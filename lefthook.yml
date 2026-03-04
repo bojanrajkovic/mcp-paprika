@@ -1,0 +1,22 @@
+pre-commit:
+  parallel: true
+  commands:
+    oxfmt:
+      glob: "**/*.{ts,json,md}"
+      stage_fixed: true
+      run: pnpm exec oxfmt --write {staged_files}
+    oxlint:
+      glob: "**/*.ts"
+      run: pnpm exec oxlint --deny-warnings {staged_files}
+
+commit-msg:
+  commands:
+    commitlint:
+      run: pnpm exec commitlint --edit {1}
+
+pre-push:
+  commands:
+    typecheck:
+      run: pnpm typecheck
+    test:
+      run: pnpm test

@@ -22,29 +22,35 @@ Out of scope: no pnpm workspaces/catalogs, no domain-driven restructuring, no CL
 ## Acceptance Criteria
 
 ### project-scaffold.AC1: Git repository is properly initialized
+
 - **project-scaffold.AC1.1 Success:** `.git/` directory exists and `git status` returns clean output after initial commit
 - **project-scaffold.AC1.2 Success:** `.gitignore` excludes `dist/`, `node_modules/`, `.env`, `.env.*`, `.idea/`, `.vscode/`, `.DS_Store`, `Thumbs.db`, `*.tgz`, `*.swp`, `*.swo`
 
 ### project-scaffold.AC2: Project installs and builds
+
 - **project-scaffold.AC2.1 Success:** `corepack enable` completes without error
 - **project-scaffold.AC2.2 Success:** `pnpm install` completes without error and creates `pnpm-lock.yaml`
 - **project-scaffold.AC2.3 Success:** `pnpm build` (`tsc`) exits with code 0 and produces `dist/index.js`
 
 ### project-scaffold.AC3: Tool versions are pinned
+
 - **project-scaffold.AC3.1 Success:** `mise.toml` contains `node = "24"`
 - **project-scaffold.AC3.2 Success:** `package.json` contains `"packageManager": "pnpm@10.30.3"`
 
 ### project-scaffold.AC4: TypeScript is correctly configured
+
 - **project-scaffold.AC4.1 Success:** `tsconfig.json` `extends` array is `["@tsconfig/strictest/tsconfig.json", "@tsconfig/node24/tsconfig.json"]` in that order
 - **project-scaffold.AC4.2 Success:** `tsconfig.json` `compilerOptions` contains only `outDir` and `rootDir`
 - **project-scaffold.AC4.3 Failure:** Adding `target`, `module`, or `moduleResolution` to `compilerOptions` should be considered incorrect — these are inherited
 
 ### project-scaffold.AC5: Directory skeleton is complete
+
 - **project-scaffold.AC5.1 Success:** All 7 directories exist under `src/`: `paprika/`, `cache/`, `utils/`, `tools/`, `types/`, `features/`, `resources/`
 - **project-scaffold.AC5.2 Success:** Each directory contains a `.gitkeep` file
 - **project-scaffold.AC5.3 Success:** `src/index.ts` exists (empty file)
 
 ### project-scaffold.AC6: Dependencies are declared
+
 - **project-scaffold.AC6.1 Success:** `dependencies` contains exactly `dotenv`, `luxon`, `parse-duration`, `zod`
 - **project-scaffold.AC6.2 Success:** `devDependencies` contains `@types/luxon`, `@types/node`, `@tsconfig/strictest`, `@tsconfig/node24`, `typescript`, `tsx`
 - **project-scaffold.AC6.3 Success:** `package.json` has `"type": "module"` and `"engines": { "node": ">=24" }`
@@ -75,6 +81,7 @@ Single ESM-only Node.js 24 package using pnpm 10.30.3 (managed via corepack) and
 ### Package Configuration
 
 `package.json` declares:
+
 - `"type": "module"` — all `.js` files use ESM semantics
 - `"packageManager": "pnpm@10.30.3"` — corepack reads this to auto-install the correct pnpm version
 - `"engines": { "node": ">=24" }` — documents minimum runtime
@@ -126,6 +133,7 @@ Each empty directory uses a `.gitkeep` file to preserve it in git. Downstream un
 ### Build & Dev Workflow
 
 Bootstrap sequence (one-time):
+
 1. `corepack enable` — activates corepack
 2. `pnpm install` — installs dependencies, creates lockfile
 3. `pnpm build` — verifies TypeScript configuration compiles cleanly
@@ -137,6 +145,7 @@ No test runner, linter, or formatter in this unit — those arrive in P1-U00a (c
 No existing codebase patterns — the project directory is empty. This is the root unit that establishes all conventions for downstream units.
 
 Key conventions established here that downstream units must follow:
+
 - **ESM with `.js` extensions**: `module: "nodenext"` requires all relative imports to use `.js` extensions in source files (e.g., `import { foo } from './bar.js'` even though the source is `bar.ts`).
 - **No manual tsconfig overrides**: Downstream units must not add `target`, `module`, or `moduleResolution` to tsconfig — these are inherited from `@tsconfig/node24`.
 - **Minimal runtime dependencies**: Node 24 provides `fetch`, `FormData`, `Blob`, `node:zlib`, `node:crypto`, and `node:fs/promises` natively. Do not add packages like `node-fetch`, `axios`, `uuid`, or `form-data`.
@@ -144,11 +153,13 @@ Key conventions established here that downstream units must follow:
 ## Implementation Phases
 
 <!-- START_PHASE_1 -->
+
 ### Phase 1: Repository and Configuration Files
 
 **Goal:** Initialize git repository and create all configuration files.
 
 **Components:**
+
 - Git repository initialization and `.gitignore`
 - `mise.toml` — Node version pinning
 - `package.json` — project metadata, scripts, dependencies, corepack config
@@ -157,25 +168,30 @@ Key conventions established here that downstream units must follow:
 **Dependencies:** None (root phase)
 
 **Done when:** `git init` succeeds, all config files exist with correct content, `corepack enable && pnpm install` succeeds, `pnpm build` compiles the empty `src/index.ts` without errors.
+
 <!-- END_PHASE_1 -->
 
 <!-- START_PHASE_2 -->
+
 ### Phase 2: Directory Skeleton
 
 **Goal:** Create the `src/` directory structure that downstream units populate.
 
 **Components:**
+
 - `src/index.ts` — empty entry point
 - 7 subdirectories under `src/` with `.gitkeep` files: `paprika/`, `cache/`, `utils/`, `tools/`, `types/`, `features/`, `resources/`
 
 **Dependencies:** Phase 1 (repository must exist)
 
 **Done when:** All 7 directories exist, `pnpm build` still compiles cleanly, initial commit is created.
+
 <!-- END_PHASE_2 -->
 
 ## Additional Considerations
 
 **Spec corrections applied:**
+
 - Original spec AC #8 stated "no entries in dependencies" — contradicts the package.json template which lists 4 runtime dependencies. This design includes the 4 runtime deps as specified in the package.json template.
 - `@types/node` updated from `^22` to `^24` to match Node 24 LTS target.
 - `resolveJsonModule` removed from tsconfig (no unit imports JSON files; ESM requires import attributes anyway).

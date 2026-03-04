@@ -1,0 +1,8 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "rules": {
+    "eqeqeq": "error",
+    "no-console": "error",
+    "unicorn/no-empty-file": "off"
+  }
+}

@@ -3,13 +3,17 @@
   "version": "0.0.0",
   "description": "MCP server for Paprika recipe manager",
   "type": "module",
-  "packageManager": "pnpm@10.30.3",
-  "engines": {
-    "node": ">=24"
-  },
   "scripts": {
     "build": "tsc",
-    "dev": "tsx src/index.ts"
+    "dev": "tsx src/index.ts",
+    "format": "oxfmt --write .",
+    "format:check": "oxfmt --check .",
+    "lint": "oxlint --deny-warnings src/",
+    "lint:fix": "oxlint --fix src/",
+    "prepare": "lefthook install",
+    "test": "vitest run --passWithNoTests",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "dotenv": "^16",
@@ -18,11 +22,23 @@
     "zod": "^3"
   },
   "devDependencies": {
+    "@commitlint/cli": "^20.4.3",
+    "@commitlint/config-conventional": "^20.4.3",
     "@tsconfig/node24": "^24",
     "@tsconfig/strictest": "^2",
     "@types/luxon": "^3",
     "@types/node": "^24",
+    "@vitest/coverage-v8": "^4.0.18",
+    "fast-check": "^4.5.3",
+    "lefthook": "^2.1.2",
+    "oxfmt": "^0.36.0",
+    "oxlint": "^1.51.0",
     "tsx": "^4.21",
-    "typescript": "^5.9"
-  }
+    "typescript": "^5.9",
+    "vitest": "^4.0.18"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "packageManager": "pnpm@10.30.3"
 }

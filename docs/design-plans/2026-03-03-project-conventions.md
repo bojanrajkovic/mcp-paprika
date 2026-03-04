@@ -16,12 +16,14 @@ The root CLAUDE.md is overhauled to serve as the authoritative conventions refer
 ## Acceptance Criteria
 
 ### project-conventions.AC1: CLAUDE.md is comprehensive and accurate
+
 - **project-conventions.AC1.1 Success:** Root CLAUDE.md exists and covers all convention categories: tech stack, commands, code conventions (imports, TypeScript style, error handling), dependency policy, testing, git conventions, version sync
 - **project-conventions.AC1.2 Success:** All 7 package.json scripts are documented in the Commands section
 - **project-conventions.AC1.3 Success:** Dependency policy states "minimize runtime dependencies" (not "zero dependencies")
 - **project-conventions.AC1.4 Success:** Domain-level CLAUDE.md stubs exist in all 7 `src/` subdirectories with Purpose, Contracts, and Dependencies sections
 
 ### project-conventions.AC2: Git hooks enforce conventions
+
 - **project-conventions.AC2.1 Success:** `pnpm exec lefthook run pre-commit` executes oxfmt and oxlint on staged files
 - **project-conventions.AC2.2 Success:** Pre-commit hook auto-stages files reformatted by oxfmt (`stage_fixed: true`)
 - **project-conventions.AC2.3 Success:** A commit with message `feat(tools): add search tool` passes the commit-msg hook
@@ -29,6 +31,7 @@ The root CLAUDE.md is overhauled to serve as the authoritative conventions refer
 - **project-conventions.AC2.5 Failure:** A commit with a file containing `==` comparison (not `===`) is rejected by the pre-commit lint hook
 
 ### project-conventions.AC3: Linting and formatting scripts work
+
 - **project-conventions.AC3.1 Success:** `pnpm lint` runs oxlint with `--deny-warnings` on `src/` and exits 0 on clean code
 - **project-conventions.AC3.2 Success:** `pnpm format` runs oxfmt with `--write` and formats all project files
 - **project-conventions.AC3.3 Success:** `pnpm format:check` runs oxfmt with `--check` and exits 0 when files are formatted
@@ -36,6 +39,7 @@ The root CLAUDE.md is overhauled to serve as the authoritative conventions refer
 - **project-conventions.AC3.5 Failure:** `pnpm format:check` exits non-zero when a file has incorrect formatting
 
 ### project-conventions.AC4: oxlint config is minimal and correct
+
 - **project-conventions.AC4.1 Success:** `.oxlintrc.json` configures `eqeqeq` as error
 - **project-conventions.AC4.2 Success:** `.oxlintrc.json` configures `no-console` as error
 - **project-conventions.AC4.3 Success:** `.oxlintrc.json` does NOT configure `no-unused-vars` (handled by tsc via `@tsconfig/strictest`)
@@ -73,17 +77,18 @@ The root `CLAUDE.md` serves as the authoritative conventions reference for both 
 
 ### Tool Choices
 
-| Tool | Purpose | Why This Over Alternatives |
-|------|---------|---------------------------|
-| lefthook | Git hooks | Single tool replaces husky + lint-staged. YAML config. Used in author's unquote project. |
-| oxlint | Linting | Rust-based, significantly faster than ESLint. Sufficient rule coverage for this project. Used in author's grounds project. |
-| oxfmt | Formatting | Rust-based, pairs with oxlint. Prettier-compatible. Beta but stable enough for this project. |
-| commitlint | Commit messages | Enforces conventional commits format required for future automated changelog (P3-U09). |
-| vitest | Test runner | Fast, ESM-native, TypeScript-first. Dependency installed here; configuration deferred to first unit that writes tests. |
+| Tool       | Purpose         | Why This Over Alternatives                                                                                                 |
+| ---------- | --------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| lefthook   | Git hooks       | Single tool replaces husky + lint-staged. YAML config. Used in author's unquote project.                                   |
+| oxlint     | Linting         | Rust-based, significantly faster than ESLint. Sufficient rule coverage for this project. Used in author's grounds project. |
+| oxfmt      | Formatting      | Rust-based, pairs with oxlint. Prettier-compatible. Beta but stable enough for this project.                               |
+| commitlint | Commit messages | Enforces conventional commits format required for future automated changelog (P3-U09).                                     |
+| vitest     | Test runner     | Fast, ESM-native, TypeScript-first. Dependency installed here; configuration deferred to first unit that writes tests.     |
 
 ### Configuration Philosophy
 
 Minimal configuration. Each tool's defaults do the right thing for most cases. We only configure:
+
 - oxlint: two rules that tsc doesn't cover (`eqeqeq`, `no-console`)
 - oxfmt: print width (120) and ignore patterns (`pnpm-lock.yaml`, `dist`)
 - commitlint: extend `@commitlint/config-conventional` with no custom rules
@@ -92,12 +97,14 @@ Minimal configuration. Each tool's defaults do the right thing for most cases. W
 ## Existing Patterns
 
 This is a new project. P1-U01 (project scaffold) established the initial structure:
+
 - `package.json` with `build` and `dev` scripts
 - `tsconfig.json` extending `@tsconfig/strictest` and `@tsconfig/node24`
 - 7 `src/` subdirectories with `.gitkeep` placeholders
 - A basic `CLAUDE.md` created by the project-claude-librarian (35 lines)
 
 Conventions are drawn from two existing projects by the same author:
+
 - **grounds** (TypeScript monorepo): oxlint, oxfmt, vitest, neverthrow, conventional commits
 - **unquote** (multi-language monorepo): lefthook, mise, hierarchical CLAUDE.md files
 
@@ -106,11 +113,13 @@ This design combines patterns from both: lefthook from unquote, oxlint/oxfmt fro
 ## Implementation Phases
 
 <!-- START_PHASE_1 -->
+
 ### Phase 1: Tool Installation and Configuration
 
 **Goal:** Install all dev tooling, create configuration files, and verify the toolchain works end-to-end.
 
 **Components:**
+
 - Dev dependencies: `oxlint`, `oxfmt`, `lefthook`, `@commitlint/cli`, `@commitlint/config-conventional`, `vitest`
 - `package.json` script additions: `test`, `lint`, `format`, `format:check`, `prepare`
 - `.oxlintrc.json` — lint rules (`eqeqeq: error`, `no-console: error`)
@@ -121,6 +130,7 @@ This design combines patterns from both: lefthook from unquote, oxlint/oxfmt fro
 **Dependencies:** P1-U01 (project scaffold) must be complete.
 
 **Done when:**
+
 - `pnpm lint` runs oxlint on `src/` and exits clean
 - `pnpm format:check` runs oxfmt and exits clean
 - `pnpm test` runs vitest (exits 0 with "no test files found")
@@ -131,17 +141,20 @@ This design combines patterns from both: lefthook from unquote, oxlint/oxfmt fro
 <!-- END_PHASE_1 -->
 
 <!-- START_PHASE_2 -->
+
 ### Phase 2: CLAUDE.md and Documentation
 
 **Goal:** Overhaul the root CLAUDE.md with comprehensive conventions and create domain-level CLAUDE.md stubs in all `src/` subdirectories.
 
 **Components:**
+
 - Root `CLAUDE.md` — full overhaul covering: project description, tech stack, commands (all 7 scripts), code conventions (imports/modules, TypeScript style, error handling), dependency policy, testing conventions, git conventions (commit format, branch naming), version sync notes
 - Domain-level `CLAUDE.md` stubs in `src/paprika/`, `src/cache/`, `src/utils/`, `src/tools/`, `src/types/`, `src/features/`, `src/resources/` — minimal template with Purpose, Contracts, and Dependencies placeholders
 
 **Dependencies:** Phase 1 (oxfmt must be installed to format the new markdown files).
 
 **Done when:**
+
 - Root `CLAUDE.md` covers all convention categories listed in the spec
 - Domain-level `CLAUDE.md` exists in all 7 `src/` subdirectories
 - All markdown files pass `pnpm format:check`
