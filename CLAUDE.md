@@ -1,6 +1,6 @@
 # mcp-paprika
 
-Last verified: 2026-03-05
+Last verified: 2026-03-06
 
 MCP server for the Paprika recipe manager. Communicates over stdio transport — `console.log` writes to stdout which is the MCP wire format. Any stray console output corrupts the protocol. Use the MCP SDK's logging facility for diagnostics.
 
@@ -10,7 +10,7 @@ MCP server for the Paprika recipe manager. Communicates over stdio transport —
 - **Language:** TypeScript 5.9 (extends `@tsconfig/strictest` + `@tsconfig/node24`)
 - **Module system:** ESM (`"type": "module"`)
 - **Package manager:** pnpm 10.30.3 (corepack-managed)
-- **Key dependencies:** zod (validation), luxon (dates), dotenv (env config), parse-duration
+- **Key dependencies:** zod (validation), luxon (dates), dotenv (env config), parse-duration, neverthrow (error handling)
 
 ## Commands
 
@@ -69,7 +69,7 @@ Minimize runtime dependencies. Every new dependency must justify its inclusion:
 
 - Prefer Node.js built-in modules when available
 - Evaluate bundle size and maintenance status before adding packages
-- Current runtime deps: `zod`, `luxon`, `dotenv`, `parse-duration`, `env-paths`
+- Current runtime deps: `zod`, `luxon`, `dotenv`, `parse-duration`, `env-paths`, `neverthrow`
 
 ## Testing
 

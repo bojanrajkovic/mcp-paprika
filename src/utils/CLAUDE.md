@@ -1,6 +1,6 @@
 # Cross-Cutting Utilities
 
-Last verified: 2026-03-05
+Last verified: 2026-03-06
 
 ## Purpose
 
@@ -21,8 +21,25 @@ that return absolute path strings. No I/O. No internal dependencies (leaf module
 | `getLogDir()`    | Platform-native log directory    |
 | `getTempDir()`   | Platform-native temp directory   |
 
+### duration.ts — Recipe duration parsing and formatting
+
+Parses duration strings in multiple formats (human-readable, ISO 8601, H:MM colon, bare
+numbers) into Luxon `Duration` objects. Returns `Result<Duration, DurationParseError>` using
+neverthrow. Formats durations as compact human-readable strings. No I/O. No internal
+dependencies (leaf module).
+
+| Function                   | Returns                                    |
+| -------------------------- | ------------------------------------------ |
+| `parseDuration(input)`     | `Result<Duration, DurationParseError>`     |
+| `formatDuration(duration)` | Compact string (e.g., "1 hr 30 min") or "" |
+
+| Class                | Extends | Fields                                      |
+| -------------------- | ------- | ------------------------------------------- |
+| `DurationParseError` | `Error` | `input: string \| number`, `reason: string` |
+
 ## Dependencies
 
-- **Uses:** None (leaf dependency)
+- **Uses:** None (leaf module — no internal project imports)
+- **External packages:** xdg.ts uses `env-paths`; duration.ts uses `luxon`, `parse-duration`, `neverthrow`
 - **Used by:** All other `src/` modules
 - **Boundary:** Must not import from any other `src/` module (leaf dependency)
