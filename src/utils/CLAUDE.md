@@ -1,6 +1,6 @@
 # Cross-Cutting Utilities
 
-Last verified: 2026-03-03
+Last verified: 2026-03-05
 
 ## Purpose
 
@@ -8,7 +8,18 @@ Shared utility functions and helpers used across multiple modules. Includes erro
 
 ## Contracts
 
-Contracts will be defined when this module is implemented.
+### xdg.ts — Platform-native application directory paths
+
+Wraps `env-paths` v4 with app name `mcp-paprika` (no suffix). Exports 5 synchronous functions
+that return absolute path strings. No I/O. No internal dependencies (leaf module).
+
+| Function         | Returns                          |
+| ---------------- | -------------------------------- |
+| `getConfigDir()` | Platform-native config directory |
+| `getCacheDir()`  | Platform-native cache directory  |
+| `getDataDir()`   | Platform-native data directory   |
+| `getLogDir()`    | Platform-native log directory    |
+| `getTempDir()`   | Platform-native temp directory   |
 
 ## Dependencies
 

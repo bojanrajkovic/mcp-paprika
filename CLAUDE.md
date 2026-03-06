@@ -1,6 +1,6 @@
 # mcp-paprika
 
-Last verified: 2026-03-03
+Last verified: 2026-03-05
 
 MCP server for the Paprika recipe manager. Communicates over stdio transport — `console.log` writes to stdout which is the MCP wire format. Any stray console output corrupts the protocol. Use the MCP SDK's logging facility for diagnostics.
 
@@ -69,7 +69,7 @@ Minimize runtime dependencies. Every new dependency must justify its inclusion:
 
 - Prefer Node.js built-in modules when available
 - Evaluate bundle size and maintenance status before adding packages
-- Current runtime deps: `zod`, `luxon`, `dotenv`, `parse-duration`
+- Current runtime deps: `zod`, `luxon`, `dotenv`, `parse-duration`, `env-paths`
 
 ## Testing
 
