@@ -1,6 +1,6 @@
 # mcp-paprika
 
-Last verified: 2026-03-06
+Last verified: 2026-03-07
 
 MCP server for the Paprika recipe manager. Communicates over stdio transport — `console.log` writes to stdout which is the MCP wire format. Any stray console output corrupts the protocol. Use the MCP SDK's logging facility for diagnostics.
 
@@ -37,6 +37,7 @@ MCP server for the Paprika recipe manager. Communicates over stdio transport —
 - `src/features/` — Feature implementations
 - `src/types/` — Shared type definitions
 - `src/utils/` — Cross-cutting utilities
+- `.github/workflows/` — CI and PR validation workflows
 
 ## Code Conventions
 
@@ -85,7 +86,7 @@ Minimize runtime dependencies. Every new dependency must justify its inclusion:
 
 Conventional commits: `<type>(<scope>): <description>`
 
-Types: `feat`, `fix`, `perf`, `refactor`, `docs`, `test`, `ci`, `build`, `chore`, `revert`
+Types: `feat`, `fix`, `perf`, `refactor`, `docs`, `test`, `ci`, `build`, `chore`, `revert`, `style`
 
 Breaking changes: use `!` after type (e.g., `feat!: change API`) or `BREAKING CHANGE:` footer.
 
@@ -99,10 +100,20 @@ Git hooks managed by lefthook, activated via `pnpm install` (the `prepare` scrip
 
 Hooks must not be bypassed. Fix issues before committing. If you commit before running `pnpm install`, hooks will not fire.
 
+### CI
+
+GitHub Actions run on every PR and push to `main`:
+
+- **CI workflow** (`ci.yml`): format check, lint, security audit, build, test
+- **PR title workflow** (`pr-title.yml`): validates PR titles match conventional commit format
+
+PRs must pass all checks before merge.
+
 ## Version Sync
 
 - `packageManager` field in `package.json` must match the pnpm version managed by corepack
 - `engines.node` must match the Node.js version in `mise.toml`
+- `node-version` in `.github/workflows/ci.yml` must match the Node.js version in `mise.toml`
 
 ## Boundaries
 
