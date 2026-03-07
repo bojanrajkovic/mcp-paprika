@@ -10,3 +10,6 @@ Thumbs.db
 *.swp
 *.swo
 .worktrees/
+coverage/
+.claude/
+.ed3d/
