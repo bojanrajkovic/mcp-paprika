@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import fc from "fast-check";
-import { paprikaConfigSchema } from "./config.js";
+import { paprikaConfigSchema, deepMerge } from "./config.js";
 
 describe("Config property-based tests", () => {
   describe("config-loader.AC8: Boolean field idempotence", () => {
@@ -48,47 +48,23 @@ describe("Config property-based tests", () => {
   });
 
   describe("config-loader.AC9: Merge behavior properties", () => {
-    it("Property 3: Override dominance - if paprika.email is in overrides, result contains the override value", () => {
+    it("Property 3: deepMerge identity - merging base with empty overrides returns deep-equal base", () => {
       fc.assert(
-        fc.property(
-          fc.string().filter((s) => s.length > 0),
-          (email) => {
-            const input = {
-              paprika: { email, password: "secret" },
-            };
-            const result = paprikaConfigSchema.safeParse(input);
-
-            expect(result.success).toBe(true);
-            if (result.success) {
-              expect(result.data.paprika.email).toBe(email);
-            }
-          },
-        ),
+        fc.property(fc.object(), (base) => {
+          const result = deepMerge(base as Record<string, unknown>, {});
+          expect(result).toEqual(base);
+        }),
       );
     });
 
-    it("Property 4: Nested object structure preservation - valid nested config objects parse without loss of structure", () => {
+    it("Property 4: deepMerge override dominance - every top-level key in overrides appears in result", () => {
       fc.assert(
-        fc.property(
-          fc.record({
-            email: fc.string().filter((s) => s.length > 0),
-            password: fc.string().filter((s) => s.length > 0),
-          }),
-          ({ email, password }) => {
-            const input = {
-              paprika: { email, password },
-              sync: { enabled: true, interval: 900000 },
-            };
-            const result = paprikaConfigSchema.safeParse(input);
-
-            expect(result.success).toBe(true);
-            if (result.success) {
-              expect(result.data.paprika.email).toBe(email);
-              expect(result.data.paprika.password).toBe(password);
-              expect(result.data.sync.enabled).toBe(true);
-            }
-          },
-        ),
+        fc.property(fc.object(), fc.object(), (base, overrides) => {
+          const result = deepMerge(base as Record<string, unknown>, overrides as Record<string, unknown>);
+          for (const key of Object.keys(overrides)) {
+            expect(key in result).toBe(true);
+          }
+        }),
       );
     });
   });

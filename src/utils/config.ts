@@ -176,7 +176,8 @@ function buildEnvOverrides(env: NodeJS.ProcessEnv): Record<string, unknown> {
 }
 
 // Recursively merges base config with overrides. Override values win for non-object fields.
-function deepMerge(base: Record<string, unknown>, overrides: Record<string, unknown>): Record<string, unknown> {
+/** @internal Pure helper for config merging. Exported for property-based testing only. */
+export function deepMerge(base: Record<string, unknown>, overrides: Record<string, unknown>): Record<string, unknown> {
   const result: Record<string, unknown> = { ...base };
   for (const key of Object.keys(overrides)) {
     const baseVal = base[key];

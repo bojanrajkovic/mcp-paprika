@@ -289,177 +289,8 @@ describe("Configuration loading", () => {
   });
 
   // Phase 2: loadConfig integration tests
-  describe("config-loader.AC1: loadConfig returns valid PaprikaConfig", () => {
-    const CONFIG_ENV_VARS = [
-      "PAPRIKA_EMAIL",
-      "PAPRIKA_PASSWORD",
-      "PAPRIKA_SYNC_INTERVAL",
-      "PAPRIKA_SYNC_ENABLED",
-      "REPLICATE_API_TOKEN",
-      "OPENAI_API_KEY",
-      "OPENAI_BASE_URL",
-      "EMBEDDING_MODEL",
-    ] as const;
-
-    let tempDir: string;
-    let savedEnv: Map<string, string | undefined>;
-
-    beforeEach(() => {
-      tempDir = mkdtempSync(join(tmpdir(), "config-test-"));
-      savedEnv = new Map();
-      for (const key of CONFIG_ENV_VARS) {
-        savedEnv.set(key, process.env[key]);
-        delete process.env[key];
-      }
-    });
-
-    afterEach(() => {
-      for (const [key, value] of savedEnv) {
-        if (value === undefined) {
-          delete process.env[key];
-        } else {
-          process.env[key] = value;
-        }
-      }
-      rmSync(tempDir, { recursive: true, force: true });
-    });
-
-    it("config-loader.AC1.1: loadConfig returns ok with PaprikaConfig when env vars are set", () => {
-      process.env.PAPRIKA_EMAIL = "user@test.com";
-      process.env.PAPRIKA_PASSWORD = "secret";
-
-      const result = loadConfig(tempDir);
-
-      expect(result.isOk()).toBe(true);
-      if (result.isOk()) {
-        expect(result.value.paprika.email).toBe("user@test.com");
-        expect(result.value.paprika.password).toBe("secret");
-      }
-    });
-
-    it("config-loader.AC1.2: loadConfig returns ok with PaprikaConfig when config.json provides credentials", () => {
-      writeFileSync(
-        join(tempDir, "config.json"),
-        JSON.stringify({ paprika: { email: "user@test.com", password: "secret" } }),
-      );
-
-      const result = loadConfig(tempDir);
-
-      expect(result.isOk()).toBe(true);
-      if (result.isOk()) {
-        expect(result.value.paprika.email).toBe("user@test.com");
-        expect(result.value.paprika.password).toBe("secret");
-      }
-    });
-  });
-
-  describe("config-loader.AC2: Source priority chain", () => {
-    const CONFIG_ENV_VARS = [
-      "PAPRIKA_EMAIL",
-      "PAPRIKA_PASSWORD",
-      "PAPRIKA_SYNC_INTERVAL",
-      "PAPRIKA_SYNC_ENABLED",
-      "REPLICATE_API_TOKEN",
-      "OPENAI_API_KEY",
-      "OPENAI_BASE_URL",
-      "EMBEDDING_MODEL",
-    ] as const;
-
-    let tempDir: string;
-    let savedEnv: Map<string, string | undefined>;
-
-    beforeEach(() => {
-      tempDir = mkdtempSync(join(tmpdir(), "config-test-"));
-      savedEnv = new Map();
-      for (const key of CONFIG_ENV_VARS) {
-        savedEnv.set(key, process.env[key]);
-        delete process.env[key];
-      }
-    });
-
-    afterEach(() => {
-      for (const [key, value] of savedEnv) {
-        if (value === undefined) {
-          delete process.env[key];
-        } else {
-          process.env[key] = value;
-        }
-      }
-      rmSync(tempDir, { recursive: true, force: true });
-    });
-
-    function writeConfig(dir: string, config: Record<string, unknown>): void {
-      writeFileSync(join(dir, "config.json"), JSON.stringify(config));
-    }
-
-    function writeDotEnv(dir: string, vars: Record<string, string>): void {
-      const content = Object.entries(vars)
-        .map(([k, v]) => `${k}=${v}`)
-        .join("\n");
-      writeFileSync(join(dir, ".env"), content);
-    }
-
-    it("config-loader.AC2.1: Env var PAPRIKA_EMAIL overrides config.json", () => {
-      writeConfig(tempDir, {
-        paprika: { email: "file@test.com", password: "filepw" },
-      });
-      process.env.PAPRIKA_EMAIL = "env@test.com";
-
-      const result = loadConfig(tempDir);
-
-      expect(result.isOk()).toBe(true);
-      if (result.isOk()) {
-        expect(result.value.paprika.email).toBe("env@test.com");
-        expect(result.value.paprika.password).toBe("filepw");
-      }
-    });
-
-    it("config-loader.AC2.2: Real env vars override .env file values", () => {
-      writeDotEnv(tempDir, {
-        PAPRIKA_EMAIL: "dotenv@test.com",
-        PAPRIKA_PASSWORD: "dotenvpw",
-      });
-      process.env.PAPRIKA_EMAIL = "real@test.com";
-
-      const result = loadConfig(tempDir);
-
-      expect(result.isOk()).toBe(true);
-      if (result.isOk()) {
-        expect(result.value.paprika.email).toBe("real@test.com");
-        expect(result.value.paprika.password).toBe("dotenvpw");
-      }
-    });
-
-    it("config-loader.AC2.3: .env file values override config.json values", () => {
-      writeConfig(tempDir, {
-        paprika: { email: "file@test.com", password: "filepw" },
-      });
-      writeDotEnv(tempDir, { PAPRIKA_EMAIL: "dotenv@test.com" });
-
-      const result = loadConfig(tempDir);
-
-      expect(result.isOk()).toBe(true);
-      if (result.isOk()) {
-        expect(result.value.paprika.email).toBe("dotenv@test.com");
-        expect(result.value.paprika.password).toBe("filepw");
-      }
-    });
-
-    it("config-loader.AC2.4: Zod defaults apply when no source provides a value", () => {
-      process.env.PAPRIKA_EMAIL = "user@test.com";
-      process.env.PAPRIKA_PASSWORD = "secret";
-
-      const result = loadConfig(tempDir);
-
-      expect(result.isOk()).toBe(true);
-      if (result.isOk()) {
-        expect(result.value.sync.enabled).toBe(true);
-        expect(result.value.sync.interval).toBe(900000);
-      }
-    });
-  });
-
-  describe("config-loader.AC5: File handling", () => {
+  describe("Phase 2: loadConfig integration", () => {
+    // Shared test infrastructure
     const CONFIG_ENV_VARS = [
       "PAPRIKA_EMAIL",
       "PAPRIKA_PASSWORD",
@@ -500,60 +331,162 @@ describe("Configuration loading", () => {
       rmSync(tempDir, { recursive: true, force: true });
     });
 
+    // Shared helpers
     function writeConfig(dir: string, config: Record<string, unknown>): void {
       writeFileSync(join(dir, "config.json"), JSON.stringify(config));
     }
 
-    it("config-loader.AC5.1: Missing config.json (ENOENT) does not cause an error", () => {
-      process.env.PAPRIKA_EMAIL = "user@test.com";
-      process.env.PAPRIKA_PASSWORD = "secret";
+    function writeDotEnv(dir: string, vars: Record<string, string>): void {
+      const content = Object.entries(vars)
+        .map(([k, v]) => `${k}=${v}`)
+        .join("\n");
+      writeFileSync(join(dir, ".env"), content);
+    }
 
-      const result = loadConfig(tempDir);
+    describe("config-loader.AC1: loadConfig returns valid PaprikaConfig", () => {
+      it("config-loader.AC1.1: loadConfig returns ok with PaprikaConfig when env vars are set", () => {
+        process.env.PAPRIKA_EMAIL = "user@test.com";
+        process.env.PAPRIKA_PASSWORD = "secret";
 
-      expect(result.isOk()).toBe(true);
-    });
+        const result = loadConfig(tempDir);
 
-    it("config-loader.AC5.2: Missing .env file does not cause an error", () => {
-      writeConfig(tempDir, {
-        paprika: { email: "user@test.com", password: "secret" },
-      });
-
-      const result = loadConfig(tempDir);
-
-      expect(result.isOk()).toBe(true);
-    });
-
-    it("config-loader.AC5.3: Invalid JSON in config.json produces ConfigError with kind 'invalid_json'", () => {
-      writeFileSync(join(tempDir, "config.json"), "not valid json {");
-
-      process.env.PAPRIKA_EMAIL = "user@test.com";
-      process.env.PAPRIKA_PASSWORD = "secret";
-
-      const result = loadConfig(tempDir);
-
-      expect(result.isErr()).toBe(true);
-      if (result.isErr()) {
-        expect(result.error.kind).toBe("invalid_json");
-      }
-    });
-
-    it("config-loader.AC5.4: Permission error on config.json produces ConfigError with kind 'file_read_error'", () => {
-      writeConfig(tempDir, {
-        paprika: { email: "user@test.com", password: "secret" },
-      });
-      chmodSync(join(tempDir, "config.json"), 0o000);
-
-      process.env.PAPRIKA_EMAIL = "backup@test.com";
-      process.env.PAPRIKA_PASSWORD = "secret";
-
-      const result = loadConfig(tempDir);
-
-      // Skip test if running as root (root can read files regardless of permissions)
-      if (result.isErr() || process.getuid?.() !== 0) {
-        if (result.isErr()) {
-          expect(result.error.kind).toBe("file_read_error");
+        expect(result.isOk()).toBe(true);
+        if (result.isOk()) {
+          expect(result.value.paprika.email).toBe("user@test.com");
+          expect(result.value.paprika.password).toBe("secret");
         }
-      }
+      });
+
+      it("config-loader.AC1.2: loadConfig returns ok with PaprikaConfig when config.json provides credentials", () => {
+        writeFileSync(
+          join(tempDir, "config.json"),
+          JSON.stringify({ paprika: { email: "user@test.com", password: "secret" } }),
+        );
+
+        const result = loadConfig(tempDir);
+
+        expect(result.isOk()).toBe(true);
+        if (result.isOk()) {
+          expect(result.value.paprika.email).toBe("user@test.com");
+          expect(result.value.paprika.password).toBe("secret");
+        }
+      });
+    });
+
+    describe("config-loader.AC2: Source priority chain", () => {
+      it("config-loader.AC2.1: Env var PAPRIKA_EMAIL overrides config.json", () => {
+        writeConfig(tempDir, {
+          paprika: { email: "file@test.com", password: "filepw" },
+        });
+        process.env.PAPRIKA_EMAIL = "env@test.com";
+
+        const result = loadConfig(tempDir);
+
+        expect(result.isOk()).toBe(true);
+        if (result.isOk()) {
+          expect(result.value.paprika.email).toBe("env@test.com");
+          expect(result.value.paprika.password).toBe("filepw");
+        }
+      });
+
+      it("config-loader.AC2.2: Real env vars override .env file values", () => {
+        writeDotEnv(tempDir, {
+          PAPRIKA_EMAIL: "dotenv@test.com",
+          PAPRIKA_PASSWORD: "dotenvpw",
+        });
+        process.env.PAPRIKA_EMAIL = "real@test.com";
+
+        const result = loadConfig(tempDir);
+
+        expect(result.isOk()).toBe(true);
+        if (result.isOk()) {
+          expect(result.value.paprika.email).toBe("real@test.com");
+          expect(result.value.paprika.password).toBe("dotenvpw");
+        }
+      });
+
+      it("config-loader.AC2.3: .env file values override config.json values", () => {
+        writeConfig(tempDir, {
+          paprika: { email: "file@test.com", password: "filepw" },
+        });
+        writeDotEnv(tempDir, { PAPRIKA_EMAIL: "dotenv@test.com" });
+
+        const result = loadConfig(tempDir);
+
+        expect(result.isOk()).toBe(true);
+        if (result.isOk()) {
+          expect(result.value.paprika.email).toBe("dotenv@test.com");
+          expect(result.value.paprika.password).toBe("filepw");
+        }
+      });
+
+      it("config-loader.AC2.4: Zod defaults apply when no source provides a value", () => {
+        process.env.PAPRIKA_EMAIL = "user@test.com";
+        process.env.PAPRIKA_PASSWORD = "secret";
+
+        const result = loadConfig(tempDir);
+
+        expect(result.isOk()).toBe(true);
+        if (result.isOk()) {
+          expect(result.value.sync.enabled).toBe(true);
+          expect(result.value.sync.interval).toBe(900000);
+        }
+      });
+    });
+
+    describe("config-loader.AC5: File handling", () => {
+      it("config-loader.AC5.1: Missing config.json (ENOENT) does not cause an error", () => {
+        process.env.PAPRIKA_EMAIL = "user@test.com";
+        process.env.PAPRIKA_PASSWORD = "secret";
+
+        const result = loadConfig(tempDir);
+
+        expect(result.isOk()).toBe(true);
+      });
+
+      it("config-loader.AC5.2: Missing .env file does not cause an error", () => {
+        writeConfig(tempDir, {
+          paprika: { email: "user@test.com", password: "secret" },
+        });
+
+        const result = loadConfig(tempDir);
+
+        expect(result.isOk()).toBe(true);
+      });
+
+      it("config-loader.AC5.3: Invalid JSON in config.json produces ConfigError with kind 'invalid_json'", () => {
+        writeFileSync(join(tempDir, "config.json"), "not valid json {");
+
+        process.env.PAPRIKA_EMAIL = "user@test.com";
+        process.env.PAPRIKA_PASSWORD = "secret";
+
+        const result = loadConfig(tempDir);
+
+        expect(result.isErr()).toBe(true);
+        if (result.isErr()) {
+          expect(result.error.kind).toBe("invalid_json");
+        }
+      });
+
+      it.runIf(process.getuid?.() !== 0)(
+        "config-loader.AC5.4: Permission error on config.json produces ConfigError with kind 'file_read_error'",
+        () => {
+          writeConfig(tempDir, {
+            paprika: { email: "user@test.com", password: "secret" },
+          });
+          chmodSync(join(tempDir, "config.json"), 0o000);
+
+          process.env.PAPRIKA_EMAIL = "backup@test.com";
+          process.env.PAPRIKA_PASSWORD = "secret";
+
+          const result = loadConfig(tempDir);
+
+          expect(result.isErr()).toBe(true);
+          if (result.isErr()) {
+            expect(result.error.kind).toBe("file_read_error");
+          }
+        },
+      );
     });
   });
 });
