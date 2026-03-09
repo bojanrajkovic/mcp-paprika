@@ -86,19 +86,18 @@ const embeddingConfigSchema = z.object({
 });
 
 export const paprikaConfigSchema = z.object({
-  paprika: z
-    .object({
+  paprika: z.preprocess(
+    (val) => val ?? {},
+    z.object({
       email: z.string().min(1),
       password: z.string().min(1),
-    })
-    // @ts-expect-error zod allows empty default for object drilling validation
-    .default({}),
+    }),
+  ),
   sync: z
     .object({
-      enabled: booleanField.optional().default(true),
-      interval: durationField.optional().default("15m"),
+      enabled: booleanField.default(true),
+      interval: durationField.default("15m"),
     })
-    .optional()
     .default({}),
   features: z
     .object({
