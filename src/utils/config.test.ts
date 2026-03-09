@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { z } from "zod";
-import { ConfigError } from "./config.js";
+import { ConfigError, paprikaConfigSchema, type EmbeddingConfig } from "./config.js";
 
 describe("Configuration loading", () => {
   describe("config-loader.AC7.3: ConfigError class", () => {
@@ -100,6 +100,178 @@ describe("Configuration loading", () => {
       expect(error.reason).toContain("unknown.field");
       expect(error.reason).toContain("Invalid value");
       expect(error.reason).not.toContain("(set via");
+    });
+  });
+
+  describe("config-loader.AC3: Duration field", () => {
+    const validBase = { paprika: { email: "user@test.com", password: "secret" } };
+
+    it("config-loader.AC3.1: accepts '15m' string and resolves to 900000 ms", () => {
+      const input = { ...validBase, sync: { interval: "15m" } };
+      const result = paprikaConfigSchema.safeParse(input);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.sync.interval).toBe(900000);
+      }
+    });
+
+    it("config-loader.AC3.2: accepts 'PT15M' ISO 8601 and resolves to 900000 ms", () => {
+      const input = { ...validBase, sync: { interval: "PT15M" } };
+      const result = paprikaConfigSchema.safeParse(input);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.sync.interval).toBe(900000);
+      }
+    });
+
+    it("config-loader.AC3.3: accepts 15 (number, minutes) and resolves to 900000 ms", () => {
+      const input = { ...validBase, sync: { interval: 15 } };
+      const result = paprikaConfigSchema.safeParse(input);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.sync.interval).toBe(900000);
+      }
+    });
+
+    it("config-loader.AC3.4: rejects 'abc' with validation error", () => {
+      const input = { ...validBase, sync: { interval: "abc" } };
+      const result = paprikaConfigSchema.safeParse(input);
+      expect(result.success).toBe(false);
+    });
+  });
+
+  describe("config-loader.AC4: Boolean field (PAPRIKA_SYNC_ENABLED)", () => {
+    const validBase = { paprika: { email: "user@test.com", password: "secret" } };
+
+    it("config-loader.AC4.1: 'true' string sets sync.enabled to true", () => {
+      const input = { ...validBase, sync: { enabled: "true" } };
+      const result = paprikaConfigSchema.safeParse(input);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.sync.enabled).toBe(true);
+      }
+    });
+
+    it("config-loader.AC4.2: 'false' string sets sync.enabled to false", () => {
+      const input = { ...validBase, sync: { enabled: "false" } };
+      const result = paprikaConfigSchema.safeParse(input);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.sync.enabled).toBe(false);
+      }
+    });
+
+    it("config-loader.AC4.3: '1' string sets sync.enabled to true", () => {
+      const input = { ...validBase, sync: { enabled: "1" } };
+      const result = paprikaConfigSchema.safeParse(input);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.sync.enabled).toBe(true);
+      }
+    });
+
+    it("config-loader.AC4.4: '0' string sets sync.enabled to false", () => {
+      const input = { ...validBase, sync: { enabled: "0" } };
+      const result = paprikaConfigSchema.safeParse(input);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.sync.enabled).toBe(false);
+      }
+    });
+
+    it("config-loader.AC4.5: 'yes' string produces validation error", () => {
+      const input = { ...validBase, sync: { enabled: "yes" } };
+      const result = paprikaConfigSchema.safeParse(input);
+      expect(result.success).toBe(false);
+    });
+  });
+
+  describe("config-loader.AC1: Defaults", () => {
+    const validBase = { paprika: { email: "user@test.com", password: "secret" } };
+
+    it("config-loader.AC1.3: default sync.enabled is true when no sync block provided", () => {
+      const result = paprikaConfigSchema.safeParse(validBase);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.sync.enabled).toBe(true);
+      }
+    });
+
+    it("config-loader.AC1.4: default sync.interval is 900000 ms when no sync block provided", () => {
+      const result = paprikaConfigSchema.safeParse(validBase);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.sync.interval).toBe(900000);
+      }
+    });
+
+    it("config-loader.AC1.5: features is undefined when no features block provided", () => {
+      const result = paprikaConfigSchema.safeParse(validBase);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.features).toBeUndefined();
+      }
+    });
+  });
+
+  describe("config-loader.AC6: Validation errors", () => {
+    it("config-loader.AC6.1: missing email produces validation error with PAPRIKA_EMAIL hint", () => {
+      const result = paprikaConfigSchema.safeParse({ paprika: {} });
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        const error = ConfigError.validation(result.error.issues);
+        expect(error.reason).toContain("PAPRIKA_EMAIL");
+      }
+    });
+
+    it("config-loader.AC6.2: missing password produces validation error with PAPRIKA_PASSWORD hint", () => {
+      const result = paprikaConfigSchema.safeParse({ paprika: {} });
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        const error = ConfigError.validation(result.error.issues);
+        expect(error.reason).toContain("PAPRIKA_PASSWORD");
+      }
+    });
+
+    it("config-loader.AC6.3: empty string email fails validation", () => {
+      const input = {
+        paprika: { email: "", password: "secret" },
+      };
+      const result = paprikaConfigSchema.safeParse(input);
+      expect(result.success).toBe(false);
+    });
+  });
+
+  describe("config-loader.AC7: Type exports", () => {
+    const validBase = { paprika: { email: "user@test.com", password: "secret" } };
+
+    it("config-loader.AC7.1: PaprikaConfig has paprika, sync, and optional features fields", () => {
+      const result = paprikaConfigSchema.safeParse(validBase);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        const config = result.data;
+        expect(config).toHaveProperty("paprika");
+        expect(config).toHaveProperty("sync");
+        expect(typeof config.paprika).toBe("object");
+        expect(typeof config.sync).toBe("object");
+        expect("email" in config.paprika).toBe(true);
+        expect("password" in config.paprika).toBe(true);
+        expect("enabled" in config.sync).toBe(true);
+        expect("interval" in config.sync).toBe(true);
+        expect(config.features).toBeUndefined();
+      }
+    });
+
+    it("config-loader.AC7.2: EmbeddingConfig has required apiKey, baseUrl, model string fields", () => {
+      // Compile-time verification: this const can only be assigned if it has the required fields
+      const embeddingConfig: EmbeddingConfig = {
+        apiKey: "test-key",
+        baseUrl: "https://example.com",
+        model: "test-model",
+      };
+      expect(embeddingConfig.apiKey).toBe("test-key");
+      expect(embeddingConfig.baseUrl).toBe("https://example.com");
+      expect(embeddingConfig.model).toBe("test-model");
     });
   });
 });

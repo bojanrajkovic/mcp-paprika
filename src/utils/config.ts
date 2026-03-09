@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { parseDuration } from "./duration.js";
 
 const ENV_VAR_HINTS: Readonly<Record<string, string>> = {
   "paprika.email": "PAPRIKA_EMAIL",
@@ -43,3 +44,65 @@ export class ConfigError extends Error {
     return new ConfigError(reason, "validation");
   }
 }
+
+const durationField = z.union([z.string(), z.number()]).transform((val, ctx) => {
+  const result = parseDuration(val);
+  if (result.isErr()) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: result.error.reason,
+    });
+    return z.NEVER;
+  }
+  return result.value.as("milliseconds");
+});
+
+const BOOLEAN_STRINGS: Readonly<Record<string, boolean>> = {
+  true: true,
+  false: false,
+  "1": true,
+  "0": false,
+};
+
+const booleanField = z.union([z.boolean(), z.string()]).transform((val, ctx) => {
+  if (typeof val === "boolean") {
+    return val;
+  }
+  const mapped = BOOLEAN_STRINGS[val];
+  if (mapped === undefined) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: `expected "true", "false", "1", or "0", got ${JSON.stringify(val)}`,
+    });
+    return z.NEVER;
+  }
+  return mapped;
+});
+
+const embeddingConfigSchema = z.object({
+  apiKey: z.string().min(1),
+  baseUrl: z.string().min(1),
+  model: z.string().min(1),
+});
+
+export const paprikaConfigSchema = z.object({
+  paprika: z.object({
+    email: z.string().min(1),
+    password: z.string().min(1),
+  }),
+  sync: z
+    .object({
+      enabled: booleanField.default(true),
+      interval: durationField.default("15m"),
+    })
+    .default({}),
+  features: z
+    .object({
+      replicateApiToken: z.string().min(1).optional(),
+      embeddings: embeddingConfigSchema.optional(),
+    })
+    .optional(),
+});
+
+export type PaprikaConfig = z.infer<typeof paprikaConfigSchema>;
+export type EmbeddingConfig = z.infer<typeof embeddingConfigSchema>;

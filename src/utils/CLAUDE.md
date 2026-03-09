@@ -1,6 +1,6 @@
 # Cross-Cutting Utilities
 
-Last verified: 2026-03-06
+Last verified: 2026-03-09
 
 ## Purpose
 
@@ -37,9 +37,38 @@ dependencies (leaf module).
 | -------------------- | ------- | ------------------------------------------- |
 | `DurationParseError` | `Error` | `input: string \| number`, `reason: string` |
 
+### config.ts — Configuration loading, validation, and type definitions
+
+Provides config schema validation (zod), error handling, and type exports for Paprika MCP
+configuration. Bridges neverthrow `Result` types and env-var string coercion into zod validation
+pipeline via custom types `durationField` and `booleanField`. No I/O. Uses `duration.ts` for
+duration parsing.
+
+| Export                | Type      | Description                                                      |
+| --------------------- | --------- | ---------------------------------------------------------------- |
+| `paprikaConfigSchema` | ZodSchema | Zod schema for full config validation                            |
+| `PaprikaConfig`       | Type      | Inferred config shape: `paprika`, `sync`, optional features      |
+| `EmbeddingConfig`     | Type      | Inferred embedding config: required `apiKey`, `baseUrl`, `model` |
+| `ConfigError`         | Class     | Error with `kind` discriminant and 3 static factories            |
+
+| Method                        | Returns     | Purpose                                 |
+| ----------------------------- | ----------- | --------------------------------------- |
+| `ConfigError.invalidJson()`   | ConfigError | File parse error with JSON detail       |
+| `ConfigError.fileReadError()` | ConfigError | File I/O error with system detail       |
+| `ConfigError.validation()`    | ConfigError | Zod validation error with env var hints |
+
+| Const (internal) | Type    | Purpose                                                       |
+| ---------------- | ------- | ------------------------------------------------------------- |
+| `durationField`  | ZodType | Custom zod type: accepts `string \| number`, outputs ms       |
+| `booleanField`   | ZodType | Custom zod type: accepts `boolean \| string`, outputs boolean |
+| `ENV_VAR_HINTS`  | Record  | Maps config paths to env var names for error messages         |
+
 ## Dependencies
 
-- **Uses:** None (leaf module — no internal project imports)
-- **External packages:** xdg.ts uses `env-paths`; duration.ts uses `luxon`, `parse-duration`, `neverthrow`
+- **Uses:** duration.ts (for `parseDuration`), zod (for schemas)
+- **External packages:**
+  - xdg.ts uses `env-paths`
+  - duration.ts uses `luxon`, `parse-duration`, `neverthrow`
+  - config.ts uses `zod`, `neverthrow`
 - **Used by:** All other `src/` modules
-- **Boundary:** Must not import from any other `src/` module (leaf dependency)
+- **Boundary:** Must not import from any other `src/` module except duration.ts (leaf dependency)
