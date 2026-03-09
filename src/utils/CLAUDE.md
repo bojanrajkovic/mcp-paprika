@@ -44,9 +44,10 @@ defaults. Returns `Result<PaprikaConfig, ConfigError>` using neverthrow. Config 
 `getConfigDir()` (or an explicit path for testing). Synchronous — config loading is a one-time
 startup cost.
 
-| Function       | Returns                              |
-| -------------- | ------------------------------------ |
-| `loadConfig()` | `Result<PaprikaConfig, ConfigError>` |
+| Export                | Returns / Description                                          |
+| --------------------- | -------------------------------------------------------------- |
+| `loadConfig()`        | `Result<PaprikaConfig, ConfigError>`                           |
+| `paprikaConfigSchema` | Zod schema used for validation; defines canonical config shape |
 
 | Type              | Description                                                      |
 | ----------------- | ---------------------------------------------------------------- |
