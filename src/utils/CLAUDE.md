@@ -1,6 +1,6 @@
 # Cross-Cutting Utilities
 
-Last verified: 2026-03-09
+Last verified: 2026-03-08
 
 ## Purpose
 
@@ -37,38 +37,28 @@ dependencies (leaf module).
 | -------------------- | ------- | ------------------------------------------- |
 | `DurationParseError` | `Error` | `input: string \| number`, `reason: string` |
 
-### config.ts — Configuration loading, validation, and type definitions
+### config.ts — Application configuration loading
 
-Provides config schema validation (zod), error handling, and type exports for Paprika MCP
-configuration. Bridges neverthrow `Result` types and env-var string coercion into zod validation
-pipeline via custom types `durationField` and `booleanField`. No I/O. Uses `duration.ts` for
-duration parsing.
+Loads configuration from three sources with priority: env vars > `.env` file > `config.json` > zod
+defaults. Returns `Result<PaprikaConfig, ConfigError>` using neverthrow. Config files are read from
+`getConfigDir()` (or an explicit path for testing). Synchronous — config loading is a one-time
+startup cost.
 
-| Export                | Type      | Description                                                      |
-| --------------------- | --------- | ---------------------------------------------------------------- |
-| `paprikaConfigSchema` | ZodSchema | Zod schema for full config validation                            |
-| `PaprikaConfig`       | Type      | Inferred config shape: `paprika`, `sync`, optional features      |
-| `EmbeddingConfig`     | Type      | Inferred embedding config: required `apiKey`, `baseUrl`, `model` |
-| `ConfigError`         | Class     | Error with `kind` discriminant and 3 static factories            |
+| Function       | Returns                              |
+| -------------- | ------------------------------------ |
+| `loadConfig()` | `Result<PaprikaConfig, ConfigError>` |
 
-| Method                        | Returns     | Purpose                                 |
-| ----------------------------- | ----------- | --------------------------------------- |
-| `ConfigError.invalidJson()`   | ConfigError | File parse error with JSON detail       |
-| `ConfigError.fileReadError()` | ConfigError | File I/O error with system detail       |
-| `ConfigError.validation()`    | ConfigError | Zod validation error with env var hints |
+| Type              | Description                                                      |
+| ----------------- | ---------------------------------------------------------------- |
+| `PaprikaConfig`   | `{ paprika, sync, features? }` — validated application config    |
+| `EmbeddingConfig` | `{ apiKey, baseUrl, model }` — Phase 3 embedding provider config |
 
-| Const (internal) | Type    | Purpose                                                       |
-| ---------------- | ------- | ------------------------------------------------------------- |
-| `durationField`  | ZodType | Custom zod type: accepts `string \| number`, outputs ms       |
-| `booleanField`   | ZodType | Custom zod type: accepts `boolean \| string`, outputs boolean |
-| `ENV_VAR_HINTS`  | Record  | Maps config paths to env var names for error messages         |
+| Class         | Extends | Fields                                                                        |
+| ------------- | ------- | ----------------------------------------------------------------------------- |
+| `ConfigError` | `Error` | `kind: "invalid_json" \| "file_read_error" \| "validation"`, `reason: string` |
 
 ## Dependencies
 
-- **Uses:** duration.ts (for `parseDuration`), zod (for schemas)
-- **External packages:**
-  - xdg.ts uses `env-paths`
-  - duration.ts uses `luxon`, `parse-duration`, `neverthrow`
-  - config.ts uses `zod`, `neverthrow`
-- **Used by:** All other `src/` modules
-- **Boundary:** Must not import from any other `src/` module except duration.ts (leaf dependency)
+- **Leaf modules (no internal imports):** `xdg.ts` (uses `env-paths`), `duration.ts` (uses `luxon`, `parse-duration`, `neverthrow`)
+- **Non-leaf modules:** `config.ts` imports from `xdg.ts` and `duration.ts`; also uses `dotenv`, `zod`, `neverthrow`
+- **Used by:** All other `src/` modules may import from `src/utils/`
