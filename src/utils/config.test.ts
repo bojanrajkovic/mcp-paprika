@@ -224,6 +224,16 @@ describe("Configuration loading", () => {
       }
     });
 
+    it("config-loader.AC6.1b: entirely absent paprika produces env var hints", () => {
+      const result = paprikaConfigSchema.safeParse({});
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        const error = ConfigError.validation(result.error.issues);
+        expect(error.reason).toContain("PAPRIKA_EMAIL");
+        expect(error.reason).toContain("PAPRIKA_PASSWORD");
+      }
+    });
+
     it("config-loader.AC6.2: missing password produces validation error with PAPRIKA_PASSWORD hint", () => {
       const result = paprikaConfigSchema.safeParse({ paprika: {} });
       expect(result.success).toBe(false);
