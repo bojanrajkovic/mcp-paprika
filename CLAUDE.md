@@ -1,6 +1,6 @@
 # mcp-paprika
 
-Last verified: 2026-03-07
+Last verified: 2026-03-08
 
 MCP server for the Paprika recipe manager. Communicates over stdio transport — `console.log` writes to stdout which is the MCP wire format. Any stray console output corrupts the protocol. Use the MCP SDK's logging facility for diagnostics.
 
@@ -10,7 +10,7 @@ MCP server for the Paprika recipe manager. Communicates over stdio transport —
 - **Language:** TypeScript 5.9 (extends `@tsconfig/strictest` + `@tsconfig/node24`)
 - **Module system:** ESM (`"type": "module"`)
 - **Package manager:** pnpm 10.30.3 (corepack-managed)
-- **Key dependencies:** zod (validation), luxon (dates), dotenv (env config), parse-duration, neverthrow (error handling)
+- **Key dependencies:** @modelcontextprotocol/sdk (MCP protocol), zod (validation), luxon (dates), dotenv (env config), parse-duration (duration parsing), env-paths (XDG directories), neverthrow (error handling)
 
 ## Commands
 
@@ -37,6 +37,8 @@ MCP server for the Paprika recipe manager. Communicates over stdio transport —
 - `src/features/` — Feature implementations
 - `src/types/` — Shared type definitions
 - `src/utils/` — Cross-cutting utilities
+- `scripts/` — Build and verification scripts (run via `npx tsx`)
+- `docs/verified-api.md` — MCP SDK verified API reference (authoritative for import paths)
 - `.github/workflows/` — CI and PR validation workflows
 
 ## Code Conventions
@@ -70,7 +72,7 @@ Minimize runtime dependencies. Every new dependency must justify its inclusion:
 
 - Prefer Node.js built-in modules when available
 - Evaluate bundle size and maintenance status before adding packages
-- Current runtime deps: `zod`, `luxon`, `dotenv`, `parse-duration`, `env-paths`, `neverthrow`
+- Current runtime deps: `@modelcontextprotocol/sdk`, `zod`, `luxon`, `dotenv`, `parse-duration`, `env-paths`, `neverthrow`
 
 ## Testing
 

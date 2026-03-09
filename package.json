@@ -16,6 +16,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.27.1",
     "dotenv": "^16",
     "env-paths": "^4.0.0",
     "luxon": "^3",
