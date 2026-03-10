@@ -10,7 +10,7 @@ MCP server for the Paprika recipe manager. Communicates over stdio transport —
 - **Language:** TypeScript 5.9 (extends `@tsconfig/strictest` + `@tsconfig/node24`)
 - **Module system:** ESM (`"type": "module"`)
 - **Package manager:** pnpm 10.30.3 (corepack-managed)
-- **Key dependencies:** @modelcontextprotocol/sdk (MCP protocol), zod (validation), luxon (dates), dotenv (env config), parse-duration (duration parsing), env-paths (XDG directories), neverthrow (error handling)
+- **Key dependencies:** @modelcontextprotocol/sdk (MCP protocol), zod (validation), luxon (dates), dotenv (env config), parse-duration (duration parsing), env-paths (XDG directories), neverthrow (error handling), cockatiel (resilience/retry)
 
 ## Commands
 
@@ -72,7 +72,7 @@ Minimize runtime dependencies. Every new dependency must justify its inclusion:
 
 - Prefer Node.js built-in modules when available
 - Evaluate bundle size and maintenance status before adding packages
-- Current runtime deps: `@modelcontextprotocol/sdk`, `zod`, `luxon`, `dotenv`, `parse-duration`, `env-paths`, `neverthrow`
+- Current runtime deps: `@modelcontextprotocol/sdk`, `cockatiel`, `dotenv`, `env-paths`, `luxon`, `neverthrow`, `parse-duration`, `zod`
 
 ## Testing
 
@@ -80,6 +80,7 @@ Minimize runtime dependencies. Every new dependency must justify its inclusion:
 - **Test location:** Colocated with source as `src/**/*.test.ts`
 - **Property-based tests:** `*.property.test.ts` (using fast-check)
 - **Integration tests:** `*.test.integration.ts`
+- **HTTP mocking:** msw (Mock Service Worker) for intercepting fetch in tests
 - **Coverage target:** ≥ 70% for new code
 
 ## Git Conventions
