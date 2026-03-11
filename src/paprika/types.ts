@@ -24,7 +24,44 @@ export const CategoryEntrySchema = z.object({
 export type RecipeEntry = z.infer<typeof RecipeEntrySchema>;
 export type CategoryEntry = z.infer<typeof CategoryEntrySchema>;
 
-// RecipeSchema - accepts snake_case wire format, outputs camelCase
+// StoredSchema — validates camelCase JSON read back from disk. No transform.
+export const RecipeStoredSchema = z.object({
+  uid: RecipeUidSchema,
+  hash: z.string(),
+  name: z.string(),
+  categories: z.array(CategoryUidSchema),
+  ingredients: z.string(),
+  directions: z.string(),
+  description: z.string().nullable(),
+  notes: z.string().nullable(),
+  prepTime: z.string().nullable(),
+  cookTime: z.string().nullable(),
+  totalTime: z.string().nullable(),
+  servings: z.string().nullable(),
+  difficulty: z.string().nullable(),
+  rating: z.number().int(),
+  created: z.string(),
+  imageUrl: z.string(),
+  photo: z.string().nullable(),
+  photoHash: z.string().nullable(),
+  photoLarge: z.string().nullable(),
+  photoUrl: z.string().nullable(),
+  source: z.string().nullable(),
+  sourceUrl: z.string().nullable(),
+  onFavorites: z.boolean(),
+  inTrash: z.boolean(),
+  isPinned: z.boolean(),
+  onGroceryList: z.boolean(),
+  scale: z.string().nullable(),
+  nutritionalInfo: z.string().nullable(),
+});
+
+// Recipe type derived from RecipeStoredSchema.
+export type Recipe = z.infer<typeof RecipeStoredSchema>;
+
+// RecipeSchema — accepts snake_case wire format, transforms to camelCase Recipe.
+// The `: Recipe` annotation on the transform return ensures the compiler enforces
+// that RecipeSchema's output is always structurally identical to RecipeStoredSchema.
 export const RecipeSchema = z
   .object({
     uid: RecipeUidSchema,
@@ -72,7 +109,7 @@ export const RecipeSchema = z
       on_grocery_list,
       nutritional_info,
       ...rest
-    }) => ({
+    }): Recipe => ({
       ...rest,
       imageUrl: image_url,
       prepTime: prep_time,
@@ -90,9 +127,18 @@ export const RecipeSchema = z
     }),
   );
 
-export type Recipe = z.output<typeof RecipeSchema>;
+// StoredSchema — validates camelCase JSON read back from disk. No transform.
+export const CategoryStoredSchema = z.object({
+  uid: CategoryUidSchema,
+  name: z.string(),
+  orderFlag: z.number().int(),
+  parentUid: z.string().nullable(),
+});
 
-// CategorySchema - accepts snake_case wire format, outputs camelCase
+// Category type derived from CategoryStoredSchema.
+export type Category = z.infer<typeof CategoryStoredSchema>;
+
+// CategorySchema — accepts snake_case wire format, transforms to camelCase Category.
 export const CategorySchema = z
   .object({
     uid: CategoryUidSchema,
@@ -100,13 +146,13 @@ export const CategorySchema = z
     order_flag: z.number().int(),
     parent_uid: z.string().nullable(),
   })
-  .transform(({ order_flag, parent_uid, ...rest }) => ({
-    ...rest,
-    orderFlag: order_flag,
-    parentUid: parent_uid,
-  }));
-
-export type Category = z.output<typeof CategorySchema>;
+  .transform(
+    ({ order_flag, parent_uid, ...rest }): Category => ({
+      ...rest,
+      orderFlag: order_flag,
+      parentUid: parent_uid,
+    }),
+  );
 
 // AuthResponseSchema - nested object, no transform needed
 export const AuthResponseSchema = z.object({

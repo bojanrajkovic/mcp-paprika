@@ -1,6 +1,6 @@
 # Paprika API Client
 
-Last verified: 2026-03-09
+Last verified: 2026-03-11
 
 ## Files
 
@@ -28,8 +28,8 @@ HTTP client for the Paprika Cloud Sync API. Handles authentication, request form
 
 **Object Types (API responses with snake_case → camelCase transforms):**
 
-- `Recipe` — Full recipe object with 28 fields; output of `RecipeSchema`
-- `Category` — Category with `uid`, `name`, `orderFlag`, `parentUid`; output of `CategorySchema`
+- `Recipe` — Full recipe object with 28 fields; output of `RecipeStoredSchema` and `RecipeSchema`
+- `Category` — Category with `uid`, `name`, `orderFlag`, `parentUid`; output of `CategoryStoredSchema` and `CategorySchema`
 - `AuthResponse` — Authentication response `{result: {token: string}}`; output of `AuthResponseSchema`
 
 **Domain Types:**
@@ -40,11 +40,19 @@ HTTP client for the Paprika Cloud Sync API. Handles authentication, request form
 
 ### Zod Schemas
 
-All schemas accept snake_case input (API wire format) and transform to camelCase for application use:
+**Wire Format Schemas** (accept snake_case input, transform to camelCase):
 
-- `RecipeSchema` — Validates and transforms full recipe objects
-- `CategorySchema` — Validates and transforms category objects
+- `RecipeSchema` — Validates and transforms full recipe objects from API (snake_case input → camelCase Recipe)
+- `CategorySchema` — Validates and transforms category objects from API (snake_case input → camelCase Category)
 - `AuthResponseSchema` — Validates authentication responses
+
+**Stored Format Schemas** (validate camelCase JSON from disk, no transform):
+
+- `RecipeStoredSchema` — Validates camelCase recipe JSON read from disk (no transform)
+- `CategoryStoredSchema` — Validates camelCase category JSON read from disk (no transform)
+
+**Entry and UID Schemas:**
+
 - Entry schemas: `RecipeEntrySchema`, `CategoryEntrySchema`
 - UID schemas: `RecipeUidSchema`, `CategoryUidSchema`
 
