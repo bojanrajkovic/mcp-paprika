@@ -6,7 +6,7 @@ Last verified: 2026-03-11
 
 - `types.ts` — Zod schemas and TypeScript types for Paprika API wire format
 - `errors.ts` — Error class hierarchy for API operations
-- `client.ts` — Typed HTTP client for Paprika Cloud Sync API (auth + resilient requests)
+- `client.ts` — Typed HTTP client for Paprika Cloud Sync API (auth, recipe/category reads, resilient requests)
 
 ## Purpose
 
@@ -70,7 +70,7 @@ Typed HTTP client wrapping the Paprika Cloud Sync API.
 
 **Exports:**
 
-- `PaprikaClient` — class with `authenticate()` and private `request<T>()`
+- `PaprikaClient` — class with `authenticate()`, recipe/category read methods, and private `request<T>()`
 
 **Construction:**
 
@@ -79,9 +79,12 @@ Typed HTTP client wrapping the Paprika Cloud Sync API.
 **Public API:**
 
 - `authenticate(): Promise<void>` — POSTs form-encoded credentials to v1 login endpoint, stores JWT token
-- No recipe/category read/write methods — deferred to P1-U06/P1-U07
+- `listRecipes(): Promise<Array<RecipeEntry>>` — fetches lightweight recipe list from `/api/v2/sync/recipes/`
+- `getRecipe(uid: string): Promise<Recipe>` — fetches full recipe details from `/api/v2/sync/recipe/{uid}/`
+- `getRecipes(uids: ReadonlyArray<string>): Promise<Array<Recipe>>` — fans out to `getRecipe()` with bulkhead(5) concurrency limit
+- `listCategories(): Promise<Array<Category>>` — fetches category list, then hydrates each with bulkhead(5) concurrency limit independent of recipe bulkhead
 
-**Private API (P1-U06/U07 will add public methods to this class that call request):**
+**Private API:**
 
 - `request<T>(method, url, schema, body?): Promise<T>` — authenticated v2 API calls with:
   - Bearer token header (when token exists)
@@ -92,8 +95,9 @@ Typed HTTP client wrapping the Paprika Cloud Sync API.
 
 **Dependencies:**
 
-- **Uses:** `zod` (response validation), `cockatiel` (retry + circuit breaker), `./types.js` (AuthResponseSchema), `./errors.js` (PaprikaAuthError, PaprikaAPIError)
-- **Used by:** P1-U06 (recipe methods), P1-U07 (category methods) — will add public methods that call `request<T>()`
+- **Uses:** `zod` (response validation), `cockatiel` (retry + circuit breaker + bulkhead), `./types.js` (schemas), `./errors.js` (error classes)
+- **Used by:** `features/`, `tools/`, `resources/` — P1-U07 will add category write methods
+- **Boundary:** Must not import from `tools/`, `resources/`, or `features/`
 
 ## Dependencies
 

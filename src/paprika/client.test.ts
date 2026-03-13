@@ -3,9 +3,43 @@ import { setupServer } from "msw/node";
 import { http, HttpResponse } from "msw";
 import { ZodError } from "zod";
 import { PaprikaClient } from "./client.js";
-import { PaprikaAuthError } from "./errors.js";
+import { PaprikaAPIError, PaprikaAuthError } from "./errors.js";
 
 const AUTH_URL = "https://paprikaapp.com/api/v1/account/login/";
+const API_BASE = "https://paprikaapp.com/api/v2/sync";
+
+function makeSnakeCaseRecipe(uid: string): object {
+  return {
+    uid,
+    hash: `hash-${uid}`,
+    name: `Recipe ${uid}`,
+    categories: [],
+    ingredients: "eggs, flour",
+    directions: "Mix and bake.",
+    description: null,
+    notes: null,
+    prep_time: null,
+    cook_time: null,
+    total_time: null,
+    servings: null,
+    difficulty: null,
+    rating: 0,
+    created: "2024-01-01T00:00:00Z",
+    image_url: "",
+    photo: null,
+    photo_hash: null,
+    photo_large: null,
+    photo_url: null,
+    source: null,
+    source_url: null,
+    on_favorites: false,
+    in_trash: false,
+    is_pinned: false,
+    on_grocery_list: false,
+    scale: null,
+    nutritional_info: null,
+  };
+}
 
 const server = setupServer();
 
@@ -169,6 +203,78 @@ describe("PaprikaClient", () => {
     });
   });
 
+  describe("p1-u06-client-reads.AC1: listRecipes() returns a recipe entry list", () => {
+    it("p1-u06-client-reads.AC1.1 - returns RecipeEntry[] with uid and hash from /api/v2/sync/recipes/", async () => {
+      server.use(
+        http.get(`${API_BASE}/recipes/`, () => {
+          return HttpResponse.json({
+            result: [
+              { uid: "uid-1", hash: "h1" },
+              { uid: "uid-2", hash: "h2" },
+            ],
+          });
+        }),
+      );
+
+      const client = new PaprikaClient("test@example.com", "password");
+      const recipes = await client.listRecipes();
+
+      expect(recipes).toHaveLength(2);
+      expect(recipes[0]!.uid).toBe("uid-1");
+      expect(recipes[0]!.hash).toBe("h1");
+      expect(recipes[1]!.uid).toBe("uid-2");
+      expect(recipes[1]!.hash).toBe("h2");
+    });
+
+    it("p1-u06-client-reads.AC1.2 - returns empty array when API returns empty result", async () => {
+      server.use(
+        http.get(`${API_BASE}/recipes/`, () => {
+          return HttpResponse.json({ result: [] });
+        }),
+      );
+
+      const client = new PaprikaClient("test@example.com", "password");
+      const recipes = await client.listRecipes();
+
+      expect(recipes).toStrictEqual([]);
+    });
+  });
+
+  describe("p1-u06-client-reads.AC2: getRecipe() returns a full recipe by UID", () => {
+    it("p1-u06-client-reads.AC2.1 - returns Recipe object with camelCase fields", async () => {
+      server.use(
+        http.get(`${API_BASE}/recipe/test-uid/`, () => {
+          return HttpResponse.json({ result: makeSnakeCaseRecipe("test-uid") });
+        }),
+      );
+
+      const client = new PaprikaClient("test@example.com", "password");
+      const recipe = await client.getRecipe("test-uid");
+
+      expect(recipe.name).toBe("Recipe test-uid");
+      expect(recipe.prepTime).toBe(null);
+      expect(recipe.onFavorites).toBe(false);
+      expect(recipe.imageUrl).toBe("");
+    });
+
+    it("p1-u06-client-reads.AC2.2 - non-2xx response throws PaprikaAPIError", async () => {
+      server.use(
+        http.get(`${API_BASE}/recipe/not-found/`, () => {
+          return HttpResponse.json({}, { status: 404 });
+        }),
+      );
+
+      const client = new PaprikaClient("test@example.com", "password");
+
+      try {
+        await client.getRecipe("not-found");
+        expect.fail("Should have thrown PaprikaAPIError");
+      } catch (error) {
+        expect(error).toBeInstanceOf(PaprikaAPIError);
+      }
+    });
+  });
+
   describe.todo("p1-u05-client-auth.AC2: Request helper adds auth and unwraps envelope", () => {
     // Tests deferred to P1-U06 when public methods exist that call request<T>().
     // request<T>() is private and cannot be tested directly.
@@ -193,5 +299,199 @@ describe("PaprikaClient", () => {
     // AC4.1: Status codes 429, 500, 502, 503 retried with exponential backoff
     // AC4.2: Circuit breaker opens after 5 consecutive failures
     // AC4.3: Non-retryable statuses (400, 403, 404) not retried
+  });
+
+  describe("p1-u06-client-reads.AC3: getRecipes() fetches multiple recipes with concurrency limiting", () => {
+    it("p1-u06-client-reads.AC3.1 - returns Recipe[] with one entry per provided UID, in same order", async () => {
+      server.use(
+        http.get(`${API_BASE}/recipe/:uid/`, ({ params }) => {
+          return HttpResponse.json({ result: makeSnakeCaseRecipe(params.uid as string) });
+        }),
+      );
+
+      const client = new PaprikaClient("test@example.com", "password");
+      const recipes = await client.getRecipes(["uid-1", "uid-2", "uid-3"]);
+
+      expect(recipes).toHaveLength(3);
+      expect(recipes[0]!.name).toBe("Recipe uid-1");
+      expect(recipes[1]!.name).toBe("Recipe uid-2");
+      expect(recipes[2]!.name).toBe("Recipe uid-3");
+    });
+
+    it("p1-u06-client-reads.AC3.2 - getRecipes([]) returns [] with zero HTTP requests", async () => {
+      // Deliberately NOT registering any handler — if a request is made, MSW returns 500
+      const client = new PaprikaClient("test@example.com", "password");
+      const recipes = await client.getRecipes([]);
+
+      expect(recipes).toStrictEqual([]);
+    });
+
+    it("p1-u06-client-reads.AC3.3 - at most 5 getRecipe() calls execute simultaneously", async () => {
+      let inFlight = 0;
+      let peakInFlight = 0;
+
+      server.use(
+        http.get(`${API_BASE}/recipe/:uid/`, async ({ params }) => {
+          inFlight++;
+          peakInFlight = Math.max(peakInFlight, inFlight);
+          await new Promise((resolve) => setTimeout(resolve, 20));
+          inFlight--;
+          return HttpResponse.json({ result: makeSnakeCaseRecipe(params.uid as string) });
+        }),
+      );
+
+      const uids = Array.from({ length: 10 }, (_, i) => `uid-${i.toString()}`);
+      const client = new PaprikaClient("test@example.com", "password");
+      await client.getRecipes(uids);
+
+      expect(peakInFlight).toBeLessThanOrEqual(5);
+    });
+
+    it("p1-u06-client-reads.AC3.4 - a single recipe fetch error causes entire getRecipes() to reject", async () => {
+      server.use(
+        http.get(`${API_BASE}/recipe/good-uid/`, () => {
+          return HttpResponse.json({ result: makeSnakeCaseRecipe("good-uid") });
+        }),
+        http.get(`${API_BASE}/recipe/bad-uid/`, () => {
+          return HttpResponse.json({}, { status: 404 });
+        }),
+      );
+
+      const client = new PaprikaClient("test@example.com", "password");
+
+      try {
+        await client.getRecipes(["good-uid", "bad-uid"]);
+        expect.fail("Should have thrown");
+      } catch (error) {
+        expect(error).toBeInstanceOf(PaprikaAPIError);
+      }
+    });
+  });
+
+  describe("p1-u06-client-reads.AC4: listCategories() returns hydrated Category objects", () => {
+    it("p1-u06-client-reads.AC4.1 - returns Category[] with camelCase fields (not snake_case)", async () => {
+      server.use(
+        http.get(`${API_BASE}/categories/`, () => {
+          return HttpResponse.json({ result: [{ uid: "cat-1", hash: "h1" }] });
+        }),
+        http.get(`${API_BASE}/category/cat-1/`, () => {
+          return HttpResponse.json({
+            result: {
+              uid: "cat-1",
+              name: "Breakfast",
+              order_flag: 1,
+              parent_uid: null,
+            },
+          });
+        }),
+      );
+
+      const client = new PaprikaClient("test@example.com", "password");
+      const categories = await client.listCategories();
+
+      expect(categories).toHaveLength(1);
+      expect(categories[0]!.name).toBe("Breakfast");
+      expect(categories[0]!.orderFlag).toBe(1);
+      expect(categories[0]!.parentUid).toBe(null);
+    });
+
+    it("p1-u06-client-reads.AC4.2 - makes exactly one /categories/ request then N /category/{uid}/ requests", async () => {
+      let listCount = 0;
+      let hydrateCount = 0;
+
+      server.use(
+        http.get(`${API_BASE}/categories/`, () => {
+          listCount++;
+          return HttpResponse.json({
+            result: [
+              { uid: "c1", hash: "h1" },
+              { uid: "c2", hash: "h2" },
+            ],
+          });
+        }),
+        http.get(`${API_BASE}/category/:uid/`, ({ params }) => {
+          hydrateCount++;
+          const uid = params.uid as string;
+          return HttpResponse.json({
+            result: {
+              uid,
+              name: `Category ${uid}`,
+              order_flag: 0,
+              parent_uid: null,
+            },
+          });
+        }),
+      );
+
+      const client = new PaprikaClient("test@example.com", "password");
+      await client.listCategories();
+
+      expect(listCount).toBe(1);
+      expect(hydrateCount).toBe(2);
+    });
+
+    it("p1-u06-client-reads.AC4.3 - returns [] when /categories/ returns empty list, no hydration requests made", async () => {
+      server.use(
+        http.get(`${API_BASE}/categories/`, () => {
+          return HttpResponse.json({ result: [] });
+        }),
+      );
+
+      const client = new PaprikaClient("test@example.com", "password");
+      const categories = await client.listCategories();
+
+      expect(categories).toStrictEqual([]);
+    });
+
+    it("p1-u06-client-reads.AC4.4 - at most 5 hydration requests execute simultaneously, independent of recipe bulkhead", async () => {
+      let catInFlight = 0;
+      let catPeakInFlight = 0;
+      let recipeInFlight = 0;
+      let recipePeakInFlight = 0;
+
+      server.use(
+        http.get(`${API_BASE}/categories/`, () => {
+          return HttpResponse.json({
+            result: Array.from({ length: 10 }, (_, i) => ({
+              uid: `cat-${i.toString()}`,
+              hash: `h${i.toString()}`,
+            })),
+          });
+        }),
+        http.get(`${API_BASE}/category/:uid/`, async ({ params }) => {
+          catInFlight++;
+          catPeakInFlight = Math.max(catPeakInFlight, catInFlight);
+          await new Promise((resolve) => setTimeout(resolve, 20));
+          catInFlight--;
+          const uid = params.uid as string;
+          return HttpResponse.json({
+            result: {
+              uid,
+              name: `Category ${uid}`,
+              order_flag: 0,
+              parent_uid: null,
+            },
+          });
+        }),
+        http.get(`${API_BASE}/recipe/:uid/`, async ({ params }) => {
+          recipeInFlight++;
+          recipePeakInFlight = Math.max(recipePeakInFlight, recipeInFlight);
+          await new Promise((resolve) => setTimeout(resolve, 20));
+          recipeInFlight--;
+          return HttpResponse.json({ result: makeSnakeCaseRecipe(params.uid as string) });
+        }),
+      );
+
+      const client = new PaprikaClient("test@example.com", "password");
+
+      // Run listCategories and getRecipes concurrently
+      await Promise.all([
+        client.listCategories(),
+        client.getRecipes(Array.from({ length: 10 }, (_, i) => `uid-${i.toString()}`)),
+      ]);
+
+      expect(catPeakInFlight).toBeLessThanOrEqual(5);
+      expect(recipePeakInFlight).toBeLessThanOrEqual(5);
+    });
   });
 });

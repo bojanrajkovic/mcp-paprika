@@ -4,27 +4,27 @@
  * Encapsulates authentication against the v1 login endpoint
  * and resilient request execution against the v2 data endpoint.
  *
- * No recipe or category read/write methods — those are deferred
- * to P1-U06 and P1-U07.
+ * Provides recipe and category read methods. Category write methods
+ * are deferred to P1-U07.
  */
 
 import {
   ExponentialBackoff,
   ConsecutiveBreaker,
+  bulkhead,
   retry,
   circuitBreaker,
   handleType,
   wrap,
   BrokenCircuitError,
 } from "cockatiel";
-import type { ZodType } from "zod";
 import { z } from "zod";
-import { AuthResponseSchema } from "./types.js";
+import type { ZodType, ZodTypeDef } from "zod";
+import type { Category, Recipe, RecipeEntry } from "./types.js";
+import { AuthResponseSchema, CategoryEntrySchema, CategorySchema, RecipeEntrySchema, RecipeSchema } from "./types.js";
 import { PaprikaAuthError, PaprikaAPIError } from "./errors.js";
 
 const AUTH_URL = "https://paprikaapp.com/api/v1/account/login/";
-// @ts-expect-error API_BASE will be used by public methods in P1-U06 and P1-U07
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const API_BASE = "https://paprikaapp.com/api/v2/sync";
 
 class TransientHTTPError extends Error {
@@ -60,6 +60,8 @@ const resilience = wrap(retryPolicy, breakerPolicy);
 
 export class PaprikaClient {
   private token: string | null = null;
+  private readonly _recipesBulkhead = bulkhead(5, Number.MAX_SAFE_INTEGER);
+  private readonly _categoriesBulkhead = bulkhead(5, Number.MAX_SAFE_INTEGER);
 
   constructor(
     private readonly email: string,
@@ -81,11 +83,33 @@ export class PaprikaClient {
     this.token = data.result.token;
   }
 
-  // @ts-expect-error request will be used by public methods in P1-U06 and P1-U07
+  async listRecipes(): Promise<Array<RecipeEntry>> {
+    return this.request("GET", `${API_BASE}/recipes/`, z.array(RecipeEntrySchema));
+  }
+
+  async getRecipe(uid: string): Promise<Recipe> {
+    return this.request("GET", `${API_BASE}/recipe/${uid}/`, RecipeSchema);
+  }
+
+  async getRecipes(uids: ReadonlyArray<string>): Promise<Array<Recipe>> {
+    return Promise.all(uids.map((uid) => this._recipesBulkhead.execute(() => this.getRecipe(uid))));
+  }
+
+  async listCategories(): Promise<Array<Category>> {
+    const entries = await this.request("GET", `${API_BASE}/categories/`, z.array(CategoryEntrySchema));
+    return Promise.all(
+      entries.map((entry) =>
+        this._categoriesBulkhead.execute(() =>
+          this.request("GET", `${API_BASE}/category/${entry.uid}/`, CategorySchema),
+        ),
+      ),
+    );
+  }
+
   private async request<T>(
     method: "GET" | "POST",
     url: string,
-    schema: ZodType<T>,
+    schema: ZodType<T, ZodTypeDef, unknown>,
     body?: FormData | URLSearchParams,
   ): Promise<T> {
     const execute = async (): Promise<T> => {
