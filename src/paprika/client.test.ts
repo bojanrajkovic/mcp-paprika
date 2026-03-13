@@ -2,8 +2,11 @@ import { describe, it, expect, beforeAll, afterAll, afterEach } from "vitest";
 import { setupServer } from "msw/node";
 import { http, HttpResponse } from "msw";
 import { ZodError } from "zod";
+import { gunzipSync } from "node:zlib";
 import { PaprikaClient } from "./client.js";
 import { PaprikaAPIError, PaprikaAuthError } from "./errors.js";
+import type { Recipe } from "./types.js";
+import { RecipeSchema, RecipeUidSchema } from "./types.js";
 
 const AUTH_URL = "https://paprikaapp.com/api/v1/account/login/";
 const API_BASE = "https://paprikaapp.com/api/v2/sync";
@@ -39,6 +42,10 @@ function makeSnakeCaseRecipe(uid: string): object {
     scale: null,
     nutritional_info: null,
   };
+}
+
+function makeCamelCaseRecipe(uid: string): Recipe {
+  return RecipeSchema.parse(makeSnakeCaseRecipe(uid));
 }
 
 const server = setupServer();
@@ -492,6 +499,202 @@ describe("PaprikaClient", () => {
 
       expect(catPeakInFlight).toBeLessThanOrEqual(5);
       expect(recipePeakInFlight).toBeLessThanOrEqual(5);
+    });
+  });
+
+  describe("p1-u07-client-writes.AC1: saveRecipe encodes and POSTs correctly", () => {
+    it("p1-u07-client-writes.AC1.1 - POST sent to correct URL", async () => {
+      const uid = "test-uid";
+      let capturedUrl = "";
+
+      server.use(
+        http.post(`${API_BASE}/recipe/${uid}/`, ({ request }) => {
+          capturedUrl = request.url;
+          return HttpResponse.json({ result: makeSnakeCaseRecipe(uid) });
+        }),
+      );
+
+      const client = new PaprikaClient("test@example.com", "password");
+      await client.saveRecipe(makeCamelCaseRecipe(uid));
+
+      expect(capturedUrl).toBe(`${API_BASE}/recipe/${uid}/`);
+    });
+
+    it("p1-u07-client-writes.AC1.2 and AC1.3 - FormData encodes correctly with snake_case keys and all 28 fields", async () => {
+      const uid = "test-uid";
+      let payload: Record<string, unknown> | null = null;
+
+      server.use(
+        http.post(`${API_BASE}/recipe/${uid}/`, async ({ request }) => {
+          const formData = await request.formData();
+          const dataBlob = formData.get("data") as Blob;
+          const arrayBuffer = await dataBlob.arrayBuffer();
+          const decompressed = gunzipSync(Buffer.from(arrayBuffer));
+          payload = JSON.parse(decompressed.toString()) as Record<string, unknown>;
+          return HttpResponse.json({ result: makeSnakeCaseRecipe(uid) });
+        }),
+      );
+
+      const client = new PaprikaClient("test@example.com", "password");
+      await client.saveRecipe(makeCamelCaseRecipe(uid));
+
+      expect(payload).toBeDefined();
+      // AC1.2: Assert specific snake_case keys exist
+      expect(payload).toHaveProperty("prep_time");
+      expect(payload).toHaveProperty("cook_time");
+      expect(payload).toHaveProperty("total_time");
+      expect(payload).toHaveProperty("image_url");
+      expect(payload).toHaveProperty("on_favorites");
+      expect(payload).toHaveProperty("in_trash");
+      expect(payload).toHaveProperty("is_pinned");
+      expect(payload).toHaveProperty("on_grocery_list");
+      expect(payload).toHaveProperty("nutritional_info");
+
+      // AC1.2: Assert camelCase equivalents do NOT exist
+      expect(payload).not.toHaveProperty("prepTime");
+      expect(payload).not.toHaveProperty("imageUrl");
+      expect(payload).not.toHaveProperty("onFavorites");
+
+      // AC1.3: Assert exactly 28 fields
+      expect(Object.keys(payload!).length).toBe(28);
+    });
+
+    it("p1-u07-client-writes.AC1.4 - Server response deserialized as camelCase Recipe", async () => {
+      const uid = "test-uid";
+
+      server.use(
+        http.post(`${API_BASE}/recipe/${uid}/`, () => {
+          return HttpResponse.json({ result: makeSnakeCaseRecipe(uid) });
+        }),
+      );
+
+      const client = new PaprikaClient("test@example.com", "password");
+      const result = await client.saveRecipe(makeCamelCaseRecipe(uid));
+
+      // Assert camelCase properties exist
+      expect(result).toHaveProperty("prepTime");
+      expect(result).toHaveProperty("onFavorites");
+      expect(result).toHaveProperty("imageUrl");
+
+      // Assert snake_case properties do NOT exist
+      expect(result).not.toHaveProperty("prep_time");
+      expect(result).not.toHaveProperty("on_favorites");
+      expect(result).not.toHaveProperty("image_url");
+    });
+
+    it("p1-u07-client-writes.AC1.5 - Non-2xx response throws PaprikaAPIError", async () => {
+      const uid = "test-uid";
+
+      server.use(
+        http.post(`${API_BASE}/recipe/${uid}/`, () => {
+          return HttpResponse.json({}, { status: 422 });
+        }),
+      );
+
+      const client = new PaprikaClient("test@example.com", "password");
+
+      try {
+        await client.saveRecipe(makeCamelCaseRecipe(uid));
+        expect.fail("Should have thrown PaprikaAPIError");
+      } catch (error) {
+        expect(error).toBeInstanceOf(PaprikaAPIError);
+      }
+    });
+  });
+
+  describe("p1-u07-client-writes.AC3: notifySync propagates changes", () => {
+    it("p1-u07-client-writes.AC3.1 - POSTs to /api/v2/sync/notify/", async () => {
+      let notifyReached = false;
+
+      server.use(
+        http.post(`${API_BASE}/notify/`, () => {
+          notifyReached = true;
+          return HttpResponse.json({ result: {} });
+        }),
+      );
+
+      const client = new PaprikaClient("test@example.com", "password");
+      await client.notifySync();
+
+      expect(notifyReached).toBe(true);
+    });
+
+    it("p1-u07-client-writes.AC3.2 - Returns void (Promise resolves with undefined)", async () => {
+      server.use(
+        http.post(`${API_BASE}/notify/`, () => {
+          return HttpResponse.json({ result: {} });
+        }),
+      );
+
+      const client = new PaprikaClient("test@example.com", "password");
+      const result = await client.notifySync();
+
+      expect(result).toBeUndefined();
+    });
+  });
+
+  describe("p1-u07-client-writes.AC2: deleteRecipe soft-deletes via trash flag", () => {
+    it("p1-u07-client-writes.AC2.1 and AC2.2 - GETs recipe, POSTs with in_trash: true, then calls notifySync", async () => {
+      const uid = "test-uid";
+      let capturedPayload: Record<string, unknown> | null = null;
+      let notifyReached = false;
+
+      server.use(
+        http.get(`${API_BASE}/recipe/${uid}/`, () => {
+          return HttpResponse.json({ result: makeSnakeCaseRecipe(uid) });
+        }),
+        http.post(`${API_BASE}/recipe/${uid}/`, async ({ request }) => {
+          const formData = await request.formData();
+          const dataBlob = formData.get("data") as Blob;
+          const arrayBuffer = await dataBlob.arrayBuffer();
+          const decompressed = gunzipSync(Buffer.from(arrayBuffer));
+          capturedPayload = JSON.parse(decompressed.toString()) as Record<string, unknown>;
+          return HttpResponse.json({ result: makeSnakeCaseRecipe(uid) });
+        }),
+        http.post(`${API_BASE}/notify/`, () => {
+          notifyReached = true;
+          return HttpResponse.json({ result: {} });
+        }),
+      );
+
+      const client = new PaprikaClient("test@example.com", "password");
+      await client.deleteRecipe(RecipeUidSchema.parse(uid));
+
+      // AC2.1: Assert in_trash is true in payload
+      expect(capturedPayload).toBeDefined();
+      expect(capturedPayload!.in_trash).toBe(true);
+
+      // AC2.2: Assert notifySync was called
+      expect(notifyReached).toBe(true);
+    });
+
+    it("p1-u07-client-writes.AC2.3 - 404 from getRecipe throws error and never calls saveRecipe or notifySync", async () => {
+      const uid = "not-found";
+      let notifyReached = false;
+
+      server.use(
+        http.get(`${API_BASE}/recipe/${uid}/`, () => {
+          return HttpResponse.json({}, { status: 404 });
+        }),
+        http.post(`${API_BASE}/notify/`, () => {
+          notifyReached = true;
+          return HttpResponse.json({ result: {} });
+        }),
+        // Deliberately NOT registering a handler for saveRecipe POST
+        // If it's called, MSW will return 500 and the test will fail
+      );
+
+      const client = new PaprikaClient("test@example.com", "password");
+
+      try {
+        await client.deleteRecipe(RecipeUidSchema.parse(uid));
+        expect.fail("Should have thrown PaprikaAPIError");
+      } catch (error) {
+        expect(error).toBeInstanceOf(PaprikaAPIError);
+      }
+
+      // Assert notify was never called
+      expect(notifyReached).toBe(false);
     });
   });
 });

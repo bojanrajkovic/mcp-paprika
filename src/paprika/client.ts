@@ -4,10 +4,11 @@
  * Encapsulates authentication against the v1 login endpoint
  * and resilient request execution against the v2 data endpoint.
  *
- * Provides recipe and category read methods. Category write methods
- * are deferred to P1-U07.
+ * Provides recipe and category read methods, plus write methods
+ * added in P1-U07 (saveRecipe, deleteRecipe, notifySync).
  */
 
+import { gzipSync } from "node:zlib";
 import {
   ExponentialBackoff,
   ConsecutiveBreaker,
@@ -20,7 +21,7 @@ import {
 } from "cockatiel";
 import { z } from "zod";
 import type { ZodType, ZodTypeDef } from "zod";
-import type { Category, Recipe, RecipeEntry } from "./types.js";
+import type { Category, Recipe, RecipeEntry, RecipeUid } from "./types.js";
 import { AuthResponseSchema, CategoryEntrySchema, CategorySchema, RecipeEntrySchema, RecipeSchema } from "./types.js";
 import { PaprikaAuthError, PaprikaAPIError } from "./errors.js";
 
@@ -57,6 +58,39 @@ const breakerPolicy = circuitBreaker(handleType(TransientHTTPError), {
 });
 
 const resilience = wrap(retryPolicy, breakerPolicy);
+
+function recipeToApiPayload(recipe: Readonly<Recipe>): Record<string, unknown> {
+  return {
+    uid: recipe.uid,
+    hash: recipe.hash,
+    name: recipe.name,
+    categories: recipe.categories,
+    ingredients: recipe.ingredients,
+    directions: recipe.directions,
+    description: recipe.description,
+    notes: recipe.notes,
+    prep_time: recipe.prepTime,
+    cook_time: recipe.cookTime,
+    total_time: recipe.totalTime,
+    servings: recipe.servings,
+    difficulty: recipe.difficulty,
+    rating: recipe.rating,
+    created: recipe.created,
+    image_url: recipe.imageUrl,
+    photo: recipe.photo,
+    photo_hash: recipe.photoHash,
+    photo_large: recipe.photoLarge,
+    photo_url: recipe.photoUrl,
+    source: recipe.source,
+    source_url: recipe.sourceUrl,
+    on_favorites: recipe.onFavorites,
+    in_trash: recipe.inTrash,
+    is_pinned: recipe.isPinned,
+    on_grocery_list: recipe.onGroceryList,
+    scale: recipe.scale,
+    nutritional_info: recipe.nutritionalInfo,
+  };
+}
 
 export class PaprikaClient {
   private token: string | null = null;
@@ -104,6 +138,31 @@ export class PaprikaClient {
         ),
       ),
     );
+  }
+
+  async saveRecipe(recipe: Readonly<Recipe>): Promise<Recipe> {
+    const formData = this.buildRecipeFormData(recipe);
+    return this.request("POST", `${API_BASE}/recipe/${recipe.uid}/`, RecipeSchema, formData);
+  }
+
+  async notifySync(): Promise<void> {
+    await this.request("POST", `${API_BASE}/notify/`, z.unknown());
+  }
+
+  async deleteRecipe(uid: RecipeUid): Promise<void> {
+    const recipe = await this.getRecipe(uid);
+    await this.saveRecipe({ ...recipe, inTrash: true });
+    await this.notifySync();
+  }
+
+  private buildRecipeFormData(recipe: Readonly<Recipe>): FormData {
+    const payload = recipeToApiPayload(recipe);
+    const json = JSON.stringify(payload);
+    const compressed = gzipSync(json);
+    const blob = new Blob([compressed]);
+    const formData = new FormData();
+    formData.append("data", blob, "data.gz");
+    return formData;
   }
 
   private async request<T>(
