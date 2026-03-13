@@ -7,13 +7,14 @@ describe("Duration property-based tests", () => {
     it("Property 1: For any valid duration (positive integer minutes), parsing and formatting should produce a non-empty string", () => {
       fc.assert(
         fc.property(fc.integer({ min: 1, max: 10000 }), (minutes) => {
-          const result = parseDuration(minutes);
-
-          expect(result.isOk()).toBe(true);
-          if (result.isOk()) {
-            const formatted = formatDuration(result.value);
-            expect(formatted).not.toBe("");
-          }
+          parseDuration(minutes).match(
+            (duration) => {
+              expect(formatDuration(duration)).not.toBe("");
+            },
+            () => {
+              expect.fail("Expected Ok but got Err");
+            },
+          );
         }),
       );
     });
@@ -21,19 +22,22 @@ describe("Duration property-based tests", () => {
     it("Property 2: Idempotence of formatting - parsing a formatted string and re-formatting should yield the same string", () => {
       fc.assert(
         fc.property(fc.integer({ min: 1, max: 10000 }), (minutes) => {
-          const result1 = parseDuration(minutes);
-
-          expect(result1.isOk()).toBe(true);
-          if (result1.isOk()) {
-            const formatted1 = formatDuration(result1.value);
-            const result2 = parseDuration(formatted1);
-
-            expect(result2.isOk()).toBe(true);
-            if (result2.isOk()) {
-              const formatted2 = formatDuration(result2.value);
-              expect(formatted1).toBe(formatted2);
-            }
-          }
+          parseDuration(minutes).match(
+            (d1) => {
+              const formatted1 = formatDuration(d1);
+              parseDuration(formatted1).match(
+                (d2) => {
+                  expect(formatted1).toBe(formatDuration(d2));
+                },
+                () => {
+                  expect.fail("Expected Ok for re-parsed duration but got Err");
+                },
+              );
+            },
+            () => {
+              expect.fail("Expected Ok but got Err");
+            },
+          );
         }),
       );
     });
@@ -52,13 +56,14 @@ describe("Duration property-based tests", () => {
               return;
             }
 
-            const result = parseDuration(num);
-
-            expect(result.isOk()).toBe(true);
-            if (result.isOk()) {
-              const minutes = result.value.as("minutes");
-              expect(minutes).toBeCloseTo(num, 5);
-            }
+            parseDuration(num).match(
+              (duration) => {
+                expect(duration.as("minutes")).toBeCloseTo(num, 5);
+              },
+              () => {
+                expect.fail("Expected Ok but got Err");
+              },
+            );
           },
         ),
       );

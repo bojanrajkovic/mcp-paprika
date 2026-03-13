@@ -348,13 +348,15 @@ describe("Configuration loading", () => {
         process.env.PAPRIKA_EMAIL = "user@test.com";
         process.env.PAPRIKA_PASSWORD = "secret";
 
-        const result = loadConfig(tempDir);
-
-        expect(result.isOk()).toBe(true);
-        if (result.isOk()) {
-          expect(result.value.paprika.email).toBe("user@test.com");
-          expect(result.value.paprika.password).toBe("secret");
-        }
+        loadConfig(tempDir).match(
+          (config) => {
+            expect(config.paprika.email).toBe("user@test.com");
+            expect(config.paprika.password).toBe("secret");
+          },
+          (err) => {
+            expect.fail(`Expected Ok but got Err: ${err.message}`);
+          },
+        );
       });
 
       it("config-loader.AC1.2: loadConfig returns ok with PaprikaConfig when config.json provides credentials", () => {
@@ -363,13 +365,15 @@ describe("Configuration loading", () => {
           JSON.stringify({ paprika: { email: "user@test.com", password: "secret" } }),
         );
 
-        const result = loadConfig(tempDir);
-
-        expect(result.isOk()).toBe(true);
-        if (result.isOk()) {
-          expect(result.value.paprika.email).toBe("user@test.com");
-          expect(result.value.paprika.password).toBe("secret");
-        }
+        loadConfig(tempDir).match(
+          (config) => {
+            expect(config.paprika.email).toBe("user@test.com");
+            expect(config.paprika.password).toBe("secret");
+          },
+          (err) => {
+            expect.fail(`Expected Ok but got Err: ${err.message}`);
+          },
+        );
       });
     });
 
@@ -380,13 +384,15 @@ describe("Configuration loading", () => {
         });
         process.env.PAPRIKA_EMAIL = "env@test.com";
 
-        const result = loadConfig(tempDir);
-
-        expect(result.isOk()).toBe(true);
-        if (result.isOk()) {
-          expect(result.value.paprika.email).toBe("env@test.com");
-          expect(result.value.paprika.password).toBe("filepw");
-        }
+        loadConfig(tempDir).match(
+          (config) => {
+            expect(config.paprika.email).toBe("env@test.com");
+            expect(config.paprika.password).toBe("filepw");
+          },
+          (err) => {
+            expect.fail(`Expected Ok but got Err: ${err.message}`);
+          },
+        );
       });
 
       it("config-loader.AC2.2: Real env vars override .env file values", () => {
@@ -396,13 +402,15 @@ describe("Configuration loading", () => {
         });
         process.env.PAPRIKA_EMAIL = "real@test.com";
 
-        const result = loadConfig(tempDir);
-
-        expect(result.isOk()).toBe(true);
-        if (result.isOk()) {
-          expect(result.value.paprika.email).toBe("real@test.com");
-          expect(result.value.paprika.password).toBe("dotenvpw");
-        }
+        loadConfig(tempDir).match(
+          (config) => {
+            expect(config.paprika.email).toBe("real@test.com");
+            expect(config.paprika.password).toBe("dotenvpw");
+          },
+          (err) => {
+            expect.fail(`Expected Ok but got Err: ${err.message}`);
+          },
+        );
       });
 
       it("config-loader.AC2.3: .env file values override config.json values", () => {
@@ -411,26 +419,30 @@ describe("Configuration loading", () => {
         });
         writeDotEnv(tempDir, { PAPRIKA_EMAIL: "dotenv@test.com" });
 
-        const result = loadConfig(tempDir);
-
-        expect(result.isOk()).toBe(true);
-        if (result.isOk()) {
-          expect(result.value.paprika.email).toBe("dotenv@test.com");
-          expect(result.value.paprika.password).toBe("filepw");
-        }
+        loadConfig(tempDir).match(
+          (config) => {
+            expect(config.paprika.email).toBe("dotenv@test.com");
+            expect(config.paprika.password).toBe("filepw");
+          },
+          (err) => {
+            expect.fail(`Expected Ok but got Err: ${err.message}`);
+          },
+        );
       });
 
       it("config-loader.AC2.4: Zod defaults apply when no source provides a value", () => {
         process.env.PAPRIKA_EMAIL = "user@test.com";
         process.env.PAPRIKA_PASSWORD = "secret";
 
-        const result = loadConfig(tempDir);
-
-        expect(result.isOk()).toBe(true);
-        if (result.isOk()) {
-          expect(result.value.sync.enabled).toBe(true);
-          expect(result.value.sync.interval).toBe(900000);
-        }
+        loadConfig(tempDir).match(
+          (config) => {
+            expect(config.sync.enabled).toBe(true);
+            expect(config.sync.interval).toBe(900000);
+          },
+          (err) => {
+            expect.fail(`Expected Ok but got Err: ${err.message}`);
+          },
+        );
       });
     });
 
@@ -439,9 +451,12 @@ describe("Configuration loading", () => {
         process.env.PAPRIKA_EMAIL = "user@test.com";
         process.env.PAPRIKA_PASSWORD = "secret";
 
-        const result = loadConfig(tempDir);
-
-        expect(result.isOk()).toBe(true);
+        loadConfig(tempDir).match(
+          () => {},
+          (err) => {
+            expect.fail(`Expected Ok but got Err: ${err.message}`);
+          },
+        );
       });
 
       it("config-loader.AC5.2: Missing .env file does not cause an error", () => {
@@ -449,9 +464,12 @@ describe("Configuration loading", () => {
           paprika: { email: "user@test.com", password: "secret" },
         });
 
-        const result = loadConfig(tempDir);
-
-        expect(result.isOk()).toBe(true);
+        loadConfig(tempDir).match(
+          () => {},
+          (err) => {
+            expect.fail(`Expected Ok but got Err: ${err.message}`);
+          },
+        );
       });
 
       it("config-loader.AC5.3: Invalid JSON in config.json produces ConfigError with kind 'invalid_json'", () => {
@@ -460,12 +478,14 @@ describe("Configuration loading", () => {
         process.env.PAPRIKA_EMAIL = "user@test.com";
         process.env.PAPRIKA_PASSWORD = "secret";
 
-        const result = loadConfig(tempDir);
-
-        expect(result.isErr()).toBe(true);
-        if (result.isErr()) {
-          expect(result.error.kind).toBe("invalid_json");
-        }
+        loadConfig(tempDir).match(
+          () => {
+            expect.fail("Expected Err but got Ok");
+          },
+          (error) => {
+            expect(error.kind).toBe("invalid_json");
+          },
+        );
       });
 
       it.runIf(process.getuid?.() !== 0)(
@@ -479,12 +499,14 @@ describe("Configuration loading", () => {
           process.env.PAPRIKA_EMAIL = "backup@test.com";
           process.env.PAPRIKA_PASSWORD = "secret";
 
-          const result = loadConfig(tempDir);
-
-          expect(result.isErr()).toBe(true);
-          if (result.isErr()) {
-            expect(result.error.kind).toBe("file_read_error");
-          }
+          loadConfig(tempDir).match(
+            () => {
+              expect.fail("Expected Err but got Ok");
+            },
+            (error) => {
+              expect(error.kind).toBe("file_read_error");
+            },
+          );
         },
       );
     });

@@ -184,20 +184,35 @@ export class RecipeStore {
     const filtered = hasConstraints
       ? recipes.filter((recipe) => {
           if (constraints.maxPrepTime !== undefined && recipe.prepTime !== null) {
-            const parsed = parseDuration(recipe.prepTime);
-            if (parsed.isOk() && parsed.value.as("minutes") > constraints.maxPrepTime) {
+            const maxPrepTime = constraints.maxPrepTime;
+            if (
+              parseDuration(recipe.prepTime).match(
+                (d) => d.as("minutes") > maxPrepTime,
+                () => false,
+              )
+            ) {
               return false;
             }
           }
           if (constraints.maxCookTime !== undefined && recipe.cookTime !== null) {
-            const parsed = parseDuration(recipe.cookTime);
-            if (parsed.isOk() && parsed.value.as("minutes") > constraints.maxCookTime) {
+            const maxCookTime = constraints.maxCookTime;
+            if (
+              parseDuration(recipe.cookTime).match(
+                (d) => d.as("minutes") > maxCookTime,
+                () => false,
+              )
+            ) {
               return false;
             }
           }
           if (constraints.maxTotalTime !== undefined && recipe.totalTime !== null) {
-            const parsed = parseDuration(recipe.totalTime);
-            if (parsed.isOk() && parsed.value.as("minutes") > constraints.maxTotalTime) {
+            const maxTotalTime = constraints.maxTotalTime;
+            if (
+              parseDuration(recipe.totalTime).match(
+                (d) => d.as("minutes") > maxTotalTime,
+                () => false,
+              )
+            ) {
               return false;
             }
           }
@@ -233,7 +248,8 @@ export class RecipeStore {
 
 function parseTotalTimeMinutes(totalTime: string | null): number | null {
   if (totalTime === null) return null;
-  const result = parseDuration(totalTime);
-  if (result.isErr()) return null;
-  return result.value.as("minutes");
+  return parseDuration(totalTime).match(
+    (d) => d.as("minutes"),
+    () => null,
+  );
 }

@@ -8,152 +8,192 @@ import { parseDuration, formatDuration, DurationParseError } from "./duration.js
 describe("Duration parsing and formatting", () => {
   describe("duration-helper.AC1: parseDuration handles human-readable strings", () => {
     it("duration-helper.AC1.1: parseDuration('15 min') returns Ok with Duration of 15 minutes", () => {
-      const result = parseDuration("15 min");
-
-      expect(result.isOk()).toBe(true);
-      if (result.isOk()) {
-        expect(result.value.as("minutes")).toBe(15);
-      }
+      parseDuration("15 min").match(
+        (duration) => {
+          expect(duration.as("minutes")).toBe(15);
+        },
+        () => {
+          expect.fail("Expected Ok but got Err");
+        },
+      );
     });
 
     it("duration-helper.AC1.2: parseDuration('1 hr 30 min') returns Ok with Duration of 90 minutes", () => {
-      const result = parseDuration("1 hr 30 min");
-
-      expect(result.isOk()).toBe(true);
-      if (result.isOk()) {
-        expect(result.value.as("minutes")).toBe(90);
-      }
+      parseDuration("1 hr 30 min").match(
+        (duration) => {
+          expect(duration.as("minutes")).toBe(90);
+        },
+        () => {
+          expect.fail("Expected Ok but got Err");
+        },
+      );
     });
 
     it("duration-helper.AC1.3: parseDuration('45 minutes') returns Ok with Duration of 45 minutes", () => {
-      const result = parseDuration("45 minutes");
-
-      expect(result.isOk()).toBe(true);
-      if (result.isOk()) {
-        expect(result.value.as("minutes")).toBe(45);
-      }
+      parseDuration("45 minutes").match(
+        (duration) => {
+          expect(duration.as("minutes")).toBe(45);
+        },
+        () => {
+          expect.fail("Expected Ok but got Err");
+        },
+      );
     });
 
     it("duration-helper.AC1.4: parseDuration('1h30m') returns Ok with Duration of 90 minutes", () => {
-      const result = parseDuration("1h30m");
-
-      expect(result.isOk()).toBe(true);
-      if (result.isOk()) {
-        expect(result.value.as("minutes")).toBe(90);
-      }
+      parseDuration("1h30m").match(
+        (duration) => {
+          expect(duration.as("minutes")).toBe(90);
+        },
+        () => {
+          expect.fail("Expected Ok but got Err");
+        },
+      );
     });
   });
 
   describe("duration-helper.AC2: parseDuration handles ISO 8601", () => {
     it("duration-helper.AC2.1: parseDuration('PT15M') returns Ok with Duration of 15 minutes", () => {
-      const result = parseDuration("PT15M");
-
-      expect(result.isOk()).toBe(true);
-      if (result.isOk()) {
-        expect(result.value.as("minutes")).toBe(15);
-      }
+      parseDuration("PT15M").match(
+        (duration) => {
+          expect(duration.as("minutes")).toBe(15);
+        },
+        () => {
+          expect.fail("Expected Ok but got Err");
+        },
+      );
     });
 
     it("duration-helper.AC2.2: parseDuration('PT1H30M') returns Ok with Duration of 90 minutes", () => {
-      const result = parseDuration("PT1H30M");
-
-      expect(result.isOk()).toBe(true);
-      if (result.isOk()) {
-        expect(result.value.as("minutes")).toBe(90);
-      }
+      parseDuration("PT1H30M").match(
+        (duration) => {
+          expect(duration.as("minutes")).toBe(90);
+        },
+        () => {
+          expect.fail("Expected Ok but got Err");
+        },
+      );
     });
   });
 
   describe("duration-helper.AC3: parseDuration handles colon format", () => {
     it("duration-helper.AC3.1: parseDuration('1:30') returns Ok with Duration of 90 minutes", () => {
-      const result = parseDuration("1:30");
-
-      expect(result.isOk()).toBe(true);
-      if (result.isOk()) {
-        expect(result.value.as("minutes")).toBe(90);
-      }
+      parseDuration("1:30").match(
+        (duration) => {
+          expect(duration.as("minutes")).toBe(90);
+        },
+        () => {
+          expect.fail("Expected Ok but got Err");
+        },
+      );
     });
 
     it("duration-helper.AC3.2: parseDuration('0:30') returns Ok with Duration of 30 minutes", () => {
-      const result = parseDuration("0:30");
-
-      expect(result.isOk()).toBe(true);
-      if (result.isOk()) {
-        expect(result.value.as("minutes")).toBe(30);
-      }
+      parseDuration("0:30").match(
+        (duration) => {
+          expect(duration.as("minutes")).toBe(30);
+        },
+        () => {
+          expect.fail("Expected Ok but got Err");
+        },
+      );
     });
 
     it("duration-helper.AC3.3: parseDuration('1:60') returns Err (minutes >= 60)", () => {
-      const result = parseDuration("1:60");
-
-      expect(result.isErr()).toBe(true);
+      parseDuration("1:60").match(
+        () => {
+          expect.fail("Expected Err but got Ok");
+        },
+        () => {},
+      );
     });
   });
 
   describe("duration-helper.AC4: parseDuration handles numeric input", () => {
     it("duration-helper.AC4.1: parseDuration(15) returns Ok with Duration of 15 minutes", () => {
-      const result = parseDuration(15);
-
-      expect(result.isOk()).toBe(true);
-      if (result.isOk()) {
-        expect(result.value.as("minutes")).toBe(15);
-      }
+      parseDuration(15).match(
+        (duration) => {
+          expect(duration.as("minutes")).toBe(15);
+        },
+        () => {
+          expect.fail("Expected Ok but got Err");
+        },
+      );
     });
 
     it("duration-helper.AC4.2: parseDuration('42') returns Ok with Duration of 42 minutes", () => {
-      const result = parseDuration("42");
-
-      expect(result.isOk()).toBe(true);
-      if (result.isOk()) {
-        expect(result.value.as("minutes")).toBe(42);
-      }
+      parseDuration("42").match(
+        (duration) => {
+          expect(duration.as("minutes")).toBe(42);
+        },
+        () => {
+          expect.fail("Expected Ok but got Err");
+        },
+      );
     });
 
     it("duration-helper.AC4.3: parseDuration(NaN) returns Err", () => {
-      const result = parseDuration(NaN);
-
-      expect(result.isErr()).toBe(true);
+      parseDuration(NaN).match(
+        () => {
+          expect.fail("Expected Err but got Ok");
+        },
+        () => {},
+      );
     });
 
     it("duration-helper.AC4.4: parseDuration(Infinity) returns Err", () => {
-      const result = parseDuration(Infinity);
-
-      expect(result.isErr()).toBe(true);
+      parseDuration(Infinity).match(
+        () => {
+          expect.fail("Expected Err but got Ok");
+        },
+        () => {},
+      );
     });
 
     it("duration-helper.AC4.5: parseDuration(-5) returns Err (negative)", () => {
-      const result = parseDuration(-5);
-
-      expect(result.isErr()).toBe(true);
+      parseDuration(-5).match(
+        () => {
+          expect.fail("Expected Err but got Ok");
+        },
+        () => {},
+      );
     });
   });
 
   describe("duration-helper.AC5: parseDuration rejects invalid input", () => {
     it("duration-helper.AC5.1: parseDuration('') returns Err", () => {
-      const result = parseDuration("");
-
-      expect(result.isErr()).toBe(true);
+      parseDuration("").match(
+        () => {
+          expect.fail("Expected Err but got Ok");
+        },
+        () => {},
+      );
     });
 
     it("duration-helper.AC5.2: parseDuration('not a duration') returns Err", () => {
-      const result = parseDuration("not a duration");
-
-      expect(result.isErr()).toBe(true);
+      parseDuration("not a duration").match(
+        () => {
+          expect.fail("Expected Err but got Ok");
+        },
+        () => {},
+      );
     });
 
     it("duration-helper.AC5.3: All Err results contain a DurationParseError with input and reason", () => {
       const testCases: Array<string | number> = ["", "not a duration", NaN, Infinity, -5, "1:60"];
 
       for (const testCase of testCases) {
-        const result = parseDuration(testCase);
-        expect(result.isErr()).toBe(true);
-        if (result.isErr()) {
-          const error = result.error;
-          expect(error).toBeInstanceOf(DurationParseError);
-          expect(error.input).toBeDefined();
-          expect(error.reason).toBeDefined();
-          expect(typeof error.reason).toBe("string");
-        }
+        parseDuration(testCase).match(
+          () => {
+            expect.fail(`Expected Err for input ${String(testCase)} but got Ok`);
+          },
+          (error) => {
+            expect(error).toBeInstanceOf(DurationParseError);
+            expect(error.input).toBeDefined();
+            expect(error.reason).toBeDefined();
+            expect(typeof error.reason).toBe("string");
+          },
+        );
       }
     });
   });

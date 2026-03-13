@@ -51,15 +51,16 @@ export class ConfigError extends Error {
 }
 
 const durationField = z.union([z.string(), z.number()]).transform((val, ctx) => {
-  const result = parseDuration(val);
-  if (result.isErr()) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: result.error.reason,
-    });
-    return z.NEVER;
-  }
-  return result.value.as("milliseconds");
+  return parseDuration(val).match(
+    (duration) => duration.as("milliseconds"),
+    (parseErr) => {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: parseErr.reason,
+      });
+      return z.NEVER;
+    },
+  );
 });
 
 const BOOLEAN_STRINGS: Readonly<Record<string, boolean>> = {
@@ -204,18 +205,15 @@ export function loadConfig(configDir?: string): Result<PaprikaConfig, ConfigErro
 
   loadDotEnv(dir);
 
-  const fileResult = readConfigFile(dir);
-  if (fileResult.isErr()) {
-    return err(fileResult.error);
-  }
+  return readConfigFile(dir).andThen((fileConfig) => {
+    const envOverrides = buildEnvOverrides(process.env);
+    const merged = deepMerge(fileConfig, envOverrides);
 
-  const envOverrides = buildEnvOverrides(process.env);
-  const merged = deepMerge(fileResult.value, envOverrides);
+    const parseResult = paprikaConfigSchema.safeParse(merged);
+    if (!parseResult.success) {
+      return err(ConfigError.validation(parseResult.error.issues));
+    }
 
-  const parseResult = paprikaConfigSchema.safeParse(merged);
-  if (!parseResult.success) {
-    return err(ConfigError.validation(parseResult.error.issues));
-  }
-
-  return ok(parseResult.data);
+    return ok(parseResult.data);
+  });
 }

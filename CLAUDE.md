@@ -61,6 +61,7 @@ MCP server for the Paprika recipe manager. Communicates over stdio transport —
 - Never throw exceptions in core business logic — return `Result.err()` instead
 - Define specific error classes (e.g., `RecipeNotFoundError`) with static factory methods
 - Validate inputs with Zod schemas at system boundaries
+- **Always use idiomatic neverthrow patterns** — `.match()`, `.andThen()`, `.map()`, `.mapErr()`. Never use `.isOk()` / `.isErr()` imperative checks; treat `Result` as an opaque monad.
 
 ### No Console
 
