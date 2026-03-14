@@ -1,6 +1,6 @@
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { err, ok, type Result } from "neverthrow";
-import type { Recipe } from "../paprika/types.js";
+import type { Category, CategoryUid, Recipe } from "../paprika/types.js";
 import type { ServerContext } from "../types/server-context.js";
 
 export function textResult(text: string): { content: [{ type: "text"; text: string }] } {
@@ -85,4 +85,44 @@ export function recipeToMarkdown(recipe: Recipe, categoryNames: Array<string>): 
   }
 
   return lines.join("\n");
+}
+
+/**
+ * Persists a saved recipe to the local cache and store, then triggers cloud sync.
+ * Called by all write tools after ctx.client.saveRecipe() returns.
+ *
+ * Order: putRecipe (sync) → flush (async) → store.set (sync) → notifySync (async)
+ * Do NOT call ctx.client.notifySync() separately in the tool handler — commitRecipe
+ * already calls it.
+ */
+export async function commitRecipe(ctx: ServerContext, saved: Recipe): Promise<void> {
+  ctx.cache.putRecipe(saved, saved.hash); // sync — buffers to memory
+  await ctx.cache.flush(); // async — writes pending entries to disk
+  ctx.store.set(saved); // sync — updates in-process store
+  await ctx.client.notifySync(); // async — signals Paprika cloud to propagate
+}
+
+/**
+ * Resolves human-readable category display names to CategoryUid values.
+ * Case-insensitive linear scan of all known categories.
+ *
+ * @returns uids — matched UIDs in the same order as input names
+ *          unknown — names that had no matching category (caller should warn)
+ */
+export function resolveCategoryNames(
+  all: Array<Category>,
+  names: Array<string>,
+): { uids: Array<CategoryUid>; unknown: Array<string> } {
+  const uids: Array<CategoryUid> = [];
+  const unknown: Array<string> = [];
+  for (const name of names) {
+    const lower = name.toLowerCase();
+    const match = all.find((c) => c.name.toLowerCase() === lower);
+    if (match) {
+      uids.push(match.uid);
+    } else {
+      unknown.push(name);
+    }
+  }
+  return { uids, unknown };
 }

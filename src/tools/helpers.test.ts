@@ -1,7 +1,9 @@
-import { describe, it, expect } from "vitest";
-import { makeRecipe } from "../cache/__fixtures__/recipes.js";
-import { coldStartGuard, textResult, recipeToMarkdown } from "./helpers.js";
+import { describe, it, expect, vi } from "vitest";
+import { makeRecipe, makeCategory } from "../cache/__fixtures__/recipes.js";
+import { coldStartGuard, textResult, recipeToMarkdown, commitRecipe, resolveCategoryNames } from "./helpers.js";
 import type { ServerContext } from "../types/server-context.js";
+import type { DiskCache } from "../cache/disk-cache.js";
+import type { PaprikaClient } from "../paprika/client.js";
 
 // Minimal ServerContext stub — only `store.size` matters for coldStartGuard
 const makeCtx = (size: number) =>
@@ -195,6 +197,124 @@ describe("p2-u02-shared-helpers: shared helper functions", () => {
       });
       const output = recipeToMarkdown(recipe, []);
       expect(output).not.toContain("**Source:**");
+    });
+  });
+
+  describe("p2-recipe-crud.AC-helpers: resolveCategoryNames", () => {
+    it("p2-recipe-crud.AC-helpers.1: exact name match returns the category's UID in uids and empty unknown array", () => {
+      const cat = makeCategory({ name: "Desserts" });
+      const result = resolveCategoryNames([cat], ["Desserts"]);
+      expect(result.uids).toHaveLength(1);
+      expect(result.uids[0]).toBe(cat.uid);
+      expect(result.unknown).toEqual([]);
+    });
+
+    it("p2-recipe-crud.AC-helpers.2: case-insensitive match (desserts matches Desserts) returns the UID, not in unknown", () => {
+      const cat = makeCategory({ name: "Desserts" });
+      const result = resolveCategoryNames([cat], ["desserts"]);
+      expect(result.uids).toHaveLength(1);
+      expect(result.uids[0]).toBe(cat.uid);
+      expect(result.unknown).toEqual([]);
+    });
+
+    it("p2-recipe-crud.AC-helpers.3: unrecognized name appears in unknown, not in uids", () => {
+      const cat = makeCategory({ name: "Desserts" });
+      const result = resolveCategoryNames([cat], ["Breakfast"]);
+      expect(result.uids).toEqual([]);
+      expect(result.unknown).toEqual(["Breakfast"]);
+    });
+
+    it("p2-recipe-crud.AC-helpers.4: mix of known and unknown — known go to uids, unknown go to unknown, both in input order", () => {
+      const cat1 = makeCategory({ name: "Desserts" });
+      const cat2 = makeCategory({ name: "Breakfast" });
+      const result = resolveCategoryNames([cat1, cat2], ["Breakfast", "Unknown", "Desserts", "Other"]);
+      expect(result.uids).toEqual([cat2.uid, cat1.uid]);
+      expect(result.unknown).toEqual(["Unknown", "Other"]);
+    });
+
+    it("p2-recipe-crud.AC-helpers.5: empty names array returns uids: [], unknown: []", () => {
+      const cat = makeCategory({ name: "Desserts" });
+      const result = resolveCategoryNames([cat], []);
+      expect(result.uids).toEqual([]);
+      expect(result.unknown).toEqual([]);
+    });
+
+    it("p2-recipe-crud.AC-helpers.6: empty all categories array with non-empty names returns all names in unknown", () => {
+      const result = resolveCategoryNames([], ["Desserts", "Breakfast"]);
+      expect(result.uids).toEqual([]);
+      expect(result.unknown).toEqual(["Desserts", "Breakfast"]);
+    });
+  });
+
+  describe("p2-recipe-crud.AC-helpers: commitRecipe", () => {
+    it("p2-recipe-crud.AC-helpers.7: calls putRecipe, flush, store.set, and notifySync exactly once each", async () => {
+      const mockPutRecipe = vi.fn();
+      const mockFlush = vi.fn().mockResolvedValue(undefined);
+      const mockNotifySync = vi.fn().mockResolvedValue(undefined);
+      const mockStoreSet = vi.fn();
+
+      const ctx = {
+        cache: { putRecipe: mockPutRecipe, flush: mockFlush } as unknown as DiskCache,
+        client: { notifySync: mockNotifySync } as unknown as PaprikaClient,
+        store: { set: mockStoreSet } as unknown as ServerContext["store"],
+        server: {} as unknown as ServerContext["server"],
+      } satisfies ServerContext;
+
+      const saved = makeRecipe();
+      await commitRecipe(ctx, saved);
+
+      expect(mockPutRecipe).toHaveBeenCalledTimes(1);
+      expect(mockFlush).toHaveBeenCalledTimes(1);
+      expect(mockStoreSet).toHaveBeenCalledTimes(1);
+      expect(mockNotifySync).toHaveBeenCalledTimes(1);
+    });
+
+    it("p2-recipe-crud.AC-helpers.8: putRecipe is called before flush (verify call order)", async () => {
+      const callOrder: Array<string> = [];
+
+      const mockPutRecipe = vi.fn(() => {
+        callOrder.push("putRecipe");
+      });
+      const mockFlush = vi.fn(async () => {
+        callOrder.push("flush");
+      });
+      const mockNotifySync = vi.fn(async () => {
+        callOrder.push("notifySync");
+      });
+      const mockStoreSet = vi.fn(() => {
+        callOrder.push("storeSet");
+      });
+
+      const ctx = {
+        cache: { putRecipe: mockPutRecipe, flush: mockFlush } as unknown as DiskCache,
+        client: { notifySync: mockNotifySync } as unknown as PaprikaClient,
+        store: { set: mockStoreSet } as unknown as ServerContext["store"],
+        server: {} as unknown as ServerContext["server"],
+      } satisfies ServerContext;
+
+      const saved = makeRecipe();
+      await commitRecipe(ctx, saved);
+
+      expect(callOrder).toEqual(["putRecipe", "flush", "storeSet", "notifySync"]);
+    });
+
+    it("p2-recipe-crud.AC-helpers.9: store.set is called with the saved recipe", async () => {
+      const mockPutRecipe = vi.fn();
+      const mockFlush = vi.fn().mockResolvedValue(undefined);
+      const mockNotifySync = vi.fn().mockResolvedValue(undefined);
+      const mockStoreSet = vi.fn();
+
+      const ctx = {
+        cache: { putRecipe: mockPutRecipe, flush: mockFlush } as unknown as DiskCache,
+        client: { notifySync: mockNotifySync } as unknown as PaprikaClient,
+        store: { set: mockStoreSet } as unknown as ServerContext["store"],
+        server: {} as unknown as ServerContext["server"],
+      } satisfies ServerContext;
+
+      const saved = makeRecipe({ name: "Test Recipe" });
+      await commitRecipe(ctx, saved);
+
+      expect(mockStoreSet).toHaveBeenCalledWith(saved);
     });
   });
 });

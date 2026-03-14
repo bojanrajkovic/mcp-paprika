@@ -24,13 +24,27 @@ export function makeTestServer(): {
   };
 }
 
-/** Creates a minimal ServerContext with a real store and stub server/client/cache. */
-export function makeCtx(store: RecipeStore, server: McpServer): ServerContext {
+/**
+ * Creates a minimal ServerContext for tool unit tests.
+ *
+ * @param store   — real RecipeStore populated by tests
+ * @param server  — stub McpServer from makeTestServer()
+ * @param overrides — optional partial overrides for client and/or cache.
+ *   Write-tool tests inject { saveRecipe: vi.fn(), notifySync: vi.fn() } and
+ *   { putRecipe: vi.fn(), flush: vi.fn() } here.
+ *   Read-tool tests pass no overrides — the existing stubs suffice.
+ */
+export function makeCtx(
+  store: RecipeStore,
+  server: McpServer,
+  overrides: Partial<Pick<ServerContext, "client" | "cache">> = {},
+): ServerContext {
   return {
     store,
     server,
     client: {} as unknown as ServerContext["client"],
     cache: {} as unknown as ServerContext["cache"],
+    ...overrides,
   } satisfies ServerContext;
 }
 
