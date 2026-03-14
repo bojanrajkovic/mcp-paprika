@@ -2,59 +2,68 @@
 
 Last verified: 2026-03-13
 
-Purpose: Defines MCP tools that AI assistants can invoke.
+Purpose: Defines MCP tools that AI assistants can invoke. Each tool file exports a `register*` function that takes `(server: McpServer, ctx: ServerContext)` and calls `server.registerTool()`.
 
-## Shared Helpers (`helpers.ts`)
+## Registered Tools
 
-All tool handlers import shared utilities from `./helpers.js` (same-directory) or `../tools/helpers.js` (cross-directory from outside `src/tools/`).
+| Tool                   | File            | Description                                           |
+| ---------------------- | --------------- | ----------------------------------------------------- |
+| `search_recipes`       | `search.ts`     | Full-text search by name, ingredients, or description |
+| `filter_by_ingredient` | `filter.ts`     | Filter recipes by ingredient (all/any mode)           |
+| `filter_by_time`       | `filter.ts`     | Filter recipes by prep/cook/total time constraints    |
+| `list_categories`      | `categories.ts` | List all categories with recipe counts                |
 
-### `textResult(text: string)`
+## Registration Pattern
 
-Wraps a plain string in the MCP wire response envelope.
-
-```typescript
-import { textResult } from "./helpers.js";
-
-// Returns: { content: [{ type: "text", text }] }
-// Satisfies CallToolResult while preserving the narrow literal type.
-return textResult("Hello, world!");
-```
-
-### `coldStartGuard(ctx: ServerContext)`
-
-Returns `Ok<void>` when the recipe store has recipes (sync complete), or `Err<CallToolResult>` when the store is empty (cold start). Use `.match()` to handle both branches:
+Every tool file exports a single registration function. All tool logic accesses data through `ctx.store` (the `RecipeStore` on `ServerContext`), never by importing `paprika/` or `cache/` directly at runtime.
 
 ```typescript
 import { coldStartGuard, textResult } from "./helpers.js";
 
-return coldStartGuard(ctx).match(
-  () => {
-    // store is ready — execute tool logic
-    return textResult("result");
-  },
-  (guard) => guard, // return the ready-to-send error directly
-);
+export function registerMyTool(server: McpServer, ctx: ServerContext): void {
+  server.registerTool(
+    "tool_name",
+    {
+      description: "...",
+      inputSchema: {
+        /* zod */
+      },
+    },
+    async (args) => {
+      return coldStartGuard(ctx).match(
+        async () => {
+          /* store is ready */ return textResult("result");
+        },
+        (guard) => guard,
+      );
+    },
+  );
+}
 ```
 
-### `recipeToMarkdown(recipe: Recipe, categoryNames: string[])`
+## Shared Helpers (`helpers.ts`)
 
-Renders a full Recipe as human-readable markdown. `categoryNames` must be pre-resolved via `ctx.store.resolveCategories(recipe.categories)` before calling.
+Utilities imported by all tool handlers from `./helpers.js`.
 
-Optional recipe fields (`description`, `notes`, `nutritionalInfo`, `source`, etc.) are omitted entirely when `null` or falsy — no empty headings appear.
+- **`textResult(text)`** -- Wraps a string in the MCP `CallToolResult` envelope.
+- **`coldStartGuard(ctx)`** -- Returns `Ok<void>` when store is synced, `Err<CallToolResult>` when empty. Always use `.match()` to handle both branches.
+- **`recipeToMarkdown(recipe, categoryNames)`** -- Renders a full recipe as markdown. Resolve categories via `ctx.store.resolveCategories()` before calling. Omits empty optional fields.
 
-```typescript
-import { recipeToMarkdown, textResult } from "./helpers.js";
+## Testing (`tool-test-utils.ts`)
 
-const categoryNames = ctx.store.resolveCategories(recipe.categories);
-return textResult(recipeToMarkdown(recipe, categoryNames));
-```
+Shared test utilities for direct tool handler invocation without a real MCP server.
+
+- **`makeTestServer()`** -- Returns a stub `McpServer` that captures handlers, plus a `callTool(name, args)` function.
+- **`makeCtx(store, server)`** -- Creates a minimal `ServerContext` with a real `RecipeStore` and stub client/cache.
+- **`getText(result)`** -- Extracts the text string from a `CallToolResult`.
 
 ## Boundaries
 
-- Tool handlers **must not** import from `paprika/` or `cache/` at runtime — use `ServerContext` (via `features/` or the context object) as the intermediary.
-- `helpers.ts` is an exception: it uses `import type` from `paprika/` for the `Recipe` type. Type-only imports have no runtime footprint and do not violate the boundary.
+- Tool handlers **must not** import from `paprika/` or `cache/` at runtime -- access data through `ctx.store` on `ServerContext`.
+- `import type` from `paprika/` and `cache/` is allowed (no runtime footprint).
+- Runtime imports from `utils/` are allowed (cross-cutting utilities, e.g., `parseDuration`).
 
 ## Dependencies
 
-- Used by: `index.ts` (MCP server registration)
-- Uses: `types/` (ServerContext), `paprika/types.ts` (Recipe, via `import type` only)
+- **Used by:** `index.ts` (MCP server registration)
+- **Uses:** `types/` (ServerContext), `utils/` (parseDuration -- runtime), `paprika/types.ts` and `cache/recipe-store.ts` (type-only imports)
