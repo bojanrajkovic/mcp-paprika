@@ -1,6 +1,6 @@
 # MCP Tool Definitions
 
-Last verified: 2026-03-14
+Last verified: 2026-03-17
 
 Purpose: Defines MCP tools that AI assistants can invoke. Each tool file exports a `register*` function that takes `(server: McpServer, ctx: ServerContext)` and calls `server.registerTool()`.
 
@@ -59,14 +59,14 @@ Utilities imported by all tool handlers from `./helpers.js`.
 - **`textResult(text)`** -- Wraps a string in the MCP `CallToolResult` envelope.
 - **`coldStartGuard(ctx)`** -- Returns `Ok<void>` when store is synced, `Err<CallToolResult>` when empty. Always use `.match()` to handle both branches.
 - **`recipeToMarkdown(recipe, categoryNames)`** -- Renders a full recipe as markdown. Resolve categories via `ctx.store.resolveCategories()` before calling. Omits empty optional fields.
-- **`commitRecipe(ctx, saved)`** -- Persists a saved recipe to cache and store, triggers cloud sync. Order: putRecipe (sync) → flush (async) → store.set (sync) → notifySync (async). Called by all write tools after `ctx.client.saveRecipe()`.
+- **`commitRecipe(ctx, saved)`** -- Persists a saved recipe to cache and store, triggers cloud sync. Order: putRecipe (sync) → flush (async) → store.set (sync) → sendResourceListChanged (sync) → notifySync (async). Called by all write tools after `ctx.client.saveRecipe()`.
 - **`resolveCategoryNames(all, names)`** -- Resolves human-readable category display names to UIDs. Case-insensitive linear scan. Returns `{ uids, unknown }` for warnings.
 
 ## Testing (`tool-test-utils.ts`)
 
 Shared test utilities for direct tool handler invocation without a real MCP server.
 
-- **`makeTestServer()`** -- Returns a stub `McpServer` that captures handlers, plus a `callTool(name, args)` function.
+- **`makeTestServer()`** -- Returns a stub `McpServer` that captures tool and resource handlers. Exposes `callTool(name, args)`, `callResourceList(name)`, `callResource(name, uid)`, and a `sendResourceListChanged` spy.
 - **`makeCtx(store, server, overrides?)`** -- Creates a minimal `ServerContext` with a real `RecipeStore` and stub client/cache. Write-tool tests pass `{ client, cache }` overrides with mocked `saveRecipe`/`notifySync`/`putRecipe`/`flush` methods.
 - **`getText(result)`** -- Extracts the text string from a `CallToolResult`.
 

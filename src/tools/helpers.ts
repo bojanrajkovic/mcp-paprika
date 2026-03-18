@@ -91,7 +91,7 @@ export function recipeToMarkdown(recipe: Recipe, categoryNames: Array<string>): 
  * Persists a saved recipe to the local cache and store, then triggers cloud sync.
  * Called by all write tools after ctx.client.saveRecipe() returns.
  *
- * Order: putRecipe (sync) → flush (async) → store.set (sync) → notifySync (async)
+ * Order: putRecipe (sync) → flush (async) → store.set (sync) → sendResourceListChanged (sync) → notifySync (async)
  * Do NOT call ctx.client.notifySync() separately in the tool handler — commitRecipe
  * already calls it.
  */
@@ -99,6 +99,7 @@ export async function commitRecipe(ctx: ServerContext, saved: Recipe): Promise<v
   ctx.cache.putRecipe(saved, saved.hash); // sync — buffers to memory
   await ctx.cache.flush(); // async — writes pending entries to disk
   ctx.store.set(saved); // sync — updates in-process store
+  ctx.server.sendResourceListChanged(); // sync — notifies MCP clients to re-list resources
   await ctx.client.notifySync(); // async — signals Paprika cloud to propagate
 }
 
