@@ -1,12 +1,13 @@
 # Paprika API Client
 
-Last verified: 2026-03-12
+Last verified: 2026-03-17
 
 ## Files
 
 - `types.ts` — Zod schemas and TypeScript types for Paprika API wire format
 - `errors.ts` — Error class hierarchy for API operations
 - `client.ts` — Typed HTTP client for Paprika Cloud Sync API (auth, recipe/category reads, recipe writes, resilient requests)
+- `sync.ts` — Background sync engine for polling and syncing recipes/categories with Paprika Cloud
 
 ## Purpose
 
@@ -101,6 +102,69 @@ Typed HTTP client wrapping the Paprika Cloud Sync API.
 
 - **Uses:** `node:zlib` (gzip compression), `zod` (response validation), `cockatiel` (retry + circuit breaker + bulkhead), `./types.js` (schemas), `./errors.js` (error classes)
 - **Used by:** `features/`, `tools/`, `resources/`
+- **Boundary:** Must not import from `tools/`, `resources/`, or `features/`
+
+### SyncEngine (sync.ts)
+
+Background polling loop that keeps local cache and in-memory store synchronized with Paprika Cloud Sync API.
+
+**Exports:**
+
+- `SyncEngine` — class with `start()`, `stop()`, `syncOnce()`, and `events` getter
+
+**Construction:**
+
+- `new SyncEngine(context: ServerContext, intervalMs: number)` — creates a new engine with specified polling interval; does not start automatically
+
+**Public API:**
+
+- `start(): void` — begins async polling loop at `intervalMs` interval; no-op if already running
+- `stop(): void` — aborts loop via AbortController; no-op if not running
+- `syncOnce(): Promise<void>` — runs one full sync cycle (recipe diff-and-fetch, category replace-all, cache flush, MCP notification, logging); never throws
+- `events` getter — returns `Pick<SyncEventEmitter, "on" | "off">` for subscribing to events:
+  - `sync:complete` event fires with `SyncResult` payload (recipes added, updated, and removed UIDs) on successful cycle
+  - `sync:error` event fires with `Error` on cycle failure
+
+**Algorithm (syncOnce):**
+
+1. **Recipe sync (diff-and-fetch):**
+   - Fetches lightweight recipe entries from server via `client.listRecipes()`
+   - Diffs against disk cache via `cache.diffRecipes(entries)` → `{ added, changed, removed }`
+   - Fetches only changed recipes: `client.getRecipes([...added, ...changed])`
+   - Writes each fetched recipe to cache: `cache.putRecipe(recipe, recipe.hash)` and to store: `store.set(recipe)`
+   - Removes deleted recipes (concurrent): `Promise.all(removed.map(uid => cache.removeRecipe(uid)))` and `store.delete(uid)`
+
+2. **Category sync (replace-all):**
+   - Fetches all categories: `client.listCategories()` → fully hydrated `Array<Category>`
+   - Replaces store categories: `store.setCategories(categories)`
+   - Writes each category to cache: `cache.putCategory(category, category.uid)` (hash placeholder)
+
+3. **Finalization:**
+   - Flushes cache once: `await cache.flush()`
+   - Sends MCP resource notification if recipe changes exist: `server.sendResourceListChanged()` (called only if any added/changed/removed detected)
+   - Emits `sync:complete` with `SyncResult` (always emitted, even for no-change cycles)
+   - Logs success: `server.sendLoggingMessage({ level: "info", data: "..." })`
+
+4. **Error handling (all wrapped in try/catch):**
+   - Catches any thrown error (API failures, cache errors, store errors)
+   - Logs error: `server.sendLoggingMessage({ level: "error", data: "..." })` (wrapped in try/catch; logging may throw if disconnected)
+   - Emits `sync:error` with the Error
+   - Never re-throws — returns normally
+
+**Invariants:**
+
+- `syncOnce()` never throws — errors are caught, logged, and emitted as events
+- `start()` when already running is a no-op (no duplicate loops via `_ac` check)
+- `stop()` when not running is a no-op (no-op if `_ac` is null)
+- Recipe changes (added/changed/removed > 0) trigger `sendResourceListChanged()`; no-change cycles do not
+- Cache is flushed exactly once per cycle (single `await cache.flush()` after all mutations)
+- Removed recipes are deleted concurrently via `Promise.all()` for efficiency
+- Loop respects AbortController signal and cleanly exits on `stop()`
+
+**Dependencies:**
+
+- **Uses:** `ServerContext` (client, cache, store, server), `mitt` (event emitter), `node:timers/promises` (scheduler.wait), `./types.js` (Recipe, RecipeUid, SyncResult, DiffResult)
+- **Used by:** entry point (P2-U12), Phase 3 event subscribers
 - **Boundary:** Must not import from `tools/`, `resources/`, or `features/`
 
 ## Dependencies
