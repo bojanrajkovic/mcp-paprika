@@ -15,14 +15,8 @@ export const RecipeEntrySchema = z.object({
   hash: z.string(),
 });
 
-export const CategoryEntrySchema = z.object({
-  uid: CategoryUidSchema,
-  hash: z.string(),
-});
-
 // Derived entry types via z.infer<>
 export type RecipeEntry = z.infer<typeof RecipeEntrySchema>;
-export type CategoryEntry = z.infer<typeof CategoryEntrySchema>;
 
 // StoredSchema — validates camelCase JSON read back from disk. No transform.
 export const RecipeStoredSchema = z.object({
@@ -41,7 +35,7 @@ export const RecipeStoredSchema = z.object({
   difficulty: z.string().nullable(),
   rating: z.number().int(),
   created: z.string(),
-  imageUrl: z.string(),
+  imageUrl: z.string().nullable(),
   photo: z.string().nullable(),
   photoHash: z.string().nullable(),
   photoLarge: z.string().nullable(),
@@ -79,7 +73,7 @@ export const RecipeSchema = z
     difficulty: z.string().nullable(),
     rating: z.number().int(),
     created: z.string(),
-    image_url: z.string(),
+    image_url: z.string().nullable(),
     photo: z.string().nullable(),
     photo_hash: z.string().nullable(),
     photo_large: z.string().nullable(),

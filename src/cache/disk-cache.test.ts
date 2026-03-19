@@ -420,7 +420,7 @@ describe("DiskCache", () => {
     });
   });
 
-  describe("diffRecipes / diffCategories", () => {
+  describe("diffRecipes", () => {
     // AC5.1: added
     it("AC5.1: diffRecipes() returns UIDs present in remote but not local index as added", async () => {
       const cache = new DiskCache(tempDir);
@@ -495,35 +495,11 @@ describe("DiskCache", () => {
       expect(result).toEqual({ added: [], changed: [], removed: [] });
     });
 
-    // AC5.6: diffCategories
-    it("AC5.6: diffCategories() applies the same algorithm to categories", async () => {
-      const cache = new DiskCache(tempDir);
-      await cache.init();
-
-      const category = makeCategory();
-      await cache.putCategory(category, "hash-c1");
-
-      // Test changed
-      let result = cache.diffCategories([{ uid: category.uid, hash: "hash-c2" }]);
-      expect(result.changed).toContain(category.uid);
-
-      // Test removed
-      result = cache.diffCategories([]);
-      expect(result.removed).toContain(category.uid);
-    });
-
     // AC5.7: throws before init — recipes
     it("AC5.7: diffRecipes() throws if called before init()", async () => {
       const cache = new DiskCache(tempDir);
 
       expect(() => cache.diffRecipes([])).toThrow();
-    });
-
-    // AC5.8: throws before init — categories
-    it("AC5.8: diffCategories() throws if called before init()", async () => {
-      const cache = new DiskCache(tempDir);
-
-      expect(() => cache.diffCategories([])).toThrow();
     });
 
     // AC6.1: index consistency

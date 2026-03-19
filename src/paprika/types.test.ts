@@ -4,14 +4,12 @@ import {
   RecipeUidSchema,
   CategoryUidSchema,
   RecipeEntrySchema,
-  CategoryEntrySchema,
   RecipeSchema,
   CategorySchema,
   AuthResponseSchema,
   type RecipeUid,
   type CategoryUid,
   type RecipeEntry,
-  type CategoryEntry,
   type Recipe,
   type Category,
   type AuthResponse,
@@ -74,33 +72,6 @@ describe("Branded UID Schemas and Entry Schemas", () => {
       // @ts-expect-error plain string should not be assignable to RecipeUid
       const recipeUid: RecipeUid = plainString;
       expect(recipeUid).toBeDefined(); // This line is unreachable at runtime
-    });
-  });
-
-  describe("CategoryEntrySchema", () => {
-    it("should parse CategoryEntry with uid and hash", () => {
-      const result = CategoryEntrySchema.safeParse({
-        uid: "category-1",
-        hash: "hash-1",
-      });
-
-      expect(result.success).toBe(true);
-      if (result.success) {
-        expect(result.data.uid).toBe("category-1");
-        expect(result.data.hash).toBe("hash-1");
-      }
-    });
-
-    it("should reject non-string uid", () => {
-      const result = CategoryEntrySchema.safeParse({
-        uid: 999,
-        hash: "hash-1",
-      });
-
-      expect(result.success).toBe(false);
-      if (!result.success) {
-        expect(result.error).toBeInstanceOf(z.ZodError);
-      }
     });
   });
 
@@ -512,13 +483,6 @@ describe("Type Exports Verification", () => {
       // Compile-time verification that RecipeEntry type is accessible
       type CheckRecipeEntry = RecipeEntry;
       const _test: CheckRecipeEntry = { uid: RecipeUidSchema.parse("test"), hash: "test" };
-      expect(_test).toBeDefined();
-    });
-
-    it("should have exported CategoryEntry type", () => {
-      // Compile-time verification that CategoryEntry type is accessible
-      type CheckCategoryEntry = CategoryEntry;
-      const _test: CheckCategoryEntry = { uid: CategoryUidSchema.parse("test"), hash: "test" };
       expect(_test).toBeDefined();
     });
 

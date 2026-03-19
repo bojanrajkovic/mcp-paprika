@@ -2,7 +2,7 @@ import { mkdir, open, readFile, readdir, rename, unlink } from "node:fs/promises
 import { join } from "node:path";
 import { z } from "zod";
 import { RecipeStoredSchema, CategoryStoredSchema } from "../paprika/types.js";
-import type { Recipe, Category, RecipeEntry, CategoryEntry, DiffResult } from "../paprika/types.js";
+import type { Recipe, Category, RecipeEntry, DiffResult } from "../paprika/types.js";
 
 // Type guard for NodeJS.ErrnoException. Mirrors the local helper in
 // utils/config.ts but is intentionally not exported from there — each
@@ -282,12 +282,5 @@ export class DiskCache {
       throw new Error("DiskCache: diffRecipes() called before init()");
     }
     return this._diffEntries(entries, this._index.recipes);
-  }
-
-  diffCategories(entries: ReadonlyArray<CategoryEntry>): DiffResult {
-    if (this._index === null) {
-      throw new Error("DiskCache: diffCategories() called before init()");
-    }
-    return this._diffEntries(entries, this._index.categories);
   }
 }

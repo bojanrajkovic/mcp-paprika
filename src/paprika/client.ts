@@ -22,7 +22,7 @@ import {
 import { z } from "zod";
 import type { ZodType, ZodTypeDef } from "zod";
 import type { Category, Recipe, RecipeEntry, RecipeUid } from "./types.js";
-import { AuthResponseSchema, CategoryEntrySchema, CategorySchema, RecipeEntrySchema, RecipeSchema } from "./types.js";
+import { AuthResponseSchema, CategorySchema, RecipeEntrySchema, RecipeSchema } from "./types.js";
 import { PaprikaAuthError, PaprikaAPIError } from "./errors.js";
 
 const AUTH_URL = "https://paprikaapp.com/api/v1/account/login/";
@@ -95,7 +95,6 @@ function recipeToApiPayload(recipe: Readonly<Recipe>): Record<string, unknown> {
 export class PaprikaClient {
   private token: string | null = null;
   private readonly _recipesBulkhead = bulkhead(5, Number.MAX_SAFE_INTEGER);
-  private readonly _categoriesBulkhead = bulkhead(5, Number.MAX_SAFE_INTEGER);
 
   constructor(
     private readonly email: string,
@@ -130,14 +129,7 @@ export class PaprikaClient {
   }
 
   async listCategories(): Promise<Array<Category>> {
-    const entries = await this.request("GET", `${API_BASE}/categories/`, z.array(CategoryEntrySchema));
-    return Promise.all(
-      entries.map((entry) =>
-        this._categoriesBulkhead.execute(() =>
-          this.request("GET", `${API_BASE}/category/${entry.uid}/`, CategorySchema),
-        ),
-      ),
-    );
+    return this.request("GET", `${API_BASE}/categories/`, z.array(CategorySchema));
   }
 
   async saveRecipe(recipe: Readonly<Recipe>): Promise<Recipe> {

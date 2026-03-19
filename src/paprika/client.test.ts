@@ -375,20 +375,15 @@ describe("PaprikaClient", () => {
     });
   });
 
-  describe("p1-u06-client-reads.AC4: listCategories() returns hydrated Category objects", () => {
-    it("p1-u06-client-reads.AC4.1 - returns Category[] with camelCase fields (not snake_case)", async () => {
+  describe("p1-u06-client-reads.AC4: listCategories() returns Category objects", () => {
+    it("p1-u06-client-reads.AC4.1 - returns Category[] with camelCase fields from /categories/ endpoint", async () => {
       server.use(
         http.get(`${API_BASE}/categories/`, () => {
-          return HttpResponse.json({ result: [{ uid: "cat-1", hash: "h1" }] });
-        }),
-        http.get(`${API_BASE}/category/cat-1/`, () => {
           return HttpResponse.json({
-            result: {
-              uid: "cat-1",
-              name: "Breakfast",
-              order_flag: 1,
-              parent_uid: null,
-            },
+            result: [
+              { uid: "cat-1", name: "Breakfast", order_flag: 1, parent_uid: null },
+              { uid: "cat-2", name: "Dinner", order_flag: 2, parent_uid: null },
+            ],
           });
         }),
       );
@@ -396,36 +391,23 @@ describe("PaprikaClient", () => {
       const client = new PaprikaClient("test@example.com", "password");
       const categories = await client.listCategories();
 
-      expect(categories).toHaveLength(1);
+      expect(categories).toHaveLength(2);
       expect(categories[0]!.name).toBe("Breakfast");
       expect(categories[0]!.orderFlag).toBe(1);
       expect(categories[0]!.parentUid).toBe(null);
     });
 
-    it("p1-u06-client-reads.AC4.2 - makes exactly one /categories/ request then N /category/{uid}/ requests", async () => {
+    it("p1-u06-client-reads.AC4.2 - makes exactly one /categories/ request (no per-category hydration)", async () => {
       let listCount = 0;
-      let hydrateCount = 0;
 
       server.use(
         http.get(`${API_BASE}/categories/`, () => {
           listCount++;
           return HttpResponse.json({
             result: [
-              { uid: "c1", hash: "h1" },
-              { uid: "c2", hash: "h2" },
+              { uid: "c1", name: "Cat 1", order_flag: 0, parent_uid: null },
+              { uid: "c2", name: "Cat 2", order_flag: 0, parent_uid: null },
             ],
-          });
-        }),
-        http.get(`${API_BASE}/category/:uid/`, ({ params }) => {
-          hydrateCount++;
-          const uid = params.uid as string;
-          return HttpResponse.json({
-            result: {
-              uid,
-              name: `Category ${uid}`,
-              order_flag: 0,
-              parent_uid: null,
-            },
           });
         }),
       );
@@ -434,10 +416,9 @@ describe("PaprikaClient", () => {
       await client.listCategories();
 
       expect(listCount).toBe(1);
-      expect(hydrateCount).toBe(2);
     });
 
-    it("p1-u06-client-reads.AC4.3 - returns [] when /categories/ returns empty list, no hydration requests made", async () => {
+    it("p1-u06-client-reads.AC4.3 - returns [] when /categories/ returns empty list", async () => {
       server.use(
         http.get(`${API_BASE}/categories/`, () => {
           return HttpResponse.json({ result: [] });
@@ -448,57 +429,6 @@ describe("PaprikaClient", () => {
       const categories = await client.listCategories();
 
       expect(categories).toStrictEqual([]);
-    });
-
-    it("p1-u06-client-reads.AC4.4 - at most 5 hydration requests execute simultaneously, independent of recipe bulkhead", async () => {
-      let catInFlight = 0;
-      let catPeakInFlight = 0;
-      let recipeInFlight = 0;
-      let recipePeakInFlight = 0;
-
-      server.use(
-        http.get(`${API_BASE}/categories/`, () => {
-          return HttpResponse.json({
-            result: Array.from({ length: 10 }, (_, i) => ({
-              uid: `cat-${i.toString()}`,
-              hash: `h${i.toString()}`,
-            })),
-          });
-        }),
-        http.get(`${API_BASE}/category/:uid/`, async ({ params }) => {
-          catInFlight++;
-          catPeakInFlight = Math.max(catPeakInFlight, catInFlight);
-          await new Promise((resolve) => setTimeout(resolve, 20));
-          catInFlight--;
-          const uid = params.uid as string;
-          return HttpResponse.json({
-            result: {
-              uid,
-              name: `Category ${uid}`,
-              order_flag: 0,
-              parent_uid: null,
-            },
-          });
-        }),
-        http.get(`${API_BASE}/recipe/:uid/`, async ({ params }) => {
-          recipeInFlight++;
-          recipePeakInFlight = Math.max(recipePeakInFlight, recipeInFlight);
-          await new Promise((resolve) => setTimeout(resolve, 20));
-          recipeInFlight--;
-          return HttpResponse.json({ result: makeSnakeCaseRecipe(params.uid as string) });
-        }),
-      );
-
-      const client = new PaprikaClient("test@example.com", "password");
-
-      // Run listCategories and getRecipes concurrently
-      await Promise.all([
-        client.listCategories(),
-        client.getRecipes(Array.from({ length: 10 }, (_, i) => `uid-${i.toString()}`)),
-      ]);
-
-      expect(catPeakInFlight).toBeLessThanOrEqual(5);
-      expect(recipePeakInFlight).toBeLessThanOrEqual(5);
     });
   });
 
