@@ -32,7 +32,6 @@ export class DiskCache {
   private readonly _indexPath: string;
   private readonly _recipesDir: string;
   private readonly _categoriesDir: string;
-  private readonly _log: (msg: string) => void;
 
   // Null until init() is called. diff*() and flush() assert non-null.
   private _index: CacheIndex | null = null;
@@ -43,12 +42,11 @@ export class DiskCache {
   private readonly _pendingRecipes: Map<string, Recipe> = new Map();
   private readonly _pendingCategories: Map<string, Category> = new Map();
 
-  constructor(cacheDir: string, log?: (msg: string) => void) {
+  constructor(cacheDir: string) {
     this._cacheDir = cacheDir;
     this._indexPath = join(cacheDir, "index.json");
     this._recipesDir = join(cacheDir, "recipes");
     this._categoriesDir = join(cacheDir, "categories");
-    this._log = log ?? (() => undefined);
   }
 
   async init(): Promise<void> {
@@ -74,14 +72,14 @@ export class DiskCache {
     try {
       parsed = JSON.parse(raw);
     } catch {
-      this._log("DiskCache: corrupt index.json (invalid JSON), resetting to empty index");
+      process.stderr.write("DiskCache: corrupt index.json (invalid JSON), resetting to empty index\n");
       this._index = { recipes: {}, categories: {} };
       return;
     }
 
     const result = CacheIndexSchema.safeParse(parsed);
     if (!result.success) {
-      this._log("DiskCache: corrupt index.json (schema mismatch), resetting to empty index");
+      process.stderr.write("DiskCache: corrupt index.json (schema mismatch), resetting to empty index\n");
       this._index = { recipes: {}, categories: {} };
       return;
     }

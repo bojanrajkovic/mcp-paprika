@@ -76,12 +76,12 @@ describe("DiskCache", () => {
       const indexPath = join(tempDir, "index.json");
       await writeFile(indexPath, JSON.stringify("just a string"));
 
-      const logSpy = vi.fn();
-      const cache = new DiskCache(tempDir, logSpy);
+      const stderrSpy = vi.spyOn(process.stderr, "write").mockReturnValue(true);
+      const cache = new DiskCache(tempDir);
       await cache.init();
 
       // Verify log was called with a message containing 'corrupt'
-      expect(logSpy).toHaveBeenCalledWith(expect.stringContaining("corrupt"));
+      expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining("corrupt"));
 
       // Verify that flush() writes an empty index
       await cache.flush();
@@ -89,6 +89,7 @@ describe("DiskCache", () => {
       const parsed = JSON.parse(content);
 
       expect(parsed).toEqual({ recipes: {}, categories: {} });
+      stderrSpy.mockRestore();
     });
 
     it("AC1.5: rethrows non-ENOENT I/O errors (e.g. permission denied)", async () => {

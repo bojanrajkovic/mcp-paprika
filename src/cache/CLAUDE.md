@@ -41,10 +41,11 @@ Persistence layer for the Paprika recipe library. Stores full recipe and categor
 
 **Construction:**
 
-`new DiskCache(cacheDir: string, log?: (msg: string) => void)`
+`new DiskCache(cacheDir: string)`
 
 - `cacheDir` — absolute path to the cache directory (typically from `getCacheDir()` in `src/utils/xdg.ts`)
-- `log` — optional log callback injected by the entry point; defaults to a no-op
+
+Diagnostic messages are written directly to `process.stderr`.
 
 **Lifecycle:**
 
@@ -97,5 +98,5 @@ Persistence layer for the Paprika recipe library. Stores full recipe and categor
 ## Dependencies
 
 - **Uses:** `paprika/types` (Recipe, Category types), `utils/duration` (parseDuration for time filtering), Node.js built-in fs/promises
-- **Used by:** `features/` (via RecipeStore), P2-U11 sync engine (via DiskCache), P2-U12 entry point (constructs DiskCache with `getCacheDir()` and injects log callback)
+- **Used by:** `features/` (via RecipeStore), P2-U11 sync engine (via DiskCache), P2-U12 entry point (constructs DiskCache with `getCacheDir()`)
 - **Boundary:** Must not import from `tools/`, `resources/`, or `features/`
