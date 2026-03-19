@@ -42,8 +42,13 @@ async function main(): Promise<void> {
   const cache = new DiskCache(getCacheDir());
   await cache.init();
 
-  // 4. Construct RecipeStore
+  // 4. Construct RecipeStore and hydrate from cache
   const store = new RecipeStore();
+  const cachedRecipes = await cache.getAllRecipes();
+  for (const recipe of cachedRecipes) {
+    store.set(recipe);
+  }
+  log(`Hydrated store with ${cachedRecipes.length} cached recipes.`);
 
   // 5. Construct McpServer
   const server = new McpServer({
@@ -73,13 +78,16 @@ async function main(): Promise<void> {
   registerRecipeResources(server, ctx);
   log("Registered recipe resources.");
 
-  // 9. Construct SyncEngine and conditionally start
+  // 9. Construct SyncEngine, run initial sync, then start background loop
   const sync = new SyncEngine(ctx, config.sync.interval);
+  log("Running initial sync...");
+  await sync.syncOnce();
+  log("Initial sync complete.");
   if (config.sync.enabled) {
     sync.start();
     log(`Sync engine started (interval: ${config.sync.interval}ms).`);
   } else {
-    log("Sync engine created but not started (disabled).");
+    log("Background sync disabled.");
   }
 
   // Phase 3 extension point
