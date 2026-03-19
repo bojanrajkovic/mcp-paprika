@@ -61,8 +61,13 @@ export class SyncEngine {
   async syncOnce(): Promise<void> {
     try {
       // 1. Recipe sync path
+      SyncEngine._log("Fetching recipe list...");
       const entries = await this._context.client.listRecipes();
+      SyncEngine._log(`Got ${entries.length} recipe entries.`);
       const diff = this._context.cache.diffRecipes(entries);
+      SyncEngine._log(
+        `Recipe diff: ${diff.added.length} added, ${diff.changed.length} changed, ${diff.removed.length} removed.`,
+      );
 
       // Compute UIDs to fetch
       const uidsToFetch = [...diff.added, ...diff.changed];
@@ -70,7 +75,9 @@ export class SyncEngine {
       // Fetch recipes if any exist
       let fetchedRecipes: Array<Recipe> = [];
       if (uidsToFetch.length > 0) {
+        SyncEngine._log(`Fetching ${uidsToFetch.length} recipes...`);
         fetchedRecipes = await this._context.client.getRecipes(uidsToFetch);
+        SyncEngine._log(`Fetched ${fetchedRecipes.length} recipes.`);
       }
 
       // Write fetched recipes to cache and store
@@ -86,13 +93,16 @@ export class SyncEngine {
       }
 
       // 2. Category sync path (replace-all)
+      SyncEngine._log("Fetching categories...");
       const categories = await this._context.client.listCategories();
+      SyncEngine._log(`Got ${categories.length} categories.`);
       this._context.store.setCategories(categories);
       for (const category of categories) {
         this._context.cache.putCategory(category, category.uid);
       }
 
       // 3. Finalization
+      SyncEngine._log("Flushing cache to disk...");
       await this._context.cache.flush();
 
       // Determine if recipe changes exist
@@ -116,7 +126,11 @@ export class SyncEngine {
       };
       this._events.emit("sync:complete", result);
 
-      // Log success
+      SyncEngine._log(
+        `Sync complete: ${addedRecipes.length} added, ${updatedRecipes.length} updated, ${diff.removed.length} removed.`,
+      );
+
+      // Log success via MCP
       try {
         await this._context.server.sendLoggingMessage({
           level: "info",
@@ -129,7 +143,9 @@ export class SyncEngine {
       // Convert caught value to Error
       const err = error instanceof Error ? error : new Error(String(error));
 
-      // Log error
+      SyncEngine._log(`Sync failed: ${err.message}`);
+
+      // Log error via MCP
       try {
         await this._context.server.sendLoggingMessage({
           level: "error",
@@ -142,6 +158,10 @@ export class SyncEngine {
       // Emit error event
       this._events.emit("sync:error", err);
     }
+  }
+
+  private static _log(msg: string): void {
+    process.stderr.write(`[mcp-paprika:sync] ${msg}\n`);
   }
 
   private async _loop(): Promise<void> {

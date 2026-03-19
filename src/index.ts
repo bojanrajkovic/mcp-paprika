@@ -16,8 +16,13 @@ import { registerDeleteTool } from "./tools/delete.js";
 import { registerRecipeResources } from "./resources/recipes.js";
 import type { ServerContext } from "./types/server-context.js";
 
+function log(msg: string): void {
+  process.stderr.write(`[mcp-paprika] ${msg}\n`);
+}
+
 async function main(): Promise<void> {
   // 1. Load and validate config
+  log("Loading configuration...");
   const configResult = loadConfig();
   const config = configResult.match(
     (cfg) => cfg,
@@ -27,10 +32,13 @@ async function main(): Promise<void> {
   );
 
   // 2. Construct PaprikaClient and authenticate
+  log("Authenticating with Paprika...");
   const client = new PaprikaClient(config.paprika.email, config.paprika.password);
   await client.authenticate();
+  log("Authenticated successfully.");
 
   // 3. Construct DiskCache and initialize
+  log("Initializing disk cache...");
   const cache = new DiskCache(getCacheDir());
   await cache.init();
 
@@ -59,26 +67,34 @@ async function main(): Promise<void> {
   registerCreateTool(server, ctx);
   registerUpdateTool(server, ctx);
   registerDeleteTool(server, ctx);
+  log("Registered 8 tools.");
 
   // 8. Register recipe resources
   registerRecipeResources(server, ctx);
+  log("Registered recipe resources.");
 
   // 9. Construct SyncEngine and conditionally start
   const sync = new SyncEngine(ctx, config.sync.interval);
   if (config.sync.enabled) {
     sync.start();
+    log(`Sync engine started (interval: ${config.sync.interval}ms).`);
+  } else {
+    log("Sync engine created but not started (disabled).");
   }
 
   // Phase 3 extension point
 
   // 10. Register SIGINT handler
   process.on("SIGINT", () => {
+    log("SIGINT received, shutting down...");
     sync.stop();
     process.exit(0);
   });
 
   // 11. Connect stdio transport
+  log("Connecting stdio transport...");
   await server.connect(new StdioServerTransport());
+  log("Server ready.");
 }
 
 main().catch((err) => {
