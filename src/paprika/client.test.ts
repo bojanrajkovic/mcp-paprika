@@ -440,7 +440,7 @@ describe("PaprikaClient", () => {
       server.use(
         http.post(`${API_BASE}/recipe/${uid}/`, ({ request }) => {
           capturedUrl = request.url;
-          return HttpResponse.json({ result: makeSnakeCaseRecipe(uid) });
+          return HttpResponse.json({ result: true });
         }),
       );
 
@@ -461,7 +461,7 @@ describe("PaprikaClient", () => {
           const arrayBuffer = await dataBlob.arrayBuffer();
           const decompressed = gunzipSync(Buffer.from(arrayBuffer));
           payload = JSON.parse(decompressed.toString()) as Record<string, unknown>;
-          return HttpResponse.json({ result: makeSnakeCaseRecipe(uid) });
+          return HttpResponse.json({ result: true });
         }),
       );
 
@@ -489,27 +489,22 @@ describe("PaprikaClient", () => {
       expect(Object.keys(payload!).length).toBe(28);
     });
 
-    it("p1-u07-client-writes.AC1.4 - Server response deserialized as camelCase Recipe", async () => {
+    it("p1-u07-client-writes.AC1.4 - saveRecipe returns the input recipe", async () => {
       const uid = "test-uid";
 
       server.use(
         http.post(`${API_BASE}/recipe/${uid}/`, () => {
-          return HttpResponse.json({ result: makeSnakeCaseRecipe(uid) });
+          return HttpResponse.json({ result: true });
         }),
       );
 
       const client = new PaprikaClient("test@example.com", "password");
-      const result = await client.saveRecipe(makeCamelCaseRecipe(uid));
+      const input = makeCamelCaseRecipe(uid);
+      const result = await client.saveRecipe(input);
 
-      // Assert camelCase properties exist
+      expect(result.uid).toBe(input.uid);
+      expect(result.name).toBe(input.name);
       expect(result).toHaveProperty("prepTime");
-      expect(result).toHaveProperty("onFavorites");
-      expect(result).toHaveProperty("imageUrl");
-
-      // Assert snake_case properties do NOT exist
-      expect(result).not.toHaveProperty("prep_time");
-      expect(result).not.toHaveProperty("on_favorites");
-      expect(result).not.toHaveProperty("image_url");
     });
 
     it("p1-u07-client-writes.AC1.5 - Non-2xx response throws PaprikaAPIError", async () => {
@@ -579,7 +574,7 @@ describe("PaprikaClient", () => {
           const arrayBuffer = await dataBlob.arrayBuffer();
           const decompressed = gunzipSync(Buffer.from(arrayBuffer));
           capturedPayload = JSON.parse(decompressed.toString()) as Record<string, unknown>;
-          return HttpResponse.json({ result: makeSnakeCaseRecipe(uid) });
+          return HttpResponse.json({ result: true });
         }),
         http.post(`${API_BASE}/notify/`, () => {
           notifyReached = true;

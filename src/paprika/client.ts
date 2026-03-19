@@ -134,7 +134,8 @@ export class PaprikaClient {
 
   async saveRecipe(recipe: Readonly<Recipe>): Promise<Recipe> {
     const formData = this.buildRecipeFormData(recipe);
-    return this.request("POST", `${API_BASE}/recipe/${recipe.uid}/`, RecipeSchema, formData);
+    await this.request("POST", `${API_BASE}/recipe/${recipe.uid}/`, z.boolean(), formData);
+    return recipe as Recipe;
   }
 
   async notifySync(): Promise<void> {
