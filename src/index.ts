@@ -13,6 +13,7 @@ import { registerReadTool } from "./tools/read.js";
 import { registerCreateTool } from "./tools/create.js";
 import { registerUpdateTool } from "./tools/update.js";
 import { registerDeleteTool } from "./tools/delete.js";
+import { registerListTool } from "./tools/list.js";
 import { registerRecipeResources } from "./resources/recipes.js";
 import type { ServerContext } from "./types/server-context.js";
 
@@ -64,15 +65,16 @@ async function main(): Promise<void> {
     server,
   };
 
-  // 7. Register all 8 tools
+  // 7. Register all 9 tools
   registerSearchTool(server, ctx);
   registerFilterTools(server, ctx);
   registerCategoryTools(server, ctx);
+  registerListTool(server, ctx);
   registerReadTool(server, ctx);
   registerCreateTool(server, ctx);
   registerUpdateTool(server, ctx);
   registerDeleteTool(server, ctx);
-  log("Registered 8 tools.");
+  log("Registered 9 tools.");
 
   // 8. Register recipe resources
   registerRecipeResources(server, ctx);
