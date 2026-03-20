@@ -1,6 +1,6 @@
 # mcp-paprika
 
-Last verified: 2026-03-18
+Last verified: 2026-03-19
 
 MCP server for the Paprika recipe manager. Communicates over stdio transport — `console.log` writes to stdout which is the MCP wire format. Any stray console output corrupts the protocol. Use `process.stderr.write()` for diagnostic messages or the MCP SDK's logging facility.
 
