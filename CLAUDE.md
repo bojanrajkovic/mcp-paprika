@@ -1,6 +1,6 @@
 # mcp-paprika
 
-Last verified: 2026-03-19
+Last verified: 2026-03-20
 
 MCP server for the Paprika recipe manager. Communicates over stdio transport — `console.log` writes to stdout which is the MCP wire format. Any stray console output corrupts the protocol. Use `process.stderr.write()` for diagnostic messages or the MCP SDK's logging facility.
 
@@ -10,7 +10,7 @@ MCP server for the Paprika recipe manager. Communicates over stdio transport —
 - **Language:** TypeScript 5.9 (extends `@tsconfig/strictest` + `@tsconfig/node24`)
 - **Module system:** ESM (`"type": "module"`)
 - **Package manager:** pnpm 10.30.3 (corepack-managed)
-- **Key dependencies:** @modelcontextprotocol/sdk (MCP protocol), zod (validation), luxon (dates), dotenv (env config), parse-duration (duration parsing), env-paths (XDG directories), neverthrow (error handling), cockatiel (resilience/retry), mitt (event emitter)
+- **Key dependencies:** @modelcontextprotocol/sdk (MCP protocol), zod (validation), luxon (dates), dotenv (env config), parse-duration (duration parsing), env-paths (XDG directories), neverthrow (error handling), cockatiel (resilience/retry), mitt (event emitter), vectra (local vector index)
 
 ## Commands
 
@@ -73,7 +73,7 @@ Minimize runtime dependencies. Every new dependency must justify its inclusion:
 
 - Prefer Node.js built-in modules when available
 - Evaluate bundle size and maintenance status before adding packages
-- Current runtime deps: `@modelcontextprotocol/sdk`, `cockatiel`, `dotenv`, `env-paths`, `luxon`, `mitt`, `neverthrow`, `parse-duration`, `zod`
+- Current runtime deps: `@modelcontextprotocol/sdk`, `cockatiel`, `dotenv`, `env-paths`, `luxon`, `mitt`, `neverthrow`, `parse-duration`, `vectra`, `zod`
 
 ## Testing
 
