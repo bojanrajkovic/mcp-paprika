@@ -27,6 +27,13 @@
       "automerge": true
     },
     {
+      "description": "Group Node.js version updates across managers",
+      "matchPackageNames": ["node"],
+      "matchManagers": ["mise", "github-actions", "nvm"],
+      "groupName": "Node.js",
+      "automerge": true
+    },
+    {
       "description": "Don't automerge major production dependency bumps",
       "matchDepTypes": ["dependencies"],
       "matchUpdateTypes": ["major"],
