@@ -1,20 +1,24 @@
-# Embedding Provider Configuration
+# Embedding provider configuration
 
-The `EmbeddingClient` works with any OpenAI-compatible `/v1/embeddings` endpoint.
-Three environment variables control provider selection:
+The `discover_recipes` tool uses embeddings for semantic search. It works with any OpenAI-compatible `/v1/embeddings` endpoint.
 
-| Variable          | Description                                   | Example                         |
-| ----------------- | --------------------------------------------- | ------------------------------- |
-| `OPENAI_BASE_URL` | Base URL for the embeddings API (up to `/v1`) | `https://openrouter.ai/api/v1`  |
-| `OPENAI_API_KEY`  | Bearer token for authentication               | `sk-or-v1-...`                  |
-| `EMBEDDING_MODEL` | Model identifier (provider-specific)          | `openai/text-embedding-3-small` |
+Three config values control provider selection. Set them as environment variables or in `config.json` (see [configuration](configuration.md) for the full config reference):
 
-## Provider Examples
+| Env var           | config.json path              | Description            | Example                         |
+| ----------------- | ----------------------------- | ---------------------- | ------------------------------- |
+| `OPENAI_BASE_URL` | `features.embeddings.baseUrl` | Base URL (up to `/v1`) | `https://openrouter.ai/api/v1`  |
+| `OPENAI_API_KEY`  | `features.embeddings.apiKey`  | Bearer token           | `sk-or-v1-...`                  |
+| `EMBEDDING_MODEL` | `features.embeddings.model`   | Model identifier       | `openai/text-embedding-3-small` |
 
-### Local development: ollama (free, no network)
+All three must be set to enable semantic search. If any are missing, the server starts without `discover_recipes`.
 
-Run embedding models locally on CPU. No API key needed. Good for offline
-development and fast iteration.
+## Provider examples
+
+### Local development: Ollama (free, no network)
+
+Run embedding models locally on CPU. No API key needed.
+
+**Environment variables:**
 
 ```bash
 OPENAI_BASE_URL=http://localhost:11434/v1
@@ -22,13 +26,27 @@ OPENAI_API_KEY=ollama
 EMBEDDING_MODEL=nomic-embed-text
 ```
 
+**config.json equivalent:**
+
+```json
+{
+  "features": {
+    "embeddings": {
+      "baseUrl": "http://localhost:11434/v1",
+      "apiKey": "ollama",
+      "model": "nomic-embed-text"
+    }
+  }
+}
+```
+
 **Setup:**
 
 ```bash
-# Install ollama (if not already installed)
+# Install ollama
 curl -fsSL https://ollama.com/install.sh | sh
 
-# Pull the embedding model (~274 MB download)
+# Pull the embedding model (~274 MB)
 ollama pull nomic-embed-text
 
 # ollama serves an OpenAI-compatible API on :11434 automatically
@@ -36,15 +54,14 @@ ollama pull nomic-embed-text
 
 **Recommended local models:**
 
-| Model                    | Size   | Dimensions | Context | Notes                             |
-| ------------------------ | ------ | ---------- | ------- | --------------------------------- |
-| `nomic-embed-text`       | 274 MB | 768        | 8K      | Best balance of quality and speed |
-| `all-minilm`             | 45 MB  | 384        | 512     | Smallest/fastest, limited context |
-| `mxbai-embed-large`      | 670 MB | 1024       | 512     | Higher quality, larger            |
-| `snowflake-arctic-embed` | 670 MB | 1024       | 512     | Strong retrieval performance      |
+| Model                    | Size   | Dimensions | Context | Notes                                 |
+| ------------------------ | ------ | ---------- | ------- | ------------------------------------- |
+| `nomic-embed-text`       | 274 MB | 768        | 8K      | Best balance of quality and speed     |
+| `all-minilm`             | 45 MB  | 384        | 512     | Smallest and fastest, limited context |
+| `mxbai-embed-large`      | 670 MB | 1024       | 512     | Higher quality, larger                |
+| `snowflake-arctic-embed` | 670 MB | 1024       | 512     | Strong retrieval performance          |
 
-No GPU required — embedding models are small enough to run on CPU. The Ryzen 7
-with AVX2 handles these comfortably.
+No GPU required — embedding models are small enough to run on CPU.
 
 ### Testing / CI: OpenRouter + text-embedding-3-small
 
@@ -54,6 +71,18 @@ Cheap and reliable. Good for CI pipelines and integration tests.
 OPENAI_BASE_URL=https://openrouter.ai/api/v1
 OPENAI_API_KEY=sk-or-v1-...
 EMBEDDING_MODEL=openai/text-embedding-3-small
+```
+
+```json
+{
+  "features": {
+    "embeddings": {
+      "baseUrl": "https://openrouter.ai/api/v1",
+      "apiKey": "sk-or-v1-...",
+      "model": "openai/text-embedding-3-small"
+    }
+  }
+}
 ```
 
 - $0.02 per million tokens
@@ -70,6 +99,18 @@ OPENAI_API_KEY=sk-or-v1-...
 EMBEDDING_MODEL=openai/text-embedding-3-large
 ```
 
+```json
+{
+  "features": {
+    "embeddings": {
+      "baseUrl": "https://openrouter.ai/api/v1",
+      "apiKey": "sk-or-v1-...",
+      "model": "openai/text-embedding-3-large"
+    }
+  }
+}
+```
+
 - $0.13 per million tokens
 - 3072 dimensions, 8K context
 - Supports dimension reduction (request fewer dims to trade quality for storage)
@@ -84,9 +125,21 @@ OPENAI_API_KEY=sk-or-v1-...
 EMBEDDING_MODEL=nvidia/llama-nemotron-embed-vl-1b-v2
 ```
 
+```json
+{
+  "features": {
+    "embeddings": {
+      "baseUrl": "https://openrouter.ai/api/v1",
+      "apiKey": "sk-or-v1-...",
+      "model": "nvidia/llama-nemotron-embed-vl-1b-v2"
+    }
+  }
+}
+```
+
 - Free (promotional, may change)
 - 131K context, multimodal (text + image)
-- Aggressive rate limits — cockatiel retry/429 handling will fire often
+- Aggressive rate limits — the retry logic will fire often
 
 ### Direct OpenAI (no OpenRouter)
 
@@ -98,13 +151,23 @@ OPENAI_API_KEY=sk-...
 EMBEDDING_MODEL=text-embedding-3-small
 ```
 
-Note: model names differ — OpenRouter uses `openai/text-embedding-3-small`,
-direct OpenAI uses `text-embedding-3-small` (no provider prefix).
+```json
+{
+  "features": {
+    "embeddings": {
+      "baseUrl": "https://api.openai.com/v1",
+      "apiKey": "sk-...",
+      "model": "text-embedding-3-small"
+    }
+  }
+}
+```
 
-## Integration Testing with ollama
+Note: model names differ — OpenRouter uses `openai/text-embedding-3-small`, direct OpenAI uses `text-embedding-3-small` (no provider prefix).
 
-For future integration tests that hit a real embedding endpoint (rather than
-MSW mocks), ollama provides a local, deterministic, free API:
+## Integration testing with Ollama
+
+For integration tests that hit a real embedding endpoint (rather than mocks), Ollama provides a local, deterministic, free API:
 
 ```bash
 # Start ollama if not running
@@ -118,5 +181,4 @@ curl -s http://localhost:11434/v1/embeddings \
 # Expected: dims=768
 ```
 
-Integration tests should be gated behind an environment variable (e.g.,
-`OLLAMA_AVAILABLE=1`) so CI can skip them when ollama isn't present.
+Integration tests are gated behind Ollama availability — they skip gracefully when Ollama isn't running.
