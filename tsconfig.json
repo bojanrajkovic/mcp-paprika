@@ -6,5 +6,11 @@
     "declaration": true
   },
   "include": ["src"],
-  "exclude": ["src/**/*.test.ts", "src/**/*.test.*.ts", "src/**/__fixtures__", "src/**/*test-utils*"]
+  "exclude": [
+    "src/**/*.test.ts",
+    "src/**/*.test.*.ts",
+    "src/**/__fixtures__",
+    "src/**/*test-utils*",
+    "src/e2e-server.ts"
+  ]
 }
