@@ -30,3 +30,17 @@ Within each tier, results are sorted alphabetically. The response includes categ
   }
 }
 ```
+
+## Sample output
+
+```text
+## Chicken Parmesan
+**Categories:** Italian, Dinner
+Prep: 20 min · Total: 50 min
+
+---
+
+## Chicken Parmesan Bake
+**Categories:** Casseroles, Dinner
+Prep: 15 min · Total: 1 hr
+```

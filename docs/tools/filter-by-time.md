@@ -42,3 +42,23 @@ Low-prep recipes (prep under 10 minutes, cook under 1 hour):
   }
 }
 ```
+
+## Sample output
+
+```text
+## Pasta Aglio e Olio
+**Categories:** Italian, Pasta
+Prep: 5 min · Total: 20 min
+
+---
+
+## Tomato Soup
+**Categories:** Soups
+Prep: 5 min · Total: 25 min
+
+---
+
+## Scrambled Eggs with Herbs
+**Categories:** Breakfast
+Prep: 2 min · Total: 10 min
+```

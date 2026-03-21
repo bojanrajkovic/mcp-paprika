@@ -57,3 +57,34 @@ Fix the ingredients and add a note:
   }
 }
 ```
+
+## Sample output
+
+```text
+# Chicken Parmesan
+**Categories:** Italian, Dinner
+
+A classic Italian-American comfort dish with crispy breaded chicken, marinara sauce, and melted mozzarella.
+
+Prep: 20 min · Cook: 30 min · Total: 50 min
+**Servings:** 4
+
+## Ingredients
+2 boneless skinless chicken breasts
+1 cup breadcrumbs
+1/2 cup grated Parmesan cheese
+1 egg, beaten
+2 cups marinara sauce
+1 cup shredded mozzarella
+Salt and pepper to taste
+
+## Directions
+1. Preheat oven to 400°F. Pound chicken to even thickness.
+2. Mix breadcrumbs and Parmesan. Dip chicken in egg, then breadcrumb mixture.
+3. Pan-fry in olive oil until golden, about 3 minutes per side.
+4. Transfer to baking dish. Top with marinara and mozzarella.
+5. Bake 20 minutes until cheese is bubbly.
+
+## Notes
+Use room-temperature eggs for best results.
+```

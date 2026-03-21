@@ -43,3 +43,17 @@ Find recipes that use either chocolate or vanilla:
   }
 }
 ```
+
+## Sample output
+
+```text
+## Chicken Fried Rice
+**Categories:** Asian, Dinner
+Prep: 10 min · Total: 25 min
+
+---
+
+## Chicken Rice Casserole
+**Categories:** Casseroles, Dinner
+Prep: 15 min · Total: 1 hr
+```

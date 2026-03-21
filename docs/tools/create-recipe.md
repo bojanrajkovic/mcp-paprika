@@ -46,3 +46,28 @@ Category names are resolved case-insensitively against your existing categories.
   }
 }
 ```
+
+## Sample output
+
+```text
+# Quick Pasta Aglio e Olio
+**Categories:** Pasta, Quick Meals
+
+Prep: 5 min · Cook: 15 min · Total: 20 min
+**Servings:** 4
+
+## Ingredients
+1 lb spaghetti
+6 cloves garlic, sliced
+1/2 cup olive oil
+1 tsp red pepper flakes
+Fresh parsley
+Parmesan cheese
+
+## Directions
+1. Cook pasta until al dente.
+2. Meanwhile, heat olive oil and cook garlic until golden.
+3. Add red pepper flakes.
+4. Toss drained pasta with garlic oil.
+5. Serve with parsley and parmesan.
+```

@@ -37,3 +37,14 @@ Second page:
   }
 }
 ```
+
+## Sample output
+
+```text
+Showing 4 of 122 recipes (offset: 0):
+
+- **Chicken Parmesan** [Italian, Dinner] (uid: a1b2c3d4-e5f6-7890-abcd-ef1234567890)
+- **Pasta Aglio e Olio** [Italian, Pasta, Quick Meals] (uid: b2c3d4e5-f6a7-8901-bcde-f12345678901)
+- **Roasted Tomato Soup** [Soups, Comfort Food] (uid: c3d4e5f6-a7b8-9012-cdef-123456789012)
+- **Shakshuka** [Breakfast, Vegetarian] (uid: d4e5f6a7-b8c9-0123-defa-234567890123)
+```
