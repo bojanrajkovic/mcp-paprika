@@ -1,7 +1,8 @@
 {
-  "name": "mcp-paprika",
+  "name": "@bojanrajkovic/mcp-paprika",
   "version": "0.0.0",
   "description": "MCP server for Paprika recipe manager",
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "build": "tsc",
@@ -14,6 +15,17 @@
     "test": "vitest run --passWithNoTests",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit"
+  },
+  "bin": {
+    "mcp-paprika": "dist/index.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.27.1",
