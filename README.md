@@ -11,34 +11,24 @@ An [MCP](https://modelcontextprotocol.io/) server for [Paprika](https://www.papr
 
 ## Quick start
 
-1. Install globally:
+Add to your MCP client config (e.g. Claude Desktop):
 
-   ```bash
-   pnpm add -g @bojanrajkovic/mcp-paprika
-   ```
+```json
+{
+  "mcpServers": {
+    "paprika": {
+      "command": "npx",
+      "args": ["-y", "@bojanrajkovic/mcp-paprika"],
+      "env": {
+        "PAPRIKA_EMAIL": "you@example.com",
+        "PAPRIKA_PASSWORD": "your-password"
+      }
+    }
+  }
+}
+```
 
-2. Set your Paprika credentials (env vars, `.env` file, or `config.json` — see [configuration](docs/configuration.md)):
-
-   ```bash
-   export PAPRIKA_EMAIL="you@example.com"
-   export PAPRIKA_PASSWORD="your-password"
-   ```
-
-3. Add to your MCP client config (e.g. Claude Desktop):
-
-   ```json
-   {
-     "mcpServers": {
-       "paprika": {
-         "command": "mcp-paprika",
-         "env": {
-           "PAPRIKA_EMAIL": "you@example.com",
-           "PAPRIKA_PASSWORD": "your-password"
-         }
-       }
-     }
-   }
-   ```
+See [configuration](docs/configuration.md) for all available options including background sync and semantic search.
 
 ## Documentation
 
