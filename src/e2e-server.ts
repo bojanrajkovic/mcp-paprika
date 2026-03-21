@@ -80,6 +80,14 @@ class MockPaprikaClient implements IMockPaprikaClient {
     parentUid: null,
   };
 
+  getMockRecipe(): Recipe {
+    return this.mockRecipe;
+  }
+
+  getMockCategory(): Category {
+    return this.mockCategory;
+  }
+
   async authenticate(): Promise<void> {
     log("Mock authentication (no-op)");
   }
@@ -135,13 +143,16 @@ async function main(): Promise<void> {
   const cache = new DiskCache(getCacheDir());
   await cache.init();
 
-  // 4. Construct RecipeStore and hydrate from cache
+  // 4. Construct RecipeStore and seed with mock data
   const store = new RecipeStore();
   const cachedRecipes = await cache.getAllRecipes();
   for (const recipe of cachedRecipes) {
     store.set(recipe);
   }
-  log(`Hydrated store with ${cachedRecipes.length} cached recipes.`);
+  // Always add the mock recipe so tools and resources work without a real sync
+  store.set(client.getMockRecipe());
+  store.setCategories([client.getMockCategory()]);
+  log(`Hydrated store with ${store.size} recipes.`);
 
   // 5. Construct McpServer
   const server = new McpServer({
