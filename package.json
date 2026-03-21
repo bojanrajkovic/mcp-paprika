@@ -1,8 +1,20 @@
 {
-  "name": "mcp-paprika",
-  "version": "0.0.0",
+  "name": "@bojanrajkovic/mcp-paprika",
+  "version": "1.0.0",
   "description": "MCP server for Paprika recipe manager",
+  "license": "MIT",
+  "bin": {
+    "mcp-paprika": "dist/index.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "type": "module",
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsc",
     "dev": "tsx src/index.ts",
