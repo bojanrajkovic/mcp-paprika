@@ -18,7 +18,7 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.27.1",
     "cockatiel": "^3.2.1",
-    "dotenv": "^16",
+    "dotenv": "^16.6.1",
     "env-paths": "^4.0.0",
     "luxon": "^3",
     "mitt": "^3.0.1",
