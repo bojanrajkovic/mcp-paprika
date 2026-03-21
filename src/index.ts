@@ -15,6 +15,7 @@ import { registerUpdateTool } from "./tools/update.js";
 import { registerDeleteTool } from "./tools/delete.js";
 import { registerListTool } from "./tools/list.js";
 import { registerRecipeResources } from "./resources/recipes.js";
+import { setupDiscoverFeature } from "./features/discover-feature.js";
 import type { ServerContext } from "./types/server-context.js";
 
 function log(msg: string): void {
@@ -92,7 +93,8 @@ async function main(): Promise<void> {
     log("Background sync disabled.");
   }
 
-  // Phase 3 extension point
+  // Phase 3: Semantic search
+  await setupDiscoverFeature(server, ctx, sync, config);
 
   // 10. Register SIGINT handler
   process.on("SIGINT", () => {

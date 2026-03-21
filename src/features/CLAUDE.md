@@ -75,8 +75,26 @@ corrupt Vectra index or hash-index.json).
 - Corruption recovery: corrupt Vectra index is backed up to `.bak` dir and recreated; corrupt `hash-index.json` is renamed to `.bak` and reset
 - Batch size is 500 texts per embedding API call
 
+### discover-feature.ts — Startup wiring for semantic search
+
+`setupDiscoverFeature` is a wiring function called from `index.ts` at server startup. It
+creates the `EmbeddingClient` and `VectorStore`, registers the `discover_recipes` tool,
+performs cold-start indexing if needed, and subscribes to `sync:complete` events for
+incremental index updates. A no-op if `config.features.embeddings` is not configured.
+
+| Export                 | Signature / Description                                                                |
+| ---------------------- | -------------------------------------------------------------------------------------- |
+| `setupDiscoverFeature` | `(server, ctx, sync, config) => Promise<void>` — wires semantic search into the server |
+
+**Invariants:**
+
+- No-op when `config.features.embeddings` is absent (semantic search remains disabled)
+- Cold-start indexing runs only when vector index is empty but recipe store has data
+- `sync:complete` handler indexes added/updated recipes and removes deleted ones
+- Errors during sync-triggered indexing are caught and logged to stderr (never crash the server)
+
 ## Dependencies
 
-- **Uses:** `paprika/` (types), `utils/` (config types), `cockatiel`, `vectra`, `zod`
-- **Used by:** `tools/`, `resources/`
-- **Boundary:** Must not import from `tools/` or `resources/`
+- **Uses:** `paprika/` (types), `utils/` (config types, xdg), `tools/` (discover tool registration), `cockatiel`, `vectra`, `zod`
+- **Used by:** `index.ts` (server startup), `tools/`, `resources/`
+- **Boundary:** Core building blocks (embeddings, vector-store, errors) must not import from `tools/` or `resources/`. Wiring functions (`discover-feature.ts`) may import tool registration functions.

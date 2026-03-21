@@ -29,7 +29,7 @@ MCP server for the Paprika recipe manager. Communicates over stdio transport —
 
 ## Project Structure
 
-- `src/index.ts` — Entry point: config, auth, cache, store, server, tools, resources, sync, stdio
+- `src/index.ts` — Entry point: config, auth, cache, store, server, tools, resources, sync, semantic search, stdio
 - `src/paprika/` — Paprika API client
 - `src/cache/` — Caching layer
 - `src/tools/` — MCP tool definitions
