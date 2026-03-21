@@ -104,6 +104,10 @@ Git hooks managed by lefthook, activated via `pnpm install` (the `prepare` scrip
 
 Hooks must not be bypassed. Fix issues before committing. If you commit before running `pnpm install`, hooks will not fire.
 
+### Pull Requests
+
+This project squash merges PRs, using the PR body as the merge commit description. PR bodies should contain a `## Summary` section with bullet points only — no test plans, checklists, or transient verification content. Transient content like test plans, verification checklists, and progress tracking should go in a PR comment and be kept up to date as they change.
+
 ### CI
 
 GitHub Actions run on every PR and push to `main`:
