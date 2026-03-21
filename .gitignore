@@ -13,3 +13,5 @@ Thumbs.db
 coverage/
 .claude/
 .ed3d/
+docs/implementation-plans/
+docs/test-plans/
