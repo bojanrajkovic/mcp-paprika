@@ -23,7 +23,7 @@
     "luxon": "^3.7.2",
     "mitt": "^3.0.1",
     "neverthrow": "^8.2.0",
-    "parse-duration": "^2",
+    "parse-duration": "^2.1.5",
     "vectra": "^0.12.3",
     "zod": "^3"
   },

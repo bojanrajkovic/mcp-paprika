@@ -30,7 +30,7 @@ importers:
         specifier: ^8.2.0
         version: 8.2.0
       parse-duration:
-        specifier: ^2
+        specifier: ^2.1.5
         version: 2.1.5
       vectra:
         specifier: ^0.12.3
