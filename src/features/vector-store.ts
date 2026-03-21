@@ -238,7 +238,7 @@ export class VectorStore {
 
   async search(query: string, topK: number = 10): Promise<ReadonlyArray<SemanticResult>> {
     const vector = await this._embedder.embed(query);
-    const results = await this._index.queryItems(vector, topK);
+    const results = await this._index.queryItems(vector, query, topK);
     return results.map((r) => ({
       uid: r.item.id,
       score: r.score,
