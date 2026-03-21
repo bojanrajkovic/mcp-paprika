@@ -1,8 +1,8 @@
 # MCP Tool Definitions
 
-Last verified: 2026-03-17
+Last verified: 2026-03-20
 
-Purpose: Defines MCP tools that AI assistants can invoke. Each tool file exports a `register*` function that takes `(server: McpServer, ctx: ServerContext)` and calls `server.registerTool()`.
+Purpose: Defines MCP tools that AI assistants can invoke. Each tool file exports a `register*` function that takes `(server: McpServer, ctx: ServerContext)` and calls `server.registerTool()`. Tools with external dependencies (e.g., vector store) accept additional parameters after `ctx`.
 
 ## Registered Tools
 
@@ -13,6 +13,7 @@ Purpose: Defines MCP tools that AI assistants can invoke. Each tool file exports
 | `search_recipes`       | `search.ts`     | Full-text search by name, ingredients, or description |
 | `filter_by_ingredient` | `filter.ts`     | Filter recipes by ingredient (all/any mode)           |
 | `filter_by_time`       | `filter.ts`     | Filter recipes by prep/cook/total time constraints    |
+| `discover_recipes`     | `discover.ts`   | Semantic search via VectorStore (natural language)    |
 | `list_categories`      | `categories.ts` | List all categories with recipe counts                |
 
 ### CRUD Tools
@@ -52,6 +53,8 @@ export function registerMyTool(server: McpServer, ctx: ServerContext): void {
 }
 ```
 
+**Variant: external dependencies.** Tools that require services beyond `ServerContext` accept additional constructor-injected parameters. Example: `registerDiscoverTool(server, ctx, vectorStore: VectorStore)` receives the vector store instance from `index.ts`.
+
 ## Shared Helpers (`helpers.ts`)
 
 Utilities imported by all tool handlers from `./helpers.js`.
@@ -80,4 +83,4 @@ Shared test utilities for direct tool handler invocation without a real MCP serv
 ## Dependencies
 
 - **Used by:** `index.ts` (MCP server registration)
-- **Uses:** `types/` (ServerContext), `utils/` (parseDuration -- runtime), `paprika/types.ts` (Zod schemas at runtime + type-only imports), `cache/recipe-store.ts` (type-only imports)
+- **Uses:** `types/` (ServerContext), `utils/` (parseDuration -- runtime), `paprika/types.ts` (Zod schemas at runtime + type-only imports), `cache/recipe-store.ts` (type-only imports), `features/vector-store.ts` (type-only imports for `VectorStore`, `SemanticResult`)
