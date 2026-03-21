@@ -3,7 +3,18 @@
   "version": "0.0.0",
   "description": "MCP server for Paprika recipe manager",
   "license": "MIT",
+  "bin": {
+    "mcp-paprika": "dist/index.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "type": "module",
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsc",
     "dev": "tsx src/index.ts",
@@ -15,17 +26,6 @@
     "test": "vitest run --passWithNoTests",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit"
-  },
-  "bin": {
-    "mcp-paprika": "dist/index.js"
-  },
-  "files": [
-    "dist",
-    "README.md",
-    "LICENSE"
-  ],
-  "publishConfig": {
-    "access": "public"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.27.1",
