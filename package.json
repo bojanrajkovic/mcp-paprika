@@ -25,7 +25,7 @@
     "neverthrow": "^8.2.0",
     "parse-duration": "^2.1.5",
     "vectra": "^0.12.3",
-    "zod": "^3"
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "@commitlint/cli": "^20.5.0",
