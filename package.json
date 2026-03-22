@@ -1,6 +1,6 @@
 {
   "name": "@bojanrajkovic/mcp-paprika",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "MCP server for Paprika recipe manager",
   "license": "MIT",
   "bin": {
