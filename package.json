@@ -3,6 +3,10 @@
   "version": "1.0.2",
   "description": "MCP server for Paprika recipe manager",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/bojanrajkovic/mcp-paprika"
+  },
   "bin": {
     "mcp-paprika": "dist/index.js"
   },
