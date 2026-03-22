@@ -132,7 +132,7 @@ describe("VectorStore init", () => {
       mockCreateIndex.mockResolvedValue(undefined);
 
       const embedder = makeMockEmbedder();
-      const store = new VectorStore(tempDir, embedder, "test-model");
+      const store = new VectorStore(tempDir, embedder, "test-model", 1);
       await store.init();
 
       expect(mockIsIndexCreated).toHaveBeenCalled();
@@ -159,7 +159,7 @@ describe("VectorStore init", () => {
       mockCreateIndex.mockResolvedValue(undefined);
 
       const embedder = makeMockEmbedder();
-      const store = new VectorStore(tempDir, embedder, "test-model");
+      const store = new VectorStore(tempDir, embedder, "test-model", 1);
       await store.init();
 
       // Verify index was already created so createIndex not called
@@ -187,7 +187,7 @@ describe("VectorStore init", () => {
       mockIsIndexCreated.mockResolvedValue(true);
 
       const embedder = makeMockEmbedder();
-      const store = new VectorStore(tempDir, embedder, "test-model");
+      const store = new VectorStore(tempDir, embedder, "test-model", 1);
       await store.init();
 
       // Verify stderr logged corruption message
@@ -220,7 +220,7 @@ describe("VectorStore init", () => {
       mockIsIndexCreated.mockResolvedValue(true);
 
       const embedder = makeMockEmbedder();
-      const store = new VectorStore(tempDir, embedder, "test-model");
+      const store = new VectorStore(tempDir, embedder, "test-model", 1);
       await store.init();
 
       // Verify stderr logged corruption message
@@ -247,7 +247,7 @@ describe("VectorStore init", () => {
       mockCreateIndex.mockResolvedValue(undefined);
 
       const embedder = makeMockEmbedder();
-      const store = new VectorStore(tempDir, embedder, "test-model");
+      const store = new VectorStore(tempDir, embedder, "test-model", 1);
       await store.init();
 
       // Verify stderr logged corruption message
@@ -278,7 +278,7 @@ describe("VectorStore init", () => {
       embedder.embedBatch.mockResolvedValue([[1, 0, 0]]);
 
       // First run with model-a: index a recipe
-      const store1 = new VectorStore(tempDir, embedder, "model-a");
+      const store1 = new VectorStore(tempDir, embedder, "model-a", 1);
       await store1.init();
       const recipe = makeRecipe({ uid: "recipe-1" });
       await store1.indexRecipes([recipe], () => []);
@@ -287,11 +287,45 @@ describe("VectorStore init", () => {
       // Second run with model-b: should clear hashes
       vi.clearAllMocks();
       mockIsIndexCreated.mockResolvedValue(true);
-      const store2 = new VectorStore(tempDir, embedder, "model-b");
+      const store2 = new VectorStore(tempDir, embedder, "model-b", 1);
       await store2.init();
 
       expect(store2.size).toBe(0);
       expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining("embedding model changed"));
+      stderrSpy.mockRestore();
+    });
+
+    it("clears hashes when schema version changes between runs", async () => {
+      const stderrSpy = vi.spyOn(process.stderr, "write").mockReturnValue(true);
+      const { LocalIndex } = await import("vectra");
+      const mockIsIndexCreated = vi.spyOn((LocalIndex as any).prototype, "isIndexCreated");
+      const mockBeginUpdate = vi.spyOn((LocalIndex as any).prototype, "beginUpdate");
+      const mockUpsertItem = vi.spyOn((LocalIndex as any).prototype, "upsertItem");
+      const mockEndUpdate = vi.spyOn((LocalIndex as any).prototype, "endUpdate");
+
+      mockIsIndexCreated.mockResolvedValue(false);
+      mockBeginUpdate.mockResolvedValue(undefined);
+      mockUpsertItem.mockResolvedValue(undefined);
+      mockEndUpdate.mockResolvedValue(undefined);
+
+      const embedder = makeMockEmbedder();
+      embedder.embedBatch.mockResolvedValue([[1, 0, 0]]);
+
+      // First run with schema version 1
+      const store1 = new VectorStore(tempDir, embedder, "same-model", 1);
+      await store1.init();
+      const recipe = makeRecipe({ uid: "recipe-1" });
+      await store1.indexRecipes([recipe], () => []);
+      expect(store1.size).toBe(1);
+
+      // Second run with schema version 2 (embedding text format changed)
+      vi.clearAllMocks();
+      mockIsIndexCreated.mockResolvedValue(true);
+      const store2 = new VectorStore(tempDir, embedder, "same-model", 2);
+      await store2.init();
+
+      expect(store2.size).toBe(0);
+      expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining("embedding schema version changed"));
       stderrSpy.mockRestore();
     });
 
@@ -311,7 +345,7 @@ describe("VectorStore init", () => {
       embedder.embedBatch.mockResolvedValue([[1, 0, 0]]);
 
       // First run
-      const store1 = new VectorStore(tempDir, embedder, "same-model");
+      const store1 = new VectorStore(tempDir, embedder, "same-model", 1);
       await store1.init();
       const recipe = makeRecipe({ uid: "recipe-1" });
       await store1.indexRecipes([recipe], () => []);
@@ -319,7 +353,7 @@ describe("VectorStore init", () => {
       // Second run with same model
       vi.clearAllMocks();
       mockIsIndexCreated.mockResolvedValue(true);
-      const store2 = new VectorStore(tempDir, embedder, "same-model");
+      const store2 = new VectorStore(tempDir, embedder, "same-model", 1);
       await store2.init();
 
       expect(store2.size).toBe(1);
@@ -360,7 +394,7 @@ describe("VectorStore indexRecipes", () => {
         [0, 1, 0],
       ]);
 
-      const store = new VectorStore(tempDir, embedder, "test-model");
+      const store = new VectorStore(tempDir, embedder, "test-model", 1);
       await store.init();
 
       const recipe1 = makeRecipe({ uid: "recipe-1" });
@@ -403,7 +437,7 @@ describe("VectorStore indexRecipes", () => {
       const embedder = makeMockEmbedder();
       embedder.embedBatch.mockResolvedValue([[1, 0, 0]]);
 
-      const store = new VectorStore(tempDir, embedder, "test-model");
+      const store = new VectorStore(tempDir, embedder, "test-model", 1);
       await store.init();
 
       const recipe = makeRecipe({ uid: "recipe-1" });
@@ -442,7 +476,7 @@ describe("VectorStore indexRecipes", () => {
       const embedder = makeMockEmbedder();
       embedder.embedBatch.mockResolvedValue([[1, 0, 0]]);
 
-      const store = new VectorStore(tempDir, embedder, "test-model");
+      const store = new VectorStore(tempDir, embedder, "test-model", 1);
       await store.init();
 
       const recipe1 = makeRecipe({ uid: "recipe-1" });
@@ -488,7 +522,7 @@ describe("VectorStore indexRecipes", () => {
       const embedder = makeMockEmbedder();
       embedder.embedBatch.mockResolvedValue([[1, 0, 0]]);
 
-      const store = new VectorStore(tempDir, embedder, "test-model");
+      const store = new VectorStore(tempDir, embedder, "test-model", 1);
       await store.init();
 
       const recipe = makeRecipe({ uid: "recipe-1" });
@@ -514,7 +548,7 @@ describe("VectorStore indexRecipes", () => {
 
       const embedder = makeMockEmbedder();
 
-      const store = new VectorStore(tempDir, embedder, "test-model");
+      const store = new VectorStore(tempDir, embedder, "test-model", 1);
       await store.init();
 
       const result = await store.indexRecipes([], () => []);
@@ -542,7 +576,7 @@ describe("VectorStore indexRecipes", () => {
       embedder.embedBatch.mockResolvedValue([[1, 0, 0]]);
 
       // First store instance
-      const store1 = new VectorStore(tempDir, embedder, "test-model");
+      const store1 = new VectorStore(tempDir, embedder, "test-model", 1);
       await store1.init();
       const recipe = makeRecipe({ uid: "recipe-1" });
       await store1.indexRecipes([recipe], () => []);
@@ -556,7 +590,7 @@ describe("VectorStore indexRecipes", () => {
       mockEndUpdate.mockResolvedValue(undefined);
 
       // Create new store instance pointing to same tempDir
-      const store2 = new VectorStore(tempDir, embedder, "test-model");
+      const store2 = new VectorStore(tempDir, embedder, "test-model", 1);
       await store2.init();
 
       // Index the same recipe again
@@ -604,7 +638,7 @@ describe("VectorStore search", () => {
       const embedder = makeMockEmbedder();
       embedder.embed.mockResolvedValue([1, 0, 0]);
 
-      const store = new VectorStore(tempDir, embedder, "test-model");
+      const store = new VectorStore(tempDir, embedder, "test-model", 1);
       await store.init();
 
       const results = await store.search("pasta recipe", 10);
@@ -644,7 +678,7 @@ describe("VectorStore search", () => {
       const embedder = makeMockEmbedder();
       embedder.embed.mockResolvedValue([1, 0, 0]);
 
-      const store = new VectorStore(tempDir, embedder, "test-model");
+      const store = new VectorStore(tempDir, embedder, "test-model", 1);
       await store.init();
 
       const results = await store.search("query", 10);
@@ -668,7 +702,7 @@ describe("VectorStore search", () => {
       const embedder = makeMockEmbedder();
       embedder.embed.mockResolvedValue([1, 0, 0]);
 
-      const store = new VectorStore(tempDir, embedder, "test-model");
+      const store = new VectorStore(tempDir, embedder, "test-model", 1);
       await store.init();
 
       const results = await store.search("query", 10);
@@ -710,7 +744,7 @@ describe("VectorStore removeRecipe", () => {
       const embedder = makeMockEmbedder();
       embedder.embedBatch.mockResolvedValue([[1, 0, 0]]);
 
-      const store = new VectorStore(tempDir, embedder, "test-model");
+      const store = new VectorStore(tempDir, embedder, "test-model", 1);
       await store.init();
 
       const recipe = makeRecipe({ uid: "recipe-1" });
@@ -751,7 +785,7 @@ describe("VectorStore removeRecipe", () => {
       const embedder = makeMockEmbedder();
       embedder.embedBatch.mockResolvedValue([[1, 0, 0]]);
 
-      const store = new VectorStore(tempDir, embedder, "test-model");
+      const store = new VectorStore(tempDir, embedder, "test-model", 1);
       await store.init();
 
       const recipe = makeRecipe({ uid: "recipe-1" });
@@ -781,7 +815,7 @@ describe("VectorStore removeRecipe", () => {
 
       const embedder = makeMockEmbedder();
 
-      const store = new VectorStore(tempDir, embedder, "test-model");
+      const store = new VectorStore(tempDir, embedder, "test-model", 1);
       await store.init();
 
       // Should not throw

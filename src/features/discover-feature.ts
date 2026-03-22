@@ -1,4 +1,4 @@
-import { EmbeddingClient } from "./embeddings.js";
+import { EmbeddingClient, EMBEDDING_SCHEMA_VERSION } from "./embeddings.js";
 import { VectorStore } from "./vector-store.js";
 import { registerDiscoverTool } from "../tools/discover.js";
 import { getCacheDir } from "../utils/xdg.js";
@@ -21,7 +21,7 @@ export async function setupDiscoverFeature(
   }
 
   const embedder = new EmbeddingClient(embeddingsConfig);
-  const vectorStore = new VectorStore(getCacheDir(), embedder, embeddingsConfig.model);
+  const vectorStore = new VectorStore(getCacheDir(), embedder, embeddingsConfig.model, EMBEDDING_SCHEMA_VERSION);
   await vectorStore.init();
 
   registerDiscoverTool(server, ctx, vectorStore);

@@ -186,6 +186,15 @@ export class EmbeddingClient {
 }
 
 /**
+ * Schema version for the embedding text format.
+ *
+ * Bump this whenever `recipeToEmbeddingText` changes (fields added/removed,
+ * format restructured) so that the vector store detects the change and
+ * triggers a full re-index on next startup.
+ */
+export const EMBEDDING_SCHEMA_VERSION = 1;
+
+/**
  * Convert a recipe to text suitable for embedding.
  *
  * Includes recipe name, description, category names, ingredients, and notes.

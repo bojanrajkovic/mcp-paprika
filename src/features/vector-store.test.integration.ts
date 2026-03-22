@@ -52,7 +52,7 @@ describe("VectorStore integration tests with real Vectra", () => {
       const { statSync, existsSync } = await import("node:fs");
 
       const embedder = makeDeterministicEmbedder();
-      const store = new VectorStore(tempDir, embedder, "test-model");
+      const store = new VectorStore(tempDir, embedder, "test-model", 1);
       await store.init();
 
       const vectorsDir = join(tempDir, "vectors");
@@ -66,7 +66,7 @@ describe("VectorStore integration tests with real Vectra", () => {
   describe("AC2.1 & AC2.2: Full indexing pipeline with dedup", () => {
     it("indexes new recipes and skips unchanged ones", async () => {
       const embedder = makeDeterministicEmbedder();
-      const store = new VectorStore(tempDir, embedder, "test-model");
+      const store = new VectorStore(tempDir, embedder, "test-model", 1);
       await store.init();
 
       // Create and index 3 recipes
@@ -87,7 +87,7 @@ describe("VectorStore integration tests with real Vectra", () => {
     it("loads persisted hashes from disk and skips unchanged recipes", async () => {
       // First store instance
       const embedder1 = makeDeterministicEmbedder();
-      const store1 = new VectorStore(tempDir, embedder1, "test-model");
+      const store1 = new VectorStore(tempDir, embedder1, "test-model", 1);
       await store1.init();
 
       const recipe1 = makeRecipe({ uid: "recipe-1" as RecipeUid, name: "Pasta Carbonara" });
@@ -98,7 +98,7 @@ describe("VectorStore integration tests with real Vectra", () => {
 
       // Second store instance pointing to same directory
       const embedder2 = makeDeterministicEmbedder();
-      const store2 = new VectorStore(tempDir, embedder2, "test-model");
+      const store2 = new VectorStore(tempDir, embedder2, "test-model", 1);
       await store2.init();
 
       // Index same recipes — should all be skipped because hashes loaded from disk
@@ -113,7 +113,7 @@ describe("VectorStore integration tests with real Vectra", () => {
   describe("AC3.1 & AC3.2: Search with ordering by similarity", () => {
     it("returns search results ordered by descending similarity score", async () => {
       const embedder = makeDeterministicEmbedder();
-      const store = new VectorStore(tempDir, embedder, "test-model");
+      const store = new VectorStore(tempDir, embedder, "test-model", 1);
       await store.init();
 
       // Index recipes with distinct content
@@ -161,7 +161,7 @@ describe("VectorStore integration tests with real Vectra", () => {
   describe("AC3.3: Empty index search returns empty array", () => {
     it("returns empty array when searching empty index", async () => {
       const embedder = makeDeterministicEmbedder();
-      const store = new VectorStore(tempDir, embedder, "test-model");
+      const store = new VectorStore(tempDir, embedder, "test-model", 1);
       await store.init();
 
       const results = await store.search("pasta recipe", 10);
@@ -173,7 +173,7 @@ describe("VectorStore integration tests with real Vectra", () => {
   describe("AC4.1: Removal removes from search results", () => {
     it("removes recipe from vector index and it no longer appears in search", async () => {
       const embedder = makeDeterministicEmbedder();
-      const store = new VectorStore(tempDir, embedder, "test-model");
+      const store = new VectorStore(tempDir, embedder, "test-model", 1);
       await store.init();
 
       // Index 2 recipes

@@ -60,7 +60,7 @@ describe.skipIf(!ollamaAvailable)("EmbeddingClient + VectorStore (Ollama)", () =
   async function setup(): Promise<{ embedder: EmbeddingClient; store: VectorStore }> {
     tempDir = await mkdtemp(join(tmpdir(), "paprika-e2e-ollama-"));
     const embedder = new EmbeddingClient(makeOllamaConfig());
-    const store = new VectorStore(tempDir, embedder, OLLAMA_MODEL);
+    const store = new VectorStore(tempDir, embedder, OLLAMA_MODEL, 1);
     await store.init();
     return { embedder, store };
   }
@@ -246,7 +246,7 @@ describe.skipIf(!ollamaAvailable)("EmbeddingClient + VectorStore (Ollama)", () =
   it("persists state across VectorStore restarts with real embeddings", async () => {
     tempDir = await mkdtemp(join(tmpdir(), "paprika-e2e-ollama-"));
     const embedder1 = new EmbeddingClient(makeOllamaConfig());
-    const store1 = new VectorStore(tempDir, embedder1, OLLAMA_MODEL);
+    const store1 = new VectorStore(tempDir, embedder1, OLLAMA_MODEL, 1);
     await store1.init();
 
     const recipe = makeRecipe({
@@ -261,7 +261,7 @@ describe.skipIf(!ollamaAvailable)("EmbeddingClient + VectorStore (Ollama)", () =
 
     // Create a new VectorStore on the same directory — simulates server restart
     const embedder2 = new EmbeddingClient(makeOllamaConfig());
-    const store2 = new VectorStore(tempDir, embedder2, OLLAMA_MODEL);
+    const store2 = new VectorStore(tempDir, embedder2, OLLAMA_MODEL, 1);
     await store2.init();
 
     expect(store2.size).toBe(1);

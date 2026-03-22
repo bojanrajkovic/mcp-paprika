@@ -72,7 +72,11 @@ function log(msg: string): void {
   process.stderr.write(`[mcp-paprika:vectors] ${msg}\n`);
 }
 
-const VectorMetaSchema = z.object({ model: z.string() });
+const VectorMetaSchema = z.object({
+  model: z.string(),
+  schemaVersion: z.number().int().optional(),
+});
+type VectorMeta = z.infer<typeof VectorMetaSchema>;
 
 export class VectorStore {
   private readonly _vectorsDir: string;
@@ -81,15 +85,17 @@ export class VectorStore {
   private readonly _index: LocalIndex;
   private readonly _embedder: EmbeddingClient;
   private readonly _modelId: string;
+  private readonly _schemaVersion: number;
   private _hashes: Record<string, string> = {};
 
-  constructor(cacheDir: string, embedder: EmbeddingClient, modelId: string) {
+  constructor(cacheDir: string, embedder: EmbeddingClient, modelId: string, schemaVersion: number) {
     this._vectorsDir = join(cacheDir, "vectors");
     this._hashIndexPath = join(this._vectorsDir, "hash-index.json");
     this._metaPath = join(this._vectorsDir, "vector-meta.json");
     this._index = new LocalIndex(this._vectorsDir);
     this._embedder = embedder;
     this._modelId = modelId;
+    this._schemaVersion = schemaVersion;
   }
 
   async init(): Promise<void> {
@@ -113,11 +119,18 @@ export class VectorStore {
     // Load hash map — follows DiskCache pattern (disk-cache.ts:60-88)
     await this._loadHashIndex();
 
-    // Invalidate vectors when the embedding model changes between runs.
-    const storedModel = await this._loadMeta();
-    if (storedModel !== null && storedModel !== this._modelId) {
-      log(`embedding model changed (${storedModel} → ${this._modelId}), clearing vector index`);
-      this._hashes = {};
+    // Invalidate vectors when the embedding model or schema version changes.
+    const meta = await this._loadMeta();
+    if (meta !== null) {
+      if (meta.model !== this._modelId) {
+        log(`embedding model changed (${meta.model} → ${this._modelId}), clearing vector index`);
+        this._hashes = {};
+      } else if ((meta.schemaVersion ?? 0) !== this._schemaVersion) {
+        log(
+          `embedding schema version changed (${String(meta.schemaVersion ?? 0)} → ${String(this._schemaVersion)}), clearing vector index`,
+        );
+        this._hashes = {};
+      }
     }
   }
 
@@ -154,7 +167,7 @@ export class VectorStore {
     this._hashes = result.data;
   }
 
-  private async _loadMeta(): Promise<string | null> {
+  private async _loadMeta(): Promise<VectorMeta | null> {
     let raw: string;
     try {
       raw = await readFile(this._metaPath, "utf-8");
@@ -166,8 +179,7 @@ export class VectorStore {
     }
 
     try {
-      const parsed = VectorMetaSchema.parse(JSON.parse(raw));
-      return parsed.model;
+      return VectorMetaSchema.parse(JSON.parse(raw));
     } catch {
       return null;
     }
@@ -177,7 +189,7 @@ export class VectorStore {
     const tmpPath = join(this._vectorsDir, `.vector-meta-${Date.now().toString()}.tmp`);
     const fh = await open(tmpPath, "w");
     try {
-      await fh.writeFile(JSON.stringify({ model: this._modelId }));
+      await fh.writeFile(JSON.stringify({ model: this._modelId, schemaVersion: this._schemaVersion }));
       await fh.sync();
     } finally {
       await fh.close();

@@ -10,6 +10,7 @@ import type { SyncEngine } from "../paprika/sync.js";
 // Mock all the feature dependencies
 vi.mock("./embeddings.js", () => ({
   EmbeddingClient: vi.fn(),
+  EMBEDDING_SCHEMA_VERSION: 1,
 }));
 
 vi.mock("./vector-store.js", () => ({
