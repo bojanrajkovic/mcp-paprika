@@ -25,18 +25,20 @@ HTTP errors (429, 500, 502, 503) and a circuit breaker (opens after 5 consecutiv
 half-open after 30s). Validates responses with Zod at the boundary. Per-instance resilience
 stack (no shared state between instances).
 
-| Export                  | Signature / Description                                                  |
-| ----------------------- | ------------------------------------------------------------------------ |
-| `EmbeddingClient`       | `constructor(config: Readonly<EmbeddingConfig>)` — resilient HTTP client |
-| `.embed(text)`          | `Promise<Array<number>>` — embed a single text                           |
-| `.embedBatch(texts)`    | `Promise<Array<Array<number>>>` — embed multiple texts in one call       |
-| `.dimensions`           | `number` getter — throws `EmbeddingError` if no call made yet            |
-| `recipeToEmbeddingText` | `(recipe, categoryNames) => string` — pure function, no I/O              |
+| Export                     | Signature / Description                                                  |
+| -------------------------- | ------------------------------------------------------------------------ |
+| `EmbeddingClient`          | `constructor(config: Readonly<EmbeddingConfig>)` — resilient HTTP client |
+| `.embed(text)`             | `Promise<Array<number>>` — embed a single text                           |
+| `.embedBatch(texts)`       | `Promise<Array<Array<number>>>` — embed multiple texts in one call       |
+| `.dimensions`              | `number` getter — throws `EmbeddingError` if no call made yet            |
+| `EMBEDDING_SCHEMA_VERSION` | `number` constant — bump when `recipeToEmbeddingText` format changes     |
+| `recipeToEmbeddingText`    | `(recipe, categoryNames) => string` — pure function, no I/O              |
 
 **Invariants:**
 
 - `EmbeddingClient` throws (does not return `Result`) because it wraps cockatiel which uses exceptions for control flow
 - `recipeToEmbeddingText` includes name, description, categories, ingredients, notes; excludes directions and nutritional info
+- **IMPORTANT:** When changing `recipeToEmbeddingText` (adding/removing fields, restructuring format), bump `EMBEDDING_SCHEMA_VERSION` so existing users get a full re-index on next startup
 - `BrokenCircuitError` from cockatiel is caught and re-thrown as `EmbeddingAPIError` with status 503
 
 ### vector-store-errors.ts — Error hierarchy for vector store operations
@@ -59,12 +61,13 @@ corrupt Vectra index or hash-index.json).
 | `contentHash`     | `(text: string) => string` — SHA-256 hex digest for change detection                        |
 | `SemanticResult`  | `type { uid, score, recipeName }` — single search result                                    |
 | `IndexingResult`  | `type { indexed, skipped, total }` — batch indexing summary                                 |
-| `VectorStore`     | `constructor(cacheDir: string, embedder: EmbeddingClient)` — vector store instance          |
+| `VectorStore`     | `constructor(cacheDir, embedder, modelId, schemaVersion)` — vector store instance           |
 | `.init()`         | `Promise<void>` — creates directory, Vectra index, loads hash map; recovers from corruption |
 | `.indexRecipes()` | `Promise<IndexingResult>` — batch index with change detection, batches of 500               |
 | `.indexRecipe()`  | `Promise<IndexingResult>` — convenience single-recipe wrapper                               |
 | `.search()`       | `Promise<ReadonlyArray<SemanticResult>>` — semantic search, default topK=10                 |
 | `.removeRecipe()` | `Promise<void>` — remove recipe from index and hash map                                     |
+| `.clearHashes()`  | `void` — reset in-memory hash index to force full re-embedding                              |
 | `.size`           | `number` getter — count of indexed recipes (via hash map)                                   |
 
 **Invariants:**
@@ -73,6 +76,7 @@ corrupt Vectra index or hash-index.json).
 - Content hash uses SHA-256 of `recipeToEmbeddingText()` output; unchanged recipes are skipped during indexing
 - Hash map persisted via atomic write (write-to-tmp + rename) following `DiskCache` pattern
 - Corruption recovery: corrupt Vectra index is backed up to `.bak` dir and recreated; corrupt `hash-index.json` is renamed to `.bak` and reset
+- Model ID and schema version are tracked in `vector-meta.json`; a mismatch on startup clears the hash index to force re-embedding
 - Batch size is 500 texts per embedding API call
 
 ### discover-feature.ts — Startup wiring for semantic search
@@ -89,7 +93,8 @@ incremental index updates. A no-op if `config.features.embeddings` is not config
 **Invariants:**
 
 - No-op when `config.features.embeddings` is absent (semantic search remains disabled)
-- Cold-start indexing runs only when vector index is empty but recipe store has data
+- Cold-start re-index runs when vector store size is below 90% of recipe store size (catches stale/orphaned data)
+- Vector index is invalidated when the embedding model or `EMBEDDING_SCHEMA_VERSION` changes between runs
 - `sync:complete` handler indexes added/updated recipes and removes deleted ones
 - Errors during sync-triggered indexing are caught and logged to stderr (never crash the server)
 
