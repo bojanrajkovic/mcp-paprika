@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.3](https://github.com/bojanrajkovic/mcp-paprika/compare/v1.0.2...v1.0.3) (2026-03-22)
+
+
+### Bug Fixes
+
+* add repository field to package.json for npm provenance ([7eae045](https://github.com/bojanrajkovic/mcp-paprika/commit/7eae0453c01508343d0a7c5135c3810902a1f42d))
+
 ## [1.0.2](https://github.com/bojanrajkovic/mcp-paprika/compare/v1.0.1...v1.0.2) (2026-03-22)
 
 
