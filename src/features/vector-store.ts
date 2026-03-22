@@ -224,6 +224,15 @@ export class VectorStore {
     return Object.keys(this._hashes).length;
   }
 
+  /**
+   * Reset the in-memory hash index so that the next `indexRecipes()` call
+   * re-embeds every recipe regardless of prior state.  The stale on-disk
+   * hash file is overwritten once indexing persists the new hashes.
+   */
+  clearHashes(): void {
+    this._hashes = {};
+  }
+
   private async _persistHashes(): Promise<void> {
     const tmpPath = join(this._vectorsDir, `.hash-index-${Date.now().toString()}.tmp`);
     const fh = await open(tmpPath, "w");
