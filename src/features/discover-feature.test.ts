@@ -10,6 +10,7 @@ import type { SyncEngine } from "../paprika/sync.js";
 // Mock all the feature dependencies
 vi.mock("./embeddings.js", () => ({
   EmbeddingClient: vi.fn(),
+  EMBEDDING_SCHEMA_VERSION: 1,
 }));
 
 vi.mock("./vector-store.js", () => ({
@@ -29,6 +30,7 @@ function makeMockVectorStore() {
     init: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
     indexRecipes: vi.fn<(recipes: any[], resolveFn: any) => Promise<void>>().mockResolvedValue(undefined),
     removeRecipe: vi.fn<(uid: string) => Promise<void>>().mockResolvedValue(undefined),
+    clearHashes: vi.fn<() => void>(),
     size: 0,
   };
 }
@@ -279,27 +281,46 @@ describe("p3-u08-discover-wiring: setupDiscoverFeature", () => {
 
       await setupDiscoverFeature(server, ctx, sync, config);
 
+      expect(mockVectorStore.clearHashes).toHaveBeenCalled();
       expect(mockVectorStore.indexRecipes).toHaveBeenCalled();
       const callArgs = mockVectorStore.indexRecipes.mock.calls[0];
       expect(callArgs[0]).toEqual([recipe]); // First arg is recipes
       expect(typeof callArgs[1]).toBe("function"); // Second arg is resolver function
     });
 
-    it("cold-start: skips indexRecipes when vectorStore.size > 0", async () => {
+    it("cold-start: skips indexRecipes when vectorStore is sufficiently indexed", async () => {
       const { setupDiscoverFeature } = await import("./discover-feature.js");
-      const recipe = makeRecipe({ uid: "recipe-1" as RecipeUid });
+      const recipes = Array.from({ length: 10 }, (_, i) => makeRecipe({ uid: `recipe-${String(i)}` as RecipeUid }));
       const store = new RecipeStore();
-      store.load([recipe], []);
+      store.load(recipes, []);
       const { server } = makeTestServer();
       const ctx = makeCtx(store, server);
       const sync = makeMockSync();
       const config = makeEnabledConfig();
 
-      mockVectorStore.size = 5; // Already indexed
+      mockVectorStore.size = 10; // Fully indexed (>= 90% of store)
 
       await setupDiscoverFeature(server, ctx, sync, config);
 
       expect(mockVectorStore.indexRecipes).not.toHaveBeenCalled();
+    });
+
+    it("cold-start: re-indexes when vectorStore has stale/orphaned entries below 90% of store", async () => {
+      const { setupDiscoverFeature } = await import("./discover-feature.js");
+      const recipes = Array.from({ length: 100 }, (_, i) => makeRecipe({ uid: `recipe-${String(i)}` as RecipeUid }));
+      const store = new RecipeStore();
+      store.load(recipes, []);
+      const { server } = makeTestServer();
+      const ctx = makeCtx(store, server);
+      const sync = makeMockSync();
+      const config = makeEnabledConfig();
+
+      mockVectorStore.size = 2; // Only 2 entries (stale test data) vs 100 recipes
+
+      await setupDiscoverFeature(server, ctx, sync, config);
+
+      expect(mockVectorStore.clearHashes).toHaveBeenCalled();
+      expect(mockVectorStore.indexRecipes).toHaveBeenCalled();
     });
 
     it("cold-start: skips indexRecipes when store is empty", async () => {

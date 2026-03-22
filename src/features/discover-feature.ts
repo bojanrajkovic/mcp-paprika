@@ -1,4 +1,4 @@
-import { EmbeddingClient } from "./embeddings.js";
+import { EmbeddingClient, EMBEDDING_SCHEMA_VERSION } from "./embeddings.js";
 import { VectorStore } from "./vector-store.js";
 import { registerDiscoverTool } from "../tools/discover.js";
 import { getCacheDir } from "../utils/xdg.js";
@@ -21,15 +21,18 @@ export async function setupDiscoverFeature(
   }
 
   const embedder = new EmbeddingClient(embeddingsConfig);
-  const vectorStore = new VectorStore(getCacheDir(), embedder);
+  const vectorStore = new VectorStore(getCacheDir(), embedder, embeddingsConfig.model, EMBEDDING_SCHEMA_VERSION);
   await vectorStore.init();
 
   registerDiscoverTool(server, ctx, vectorStore);
 
   // Cold-start initial indexing: the initial sync.syncOnce() in index.ts fires
-  // sync:complete BEFORE this subscription exists. On first-ever startup (empty
-  // vector index), explicitly index all recipes already in the store.
-  if (vectorStore.size === 0 && ctx.store.size > 0) {
+  // sync:complete BEFORE this subscription exists. Re-index all recipes when
+  // the vector store is empty or significantly out of sync with the recipe
+  // store (e.g. stale test data, orphaned entries from a prior crash, or
+  // a model/dimension change that invalidated the old vectors).
+  if (ctx.store.size > 0 && vectorStore.size < ctx.store.size * 0.9) {
+    vectorStore.clearHashes();
     await vectorStore.indexRecipes(ctx.store.getAll(), (uids) => ctx.store.resolveCategories(uids));
   }
 
