@@ -72,18 +72,24 @@ function log(msg: string): void {
   process.stderr.write(`[mcp-paprika:vectors] ${msg}\n`);
 }
 
+const VectorMetaSchema = z.object({ model: z.string() });
+
 export class VectorStore {
   private readonly _vectorsDir: string;
   private readonly _hashIndexPath: string;
+  private readonly _metaPath: string;
   private readonly _index: LocalIndex;
   private readonly _embedder: EmbeddingClient;
+  private readonly _modelId: string;
   private _hashes: Record<string, string> = {};
 
-  constructor(cacheDir: string, embedder: EmbeddingClient) {
+  constructor(cacheDir: string, embedder: EmbeddingClient, modelId: string) {
     this._vectorsDir = join(cacheDir, "vectors");
     this._hashIndexPath = join(this._vectorsDir, "hash-index.json");
+    this._metaPath = join(this._vectorsDir, "vector-meta.json");
     this._index = new LocalIndex(this._vectorsDir);
     this._embedder = embedder;
+    this._modelId = modelId;
   }
 
   async init(): Promise<void> {
@@ -106,6 +112,13 @@ export class VectorStore {
 
     // Load hash map — follows DiskCache pattern (disk-cache.ts:60-88)
     await this._loadHashIndex();
+
+    // Invalidate vectors when the embedding model changes between runs.
+    const storedModel = await this._loadMeta();
+    if (storedModel !== null && storedModel !== this._modelId) {
+      log(`embedding model changed (${storedModel} → ${this._modelId}), clearing vector index`);
+      this._hashes = {};
+    }
   }
 
   private async _loadHashIndex(): Promise<void> {
@@ -139,6 +152,37 @@ export class VectorStore {
     }
 
     this._hashes = result.data;
+  }
+
+  private async _loadMeta(): Promise<string | null> {
+    let raw: string;
+    try {
+      raw = await readFile(this._metaPath, "utf-8");
+    } catch (error: unknown) {
+      if (isNodeError(error) && error.code === "ENOENT") {
+        return null;
+      }
+      throw error;
+    }
+
+    try {
+      const parsed = VectorMetaSchema.parse(JSON.parse(raw));
+      return parsed.model;
+    } catch {
+      return null;
+    }
+  }
+
+  private async _persistMeta(): Promise<void> {
+    const tmpPath = join(this._vectorsDir, `.vector-meta-${Date.now().toString()}.tmp`);
+    const fh = await open(tmpPath, "w");
+    try {
+      await fh.writeFile(JSON.stringify({ model: this._modelId }));
+      await fh.sync();
+    } finally {
+      await fh.close();
+    }
+    await rename(tmpPath, this._metaPath);
   }
 
   private async _backupFile(src: string, dest: string): Promise<void> {
@@ -207,11 +251,12 @@ export class VectorStore {
       });
     }
 
-    // Update hash map
+    // Update hash map and model metadata
     for (const entry of toEmbed) {
       this._hashes[entry.recipe.uid] = entry.hash;
     }
     await this._persistHashes();
+    await this._persistMeta();
 
     return { indexed: toEmbed.length, skipped, total: recipes.length };
   }

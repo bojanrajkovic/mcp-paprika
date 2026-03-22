@@ -21,7 +21,7 @@ export async function setupDiscoverFeature(
   }
 
   const embedder = new EmbeddingClient(embeddingsConfig);
-  const vectorStore = new VectorStore(getCacheDir(), embedder);
+  const vectorStore = new VectorStore(getCacheDir(), embedder, embeddingsConfig.model);
   await vectorStore.init();
 
   registerDiscoverTool(server, ctx, vectorStore);
