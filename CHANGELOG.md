@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.0.4](https://github.com/bojanrajkovic/mcp-paprika/compare/v1.0.3...v1.0.4) (2026-04-27)
+
+
+### Bug Fixes
+
+* **deps:** update dependency @modelcontextprotocol/sdk to ^1.29.0 ([#41](https://github.com/bojanrajkovic/mcp-paprika/issues/41)) ([0194606](https://github.com/bojanrajkovic/mcp-paprika/commit/019460610fc7a6ecd86bcda7389e95aebdb7ee36))
+* **deps:** update dependency dotenv to ^17.4.2 ([#42](https://github.com/bojanrajkovic/mcp-paprika/issues/42)) ([4b8f751](https://github.com/bojanrajkovic/mcp-paprika/commit/4b8f75180e13fbf4f06c72e3aad9bfad206bddc8))
+* **deps:** update dependency parse-duration to ^2.1.6 ([#38](https://github.com/bojanrajkovic/mcp-paprika/issues/38)) ([ac61d6b](https://github.com/bojanrajkovic/mcp-paprika/commit/ac61d6be9fcca5303d72c7369b7fd2e9ae05f024))
+
 ## [1.0.3](https://github.com/bojanrajkovic/mcp-paprika/compare/v1.0.2...v1.0.3) (2026-03-22)
 
 
