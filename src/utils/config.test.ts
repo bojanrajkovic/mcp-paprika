@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { z } from "zod";
 import { ConfigError, paprikaConfigSchema, type EmbeddingConfig, loadConfig } from "./config.js";
 import { mkdtempSync, writeFileSync, rmSync, chmodSync } from "node:fs";
@@ -509,6 +509,57 @@ describe("Configuration loading", () => {
           );
         },
       );
+    });
+
+    describe("config-loader.AC8: stdio transport hygiene (issue #49)", () => {
+      // MCP servers communicate over stdio; any stray write to stdout (or any
+      // stream that flushes through it, like console.log) corrupts the
+      // JSON-RPC frame and crashes the client. dotenv 17+ prints an "◇
+      // injected env" banner via console.log when it loads a .env file unless
+      // told otherwise, so loadConfig must pass quiet: true.
+      it("config-loader.AC8.1: loadConfig writes nothing to stdout when a .env file is present", () => {
+        writeDotEnv(tempDir, {
+          PAPRIKA_EMAIL: "user@test.com",
+          PAPRIKA_PASSWORD: "secret",
+        });
+
+        const consoleLogSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+        const stdoutSpy = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+        try {
+          loadConfig(tempDir).match(
+            () => {},
+            (error) => {
+              expect.fail(`Expected Ok but got Err: ${error.message}`);
+            },
+          );
+          expect(consoleLogSpy).not.toHaveBeenCalled();
+          expect(stdoutSpy).not.toHaveBeenCalled();
+        } finally {
+          stdoutSpy.mockRestore();
+          consoleLogSpy.mockRestore();
+        }
+      });
+
+      it("config-loader.AC8.2: loadConfig writes nothing to stdout when no .env file is present", () => {
+        process.env.PAPRIKA_EMAIL = "user@test.com";
+        process.env.PAPRIKA_PASSWORD = "secret";
+
+        const consoleLogSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+        const stdoutSpy = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+        try {
+          loadConfig(tempDir).match(
+            () => {},
+            (error) => {
+              expect.fail(`Expected Ok but got Err: ${error.message}`);
+            },
+          );
+          expect(consoleLogSpy).not.toHaveBeenCalled();
+          expect(stdoutSpy).not.toHaveBeenCalled();
+        } finally {
+          stdoutSpy.mockRestore();
+          consoleLogSpy.mockRestore();
+        }
+      });
     });
   });
 });

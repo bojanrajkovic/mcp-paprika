@@ -145,8 +145,11 @@ function readConfigFile(configDir: string): Result<Record<string, unknown>, Conf
 }
 
 // Loads .env file from configDir into process.env. Missing .env is silently ignored.
+// quiet: true suppresses dotenv's "◇ injected env" startup banner — MCP stdio
+// transport reserves stdout for JSON-RPC framing, so any stray write corrupts
+// the wire protocol (issue #49).
 function loadDotEnv(configDir: string): void {
-  dotenv.config({ path: join(configDir, ".env") });
+  dotenv.config({ path: join(configDir, ".env"), quiet: true });
 }
 
 // Maps known env vars to the nested config object structure.
