@@ -28,6 +28,6 @@ Registers the `paprika://pantry/{uid}` resource template with list and read call
 
 ## Dependencies
 
-- **Uses:** `tools/helpers.ts` (runtime import of `recipeToMarkdown`), `types/server-context.ts` (ServerContext type), `paprika/types.ts` (type-only imports for RecipeUid)
+- **Uses:** `tools/helpers.ts` (runtime import of `recipeToMarkdown`), `tools/pantry-helpers.ts` (runtime import of `pantryItemToMarkdown`), `types/server-context.ts` (ServerContext type), `paprika/types.ts` (type-only imports for `RecipeUid` and `PantryItemUid`)
 - **Used by:** `index.ts` (MCP server registration)
-- **Boundary:** May not import at runtime from `paprika/` or `cache/` directly (except `import type`). Runtime imports of `tools/helpers.js` are allowed.
+- **Boundary:** May not import at runtime from `paprika/` or `cache/` directly (except `import type`). Runtime imports of helper files under `tools/` (e.g. `tools/helpers.js`, `tools/pantry-helpers.js`) are allowed.
