@@ -10,6 +10,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { DiskCache } from "./cache/disk-cache.js";
 import { RecipeStore } from "./cache/recipe-store.js";
+import { PantryStore } from "./cache/pantry-store.js";
 import { loadConfig } from "./utils/config.js";
 import { getCacheDir } from "./utils/xdg.js";
 import { registerSearchTool } from "./tools/search.js";
@@ -154,17 +155,22 @@ async function main(): Promise<void> {
   store.setCategories([client.getMockCategory()]);
   log(`Hydrated store with ${store.size} recipes.`);
 
-  // 5. Construct McpServer
+  // 5. Construct PantryStore
+  const pantryStore = new PantryStore();
+  log("Initialized pantry store.");
+
+  // 6. Construct McpServer
   const server = new McpServer({
     name: "mcp-paprika",
     version: "0.0.0",
   });
 
-  // 6. Assemble ServerContext
+  // 7. Assemble ServerContext
   const ctx: ServerContext = {
     client: client as unknown as ServerContext["client"],
     cache,
     store,
+    pantryStore,
     server,
   };
 
