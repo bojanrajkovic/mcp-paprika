@@ -1,6 +1,6 @@
 # MCP Tool Definitions
 
-Last verified: 2026-03-20
+Last verified: 2026-05-07
 
 Purpose: Defines MCP tools that AI assistants can invoke. Each tool file exports a `register*` function that takes `(server: McpServer, ctx: ServerContext)` and calls `server.registerTool()`. Tools with external dependencies (e.g., vector store) accept additional parameters after `ctx`.
 
@@ -8,22 +8,24 @@ Purpose: Defines MCP tools that AI assistants can invoke. Each tool file exports
 
 ### Discovery & Query Tools
 
-| Tool                   | File            | Description                                           |
-| ---------------------- | --------------- | ----------------------------------------------------- |
-| `search_recipes`       | `search.ts`     | Full-text search by name, ingredients, or description |
-| `filter_by_ingredient` | `filter.ts`     | Filter recipes by ingredient (all/any mode)           |
-| `filter_by_time`       | `filter.ts`     | Filter recipes by prep/cook/total time constraints    |
-| `discover_recipes`     | `discover.ts`   | Semantic search via VectorStore (natural language)    |
-| `list_categories`      | `categories.ts` | List all categories with recipe counts                |
+| Tool                   | File             | Description                                               |
+| ---------------------- | ---------------- | --------------------------------------------------------- |
+| `search_recipes`       | `search.ts`      | Full-text search by name, ingredients, or description     |
+| `filter_by_ingredient` | `filter.ts`      | Filter recipes by ingredient (all/any mode)               |
+| `filter_by_time`       | `filter.ts`      | Filter recipes by prep/cook/total time constraints        |
+| `discover_recipes`     | `discover.ts`    | Semantic search via VectorStore (natural language)        |
+| `list_categories`      | `categories.ts`  | List all categories with recipe counts                    |
+| `list_pantry`          | `pantry-list.ts` | List all pantry items sorted alphabetically by ingredient |
 
 ### CRUD Tools
 
-| Tool            | File        | Description                                                                    |
-| --------------- | ----------- | ------------------------------------------------------------------------------ |
-| `read_recipe`   | `read.ts`   | Fetch recipe by UID or title (exact/prefix/contains match)                     |
-| `create_recipe` | `create.ts` | Create a new recipe with name, ingredients, directions, and optional fields    |
-| `update_recipe` | `update.ts` | Update existing recipe — partial merge, categories fully replace when provided |
-| `delete_recipe` | `delete.ts` | Soft-delete recipe by UID (moves to trash, reversible in Paprika app)          |
+| Tool              | File            | Description                                                                    |
+| ----------------- | --------------- | ------------------------------------------------------------------------------ |
+| `read_recipe`     | `read.ts`       | Fetch recipe by UID or title (exact/prefix/contains match)                     |
+| `create_recipe`   | `create.ts`     | Create a new recipe with name, ingredients, directions, and optional fields    |
+| `update_recipe`   | `update.ts`     | Update existing recipe — partial merge, categories fully replace when provided |
+| `delete_recipe`   | `delete.ts`     | Soft-delete recipe by UID (moves to trash, reversible in Paprika app)          |
+| `get_pantry_item` | `pantry-get.ts` | Fetch pantry item by UID or ingredient (fuzzy match, with disambiguation)      |
 
 ## Registration Pattern
 
@@ -55,15 +57,24 @@ export function registerMyTool(server: McpServer, ctx: ServerContext): void {
 
 **Variant: external dependencies.** Tools that require services beyond `ServerContext` accept additional constructor-injected parameters. Example: `registerDiscoverTool(server, ctx, vectorStore: VectorStore)` receives the vector store instance from `index.ts`.
 
-## Shared Helpers (`helpers.ts`)
+## Shared Helpers
 
-Utilities imported by all tool handlers from `./helpers.js`.
+### `helpers.ts`
+
+Utilities imported by recipe tool handlers from `./helpers.js`.
 
 - **`textResult(text)`** -- Wraps a string in the MCP `CallToolResult` envelope.
 - **`coldStartGuard(ctx)`** -- Returns `Ok<void>` when store is synced, `Err<CallToolResult>` when empty. Always use `.match()` to handle both branches.
 - **`recipeToMarkdown(recipe, categoryNames)`** -- Renders a full recipe as markdown. Resolve categories via `ctx.store.resolveCategories()` before calling. Omits empty optional fields.
 - **`commitRecipe(ctx, saved)`** -- Persists a saved recipe to cache and store, triggers cloud sync. Order: putRecipe (sync) → flush (async) → store.set (sync) → sendResourceListChanged (sync) → notifySync (async). Called by all write tools after `ctx.client.saveRecipe()`.
 - **`resolveCategoryNames(all, names)`** -- Resolves human-readable category display names to UIDs. Case-insensitive linear scan. Returns `{ uids, unknown }` for warnings.
+
+### `pantry-helpers.ts`
+
+Utilities imported by pantry tool handlers from `./pantry-helpers.js`.
+
+- **`pantryStartGuard(ctx)`** -- Returns `Ok<void>` when pantry is synced, `Err<CallToolResult>` when not yet synced. Always use `.match()` to handle both branches.
+- **`pantryItemToMarkdown(item)`** -- Renders a pantry item as markdown with ingredient, UID, quantity, aisle, dates, note, and source recipe fields (omits empty fields).
 
 ## Testing (`tool-test-utils.ts`)
 

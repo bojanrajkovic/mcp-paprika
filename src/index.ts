@@ -16,6 +16,8 @@ import { registerCreateTool } from "./tools/create.js";
 import { registerUpdateTool } from "./tools/update.js";
 import { registerDeleteTool } from "./tools/delete.js";
 import { registerListTool } from "./tools/list.js";
+import { registerListPantryTool } from "./tools/pantry-list.js";
+import { registerGetPantryItemTool } from "./tools/pantry-get.js";
 import { registerRecipeResources } from "./resources/recipes.js";
 import { setupDiscoverFeature } from "./features/discover-feature.js";
 import type { ServerContext } from "./types/server-context.js";
@@ -77,7 +79,7 @@ async function main(): Promise<void> {
     server,
   };
 
-  // 7. Register all 9 tools
+  // 7. Register all 11 tools
   registerSearchTool(server, ctx);
   registerFilterTools(server, ctx);
   registerCategoryTools(server, ctx);
@@ -86,7 +88,9 @@ async function main(): Promise<void> {
   registerCreateTool(server, ctx);
   registerUpdateTool(server, ctx);
   registerDeleteTool(server, ctx);
-  log("Registered 9 tools.");
+  registerListPantryTool(server, ctx);
+  registerGetPantryItemTool(server, ctx);
+  log("Registered 11 tools.");
 
   // 8. Register recipe resources
   registerRecipeResources(server, ctx);
