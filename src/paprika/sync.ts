@@ -2,7 +2,23 @@ import { scheduler } from "node:timers/promises";
 import { createRequire } from "node:module";
 
 import type { ServerContext } from "../types/server-context.js";
-import type { Recipe, RecipeUid, SyncResult } from "./types.js";
+import type { PantryItem, Recipe, RecipeUid, SyncResult } from "./types.js";
+
+function pantryItemsEqual(a: PantryItem, b: PantryItem): boolean {
+  return (
+    a.uid === b.uid &&
+    a.ingredient === b.ingredient &&
+    a.quantity === b.quantity &&
+    a.aisle === b.aisle &&
+    a.aisleUid === b.aisleUid &&
+    a.expirationDate === b.expirationDate &&
+    a.hasExpiration === b.hasExpiration &&
+    a.inStock === b.inStock &&
+    a.purchaseDate === b.purchaseDate &&
+    a.locationUid === b.locationUid &&
+    a.notes === b.notes
+  );
+}
 
 type SyncEvents = {
   "sync:complete": SyncResult;
@@ -101,12 +117,44 @@ export class SyncEngine {
         this._context.cache.putCategory(category, category.uid);
       }
 
-      // 3. Finalization
+      // 3. Pantry sync (replace-all with orphan cleanup)
+      SyncEngine._log("Fetching pantry...");
+      const pantryItems = await this._context.client.listPantry();
+      SyncEngine._log(`Got ${pantryItems.length.toString()} pantry items.`);
+
+      const cachedPantryItems = await this._context.cache.getAllPantryItems();
+      const cachedPantryUids = new Set(cachedPantryItems.map((item) => item.uid));
+      const incomingPantryUids = new Set(pantryItems.map((item) => item.uid));
+      const orphanPantryUids = [...cachedPantryUids].filter((uid) => !incomingPantryUids.has(uid));
+      const newPantryUids = [...incomingPantryUids].filter((uid) => !cachedPantryUids.has(uid));
+      const cachedPantryByUid = new Map(cachedPantryItems.map((item) => [item.uid, item]));
+      // Pantry items have no hash field, so detect content edits to existing UIDs
+      // (quantity/notes/in-stock/etc.) by field-wise comparison; without this, MCP
+      // clients would see stale resource content until an add or remove triggered
+      // a notification.
+      const updatedPantryUids = pantryItems.filter((incoming) => {
+        const cached = cachedPantryByUid.get(incoming.uid);
+        return cached !== undefined && !pantryItemsEqual(cached, incoming);
+      });
+      const pantryHasChanges = orphanPantryUids.length > 0 || newPantryUids.length > 0 || updatedPantryUids.length > 0;
+
+      await Promise.all(orphanPantryUids.map((uid) => this._context.cache.removePantryItem(uid)));
+      this._context.pantryStore.load(pantryItems);
+      for (const item of pantryItems) {
+        this._context.cache.putPantryItem(item);
+      }
+
+      if (orphanPantryUids.length > 0) {
+        SyncEngine._log(`Removed ${orphanPantryUids.length.toString()} orphan pantry items.`);
+      }
+
+      // 4. Finalization
       SyncEngine._log("Flushing cache to disk...");
       await this._context.cache.flush();
 
-      // Determine if recipe changes exist
-      const hasChanges = diff.added.length > 0 || diff.changed.length > 0 || diff.removed.length > 0;
+      // Determine if changes exist
+      const hasChanges =
+        diff.added.length > 0 || diff.changed.length > 0 || diff.removed.length > 0 || pantryHasChanges;
 
       // Send resource notification if changes exist
       if (hasChanges) {

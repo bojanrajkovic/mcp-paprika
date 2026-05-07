@@ -11,6 +11,7 @@ const makeCtx = (size: number) =>
     store: { size } as unknown as ServerContext["store"],
     client: {} as unknown as ServerContext["client"],
     cache: {} as unknown as ServerContext["cache"],
+    pantryStore: {} as unknown as ServerContext["pantryStore"],
     server: {} as unknown as ServerContext["server"],
   }) satisfies ServerContext;
 
@@ -258,6 +259,7 @@ describe("p2-u02-shared-helpers: shared helper functions", () => {
         cache: { putRecipe: mockPutRecipe, flush: mockFlush } as unknown as DiskCache,
         client: { notifySync: mockNotifySync } as unknown as PaprikaClient,
         store: { set: mockStoreSet } as unknown as ServerContext["store"],
+        pantryStore: {} as unknown as ServerContext["pantryStore"],
         server: { sendResourceListChanged: mockSendResourceListChanged } as unknown as ServerContext["server"],
       } satisfies ServerContext;
 
@@ -294,6 +296,7 @@ describe("p2-u02-shared-helpers: shared helper functions", () => {
         cache: { putRecipe: mockPutRecipe, flush: mockFlush } as unknown as DiskCache,
         client: { notifySync: mockNotifySync } as unknown as PaprikaClient,
         store: { set: mockStoreSet } as unknown as ServerContext["store"],
+        pantryStore: {} as unknown as ServerContext["pantryStore"],
         server: { sendResourceListChanged: mockSendResourceListChanged } as unknown as ServerContext["server"],
       } satisfies ServerContext;
 
@@ -314,6 +317,7 @@ describe("p2-u02-shared-helpers: shared helper functions", () => {
         cache: { putRecipe: mockPutRecipe, flush: mockFlush } as unknown as DiskCache,
         client: { notifySync: mockNotifySync } as unknown as PaprikaClient,
         store: { set: mockStoreSet } as unknown as ServerContext["store"],
+        pantryStore: {} as unknown as ServerContext["pantryStore"],
         server: { sendResourceListChanged: mockSendResourceListChanged } as unknown as ServerContext["server"],
       } satisfies ServerContext;
 

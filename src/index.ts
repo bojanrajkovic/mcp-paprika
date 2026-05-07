@@ -5,6 +5,7 @@ import { PaprikaClient } from "./paprika/client.js";
 import { SyncEngine } from "./paprika/sync.js";
 import { DiskCache } from "./cache/disk-cache.js";
 import { RecipeStore } from "./cache/recipe-store.js";
+import { PantryStore } from "./cache/pantry-store.js";
 import { loadConfig } from "./utils/config.js";
 import { getCacheDir } from "./utils/xdg.js";
 import { registerSearchTool } from "./tools/search.js";
@@ -15,7 +16,10 @@ import { registerCreateTool } from "./tools/create.js";
 import { registerUpdateTool } from "./tools/update.js";
 import { registerDeleteTool } from "./tools/delete.js";
 import { registerListTool } from "./tools/list.js";
+import { registerListPantryTool } from "./tools/pantry-list.js";
+import { registerGetPantryItemTool } from "./tools/pantry-get.js";
 import { registerRecipeResources } from "./resources/recipes.js";
+import { registerPantryResources } from "./resources/pantry.js";
 import { setupDiscoverFeature } from "./features/discover-feature.js";
 import type { ServerContext } from "./types/server-context.js";
 
@@ -53,6 +57,14 @@ async function main(): Promise<void> {
   }
   log(`Hydrated store with ${cachedRecipes.length} cached recipes.`);
 
+  // 4b. Construct PantryStore and hydrate from cache
+  const pantryStore = new PantryStore();
+  const cachedPantryItems = await cache.getAllPantryItems();
+  if (cachedPantryItems.length > 0) {
+    pantryStore.load(cachedPantryItems);
+  }
+  log(`Hydrated pantry store with ${cachedPantryItems.length.toString()} cached pantry items.`);
+
   // 5. Construct McpServer
   const server = new McpServer({
     name: "mcp-paprika",
@@ -64,10 +76,11 @@ async function main(): Promise<void> {
     client,
     cache,
     store,
+    pantryStore,
     server,
   };
 
-  // 7. Register all 9 tools
+  // 7. Register all 11 tools
   registerSearchTool(server, ctx);
   registerFilterTools(server, ctx);
   registerCategoryTools(server, ctx);
@@ -76,11 +89,16 @@ async function main(): Promise<void> {
   registerCreateTool(server, ctx);
   registerUpdateTool(server, ctx);
   registerDeleteTool(server, ctx);
-  log("Registered 9 tools.");
+  registerListPantryTool(server, ctx);
+  registerGetPantryItemTool(server, ctx);
+  log("Registered 11 tools.");
 
   // 8. Register recipe resources
   registerRecipeResources(server, ctx);
   log("Registered recipe resources.");
+
+  registerPantryResources(server, ctx);
+  log("Registered pantry resources.");
 
   // 9. Construct SyncEngine, run initial sync, then start background loop
   const sync = new SyncEngine(ctx, config.sync.interval);

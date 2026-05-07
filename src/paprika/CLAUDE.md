@@ -1,6 +1,6 @@
 # Paprika API Client
 
-Last verified: 2026-03-17
+Last verified: 2026-05-07
 
 ## Files
 
@@ -21,6 +21,7 @@ HTTP client for the Paprika Cloud Sync API. Handles authentication, request form
 
 - `RecipeUid` — Branded string type for recipe identifiers, validated by `RecipeUidSchema`
 - `CategoryUid` — Branded string type for category identifiers, validated by `CategoryUidSchema`
+- `PantryItemUid` — Branded string type for pantry item identifiers, validated by `PantryItemUidSchema`
 
 **Entry Types:**
 
@@ -31,6 +32,7 @@ HTTP client for the Paprika Cloud Sync API. Handles authentication, request form
 
 - `Recipe` — Full recipe object with 28 fields; output of `RecipeStoredSchema` and `RecipeSchema`
 - `Category` — Category with `uid`, `name`, `orderFlag`, `parentUid`; output of `CategoryStoredSchema` and `CategorySchema`
+- `PantryItem` — Pantry inventory item with 11 fields (`uid`, `ingredient`, `quantity`, `aisle`, `aisleUid`, `expirationDate`, `hasExpiration`, `inStock`, `purchaseDate`, `locationUid`, `notes`); output of `PantryItemStoredSchema` and `PantryItemSchema`
 - `AuthResponse` — Authentication response `{result: {token: string}}`; output of `AuthResponseSchema`
 
 **Domain Types:**
@@ -45,12 +47,14 @@ HTTP client for the Paprika Cloud Sync API. Handles authentication, request form
 
 - `RecipeSchema` — Validates and transforms full recipe objects from API (snake_case input → camelCase Recipe)
 - `CategorySchema` — Validates and transforms category objects from API (snake_case input → camelCase Category)
+- `PantryItemSchema` — Validates and transforms pantry items from API (snake_case input → camelCase PantryItem)
 - `AuthResponseSchema` — Validates authentication responses
 
 **Stored Format Schemas** (validate camelCase JSON from disk, no transform):
 
 - `RecipeStoredSchema` — Validates camelCase recipe JSON read from disk (no transform)
 - `CategoryStoredSchema` — Validates camelCase category JSON read from disk (no transform)
+- `PantryItemStoredSchema` — Validates camelCase pantry item JSON read from disk (no transform)
 
 **Entry and UID Schemas:**
 
@@ -84,6 +88,7 @@ Typed HTTP client wrapping the Paprika Cloud Sync API.
 - `getRecipe(uid: string): Promise<Recipe>` — fetches full recipe details from `/api/v2/sync/recipe/{uid}/`
 - `getRecipes(uids: ReadonlyArray<string>): Promise<Array<Recipe>>` — fans out to `getRecipe()` with bulkhead(5) concurrency limit
 - `listCategories(): Promise<Array<Category>>` — fetches category list, then hydrates each with bulkhead(5) concurrency limit independent of recipe bulkhead
+- `listPantry(): Promise<Array<PantryItem>>` — fetches fully-hydrated pantry items from `/api/v2/sync/pantry/` (no entry/detail split; all items are complete objects)
 - `saveRecipe(recipe: Readonly<Recipe>): Promise<Recipe>` — serializes recipe to camelCase-to-snake_case JSON, gzip-compresses, POSTs as `FormData` with `data.gz` attachment
 - `deleteRecipe(uid: RecipeUid): Promise<void>` — soft-delete: fetches recipe, sets `inTrash: true`, saves, then calls `notifySync()`
 - `notifySync(): Promise<void>` — POSTs to `/api/v2/sync/notify/` to trigger cloud sync propagation
@@ -139,13 +144,23 @@ Background polling loop that keeps local cache and in-memory store synchronized 
    - Replaces store categories: `store.setCategories(categories)`
    - Writes each category to cache: `cache.putCategory(category, category.uid)` (hash placeholder)
 
-3. **Finalization:**
+3. **Pantry sync (replace-all with orphan cleanup):**
+   - Fetches all pantry items: `client.listPantry()` → fully hydrated `Array<PantryItem>`
+   - Computes orphan UIDs (cached but not in API response) via Set difference: `cachedUids - incomingUids`
+   - Computes new UIDs (in API response but not cached): `incomingUids - cachedUids`
+   - Computes updated UIDs (UID present in both sets, but field-wise content differs) via `pantryItemsEqual()` — pantry items have no hash field, so content edits to existing UIDs (quantity, in-stock, notes, etc.) are detected by direct field comparison
+   - Removes orphans concurrently: `Promise.all(orphanUids.map(uid => cache.removePantryItem(uid)))`
+   - Loads all items into store (unconditionally): `pantryStore.load(pantryItems)` (sets `hasSynced = true` even when empty)
+   - Writes each item to cache: `cache.putPantryItem(item)` for all items (even unchanged ones, ensuring updates propagate)
+   - Logs orphan count when > 0
+
+4. **Finalization:**
    - Flushes cache once: `await cache.flush()`
-   - Sends MCP resource notification if recipe changes exist: `server.sendResourceListChanged()` (called only if any added/changed/removed detected)
+   - Sends MCP resource notification if recipe OR pantry changes exist: `server.sendResourceListChanged()` (called if any added/changed/removed/orphaned detected)
    - Emits `sync:complete` with `SyncResult` (always emitted, even for no-change cycles)
    - Logs success: `server.sendLoggingMessage({ level: "info", data: "..." })`
 
-4. **Error handling (all wrapped in try/catch):**
+5. **Error handling (all wrapped in try/catch):**
    - Catches any thrown error (API failures, cache errors, store errors)
    - Logs error: `server.sendLoggingMessage({ level: "error", data: "..." })` (wrapped in try/catch; logging may throw if disconnected)
    - Emits `sync:error` with the Error
@@ -156,10 +171,12 @@ Background polling loop that keeps local cache and in-memory store synchronized 
 - `syncOnce()` never throws — errors are caught, logged, and emitted as events
 - `start()` when already running is a no-op (no duplicate loops via `_ac` check)
 - `stop()` when not running is a no-op (no-op if `_ac` is null)
-- Recipe changes (added/changed/removed > 0) trigger `sendResourceListChanged()`; no-change cycles do not
+- Recipe or pantry changes trigger `sendResourceListChanged()`; no-change cycles do not. Recipe changes are detected via `diffRecipes` (hash-based: `added`, `changed`, `removed`); pantry changes are detected via Set difference for added/orphaned UIDs and `pantryItemsEqual()` for same-UID content edits
 - Cache is flushed exactly once per cycle (single `await cache.flush()` after all mutations)
 - Removed recipes are deleted concurrently via `Promise.all()` for efficiency
+- Orphaned pantry items are deleted concurrently via `Promise.all()` for efficiency
 - Loop respects AbortController signal and cleanly exits on `stop()`
+- `pantryStore.load(items)` is called unconditionally even when `items.length === 0`, setting `hasSynced = true` after first sync
 
 **Dependencies:**
 

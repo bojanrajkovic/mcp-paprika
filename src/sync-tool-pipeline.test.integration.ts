@@ -7,6 +7,7 @@ import { join } from "node:path";
 import { PaprikaClient } from "./paprika/client.js";
 import { DiskCache } from "./cache/disk-cache.js";
 import { RecipeStore } from "./cache/recipe-store.js";
+import { PantryStore } from "./cache/pantry-store.js";
 import { SyncEngine } from "./paprika/sync.js";
 import { makeCategory } from "./cache/__fixtures__/recipes.js";
 import type { RecipeUid } from "./paprika/types.js";
@@ -98,6 +99,9 @@ describe("Sync → Tool Pipeline Integration", () => {
         http.get(`${API_BASE}/categories/`, () => {
           return HttpResponse.json({ result: [] });
         }),
+        http.get(`${API_BASE}/pantry/`, () => {
+          return HttpResponse.json({ result: [] });
+        }),
       );
 
       // Create real instances
@@ -106,6 +110,7 @@ describe("Sync → Tool Pipeline Integration", () => {
       await cache.init();
 
       const store = new RecipeStore();
+      const pantryStore = new PantryStore();
       const mockServer = {
         sendLoggingMessage: async () => {},
         sendResourceListChanged: () => {},
@@ -115,6 +120,7 @@ describe("Sync → Tool Pipeline Integration", () => {
         client,
         cache,
         store,
+        pantryStore,
         server: mockServer,
       };
 
@@ -190,6 +196,9 @@ describe("Sync → Tool Pipeline Integration", () => {
         http.get(`${API_BASE}/categories/`, () => {
           return HttpResponse.json({ result: [] });
         }),
+        http.get(`${API_BASE}/pantry/`, () => {
+          return HttpResponse.json({ result: [] });
+        }),
       );
 
       // Setup
@@ -197,12 +206,13 @@ describe("Sync → Tool Pipeline Integration", () => {
       const cache = new DiskCache(tempDir);
       await cache.init();
       const store = new RecipeStore();
+      const pantryStore = new PantryStore();
       const mockServer = {
         sendLoggingMessage: async () => {},
         sendResourceListChanged: () => {},
       };
 
-      const context = { client, cache, store, server: mockServer };
+      const context = { client, cache, store, pantryStore, server: mockServer };
       const engine = new SyncEngine(context, 100);
 
       // First sync
@@ -251,6 +261,9 @@ describe("Sync → Tool Pipeline Integration", () => {
         http.get(`${API_BASE}/categories/`, () => {
           return HttpResponse.json({ result: [] });
         }),
+        http.get(`${API_BASE}/pantry/`, () => {
+          return HttpResponse.json({ result: [] });
+        }),
       );
 
       // Setup
@@ -258,12 +271,13 @@ describe("Sync → Tool Pipeline Integration", () => {
       const cache = new DiskCache(tempDir);
       await cache.init();
       const store = new RecipeStore();
+      const pantryStore = new PantryStore();
       const mockServer = {
         sendLoggingMessage: async () => {},
         sendResourceListChanged: () => {},
       };
 
-      const context = { client, cache, store, server: mockServer };
+      const context = { client, cache, store, pantryStore, server: mockServer };
       const engine = new SyncEngine(context, 100);
 
       // First sync: both recipes
@@ -331,6 +345,9 @@ describe("Sync → Tool Pipeline Integration", () => {
             ],
           });
         }),
+        http.get(`${API_BASE}/pantry/`, () => {
+          return HttpResponse.json({ result: [] });
+        }),
       );
 
       // Setup and sync
@@ -338,12 +355,13 @@ describe("Sync → Tool Pipeline Integration", () => {
       const cache = new DiskCache(tempDir);
       await cache.init();
       const store = new RecipeStore();
+      const pantryStore = new PantryStore();
       const mockServer = {
         sendLoggingMessage: async () => {},
         sendResourceListChanged: () => {},
       };
 
-      const context = { client, cache, store, server: mockServer };
+      const context = { client, cache, store, pantryStore, server: mockServer };
       const engine = new SyncEngine(context, 100);
       await engine.syncOnce();
 
@@ -406,6 +424,9 @@ describe("Sync → Tool Pipeline Integration", () => {
         http.get(`${API_BASE}/categories/`, () => {
           return HttpResponse.json({ result: [] });
         }),
+        http.get(`${API_BASE}/pantry/`, () => {
+          return HttpResponse.json({ result: [] });
+        }),
       );
 
       // Setup
@@ -413,12 +434,13 @@ describe("Sync → Tool Pipeline Integration", () => {
       const cache = new DiskCache(tempDir);
       await cache.init();
       const store = new RecipeStore();
+      const pantryStore = new PantryStore();
       const mockServer = {
         sendLoggingMessage: async () => {},
         sendResourceListChanged: () => {},
       };
 
-      const context = { client, cache, store, server: mockServer };
+      const context = { client, cache, store, pantryStore, server: mockServer };
       const engine = new SyncEngine(context, 100);
 
       // First sync with original name

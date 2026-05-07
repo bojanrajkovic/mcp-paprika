@@ -6,12 +6,17 @@ import {
   RecipeEntrySchema,
   RecipeSchema,
   CategorySchema,
+  PantryItemUidSchema,
+  PantryItemStoredSchema,
+  PantryItemSchema,
   AuthResponseSchema,
   type RecipeUid,
   type CategoryUid,
   type RecipeEntry,
   type Recipe,
   type Category,
+  type PantryItemUid,
+  type PantryItem,
   type AuthResponse,
   type RecipeInput,
   type SyncResult,
@@ -541,6 +546,184 @@ describe("Type Exports Verification", () => {
         result: {
           token: "test-token",
         },
+      };
+      expect(_test).toBeDefined();
+    });
+  });
+});
+
+describe("pantry-read.AC1: PantryItem types", () => {
+  describe("pantry-read.AC1.1: PantryItemSchema transforms snake_case to camelCase", () => {
+    it("should parse snake_case wire JSON and transform to camelCase", () => {
+      const snakeCasePantryItem = {
+        uid: "pantry-123",
+        ingredient: "Flour",
+        quantity: "2 cups",
+        aisle: "Produce",
+        aisle_uid: "aisle-1",
+        expiration_date: "2026-12-31",
+        has_expiration: true,
+        in_stock: true,
+        purchase_date: "2026-01-01 00:00:00",
+        location_uid: "location-1",
+        notes: "Store in cool place",
+      };
+
+      const result = PantryItemSchema.safeParse(snakeCasePantryItem);
+      expect(result.success).toBe(true);
+
+      if (result.success) {
+        const item = result.data;
+        expect(item.aisleUid).toBe("aisle-1");
+        expect(item.expirationDate).toBe("2026-12-31");
+        expect(item.hasExpiration).toBe(true);
+        expect(item.inStock).toBe(true);
+        expect(item.purchaseDate).toBe("2026-01-01 00:00:00");
+        expect(item.locationUid).toBe("location-1");
+        expect(item.uid).toBe("pantry-123");
+        expect(item.ingredient).toBe("Flour");
+        expect(item.quantity).toBe("2 cups");
+        expect(item.aisle).toBe("Produce");
+        expect(item.notes).toBe("Store in cool place");
+      }
+    });
+  });
+
+  describe("pantry-read.AC1.2: PantryItemStoredSchema validates camelCase with no transform", () => {
+    it("should parse camelCase stored JSON without transformation", () => {
+      const camelCasePantryItem = {
+        uid: "pantry-123",
+        ingredient: "Flour",
+        quantity: "2 cups",
+        aisle: "Produce",
+        aisleUid: "aisle-1",
+        expirationDate: "2026-12-31",
+        hasExpiration: true,
+        inStock: true,
+        purchaseDate: "2026-01-01 00:00:00",
+        locationUid: "location-1",
+        notes: "Store in cool place",
+      };
+
+      const result = PantryItemStoredSchema.safeParse(camelCasePantryItem);
+      expect(result.success).toBe(true);
+
+      if (result.success) {
+        expect(result.data).toEqual(camelCasePantryItem);
+      }
+    });
+  });
+
+  describe("pantry-read.AC1.3: PantryItemUidSchema produces branded type", () => {
+    it("should parse UID string and produce branded PantryItemUid", () => {
+      const parsed = PantryItemUidSchema.parse("pantry-uid-123");
+      const variable: PantryItemUid = parsed;
+      expect(variable).toBe("pantry-uid-123");
+    });
+
+    it("should not allow plain string to be assigned to branded UID", () => {
+      const plainString = "just-a-string";
+      // @ts-expect-error plain string should not be assignable to branded PantryItemUid
+      const _uid: PantryItemUid = plainString;
+      expect(_uid).toBeDefined();
+    });
+  });
+
+  describe("pantry-read.AC1.4: null expirationDate/purchaseDate/locationUid/notes accepted", () => {
+    it("should accept wire JSON with expiration_date: null", () => {
+      const wireItem = {
+        uid: "pantry-123",
+        ingredient: "Flour",
+        quantity: "2 cups",
+        aisle: "Produce",
+        aisle_uid: "aisle-1",
+        expiration_date: null,
+        has_expiration: false,
+        in_stock: true,
+        purchase_date: null,
+        location_uid: null,
+        notes: null,
+      };
+
+      const result = PantryItemSchema.safeParse(wireItem);
+      expect(result.success).toBe(true);
+
+      if (result.success) {
+        expect(result.data.expirationDate).toBe(null);
+        expect(result.data.purchaseDate).toBe(null);
+        expect(result.data.locationUid).toBe(null);
+        expect(result.data.notes).toBe(null);
+      }
+    });
+
+    it("should accept stored JSON with expirationDate: null", () => {
+      const storedItem = {
+        uid: "pantry-123",
+        ingredient: "Flour",
+        quantity: "2 cups",
+        aisle: "Produce",
+        aisleUid: "aisle-1",
+        expirationDate: null,
+        hasExpiration: false,
+        inStock: true,
+        purchaseDate: null,
+        locationUid: null,
+        notes: null,
+      };
+
+      const result = PantryItemStoredSchema.safeParse(storedItem);
+      expect(result.success).toBe(true);
+
+      if (result.success) {
+        expect(result.data.expirationDate).toBe(null);
+        expect(result.data.purchaseDate).toBe(null);
+        expect(result.data.locationUid).toBe(null);
+        expect(result.data.notes).toBe(null);
+      }
+    });
+  });
+
+  describe("pantry-read.AC1.7: Malformed wire JSON rejected (missing required fields)", () => {
+    it("should reject wire JSON missing required ingredient field", () => {
+      const malformedItem = {
+        uid: "pantry-123",
+        // missing ingredient
+        quantity: "2 cups",
+        aisle: "Produce",
+        aisle_uid: "aisle-1",
+        expiration_date: null,
+        has_expiration: false,
+        in_stock: true,
+        purchase_date: null,
+        location_uid: null,
+        notes: null,
+      };
+
+      const result = PantryItemSchema.safeParse(malformedItem);
+      expect(result.success).toBe(false);
+
+      if (!result.success) {
+        expect(result.error.issues[0].path.includes("ingredient")).toBe(true);
+      }
+    });
+  });
+
+  describe("Type Exports Verification for PantryItem", () => {
+    it("should have exported PantryItem type", () => {
+      // Compile-time verification that PantryItem type is accessible
+      type CheckPantryItem = PantryItem;
+      const _test: CheckPantryItem = {
+        uid: PantryItemUidSchema.parse("pantry-123"),
+        ingredient: "Flour",
+        quantity: "2 cups",
+        aisle: "Produce",
+        aisleUid: "aisle-1",
+        expirationDate: null,
+        hasExpiration: false,
+        inStock: true,
+        purchaseDate: null,
+        locationUid: null,
+        notes: null,
       };
       expect(_test).toBeDefined();
     });

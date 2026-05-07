@@ -6,8 +6,11 @@ import type { ServerContext } from "../types/server-context.js";
 import type { RecipeStore } from "../cache/recipe-store.js";
 import type { PaprikaClient } from "./client.js";
 import type { DiskCache } from "../cache/disk-cache.js";
-import type { RecipeEntry, RecipeUid, SyncResult } from "./types.js";
+import type { PantryStore } from "../cache/pantry-store.js";
+import type { PantryItemUid, RecipeEntry, RecipeUid, SyncResult } from "./types.js";
 import { makeRecipe, makeCategory } from "../cache/__fixtures__/recipes.js";
+import { makePantryItem } from "../cache/__fixtures__/pantry.js";
+import { PantryStore as RealPantryStore } from "../cache/pantry-store.js";
 
 function makeMockServer(): McpServer {
   return {
@@ -29,6 +32,7 @@ function makeMockClient(): PaprikaClient {
     listRecipes: vi.fn().mockResolvedValue([]),
     getRecipes: vi.fn().mockResolvedValue([]),
     listCategories: vi.fn().mockResolvedValue([]),
+    listPantry: vi.fn().mockResolvedValue([]),
   } as unknown as PaprikaClient;
 }
 
@@ -38,8 +42,28 @@ function makeMockCache(): DiskCache {
     putRecipe: vi.fn(),
     removeRecipe: vi.fn().mockResolvedValue(undefined),
     putCategory: vi.fn(),
+    getAllPantryItems: vi.fn().mockResolvedValue([]),
+    putPantryItem: vi.fn(),
+    removePantryItem: vi.fn().mockResolvedValue(undefined),
     flush: vi.fn().mockResolvedValue(undefined),
   } as unknown as DiskCache;
+}
+
+function makeMockPantryStore(): PantryStore {
+  return {
+    load: vi.fn(),
+    set: vi.fn(),
+    delete: vi.fn(),
+    get: vi.fn(),
+    getAll: vi.fn().mockReturnValue([]),
+    findByIngredient: vi.fn().mockReturnValue([]),
+    get hasSynced() {
+      return false;
+    },
+    get size() {
+      return 0;
+    },
+  } as unknown as PantryStore;
 }
 
 function makeTestContext(): ServerContext {
@@ -47,6 +71,7 @@ function makeTestContext(): ServerContext {
     client: makeMockClient(),
     cache: makeMockCache(),
     store: makeMockStore(),
+    pantryStore: makeMockPantryStore(),
     server: makeMockServer(),
   };
 }
@@ -240,6 +265,7 @@ describe("syncOnce", () => {
       listRecipes: vi.fn().mockResolvedValue([]),
       getRecipes: vi.fn().mockResolvedValue([]),
       listCategories: vi.fn().mockResolvedValue([]),
+      listPantry: vi.fn().mockResolvedValue([]),
     } as unknown as PaprikaClient;
   }
 
@@ -249,6 +275,9 @@ describe("syncOnce", () => {
       putRecipe: vi.fn(),
       removeRecipe: vi.fn().mockResolvedValue(undefined),
       putCategory: vi.fn(),
+      getAllPantryItems: vi.fn().mockResolvedValue([]),
+      putPantryItem: vi.fn(),
+      removePantryItem: vi.fn().mockResolvedValue(undefined),
       flush: vi.fn().mockResolvedValue(undefined),
     } as unknown as DiskCache;
   }
@@ -259,6 +288,23 @@ describe("syncOnce", () => {
       delete: vi.fn(),
       setCategories: vi.fn(),
     } as unknown as RecipeStore;
+  }
+
+  function makeMockPantryStoreDefault(): PantryStore {
+    return {
+      load: vi.fn(),
+      set: vi.fn(),
+      delete: vi.fn(),
+      get: vi.fn(),
+      getAll: vi.fn().mockReturnValue([]),
+      findByIngredient: vi.fn().mockReturnValue([]),
+      get hasSynced() {
+        return false;
+      },
+      get size() {
+        return 0;
+      },
+    } as unknown as PantryStore;
   }
 
   function makeMockServerDefault(): McpServer {
@@ -273,11 +319,13 @@ describe("syncOnce", () => {
     cacheOverrides?: Partial<DiskCache>,
     storeOverrides?: Partial<RecipeStore>,
     serverOverrides?: Partial<McpServer>,
+    pantryStoreOverrides?: Partial<PantryStore>,
   ): SyncEngine {
     const context: ServerContext = {
       client: { ...makeMockClientDefault(), ...clientOverrides } as PaprikaClient,
       cache: { ...makeMockCacheDefault(), ...cacheOverrides } as DiskCache,
       store: { ...makeMockStoreDefault(), ...storeOverrides } as RecipeStore,
+      pantryStore: { ...makeMockPantryStoreDefault(), ...pantryStoreOverrides } as PantryStore,
       server: { ...makeMockServerDefault(), ...serverOverrides } as McpServer,
     };
     return new SyncEngine(context, 10);
@@ -596,5 +644,266 @@ describe("syncOnce", () => {
         level: "error",
       }),
     );
+  });
+
+  describe("pantry-read.AC4: Sync Engine Integration", () => {
+    // Import SyncEngine at describe level so it's available for tests that construct ServerContext directly
+    beforeEach(() => {
+      // beforeEach hook to ensure SyncEngine is available
+    });
+
+    it("pantry-read.AC4.1 Success: syncOnce() populates PantryStore via load() with items from API", async () => {
+      const item1 = makePantryItem();
+      const item2 = makePantryItem();
+
+      const load = vi.fn();
+
+      const engine = makeSyncEngine(
+        {
+          listPantry: vi.fn().mockResolvedValue([item1, item2]),
+        },
+        undefined,
+        undefined,
+        undefined,
+        {
+          load,
+        },
+      );
+
+      await engine.syncOnce();
+
+      expect(load).toHaveBeenCalledOnce();
+      expect(load).toHaveBeenCalledWith(expect.arrayContaining([item1, item2]));
+    });
+
+    it("pantry-read.AC4.2 Success: syncOnce() writes all pantry items to DiskCache", async () => {
+      const item1 = makePantryItem();
+      const item2 = makePantryItem();
+
+      const putPantryItem = vi.fn();
+
+      const engine = makeSyncEngine(
+        {
+          listPantry: vi.fn().mockResolvedValue([item1, item2]),
+        },
+        {
+          putPantryItem,
+        },
+      );
+
+      await engine.syncOnce();
+
+      expect(putPantryItem).toHaveBeenCalledTimes(2);
+      expect(putPantryItem).toHaveBeenCalledWith(item1);
+      expect(putPantryItem).toHaveBeenCalledWith(item2);
+    });
+
+    it("pantry-read.AC4.3 Success: Orphan pantry files removed, but not keeper or newItem", async () => {
+      const orphan1 = makePantryItem();
+      const orphan2 = makePantryItem();
+      const keeper = makePantryItem();
+      const newItem = makePantryItem();
+
+      const removePantryItem = vi.fn().mockResolvedValue(undefined);
+
+      const engine = makeSyncEngine(
+        {
+          listPantry: vi.fn().mockResolvedValue([keeper, newItem]),
+        },
+        {
+          getAllPantryItems: vi.fn().mockResolvedValue([orphan1, orphan2, keeper]),
+          removePantryItem,
+        },
+      );
+
+      await engine.syncOnce();
+
+      expect(removePantryItem).toHaveBeenCalledTimes(2);
+      expect(removePantryItem).toHaveBeenCalledWith(orphan1.uid);
+      expect(removePantryItem).toHaveBeenCalledWith(orphan2.uid);
+      expect(removePantryItem).not.toHaveBeenCalledWith(keeper.uid);
+      expect(removePantryItem).not.toHaveBeenCalledWith(newItem.uid);
+    });
+
+    it("pantry-read.AC4.4 Success: sendResourceListChanged called when pantry changes exist, not when no changes", async () => {
+      const newItem = makePantryItem();
+
+      const sendResourceListChanged = vi.fn();
+
+      // Test with pantry change
+      const engine1 = makeSyncEngine(
+        {
+          listRecipes: vi.fn().mockResolvedValue([]),
+          listPantry: vi.fn().mockResolvedValue([newItem]),
+        },
+        {
+          diffRecipes: vi.fn().mockReturnValue({ added: [], changed: [], removed: [] }),
+          getAllPantryItems: vi.fn().mockResolvedValue([]),
+        },
+        undefined,
+        {
+          sendResourceListChanged,
+        },
+      );
+
+      await engine1.syncOnce();
+      expect(sendResourceListChanged).toHaveBeenCalledOnce();
+
+      // Test with no changes (empty cache, empty incoming)
+      vi.clearAllMocks();
+      const sendResourceListChanged2 = vi.fn();
+      const engine2 = makeSyncEngine(
+        {
+          listRecipes: vi.fn().mockResolvedValue([]),
+          listPantry: vi.fn().mockResolvedValue([]),
+        },
+        {
+          diffRecipes: vi.fn().mockReturnValue({ added: [], changed: [], removed: [] }),
+          getAllPantryItems: vi.fn().mockResolvedValue([]),
+        },
+        undefined,
+        {
+          sendResourceListChanged: sendResourceListChanged2,
+        },
+      );
+
+      await engine2.syncOnce();
+      expect(sendResourceListChanged2).not.toHaveBeenCalled();
+    });
+
+    it("pantry-read.AC4.4 Success: sendResourceListChanged fires when same-UID pantry item content changes", async () => {
+      const sharedUid = "uid-shared" as PantryItemUid;
+      const cachedItem = makePantryItem({ uid: sharedUid, ingredient: "Old Ingredient", quantity: "1" });
+      const incomingItem = makePantryItem({
+        uid: sharedUid,
+        ingredient: "Old Ingredient",
+        quantity: "2",
+      });
+
+      const sendResourceListChanged = vi.fn();
+
+      const engine = makeSyncEngine(
+        {
+          listRecipes: vi.fn().mockResolvedValue([]),
+          listPantry: vi.fn().mockResolvedValue([incomingItem]),
+        },
+        {
+          diffRecipes: vi.fn().mockReturnValue({ added: [], changed: [], removed: [] }),
+          getAllPantryItems: vi.fn().mockResolvedValue([cachedItem]),
+        },
+        undefined,
+        {
+          sendResourceListChanged,
+        },
+      );
+
+      await engine.syncOnce();
+      expect(sendResourceListChanged).toHaveBeenCalledOnce();
+    });
+
+    it("pantry-read.AC4.5 Success: REAL PantryStore hasSynced flips to true after sync", async () => {
+      const item = makePantryItem();
+      const realPantryStore = new RealPantryStore();
+
+      expect(realPantryStore.hasSynced).toBe(false);
+
+      const context: ServerContext = {
+        client: {
+          listRecipes: vi.fn().mockResolvedValue([]),
+          getRecipes: vi.fn().mockResolvedValue([]),
+          listCategories: vi.fn().mockResolvedValue([]),
+          listPantry: vi.fn().mockResolvedValue([item]),
+        } as unknown as PaprikaClient,
+        cache: {
+          diffRecipes: vi.fn().mockReturnValue({ added: [], changed: [], removed: [] }),
+          putRecipe: vi.fn(),
+          removeRecipe: vi.fn().mockResolvedValue(undefined),
+          putCategory: vi.fn(),
+          getAllPantryItems: vi.fn().mockResolvedValue([]),
+          putPantryItem: vi.fn(),
+          removePantryItem: vi.fn().mockResolvedValue(undefined),
+          flush: vi.fn().mockResolvedValue(undefined),
+        } as unknown as DiskCache,
+        store: {
+          set: vi.fn(),
+          delete: vi.fn(),
+          setCategories: vi.fn(),
+        } as unknown as RecipeStore,
+        pantryStore: realPantryStore,
+        server: {
+          sendResourceListChanged: vi.fn(),
+          sendLoggingMessage: vi.fn().mockResolvedValue(undefined),
+        } as unknown as McpServer,
+      };
+      const engine = new SyncEngine(context, 10);
+
+      await engine.syncOnce();
+
+      expect(realPantryStore.hasSynced).toBe(true);
+    });
+
+    it("pantry-read.AC4.6 Edge: Empty pantry from API handled gracefully", async () => {
+      const realPantryStore = new RealPantryStore();
+
+      const context: ServerContext = {
+        client: {
+          listRecipes: vi.fn().mockResolvedValue([]),
+          getRecipes: vi.fn().mockResolvedValue([]),
+          listCategories: vi.fn().mockResolvedValue([]),
+          listPantry: vi.fn().mockResolvedValue([]),
+        } as unknown as PaprikaClient,
+        cache: {
+          diffRecipes: vi.fn().mockReturnValue({ added: [], changed: [], removed: [] }),
+          putRecipe: vi.fn(),
+          removeRecipe: vi.fn().mockResolvedValue(undefined),
+          putCategory: vi.fn(),
+          getAllPantryItems: vi.fn().mockResolvedValue([]),
+          putPantryItem: vi.fn(),
+          removePantryItem: vi.fn().mockResolvedValue(undefined),
+          flush: vi.fn().mockResolvedValue(undefined),
+        } as unknown as DiskCache,
+        store: {
+          set: vi.fn(),
+          delete: vi.fn(),
+          setCategories: vi.fn(),
+        } as unknown as RecipeStore,
+        pantryStore: realPantryStore,
+        server: {
+          sendResourceListChanged: vi.fn(),
+          sendLoggingMessage: vi.fn().mockResolvedValue(undefined),
+        } as unknown as McpServer,
+      };
+      const engine = new SyncEngine(context, 10);
+
+      let errorEmitted = false;
+      engine.events.on("sync:error", () => {
+        errorEmitted = true;
+      });
+
+      await engine.syncOnce();
+
+      expect(errorEmitted).toBe(false);
+      expect(realPantryStore.hasSynced).toBe(true);
+      expect(realPantryStore.size).toBe(0);
+    });
+
+    it("pantry-read.AC4.7 Failure: syncOnce() does not throw when listPantry() fails", async () => {
+      const testError = new Error("network down");
+
+      const engine = makeSyncEngine({
+        listPantry: vi.fn().mockRejectedValue(testError),
+      });
+
+      let receivedError: Error | null = null;
+      engine.events.on("sync:error", (error) => {
+        receivedError = error;
+      });
+
+      // Should not throw
+      await expect(engine.syncOnce()).resolves.toBeUndefined();
+
+      // Should emit sync:error
+      expect(receivedError).toBe(testError);
+    });
   });
 });

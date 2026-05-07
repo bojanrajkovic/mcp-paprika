@@ -1,8 +1,8 @@
 import { mkdir, open, readFile, readdir, rename, unlink } from "node:fs/promises";
 import { join } from "node:path";
 import { z } from "zod";
-import { RecipeStoredSchema, CategoryStoredSchema } from "../paprika/types.js";
-import type { Recipe, Category, RecipeEntry, DiffResult } from "../paprika/types.js";
+import { RecipeStoredSchema, CategoryStoredSchema, PantryItemStoredSchema } from "../paprika/types.js";
+import type { Recipe, Category, RecipeEntry, DiffResult, PantryItem } from "../paprika/types.js";
 
 // Type guard for NodeJS.ErrnoException. Mirrors the local helper in
 // utils/config.ts but is intentionally not exported from there — each
@@ -23,6 +23,7 @@ function isNodeError(error: unknown): error is NodeJS.ErrnoException {
 const CacheIndexSchema = z.object({
   recipes: z.record(z.string(), z.string()),
   categories: z.record(z.string(), z.string()),
+  pantry: z.record(z.string(), z.string()).default({}),
 });
 
 type CacheIndex = z.infer<typeof CacheIndexSchema>;
@@ -32,6 +33,7 @@ export class DiskCache {
   private readonly _indexPath: string;
   private readonly _recipesDir: string;
   private readonly _categoriesDir: string;
+  private readonly _pantryDir: string;
 
   // Null until init() is called. diff*() and flush() assert non-null.
   private _index: CacheIndex | null = null;
@@ -41,18 +43,21 @@ export class DiskCache {
   // they just put in the same sync cycle.
   private readonly _pendingRecipes: Map<string, Recipe> = new Map();
   private readonly _pendingCategories: Map<string, Category> = new Map();
+  private readonly _pendingPantryItems: Map<string, PantryItem> = new Map();
 
   constructor(cacheDir: string) {
     this._cacheDir = cacheDir;
     this._indexPath = join(cacheDir, "index.json");
     this._recipesDir = join(cacheDir, "recipes");
     this._categoriesDir = join(cacheDir, "categories");
+    this._pantryDir = join(cacheDir, "pantry");
   }
 
   async init(): Promise<void> {
     // Create subdirectories (idempotent — recursive: true).
     await mkdir(this._recipesDir, { recursive: true });
     await mkdir(this._categoriesDir, { recursive: true });
+    await mkdir(this._pantryDir, { recursive: true });
 
     // Load index.json. ENOENT = first run → empty index.
     // Parse failure = corruption → log warning + empty index.
@@ -62,7 +67,7 @@ export class DiskCache {
       raw = await readFile(this._indexPath, "utf-8");
     } catch (error: unknown) {
       if (isNodeError(error) && error.code === "ENOENT") {
-        this._index = { recipes: {}, categories: {} };
+        this._index = { recipes: {}, categories: {}, pantry: {} };
         return;
       }
       throw error;
@@ -73,14 +78,14 @@ export class DiskCache {
       parsed = JSON.parse(raw);
     } catch {
       process.stderr.write("DiskCache: corrupt index.json (invalid JSON), resetting to empty index\n");
-      this._index = { recipes: {}, categories: {} };
+      this._index = { recipes: {}, categories: {}, pantry: {} };
       return;
     }
 
     const result = CacheIndexSchema.safeParse(parsed);
     if (!result.success) {
       process.stderr.write("DiskCache: corrupt index.json (schema mismatch), resetting to empty index\n");
-      this._index = { recipes: {}, categories: {} };
+      this._index = { recipes: {}, categories: {}, pantry: {} };
       return;
     }
 
@@ -117,6 +122,16 @@ export class DiskCache {
           await fh.close();
         }
       }),
+      ...[...this._pendingPantryItems.entries()].map(async ([uid, item]) => {
+        const filePath = join(this._pantryDir, `${uid}.json`);
+        const fh = await open(filePath, "w");
+        try {
+          await fh.writeFile(JSON.stringify(item, null, 2));
+          await fh.sync();
+        } finally {
+          await fh.close();
+        }
+      }),
     ]);
 
     // Write index atomically via temp-then-rename.
@@ -134,6 +149,7 @@ export class DiskCache {
 
     this._pendingRecipes.clear();
     this._pendingCategories.clear();
+    this._pendingPantryItems.clear();
   }
 
   async getRecipe(uid: string): Promise<Recipe | null> {
@@ -169,6 +185,14 @@ export class DiskCache {
     this._index.recipes[recipe.uid] = hash;
   }
 
+  putPantryItem(item: PantryItem): void {
+    if (this._index === null) {
+      throw new Error("DiskCache: putPantryItem() called before init()");
+    }
+    this._pendingPantryItems.set(item.uid, item);
+    this._index.pantry[item.uid] = "";
+  }
+
   async removeRecipe(uid: string): Promise<void> {
     if (this._index === null) {
       throw new Error("DiskCache: removeRecipe() called before init()");
@@ -187,6 +211,24 @@ export class DiskCache {
     // Remove from index and pending map.
     delete this._index.recipes[uid];
     this._pendingRecipes.delete(uid);
+  }
+
+  async removePantryItem(uid: string): Promise<void> {
+    if (this._index === null) {
+      throw new Error("DiskCache: removePantryItem() called before init()");
+    }
+
+    const filePath = join(this._pantryDir, `${uid}.json`);
+    try {
+      await unlink(filePath);
+    } catch (error: unknown) {
+      if (!isNodeError(error) || error.code !== "ENOENT") {
+        throw error;
+      }
+    }
+
+    delete this._index.pantry[uid];
+    this._pendingPantryItems.delete(uid);
   }
 
   async getAllRecipes(): Promise<Array<Recipe>> {
@@ -216,6 +258,37 @@ export class DiskCache {
         const raw = await readFile(join(this._recipesDir, filename), "utf-8");
         const recipe = RecipeStoredSchema.parse(JSON.parse(raw));
         result.set(uid, recipe);
+      }),
+    );
+
+    return [...result.values()];
+  }
+
+  async getAllPantryItems(): Promise<Array<PantryItem>> {
+    if (this._index === null) {
+      throw new Error("DiskCache: getAllPantryItems() called before init()");
+    }
+
+    const result: Map<string, PantryItem> = new Map(this._pendingPantryItems);
+
+    let files: Array<string>;
+    try {
+      files = await readdir(this._pantryDir);
+    } catch (error: unknown) {
+      if (isNodeError(error) && error.code === "ENOENT") {
+        return [...result.values()];
+      }
+      throw error;
+    }
+
+    const jsonFiles = files.filter((f) => f.endsWith(".json"));
+    await Promise.all(
+      jsonFiles.map(async (filename) => {
+        const uid = filename.slice(0, -5);
+        if (result.has(uid)) return;
+        const raw = await readFile(join(this._pantryDir, filename), "utf-8");
+        const item = PantryItemStoredSchema.parse(JSON.parse(raw));
+        result.set(uid, item);
       }),
     );
 

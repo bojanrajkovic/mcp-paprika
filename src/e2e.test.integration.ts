@@ -78,6 +78,8 @@ describe("MCP Server end-to-end round-trip", () => {
     expect(toolNames).toContain("update_recipe");
     expect(toolNames).toContain("delete_recipe");
     expect(toolNames).toContain("list_categories");
+    expect(toolNames).toContain("list_pantry");
+    expect(toolNames).toContain("get_pantry_item");
 
     // Verify tools have descriptions
     result.tools.forEach((tool) => {
@@ -113,6 +115,11 @@ describe("MCP Server end-to-end round-trip", () => {
     const recipeResource = result.resources.find((r) => r.uri.startsWith("paprika://recipe/"));
     expect(recipeResource).toBeDefined();
     expect(recipeResource?.name).toBeDefined();
+
+    // Verify pantry resource is registered
+    const pantryResource = result.resources.find((r) => r.uri.startsWith("paprika://pantry/"));
+    expect(pantryResource).toBeDefined();
+    expect(pantryResource?.name).toBeDefined();
   });
 
   it("lists resources and reads a valid recipe", async () => {
@@ -152,5 +159,39 @@ describe("MCP Server end-to-end round-trip", () => {
     // Tool should return an error response (either marked with isError or containing error text)
     expect(result).toBeDefined();
     expect(result.content).toBeDefined();
+  });
+
+  it("calls pantry tools and receives results", async () => {
+    // Test list_pantry tool
+    const listResult = await client.callTool({
+      name: "list_pantry",
+      arguments: {},
+    });
+
+    expect(listResult).toBeDefined();
+    expect(Array.isArray(listResult.content)).toBe(true);
+    expect(listResult.content.length).toBeGreaterThan(0);
+
+    // Verify response has text content with pantry info
+    const firstContent = listResult.content[0];
+    expect(firstContent).toBeDefined();
+    expect(firstContent.type).toBe("text");
+    const listText = (firstContent as { type: string; text: string }).text;
+    expect(typeof listText).toBe("string");
+    expect(listText.toLowerCase()).toContain("pantry"); // Should mention pantry
+
+    // Test get_pantry_item by ingredient
+    const getResult = await client.callTool({
+      name: "get_pantry_item",
+      arguments: { ingredient: "Flour" },
+    });
+
+    expect(getResult).toBeDefined();
+    expect(Array.isArray(getResult.content)).toBe(true);
+    expect(getResult.content.length).toBeGreaterThan(0);
+
+    const getContent = getResult.content[0];
+    expect(getContent).toBeDefined();
+    expect(getContent.type).toBe("text");
   });
 });

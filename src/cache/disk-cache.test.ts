@@ -5,6 +5,7 @@ import { join } from "node:path";
 import type { RecipeUid } from "../paprika/types.js";
 import { DiskCache } from "./disk-cache.js";
 import { makeRecipe, makeCategory } from "./__fixtures__/recipes.js";
+import { makePantryItem } from "./__fixtures__/pantry.js";
 
 describe("DiskCache", () => {
   let tempDir: string;
@@ -68,7 +69,7 @@ describe("DiskCache", () => {
       const content = await readFile(indexPath, "utf-8");
       const parsed = JSON.parse(content);
 
-      expect(parsed).toEqual({ recipes: {}, categories: {} });
+      expect(parsed).toEqual({ recipes: {}, categories: {}, pantry: {} });
     });
 
     it("AC1.4: resets to empty index and calls log when index.json is present but fails schema validation", async () => {
@@ -88,7 +89,7 @@ describe("DiskCache", () => {
       const content = await readFile(indexPath, "utf-8");
       const parsed = JSON.parse(content);
 
-      expect(parsed).toEqual({ recipes: {}, categories: {} });
+      expect(parsed).toEqual({ recipes: {}, categories: {}, pantry: {} });
       stderrSpy.mockRestore();
     });
 
@@ -547,6 +548,141 @@ describe("DiskCache", () => {
       expect(result.added).toHaveLength(1);
       expect(result.changed).toHaveLength(1);
       expect(result.removed).toHaveLength(1);
+    });
+  });
+
+  describe("pantry-read.AC3: DiskCache pantry methods", () => {
+    it("AC3.1: init() creates pantry/ subdirectory", async () => {
+      const cache = new DiskCache(tempDir);
+      await cache.init();
+
+      const pantryDir = join(tempDir, "pantry");
+      const pantryDirStat = await stat(pantryDir);
+
+      expect(pantryDirStat.isDirectory()).toBe(true);
+    });
+
+    it("AC3.2: putPantryItem() + flush() writes JSON file to pantry/ directory and updates index", async () => {
+      const cache = new DiskCache(tempDir);
+      await cache.init();
+
+      const item = makePantryItem();
+      cache.putPantryItem(item);
+      await cache.flush();
+
+      // Verify file exists and contains correct data
+      const filePath = join(tempDir, "pantry", `${item.uid}.json`);
+      const raw = await readFile(filePath, "utf-8");
+      const parsed = JSON.parse(raw);
+
+      expect(parsed.uid).toBe(item.uid);
+      expect(parsed.ingredient).toBe(item.ingredient);
+      expect(parsed.quantity).toBe(item.quantity);
+
+      // Verify index contains empty-string placeholder
+      const indexPath = join(tempDir, "index.json");
+      const indexContent = await readFile(indexPath, "utf-8");
+      const parsedIndex = JSON.parse(indexContent);
+
+      expect(parsedIndex.pantry[item.uid]).toBe("");
+    });
+
+    it("AC3.3: getAllPantryItems() returns items from pending buffer and disk, pending shadows disk", async () => {
+      const cache = new DiskCache(tempDir);
+      await cache.init();
+
+      // Write one item to disk manually
+      const diskItem = makePantryItem({ uid: "uid-disk" });
+      const diskItemPath = join(tempDir, "pantry", "uid-disk.json");
+      await writeFile(diskItemPath, JSON.stringify(diskItem, null, 2));
+
+      // Put a pending item (not flushed)
+      const pendingItem = makePantryItem({ uid: "uid-pending" });
+      cache.putPantryItem(pendingItem);
+
+      // Get all items (should include both)
+      const allItems = await cache.getAllPantryItems();
+
+      expect(allItems).toHaveLength(2);
+      expect(allItems.map((i) => i.uid).sort()).toEqual(["uid-disk", "uid-pending"]);
+
+      // Test shadowing: put item with same UID as disk but different data
+      const sharedItem = makePantryItem({
+        uid: "uid-shared",
+        ingredient: "Pending Version",
+      });
+      await writeFile(
+        join(tempDir, "pantry", "uid-shared.json"),
+        JSON.stringify({ ...sharedItem, ingredient: "Disk Version" }, null, 2),
+      );
+
+      cache.putPantryItem(sharedItem);
+
+      // Get all items again
+      const allItems2 = await cache.getAllPantryItems();
+      const sharedFromCache = allItems2.find((i) => i.uid === "uid-shared");
+
+      expect(sharedFromCache?.ingredient).toBe("Pending Version");
+    });
+
+    it("AC3.4: removePantryItem() deletes file and removes from index and pending", async () => {
+      const cache = new DiskCache(tempDir);
+      await cache.init();
+
+      const item = makePantryItem();
+      cache.putPantryItem(item);
+      await cache.flush();
+
+      // Verify file exists
+      const filePath = join(tempDir, "pantry", `${item.uid}.json`);
+      await expect(stat(filePath)).resolves.toBeDefined();
+
+      // Remove the item
+      await cache.removePantryItem(item.uid);
+
+      // Verify file is deleted
+      await expect(stat(filePath)).rejects.toThrow();
+
+      // Verify item is not returned by getAllPantryItems
+      const allItems = await cache.getAllPantryItems();
+      expect(allItems).toHaveLength(0);
+
+      // Verify the pantry index entry is removed from disk
+      await cache.flush();
+      const indexContent = await readFile(join(tempDir, "index.json"), "utf-8");
+      const parsedIndex: { pantry?: Record<string, string> } = JSON.parse(indexContent);
+      expect(parsedIndex.pantry).not.toHaveProperty(item.uid);
+
+      // Test removing from pending (not flushed): put then remove without flush
+      const pendingItem = makePantryItem();
+      cache.putPantryItem(pendingItem);
+      await cache.removePantryItem(pendingItem.uid);
+
+      const allItems2 = await cache.getAllPantryItems();
+      expect(allItems2).toHaveLength(0);
+    });
+
+    it("AC3.5: removePantryItem() is idempotent on missing file", async () => {
+      const cache = new DiskCache(tempDir);
+      await cache.init();
+
+      // Remove a pantry item that was never created
+      await expect(cache.removePantryItem("never-existed-uid")).resolves.toBeUndefined();
+    });
+
+    it("AC3.6: Existing index.json without pantry key loads cleanly via .default({})", async () => {
+      // Write a legacy index.json with only recipes and categories (no pantry)
+      const legacyIndex = JSON.stringify({ recipes: {}, categories: {} });
+      const indexPath = join(tempDir, "index.json");
+      await writeFile(indexPath, legacyIndex);
+
+      // Create and init a fresh cache
+      const cache = new DiskCache(tempDir);
+      await cache.init();
+
+      // Verify no error and getAllPantryItems returns empty
+      const allItems = await cache.getAllPantryItems();
+      expect(allItems).toHaveLength(0);
     });
   });
 });
