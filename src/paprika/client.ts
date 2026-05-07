@@ -21,8 +21,8 @@ import {
 } from "cockatiel";
 import { z } from "zod";
 import type { ZodType, ZodTypeDef } from "zod";
-import type { Category, Recipe, RecipeEntry, RecipeUid } from "./types.js";
-import { AuthResponseSchema, CategorySchema, RecipeEntrySchema, RecipeSchema } from "./types.js";
+import type { Category, PantryItem, Recipe, RecipeEntry, RecipeUid } from "./types.js";
+import { AuthResponseSchema, CategorySchema, PantryItemSchema, RecipeEntrySchema, RecipeSchema } from "./types.js";
 import { PaprikaAuthError, PaprikaAPIError } from "./errors.js";
 
 const AUTH_URL = "https://paprikaapp.com/api/v1/account/login/";
@@ -130,6 +130,10 @@ export class PaprikaClient {
 
   async listCategories(): Promise<Array<Category>> {
     return this.request("GET", `${API_BASE}/categories/`, z.array(CategorySchema));
+  }
+
+  async listPantry(): Promise<Array<PantryItem>> {
+    return this.request("GET", `${API_BASE}/pantry/`, z.array(PantryItemSchema));
   }
 
   async saveRecipe(recipe: Readonly<Recipe>): Promise<Recipe> {
