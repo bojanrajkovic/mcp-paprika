@@ -1,10 +1,11 @@
 # Caching Layer
 
-Last verified: 2026-05-06
+Last verified: 2026-05-07
 
 ## Files
 
 - `recipe-store.ts` — In-memory cache for recipes and categories with CRUD operations and query methods
+- `pantry-store.ts` — In-memory query layer for pantry items (replace-all semantics, no hashing)
 - `disk-cache.ts` — Persistent disk cache for the Paprika recipe library between server restarts
 
 ## Purpose
@@ -34,6 +35,27 @@ Core in-memory cache for recipes and categories with CRUD operations and query m
 - `filterByTime(constraints)` - Filter and sort recipes by duration constraints
 - `findByName(title)` - Tiered name lookup (exact > starts-with > contains)
 - Category operations: `getCategory()`, `getAllCategories()`, `setCategories()`, `resolveCategories()`
+
+### PantryStore
+
+In-memory query layer for pantry items, hydrated by the sync engine. Mirrors the `RecipeStore` shape but is intentionally simpler: pantry items have no hash, no categories, and no time/ingredient filtering — just CRUD plus a tiered name lookup.
+
+**Construction:**
+
+`new PantryStore()` — no arguments; starts empty with `hasSynced = false`.
+
+**Methods:**
+
+| Method                    | Signature                                       | Description                                                                                     |
+| ------------------------- | ----------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `load(items)`             | `(items: ReadonlyArray<PantryItem>): void`      | Clears existing items, repopulates from `items`, sets `hasSynced = true`                        |
+| `get(uid)`                | `(uid: PantryItemUid): PantryItem \| undefined` | Direct UID lookup                                                                               |
+| `getAll()`                | `(): Array<PantryItem>`                         | Returns all items (insertion order)                                                             |
+| `set(item)`               | `(item: PantryItem): void`                      | Upsert by `item.uid`                                                                            |
+| `delete(uid)`             | `(uid: PantryItemUid): void`                    | Removes the entry if present (no-op otherwise)                                                  |
+| `size`                    | `number` getter                                 | Count of items                                                                                  |
+| `hasSynced`               | `boolean` getter                                | `true` after the first `load()` call (even when `items.length === 0`)                           |
+| `findByIngredient(query)` | `(query: string): Array<PantryItem>`            | Tiered case-insensitive lookup: exact match > starts-with > contains; at most one tier returned |
 
 ### DiskCache
 
@@ -95,6 +117,14 @@ Diagnostic messages are written directly to `process.stderr`.
 - `filterByTime()` results are sorted by total time ascending (null total times sort last)
 - `findByName()` returns at most one tier: exact matches, or starts-with matches, or contains matches
 
+### PantryStore
+
+- `hasSynced` is `false` until the first `load()` call; `pantryStartGuard()` (in `tools/pantry-helpers.ts`) returns `Err` until then
+- `load()` clears existing items before populating, so it always reflects the latest API snapshot (replace-all semantics)
+- `load([])` still flips `hasSynced` to `true` — an empty pantry is a valid synced state
+- `findByIngredient()` returns at most one tier (exact > starts-with > contains); ties within a tier are returned in insertion order
+- All read methods are pure (no I/O); the store is rehydrated from `DiskCache.getAllPantryItems()` on startup and refreshed by the sync engine
+
 ### DiskCache
 
 - `DiskCache` requires `init()` before `flush()`, `getAllRecipes()`, `putRecipe()`, `removeRecipe()`, `putCategory()`, `putPantryItem()`, `removePantryItem()`, `getAllPantryItems()`, `diffRecipes()`, or `diffCategories()` — calling any of these before `init()` throws
@@ -106,6 +136,10 @@ Diagnostic messages are written directly to `process.stderr`.
 
 ## Dependencies
 
-- **Uses:** `paprika/types` (Recipe, Category types), `utils/duration` (parseDuration for time filtering), Node.js built-in fs/promises
-- **Used by:** `features/` (via RecipeStore), P2-U11 sync engine (via DiskCache), P2-U12 entry point (constructs DiskCache with `getCacheDir()`)
+- **Uses:** `paprika/types` (Recipe, Category, PantryItem types), `utils/duration` (parseDuration for time filtering), Node.js built-in fs/promises
+- **Used by:**
+  - `features/` (via `RecipeStore`)
+  - `paprika/sync.ts` (via `DiskCache` and `PantryStore` for diff/replace-all sync)
+  - `tools/` and `resources/` (via `ctx.pantryStore` for pantry reads; `ctx.store` for recipe reads)
+  - `index.ts` (constructs `DiskCache` with `getCacheDir()`, `RecipeStore`, and `PantryStore`)
 - **Boundary:** Must not import from `tools/`, `resources/`, or `features/`

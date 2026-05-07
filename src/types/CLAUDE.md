@@ -1,6 +1,6 @@
 # Shared Type Definitions
 
-Last verified: 2026-05-06
+Last verified: 2026-05-07
 
 ## Purpose
 
@@ -30,6 +30,6 @@ import type { ServerContext } from "../types/server-context.js";
 
 ## Dependencies
 
-- **Uses:** `@modelcontextprotocol/sdk/server/mcp.js` (McpServer), `../paprika/client.js` (PaprikaClient), `../cache/disk-cache.js` (DiskCache), `../cache/recipe-store.js` (RecipeStore)
+- **Uses:** `@modelcontextprotocol/sdk/server/mcp.js` (McpServer), `../paprika/client.js` (PaprikaClient), `../cache/disk-cache.js` (DiskCache), `../cache/recipe-store.js` (RecipeStore), `../cache/pantry-store.js` (PantryStore)
 - **Used by:** All Phase 2 tool and resource modules
 - **Boundary:** All imports in this module use `import type` — no runtime value imports
