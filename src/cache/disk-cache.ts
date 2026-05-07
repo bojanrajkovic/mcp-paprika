@@ -23,6 +23,7 @@ function isNodeError(error: unknown): error is NodeJS.ErrnoException {
 const CacheIndexSchema = z.object({
   recipes: z.record(z.string(), z.string()),
   categories: z.record(z.string(), z.string()),
+  pantry: z.record(z.string(), z.string()).default({}),
 });
 
 type CacheIndex = z.infer<typeof CacheIndexSchema>;
@@ -62,7 +63,7 @@ export class DiskCache {
       raw = await readFile(this._indexPath, "utf-8");
     } catch (error: unknown) {
       if (isNodeError(error) && error.code === "ENOENT") {
-        this._index = { recipes: {}, categories: {} };
+        this._index = { recipes: {}, categories: {}, pantry: {} };
         return;
       }
       throw error;
@@ -73,14 +74,14 @@ export class DiskCache {
       parsed = JSON.parse(raw);
     } catch {
       process.stderr.write("DiskCache: corrupt index.json (invalid JSON), resetting to empty index\n");
-      this._index = { recipes: {}, categories: {} };
+      this._index = { recipes: {}, categories: {}, pantry: {} };
       return;
     }
 
     const result = CacheIndexSchema.safeParse(parsed);
     if (!result.success) {
       process.stderr.write("DiskCache: corrupt index.json (schema mismatch), resetting to empty index\n");
-      this._index = { recipes: {}, categories: {} };
+      this._index = { recipes: {}, categories: {}, pantry: {} };
       return;
     }
 
