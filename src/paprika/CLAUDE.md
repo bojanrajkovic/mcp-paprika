@@ -1,6 +1,6 @@
 # Paprika API Client
 
-Last verified: 2026-03-17
+Last verified: 2026-05-06
 
 ## Files
 
@@ -21,6 +21,7 @@ HTTP client for the Paprika Cloud Sync API. Handles authentication, request form
 
 - `RecipeUid` — Branded string type for recipe identifiers, validated by `RecipeUidSchema`
 - `CategoryUid` — Branded string type for category identifiers, validated by `CategoryUidSchema`
+- `PantryItemUid` — Branded string type for pantry item identifiers, validated by `PantryItemUidSchema`
 
 **Entry Types:**
 
@@ -31,6 +32,7 @@ HTTP client for the Paprika Cloud Sync API. Handles authentication, request form
 
 - `Recipe` — Full recipe object with 28 fields; output of `RecipeStoredSchema` and `RecipeSchema`
 - `Category` — Category with `uid`, `name`, `orderFlag`, `parentUid`; output of `CategoryStoredSchema` and `CategorySchema`
+- `PantryItem` — Pantry inventory item with 11 fields (`uid`, `ingredient`, `quantity`, `aisle`, `aisleUid`, `expirationDate`, `hasExpiration`, `inStock`, `purchaseDate`, `locationUid`, `notes`); output of `PantryItemStoredSchema` and `PantryItemSchema`
 - `AuthResponse` — Authentication response `{result: {token: string}}`; output of `AuthResponseSchema`
 
 **Domain Types:**
@@ -45,12 +47,14 @@ HTTP client for the Paprika Cloud Sync API. Handles authentication, request form
 
 - `RecipeSchema` — Validates and transforms full recipe objects from API (snake_case input → camelCase Recipe)
 - `CategorySchema` — Validates and transforms category objects from API (snake_case input → camelCase Category)
+- `PantryItemSchema` — Validates and transforms pantry items from API (snake_case input → camelCase PantryItem)
 - `AuthResponseSchema` — Validates authentication responses
 
 **Stored Format Schemas** (validate camelCase JSON from disk, no transform):
 
 - `RecipeStoredSchema` — Validates camelCase recipe JSON read from disk (no transform)
 - `CategoryStoredSchema` — Validates camelCase category JSON read from disk (no transform)
+- `PantryItemStoredSchema` — Validates camelCase pantry item JSON read from disk (no transform)
 
 **Entry and UID Schemas:**
 
@@ -84,6 +88,7 @@ Typed HTTP client wrapping the Paprika Cloud Sync API.
 - `getRecipe(uid: string): Promise<Recipe>` — fetches full recipe details from `/api/v2/sync/recipe/{uid}/`
 - `getRecipes(uids: ReadonlyArray<string>): Promise<Array<Recipe>>` — fans out to `getRecipe()` with bulkhead(5) concurrency limit
 - `listCategories(): Promise<Array<Category>>` — fetches category list, then hydrates each with bulkhead(5) concurrency limit independent of recipe bulkhead
+- `listPantry(): Promise<Array<PantryItem>>` — fetches fully-hydrated pantry items from `/api/v2/sync/pantry/` (no entry/detail split; all items are complete objects)
 - `saveRecipe(recipe: Readonly<Recipe>): Promise<Recipe>` — serializes recipe to camelCase-to-snake_case JSON, gzip-compresses, POSTs as `FormData` with `data.gz` attachment
 - `deleteRecipe(uid: RecipeUid): Promise<void>` — soft-delete: fetches recipe, sets `inTrash: true`, saves, then calls `notifySync()`
 - `notifySync(): Promise<void>` — POSTs to `/api/v2/sync/notify/` to trigger cloud sync propagation
