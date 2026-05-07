@@ -174,7 +174,7 @@ async function main(): Promise<void> {
     server,
   };
 
-  // 7. Register all tools
+  // 8. Register all tools
   registerSearchTool(server, ctx);
   registerFilterTools(server, ctx);
   registerCategoryTools(server, ctx);
@@ -185,15 +185,15 @@ async function main(): Promise<void> {
   registerDeleteTool(server, ctx);
   log("Registered 8 tools.");
 
-  // 8. Register recipe resources
+  // 9. Register recipe resources
   registerRecipeResources(server, ctx);
   log("Registered recipe resources.");
 
-  // 9. Construct SyncEngine (but don't use real one, keep it minimal)
+  // 10. Construct SyncEngine (but don't use real one, keep it minimal)
   // For testing, we skip the sync engine to avoid background polling
   log("Sync engine disabled for E2E testing.");
 
-  // 10. Setup discover feature (if configured)
+  // 11. Setup discover feature (if configured)
   if (config.features?.embeddings) {
     log("Setting up discover feature...");
     // Mock SyncEngine for discover feature
@@ -205,13 +205,13 @@ async function main(): Promise<void> {
     log("Discover feature disabled (embeddings not configured).");
   }
 
-  // 11. Register SIGINT handler
+  // 12. Register SIGINT handler
   process.on("SIGINT", () => {
     log("SIGINT received, shutting down...");
     process.exit(0);
   });
 
-  // 12. Connect stdio transport
+  // 13. Connect stdio transport
   log("Connecting stdio transport...");
   await server.connect(new StdioServerTransport());
   log("Server ready.");
