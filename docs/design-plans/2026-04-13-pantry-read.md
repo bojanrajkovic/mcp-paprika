@@ -65,7 +65,7 @@ Write support (`add_pantry_item`, `update_pantry_item`, `delete_pantry_item`) is
 - **pantry-read.AC5.5 Success:** `get_pantry_item` by ingredient with multiple matches returns disambiguation list
 - **pantry-read.AC5.6 Failure:** `get_pantry_item` with unknown UID or ingredient returns not-found message
 - **pantry-read.AC5.7 Failure:** Both tools return error when `pantryStore.hasSynced` is `false` (cold start guard)
-- **pantry-read.AC5.8 Failure:** `get_pantry_item` with neither `uid` nor `ingredient` is rejected by input validation
+- **pantry-read.AC5.8 Failure:** `get_pantry_item` with neither `uid` nor `ingredient` is rejected by the handler with a friendly error message
 
 ### pantry-read.AC6: MCP Resource
 
