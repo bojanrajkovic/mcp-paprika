@@ -1,6 +1,6 @@
 # Paprika API Client
 
-Last verified: 2026-05-06
+Last verified: 2026-05-06 (pantry sync updated 2026-05-06)
 
 ## Files
 
@@ -144,13 +144,22 @@ Background polling loop that keeps local cache and in-memory store synchronized 
    - Replaces store categories: `store.setCategories(categories)`
    - Writes each category to cache: `cache.putCategory(category, category.uid)` (hash placeholder)
 
-3. **Finalization:**
+3. **Pantry sync (replace-all with orphan cleanup):**
+   - Fetches all pantry items: `client.listPantry()` → fully hydrated `Array<PantryItem>`
+   - Computes orphan UIDs (cached but not in API response) via Set difference: `cachedUids - incomingUids`
+   - Computes new UIDs (in API response but not cached): `incomingUids - cachedUids`
+   - Removes orphans concurrently: `Promise.all(orphanUids.map(uid => cache.removePantryItem(uid)))`
+   - Loads all items into store (unconditionally): `pantryStore.load(pantryItems)` (sets `hasSynced = true` even when empty)
+   - Writes each item to cache: `cache.putPantryItem(item)` for all items (even unchanged ones, ensuring updates propagate)
+   - Logs orphan count when > 0
+
+4. **Finalization:**
    - Flushes cache once: `await cache.flush()`
-   - Sends MCP resource notification if recipe changes exist: `server.sendResourceListChanged()` (called only if any added/changed/removed detected)
+   - Sends MCP resource notification if recipe OR pantry changes exist: `server.sendResourceListChanged()` (called if any added/changed/removed/orphaned detected)
    - Emits `sync:complete` with `SyncResult` (always emitted, even for no-change cycles)
    - Logs success: `server.sendLoggingMessage({ level: "info", data: "..." })`
 
-4. **Error handling (all wrapped in try/catch):**
+5. **Error handling (all wrapped in try/catch):**
    - Catches any thrown error (API failures, cache errors, store errors)
    - Logs error: `server.sendLoggingMessage({ level: "error", data: "..." })` (wrapped in try/catch; logging may throw if disconnected)
    - Emits `sync:error` with the Error
@@ -161,10 +170,12 @@ Background polling loop that keeps local cache and in-memory store synchronized 
 - `syncOnce()` never throws — errors are caught, logged, and emitted as events
 - `start()` when already running is a no-op (no duplicate loops via `_ac` check)
 - `stop()` when not running is a no-op (no-op if `_ac` is null)
-- Recipe changes (added/changed/removed > 0) trigger `sendResourceListChanged()`; no-change cycles do not
+- Recipe or pantry changes (any added/changed/removed/orphaned > 0) trigger `sendResourceListChanged()`; no-change cycles do not
 - Cache is flushed exactly once per cycle (single `await cache.flush()` after all mutations)
 - Removed recipes are deleted concurrently via `Promise.all()` for efficiency
+- Orphaned pantry items are deleted concurrently via `Promise.all()` for efficiency
 - Loop respects AbortController signal and cleanly exits on `stop()`
+- `pantryStore.load(items)` is called unconditionally even when `items.length === 0`, setting `hasSynced = true` after first sync
 
 **Dependencies:**
 

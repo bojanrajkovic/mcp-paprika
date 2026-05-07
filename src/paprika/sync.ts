@@ -101,12 +101,35 @@ export class SyncEngine {
         this._context.cache.putCategory(category, category.uid);
       }
 
-      // 3. Finalization
+      // 3. Pantry sync (replace-all with orphan cleanup)
+      SyncEngine._log("Fetching pantry...");
+      const pantryItems = await this._context.client.listPantry();
+      SyncEngine._log(`Got ${pantryItems.length.toString()} pantry items.`);
+
+      const cachedPantryItems = await this._context.cache.getAllPantryItems();
+      const cachedPantryUids = new Set(cachedPantryItems.map((item) => item.uid));
+      const incomingPantryUids = new Set(pantryItems.map((item) => item.uid));
+      const orphanPantryUids = [...cachedPantryUids].filter((uid) => !incomingPantryUids.has(uid));
+      const newPantryUids = [...incomingPantryUids].filter((uid) => !cachedPantryUids.has(uid));
+      const pantryHasChanges = orphanPantryUids.length > 0 || newPantryUids.length > 0;
+
+      await Promise.all(orphanPantryUids.map((uid) => this._context.cache.removePantryItem(uid)));
+      this._context.pantryStore.load(pantryItems);
+      for (const item of pantryItems) {
+        this._context.cache.putPantryItem(item);
+      }
+
+      if (orphanPantryUids.length > 0) {
+        SyncEngine._log(`Removed ${orphanPantryUids.length.toString()} orphan pantry items.`);
+      }
+
+      // 4. Finalization
       SyncEngine._log("Flushing cache to disk...");
       await this._context.cache.flush();
 
-      // Determine if recipe changes exist
-      const hasChanges = diff.added.length > 0 || diff.changed.length > 0 || diff.removed.length > 0;
+      // Determine if changes exist
+      const hasChanges =
+        diff.added.length > 0 || diff.changed.length > 0 || diff.removed.length > 0 || pantryHasChanges;
 
       // Send resource notification if changes exist
       if (hasChanges) {
