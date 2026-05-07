@@ -1,6 +1,6 @@
 # Caching Layer
 
-Last verified: 2026-03-11
+Last verified: 2026-05-06
 
 ## Files
 
@@ -70,6 +70,14 @@ Diagnostic messages are written directly to `process.stderr`.
 | `getCategory(uid)`            | `(uid: string): Promise<Category \| null>` | Returns pending entry or reads/validates from disk; `null` on miss |
 | `putCategory(category, hash)` | `(category: Category, hash: string): void` | Buffers to pending map; updates `_index` in memory; no file I/O    |
 
+**Pantry methods:**
+
+| Method                  | Signature                        | Description                                                                           |
+| ----------------------- | -------------------------------- | ------------------------------------------------------------------------------------- |
+| `putPantryItem(item)`   | `(item: PantryItem): void`       | Buffers to pending map; updates `_index.pantry[uid]` to empty string (no hash needed) |
+| `removePantryItem(uid)` | `(uid: string): Promise<void>`   | Deletes file (idempotent); removes from `_index.pantry` and pending map               |
+| `getAllPantryItems()`   | `(): Promise<Array<PantryItem>>` | Merges pending map with all `.json` files in `pantry/`; pending shadows disk          |
+
 **Diff methods (synchronous):**
 
 | Method                    | Signature                                             | Description                                                                      |
@@ -89,11 +97,12 @@ Diagnostic messages are written directly to `process.stderr`.
 
 ### DiskCache
 
-- `DiskCache` requires `init()` before `flush()`, `getAllRecipes()`, `putRecipe()`, `removeRecipe()`, `putCategory()`, `diffRecipes()`, or `diffCategories()` — calling any of these before `init()` throws
+- `DiskCache` requires `init()` before `flush()`, `getAllRecipes()`, `putRecipe()`, `removeRecipe()`, `putCategory()`, `putPantryItem()`, `removePantryItem()`, `getAllPantryItems()`, `diffRecipes()`, or `diffCategories()` — calling any of these before `init()` throws
 - `flush()` must be called after each batch of `put*()` calls to persist data to disk; until then, data lives only in memory and will be lost on restart
-- `getAllRecipes()` merges pending (not-yet-flushed) entries with disk files; pending entries shadow disk for the same UID
+- `getAllRecipes()` and `getAllPantryItems()` merge pending (not-yet-flushed) entries with disk files; pending entries shadow disk for the same UID
 - There is no `removeCategory()` or `getAllCategories()` — categories are always re-synced from the API; the cache only stores them for diffing
 - `diffRecipes()` and `diffCategories()` reflect `putRecipe()`/`putCategory()` calls immediately (before `flush()`) because `put*()` updates `_index` in memory
+- Pantry items use replace-all semantics (no diffPantryItems method); the `_index.pantry` field stores empty-string placeholders (no hash) for each UID
 
 ## Dependencies
 
