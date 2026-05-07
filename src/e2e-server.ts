@@ -21,10 +21,21 @@ import { registerCreateTool } from "./tools/create.js";
 import { registerUpdateTool } from "./tools/update.js";
 import { registerDeleteTool } from "./tools/delete.js";
 import { registerListTool } from "./tools/list.js";
+import { registerListPantryTool } from "./tools/pantry-list.js";
+import { registerGetPantryItemTool } from "./tools/pantry-get.js";
 import { registerRecipeResources } from "./resources/recipes.js";
+import { registerPantryResources } from "./resources/pantry.js";
 import { setupDiscoverFeature } from "./features/discover-feature.js";
 import type { ServerContext } from "./types/server-context.js";
-import type { Category, Recipe, RecipeEntry, RecipeUid, CategoryUid } from "./paprika/types.js";
+import type {
+  Category,
+  Recipe,
+  RecipeEntry,
+  RecipeUid,
+  CategoryUid,
+  PantryItem,
+  PantryItemUid,
+} from "./paprika/types.js";
 
 function log(msg: string): void {
   process.stderr.write(`[mcp-paprika-test] ${msg}\n`);
@@ -37,6 +48,7 @@ interface IMockPaprikaClient {
   getRecipe(uid: string): Promise<Recipe>;
   getRecipes(uids: ReadonlyArray<string>): Promise<Array<Recipe>>;
   listCategories(): Promise<Array<Category>>;
+  listPantry(): Promise<Array<PantryItem>>;
   saveRecipe(recipe: Readonly<Recipe>): Promise<Recipe>;
   deleteRecipe(uid: RecipeUid): Promise<void>;
   notifySync(): Promise<void>;
@@ -81,12 +93,30 @@ class MockPaprikaClient implements IMockPaprikaClient {
     parentUid: null,
   };
 
+  private mockPantryItem: PantryItem = {
+    uid: "pantry-1" as PantryItemUid,
+    ingredient: "Flour",
+    quantity: "2 lbs",
+    aisle: "Baking",
+    aisleUid: "aisle-1",
+    expirationDate: null,
+    hasExpiration: false,
+    inStock: true,
+    purchaseDate: null,
+    locationUid: null,
+    notes: null,
+  };
+
   getMockRecipe(): Recipe {
     return this.mockRecipe;
   }
 
   getMockCategory(): Category {
     return this.mockCategory;
+  }
+
+  getMockPantryItem(): PantryItem {
+    return this.mockPantryItem;
   }
 
   async authenticate(): Promise<void> {
@@ -107,6 +137,10 @@ class MockPaprikaClient implements IMockPaprikaClient {
 
   async listCategories(): Promise<Array<Category>> {
     return [this.mockCategory];
+  }
+
+  async listPantry(): Promise<Array<PantryItem>> {
+    return [this.mockPantryItem];
   }
 
   async saveRecipe(recipe: Readonly<Recipe>): Promise<Recipe> {
@@ -155,9 +189,10 @@ async function main(): Promise<void> {
   store.setCategories([client.getMockCategory()]);
   log(`Hydrated store with ${store.size} recipes.`);
 
-  // 5. Construct PantryStore
+  // 5. Construct PantryStore and hydrate with mock data
   const pantryStore = new PantryStore();
-  log("Initialized pantry store.");
+  pantryStore.load([client.getMockPantryItem()]);
+  log("Hydrated pantry store with mock data.");
 
   // 6. Construct McpServer
   const server = new McpServer({
@@ -183,17 +218,23 @@ async function main(): Promise<void> {
   registerCreateTool(server, ctx);
   registerUpdateTool(server, ctx);
   registerDeleteTool(server, ctx);
-  log("Registered 8 tools.");
+  registerListPantryTool(server, ctx);
+  registerGetPantryItemTool(server, ctx);
+  log("Registered 10 tools.");
 
   // 9. Register recipe resources
   registerRecipeResources(server, ctx);
   log("Registered recipe resources.");
 
-  // 10. Construct SyncEngine (but don't use real one, keep it minimal)
+  // 10. Register pantry resources
+  registerPantryResources(server, ctx);
+  log("Registered pantry resources.");
+
+  // 11. Construct SyncEngine (but don't use real one, keep it minimal)
   // For testing, we skip the sync engine to avoid background polling
   log("Sync engine disabled for E2E testing.");
 
-  // 11. Setup discover feature (if configured)
+  // 12. Setup discover feature (if configured)
   if (config.features?.embeddings) {
     log("Setting up discover feature...");
     // Mock SyncEngine for discover feature
@@ -205,13 +246,13 @@ async function main(): Promise<void> {
     log("Discover feature disabled (embeddings not configured).");
   }
 
-  // 12. Register SIGINT handler
+  // 13. Register SIGINT handler
   process.on("SIGINT", () => {
     log("SIGINT received, shutting down...");
     process.exit(0);
   });
 
-  // 13. Connect stdio transport
+  // 14. Connect stdio transport
   log("Connecting stdio transport...");
   await server.connect(new StdioServerTransport());
   log("Server ready.");
