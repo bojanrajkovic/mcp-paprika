@@ -622,4 +622,64 @@ describe("PaprikaClient", () => {
       expect(notifyReached).toBe(false);
     });
   });
+
+  describe("pantry-read.AC1: listPantry", () => {
+    function makeSnakeCasePantryItem(overrides?: Partial<object>): object {
+      return {
+        uid: "pantry-1",
+        ingredient: "Test Ingredient",
+        quantity: "1",
+        aisle: "Produce",
+        aisle_uid: "aisle-1",
+        expiration_date: null,
+        has_expiration: false,
+        in_stock: true,
+        purchase_date: "2026-01-01 00:00:00",
+        location_uid: null,
+        notes: null,
+        ...overrides,
+      };
+    }
+
+    it("pantry-read.AC1.5 - returns PantryItem[] with camelCase fields from /api/v2/sync/pantry/", async () => {
+      server.use(
+        http.get(`${API_BASE}/pantry/`, () => {
+          return HttpResponse.json({
+            result: [
+              makeSnakeCasePantryItem({ uid: "pantry-1" }),
+              makeSnakeCasePantryItem({ uid: "pantry-2", ingredient: "Another Item" }),
+            ],
+          });
+        }),
+      );
+
+      const client = new PaprikaClient("test@example.com", "password");
+      const pantryItems = await client.listPantry();
+
+      expect(pantryItems).toHaveLength(2);
+      expect(pantryItems[0]!.uid).toBe("pantry-1");
+      expect(pantryItems[0]!.ingredient).toBe("Test Ingredient");
+      expect(pantryItems[0]!.aisleUid).toBe("aisle-1");
+      expect(pantryItems[0]!.expirationDate).toBe(null);
+      expect(pantryItems[0]!.hasExpiration).toBe(false);
+      expect(pantryItems[0]!.inStock).toBe(true);
+      expect(pantryItems[0]!.purchaseDate).toBe("2026-01-01 00:00:00");
+      expect(pantryItems[0]!.locationUid).toBe(null);
+      expect(pantryItems[1]!.uid).toBe("pantry-2");
+      expect(pantryItems[1]!.ingredient).toBe("Another Item");
+    });
+
+    it("pantry-read.AC1.6 - returns [] when /api/v2/sync/pantry/ returns empty result", async () => {
+      server.use(
+        http.get(`${API_BASE}/pantry/`, () => {
+          return HttpResponse.json({ result: [] });
+        }),
+      );
+
+      const client = new PaprikaClient("test@example.com", "password");
+      const pantryItems = await client.listPantry();
+
+      expect(pantryItems).toStrictEqual([]);
+    });
+  });
 });
