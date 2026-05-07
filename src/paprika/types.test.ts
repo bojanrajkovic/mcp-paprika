@@ -647,6 +647,13 @@ describe("pantry-read.AC1: PantryItem types", () => {
 
       const result = PantryItemSchema.safeParse(wireItem);
       expect(result.success).toBe(true);
+
+      if (result.success) {
+        expect(result.data.expirationDate).toBe(null);
+        expect(result.data.purchaseDate).toBe(null);
+        expect(result.data.locationUid).toBe(null);
+        expect(result.data.notes).toBe(null);
+      }
     });
 
     it("should accept stored JSON with expirationDate: null", () => {
@@ -666,6 +673,13 @@ describe("pantry-read.AC1: PantryItem types", () => {
 
       const result = PantryItemStoredSchema.safeParse(storedItem);
       expect(result.success).toBe(true);
+
+      if (result.success) {
+        expect(result.data.expirationDate).toBe(null);
+        expect(result.data.purchaseDate).toBe(null);
+        expect(result.data.locationUid).toBe(null);
+        expect(result.data.notes).toBe(null);
+      }
     });
   });
 

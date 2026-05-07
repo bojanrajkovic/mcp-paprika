@@ -624,7 +624,21 @@ describe("PaprikaClient", () => {
   });
 
   describe("pantry-read.AC1: listPantry", () => {
-    function makeSnakeCasePantryItem(overrides?: Partial<object>): object {
+    type PantryItemWire = {
+      uid: string;
+      ingredient: string;
+      quantity: string;
+      aisle: string;
+      aisle_uid: string;
+      expiration_date: string | null;
+      has_expiration: boolean;
+      in_stock: boolean;
+      purchase_date: string | null;
+      location_uid: string | null;
+      notes: string | null;
+    };
+
+    function makeSnakeCasePantryItem(overrides?: Partial<PantryItemWire>): PantryItemWire {
       return {
         uid: "pantry-1",
         ingredient: "Test Ingredient",
