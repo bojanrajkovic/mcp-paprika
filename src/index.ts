@@ -5,6 +5,7 @@ import { PaprikaClient } from "./paprika/client.js";
 import { SyncEngine } from "./paprika/sync.js";
 import { DiskCache } from "./cache/disk-cache.js";
 import { RecipeStore } from "./cache/recipe-store.js";
+import { PantryStore } from "./cache/pantry-store.js";
 import { loadConfig } from "./utils/config.js";
 import { getCacheDir } from "./utils/xdg.js";
 import { registerSearchTool } from "./tools/search.js";
@@ -53,6 +54,14 @@ async function main(): Promise<void> {
   }
   log(`Hydrated store with ${cachedRecipes.length} cached recipes.`);
 
+  // 4b. Construct PantryStore and hydrate from cache
+  const pantryStore = new PantryStore();
+  const cachedPantryItems = await cache.getAllPantryItems();
+  if (cachedPantryItems.length > 0) {
+    pantryStore.load(cachedPantryItems);
+  }
+  log(`Hydrated pantry store with ${cachedPantryItems.length.toString()} cached pantry items.`);
+
   // 5. Construct McpServer
   const server = new McpServer({
     name: "mcp-paprika",
@@ -64,6 +73,7 @@ async function main(): Promise<void> {
     client,
     cache,
     store,
+    pantryStore,
     server,
   };
 
