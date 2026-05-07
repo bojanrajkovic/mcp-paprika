@@ -17,7 +17,7 @@ export function makeTestServer(): {
   server: McpServer;
   callTool: (name: string, args: Record<string, unknown>) => Promise<CallToolResult>;
   callResourceList: (name: string) => Promise<unknown>;
-  callResource: (name: string, uid: string) => Promise<unknown>;
+  callResource: (name: string, uid: string, uri?: string) => Promise<unknown>;
   sendResourceListChanged: ReturnType<typeof vi.fn>;
 } {
   const handlers = new Map<string, (args: Record<string, unknown>) => Promise<CallToolResult>>();
@@ -55,11 +55,11 @@ export function makeTestServer(): {
       if (!entry.list) throw new Error(`Resource has no list callback: ${name}`);
       return entry.list();
     },
-    callResource: (name, uid) => {
+    callResource: (name, uid, uri) => {
       const entry = resourceHandlers.get(name);
       if (!entry) throw new Error(`Resource not registered: ${name}`);
-      const uri = new URL(`paprika://recipe/${uid}`);
-      return entry.read(uri, { uid } as Record<string, string | string[]>);
+      const url = new URL(uri ?? `paprika://recipe/${uid}`);
+      return entry.read(url, { uid } as Record<string, string | string[]>);
     },
     sendResourceListChanged,
   };
