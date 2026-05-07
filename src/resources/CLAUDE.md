@@ -1,6 +1,6 @@
 # MCP Resource Definitions
 
-Last verified: 2026-03-17
+Last verified: 2026-05-07
 
 ## Purpose
 
@@ -16,6 +16,15 @@ Registers the `paprika://recipe/{uid}` resource template with list and read call
 
 - **List callback:** Returns all non-trashed recipes with `uri: "paprika://recipe/{uid}"`, `name: recipe.name`, and `mimeType: "text/markdown"` for each. Returns `{ resources: [] }` when store is empty.
 - **Read callback:** Returns a recipe as markdown with a UID header (`**UID:** \`{uid}\``) prepended. Category UIDs are resolved to display names. Throws an error if the UID does not exist.
+
+### Pantry Resources
+
+**Function:** `registerPantryResources(server: McpServer, ctx: ServerContext): void`
+
+Registers the `paprika://pantry/{uid}` resource template with list and read callbacks:
+
+- **List callback:** Returns all pantry items with `uri: "paprika://pantry/{uid}"`, `name: item.ingredient`, and `mimeType: "text/markdown"` for each. Returns `{ resources: [] }` when store is empty.
+- **Read callback:** Returns a pantry item as markdown formatted by `pantryItemToMarkdown()`. The markdown includes ingredient, UID, in-stock status, and optional fields (quantity, aisle, expiration date, purchase date, notes). Throws an error if the UID does not exist.
 
 ## Dependencies
 

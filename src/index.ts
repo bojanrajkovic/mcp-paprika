@@ -19,6 +19,7 @@ import { registerListTool } from "./tools/list.js";
 import { registerListPantryTool } from "./tools/pantry-list.js";
 import { registerGetPantryItemTool } from "./tools/pantry-get.js";
 import { registerRecipeResources } from "./resources/recipes.js";
+import { registerPantryResources } from "./resources/pantry.js";
 import { setupDiscoverFeature } from "./features/discover-feature.js";
 import type { ServerContext } from "./types/server-context.js";
 
@@ -95,6 +96,9 @@ async function main(): Promise<void> {
   // 8. Register recipe resources
   registerRecipeResources(server, ctx);
   log("Registered recipe resources.");
+
+  registerPantryResources(server, ctx);
+  log("Registered pantry resources.");
 
   // 9. Construct SyncEngine, run initial sync, then start background loop
   const sync = new SyncEngine(ctx, config.sync.interval);
