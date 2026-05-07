@@ -99,6 +99,9 @@ describe("Sync → Tool Pipeline Integration", () => {
         http.get(`${API_BASE}/categories/`, () => {
           return HttpResponse.json({ result: [] });
         }),
+        http.get(`${API_BASE}/pantry/`, () => {
+          return HttpResponse.json({ result: [] });
+        }),
       );
 
       // Create real instances
@@ -193,6 +196,9 @@ describe("Sync → Tool Pipeline Integration", () => {
         http.get(`${API_BASE}/categories/`, () => {
           return HttpResponse.json({ result: [] });
         }),
+        http.get(`${API_BASE}/pantry/`, () => {
+          return HttpResponse.json({ result: [] });
+        }),
       );
 
       // Setup
@@ -253,6 +259,9 @@ describe("Sync → Tool Pipeline Integration", () => {
           return HttpResponse.json({ result: recipe });
         }),
         http.get(`${API_BASE}/categories/`, () => {
+          return HttpResponse.json({ result: [] });
+        }),
+        http.get(`${API_BASE}/pantry/`, () => {
           return HttpResponse.json({ result: [] });
         }),
       );
@@ -336,6 +345,9 @@ describe("Sync → Tool Pipeline Integration", () => {
             ],
           });
         }),
+        http.get(`${API_BASE}/pantry/`, () => {
+          return HttpResponse.json({ result: [] });
+        }),
       );
 
       // Setup and sync
@@ -410,6 +422,9 @@ describe("Sync → Tool Pipeline Integration", () => {
           return HttpResponse.json({ result: recipe });
         }),
         http.get(`${API_BASE}/categories/`, () => {
+          return HttpResponse.json({ result: [] });
+        }),
+        http.get(`${API_BASE}/pantry/`, () => {
           return HttpResponse.json({ result: [] });
         }),
       );
