@@ -2,6 +2,8 @@ import { vi } from "vitest";
 import type { ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+
+import { PantryStore } from "../cache/pantry-store.js";
 import type { RecipeStore } from "../cache/recipe-store.js";
 import type { ServerContext } from "../types/server-context.js";
 
@@ -76,14 +78,14 @@ export function makeTestServer(): {
 export function makeCtx(
   store: RecipeStore,
   server: McpServer,
-  overrides: Partial<Pick<ServerContext, "client" | "cache">> = {},
+  overrides: Partial<Pick<ServerContext, "client" | "cache" | "pantryStore">> = {},
 ): ServerContext {
   return {
     store,
     server,
-    client: {} as unknown as ServerContext["client"],
-    cache: {} as unknown as ServerContext["cache"],
-    ...overrides,
+    pantryStore: overrides.pantryStore ?? new PantryStore(),
+    client: overrides.client ?? ({} as unknown as ServerContext["client"]),
+    cache: overrides.cache ?? ({} as unknown as ServerContext["cache"]),
   } satisfies ServerContext;
 }
 
