@@ -647,6 +647,12 @@ describe("DiskCache", () => {
       const allItems = await cache.getAllPantryItems();
       expect(allItems).toHaveLength(0);
 
+      // Verify the pantry index entry is removed from disk
+      await cache.flush();
+      const indexContent = await readFile(join(tempDir, "index.json"), "utf-8");
+      const parsedIndex: { pantry?: Record<string, string> } = JSON.parse(indexContent);
+      expect(parsedIndex.pantry).not.toHaveProperty(item.uid);
+
       // Test removing from pending (not flushed): put then remove without flush
       const pendingItem = makePantryItem();
       cache.putPantryItem(pendingItem);
