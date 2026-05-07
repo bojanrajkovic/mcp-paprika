@@ -74,7 +74,7 @@ Utilities imported by recipe tool handlers from `./helpers.js`.
 Utilities imported by pantry tool handlers from `./pantry-helpers.js`.
 
 - **`pantryStartGuard(ctx)`** -- Returns `Ok<void>` when pantry is synced, `Err<CallToolResult>` when not yet synced. Always use `.match()` to handle both branches.
-- **`pantryItemToMarkdown(item)`** -- Renders a pantry item as markdown with ingredient, UID, quantity, aisle, dates, note, and source recipe fields (omits empty fields).
+- **`pantryItemToMarkdown(item)`** -- Renders a pantry item as markdown with ingredient, UID, and in-stock status (always rendered) plus quantity, aisle, expiration date, purchase date, and notes when present (omits empty strings and `null` optional fields).
 
 ## Testing (`tool-test-utils.ts`)
 
