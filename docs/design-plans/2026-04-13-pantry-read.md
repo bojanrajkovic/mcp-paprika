@@ -15,6 +15,7 @@ Write support (`add_pantry_item`, `update_pantry_item`, `delete_pantry_item`) is
 ## Acceptance Criteria
 
 ### pantry-read.AC1: Types and Client
+
 - **pantry-read.AC1.1 Success:** Snake_case wire JSON parsed through `PantryItemSchema` produces camelCase `PantryItem` with all fields correctly transformed
 - **pantry-read.AC1.2 Success:** CamelCase JSON validates through `PantryItemStoredSchema` without transformation (disk round-trip)
 - **pantry-read.AC1.3 Success:** `PantryItemUidSchema` produces branded `PantryItemUid` type
@@ -24,6 +25,7 @@ Write support (`add_pantry_item`, `update_pantry_item`, `delete_pantry_item`) is
 - **pantry-read.AC1.7 Failure:** Malformed wire JSON rejected by `PantryItemSchema` (missing required field)
 
 ### pantry-read.AC2: PantryStore
+
 - **pantry-read.AC2.1 Success:** `load()` populates store and sets `hasSynced` to `true`
 - **pantry-read.AC2.2 Success:** `load()` with empty array sets `hasSynced` to `true` (empty pantry is valid)
 - **pantry-read.AC2.3 Success:** `get(uid)` returns item for known UID, `undefined` for unknown
@@ -36,6 +38,7 @@ Write support (`add_pantry_item`, `update_pantry_item`, `delete_pantry_item`) is
 - **pantry-read.AC2.10 Edge:** `hasSynced` is `false` before any `load()` call
 
 ### pantry-read.AC3: DiskCache Extensions
+
 - **pantry-read.AC3.1 Success:** `init()` creates `pantry/` subdirectory
 - **pantry-read.AC3.2 Success:** `putPantryItem()` + `flush()` writes JSON file to `pantry/` directory
 - **pantry-read.AC3.3 Success:** `getAllPantryItems()` returns items from pending buffer and disk, pending shadows disk
@@ -44,6 +47,7 @@ Write support (`add_pantry_item`, `update_pantry_item`, `delete_pantry_item`) is
 - **pantry-read.AC3.6 Edge:** Existing `index.json` without `pantry` key loads cleanly via `.default({})`
 
 ### pantry-read.AC4: Sync Engine Integration
+
 - **pantry-read.AC4.1 Success:** `syncOnce()` populates `PantryStore` via `load()` with items from API
 - **pantry-read.AC4.2 Success:** `syncOnce()` writes all pantry items to `DiskCache`
 - **pantry-read.AC4.3 Success:** Orphan pantry files (cached but not in API response) are removed from disk and index
@@ -53,6 +57,7 @@ Write support (`add_pantry_item`, `update_pantry_item`, `delete_pantry_item`) is
 - **pantry-read.AC4.7 Failure:** `syncOnce()` does not throw when `listPantry()` fails (error logged and emitted)
 
 ### pantry-read.AC5: Read Tools
+
 - **pantry-read.AC5.1 Success:** `list_pantry` returns markdown table sorted alphabetically by ingredient
 - **pantry-read.AC5.2 Success:** `list_pantry` returns friendly message for empty pantry
 - **pantry-read.AC5.3 Success:** `get_pantry_item` by UID returns full item details as markdown
@@ -63,6 +68,7 @@ Write support (`add_pantry_item`, `update_pantry_item`, `delete_pantry_item`) is
 - **pantry-read.AC5.8 Failure:** `get_pantry_item` with neither `uid` nor `ingredient` is rejected by input validation
 
 ### pantry-read.AC6: MCP Resource
+
 - **pantry-read.AC6.1 Success:** List callback returns all pantry items with URI, name, and mimeType
 - **pantry-read.AC6.2 Success:** Read callback returns pantry item formatted as markdown for known UID
 - **pantry-read.AC6.3 Failure:** Read callback throws for unknown UID
@@ -137,11 +143,13 @@ This design follows established patterns found in the codebase:
 ## Implementation Phases
 
 <!-- START_PHASE_1 -->
+
 ### Phase 1: Types and Client
 
 **Goal:** Define pantry item types and add the API read method.
 
 **Components:**
+
 - `PantryItemUidSchema`, `PantryItemStoredSchema`, `PantryItemSchema`, `PantryItem` type in `src/paprika/types.ts`
 - `PaprikaClient.listPantry()` in `src/paprika/client.ts`
 - `makePantryItem()` test fixture in `src/cache/__fixtures__/pantry.ts`
@@ -151,28 +159,34 @@ This design follows established patterns found in the codebase:
 **Dependencies:** None (first phase)
 
 **Done when:** Wire→stored transform works, `listPantry()` parses mock API responses, `pnpm build` and `pnpm test` pass. Covers `pantry-read.AC1.*`.
+
 <!-- END_PHASE_1 -->
 
 <!-- START_PHASE_2 -->
+
 ### Phase 2: PantryStore
 
 **Goal:** In-memory query layer for pantry items with cold start detection.
 
 **Components:**
+
 - `PantryStore` class in `src/cache/pantry-store.ts` — `load()`, `get()`, `getAll()`, `set()`, `delete()`, `size`, `hasSynced`, `findByIngredient()`
 - Tests in `src/cache/pantry-store.test.ts`
 
 **Dependencies:** Phase 1 (uses `PantryItem` and `PantryItemUid` types)
 
 **Done when:** All CRUD operations work, `hasSynced` flag behaves correctly, `findByIngredient` returns correct tier results (exact > startsWith > includes), `pnpm build` and `pnpm test` pass. Covers `pantry-read.AC2.*`.
+
 <!-- END_PHASE_2 -->
 
 <!-- START_PHASE_3 -->
+
 ### Phase 3: DiskCache Extensions
 
 **Goal:** Persistent storage for pantry items with backwards-compatible index.
 
 **Components:**
+
 - `CacheIndexSchema` extended with `pantry` field in `src/cache/disk-cache.ts`
 - `_pantryDir` subdirectory and `_pendingPantryItems` buffer in `DiskCache`
 - `putPantryItem()`, `removePantryItem()`, `getAllPantryItems()` methods in `DiskCache`
@@ -183,14 +197,17 @@ This design follows established patterns found in the codebase:
 **Dependencies:** Phase 1 (uses `PantryItem` type and `PantryItemStoredSchema`)
 
 **Done when:** Pantry items persist to disk, pending buffer shadows disk reads, orphan removal works, existing `index.json` without `pantry` key loads cleanly, `pnpm build` and `pnpm test` pass. Covers `pantry-read.AC3.*`.
+
 <!-- END_PHASE_3 -->
 
 <!-- START_PHASE_4 -->
+
 ### Phase 4: Sync Engine, ServerContext, and Index Wiring
 
 **Goal:** Connect pantry sync to the background refresh loop and wire everything together.
 
 **Components:**
+
 - Pantry sync path in `SyncEngine.syncOnce()` in `src/paprika/sync.ts` — replace-all with orphan cleanup
 - `pantryStore: PantryStore` field added to `ServerContext` in `src/types/server-context.ts`
 - `PantryStore` instantiation and hydration in `src/index.ts`
@@ -200,14 +217,17 @@ This design follows established patterns found in the codebase:
 **Dependencies:** Phases 1-3 (client, store, cache all required)
 
 **Done when:** `syncOnce()` populates `PantryStore` and `DiskCache` with pantry items, orphan files are cleaned up, `sendResourceListChanged()` fires on pantry changes, `pantryStore.hasSynced` is `true` after sync, `pnpm build` and `pnpm test` pass. Covers `pantry-read.AC4.*`.
+
 <!-- END_PHASE_4 -->
 
 <!-- START_PHASE_5 -->
+
 ### Phase 5: Read Tools
 
 **Goal:** MCP tools for listing and looking up pantry items.
 
 **Components:**
+
 - `pantryStartGuard()` and `pantryItemToMarkdown()` in `src/tools/pantry-helpers.ts`
 - `registerListPantryTool()` in `src/tools/pantry-list.ts`
 - `registerGetPantryItemTool()` in `src/tools/pantry-get.ts`
@@ -217,14 +237,17 @@ This design follows established patterns found in the codebase:
 **Dependencies:** Phases 2 and 4 (PantryStore and ServerContext wiring)
 
 **Done when:** `list_pantry` returns sorted markdown table, `get_pantry_item` finds by UID or fuzzy ingredient name with disambiguation, `pantryStartGuard` blocks calls before sync, `pnpm build` and `pnpm test` pass. Covers `pantry-read.AC5.*`.
+
 <!-- END_PHASE_5 -->
 
 <!-- START_PHASE_6 -->
+
 ### Phase 6: MCP Resource
 
 **Goal:** Expose pantry items as browsable MCP resources.
 
 **Components:**
+
 - `registerPantryResources()` in `src/resources/pantry.ts`
 - Resource registration in `src/index.ts`
 - Tests in `src/resources/pantry.test.ts`
@@ -232,6 +255,7 @@ This design follows established patterns found in the codebase:
 **Dependencies:** Phase 4 (ServerContext with pantryStore)
 
 **Done when:** `paprika://pantry/{uid}` lists all pantry items and returns individual item details by UID, `pnpm build` and `pnpm test` pass. Covers `pantry-read.AC6.*`.
+
 <!-- END_PHASE_6 -->
 
 ## Additional Considerations
@@ -246,11 +270,11 @@ This design follows established patterns found in the codebase:
 
 ## Documents to Update
 
-| Document | Change |
-|----------|--------|
-| `CLAUDE.md` (root) | Add pantry tools and resource to project structure |
-| `src/paprika/CLAUDE.md` | Add `PantryItem` types, `listPantry()` client method, pantry sync path |
-| `src/cache/CLAUDE.md` | Add `PantryStore` contract, `DiskCache` pantry methods |
-| `src/tools/CLAUDE.md` | Add `list_pantry` and `get_pantry_item` tool entries, `pantryStartGuard` helper |
-| `src/resources/CLAUDE.md` | Add `paprika://pantry/{uid}` resource |
-| `src/types/CLAUDE.md` | Add `pantryStore` field to `ServerContext` |
+| Document                  | Change                                                                          |
+| ------------------------- | ------------------------------------------------------------------------------- |
+| `CLAUDE.md` (root)        | Add pantry tools and resource to project structure                              |
+| `src/paprika/CLAUDE.md`   | Add `PantryItem` types, `listPantry()` client method, pantry sync path          |
+| `src/cache/CLAUDE.md`     | Add `PantryStore` contract, `DiskCache` pantry methods                          |
+| `src/tools/CLAUDE.md`     | Add `list_pantry` and `get_pantry_item` tool entries, `pantryStartGuard` helper |
+| `src/resources/CLAUDE.md` | Add `paprika://pantry/{uid}` resource                                           |
+| `src/types/CLAUDE.md`     | Add `pantryStore` field to `ServerContext`                                      |
