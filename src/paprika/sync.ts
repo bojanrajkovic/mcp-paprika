@@ -2,7 +2,23 @@ import { scheduler } from "node:timers/promises";
 import { createRequire } from "node:module";
 
 import type { ServerContext } from "../types/server-context.js";
-import type { Recipe, RecipeUid, SyncResult } from "./types.js";
+import type { PantryItem, Recipe, RecipeUid, SyncResult } from "./types.js";
+
+function pantryItemsEqual(a: PantryItem, b: PantryItem): boolean {
+  return (
+    a.uid === b.uid &&
+    a.ingredient === b.ingredient &&
+    a.quantity === b.quantity &&
+    a.aisle === b.aisle &&
+    a.aisleUid === b.aisleUid &&
+    a.expirationDate === b.expirationDate &&
+    a.hasExpiration === b.hasExpiration &&
+    a.inStock === b.inStock &&
+    a.purchaseDate === b.purchaseDate &&
+    a.locationUid === b.locationUid &&
+    a.notes === b.notes
+  );
+}
 
 type SyncEvents = {
   "sync:complete": SyncResult;
@@ -111,7 +127,16 @@ export class SyncEngine {
       const incomingPantryUids = new Set(pantryItems.map((item) => item.uid));
       const orphanPantryUids = [...cachedPantryUids].filter((uid) => !incomingPantryUids.has(uid));
       const newPantryUids = [...incomingPantryUids].filter((uid) => !cachedPantryUids.has(uid));
-      const pantryHasChanges = orphanPantryUids.length > 0 || newPantryUids.length > 0;
+      const cachedPantryByUid = new Map(cachedPantryItems.map((item) => [item.uid, item]));
+      // Pantry items have no hash field, so detect content edits to existing UIDs
+      // (quantity/notes/in-stock/etc.) by field-wise comparison; without this, MCP
+      // clients would see stale resource content until an add or remove triggered
+      // a notification.
+      const updatedPantryUids = pantryItems.filter((incoming) => {
+        const cached = cachedPantryByUid.get(incoming.uid);
+        return cached !== undefined && !pantryItemsEqual(cached, incoming);
+      });
+      const pantryHasChanges = orphanPantryUids.length > 0 || newPantryUids.length > 0 || updatedPantryUids.length > 0;
 
       await Promise.all(orphanPantryUids.map((uid) => this._context.cache.removePantryItem(uid)));
       this._context.pantryStore.load(pantryItems);

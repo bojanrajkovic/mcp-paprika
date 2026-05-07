@@ -148,6 +148,7 @@ Background polling loop that keeps local cache and in-memory store synchronized 
    - Fetches all pantry items: `client.listPantry()` → fully hydrated `Array<PantryItem>`
    - Computes orphan UIDs (cached but not in API response) via Set difference: `cachedUids - incomingUids`
    - Computes new UIDs (in API response but not cached): `incomingUids - cachedUids`
+   - Computes updated UIDs (UID present in both sets, but field-wise content differs) via `pantryItemsEqual()` — pantry items have no hash field, so content edits to existing UIDs (quantity, in-stock, notes, etc.) are detected by direct field comparison
    - Removes orphans concurrently: `Promise.all(orphanUids.map(uid => cache.removePantryItem(uid)))`
    - Loads all items into store (unconditionally): `pantryStore.load(pantryItems)` (sets `hasSynced = true` even when empty)
    - Writes each item to cache: `cache.putPantryItem(item)` for all items (even unchanged ones, ensuring updates propagate)
@@ -170,7 +171,7 @@ Background polling loop that keeps local cache and in-memory store synchronized 
 - `syncOnce()` never throws — errors are caught, logged, and emitted as events
 - `start()` when already running is a no-op (no duplicate loops via `_ac` check)
 - `stop()` when not running is a no-op (no-op if `_ac` is null)
-- Recipe or pantry changes (any added/changed/removed/orphaned > 0) trigger `sendResourceListChanged()`; no-change cycles do not
+- Recipe or pantry changes trigger `sendResourceListChanged()`; no-change cycles do not. Recipe changes are detected via `diffRecipes` (hash-based: `added`, `changed`, `removed`); pantry changes are detected via Set difference for added/orphaned UIDs and `pantryItemsEqual()` for same-UID content edits
 - Cache is flushed exactly once per cycle (single `await cache.flush()` after all mutations)
 - Removed recipes are deleted concurrently via `Promise.all()` for efficiency
 - Orphaned pantry items are deleted concurrently via `Promise.all()` for efficiency

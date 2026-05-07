@@ -7,7 +7,7 @@ import type { RecipeStore } from "../cache/recipe-store.js";
 import type { PaprikaClient } from "./client.js";
 import type { DiskCache } from "../cache/disk-cache.js";
 import type { PantryStore } from "../cache/pantry-store.js";
-import type { RecipeEntry, RecipeUid, SyncResult } from "./types.js";
+import type { PantryItemUid, RecipeEntry, RecipeUid, SyncResult } from "./types.js";
 import { makeRecipe, makeCategory } from "../cache/__fixtures__/recipes.js";
 import { makePantryItem } from "../cache/__fixtures__/pantry.js";
 import { PantryStore as RealPantryStore } from "../cache/pantry-store.js";
@@ -769,6 +769,36 @@ describe("syncOnce", () => {
 
       await engine2.syncOnce();
       expect(sendResourceListChanged2).not.toHaveBeenCalled();
+    });
+
+    it("pantry-read.AC4.4 Success: sendResourceListChanged fires when same-UID pantry item content changes", async () => {
+      const sharedUid = "uid-shared" as PantryItemUid;
+      const cachedItem = makePantryItem({ uid: sharedUid, ingredient: "Old Ingredient", quantity: "1" });
+      const incomingItem = makePantryItem({
+        uid: sharedUid,
+        ingredient: "Old Ingredient",
+        quantity: "2",
+      });
+
+      const sendResourceListChanged = vi.fn();
+
+      const engine = makeSyncEngine(
+        {
+          listRecipes: vi.fn().mockResolvedValue([]),
+          listPantry: vi.fn().mockResolvedValue([incomingItem]),
+        },
+        {
+          diffRecipes: vi.fn().mockReturnValue({ added: [], changed: [], removed: [] }),
+          getAllPantryItems: vi.fn().mockResolvedValue([cachedItem]),
+        },
+        undefined,
+        {
+          sendResourceListChanged,
+        },
+      );
+
+      await engine.syncOnce();
+      expect(sendResourceListChanged).toHaveBeenCalledOnce();
     });
 
     it("pantry-read.AC4.5 Success: REAL PantryStore hasSynced flips to true after sync", async () => {
