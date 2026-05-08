@@ -134,11 +134,8 @@ describe("pantry-mutations.AC6: delete_pantry_item tool", () => {
     });
     const text = getText(result);
 
-    // Idempotent retry-friendly message: covers both "never created" and
-    // "already deleted" cases since after a successful delete the item is
-    // removed from the local store and we can't distinguish the two.
-    expect(text).toContain("No pantry item present");
-    expect(text).toContain("never created or has already been deleted");
+    // Genuine unknown-UID case: not in items, not in tombstone set.
+    expect(text).toContain("No pantry item found");
     expect(mockSavePantryItem).not.toHaveBeenCalled();
     expect(mockRemovePantryItem).not.toHaveBeenCalled();
     expect(pantryStore.size).toBe(0);
@@ -217,5 +214,51 @@ describe("pantry-mutations.AC6: delete_pantry_item tool", () => {
     const after = pantryStore.get("uid-1" as PantryItemUid);
     expect(after).toBeDefined();
     expect(after?.deleted).toBe(false);
+  });
+
+  it("pantry-mutations.AC6.2-retry: production retry path — second call after successful delete returns 'already deleted'", async () => {
+    // Codex P2 fix: in the production flow, commitPantryItem's delete branch
+    // calls pantryStore.delete(uid), so the item is removed from the live
+    // items map. Without a tombstone tracker, a retried delete would hit the
+    // `!existing` branch and return "No pantry item found" — indistinguishable
+    // from a genuinely invalid UID. Verifying the tombstone-aware path here.
+    const store = new RecipeStore();
+    const pantryStore = new PantryStore();
+    pantryStore.load([
+      makePantryItem({
+        uid: "uid-retry" as PantryItemUid,
+        ingredient: "Butter",
+        deleted: false,
+      }),
+    ]);
+    // Simulate the post-commit state: pantryStore.delete() was called, which
+    // both removes from items AND records a tombstone.
+    pantryStore.delete("uid-retry" as PantryItemUid);
+
+    const mockSavePantryItem = vi.fn();
+    const mockNotifySync = vi.fn().mockResolvedValue(undefined);
+    const mockPutPantryItem = vi.fn();
+    const mockRemovePantryItem = vi.fn().mockResolvedValue(undefined);
+    const mockFlush = vi.fn().mockResolvedValue(undefined);
+
+    const { server, callTool } = makeTestServer();
+    const ctx = makeCtx(store, server, {
+      pantryStore,
+      client: { savePantryItem: mockSavePantryItem, notifySync: mockNotifySync } as unknown as PaprikaClient,
+      cache: {
+        putPantryItem: mockPutPantryItem,
+        removePantryItem: mockRemovePantryItem,
+        flush: mockFlush,
+      } as unknown as DiskCache,
+    });
+    registerDeletePantryItemTool(server, ctx);
+
+    const result = await callTool("delete_pantry_item", { uid: "uid-retry" });
+    const text = getText(result);
+
+    expect(text).toContain("already deleted");
+    expect(text).toContain("uid-retry");
+    expect(mockSavePantryItem).not.toHaveBeenCalled();
+    expect(mockRemovePantryItem).not.toHaveBeenCalled();
   });
 });

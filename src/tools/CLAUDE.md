@@ -21,16 +21,16 @@ Purpose: Defines MCP tools that AI assistants can invoke. Each tool file exports
 
 ### CRUD Tools
 
-| Tool                 | File               | Description                                                                                                    |
-| -------------------- | ------------------ | -------------------------------------------------------------------------------------------------------------- |
-| `read_recipe`        | `read.ts`          | Fetch recipe by UID or title (exact/prefix/contains match)                                                     |
-| `create_recipe`      | `create.ts`        | Create a new recipe with name, ingredients, directions, and optional fields                                    |
-| `update_recipe`      | `update.ts`        | Update existing recipe — partial merge, categories fully replace when provided                                 |
-| `delete_recipe`      | `delete.ts`        | Soft-delete recipe by UID (moves to trash, reversible in Paprika app)                                          |
-| `get_pantry_item`    | `pantry-get.ts`    | Fetch pantry item by UID or ingredient (fuzzy match, with disambiguation)                                      |
-| `add_pantry_item`    | `pantry-add.ts`    | Add a new pantry item; rejects duplicate ingredients (case-insensitive exact match) with the existing UID      |
-| `update_pantry_item` | `pantry-update.ts` | Update existing pantry item — partial merge; `hasExpiration` is auto-derived when `expirationDate` is provided |
-| `delete_pantry_item` | `pantry-delete.ts` | Soft-delete pantry item by UID; idempotent — repeated calls return a retry-friendly "no item present" message  |
+| Tool                 | File               | Description                                                                                                       |
+| -------------------- | ------------------ | ----------------------------------------------------------------------------------------------------------------- |
+| `read_recipe`        | `read.ts`          | Fetch recipe by UID or title (exact/prefix/contains match)                                                        |
+| `create_recipe`      | `create.ts`        | Create a new recipe with name, ingredients, directions, and optional fields                                       |
+| `update_recipe`      | `update.ts`        | Update existing recipe — partial merge, categories fully replace when provided                                    |
+| `delete_recipe`      | `delete.ts`        | Soft-delete recipe by UID (moves to trash, reversible in Paprika app)                                             |
+| `get_pantry_item`    | `pantry-get.ts`    | Fetch pantry item by UID or ingredient (fuzzy match, with disambiguation)                                         |
+| `add_pantry_item`    | `pantry-add.ts`    | Add a new pantry item; rejects duplicate ingredients (case-insensitive exact match) with the existing UID         |
+| `update_pantry_item` | `pantry-update.ts` | Update existing pantry item — partial merge; `hasExpiration` is auto-derived when `expirationDate` is provided    |
+| `delete_pantry_item` | `pantry-delete.ts` | Soft-delete pantry item by UID; idempotent — retried calls return "already deleted" via the store's tombstone set |
 
 ## Registration Pattern
 

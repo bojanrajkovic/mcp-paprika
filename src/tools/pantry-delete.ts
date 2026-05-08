@@ -24,22 +24,21 @@ export function registerDeletePantryItemTool(server: McpServer, ctx: ServerConte
           const existing = ctx.pantryStore.get(uid);
 
           if (!existing) {
-            // Idempotent retry path: a successful prior delete removes the item
-            // from the local store (commitPantryItem's delete branch calls
-            // pantryStore.delete). We can't distinguish "never created" from
-            // "already deleted" without an extra round-trip, so the message
-            // covers both — either way the caller's retry is safe and no
-            // server state changes.
-            return textResult(
-              `No pantry item present with UID "${args.uid}". The item was either never created or has already been deleted; no action taken.`,
-            );
+            // Distinguish "I deleted this in this session" (tombstone) from
+            // "never existed". The store's tombstone set tracks UIDs deleted
+            // via this client since the last sync; a retried delete on a
+            // previously-deleted UID returns the idempotent "already deleted"
+            // signal callers expect.
+            if (ctx.pantryStore.isTombstone(uid)) {
+              return textResult(`Pantry item with UID "${args.uid}" is already deleted.`);
+            }
+            return textResult(`No pantry item found with UID "${args.uid}".`);
           }
 
           if (existing.deleted) {
-            // This branch fires only when a tombstone is observed in the store,
-            // which currently happens only in tests (production flow removes the
-            // item entirely on commit). Kept for defense-in-depth in case the
-            // store later starts retaining tombstones.
+            // Defense-in-depth: if a tombstone ever lands in the items map
+            // (e.g., from a future sync that returns deleted items), still
+            // report it as already-deleted rather than re-saving.
             return textResult(`Pantry item "${existing.ingredient}" is already deleted.`);
           }
 

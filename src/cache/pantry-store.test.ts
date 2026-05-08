@@ -135,4 +135,50 @@ describe("PantryStore", () => {
       expect(store.hasSynced).toBe(false);
     });
   });
+
+  describe("tombstone tracking (idempotent delete support)", () => {
+    it("delete() of a present item records the UID in the tombstone set", () => {
+      const item = makePantryItem({ uid: "uid-1" as PantryItemUid });
+      store.load([item]);
+      expect(store.isTombstone("uid-1" as PantryItemUid)).toBe(false);
+
+      store.delete("uid-1" as PantryItemUid);
+
+      expect(store.get("uid-1" as PantryItemUid)).toBeUndefined();
+      expect(store.isTombstone("uid-1" as PantryItemUid)).toBe(true);
+    });
+
+    it("delete() of an absent UID does NOT add a spurious tombstone", () => {
+      // Avoids treating "delete unknown UID" as if we'd successfully soft-deleted it.
+      store.load([]);
+
+      store.delete("uid-never-existed" as PantryItemUid);
+
+      expect(store.isTombstone("uid-never-existed" as PantryItemUid)).toBe(false);
+    });
+
+    it("set() of a previously-tombstoned UID clears the tombstone (resurrection)", () => {
+      const item = makePantryItem({ uid: "uid-1" as PantryItemUid });
+      store.load([item]);
+      store.delete("uid-1" as PantryItemUid);
+      expect(store.isTombstone("uid-1" as PantryItemUid)).toBe(true);
+
+      store.set(item);
+
+      expect(store.isTombstone("uid-1" as PantryItemUid)).toBe(false);
+      expect(store.get("uid-1" as PantryItemUid)).toEqual(item);
+    });
+
+    it("load() clears the tombstone set (sync snapshot is authoritative)", () => {
+      const item = makePantryItem({ uid: "uid-1" as PantryItemUid });
+      store.load([item]);
+      store.delete("uid-1" as PantryItemUid);
+      expect(store.isTombstone("uid-1" as PantryItemUid)).toBe(true);
+
+      // Next sync arrives — the server's view replaces local in-session state.
+      store.load([]);
+
+      expect(store.isTombstone("uid-1" as PantryItemUid)).toBe(false);
+    });
+  });
 });
