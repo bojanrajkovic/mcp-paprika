@@ -1,6 +1,6 @@
 # Paprika API Client
 
-Last verified: 2026-05-07
+Last verified: 2026-05-08
 
 ## Files
 
@@ -90,18 +90,24 @@ Typed HTTP client wrapping the Paprika Cloud Sync API.
 - `listCategories(): Promise<Array<Category>>` — fetches category list, then hydrates each with bulkhead(5) concurrency limit independent of recipe bulkhead
 - `listPantry(): Promise<Array<PantryItem>>` — fetches fully-hydrated pantry items from `/api/v2/sync/pantry/` (no entry/detail split; all items are complete objects)
 - `saveRecipe(recipe: Readonly<Recipe>): Promise<Recipe>` — serializes recipe to camelCase-to-snake_case JSON, gzip-compresses, POSTs as `FormData` with `data.gz` attachment
+- `savePantryItem(item: Readonly<PantryItem>): Promise<PantryItem>` — serializes pantry item to camelCase-to-snake_case JSON, gzip-compresses, POSTs as `FormData` with `data.gz` attachment to `/api/v2/sync/pantry/{uid}/`. Returns the input item on success (Paprika responds with `{result: true}`, not the saved object). Soft-deletes are expressed by setting `deleted: true` on the item and POSTing through the same endpoint — there is no separate delete method.
 - `deleteRecipe(uid: RecipeUid): Promise<void>` — soft-delete: fetches recipe, sets `inTrash: true`, saves, then calls `notifySync()`
 - `notifySync(): Promise<void>` — POSTs to `/api/v2/sync/notify/` to trigger cloud sync propagation
 
 **Private API:**
 
 - `buildRecipeFormData(recipe: Readonly<Recipe>): FormData` — converts recipe to snake_case JSON, gzip-compresses, wraps in FormData with `data.gz` blob
+- `buildPantryFormData(item: Readonly<PantryItem>): FormData` — converts pantry item to snake_case JSON via `pantryItemToApiPayload`, gzip-compresses, wraps in FormData with `data.gz` blob
 - `request<T>(method, url, schema, body?): Promise<T>` — authenticated v2 API calls with:
   - Bearer token header (when token exists)
   - Cockatiel retry (429, 500, 502, 503) + circuit breaker (5 consecutive failures)
   - 401 re-auth retry (single attempt)
   - Response envelope unwrapping (`{ result: T }` → `T`)
   - Zod schema validation of inner value
+
+**Pantry write wire format:**
+
+Same encoding as recipe writes: gzip-compressed JSON in a multipart `data` field POSTed to `/api/v2/sync/pantry/{uid}/`. Soft-delete is expressed by setting `deleted: true` on the item and POSTing through the same endpoint. No separate DELETE HTTP verb is used.
 
 **Dependencies:**
 

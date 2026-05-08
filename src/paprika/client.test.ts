@@ -5,8 +5,8 @@ import { ZodError } from "zod";
 import { gunzipSync } from "node:zlib";
 import { PaprikaClient } from "./client.js";
 import { PaprikaAPIError, PaprikaAuthError } from "./errors.js";
-import type { Recipe } from "./types.js";
-import { RecipeSchema, RecipeUidSchema } from "./types.js";
+import type { PantryItem, Recipe } from "./types.js";
+import { PantryItemSchema, RecipeSchema, RecipeUidSchema } from "./types.js";
 
 const AUTH_URL = "https://paprikaapp.com/api/v1/account/login/";
 const API_BASE = "https://paprikaapp.com/api/v2/sync";
@@ -46,6 +46,45 @@ function makeSnakeCaseRecipe(uid: string): object {
 
 function makeCamelCaseRecipe(uid: string): Recipe {
   return RecipeSchema.parse(makeSnakeCaseRecipe(uid));
+}
+
+function makeSnakeCasePantryItem(
+  overrides?: Partial<{
+    uid: string;
+    ingredient: string;
+    quantity: string;
+    aisle: string;
+    aisle_uid: string;
+    expiration_date: string | null;
+    has_expiration: boolean;
+    in_stock: boolean;
+    purchase_date: string | null;
+    location_uid: string | null;
+    notes: string | null;
+    deleted: boolean;
+  }>,
+): object {
+  return {
+    uid: "pantry-1",
+    ingredient: "Butter",
+    quantity: "1 lb",
+    aisle: "Dairy",
+    aisle_uid: "aisle-1",
+    expiration_date: null,
+    has_expiration: false,
+    in_stock: true,
+    purchase_date: null,
+    location_uid: null,
+    notes: null,
+    deleted: false,
+    ...overrides,
+  };
+}
+
+function makeCamelCasePantryItem(uid: string, overrides?: Partial<PantryItem>): PantryItem {
+  return PantryItemSchema.parse({
+    ...makeSnakeCasePantryItem({ uid, ...overrides }),
+  });
 }
 
 const server = setupServer();
@@ -694,6 +733,218 @@ describe("PaprikaClient", () => {
       const pantryItems = await client.listPantry();
 
       expect(pantryItems).toStrictEqual([]);
+    });
+  });
+
+  describe("pantry-mutations.AC1: pantryItemToApiPayload (via savePantryItem wire body)", () => {
+    it("pantry-mutations.AC1.4 - payload has exactly 12 snake_case keys, no camelCase", async () => {
+      const uid = "pantry-test-1";
+      let payload: Record<string, unknown> | null = null;
+
+      server.use(
+        http.post(`${API_BASE}/pantry/${uid}/`, async ({ request }) => {
+          const formData = await request.formData();
+          const dataBlob = formData.get("data") as Blob;
+          const arrayBuffer = await dataBlob.arrayBuffer();
+          const decompressed = gunzipSync(Buffer.from(arrayBuffer));
+          payload = JSON.parse(decompressed.toString()) as Record<string, unknown>;
+          return HttpResponse.json({ result: true });
+        }),
+      );
+
+      const client = new PaprikaClient("test@example.com", "password");
+      await client.savePantryItem(makeCamelCasePantryItem(uid));
+
+      expect(payload).toBeDefined();
+      expect(Object.keys(payload!).length).toBe(12);
+      expect(payload).toHaveProperty("uid");
+      expect(payload).toHaveProperty("ingredient");
+      expect(payload).toHaveProperty("quantity");
+      expect(payload).toHaveProperty("aisle");
+      expect(payload).toHaveProperty("aisle_uid");
+      expect(payload).toHaveProperty("expiration_date");
+      expect(payload).toHaveProperty("has_expiration");
+      expect(payload).toHaveProperty("in_stock");
+      expect(payload).toHaveProperty("purchase_date");
+      expect(payload).toHaveProperty("location_uid");
+      expect(payload).toHaveProperty("notes");
+      expect(payload).toHaveProperty("deleted");
+      expect(payload).not.toHaveProperty("aisleUid");
+      expect(payload).not.toHaveProperty("expirationDate");
+      expect(payload).not.toHaveProperty("hasExpiration");
+      expect(payload).not.toHaveProperty("inStock");
+      expect(payload).not.toHaveProperty("purchaseDate");
+      expect(payload).not.toHaveProperty("locationUid");
+    });
+
+    it("pantry-mutations.AC1.5 - deleted flag is included and emitted correctly", async () => {
+      const uid = "pantry-test-2";
+      const payloads: Array<Record<string, unknown>> = [];
+
+      server.use(
+        http.post(`${API_BASE}/pantry/${uid}/`, async ({ request }) => {
+          const formData = await request.formData();
+          const dataBlob = formData.get("data") as Blob;
+          const arrayBuffer = await dataBlob.arrayBuffer();
+          const decompressed = gunzipSync(Buffer.from(arrayBuffer));
+          payloads.push(JSON.parse(decompressed.toString()) as Record<string, unknown>);
+          return HttpResponse.json({ result: true });
+        }),
+      );
+
+      const client = new PaprikaClient("test@example.com", "password");
+      await client.savePantryItem(makeCamelCasePantryItem(uid, { deleted: false }));
+      await client.savePantryItem(makeCamelCasePantryItem(uid, { deleted: true }));
+
+      expect(payloads).toHaveLength(2);
+      expect(payloads[0]!.deleted).toBe(false);
+      expect(payloads[1]!.deleted).toBe(true);
+    });
+
+    it("pantry-mutations.AC1.6 - null values survive the conversion", async () => {
+      const uid = "pantry-test-3";
+      let payload: Record<string, unknown> | null = null;
+
+      server.use(
+        http.post(`${API_BASE}/pantry/${uid}/`, async ({ request }) => {
+          const formData = await request.formData();
+          const dataBlob = formData.get("data") as Blob;
+          const arrayBuffer = await dataBlob.arrayBuffer();
+          const decompressed = gunzipSync(Buffer.from(arrayBuffer));
+          payload = JSON.parse(decompressed.toString()) as Record<string, unknown>;
+          return HttpResponse.json({ result: true });
+        }),
+      );
+
+      const client = new PaprikaClient("test@example.com", "password");
+      await client.savePantryItem(
+        makeCamelCasePantryItem(uid, {
+          expirationDate: null,
+          purchaseDate: null,
+          locationUid: null,
+          notes: null,
+        }),
+      );
+
+      expect(payload).toBeDefined();
+      expect(payload!.expiration_date).toBeNull();
+      expect(payload!.purchase_date).toBeNull();
+      expect(payload!.location_uid).toBeNull();
+      expect(payload!.notes).toBeNull();
+    });
+  });
+
+  describe("pantry-mutations.AC2: savePantryItem", () => {
+    it("pantry-mutations.AC2.1 - savePantryItem POSTs to correct URL and returns input item", async () => {
+      const uid = "pantry-test-4";
+      let capturedUrl = "";
+
+      server.use(
+        http.post(`${API_BASE}/pantry/${uid}/`, ({ request }) => {
+          capturedUrl = request.url;
+          return HttpResponse.json({ result: true });
+        }),
+      );
+
+      const client = new PaprikaClient("test@example.com", "password");
+      const input = makeCamelCasePantryItem(uid);
+      const result = await client.savePantryItem(input);
+
+      expect(capturedUrl).toBe(`${API_BASE}/pantry/${uid}/`);
+      expect(result.uid).toBe(input.uid);
+      expect(result.ingredient).toBe(input.ingredient);
+      expect(result.deleted).toBe(input.deleted);
+    });
+
+    it("pantry-mutations.AC2.2 - HTTP 401 triggers re-auth retry", async () => {
+      const uid = "pantry-test-5";
+      let authCallCount = 0;
+      let pantryCallCount = 0;
+
+      server.use(
+        http.post(AUTH_URL, () => {
+          authCallCount++;
+          return HttpResponse.json({ result: { token: "fresh-token-123" } });
+        }),
+        http.post(`${API_BASE}/pantry/${uid}/`, () => {
+          pantryCallCount++;
+          if (pantryCallCount === 1) {
+            return HttpResponse.json({ result: true }, { status: 401 });
+          }
+          return HttpResponse.json({ result: true });
+        }),
+      );
+
+      const client = new PaprikaClient("test@example.com", "password");
+      await client.authenticate();
+      const result = await client.savePantryItem(makeCamelCasePantryItem(uid));
+
+      expect(result.uid).toBe(uid);
+      expect(authCallCount).toBe(2);
+      expect(pantryCallCount).toBe(2);
+    });
+
+    it("pantry-mutations.AC2.3 - retryable HTTP statuses (429, 500, 502, 503) trigger cockatiel retry", async () => {
+      const uid = "pantry-test-6";
+      let pantryCallCount = 0;
+
+      server.use(
+        http.post(`${API_BASE}/pantry/${uid}/`, () => {
+          pantryCallCount++;
+          if (pantryCallCount === 1) {
+            return HttpResponse.json({ result: true }, { status: 503 });
+          }
+          return HttpResponse.json({ result: true });
+        }),
+      );
+
+      const client = new PaprikaClient("test@example.com", "password");
+      const result = await client.savePantryItem(makeCamelCasePantryItem(uid));
+
+      expect(result.uid).toBe(uid);
+      expect(pantryCallCount).toBe(2);
+    }, 5000);
+
+    it("pantry-mutations.AC2.4 - non-retryable HTTP error throws PaprikaAPIError", async () => {
+      const uid = "pantry-test-7";
+
+      server.use(
+        http.post(`${API_BASE}/pantry/${uid}/`, () => {
+          return HttpResponse.json({}, { status: 400 });
+        }),
+      );
+
+      const client = new PaprikaClient("test@example.com", "password");
+
+      try {
+        await client.savePantryItem(makeCamelCasePantryItem(uid));
+        expect.fail("Should have thrown PaprikaAPIError");
+      } catch (error) {
+        expect(error).toBeInstanceOf(PaprikaAPIError);
+        if (error instanceof PaprikaAPIError) {
+          expect(error.status).toBe(400);
+          expect(error.endpoint).toBe(`${API_BASE}/pantry/${uid}/`);
+        }
+      }
+    });
+
+    it("pantry-mutations.AC2.5 - invalid Zod envelope (result is string not boolean) throws ZodError", async () => {
+      const uid = "pantry-test-8";
+
+      server.use(
+        http.post(`${API_BASE}/pantry/${uid}/`, () => {
+          return HttpResponse.json({ result: "ok" });
+        }),
+      );
+
+      const client = new PaprikaClient("test@example.com", "password");
+
+      try {
+        await client.savePantryItem(makeCamelCasePantryItem(uid));
+        expect.fail("Should have thrown ZodError");
+      } catch (error) {
+        expect(error).toBeInstanceOf(ZodError);
+      }
     });
   });
 });

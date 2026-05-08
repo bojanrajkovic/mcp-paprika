@@ -92,6 +92,23 @@ function recipeToApiPayload(recipe: Readonly<Recipe>): Record<string, unknown> {
   };
 }
 
+function pantryItemToApiPayload(item: Readonly<PantryItem>): Record<string, unknown> {
+  return {
+    uid: item.uid,
+    ingredient: item.ingredient,
+    quantity: item.quantity,
+    aisle: item.aisle,
+    aisle_uid: item.aisleUid,
+    expiration_date: item.expirationDate,
+    has_expiration: item.hasExpiration,
+    in_stock: item.inStock,
+    purchase_date: item.purchaseDate,
+    location_uid: item.locationUid,
+    notes: item.notes,
+    deleted: item.deleted,
+  };
+}
+
 export class PaprikaClient {
   private token: string | null = null;
   private readonly _recipesBulkhead = bulkhead(5, Number.MAX_SAFE_INTEGER);
@@ -142,6 +159,12 @@ export class PaprikaClient {
     return recipe as Recipe;
   }
 
+  async savePantryItem(item: Readonly<PantryItem>): Promise<PantryItem> {
+    const formData = this.buildPantryFormData(item);
+    await this.request("POST", `${API_BASE}/pantry/${item.uid}/`, z.boolean(), formData);
+    return item as PantryItem;
+  }
+
   async notifySync(): Promise<void> {
     await this.request("POST", `${API_BASE}/notify/`, z.unknown());
   }
@@ -154,6 +177,16 @@ export class PaprikaClient {
 
   private buildRecipeFormData(recipe: Readonly<Recipe>): FormData {
     const payload = recipeToApiPayload(recipe);
+    const json = JSON.stringify(payload);
+    const compressed = gzipSync(json);
+    const blob = new Blob([compressed]);
+    const formData = new FormData();
+    formData.append("data", blob, "data.gz");
+    return formData;
+  }
+
+  private buildPantryFormData(item: Readonly<PantryItem>): FormData {
+    const payload = pantryItemToApiPayload(item);
     const json = JSON.stringify(payload);
     const compressed = gzipSync(json);
     const blob = new Blob([compressed]);
