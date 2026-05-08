@@ -6,7 +6,7 @@ import { gunzipSync } from "node:zlib";
 import { PaprikaClient } from "./client.js";
 import { PaprikaAPIError, PaprikaAuthError } from "./errors.js";
 import type { PantryItem, Recipe } from "./types.js";
-import { RecipeSchema, RecipeUidSchema } from "./types.js";
+import { RecipeSchema, RecipeUidSchema, PantryItemUidSchema } from "./types.js";
 
 const AUTH_URL = "https://paprikaapp.com/api/v1/account/login/";
 const API_BASE = "https://paprikaapp.com/api/v2/sync";
@@ -50,7 +50,7 @@ function makeCamelCaseRecipe(uid: string): Recipe {
 
 function makeCamelCasePantryItem(uid: string, overrides?: Partial<PantryItem>): PantryItem {
   const defaults: PantryItem = {
-    uid: uid as any,
+    uid: PantryItemUidSchema.parse(uid),
     ingredient: "Butter",
     quantity: "1 lb",
     aisle: "Dairy",
@@ -64,8 +64,7 @@ function makeCamelCasePantryItem(uid: string, overrides?: Partial<PantryItem>): 
     deleted: false,
   };
 
-  const merged = { ...defaults, ...overrides };
-  return merged as PantryItem;
+  return { ...defaults, ...overrides };
 }
 
 const server = setupServer();
