@@ -41,11 +41,10 @@ export function registerUpdatePantryItemTool(server: McpServer, ctx: ServerConte
 
           // Auto-derive hasExpiration when expirationDate is explicitly provided (AC5.3)
           // When provided (string or null), derive hasExpiration; when omitted (undefined), leave both as-is
-          const expirationDateProvided = args.expirationDate !== undefined;
-          const newExpirationDate: string | null = expirationDateProvided
-            ? (args.expirationDate as string | null) // narrowed from string | null | undefined
-            : existing.expirationDate;
-          const newHasExpiration = expirationDateProvided ? newExpirationDate !== null : existing.hasExpiration;
+          const newExpirationDate: string | null =
+            args.expirationDate !== undefined ? args.expirationDate : existing.expirationDate;
+          const newHasExpiration =
+            args.expirationDate !== undefined ? args.expirationDate !== null : existing.hasExpiration;
 
           const updated: PantryItem = {
             ...existing,
