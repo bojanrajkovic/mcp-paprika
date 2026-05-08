@@ -2,6 +2,8 @@
 
 Last verified: 2026-05-08
 
+> Pantry write tools (`add_pantry_item`, `update_pantry_item`) normalize any user-supplied `expirationDate` through `normalizePaprikaDate()` (`paprika/dates.ts`) before persisting. Accepts ISO 8601, `yyyy-MM-dd`, `yyyy/MM/dd`, or the already-Paprika `yyyy-MM-dd HH:mm:ss`. Unparseable input returns a `textResult` error to the LLM rather than writing garbage. `add_pantry_item` stamps `purchaseDate` via `paprikaDateToday()` (today at midnight, Paprika wire format) and generates UIDs as **uppercase** UUID v4 to match what Paprika.app emits.
+
 Purpose: Defines MCP tools that AI assistants can invoke. Each tool file exports a `register*` function that takes `(server: McpServer, ctx: ServerContext)` and calls `server.registerTool()`. Tools with external dependencies (e.g., vector store) accept additional parameters after `ctx`.
 
 ## Registered Tools
