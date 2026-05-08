@@ -44,7 +44,9 @@ function emitReport(steps: ReadonlyArray<StepResult>): void {
 async function runCleanup(client: PaprikaClient, steps: Array<StepResult>): Promise<void> {
   logProgress("Cleanup: listing current pantry...");
   const all = await client.listPantry();
-  const stale = all.filter((i) => i.ingredient.startsWith(SMOKE_PREFIX));
+  // Also sweep [mcp-e2e] orphans from scripts/e2e-mcp-pantry.ts so a crashed
+  // e2e run that left items behind gets cleaned up on the next smoke run.
+  const stale = all.filter((i) => i.ingredient.startsWith(SMOKE_PREFIX) || i.ingredient.startsWith("[mcp-e2e]"));
   logProgress(`Found ${stale.length.toString()} stale [mcp-smoke] items.`);
 
   for (const item of stale) {
