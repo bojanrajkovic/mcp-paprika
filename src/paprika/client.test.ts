@@ -6,7 +6,7 @@ import { gunzipSync } from "node:zlib";
 import { PaprikaClient } from "./client.js";
 import { PaprikaAPIError, PaprikaAuthError } from "./errors.js";
 import type { PantryItem, Recipe } from "./types.js";
-import { PantryItemSchema, RecipeSchema, RecipeUidSchema } from "./types.js";
+import { RecipeSchema, RecipeUidSchema } from "./types.js";
 
 const AUTH_URL = "https://paprikaapp.com/api/v1/account/login/";
 const API_BASE = "https://paprikaapp.com/api/v2/sync";
@@ -48,43 +48,24 @@ function makeCamelCaseRecipe(uid: string): Recipe {
   return RecipeSchema.parse(makeSnakeCaseRecipe(uid));
 }
 
-function makeSnakeCasePantryItem(
-  overrides?: Partial<{
-    uid: string;
-    ingredient: string;
-    quantity: string;
-    aisle: string;
-    aisle_uid: string;
-    expiration_date: string | null;
-    has_expiration: boolean;
-    in_stock: boolean;
-    purchase_date: string | null;
-    location_uid: string | null;
-    notes: string | null;
-    deleted: boolean;
-  }>,
-): object {
-  return {
-    uid: "pantry-1",
+function makeCamelCasePantryItem(uid: string, overrides?: Partial<PantryItem>): PantryItem {
+  const defaults: PantryItem = {
+    uid: uid as any,
     ingredient: "Butter",
     quantity: "1 lb",
     aisle: "Dairy",
-    aisle_uid: "aisle-1",
-    expiration_date: null,
-    has_expiration: false,
-    in_stock: true,
-    purchase_date: null,
-    location_uid: null,
+    aisleUid: "aisle-1",
+    expirationDate: null,
+    hasExpiration: false,
+    inStock: true,
+    purchaseDate: null,
+    locationUid: null,
     notes: null,
     deleted: false,
-    ...overrides,
   };
-}
 
-function makeCamelCasePantryItem(uid: string, overrides?: Partial<PantryItem>): PantryItem {
-  return PantryItemSchema.parse({
-    ...makeSnakeCasePantryItem({ uid, ...overrides }),
-  });
+  const merged = { ...defaults, ...overrides };
+  return merged as PantryItem;
 }
 
 const server = setupServer();
@@ -884,26 +865,30 @@ describe("PaprikaClient", () => {
       expect(pantryCallCount).toBe(2);
     });
 
-    it("pantry-mutations.AC2.3 - retryable HTTP statuses (429, 500, 502, 503) trigger cockatiel retry", async () => {
-      const uid = "pantry-test-6";
-      let pantryCallCount = 0;
+    it.each([429, 500, 502, 503])(
+      "pantry-mutations.AC2.3 - retryable HTTP status %i triggers cockatiel retry",
+      async (status: number) => {
+        const uid = `pantry-test-6-${status}`;
+        let pantryCallCount = 0;
 
-      server.use(
-        http.post(`${API_BASE}/pantry/${uid}/`, () => {
-          pantryCallCount++;
-          if (pantryCallCount === 1) {
-            return HttpResponse.json({ result: true }, { status: 503 });
-          }
-          return HttpResponse.json({ result: true });
-        }),
-      );
+        server.use(
+          http.post(`${API_BASE}/pantry/${uid}/`, () => {
+            pantryCallCount++;
+            if (pantryCallCount === 1) {
+              return HttpResponse.json({ result: true }, { status });
+            }
+            return HttpResponse.json({ result: true });
+          }),
+        );
 
-      const client = new PaprikaClient("test@example.com", "password");
-      const result = await client.savePantryItem(makeCamelCasePantryItem(uid));
+        const client = new PaprikaClient("test@example.com", "password");
+        const result = await client.savePantryItem(makeCamelCasePantryItem(uid));
 
-      expect(result.uid).toBe(uid);
-      expect(pantryCallCount).toBe(2);
-    }, 5000);
+        expect(result.uid).toBe(uid);
+        expect(pantryCallCount).toBe(2);
+      },
+      5000,
+    );
 
     it("pantry-mutations.AC2.4 - non-retryable HTTP error throws PaprikaAPIError", async () => {
       const uid = "pantry-test-7";
