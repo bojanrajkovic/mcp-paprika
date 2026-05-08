@@ -81,7 +81,7 @@ async function main(): Promise<void> {
     server,
   };
 
-  // 7. Register all 11 tools
+  // 7. Register all 12 tools
   registerSearchTool(server, ctx);
   registerFilterTools(server, ctx);
   registerCategoryTools(server, ctx);

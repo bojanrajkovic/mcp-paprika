@@ -189,6 +189,8 @@ describe("pantry-mutations.AC4: add_pantry_item tool", () => {
     expect(text).toContain("update_pantry_item");
     expect(mockSavePantryItem).not.toHaveBeenCalled();
     expect(mockPutPantryItem).not.toHaveBeenCalled();
+    expect(pantryStore.size).toBe(1);
+    expect(pantryStore.get("existing-uid" as PantryItemUid)).toBeDefined();
   });
 
   it("pantry-mutations.AC4.6: cold-start guard blocks call before pantry synced", async () => {
