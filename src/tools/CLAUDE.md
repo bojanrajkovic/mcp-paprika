@@ -1,6 +1,6 @@
 # MCP Tool Definitions
 
-Last verified: 2026-05-07
+Last verified: 2026-05-08
 
 Purpose: Defines MCP tools that AI assistants can invoke. Each tool file exports a `register*` function that takes `(server: McpServer, ctx: ServerContext)` and calls `server.registerTool()`. Tools with external dependencies (e.g., vector store) accept additional parameters after `ctx`.
 
@@ -75,6 +75,7 @@ Utilities imported by pantry tool handlers from `./pantry-helpers.js`.
 
 - **`pantryStartGuard(ctx)`** -- Returns `Ok<void>` when pantry is synced, `Err<CallToolResult>` when not yet synced. Always use `.match()` to handle both branches.
 - **`pantryItemToMarkdown(item)`** -- Renders a pantry item as markdown with ingredient, UID, and in-stock status (always rendered) plus quantity, aisle, expiration date, purchase date, and notes when present (omits empty strings and `null` optional fields).
+- **`commitPantryItem(ctx, saved)`** -- Persists a saved pantry item to the local cache and store, then triggers cloud sync. Branches on `saved.deleted`: the upsert branch calls `putPantryItem` (sync) → `flush` (async) → `pantryStore.set` (sync) → `sendResourceListChanged` (sync) → `notifySync` (async); the delete branch calls `removePantryItem` (async) → `flush` (async) → `pantryStore.delete` (sync) → `sendResourceListChanged` (sync) → `notifySync` (async). Called by all pantry write tools after `ctx.client.savePantryItem()`. Do NOT call `ctx.client.notifySync()` separately in the tool handler — `commitPantryItem` already calls it.
 
 ## Testing (`tool-test-utils.ts`)
 
