@@ -1,6 +1,6 @@
 # mcp-paprika
 
-Last verified: 2026-05-08
+Last verified: 2026-05-07
 
 MCP server for the Paprika recipe manager. Communicates over stdio transport — `console.log` writes to stdout which is the MCP wire format. Any stray console output corrupts the protocol. Use `process.stderr.write()` for diagnostic messages or the MCP SDK's logging facility.
 
@@ -32,7 +32,7 @@ MCP server for the Paprika recipe manager. Communicates over stdio transport —
 - `src/index.ts` — Entry point: config, auth, cache, store (recipes), pantryStore, server, tools, resources, sync, semantic search, stdio
 - `src/paprika/` — Paprika API client with pantry read support (`listPantry()` method)
 - `src/cache/` — Caching layer with `PantryStore` for in-memory queries and pantry persistence
-- `src/tools/` — MCP tool definitions including `list_pantry` and `get_pantry_item` for pantry access
+- `src/tools/` — MCP tool definitions including `list_pantry`, `get_pantry_item` (read), and `add_pantry_item` (write) — additional pantry write tools land in Phase 5
 - `src/resources/` — MCP resource definitions including `paprika://pantry/{uid}` resource template
 - `src/features/` — Feature implementations
 - `src/types/` — Shared type definitions including `PantryItem` and branded `PantryItemUid`
