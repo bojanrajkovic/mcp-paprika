@@ -134,7 +134,11 @@ describe("pantry-mutations.AC6: delete_pantry_item tool", () => {
     });
     const text = getText(result);
 
-    expect(text).toContain("No pantry item found");
+    // Idempotent retry-friendly message: covers both "never created" and
+    // "already deleted" cases since after a successful delete the item is
+    // removed from the local store and we can't distinguish the two.
+    expect(text).toContain("No pantry item present");
+    expect(text).toContain("never created or has already been deleted");
     expect(mockSavePantryItem).not.toHaveBeenCalled();
     expect(mockRemovePantryItem).not.toHaveBeenCalled();
     expect(pantryStore.size).toBe(0);

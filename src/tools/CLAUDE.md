@@ -30,7 +30,7 @@ Purpose: Defines MCP tools that AI assistants can invoke. Each tool file exports
 | `get_pantry_item`    | `pantry-get.ts`    | Fetch pantry item by UID or ingredient (fuzzy match, with disambiguation)                                      |
 | `add_pantry_item`    | `pantry-add.ts`    | Add a new pantry item; rejects duplicate ingredients (case-insensitive exact match) with the existing UID      |
 | `update_pantry_item` | `pantry-update.ts` | Update existing pantry item — partial merge; `hasExpiration` is auto-derived when `expirationDate` is provided |
-| `delete_pantry_item` | `pantry-delete.ts` | Soft-delete pantry item by UID; idempotent ("already deleted" on a second call)                                |
+| `delete_pantry_item` | `pantry-delete.ts` | Soft-delete pantry item by UID; idempotent — repeated calls return a retry-friendly "no item present" message  |
 
 ## Registration Pattern
 

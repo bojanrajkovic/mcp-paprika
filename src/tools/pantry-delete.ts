@@ -24,10 +24,22 @@ export function registerDeletePantryItemTool(server: McpServer, ctx: ServerConte
           const existing = ctx.pantryStore.get(uid);
 
           if (!existing) {
-            return textResult(`No pantry item found with UID "${args.uid}".`);
+            // Idempotent retry path: a successful prior delete removes the item
+            // from the local store (commitPantryItem's delete branch calls
+            // pantryStore.delete). We can't distinguish "never created" from
+            // "already deleted" without an extra round-trip, so the message
+            // covers both — either way the caller's retry is safe and no
+            // server state changes.
+            return textResult(
+              `No pantry item present with UID "${args.uid}". The item was either never created or has already been deleted; no action taken.`,
+            );
           }
 
           if (existing.deleted) {
+            // This branch fires only when a tombstone is observed in the store,
+            // which currently happens only in tests (production flow removes the
+            // item entirely on commit). Kept for defense-in-depth in case the
+            // store later starts retaining tombstones.
             return textResult(`Pantry item "${existing.ingredient}" is already deleted.`);
           }
 

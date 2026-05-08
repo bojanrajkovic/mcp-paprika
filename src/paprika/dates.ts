@@ -43,7 +43,11 @@ export function normalizePaprikaDate(input: string): string | null {
   if (dt.isValid) return dt.toFormat(PAPRIKA_DATE_FORMAT);
 
   // ISO 8601 (what `new Date().toISOString()` produces; what LLMs often emit).
-  dt = DateTime.fromISO(input);
+  // setZone: true preserves any explicit offset/`Z` in the input so that
+  // `startOf("day")` operates in the input's intended zone rather than the
+  // host's local zone. Without this, `"2026-12-31T00:00:00Z"` on a Pacific
+  // host would shift to `2026-12-30` before truncation.
+  dt = DateTime.fromISO(input, { setZone: true });
   if (dt.isValid) return dt.startOf("day").toFormat(PAPRIKA_DATE_FORMAT);
 
   // Bare yyyy-MM-dd.
