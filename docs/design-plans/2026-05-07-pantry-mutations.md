@@ -1,8 +1,37 @@
 # Pantry Write Support Design
 
+> **Wire format note (2026-05-08):** The originally-designed wire format
+> ("mirrors `saveRecipe` exactly") was inferred from community libraries that
+> don't actually implement pantry writes. Empirical capture from the macOS
+> Paprika.app v3.8.4 (build:41) via mitmproxy revealed two divergences from
+> the recipe write path:
+>
+> 1. **URL is the collection** `POST /api/v2/sync/pantry/` (NO UID in path).
+>    Recipe writes use `/sync/recipe/{uid}/`; pantry, grocery aisles, grocery
+>    ingredients, and grocery lists all share the no-UID-in-path collection
+>    pattern. Recipe is the outlier (probably because recipes carry photos
+>    that warrant per-item upload endpoints).
+> 2. **Body is a JSON array** `[item]` (a single-element array even for one
+>    item; Paprika.app batches when multiple changes happen quickly).
+> 3. **Multipart filename** is `"file"` (not `"data.gz"`).
+> 4. **Date format** for `purchase_date` and `expiration_date` is plain
+>    `"yyyy-MM-dd HH:mm:ss"` (no T, no timezone, no fractional seconds; the
+>    time component is conventionally `00:00:00`). ISO 8601 is rejected with
+>    HTTP 500. See `src/paprika/dates.ts`.
+> 5. **`has_expiration` is NOT auto-derived from `expiration_date` on the
+>    wire** — Paprika.app permits these to disagree. Our MCP tool still
+>    auto-derives them in `add_pantry_item`/`update_pantry_item` for tool-level
+>    convenience; that behavior is a tool contract, not an API contract.
+> 6. **`aisle_uid` is a 64-char uppercase hex string**, NOT a UUID. It
+>    references Paprika's aisle catalog. An empty string is accepted by the
+>    server (verified — issue #56's contingency does NOT apply).
+>
+> The text below was the original plan. The "Pantry write wire format" section
+> later in this doc and `src/paprika/CLAUDE.md` carry the corrected contract.
+
 ## Summary
 
-Pantry write support builds on the read infrastructure shipped in PR #46, adding three MCP tools — `add_pantry_item`, `update_pantry_item`, and `delete_pantry_item` — along with the client method, payload converter, and commit helper that back them. The implementation mirrors the recipe write path at every layer: `savePantryItem` is a gzip multipart POST to `/api/v2/sync/pantry/{uid}/` matching the shape of `saveRecipe`; `pantryItemToApiPayload` is a camelCase-to-snake_case converter parallel to `recipeToApiPayload`; and `commitPantryItem` follows the same cache-first, then store, then MCP notification, then sync-notify ordering as `commitRecipe`. Soft-delete is expressed by setting `deleted: true` on the item and posting through the same endpoint — there is no separate DELETE method.
+Pantry write support builds on the read infrastructure shipped in PR #46, adding three MCP tools — `add_pantry_item`, `update_pantry_item`, and `delete_pantry_item` — along with the client method, payload converter, and commit helper that back them. The implementation mirrors the recipe write path at the helper-orchestration layer (`commitPantryItem` matches `commitRecipe`'s ordering) but the WIRE FORMAT diverges (see the wire-format note above): the URL is the pantry collection (no UID in path), the body is a `[item]` array, and dates use Paprika's plain `yyyy-MM-dd HH:mm:ss` format. `pantryItemToApiPayload` is a camelCase-to-snake_case converter parallel to `recipeToApiPayload`. Soft-delete is expressed by setting `deleted: true` on the item and posting through the same endpoint — there is no separate DELETE method.
 
 Two aspects diverge intentionally from the recipe pattern. First, the `deleted` field is declared `optional().default(false)` on both pantry schemas rather than required, because community implementations do not confirm that the Paprika API includes `deleted` on read responses for live items; the default makes parsing absent-tolerant while the TypeScript type still sees a non-optional `boolean` everywhere else. Second, `add_pantry_item` rejects duplicate ingredient names via a case-insensitive exact match against the store before generating a UID, returning the existing item's UID in the rejection message so the caller can switch to `update_pantry_item` — a guard that has no recipe equivalent. Because the pantry write wire format is inferred from community implementations rather than confirmed by official documentation, a `scripts/smoke-pantry-write.ts` runner provides manual empirical validation against a real Paprika account before merge, and its output serves as the PR's evidence artifact.
 
@@ -39,7 +68,7 @@ Unit tests cover the new client method (msw-mocked HTTP), the payload converter,
 
 ### pantry-mutations.AC2: Client write method
 
-- **pantry-mutations.AC2.1 Success:** `savePantryItem(item)` POSTs gzip-compressed JSON in a multipart form with field name `data` to `/api/v2/sync/pantry/{uid}/` and returns the input item when the server responds with `{result: true}`
+- **pantry-mutations.AC2.1 Success:** `savePantryItem(item)` POSTs gzip-compressed JSON in a multipart form with field name `data` to `/api/v2/sync/pantry/` and returns the input item when the server responds with `{result: true}`
 - **pantry-mutations.AC2.2 Success:** HTTP 401 triggers a single re-auth retry via the existing `request<T>` machinery
 - **pantry-mutations.AC2.3 Success:** Retryable HTTP statuses (429, 500, 502, 503) trigger the existing cockatiel retry+circuit policy
 - **pantry-mutations.AC2.4 Failure:** A non-retryable HTTP error (e.g., 400) throws `PaprikaAPIError` carrying `status` and `endpoint`
@@ -88,12 +117,12 @@ Unit tests cover the new client method (msw-mocked HTTP), the payload converter,
 ## Glossary
 
 - **`pantryItemToApiPayload`**: Function that converts a camelCase `PantryItem` to the 12-field snake_case wire shape required by the Paprika sync endpoint. Always emits `deleted` (defaulting to `false` for live items). Mirrors `recipeToApiPayload`.
-- **`savePantryItem`**: `PaprikaClient` method that gzip-compresses the wire payload, wraps it in a multipart form field named `data`, and POSTs it to `/api/v2/sync/pantry/{uid}/`. Returns the input item on success (Paprika responds with `{result: true}`, not the full object). Mirrors `saveRecipe`.
+- **`savePantryItem`**: `PaprikaClient` method that gzip-compresses the wire payload, wraps it in a multipart form field named `data`, and POSTs it to `/api/v2/sync/pantry/`. Returns the input item on success (Paprika responds with `{result: true}`, not the full object). Mirrors `saveRecipe`.
 - **`commitPantryItem`**: Helper that applies a completed pantry write to the local server state. Branches on `saved.deleted`: the upsert branch calls `putPantryItem → flush → store.set → sendResourceListChanged → notifySync`; the delete branch calls `removePantryItem → flush → store.delete → sendResourceListChanged → notifySync`. Mirrors `commitRecipe`.
 - **`pantryStartGuard`**: Guard function used in every pantry tool handler that short-circuits with a friendly error if the pantry has not yet completed its first sync. Prevents writes against an uninitialized store. Introduced in PR #46.
 - **`findByIngredient`**: Method on `PantryStore` that performs a tiered fuzzy search over pantry items by ingredient name. `add_pantry_item` uses it for its duplicate-ingredient guard: an exact case-insensitive match is treated as "already exists, reject."
 - **Soft-delete via flag**: Deletion pattern where a record is not removed from the backing store but instead marked with a boolean field (`deleted: true`). The item is then POSTed through the same write endpoint. Paprika uses this for pantry items (field: `deleted`) and for recipes (field: `inTrash`).
-- **Gzip multipart wire format**: The HTTP encoding used for Paprika sync writes — JSON is gzip-compressed and sent as a multipart form-data body with a field named `data`. Required by the `/api/v2/sync/pantry/{uid}/` and `/api/v2/sync/recipe/{uid}/` endpoints.
+- **Gzip multipart wire format**: The HTTP encoding used for Paprika sync writes — JSON is gzip-compressed and sent as a multipart form-data body with a field named `data`. Required by the `/api/v2/sync/pantry/` and `/api/v2/sync/recipe/{uid}/` endpoints.
 - **Replace-all sync with orphan cleanup**: The pantry sync strategy, in contrast to the recipe hash-based diff. On each sync cycle the full pantry list from the API replaces the local store; items present locally but absent from the response are treated as orphans and deleted. This means a write that fires during a sync window can be orphaned — the same race that exists for recipe writes.
 - **Branded UID / `PantryItemUidSchema`**: A Zod-branded string schema that marks a plain `string` as a validated pantry item UID. New UIDs are generated with `PantryItemUidSchema.parse(crypto.randomUUID())`, ensuring the type system enforces UID provenance without runtime overhead. The recipe path uses the same idiom.
 - **`pantryStore` / `PantryStore`**: The in-memory store holding the current pantry snapshot, populated during sync. Exposes `get`, `set`, `delete`, and `findByIngredient`. Pantry tool handlers read from and write to this store after every API call.
@@ -102,14 +131,14 @@ Unit tests cover the new client method (msw-mocked HTTP), the payload converter,
 
 ## Architecture
 
-Pantry write support extends the read infrastructure delivered by PR #46 with three MCP tools (`add_pantry_item`, `update_pantry_item`, `delete_pantry_item`), one client method (`PaprikaClient.savePantryItem`), one payload converter (`pantryItemToApiPayload`), and one helper (`commitPantryItem`). The wire format is gzip-compressed JSON in a multipart `data` field POSTed to `/api/v2/sync/pantry/{uid}/`, mirroring `saveRecipe`. Soft-delete is performed by setting `deleted: true` on the item and POSTing through the same endpoint — there is no separate DELETE method on the client.
+Pantry write support extends the read infrastructure delivered by PR #46 with three MCP tools (`add_pantry_item`, `update_pantry_item`, `delete_pantry_item`), one client method (`PaprikaClient.savePantryItem`), one payload converter (`pantryItemToApiPayload`), and one helper (`commitPantryItem`). The wire format is gzip-compressed JSON in a multipart `data` field POSTed to `/api/v2/sync/pantry/`, mirroring `saveRecipe`. Soft-delete is performed by setting `deleted: true` on the item and POSTing through the same endpoint — there is no separate DELETE method on the client.
 
 **Data flow:**
 
 ```
 add_pantry_item / update_pantry_item / delete_pantry_item
   → build full PantryItem (with deleted: false or true)
-  → ctx.client.savePantryItem(item)        // gzip multipart POST /sync/pantry/{uid}/
+  → ctx.client.savePantryItem(item)        // gzip multipart POST /sync/pantry/ (collection URL, no UID in path)
   → commitPantryItem(ctx, saved)
        ├─ if saved.deleted:
        │    cache.removePantryItem → flush → store.delete → sendResourceListChanged → notifySync
@@ -121,7 +150,7 @@ add_pantry_item / update_pantry_item / delete_pantry_item
 
 - **`PantryItemSchema` / `PantryItemStoredSchema` extension** (`src/paprika/types.ts`) — Add `deleted: z.boolean().optional().default(false)` to both schemas. The `.default(false)` makes the field absent-tolerant on reads (Paprika may omit it for live items) while the type system treats `deleted` as a non-optional `boolean` everywhere else in the codebase.
 - **`pantryItemToApiPayload(item)`** (`src/paprika/client.ts`) — CamelCase→snake_case converter producing the 12-field wire shape, paralleling `recipeToApiPayload`. Always emits `deleted` (default `false` for live items, `true` only when the delete tool sets it).
-- **`PaprikaClient.savePantryItem(item)`** (`src/paprika/client.ts`) — Builds gzip multipart from the payload via a private helper (mirroring `buildRecipeFormData`), POSTs to `${API_BASE}/pantry/${item.uid}/`, validates a `z.boolean()` envelope, and returns the input as-saved (Paprika returns just `true`).
+- **`PaprikaClient.savePantryItem(item)`** (`src/paprika/client.ts`) — Builds gzip multipart from the payload via a private helper (mirroring `buildRecipeFormData` in transport, but the body is a single-element array `[payload]` and the multipart filename is `"file"`), POSTs to `${API_BASE}/pantry/` (collection URL, no UID in path — diverges from `saveRecipe`), validates a `z.boolean()` envelope, and returns the input as-saved (Paprika returns just `true`).
 - **`commitPantryItem(ctx, saved)`** (`src/tools/pantry-helpers.ts`) — Branches on `saved.deleted`: the upsert branch upserts cache+store and notifies; the delete branch removes from cache+store and notifies. Mirrors `commitRecipe`'s ordering (cache first, then store, then MCP notification, then `notifySync`).
 - **`add_pantry_item` handler** (`src/tools/pantry-add.ts`) — Constructs a full `PantryItem` with sensible defaults (per the field defaults table in Implementation Phases). Rejects duplicate ingredient names case-insensitively via `pantryStore.findByIngredient` before generating a UID. Generates UIDs with `PantryItemUidSchema.parse(crypto.randomUUID())`, matching the recipe UID generation pattern.
 - **`update_pantry_item` handler** (`src/tools/pantry-update.ts`) — Partial-merge tool surface mirroring `update_recipe` line-for-line: fetch baseline from `pantryStore.get(uid)`, conditional-spread for each provided field, save full object via `savePantryItem`, commit via `commitPantryItem`. Auto-derives `hasExpiration` from `expirationDate` provision.
@@ -189,7 +218,7 @@ The duplicate-ingredient rejection in `add_pantry_item` reuses the existing `fin
 
 - `PaprikaClient.savePantryItem(item: Readonly<PantryItem>): Promise<PantryItem>` in `src/paprika/client.ts`
 - Private helper `buildPantryFormData(item)` mirroring `buildRecipeFormData`
-- msw handler for `POST /api/v2/sync/pantry/{uid}/` accepting multipart with gzip-compressed JSON, returning `{result: true}`
+- msw handler for `POST /api/v2/sync/pantry/` accepting multipart with gzip-compressed JSON, returning `{result: true}`
 - Tests in `src/paprika/client.test.ts` for happy-path POST, retry on 401 with re-auth, retry on 429/500/502/503, error throw on non-retryable status, Zod rejection on bad envelope shape
 
 **Dependencies:** Phase 1 (uses `pantryItemToApiPayload`)
