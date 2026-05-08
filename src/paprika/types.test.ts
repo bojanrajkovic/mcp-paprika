@@ -609,7 +609,7 @@ describe("pantry-read.AC1: PantryItem types", () => {
       expect(result.success).toBe(true);
 
       if (result.success) {
-        expect(result.data).toEqual(camelCasePantryItem);
+        expect(result.data).toEqual({ ...camelCasePantryItem, deleted: false });
       }
     });
   });
@@ -724,8 +724,164 @@ describe("pantry-read.AC1: PantryItem types", () => {
         purchaseDate: null,
         locationUid: null,
         notes: null,
+        deleted: false,
       };
       expect(_test).toBeDefined();
+    });
+  });
+});
+
+describe("pantry-mutations.AC1: Schema and payload converter", () => {
+  describe("pantry-mutations.AC1.1: deleted field round-trips through PantryItemSchema", () => {
+    it("should parse wire JSON with deleted: false and round-trip through stored schema", () => {
+      const wireItem = {
+        uid: "pantry-123",
+        ingredient: "Flour",
+        quantity: "2 cups",
+        aisle: "Produce",
+        aisle_uid: "aisle-1",
+        expiration_date: "2026-12-31",
+        has_expiration: true,
+        in_stock: true,
+        purchase_date: "2026-01-01 00:00:00",
+        location_uid: "location-1",
+        notes: "Store in cool place",
+        deleted: false,
+      };
+
+      const parseResult = PantryItemSchema.safeParse(wireItem);
+      expect(parseResult.success).toBe(true);
+
+      if (parseResult.success) {
+        const camelCaseItem = parseResult.data;
+        expect(camelCaseItem.deleted).toBe(false);
+
+        // Round-trip through stored schema
+        const storedResult = PantryItemStoredSchema.safeParse(camelCaseItem);
+        expect(storedResult.success).toBe(true);
+
+        if (storedResult.success) {
+          expect(storedResult.data).toEqual(camelCaseItem);
+        }
+      }
+    });
+  });
+
+  describe("pantry-mutations.AC1.2: Wire JSON without deleted key yields deleted: false default", () => {
+    it("should parse wire JSON omitting deleted key and apply default false", () => {
+      const wireItem = {
+        uid: "pantry-123",
+        ingredient: "Flour",
+        quantity: "2 cups",
+        aisle: "Produce",
+        aisle_uid: "aisle-1",
+        expiration_date: "2026-12-31",
+        has_expiration: true,
+        in_stock: true,
+        purchase_date: "2026-01-01 00:00:00",
+        location_uid: "location-1",
+        notes: "Store in cool place",
+      };
+
+      const result = PantryItemSchema.safeParse(wireItem);
+      expect(result.success).toBe(true);
+
+      if (result.success) {
+        expect(result.data.deleted).toBe(false);
+      }
+    });
+  });
+
+  describe("pantry-mutations.AC1.3: Stored JSON without deleted key yields deleted: false default", () => {
+    it("should parse stored JSON omitting deleted key and apply default false", () => {
+      const storedItem = {
+        uid: "pantry-123",
+        ingredient: "Flour",
+        quantity: "2 cups",
+        aisle: "Produce",
+        aisleUid: "aisle-1",
+        expirationDate: "2026-12-31",
+        hasExpiration: true,
+        inStock: true,
+        purchaseDate: "2026-01-01 00:00:00",
+        locationUid: "location-1",
+        notes: "Store in cool place",
+      };
+
+      const result = PantryItemStoredSchema.safeParse(storedItem);
+      expect(result.success).toBe(true);
+
+      if (result.success) {
+        expect(result.data.deleted).toBe(false);
+      }
+    });
+  });
+
+  describe("pantry-mutations.AC1.6: null values for optional fields survive round-trip", () => {
+    it("should preserve null values through wire→stored round-trip", () => {
+      const wireItem = {
+        uid: "pantry-123",
+        ingredient: "Flour",
+        quantity: "2 cups",
+        aisle: "Produce",
+        aisle_uid: "aisle-1",
+        expiration_date: null,
+        has_expiration: false,
+        in_stock: true,
+        purchase_date: null,
+        location_uid: null,
+        notes: null,
+        deleted: false,
+      };
+
+      const parseResult = PantryItemSchema.safeParse(wireItem);
+      expect(parseResult.success).toBe(true);
+
+      if (parseResult.success) {
+        const camelCaseItem = parseResult.data;
+        expect(camelCaseItem.expirationDate).toBe(null);
+        expect(camelCaseItem.purchaseDate).toBe(null);
+        expect(camelCaseItem.locationUid).toBe(null);
+        expect(camelCaseItem.notes).toBe(null);
+
+        // Verify round-trip through stored schema preserves nulls
+        const storedResult = PantryItemStoredSchema.safeParse(camelCaseItem);
+        expect(storedResult.success).toBe(true);
+
+        if (storedResult.success) {
+          expect(storedResult.data.expirationDate).toBe(null);
+          expect(storedResult.data.purchaseDate).toBe(null);
+          expect(storedResult.data.locationUid).toBe(null);
+          expect(storedResult.data.notes).toBe(null);
+        }
+      }
+    });
+  });
+
+  describe("pantry-mutations.AC1.7: Wire JSON with non-boolean deleted is rejected", () => {
+    it("should reject wire JSON with deleted as string instead of boolean", () => {
+      const wireItem = {
+        uid: "pantry-123",
+        ingredient: "Flour",
+        quantity: "2 cups",
+        aisle: "Produce",
+        aisle_uid: "aisle-1",
+        expiration_date: "2026-12-31",
+        has_expiration: true,
+        in_stock: true,
+        purchase_date: "2026-01-01 00:00:00",
+        location_uid: "location-1",
+        notes: "Store in cool place",
+        deleted: "true", // string instead of boolean
+      };
+
+      const result = PantryItemSchema.safeParse(wireItem);
+      expect(result.success).toBe(false);
+
+      if (!result.success) {
+        const deletedError = result.error.issues.find((issue) => issue.path.includes("deleted"));
+        expect(deletedError).toBeDefined();
+      }
     });
   });
 });
