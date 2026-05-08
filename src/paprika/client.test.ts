@@ -719,15 +719,15 @@ describe("PaprikaClient", () => {
   describe("pantry-mutations.AC1: pantryItemToApiPayload (via savePantryItem wire body)", () => {
     it("pantry-mutations.AC1.4 - payload has exactly 12 snake_case keys, no camelCase", async () => {
       const uid = "pantry-test-1";
-      let payload: Record<string, unknown> | null = null;
+      let body: Array<Record<string, unknown>> | null = null;
 
       server.use(
-        http.post(`${API_BASE}/pantry/${uid}/`, async ({ request }) => {
+        http.post(`${API_BASE}/pantry/`, async ({ request }) => {
           const formData = await request.formData();
           const dataBlob = formData.get("data") as Blob;
           const arrayBuffer = await dataBlob.arrayBuffer();
           const decompressed = gunzipSync(Buffer.from(arrayBuffer));
-          payload = JSON.parse(decompressed.toString()) as Record<string, unknown>;
+          body = JSON.parse(decompressed.toString()) as Array<Record<string, unknown>>;
           return HttpResponse.json({ result: true });
         }),
       );
@@ -735,8 +735,11 @@ describe("PaprikaClient", () => {
       const client = new PaprikaClient("test@example.com", "password");
       await client.savePantryItem(makeCamelCasePantryItem(uid));
 
-      expect(payload).toBeDefined();
-      expect(Object.keys(payload!).length).toBe(12);
+      expect(body).toBeDefined();
+      expect(Array.isArray(body)).toBe(true);
+      expect(body!).toHaveLength(1);
+      const payload = body![0]!;
+      expect(Object.keys(payload).length).toBe(12);
       expect(payload).toHaveProperty("uid");
       expect(payload).toHaveProperty("ingredient");
       expect(payload).toHaveProperty("quantity");
@@ -759,15 +762,15 @@ describe("PaprikaClient", () => {
 
     it("pantry-mutations.AC1.5 - deleted flag is included and emitted correctly", async () => {
       const uid = "pantry-test-2";
-      const payloads: Array<Record<string, unknown>> = [];
+      const bodies: Array<Array<Record<string, unknown>>> = [];
 
       server.use(
-        http.post(`${API_BASE}/pantry/${uid}/`, async ({ request }) => {
+        http.post(`${API_BASE}/pantry/`, async ({ request }) => {
           const formData = await request.formData();
           const dataBlob = formData.get("data") as Blob;
           const arrayBuffer = await dataBlob.arrayBuffer();
           const decompressed = gunzipSync(Buffer.from(arrayBuffer));
-          payloads.push(JSON.parse(decompressed.toString()) as Record<string, unknown>);
+          bodies.push(JSON.parse(decompressed.toString()) as Array<Record<string, unknown>>);
           return HttpResponse.json({ result: true });
         }),
       );
@@ -776,22 +779,22 @@ describe("PaprikaClient", () => {
       await client.savePantryItem(makeCamelCasePantryItem(uid, { deleted: false }));
       await client.savePantryItem(makeCamelCasePantryItem(uid, { deleted: true }));
 
-      expect(payloads).toHaveLength(2);
-      expect(payloads[0]!.deleted).toBe(false);
-      expect(payloads[1]!.deleted).toBe(true);
+      expect(bodies).toHaveLength(2);
+      expect(bodies[0]![0]!.deleted).toBe(false);
+      expect(bodies[1]![0]!.deleted).toBe(true);
     });
 
     it("pantry-mutations.AC1.6 - null values survive the conversion", async () => {
       const uid = "pantry-test-3";
-      let payload: Record<string, unknown> | null = null;
+      let body: Array<Record<string, unknown>> | null = null;
 
       server.use(
-        http.post(`${API_BASE}/pantry/${uid}/`, async ({ request }) => {
+        http.post(`${API_BASE}/pantry/`, async ({ request }) => {
           const formData = await request.formData();
           const dataBlob = formData.get("data") as Blob;
           const arrayBuffer = await dataBlob.arrayBuffer();
           const decompressed = gunzipSync(Buffer.from(arrayBuffer));
-          payload = JSON.parse(decompressed.toString()) as Record<string, unknown>;
+          body = JSON.parse(decompressed.toString()) as Array<Record<string, unknown>>;
           return HttpResponse.json({ result: true });
         }),
       );
@@ -806,21 +809,22 @@ describe("PaprikaClient", () => {
         }),
       );
 
-      expect(payload).toBeDefined();
-      expect(payload!.expiration_date).toBeNull();
-      expect(payload!.purchase_date).toBeNull();
-      expect(payload!.location_uid).toBeNull();
-      expect(payload!.notes).toBeNull();
+      expect(body).toBeDefined();
+      const payload = body![0]!;
+      expect(payload.expiration_date).toBeNull();
+      expect(payload.purchase_date).toBeNull();
+      expect(payload.location_uid).toBeNull();
+      expect(payload.notes).toBeNull();
     });
   });
 
   describe("pantry-mutations.AC2: savePantryItem", () => {
-    it("pantry-mutations.AC2.1 - savePantryItem POSTs to correct URL and returns input item", async () => {
+    it("pantry-mutations.AC2.1 - savePantryItem POSTs to collection URL and returns input item", async () => {
       const uid = "pantry-test-4";
       let capturedUrl = "";
 
       server.use(
-        http.post(`${API_BASE}/pantry/${uid}/`, ({ request }) => {
+        http.post(`${API_BASE}/pantry/`, ({ request }) => {
           capturedUrl = request.url;
           return HttpResponse.json({ result: true });
         }),
@@ -830,7 +834,7 @@ describe("PaprikaClient", () => {
       const input = makeCamelCasePantryItem(uid);
       const result = await client.savePantryItem(input);
 
-      expect(capturedUrl).toBe(`${API_BASE}/pantry/${uid}/`);
+      expect(capturedUrl).toBe(`${API_BASE}/pantry/`);
       expect(result.uid).toBe(input.uid);
       expect(result.ingredient).toBe(input.ingredient);
       expect(result.deleted).toBe(input.deleted);
@@ -846,7 +850,7 @@ describe("PaprikaClient", () => {
           authCallCount++;
           return HttpResponse.json({ result: { token: "fresh-token-123" } });
         }),
-        http.post(`${API_BASE}/pantry/${uid}/`, () => {
+        http.post(`${API_BASE}/pantry/`, () => {
           pantryCallCount++;
           if (pantryCallCount === 1) {
             return HttpResponse.json({ result: true }, { status: 401 });
@@ -871,7 +875,7 @@ describe("PaprikaClient", () => {
         let pantryCallCount = 0;
 
         server.use(
-          http.post(`${API_BASE}/pantry/${uid}/`, () => {
+          http.post(`${API_BASE}/pantry/`, () => {
             pantryCallCount++;
             if (pantryCallCount === 1) {
               return HttpResponse.json({ result: true }, { status });
@@ -893,7 +897,7 @@ describe("PaprikaClient", () => {
       const uid = "pantry-test-7";
 
       server.use(
-        http.post(`${API_BASE}/pantry/${uid}/`, () => {
+        http.post(`${API_BASE}/pantry/`, () => {
           return HttpResponse.json({}, { status: 400 });
         }),
       );
@@ -907,7 +911,7 @@ describe("PaprikaClient", () => {
         expect(error).toBeInstanceOf(PaprikaAPIError);
         if (error instanceof PaprikaAPIError) {
           expect(error.status).toBe(400);
-          expect(error.endpoint).toBe(`${API_BASE}/pantry/${uid}/`);
+          expect(error.endpoint).toBe(`${API_BASE}/pantry/`);
         }
       }
     });
@@ -916,7 +920,7 @@ describe("PaprikaClient", () => {
       const uid = "pantry-test-8";
 
       server.use(
-        http.post(`${API_BASE}/pantry/${uid}/`, () => {
+        http.post(`${API_BASE}/pantry/`, () => {
           return HttpResponse.json({ result: "ok" });
         }),
       );

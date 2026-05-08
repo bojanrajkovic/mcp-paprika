@@ -4,6 +4,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { PantryItemUidSchema } from "../paprika/types.js";
 import type { PantryItem } from "../paprika/types.js";
+import { normalizePaprikaDate, paprikaDateToday } from "../paprika/dates.js";
 import { textResult } from "./helpers.js";
 import { commitPantryItem, pantryItemToMarkdown, pantryStartGuard } from "./pantry-helpers.js";
 import type { ServerContext } from "../types/server-context.js";
@@ -40,10 +41,22 @@ export function registerAddPantryItemTool(server: McpServer, ctx: ServerContext)
             );
           }
 
-          // Construct full PantryItem with defaults (per Server-Derived Field Defaults table)
-          const expirationDate = args.expirationDate ?? null;
+          // Construct full PantryItem with defaults (per Server-Derived Field Defaults table).
+          // Normalize the user-supplied expirationDate to Paprika wire format
+          // ("yyyy-MM-dd HH:mm:ss"). Returning null on unparseable input keeps the
+          // user from accidentally writing garbage into the field.
+          const expirationDate = args.expirationDate !== undefined ? normalizePaprikaDate(args.expirationDate) : null;
+          if (args.expirationDate !== undefined && expirationDate === null) {
+            return textResult(
+              `Could not parse expirationDate "${args.expirationDate}". Use ISO 8601 (e.g., "2026-12-31") or "yyyy-MM-dd HH:mm:ss".`,
+            );
+          }
+          // UUID uppercased to match what the Paprika app emits on the wire and what
+          // listPantry returns; Paprika servers accept either case but matching the
+          // app keeps round-tripped UIDs consistent.
+          const uid = PantryItemUidSchema.parse(crypto.randomUUID().toUpperCase());
           const newItem: PantryItem = {
-            uid: PantryItemUidSchema.parse(crypto.randomUUID()),
+            uid,
             ingredient: args.ingredient,
             quantity: args.quantity ?? "",
             aisle: args.aisle ?? "",
@@ -51,7 +64,9 @@ export function registerAddPantryItemTool(server: McpServer, ctx: ServerContext)
             expirationDate,
             hasExpiration: expirationDate !== null, // AC4.2, AC4.3
             inStock: args.inStock ?? true,
-            purchaseDate: new Date().toISOString(),
+            // Today's date at midnight (Paprika's wire format); matches what
+            // Paprika.app stamps when the user adds an item.
+            purchaseDate: paprikaDateToday(),
             locationUid: null,
             notes: args.notes ?? null,
             deleted: false,

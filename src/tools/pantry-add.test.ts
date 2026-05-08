@@ -51,13 +51,13 @@ describe("pantry-mutations.AC4: add_pantry_item tool", () => {
     expect(callArgs?.notes).toBe(null);
     expect(callArgs?.deleted).toBe(false);
 
-    // UUID v4 regex
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    // UUID v4 regex (Paprika expects uppercase to match its app's wire format)
+    const uuidRegex = /^[0-9A-F]{8}-[0-9A-F]{4}-[1-5][0-9A-F]{3}-[89AB][0-9A-F]{3}-[0-9A-F]{12}$/;
     expect(callArgs?.uid).toMatch(uuidRegex);
 
-    // ISO 8601 timestamp regex
-    const isoRegex = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{3})?Z?$/;
-    expect(callArgs?.purchaseDate).toMatch(isoRegex);
+    // Paprika wire date format: "yyyy-MM-dd HH:mm:ss" (today's date at midnight, no timezone)
+    const paprikaDateRegex = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/;
+    expect(callArgs?.purchaseDate).toMatch(paprikaDateRegex);
 
     // Verify commit happened
     expect(pantryStore.get(callArgs?.uid as PantryItemUid)).toBeDefined();
@@ -89,7 +89,8 @@ describe("pantry-mutations.AC4: add_pantry_item tool", () => {
     });
 
     const callArgs = mockSavePantryItem.mock.calls[0]?.[0];
-    expect(callArgs?.expirationDate).toBe("2026-12-31");
+    // User input is normalized to Paprika wire format ("yyyy-MM-dd HH:mm:ss" at midnight).
+    expect(callArgs?.expirationDate).toBe("2026-12-31 00:00:00");
     expect(callArgs?.hasExpiration).toBe(true);
   });
 

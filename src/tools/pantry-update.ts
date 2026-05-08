@@ -3,6 +3,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { PantryItemUidSchema } from "../paprika/types.js";
 import type { PantryItem } from "../paprika/types.js";
+import { normalizePaprikaDate } from "../paprika/dates.js";
 import { textResult } from "./helpers.js";
 import { commitPantryItem, pantryItemToMarkdown, pantryStartGuard } from "./pantry-helpers.js";
 import type { ServerContext } from "../types/server-context.js";
@@ -39,10 +40,24 @@ export function registerUpdatePantryItemTool(server: McpServer, ctx: ServerConte
             return textResult(`No pantry item found with UID "${args.uid}".`);
           }
 
-          // Auto-derive hasExpiration when expirationDate is explicitly provided (AC5.3)
-          // When provided (string or null), derive hasExpiration; when omitted (undefined), leave both as-is
-          const newExpirationDate: string | null =
-            args.expirationDate !== undefined ? args.expirationDate : existing.expirationDate;
+          // Auto-derive hasExpiration when expirationDate is explicitly provided (AC5.3).
+          // When provided (string or null), derive hasExpiration; when omitted (undefined),
+          // leave both as-is. User-supplied date strings are normalized to Paprika's
+          // wire format ("yyyy-MM-dd HH:mm:ss") so the LLM can pass ISO 8601 freely.
+          let newExpirationDate: string | null;
+          if (args.expirationDate === undefined) {
+            newExpirationDate = existing.expirationDate;
+          } else if (args.expirationDate === null) {
+            newExpirationDate = null;
+          } else {
+            const normalized = normalizePaprikaDate(args.expirationDate);
+            if (normalized === null) {
+              return textResult(
+                `Could not parse expirationDate "${args.expirationDate}". Use ISO 8601 (e.g., "2026-12-31") or "yyyy-MM-dd HH:mm:ss".`,
+              );
+            }
+            newExpirationDate = normalized;
+          }
           const newHasExpiration =
             args.expirationDate !== undefined ? args.expirationDate !== null : existing.hasExpiration;
 

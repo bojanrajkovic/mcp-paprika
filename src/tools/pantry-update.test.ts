@@ -125,7 +125,8 @@ describe("pantry-mutations.AC5: update_pantry_item tool", () => {
     });
 
     const callArgs = mockSavePantryItem.mock.calls[0]?.[0];
-    expect(callArgs?.expirationDate).toBe("2026-12-31");
+    // User input is normalized to Paprika wire format ("yyyy-MM-dd HH:mm:ss" at midnight).
+    expect(callArgs?.expirationDate).toBe("2026-12-31 00:00:00");
     expect(callArgs?.hasExpiration).toBe(true);
   });
 

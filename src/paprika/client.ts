@@ -161,7 +161,11 @@ export class PaprikaClient {
 
   async savePantryItem(item: Readonly<PantryItem>): Promise<PantryItem> {
     const formData = this.buildPantryFormData(item);
-    await this.request("POST", `${API_BASE}/pantry/${item.uid}/`, z.boolean(), formData);
+    // Pantry writes (add, update, soft-delete) all POST to the collection URL;
+    // the UID lives in the body, not the URL. Diverges from `saveRecipe`
+    // (which uses /sync/recipe/{uid}/) and matches `groceryaisles`/`groceryingredients`.
+    // Verified 2026-05-08 against macOS Paprika.app v3.8.4 (build:41).
+    await this.request("POST", `${API_BASE}/pantry/`, z.boolean(), formData);
     return item as PantryItem;
   }
 
@@ -186,12 +190,15 @@ export class PaprikaClient {
   }
 
   private buildPantryFormData(item: Readonly<PantryItem>): FormData {
-    const payload = pantryItemToApiPayload(item);
+    // Wire format: gzipped JSON of `[item]` (single-element array), uploaded as
+    // multipart field name="data" filename="file". The Paprika app batches when
+    // multiple changes happen quickly; we always send a one-item batch.
+    const payload = [pantryItemToApiPayload(item)];
     const json = JSON.stringify(payload);
     const compressed = gzipSync(json);
     const blob = new Blob([compressed]);
     const formData = new FormData();
-    formData.append("data", blob, "data.gz");
+    formData.append("data", blob, "file");
     return formData;
   }
 
