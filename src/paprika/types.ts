@@ -167,6 +167,7 @@ export const PantryItemStoredSchema = z.object({
   purchaseDate: z.string().nullable(),
   locationUid: z.string().nullable(),
   notes: z.string().nullable(),
+  deleted: z.boolean().optional().default(false),
 });
 
 // PantryItem type derived from PantryItemStoredSchema.
@@ -188,6 +189,7 @@ export const PantryItemSchema = z
     purchase_date: z.string().nullable(),
     location_uid: z.string().nullable(),
     notes: z.string().nullable(),
+    deleted: z.boolean().optional().default(false),
   })
   .transform(
     ({ aisle_uid, expiration_date, has_expiration, in_stock, purchase_date, location_uid, ...rest }): PantryItem => ({

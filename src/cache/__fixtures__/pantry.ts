@@ -17,6 +17,7 @@ export function makePantryItem(overrides?: Partial<PantryItem>): PantryItem {
     purchaseDate: "2026-01-01 00:00:00",
     locationUid: null,
     notes: null,
+    deleted: false,
     ...overrides,
   };
 }

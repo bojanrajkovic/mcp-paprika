@@ -1,6 +1,8 @@
 # MCP Tool Definitions
 
-Last verified: 2026-05-07
+Last verified: 2026-05-08
+
+> Pantry write tools (`add_pantry_item`, `update_pantry_item`) normalize any user-supplied `expirationDate` through `normalizePaprikaDate()` (`paprika/dates.ts`) before persisting. Accepts ISO 8601, `yyyy-MM-dd`, `yyyy/MM/dd`, or the already-Paprika `yyyy-MM-dd HH:mm:ss`. Unparseable input returns a `textResult` error to the LLM rather than writing garbage. `add_pantry_item` stamps `purchaseDate` via `paprikaDateToday()` (today at midnight, Paprika wire format) and generates UIDs as **uppercase** UUID v4 to match what Paprika.app emits.
 
 Purpose: Defines MCP tools that AI assistants can invoke. Each tool file exports a `register*` function that takes `(server: McpServer, ctx: ServerContext)` and calls `server.registerTool()`. Tools with external dependencies (e.g., vector store) accept additional parameters after `ctx`.
 
@@ -19,13 +21,16 @@ Purpose: Defines MCP tools that AI assistants can invoke. Each tool file exports
 
 ### CRUD Tools
 
-| Tool              | File            | Description                                                                    |
-| ----------------- | --------------- | ------------------------------------------------------------------------------ |
-| `read_recipe`     | `read.ts`       | Fetch recipe by UID or title (exact/prefix/contains match)                     |
-| `create_recipe`   | `create.ts`     | Create a new recipe with name, ingredients, directions, and optional fields    |
-| `update_recipe`   | `update.ts`     | Update existing recipe — partial merge, categories fully replace when provided |
-| `delete_recipe`   | `delete.ts`     | Soft-delete recipe by UID (moves to trash, reversible in Paprika app)          |
-| `get_pantry_item` | `pantry-get.ts` | Fetch pantry item by UID or ingredient (fuzzy match, with disambiguation)      |
+| Tool                 | File               | Description                                                                                                       |
+| -------------------- | ------------------ | ----------------------------------------------------------------------------------------------------------------- |
+| `read_recipe`        | `read.ts`          | Fetch recipe by UID or title (exact/prefix/contains match)                                                        |
+| `create_recipe`      | `create.ts`        | Create a new recipe with name, ingredients, directions, and optional fields                                       |
+| `update_recipe`      | `update.ts`        | Update existing recipe — partial merge, categories fully replace when provided                                    |
+| `delete_recipe`      | `delete.ts`        | Soft-delete recipe by UID (moves to trash, reversible in Paprika app)                                             |
+| `get_pantry_item`    | `pantry-get.ts`    | Fetch pantry item by UID or ingredient (fuzzy match, with disambiguation)                                         |
+| `add_pantry_item`    | `pantry-add.ts`    | Add a new pantry item; rejects duplicate ingredients (case-insensitive exact match) with the existing UID         |
+| `update_pantry_item` | `pantry-update.ts` | Update existing pantry item — partial merge; `hasExpiration` is auto-derived when `expirationDate` is provided    |
+| `delete_pantry_item` | `pantry-delete.ts` | Soft-delete pantry item by UID; idempotent — retried calls return "already deleted" via the store's tombstone set |
 
 ## Registration Pattern
 
@@ -75,6 +80,7 @@ Utilities imported by pantry tool handlers from `./pantry-helpers.js`.
 
 - **`pantryStartGuard(ctx)`** -- Returns `Ok<void>` when pantry is synced, `Err<CallToolResult>` when not yet synced. Always use `.match()` to handle both branches.
 - **`pantryItemToMarkdown(item)`** -- Renders a pantry item as markdown with ingredient, UID, and in-stock status (always rendered) plus quantity, aisle, expiration date, purchase date, and notes when present (omits empty strings and `null` optional fields).
+- **`commitPantryItem(ctx, saved)`** -- Persists a saved pantry item to the local cache and store, then triggers cloud sync. Branches on `saved.deleted`: the upsert branch calls `putPantryItem` (sync) → `flush` (async) → `pantryStore.set` (sync) → `sendResourceListChanged` (sync) → `notifySync` (async); the delete branch calls `removePantryItem` (async) → `flush` (async) → `pantryStore.delete` (sync) → `sendResourceListChanged` (sync) → `notifySync` (async). Called by all pantry write tools after `ctx.client.savePantryItem()`. Do NOT call `ctx.client.notifySync()` separately in the tool handler — `commitPantryItem` already calls it.
 
 ## Testing (`tool-test-utils.ts`)
 

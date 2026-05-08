@@ -52,7 +52,8 @@ In-memory query layer for pantry items, hydrated by the sync engine. Mirrors the
 | `get(uid)`                | `(uid: PantryItemUid): PantryItem \| undefined` | Direct UID lookup                                                                               |
 | `getAll()`                | `(): Array<PantryItem>`                         | Returns all items (insertion order)                                                             |
 | `set(item)`               | `(item: PantryItem): void`                      | Upsert by `item.uid`                                                                            |
-| `delete(uid)`             | `(uid: PantryItemUid): void`                    | Removes the entry if present (no-op otherwise)                                                  |
+| `delete(uid)`             | `(uid: PantryItemUid): void`                    | Removes the entry if present (no-op otherwise); records UID in the tombstone set when present   |
+| `isTombstone(uid)`        | `(uid: PantryItemUid): boolean`                 | `true` if `uid` was soft-deleted via `delete()` since the last `load()` (in-session tombstone)  |
 | `size`                    | `number` getter                                 | Count of items                                                                                  |
 | `hasSynced`               | `boolean` getter                                | `true` after the first `load()` call (even when `items.length === 0`)                           |
 | `findByIngredient(query)` | `(query: string): Array<PantryItem>`            | Tiered case-insensitive lookup: exact match > starts-with > contains; at most one tier returned |
@@ -124,6 +125,7 @@ Diagnostic messages are written directly to `process.stderr`.
 - `load([])` still flips `hasSynced` to `true` — an empty pantry is a valid synced state
 - `findByIngredient()` returns at most one tier (exact > starts-with > contains); ties within a tier are returned in insertion order
 - All read methods are pure (no I/O); the store is rehydrated from `DiskCache.getAllPantryItems()` on startup and refreshed by the sync engine
+- The tombstone set survives sync cycles: `delete()` adds unconditionally; `set()` clears for that UID; `load(items)` clears only for UIDs present in `items` (resurrection). Tombstones for UIDs that stay absent from the snapshot persist, so delayed retries past a sync interval still get the idempotent "already deleted" signal. `delete()` tombstones even when the UID is absent from `_items` to defend against a sync-race in which `commitPantryItem`'s awaits let `syncOnce()` remove the UID before the local commit lands. After every `load()` and `set()`, the tombstone set is disjoint from `_items`
 
 ### DiskCache
 

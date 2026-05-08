@@ -1,12 +1,13 @@
 # Paprika API Client
 
-Last verified: 2026-05-07
+Last verified: 2026-05-08
 
 ## Files
 
 - `types.ts` — Zod schemas and TypeScript types for Paprika API wire format
 - `errors.ts` — Error class hierarchy for API operations
-- `client.ts` — Typed HTTP client for Paprika Cloud Sync API (auth, recipe/category reads, recipe writes, resilient requests)
+- `client.ts` — Typed HTTP client for Paprika Cloud Sync API (auth, recipe/category/pantry reads, recipe and pantry writes, resilient requests)
+- `dates.ts` — Pure helpers for Paprika's pantry-wire date format (`yyyy-MM-dd HH:mm:ss`): `formatPaprikaDate(Date)`, `paprikaDateToday()`, `normalizePaprikaDate(string)` (accepts ISO 8601 / date-only / already-Paprika; returns `null` on unparseable input)
 - `sync.ts` — Background sync engine for polling and syncing recipes/categories with Paprika Cloud
 
 ## Purpose
@@ -32,7 +33,7 @@ HTTP client for the Paprika Cloud Sync API. Handles authentication, request form
 
 - `Recipe` — Full recipe object with 28 fields; output of `RecipeStoredSchema` and `RecipeSchema`
 - `Category` — Category with `uid`, `name`, `orderFlag`, `parentUid`; output of `CategoryStoredSchema` and `CategorySchema`
-- `PantryItem` — Pantry inventory item with 11 fields (`uid`, `ingredient`, `quantity`, `aisle`, `aisleUid`, `expirationDate`, `hasExpiration`, `inStock`, `purchaseDate`, `locationUid`, `notes`); output of `PantryItemStoredSchema` and `PantryItemSchema`
+- `PantryItem` — Pantry inventory item with 12 fields (`uid`, `ingredient`, `quantity`, `aisle`, `aisleUid`, `expirationDate`, `hasExpiration`, `inStock`, `purchaseDate`, `locationUid`, `notes`, `deleted`); output of `PantryItemStoredSchema` and `PantryItemSchema`. The `deleted` field is `optional().default(false)` on both schemas — read responses may omit it for live items, but the parsed object always carries a concrete boolean.
 - `AuthResponse` — Authentication response `{result: {token: string}}`; output of `AuthResponseSchema`
 
 **Domain Types:**
@@ -90,18 +91,29 @@ Typed HTTP client wrapping the Paprika Cloud Sync API.
 - `listCategories(): Promise<Array<Category>>` — fetches category list, then hydrates each with bulkhead(5) concurrency limit independent of recipe bulkhead
 - `listPantry(): Promise<Array<PantryItem>>` — fetches fully-hydrated pantry items from `/api/v2/sync/pantry/` (no entry/detail split; all items are complete objects)
 - `saveRecipe(recipe: Readonly<Recipe>): Promise<Recipe>` — serializes recipe to camelCase-to-snake_case JSON, gzip-compresses, POSTs as `FormData` with `data.gz` attachment
+- `savePantryItem(item: Readonly<PantryItem>): Promise<PantryItem>` — serializes pantry item to camelCase-to-snake_case JSON wrapped in a single-element array, gzip-compresses, POSTs as `FormData` with field `data` filename `file` to the **collection URL** `/api/v2/sync/pantry/` (NO UID in path — diverges from `saveRecipe`). Returns the input item on success (Paprika responds with `{result: true}`, not the saved object). All operations (add, update, soft-delete) use this same endpoint and body shape; the soft-delete is expressed by toggling `deleted: true` on the item. Paprika upserts by `uid` — POSTing with an unknown UID creates the item.
 - `deleteRecipe(uid: RecipeUid): Promise<void>` — soft-delete: fetches recipe, sets `inTrash: true`, saves, then calls `notifySync()`
 - `notifySync(): Promise<void>` — POSTs to `/api/v2/sync/notify/` to trigger cloud sync propagation
 
 **Private API:**
 
 - `buildRecipeFormData(recipe: Readonly<Recipe>): FormData` — converts recipe to snake_case JSON, gzip-compresses, wraps in FormData with `data.gz` blob
+- `buildPantryFormData(item: Readonly<PantryItem>): FormData` — converts pantry item to snake_case JSON via `pantryItemToApiPayload`, gzip-compresses, wraps in FormData with `data.gz` blob
 - `request<T>(method, url, schema, body?): Promise<T>` — authenticated v2 API calls with:
   - Bearer token header (when token exists)
   - Cockatiel retry (429, 500, 502, 503) + circuit breaker (5 consecutive failures)
   - 401 re-auth retry (single attempt)
   - Response envelope unwrapping (`{ result: T }` → `T`)
   - Zod schema validation of inner value
+
+**Pantry write wire format** (verified 2026-05-08 against macOS Paprika.app v3.8.4 build:41 via mitmproxy):
+
+- Endpoint: `POST /api/v2/sync/pantry/` (collection URL, NO UID in path — diverges from `saveRecipe` which uses `/sync/recipe/{uid}/`)
+- Body: gzipped JSON `Array<PantryItemWire>` (single-element array even for one item; Paprika.app batches when multiple changes happen quickly)
+- Multipart: field name `data`, filename `file`, content-type `application/octet-stream`
+- Date format: `yyyy-MM-dd HH:mm:ss` (no T, no timezone, no fractional seconds) — see `src/paprika/dates.ts` for helpers
+- UID: uppercase UUID v4 (Paprika is case-insensitive but its app emits uppercase)
+- All operations use the same shape: add, update, and soft-delete are differentiated only by item content; soft-delete sets `deleted: true`. The `aisleUid` is a 64-char uppercase hex string (Paprika's aisle catalog ID, NOT a UUID).
 
 **Dependencies:**
 

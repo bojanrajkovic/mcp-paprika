@@ -30,9 +30,9 @@ MCP server for the Paprika recipe manager. Communicates over stdio transport —
 ## Project Structure
 
 - `src/index.ts` — Entry point: config, auth, cache, store (recipes), pantryStore, server, tools, resources, sync, semantic search, stdio
-- `src/paprika/` — Paprika API client with pantry read support (`listPantry()` method)
+- `src/paprika/` — Paprika API client with pantry read and write support (`listPantry()`, `savePantryItem()` methods)
 - `src/cache/` — Caching layer with `PantryStore` for in-memory queries and pantry persistence
-- `src/tools/` — MCP tool definitions including `list_pantry` and `get_pantry_item` for pantry access
+- `src/tools/` — MCP tool definitions including read tools (`list_pantry`, `get_pantry_item`) and write tools (`add_pantry_item`, `update_pantry_item`, `delete_pantry_item`) for pantry access
 - `src/resources/` — MCP resource definitions including `paprika://pantry/{uid}` resource template
 - `src/features/` — Feature implementations
 - `src/types/` — Shared type definitions including `PantryItem` and branded `PantryItemUid`
