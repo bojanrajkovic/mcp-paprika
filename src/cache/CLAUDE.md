@@ -125,7 +125,7 @@ Diagnostic messages are written directly to `process.stderr`.
 - `load([])` still flips `hasSynced` to `true` — an empty pantry is a valid synced state
 - `findByIngredient()` returns at most one tier (exact > starts-with > contains); ties within a tier are returned in insertion order
 - All read methods are pure (no I/O); the store is rehydrated from `DiskCache.getAllPantryItems()` on startup and refreshed by the sync engine
-- The tombstone set survives sync cycles: `delete()` adds; `set()` clears for that UID; `load(items)` clears only for UIDs present in `items` (resurrection). Tombstones for UIDs that stay absent from the snapshot persist, so delayed retries past a sync interval still get the idempotent "already deleted" signal. `delete()` of an absent UID does NOT record a spurious tombstone. After every `load()` and `set()`, the tombstone set is disjoint from `_items`
+- The tombstone set survives sync cycles: `delete()` adds unconditionally; `set()` clears for that UID; `load(items)` clears only for UIDs present in `items` (resurrection). Tombstones for UIDs that stay absent from the snapshot persist, so delayed retries past a sync interval still get the idempotent "already deleted" signal. `delete()` tombstones even when the UID is absent from `_items` to defend against a sync-race in which `commitPantryItem`'s awaits let `syncOnce()` remove the UID before the local commit lands. After every `load()` and `set()`, the tombstone set is disjoint from `_items`
 
 ### DiskCache
 

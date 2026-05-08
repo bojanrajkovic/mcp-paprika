@@ -148,13 +148,38 @@ describe("PantryStore", () => {
       expect(store.isTombstone("uid-1" as PantryItemUid)).toBe(true);
     });
 
-    it("delete() of an absent UID does NOT add a spurious tombstone", () => {
-      // Avoids treating "delete unknown UID" as if we'd successfully soft-deleted it.
+    it("delete() always tombstones, even if the UID is absent (sync-race defense)", () => {
+      // Codex P2 fix: the only caller of pantryStore.delete is
+      // commitPantryItem post-successful-save. Several awaits separate the
+      // save from the local commit, during which SyncEngine.syncOnce() can
+      // call load(...) and remove the UID from _items. If we conditioned
+      // the tombstone on _items.has(uid), that race would silently drop the
+      // idempotent retry signal. Always-tombstoning trades an acceptable
+      // false-positive (extra "already deleted" message for any future
+      // caller that delete()s an unknown UID) against a real correctness
+      // hazard.
       store.load([]);
 
       store.delete("uid-never-existed" as PantryItemUid);
 
-      expect(store.isTombstone("uid-never-existed" as PantryItemUid)).toBe(false);
+      expect(store.isTombstone("uid-never-existed" as PantryItemUid)).toBe(true);
+    });
+
+    it("delete() after a sync-race load() still records a tombstone (Codex regression)", () => {
+      // Mimics the production interleaving: a save+commit sequence races
+      // with syncOnce() calling load(...). The save succeeds server-side,
+      // but a sync cycle removes the UID from _items before commit calls
+      // delete. The tombstone must STILL land so retries get the
+      // idempotent signal.
+      const item = makePantryItem({ uid: "uid-1" as PantryItemUid });
+      store.load([item]);
+      // Sync cycle replaces the snapshot — uid-1 already removed server-side
+      // (deleted+filtered), so the new load doesn't include it.
+      store.load([]);
+      // ...now commitPantryItem's delete branch finally lands.
+      store.delete("uid-1" as PantryItemUid);
+
+      expect(store.isTombstone("uid-1" as PantryItemUid)).toBe(true);
     });
 
     it("set() of a previously-tombstoned UID clears the tombstone (resurrection)", () => {

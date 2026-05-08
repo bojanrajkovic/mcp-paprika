@@ -39,9 +39,16 @@ export class PantryStore {
   }
 
   delete(uid: PantryItemUid): void {
-    if (this._items.has(uid)) {
-      this._tombstones.add(uid);
-    }
+    // Always tombstone, regardless of whether `uid` is currently in `_items`.
+    // The only caller is `commitPantryItem`'s delete branch (post-successful
+    // savePantryItem), but several awaits separate the save from the local
+    // commit; SyncEngine.syncOnce() can interleave a `load(...)` that wipes
+    // the UID from `_items` before commit lands. Conditioning the tombstone
+    // on `_items.has(uid)` would silently drop the idempotent retry signal
+    // in exactly that race. Spurious tombstones from other callers are
+    // acceptable: an extra "already deleted" message is harmless; a missing
+    // one isn't.
+    this._tombstones.add(uid);
     this._items.delete(uid);
   }
 
