@@ -2,21 +2,25 @@ import type { PantryItem, PantryItemUid } from "../paprika/types.js";
 
 export class PantryStore {
   private readonly _items: Map<PantryItemUid, PantryItem> = new Map();
-  // Tombstones track UIDs that were soft-deleted via this client in the current
-  // session, so `delete_pantry_item` can return a distinct "already deleted"
-  // message for retried calls (server upserts by UID and the live-items map
-  // alone can't distinguish "I deleted this" from "this never existed").
-  // Cleared on `load()` since each sync's listPantry response is authoritative
-  // (server filters out tombstones from the read-list, so post-sync we trust
-  // the snapshot). Resurrection via `set()` clears the tombstone.
+  // Tombstones track UIDs that were soft-deleted via this client, so
+  // `delete_pantry_item` can return a distinct "already deleted" message for
+  // retried calls (server upserts by UID and the live-items map alone can't
+  // distinguish "I deleted this" from "this never existed"). Tombstones
+  // persist across `load()` so delayed retries that span a sync cycle still
+  // get the idempotent signal — `load()` only un-tombstones UIDs that are
+  // now back in the live items list (i.e. resurrected by the server, e.g.,
+  // un-deleted via another client). The tombstone set therefore stays
+  // disjoint from `_items` after every load.
   private readonly _tombstones: Set<PantryItemUid> = new Set();
   private _hasSynced = false;
 
   load(items: ReadonlyArray<PantryItem>): void {
     this._items.clear();
-    this._tombstones.clear();
     for (const item of items) {
       this._items.set(item.uid, item);
+      // Resurrection: if this UID was previously tombstoned, the new live
+      // entry supersedes the tombstone (item came back from the server).
+      this._tombstones.delete(item.uid);
     }
     this._hasSynced = true;
   }

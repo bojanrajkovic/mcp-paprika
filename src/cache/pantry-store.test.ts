@@ -169,16 +169,36 @@ describe("PantryStore", () => {
       expect(store.get("uid-1" as PantryItemUid)).toEqual(item);
     });
 
-    it("load() clears the tombstone set (sync snapshot is authoritative)", () => {
+    it("load() preserves tombstones for UIDs absent from the new items list", () => {
+      // Codex P2 fix: tombstones must survive sync cycles so delayed retries
+      // (e.g., after a transient transport error) still get the idempotent
+      // "already deleted" signal. The server's listPantry filters out
+      // tombstoned items, so an absent UID after sync = still server-side-deleted.
       const item = makePantryItem({ uid: "uid-1" as PantryItemUid });
       store.load([item]);
       store.delete("uid-1" as PantryItemUid);
       expect(store.isTombstone("uid-1" as PantryItemUid)).toBe(true);
 
-      // Next sync arrives — the server's view replaces local in-session state.
+      // Next sync arrives without uid-1 (server has it tombstoned too).
       store.load([]);
 
+      // Tombstone must persist so retried delete still returns "already deleted".
+      expect(store.isTombstone("uid-1" as PantryItemUid)).toBe(true);
+    });
+
+    it("load() clears tombstones for UIDs that resurrect in the new items list", () => {
+      // If another client un-deletes the item, the server returns it as live;
+      // our store should drop the tombstone so items and tombstones stay
+      // disjoint and the resurrected item is visible.
+      const item = makePantryItem({ uid: "uid-1" as PantryItemUid });
+      store.load([item]);
+      store.delete("uid-1" as PantryItemUid);
+      expect(store.isTombstone("uid-1" as PantryItemUid)).toBe(true);
+
+      store.load([item]);
+
       expect(store.isTombstone("uid-1" as PantryItemUid)).toBe(false);
+      expect(store.get("uid-1" as PantryItemUid)).toEqual(item);
     });
   });
 });
