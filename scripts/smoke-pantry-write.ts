@@ -231,7 +231,11 @@ async function runFailureProbes(
       // best-effort cleanup; ignore failures here
     }
   }
-  await client.notifySync();
+  try {
+    await client.notifySync();
+  } catch {
+    // best-effort sync; ignore failures here
+  }
 
   // Probe (b): RE-DELETE the just-deleted happy-path item (AC7.3.b literal: "second delete
   // of the just-deleted item"). Skip the probe if Section 2 didn't reach the delete step.
