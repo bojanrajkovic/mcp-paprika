@@ -1,0 +1,71 @@
+import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+
+import { buildAppContext, buildMcpServer } from "../server/build.js";
+import { singleServerNotifier } from "../server/notifier.js";
+import type { PaprikaConfig } from "../utils/config.js";
+
+function log(msg: string): void {
+  process.stderr.write(`[mcp-paprika] ${msg}\n`);
+}
+
+export interface TransportHandle {
+  shutdown(): Promise<void>;
+}
+
+/**
+ * Emit a one-line warning if the user set HTTP env vars while transport is
+ * stdio. The HTTP config block is always populated (defaults), so we
+ * detect "user-set" by inspecting env vars directly. Catches the typo case
+ * where someone sets `MCP_HTTP_PORT=8080` and forgets `MCP_TRANSPORT=http`.
+ */
+function warnIfUnusedHttpConfig(env: NodeJS.ProcessEnv): void {
+  const set: string[] = [];
+  if (env["MCP_HTTP_PORT"] !== undefined) set.push("MCP_HTTP_PORT");
+  if (env["MCP_HTTP_HOST"] !== undefined) set.push("MCP_HTTP_HOST");
+  if (set.length > 0) {
+    process.stderr.write(
+      `[mcp-paprika] WARNING: ${set.join(", ")} set but MCP_TRANSPORT=stdio (default); HTTP config ignored. ` +
+        `Set MCP_TRANSPORT=http to use Streamable HTTP.\n`,
+    );
+  }
+}
+
+/**
+ * Start the server with a single stdio session. Returns a handle whose
+ * `shutdown()` stops the background sync engine; the stdio transport itself
+ * does not need to be torn down (the process exits when stdin closes).
+ */
+export async function startStdio(config: PaprikaConfig): Promise<TransportHandle> {
+  warnIfUnusedHttpConfig(process.env);
+
+  // Deferred-getter notifier resolves the chicken-and-egg between AppContext
+  // (needs notifier) and McpServer (built from AppContext, then bound to
+  // notifier). See src/server/notifier.ts for the rationale.
+  let server: McpServer | undefined;
+  const notifier = singleServerNotifier(() => server);
+
+  const { app, sync } = await buildAppContext(config, notifier);
+  server = buildMcpServer(app);
+
+  log("Running initial sync...");
+  await sync.syncOnce();
+  log("Initial sync complete.");
+
+  if (config.sync.enabled) {
+    sync.start();
+    log(`Sync engine started (interval: ${config.sync.interval.toString()}ms).`);
+  } else {
+    log("Background sync disabled.");
+  }
+
+  log("Connecting stdio transport...");
+  await server.connect(new StdioServerTransport());
+  log("Server ready.");
+
+  return {
+    async shutdown() {
+      sync.stop();
+    },
+  };
+}
