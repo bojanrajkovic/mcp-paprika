@@ -1,6 +1,6 @@
 # MCP SDK Verified API Reference
 
-> Verified against `@modelcontextprotocol/sdk` v1.27.1 — see `scripts/verify-sdk.ts` for compile-time and runtime proof.
+> Verified against `@modelcontextprotocol/sdk` v1.29.0 — see `scripts/verify-sdk.ts` for compile-time and runtime proof.
 >
 > This document is the authoritative reference for downstream units (P2-U10, P2-U11, P2-U12).
 > Where it differs from the Phase 2 architecture doc, **this document takes precedence**.
@@ -8,12 +8,12 @@
 ## 1. SDK Version
 
 - **Package:** `@modelcontextprotocol/sdk`
-- **Installed version:** 1.27.1
+- **Installed version:** 1.29.0
 - **Installed as:** runtime dependency (`dependencies`, not `devDependencies`)
 
 ## 2. Import Paths
 
-**These import paths are verified by `scripts/verify-sdk.ts` as the successful compilation paths for SDK v1.27.1.**
+**These import paths are verified by `scripts/verify-sdk.ts` as the successful compilation paths for SDK v1.29.0.**
 
 The design research assumed barrel exports at `@modelcontextprotocol/sdk/server`, but the actual SDK uses subpath exports. Use these paths:
 
@@ -188,3 +188,64 @@ async function handleTool(args: ToolArgs): Promise<CallToolResult> {
 | 2   | Import: Transport | `import { StdioServerTransport } from "@modelcontextprotocol/sdk/server"` | `import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"` (subpath export, not barrel) | `import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";`      |
 | 3   | Notifications     | `server.notification({ method: "notifications/resources/list_changed" })` | Explicit method on McpServer: `sendResourceListChanged()`                                                       | `server.sendResourceListChanged();`                                                      |
 | 4   | Resource callback | `(uri, { uid })`                                                          | `(uri: URL, variables: Record<string, string>, extra)`                                                          | `async (uri, variables, extra) => { const uid = variables.uid; ... }`                    |
+
+## 10. Streamable HTTP transport
+
+The Streamable HTTP transport (issue #44) lets HTTP-based MCP clients connect over a
+single endpoint that multiplexes JSON-RPC and SSE streaming. Two implementations are
+available:
+
+- **Primary**: `@hono/mcp`'s `StreamableHTTPTransport` — a Hono-native wrapper that
+  takes a Hono `Context` directly. This is what `src/transport/http.ts` uses.
+- **Fallback**: the SDK-native `WebStandardStreamableHTTPServerTransport` — same
+  protocol, ships with the SDK; useful if you ever need to drop the `@hono/mcp`
+  dependency.
+
+### Verified imports
+
+| Construct                                  | Import Path                                                     |
+| ------------------------------------------ | --------------------------------------------------------------- |
+| `StreamableHTTPTransport`                  | `@hono/mcp`                                                     |
+| `StreamableHTTPServerTransport`            | `@modelcontextprotocol/sdk/server/streamableHttp.js`            |
+| `WebStandardStreamableHTTPServerTransport` | `@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js` |
+| `isInitializeRequest`                      | `@modelcontextprotocol/sdk/types.js`                            |
+
+### Constructor options
+
+`StreamableHTTPTransport` accepts the SDK's `StreamableHTTPServerTransportOptions`
+(an alias of `WebStandardStreamableHTTPServerTransportOptions`):
+
+```typescript
+new StreamableHTTPTransport({
+  sessionIdGenerator: () => crypto.randomUUID(),
+  onsessioninitialized: (sessionId: string) => void | Promise<void>,
+  onsessionclosed: (sessionId: string) => void | Promise<void>,
+  enableJsonResponse: false,  // default; true to skip SSE and return JSON
+});
+```
+
+### handleRequest signature
+
+```typescript
+handleRequest(c: Context, parsedBody?: unknown): Promise<Response | undefined>;
+```
+
+It takes a Hono `Context`, **not** a `Request` or `c.req.raw`. Pre-parse the JSON body
+only when sniffing for `isInitializeRequest` on a new (no-session-id) request — the
+transport reads the body itself otherwise.
+
+### Per-session pattern
+
+For stateful mode (one McpServer per HTTP session), wire `onsessioninitialized` to add
+to a `Map<sessionId, { server, transport }>` and `onsessionclosed` to remove. Shared
+state (Paprika client, caches, stores, vector index) lives in a single `AppContext`;
+tool registration happens per-session via `buildMcpServer(app)`. See
+`src/transport/http.ts` for the canonical wiring.
+
+### Graceful shutdown
+
+Order is load-bearing: stop sync → `transport.close()` on every session concurrently
+(aborts open SSE writers) → clear session map → `httpServer.close()` (drains remaining
+short-lived connections). Wrap the whole sequence in a hard timeout (~10s);
+`http.Server.close()` waits forever for long-lived SSE GET streams to terminate on
+their own.

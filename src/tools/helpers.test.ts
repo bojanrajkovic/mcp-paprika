@@ -12,7 +12,12 @@ const makeCtx = (size: number) =>
     client: {} as unknown as ServerContext["client"],
     cache: {} as unknown as ServerContext["cache"],
     pantryStore: {} as unknown as ServerContext["pantryStore"],
+    vectorStore: null,
     server: {} as unknown as ServerContext["server"],
+    notifier: {
+      resourceListChanged: () => {},
+      loggingMessage: async () => {},
+    },
   }) satisfies ServerContext;
 
 describe("p2-u02-shared-helpers: shared helper functions", () => {
@@ -248,19 +253,24 @@ describe("p2-u02-shared-helpers: shared helper functions", () => {
   });
 
   describe("p2-recipe-crud.AC-helpers: commitRecipe", () => {
-    it("p2-recipe-crud.AC-helpers.7: calls putRecipe, flush, store.set, sendResourceListChanged, and notifySync exactly once each", async () => {
+    it("p2-recipe-crud.AC-helpers.7: calls putRecipe, flush, store.set, notifier.resourceListChanged, and notifySync exactly once each", async () => {
       const mockPutRecipe = vi.fn();
       const mockFlush = vi.fn().mockResolvedValue(undefined);
       const mockNotifySync = vi.fn().mockResolvedValue(undefined);
       const mockStoreSet = vi.fn();
-      const mockSendResourceListChanged = vi.fn();
+      const mockResourceListChanged = vi.fn();
 
       const ctx = {
         cache: { putRecipe: mockPutRecipe, flush: mockFlush } as unknown as DiskCache,
         client: { notifySync: mockNotifySync } as unknown as PaprikaClient,
         store: { set: mockStoreSet } as unknown as ServerContext["store"],
         pantryStore: {} as unknown as ServerContext["pantryStore"],
-        server: { sendResourceListChanged: mockSendResourceListChanged } as unknown as ServerContext["server"],
+        vectorStore: null,
+        server: {} as unknown as ServerContext["server"],
+        notifier: {
+          resourceListChanged: mockResourceListChanged,
+          loggingMessage: vi.fn().mockResolvedValue(undefined),
+        },
       } satisfies ServerContext;
 
       const saved = makeRecipe();
@@ -269,11 +279,11 @@ describe("p2-u02-shared-helpers: shared helper functions", () => {
       expect(mockPutRecipe).toHaveBeenCalledTimes(1);
       expect(mockFlush).toHaveBeenCalledTimes(1);
       expect(mockStoreSet).toHaveBeenCalledTimes(1);
-      expect(mockSendResourceListChanged).toHaveBeenCalledTimes(1);
+      expect(mockResourceListChanged).toHaveBeenCalledTimes(1);
       expect(mockNotifySync).toHaveBeenCalledTimes(1);
     });
 
-    it("p2-recipe-crud.AC-helpers.8: call order is putRecipe → flush → storeSet → sendResourceListChanged → notifySync", async () => {
+    it("p2-recipe-crud.AC-helpers.8: call order is putRecipe → flush → storeSet → resourceListChanged → notifySync", async () => {
       const callOrder: Array<string> = [];
 
       const mockPutRecipe = vi.fn(() => {
@@ -288,8 +298,8 @@ describe("p2-u02-shared-helpers: shared helper functions", () => {
       const mockStoreSet = vi.fn(() => {
         callOrder.push("storeSet");
       });
-      const mockSendResourceListChanged = vi.fn(() => {
-        callOrder.push("sendResourceListChanged");
+      const mockResourceListChanged = vi.fn(() => {
+        callOrder.push("resourceListChanged");
       });
 
       const ctx = {
@@ -297,13 +307,18 @@ describe("p2-u02-shared-helpers: shared helper functions", () => {
         client: { notifySync: mockNotifySync } as unknown as PaprikaClient,
         store: { set: mockStoreSet } as unknown as ServerContext["store"],
         pantryStore: {} as unknown as ServerContext["pantryStore"],
-        server: { sendResourceListChanged: mockSendResourceListChanged } as unknown as ServerContext["server"],
+        vectorStore: null,
+        server: {} as unknown as ServerContext["server"],
+        notifier: {
+          resourceListChanged: mockResourceListChanged,
+          loggingMessage: vi.fn().mockResolvedValue(undefined),
+        },
       } satisfies ServerContext;
 
       const saved = makeRecipe();
       await commitRecipe(ctx, saved);
 
-      expect(callOrder).toEqual(["putRecipe", "flush", "storeSet", "sendResourceListChanged", "notifySync"]);
+      expect(callOrder).toEqual(["putRecipe", "flush", "storeSet", "resourceListChanged", "notifySync"]);
     });
 
     it("p2-recipe-crud.AC-helpers.9: store.set is called with the saved recipe", async () => {
@@ -311,14 +326,19 @@ describe("p2-u02-shared-helpers: shared helper functions", () => {
       const mockFlush = vi.fn().mockResolvedValue(undefined);
       const mockNotifySync = vi.fn().mockResolvedValue(undefined);
       const mockStoreSet = vi.fn();
-      const mockSendResourceListChanged = vi.fn();
+      const mockResourceListChanged = vi.fn();
 
       const ctx = {
         cache: { putRecipe: mockPutRecipe, flush: mockFlush } as unknown as DiskCache,
         client: { notifySync: mockNotifySync } as unknown as PaprikaClient,
         store: { set: mockStoreSet } as unknown as ServerContext["store"],
         pantryStore: {} as unknown as ServerContext["pantryStore"],
-        server: { sendResourceListChanged: mockSendResourceListChanged } as unknown as ServerContext["server"],
+        vectorStore: null,
+        server: {} as unknown as ServerContext["server"],
+        notifier: {
+          resourceListChanged: mockResourceListChanged,
+          loggingMessage: vi.fn().mockResolvedValue(undefined),
+        },
       } satisfies ServerContext;
 
       const saved = makeRecipe({ name: "Test Recipe" });

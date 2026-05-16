@@ -11,15 +11,18 @@ Environment variables always win. If you set `PAPRIKA_EMAIL` as an env var and a
 
 ## Environment variables
 
-| Variable                | Config path                   | Required | Default | Description                      |
-| ----------------------- | ----------------------------- | -------- | ------- | -------------------------------- |
-| `PAPRIKA_EMAIL`         | `paprika.email`               | Yes      | —       | Paprika account email            |
-| `PAPRIKA_PASSWORD`      | `paprika.password`            | Yes      | —       | Paprika account password         |
-| `PAPRIKA_SYNC_INTERVAL` | `sync.interval`               | No       | `"15m"` | Background sync polling interval |
-| `PAPRIKA_SYNC_ENABLED`  | `sync.enabled`                | No       | `true`  | Enable background sync           |
-| `OPENAI_API_KEY`        | `features.embeddings.apiKey`  | No       | —       | Embedding provider API key       |
-| `OPENAI_BASE_URL`       | `features.embeddings.baseUrl` | No       | —       | Embedding provider base URL      |
-| `EMBEDDING_MODEL`       | `features.embeddings.model`   | No       | —       | Embedding model identifier       |
+| Variable                | Config path                   | Required | Default     | Description                                                           |
+| ----------------------- | ----------------------------- | -------- | ----------- | --------------------------------------------------------------------- |
+| `PAPRIKA_EMAIL`         | `paprika.email`               | Yes      | —           | Paprika account email                                                 |
+| `PAPRIKA_PASSWORD`      | `paprika.password`            | Yes      | —           | Paprika account password                                              |
+| `PAPRIKA_SYNC_INTERVAL` | `sync.interval`               | No       | `"15m"`     | Background sync polling interval                                      |
+| `PAPRIKA_SYNC_ENABLED`  | `sync.enabled`                | No       | `true`      | Enable background sync                                                |
+| `MCP_TRANSPORT`         | `transport`                   | No       | `"stdio"`   | Transport mode: `"stdio"` (CLI clients) or `"http"` (Streamable HTTP) |
+| `MCP_HTTP_PORT`         | `http.port`                   | No       | `3000`      | Port to bind when `MCP_TRANSPORT=http` (1–65535)                      |
+| `MCP_HTTP_HOST`         | `http.host`                   | No       | `"0.0.0.0"` | Host to bind when `MCP_TRANSPORT=http`                                |
+| `OPENAI_API_KEY`        | `features.embeddings.apiKey`  | No       | —           | Embedding provider API key                                            |
+| `OPENAI_BASE_URL`       | `features.embeddings.baseUrl` | No       | —           | Embedding provider base URL                                           |
+| `EMBEDDING_MODEL`       | `features.embeddings.model`   | No       | —           | Embedding model identifier                                            |
 
 ### Embedding config gating
 
@@ -38,6 +41,22 @@ All three embedding variables (`OPENAI_API_KEY`, `OPENAI_BASE_URL`, `EMBEDDING_M
 
 `PAPRIKA_SYNC_ENABLED` accepts `"true"`, `"false"`, `"1"`, or `"0"`.
 
+## HTTP transport
+
+`MCP_TRANSPORT=http` switches the server from stdio to a Streamable HTTP endpoint that
+serves the MCP protocol at `POST /mcp` and a liveness probe at `GET /healthz`. Stdio
+remains the default so existing CLI clients (Claude Code, Claude Desktop, Cursor,
+mcp-cli) are unaffected.
+
+`MCP_HTTP_PORT` accepts a number string or bare number and is coerced to an integer
+in the range `1`–`65535`. `MCP_HTTP_HOST` accepts any non-empty string; default is
+`0.0.0.0` (all interfaces).
+
+> **Security:** This server has **no built-in authentication**. Do not expose
+> `MCP_HTTP_PORT` directly to the public internet. Run it behind Cloudflare Access,
+> Tailscale Serve, an OAuth2 proxy, or your reverse proxy of choice. OAuth 2.1
+> support is a planned follow-up.
+
 ## Config file
 
 Place a `config.json` in the config directory. All fields are optional — you can mix config file and env vars.
@@ -51,6 +70,11 @@ Place a `config.json` in the config directory. All fields are optional — you c
   "sync": {
     "enabled": true,
     "interval": "15m"
+  },
+  "transport": "stdio",
+  "http": {
+    "port": 3000,
+    "host": "0.0.0.0"
   },
   "features": {
     "embeddings": {

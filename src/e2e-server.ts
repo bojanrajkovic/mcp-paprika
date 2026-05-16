@@ -3,30 +3,22 @@
  * Test-specific server entry point that mocks PaprikaClient for E2E testing.
  *
  * This is spawned by e2e.test.integration.ts to test the MCP server
- * without needing real Paprika credentials.
+ * without needing real Paprika credentials. Reuses `buildMcpServer` for
+ * tool/resource registration so production and e2e paths share the same
+ * wiring. Sync is intentionally disabled; vectorStore is `null` (the
+ * discover tool is gated on its presence, matching the prior 10-tool
+ * subset semantics asserted by `e2e.test.integration.ts`).
  */
 
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { DiskCache } from "./cache/disk-cache.js";
 import { RecipeStore } from "./cache/recipe-store.js";
 import { PantryStore } from "./cache/pantry-store.js";
-import { loadConfig } from "./utils/config.js";
+import { buildMcpServer } from "./server/build.js";
+import type { AppContext } from "./server/app-context.js";
+import { singleServerNotifier } from "./server/notifier.js";
 import { getCacheDir } from "./utils/xdg.js";
-import { registerSearchTool } from "./tools/search.js";
-import { registerFilterTools } from "./tools/filter.js";
-import { registerCategoryTools } from "./tools/categories.js";
-import { registerReadTool } from "./tools/read.js";
-import { registerCreateTool } from "./tools/create.js";
-import { registerUpdateTool } from "./tools/update.js";
-import { registerDeleteTool } from "./tools/delete.js";
-import { registerListTool } from "./tools/list.js";
-import { registerListPantryTool } from "./tools/pantry-list.js";
-import { registerGetPantryItemTool } from "./tools/pantry-get.js";
-import { registerRecipeResources } from "./resources/recipes.js";
-import { registerPantryResources } from "./resources/pantry.js";
-import { setupDiscoverFeature } from "./features/discover-feature.js";
-import type { ServerContext } from "./types/server-context.js";
 import type {
   Category,
   Recipe,
@@ -41,7 +33,6 @@ function log(msg: string): void {
   process.stderr.write(`[mcp-paprika-test] ${msg}\n`);
 }
 
-// Mock PaprikaClient for testing
 interface IMockPaprikaClient {
   authenticate(): Promise<void>;
   listRecipes(): Promise<Array<RecipeEntry>>;
@@ -157,109 +148,56 @@ class MockPaprikaClient implements IMockPaprikaClient {
 }
 
 async function main(): Promise<void> {
-  // 1. Load and validate config
-  log("Loading configuration...");
-  const configResult = loadConfig();
-  const config = configResult.match(
-    (cfg) => cfg,
-    (err) => {
-      throw err;
-    },
-  );
-
-  // 2. Use mock client instead of real one
   log("Using mock Paprika client for testing...");
   const client = new MockPaprikaClient();
   await client.authenticate();
   log("Mock authentication complete.");
 
-  // 3. Construct DiskCache and initialize
   log("Initializing disk cache...");
   const cache = new DiskCache(getCacheDir());
   await cache.init();
 
-  // 4. Construct RecipeStore and seed with mock data
   const store = new RecipeStore();
   const cachedRecipes = await cache.getAllRecipes();
   for (const recipe of cachedRecipes) {
     store.set(recipe);
   }
-  // Always add the mock recipe so tools and resources work without a real sync
   store.set(client.getMockRecipe());
   store.setCategories([client.getMockCategory()]);
-  log(`Hydrated store with ${store.size} recipes.`);
+  log(`Hydrated store with ${store.size.toString()} recipes.`);
 
-  // 5. Construct PantryStore and hydrate with mock data
   const pantryStore = new PantryStore();
   pantryStore.load([client.getMockPantryItem()]);
   log("Hydrated pantry store with mock data.");
 
-  // 6. Construct McpServer
-  const server = new McpServer({
-    name: "mcp-paprika",
-    version: "0.0.0",
-  });
+  // Deferred-getter notifier (see src/index.ts for the rationale).
+  let server: McpServer | undefined;
+  const notifier = singleServerNotifier(() => server);
 
-  // 7. Assemble ServerContext
-  const ctx: ServerContext = {
-    client: client as unknown as ServerContext["client"],
+  const app: AppContext = {
+    client: client as unknown as AppContext["client"],
     cache,
     store,
     pantryStore,
-    server,
+    vectorStore: null, // discover tool intentionally not registered (no embeddings in e2e)
+    notifier,
   };
 
-  // 8. Register all tools
-  registerSearchTool(server, ctx);
-  registerFilterTools(server, ctx);
-  registerCategoryTools(server, ctx);
-  registerListTool(server, ctx);
-  registerReadTool(server, ctx);
-  registerCreateTool(server, ctx);
-  registerUpdateTool(server, ctx);
-  registerDeleteTool(server, ctx);
-  registerListPantryTool(server, ctx);
-  registerGetPantryItemTool(server, ctx);
-  log("Registered 10 tools.");
-
-  // 9. Register recipe resources
-  registerRecipeResources(server, ctx);
-  log("Registered recipe resources.");
-
-  // 10. Register pantry resources
-  registerPantryResources(server, ctx);
-  log("Registered pantry resources.");
-
-  // 11. Construct SyncEngine (but don't use real one, keep it minimal)
-  // For testing, we skip the sync engine to avoid background polling
+  server = buildMcpServer(app);
+  log("Registered tools and resources via buildMcpServer.");
   log("Sync engine disabled for E2E testing.");
 
-  // 12. Setup discover feature (if configured)
-  if (config.features?.embeddings) {
-    log("Setting up discover feature...");
-    // Mock SyncEngine for discover feature
-    const mockSync = {
-      events: { on: () => {}, off: () => {} },
-    } as unknown;
-    await setupDiscoverFeature(server, ctx, mockSync as any, config);
-  } else {
-    log("Discover feature disabled (embeddings not configured).");
-  }
-
-  // 13. Register SIGINT handler
   process.on("SIGINT", () => {
     log("SIGINT received, shutting down...");
     process.exit(0);
   });
 
-  // 14. Connect stdio transport
   log("Connecting stdio transport...");
   await server.connect(new StdioServerTransport());
   log("Server ready.");
 }
 
-main().catch((err) => {
-  /* oxlint-disable-next-line no-console */
-  console.error(err instanceof Error ? err.message : String(err));
+main().catch((err: unknown) => {
+  process.stderr.write(`${err instanceof Error ? err.message : String(err)}\n`);
   process.exit(1);
 });

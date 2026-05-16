@@ -1,7 +1,7 @@
 import { scheduler } from "node:timers/promises";
 import { createRequire } from "node:module";
 
-import type { ServerContext } from "../types/server-context.js";
+import type { AppContext } from "../server/app-context.js";
 import type { PantryItem, Recipe, RecipeUid, SyncResult } from "./types.js";
 
 function pantryItemsEqual(a: PantryItem, b: PantryItem): boolean {
@@ -38,13 +38,13 @@ type SyncEventEmitter = {
 };
 
 export class SyncEngine {
-  private readonly _context: ServerContext;
+  private readonly _context: AppContext;
   private readonly _intervalMs: number;
   private readonly _events: SyncEventEmitter;
   private readonly _eventsView: Pick<SyncEventEmitter, "on" | "off">;
   private _ac: AbortController | null = null;
 
-  constructor(context: ServerContext, intervalMs: number) {
+  constructor(context: AppContext, intervalMs: number) {
     this._context = context;
     this._intervalMs = intervalMs;
     // CJS require returns unknown; mitt's default export is a factory function that returns the emitter
@@ -159,7 +159,7 @@ export class SyncEngine {
 
       // Send resource notification if changes exist
       if (hasChanges) {
-        this._context.server.sendResourceListChanged();
+        this._context.notifier.resourceListChanged();
       }
 
       // Partition fetched recipes: added vs updated
@@ -179,30 +179,22 @@ export class SyncEngine {
         `Sync complete: ${addedRecipes.length} added, ${updatedRecipes.length} updated, ${diff.removed.length} removed.`,
       );
 
-      // Log success via MCP
-      try {
-        await this._context.server.sendLoggingMessage({
-          level: "info",
-          data: `Sync complete: ${addedRecipes.length} added, ${updatedRecipes.length} updated, ${diff.removed.length} removed`,
-        });
-      } catch {
-        // Logging may throw if not connected — swallow silently
-      }
+      // Log success via MCP — notifier swallows transport errors internally
+      await this._context.notifier.loggingMessage({
+        level: "info",
+        data: `Sync complete: ${addedRecipes.length} added, ${updatedRecipes.length} updated, ${diff.removed.length} removed`,
+      });
     } catch (error: unknown) {
       // Convert caught value to Error
       const err = error instanceof Error ? error : new Error(String(error));
 
       SyncEngine._log(`Sync failed: ${err.message}`);
 
-      // Log error via MCP
-      try {
-        await this._context.server.sendLoggingMessage({
-          level: "error",
-          data: `Sync failed: ${err.message}`,
-        });
-      } catch {
-        // Logging may throw if not connected — swallow silently
-      }
+      // Log error via MCP — notifier swallows transport errors internally
+      await this._context.notifier.loggingMessage({
+        level: "error",
+        data: `Sync failed: ${err.message}`,
+      });
 
       // Emit error event
       this._events.emit("sync:error", err);

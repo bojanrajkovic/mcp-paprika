@@ -1,6 +1,6 @@
 # Feature Implementations
 
-Last verified: 2026-03-20
+Last verified: 2026-05-15
 
 ## Purpose
 
@@ -79,27 +79,36 @@ corrupt Vectra index or hash-index.json).
 - Model ID and schema version are tracked in `vector-meta.json`; a mismatch on startup clears the hash index to force re-embedding
 - Batch size is 500 texts per embedding API call
 
-### discover-feature.ts — Startup wiring for semantic search
+### discover-feature.ts — Process-wide wiring for semantic search
 
-`setupDiscoverFeature` is a wiring function called from `index.ts` at server startup. It
-creates the `EmbeddingClient` and `VectorStore`, registers the `discover_recipes` tool,
-performs cold-start indexing if needed, and subscribes to `sync:complete` events for
-incremental index updates. A no-op if `config.features.embeddings` is not configured.
+`buildDiscoverComponents` is a process-wide wiring function called once from
+`buildAppContext` in `src/server/build.ts`. It instantiates the `EmbeddingClient` and
+`VectorStore`, performs cold-start re-indexing when needed, and subscribes to
+`syncEvents.on("sync:complete", …)` for incremental index updates. It returns the
+`VectorStore` instance (or `null`), which `buildAppContext` then stashes onto
+`AppContext.vectorStore`. **Tool registration is not wired here** —
+`registerDiscoverTool(server, sessionCtx, vectorStore)` is called from `buildMcpServer`
+once per server instance when `app.vectorStore !== null`.
 
-| Export                 | Signature / Description                                                                |
-| ---------------------- | -------------------------------------------------------------------------------------- |
-| `setupDiscoverFeature` | `(server, ctx, sync, config) => Promise<void>` — wires semantic search into the server |
+A local `SyncEventsView` interface decouples this module from `SyncEngine`; it accepts
+anything that exposes a typed `on`/`off` for `sync:complete` and `sync:error`.
+
+| Export                    | Signature / Description                                                                                         |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `buildDiscoverComponents` | `(config, store, syncEvents) => Promise<VectorStore \| null>` — builds + wires the semantic-search components   |
+| `SyncEventsView`          | `interface` describing the subset of `SyncEngine.events` (`on`/`off` for `sync:complete` and `sync:error`) used |
 
 **Invariants:**
 
-- No-op when `config.features.embeddings` is absent (semantic search remains disabled)
+- Returns `null` when `config.features.embeddings` is absent (semantic search disabled; `buildMcpServer` then skips `discover_recipes` registration)
 - Cold-start re-index runs when vector store size is below 90% of recipe store size (catches stale/orphaned data)
 - Vector index is invalidated when the embedding model or `EMBEDDING_SCHEMA_VERSION` changes between runs
 - `sync:complete` handler indexes added/updated recipes and removes deleted ones
 - Errors during sync-triggered indexing are caught and logged to stderr (never crash the server)
+- Runs exactly once per process (during `buildAppContext`), not per session — the returned `VectorStore` is shared across all sessions via `AppContext.vectorStore`
 
 ## Dependencies
 
-- **Uses:** `paprika/` (types), `utils/` (config types, xdg), `tools/` (discover tool registration), `cockatiel`, `vectra`, `zod`
-- **Used by:** `index.ts` (server startup), `tools/`, `resources/`
-- **Boundary:** Core building blocks (embeddings, vector-store, errors) must not import from `tools/` or `resources/`. Wiring functions (`discover-feature.ts`) may import tool registration functions.
+- **Uses:** `paprika/` (types — `SyncResult`), `cache/recipe-store.ts` (type-only), `utils/` (config types, xdg), `cockatiel`, `vectra`, `zod`
+- **Used by:** `src/server/build.ts` (`buildAppContext` calls `buildDiscoverComponents`; `buildMcpServer` imports `VectorStore` type and `registerDiscoverTool` separately), `tools/discover.ts` (consumes `VectorStore`, `SemanticResult` types)
+- **Boundary:** Must not import from `tools/` or `resources/` at runtime. Tool registration moved to `src/server/build.ts` in Phase 1 — `discover-feature.ts` no longer imports `registerDiscoverTool` (test files in this directory may still import from `tools/tool-test-utils.ts`; that is allowed because test code is outside the runtime boundary).

@@ -1,6 +1,6 @@
 # MCP Tool Definitions
 
-Last verified: 2026-05-08
+Last verified: 2026-05-15
 
 > Pantry write tools (`add_pantry_item`, `update_pantry_item`) normalize any user-supplied `expirationDate` through `normalizePaprikaDate()` (`paprika/dates.ts`) before persisting. Accepts ISO 8601, `yyyy-MM-dd`, `yyyy/MM/dd`, or the already-Paprika `yyyy-MM-dd HH:mm:ss`. Unparseable input returns a `textResult` error to the LLM rather than writing garbage. `add_pantry_item` stamps `purchaseDate` via `paprikaDateToday()` (today at midnight, Paprika wire format) and generates UIDs as **uppercase** UUID v4 to match what Paprika.app emits.
 
@@ -71,7 +71,7 @@ Utilities imported by recipe tool handlers from `./helpers.js`.
 - **`textResult(text)`** -- Wraps a string in the MCP `CallToolResult` envelope.
 - **`coldStartGuard(ctx)`** -- Returns `Ok<void>` when store is synced, `Err<CallToolResult>` when empty. Always use `.match()` to handle both branches.
 - **`recipeToMarkdown(recipe, categoryNames)`** -- Renders a full recipe as markdown. Resolve categories via `ctx.store.resolveCategories()` before calling. Omits empty optional fields.
-- **`commitRecipe(ctx, saved)`** -- Persists a saved recipe to cache and store, triggers cloud sync. Order: putRecipe (sync) → flush (async) → store.set (sync) → sendResourceListChanged (sync) → notifySync (async). Called by all write tools after `ctx.client.saveRecipe()`.
+- **`commitRecipe(ctx, saved)`** -- Persists a saved recipe to cache and store, triggers cloud sync. Order: putRecipe (sync) → flush (async) → store.set (sync) → `ctx.notifier.resourceListChanged()` (sync) → notifySync (async). Called by all write tools after `ctx.client.saveRecipe()`.
 - **`resolveCategoryNames(all, names)`** -- Resolves human-readable category display names to UIDs. Case-insensitive linear scan. Returns `{ uids, unknown }` for warnings.
 
 ### `pantry-helpers.ts`
@@ -80,14 +80,15 @@ Utilities imported by pantry tool handlers from `./pantry-helpers.js`.
 
 - **`pantryStartGuard(ctx)`** -- Returns `Ok<void>` when pantry is synced, `Err<CallToolResult>` when not yet synced. Always use `.match()` to handle both branches.
 - **`pantryItemToMarkdown(item)`** -- Renders a pantry item as markdown with ingredient, UID, and in-stock status (always rendered) plus quantity, aisle, expiration date, purchase date, and notes when present (omits empty strings and `null` optional fields).
-- **`commitPantryItem(ctx, saved)`** -- Persists a saved pantry item to the local cache and store, then triggers cloud sync. Branches on `saved.deleted`: the upsert branch calls `putPantryItem` (sync) → `flush` (async) → `pantryStore.set` (sync) → `sendResourceListChanged` (sync) → `notifySync` (async); the delete branch calls `removePantryItem` (async) → `flush` (async) → `pantryStore.delete` (sync) → `sendResourceListChanged` (sync) → `notifySync` (async). Called by all pantry write tools after `ctx.client.savePantryItem()`. Do NOT call `ctx.client.notifySync()` separately in the tool handler — `commitPantryItem` already calls it.
+- **`commitPantryItem(ctx, saved)`** -- Persists a saved pantry item to the local cache and store, then triggers cloud sync. Branches on `saved.deleted`: the upsert branch calls `putPantryItem` (sync) → `flush` (async) → `pantryStore.set` (sync) → `ctx.notifier.resourceListChanged()` (sync) → `notifySync` (async); the delete branch calls `removePantryItem` (async) → `flush` (async) → `pantryStore.delete` (sync) → `ctx.notifier.resourceListChanged()` (sync) → `notifySync` (async). Called by all pantry write tools after `ctx.client.savePantryItem()`. Do NOT call `ctx.client.notifySync()` separately in the tool handler — `commitPantryItem` already calls it.
 
 ## Testing (`tool-test-utils.ts`)
 
 Shared test utilities for direct tool handler invocation without a real MCP server.
 
-- **`makeTestServer()`** -- Returns a stub `McpServer` that captures tool and resource handlers. Exposes `callTool(name, args)`, `callResourceList(name)`, `callResource(name, uid)`, and a `sendResourceListChanged` spy.
-- **`makeCtx(store, server, overrides?)`** -- Creates a minimal `ServerContext` with a real `RecipeStore` and stub client/cache. Write-tool tests pass `{ client, cache }` overrides with mocked `saveRecipe`/`notifySync`/`putRecipe`/`flush` methods.
+- **`makeTestServer()`** -- Returns a stub `McpServer` that captures tool and resource handlers. Exposes `callTool(name, args)`, `callResourceList(name)`, `callResource(name, uid)`, and a `sendResourceListChanged` spy on the server stub itself. **Note:** Since Phase 1, `commitRecipe`/`commitPantryItem` route resource-list notifications through `ctx.notifier` instead of `ctx.server.sendResourceListChanged()`. Tests asserting on commit-path notifications should spy on the notifier (see `makeStubNotifier()` below); the `makeTestServer().sendResourceListChanged` spy only fires for direct `server.sendResourceListChanged()` calls, which are no longer made from helper code.
+- **`makeStubNotifier()`** -- Returns `{ notifier, resourceListChanged, loggingMessage }`. The `notifier` satisfies the `Notifier` interface and is wired with `vi.fn()` spies; assert on the returned spies (e.g. `expect(resourceListChanged).toHaveBeenCalledTimes(1)`). Pass `notifier` into `makeCtx(..., { notifier })` for any test that exercises `commitRecipe`/`commitPantryItem`/`SyncEngine` notification behavior.
+- **`makeCtx(store, server, overrides?)`** -- Creates a minimal `ServerContext` with a real `RecipeStore` and stub `client`/`cache`/`pantryStore`/`vectorStore`/`notifier`. Overrides accept `client`, `cache`, `pantryStore`, `vectorStore`, and `notifier`. Write-tool tests pass `{ client, cache }` with mocked `saveRecipe`/`notifySync`/`putRecipe`/`flush` plus a `notifier` from `makeStubNotifier()` when asserting on notifications. If no `notifier` is provided, a no-op notifier is used. `vectorStore` defaults to `null`.
 - **`getText(result)`** -- Extracts the text string from a `CallToolResult`.
 
 ## Boundaries
@@ -99,5 +100,5 @@ Shared test utilities for direct tool handler invocation without a real MCP serv
 
 ## Dependencies
 
-- **Used by:** `index.ts` (MCP server registration)
-- **Uses:** `types/` (ServerContext), `utils/` (parseDuration -- runtime), `paprika/types.ts` (Zod schemas at runtime + type-only imports), `cache/recipe-store.ts` (type-only imports), `features/vector-store.ts` (type-only imports for `VectorStore`, `SemanticResult`)
+- **Used by:** `src/server/build.ts` (`buildMcpServer` registers all 14 tools per server instance; `registerDiscoverTool` only when `app.vectorStore !== null`)
+- **Uses:** `types/` (ServerContext alias) and `server/` (`SessionContext`, `Notifier` types), `utils/` (parseDuration -- runtime), `paprika/types.ts` (Zod schemas at runtime + type-only imports), `cache/recipe-store.ts` (type-only imports), `features/vector-store.ts` (type-only imports for `VectorStore`, `SemanticResult`)

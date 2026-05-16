@@ -11,6 +11,9 @@ const ENV_VAR_HINTS: Readonly<Record<string, string>> = {
   "paprika.password": "PAPRIKA_PASSWORD",
   "sync.interval": "PAPRIKA_SYNC_INTERVAL",
   "sync.enabled": "PAPRIKA_SYNC_ENABLED",
+  transport: "MCP_TRANSPORT",
+  "http.port": "MCP_HTTP_PORT",
+  "http.host": "MCP_HTTP_HOST",
   "features.replicateApiToken": "REPLICATE_API_TOKEN",
   "features.embeddings.apiKey": "OPENAI_API_KEY",
   "features.embeddings.baseUrl": "OPENAI_BASE_URL",
@@ -105,6 +108,17 @@ export const paprikaConfigSchema = z.object({
       interval: durationField.default("15m"),
     })
     .default({}),
+  // Transport selection. `stdio` (default) keeps the current behavior for all
+  // existing CLI clients (Claude Code, Claude Desktop, Cursor, mcp-cli). `http`
+  // exposes Streamable HTTP for Claude Mobile and other HTTP-based MCP
+  // clients. See docs/configuration.md for the security implications.
+  transport: z.enum(["stdio", "http"]).default("stdio"),
+  http: z
+    .object({
+      port: z.coerce.number().int().min(1).max(65535).default(3000),
+      host: z.string().min(1).default("0.0.0.0"),
+    })
+    .default({}),
   features: z
     .object({
       replicateApiToken: z.string().min(1).optional(),
@@ -157,6 +171,7 @@ function buildEnvOverrides(env: NodeJS.ProcessEnv): Record<string, unknown> {
   const overrides: Record<string, unknown> = {};
   const paprika: Record<string, unknown> = {};
   const sync: Record<string, unknown> = {};
+  const http: Record<string, unknown> = {};
   const features: Record<string, unknown> = {};
   const embeddings: Record<string, unknown> = {};
 
@@ -165,6 +180,10 @@ function buildEnvOverrides(env: NodeJS.ProcessEnv): Record<string, unknown> {
 
   if (env["PAPRIKA_SYNC_INTERVAL"] !== undefined) sync["interval"] = env["PAPRIKA_SYNC_INTERVAL"];
   if (env["PAPRIKA_SYNC_ENABLED"] !== undefined) sync["enabled"] = env["PAPRIKA_SYNC_ENABLED"];
+
+  if (env["MCP_TRANSPORT"] !== undefined) overrides["transport"] = env["MCP_TRANSPORT"];
+  if (env["MCP_HTTP_PORT"] !== undefined) http["port"] = env["MCP_HTTP_PORT"];
+  if (env["MCP_HTTP_HOST"] !== undefined) http["host"] = env["MCP_HTTP_HOST"];
 
   if (env["REPLICATE_API_TOKEN"] !== undefined) features["replicateApiToken"] = env["REPLICATE_API_TOKEN"];
   if (env["OPENAI_API_KEY"] !== undefined) embeddings["apiKey"] = env["OPENAI_API_KEY"];
@@ -175,6 +194,7 @@ function buildEnvOverrides(env: NodeJS.ProcessEnv): Record<string, unknown> {
   if (Object.keys(features).length > 0) overrides["features"] = features;
   if (Object.keys(paprika).length > 0) overrides["paprika"] = paprika;
   if (Object.keys(sync).length > 0) overrides["sync"] = sync;
+  if (Object.keys(http).length > 0) overrides["http"] = http;
 
   return overrides;
 }

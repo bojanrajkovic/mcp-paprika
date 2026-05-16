@@ -5,12 +5,28 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 
 import { PantryStore } from "../cache/pantry-store.js";
 import type { RecipeStore } from "../cache/recipe-store.js";
+import type { Notifier } from "../server/notifier.js";
 import type { ServerContext } from "../types/server-context.js";
 
 type ResourceEntry = {
   list: (() => Promise<unknown>) | undefined;
   read: (uri: URL, variables: Record<string, string | string[]>) => Promise<unknown>;
 };
+
+/** Stub Notifier with vi.fn spies on each method, for assertions in tests. */
+export function makeStubNotifier(): {
+  notifier: Notifier;
+  resourceListChanged: ReturnType<typeof vi.fn>;
+  loggingMessage: ReturnType<typeof vi.fn>;
+} {
+  const resourceListChanged = vi.fn();
+  const loggingMessage = vi.fn().mockResolvedValue(undefined);
+  return {
+    notifier: { resourceListChanged, loggingMessage },
+    resourceListChanged,
+    loggingMessage,
+  };
+}
 
 /** Stubs McpServer to capture registered tool and resource handlers for direct invocation in tests. */
 export function makeTestServer(): {
@@ -70,22 +86,29 @@ export function makeTestServer(): {
  *
  * @param store   — real RecipeStore populated by tests
  * @param server  — stub McpServer from makeTestServer()
- * @param overrides — optional partial overrides for client and/or cache.
- *   Write-tool tests inject { saveRecipe: vi.fn(), notifySync: vi.fn() } and
- *   { putRecipe: vi.fn(), flush: vi.fn() } here.
+ * @param overrides — optional partial overrides for client, cache, pantryStore, vectorStore, and/or notifier.
+ *   Write-tool tests inject { saveRecipe: vi.fn(), notifySync: vi.fn() } on client and
+ *   { putRecipe: vi.fn(), flush: vi.fn() } on cache. Tests asserting on resource-list
+ *   notifications should pass a stub notifier from `makeStubNotifier()`.
  *   Read-tool tests pass no overrides — the existing stubs suffice.
  */
 export function makeCtx(
   store: RecipeStore,
   server: McpServer,
-  overrides: Partial<Pick<ServerContext, "client" | "cache" | "pantryStore">> = {},
+  overrides: Partial<Pick<ServerContext, "client" | "cache" | "pantryStore" | "vectorStore" | "notifier">> = {},
 ): ServerContext {
+  const notifier: Notifier = overrides.notifier ?? {
+    resourceListChanged: () => {},
+    loggingMessage: async () => {},
+  };
   return {
     store,
     server,
     pantryStore: overrides.pantryStore ?? new PantryStore(),
+    vectorStore: overrides.vectorStore ?? null,
     client: overrides.client ?? ({} as unknown as ServerContext["client"]),
     cache: overrides.cache ?? ({} as unknown as ServerContext["cache"]),
+    notifier,
   } satisfies ServerContext;
 }
 

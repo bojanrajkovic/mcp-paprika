@@ -44,9 +44,9 @@ export function pantryItemToMarkdown(item: PantryItem): string {
  *
  * Branches on `saved.deleted`:
  * - Upsert (deleted: false): putPantryItem (sync) → flush (async) → set (sync) →
- *   sendResourceListChanged (sync) → notifySync (async)
+ *   notifier.resourceListChanged (sync) → notifySync (async)
  * - Delete (deleted: true):  removePantryItem (async) → flush (async) → delete (sync) →
- *   sendResourceListChanged (sync) → notifySync (async)
+ *   notifier.resourceListChanged (sync) → notifySync (async)
  *
  * Do NOT call `ctx.client.notifySync()` separately in the tool handler —
  * commitPantryItem already calls it.
@@ -57,13 +57,13 @@ export async function commitPantryItem(ctx: ServerContext, saved: Readonly<Pantr
     await ctx.cache.removePantryItem(uid);
     await ctx.cache.flush();
     ctx.pantryStore.delete(uid);
-    ctx.server.sendResourceListChanged();
+    ctx.notifier.resourceListChanged();
     await ctx.client.notifySync();
   } else {
     ctx.cache.putPantryItem(saved);
     await ctx.cache.flush();
     ctx.pantryStore.set(saved);
-    ctx.server.sendResourceListChanged();
+    ctx.notifier.resourceListChanged();
     await ctx.client.notifySync();
   }
 }

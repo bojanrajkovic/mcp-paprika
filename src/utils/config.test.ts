@@ -296,6 +296,9 @@ describe("Configuration loading", () => {
       "PAPRIKA_PASSWORD",
       "PAPRIKA_SYNC_INTERVAL",
       "PAPRIKA_SYNC_ENABLED",
+      "MCP_TRANSPORT",
+      "MCP_HTTP_PORT",
+      "MCP_HTTP_HOST",
       "REPLICATE_API_TOKEN",
       "OPENAI_API_KEY",
       "OPENAI_BASE_URL",
@@ -509,6 +512,117 @@ describe("Configuration loading", () => {
           );
         },
       );
+    });
+
+    describe("config-loader.AC9: transport + HTTP config", () => {
+      it("config-loader.AC9.1: defaults — transport is 'stdio', http.port is 3000, http.host is '0.0.0.0'", () => {
+        process.env.PAPRIKA_EMAIL = "user@test.com";
+        process.env.PAPRIKA_PASSWORD = "secret";
+
+        loadConfig(tempDir).match(
+          (config) => {
+            expect(config.transport).toBe("stdio");
+            expect(config.http.port).toBe(3000);
+            expect(config.http.host).toBe("0.0.0.0");
+          },
+          (err) => {
+            expect.fail(`Expected Ok but got Err: ${err.message}`);
+          },
+        );
+      });
+
+      it("config-loader.AC9.2: MCP_TRANSPORT=http sets transport", () => {
+        process.env.PAPRIKA_EMAIL = "user@test.com";
+        process.env.PAPRIKA_PASSWORD = "secret";
+        process.env.MCP_TRANSPORT = "http";
+
+        loadConfig(tempDir).match(
+          (config) => {
+            expect(config.transport).toBe("http");
+          },
+          (err) => {
+            expect.fail(`Expected Ok but got Err: ${err.message}`);
+          },
+        );
+      });
+
+      it("config-loader.AC9.3: MCP_TRANSPORT=foo is rejected by validation", () => {
+        process.env.PAPRIKA_EMAIL = "user@test.com";
+        process.env.PAPRIKA_PASSWORD = "secret";
+        process.env.MCP_TRANSPORT = "foo";
+
+        loadConfig(tempDir).match(
+          () => {
+            expect.fail("Expected Err but got Ok");
+          },
+          (error) => {
+            expect(error.kind).toBe("validation");
+            expect(error.reason).toContain("transport");
+          },
+        );
+      });
+
+      it("config-loader.AC9.4: MCP_HTTP_PORT='8080' string is coerced to number", () => {
+        process.env.PAPRIKA_EMAIL = "user@test.com";
+        process.env.PAPRIKA_PASSWORD = "secret";
+        process.env.MCP_HTTP_PORT = "8080";
+
+        loadConfig(tempDir).match(
+          (config) => {
+            expect(config.http.port).toBe(8080);
+          },
+          (err) => {
+            expect.fail(`Expected Ok but got Err: ${err.message}`);
+          },
+        );
+      });
+
+      it("config-loader.AC9.5: MCP_HTTP_PORT='0' is rejected (below min 1)", () => {
+        process.env.PAPRIKA_EMAIL = "user@test.com";
+        process.env.PAPRIKA_PASSWORD = "secret";
+        process.env.MCP_HTTP_PORT = "0";
+
+        loadConfig(tempDir).match(
+          () => {
+            expect.fail("Expected Err but got Ok");
+          },
+          (error) => {
+            expect(error.kind).toBe("validation");
+            expect(error.reason).toContain("http.port");
+          },
+        );
+      });
+
+      it("config-loader.AC9.6: MCP_HTTP_PORT='70000' is rejected (above max 65535)", () => {
+        process.env.PAPRIKA_EMAIL = "user@test.com";
+        process.env.PAPRIKA_PASSWORD = "secret";
+        process.env.MCP_HTTP_PORT = "70000";
+
+        loadConfig(tempDir).match(
+          () => {
+            expect.fail("Expected Err but got Ok");
+          },
+          (error) => {
+            expect(error.kind).toBe("validation");
+            expect(error.reason).toContain("http.port");
+          },
+        );
+      });
+
+      it("config-loader.AC9.7: MCP_HTTP_HOST='127.0.0.1' is accepted", () => {
+        process.env.PAPRIKA_EMAIL = "user@test.com";
+        process.env.PAPRIKA_PASSWORD = "secret";
+        process.env.MCP_HTTP_HOST = "127.0.0.1";
+
+        loadConfig(tempDir).match(
+          (config) => {
+            expect(config.http.host).toBe("127.0.0.1");
+          },
+          (err) => {
+            expect.fail(`Expected Ok but got Err: ${err.message}`);
+          },
+        );
+      });
     });
 
     describe("config-loader.AC8: stdio transport hygiene (issue #49)", () => {

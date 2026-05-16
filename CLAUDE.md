@@ -1,16 +1,19 @@
 # mcp-paprika
 
-Last verified: 2026-05-08
+Last verified: 2026-05-16
 
-MCP server for the Paprika recipe manager. Communicates over stdio transport — `console.log` writes to stdout which is the MCP wire format. Any stray console output corrupts the protocol. Use `process.stderr.write()` for diagnostic messages or the MCP SDK's logging facility.
+MCP server for the Paprika recipe manager. Two transports: **stdio** (default; used by Claude Desktop, Claude Code, Cursor, mcp-cli) and **Streamable HTTP** (used by Claude Mobile and other HTTP-based MCP clients). Selected via `MCP_TRANSPORT=stdio|http`.
+
+**Stdio note:** when running in stdio mode, `console.log` writes to stdout which is the MCP wire format. Any stray console output corrupts the protocol. Use `process.stderr.write()` for diagnostic messages or the MCP SDK's logging facility. The `no-console` oxlint rule enforces this.
 
 ## Tech Stack
 
 - **Runtime:** Node.js 24 (managed via mise)
 - **Language:** TypeScript 5.9 (extends `@tsconfig/strictest` + `@tsconfig/node24`)
 - **Module system:** ESM (`"type": "module"`)
-- **Package manager:** pnpm 10.30.3 (corepack-managed)
-- **Key dependencies:** @modelcontextprotocol/sdk (MCP protocol), zod (validation), luxon (dates), dotenv (env config), parse-duration (duration parsing), env-paths (XDG directories), neverthrow (error handling), cockatiel (resilience/retry), mitt (event emitter), vectra (local vector index)
+- **Package manager:** pnpm 11.1.2 (corepack-managed)
+- **Key dependencies:** @modelcontextprotocol/sdk (MCP protocol), hono + @hono/mcp + @hono/node-server (HTTP transport), zod (validation), luxon (dates), dotenv (env config), parse-duration (duration parsing), env-paths (XDG directories), neverthrow (error handling), cockatiel (resilience/retry), mitt (event emitter), vectra (local vector index)
+- **Container:** distroless `gcr.io/distroless/nodejs24-debian13:nonroot` runtime; 3-stage Dockerfile (builder → prod-deps prune → distroless)
 
 ## Commands
 
@@ -29,16 +32,19 @@ MCP server for the Paprika recipe manager. Communicates over stdio transport —
 
 ## Project Structure
 
-- `src/index.ts` — Entry point: config, auth, cache, store (recipes), pantryStore, server, tools, resources, sync, semantic search, stdio
+- `src/index.ts` — Transport dispatcher: loads config, dispatches to `startStdio` or `startHttp` based on `config.transport`, wires SIGINT/SIGTERM to the returned handle's `shutdown()`
+- `src/transport/` — Transport-specific entry points: `stdio.ts` (deferred-getter notifier, sync, then `server.connect(new StdioServerTransport())`) and `http.ts` (Hono app with `GET /healthz` + `ALL /mcp`, session map, graceful shutdown that aborts SSE streams before closing the HTTP server). `startHttp` returns an `HttpTransportHandle` with the bound port (useful for tests passing `port: 0`)
+- `src/server/` — Process-wide composition root: `AppContext`/`SessionContext` types, `Notifier` abstraction (`singleServerNotifier`, `broadcastNotifier`), `buildAppContext` (heavyweight shared state) and `buildMcpServer` (per-session tool/resource registration; discover tool gated on `vectorStore !== null`)
 - `src/paprika/` — Paprika API client with pantry read and write support (`listPantry()`, `savePantryItem()` methods)
 - `src/cache/` — Caching layer with `PantryStore` for in-memory queries and pantry persistence
 - `src/tools/` — MCP tool definitions including read tools (`list_pantry`, `get_pantry_item`) and write tools (`add_pantry_item`, `update_pantry_item`, `delete_pantry_item`) for pantry access
 - `src/resources/` — MCP resource definitions including `paprika://pantry/{uid}` resource template
-- `src/features/` — Feature implementations
-- `src/types/` — Shared type definitions including `PantryItem` and branded `PantryItemUid`
-- `src/utils/` — Cross-cutting utilities
-- `scripts/` — Build and verification scripts (run via `npx tsx`)
-- `docs/verified-api.md` — MCP SDK verified API reference (authoritative for import paths)
+- `src/features/` — Feature implementations (semantic search wiring lives here; tool registration happens in `src/server/build.ts`)
+- `src/types/` — Shared type definitions including `PantryItem` and branded `PantryItemUid`; `ServerContext` is a backward-compat alias re-exporting `SessionContext` from `src/server/`
+- `src/utils/` — Cross-cutting utilities (including `config.ts` with `transport`/`http` schema fields)
+- `scripts/` — Build and verification scripts (run via `npx tsx`), plus `healthcheck.mjs` (zero-dep Node script used by the Dockerfile HEALTHCHECK)
+- `Dockerfile` + `.dockerignore` — 3-stage container build targeting `gcr.io/distroless/nodejs24-debian13:nonroot`; pre-creates `/data/{config,cache}` with nonroot ownership so the disk cache writes work on first run
+- `docs/verified-api.md` — MCP SDK verified API reference (authoritative for import paths, including the Streamable HTTP transport surface)
 - `.github/workflows/` — CI and PR validation workflows
 
 ## Code Conventions
@@ -73,7 +79,7 @@ Minimize runtime dependencies. Every new dependency must justify its inclusion:
 
 - Prefer Node.js built-in modules when available
 - Evaluate bundle size and maintenance status before adding packages
-- Current runtime deps: `@modelcontextprotocol/sdk`, `cockatiel`, `dotenv`, `env-paths`, `luxon`, `mitt`, `neverthrow`, `parse-duration`, `vectra`, `zod`
+- Current runtime deps: `@hono/mcp`, `@hono/node-server`, `@modelcontextprotocol/sdk`, `cockatiel`, `dotenv`, `env-paths`, `hono`, `luxon`, `mitt`, `neverthrow`, `parse-duration`, `vectra`, `zod`
 
 ## Testing
 

@@ -1,141 +1,43 @@
 #!/usr/bin/env node
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { PaprikaClient } from "./paprika/client.js";
-import { SyncEngine } from "./paprika/sync.js";
-import { DiskCache } from "./cache/disk-cache.js";
-import { RecipeStore } from "./cache/recipe-store.js";
-import { PantryStore } from "./cache/pantry-store.js";
+import { startHttp } from "./transport/http.js";
+import { startStdio, type TransportHandle } from "./transport/stdio.js";
 import { loadConfig } from "./utils/config.js";
-import { getCacheDir } from "./utils/xdg.js";
-import { registerSearchTool } from "./tools/search.js";
-import { registerFilterTools } from "./tools/filter.js";
-import { registerCategoryTools } from "./tools/categories.js";
-import { registerReadTool } from "./tools/read.js";
-import { registerCreateTool } from "./tools/create.js";
-import { registerUpdateTool } from "./tools/update.js";
-import { registerDeleteTool } from "./tools/delete.js";
-import { registerListTool } from "./tools/list.js";
-import { registerListPantryTool } from "./tools/pantry-list.js";
-import { registerGetPantryItemTool } from "./tools/pantry-get.js";
-import { registerAddPantryItemTool } from "./tools/pantry-add.js";
-import { registerUpdatePantryItemTool } from "./tools/pantry-update.js";
-import { registerDeletePantryItemTool } from "./tools/pantry-delete.js";
-import { registerRecipeResources } from "./resources/recipes.js";
-import { registerPantryResources } from "./resources/pantry.js";
-import { setupDiscoverFeature } from "./features/discover-feature.js";
-import type { ServerContext } from "./types/server-context.js";
 
 function log(msg: string): void {
   process.stderr.write(`[mcp-paprika] ${msg}\n`);
 }
 
 async function main(): Promise<void> {
-  // 1. Load and validate config
   log("Loading configuration...");
-  const configResult = loadConfig();
-  const config = configResult.match(
+  const config = loadConfig().match(
     (cfg) => cfg,
     (err) => {
       throw err;
     },
   );
 
-  // 2. Construct PaprikaClient and authenticate
-  log("Authenticating with Paprika...");
-  const client = new PaprikaClient(config.paprika.email, config.paprika.password);
-  await client.authenticate();
-  log("Authenticated successfully.");
+  const handle: TransportHandle = config.transport === "http" ? await startHttp(config) : await startStdio(config);
 
-  // 3. Construct DiskCache and initialize
-  log("Initializing disk cache...");
-  const cache = new DiskCache(getCacheDir());
-  await cache.init();
-
-  // 4. Construct RecipeStore and hydrate from cache
-  const store = new RecipeStore();
-  const cachedRecipes = await cache.getAllRecipes();
-  for (const recipe of cachedRecipes) {
-    store.set(recipe);
-  }
-  log(`Hydrated store with ${cachedRecipes.length} cached recipes.`);
-
-  // 4b. Construct PantryStore and hydrate from cache
-  const pantryStore = new PantryStore();
-  const cachedPantryItems = await cache.getAllPantryItems();
-  if (cachedPantryItems.length > 0) {
-    pantryStore.load(cachedPantryItems);
-  }
-  log(`Hydrated pantry store with ${cachedPantryItems.length.toString()} cached pantry items.`);
-
-  // 5. Construct McpServer
-  const server = new McpServer({
-    name: "mcp-paprika",
-    version: "0.0.0",
-  });
-
-  // 6. Assemble ServerContext
-  const ctx: ServerContext = {
-    client,
-    cache,
-    store,
-    pantryStore,
-    server,
+  const onSignal = (signal: string) => {
+    log(`${signal} received, shutting down...`);
+    handle.shutdown().then(
+      () => process.exit(0),
+      (err: unknown) => {
+        process.stderr.write(`[mcp-paprika] Shutdown error: ${err instanceof Error ? err.message : String(err)}\n`);
+        process.exit(1);
+      },
+    );
   };
 
-  // 7. Register all 14 tools
-  registerSearchTool(server, ctx);
-  registerFilterTools(server, ctx);
-  registerCategoryTools(server, ctx);
-  registerListTool(server, ctx);
-  registerReadTool(server, ctx);
-  registerCreateTool(server, ctx);
-  registerUpdateTool(server, ctx);
-  registerDeleteTool(server, ctx);
-  registerListPantryTool(server, ctx);
-  registerGetPantryItemTool(server, ctx);
-  registerAddPantryItemTool(server, ctx);
-  registerUpdatePantryItemTool(server, ctx);
-  registerDeletePantryItemTool(server, ctx);
-  log("Registered 14 tools.");
-
-  // 8. Register recipe resources
-  registerRecipeResources(server, ctx);
-  log("Registered recipe resources.");
-
-  registerPantryResources(server, ctx);
-  log("Registered pantry resources.");
-
-  // 9. Construct SyncEngine, run initial sync, then start background loop
-  const sync = new SyncEngine(ctx, config.sync.interval);
-  log("Running initial sync...");
-  await sync.syncOnce();
-  log("Initial sync complete.");
-  if (config.sync.enabled) {
-    sync.start();
-    log(`Sync engine started (interval: ${config.sync.interval}ms).`);
-  } else {
-    log("Background sync disabled.");
-  }
-
-  // Phase 3: Semantic search
-  await setupDiscoverFeature(server, ctx, sync, config);
-
-  // 10. Register SIGINT handler
   process.on("SIGINT", () => {
-    log("SIGINT received, shutting down...");
-    sync.stop();
-    process.exit(0);
+    onSignal("SIGINT");
   });
-
-  // 11. Connect stdio transport
-  log("Connecting stdio transport...");
-  await server.connect(new StdioServerTransport());
-  log("Server ready.");
+  process.on("SIGTERM", () => {
+    onSignal("SIGTERM");
+  });
 }
 
-main().catch((err) => {
-  /* oxlint-disable-next-line no-console */
-  console.error(err instanceof Error ? err.message : String(err));
+main().catch((err: unknown) => {
+  process.stderr.write(`${err instanceof Error ? err.message : String(err)}\n`);
   process.exit(1);
 });

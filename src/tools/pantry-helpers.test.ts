@@ -2,13 +2,13 @@ import { describe, it, expect, vi } from "vitest";
 import { PantryStore } from "../cache/pantry-store.js";
 import { makePantryItem } from "../cache/__fixtures__/pantry.js";
 import { commitPantryItem } from "./pantry-helpers.js";
-import { makeTestServer, makeCtx } from "./tool-test-utils.js";
+import { makeTestServer, makeCtx, makeStubNotifier } from "./tool-test-utils.js";
 import type { PaprikaClient } from "../paprika/client.js";
 import type { DiskCache } from "../cache/disk-cache.js";
 
 describe("pantry-mutations.AC3: commitPantryItem helper", () => {
   describe("AC3.1: upsert branch (deleted: false)", () => {
-    it("should call putPantryItem, flush, set, sendResourceListChanged, notifySync in order", async () => {
+    it("should call putPantryItem, flush, set, resourceListChanged, notifySync in order", async () => {
       // Arrange
       const saved = makePantryItem({ deleted: false });
       const pantryStore = new PantryStore();
@@ -19,6 +19,7 @@ describe("pantry-mutations.AC3: commitPantryItem helper", () => {
       const mockRemovePantryItem = vi.fn();
       const mockFlush = vi.fn().mockResolvedValue(undefined);
       const mockNotifySync = vi.fn().mockResolvedValue(undefined);
+      const stub = makeStubNotifier();
 
       const { server } = makeTestServer();
       const ctx = makeCtx(new PantryStore(), server, {
@@ -29,6 +30,7 @@ describe("pantry-mutations.AC3: commitPantryItem helper", () => {
           flush: mockFlush,
         } as unknown as DiskCache,
         pantryStore,
+        notifier: stub.notifier,
       });
 
       // Act
@@ -37,10 +39,8 @@ describe("pantry-mutations.AC3: commitPantryItem helper", () => {
       // Assert: verify full ordering using invocationCallOrder
       expect(mockPutPantryItem.mock.invocationCallOrder[0]).toBeLessThan(mockFlush.mock.invocationCallOrder[0]!);
       expect(mockFlush.mock.invocationCallOrder[0]).toBeLessThan(setSpy.mock.invocationCallOrder[0]!);
-      expect(setSpy.mock.invocationCallOrder[0]).toBeLessThan(
-        ctx.server.sendResourceListChanged.mock.invocationCallOrder[0]!,
-      );
-      expect(ctx.server.sendResourceListChanged.mock.invocationCallOrder[0]).toBeLessThan(
+      expect(setSpy.mock.invocationCallOrder[0]).toBeLessThan(stub.resourceListChanged.mock.invocationCallOrder[0]!);
+      expect(stub.resourceListChanged.mock.invocationCallOrder[0]).toBeLessThan(
         mockNotifySync.mock.invocationCallOrder[0]!,
       );
 
@@ -55,7 +55,7 @@ describe("pantry-mutations.AC3: commitPantryItem helper", () => {
   });
 
   describe("AC3.2: delete branch (deleted: true)", () => {
-    it("should call removePantryItem, flush, delete, sendResourceListChanged, notifySync in order", async () => {
+    it("should call removePantryItem, flush, delete, resourceListChanged, notifySync in order", async () => {
       // Arrange
       const item = makePantryItem({ deleted: false });
       const saved = { ...item, deleted: true };
@@ -68,6 +68,7 @@ describe("pantry-mutations.AC3: commitPantryItem helper", () => {
       const mockRemovePantryItem = vi.fn().mockResolvedValue(undefined);
       const mockFlush = vi.fn().mockResolvedValue(undefined);
       const mockNotifySync = vi.fn().mockResolvedValue(undefined);
+      const stub = makeStubNotifier();
 
       const { server } = makeTestServer();
       const ctx = makeCtx(new PantryStore(), server, {
@@ -78,6 +79,7 @@ describe("pantry-mutations.AC3: commitPantryItem helper", () => {
           flush: mockFlush,
         } as unknown as DiskCache,
         pantryStore,
+        notifier: stub.notifier,
       });
 
       // Act
@@ -86,10 +88,8 @@ describe("pantry-mutations.AC3: commitPantryItem helper", () => {
       // Assert: verify full ordering using invocationCallOrder
       expect(mockRemovePantryItem.mock.invocationCallOrder[0]).toBeLessThan(mockFlush.mock.invocationCallOrder[0]!);
       expect(mockFlush.mock.invocationCallOrder[0]).toBeLessThan(deleteSpy.mock.invocationCallOrder[0]!);
-      expect(deleteSpy.mock.invocationCallOrder[0]).toBeLessThan(
-        ctx.server.sendResourceListChanged.mock.invocationCallOrder[0]!,
-      );
-      expect(ctx.server.sendResourceListChanged.mock.invocationCallOrder[0]).toBeLessThan(
+      expect(deleteSpy.mock.invocationCallOrder[0]).toBeLessThan(stub.resourceListChanged.mock.invocationCallOrder[0]!);
+      expect(stub.resourceListChanged.mock.invocationCallOrder[0]).toBeLessThan(
         mockNotifySync.mock.invocationCallOrder[0]!,
       );
 
@@ -115,6 +115,7 @@ describe("pantry-mutations.AC3: commitPantryItem helper", () => {
       const mockRemovePantryItem = vi.fn();
       const mockFlush = vi.fn().mockRejectedValue(new Error("flush failed"));
       const mockNotifySync = vi.fn().mockResolvedValue(undefined);
+      const stub = makeStubNotifier();
 
       const { server } = makeTestServer();
       const ctx = makeCtx(new PantryStore(), server, {
@@ -125,6 +126,7 @@ describe("pantry-mutations.AC3: commitPantryItem helper", () => {
           flush: mockFlush,
         } as unknown as DiskCache,
         pantryStore,
+        notifier: stub.notifier,
       });
 
       // Act & Assert
@@ -135,7 +137,7 @@ describe("pantry-mutations.AC3: commitPantryItem helper", () => {
 
       // Assert: subsequent steps did NOT run
       expect(setSpy.mock.calls.length).toBe(0);
-      expect(ctx.server.sendResourceListChanged).not.toHaveBeenCalled();
+      expect(stub.resourceListChanged).not.toHaveBeenCalled();
       expect(mockNotifySync).not.toHaveBeenCalled();
       expect(pantryStore.get(saved.uid)).toBeUndefined();
     });
@@ -153,6 +155,7 @@ describe("pantry-mutations.AC3: commitPantryItem helper", () => {
       const mockRemovePantryItem = vi.fn().mockResolvedValue(undefined);
       const mockFlush = vi.fn().mockRejectedValue(new Error("flush failed"));
       const mockNotifySync = vi.fn().mockResolvedValue(undefined);
+      const stub = makeStubNotifier();
 
       const { server } = makeTestServer();
       const ctx = makeCtx(new PantryStore(), server, {
@@ -163,6 +166,7 @@ describe("pantry-mutations.AC3: commitPantryItem helper", () => {
           flush: mockFlush,
         } as unknown as DiskCache,
         pantryStore,
+        notifier: stub.notifier,
       });
 
       // Act & Assert
@@ -173,7 +177,7 @@ describe("pantry-mutations.AC3: commitPantryItem helper", () => {
 
       // Assert: subsequent steps did NOT run
       expect(deleteSpy.mock.calls.length).toBe(0);
-      expect(ctx.server.sendResourceListChanged).not.toHaveBeenCalled();
+      expect(stub.resourceListChanged).not.toHaveBeenCalled();
       expect(mockNotifySync).not.toHaveBeenCalled();
       // Item should still be in store (not deleted by the helper)
       expect(pantryStore.get(saved.uid)).toEqual(item);
