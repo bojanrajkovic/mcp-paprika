@@ -75,9 +75,11 @@ EXPOSE 3000
 
 USER nonroot
 
-# HEALTHCHECK relies on the implicit `node` ENTRYPOINT — distroless will
-# prepend `/nodejs/bin/node` to whatever CMD is supplied.
+# HEALTHCHECK exec form does NOT inherit the container ENTRYPOINT (only the
+# top-level CMD does), and distroless has no shell — so spell out the node
+# binary explicitly. The script file is also not chmod +x, but that doesn't
+# matter when we invoke it via the interpreter.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
-    CMD ["/app/scripts/healthcheck.mjs"]
+    CMD ["/nodejs/bin/node", "/app/scripts/healthcheck.mjs"]
 
 CMD ["/app/dist/index.js"]

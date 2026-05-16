@@ -87,7 +87,17 @@ export function broadcastNotifier(snapshot: SessionSnapshot): Notifier {
     },
     async loggingMessage(params) {
       const servers = [...snapshot()];
-      await Promise.allSettled(servers.map((server) => server.sendLoggingMessage(params)));
+      // Each call is wrapped in an async IIFE so a synchronous throw from
+      // server.sendLoggingMessage() (not just a rejected promise) becomes a
+      // rejected promise inside the IIFE, which Promise.allSettled can then
+      // absorb. Without this, a sync throw escapes the `map(...)` callback
+      // before Promise.allSettled is constructed and bubbles into
+      // SyncEngine.syncOnce(), causing it to wrongly report a sync failure.
+      await Promise.allSettled(
+        servers.map(async (server) => {
+          await server.sendLoggingMessage(params);
+        }),
+      );
     },
   };
 }
