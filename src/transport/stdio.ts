@@ -45,12 +45,11 @@ export async function startStdio(config: PaprikaConfig): Promise<TransportHandle
   let server: McpServer | undefined;
   const notifier = singleServerNotifier(() => server);
 
+  // buildAppContext runs the initial sync internally so cold-start vector
+  // indexing happens against a fully-populated RecipeStore (categories
+  // included). See src/server/build.ts for the ordering rationale.
   const { app, sync } = await buildAppContext(config, notifier);
   server = buildMcpServer(app);
-
-  log("Running initial sync...");
-  await sync.syncOnce();
-  log("Initial sync complete.");
 
   if (config.sync.enabled) {
     sync.start();

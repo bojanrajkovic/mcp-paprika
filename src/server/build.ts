@@ -37,14 +37,26 @@ function log(msg: string): void {
 /**
  * Build the process-wide AppContext and SyncEngine.
  *
- * Authenticates the Paprika client, hydrates caches and stores, constructs
- * the SyncEngine, then builds the (optional) vector store. The vector store
- * subscribes to `sync.events` so it can incrementally re-index when a sync
- * cycle reports added/updated/removed recipes.
+ * Ordering (load-bearing):
  *
- * SyncEngine is constructed BEFORE the vector store so the latter can
- * subscribe to its event stream — SyncEngine itself never reads
- * `app.vectorStore`, so it is safe to omit at construction time.
+ * 1. Authenticate the Paprika client (this is the real fast-fail for bad
+ *    credentials — `authenticate()` throws; `syncOnce()` swallows everything).
+ * 2. Hydrate `DiskCache`, `RecipeStore` (recipes only — the cache deliberately
+ *    has no `getAllCategories()`), and `PantryStore`.
+ * 3. Construct `SyncEngine` against a placeholder `AppContext` (`vectorStore: null`).
+ *    `SyncEngine` never reads `vectorStore`, so this is safe.
+ * 4. **Run the initial `sync.syncOnce()`** before building discover components.
+ *    This is the load-bearing step: `RecipeStore.setCategories()` is only
+ *    called from inside `syncOnce()`, so cold-start vector indexing must run
+ *    AFTER the first sync — otherwise embeddings get computed with empty
+ *    category names and stay that way until a recipe mutation forces a
+ *    re-embed (warm-restart + unchanged-hashes case). `syncOnce()` is
+ *    documented to never throw, so this can't block startup.
+ * 5. Build discover components (subscribes the vector store to `sync.events`
+ *    for incremental re-indexing on subsequent cycles).
+ *
+ * Returns the fully-assembled `AppContext` and the `SyncEngine`. The caller
+ * decides whether to call `sync.start()` to enable the background loop.
  */
 export async function buildAppContext(
   config: PaprikaConfig,
@@ -86,6 +98,24 @@ export async function buildAppContext(
     notifier,
   };
   const sync = new SyncEngine(syncCtx, config.sync.interval);
+
+  // Run the initial sync BEFORE building discover components.
+  //
+  // `RecipeStore.setCategories()` is only ever called from within
+  // `SyncEngine.syncOnce()`. Cold-start indexing in `buildDiscoverComponents`
+  // calls `store.resolveCategories(uids)` per recipe to construct the
+  // embedding text — if categories are unpopulated, embeddings get computed
+  // with empty category names and stay that way until a recipe mutation
+  // (Codex #75 review). On a warm restart with unchanged remote hashes the
+  // post-build sync emits nothing, so the sync:complete subscription never
+  // gets a chance to fix it.
+  //
+  // `syncOnce()` is documented to never throw (any failure is logged + emitted
+  // as `sync:error`), so this is safe to await unconditionally — same fail-soft
+  // semantics as the pre-Phase-1 entry point.
+  log("Running initial sync...");
+  await sync.syncOnce();
+  log("Initial sync complete.");
 
   const vectorStore = await buildDiscoverComponents(config, store, sync.events);
 

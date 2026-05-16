@@ -80,9 +80,15 @@ If anyone restructures `src/index.ts`, preserve this ordering — collapsing it 
 buildAppContext(config: PaprikaConfig, notifier: Notifier): Promise<{ app: AppContext; sync: SyncEngine }>
 ```
 
-Process-wide builder. Authenticates the Paprika client, hydrates `DiskCache`, `RecipeStore`, and `PantryStore` from disk, constructs `SyncEngine`, then calls `buildDiscoverComponents` (subscribes the vector store to `sync.events`). Returns the assembled `AppContext` plus the `SyncEngine` so the entry point can drive the initial sync and start the background loop.
+Process-wide builder. Authenticates the Paprika client, hydrates `DiskCache`, `RecipeStore`, and `PantryStore` from disk, constructs `SyncEngine`, **runs the initial `sync.syncOnce()`**, then calls `buildDiscoverComponents` (which subscribes the vector store to `sync.events` for incremental re-indexing). Returns the assembled `AppContext` plus the `SyncEngine`; the caller starts the background loop with `sync.start()` if `config.sync.enabled`.
 
-**Construction order matters:** `SyncEngine` is built BEFORE the vector store so the vector store can subscribe to `sync.events`. `SyncEngine` is given a placeholder `AppContext` whose `vectorStore: null`; this is safe because `SyncEngine` never reads `vectorStore`. The "real" `AppContext` with the populated `vectorStore` is what the caller receives.
+**Construction order is load-bearing:**
+
+1. Authenticate (this is where bad credentials fast-fail — `syncOnce()` swallows everything).
+2. Hydrate caches and stores from disk (recipes and pantry only — the cache deliberately has no `getAllCategories()`).
+3. Construct `SyncEngine` against a placeholder `AppContext` whose `vectorStore: null`. Safe because `SyncEngine` never reads `vectorStore`.
+4. **`await sync.syncOnce()`.** Categories live only in `RecipeStore` (populated by `setCategories()`, which is called only from inside `syncOnce()`). Cold-start vector indexing in `buildDiscoverComponents` resolves category names per recipe; if it runs before the first sync, embeddings get computed with empty categories and stay that way until a recipe mutation re-embeds. On warm restarts with unchanged remote hashes, the post-build sync emits nothing, so the `sync:complete` subscription never gets the chance to fix it.
+5. Build discover components against the now-hydrated store. The "real" `AppContext` with the populated `vectorStore` is what the caller receives.
 
 ### buildMcpServer
 

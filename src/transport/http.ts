@@ -59,11 +59,10 @@ export async function startHttp(config: PaprikaConfig): Promise<HttpTransportHan
   // evicted by an unrelated DELETE).
   const notifier = broadcastNotifier(() => [...sessions.values()].map((s) => s.server));
 
+  // buildAppContext runs the initial sync internally so cold-start vector
+  // indexing happens against a fully-populated RecipeStore (categories
+  // included). See src/server/build.ts for the ordering rationale.
   const { app, sync } = await buildAppContext(config, notifier);
-
-  log("Running initial sync...");
-  await sync.syncOnce();
-  log("Initial sync complete.");
 
   if (config.sync.enabled) {
     sync.start();
