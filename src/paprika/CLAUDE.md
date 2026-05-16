@@ -1,6 +1,6 @@
 # Paprika API Client
 
-Last verified: 2026-05-08
+Last verified: 2026-05-15
 
 ## Files
 
@@ -131,7 +131,7 @@ Background polling loop that keeps local cache and in-memory store synchronized 
 
 **Construction:**
 
-- `new SyncEngine(context: ServerContext, intervalMs: number)` — creates a new engine with specified polling interval; does not start automatically
+- `new SyncEngine(context: AppContext, intervalMs: number)` — creates a new engine with the specified polling interval; does not start automatically. Takes `AppContext` (process-wide) rather than `SessionContext`/`ServerContext` because the sync loop is process-wide and must not be tied to a single MCP session. Notifications go through `context.notifier` so the same loop works for stdio (single server) and HTTP (broadcast across all live sessions).
 
 **Public API:**
 
@@ -168,13 +168,13 @@ Background polling loop that keeps local cache and in-memory store synchronized 
 
 4. **Finalization:**
    - Flushes cache once: `await cache.flush()`
-   - Sends MCP resource notification if recipe OR pantry changes exist: `server.sendResourceListChanged()` (called if any added/changed/removed/orphaned detected)
+   - Sends MCP resource notification if recipe OR pantry changes exist: `context.notifier.resourceListChanged()` (called if any added/changed/removed/orphaned detected)
    - Emits `sync:complete` with `SyncResult` (always emitted, even for no-change cycles)
-   - Logs success: `server.sendLoggingMessage({ level: "info", data: "..." })`
+   - Logs success: `await context.notifier.loggingMessage({ level: "info", data: "..." })`
 
 5. **Error handling (all wrapped in try/catch):**
    - Catches any thrown error (API failures, cache errors, store errors)
-   - Logs error: `server.sendLoggingMessage({ level: "error", data: "..." })` (wrapped in try/catch; logging may throw if disconnected)
+   - Logs error: `await context.notifier.loggingMessage({ level: "error", data: "..." })` (the notifier swallows transport failures internally — no extra try/catch around the logging call needed)
    - Emits `sync:error` with the Error
    - Never re-throws — returns normally
 
@@ -183,7 +183,7 @@ Background polling loop that keeps local cache and in-memory store synchronized 
 - `syncOnce()` never throws — errors are caught, logged, and emitted as events
 - `start()` when already running is a no-op (no duplicate loops via `_ac` check)
 - `stop()` when not running is a no-op (no-op if `_ac` is null)
-- Recipe or pantry changes trigger `sendResourceListChanged()`; no-change cycles do not. Recipe changes are detected via `diffRecipes` (hash-based: `added`, `changed`, `removed`); pantry changes are detected via Set difference for added/orphaned UIDs and `pantryItemsEqual()` for same-UID content edits
+- Recipe or pantry changes trigger `notifier.resourceListChanged()`; no-change cycles do not. Recipe changes are detected via `diffRecipes` (hash-based: `added`, `changed`, `removed`); pantry changes are detected via Set difference for added/orphaned UIDs and `pantryItemsEqual()` for same-UID content edits
 - Cache is flushed exactly once per cycle (single `await cache.flush()` after all mutations)
 - Removed recipes are deleted concurrently via `Promise.all()` for efficiency
 - Orphaned pantry items are deleted concurrently via `Promise.all()` for efficiency
@@ -192,8 +192,8 @@ Background polling loop that keeps local cache and in-memory store synchronized 
 
 **Dependencies:**
 
-- **Uses:** `ServerContext` (client, cache, store, server), `mitt` (event emitter), `node:timers/promises` (scheduler.wait), `./types.js` (Recipe, RecipeUid, SyncResult, DiffResult)
-- **Used by:** entry point (P2-U12), Phase 3 event subscribers
+- **Uses:** `AppContext` (client, cache, store, pantryStore, notifier — `server` is intentionally absent), `mitt` (event emitter), `node:timers/promises` (scheduler.wait), `./types.js` (Recipe, RecipeUid, SyncResult, DiffResult)
+- **Used by:** `src/server/build.ts` (`buildAppContext` constructs SyncEngine), `src/features/discover-feature.ts` (subscribes to `sync.events` for incremental re-indexing)
 - **Boundary:** Must not import from `tools/`, `resources/`, or `features/`
 
 ## Dependencies

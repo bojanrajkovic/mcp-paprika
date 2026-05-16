@@ -1,8 +1,8 @@
 import { vi, describe, it, expect, afterEach, beforeEach, expectTypeOf } from "vitest";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
 import { SyncEngine } from "./sync.js";
-import type { ServerContext } from "../types/server-context.js";
+import type { AppContext } from "../server/app-context.js";
+import type { Notifier } from "../server/notifier.js";
 import type { RecipeStore } from "../cache/recipe-store.js";
 import type { PaprikaClient } from "./client.js";
 import type { DiskCache } from "../cache/disk-cache.js";
@@ -12,11 +12,11 @@ import { makeRecipe, makeCategory } from "../cache/__fixtures__/recipes.js";
 import { makePantryItem } from "../cache/__fixtures__/pantry.js";
 import { PantryStore as RealPantryStore } from "../cache/pantry-store.js";
 
-function makeMockServer(): McpServer {
+function makeMockNotifier(): Notifier {
   return {
-    sendLoggingMessage: vi.fn().mockResolvedValue(undefined),
-    sendResourceListChanged: vi.fn(),
-  } as unknown as McpServer;
+    resourceListChanged: vi.fn(),
+    loggingMessage: vi.fn().mockResolvedValue(undefined),
+  };
 }
 
 function makeMockStore(): RecipeStore {
@@ -66,13 +66,14 @@ function makeMockPantryStore(): PantryStore {
   } as unknown as PantryStore;
 }
 
-function makeTestContext(): ServerContext {
+function makeTestContext(): AppContext {
   return {
     client: makeMockClient(),
     cache: makeMockCache(),
     store: makeMockStore(),
     pantryStore: makeMockPantryStore(),
-    server: makeMockServer(),
+    vectorStore: null,
+    notifier: makeMockNotifier(),
   };
 }
 
@@ -307,26 +308,27 @@ describe("syncOnce", () => {
     } as unknown as PantryStore;
   }
 
-  function makeMockServerDefault(): McpServer {
+  function makeMockNotifierDefault(): Notifier {
     return {
-      sendResourceListChanged: vi.fn(),
-      sendLoggingMessage: vi.fn().mockResolvedValue(undefined),
-    } as unknown as McpServer;
+      resourceListChanged: vi.fn(),
+      loggingMessage: vi.fn().mockResolvedValue(undefined),
+    };
   }
 
   function makeSyncEngine(
     clientOverrides?: Partial<PaprikaClient>,
     cacheOverrides?: Partial<DiskCache>,
     storeOverrides?: Partial<RecipeStore>,
-    serverOverrides?: Partial<McpServer>,
+    notifierOverrides?: Partial<Notifier>,
     pantryStoreOverrides?: Partial<PantryStore>,
   ): SyncEngine {
-    const context: ServerContext = {
+    const context: AppContext = {
       client: { ...makeMockClientDefault(), ...clientOverrides } as PaprikaClient,
       cache: { ...makeMockCacheDefault(), ...cacheOverrides } as DiskCache,
       store: { ...makeMockStoreDefault(), ...storeOverrides } as RecipeStore,
       pantryStore: { ...makeMockPantryStoreDefault(), ...pantryStoreOverrides } as PantryStore,
-      server: { ...makeMockServerDefault(), ...serverOverrides } as McpServer,
+      vectorStore: null,
+      notifier: { ...makeMockNotifierDefault(), ...notifierOverrides } as Notifier,
     };
     return new SyncEngine(context, 10);
   }
@@ -510,11 +512,11 @@ describe("syncOnce", () => {
     expect(putCategory).toHaveBeenCalledWith(category2, category2.uid);
   });
 
-  it("AC5.1: sendResourceListChanged called when recipe changes exist", async () => {
+  it("AC5.1: notifier.resourceListChanged called when recipe changes exist", async () => {
     const recipe = makeRecipe({ uid: "recipe-1" as RecipeUid });
     const entry: RecipeEntry = { uid: recipe.uid, hash: recipe.hash };
 
-    const sendResourceListChanged = vi.fn();
+    const resourceListChanged = vi.fn();
 
     const engine = makeSyncEngine(
       {
@@ -526,23 +528,23 @@ describe("syncOnce", () => {
       },
       undefined,
       {
-        sendResourceListChanged,
+        resourceListChanged,
       },
     );
     await engine.syncOnce();
 
-    expect(sendResourceListChanged).toHaveBeenCalled();
+    expect(resourceListChanged).toHaveBeenCalled();
   });
 
-  it("AC5.2: sendResourceListChanged NOT called when no recipe changes", async () => {
-    const sendResourceListChanged = vi.fn();
+  it("AC5.2: notifier.resourceListChanged NOT called when no recipe changes", async () => {
+    const resourceListChanged = vi.fn();
 
     const engine = makeSyncEngine(undefined, undefined, undefined, {
-      sendResourceListChanged,
+      resourceListChanged,
     });
     await engine.syncOnce();
 
-    expect(sendResourceListChanged).not.toHaveBeenCalled();
+    expect(resourceListChanged).not.toHaveBeenCalled();
   });
 
   it("AC6.1: syncOnce never throws on API error", async () => {
@@ -609,23 +611,23 @@ describe("syncOnce", () => {
     expect(events).toContain("complete");
   });
 
-  it("AC7.1: sendLoggingMessage called with level info on success", async () => {
-    const sendLoggingMessage = vi.fn().mockResolvedValue(undefined);
+  it("AC7.1: notifier.loggingMessage called with level info on success", async () => {
+    const loggingMessage = vi.fn().mockResolvedValue(undefined);
 
     const engine = makeSyncEngine(undefined, undefined, undefined, {
-      sendLoggingMessage,
+      loggingMessage,
     });
     await engine.syncOnce();
 
-    expect(sendLoggingMessage).toHaveBeenCalledWith(
+    expect(loggingMessage).toHaveBeenCalledWith(
       expect.objectContaining({
         level: "info",
       }),
     );
   });
 
-  it("AC7.2: sendLoggingMessage called with level error on failure", async () => {
-    const sendLoggingMessage = vi.fn().mockResolvedValue(undefined);
+  it("AC7.2: notifier.loggingMessage called with level error on failure", async () => {
+    const loggingMessage = vi.fn().mockResolvedValue(undefined);
 
     const engine = makeSyncEngine(
       {
@@ -634,12 +636,12 @@ describe("syncOnce", () => {
       undefined,
       undefined,
       {
-        sendLoggingMessage,
+        loggingMessage,
       },
     );
     await engine.syncOnce();
 
-    expect(sendLoggingMessage).toHaveBeenCalledWith(
+    expect(loggingMessage).toHaveBeenCalledWith(
       expect.objectContaining({
         level: "error",
       }),
@@ -725,10 +727,10 @@ describe("syncOnce", () => {
       expect(removePantryItem).not.toHaveBeenCalledWith(newItem.uid);
     });
 
-    it("pantry-read.AC4.4 Success: sendResourceListChanged called when pantry changes exist, not when no changes", async () => {
+    it("pantry-read.AC4.4 Success: notifier.resourceListChanged called when pantry changes exist, not when no changes", async () => {
       const newItem = makePantryItem();
 
-      const sendResourceListChanged = vi.fn();
+      const resourceListChanged = vi.fn();
 
       // Test with pantry change
       const engine1 = makeSyncEngine(
@@ -742,16 +744,16 @@ describe("syncOnce", () => {
         },
         undefined,
         {
-          sendResourceListChanged,
+          resourceListChanged,
         },
       );
 
       await engine1.syncOnce();
-      expect(sendResourceListChanged).toHaveBeenCalledOnce();
+      expect(resourceListChanged).toHaveBeenCalledOnce();
 
       // Test with no changes (empty cache, empty incoming)
       vi.clearAllMocks();
-      const sendResourceListChanged2 = vi.fn();
+      const resourceListChanged2 = vi.fn();
       const engine2 = makeSyncEngine(
         {
           listRecipes: vi.fn().mockResolvedValue([]),
@@ -763,15 +765,15 @@ describe("syncOnce", () => {
         },
         undefined,
         {
-          sendResourceListChanged: sendResourceListChanged2,
+          resourceListChanged: resourceListChanged2,
         },
       );
 
       await engine2.syncOnce();
-      expect(sendResourceListChanged2).not.toHaveBeenCalled();
+      expect(resourceListChanged2).not.toHaveBeenCalled();
     });
 
-    it("pantry-read.AC4.4 Success: sendResourceListChanged fires when same-UID pantry item content changes", async () => {
+    it("pantry-read.AC4.4 Success: notifier.resourceListChanged fires when same-UID pantry item content changes", async () => {
       const sharedUid = "uid-shared" as PantryItemUid;
       const cachedItem = makePantryItem({ uid: sharedUid, ingredient: "Old Ingredient", quantity: "1" });
       const incomingItem = makePantryItem({
@@ -780,7 +782,7 @@ describe("syncOnce", () => {
         quantity: "2",
       });
 
-      const sendResourceListChanged = vi.fn();
+      const resourceListChanged = vi.fn();
 
       const engine = makeSyncEngine(
         {
@@ -793,12 +795,12 @@ describe("syncOnce", () => {
         },
         undefined,
         {
-          sendResourceListChanged,
+          resourceListChanged,
         },
       );
 
       await engine.syncOnce();
-      expect(sendResourceListChanged).toHaveBeenCalledOnce();
+      expect(resourceListChanged).toHaveBeenCalledOnce();
     });
 
     it("pantry-read.AC4.5 Success: REAL PantryStore hasSynced flips to true after sync", async () => {
@@ -807,7 +809,7 @@ describe("syncOnce", () => {
 
       expect(realPantryStore.hasSynced).toBe(false);
 
-      const context: ServerContext = {
+      const context: AppContext = {
         client: {
           listRecipes: vi.fn().mockResolvedValue([]),
           getRecipes: vi.fn().mockResolvedValue([]),
@@ -830,10 +832,8 @@ describe("syncOnce", () => {
           setCategories: vi.fn(),
         } as unknown as RecipeStore,
         pantryStore: realPantryStore,
-        server: {
-          sendResourceListChanged: vi.fn(),
-          sendLoggingMessage: vi.fn().mockResolvedValue(undefined),
-        } as unknown as McpServer,
+        vectorStore: null,
+        notifier: makeMockNotifier(),
       };
       const engine = new SyncEngine(context, 10);
 
@@ -845,7 +845,7 @@ describe("syncOnce", () => {
     it("pantry-read.AC4.6 Edge: Empty pantry from API handled gracefully", async () => {
       const realPantryStore = new RealPantryStore();
 
-      const context: ServerContext = {
+      const context: AppContext = {
         client: {
           listRecipes: vi.fn().mockResolvedValue([]),
           getRecipes: vi.fn().mockResolvedValue([]),
@@ -868,10 +868,8 @@ describe("syncOnce", () => {
           setCategories: vi.fn(),
         } as unknown as RecipeStore,
         pantryStore: realPantryStore,
-        server: {
-          sendResourceListChanged: vi.fn(),
-          sendLoggingMessage: vi.fn().mockResolvedValue(undefined),
-        } as unknown as McpServer,
+        vectorStore: null,
+        notifier: makeMockNotifier(),
       };
       const engine = new SyncEngine(context, 10);
 

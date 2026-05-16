@@ -111,9 +111,9 @@ describe("Sync → Tool Pipeline Integration", () => {
 
       const store = new RecipeStore();
       const pantryStore = new PantryStore();
-      const mockServer = {
-        sendLoggingMessage: async () => {},
-        sendResourceListChanged: () => {},
+      const notifier = {
+        resourceListChanged: () => {},
+        loggingMessage: async () => {},
       };
 
       const context = {
@@ -121,7 +121,8 @@ describe("Sync → Tool Pipeline Integration", () => {
         cache,
         store,
         pantryStore,
-        server: mockServer,
+        vectorStore: null,
+        notifier,
       };
 
       const engine = new SyncEngine(context, 100);
@@ -207,12 +208,12 @@ describe("Sync → Tool Pipeline Integration", () => {
       await cache.init();
       const store = new RecipeStore();
       const pantryStore = new PantryStore();
-      const mockServer = {
-        sendLoggingMessage: async () => {},
-        sendResourceListChanged: () => {},
+      const notifier = {
+        resourceListChanged: () => {},
+        loggingMessage: async () => {},
       };
 
-      const context = { client, cache, store, pantryStore, server: mockServer };
+      const context = { client, cache, store, pantryStore, vectorStore: null, notifier };
       const engine = new SyncEngine(context, 100);
 
       // First sync
@@ -272,12 +273,12 @@ describe("Sync → Tool Pipeline Integration", () => {
       await cache.init();
       const store = new RecipeStore();
       const pantryStore = new PantryStore();
-      const mockServer = {
-        sendLoggingMessage: async () => {},
-        sendResourceListChanged: () => {},
+      const notifier = {
+        resourceListChanged: () => {},
+        loggingMessage: async () => {},
       };
 
-      const context = { client, cache, store, pantryStore, server: mockServer };
+      const context = { client, cache, store, pantryStore, vectorStore: null, notifier };
       const engine = new SyncEngine(context, 100);
 
       // First sync: both recipes
@@ -356,12 +357,12 @@ describe("Sync → Tool Pipeline Integration", () => {
       await cache.init();
       const store = new RecipeStore();
       const pantryStore = new PantryStore();
-      const mockServer = {
-        sendLoggingMessage: async () => {},
-        sendResourceListChanged: () => {},
+      const notifier = {
+        resourceListChanged: () => {},
+        loggingMessage: async () => {},
       };
 
-      const context = { client, cache, store, pantryStore, server: mockServer };
+      const context = { client, cache, store, pantryStore, vectorStore: null, notifier };
       const engine = new SyncEngine(context, 100);
       await engine.syncOnce();
 
@@ -435,12 +436,12 @@ describe("Sync → Tool Pipeline Integration", () => {
       await cache.init();
       const store = new RecipeStore();
       const pantryStore = new PantryStore();
-      const mockServer = {
-        sendLoggingMessage: async () => {},
-        sendResourceListChanged: () => {},
+      const notifier = {
+        resourceListChanged: () => {},
+        loggingMessage: async () => {},
       };
 
-      const context = { client, cache, store, pantryStore, server: mockServer };
+      const context = { client, cache, store, pantryStore, vectorStore: null, notifier };
       const engine = new SyncEngine(context, 100);
 
       // First sync with original name
