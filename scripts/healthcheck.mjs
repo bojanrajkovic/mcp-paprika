@@ -6,7 +6,23 @@
 import { request } from "node:http";
 
 const port = process.env.MCP_HTTP_PORT ?? "3000";
-const host = "127.0.0.1";
+// Probe the actual bind address, falling back to loopback for the
+// listen-everywhere defaults. Without this, setting MCP_HTTP_HOST to a
+// specific non-loopback interface would mark the container unhealthy even
+// while the server happily serves traffic.
+//
+//   "0.0.0.0" / ""  → listens on all IPv4 interfaces → probe via 127.0.0.1
+//   "::"            → listens on all IPv6 interfaces → probe via ::1
+//   anything else   → probe the exact host the server binds to
+const configured = process.env.MCP_HTTP_HOST ?? "";
+let host;
+if (configured === "" || configured === "0.0.0.0") {
+  host = "127.0.0.1";
+} else if (configured === "::") {
+  host = "::1";
+} else {
+  host = configured;
+}
 const timeoutMs = 4000;
 
 const req = request(
