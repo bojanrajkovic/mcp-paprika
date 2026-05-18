@@ -12,7 +12,7 @@
  */
 
 import {
-  InvalidRequestError,
+  InvalidGrantError,
   InvalidScopeError,
   InvalidTokenError,
   InvalidTargetError,
@@ -100,7 +100,7 @@ export const OAuthTokenError = {
    * Maps to SDK InvalidGrantError.
    */
   invalidGrant: (message: string): OAuthError => {
-    return new InvalidRequestError(message, "invalid_grant");
+    return new InvalidGrantError(message);
   },
 
   /**
