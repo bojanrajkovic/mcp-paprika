@@ -1,4 +1,5 @@
 import type { OAuthServerProvider, AuthorizationParams } from "@modelcontextprotocol/sdk/server/auth/provider.js";
+import type { OAuthRegisteredClientsStore } from "@modelcontextprotocol/sdk/server/auth/clients.js";
 import type {
   OAuthClientInformationFull,
   OAuthTokens,
@@ -42,12 +43,11 @@ export class MintingOAuthServerProvider implements OAuthServerProvider {
     private readonly _publicUrl: string,
   ) {}
 
-  get clientsStore(): any {
+  get clientsStore(): OAuthRegisteredClientsStore {
     // Type mismatch: SDK's OAuthRegisteredClientsStore interface requires mutable arrays
     // in the returned OAuthClientInformationFull, while our DiskClientRegistrationStore returns
-    // readonly arrays. In practice, the SDK never mutates these arrays, so the cast is safe.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return this._clientStore as any;
+    // readonly arrays. In practice, the SDK never mutates these arrays, so the cast is sound.
+    return this._clientStore as unknown as OAuthRegisteredClientsStore;
   }
 
   async authorize(

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, beforeAll, afterAll, vi } from "vitest";
 import { Hono } from "hono";
 import { buildAuthRoutes, buildDcrRateLimit, buildClientCap } from "./routes.js";
 import { DiskClientRegistrationStore } from "./client-registration.js";
@@ -7,6 +7,7 @@ import { AuthRequestStore } from "./auth-request-store.js";
 import { AuthCodeStore } from "./auth-code-store.js";
 import { DiskCache } from "../cache/disk-cache.js";
 import { createOidcStub } from "./__fixtures__/oidc-stub.js";
+import { createJwksFor } from "./oidc-client.js";
 import { setupServer } from "msw/node";
 
 describe("Auth Routes", () => {
@@ -117,17 +118,172 @@ describe("Auth Routes", () => {
       expect(redirectUrl.searchParams.get("state")).toBe(claudeState);
     });
 
-    it.todo("AC2.14: success redirect includes iss=<MCP_PUBLIC_URL>");
-    // PLAN says (phase_06.md:662-667): successful upstream code exchange → allowlist OK → mints mcp_ac_ → redirects with code+state+iss
-    // C3 FIXED: OIDC stub now signs fresh JWT per request with correct nonce (was {{nonce}} placeholder).
-    // Remaining blocker: test requires driving full /authorize → /token → /callback flow.
-    // MSW at module level + JWKS endpoint setup. Deferred to Phase 7 e2e test with real HTTP transport.
+    it("AC2.14: success redirect includes iss=<MCP_PUBLIC_URL>", async () => {
+      // PLAN says (phase_06.md:662-667): successful upstream code exchange → allowlist OK → mints mcp_ac_ → redirects with code+state+iss
+      // Build a local app with realJwks so verifyIdToken can fetch the key from the MSW stub's /jwks endpoint.
+      // The outer beforeEach app uses `jwks: async () => ({ keys: [] })` which would fail sig verification.
+      const discoveryForJwks = {
+        issuer: oidcStub.issuer,
+        authorization_endpoint: `${oidcStub.issuer}/authorize`,
+        token_endpoint: `${oidcStub.issuer}/token`,
+        jwks_uri: `${oidcStub.issuer}/jwks`,
+      };
+      const realJwks = createJwksFor(discoveryForJwks);
 
-    it.todo("AC3.4: does NOT log id_token, only identity claims, on denial");
-    // PLAN says (phase_06.md:680-686): allowlist denial logs identity claims (email, sub) but never id_token.
-    // C3 FIXED: JWT now valid; allowlist denial path is testable.
-    // Remaining blocker: same as AC2.14 — requires /authorize → /token → /callback flow setup.
-    // Deferred to Phase 7 e2e test.
+      const localAuthRequests = new AuthRequestStore();
+      const localAuthCodes = new AuthCodeStore();
+      const localApp = new Hono();
+      localApp.route(
+        "/",
+        buildAuthRoutes({
+          clientStore,
+          tokenStore,
+          authRequests: localAuthRequests,
+          authCodes: localAuthCodes,
+          oidcConfig: {
+            clientId: "stub-client-id",
+            clientSecret: "stub-client-secret",
+            scopes: ["openid", "email"],
+            emailVerifiedPolicy: "if-present",
+            allowlist: { emails: ["user@example.com"], subs: [] },
+            allowedAlgs: ["RS256"],
+          },
+          discovery: discoveryForJwks,
+          jwks: realJwks,
+          publicUrl: "https://mcp.example.com",
+        }),
+      );
+
+      // Seed the local AuthRequestStore with a known state+nonce pair
+      const ourState = "mcp_state_success_test";
+      const ourNonce = "mcp_nonce_success_test";
+      localAuthRequests.put(ourState, {
+        clientId: "stub-client-id",
+        codeChallenge: "challenge",
+        codeChallengeMethod: "S256",
+        redirectUri: "https://claude.ai/callback",
+        resource: "https://mcp.example.com/",
+        claudeState: "claude_state_success",
+        scope: "openid email",
+        ourNonce,
+        createdAt: Math.floor(Date.now() / 1000),
+      });
+
+      // Drive the stub's /authorize so codeToNonce records ourNonce for the generated code
+      const authResp = await fetch(
+        `${oidcStub.issuer}/authorize?nonce=${ourNonce}&state=${ourState}&redirect_uri=https://mcp.example.com/oauth/callback`,
+        { redirect: "manual" },
+      );
+      const upstreamCode = new URL(authResp.headers.get("location")!).searchParams.get("code")!;
+
+      // Drive the callback route — MSW intercepts the outbound /token and /jwks calls
+      const res = await localApp.request(`/oauth/callback?code=${upstreamCode}&state=${ourState}`);
+
+      expect(res.status).toBe(302);
+      const location = res.headers.get("location");
+      expect(location).toBeTruthy();
+
+      const loc = new URL(location!);
+      expect(loc.origin + loc.pathname).toBe("https://claude.ai/callback");
+      expect(loc.searchParams.get("iss")).toBe("https://mcp.example.com");
+      expect(loc.searchParams.get("state")).toBe("claude_state_success");
+      expect(loc.searchParams.get("code")).toMatch(/^mcp_ac_/);
+    });
+
+    it("AC3.4: does NOT log id_token, only identity claims, on denial", async () => {
+      // PLAN says (phase_06.md:680-686): allowlist denial logs identity claims (email, sub) but never id_token.
+      // Build a local app with realJwks so verifyIdToken passes, then hit allowlist denial.
+      const discoveryForJwks = {
+        issuer: oidcStub.issuer,
+        authorization_endpoint: `${oidcStub.issuer}/authorize`,
+        token_endpoint: `${oidcStub.issuer}/token`,
+        jwks_uri: `${oidcStub.issuer}/jwks`,
+      };
+      const realJwks = createJwksFor(discoveryForJwks);
+
+      const localAuthRequests = new AuthRequestStore();
+      const localAuthCodes = new AuthCodeStore();
+      const localApp = new Hono();
+      localApp.route(
+        "/",
+        buildAuthRoutes({
+          clientStore,
+          tokenStore,
+          authRequests: localAuthRequests,
+          authCodes: localAuthCodes,
+          oidcConfig: {
+            clientId: "stub-client-id",
+            clientSecret: "stub-client-secret",
+            scopes: ["openid", "email"],
+            emailVerifiedPolicy: "if-present",
+            // Only user@example.com is on the allowlist — unknown@example.com will be denied
+            allowlist: { emails: ["user@example.com"], subs: [] },
+            allowedAlgs: ["RS256"],
+          },
+          discovery: discoveryForJwks,
+          jwks: realJwks,
+          publicUrl: "https://mcp.example.com",
+        }),
+      );
+
+      // Override the stub identity to one not on the allowlist
+      oidcStub.authenticateNext({ email: "unknown@example.com", sub: "unknown-sub-999", emailVerified: true });
+
+      // Seed the local AuthRequestStore
+      const ourState = "mcp_state_denial_test";
+      const ourNonce = "mcp_nonce_denial_test";
+      localAuthRequests.put(ourState, {
+        clientId: "stub-client-id",
+        codeChallenge: "challenge",
+        codeChallengeMethod: "S256",
+        redirectUri: "https://claude.ai/callback",
+        resource: "https://mcp.example.com/",
+        claudeState: "claude_state_denial",
+        scope: "openid email",
+        ourNonce,
+        createdAt: Math.floor(Date.now() / 1000),
+      });
+
+      // Drive /authorize to register the nonce in the stub's codeToNonce map
+      const authResp = await fetch(
+        `${oidcStub.issuer}/authorize?nonce=${ourNonce}&state=${ourState}&redirect_uri=https://mcp.example.com/oauth/callback`,
+        { redirect: "manual" },
+      );
+      const upstreamCode = new URL(authResp.headers.get("location")!).searchParams.get("code")!;
+
+      // Spy on stderr to capture allowlist denial log output
+      const stderrWrites: Array<string> = [];
+      const stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation((chunk: unknown) => {
+        stderrWrites.push(String(chunk));
+        return true;
+      });
+
+      try {
+        // Drive the callback route
+        const res = await localApp.request(`/oauth/callback?code=${upstreamCode}&state=${ourState}`);
+
+        // Should redirect with error=access_denied and iss
+        expect(res.status).toBe(302);
+        const location = res.headers.get("location");
+        expect(location).toBeTruthy();
+        const loc = new URL(location!);
+        expect(loc.searchParams.get("error")).toBe("access_denied");
+        expect(loc.searchParams.get("iss")).toBe("https://mcp.example.com");
+
+        // Combine all stderr output
+        const allStderr = stderrWrites.join("");
+
+        // AC3.4: id_token must NOT appear in logs (JWTs always start with "eyJ")
+        expect(allStderr).not.toMatch(/eyJ/);
+
+        // AC3.4: identity claims MUST appear in the denial log
+        expect(allStderr).toMatch(/email=/);
+        expect(allStderr).toMatch(/sub=/);
+        expect(allStderr).toMatch(/allowlist denial/);
+      } finally {
+        stderrSpy.mockRestore();
+      }
+    });
 
     it("missing state → 400", async () => {
       const res = await app.request("/oauth/callback");
@@ -159,7 +315,7 @@ describe("Auth Routes", () => {
       expect(res.status).toBe(200);
       const json = (await res.json()) as any;
       expect(json.client_name).toBe("Updated Name");
-      expect(json.registration_client_uri).toBeTruthy();
+      expect(json.registration_client_uri).toBe(`https://mcp.example.com/register/${clientId}`);
     });
 
     it("AC2.12: missing Authorization → 401", async () => {
@@ -296,7 +452,7 @@ describe("Auth Routes", () => {
       const testCache = new DiskCache(`/tmp/test-cap-${Date.now()}-${Math.random().toString(36).slice(2)}`);
       await testCache.init();
 
-      const testClientStore = new DiskClientRegistrationStore(testCache);
+      const testClientStore = new DiskClientRegistrationStore(testCache, "https://mcp.example.com");
       const testApp = new Hono();
       testApp.use("/register", buildClientCap(testCache, 50));
       testApp.post("/register", (c) => c.json({ ok: true }, 201));

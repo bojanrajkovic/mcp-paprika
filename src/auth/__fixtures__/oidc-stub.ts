@@ -12,8 +12,8 @@
  */
 
 import { http, HttpResponse, type HttpHandler } from "msw";
-import { generateSecret, SignJWT, type JWK, type JWTPayload } from "jose";
-import { makeRsaJwt, makeEs256Jwt } from "./jose-keys.js";
+import { generateKeyPair, exportJWK, generateSecret, SignJWT, type JWK, type JWTPayload, type KeyLike } from "jose";
+import { makeEs256Jwt } from "./jose-keys.js";
 
 export interface OidcStubOptions {
   readonly issuer: string;
@@ -45,19 +45,41 @@ export function createOidcStub(opts: OidcStubOptions): OidcStub {
   let signAlg: "RS256" | "ES256" | "HS256" | "none" = "RS256";
 
   // Cached keypair (NOT cached token — tokens are signed fresh per request with correct nonce)
+  // Both the public JWK and private key are cached together so /jwks always returns the
+  // same key that signs the tokens. makeRsaJwt() generates a fresh keypair on every call,
+  // so we cannot use it here — we must cache the private key separately and sign inline.
   let cachedRsaJwk: JWK | null = null;
+  let cachedRsaPrivateKey: KeyLike | null = null;
 
   // Map from upstream authorization code to captured nonce+state
   const codeToNonce = new Map<string, { nonce: string; state: string }>();
 
   /**
+   * Ensures the RSA keypair is generated and cached, then returns the public JWK.
+   * Subsequent calls return the same JWK (and the same private key used to sign).
+   */
+  async function getOrCreateRsaJwk(): Promise<JWK> {
+    if (cachedRsaJwk === null || cachedRsaPrivateKey === null) {
+      const { publicKey, privateKey } = await generateKeyPair("RS256");
+      const jwk = await exportJWK(publicKey);
+      jwk.kid = "stub-rsa-1";
+      jwk.alg = "RS256";
+      jwk.use = "sig";
+      cachedRsaJwk = jwk;
+      cachedRsaPrivateKey = privateKey;
+    }
+    return cachedRsaJwk;
+  }
+
+  /**
    * Signs a fresh RS256 JWT with the given identity and nonce.
-   * Does NOT cache the token; caches only the keypair.
+   * Uses the cached private key so /jwks and the token share the same keypair.
    */
   async function signRsaToken(
     identity: typeof opts.defaultIdentity,
     nonce: string,
   ): Promise<{ token: string; jwk: JWK }> {
+    const jwk = await getOrCreateRsaJwk();
     const claims: JWTPayload = {
       iss: opts.issuer,
       sub: identity.sub,
@@ -69,15 +91,11 @@ export function createOidcStub(opts: OidcStubOptions): OidcStub {
       exp: expireNext ? Math.floor(Date.now() / 1000) - 3600 : Math.floor(Date.now() / 1000) + 3600,
     };
 
-    const result = await makeRsaJwt(claims, { alg: "RS256", kid: "stub-rsa-key-1" });
-    if (cachedRsaJwk === null) {
-      cachedRsaJwk = result.jwk;
-    }
+    const token = await new SignJWT(claims)
+      .setProtectedHeader({ alg: "RS256", kid: "stub-rsa-1" })
+      .sign(cachedRsaPrivateKey!);
 
-    return {
-      token: result.token,
-      jwk: cachedRsaJwk!,
-    };
+    return { token, jwk };
   }
 
   async function getEs256Token(identity: typeof opts.defaultIdentity): Promise<{ token: string; jwk: JWK }> {
@@ -130,10 +148,10 @@ export function createOidcStub(opts: OidcStubOptions): OidcStub {
 
     // GET /jwks
     http.get(`${opts.issuer}/jwks`, async () => {
-      // Return public key(s) for verification
-      const rsaResult = await getRsaToken(opts.defaultIdentity);
+      // Return public key(s) for verification — always the same key as used to sign tokens
+      const jwk = await getOrCreateRsaJwk();
       return HttpResponse.json({
-        keys: [rsaResult.jwk],
+        keys: [jwk],
       });
     }),
 
@@ -257,15 +275,16 @@ export function createOidcStub(opts: OidcStubOptions): OidcStub {
     },
     signWithAlg(alg) {
       signAlg = alg;
-      // Clear cached token so it's regenerated with the new alg
-      cachedRsaToken = null;
+      // Clear cached keypair so it's regenerated (relevant if alg changed back to RS256)
       cachedRsaJwk = null;
+      cachedRsaPrivateKey = null;
     },
     resetOverrides() {
       nextIdentity = { ...opts.defaultIdentity };
       expireNext = false;
       signAlg = "RS256";
       cachedRsaJwk = null;
+      cachedRsaPrivateKey = null;
       codeToNonce.clear();
     },
   };
