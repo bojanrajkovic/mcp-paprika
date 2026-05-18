@@ -68,10 +68,10 @@ describe("OIDC Presets", () => {
         allowedAlgs: ["RS256"],
       });
 
-      expect(result.isErr()).toBe(true);
-      if (result.isErr()) {
-        expect(result.error.message).toContain("discoveryUrl");
-      }
+      result.match(
+        () => expect.fail("Expected Err but got Ok"),
+        (error) => expect(error.message).toContain("discoveryUrl"),
+      );
     });
 
     it("returns err when scopes is missing", () => {
@@ -81,10 +81,10 @@ describe("OIDC Presets", () => {
         allowedAlgs: ["RS256"],
       });
 
-      expect(result.isErr()).toBe(true);
-      if (result.isErr()) {
-        expect(result.error.message).toContain("scopes");
-      }
+      result.match(
+        () => expect.fail("Expected Err but got Ok"),
+        (error) => expect(error.message).toContain("scopes"),
+      );
     });
 
     it("returns err when emailVerifiedPolicy is missing", () => {
@@ -94,10 +94,10 @@ describe("OIDC Presets", () => {
         allowedAlgs: ["RS256"],
       });
 
-      expect(result.isErr()).toBe(true);
-      if (result.isErr()) {
-        expect(result.error.message).toContain("emailVerifiedPolicy");
-      }
+      result.match(
+        () => expect.fail("Expected Err but got Ok"),
+        (error) => expect(error.message).toContain("emailVerifiedPolicy"),
+      );
     });
 
     it("returns err when allowedAlgs is missing", () => {
@@ -107,10 +107,10 @@ describe("OIDC Presets", () => {
         emailVerifiedPolicy: "strict",
       });
 
-      expect(result.isErr()).toBe(true);
-      if (result.isErr()) {
-        expect(result.error.message).toContain("allowedAlgs");
-      }
+      result.match(
+        () => expect.fail("Expected Err but got Ok"),
+        (error) => expect(error.message).toContain("allowedAlgs"),
+      );
     });
 
     it("builds resolved config from overrides when all required fields present", () => {
@@ -126,14 +126,16 @@ describe("OIDC Presets", () => {
         allowedAlgs,
       });
 
-      expect(result.isOk()).toBe(true);
-      if (result.isOk()) {
-        expect(result.value.discoveryUrl).toBe(discoveryUrl);
-        expect(result.value.scopes).toEqual(scopes);
-        expect(result.value.emailVerifiedPolicy).toBe(emailVerifiedPolicy);
-        expect(result.value.allowedAlgs).toEqual(allowedAlgs);
-        expect(result.value.presetName).toBeNull();
-      }
+      result.match(
+        (config) => {
+          expect(config.discoveryUrl).toBe(discoveryUrl);
+          expect(config.scopes).toEqual(scopes);
+          expect(config.emailVerifiedPolicy).toBe(emailVerifiedPolicy);
+          expect(config.allowedAlgs).toEqual(allowedAlgs);
+          expect(config.presetName).toBeNull();
+        },
+        () => expect.fail("Expected Ok but got Err"),
+      );
     });
   });
 
@@ -141,24 +143,28 @@ describe("OIDC Presets", () => {
     it("resolves google preset without overrides", () => {
       const result = resolvePreset("google", {});
 
-      expect(result.isOk()).toBe(true);
-      if (result.isOk()) {
-        expect(result.value.presetName).toBe("google");
-        expect(result.value.discoveryUrl).toBe("https://accounts.google.com/.well-known/openid-configuration");
-        expect(result.value.scopes).toEqual(["openid", "email", "profile"]);
-        expect(result.value.emailVerifiedPolicy).toBe("strict");
-        expect(result.value.allowedAlgs).toEqual(["RS256"]);
-      }
+      result.match(
+        (config) => {
+          expect(config.presetName).toBe("google");
+          expect(config.discoveryUrl).toBe("https://accounts.google.com/.well-known/openid-configuration");
+          expect(config.scopes).toEqual(["openid", "email", "profile"]);
+          expect(config.emailVerifiedPolicy).toBe("strict");
+          expect(config.allowedAlgs).toEqual(["RS256"]);
+        },
+        () => expect.fail("Expected Ok but got Err"),
+      );
     });
 
     it("returns err when tenant-bound preset lacks discoveryUrl override", () => {
       const result = resolvePreset("entra", {});
 
-      expect(result.isErr()).toBe(true);
-      if (result.isErr()) {
-        expect(result.error.message).toContain("entra");
-        expect(result.error.message).toContain("DISCOVERY_URL");
-      }
+      result.match(
+        () => expect.fail("Expected Err but got Ok"),
+        (error) => {
+          expect(error.message).toContain("entra");
+          expect(error.message).toContain("DISCOVERY_URL");
+        },
+      );
     });
 
     it("resolves tenant-bound preset when discoveryUrl override provided", () => {
@@ -166,13 +172,15 @@ describe("OIDC Presets", () => {
 
       const result = resolvePreset("entra", { discoveryUrl });
 
-      expect(result.isOk()).toBe(true);
-      if (result.isOk()) {
-        expect(result.value.presetName).toBe("entra");
-        expect(result.value.discoveryUrl).toBe(discoveryUrl);
-        expect(result.value.scopes).toEqual(["openid", "email", "profile"]);
-        expect(result.value.emailVerifiedPolicy).toBe("strict");
-      }
+      result.match(
+        (config) => {
+          expect(config.presetName).toBe("entra");
+          expect(config.discoveryUrl).toBe(discoveryUrl);
+          expect(config.scopes).toEqual(["openid", "email", "profile"]);
+          expect(config.emailVerifiedPolicy).toBe("strict");
+        },
+        () => expect.fail("Expected Ok but got Err"),
+      );
     });
 
     it("merges overrides with okta preset (overrides win)", () => {
@@ -184,13 +192,15 @@ describe("OIDC Presets", () => {
         scopes: customScopes,
       });
 
-      expect(result.isOk()).toBe(true);
-      if (result.isOk()) {
-        expect(result.value.presetName).toBe("okta");
-        expect(result.value.discoveryUrl).toBe(discoveryUrl);
-        expect(result.value.scopes).toEqual(customScopes);
-        expect(result.value.emailVerifiedPolicy).toBe("strict");
-      }
+      result.match(
+        (config) => {
+          expect(config.presetName).toBe("okta");
+          expect(config.discoveryUrl).toBe(discoveryUrl);
+          expect(config.scopes).toEqual(customScopes);
+          expect(config.emailVerifiedPolicy).toBe("strict");
+        },
+        () => expect.fail("Expected Ok but got Err"),
+      );
     });
 
     it("merges overrides with auth0 preset", () => {
@@ -198,12 +208,14 @@ describe("OIDC Presets", () => {
 
       const result = resolvePreset("auth0", { discoveryUrl });
 
-      expect(result.isOk()).toBe(true);
-      if (result.isOk()) {
-        expect(result.value.presetName).toBe("auth0");
-        expect(result.value.discoveryUrl).toBe(discoveryUrl);
-        expect(result.value.emailVerifiedPolicy).toBe("if-present");
-      }
+      result.match(
+        (config) => {
+          expect(config.presetName).toBe("auth0");
+          expect(config.discoveryUrl).toBe(discoveryUrl);
+          expect(config.emailVerifiedPolicy).toBe("if-present");
+        },
+        () => expect.fail("Expected Ok but got Err"),
+      );
     });
 
     it("merges overrides with keycloak preset", () => {
@@ -215,22 +227,26 @@ describe("OIDC Presets", () => {
         allowedAlgs,
       });
 
-      expect(result.isOk()).toBe(true);
-      if (result.isOk()) {
-        expect(result.value.presetName).toBe("keycloak");
-        expect(result.value.discoveryUrl).toBe(discoveryUrl);
-        expect(result.value.allowedAlgs).toEqual(allowedAlgs);
-      }
+      result.match(
+        (config) => {
+          expect(config.presetName).toBe("keycloak");
+          expect(config.discoveryUrl).toBe(discoveryUrl);
+          expect(config.allowedAlgs).toEqual(allowedAlgs);
+        },
+        () => expect.fail("Expected Ok but got Err"),
+      );
     });
 
     it("returns err for unknown preset name", () => {
       const result = resolvePreset("unknown" as any, {});
 
-      expect(result.isErr()).toBe(true);
-      if (result.isErr()) {
-        expect(result.error.message).toContain("Unknown");
-        expect(result.error.message).toContain("unknown");
-      }
+      result.match(
+        () => expect.fail("Expected Err but got Ok"),
+        (error) => {
+          expect(error.message).toContain("Unknown");
+          expect(error.message).toContain("unknown");
+        },
+      );
     });
   });
 
@@ -264,7 +280,12 @@ describe("OIDC Presets", () => {
         return initialResult.map(() => updatedConfig);
       });
 
-      expect(chainedResult.isOk()).toBe(true);
+      chainedResult.match(
+        () => {
+          // Success case
+        },
+        () => expect.fail("Expected Ok but got Err"),
+      );
     });
   });
 });
