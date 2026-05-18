@@ -8,7 +8,7 @@ import { http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
 import { OAuthMetadataValidationError } from "./errors.js";
 import { loadDiscovery, createJwksFor, verifyIdToken } from "./oidc-client.js";
-import { makeRsaJwt, makeEs256Jwt } from "./__tests__/jose-keys.js";
+import { makeRsaJwt, makeEs256Jwt, makeHs256Jwt } from "./__tests__/jose-keys.js";
 
 const server = setupServer();
 
@@ -227,6 +227,7 @@ describe("verifyIdToken", () => {
 
   // AC7.1 - RS256 signature verification
   it("AC7.1: RS256-signed id_token verifies and returns payload", async () => {
+    // PLAN says (phase_04.md:22): upstream id_token signed with RS256 verifies (default allowlist)
     const nonce = "n-1";
     const now = Math.floor(Date.now() / 1000);
 
@@ -271,6 +272,7 @@ describe("verifyIdToken", () => {
 
   // AC7.2 - ES256 signature verification
   it("AC7.2: ES256-signed id_token verifies", async () => {
+    // PLAN says (phase_04.md:23): upstream id_token signed with ES256 verifies (default allowlist)
     const nonce = "n-2";
     const now = Math.floor(Date.now() / 1000);
 
@@ -314,6 +316,7 @@ describe("verifyIdToken", () => {
 
   // AC7.3 - alg=none rejection
   it("AC7.3: id_token with alg=none is rejected", async () => {
+    // PLAN says (phase_04.md:24): id_token with alg='none' rejected by verifyIdToken
     const nonce = "n-3";
     const now = Math.floor(Date.now() / 1000);
 
@@ -367,18 +370,27 @@ describe("verifyIdToken", () => {
 
   // AC7.4 - HS256 rejection
   it("AC7.4: id_token signed with HS256 is rejected", async () => {
+    // PLAN says (phase_04.md:25): id_token signed with HS256 rejected by verifyIdToken.
+    // Tests defense against the JWS algorithm-confusion attack — jose's algorithms
+    // allowlist must reject HS256 tokens even if (especially if) the JWKS happens to
+    // contain matching key material.
     const nonce = "n-4";
     const now = Math.floor(Date.now() / 1000);
 
-    // Generate a properly signed RS256 token for testing
-    const { token: rsaToken, jwk: rsaJwk } = await makeRsaJwt({
+    const claims = {
       iss: issuer,
       aud: clientId,
       sub: "user-4",
       nonce,
       exp: now + 60,
       iat: now,
-    });
+    };
+
+    const { token: hs256Token } = await makeHs256Jwt(claims);
+
+    // Mock the JWKS endpoint with the standard RSA public JWK (so resolver has SOMETHING
+    // to look up but jose's algorithms guard should reject before key lookup matters).
+    const { jwk: rsaJwk } = await makeRsaJwt({}, {});
 
     server.use(
       http.get(discoveryUrl, () =>
@@ -396,14 +408,12 @@ describe("verifyIdToken", () => {
     const discovery = await loadDiscovery(discoveryUrl, ["RS256"]);
     const jwks = createJwksFor(discovery);
 
-    // Token signed with RS256, but allowlist only includes HS256
-    // jose will reject because RS256 not in allowlist, throwing JOSEAlgNotAllowed
     await expect(
-      verifyIdToken(rsaToken, jwks, {
+      verifyIdToken(hs256Token, jwks, {
         clientId,
         issuer,
         nonce,
-        allowedAlgs: ["HS256"],
+        allowedAlgs: ["RS256", "ES256"], // default allowlist
       }),
     ).rejects.toThrow(OAuthMetadataValidationError);
   });
@@ -527,6 +537,7 @@ describe("verifyIdToken", () => {
 
   // AC7.8 - nonce mismatch
   it("AC7.8: id_token with mismatched nonce is rejected after signature verification", async () => {
+    // PLAN says (phase_04.md:27): mismatched nonce AND missing nonce are rejected
     const expectedNonce = "n-expected";
     const wrongNonce = "n-wrong";
     const now = Math.floor(Date.now() / 1000);
@@ -568,6 +579,7 @@ describe("verifyIdToken", () => {
 
   // AC7.8 - nonce required
   it("AC7.8: id_token with no nonce claim is rejected (nonce required)", async () => {
+    // PLAN says (phase_04.md:27): mismatched nonce AND missing nonce are rejected
     const nonce = "n-required";
     const now = Math.floor(Date.now() / 1000);
 
@@ -604,5 +616,90 @@ describe("verifyIdToken", () => {
         allowedAlgs: ["RS256"],
       }),
     ).rejects.toThrow(OAuthMetadataValidationError);
+  });
+
+  it("accepts array-valued aud claim (Microsoft Entra compatibility)", async () => {
+    // PLAN deferred from Phase 1: Entra emits array `aud`. Schema must accept both.
+    const nonce = "n-aud-array";
+    const now = Math.floor(Date.now() / 1000);
+
+    const { token, jwk } = await makeRsaJwt({
+      iss: issuer,
+      aud: [clientId, "other-client"],
+      sub: "user-aud-array",
+      nonce,
+      exp: now + 60,
+      iat: now,
+    });
+
+    server.use(
+      http.get(discoveryUrl, () =>
+        HttpResponse.json({
+          issuer,
+          authorization_endpoint: `${baseUrl}/authorize`,
+          token_endpoint: `${baseUrl}/token`,
+          jwks_uri: jwksUrl,
+          id_token_signing_alg_values_supported: ["RS256"],
+        }),
+      ),
+      http.get(jwksUrl, () => HttpResponse.json({ keys: [jwk] })),
+    );
+
+    const discovery = await loadDiscovery(discoveryUrl, ["RS256"]);
+    const jwks = createJwksFor(discovery);
+
+    const payload = await verifyIdToken(token, jwks, {
+      clientId,
+      issuer,
+      nonce,
+      allowedAlgs: ["RS256"],
+    });
+
+    expect(Array.isArray(payload.aud)).toBe(true);
+    expect(payload.aud).toContain(clientId);
+    expect(payload.aud).toContain("other-client");
+  });
+
+  it("coerces string email_verified to boolean (older Entra/Keycloak compatibility)", async () => {
+    // PLAN deferred from Phase 1: older Entra tenants emit "true"/"false" as strings.
+    const nonce = "n-email-verified-string";
+    const now = Math.floor(Date.now() / 1000);
+
+    const { token, jwk } = await makeRsaJwt({
+      iss: issuer,
+      aud: clientId,
+      sub: "user-email-string",
+      email: "user@x.com",
+      email_verified: "true" as unknown as boolean, // intentional cast to test coercion
+      nonce,
+      exp: now + 60,
+      iat: now,
+    });
+
+    server.use(
+      http.get(discoveryUrl, () =>
+        HttpResponse.json({
+          issuer,
+          authorization_endpoint: `${baseUrl}/authorize`,
+          token_endpoint: `${baseUrl}/token`,
+          jwks_uri: jwksUrl,
+          id_token_signing_alg_values_supported: ["RS256"],
+        }),
+      ),
+      http.get(jwksUrl, () => HttpResponse.json({ keys: [jwk] })),
+    );
+
+    const discovery = await loadDiscovery(discoveryUrl, ["RS256"]);
+    const jwks = createJwksFor(discovery);
+
+    const payload = await verifyIdToken(token, jwks, {
+      clientId,
+      issuer,
+      nonce,
+      allowedAlgs: ["RS256"],
+    });
+
+    expect(payload.email_verified).toBe(true);
+    expect(typeof payload.email_verified).toBe("boolean");
   });
 });

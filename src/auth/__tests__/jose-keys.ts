@@ -6,7 +6,7 @@
  * suitable for mocking JWKS endpoints.
  */
 
-import { generateKeyPair, exportJWK, SignJWT, type JWK, type JWTPayload } from "jose";
+import { generateKeyPair, generateSecret, exportJWK, SignJWT, type JWK, type JWTPayload } from "jose";
 
 /**
  * Generates an RSA or ECDSA JWT with specified claims.
@@ -53,4 +53,25 @@ export async function makeEs256Jwt(
   },
 ): Promise<{ token: string; jwk: JWK }> {
   return makeRsaJwt(claims, { alg: "ES256", ...opts });
+}
+
+/**
+ * Generates an HS256-signed JWT with specified claims.
+ *
+ * Returns both the signed token and the symmetric JWK.
+ * Used to test rejection of HMAC-signed tokens in verifyIdToken.
+ *
+ * @param claims - JWT payload claims to include
+ * @returns Object with signed token and symmetric JWK
+ */
+export async function makeHs256Jwt(claims: JWTPayload): Promise<{ token: string; jwk: JWK }> {
+  const secret = await generateSecret("HS256", { extractable: true });
+  const jwk: JWK = {
+    ...(await exportJWK(secret)),
+    alg: "HS256",
+  };
+
+  const token = await new SignJWT(claims).setProtectedHeader({ alg: "HS256" }).sign(secret);
+
+  return { token, jwk };
 }
