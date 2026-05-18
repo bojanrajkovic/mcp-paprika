@@ -8,6 +8,7 @@ import { AuthCodeStore } from "./auth-code-store.js";
 import { DiskCache } from "../cache/disk-cache.js";
 import { createOidcStub } from "./__fixtures__/oidc-stub.js";
 import { setupServer } from "msw/node";
+import { ACCESS_TOKEN_TTL_SECONDS } from "./tokens.js";
 import type { OAuthClientInformationFull } from "@modelcontextprotocol/sdk/server/auth/provider.js";
 
 describe("MintingOAuthServerProvider", () => {
@@ -163,63 +164,249 @@ describe("MintingOAuthServerProvider", () => {
 
   describe("exchangeAuthorizationCode (AC2.4)", () => {
     it("AC2.4: valid auth_code → returns access+refresh+expires_in=86400+token_type=Bearer", async () => {
-      // This test will require full integration with the stores
-      // For now, we'll write a simpler version that validates the method signature
-      expect(typeof provider.exchangeAuthorizationCode).toBe("function");
+      // PLAN says (phase_06.md:295): Set up a complete exchange. Put an AuthCodeState into authCodes via `authCodes.put(code, state)`, then call `provider.exchangeAuthorizationCode(client, code, codeVerifier, redirectUri, resource)`. Assert the returned `OAuthTokens` has `access_token` (starts with `mcp_at_` or whatever prefix tokens.ts uses), `refresh_token`, `token_type === "Bearer"`, `expires_in === ACCESS_TOKEN_TTL_SECONDS` (24h = 86400), and `scope` equal to the AuthCodeState scope.
+      const code = "test-code-123";
+      const resourceUrl = new URL("https://mcp.example.com");
+      authCodes.put(code, {
+        clientId: mockClient.client_id,
+        codeChallenge: "challenge-123",
+        codeChallengeMethod: "S256",
+        redirectUri: "https://claude.ai/callback",
+        resource: resourceUrl.toString(),
+        scope: "openid email",
+        identity: { email: "user@example.com", sub: "user-sub-123", source: "email" },
+        createdAt: Math.floor(Date.now() / 1000),
+      });
+
+      const tokens = await provider.exchangeAuthorizationCode(
+        mockClient,
+        code,
+        undefined,
+        "https://claude.ai/callback",
+        resourceUrl,
+      );
+
+      expect(tokens.access_token).toMatch(/^mcp_at_/);
+      expect(tokens.refresh_token).toMatch(/^mcp_rt_/);
+      expect(tokens.token_type).toBe("Bearer");
+      expect(tokens.expires_in).toBe(ACCESS_TOKEN_TTL_SECONDS);
+      expect(tokens.scope).toBe("openid email");
     });
 
     it("AC2.11: consumed auth_code → InvalidGrantError on second exchange", async () => {
-      // Placeholder
-      expect(typeof provider.exchangeAuthorizationCode).toBe("function");
+      // PLAN says (phase_06.md:296): Exchange once successfully, then call again with the same code. Second call must reject with `InvalidGrantError` (assert `.rejects.toMatchObject({ errorCode: "invalid_grant" })`).
+      const code = "test-code-consumed";
+      const resourceUrl = new URL("https://mcp.example.com");
+      authCodes.put(code, {
+        clientId: mockClient.client_id,
+        codeChallenge: "challenge-123",
+        codeChallengeMethod: "S256",
+        redirectUri: "https://claude.ai/callback",
+        resource: resourceUrl.toString(),
+        scope: "openid email",
+        identity: { email: "user@example.com", sub: "user-sub-123", source: "email" },
+        createdAt: Math.floor(Date.now() / 1000),
+      });
+
+      // First exchange succeeds
+      const result1 = await provider.exchangeAuthorizationCode(
+        mockClient,
+        code,
+        undefined,
+        "https://claude.ai/callback",
+        resourceUrl,
+      );
+      expect(result1.access_token).toBeDefined();
+
+      // Second exchange with same code fails
+      await expect(
+        provider.exchangeAuthorizationCode(mockClient, code, undefined, "https://claude.ai/callback", resourceUrl),
+      ).rejects.toMatchObject({ errorCode: "invalid_grant" });
     });
 
     it("AC2.10: resource mismatch → invalid_target error", async () => {
-      // Placeholder
-      expect(typeof provider.exchangeAuthorizationCode).toBe("function");
+      // PLAN says (phase_06.md:297): Stored AuthCodeState has resource="https://m.example.com/mcp"; call exchange with `resource: new URL("https://wrong/")`. Reject with `errorCode: "invalid_target"`.
+      const code = "test-code-resource-mismatch";
+      authCodes.put(code, {
+        clientId: mockClient.client_id,
+        codeChallenge: "challenge-123",
+        codeChallengeMethod: "S256",
+        redirectUri: "https://claude.ai/callback",
+        resource: "https://m.example.com/mcp",
+        scope: "openid email",
+        identity: { email: "user@example.com", sub: "user-sub-123", source: "email" },
+        createdAt: Math.floor(Date.now() / 1000),
+      });
+
+      await expect(
+        provider.exchangeAuthorizationCode(
+          mockClient,
+          code,
+          undefined,
+          "https://claude.ai/callback",
+          new URL("https://wrong/"),
+        ),
+      ).rejects.toMatchObject({ errorCode: "invalid_target" });
     });
   });
 
   describe("exchangeRefreshToken", () => {
     it("happy path: returns new pair, old refresh invalidated", async () => {
-      expect(typeof provider.exchangeRefreshToken).toBe("function");
+      // PLAN says (phase_06.md:307): Issue a token pair via `tokenStore.issueAccessRefreshPair(...)`, then call `provider.exchangeRefreshToken(undefined as any, oldRefresh)`. Assert new pair returned, old refresh token invalidated (subsequent `provider.exchangeRefreshToken(_, oldRefresh)` rejects).
+      const pair = await tokenStore.issueAccessRefreshPair({
+        clientId: mockClient.client_id,
+        identity: { email: "user@example.com", sub: "user-sub-123", source: "email" },
+        scope: "openid email",
+        resource: "https://mcp.example.com/",
+      });
+
+      const newPair = await provider.exchangeRefreshToken(undefined as any, pair.refresh.plaintext);
+
+      expect(newPair.access_token).toMatch(/^mcp_at_/);
+      expect(newPair.refresh_token).toMatch(/^mcp_rt_/);
+      expect(newPair.token_type).toBe("Bearer");
+      expect(newPair.expires_in).toBe(ACCESS_TOKEN_TTL_SECONDS);
+
+      // Old refresh token is invalidated
+      await expect(provider.exchangeRefreshToken(undefined as any, pair.refresh.plaintext)).rejects.toMatchObject({
+        errorCode: "invalid_grant",
+      });
     });
 
     it("AC2.10: mismatched resource → invalid_target", async () => {
-      expect(typeof provider.exchangeRefreshToken).toBe("function");
+      // PLAN says (phase_06.md:308): Issue pair with resource="A"; call `exchangeRefreshToken` with `resource: new URL("B/")`. Reject with `errorCode: "invalid_target"`.
+      const pair = await tokenStore.issueAccessRefreshPair({
+        clientId: mockClient.client_id,
+        identity: { email: "user@example.com", sub: "user-sub-123", source: "email" },
+        scope: "openid email",
+        resource: "https://a.example.com/",
+      });
+
+      await expect(
+        provider.exchangeRefreshToken(
+          undefined as any,
+          pair.refresh.plaintext,
+          undefined,
+          new URL("https://b.example.com"),
+        ),
+      ).rejects.toMatchObject({ errorCode: "invalid_target" });
     });
   });
 
   describe("verifyAccessToken", () => {
     it("returns AuthInfo for valid token", async () => {
-      expect(typeof provider.verifyAccessToken).toBe("function");
+      // PLAN says (phase_06.md:312): Issue pair, call `provider.verifyAccessToken(pair.access.plaintext)`. Resolves to AuthInfo with `clientId`, `scopes`, `extra.identity`, etc.
+      const pair = await tokenStore.issueAccessRefreshPair({
+        clientId: mockClient.client_id,
+        identity: { email: "user@example.com", sub: "user-sub-123", source: "email" },
+        scope: "openid email",
+        resource: "https://mcp.example.com/",
+      });
+
+      const authInfo = await provider.verifyAccessToken(pair.access.plaintext);
+
+      expect(authInfo.clientId).toBe(mockClient.client_id);
+      expect(authInfo.scopes).toEqual(["openid", "email"]);
+      expect(authInfo.extra?.email).toBe("user@example.com");
+      expect(authInfo.extra?.sub).toBe("user-sub-123");
     });
 
     it("throws InvalidTokenError for unknown/expired token", async () => {
-      expect(typeof provider.verifyAccessToken).toBe("function");
+      // PLAN says (phase_06.md:313): Call with random string. Reject with `errorCode: "invalid_token"`.
+      await expect(provider.verifyAccessToken("random-invalid-token")).rejects.toMatchObject({
+        errorCode: "invalid_token",
+      });
     });
   });
 
   describe("revokeToken (AC2.5)", () => {
     it("AC2.5: removes token; subsequent verifyAccessToken throws InvalidTokenError", async () => {
-      expect(typeof provider.revokeToken).toBe("function");
+      // PLAN says (phase_06.md:317): Issue pair, call `provider.revokeToken({} as any, { token: pair.access.plaintext, token_type_hint: "access_token" })`. Then `provider.verifyAccessToken(pair.access.plaintext)` rejects with `errorCode: "invalid_token"`.
+      const pair = await tokenStore.issueAccessRefreshPair({
+        clientId: mockClient.client_id,
+        identity: { email: "user@example.com", sub: "user-sub-123", source: "email" },
+        scope: "openid email",
+        resource: "https://mcp.example.com/",
+      });
+
+      await provider.revokeToken({} as any, {
+        token: pair.access.plaintext,
+        token_type_hint: "access_token",
+      });
+
+      // Token is now revoked
+      await expect(provider.verifyAccessToken(pair.access.plaintext)).rejects.toMatchObject({
+        errorCode: "invalid_token",
+      });
     });
 
     it("idempotent — revoking unknown token returns void without throw", async () => {
-      expect(typeof provider.revokeToken).toBe("function");
+      // PLAN says (phase_06.md:319): Call with a random token. Resolves to undefined without throwing.
+      await expect(
+        provider.revokeToken({} as any, {
+          token: "random-unknown-token",
+          token_type_hint: "access_token",
+        }),
+      ).resolves.toBeUndefined();
     });
   });
 
   describe("challengeForAuthorizationCode", () => {
     it("returns the code_challenge stored at /authorize time", async () => {
-      expect(typeof provider.challengeForAuthorizationCode).toBe("function");
+      // PLAN says (phase_06.md:322): Put an AuthCodeState with `codeChallenge: "abc"`. Call `provider.challengeForAuthorizationCode(client, code)`. Resolves to "abc".
+      const code = "test-code-challenge";
+      const challenge = "abc123def456";
+      const resourceUrl = new URL("https://mcp.example.com");
+      authCodes.put(code, {
+        clientId: mockClient.client_id,
+        codeChallenge: challenge,
+        codeChallengeMethod: "S256",
+        redirectUri: "https://claude.ai/callback",
+        resource: resourceUrl.toString(),
+        scope: "openid email",
+        identity: { email: "user@example.com", sub: "user-sub-123", source: "email" },
+        createdAt: Math.floor(Date.now() / 1000),
+      });
+
+      const result = await provider.challengeForAuthorizationCode(mockClient, code);
+      expect(result).toBe(challenge);
     });
 
     it("does NOT consume the auth_code (subsequent exchangeAuthorizationCode succeeds)", async () => {
-      expect(typeof provider.challengeForAuthorizationCode).toBe("function");
+      // PLAN says (phase_06.md:324): Call challenge, then call exchange with same code. Both succeed (the code is only consumed by `exchangeAuthorizationCode`, not by `challengeForAuthorizationCode`'s peek).
+      const code = "test-code-peek-not-consume";
+      const resourceUrl = new URL("https://mcp.example.com");
+      authCodes.put(code, {
+        clientId: mockClient.client_id,
+        codeChallenge: "challenge-123",
+        codeChallengeMethod: "S256",
+        redirectUri: "https://claude.ai/callback",
+        resource: resourceUrl.toString(),
+        scope: "openid email",
+        identity: { email: "user@example.com", sub: "user-sub-123", source: "email" },
+        createdAt: Math.floor(Date.now() / 1000),
+      });
+
+      // Challenge call does NOT consume
+      const challenge = await provider.challengeForAuthorizationCode(mockClient, code);
+      expect(challenge).toBe("challenge-123");
+
+      // Exchange succeeds with same code
+      const tokens = await provider.exchangeAuthorizationCode(
+        mockClient,
+        code,
+        undefined,
+        "https://claude.ai/callback",
+        resourceUrl,
+      );
+      expect(tokens.access_token).toBeDefined();
     });
 
     it("unknown code → InvalidGrantError", async () => {
-      expect(typeof provider.challengeForAuthorizationCode).toBe("function");
+      // PLAN says (phase_06.md:325): Call with random code. Reject with `errorCode: "invalid_grant"`.
+      await expect(provider.challengeForAuthorizationCode(mockClient, "unknown-code")).rejects.toMatchObject({
+        errorCode: "invalid_grant",
+      });
     });
   });
 });
