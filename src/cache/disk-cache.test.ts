@@ -2,10 +2,12 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { mkdtemp, readFile, readdir, stat, rm, writeFile, mkdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { randomUUID } from "node:crypto";
 import type { RecipeUid } from "../paprika/types.js";
 import { DiskCache } from "./disk-cache.js";
 import { makeRecipe, makeCategory } from "./__fixtures__/recipes.js";
 import { makePantryItem } from "./__fixtures__/pantry.js";
+import { makeOAuthClient, makeOAuthToken } from "./__fixtures__/oauth.js";
 
 describe("DiskCache", () => {
   let tempDir: string;
@@ -683,6 +685,338 @@ describe("DiskCache", () => {
       // Verify no error and getAllPantryItems returns empty
       const allItems = await cache.getAllPantryItems();
       expect(allItems).toHaveLength(0);
+    });
+  });
+
+  describe("DiskCache: OAuth client CRUD", () => {
+    it("put then get round-trips through pending map", async () => {
+      const cache = new DiskCache(tempDir);
+      await cache.init();
+      const clientId = randomUUID();
+      const client = makeOAuthClient({ clientId });
+      await cache.putOAuthClient(client);
+      expect(await cache.getOAuthClient(clientId)).toEqual(client);
+    });
+
+    it("put → flush → get reads from disk", async () => {
+      const cache = new DiskCache(tempDir);
+      await cache.init();
+      const clientId = randomUUID();
+      const client = makeOAuthClient({ clientId });
+      await cache.putOAuthClient(client);
+      await cache.flush();
+      expect(await cache.getOAuthClient(clientId)).toEqual(client);
+    });
+
+    it("put → flush → remove deletes file and index entry", async () => {
+      const cache = new DiskCache(tempDir);
+      await cache.init();
+      const clientId = randomUUID();
+      const client = makeOAuthClient({ clientId });
+      await cache.putOAuthClient(client);
+      await cache.flush();
+
+      // Verify file exists
+      const filePath = join(tempDir, "oauthClients", `${clientId}.json`);
+      await expect(stat(filePath)).resolves.toBeDefined();
+
+      // Remove the client
+      await cache.removeOAuthClient(clientId);
+
+      // Verify file is deleted
+      await expect(stat(filePath)).rejects.toThrow();
+
+      // Verify client is not returned by getAllOAuthClients
+      const allClients = await cache.getAllOAuthClients();
+      expect(allClients).toHaveLength(0);
+
+      // Verify the index entry is removed from disk
+      await cache.flush();
+      const indexContent = await readFile(join(tempDir, "index.json"), "utf-8");
+      const parsedIndex: { oauthClients?: Record<string, string> } = JSON.parse(indexContent);
+      expect(parsedIndex.oauthClients).not.toHaveProperty(clientId);
+    });
+
+    it("getAllOAuthClients merges pending and disk; pending shadows disk", async () => {
+      const cache = new DiskCache(tempDir);
+      await cache.init();
+
+      const diskClientId = randomUUID();
+      const diskClient = makeOAuthClient({ clientId: diskClientId });
+      const diskClientPath = join(tempDir, "oauthClients", `${diskClientId}.json`);
+      await writeFile(diskClientPath, JSON.stringify(diskClient, null, 2));
+
+      const pendingClientId = randomUUID();
+      const pendingClient = makeOAuthClient({ clientId: pendingClientId });
+      await cache.putOAuthClient(pendingClient);
+
+      const allClients = await cache.getAllOAuthClients();
+
+      expect(allClients).toHaveLength(2);
+      expect(allClients.map((c) => c.clientId).sort()).toEqual([diskClientId, pendingClientId].sort());
+
+      // Test shadowing: put client with same ID as disk but different data
+      const sharedClientId = randomUUID();
+      const sharedClient = makeOAuthClient({
+        clientId: sharedClientId,
+        clientName: "Pending Version",
+      });
+      await writeFile(
+        join(tempDir, "oauthClients", `${sharedClientId}.json`),
+        JSON.stringify({ ...sharedClient, clientName: "Disk Version" }, null, 2),
+      );
+
+      await cache.putOAuthClient(sharedClient);
+
+      const allClients2 = await cache.getAllOAuthClients();
+      const sharedFromCache = allClients2.find((c) => c.clientId === sharedClientId);
+
+      expect(sharedFromCache?.clientName).toBe("Pending Version");
+    });
+
+    it("AC4.5: on-disk JSON contains registrationAccessTokenHash as 64-char hex; no plaintext", async () => {
+      // PLAN says (phase_03.md:271-282): on-disk JSON for OAuth client shows
+      // registrationAccessTokenHash as 64-char hex; no plaintext fields exist
+      // (client_secret, clientSecret, registrationAccessToken).
+      const cache = new DiskCache(tempDir);
+      await cache.init();
+      const clientId = randomUUID();
+      await cache.putOAuthClient(makeOAuthClient({ clientId, registrationAccessTokenHash: "a".repeat(64) }));
+      await cache.flush();
+      const raw = await readFile(join(tempDir, "oauthClients", `${clientId}.json`), "utf-8");
+      const parsed = JSON.parse(raw);
+      expect(parsed.registrationAccessTokenHash).toMatch(/^[0-9a-f]{64}$/);
+      expect(parsed).not.toHaveProperty("client_secret");
+      expect(parsed).not.toHaveProperty("clientSecret");
+      expect(parsed).not.toHaveProperty("registrationAccessToken");
+    });
+  });
+
+  describe("DiskCache: OAuth token CRUD", () => {
+    it("put then get round-trips through pending map", async () => {
+      const cache = new DiskCache(tempDir);
+      await cache.init();
+      const token = makeOAuthToken({ tokenHash: "hash1" });
+      await cache.putOAuthToken(token);
+      expect(await cache.getOAuthToken("hash1")).toEqual(token);
+    });
+
+    it("put → flush → get reads from disk", async () => {
+      const cache = new DiskCache(tempDir);
+      await cache.init();
+      const token = makeOAuthToken({ tokenHash: "hash2" });
+      await cache.putOAuthToken(token);
+      await cache.flush();
+      expect(await cache.getOAuthToken("hash2")).toEqual(token);
+    });
+
+    it("put → flush → remove deletes file and index entry", async () => {
+      const cache = new DiskCache(tempDir);
+      await cache.init();
+      const token = makeOAuthToken({ tokenHash: "hash3" });
+      await cache.putOAuthToken(token);
+      await cache.flush();
+
+      // Verify file exists
+      const filePath = join(tempDir, "oauthTokens", "hash3.json");
+      await expect(stat(filePath)).resolves.toBeDefined();
+
+      // Remove the token
+      await cache.removeOAuthToken("hash3");
+
+      // Verify file is deleted
+      await expect(stat(filePath)).rejects.toThrow();
+
+      // Verify token is not returned by getAllOAuthTokens
+      const allTokens = await cache.getAllOAuthTokens();
+      expect(allTokens).toHaveLength(0);
+
+      // Verify the index entry is removed from disk
+      await cache.flush();
+      const indexContent = await readFile(join(tempDir, "index.json"), "utf-8");
+      const parsedIndex: { oauthTokens?: Record<string, string> } = JSON.parse(indexContent);
+      expect(parsedIndex.oauthTokens).not.toHaveProperty("hash3");
+    });
+
+    it("getAllOAuthTokens merges pending and disk; pending shadows disk", async () => {
+      const cache = new DiskCache(tempDir);
+      await cache.init();
+
+      // Write one token to disk manually
+      const diskToken = makeOAuthToken({ tokenHash: "t-disk" });
+      const diskTokenPath = join(tempDir, "oauthTokens", "t-disk.json");
+      await writeFile(diskTokenPath, JSON.stringify(diskToken, null, 2));
+
+      // Put a pending token (not flushed)
+      const pendingToken = makeOAuthToken({ tokenHash: "t-pending" });
+      await cache.putOAuthToken(pendingToken);
+
+      // Get all tokens (should include both)
+      const allTokens = await cache.getAllOAuthTokens();
+
+      expect(allTokens).toHaveLength(2);
+      expect(allTokens.map((t) => t.tokenHash).sort()).toEqual(["t-disk", "t-pending"]);
+
+      // Test shadowing: put token with same hash as disk but different data
+      const sharedToken = makeOAuthToken({
+        tokenHash: "t-shared",
+        kind: "access",
+      });
+      await writeFile(
+        join(tempDir, "oauthTokens", "t-shared.json"),
+        JSON.stringify({ ...sharedToken, kind: "refresh" }, null, 2),
+      );
+
+      await cache.putOAuthToken(sharedToken);
+
+      // Get all tokens again
+      const allTokens2 = await cache.getAllOAuthTokens();
+      const sharedFromCache = allTokens2.find((t) => t.tokenHash === "t-shared");
+
+      expect(sharedFromCache?.kind).toBe("access");
+    });
+
+    it("AC4.6: filename equals tokenHash; file's tokenHash field equals filename", async () => {
+      // PLAN says (phase_03.md:292-303): filename = ${tokenHash}.json;
+      // file's tokenHash field equals filename's hex.
+      const hash = "b".repeat(64);
+      const token = makeOAuthToken({ tokenHash: hash });
+      const cache = new DiskCache(tempDir);
+      await cache.init();
+      await cache.putOAuthToken(token);
+      await cache.flush();
+      const entries = await readdir(join(tempDir, "oauthTokens"));
+      expect(entries).toContain(`${hash}.json`);
+      const raw = await readFile(join(tempDir, "oauthTokens", `${hash}.json`), "utf-8");
+      expect(JSON.parse(raw).tokenHash).toBe(hash);
+    });
+  });
+
+  describe("DiskCache: index.json migration", () => {
+    it("pre-OAuth index.json (no oauthClients/oauthTokens keys) parses cleanly with empty defaults", async () => {
+      // Write a legacy index.json containing only recipes + categories + pantry.
+      await writeFile(join(tempDir, "index.json"), JSON.stringify({ recipes: {}, categories: {}, pantry: {} }));
+      const cache = new DiskCache(tempDir);
+      await cache.init();
+      expect(await cache.getAllOAuthClients()).toEqual([]);
+      expect(await cache.getAllOAuthTokens()).toEqual([]);
+    });
+  });
+
+  describe("DiskCache: concurrent writes serialize via mutex", () => {
+    it("interleaved puts + flush land atomically: every put either fully on disk or not at all", async () => {
+      const cache = new DiskCache(tempDir);
+      await cache.init();
+
+      // Generate 50 puts across 3 namespaces + 5 interleaved flushes.
+      const recipes = Array.from({ length: 20 }, (_, i) => makeRecipe({ uid: `r-${i}` as RecipeUid }));
+      const clients = Array.from({ length: 20 }, () =>
+        makeOAuthClient({ registrationAccessTokenHash: "a".repeat(64) }),
+      );
+      const tokens = Array.from({ length: 10 }, (_, i) => makeOAuthToken({ tokenHash: `${i}`.padStart(64, "0") }));
+
+      const operations: Array<Promise<unknown>> = [];
+      for (let i = 0; i < 20; i++) {
+        operations.push(cache.putRecipe(recipes[i], `hash-${i}`));
+        operations.push(cache.putOAuthClient(clients[i]));
+        if (i % 4 === 3) operations.push(cache.flush()); // 5 interleaved flushes
+      }
+      for (const token of tokens) operations.push(cache.putOAuthToken(token));
+      operations.push(cache.flush());
+
+      await Promise.all(operations);
+
+      // Invariant 1: every index entry has a corresponding file on disk.
+      const recipeFiles = await readdir(join(tempDir, "recipes"));
+      const clientFiles = await readdir(join(tempDir, "oauthClients"));
+      const tokenFiles = await readdir(join(tempDir, "oauthTokens"));
+      expect(recipeFiles.length).toBe(20);
+      expect(clientFiles.length).toBe(20);
+      expect(tokenFiles.length).toBe(10);
+
+      // Invariant 2: no file-without-index (every file is reachable from getAll*).
+      const allRecipes = await cache.getAllRecipes();
+      const allClients = await cache.getAllOAuthClients();
+      const allTokens = await cache.getAllOAuthTokens();
+      expect(allRecipes).toHaveLength(20);
+      expect(allClients).toHaveLength(20);
+      expect(allTokens).toHaveLength(10);
+
+      // Invariant 3: no .tmp leftovers from index renames.
+      const cacheEntries = await readdir(tempDir);
+      expect(cacheEntries.filter((e) => e.endsWith(".tmp"))).toHaveLength(0);
+    });
+
+    it("flush() that fires mid-put still captures all puts that started before it", async () => {
+      const cache = new DiskCache(tempDir);
+      await cache.init();
+      // Two puts, then immediately a flush, all without await. Mutex orders them.
+      const clientA = makeOAuthClient();
+      const clientB = makeOAuthClient();
+      const clientC = makeOAuthClient();
+      const p1 = cache.putOAuthClient(clientA);
+      const p2 = cache.putOAuthClient(clientB);
+      const f = cache.flush();
+      const p3 = cache.putOAuthClient(clientC);
+      await Promise.all([p1, p2, f, p3]);
+
+      // After the flush mid-sequence, a and b are on disk; c was queued after flush.
+      const filesOnDiskAfter = await readdir(join(tempDir, "oauthClients"));
+      expect(filesOnDiskAfter).toEqual(
+        expect.arrayContaining([`${clientA.clientId}.json`, `${clientB.clientId}.json`]),
+      );
+      // c may or may not be on disk depending on whether p3 ran before resolution; either way no torn state.
+      // Final flush guarantees everything lands:
+      await cache.flush();
+      const finalFiles = await readdir(join(tempDir, "oauthClients"));
+      expect(finalFiles).toEqual(
+        expect.arrayContaining([`${clientA.clientId}.json`, `${clientB.clientId}.json`, `${clientC.clientId}.json`]),
+      );
+    });
+
+    it("flush() error doesn't poison subsequent operations", async () => {
+      // async-mutex's runExclusive contract: a rejected work() releases the lock
+      // and the next queued caller runs normally. We test this by verifying that
+      // after a flush error, we can still perform new puts and flushes.
+      const cache = new DiskCache(tempDir);
+      await cache.init();
+
+      // Put an initial client to have something to flush
+      const client1 = makeOAuthClient();
+      await cache.putOAuthClient(client1);
+      await cache.flush();
+
+      // Make the cache directory read-only to cause flush to fail
+      await import("node:fs/promises").then((fs) => fs.chmod(tempDir, 0o555));
+
+      // Now put a second client and try to flush — should fail
+      const client2 = makeOAuthClient();
+      await cache.putOAuthClient(client2);
+
+      // The flush should fail due to permission error
+      let flushFailed = false;
+      try {
+        await cache.flush();
+      } catch {
+        flushFailed = true;
+      }
+      expect(flushFailed).toBe(true);
+
+      // Restore write permissions
+      await import("node:fs/promises").then((fs) => fs.chmod(tempDir, 0o755));
+
+      // But the lock should be released, so the next operation should succeed
+      const client3 = makeOAuthClient();
+      await cache.putOAuthClient(client3);
+
+      // This flush should succeed despite the previous failure
+      await cache.flush();
+
+      // Verify clients are on disk (client2 may or may not be due to the failed flush)
+      const allClients = await cache.getAllOAuthClients();
+      const clientIds = allClients.map((c) => c.clientId);
+      expect(clientIds).toContain(client1.clientId);
+      expect(clientIds).toContain(client3.clientId);
     });
   });
 });
