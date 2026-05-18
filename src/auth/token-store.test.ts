@@ -39,7 +39,7 @@ function makeVerifiedIdentity(overrides?: Partial<VerifiedIdentity>): VerifiedId
   };
 }
 
-function makeTokenStoreInput(overrides?: any) {
+function makeTokenStoreInput(overrides?: Partial<Parameters<TokenStore["issueAccessRefreshPair"]>[0]>) {
   return {
     clientId: "00000000-0000-0000-0000-000000000001",
     identity: makeVerifiedIdentity(),
@@ -49,7 +49,7 @@ function makeTokenStoreInput(overrides?: any) {
   };
 }
 
-function makeWireRegistration(overrides?: any) {
+function makeWireRegistration(overrides?: Partial<Record<string, unknown>>) {
   return {
     redirect_uris: ["https://client.example.com/callback"],
     ...overrides,
@@ -72,7 +72,7 @@ describe("TokenStore", () => {
     now = Math.floor(Date.now() / 1000);
     const nowFn = vi.fn(() => now);
 
-    store = new TokenStore(cache, clientStore, nowFn);
+    store = new TokenStore(cache, nowFn);
 
     // Pre-register a client for tests that need it
     await clientStore.registerClient(makeWireRegistration());
@@ -393,8 +393,7 @@ describe("TokenStore", () => {
       // Simulate restart with fresh DiskCache and TokenStore on the same directory
       const cache2 = new DiskCacheImpl(tempDir);
       await cache2.init();
-      const clientStore2 = new DiskClientRegistrationStoreImpl(cache2, "https://m.example.com");
-      const store2 = new TokenStore(cache2, clientStore2);
+      const store2 = new TokenStore(cache2);
 
       // PLAN says (phase_05.md:27): token should persist and lookup should work
       const result = await store2.lookupAccessToken(access.plaintext);
@@ -411,8 +410,7 @@ describe("TokenStore", () => {
       // Simulate restart with fresh DiskCache and TokenStore on the same directory
       const cache2 = new DiskCacheImpl(tempDir);
       await cache2.init();
-      const clientStore2 = new DiskClientRegistrationStoreImpl(cache2, "https://m.example.com");
-      const store2 = new TokenStore(cache2, clientStore2);
+      const store2 = new TokenStore(cache2);
 
       // PLAN says (phase_05.md:28): refresh token should persist
       const found = await store2.lookupRefreshToken(r1.plaintext);

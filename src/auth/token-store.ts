@@ -11,6 +11,7 @@
 
 import { err, ok, type Result } from "neverthrow";
 import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
+import type { OAuthError } from "@modelcontextprotocol/sdk/server/auth/errors.js";
 import type { DiskCache } from "../cache/disk-cache.js";
 import {
   generateOpaqueToken,
@@ -21,7 +22,6 @@ import {
 import { OAuthTokenError } from "./errors.js";
 import type { OAuthToken } from "./types.js";
 import type { VerifiedIdentity } from "./allowlist.js";
-import type { DiskClientRegistrationStore } from "./client-registration.js";
 
 // ============================================================================
 // Exports
@@ -39,7 +39,6 @@ export interface IssuedPair {
 export class TokenStore {
   constructor(
     private readonly _cache: DiskCache,
-    _clientStore: DiskClientRegistrationStore, // reserved for future extension
     private readonly _now: () => number = () => Math.floor(Date.now() / 1000),
   ) {}
 
@@ -164,7 +163,7 @@ export class TokenStore {
     plaintext: string,
     requestedScopes?: ReadonlyArray<string>,
     requestedResource?: string,
-  ): Promise<Result<IssuedPair, any>> {
+  ): Promise<Result<IssuedPair, OAuthError>> {
     const existing = await this.lookupRefreshToken(plaintext);
     if (existing === null) {
       return err(OAuthTokenError.invalidGrant("refresh token invalid or expired"));
@@ -248,9 +247,7 @@ export class TokenStore {
   async removeAllForClient(clientId: string): Promise<void> {
     const all = await this._cache.getAllOAuthTokens();
     const matching = all.filter((t) => t.clientId === clientId);
-    for (const t of matching) {
-      await this._cache.removeOAuthToken(t.tokenHash);
-    }
+    await Promise.all(matching.map((t) => this._cache.removeOAuthToken(t.tokenHash)));
     await this._cache.flush();
   }
 
