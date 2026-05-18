@@ -27,10 +27,13 @@ let originalXdgCache: string | undefined;
 let originalXdgConfig: string | undefined;
 
 function makeConfig(overrides: Partial<PaprikaConfig> = {}): PaprikaConfig {
+  // transport: "stdio" — buildAuthContext returns null for stdio, so these tests
+  // don't need an oauth block. The transport field doesn't affect how startHttp
+  // operates (it's already in HTTP mode by being called at all).
   return {
     paprika: { email: "test@example.com", password: "secret" },
     sync: { enabled: false, interval: 60_000 },
-    transport: "http",
+    transport: "stdio",
     http: { port: 0, host: "127.0.0.1" },
     ...overrides,
   } as PaprikaConfig;

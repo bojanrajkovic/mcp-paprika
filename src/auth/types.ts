@@ -21,6 +21,7 @@ import type { AuthCodeStore } from "./auth-code-store.js";
 import type { TokenStore } from "./token-store.js";
 import type { DiskClientRegistrationStore } from "./client-registration.js";
 import type { AuthCleanup } from "./cleanup.js";
+import type { MintingOAuthServerProvider } from "./provider.js";
 
 // ============================================================================
 // Email Verified Policy
@@ -233,6 +234,7 @@ export type AuthInfoExtra = z.infer<typeof AuthInfoExtraSchema>;
 // OAuth runtime state bundle. Present on AppContext.auth when OAuth is
 // configured (HTTP mode); null in stdio mode (no auth required).
 export interface AuthContext {
+  readonly provider: MintingOAuthServerProvider;
   readonly config: ResolvedOAuthConfig;
   readonly discovery: DiscoveryDoc;
   readonly jwks: JWTVerifyGetKey;

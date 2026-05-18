@@ -1,12 +1,12 @@
 # Server Composition Root
 
-Last verified: 2026-05-15
+Last verified: 2026-05-18
 
 ## Purpose
 
 Process-wide composition root. Owns the authoritative context types (`AppContext`, `SessionContext`), the `Notifier` abstraction that decouples mutation code from "the server," and the `buildAppContext` / `buildMcpServer` builders that draw the line between process-wide and per-session state.
 
-This split exists so the same business logic (tools, resources, sync engine) can run unchanged under stdio (one server per process) and HTTP (N concurrent sessions per process). Phase 1 introduced the split; the HTTP transport itself lands in Phase 3 and does not exist yet — do not reference `src/transport/` or any HTTP code from these files until then.
+This split exists so the same business logic (tools, resources, sync engine) can run unchanged under stdio (one server per process) and HTTP (N concurrent sessions per process).
 
 ## Files
 
@@ -28,6 +28,7 @@ Process-wide, heavyweight, shared state. Built once per process by `buildAppCont
 | `pantryStore` | `PantryStore`         | In-memory pantry query layer                                               |
 | `vectorStore` | `VectorStore \| null` | Semantic-search index; `null` when embeddings are not configured           |
 | `notifier`    | `Notifier`            | Notification surface — decouples callers from any one `McpServer` instance |
+| `auth`        | `AuthContext \| null` | OAuth 2.1 runtime state; `null` in stdio mode (no auth required)           |
 
 All fields are `readonly`. Notably **no `server`** — `AppContext` is intentionally agnostic to how many MCP sessions exist.
 
@@ -86,9 +87,10 @@ Process-wide builder. Authenticates the Paprika client, hydrates `DiskCache`, `R
 
 1. Authenticate (this is where bad credentials fast-fail — `syncOnce()` swallows everything).
 2. Hydrate caches and stores from disk (recipes and pantry only — the cache deliberately has no `getAllCategories()`).
-3. Construct `SyncEngine` against a placeholder `AppContext` whose `vectorStore: null`. Safe because `SyncEngine` never reads `vectorStore`.
+   2.5. **`await buildAuthContext(config, cache)`** — returns `null` for stdio; for HTTP, fetches the OIDC discovery document and assembles all OAuth stores and the provider. Throws on discovery failure (fail-fast: no value running HTTP mode if auth is broken).
+3. Construct `SyncEngine` against a placeholder `AppContext` whose `vectorStore: null`. Safe because `SyncEngine` never reads `vectorStore`. The `auth` value from step 2.5 is passed here.
 4. **`await sync.syncOnce()`.** Categories live only in `RecipeStore` (populated by `setCategories()`, which is called only from inside `syncOnce()`). Cold-start vector indexing in `buildDiscoverComponents` resolves category names per recipe; if it runs before the first sync, embeddings get computed with empty categories and stay that way until a recipe mutation re-embeds. On warm restarts with unchanged remote hashes, the post-build sync emits nothing, so the `sync:complete` subscription never gets the chance to fix it.
-5. Build discover components against the now-hydrated store. The "real" `AppContext` with the populated `vectorStore` is what the caller receives.
+5. Build discover components against the now-hydrated store. The "real" `AppContext` with the populated `vectorStore` and `auth` is what the caller receives.
 
 ### buildMcpServer
 
@@ -109,6 +111,6 @@ Per-session builder. Constructs a fresh `McpServer`, wraps `app` into a `Session
 
 ## Dependencies
 
-- **Uses:** `@modelcontextprotocol/sdk` (`McpServer`, `LoggingMessageNotification`), `../paprika/` (`PaprikaClient`, `SyncEngine`), `../cache/` (`DiskCache`, `RecipeStore`, `PantryStore`), `../features/` (`VectorStore`, `buildDiscoverComponents`), `../tools/` (all `register*Tool` functions), `../resources/` (`registerRecipeResources`, `registerPantryResources`), `../utils/` (`PaprikaConfig`, `getCacheDir`)
-- **Used by:** `src/index.ts` (stdio entry point); Phase 3 HTTP transport will also call `buildAppContext` once and `buildMcpServer` per session
+- **Uses:** `@modelcontextprotocol/sdk` (`McpServer`, `LoggingMessageNotification`), `../paprika/` (`PaprikaClient`, `SyncEngine`), `../cache/` (`DiskCache`, `RecipeStore`, `PantryStore`), `../features/` (`VectorStore`, `buildDiscoverComponents`), `../tools/` (all `register*Tool` functions), `../resources/` (`registerRecipeResources`, `registerPantryResources`), `../utils/` (`PaprikaConfig`, `getCacheDir`), `../auth/build.js` (`buildAuthContext`)
+- **Used by:** `src/index.ts` (stdio entry point); `src/transport/http.ts` calls `buildAppContext` once and `buildMcpServer` per session
 - **Boundary:** This is the composition root — it is allowed to import from every other src directory. Other src directories must not import from `src/server/` back into themselves except via `import type` (e.g., `src/types/server-context.ts` and `src/paprika/sync.ts` import `AppContext`/`SessionContext` types from here).
