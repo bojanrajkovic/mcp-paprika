@@ -135,8 +135,8 @@ describe("buildAuthContext", () => {
       expect(result!.discovery).toBeDefined();
       expect(result!.discovery.issuer).toBe("https://accounts.example.test");
       expect(result!.jwks).toBeDefined();
-      expect(result!.requestStore).toBeDefined();
-      expect(result!.codeStore).toBeDefined();
+      expect(result!.authRequests).toBeDefined();
+      expect(result!.authCodes).toBeDefined();
       expect(result!.tokenStore).toBeDefined();
       expect(result!.clientStore).toBeDefined();
       expect(result!.cleanup).toBeDefined();

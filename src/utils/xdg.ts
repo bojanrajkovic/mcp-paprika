@@ -1,23 +1,38 @@
-import envPaths from "env-paths";
+// pattern: Functional Core
 
-const paths = envPaths("mcp-paprika", { suffix: "" });
+import envPaths from "env-paths";
+import { join } from "node:path";
+
+const PROGRAM_NAME = "mcp-paprika";
+
+// env-paths's macOS branch hard-codes ~/Library/{Preferences,Caches,...} and
+// ignores XDG_* env vars entirely.  Re-implement the XDG override on every
+// platform so tests that set XDG_CACHE_HOME / XDG_CONFIG_HOME actually work.
 
 export function getConfigDir(): string {
-  return paths.config;
+  const override = process.env["XDG_CONFIG_HOME"];
+  if (override !== undefined && override !== "") return join(override, PROGRAM_NAME);
+  return envPaths(PROGRAM_NAME, { suffix: "" }).config;
 }
 
 export function getCacheDir(): string {
-  return paths.cache;
+  const override = process.env["XDG_CACHE_HOME"];
+  if (override !== undefined && override !== "") return join(override, PROGRAM_NAME);
+  return envPaths(PROGRAM_NAME, { suffix: "" }).cache;
 }
 
 export function getDataDir(): string {
-  return paths.data;
+  const override = process.env["XDG_DATA_HOME"];
+  if (override !== undefined && override !== "") return join(override, PROGRAM_NAME);
+  return envPaths(PROGRAM_NAME, { suffix: "" }).data;
 }
 
 export function getLogDir(): string {
-  return paths.log;
+  const override = process.env["XDG_STATE_HOME"];
+  if (override !== undefined && override !== "") return join(override, PROGRAM_NAME);
+  return envPaths(PROGRAM_NAME, { suffix: "" }).log;
 }
 
 export function getTempDir(): string {
-  return paths.temp;
+  return envPaths(PROGRAM_NAME, { suffix: "" }).temp;
 }

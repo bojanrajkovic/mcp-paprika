@@ -9,6 +9,8 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from
 import { startHttp, type HttpTransportHandle } from "./http.js";
 import type { PaprikaConfig } from "../utils/config.js";
 import { createOidcStub } from "../auth/__fixtures__/oidc-stub.js";
+import { DiskCache } from "../cache/disk-cache.js";
+import { makeOAuthClient } from "../cache/__fixtures__/oauth.js";
 
 /**
  * These tests drive the HTTP transport with raw `fetch`, not the MCP SDK
@@ -453,10 +455,27 @@ function makeClaudeAiRegistration(): Record<string, unknown> {
 describe("HTTP transport — OAuth mounted", () => {
   // Single server instance shared across all OAuth wire tests.
   // This is an integration setup — uses beforeAll/afterAll with one handle.
+  //
+  // We manage a dedicated tempdir here (not relying on the outer beforeEach)
+  // because the OAuth server is created once in beforeAll and must point at a
+  // stable cache directory for its entire lifetime.  The outer beforeEach
+  // tempdir is scoped per-test and gets deleted by afterEach — after C1 fixed
+  // XDG_CACHE_HOME to be read dynamically, the server's DiskCache would point
+  // at a deleted directory from test 2 onward if we didn't own the lifecycle.
   let oauthHandle: HttpTransportHandle;
   let oauthPort: number;
+  let oauthTempDir: string;
+  let savedXdgCache: string | undefined;
+  let savedXdgConfig: string | undefined;
 
   beforeAll(async () => {
+    // Allocate a dedicated tempdir that lives for the whole OAuth suite.
+    oauthTempDir = await mkdtemp(join(tmpdir(), "mcp-paprika-oauth-"));
+    savedXdgCache = process.env["XDG_CACHE_HOME"];
+    savedXdgConfig = process.env["XDG_CONFIG_HOME"];
+    process.env["XDG_CACHE_HOME"] = oauthTempDir;
+    process.env["XDG_CONFIG_HOME"] = oauthTempDir;
+
     const oidcStub = createOidcStub({
       issuer: OIDC_ISSUER,
       clientId: "test-upstream-client",
@@ -473,6 +492,12 @@ describe("HTTP transport — OAuth mounted", () => {
 
   afterAll(async () => {
     await oauthHandle.shutdown();
+    // Restore env vars and clean up the dedicated tempdir.
+    if (savedXdgCache === undefined) delete process.env["XDG_CACHE_HOME"];
+    else process.env["XDG_CACHE_HOME"] = savedXdgCache;
+    if (savedXdgConfig === undefined) delete process.env["XDG_CONFIG_HOME"];
+    else process.env["XDG_CONFIG_HOME"] = savedXdgConfig;
+    await rm(oauthTempDir, { recursive: true, force: true });
   });
 
   describe("OA.1/AC2.1+AC6.1: OAuth authorization server metadata", () => {
@@ -565,6 +590,11 @@ describe("HTTP transport — OAuth mounted", () => {
       expect(res.status).toBe(401);
       const wwwAuth = res.headers.get("www-authenticate") ?? "";
       expect(wwwAuth).toContain("Bearer");
+      // PLAN says (phase_07.md:554-562): WWW-Authenticate header must contain resource_metadata
+      // per RFC 9110 / RFC 9728 so clients can discover the protected-resource document.
+      expect(wwwAuth).toContain("resource_metadata=");
+      // The resource_metadata URL must point at the well-known protected-resource endpoint.
+      expect(wwwAuth).toContain("/.well-known/oauth-protected-resource");
     });
   });
 
@@ -583,6 +613,65 @@ describe("HTTP transport — OAuth mounted", () => {
       expect(res.status).toBe(401);
       const body = await res.text();
       expect(body).not.toContain(fakeToken);
+    });
+  });
+
+  describe("AC5.1: DCR rate-limit mounted on startHttp server", () => {
+    it("AC5.1: 10x POST /register from same IP succeeds; 11th returns 429", async () => {
+      // PLAN says (phase_07.md:584): wire-level smoke that buildDcrRateLimit() is mounted.
+      // Uses a fresh IP (203.0.113.7) distinct from other OAuth tests to start with a clean bucket.
+      const registrationBody = makeClaudeAiRegistration();
+      const headers: Record<string, string> = {
+        "content-type": "application/json",
+        "x-forwarded-for": "203.0.113.7",
+      };
+      for (let i = 0; i < 10; i++) {
+        const res = await fetch(`http://127.0.0.1:${oauthPort.toString()}/register`, {
+          method: "POST",
+          headers,
+          body: JSON.stringify(registrationBody),
+        });
+        expect(res.status).toBe(201);
+      }
+      // 11th registration from the same IP must be rate-limited.
+      const limited = await fetch(`http://127.0.0.1:${oauthPort.toString()}/register`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(registrationBody),
+      });
+      expect(limited.status).toBe(429);
+    });
+  });
+
+  describe("AC5.2: Client cap mounted on startHttp server", () => {
+    it("AC5.2: with 50 registered clients in cache, POST /register returns 429 with cap error", async () => {
+      // PLAN says (phase_07.md:584): wire-level smoke that buildClientCap is mounted.
+      // Seed the cache directly via DiskCache (bypassing HTTP rate-limit) so the cap
+      // check sees >= 50 existing clients.  buildClientCap reads cache.getAllOAuthClients()
+      // on every POST /register — fresh disk files are visible on the very next call.
+      const cacheDir = join(oauthTempDir, "mcp-paprika");
+      const seedCache = new DiskCache(cacheDir);
+      await seedCache.init();
+
+      // Count existing clients (from other tests in this suite).
+      const existing = await seedCache.getAllOAuthClients();
+      const needed = 50 - existing.length;
+      for (let i = 0; i < needed; i++) {
+        await seedCache.putOAuthClient(makeOAuthClient());
+      }
+      await seedCache.flush();
+
+      // Now the server sees >= 50 clients; the next registration must be capped.
+      const res = await fetch(`http://127.0.0.1:${oauthPort.toString()}/register`, {
+        method: "POST",
+        // Use a fresh IP to avoid the rate-limit bucket from AC5.1.
+        headers: { "content-type": "application/json", "x-forwarded-for": "203.0.113.99" },
+        body: JSON.stringify(makeClaudeAiRegistration()),
+      });
+      expect(res.status).toBe(429);
+      const doc = (await res.json()) as Record<string, unknown>;
+      // buildClientCap returns { error: "invalid_request", error_description: "client registration cap reached" }
+      expect(doc["error_description"]).toContain("cap");
     });
   });
 });

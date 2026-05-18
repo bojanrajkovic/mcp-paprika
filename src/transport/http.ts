@@ -121,8 +121,8 @@ export async function startHttp(config: PaprikaConfig): Promise<HttpTransportHan
       buildAuthRoutes({
         clientStore: auth.clientStore,
         tokenStore: auth.tokenStore,
-        authRequests: auth.requestStore, // AuthContext uses requestStore; AuthRoutesDeps uses authRequests
-        authCodes: auth.codeStore, // AuthContext uses codeStore; AuthRoutesDeps uses authCodes
+        authRequests: auth.authRequests,
+        authCodes: auth.authCodes,
         oidcConfig: auth.config,
         discovery: auth.discovery,
         jwks: auth.jwks,

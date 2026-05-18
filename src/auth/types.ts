@@ -238,8 +238,8 @@ export interface AuthContext {
   readonly config: ResolvedOAuthConfig;
   readonly discovery: DiscoveryDoc;
   readonly jwks: JWTVerifyGetKey;
-  readonly requestStore: AuthRequestStore;
-  readonly codeStore: AuthCodeStore;
+  readonly authRequests: AuthRequestStore;
+  readonly authCodes: AuthCodeStore;
   readonly tokenStore: TokenStore;
   readonly clientStore: DiskClientRegistrationStore;
   readonly cleanup: AuthCleanup;

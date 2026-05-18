@@ -58,13 +58,24 @@ export async function buildAuthContext(config: PaprikaConfig, cache: DiskCache):
 
   // Assemble full ResolvedOAuthConfig by merging the preset result with
   // the deployment-specific fields validated by superRefine.
-  // config.oauth.publicUrl, clientId, clientSecret are guaranteed non-null
-  // when transport === "http" by superRefine in src/utils/config.ts.
+  // These three fields are guaranteed non-undefined when transport === "http"
+  // by superRefine in src/utils/config.ts.  The invariant guards below make
+  // that contract explicit and narrow the types without `as string` casts.
+  if (config.oauth.publicUrl === undefined) {
+    throw new Error("invariant: oauth.publicUrl must be set when transport=http");
+  }
+  if (config.oauth.clientId === undefined) {
+    throw new Error("invariant: oauth.clientId must be set when transport=http");
+  }
+  if (config.oauth.clientSecret === undefined) {
+    throw new Error("invariant: oauth.clientSecret must be set when transport=http");
+  }
+
   const resolved: ResolvedOAuthConfig = {
     ...presetResult,
-    publicUrl: config.oauth.publicUrl as string,
-    clientId: config.oauth.clientId as string,
-    clientSecret: config.oauth.clientSecret as string,
+    publicUrl: config.oauth.publicUrl,
+    clientId: config.oauth.clientId,
+    clientSecret: config.oauth.clientSecret,
     allowlist: config.oauth.allowlist,
   };
 
@@ -96,8 +107,8 @@ export async function buildAuthContext(config: PaprikaConfig, cache: DiskCache):
     config: resolved,
     discovery,
     jwks,
-    requestStore,
-    codeStore,
+    authRequests: requestStore,
+    authCodes: codeStore,
     tokenStore,
     clientStore,
     cleanup,
