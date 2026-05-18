@@ -50,10 +50,7 @@ function storedToWire(
     readonly registrationClientUri?: string;
   },
 ): OAuthClientInformationFull {
-  const baseResult: Omit<OAuthClientInformationFull, "registration_access_token" | "registration_client_uri"> & {
-    registration_access_token?: string;
-    registration_client_uri?: string;
-  } = {
+  return {
     client_id: stored.clientId,
     client_id_issued_at: stored.clientIdIssuedAt,
     client_secret_expires_at: 0,
@@ -63,17 +60,11 @@ function storedToWire(
     redirect_uris: stored.redirectUris,
     scope: stored.scope,
     token_endpoint_auth_method: stored.tokenEndpointAuthMethod,
+    ...(extras?.registrationAccessToken !== undefined
+      ? { registration_access_token: extras.registrationAccessToken }
+      : {}),
+    ...(extras?.registrationClientUri !== undefined ? { registration_client_uri: extras.registrationClientUri } : {}),
   };
-
-  if (extras?.registrationAccessToken !== undefined) {
-    baseResult.registration_access_token = extras.registrationAccessToken;
-  }
-
-  if (extras?.registrationClientUri !== undefined) {
-    baseResult.registration_client_uri = extras.registrationClientUri;
-  }
-
-  return baseResult as OAuthClientInformationFull;
 }
 
 // ============================================================================
