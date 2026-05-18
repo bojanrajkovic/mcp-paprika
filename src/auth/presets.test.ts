@@ -55,8 +55,8 @@ describe("OIDC Presets", () => {
 
     it("is readonly", () => {
       expect(OIDC_PRESETS).toBeDefined();
-      // Should not be able to modify (TypeScript check, but test validates intent)
-      expect(Object.isFrozen(OIDC_PRESETS) || !Object.isExtensible(OIDC_PRESETS)).toBe(true);
+      // Object.freeze() makes the object immutable
+      expect(Object.isFrozen(OIDC_PRESETS)).toBe(true);
     });
   });
 

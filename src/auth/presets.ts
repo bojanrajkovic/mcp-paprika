@@ -7,7 +7,7 @@
 
 import { Result, ok, err } from "neverthrow";
 import { OAuthConfigError } from "./errors.js";
-import type { OIDCPreset, ResolvedOAuthConfig } from "./types.js";
+import type { OIDCPreset, ResolvedOAuthConfig, EmailVerifiedPolicy } from "./types.js";
 
 // ============================================================================
 // OIDC Presets Table
@@ -61,11 +61,18 @@ type PartialResolvedConfig = Partial<
   Pick<ResolvedOAuthConfig, "discoveryUrl" | "scopes" | "emailVerifiedPolicy" | "allowedAlgs">
 >;
 
+/**
+ * Result type for resolvePreset. Represents the fully merged configuration
+ * after preset expansion, but excludes publicUrl, clientId, clientSecret, and
+ * allowlist fields which are handled separately during config merging in Phase 7.
+ * This narrowing is by design: presets define provider configuration only,
+ * while global OAuth config provides deployment-specific fields.
+ */
 type PartialResolvedConfigResult = {
   readonly presetName: string | null;
   readonly discoveryUrl: string;
   readonly scopes: ReadonlyArray<string>;
-  readonly emailVerifiedPolicy: "strict" | "skip" | "if-present";
+  readonly emailVerifiedPolicy: EmailVerifiedPolicy;
   readonly allowedAlgs: ReadonlyArray<string>;
 };
 
@@ -108,17 +115,12 @@ export function resolvePreset(
 
     // All required fields present in overrides
     // At this point, TypeScript knows all these are defined
-    const discoveryUrl = overrides.discoveryUrl as string;
-    const scopes = overrides.scopes as ReadonlyArray<string>;
-    const emailVerifiedPolicy = overrides.emailVerifiedPolicy as "strict" | "skip" | "if-present";
-    const allowedAlgs = overrides.allowedAlgs as ReadonlyArray<string>;
-
     return ok({
       presetName: null,
-      discoveryUrl,
-      scopes,
-      emailVerifiedPolicy,
-      allowedAlgs,
+      discoveryUrl: overrides.discoveryUrl!,
+      scopes: overrides.scopes!,
+      emailVerifiedPolicy: overrides.emailVerifiedPolicy!,
+      allowedAlgs: overrides.allowedAlgs!,
     });
   }
 
@@ -127,19 +129,12 @@ export function resolvePreset(
   switch (name) {
     case "google": {
       const preset = OIDC_PRESETS.google;
-      const discoveryUrl = overrides.discoveryUrl ?? preset.discoveryUrl;
-      const scopes = (overrides.scopes ?? preset.scopes) as ReadonlyArray<string>;
-      const emailVerifiedPolicy = (overrides.emailVerifiedPolicy ?? preset.emailVerifiedPolicy) as
-        | "strict"
-        | "skip"
-        | "if-present";
-      const allowedAlgs = (overrides.allowedAlgs ?? preset.allowedAlgs) as ReadonlyArray<string>;
       return ok({
         presetName: name,
-        discoveryUrl,
-        scopes,
-        emailVerifiedPolicy,
-        allowedAlgs,
+        discoveryUrl: overrides.discoveryUrl ?? preset.discoveryUrl,
+        scopes: overrides.scopes ?? preset.scopes,
+        emailVerifiedPolicy: overrides.emailVerifiedPolicy ?? preset.emailVerifiedPolicy,
+        allowedAlgs: overrides.allowedAlgs ?? preset.allowedAlgs,
       });
     }
 
@@ -148,18 +143,12 @@ export function resolvePreset(
       if (!overrides.discoveryUrl) {
         return err(OAuthConfigError.missingDiscoveryUrl(name));
       }
-      const scopes = (overrides.scopes ?? preset.scopes) as ReadonlyArray<string>;
-      const emailVerifiedPolicy = (overrides.emailVerifiedPolicy ?? preset.emailVerifiedPolicy) as
-        | "strict"
-        | "skip"
-        | "if-present";
-      const allowedAlgs = (overrides.allowedAlgs ?? preset.allowedAlgs) as ReadonlyArray<string>;
       return ok({
         presetName: name,
         discoveryUrl: overrides.discoveryUrl,
-        scopes,
-        emailVerifiedPolicy,
-        allowedAlgs,
+        scopes: overrides.scopes ?? preset.scopes,
+        emailVerifiedPolicy: overrides.emailVerifiedPolicy ?? preset.emailVerifiedPolicy,
+        allowedAlgs: overrides.allowedAlgs ?? preset.allowedAlgs,
       });
     }
 
@@ -168,18 +157,12 @@ export function resolvePreset(
       if (!overrides.discoveryUrl) {
         return err(OAuthConfigError.missingDiscoveryUrl(name));
       }
-      const scopes = (overrides.scopes ?? preset.scopes) as ReadonlyArray<string>;
-      const emailVerifiedPolicy = (overrides.emailVerifiedPolicy ?? preset.emailVerifiedPolicy) as
-        | "strict"
-        | "skip"
-        | "if-present";
-      const allowedAlgs = (overrides.allowedAlgs ?? preset.allowedAlgs) as ReadonlyArray<string>;
       return ok({
         presetName: name,
         discoveryUrl: overrides.discoveryUrl,
-        scopes,
-        emailVerifiedPolicy,
-        allowedAlgs,
+        scopes: overrides.scopes ?? preset.scopes,
+        emailVerifiedPolicy: overrides.emailVerifiedPolicy ?? preset.emailVerifiedPolicy,
+        allowedAlgs: overrides.allowedAlgs ?? preset.allowedAlgs,
       });
     }
 
@@ -188,18 +171,12 @@ export function resolvePreset(
       if (!overrides.discoveryUrl) {
         return err(OAuthConfigError.missingDiscoveryUrl(name));
       }
-      const scopes = (overrides.scopes ?? preset.scopes) as ReadonlyArray<string>;
-      const emailVerifiedPolicy = (overrides.emailVerifiedPolicy ?? preset.emailVerifiedPolicy) as
-        | "strict"
-        | "skip"
-        | "if-present";
-      const allowedAlgs = (overrides.allowedAlgs ?? preset.allowedAlgs) as ReadonlyArray<string>;
       return ok({
         presetName: name,
         discoveryUrl: overrides.discoveryUrl,
-        scopes,
-        emailVerifiedPolicy,
-        allowedAlgs,
+        scopes: overrides.scopes ?? preset.scopes,
+        emailVerifiedPolicy: overrides.emailVerifiedPolicy ?? preset.emailVerifiedPolicy,
+        allowedAlgs: overrides.allowedAlgs ?? preset.allowedAlgs,
       });
     }
 
@@ -208,18 +185,12 @@ export function resolvePreset(
       if (!overrides.discoveryUrl) {
         return err(OAuthConfigError.missingDiscoveryUrl(name));
       }
-      const scopes = (overrides.scopes ?? preset.scopes) as ReadonlyArray<string>;
-      const emailVerifiedPolicy = (overrides.emailVerifiedPolicy ?? preset.emailVerifiedPolicy) as
-        | "strict"
-        | "skip"
-        | "if-present";
-      const allowedAlgs = (overrides.allowedAlgs ?? preset.allowedAlgs) as ReadonlyArray<string>;
       return ok({
         presetName: name,
         discoveryUrl: overrides.discoveryUrl,
-        scopes,
-        emailVerifiedPolicy,
-        allowedAlgs,
+        scopes: overrides.scopes ?? preset.scopes,
+        emailVerifiedPolicy: overrides.emailVerifiedPolicy ?? preset.emailVerifiedPolicy,
+        allowedAlgs: overrides.allowedAlgs ?? preset.allowedAlgs,
       });
     }
 

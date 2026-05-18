@@ -97,6 +97,14 @@ export const OAuthClientWireRegisterSchema = z
     redirectUris: data.redirect_uris,
     scope: data.scope || "",
     tokenEndpointAuthMethod: data.token_endpoint_auth_method || "none",
+  }))
+  .transform((data) => ({
+    clientName: data.clientName,
+    grantTypes: Object.freeze(data.grantTypes) as readonly ("authorization_code" | "refresh_token")[],
+    responseTypes: Object.freeze(data.responseTypes) as readonly "code"[],
+    redirectUris: Object.freeze(data.redirectUris) as readonly string[],
+    scope: data.scope,
+    tokenEndpointAuthMethod: data.tokenEndpointAuthMethod,
   }));
 
 export type OAuthClientWireRegister = z.infer<typeof OAuthClientWireRegisterSchema>;
