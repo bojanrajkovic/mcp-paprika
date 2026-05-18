@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { mkdtemp, readFile, readdir, stat, rm, writeFile, mkdir } from "node:fs/promises";
+import { mkdtemp, readFile, readdir, stat, rm, writeFile, mkdir, chmod } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
@@ -796,33 +796,33 @@ describe("DiskCache", () => {
     it("put then get round-trips through pending map", async () => {
       const cache = new DiskCache(tempDir);
       await cache.init();
-      const token = makeOAuthToken({ tokenHash: "hash1" });
+      const token = makeOAuthToken();
       await cache.putOAuthToken(token);
-      expect(await cache.getOAuthToken("hash1")).toEqual(token);
+      expect(await cache.getOAuthToken(token.tokenHash)).toEqual(token);
     });
 
     it("put → flush → get reads from disk", async () => {
       const cache = new DiskCache(tempDir);
       await cache.init();
-      const token = makeOAuthToken({ tokenHash: "hash2" });
+      const token = makeOAuthToken();
       await cache.putOAuthToken(token);
       await cache.flush();
-      expect(await cache.getOAuthToken("hash2")).toEqual(token);
+      expect(await cache.getOAuthToken(token.tokenHash)).toEqual(token);
     });
 
     it("put → flush → remove deletes file and index entry", async () => {
       const cache = new DiskCache(tempDir);
       await cache.init();
-      const token = makeOAuthToken({ tokenHash: "hash3" });
+      const token = makeOAuthToken();
       await cache.putOAuthToken(token);
       await cache.flush();
 
       // Verify file exists
-      const filePath = join(tempDir, "oauthTokens", "hash3.json");
+      const filePath = join(tempDir, "oauthTokens", `${token.tokenHash}.json`);
       await expect(stat(filePath)).resolves.toBeDefined();
 
       // Remove the token
-      await cache.removeOAuthToken("hash3");
+      await cache.removeOAuthToken(token.tokenHash);
 
       // Verify file is deleted
       await expect(stat(filePath)).rejects.toThrow();
@@ -835,7 +835,7 @@ describe("DiskCache", () => {
       await cache.flush();
       const indexContent = await readFile(join(tempDir, "index.json"), "utf-8");
       const parsedIndex: { oauthTokens?: Record<string, string> } = JSON.parse(indexContent);
-      expect(parsedIndex.oauthTokens).not.toHaveProperty("hash3");
+      expect(parsedIndex.oauthTokens).not.toHaveProperty(token.tokenHash);
     });
 
     it("getAllOAuthTokens merges pending and disk; pending shadows disk", async () => {
@@ -843,27 +843,27 @@ describe("DiskCache", () => {
       await cache.init();
 
       // Write one token to disk manually
-      const diskToken = makeOAuthToken({ tokenHash: "t-disk" });
-      const diskTokenPath = join(tempDir, "oauthTokens", "t-disk.json");
+      const diskToken = makeOAuthToken();
+      const diskTokenPath = join(tempDir, "oauthTokens", `${diskToken.tokenHash}.json`);
       await writeFile(diskTokenPath, JSON.stringify(diskToken, null, 2));
 
       // Put a pending token (not flushed)
-      const pendingToken = makeOAuthToken({ tokenHash: "t-pending" });
+      const pendingToken = makeOAuthToken();
       await cache.putOAuthToken(pendingToken);
 
       // Get all tokens (should include both)
       const allTokens = await cache.getAllOAuthTokens();
 
       expect(allTokens).toHaveLength(2);
-      expect(allTokens.map((t) => t.tokenHash).sort()).toEqual(["t-disk", "t-pending"]);
+      expect(allTokens.map((t) => t.tokenHash).sort()).toEqual([diskToken.tokenHash, pendingToken.tokenHash].sort());
 
       // Test shadowing: put token with same hash as disk but different data
       const sharedToken = makeOAuthToken({
-        tokenHash: "t-shared",
         kind: "access",
       });
+      const sharedHash = sharedToken.tokenHash;
       await writeFile(
-        join(tempDir, "oauthTokens", "t-shared.json"),
+        join(tempDir, "oauthTokens", `${sharedHash}.json`),
         JSON.stringify({ ...sharedToken, kind: "refresh" }, null, 2),
       );
 
@@ -871,7 +871,7 @@ describe("DiskCache", () => {
 
       // Get all tokens again
       const allTokens2 = await cache.getAllOAuthTokens();
-      const sharedFromCache = allTokens2.find((t) => t.tokenHash === "t-shared");
+      const sharedFromCache = allTokens2.find((t) => t.tokenHash === sharedHash);
 
       expect(sharedFromCache?.kind).toBe("access");
     });
@@ -879,8 +879,9 @@ describe("DiskCache", () => {
     it("AC4.6: filename equals tokenHash; file's tokenHash field equals filename", async () => {
       // PLAN says (phase_03.md:292-303): filename = ${tokenHash}.json;
       // file's tokenHash field equals filename's hex.
-      const hash = "b".repeat(64);
-      const token = makeOAuthToken({ tokenHash: hash });
+      // Use makeOAuthToken without override to get valid 64-char hex hash
+      const token = makeOAuthToken();
+      const hash = token.tokenHash;
       const cache = new DiskCache(tempDir);
       await cache.init();
       await cache.putOAuthToken(token);
@@ -913,7 +914,8 @@ describe("DiskCache", () => {
       const clients = Array.from({ length: 20 }, () =>
         makeOAuthClient({ registrationAccessTokenHash: "a".repeat(64) }),
       );
-      const tokens = Array.from({ length: 10 }, (_, i) => makeOAuthToken({ tokenHash: `${i}`.padStart(64, "0") }));
+      // Generate tokens with valid 64-char hex tokenHash (don't use padStart on short strings)
+      const tokens = Array.from({ length: 10 }, () => makeOAuthToken());
 
       const operations: Array<Promise<unknown>> = [];
       for (let i = 0; i < 20; i++) {
@@ -974,10 +976,27 @@ describe("DiskCache", () => {
       );
     });
 
-    it("flush() error doesn't poison subsequent operations", async () => {
+    it("AC4.6: malformed tokenHash is rejected at put time by schema", async () => {
+      // PLAN says (phase_03.md:217): OAuthTokenSchema enforces /^[0-9a-f]{64}$/ on parse,
+      // so non-hex or wrong-length tokenHashes are rejected at the storage boundary.
+      const cache = new DiskCache(tempDir);
+      await cache.init();
+
+      // Attempting to create a token with invalid tokenHash should fail schema validation
+      expect(() => {
+        makeOAuthToken({ tokenHash: "not-hex-and-too-short" });
+      }).toThrow();
+
+      expect(() => {
+        makeOAuthToken({ tokenHash: "G".repeat(64) }); // G is not valid hex
+      }).toThrow();
+    });
+
+    it("AC4.7: flush() error doesn't poison subsequent operations (lock releases on exception)", async () => {
       // async-mutex's runExclusive contract: a rejected work() releases the lock
-      // and the next queued caller runs normally. We test this by verifying that
-      // after a flush error, we can still perform new puts and flushes.
+      // and the next queued caller runs normally. Test by temporarily removing
+      // write permissions from the cache directory to cause flush to fail, then
+      // verify that restoring permissions allows subsequent flushes to succeed.
       const cache = new DiskCache(tempDir);
       await cache.init();
 
@@ -986,14 +1005,14 @@ describe("DiskCache", () => {
       await cache.putOAuthClient(client1);
       await cache.flush();
 
-      // Make the cache directory read-only to cause flush to fail
-      await import("node:fs/promises").then((fs) => fs.chmod(tempDir, 0o555));
+      // Make the entire cache directory read-only to cause the next flush to fail
+      await chmod(tempDir, 0o555);
 
       // Now put a second client and try to flush — should fail
       const client2 = makeOAuthClient();
       await cache.putOAuthClient(client2);
 
-      // The flush should fail due to permission error
+      // The flush should fail due to permissions
       let flushFailed = false;
       try {
         await cache.flush();
@@ -1002,17 +1021,17 @@ describe("DiskCache", () => {
       }
       expect(flushFailed).toBe(true);
 
-      // Restore write permissions
-      await import("node:fs/promises").then((fs) => fs.chmod(tempDir, 0o755));
+      // Restore write permissions so the next flush can succeed
+      await chmod(tempDir, 0o755);
 
-      // But the lock should be released, so the next operation should succeed
+      // Lock should be released. The next operation should succeed.
       const client3 = makeOAuthClient();
       await cache.putOAuthClient(client3);
 
       // This flush should succeed despite the previous failure
       await cache.flush();
 
-      // Verify clients are on disk (client2 may or may not be due to the failed flush)
+      // Verify clients are on disk (client1 and client3 should be present)
       const allClients = await cache.getAllOAuthClients();
       const clientIds = allClients.map((c) => c.clientId);
       expect(clientIds).toContain(client1.clientId);
