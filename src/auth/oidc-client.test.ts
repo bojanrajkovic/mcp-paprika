@@ -8,7 +8,7 @@ import { http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
 import { OAuthMetadataValidationError } from "./errors.js";
 import { loadDiscovery, createJwksFor, verifyIdToken } from "./oidc-client.js";
-import { makeRsaJwt, makeEs256Jwt, makeHs256Jwt } from "./__tests__/jose-keys.js";
+import { makeRsaJwt, makeEs256Jwt, makeHs256Jwt } from "./__fixtures__/jose-keys.js";
 
 const server = setupServer();
 
