@@ -87,6 +87,39 @@ export class OAuthMetadataValidationError extends Error {
   static expiredToken(exp: number): OAuthMetadataValidationError {
     return new OAuthMetadataValidationError(`id_token expired at ${new Date(exp * 1000).toISOString()}`);
   }
+
+  // RFC 7591/7592 DCR validation errors
+  static unsupportedAuthMethod(value: unknown): OAuthMetadataValidationError {
+    return new OAuthMetadataValidationError(`token_endpoint_auth_method must be "none", got: ${JSON.stringify(value)}`);
+  }
+
+  static unsupportedGrantType(values: unknown): OAuthMetadataValidationError {
+    return new OAuthMetadataValidationError(
+      `grant_types must be subset of ["authorization_code", "refresh_token"], got: ${JSON.stringify(values)}`,
+    );
+  }
+
+  static unsupportedResponseType(values: unknown): OAuthMetadataValidationError {
+    return new OAuthMetadataValidationError(`response_types must be exactly ["code"], got: ${JSON.stringify(values)}`);
+  }
+
+  static invalidRedirectUri(uri: string, reason: string): OAuthMetadataValidationError {
+    return new OAuthMetadataValidationError(`Invalid redirect_uri "${uri}": ${reason}`);
+  }
+
+  static emptyRedirectUris(): OAuthMetadataValidationError {
+    return new OAuthMetadataValidationError("redirect_uris is required and must contain at least one URI");
+  }
+
+  static unsupportedSigningAlg(alg: unknown, allowed: ReadonlyArray<string>): OAuthMetadataValidationError {
+    return new OAuthMetadataValidationError(
+      `id_token_signed_response_alg must be one of [${allowed.join(", ")}], got: ${JSON.stringify(alg)}`,
+    );
+  }
+
+  static invalidClientMetadata(path: string, message: string): OAuthMetadataValidationError {
+    return new OAuthMetadataValidationError(`Client metadata validation failed at "${path}": ${message}`);
+  }
 }
 
 /**
