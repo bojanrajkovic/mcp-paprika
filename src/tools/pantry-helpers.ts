@@ -60,7 +60,7 @@ export async function commitPantryItem(ctx: ServerContext, saved: Readonly<Pantr
     ctx.notifier.resourceListChanged();
     await ctx.client.notifySync();
   } else {
-    ctx.cache.putPantryItem(saved);
+    await ctx.cache.putPantryItem(saved);
     await ctx.cache.flush();
     ctx.pantryStore.set(saved);
     ctx.notifier.resourceListChanged();

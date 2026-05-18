@@ -69,7 +69,7 @@ describe("DiskCache", () => {
       const content = await readFile(indexPath, "utf-8");
       const parsed = JSON.parse(content);
 
-      expect(parsed).toEqual({ recipes: {}, categories: {}, pantry: {} });
+      expect(parsed).toEqual({ recipes: {}, categories: {}, pantry: {}, oauthClients: {}, oauthTokens: {} });
     });
 
     it("AC1.4: resets to empty index and calls log when index.json is present but fails schema validation", async () => {
@@ -89,7 +89,7 @@ describe("DiskCache", () => {
       const content = await readFile(indexPath, "utf-8");
       const parsed = JSON.parse(content);
 
-      expect(parsed).toEqual({ recipes: {}, categories: {}, pantry: {} });
+      expect(parsed).toEqual({ recipes: {}, categories: {}, pantry: {}, oauthClients: {}, oauthTokens: {} });
       stderrSpy.mockRestore();
     });
 
@@ -567,7 +567,7 @@ describe("DiskCache", () => {
       await cache.init();
 
       const item = makePantryItem();
-      cache.putPantryItem(item);
+      await cache.putPantryItem(item);
       await cache.flush();
 
       // Verify file exists and contains correct data
@@ -598,7 +598,7 @@ describe("DiskCache", () => {
 
       // Put a pending item (not flushed)
       const pendingItem = makePantryItem({ uid: "uid-pending" });
-      cache.putPantryItem(pendingItem);
+      await cache.putPantryItem(pendingItem);
 
       // Get all items (should include both)
       const allItems = await cache.getAllPantryItems();
@@ -616,7 +616,7 @@ describe("DiskCache", () => {
         JSON.stringify({ ...sharedItem, ingredient: "Disk Version" }, null, 2),
       );
 
-      cache.putPantryItem(sharedItem);
+      await cache.putPantryItem(sharedItem);
 
       // Get all items again
       const allItems2 = await cache.getAllPantryItems();
@@ -630,7 +630,7 @@ describe("DiskCache", () => {
       await cache.init();
 
       const item = makePantryItem();
-      cache.putPantryItem(item);
+      await cache.putPantryItem(item);
       await cache.flush();
 
       // Verify file exists
@@ -655,7 +655,7 @@ describe("DiskCache", () => {
 
       // Test removing from pending (not flushed): put then remove without flush
       const pendingItem = makePantryItem();
-      cache.putPantryItem(pendingItem);
+      await cache.putPantryItem(pendingItem);
       await cache.removePantryItem(pendingItem.uid);
 
       const allItems2 = await cache.getAllPantryItems();
