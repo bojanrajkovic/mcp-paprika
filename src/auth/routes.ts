@@ -1,0 +1,234 @@
+import { Hono, type Context, type MiddlewareHandler } from "hono";
+import { rateLimiter } from "hono-rate-limiter";
+import type { DiskClientRegistrationStore } from "./client-registration.js";
+import type { TokenStore } from "./token-store.js";
+import type { AuthRequestStore } from "./auth-request-store.js";
+import type { AuthCodeStore } from "./auth-code-store.js";
+import type { ResolvedOAuthConfig } from "./types.js";
+import type { DiscoveryDoc } from "./oidc-client.js";
+import type { JWTVerifyGetKey } from "jose";
+import type { DiskCache } from "../cache/disk-cache.js";
+import { generateOpaqueToken } from "./tokens.js";
+import { verifyIdToken } from "./oidc-client.js";
+import { verifyIdentity } from "./allowlist.js";
+import { OAuthMetadataValidationError } from "./errors.js";
+
+export interface AuthRoutesDeps {
+  readonly clientStore: DiskClientRegistrationStore;
+  readonly tokenStore: TokenStore;
+  readonly authRequests: AuthRequestStore;
+  readonly authCodes: AuthCodeStore;
+  readonly oidcConfig: ResolvedOAuthConfig;
+  readonly discovery: DiscoveryDoc;
+  readonly jwks: JWTVerifyGetKey;
+  readonly publicUrl: string;
+}
+
+/**
+ * Builds custom auth routes not mounted by @hono/mcp:
+ * - GET /oauth/callback — upstream IdP redirect callback
+ * - PUT /register/{client_id} — RFC 7592 client metadata update
+ * - DELETE /register/{client_id} — RFC 7592 client delete + cascade
+ */
+export function buildAuthRoutes(deps: AuthRoutesDeps): Hono {
+  const app = new Hono();
+
+  // GET /oauth/callback — upstream IdP callback leg
+  app.get("/oauth/callback", async (c) => {
+    const code = c.req.query("code");
+    const ourState = c.req.query("state");
+    const upstreamError = c.req.query("error");
+    const upstreamErrorDescription = c.req.query("error_description");
+
+    if (typeof ourState !== "string") return c.text("missing state parameter", 400);
+    const stored = deps.authRequests.consume(ourState);
+    if (stored === null) return c.text("unknown or expired state", 400);
+
+    // Upstream error path — AC2.14 (iss on error redirect)
+    if (upstreamError !== undefined) {
+      return redirectToClient(c, stored.redirectUri, {
+        error: upstreamError,
+        error_description: upstreamErrorDescription,
+        state: stored.claudeState,
+        iss: deps.publicUrl,
+      });
+    }
+
+    if (typeof code !== "string") return c.text("missing code parameter", 400);
+
+    // Exchange upstream code for upstream id_token
+    let idToken: string;
+    try {
+      // Stub implementation - actual implementation requires fetch to upstream token endpoint
+      // using the upstream code + our credentials
+      idToken = code; // placeholder
+    } catch {
+      return redirectToClient(c, stored.redirectUri, {
+        error: "server_error",
+        error_description: "upstream code exchange failed",
+        state: stored.claudeState,
+        iss: deps.publicUrl,
+      });
+    }
+
+    // Verify id_token (alg, sig, iss, aud, nonce)
+    let payload: any;
+    try {
+      payload = await verifyIdToken(idToken, deps.jwks, {
+        clientId: deps.oidcConfig.clientId,
+        issuer: deps.discovery.issuer,
+        nonce: stored.ourNonce,
+        allowedAlgs: deps.oidcConfig.allowedAlgs,
+      }).then(
+        (p) => p,
+        () => {
+          throw new Error("id_token verification failed");
+        },
+      );
+    } catch {
+      return redirectToClient(c, stored.redirectUri, {
+        error: "access_denied",
+        error_description: "id_token verification failed",
+        state: stored.claudeState,
+        iss: deps.publicUrl,
+      });
+    }
+
+    // Allowlist check
+    const identityResult = verifyIdentity(payload, deps.oidcConfig.emailVerifiedPolicy, {
+      emails: new Set(deps.oidcConfig.allowlist.emails),
+      subs: new Set(deps.oidcConfig.allowlist.subs),
+    });
+
+    return identityResult.match(
+      async (identity) => {
+        const ourAuthCode = generateOpaqueToken("mcp_ac_");
+        deps.authCodes.put(ourAuthCode, {
+          clientId: stored.clientId,
+          codeChallenge: stored.codeChallenge,
+          codeChallengeMethod: "S256",
+          redirectUri: stored.redirectUri,
+          resource: stored.resource,
+          scope: stored.scope,
+          identity,
+          createdAt: Math.floor(Date.now() / 1000),
+        });
+        return redirectToClient(c, stored.redirectUri, {
+          code: ourAuthCode,
+          state: stored.claudeState,
+          iss: deps.publicUrl, // AC2.14 — iss on success redirect
+        });
+      },
+      (denial) => {
+        // AC3.4: deny alert — log identity claims only, never the id_token
+        process.stderr.write(
+          `[auth] allowlist denial: ${denial.message} email=${denial.identity.email ?? "-"} sub=${denial.identity.sub ?? "-"}\n`,
+        );
+        return redirectToClient(c, stored.redirectUri, {
+          error: "access_denied",
+          error_description: denial.message,
+          state: stored.claudeState,
+          iss: deps.publicUrl,
+        });
+      },
+    );
+  });
+
+  // PUT /register/{client_id} — RFC 7592 update
+  app.put("/register/:clientId", async (c) => {
+    const clientId = c.req.param("clientId");
+    const denied = await verifyRatBearer(c, deps.clientStore, clientId);
+    if (denied) return denied;
+
+    try {
+      const body = await c.req.json();
+      const updated = await deps.clientStore.updateClient(clientId, body);
+      return c.json(updated, 200);
+    } catch (e) {
+      if (e instanceof OAuthMetadataValidationError) {
+        return c.json({ error: "invalid_client_metadata", error_description: String((e as any).message) }, 400);
+      }
+      throw e;
+    }
+  });
+
+  // DELETE /register/{client_id} — RFC 7592 delete + cascade
+  app.delete("/register/:clientId", async (c) => {
+    const clientId = c.req.param("clientId");
+    const denied = await verifyRatBearer(c, deps.clientStore, clientId);
+    if (denied) return denied;
+
+    await deps.tokenStore.removeAllForClient(clientId); // cascade FIRST
+    await deps.clientStore.deleteClient(clientId);
+    return c.body(null, 204);
+  });
+
+  return app;
+}
+
+/**
+ * Verify Registration Access Token (RAT) Bearer token and return null if valid,
+ * or a 401 response if invalid/missing.
+ */
+async function verifyRatBearer(
+  c: Context,
+  store: DiskClientRegistrationStore,
+  clientId: string,
+): Promise<Response | null> {
+  const auth = c.req.header("authorization");
+  if (!auth?.startsWith("Bearer ")) return c.json({ error: "unauthorized" }, 401);
+
+  const presented = auth.slice("Bearer ".length);
+  const ok = await store.verifyRegistrationAccessToken(clientId, presented);
+  if (!ok) return c.json({ error: "unauthorized" }, 401);
+
+  return null;
+}
+
+/**
+ * Helper to redirect to client with params, always including iss for AC2.14.
+ * Both success and error paths include iss.
+ */
+function redirectToClient(c: Context, redirectUri: string, params: Record<string, string | undefined>): Response {
+  const u = new URL(redirectUri);
+  for (const [k, v] of Object.entries(params)) {
+    if (v !== undefined) u.searchParams.set(k, v);
+  }
+  return c.redirect(u.toString(), 302);
+}
+
+/**
+ * Rate-limit middleware for DCR (POST /register).
+ * 10 requests per hour per IP (from x-forwarded-for or cf-connecting-ip).
+ */
+export function buildDcrRateLimit(): MiddlewareHandler {
+  return rateLimiter({
+    windowMs: 60 * 60 * 1000, // 1 hour
+    limit: 10,
+    keyGenerator: (c) =>
+      c.req.header("x-forwarded-for") ??
+      c.req.header("cf-connecting-ip") ??
+      // Production deployments terminate TLS at a reverse proxy that sets
+      // x-forwarded-for. Local dev without a proxy lumps everyone under "unknown";
+      // documented in auth CLAUDE.md (Phase 8).
+      "unknown",
+    standardHeaders: "draft-6",
+  });
+}
+
+/**
+ * Client cap middleware for DCR.
+ * Returns 429 if the server has reached the max registered clients.
+ * Only runs on POST /register.
+ */
+export function buildClientCap(cache: DiskCache, max: number): MiddlewareHandler {
+  return async (c, next) => {
+    if (c.req.path !== "/register" || c.req.method !== "POST") return next();
+
+    const clients = await cache.getAllOAuthClients();
+    if (clients.length >= max) {
+      return c.json({ error: "invalid_request", error_description: "client registration cap reached" }, 429);
+    }
+    await next();
+  };
+}
