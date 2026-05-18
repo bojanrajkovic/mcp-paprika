@@ -74,6 +74,29 @@ export class OAuthMetadataValidationError extends Error {
     return new OAuthMetadataValidationError(`OIDC discovery document missing required field: ${field}`);
   }
 
+  static discoveryFetchFailed(url: string, status: number): OAuthMetadataValidationError {
+    return new OAuthMetadataValidationError(`failed to fetch OIDC discovery document from ${url}: HTTP ${status}`);
+  }
+
+  static invalidDiscoveryDoc(
+    issues: Array<{ path: Array<string | number>; message: string }>,
+  ): OAuthMetadataValidationError {
+    const firstIssue = issues[0];
+    const path = firstIssue?.path.join(".") || "unknown";
+    const message = firstIssue?.message || "unknown error";
+    return new OAuthMetadataValidationError(`invalid OIDC discovery document: ${path} ${message}`);
+  }
+
+  static noAlgOverlap(supported: ReadonlyArray<string>, allowed: ReadonlyArray<string>): OAuthMetadataValidationError {
+    return new OAuthMetadataValidationError(
+      `no supported algorithms overlap: upstream advertises [${supported.join(", ")}], we allow [${allowed.join(", ")}]`,
+    );
+  }
+
+  static idTokenInvalid(message: string, options?: ErrorOptions): OAuthMetadataValidationError {
+    return new OAuthMetadataValidationError(`id_token verification failed: ${message}`, options);
+  }
+
   static nonceMismatch(): OAuthMetadataValidationError {
     return new OAuthMetadataValidationError("OIDC nonce mismatch: id_token nonce does not match request nonce");
   }
