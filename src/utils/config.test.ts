@@ -288,6 +288,365 @@ describe("Configuration loading", () => {
     });
   });
 
+  // OAuth config validation tests (AC3.9, AC6.2, AC6.3)
+  describe("OAuth config", () => {
+    const OAUTH_ENV_VARS = [
+      "MCP_PUBLIC_URL",
+      "MCP_OIDC_PRESET",
+      "MCP_OIDC_DISCOVERY_URL",
+      "MCP_OIDC_SCOPES",
+      "MCP_OIDC_EMAIL_VERIFIED_POLICY",
+      "MCP_OIDC_ALLOWED_ALGS",
+      "MCP_OIDC_CLIENT_ID",
+      "MCP_OIDC_CLIENT_SECRET",
+      "MCP_ALLOWED_EMAILS",
+      "MCP_ALLOWED_SUBS",
+    ] as const;
+
+    let tempDir: string;
+    let savedEnv: Map<string, string | undefined>;
+
+    beforeEach(() => {
+      tempDir = mkdtempSync(join(tmpdir(), "oauth-test-"));
+      savedEnv = new Map();
+      const allVars = ["PAPRIKA_EMAIL", "PAPRIKA_PASSWORD", "MCP_TRANSPORT", ...OAUTH_ENV_VARS];
+      for (const key of allVars) {
+        savedEnv.set(key, process.env[key]);
+        delete process.env[key];
+      }
+    });
+
+    afterEach(() => {
+      for (const [key, value] of savedEnv) {
+        if (value === undefined) {
+          delete process.env[key];
+        } else {
+          process.env[key] = value;
+        }
+      }
+      try {
+        chmodSync(join(tempDir, "config.json"), 0o644);
+      } catch {
+        // ignore if file doesn't exist
+      }
+      rmSync(tempDir, { recursive: true, force: true });
+    });
+
+    describe("oauth21-http.AC3.9: Allowlist validation", () => {
+      it("rejects HTTP transport with both MCP_ALLOWED_EMAILS and MCP_ALLOWED_SUBS empty", () => {
+        process.env.PAPRIKA_EMAIL = "user@test.com";
+        process.env.PAPRIKA_PASSWORD = "secret";
+        process.env.MCP_TRANSPORT = "http";
+        process.env.MCP_PUBLIC_URL = "https://m.example.com";
+        process.env.MCP_OIDC_PRESET = "google";
+        process.env.MCP_OIDC_CLIENT_ID = "client123";
+        process.env.MCP_OIDC_CLIENT_SECRET = "secret456";
+        process.env.MCP_ALLOWED_EMAILS = "";
+        process.env.MCP_ALLOWED_SUBS = "";
+
+        const result = loadConfig(tempDir);
+        result.match(
+          () => {
+            expect.fail("Expected Err but got Ok");
+          },
+          (error) => {
+            expect(error.kind).toBe("validation");
+            expect(error.reason).toContain("MCP_ALLOWED_EMAILS");
+            expect(error.reason).toContain("MCP_ALLOWED_SUBS");
+          },
+        );
+      });
+
+      it("accepts HTTP transport with non-empty MCP_ALLOWED_EMAILS", () => {
+        process.env.PAPRIKA_EMAIL = "user@test.com";
+        process.env.PAPRIKA_PASSWORD = "secret";
+        process.env.MCP_TRANSPORT = "http";
+        process.env.MCP_PUBLIC_URL = "https://m.example.com";
+        process.env.MCP_OIDC_PRESET = "google";
+        process.env.MCP_OIDC_CLIENT_ID = "client123";
+        process.env.MCP_OIDC_CLIENT_SECRET = "secret456";
+        process.env.MCP_ALLOWED_EMAILS = "alice@example.com";
+
+        const result = loadConfig(tempDir);
+        result.match(
+          (config) => {
+            expect(config.oauth?.allowlist.emails).toEqual(["alice@example.com"]);
+          },
+          (error) => {
+            expect.fail(`Expected Ok but got Err: ${error.reason}`);
+          },
+        );
+      });
+    });
+
+    describe("oauth21-http.AC6.2: Public URL requirement", () => {
+      it("rejects HTTP transport without MCP_PUBLIC_URL", () => {
+        process.env.PAPRIKA_EMAIL = "user@test.com";
+        process.env.PAPRIKA_PASSWORD = "secret";
+        process.env.MCP_TRANSPORT = "http";
+        process.env.MCP_OIDC_PRESET = "google";
+        process.env.MCP_OIDC_CLIENT_ID = "client123";
+        process.env.MCP_OIDC_CLIENT_SECRET = "secret456";
+        process.env.MCP_ALLOWED_EMAILS = "alice@example.com";
+
+        const result = loadConfig(tempDir);
+        result.match(
+          () => {
+            expect.fail("Expected Err but got Ok");
+          },
+          (error) => {
+            expect(error.kind).toBe("validation");
+            expect(error.reason).toContain("MCP_PUBLIC_URL");
+          },
+        );
+      });
+    });
+
+    describe("oauth21-http.AC6.3: HTTPS requirement", () => {
+      it("rejects HTTP transport with http:// URL", () => {
+        process.env.PAPRIKA_EMAIL = "user@test.com";
+        process.env.PAPRIKA_PASSWORD = "secret";
+        process.env.MCP_TRANSPORT = "http";
+        process.env.MCP_PUBLIC_URL = "http://mcp.example.com";
+        process.env.MCP_OIDC_PRESET = "google";
+        process.env.MCP_OIDC_CLIENT_ID = "client123";
+        process.env.MCP_OIDC_CLIENT_SECRET = "secret456";
+        process.env.MCP_ALLOWED_EMAILS = "alice@example.com";
+
+        const result = loadConfig(tempDir);
+        result.match(
+          () => {
+            expect.fail("Expected Err but got Ok");
+          },
+          (error) => {
+            expect(error.kind).toBe("validation");
+            expect(error.reason).toContain("https");
+          },
+        );
+      });
+
+      it("accepts substring trick (https://evil/?fake=http://x) as HTTPS", () => {
+        process.env.PAPRIKA_EMAIL = "user@test.com";
+        process.env.PAPRIKA_PASSWORD = "secret";
+        process.env.MCP_TRANSPORT = "http";
+        process.env.MCP_PUBLIC_URL = "https://evil/?fake=http://x";
+        process.env.MCP_OIDC_PRESET = "google";
+        process.env.MCP_OIDC_CLIENT_ID = "client123";
+        process.env.MCP_OIDC_CLIENT_SECRET = "secret456";
+        process.env.MCP_ALLOWED_EMAILS = "alice@example.com";
+
+        const result = loadConfig(tempDir);
+        result.match(
+          (config) => {
+            expect(config.oauth?.publicUrl).toBe("https://evil/?fake=http://x");
+          },
+          (error) => {
+            expect.fail(`Expected Ok but got Err: ${error.reason}`);
+          },
+        );
+      });
+    });
+
+    describe("listField behaviors", () => {
+      it("splits comma-separated values and trims whitespace", () => {
+        process.env.PAPRIKA_EMAIL = "user@test.com";
+        process.env.PAPRIKA_PASSWORD = "secret";
+        process.env.MCP_TRANSPORT = "http";
+        process.env.MCP_PUBLIC_URL = "https://m.example.com";
+        process.env.MCP_OIDC_PRESET = "google";
+        process.env.MCP_OIDC_CLIENT_ID = "client123";
+        process.env.MCP_OIDC_CLIENT_SECRET = "secret456";
+        process.env.MCP_ALLOWED_EMAILS = "a@x, b@x ,c@x";
+
+        const result = loadConfig(tempDir);
+        result.match(
+          (config) => {
+            expect(config.oauth?.allowlist.emails).toEqual(["a@x", "b@x", "c@x"]);
+          },
+          (error) => {
+            expect.fail(`Expected Ok but got Err: ${error.reason}`);
+          },
+        );
+      });
+
+      it("filters empty entries from comma-separated values", () => {
+        process.env.PAPRIKA_EMAIL = "user@test.com";
+        process.env.PAPRIKA_PASSWORD = "secret";
+        process.env.MCP_TRANSPORT = "http";
+        process.env.MCP_PUBLIC_URL = "https://m.example.com";
+        process.env.MCP_OIDC_PRESET = "google";
+        process.env.MCP_OIDC_CLIENT_ID = "client123";
+        process.env.MCP_OIDC_CLIENT_SECRET = "secret456";
+        process.env.MCP_ALLOWED_EMAILS = ",,";
+
+        const result = loadConfig(tempDir);
+        result.match(
+          () => {
+            expect.fail("Expected Err but got Ok");
+          },
+          (error) => {
+            expect(error.kind).toBe("validation");
+            expect(error.reason).toContain("MCP_ALLOWED_EMAILS");
+          },
+        );
+      });
+    });
+
+    describe("stdio transport skips OAuth validation", () => {
+      it("accepts stdio transport with no OAuth config", () => {
+        process.env.PAPRIKA_EMAIL = "user@test.com";
+        process.env.PAPRIKA_PASSWORD = "secret";
+        process.env.MCP_TRANSPORT = "stdio";
+
+        const result = loadConfig(tempDir);
+        result.match(
+          (config) => {
+            expect(config.transport).toBe("stdio");
+          },
+          (error) => {
+            expect.fail(`Expected Ok but got Err: ${error.reason}`);
+          },
+        );
+      });
+
+      it("accepts stdio transport with invalid OAuth env vars (http:// URL is allowed)", () => {
+        process.env.PAPRIKA_EMAIL = "user@test.com";
+        process.env.PAPRIKA_PASSWORD = "secret";
+        process.env.MCP_TRANSPORT = "stdio";
+        process.env.MCP_PUBLIC_URL = "http://m.example.com";
+        process.env.MCP_OIDC_PRESET = "google";
+
+        const result = loadConfig(tempDir);
+        result.match(
+          (config) => {
+            expect(config.transport).toBe("stdio");
+          },
+          (error) => {
+            expect.fail(`Expected Ok but got Err: ${error.reason}`);
+          },
+        );
+      });
+    });
+
+    describe("Preset OR discovery URL invariant", () => {
+      it("rejects HTTP mode without preset and without discovery URL", () => {
+        process.env.PAPRIKA_EMAIL = "user@test.com";
+        process.env.PAPRIKA_PASSWORD = "secret";
+        process.env.MCP_TRANSPORT = "http";
+        process.env.MCP_PUBLIC_URL = "https://m.example.com";
+        process.env.MCP_OIDC_CLIENT_ID = "client123";
+        process.env.MCP_OIDC_CLIENT_SECRET = "secret456";
+        process.env.MCP_ALLOWED_EMAILS = "alice@example.com";
+
+        const result = loadConfig(tempDir);
+        result.match(
+          () => {
+            expect.fail("Expected Err but got Ok");
+          },
+          (error) => {
+            expect(error.kind).toBe("validation");
+            expect(error.reason).toContain("MCP_OIDC_PRESET");
+            expect(error.reason).toContain("MCP_OIDC_DISCOVERY_URL");
+          },
+        );
+      });
+
+      it("accepts HTTP mode with discovery URL only", () => {
+        process.env.PAPRIKA_EMAIL = "user@test.com";
+        process.env.PAPRIKA_PASSWORD = "secret";
+        process.env.MCP_TRANSPORT = "http";
+        process.env.MCP_PUBLIC_URL = "https://m.example.com";
+        process.env.MCP_OIDC_DISCOVERY_URL = "https://issuer.example.com/.well-known/openid-configuration";
+        process.env.MCP_OIDC_CLIENT_ID = "client123";
+        process.env.MCP_OIDC_CLIENT_SECRET = "secret456";
+        process.env.MCP_ALLOWED_EMAILS = "alice@example.com";
+
+        const result = loadConfig(tempDir);
+        result.match(
+          (config) => {
+            expect(config.oauth?.discoveryUrl).toBe("https://issuer.example.com/.well-known/openid-configuration");
+          },
+          (error) => {
+            expect.fail(`Expected Ok but got Err: ${error.reason}`);
+          },
+        );
+      });
+    });
+
+    describe("Client credentials requirement", () => {
+      it("rejects HTTP mode without clientId", () => {
+        process.env.PAPRIKA_EMAIL = "user@test.com";
+        process.env.PAPRIKA_PASSWORD = "secret";
+        process.env.MCP_TRANSPORT = "http";
+        process.env.MCP_PUBLIC_URL = "https://m.example.com";
+        process.env.MCP_OIDC_PRESET = "google";
+        process.env.MCP_OIDC_CLIENT_SECRET = "secret456";
+        process.env.MCP_ALLOWED_EMAILS = "alice@example.com";
+
+        const result = loadConfig(tempDir);
+        result.match(
+          () => {
+            expect.fail("Expected Err but got Ok");
+          },
+          (error) => {
+            expect(error.kind).toBe("validation");
+            expect(error.reason).toContain("MCP_OIDC_CLIENT_ID");
+          },
+        );
+      });
+
+      it("rejects HTTP mode without clientSecret", () => {
+        process.env.PAPRIKA_EMAIL = "user@test.com";
+        process.env.PAPRIKA_PASSWORD = "secret";
+        process.env.MCP_TRANSPORT = "http";
+        process.env.MCP_PUBLIC_URL = "https://m.example.com";
+        process.env.MCP_OIDC_PRESET = "google";
+        process.env.MCP_OIDC_CLIENT_ID = "client123";
+        process.env.MCP_ALLOWED_EMAILS = "alice@example.com";
+
+        const result = loadConfig(tempDir);
+        result.match(
+          () => {
+            expect.fail("Expected Err but got Ok");
+          },
+          (error) => {
+            expect(error.kind).toBe("validation");
+            expect(error.reason).toContain("MCP_OIDC_CLIENT_SECRET");
+          },
+        );
+      });
+    });
+
+    describe("Happy path", () => {
+      it("accepts valid HTTP OAuth config with all required env vars", () => {
+        process.env.PAPRIKA_EMAIL = "user@test.com";
+        process.env.PAPRIKA_PASSWORD = "secret";
+        process.env.MCP_TRANSPORT = "http";
+        process.env.MCP_PUBLIC_URL = "https://mcp.example.com";
+        process.env.MCP_OIDC_PRESET = "google";
+        process.env.MCP_OIDC_CLIENT_ID = "client123";
+        process.env.MCP_OIDC_CLIENT_SECRET = "secret456";
+        process.env.MCP_ALLOWED_EMAILS = "alice@example.com,bob@example.com";
+
+        const result = loadConfig(tempDir);
+        result.match(
+          (config) => {
+            expect(config.oauth).toBeDefined();
+            expect(config.oauth?.publicUrl).toBe("https://mcp.example.com");
+            expect(config.oauth?.preset).toBe("google");
+            expect(config.oauth?.clientId).toBe("client123");
+            expect(config.oauth?.clientSecret).toBe("secret456");
+            expect(config.oauth?.allowlist.emails).toEqual(["alice@example.com", "bob@example.com"]);
+            expect(config.oauth?.allowlist.subs).toEqual([]);
+          },
+          (error) => {
+            expect.fail(`Expected Ok but got Err: ${error.reason}`);
+          },
+        );
+      });
+    });
+  });
+
   // Phase 2: loadConfig integration tests
   describe("Phase 2: loadConfig integration", () => {
     // Shared test infrastructure
@@ -535,6 +894,11 @@ describe("Configuration loading", () => {
         process.env.PAPRIKA_EMAIL = "user@test.com";
         process.env.PAPRIKA_PASSWORD = "secret";
         process.env.MCP_TRANSPORT = "http";
+        process.env.MCP_PUBLIC_URL = "https://mcp.example.com";
+        process.env.MCP_OIDC_PRESET = "google";
+        process.env.MCP_OIDC_CLIENT_ID = "client123";
+        process.env.MCP_OIDC_CLIENT_SECRET = "secret456";
+        process.env.MCP_ALLOWED_EMAILS = "alice@example.com";
 
         loadConfig(tempDir).match(
           (config) => {
