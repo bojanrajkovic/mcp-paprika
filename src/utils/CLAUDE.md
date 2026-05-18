@@ -1,6 +1,6 @@
 # Cross-Cutting Utilities
 
-Last verified: 2026-03-09
+Last verified: 2026-05-18
 
 ## Purpose
 
@@ -49,10 +49,53 @@ startup cost.
 | `loadConfig()`        | `Result<PaprikaConfig, ConfigError>`                           |
 | `paprikaConfigSchema` | Zod schema used for validation; defines canonical config shape |
 
-| Type              | Description                                                      |
-| ----------------- | ---------------------------------------------------------------- |
-| `PaprikaConfig`   | `{ paprika, sync, features? }` — validated application config    |
-| `EmbeddingConfig` | `{ apiKey, baseUrl, model }` — Phase 3 embedding provider config |
+| Type              | Description                                                                            |
+| ----------------- | -------------------------------------------------------------------------------------- |
+| `PaprikaConfig`   | `{ paprika, sync, transport, http, features?, oauth? }` — validated application config |
+| `EmbeddingConfig` | `{ apiKey, baseUrl, model }` — embedding provider config                               |
+
+**`oauth` block** (`paprikaConfigSchema.oauth` — optional, required when `transport === "http"`):
+
+```
+oauth: {
+  publicUrl?:            string         // Canonical https:// issuer URL (no trailing slash)
+  preset?:               "google" | "entra" | "okta" | "auth0" | "keycloak"
+  discoveryUrl?:         string (URL)   // OIDC discovery URL; required for tenant-bound presets
+  scopes?:               string[]       // Override preset's scope list
+  emailVerifiedPolicy?:  "strict" | "skip" | "if-present"
+  allowedAlgs?:          string[]       // Override preset's allowed id_token signing algs
+  clientId?:             string         // Client ID from upstream IdP
+  clientSecret?:         string         // Client secret from upstream IdP
+  allowlist: {
+    emails:              string[]       // Comma-separated emails (listField, default [])
+    subs:                string[]       // Comma-separated subject IDs (listField, default [])
+  }
+}
+```
+
+**`listField` helper** — module-internal Zod field that accepts either an array of strings or a comma-separated string (e.g., from an env var) and normalizes to a trimmed, non-empty `string[]`. Used for `oauth.scopes`, `oauth.allowedAlgs`, `oauth.allowlist.emails`, and `oauth.allowlist.subs`.
+
+**Cross-field `.superRefine()` invariant** — enforced at root schema level when `transport === "http"`:
+
+- `oauth.publicUrl` must be present and a valid `https://` URL.
+- At least one of `oauth.allowlist.emails` or `oauth.allowlist.subs` must be non-empty.
+- Exactly one of `oauth.preset` or `oauth.discoveryUrl` must be set.
+- Both `oauth.clientId` and `oauth.clientSecret` must be present.
+
+**OAuth env-var mapping table:**
+
+| Env var                          | Config path                 |
+| -------------------------------- | --------------------------- |
+| `MCP_PUBLIC_URL`                 | `oauth.publicUrl`           |
+| `MCP_OIDC_PRESET`                | `oauth.preset`              |
+| `MCP_OIDC_DISCOVERY_URL`         | `oauth.discoveryUrl`        |
+| `MCP_OIDC_SCOPES`                | `oauth.scopes`              |
+| `MCP_OIDC_EMAIL_VERIFIED_POLICY` | `oauth.emailVerifiedPolicy` |
+| `MCP_OIDC_ALLOWED_ALGS`          | `oauth.allowedAlgs`         |
+| `MCP_OIDC_CLIENT_ID`             | `oauth.clientId`            |
+| `MCP_OIDC_CLIENT_SECRET`         | `oauth.clientSecret`        |
+| `MCP_ALLOWED_EMAILS`             | `oauth.allowlist.emails`    |
+| `MCP_ALLOWED_SUBS`               | `oauth.allowlist.subs`      |
 
 | Class         | Extends | Fields                                                                        |
 | ------------- | ------- | ----------------------------------------------------------------------------- |

@@ -108,9 +108,10 @@ Per-session builder. Constructs a fresh `McpServer`, wraps `app` into a `Session
 - Notifier methods never throw.
 - `buildAppContext` is called exactly once per process; `buildMcpServer` is called once per session.
 - The discover tool is registered iff `app.vectorStore !== null`.
+- `app.auth !== null` iff `config.transport === "http"`. Use-sites check `app.auth === null` to detect stdio mode (mirrors the `vectorStore` optional-feature pattern).
 
 ## Dependencies
 
-- **Uses:** `@modelcontextprotocol/sdk` (`McpServer`, `LoggingMessageNotification`), `../paprika/` (`PaprikaClient`, `SyncEngine`), `../cache/` (`DiskCache`, `RecipeStore`, `PantryStore`), `../features/` (`VectorStore`, `buildDiscoverComponents`), `../tools/` (all `register*Tool` functions), `../resources/` (`registerRecipeResources`, `registerPantryResources`), `../utils/` (`PaprikaConfig`, `getCacheDir`), `../auth/build.js` (`buildAuthContext`)
+- **Uses:** `@modelcontextprotocol/sdk` (`McpServer`, `LoggingMessageNotification`), `../paprika/` (`PaprikaClient`, `SyncEngine`), `../cache/` (`DiskCache`, `RecipeStore`, `PantryStore`), `../features/` (`VectorStore`, `buildDiscoverComponents`), `../tools/` (all `register*Tool` functions), `../resources/` (`registerRecipeResources`, `registerPantryResources`), `../utils/` (`PaprikaConfig`, `getCacheDir`), `../auth/` (`buildAuthContext`)
 - **Used by:** `src/index.ts` (stdio entry point); `src/transport/http.ts` calls `buildAppContext` once and `buildMcpServer` per session
 - **Boundary:** This is the composition root — it is allowed to import from every other src directory. Other src directories must not import from `src/server/` back into themselves except via `import type` (e.g., `src/types/server-context.ts` and `src/paprika/sync.ts` import `AppContext`/`SessionContext` types from here).

@@ -399,12 +399,12 @@ bearerAuth(options: BearerAuthOptions): MiddlewareHandler;
 **Load-bearing behavior:**
 
 - This IS Hono core's `bearerAuth`, imported from `"hono/bearer-auth"`.
-- On auth failure (401), the default `WWW-Authenticate` header is `Bearer error="Unauthorized"` (literal string).
-- @hono/mcp wraps this with a custom middleware that injects RFC 9110-compliant `WWW-Authenticate` headers with additional metadata:
+- On auth failure (401), `@hono/mcp` sets a custom `wwwAuthenticateHeader` that emits:
   ```
-  WWW-Authenticate: Bearer error="invalid_token", error_description="...", resource_metadata="https://issuer/.well-known/oauth-protected-resource"
+  WWW-Authenticate: Bearer error="Unauthorized", error_description="Unauthorized", resource_metadata="https://issuer/.well-known/oauth-protected-resource"
   ```
-- The `resource_metadata` field points to the RFC 9728 resource metadata endpoint for the issuer.
+  The `error` value is the literal string `"Unauthorized"` (not `"invalid_token"`); this matches the `noAuthenticationHeader` and `invalidAuthenticationHeader` config in `@hono/mcp/dist/auth-Bx35uFvz.js` (verified 2026-05-18).
+- The `resource_metadata` field points to the RFC 9728 resource metadata endpoint for the issuer, derived from the request URL origin at call time.
 
 ### OAuthServerProvider interface
 
