@@ -17,7 +17,6 @@ import { describe, it, expect, afterEach, vi, beforeEach } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createRequire } from "node:module";
 import { RecipeStore } from "../cache/recipe-store.js";
 import { makeRecipe } from "../cache/__fixtures__/recipes.js";
 import { makeTestServer, makeCtx, getText } from "../tools/tool-test-utils.js";
@@ -26,16 +25,13 @@ import type { EmbeddingConfig } from "../utils/config.js";
 import type { SyncResult } from "../paprika/types.js";
 import type { RecipeUid } from "../paprika/types.js";
 
-// Use CommonJS require to work around TypeScript ESM resolution issues with mitt
-const _require = createRequire(import.meta.url);
-const mittFactory: unknown = _require("mitt");
-function makeMitt<T extends Record<string, unknown>>() {
-  return (mittFactory as CallableFunction)() as {
-    on: <K extends keyof T>(type: K, handler: (event: T[K]) => void) => void;
-    off: <K extends keyof T>(type: K, handler: (event: T[K]) => void) => void;
-    emit: <K extends keyof T>(type: K, event: T[K]) => void;
-  };
-}
+// mitt's package shape (flat-conditioned `exports`, .d.ts using `export default`) confuses
+// TS strict resolution under @tsconfig/strictest + nodenext into typing the default import
+// as the namespace. The namespace's `.default` member IS the function, so we recover the
+// callable type by casting through `unknown` to `typeof _mitt.default`. Runtime is unaffected
+// (esModuleInterop unwraps the default at the JS layer).
+import _mitt from "mitt";
+const mitt = _mitt as unknown as typeof _mitt.default;
 
 // Module-level tempDir variable used by the mock below.
 // Each test will create its own temp directory via beforeEach.
@@ -107,7 +103,7 @@ describe.skipIf(!ollamaAvailable)("buildDiscoverComponents + registerDiscoverToo
   it("completes initialization without error when Ollama is available", async () => {
     const store = new RecipeStore();
     store.load([], []);
-    const syncEvents = makeMitt<SyncEvents>();
+    const syncEvents = mitt<SyncEvents>();
     const config = makePaprikaConfig();
 
     const vectorStore = await buildDiscoverComponents(config, store, syncEvents);
@@ -119,7 +115,7 @@ describe.skipIf(!ollamaAvailable)("buildDiscoverComponents + registerDiscoverToo
     const store = new RecipeStore();
     store.load([], []);
     const ctx = makeCtx(store, server);
-    const syncEvents = makeMitt<SyncEvents>();
+    const syncEvents = mitt<SyncEvents>();
     const config = makePaprikaConfig();
 
     const vectorStore = await buildDiscoverComponents(config, store, syncEvents);
@@ -141,7 +137,7 @@ describe.skipIf(!ollamaAvailable)("buildDiscoverComponents + registerDiscoverToo
     const store = new RecipeStore();
     store.load([recipe1], []);
     makeCtx(store, server);
-    const syncEvents = makeMitt<SyncEvents>();
+    const syncEvents = mitt<SyncEvents>();
     const config = makePaprikaConfig();
 
     await buildDiscoverComponents(config, store, syncEvents);
@@ -176,7 +172,7 @@ describe.skipIf(!ollamaAvailable)("buildDiscoverComponents + registerDiscoverToo
     const store = new RecipeStore();
     store.load([recipe1], []);
     makeCtx(store, server);
-    const syncEvents = makeMitt<SyncEvents>();
+    const syncEvents = mitt<SyncEvents>();
     const config = makePaprikaConfig();
 
     await buildDiscoverComponents(config, store, syncEvents);
@@ -206,7 +202,7 @@ describe.skipIf(!ollamaAvailable)("buildDiscoverComponents + registerDiscoverToo
     const store = new RecipeStore();
     store.load([recipe], []);
     const ctx = makeCtx(store, server);
-    const syncEvents = makeMitt<SyncEvents>();
+    const syncEvents = mitt<SyncEvents>();
     const config = makePaprikaConfig();
 
     const vectorStore = await buildDiscoverComponents(config, store, syncEvents);

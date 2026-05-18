@@ -106,14 +106,17 @@ export function createOidcStub(opts: OidcStubOptions): OidcStub {
     return { token, jwk };
   }
 
-  async function getEs256Token(identity: typeof opts.defaultIdentity): Promise<{ token: string; jwk: JWK }> {
+  async function getEs256Token(
+    identity: typeof opts.defaultIdentity,
+    nonce: string,
+  ): Promise<{ token: string; jwk: JWK }> {
     const claims: JWTPayload = {
       iss: opts.issuer,
       sub: identity.sub,
       aud: opts.clientId,
       email: identity.email,
       email_verified: identity.emailVerified,
-      nonce: "nonce-value",
+      nonce,
       iat: Math.floor(Date.now() / 1000),
       exp: expireNext ? Math.floor(Date.now() / 1000) - 3600 : Math.floor(Date.now() / 1000) + 3600,
     };
@@ -121,7 +124,7 @@ export function createOidcStub(opts: OidcStubOptions): OidcStub {
     return makeEs256Jwt(claims, { kid: "stub-es256-key-1" });
   }
 
-  async function getHs256Token(identity: typeof opts.defaultIdentity): Promise<string> {
+  async function getHs256Token(identity: typeof opts.defaultIdentity, nonce: string): Promise<string> {
     const secret = await generateSecret("HS256", { extractable: true });
     const claims: JWTPayload = {
       iss: opts.issuer,
@@ -129,7 +132,7 @@ export function createOidcStub(opts: OidcStubOptions): OidcStub {
       aud: opts.clientId,
       email: identity.email,
       email_verified: identity.emailVerified,
-      nonce: "nonce-value",
+      nonce,
       iat: Math.floor(Date.now() / 1000),
       exp: expireNext ? Math.floor(Date.now() / 1000) - 3600 : Math.floor(Date.now() / 1000) + 3600,
     };
@@ -227,13 +230,12 @@ export function createOidcStub(opts: OidcStubOptions): OidcStub {
             break;
           }
           case "ES256": {
-            // ES256 also needs per-request signing with correct nonce
-            const result = await getEs256Token(nextIdentity);
+            const result = await getEs256Token(nextIdentity, nonce);
             idToken = result.token;
             break;
           }
           case "HS256": {
-            idToken = await getHs256Token(nextIdentity);
+            idToken = await getHs256Token(nextIdentity, nonce);
             break;
           }
           case "none": {

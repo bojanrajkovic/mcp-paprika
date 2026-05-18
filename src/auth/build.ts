@@ -83,13 +83,11 @@ export async function buildAuthContext(config: PaprikaConfig, cache: DiskCache):
   const discovery = await loadDiscovery(resolved.discoveryUrl, resolved.allowedAlgs);
   const jwks = createJwksFor(discovery);
 
-  // Compose stores — TokenStore ctor takes (cache, now?) — NOT (cache, clientStore)
   const clientStore = new DiskClientRegistrationStore(cache, resolved.publicUrl);
   const tokenStore = new TokenStore(cache);
   const requestStore = new AuthRequestStore();
   const codeStore = new AuthCodeStore();
 
-  // MintingOAuthServerProvider ctor: (clientStore, tokenStore, authRequests, authCodes, discovery, oidcConfig, publicUrl)
   const provider = new MintingOAuthServerProvider(
     clientStore,
     tokenStore,

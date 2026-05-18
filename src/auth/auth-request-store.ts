@@ -7,7 +7,7 @@
  *
  * No persistence across restart (in-memory only). Not used in normal production cleanup
  * as the entries typically consume within seconds of creation. `sweepExpired()` is called
- * periodically in Phase 7 for memory hygiene.
+ * periodically by `AuthCleanup` for memory hygiene.
  */
 
 import type { AuthRequestState } from "./types.js";

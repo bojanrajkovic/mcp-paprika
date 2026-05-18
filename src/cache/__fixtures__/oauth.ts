@@ -1,4 +1,5 @@
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
+import { hashTokenForStorage } from "../../auth/tokens.js";
 import { OAuthClientSchema, OAuthTokenSchema } from "../../auth/types.js";
 import type { OAuthClient, OAuthToken } from "../../auth/types.js";
 
@@ -12,8 +13,7 @@ export function makeOAuthClient(overrides?: Partial<OAuthClient>): OAuthClient {
   const candidate: OAuthClient = {
     clientId: overrides?.clientId ?? randomUUID(),
     clientIdIssuedAt: now,
-    registrationAccessTokenHash:
-      overrides?.registrationAccessTokenHash ?? createHash("sha256").update("default-rat").digest("hex"),
+    registrationAccessTokenHash: overrides?.registrationAccessTokenHash ?? hashTokenForStorage("default-rat"),
     tokenEndpointAuthMethod: "none",
     grantTypes: ["authorization_code", "refresh_token"],
     responseTypes: ["code"],
@@ -37,7 +37,7 @@ export function makeOAuthToken(overrides?: Partial<OAuthToken>): OAuthToken {
   const now = Math.floor(Date.now() / 1000);
 
   const candidate: OAuthToken = {
-    tokenHash: overrides?.tokenHash ?? createHash("sha256").update(`token-${randomUUID()}`).digest("hex"),
+    tokenHash: overrides?.tokenHash ?? hashTokenForStorage(`token-${randomUUID()}`),
     kind: "access",
     clientId: overrides?.clientId ?? randomUUID(),
     scope: "openid email profile",

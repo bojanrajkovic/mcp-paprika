@@ -66,12 +66,14 @@ export class DiskCache {
   }
 
   async init(): Promise<void> {
-    // Create subdirectories (idempotent — recursive: true).
-    await mkdir(this._recipesDir, { recursive: true });
-    await mkdir(this._categoriesDir, { recursive: true });
-    await mkdir(this._pantryDir, { recursive: true });
-    await mkdir(this._oauthClientsDir, { recursive: true });
-    await mkdir(this._oauthTokensDir, { recursive: true });
+    // Create subdirectories (idempotent — recursive: true). Independent paths, so parallelize.
+    await Promise.all([
+      mkdir(this._recipesDir, { recursive: true }),
+      mkdir(this._categoriesDir, { recursive: true }),
+      mkdir(this._pantryDir, { recursive: true }),
+      mkdir(this._oauthClientsDir, { recursive: true }),
+      mkdir(this._oauthTokensDir, { recursive: true }),
+    ]);
 
     // Load index.json. ENOENT = first run → empty index.
     // Parse failure = corruption → log warning + empty index.

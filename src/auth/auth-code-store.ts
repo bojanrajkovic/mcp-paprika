@@ -5,7 +5,7 @@
  * Consume-on-read: calling `consume()` atomically deletes the entry for single-use replay protection.
  * Lazy TTL eviction: expired entries are deleted on `consume()`, `peek()`, or `sweepExpired()`.
  *
- * Identity is populated by the `/oauth/callback` handler (Phase 6) after verifying the
+ * Identity is populated by the `/oauth/callback` handler after verifying the
  * upstream id_token and checking the allowlist. The store does not enrich; it stores
  * whatever is handed to `put()`.
  *

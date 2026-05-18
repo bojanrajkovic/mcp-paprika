@@ -172,7 +172,7 @@ export class DiskClientRegistrationStore {
 
   /**
    * Delete a client.
-   * Removes from cache and disk. No cascade — caller (Phase 6 route) composes with TokenStore.removeAllForClient.
+   * Removes from cache and disk. No cascade — the DELETE /register/:id route composes with TokenStore.removeAllForClient.
    */
   async deleteClient(clientId: string): Promise<void> {
     await this._cache.removeOAuthClient(clientId);

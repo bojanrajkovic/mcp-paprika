@@ -86,6 +86,9 @@ export async function startHttp(config: PaprikaConfig): Promise<HttpTransportHan
   if (app.auth !== null) {
     // Capture auth to avoid null-checks inside callbacks (mirrors SyncEngine pattern)
     const auth = app.auth;
+    // issuerUrl stays a string at every @hono/mcp boundary — passing a URL would trigger
+    // the library's .href call and force a trailing slash, breaking exact-match against MCP_PUBLIC_URL.
+    const resourceServerUrl = new URL(auth.config.publicUrl);
 
     // 1. Customized well-known docs MUST mount BEFORE mcpAuthRouter so Hono's
     //    first-match-wins returns our overrides instead of mcpAuthRouter's defaults
@@ -93,9 +96,9 @@ export async function startHttp(config: PaprikaConfig): Promise<HttpTransportHan
     hono.route(
       "/",
       buildAuthMetadataRouter({
-        issuerUrl: auth.config.publicUrl, // STRING — preserves exact value, no trailing-slash normalization
+        issuerUrl: auth.config.publicUrl,
         provider: auth.provider,
-        resourceServerUrl: new URL(auth.config.publicUrl),
+        resourceServerUrl,
       }),
     );
 
@@ -110,8 +113,8 @@ export async function startHttp(config: PaprikaConfig): Promise<HttpTransportHan
       "/",
       mcpAuthRouter({
         provider: auth.provider,
-        issuerUrl: auth.config.publicUrl, // STRING — see Phase 6 note on issuerUrl
-        resourceServerUrl: new URL(auth.config.publicUrl),
+        issuerUrl: auth.config.publicUrl,
+        resourceServerUrl,
       }),
     );
 

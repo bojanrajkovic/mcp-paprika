@@ -1,6 +1,6 @@
 /**
  * Shared test utilities for OAuth auth module tests.
- * Exported for reuse in Phase 4 (oidc-client) and other downstream tests.
+ * Exported for reuse across allowlist + oidc-client tests.
  */
 
 import fc from "fast-check";

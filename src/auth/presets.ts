@@ -64,7 +64,7 @@ type PartialResolvedConfig = Partial<
 /**
  * Result type for resolvePreset. Represents the fully merged configuration
  * after preset expansion, but excludes publicUrl, clientId, clientSecret, and
- * allowlist fields which are handled separately during config merging in Phase 7.
+ * allowlist fields, which are handled separately during config merging in `build.ts`.
  * This narrowing is by design: presets define provider configuration only,
  * while global OAuth config provides deployment-specific fields.
  */
@@ -105,12 +105,9 @@ export function resolvePreset(
     if (!overrides.allowedAlgs) missingFields.push("allowedAlgs");
 
     if (missingFields.length > 0) {
-      const firstMissing = missingFields[0];
-      if (!firstMissing) {
-        // Should never happen, but TypeScript needs this check
-        return err(OAuthConfigError.missingPresetOrDiscovery("discoveryUrl"));
-      }
-      return err(OAuthConfigError.missingPresetOrDiscovery(firstMissing));
+      // missingFields.length > 0 guarantees [0] is defined; the non-null assertion just
+      // satisfies noUncheckedIndexedAccess without inventing an unreachable fallback branch.
+      return err(OAuthConfigError.missingPresetOrDiscovery(missingFields[0]!));
     }
 
     // All required fields present in overrides

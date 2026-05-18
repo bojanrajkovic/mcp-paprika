@@ -23,7 +23,7 @@ import type { ResolvedOAuthConfig } from "./types.js";
 /**
  * Minting OAuth 2.1 server provider implementing OAuthServerProvider.
  *
- * Composes Phase 5's stores (auth-request, auth-code, client-registration, token-store)
+ * Composes the four auth stores (auth-request, auth-code, client-registration, token-store)
  * to implement the OAuth flow:
  * - authorize: redirects to upstream IdP with chained state/nonce
  * - exchangeAuthorizationCode: validates PKCE, verifies against our stored state, mints tokens
@@ -144,7 +144,7 @@ export class MintingOAuthServerProvider implements OAuthServerProvider {
         expires_in: ACCESS_TOKEN_TTL_SECONDS,
       }),
       (e) => {
-        throw e; // Phase 1's OAuthTokenError factory returns SDK error subclasses
+        throw e; // OAuthTokenError factories return SDK error subclasses, which the library serializes
       },
     );
   }

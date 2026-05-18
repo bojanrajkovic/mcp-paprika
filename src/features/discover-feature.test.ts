@@ -3,18 +3,13 @@ import type { SyncResult } from "../paprika/types.js";
 import type { RecipeUid } from "../paprika/types.js";
 import { RecipeStore } from "../cache/recipe-store.js";
 import { makeRecipe } from "../cache/__fixtures__/recipes.js";
-import { createRequire } from "node:module";
-
-// Use CommonJS require to work around TypeScript ESM resolution issues with mitt
-const _require = createRequire(import.meta.url);
-const mittFactory: unknown = _require("mitt");
-function makeMitt<T extends Record<string, unknown>>() {
-  return (mittFactory as CallableFunction)() as {
-    on: <K extends keyof T>(type: K, handler: (event: T[K]) => void) => void;
-    off: <K extends keyof T>(type: K, handler: (event: T[K]) => void) => void;
-    emit: <K extends keyof T>(type: K, event: T[K]) => void;
-  };
-}
+// mitt's package shape (flat-conditioned `exports`, .d.ts using `export default`) confuses
+// TS strict resolution under @tsconfig/strictest + nodenext into typing the default import
+// as the namespace. The namespace's `.default` member IS the function, so we recover the
+// callable type by casting through `unknown` to `typeof _mitt.default`. Runtime is unaffected
+// (esModuleInterop unwraps the default at the JS layer).
+import _mitt from "mitt";
+const mitt = _mitt as unknown as typeof _mitt.default;
 
 // Mock all the feature dependencies
 vi.mock("./embeddings.js", () => ({
@@ -42,7 +37,7 @@ function makeMockVectorStore() {
 
 // Helper to create a mock sync events view (mitt-backed)
 function makeMockSyncEvents() {
-  return makeMitt<{ "sync:complete": SyncResult; "sync:error": Error }>();
+  return mitt<{ "sync:complete": SyncResult; "sync:error": Error }>();
 }
 
 function makeEnabledConfig(overrides: Record<string, unknown> = {}) {
