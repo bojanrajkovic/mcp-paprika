@@ -12,7 +12,7 @@
  */
 
 import { http, HttpResponse, type HttpHandler } from "msw";
-import { generateKeyPair, exportJWK, generateSecret, SignJWT, type JWK, type JWTPayload, type KeyLike } from "jose";
+import { generateKeyPair, exportJWK, generateSecret, SignJWT, type JWK, type JWTPayload } from "jose";
 import { makeEs256Jwt } from "./jose-keys.js";
 
 export interface OidcStubOptions {
@@ -49,7 +49,7 @@ export function createOidcStub(opts: OidcStubOptions): OidcStub {
   // same key that signs the tokens. makeRsaJwt() generates a fresh keypair on every call,
   // so we cannot use it here — we must cache the private key separately and sign inline.
   let cachedRsaJwk: JWK | null = null;
-  let cachedRsaPrivateKey: KeyLike | null = null;
+  let cachedRsaPrivateKey: CryptoKey | null = null;
 
   // Map from upstream authorization code to captured nonce+state
   const codeToNonce = new Map<string, { nonce: string; state: string }>();
