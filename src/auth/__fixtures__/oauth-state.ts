@@ -2,26 +2,31 @@ import { AuthRequestStateSchema, AuthCodeStateSchema } from "../types.js";
 import type { AuthRequestState, AuthCodeState } from "../types.js";
 
 /**
+ * Defaults shared by AuthRequestState and AuthCodeState test factories.
+ * Captures the seven fields the two schemas have in common; the per-factory
+ * functions below add their schema-specific fields and merge caller overrides.
+ */
+const SHARED_STATE_DEFAULTS = {
+  clientId: "00000000-0000-0000-0000-000000000001",
+  codeChallenge: "dGVzdC1jb2RlLWNoYWxsZW5nZS10ZXN0LWNvZGUtY2hhbGxlbmdl",
+  codeChallengeMethod: "S256",
+  redirectUri: "http://localhost:3000/callback",
+  resource: "https://api.example.com",
+  scope: "openid email profile",
+} as const;
+
+/**
  * Factory for creating test AuthRequestState objects.
  * All fields required by AuthRequestStateSchema are provided as defaults.
  */
 export function makeAuthRequestState(overrides?: Partial<AuthRequestState>): AuthRequestState {
-  const now = Math.floor(Date.now() / 1000);
-
-  const candidate: AuthRequestState = {
-    clientId: "00000000-0000-0000-0000-000000000001",
-    codeChallenge: "dGVzdC1jb2RlLWNoYWxsZW5nZS10ZXN0LWNvZGUtY2hhbGxlbmdl",
-    codeChallengeMethod: "S256",
-    redirectUri: "http://localhost:3000/callback",
-    resource: "https://api.example.com",
+  return AuthRequestStateSchema.parse({
+    ...SHARED_STATE_DEFAULTS,
     claudeState: "claude-state-1",
-    scope: "openid email profile",
     ourNonce: "nonce-1",
-    createdAt: now,
+    createdAt: Math.floor(Date.now() / 1000),
     ...overrides,
-  };
-
-  return AuthRequestStateSchema.parse(candidate);
+  });
 }
 
 /**
@@ -29,23 +34,14 @@ export function makeAuthRequestState(overrides?: Partial<AuthRequestState>): Aut
  * All fields required by AuthCodeStateSchema are provided as defaults.
  */
 export function makeAuthCodeState(overrides?: Partial<AuthCodeState>): AuthCodeState {
-  const now = Math.floor(Date.now() / 1000);
-
-  const candidate: AuthCodeState = {
-    clientId: "00000000-0000-0000-0000-000000000001",
-    codeChallenge: "dGVzdC1jb2RlLWNoYWxsZW5nZS10ZXN0LWNvZGUtY2hhbGxlbmdl",
-    codeChallengeMethod: "S256",
-    redirectUri: "http://localhost:3000/callback",
-    resource: "https://api.example.com",
-    scope: "openid email profile",
+  return AuthCodeStateSchema.parse({
+    ...SHARED_STATE_DEFAULTS,
     identity: {
       email: "test@example.com",
       sub: "sub-test-1",
       source: "email",
     },
-    createdAt: now,
+    createdAt: Math.floor(Date.now() / 1000),
     ...overrides,
-  };
-
-  return AuthCodeStateSchema.parse(candidate);
+  });
 }
