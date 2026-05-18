@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.1.0](https://github.com/bojanrajkovic/mcp-paprika/compare/v1.0.4...v1.1.0) (2026-05-18)
+
+
+### Features
+
+* add HTTP transport and container image ([#44](https://github.com/bojanrajkovic/mcp-paprika/issues/44)) ([#75](https://github.com/bojanrajkovic/mcp-paprika/issues/75)) ([31d7b5c](https://github.com/bojanrajkovic/mcp-paprika/commit/31d7b5c23d595699e647862fa8088ce1ca21cf18))
+* add pantry read support ([#46](https://github.com/bojanrajkovic/mcp-paprika/issues/46)) ([d2635cf](https://github.com/bojanrajkovic/mcp-paprika/commit/d2635cf775c0d13ea92aa07d6ed1424a88e5c691))
+* **pantry:** add write support (add/update/delete tools + soft-delete) ([#58](https://github.com/bojanrajkovic/mcp-paprika/issues/58)) ([0fe17fd](https://github.com/bojanrajkovic/mcp-paprika/commit/0fe17fd12c931b1ad909b06b4e9b73508baf5c3a))
+
+
+### Bug Fixes
+
+* **deps:** update dependency vectra to ^0.14.0 ([#68](https://github.com/bojanrajkovic/mcp-paprika/issues/68)) ([a705231](https://github.com/bojanrajkovic/mcp-paprika/commit/a705231aa240e2b0f975cd188b488b939ea141d6))
+* **sync:** coerce null ingredients/directions to empty string ([#77](https://github.com/bojanrajkovic/mcp-paprika/issues/77)) ([d47c5e8](https://github.com/bojanrajkovic/mcp-paprika/commit/d47c5e8a8de160ddd285c34905eb3450efb1c1dd)), closes [#76](https://github.com/bojanrajkovic/mcp-paprika/issues/76)
+
 ## [1.0.4](https://github.com/bojanrajkovic/mcp-paprika/compare/v1.0.3...v1.0.4) (2026-05-06)
 
 
