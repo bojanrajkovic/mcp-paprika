@@ -114,8 +114,23 @@ export async function buildAppContext(
   // as `sync:error`), so this is safe to await unconditionally — same fail-soft
   // semantics as the pre-Phase-1 entry point.
   log("Running initial sync...");
+  // `syncOnce()` never throws — instead it emits `sync:complete` on success or
+  // `sync:error` on failure. Subscribe so the startup log reflects the actual
+  // outcome rather than always claiming success (#76). Wrap the capture in an
+  // object because TS narrows locals mutated only via closure to their initial
+  // type, which would force a cast on every read.
+  const errorBox: { value: Error | null } = { value: null };
+  const onError = (err: Error): void => {
+    errorBox.value = err;
+  };
+  sync.events.on("sync:error", onError);
   await sync.syncOnce();
-  log("Initial sync complete.");
+  sync.events.off("sync:error", onError);
+  if (errorBox.value === null) {
+    log("Initial sync complete.");
+  } else {
+    log(`Initial sync failed: ${errorBox.value.message}. Continuing startup; background sync will retry.`);
+  }
 
   const vectorStore = await buildDiscoverComponents(config, store, sync.events);
 
