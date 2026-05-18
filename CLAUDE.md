@@ -45,7 +45,6 @@ MCP server for the Paprika recipe manager. Two transports: **stdio** (default; u
 - `src/auth/` — OAuth 2.1 authorization-server surface (DCR, authorize, token, revoke), OIDC upstream client, opaque-token minting + persistence, and identity allowlist. Loaded only when `MCP_TRANSPORT=http`.
 - `scripts/` — Build and verification scripts (run via `npx tsx`), plus `healthcheck.mjs` (zero-dep Node script used by the Dockerfile HEALTHCHECK)
 - `Dockerfile` + `.dockerignore` — 3-stage container build targeting `gcr.io/distroless/nodejs24-debian13:nonroot`; pre-creates `/data/{config,cache}` with nonroot ownership so the disk cache writes work on first run
-- `docs/verified-api.md` — MCP SDK verified API reference (authoritative for import paths, including the Streamable HTTP transport surface)
 - `.github/workflows/` — CI and PR validation workflows
 
 ## Code Conventions
