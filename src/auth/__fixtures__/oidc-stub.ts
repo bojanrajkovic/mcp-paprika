@@ -17,6 +17,7 @@ import {
   exportJWK,
   generateSecret,
   SignJWT,
+  UnsecuredJWT,
   type JWK,
   type JWTPayload,
   type GenerateKeyPairResult,
@@ -52,7 +53,7 @@ export function createOidcStub(opts: OidcStubOptions): OidcStub {
   let expireNext = false;
   let signAlg: "RS256" | "ES256" | "HS256" | "none" = "RS256";
 
-  // Cached keypair (NOT cached token — tokens are signed fresh per request with correct nonce)
+  // Cached keypair (NOT cached token — tokens are signed fresh per request with correct nonce).
   // Both the public JWK and private key are cached together so /jwks always returns the
   // same key that signs the tokens. makeRsaJwt() generates a fresh keypair on every call,
   // so we cannot use it here — we must cache the private key separately and sign inline.
@@ -79,65 +80,36 @@ export function createOidcStub(opts: OidcStubOptions): OidcStub {
     return cachedRsaJwk;
   }
 
-  /**
-   * Signs a fresh RS256 JWT with the given identity and nonce.
-   * Uses the cached private key so /jwks and the token share the same keypair.
-   */
-  async function signRsaToken(
-    identity: typeof opts.defaultIdentity,
-    nonce: string,
-  ): Promise<{ token: string; jwk: JWK }> {
-    const jwk = await getOrCreateRsaJwk();
-    const claims: JWTPayload = {
+  function buildClaims(identity: typeof opts.defaultIdentity, nonce: string): JWTPayload {
+    const now = Math.floor(Date.now() / 1000);
+    return {
       iss: opts.issuer,
       sub: identity.sub,
       aud: opts.clientId,
       email: identity.email,
       email_verified: identity.emailVerified,
-      nonce, // the actual nonce from authorize, not a placeholder
-      iat: Math.floor(Date.now() / 1000),
-      exp: expireNext ? Math.floor(Date.now() / 1000) - 3600 : Math.floor(Date.now() / 1000) + 3600,
+      nonce, // the actual nonce from /authorize, not a placeholder
+      iat: now,
+      exp: expireNext ? now - 3600 : now + 3600,
     };
-
-    const token = await new SignJWT(claims)
-      .setProtectedHeader({ alg: "RS256", kid: "stub-rsa-1" })
-      .sign(cachedRsaPrivateKey!);
-
-    return { token, jwk };
   }
 
-  async function getEs256Token(
-    identity: typeof opts.defaultIdentity,
-    nonce: string,
-  ): Promise<{ token: string; jwk: JWK }> {
-    const claims: JWTPayload = {
-      iss: opts.issuer,
-      sub: identity.sub,
-      aud: opts.clientId,
-      email: identity.email,
-      email_verified: identity.emailVerified,
-      nonce,
-      iat: Math.floor(Date.now() / 1000),
-      exp: expireNext ? Math.floor(Date.now() / 1000) - 3600 : Math.floor(Date.now() / 1000) + 3600,
-    };
-
-    return makeEs256Jwt(claims, { kid: "stub-es256-key-1" });
-  }
-
-  async function getHs256Token(identity: typeof opts.defaultIdentity, nonce: string): Promise<string> {
-    const secret = await generateSecret("HS256", { extractable: true });
-    const claims: JWTPayload = {
-      iss: opts.issuer,
-      sub: identity.sub,
-      aud: opts.clientId,
-      email: identity.email,
-      email_verified: identity.emailVerified,
-      nonce,
-      iat: Math.floor(Date.now() / 1000),
-      exp: expireNext ? Math.floor(Date.now() / 1000) - 3600 : Math.floor(Date.now() / 1000) + 3600,
-    };
-
-    return new SignJWT(claims).setProtectedHeader({ alg: "HS256" }).sign(secret);
+  async function signWithCurrentAlg(claims: JWTPayload): Promise<string> {
+    switch (signAlg) {
+      case "RS256": {
+        await getOrCreateRsaJwk(); // ensures cachedRsaPrivateKey is populated
+        return new SignJWT(claims).setProtectedHeader({ alg: "RS256", kid: "stub-rsa-1" }).sign(cachedRsaPrivateKey!);
+      }
+      case "ES256":
+        return (await makeEs256Jwt(claims, { kid: "stub-es256-key-1" })).token;
+      case "HS256": {
+        const secret = await generateSecret("HS256", { extractable: true });
+        return new SignJWT(claims).setProtectedHeader({ alg: "HS256" }).sign(secret);
+      }
+      case "none":
+        // For AC7 negative tests: unsigned JWT (jose's UnsecuredJWT emits the alg=none header).
+        return new UnsecuredJWT(claims).encode();
+    }
   }
 
   // MSW handlers
@@ -220,43 +192,9 @@ export function createOidcStub(opts: OidcStubOptions): OidcStub {
       const { nonce } = codeToNonce.get(code)!;
       codeToNonce.delete(code); // consume the code (one-time use)
 
-      // Generate id_token with the override identity, correct nonce, and algorithm
       let idToken: string;
       try {
-        switch (signAlg) {
-          case "RS256": {
-            const result = await signRsaToken(nextIdentity, nonce);
-            idToken = result.token;
-            break;
-          }
-          case "ES256": {
-            const result = await getEs256Token(nextIdentity, nonce);
-            idToken = result.token;
-            break;
-          }
-          case "HS256": {
-            idToken = await getHs256Token(nextIdentity, nonce);
-            break;
-          }
-          case "none": {
-            // For AC7 negative tests: return an unsigned token (JWT with alg=none, no signature)
-            const header = JSON.stringify({ alg: "none", typ: "JWT" });
-            const payload = JSON.stringify({
-              iss: opts.issuer,
-              sub: nextIdentity.sub,
-              aud: opts.clientId,
-              email: nextIdentity.email,
-              email_verified: nextIdentity.emailVerified,
-              nonce,
-              iat: Math.floor(Date.now() / 1000),
-              exp: expireNext ? Math.floor(Date.now() / 1000) - 3600 : Math.floor(Date.now() / 1000) + 3600,
-            });
-            const headerB64 = btoa(header).replace(/=+$/, "").replace(/\+/g, "-").replace(/\//g, "_");
-            const payloadB64 = btoa(payload).replace(/=+$/, "").replace(/\+/g, "-").replace(/\//g, "_");
-            idToken = `${headerB64}.${payloadB64}.`;
-            break;
-          }
-        }
+        idToken = await signWithCurrentAlg(buildClaims(nextIdentity, nonce));
       } catch {
         return HttpResponse.json(
           { error: "server_error", error_description: "Token generation failed" },
