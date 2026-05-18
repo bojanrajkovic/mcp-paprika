@@ -281,14 +281,21 @@ This section documents the OAuth 2.1 server provider integration surface from `@
 **Signature:**
 
 ```typescript
-interface McpAuthRouterOptions {
+interface AuthRouterOptions {
   provider: OAuthServerProvider;
-  issuerUrl: string | URL;  // String preferred; URL adds trailing slash
-  clientRegistrationPath?: string;  // default: "/register"
-  skipRevocation?: boolean;          // default: false
+  issuerUrl: URL | string;  // String preferred; URL adds trailing slash
+  baseUrl?: URL;
+  serviceDocumentationUrl?: URL;
+  scopesSupported?: string[];
+  resourceName?: string;
+  resourceServerUrl?: URL;
+  authorizationOptions?: { rateLimit?: Partial<ConfigType> | false };
+  clientRegistrationOptions?: { rateLimit?: Partial<ConfigType> | false; clientIdGeneration?: boolean; clientSecretExpirySeconds?: number };
+  revocationOptions?: { rateLimit?: Partial<ConfigType> | false };
+  tokenOptions?: { rateLimit?: Partial<ConfigType> | false };
 }
 
-mcpAuthRouter(options: McpAuthRouterOptions): Hono;
+mcpAuthRouter(options: AuthRouterOptions): Hono;
 ```
 
 **Routes mounted:**
@@ -296,9 +303,9 @@ mcpAuthRouter(options: McpAuthRouterOptions): Hono;
 - `GET /authorize` — calls `provider.authorize(...)`
 - `POST /token` — calls `provider.exchangeAuthorizationCode` or `provider.exchangeRefreshToken`
 - `POST /register` — calls `provider.clientsStore.registerClient(...)` (if provider has `clientsStore`)
-- `POST /revoke` — calls `provider.revokeToken(...)` (unless `skipRevocation: true`)
+- `POST /revoke` — calls `provider.revokeToken(...)` (if provider has `revokeToken`)
 - `GET /.well-known/oauth-authorization-server` — serves RFC 8414 metadata
-- `GET /.well-known/oauth-protected-resource/{rsPath}` — serves RFC 9728 resource metadata (if provider has `clientsStore`)
+- `GET /.well-known/oauth-protected-resource/{rsPath}` — serves RFC 9728 resource metadata
 
 **Load-bearing behavior:**
 
@@ -315,8 +322,11 @@ mcpAuthRouter(options: McpAuthRouterOptions): Hono;
 
 ```typescript
 interface CreateOAuthMetadataOptions {
-  issuerUrl: string;
-  provider: OAuthServerProvider;
+  issuerUrl: URL | string;
+  baseUrl?: URL;
+  serviceDocumentationUrl?: URL;
+  scopesSupported?: string[];
+  provider?: OAuthServerProvider;
 }
 
 createOAuthMetadata(options: CreateOAuthMetadataOptions): OAuthMetadata;
@@ -326,14 +336,18 @@ createOAuthMetadata(options: CreateOAuthMetadataOptions): OAuthMetadata;
 
 ```typescript
 {
-  issuer: "https://issuer.example.com",  // verbatim from issuerUrl
+  issuer: "https://issuer.example.com",  // verbatim from issuerUrl if string; url.href if URL
+  service_documentation: options.serviceDocumentationUrl?.href,
   authorization_endpoint: "https://issuer.example.com/authorize",
-  token_endpoint: "https://issuer.example.com/token",
-  revocation_endpoint: "https://issuer.example.com/revoke",  // if provider has revokeToken
-  registration_endpoint: "https://issuer.example.com/register",  // if provider has clientsStore
+  response_types_supported: ["code"],
   code_challenge_methods_supported: ["S256"],
+  token_endpoint: "https://issuer.example.com/token",
   token_endpoint_auth_methods_supported: ["client_secret_post"],  // HARD-CODED; must override
-  // ... (other RFC 8414 fields)
+  grant_types_supported: ["authorization_code", "refresh_token"],
+  scopes_supported: options.scopesSupported,
+  revocation_endpoint: "https://issuer.example.com/revoke",  // if provider?.revokeToken
+  revocation_endpoint_auth_methods_supported: ["client_secret_post"],  // if revocation_endpoint
+  registration_endpoint: "https://issuer.example.com/register",  // if provider?.clientsStore.registerClient
 }
 ```
 
@@ -341,7 +355,7 @@ createOAuthMetadata(options: CreateOAuthMetadataOptions): OAuthMetadata;
 
 - `token_endpoint_auth_methods_supported` is hard-coded to `["client_secret_post"]`. Must override to `["none"]` for public clients (Phase 6 Task 4).
 - `authorization_response_iss_parameter_supported` is absent by default. Must be set to `true` for RFC 9207 compliance (Phase 6 Task 4).
-- `id_token_signing_alg_values_supported` is included by default. Should be deleted for opaque-token setups that don't sign id_tokens (AC2.13).
+- `id_token_signing_alg_values_supported` is NOT included by default; no action needed for opaque-token setups.
 
 ### wellKnownRouter
 
@@ -370,11 +384,11 @@ wellKnownRouter(options: WellKnownRouterOptions): Hono;
 
 `bearerAuth(options)` is a Hono middleware that validates Bearer token authorization.
 
-**Signature:**
+**Signature (from Hono core):**
 
 ```typescript
 interface BearerAuthOptions {
-  verifyToken: (token: string) => boolean | Promise<boolean>;
+  verifyToken: (token: string, c: Context) => boolean | Promise<boolean>;
   realm?: string;
   prefix?: string;
 }
@@ -384,8 +398,9 @@ bearerAuth(options: BearerAuthOptions): MiddlewareHandler;
 
 **Load-bearing behavior:**
 
-- This is NOT Hono core's `bearerAuth`; it's a wrapper from `@hono/mcp` that injects RFC 9110-compliant `WWW-Authenticate` headers.
-- On auth failure (401), the response includes:
+- This IS Hono core's `bearerAuth`, imported from `"hono/bearer-auth"`.
+- On auth failure (401), the default `WWW-Authenticate` header is `Bearer error="Unauthorized"` (literal string).
+- @hono/mcp wraps this with a custom middleware that injects RFC 9110-compliant `WWW-Authenticate` headers with additional metadata:
   ```
   WWW-Authenticate: Bearer error="invalid_token", error_description="...", resource_metadata="https://issuer/.well-known/oauth-protected-resource"
   ```
@@ -395,13 +410,19 @@ bearerAuth(options: BearerAuthOptions): MiddlewareHandler;
 
 The `OAuthServerProvider` interface defines all methods Phase 6's `MintingOAuthServerProvider` must implement.
 
-**Signature (simplified):**
+**Signature (from SDK):**
 
 ```typescript
 interface OAuthServerProvider {
-  readonly clientsStore?: OAuthClientStore; // optional; presence gates registration_endpoint
+  get clientsStore(): OAuthRegisteredClientsStore; // REQUIRED; presence gates registration_endpoint
 
-  authorize(client: OAuthClientInformationFull, params: AuthorizationParams, res: HonoResponse): Promise<void>;
+  authorize(
+    client: OAuthClientInformationFull,
+    params: AuthorizationParams,
+    res: Response, // express Response
+  ): Promise<void>;
+
+  challengeForAuthorizationCode(client: OAuthClientInformationFull, authorizationCode: string): Promise<string>; // REQUIRED; enables PKCE
 
   exchangeAuthorizationCode(
     client: OAuthClientInformationFull,
@@ -420,9 +441,9 @@ interface OAuthServerProvider {
 
   verifyAccessToken(token: string): Promise<AuthInfo>;
 
-  revokeToken(client: OAuthClientInformationFull, request: OAuthTokenRevocationRequest): Promise<void>;
+  revokeToken?(client: OAuthClientInformationFull, request: OAuthTokenRevocationRequest): Promise<void>; // optional; absence gates revocation_endpoint
 
-  challengeForAuthorizationCode?(client: OAuthClientInformationFull, authorizationCode: string): Promise<string>; // optional; enables PKCE
+  skipLocalPkceValidation?: boolean; // optional; skips local PKCE validation if upstream does it
 }
 ```
 
