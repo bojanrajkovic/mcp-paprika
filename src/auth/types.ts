@@ -159,7 +159,7 @@ export const AuthRequestStateSchema = z.object({
   codeChallenge: z.string(),
   codeChallengeMethod: z.literal("S256"),
   redirectUri: z.string().url(),
-  resource: z.string().url(),
+  resource: z.string().url().or(z.literal("")),
   claudeState: z.string(),
   scope: z.string(),
   ourNonce: z.string(),
@@ -177,7 +177,7 @@ export const AuthCodeStateSchema = z.object({
   codeChallenge: z.string(),
   codeChallengeMethod: z.literal("S256"),
   redirectUri: z.string().url(),
-  resource: z.string().url(),
+  resource: z.string().url().or(z.literal("")),
   scope: z.string(),
   identity: z.object({
     email: z.string().email().nullable(),
