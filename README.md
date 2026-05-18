@@ -49,14 +49,14 @@ The HTTP transport uses **OAuth 2.1 with OIDC delegation**: `mcp-paprika` acts a
 
 Pick a preset or supply a raw discovery URL:
 
-| Preset value | IdP | Notes |
-| ------------ | --- | ----- |
-| `google` | Google | Discovery URL built-in |
-| `entra` | Microsoft Entra ID (Azure AD) | Tenant-bound — requires `MCP_OIDC_DISCOVERY_URL` |
-| `okta` | Okta | Tenant-bound — requires `MCP_OIDC_DISCOVERY_URL` |
-| `auth0` | Auth0 | Tenant-bound — requires `MCP_OIDC_DISCOVERY_URL` |
-| `keycloak` | Keycloak | Tenant-bound — requires `MCP_OIDC_DISCOVERY_URL` |
-| _(none)_ | Custom | Set `MCP_OIDC_DISCOVERY_URL` directly; omit `MCP_OIDC_PRESET` |
+| Preset value | IdP                           | Notes                                                         |
+| ------------ | ----------------------------- | ------------------------------------------------------------- |
+| `google`     | Google                        | Discovery URL built-in                                        |
+| `entra`      | Microsoft Entra ID (Azure AD) | Tenant-bound — requires `MCP_OIDC_DISCOVERY_URL`              |
+| `okta`       | Okta                          | Tenant-bound — requires `MCP_OIDC_DISCOVERY_URL`              |
+| `auth0`      | Auth0                         | Tenant-bound — requires `MCP_OIDC_DISCOVERY_URL`              |
+| `keycloak`   | Keycloak                      | Tenant-bound — requires `MCP_OIDC_DISCOVERY_URL`              |
+| _(none)_     | Custom                        | Set `MCP_OIDC_DISCOVERY_URL` directly; omit `MCP_OIDC_PRESET` |
 
 ### Step 2 — Register one OAuth client in your IdP
 
@@ -73,19 +73,19 @@ Copy the resulting client ID and client secret — these become `MCP_OIDC_CLIENT
 
 Full env-var reference:
 
-| Env var | Required? | Description |
-| ------- | --------- | ----------- |
-| `MCP_TRANSPORT` | yes | Set to `http` |
-| `MCP_PUBLIC_URL` | yes | Canonical `https://` URL of this server; used as OAuth issuer. No trailing slash. |
-| `MCP_OIDC_PRESET` | one of preset or discoveryUrl | `google`, `entra`, `okta`, `auth0`, or `keycloak` |
-| `MCP_OIDC_DISCOVERY_URL` | one of preset or discoveryUrl | Raw OIDC discovery URL; required for tenant-bound presets |
-| `MCP_OIDC_CLIENT_ID` | yes | Client ID from upstream IdP |
-| `MCP_OIDC_CLIENT_SECRET` | yes | Client secret from upstream IdP |
-| `MCP_ALLOWED_EMAILS` | one of emails or subs | Comma-separated list of allowed email addresses |
-| `MCP_ALLOWED_SUBS` | one of emails or subs | Comma-separated list of allowed subject IDs |
-| `MCP_OIDC_SCOPES` | no | Override preset's scope list (comma-separated; default `openid email profile`) |
-| `MCP_OIDC_EMAIL_VERIFIED_POLICY` | no | `strict` (default), `skip`, or `if-present` |
-| `MCP_OIDC_ALLOWED_ALGS` | no | Override preset's allowed id_token signing algorithms (comma-separated) |
+| Env var                          | Required?                     | Description                                                                       |
+| -------------------------------- | ----------------------------- | --------------------------------------------------------------------------------- |
+| `MCP_TRANSPORT`                  | yes                           | Set to `http`                                                                     |
+| `MCP_PUBLIC_URL`                 | yes                           | Canonical `https://` URL of this server; used as OAuth issuer. No trailing slash. |
+| `MCP_OIDC_PRESET`                | one of preset or discoveryUrl | `google`, `entra`, `okta`, `auth0`, or `keycloak`                                 |
+| `MCP_OIDC_DISCOVERY_URL`         | one of preset or discoveryUrl | Raw OIDC discovery URL; required for tenant-bound presets                         |
+| `MCP_OIDC_CLIENT_ID`             | yes                           | Client ID from upstream IdP                                                       |
+| `MCP_OIDC_CLIENT_SECRET`         | yes                           | Client secret from upstream IdP                                                   |
+| `MCP_ALLOWED_EMAILS`             | one of emails or subs         | Comma-separated list of allowed email addresses                                   |
+| `MCP_ALLOWED_SUBS`               | one of emails or subs         | Comma-separated list of allowed subject IDs                                       |
+| `MCP_OIDC_SCOPES`                | no                            | Override preset's scope list (comma-separated; default `openid email profile`)    |
+| `MCP_OIDC_EMAIL_VERIFIED_POLICY` | no                            | `strict` (default), `skip`, or `if-present`                                       |
+| `MCP_OIDC_ALLOWED_ALGS`          | no                            | Override preset's allowed id_token signing algorithms (comma-separated)           |
 
 Example startup command:
 

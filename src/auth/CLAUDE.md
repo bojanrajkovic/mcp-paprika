@@ -22,7 +22,7 @@ This module is loaded only when `MCP_TRANSPORT=http`. In stdio mode, `buildAuthC
 - `client-registration.ts` — `DiskClientRegistrationStore` implementing the SDK `OAuthRegisteredClientsStore` interface; persists registered clients to `DiskCache`'s `oauth/clients/` namespace; enforces `registrationAccessTokenHash` on management endpoints; issues UUIDv4 `clientId` (delegated to SDK)
 - `token-store.ts` — `TokenStore`: `issueAccessRefreshPair`, `lookupAccessToken`, `rotateRefresh`, `revoke`, `removeAllForClient`; all tokens stored by their `tokenHash` (SHA-256 hex of plaintext); enforces RFC 8707 resource binding and RFC 6749 §6 scope-subset-only on refresh
 - `provider.ts` — `MintingOAuthServerProvider` implementing the SDK `OAuthServerProvider` interface; orchestrates the authorization code flow using the four stores; constructs the upstream OIDC authorize redirect, handles the callback, and issues tokens
-- `routes.ts` — Hono route handlers for `/oauth/callback` (receives upstream IdP redirect), `PUT /register/:clientId` (RFC 7592 client update), and `DELETE /register/:clientId` (RFC 7592 client delete); exports `makeRateLimitMiddleware` and `makeCapMiddleware` factory functions
+- `routes.ts` — Hono route handlers for `/oauth/callback` (receives upstream IdP redirect), `PUT /register/:clientId` (RFC 7592 client update), and `DELETE /register/:clientId` (RFC 7592 client delete); exports `buildDcrRateLimit` and `buildClientCap` middleware factory functions
 - `metadata.ts` — `buildCustomizedAuthorizationServerMetadata(config)` returns RFC 8414 metadata override object; `buildAuthMetadataRouter(config)` returns the Hono router that serves `/.well-known/oauth-authorization-server` (mounted before `mcpAuthRouter` so first-match-wins overrides library defaults)
 - `cleanup.ts` — `AuthCleanup` background task (start/stop via `AbortController`); periodically removes clients with `lastTokenActivityAt < now - 90d` (cascade-removes their tokens), expired auth-request states, and expired auth-code states; mirrors the `SyncEngine` lifecycle contract
 - `build.ts` — `buildAuthContext(config, cache) → Promise<AuthContext | null>`; fail-fast startup builder that fetches OIDC discovery, assembles all stores, creates the provider, and returns the `AuthContext` bundle; returns `null` for stdio
@@ -42,7 +42,7 @@ interface OAuthServerProvider {
   authorize(client, params, res): Promise<void>;
   challengeForAuthorizationCode(client, authorizationCode): Promise<string>;
   exchangeAuthorizationCode(client, authorizationCode, codeVerifier, redirectUri, extra): Promise<OAuthTokens>;
-  refreshToken(client, refreshToken, scopes): Promise<OAuthTokens>;
+  exchangeRefreshToken(client, refreshToken, scopes?, resource?): Promise<OAuthTokens>;
   verifyAccessToken(token): Promise<AuthInfo>;
   revokeToken?(client, token): Promise<void>;
 }
@@ -149,16 +149,16 @@ Persisted to `DiskCache` as `oauth/tokens/${tokenHash}.json`. `tokenHash` is the
 - Access token TTL: 24 hours.
 - Refresh token TTL: 30 days; rotated on every use (old refresh token is revoked, new one issued with a fresh 30-day window).
 - Authorization code TTL: 60 seconds, single-use via `consume`.
-- Auth-request state TTL: 5 minutes, single-use via `consume` in `MintingOAuthServerProvider.challengeForAuthorizationCode`.
-- RFC 8707 resource binding: the `resource` parameter from the authorization request is bound to both the access token and the refresh token; `refreshToken` enforces that the `resource` field matches, and `exchangeAuthorizationCode` passes through the resource claim.
-- RFC 6749 §6 scope subsetting: `refreshToken` only allows the requested scope to be equal to or a strict subset of the originally granted scope — scope widening is rejected.
+- Auth-request state TTL: 5 minutes, single-use via `consume` in the `/oauth/callback` route handler (`routes.ts`). The `AuthCodeStore` is consumed in `MintingOAuthServerProvider.exchangeAuthorizationCode`; `challengeForAuthorizationCode` only peeks.
+- RFC 8707 resource binding: the `resource` parameter from the authorization request is bound to both the access token and the refresh token; `TokenStore.rotateRefresh` (called via `exchangeRefreshToken`) enforces that the `resource` field matches, and `exchangeAuthorizationCode` passes through the resource claim.
+- RFC 6749 §6 scope subsetting: `exchangeRefreshToken` only allows the requested scope to be equal to or a strict subset of the originally granted scope — scope widening is rejected.
 
 ### DCR
 
 - Public-client only: `token_endpoint_auth_method` must be `"none"` in every registration or update request; any other value is rejected with `invalid_client_metadata`.
 - The RAT is issued at registration as a random opaque token, hashed before storage, and returned in plaintext exactly once in the `201 Created` DCR response.
-- DCR rate-limit: 10 registrations per hour per IP address (enforced via `makeRateLimitMiddleware` in `routes.ts`).
-- Hard cap: maximum 50 registered clients (configurable; enforced via `makeCapMiddleware` in `routes.ts`, which runs before `mcpAuthRouter` matches `/register`).
+- DCR rate-limit: 10 registrations per hour per IP address (enforced via `buildDcrRateLimit` in `routes.ts`).
+- Hard cap: maximum 50 registered clients (configurable; enforced via `buildClientCap` in `routes.ts`, which runs before `mcpAuthRouter` matches `/register`).
 - Cleanup: `AuthCleanup` marks clients with `lastTokenActivityAt < now - DCR_CLIENT_STALE_DAYS` as stale and removes them along with all their tokens; the background task runs on a configurable interval.
 
 ### HTTP surface
@@ -212,7 +212,7 @@ Persisted to `DiskCache` as `oauth/tokens/${tokenHash}.json`. `tokenHash` is the
 **Used by:**
 
 - `src/server/build.ts` — calls `buildAuthContext` and stores result as `app.auth`
-- `src/transport/http.ts` — mounts `buildAuthMetadataRouter`, `makeRateLimitMiddleware`, `makeCapMiddleware`, and `mcpAuthRouter(provider)` from `@hono/mcp`
+- `src/transport/http.ts` — mounts `buildAuthMetadataRouter`, `buildDcrRateLimit`, `buildClientCap`, and `mcpAuthRouter(provider)` from `@hono/mcp`
 
 ## Boundaries
 
