@@ -142,7 +142,7 @@ export const OAuthTokenSchema = z.object({
     sub: z.string(),
     source: z.enum(["email", "sub"]),
   }),
-  resource: z.string().url(),
+  resource: z.string().url().or(z.literal("")),
   expiresAt: z.number().int(),
   createdAt: z.number().int(),
   rotatedFromHash: z.string().optional(),
