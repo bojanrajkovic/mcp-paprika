@@ -15,7 +15,7 @@ import { Result, ok, err } from "neverthrow";
 import { OAuthMetadataValidationError } from "./errors.js";
 
 // ============================================================================
-// Validated Output Type
+// Validated Output Types
 // ============================================================================
 
 export interface ValidatedClientMetadata {
@@ -24,6 +24,16 @@ export interface ValidatedClientMetadata {
   readonly responseTypes: ReadonlyArray<"code">;
   readonly redirectUris: ReadonlyArray<string>;
   readonly scope: string;
+  readonly clientName?: string;
+  readonly idTokenSignedResponseAlg?: string;
+}
+
+export interface ValidatedClientMetadataPatch {
+  readonly tokenEndpointAuthMethod?: "none";
+  readonly grantTypes?: ReadonlyArray<"authorization_code" | "refresh_token">;
+  readonly responseTypes?: ReadonlyArray<"code">;
+  readonly redirectUris?: ReadonlyArray<string>;
+  readonly scope?: string;
   readonly clientName?: string;
   readonly idTokenSignedResponseAlg?: string;
 }
@@ -54,207 +64,206 @@ function isValidRedirectUri(uri: string): boolean {
   }
 }
 
-// Helper: allowed signing algorithms for id_token
-const ALLOWED_SIGNING_ALGS = ["RS256", "ES256"] as const;
-
-// Schema for validateRegistration (all required fields)
-// We accept any value for auth_method/grant_types/response_types and validate them in the rules
+// Tightened schema for validateRegistration with proper field validation
 const RegistrationMetadataSchema = z
   .object({
-    token_endpoint_auth_method: z.any().optional(),
-    grant_types: z.any().optional(),
-    response_types: z.any().optional(),
-    redirect_uris: z.any().optional(),
-    scope: z.any().optional(),
+    token_endpoint_auth_method: z.literal("none").optional(),
+    grant_types: z.array(z.enum(["authorization_code", "refresh_token"])).optional(),
+    response_types: z.array(z.literal("code")).optional(),
+    redirect_uris: z.array(z.string()).optional(),
+    scope: z.string().min(1).optional(),
     client_name: z.string().optional(),
-    id_token_signed_response_alg: z.string().optional(),
+    id_token_signed_response_alg: z.enum(["RS256", "ES256"]).optional(),
   })
-  .passthrough(); // Allow and preserve other RFC 7591 fields
+  .passthrough() // Allow and preserve other RFC 7591 fields
+  .superRefine((data, ctx) => {
+    // Validate redirect_uris: must be present, non-empty, valid URLs with our scheme rules
+    if (!Array.isArray(data.redirect_uris) || data.redirect_uris.length === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["redirect_uris"],
+        message: "redirect_uris is required and must be a non-empty array of valid URLs",
+      });
+    } else {
+      for (let i = 0; i < data.redirect_uris.length; i++) {
+        const uri = data.redirect_uris[i];
+        if (typeof uri !== "string") {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["redirect_uris", i],
+            message: "must be a string",
+          });
+        } else {
+          try {
+            new URL(uri);
+          } catch {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              path: ["redirect_uris", i],
+              message: "must be a valid URL",
+            });
+            continue;
+          }
+
+          if (!isValidRedirectUri(uri)) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              path: ["redirect_uris", i],
+              message: "must use https:// or http://localhost/127.0.0.1/[::1]",
+            });
+          }
+        }
+      }
+    }
+
+    // Validate response_types: if present, must be exactly ["code"]
+    if (
+      data.response_types !== undefined &&
+      (!Array.isArray(data.response_types) || data.response_types.length !== 1 || data.response_types[0] !== "code")
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["response_types"],
+        message: "must be exactly ['code'] when present",
+      });
+    }
+
+    // Validate grant_types: if present, must be a non-empty subset of allowed
+    if (data.grant_types !== undefined) {
+      if (!Array.isArray(data.grant_types) || data.grant_types.length === 0) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["grant_types"],
+          message: "must be a non-empty array when present",
+        });
+      }
+    }
+  });
 
 type RegistrationMetadataInput = z.infer<typeof RegistrationMetadataSchema>;
 
-// Schema for validateUpdate (all optional fields, partial updates)
-// We accept any value for auth_method/grant_types/response_types and validate them in the rules
+// Tightened schema for validateUpdate with proper field validation (all optional)
 const UpdateMetadataSchema = z
   .object({
-    token_endpoint_auth_method: z.any().optional(),
-    grant_types: z.any().optional(),
-    response_types: z.any().optional(),
-    redirect_uris: z.any().optional(),
-    scope: z.any().optional(),
+    token_endpoint_auth_method: z.literal("none").optional(),
+    grant_types: z.array(z.enum(["authorization_code", "refresh_token"])).optional(),
+    response_types: z.array(z.literal("code")).optional(),
+    redirect_uris: z.array(z.string()).optional(),
+    scope: z.string().min(1).optional(),
     client_name: z.string().optional(),
-    id_token_signed_response_alg: z.string().optional(),
+    id_token_signed_response_alg: z.enum(["RS256", "ES256"]).optional(),
   })
-  .passthrough(); // Allow and preserve other RFC 7591 fields
+  .passthrough() // Allow and preserve other RFC 7591 fields
+  .superRefine((data, ctx) => {
+    // Validate redirect_uris if present: must be non-empty with valid scheme
+    if (data.redirect_uris !== undefined) {
+      if (!Array.isArray(data.redirect_uris) || data.redirect_uris.length === 0) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["redirect_uris"],
+          message: "redirect_uris must be a non-empty array when present",
+        });
+      } else {
+        for (let i = 0; i < data.redirect_uris.length; i++) {
+          const uri = data.redirect_uris[i];
+          if (typeof uri !== "string") {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              path: ["redirect_uris", i],
+              message: "must be a string",
+            });
+          } else {
+            try {
+              new URL(uri);
+            } catch {
+              ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                path: ["redirect_uris", i],
+                message: "must be a valid URL",
+              });
+              continue;
+            }
 
-// Helper: validate cross-cutting rules for registration
-function validateRegistrationRules(
-  data: RegistrationMetadataInput,
-): Result<ValidatedClientMetadata, OAuthMetadataValidationError> {
-  // Default values per RFC 7591 for registration
-  const authMethod = data.token_endpoint_auth_method ?? "none";
-  let grantTypes = data.grant_types ?? ["authorization_code", "refresh_token"];
-  let responseTypes = data.response_types ?? ["code"];
-  let redirectUris = data.redirect_uris ?? [];
-  let scope = data.scope ?? "";
-  const clientName = data.client_name;
-  const idTokenAlg = data.id_token_signed_response_alg;
-
-  // Normalize to arrays if needed
-  if (!Array.isArray(grantTypes)) {
-    return err(OAuthMetadataValidationError.unsupportedGrantType(grantTypes));
-  }
-  if (!Array.isArray(responseTypes)) {
-    return err(OAuthMetadataValidationError.unsupportedResponseType(responseTypes));
-  }
-  if (!Array.isArray(redirectUris)) {
-    return err(OAuthMetadataValidationError.invalidRedirectUri(String(redirectUris), "must be an array"));
-  }
-
-  // Rule 1: token_endpoint_auth_method must be "none"
-  if (authMethod !== "none") {
-    return err(OAuthMetadataValidationError.unsupportedAuthMethod(authMethod));
-  }
-
-  // Rule 2: grant_types must be subset of allowed
-  const allowedGrantTypes = new Set(["authorization_code", "refresh_token"]);
-  for (const gt of grantTypes) {
-    if (!allowedGrantTypes.has(gt)) {
-      return err(OAuthMetadataValidationError.unsupportedGrantType(grantTypes));
+            if (!isValidRedirectUri(uri)) {
+              ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                path: ["redirect_uris", i],
+                message: "must use https:// or http://localhost/127.0.0.1/[::1]",
+              });
+            }
+          }
+        }
+      }
     }
-  }
 
-  // Rule 3: response_types must be exactly ["code"]
-  if (responseTypes.length !== 1 || responseTypes[0] !== "code") {
-    return err(OAuthMetadataValidationError.unsupportedResponseType(responseTypes));
-  }
-
-  // Rule 4: redirect_uris required and valid
-  if (redirectUris.length === 0) {
-    return err(OAuthMetadataValidationError.emptyRedirectUris());
-  }
-
-  for (const uri of redirectUris) {
-    if (typeof uri !== "string" || !isValidRedirectUri(uri)) {
-      return err(
-        OAuthMetadataValidationError.invalidRedirectUri(
-          String(uri),
-          "must be a valid https:// URL or http://localhost/127.0.0.1",
-        ),
-      );
+    // Validate response_types if present: must be exactly ["code"]
+    if (
+      data.response_types !== undefined &&
+      (!Array.isArray(data.response_types) || data.response_types.length !== 1 || data.response_types[0] !== "code")
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["response_types"],
+        message: "must be exactly ['code'] when present",
+      });
     }
-  }
 
-  // Rule 5: id_token_signed_response_alg optional but must be in allowlist if present
-  if (idTokenAlg !== undefined) {
-    if (!ALLOWED_SIGNING_ALGS.includes(idTokenAlg as any)) {
-      return err(OAuthMetadataValidationError.unsupportedSigningAlg(idTokenAlg, Array.from(ALLOWED_SIGNING_ALGS)));
+    // Validate grant_types if present: must be a non-empty subset of allowed
+    if (data.grant_types !== undefined) {
+      if (!Array.isArray(data.grant_types) || data.grant_types.length === 0) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["grant_types"],
+          message: "must be a non-empty array when present",
+        });
+      }
     }
-  }
-
-  // Rule 6: scope must be non-empty and string
-  if (typeof scope !== "string" || scope === "") {
-    return err(OAuthMetadataValidationError.invalidClientMetadata("scope", "scope must be a non-empty string"));
-  }
-
-  return ok({
-    tokenEndpointAuthMethod: "none",
-    grantTypes: Object.freeze(grantTypes) as ReadonlyArray<"authorization_code" | "refresh_token">,
-    responseTypes: Object.freeze(["code"]) as ReadonlyArray<"code">,
-    redirectUris: Object.freeze(redirectUris) as ReadonlyArray<string>,
-    scope,
-    ...(clientName && { clientName }),
-    ...(idTokenAlg && { idTokenSignedResponseAlg: idTokenAlg }),
   });
+
+// Helper: convert parsed data to ValidatedClientMetadata with defaults for registration
+function buildRegistrationMetadata(data: RegistrationMetadataInput): ValidatedClientMetadata {
+  return {
+    tokenEndpointAuthMethod: "none",
+    grantTypes: Object.freeze(data.grant_types ?? ["authorization_code", "refresh_token"]) as ReadonlyArray<
+      "authorization_code" | "refresh_token"
+    >,
+    responseTypes: Object.freeze(data.response_types ?? ["code"]) as ReadonlyArray<"code">,
+    redirectUris: Object.freeze(data.redirect_uris ?? []) as ReadonlyArray<string>,
+    scope: data.scope ?? "",
+    ...(data.client_name && { clientName: data.client_name }),
+    ...(data.id_token_signed_response_alg && {
+      idTokenSignedResponseAlg: data.id_token_signed_response_alg,
+    }),
+  };
 }
 
-// Helper: validate cross-cutting rules for updates (partial validation)
-function validateUpdateRules(
-  data: RegistrationMetadataInput,
-): Result<ValidatedClientMetadata, OAuthMetadataValidationError> {
-  // Updates allow omitted fields (partial updates per RFC 7592 §2.2)
-  // but present fields must pass the same validation
+// Helper: convert parsed data to ValidatedClientMetadataPatch for updates (no defaults)
+function buildUpdateMetadataPatch(data: RegistrationMetadataInput): ValidatedClientMetadataPatch {
+  const result: Record<string, unknown> = {};
 
-  // Rule 1: if token_endpoint_auth_method present, must be "none"
-  if (data.token_endpoint_auth_method !== undefined && data.token_endpoint_auth_method !== "none") {
-    return err(OAuthMetadataValidationError.unsupportedAuthMethod(data.token_endpoint_auth_method));
+  if (data.token_endpoint_auth_method !== undefined) {
+    result["tokenEndpointAuthMethod"] = data.token_endpoint_auth_method;
   }
-
-  // Rule 2: if grant_types present, must be subset
   if (data.grant_types !== undefined) {
-    if (!Array.isArray(data.grant_types)) {
-      return err(OAuthMetadataValidationError.unsupportedGrantType(data.grant_types));
-    }
-
-    const allowedGrantTypes = new Set(["authorization_code", "refresh_token"]);
-    for (const gt of data.grant_types) {
-      if (!allowedGrantTypes.has(gt)) {
-        return err(OAuthMetadataValidationError.unsupportedGrantType(data.grant_types));
-      }
-    }
+    result["grantTypes"] = Object.freeze(data.grant_types) as ReadonlyArray<"authorization_code" | "refresh_token">;
   }
-
-  // Rule 3: if response_types present, must be exactly ["code"]
   if (data.response_types !== undefined) {
-    if (!Array.isArray(data.response_types) || data.response_types.length !== 1 || data.response_types[0] !== "code") {
-      return err(OAuthMetadataValidationError.unsupportedResponseType(data.response_types));
-    }
+    result["responseTypes"] = Object.freeze(data.response_types) as ReadonlyArray<"code">;
   }
-
-  // Rule 4: if redirect_uris present, all must be valid
   if (data.redirect_uris !== undefined) {
-    if (!Array.isArray(data.redirect_uris) || data.redirect_uris.length === 0) {
-      return err(OAuthMetadataValidationError.emptyRedirectUris());
-    }
-
-    for (const uri of data.redirect_uris) {
-      if (typeof uri !== "string" || !isValidRedirectUri(uri)) {
-        return err(
-          OAuthMetadataValidationError.invalidRedirectUri(
-            String(uri),
-            "must be a valid https:// URL or http://localhost/127.0.0.1",
-          ),
-        );
-      }
-    }
+    result["redirectUris"] = Object.freeze(data.redirect_uris) as ReadonlyArray<string>;
   }
-
-  // Rule 5: if id_token_signed_response_alg present, must be allowed
-  if (data.id_token_signed_response_alg !== undefined) {
-    if (!ALLOWED_SIGNING_ALGS.includes(data.id_token_signed_response_alg as any)) {
-      return err(
-        OAuthMetadataValidationError.unsupportedSigningAlg(
-          data.id_token_signed_response_alg,
-          Array.from(ALLOWED_SIGNING_ALGS),
-        ),
-      );
-    }
-  }
-
-  // Rule 6: if scope present, must be non-empty
   if (data.scope !== undefined) {
-    if (typeof data.scope !== "string" || data.scope === "") {
-      return err(OAuthMetadataValidationError.invalidClientMetadata("scope", "scope must be a non-empty string"));
-    }
+    result["scope"] = data.scope;
+  }
+  if (data.client_name !== undefined) {
+    result["clientName"] = data.client_name;
+  }
+  if (data.id_token_signed_response_alg !== undefined) {
+    result["idTokenSignedResponseAlg"] = data.id_token_signed_response_alg;
   }
 
-  // For updates, we only validate what's present. Return partial metadata.
-  const grantTypes = data.grant_types ?? ["authorization_code", "refresh_token"];
-  const responseTypes = data.response_types ?? ["code"];
-  const redirectUris = data.redirect_uris ?? [];
-  const scope = data.scope ?? "";
-
-  const result: ValidatedClientMetadata = {
-    tokenEndpointAuthMethod: data.token_endpoint_auth_method ?? "none",
-    grantTypes: Object.freeze(grantTypes) as ReadonlyArray<"authorization_code" | "refresh_token">,
-    responseTypes: Object.freeze(responseTypes) as ReadonlyArray<"code">,
-    redirectUris: Object.freeze(redirectUris) as ReadonlyArray<string>,
-    scope,
-    ...(data.client_name && { clientName: data.client_name }),
-    ...(data.id_token_signed_response_alg && { idTokenSignedResponseAlg: data.id_token_signed_response_alg }),
-  };
-
-  return ok(result);
+  return result as ValidatedClientMetadataPatch;
 }
 
 // ============================================================================
@@ -263,47 +272,56 @@ function validateUpdateRules(
 
 /**
  * Validates client metadata for RFC 7591 registration.
- * Requires all essential fields: redirect_uris, scope defaults to empty string.
+ * Requires all essential fields: redirect_uris.
  * token_endpoint_auth_method defaults to "none".
  * grant_types defaults to ["authorization_code", "refresh_token"].
  * response_types defaults to ["code"].
+ * scope defaults to empty string.
  */
 export function validateRegistration(meta: unknown): Result<ValidatedClientMetadata, OAuthMetadataValidationError> {
-  // First parse with Zod to narrow type
+  // Parse with Zod schema (includes field validation and redirect_uri scheme checks)
   const parseResult = RegistrationMetadataSchema.safeParse(meta);
 
   if (!parseResult.success) {
-    // Zod error: return first issue
+    // Translate first Zod error to OAuth error
     const issue = parseResult.error.issues[0];
     if (!issue) {
       return err(OAuthMetadataValidationError.invalidClientMetadata("", "unknown validation error"));
     }
+
     const path = issue.path.length > 0 ? issue.path.join(".") : "root";
-    return err(OAuthMetadataValidationError.invalidClientMetadata(path, issue.message));
+    const message = issue.message;
+
+    return err(OAuthMetadataValidationError.invalidClientMetadata(path, message));
   }
 
-  // Then apply cross-cutting validation rules
-  return validateRegistrationRules(parseResult.data);
+  // Build result with defaults for registration
+  return ok(buildRegistrationMetadata(parseResult.data));
 }
 
 /**
  * Validates client metadata for RFC 7592 updates.
- * All fields are optional (partial updates). Present fields pass the same validation as registration.
+ * All fields are optional (partial updates per RFC 7592 §2.2).
+ * Present fields pass the same validation as registration.
+ * Omitted fields are NOT synthesized in the output (unlike registration).
  */
-export function validateUpdate(meta: unknown): Result<ValidatedClientMetadata, OAuthMetadataValidationError> {
-  // First parse with Zod to narrow type
+export function validateUpdate(meta: unknown): Result<ValidatedClientMetadataPatch, OAuthMetadataValidationError> {
+  // Parse with Zod schema (includes field validation and redirect_uri scheme checks)
   const parseResult = UpdateMetadataSchema.safeParse(meta);
 
   if (!parseResult.success) {
-    // Zod error: return first issue
+    // Translate first Zod error to OAuth error
     const issue = parseResult.error.issues[0];
     if (!issue) {
       return err(OAuthMetadataValidationError.invalidClientMetadata("", "unknown validation error"));
     }
+
     const path = issue.path.length > 0 ? issue.path.join(".") : "root";
-    return err(OAuthMetadataValidationError.invalidClientMetadata(path, issue.message));
+    const message = issue.message;
+
+    return err(OAuthMetadataValidationError.invalidClientMetadata(path, message));
   }
 
-  // Then apply cross-cutting validation rules (with partial semantics)
-  return validateUpdateRules(parseResult.data);
+  // Build result as a patch (no defaults, only present fields)
+  return ok(buildUpdateMetadataPatch(parseResult.data));
 }

@@ -33,7 +33,8 @@ describe("auth/dcr-validator: RFC 7591/7592 metadata validation", () => {
         () => expect.fail("Expected Err but got Ok"),
         (error) => {
           expect(error.name).toBe("OAuthMetadataValidationError");
-          expect(error.message).toContain("client_secret_post");
+          // Error mentions unsupported auth method
+          expect(error.message.toLowerCase()).toContain("none");
         },
       );
     });
@@ -315,6 +316,11 @@ describe("auth/dcr-validator: RFC 7591/7592 metadata validation", () => {
       result.match(
         (metadata) => {
           expect(metadata.redirectUris).toContain("https://new-app.example.com/cb");
+          // Omitted fields should be absent (undefined), not synthesized with defaults
+          expect(metadata.tokenEndpointAuthMethod).toBeUndefined();
+          expect(metadata.grantTypes).toBeUndefined();
+          expect(metadata.responseTypes).toBeUndefined();
+          expect(metadata.scope).toBeUndefined();
         },
         () => expect.fail("Expected Ok but got Err"),
       );
