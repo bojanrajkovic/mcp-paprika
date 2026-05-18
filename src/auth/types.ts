@@ -197,9 +197,9 @@ export type AuthCodeState = z.infer<typeof AuthCodeStateSchema>;
 export const IdTokenPayloadSchema = z.object({
   iss: z.string().url(),
   sub: z.string(),
-  aud: z.string(),
+  aud: z.union([z.string(), z.array(z.string()).min(1)]),
   email: z.string().email().optional(),
-  email_verified: z.boolean().optional(),
+  email_verified: z.preprocess((v) => (typeof v === "string" ? v === "true" : v), z.boolean().optional()),
   nonce: z.string(),
   exp: z.number().int(),
   iat: z.number().int(),
