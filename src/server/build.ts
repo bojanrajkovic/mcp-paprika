@@ -96,6 +96,7 @@ export async function buildAppContext(
     pantryStore,
     vectorStore: null,
     notifier,
+    auth: null,
   };
   const sync = new SyncEngine(syncCtx, config.sync.interval);
 
@@ -141,6 +142,7 @@ export async function buildAppContext(
     pantryStore,
     vectorStore,
     notifier,
+    auth: null,
   };
 
   return { app, sync };

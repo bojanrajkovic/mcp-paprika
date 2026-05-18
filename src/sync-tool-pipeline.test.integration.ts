@@ -123,6 +123,7 @@ describe("Sync → Tool Pipeline Integration", () => {
         pantryStore,
         vectorStore: null,
         notifier,
+        auth: null,
       };
 
       const engine = new SyncEngine(context, 100);
@@ -213,7 +214,7 @@ describe("Sync → Tool Pipeline Integration", () => {
         loggingMessage: async () => {},
       };
 
-      const context = { client, cache, store, pantryStore, vectorStore: null, notifier };
+      const context = { client, cache, store, pantryStore, vectorStore: null, notifier, auth: null };
       const engine = new SyncEngine(context, 100);
 
       // First sync
@@ -278,7 +279,7 @@ describe("Sync → Tool Pipeline Integration", () => {
         loggingMessage: async () => {},
       };
 
-      const context = { client, cache, store, pantryStore, vectorStore: null, notifier };
+      const context = { client, cache, store, pantryStore, vectorStore: null, notifier, auth: null };
       const engine = new SyncEngine(context, 100);
 
       // First sync: both recipes
@@ -362,7 +363,7 @@ describe("Sync → Tool Pipeline Integration", () => {
         loggingMessage: async () => {},
       };
 
-      const context = { client, cache, store, pantryStore, vectorStore: null, notifier };
+      const context = { client, cache, store, pantryStore, vectorStore: null, notifier, auth: null };
       const engine = new SyncEngine(context, 100);
       await engine.syncOnce();
 
@@ -441,7 +442,7 @@ describe("Sync → Tool Pipeline Integration", () => {
         loggingMessage: async () => {},
       };
 
-      const context = { client, cache, store, pantryStore, vectorStore: null, notifier };
+      const context = { client, cache, store, pantryStore, vectorStore: null, notifier, auth: null };
       const engine = new SyncEngine(context, 100);
 
       // First sync with original name

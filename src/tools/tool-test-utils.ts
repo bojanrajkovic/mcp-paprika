@@ -109,6 +109,7 @@ export function makeCtx(
     client: overrides.client ?? ({} as unknown as ServerContext["client"]),
     cache: overrides.cache ?? ({} as unknown as ServerContext["cache"]),
     notifier,
+    auth: null,
   } satisfies ServerContext;
 }
 

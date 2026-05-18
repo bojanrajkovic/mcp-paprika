@@ -182,6 +182,7 @@ async function main(): Promise<void> {
     pantryStore,
     vectorStore: null, // discover tool intentionally not registered (no embeddings in e2e)
     notifier,
+    auth: null,
   };
 
   server = buildMcpServer(app);

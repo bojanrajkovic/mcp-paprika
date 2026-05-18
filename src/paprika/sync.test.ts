@@ -74,6 +74,7 @@ function makeTestContext(): AppContext {
     pantryStore: makeMockPantryStore(),
     vectorStore: null,
     notifier: makeMockNotifier(),
+    auth: null,
   };
 }
 
@@ -329,6 +330,7 @@ describe("syncOnce", () => {
       pantryStore: { ...makeMockPantryStoreDefault(), ...pantryStoreOverrides } as PantryStore,
       vectorStore: null,
       notifier: { ...makeMockNotifierDefault(), ...notifierOverrides } as Notifier,
+      auth: null,
     };
     return new SyncEngine(context, 10);
   }
@@ -834,6 +836,7 @@ describe("syncOnce", () => {
         pantryStore: realPantryStore,
         vectorStore: null,
         notifier: makeMockNotifier(),
+        auth: null,
       };
       const engine = new SyncEngine(context, 10);
 
@@ -870,6 +873,7 @@ describe("syncOnce", () => {
         pantryStore: realPantryStore,
         vectorStore: null,
         notifier: makeMockNotifier(),
+        auth: null,
       };
       const engine = new SyncEngine(context, 10);
 

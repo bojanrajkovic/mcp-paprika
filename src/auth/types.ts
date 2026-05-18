@@ -10,9 +10,17 @@
  * - OIDC upstream: IdTokenPayload
  * - Authorization info: AuthInfoExtra
  * - Wire schemas: OAuthClientWireRegisterSchema, OAuthClientWireResponseSchema
+ * - AuthContext: OAuth runtime state bundle, used as AppContext.auth
  */
 
 import { z } from "zod";
+import type { JWTVerifyGetKey } from "jose";
+import type { DiscoveryDoc } from "./oidc-client.js";
+import type { AuthRequestStore } from "./auth-request-store.js";
+import type { AuthCodeStore } from "./auth-code-store.js";
+import type { TokenStore } from "./token-store.js";
+import type { DiskClientRegistrationStore } from "./client-registration.js";
+import type { AuthCleanup } from "./cleanup.js";
 
 // ============================================================================
 // Email Verified Policy
@@ -218,3 +226,19 @@ export const AuthInfoExtraSchema = z.object({
 });
 
 export type AuthInfoExtra = z.infer<typeof AuthInfoExtraSchema>;
+
+// ============================================================================
+// AuthContext
+// ============================================================================
+// OAuth runtime state bundle. Present on AppContext.auth when OAuth is
+// configured (HTTP mode); null in stdio mode (no auth required).
+export interface AuthContext {
+  readonly config: ResolvedOAuthConfig;
+  readonly discovery: DiscoveryDoc;
+  readonly jwks: JWTVerifyGetKey;
+  readonly requestStore: AuthRequestStore;
+  readonly codeStore: AuthCodeStore;
+  readonly tokenStore: TokenStore;
+  readonly clientStore: DiskClientRegistrationStore;
+  readonly cleanup: AuthCleanup;
+}
