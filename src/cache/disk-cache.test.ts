@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { mkdtemp, readFile, readdir, stat, rm, writeFile, mkdir, chmod } from "node:fs/promises";
+import { mkdtemp, readFile, readdir, stat, rm, writeFile, mkdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
@@ -8,6 +8,13 @@ import { DiskCache } from "./disk-cache.js";
 import { makeRecipe, makeCategory } from "./__fixtures__/recipes.js";
 import { makePantryItem } from "./__fixtures__/pantry.js";
 import { makeOAuthClient, makeOAuthToken } from "./__fixtures__/oauth.js";
+
+// Mock fs/promises to allow injecting failures into rename.
+// The factory function imports the real module and overrides only rename with a spy.
+vi.mock("node:fs/promises", async (importOriginal) => {
+  const orig = await importOriginal<typeof import("node:fs/promises")>();
+  return { ...orig, rename: vi.fn(orig.rename) };
+});
 
 describe("DiskCache", () => {
   let tempDir: string;
@@ -976,9 +983,11 @@ describe("DiskCache", () => {
       );
     });
 
-    it("AC4.6: malformed tokenHash is rejected at put time by schema", async () => {
-      // PLAN says (phase_03.md:217): OAuthTokenSchema enforces /^[0-9a-f]{64}$/ on parse,
-      // so non-hex or wrong-length tokenHashes are rejected at the storage boundary.
+    it("AC4.6: OAuthTokenSchema rejects malformed tokenHash at parse time", async () => {
+      // PLAN says (phase_03.md:217): OAuthTokenSchema enforces /^[0-9a-f]{64}$/ on parse.
+      // This test exercises the fixture's schema check, not the cache's put-time behavior.
+      // Note: DiskCache.putOAuthToken does not validate on write — it defers writes to flush(),
+      // and the schema validation happens when reading from disk (getOAuthToken).
       const cache = new DiskCache(tempDir);
       await cache.init();
 
@@ -993,49 +1002,41 @@ describe("DiskCache", () => {
     });
 
     it("AC4.7: flush() error doesn't poison subsequent operations (lock releases on exception)", async () => {
+      // PLAN says (phase_03.md:396-401): use vi.spyOn(fs.rename) to reject once
+      // and verify async-mutex's released-lock contract.
       // async-mutex's runExclusive contract: a rejected work() releases the lock
-      // and the next queued caller runs normally. Test by temporarily removing
-      // write permissions from the cache directory to cause flush to fail, then
-      // verify that restoring permissions allows subsequent flushes to succeed.
+      // and the next queued caller runs normally.
       const cache = new DiskCache(tempDir);
       await cache.init();
 
-      // Put an initial client to have something to flush
-      const client1 = makeOAuthClient();
-      await cache.putOAuthClient(client1);
-      await cache.flush();
+      await cache.putOAuthClient(makeOAuthClient());
 
-      // Make the entire cache directory read-only to cause the next flush to fail
-      await chmod(tempDir, 0o555);
+      // Get the mocked rename and inject a one-time rejection.
+      // The vi.mock at module level intercepts all fs/promises imports,
+      // so rename is our spy function.
+      const { rename: renameMock } = await import("node:fs/promises");
+      vi.mocked(renameMock).mockRejectedValueOnce(new Error("EACCES: simulated"));
 
-      // Now put a second client and try to flush — should fail
-      const client2 = makeOAuthClient();
-      await cache.putOAuthClient(client2);
+      await expect(cache.flush()).rejects.toThrow("EACCES: simulated");
 
-      // The flush should fail due to permissions
-      let flushFailed = false;
-      try {
+      // Subsequent operations must succeed (proves async-mutex released the lock).
+      // Also race against a tight timeout (200ms) so a "lock held forever" regression
+      // shows up as an assertion failure, not vitest's 5s default timeout.
+      const recoveryOp = (async () => {
+        await cache.putOAuthClient(makeOAuthClient());
         await cache.flush();
-      } catch {
-        flushFailed = true;
-      }
-      expect(flushFailed).toBe(true);
+      })();
+      const timeoutOp = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("recovery took >200ms — mutex may not have released")), 200),
+      );
+      await Promise.race([recoveryOp, timeoutOp]);
 
-      // Restore write permissions so the next flush can succeed
-      await chmod(tempDir, 0o755);
+      // Verify both clients on disk
+      const clients = await readdir(join(tempDir, "oauthClients"));
+      expect(clients).toHaveLength(2);
 
-      // Lock should be released. The next operation should succeed.
-      const client3 = makeOAuthClient();
-      await cache.putOAuthClient(client3);
-
-      // This flush should succeed despite the previous failure
-      await cache.flush();
-
-      // Verify clients are on disk (client1 and client3 should be present)
-      const allClients = await cache.getAllOAuthClients();
-      const clientIds = allClients.map((c) => c.clientId);
-      expect(clientIds).toContain(client1.clientId);
-      expect(clientIds).toContain(client3.clientId);
+      // Confirm the rename mock was called at least once
+      expect(vi.mocked(renameMock).mock.calls.length).toBeGreaterThanOrEqual(1);
     });
   });
 });
