@@ -9,6 +9,7 @@ import { DiskCache } from "../cache/disk-cache.js";
 import { createOidcStub } from "./__fixtures__/oidc-stub.js";
 import { createJwksFor } from "./oidc-client.js";
 import { setupServer } from "msw/node";
+import type { JWTVerifyGetKey } from "jose";
 
 describe("Auth Routes", () => {
   let cache: DiskCache;
@@ -70,6 +71,9 @@ describe("Auth Routes", () => {
         oidcConfig: {
           clientId: "stub-client-id",
           clientSecret: "stub-client-secret",
+          discoveryUrl: `${oidcStub.issuer}/.well-known/openid-configuration`,
+          publicUrl: "https://mcp.example.com",
+          presetName: null,
           scopes: ["openid", "email"],
           emailVerifiedPolicy: "if-present",
           allowlist: { emails: ["user@example.com"], subs: [] },
@@ -80,8 +84,9 @@ describe("Auth Routes", () => {
           authorization_endpoint: `${oidcStub.issuer}/authorize`,
           token_endpoint: `${oidcStub.issuer}/token`,
           jwks_uri: `${oidcStub.issuer}/jwks`,
+          id_token_signing_alg_values_supported: ["RS256"],
         },
-        jwks: async () => ({ keys: [] }), // stub
+        jwks: (async () => ({ keys: [] })) as unknown as JWTVerifyGetKey,
         publicUrl: "https://mcp.example.com",
       }),
     );
@@ -127,6 +132,7 @@ describe("Auth Routes", () => {
         authorization_endpoint: `${oidcStub.issuer}/authorize`,
         token_endpoint: `${oidcStub.issuer}/token`,
         jwks_uri: `${oidcStub.issuer}/jwks`,
+        id_token_signing_alg_values_supported: ["RS256"],
       };
       const realJwks = createJwksFor(discoveryForJwks);
 
@@ -143,6 +149,9 @@ describe("Auth Routes", () => {
           oidcConfig: {
             clientId: "stub-client-id",
             clientSecret: "stub-client-secret",
+            discoveryUrl: `${oidcStub.issuer}/.well-known/openid-configuration`,
+            publicUrl: "https://mcp.example.com",
+            presetName: null,
             scopes: ["openid", "email"],
             emailVerifiedPolicy: "if-present",
             allowlist: { emails: ["user@example.com"], subs: [] },
@@ -198,6 +207,7 @@ describe("Auth Routes", () => {
         authorization_endpoint: `${oidcStub.issuer}/authorize`,
         token_endpoint: `${oidcStub.issuer}/token`,
         jwks_uri: `${oidcStub.issuer}/jwks`,
+        id_token_signing_alg_values_supported: ["RS256"],
       };
       const realJwks = createJwksFor(discoveryForJwks);
 
@@ -214,6 +224,9 @@ describe("Auth Routes", () => {
           oidcConfig: {
             clientId: "stub-client-id",
             clientSecret: "stub-client-secret",
+            discoveryUrl: `${oidcStub.issuer}/.well-known/openid-configuration`,
+            publicUrl: "https://mcp.example.com",
+            presetName: null,
             scopes: ["openid", "email"],
             emailVerifiedPolicy: "if-present",
             // Only user@example.com is on the allowlist — unknown@example.com will be denied

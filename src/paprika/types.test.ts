@@ -802,7 +802,7 @@ describe("pantry-read.AC1: PantryItem types", () => {
       expect(result.success).toBe(false);
 
       if (!result.success) {
-        expect(result.error.issues[0].path.includes("ingredient")).toBe(true);
+        expect(result.error.issues[0]!.path.includes("ingredient")).toBe(true);
       }
     });
   });

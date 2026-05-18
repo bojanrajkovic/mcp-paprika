@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import fc from "fast-check";
 import { recipeToMarkdown } from "./helpers.js";
-import type { Recipe, RecipeUid, CategoryUid } from "../paprika/types.js";
+import type { RecipeUid, CategoryUid } from "../paprika/types.js";
 
 const arbitraryRecipe = fc.record({
   uid: fc.string().map((s) => s as RecipeUid),
@@ -32,7 +32,7 @@ const arbitraryRecipe = fc.record({
   onGroceryList: fc.boolean(),
   scale: fc.option(fc.string(), { nil: null }),
   nutritionalInfo: fc.option(fc.string(), { nil: null }),
-} as Record<keyof Recipe, fc.Arbitrary<unknown>>);
+});
 
 const arbitraryCategoryNames = fc.array(fc.string());
 

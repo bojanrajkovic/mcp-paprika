@@ -26,7 +26,7 @@ import type { DiskClientRegistrationStore } from "./client-registration.js";
 import { DiskClientRegistrationStore as DiskClientRegistrationStoreImpl } from "./client-registration.js";
 import { TokenStore } from "./token-store.js";
 import { hashTokenForStorage, ACCESS_TOKEN_TTL_SECONDS, REFRESH_TOKEN_TTL_SECONDS } from "./tokens.js";
-import type { VerifiedIdentity } from "./types.js";
+import type { VerifiedIdentity } from "./allowlist.js";
 import { AuthRequestStore } from "./auth-request-store.js";
 import { AuthCodeStore } from "./auth-code-store.js";
 
@@ -126,9 +126,9 @@ describe("TokenStore", () => {
       expect(result?.clientId).toBe(input.clientId);
       expect(result?.scopes).toEqual(["read", "write"]);
       expect(result?.expiresAt).toBe(now + ACCESS_TOKEN_TTL_SECONDS);
-      expect(result?.extra?.email).toBe("alice@example.com");
-      expect(result?.extra?.sub).toBe("alice-sub");
-      expect(result?.extra?.source).toBe("email");
+      expect(result?.extra?.["email"]).toBe("alice@example.com");
+      expect(result?.extra?.["sub"]).toBe("alice-sub");
+      expect(result?.extra?.["source"]).toBe("email");
     });
 
     it("returns AuthInfo with resource as URL when present", async () => {

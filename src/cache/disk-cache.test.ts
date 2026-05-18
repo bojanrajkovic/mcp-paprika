@@ -3,7 +3,7 @@ import { mkdtemp, readFile, readdir, stat, rm, writeFile, mkdir } from "node:fs/
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
-import type { RecipeUid } from "../paprika/types.js";
+import type { RecipeUid, PantryItemUid } from "../paprika/types.js";
 import { DiskCache } from "./disk-cache.js";
 import { makeRecipe, makeCategory } from "./__fixtures__/recipes.js";
 import { makePantryItem } from "./__fixtures__/pantry.js";
@@ -601,12 +601,12 @@ describe("DiskCache", () => {
       await cache.init();
 
       // Write one item to disk manually
-      const diskItem = makePantryItem({ uid: "uid-disk" });
+      const diskItem = makePantryItem({ uid: "uid-disk" as PantryItemUid });
       const diskItemPath = join(tempDir, "pantry", "uid-disk.json");
       await writeFile(diskItemPath, JSON.stringify(diskItem, null, 2));
 
       // Put a pending item (not flushed)
-      const pendingItem = makePantryItem({ uid: "uid-pending" });
+      const pendingItem = makePantryItem({ uid: "uid-pending" as PantryItemUid });
       await cache.putPantryItem(pendingItem);
 
       // Get all items (should include both)
@@ -617,7 +617,7 @@ describe("DiskCache", () => {
 
       // Test shadowing: put item with same UID as disk but different data
       const sharedItem = makePantryItem({
-        uid: "uid-shared",
+        uid: "uid-shared" as PantryItemUid,
         ingredient: "Pending Version",
       });
       await writeFile(
@@ -926,8 +926,8 @@ describe("DiskCache", () => {
 
       const operations: Array<Promise<unknown>> = [];
       for (let i = 0; i < 20; i++) {
-        operations.push(cache.putRecipe(recipes[i], `hash-${i}`));
-        operations.push(cache.putOAuthClient(clients[i]));
+        operations.push(cache.putRecipe(recipes[i]!, `hash-${i}`));
+        operations.push(cache.putOAuthClient(clients[i]!));
         if (i % 4 === 3) operations.push(cache.flush()); // 5 interleaved flushes
       }
       for (const token of tokens) operations.push(cache.putOAuthToken(token));

@@ -1,8 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import type { Mocked } from "vitest";
 import { contentHash, VectorStore } from "./vector-store.js";
 import { VectorStoreError } from "./vector-store-errors.js";
 import { recipeToEmbeddingText } from "./embeddings.js";
 import { makeRecipe } from "../cache/__fixtures__/recipes.js";
+import type { RecipeUid } from "../paprika/types.js";
 import { mkdtemp, rm, writeFile, readFile, mkdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -99,14 +101,14 @@ vi.mock("vectra", () => {
   return { LocalIndex: MockLocalIndex };
 });
 
-function makeMockEmbedder(): EmbeddingClient {
+function makeMockEmbedder(): Mocked<EmbeddingClient> {
   return {
     embed: vi.fn<(text: string) => Promise<Array<number>>>(),
     embedBatch: vi.fn<(texts: ReadonlyArray<string>) => Promise<Array<Array<number>>>>(),
     get dimensions() {
       return 3;
     },
-  } as unknown as EmbeddingClient;
+  } as unknown as Mocked<EmbeddingClient>;
 }
 
 describe("VectorStore init", () => {
@@ -280,7 +282,7 @@ describe("VectorStore init", () => {
       // First run with model-a: index a recipe
       const store1 = new VectorStore(tempDir, embedder, "model-a", 1);
       await store1.init();
-      const recipe = makeRecipe({ uid: "recipe-1" });
+      const recipe = makeRecipe({ uid: "recipe-1" as RecipeUid });
       await store1.indexRecipes([recipe], () => []);
       expect(store1.size).toBe(1);
 
@@ -314,7 +316,7 @@ describe("VectorStore init", () => {
       // First run with schema version 1
       const store1 = new VectorStore(tempDir, embedder, "same-model", 1);
       await store1.init();
-      const recipe = makeRecipe({ uid: "recipe-1" });
+      const recipe = makeRecipe({ uid: "recipe-1" as RecipeUid });
       await store1.indexRecipes([recipe], () => []);
       expect(store1.size).toBe(1);
 
@@ -347,7 +349,7 @@ describe("VectorStore init", () => {
       // First run
       const store1 = new VectorStore(tempDir, embedder, "same-model", 1);
       await store1.init();
-      const recipe = makeRecipe({ uid: "recipe-1" });
+      const recipe = makeRecipe({ uid: "recipe-1" as RecipeUid });
       await store1.indexRecipes([recipe], () => []);
 
       // Second run with same model
@@ -397,8 +399,8 @@ describe("VectorStore indexRecipes", () => {
       const store = new VectorStore(tempDir, embedder, "test-model", 1);
       await store.init();
 
-      const recipe1 = makeRecipe({ uid: "recipe-1" });
-      const recipe2 = makeRecipe({ uid: "recipe-2" });
+      const recipe1 = makeRecipe({ uid: "recipe-1" as RecipeUid });
+      const recipe2 = makeRecipe({ uid: "recipe-2" as RecipeUid });
 
       const result = await store.indexRecipes([recipe1, recipe2], () => []);
 
@@ -440,7 +442,7 @@ describe("VectorStore indexRecipes", () => {
       const store = new VectorStore(tempDir, embedder, "test-model", 1);
       await store.init();
 
-      const recipe = makeRecipe({ uid: "recipe-1" });
+      const recipe = makeRecipe({ uid: "recipe-1" as RecipeUid });
 
       // First indexing
       await store.indexRecipes([recipe], () => []);
@@ -479,7 +481,7 @@ describe("VectorStore indexRecipes", () => {
       const store = new VectorStore(tempDir, embedder, "test-model", 1);
       await store.init();
 
-      const recipe1 = makeRecipe({ uid: "recipe-1" });
+      const recipe1 = makeRecipe({ uid: "recipe-1" as RecipeUid });
 
       // First indexing
       await store.indexRecipes([recipe1], () => []);
@@ -496,8 +498,8 @@ describe("VectorStore indexRecipes", () => {
       ]);
 
       // Index 3 recipes: 2 new, 1 unchanged
-      const recipe2 = makeRecipe({ uid: "recipe-2" });
-      const recipe3 = makeRecipe({ uid: "recipe-3" });
+      const recipe2 = makeRecipe({ uid: "recipe-2" as RecipeUid });
+      const recipe3 = makeRecipe({ uid: "recipe-3" as RecipeUid });
 
       const result = await store.indexRecipes([recipe1, recipe2, recipe3], () => []);
 
@@ -525,7 +527,7 @@ describe("VectorStore indexRecipes", () => {
       const store = new VectorStore(tempDir, embedder, "test-model", 1);
       await store.init();
 
-      const recipe = makeRecipe({ uid: "recipe-1" });
+      const recipe = makeRecipe({ uid: "recipe-1" as RecipeUid });
       await store.indexRecipes([recipe], () => []);
 
       // Read the persisted hash-index.json
@@ -578,7 +580,7 @@ describe("VectorStore indexRecipes", () => {
       // First store instance
       const store1 = new VectorStore(tempDir, embedder, "test-model", 1);
       await store1.init();
-      const recipe = makeRecipe({ uid: "recipe-1" });
+      const recipe = makeRecipe({ uid: "recipe-1" as RecipeUid });
       await store1.indexRecipes([recipe], () => []);
 
       // Reset mocks for second instance
@@ -747,7 +749,7 @@ describe("VectorStore removeRecipe", () => {
       const store = new VectorStore(tempDir, embedder, "test-model", 1);
       await store.init();
 
-      const recipe = makeRecipe({ uid: "recipe-1" });
+      const recipe = makeRecipe({ uid: "recipe-1" as RecipeUid });
       await store.indexRecipes([recipe], () => []);
 
       // Verify recipe is in hash map
@@ -788,7 +790,7 @@ describe("VectorStore removeRecipe", () => {
       const store = new VectorStore(tempDir, embedder, "test-model", 1);
       await store.init();
 
-      const recipe = makeRecipe({ uid: "recipe-1" });
+      const recipe = makeRecipe({ uid: "recipe-1" as RecipeUid });
       await store.indexRecipes([recipe], () => []);
 
       await store.removeRecipe("recipe-1");

@@ -32,8 +32,12 @@ describe("OAuth Metadata Customization", () => {
         authorization_endpoint: "https://idp.stub.example.com/authorize",
         token_endpoint: "https://idp.stub.example.com/token",
         jwks_uri: "https://idp.stub.example.com/jwks",
+        id_token_signing_alg_values_supported: ["RS256"],
       },
       {
+        discoveryUrl: "https://idp.stub.example.com/.well-known/openid-configuration",
+        publicUrl: "https://mcp.example.com",
+        presetName: null,
         clientId: "stub-client-id",
         clientSecret: "stub-client-secret",
         scopes: ["openid", "email"],
@@ -75,7 +79,7 @@ describe("OAuth Metadata Customization", () => {
         issuerUrl: "https://m.example.com",
         provider,
       });
-      expect(meta.authorization_response_iss_parameter_supported).toBe(true);
+      expect(meta["authorization_response_iss_parameter_supported"]).toBe(true);
     });
 
     it("AC2.1/2.13: id_token_signing_alg_values_supported field is NOT present", () => {
@@ -154,8 +158,8 @@ describe("OAuth Metadata Customization", () => {
       expect(res.status).toBe(200);
 
       const body = (await res.json()) as Record<string, unknown>;
-      expect(body.token_endpoint_auth_methods_supported).toEqual(["none"]);
-      expect(body.authorization_response_iss_parameter_supported).toBe(true);
+      expect(body["token_endpoint_auth_methods_supported"]).toEqual(["none"]);
+      expect(body["authorization_response_iss_parameter_supported"]).toBe(true);
       expect(body).not.toHaveProperty("id_token_signing_alg_values_supported");
     });
 
@@ -176,10 +180,10 @@ describe("OAuth Metadata Customization", () => {
 
       const body = (await res.json()) as Record<string, unknown>;
       // resource from URL may have trailing slash; normalize for comparison
-      const resource = String(body.resource).replace(/\/$/, "");
+      const resource = String(body["resource"]).replace(/\/$/, "");
       expect(resource).toBe("https://m.example.com");
-      expect(Array.isArray(body.authorization_servers)).toBe(true);
-      const authServers = (body.authorization_servers as Array<string>).map((s) => s.replace(/\/$/, ""));
+      expect(Array.isArray(body["authorization_servers"])).toBe(true);
+      const authServers = (body["authorization_servers"] as Array<string>).map((s) => s.replace(/\/$/, ""));
       expect(authServers).toContain("https://m.example.com");
     });
   });

@@ -62,8 +62,8 @@ describe("EmbeddingClient", () => {
       await client.embedBatch(["a", "b", "c"]);
 
       expect(capturedMethod).toBe("POST");
-      expect(capturedHeaders.authorization).toBe(`Bearer ${API_KEY}`);
-      expect(capturedHeaders.contentType).toBe("application/json");
+      expect(capturedHeaders["authorization"]).toBe(`Bearer ${API_KEY}`);
+      expect(capturedHeaders["contentType"]).toBe("application/json");
       expect(capturedBody).toEqual({
         model: MODEL,
         input: ["a", "b", "c"],
@@ -301,7 +301,7 @@ describe("EmbeddingClient", () => {
       const client = new EmbeddingClient(makeEmbeddingConfig());
 
       try {
-        const _ = client.dimensions;
+        void client.dimensions;
         expect.fail("Should have thrown EmbeddingError");
       } catch (error) {
         expect(error).toBeInstanceOf(EmbeddingError);

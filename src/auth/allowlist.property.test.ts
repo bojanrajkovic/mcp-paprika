@@ -39,7 +39,7 @@ describe("allowlist: property-based tests", () => {
           // Force email to be in allowlist and email_verified to not be true
           const modifiedAllowlist = {
             ...allowlist,
-            emails: new Set([...allowlist.emails, payload.email]),
+            emails: new Set([...allowlist.emails, payload.email].filter((s): s is string => s !== null)),
             subs: new Set<string>(), // empty subs to force email path
           };
           const modifiedPayload = {
@@ -62,7 +62,7 @@ describe("allowlist: property-based tests", () => {
           // Force email to be in allowlist and subs empty
           const modifiedAllowlist = {
             ...allowlist,
-            emails: new Set([...allowlist.emails, payload.email]),
+            emails: new Set([...allowlist.emails, payload.email].filter((s): s is string => s !== null)),
             subs: new Set<string>(),
           };
 

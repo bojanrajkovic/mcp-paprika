@@ -86,9 +86,9 @@ function paprikaMockHandlers() {
     http.get(`${PAPRIKA_API_BASE}/category/:uid/`, ({ params }) =>
       HttpResponse.json({
         result: {
-          uid: params.uid,
-          name: params.uid === "cat-1" ? "Main Dishes" : "Desserts",
-          order_flag: params.uid === "cat-1" ? 0 : 1,
+          uid: params["uid"],
+          name: params["uid"] === "cat-1" ? "Main Dishes" : "Desserts",
+          order_flag: params["uid"] === "cat-1" ? 0 : 1,
           parent_uid: null,
         },
       }),

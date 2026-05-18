@@ -4,7 +4,7 @@
 
 import { describe, it, expect } from "vitest";
 import { resolvePreset, OIDC_PRESETS } from "./presets.js";
-import type { ResolvedOAuthConfig } from "./types.js";
+import type { OIDCPreset, ResolvedOAuthConfig } from "./types.js";
 
 describe("OIDC Presets", () => {
   describe("OIDC_PRESETS table", () => {
@@ -18,7 +18,7 @@ describe("OIDC Presets", () => {
     });
 
     it("contains entra preset without discoveryUrl", () => {
-      const preset = OIDC_PRESETS.entra;
+      const preset: OIDCPreset = OIDC_PRESETS.entra;
       expect(preset).toBeDefined();
       expect(preset.discoveryUrl).toBeUndefined();
       expect(preset.scopes).toEqual(["openid", "email", "profile"]);
@@ -27,7 +27,7 @@ describe("OIDC Presets", () => {
     });
 
     it("contains okta preset without discoveryUrl", () => {
-      const preset = OIDC_PRESETS.okta;
+      const preset: OIDCPreset = OIDC_PRESETS.okta;
       expect(preset).toBeDefined();
       expect(preset.discoveryUrl).toBeUndefined();
       expect(preset.scopes).toEqual(["openid", "email", "profile"]);
@@ -36,7 +36,7 @@ describe("OIDC Presets", () => {
     });
 
     it("contains auth0 preset without discoveryUrl", () => {
-      const preset = OIDC_PRESETS.auth0;
+      const preset: OIDCPreset = OIDC_PRESETS.auth0;
       expect(preset).toBeDefined();
       expect(preset.discoveryUrl).toBeUndefined();
       expect(preset.scopes).toEqual(["openid", "email", "profile"]);
@@ -45,7 +45,7 @@ describe("OIDC Presets", () => {
     });
 
     it("contains keycloak preset without discoveryUrl", () => {
-      const preset = OIDC_PRESETS.keycloak;
+      const preset: OIDCPreset = OIDC_PRESETS.keycloak;
       expect(preset).toBeDefined();
       expect(preset.discoveryUrl).toBeUndefined();
       expect(preset.scopes).toEqual(["openid", "email", "profile"]);

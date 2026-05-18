@@ -96,6 +96,7 @@ class MockPaprikaClient implements IMockPaprikaClient {
     purchaseDate: null,
     locationUid: null,
     notes: null,
+    deleted: false,
   };
 
   getMockRecipe(): Recipe {

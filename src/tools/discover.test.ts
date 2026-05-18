@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import type { VectorStore, SemanticResult } from "../features/vector-store.js";
 import { RecipeStore } from "../cache/recipe-store.js";
 import { makeRecipe, makeCategory } from "../cache/__fixtures__/recipes.js";
+import type { RecipeUid } from "../paprika/types.js";
 import { registerDiscoverTool } from "./discover.js";
 import { makeTestServer, makeCtx, getText } from "./tool-test-utils.js";
 
@@ -54,7 +55,7 @@ describe("p3-u06-discover-tool: discover_recipes tool", () => {
   describe("p3-u06-discover-tool.AC2: Search and result formatting", () => {
     it("p3-u06-discover-tool.AC2.1: vectorStore.search is called with query and topK", async () => {
       const store = new RecipeStore();
-      store.load([makeRecipe({ uid: "recipe-1" })], []);
+      store.load([makeRecipe({ uid: "recipe-1" as RecipeUid })], []);
       const { server, callTool } = makeTestServer();
       const mockVs = makeMockVectorStore([{ uid: "recipe-1", score: 0.85, recipeName: "Pasta" }]);
       registerDiscoverTool(server, makeCtx(store, server), mockVs as unknown as VectorStore);
@@ -66,7 +67,7 @@ describe("p3-u06-discover-tool: discover_recipes tool", () => {
 
     it("p3-u06-discover-tool.AC2.2: result includes recipe name with integer percentage match", async () => {
       const store = new RecipeStore();
-      store.load([makeRecipe({ uid: "recipe-1", name: "Chocolate Cake" })], []);
+      store.load([makeRecipe({ uid: "recipe-1" as RecipeUid, name: "Chocolate Cake" })], []);
       const { server, callTool } = makeTestServer();
       const mockVs = makeMockVectorStore([{ uid: "recipe-1", score: 0.923, recipeName: "Chocolate Cake" }]);
       registerDiscoverTool(server, makeCtx(store, server), mockVs as unknown as VectorStore);
@@ -81,7 +82,7 @@ describe("p3-u06-discover-tool: discover_recipes tool", () => {
     it("p3-u06-discover-tool.AC2.3: categories are resolved and displayed when present", async () => {
       const category = makeCategory({ name: "Dessert" });
       const store = new RecipeStore();
-      store.load([makeRecipe({ uid: "recipe-1", name: "Cake", categories: [category.uid] })], [category]);
+      store.load([makeRecipe({ uid: "recipe-1" as RecipeUid, name: "Cake", categories: [category.uid] })], [category]);
       const { server, callTool } = makeTestServer();
       const mockVs = makeMockVectorStore([{ uid: "recipe-1", score: 0.9, recipeName: "Cake" }]);
       registerDiscoverTool(server, makeCtx(store, server), mockVs as unknown as VectorStore);
@@ -94,7 +95,7 @@ describe("p3-u06-discover-tool: discover_recipes tool", () => {
 
     it("p3-u06-discover-tool.AC2.3: categories line is absent when recipe has no categories", async () => {
       const store = new RecipeStore();
-      store.load([makeRecipe({ uid: "recipe-1", name: "Bread", categories: [] })], []);
+      store.load([makeRecipe({ uid: "recipe-1" as RecipeUid, name: "Bread", categories: [] })], []);
       const { server, callTool } = makeTestServer();
       const mockVs = makeMockVectorStore([{ uid: "recipe-1", score: 0.9, recipeName: "Bread" }]);
       registerDiscoverTool(server, makeCtx(store, server), mockVs as unknown as VectorStore);
@@ -110,7 +111,7 @@ describe("p3-u06-discover-tool: discover_recipes tool", () => {
       store.load(
         [
           makeRecipe({
-            uid: "recipe-1",
+            uid: "recipe-1" as RecipeUid,
             name: "Pasta",
             prepTime: "10 min",
             cookTime: "30 min",
@@ -134,7 +135,7 @@ describe("p3-u06-discover-tool: discover_recipes tool", () => {
       store.load(
         [
           makeRecipe({
-            uid: "recipe-1",
+            uid: "recipe-1" as RecipeUid,
             name: "Soup",
             prepTime: null,
             cookTime: null,
@@ -155,7 +156,7 @@ describe("p3-u06-discover-tool: discover_recipes tool", () => {
 
     it("p3-u06-discover-tool.AC2.5: result includes UID in backtick format", async () => {
       const store = new RecipeStore();
-      store.load([makeRecipe({ uid: "abc-def-123", name: "Test Recipe" })], []);
+      store.load([makeRecipe({ uid: "abc-def-123" as RecipeUid, name: "Test Recipe" })], []);
       const { server, callTool } = makeTestServer();
       const mockVs = makeMockVectorStore([{ uid: "abc-def-123", score: 0.9, recipeName: "Test Recipe" }]);
       registerDiscoverTool(server, makeCtx(store, server), mockVs as unknown as VectorStore);
@@ -183,7 +184,7 @@ describe("p3-u06-discover-tool: discover_recipes tool", () => {
 
     it("p3-u06-discover-tool.AC3.2: all results map to deleted recipes", async () => {
       const store = new RecipeStore();
-      store.load([makeRecipe({ uid: "existing" })], []);
+      store.load([makeRecipe({ uid: "existing" as RecipeUid })], []);
       const { server, callTool } = makeTestServer();
       const mockVs = makeMockVectorStore([
         { uid: "deleted-1", score: 0.9, recipeName: "Deleted Recipe" },
@@ -202,7 +203,10 @@ describe("p3-u06-discover-tool: discover_recipes tool", () => {
     it("p3-u06-discover-tool.AC4.1: silently skips deleted recipes", async () => {
       const store = new RecipeStore();
       store.load(
-        [makeRecipe({ uid: "recipe-1", name: "Existing 1" }), makeRecipe({ uid: "recipe-3", name: "Existing 2" })],
+        [
+          makeRecipe({ uid: "recipe-1" as RecipeUid, name: "Existing 1" }),
+          makeRecipe({ uid: "recipe-3" as RecipeUid, name: "Existing 2" }),
+        ],
         [],
       );
       const { server, callTool } = makeTestServer();
@@ -223,7 +227,13 @@ describe("p3-u06-discover-tool: discover_recipes tool", () => {
 
     it("p3-u06-discover-tool.AC4.2: remaining results are re-numbered sequentially", async () => {
       const store = new RecipeStore();
-      store.load([makeRecipe({ uid: "recipe-1", name: "First" }), makeRecipe({ uid: "recipe-3", name: "Third" })], []);
+      store.load(
+        [
+          makeRecipe({ uid: "recipe-1" as RecipeUid, name: "First" }),
+          makeRecipe({ uid: "recipe-3" as RecipeUid, name: "Third" }),
+        ],
+        [],
+      );
       const { server, callTool } = makeTestServer();
       const mockVs = makeMockVectorStore([
         { uid: "recipe-1", score: 0.95, recipeName: "First" },

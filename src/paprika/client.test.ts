@@ -331,7 +331,7 @@ describe("PaprikaClient", () => {
     it("p1-u06-client-reads.AC3.1 - returns Recipe[] with one entry per provided UID, in same order", async () => {
       server.use(
         http.get(`${API_BASE}/recipe/:uid/`, ({ params }) => {
-          return HttpResponse.json({ result: makeSnakeCaseRecipe(params.uid as string) });
+          return HttpResponse.json({ result: makeSnakeCaseRecipe(params["uid"] as string) });
         }),
       );
 
@@ -362,7 +362,7 @@ describe("PaprikaClient", () => {
           peakInFlight = Math.max(peakInFlight, inFlight);
           await new Promise((resolve) => setTimeout(resolve, 20));
           inFlight--;
-          return HttpResponse.json({ result: makeSnakeCaseRecipe(params.uid as string) });
+          return HttpResponse.json({ result: makeSnakeCaseRecipe(params["uid"] as string) });
         }),
       );
 
@@ -606,7 +606,7 @@ describe("PaprikaClient", () => {
 
       // AC2.1: Assert in_trash is true in payload
       expect(capturedPayload).toBeDefined();
-      expect(capturedPayload!.in_trash).toBe(true);
+      expect(capturedPayload!["in_trash"]).toBe(true);
 
       // AC2.2: Assert notifySync was called
       expect(notifyReached).toBe(true);
@@ -780,8 +780,8 @@ describe("PaprikaClient", () => {
       await client.savePantryItem(makeCamelCasePantryItem(uid, { deleted: true }));
 
       expect(bodies).toHaveLength(2);
-      expect(bodies[0]![0]!.deleted).toBe(false);
-      expect(bodies[1]![0]!.deleted).toBe(true);
+      expect(bodies[0]![0]!["deleted"]).toBe(false);
+      expect(bodies[1]![0]!["deleted"]).toBe(true);
     });
 
     it("pantry-mutations.AC1.6 - null values survive the conversion", async () => {
@@ -811,10 +811,10 @@ describe("PaprikaClient", () => {
 
       expect(body).toBeDefined();
       const payload = body![0]!;
-      expect(payload.expiration_date).toBeNull();
-      expect(payload.purchase_date).toBeNull();
-      expect(payload.location_uid).toBeNull();
-      expect(payload.notes).toBeNull();
+      expect(payload["expiration_date"]).toBeNull();
+      expect(payload["purchase_date"]).toBeNull();
+      expect(payload["location_uid"]).toBeNull();
+      expect(payload["notes"]).toBeNull();
     });
   });
 

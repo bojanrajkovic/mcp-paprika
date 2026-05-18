@@ -334,15 +334,15 @@ describe("Configuration loading", () => {
 
     describe("oauth21-http.AC3.9: Allowlist validation", () => {
       it("rejects HTTP transport with both MCP_ALLOWED_EMAILS and MCP_ALLOWED_SUBS empty", () => {
-        process.env.PAPRIKA_EMAIL = "user@test.com";
-        process.env.PAPRIKA_PASSWORD = "secret";
-        process.env.MCP_TRANSPORT = "http";
-        process.env.MCP_PUBLIC_URL = "https://m.example.com";
-        process.env.MCP_OIDC_PRESET = "google";
-        process.env.MCP_OIDC_CLIENT_ID = "client123";
-        process.env.MCP_OIDC_CLIENT_SECRET = "secret456";
-        process.env.MCP_ALLOWED_EMAILS = "";
-        process.env.MCP_ALLOWED_SUBS = "";
+        process.env["PAPRIKA_EMAIL"] = "user@test.com";
+        process.env["PAPRIKA_PASSWORD"] = "secret";
+        process.env["MCP_TRANSPORT"] = "http";
+        process.env["MCP_PUBLIC_URL"] = "https://m.example.com";
+        process.env["MCP_OIDC_PRESET"] = "google";
+        process.env["MCP_OIDC_CLIENT_ID"] = "client123";
+        process.env["MCP_OIDC_CLIENT_SECRET"] = "secret456";
+        process.env["MCP_ALLOWED_EMAILS"] = "";
+        process.env["MCP_ALLOWED_SUBS"] = "";
 
         const result = loadConfig(tempDir);
         result.match(
@@ -358,14 +358,14 @@ describe("Configuration loading", () => {
       });
 
       it("accepts HTTP transport with non-empty MCP_ALLOWED_EMAILS", () => {
-        process.env.PAPRIKA_EMAIL = "user@test.com";
-        process.env.PAPRIKA_PASSWORD = "secret";
-        process.env.MCP_TRANSPORT = "http";
-        process.env.MCP_PUBLIC_URL = "https://m.example.com";
-        process.env.MCP_OIDC_PRESET = "google";
-        process.env.MCP_OIDC_CLIENT_ID = "client123";
-        process.env.MCP_OIDC_CLIENT_SECRET = "secret456";
-        process.env.MCP_ALLOWED_EMAILS = "alice@example.com";
+        process.env["PAPRIKA_EMAIL"] = "user@test.com";
+        process.env["PAPRIKA_PASSWORD"] = "secret";
+        process.env["MCP_TRANSPORT"] = "http";
+        process.env["MCP_PUBLIC_URL"] = "https://m.example.com";
+        process.env["MCP_OIDC_PRESET"] = "google";
+        process.env["MCP_OIDC_CLIENT_ID"] = "client123";
+        process.env["MCP_OIDC_CLIENT_SECRET"] = "secret456";
+        process.env["MCP_ALLOWED_EMAILS"] = "alice@example.com";
 
         const result = loadConfig(tempDir);
         result.match(
@@ -381,13 +381,13 @@ describe("Configuration loading", () => {
 
     describe("oauth21-http.AC6.2: Public URL requirement", () => {
       it("rejects HTTP transport without MCP_PUBLIC_URL", () => {
-        process.env.PAPRIKA_EMAIL = "user@test.com";
-        process.env.PAPRIKA_PASSWORD = "secret";
-        process.env.MCP_TRANSPORT = "http";
-        process.env.MCP_OIDC_PRESET = "google";
-        process.env.MCP_OIDC_CLIENT_ID = "client123";
-        process.env.MCP_OIDC_CLIENT_SECRET = "secret456";
-        process.env.MCP_ALLOWED_EMAILS = "alice@example.com";
+        process.env["PAPRIKA_EMAIL"] = "user@test.com";
+        process.env["PAPRIKA_PASSWORD"] = "secret";
+        process.env["MCP_TRANSPORT"] = "http";
+        process.env["MCP_OIDC_PRESET"] = "google";
+        process.env["MCP_OIDC_CLIENT_ID"] = "client123";
+        process.env["MCP_OIDC_CLIENT_SECRET"] = "secret456";
+        process.env["MCP_ALLOWED_EMAILS"] = "alice@example.com";
 
         const result = loadConfig(tempDir);
         result.match(
@@ -404,14 +404,14 @@ describe("Configuration loading", () => {
 
     describe("oauth21-http.AC6.3: HTTPS requirement", () => {
       it("rejects HTTP transport with http:// URL", () => {
-        process.env.PAPRIKA_EMAIL = "user@test.com";
-        process.env.PAPRIKA_PASSWORD = "secret";
-        process.env.MCP_TRANSPORT = "http";
-        process.env.MCP_PUBLIC_URL = "http://mcp.example.com";
-        process.env.MCP_OIDC_PRESET = "google";
-        process.env.MCP_OIDC_CLIENT_ID = "client123";
-        process.env.MCP_OIDC_CLIENT_SECRET = "secret456";
-        process.env.MCP_ALLOWED_EMAILS = "alice@example.com";
+        process.env["PAPRIKA_EMAIL"] = "user@test.com";
+        process.env["PAPRIKA_PASSWORD"] = "secret";
+        process.env["MCP_TRANSPORT"] = "http";
+        process.env["MCP_PUBLIC_URL"] = "http://mcp.example.com";
+        process.env["MCP_OIDC_PRESET"] = "google";
+        process.env["MCP_OIDC_CLIENT_ID"] = "client123";
+        process.env["MCP_OIDC_CLIENT_SECRET"] = "secret456";
+        process.env["MCP_ALLOWED_EMAILS"] = "alice@example.com";
 
         const result = loadConfig(tempDir);
         result.match(
@@ -426,14 +426,14 @@ describe("Configuration loading", () => {
       });
 
       it("accepts substring trick (https://evil/?fake=http://x) as HTTPS", () => {
-        process.env.PAPRIKA_EMAIL = "user@test.com";
-        process.env.PAPRIKA_PASSWORD = "secret";
-        process.env.MCP_TRANSPORT = "http";
-        process.env.MCP_PUBLIC_URL = "https://evil/?fake=http://x";
-        process.env.MCP_OIDC_PRESET = "google";
-        process.env.MCP_OIDC_CLIENT_ID = "client123";
-        process.env.MCP_OIDC_CLIENT_SECRET = "secret456";
-        process.env.MCP_ALLOWED_EMAILS = "alice@example.com";
+        process.env["PAPRIKA_EMAIL"] = "user@test.com";
+        process.env["PAPRIKA_PASSWORD"] = "secret";
+        process.env["MCP_TRANSPORT"] = "http";
+        process.env["MCP_PUBLIC_URL"] = "https://evil/?fake=http://x";
+        process.env["MCP_OIDC_PRESET"] = "google";
+        process.env["MCP_OIDC_CLIENT_ID"] = "client123";
+        process.env["MCP_OIDC_CLIENT_SECRET"] = "secret456";
+        process.env["MCP_ALLOWED_EMAILS"] = "alice@example.com";
 
         const result = loadConfig(tempDir);
         result.match(
@@ -449,14 +449,14 @@ describe("Configuration loading", () => {
 
     describe("listField behaviors", () => {
       it("splits comma-separated values and trims whitespace", () => {
-        process.env.PAPRIKA_EMAIL = "user@test.com";
-        process.env.PAPRIKA_PASSWORD = "secret";
-        process.env.MCP_TRANSPORT = "http";
-        process.env.MCP_PUBLIC_URL = "https://m.example.com";
-        process.env.MCP_OIDC_PRESET = "google";
-        process.env.MCP_OIDC_CLIENT_ID = "client123";
-        process.env.MCP_OIDC_CLIENT_SECRET = "secret456";
-        process.env.MCP_ALLOWED_EMAILS = "a@x, b@x ,c@x";
+        process.env["PAPRIKA_EMAIL"] = "user@test.com";
+        process.env["PAPRIKA_PASSWORD"] = "secret";
+        process.env["MCP_TRANSPORT"] = "http";
+        process.env["MCP_PUBLIC_URL"] = "https://m.example.com";
+        process.env["MCP_OIDC_PRESET"] = "google";
+        process.env["MCP_OIDC_CLIENT_ID"] = "client123";
+        process.env["MCP_OIDC_CLIENT_SECRET"] = "secret456";
+        process.env["MCP_ALLOWED_EMAILS"] = "a@x, b@x ,c@x";
 
         const result = loadConfig(tempDir);
         result.match(
@@ -470,14 +470,14 @@ describe("Configuration loading", () => {
       });
 
       it("filters empty entries from comma-separated values", () => {
-        process.env.PAPRIKA_EMAIL = "user@test.com";
-        process.env.PAPRIKA_PASSWORD = "secret";
-        process.env.MCP_TRANSPORT = "http";
-        process.env.MCP_PUBLIC_URL = "https://m.example.com";
-        process.env.MCP_OIDC_PRESET = "google";
-        process.env.MCP_OIDC_CLIENT_ID = "client123";
-        process.env.MCP_OIDC_CLIENT_SECRET = "secret456";
-        process.env.MCP_ALLOWED_EMAILS = ",,";
+        process.env["PAPRIKA_EMAIL"] = "user@test.com";
+        process.env["PAPRIKA_PASSWORD"] = "secret";
+        process.env["MCP_TRANSPORT"] = "http";
+        process.env["MCP_PUBLIC_URL"] = "https://m.example.com";
+        process.env["MCP_OIDC_PRESET"] = "google";
+        process.env["MCP_OIDC_CLIENT_ID"] = "client123";
+        process.env["MCP_OIDC_CLIENT_SECRET"] = "secret456";
+        process.env["MCP_ALLOWED_EMAILS"] = ",,";
 
         const result = loadConfig(tempDir);
         result.match(
@@ -494,9 +494,9 @@ describe("Configuration loading", () => {
 
     describe("stdio transport skips OAuth validation", () => {
       it("accepts stdio transport with no OAuth config", () => {
-        process.env.PAPRIKA_EMAIL = "user@test.com";
-        process.env.PAPRIKA_PASSWORD = "secret";
-        process.env.MCP_TRANSPORT = "stdio";
+        process.env["PAPRIKA_EMAIL"] = "user@test.com";
+        process.env["PAPRIKA_PASSWORD"] = "secret";
+        process.env["MCP_TRANSPORT"] = "stdio";
 
         const result = loadConfig(tempDir);
         result.match(
@@ -510,11 +510,11 @@ describe("Configuration loading", () => {
       });
 
       it("accepts stdio transport with invalid OAuth env vars (http:// URL is allowed)", () => {
-        process.env.PAPRIKA_EMAIL = "user@test.com";
-        process.env.PAPRIKA_PASSWORD = "secret";
-        process.env.MCP_TRANSPORT = "stdio";
-        process.env.MCP_PUBLIC_URL = "http://m.example.com";
-        process.env.MCP_OIDC_PRESET = "google";
+        process.env["PAPRIKA_EMAIL"] = "user@test.com";
+        process.env["PAPRIKA_PASSWORD"] = "secret";
+        process.env["MCP_TRANSPORT"] = "stdio";
+        process.env["MCP_PUBLIC_URL"] = "http://m.example.com";
+        process.env["MCP_OIDC_PRESET"] = "google";
 
         const result = loadConfig(tempDir);
         result.match(
@@ -530,13 +530,13 @@ describe("Configuration loading", () => {
 
     describe("Preset OR discovery URL invariant", () => {
       it("rejects HTTP mode without preset and without discovery URL", () => {
-        process.env.PAPRIKA_EMAIL = "user@test.com";
-        process.env.PAPRIKA_PASSWORD = "secret";
-        process.env.MCP_TRANSPORT = "http";
-        process.env.MCP_PUBLIC_URL = "https://m.example.com";
-        process.env.MCP_OIDC_CLIENT_ID = "client123";
-        process.env.MCP_OIDC_CLIENT_SECRET = "secret456";
-        process.env.MCP_ALLOWED_EMAILS = "alice@example.com";
+        process.env["PAPRIKA_EMAIL"] = "user@test.com";
+        process.env["PAPRIKA_PASSWORD"] = "secret";
+        process.env["MCP_TRANSPORT"] = "http";
+        process.env["MCP_PUBLIC_URL"] = "https://m.example.com";
+        process.env["MCP_OIDC_CLIENT_ID"] = "client123";
+        process.env["MCP_OIDC_CLIENT_SECRET"] = "secret456";
+        process.env["MCP_ALLOWED_EMAILS"] = "alice@example.com";
 
         const result = loadConfig(tempDir);
         result.match(
@@ -552,14 +552,14 @@ describe("Configuration loading", () => {
       });
 
       it("accepts HTTP mode with discovery URL only", () => {
-        process.env.PAPRIKA_EMAIL = "user@test.com";
-        process.env.PAPRIKA_PASSWORD = "secret";
-        process.env.MCP_TRANSPORT = "http";
-        process.env.MCP_PUBLIC_URL = "https://m.example.com";
-        process.env.MCP_OIDC_DISCOVERY_URL = "https://issuer.example.com/.well-known/openid-configuration";
-        process.env.MCP_OIDC_CLIENT_ID = "client123";
-        process.env.MCP_OIDC_CLIENT_SECRET = "secret456";
-        process.env.MCP_ALLOWED_EMAILS = "alice@example.com";
+        process.env["PAPRIKA_EMAIL"] = "user@test.com";
+        process.env["PAPRIKA_PASSWORD"] = "secret";
+        process.env["MCP_TRANSPORT"] = "http";
+        process.env["MCP_PUBLIC_URL"] = "https://m.example.com";
+        process.env["MCP_OIDC_DISCOVERY_URL"] = "https://issuer.example.com/.well-known/openid-configuration";
+        process.env["MCP_OIDC_CLIENT_ID"] = "client123";
+        process.env["MCP_OIDC_CLIENT_SECRET"] = "secret456";
+        process.env["MCP_ALLOWED_EMAILS"] = "alice@example.com";
 
         const result = loadConfig(tempDir);
         result.match(
@@ -575,13 +575,13 @@ describe("Configuration loading", () => {
 
     describe("Client credentials requirement", () => {
       it("rejects HTTP mode without clientId", () => {
-        process.env.PAPRIKA_EMAIL = "user@test.com";
-        process.env.PAPRIKA_PASSWORD = "secret";
-        process.env.MCP_TRANSPORT = "http";
-        process.env.MCP_PUBLIC_URL = "https://m.example.com";
-        process.env.MCP_OIDC_PRESET = "google";
-        process.env.MCP_OIDC_CLIENT_SECRET = "secret456";
-        process.env.MCP_ALLOWED_EMAILS = "alice@example.com";
+        process.env["PAPRIKA_EMAIL"] = "user@test.com";
+        process.env["PAPRIKA_PASSWORD"] = "secret";
+        process.env["MCP_TRANSPORT"] = "http";
+        process.env["MCP_PUBLIC_URL"] = "https://m.example.com";
+        process.env["MCP_OIDC_PRESET"] = "google";
+        process.env["MCP_OIDC_CLIENT_SECRET"] = "secret456";
+        process.env["MCP_ALLOWED_EMAILS"] = "alice@example.com";
 
         const result = loadConfig(tempDir);
         result.match(
@@ -596,13 +596,13 @@ describe("Configuration loading", () => {
       });
 
       it("rejects HTTP mode without clientSecret", () => {
-        process.env.PAPRIKA_EMAIL = "user@test.com";
-        process.env.PAPRIKA_PASSWORD = "secret";
-        process.env.MCP_TRANSPORT = "http";
-        process.env.MCP_PUBLIC_URL = "https://m.example.com";
-        process.env.MCP_OIDC_PRESET = "google";
-        process.env.MCP_OIDC_CLIENT_ID = "client123";
-        process.env.MCP_ALLOWED_EMAILS = "alice@example.com";
+        process.env["PAPRIKA_EMAIL"] = "user@test.com";
+        process.env["PAPRIKA_PASSWORD"] = "secret";
+        process.env["MCP_TRANSPORT"] = "http";
+        process.env["MCP_PUBLIC_URL"] = "https://m.example.com";
+        process.env["MCP_OIDC_PRESET"] = "google";
+        process.env["MCP_OIDC_CLIENT_ID"] = "client123";
+        process.env["MCP_ALLOWED_EMAILS"] = "alice@example.com";
 
         const result = loadConfig(tempDir);
         result.match(
@@ -619,9 +619,9 @@ describe("Configuration loading", () => {
 
     describe("superRefine full fan-out when oauth is undefined", () => {
       it("produces 4 distinct validation issues when transport=http with no oauth block", () => {
-        process.env.PAPRIKA_EMAIL = "user@test.com";
-        process.env.PAPRIKA_PASSWORD = "secret";
-        process.env.MCP_TRANSPORT = "http";
+        process.env["PAPRIKA_EMAIL"] = "user@test.com";
+        process.env["PAPRIKA_PASSWORD"] = "secret";
+        process.env["MCP_TRANSPORT"] = "http";
         // Note: no oauth-related env vars set
 
         const result = loadConfig(tempDir);
@@ -655,14 +655,14 @@ describe("Configuration loading", () => {
 
     describe("Happy path", () => {
       it("accepts valid HTTP OAuth config with all required env vars", () => {
-        process.env.PAPRIKA_EMAIL = "user@test.com";
-        process.env.PAPRIKA_PASSWORD = "secret";
-        process.env.MCP_TRANSPORT = "http";
-        process.env.MCP_PUBLIC_URL = "https://mcp.example.com";
-        process.env.MCP_OIDC_PRESET = "google";
-        process.env.MCP_OIDC_CLIENT_ID = "client123";
-        process.env.MCP_OIDC_CLIENT_SECRET = "secret456";
-        process.env.MCP_ALLOWED_EMAILS = "alice@example.com,bob@example.com";
+        process.env["PAPRIKA_EMAIL"] = "user@test.com";
+        process.env["PAPRIKA_PASSWORD"] = "secret";
+        process.env["MCP_TRANSPORT"] = "http";
+        process.env["MCP_PUBLIC_URL"] = "https://mcp.example.com";
+        process.env["MCP_OIDC_PRESET"] = "google";
+        process.env["MCP_OIDC_CLIENT_ID"] = "client123";
+        process.env["MCP_OIDC_CLIENT_SECRET"] = "secret456";
+        process.env["MCP_ALLOWED_EMAILS"] = "alice@example.com,bob@example.com";
 
         const result = loadConfig(tempDir);
         result.match(
@@ -743,8 +743,8 @@ describe("Configuration loading", () => {
 
     describe("config-loader.AC1: loadConfig returns valid PaprikaConfig", () => {
       it("config-loader.AC1.1: loadConfig returns ok with PaprikaConfig when env vars are set", () => {
-        process.env.PAPRIKA_EMAIL = "user@test.com";
-        process.env.PAPRIKA_PASSWORD = "secret";
+        process.env["PAPRIKA_EMAIL"] = "user@test.com";
+        process.env["PAPRIKA_PASSWORD"] = "secret";
 
         loadConfig(tempDir).match(
           (config) => {
@@ -780,7 +780,7 @@ describe("Configuration loading", () => {
         writeConfig(tempDir, {
           paprika: { email: "file@test.com", password: "filepw" },
         });
-        process.env.PAPRIKA_EMAIL = "env@test.com";
+        process.env["PAPRIKA_EMAIL"] = "env@test.com";
 
         loadConfig(tempDir).match(
           (config) => {
@@ -798,7 +798,7 @@ describe("Configuration loading", () => {
           PAPRIKA_EMAIL: "dotenv@test.com",
           PAPRIKA_PASSWORD: "dotenvpw",
         });
-        process.env.PAPRIKA_EMAIL = "real@test.com";
+        process.env["PAPRIKA_EMAIL"] = "real@test.com";
 
         loadConfig(tempDir).match(
           (config) => {
@@ -829,8 +829,8 @@ describe("Configuration loading", () => {
       });
 
       it("config-loader.AC2.4: Zod defaults apply when no source provides a value", () => {
-        process.env.PAPRIKA_EMAIL = "user@test.com";
-        process.env.PAPRIKA_PASSWORD = "secret";
+        process.env["PAPRIKA_EMAIL"] = "user@test.com";
+        process.env["PAPRIKA_PASSWORD"] = "secret";
 
         loadConfig(tempDir).match(
           (config) => {
@@ -846,8 +846,8 @@ describe("Configuration loading", () => {
 
     describe("config-loader.AC5: File handling", () => {
       it("config-loader.AC5.1: Missing config.json (ENOENT) does not cause an error", () => {
-        process.env.PAPRIKA_EMAIL = "user@test.com";
-        process.env.PAPRIKA_PASSWORD = "secret";
+        process.env["PAPRIKA_EMAIL"] = "user@test.com";
+        process.env["PAPRIKA_PASSWORD"] = "secret";
 
         loadConfig(tempDir).match(
           () => {},
@@ -873,8 +873,8 @@ describe("Configuration loading", () => {
       it("config-loader.AC5.3: Invalid JSON in config.json produces ConfigError with kind 'invalid_json'", () => {
         writeFileSync(join(tempDir, "config.json"), "not valid json {");
 
-        process.env.PAPRIKA_EMAIL = "user@test.com";
-        process.env.PAPRIKA_PASSWORD = "secret";
+        process.env["PAPRIKA_EMAIL"] = "user@test.com";
+        process.env["PAPRIKA_PASSWORD"] = "secret";
 
         loadConfig(tempDir).match(
           () => {
@@ -894,8 +894,8 @@ describe("Configuration loading", () => {
           });
           chmodSync(join(tempDir, "config.json"), 0o000);
 
-          process.env.PAPRIKA_EMAIL = "backup@test.com";
-          process.env.PAPRIKA_PASSWORD = "secret";
+          process.env["PAPRIKA_EMAIL"] = "backup@test.com";
+          process.env["PAPRIKA_PASSWORD"] = "secret";
 
           loadConfig(tempDir).match(
             () => {
@@ -911,8 +911,8 @@ describe("Configuration loading", () => {
 
     describe("config-loader.AC9: transport + HTTP config", () => {
       it("config-loader.AC9.1: defaults — transport is 'stdio', http.port is 3000, http.host is '0.0.0.0'", () => {
-        process.env.PAPRIKA_EMAIL = "user@test.com";
-        process.env.PAPRIKA_PASSWORD = "secret";
+        process.env["PAPRIKA_EMAIL"] = "user@test.com";
+        process.env["PAPRIKA_PASSWORD"] = "secret";
 
         loadConfig(tempDir).match(
           (config) => {
@@ -927,14 +927,14 @@ describe("Configuration loading", () => {
       });
 
       it("config-loader.AC9.2: MCP_TRANSPORT=http sets transport", () => {
-        process.env.PAPRIKA_EMAIL = "user@test.com";
-        process.env.PAPRIKA_PASSWORD = "secret";
-        process.env.MCP_TRANSPORT = "http";
-        process.env.MCP_PUBLIC_URL = "https://mcp.example.com";
-        process.env.MCP_OIDC_PRESET = "google";
-        process.env.MCP_OIDC_CLIENT_ID = "client123";
-        process.env.MCP_OIDC_CLIENT_SECRET = "secret456";
-        process.env.MCP_ALLOWED_EMAILS = "alice@example.com";
+        process.env["PAPRIKA_EMAIL"] = "user@test.com";
+        process.env["PAPRIKA_PASSWORD"] = "secret";
+        process.env["MCP_TRANSPORT"] = "http";
+        process.env["MCP_PUBLIC_URL"] = "https://mcp.example.com";
+        process.env["MCP_OIDC_PRESET"] = "google";
+        process.env["MCP_OIDC_CLIENT_ID"] = "client123";
+        process.env["MCP_OIDC_CLIENT_SECRET"] = "secret456";
+        process.env["MCP_ALLOWED_EMAILS"] = "alice@example.com";
 
         loadConfig(tempDir).match(
           (config) => {
@@ -947,9 +947,9 @@ describe("Configuration loading", () => {
       });
 
       it("config-loader.AC9.3: MCP_TRANSPORT=foo is rejected by validation", () => {
-        process.env.PAPRIKA_EMAIL = "user@test.com";
-        process.env.PAPRIKA_PASSWORD = "secret";
-        process.env.MCP_TRANSPORT = "foo";
+        process.env["PAPRIKA_EMAIL"] = "user@test.com";
+        process.env["PAPRIKA_PASSWORD"] = "secret";
+        process.env["MCP_TRANSPORT"] = "foo";
 
         loadConfig(tempDir).match(
           () => {
@@ -963,9 +963,9 @@ describe("Configuration loading", () => {
       });
 
       it("config-loader.AC9.4: MCP_HTTP_PORT='8080' string is coerced to number", () => {
-        process.env.PAPRIKA_EMAIL = "user@test.com";
-        process.env.PAPRIKA_PASSWORD = "secret";
-        process.env.MCP_HTTP_PORT = "8080";
+        process.env["PAPRIKA_EMAIL"] = "user@test.com";
+        process.env["PAPRIKA_PASSWORD"] = "secret";
+        process.env["MCP_HTTP_PORT"] = "8080";
 
         loadConfig(tempDir).match(
           (config) => {
@@ -978,9 +978,9 @@ describe("Configuration loading", () => {
       });
 
       it("config-loader.AC9.5: MCP_HTTP_PORT='0' is rejected (below min 1)", () => {
-        process.env.PAPRIKA_EMAIL = "user@test.com";
-        process.env.PAPRIKA_PASSWORD = "secret";
-        process.env.MCP_HTTP_PORT = "0";
+        process.env["PAPRIKA_EMAIL"] = "user@test.com";
+        process.env["PAPRIKA_PASSWORD"] = "secret";
+        process.env["MCP_HTTP_PORT"] = "0";
 
         loadConfig(tempDir).match(
           () => {
@@ -994,9 +994,9 @@ describe("Configuration loading", () => {
       });
 
       it("config-loader.AC9.6: MCP_HTTP_PORT='70000' is rejected (above max 65535)", () => {
-        process.env.PAPRIKA_EMAIL = "user@test.com";
-        process.env.PAPRIKA_PASSWORD = "secret";
-        process.env.MCP_HTTP_PORT = "70000";
+        process.env["PAPRIKA_EMAIL"] = "user@test.com";
+        process.env["PAPRIKA_PASSWORD"] = "secret";
+        process.env["MCP_HTTP_PORT"] = "70000";
 
         loadConfig(tempDir).match(
           () => {
@@ -1010,9 +1010,9 @@ describe("Configuration loading", () => {
       });
 
       it("config-loader.AC9.7: MCP_HTTP_HOST='127.0.0.1' is accepted", () => {
-        process.env.PAPRIKA_EMAIL = "user@test.com";
-        process.env.PAPRIKA_PASSWORD = "secret";
-        process.env.MCP_HTTP_HOST = "127.0.0.1";
+        process.env["PAPRIKA_EMAIL"] = "user@test.com";
+        process.env["PAPRIKA_PASSWORD"] = "secret";
+        process.env["MCP_HTTP_HOST"] = "127.0.0.1";
 
         loadConfig(tempDir).match(
           (config) => {
@@ -1055,8 +1055,8 @@ describe("Configuration loading", () => {
       });
 
       it("config-loader.AC8.2: loadConfig writes nothing to stdout when no .env file is present", () => {
-        process.env.PAPRIKA_EMAIL = "user@test.com";
-        process.env.PAPRIKA_PASSWORD = "secret";
+        process.env["PAPRIKA_EMAIL"] = "user@test.com";
+        process.env["PAPRIKA_PASSWORD"] = "secret";
 
         const consoleLogSpy = vi.spyOn(console, "log").mockImplementation(() => {});
         const stdoutSpy = vi.spyOn(process.stdout, "write").mockImplementation(() => true);

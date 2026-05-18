@@ -9,7 +9,7 @@ import { DiskCache } from "../cache/disk-cache.js";
 import { createOidcStub } from "./__fixtures__/oidc-stub.js";
 import { setupServer } from "msw/node";
 import { ACCESS_TOKEN_TTL_SECONDS } from "./tokens.js";
-import type { OAuthClientInformationFull } from "@modelcontextprotocol/sdk/server/auth/provider.js";
+import type { OAuthClientInformationFull } from "@modelcontextprotocol/sdk/shared/auth.js";
 
 describe("MintingOAuthServerProvider", () => {
   let cacheDir: string;
@@ -69,6 +69,7 @@ describe("MintingOAuthServerProvider", () => {
       authorization_endpoint: `${oidcStub.issuer}/authorize`,
       token_endpoint: `${oidcStub.issuer}/token`,
       jwks_uri: `${oidcStub.issuer}/jwks`,
+      id_token_signing_alg_values_supported: ["RS256"],
     };
 
     provider = new MintingOAuthServerProvider(
@@ -78,6 +79,9 @@ describe("MintingOAuthServerProvider", () => {
       authCodes,
       discovery,
       {
+        discoveryUrl: `${oidcStub.issuer}/.well-known/openid-configuration`,
+        publicUrl: "https://mcp.example.com",
+        presetName: null,
         clientId: "stub-client-id",
         clientSecret: "stub-client-secret",
         scopes: ["openid", "email"],
@@ -121,13 +125,12 @@ describe("MintingOAuthServerProvider", () => {
           scopes: ["openid", "email"],
           redirectUri: "https://claude.ai/callback",
           codeChallenge: "challenge123456789",
-          codeChallengeMethod: "S256",
         },
         ctx as any,
       );
 
       expect(ctx.redirect).toHaveBeenCalled();
-      const redirectUrl = ctx.redirect.mock.calls[0][0];
+      const redirectUrl = ctx.redirect.mock.calls[0]![0]!;
       const parsed = new URL(redirectUrl);
 
       expect(parsed.origin).toBe("https://idp.stub.example.com");
@@ -142,7 +145,7 @@ describe("MintingOAuthServerProvider", () => {
 
     it("stores AuthRequestState keyed by ourState before redirect", async () => {
       const ctx = {
-        redirect: vi.fn((url: string, status: number) => new Response(null, { status })),
+        redirect: vi.fn((_url: string, status: number) => new Response(null, { status })),
       };
 
       await provider.authorize(
@@ -152,13 +155,12 @@ describe("MintingOAuthServerProvider", () => {
           scopes: ["openid", "email"],
           redirectUri: "https://claude.ai/callback",
           codeChallenge: "challenge123456789",
-          codeChallengeMethod: "S256",
         },
         ctx as any,
       );
 
       // Extract ourState from redirect URL
-      const redirectUrl = ctx.redirect.mock.calls[0][0];
+      const redirectUrl = ctx.redirect.mock.calls[0]![0]!;
       const parsed = new URL(redirectUrl);
       const ourState = parsed.searchParams.get("state");
 
@@ -319,8 +321,8 @@ describe("MintingOAuthServerProvider", () => {
 
       expect(authInfo.clientId).toBe(mockClient.client_id);
       expect(authInfo.scopes).toEqual(["openid", "email"]);
-      expect(authInfo.extra?.email).toBe("user@example.com");
-      expect(authInfo.extra?.sub).toBe("user-sub-123");
+      expect(authInfo.extra?.["email"]).toBe("user@example.com");
+      expect(authInfo.extra?.["sub"]).toBe("user-sub-123");
     });
 
     it("throws InvalidTokenError for unknown/expired token", async () => {

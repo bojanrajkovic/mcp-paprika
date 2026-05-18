@@ -3,7 +3,18 @@ import type { SyncResult } from "../paprika/types.js";
 import type { RecipeUid } from "../paprika/types.js";
 import { RecipeStore } from "../cache/recipe-store.js";
 import { makeRecipe } from "../cache/__fixtures__/recipes.js";
-import mitt from "mitt";
+import { createRequire } from "node:module";
+
+// Use CommonJS require to work around TypeScript ESM resolution issues with mitt
+const _require = createRequire(import.meta.url);
+const mittFactory: unknown = _require("mitt");
+function makeMitt<T extends Record<string, unknown>>() {
+  return (mittFactory as CallableFunction)() as {
+    on: <K extends keyof T>(type: K, handler: (event: T[K]) => void) => void;
+    off: <K extends keyof T>(type: K, handler: (event: T[K]) => void) => void;
+    emit: <K extends keyof T>(type: K, event: T[K]) => void;
+  };
+}
 
 // Mock all the feature dependencies
 vi.mock("./embeddings.js", () => ({
@@ -31,13 +42,15 @@ function makeMockVectorStore() {
 
 // Helper to create a mock sync events view (mitt-backed)
 function makeMockSyncEvents() {
-  return mitt<{ "sync:complete": SyncResult; "sync:error": Error }>();
+  return makeMitt<{ "sync:complete": SyncResult; "sync:error": Error }>();
 }
 
-function makeEnabledConfig(overrides: any = {}) {
+function makeEnabledConfig(overrides: Record<string, unknown> = {}) {
   return {
+    transport: "stdio" as const,
     paprika: { email: "test@example.com", password: "pass" },
     sync: { enabled: true, interval: 5000 },
+    http: { port: 3000, host: "0.0.0.0" },
     features: {
       embeddings: {
         apiKey: "test-key",
@@ -52,14 +65,18 @@ function makeEnabledConfig(overrides: any = {}) {
 function makeDisabledConfig(withFeaturesEmpty = false) {
   if (withFeaturesEmpty) {
     return {
+      transport: "stdio" as const,
       paprika: { email: "test@example.com", password: "pass" },
       sync: { enabled: true, interval: 5000 },
+      http: { port: 3000, host: "0.0.0.0" },
       features: {},
     };
   }
   return {
+    transport: "stdio" as const,
     paprika: { email: "test@example.com", password: "pass" },
     sync: { enabled: true, interval: 5000 },
+    http: { port: 3000, host: "0.0.0.0" },
   };
 }
 
@@ -178,8 +195,10 @@ describe("p3-u08-discover-wiring: buildDiscoverComponents", () => {
         model: "embedder",
       };
       const config = {
+        transport: "stdio" as const,
         paprika: { email: "test@example.com", password: "pass" },
         sync: { enabled: true, interval: 5000 },
+        http: { port: 3000, host: "0.0.0.0" },
         features: {
           embeddings: embeddingsConfig,
         },
@@ -201,7 +220,7 @@ describe("p3-u08-discover-wiring: buildDiscoverComponents", () => {
       await buildDiscoverComponents(config, store, syncEvents);
 
       // VectorStore constructor is mocked and should have been called with the right args
-      const callArgs = vi.mocked(VectorStore).mock.calls[0];
+      const callArgs = vi.mocked(VectorStore).mock.calls[0]!;
       expect(callArgs[0]).toBe("/mock/cache");
       expect(typeof callArgs[1]).toBe("object"); // EmbeddingClient instance
     });

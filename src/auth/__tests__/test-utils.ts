@@ -13,7 +13,9 @@ import type { IdTokenPayload } from "../types.js";
  */
 export function arbitraryIdTokenPayload(): fc.Arbitrary<IdTokenPayload> {
   return fc.record({
-    iss: fc.webUrl({ withPathname: false }),
+    iss: fc
+      .tuple(fc.constantFrom("http", "https"), fc.webAuthority())
+      .map(([scheme, authority]) => `${scheme}://${authority}`),
     sub: fc.string({ minLength: 1 }),
     aud: fc.string({ minLength: 1 }),
     email: fc.option(fc.emailAddress()),
@@ -30,7 +32,9 @@ export function arbitraryIdTokenPayload(): fc.Arbitrary<IdTokenPayload> {
  */
 export function arbitraryIdTokenPayloadWithEmail(): fc.Arbitrary<IdTokenPayload> {
   return fc.record({
-    iss: fc.webUrl({ withPathname: false }),
+    iss: fc
+      .tuple(fc.constantFrom("http", "https"), fc.webAuthority())
+      .map(([scheme, authority]) => `${scheme}://${authority}`),
     sub: fc.string({ minLength: 1 }),
     aud: fc.string({ minLength: 1 }),
     email: fc.emailAddress(),
