@@ -149,23 +149,26 @@ export class OAuthClientNotFoundError extends Error {
 
 /**
  * Error thrown when an authenticated user is denied by the allowlist.
- * Examples: email not in allowlist, sub not in allowlist.
+ * Examples: email not in allowlist, sub not in allowlist, email_verified policy violation.
  * Caught by /oauth/callback handler and translated to an error redirect.
  */
 export class OAuthAllowlistDenialError extends Error {
-  readonly identity: { email?: string; sub?: string };
+  readonly identity: { email?: string | null; sub?: string };
 
-  constructor(message: string, identity: { email?: string; sub?: string }, options?: ErrorOptions) {
+  constructor(message: string, identity: { email?: string | null; sub?: string }, options?: ErrorOptions) {
     super(message, options);
     this.name = "OAuthAllowlistDenialError";
     this.identity = identity;
   }
 
-  static emailDenied(email: string): OAuthAllowlistDenialError {
-    return new OAuthAllowlistDenialError(`Email not in allowlist: ${email}`, { email });
+  static emailNotVerified(email: string, policy: string): OAuthAllowlistDenialError {
+    return new OAuthAllowlistDenialError(
+      `Email "${email}" is in allowlist but email_verified policy "${policy}" denied access`,
+      { email },
+    );
   }
 
-  static subDenied(sub: string): OAuthAllowlistDenialError {
-    return new OAuthAllowlistDenialError(`Subject not in allowlist: ${sub}`, { sub });
+  static notAllowlisted(email: string | null, sub: string): OAuthAllowlistDenialError {
+    return new OAuthAllowlistDenialError(`Identity not in allowlist: email="${email}", sub="${sub}"`, { email, sub });
   }
 }

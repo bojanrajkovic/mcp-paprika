@@ -1,0 +1,36 @@
+/**
+ * Shared test utilities for OAuth auth module tests.
+ * Exported for reuse in Phase 4 (oidc-client) and other downstream tests.
+ */
+
+import fc from "fast-check";
+import type { IdTokenPayload } from "./types.js";
+
+/**
+ * Arbitrary factory for IdTokenPayload — generates valid id_token payloads for property testing.
+ * Covers all required fields and optional email/email_verified variations.
+ */
+export function arbitraryIdTokenPayload(): fc.Arbitrary<IdTokenPayload> {
+  return fc.record({
+    iss: fc.webUrl({ withPathname: false }),
+    sub: fc.string({ minLength: 1 }),
+    aud: fc.string({ minLength: 1 }),
+    email: fc.option(fc.emailAddress()),
+    email_verified: fc.option(fc.boolean()),
+    nonce: fc.string({ minLength: 1 }),
+    exp: fc.integer({ min: Math.floor(Date.now() / 1000), max: Math.floor(Date.now() / 1000) + 86400 }),
+    iat: fc.integer({ min: Math.floor(Date.now() / 1000) - 3600, max: Math.floor(Date.now() / 1000) }),
+  });
+}
+
+/**
+ * Arbitrary factory for AllowlistInput — generates email and sub allowlists.
+ */
+export function arbitraryAllowlist(): fc.Arbitrary<{ emails: Set<string>; subs: Set<string> }> {
+  return fc
+    .tuple(fc.set(fc.emailAddress(), { maxLength: 5 }), fc.set(fc.string({ minLength: 1 }), { maxLength: 5 }))
+    .map(([emails, subs]) => ({
+      emails: new Set(emails),
+      subs: new Set(subs),
+    }));
+}
