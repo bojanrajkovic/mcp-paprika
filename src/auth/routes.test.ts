@@ -326,9 +326,9 @@ describe("Auth Routes", () => {
       });
 
       expect(res.status).toBe(200);
-      const json = (await res.json()) as any;
-      expect(json.client_name).toBe("Updated Name");
-      expect(json.registration_client_uri).toBe(`https://mcp.example.com/register/${clientId}`);
+      const json = (await res.json()) as Record<string, unknown>;
+      expect(json["client_name"]).toBe("Updated Name");
+      expect(json["registration_client_uri"]).toBe(`https://mcp.example.com/register/${clientId}`);
     });
 
     it("AC2.12: missing Authorization → 401", async () => {

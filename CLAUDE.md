@@ -17,18 +17,18 @@ MCP server for the Paprika recipe manager. Two transports: **stdio** (default; u
 
 ## Commands
 
-| Command             | Description                                                          |
-| ------------------- | -------------------------------------------------------------------- |
-| `pnpm build`        | Compile TypeScript to `dist/`                                        |
-| `pnpm dev`          | Run dev server via tsx                                               |
-| `pnpm test`         | Run vitest test suite                                                |
-| `pnpm test:watch`   | Run vitest in watch mode                                             |
+| Command             | Description                                                                                                                                                                                                                                                                                                        |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `pnpm build`        | Compile TypeScript to `dist/`                                                                                                                                                                                                                                                                                      |
+| `pnpm dev`          | Run dev server via tsx                                                                                                                                                                                                                                                                                             |
+| `pnpm test`         | Run vitest test suite                                                                                                                                                                                                                                                                                              |
+| `pnpm test:watch`   | Run vitest in watch mode                                                                                                                                                                                                                                                                                           |
 | `pnpm typecheck`    | Type-check source (`tsc --noEmit`) and test files + fixtures (`tsc --noEmit -p tsconfig.test.json`). `tsconfig.json` excludes `*.test.ts`, `__tests__/`, `__fixtures__/`, and `*test-utils*`; `tsconfig.test.json` extends it but includes everything, with `noEmit`/no-declaration so build output is unaffected. |
-| `pnpm lint`         | Run oxlint with `--deny-warnings` on `src/`                          |
-| `pnpm lint:fix`     | Run oxlint with `--fix` on `src/`                                    |
-| `pnpm format`       | Format all files with oxfmt                                          |
-| `pnpm format:check` | Check formatting without writing changes                             |
-| `pnpm prepare`      | Install lefthook git hooks (runs automatically after `pnpm install`) |
+| `pnpm lint`         | Run oxlint with `--deny-warnings` on `src/`                                                                                                                                                                                                                                                                        |
+| `pnpm lint:fix`     | Run oxlint with `--fix` on `src/`                                                                                                                                                                                                                                                                                  |
+| `pnpm format`       | Format all files with oxfmt                                                                                                                                                                                                                                                                                        |
+| `pnpm format:check` | Check formatting without writing changes                                                                                                                                                                                                                                                                           |
+| `pnpm prepare`      | Install lefthook git hooks (runs automatically after `pnpm install`)                                                                                                                                                                                                                                               |
 
 ## Project Structure
 

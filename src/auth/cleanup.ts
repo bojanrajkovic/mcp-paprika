@@ -70,13 +70,19 @@ export class AuthCleanup {
     const allClients = await this._cache.getAllOAuthClients();
     const stale = allClients.filter((c) => c.lastTokenActivityAt < cutoff);
 
+    // Fetch tokens once and precompute per-client counts so the cascade loop is O(stale + tokens)
+    // instead of O(stale × tokens). At the 50-client cap with ~hundreds of tokens this is a small
+    // win, but the code is simpler and the runtime is bounded regardless of how often the loop fires.
+    const tokensByClient = new Map<string, number>();
+    for (const t of await this._cache.getAllOAuthTokens()) {
+      tokensByClient.set(t.clientId, (tokensByClient.get(t.clientId) ?? 0) + 1);
+    }
+
     let tokensRemoved = 0;
     for (const c of stale) {
-      const allTokens = await this._cache.getAllOAuthTokens();
-      const beforeCount = allTokens.filter((t) => t.clientId === c.clientId).length;
+      tokensRemoved += tokensByClient.get(c.clientId) ?? 0;
       await this._tokenStore.removeAllForClient(c.clientId); // cascade (AC5.4)
       await this._clientStore.deleteClient(c.clientId);
-      tokensRemoved += beforeCount;
     }
 
     // (2) In-memory store sweeps — bound memory under sustained /authorize traffic
