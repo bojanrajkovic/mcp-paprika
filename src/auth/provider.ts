@@ -42,10 +42,11 @@ export class MintingOAuthServerProvider implements OAuthServerProvider {
     private readonly _publicUrl: string,
   ) {}
 
-  get clientsStore() {
-    // Cast is needed because SDK's OAuthRegisteredClientsStore interface requires mutable arrays
+  get clientsStore(): any {
+    // Type mismatch: SDK's OAuthRegisteredClientsStore interface requires mutable arrays
     // in the returned OAuthClientInformationFull, while our DiskClientRegistrationStore returns
-    // readonly arrays. In practice, the SDK never mutates these arrays.
+    // readonly arrays. In practice, the SDK never mutates these arrays, so the cast is safe.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return this._clientStore as any;
   }
 

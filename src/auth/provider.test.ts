@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, afterAll, beforeAll, vi } from "vitest";
 import { URL } from "node:url";
 import { MintingOAuthServerProvider } from "./provider.js";
 import { DiskClientRegistrationStore } from "./client-registration.js";
@@ -21,21 +21,10 @@ describe("MintingOAuthServerProvider", () => {
   let oidcStub: ReturnType<typeof createOidcStub>;
   let provider: MintingOAuthServerProvider;
   let mockClient: OAuthClientInformationFull;
+  let server: ReturnType<typeof setupServer>;
 
-  beforeEach(async () => {
-    // Setup test directory
-    cacheDir = `/tmp/test-oauth-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-
-    // Initialize cache and stores
-    cache = new DiskCache(cacheDir);
-    await cache.init();
-
-    clientStore = new DiskClientRegistrationStore(cache);
-    tokenStore = new TokenStore(cache);
-    authRequests = new AuthRequestStore();
-    authCodes = new AuthCodeStore();
-
-    // Create OIDC stub
+  beforeAll(() => {
+    // Create OIDC stub at module level (shared across all tests)
     oidcStub = createOidcStub({
       issuer: "https://idp.stub.example.com",
       clientId: "stub-client-id",
@@ -47,9 +36,32 @@ describe("MintingOAuthServerProvider", () => {
       },
     });
 
-    // Setup MSW server
-    const server = setupServer(...oidcStub.handlers);
+    // Setup MSW server at module level
+    server = setupServer(...oidcStub.handlers);
     server.listen();
+  });
+
+  afterEach(() => {
+    server.resetHandlers();
+    oidcStub.resetOverrides();
+  });
+
+  afterAll(() => {
+    server.close();
+  });
+
+  beforeEach(async () => {
+    // Setup test directory
+    cacheDir = `/tmp/test-oauth-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+    // Initialize cache and stores
+    cache = new DiskCache(cacheDir);
+    await cache.init();
+
+    clientStore = new DiskClientRegistrationStore(cache, "https://mcp.example.com");
+    tokenStore = new TokenStore(cache);
+    authRequests = new AuthRequestStore();
+    authCodes = new AuthCodeStore();
 
     // Initialize provider
     const discovery = {
@@ -69,7 +81,7 @@ describe("MintingOAuthServerProvider", () => {
         clientId: "stub-client-id",
         clientSecret: "stub-client-secret",
         scopes: ["openid", "email"],
-        emailVerifiedPolicy: "recommended",
+        emailVerifiedPolicy: "if-present",
         allowlist: { emails: ["user@example.com"], subs: [] },
         allowedAlgs: ["RS256"],
       },

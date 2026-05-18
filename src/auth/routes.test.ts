@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, beforeAll, afterAll } from "vitest";
 import { Hono } from "hono";
 import { buildAuthRoutes, buildDcrRateLimit, buildClientCap } from "./routes.js";
 import { DiskClientRegistrationStore } from "./client-registration.js";
@@ -16,19 +16,12 @@ describe("Auth Routes", () => {
   let authCodes: AuthCodeStore;
   let clientStore: DiskClientRegistrationStore;
   let tokenStore: TokenStore;
+  let oidcStub: ReturnType<typeof createOidcStub>;
+  let server: ReturnType<typeof setupServer>;
 
-  beforeEach(async () => {
-    const cacheDir = `/tmp/test-routes-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    cache = new DiskCache(cacheDir);
-    await cache.init();
-
-    clientStore = new DiskClientRegistrationStore(cache);
-    tokenStore = new TokenStore(cache);
-    authRequests = new AuthRequestStore();
-    authCodes = new AuthCodeStore();
-
-    // Setup OIDC stub
-    const oidcStub = createOidcStub({
+  beforeAll(() => {
+    // Create OIDC stub at module level (shared across all tests)
+    oidcStub = createOidcStub({
       issuer: "https://idp.stub.example.com",
       clientId: "stub-client-id",
       clientSecret: "stub-client-secret",
@@ -39,8 +32,29 @@ describe("Auth Routes", () => {
       },
     });
 
-    const server = setupServer(...oidcStub.handlers);
+    // Setup MSW server at module level
+    server = setupServer(...oidcStub.handlers);
     server.listen();
+  });
+
+  afterEach(() => {
+    server.resetHandlers();
+    oidcStub.resetOverrides();
+  });
+
+  afterAll(() => {
+    server.close();
+  });
+
+  beforeEach(async () => {
+    const cacheDir = `/tmp/test-routes-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    cache = new DiskCache(cacheDir);
+    await cache.init();
+
+    clientStore = new DiskClientRegistrationStore(cache, "https://mcp.example.com");
+    tokenStore = new TokenStore(cache);
+    authRequests = new AuthRequestStore();
+    authCodes = new AuthCodeStore();
 
     // Setup Hono app with routes
     app = new Hono();
@@ -56,7 +70,7 @@ describe("Auth Routes", () => {
           clientId: "stub-client-id",
           clientSecret: "stub-client-secret",
           scopes: ["openid", "email"],
-          emailVerifiedPolicy: "recommended",
+          emailVerifiedPolicy: "if-present",
           allowlist: { emails: ["user@example.com"], subs: [] },
           allowedAlgs: ["RS256"],
         },
@@ -105,17 +119,15 @@ describe("Auth Routes", () => {
 
     it.todo("AC2.14: success redirect includes iss=<MCP_PUBLIC_URL>");
     // PLAN says (phase_06.md:662-667): successful upstream code exchange → allowlist OK → mints mcp_ac_ → redirects with code+state+iss
-    // Deferred to Phase 7 e2e test: requires full OIDC flow (upstream code exchange + id_token verification).
-    // routes.ts line 57-88 now implements upstream code exchange with fetch to token_endpoint and id_token extraction.
-    // Test setup requires: (1) separate OIDC stub instance to avoid MSW request-body read conflicts,
-    // (2) createJwksFor wiring for JWKS verification (jose's createRemoteJWKSet needs real endpoint).
-    // Phase 7 e2e test covers the full success path with real HTTP transport.
+    // C3 FIXED: OIDC stub now signs fresh JWT per request with correct nonce (was {{nonce}} placeholder).
+    // Remaining blocker: test requires driving full /authorize → /token → /callback flow.
+    // MSW at module level + JWKS endpoint setup. Deferred to Phase 7 e2e test with real HTTP transport.
 
     it.todo("AC3.4: does NOT log id_token, only identity claims, on denial");
-    // PLAN says (phase_06.md:680-686): allowlist denial should log identity claims (email, sub) but never the id_token plaintext.
-    // Deferred to Phase 7 e2e test: same rationale as AC2.14 success path above.
-    // routes.ts line 124-126 implements the denial logging: logs identity claims only via process.stderr.write().
-    // Test setup requires full OIDC flow with separate stub instance to avoid MSW conflicts.
+    // PLAN says (phase_06.md:680-686): allowlist denial logs identity claims (email, sub) but never id_token.
+    // C3 FIXED: JWT now valid; allowlist denial path is testable.
+    // Remaining blocker: same as AC2.14 — requires /authorize → /token → /callback flow setup.
+    // Deferred to Phase 7 e2e test.
 
     it("missing state → 400", async () => {
       const res = await app.request("/oauth/callback");

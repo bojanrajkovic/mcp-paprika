@@ -1,5 +1,6 @@
 import { Hono, type Context, type MiddlewareHandler } from "hono";
 import { rateLimiter } from "hono-rate-limiter";
+import { z } from "zod";
 import type { DiskClientRegistrationStore } from "./client-registration.js";
 import type { TokenStore } from "./token-store.js";
 import type { AuthRequestStore } from "./auth-request-store.js";
@@ -10,6 +11,7 @@ import type { JWTVerifyGetKey } from "jose";
 import type { DiskCache } from "../cache/disk-cache.js";
 import { generateOpaqueToken } from "./tokens.js";
 import { verifyIdToken } from "./oidc-client.js";
+import type { IdTokenPayload } from "./types.js";
 import { verifyIdentity } from "./allowlist.js";
 import { OAuthMetadataValidationError } from "./errors.js";
 
@@ -64,21 +66,35 @@ export function buildAuthRoutes(deps: AuthRoutesDeps): Hono {
         code,
         client_id: deps.oidcConfig.clientId,
         client_secret: deps.oidcConfig.clientSecret,
+        redirect_uri: `${deps.publicUrl}/oauth/callback`,
       });
       const tokenRes = await fetch(deps.discovery.token_endpoint, {
         method: "POST",
         headers: { "content-type": "application/x-www-form-urlencoded" },
-        body: new TextEncoder().encode(tokenBody.toString()),
+        body: tokenBody,
       });
       if (!tokenRes.ok) {
         throw new Error(`token endpoint returned ${tokenRes.status}`);
       }
-      const tokenJson = (await tokenRes.json()) as any;
-      if (typeof tokenJson.id_token !== "string") {
-        throw new Error("token endpoint did not return id_token");
+      const tokenJson = await tokenRes.json();
+
+      // Validate token response shape
+      const TokenResponseSchema = z.object({
+        id_token: z.string(),
+        access_token: z.string().optional(),
+        token_type: z.string().optional(),
+        expires_in: z.number().optional(),
+      });
+
+      const validated = TokenResponseSchema.safeParse(tokenJson);
+      if (!validated.success) {
+        throw new Error("token endpoint response missing id_token");
       }
-      idToken = tokenJson.id_token;
-    } catch {
+      idToken = validated.data.id_token;
+    } catch (cause) {
+      process.stderr.write(
+        `[auth] upstream token exchange failed: ${cause instanceof Error ? cause.message : String(cause)}\n`,
+      );
       return redirectToClient(c, stored.redirectUri, {
         error: "server_error",
         error_description: "upstream code exchange failed",
@@ -88,20 +104,18 @@ export function buildAuthRoutes(deps: AuthRoutesDeps): Hono {
     }
 
     // Verify id_token (alg, sig, iss, aud, nonce)
-    let payload: any;
+    let payload: IdTokenPayload;
     try {
       payload = await verifyIdToken(idToken, deps.jwks, {
         clientId: deps.oidcConfig.clientId,
         issuer: deps.discovery.issuer,
         nonce: stored.ourNonce,
         allowedAlgs: deps.oidcConfig.allowedAlgs,
-      }).then(
-        (p) => p,
-        () => {
-          throw new Error("id_token verification failed");
-        },
+      });
+    } catch (cause) {
+      process.stderr.write(
+        `[auth] id_token verification failed: ${cause instanceof Error ? cause.message : String(cause)}\n`,
       );
-    } catch {
       return redirectToClient(c, stored.redirectUri, {
         error: "access_denied",
         error_description: "id_token verification failed",
@@ -162,7 +176,7 @@ export function buildAuthRoutes(deps: AuthRoutesDeps): Hono {
       return c.json(updated, 200);
     } catch (e) {
       if (e instanceof OAuthMetadataValidationError) {
-        return c.json({ error: "invalid_client_metadata", error_description: String((e as any).message) }, 400);
+        return c.json({ error: "invalid_client_metadata", error_description: e.message }, 400);
       }
       throw e;
     }
@@ -221,13 +235,20 @@ export function buildDcrRateLimit(): MiddlewareHandler {
   return rateLimiter({
     windowMs: 60 * 60 * 1000, // 1 hour
     limit: 10,
-    keyGenerator: (c) =>
-      c.req.header("x-forwarded-for") ??
-      c.req.header("cf-connecting-ip") ??
-      // Production deployments terminate TLS at a reverse proxy that sets
-      // x-forwarded-for. Local dev without a proxy lumps everyone under "unknown";
-      // documented in auth CLAUDE.md (Phase 8).
-      "unknown",
+    keyGenerator: (c) => {
+      // RFC 7239: x-forwarded-for is comma-separated; take the leftmost (client IP)
+      const xForwardedFor = c.req.header("x-forwarded-for");
+      if (xForwardedFor) {
+        return xForwardedFor.split(",")[0]?.trim() ?? "unknown";
+      }
+      return (
+        c.req.header("cf-connecting-ip") ??
+        // Production deployments terminate TLS at a reverse proxy that sets
+        // x-forwarded-for. Local dev without a proxy lumps everyone under "unknown";
+        // documented in auth CLAUDE.md (Phase 8).
+        "unknown"
+      );
+    },
     standardHeaders: "draft-6",
   });
 }

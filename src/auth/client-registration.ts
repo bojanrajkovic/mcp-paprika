@@ -10,7 +10,7 @@
  * - verifyRegistrationAccessToken: used by route handlers to gate PUT/DELETE access
  */
 
-import { randomUUID } from "node:crypto";
+import { randomUUID, timingSafeEqual } from "node:crypto";
 import { generateOpaqueToken, hashTokenForStorage } from "./tokens.js";
 import { validateRegistration, validateUpdate } from "./dcr-validator.js";
 import { OAuthClientNotFoundError } from "./errors.js";
@@ -188,6 +188,19 @@ export class DiskClientRegistrationStore {
     if (client === null) return false;
 
     const presentedHash = hashTokenForStorage(presentedToken);
-    return presentedHash === client.registrationAccessTokenHash;
+    const storedHash = client.registrationAccessTokenHash;
+
+    // Both hashes should be 64-character hex strings (SHA-256)
+    if (presentedHash.length !== 64 || storedHash.length !== 64) {
+      return false;
+    }
+
+    // Timing-safe comparison to prevent timing attacks
+    try {
+      return timingSafeEqual(Buffer.from(presentedHash, "hex"), Buffer.from(storedHash, "hex"));
+    } catch {
+      // If buffer conversion fails (invalid hex), return false
+      return false;
+    }
   }
 }

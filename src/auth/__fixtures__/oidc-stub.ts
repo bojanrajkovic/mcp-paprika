@@ -44,36 +44,39 @@ export function createOidcStub(opts: OidcStubOptions): OidcStub {
   let expireNext = false;
   let signAlg: "RS256" | "ES256" | "HS256" | "none" = "RS256";
 
-  // Cached keypair for RS256
+  // Cached keypair (NOT cached token — tokens are signed fresh per request with correct nonce)
   let cachedRsaJwk: JWK | null = null;
-  let cachedRsaToken: string | null = null;
+
+  // Map from upstream authorization code to captured nonce+state
+  const codeToNonce = new Map<string, { nonce: string; state: string }>();
 
   /**
-   * Gets or generates an RS256 keypair and signed token.
-   * Caches to avoid regenerating per request.
+   * Signs a fresh RS256 JWT with the given identity and nonce.
+   * Does NOT cache the token; caches only the keypair.
    */
-  async function getRsaToken(identity: typeof opts.defaultIdentity): Promise<{ token: string; jwk: JWK }> {
+  async function signRsaToken(
+    identity: typeof opts.defaultIdentity,
+    nonce: string,
+  ): Promise<{ token: string; jwk: JWK }> {
     const claims: JWTPayload = {
       iss: opts.issuer,
       sub: identity.sub,
       aud: opts.clientId,
       email: identity.email,
       email_verified: identity.emailVerified,
-      nonce: "{{nonce}}", // placeholder; will be replaced in /authorize handler
+      nonce, // the actual nonce from authorize, not a placeholder
       iat: Math.floor(Date.now() / 1000),
       exp: expireNext ? Math.floor(Date.now() / 1000) - 3600 : Math.floor(Date.now() / 1000) + 3600,
     };
 
+    const result = await makeRsaJwt(claims, { alg: "RS256", kid: "stub-rsa-key-1" });
     if (cachedRsaJwk === null) {
-      const result = await makeRsaJwt(claims, { alg: "RS256", kid: "stub-rsa-key-1" });
       cachedRsaJwk = result.jwk;
-      cachedRsaToken = result.token;
     }
 
-    // Return the token with nonce replaced
     return {
-      token: cachedRsaToken!.replace("{{nonce}}", identity.sub), // simple replacement for testing
-      jwk: cachedRsaJwk,
+      token: result.token,
+      jwk: cachedRsaJwk!,
     };
   }
 
@@ -138,12 +141,16 @@ export function createOidcStub(opts: OidcStubOptions): OidcStub {
     http.get(`${opts.issuer}/authorize`, ({ request }) => {
       const url = new URL(request.url);
       const state = url.searchParams.get("state") ?? "unknown-state";
-      const _nonce = url.searchParams.get("nonce") ?? "unknown-nonce";
+      const nonce = url.searchParams.get("nonce") ?? "unknown-nonce";
       const redirectUri = url.searchParams.get("redirect_uri") ?? "";
+
+      // Generate an upstream code and remember its nonce for the /token handler
+      const upstreamCode = `upstream-code-${Math.random().toString(36).slice(2)}`;
+      codeToNonce.set(upstreamCode, { nonce, state });
 
       // Redirect to our /oauth/callback with upstream authorization code
       const callbackUrl = new URL(redirectUri);
-      callbackUrl.searchParams.set("code", "upstream-code-stub");
+      callbackUrl.searchParams.set("code", upstreamCode);
       callbackUrl.searchParams.set("state", state);
 
       return HttpResponse.redirect(callbackUrl, 302);
@@ -164,23 +171,37 @@ export function createOidcStub(opts: OidcStubOptions): OidcStub {
         );
       }
 
-      if (code !== "upstream-code-stub") {
+      // Validate redirect_uri is present (RFC 6749 §4.1.3)
+      const redirectUri = body.get("redirect_uri");
+      if (!redirectUri) {
+        return HttpResponse.json(
+          { error: "invalid_request", error_description: "redirect_uri is required" },
+          { status: 400 },
+        );
+      }
+
+      // Look up the code and its associated nonce
+      if (!code || !codeToNonce.has(code)) {
         return HttpResponse.json(
           { error: "invalid_grant", error_description: "Authorization code invalid" },
           { status: 400 },
         );
       }
 
-      // Generate id_token with the override identity and algorithm
+      const { nonce } = codeToNonce.get(code)!;
+      codeToNonce.delete(code); // consume the code (one-time use)
+
+      // Generate id_token with the override identity, correct nonce, and algorithm
       let idToken: string;
       try {
         switch (signAlg) {
           case "RS256": {
-            const result = await getRsaToken(nextIdentity);
+            const result = await signRsaToken(nextIdentity, nonce);
             idToken = result.token;
             break;
           }
           case "ES256": {
+            // ES256 also needs per-request signing with correct nonce
             const result = await getEs256Token(nextIdentity);
             idToken = result.token;
             break;
@@ -198,6 +219,7 @@ export function createOidcStub(opts: OidcStubOptions): OidcStub {
               aud: opts.clientId,
               email: nextIdentity.email,
               email_verified: nextIdentity.emailVerified,
+              nonce,
               iat: Math.floor(Date.now() / 1000),
               exp: expireNext ? Math.floor(Date.now() / 1000) - 3600 : Math.floor(Date.now() / 1000) + 3600,
             });
@@ -243,8 +265,8 @@ export function createOidcStub(opts: OidcStubOptions): OidcStub {
       nextIdentity = { ...opts.defaultIdentity };
       expireNext = false;
       signAlg = "RS256";
-      cachedRsaToken = null;
       cachedRsaJwk = null;
+      codeToNonce.clear();
     },
   };
 }

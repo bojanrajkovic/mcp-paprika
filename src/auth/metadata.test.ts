@@ -17,7 +17,7 @@ describe("OAuth Metadata Customization", () => {
     cache = new DiskCache(cacheDir);
     await cache.init();
 
-    const clientStore = new DiskClientRegistrationStore(cache);
+    const clientStore = new DiskClientRegistrationStore(cache, "https://mcp.example.com");
     const tokenStore = new TokenStore(cache);
     const authRequests = new AuthRequestStore();
     const authCodes = new AuthCodeStore();
@@ -37,7 +37,7 @@ describe("OAuth Metadata Customization", () => {
         clientId: "stub-client-id",
         clientSecret: "stub-client-secret",
         scopes: ["openid", "email"],
-        emailVerifiedPolicy: "recommended",
+        emailVerifiedPolicy: "if-present",
         allowlist: { emails: [], subs: [] },
         allowedAlgs: ["RS256"],
       },
