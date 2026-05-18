@@ -166,14 +166,16 @@ export const paprikaConfigSchema = z
   .superRefine((cfg, ctx) => {
     if (cfg.transport !== "http") return;
     const oauth = cfg.oauth;
-    if (!oauth || !oauth.publicUrl) {
+
+    // Check publicUrl (required when transport=http)
+    if (!oauth?.publicUrl) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["oauth", "publicUrl"],
         message: "MCP_PUBLIC_URL is required when MCP_TRANSPORT=http",
       });
     } else {
-      // Validate HTTPS only for HTTP transport
+      // Validate HTTPS only if publicUrl is present
       try {
         const url = new URL(oauth.publicUrl);
         if (url.protocol !== "https:") {
@@ -191,30 +193,32 @@ export const paprikaConfigSchema = z
         });
       }
     }
-    if (oauth) {
-      const emails = oauth.allowlist?.emails ?? [];
-      const subs = oauth.allowlist?.subs ?? [];
-      if (emails.length === 0 && subs.length === 0) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ["oauth", "allowlist"],
-          message: "at least one of MCP_ALLOWED_EMAILS or MCP_ALLOWED_SUBS must be non-empty when MCP_TRANSPORT=http",
-        });
-      }
-      if (!oauth.preset && !oauth.discoveryUrl) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ["oauth", "preset"],
-          message: "one of MCP_OIDC_PRESET or MCP_OIDC_DISCOVERY_URL must be set",
-        });
-      }
-      if (!oauth.clientId || !oauth.clientSecret) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ["oauth", oauth.clientId ? "clientSecret" : "clientId"],
-          message: "MCP_OIDC_CLIENT_ID and MCP_OIDC_CLIENT_SECRET are required when MCP_TRANSPORT=http",
-        });
-      }
+
+    // Treat undefined oauth as having empty allowlists, preset, and client credentials
+    const emails = oauth?.allowlist?.emails ?? [];
+    const subs = oauth?.allowlist?.subs ?? [];
+    if (emails.length === 0 && subs.length === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["oauth", "allowlist"],
+        message: "at least one of MCP_ALLOWED_EMAILS or MCP_ALLOWED_SUBS must be non-empty when MCP_TRANSPORT=http",
+      });
+    }
+
+    if (!oauth?.preset && !oauth?.discoveryUrl) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["oauth", "preset"],
+        message: "one of MCP_OIDC_PRESET or MCP_OIDC_DISCOVERY_URL must be set",
+      });
+    }
+
+    if (!oauth?.clientId || !oauth?.clientSecret) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["oauth", oauth?.clientId ? "clientSecret" : "clientId"],
+        message: "MCP_OIDC_CLIENT_ID and MCP_OIDC_CLIENT_SECRET are required when MCP_TRANSPORT=http",
+      });
     }
   });
 

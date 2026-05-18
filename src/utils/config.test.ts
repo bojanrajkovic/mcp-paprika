@@ -617,6 +617,42 @@ describe("Configuration loading", () => {
       });
     });
 
+    describe("superRefine full fan-out when oauth is undefined", () => {
+      it("produces 4 distinct validation issues when transport=http with no oauth block", () => {
+        process.env.PAPRIKA_EMAIL = "user@test.com";
+        process.env.PAPRIKA_PASSWORD = "secret";
+        process.env.MCP_TRANSPORT = "http";
+        // Note: no oauth-related env vars set
+
+        const result = loadConfig(tempDir);
+        result.match(
+          () => {
+            expect.fail("Expected Err but got Ok");
+          },
+          (error) => {
+            expect(error.kind).toBe("validation");
+            // Should have 4 distinct issues:
+            // 1. Missing publicUrl
+            // 2. Missing allowlist (empty emails and subs)
+            // 3. Missing preset or discoveryUrl
+            // 4. Missing clientId or clientSecret
+            const reason = error.reason;
+            expect(reason).toContain("MCP_PUBLIC_URL");
+            expect(reason).toContain("MCP_ALLOWED_EMAILS");
+            expect(reason).toContain("MCP_ALLOWED_SUBS");
+            expect(reason).toContain("MCP_OIDC_PRESET");
+            expect(reason).toContain("MCP_OIDC_DISCOVERY_URL");
+            expect(reason).toContain("MCP_OIDC_CLIENT_ID");
+            expect(reason).toContain("MCP_OIDC_CLIENT_SECRET");
+            // Count the number of distinct issues in the error message
+            // Should have lines starting with "  - " for each issue
+            const issueCount = (reason.match(/  - /g) || []).length;
+            expect(issueCount).toBe(4);
+          },
+        );
+      });
+    });
+
     describe("Happy path", () => {
       it("accepts valid HTTP OAuth config with all required env vars", () => {
         process.env.PAPRIKA_EMAIL = "user@test.com";
