@@ -93,6 +93,7 @@ describe("sweepOnce", () => {
     const result = await cleanup.sweepOnce();
 
     expect(result.clientsRemoved).toBe(1);
+    expect(result.tokensRemoved).toBe(3);
     // All 3 stale-client tokens removed
     expect(await cache.getOAuthToken(staleToken1.tokenHash)).toBeNull();
     expect(await cache.getOAuthToken(staleToken2.tokenHash)).toBeNull();

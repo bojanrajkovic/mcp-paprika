@@ -51,8 +51,11 @@ export class AuthCleanup {
   /**
    * Run one cleanup sweep.
    *
-   * Public for tests and for potential startup use.
-   * Never throws — any error in cleanup is swallowed to prevent loop crashes.
+   * Public for tests and for direct use from startup code (e.g., buildAuth).
+   * May throw on disk errors (DiskCache/TokenStore/DiskClientRegistrationStore
+   * failures propagate to the caller). The background loop (`_loop`) catches
+   * these and continues — callers invoking `sweepOnce` directly should handle
+   * rejection.
    *
    * Returns counts of removed entries for observability.
    */
