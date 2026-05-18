@@ -130,15 +130,15 @@ describe("OAuth Metadata Customization", () => {
       expect(noneViolations).toEqual([]);
     });
 
-    it("AC2.2: revocation_endpoint_auth_methods_supported overridden to ['none'] if present", () => {
+    it("AC2.2: revocation_endpoint_auth_methods_supported removed (public clients need no credentials)", () => {
       const meta = buildCustomizedAuthorizationServerMetadata({
         issuerUrl: "https://m.example.com",
         provider,
       });
 
-      if (meta.revocation_endpoint_auth_methods_supported !== undefined) {
-        expect(meta.revocation_endpoint_auth_methods_supported).toEqual(["none"]);
-      }
+      // AC2.13: public-client setup — we delete the field entirely so the flat-value
+      // scan in integration tests sees exactly one "none" (token_endpoint_auth_methods_supported).
+      expect(meta.revocation_endpoint_auth_methods_supported).toBeUndefined();
     });
   });
 

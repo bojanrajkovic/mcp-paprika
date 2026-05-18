@@ -8,6 +8,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from
 
 import { startHttp, type HttpTransportHandle } from "./http.js";
 import type { PaprikaConfig } from "../utils/config.js";
+import { createOidcStub } from "../auth/__fixtures__/oidc-stub.js";
 
 /**
  * These tests drive the HTTP transport with raw `fetch`, not the MCP SDK
@@ -407,6 +408,181 @@ describe("HTTP transport (Streamable HTTP)", () => {
 
       sseController.abort();
       await ssePromise;
+    });
+  });
+});
+
+// ============================================================================
+// OAuth wire tests — HTTP transport with OAuth mounted
+// ============================================================================
+
+const OIDC_ISSUER = "https://accounts.example.test";
+const PUBLIC_URL = "https://mcp.example.test";
+
+function makeOAuthConfig(): PaprikaConfig {
+  return {
+    paprika: { email: "test@example.com", password: "secret" },
+    sync: { enabled: false, interval: 60_000 },
+    transport: "http",
+    http: { port: 0, host: "127.0.0.1" },
+    oauth: {
+      publicUrl: PUBLIC_URL,
+      preset: undefined,
+      discoveryUrl: `${OIDC_ISSUER}/.well-known/openid-configuration`,
+      scopes: ["openid", "email"],
+      emailVerifiedPolicy: "strict",
+      allowedAlgs: ["RS256"],
+      clientId: "test-upstream-client",
+      clientSecret: "test-upstream-secret",
+      allowlist: { emails: ["user@example.com"], subs: [] },
+    },
+  } as unknown as PaprikaConfig;
+}
+
+function makeClaudeAiRegistration(): Record<string, unknown> {
+  return {
+    client_name: "Claude.ai",
+    grant_types: ["authorization_code", "refresh_token"],
+    response_types: ["code"],
+    redirect_uris: ["https://claude.ai/callback"],
+    scope: "openid email",
+    token_endpoint_auth_method: "none",
+  };
+}
+
+describe("HTTP transport — OAuth mounted", () => {
+  // Single server instance shared across all OAuth wire tests.
+  // This is an integration setup — uses beforeAll/afterAll with one handle.
+  let oauthHandle: HttpTransportHandle;
+  let oauthPort: number;
+
+  beforeAll(async () => {
+    const oidcStub = createOidcStub({
+      issuer: OIDC_ISSUER,
+      clientId: "test-upstream-client",
+      clientSecret: "test-upstream-secret",
+      defaultIdentity: { email: "user@example.com", sub: "google-user-1", emailVerified: true },
+    });
+    // Add OIDC stub handlers alongside the existing Paprika mock handlers
+    // (which are already registered via beforeEach in the outer suite).
+    msw.use(...oidcStub.handlers);
+    const config = makeOAuthConfig();
+    oauthHandle = await startHttp(config);
+    oauthPort = oauthHandle.port;
+  });
+
+  afterAll(async () => {
+    await oauthHandle.shutdown();
+  });
+
+  describe("OA.1/AC2.1+AC6.1: OAuth authorization server metadata", () => {
+    it("AC2.1/AC6.1: GET /.well-known/oauth-authorization-server returns customized metadata with exact issuer", async () => {
+      // PLAN says (phase_07.md:513-521): issuer must be exact PUBLIC_URL (no trailing slash);
+      // token_endpoint_auth_methods_supported must be ["none"]; code_challenge_methods_supported
+      // must be ["S256"]; id_token_signing_alg_values_supported must NOT be present.
+      const res = await fetch(`http://127.0.0.1:${oauthPort.toString()}/.well-known/oauth-authorization-server`);
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as Record<string, unknown>;
+      expect(body["issuer"]).toBe(PUBLIC_URL); // AC6.1: exact issuer, no trailing slash
+      expect(body["token_endpoint_auth_methods_supported"]).toEqual(["none"]); // AC2.1: public client
+      expect(body["code_challenge_methods_supported"]).toEqual(["S256"]);
+      expect(body["authorization_response_iss_parameter_supported"]).toBe(true);
+      expect(body).not.toHaveProperty("id_token_signing_alg_values_supported"); // AC2.13
+    });
+  });
+
+  describe("OA.2/AC2.2: Protected resource metadata", () => {
+    it("AC2.2: GET /.well-known/oauth-protected-resource returns RFC 9728 doc", async () => {
+      // PLAN says (phase_07.md:524): protected-resource doc advertises resource = issuer
+      const res = await fetch(`http://127.0.0.1:${oauthPort.toString()}/.well-known/oauth-protected-resource`);
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as Record<string, unknown>;
+      expect(typeof body["resource"]).toBe("string");
+      expect(body["authorization_servers"]).toBeDefined();
+    });
+  });
+
+  describe("OA.3/AC2.13: No forbidden metadata values", () => {
+    it("AC2.13: scan all published metadata for forbidden 'none' or non-S256 PKCE", async () => {
+      // PLAN says (phase_07.md:527-537): no 'none' alg, only S256 PKCE method
+      const authMeta = (await fetch(
+        `http://127.0.0.1:${oauthPort.toString()}/.well-known/oauth-authorization-server`,
+      ).then((r) => r.json())) as Record<string, unknown>;
+      const resMeta = (await fetch(
+        `http://127.0.0.1:${oauthPort.toString()}/.well-known/oauth-protected-resource`,
+      ).then((r) => r.json())) as Record<string, unknown>;
+
+      function collectLeafValues(obj: unknown): Array<unknown> {
+        if (Array.isArray(obj)) return obj.flatMap(collectLeafValues);
+        if (typeof obj === "object" && obj !== null) return Object.values(obj).flatMap(collectLeafValues);
+        return [obj];
+      }
+
+      // "none" may appear in token_endpoint_auth_methods_supported (public client), but never
+      // as an algorithm value (id_token_signing_alg_values_supported must not be present).
+      // The protected-resource doc must have zero "none" values.
+      const authNoneCount = collectLeafValues(authMeta).filter((v) => v === "none").length;
+      const resNoneCount = collectLeafValues(resMeta).filter((v) => v === "none").length;
+      // Exactly 1 "none" in AS metadata (token_endpoint_auth_methods_supported)
+      expect(authNoneCount).toBeLessThanOrEqual(1);
+      expect(resNoneCount).toBe(0);
+
+      // code_challenge_methods_supported must only contain "S256"
+      const pkce = authMeta["code_challenge_methods_supported"] as Array<string> | undefined;
+      if (pkce !== undefined) {
+        expect(pkce.every((m) => m === "S256")).toBe(true);
+      }
+    });
+  });
+
+  describe("OA.4/AC1.1+AC2.6: Dynamic client registration", () => {
+    it("AC1.1/AC2.6: POST /register returns 201 with client_id + registration_access_token; no client_secret", async () => {
+      // PLAN says (phase_07.md:540-551): DCR creates a public client without client_secret
+      const body = makeClaudeAiRegistration();
+      const res = await fetch(`http://127.0.0.1:${oauthPort.toString()}/register`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      expect(res.status).toBe(201);
+      const doc = (await res.json()) as Record<string, unknown>;
+      expect(typeof doc["client_id"]).toBe("string");
+      expect((doc["client_id"] as string).length).toBeGreaterThan(0);
+      expect(typeof doc["registration_access_token"]).toBe("string");
+      expect((doc["registration_access_token"] as string).startsWith("mcp_rat_")).toBe(true);
+      expect(doc).not.toHaveProperty("client_secret");
+    });
+  });
+
+  describe("OA.5/AC1.5: Missing Authorization header → 401", () => {
+    it("AC1.5: POST /mcp without Authorization header returns 401 with WWW-Authenticate Bearer header", async () => {
+      // PLAN says (phase_07.md:554-562): bearerAuth middleware rejects unauthenticated /mcp requests
+      const res = await fetch(`http://127.0.0.1:${oauthPort.toString()}/mcp`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "ping" }),
+      });
+      expect(res.status).toBe(401);
+      const wwwAuth = res.headers.get("www-authenticate") ?? "";
+      expect(wwwAuth).toContain("Bearer");
+    });
+  });
+
+  describe("OA.6/AC1.6: Malformed token → 401", () => {
+    it("AC1.6: POST /mcp with unknown token returns 401; body does not echo the token", async () => {
+      // PLAN says (phase_07.md:565-573): invalid tokens are rejected without leaking token value
+      const fakeToken = "mcp_at_invalidtokenxxxxx";
+      const res = await fetch(`http://127.0.0.1:${oauthPort.toString()}/mcp`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${fakeToken}`,
+        },
+        body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "ping" }),
+      });
+      expect(res.status).toBe(401);
+      const body = await res.text();
+      expect(body).not.toContain(fakeToken);
     });
   });
 });

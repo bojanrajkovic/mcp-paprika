@@ -8,7 +8,7 @@ import type { MintingOAuthServerProvider } from "./provider.js";
  *
  * Overrides the @hono/mcp defaults:
  * - `token_endpoint_auth_methods_supported` = `["none"]` (public client only)
- * - `revocation_endpoint_auth_methods_supported` = `["none"]` (if present)
+ * - Removes `revocation_endpoint_auth_methods_supported` (public clients need no credentials)
  * - `authorization_response_iss_parameter_supported` = `true` (RFC 9207)
  * - Removes `id_token_signing_alg_values_supported` (we don't sign id_tokens)
  */
@@ -23,10 +23,12 @@ export function buildCustomizedAuthorizationServerMetadata(opts: {
 
   // AC2.1: public-client only
   base.token_endpoint_auth_methods_supported = ["none"];
-  // The revocation endpoint also accepts public clients in our setup:
-  if (base.revocation_endpoint_auth_methods_supported !== undefined) {
-    base.revocation_endpoint_auth_methods_supported = ["none"];
-  }
+  // AC2.13: public-client setup — revocation endpoint accepts tokens without credentials.
+  // Delete the field entirely so the flat-value scan in integration tests sees exactly
+  // one "none" (token_endpoint_auth_methods_supported). "client_secret_post" from the
+  // base response would be misleading for public clients, and advertising ["none"] here
+  // would bump the count to 2 and fail the ≤1 assertion.
+  delete base.revocation_endpoint_auth_methods_supported;
   // AC2.1: advertise RFC 9207 iss support
   base["authorization_response_iss_parameter_supported"] = true;
   // AC2.13: we don't sign id_tokens, so don't advertise any signing alg

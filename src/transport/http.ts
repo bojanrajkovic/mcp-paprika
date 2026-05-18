@@ -7,10 +7,13 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
 import { Hono } from "hono";
 
+import { mcpAuthRouter, bearerAuth } from "@hono/mcp";
 import { buildAppContext, buildMcpServer } from "../server/build.js";
 import { broadcastNotifier } from "../server/notifier.js";
 import type { PaprikaConfig } from "../utils/config.js";
 import type { TransportHandle } from "./stdio.js";
+import { buildAuthMetadataRouter } from "../auth/metadata.js";
+import { buildAuthRoutes, buildDcrRateLimit, buildClientCap } from "../auth/routes.js";
 
 const SHUTDOWN_TIMEOUT_MS = 10_000;
 const MCP_SESSION_HEADER = "mcp-session-id";
@@ -80,6 +83,70 @@ export async function startHttp(config: PaprikaConfig): Promise<HttpTransportHan
     }),
   );
 
+  if (app.auth !== null) {
+    // Capture auth to avoid null-checks inside callbacks (mirrors SyncEngine pattern)
+    const auth = app.auth;
+
+    // 1. Customized well-known docs MUST mount BEFORE mcpAuthRouter so Hono's
+    //    first-match-wins returns our overrides instead of mcpAuthRouter's defaults
+    //    (which hard-code token_endpoint_auth_methods_supported: ["client_secret_post"]).
+    hono.route(
+      "/",
+      buildAuthMetadataRouter({
+        issuerUrl: auth.config.publicUrl, // STRING — preserves exact value, no trailing-slash normalization
+        provider: auth.provider,
+        resourceServerUrl: new URL(auth.config.publicUrl),
+      }),
+    );
+
+    // 2. Rate-limit + cap middleware MUST attach BEFORE mcpAuthRouter handles POST /register
+    //    (mcpAuthRouter processes it internally; middleware added after would be bypassed).
+    hono.use("/register", buildDcrRateLimit());
+    hono.use("/register", buildClientCap(app.cache, 50));
+
+    // 3. mcpAuthRouter mounts DCR + authorize + token + revoke.
+    //    Well-known routes are shadowed by step 1 (first-match-wins).
+    hono.route(
+      "/",
+      mcpAuthRouter({
+        provider: auth.provider,
+        issuerUrl: auth.config.publicUrl, // STRING — see Phase 6 note on issuerUrl
+        resourceServerUrl: new URL(auth.config.publicUrl),
+      }),
+    );
+
+    // 4. Custom routes: /oauth/callback (upstream IdP redirect), RFC 7592 PUT/DELETE /register/:id
+    hono.route(
+      "/",
+      buildAuthRoutes({
+        clientStore: auth.clientStore,
+        tokenStore: auth.tokenStore,
+        authRequests: auth.requestStore, // AuthContext uses requestStore; AuthRoutesDeps uses authRequests
+        authCodes: auth.codeStore, // AuthContext uses codeStore; AuthRoutesDeps uses authCodes
+        oidcConfig: auth.config,
+        discovery: auth.discovery,
+        jwks: auth.jwks,
+        publicUrl: auth.config.publicUrl,
+      }),
+    );
+
+    // 5. bearerAuth guards /mcp — all unauthenticated MCP requests are rejected with 401.
+    //    verifyAccessToken throws on invalid tokens; catch and return false.
+    hono.use(
+      "/mcp",
+      bearerAuth({
+        verifyToken: async (token: string) => {
+          try {
+            await auth.provider.verifyAccessToken(token);
+            return true;
+          } catch {
+            return false;
+          }
+        },
+      }),
+    );
+  }
+
   hono.all("/mcp", async (c) => {
     const sessionId = c.req.header(MCP_SESSION_HEADER);
 
@@ -142,11 +209,20 @@ export async function startHttp(config: PaprikaConfig): Promise<HttpTransportHan
     );
   });
 
-  log(`HTTP transport listening on http://${config.http.host}:${boundPort.toString()}/mcp`);
+  if (app.auth !== null) {
+    log(`HTTP transport listening on http://${config.http.host}:${boundPort.toString()}/mcp`);
+    log(`OAuth issuer: ${app.auth.config.publicUrl}`);
+    log(`OAuth upstream: ${app.auth.discovery.issuer} (${app.auth.config.scopes.join(" ")})`);
+    log(
+      `Allowlist: ${app.auth.config.allowlist.emails.length.toString()} email(s), ${app.auth.config.allowlist.subs.length.toString()} sub(s)`,
+    );
+    app.auth.cleanup.start();
+  } else {
+    log(
+      `HTTP transport listening on http://${config.http.host}:${boundPort.toString()}/mcp (NO AUTH — stdio-equivalent dev mode)`,
+    );
+  }
   log(`Health probe: GET http://${config.http.host}:${boundPort.toString()}/healthz`);
-  log(
-    `WARNING: No built-in authentication. Place a reverse proxy (Cloudflare Access, Tailscale Serve, OAuth2 proxy) in front of this server before exposing it publicly.`,
-  );
 
   return {
     port: boundPort,
@@ -160,6 +236,7 @@ export async function startHttp(config: PaprikaConfig): Promise<HttpTransportHan
       // so a misbehaving session can't hold shutdown forever.
       const drain = async (): Promise<void> => {
         sync.stop();
+        app.auth?.cleanup.stop();
 
         const sessionSnapshot = [...sessions.values()];
         await Promise.allSettled(sessionSnapshot.map((s) => s.transport.close()));
