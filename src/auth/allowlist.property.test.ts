@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import fc from "fast-check";
 import { verifyIdentity } from "./allowlist.js";
-import { arbitraryIdTokenPayload, arbitraryAllowlist } from "./test-utils.js";
+import { arbitraryIdTokenPayload, arbitraryIdTokenPayloadWithEmail, arbitraryAllowlist } from "./test-utils.js";
 
 describe("allowlist: property-based tests", () => {
   describe("Policy semantics", () => {
@@ -15,9 +15,15 @@ describe("allowlist: property-based tests", () => {
           const shouldAdmit = emailListed || subListed;
 
           if (shouldAdmit) {
-            expect(result.isOk()).toBe(true);
+            result.match(
+              () => {},
+              () => expect.fail("Expected Ok but got Err"),
+            );
           } else {
-            expect(result.isErr()).toBe(true);
+            result.match(
+              () => expect.fail("Expected Err but got Ok"),
+              () => {},
+            );
           }
         }),
       );
@@ -25,9 +31,8 @@ describe("allowlist: property-based tests", () => {
 
     it("Property 2: strict policy never admits when email is in list but email_verified !== true", () => {
       fc.assert(
-        fc.property(arbitraryIdTokenPayload(), arbitraryAllowlist(), fc.constant(true), (payload, allowlist, _) => {
+        fc.property(arbitraryIdTokenPayloadWithEmail(), arbitraryAllowlist(), (payload, allowlist) => {
           // Force email to be in allowlist and email_verified to not be true
-          if (!payload.email) return; // skip if no email
           const modifiedAllowlist = {
             ...allowlist,
             emails: new Set([...allowlist.emails, payload.email]),
@@ -39,16 +44,18 @@ describe("allowlist: property-based tests", () => {
           };
 
           const result = verifyIdentity(modifiedPayload, "strict", modifiedAllowlist);
-          expect(result.isErr()).toBe(true);
+          result.match(
+            () => expect.fail("Expected Err but got Ok"),
+            () => {},
+          );
         }),
       );
     });
 
     it("Property 3: if-present policy admits when email_verified is missing, denies when email_verified === false", () => {
       fc.assert(
-        fc.property(arbitraryIdTokenPayload(), arbitraryAllowlist(), (payload, allowlist) => {
+        fc.property(arbitraryIdTokenPayloadWithEmail(), arbitraryAllowlist(), (payload, allowlist) => {
           // Force email to be in allowlist and subs empty
-          if (!payload.email) return; // skip if no email
           const modifiedAllowlist = {
             ...allowlist,
             emails: new Set([...allowlist.emails, payload.email]),
@@ -61,7 +68,10 @@ describe("allowlist: property-based tests", () => {
             email_verified: undefined,
           };
           const resultMissing = verifyIdentity(payloadMissing, "if-present", modifiedAllowlist);
-          expect(resultMissing.isOk()).toBe(true);
+          resultMissing.match(
+            () => {},
+            () => expect.fail("Expected Ok but got Err for email_verified=undefined"),
+          );
 
           // Test case 2: email_verified = false — should deny
           const payloadFalse = {
@@ -69,7 +79,10 @@ describe("allowlist: property-based tests", () => {
             email_verified: false,
           };
           const resultFalse = verifyIdentity(payloadFalse, "if-present", modifiedAllowlist);
-          expect(resultFalse.isErr()).toBe(true);
+          resultFalse.match(
+            () => expect.fail("Expected Err but got Ok for email_verified=false"),
+            () => {},
+          );
         }),
       );
     });

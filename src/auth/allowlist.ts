@@ -25,7 +25,7 @@ export interface AllowlistInput {
 }
 
 export interface VerifiedIdentity {
-  readonly email: string;
+  readonly email: string | null;
   readonly sub: string;
   readonly source: "email" | "sub";
 }
@@ -68,22 +68,26 @@ export function verifyIdentity(
   const sub = payload.sub;
   const verified = payload.email_verified;
 
-  // Step 1: If email would be admitted (all three conditions must be true), return with source=email
-  if (email && allowlist.emails.has(email) && policyAllows(verified, policy)) {
+  // Step 1: Resolve email match — would email be admitted by policy?
+  const emailWouldAdmit = email && allowlist.emails.has(email) && policyAllows(verified, policy);
+
+  // Step 2: If email would be admitted, return with source=email
+  if (emailWouldAdmit) {
     return ok({ email, sub, source: "email" });
   }
 
-  // Step 2: If email is in list but policy denies it, return emailNotVerified error
-  // This blocks sub fallback — email takes precedence when present
+  // Step 3: Else if sub is in allowlist, return with source=sub
+  // (sub does not depend on email_verified, so this is a fallback)
+  if (sub && allowlist.subs.has(sub)) {
+    return ok({ email: email ?? null, sub, source: "sub" });
+  }
+
+  // Step 4: Else if email is in list but policy denies it, return emailNotVerified error
+  // (This is only reached if sub did not match, ensuring email takes precedence)
   if (email && allowlist.emails.has(email) && !policyAllows(verified, policy)) {
     return err(OAuthAllowlistDenialError.emailNotVerified(email, policy));
   }
 
-  // Step 3: If sub is in allowlist, return with source=sub
-  if (sub && allowlist.subs.has(sub)) {
-    return ok({ email: email ?? "", sub, source: "sub" });
-  }
-
-  // Step 4: Neither email nor sub admitted the identity
+  // Step 5: Neither email nor sub admitted the identity
   return err(OAuthAllowlistDenialError.notAllowlisted(email ?? null, sub));
 }

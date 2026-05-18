@@ -211,13 +211,13 @@ describe("auth/allowlist: identity verification against email/sub lists", () => 
       result.match(
         (identity) => {
           expect(identity.source).toBe("sub");
-          expect(identity.email).toBe("");
+          expect(identity.email).toBeNull();
         },
         () => expect.fail("Expected Ok but got Err"),
       );
     });
 
-    it("rejects with emailNotVerified when both email and sub are in lists but email fails policy", () => {
+    it("admits via sub when both lists hit but email fails policy", () => {
       const payload = createPayload({
         email: "user@example.com",
         email_verified: false,
@@ -230,10 +230,11 @@ describe("auth/allowlist: identity verification against email/sub lists", () => 
       const result = verifyIdentity(payload, "strict", allowlist);
 
       result.match(
-        () => expect.fail("Expected Err but got Ok"),
-        (error) => {
-          expect(error).toBeInstanceOf(OAuthAllowlistDenialError);
+        (identity) => {
+          expect(identity.source).toBe("sub");
+          expect(identity.email).toBe("user@example.com");
         },
+        () => expect.fail("Expected Ok but got Err"),
       );
     });
   });

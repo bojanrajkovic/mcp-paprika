@@ -138,7 +138,7 @@ export const OAuthTokenSchema = z.object({
   clientId: z.string().uuid(),
   scope: z.string(),
   identity: z.object({
-    email: z.string().email(),
+    email: z.string().email().nullable(),
     sub: z.string(),
     source: z.enum(["email", "sub"]),
   }),
@@ -180,7 +180,7 @@ export const AuthCodeStateSchema = z.object({
   resource: z.string().url(),
   scope: z.string(),
   identity: z.object({
-    email: z.string().email(),
+    email: z.string().email().nullable(),
     sub: z.string(),
     source: z.enum(["email", "sub"]),
   }),
