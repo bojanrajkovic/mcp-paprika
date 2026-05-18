@@ -24,8 +24,17 @@ export const RecipeStoredSchema = z.object({
   hash: z.string(),
   name: z.string(),
   categories: z.array(CategoryUidSchema),
-  ingredients: z.string(),
-  directions: z.string(),
+  // Paprika's API returns `null` for `ingredients` and `directions` when a
+  // recipe leaves them empty (e.g. stub recipes imported from a photo). Coerce
+  // to "" so a single null-bearing recipe cannot abort initial sync — see #76.
+  ingredients: z
+    .string()
+    .nullable()
+    .transform((v) => v ?? ""),
+  directions: z
+    .string()
+    .nullable()
+    .transform((v) => v ?? ""),
   description: z.string().nullable(),
   notes: z.string().nullable(),
   prepTime: z.string().nullable(),
@@ -62,8 +71,15 @@ export const RecipeSchema = z
     hash: z.string(),
     name: z.string(),
     categories: z.array(CategoryUidSchema),
-    ingredients: z.string(),
-    directions: z.string(),
+    // Coerce null → "" to match the wire format (see RecipeStoredSchema and #76).
+    ingredients: z
+      .string()
+      .nullable()
+      .transform((v) => v ?? ""),
+    directions: z
+      .string()
+      .nullable()
+      .transform((v) => v ?? ""),
     description: z.string().nullable(),
     notes: z.string().nullable(),
     prep_time: z.string().nullable(),

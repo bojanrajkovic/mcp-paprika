@@ -5,6 +5,7 @@ import {
   CategoryUidSchema,
   RecipeEntrySchema,
   RecipeSchema,
+  RecipeStoredSchema,
   CategorySchema,
   PantryItemUidSchema,
   PantryItemStoredSchema,
@@ -309,6 +310,104 @@ describe("Full Object Schemas", () => {
 
       if (result.success) {
         expect(result.data.result.token).toBe("test-jwt-token");
+      }
+    });
+  });
+
+  describe("paprika-types.AC1.9: RecipeSchema coerces null ingredients/directions to empty string", () => {
+    // Paprika's API returns `null` for `ingredients` and `directions` when a
+    // recipe has them empty (e.g. stub recipes imported from a photo). A
+    // single null-bearing recipe would otherwise abort initial sync via Zod
+    // validation — see issue #76.
+    it("should accept wire JSON with ingredients: null and directions: null", () => {
+      const snakeCaseRecipe = {
+        uid: "recipe-123",
+        hash: "hash-abc",
+        name: "Stub Recipe",
+        categories: [],
+        ingredients: null,
+        directions: null,
+        description: null,
+        notes: null,
+        prep_time: null,
+        cook_time: null,
+        total_time: null,
+        servings: null,
+        difficulty: null,
+        rating: 0,
+        created: "2024-01-01T00:00:00Z",
+        image_url: null,
+        photo: null,
+        photo_hash: null,
+        photo_large: null,
+        photo_url: null,
+        source: null,
+        source_url: null,
+        on_favorites: false,
+        in_trash: false,
+        is_pinned: false,
+        on_grocery_list: false,
+        scale: null,
+        nutritional_info: null,
+      };
+
+      const result = RecipeSchema.safeParse(snakeCaseRecipe);
+      expect(result.success).toBe(true);
+
+      if (result.success) {
+        expect(result.data.ingredients).toBe("");
+        expect(result.data.directions).toBe("");
+        // Compile-time check: ingredients/directions remain string, not string | null
+        const _checkIng: string = result.data.ingredients;
+        const _checkDir: string = result.data.directions;
+        expect(_checkIng).toBe("");
+        expect(_checkDir).toBe("");
+      }
+    });
+  });
+
+  describe("paprika-types.AC1.10: RecipeStoredSchema coerces null ingredients/directions to empty string", () => {
+    // Disk format mirrors the wire-format coercion so that a recipe with
+    // null ingredients/directions written by an older client still parses
+    // cleanly on read-back.
+    it("should accept stored JSON with ingredients: null and directions: null", () => {
+      const storedRecipe = {
+        uid: "recipe-123",
+        hash: "hash-abc",
+        name: "Stub Recipe",
+        categories: [],
+        ingredients: null,
+        directions: null,
+        description: null,
+        notes: null,
+        prepTime: null,
+        cookTime: null,
+        totalTime: null,
+        servings: null,
+        difficulty: null,
+        rating: 0,
+        created: "2024-01-01T00:00:00Z",
+        imageUrl: null,
+        photo: null,
+        photoHash: null,
+        photoLarge: null,
+        photoUrl: null,
+        source: null,
+        sourceUrl: null,
+        onFavorites: false,
+        inTrash: false,
+        isPinned: false,
+        onGroceryList: false,
+        scale: null,
+        nutritionalInfo: null,
+      };
+
+      const result = RecipeStoredSchema.safeParse(storedRecipe);
+      expect(result.success).toBe(true);
+
+      if (result.success) {
+        expect(result.data.ingredients).toBe("");
+        expect(result.data.directions).toBe("");
       }
     });
   });
