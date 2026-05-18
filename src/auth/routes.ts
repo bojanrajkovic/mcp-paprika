@@ -59,9 +59,25 @@ export function buildAuthRoutes(deps: AuthRoutesDeps): Hono {
     // Exchange upstream code for upstream id_token
     let idToken: string;
     try {
-      // Stub implementation - actual implementation requires fetch to upstream token endpoint
-      // using the upstream code + our credentials
-      idToken = code; // placeholder
+      const tokenBody = new URLSearchParams({
+        grant_type: "authorization_code",
+        code,
+        client_id: deps.oidcConfig.clientId,
+        client_secret: deps.oidcConfig.clientSecret,
+      });
+      const tokenRes = await fetch(deps.discovery.token_endpoint, {
+        method: "POST",
+        headers: { "content-type": "application/x-www-form-urlencoded" },
+        body: new TextEncoder().encode(tokenBody.toString()),
+      });
+      if (!tokenRes.ok) {
+        throw new Error(`token endpoint returned ${tokenRes.status}`);
+      }
+      const tokenJson = (await tokenRes.json()) as any;
+      if (typeof tokenJson.id_token !== "string") {
+        throw new Error("token endpoint did not return id_token");
+      }
+      idToken = tokenJson.id_token;
     } catch {
       return redirectToClient(c, stored.redirectUri, {
         error: "server_error",

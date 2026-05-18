@@ -40,6 +40,7 @@
     "dotenv": "^17.4.2",
     "env-paths": "^4.0.0",
     "hono": "4.12.8",
+    "hono-rate-limiter": "^0.5.3",
     "jose": "^6.2.3",
     "luxon": "^3.7.2",
     "mitt": "^3.0.1",

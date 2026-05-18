@@ -103,6 +103,20 @@ describe("Auth Routes", () => {
       expect(redirectUrl.searchParams.get("state")).toBe(claudeState);
     });
 
+    it.todo("AC2.14: success redirect includes iss=<MCP_PUBLIC_URL>");
+    // PLAN says (phase_06.md:662-667): successful upstream code exchange → allowlist OK → mints mcp_ac_ → redirects with code+state+iss
+    // Deferred to Phase 7 e2e test: requires full OIDC flow (upstream code exchange + id_token verification).
+    // routes.ts line 57-88 now implements upstream code exchange with fetch to token_endpoint and id_token extraction.
+    // Test setup requires: (1) separate OIDC stub instance to avoid MSW request-body read conflicts,
+    // (2) createJwksFor wiring for JWKS verification (jose's createRemoteJWKSet needs real endpoint).
+    // Phase 7 e2e test covers the full success path with real HTTP transport.
+
+    it.todo("AC3.4: does NOT log id_token, only identity claims, on denial");
+    // PLAN says (phase_06.md:680-686): allowlist denial should log identity claims (email, sub) but never the id_token plaintext.
+    // Deferred to Phase 7 e2e test: same rationale as AC2.14 success path above.
+    // routes.ts line 124-126 implements the denial logging: logs identity claims only via process.stderr.write().
+    // Test setup requires full OIDC flow with separate stub instance to avoid MSW conflicts.
+
     it("missing state → 400", async () => {
       const res = await app.request("/oauth/callback");
       expect(res.status).toBe(400);
@@ -194,19 +208,106 @@ describe("Auth Routes", () => {
 
   describe("DCR rate-limit middleware (AC5.1)", () => {
     it("AC5.1: buildDcrRateLimit middleware enforces 10 req/hour limit", async () => {
-      // PLAN says (phase_06.md:700-703): The `buildDcrRateLimit()` middleware limits POST /register to 10 requests per hour per IP. This test verifies the middleware exists and properly rejects 11th request from same IP.
-      const middleware = buildDcrRateLimit();
-      expect(middleware).toBeDefined();
-      expect(typeof middleware).toBe("function");
+      // PLAN says (phase_06.md:702-718): The `buildDcrRateLimit()` middleware limits POST /register to 10 requests per hour per IP.
+      // Test: 10 requests from same IP succeed (201), 11th is rejected (429).
+      const testApp = new Hono();
+      testApp.use("/register", buildDcrRateLimit());
+      testApp.post("/register", (c) => c.json({ ok: true }, 201));
+
+      const ip = "203.0.113.7";
+
+      // First 10 requests should succeed
+      for (let i = 0; i < 10; i++) {
+        const res = await testApp.request("/register", {
+          method: "POST",
+          headers: {
+            "x-forwarded-for": ip,
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({ client_name: `Client ${i}`, redirect_uris: ["https://x/"] }),
+        });
+        expect(res.status).toBe(201);
+      }
+
+      // 11th request should be rate-limited
+      const res11 = await testApp.request("/register", {
+        method: "POST",
+        headers: {
+          "x-forwarded-for": ip,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ client_name: "Client 11", redirect_uris: ["https://x/"] }),
+      });
+      expect(res11.status).toBe(429);
+    });
+
+    it("different IPs have separate rate-limit windows", async () => {
+      // PLAN says (phase_06.md:719): After 10 requests from one IP, a request from a different IP should not be rate-limited.
+      const testApp = new Hono();
+      testApp.use("/register", buildDcrRateLimit());
+      testApp.post("/register", (c) => c.json({ ok: true }, 201));
+
+      const ip1 = "203.0.113.7";
+      const ip2 = "203.0.113.8";
+
+      // Fill up the window for ip1
+      for (let i = 0; i < 10; i++) {
+        const res = await testApp.request("/register", {
+          method: "POST",
+          headers: {
+            "x-forwarded-for": ip1,
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({ client_name: `Client ${i}`, redirect_uris: ["https://x/"] }),
+        });
+        expect(res.status).toBe(201);
+      }
+
+      // ip2 should still be able to make a request (has its own window)
+      const resIp2 = await testApp.request("/register", {
+        method: "POST",
+        headers: {
+          "x-forwarded-for": ip2,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ client_name: "Client IP2", redirect_uris: ["https://x/"] }),
+      });
+      expect(resIp2.status).toBe(201);
     });
   });
 
   describe("DCR client cap middleware (AC5.2)", () => {
     it("AC5.2: buildClientCap middleware enforces client count limit", async () => {
-      // PLAN says (phase_06.md:706-710): The `buildClientCap(cache, max)` middleware prevents DCR registration when the server has reached the max registered clients. This test verifies the middleware exists and is properly constructed.
-      const middleware = buildClientCap(cache, 50);
-      expect(middleware).toBeDefined();
-      expect(typeof middleware).toBe("function");
+      // PLAN says (phase_06.md:723): The `buildClientCap(cache, max)` middleware prevents DCR registration
+      // when the server has reached the max registered clients.
+      // Test: Pre-populate cache with 50 clients, then 51st POST /register returns 429 with cap error_description.
+      const testCache = new DiskCache(`/tmp/test-cap-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+      await testCache.init();
+
+      const testClientStore = new DiskClientRegistrationStore(testCache);
+      const testApp = new Hono();
+      testApp.use("/register", buildClientCap(testCache, 50));
+      testApp.post("/register", (c) => c.json({ ok: true }, 201));
+
+      // Pre-populate cache with 50 clients
+      for (let i = 0; i < 50; i++) {
+        await testClientStore.registerClient({
+          client_name: `Preload Client ${i}`,
+          redirect_uris: ["https://x/"],
+        });
+      }
+
+      // 51st request should be rejected with 429 and cap error
+      const res51 = await testApp.request("/register", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ client_name: "Client 51", redirect_uris: ["https://x/"] }),
+      });
+      expect(res51.status).toBe(429);
+      const json = (await res51.json()) as any;
+      expect(json.error_description).toContain("cap");
     });
   });
 });
