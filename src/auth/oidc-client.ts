@@ -12,7 +12,7 @@
 import { z } from "zod";
 import { createRemoteJWKSet, jwtVerify, type JWTVerifyGetKey } from "jose";
 import { OAuthMetadataValidationError } from "./errors.js";
-import { IdTokenPayloadSchema } from "./types.js";
+import { IdTokenPayloadSchema, type IdTokenPayload } from "./types.js";
 import { JWKS_CACHE_TTL_MS } from "./tokens.js";
 
 // ============================================================================
@@ -200,11 +200,12 @@ export async function verifyIdToken(
   idToken: string,
   jwks: JWTVerifyGetKey,
   expectations: VerifyIdTokenExpectations,
-): Promise<Awaited<ReturnType<typeof IdTokenPayloadSchema.parseAsync>>> {
+): Promise<IdTokenPayload> {
   // Step 1-3: Signature verification, issuer/audience/expiration checks, algorithm validation
   let payload: Record<string, unknown>;
   try {
     const result = await jwtVerify(idToken, jwks, {
+      // jose's algorithms is typed mutable; spread to satisfy without mutating our readonly array
       algorithms: [...expectations.allowedAlgs],
       issuer: expectations.issuer,
       audience: expectations.clientId,
@@ -220,12 +221,11 @@ export async function verifyIdToken(
     });
   }
 
-  // Step 4: Nonce verification (NOT built into jose)
-  // Must run AFTER signature verification succeeds to prevent timing attacks
+  // Must run AFTER signature verification — payload claims are untrusted until the JWS signature is verified.
   if (typeof payload["nonce"] !== "string" || payload["nonce"] !== expectations.nonce) {
     throw OAuthMetadataValidationError.nonceMismatch();
   }
 
   // Step 5: Validate payload shape
-  return IdTokenPayloadSchema.parseAsync(payload);
+  return IdTokenPayloadSchema.parse(payload);
 }
