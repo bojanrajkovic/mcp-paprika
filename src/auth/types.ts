@@ -133,7 +133,7 @@ export type OAuthClientWireResponse = z.infer<typeof OAuthClientWireResponseSche
 // Persisted: OAuthToken
 // ============================================================================
 export const OAuthTokenSchema = z.object({
-  tokenHash: z.string(),
+  tokenHash: z.string().regex(/^[0-9a-f]{64}$/, "tokenHash must be 64-character lowercase hex"),
   kind: z.enum(["access", "refresh"]),
   clientId: z.string().uuid(),
   scope: z.string(),

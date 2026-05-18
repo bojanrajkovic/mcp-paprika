@@ -1,36 +1,32 @@
-import { randomUUID as cryptoRandomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
+import { OAuthClientSchema, OAuthTokenSchema } from "../../auth/types.js";
 import type { OAuthClient, OAuthToken } from "../../auth/types.js";
-
-let oauthClientCounter = 0;
-let oauthTokenCounter = 0;
 
 /**
  * Factory for creating test OAuthClient objects.
  * Generates defaults matching OAuthClientSchema requirements.
  */
 export function makeOAuthClient(overrides?: Partial<OAuthClient>): OAuthClient {
-  oauthClientCounter++;
-  // Generate a deterministic UUID-shaped string for testing, or use override
-  const clientId =
-    overrides?.clientId ??
-    `${oauthClientCounter}`.padStart(8, "0") + `-0000-4000-8000-0000000${oauthClientCounter}`.padEnd(36 - 8, "0");
   const now = Math.floor(Date.now() / 1000);
 
-  return {
-    clientId,
+  const candidate: OAuthClient = {
+    clientId: overrides?.clientId ?? randomUUID(),
     clientIdIssuedAt: now,
-    registrationAccessTokenHash: "a".repeat(64), // 64-char hex default
+    registrationAccessTokenHash:
+      overrides?.registrationAccessTokenHash ?? createHash("sha256").update("default-rat").digest("hex"),
     tokenEndpointAuthMethod: "none",
     grantTypes: ["authorization_code", "refresh_token"],
     responseTypes: ["code"],
     redirectUris: ["http://localhost:3000/callback"],
     scope: "openid email profile",
-    clientName: `Test OAuth Client ${oauthClientCounter}`,
+    clientName: `Test OAuth Client ${randomUUID().substring(0, 8)}`,
     createdAt: now,
     updatedAt: now,
     lastTokenActivityAt: now,
     ...overrides,
   };
+
+  return OAuthClientSchema.parse(candidate);
 }
 
 /**
@@ -38,17 +34,16 @@ export function makeOAuthClient(overrides?: Partial<OAuthClient>): OAuthClient {
  * Generates defaults matching OAuthTokenSchema requirements.
  */
 export function makeOAuthToken(overrides?: Partial<OAuthToken>): OAuthToken {
-  oauthTokenCounter++;
   const now = Math.floor(Date.now() / 1000);
 
-  return {
-    tokenHash: "b".repeat(64), // 64-char hex default
+  const candidate: OAuthToken = {
+    tokenHash: overrides?.tokenHash ?? createHash("sha256").update(`token-${randomUUID()}`).digest("hex"),
     kind: "access",
-    clientId: cryptoRandomUUID(),
+    clientId: overrides?.clientId ?? randomUUID(),
     scope: "openid email profile",
     identity: {
-      email: `test${oauthTokenCounter}@example.com`,
-      sub: `sub-${oauthTokenCounter}`,
+      email: `test-${randomUUID().substring(0, 8)}@example.com`,
+      sub: `sub-${randomUUID().substring(0, 8)}`,
       source: "email",
     },
     resource: "https://api.example.com",
@@ -56,4 +51,6 @@ export function makeOAuthToken(overrides?: Partial<OAuthToken>): OAuthToken {
     createdAt: now,
     ...overrides,
   };
+
+  return OAuthTokenSchema.parse(candidate);
 }
