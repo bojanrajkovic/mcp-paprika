@@ -1,6 +1,6 @@
 # Cross-Cutting Utilities
 
-Last verified: 2026-05-18
+Last verified: 2026-05-18 (xdg XDG-override behavior added 2026-05-18)
 
 ## Purpose
 
@@ -11,15 +11,25 @@ Shared utility functions and helpers used across multiple modules. Includes erro
 ### xdg.ts — Platform-native application directory paths
 
 Wraps `env-paths` v4 with app name `mcp-paprika` (no suffix). Exports 5 synchronous functions
-that return absolute path strings. No I/O. No internal dependencies (leaf module).
+that return absolute path strings. No internal dependencies (leaf module).
 
-| Function         | Returns                          |
-| ---------------- | -------------------------------- |
-| `getConfigDir()` | Platform-native config directory |
-| `getCacheDir()`  | Platform-native cache directory  |
-| `getDataDir()`   | Platform-native data directory   |
-| `getLogDir()`    | Platform-native log directory    |
-| `getTempDir()`   | Platform-native temp directory   |
+**XDG env-var overrides:** `getConfigDir`, `getCacheDir`, `getDataDir`, and `getLogDir` each
+read a single `XDG_*` env var at call time and, when set to a non-empty string, return
+`join(<override>, "mcp-paprika")`. This is a deliberate workaround for `env-paths`' macOS
+branch, which hard-codes `~/Library/{Preferences,Caches,…}` and ignores `XDG_*` entirely —
+re-implementing the override here means tests that set `XDG_CACHE_HOME` / `XDG_CONFIG_HOME`
+actually redirect on macOS as well as Linux. Because `process.env` is read on every call,
+these functions are not pure leaf modules.
+
+| Function         | XDG override      | Returns                                                           |
+| ---------------- | ----------------- | ----------------------------------------------------------------- |
+| `getConfigDir()` | `XDG_CONFIG_HOME` | Platform-native config directory (or override + `/mcp-paprika`)   |
+| `getCacheDir()`  | `XDG_CACHE_HOME`  | Platform-native cache directory (or override + `/mcp-paprika`)    |
+| `getDataDir()`   | `XDG_DATA_HOME`   | Platform-native data directory (or override + `/mcp-paprika`)     |
+| `getLogDir()`    | `XDG_STATE_HOME`  | Platform-native log directory (or override + `/mcp-paprika`); the |
+|                  |                   | XDG Base Dir spec puts logs under state, not a dedicated log var  |
+| `getTempDir()`   | (none)            | Platform-native temp directory; XDG override is intentionally     |
+|                  |                   | not honored — temp paths come from the OS regardless              |
 
 ### duration.ts — Recipe duration parsing and formatting
 
