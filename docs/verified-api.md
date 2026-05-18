@@ -249,3 +249,223 @@ Order is load-bearing: stop sync → `transport.close()` on every session concur
 short-lived connections). Wrap the whole sequence in a hard timeout (~10s);
 `http.Server.close()` waits forever for long-lived SSE GET streams to terminate on
 their own.
+
+---
+
+## 5. @hono/mcp@0.2.5 OAuth Surface
+
+**Verified against:** `@hono/mcp@0.2.5` (installed)
+
+This section documents the OAuth 2.1 server provider integration surface from `@hono/mcp` and the MCP SDK. Phase 6 uses these exports to wire the OAuth endpoint surface (authorization, token, revocation, DCR) and customize RFC 8414 metadata.
+
+### Verified imports
+
+| Construct                     | Import Path                                         |
+| ----------------------------- | --------------------------------------------------- |
+| `mcpAuthRouter`               | `@hono/mcp`                                         |
+| `bearerAuth`                  | `@hono/mcp`                                         |
+| `authorizeHandler`            | `@hono/mcp/auth`                                    |
+| `tokenHandler`                | `@hono/mcp/auth`                                    |
+| `revokeHandler`               | `@hono/mcp/auth`                                    |
+| `clientRegistrationHandler`   | `@hono/mcp/auth`                                    |
+| `wellKnownRouter`             | `@hono/mcp/auth`                                    |
+| `createOAuthMetadata`         | `@hono/mcp/auth`                                    |
+| `OAuthServerProvider`         | `@modelcontextprotocol/sdk/server/auth/provider.js` |
+| `OAuthError` (and subclasses) | `@modelcontextprotocol/sdk/server/auth/errors.js`   |
+| `AuthInfo`                    | `@modelcontextprotocol/sdk/server/auth/types.js`    |
+
+### mcpAuthRouter
+
+`mcpAuthRouter(options)` mounts the RFC 6749 / RFC 7591 / RFC 7592 OAuth endpoints. It returns a Hono router.
+
+**Signature:**
+
+```typescript
+interface McpAuthRouterOptions {
+  provider: OAuthServerProvider;
+  issuerUrl: string | URL;  // String preferred; URL adds trailing slash
+  clientRegistrationPath?: string;  // default: "/register"
+  skipRevocation?: boolean;          // default: false
+}
+
+mcpAuthRouter(options: McpAuthRouterOptions): Hono;
+```
+
+**Routes mounted:**
+
+- `GET /authorize` — calls `provider.authorize(...)`
+- `POST /token` — calls `provider.exchangeAuthorizationCode` or `provider.exchangeRefreshToken`
+- `POST /register` — calls `provider.clientsStore.registerClient(...)` (if provider has `clientsStore`)
+- `POST /revoke` — calls `provider.revokeToken(...)` (unless `skipRevocation: true`)
+- `GET /.well-known/oauth-authorization-server` — serves RFC 8414 metadata
+- `GET /.well-known/oauth-protected-resource/{rsPath}` — serves RFC 9728 resource metadata (if provider has `clientsStore`)
+
+**Load-bearing behavior:**
+
+- PKCE validation (code_challenge + code_challenge_method=S256) is enforced by the library BEFORE calling `provider.authorize`.
+- The library catches thrown errors: if `error instanceof OAuthError`, calls `error.toResponseObject()` for the HTTP response. Otherwise, wraps as 500 `ServerError`.
+- `issuerUrl` as a URL object calls `.href`, which adds a trailing slash — breaks AC2.1's exact-match invariant. **Always pass strings.**
+- RFC 9207 `iss` is NOT auto-injected into authorization response redirects. Only error/success state is included; custom routes must add `iss` manually.
+
+### createOAuthMetadata
+
+`createOAuthMetadata(options)` builds the RFC 8414 authorization server metadata object, suitable for mutation.
+
+**Signature:**
+
+```typescript
+interface CreateOAuthMetadataOptions {
+  issuerUrl: string;
+  provider: OAuthServerProvider;
+}
+
+createOAuthMetadata(options: CreateOAuthMetadataOptions): OAuthMetadata;
+```
+
+**Default output (before customization):**
+
+```typescript
+{
+  issuer: "https://issuer.example.com",  // verbatim from issuerUrl
+  authorization_endpoint: "https://issuer.example.com/authorize",
+  token_endpoint: "https://issuer.example.com/token",
+  revocation_endpoint: "https://issuer.example.com/revoke",  // if provider has revokeToken
+  registration_endpoint: "https://issuer.example.com/register",  // if provider has clientsStore
+  code_challenge_methods_supported: ["S256"],
+  token_endpoint_auth_methods_supported: ["client_secret_post"],  // HARD-CODED; must override
+  // ... (other RFC 8414 fields)
+}
+```
+
+**Known issues:**
+
+- `token_endpoint_auth_methods_supported` is hard-coded to `["client_secret_post"]`. Must override to `["none"]` for public clients (Phase 6 Task 4).
+- `authorization_response_iss_parameter_supported` is absent by default. Must be set to `true` for RFC 9207 compliance (Phase 6 Task 4).
+- `id_token_signing_alg_values_supported` is included by default. Should be deleted for opaque-token setups that don't sign id_tokens (AC2.13).
+
+### wellKnownRouter
+
+`wellKnownRouter(options)` mounts the RFC 8414 / RFC 9728 well-known endpoints with the provided metadata.
+
+**Signature:**
+
+```typescript
+interface WellKnownRouterOptions {
+  oauthMetadata: OAuthMetadata;
+  resourceServerUrl: URL;
+  // additional fields may be present in v0.2.5
+}
+
+wellKnownRouter(options: WellKnownRouterOptions): Hono;
+```
+
+**Routes mounted:**
+
+- `GET /.well-known/oauth-authorization-server` — returns the provided `oauthMetadata` as JSON
+- `GET /.well-known/oauth-protected-resource` — returns RFC 9728 resource metadata with `resource` = `resourceServerUrl` and `authorization_servers` array
+
+**Mount order:** Must be mounted BEFORE `mcpAuthRouter` in Hono's router chain. Hono's first-match-wins routing ensures this custom instance serves instead of the library's built-in.
+
+### bearerAuth
+
+`bearerAuth(options)` is a Hono middleware that validates Bearer token authorization.
+
+**Signature:**
+
+```typescript
+interface BearerAuthOptions {
+  verifyToken: (token: string) => boolean | Promise<boolean>;
+  realm?: string;
+  prefix?: string;
+}
+
+bearerAuth(options: BearerAuthOptions): MiddlewareHandler;
+```
+
+**Load-bearing behavior:**
+
+- This is NOT Hono core's `bearerAuth`; it's a wrapper from `@hono/mcp` that injects RFC 9110-compliant `WWW-Authenticate` headers.
+- On auth failure (401), the response includes:
+  ```
+  WWW-Authenticate: Bearer error="invalid_token", error_description="...", resource_metadata="https://issuer/.well-known/oauth-protected-resource"
+  ```
+- The `resource_metadata` field points to the RFC 9728 resource metadata endpoint for the issuer.
+
+### OAuthServerProvider interface
+
+The `OAuthServerProvider` interface defines all methods Phase 6's `MintingOAuthServerProvider` must implement.
+
+**Signature (simplified):**
+
+```typescript
+interface OAuthServerProvider {
+  readonly clientsStore?: OAuthClientStore; // optional; presence gates registration_endpoint
+
+  authorize(client: OAuthClientInformationFull, params: AuthorizationParams, res: HonoResponse): Promise<void>;
+
+  exchangeAuthorizationCode(
+    client: OAuthClientInformationFull,
+    authorizationCode: string,
+    codeVerifier?: string,
+    redirectUri?: string,
+    resource?: URL,
+  ): Promise<OAuthTokens>;
+
+  exchangeRefreshToken(
+    client: OAuthClientInformationFull,
+    refreshToken: string,
+    scopes?: string[],
+    resource?: URL,
+  ): Promise<OAuthTokens>;
+
+  verifyAccessToken(token: string): Promise<AuthInfo>;
+
+  revokeToken(client: OAuthClientInformationFull, request: OAuthTokenRevocationRequest): Promise<void>;
+
+  challengeForAuthorizationCode?(client: OAuthClientInformationFull, authorizationCode: string): Promise<string>; // optional; enables PKCE
+}
+```
+
+**Error handling:** All methods that can fail MUST throw SDK `OAuthError` subclasses (`InvalidGrantError`, `InvalidScopeError`, `InvalidTokenError`, `InvalidTargetError`, `InvalidRequestError`, etc.). The library catches these and serializes to proper RFC 6749 error responses.
+
+### OAuthError subclasses
+
+Standard error types (from `@modelcontextprotocol/sdk/server/auth/errors.js`):
+
+| Class                 | Error code        | Use case                                         |
+| --------------------- | ----------------- | ------------------------------------------------ |
+| `InvalidGrantError`   | `invalid_grant`   | Token invalid/expired, auth code invalid/expired |
+| `InvalidScopeError`   | `invalid_scope`   | Requested scope exceeds granted scope            |
+| `InvalidTokenError`   | `invalid_token`   | Token invalid or expired (for revocation)        |
+| `InvalidTargetError`  | `invalid_target`  | Resource mismatch (RFC 8707)                     |
+| `InvalidRequestError` | `invalid_request` | Generic request validation failure               |
+
+**Converting Result to throw:**
+
+```typescript
+// Phase 5 TokenStore.rotateRefresh returns Result<IssuedPair, OAuthError>
+const result = await tokenStore.rotateRefresh(...);
+return result.match(
+  (pair) => ({ access_token: pair.access.plaintext, ... }),
+  (err) => { throw err; }  // OAuthError from Phase 1's factory, ready to throw
+);
+```
+
+### AuthInfo type
+
+Type returned by `provider.verifyAccessToken(token)`.
+
+**Shape (from SDK):**
+
+```typescript
+interface AuthInfo {
+  token: string;
+  clientId: string;
+  scopes: string[];
+  expiresAt: number; // Unix timestamp in seconds
+  resource?: URL; // optional; resource binding
+  extra?: Record<string, unknown>; // custom fields (identity info, etc.)
+}
+```
+
+The `bearerAuth` middleware (from `@hono/mcp`) calls `verifyAccessToken` to populate this on the request context.
