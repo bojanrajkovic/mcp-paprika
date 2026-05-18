@@ -73,7 +73,7 @@ describe("auth/dcr-validator: property-based tests", () => {
             scope: fc.constant("openid"),
           }),
           (input) => {
-            const result = validateRegistration(input as any);
+            const result = validateRegistration(input);
 
             result.match(
               () => {
@@ -113,8 +113,8 @@ describe("auth/dcr-validator: property-based tests", () => {
             ),
           }),
           (input) => {
-            const result = validateRegistration(input as any);
-            const resultUpdate = validateUpdate(input as any);
+            const result = validateRegistration(input);
+            const resultUpdate = validateUpdate(input);
 
             result.match(
               (metadata) => {

@@ -212,7 +212,7 @@ export type IdTokenPayload = z.infer<typeof IdTokenPayloadSchema>;
 // ============================================================================
 // Identity information extracted from upstream id_token or user info
 export const AuthInfoExtraSchema = z.object({
-  email: z.string().email(),
+  email: z.string().email().nullable(),
   sub: z.string(),
   source: z.enum(["email", "sub"]),
 });

@@ -11,7 +11,8 @@
  */
 
 import { z } from "zod";
-import { Result, ok, err } from "neverthrow";
+import { ok, err } from "neverthrow";
+import type { Result } from "neverthrow";
 import { OAuthMetadataValidationError } from "./errors.js";
 
 // ============================================================================
@@ -230,10 +231,12 @@ function buildRegistrationMetadata(data: RegistrationMetadataInput): ValidatedCl
     responseTypes: Object.freeze(data.response_types ?? ["code"]) as ReadonlyArray<"code">,
     redirectUris: Object.freeze(data.redirect_uris ?? []) as ReadonlyArray<string>,
     scope: data.scope ?? "",
-    ...(data.client_name && { clientName: data.client_name }),
-    ...(data.id_token_signed_response_alg && {
-      idTokenSignedResponseAlg: data.id_token_signed_response_alg,
-    }),
+    ...(data.client_name !== undefined ? { clientName: data.client_name } : {}),
+    ...(data.id_token_signed_response_alg !== undefined
+      ? {
+          idTokenSignedResponseAlg: data.id_token_signed_response_alg,
+        }
+      : {}),
   };
 }
 
