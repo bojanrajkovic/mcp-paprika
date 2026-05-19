@@ -195,14 +195,7 @@ export class DiskCache {
   async getRecipe(uid: string): Promise<Recipe | null> {
     // Pending map is checked first so callers can read back data they just
     // put in the same sync cycle (before flush writes it to disk).
-    // Cast: RecipeStoredSchema output has branded UIDs at runtime but TS infers
-    // plain string — the cast is safe because parse() enforces the schema shape.
-    return this._readJsonFile(
-      this._recipesDir,
-      uid,
-      RecipeStoredSchema as unknown as z.ZodType<Recipe>,
-      this._pendingRecipes,
-    );
+    return this._readJsonFile(this._recipesDir, uid, (raw) => RecipeStoredSchema.parse(raw), this._pendingRecipes);
   }
 
   putRecipe(recipe: Recipe, hash: string): Promise<void> {
@@ -250,32 +243,23 @@ export class DiskCache {
     if (this._index === null) {
       throw new Error("DiskCache: getAllRecipes() called before init()");
     }
-    // Cast: same branded-UID reason as getRecipe.
-    return this._readAllJsonFiles(
-      this._recipesDir,
-      this._pendingRecipes,
-      RecipeStoredSchema as unknown as z.ZodType<Recipe>,
-    );
+    return this._readAllJsonFiles(this._recipesDir, this._pendingRecipes, (raw) => RecipeStoredSchema.parse(raw));
   }
 
   async getAllPantryItems(): Promise<Array<PantryItem>> {
     if (this._index === null) {
       throw new Error("DiskCache: getAllPantryItems() called before init()");
     }
-    // Cast: same branded-UID reason as getRecipe.
-    return this._readAllJsonFiles(
-      this._pantryDir,
-      this._pendingPantryItems,
-      PantryItemStoredSchema as unknown as z.ZodType<PantryItem>,
+    return this._readAllJsonFiles(this._pantryDir, this._pendingPantryItems, (raw) =>
+      PantryItemStoredSchema.parse(raw),
     );
   }
 
   async getCategory(uid: string): Promise<Category | null> {
-    // Cast: same branded-UID reason as getRecipe.
     return this._readJsonFile(
       this._categoriesDir,
       uid,
-      CategoryStoredSchema as unknown as z.ZodType<Category>,
+      (raw) => CategoryStoredSchema.parse(raw),
       this._pendingCategories,
     );
   }
@@ -295,13 +279,13 @@ export class DiskCache {
   // ============================================================================
 
   // Returns a pending entry (if present) or reads+validates a JSON file from
-  // disk. ENOENT is silenced and returns null. Schema parse runs on every disk
+  // disk. ENOENT is silenced and returns null. parse() runs on every disk
   // read; pending entries are returned directly (already validated at buffer
   // time). Does not acquire _writeLock — callers are responsible.
   private async _readJsonFile<T>(
     dir: string,
     key: string,
-    schema: z.ZodType<T>,
+    parse: (raw: unknown) => T,
     pending: ReadonlyMap<string, T>,
   ): Promise<T | null> {
     const hit = pending.get(key);
@@ -320,17 +304,17 @@ export class DiskCache {
       throw error;
     }
 
-    return schema.parse(JSON.parse(raw));
+    return parse(JSON.parse(raw));
   }
 
   // Reads all JSON files from a directory and merges with pending entries.
   // Pending entries shadow disk for the same key. ENOENT on the directory is
-  // silenced (first-run case). Schema parse runs on every disk read.
+  // silenced (first-run case). parse() runs on every disk read.
   // Does not acquire _writeLock — read-only, no mutex needed.
   private async _readAllJsonFiles<T>(
     dir: string,
     pending: ReadonlyMap<string, T>,
-    schema: z.ZodType<T>,
+    parse: (raw: unknown) => T,
   ): Promise<Array<T>> {
     // Seed result with pending entries. Pending shadows disk for the same key.
     const result: Map<string, T> = new Map(pending);
@@ -351,7 +335,7 @@ export class DiskCache {
         const key = filename.slice(0, -5); // strip ".json"
         if (result.has(key)) return; // pending entry shadows disk
         const raw = await readFile(join(dir, filename), "utf-8");
-        const value = schema.parse(JSON.parse(raw));
+        const value = parse(JSON.parse(raw));
         result.set(key, value);
       }),
     );
@@ -432,7 +416,12 @@ export class DiskCache {
   }
 
   async getOAuthClient(clientId: string): Promise<OAuthClient | null> {
-    return this._readJsonFile(this._oauthClientsDir, clientId, OAuthClientSchema, this._pendingOAuthClients);
+    return this._readJsonFile(
+      this._oauthClientsDir,
+      clientId,
+      (raw) => OAuthClientSchema.parse(raw),
+      this._pendingOAuthClients,
+    );
   }
 
   removeOAuthClient(clientId: string): Promise<void> {
@@ -448,7 +437,9 @@ export class DiskCache {
     if (this._index === null) {
       throw new Error("DiskCache: getAllOAuthClients() called before init()");
     }
-    return this._readAllJsonFiles(this._oauthClientsDir, this._pendingOAuthClients, OAuthClientSchema);
+    return this._readAllJsonFiles(this._oauthClientsDir, this._pendingOAuthClients, (raw) =>
+      OAuthClientSchema.parse(raw),
+    );
   }
 
   putOAuthToken(token: OAuthToken): Promise<void> {
@@ -462,7 +453,12 @@ export class DiskCache {
   }
 
   async getOAuthToken(tokenHash: string): Promise<OAuthToken | null> {
-    return this._readJsonFile(this._oauthTokensDir, tokenHash, OAuthTokenSchema, this._pendingOAuthTokens);
+    return this._readJsonFile(
+      this._oauthTokensDir,
+      tokenHash,
+      (raw) => OAuthTokenSchema.parse(raw),
+      this._pendingOAuthTokens,
+    );
   }
 
   removeOAuthToken(tokenHash: string): Promise<void> {
@@ -478,6 +474,6 @@ export class DiskCache {
     if (this._index === null) {
       throw new Error("DiskCache: getAllOAuthTokens() called before init()");
     }
-    return this._readAllJsonFiles(this._oauthTokensDir, this._pendingOAuthTokens, OAuthTokenSchema);
+    return this._readAllJsonFiles(this._oauthTokensDir, this._pendingOAuthTokens, (raw) => OAuthTokenSchema.parse(raw));
   }
 }
