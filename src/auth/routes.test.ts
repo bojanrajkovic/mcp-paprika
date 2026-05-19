@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, beforeAll, afterAll, vi } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { nowSeconds } from "./tokens.js";
 import { Hono } from "hono";
 import { buildAuthRoutes, buildDcrRateLimit, buildClientCap } from "./routes.js";
@@ -7,11 +7,15 @@ import { TokenStore } from "./token-store.js";
 import { AuthRequestStore } from "./auth-request-store.js";
 import { AuthCodeStore } from "./auth-code-store.js";
 import { DiskCache } from "../cache/disk-cache.js";
-import { createOidcStub } from "./__fixtures__/oidc-stub.js";
+import { makeDefaultOidcStub, makeDiscoveryDoc } from "./__fixtures__/oidc-stub.js";
 import { makeVerifiedIdentity } from "./__fixtures__/oauth-state.js";
 import { createJwksFor } from "./oidc-client.js";
-import { setupServer } from "msw/node";
 import type { JWTVerifyGetKey } from "jose";
+import { useMswServer } from "../__fixtures__/msw.js";
+
+// Created at module scope so handlers can be passed as permanent initial handlers
+// to useMswServer (permanent = not removed by resetHandlers).
+const oidcStub = makeDefaultOidcStub();
 
 describe("Auth Routes", () => {
   let cache: DiskCache;
@@ -20,35 +24,10 @@ describe("Auth Routes", () => {
   let authCodes: AuthCodeStore;
   let clientStore: DiskClientRegistrationStore;
   let tokenStore: TokenStore;
-  let oidcStub: ReturnType<typeof createOidcStub>;
-  let server: ReturnType<typeof setupServer>;
 
-  beforeAll(() => {
-    // Create OIDC stub at module level (shared across all tests)
-    oidcStub = createOidcStub({
-      issuer: "https://idp.stub.example.com",
-      clientId: "stub-client-id",
-      clientSecret: "stub-client-secret",
-      defaultIdentity: {
-        email: "user@example.com",
-        sub: "user-sub-123",
-        emailVerified: true,
-      },
-    });
-
-    // Setup MSW server at module level
-    server = setupServer(...oidcStub.handlers);
-    server.listen();
-  });
-
-  afterEach(() => {
-    server.resetHandlers();
-    oidcStub.resetOverrides();
-  });
-
-  afterAll(() => {
-    server.close();
-  });
+  // useMswServer wires beforeAll(listen) + afterEach(resetHandlers + onReset) + afterAll(close).
+  // oidcStub.handlers are passed as permanent handlers so resetHandlers() preserves them.
+  useMswServer([...oidcStub.handlers], { onReset: () => oidcStub.resetOverrides() });
 
   beforeEach(async () => {
     const cacheDir = `/tmp/test-routes-${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -81,13 +60,7 @@ describe("Auth Routes", () => {
           allowlist: { emails: ["user@example.com"], subs: [] },
           allowedAlgs: ["RS256"],
         },
-        discovery: {
-          issuer: oidcStub.issuer,
-          authorization_endpoint: `${oidcStub.issuer}/authorize`,
-          token_endpoint: `${oidcStub.issuer}/token`,
-          jwks_uri: `${oidcStub.issuer}/jwks`,
-          id_token_signing_alg_values_supported: ["RS256"],
-        },
+        discovery: makeDiscoveryDoc(oidcStub.issuer),
         jwks: (async () => ({ keys: [] })) as unknown as JWTVerifyGetKey,
         publicUrl: "https://mcp.example.com",
       }),
@@ -129,13 +102,7 @@ describe("Auth Routes", () => {
       // PLAN says (phase_06.md:662-667): successful upstream code exchange → allowlist OK → mints mcp_ac_ → redirects with code+state+iss
       // Build a local app with realJwks so verifyIdToken can fetch the key from the MSW stub's /jwks endpoint.
       // The outer beforeEach app uses `jwks: async () => ({ keys: [] })` which would fail sig verification.
-      const discoveryForJwks = {
-        issuer: oidcStub.issuer,
-        authorization_endpoint: `${oidcStub.issuer}/authorize`,
-        token_endpoint: `${oidcStub.issuer}/token`,
-        jwks_uri: `${oidcStub.issuer}/jwks`,
-        id_token_signing_alg_values_supported: ["RS256"],
-      };
+      const discoveryForJwks = makeDiscoveryDoc(oidcStub.issuer);
       const realJwks = createJwksFor(discoveryForJwks);
 
       const localAuthRequests = new AuthRequestStore();
@@ -204,13 +171,7 @@ describe("Auth Routes", () => {
     it("AC3.4: does NOT log id_token, only identity claims, on denial", async () => {
       // PLAN says (phase_06.md:680-686): allowlist denial logs identity claims (email, sub) but never id_token.
       // Build a local app with realJwks so verifyIdToken passes, then hit allowlist denial.
-      const discoveryForJwks = {
-        issuer: oidcStub.issuer,
-        authorization_endpoint: `${oidcStub.issuer}/authorize`,
-        token_endpoint: `${oidcStub.issuer}/token`,
-        jwks_uri: `${oidcStub.issuer}/jwks`,
-        id_token_signing_alg_values_supported: ["RS256"],
-      };
+      const discoveryForJwks = makeDiscoveryDoc(oidcStub.issuer);
       const realJwks = createJwksFor(discoveryForJwks);
 
       const localAuthRequests = new AuthRequestStore();

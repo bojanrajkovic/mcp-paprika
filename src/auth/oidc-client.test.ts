@@ -3,19 +3,17 @@
  * Uses MSW to intercept fetch calls to discovery and JWKS endpoints.
  */
 
-import { beforeAll, afterEach, afterAll, describe, it, expect } from "vitest";
+import { describe, it, expect } from "vitest";
 import { nowSeconds } from "./tokens.js";
 import { http, HttpResponse } from "msw";
-import { setupServer } from "msw/node";
 import { OAuthMetadataValidationError } from "./errors.js";
 import { loadDiscovery, createJwksFor, verifyIdToken } from "./oidc-client.js";
 import { makeRsaJwt, makeEs256Jwt, makeHs256Jwt } from "./__fixtures__/jose-keys.js";
+import type { JWK } from "jose";
+import type { JWTVerifyGetKey } from "jose";
+import { useMswServer } from "../__fixtures__/msw.js";
 
-const server = setupServer();
-
-beforeAll(() => server.listen());
-afterEach(() => server.resetHandlers());
-afterAll(() => server.close());
+const server = useMswServer();
 
 describe("loadDiscovery", () => {
   it("happy path: returns parsed doc when all required fields present + https + alg overlaps", async () => {
@@ -226,6 +224,31 @@ describe("verifyIdToken", () => {
   const clientId = "client-x";
   const issuer = baseUrl;
 
+  /**
+   * F10: Installs MSW discovery + JWKS handlers, then loads the discovery doc
+   * and creates a JWTVerifyGetKey — reducing the 3-step boilerplate that
+   * appeared in every verifyIdToken test to a single await call.
+   *
+   * @param jwk  - The public JWK to serve from the /jwks endpoint
+   * @param algs - Signing algorithms to advertise; defaults to ["RS256"]
+   */
+  async function setupJwks(jwk: JWK, algs: ReadonlyArray<string> = ["RS256"]): Promise<JWTVerifyGetKey> {
+    server.use(
+      http.get(discoveryUrl, () =>
+        HttpResponse.json({
+          issuer,
+          authorization_endpoint: `${baseUrl}/authorize`,
+          token_endpoint: `${baseUrl}/token`,
+          jwks_uri: jwksUrl,
+          id_token_signing_alg_values_supported: [...algs],
+        }),
+      ),
+      http.get(jwksUrl, () => HttpResponse.json({ keys: [jwk] })),
+    );
+    const discovery = await loadDiscovery(discoveryUrl, [...algs]);
+    return createJwksFor(discovery);
+  }
+
   // AC7.1 - RS256 signature verification
   it("AC7.1: RS256-signed id_token verifies and returns payload", async () => {
     // PLAN says (phase_04.md:22): upstream id_token signed with RS256 verifies (default allowlist)
@@ -243,21 +266,7 @@ describe("verifyIdToken", () => {
       iat: now,
     });
 
-    server.use(
-      http.get(discoveryUrl, () =>
-        HttpResponse.json({
-          issuer,
-          authorization_endpoint: `${baseUrl}/authorize`,
-          token_endpoint: `${baseUrl}/token`,
-          jwks_uri: jwksUrl,
-          id_token_signing_alg_values_supported: ["RS256"],
-        }),
-      ),
-      http.get(jwksUrl, () => HttpResponse.json({ keys: [jwk] })),
-    );
-
-    const discovery = await loadDiscovery(discoveryUrl, ["RS256"]);
-    const jwks = createJwksFor(discovery);
+    const jwks = await setupJwks(jwk);
 
     const payload = await verifyIdToken(token, jwks, {
       clientId,
@@ -288,21 +297,7 @@ describe("verifyIdToken", () => {
       iat: now,
     });
 
-    server.use(
-      http.get(discoveryUrl, () =>
-        HttpResponse.json({
-          issuer,
-          authorization_endpoint: `${baseUrl}/authorize`,
-          token_endpoint: `${baseUrl}/token`,
-          jwks_uri: jwksUrl,
-          id_token_signing_alg_values_supported: ["ES256"],
-        }),
-      ),
-      http.get(jwksUrl, () => HttpResponse.json({ keys: [jwk] })),
-    );
-
-    const discovery = await loadDiscovery(discoveryUrl, ["ES256"]);
-    const jwks = createJwksFor(discovery);
+    const jwks = await setupJwks(jwk, ["ES256"]);
 
     const payload = await verifyIdToken(token, jwks, {
       clientId,
@@ -343,21 +338,7 @@ describe("verifyIdToken", () => {
       iat: now,
     });
 
-    server.use(
-      http.get(discoveryUrl, () =>
-        HttpResponse.json({
-          issuer,
-          authorization_endpoint: `${baseUrl}/authorize`,
-          token_endpoint: `${baseUrl}/token`,
-          jwks_uri: jwksUrl,
-          id_token_signing_alg_values_supported: ["RS256"],
-        }),
-      ),
-      http.get(jwksUrl, () => HttpResponse.json({ keys: [jwk] })),
-    );
-
-    const discovery = await loadDiscovery(discoveryUrl, ["RS256"]);
-    const jwks = createJwksFor(discovery);
+    const jwks = await setupJwks(jwk);
 
     await expect(
       verifyIdToken(noneToken, jwks, {
@@ -393,21 +374,7 @@ describe("verifyIdToken", () => {
     // to look up but jose's algorithms guard should reject before key lookup matters).
     const { jwk: rsaJwk } = await makeRsaJwt({}, {});
 
-    server.use(
-      http.get(discoveryUrl, () =>
-        HttpResponse.json({
-          issuer,
-          authorization_endpoint: `${baseUrl}/authorize`,
-          token_endpoint: `${baseUrl}/token`,
-          jwks_uri: jwksUrl,
-          id_token_signing_alg_values_supported: ["RS256"],
-        }),
-      ),
-      http.get(jwksUrl, () => HttpResponse.json({ keys: [rsaJwk] })),
-    );
-
-    const discovery = await loadDiscovery(discoveryUrl, ["RS256"]);
-    const jwks = createJwksFor(discovery);
+    const jwks = await setupJwks(rsaJwk);
 
     await expect(
       verifyIdToken(hs256Token, jwks, {
@@ -432,21 +399,7 @@ describe("verifyIdToken", () => {
       iat: now - 120,
     });
 
-    server.use(
-      http.get(discoveryUrl, () =>
-        HttpResponse.json({
-          issuer,
-          authorization_endpoint: `${baseUrl}/authorize`,
-          token_endpoint: `${baseUrl}/token`,
-          jwks_uri: jwksUrl,
-          id_token_signing_alg_values_supported: ["RS256"],
-        }),
-      ),
-      http.get(jwksUrl, () => HttpResponse.json({ keys: [jwk] })),
-    );
-
-    const discovery = await loadDiscovery(discoveryUrl, ["RS256"]);
-    const jwks = createJwksFor(discovery);
+    const jwks = await setupJwks(jwk);
 
     await expect(
       verifyIdToken(token, jwks, {
@@ -471,21 +424,7 @@ describe("verifyIdToken", () => {
       iat: now,
     });
 
-    server.use(
-      http.get(discoveryUrl, () =>
-        HttpResponse.json({
-          issuer,
-          authorization_endpoint: `${baseUrl}/authorize`,
-          token_endpoint: `${baseUrl}/token`,
-          jwks_uri: jwksUrl,
-          id_token_signing_alg_values_supported: ["RS256"],
-        }),
-      ),
-      http.get(jwksUrl, () => HttpResponse.json({ keys: [jwk] })),
-    );
-
-    const discovery = await loadDiscovery(discoveryUrl, ["RS256"]);
-    const jwks = createJwksFor(discovery);
+    const jwks = await setupJwks(jwk);
 
     await expect(
       verifyIdToken(token, jwks, {
@@ -510,21 +449,7 @@ describe("verifyIdToken", () => {
       iat: now,
     });
 
-    server.use(
-      http.get(discoveryUrl, () =>
-        HttpResponse.json({
-          issuer,
-          authorization_endpoint: `${baseUrl}/authorize`,
-          token_endpoint: `${baseUrl}/token`,
-          jwks_uri: jwksUrl,
-          id_token_signing_alg_values_supported: ["RS256"],
-        }),
-      ),
-      http.get(jwksUrl, () => HttpResponse.json({ keys: [jwk] })),
-    );
-
-    const discovery = await loadDiscovery(discoveryUrl, ["RS256"]);
-    const jwks = createJwksFor(discovery);
+    const jwks = await setupJwks(jwk);
 
     await expect(
       verifyIdToken(token, jwks, {
@@ -552,21 +477,7 @@ describe("verifyIdToken", () => {
       iat: now,
     });
 
-    server.use(
-      http.get(discoveryUrl, () =>
-        HttpResponse.json({
-          issuer,
-          authorization_endpoint: `${baseUrl}/authorize`,
-          token_endpoint: `${baseUrl}/token`,
-          jwks_uri: jwksUrl,
-          id_token_signing_alg_values_supported: ["RS256"],
-        }),
-      ),
-      http.get(jwksUrl, () => HttpResponse.json({ keys: [jwk] })),
-    );
-
-    const discovery = await loadDiscovery(discoveryUrl, ["RS256"]);
-    const jwks = createJwksFor(discovery);
+    const jwks = await setupJwks(jwk);
 
     await expect(
       verifyIdToken(token, jwks, {
@@ -593,21 +504,7 @@ describe("verifyIdToken", () => {
       iat: now,
     });
 
-    server.use(
-      http.get(discoveryUrl, () =>
-        HttpResponse.json({
-          issuer,
-          authorization_endpoint: `${baseUrl}/authorize`,
-          token_endpoint: `${baseUrl}/token`,
-          jwks_uri: jwksUrl,
-          id_token_signing_alg_values_supported: ["RS256"],
-        }),
-      ),
-      http.get(jwksUrl, () => HttpResponse.json({ keys: [jwk] })),
-    );
-
-    const discovery = await loadDiscovery(discoveryUrl, ["RS256"]);
-    const jwks = createJwksFor(discovery);
+    const jwks = await setupJwks(jwk);
 
     await expect(
       verifyIdToken(token, jwks, {
@@ -633,21 +530,7 @@ describe("verifyIdToken", () => {
       iat: now,
     });
 
-    server.use(
-      http.get(discoveryUrl, () =>
-        HttpResponse.json({
-          issuer,
-          authorization_endpoint: `${baseUrl}/authorize`,
-          token_endpoint: `${baseUrl}/token`,
-          jwks_uri: jwksUrl,
-          id_token_signing_alg_values_supported: ["RS256"],
-        }),
-      ),
-      http.get(jwksUrl, () => HttpResponse.json({ keys: [jwk] })),
-    );
-
-    const discovery = await loadDiscovery(discoveryUrl, ["RS256"]);
-    const jwks = createJwksFor(discovery);
+    const jwks = await setupJwks(jwk);
 
     const payload = await verifyIdToken(token, jwks, {
       clientId,
@@ -677,21 +560,7 @@ describe("verifyIdToken", () => {
       iat: now,
     });
 
-    server.use(
-      http.get(discoveryUrl, () =>
-        HttpResponse.json({
-          issuer,
-          authorization_endpoint: `${baseUrl}/authorize`,
-          token_endpoint: `${baseUrl}/token`,
-          jwks_uri: jwksUrl,
-          id_token_signing_alg_values_supported: ["RS256"],
-        }),
-      ),
-      http.get(jwksUrl, () => HttpResponse.json({ keys: [jwk] })),
-    );
-
-    const discovery = await loadDiscovery(discoveryUrl, ["RS256"]);
-    const jwks = createJwksFor(discovery);
+    const jwks = await setupJwks(jwk);
 
     const payload = await verifyIdToken(token, jwks, {
       clientId,

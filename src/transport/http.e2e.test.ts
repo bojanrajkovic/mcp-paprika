@@ -15,18 +15,16 @@
  *   AC4.4 — auth codes do NOT survive server restart
  */
 
-import { mkdtemp, rm } from "node:fs/promises";
 import { randomBytes, createHash } from "node:crypto";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 
 import { http, HttpResponse } from "msw";
-import { setupServer } from "msw/node";
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { startHttp, type HttpTransportHandle } from "./http.js";
 import type { PaprikaConfig } from "../utils/config.js";
 import { createOidcStub } from "../auth/__fixtures__/oidc-stub.js";
+import { useXdgIsolation } from "../__fixtures__/xdg-isolation.js";
+import { useMswServer } from "../__fixtures__/msw.js";
 
 // ============================================================================
 // Constants
@@ -42,10 +40,7 @@ const PAPRIKA_API_BASE = "https://paprikaapp.com/api/v2/sync";
 // MSW server (process-level, shared across all tests)
 // ============================================================================
 
-const msw = setupServer();
-beforeAll(() => msw.listen({ onUnhandledRequest: "bypass" }));
-afterEach(() => msw.resetHandlers());
-afterAll(() => msw.close());
+const msw = useMswServer([], { onUnhandledRequest: "bypass" });
 
 // ============================================================================
 // Paprika API mock handlers
@@ -210,19 +205,12 @@ async function driveFullFlow(port: number): Promise<FullFlowResult> {
 describe("HTTP e2e: full claude.ai connector flow", () => {
   let handle: HttpTransportHandle;
   let port: number;
-  let tempCacheDir: string;
-  let originalXdgCache: string | undefined;
-  let originalXdgConfig: string | undefined;
   let oidcStub: ReturnType<typeof createOidcStub>;
+  const xdg = useXdgIsolation("mcp-paprika-e2e");
 
   beforeEach(async () => {
-    // Create isolated temp dir per test
-    tempCacheDir = await mkdtemp(join(tmpdir(), "mcp-paprika-e2e-"));
-    originalXdgCache = process.env["XDG_CACHE_HOME"];
-    originalXdgConfig = process.env["XDG_CONFIG_HOME"];
-    // Redirect getCacheDir() / getConfigDir() to our isolated temp dir
-    process.env["XDG_CACHE_HOME"] = tempCacheDir;
-    process.env["XDG_CONFIG_HOME"] = tempCacheDir;
+    // Redirect getCacheDir() / getConfigDir() to an isolated temp dir
+    await xdg.setup();
 
     // Register MSW handlers before startHttp so discovery + Paprika auth
     // during buildAppContext are intercepted correctly.
@@ -240,11 +228,7 @@ describe("HTTP e2e: full claude.ai connector flow", () => {
 
   afterEach(async () => {
     await handle.shutdown();
-    if (originalXdgCache === undefined) delete process.env["XDG_CACHE_HOME"];
-    else process.env["XDG_CACHE_HOME"] = originalXdgCache;
-    if (originalXdgConfig === undefined) delete process.env["XDG_CONFIG_HOME"];
-    else process.env["XDG_CONFIG_HOME"] = originalXdgConfig;
-    await rm(tempCacheDir, { recursive: true, force: true });
+    await xdg.teardown();
   });
 
   // --------------------------------------------------------------------------

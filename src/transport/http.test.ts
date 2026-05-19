@@ -1,9 +1,6 @@
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { http, HttpResponse } from "msw";
-import { setupServer } from "msw/node";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import { startHttp, type HttpTransportHandle } from "./http.js";
@@ -11,6 +8,8 @@ import type { PaprikaConfig } from "../utils/config.js";
 import { createOidcStub } from "../auth/__fixtures__/oidc-stub.js";
 import { DiskCache } from "../cache/disk-cache.js";
 import { makeOAuthClient } from "../cache/__fixtures__/oauth.js";
+import { useXdgIsolation } from "../__fixtures__/xdg-isolation.js";
+import { useMswServer } from "../__fixtures__/msw.js";
 
 /**
  * These tests drive the HTTP transport with raw `fetch`, not the MCP SDK
@@ -24,24 +23,22 @@ import { makeOAuthClient } from "../cache/__fixtures__/oauth.js";
 const PAPRIKA_API_BASE = "https://paprikaapp.com/api/v2/sync";
 const PAPRIKA_AUTH_URL = "https://paprikaapp.com/api/v1/account/login/";
 
-const msw = setupServer();
-let tempCacheDir: string;
-let originalXdgCache: string | undefined;
-let originalXdgConfig: string | undefined;
+// Declare OIDC_ISSUER and PUBLIC_URL here (same as used in OAuth section below)
+// so they can be referenced by module-level oidcStub initialization.
+const OIDC_ISSUER = "https://accounts.example.test";
+const PUBLIC_URL = "https://mcp.example.test";
 
-function makeConfig(overrides: Partial<PaprikaConfig> = {}): PaprikaConfig {
-  // transport: "stdio" — buildAuthContext returns null for stdio, so these tests
-  // don't need an oauth block. The transport field doesn't affect how startHttp
-  // operates (it's already in HTTP mode by being called at all).
-  return {
-    paprika: { email: "test@example.com", password: "secret" },
-    sync: { enabled: false, interval: 60_000 },
-    transport: "stdio",
-    http: { port: 0, host: "127.0.0.1" },
-    ...overrides,
-  } as PaprikaConfig;
-}
+// Create OIDC stub once at module level so it can be used as permanent handlers
+// for both the outer HTTP tests and the nested OAuth describe block.
+const oidcStub = createOidcStub({
+  issuer: OIDC_ISSUER,
+  clientId: "test-upstream-client",
+  clientSecret: "test-upstream-secret",
+  defaultIdentity: { email: "user@example.com", sub: "google-user-1", emailVerified: true },
+});
 
+// Paprika handlers defined as a function so they can be instantiated fresh for
+// every initialization of the MSW server (required by setupServer semantics).
 function paprikaMockHandlers() {
   // Mock one recipe so coldStartGuard (which checks store.size === 0) doesn't
   // short-circuit category/recipe tools. Most tool handlers require a hydrated
@@ -103,30 +100,39 @@ function paprikaMockHandlers() {
   ];
 }
 
-beforeAll(() => {
-  msw.listen({ onUnhandledRequest: "bypass" });
+// Initialize MSW server with both Paprika and OIDC stub handlers as permanent handlers.
+// This ensures they survive resetHandlers() between tests and are available for the
+// nested OAuth describe's beforeAll, which runs before the first test's outer beforeEach.
+// Note: msw's lifecycle hooks are wired by the composable; variable is used indirectly.
+void useMswServer([...paprikaMockHandlers(), ...oidcStub.handlers], {
+  onUnhandledRequest: "bypass",
+  onReset: () => oidcStub.resetOverrides(),
 });
+const xdg = useXdgIsolation("mcp-paprika-http");
 
-afterAll(() => {
-  msw.close();
-});
+function makeConfig(overrides: Partial<PaprikaConfig> = {}): PaprikaConfig {
+  // transport: "stdio" — buildAuthContext returns null for stdio, so these tests
+  // don't need an oauth block. The transport field doesn't affect how startHttp
+  // operates (it's already in HTTP mode by being called at all).
+  return {
+    paprika: { email: "test@example.com", password: "secret" },
+    sync: { enabled: false, interval: 60_000 },
+    transport: "stdio",
+    http: { port: 0, host: "127.0.0.1" },
+    ...overrides,
+  } as PaprikaConfig;
+}
 
 beforeEach(async () => {
-  msw.resetHandlers();
-  msw.use(...paprikaMockHandlers());
-  tempCacheDir = await mkdtemp(join(tmpdir(), "mcp-paprika-http-"));
-  originalXdgCache = process.env["XDG_CACHE_HOME"];
-  originalXdgConfig = process.env["XDG_CONFIG_HOME"];
-  process.env["XDG_CACHE_HOME"] = tempCacheDir;
-  process.env["XDG_CONFIG_HOME"] = tempCacheDir;
+  // Note: msw.resetHandlers() is called by the composable's afterEach hook.
+  // Paprika handlers are permanent (passed to setupServer), so no need to re-add.
+  // OIDC stub handlers are also permanent, but resetOverrides() is called via
+  // composable's onReset callback to clear any per-test handler overrides.
+  await xdg.setup();
 });
 
 afterEach(async () => {
-  if (originalXdgCache === undefined) delete process.env["XDG_CACHE_HOME"];
-  else process.env["XDG_CACHE_HOME"] = originalXdgCache;
-  if (originalXdgConfig === undefined) delete process.env["XDG_CONFIG_HOME"];
-  else process.env["XDG_CONFIG_HOME"] = originalXdgConfig;
-  await rm(tempCacheDir, { recursive: true, force: true });
+  await xdg.teardown();
 });
 
 /** Parse a single SSE `event: message\ndata: {...}` frame and return the parsed JSON. */
@@ -418,9 +424,6 @@ describe("HTTP transport (Streamable HTTP)", () => {
 // OAuth wire tests — HTTP transport with OAuth mounted
 // ============================================================================
 
-const OIDC_ISSUER = "https://accounts.example.test";
-const PUBLIC_URL = "https://mcp.example.test";
-
 function makeOAuthConfig(): PaprikaConfig {
   return {
     paprika: { email: "test@example.com", password: "secret" },
@@ -464,27 +467,14 @@ describe("HTTP transport — OAuth mounted", () => {
   // at a deleted directory from test 2 onward if we didn't own the lifecycle.
   let oauthHandle: HttpTransportHandle;
   let oauthPort: number;
-  let oauthTempDir: string;
-  let savedXdgCache: string | undefined;
-  let savedXdgConfig: string | undefined;
+  const oauthXdg = useXdgIsolation("mcp-paprika-oauth");
 
   beforeAll(async () => {
     // Allocate a dedicated tempdir that lives for the whole OAuth suite.
-    oauthTempDir = await mkdtemp(join(tmpdir(), "mcp-paprika-oauth-"));
-    savedXdgCache = process.env["XDG_CACHE_HOME"];
-    savedXdgConfig = process.env["XDG_CONFIG_HOME"];
-    process.env["XDG_CACHE_HOME"] = oauthTempDir;
-    process.env["XDG_CONFIG_HOME"] = oauthTempDir;
+    await oauthXdg.setup();
 
-    const oidcStub = createOidcStub({
-      issuer: OIDC_ISSUER,
-      clientId: "test-upstream-client",
-      clientSecret: "test-upstream-secret",
-      defaultIdentity: { email: "user@example.com", sub: "google-user-1", emailVerified: true },
-    });
-    // Add OIDC stub handlers alongside the existing Paprika mock handlers
-    // (which are already registered via beforeEach in the outer suite).
-    msw.use(...oidcStub.handlers);
+    // Note: oidcStub handlers are already registered at module scope as permanent
+    // handlers via useMswServer(), so the OAuth tests inherit them.
     const config = makeOAuthConfig();
     oauthHandle = await startHttp(config);
     oauthPort = oauthHandle.port;
@@ -493,11 +483,7 @@ describe("HTTP transport — OAuth mounted", () => {
   afterAll(async () => {
     await oauthHandle.shutdown();
     // Restore env vars and clean up the dedicated tempdir.
-    if (savedXdgCache === undefined) delete process.env["XDG_CACHE_HOME"];
-    else process.env["XDG_CACHE_HOME"] = savedXdgCache;
-    if (savedXdgConfig === undefined) delete process.env["XDG_CONFIG_HOME"];
-    else process.env["XDG_CONFIG_HOME"] = savedXdgConfig;
-    await rm(oauthTempDir, { recursive: true, force: true });
+    await oauthXdg.teardown();
   });
 
   describe("OA.1/AC2.1+AC6.1: OAuth authorization server metadata", () => {
@@ -649,7 +635,7 @@ describe("HTTP transport — OAuth mounted", () => {
       // Seed the cache directly via DiskCache (bypassing HTTP rate-limit) so the cap
       // check sees >= 50 existing clients.  buildClientCap reads cache.getAllOAuthClients()
       // on every POST /register — fresh disk files are visible on the very next call.
-      const cacheDir = join(oauthTempDir, "mcp-paprika");
+      const cacheDir = join(oauthXdg.dir(), "mcp-paprika");
       const seedCache = new DiskCache(cacheDir);
       await seedCache.init();
 

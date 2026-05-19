@@ -24,6 +24,11 @@ import {
 } from "jose";
 import { makeEs256Jwt } from "./jose-keys.js";
 import { nowSeconds } from "../tokens.js";
+import type { DiscoveryDoc } from "../oidc-client.js";
+
+// ============================================================================
+// OidcStub types (forward-declared so helpers below can reference them)
+// ============================================================================
 
 export interface OidcStubOptions {
   readonly issuer: string;
@@ -40,6 +45,63 @@ export interface OidcStub {
   expireNextToken(): void;
   signWithAlg(alg: "RS256" | "ES256" | "HS256" | "none"): void;
   resetOverrides(): void;
+}
+
+// ============================================================================
+// F3: makeDiscoveryDoc — Minimal-valid 5-field discovery document literal
+// ============================================================================
+
+/**
+ * Builds a minimal valid OIDC discovery document for the given base URL.
+ *
+ * Covers the 5 required fields used by `loadDiscovery` / `createJwksFor` in
+ * tests: issuer, authorization_endpoint, token_endpoint, jwks_uri, and
+ * id_token_signing_alg_values_supported. Useful wherever tests need a quick
+ * discovery doc without the full 9-field shape emitted by the live OidcStub
+ * handlers.
+ *
+ * Note: uses template literals (not `new URL(base).toString()`) to avoid
+ * adding a trailing slash to the base URL.
+ *
+ * @param base  - The IdP base URL, e.g. "https://idp.example.com" (no trailing slash)
+ * @param algs  - Signing algorithms to advertise; defaults to ["RS256"]
+ */
+export function makeDiscoveryDoc(base: string, algs: ReadonlyArray<string> = ["RS256"]): DiscoveryDoc {
+  return {
+    issuer: base,
+    authorization_endpoint: `${base}/authorize`,
+    token_endpoint: `${base}/token`,
+    jwks_uri: `${base}/jwks`,
+    id_token_signing_alg_values_supported: [...algs],
+  };
+}
+
+// ============================================================================
+// F2: makeDefaultOidcStub — createOidcStub with canonical test defaults
+// ============================================================================
+
+/**
+ * Creates an `OidcStub` with the standard test-suite defaults so callers
+ * only have to specify what diverges.
+ *
+ * Defaults:
+ *   issuer:         "https://idp.stub.example.com"
+ *   clientId:       "stub-client-id"
+ *   clientSecret:   "stub-client-secret"
+ *   defaultIdentity: { email: "user@example.com", sub: "user-sub-123", emailVerified: true }
+ */
+export function makeDefaultOidcStub(overrides: Partial<OidcStubOptions> = {}): OidcStub {
+  return createOidcStub({
+    issuer: "https://idp.stub.example.com",
+    clientId: "stub-client-id",
+    clientSecret: "stub-client-secret",
+    defaultIdentity: {
+      email: "user@example.com",
+      sub: "user-sub-123",
+      emailVerified: true,
+    },
+    ...overrides,
+  });
 }
 
 /**

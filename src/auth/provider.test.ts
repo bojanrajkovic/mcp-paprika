@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, afterAll, beforeAll, vi } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { URL } from "node:url";
 import { MintingOAuthServerProvider } from "./provider.js";
 import { DiskClientRegistrationStore } from "./client-registration.js";
@@ -6,12 +6,12 @@ import { TokenStore } from "./token-store.js";
 import { AuthRequestStore } from "./auth-request-store.js";
 import { AuthCodeStore } from "./auth-code-store.js";
 import { DiskCache } from "../cache/disk-cache.js";
-import { createOidcStub } from "./__fixtures__/oidc-stub.js";
+import { makeDefaultOidcStub, makeDiscoveryDoc } from "./__fixtures__/oidc-stub.js";
 import { makeAuthCodeState, makeVerifiedIdentity } from "./__fixtures__/oauth-state.js";
-import { setupServer } from "msw/node";
 import { ACCESS_TOKEN_TTL_SECONDS } from "./tokens.js";
 import type { OAuthClientInformationFull } from "@modelcontextprotocol/sdk/shared/auth.js";
 import type { AuthCodeState } from "./types.js";
+import { useMswServer } from "../__fixtures__/msw.js";
 
 /**
  * Local helper that wraps makeAuthCodeState with this test file's defaults
@@ -34,6 +34,10 @@ function makeProviderAuthCode(
   });
 }
 
+// Created at module scope so handlers can be passed as permanent initial handlers
+// to useMswServer (permanent = not removed by resetHandlers).
+const oidcStub = makeDefaultOidcStub();
+
 describe("MintingOAuthServerProvider", () => {
   let cacheDir: string;
   let cache: DiskCache;
@@ -41,37 +45,12 @@ describe("MintingOAuthServerProvider", () => {
   let tokenStore: TokenStore;
   let authRequests: AuthRequestStore;
   let authCodes: AuthCodeStore;
-  let oidcStub: ReturnType<typeof createOidcStub>;
   let provider: MintingOAuthServerProvider;
   let mockClient: OAuthClientInformationFull;
-  let server: ReturnType<typeof setupServer>;
 
-  beforeAll(() => {
-    // Create OIDC stub at module level (shared across all tests)
-    oidcStub = createOidcStub({
-      issuer: "https://idp.stub.example.com",
-      clientId: "stub-client-id",
-      clientSecret: "stub-client-secret",
-      defaultIdentity: {
-        email: "user@example.com",
-        sub: "user-sub-123",
-        emailVerified: true,
-      },
-    });
-
-    // Setup MSW server at module level
-    server = setupServer(...oidcStub.handlers);
-    server.listen();
-  });
-
-  afterEach(() => {
-    server.resetHandlers();
-    oidcStub.resetOverrides();
-  });
-
-  afterAll(() => {
-    server.close();
-  });
+  // useMswServer wires beforeAll(listen) + afterEach(resetHandlers + onReset) + afterAll(close).
+  // oidcStub.handlers are passed as permanent handlers so resetHandlers() preserves them.
+  useMswServer([...oidcStub.handlers], { onReset: () => oidcStub.resetOverrides() });
 
   beforeEach(async () => {
     // Setup test directory
@@ -87,13 +66,7 @@ describe("MintingOAuthServerProvider", () => {
     authCodes = new AuthCodeStore();
 
     // Initialize provider
-    const discovery = {
-      issuer: oidcStub.issuer,
-      authorization_endpoint: `${oidcStub.issuer}/authorize`,
-      token_endpoint: `${oidcStub.issuer}/token`,
-      jwks_uri: `${oidcStub.issuer}/jwks`,
-      id_token_signing_alg_values_supported: ["RS256"],
-    };
+    const discovery = makeDiscoveryDoc(oidcStub.issuer);
 
     provider = new MintingOAuthServerProvider(
       clientStore,

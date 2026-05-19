@@ -8,41 +8,24 @@
  * - Throws when discovery returns 500
  */
 
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-
 import { http, HttpResponse } from "msw";
-import { setupServer } from "msw/node";
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { buildAuthContext } from "./build.js";
 import { createOidcStub } from "./__fixtures__/oidc-stub.js";
 import type { PaprikaConfig } from "../utils/config.js";
+import { useXdgIsolation } from "../__fixtures__/xdg-isolation.js";
+import { useMswServer } from "../__fixtures__/msw.js";
 
-const msw = setupServer();
-let tempCacheDir: string;
-let originalXdgCache: string | undefined;
-
-beforeAll(() => {
-  msw.listen({ onUnhandledRequest: "bypass" });
-});
-
-afterAll(() => {
-  msw.close();
-});
+const msw = useMswServer([], { onUnhandledRequest: "bypass" });
+const xdg = useXdgIsolation("mcp-paprika-build-auth");
 
 beforeEach(async () => {
-  msw.resetHandlers();
-  tempCacheDir = await mkdtemp(join(tmpdir(), "mcp-paprika-build-auth-"));
-  originalXdgCache = process.env["XDG_CACHE_HOME"];
-  process.env["XDG_CACHE_HOME"] = tempCacheDir;
+  await xdg.setup();
 });
 
 afterEach(async () => {
-  if (originalXdgCache === undefined) delete process.env["XDG_CACHE_HOME"];
-  else process.env["XDG_CACHE_HOME"] = originalXdgCache;
-  await rm(tempCacheDir, { recursive: true, force: true });
+  await xdg.teardown();
 });
 
 function makeStdioConfig(): PaprikaConfig {
@@ -79,7 +62,7 @@ describe("buildAuthContext", () => {
     it("returns null when config.transport is 'stdio'", async () => {
       // PLAN says (phase_07.md:305-306): if config.transport !== "http" return null
       const { DiskCache } = await import("../cache/disk-cache.js");
-      const cache = new DiskCache(tempCacheDir);
+      const cache = new DiskCache(xdg.dir());
       await cache.init();
 
       const config = makeStdioConfig();
@@ -93,7 +76,7 @@ describe("buildAuthContext", () => {
     it("throws Error when transport is http but oauth config is undefined", async () => {
       // PLAN says (phase_07.md:307-310): defensive guard for http without oauth block
       const { DiskCache } = await import("../cache/disk-cache.js");
-      const cache = new DiskCache(tempCacheDir);
+      const cache = new DiskCache(xdg.dir());
       await cache.init();
 
       const config: PaprikaConfig = {
@@ -120,7 +103,7 @@ describe("buildAuthContext", () => {
       msw.use(...oidcStub.handlers);
 
       const { DiskCache } = await import("../cache/disk-cache.js");
-      const cache = new DiskCache(tempCacheDir);
+      const cache = new DiskCache(xdg.dir());
       await cache.init();
 
       const config = makeHttpConfig("https://accounts.example.test");
@@ -153,7 +136,7 @@ describe("buildAuthContext", () => {
       );
 
       const { DiskCache } = await import("../cache/disk-cache.js");
-      const cache = new DiskCache(tempCacheDir);
+      const cache = new DiskCache(xdg.dir());
       await cache.init();
 
       const config = makeHttpConfig("https://accounts.example.test");
