@@ -17,8 +17,9 @@ This module is loaded only when `MCP_TRANSPORT=http`. In stdio mode, `buildAuthC
 - `allowlist.ts` — `verifyIdentity(identity, allowlist, policy)`: OR semantics across email + sub allowlists, with `email_verified` policy enforcement (`strict` / `skip` / `if-present`); returns `Result<AuthInfoExtra, OAuthAllowlistDenialError>`
 - `dcr-validator.ts` — RFC 7591/7592 metadata validation: `validateRegistration(body)` and `validateUpdate(body)`; rejects `token_endpoint_auth_method !== "none"`, validates `grant_types` / `response_types` subsets, and enforces `redirect_uris` rules (non-empty, valid URLs, `http://localhost` exemption for non-https)
 - `oidc-client.ts` — `loadDiscovery(discoveryUrl, allowedAlgs)` fetches and validates the upstream OIDC discovery document (enforces HTTPS on all URLs, checks algorithm overlap); `createJwksFor(discovery)` returns a `JWTVerifyGetKey` backed by jose's `createRemoteJWKSet`; `verifyIdToken(token, jwks, options)` calls jose's `jwtVerify` with explicit `algorithms` list
-- `auth-request-store.ts` — In-memory 5-minute TTL store for `AuthRequestState` (keyed by our state parameter, carries PKCE challenge + nonce + client + redirect context). Single-use semantics: `put` / `peek` / `consume`.
-- `auth-code-store.ts` — In-memory 60-second TTL store for `AuthCodeState` (keyed by our authorization code; holds the verified identity). Single-use via `consume`. Distinct from `auth-request-store.ts` to keep pre- and post-callback state separate.
+- `ttl-store.ts` — Generic base class `TtlStore<T extends { createdAt: number }>` with `put`, `consume` (delete-before-TTL-check, single-use), `sweepExpired`, and `size`; clock-injectable via `now` option. Extended by `AuthRequestStore` and `AuthCodeStore`.
+- `auth-request-store.ts` — In-memory 5-minute TTL store for `AuthRequestState` (keyed by our state parameter, carries PKCE challenge + nonce + client + redirect context). Extends `TtlStore`; exposes `put` / `consume` (single-use).
+- `auth-code-store.ts` — In-memory 60-second TTL store for `AuthCodeState` (keyed by our authorization code; holds the verified identity). Extends `TtlStore`; adds `peek()` (read-without-consume, lazy-evicts expired entries). Single-use consume enforced via `TtlStore.consume`. Distinct from `auth-request-store.ts` to keep pre- and post-callback state separate.
 - `client-registration.ts` — `DiskClientRegistrationStore` implementing the SDK `OAuthRegisteredClientsStore` interface; persists registered clients to `DiskCache`'s `oauth/clients/` namespace; enforces `registrationAccessTokenHash` on management endpoints; issues UUIDv4 `clientId` (delegated to SDK)
 - `token-store.ts` — `TokenStore`: `issueAccessRefreshPair`, `lookupAccessToken`, `rotateRefresh`, `revoke`, `removeAllForClient`; all tokens stored by their `tokenHash` (SHA-256 hex of plaintext); enforces RFC 8707 resource binding and RFC 6749 §6 scope-subset-only on refresh
 - `provider.ts` — `MintingOAuthServerProvider` implementing the SDK `OAuthServerProvider` interface; orchestrates the authorization code flow using the four stores; constructs the upstream OIDC authorize redirect, handles the callback, and issues tokens
@@ -194,11 +195,12 @@ Persisted to `DiskCache` as `oauth/tokens/${tokenHash}.json`. `tokenHash` is the
 - `allowlist.ts` — imports from `errors.ts` and `types.ts`
 - `dcr-validator.ts` — imports from `errors.ts` and `types.ts`
 - `types.ts` — imports type references from other `src/auth/` modules (circular-free via `import type`)
+- `ttl-store.ts` — no internal imports; pure generic implementation
 
 **Shell modules (use other auth files + external deps):**
 
 - `oidc-client.ts` — uses `jose`
-- `auth-request-store.ts`, `auth-code-store.ts` — use `types.ts` and `tokens.ts`
+- `auth-request-store.ts`, `auth-code-store.ts` — extend `ttl-store.ts`; import from `types.ts` and `tokens.ts`
 - `client-registration.ts` — uses `src/cache/disk-cache.ts` (via `DiskCache`)
 - `token-store.ts` — uses `src/cache/disk-cache.ts`
 - `provider.ts` — uses all stores, `oidc-client.ts`, and `allowlist.ts`
