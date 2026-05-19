@@ -77,6 +77,38 @@ type PartialResolvedConfigResult = {
 };
 
 /**
+ * Tenant names that require an operator-supplied discoveryUrl.
+ * These four presets share identical resolution logic; they differ only in their
+ * preset-table entry (scopes, emailVerifiedPolicy, allowedAlgs defaults).
+ */
+type TenantBoundName = "entra" | "okta" | "auth0" | "keycloak";
+
+/** Shared type for the four tenant-bound OIDC_PRESETS entries (no discoveryUrl). */
+type TenantBoundPreset = Omit<OIDCPreset, "discoveryUrl">;
+
+/**
+ * Resolves a tenant-bound preset (entra, okta, auth0, keycloak).
+ * These presets require an operator-supplied discoveryUrl because the provider
+ * is multi-tenant — there is no single well-known discovery endpoint.
+ */
+function resolveTenantBound(
+  name: TenantBoundName,
+  preset: TenantBoundPreset,
+  overrides: PartialResolvedConfig,
+): Result<PartialResolvedConfigResult, OAuthConfigError> {
+  if (!overrides.discoveryUrl) {
+    return err(OAuthConfigError.missingDiscoveryUrl(name));
+  }
+  return ok({
+    presetName: name,
+    discoveryUrl: overrides.discoveryUrl,
+    scopes: overrides.scopes ?? preset.scopes,
+    emailVerifiedPolicy: overrides.emailVerifiedPolicy ?? preset.emailVerifiedPolicy,
+    allowedAlgs: overrides.allowedAlgs ?? preset.allowedAlgs,
+  });
+}
+
+/**
  * Resolves an OIDC preset with optional overrides.
  *
  * Three paths:
@@ -135,61 +167,17 @@ export function resolvePreset(
       });
     }
 
-    case "entra": {
-      const preset = OIDC_PRESETS.entra;
-      if (!overrides.discoveryUrl) {
-        return err(OAuthConfigError.missingDiscoveryUrl(name));
-      }
-      return ok({
-        presetName: name,
-        discoveryUrl: overrides.discoveryUrl,
-        scopes: overrides.scopes ?? preset.scopes,
-        emailVerifiedPolicy: overrides.emailVerifiedPolicy ?? preset.emailVerifiedPolicy,
-        allowedAlgs: overrides.allowedAlgs ?? preset.allowedAlgs,
-      });
-    }
+    case "entra":
+      return resolveTenantBound(name, OIDC_PRESETS.entra, overrides);
 
-    case "okta": {
-      const preset = OIDC_PRESETS.okta;
-      if (!overrides.discoveryUrl) {
-        return err(OAuthConfigError.missingDiscoveryUrl(name));
-      }
-      return ok({
-        presetName: name,
-        discoveryUrl: overrides.discoveryUrl,
-        scopes: overrides.scopes ?? preset.scopes,
-        emailVerifiedPolicy: overrides.emailVerifiedPolicy ?? preset.emailVerifiedPolicy,
-        allowedAlgs: overrides.allowedAlgs ?? preset.allowedAlgs,
-      });
-    }
+    case "okta":
+      return resolveTenantBound(name, OIDC_PRESETS.okta, overrides);
 
-    case "auth0": {
-      const preset = OIDC_PRESETS.auth0;
-      if (!overrides.discoveryUrl) {
-        return err(OAuthConfigError.missingDiscoveryUrl(name));
-      }
-      return ok({
-        presetName: name,
-        discoveryUrl: overrides.discoveryUrl,
-        scopes: overrides.scopes ?? preset.scopes,
-        emailVerifiedPolicy: overrides.emailVerifiedPolicy ?? preset.emailVerifiedPolicy,
-        allowedAlgs: overrides.allowedAlgs ?? preset.allowedAlgs,
-      });
-    }
+    case "auth0":
+      return resolveTenantBound(name, OIDC_PRESETS.auth0, overrides);
 
-    case "keycloak": {
-      const preset = OIDC_PRESETS.keycloak;
-      if (!overrides.discoveryUrl) {
-        return err(OAuthConfigError.missingDiscoveryUrl(name));
-      }
-      return ok({
-        presetName: name,
-        discoveryUrl: overrides.discoveryUrl,
-        scopes: overrides.scopes ?? preset.scopes,
-        emailVerifiedPolicy: overrides.emailVerifiedPolicy ?? preset.emailVerifiedPolicy,
-        allowedAlgs: overrides.allowedAlgs ?? preset.allowedAlgs,
-      });
-    }
+    case "keycloak":
+      return resolveTenantBound(name, OIDC_PRESETS.keycloak, overrides);
 
     default:
       return err(OAuthConfigError.unknownPreset(name as string));
