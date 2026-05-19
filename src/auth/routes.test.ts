@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { nowSeconds } from "./tokens.js";
 import { Hono } from "hono";
-import { buildAuthRoutes, buildDcrRateLimit, buildClientCap } from "./routes.js";
+import { buildAuthRoutes, buildDcrRateLimit, buildClientCap, type AuthRoutesDeps } from "./routes.js";
 import { DiskClientRegistrationStore } from "./client-registration.js";
 import { TokenStore } from "./token-store.js";
 import { AuthRequestStore } from "./auth-request-store.js";
@@ -12,6 +12,47 @@ import { makeVerifiedIdentity } from "./__fixtures__/oauth-state.js";
 import { createJwksFor } from "./oidc-client.js";
 import type { JWTVerifyGetKey } from "jose";
 import { useMswServer } from "../__fixtures__/msw.js";
+
+// ============================================================================
+// F6: makeRoutesConfig — deduplicated buildAuthRoutes config factory
+// ============================================================================
+
+type RoutesCtx = {
+  clientStore: DiskClientRegistrationStore;
+  tokenStore: TokenStore;
+  authRequests: AuthRequestStore;
+  authCodes: AuthCodeStore;
+  oidcStubIssuer: string;
+};
+
+type RoutesOverrides = {
+  jwks?: JWTVerifyGetKey;
+  authRequests?: AuthRequestStore;
+  authCodes?: AuthCodeStore;
+};
+
+function makeRoutesConfig(ctx: RoutesCtx, overrides: RoutesOverrides = {}): AuthRoutesDeps {
+  return {
+    clientStore: ctx.clientStore,
+    tokenStore: ctx.tokenStore,
+    authRequests: overrides.authRequests ?? ctx.authRequests,
+    authCodes: overrides.authCodes ?? ctx.authCodes,
+    oidcConfig: {
+      clientId: "stub-client-id",
+      clientSecret: "stub-client-secret",
+      discoveryUrl: `${ctx.oidcStubIssuer}/.well-known/openid-configuration`,
+      publicUrl: "https://mcp.example.com",
+      presetName: null,
+      scopes: ["openid", "email"],
+      emailVerifiedPolicy: "if-present",
+      allowlist: { emails: ["user@example.com"], subs: [] },
+      allowedAlgs: ["RS256"],
+    },
+    discovery: makeDiscoveryDoc(ctx.oidcStubIssuer),
+    jwks: overrides.jwks ?? ((async () => ({ keys: [] })) as unknown as JWTVerifyGetKey),
+    publicUrl: "https://mcp.example.com",
+  };
+}
 
 // Created at module scope so handlers can be passed as permanent initial handlers
 // to useMswServer (permanent = not removed by resetHandlers).
@@ -44,26 +85,9 @@ describe("Auth Routes", () => {
 
     app.route(
       "/",
-      buildAuthRoutes({
-        clientStore,
-        tokenStore,
-        authRequests,
-        authCodes,
-        oidcConfig: {
-          clientId: "stub-client-id",
-          clientSecret: "stub-client-secret",
-          discoveryUrl: `${oidcStub.issuer}/.well-known/openid-configuration`,
-          publicUrl: "https://mcp.example.com",
-          presetName: null,
-          scopes: ["openid", "email"],
-          emailVerifiedPolicy: "if-present",
-          allowlist: { emails: ["user@example.com"], subs: [] },
-          allowedAlgs: ["RS256"],
-        },
-        discovery: makeDiscoveryDoc(oidcStub.issuer),
-        jwks: (async () => ({ keys: [] })) as unknown as JWTVerifyGetKey,
-        publicUrl: "https://mcp.example.com",
-      }),
+      buildAuthRoutes(
+        makeRoutesConfig({ clientStore, tokenStore, authRequests, authCodes, oidcStubIssuer: oidcStub.issuer }),
+      ),
     );
   });
 
@@ -102,34 +126,19 @@ describe("Auth Routes", () => {
       // PLAN says (phase_06.md:662-667): successful upstream code exchange → allowlist OK → mints mcp_ac_ → redirects with code+state+iss
       // Build a local app with realJwks so verifyIdToken can fetch the key from the MSW stub's /jwks endpoint.
       // The outer beforeEach app uses `jwks: async () => ({ keys: [] })` which would fail sig verification.
-      const discoveryForJwks = makeDiscoveryDoc(oidcStub.issuer);
-      const realJwks = createJwksFor(discoveryForJwks);
+      const realJwks = createJwksFor(makeDiscoveryDoc(oidcStub.issuer));
 
       const localAuthRequests = new AuthRequestStore();
       const localAuthCodes = new AuthCodeStore();
       const localApp = new Hono();
       localApp.route(
         "/",
-        buildAuthRoutes({
-          clientStore,
-          tokenStore,
-          authRequests: localAuthRequests,
-          authCodes: localAuthCodes,
-          oidcConfig: {
-            clientId: "stub-client-id",
-            clientSecret: "stub-client-secret",
-            discoveryUrl: `${oidcStub.issuer}/.well-known/openid-configuration`,
-            publicUrl: "https://mcp.example.com",
-            presetName: null,
-            scopes: ["openid", "email"],
-            emailVerifiedPolicy: "if-present",
-            allowlist: { emails: ["user@example.com"], subs: [] },
-            allowedAlgs: ["RS256"],
-          },
-          discovery: discoveryForJwks,
-          jwks: realJwks,
-          publicUrl: "https://mcp.example.com",
-        }),
+        buildAuthRoutes(
+          makeRoutesConfig(
+            { clientStore, tokenStore, authRequests, authCodes, oidcStubIssuer: oidcStub.issuer },
+            { jwks: realJwks, authRequests: localAuthRequests, authCodes: localAuthCodes },
+          ),
+        ),
       );
 
       // Seed the local AuthRequestStore with a known state+nonce pair
@@ -171,35 +180,20 @@ describe("Auth Routes", () => {
     it("AC3.4: does NOT log id_token, only identity claims, on denial", async () => {
       // PLAN says (phase_06.md:680-686): allowlist denial logs identity claims (email, sub) but never id_token.
       // Build a local app with realJwks so verifyIdToken passes, then hit allowlist denial.
-      const discoveryForJwks = makeDiscoveryDoc(oidcStub.issuer);
-      const realJwks = createJwksFor(discoveryForJwks);
+      // Only user@example.com is on the allowlist — unknown@example.com will be denied.
+      const realJwks = createJwksFor(makeDiscoveryDoc(oidcStub.issuer));
 
       const localAuthRequests = new AuthRequestStore();
       const localAuthCodes = new AuthCodeStore();
       const localApp = new Hono();
       localApp.route(
         "/",
-        buildAuthRoutes({
-          clientStore,
-          tokenStore,
-          authRequests: localAuthRequests,
-          authCodes: localAuthCodes,
-          oidcConfig: {
-            clientId: "stub-client-id",
-            clientSecret: "stub-client-secret",
-            discoveryUrl: `${oidcStub.issuer}/.well-known/openid-configuration`,
-            publicUrl: "https://mcp.example.com",
-            presetName: null,
-            scopes: ["openid", "email"],
-            emailVerifiedPolicy: "if-present",
-            // Only user@example.com is on the allowlist — unknown@example.com will be denied
-            allowlist: { emails: ["user@example.com"], subs: [] },
-            allowedAlgs: ["RS256"],
-          },
-          discovery: discoveryForJwks,
-          jwks: realJwks,
-          publicUrl: "https://mcp.example.com",
-        }),
+        buildAuthRoutes(
+          makeRoutesConfig(
+            { clientStore, tokenStore, authRequests, authCodes, oidcStubIssuer: oidcStub.issuer },
+            { jwks: realJwks, authRequests: localAuthRequests, authCodes: localAuthCodes },
+          ),
+        ),
       );
 
       // Override the stub identity to one not on the allowlist

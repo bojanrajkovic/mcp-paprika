@@ -107,6 +107,24 @@ function generatePkce(): { codeVerifier: string; codeChallenge: string } {
 }
 
 // ============================================================================
+// F7: buildAuthorizeUrl — deduplicated authorize URL builder
+// ============================================================================
+
+function buildAuthorizeUrl(port: number, clientId: string, codeChallenge: string, state: string): string {
+  const params = new URLSearchParams({
+    response_type: "code",
+    client_id: clientId,
+    redirect_uri: "https://claude.ai/callback",
+    code_challenge: codeChallenge,
+    code_challenge_method: "S256",
+    state,
+    scope: "openid email",
+    resource: PUBLIC_URL,
+  });
+  return `http://127.0.0.1:${port.toString()}/authorize?${params.toString()}`;
+}
+
+// ============================================================================
 // Full-flow helper — drives DCR → authorize → upstream callback → our callback
 // Returns { registration, tokens, port }
 // ============================================================================
@@ -139,18 +157,7 @@ async function driveFullFlow(port: number): Promise<FullFlowResult> {
   // Step 2: GET /authorize — our server builds upstream URL and redirects
   const { codeVerifier, codeChallenge } = generatePkce();
   const claudeState = `claude-state-${randomBytes(8).toString("hex")}`;
-  const authorizeUrl =
-    `http://127.0.0.1:${port.toString()}/authorize` +
-    `?response_type=code` +
-    `&client_id=${encodeURIComponent(clientId)}` +
-    `&redirect_uri=${encodeURIComponent("https://claude.ai/callback")}` +
-    `&code_challenge=${codeChallenge}` +
-    `&code_challenge_method=S256` +
-    `&state=${claudeState}` +
-    `&scope=openid+email` +
-    `&resource=${encodeURIComponent(PUBLIC_URL)}`;
-
-  const authRes = await fetch(authorizeUrl, { redirect: "manual" });
+  const authRes = await fetch(buildAuthorizeUrl(port, clientId, codeChallenge, claudeState), { redirect: "manual" });
   // Our server redirects to upstream /authorize
   const upstreamRedirectUrl = authRes.headers.get("location") ?? "";
 
@@ -254,18 +261,7 @@ describe("HTTP e2e: full claude.ai connector flow", () => {
     // Step 2: GET /authorize — PKCE (PLAN says phase_07.md:680-693)
     const { codeVerifier, codeChallenge } = generatePkce();
     const claudeState = "claude-state-e2e-test";
-    const authorizeUrl =
-      `http://127.0.0.1:${port.toString()}/authorize` +
-      `?response_type=code` +
-      `&client_id=${encodeURIComponent(clientId)}` +
-      `&redirect_uri=${encodeURIComponent("https://claude.ai/callback")}` +
-      `&code_challenge=${codeChallenge}` +
-      `&code_challenge_method=S256` +
-      `&state=${claudeState}` +
-      `&scope=openid+email` +
-      `&resource=${encodeURIComponent(PUBLIC_URL)}`;
-
-    const authRes = await fetch(authorizeUrl, { redirect: "manual" });
+    const authRes = await fetch(buildAuthorizeUrl(port, clientId, codeChallenge, claudeState), { redirect: "manual" });
     expect(authRes.status).toBe(302);
     const upstreamRedirectUrl = authRes.headers.get("location") ?? "";
     const upstreamParsed = new URL(upstreamRedirectUrl);
@@ -425,18 +421,9 @@ describe("HTTP e2e: full claude.ai connector flow", () => {
       // GET /authorize → upstream redirect
       const { codeChallenge } = generatePkce();
       const claudeState = "claude-state-ac34";
-      const authorizeUrl =
-        `http://127.0.0.1:${port.toString()}/authorize` +
-        `?response_type=code` +
-        `&client_id=${encodeURIComponent(clientId)}` +
-        `&redirect_uri=${encodeURIComponent("https://claude.ai/callback")}` +
-        `&code_challenge=${codeChallenge}` +
-        `&code_challenge_method=S256` +
-        `&state=${claudeState}` +
-        `&scope=openid+email` +
-        `&resource=${encodeURIComponent(PUBLIC_URL)}`;
-
-      const authRes = await fetch(authorizeUrl, { redirect: "manual" });
+      const authRes = await fetch(buildAuthorizeUrl(port, clientId, codeChallenge, claudeState), {
+        redirect: "manual",
+      });
       const upstreamRedirectUrl = authRes.headers.get("location") ?? "";
 
       // Follow to upstream /authorize — stub returns the intruder identity
@@ -481,18 +468,7 @@ describe("HTTP e2e: full claude.ai connector flow", () => {
 
     const { codeVerifier, codeChallenge } = generatePkce();
     const claudeState = "claude-state-ac44";
-    const authorizeUrl =
-      `http://127.0.0.1:${port.toString()}/authorize` +
-      `?response_type=code` +
-      `&client_id=${encodeURIComponent(clientId)}` +
-      `&redirect_uri=${encodeURIComponent("https://claude.ai/callback")}` +
-      `&code_challenge=${codeChallenge}` +
-      `&code_challenge_method=S256` +
-      `&state=${claudeState}` +
-      `&scope=openid+email` +
-      `&resource=${encodeURIComponent(PUBLIC_URL)}`;
-
-    const authRes = await fetch(authorizeUrl, { redirect: "manual" });
+    const authRes = await fetch(buildAuthorizeUrl(port, clientId, codeChallenge, claudeState), { redirect: "manual" });
     const upstreamRedirectUrl = authRes.headers.get("location") ?? "";
     const upstreamAuthRes = await fetch(upstreamRedirectUrl, { redirect: "manual" });
     const callbackUrlFull = upstreamAuthRes.headers.get("location") ?? "";
