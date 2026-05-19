@@ -1,6 +1,21 @@
 import { AuthRequestStateSchema, AuthCodeStateSchema } from "../types.js";
 import { nowSeconds } from "../tokens.js";
 import type { AuthRequestState, AuthCodeState } from "../types.js";
+import type { VerifiedIdentity } from "../allowlist.js";
+
+/**
+ * Factory for creating test VerifiedIdentity objects (the post-allowlist
+ * identity claim shape consumed by TokenStore.issueAccessRefreshPair and
+ * carried through OAuthToken / AuthCodeState).
+ */
+export function makeVerifiedIdentity(overrides?: Partial<VerifiedIdentity>): VerifiedIdentity {
+  return {
+    email: "user@example.com",
+    sub: "sub-123",
+    source: "email",
+    ...overrides,
+  };
+}
 
 /**
  * Defaults shared by AuthRequestState and AuthCodeState test factories.

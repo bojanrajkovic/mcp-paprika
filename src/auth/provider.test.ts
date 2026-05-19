@@ -7,9 +7,32 @@ import { AuthRequestStore } from "./auth-request-store.js";
 import { AuthCodeStore } from "./auth-code-store.js";
 import { DiskCache } from "../cache/disk-cache.js";
 import { createOidcStub } from "./__fixtures__/oidc-stub.js";
+import { makeAuthCodeState, makeVerifiedIdentity } from "./__fixtures__/oauth-state.js";
 import { setupServer } from "msw/node";
-import { ACCESS_TOKEN_TTL_SECONDS, nowSeconds } from "./tokens.js";
+import { ACCESS_TOKEN_TTL_SECONDS } from "./tokens.js";
 import type { OAuthClientInformationFull } from "@modelcontextprotocol/sdk/shared/auth.js";
+import type { AuthCodeState } from "./types.js";
+
+/**
+ * Local helper that wraps makeAuthCodeState with this test file's defaults
+ * (clientId from mockClient, the standard `user@example.com` identity, the
+ * `https://claude.ai/callback` redirect, etc.). Each call site only needs
+ * to specify what diverges.
+ */
+function makeProviderAuthCode(
+  mockClient: OAuthClientInformationFull,
+  overrides: Partial<AuthCodeState> = {},
+): AuthCodeState {
+  return makeAuthCodeState({
+    clientId: mockClient.client_id,
+    codeChallenge: "challenge-123",
+    redirectUri: "https://claude.ai/callback",
+    resource: "https://mcp.example.com/",
+    scope: "openid email",
+    identity: makeVerifiedIdentity({ email: "user@example.com", sub: "user-sub-123" }),
+    ...overrides,
+  });
+}
 
 describe("MintingOAuthServerProvider", () => {
   let cacheDir: string;
@@ -181,16 +204,7 @@ describe("MintingOAuthServerProvider", () => {
       // PLAN says (phase_06.md:295): Set up a complete exchange. Put an AuthCodeState into authCodes via `authCodes.put(code, state)`, then call `provider.exchangeAuthorizationCode(client, code, codeVerifier, redirectUri, resource)`. Assert the returned `OAuthTokens` has `access_token` (starts with `mcp_at_` or whatever prefix tokens.ts uses), `refresh_token`, `token_type === "Bearer"`, `expires_in === ACCESS_TOKEN_TTL_SECONDS` (24h = 86400), and `scope` equal to the AuthCodeState scope.
       const code = "test-code-123";
       const resourceUrl = new URL("https://mcp.example.com");
-      authCodes.put(code, {
-        clientId: mockClient.client_id,
-        codeChallenge: "challenge-123",
-        codeChallengeMethod: "S256",
-        redirectUri: "https://claude.ai/callback",
-        resource: resourceUrl.toString(),
-        scope: "openid email",
-        identity: { email: "user@example.com", sub: "user-sub-123", source: "email" },
-        createdAt: nowSeconds(),
-      });
+      authCodes.put(code, makeProviderAuthCode(mockClient));
 
       const tokens = await provider.exchangeAuthorizationCode(
         mockClient,
@@ -211,16 +225,7 @@ describe("MintingOAuthServerProvider", () => {
       // PLAN says (phase_06.md:296): Exchange once successfully, then call again with the same code. Second call must reject with `InvalidGrantError` (assert `.rejects.toMatchObject({ errorCode: "invalid_grant" })`).
       const code = "test-code-consumed";
       const resourceUrl = new URL("https://mcp.example.com");
-      authCodes.put(code, {
-        clientId: mockClient.client_id,
-        codeChallenge: "challenge-123",
-        codeChallengeMethod: "S256",
-        redirectUri: "https://claude.ai/callback",
-        resource: resourceUrl.toString(),
-        scope: "openid email",
-        identity: { email: "user@example.com", sub: "user-sub-123", source: "email" },
-        createdAt: nowSeconds(),
-      });
+      authCodes.put(code, makeProviderAuthCode(mockClient));
 
       // First exchange succeeds
       const result1 = await provider.exchangeAuthorizationCode(
@@ -241,16 +246,7 @@ describe("MintingOAuthServerProvider", () => {
     it("AC2.10: resource mismatch → invalid_target error", async () => {
       // PLAN says (phase_06.md:297): Stored AuthCodeState has resource="https://m.example.com/mcp"; call exchange with `resource: new URL("https://wrong/")`. Reject with `errorCode: "invalid_target"`.
       const code = "test-code-resource-mismatch";
-      authCodes.put(code, {
-        clientId: mockClient.client_id,
-        codeChallenge: "challenge-123",
-        codeChallengeMethod: "S256",
-        redirectUri: "https://claude.ai/callback",
-        resource: "https://m.example.com/mcp",
-        scope: "openid email",
-        identity: { email: "user@example.com", sub: "user-sub-123", source: "email" },
-        createdAt: nowSeconds(),
-      });
+      authCodes.put(code, makeProviderAuthCode(mockClient, { resource: "https://m.example.com/mcp" }));
 
       await expect(
         provider.exchangeAuthorizationCode(
@@ -269,7 +265,7 @@ describe("MintingOAuthServerProvider", () => {
       // PLAN says (phase_06.md:307): Issue a token pair via `tokenStore.issueAccessRefreshPair(...)`, then call `provider.exchangeRefreshToken(undefined as any, oldRefresh)`. Assert new pair returned, old refresh token invalidated (subsequent `provider.exchangeRefreshToken(_, oldRefresh)` rejects).
       const pair = await tokenStore.issueAccessRefreshPair({
         clientId: mockClient.client_id,
-        identity: { email: "user@example.com", sub: "user-sub-123", source: "email" },
+        identity: makeVerifiedIdentity({ email: "user@example.com", sub: "user-sub-123" }),
         scope: "openid email",
         resource: "https://mcp.example.com/",
       });
@@ -291,7 +287,7 @@ describe("MintingOAuthServerProvider", () => {
       // PLAN says (phase_06.md:308): Issue pair with resource="A"; call `exchangeRefreshToken` with `resource: new URL("B/")`. Reject with `errorCode: "invalid_target"`.
       const pair = await tokenStore.issueAccessRefreshPair({
         clientId: mockClient.client_id,
-        identity: { email: "user@example.com", sub: "user-sub-123", source: "email" },
+        identity: makeVerifiedIdentity({ email: "user@example.com", sub: "user-sub-123" }),
         scope: "openid email",
         resource: "https://a.example.com/",
       });
@@ -312,7 +308,7 @@ describe("MintingOAuthServerProvider", () => {
       // PLAN says (phase_06.md:312): Issue pair, call `provider.verifyAccessToken(pair.access.plaintext)`. Resolves to AuthInfo with `clientId`, `scopes`, `extra.identity`, etc.
       const pair = await tokenStore.issueAccessRefreshPair({
         clientId: mockClient.client_id,
-        identity: { email: "user@example.com", sub: "user-sub-123", source: "email" },
+        identity: makeVerifiedIdentity({ email: "user@example.com", sub: "user-sub-123" }),
         scope: "openid email",
         resource: "https://mcp.example.com/",
       });
@@ -338,7 +334,7 @@ describe("MintingOAuthServerProvider", () => {
       // PLAN says (phase_06.md:317): Issue pair, call `provider.revokeToken({} as any, { token: pair.access.plaintext, token_type_hint: "access_token" })`. Then `provider.verifyAccessToken(pair.access.plaintext)` rejects with `errorCode: "invalid_token"`.
       const pair = await tokenStore.issueAccessRefreshPair({
         clientId: mockClient.client_id,
-        identity: { email: "user@example.com", sub: "user-sub-123", source: "email" },
+        identity: makeVerifiedIdentity({ email: "user@example.com", sub: "user-sub-123" }),
         scope: "openid email",
         resource: "https://mcp.example.com/",
       });
@@ -370,17 +366,7 @@ describe("MintingOAuthServerProvider", () => {
       // PLAN says (phase_06.md:322): Put an AuthCodeState with `codeChallenge: "abc"`. Call `provider.challengeForAuthorizationCode(client, code)`. Resolves to "abc".
       const code = "test-code-challenge";
       const challenge = "abc123def456";
-      const resourceUrl = new URL("https://mcp.example.com");
-      authCodes.put(code, {
-        clientId: mockClient.client_id,
-        codeChallenge: challenge,
-        codeChallengeMethod: "S256",
-        redirectUri: "https://claude.ai/callback",
-        resource: resourceUrl.toString(),
-        scope: "openid email",
-        identity: { email: "user@example.com", sub: "user-sub-123", source: "email" },
-        createdAt: nowSeconds(),
-      });
+      authCodes.put(code, makeProviderAuthCode(mockClient, { codeChallenge: challenge }));
 
       const result = await provider.challengeForAuthorizationCode(mockClient, code);
       expect(result).toBe(challenge);
@@ -390,16 +376,7 @@ describe("MintingOAuthServerProvider", () => {
       // PLAN says (phase_06.md:324): Call challenge, then call exchange with same code. Both succeed (the code is only consumed by `exchangeAuthorizationCode`, not by `challengeForAuthorizationCode`'s peek).
       const code = "test-code-peek-not-consume";
       const resourceUrl = new URL("https://mcp.example.com");
-      authCodes.put(code, {
-        clientId: mockClient.client_id,
-        codeChallenge: "challenge-123",
-        codeChallengeMethod: "S256",
-        redirectUri: "https://claude.ai/callback",
-        resource: resourceUrl.toString(),
-        scope: "openid email",
-        identity: { email: "user@example.com", sub: "user-sub-123", source: "email" },
-        createdAt: nowSeconds(),
-      });
+      authCodes.put(code, makeProviderAuthCode(mockClient));
 
       // Challenge call does NOT consume
       const challenge = await provider.challengeForAuthorizationCode(mockClient, code);

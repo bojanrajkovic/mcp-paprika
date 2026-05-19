@@ -8,6 +8,7 @@ import { AuthRequestStore } from "./auth-request-store.js";
 import { AuthCodeStore } from "./auth-code-store.js";
 import { DiskCache } from "../cache/disk-cache.js";
 import { createOidcStub } from "./__fixtures__/oidc-stub.js";
+import { makeVerifiedIdentity } from "./__fixtures__/oauth-state.js";
 import { createJwksFor } from "./oidc-client.js";
 import { setupServer } from "msw/node";
 import type { JWTVerifyGetKey } from "jose";
@@ -356,7 +357,7 @@ describe("Auth Routes", () => {
       // Issue a token pair for this client
       const pair = await tokenStore.issueAccessRefreshPair({
         clientId,
-        identity: { email: "user@example.com", sub: "user-sub-123", source: "email" },
+        identity: makeVerifiedIdentity({ email: "user@example.com", sub: "user-sub-123" }),
         scope: "openid email",
         resource: "https://mcp.example.com/",
       });

@@ -26,18 +26,9 @@ import type { DiskClientRegistrationStore } from "./client-registration.js";
 import { DiskClientRegistrationStore as DiskClientRegistrationStoreImpl } from "./client-registration.js";
 import { TokenStore } from "./token-store.js";
 import { hashTokenForStorage, ACCESS_TOKEN_TTL_SECONDS, REFRESH_TOKEN_TTL_SECONDS, nowSeconds } from "./tokens.js";
-import type { VerifiedIdentity } from "./allowlist.js";
 import { AuthRequestStore } from "./auth-request-store.js";
 import { AuthCodeStore } from "./auth-code-store.js";
-
-function makeVerifiedIdentity(overrides?: Partial<VerifiedIdentity>): VerifiedIdentity {
-  return {
-    email: "user@example.com",
-    sub: "sub-123",
-    source: "email",
-    ...overrides,
-  };
-}
+import { makeVerifiedIdentity } from "./__fixtures__/oauth-state.js";
 
 function makeTokenStoreInput(overrides?: Partial<Parameters<TokenStore["issueAccessRefreshPair"]>[0]>) {
   return {
