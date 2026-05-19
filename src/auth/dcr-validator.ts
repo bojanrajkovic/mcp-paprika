@@ -65,18 +65,81 @@ function isValidRedirectUri(uri: string): boolean {
   }
 }
 
-// Tightened schema for validateRegistration with proper field validation
-const RegistrationMetadataSchema = z
-  .object({
-    token_endpoint_auth_method: z.literal("none").optional(),
-    grant_types: z.array(z.enum(["authorization_code", "refresh_token"])).optional(),
-    response_types: z.array(z.literal("code")).optional(),
-    redirect_uris: z.array(z.string()).optional(),
-    scope: z.string().min(1).optional(),
-    client_name: z.string().optional(),
-    id_token_signed_response_alg: z.enum(["RS256", "ES256"]).optional(),
-  })
-  .passthrough() // Allow and preserve other RFC 7591 fields
+// Shared field declarations for both registration and update schemas
+const ClientMetadataFieldsSchema = z.object({
+  token_endpoint_auth_method: z.literal("none").optional(),
+  grant_types: z.array(z.enum(["authorization_code", "refresh_token"])).optional(),
+  response_types: z.array(z.literal("code")).optional(),
+  redirect_uris: z.array(z.string()).optional(),
+  scope: z.string().min(1).optional(),
+  client_name: z.string().optional(),
+  id_token_signed_response_alg: z.enum(["RS256", "ES256"]).optional(),
+});
+
+type ClientMetadataFields = z.infer<typeof ClientMetadataFieldsSchema>;
+
+// Shared helper: validate each redirect URI item in a non-empty array
+function validateRedirectUriItems(uris: string[], ctx: z.RefinementCtx): void {
+  for (let i = 0; i < uris.length; i++) {
+    const uri = uris[i];
+    if (typeof uri !== "string") {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["redirect_uris", i],
+        message: "must be a string",
+      });
+    } else {
+      try {
+        new URL(uri);
+      } catch {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["redirect_uris", i],
+          message: "must be a valid URL",
+        });
+        continue;
+      }
+
+      if (!isValidRedirectUri(uri)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["redirect_uris", i],
+          message: "must use https:// or http://localhost/127.0.0.1/[::1]",
+        });
+      }
+    }
+  }
+}
+
+// Shared helper: validate response_types if present (must be exactly ["code"])
+function validateResponseTypes(data: ClientMetadataFields, ctx: z.RefinementCtx): void {
+  if (
+    data.response_types !== undefined &&
+    (!Array.isArray(data.response_types) || data.response_types.length !== 1 || data.response_types[0] !== "code")
+  ) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["response_types"],
+      message: "must be exactly ['code'] when present",
+    });
+  }
+}
+
+// Shared helper: validate grant_types if present (must be a non-empty subset)
+function validateGrantTypes(data: ClientMetadataFields, ctx: z.RefinementCtx): void {
+  if (data.grant_types !== undefined) {
+    if (!Array.isArray(data.grant_types) || data.grant_types.length === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["grant_types"],
+        message: "must be a non-empty array when present",
+      });
+    }
+  }
+}
+
+// Schema for validateRegistration: redirect_uris REQUIRED (must be present and non-empty)
+const RegistrationMetadataSchema = ClientMetadataFieldsSchema.passthrough() // Allow and preserve other RFC 7591 fields
   .superRefine((data, ctx) => {
     // Validate redirect_uris: must be present, non-empty, valid URLs with our scheme rules
     if (!Array.isArray(data.redirect_uris) || data.redirect_uris.length === 0) {
@@ -86,75 +149,17 @@ const RegistrationMetadataSchema = z
         message: "redirect_uris is required and must be a non-empty array of valid URLs",
       });
     } else {
-      for (let i = 0; i < data.redirect_uris.length; i++) {
-        const uri = data.redirect_uris[i];
-        if (typeof uri !== "string") {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            path: ["redirect_uris", i],
-            message: "must be a string",
-          });
-        } else {
-          try {
-            new URL(uri);
-          } catch {
-            ctx.addIssue({
-              code: z.ZodIssueCode.custom,
-              path: ["redirect_uris", i],
-              message: "must be a valid URL",
-            });
-            continue;
-          }
-
-          if (!isValidRedirectUri(uri)) {
-            ctx.addIssue({
-              code: z.ZodIssueCode.custom,
-              path: ["redirect_uris", i],
-              message: "must use https:// or http://localhost/127.0.0.1/[::1]",
-            });
-          }
-        }
-      }
+      validateRedirectUriItems(data.redirect_uris, ctx);
     }
 
-    // Validate response_types: if present, must be exactly ["code"]
-    if (
-      data.response_types !== undefined &&
-      (!Array.isArray(data.response_types) || data.response_types.length !== 1 || data.response_types[0] !== "code")
-    ) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["response_types"],
-        message: "must be exactly ['code'] when present",
-      });
-    }
-
-    // Validate grant_types: if present, must be a non-empty subset of allowed
-    if (data.grant_types !== undefined) {
-      if (!Array.isArray(data.grant_types) || data.grant_types.length === 0) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ["grant_types"],
-          message: "must be a non-empty array when present",
-        });
-      }
-    }
+    validateResponseTypes(data, ctx);
+    validateGrantTypes(data, ctx);
   });
 
 type RegistrationMetadataInput = z.infer<typeof RegistrationMetadataSchema>;
 
-// Tightened schema for validateUpdate with proper field validation (all optional)
-const UpdateMetadataSchema = z
-  .object({
-    token_endpoint_auth_method: z.literal("none").optional(),
-    grant_types: z.array(z.enum(["authorization_code", "refresh_token"])).optional(),
-    response_types: z.array(z.literal("code")).optional(),
-    redirect_uris: z.array(z.string()).optional(),
-    scope: z.string().min(1).optional(),
-    client_name: z.string().optional(),
-    id_token_signed_response_alg: z.enum(["RS256", "ES256"]).optional(),
-  })
-  .passthrough() // Allow and preserve other RFC 7591 fields
+// Schema for validateUpdate: redirect_uris OPTIONAL (whole block skipped when absent)
+const UpdateMetadataSchema = ClientMetadataFieldsSchema.passthrough() // Allow and preserve other RFC 7591 fields
   .superRefine((data, ctx) => {
     // Validate redirect_uris if present: must be non-empty with valid scheme
     if (data.redirect_uris !== undefined) {
@@ -165,60 +170,12 @@ const UpdateMetadataSchema = z
           message: "redirect_uris must be a non-empty array when present",
         });
       } else {
-        for (let i = 0; i < data.redirect_uris.length; i++) {
-          const uri = data.redirect_uris[i];
-          if (typeof uri !== "string") {
-            ctx.addIssue({
-              code: z.ZodIssueCode.custom,
-              path: ["redirect_uris", i],
-              message: "must be a string",
-            });
-          } else {
-            try {
-              new URL(uri);
-            } catch {
-              ctx.addIssue({
-                code: z.ZodIssueCode.custom,
-                path: ["redirect_uris", i],
-                message: "must be a valid URL",
-              });
-              continue;
-            }
-
-            if (!isValidRedirectUri(uri)) {
-              ctx.addIssue({
-                code: z.ZodIssueCode.custom,
-                path: ["redirect_uris", i],
-                message: "must use https:// or http://localhost/127.0.0.1/[::1]",
-              });
-            }
-          }
-        }
+        validateRedirectUriItems(data.redirect_uris, ctx);
       }
     }
 
-    // Validate response_types if present: must be exactly ["code"]
-    if (
-      data.response_types !== undefined &&
-      (!Array.isArray(data.response_types) || data.response_types.length !== 1 || data.response_types[0] !== "code")
-    ) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["response_types"],
-        message: "must be exactly ['code'] when present",
-      });
-    }
-
-    // Validate grant_types if present: must be a non-empty subset of allowed
-    if (data.grant_types !== undefined) {
-      if (!Array.isArray(data.grant_types) || data.grant_types.length === 0) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ["grant_types"],
-          message: "must be a non-empty array when present",
-        });
-      }
-    }
+    validateResponseTypes(data, ctx);
+    validateGrantTypes(data, ctx);
   });
 
 // Helper: convert parsed data to ValidatedClientMetadata with defaults for registration
