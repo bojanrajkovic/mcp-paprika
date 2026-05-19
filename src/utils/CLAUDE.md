@@ -1,12 +1,21 @@
 # Cross-Cutting Utilities
 
-Last verified: 2026-05-18 (xdg XDG-override behavior added 2026-05-18)
+Last verified: 2026-05-18 (log.ts helpers added 2026-05-18; xdg XDG-override behavior added 2026-05-18)
 
 ## Purpose
 
 Shared utility functions and helpers used across multiple modules. Includes error base classes, logging helpers, and common transformations.
 
 ## Contracts
+
+### log.ts — Stderr logging helpers
+
+Two pure functions for the stdio-safe diagnostic-logging pattern used across the codebase. Stdio transport uses stdout for the MCP wire format, so every diagnostic message MUST go to stderr (the `no-console` oxlint rule enforces this). No internal dependencies (leaf module).
+
+| Function               | Signature                                   | Description                                                                                                            |
+| ---------------------- | ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `createLogger(prefix)` | `(prefix: string) => (msg: string) => void` | Returns a function that writes `[${prefix}] ${msg}\n` to `process.stderr`. Replaces per-module inline `log()` shims.   |
+| `toMessage(e)`         | `(e: unknown) => string`                    | Extracts a human-readable message from an unknown thrown value: `e.message` if `e instanceof Error`, else `String(e)`. |
 
 ### xdg.ts — Platform-native application directory paths
 
@@ -113,6 +122,6 @@ oauth: {
 
 ## Dependencies
 
-- **Leaf modules (no internal imports):** `xdg.ts` (uses `env-paths`), `duration.ts` (uses `luxon`, `parse-duration`, `neverthrow`)
+- **Leaf modules (no internal imports):** `log.ts` (uses only `process.stderr`), `xdg.ts` (uses `env-paths`), `duration.ts` (uses `luxon`, `parse-duration`, `neverthrow`)
 - **Non-leaf modules:** `config.ts` imports from `xdg.ts` and `duration.ts`; also uses `dotenv`, `zod`, `neverthrow`
 - **Used by:** All other `src/` modules may import from `src/utils/`
