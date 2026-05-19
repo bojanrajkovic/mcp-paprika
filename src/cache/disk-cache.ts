@@ -195,23 +195,14 @@ export class DiskCache {
   async getRecipe(uid: string): Promise<Recipe | null> {
     // Pending map is checked first so callers can read back data they just
     // put in the same sync cycle (before flush writes it to disk).
-    const pending = this._pendingRecipes.get(uid);
-    if (pending !== undefined) {
-      return pending;
-    }
-
-    const filePath = join(this._recipesDir, `${uid}.json`);
-    let raw: string;
-    try {
-      raw = await readFile(filePath, "utf-8");
-    } catch (error: unknown) {
-      if (isNodeError(error) && error.code === "ENOENT") {
-        return null;
-      }
-      throw error;
-    }
-
-    return RecipeStoredSchema.parse(JSON.parse(raw));
+    // Cast: RecipeStoredSchema output has branded UIDs at runtime but TS infers
+    // plain string — the cast is safe because parse() enforces the schema shape.
+    return this._readJsonFile(
+      this._recipesDir,
+      uid,
+      RecipeStoredSchema as unknown as z.ZodType<Recipe>,
+      this._pendingRecipes,
+    );
   }
 
   putRecipe(recipe: Recipe, hash: string): Promise<void> {
@@ -242,20 +233,7 @@ export class DiskCache {
       if (this._index === null) {
         throw new Error("DiskCache: removeRecipe() called before init()");
       }
-
-      // Delete file from disk if present. ENOENT is fine — idempotent.
-      const filePath = join(this._recipesDir, `${uid}.json`);
-      try {
-        await unlink(filePath);
-      } catch (error: unknown) {
-        if (!isNodeError(error) || error.code !== "ENOENT") {
-          throw error;
-        }
-      }
-
-      // Remove from index and pending map.
-      delete this._index.recipes[uid];
-      this._pendingRecipes.delete(uid);
+      await this._removeJsonFile(this._recipesDir, uid, this._pendingRecipes, this._index.recipes);
     });
   }
 
@@ -264,18 +242,7 @@ export class DiskCache {
       if (this._index === null) {
         throw new Error("DiskCache: removePantryItem() called before init()");
       }
-
-      const filePath = join(this._pantryDir, `${uid}.json`);
-      try {
-        await unlink(filePath);
-      } catch (error: unknown) {
-        if (!isNodeError(error) || error.code !== "ENOENT") {
-          throw error;
-        }
-      }
-
-      delete this._index.pantry[uid];
-      this._pendingPantryItems.delete(uid);
+      await this._removeJsonFile(this._pantryDir, uid, this._pendingPantryItems, this._index.pantry);
     });
   }
 
@@ -283,84 +250,34 @@ export class DiskCache {
     if (this._index === null) {
       throw new Error("DiskCache: getAllRecipes() called before init()");
     }
-
-    // Start with pending entries. Pending shadows disk for the same UID.
-    const result: Map<string, Recipe> = new Map(this._pendingRecipes);
-
-    // Read all .json files from recipesDir and add those not already in pending.
-    let files: Array<string>;
-    try {
-      files = await readdir(this._recipesDir);
-    } catch (error: unknown) {
-      if (isNodeError(error) && error.code === "ENOENT") {
-        return [...result.values()];
-      }
-      throw error;
-    }
-
-    const jsonFiles = files.filter((f) => f.endsWith(".json"));
-    await Promise.all(
-      jsonFiles.map(async (filename) => {
-        const uid = filename.slice(0, -5); // strip ".json"
-        if (result.has(uid)) return; // pending entry shadows disk
-        const raw = await readFile(join(this._recipesDir, filename), "utf-8");
-        const recipe = RecipeStoredSchema.parse(JSON.parse(raw));
-        result.set(uid, recipe);
-      }),
+    // Cast: same branded-UID reason as getRecipe.
+    return this._readAllJsonFiles(
+      this._recipesDir,
+      this._pendingRecipes,
+      RecipeStoredSchema as unknown as z.ZodType<Recipe>,
     );
-
-    return [...result.values()];
   }
 
   async getAllPantryItems(): Promise<Array<PantryItem>> {
     if (this._index === null) {
       throw new Error("DiskCache: getAllPantryItems() called before init()");
     }
-
-    const result: Map<string, PantryItem> = new Map(this._pendingPantryItems);
-
-    let files: Array<string>;
-    try {
-      files = await readdir(this._pantryDir);
-    } catch (error: unknown) {
-      if (isNodeError(error) && error.code === "ENOENT") {
-        return [...result.values()];
-      }
-      throw error;
-    }
-
-    const jsonFiles = files.filter((f) => f.endsWith(".json"));
-    await Promise.all(
-      jsonFiles.map(async (filename) => {
-        const uid = filename.slice(0, -5);
-        if (result.has(uid)) return;
-        const raw = await readFile(join(this._pantryDir, filename), "utf-8");
-        const item = PantryItemStoredSchema.parse(JSON.parse(raw));
-        result.set(uid, item);
-      }),
+    // Cast: same branded-UID reason as getRecipe.
+    return this._readAllJsonFiles(
+      this._pantryDir,
+      this._pendingPantryItems,
+      PantryItemStoredSchema as unknown as z.ZodType<PantryItem>,
     );
-
-    return [...result.values()];
   }
 
   async getCategory(uid: string): Promise<Category | null> {
-    const pending = this._pendingCategories.get(uid);
-    if (pending !== undefined) {
-      return pending;
-    }
-
-    const filePath = join(this._categoriesDir, `${uid}.json`);
-    let raw: string;
-    try {
-      raw = await readFile(filePath, "utf-8");
-    } catch (error: unknown) {
-      if (isNodeError(error) && error.code === "ENOENT") {
-        return null;
-      }
-      throw error;
-    }
-
-    return CategoryStoredSchema.parse(JSON.parse(raw));
+    // Cast: same branded-UID reason as getRecipe.
+    return this._readJsonFile(
+      this._categoriesDir,
+      uid,
+      CategoryStoredSchema as unknown as z.ZodType<Category>,
+      this._pendingCategories,
+    );
   }
 
   putCategory(category: Category, hash: string): Promise<void> {
@@ -372,6 +289,103 @@ export class DiskCache {
       this._index.categories[category.uid] = hash;
     });
   }
+
+  // ============================================================================
+  // Private generic helpers for namespace-agnostic JSON CRUD
+  // ============================================================================
+
+  // Returns a pending entry (if present) or reads+validates a JSON file from
+  // disk. ENOENT is silenced and returns null. Schema parse runs on every disk
+  // read; pending entries are returned directly (already validated at buffer
+  // time). Does not acquire _writeLock — callers are responsible.
+  private async _readJsonFile<T>(
+    dir: string,
+    key: string,
+    schema: z.ZodType<T>,
+    pending: ReadonlyMap<string, T>,
+  ): Promise<T | null> {
+    const hit = pending.get(key);
+    if (hit !== undefined) {
+      return hit;
+    }
+
+    const filePath = join(dir, `${key}.json`);
+    let raw: string;
+    try {
+      raw = await readFile(filePath, "utf-8");
+    } catch (error: unknown) {
+      if (isNodeError(error) && error.code === "ENOENT") {
+        return null;
+      }
+      throw error;
+    }
+
+    return schema.parse(JSON.parse(raw));
+  }
+
+  // Reads all JSON files from a directory and merges with pending entries.
+  // Pending entries shadow disk for the same key. ENOENT on the directory is
+  // silenced (first-run case). Schema parse runs on every disk read.
+  // Does not acquire _writeLock — read-only, no mutex needed.
+  private async _readAllJsonFiles<T>(
+    dir: string,
+    pending: ReadonlyMap<string, T>,
+    schema: z.ZodType<T>,
+  ): Promise<Array<T>> {
+    // Seed result with pending entries. Pending shadows disk for the same key.
+    const result: Map<string, T> = new Map(pending);
+
+    let files: Array<string>;
+    try {
+      files = await readdir(dir);
+    } catch (error: unknown) {
+      if (isNodeError(error) && error.code === "ENOENT") {
+        return [...result.values()];
+      }
+      throw error;
+    }
+
+    const jsonFiles = files.filter((f) => f.endsWith(".json"));
+    await Promise.all(
+      jsonFiles.map(async (filename) => {
+        const key = filename.slice(0, -5); // strip ".json"
+        if (result.has(key)) return; // pending entry shadows disk
+        const raw = await readFile(join(dir, filename), "utf-8");
+        const value = schema.parse(JSON.parse(raw));
+        result.set(key, value);
+      }),
+    );
+
+    return [...result.values()];
+  }
+
+  // Deletes a file from disk (ENOENT-silenced), then removes the key from the
+  // in-memory index record and the pending map. Must be called inside
+  // _writeLock.runExclusive — the public remove methods are responsible for
+  // acquiring the lock. Unlink failure (non-ENOENT) throws before touching
+  // index or pending, preserving consistency.
+  private async _removeJsonFile<T>(
+    dir: string,
+    key: string,
+    pending: Map<string, T>,
+    indexRecord: Record<string, string>,
+  ): Promise<void> {
+    const filePath = join(dir, `${key}.json`);
+    try {
+      await unlink(filePath);
+    } catch (error: unknown) {
+      if (!isNodeError(error) || error.code !== "ENOENT") {
+        throw error;
+      }
+    }
+
+    delete indexRecord[key];
+    pending.delete(key);
+  }
+
+  // ============================================================================
+  // Private synchronous helper for diff computation
+  // ============================================================================
 
   // Private synchronous helper. Classifies remote entries against the local
   // uid → hash map into added/changed/removed. Uses a Set for O(1) remote
@@ -418,23 +432,7 @@ export class DiskCache {
   }
 
   async getOAuthClient(clientId: string): Promise<OAuthClient | null> {
-    const pending = this._pendingOAuthClients.get(clientId);
-    if (pending !== undefined) {
-      return pending;
-    }
-
-    const filePath = join(this._oauthClientsDir, `${clientId}.json`);
-    let raw: string;
-    try {
-      raw = await readFile(filePath, "utf-8");
-    } catch (error: unknown) {
-      if (isNodeError(error) && error.code === "ENOENT") {
-        return null;
-      }
-      throw error;
-    }
-
-    return OAuthClientSchema.parse(JSON.parse(raw));
+    return this._readJsonFile(this._oauthClientsDir, clientId, OAuthClientSchema, this._pendingOAuthClients);
   }
 
   removeOAuthClient(clientId: string): Promise<void> {
@@ -442,18 +440,7 @@ export class DiskCache {
       if (this._index === null) {
         throw new Error("DiskCache: removeOAuthClient() called before init()");
       }
-
-      const filePath = join(this._oauthClientsDir, `${clientId}.json`);
-      try {
-        await unlink(filePath);
-      } catch (error: unknown) {
-        if (!isNodeError(error) || error.code !== "ENOENT") {
-          throw error;
-        }
-      }
-
-      delete this._index.oauthClients[clientId];
-      this._pendingOAuthClients.delete(clientId);
+      await this._removeJsonFile(this._oauthClientsDir, clientId, this._pendingOAuthClients, this._index.oauthClients);
     });
   }
 
@@ -461,31 +448,7 @@ export class DiskCache {
     if (this._index === null) {
       throw new Error("DiskCache: getAllOAuthClients() called before init()");
     }
-
-    const result: Map<string, OAuthClient> = new Map(this._pendingOAuthClients);
-
-    let files: Array<string>;
-    try {
-      files = await readdir(this._oauthClientsDir);
-    } catch (error: unknown) {
-      if (isNodeError(error) && error.code === "ENOENT") {
-        return [...result.values()];
-      }
-      throw error;
-    }
-
-    const jsonFiles = files.filter((f) => f.endsWith(".json"));
-    await Promise.all(
-      jsonFiles.map(async (filename) => {
-        const clientId = filename.slice(0, -5);
-        if (result.has(clientId)) return;
-        const raw = await readFile(join(this._oauthClientsDir, filename), "utf-8");
-        const client = OAuthClientSchema.parse(JSON.parse(raw));
-        result.set(clientId, client);
-      }),
-    );
-
-    return [...result.values()];
+    return this._readAllJsonFiles(this._oauthClientsDir, this._pendingOAuthClients, OAuthClientSchema);
   }
 
   putOAuthToken(token: OAuthToken): Promise<void> {
@@ -499,23 +462,7 @@ export class DiskCache {
   }
 
   async getOAuthToken(tokenHash: string): Promise<OAuthToken | null> {
-    const pending = this._pendingOAuthTokens.get(tokenHash);
-    if (pending !== undefined) {
-      return pending;
-    }
-
-    const filePath = join(this._oauthTokensDir, `${tokenHash}.json`);
-    let raw: string;
-    try {
-      raw = await readFile(filePath, "utf-8");
-    } catch (error: unknown) {
-      if (isNodeError(error) && error.code === "ENOENT") {
-        return null;
-      }
-      throw error;
-    }
-
-    return OAuthTokenSchema.parse(JSON.parse(raw));
+    return this._readJsonFile(this._oauthTokensDir, tokenHash, OAuthTokenSchema, this._pendingOAuthTokens);
   }
 
   removeOAuthToken(tokenHash: string): Promise<void> {
@@ -523,18 +470,7 @@ export class DiskCache {
       if (this._index === null) {
         throw new Error("DiskCache: removeOAuthToken() called before init()");
       }
-
-      const filePath = join(this._oauthTokensDir, `${tokenHash}.json`);
-      try {
-        await unlink(filePath);
-      } catch (error: unknown) {
-        if (!isNodeError(error) || error.code !== "ENOENT") {
-          throw error;
-        }
-      }
-
-      delete this._index.oauthTokens[tokenHash];
-      this._pendingOAuthTokens.delete(tokenHash);
+      await this._removeJsonFile(this._oauthTokensDir, tokenHash, this._pendingOAuthTokens, this._index.oauthTokens);
     });
   }
 
@@ -542,30 +478,6 @@ export class DiskCache {
     if (this._index === null) {
       throw new Error("DiskCache: getAllOAuthTokens() called before init()");
     }
-
-    const result: Map<string, OAuthToken> = new Map(this._pendingOAuthTokens);
-
-    let files: Array<string>;
-    try {
-      files = await readdir(this._oauthTokensDir);
-    } catch (error: unknown) {
-      if (isNodeError(error) && error.code === "ENOENT") {
-        return [...result.values()];
-      }
-      throw error;
-    }
-
-    const jsonFiles = files.filter((f) => f.endsWith(".json"));
-    await Promise.all(
-      jsonFiles.map(async (filename) => {
-        const tokenHash = filename.slice(0, -5);
-        if (result.has(tokenHash)) return;
-        const raw = await readFile(join(this._oauthTokensDir, filename), "utf-8");
-        const token = OAuthTokenSchema.parse(JSON.parse(raw));
-        result.set(tokenHash, token);
-      }),
-    );
-
-    return [...result.values()];
+    return this._readAllJsonFiles(this._oauthTokensDir, this._pendingOAuthTokens, OAuthTokenSchema);
   }
 }
