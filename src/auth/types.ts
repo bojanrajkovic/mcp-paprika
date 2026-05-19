@@ -139,6 +139,43 @@ export const OAuthClientWireResponseSchema = z.object({
 export type OAuthClientWireResponse = z.infer<typeof OAuthClientWireResponseSchema>;
 
 // ============================================================================
+// Shared sub-schemas
+// ============================================================================
+
+/**
+ * Identity claims extracted from an upstream id_token after allowlist verification.
+ * The `source` field records whether the user was admitted by an email-allowlist hit
+ * or a sub-allowlist hit (email-precedence semantics in `allowlist.ts`).
+ */
+export const IdentitySchema = z.object({
+  email: z.string().email().nullable(),
+  sub: z.string(),
+  source: z.enum(["email", "sub"]),
+});
+
+/**
+ * RFC 8707 resource indicator — must be a fully-qualified URL or an explicit empty
+ * string (the latter encodes "no resource binding requested"). Used by OAuthToken,
+ * AuthRequestState, and AuthCodeState to enforce the same shape consistently.
+ */
+export const ResourceUriSchema = z.string().url().or(z.literal(""));
+
+/**
+ * Fields shared by AuthRequestState (pre-callback) and AuthCodeState (post-callback).
+ * Both states carry the PKCE challenge + redirect-URI + resource + scope; they diverge
+ * only on the trailing fields (request adds claudeState+ourNonce; code adds identity).
+ */
+const AuthFlowStateBaseSchema = z.object({
+  clientId: z.string().uuid(),
+  codeChallenge: z.string(),
+  codeChallengeMethod: z.literal("S256"),
+  redirectUri: z.string().url(),
+  resource: ResourceUriSchema,
+  scope: z.string(),
+  createdAt: z.number().int(),
+});
+
+// ============================================================================
 // Persisted: OAuthToken
 // ============================================================================
 export const OAuthTokenSchema = z.object({
@@ -146,12 +183,8 @@ export const OAuthTokenSchema = z.object({
   kind: z.enum(["access", "refresh"]),
   clientId: z.string().uuid(),
   scope: z.string(),
-  identity: z.object({
-    email: z.string().email().nullable(),
-    sub: z.string(),
-    source: z.enum(["email", "sub"]),
-  }),
-  resource: z.string().url().or(z.literal("")),
+  identity: IdentitySchema,
+  resource: ResourceUriSchema,
   expiresAt: z.number().int(),
   createdAt: z.number().int(),
   rotatedFromHash: z.string().optional(),
@@ -163,16 +196,9 @@ export type OAuthToken = z.infer<typeof OAuthTokenSchema>;
 // In-Memory: AuthRequestState
 // ============================================================================
 // Keyed by our_state; 5-minute TTL
-export const AuthRequestStateSchema = z.object({
-  clientId: z.string().uuid(),
-  codeChallenge: z.string(),
-  codeChallengeMethod: z.literal("S256"),
-  redirectUri: z.string().url(),
-  resource: z.string().url().or(z.literal("")),
+export const AuthRequestStateSchema = AuthFlowStateBaseSchema.extend({
   claudeState: z.string(),
-  scope: z.string(),
   ourNonce: z.string(),
-  createdAt: z.number().int(),
 });
 
 export type AuthRequestState = z.infer<typeof AuthRequestStateSchema>;
@@ -181,19 +207,8 @@ export type AuthRequestState = z.infer<typeof AuthRequestStateSchema>;
 // In-Memory: AuthCodeState
 // ============================================================================
 // Keyed by our_auth_code; 60-second TTL
-export const AuthCodeStateSchema = z.object({
-  clientId: z.string().uuid(),
-  codeChallenge: z.string(),
-  codeChallengeMethod: z.literal("S256"),
-  redirectUri: z.string().url(),
-  resource: z.string().url().or(z.literal("")),
-  scope: z.string(),
-  identity: z.object({
-    email: z.string().email().nullable(),
-    sub: z.string(),
-    source: z.enum(["email", "sub"]),
-  }),
-  createdAt: z.number().int(),
+export const AuthCodeStateSchema = AuthFlowStateBaseSchema.extend({
+  identity: IdentitySchema,
 });
 
 export type AuthCodeState = z.infer<typeof AuthCodeStateSchema>;
