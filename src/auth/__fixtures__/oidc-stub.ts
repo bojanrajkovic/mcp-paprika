@@ -23,6 +23,7 @@ import {
   type GenerateKeyPairResult,
 } from "jose";
 import { makeEs256Jwt } from "./jose-keys.js";
+import { nowSeconds } from "../tokens.js";
 
 export interface OidcStubOptions {
   readonly issuer: string;
@@ -81,7 +82,7 @@ export function createOidcStub(opts: OidcStubOptions): OidcStub {
   }
 
   function buildClaims(identity: typeof opts.defaultIdentity, nonce: string): JWTPayload {
-    const now = Math.floor(Date.now() / 1000);
+    const now = nowSeconds();
     return {
       iss: opts.issuer,
       sub: identity.sub,

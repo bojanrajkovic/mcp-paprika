@@ -5,6 +5,7 @@
 
 import fc from "fast-check";
 import type { IdTokenPayload } from "../types.js";
+import { nowSeconds } from "../tokens.js";
 
 /**
  * Arbitrary factory for IdTokenPayload — generates valid id_token payloads for property testing.
@@ -21,8 +22,8 @@ export function arbitraryIdTokenPayload(): fc.Arbitrary<IdTokenPayload> {
     email: fc.option(fc.emailAddress()),
     email_verified: fc.option(fc.boolean()),
     nonce: fc.string({ minLength: 1 }),
-    exp: fc.integer({ min: Math.floor(Date.now() / 1000), max: Math.floor(Date.now() / 1000) + 86400 }),
-    iat: fc.integer({ min: Math.floor(Date.now() / 1000) - 3600, max: Math.floor(Date.now() / 1000) }),
+    exp: fc.integer({ min: nowSeconds(), max: nowSeconds() + 86400 }),
+    iat: fc.integer({ min: nowSeconds() - 3600, max: nowSeconds() }),
   });
 }
 
@@ -40,8 +41,8 @@ export function arbitraryIdTokenPayloadWithEmail(): fc.Arbitrary<IdTokenPayload>
     email: fc.emailAddress(),
     email_verified: fc.option(fc.boolean()),
     nonce: fc.string({ minLength: 1 }),
-    exp: fc.integer({ min: Math.floor(Date.now() / 1000), max: Math.floor(Date.now() / 1000) + 86400 }),
-    iat: fc.integer({ min: Math.floor(Date.now() / 1000) - 3600, max: Math.floor(Date.now() / 1000) }),
+    exp: fc.integer({ min: nowSeconds(), max: nowSeconds() + 86400 }),
+    iat: fc.integer({ min: nowSeconds() - 3600, max: nowSeconds() }),
   });
 }
 

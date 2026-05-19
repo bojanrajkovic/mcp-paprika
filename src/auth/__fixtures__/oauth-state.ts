@@ -1,4 +1,5 @@
 import { AuthRequestStateSchema, AuthCodeStateSchema } from "../types.js";
+import { nowSeconds } from "../tokens.js";
 import type { AuthRequestState, AuthCodeState } from "../types.js";
 
 /**
@@ -24,7 +25,7 @@ export function makeAuthRequestState(overrides?: Partial<AuthRequestState>): Aut
     ...SHARED_STATE_DEFAULTS,
     claudeState: "claude-state-1",
     ourNonce: "nonce-1",
-    createdAt: Math.floor(Date.now() / 1000),
+    createdAt: nowSeconds(),
     ...overrides,
   });
 }
@@ -41,7 +42,7 @@ export function makeAuthCodeState(overrides?: Partial<AuthCodeState>): AuthCodeS
       sub: "sub-test-1",
       source: "email",
     },
-    createdAt: Math.floor(Date.now() / 1000),
+    createdAt: nowSeconds(),
     ...overrides,
   });
 }

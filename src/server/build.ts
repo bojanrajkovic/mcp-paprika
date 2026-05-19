@@ -27,13 +27,12 @@ import { getCacheDir } from "../utils/xdg.js";
 import type { AppContext, SessionContext } from "./app-context.js";
 import type { Notifier } from "./notifier.js";
 import { buildAuthContext } from "../auth/build.js";
+import { createLogger } from "../utils/log.js";
 
 const SERVER_NAME = "mcp-paprika";
 const SERVER_VERSION = "0.0.0";
 
-function log(msg: string): void {
-  process.stderr.write(`[mcp-paprika] ${msg}\n`);
-}
+const log = createLogger("mcp-paprika");
 
 /**
  * Build the process-wide AppContext and SyncEngine.

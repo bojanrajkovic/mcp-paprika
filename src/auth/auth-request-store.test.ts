@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import type { AuthRequestState } from "./types.js";
 import { AuthRequestStore } from "./auth-request-store.js";
+import { nowSeconds } from "./tokens.js";
 
 /**
  * Create a minimal AuthRequestState for testing.
@@ -22,7 +23,7 @@ function makeAuthRequestState(overrides?: Partial<AuthRequestState>): AuthReques
 
 describe("AuthRequestStore", () => {
   it("put then consume returns the entry", () => {
-    const now = Math.floor(Date.now() / 1000);
+    const now = nowSeconds();
     const store = new AuthRequestStore({ now: () => now * 1000 });
     const state = makeAuthRequestState({ createdAt: now });
     store.put("state-1", state);
@@ -34,7 +35,7 @@ describe("AuthRequestStore", () => {
   });
 
   it("consume deletes — second consume returns null", () => {
-    const now = Math.floor(Date.now() / 1000);
+    const now = nowSeconds();
     const store = new AuthRequestStore({ now: () => now * 1000 });
     const state = makeAuthRequestState({ createdAt: now });
     store.put("state-1", state);

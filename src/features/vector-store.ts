@@ -58,6 +58,7 @@ import type { EmbeddingClient } from "./embeddings.js";
 import { recipeToEmbeddingText } from "./embeddings.js";
 import { VectorStoreError } from "./vector-store-errors.js";
 import type { Recipe, CategoryUid } from "../paprika/types.js";
+import { createLogger } from "../utils/log.js";
 
 const HashIndexSchema = z.record(z.string(), z.string());
 
@@ -68,9 +69,7 @@ function isNodeError(error: unknown): error is NodeJS.ErrnoException {
   return error instanceof Error && "code" in error;
 }
 
-function log(msg: string): void {
-  process.stderr.write(`[mcp-paprika:vectors] ${msg}\n`);
-}
+const log = createLogger("mcp-paprika:vectors");
 
 const VectorMetaSchema = z.object({
   model: z.string(),

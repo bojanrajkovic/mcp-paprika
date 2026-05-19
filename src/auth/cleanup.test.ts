@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
+import { nowSeconds } from "./tokens.js";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DiskCache } from "../cache/disk-cache.js";
@@ -176,7 +177,7 @@ describe("lifecycle", () => {
       cache,
       authRequests,
       authCodes,
-      () => Math.floor(Date.now() / 1000),
+      () => nowSeconds(),
       24 * 60 * 60 * 1000,
     );
 
@@ -197,7 +198,7 @@ describe("lifecycle", () => {
       cache,
       authRequests,
       authCodes,
-      () => Math.floor(Date.now() / 1000),
+      () => nowSeconds(),
       24 * 60 * 60 * 1000,
     );
 
@@ -214,15 +215,7 @@ describe("lifecycle", () => {
     const authRequests = new AuthRequestStore();
     const authCodes = new AuthCodeStore();
     // Short interval so at least one cycle completes in 100ms
-    const cleanup = new AuthCleanup(
-      clientStore,
-      tokenStore,
-      cache,
-      authRequests,
-      authCodes,
-      () => Math.floor(Date.now() / 1000),
-      50,
-    );
+    const cleanup = new AuthCleanup(clientStore, tokenStore, cache, authRequests, authCodes, () => nowSeconds(), 50);
 
     cleanup.start();
     await new Promise((r) => setTimeout(r, 100)); // let one error cycle run + recover

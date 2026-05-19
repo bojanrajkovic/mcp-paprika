@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, beforeAll, afterAll, vi } from "vitest";
+import { nowSeconds } from "./tokens.js";
 import { Hono } from "hono";
 import { buildAuthRoutes, buildDcrRateLimit, buildClientCap } from "./routes.js";
 import { DiskClientRegistrationStore } from "./client-registration.js";
@@ -106,7 +107,7 @@ describe("Auth Routes", () => {
         claudeState,
         scope: "openid email",
         ourNonce: "mcp_nonce_error",
-        createdAt: Math.floor(Date.now() / 1000),
+        createdAt: nowSeconds(),
       });
 
       const res = await app.request(
@@ -175,7 +176,7 @@ describe("Auth Routes", () => {
         claudeState: "claude_state_success",
         scope: "openid email",
         ourNonce,
-        createdAt: Math.floor(Date.now() / 1000),
+        createdAt: nowSeconds(),
       });
 
       // Drive the stub's /authorize so codeToNonce records ourNonce for the generated code
@@ -254,7 +255,7 @@ describe("Auth Routes", () => {
         claudeState: "claude_state_denial",
         scope: "openid email",
         ourNonce,
-        createdAt: Math.floor(Date.now() / 1000),
+        createdAt: nowSeconds(),
       });
 
       // Drive /authorize to register the nonce in the stub's codeToNonce map
@@ -487,8 +488,8 @@ describe("Auth Routes", () => {
         body: JSON.stringify({ client_name: "Client 51", redirect_uris: ["https://x/"] }),
       });
       expect(res51.status).toBe(429);
-      const json = (await res51.json()) as any;
-      expect(json.error_description).toContain("cap");
+      const json = (await res51.json()) as Record<string, unknown>;
+      expect(json["error_description"]).toContain("cap");
     });
   });
 });

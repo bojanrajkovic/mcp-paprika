@@ -18,6 +18,7 @@ import {
   hashTokenForStorage,
   ACCESS_TOKEN_TTL_SECONDS,
   REFRESH_TOKEN_TTL_SECONDS,
+  nowSeconds,
 } from "./tokens.js";
 import { OAuthTokenError } from "./errors.js";
 import type { OAuthToken } from "./types.js";
@@ -39,7 +40,7 @@ export interface IssuedPair {
 export class TokenStore {
   constructor(
     private readonly _cache: DiskCache,
-    private readonly _now: () => number = () => Math.floor(Date.now() / 1000),
+    private readonly _now: () => number = () => nowSeconds(),
   ) {}
 
   /**

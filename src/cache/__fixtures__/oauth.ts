@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { hashTokenForStorage } from "../../auth/tokens.js";
+import { hashTokenForStorage, nowSeconds } from "../../auth/tokens.js";
 import { OAuthClientSchema, OAuthTokenSchema } from "../../auth/types.js";
 import type { OAuthClient, OAuthToken } from "../../auth/types.js";
 
@@ -8,7 +8,7 @@ import type { OAuthClient, OAuthToken } from "../../auth/types.js";
  * Generates defaults matching OAuthClientSchema requirements.
  */
 export function makeOAuthClient(overrides?: Partial<OAuthClient>): OAuthClient {
-  const now = Math.floor(Date.now() / 1000);
+  const now = nowSeconds();
 
   const candidate: OAuthClient = {
     clientId: overrides?.clientId ?? randomUUID(),
@@ -34,7 +34,7 @@ export function makeOAuthClient(overrides?: Partial<OAuthClient>): OAuthClient {
  * Generates defaults matching OAuthTokenSchema requirements.
  */
 export function makeOAuthToken(overrides?: Partial<OAuthToken>): OAuthToken {
-  const now = Math.floor(Date.now() / 1000);
+  const now = nowSeconds();
 
   const candidate: OAuthToken = {
     tokenHash: overrides?.tokenHash ?? hashTokenForStorage(`token-${randomUUID()}`),

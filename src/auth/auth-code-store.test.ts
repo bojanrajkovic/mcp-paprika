@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import type { AuthCodeState } from "./types.js";
 import { AuthCodeStore } from "./auth-code-store.js";
+import { nowSeconds } from "./tokens.js";
 
 /**
  * Create a minimal AuthCodeState for testing.
@@ -25,7 +26,7 @@ function makeAuthCodeState(overrides?: Partial<AuthCodeState>): AuthCodeState {
 
 describe("AuthCodeStore", () => {
   it("put then consume returns the entry", () => {
-    const now = Math.floor(Date.now() / 1000);
+    const now = nowSeconds();
     const store = new AuthCodeStore({ now: () => now * 1000 });
     const state = makeAuthCodeState({ createdAt: now });
     store.put("auth_code_1", state);
@@ -37,7 +38,7 @@ describe("AuthCodeStore", () => {
   });
 
   it("consume deletes — second consume returns null", () => {
-    const now = Math.floor(Date.now() / 1000);
+    const now = nowSeconds();
     const store = new AuthCodeStore({ now: () => now * 1000 });
     const state = makeAuthCodeState({ createdAt: now });
     store.put("auth_code_1", state);
@@ -98,7 +99,7 @@ describe("AuthCodeStore", () => {
   it("AC2.11: consumed auth code returns null on second consume", () => {
     // PLAN says (phase_05.md:22): POST /token with already-consumed auth code returns invalid_grant (single-use).
     // Phase 5 enforces single-use at the store layer via consume's atomic delete.
-    const now = Math.floor(Date.now() / 1000);
+    const now = nowSeconds();
     const store = new AuthCodeStore({ now: () => now * 1000 });
     store.put("mcp_ac_xyz", makeAuthCodeState({ createdAt: now }));
     expect(store.consume("mcp_ac_xyz")).not.toBeNull();
@@ -106,7 +107,7 @@ describe("AuthCodeStore", () => {
   });
 
   it("peek does NOT decrement remaining-uses: peek + consume + consume → first consume succeeds, second returns null", () => {
-    const now = Math.floor(Date.now() / 1000);
+    const now = nowSeconds();
     const store = new AuthCodeStore({ now: () => now * 1000 });
     const state = makeAuthCodeState({ createdAt: now });
     store.put("auth_code_1", state);

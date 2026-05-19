@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { createLogger } from "../utils/log.js";
 import type { Server as NodeHttpServer } from "node:http";
 
 import { StreamableHTTPTransport } from "@hono/mcp";
@@ -27,9 +28,7 @@ export interface HttpTransportHandle extends TransportHandle {
   readonly port: number;
 }
 
-function log(msg: string): void {
-  process.stderr.write(`[mcp-paprika] ${msg}\n`);
-}
+const log = createLogger("mcp-paprika");
 
 interface Session {
   server: McpServer;

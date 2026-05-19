@@ -25,7 +25,7 @@ import { DiskCache as DiskCacheImpl } from "../cache/disk-cache.js";
 import type { DiskClientRegistrationStore } from "./client-registration.js";
 import { DiskClientRegistrationStore as DiskClientRegistrationStoreImpl } from "./client-registration.js";
 import { TokenStore } from "./token-store.js";
-import { hashTokenForStorage, ACCESS_TOKEN_TTL_SECONDS, REFRESH_TOKEN_TTL_SECONDS } from "./tokens.js";
+import { hashTokenForStorage, ACCESS_TOKEN_TTL_SECONDS, REFRESH_TOKEN_TTL_SECONDS, nowSeconds } from "./tokens.js";
 import type { VerifiedIdentity } from "./allowlist.js";
 import { AuthRequestStore } from "./auth-request-store.js";
 import { AuthCodeStore } from "./auth-code-store.js";
@@ -69,7 +69,7 @@ describe("TokenStore", () => {
     await cache.init();
     clientStore = new DiskClientRegistrationStoreImpl(cache, "https://m.example.com");
 
-    now = Math.floor(Date.now() / 1000);
+    now = nowSeconds();
     const nowFn = vi.fn(() => now);
 
     store = new TokenStore(cache, nowFn);

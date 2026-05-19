@@ -1,3 +1,4 @@
+import { toMessage } from "../utils/log.js";
 import { Hono, type Context, type MiddlewareHandler } from "hono";
 import { rateLimiter } from "hono-rate-limiter";
 import { z } from "zod";
@@ -9,7 +10,7 @@ import type { ResolvedOAuthConfig } from "./types.js";
 import type { DiscoveryDoc } from "./oidc-client.js";
 import type { JWTVerifyGetKey } from "jose";
 import type { DiskCache } from "../cache/disk-cache.js";
-import { generateOpaqueToken } from "./tokens.js";
+import { generateOpaqueToken, nowSeconds } from "./tokens.js";
 import { verifyIdToken } from "./oidc-client.js";
 import type { IdTokenPayload } from "./types.js";
 import { verifyIdentity } from "./allowlist.js";
@@ -92,9 +93,7 @@ export function buildAuthRoutes(deps: AuthRoutesDeps): Hono {
       }
       idToken = validated.data.id_token;
     } catch (cause) {
-      process.stderr.write(
-        `[auth] upstream token exchange failed: ${cause instanceof Error ? cause.message : String(cause)}\n`,
-      );
+      process.stderr.write(`[auth] upstream token exchange failed: ${toMessage(cause)}\n`);
       return redirectToClient(c, stored.redirectUri, {
         error: "server_error",
         error_description: "upstream code exchange failed",
@@ -113,9 +112,7 @@ export function buildAuthRoutes(deps: AuthRoutesDeps): Hono {
         allowedAlgs: deps.oidcConfig.allowedAlgs,
       });
     } catch (cause) {
-      process.stderr.write(
-        `[auth] id_token verification failed: ${cause instanceof Error ? cause.message : String(cause)}\n`,
-      );
+      process.stderr.write(`[auth] id_token verification failed: ${toMessage(cause)}\n`);
       return redirectToClient(c, stored.redirectUri, {
         error: "access_denied",
         error_description: "id_token verification failed",
@@ -141,7 +138,7 @@ export function buildAuthRoutes(deps: AuthRoutesDeps): Hono {
           resource: stored.resource,
           scope: stored.scope,
           identity,
-          createdAt: Math.floor(Date.now() / 1000),
+          createdAt: nowSeconds(),
         });
         return redirectToClient(c, stored.redirectUri, {
           code: ourAuthCode,

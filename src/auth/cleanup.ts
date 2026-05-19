@@ -17,7 +17,7 @@ import type { AuthRequestStore } from "./auth-request-store.js";
 import type { AuthCodeStore } from "./auth-code-store.js";
 import type { DiskClientRegistrationStore } from "./client-registration.js";
 import type { TokenStore } from "./token-store.js";
-import { DCR_CLIENT_STALE_DAYS } from "./tokens.js";
+import { DCR_CLIENT_STALE_DAYS, nowSeconds } from "./tokens.js";
 
 const CLEANUP_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 hours
 
@@ -30,7 +30,7 @@ export class AuthCleanup {
     private readonly _cache: DiskCache,
     private readonly _authRequests: AuthRequestStore,
     private readonly _authCodes: AuthCodeStore,
-    private readonly _now: () => number = () => Math.floor(Date.now() / 1000),
+    private readonly _now: () => number = () => nowSeconds(),
     private readonly _intervalMs: number = CLEANUP_INTERVAL_MS,
   ) {}
 

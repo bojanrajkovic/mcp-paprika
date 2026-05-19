@@ -4,6 +4,7 @@
  */
 
 import { beforeAll, afterEach, afterAll, describe, it, expect } from "vitest";
+import { nowSeconds } from "./tokens.js";
 import { http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
 import { OAuthMetadataValidationError } from "./errors.js";
@@ -229,7 +230,7 @@ describe("verifyIdToken", () => {
   it("AC7.1: RS256-signed id_token verifies and returns payload", async () => {
     // PLAN says (phase_04.md:22): upstream id_token signed with RS256 verifies (default allowlist)
     const nonce = "n-1";
-    const now = Math.floor(Date.now() / 1000);
+    const now = nowSeconds();
 
     const { token, jwk } = await makeRsaJwt({
       iss: issuer,
@@ -274,7 +275,7 @@ describe("verifyIdToken", () => {
   it("AC7.2: ES256-signed id_token verifies", async () => {
     // PLAN says (phase_04.md:23): upstream id_token signed with ES256 verifies (default allowlist)
     const nonce = "n-2";
-    const now = Math.floor(Date.now() / 1000);
+    const now = nowSeconds();
 
     const { token, jwk } = await makeEs256Jwt({
       iss: issuer,
@@ -318,7 +319,7 @@ describe("verifyIdToken", () => {
   it("AC7.3: id_token with alg=none is rejected", async () => {
     // PLAN says (phase_04.md:24): id_token with alg='none' rejected by verifyIdToken
     const nonce = "n-3";
-    const now = Math.floor(Date.now() / 1000);
+    const now = nowSeconds();
 
     // jose won't sign with alg=none, so construct manually
     const header = Buffer.from(JSON.stringify({ alg: "none", typ: "JWT" })).toString("base64url");
@@ -375,7 +376,7 @@ describe("verifyIdToken", () => {
     // allowlist must reject HS256 tokens even if (especially if) the JWKS happens to
     // contain matching key material.
     const nonce = "n-4";
-    const now = Math.floor(Date.now() / 1000);
+    const now = nowSeconds();
 
     const claims = {
       iss: issuer,
@@ -420,7 +421,7 @@ describe("verifyIdToken", () => {
 
   it("rejects expired id_token (exp in the past)", async () => {
     const nonce = "n-exp";
-    const now = Math.floor(Date.now() / 1000);
+    const now = nowSeconds();
 
     const { token, jwk } = await makeRsaJwt({
       iss: issuer,
@@ -459,7 +460,7 @@ describe("verifyIdToken", () => {
 
   it("rejects wrong audience", async () => {
     const nonce = "n-aud";
-    const now = Math.floor(Date.now() / 1000);
+    const now = nowSeconds();
 
     const { token, jwk } = await makeRsaJwt({
       iss: issuer,
@@ -498,7 +499,7 @@ describe("verifyIdToken", () => {
 
   it("rejects wrong issuer", async () => {
     const nonce = "n-iss";
-    const now = Math.floor(Date.now() / 1000);
+    const now = nowSeconds();
 
     const { token, jwk } = await makeRsaJwt({
       iss: "https://wrong-idp.example.com",
@@ -540,7 +541,7 @@ describe("verifyIdToken", () => {
     // PLAN says (phase_04.md:27): mismatched nonce AND missing nonce are rejected
     const expectedNonce = "n-expected";
     const wrongNonce = "n-wrong";
-    const now = Math.floor(Date.now() / 1000);
+    const now = nowSeconds();
 
     const { token, jwk } = await makeRsaJwt({
       iss: issuer,
@@ -581,7 +582,7 @@ describe("verifyIdToken", () => {
   it("AC7.8: id_token with no nonce claim is rejected (nonce required)", async () => {
     // PLAN says (phase_04.md:27): mismatched nonce AND missing nonce are rejected
     const nonce = "n-required";
-    const now = Math.floor(Date.now() / 1000);
+    const now = nowSeconds();
 
     const { token, jwk } = await makeRsaJwt({
       iss: issuer,
@@ -621,7 +622,7 @@ describe("verifyIdToken", () => {
   it("accepts array-valued aud claim (Microsoft Entra compatibility)", async () => {
     // PLAN deferred from Phase 1: Entra emits array `aud`. Schema must accept both.
     const nonce = "n-aud-array";
-    const now = Math.floor(Date.now() / 1000);
+    const now = nowSeconds();
 
     const { token, jwk } = await makeRsaJwt({
       iss: issuer,
@@ -663,7 +664,7 @@ describe("verifyIdToken", () => {
   it("coerces string email_verified to boolean (older Entra/Keycloak compatibility)", async () => {
     // PLAN deferred from Phase 1: older Entra tenants emit "true"/"false" as strings.
     const nonce = "n-email-verified-string";
-    const now = Math.floor(Date.now() / 1000);
+    const now = nowSeconds();
 
     const { token, jwk } = await makeRsaJwt({
       iss: issuer,

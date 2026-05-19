@@ -2,10 +2,9 @@
 import { startHttp } from "./transport/http.js";
 import { startStdio, type TransportHandle } from "./transport/stdio.js";
 import { loadConfig } from "./utils/config.js";
+import { createLogger, toMessage } from "./utils/log.js";
 
-function log(msg: string): void {
-  process.stderr.write(`[mcp-paprika] ${msg}\n`);
-}
+const log = createLogger("mcp-paprika");
 
 async function main(): Promise<void> {
   log("Loading configuration...");
@@ -23,7 +22,7 @@ async function main(): Promise<void> {
     handle.shutdown().then(
       () => process.exit(0),
       (err: unknown) => {
-        process.stderr.write(`[mcp-paprika] Shutdown error: ${err instanceof Error ? err.message : String(err)}\n`);
+        process.stderr.write(`[mcp-paprika] Shutdown error: ${toMessage(err)}\n`);
         process.exit(1);
       },
     );
@@ -38,6 +37,6 @@ async function main(): Promise<void> {
 }
 
 main().catch((err: unknown) => {
-  process.stderr.write(`${err instanceof Error ? err.message : String(err)}\n`);
+  process.stderr.write(`${toMessage(err)}\n`);
   process.exit(1);
 });

@@ -15,7 +15,7 @@ import type { DiskClientRegistrationStore } from "./client-registration.js";
 import type { TokenStore } from "./token-store.js";
 import type { AuthRequestStore } from "./auth-request-store.js";
 import type { AuthCodeStore } from "./auth-code-store.js";
-import { generateOpaqueToken, ACCESS_TOKEN_TTL_SECONDS } from "./tokens.js";
+import { generateOpaqueToken, ACCESS_TOKEN_TTL_SECONDS, nowSeconds } from "./tokens.js";
 import type { Context } from "hono";
 import type { DiscoveryDoc } from "./oidc-client.js";
 import type { ResolvedOAuthConfig } from "./types.js";
@@ -68,7 +68,7 @@ export class MintingOAuthServerProvider implements OAuthServerProvider {
       claudeState: params.state ?? "",
       scope: params.scopes?.join(" ") ?? "",
       ourNonce,
-      createdAt: Math.floor(Date.now() / 1000),
+      createdAt: nowSeconds(),
     });
 
     // Build upstream redirect. PKCE is NOT chained — see design notes.

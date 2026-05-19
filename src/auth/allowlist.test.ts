@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { verifyIdentity } from "./allowlist.js";
+import { nowSeconds } from "./tokens.js";
 import { OAuthAllowlistDenialError } from "./errors.js";
 import type { IdTokenPayload } from "./types.js";
 
@@ -10,8 +11,8 @@ function createPayload(overrides: Partial<IdTokenPayload> = {}): IdTokenPayload 
     sub: "google-sub-123",
     aud: "client-id",
     nonce: "nonce-value",
-    exp: Math.floor(Date.now() / 1000) + 3600,
-    iat: Math.floor(Date.now() / 1000),
+    exp: nowSeconds() + 3600,
+    iat: nowSeconds(),
     ...overrides,
   };
 }

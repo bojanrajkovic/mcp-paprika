@@ -11,7 +11,7 @@
  */
 
 import { randomUUID, timingSafeEqual } from "node:crypto";
-import { generateOpaqueToken, hashTokenForStorage } from "./tokens.js";
+import { generateOpaqueToken, hashTokenForStorage, nowSeconds } from "./tokens.js";
 import { validateRegistration, validateUpdate } from "./dcr-validator.js";
 import { OAuthClientNotFoundError } from "./errors.js";
 import type { OAuthClient } from "./types.js";
@@ -103,7 +103,7 @@ export class DiskClientRegistrationStore {
 
     const clientId = randomUUID();
     const registrationAccessToken = generateOpaqueToken("mcp_rat_");
-    const now = Math.floor(Date.now() / 1000);
+    const now = nowSeconds();
 
     const stored: OAuthClient = {
       clientId,
@@ -148,7 +148,7 @@ export class DiskClientRegistrationStore {
       },
     );
 
-    const now = Math.floor(Date.now() / 1000);
+    const now = nowSeconds();
 
     // Merge: spread existing, apply validated patch, reset tokenEndpointAuthMethod
     const updated: OAuthClient = {

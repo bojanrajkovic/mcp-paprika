@@ -24,6 +24,21 @@ export const TOKEN_PREFIXES = ["mcp_at_", "mcp_rt_", "mcp_ac_", "mcp_rat_", "mcp
 export type TokenPrefix = (typeof TOKEN_PREFIXES)[number];
 
 // ============================================================================
+// Time helpers
+// ============================================================================
+
+/**
+ * Current Unix timestamp in seconds.
+ *
+ * OAuth/OIDC claim shapes use second-resolution Unix time (RFC 7519 §2 — NumericDate).
+ * Centralising this here keeps the truncation rule (`Math.floor`, not `Math.trunc` or
+ * `Math.round`) consistent across token issuance, schema parsing, and test factories.
+ */
+export function nowSeconds(): number {
+  return Math.floor(Date.now() / 1000);
+}
+
+// ============================================================================
 // Token Generation
 // ============================================================================
 

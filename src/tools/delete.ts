@@ -1,3 +1,4 @@
+import { toMessage } from "../utils/log.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
@@ -37,7 +38,7 @@ export function registerDeleteTool(server: McpServer, ctx: ServerContext): void 
             const saved = await ctx.client.saveRecipe(trashed);
             await commitRecipe(ctx, saved);
           } catch (error) {
-            return textResult(`Failed to delete recipe: ${error instanceof Error ? error.message : String(error)}`);
+            return textResult(`Failed to delete recipe: ${toMessage(error)}`);
           }
 
           return textResult(`Recipe "${recipe.name}" has been moved to the trash.`);

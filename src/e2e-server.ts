@@ -19,6 +19,7 @@ import { buildMcpServer } from "./server/build.js";
 import type { AppContext } from "./server/app-context.js";
 import { singleServerNotifier } from "./server/notifier.js";
 import { getCacheDir } from "./utils/xdg.js";
+import { createLogger, toMessage } from "./utils/log.js";
 import type {
   Category,
   Recipe,
@@ -29,9 +30,7 @@ import type {
   PantryItemUid,
 } from "./paprika/types.js";
 
-function log(msg: string): void {
-  process.stderr.write(`[mcp-paprika-test] ${msg}\n`);
-}
+const log = createLogger("mcp-paprika-test");
 
 interface IMockPaprikaClient {
   authenticate(): Promise<void>;
@@ -200,6 +199,6 @@ async function main(): Promise<void> {
 }
 
 main().catch((err: unknown) => {
-  process.stderr.write(`${err instanceof Error ? err.message : String(err)}\n`);
+  process.stderr.write(`${toMessage(err)}\n`);
   process.exit(1);
 });

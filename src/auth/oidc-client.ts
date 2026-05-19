@@ -1,3 +1,5 @@
+import { toMessage } from "../utils/log.js";
+
 /**
  * OIDC upstream client: discovery loading and id_token verification.
  *
@@ -216,7 +218,7 @@ export async function verifyIdToken(
     // jose's error types: JOSEAlgNotAllowed, JWSSignatureVerificationFailed,
     // JWTExpired, JWTClaimValidationFailed, JWTInvalid, etc.
     // All wrap into our semantic error
-    throw OAuthMetadataValidationError.idTokenInvalid(cause instanceof Error ? cause.message : String(cause), {
+    throw OAuthMetadataValidationError.idTokenInvalid(toMessage(cause), {
       cause,
     });
   }

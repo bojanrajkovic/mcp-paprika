@@ -1,3 +1,4 @@
+import { toMessage } from "./log.js";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { z } from "zod";
@@ -42,12 +43,12 @@ export class ConfigError extends Error {
   }
 
   static invalidJson(path: string, cause: unknown): ConfigError {
-    const detail = cause instanceof Error ? cause.message : String(cause);
+    const detail = toMessage(cause);
     return new ConfigError(`Invalid JSON in ${path}: ${detail}`, "invalid_json");
   }
 
   static fileReadError(path: string, cause: unknown): ConfigError {
-    const detail = cause instanceof Error ? cause.message : String(cause);
+    const detail = toMessage(cause);
     return new ConfigError(`Cannot read ${path}: ${detail}`, "file_read_error");
   }
 

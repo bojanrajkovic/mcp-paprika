@@ -8,7 +8,7 @@ import { AuthCodeStore } from "./auth-code-store.js";
 import { DiskCache } from "../cache/disk-cache.js";
 import { createOidcStub } from "./__fixtures__/oidc-stub.js";
 import { setupServer } from "msw/node";
-import { ACCESS_TOKEN_TTL_SECONDS } from "./tokens.js";
+import { ACCESS_TOKEN_TTL_SECONDS, nowSeconds } from "./tokens.js";
 import type { OAuthClientInformationFull } from "@modelcontextprotocol/sdk/shared/auth.js";
 
 describe("MintingOAuthServerProvider", () => {
@@ -189,7 +189,7 @@ describe("MintingOAuthServerProvider", () => {
         resource: resourceUrl.toString(),
         scope: "openid email",
         identity: { email: "user@example.com", sub: "user-sub-123", source: "email" },
-        createdAt: Math.floor(Date.now() / 1000),
+        createdAt: nowSeconds(),
       });
 
       const tokens = await provider.exchangeAuthorizationCode(
@@ -219,7 +219,7 @@ describe("MintingOAuthServerProvider", () => {
         resource: resourceUrl.toString(),
         scope: "openid email",
         identity: { email: "user@example.com", sub: "user-sub-123", source: "email" },
-        createdAt: Math.floor(Date.now() / 1000),
+        createdAt: nowSeconds(),
       });
 
       // First exchange succeeds
@@ -249,7 +249,7 @@ describe("MintingOAuthServerProvider", () => {
         resource: "https://m.example.com/mcp",
         scope: "openid email",
         identity: { email: "user@example.com", sub: "user-sub-123", source: "email" },
-        createdAt: Math.floor(Date.now() / 1000),
+        createdAt: nowSeconds(),
       });
 
       await expect(
@@ -379,7 +379,7 @@ describe("MintingOAuthServerProvider", () => {
         resource: resourceUrl.toString(),
         scope: "openid email",
         identity: { email: "user@example.com", sub: "user-sub-123", source: "email" },
-        createdAt: Math.floor(Date.now() / 1000),
+        createdAt: nowSeconds(),
       });
 
       const result = await provider.challengeForAuthorizationCode(mockClient, code);
@@ -398,7 +398,7 @@ describe("MintingOAuthServerProvider", () => {
         resource: resourceUrl.toString(),
         scope: "openid email",
         identity: { email: "user@example.com", sub: "user-sub-123", source: "email" },
-        createdAt: Math.floor(Date.now() / 1000),
+        createdAt: nowSeconds(),
       });
 
       // Challenge call does NOT consume

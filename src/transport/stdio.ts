@@ -4,10 +4,9 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { buildAppContext, buildMcpServer } from "../server/build.js";
 import { singleServerNotifier } from "../server/notifier.js";
 import type { PaprikaConfig } from "../utils/config.js";
+import { createLogger } from "../utils/log.js";
 
-function log(msg: string): void {
-  process.stderr.write(`[mcp-paprika] ${msg}\n`);
-}
+const log = createLogger("mcp-paprika");
 
 export interface TransportHandle {
   shutdown(): Promise<void>;
