@@ -1,6 +1,6 @@
 # Cross-Cutting Utilities
 
-Last verified: 2026-03-09
+Last verified: 2026-05-20 (oauth.trustProxy added 2026-05-20; publicUrl trailing-slash strip added 2026-05-19; log.ts helpers added 2026-05-18; xdg XDG-override behavior added 2026-05-18)
 
 ## Purpose
 
@@ -8,18 +8,37 @@ Shared utility functions and helpers used across multiple modules. Includes erro
 
 ## Contracts
 
+### log.ts — Stderr logging helpers
+
+Two pure functions for the stdio-safe diagnostic-logging pattern used across the codebase. Stdio transport uses stdout for the MCP wire format, so every diagnostic message MUST go to stderr (the `no-console` oxlint rule enforces this). No internal dependencies (leaf module).
+
+| Function               | Signature                                   | Description                                                                                                            |
+| ---------------------- | ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `createLogger(prefix)` | `(prefix: string) => (msg: string) => void` | Returns a function that writes `[${prefix}] ${msg}\n` to `process.stderr`. Replaces per-module inline `log()` shims.   |
+| `toMessage(e)`         | `(e: unknown) => string`                    | Extracts a human-readable message from an unknown thrown value: `e.message` if `e instanceof Error`, else `String(e)`. |
+
 ### xdg.ts — Platform-native application directory paths
 
 Wraps `env-paths` v4 with app name `mcp-paprika` (no suffix). Exports 5 synchronous functions
-that return absolute path strings. No I/O. No internal dependencies (leaf module).
+that return absolute path strings. No internal dependencies (leaf module).
 
-| Function         | Returns                          |
-| ---------------- | -------------------------------- |
-| `getConfigDir()` | Platform-native config directory |
-| `getCacheDir()`  | Platform-native cache directory  |
-| `getDataDir()`   | Platform-native data directory   |
-| `getLogDir()`    | Platform-native log directory    |
-| `getTempDir()`   | Platform-native temp directory   |
+**XDG env-var overrides:** `getConfigDir`, `getCacheDir`, `getDataDir`, and `getLogDir` each
+read a single `XDG_*` env var at call time and, when set to a non-empty string, return
+`join(<override>, "mcp-paprika")`. This is a deliberate workaround for `env-paths`' macOS
+branch, which hard-codes `~/Library/{Preferences,Caches,…}` and ignores `XDG_*` entirely —
+re-implementing the override here means tests that set `XDG_CACHE_HOME` / `XDG_CONFIG_HOME`
+actually redirect on macOS as well as Linux. Because `process.env` is read on every call,
+these functions are not pure leaf modules.
+
+| Function         | XDG override      | Returns                                                           |
+| ---------------- | ----------------- | ----------------------------------------------------------------- |
+| `getConfigDir()` | `XDG_CONFIG_HOME` | Platform-native config directory (or override + `/mcp-paprika`)   |
+| `getCacheDir()`  | `XDG_CACHE_HOME`  | Platform-native cache directory (or override + `/mcp-paprika`)    |
+| `getDataDir()`   | `XDG_DATA_HOME`   | Platform-native data directory (or override + `/mcp-paprika`)     |
+| `getLogDir()`    | `XDG_STATE_HOME`  | Platform-native log directory (or override + `/mcp-paprika`); the |
+|                  |                   | XDG Base Dir spec puts logs under state, not a dedicated log var  |
+| `getTempDir()`   | (none)            | Platform-native temp directory; XDG override is intentionally     |
+|                  |                   | not honored — temp paths come from the OS regardless              |
 
 ### duration.ts — Recipe duration parsing and formatting
 
@@ -49,10 +68,57 @@ startup cost.
 | `loadConfig()`        | `Result<PaprikaConfig, ConfigError>`                           |
 | `paprikaConfigSchema` | Zod schema used for validation; defines canonical config shape |
 
-| Type              | Description                                                      |
-| ----------------- | ---------------------------------------------------------------- |
-| `PaprikaConfig`   | `{ paprika, sync, features? }` — validated application config    |
-| `EmbeddingConfig` | `{ apiKey, baseUrl, model }` — Phase 3 embedding provider config |
+| Type              | Description                                                                            |
+| ----------------- | -------------------------------------------------------------------------------------- |
+| `PaprikaConfig`   | `{ paprika, sync, transport, http, features?, oauth? }` — validated application config |
+| `EmbeddingConfig` | `{ apiKey, baseUrl, model }` — embedding provider config                               |
+
+**`oauth` block** (`paprikaConfigSchema.oauth` — optional, required when `transport === "http"`):
+
+```
+oauth: {
+  publicUrl?:            string         // Canonical https:// issuer URL (no trailing slash)
+  preset?:               "google" | "entra" | "okta" | "auth0" | "keycloak"
+  discoveryUrl?:         string (URL)   // OIDC discovery URL; required for tenant-bound presets
+  scopes?:               string[]       // Override preset's scope list
+  emailVerifiedPolicy?:  "strict" | "skip" | "if-present"
+  allowedAlgs?:          string[]       // Override preset's allowed id_token signing algs
+  clientId?:             string         // Client ID from upstream IdP
+  clientSecret?:         string         // Client secret from upstream IdP
+  trustProxy:            boolean        // Trust X-Forwarded-For for DCR rate-limit key (default false). Flip to true only behind a sanitizing proxy (k8s ingress, Tailscale Funnel, Cloudflare).
+  allowlist: {
+    emails:              string[]       // Comma-separated emails (listField, default [])
+    subs:                string[]       // Comma-separated subject IDs (listField, default [])
+  }
+}
+```
+
+**`listField` helper** — module-internal Zod field that accepts either an array of strings or a comma-separated string (e.g., from an env var) and normalizes to a trimmed, non-empty `string[]`. Used for `oauth.scopes`, `oauth.allowedAlgs`, `oauth.allowlist.emails`, and `oauth.allowlist.subs`.
+
+**`publicUrl` normalization** — the `oauth.publicUrl` schema strips trailing slashes via `.transform(v => v.replace(/\/+$/, ""))` at parse time. Downstream code can concatenate `${publicUrl}/oauth/callback`, `${publicUrl}/register/<id>`, etc. without producing `//` — required for exact upstream IdP redirect-URI matching.
+
+**Cross-field `.superRefine()` invariant** — enforced at root schema level when `transport === "http"`:
+
+- `oauth.publicUrl` must be present and a valid `https://` URL.
+- At least one of `oauth.allowlist.emails` or `oauth.allowlist.subs` must be non-empty.
+- Exactly one of `oauth.preset` or `oauth.discoveryUrl` must be set.
+- Both `oauth.clientId` and `oauth.clientSecret` must be present.
+
+**OAuth env-var mapping table:**
+
+| Env var                          | Config path                 |
+| -------------------------------- | --------------------------- |
+| `MCP_PUBLIC_URL`                 | `oauth.publicUrl`           |
+| `MCP_OIDC_PRESET`                | `oauth.preset`              |
+| `MCP_OIDC_DISCOVERY_URL`         | `oauth.discoveryUrl`        |
+| `MCP_OIDC_SCOPES`                | `oauth.scopes`              |
+| `MCP_OIDC_EMAIL_VERIFIED_POLICY` | `oauth.emailVerifiedPolicy` |
+| `MCP_OIDC_ALLOWED_ALGS`          | `oauth.allowedAlgs`         |
+| `MCP_OIDC_CLIENT_ID`             | `oauth.clientId`            |
+| `MCP_OIDC_CLIENT_SECRET`         | `oauth.clientSecret`        |
+| `MCP_TRUST_PROXY`                | `oauth.trustProxy`          |
+| `MCP_ALLOWED_EMAILS`             | `oauth.allowlist.emails`    |
+| `MCP_ALLOWED_SUBS`               | `oauth.allowlist.subs`      |
 
 | Class         | Extends | Fields                                                                        |
 | ------------- | ------- | ----------------------------------------------------------------------------- |
@@ -60,6 +126,6 @@ startup cost.
 
 ## Dependencies
 
-- **Leaf modules (no internal imports):** `xdg.ts` (uses `env-paths`), `duration.ts` (uses `luxon`, `parse-duration`, `neverthrow`)
+- **Leaf modules (no internal imports):** `log.ts` (uses only `process.stderr`), `xdg.ts` (uses `env-paths`), `duration.ts` (uses `luxon`, `parse-duration`, `neverthrow`)
 - **Non-leaf modules:** `config.ts` imports from `xdg.ts` and `duration.ts`; also uses `dotenv`, `zod`, `neverthrow`
 - **Used by:** All other `src/` modules may import from `src/utils/`

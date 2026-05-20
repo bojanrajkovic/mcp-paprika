@@ -96,7 +96,7 @@ export function recipeToMarkdown(recipe: Recipe, categoryNames: Array<string>): 
  * already calls it.
  */
 export async function commitRecipe(ctx: ServerContext, saved: Recipe): Promise<void> {
-  ctx.cache.putRecipe(saved, saved.hash); // sync — buffers to memory
+  await ctx.cache.putRecipe(saved, saved.hash); // async — buffers to memory with mutex
   await ctx.cache.flush(); // async — writes pending entries to disk
   ctx.store.set(saved); // sync — updates in-process store
   ctx.notifier.resourceListChanged(); // sync — notifies MCP clients (single server or broadcast)

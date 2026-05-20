@@ -1,3 +1,4 @@
+import { toMessage } from "../utils/log.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
@@ -80,7 +81,7 @@ export function registerCreateTool(server: McpServer, ctx: ServerContext): void 
             await commitRecipe(ctx, saved); // AC2.5, AC2.6
           } catch (error) {
             // AC2.8: store/cache not updated — commitRecipe not reached
-            return textResult(`Failed to create recipe: ${error instanceof Error ? error.message : String(error)}`);
+            return textResult(`Failed to create recipe: ${toMessage(error)}`);
           }
 
           const categoryNames = ctx.store.resolveCategories(saved.categories);

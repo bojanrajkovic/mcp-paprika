@@ -1,3 +1,4 @@
+import { toMessage } from "../utils/log.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
@@ -48,9 +49,7 @@ export function registerDeletePantryItemTool(server: McpServer, ctx: ServerConte
             const saved = await ctx.client.savePantryItem(trashed);
             await commitPantryItem(ctx, saved);
           } catch (error) {
-            return textResult(
-              `Failed to delete pantry item: ${error instanceof Error ? error.message : String(error)}`,
-            );
+            return textResult(`Failed to delete pantry item: ${toMessage(error)}`);
           }
 
           return textResult(`Pantry item "${existing.ingredient}" has been deleted.`);

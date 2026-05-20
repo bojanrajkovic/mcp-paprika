@@ -3,7 +3,13 @@ import type { SyncResult } from "../paprika/types.js";
 import type { RecipeUid } from "../paprika/types.js";
 import { RecipeStore } from "../cache/recipe-store.js";
 import { makeRecipe } from "../cache/__fixtures__/recipes.js";
-import mitt from "mitt";
+// mitt's package shape (flat-conditioned `exports`, .d.ts using `export default`) confuses
+// TS strict resolution under @tsconfig/strictest + nodenext into typing the default import
+// as the namespace. The namespace's `.default` member IS the function, so we recover the
+// callable type by casting through `unknown` to `typeof _mitt.default`. Runtime is unaffected
+// (esModuleInterop unwraps the default at the JS layer).
+import _mitt from "mitt";
+const mitt = _mitt as unknown as typeof _mitt.default;
 
 // Mock all the feature dependencies
 vi.mock("./embeddings.js", () => ({
@@ -34,10 +40,12 @@ function makeMockSyncEvents() {
   return mitt<{ "sync:complete": SyncResult; "sync:error": Error }>();
 }
 
-function makeEnabledConfig(overrides: any = {}) {
+function makeEnabledConfig(overrides: Record<string, unknown> = {}) {
   return {
+    transport: "stdio" as const,
     paprika: { email: "test@example.com", password: "pass" },
     sync: { enabled: true, interval: 5000 },
+    http: { port: 3000, host: "0.0.0.0" },
     features: {
       embeddings: {
         apiKey: "test-key",
@@ -52,14 +60,18 @@ function makeEnabledConfig(overrides: any = {}) {
 function makeDisabledConfig(withFeaturesEmpty = false) {
   if (withFeaturesEmpty) {
     return {
+      transport: "stdio" as const,
       paprika: { email: "test@example.com", password: "pass" },
       sync: { enabled: true, interval: 5000 },
+      http: { port: 3000, host: "0.0.0.0" },
       features: {},
     };
   }
   return {
+    transport: "stdio" as const,
     paprika: { email: "test@example.com", password: "pass" },
     sync: { enabled: true, interval: 5000 },
+    http: { port: 3000, host: "0.0.0.0" },
   };
 }
 
@@ -178,8 +190,10 @@ describe("p3-u08-discover-wiring: buildDiscoverComponents", () => {
         model: "embedder",
       };
       const config = {
+        transport: "stdio" as const,
         paprika: { email: "test@example.com", password: "pass" },
         sync: { enabled: true, interval: 5000 },
+        http: { port: 3000, host: "0.0.0.0" },
         features: {
           embeddings: embeddingsConfig,
         },
@@ -201,7 +215,7 @@ describe("p3-u08-discover-wiring: buildDiscoverComponents", () => {
       await buildDiscoverComponents(config, store, syncEvents);
 
       // VectorStore constructor is mocked and should have been called with the right args
-      const callArgs = vi.mocked(VectorStore).mock.calls[0];
+      const callArgs = vi.mocked(VectorStore).mock.calls[0]!;
       expect(callArgs[0]).toBe("/mock/cache");
       expect(typeof callArgs[1]).toBe("object"); // EmbeddingClient instance
     });

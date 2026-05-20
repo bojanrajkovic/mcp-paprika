@@ -17,7 +17,6 @@ import { describe, it, expect, afterEach, vi, beforeEach } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import mitt from "mitt";
 import { RecipeStore } from "../cache/recipe-store.js";
 import { makeRecipe } from "../cache/__fixtures__/recipes.js";
 import { makeTestServer, makeCtx, getText } from "../tools/tool-test-utils.js";
@@ -25,6 +24,14 @@ import { registerDiscoverTool } from "../tools/discover.js";
 import type { EmbeddingConfig } from "../utils/config.js";
 import type { SyncResult } from "../paprika/types.js";
 import type { RecipeUid } from "../paprika/types.js";
+
+// mitt's package shape (flat-conditioned `exports`, .d.ts using `export default`) confuses
+// TS strict resolution under @tsconfig/strictest + nodenext into typing the default import
+// as the namespace. The namespace's `.default` member IS the function, so we recover the
+// callable type by casting through `unknown` to `typeof _mitt.default`. Runtime is unaffected
+// (esModuleInterop unwraps the default at the JS layer).
+import _mitt from "mitt";
+const mitt = _mitt as unknown as typeof _mitt.default;
 
 // Module-level tempDir variable used by the mock below.
 // Each test will create its own temp directory via beforeEach.
@@ -73,8 +80,10 @@ type SyncEvents = { "sync:complete": SyncResult; "sync:error": Error };
 
 function makePaprikaConfig() {
   return {
+    transport: "stdio" as const,
     paprika: { email: "test@example.com", password: "pass" },
     sync: { enabled: true, interval: 5000 },
+    http: { port: 0, host: "127.0.0.1" },
     features: { embeddings: makeOllamaConfig() },
   };
 }

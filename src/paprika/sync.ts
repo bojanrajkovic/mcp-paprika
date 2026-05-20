@@ -99,7 +99,7 @@ export class SyncEngine {
 
       // Write fetched recipes to cache and store
       for (const recipe of fetchedRecipes) {
-        this._context.cache.putRecipe(recipe, recipe.hash);
+        await this._context.cache.putRecipe(recipe, recipe.hash);
         this._context.store.set(recipe);
       }
 
@@ -115,7 +115,7 @@ export class SyncEngine {
       SyncEngine._log(`Got ${categories.length} categories.`);
       this._context.store.setCategories(categories);
       for (const category of categories) {
-        this._context.cache.putCategory(category, category.uid);
+        await this._context.cache.putCategory(category, category.uid);
       }
 
       // 3. Pantry sync (replace-all with orphan cleanup)
@@ -142,7 +142,7 @@ export class SyncEngine {
       await Promise.all(orphanPantryUids.map((uid) => this._context.cache.removePantryItem(uid)));
       this._context.pantryStore.load(pantryItems);
       for (const item of pantryItems) {
-        this._context.cache.putPantryItem(item);
+        await this._context.cache.putPantryItem(item);
       }
 
       if (orphanPantryUids.length > 0) {

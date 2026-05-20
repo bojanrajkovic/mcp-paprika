@@ -1,6 +1,6 @@
 # Caching Layer
 
-Last verified: 2026-05-07
+Last verified: 2026-05-20 (tryPutOAuthClient added 2026-05-20)
 
 ## Files
 
@@ -101,6 +101,25 @@ Diagnostic messages are written directly to `process.stderr`.
 | `removePantryItem(uid)` | `(uid: string): Promise<void>`   | Deletes file (idempotent); removes from `_index.pantry` and pending map               |
 | `getAllPantryItems()`   | `(): Promise<Array<PantryItem>>` | Merges pending map with all `.json` files in `pantry/`; pending shadows disk          |
 
+**OAuth client methods:**
+
+| Method                           | Signature                                                                                          | Description                                                                                                                                                                     |
+| -------------------------------- | -------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `putOAuthClient(client)`         | `(client: OAuthClient): Promise<void>`                                                             | Locks, buffers to pending map, sets index placeholder; flush writes the file                                                                                                    |
+| `tryPutOAuthClient(client, max)` | `(client: OAuthClient, maxClients: number): Promise<{ok:true} \| {ok:false, currentCount:number}>` | Atomic check-and-put under `_writeLock`: counts current clients (re-puts of an existing `clientId` skip the count) and only writes if under `max`. Used by DCR cap enforcement. |
+| `getOAuthClient(clientId)`       | `(clientId: string): Promise<OAuthClient \| null>`                                                 | Pending-first; disk fallback; validates via `OAuthClientSchema`                                                                                                                 |
+| `removeOAuthClient(clientId)`    | `(clientId: string): Promise<void>`                                                                | Locked; unlinks file (idempotent); removes index + pending entries                                                                                                              |
+| `getAllOAuthClients()`           | `(): Promise<Array<OAuthClient>>`                                                                  | Pending shadows disk merge                                                                                                                                                      |
+
+**OAuth token methods:**
+
+| Method                        | Signature                                          | Description                                                                   |
+| ----------------------------- | -------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `putOAuthToken(token)`        | `(token: OAuthToken): Promise<void>`               | Locks, buffers, indexes by `token.tokenHash` (filename = `${tokenHash}.json`) |
+| `getOAuthToken(tokenHash)`    | `(tokenHash: string): Promise<OAuthToken \| null>` | Pending-first; disk fallback; validates via `OAuthTokenSchema`                |
+| `removeOAuthToken(tokenHash)` | `(tokenHash: string): Promise<void>`               | Locked; unlinks; idempotent                                                   |
+| `getAllOAuthTokens()`         | `(): Promise<Array<OAuthToken>>`                   | Pending shadows disk merge                                                    |
+
 **Diff methods (synchronous):**
 
 | Method                    | Signature                                             | Description                                                                      |
@@ -135,6 +154,11 @@ Diagnostic messages are written directly to `process.stderr`.
 - There is no `removeCategory()` or `getAllCategories()` — categories are always re-synced from the API; the cache only stores them for diffing
 - `diffRecipes()` and `diffCategories()` reflect `putRecipe()`/`putCategory()` calls immediately (before `flush()`) because `put*()` updates `_index` in memory
 - Pantry items use replace-all semantics (no diffPantryItems method); the `_index.pantry` field stores empty-string placeholders (no hash) for each UID
+- **Async-mutex serialization:** All mutating methods (`putX`, `removeX`, `flush`) execute inside an internal `async-mutex`-backed `Mutex` (`_writeLock`). Concurrent calls queue in FIFO order. A failed operation does not poison subsequent ones (`async-mutex` releases the lock on exception and runs the next queued caller normally). This guarantees that `flush()` snapshots a consistent state: a `put*` whose returned promise resolves before a `flush()` starts is included in the snapshot; one that resolves after is not. The previously-undocumented snapshot/clear race is closed. **Re-entrance is forbidden:** no locked method may call another locked method on the same `DiskCache` instance — `async-mutex` would deadlock.
+- **OAuth-client filenames** use `${clientId}.json` — `clientId` is a UUIDv4 generated by `@modelcontextprotocol/sdk`. DiskCache does not validate UUID shape; the schema layer (`OAuthClientSchema`) does.
+- **OAuth-token filenames** use `${tokenHash}.json` where `tokenHash` is the 64-char SHA-256 hex of the plaintext bearer token. `OAuthTokenSchema` enforces this shape on every parse, so AC4.6 ("filename equals tokenHash field") is enforced at both write and read.
+- **Plaintext tokens never hit disk.** The token-store layer (Phase 5) hashes before calling `putOAuthToken`.
+- **No client secrets exist.** The server is public-client only — `OAuthClientSchema` has no `clientSecret` / `clientSecretHash` field. AC4.5 follows from the schema.
 
 ## Dependencies
 

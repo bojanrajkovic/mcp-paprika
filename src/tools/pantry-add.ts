@@ -1,4 +1,5 @@
 // pattern: Imperative Shell
+import { toMessage } from "../utils/log.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
@@ -78,7 +79,7 @@ export function registerAddPantryItemTool(server: McpServer, ctx: ServerContext)
             await commitPantryItem(ctx, saved);
           } catch (error) {
             // AC4.7: store/cache not updated — commitPantryItem not reached
-            return textResult(`Failed to add pantry item: ${error instanceof Error ? error.message : String(error)}`);
+            return textResult(`Failed to add pantry item: ${toMessage(error)}`);
           }
 
           return textResult(pantryItemToMarkdown(saved));

@@ -26,13 +26,13 @@ import type { PaprikaConfig } from "../utils/config.js";
 import { getCacheDir } from "../utils/xdg.js";
 import type { AppContext, SessionContext } from "./app-context.js";
 import type { Notifier } from "./notifier.js";
+import { buildAuthContext } from "../auth/build.js";
+import { createLogger } from "../utils/log.js";
 
 const SERVER_NAME = "mcp-paprika";
 const SERVER_VERSION = "0.0.0";
 
-function log(msg: string): void {
-  process.stderr.write(`[mcp-paprika] ${msg}\n`);
-}
+const log = createLogger("mcp-paprika");
 
 /**
  * Build the process-wide AppContext and SyncEngine.
@@ -71,6 +71,13 @@ export async function buildAppContext(
   const cache = new DiskCache(getCacheDir());
   await cache.init();
 
+  const auth = await buildAuthContext(config, cache);
+  if (auth !== null) {
+    log(
+      `OAuth configured: issuer=${auth.config.publicUrl}, allowlist=${(auth.config.allowlist.emails.length + auth.config.allowlist.subs.length).toString()} entries`,
+    );
+  }
+
   const store = new RecipeStore();
   const cachedRecipes = await cache.getAllRecipes();
   for (const recipe of cachedRecipes) {
@@ -96,6 +103,7 @@ export async function buildAppContext(
     pantryStore,
     vectorStore: null,
     notifier,
+    auth, // null for stdio, populated for HTTP
   };
   const sync = new SyncEngine(syncCtx, config.sync.interval);
 
@@ -141,6 +149,7 @@ export async function buildAppContext(
     pantryStore,
     vectorStore,
     notifier,
+    auth, // null for stdio, populated for HTTP
   };
 
   return { app, sync };

@@ -90,9 +90,9 @@ describe("Sync → Tool Pipeline Integration", () => {
           });
         }),
         http.get(`${API_BASE}/recipe/:uid/`, ({ params }) => {
-          const recipe = makeSnakeCaseRecipe(params.uid as string, {
-            ingredients: params.uid === "recipe-1" ? "eggs, flour" : "chocolate, butter",
-            name: params.uid === "recipe-1" ? "Scrambled Eggs" : "Chocolate Cake",
+          const recipe = makeSnakeCaseRecipe(params["uid"] as string, {
+            ingredients: params["uid"] === "recipe-1" ? "eggs, flour" : "chocolate, butter",
+            name: params["uid"] === "recipe-1" ? "Scrambled Eggs" : "Chocolate Cake",
           });
           return HttpResponse.json({ result: recipe });
         }),
@@ -123,6 +123,7 @@ describe("Sync → Tool Pipeline Integration", () => {
         pantryStore,
         vectorStore: null,
         notifier,
+        auth: null,
       };
 
       const engine = new SyncEngine(context, 100);
@@ -189,8 +190,8 @@ describe("Sync → Tool Pipeline Integration", () => {
           return HttpResponse.json({ result: recipes });
         }),
         http.get(`${API_BASE}/recipe/:uid/`, ({ params }) => {
-          const recipe = makeSnakeCaseRecipe(params.uid as string, {
-            name: params.uid === "recipe-1" ? "Pasta" : "Salad",
+          const recipe = makeSnakeCaseRecipe(params["uid"] as string, {
+            name: params["uid"] === "recipe-1" ? "Pasta" : "Salad",
           });
           return HttpResponse.json({ result: recipe });
         }),
@@ -213,7 +214,7 @@ describe("Sync → Tool Pipeline Integration", () => {
         loggingMessage: async () => {},
       };
 
-      const context = { client, cache, store, pantryStore, vectorStore: null, notifier };
+      const context = { client, cache, store, pantryStore, vectorStore: null, notifier, auth: null };
       const engine = new SyncEngine(context, 100);
 
       // First sync
@@ -254,8 +255,8 @@ describe("Sync → Tool Pipeline Integration", () => {
           return HttpResponse.json({ result: recipes });
         }),
         http.get(`${API_BASE}/recipe/:uid/`, ({ params }) => {
-          const recipe = makeSnakeCaseRecipe(params.uid as string, {
-            name: params.uid === "recipe-1" ? "Pasta" : "Salad",
+          const recipe = makeSnakeCaseRecipe(params["uid"] as string, {
+            name: params["uid"] === "recipe-1" ? "Pasta" : "Salad",
           });
           return HttpResponse.json({ result: recipe });
         }),
@@ -278,7 +279,7 @@ describe("Sync → Tool Pipeline Integration", () => {
         loggingMessage: async () => {},
       };
 
-      const context = { client, cache, store, pantryStore, vectorStore: null, notifier };
+      const context = { client, cache, store, pantryStore, vectorStore: null, notifier, auth: null };
       const engine = new SyncEngine(context, 100);
 
       // First sync: both recipes
@@ -319,7 +320,7 @@ describe("Sync → Tool Pipeline Integration", () => {
         }),
         http.get(`${API_BASE}/recipe/:uid/`, ({ params }) => {
           let recipe;
-          if (params.uid === "eggs") {
+          if (params["uid"] === "eggs") {
             recipe = makeSnakeCaseRecipe("eggs", {
               name: "Scrambled Eggs",
               ingredients: "eggs, butter, salt",
@@ -362,7 +363,7 @@ describe("Sync → Tool Pipeline Integration", () => {
         loggingMessage: async () => {},
       };
 
-      const context = { client, cache, store, pantryStore, vectorStore: null, notifier };
+      const context = { client, cache, store, pantryStore, vectorStore: null, notifier, auth: null };
       const engine = new SyncEngine(context, 100);
       await engine.syncOnce();
 
@@ -417,7 +418,7 @@ describe("Sync → Tool Pipeline Integration", () => {
           });
         }),
         http.get(`${API_BASE}/recipe/:uid/`, ({ params }) => {
-          const recipe = makeSnakeCaseRecipe(params.uid as string, {
+          const recipe = makeSnakeCaseRecipe(params["uid"] as string, {
             name: recipeName,
           });
           return HttpResponse.json({ result: recipe });
@@ -441,7 +442,7 @@ describe("Sync → Tool Pipeline Integration", () => {
         loggingMessage: async () => {},
       };
 
-      const context = { client, cache, store, pantryStore, vectorStore: null, notifier };
+      const context = { client, cache, store, pantryStore, vectorStore: null, notifier, auth: null };
       const engine = new SyncEngine(context, 100);
 
       // First sync with original name

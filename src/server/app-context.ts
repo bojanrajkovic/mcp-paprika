@@ -5,6 +5,7 @@ import type { PantryStore } from "../cache/pantry-store.js";
 import type { RecipeStore } from "../cache/recipe-store.js";
 import type { VectorStore } from "../features/vector-store.js";
 import type { PaprikaClient } from "../paprika/client.js";
+import type { AuthContext } from "../auth/types.js";
 import type { Notifier } from "./notifier.js";
 
 /**
@@ -22,6 +23,8 @@ export interface AppContext {
   readonly pantryStore: PantryStore;
   readonly vectorStore: VectorStore | null;
   readonly notifier: Notifier;
+  /** OAuth runtime state. null in stdio mode (auth not required). */
+  readonly auth: AuthContext | null;
 }
 
 /**

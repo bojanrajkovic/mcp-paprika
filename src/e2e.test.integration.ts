@@ -95,13 +95,14 @@ describe("MCP Server end-to-end round-trip", () => {
     });
 
     expect(result).toBeDefined();
-    expect(Array.isArray(result.content)).toBe(true);
-    expect(result.content.length).toBeGreaterThan(0);
+    const content = result.content as Array<{ type: string; text: string }>;
+    expect(Array.isArray(content)).toBe(true);
+    expect(content.length).toBeGreaterThan(0);
 
     // Verify response has text content
-    const firstContent = result.content[0];
+    const firstContent = content[0];
     expect(firstContent).toBeDefined();
-    expect(firstContent.type).toBe("text");
+    expect(firstContent?.type).toBe("text");
     expect(typeof (firstContent as { type: string; text: string }).text).toBe("string");
   });
 
@@ -146,7 +147,7 @@ describe("MCP Server end-to-end round-trip", () => {
       // Verify content is a resource type
       const firstContent = result.contents[0];
       expect(firstContent).toBeDefined();
-      expect(firstContent.uri).toBeDefined();
+      expect(firstContent?.uri).toBeDefined();
     }
   });
 
@@ -169,14 +170,15 @@ describe("MCP Server end-to-end round-trip", () => {
     });
 
     expect(listResult).toBeDefined();
-    expect(Array.isArray(listResult.content)).toBe(true);
-    expect(listResult.content.length).toBeGreaterThan(0);
+    const listContent = listResult.content as Array<{ type: string; text: string }>;
+    expect(Array.isArray(listContent)).toBe(true);
+    expect(listContent.length).toBeGreaterThan(0);
 
     // Verify response has text content with pantry info
-    const firstContent = listResult.content[0];
+    const firstContent = listContent[0];
     expect(firstContent).toBeDefined();
-    expect(firstContent.type).toBe("text");
-    const listText = (firstContent as { type: string; text: string }).text;
+    expect(firstContent?.type).toBe("text");
+    const listText = firstContent?.text ?? "";
     expect(typeof listText).toBe("string");
     expect(listText.toLowerCase()).toContain("pantry"); // Should mention pantry
 
@@ -187,11 +189,12 @@ describe("MCP Server end-to-end round-trip", () => {
     });
 
     expect(getResult).toBeDefined();
-    expect(Array.isArray(getResult.content)).toBe(true);
-    expect(getResult.content.length).toBeGreaterThan(0);
+    const getContent = getResult.content as Array<{ type: string; text: string }>;
+    expect(Array.isArray(getContent)).toBe(true);
+    expect(getContent.length).toBeGreaterThan(0);
 
-    const getContent = getResult.content[0];
-    expect(getContent).toBeDefined();
-    expect(getContent.type).toBe("text");
+    const getFirstContent = getContent[0];
+    expect(getFirstContent).toBeDefined();
+    expect(getFirstContent?.type).toBe("text");
   });
 });

@@ -1,0 +1,191 @@
+import { describe, it, expect, beforeEach } from "vitest";
+import { Hono } from "hono";
+import { buildCustomizedAuthorizationServerMetadata, buildAuthMetadataRouter } from "./metadata.js";
+import { MintingOAuthServerProvider } from "./provider.js";
+import { DiskClientRegistrationStore } from "./client-registration.js";
+import { TokenStore } from "./token-store.js";
+import { AuthRequestStore } from "./auth-request-store.js";
+import { AuthCodeStore } from "./auth-code-store.js";
+import { DiskCache } from "../cache/disk-cache.js";
+
+describe("OAuth Metadata Customization", () => {
+  let cache: DiskCache;
+  let provider: MintingOAuthServerProvider;
+
+  beforeEach(async () => {
+    const cacheDir = `/tmp/test-metadata-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    cache = new DiskCache(cacheDir);
+    await cache.init();
+
+    const clientStore = new DiskClientRegistrationStore(cache, "https://mcp.example.com");
+    const tokenStore = new TokenStore(cache);
+    const authRequests = new AuthRequestStore();
+    const authCodes = new AuthCodeStore();
+
+    provider = new MintingOAuthServerProvider(
+      clientStore,
+      tokenStore,
+      authRequests,
+      authCodes,
+      {
+        issuer: "https://idp.stub.example.com",
+        authorization_endpoint: "https://idp.stub.example.com/authorize",
+        token_endpoint: "https://idp.stub.example.com/token",
+        jwks_uri: "https://idp.stub.example.com/jwks",
+        id_token_signing_alg_values_supported: ["RS256"],
+      },
+      {
+        discoveryUrl: "https://idp.stub.example.com/.well-known/openid-configuration",
+        publicUrl: "https://mcp.example.com",
+        presetName: null,
+        clientId: "stub-client-id",
+        clientSecret: "stub-client-secret",
+        scopes: ["openid", "email"],
+        emailVerifiedPolicy: "if-present",
+        trustProxy: false,
+        allowlist: { emails: [], subs: [] },
+        allowedAlgs: ["RS256"],
+      },
+      "https://mcp.example.com",
+    );
+  });
+
+  describe("buildCustomizedAuthorizationServerMetadata", () => {
+    it("AC2.1: issuer field equals input string verbatim (no trailing slash)", () => {
+      const meta = buildCustomizedAuthorizationServerMetadata({
+        issuerUrl: "https://m.example.com",
+        provider,
+      });
+      expect(meta.issuer).toBe("https://m.example.com");
+    });
+
+    it("AC2.1: token_endpoint_auth_methods_supported is exactly ['none'] (overridden from library default)", () => {
+      const meta = buildCustomizedAuthorizationServerMetadata({
+        issuerUrl: "https://m.example.com",
+        provider,
+      });
+      expect(meta.token_endpoint_auth_methods_supported).toEqual(["none"]);
+    });
+
+    it("AC2.1: code_challenge_methods_supported is exactly ['S256'] (library default, unchanged)", () => {
+      const meta = buildCustomizedAuthorizationServerMetadata({
+        issuerUrl: "https://m.example.com",
+        provider,
+      });
+      expect(meta.code_challenge_methods_supported).toEqual(["S256"]);
+    });
+
+    it("AC2.1: authorization_response_iss_parameter_supported is true (added — not in library default)", () => {
+      const meta = buildCustomizedAuthorizationServerMetadata({
+        issuerUrl: "https://m.example.com",
+        provider,
+      });
+      expect(meta["authorization_response_iss_parameter_supported"]).toBe(true);
+    });
+
+    it("AC2.1/2.13: id_token_signing_alg_values_supported field is NOT present", () => {
+      const meta = buildCustomizedAuthorizationServerMetadata({
+        issuerUrl: "https://m.example.com",
+        provider,
+      });
+      expect(meta).not.toHaveProperty("id_token_signing_alg_values_supported");
+    });
+
+    it("AC2.13: no metadata field anywhere has value 'none' except auth_methods (which is intentional public-client config)", () => {
+      const meta = buildCustomizedAuthorizationServerMetadata({
+        issuerUrl: "https://m.example.com",
+        provider,
+      });
+
+      // Recursive scan for 'none' values, excluding intentional auth_methods
+      const findNone = (obj: unknown, path: string[] = []): Array<string> => {
+        const results: Array<string> = [];
+        if (typeof obj !== "object" || obj === null) return results;
+
+        for (const [key, value] of Object.entries(obj)) {
+          const currentPath = [...path, key];
+          const pathStr = currentPath.join(".");
+          // Skip if any part of the path contains "auth_methods"
+          const isAuthMethod = pathStr.includes("auth_methods");
+
+          if (value === "none" && !isAuthMethod) {
+            results.push(pathStr);
+          }
+          if (Array.isArray(value)) {
+            for (let i = 0; i < value.length; i++) {
+              if (value[i] === "none" && !isAuthMethod) {
+                results.push(`${pathStr}[${i}]`);
+              }
+              if (typeof value[i] === "object") {
+                results.push(...findNone(value[i], [...currentPath, `[${i}]`]));
+              }
+            }
+          } else if (typeof value === "object") {
+            results.push(...findNone(value, currentPath));
+          }
+        }
+        return results;
+      };
+
+      const noneViolations = findNone(meta);
+      expect(noneViolations).toEqual([]);
+    });
+
+    it("AC2.2: revocation_endpoint_auth_methods_supported removed (public clients need no credentials)", () => {
+      const meta = buildCustomizedAuthorizationServerMetadata({
+        issuerUrl: "https://m.example.com",
+        provider,
+      });
+
+      // AC2.13: public-client setup — we delete the field entirely so the flat-value
+      // scan in integration tests sees exactly one "none" (token_endpoint_auth_methods_supported).
+      expect(meta.revocation_endpoint_auth_methods_supported).toBeUndefined();
+    });
+  });
+
+  describe("buildAuthMetadataRouter (wire-level test)", () => {
+    it("GET /.well-known/oauth-authorization-server returns customized metadata", async () => {
+      const app = new Hono();
+      app.route(
+        "/",
+        buildAuthMetadataRouter({
+          issuerUrl: "https://m.example.com",
+          provider,
+          resourceServerUrl: new URL("https://m.example.com"),
+        }),
+      );
+
+      const res = await app.request("/.well-known/oauth-authorization-server");
+      expect(res.status).toBe(200);
+
+      const body = (await res.json()) as Record<string, unknown>;
+      expect(body["token_endpoint_auth_methods_supported"]).toEqual(["none"]);
+      expect(body["authorization_response_iss_parameter_supported"]).toBe(true);
+      expect(body).not.toHaveProperty("id_token_signing_alg_values_supported");
+    });
+
+    it("AC2.2: GET /.well-known/oauth-protected-resource returns resource = issuer; authorization_servers includes issuer", async () => {
+      const app = new Hono();
+      const resourceUrl = new URL("https://m.example.com");
+      app.route(
+        "/",
+        buildAuthMetadataRouter({
+          issuerUrl: "https://m.example.com",
+          provider,
+          resourceServerUrl: resourceUrl,
+        }),
+      );
+
+      const res = await app.request("/.well-known/oauth-protected-resource");
+      expect(res.status).toBe(200);
+
+      const body = (await res.json()) as Record<string, unknown>;
+      // resource from URL may have trailing slash; normalize for comparison
+      const resource = String(body["resource"]).replace(/\/$/, "");
+      expect(resource).toBe("https://m.example.com");
+      expect(Array.isArray(body["authorization_servers"])).toBe(true);
+      const authServers = (body["authorization_servers"] as Array<string>).map((s) => s.replace(/\/$/, ""));
+      expect(authServers).toContain("https://m.example.com");
+    });
+  });
+});

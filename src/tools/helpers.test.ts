@@ -18,6 +18,7 @@ const makeCtx = (size: number) =>
       resourceListChanged: () => {},
       loggingMessage: async () => {},
     },
+    auth: null,
   }) satisfies ServerContext;
 
 describe("p2-u02-shared-helpers: shared helper functions", () => {
@@ -271,6 +272,7 @@ describe("p2-u02-shared-helpers: shared helper functions", () => {
           resourceListChanged: mockResourceListChanged,
           loggingMessage: vi.fn().mockResolvedValue(undefined),
         },
+        auth: null,
       } satisfies ServerContext;
 
       const saved = makeRecipe();
@@ -313,6 +315,7 @@ describe("p2-u02-shared-helpers: shared helper functions", () => {
           resourceListChanged: mockResourceListChanged,
           loggingMessage: vi.fn().mockResolvedValue(undefined),
         },
+        auth: null,
       } satisfies ServerContext;
 
       const saved = makeRecipe();
@@ -339,6 +342,7 @@ describe("p2-u02-shared-helpers: shared helper functions", () => {
           resourceListChanged: mockResourceListChanged,
           loggingMessage: vi.fn().mockResolvedValue(undefined),
         },
+        auth: null,
       } satisfies ServerContext;
 
       const saved = makeRecipe({ name: "Test Recipe" });

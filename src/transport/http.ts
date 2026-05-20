@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { createLogger } from "../utils/log.js";
 import type { Server as NodeHttpServer } from "node:http";
 
 import { StreamableHTTPTransport } from "@hono/mcp";
@@ -7,10 +8,13 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
 import { Hono } from "hono";
 
+import { mcpAuthRouter, bearerAuth } from "@hono/mcp";
 import { buildAppContext, buildMcpServer } from "../server/build.js";
 import { broadcastNotifier } from "../server/notifier.js";
 import type { PaprikaConfig } from "../utils/config.js";
 import type { TransportHandle } from "./stdio.js";
+import { buildAuthMetadataRouter } from "../auth/metadata.js";
+import { buildAuthRoutes, buildDcrRateLimit, buildClientCap, MAX_REGISTERED_CLIENTS } from "../auth/routes.js";
 
 const SHUTDOWN_TIMEOUT_MS = 10_000;
 const MCP_SESSION_HEADER = "mcp-session-id";
@@ -24,9 +28,7 @@ export interface HttpTransportHandle extends TransportHandle {
   readonly port: number;
 }
 
-function log(msg: string): void {
-  process.stderr.write(`[mcp-paprika] ${msg}\n`);
-}
+const log = createLogger("mcp-paprika");
 
 interface Session {
   server: McpServer;
@@ -79,6 +81,86 @@ export async function startHttp(config: PaprikaConfig): Promise<HttpTransportHan
       sessions: sessions.size,
     }),
   );
+
+  if (app.auth !== null) {
+    // Capture auth to avoid null-checks inside callbacks (mirrors SyncEngine pattern)
+    const auth = app.auth;
+    // issuerUrl stays a string at every @hono/mcp boundary — passing a URL would trigger
+    // the library's .href call and force a trailing slash, breaking exact-match against MCP_PUBLIC_URL.
+    const resourceServerUrl = new URL(auth.config.publicUrl);
+
+    // 1. Customized well-known docs MUST mount BEFORE mcpAuthRouter so Hono's
+    //    first-match-wins returns our overrides instead of mcpAuthRouter's defaults
+    //    (which hard-code token_endpoint_auth_methods_supported: ["client_secret_post"]).
+    hono.route(
+      "/",
+      buildAuthMetadataRouter({
+        issuerUrl: auth.config.publicUrl,
+        provider: auth.provider,
+        resourceServerUrl,
+      }),
+    );
+
+    // 2. Rate-limit + cap middleware MUST attach BEFORE mcpAuthRouter handles POST /register
+    //    (mcpAuthRouter processes it internally; middleware added after would be bypassed).
+    //    The middleware-level cap is a fast-path 429; the authoritative atomic enforcement
+    //    lives inside DiskClientRegistrationStore.registerClient (same MAX_REGISTERED_CLIENTS).
+    hono.use("/register", buildDcrRateLimit({ trustProxy: auth.config.trustProxy }));
+    hono.use("/register", buildClientCap(app.cache, MAX_REGISTERED_CLIENTS));
+
+    // 3. mcpAuthRouter mounts DCR + authorize + token + revoke.
+    //    Well-known routes are shadowed by step 1 (first-match-wins).
+    //
+    //    Disable every built-in rate limiter — @hono/mcp's defaults keyGen
+    //    every endpoint to a single shared string ("some-unique-key"), so one
+    //    noisy client can exhaust the global bucket for everyone (DoS). Our
+    //    own per-IP DCR limiter at step 2 handles registration; /authorize,
+    //    /token, and /revoke are already gated by client_id / bearer / RAT
+    //    checks and don't need an additional shared-key limiter.
+    hono.route(
+      "/",
+      mcpAuthRouter({
+        provider: auth.provider,
+        issuerUrl: auth.config.publicUrl,
+        resourceServerUrl,
+        authorizationOptions: { rateLimit: false },
+        tokenOptions: { rateLimit: false },
+        revocationOptions: { rateLimit: false },
+        clientRegistrationOptions: { rateLimit: false },
+      }),
+    );
+
+    // 4. Custom routes: /oauth/callback (upstream IdP redirect), RFC 7592 PUT/DELETE /register/:id
+    hono.route(
+      "/",
+      buildAuthRoutes({
+        clientStore: auth.clientStore,
+        tokenStore: auth.tokenStore,
+        authRequests: auth.authRequests,
+        authCodes: auth.authCodes,
+        oidcConfig: auth.config,
+        discovery: auth.discovery,
+        jwks: auth.jwks,
+        publicUrl: auth.config.publicUrl,
+      }),
+    );
+
+    // 5. bearerAuth guards /mcp — all unauthenticated MCP requests are rejected with 401.
+    //    verifyAccessToken throws on invalid tokens; catch and return false.
+    hono.use(
+      "/mcp",
+      bearerAuth({
+        verifyToken: async (token: string) => {
+          try {
+            await auth.provider.verifyAccessToken(token);
+            return true;
+          } catch {
+            return false;
+          }
+        },
+      }),
+    );
+  }
 
   hono.all("/mcp", async (c) => {
     const sessionId = c.req.header(MCP_SESSION_HEADER);
@@ -143,10 +225,19 @@ export async function startHttp(config: PaprikaConfig): Promise<HttpTransportHan
   });
 
   log(`HTTP transport listening on http://${config.http.host}:${boundPort.toString()}/mcp`);
+  if (app.auth !== null) {
+    log(`OAuth issuer: ${app.auth.config.publicUrl}`);
+    log(`OAuth upstream: ${app.auth.discovery.issuer} (${app.auth.config.scopes.join(" ")})`);
+    log(
+      `Allowlist: ${app.auth.config.allowlist.emails.length.toString()} email(s), ${app.auth.config.allowlist.subs.length.toString()} sub(s)`,
+    );
+    app.auth.cleanup.start();
+  }
+  // In production startHttp is only dispatched when MCP_TRANSPORT=http, which
+  // makes buildAuthContext return a non-null AuthContext (or fail-fast). The
+  // null branch is exercised only by transport tests that pass MCP_TRANSPORT=stdio
+  // to skip the OAuth fixture — see src/transport/http.test.ts.
   log(`Health probe: GET http://${config.http.host}:${boundPort.toString()}/healthz`);
-  log(
-    `WARNING: No built-in authentication. Place a reverse proxy (Cloudflare Access, Tailscale Serve, OAuth2 proxy) in front of this server before exposing it publicly.`,
-  );
 
   return {
     port: boundPort,
@@ -160,6 +251,7 @@ export async function startHttp(config: PaprikaConfig): Promise<HttpTransportHan
       // so a misbehaving session can't hold shutdown forever.
       const drain = async (): Promise<void> => {
         sync.stop();
+        app.auth?.cleanup.stop();
 
         const sessionSnapshot = [...sessions.values()];
         await Promise.allSettled(sessionSnapshot.map((s) => s.transport.close()));

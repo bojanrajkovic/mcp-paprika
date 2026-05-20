@@ -4,6 +4,7 @@ import { getCacheDir } from "../utils/xdg.js";
 import type { RecipeStore } from "../cache/recipe-store.js";
 import type { SyncResult } from "../paprika/types.js";
 import type { PaprikaConfig } from "../utils/config.js";
+import { toMessage } from "../utils/log.js";
 
 /**
  * View over the SyncEngine event stream. Matches `SyncEngine.events` (a
@@ -72,7 +73,7 @@ export async function buildDiscoverComponents(
         await vectorStore.removeRecipe(uid);
       }
     } catch (err) {
-      process.stderr.write(`[mcp-paprika] Vector index error: ${err instanceof Error ? err.message : String(err)}\n`);
+      process.stderr.write(`[mcp-paprika] Vector index error: ${toMessage(err)}\n`);
     }
   });
 

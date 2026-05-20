@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { PantryStore } from "../cache/pantry-store.js";
+import { RecipeStore } from "../cache/recipe-store.js";
 import { makePantryItem } from "../cache/__fixtures__/pantry.js";
 import { commitPantryItem } from "./pantry-helpers.js";
 import { makeTestServer, makeCtx, makeStubNotifier } from "./tool-test-utils.js";
@@ -22,7 +23,7 @@ describe("pantry-mutations.AC3: commitPantryItem helper", () => {
       const stub = makeStubNotifier();
 
       const { server } = makeTestServer();
-      const ctx = makeCtx(new PantryStore(), server, {
+      const ctx = makeCtx(new RecipeStore(), server, {
         client: { notifySync: mockNotifySync } as unknown as PaprikaClient,
         cache: {
           putPantryItem: mockPutPantryItem,
@@ -71,7 +72,7 @@ describe("pantry-mutations.AC3: commitPantryItem helper", () => {
       const stub = makeStubNotifier();
 
       const { server } = makeTestServer();
-      const ctx = makeCtx(new PantryStore(), server, {
+      const ctx = makeCtx(new RecipeStore(), server, {
         client: { notifySync: mockNotifySync } as unknown as PaprikaClient,
         cache: {
           putPantryItem: mockPutPantryItem,
@@ -118,7 +119,7 @@ describe("pantry-mutations.AC3: commitPantryItem helper", () => {
       const stub = makeStubNotifier();
 
       const { server } = makeTestServer();
-      const ctx = makeCtx(new PantryStore(), server, {
+      const ctx = makeCtx(new RecipeStore(), server, {
         client: { notifySync: mockNotifySync } as unknown as PaprikaClient,
         cache: {
           putPantryItem: mockPutPantryItem,
@@ -158,7 +159,7 @@ describe("pantry-mutations.AC3: commitPantryItem helper", () => {
       const stub = makeStubNotifier();
 
       const { server } = makeTestServer();
-      const ctx = makeCtx(new PantryStore(), server, {
+      const ctx = makeCtx(new RecipeStore(), server, {
         client: { notifySync: mockNotifySync } as unknown as PaprikaClient,
         cache: {
           putPantryItem: mockPutPantryItem,
