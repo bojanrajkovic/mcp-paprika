@@ -124,6 +124,27 @@ describe("OIDC Presets", () => {
       );
     });
 
+    it("treats empty-array scopes/allowedAlgs as 'not provided' and uses defaults", () => {
+      // An operator who sets MCP_OIDC_SCOPES="" (e.g. via dotenv) ends up with
+      // listField parsing to []. The resolver's prior `?? defaults` only
+      // triggered on undefined/null, so empty arrays silently became the
+      // effective scope list and broke /authorize (most IdPs refuse to issue
+      // an id_token when scope is empty). Treat [] as "use default" to fail
+      // gracefully back to documented defaults instead.
+      const result = resolvePreset(undefined, {
+        discoveryUrl: "https://example.com/.well-known/openid-configuration",
+        scopes: [],
+        allowedAlgs: [],
+      });
+      result.match(
+        (config) => {
+          expect(config.scopes).toEqual(["openid", "email", "profile"]);
+          expect(config.allowedAlgs).toEqual(["RS256"]);
+        },
+        (error) => expect.fail(`Expected Ok but got Err: ${error.message}`),
+      );
+    });
+
     it("accepts discoveryUrl alone — all three other fields default", () => {
       // The minimum-viable custom-discovery setup: just MCP_OIDC_DISCOVERY_URL.
       // All other fields default to safe values.

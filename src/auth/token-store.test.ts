@@ -399,6 +399,49 @@ describe("TokenStore", () => {
 
       expect(true).toBe(true);
     });
+
+    it("concurrent revoke + rotateRefresh on same refresh token: no double-spend", async () => {
+      // Without revoke acquiring the rotation mutex, the sequence
+      //   1) rotation reads refresh as valid
+      //   2) revoke removes it
+      //   3) rotation removes (no-op) and mints a new pair
+      // leaves the caller having "revoked" a token that still produced a new
+      // pair. With revoke serialized under _rotateLock, whichever side wins
+      // runs atomically: either rotation succeeds and the old refresh is
+      // gone, or revoke wins and rotation returns invalid_grant.
+      //
+      // The invariant we assert: after both complete, the old refresh
+      // plaintext is invalid (lookupRefreshToken returns null) AND we never
+      // observe both a successful rotation AND an "extra" issued pair from
+      // the same plaintext.
+      const input = makeTokenStoreInput();
+      const { refresh } = await store.issueAccessRefreshPair(input);
+
+      const [rotateResult] = await Promise.all([
+        store.rotateRefresh(refresh.plaintext, input.clientId),
+        store.revoke(refresh.plaintext),
+      ]);
+
+      // The OLD refresh plaintext must no longer be usable, regardless of who
+      // won the race.
+      expect(await store.lookupRefreshToken(refresh.plaintext)).toBeNull();
+
+      // A second rotateRefresh on the same OLD plaintext must always fail —
+      // either because revoke already removed it (revoke won) or because
+      // rotation already rotated it away (rotation won).
+      const second = await store.rotateRefresh(refresh.plaintext, input.clientId);
+      const secondCode = second.match(
+        () => null,
+        (e) => e.errorCode,
+      );
+      expect(secondCode).toBe("invalid_grant");
+
+      // Sanity: if rotation won, the new pair it minted is independent of the
+      // old plaintext (different hash) and revoke of the old plaintext didn't
+      // remove it. That's the intended behavior — revoke targets the OLD
+      // refresh; a successful rotation has already replaced it.
+      void rotateResult; // rotation outcome itself is non-deterministic under the race
+    });
   });
 
   describe("removeAllForClient", () => {

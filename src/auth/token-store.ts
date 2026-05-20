@@ -266,11 +266,22 @@ export class TokenStore {
    *
    * Idempotent: revoking a non-existent token is a no-op (DiskCache.removeOAuthToken
    * is idempotent). Idempotency is essential for use in cleanup loops.
+   *
+   * Acquires `_rotateLock` so it can't interleave with `rotateRefresh`'s
+   * lookup→mint window. Without the lock, the sequence
+   *   1) rotation reads refresh as valid
+   *   2) revoke removes the same refresh
+   *   3) rotation removes (no-op) and mints a new pair
+   * lets a token the caller just revoked still produce fresh credentials.
+   * Under the shared lock, whichever operation acquires the lock first runs
+   * atomically and the other observes the post-state.
    */
   async revoke(plaintext: string): Promise<void> {
-    const hash = hashTokenForStorage(plaintext);
-    await this._cache.removeOAuthToken(hash);
-    await this._cache.flush();
+    await this._rotateLock.runExclusive(async () => {
+      const hash = hashTokenForStorage(plaintext);
+      await this._cache.removeOAuthToken(hash);
+      await this._cache.flush();
+    });
   }
 
   /**

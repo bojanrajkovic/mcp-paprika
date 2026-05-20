@@ -87,6 +87,18 @@ type TenantBoundName = "entra" | "okta" | "auth0" | "keycloak";
 type TenantBoundPreset = Omit<OIDCPreset, "discoveryUrl">;
 
 /**
+ * `??` only triggers on `null`/`undefined`, so a config like
+ * `MCP_OIDC_SCOPES=""` that listField parses to `[]` would suppress the
+ * preset's default and ship an empty scope to /authorize — most IdPs then
+ * refuse to return an id_token and every login fails at callback time.
+ * Treat empty arrays the same as "not provided" so the documented default
+ * kicks in.
+ */
+function nonEmptyOr<T>(value: ReadonlyArray<T> | undefined, fallback: ReadonlyArray<T>): ReadonlyArray<T> {
+  return value !== undefined && value.length > 0 ? value : fallback;
+}
+
+/**
  * Resolves a tenant-bound preset (entra, okta, auth0, keycloak).
  * These presets require an operator-supplied discoveryUrl because the provider
  * is multi-tenant — there is no single well-known discovery endpoint.
@@ -102,9 +114,9 @@ function resolveTenantBound(
   return ok({
     presetName: name,
     discoveryUrl: overrides.discoveryUrl,
-    scopes: overrides.scopes ?? preset.scopes,
+    scopes: nonEmptyOr(overrides.scopes, preset.scopes),
     emailVerifiedPolicy: overrides.emailVerifiedPolicy ?? preset.emailVerifiedPolicy,
-    allowedAlgs: overrides.allowedAlgs ?? preset.allowedAlgs,
+    allowedAlgs: nonEmptyOr(overrides.allowedAlgs, preset.allowedAlgs),
   });
 }
 
@@ -139,9 +151,9 @@ export function resolvePreset(
     return ok({
       presetName: null,
       discoveryUrl: overrides.discoveryUrl,
-      scopes: overrides.scopes ?? ["openid", "email", "profile"],
+      scopes: nonEmptyOr(overrides.scopes, ["openid", "email", "profile"]),
       emailVerifiedPolicy: overrides.emailVerifiedPolicy ?? "strict",
-      allowedAlgs: overrides.allowedAlgs ?? ["RS256"],
+      allowedAlgs: nonEmptyOr(overrides.allowedAlgs, ["RS256"]),
     });
   }
 
@@ -153,9 +165,9 @@ export function resolvePreset(
       return ok({
         presetName: name,
         discoveryUrl: overrides.discoveryUrl ?? preset.discoveryUrl,
-        scopes: overrides.scopes ?? preset.scopes,
+        scopes: nonEmptyOr(overrides.scopes, preset.scopes),
         emailVerifiedPolicy: overrides.emailVerifiedPolicy ?? preset.emailVerifiedPolicy,
-        allowedAlgs: overrides.allowedAlgs ?? preset.allowedAlgs,
+        allowedAlgs: nonEmptyOr(overrides.allowedAlgs, preset.allowedAlgs),
       });
     }
 
