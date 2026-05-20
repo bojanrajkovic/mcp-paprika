@@ -14,7 +14,7 @@ import { generateOpaqueToken, nowSeconds } from "./tokens.js";
 import { verifyIdToken } from "./oidc-client.js";
 import type { IdTokenPayload } from "./types.js";
 import { verifyIdentity } from "./allowlist.js";
-import { OAuthMetadataValidationError } from "./errors.js";
+import { OAuthClientNotFoundError, OAuthMetadataValidationError } from "./errors.js";
 
 export interface AuthRoutesDeps {
   readonly clientStore: DiskClientRegistrationStore;
@@ -191,6 +191,13 @@ export function buildAuthRoutes(deps: AuthRoutesDeps): Hono {
     } catch (e) {
       if (e instanceof OAuthMetadataValidationError) {
         return c.json({ error: "invalid_client_metadata", error_description: e.message }, 400);
+      }
+      // A concurrent DELETE /register/:id (or AuthCleanup's stale-client sweep)
+      // can land between verifyRatBearer's lookup and updateClient's load,
+      // making the client disappear mid-request. RFC 7592 doesn't enumerate
+      // 404 for this case but it's the closest match — definitely not a 500.
+      if (e instanceof OAuthClientNotFoundError) {
+        return c.json({ error: "invalid_client", error_description: "client not found" }, 404);
       }
       throw e;
     }

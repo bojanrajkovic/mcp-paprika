@@ -14,6 +14,7 @@ import { AuthRequestStore } from "./auth-request-store.js";
 import { AuthCodeStore } from "./auth-code-store.js";
 import { DiskCache } from "../cache/disk-cache.js";
 import { makeDefaultOidcStub, makeDiscoveryDoc } from "./__fixtures__/oidc-stub.js";
+import { OAuthClientNotFoundError } from "./errors.js";
 import { makeVerifiedIdentity } from "./__fixtures__/oauth-state.js";
 import { createJwksFor } from "./oidc-client.js";
 import type { JWTVerifyGetKey } from "jose";
@@ -395,6 +396,36 @@ describe("Auth Routes", () => {
         body: JSON.stringify({ client_name: "Updated" }),
       });
       expect(res.status).toBe(401);
+    });
+
+    it("races a concurrent DELETE to 404, not 500", async () => {
+      // The race: verifyRatBearer's lookup passes (client + RAT present), then
+      // a concurrent DELETE /register/:id removes the client record, then
+      // updateClient throws OAuthClientNotFoundError. The previous handler
+      // only mapped OAuthMetadataValidationError and rethrew everything else,
+      // turning this benign concurrent condition into a 500. The handler now
+      // catches the not-found case and returns 404.
+      //
+      // Deterministically simulating the race: stub the verifyRegistrationAccessToken
+      // path to pass, but have updateClient throw OAuthClientNotFoundError.
+      const verifySpy = vi.spyOn(clientStore, "verifyRegistrationAccessToken").mockResolvedValue(true);
+      const updateSpy = vi
+        .spyOn(clientStore, "updateClient")
+        .mockRejectedValue(OAuthClientNotFoundError.forId("ghost-client"));
+
+      try {
+        const res = await app.request("/register/ghost-client", {
+          method: "PUT",
+          headers: { "content-type": "application/json", authorization: "Bearer any-rat" },
+          body: JSON.stringify({ client_name: "Updated" }),
+        });
+        expect(res.status).toBe(404);
+        const body = (await res.json()) as Record<string, unknown>;
+        expect(body["error"]).toBe("invalid_client");
+      } finally {
+        verifySpy.mockRestore();
+        updateSpy.mockRestore();
+      }
     });
 
     it("RFC 6750 §2.1: Bearer scheme is case-insensitive (bearer/BEARER accepted)", async () => {

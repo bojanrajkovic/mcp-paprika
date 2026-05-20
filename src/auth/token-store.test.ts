@@ -465,6 +465,28 @@ describe("TokenStore", () => {
       expect(await store.lookupAccessToken(pair2.access.plaintext)).not.toBeNull();
       expect(await store.lookupRefreshToken(pair2.refresh.plaintext)).not.toBeNull();
     });
+
+    it("concurrent rotateRefresh + removeAllForClient: no new tokens survive the deregistration", async () => {
+      // Without sharing _rotateLock, the sequence
+      //   1) removeAllForClient takes a getAllOAuthTokens snapshot
+      //   2) rotateRefresh mints a new pair and writes it to disk
+      //   3) removeAllForClient deletes the snapshot tokens — the new pair survives
+      // leaves still-valid tokens for a client that was just deregistered, which
+      // /mcp would honor because bearerAuth only consults the token store. The
+      // invariant under the shared lock: after both operations complete, NO
+      // tokens remain for the client (whichever side wins, the other observes
+      // the post-state and either tears down everything or fails to mint).
+      const input = makeTokenStoreInput();
+      const { refresh } = await store.issueAccessRefreshPair(input);
+
+      await Promise.all([
+        store.rotateRefresh(refresh.plaintext, input.clientId),
+        store.removeAllForClient(input.clientId),
+      ]);
+
+      const remaining = (await cache.getAllOAuthTokens()).filter((t) => t.clientId === input.clientId);
+      expect(remaining).toEqual([]);
+    });
   });
 
   describe("AC4.2: access token persists across DiskCache restart", () => {

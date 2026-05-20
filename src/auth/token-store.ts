@@ -288,12 +288,22 @@ export class TokenStore {
    * Revokes all tokens issued to a specific client.
    *
    * Used for client deregistration or session invalidation. Idempotent.
+   *
+   * Acquires `_rotateLock` so a concurrent `rotateRefresh` can't slip a new
+   * pair onto disk between the snapshot and the deletes. Without the lock:
+   *   1) `removeAllForClient` calls `getAllOAuthTokens` → snapshot
+   *   2) `rotateRefresh` (under the lock by itself) mints a new pair and writes it
+   *   3) `removeAllForClient` deletes the snapshot tokens — the new pair survives
+   * Sharing the rotation lock makes both operations atomic with respect to each
+   * other: whichever wins runs to completion before the other observes state.
    */
   async removeAllForClient(clientId: string): Promise<void> {
-    const all = await this._cache.getAllOAuthTokens();
-    const matching = all.filter((t) => t.clientId === clientId);
-    await Promise.all(matching.map((t) => this._cache.removeOAuthToken(t.tokenHash)));
-    await this._cache.flush();
+    await this._rotateLock.runExclusive(async () => {
+      const all = await this._cache.getAllOAuthTokens();
+      const matching = all.filter((t) => t.clientId === clientId);
+      await Promise.all(matching.map((t) => this._cache.removeOAuthToken(t.tokenHash)));
+      await this._cache.flush();
+    });
   }
 
   /**
