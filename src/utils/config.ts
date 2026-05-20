@@ -147,7 +147,16 @@ export const paprikaConfigSchema = z
       .optional(),
     oauth: z
       .object({
-        publicUrl: z.string().min(1).optional(),
+        // Strip trailing slashes once at parse time so downstream concatenations
+        // (`${publicUrl}/oauth/callback`, `${publicUrl}/register/<id>`, …) never
+        // produce `//`. Upstream IdPs require exact redirect-URI matching, so a
+        // `MCP_PUBLIC_URL=https://host/` would otherwise break authorization
+        // and the RFC 7592 registration_client_uri it advertises.
+        publicUrl: z
+          .string()
+          .min(1)
+          .transform((v) => v.replace(/\/+$/, ""))
+          .optional(),
         preset: z.enum(["google", "entra", "okta", "auth0", "keycloak"]).optional(),
         discoveryUrl: z.string().url().optional(),
         scopes: listField.optional(),

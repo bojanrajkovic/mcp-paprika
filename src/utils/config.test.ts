@@ -425,6 +425,27 @@ describe("Configuration loading", () => {
         );
       });
 
+      it("strips trailing slash from MCP_PUBLIC_URL once at load (so /oauth/callback doesn't become //oauth/callback)", () => {
+        process.env["PAPRIKA_EMAIL"] = "user@test.com";
+        process.env["PAPRIKA_PASSWORD"] = "secret";
+        process.env["MCP_TRANSPORT"] = "http";
+        process.env["MCP_PUBLIC_URL"] = "https://mcp.example.com/";
+        process.env["MCP_OIDC_PRESET"] = "google";
+        process.env["MCP_OIDC_CLIENT_ID"] = "client123";
+        process.env["MCP_OIDC_CLIENT_SECRET"] = "secret456";
+        process.env["MCP_ALLOWED_EMAILS"] = "alice@example.com";
+
+        const result = loadConfig(tempDir);
+        result.match(
+          (config) => {
+            expect(config.oauth?.publicUrl).toBe("https://mcp.example.com");
+          },
+          (error) => {
+            expect.fail(`Expected Ok but got Err: ${error.reason}`);
+          },
+        );
+      });
+
       it("accepts substring trick (https://evil/?fake=http://x) as HTTPS", () => {
         process.env["PAPRIKA_EMAIL"] = "user@test.com";
         process.env["PAPRIKA_PASSWORD"] = "secret";
