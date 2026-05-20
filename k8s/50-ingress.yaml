@@ -1,0 +1,30 @@
+# Tailscale Funnel exposes the MCP server on the public internet at
+# https://paprika.gaur-kardashev.ts.net. The MCP server now ships OAuth
+# 2.1 + PKCE + Dynamic Client Registration (RFC 7591) and delegates upstream
+# auth to Google via the `google` preset, so claude.ai / Claude Mobile can
+# complete the spec-required auth handshake against this endpoint.
+#
+# The ingress class is `tailscale`; the `tailscale.com/funnel: "true"`
+# annotation flips the operator from "tailnet-only" to "Funnel" mode (public).
+# `tls.hosts[0]` is the funnel name segment — Tailscale prefixes it with the
+# tailnet to produce the final hostname.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: mcp-paprika-funnel
+  namespace: mcp-paprika
+  labels:
+    app.kubernetes.io/name: mcp-paprika
+    app.kubernetes.io/instance: mcp-paprika
+  annotations:
+    tailscale.com/funnel: "true"
+spec:
+  ingressClassName: tailscale
+  tls:
+    - hosts:
+        - paprika
+  defaultBackend:
+    service:
+      name: mcp-paprika
+      port:
+        number: 80

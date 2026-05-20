@@ -15,3 +15,6 @@ coverage/
 .ed3d/
 docs/implementation-plans/
 docs/test-plans/
+
+# Filled-in copy of k8s/20-secret.example.yaml — never commit real credentials.
+k8s/secret.yaml
