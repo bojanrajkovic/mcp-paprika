@@ -147,13 +147,17 @@ export function buildAuthRoutes(deps: AuthRoutesDeps): Hono {
         });
       },
       (denial) => {
-        // AC3.4: deny alert — log identity claims only, never the id_token
+        // AC3.4: deny alert — log identity claims only, never the id_token.
+        // The full denial reason (including email/sub) goes to operator stderr;
+        // the redirect-back error_description is generic so we don't leak the
+        // user's email or subject id through claude.ai (or the user's browser
+        // history) on a denial.
         process.stderr.write(
           `[auth] allowlist denial: ${denial.message} email=${denial.identity.email ?? "-"} sub=${denial.identity.sub ?? "-"}\n`,
         );
         return redirectToClient(c, stored.redirectUri, {
           error: "access_denied",
-          error_description: denial.message,
+          error_description: "identity not allowed by server policy",
           state: stored.claudeState,
           iss: deps.publicUrl,
         });
@@ -203,9 +207,11 @@ async function verifyRatBearer(
   clientId: string,
 ): Promise<Response | null> {
   const auth = c.req.header("authorization");
-  if (!auth?.startsWith("Bearer ")) return c.json({ error: "unauthorized" }, 401);
+  // RFC 6750 §2.1: the Bearer scheme is case-insensitive.
+  const match = auth?.match(/^bearer\s+(.+)$/i);
+  if (!match) return c.json({ error: "unauthorized" }, 401);
 
-  const presented = auth.slice("Bearer ".length);
+  const presented = match[1]!;
   const ok = await store.verifyRegistrationAccessToken(clientId, presented);
   if (!ok) return c.json({ error: "unauthorized" }, 401);
 

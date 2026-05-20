@@ -240,6 +240,14 @@ describe("Auth Routes", () => {
         expect(loc.searchParams.get("error")).toBe("access_denied");
         expect(loc.searchParams.get("iss")).toBe("https://mcp.example.com");
 
+        // Denial redirects MUST NOT leak identity claims back to the client —
+        // these go onto a URL forwarded to claude.ai. The full claims live in
+        // the operator's stderr log (asserted below); the on-the-wire copy is
+        // a generic message.
+        const description = loc.searchParams.get("error_description") ?? "";
+        expect(description).not.toContain("unknown@example.com");
+        expect(description).not.toContain("unknown-sub-999");
+
         // Combine all stderr output
         const allStderr = stderrWrites.join("");
 
@@ -295,6 +303,27 @@ describe("Auth Routes", () => {
         body: JSON.stringify({ client_name: "Updated" }),
       });
       expect(res.status).toBe(401);
+    });
+
+    it("RFC 6750 §2.1: Bearer scheme is case-insensitive (bearer/BEARER accepted)", async () => {
+      const registered = await clientStore.registerClient({
+        client_name: "Mixed Case",
+        redirect_uris: ["https://claude.ai/callback"],
+      });
+      const rat = registered.registration_access_token;
+      const clientId = registered.client_id;
+
+      for (const scheme of ["bearer", "BEARER", "Bearer", "BeArEr"]) {
+        const res = await app.request(`/register/${clientId}`, {
+          method: "PUT",
+          headers: {
+            "content-type": "application/json",
+            authorization: `${scheme} ${rat}`,
+          },
+          body: JSON.stringify({ client_name: `via-${scheme}` }),
+        });
+        expect(res.status, `scheme=${scheme}`).toBe(200);
+      }
     });
   });
 
