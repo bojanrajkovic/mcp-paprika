@@ -50,6 +50,13 @@ spec:
               value: https://paprika.gaur-kardashev.ts.net
             - name: MCP_OIDC_PRESET
               value: google
+            # Tailscale Funnel is the only ingress in front of this pod and it
+            # sanitizes X-Forwarded-For, so MCP_TRUST_PROXY=true lets the DCR
+            # rate-limiter key off the real client tailnet address instead of
+            # collapsing every public request into the funnel pod's address.
+            # See src/auth/routes.ts:buildDcrRateLimit for the safety analysis.
+            - name: MCP_TRUST_PROXY
+              value: "true"
           envFrom:
             - secretRef:
                 name: mcp-paprika
