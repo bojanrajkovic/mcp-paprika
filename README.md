@@ -135,19 +135,44 @@ The server also exposes:
 
 ## Quick start — container
 
+The image defaults to `MCP_TRANSPORT=http`, so a container run needs the same
+OAuth environment that the [HTTP transport quick start](#quick-start--http-transport)
+walks through — `MCP_PUBLIC_URL`, an OIDC preset (or discovery URL), upstream
+client credentials, and a non-empty allowlist. Without those, the server exits
+during config validation.
+
 ```bash
 docker build -t mcp-paprika:dev .
 
 docker run --rm \
   -e PAPRIKA_EMAIL=you@example.com \
   -e PAPRIKA_PASSWORD=your-password \
+  -e MCP_PUBLIC_URL=https://mcp.example.com \
+  -e MCP_OIDC_PRESET=google \
+  -e MCP_OIDC_CLIENT_ID=123456789-abc.apps.googleusercontent.com \
+  -e MCP_OIDC_CLIENT_SECRET=GOCSPX-... \
+  -e MCP_ALLOWED_EMAILS=you@example.com \
   -v "$(pwd)/data:/data" \
   -p 3000:3000 \
   mcp-paprika:dev
 ```
 
-The image defaults to `MCP_TRANSPORT=http`, binds on `0.0.0.0:3000`, and persists the
-disk cache and vector index under `/data` (the documented mount point). Both `/data`
+For a one-shot smoke test that just verifies the image launches (no OAuth, no
+remote clients), override the transport to `stdio` — note that this turns the
+container into a CLI process that speaks MCP on stdin/stdout, so the port
+mapping isn't used:
+
+```bash
+docker run --rm -i \
+  -e MCP_TRANSPORT=stdio \
+  -e PAPRIKA_EMAIL=you@example.com \
+  -e PAPRIKA_PASSWORD=your-password \
+  -v "$(pwd)/data:/data" \
+  mcp-paprika:dev
+```
+
+The HTTP-mode image binds on `0.0.0.0:3000` and persists the disk cache and
+vector index under `/data` (the documented mount point). Both `/data`
 sub-directories (`config/`, `cache/`) are pre-created with `nonroot` (UID 65532)
 ownership in the image so writes work the first time even on a fresh bind-mount.
 
