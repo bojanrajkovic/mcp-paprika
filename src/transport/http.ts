@@ -110,12 +110,23 @@ export async function startHttp(config: PaprikaConfig): Promise<HttpTransportHan
 
     // 3. mcpAuthRouter mounts DCR + authorize + token + revoke.
     //    Well-known routes are shadowed by step 1 (first-match-wins).
+    //
+    //    Disable every built-in rate limiter — @hono/mcp's defaults keyGen
+    //    every endpoint to a single shared string ("some-unique-key"), so one
+    //    noisy client can exhaust the global bucket for everyone (DoS). Our
+    //    own per-IP DCR limiter at step 2 handles registration; /authorize,
+    //    /token, and /revoke are already gated by client_id / bearer / RAT
+    //    checks and don't need an additional shared-key limiter.
     hono.route(
       "/",
       mcpAuthRouter({
         provider: auth.provider,
         issuerUrl: auth.config.publicUrl,
         resourceServerUrl,
+        authorizationOptions: { rateLimit: false },
+        tokenOptions: { rateLimit: false },
+        revocationOptions: { rateLimit: false },
+        clientRegistrationOptions: { rateLimit: false },
       }),
     );
 
