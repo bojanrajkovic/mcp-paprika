@@ -211,19 +211,19 @@ export async function startHttp(config: PaprikaConfig): Promise<HttpTransportHan
     );
   });
 
+  log(`HTTP transport listening on http://${config.http.host}:${boundPort.toString()}/mcp`);
   if (app.auth !== null) {
-    log(`HTTP transport listening on http://${config.http.host}:${boundPort.toString()}/mcp`);
     log(`OAuth issuer: ${app.auth.config.publicUrl}`);
     log(`OAuth upstream: ${app.auth.discovery.issuer} (${app.auth.config.scopes.join(" ")})`);
     log(
       `Allowlist: ${app.auth.config.allowlist.emails.length.toString()} email(s), ${app.auth.config.allowlist.subs.length.toString()} sub(s)`,
     );
     app.auth.cleanup.start();
-  } else {
-    log(
-      `HTTP transport listening on http://${config.http.host}:${boundPort.toString()}/mcp (NO AUTH — stdio-equivalent dev mode)`,
-    );
   }
+  // In production startHttp is only dispatched when MCP_TRANSPORT=http, which
+  // makes buildAuthContext return a non-null AuthContext (or fail-fast). The
+  // null branch is exercised only by transport tests that pass MCP_TRANSPORT=stdio
+  // to skip the OAuth fixture — see src/transport/http.test.ts.
   log(`Health probe: GET http://${config.http.host}:${boundPort.toString()}/healthz`);
 
   return {
