@@ -198,6 +198,23 @@ describe("auth/dcr-validator: RFC 7591/7592 metadata validation", () => {
       );
     });
 
+    it("registration: redirect_uri=http://[::1]/cb accepted (IPv6 loopback)", () => {
+      const result = validateRegistration({
+        token_endpoint_auth_method: "none",
+        redirect_uris: ["http://[::1]/cb"],
+        response_types: ["code"],
+        grant_types: ["authorization_code"],
+        scope: "openid",
+      });
+
+      result.match(
+        (metadata) => {
+          expect(metadata.redirectUris).toContain("http://[::1]/cb");
+        },
+        () => expect.fail("Expected Ok but got Err"),
+      );
+    });
+
     it("registration: redirect_uri=https://app.com/cb accepted", () => {
       const result = validateRegistration({
         token_endpoint_auth_method: "none",

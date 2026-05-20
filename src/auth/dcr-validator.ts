@@ -53,10 +53,13 @@ function isValidRedirectUri(uri: string): boolean {
       return true;
     }
 
-    // http only OK for localhost / 127.0.0.1 / [::1]
+    // http only OK for localhost / 127.0.0.1 / [::1].
+    // Node's WHATWG URL parser preserves brackets around IPv6 hostnames
+    // (e.g. `new URL("http://[::1]/").hostname === "[::1]"`), so compare against
+    // the bracketed form rather than the bare address.
     if (url.protocol === "http:") {
       const hostname = url.hostname;
-      return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
+      return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "[::1]";
     }
 
     return false;
