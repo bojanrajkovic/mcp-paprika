@@ -22,6 +22,7 @@ import { AuthRequestStore } from "./auth-request-store.js";
 import { AuthCodeStore } from "./auth-code-store.js";
 import { MintingOAuthServerProvider } from "./provider.js";
 import { AuthCleanup } from "./cleanup.js";
+import { MAX_REGISTERED_CLIENTS } from "./routes.js";
 import type { AuthContext, ResolvedOAuthConfig } from "./types.js";
 
 export async function buildAuthContext(config: PaprikaConfig, cache: DiskCache): Promise<AuthContext | null> {
@@ -76,6 +77,7 @@ export async function buildAuthContext(config: PaprikaConfig, cache: DiskCache):
     publicUrl: config.oauth.publicUrl,
     clientId: config.oauth.clientId,
     clientSecret: config.oauth.clientSecret,
+    trustProxy: config.oauth.trustProxy,
     allowlist: config.oauth.allowlist,
   };
 
@@ -83,7 +85,7 @@ export async function buildAuthContext(config: PaprikaConfig, cache: DiskCache):
   const discovery = await loadDiscovery(resolved.discoveryUrl, resolved.allowedAlgs);
   const jwks = createJwksFor(discovery);
 
-  const clientStore = new DiskClientRegistrationStore(cache, resolved.publicUrl);
+  const clientStore = new DiskClientRegistrationStore(cache, resolved.publicUrl, MAX_REGISTERED_CLIENTS);
   const tokenStore = new TokenStore(cache);
   const requestStore = new AuthRequestStore();
   const codeStore = new AuthCodeStore();

@@ -14,7 +14,7 @@ import { broadcastNotifier } from "../server/notifier.js";
 import type { PaprikaConfig } from "../utils/config.js";
 import type { TransportHandle } from "./stdio.js";
 import { buildAuthMetadataRouter } from "../auth/metadata.js";
-import { buildAuthRoutes, buildDcrRateLimit, buildClientCap } from "../auth/routes.js";
+import { buildAuthRoutes, buildDcrRateLimit, buildClientCap, MAX_REGISTERED_CLIENTS } from "../auth/routes.js";
 
 const SHUTDOWN_TIMEOUT_MS = 10_000;
 const MCP_SESSION_HEADER = "mcp-session-id";
@@ -103,8 +103,10 @@ export async function startHttp(config: PaprikaConfig): Promise<HttpTransportHan
 
     // 2. Rate-limit + cap middleware MUST attach BEFORE mcpAuthRouter handles POST /register
     //    (mcpAuthRouter processes it internally; middleware added after would be bypassed).
-    hono.use("/register", buildDcrRateLimit());
-    hono.use("/register", buildClientCap(app.cache, 50));
+    //    The middleware-level cap is a fast-path 429; the authoritative atomic enforcement
+    //    lives inside DiskClientRegistrationStore.registerClient (same MAX_REGISTERED_CLIENTS).
+    hono.use("/register", buildDcrRateLimit({ trustProxy: auth.config.trustProxy }));
+    hono.use("/register", buildClientCap(app.cache, MAX_REGISTERED_CLIENTS));
 
     // 3. mcpAuthRouter mounts DCR + authorize + token + revoke.
     //    Well-known routes are shadowed by step 1 (first-match-wins).

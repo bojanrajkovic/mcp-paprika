@@ -1,6 +1,6 @@
 # Cross-Cutting Utilities
 
-Last verified: 2026-05-19 (publicUrl trailing-slash strip added 2026-05-19; log.ts helpers added 2026-05-18; xdg XDG-override behavior added 2026-05-18)
+Last verified: 2026-05-20 (oauth.trustProxy added 2026-05-20; publicUrl trailing-slash strip added 2026-05-19; log.ts helpers added 2026-05-18; xdg XDG-override behavior added 2026-05-18)
 
 ## Purpose
 
@@ -85,6 +85,7 @@ oauth: {
   allowedAlgs?:          string[]       // Override preset's allowed id_token signing algs
   clientId?:             string         // Client ID from upstream IdP
   clientSecret?:         string         // Client secret from upstream IdP
+  trustProxy:            boolean        // Trust X-Forwarded-For for DCR rate-limit key (default false). Flip to true only behind a sanitizing proxy (k8s ingress, Tailscale Funnel, Cloudflare).
   allowlist: {
     emails:              string[]       // Comma-separated emails (listField, default [])
     subs:                string[]       // Comma-separated subject IDs (listField, default [])
@@ -115,6 +116,7 @@ oauth: {
 | `MCP_OIDC_ALLOWED_ALGS`          | `oauth.allowedAlgs`         |
 | `MCP_OIDC_CLIENT_ID`             | `oauth.clientId`            |
 | `MCP_OIDC_CLIENT_SECRET`         | `oauth.clientSecret`        |
+| `MCP_TRUST_PROXY`                | `oauth.trustProxy`          |
 | `MCP_ALLOWED_EMAILS`             | `oauth.allowlist.emails`    |
 | `MCP_ALLOWED_SUBS`               | `oauth.allowlist.subs`      |
 

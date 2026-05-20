@@ -1,6 +1,6 @@
 # OAuth 2.1 Authorization Layer
 
-Last verified: 2026-05-19
+Last verified: 2026-05-20
 
 ## Purpose
 
@@ -20,10 +20,10 @@ This module is loaded only when `MCP_TRANSPORT=http`. In stdio mode, `buildAuthC
 - `ttl-store.ts` — Generic base class `TtlStore<T extends { createdAt: number }>` with `put`, `consume` (delete-before-TTL-check, single-use), `sweepExpired`, and `size`; clock-injectable via `now` option. Extended by `AuthRequestStore` and `AuthCodeStore`.
 - `auth-request-store.ts` — In-memory 5-minute TTL store for `AuthRequestState` (keyed by our state parameter, carries PKCE challenge + nonce + client + redirect context). Extends `TtlStore`; exposes `put` / `consume` (single-use).
 - `auth-code-store.ts` — In-memory 60-second TTL store for `AuthCodeState` (keyed by our authorization code; holds the verified identity). Extends `TtlStore`; adds `peek()` (read-without-consume, lazy-evicts expired entries). Single-use consume enforced via `TtlStore.consume`. Distinct from `auth-request-store.ts` to keep pre- and post-callback state separate.
-- `client-registration.ts` — `DiskClientRegistrationStore` implementing the SDK `OAuthRegisteredClientsStore` interface; persists registered clients to `DiskCache`'s `oauth/clients/` namespace; enforces `registrationAccessTokenHash` on management endpoints; issues UUIDv4 `clientId` (delegated to SDK)
+- `client-registration.ts` — `DiskClientRegistrationStore` implementing the SDK `OAuthRegisteredClientsStore` interface; persists registered clients to `DiskCache`'s `oauth/clients/` namespace; enforces `registrationAccessTokenHash` on management endpoints; issues UUIDv4 `clientId` (delegated to SDK); takes a `maxClients` ctor param and atomically enforces the cap via `DiskCache.tryPutOAuthClient` (throws `InvalidRequestError` on overflow so @hono/mcp returns 400)
 - `token-store.ts` — `TokenStore`: `issueAccessRefreshPair`, `lookupAccessToken`, `lookupRefreshToken`, `getTokenRecord` (any-kind by plaintext, used for ownership checks), `rotateRefresh`, `revoke`, `removeAllForClient`; all tokens stored by their `tokenHash` (SHA-256 hex of plaintext); enforces RFC 8707 resource binding, RFC 6749 §6 scope-subset-only on refresh, and refresh-token client binding (`rotateRefresh` requires `expectedClientId`); serializes refresh rotation through an internal `async-mutex` `_rotateLock` so concurrent rotations on the same plaintext can't both consume the token
 - `provider.ts` — `MintingOAuthServerProvider` implementing the SDK `OAuthServerProvider` interface; orchestrates the authorization code flow using the four stores; constructs the upstream OIDC authorize redirect, handles the callback, and issues tokens
-- `routes.ts` — Hono route handlers for `/oauth/callback` (receives upstream IdP redirect), `PUT /register/:clientId` (RFC 7592 client update), and `DELETE /register/:clientId` (RFC 7592 client delete); exports `buildDcrRateLimit` and `buildClientCap` middleware factory functions
+- `routes.ts` — Hono route handlers for `/oauth/callback` (receives upstream IdP redirect), `PUT /register/:clientId` (RFC 7592 client update), and `DELETE /register/:clientId` (RFC 7592 client delete); exports `buildDcrRateLimit({trustProxy})` (key derivation depends on the flag) and `buildClientCap` middleware factories plus the `MAX_REGISTERED_CLIENTS` constant (also imported by `build.ts` so the middleware fast-path and the atomic store-level enforcement share one value)
 - `metadata.ts` — `buildCustomizedAuthorizationServerMetadata(config)` returns RFC 8414 metadata override object; `buildAuthMetadataRouter(config)` returns the Hono router that serves `/.well-known/oauth-authorization-server` (mounted before `mcpAuthRouter` so first-match-wins overrides library defaults)
 - `cleanup.ts` — `AuthCleanup` background task (start/stop via `AbortController`); periodically removes clients with `lastTokenActivityAt < now - 90d` (cascade-removes their tokens), expired auth-request states, and expired auth-code states; mirrors the `SyncEngine` lifecycle contract
 - `build.ts` — `buildAuthContext(config, cache) → Promise<AuthContext | null>`; fail-fast startup builder that fetches OIDC discovery, assembles all stores, creates the provider, and returns the `AuthContext` bundle; returns `null` for stdio
@@ -161,8 +161,8 @@ Persisted to `DiskCache` as `oauth/tokens/${tokenHash}.json`. `tokenHash` is the
 
 - Public-client only: `token_endpoint_auth_method` must be `"none"` in every registration or update request; any other value is rejected with `invalid_client_metadata`.
 - The RAT is issued at registration as a random opaque token, hashed before storage, and returned in plaintext exactly once in the `201 Created` DCR response.
-- DCR rate-limit: 10 registrations per hour per IP address (enforced via `buildDcrRateLimit` in `routes.ts`).
-- Hard cap: maximum 50 registered clients (configurable; enforced via `buildClientCap` in `routes.ts`, which runs before `mcpAuthRouter` matches `/register`).
+- DCR rate-limit: 10 registrations per hour per IP address (enforced via `buildDcrRateLimit` in `routes.ts`). The per-request key is the connection's remote address by default (`trustProxy: false`); set `MCP_TRUST_PROXY=true` only when a sanitizing reverse proxy is in front, otherwise an attacker can spoof `x-forwarded-for` per request and bypass the limit.
+- Hard cap: maximum `MAX_REGISTERED_CLIENTS` (50) registered clients. Enforced in two places: `buildClientCap` middleware (`routes.ts`) returns a fast-path 429 for the common single-request overflow, and `DiskClientRegistrationStore.registerClient` does the authoritative atomic check inside `DiskCache.tryPutOAuthClient` (under the same `_writeLock` as the put). The atomic path returns 400 `invalid_request` for the race case — both observers passed the middleware but only one wins the lock.
 - Cleanup: `AuthCleanup` marks clients with `lastTokenActivityAt < now - DCR_CLIENT_STALE_DAYS` as stale and removes them along with all their tokens; the background task runs on a configurable interval.
 
 ### HTTP surface

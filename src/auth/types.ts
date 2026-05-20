@@ -57,6 +57,16 @@ export const ResolvedOAuthConfigSchema = z.object({
   allowedAlgs: z.array(z.string()).readonly(),
   clientId: z.string().min(1),
   clientSecret: z.string().min(1),
+  /**
+   * When true, the DCR rate-limiter derives its per-request key from
+   * `x-forwarded-for` / `cf-connecting-ip`. Use only behind a reverse proxy
+   * that sanitizes those headers (Tailscale Funnel, k8s ingress, Cloudflare);
+   * otherwise a client can spoof a fresh address per request and bypass the
+   * 10/hr DCR limit. When false (default), the rate-limiter uses the
+   * connection's remote address — safe for a direct-exposed server, but
+   * collapses every request to a single bucket if a proxy is in front.
+   */
+  trustProxy: z.boolean(),
   allowlist: z.object({
     emails: z.array(z.string().email()).readonly(),
     subs: z.array(z.string()).readonly(),

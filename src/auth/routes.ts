@@ -231,35 +231,72 @@ function redirectToClient(c: Context, redirectUri: string, params: Record<string
 }
 
 /**
- * Rate-limit middleware for DCR (POST /register).
- * 10 requests per hour per IP (from x-forwarded-for or cf-connecting-ip).
+ * Hard cap on the number of registered DCR clients. Both the fast-path
+ * `buildClientCap` middleware (non-atomic 429 rejection) and the authoritative
+ * atomic check inside `DiskClientRegistrationStore.registerClient` read from
+ * this single constant so they can't drift apart.
  */
-export function buildDcrRateLimit(): MiddlewareHandler {
+export const MAX_REGISTERED_CLIENTS = 50;
+
+/**
+ * Rate-limit middleware for DCR (POST /register). 10 requests / hour / IP.
+ *
+ * `trustProxy` controls how the per-request key is derived:
+ * - `true` — honor `x-forwarded-for` (leftmost) then `cf-connecting-ip`,
+ *   falling back to the connection's remote address. Use only behind a
+ *   reverse proxy that sanitizes those headers (Tailscale Funnel, an
+ *   ingress controller, Cloudflare, etc.); otherwise an attacker can spoof
+ *   a fresh address per request and trivially bypass the limit.
+ * - `false` — derive the key from the connection's remote address only.
+ *   This is the safe default for a direct-exposed server; behind a proxy
+ *   it lumps every request under the proxy's address, so flip to `true`
+ *   once a trusted proxy is in place.
+ */
+export function buildDcrRateLimit(options: { readonly trustProxy: boolean }): MiddlewareHandler {
   return rateLimiter({
     windowMs: 60 * 60 * 1000, // 1 hour
     limit: 10,
     keyGenerator: (c) => {
-      // RFC 7239: x-forwarded-for is comma-separated; take the leftmost (client IP)
-      const xForwardedFor = c.req.header("x-forwarded-for");
-      if (xForwardedFor) {
-        return xForwardedFor.split(",")[0]?.trim() ?? "unknown";
+      if (options.trustProxy) {
+        // RFC 7239: x-forwarded-for is comma-separated; take the leftmost (client IP).
+        const xForwardedFor = c.req.header("x-forwarded-for");
+        if (xForwardedFor) {
+          const first = xForwardedFor.split(",")[0]?.trim();
+          if (first) return first;
+        }
+        const cf = c.req.header("cf-connecting-ip");
+        if (cf) return cf;
       }
-      return (
-        c.req.header("cf-connecting-ip") ??
-        // Production deployments terminate TLS at a reverse proxy that sets
-        // x-forwarded-for. Local dev without a proxy lumps everyone under "unknown";
-        // documented in auth CLAUDE.md (Phase 8).
-        "unknown"
-      );
+      return getRemoteAddress(c) ?? "unknown";
     },
     standardHeaders: "draft-6",
   });
 }
 
 /**
+ * Read the connection's remote address from the underlying node:http
+ * IncomingMessage that `@hono/node-server` attaches to `c.env`. Returns
+ * `null` when running under a Hono adapter that doesn't expose it (e.g.
+ * `app.request()` in tests, or non-Node adapters).
+ */
+function getRemoteAddress(c: Context): string | null {
+  const env = c.env as { incoming?: { socket?: { remoteAddress?: string } } } | undefined;
+  return env?.incoming?.socket?.remoteAddress ?? null;
+}
+
+/**
  * Client cap middleware for DCR.
  * Returns 429 if the server has reached the max registered clients.
  * Only runs on POST /register.
+ *
+ * This is a non-atomic read-before-write — under concurrent registration
+ * traffic, two requests can both observe a pre-cap count, both pass the
+ * middleware, and both proceed to registration. The authoritative atomic
+ * cap is enforced inside `DiskClientRegistrationStore.registerClient` (under
+ * `DiskCache`'s write mutex), which throws `InvalidRequestError` on overflow.
+ * This middleware exists as a fast-path 429 for the common single-request
+ * case where the cap is obviously hit; the atomic store check closes the
+ * race window for the rest.
  */
 export function buildClientCap(cache: DiskCache, max: number): MiddlewareHandler {
   return async (c, next) => {

@@ -11,6 +11,7 @@
  */
 
 import { randomUUID, timingSafeEqual } from "node:crypto";
+import { InvalidRequestError } from "@modelcontextprotocol/sdk/server/auth/errors.js";
 import { generateOpaqueToken, hashTokenForStorage, nowSeconds } from "./tokens.js";
 import { validateRegistration, validateUpdate } from "./dcr-validator.js";
 import { OAuthClientNotFoundError } from "./errors.js";
@@ -75,6 +76,15 @@ export class DiskClientRegistrationStore {
   constructor(
     private readonly _cache: DiskCache,
     private readonly _publicUrl: string,
+    /**
+     * Hard cap on the number of registered clients. Enforced atomically
+     * inside `registerClient` (via `DiskCache.tryPutOAuthClient`) so concurrent
+     * registrations can't bypass it through a count-then-put race. Defaults to
+     * `Infinity` for tests / callers that don't supply a cap; production wires
+     * the cap from config (typically 50, matching the `buildClientCap`
+     * middleware's fast-path 429 limit).
+     */
+    private readonly _maxClients: number = Number.POSITIVE_INFINITY,
   ) {}
 
   /**
@@ -120,7 +130,16 @@ export class DiskClientRegistrationStore {
       lastTokenActivityAt: now,
     };
 
-    await this._cache.putOAuthClient(stored);
+    // Atomic check+put under DiskCache's write mutex. The `buildClientCap`
+    // middleware does a non-atomic read-before-write earlier in the request
+    // pipeline (cheap fast-path 429 when the cap is obviously hit); this is
+    // the authoritative race-safe enforcement. On overflow we throw an OAuth
+    // `InvalidRequestError` so @hono/mcp's DCR handler returns 400 with the
+    // standard `invalid_request` error code (rather than a 500).
+    const result = await this._cache.tryPutOAuthClient(stored, this._maxClients);
+    if (!result.ok) {
+      throw new InvalidRequestError(`client registration cap reached (${result.currentCount.toString()} clients)`);
+    }
     await this._cache.flush();
 
     return storedToWire(stored, {

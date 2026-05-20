@@ -275,6 +275,7 @@ describe("OIDC Presets", () => {
           clientId: "test-client",
           clientSecret: "test-secret",
           publicUrl: "https://example.com",
+          trustProxy: false,
           allowlist: { emails: ["test@example.com"], subs: [] },
         };
         return initialResult.map(() => updatedConfig);

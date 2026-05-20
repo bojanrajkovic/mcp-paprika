@@ -82,6 +82,7 @@ describe("MintingOAuthServerProvider", () => {
         clientSecret: "stub-client-secret",
         scopes: ["openid", "email"],
         emailVerifiedPolicy: "if-present",
+        trustProxy: false,
         allowlist: { emails: ["user@example.com"], subs: [] },
         allowedAlgs: ["RS256"],
       },

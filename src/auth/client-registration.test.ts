@@ -96,6 +96,63 @@ describe("DiskClientRegistrationStore", () => {
 
       expect(thrownError).toBeInstanceOf(OAuthMetadataValidationError);
     });
+
+    it("enforces maxClients atomically against concurrent registrations", async () => {
+      // Pre-seed 49 OAuthClients directly via DiskCache. Then fire 5 concurrent
+      // registerClient calls via Promise.allSettled. With maxClients=50 enforced
+      // atomically inside the DiskCache write lock, exactly 1 must succeed and 4
+      // must be rejected with an OAuthError whose errorCode is "invalid_request".
+      //
+      // The middleware-level cap check (buildClientCap) is a non-atomic
+      // read-before-write — concurrent requests can both observe the same
+      // pre-cap count. The authoritative enforcement has to be in the same
+      // critical section as the write. This test would pass trivially if we
+      // only had the middleware (since none of these requests go through the
+      // middleware), and would fail without an atomic check inside registerClient.
+      const capped = new DiskClientRegistrationStore(cache, "https://m.example.com", 50);
+
+      for (let i = 0; i < 49; i++) {
+        await cache.putOAuthClient({
+          clientId: randomUUID(),
+          clientIdIssuedAt: 0,
+          registrationAccessTokenHash: "a".repeat(64),
+          tokenEndpointAuthMethod: "none",
+          grantTypes: ["authorization_code"],
+          responseTypes: ["code"],
+          redirectUris: ["https://x.example.com/cb"],
+          scope: "openid",
+          createdAt: 0,
+          updatedAt: 0,
+          lastTokenActivityAt: 0,
+        });
+      }
+      await cache.flush();
+
+      const meta = makeWireRegistration();
+      const results = await Promise.allSettled([
+        capped.registerClient(meta),
+        capped.registerClient(meta),
+        capped.registerClient(meta),
+        capped.registerClient(meta),
+        capped.registerClient(meta),
+      ]);
+
+      const fulfilled = results.filter((r) => r.status === "fulfilled");
+      const rejected = results.filter((r) => r.status === "rejected");
+      expect(fulfilled.length).toBe(1);
+      expect(rejected.length).toBe(4);
+
+      // Every rejection should carry the OAuth errorCode "invalid_request" so
+      // @hono/mcp surfaces it as a 400 rather than a 500.
+      for (const r of rejected) {
+        const reason = (r as PromiseRejectedResult).reason as { errorCode?: string };
+        expect(reason.errorCode).toBe("invalid_request");
+      }
+
+      // The disk index must show exactly 50 clients, not 51-54.
+      const all = await cache.getAllOAuthClients();
+      expect(all.length).toBe(50);
+    });
   });
 
   describe("getClient", () => {

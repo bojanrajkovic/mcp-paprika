@@ -490,6 +490,37 @@ describe("Configuration loading", () => {
         );
       });
 
+      it("MCP_TRUST_PROXY defaults to false and parses 'true'/'false' string envs", () => {
+        // Default: not set → false.
+        process.env["PAPRIKA_EMAIL"] = "user@test.com";
+        process.env["PAPRIKA_PASSWORD"] = "secret";
+        process.env["MCP_TRANSPORT"] = "http";
+        process.env["MCP_PUBLIC_URL"] = "https://m.example.com";
+        process.env["MCP_OIDC_PRESET"] = "google";
+        process.env["MCP_OIDC_CLIENT_ID"] = "client123";
+        process.env["MCP_OIDC_CLIENT_SECRET"] = "secret456";
+        process.env["MCP_ALLOWED_EMAILS"] = "alice@example.com";
+
+        loadConfig(tempDir).match(
+          (config) => expect(config.oauth?.trustProxy).toBe(false),
+          (error) => expect.fail(`expected Ok, got Err: ${error.reason}`),
+        );
+
+        // Explicit "true" → true.
+        process.env["MCP_TRUST_PROXY"] = "true";
+        loadConfig(tempDir).match(
+          (config) => expect(config.oauth?.trustProxy).toBe(true),
+          (error) => expect.fail(`expected Ok, got Err: ${error.reason}`),
+        );
+
+        // Explicit "false" → false.
+        process.env["MCP_TRUST_PROXY"] = "false";
+        loadConfig(tempDir).match(
+          (config) => expect(config.oauth?.trustProxy).toBe(false),
+          (error) => expect.fail(`expected Ok, got Err: ${error.reason}`),
+        );
+      });
+
       it("filters empty entries from comma-separated values", () => {
         process.env["PAPRIKA_EMAIL"] = "user@test.com";
         process.env["PAPRIKA_PASSWORD"] = "secret";

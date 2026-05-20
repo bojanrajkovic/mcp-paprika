@@ -86,6 +86,7 @@ Full env-var reference:
 | `MCP_OIDC_SCOPES`                | no                            | Override preset's scope list (comma-separated; default `openid email profile`)    |
 | `MCP_OIDC_EMAIL_VERIFIED_POLICY` | no                            | `strict` (default), `skip`, or `if-present`                                       |
 | `MCP_OIDC_ALLOWED_ALGS`          | no                            | Override preset's allowed id_token signing algorithms (comma-separated)           |
+| `MCP_TRUST_PROXY`                | no                            | `true` to trust `X-Forwarded-For` / `CF-Connecting-IP` for the DCR rate-limit key. Default `false` (safe for direct exposure). Set `true` only behind a sanitizing reverse proxy (k8s ingress, Tailscale Funnel, Cloudflare). |
 
 Example startup command:
 

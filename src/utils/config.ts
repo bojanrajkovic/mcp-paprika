@@ -27,6 +27,7 @@ const ENV_VAR_HINTS: Readonly<Record<string, string>> = {
   "oauth.allowedAlgs": "MCP_OIDC_ALLOWED_ALGS",
   "oauth.clientId": "MCP_OIDC_CLIENT_ID",
   "oauth.clientSecret": "MCP_OIDC_CLIENT_SECRET",
+  "oauth.trustProxy": "MCP_TRUST_PROXY",
   "oauth.allowlist.emails": "MCP_ALLOWED_EMAILS",
   "oauth.allowlist.subs": "MCP_ALLOWED_SUBS",
 };
@@ -164,6 +165,11 @@ export const paprikaConfigSchema = z
         allowedAlgs: listField.optional(),
         clientId: z.string().min(1).optional(),
         clientSecret: z.string().min(1).optional(),
+        // Trust X-Forwarded-For / CF-Connecting-IP for the DCR rate-limit key.
+        // Default false (safe for direct exposure). Set true behind a sanitizing
+        // reverse proxy (k8s ingress, Tailscale Funnel, Cloudflare). See
+        // src/auth/routes.ts:buildDcrRateLimit for why this matters.
+        trustProxy: booleanField.default(false),
         allowlist: z
           .object({
             emails: listField.default([]),
@@ -306,6 +312,7 @@ function buildEnvOverrides(env: NodeJS.ProcessEnv): Record<string, unknown> {
   if (env["MCP_OIDC_ALLOWED_ALGS"] !== undefined) oauth["allowedAlgs"] = env["MCP_OIDC_ALLOWED_ALGS"];
   if (env["MCP_OIDC_CLIENT_ID"] !== undefined) oauth["clientId"] = env["MCP_OIDC_CLIENT_ID"];
   if (env["MCP_OIDC_CLIENT_SECRET"] !== undefined) oauth["clientSecret"] = env["MCP_OIDC_CLIENT_SECRET"];
+  if (env["MCP_TRUST_PROXY"] !== undefined) oauth["trustProxy"] = env["MCP_TRUST_PROXY"];
 
   if (env["MCP_ALLOWED_EMAILS"] !== undefined) allowlist["emails"] = env["MCP_ALLOWED_EMAILS"];
   if (env["MCP_ALLOWED_SUBS"] !== undefined) allowlist["subs"] = env["MCP_ALLOWED_SUBS"];

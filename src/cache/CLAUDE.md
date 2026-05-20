@@ -1,6 +1,6 @@
 # Caching Layer
 
-Last verified: 2026-05-18
+Last verified: 2026-05-20 (tryPutOAuthClient added 2026-05-20)
 
 ## Files
 
@@ -103,12 +103,13 @@ Diagnostic messages are written directly to `process.stderr`.
 
 **OAuth client methods:**
 
-| Method                        | Signature                                          | Description                                                                  |
-| ----------------------------- | -------------------------------------------------- | ---------------------------------------------------------------------------- |
-| `putOAuthClient(client)`      | `(client: OAuthClient): Promise<void>`             | Locks, buffers to pending map, sets index placeholder; flush writes the file |
-| `getOAuthClient(clientId)`    | `(clientId: string): Promise<OAuthClient \| null>` | Pending-first; disk fallback; validates via `OAuthClientSchema`              |
-| `removeOAuthClient(clientId)` | `(clientId: string): Promise<void>`                | Locked; unlinks file (idempotent); removes index + pending entries           |
-| `getAllOAuthClients()`        | `(): Promise<Array<OAuthClient>>`                  | Pending shadows disk merge                                                   |
+| Method                           | Signature                                                                                          | Description                                                                                                                                                                     |
+| -------------------------------- | -------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `putOAuthClient(client)`         | `(client: OAuthClient): Promise<void>`                                                             | Locks, buffers to pending map, sets index placeholder; flush writes the file                                                                                                    |
+| `tryPutOAuthClient(client, max)` | `(client: OAuthClient, maxClients: number): Promise<{ok:true} \| {ok:false, currentCount:number}>` | Atomic check-and-put under `_writeLock`: counts current clients (re-puts of an existing `clientId` skip the count) and only writes if under `max`. Used by DCR cap enforcement. |
+| `getOAuthClient(clientId)`       | `(clientId: string): Promise<OAuthClient \| null>`                                                 | Pending-first; disk fallback; validates via `OAuthClientSchema`                                                                                                                 |
+| `removeOAuthClient(clientId)`    | `(clientId: string): Promise<void>`                                                                | Locked; unlinks file (idempotent); removes index + pending entries                                                                                                              |
+| `getAllOAuthClients()`           | `(): Promise<Array<OAuthClient>>`                                                                  | Pending shadows disk merge                                                                                                                                                      |
 
 **OAuth token methods:**
 

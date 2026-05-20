@@ -439,6 +439,10 @@ function makeOAuthConfig(): PaprikaConfig {
       allowedAlgs: ["RS256"],
       clientId: "test-upstream-client",
       clientSecret: "test-upstream-secret",
+      // Tests drive different x-forwarded-for values to exercise the per-IP
+      // rate-limit window; with trustProxy=false the limiter would collapse
+      // everyone into one bucket and AC5.1 / AC5.2 would interfere.
+      trustProxy: true,
       allowlist: { emails: ["user@example.com"], subs: [] },
     },
   } as unknown as PaprikaConfig;

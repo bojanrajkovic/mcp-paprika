@@ -45,6 +45,7 @@ function makeRoutesConfig(ctx: RoutesCtx, overrides: RoutesOverrides = {}): Auth
       presetName: null,
       scopes: ["openid", "email"],
       emailVerifiedPolicy: "if-present",
+      trustProxy: true,
       allowlist: { emails: ["user@example.com"], subs: [] },
       allowedAlgs: ["RS256"],
     },
@@ -378,7 +379,7 @@ describe("Auth Routes", () => {
       // PLAN says (phase_06.md:702-718): The `buildDcrRateLimit()` middleware limits POST /register to 10 requests per hour per IP.
       // Test: 10 requests from same IP succeed (201), 11th is rejected (429).
       const testApp = new Hono();
-      testApp.use("/register", buildDcrRateLimit());
+      testApp.use("/register", buildDcrRateLimit({ trustProxy: true }));
       testApp.post("/register", (c) => c.json({ ok: true }, 201));
 
       const ip = "203.0.113.7";
@@ -411,7 +412,7 @@ describe("Auth Routes", () => {
     it("different IPs have separate rate-limit windows", async () => {
       // PLAN says (phase_06.md:719): After 10 requests from one IP, a request from a different IP should not be rate-limited.
       const testApp = new Hono();
-      testApp.use("/register", buildDcrRateLimit());
+      testApp.use("/register", buildDcrRateLimit({ trustProxy: true }));
       testApp.post("/register", (c) => c.json({ ok: true }, 201));
 
       const ip1 = "203.0.113.7";
@@ -440,6 +441,41 @@ describe("Auth Routes", () => {
         body: JSON.stringify({ client_name: "Client IP2", redirect_uris: ["https://x/"] }),
       });
       expect(resIp2.status).toBe(201);
+    });
+
+    it("trustProxy=false ignores x-forwarded-for (every request collapses to one bucket)", async () => {
+      // The default is `trustProxy: false`. With that, the rate-limiter must NOT
+      // honor an attacker-controlled `x-forwarded-for`; otherwise a client could
+      // vary the header per request and trivially bypass the 10/hr limit. Under
+      // Hono's `app.request()` no socket address is available either, so all
+      // requests fall back to the "unknown" bucket and share the 10-request budget.
+      const testApp = new Hono();
+      testApp.use("/register", buildDcrRateLimit({ trustProxy: false }));
+      testApp.post("/register", (c) => c.json({ ok: true }, 201));
+
+      // First 10 requests succeed, even though each carries a different XFF.
+      for (let i = 0; i < 10; i++) {
+        const res = await testApp.request("/register", {
+          method: "POST",
+          headers: {
+            "x-forwarded-for": `203.0.113.${(i + 1).toString()}`,
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({ client_name: `Client ${i}`, redirect_uris: ["https://x/"] }),
+        });
+        expect(res.status).toBe(201);
+      }
+
+      // 11th request — different XFF, but still rate-limited because XFF is ignored.
+      const blocked = await testApp.request("/register", {
+        method: "POST",
+        headers: {
+          "x-forwarded-for": "203.0.113.99",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ client_name: "spoofed", redirect_uris: ["https://x/"] }),
+      });
+      expect(blocked.status).toBe(429);
     });
   });
 

@@ -415,6 +415,40 @@ export class DiskCache {
     });
   }
 
+  /**
+   * Atomically counts the current OAuth-client population and puts `client`
+   * only if it fits under `maxClients`. Both the count and the put happen
+   * inside the same `_writeLock` acquisition, so concurrent callers can't
+   * both observe count=49, both pass the check, and both write — the race
+   * window that a separate count-then-put would leave open.
+   *
+   * Returns:
+   * - `{ ok: true }` if the client was buffered (caller still owes a `flush()`).
+   * - `{ ok: false, currentCount }` if the cap is already reached; nothing
+   *   was written. `currentCount` lets callers log/diagnose.
+   *
+   * Updating an existing client (same `clientId`) is treated as a re-put,
+   * not a new client — the count check uses the pre-existing index size.
+   */
+  tryPutOAuthClient(
+    client: OAuthClient,
+    maxClients: number,
+  ): Promise<{ readonly ok: true } | { readonly ok: false; readonly currentCount: number }> {
+    return this._writeLock.runExclusive(() => {
+      if (this._index === null) {
+        throw new Error("DiskCache: tryPutOAuthClient() called before init()");
+      }
+      const alreadyKnown = Object.prototype.hasOwnProperty.call(this._index.oauthClients, client.clientId);
+      const currentCount = Object.keys(this._index.oauthClients).length;
+      if (!alreadyKnown && currentCount >= maxClients) {
+        return { ok: false, currentCount } as const;
+      }
+      this._pendingOAuthClients.set(client.clientId, client);
+      this._index.oauthClients[client.clientId] = "";
+      return { ok: true } as const;
+    });
+  }
+
   async getOAuthClient(clientId: string): Promise<OAuthClient | null> {
     return this._readJsonFile(
       this._oauthClientsDir,

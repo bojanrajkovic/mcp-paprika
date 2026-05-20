@@ -75,6 +75,7 @@ function makeE2eConfig(overrides: Partial<PaprikaConfig> = {}): PaprikaConfig {
       allowedAlgs: ["RS256"],
       clientId: "test-upstream-client",
       clientSecret: "test-upstream-secret",
+      trustProxy: true,
       allowlist: { emails: [ALLOWED_EMAIL], subs: [] },
     },
     ...overrides,
