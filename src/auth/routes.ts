@@ -255,28 +255,31 @@ export const MAX_REGISTERED_CLIENTS = 50;
  * Pick the upstream token-endpoint authentication method based on the IdP's
  * discovery metadata.
  *
- * - If the IdP advertises `client_secret_post`, we use it (matches the long-
- *   standing default; widest IdP support).
- * - Else if it advertises `client_secret_basic`, we use Basic — required by
- *   compliant IdPs that don't support post (some Entra / Okta tenants default
+ * - If the IdP advertises `client_secret_post`, use it (widest IdP support;
+ *   what Google/Entra/Okta/Auth0/Keycloak presets actually advertise).
+ * - Else if it advertises `client_secret_basic`, use Basic — required by
+ *   compliant IdPs that don't support post (some Entra/Okta tenants default
  *   to Basic only).
- * - If discovery doesn't include the field at all, fall back to post: the
- *   field is optional in RFC 8414 and most well-known IdPs accept both. (RFC
- *   6749 §2.3.1 says Basic "MUST" be supported, but every IdP we've actually
- *   integrated against accepts both; defaulting to post preserves backward
- *   compatibility for self-hosted IdPs whose discovery is silent on this.)
+ * - If discovery doesn't include the field at all, fall back to **Basic**.
+ *   RFC 8414 makes the field optional and RFC 6749 §2.3.1 specifies that
+ *   every spec-compliant authorization server MUST accept HTTP Basic auth at
+ *   the token endpoint. Defaulting to post was non-compliant for IdPs whose
+ *   discovery is silent and that only accept Basic — every such login would
+ *   fail at callback time.
  *
  * Exported for unit testing.
  */
 export function pickTokenAuthMethod(supported: ReadonlyArray<string> | undefined): "post" | "basic" {
-  if (supported === undefined || supported.length === 0) return "post";
+  if (supported === undefined || supported.length === 0) return "basic";
   if (supported.includes("client_secret_post")) return "post";
   if (supported.includes("client_secret_basic")) return "basic";
   // Discovery advertises only methods we don't support (private_key_jwt,
-  // tls_client_auth, none, …). Best effort: post — the request will fail and
-  // /oauth/callback's catch-all logs `upstream code exchange failed`, which is
-  // the correct outcome.
-  return "post";
+  // tls_client_auth, none, …). Best effort: Basic, per RFC 6749 §2.3.1's
+  // "MUST support Basic" requirement on compliant servers. The request will
+  // still likely fail and /oauth/callback's catch-all logs `upstream code
+  // exchange failed`, but trying the spec-mandated method is better than
+  // attempting one neither side promised to support.
+  return "basic";
 }
 
 /**

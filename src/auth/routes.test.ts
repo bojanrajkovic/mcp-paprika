@@ -653,11 +653,14 @@ describe("Auth Routes", () => {
   });
 
   describe("pickTokenAuthMethod (RFC 8414 token_endpoint_auth_methods_supported)", () => {
-    it("returns 'post' when discovery field is undefined", () => {
-      // The metadata field is optional in RFC 8414; falling through to post
-      // preserves the long-standing default and works against every IdP
-      // we've actually integrated against (Google, Entra, etc.).
-      expect(pickTokenAuthMethod(undefined)).toBe("post");
+    it("returns 'basic' when discovery field is undefined (RFC 6749 §2.3.1)", () => {
+      // RFC 8414 makes token_endpoint_auth_methods_supported optional, and
+      // RFC 6749 §2.3.1 specifies that every compliant authorization server
+      // MUST accept HTTP Basic at the token endpoint. Defaulting to Basic
+      // when discovery is silent is the spec-mandated behavior; defaulting
+      // to post would silently fail against Basic-only IdPs whose discovery
+      // omits the field.
+      expect(pickTokenAuthMethod(undefined)).toBe("basic");
     });
 
     it("returns 'post' when discovery advertises both methods", () => {
@@ -676,12 +679,14 @@ describe("Auth Routes", () => {
       expect(pickTokenAuthMethod(["client_secret_post"])).toBe("post");
     });
 
-    it("returns 'post' as best-effort when discovery advertises only unsupported methods", () => {
-      // private_key_jwt, tls_client_auth, etc. We don't support those —
-      // the request will fail server-side and surface as `upstream code
-      // exchange failed`, which is the correct outcome.
-      expect(pickTokenAuthMethod(["private_key_jwt", "tls_client_auth"])).toBe("post");
-      expect(pickTokenAuthMethod([])).toBe("post");
+    it("returns 'basic' as best-effort when discovery advertises only unsupported methods", () => {
+      // private_key_jwt, tls_client_auth, etc. We don't support those — the
+      // request will likely fail server-side, but trying the spec-mandated
+      // Basic is better than attempting a method neither side promised. An
+      // empty list is treated as "field absent" and also falls through to
+      // Basic per RFC 6749 §2.3.1.
+      expect(pickTokenAuthMethod(["private_key_jwt", "tls_client_auth"])).toBe("basic");
+      expect(pickTokenAuthMethod([])).toBe("basic");
     });
   });
 });
