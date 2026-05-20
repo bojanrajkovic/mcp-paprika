@@ -294,7 +294,7 @@ export function pickTokenAuthMethod(supported: ReadonlyArray<string> | undefined
  *   once a trusted proxy is in place.
  */
 export function buildDcrRateLimit(options: { readonly trustProxy: boolean }): MiddlewareHandler {
-  return rateLimiter({
+  const inner = rateLimiter({
     windowMs: 60 * 60 * 1000, // 1 hour
     limit: 10,
     keyGenerator: (c) => {
@@ -312,6 +312,16 @@ export function buildDcrRateLimit(options: { readonly trustProxy: boolean }): Mi
     },
     standardHeaders: "draft-6",
   });
+  // Hono mounts the middleware on the `/register` prefix, but RFC 7592
+  // `PUT /register/:clientId` (update) and `DELETE /register/:clientId`
+  // (delete) share that prefix. Without the gate, those legitimate
+  // client-management calls also burn the 10/hr bucket and start returning
+  // 429 once a single client has been registered enough. Mirrors the same
+  // gate buildClientCap applies.
+  return async (c, next) => {
+    if (c.req.path !== "/register" || c.req.method !== "POST") return next();
+    return inner(c, next);
+  };
 }
 
 /**

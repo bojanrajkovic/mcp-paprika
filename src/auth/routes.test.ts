@@ -466,6 +466,53 @@ describe("Auth Routes", () => {
   });
 
   describe("DCR rate-limit middleware (AC5.1)", () => {
+    it("RFC 7592 PUT/DELETE /register/:id do NOT consume the DCR rate-limit bucket", async () => {
+      // The middleware is mounted on the `/register` prefix, which Hono also
+      // matches against /register/:id. Without the method+path gate inside
+      // buildDcrRateLimit, RFC 7592 management calls would burn the 10/hr
+      // bucket after a burst of registrations and start returning 429 for
+      // legitimate updates and deletes. Drive 10 POSTs first to exhaust the
+      // bucket, then assert PUT and DELETE on /register/:id still pass through.
+      const testApp = new Hono();
+      testApp.use("/register", buildDcrRateLimit({ trustProxy: true }));
+      testApp.post("/register", (c) => c.json({ ok: true }, 201));
+      testApp.put("/register/:id", (c) => c.json({ ok: true, op: "put" }, 200));
+      testApp.delete("/register/:id", (c) => c.body(null, 204));
+
+      const ip = "203.0.113.99";
+      for (let i = 0; i < 10; i++) {
+        const res = await testApp.request("/register", {
+          method: "POST",
+          headers: { "x-forwarded-for": ip, "content-type": "application/json" },
+          body: JSON.stringify({ client_name: `Client ${i}`, redirect_uris: ["https://x/"] }),
+        });
+        expect(res.status).toBe(201);
+      }
+
+      // PUT /register/:id from the SAME ip must succeed — bucket only covers POST /register.
+      const putRes = await testApp.request("/register/some-client-id", {
+        method: "PUT",
+        headers: { "x-forwarded-for": ip, "content-type": "application/json" },
+        body: JSON.stringify({ client_name: "updated" }),
+      });
+      expect(putRes.status).toBe(200);
+
+      // DELETE /register/:id from the SAME ip must succeed too.
+      const delRes = await testApp.request("/register/some-client-id", {
+        method: "DELETE",
+        headers: { "x-forwarded-for": ip },
+      });
+      expect(delRes.status).toBe(204);
+
+      // Sanity: an 11th POST from this ip still hits the limit.
+      const blocked = await testApp.request("/register", {
+        method: "POST",
+        headers: { "x-forwarded-for": ip, "content-type": "application/json" },
+        body: JSON.stringify({ client_name: "extra", redirect_uris: ["https://x/"] }),
+      });
+      expect(blocked.status).toBe(429);
+    });
+
     it("AC5.1: buildDcrRateLimit middleware enforces 10 req/hour limit", async () => {
       // PLAN says (phase_06.md:702-718): The `buildDcrRateLimit()` middleware limits POST /register to 10 requests per hour per IP.
       // Test: 10 requests from same IP succeed (201), 11th is rejected (429).

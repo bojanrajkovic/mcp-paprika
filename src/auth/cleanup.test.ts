@@ -157,8 +157,81 @@ describe("sweepOnce", () => {
 
     expect(result.clientsRemoved).toBe(0);
     expect(result.tokensRemoved).toBe(0);
+    expect(result.expiredTokensRemoved).toBe(0);
     expect(result.authRequestsRemoved).toBe(0);
     expect(result.authCodesRemoved).toBe(0);
+  });
+
+  it("sweepOnce evicts expired OAuth tokens whose owning client is still active", async () => {
+    // `rotateRefresh` deletes the prior refresh token but not the prior access
+    // token, so an active session leaves one expired access record on disk per
+    // refresh. The stale-client cascade only fires after 90 days of inactivity,
+    // which means an actively-refreshing client accumulates expired access
+    // tokens indefinitely between cascade ticks. This sweep is the bounding
+    // mechanism.
+    const clock = { v: 1_700_000_000 };
+    const activeClientId = "00000000-0000-0000-0000-000000000030";
+    await cache.putOAuthClient(makeOAuthClient({ clientId: activeClientId, lastTokenActivityAt: clock.v - 86400 }));
+
+    // Expired access token belonging to the active client — should be removed.
+    const expiredAccess = makeOAuthToken({
+      clientId: activeClientId,
+      kind: "access",
+      expiresAt: clock.v - 60, // expired 60s ago
+    });
+    // Live access token, also active client — must be preserved.
+    const liveAccess = makeOAuthToken({
+      clientId: activeClientId,
+      kind: "access",
+      expiresAt: clock.v + 3600,
+    });
+    // Live refresh token — must be preserved.
+    const liveRefresh = makeOAuthToken({
+      clientId: activeClientId,
+      kind: "refresh",
+      expiresAt: clock.v + 30 * 86400,
+    });
+    await cache.putOAuthToken(expiredAccess);
+    await cache.putOAuthToken(liveAccess);
+    await cache.putOAuthToken(liveRefresh);
+    await cache.flush();
+
+    const authRequests = new AuthRequestStore();
+    const authCodes = new AuthCodeStore();
+    const cleanup = new AuthCleanup(clientStore, tokenStore, cache, authRequests, authCodes, () => clock.v);
+    const result = await cleanup.sweepOnce();
+
+    expect(result.expiredTokensRemoved).toBe(1);
+    expect(result.clientsRemoved).toBe(0); // client wasn't stale
+    expect(await cache.getOAuthToken(expiredAccess.tokenHash)).toBeNull();
+    expect(await cache.getOAuthToken(liveAccess.tokenHash)).not.toBeNull();
+    expect(await cache.getOAuthToken(liveRefresh.tokenHash)).not.toBeNull();
+  });
+
+  it("expired tokens belonging to a stale client are counted in the cascade, not double-counted", async () => {
+    // The cascade in step (1) removes ALL tokens for the stale client.
+    // Without the partition, the orphan sweep in step (3) would also try to
+    // remove the same already-deleted token and either double-count or
+    // duplicate the disk op. Assert tokensRemoved (cascade) covers it and
+    // expiredTokensRemoved (orphan sweep) does not.
+    const clock = { v: 1_700_000_000 };
+    const staleClientId = "00000000-0000-0000-0000-000000000040";
+    await cache.putOAuthClient(makeOAuthClient({ clientId: staleClientId, lastTokenActivityAt: clock.v - 91 * 86400 }));
+    const expiredTokenForStaleClient = makeOAuthToken({
+      clientId: staleClientId,
+      expiresAt: clock.v - 60,
+    });
+    await cache.putOAuthToken(expiredTokenForStaleClient);
+    await cache.flush();
+
+    const authRequests = new AuthRequestStore();
+    const authCodes = new AuthCodeStore();
+    const cleanup = new AuthCleanup(clientStore, tokenStore, cache, authRequests, authCodes, () => clock.v);
+    const result = await cleanup.sweepOnce();
+
+    expect(result.clientsRemoved).toBe(1);
+    expect(result.tokensRemoved).toBe(1);
+    expect(result.expiredTokensRemoved).toBe(0); // not double-counted
   });
 });
 

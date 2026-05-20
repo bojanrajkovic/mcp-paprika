@@ -7,6 +7,11 @@
  * Responsibilities (run every CLEANUP_INTERVAL_MS = 6h):
  * 1. Remove stale DCR clients (lastTokenActivityAt > 90 days old) + cascade their tokens.
  * 2. Sweep expired in-memory AuthRequestStore and AuthCodeStore entries.
+ * 3. Sweep expired OAuth tokens (expiresAt < now). `rotateRefresh` deletes the
+ *    previous refresh token but not the previous access token — every refresh
+ *    leaves a soon-to-expire access record behind. Without this sweep,
+ *    long-running clients accumulate one expired access token per refresh
+ *    until their owning client itself goes stale (90d).
  *
  * Public `sweepOnce()` is exposed for direct testing and for startup use.
  */
@@ -62,21 +67,26 @@ export class AuthCleanup {
   async sweepOnce(): Promise<{
     clientsRemoved: number;
     tokensRemoved: number;
+    expiredTokensRemoved: number;
     authRequestsRemoved: number;
     authCodesRemoved: number;
   }> {
+    const now = this._now();
+
     // (1) Stale DCR clients: lastTokenActivityAt older than DCR_CLIENT_STALE_DAYS (90d)
-    const cutoff = this._now() - DCR_CLIENT_STALE_DAYS * 86400;
+    const cutoff = now - DCR_CLIENT_STALE_DAYS * 86400;
     const allClients = await this._cache.getAllOAuthClients();
     const stale = allClients.filter((c) => c.lastTokenActivityAt < cutoff);
 
-    // Fetch tokens once and precompute per-client counts so the cascade loop is O(stale + tokens)
-    // instead of O(stale × tokens). At the 50-client cap with ~hundreds of tokens this is a small
-    // win, but the code is simpler and the runtime is bounded regardless of how often the loop fires.
+    // Fetch tokens once. Precompute per-client counts for the cascade loop and
+    // collect expired tokens for the orphan sweep in (3). One pass over all
+    // tokens, then we partition by stale-client cascade vs. expired-orphan.
+    const allTokens = await this._cache.getAllOAuthTokens();
     const tokensByClient = new Map<string, number>();
-    for (const t of await this._cache.getAllOAuthTokens()) {
+    for (const t of allTokens) {
       tokensByClient.set(t.clientId, (tokensByClient.get(t.clientId) ?? 0) + 1);
     }
+    const staleClientIds = new Set(stale.map((c) => c.clientId));
 
     let tokensRemoved = 0;
     for (const c of stale) {
@@ -89,9 +99,23 @@ export class AuthCleanup {
     const authRequestsRemoved = this._authRequests.sweepExpired();
     const authCodesRemoved = this._authCodes.sweepExpired();
 
+    // (3) Expired-token sweep — remove tokens past `expiresAt` whose owning
+    //     client is still active (stale-client cascade already covers the
+    //     others). `rotateRefresh` deletes the old refresh but not the old
+    //     access; without this an active session leaves one expired access
+    //     token on disk per refresh forever.
+    let expiredTokensRemoved = 0;
+    const expiredOrphans = allTokens.filter((t) => t.expiresAt < now && !staleClientIds.has(t.clientId));
+    if (expiredOrphans.length > 0) {
+      await Promise.all(expiredOrphans.map((t) => this._cache.removeOAuthToken(t.tokenHash)));
+      await this._cache.flush();
+      expiredTokensRemoved = expiredOrphans.length;
+    }
+
     return {
       clientsRemoved: stale.length,
       tokensRemoved,
+      expiredTokensRemoved,
       authRequestsRemoved,
       authCodesRemoved,
     };
