@@ -1,6 +1,6 @@
 # OAuth 2.1 Authorization Layer
 
-Last verified: 2026-05-18
+Last verified: 2026-05-19
 
 ## Purpose
 
@@ -21,7 +21,7 @@ This module is loaded only when `MCP_TRANSPORT=http`. In stdio mode, `buildAuthC
 - `auth-request-store.ts` — In-memory 5-minute TTL store for `AuthRequestState` (keyed by our state parameter, carries PKCE challenge + nonce + client + redirect context). Extends `TtlStore`; exposes `put` / `consume` (single-use).
 - `auth-code-store.ts` — In-memory 60-second TTL store for `AuthCodeState` (keyed by our authorization code; holds the verified identity). Extends `TtlStore`; adds `peek()` (read-without-consume, lazy-evicts expired entries). Single-use consume enforced via `TtlStore.consume`. Distinct from `auth-request-store.ts` to keep pre- and post-callback state separate.
 - `client-registration.ts` — `DiskClientRegistrationStore` implementing the SDK `OAuthRegisteredClientsStore` interface; persists registered clients to `DiskCache`'s `oauth/clients/` namespace; enforces `registrationAccessTokenHash` on management endpoints; issues UUIDv4 `clientId` (delegated to SDK)
-- `token-store.ts` — `TokenStore`: `issueAccessRefreshPair`, `lookupAccessToken`, `rotateRefresh`, `revoke`, `removeAllForClient`; all tokens stored by their `tokenHash` (SHA-256 hex of plaintext); enforces RFC 8707 resource binding and RFC 6749 §6 scope-subset-only on refresh
+- `token-store.ts` — `TokenStore`: `issueAccessRefreshPair`, `lookupAccessToken`, `lookupRefreshToken`, `getTokenRecord` (any-kind by plaintext, used for ownership checks), `rotateRefresh`, `revoke`, `removeAllForClient`; all tokens stored by their `tokenHash` (SHA-256 hex of plaintext); enforces RFC 8707 resource binding, RFC 6749 §6 scope-subset-only on refresh, and refresh-token client binding (`rotateRefresh` requires `expectedClientId`); serializes refresh rotation through an internal `async-mutex` `_rotateLock` so concurrent rotations on the same plaintext can't both consume the token
 - `provider.ts` — `MintingOAuthServerProvider` implementing the SDK `OAuthServerProvider` interface; orchestrates the authorization code flow using the four stores; constructs the upstream OIDC authorize redirect, handles the callback, and issues tokens
 - `routes.ts` — Hono route handlers for `/oauth/callback` (receives upstream IdP redirect), `PUT /register/:clientId` (RFC 7592 client update), and `DELETE /register/:clientId` (RFC 7592 client delete); exports `buildDcrRateLimit` and `buildClientCap` middleware factory functions
 - `metadata.ts` — `buildCustomizedAuthorizationServerMetadata(config)` returns RFC 8414 metadata override object; `buildAuthMetadataRouter(config)` returns the Hono router that serves `/.well-known/oauth-authorization-server` (mounted before `mcpAuthRouter` so first-match-wins overrides library defaults)
@@ -132,7 +132,7 @@ Persisted to `DiskCache` as `oauth/tokens/${tokenHash}.json`. `tokenHash` is the
 - HMAC algorithms (HS256, HS384, HS512) are never accepted for id_token verification — `allowedAlgs` defaults to `["RS256", "ES256"]` or the preset's value; HS\* algorithms must be explicitly and deliberately added to override.
 - Allowed algorithms are configurable per preset (e.g., keycloak allows `["RS256", "ES256"]`) and can be further overridden via `MCP_OIDC_ALLOWED_ALGS`; the intersection with the upstream IdP's advertised algorithms is checked at startup (fail-fast if empty).
 - All upstream OIDC metadata URLs (issuer, authorization endpoint, token endpoint, JWKS URI) must use `https://` — `loadDiscovery` enforces this; `http://` URLs cause a startup failure.
-- DCR `redirect_uris` are permitted to use `http://localhost*` — this is the only explicit HTTP exemption; all other redirect URIs must be HTTPS.
+- DCR `redirect_uris` are permitted to use `http://localhost`, `http://127.0.0.1`, and `http://[::1]` — these are the only explicit HTTP exemptions; all other redirect URIs must be HTTPS. Node's WHATWG URL parser preserves the brackets on IPv6 hostnames (`new URL("http://[::1]/").hostname === "[::1]"`), so the validator compares against the bracketed form.
 - Bearer tokens are 32 bytes from `crypto.randomBytes`, encoded as base64url (43 characters); total entropy is 256 bits regardless of prefix.
 - SHA-256 is used for all storage hashes; there is no pepper or HMAC hardening (see `tokens.ts` comment for the future-hardening note).
 - Plaintext tokens never appear on disk — the token-store layer hashes before calling `putOAuthToken`; `OAuthTokenSchema` stores only `tokenHash`.
@@ -153,6 +153,9 @@ Persisted to `DiskCache` as `oauth/tokens/${tokenHash}.json`. `tokenHash` is the
 - Auth-request state TTL: 5 minutes, single-use via `consume` in the `/oauth/callback` route handler (`routes.ts`). The `AuthCodeStore` is consumed in `MintingOAuthServerProvider.exchangeAuthorizationCode`; `challengeForAuthorizationCode` only peeks.
 - RFC 8707 resource binding: the `resource` parameter from the authorization request is bound to both the access token and the refresh token; `TokenStore.rotateRefresh` (called via `exchangeRefreshToken`) enforces that the `resource` field matches, and `exchangeAuthorizationCode` passes through the resource claim.
 - RFC 6749 §6 scope subsetting: `exchangeRefreshToken` only allows the requested scope to be equal to or a strict subset of the originally granted scope — scope widening is rejected.
+- Refresh-token client binding (OAuth 2.1 §4.3.1): `TokenStore.rotateRefresh` requires an `expectedClientId` and rejects with `invalid_grant` if it doesn't match the stored token's `clientId` — a registered client cannot rotate another client's refresh token. The same `invalid_grant` is returned for both "unknown token" and "wrong client" so existence isn't leaked.
+- Revocation client binding (RFC 7009 §2.2): `MintingOAuthServerProvider.revokeToken` looks up the token via `TokenStore.getTokenRecord` and silently no-ops when the calling client doesn't own it. The HTTP response stays 200/empty either way so existence isn't leaked.
+- RFC 6749 §4.1.3 / token-request redirect_uri: `exchangeAuthorizationCode` requires the `redirect_uri` parameter to be present and exactly match the value carried over from `/authorize`. Omitting it is rejected with `invalid_grant` (a stolen code from a different endpoint cannot be redeemed).
 
 ### DCR
 
@@ -168,6 +171,8 @@ Persisted to `DiskCache` as `oauth/tokens/${tokenHash}.json`. `tokenHash` is the
 - The issuer URL is passed to the SDK as a **string** (not a `URL` object) to work around a library URL-object bug that would otherwise append a trailing slash and break exact-match comparisons with `MCP_PUBLIC_URL`.
 - RFC 9207 `iss` is included in both success and error redirects from `/oauth/callback`; this is enforced in the callback route handler.
 - The `bearerAuth` middleware used to protect `/mcp` is imported from `@hono/mcp` (not Hono core); on auth failure it emits `WWW-Authenticate: Bearer error="Unauthorized", error_description="Unauthorized", resource_metadata="<origin>/.well-known/oauth-protected-resource"`. **Operational caveat:** the `<origin>` here is `new URL(c.req.url).origin` — i.e., the URL the _request_ arrived at, NOT the configured `MCP_PUBLIC_URL`. Behind a reverse proxy that doesn't forward `X-Forwarded-Proto` / `X-Forwarded-Host`, the 401 hint can point at an internal-only origin and a client following it would fail to reach the protected-resource doc. Ensure the proxy forwards those headers (and Hono is configured to trust them via `app.use(trustProxy(...))` or equivalent) so `c.req.url` reflects the public origin.
+- The RFC 7592 `PUT /register/{clientId}` and `DELETE /register/{clientId}` routes match the `Authorization: Bearer …` scheme case-insensitively (RFC 6750 §2.1). The RAT plaintext itself is compared by SHA-256 hash, so the scheme casing is the only loose part.
+- Allowlist denials in `/oauth/callback` redirect back to the client with a generic `error_description="identity not allowed by server policy"` — the full denial reason (email + sub + which rule) goes to operator stderr only. Don't re-introduce identity claims into the redirect: the URL is forwarded to claude.ai and ends up in the user's browser history.
 - Rate-limit and cap middleware are mounted on the Hono app router **before** `mcpAuthRouter` so that `/register` requests are subject to both before the SDK's registration handler runs.
 
 ### AppContext
@@ -183,6 +188,7 @@ Persisted to `DiskCache` as `oauth/tokens/${tokenHash}.json`. `tokenHash` is the
 ### Concurrency
 
 - `DiskCache` `async-mutex` serializes all OAuth writes (clients and tokens); concurrent calls queue in FIFO order; a failed operation does not poison subsequent ones.
+- `TokenStore.rotateRefresh` also wraps its full lookup → validate → consume → mint sequence in its own `async-mutex` `_rotateLock`. The DiskCache mutex alone is not sufficient: the window between `lookupRefreshToken` (a read) and `removeOAuthToken` (a write) lets two concurrent rotations both observe the same token as valid. Single mutex per store is fine — rotations are bounded by `ACCESS_TOKEN_TTL_SECONDS` (~one per active session per 24h).
 - In-memory stores (`AuthRequestStore`, `AuthCodeStore`) assume single-threaded Node.js event-loop execution; no per-store mutex is needed because all operations are synchronous (no `await` within a store method).
 
 ## Dependencies

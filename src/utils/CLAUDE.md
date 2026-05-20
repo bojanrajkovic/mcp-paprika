@@ -1,6 +1,6 @@
 # Cross-Cutting Utilities
 
-Last verified: 2026-05-18 (log.ts helpers added 2026-05-18; xdg XDG-override behavior added 2026-05-18)
+Last verified: 2026-05-19 (publicUrl trailing-slash strip added 2026-05-19; log.ts helpers added 2026-05-18; xdg XDG-override behavior added 2026-05-18)
 
 ## Purpose
 
@@ -93,6 +93,8 @@ oauth: {
 ```
 
 **`listField` helper** — module-internal Zod field that accepts either an array of strings or a comma-separated string (e.g., from an env var) and normalizes to a trimmed, non-empty `string[]`. Used for `oauth.scopes`, `oauth.allowedAlgs`, `oauth.allowlist.emails`, and `oauth.allowlist.subs`.
+
+**`publicUrl` normalization** — the `oauth.publicUrl` schema strips trailing slashes via `.transform(v => v.replace(/\/+$/, ""))` at parse time. Downstream code can concatenate `${publicUrl}/oauth/callback`, `${publicUrl}/register/<id>`, etc. without producing `//` — required for exact upstream IdP redirect-URI matching.
 
 **Cross-field `.superRefine()` invariant** — enforced at root schema level when `transport === "http"`:
 
