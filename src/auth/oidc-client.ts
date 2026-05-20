@@ -30,6 +30,13 @@ const DiscoveryDocSchema = z.object({
   id_token_signing_alg_values_supported: z.array(z.string()).min(1),
   response_types_supported: z.array(z.string()).optional(),
   scopes_supported: z.array(z.string()).optional(),
+  // RFC 8414 §2; OIDC clients use this to pick how to authenticate against the
+  // token endpoint. We support `client_secret_post` (preferred — current default)
+  // and `client_secret_basic` (RFC 6749 §2.3.1 — every spec-compliant AS must
+  // accept it). The field is optional in the spec; when absent, our default
+  // matches RFC's "MUST support Basic" by sending Basic only when the IdP
+  // explicitly advertises it, otherwise we keep the post-style we use today.
+  token_endpoint_auth_methods_supported: z.array(z.string()).optional(),
 });
 
 export type DiscoveryDoc = z.infer<typeof DiscoveryDocSchema>;

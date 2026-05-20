@@ -74,7 +74,12 @@ describe("OIDC Presets", () => {
       );
     });
 
-    it("returns err when scopes is missing", () => {
+    it("defaults scopes to ['openid','email','profile'] when not provided", () => {
+      // Custom-discovery only requires discoveryUrl. The other three fields
+      // are documented as optional in the config schema and the README walks
+      // through the "set MCP_OIDC_DISCOVERY_URL directly" path without
+      // mentioning them, so missing values fall back to the same defaults
+      // every preset uses (openid + email + profile).
       const result = resolvePreset(undefined, {
         discoveryUrl: "https://example.com/.well-known/openid-configuration",
         emailVerifiedPolicy: "strict",
@@ -82,12 +87,14 @@ describe("OIDC Presets", () => {
       });
 
       result.match(
-        () => expect.fail("Expected Err but got Ok"),
-        (error) => expect(error.message).toContain("scopes"),
+        (config) => {
+          expect(config.scopes).toEqual(["openid", "email", "profile"]);
+        },
+        (error) => expect.fail(`Expected Ok but got Err: ${error.message}`),
       );
     });
 
-    it("returns err when emailVerifiedPolicy is missing", () => {
+    it("defaults emailVerifiedPolicy to 'strict' when not provided", () => {
       const result = resolvePreset(undefined, {
         discoveryUrl: "https://example.com/.well-known/openid-configuration",
         scopes: ["openid"],
@@ -95,12 +102,14 @@ describe("OIDC Presets", () => {
       });
 
       result.match(
-        () => expect.fail("Expected Err but got Ok"),
-        (error) => expect(error.message).toContain("emailVerifiedPolicy"),
+        (config) => {
+          expect(config.emailVerifiedPolicy).toBe("strict");
+        },
+        (error) => expect.fail(`Expected Ok but got Err: ${error.message}`),
       );
     });
 
-    it("returns err when allowedAlgs is missing", () => {
+    it("defaults allowedAlgs to ['RS256'] when not provided", () => {
       const result = resolvePreset(undefined, {
         discoveryUrl: "https://example.com/.well-known/openid-configuration",
         scopes: ["openid"],
@@ -108,8 +117,29 @@ describe("OIDC Presets", () => {
       });
 
       result.match(
-        () => expect.fail("Expected Err but got Ok"),
-        (error) => expect(error.message).toContain("allowedAlgs"),
+        (config) => {
+          expect(config.allowedAlgs).toEqual(["RS256"]);
+        },
+        (error) => expect.fail(`Expected Ok but got Err: ${error.message}`),
+      );
+    });
+
+    it("accepts discoveryUrl alone — all three other fields default", () => {
+      // The minimum-viable custom-discovery setup: just MCP_OIDC_DISCOVERY_URL.
+      // All other fields default to safe values.
+      const result = resolvePreset(undefined, {
+        discoveryUrl: "https://example.com/.well-known/openid-configuration",
+      });
+
+      result.match(
+        (config) => {
+          expect(config.discoveryUrl).toBe("https://example.com/.well-known/openid-configuration");
+          expect(config.scopes).toEqual(["openid", "email", "profile"]);
+          expect(config.emailVerifiedPolicy).toBe("strict");
+          expect(config.allowedAlgs).toEqual(["RS256"]);
+          expect(config.presetName).toBeNull();
+        },
+        (error) => expect.fail(`Expected Ok but got Err: ${error.message}`),
       );
     });
 

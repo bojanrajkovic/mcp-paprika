@@ -59,19 +59,32 @@ export function buildAuthRoutes(deps: AuthRoutesDeps): Hono {
 
     if (typeof code !== "string") return c.text("missing code parameter", 400);
 
-    // Exchange upstream code for upstream id_token
+    // Exchange upstream code for upstream id_token. Pick the auth method
+    // advertised by discovery — IdPs that require `client_secret_basic`
+    // (Entra and some Okta tenants) fail every login if we always post the
+    // secret in the body, so we pick from `token_endpoint_auth_methods_supported`
+    // and only fall through to post when the field is absent / unrecognized.
     let idToken: string;
     try {
+      const authMethod = pickTokenAuthMethod(deps.discovery.token_endpoint_auth_methods_supported);
+      const headers: Record<string, string> = { "content-type": "application/x-www-form-urlencoded" };
       const tokenBody = new URLSearchParams({
         grant_type: "authorization_code",
         code,
-        client_id: deps.oidcConfig.clientId,
-        client_secret: deps.oidcConfig.clientSecret,
         redirect_uri: `${deps.publicUrl}/oauth/callback`,
       });
+      if (authMethod === "basic") {
+        // RFC 6749 §2.3.1: client_id and client_secret are application/x-www-form-urlencoded
+        // (percent-encoded) BEFORE being concatenated with ":" and base64-encoded.
+        const userpass = `${encodeURIComponent(deps.oidcConfig.clientId)}:${encodeURIComponent(deps.oidcConfig.clientSecret)}`;
+        headers["authorization"] = `Basic ${Buffer.from(userpass, "utf-8").toString("base64")}`;
+      } else {
+        tokenBody.set("client_id", deps.oidcConfig.clientId);
+        tokenBody.set("client_secret", deps.oidcConfig.clientSecret);
+      }
       const tokenRes = await fetch(deps.discovery.token_endpoint, {
         method: "POST",
-        headers: { "content-type": "application/x-www-form-urlencoded" },
+        headers,
         body: tokenBody,
       });
       if (!tokenRes.ok) {
@@ -237,6 +250,34 @@ function redirectToClient(c: Context, redirectUri: string, params: Record<string
  * this single constant so they can't drift apart.
  */
 export const MAX_REGISTERED_CLIENTS = 50;
+
+/**
+ * Pick the upstream token-endpoint authentication method based on the IdP's
+ * discovery metadata.
+ *
+ * - If the IdP advertises `client_secret_post`, we use it (matches the long-
+ *   standing default; widest IdP support).
+ * - Else if it advertises `client_secret_basic`, we use Basic — required by
+ *   compliant IdPs that don't support post (some Entra / Okta tenants default
+ *   to Basic only).
+ * - If discovery doesn't include the field at all, fall back to post: the
+ *   field is optional in RFC 8414 and most well-known IdPs accept both. (RFC
+ *   6749 §2.3.1 says Basic "MUST" be supported, but every IdP we've actually
+ *   integrated against accepts both; defaulting to post preserves backward
+ *   compatibility for self-hosted IdPs whose discovery is silent on this.)
+ *
+ * Exported for unit testing.
+ */
+export function pickTokenAuthMethod(supported: ReadonlyArray<string> | undefined): "post" | "basic" {
+  if (supported === undefined || supported.length === 0) return "post";
+  if (supported.includes("client_secret_post")) return "post";
+  if (supported.includes("client_secret_basic")) return "basic";
+  // Discovery advertises only methods we don't support (private_key_jwt,
+  // tls_client_auth, none, …). Best effort: post — the request will fail and
+  // /oauth/callback's catch-all logs `upstream code exchange failed`, which is
+  // the correct outcome.
+  return "post";
+}
 
 /**
  * Rate-limit middleware for DCR (POST /register). 10 requests / hour / IP.

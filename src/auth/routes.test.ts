@@ -1,7 +1,13 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { nowSeconds } from "./tokens.js";
 import { Hono } from "hono";
-import { buildAuthRoutes, buildDcrRateLimit, buildClientCap, type AuthRoutesDeps } from "./routes.js";
+import {
+  buildAuthRoutes,
+  buildDcrRateLimit,
+  buildClientCap,
+  pickTokenAuthMethod,
+  type AuthRoutesDeps,
+} from "./routes.js";
 import { DiskClientRegistrationStore } from "./client-registration.js";
 import { TokenStore } from "./token-store.js";
 import { AuthRequestStore } from "./auth-request-store.js";
@@ -69,7 +75,7 @@ describe("Auth Routes", () => {
 
   // useMswServer wires beforeAll(listen) + afterEach(resetHandlers + onReset) + afterAll(close).
   // oidcStub.handlers are passed as permanent handlers so resetHandlers() preserves them.
-  useMswServer([...oidcStub.handlers], { onReset: () => oidcStub.resetOverrides() });
+  const msw = useMswServer([...oidcStub.handlers], { onReset: () => oidcStub.resetOverrides() });
 
   beforeEach(async () => {
     const cacheDir = `/tmp/test-routes-${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -176,6 +182,91 @@ describe("Auth Routes", () => {
       expect(loc.searchParams.get("iss")).toBe("https://mcp.example.com");
       expect(loc.searchParams.get("state")).toBe("claude_state_success");
       expect(loc.searchParams.get("code")).toMatch(/^mcp_ac_/);
+    });
+
+    it("RFC 8414: uses HTTP Basic auth at upstream /token when discovery advertises only client_secret_basic", async () => {
+      // The IdP doc here only lists `client_secret_basic`. /oauth/callback must
+      // honor that and authenticate via Authorization: Basic — sending the
+      // secret in the body fails compliant IdPs like some Entra/Okta tenants.
+      // We capture the outbound request via an MSW handler override and assert
+      // both that the header is present AND that no `client_secret` appears in
+      // the body (the previous failure mode).
+      const realJwks = createJwksFor(makeDiscoveryDoc(oidcStub.issuer));
+
+      let capturedAuth: string | null | undefined;
+      let bodyHadSecret = true;
+      msw.use(
+        // Async import isn't allowed in the message body — use a module-scope import.
+        (await import("msw")).http.post(`${oidcStub.issuer}/token`, async ({ request }) => {
+          capturedAuth = request.headers.get("authorization");
+          const body = new URLSearchParams(await request.clone().text());
+          bodyHadSecret = body.has("client_secret");
+          if (capturedAuth?.toLowerCase().startsWith("basic ")) {
+            // Hand back to the existing stub by issuing a sub-request — simpler
+            // to mirror the stub's success path inline since we control the
+            // assertions on the way out.
+            return undefined; // fall through to the permanent handler
+          }
+          // Not Basic — the bug Codex flagged. Fail loudly so the test reports it.
+          const { HttpResponse } = await import("msw");
+          return HttpResponse.json({ error: "invalid_client" }, { status: 401 });
+        }),
+      );
+
+      const localAuthRequests = new AuthRequestStore();
+      const localAuthCodes = new AuthCodeStore();
+      const basicOnlyDiscovery = {
+        ...makeDiscoveryDoc(oidcStub.issuer),
+        token_endpoint_auth_methods_supported: ["client_secret_basic"],
+      };
+      const localApp = new Hono();
+      localApp.route(
+        "/",
+        buildAuthRoutes({
+          ...makeRoutesConfig(
+            { clientStore, tokenStore, authRequests, authCodes, oidcStubIssuer: oidcStub.issuer },
+            { jwks: realJwks, authRequests: localAuthRequests, authCodes: localAuthCodes },
+          ),
+          discovery: basicOnlyDiscovery,
+        }),
+      );
+
+      const ourState = "mcp_state_basic_test";
+      const ourNonce = "mcp_nonce_basic_test";
+      localAuthRequests.put(ourState, {
+        clientId: "stub-client-id",
+        codeChallenge: "challenge",
+        codeChallengeMethod: "S256",
+        redirectUri: "https://claude.ai/callback",
+        resource: "https://mcp.example.com/",
+        claudeState: "claude_state_basic",
+        scope: "openid email",
+        ourNonce,
+        createdAt: nowSeconds(),
+      });
+
+      const authResp = await fetch(
+        `${oidcStub.issuer}/authorize?nonce=${ourNonce}&state=${ourState}&redirect_uri=https://mcp.example.com/oauth/callback`,
+        { redirect: "manual" },
+      );
+      const upstreamCode = new URL(authResp.headers.get("location")!).searchParams.get("code")!;
+
+      const res = await localApp.request(`/oauth/callback?code=${upstreamCode}&state=${ourState}`);
+
+      expect(res.status).toBe(302);
+      const location = res.headers.get("location");
+      const loc = new URL(location!);
+      expect(loc.searchParams.get("code")).toMatch(/^mcp_ac_/); // success path
+
+      expect(capturedAuth).toMatch(/^Basic\s+[A-Za-z0-9+/=]+$/);
+      expect(bodyHadSecret).toBe(false);
+
+      // Decode the Basic header to confirm the credentials are the configured
+      // pair, properly form-urlencoded per RFC 6749 §2.3.1.
+      const decoded = Buffer.from(capturedAuth!.slice("Basic ".length), "base64").toString("utf-8");
+      const [u, p] = decoded.split(":");
+      expect(decodeURIComponent(u!)).toBe("stub-client-id");
+      expect(decodeURIComponent(p!)).toBe("stub-client-secret");
     });
 
     it("AC3.4: does NOT log id_token, only identity claims, on denial", async () => {
@@ -511,6 +602,39 @@ describe("Auth Routes", () => {
       expect(res51.status).toBe(429);
       const json = (await res51.json()) as Record<string, unknown>;
       expect(json["error_description"]).toContain("cap");
+    });
+  });
+
+  describe("pickTokenAuthMethod (RFC 8414 token_endpoint_auth_methods_supported)", () => {
+    it("returns 'post' when discovery field is undefined", () => {
+      // The metadata field is optional in RFC 8414; falling through to post
+      // preserves the long-standing default and works against every IdP
+      // we've actually integrated against (Google, Entra, etc.).
+      expect(pickTokenAuthMethod(undefined)).toBe("post");
+    });
+
+    it("returns 'post' when discovery advertises both methods", () => {
+      // post is the long-standing default — when both are offered, keep it.
+      expect(pickTokenAuthMethod(["client_secret_basic", "client_secret_post"])).toBe("post");
+    });
+
+    it("returns 'basic' when discovery advertises only client_secret_basic", () => {
+      // The codex finding case: IdPs that require Basic. Our previous default
+      // always sent the secret in the body, which those IdPs reject as
+      // `invalid_client`.
+      expect(pickTokenAuthMethod(["client_secret_basic"])).toBe("basic");
+    });
+
+    it("returns 'post' when discovery advertises only client_secret_post", () => {
+      expect(pickTokenAuthMethod(["client_secret_post"])).toBe("post");
+    });
+
+    it("returns 'post' as best-effort when discovery advertises only unsupported methods", () => {
+      // private_key_jwt, tls_client_auth, etc. We don't support those —
+      // the request will fail server-side and surface as `upstream code
+      // exchange failed`, which is the correct outcome.
+      expect(pickTokenAuthMethod(["private_key_jwt", "tls_client_auth"])).toBe("post");
+      expect(pickTokenAuthMethod([])).toBe("post");
     });
   });
 });

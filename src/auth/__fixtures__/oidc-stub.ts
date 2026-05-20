@@ -220,12 +220,27 @@ export function createOidcStub(opts: OidcStubOptions): OidcStub {
       return HttpResponse.redirect(callbackUrl, 302);
     }),
 
-    // POST /token — upstream token endpoint
+    // POST /token — upstream token endpoint. Accepts either
+    // `client_secret_post` (credentials in body) or `client_secret_basic`
+    // (credentials in Authorization header), mirroring real-world IdPs that
+    // support both per RFC 6749 §2.3.1.
     http.post(`${opts.issuer}/token`, async ({ request }) => {
       const body = new URLSearchParams(await request.text());
-      const clientId = body.get("client_id");
-      const clientSecret = body.get("client_secret");
       const code = body.get("code");
+
+      let clientId = body.get("client_id");
+      let clientSecret = body.get("client_secret");
+      if (clientId === null || clientSecret === null) {
+        const authHeader = request.headers.get("authorization");
+        if (authHeader?.toLowerCase().startsWith("basic ")) {
+          const decoded = Buffer.from(authHeader.slice("basic ".length), "base64").toString("utf-8");
+          const colon = decoded.indexOf(":");
+          if (colon > -1) {
+            clientId = decodeURIComponent(decoded.slice(0, colon));
+            clientSecret = decodeURIComponent(decoded.slice(colon + 1));
+          }
+        }
+      }
 
       // Validate client credentials
       if (clientId !== opts.clientId || clientSecret !== opts.clientSecret) {

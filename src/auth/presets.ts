@@ -127,29 +127,21 @@ export function resolvePreset(
   name: PresetName | undefined,
   overrides: PartialResolvedConfig,
 ): Result<PartialResolvedConfigResult, OAuthConfigError> {
-  // Path 1: Custom discovery URL (no preset)
+  // Path 1: Custom discovery URL (no preset). Only discoveryUrl is genuinely
+  // required — the README documents the "set MCP_OIDC_DISCOVERY_URL directly"
+  // path and the config schema marks scopes/policy/algs optional, so requiring
+  // them all here contradicts the documented setup. Default to the same safe
+  // values every preset uses for these fields.
   if (name === undefined) {
-    const missingFields: Array<keyof PartialResolvedConfig> = [];
-
-    if (!overrides.discoveryUrl) missingFields.push("discoveryUrl");
-    if (!overrides.scopes) missingFields.push("scopes");
-    if (!overrides.emailVerifiedPolicy) missingFields.push("emailVerifiedPolicy");
-    if (!overrides.allowedAlgs) missingFields.push("allowedAlgs");
-
-    if (missingFields.length > 0) {
-      // missingFields.length > 0 guarantees [0] is defined; the non-null assertion just
-      // satisfies noUncheckedIndexedAccess without inventing an unreachable fallback branch.
-      return err(OAuthConfigError.missingPresetOrDiscovery(missingFields[0]!));
+    if (!overrides.discoveryUrl) {
+      return err(OAuthConfigError.missingPresetOrDiscovery("discoveryUrl"));
     }
-
-    // All required fields present in overrides
-    // At this point, TypeScript knows all these are defined
     return ok({
       presetName: null,
-      discoveryUrl: overrides.discoveryUrl!,
-      scopes: overrides.scopes!,
-      emailVerifiedPolicy: overrides.emailVerifiedPolicy!,
-      allowedAlgs: overrides.allowedAlgs!,
+      discoveryUrl: overrides.discoveryUrl,
+      scopes: overrides.scopes ?? ["openid", "email", "profile"],
+      emailVerifiedPolicy: overrides.emailVerifiedPolicy ?? "strict",
+      allowedAlgs: overrides.allowedAlgs ?? ["RS256"],
     });
   }
 
