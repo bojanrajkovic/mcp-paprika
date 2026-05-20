@@ -10,6 +10,7 @@
  */
 
 import { err, ok, type Result } from "neverthrow";
+import { Mutex } from "async-mutex";
 import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
 import type { OAuthError } from "@modelcontextprotocol/sdk/server/auth/errors.js";
 import type { DiskCache } from "../cache/disk-cache.js";
@@ -38,6 +39,14 @@ export interface IssuedPair {
 // ============================================================================
 
 export class TokenStore {
+  // Serializes rotateRefresh across the whole store. The window between
+  // `lookupRefreshToken` and `removeOAuthToken` would otherwise let two
+  // concurrent rotations both observe the same token as valid and both mint
+  // new pairs (refresh-token replay). Single-mutex throughput is fine here:
+  // rotations are bounded by ACCESS_TOKEN_TTL_SECONDS (~once per 24h per
+  // session).
+  private readonly _rotateLock = new Mutex();
+
   constructor(
     private readonly _cache: DiskCache,
     private readonly _now: () => number = () => nowSeconds(),
@@ -162,70 +171,94 @@ export class TokenStore {
    */
   async rotateRefresh(
     plaintext: string,
+    expectedClientId: string,
     requestedScopes?: ReadonlyArray<string>,
     requestedResource?: string,
   ): Promise<Result<IssuedPair, OAuthError>> {
-    const existing = await this.lookupRefreshToken(plaintext);
-    if (existing === null) {
-      return err(OAuthTokenError.invalidGrant("refresh token invalid or expired"));
-    }
-
-    // RFC 8707 §2 — resource binding (AC2.10)
-    if (requestedResource !== undefined && requestedResource !== existing.resource) {
-      return err(OAuthTokenError.invalidTarget("requested resource does not match the granted resource"));
-    }
-
-    // RFC 6749 §6 — scope must be subset (no widening)
-    const grantedScopes = existing.scope.split(" ").filter(Boolean);
-    let newScope = existing.scope;
-    if (requestedScopes !== undefined) {
-      const grantedSet = new Set(grantedScopes);
-      const allSubset = requestedScopes.every((s) => grantedSet.has(s));
-      if (!allSubset) {
-        return err(OAuthTokenError.invalidScope("requested scope exceeds the granted scope"));
+    return this._rotateLock.runExclusive(async () => {
+      const existing = await this.lookupRefreshToken(plaintext);
+      if (existing === null) {
+        return err(OAuthTokenError.invalidGrant("refresh token invalid or expired"));
       }
-      newScope = requestedScopes.join(" ");
-    }
 
-    // Invalidate the old refresh token IMMEDIATELY (AC7.7)
-    await this._cache.removeOAuthToken(existing.tokenHash);
-    await this._cache.flush();
+      // RFC 6749 §6 / OAuth 2.1 §4.3.1 — a refresh_token may only be used by
+      // the client it was issued to. Returning a generic invalid_grant (not a
+      // distinct error) avoids leaking existence to a probing client.
+      if (existing.clientId !== expectedClientId) {
+        return err(OAuthTokenError.invalidGrant("refresh token invalid or expired"));
+      }
 
-    // Mint the new pair with rotation linkage
-    const accessPlain = generateOpaqueToken("mcp_at_");
-    const refreshPlain = generateOpaqueToken("mcp_rt_");
-    const now = this._now();
-    const accessExpiresAt = now + ACCESS_TOKEN_TTL_SECONDS;
-    const refreshExpiresAt = now + REFRESH_TOKEN_TTL_SECONDS;
+      // RFC 8707 §2 — resource binding (AC2.10)
+      if (requestedResource !== undefined && requestedResource !== existing.resource) {
+        return err(OAuthTokenError.invalidTarget("requested resource does not match the granted resource"));
+      }
 
-    await this._cache.putOAuthToken({
-      tokenHash: hashTokenForStorage(accessPlain),
-      kind: "access",
-      clientId: existing.clientId,
-      scope: newScope,
-      identity: existing.identity,
-      resource: existing.resource,
-      expiresAt: accessExpiresAt,
-      createdAt: now,
+      // RFC 6749 §6 — scope must be subset (no widening)
+      const grantedScopes = existing.scope.split(" ").filter(Boolean);
+      let newScope = existing.scope;
+      if (requestedScopes !== undefined) {
+        const grantedSet = new Set(grantedScopes);
+        const allSubset = requestedScopes.every((s) => grantedSet.has(s));
+        if (!allSubset) {
+          return err(OAuthTokenError.invalidScope("requested scope exceeds the granted scope"));
+        }
+        newScope = requestedScopes.join(" ");
+      }
+
+      // Invalidate the old refresh token IMMEDIATELY (AC7.7)
+      await this._cache.removeOAuthToken(existing.tokenHash);
+      await this._cache.flush();
+
+      // Mint the new pair with rotation linkage
+      const accessPlain = generateOpaqueToken("mcp_at_");
+      const refreshPlain = generateOpaqueToken("mcp_rt_");
+      const now = this._now();
+      const accessExpiresAt = now + ACCESS_TOKEN_TTL_SECONDS;
+      const refreshExpiresAt = now + REFRESH_TOKEN_TTL_SECONDS;
+
+      await this._cache.putOAuthToken({
+        tokenHash: hashTokenForStorage(accessPlain),
+        kind: "access",
+        clientId: existing.clientId,
+        scope: newScope,
+        identity: existing.identity,
+        resource: existing.resource,
+        expiresAt: accessExpiresAt,
+        createdAt: now,
+      });
+      await this._cache.putOAuthToken({
+        tokenHash: hashTokenForStorage(refreshPlain),
+        kind: "refresh",
+        clientId: existing.clientId,
+        scope: newScope,
+        identity: existing.identity,
+        resource: existing.resource,
+        expiresAt: refreshExpiresAt,
+        createdAt: now,
+        rotatedFromHash: existing.tokenHash, // audit linkage
+      });
+      await this._bumpLastActivity(existing.clientId, now);
+      await this._cache.flush();
+
+      return ok({
+        access: { plaintext: accessPlain, expiresAt: accessExpiresAt },
+        refresh: { plaintext: refreshPlain, expiresAt: refreshExpiresAt },
+      });
     });
-    await this._cache.putOAuthToken({
-      tokenHash: hashTokenForStorage(refreshPlain),
-      kind: "refresh",
-      clientId: existing.clientId,
-      scope: newScope,
-      identity: existing.identity,
-      resource: existing.resource,
-      expiresAt: refreshExpiresAt,
-      createdAt: now,
-      rotatedFromHash: existing.tokenHash, // audit linkage
-    });
-    await this._bumpLastActivity(existing.clientId, now);
-    await this._cache.flush();
+  }
 
-    return ok({
-      access: { plaintext: accessPlain, expiresAt: accessExpiresAt },
-      refresh: { plaintext: refreshPlain, expiresAt: refreshExpiresAt },
-    });
+  /**
+   * Looks up any OAuth token (access OR refresh) by plaintext, ignoring
+   * expiry. Returns null if the hash is unknown.
+   *
+   * Used by callers that need to check ownership (clientId) before acting on
+   * a token — e.g. RFC 7009 revocation must verify the requesting client
+   * owns the token before revoking, and a stale/expired token still has a
+   * real owner.
+   */
+  async getTokenRecord(plaintext: string): Promise<OAuthToken | null> {
+    const hash = hashTokenForStorage(plaintext);
+    return this._cache.getOAuthToken(hash);
   }
 
   /**

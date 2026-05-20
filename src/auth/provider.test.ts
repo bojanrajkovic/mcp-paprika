@@ -216,6 +216,21 @@ describe("MintingOAuthServerProvider", () => {
       ).rejects.toMatchObject({ errorCode: "invalid_grant" });
     });
 
+    it("RFC 6749 §4.1.3: omitted redirect_uri rejected when /authorize stored one", async () => {
+      // The /authorize request always includes redirect_uri (it's a required
+      // field on AuthCodeState). RFC 6749 §4.1.3 requires the matching
+      // redirect_uri to be presented at /token. Silently accepting requests
+      // that drop the parameter would let a stolen auth_code be redeemed from
+      // an unrelated endpoint.
+      const code = "test-code-omit-redirect";
+      const resourceUrl = new URL("https://mcp.example.com");
+      authCodes.put(code, makeProviderAuthCode(mockClient));
+
+      await expect(
+        provider.exchangeAuthorizationCode(mockClient, code, undefined, undefined, resourceUrl),
+      ).rejects.toMatchObject({ errorCode: "invalid_grant" });
+    });
+
     it("AC2.10: resource mismatch → invalid_target error", async () => {
       // PLAN says (phase_06.md:297): Stored AuthCodeState has resource="https://m.example.com/mcp"; call exchange with `resource: new URL("https://wrong/")`. Reject with `errorCode: "invalid_target"`.
       const code = "test-code-resource-mismatch";
@@ -243,7 +258,7 @@ describe("MintingOAuthServerProvider", () => {
         resource: "https://mcp.example.com/",
       });
 
-      const newPair = await provider.exchangeRefreshToken(undefined as any, pair.refresh.plaintext);
+      const newPair = await provider.exchangeRefreshToken(mockClient, pair.refresh.plaintext);
 
       expect(newPair.access_token).toMatch(/^mcp_at_/);
       expect(newPair.refresh_token).toMatch(/^mcp_rt_/);
@@ -251,9 +266,41 @@ describe("MintingOAuthServerProvider", () => {
       expect(newPair.expires_in).toBe(ACCESS_TOKEN_TTL_SECONDS);
 
       // Old refresh token is invalidated
-      await expect(provider.exchangeRefreshToken(undefined as any, pair.refresh.plaintext)).rejects.toMatchObject({
+      await expect(provider.exchangeRefreshToken(mockClient, pair.refresh.plaintext)).rejects.toMatchObject({
         errorCode: "invalid_grant",
       });
+    });
+
+    it("cross-client: requesting client ≠ stored clientId → invalid_grant, token preserved", async () => {
+      // Registered client A obtains a refresh_token; registered client B then
+      // submits a refresh-token grant carrying A's refresh_token. The provider
+      // MUST reject the rotation (otherwise B keeps A's session alive and
+      // receives access tokens for A's identity).
+      const pair = await tokenStore.issueAccessRefreshPair({
+        clientId: mockClient.client_id,
+        identity: makeVerifiedIdentity({ email: "user@example.com", sub: "user-sub-123" }),
+        scope: "openid email",
+        resource: "https://mcp.example.com/",
+      });
+
+      const otherClient = await clientStore.registerClient({
+        client_name: "Other Client",
+        redirect_uris: ["https://other.example.com/callback"],
+      });
+
+      await expect(
+        provider.exchangeRefreshToken(
+          {
+            client_id: otherClient.client_id,
+            redirect_uris: ["https://other.example.com/callback"],
+          } as OAuthClientInformationFull,
+          pair.refresh.plaintext,
+        ),
+      ).rejects.toMatchObject({ errorCode: "invalid_grant" });
+
+      // The owning client can still use its refresh token.
+      const ownerResult = await provider.exchangeRefreshToken(mockClient, pair.refresh.plaintext);
+      expect(ownerResult.access_token).toMatch(/^mcp_at_/);
     });
 
     it("AC2.10: mismatched resource → invalid_target", async () => {
@@ -266,12 +313,7 @@ describe("MintingOAuthServerProvider", () => {
       });
 
       await expect(
-        provider.exchangeRefreshToken(
-          undefined as any,
-          pair.refresh.plaintext,
-          undefined,
-          new URL("https://b.example.com"),
-        ),
+        provider.exchangeRefreshToken(mockClient, pair.refresh.plaintext, undefined, new URL("https://b.example.com")),
       ).rejects.toMatchObject({ errorCode: "invalid_target" });
     });
   });
@@ -312,7 +354,7 @@ describe("MintingOAuthServerProvider", () => {
         resource: "https://mcp.example.com/",
       });
 
-      await provider.revokeToken({} as any, {
+      await provider.revokeToken(mockClient, {
         token: pair.access.plaintext,
         token_type_hint: "access_token",
       });
@@ -321,6 +363,38 @@ describe("MintingOAuthServerProvider", () => {
       await expect(provider.verifyAccessToken(pair.access.plaintext)).rejects.toMatchObject({
         errorCode: "invalid_token",
       });
+    });
+
+    it("RFC 7009 §2.2: caller client mismatched → silently no-op, token still valid", async () => {
+      // RFC 7009 §2.1: "If the server is unable to locate the token using the
+      // given hint, it MUST extend its search across all of its supported
+      // token types"; §2.2: "An authorization server MAY revoke its own
+      // tokens, but the requesting client must be the same as the client
+      // associated with the token." Mismatch must NOT revoke (and must not
+      // leak existence).
+      const pair = await tokenStore.issueAccessRefreshPair({
+        clientId: mockClient.client_id,
+        identity: makeVerifiedIdentity({ email: "user@example.com", sub: "user-sub-123" }),
+        scope: "openid email",
+        resource: "https://mcp.example.com/",
+      });
+
+      const otherClient = await clientStore.registerClient({
+        client_name: "Other Client",
+        redirect_uris: ["https://other.example.com/callback"],
+      });
+
+      await provider.revokeToken(
+        {
+          client_id: otherClient.client_id,
+          redirect_uris: ["https://other.example.com/callback"],
+        } as OAuthClientInformationFull,
+        { token: pair.access.plaintext, token_type_hint: "access_token" },
+      );
+
+      // Token belongs to mockClient — it MUST still be valid.
+      const stillValid = await provider.verifyAccessToken(pair.access.plaintext);
+      expect(stillValid.clientId).toBe(mockClient.client_id);
     });
 
     it("idempotent — revoking unknown token returns void without throw", async () => {

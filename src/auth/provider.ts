@@ -105,8 +105,12 @@ export class MintingOAuthServerProvider implements OAuthServerProvider {
     const state = this._authCodes.consume(authorizationCode);
     if (state === null) throw new InvalidGrantError("authorization code consumed or expired"); // AC2.11
     if (state.clientId !== client.client_id) throw new InvalidGrantError("clientId mismatch");
-    if (redirectUri !== undefined && redirectUri !== state.redirectUri) {
-      throw new InvalidGrantError("redirect_uri mismatch");
+    // RFC 6749 §4.1.3: if the /authorize request included redirect_uri (it
+    // always does in our flow — AuthCodeState requires it), the token request
+    // MUST include and match the same value. Allowing omission lets a stolen
+    // code be redeemed against a different endpoint.
+    if (redirectUri === undefined || redirectUri !== state.redirectUri) {
+      throw new InvalidGrantError("redirect_uri missing or mismatch");
     }
     if (resource !== undefined && resource.toString() !== state.resource) {
       // RFC 8707 - AC2.10.
@@ -130,12 +134,15 @@ export class MintingOAuthServerProvider implements OAuthServerProvider {
   }
 
   async exchangeRefreshToken(
-    _client: OAuthClientInformationFull,
+    client: OAuthClientInformationFull,
     refreshToken: string,
     scopes?: Array<string>,
     resource?: URL,
   ): Promise<OAuthTokens> {
-    const result = await this._tokenStore.rotateRefresh(refreshToken, scopes, resource?.toString());
+    // RFC 6749 §6 / OAuth 2.1 §4.3.1 — a refresh_token belongs to the client
+    // it was issued to. TokenStore.rotateRefresh enforces that by comparing
+    // expectedClientId to the stored record (atomically under its mutex).
+    const result = await this._tokenStore.rotateRefresh(refreshToken, client.client_id, scopes, resource?.toString());
     return result.match(
       (pair) => ({
         access_token: pair.access.plaintext,
@@ -155,8 +162,17 @@ export class MintingOAuthServerProvider implements OAuthServerProvider {
     return info;
   }
 
-  async revokeToken(_client: OAuthClientInformationFull, request: OAuthTokenRevocationRequest): Promise<void> {
+  async revokeToken(client: OAuthClientInformationFull, request: OAuthTokenRevocationRequest): Promise<void> {
+    // RFC 7009 §2.1: "If the server is unable to locate the token using the
+    // given hint, it MUST extend its search across all of its supported token
+    // types" and §2.2: "The authorization server first validates the client
+    // credentials [...] and then verifies whether the token was issued to the
+    // client". A token issued to a different client MUST NOT be revoked;
+    // returning void either way (no existence leak) preserves §2.2's privacy
+    // intent.
+    const record = await this._tokenStore.getTokenRecord(request.token);
+    if (record === null) return;
+    if (record.clientId !== client.client_id) return;
     await this._tokenStore.revoke(request.token);
-    // Always returns void (200 from library); no existence leak.
   }
 }

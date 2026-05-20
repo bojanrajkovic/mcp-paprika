@@ -217,7 +217,7 @@ describe("TokenStore", () => {
       const input = makeTokenStoreInput();
       const { refresh: r1 } = await store.issueAccessRefreshPair(input);
 
-      const result = await store.rotateRefresh(r1.plaintext);
+      const result = await store.rotateRefresh(r1.plaintext, input.clientId);
 
       result.match(
         (pair) => {
@@ -230,7 +230,7 @@ describe("TokenStore", () => {
       );
 
       // PLAN says (phase_05.md:32): old refresh now invalid
-      const second = await store.rotateRefresh(r1.plaintext);
+      const second = await store.rotateRefresh(r1.plaintext, input.clientId);
       const errorCode = second.match(
         () => null,
         (e) => e.errorCode,
@@ -243,7 +243,12 @@ describe("TokenStore", () => {
       const { refresh } = await store.issueAccessRefreshPair(input);
 
       // PLAN says (phase_05.md:21): requested resource does not match → invalid_target
-      const result = await store.rotateRefresh(refresh.plaintext, undefined, "https://other.example.com");
+      const result = await store.rotateRefresh(
+        refresh.plaintext,
+        input.clientId,
+        undefined,
+        "https://other.example.com",
+      );
 
       const errorCode = result.match(
         () => null,
@@ -256,7 +261,7 @@ describe("TokenStore", () => {
       const input = makeTokenStoreInput({ resource: "https://m.example.com" });
       const { refresh } = await store.issueAccessRefreshPair(input);
 
-      const result = await store.rotateRefresh(refresh.plaintext, undefined, "https://m.example.com");
+      const result = await store.rotateRefresh(refresh.plaintext, input.clientId, undefined, "https://m.example.com");
 
       result.match(
         (pair) => {
@@ -270,7 +275,7 @@ describe("TokenStore", () => {
       const input = makeTokenStoreInput({ scope: "read" });
       const { refresh } = await store.issueAccessRefreshPair(input);
 
-      const result = await store.rotateRefresh(refresh.plaintext, ["read", "write"]);
+      const result = await store.rotateRefresh(refresh.plaintext, input.clientId, ["read", "write"]);
 
       const errorCode = result.match(
         () => null,
@@ -283,7 +288,7 @@ describe("TokenStore", () => {
       const input = makeTokenStoreInput({ scope: "read write delete" });
       const { refresh, access: a1 } = await store.issueAccessRefreshPair(input);
 
-      const result = await store.rotateRefresh(refresh.plaintext, ["read", "write"]);
+      const result = await store.rotateRefresh(refresh.plaintext, input.clientId, ["read", "write"]);
 
       result.match(
         (pair) => {
@@ -307,7 +312,7 @@ describe("TokenStore", () => {
       const input = makeTokenStoreInput();
       const { refresh: r1 } = await store.issueAccessRefreshPair(input);
 
-      const result = await store.rotateRefresh(r1.plaintext);
+      const result = await store.rotateRefresh(r1.plaintext, input.clientId);
 
       const r2Plaintext = result.match(
         (p) => p.refresh.plaintext,
@@ -320,13 +325,56 @@ describe("TokenStore", () => {
     });
 
     it("returns invalid_grant when refresh token is missing/invalid", async () => {
-      const result = await store.rotateRefresh("mcp_rt_doesnotexist");
+      const result = await store.rotateRefresh("mcp_rt_doesnotexist", "00000000-0000-0000-0000-000000000001");
 
       const errorCode = result.match(
         () => null,
         (e) => e.errorCode,
       );
       expect(errorCode).toBe("invalid_grant");
+    });
+
+    it("cross-client refresh: requesting client ≠ stored clientId → invalid_grant (no rotation)", async () => {
+      // A registered client must not be able to rotate another client's refresh
+      // token — the stored token's clientId must match the requesting client.
+      const ownerInput = makeTokenStoreInput({ clientId: "00000000-0000-0000-0000-000000000001" });
+      const { refresh } = await store.issueAccessRefreshPair(ownerInput);
+
+      const result = await store.rotateRefresh(refresh.plaintext, "00000000-0000-0000-0000-000000000002");
+
+      const errorCode = result.match(
+        () => null,
+        (e) => e.errorCode,
+      );
+      expect(errorCode).toBe("invalid_grant");
+
+      // The original refresh token MUST still be valid (no rotation happened).
+      const stillValid = await store.lookupRefreshToken(refresh.plaintext);
+      expect(stillValid).not.toBeNull();
+    });
+
+    it("concurrent rotation with same refresh token: exactly one succeeds (TOCTOU)", async () => {
+      // Two simultaneous rotateRefresh calls with the same plaintext race the
+      // lookup-then-remove window in TokenStore. Without serialization both
+      // would see the token as valid and both would mint a new pair, enabling
+      // refresh-token replay.
+      const input = makeTokenStoreInput();
+      const { refresh } = await store.issueAccessRefreshPair(input);
+
+      const [a, b] = await Promise.all([
+        store.rotateRefresh(refresh.plaintext, input.clientId),
+        store.rotateRefresh(refresh.plaintext, input.clientId),
+      ]);
+
+      const labels = [a, b]
+        .map((r) =>
+          r.match<"ok" | "err">(
+            () => "ok",
+            () => "err",
+          ),
+        )
+        .sort();
+      expect(labels).toEqual(["err", "ok"]);
     });
   });
 
@@ -408,7 +456,7 @@ describe("TokenStore", () => {
       expect(found).not.toBeNull();
 
       // Rotation should work post-restart
-      const result = await store2.rotateRefresh(r1.plaintext);
+      const result = await store2.rotateRefresh(r1.plaintext, input.clientId);
       result.match(
         (pair) => {
           expect(pair.refresh.plaintext).not.toBe(r1.plaintext);
