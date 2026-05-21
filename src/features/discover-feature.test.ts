@@ -44,7 +44,7 @@ function makeEnabledConfig(overrides: Record<string, unknown> = {}) {
   return {
     transport: "stdio" as const,
     paprika: { email: "test@example.com", password: "pass" },
-    sync: { enabled: true, interval: 5000 },
+    sync: { enabled: true, interval: 5000, pendingWriteTtl: 60000 },
     http: { port: 3000, host: "0.0.0.0" },
     features: {
       embeddings: {
@@ -62,7 +62,7 @@ function makeDisabledConfig(withFeaturesEmpty = false) {
     return {
       transport: "stdio" as const,
       paprika: { email: "test@example.com", password: "pass" },
-      sync: { enabled: true, interval: 5000 },
+      sync: { enabled: true, interval: 5000, pendingWriteTtl: 60000 },
       http: { port: 3000, host: "0.0.0.0" },
       features: {},
     };
@@ -70,7 +70,7 @@ function makeDisabledConfig(withFeaturesEmpty = false) {
   return {
     transport: "stdio" as const,
     paprika: { email: "test@example.com", password: "pass" },
-    sync: { enabled: true, interval: 5000 },
+    sync: { enabled: true, interval: 5000, pendingWriteTtl: 60000 },
     http: { port: 3000, host: "0.0.0.0" },
   };
 }
@@ -192,7 +192,7 @@ describe("p3-u08-discover-wiring: buildDiscoverComponents", () => {
       const config = {
         transport: "stdio" as const,
         paprika: { email: "test@example.com", password: "pass" },
-        sync: { enabled: true, interval: 5000 },
+        sync: { enabled: true, interval: 5000, pendingWriteTtl: 60000 },
         http: { port: 3000, host: "0.0.0.0" },
         features: {
           embeddings: embeddingsConfig,

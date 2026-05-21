@@ -12,6 +12,7 @@ const ENV_VAR_HINTS: Readonly<Record<string, string>> = {
   "paprika.password": "PAPRIKA_PASSWORD",
   "sync.interval": "PAPRIKA_SYNC_INTERVAL",
   "sync.enabled": "PAPRIKA_SYNC_ENABLED",
+  "sync.pendingWriteTtl": "PAPRIKA_SYNC_PENDING_WRITE_TTL",
   transport: "MCP_TRANSPORT",
   "http.port": "MCP_HTTP_PORT",
   "http.host": "MCP_HTTP_HOST",
@@ -127,6 +128,11 @@ export const paprikaConfigSchema = z
       .object({
         enabled: booleanField.default(true),
         interval: durationField.default("15m"),
+        // Window during which a local write is shielded from sync reconciliation
+        // (sync would otherwise see a stale canonical list and either delete the
+        // just-written item or resurrect the just-deleted one). Cleared on
+        // observation for upserts; TTL-only for deletes. See issue #57.
+        pendingWriteTtl: durationField.default("60s"),
       })
       .default({}),
     // Transport selection. `stdio` (default) keeps the current behavior for all
@@ -293,6 +299,8 @@ function buildEnvOverrides(env: NodeJS.ProcessEnv): Record<string, unknown> {
 
   if (env["PAPRIKA_SYNC_INTERVAL"] !== undefined) sync["interval"] = env["PAPRIKA_SYNC_INTERVAL"];
   if (env["PAPRIKA_SYNC_ENABLED"] !== undefined) sync["enabled"] = env["PAPRIKA_SYNC_ENABLED"];
+  if (env["PAPRIKA_SYNC_PENDING_WRITE_TTL"] !== undefined)
+    sync["pendingWriteTtl"] = env["PAPRIKA_SYNC_PENDING_WRITE_TTL"];
 
   if (env["MCP_TRANSPORT"] !== undefined) overrides["transport"] = env["MCP_TRANSPORT"];
   if (env["MCP_HTTP_PORT"] !== undefined) http["port"] = env["MCP_HTTP_PORT"];

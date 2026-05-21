@@ -264,7 +264,11 @@ describe("p2-u02-shared-helpers: shared helper functions", () => {
       const ctx = {
         cache: { putRecipe: mockPutRecipe, flush: mockFlush } as unknown as DiskCache,
         client: { notifySync: mockNotifySync } as unknown as PaprikaClient,
-        store: { set: mockStoreSet } as unknown as ServerContext["store"],
+        store: {
+          set: mockStoreSet,
+          markPendingUpsert: vi.fn(),
+          markPendingDelete: vi.fn(),
+        } as unknown as ServerContext["store"],
         pantryStore: {} as unknown as ServerContext["pantryStore"],
         vectorStore: null,
         server: {} as unknown as ServerContext["server"],
@@ -307,7 +311,11 @@ describe("p2-u02-shared-helpers: shared helper functions", () => {
       const ctx = {
         cache: { putRecipe: mockPutRecipe, flush: mockFlush } as unknown as DiskCache,
         client: { notifySync: mockNotifySync } as unknown as PaprikaClient,
-        store: { set: mockStoreSet } as unknown as ServerContext["store"],
+        store: {
+          set: mockStoreSet,
+          markPendingUpsert: vi.fn(),
+          markPendingDelete: vi.fn(),
+        } as unknown as ServerContext["store"],
         pantryStore: {} as unknown as ServerContext["pantryStore"],
         vectorStore: null,
         server: {} as unknown as ServerContext["server"],
@@ -334,7 +342,11 @@ describe("p2-u02-shared-helpers: shared helper functions", () => {
       const ctx = {
         cache: { putRecipe: mockPutRecipe, flush: mockFlush } as unknown as DiskCache,
         client: { notifySync: mockNotifySync } as unknown as PaprikaClient,
-        store: { set: mockStoreSet } as unknown as ServerContext["store"],
+        store: {
+          set: mockStoreSet,
+          markPendingUpsert: vi.fn(),
+          markPendingDelete: vi.fn(),
+        } as unknown as ServerContext["store"],
         pantryStore: {} as unknown as ServerContext["pantryStore"],
         vectorStore: null,
         server: {} as unknown as ServerContext["server"],
@@ -349,6 +361,44 @@ describe("p2-u02-shared-helpers: shared helper functions", () => {
       await commitRecipe(ctx, saved);
 
       expect(mockStoreSet).toHaveBeenCalledWith(saved);
+    });
+
+    it("p2-recipe-crud.AC-helpers.10: clearPending fires and store.set is skipped when cache.putRecipe rejects", async () => {
+      const mockPutRecipe = vi.fn().mockRejectedValue(new Error("disk full"));
+      const mockFlush = vi.fn().mockResolvedValue(undefined);
+      const mockNotifySync = vi.fn().mockResolvedValue(undefined);
+      const mockStoreSet = vi.fn();
+      const mockMarkPendingUpsert = vi.fn();
+      const mockClearPending = vi.fn();
+      const mockResourceListChanged = vi.fn();
+
+      const ctx = {
+        cache: { putRecipe: mockPutRecipe, flush: mockFlush } as unknown as DiskCache,
+        client: { notifySync: mockNotifySync } as unknown as PaprikaClient,
+        store: {
+          set: mockStoreSet,
+          markPendingUpsert: mockMarkPendingUpsert,
+          markPendingDelete: vi.fn(),
+          clearPending: mockClearPending,
+        } as unknown as ServerContext["store"],
+        pantryStore: {} as unknown as ServerContext["pantryStore"],
+        vectorStore: null,
+        server: {} as unknown as ServerContext["server"],
+        notifier: {
+          resourceListChanged: mockResourceListChanged,
+          loggingMessage: vi.fn().mockResolvedValue(undefined),
+        },
+        auth: null,
+      } satisfies ServerContext;
+
+      const saved = makeRecipe({ name: "Test Recipe" });
+      await expect(commitRecipe(ctx, saved)).rejects.toThrow("disk full");
+
+      expect(mockMarkPendingUpsert).toHaveBeenCalledWith(saved.uid);
+      expect(mockClearPending).toHaveBeenCalledWith(saved.uid);
+      expect(mockStoreSet).not.toHaveBeenCalled();
+      expect(mockResourceListChanged).not.toHaveBeenCalled();
+      expect(mockNotifySync).not.toHaveBeenCalled();
     });
   });
 });

@@ -141,6 +141,23 @@ describe("Configuration loading", () => {
       const result = paprikaConfigSchema.safeParse(input);
       expect(result.success).toBe(false);
     });
+
+    it("config-loader.AC3.5: accepts '60s' for pendingWriteTtl and resolves to 60000 ms", () => {
+      const input = { ...validBase, sync: { pendingWriteTtl: "60s" } };
+      const result = paprikaConfigSchema.safeParse(input);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.sync.pendingWriteTtl).toBe(60000);
+      }
+    });
+
+    it("config-loader.AC3.6: default pendingWriteTtl is 60000 ms when no sync block provided", () => {
+      const result = paprikaConfigSchema.safeParse(validBase);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.sync.pendingWriteTtl).toBe(60000);
+      }
+    });
   });
 
   describe("config-loader.AC4: Boolean field (PAPRIKA_SYNC_ENABLED)", () => {
@@ -743,6 +760,7 @@ describe("Configuration loading", () => {
       "PAPRIKA_PASSWORD",
       "PAPRIKA_SYNC_INTERVAL",
       "PAPRIKA_SYNC_ENABLED",
+      "PAPRIKA_SYNC_PENDING_WRITE_TTL",
       "MCP_TRANSPORT",
       "MCP_HTTP_PORT",
       "MCP_HTTP_HOST",

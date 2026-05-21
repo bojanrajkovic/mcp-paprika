@@ -960,6 +960,88 @@ describe("RecipeStore", () => {
       });
     });
 
+    describe("pending-writes (issue #57 race protection)", () => {
+      it("freshly constructed store has no pending writes", () => {
+        expect(store.pendingWriteCount).toBe(0);
+        expect(store.isPendingUpsert("uid-1" as RecipeUid)).toBe(false);
+        expect(store.isPendingDelete("uid-1" as RecipeUid)).toBe(false);
+      });
+
+      it("markPendingUpsert flips isPendingUpsert true and isPendingDelete false", () => {
+        const uid = "uid-1" as RecipeUid;
+        store.markPendingUpsert(uid);
+        expect(store.isPendingUpsert(uid)).toBe(true);
+        expect(store.isPendingDelete(uid)).toBe(false);
+      });
+
+      it("markPendingDelete flips isPendingDelete true and isPendingUpsert false", () => {
+        const uid = "uid-1" as RecipeUid;
+        store.markPendingDelete(uid);
+        expect(store.isPendingDelete(uid)).toBe(true);
+        expect(store.isPendingUpsert(uid)).toBe(false);
+      });
+
+      it("markPendingUpsert overwrites a prior markPendingDelete (and vice versa)", () => {
+        const uid = "uid-1" as RecipeUid;
+        store.markPendingDelete(uid);
+        store.markPendingUpsert(uid);
+        expect(store.isPendingUpsert(uid)).toBe(true);
+
+        store.markPendingDelete(uid);
+        expect(store.isPendingDelete(uid)).toBe(true);
+      });
+
+      it("clearPending removes both upsert and delete flags", () => {
+        const uid = "uid-1" as RecipeUid;
+        store.markPendingUpsert(uid);
+        store.clearPending(uid);
+        expect(store.isPendingUpsert(uid)).toBe(false);
+        expect(store.isPendingDelete(uid)).toBe(false);
+        expect(store.pendingWriteCount).toBe(0);
+      });
+
+      it("sweepPending evicts entries older than the TTL and leaves fresh ones", () => {
+        const tinyTtlStore = new RecipeStore({ pendingWriteTtlMs: 1000 });
+        const stale = "uid-stale" as RecipeUid;
+        const fresh = "uid-fresh" as RecipeUid;
+        tinyTtlStore.markPendingUpsert(stale, 0);
+        tinyTtlStore.markPendingDelete(fresh, 2000);
+
+        const removed = tinyTtlStore.sweepPending(2500);
+
+        expect(removed).toBe(1);
+        expect(tinyTtlStore.isPendingUpsert(stale)).toBe(false);
+        expect(tinyTtlStore.isPendingDelete(fresh)).toBe(true);
+      });
+
+      it("sweepPending is a no-op when no entries have expired", () => {
+        const tinyTtlStore = new RecipeStore({ pendingWriteTtlMs: 1000 });
+        tinyTtlStore.markPendingUpsert("uid-1" as RecipeUid, 0);
+        const removed = tinyTtlStore.sweepPending(500);
+        expect(removed).toBe(0);
+        expect(tinyTtlStore.isPendingUpsert("uid-1" as RecipeUid)).toBe(true);
+      });
+
+      it("TTL=0 disables pending-write tracking entirely (sync.enabled=false mode)", () => {
+        // Codex P2 round 3, PR #92: when the background sync loop is disabled,
+        // syncOnce() never runs to drain the map. The construction site passes
+        // TTL=0 in that case; mark methods must become no-ops.
+        const disabledStore = new RecipeStore({ pendingWriteTtlMs: 0 });
+        disabledStore.markPendingUpsert("uid-1" as RecipeUid);
+        disabledStore.markPendingDelete("uid-2" as RecipeUid);
+        expect(disabledStore.pendingWriteCount).toBe(0);
+        expect(disabledStore.isPendingUpsert("uid-1" as RecipeUid)).toBe(false);
+        expect(disabledStore.isPendingDelete("uid-2" as RecipeUid)).toBe(false);
+      });
+
+      it("pending writes are independent of recipes Map and category Map", () => {
+        const uid = "uid-1" as RecipeUid;
+        store.markPendingUpsert(uid);
+        expect(store.get(uid)).toBeUndefined();
+        expect(store.size).toBe(0);
+      });
+    });
+
     describe("recipe-query-store.AC7.4: Imports only from paprika/types and utils/duration (plus npm packages)", () => {
       it("verifies all relative imports match allowed paths", () => {
         const __filename = fileURLToPath(import.meta.url);

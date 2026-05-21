@@ -24,6 +24,10 @@ function makeMockStore(): RecipeStore {
     set: vi.fn(),
     delete: vi.fn(),
     setCategories: vi.fn(),
+    isPendingUpsert: vi.fn().mockReturnValue(false),
+    isPendingDelete: vi.fn().mockReturnValue(false),
+    clearPending: vi.fn(),
+    sweepPending: vi.fn().mockReturnValue(0),
   } as unknown as RecipeStore;
 }
 
@@ -57,6 +61,10 @@ function makeMockPantryStore(): PantryStore {
     get: vi.fn(),
     getAll: vi.fn().mockReturnValue([]),
     findByIngredient: vi.fn().mockReturnValue([]),
+    isPendingUpsert: vi.fn().mockReturnValue(false),
+    isPendingDelete: vi.fn().mockReturnValue(false),
+    clearPending: vi.fn(),
+    sweepPending: vi.fn().mockReturnValue(0),
     get hasSynced() {
       return false;
     },
@@ -289,6 +297,10 @@ describe("syncOnce", () => {
       set: vi.fn(),
       delete: vi.fn(),
       setCategories: vi.fn(),
+      isPendingUpsert: vi.fn().mockReturnValue(false),
+      isPendingDelete: vi.fn().mockReturnValue(false),
+      clearPending: vi.fn(),
+      sweepPending: vi.fn().mockReturnValue(0),
     } as unknown as RecipeStore;
   }
 
@@ -300,6 +312,10 @@ describe("syncOnce", () => {
       get: vi.fn(),
       getAll: vi.fn().mockReturnValue([]),
       findByIngredient: vi.fn().mockReturnValue([]),
+      isPendingUpsert: vi.fn().mockReturnValue(false),
+      isPendingDelete: vi.fn().mockReturnValue(false),
+      clearPending: vi.fn(),
+      sweepPending: vi.fn().mockReturnValue(0),
       get hasSynced() {
         return false;
       },
@@ -832,6 +848,10 @@ describe("syncOnce", () => {
           set: vi.fn(),
           delete: vi.fn(),
           setCategories: vi.fn(),
+          isPendingUpsert: vi.fn().mockReturnValue(false),
+          isPendingDelete: vi.fn().mockReturnValue(false),
+          clearPending: vi.fn(),
+          sweepPending: vi.fn().mockReturnValue(0),
         } as unknown as RecipeStore,
         pantryStore: realPantryStore,
         vectorStore: null,
@@ -869,6 +889,10 @@ describe("syncOnce", () => {
           set: vi.fn(),
           delete: vi.fn(),
           setCategories: vi.fn(),
+          isPendingUpsert: vi.fn().mockReturnValue(false),
+          isPendingDelete: vi.fn().mockReturnValue(false),
+          clearPending: vi.fn(),
+          sweepPending: vi.fn().mockReturnValue(0),
         } as unknown as RecipeStore,
         pantryStore: realPantryStore,
         vectorStore: null,

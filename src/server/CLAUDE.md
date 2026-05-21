@@ -1,6 +1,6 @@
 # Server Composition Root
 
-Last verified: 2026-05-18
+Last verified: 2026-05-21
 
 ## Purpose
 
@@ -82,6 +82,8 @@ buildAppContext(config: PaprikaConfig, notifier: Notifier): Promise<{ app: AppCo
 ```
 
 Process-wide builder. Authenticates the Paprika client, hydrates `DiskCache`, `RecipeStore`, and `PantryStore` from disk, constructs `SyncEngine`, **runs the initial `sync.syncOnce()`**, then calls `buildDiscoverComponents` (which subscribes the vector store to `sync.events` for incremental re-indexing). Returns the assembled `AppContext` plus the `SyncEngine`; the caller starts the background loop with `sync.start()` if `config.sync.enabled`.
+
+Reads `config.sync.pendingWriteTtl` and threads it as `pendingWriteTtlMs` into both `new RecipeStore({ pendingWriteTtlMs })` and `new PantryStore({ pendingWriteTtlMs })` so the sync engine's per-cycle `sweepPending()` calls use the configured TTL.
 
 **Construction order is load-bearing:**
 

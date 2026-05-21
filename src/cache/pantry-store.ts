@@ -1,5 +1,21 @@
 import type { PantryItem, PantryItemUid } from "../paprika/types.js";
 
+// Pending-write bookkeeping (issue #57). Tracks just-written items so the
+// SyncEngine can skip reconciling them against a stale canonical list
+// (Paprika omits soft-deleted items, and a sync cycle issued before a write
+// returns a list missing that write's UID). Upserts clear on observation
+// (UID appears in canonical list with deleted !== true); deletes rely on
+// the TTL because Paprika gives no observable "I propagated your delete"
+// signal — absence is ambiguous between propagated and not-yet-propagated.
+type PendingWriteKind = "upsert" | "delete";
+
+type PendingWrite = {
+  readonly kind: PendingWriteKind;
+  readonly at: number;
+};
+
+const DEFAULT_PENDING_WRITE_TTL_MS = 60_000;
+
 export class PantryStore {
   private readonly _items: Map<PantryItemUid, PantryItem> = new Map();
   // Tombstones track UIDs that were soft-deleted via this client, so
@@ -12,7 +28,13 @@ export class PantryStore {
   // un-deleted via another client). The tombstone set therefore stays
   // disjoint from `_items` after every load.
   private readonly _tombstones: Set<PantryItemUid> = new Set();
+  private readonly _pendingWrites: Map<PantryItemUid, PendingWrite> = new Map();
+  private readonly _pendingWriteTtlMs: number;
   private _hasSynced = false;
+
+  constructor(opts?: { readonly pendingWriteTtlMs?: number }) {
+    this._pendingWriteTtlMs = opts?.pendingWriteTtlMs ?? DEFAULT_PENDING_WRITE_TTL_MS;
+  }
 
   load(items: ReadonlyArray<PantryItem>): void {
     this._items.clear();
@@ -86,5 +108,45 @@ export class PantryStore {
     if (exact.length > 0) return exact;
     if (prefix.length > 0) return prefix;
     return substring;
+  }
+
+  markPendingUpsert(uid: PantryItemUid, at: number = Date.now()): void {
+    // TTL <= 0 disables pending-write tracking entirely. Used when the
+    // background sync loop is disabled — without periodic syncOnce calls to
+    // sweep, marks would accumulate indefinitely (codex P2, PR #92).
+    if (this._pendingWriteTtlMs <= 0) return;
+    this._pendingWrites.set(uid, { kind: "upsert", at });
+  }
+
+  markPendingDelete(uid: PantryItemUid, at: number = Date.now()): void {
+    if (this._pendingWriteTtlMs <= 0) return;
+    this._pendingWrites.set(uid, { kind: "delete", at });
+  }
+
+  isPendingUpsert(uid: PantryItemUid): boolean {
+    return this._pendingWrites.get(uid)?.kind === "upsert";
+  }
+
+  isPendingDelete(uid: PantryItemUid): boolean {
+    return this._pendingWrites.get(uid)?.kind === "delete";
+  }
+
+  clearPending(uid: PantryItemUid): void {
+    this._pendingWrites.delete(uid);
+  }
+
+  sweepPending(now: number = Date.now()): number {
+    let removed = 0;
+    for (const [uid, entry] of this._pendingWrites) {
+      if (now - entry.at >= this._pendingWriteTtlMs) {
+        this._pendingWrites.delete(uid);
+        removed += 1;
+      }
+    }
+    return removed;
+  }
+
+  get pendingWriteCount(): number {
+    return this._pendingWrites.size;
   }
 }

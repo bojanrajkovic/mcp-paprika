@@ -86,8 +86,28 @@ export class SyncEngine {
         `Recipe diff: ${diff.added.length} added, ${diff.changed.length} changed, ${diff.removed.length} removed.`,
       );
 
+      // Filter the diff through pending-writes (issue #57). A pending-upsert
+      // means we just wrote this UID and the canonical list reflects pre-write
+      // state; skip add/change/remove for it so sync doesn't roll back or
+      // delete our local copy. A pending-delete means we just trashed this UID
+      // and the canonical list may still have it; skip add/change so sync
+      // doesn't resurrect our just-deleted recipe. We leave diff.removed
+      // alone for pending-deletes: if the server actually no longer lists
+      // the UID, honoring the removal is correct.
+      const filteredRemoved = diff.removed.filter((uid) => !this._context.store.isPendingUpsert(uid as RecipeUid));
+      const filteredAdded = diff.added.filter(
+        (uid) =>
+          !this._context.store.isPendingUpsert(uid as RecipeUid) &&
+          !this._context.store.isPendingDelete(uid as RecipeUid),
+      );
+      const filteredChanged = diff.changed.filter(
+        (uid) =>
+          !this._context.store.isPendingUpsert(uid as RecipeUid) &&
+          !this._context.store.isPendingDelete(uid as RecipeUid),
+      );
+
       // Compute UIDs to fetch
-      const uidsToFetch = [...diff.added, ...diff.changed];
+      const uidsToFetch = [...filteredAdded, ...filteredChanged];
 
       // Fetch recipes if any exist
       let fetchedRecipes: Array<Recipe> = [];
@@ -104,9 +124,23 @@ export class SyncEngine {
       }
 
       // Remove deleted recipes (async, use Promise.all for concurrency)
-      await Promise.all(diff.removed.map((uid) => this._context.cache.removeRecipe(uid)));
-      for (const uid of diff.removed) {
+      await Promise.all(filteredRemoved.map((uid) => this._context.cache.removeRecipe(uid)));
+      for (const uid of filteredRemoved) {
         this._context.store.delete(uid as RecipeUid);
+      }
+
+      // Observation-based clearing for recipe pending-upserts: clear only when
+      // the canonical entry's hash matches our local cache. UID presence alone
+      // is insufficient for updates — the UID is already in entries with the
+      // PRE-write hash while propagation is in flight, and clearing on UID
+      // presence would drop protection on the first sync cycle and let the
+      // next cycle re-fetch and overwrite our edit (codex P1, PR #92).
+      for (const entry of entries) {
+        if (!this._context.store.isPendingUpsert(entry.uid)) continue;
+        const local = this._context.store.get(entry.uid);
+        if (local !== undefined && local.hash === entry.hash) {
+          this._context.store.clearPending(entry.uid);
+        }
       }
 
       // 2. Category sync path (replace-all)
@@ -124,25 +158,59 @@ export class SyncEngine {
       SyncEngine._log(`Got ${pantryItems.length.toString()} pantry items.`);
 
       const cachedPantryItems = await this._context.cache.getAllPantryItems();
+
+      // Pending-writes filtering (issue #57). For pending-upserts we exclude
+      // the UID from the canonical incoming list and pull our local version
+      // from cache instead — that protects both directions of the race
+      // (incoming has stale content, or incoming is missing our UID
+      // entirely). For pending-deletes we exclude the UID from incoming so
+      // pantryStore.load() and the cache.putPantryItem loop don't resurrect
+      // a just-deleted item. Paprika empirically omits soft-deleted items
+      // from listPantry (case B), so we don't observation-clear pending
+      // deletes — TTL is the only safe clearing mechanism for that direction.
+      const incomingFiltered = pantryItems.filter(
+        (item) =>
+          !this._context.pantryStore.isPendingDelete(item.uid) && !this._context.pantryStore.isPendingUpsert(item.uid),
+      );
+      const pendingUpsertedItems = cachedPantryItems.filter((item) =>
+        this._context.pantryStore.isPendingUpsert(item.uid),
+      );
+      const effectivePantry = [...incomingFiltered, ...pendingUpsertedItems];
+
       const cachedPantryUids = new Set(cachedPantryItems.map((item) => item.uid));
-      const incomingPantryUids = new Set(pantryItems.map((item) => item.uid));
-      const orphanPantryUids = [...cachedPantryUids].filter((uid) => !incomingPantryUids.has(uid));
-      const newPantryUids = [...incomingPantryUids].filter((uid) => !cachedPantryUids.has(uid));
+      const effectivePantryUids = new Set(effectivePantry.map((item) => item.uid));
+      const orphanPantryUids = [...cachedPantryUids].filter((uid) => !effectivePantryUids.has(uid));
+      const newPantryUids = [...effectivePantryUids].filter((uid) => !cachedPantryUids.has(uid));
       const cachedPantryByUid = new Map(cachedPantryItems.map((item) => [item.uid, item]));
       // Pantry items have no hash field, so detect content edits to existing UIDs
       // (quantity/notes/in-stock/etc.) by field-wise comparison; without this, MCP
       // clients would see stale resource content until an add or remove triggered
       // a notification.
-      const updatedPantryUids = pantryItems.filter((incoming) => {
+      const updatedPantryUids = effectivePantry.filter((incoming) => {
         const cached = cachedPantryByUid.get(incoming.uid);
         return cached !== undefined && !pantryItemsEqual(cached, incoming);
       });
       const pantryHasChanges = orphanPantryUids.length > 0 || newPantryUids.length > 0 || updatedPantryUids.length > 0;
 
       await Promise.all(orphanPantryUids.map((uid) => this._context.cache.removePantryItem(uid)));
-      this._context.pantryStore.load(pantryItems);
-      for (const item of pantryItems) {
+      this._context.pantryStore.load(effectivePantry);
+      for (const item of effectivePantry) {
         await this._context.cache.putPantryItem(item);
+      }
+
+      // Observation-based clearing for pantry pending-upserts: clear only when
+      // the canonical item's content equals our local cached content. UID
+      // presence alone is insufficient for updates — the UID is already in
+      // listPantry with the PRE-write quantity/notes/in-stock while propagation
+      // is in flight, and clearing on UID presence would drop protection on
+      // the first sync cycle and let the next cycle reload the stale content
+      // (codex P1, PR #92).
+      for (const item of pantryItems) {
+        if (!this._context.pantryStore.isPendingUpsert(item.uid)) continue;
+        const cached = cachedPantryByUid.get(item.uid);
+        if (cached !== undefined && pantryItemsEqual(cached, item)) {
+          this._context.pantryStore.clearPending(item.uid);
+        }
       }
 
       if (orphanPantryUids.length > 0) {
@@ -153,9 +221,20 @@ export class SyncEngine {
       SyncEngine._log("Flushing cache to disk...");
       await this._context.cache.flush();
 
+      // Sweep expired pending-writes (issue #57 TTL fallback). Pending-deletes
+      // rely on this for clearing since Paprika gives no observable signal
+      // that our soft-delete propagated.
+      const sweptStore = this._context.store.sweepPending();
+      const sweptPantry = this._context.pantryStore.sweepPending();
+      if (sweptStore > 0 || sweptPantry > 0) {
+        SyncEngine._log(
+          `Swept ${sweptStore.toString()} recipe and ${sweptPantry.toString()} pantry pending-writes past TTL.`,
+        );
+      }
+
       // Determine if changes exist
       const hasChanges =
-        diff.added.length > 0 || diff.changed.length > 0 || diff.removed.length > 0 || pantryHasChanges;
+        filteredAdded.length > 0 || filteredChanged.length > 0 || filteredRemoved.length > 0 || pantryHasChanges;
 
       // Send resource notification if changes exist
       if (hasChanges) {
@@ -163,7 +242,7 @@ export class SyncEngine {
       }
 
       // Partition fetched recipes: added vs updated
-      const addedSet = new Set(diff.added);
+      const addedSet = new Set(filteredAdded);
       const addedRecipes = fetchedRecipes.filter((r) => addedSet.has(r.uid));
       const updatedRecipes = fetchedRecipes.filter((r) => !addedSet.has(r.uid));
 
@@ -171,18 +250,18 @@ export class SyncEngine {
       const result: SyncResult = {
         added: addedRecipes,
         updated: updatedRecipes,
-        removedUids: diff.removed,
+        removedUids: filteredRemoved,
       };
       this._events.emit("sync:complete", result);
 
       SyncEngine._log(
-        `Sync complete: ${addedRecipes.length} added, ${updatedRecipes.length} updated, ${diff.removed.length} removed.`,
+        `Sync complete: ${addedRecipes.length} added, ${updatedRecipes.length} updated, ${filteredRemoved.length} removed.`,
       );
 
       // Log success via MCP — notifier swallows transport errors internally
       await this._context.notifier.loggingMessage({
         level: "info",
-        data: `Sync complete: ${addedRecipes.length} added, ${updatedRecipes.length} updated, ${diff.removed.length} removed`,
+        data: `Sync complete: ${addedRecipes.length} added, ${updatedRecipes.length} updated, ${filteredRemoved.length} removed`,
       });
     } catch (error: unknown) {
       // Convert caught value to Error

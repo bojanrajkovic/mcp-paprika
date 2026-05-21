@@ -184,4 +184,66 @@ describe("pantry-mutations.AC3: commitPantryItem helper", () => {
       expect(pantryStore.get(saved.uid)).toEqual(item);
     });
   });
+
+  describe("AC3.4: pending-mark rollback on commit failure (codex P2, PR #92)", () => {
+    it("should clear pending-upsert mark when cache.putPantryItem rejects in upsert branch", async () => {
+      const saved = makePantryItem({ deleted: false });
+      const pantryStore = new PantryStore();
+
+      const mockPutPantryItem = vi.fn().mockRejectedValue(new Error("disk full"));
+      const mockRemovePantryItem = vi.fn();
+      const mockFlush = vi.fn().mockResolvedValue(undefined);
+      const mockNotifySync = vi.fn().mockResolvedValue(undefined);
+      const stub = makeStubNotifier();
+
+      const { server } = makeTestServer();
+      const ctx = makeCtx(new RecipeStore(), server, {
+        client: { notifySync: mockNotifySync } as unknown as PaprikaClient,
+        cache: {
+          putPantryItem: mockPutPantryItem,
+          removePantryItem: mockRemovePantryItem,
+          flush: mockFlush,
+        } as unknown as DiskCache,
+        pantryStore,
+        notifier: stub.notifier,
+      });
+
+      await expect(commitPantryItem(ctx, saved)).rejects.toThrow("disk full");
+
+      // The pending-upsert mark must NOT persist past a failed commit, otherwise
+      // sync would filter this UID for the TTL window and suppress reconciliation.
+      expect(pantryStore.isPendingUpsert(saved.uid)).toBe(false);
+      expect(pantryStore.isPendingDelete(saved.uid)).toBe(false);
+    });
+
+    it("should clear pending-delete mark when cache.removePantryItem rejects in delete branch", async () => {
+      const item = makePantryItem({ deleted: false });
+      const saved = { ...item, deleted: true };
+      const pantryStore = new PantryStore();
+      pantryStore.load([item]);
+
+      const mockPutPantryItem = vi.fn();
+      const mockRemovePantryItem = vi.fn().mockRejectedValue(new Error("disk full"));
+      const mockFlush = vi.fn().mockResolvedValue(undefined);
+      const mockNotifySync = vi.fn().mockResolvedValue(undefined);
+      const stub = makeStubNotifier();
+
+      const { server } = makeTestServer();
+      const ctx = makeCtx(new RecipeStore(), server, {
+        client: { notifySync: mockNotifySync } as unknown as PaprikaClient,
+        cache: {
+          putPantryItem: mockPutPantryItem,
+          removePantryItem: mockRemovePantryItem,
+          flush: mockFlush,
+        } as unknown as DiskCache,
+        pantryStore,
+        notifier: stub.notifier,
+      });
+
+      await expect(commitPantryItem(ctx, saved)).rejects.toThrow("disk full");
+
+      expect(pantryStore.isPendingDelete(saved.uid)).toBe(false);
+      expect(pantryStore.isPendingUpsert(saved.uid)).toBe(false);
+    });
+  });
 });

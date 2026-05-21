@@ -78,14 +78,19 @@ export async function buildAppContext(
     );
   }
 
-  const store = new RecipeStore();
+  // When background sync is disabled, syncOnce() never runs after startup, so
+  // pending-write marks would never be swept. Pass TTL=0 to disable the
+  // feature entirely in that mode (markPending* becomes a no-op). See
+  // src/cache/CLAUDE.md "Pending-writes (issue #57)" and codex P2 on PR #92.
+  const pendingWriteTtlMs = config.sync.enabled ? config.sync.pendingWriteTtl : 0;
+  const store = new RecipeStore({ pendingWriteTtlMs });
   const cachedRecipes = await cache.getAllRecipes();
   for (const recipe of cachedRecipes) {
     store.set(recipe);
   }
   log(`Hydrated store with ${cachedRecipes.length.toString()} cached recipes.`);
 
-  const pantryStore = new PantryStore();
+  const pantryStore = new PantryStore({ pendingWriteTtlMs });
   const cachedPantryItems = await cache.getAllPantryItems();
   if (cachedPantryItems.length > 0) {
     pantryStore.load(cachedPantryItems);

@@ -226,4 +226,94 @@ describe("PantryStore", () => {
       expect(store.get("uid-1" as PantryItemUid)).toEqual(item);
     });
   });
+
+  describe("pending-writes (issue #57 race protection)", () => {
+    it("freshly constructed store has no pending writes", () => {
+      expect(store.pendingWriteCount).toBe(0);
+      expect(store.isPendingUpsert("uid-1" as PantryItemUid)).toBe(false);
+      expect(store.isPendingDelete("uid-1" as PantryItemUid)).toBe(false);
+    });
+
+    it("markPendingUpsert flips isPendingUpsert true and isPendingDelete false", () => {
+      const uid = "uid-1" as PantryItemUid;
+      store.markPendingUpsert(uid);
+      expect(store.isPendingUpsert(uid)).toBe(true);
+      expect(store.isPendingDelete(uid)).toBe(false);
+    });
+
+    it("markPendingDelete flips isPendingDelete true and isPendingUpsert false", () => {
+      const uid = "uid-1" as PantryItemUid;
+      store.markPendingDelete(uid);
+      expect(store.isPendingDelete(uid)).toBe(true);
+      expect(store.isPendingUpsert(uid)).toBe(false);
+    });
+
+    it("markPendingUpsert overwrites a prior markPendingDelete (and vice versa)", () => {
+      // Within a single sync window the same UID can flip from delete-pending
+      // to upsert-pending if the user immediately re-adds an item by the same
+      // UID. The latest write wins.
+      const uid = "uid-1" as PantryItemUid;
+      store.markPendingDelete(uid);
+      store.markPendingUpsert(uid);
+      expect(store.isPendingUpsert(uid)).toBe(true);
+      expect(store.isPendingDelete(uid)).toBe(false);
+
+      store.markPendingDelete(uid);
+      expect(store.isPendingDelete(uid)).toBe(true);
+      expect(store.isPendingUpsert(uid)).toBe(false);
+    });
+
+    it("clearPending removes both upsert and delete flags", () => {
+      const uid = "uid-1" as PantryItemUid;
+      store.markPendingUpsert(uid);
+      store.clearPending(uid);
+      expect(store.isPendingUpsert(uid)).toBe(false);
+      expect(store.isPendingDelete(uid)).toBe(false);
+      expect(store.pendingWriteCount).toBe(0);
+    });
+
+    it("sweepPending evicts entries older than the TTL and leaves fresh ones", () => {
+      const tinyTtlStore = new PantryStore({ pendingWriteTtlMs: 1000 });
+      const stale = "uid-stale" as PantryItemUid;
+      const fresh = "uid-fresh" as PantryItemUid;
+      tinyTtlStore.markPendingUpsert(stale, 0);
+      tinyTtlStore.markPendingDelete(fresh, 2000);
+
+      const removed = tinyTtlStore.sweepPending(2500);
+
+      expect(removed).toBe(1);
+      expect(tinyTtlStore.isPendingUpsert(stale)).toBe(false);
+      expect(tinyTtlStore.isPendingDelete(fresh)).toBe(true);
+    });
+
+    it("sweepPending is a no-op when no entries have expired", () => {
+      const tinyTtlStore = new PantryStore({ pendingWriteTtlMs: 1000 });
+      tinyTtlStore.markPendingUpsert("uid-1" as PantryItemUid, 0);
+      const removed = tinyTtlStore.sweepPending(500);
+      expect(removed).toBe(0);
+      expect(tinyTtlStore.isPendingUpsert("uid-1" as PantryItemUid)).toBe(true);
+    });
+
+    it("TTL=0 disables pending-write tracking entirely (sync.enabled=false mode)", () => {
+      // Codex P2 round 3, PR #92: when the background sync loop is disabled,
+      // syncOnce() never runs to drain the map. The construction site passes
+      // TTL=0 in that case; mark methods must become no-ops to prevent
+      // unbounded accumulation across writes.
+      const disabledStore = new PantryStore({ pendingWriteTtlMs: 0 });
+      disabledStore.markPendingUpsert("uid-1" as PantryItemUid);
+      disabledStore.markPendingDelete("uid-2" as PantryItemUid);
+      expect(disabledStore.pendingWriteCount).toBe(0);
+      expect(disabledStore.isPendingUpsert("uid-1" as PantryItemUid)).toBe(false);
+      expect(disabledStore.isPendingDelete("uid-2" as PantryItemUid)).toBe(false);
+    });
+
+    it("pending writes are independent of items, tombstones, and hasSynced", () => {
+      // Marking a pending write must not touch _items, _tombstones, or _hasSynced.
+      const uid = "uid-1" as PantryItemUid;
+      store.markPendingUpsert(uid);
+      expect(store.get(uid)).toBeUndefined();
+      expect(store.isTombstone(uid)).toBe(false);
+      expect(store.hasSynced).toBe(false);
+    });
+  });
 });

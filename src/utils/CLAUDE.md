@@ -1,6 +1,6 @@
 # Cross-Cutting Utilities
 
-Last verified: 2026-05-20 (oauth.trustProxy added 2026-05-20; publicUrl trailing-slash strip added 2026-05-19; log.ts helpers added 2026-05-18; xdg XDG-override behavior added 2026-05-18)
+Last verified: 2026-05-21
 
 ## Purpose
 
@@ -73,6 +73,20 @@ startup cost.
 | `PaprikaConfig`   | `{ paprika, sync, transport, http, features?, oauth? }` — validated application config |
 | `EmbeddingConfig` | `{ apiKey, baseUrl, model }` — embedding provider config                               |
 
+**`sync` block** (`paprikaConfigSchema.sync`):
+
+```
+sync: {
+  enabled:         boolean   // Run the background polling loop (default true)
+  interval:        number    // Poll interval in milliseconds (durationField, default "15m")
+  pendingWriteTtl: number    // Window in milliseconds during which a local write is shielded
+                             // from sync reconciliation (durationField, default "60s"). See
+                             // src/cache/CLAUDE.md "Pending-writes (issue #57)".
+}
+```
+
+All three are `durationField`s except `enabled`. `pendingWriteTtl` is consumed by `buildAppContext` and passed to both `new RecipeStore({ pendingWriteTtlMs })` and `new PantryStore({ pendingWriteTtlMs })`.
+
 **`oauth` block** (`paprikaConfigSchema.oauth` — optional, required when `transport === "http"`):
 
 ```
@@ -103,6 +117,14 @@ oauth: {
 - At least one of `oauth.allowlist.emails` or `oauth.allowlist.subs` must be non-empty.
 - Exactly one of `oauth.preset` or `oauth.discoveryUrl` must be set.
 - Both `oauth.clientId` and `oauth.clientSecret` must be present.
+
+**Sync env-var mapping table:**
+
+| Env var                          | Config path            |
+| -------------------------------- | ---------------------- |
+| `PAPRIKA_SYNC_ENABLED`           | `sync.enabled`         |
+| `PAPRIKA_SYNC_INTERVAL`          | `sync.interval`        |
+| `PAPRIKA_SYNC_PENDING_WRITE_TTL` | `sync.pendingWriteTtl` |
 
 **OAuth env-var mapping table:**
 
