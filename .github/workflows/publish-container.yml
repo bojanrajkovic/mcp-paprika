@@ -25,9 +25,8 @@ jobs:
   publish:
     name: Build, scan, sign & publish
     runs-on: ubuntu-latest
-    # Multi-arch via QEMU + scan-before-push + sign+attest is meaningfully
-    # longer than `npm publish`. 30 min headroom for cold cache + DB update.
-    timeout-minutes: 30
+    # Headroom for the Trivy DB pull + multi-arch buildx + GHCR push.
+    timeout-minutes: 15
 
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
