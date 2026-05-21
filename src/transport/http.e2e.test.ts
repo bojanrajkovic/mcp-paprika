@@ -64,7 +64,7 @@ function makeE2eConfig(overrides: Partial<PaprikaConfig> = {}): PaprikaConfig {
     paprika: { email: "test@example.com", password: "secret" },
     sync: { enabled: false, interval: 60_000 },
     transport: "http",
-    http: { port: 0, host: "127.0.0.1" },
+    http: { port: 0, host: "127.0.0.1", allowedHosts: [], allowedOrigins: [] },
     oauth: {
       publicUrl: PUBLIC_URL,
       preset: undefined,

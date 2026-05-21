@@ -87,6 +87,28 @@ sync: {
 
 All three are `durationField`s except `enabled`. `pendingWriteTtl` is consumed by `buildAppContext` and passed to both `new RecipeStore({ pendingWriteTtlMs })` and `new PantryStore({ pendingWriteTtlMs })`.
 
+**`http` block** (`paprikaConfigSchema.http`):
+
+```
+http: {
+  port:            number     // 1–65535, default 3000 (z.coerce.number)
+  host:            string     // bind host, default "0.0.0.0"
+  allowedHosts:    string[]   // DNS rebinding Host allowlist (listField, default [])
+  allowedOrigins:  string[]   // DNS rebinding Origin allowlist (listField, default [])
+}
+```
+
+`allowedHosts` and `allowedOrigins` are threaded through to the `@hono/mcp` `StreamableHTTPTransport` constructor (`allowedHosts`, `allowedOrigins`, and `enableDnsRebindingProtection` — auto-enabled when either list is non-empty). The check fires inside the transport's `handleRequest`, so it only applies to `POST /mcp`; other routes (`/healthz`, OAuth endpoints, `/oauth/callback`) are not gated. The `@hono/mcp` validation is stricter than the upstream SDK's: when `allowedOrigins` is non-empty, missing-Origin requests are also rejected (the SDK only enforces when Origin is present). See `docs/configuration.md` for operator guidance.
+
+**HTTP env-var mapping table:**
+
+| Env var               | Config path           |
+| --------------------- | --------------------- |
+| `MCP_HTTP_PORT`       | `http.port`           |
+| `MCP_HTTP_HOST`       | `http.host`           |
+| `MCP_ALLOWED_HOSTS`   | `http.allowedHosts`   |
+| `MCP_ALLOWED_ORIGINS` | `http.allowedOrigins` |
+
 **`oauth` block** (`paprikaConfigSchema.oauth` — optional, required when `transport === "http"`):
 
 ```

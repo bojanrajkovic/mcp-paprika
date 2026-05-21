@@ -45,7 +45,7 @@ function makeEnabledConfig(overrides: Record<string, unknown> = {}) {
     transport: "stdio" as const,
     paprika: { email: "test@example.com", password: "pass" },
     sync: { enabled: true, interval: 5000, pendingWriteTtl: 60000 },
-    http: { port: 3000, host: "0.0.0.0" },
+    http: { port: 3000, host: "0.0.0.0", allowedHosts: [], allowedOrigins: [] },
     features: {
       embeddings: {
         apiKey: "test-key",
@@ -63,7 +63,7 @@ function makeDisabledConfig(withFeaturesEmpty = false) {
       transport: "stdio" as const,
       paprika: { email: "test@example.com", password: "pass" },
       sync: { enabled: true, interval: 5000, pendingWriteTtl: 60000 },
-      http: { port: 3000, host: "0.0.0.0" },
+      http: { port: 3000, host: "0.0.0.0", allowedHosts: [], allowedOrigins: [] },
       features: {},
     };
   }
@@ -71,7 +71,7 @@ function makeDisabledConfig(withFeaturesEmpty = false) {
     transport: "stdio" as const,
     paprika: { email: "test@example.com", password: "pass" },
     sync: { enabled: true, interval: 5000, pendingWriteTtl: 60000 },
-    http: { port: 3000, host: "0.0.0.0" },
+    http: { port: 3000, host: "0.0.0.0", allowedHosts: [], allowedOrigins: [] },
   };
 }
 
@@ -193,7 +193,7 @@ describe("p3-u08-discover-wiring: buildDiscoverComponents", () => {
         transport: "stdio" as const,
         paprika: { email: "test@example.com", password: "pass" },
         sync: { enabled: true, interval: 5000, pendingWriteTtl: 60000 },
-        http: { port: 3000, host: "0.0.0.0" },
+        http: { port: 3000, host: "0.0.0.0", allowedHosts: [], allowedOrigins: [] },
         features: {
           embeddings: embeddingsConfig,
         },

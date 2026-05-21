@@ -20,6 +20,8 @@ Environment variables always win. If you set `PAPRIKA_EMAIL` as an env var and a
 | `MCP_TRANSPORT`         | `transport`                   | No       | `"stdio"`   | Transport mode: `"stdio"` (CLI clients) or `"http"` (Streamable HTTP) |
 | `MCP_HTTP_PORT`         | `http.port`                   | No       | `3000`      | Port to bind when `MCP_TRANSPORT=http` (1–65535)                      |
 | `MCP_HTTP_HOST`         | `http.host`                   | No       | `"0.0.0.0"` | Host to bind when `MCP_TRANSPORT=http`                                |
+| `MCP_ALLOWED_HOSTS`     | `http.allowedHosts`           | No       | `[]`        | Host-header allowlist (DNS rebinding protection)                      |
+| `MCP_ALLOWED_ORIGINS`   | `http.allowedOrigins`         | No       | `[]`        | Origin-header allowlist (browser-only; locks out CLI clients)         |
 | `OPENAI_API_KEY`        | `features.embeddings.apiKey`  | No       | —           | Embedding provider API key                                            |
 | `OPENAI_BASE_URL`       | `features.embeddings.baseUrl` | No       | —           | Embedding provider base URL                                           |
 | `EMBEDDING_MODEL`       | `features.embeddings.model`   | No       | —           | Embedding model identifier                                            |
@@ -56,6 +58,56 @@ in the range `1`–`65535`. `MCP_HTTP_HOST` accepts any non-empty string; defaul
 > `MCP_HTTP_PORT` directly to the public internet. Run it behind Cloudflare Access,
 > Tailscale Serve, an OAuth2 proxy, or your reverse proxy of choice. OAuth 2.1
 > support is a planned follow-up.
+
+### DNS rebinding protection
+
+When the server is exposed directly to the public internet (no Cloudflare
+Access, Tailscale Serve, or other proxy validating hosts in front), set
+`MCP_ALLOWED_HOSTS` to a comma-separated list of permitted `Host` header
+values:
+
+```bash
+MCP_ALLOWED_HOSTS=mcp.example.com,mcp.example.com:443
+```
+
+Requests to `POST /mcp` whose `Host` header isn't on the list get rejected
+with HTTP 403. The default is empty (no restriction), which is correct when a
+reverse proxy in front already validates the host.
+
+`MCP_ALLOWED_HOSTS` alone is the right knob for almost every deployment.
+Every HTTP client sends a `Host` header — HTTP/1.1 requires it — so the
+check covers browser clients (Claude Mobile, claude.ai) and CLI clients
+(Claude Code over HTTP, mcp-cli) the same way. It's also the header that DNS
+rebinding can't forge: the attacker controls DNS resolution, but the victim's
+browser still sends `Host: attacker.example` — which won't be on your list.
+
+#### Origin allowlist (browser-only deployments)
+
+`MCP_ALLOWED_ORIGINS` is a separate `Origin` header allowlist. **Setting it
+locks out CLI clients.** Once the list is non-empty, the MCP transport also
+rejects `POST /mcp` requests that arrive without an `Origin` header, and CLI
+MCP clients don't send one. Use it only when the server is intended for
+browser clients exclusively and you want to constrain which origins can call
+it:
+
+```bash
+MCP_ALLOWED_ORIGINS=https://claude.ai
+```
+
+This is belt-and-suspenders on top of `MCP_ALLOWED_HOSTS`, not a replacement
+for it.
+
+#### Scope and matching rules
+
+- Only `POST /mcp` is gated. The check fires inside the MCP transport, so
+  `/healthz`, OAuth endpoints (`/.well-known/*`, `/register`, `/authorize`,
+  `/token`, `/revoke`), and `/oauth/callback` aren't affected. That matches
+  the threat model — DNS rebinding targets the application protocol endpoint
+  — but "DNS rebinding protection" here doesn't mean "every route is locked
+  down."
+- Host and Origin values are matched exactly against the incoming header.
+  Include the port if your clients send one (e.g. `mcp.example.com:443`).
+- Either list automatically enables enforcement. There's no separate toggle.
 
 ## Config file
 

@@ -764,6 +764,8 @@ describe("Configuration loading", () => {
       "MCP_TRANSPORT",
       "MCP_HTTP_PORT",
       "MCP_HTTP_HOST",
+      "MCP_ALLOWED_HOSTS",
+      "MCP_ALLOWED_ORIGINS",
       "REPLICATE_API_TOKEN",
       "OPENAI_API_KEY",
       "OPENAI_BASE_URL",
@@ -1087,6 +1089,51 @@ describe("Configuration loading", () => {
         loadConfig(tempDir).match(
           (config) => {
             expect(config.http.host).toBe("127.0.0.1");
+          },
+          (err) => {
+            expect.fail(`Expected Ok but got Err: ${err.message}`);
+          },
+        );
+      });
+
+      it("config-loader.AC9.8: http.allowedHosts and http.allowedOrigins default to empty arrays", () => {
+        process.env["PAPRIKA_EMAIL"] = "user@test.com";
+        process.env["PAPRIKA_PASSWORD"] = "secret";
+
+        loadConfig(tempDir).match(
+          (config) => {
+            expect(config.http.allowedHosts).toEqual([]);
+            expect(config.http.allowedOrigins).toEqual([]);
+          },
+          (err) => {
+            expect.fail(`Expected Ok but got Err: ${err.message}`);
+          },
+        );
+      });
+
+      it("config-loader.AC9.9: MCP_ALLOWED_HOSTS splits and trims comma-separated values", () => {
+        process.env["PAPRIKA_EMAIL"] = "user@test.com";
+        process.env["PAPRIKA_PASSWORD"] = "secret";
+        process.env["MCP_ALLOWED_HOSTS"] = "mcp.example.com, mcp.internal:3000 ,localhost";
+
+        loadConfig(tempDir).match(
+          (config) => {
+            expect(config.http.allowedHosts).toEqual(["mcp.example.com", "mcp.internal:3000", "localhost"]);
+          },
+          (err) => {
+            expect.fail(`Expected Ok but got Err: ${err.message}`);
+          },
+        );
+      });
+
+      it("config-loader.AC9.10: MCP_ALLOWED_ORIGINS splits and trims comma-separated values", () => {
+        process.env["PAPRIKA_EMAIL"] = "user@test.com";
+        process.env["PAPRIKA_PASSWORD"] = "secret";
+        process.env["MCP_ALLOWED_ORIGINS"] = "https://app.example.com,https://other.example.com";
+
+        loadConfig(tempDir).match(
+          (config) => {
+            expect(config.http.allowedOrigins).toEqual(["https://app.example.com", "https://other.example.com"]);
           },
           (err) => {
             expect.fail(`Expected Ok but got Err: ${err.message}`);

@@ -16,6 +16,8 @@ const ENV_VAR_HINTS: Readonly<Record<string, string>> = {
   transport: "MCP_TRANSPORT",
   "http.port": "MCP_HTTP_PORT",
   "http.host": "MCP_HTTP_HOST",
+  "http.allowedHosts": "MCP_ALLOWED_HOSTS",
+  "http.allowedOrigins": "MCP_ALLOWED_ORIGINS",
   "features.replicateApiToken": "REPLICATE_API_TOKEN",
   "features.embeddings.apiKey": "OPENAI_API_KEY",
   "features.embeddings.baseUrl": "OPENAI_BASE_URL",
@@ -144,6 +146,14 @@ export const paprikaConfigSchema = z
       .object({
         port: z.coerce.number().int().min(1).max(65535).default(3000),
         host: z.string().min(1).default("0.0.0.0"),
+        // DNS rebinding protection: when either list is non-empty the SDK
+        // transport enforces exact-match validation of the request Host /
+        // Origin header on /mcp. Both default to empty (no restriction) to
+        // preserve the reverse-proxy-friendly default the HTTP transport
+        // assumes — operators putting the server on the public internet
+        // without a proxy should set these. See docs/configuration.md.
+        allowedHosts: listField.default([]),
+        allowedOrigins: listField.default([]),
       })
       .default({}),
     features: z
@@ -305,6 +315,8 @@ function buildEnvOverrides(env: NodeJS.ProcessEnv): Record<string, unknown> {
   if (env["MCP_TRANSPORT"] !== undefined) overrides["transport"] = env["MCP_TRANSPORT"];
   if (env["MCP_HTTP_PORT"] !== undefined) http["port"] = env["MCP_HTTP_PORT"];
   if (env["MCP_HTTP_HOST"] !== undefined) http["host"] = env["MCP_HTTP_HOST"];
+  if (env["MCP_ALLOWED_HOSTS"] !== undefined) http["allowedHosts"] = env["MCP_ALLOWED_HOSTS"];
+  if (env["MCP_ALLOWED_ORIGINS"] !== undefined) http["allowedOrigins"] = env["MCP_ALLOWED_ORIGINS"];
 
   if (env["REPLICATE_API_TOKEN"] !== undefined) features["replicateApiToken"] = env["REPLICATE_API_TOKEN"];
   if (env["OPENAI_API_KEY"] !== undefined) embeddings["apiKey"] = env["OPENAI_API_KEY"];
