@@ -55,6 +55,15 @@ interface Session {
  */
 export async function startHttp(config: PaprikaConfig): Promise<HttpTransportHandle> {
   const sessions = new Map<string, Session>();
+
+  // DNS rebinding protection: derive once at startup. The SDK's transport
+  // options for allowedHosts/allowedOrigins/enableDnsRebindingProtection carry
+  // @deprecated JSDoc in @modelcontextprotocol/sdk 1.29.0 (it suggests
+  // external middleware) but the implementation still exists and is the
+  // smallest surface for this knob. If/when the SDK removes them, swap to a
+  // Hono middleware on /mcp.
+  const { allowedHosts, allowedOrigins } = config.http;
+  const dnsRebindingProtection = allowedHosts.length > 0 || allowedOrigins.length > 0;
   // The snapshot getter is invoked at notification time. Materializing the
   // current set of servers here avoids iterator invalidation during async
   // fan-out (e.g. broadcasting a logging message while a session is being
@@ -204,6 +213,9 @@ export async function startHttp(config: PaprikaConfig): Promise<HttpTransportHan
       onsessionclosed: (id) => {
         sessions.delete(id);
       },
+      allowedHosts,
+      allowedOrigins,
+      enableDnsRebindingProtection: dnsRebindingProtection,
     });
 
     await server.connect(transport);

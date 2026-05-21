@@ -33,8 +33,8 @@ function makeStdioConfig(): PaprikaConfig {
     paprika: { email: "test@example.com", password: "secret" },
     sync: { enabled: false, interval: 60_000 },
     transport: "stdio",
-    http: { port: 3000, host: "127.0.0.1" },
-  } as PaprikaConfig;
+    http: { port: 3000, host: "127.0.0.1", allowedHosts: [], allowedOrigins: [] },
+  } as unknown as PaprikaConfig;
 }
 
 function makeHttpConfig(oauthIssuer: string): PaprikaConfig {
@@ -42,7 +42,7 @@ function makeHttpConfig(oauthIssuer: string): PaprikaConfig {
     paprika: { email: "test@example.com", password: "secret" },
     sync: { enabled: false, interval: 60_000 },
     transport: "http",
-    http: { port: 0, host: "127.0.0.1" },
+    http: { port: 0, host: "127.0.0.1", allowedHosts: [], allowedOrigins: [] },
     oauth: {
       publicUrl: "https://mcp.example.test",
       preset: undefined,
@@ -83,7 +83,7 @@ describe("buildAuthContext", () => {
         paprika: { email: "test@example.com", password: "secret" },
         sync: { enabled: false, interval: 60_000 },
         transport: "http",
-        http: { port: 0, host: "127.0.0.1" },
+        http: { port: 0, host: "127.0.0.1", allowedHosts: [], allowedOrigins: [] },
         // no oauth block
       } as unknown as PaprikaConfig;
 

@@ -118,7 +118,7 @@ function makeConfig(overrides: Partial<PaprikaConfig> = {}): PaprikaConfig {
     paprika: { email: "test@example.com", password: "secret" },
     sync: { enabled: false, interval: 60_000 },
     transport: "stdio",
-    http: { port: 0, host: "127.0.0.1" },
+    http: { port: 0, host: "127.0.0.1", allowedHosts: [], allowedOrigins: [] },
     ...overrides,
   } as PaprikaConfig;
 }
@@ -375,6 +375,112 @@ describe("HTTP transport (Streamable HTTP)", () => {
     });
   });
 
+  describe("HT.10: DNS rebinding protection toggles", () => {
+    // @hono/mcp's StreamableHTTPTransport implements its own DNS rebinding
+    // validation that is stricter than the upstream SDK's: when
+    // allowedOrigins is non-empty, requests MUST carry an Origin header that
+    // is in the list (missing Origin is rejected, not waved through). That
+    // means MCP_ALLOWED_ORIGINS effectively requires a browser-shaped
+    // client; CLI/SDK clients that don't send Origin would be locked out.
+    // undici's fetch refuses to override the Host header, so we only
+    // exercise the Origin path here.
+    function initializeBody(): Record<string, unknown> {
+      return {
+        jsonrpc: "2.0",
+        id: 1,
+        method: "initialize",
+        params: {
+          protocolVersion: "2025-06-18",
+          capabilities: {},
+          clientInfo: { name: "vitest", version: "0" },
+        },
+      };
+    }
+
+    it("rejects POST /mcp with a disallowed Origin header", async () => {
+      const handle = await startHttp(
+        makeConfig({
+          http: { port: 0, host: "127.0.0.1", allowedHosts: [], allowedOrigins: ["https://allowed.example.test"] },
+        }),
+      );
+      try {
+        const response = await fetch(`http://127.0.0.1:${handle.port.toString()}/mcp`, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            accept: "application/json, text/event-stream",
+            origin: "https://evil.example.test",
+          },
+          body: JSON.stringify(initializeBody()),
+        });
+        expect(response.status).toBe(403);
+      } finally {
+        await handle.shutdown();
+      }
+    });
+
+    it("rejects POST /mcp when allowedOrigins is set and no Origin header is sent", async () => {
+      const handle = await startHttp(
+        makeConfig({
+          http: { port: 0, host: "127.0.0.1", allowedHosts: [], allowedOrigins: ["https://allowed.example.test"] },
+        }),
+      );
+      try {
+        const response = await fetch(`http://127.0.0.1:${handle.port.toString()}/mcp`, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            accept: "application/json, text/event-stream",
+          },
+          body: JSON.stringify(initializeBody()),
+        });
+        expect(response.status).toBe(403);
+      } finally {
+        await handle.shutdown();
+      }
+    });
+
+    it("accepts POST /mcp with an allowed Origin header", async () => {
+      const handle = await startHttp(
+        makeConfig({
+          http: { port: 0, host: "127.0.0.1", allowedHosts: [], allowedOrigins: ["https://allowed.example.test"] },
+        }),
+      );
+      try {
+        const response = await fetch(`http://127.0.0.1:${handle.port.toString()}/mcp`, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            accept: "application/json, text/event-stream",
+            origin: "https://allowed.example.test",
+          },
+          body: JSON.stringify(initializeBody()),
+        });
+        expect(response.status).toBe(200);
+      } finally {
+        await handle.shutdown();
+      }
+    });
+
+    it("leaves all requests unchallenged when both lists are empty (default)", async () => {
+      const handle = await startHttp(makeConfig());
+      try {
+        const response = await fetch(`http://127.0.0.1:${handle.port.toString()}/mcp`, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            accept: "application/json, text/event-stream",
+            origin: "https://anywhere.example.test",
+          },
+          body: JSON.stringify(initializeBody()),
+        });
+        expect(response.status).toBe(200);
+      } finally {
+        await handle.shutdown();
+      }
+    });
+  });
+
   describe("HT.9: graceful shutdown aborts open SSE streams within the timeout", () => {
     it("returns from shutdown() promptly and refuses further connections", async () => {
       const handle = await startHttp(makeConfig());
@@ -429,7 +535,7 @@ function makeOAuthConfig(): PaprikaConfig {
     paprika: { email: "test@example.com", password: "secret" },
     sync: { enabled: false, interval: 60_000 },
     transport: "http",
-    http: { port: 0, host: "127.0.0.1" },
+    http: { port: 0, host: "127.0.0.1", allowedHosts: [], allowedOrigins: [] },
     oauth: {
       publicUrl: PUBLIC_URL,
       preset: undefined,

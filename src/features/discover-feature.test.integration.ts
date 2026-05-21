@@ -83,7 +83,7 @@ function makePaprikaConfig() {
     transport: "stdio" as const,
     paprika: { email: "test@example.com", password: "pass" },
     sync: { enabled: true, interval: 5000, pendingWriteTtl: 60000 },
-    http: { port: 0, host: "127.0.0.1" },
+    http: { port: 0, host: "127.0.0.1", allowedHosts: [], allowedOrigins: [] },
     features: { embeddings: makeOllamaConfig() },
   };
 }
