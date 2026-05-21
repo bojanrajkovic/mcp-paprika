@@ -102,3 +102,5 @@ cosign verify ghcr.io/bojanrajkovic/mcp-paprika:$TAG \
   --certificate-identity-regexp '^https://github\.com/bojanrajkovic/mcp-paprika/' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 ```
+
+> **cosign version requirement:** the workflow signs via `sigstore/cosign-installer` (latest), which uses OCI 1.1 referrers to store the signature alongside the image rather than a separate `.sig` tag. `cosign verify` needs a version that supports referrers — **2.5+ works out of the box**, and earlier 2.x versions need `--registry-referrers-mode=oci-1-1`. Older versions report "no signatures found" against an image that is in fact correctly signed. The Docker-run alias is a convenient way to pin the verify-side version: `docker run --rm ghcr.io/sigstore/cosign/cosign:latest verify …`.
