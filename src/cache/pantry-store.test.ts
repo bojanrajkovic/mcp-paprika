@@ -294,6 +294,19 @@ describe("PantryStore", () => {
       expect(tinyTtlStore.isPendingUpsert("uid-1" as PantryItemUid)).toBe(true);
     });
 
+    it("TTL=0 disables pending-write tracking entirely (sync.enabled=false mode)", () => {
+      // Codex P2 round 3, PR #92: when the background sync loop is disabled,
+      // syncOnce() never runs to drain the map. The construction site passes
+      // TTL=0 in that case; mark methods must become no-ops to prevent
+      // unbounded accumulation across writes.
+      const disabledStore = new PantryStore({ pendingWriteTtlMs: 0 });
+      disabledStore.markPendingUpsert("uid-1" as PantryItemUid);
+      disabledStore.markPendingDelete("uid-2" as PantryItemUid);
+      expect(disabledStore.pendingWriteCount).toBe(0);
+      expect(disabledStore.isPendingUpsert("uid-1" as PantryItemUid)).toBe(false);
+      expect(disabledStore.isPendingDelete("uid-2" as PantryItemUid)).toBe(false);
+    });
+
     it("pending writes are independent of items, tombstones, and hasSynced", () => {
       // Marking a pending write must not touch _items, _tombstones, or _hasSynced.
       const uid = "uid-1" as PantryItemUid;

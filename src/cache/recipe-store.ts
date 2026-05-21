@@ -263,10 +263,15 @@ export class RecipeStore {
   }
 
   markPendingUpsert(uid: RecipeUid, at: number = Date.now()): void {
+    // TTL <= 0 disables pending-write tracking entirely. Used when the
+    // background sync loop is disabled — without periodic syncOnce calls to
+    // sweep, marks would accumulate indefinitely (codex P2, PR #92).
+    if (this._pendingWriteTtlMs <= 0) return;
     this._pendingWrites.set(uid, { kind: "upsert", at });
   }
 
   markPendingDelete(uid: RecipeUid, at: number = Date.now()): void {
+    if (this._pendingWriteTtlMs <= 0) return;
     this._pendingWrites.set(uid, { kind: "delete", at });
   }
 
