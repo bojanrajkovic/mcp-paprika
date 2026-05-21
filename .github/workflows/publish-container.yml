@@ -98,14 +98,30 @@ jobs:
           tags: mcp-paprika:scan
           labels: ${{ steps.meta.outputs.labels }}
 
+      # Two scan passes:
+      #   1. Informational — surfaces HIGH + CRITICAL in the log for
+      #      visibility but never fails the build. Lets reviewers see
+      #      HIGH-severity drift accumulating in transitive deps before it
+      #      escalates to CRITICAL.
+      #   2. Fail-gate — only CRITICAL fails the workflow. CRITICAL is the
+      #      "stop the line" bar; HIGH belongs in a follow-up.
       # `ignore-unfixed: true` skips vulns with no published patch — those
       # aren't actionable at release time and would block on unfixable noise.
-      - name: Trivy scan (fail on CRITICAL)
+      - name: Trivy scan (informational, HIGH + CRITICAL)
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: mcp-paprika:scan
           format: table
           severity: HIGH,CRITICAL
+          exit-code: '0'
+          ignore-unfixed: true
+
+      - name: Trivy fail-gate (CRITICAL only)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: mcp-paprika:scan
+          format: table
+          severity: CRITICAL
           exit-code: '1'
           ignore-unfixed: true
 
