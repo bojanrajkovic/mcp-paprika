@@ -1,0 +1,169 @@
+name: Publish Container
+
+# Fires on the same edge as the npm publish workflow: release-please-action
+# creates a GitHub Release after the version-bump PR merges, which triggers
+# `release: published`. npm + container ship from the same tag.
+on:
+  release:
+    types: [published]
+
+concurrency:
+  group: publish-container-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write # checkout + anchore/sbom-action upload-release-assets
+  id-token: write # OIDC for cosign + Sigstore-backed attestations
+  packages: write # GHCR push
+  attestations: write # actions/attest-* writes attestations to the registry
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  publish:
+    name: Build, scan, sign & publish
+    runs-on: ubuntu-latest
+    # Headroom for the Trivy DB pull + multi-arch buildx + GHCR push.
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      # QEMU registers the binfmt handlers for cross-platform Docker builds.
+      # This is *not* cross-compilation — the app is pure JS and the build
+      # produces byte-identical layers per arch; only the distroless base
+      # image differs. Emulation cost is small for a Node-only build.
+      - uses: docker/setup-qemu-action@ce360397dd3f832beb865e1373c09c0e9f86d70a # v4.0.0
+        with:
+          platforms: linux/arm64
+
+      - uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4.0.0
+
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+
+      - uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4.1.0
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Image metadata
+        id: meta
+        uses: docker/metadata-action@030e881283bb7a6894de51c315a6bfe6a94e05cf # v6.0.0
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          # The release tag from release-please (e.g. v1.2.0) becomes the
+          # version tag. `:latest` is only added for non-prerelease releases,
+          # so pulls of `:latest` always land on a stable version while
+          # release-please RCs (1.2.0-rc1) get only the version tag.
+          tags: |
+            type=semver,pattern={{version}},value=${{ github.event.release.tag_name }}
+            type=raw,value=latest,enable=${{ !github.event.release.prerelease }}
+
+      # --- Build → scan → push, in that order ---
+      #
+      # First build loads an amd64 image into the local Docker daemon (no
+      # registry push). Trivy scans it. Only on scan pass does a second
+      # build push to GHCR. Vulnerable images never reach the registry, so
+      # cosign and the attestations only ever certify scan-passed digests.
+      #
+      # We scan amd64 only: the app is pure JS and the arm64 image differs
+      # only in the distroless base image, which the upstream project
+      # patches across arches in lockstep. If a dep ever gains arch-specific
+      # native bindings, split this into two single-platform scans.
+      #
+      # (We tried scanning a multi-arch OCI archive directly — Trivy 0.70
+      # only understands Docker-save tarballs or OCI *directory* layouts,
+      # not the OCI tarball that `docker/build-push-action` emits with
+      # `type=oci`. `load: true` produces a daemon-loaded image, which
+      # Trivy scans natively.)
+      #
+      # No external cache (cache-from / cache-to) — GitHub Actions cache is
+      # cross-workflow writable, so a poisoned cache from any workflow on
+      # this repo would be baked into a cosign-signed, provenance-attested
+      # artifact. Release workflows trade build speed for trust. Buildx's
+      # in-run daemon cache (ephemeral to the runner) still makes the second
+      # build cheap by reusing layers from the first.
+
+      - name: Build amd64 (no push) for scanning
+        uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f # v7.1.0
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/amd64
+          push: false
+          load: true
+          tags: mcp-paprika:scan
+          labels: ${{ steps.meta.outputs.labels }}
+
+      # Vulnerability scan via Grype. We're already trusting Anchore for
+      # Syft-based SBOM generation, so keeping the scanner in the same
+      # vendor ecosystem reduces our trusted-vendor set rather than
+      # expanding it. `severity-cutoff: critical` makes the step display
+      # everything but fail only on CRITICAL — equivalent to the
+      # "report HIGH, gate on CRITICAL" intent in a single step.
+      - name: Vulnerability scan (Grype)
+        uses: anchore/scan-action@e1165082ffb1fe366ebaf02d8526e7c4989ea9d2 # v7.4.0
+        with:
+          image: mcp-paprika:scan
+          severity-cutoff: critical
+          fail-build: true
+          output-format: table
+          only-fixed: true
+
+      - name: Build & push (multi-arch, scan passed)
+        id: push
+        uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f # v7.1.0
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+      # --- Supply-chain attestations + signature over the pushed digest ---
+
+      # SLSA provenance: a verifiable record of the workflow run, source
+      # commit, and inputs that produced this digest. Stored as an OCI
+      # attestation in GHCR; verifiable via `gh attestation verify`.
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4.1.0
+        with:
+          subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true
+
+      # SBOM generation (Syft via anchore/sbom-action) produces an SPDX
+      # document for the pushed image; actions/attest-sbom signs it as a
+      # Sigstore attestation and pushes alongside provenance in GHCR.
+      - name: Generate SBOM
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
+        with:
+          image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.push.outputs.digest }}
+          format: spdx-json
+          output-file: /tmp/sbom.spdx.json
+          # The action also uploads the SBOM to the GitHub Release as an
+          # asset; the attestation in GHCR is the canonical verifiable copy.
+          upload-release-assets: true
+          upload-artifact: false
+
+      - name: Attest SBOM
+        uses: actions/attest-sbom@c604332985a26aa8cf1bdc465b92731239ec6b9e # v4.1.0
+        with:
+          subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+          sbom-path: /tmp/sbom.spdx.json
+          push-to-registry: true
+
+      # Cosign signs the *digest* (not the tags), so every tag pointing at
+      # this manifest verifies from a single signature. The OIDC identity
+      # comes from GitHub Actions — no long-lived keys, no secrets. The
+      # signature is published to the public Rekor transparency log.
+      - name: Sign image with cosign
+        env:
+          IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          DIGEST: ${{ steps.push.outputs.digest }}
+        run: cosign sign --yes "${IMAGE}@${DIGEST}"

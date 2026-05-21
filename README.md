@@ -142,8 +142,10 @@ walks through — `MCP_PUBLIC_URL`, an OIDC preset (or discovery URL), upstream
 client credentials, and a non-empty allowlist. Without those, the server exits
 during config validation.
 
+Pull the published image (multi-arch: `linux/amd64`, `linux/arm64`):
+
 ```bash
-docker build -t mcp-paprika:dev .
+docker pull ghcr.io/bojanrajkovic/mcp-paprika:latest
 
 docker run --rm \
   -e PAPRIKA_EMAIL=you@example.com \
@@ -155,8 +157,24 @@ docker run --rm \
   -e MCP_ALLOWED_EMAILS=you@example.com \
   -v "$(pwd)/data:/data" \
   -p 3000:3000 \
-  mcp-paprika:dev
+  ghcr.io/bojanrajkovic/mcp-paprika:latest
 ```
+
+The image is signed with [sigstore/cosign](https://github.com/sigstore/cosign) keyless OIDC and ships SLSA build provenance + an SPDX SBOM as OCI attestations. Verify both before running in untrusted environments — `gh attestation verify` without `--predicate-type` only validates the default (provenance) attestation, so the SBOM needs its own verification:
+
+```bash
+# SLSA build provenance
+gh attestation verify oci://ghcr.io/bojanrajkovic/mcp-paprika:latest \
+  --owner bojanrajkovic \
+  --predicate-type https://slsa.dev/provenance/v1
+
+# SPDX SBOM
+gh attestation verify oci://ghcr.io/bojanrajkovic/mcp-paprika:latest \
+  --owner bojanrajkovic \
+  --predicate-type https://spdx.dev/Document/v2.3
+```
+
+Contributors building from source can use `docker build -t mcp-paprika:dev .` and substitute `mcp-paprika:dev` for the image reference below.
 
 For a one-shot smoke test that just verifies the image launches (no OAuth, no
 remote clients), override the transport to `stdio` — note that this turns the
@@ -169,7 +187,7 @@ docker run --rm -i \
   -e PAPRIKA_EMAIL=you@example.com \
   -e PAPRIKA_PASSWORD=your-password \
   -v "$(pwd)/data:/data" \
-  mcp-paprika:dev
+  ghcr.io/bojanrajkovic/mcp-paprika:latest
 ```
 
 The HTTP-mode image binds on `0.0.0.0:3000` and persists the disk cache and
@@ -190,7 +208,7 @@ docker run --rm \
   -e PAPRIKA_EMAIL=... -e PAPRIKA_PASSWORD=... \
   -v mcp-paprika-data:/data \
   -p 3000:3000 \
-  mcp-paprika:dev
+  ghcr.io/bojanrajkovic/mcp-paprika:latest
 ```
 
 The image also declares a `HEALTHCHECK` that hits `GET /healthz`; verify with:
@@ -242,6 +260,7 @@ OAuth provides authentication-level controls; the reverse proxy provides TLS, ra
 - **[Tools reference](docs/tools/)** — every tool with parameters and examples
 - **[Embedding providers](docs/embedding-providers.md)** — set up semantic search with Ollama, OpenAI, OpenRouter, etc.
 - **[Architecture](docs/architecture.md)** — how it works under the hood
+- **[Releasing](docs/releasing.md)** — maintainer-facing release model, prerelease validation, attestation verification
 
 ## License
 
