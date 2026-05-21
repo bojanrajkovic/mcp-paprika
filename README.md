@@ -160,11 +160,18 @@ docker run --rm \
   ghcr.io/bojanrajkovic/mcp-paprika:latest
 ```
 
-The image is signed with [sigstore/cosign](https://github.com/sigstore/cosign) keyless OIDC and ships SLSA build provenance + an SPDX SBOM as OCI attestations. Verify before running in untrusted environments:
+The image is signed with [sigstore/cosign](https://github.com/sigstore/cosign) keyless OIDC and ships SLSA build provenance + an SPDX SBOM as OCI attestations. Verify both before running in untrusted environments — `gh attestation verify` without `--predicate-type` only validates the default (provenance) attestation, so the SBOM needs its own verification:
 
 ```bash
+# SLSA build provenance
 gh attestation verify oci://ghcr.io/bojanrajkovic/mcp-paprika:latest \
-  --owner bojanrajkovic
+  --owner bojanrajkovic \
+  --predicate-type https://slsa.dev/provenance/v1
+
+# SPDX SBOM
+gh attestation verify oci://ghcr.io/bojanrajkovic/mcp-paprika:latest \
+  --owner bojanrajkovic \
+  --predicate-type https://spdx.dev/Document/v2.3
 ```
 
 Contributors building from source can use `docker build -t mcp-paprika:dev .` and substitute `mcp-paprika:dev` for the image reference below.

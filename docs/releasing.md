@@ -82,7 +82,7 @@ The cosign signature in the public Rekor transparency log persists — Rekor is 
 
   If that is operationally annoying, temporarily disable `publish.yml` from the Actions UI before tagging a manual prerelease and re-enable it afterwards — two clicks, fully reversible.
 
-- The container workflow itself only runs on release events. To test changes to `publish-container.yml` before merging, tag a synthetic prerelease against the PR branch (`gh release create v0.0.0-smoketest.0 --target <branch> --prerelease`). The release event uses the workflow file at the tagged commit, so PR-branch workflow changes are exercised. (`workflow_dispatch` does not work for pre-merge testing because GitHub uses the default-branch version of dispatched workflow files.)
+- The container workflow itself only runs on release events. To test PR-branch changes to `publish-container.yml` before merging, tag a synthetic prerelease against the PR branch (`gh release create v0.0.0-smoketest.0 --target <branch> --prerelease`). The release event uses the workflow file at the tagged commit, so PR-branch workflow changes are actually exercised. `workflow_dispatch` doesn't help here for two compounding reasons: the workflow file has to already exist on the default branch to be dispatchable at all (a brand-new workflow on a PR branch returns HTTP 404 from `gh workflow run`), and even for an existing dispatchable workflow GitHub runs the _default-branch definition_ regardless of which `ref` you select for `github.ref` — so PR-branch edits to the workflow body are never the version that executes. The release-event path is the only way to validate workflow changes pre-merge.
 
 - GHCR container packages from a public repo are private at the package level by default. The first push lands as a private package; flip visibility to public in the package settings (one-time, persists for future tags).
 
@@ -93,9 +93,16 @@ Consumers can verify the supply-chain attestations on any published tag:
 ```sh
 TAG=1.2.0
 
-# SLSA build provenance + SBOM
+# SLSA build provenance — gh attestation verify defaults to provenance
+# only, so SBOM needs an explicit predicate-type to actually check it.
 gh attestation verify oci://ghcr.io/bojanrajkovic/mcp-paprika:$TAG \
-  --owner bojanrajkovic
+  --owner bojanrajkovic \
+  --predicate-type https://slsa.dev/provenance/v1
+
+# SPDX SBOM
+gh attestation verify oci://ghcr.io/bojanrajkovic/mcp-paprika:$TAG \
+  --owner bojanrajkovic \
+  --predicate-type https://spdx.dev/Document/v2.3
 
 # cosign keyless signature
 cosign verify ghcr.io/bojanrajkovic/mcp-paprika:$TAG \
