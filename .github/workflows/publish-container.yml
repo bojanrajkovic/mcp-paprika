@@ -12,10 +12,10 @@ concurrency:
   cancel-in-progress: false
 
 permissions:
-  contents: write      # checkout + anchore/sbom-action upload-release-assets
-  id-token: write      # OIDC for cosign + Sigstore-backed attestations
-  packages: write      # GHCR push
-  attestations: write  # actions/attest-* writes attestations to the registry
+  contents: write # checkout + anchore/sbom-action upload-release-assets
+  id-token: write # OIDC for cosign + Sigstore-backed attestations
+  packages: write # GHCR push
+  attestations: write # actions/attest-* writes attestations to the registry
 
 env:
   REGISTRY: ghcr.io
