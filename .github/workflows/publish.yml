@@ -33,5 +33,26 @@ jobs:
       - name: Build
         run: pnpm build
 
+      # Stable releases publish to the `latest` dist-tag (npm's default when
+      # no `--tag` is given). Prereleases publish under a dist-tag derived
+      # from the semver prerelease identifier (1.2.0-beta.0 → @beta,
+      # 1.2.0-rc.1 → @rc, 0.0.0-smoketest.N → @smoketest), so `npm install`
+      # without a tag always lands on a stable version. The in-workflow
+      # `npm version` bumps the runner's package.json to match the release
+      # tag — it is never committed back, so the source-of-truth in main
+      # only changes when release-please cuts a stable bump-PR.
       - name: Publish
-        run: npm publish --provenance --ignore-scripts
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+          IS_PRERELEASE: ${{ github.event.release.prerelease }}
+        run: |
+          if [ "$IS_PRERELEASE" = "true" ]; then
+            VERSION="${TAG#v}"
+            DIST_TAG=$(printf '%s' "$VERSION" | sed -nE 's/^[0-9]+\.[0-9]+\.[0-9]+-([a-z][a-z0-9]*).*/\1/p')
+            DIST_TAG="${DIST_TAG:-next}"
+            echo "Publishing prerelease $VERSION under dist-tag @$DIST_TAG"
+            npm version --no-git-tag-version --allow-same-version "$VERSION"
+            npm publish --provenance --ignore-scripts --tag "$DIST_TAG"
+          else
+            npm publish --provenance --ignore-scripts
+          fi

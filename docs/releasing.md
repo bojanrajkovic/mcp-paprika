@@ -5,11 +5,13 @@ The project ships two artifacts from each release tag:
 - **npm package** at `@bojanrajkovic/mcp-paprika` via `publish.yml`
 - **Container image** at `ghcr.io/bojanrajkovic/mcp-paprika` via `publish-container.yml` (multi-arch, signed, with SLSA provenance and SPDX SBOM attestations)
 
-Both workflows fire on the same `release: published` event, so npm and the container always ship from the same git tag.
+Both workflows fire on `release: published`, so npm and the container always ship from the same git tag.
+
+Prereleases are first-class: tagging a release as prerelease publishes the npm package under a derived dist-tag (`@beta`, `@rc`, `@next`, …) and the container under the matching version tag, without ever updating the `latest` / `:latest` pointers. The published artifacts are permanent — npm versions and GHCR images stay as part of the historical record.
 
 ## Release model
 
-Trunk-based, release-please-driven, with optional empirical validation via prerelease container tags.
+Trunk-based, release-please-driven, with optional prerelease tags for pre-merge validation of the container and npm package together.
 
 ### Stable releases
 
@@ -18,13 +20,13 @@ Trunk-based, release-please-driven, with optional empirical validation via prere
 3. Merging that release PR cuts the GitHub Release at the new tag.
 4. `publish.yml` and `publish-container.yml` fire on the published release, building and shipping npm + container with full attestations.
 
-`:latest` on GHCR is updated only for non-prerelease releases, so consumers pulling `ghcr.io/bojanrajkovic/mcp-paprika:latest` always land on a stable version.
+The `latest` pointers — GHCR's `:latest` tag and npm's `latest` dist-tag — update only for non-prerelease releases, so consumers without a pinned version always land on a stable release.
 
-### Optional: validate a release candidate before merging
+### Validating a release candidate before merging
 
-The container workflow also runs for prereleases, which lets you build, sign, and deploy a real candidate image before promoting it to stable:
+Both workflows run for prereleases, so a real candidate image and npm package can be built, signed, and exercised before promotion:
 
-1. With the release-please PR open (version-bump + changelog visible), tag a prerelease against `main`:
+1. With the release-please PR open, tag a prerelease against `main`:
 
    ```sh
    gh release create v1.2.0-beta.0 \
@@ -33,58 +35,37 @@ The container workflow also runs for prereleases, which lets you build, sign, an
      --notes "Pre-merge validation for 1.2.0"
    ```
 
-2. `publish-container.yml` builds `ghcr.io/bojanrajkovic/mcp-paprika:1.2.0-beta.0`. `:latest` is not touched.
-3. Pull and exercise the candidate image in your environment.
-4. If it passes: merge the release-please PR. release-please cuts `v1.2.0`, the workflows produce a stable image at `:1.2.0` and roll `:latest`.
-5. If it fails: abandon the candidate, fix forward, and tag a new prerelease (`v1.2.0-beta.1`, etc.).
+2. `publish-container.yml` pushes `ghcr.io/bojanrajkovic/mcp-paprika:1.2.0-beta.0` and `publish.yml` publishes `@bojanrajkovic/mcp-paprika@1.2.0-beta.0` under the `@beta` dist-tag. `:latest` and the npm `latest` dist-tag are not touched.
+3. Pull the candidate and exercise it (`docker pull ghcr.io/bojanrajkovic/mcp-paprika:1.2.0-beta.0` or `npm install @bojanrajkovic/mcp-paprika@beta`).
+4. If it passes: merge the release-please PR. release-please cuts `v1.2.0`, the workflows produce a stable image at `:1.2.0` and the npm `latest` dist-tag rolls to `1.2.0`.
+5. If it fails: abandon the candidate, fix forward, tag a new prerelease (`v1.2.0-beta.1`, etc.). The failed candidate stays in the registry as historical record.
 
-Use a freeze on `main` only for the merge window between "candidate validated" and "release PR merged" — typically minutes, not hours.
+Freeze `main` only between "candidate validated" and "release PR merged" — typically minutes.
 
 ### release-please coordination
 
 release-please uses `.release-please-manifest.json` as the source of truth for the current version. Manual prerelease tags created via `gh release create`:
 
-- **Do not** update `.release-please-manifest.json` (no `package.json` bump, no CHANGELOG entry).
-- **Do not** affect release-please's commit range when it computes the next release — release-please looks at commits since the manifest version's tag, not at every release tag in the repo.
-- **Do** appear in the GitHub Releases list as prereleases. Delete them after validation (see below) to keep the list clean.
+- Do not update `.release-please-manifest.json` (no `package.json` bump in main, no CHANGELOG entry). `publish.yml` does an in-workflow `npm version` so the published artifact's version matches the release tag, but that bump never commits back.
+- Do not affect release-please's commit range — it looks at commits since the manifest version's tag, not at every release tag in the repo.
+- Do appear in the GitHub Releases list as prereleases. They're kept as historical record.
 
-The `chore`/`docs` conventional-commit types are hidden from `CHANGELOG.md` via the `changelog-sections` config in `release-please-config.json`. Workflow tweaks, test-only changes, and other internal commits should use those types so they don't surface as user-facing changelog noise.
+`chore`/`docs` conventional-commit types are hidden from `CHANGELOG.md` via the `changelog-sections` config in `release-please-config.json`. Workflow tweaks, test-only changes, and other internal commits should use those types.
 
 ## Tag conventions
 
-| Tag form                                     | Semantic            | Triggers `publish.yml`?               | Triggers `publish-container.yml`? | Rolls `:latest`? |
-| -------------------------------------------- | ------------------- | ------------------------------------- | --------------------------------- | ---------------- |
-| `v1.2.0` (release-please cut)                | Stable release      | yes                                   | yes                               | yes              |
-| `v1.2.0-beta.0` (manual `--prerelease`)      | RC for validation   | yes — but is gated by package version | yes                               | no               |
-| `v0.0.0-smoketest.N` (manual `--prerelease`) | Workflow smoke test | same                                  | yes                               | no               |
+| Tag form                                | Semantic          | npm output               | Container output       | Rolls `latest` pointers? |
+| --------------------------------------- | ----------------- | ------------------------ | ---------------------- | ------------------------ |
+| `v1.2.0` (release-please cut)           | Stable release    | `1.2.0` → `@latest`      | `:1.2.0` and `:latest` | yes                      |
+| `v1.2.0-beta.0` (manual `--prerelease`) | RC for validation | `1.2.0-beta.0` → `@beta` | `:1.2.0-beta.0`        | no                       |
 
-Manual prerelease tags should always include a valid [semver prerelease identifier](https://semver.org/#spec-item-9) (`-beta.0`, `-rc.1`, `-smoketest.0`, …) so `docker/metadata-action` parses them correctly into a clean version tag on the image.
-
-## Cleanup after a validation or smoke-test prerelease
-
-```sh
-TAG=v1.2.0-beta.0
-
-# Delete the GitHub Release and its git tag in one step
-gh release delete "$TAG" --yes --cleanup-tag
-
-# Find and delete the GHCR container version
-gh api /user/packages/container/mcp-paprika/versions \
-  --jq ".[] | select(.metadata.container.tags[] == \"${TAG#v}\") | .id" \
-  | xargs -I{} gh api -X DELETE "/user/packages/container/mcp-paprika/versions/{}"
-```
-
-The cosign signature in the public Rekor transparency log persists — Rekor is append-only by design. That entry is just provenance for a dev build; it does not affect anything beyond historical auditability.
+Manual prerelease tags should include a valid [semver prerelease identifier](https://semver.org/#spec-item-9) (`-beta.0`, `-rc.1`, …) so `docker/metadata-action` parses them into a clean image version tag, and `publish.yml` derives the npm dist-tag from the leading alpha portion of that identifier. A prerelease without a recognizable identifier (`v1.2.0-0`) falls back to the `@next` dist-tag.
 
 ## Operational notes
 
-- `publish.yml` fires on every published release including prereleases. The `npm publish` step uses whichever version `package.json` records, so a manual prerelease tag against `main` triggers an attempted re-publish of the current stable version, which npm rejects with a benign "version already exists" error. The workflow run shows as failed in the Actions tab; the npm registry is unaffected.
+- To validate PR-branch changes to `publish-container.yml` itself, tag a synthetic prerelease against the PR branch. The release event uses the workflow file at the tagged commit, so the PR-branch version is what executes. `workflow_dispatch` is not a substitute: GitHub runs the default-branch workflow definition regardless of which `ref` you dispatch against, so PR-branch edits to the workflow body are never the version that runs.
 
-  If that is operationally annoying, temporarily disable `publish.yml` from the Actions UI before tagging a manual prerelease and re-enable it afterwards — two clicks, fully reversible.
-
-- The container workflow itself only runs on release events. To test PR-branch changes to `publish-container.yml` before merging, tag a synthetic prerelease against the PR branch (`gh release create v0.0.0-smoketest.0 --target <branch> --prerelease`). The release event uses the workflow file at the tagged commit, so PR-branch workflow changes are actually exercised. `workflow_dispatch` doesn't help here for two compounding reasons: the workflow file has to already exist on the default branch to be dispatchable at all (a brand-new workflow on a PR branch returns HTTP 404 from `gh workflow run`), and even for an existing dispatchable workflow GitHub runs the _default-branch definition_ regardless of which `ref` you select for `github.ref` — so PR-branch edits to the workflow body are never the version that executes. The release-event path is the only way to validate workflow changes pre-merge.
-
-- GHCR container packages from a public repo are private at the package level by default. The first push lands as a private package; flip visibility to public in the package settings (one-time, persists for future tags).
+- GHCR container packages from a public repo are private at the package level by default. The first push lands as a private package; flip visibility to public in the package settings once (persists for future tags).
 
 ## Verifying a published image
 
@@ -110,4 +91,26 @@ cosign verify ghcr.io/bojanrajkovic/mcp-paprika:$TAG \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 ```
 
-> **cosign version requirement:** the workflow signs via `sigstore/cosign-installer` (latest), which uses OCI 1.1 referrers to store the signature alongside the image rather than a separate `.sig` tag. `cosign verify` needs a version that supports referrers — **2.5+ works out of the box**, and earlier 2.x versions need `--registry-referrers-mode=oci-1-1`. Older versions report "no signatures found" against an image that is in fact correctly signed. The Docker-run alias is a convenient way to pin the verify-side version: `docker run --rm ghcr.io/sigstore/cosign/cosign:latest verify …`.
+> **cosign version requirement:** the workflow signs using OCI 1.1 referrers, so `cosign verify` needs cosign 2.5+. Earlier 2.x versions need `--registry-referrers-mode=oci-1-1`; older versions report "no signatures found" against an image that is correctly signed. `docker run --rm ghcr.io/sigstore/cosign/cosign:latest verify …` is a convenient way to pin the verify-side version.
+
+## Deleting a published version (rare)
+
+Published versions are intentionally permanent — both registries persist them as historical record. If you need to delete one anyway (accidental publish, leaked secret in a build), here is the procedure:
+
+```sh
+TAG=v1.2.0-beta.0
+
+# GitHub Release + git tag
+gh release delete "$TAG" --yes --cleanup-tag
+
+# GHCR container version
+gh api /user/packages/container/mcp-paprika/versions \
+  --jq ".[] | select(.metadata.container.tags[] == \"${TAG#v}\") | .id" \
+  | xargs -I{} gh api -X DELETE "/user/packages/container/mcp-paprika/versions/{}"
+
+# npm package version (only possible within 72 hours of publish, and only
+# if the version has no dependents — see npm's unpublish policy)
+npm unpublish "@bojanrajkovic/mcp-paprika@${TAG#v}"
+```
+
+The cosign signature in the public Rekor transparency log persists regardless — Rekor is append-only by design.
