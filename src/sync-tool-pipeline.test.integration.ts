@@ -11,7 +11,7 @@ import { PantryStore } from "./cache/pantry-store.js";
 import { SyncEngine } from "./paprika/sync.js";
 import { makeCategory, makeRecipe } from "./cache/__fixtures__/recipes.js";
 import { makePantryItem } from "./cache/__fixtures__/pantry.js";
-import type { PantryItemUid, RecipeUid } from "./paprika/types.js";
+import type { PantryItem, PantryItemUid, RecipeUid } from "./paprika/types.js";
 import { makeTestServer, makeCtx, getText } from "./tools/tool-test-utils.js";
 import { registerSearchTool } from "./tools/search.js";
 import { registerReadTool } from "./tools/read.js";
@@ -621,6 +621,89 @@ describe("Sync → Tool Pipeline Integration", () => {
       // Local "trashed" state should survive the sync — diff.changed for this
       // UID is filtered out by the pending-delete guard.
       expect(store.get(trashedRecipe.uid)?.inTrash).toBe(true);
+    });
+
+    it("AC5.6: pantry pending-upsert clears on content match (not UID match alone)", async () => {
+      // Codex P1: clearing pending-upsert on UID presence drops protection for
+      // updates, since the UID is already in listPantry with pre-write content.
+      // This test guards against that regression for the update path.
+      const { cache, pantryStore, engine } = makeRaceContext();
+      await cache.init();
+
+      // Match makeSnakeCasePantryItem's defaults so pantryItemsEqual can return true
+      // when the wire item matches our local content.
+      const updated = makePantryItem({
+        uid: "PANTRY-UPDATE" as PantryItemUid,
+        ingredient: "Eggs",
+        quantity: "2 dozen",
+        aisle: "",
+        aisleUid: "" as PantryItem["aisleUid"],
+        purchaseDate: "2026-05-21 00:00:00",
+      });
+      pantryStore.load([updated]);
+      await cache.putPantryItem(updated);
+      await cache.flush();
+      pantryStore.markPendingUpsert(updated.uid);
+
+      // First sync: canonical list returns the pre-write version (different quantity).
+      const stalePantryWire = makeSnakeCasePantryItem("PANTRY-UPDATE", { ingredient: "Eggs", quantity: "1 dozen" });
+      server.use(
+        http.get(`${API_BASE}/recipes/`, () => HttpResponse.json({ result: [] })),
+        http.get(`${API_BASE}/categories/`, () => HttpResponse.json({ result: [] })),
+        http.get(`${API_BASE}/pantry/`, () => HttpResponse.json({ result: [stalePantryWire] })),
+      );
+      await engine.syncOnce();
+      // Pending-upsert must still be set — content didn't match.
+      expect(pantryStore.isPendingUpsert(updated.uid)).toBe(true);
+      expect(pantryStore.get(updated.uid)?.quantity).toBe("2 dozen");
+
+      // Second sync: canonical list now matches our local content.
+      const propagatedWire = makeSnakeCasePantryItem("PANTRY-UPDATE", { ingredient: "Eggs", quantity: "2 dozen" });
+      server.use(http.get(`${API_BASE}/pantry/`, () => HttpResponse.json({ result: [propagatedWire] })));
+      await engine.syncOnce();
+      // Pending-upsert cleared because content matched.
+      expect(pantryStore.isPendingUpsert(updated.uid)).toBe(false);
+      expect(pantryStore.get(updated.uid)?.quantity).toBe("2 dozen");
+    });
+
+    it("AC5.7: recipe pending-upsert clears on hash match (not UID match alone)", async () => {
+      // Codex P1: same regression guard for recipes — UID is in entries with
+      // pre-write hash while propagation is in flight.
+      const { cache, store, engine } = makeRaceContext();
+      await cache.init();
+
+      const recipe = makeRecipe({ uid: "recipe-edit" as RecipeUid, name: "After Edit", hash: "hash-new" });
+      await cache.putRecipe(recipe, recipe.hash);
+      await cache.flush();
+      store.set(recipe);
+      store.markPendingUpsert(recipe.uid);
+
+      // First sync: canonical entries return the pre-write hash.
+      server.use(
+        http.get(`${API_BASE}/recipes/`, () =>
+          HttpResponse.json({ result: [{ uid: "recipe-edit", hash: "hash-old" }] }),
+        ),
+        http.get(`${API_BASE}/recipe/:uid/`, ({ params }) =>
+          HttpResponse.json({ result: makeSnakeCaseRecipe(params["uid"] as string, { name: "Before Edit" }) }),
+        ),
+        http.get(`${API_BASE}/categories/`, () => HttpResponse.json({ result: [] })),
+        http.get(`${API_BASE}/pantry/`, () => HttpResponse.json({ result: [] })),
+      );
+      await engine.syncOnce();
+      // Pending-upsert must still be set — hash didn't match.
+      expect(store.isPendingUpsert(recipe.uid)).toBe(true);
+      expect(store.get(recipe.uid)?.name).toBe("After Edit");
+
+      // Second sync: canonical entries now have our hash.
+      server.use(
+        http.get(`${API_BASE}/recipes/`, () =>
+          HttpResponse.json({ result: [{ uid: "recipe-edit", hash: "hash-new" }] }),
+        ),
+      );
+      await engine.syncOnce();
+      // Pending-upsert cleared because hash matched.
+      expect(store.isPendingUpsert(recipe.uid)).toBe(false);
+      expect(store.get(recipe.uid)?.name).toBe("After Edit");
     });
 
     it("AC5.5: TTL fallback eventually clears pending-deletes after expiry", async () => {

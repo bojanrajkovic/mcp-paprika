@@ -129,10 +129,16 @@ export class SyncEngine {
         this._context.store.delete(uid as RecipeUid);
       }
 
-      // Observation-based clearing for recipe pending-upserts: if our UID
-      // appears in the canonical entries list, our write round-tripped.
+      // Observation-based clearing for recipe pending-upserts: clear only when
+      // the canonical entry's hash matches our local cache. UID presence alone
+      // is insufficient for updates — the UID is already in entries with the
+      // PRE-write hash while propagation is in flight, and clearing on UID
+      // presence would drop protection on the first sync cycle and let the
+      // next cycle re-fetch and overwrite our edit (codex P1, PR #92).
       for (const entry of entries) {
-        if (this._context.store.isPendingUpsert(entry.uid)) {
+        if (!this._context.store.isPendingUpsert(entry.uid)) continue;
+        const local = this._context.store.get(entry.uid);
+        if (local !== undefined && local.hash === entry.hash) {
           this._context.store.clearPending(entry.uid);
         }
       }
@@ -192,11 +198,17 @@ export class SyncEngine {
         await this._context.cache.putPantryItem(item);
       }
 
-      // Observation-based clearing for pantry pending-upserts: clear when our
-      // UID appears in the RAW canonical incoming list (not the filtered one
-      // — we want to observe Paprika's actual state).
+      // Observation-based clearing for pantry pending-upserts: clear only when
+      // the canonical item's content equals our local cached content. UID
+      // presence alone is insufficient for updates — the UID is already in
+      // listPantry with the PRE-write quantity/notes/in-stock while propagation
+      // is in flight, and clearing on UID presence would drop protection on
+      // the first sync cycle and let the next cycle reload the stale content
+      // (codex P1, PR #92).
       for (const item of pantryItems) {
-        if (this._context.pantryStore.isPendingUpsert(item.uid)) {
+        if (!this._context.pantryStore.isPendingUpsert(item.uid)) continue;
+        const cached = cachedPantryByUid.get(item.uid);
+        if (cached !== undefined && pantryItemsEqual(cached, item)) {
           this._context.pantryStore.clearPending(item.uid);
         }
       }
