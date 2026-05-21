@@ -64,10 +64,21 @@ jobs:
 
       # --- Build → scan → push, in that order ---
       #
-      # First build emits an OCI archive locally; no registry push. Trivy
-      # scans that archive. Only on scan pass does a second build push to
-      # GHCR. Vulnerable images never reach the registry, so cosign and the
-      # attestations only ever certify scan-passed digests.
+      # First build loads an amd64 image into the local Docker daemon (no
+      # registry push). Trivy scans it. Only on scan pass does a second
+      # build push to GHCR. Vulnerable images never reach the registry, so
+      # cosign and the attestations only ever certify scan-passed digests.
+      #
+      # We scan amd64 only: the app is pure JS and the arm64 image differs
+      # only in the distroless base image, which the upstream project
+      # patches across arches in lockstep. If a dep ever gains arch-specific
+      # native bindings, split this into two single-platform scans.
+      #
+      # (We tried scanning a multi-arch OCI archive directly — Trivy 0.70
+      # only understands Docker-save tarballs or OCI *directory* layouts,
+      # not the OCI tarball that `docker/build-push-action` emits with
+      # `type=oci`. `load: true` produces a daemon-loaded image, which
+      # Trivy scans natively.)
       #
       # No external cache (cache-from / cache-to) — GitHub Actions cache is
       # cross-workflow writable, so a poisoned cache from any workflow on
@@ -76,35 +87,29 @@ jobs:
       # in-run daemon cache (ephemeral to the runner) still makes the second
       # build cheap by reusing layers from the first.
 
-      - name: Build (no push) for scanning
+      - name: Build amd64 (no push) for scanning
         uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f # v7.1.0
         with:
           context: .
           file: ./Dockerfile
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
           push: false
-          outputs: type=oci,dest=/tmp/mcp-paprika.oci.tar
-          tags: ${{ steps.meta.outputs.tags }}
+          load: true
+          tags: mcp-paprika:scan
           labels: ${{ steps.meta.outputs.labels }}
 
-      # Trivy `--input` on a multi-arch OCI archive scans the host-platform
-      # layers by default. For a pure-JS app riding on `gcr.io/distroless` —
-      # which patches CVEs uniformly across arches — amd64 coverage is a
-      # faithful proxy for arm64. If that ever stops being true (e.g. a dep
-      # gains arch-specific native bindings) split this into two scans.
-      #
       # `ignore-unfixed: true` skips vulns with no published patch — those
       # aren't actionable at release time and would block on unfixable noise.
       - name: Trivy scan (fail on CRITICAL)
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
-          input: /tmp/mcp-paprika.oci.tar
+          image-ref: mcp-paprika:scan
           format: table
           severity: HIGH,CRITICAL
           exit-code: '1'
           ignore-unfixed: true
 
-      - name: Build & push (scan passed)
+      - name: Build & push (multi-arch, scan passed)
         id: push
         uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f # v7.1.0
         with:

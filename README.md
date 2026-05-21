@@ -253,6 +253,7 @@ OAuth provides authentication-level controls; the reverse proxy provides TLS, ra
 - **[Tools reference](docs/tools/)** — every tool with parameters and examples
 - **[Embedding providers](docs/embedding-providers.md)** — set up semantic search with Ollama, OpenAI, OpenRouter, etc.
 - **[Architecture](docs/architecture.md)** — how it works under the hood
+- **[Releasing](docs/releasing.md)** — maintainer-facing release model, prerelease validation, attestation verification
 
 ## License
 
