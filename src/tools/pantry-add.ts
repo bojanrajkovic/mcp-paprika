@@ -1,5 +1,5 @@
 // pattern: Imperative Shell
-import { toMessage } from "../utils/log.js";
+import { createLogger, toMessage } from "../utils/log.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
@@ -9,6 +9,8 @@ import { normalizePaprikaDate, paprikaDateToday } from "../paprika/dates.js";
 import { textResult } from "./helpers.js";
 import { commitPantryItem, pantryItemToMarkdown, pantryStartGuard } from "./pantry-helpers.js";
 import type { ServerContext } from "../types/server-context.js";
+
+const log = createLogger("mcp-paprika:add_pantry_item");
 
 export function registerAddPantryItemTool(server: McpServer, ctx: ServerContext): void {
   server.registerTool(
@@ -79,7 +81,9 @@ export function registerAddPantryItemTool(server: McpServer, ctx: ServerContext)
             await commitPantryItem(ctx, saved);
           } catch (error) {
             // AC4.7: store/cache not updated — commitPantryItem not reached
-            return textResult(`Failed to add pantry item: ${toMessage(error)}`);
+            const message = toMessage(error);
+            log(`savePantryItem failed for ${args.ingredient}: ${message}`);
+            return textResult(`Failed to add pantry item: ${message}`);
           }
 
           return textResult(pantryItemToMarkdown(saved));

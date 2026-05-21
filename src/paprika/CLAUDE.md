@@ -101,7 +101,7 @@ Typed HTTP client wrapping the Paprika Cloud Sync API.
 - `buildPantryFormData(item: Readonly<PantryItem>): FormData` — converts pantry item to snake_case JSON via `pantryItemToApiPayload`, gzip-compresses, wraps in FormData with `data.gz` blob
 - `request<T>(method, url, schema, body?): Promise<T>` — authenticated v2 API calls with:
   - Bearer token header (when token exists)
-  - Cockatiel retry (429, 500, 502, 503) + circuit breaker (5 consecutive failures)
+  - Cockatiel retry (HTTP 429/500/502/503 and network-level fetch failures — DNS, TCP reset, TLS handshake, abort; undici throws a bare `TypeError` for these and the client wraps them in a private `NetworkRetryableError` marker so `handleType` matches) + circuit breaker (5 consecutive failures of either kind)
   - 401 re-auth retry (single attempt)
   - Response envelope unwrapping (`{ result: T }` → `T`)
   - Zod schema validation of inner value

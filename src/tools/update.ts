@@ -1,4 +1,4 @@
-import { toMessage } from "../utils/log.js";
+import { createLogger, toMessage } from "../utils/log.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
@@ -6,6 +6,8 @@ import { RecipeUidSchema } from "../paprika/types.js";
 import type { Recipe } from "../paprika/types.js";
 import { coldStartGuard, commitRecipe, recipeToMarkdown, resolveCategoryNames, textResult } from "./helpers.js";
 import type { ServerContext } from "../types/server-context.js";
+
+const log = createLogger("mcp-paprika:update_recipe");
 
 export function registerUpdateTool(server: McpServer, ctx: ServerContext): void {
   server.registerTool(
@@ -82,7 +84,9 @@ export function registerUpdateTool(server: McpServer, ctx: ServerContext): void 
             saved = await ctx.client.saveRecipe(updated); // AC3.4
             await commitRecipe(ctx, saved); // AC3.4
           } catch (error) {
-            return textResult(`Failed to update recipe: ${toMessage(error)}`);
+            const message = toMessage(error);
+            log(`saveRecipe failed for uid=${updated.uid}: ${message}`);
+            return textResult(`Failed to update recipe: ${message}`);
           }
 
           const categoryNames = ctx.store.resolveCategories(saved.categories);

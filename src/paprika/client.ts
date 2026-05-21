@@ -35,6 +35,19 @@ class TransientHTTPError extends Error {
   }
 }
 
+// Private marker class used to route network-level fetch failures (DNS,
+// TCP reset, TLS handshake, etc.) through cockatiel's handleType-based
+// retry policy. undici throws a bare TypeError for these; the runtime
+// has no dedicated subclass we can match on directly. The cause is the
+// original TypeError so callers can unwrap and surface the real error
+// once retries are exhausted.
+class NetworkRetryableError extends Error {
+  constructor(override readonly cause: TypeError) {
+    super(`Network error: ${cause.message}`, { cause });
+    this.name = "NetworkRetryableError";
+  }
+}
+
 class TokenExpiredError extends Error {
   constructor() {
     super("Token expired");
@@ -44,7 +57,7 @@ class TokenExpiredError extends Error {
 
 const RETRYABLE_STATUSES = new Set([429, 500, 502, 503]);
 
-const retryPolicy = retry(handleType(TransientHTTPError), {
+const retryPolicy = retry(handleType(TransientHTTPError).orType(NetworkRetryableError), {
   maxAttempts: 3,
   backoff: new ExponentialBackoff({
     initialDelay: 500,
@@ -52,7 +65,7 @@ const retryPolicy = retry(handleType(TransientHTTPError), {
   }),
 });
 
-const breakerPolicy = circuitBreaker(handleType(TransientHTTPError), {
+const breakerPolicy = circuitBreaker(handleType(TransientHTTPError).orType(NetworkRetryableError), {
   halfOpenAfter: 30_000,
   breaker: new ConsecutiveBreaker(5),
 });
@@ -219,7 +232,19 @@ export class PaprikaClient {
         fetchInit.body = body;
       }
 
-      const response = await fetch(url, fetchInit);
+      let response: Response;
+      try {
+        response = await fetch(url, fetchInit);
+      } catch (error) {
+        // undici throws a bare TypeError for network-level failures (DNS,
+        // TCP reset, TLS handshake, abort). Re-throw as a retryable marker
+        // so cockatiel's handleType policy applies the same backoff +
+        // circuit-breaker treatment as 5xx HTTP responses.
+        if (error instanceof TypeError) {
+          throw new NetworkRetryableError(error);
+        }
+        throw error;
+      }
 
       if (!response.ok) {
         if (RETRYABLE_STATUSES.has(response.status)) {
@@ -245,6 +270,12 @@ export class PaprikaClient {
         throw new PaprikaAPIError("Service unavailable (circuit open)", 503, url);
       }
 
+      // Unwrap the retry marker so callers see the original undici TypeError —
+      // tools that surface .message stay consistent with the pre-retry shape.
+      if (error instanceof NetworkRetryableError) {
+        throw error.cause;
+      }
+
       if (error instanceof TokenExpiredError) {
         if (!this.token) {
           throw new PaprikaAuthError("Authentication required (HTTP 401)");
@@ -260,6 +291,9 @@ export class PaprikaClient {
           }
           if (retryError instanceof BrokenCircuitError) {
             throw new PaprikaAPIError("Service unavailable (circuit open)", 503, url);
+          }
+          if (retryError instanceof NetworkRetryableError) {
+            throw retryError.cause;
           }
           throw retryError;
         }

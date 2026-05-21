@@ -893,6 +893,57 @@ describe("PaprikaClient", () => {
       5000,
     );
 
+    it("network-retry.1 - transient network-level fetch failure on a write triggers cockatiel retry", async () => {
+      const uid = "pantry-test-network-retry";
+      let pantryCallCount = 0;
+
+      server.use(
+        http.post(`${API_BASE}/pantry/`, () => {
+          pantryCallCount++;
+          if (pantryCallCount === 1) {
+            return HttpResponse.error();
+          }
+          return HttpResponse.json({ result: true });
+        }),
+      );
+
+      const client = new PaprikaClient("test@example.com", "password");
+      const result = await client.savePantryItem(makeCamelCasePantryItem(uid));
+
+      expect(result.uid).toBe(uid);
+      expect(pantryCallCount).toBe(2);
+    });
+
+    it("network-retry.2 - exhausted network retries surface the original undici fetch error", async () => {
+      const uid = "pantry-test-network-exhausted";
+      let pantryCallCount = 0;
+
+      server.use(
+        http.post(`${API_BASE}/pantry/`, () => {
+          pantryCallCount++;
+          return HttpResponse.error();
+        }),
+      );
+
+      const client = new PaprikaClient("test@example.com", "password");
+
+      let caught: unknown;
+      try {
+        await client.savePantryItem(makeCamelCasePantryItem(uid));
+        expect.fail("Should have thrown");
+      } catch (error) {
+        caught = error;
+      }
+
+      // After retries are exhausted, callers see the original network-level
+      // TypeError, not the internal retry marker. Tools that catch and
+      // surface the message stay consistent with the pre-retry behavior.
+      // (msw renders the message as "Failed to fetch"; node's undici emits
+      // "fetch failed" in production — both are TypeError.)
+      expect(caught).toBeInstanceOf(TypeError);
+      expect(pantryCallCount).toBeGreaterThan(1);
+    });
+
     it("pantry-mutations.AC2.4 - non-retryable HTTP error throws PaprikaAPIError", async () => {
       const uid = "pantry-test-7";
 
