@@ -1,6 +1,6 @@
 # mcp-paprika
 
-Last verified: 2026-05-18
+Last verified: 2026-05-21
 
 MCP server for the Paprika recipe manager. Two transports: **stdio** (default; unauthenticated local pipe used by Claude Desktop, Claude Code, Cursor, mcp-cli) and **Streamable HTTP** (used by Claude Mobile and other remote MCP clients; ships with OAuth 2.1 + OIDC delegation). Selected via `MCP_TRANSPORT=stdio|http`.
 

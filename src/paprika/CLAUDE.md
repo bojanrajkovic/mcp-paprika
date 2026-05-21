@@ -1,6 +1,6 @@
 # Paprika API Client
 
-Last verified: 2026-05-15
+Last verified: 2026-05-21
 
 ## Files
 
@@ -144,30 +144,38 @@ Background polling loop that keeps local cache and in-memory store synchronized 
 
 **Algorithm (syncOnce):**
 
-1. **Recipe sync (diff-and-fetch):**
+1. **Recipe sync (diff-and-fetch, pending-writes filtered):**
    - Fetches lightweight recipe entries from server via `client.listRecipes()`
    - Diffs against disk cache via `cache.diffRecipes(entries)` → `{ added, changed, removed }`
-   - Fetches only changed recipes: `client.getRecipes([...added, ...changed])`
+   - **Filters the diff through `store.isPendingUpsert` / `store.isPendingDelete`** (issue #57):
+     - `removed` → drops UIDs marked pending-upsert (server hasn't seen our write yet; deleting would roll it back). Pending-deletes pass through — if the server actually no longer lists the UID, honoring the removal is correct.
+     - `added` and `changed` → drops UIDs marked pending-upsert OR pending-delete (incoming snapshot is pre-write, so applying it would clobber or resurrect our local change). Variables are named `filteredAdded` / `filteredChanged` / `filteredRemoved` from this point forward; the emitted `SyncResult` uses the filtered values.
+   - Fetches only filtered changes: `client.getRecipes([...filteredAdded, ...filteredChanged])`
    - Writes each fetched recipe to cache: `cache.putRecipe(recipe, recipe.hash)` and to store: `store.set(recipe)`
-   - Removes deleted recipes (concurrent): `Promise.all(removed.map(uid => cache.removeRecipe(uid)))` and `store.delete(uid)`
+   - Removes deleted recipes (concurrent): `Promise.all(filteredRemoved.map(uid => cache.removeRecipe(uid)))` and `store.delete(uid)`
+   - **Observation-based clearing:** walks the raw `entries` from `listRecipes()` and calls `store.clearPending(uid)` for any UID that has a pending-upsert and appears in the canonical list.
 
 2. **Category sync (replace-all):**
    - Fetches all categories: `client.listCategories()` → fully hydrated `Array<Category>`
    - Replaces store categories: `store.setCategories(categories)`
    - Writes each category to cache: `cache.putCategory(category, category.uid)` (hash placeholder)
 
-3. **Pantry sync (replace-all with orphan cleanup):**
+3. **Pantry sync (replace-all with orphan cleanup, pending-writes filtered):**
    - Fetches all pantry items: `client.listPantry()` → fully hydrated `Array<PantryItem>`
-   - Computes orphan UIDs (cached but not in API response) via Set difference: `cachedUids - incomingUids`
-   - Computes new UIDs (in API response but not cached): `incomingUids - cachedUids`
+   - Reads cached items: `cachedPantryItems = await cache.getAllPantryItems()`
+   - **Builds `effectivePantry`** (issue #57): filters incoming items to drop UIDs that are pending-upsert OR pending-delete, then concatenates `cachedPantryItems` filtered down to pending-upserts. This protects both directions of the upsert race (incoming has stale content, or incoming omits our UID) and prevents pending-deletes from being resurrected.
+   - Computes orphan UIDs against **effectivePantry** (cached but not in effective list) via Set difference
+   - Computes new UIDs (in effective list but not cached)
    - Computes updated UIDs (UID present in both sets, but field-wise content differs) via `pantryItemsEqual()` — pantry items have no hash field, so content edits to existing UIDs (quantity, in-stock, notes, etc.) are detected by direct field comparison
    - Removes orphans concurrently: `Promise.all(orphanUids.map(uid => cache.removePantryItem(uid)))`
-   - Loads all items into store (unconditionally): `pantryStore.load(pantryItems)` (sets `hasSynced = true` even when empty)
-   - Writes each item to cache: `cache.putPantryItem(item)` for all items (even unchanged ones, ensuring updates propagate)
+   - Loads effective items into store (unconditionally): `pantryStore.load(effectivePantry)` (sets `hasSynced = true` even when empty)
+   - Writes each effective item to cache: `cache.putPantryItem(item)` for all items (even unchanged ones, ensuring updates propagate)
+   - **Observation-based clearing:** walks the **raw** `pantryItems` (not the filtered list) and calls `pantryStore.clearPending(uid)` for any UID that has a pending-upsert and appears in the canonical list. Pending-deletes are NOT observation-cleared — Paprika omits soft-deleted items from `listPantry` (case B; verified against Paprika.app), so absence is ambiguous and TTL is the only safe clearing mechanism for the delete direction.
    - Logs orphan count when > 0
 
 4. **Finalization:**
    - Flushes cache once: `await cache.flush()`
+   - **Sweeps expired pending-writes:** `store.sweepPending()` and `pantryStore.sweepPending()` — TTL fallback for pending-deletes (and a defense for upserts where the canonical observation never arrives).
    - Sends MCP resource notification if recipe OR pantry changes exist: `context.notifier.resourceListChanged()` (called if any added/changed/removed/orphaned detected)
    - Emits `sync:complete` with `SyncResult` (always emitted, even for no-change cycles)
    - Logs success: `await context.notifier.loggingMessage({ level: "info", data: "..." })`
@@ -183,12 +191,13 @@ Background polling loop that keeps local cache and in-memory store synchronized 
 - `syncOnce()` never throws — errors are caught, logged, and emitted as events
 - `start()` when already running is a no-op (no duplicate loops via `_ac` check)
 - `stop()` when not running is a no-op (no-op if `_ac` is null)
-- Recipe or pantry changes trigger `notifier.resourceListChanged()`; no-change cycles do not. Recipe changes are detected via `diffRecipes` (hash-based: `added`, `changed`, `removed`); pantry changes are detected via Set difference for added/orphaned UIDs and `pantryItemsEqual()` for same-UID content edits
+- Recipe or pantry changes trigger `notifier.resourceListChanged()`; no-change cycles do not. Recipe changes are detected via `diffRecipes` filtered by pending-writes (hash-based: `filteredAdded`, `filteredChanged`, `filteredRemoved`); pantry changes are detected via Set difference between `effectivePantry` and cached items plus `pantryItemsEqual()` for same-UID content edits
 - Cache is flushed exactly once per cycle (single `await cache.flush()` after all mutations)
 - Removed recipes are deleted concurrently via `Promise.all()` for efficiency
 - Orphaned pantry items are deleted concurrently via `Promise.all()` for efficiency
 - Loop respects AbortController signal and cleanly exits on `stop()`
-- `pantryStore.load(items)` is called unconditionally even when `items.length === 0`, setting `hasSynced = true` after first sync
+- `pantryStore.load(items)` is called unconditionally even when `effectivePantry` is empty, setting `hasSynced = true` after first sync
+- Both stores' `sweepPending()` runs every cycle (TTL fallback for pending-writes; see `cache/CLAUDE.md` Pending-writes section). Observation-based clearing handles upserts; the sweep is the only clearing mechanism for pending-deletes
 
 **Dependencies:**
 

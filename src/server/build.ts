@@ -78,14 +78,15 @@ export async function buildAppContext(
     );
   }
 
-  const store = new RecipeStore();
+  const pendingWriteTtlMs = config.sync.pendingWriteTtl;
+  const store = new RecipeStore({ pendingWriteTtlMs });
   const cachedRecipes = await cache.getAllRecipes();
   for (const recipe of cachedRecipes) {
     store.set(recipe);
   }
   log(`Hydrated store with ${cachedRecipes.length.toString()} cached recipes.`);
 
-  const pantryStore = new PantryStore();
+  const pantryStore = new PantryStore({ pendingWriteTtlMs });
   const cachedPantryItems = await cache.getAllPantryItems();
   if (cachedPantryItems.length > 0) {
     pantryStore.load(cachedPantryItems);

@@ -264,7 +264,11 @@ describe("p2-u02-shared-helpers: shared helper functions", () => {
       const ctx = {
         cache: { putRecipe: mockPutRecipe, flush: mockFlush } as unknown as DiskCache,
         client: { notifySync: mockNotifySync } as unknown as PaprikaClient,
-        store: { set: mockStoreSet } as unknown as ServerContext["store"],
+        store: {
+          set: mockStoreSet,
+          markPendingUpsert: vi.fn(),
+          markPendingDelete: vi.fn(),
+        } as unknown as ServerContext["store"],
         pantryStore: {} as unknown as ServerContext["pantryStore"],
         vectorStore: null,
         server: {} as unknown as ServerContext["server"],
@@ -307,7 +311,11 @@ describe("p2-u02-shared-helpers: shared helper functions", () => {
       const ctx = {
         cache: { putRecipe: mockPutRecipe, flush: mockFlush } as unknown as DiskCache,
         client: { notifySync: mockNotifySync } as unknown as PaprikaClient,
-        store: { set: mockStoreSet } as unknown as ServerContext["store"],
+        store: {
+          set: mockStoreSet,
+          markPendingUpsert: vi.fn(),
+          markPendingDelete: vi.fn(),
+        } as unknown as ServerContext["store"],
         pantryStore: {} as unknown as ServerContext["pantryStore"],
         vectorStore: null,
         server: {} as unknown as ServerContext["server"],
@@ -334,7 +342,11 @@ describe("p2-u02-shared-helpers: shared helper functions", () => {
       const ctx = {
         cache: { putRecipe: mockPutRecipe, flush: mockFlush } as unknown as DiskCache,
         client: { notifySync: mockNotifySync } as unknown as PaprikaClient,
-        store: { set: mockStoreSet } as unknown as ServerContext["store"],
+        store: {
+          set: mockStoreSet,
+          markPendingUpsert: vi.fn(),
+          markPendingDelete: vi.fn(),
+        } as unknown as ServerContext["store"],
         pantryStore: {} as unknown as ServerContext["pantryStore"],
         vectorStore: null,
         server: {} as unknown as ServerContext["server"],

@@ -91,11 +91,28 @@ export function recipeToMarkdown(recipe: Recipe, categoryNames: Array<string>): 
  * Persists a saved recipe to the local cache and store, then triggers cloud sync.
  * Called by all write tools after ctx.client.saveRecipe() returns.
  *
- * Order: putRecipe (sync) → flush (async) → store.set (sync) → notifier.resourceListChanged (sync) → notifySync (async)
+ * Order: putRecipe (sync) → flush (async) → store.set (sync) → markPending* (sync) →
+ * notifier.resourceListChanged (sync) → notifySync (async)
+ *
+ * The pending-write mark protects this UID from sync-cycle reconciliation
+ * during the race window before Paprika's canonical list reflects the write.
+ * `inTrash: true` is the recipe-side soft-delete, so we mark pending-delete
+ * in that case; otherwise it's an upsert.
+ *
  * Do NOT call ctx.client.notifySync() separately in the tool handler — commitRecipe
  * already calls it.
  */
 export async function commitRecipe(ctx: ServerContext, saved: Recipe): Promise<void> {
+  // Mark the pending write BEFORE any cache I/O. The await on putRecipe yields
+  // to the event loop and lets an in-flight sync cycle observe the cache mid-
+  // commit; if the mark isn't set yet, sync's pending-write filter sees nothing
+  // and would still treat our UID as an orphan or stale entry. Setting the mark
+  // first closes that window for both upserts and soft-deletes.
+  if (saved.inTrash) {
+    ctx.store.markPendingDelete(saved.uid);
+  } else {
+    ctx.store.markPendingUpsert(saved.uid);
+  }
   await ctx.cache.putRecipe(saved, saved.hash); // async — buffers to memory with mutex
   await ctx.cache.flush(); // async — writes pending entries to disk
   ctx.store.set(saved); // sync — updates in-process store

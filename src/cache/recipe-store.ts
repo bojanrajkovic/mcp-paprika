@@ -18,9 +18,26 @@ export type TimeConstraints = {
   readonly maxTotalTime?: number;
 };
 
+// See PantryStore for the rationale behind pending-writes bookkeeping
+// (issue #57). Same shape, applied to recipes.
+type PendingWriteKind = "upsert" | "delete";
+
+type PendingWrite = {
+  readonly kind: PendingWriteKind;
+  readonly at: number;
+};
+
+const DEFAULT_PENDING_WRITE_TTL_MS = 60_000;
+
 export class RecipeStore {
   private readonly recipes: Map<RecipeUid, Recipe> = new Map();
   private readonly categories: Map<CategoryUid, Category> = new Map();
+  private readonly _pendingWrites: Map<RecipeUid, PendingWrite> = new Map();
+  private readonly _pendingWriteTtlMs: number;
+
+  constructor(opts?: { readonly pendingWriteTtlMs?: number }) {
+    this._pendingWriteTtlMs = opts?.pendingWriteTtlMs ?? DEFAULT_PENDING_WRITE_TTL_MS;
+  }
 
   load(recipes: ReadonlyArray<Recipe>, categories: ReadonlyArray<Category>): void {
     this.recipes.clear();
@@ -243,6 +260,41 @@ export class RecipeStore {
 
     const contains = recipes.filter((r) => r.name.toLowerCase().includes(lowerTitle));
     return contains;
+  }
+
+  markPendingUpsert(uid: RecipeUid, at: number = Date.now()): void {
+    this._pendingWrites.set(uid, { kind: "upsert", at });
+  }
+
+  markPendingDelete(uid: RecipeUid, at: number = Date.now()): void {
+    this._pendingWrites.set(uid, { kind: "delete", at });
+  }
+
+  isPendingUpsert(uid: RecipeUid): boolean {
+    return this._pendingWrites.get(uid)?.kind === "upsert";
+  }
+
+  isPendingDelete(uid: RecipeUid): boolean {
+    return this._pendingWrites.get(uid)?.kind === "delete";
+  }
+
+  clearPending(uid: RecipeUid): void {
+    this._pendingWrites.delete(uid);
+  }
+
+  sweepPending(now: number = Date.now()): number {
+    let removed = 0;
+    for (const [uid, entry] of this._pendingWrites) {
+      if (now - entry.at >= this._pendingWriteTtlMs) {
+        this._pendingWrites.delete(uid);
+        removed += 1;
+      }
+    }
+    return removed;
+  }
+
+  get pendingWriteCount(): number {
+    return this._pendingWrites.size;
   }
 }
 

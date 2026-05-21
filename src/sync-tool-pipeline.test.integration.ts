@@ -9,8 +9,9 @@ import { DiskCache } from "./cache/disk-cache.js";
 import { RecipeStore } from "./cache/recipe-store.js";
 import { PantryStore } from "./cache/pantry-store.js";
 import { SyncEngine } from "./paprika/sync.js";
-import { makeCategory } from "./cache/__fixtures__/recipes.js";
-import type { RecipeUid } from "./paprika/types.js";
+import { makeCategory, makeRecipe } from "./cache/__fixtures__/recipes.js";
+import { makePantryItem } from "./cache/__fixtures__/pantry.js";
+import type { PantryItemUid, RecipeUid } from "./paprika/types.js";
 import { makeTestServer, makeCtx, getText } from "./tools/tool-test-utils.js";
 import { registerSearchTool } from "./tools/search.js";
 import { registerReadTool } from "./tools/read.js";
@@ -474,6 +475,186 @@ describe("Sync → Tool Pipeline Integration", () => {
         limit: 20,
       });
       expect(getText(searchResult)).toContain("Updated Name");
+    });
+  });
+
+  describe("AC5: Write→sync propagation race protection (issue #57)", () => {
+    function makeSnakeCasePantryItem(uid: string, overrides?: Partial<Record<string, unknown>>): object {
+      return {
+        uid,
+        ingredient: `Item ${uid}`,
+        quantity: "1",
+        aisle: "",
+        aisle_uid: "",
+        expiration_date: null,
+        has_expiration: false,
+        in_stock: true,
+        purchase_date: "2026-05-21 00:00:00",
+        location_uid: null,
+        notes: null,
+        deleted: false,
+        ...overrides,
+      };
+    }
+
+    function makeRaceContext(): {
+      client: PaprikaClient;
+      cache: DiskCache;
+      store: RecipeStore;
+      pantryStore: PantryStore;
+      engine: SyncEngine;
+    } {
+      const client = new PaprikaClient("test@example.com", "password");
+      const cache = new DiskCache(tempDir);
+      const store = new RecipeStore();
+      const pantryStore = new PantryStore();
+      const notifier = {
+        resourceListChanged: () => {},
+        loggingMessage: async (): Promise<void> => {},
+      };
+      const context = { client, cache, store, pantryStore, vectorStore: null, notifier, auth: null };
+      const engine = new SyncEngine(context, 100);
+      return { client, cache, store, pantryStore, engine };
+    }
+
+    it("AC5.1: pantry upsert is not orphaned by a sync with stale (pre-write) canonical list", async () => {
+      // The stale canonical list is empty (Paprika hadn't propagated our write
+      // when sync's listPantry was issued). Without protection, sync would
+      // treat our just-upserted UID as an orphan and remove it locally.
+      server.use(
+        http.get(`${API_BASE}/recipes/`, () => HttpResponse.json({ result: [] })),
+        http.get(`${API_BASE}/categories/`, () => HttpResponse.json({ result: [] })),
+        http.get(`${API_BASE}/pantry/`, () => HttpResponse.json({ result: [] })),
+      );
+
+      const { cache, pantryStore, engine } = makeRaceContext();
+      await cache.init();
+
+      const item = makePantryItem({ uid: "PANTRY-UID-1" as PantryItemUid, ingredient: "Eggs" });
+      pantryStore.load([item]);
+      await cache.putPantryItem(item);
+      await cache.flush();
+      pantryStore.markPendingUpsert(item.uid);
+
+      await engine.syncOnce();
+
+      expect(pantryStore.get(item.uid)).toEqual(item);
+      expect(pantryStore.size).toBe(1);
+    });
+
+    it("AC5.2: pantry delete is not resurrected by a sync with stale (pre-delete) canonical list", async () => {
+      const stalePantryWire = makeSnakeCasePantryItem("PANTRY-UID-2", { ingredient: "Eggs" });
+      server.use(
+        http.get(`${API_BASE}/recipes/`, () => HttpResponse.json({ result: [] })),
+        http.get(`${API_BASE}/categories/`, () => HttpResponse.json({ result: [] })),
+        http.get(`${API_BASE}/pantry/`, () => HttpResponse.json({ result: [stalePantryWire] })),
+      );
+
+      const { pantryStore, cache, engine } = makeRaceContext();
+      await cache.init();
+
+      const uid = "PANTRY-UID-2" as PantryItemUid;
+      pantryStore.load([]);
+      pantryStore.markPendingDelete(uid);
+
+      await engine.syncOnce();
+
+      expect(pantryStore.get(uid)).toBeUndefined();
+      expect(pantryStore.size).toBe(0);
+    });
+
+    it("AC5.3: recipe upsert is not removed by a sync with stale (pre-write) canonical list", async () => {
+      server.use(
+        http.get(`${API_BASE}/recipes/`, () => HttpResponse.json({ result: [] })),
+        http.get(`${API_BASE}/categories/`, () => HttpResponse.json({ result: [] })),
+        http.get(`${API_BASE}/pantry/`, () => HttpResponse.json({ result: [] })),
+      );
+
+      const { cache, store, engine } = makeRaceContext();
+      await cache.init();
+
+      const recipe = makeRecipe({ uid: "recipe-just-written" as RecipeUid, name: "Just Written", hash: "hash-new" });
+      await cache.putRecipe(recipe, recipe.hash);
+      await cache.flush();
+      store.set(recipe);
+      store.markPendingUpsert(recipe.uid);
+
+      await engine.syncOnce();
+
+      expect(store.get(recipe.uid)?.name).toBe("Just Written");
+      expect(store.size).toBe(1);
+    });
+
+    it("AC5.4: recipe soft-delete (inTrash) is not resurrected by a sync with stale canonical list", async () => {
+      // The stale canonical list still contains the recipe with its pre-trash
+      // hash. Without protection, sync would diff.changed and re-fetch the
+      // non-trashed version, undoing our local trash.
+      server.use(
+        http.get(`${API_BASE}/recipes/`, () =>
+          HttpResponse.json({ result: [{ uid: "recipe-trashed", hash: "hash-pre-trash" }] }),
+        ),
+        http.get(`${API_BASE}/recipe/:uid/`, ({ params }) =>
+          HttpResponse.json({
+            result: makeSnakeCaseRecipe(params["uid"] as string, { name: "Pre-Trash Version", in_trash: false }),
+          }),
+        ),
+        http.get(`${API_BASE}/categories/`, () => HttpResponse.json({ result: [] })),
+        http.get(`${API_BASE}/pantry/`, () => HttpResponse.json({ result: [] })),
+      );
+
+      const { cache, store, engine } = makeRaceContext();
+      await cache.init();
+
+      const trashedRecipe = makeRecipe({
+        uid: "recipe-trashed" as RecipeUid,
+        name: "Pre-Trash Version",
+        hash: "hash-post-trash",
+        inTrash: true,
+      });
+      await cache.putRecipe(trashedRecipe, trashedRecipe.hash);
+      await cache.flush();
+      store.set(trashedRecipe);
+      store.markPendingDelete(trashedRecipe.uid);
+
+      await engine.syncOnce();
+
+      // Local "trashed" state should survive the sync — diff.changed for this
+      // UID is filtered out by the pending-delete guard.
+      expect(store.get(trashedRecipe.uid)?.inTrash).toBe(true);
+    });
+
+    it("AC5.5: TTL fallback eventually clears pending-deletes after expiry", async () => {
+      // Use a tiny TTL so we don't have to wait. After the TTL elapses and
+      // sweepPending runs (called at end of syncOnce), pending-delete clears
+      // and the next sync reconciles canonical state normally.
+      const client = new PaprikaClient("test@example.com", "password");
+      const cache = new DiskCache(tempDir);
+      await cache.init();
+      const store = new RecipeStore({ pendingWriteTtlMs: 50 });
+      const pantryStore = new PantryStore({ pendingWriteTtlMs: 50 });
+      const notifier = { resourceListChanged: () => {}, loggingMessage: async (): Promise<void> => {} };
+      const context = { client, cache, store, pantryStore, vectorStore: null, notifier, auth: null };
+      const engine = new SyncEngine(context, 100);
+
+      const stalePantryWire = makeSnakeCasePantryItem("PANTRY-UID-3", { ingredient: "Milk" });
+      server.use(
+        http.get(`${API_BASE}/recipes/`, () => HttpResponse.json({ result: [] })),
+        http.get(`${API_BASE}/categories/`, () => HttpResponse.json({ result: [] })),
+        http.get(`${API_BASE}/pantry/`, () => HttpResponse.json({ result: [stalePantryWire] })),
+      );
+
+      const uid = "PANTRY-UID-3" as PantryItemUid;
+      pantryStore.load([]);
+      pantryStore.markPendingDelete(uid, Date.now() - 1000); // pre-aged past TTL
+
+      // First sync: filters the incoming, but then sweepPending evicts the stale entry.
+      await engine.syncOnce();
+      expect(pantryStore.size).toBe(0); // first sync still protected before sweep
+
+      // Second sync: pending-delete is gone (swept), now sync reflects canonical state.
+      await engine.syncOnce();
+      expect(pantryStore.size).toBe(1);
+      expect(pantryStore.get(uid)?.ingredient).toBe("Milk");
     });
   });
 });
