@@ -113,8 +113,16 @@ export async function commitRecipe(ctx: ServerContext, saved: Recipe): Promise<v
   } else {
     ctx.store.markPendingUpsert(saved.uid);
   }
-  await ctx.cache.putRecipe(saved, saved.hash); // async — buffers to memory with mutex
-  await ctx.cache.flush(); // async — writes pending entries to disk
+  try {
+    await ctx.cache.putRecipe(saved, saved.hash); // async — buffers to memory with mutex
+    await ctx.cache.flush(); // async — writes pending entries to disk
+  } catch (e) {
+    // Local commit failed before reaching the store/notifier. Clear the pending
+    // mark so sync isn't permanently filtered for this UID until TTL expiry;
+    // failed commits shouldn't suppress canonical reconciliation.
+    ctx.store.clearPending(saved.uid);
+    throw e;
+  }
   ctx.store.set(saved); // sync — updates in-process store
   ctx.notifier.resourceListChanged(); // sync — notifies MCP clients (single server or broadcast)
   await ctx.client.notifySync(); // async — signals Paprika cloud to propagate

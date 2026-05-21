@@ -56,18 +56,30 @@ export async function commitPantryItem(ctx: ServerContext, saved: Readonly<Pantr
   // that observes the cache mid-commit (between put/remove and flush, or
   // between flush and pantryStore.set/delete) sees the pending-write flag
   // and skips reconciling our UID. See commitRecipe for the same rationale.
+  // If cache I/O throws, clear the pending mark before re-throwing — failed
+  // local commits shouldn't suppress canonical reconciliation until TTL.
   if (saved.deleted) {
     const uid: PantryItemUid = saved.uid;
     ctx.pantryStore.markPendingDelete(uid);
-    await ctx.cache.removePantryItem(uid);
-    await ctx.cache.flush();
+    try {
+      await ctx.cache.removePantryItem(uid);
+      await ctx.cache.flush();
+    } catch (e) {
+      ctx.pantryStore.clearPending(uid);
+      throw e;
+    }
     ctx.pantryStore.delete(uid);
     ctx.notifier.resourceListChanged();
     await ctx.client.notifySync();
   } else {
     ctx.pantryStore.markPendingUpsert(saved.uid);
-    await ctx.cache.putPantryItem(saved);
-    await ctx.cache.flush();
+    try {
+      await ctx.cache.putPantryItem(saved);
+      await ctx.cache.flush();
+    } catch (e) {
+      ctx.pantryStore.clearPending(saved.uid);
+      throw e;
+    }
     ctx.pantryStore.set(saved);
     ctx.notifier.resourceListChanged();
     await ctx.client.notifySync();
