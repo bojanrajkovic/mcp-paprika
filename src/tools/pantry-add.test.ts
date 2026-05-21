@@ -251,4 +251,31 @@ describe("pantry-mutations.AC4: add_pantry_item tool", () => {
     expect(mockFlush.mock.calls.length).toBe(0);
     expect(pantryStore.size).toBe(0);
   });
+
+  it("observability.1: savePantryItem error is written to stderr so it appears in pod logs", async () => {
+    const store = new RecipeStore();
+    const pantryStore = new PantryStore();
+    pantryStore.load([]);
+
+    const mockSavePantryItem = vi.fn().mockRejectedValue(new TypeError("fetch failed"));
+    const mockNotifySync = vi.fn().mockResolvedValue(undefined);
+
+    const stderrSpy = vi.spyOn(process.stderr, "write").mockReturnValue(true);
+    try {
+      const { server, callTool } = makeTestServer();
+      const ctx = makeCtx(store, server, {
+        pantryStore,
+        client: { savePantryItem: mockSavePantryItem, notifySync: mockNotifySync } as unknown as PaprikaClient,
+      });
+      registerAddPantryItemTool(server, ctx);
+
+      await callTool("add_pantry_item", { ingredient: "Butter" });
+
+      const stderrWrites = stderrSpy.mock.calls.map((call) => String(call[0])).join("");
+      expect(stderrWrites).toContain("add_pantry_item");
+      expect(stderrWrites).toContain("fetch failed");
+    } finally {
+      stderrSpy.mockRestore();
+    }
+  });
 });
