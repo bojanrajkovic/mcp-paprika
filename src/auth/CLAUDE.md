@@ -202,6 +202,10 @@ Persisted to `DiskCache` as `oauth/tokens/${tokenHash}.json`. `tokenHash` is the
 - `"allowlist accepted identity"` — info, fields `{ email, sub }` — emitted in `routes.ts` on the success branch.
 - `"allowlist denied identity"` — warn, fields `{ reason, email, sub }` — emitted in `routes.ts` on the `OAuthAllowlistDenialError` branch; fans out to connected MCP clients via `notifications/message` automatically.
 
+#### Allowlist denial notifications: behavior change
+
+Prior to the structured-logging migration, allowlist denials wrote a single `[auth]` line to stderr only. The new behavior emits a `warn`-level pino record that fans out to all connected MCP clients via `notifications/message` automatically (because `warn` meets the default `notifyLevel: "warn"` threshold). Operators wanting to suppress these notifications from MCP clients can set `MCP_LOG_NOTIFY_LEVEL=error` — at that threshold only `error`+`fatal` records fan out, and denial records stay in the primary log stream only.
+
 **Token field redaction.** The root logger's redact config covers `*.authorization`, `*.password`, `*.token`, `*.client_secret`, `*.access_token`, `*.refresh_token`, and `*.id_token`. Auth code must not pass raw token values through pino fields — log identifiers (`tokenHash`, `clientId`) instead. `tokenHash` is the SHA-256 hex of the plaintext bearer token and is safe to include verbatim.
 
 **Silent-catch debug logs.** Three modules log at `debug` when their normally-silent catch paths fire. Operators can enable `MCP_LOG_LEVEL=debug` to diagnose these paths in production:
