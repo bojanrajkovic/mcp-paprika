@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { http, HttpResponse } from "msw";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
+import { Hono } from "hono";
 import { startHttp, accessLog, type HttpTransportHandle, type StartHttpOptions } from "./http.js";
 import type { PaprikaConfig } from "../utils/config.js";
 import { createOidcStub } from "../auth/__fixtures__/oidc-stub.js";
@@ -915,5 +916,34 @@ describe("accessLog middleware placement — integration (AC9.5-integration)", (
     } finally {
       await handle.shutdown();
     }
+  });
+
+  it("AC9.5-int-3: 5xx response through real Hono router emits error-level access-log record", async () => {
+    // Drives a real 5xx through Hono's router (not a stub Context) by mounting
+    // accessLog on a fresh Hono app, then registering a route that throws.
+    // Hono's default error handler converts the throw into a 500 response;
+    // accessLog observes c.res.status === 500 after next() returns and emits
+    // an error-level record. This proves the placement-via-router contract
+    // for the 5xx path that AC9.5 calls out (fan-out condition: error level
+    // >= default notifyLevel "warn", structurally guaranteed by the multistream
+    // that app.log carries in production).
+    const { log, records } = makePinoCapture();
+    const app = new Hono();
+    app.use("*", accessLog(log));
+    app.get("/boom", () => {
+      throw new Error("simulated server failure");
+    });
+
+    const res = await app.request("/boom");
+    expect(res.status).toBe(500);
+
+    const boomRecords = records.filter((r) => r["path"] === "/boom");
+    expect(boomRecords).toHaveLength(1);
+    const r = boomRecords[0]!;
+    expect(r["method"]).toBe("GET");
+    expect(r["status"]).toBe(500);
+    expect(r["level"]).toBe(50); // pino numeric level for error
+    expect(r["msg"]).toBe("http request 5xx");
+    expect(typeof r["durationMs"]).toBe("number");
   });
 });
