@@ -1,6 +1,6 @@
 # Cross-Cutting Utilities
 
-Last verified: 2026-05-21
+Last verified: 2026-05-22
 
 ## Purpose
 
@@ -8,14 +8,54 @@ Shared utility functions and helpers used across multiple modules. Includes erro
 
 ## Contracts
 
-### log.ts — Stderr logging helpers
+### log.ts — Structured pino logger
 
-Two pure functions for the stdio-safe diagnostic-logging pattern used across the codebase. Stdio transport uses stdout for the MCP wire format, so every diagnostic message MUST go to stderr (the `no-console` oxlint rule enforces this). No internal dependencies (leaf module).
+Constructs a process-wide pino logger with two output streams and baked-in credential redaction. Stdio transport uses stdout for the MCP wire format, so all log output must stay off stdout — the `no-console` oxlint rule enforces this. Imports from `../server/notifier.js` and `./xdg.js` (non-leaf module).
 
-| Function               | Signature                                   | Description                                                                                                            |
-| ---------------------- | ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| `createLogger(prefix)` | `(prefix: string) => (msg: string) => void` | Returns a function that writes `[${prefix}] ${msg}\n` to `process.stderr`. Replaces per-module inline `log()` shims.   |
-| `toMessage(e)`         | `(e: unknown) => string`                    | Extracts a human-readable message from an unknown thrown value: `e.message` if `e instanceof Error`, else `String(e)`. |
+**Canonical export: `createLogger(opts: LoggerOptions): pino.Logger`**
+
+Called exactly once per process by `buildAppContext`. Returns a pino logger configured with a primary output stream and a notifier fan-out stream. Children are created via `parent.child({ component: "<flat-name>" })` — flat single-word names, no `mcp-paprika:` prefix.
+
+| Option        | Type                  | Default  | Description                                                                                     |
+| ------------- | --------------------- | -------- | ----------------------------------------------------------------------------------------------- |
+| `transport`   | `"stdio" \| "http"`   | —        | Drives primary destination selection                                                            |
+| `notifier`    | `Notifier`            | —        | Fan-out target; `loggingMessage(...)` is called fire-and-forget                                 |
+| `level`       | `PinoLevel`           | `"info"` | Primary stream threshold                                                                        |
+| `notifyLevel` | `PinoLevel`           | `"warn"` | Fan-out threshold; `warn+` records reach connected MCP clients automatically                    |
+| `pretty`      | `boolean \| "auto"`   | `"auto"` | `"auto"` = pretty for stdio (TTY → stderr, non-TTY → file), raw JSON for HTTP                   |
+| `file`        | `string \| undefined` | —        | Override the default file path for stdio non-TTY; default is `getLogDir() + "/mcp-paprika.log"` |
+
+**Primary destination routing:**
+
+| transport | pretty   | stderr.isTTY | destination                              |
+| --------- | -------- | ------------ | ---------------------------------------- |
+| `"http"`  | any      | any          | stdout (raw JSON)                        |
+| `"stdio"` | `false`  | any          | stderr (TTY) or file (non-TTY), raw JSON |
+| `"stdio"` | `true`   | any          | pino-pretty to stderr (TTY) or file      |
+| `"stdio"` | `"auto"` | `true`       | pino-pretty to stderr                    |
+| `"stdio"` | `"auto"` | `false`      | pino-pretty to file                      |
+
+**Redacted paths** (applied to both streams, censor value `"[Redacted]"`):
+`*.authorization`, `*.password`, `*.token`, `*.client_secret`, `*.access_token`, `*.refresh_token`, `*.id_token`
+
+**File destination safety:** `mkdir -p` runs synchronously at construction. If the directory cannot be created or the file cannot be opened for writing, `createLogger` throws synchronously with a clear error message — no silent fallback to stderr.
+
+**Fan-out stream:** A Node `Writable` that parses each serialized pino record, strips pino internals (`level`, `time`, `hostname`, `pid`, `v`), maps the numeric level to the MCP RFC 5424 subset (`debug`/`info`/`warning`/`error`/`critical`), and calls `notifier.loggingMessage(...)` fire-and-forget. The `_write` callback completes synchronously regardless of the notifier's outcome.
+
+**Level mapping (pino → MCP):**
+
+| pino level | MCP level  |
+| ---------- | ---------- |
+| `trace`    | `debug`    |
+| `debug`    | `debug`    |
+| `info`     | `info`     |
+| `warn`     | `warning`  |
+| `error`    | `error`    |
+| `fatal`    | `critical` |
+
+**Deprecated overload:** `createLogger(prefix: string)` still exists as a `@deprecated` overload that returns `(msg: string) => void` writing `[prefix] msg\n` to stderr. It is preserved for backward compatibility while Phase 1-3 call sites are unmigrated; Phase 4 removes all callers and this overload.
+
+**`toMessage(e)`:** `(e: unknown) => string` — extracts a human-readable message from an unknown thrown value: `e.message` if `e instanceof Error`, else `String(e)`. Ten production sites across the codebase depend on this export.
 
 ### xdg.ts — Platform-native application directory paths
 
@@ -68,10 +108,10 @@ startup cost.
 | `loadConfig()`        | `Result<PaprikaConfig, ConfigError>`                           |
 | `paprikaConfigSchema` | Zod schema used for validation; defines canonical config shape |
 
-| Type              | Description                                                                            |
-| ----------------- | -------------------------------------------------------------------------------------- |
-| `PaprikaConfig`   | `{ paprika, sync, transport, http, features?, oauth? }` — validated application config |
-| `EmbeddingConfig` | `{ apiKey, baseUrl, model }` — embedding provider config                               |
+| Type              | Description                                                                                     |
+| ----------------- | ----------------------------------------------------------------------------------------------- |
+| `PaprikaConfig`   | `{ paprika, sync, transport, http, logging, features?, oauth? }` — validated application config |
+| `EmbeddingConfig` | `{ apiKey, baseUrl, model }` — embedding provider config                                        |
 
 **`sync` block** (`paprikaConfigSchema.sync`):
 
@@ -108,6 +148,35 @@ http: {
 | `MCP_HTTP_HOST`       | `http.host`           |
 | `MCP_ALLOWED_HOSTS`   | `http.allowedHosts`   |
 | `MCP_ALLOWED_ORIGINS` | `http.allowedOrigins` |
+
+**`logging` block** (`paprikaConfigSchema.logging`):
+
+```
+logging: {
+  level:        PinoLevel  // Root logger threshold ("trace"–"fatal"); default "info".
+                            // "silent" is intentionally excluded — operators cannot disable
+                            // the root logger entirely.
+  notifyLevel:  PinoLevel  // Fan-out threshold; records at or above this level are forwarded
+                            // to connected MCP clients via notifier.loggingMessage(); default "warn"
+  pretty:       boolean | "auto"
+                            // true = always pino-pretty; false = always raw JSON;
+                            // "auto" = pretty for stdio (TTY → stderr, non-TTY → file),
+                            // raw JSON for HTTP; default "auto"
+  file?:        string      // Override the file path used for stdio non-TTY destination.
+                            // Unset resolves to getLogDir() + "/mcp-paprika.log".
+}
+```
+
+The block always exists on `PaprikaConfig` (`.default({})` on the schema object), so call sites can safely read `config.logging.level` without optional-chaining.
+
+**Logging env-var mapping table:**
+
+| Env var                | Config path           | Notes                                                                   |
+| ---------------------- | --------------------- | ----------------------------------------------------------------------- |
+| `MCP_LOG_LEVEL`        | `logging.level`       | Pino level name; validated by schema                                    |
+| `MCP_LOG_NOTIFY_LEVEL` | `logging.notifyLevel` | Pino level name; validated by schema                                    |
+| `MCP_LOG_PRETTY`       | `logging.pretty`      | `"true"`/`"1"` → `true`, `"false"`/`"0"` → `false`, `"auto"` → `"auto"` |
+| `MCP_LOG_FILE`         | `logging.file`        | Absolute path; overrides XDG default                                    |
 
 **`oauth` block** (`paprikaConfigSchema.oauth` — optional, required when `transport === "http"`):
 
@@ -170,6 +239,7 @@ oauth: {
 
 ## Dependencies
 
-- **Leaf modules (no internal imports):** `log.ts` (uses only `process.stderr`), `xdg.ts` (uses `env-paths`), `duration.ts` (uses `luxon`, `parse-duration`, `neverthrow`)
+- **Leaf modules (no internal imports):** `xdg.ts` (uses `env-paths`), `duration.ts` (uses `luxon`, `parse-duration`, `neverthrow`)
+- **Non-leaf modules (utils-internal):** `log.ts` imports from `../server/notifier.js` (for `Notifier` type) and `./xdg.js` (for `getLogDir()`); also uses `pino`, `pino-pretty`, `node:stream`, `node:fs`, `node:path`
 - **Non-leaf modules:** `config.ts` imports from `xdg.ts` and `duration.ts`; also uses `dotenv`, `zod`, `neverthrow`
 - **Used by:** All other `src/` modules may import from `src/utils/`
