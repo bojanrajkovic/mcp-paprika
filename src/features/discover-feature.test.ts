@@ -3,7 +3,7 @@ import type { SyncResult } from "../paprika/types.js";
 import type { RecipeUid } from "../paprika/types.js";
 import { RecipeStore } from "../cache/recipe-store.js";
 import { makeRecipe } from "../cache/__fixtures__/recipes.js";
-import { makePinoCapture } from "../tools/tool-test-utils.js";
+import { makePinoCapture, DEFAULT_LOGGING_CONFIG } from "../tools/tool-test-utils.js";
 // mitt's package shape (flat-conditioned `exports`, .d.ts using `export default`) confuses
 // TS strict resolution under @tsconfig/strictest + nodenext into typing the default import
 // as the namespace. The namespace's `.default` member IS the function, so we recover the
@@ -41,15 +41,13 @@ function makeMockSyncEvents() {
   return mitt<{ "sync:complete": SyncResult; "sync:error": Error }>();
 }
 
-const DEFAULT_LOGGING = { level: "info" as const, notifyLevel: "warn" as const, pretty: "auto" as const };
-
 function makeEnabledConfig(overrides: Record<string, unknown> = {}) {
   return {
     transport: "stdio" as const,
     paprika: { email: "test@example.com", password: "pass" },
     sync: { enabled: true, interval: 5000, pendingWriteTtl: 60000 },
     http: { port: 3000, host: "0.0.0.0", allowedHosts: [], allowedOrigins: [] },
-    logging: DEFAULT_LOGGING,
+    logging: DEFAULT_LOGGING_CONFIG,
     features: {
       embeddings: {
         apiKey: "test-key",
@@ -68,7 +66,7 @@ function makeDisabledConfig(withFeaturesEmpty = false) {
       paprika: { email: "test@example.com", password: "pass" },
       sync: { enabled: true, interval: 5000, pendingWriteTtl: 60000 },
       http: { port: 3000, host: "0.0.0.0", allowedHosts: [], allowedOrigins: [] },
-      logging: DEFAULT_LOGGING,
+      logging: DEFAULT_LOGGING_CONFIG,
       features: {},
     };
   }
@@ -77,7 +75,7 @@ function makeDisabledConfig(withFeaturesEmpty = false) {
     paprika: { email: "test@example.com", password: "pass" },
     sync: { enabled: true, interval: 5000, pendingWriteTtl: 60000 },
     http: { port: 3000, host: "0.0.0.0", allowedHosts: [], allowedOrigins: [] },
-    logging: DEFAULT_LOGGING,
+    logging: DEFAULT_LOGGING_CONFIG,
   };
 }
 
@@ -200,7 +198,7 @@ describe("p3-u08-discover-wiring: buildDiscoverComponents", () => {
         paprika: { email: "test@example.com", password: "pass" },
         sync: { enabled: true, interval: 5000, pendingWriteTtl: 60000 },
         http: { port: 3000, host: "0.0.0.0", allowedHosts: [], allowedOrigins: [] },
-        logging: DEFAULT_LOGGING,
+        logging: DEFAULT_LOGGING_CONFIG,
         features: {
           embeddings: embeddingsConfig,
         },

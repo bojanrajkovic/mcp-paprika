@@ -17,7 +17,8 @@ import {
   type IPolicy,
   type IRetryContext,
 } from "cockatiel";
-import pino, { type Logger } from "pino";
+import type { Logger } from "pino";
+import { SILENT_LOG } from "../utils/log.js";
 import { z } from "zod";
 import type { Recipe } from "../paprika/types.js";
 import type { EmbeddingConfig } from "../utils/config.js";
@@ -74,7 +75,7 @@ export class EmbeddingClient {
   private readonly _baseUrl: string;
   private readonly _apiKey: string;
   private readonly _model: string;
-  private readonly _log: Logger;
+  private readonly log: Logger;
   private readonly _retryPolicy: ReturnType<typeof retry>;
   private readonly _breakerPolicy: ReturnType<typeof circuitBreaker>;
   private readonly _resilience: IPolicy<IRetryContext, never>;
@@ -84,7 +85,7 @@ export class EmbeddingClient {
     this._baseUrl = config.baseUrl.replace(/\/+$/, "");
     this._apiKey = config.apiKey;
     this._model = config.model;
-    this._log = log ?? pino({ level: "silent" });
+    this.log = log ?? SILENT_LOG;
 
     // Per-instance resilience stack
     this._retryPolicy = retry(handleType(TransientHTTPError), {
@@ -100,15 +101,13 @@ export class EmbeddingClient {
       breaker: new ConsecutiveBreaker(5),
     });
 
-    // event.attempt is the upcoming retry number (1 = first retry).
-    // Normalize: upcoming retry N → attempt N+1 in 1-indexed network-touch terms.
-    // The upcoming 2nd network touch = first retry = event.attempt 1 → log attempt 2.
-    // Mirrors the paprika client normalization pattern.
+    // event.attempt is the 0-indexed upcoming-retry counter; +1 yields the
+    // 1-indexed network-touch attempt number that the inline log site uses.
     this._retryPolicy.onRetry((event) => {
       if ("error" in event) {
         const err = event.error;
         const status = err instanceof TransientHTTPError ? err.status : undefined;
-        this._log.warn(
+        this.log.warn(
           { err, status, attempt: event.attempt + 1, nextBackoffMs: event.delay },
           "embedding request failed, retrying",
         );
@@ -119,13 +118,26 @@ export class EmbeddingClient {
       if ("error" in event) {
         const err = event.error;
         const status = err instanceof TransientHTTPError ? err.status : undefined;
-        this._log.error({ err, status }, "embedding request gave up after retries");
+        this.log.error({ err, status }, "embedding request gave up after retries");
       }
+    });
+
+    // Breaker state-change hooks. `onBreak` reaches connected MCP clients via
+    // the default `notifyLevel: "warn"` fan-out; reset/half-open stay on the
+    // primary log stream by design.
+    this._breakerPolicy.onBreak(() => {
+      this.log.warn({}, "embedding circuit breaker opened");
+    });
+    this._breakerPolicy.onReset(() => {
+      this.log.info({}, "embedding circuit breaker reset");
+    });
+    this._breakerPolicy.onHalfOpen(() => {
+      this.log.info({}, "embedding circuit breaker half-open (probe pending)");
     });
 
     // Breaker OUTSIDE retry so the consecutive-failure counter increments
     // once per embed call regardless of how many retries that call exhausted
-    // internally. Mirrors the wrap order in PaprikaClient.
+    // internally.
     this._resilience = wrap(this._breakerPolicy, this._retryPolicy);
   }
 
@@ -158,8 +170,8 @@ export class EmbeddingClient {
 
     const execute = async (ctx: IRetryContext): Promise<Array<Array<number>>> => {
       const attempt = ctx.attempt + 1;
-      const start = performance.now();
-      this._log.debug({ attempt }, "embedding request start");
+      const t0 = performance.now();
+      this.log.debug({ attempt }, "embedding request start");
 
       const response = await fetch(endpoint, {
         method: "POST",
@@ -179,7 +191,7 @@ export class EmbeddingClient {
           // onRetry hook will log the warn; just throw for cockatiel to handle
           throw new TransientHTTPError(response.status);
         }
-        this._log.error({ status: response.status, attempt }, "embedding request failed (non-retryable)");
+        this.log.error({ status: response.status, attempt }, "embedding request failed (non-retryable)");
         throw new EmbeddingAPIError("Embedding API error", response.status, endpoint);
       }
 
@@ -192,8 +204,8 @@ export class EmbeddingClient {
         this._dimensions = parsed.data[0]!.embedding.length;
       }
 
-      const durationMs = Math.round(performance.now() - start);
-      this._log.debug({ attempt, durationMs }, "embedding request ok");
+      const attemptDurationMs = Math.round(performance.now() - t0);
+      this.log.debug({ attempt, attemptDurationMs }, "embedding request ok");
       return parsed.data.map((d) => d.embedding);
     };
 

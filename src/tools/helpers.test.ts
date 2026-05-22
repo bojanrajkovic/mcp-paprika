@@ -1,12 +1,10 @@
 import { describe, it, expect, vi } from "vitest";
-import pino from "pino";
 import { makeRecipe, makeCategory } from "../cache/__fixtures__/recipes.js";
 import { coldStartGuard, textResult, recipeToMarkdown, commitRecipe, resolveCategoryNames } from "./helpers.js";
 import type { ServerContext } from "../types/server-context.js";
 import type { DiskCache } from "../cache/disk-cache.js";
 import type { PaprikaClient } from "../paprika/client.js";
-
-const SILENT_LOG = pino({ level: "silent" });
+import { SILENT_LOG } from "../utils/log.js";
 
 // Minimal ServerContext stub — only `store.size` matters for coldStartGuard
 const makeCtx = (size: number) =>

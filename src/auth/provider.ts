@@ -150,15 +150,14 @@ export class MintingOAuthServerProvider implements OAuthServerProvider {
     // RFC 6749 §6 / OAuth 2.1 §4.3.1 — a refresh_token belongs to the client
     // it was issued to. TokenStore.rotateRefresh enforces that by comparing
     // expectedClientId to the stored record (atomically under its mutex).
-    // Look up old token BEFORE rotation to capture sub for logging (rotateRefresh
-    // deletes the old token before returning, so it wouldn't be available after).
-    const oldRecord = await this._tokenStore.getTokenRecord(refreshToken);
+    // The returned IssuedPair.identity carries the rotated-out token's
+    // identity so we can log `sub` without a separate disk read.
     const result = await this._tokenStore.rotateRefresh(refreshToken, client.client_id, scopes, resource?.toString());
     return result.match(
       (pair) => {
         const tokenHash = hashTokenForStorage(pair.access.plaintext);
         this.log.info(
-          { tokenHash, clientId: client.client_id, sub: oldRecord?.identity.sub ?? null },
+          { tokenHash, clientId: client.client_id, sub: pair.identity.sub },
           "access token minted (refresh_token grant)",
         );
         return {

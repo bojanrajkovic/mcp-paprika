@@ -1,6 +1,16 @@
 /**
- * Cross-cutting error classes used by multiple modules.
+ * Cross-cutting error classes and helpers used by multiple modules.
  */
+
+/**
+ * Type guard for Node's `ErrnoException` shape — any `Error` whose `code`
+ * property is set by the runtime (typical for `fs`/`net`/`child_process`).
+ *
+ * Use as: `if (isNodeError(err) && err.code === "ENOENT") { ... }`.
+ */
+export function isNodeError(error: unknown): error is NodeJS.ErrnoException {
+  return error instanceof Error && "code" in error;
+}
 
 /**
  * Short identifier for a client/subsystem that mounts cockatiel resilience.

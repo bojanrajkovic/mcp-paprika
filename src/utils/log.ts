@@ -20,6 +20,17 @@ export function toMessage(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
 }
 
+/**
+ * Process-wide silent pino logger. Use as the default for optional `log?:
+ * Logger` parameters on classes/functions whose tests omit a logger — avoids
+ * scattering `pino({ level: "silent" })` calls across production and test code.
+ *
+ * Safe to share across instances: pino loggers are stateless w.r.t. their
+ * level config, and the silent level short-circuits every log method to a
+ * no-op so there's no shared-state concern.
+ */
+export const SILENT_LOG = pino({ level: "silent" });
+
 // ---------------------------------------------------------------------------
 // Exported types
 // ---------------------------------------------------------------------------

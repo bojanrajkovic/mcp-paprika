@@ -11,7 +11,7 @@ import { DiskCache } from "../cache/disk-cache.js";
 import { makeOAuthClient } from "../cache/__fixtures__/oauth.js";
 import { useXdgIsolation } from "../__fixtures__/xdg-isolation.js";
 import { useMswServer } from "../__fixtures__/msw.js";
-import { makePinoCapture } from "../tools/tool-test-utils.js";
+import { makePinoCapture, SILENT_LOGGING_CONFIG } from "../tools/tool-test-utils.js";
 
 /**
  * These tests drive the HTTP transport with raw `fetch`, not the MCP SDK
@@ -121,7 +121,7 @@ function makeConfig(overrides: Partial<PaprikaConfig> = {}): PaprikaConfig {
     sync: { enabled: false, interval: 60_000 },
     transport: "stdio",
     http: { port: 0, host: "127.0.0.1", allowedHosts: [], allowedOrigins: [] },
-    logging: { level: "silent", notifyLevel: "fatal", pretty: false },
+    logging: SILENT_LOGGING_CONFIG,
     ...overrides,
   } as PaprikaConfig;
 }
@@ -539,7 +539,7 @@ function makeOAuthConfig(): PaprikaConfig {
     sync: { enabled: false, interval: 60_000 },
     transport: "http",
     http: { port: 0, host: "127.0.0.1", allowedHosts: [], allowedOrigins: [] },
-    logging: { level: "silent", notifyLevel: "fatal", pretty: false },
+    logging: SILENT_LOGGING_CONFIG,
     oauth: {
       publicUrl: PUBLIC_URL,
       preset: undefined,

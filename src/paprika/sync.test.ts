@@ -1,8 +1,7 @@
 import { vi, describe, it, expect, afterEach, beforeEach, expectTypeOf } from "vitest";
-import pino from "pino";
 
 import { SyncEngine } from "./sync.js";
-import { createLogger } from "../utils/log.js";
+import { createLogger, SILENT_LOG } from "../utils/log.js";
 import type { AppContext } from "../server/app-context.js";
 import type { Notifier } from "../server/notifier.js";
 import type { RecipeStore } from "../cache/recipe-store.js";
@@ -13,8 +12,6 @@ import type { PantryItemUid, RecipeEntry, RecipeUid, SyncResult } from "./types.
 import { makeRecipe, makeCategory } from "../cache/__fixtures__/recipes.js";
 import { makePantryItem } from "../cache/__fixtures__/pantry.js";
 import { PantryStore as RealPantryStore } from "../cache/pantry-store.js";
-
-const SILENT_LOG = pino({ level: "silent" });
 
 function makeMockNotifier(): Notifier {
   return {

@@ -6,6 +6,7 @@ import dotenv from "dotenv";
 import { ok, err, type Result } from "neverthrow";
 import { parseDuration } from "./duration.js";
 import { getConfigDir } from "./xdg.js";
+import { isNodeError } from "./errors.js";
 
 const ENV_VAR_HINTS: Readonly<Record<string, string>> = {
   "paprika.email": "PAPRIKA_EMAIL",
@@ -273,11 +274,6 @@ export const paprikaConfigSchema = z
 export type PaprikaConfig = z.infer<typeof paprikaConfigSchema>;
 export type EmbeddingConfig = z.infer<typeof embeddingConfigSchema>;
 
-// Type guard for NodeJS.ErrnoException
-function isNodeError(error: unknown): error is NodeJS.ErrnoException {
-  return error instanceof Error && "code" in error;
-}
-
 // Reads config.json from configDir. ENOENT returns ok({}). Invalid JSON and permission errors return err.
 function readConfigFile(configDir: string): Result<Record<string, unknown>, ConfigError> {
   const filePath = join(configDir, "config.json");
@@ -336,9 +332,15 @@ export function buildEnvOverrides(env: NodeJS.ProcessEnv): Record<string, unknow
   if (env["MCP_ALLOWED_HOSTS"] !== undefined) http["allowedHosts"] = env["MCP_ALLOWED_HOSTS"];
   if (env["MCP_ALLOWED_ORIGINS"] !== undefined) http["allowedOrigins"] = env["MCP_ALLOWED_ORIGINS"];
 
-  if (env["MCP_LOG_LEVEL"]) logging["level"] = env["MCP_LOG_LEVEL"];
-  if (env["MCP_LOG_NOTIFY_LEVEL"]) logging["notifyLevel"] = env["MCP_LOG_NOTIFY_LEVEL"];
-  if (env["MCP_LOG_FILE"]) logging["file"] = env["MCP_LOG_FILE"];
+  if (env["MCP_LOG_LEVEL"] !== undefined && env["MCP_LOG_LEVEL"] !== "") {
+    logging["level"] = env["MCP_LOG_LEVEL"];
+  }
+  if (env["MCP_LOG_NOTIFY_LEVEL"] !== undefined && env["MCP_LOG_NOTIFY_LEVEL"] !== "") {
+    logging["notifyLevel"] = env["MCP_LOG_NOTIFY_LEVEL"];
+  }
+  if (env["MCP_LOG_FILE"] !== undefined && env["MCP_LOG_FILE"] !== "") {
+    logging["file"] = env["MCP_LOG_FILE"];
+  }
   if (env["MCP_LOG_PRETTY"] !== undefined && env["MCP_LOG_PRETTY"] !== "") {
     const raw = env["MCP_LOG_PRETTY"];
     // "auto" is the only string the schema accepts verbatim; otherwise reuse

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import pino from "pino";
+import { SILENT_LOG } from "../utils/log.js";
 import { nowSeconds } from "./tokens.js";
 import { makePinoCapture } from "../tools/tool-test-utils.js";
 import { Hono } from "hono";
@@ -64,7 +64,7 @@ function makeRoutesConfig(ctx: RoutesCtx, overrides: RoutesOverrides = {}): Auth
     discovery: makeDiscoveryDoc(ctx.oidcStubIssuer),
     jwks: overrides.jwks ?? ((async () => ({ keys: [] })) as unknown as JWTVerifyGetKey),
     publicUrl: "https://mcp.example.com",
-    log: { auth: pino({ level: "silent" }), oidcClient: pino({ level: "silent" }) },
+    log: { auth: SILENT_LOG, oidcClient: SILENT_LOG },
   };
 }
 
@@ -89,7 +89,7 @@ describe("Auth Routes", () => {
     cache = new DiskCache(cacheDir);
     await cache.init();
 
-    clientStore = new DiskClientRegistrationStore(cache, "https://mcp.example.com", pino({ level: "silent" }));
+    clientStore = new DiskClientRegistrationStore(cache, "https://mcp.example.com", SILENT_LOG);
     tokenStore = new TokenStore(cache);
     authRequests = new AuthRequestStore();
     authCodes = new AuthCodeStore();
@@ -298,7 +298,7 @@ describe("Auth Routes", () => {
             { clientStore, tokenStore, authRequests, authCodes, oidcStubIssuer: oidcStub.issuer },
             { jwks: realJwks, authRequests: localAuthRequests, authCodes: localAuthCodes },
           ),
-          log: { auth: authLog, oidcClient: pino({ level: "silent" }) },
+          log: { auth: authLog, oidcClient: SILENT_LOG },
         }),
       );
 
@@ -381,7 +381,7 @@ describe("Auth Routes", () => {
             { clientStore, tokenStore, authRequests, authCodes, oidcStubIssuer: oidcStub.issuer },
             { jwks: realJwks, authRequests: localAuthRequests, authCodes: localAuthCodes },
           ),
-          log: { auth: authLog, oidcClient: pino({ level: "silent" }) },
+          log: { auth: authLog, oidcClient: SILENT_LOG },
         }),
       );
 
@@ -730,11 +730,7 @@ describe("Auth Routes", () => {
       const testCache = new DiskCache(`/tmp/test-cap-${Date.now()}-${Math.random().toString(36).slice(2)}`);
       await testCache.init();
 
-      const testClientStore = new DiskClientRegistrationStore(
-        testCache,
-        "https://mcp.example.com",
-        pino({ level: "silent" }),
-      );
+      const testClientStore = new DiskClientRegistrationStore(testCache, "https://mcp.example.com", SILENT_LOG);
       const testApp = new Hono();
       testApp.use("/register", buildClientCap(testCache, 50));
       testApp.post("/register", (c) => c.json({ ok: true }, 201));

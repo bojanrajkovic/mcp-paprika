@@ -10,8 +10,7 @@ import { PantryStore } from "../cache/pantry-store.js";
 import type { RecipeStore } from "../cache/recipe-store.js";
 import type { Notifier } from "../server/notifier.js";
 import type { ServerContext } from "../types/server-context.js";
-
-const SILENT_LOG = pino({ level: "silent" });
+import { SILENT_LOG } from "../utils/log.js";
 
 /**
  * Shape returned by `makePinoCapture()`. `log` is the capture logger;
@@ -174,6 +173,29 @@ export function getText(result: CallToolResult): string {
   if (!first || first.type !== "text") throw new Error("Expected text content");
   return first.text;
 }
+
+/**
+ * Logging-config shape that suppresses all output. Use for transport-test
+ * setups (or anywhere a config literal is needed but logger noise isn't).
+ * `notifyLevel: "fatal"` blocks fan-out at any sub-fatal level — no level
+ * the production code emits today will reach the notifier through this.
+ */
+export const SILENT_LOGGING_CONFIG = {
+  level: "silent" as const,
+  notifyLevel: "fatal" as const,
+  pretty: false as const,
+};
+
+/**
+ * Default logging-config shape matching the schema defaults from
+ * `paprikaConfigSchema`. Use when tests want production-like log behavior
+ * but as a literal rather than going through `loadConfig()`.
+ */
+export const DEFAULT_LOGGING_CONFIG = {
+  level: "info" as const,
+  notifyLevel: "warn" as const,
+  pretty: "auto" as const,
+};
 
 /**
  * Drives the given async call 5 times under fake timers so cockatiel's

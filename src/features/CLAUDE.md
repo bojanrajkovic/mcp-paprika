@@ -111,7 +111,7 @@ anything that exposes a typed `on`/`off` for `sync:complete` and `sync:error`.
 
 ### VectorStore
 
-Per-instance `_log` child logger. Constructor takes optional `log?: Logger` (default: silent). Corruption recovery emits `warn` for corrupt Vectra index and corrupt `hash-index.json`. ENOENT and parse-failure paths in read operations emit `debug` or stay silent per the per-site classification in source comments.
+Per-instance `log` child logger. Constructor takes optional `log?: Logger` (default: silent). Corruption recovery emits `warn` for corrupt Vectra index and corrupt `hash-index.json`. ENOENT and parse-failure paths in read operations emit `debug` or stay silent per the per-site classification in source comments.
 
 ### EmbeddingClient
 

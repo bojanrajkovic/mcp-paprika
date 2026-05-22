@@ -36,7 +36,7 @@ export class AuthCleanup {
     private readonly _cache: DiskCache,
     private readonly _authRequests: AuthRequestStore,
     private readonly _authCodes: AuthCodeStore,
-    private readonly _log: Logger,
+    private readonly log: Logger,
     private readonly _now: () => number = () => nowSeconds(),
     private readonly _intervalMs: number = CLEANUP_INTERVAL_MS,
   ) {}
@@ -130,13 +130,13 @@ export class AuthCleanup {
       try {
         await this.sweepOnce();
       } catch (err) {
-        this._log.debug({ err }, "auth cleanup sweep failed; continuing");
+        this.log.debug({ err }, "auth cleanup sweep failed; continuing");
       }
       try {
         await wait(this._intervalMs, undefined, { signal: this._ac.signal });
       } catch (err) {
         if (!(err instanceof Error && err.name === "AbortError")) {
-          this._log.debug({ err }, "auth cleanup wait failed unexpectedly");
+          this.log.debug({ err }, "auth cleanup wait failed unexpectedly");
         }
         return;
       }

@@ -3,22 +3,12 @@ import { join } from "node:path";
 import { Mutex } from "async-mutex";
 import { z } from "zod";
 import type { Logger } from "pino";
-import pino from "pino";
 import { RecipeStoredSchema, CategoryStoredSchema, PantryItemStoredSchema } from "../paprika/types.js";
 import type { Recipe, Category, RecipeEntry, DiffResult, PantryItem } from "../paprika/types.js";
 import { OAuthClientSchema, OAuthTokenSchema } from "../auth/types.js";
 import type { OAuthClient, OAuthToken } from "../auth/types.js";
-
-// Module-level silent logger used as default when no logger is provided.
-// This avoids allocating a new silent pino on every constructor call.
-const SILENT = pino({ level: "silent" });
-
-// Type guard for NodeJS.ErrnoException. Mirrors the local helper in
-// utils/config.ts but is intentionally not exported from there — each
-// module defines its own copy per the existing pattern.
-function isNodeError(error: unknown): error is NodeJS.ErrnoException {
-  return error instanceof Error && "code" in error;
-}
+import { SILENT_LOG } from "../utils/log.js";
+import { isNodeError } from "../utils/errors.js";
 
 // I/O error handling convention throughout this file:
 // We use try/catch and check error.code rather than existsSync()-then-read.
@@ -70,7 +60,7 @@ export class DiskCache {
     this._pantryDir = join(cacheDir, "pantry");
     this._oauthClientsDir = join(cacheDir, "oauthClients");
     this._oauthTokensDir = join(cacheDir, "oauthTokens");
-    this.log = log ?? SILENT;
+    this.log = log ?? SILENT_LOG;
   }
 
   async init(): Promise<void> {

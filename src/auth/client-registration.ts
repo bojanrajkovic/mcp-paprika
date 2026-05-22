@@ -77,7 +77,7 @@ export class DiskClientRegistrationStore {
   constructor(
     private readonly _cache: DiskCache,
     private readonly _publicUrl: string,
-    private readonly _log: Logger,
+    private readonly log: Logger,
     /**
      * Hard cap on the number of registered clients. Enforced atomically
      * inside `registerClient` (via `DiskCache.tryPutOAuthClient`) so concurrent
@@ -106,7 +106,7 @@ export class DiskClientRegistrationStore {
    */
   async registerClient(metaIn: unknown): Promise<OAuthClientInformationFull> {
     // Validate via dcr-validator; pass logger for URL-parse debug diagnosability
-    const validated = validateRegistration(metaIn, this._log).match(
+    const validated = validateRegistration(metaIn, this.log).match(
       (v) => v,
       (e) => {
         throw e;
@@ -143,7 +143,7 @@ export class DiskClientRegistrationStore {
       throw new InvalidRequestError(`client registration cap reached (${result.currentCount.toString()} clients)`);
     }
     await this._cache.flush();
-    this._log.info(
+    this.log.info(
       { clientId: stored.clientId, redirectUriCount: stored.redirectUris.length },
       "client registered via DCR",
     );
@@ -166,7 +166,7 @@ export class DiskClientRegistrationStore {
     if (existing === null) throw OAuthClientNotFoundError.forId(clientId);
 
     // Validate patch via dcr-validator; pass logger for URL-parse debug diagnosability
-    const validated = validateUpdate(metaIn, this._log).match(
+    const validated = validateUpdate(metaIn, this.log).match(
       (v) => v,
       (e) => {
         throw e;
@@ -224,7 +224,7 @@ export class DiskClientRegistrationStore {
     try {
       return timingSafeEqual(Buffer.from(presentedHash, "hex"), Buffer.from(storedHash, "hex"));
     } catch (err) {
-      this._log.debug({ err, clientId }, "RAT timing-safe equality failed (likely invalid hex)");
+      this.log.debug({ err, clientId }, "RAT timing-safe equality failed (likely invalid hex)");
       return false;
     }
   }

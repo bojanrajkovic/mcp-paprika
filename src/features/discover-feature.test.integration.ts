@@ -19,7 +19,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { RecipeStore } from "../cache/recipe-store.js";
 import { makeRecipe } from "../cache/__fixtures__/recipes.js";
-import { makeTestServer, makeCtx, getText } from "../tools/tool-test-utils.js";
+import { makeTestServer, makeCtx, getText, DEFAULT_LOGGING_CONFIG } from "../tools/tool-test-utils.js";
 import { registerDiscoverTool } from "../tools/discover.js";
 import type { EmbeddingConfig } from "../utils/config.js";
 import type { SyncResult } from "../paprika/types.js";
@@ -84,7 +84,7 @@ function makePaprikaConfig() {
     paprika: { email: "test@example.com", password: "pass" },
     sync: { enabled: true, interval: 5000, pendingWriteTtl: 60000 },
     http: { port: 0, host: "127.0.0.1", allowedHosts: [], allowedOrigins: [] },
-    logging: { level: "info" as const, notifyLevel: "warn" as const, pretty: "auto" as const },
+    logging: DEFAULT_LOGGING_CONFIG,
     features: { embeddings: makeOllamaConfig() },
   };
 }

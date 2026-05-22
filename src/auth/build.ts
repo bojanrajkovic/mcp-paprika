@@ -86,15 +86,12 @@ export async function buildAuthContext(
     allowlist: config.oauth.allowlist,
   };
 
-  // Fetch + validate upstream discovery document (rejects http:// endpoints; checks alg overlap)
-  const discovery = await loadDiscovery(
-    resolved.discoveryUrl,
-    resolved.allowedAlgs,
-    parentLog.child({ component: "oidc-client" }),
-  );
-  const jwks = createJwksFor(discovery);
-
   const authLog = parentLog.child({ component: "auth" });
+  const oidcClientLog = parentLog.child({ component: "oidc-client" });
+
+  // Fetch + validate upstream discovery document (rejects http:// endpoints; checks alg overlap)
+  const discovery = await loadDiscovery(resolved.discoveryUrl, resolved.allowedAlgs, oidcClientLog);
+  const jwks = createJwksFor(discovery);
 
   const clientStore = new DiskClientRegistrationStore(cache, resolved.publicUrl, authLog, MAX_REGISTERED_CLIENTS);
   const tokenStore = new TokenStore(cache);
@@ -126,7 +123,7 @@ export async function buildAuthContext(
     cleanup,
     log: {
       auth: authLog,
-      oidcClient: parentLog.child({ component: "oidc-client" }),
+      oidcClient: oidcClientLog,
     },
   };
 }

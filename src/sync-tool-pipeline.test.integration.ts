@@ -4,7 +4,6 @@ import { http, HttpResponse } from "msw";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import pino from "pino";
 import { PaprikaClient } from "./paprika/client.js";
 import { DiskCache } from "./cache/disk-cache.js";
 import { RecipeStore } from "./cache/recipe-store.js";
@@ -19,9 +18,9 @@ import { registerReadTool } from "./tools/read.js";
 import { registerListTool } from "./tools/list.js";
 import { registerFilterTools } from "./tools/filter.js";
 import { registerCategoryTools } from "./tools/categories.js";
+import { SILENT_LOG } from "./utils/log.js";
 
 const API_BASE = "https://paprikaapp.com/api/v2/sync";
-const SILENT_LOG = pino({ level: "silent" });
 
 function makeSnakeCaseRecipe(uid: string, overrides?: Partial<Record<string, unknown>>): object {
   return {

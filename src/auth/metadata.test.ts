@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import pino from "pino";
+import { SILENT_LOG } from "../utils/log.js";
 import { Hono } from "hono";
 import { buildCustomizedAuthorizationServerMetadata, buildAuthMetadataRouter } from "./metadata.js";
 import { MintingOAuthServerProvider } from "./provider.js";
@@ -18,7 +18,7 @@ describe("OAuth Metadata Customization", () => {
     cache = new DiskCache(cacheDir);
     await cache.init();
 
-    const clientStore = new DiskClientRegistrationStore(cache, "https://mcp.example.com", pino({ level: "silent" }));
+    const clientStore = new DiskClientRegistrationStore(cache, "https://mcp.example.com", SILENT_LOG);
     const tokenStore = new TokenStore(cache);
     const authRequests = new AuthRequestStore();
     const authCodes = new AuthCodeStore();
@@ -48,7 +48,7 @@ describe("OAuth Metadata Customization", () => {
         allowedAlgs: ["RS256"],
       },
       "https://mcp.example.com",
-      pino({ level: "silent" }),
+      SILENT_LOG,
     );
   });
 

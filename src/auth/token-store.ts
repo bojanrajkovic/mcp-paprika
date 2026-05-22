@@ -32,6 +32,14 @@ import type { VerifiedIdentity } from "./allowlist.js";
 export interface IssuedPair {
   readonly access: { readonly plaintext: string; readonly expiresAt: number };
   readonly refresh: { readonly plaintext: string; readonly expiresAt: number };
+  /**
+   * Identity bound to the issued/rotated pair. For `issueAccessRefreshPair`,
+   * this echoes the input identity; for `rotateRefresh`, it's the rotated-out
+   * token's identity (the new pair carries the same identity by definition).
+   * Surfacing it on the result lets the provider log refresh-grant state
+   * transitions without a separate disk read.
+   */
+  readonly identity: VerifiedIdentity;
 }
 
 // ============================================================================
@@ -100,6 +108,7 @@ export class TokenStore {
     return {
       access: { plaintext: accessPlain, expiresAt: accessExpiresAt },
       refresh: { plaintext: refreshPlain, expiresAt: refreshExpiresAt },
+      identity: input.identity,
     };
   }
 
@@ -243,6 +252,7 @@ export class TokenStore {
       return ok({
         access: { plaintext: accessPlain, expiresAt: accessExpiresAt },
         refresh: { plaintext: refreshPlain, expiresAt: refreshExpiresAt },
+        identity: existing.identity,
       });
     });
   }

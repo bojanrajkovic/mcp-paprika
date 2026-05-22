@@ -23,7 +23,6 @@ import {
   type IPolicy,
   type IRetryContext,
 } from "cockatiel";
-import pino from "pino";
 import type { Logger } from "pino";
 import { z } from "zod";
 import type { ZodType, ZodTypeDef } from "zod";
@@ -31,11 +30,10 @@ import type { Category, PantryItem, Recipe, RecipeEntry, RecipeUid } from "./typ
 import { AuthResponseSchema, CategorySchema, PantryItemSchema, RecipeEntrySchema, RecipeSchema } from "./types.js";
 import { PaprikaAuthError, PaprikaAPIError } from "./errors.js";
 import { CircuitOpenError } from "../utils/errors.js";
+import { SILENT_LOG } from "../utils/log.js";
 
 const AUTH_URL = "https://paprikaapp.com/api/v1/account/login/";
 const API_BASE = "https://paprikaapp.com/api/v2/sync";
-
-const SILENT_LOG = pino({ level: "silent" });
 
 class TransientHTTPError extends Error {
   constructor(readonly status: number) {

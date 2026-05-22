@@ -58,20 +58,14 @@ import type { EmbeddingClient } from "./embeddings.js";
 import { recipeToEmbeddingText } from "./embeddings.js";
 import { VectorStoreError } from "./vector-store-errors.js";
 import type { Logger } from "pino";
-import pino from "pino";
 import type { Recipe, CategoryUid } from "../paprika/types.js";
+import { SILENT_LOG } from "../utils/log.js";
+import { isNodeError } from "../utils/errors.js";
 
 const HashIndexSchema = z.record(z.string(), z.string());
 
 /** Maximum number of texts to embed in a single batch call. */
 const BATCH_SIZE = 500;
-
-function isNodeError(error: unknown): error is NodeJS.ErrnoException {
-  return error instanceof Error && "code" in error;
-}
-
-// Module-level silent logger used as default when no logger is provided.
-const SILENT = pino({ level: "silent" });
 
 const VectorMetaSchema = z.object({
   model: z.string(),
@@ -87,7 +81,7 @@ export class VectorStore {
   private readonly _embedder: EmbeddingClient;
   private readonly _modelId: string;
   private readonly _schemaVersion: number;
-  private readonly _log: Logger;
+  private readonly log: Logger;
   private _hashes: Record<string, string> = {};
 
   constructor(cacheDir: string, embedder: EmbeddingClient, modelId: string, schemaVersion: number, log?: Logger) {
@@ -98,7 +92,7 @@ export class VectorStore {
     this._embedder = embedder;
     this._modelId = modelId;
     this._schemaVersion = schemaVersion;
-    this._log = log ?? SILENT;
+    this.log = log ?? SILENT_LOG;
   }
 
   async init(): Promise<void> {
@@ -111,7 +105,7 @@ export class VectorStore {
         await this._index.createIndex();
       }
     } catch {
-      this._log.warn({ vectorsDir: this._vectorsDir }, "corrupt Vectra index, backing up and recreating");
+      this.log.warn({ vectorsDir: this._vectorsDir }, "corrupt Vectra index, backing up and recreating");
       const backupDir = `${this._vectorsDir}.bak`;
       await cp(this._vectorsDir, backupDir, { recursive: true, force: true });
       await this._index.createIndex({ version: 1, deleteIfExists: true });
@@ -126,13 +120,13 @@ export class VectorStore {
     const meta = await this._loadMeta();
     if (meta !== null) {
       if (meta.model !== this._modelId) {
-        this._log.info(
+        this.log.info(
           { previousModel: meta.model, newModel: this._modelId },
           "embedding model changed, clearing vector index",
         );
         this._hashes = {};
       } else if ((meta.schemaVersion ?? 0) !== this._schemaVersion) {
-        this._log.info(
+        this.log.info(
           {
             previousSchemaVersion: meta.schemaVersion ?? 0,
             newSchemaVersion: this._schemaVersion,
@@ -161,7 +155,7 @@ export class VectorStore {
     try {
       parsed = JSON.parse(raw);
     } catch (err) {
-      this._log.warn({ err, path: this._hashIndexPath }, "corrupt hash-index.json, backing up and resetting");
+      this.log.warn({ err, path: this._hashIndexPath }, "corrupt hash-index.json, backing up and resetting");
       await this._backupFile(this._hashIndexPath, `${this._hashIndexPath}.bak`);
       this._hashes = {};
       return;
@@ -169,7 +163,7 @@ export class VectorStore {
 
     const result = HashIndexSchema.safeParse(parsed);
     if (!result.success) {
-      this._log.warn({ path: this._hashIndexPath }, "schema mismatch on hash-index.json, backing up and resetting");
+      this.log.warn({ path: this._hashIndexPath }, "schema mismatch on hash-index.json, backing up and resetting");
       await this._backupFile(this._hashIndexPath, `${this._hashIndexPath}.bak`);
       this._hashes = {};
       return;
@@ -193,7 +187,7 @@ export class VectorStore {
     try {
       return VectorMetaSchema.parse(JSON.parse(raw));
     } catch (err) {
-      this._log.debug({ err, path: this._metaPath }, "could not parse vector-meta.json; will re-detect model/schema");
+      this.log.debug({ err, path: this._metaPath }, "could not parse vector-meta.json; will re-detect model/schema");
       return null;
     }
   }

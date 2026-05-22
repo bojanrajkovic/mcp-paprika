@@ -10,15 +10,13 @@
 
 import { http, HttpResponse } from "msw";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import pino from "pino";
 
 import { buildAuthContext } from "./build.js";
 import { createOidcStub } from "./__fixtures__/oidc-stub.js";
 import type { PaprikaConfig } from "../utils/config.js";
 import { useXdgIsolation } from "../__fixtures__/xdg-isolation.js";
 import { useMswServer } from "../__fixtures__/msw.js";
-
-const SILENT_LOG = pino({ level: "silent" });
+import { SILENT_LOG } from "../utils/log.js";
 
 const msw = useMswServer([], { onUnhandledRequest: "bypass" });
 const xdg = useXdgIsolation("mcp-paprika-build-auth");

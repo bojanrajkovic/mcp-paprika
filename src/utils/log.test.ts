@@ -4,7 +4,7 @@ import type { Level as PinoLevel } from "pino";
 import { mkdtempSync, rmSync, existsSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { pinoLevelToMcp, notifierStream, resolvePrimaryDestination, createLogger } from "./log.js";
+import { pinoLevelToMcp, notifierStream, resolvePrimaryDestination, createLogger, toMessage } from "./log.js";
 import type { LoggerOptions } from "./log.js";
 import type { Notifier } from "../server/notifier.js";
 
@@ -441,7 +441,7 @@ describe("resolvePrimaryDestination", () => {
       try {
         resolvePrimaryDestination(makeOpts({ transport: "stdio", pretty: false, file: badPath }));
       } catch (e) {
-        errorMessage = e instanceof Error ? e.message : String(e);
+        errorMessage = toMessage(e);
       }
 
       // The error should surface naturally from mkdirSync (ENOTDIR)

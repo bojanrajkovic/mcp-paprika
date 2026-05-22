@@ -10,7 +10,7 @@ import { makeDefaultOidcStub, makeDiscoveryDoc } from "./__fixtures__/oidc-stub.
 import { makeAuthCodeState, makeVerifiedIdentity } from "./__fixtures__/oauth-state.js";
 import { ACCESS_TOKEN_TTL_SECONDS, hashTokenForStorage } from "./tokens.js";
 import { makePinoCapture } from "../tools/tool-test-utils.js";
-import pino from "pino";
+import { SILENT_LOG } from "../utils/log.js";
 import type { OAuthClientInformationFull } from "@modelcontextprotocol/sdk/shared/auth.js";
 import type { AuthCodeState } from "./types.js";
 import { useMswServer } from "../__fixtures__/msw.js";
@@ -62,7 +62,7 @@ describe("MintingOAuthServerProvider", () => {
     cache = new DiskCache(cacheDir);
     await cache.init();
 
-    clientStore = new DiskClientRegistrationStore(cache, "https://mcp.example.com", pino({ level: "silent" }));
+    clientStore = new DiskClientRegistrationStore(cache, "https://mcp.example.com", SILENT_LOG);
     tokenStore = new TokenStore(cache);
     authRequests = new AuthRequestStore();
     authCodes = new AuthCodeStore();
@@ -89,7 +89,7 @@ describe("MintingOAuthServerProvider", () => {
         allowedAlgs: ["RS256"],
       },
       "https://mcp.example.com",
-      pino({ level: "silent" }),
+      SILENT_LOG,
     );
 
     // Create mock client for testing
@@ -462,11 +462,7 @@ describe("MintingOAuthServerProvider", () => {
       logRecords = records;
 
       // Fresh clientStore with silent logger (we're only capturing logProvider's logger)
-      const logClientStore = new DiskClientRegistrationStore(
-        cache,
-        "https://mcp.example.com",
-        pino({ level: "silent" }),
-      );
+      const logClientStore = new DiskClientRegistrationStore(cache, "https://mcp.example.com", SILENT_LOG);
       const discovery = makeDiscoveryDoc(oidcStub.issuer);
 
       logProvider = new MintingOAuthServerProvider(

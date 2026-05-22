@@ -166,7 +166,7 @@ async function main(): Promise<void> {
   log.info("mock authentication complete");
 
   log.info("initializing disk cache");
-  const cache = new DiskCache(getCacheDir());
+  const cache = new DiskCache(getCacheDir(), log.child({ component: "disk-cache" }));
   await cache.init();
 
   const store = new RecipeStore();

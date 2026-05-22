@@ -57,6 +57,8 @@ Top-level, 1-deep (`*.field`), and 2-deep (`*.*.field`) wildcards for each of th
 
 **`toMessage(e)`:** `(e: unknown) => string` — extracts a human-readable message from an unknown thrown value: `e.message` if `e instanceof Error`, else `String(e)`. Ten production sites across the codebase depend on this export.
 
+**`SILENT_LOG`:** a process-wide silent pino `Logger` exported as the canonical default for optional `log?: Logger` parameters on classes and functions. Production callers (`DiskCache`, `VectorStore`, `EmbeddingClient`, `PaprikaClient`) fall back to it when no logger is threaded; tests import it instead of constructing per-test `pino({ level: "silent" })` instances. Pino's silent level short-circuits every log method to a no-op, so the shared instance is safe across modules.
+
 ### xdg.ts — Platform-native application directory paths
 
 Wraps `env-paths` v4 with app name `mcp-paprika` (no suffix). Exports 5 synchronous functions
@@ -96,9 +98,9 @@ dependencies (leaf module).
 | -------------------- | ------- | ------------------------------------------- |
 | `DurationParseError` | `Error` | `input: string \| number`, `reason: string` |
 
-### errors.ts — Cross-cutting error classes
+### errors.ts — Cross-cutting error classes and helpers
 
-Houses error classes and types that span more than one domain module — currently the shared circuit-open surface and its service-name union.
+Houses error classes, types, and small helpers that span more than one domain module.
 
 `CircuitService` is a string union — `"paprika" | "embeddings"` — naming each client that mounts cockatiel resilience. Adding a new client requires extending this union; the compile error forces a deliberate decision rather than letting typos through.
 
@@ -107,6 +109,8 @@ Houses error classes and types that span more than one domain module — current
 | `CircuitOpenError` | `Error` | `service`, `endpoint`, `cause: BrokenCircuitError` | Any cockatiel-backed client's breaker rejects a call (no HTTP request issued; no fake status) |
 
 Constructor: `new CircuitOpenError(service: CircuitService, endpoint: string, options?: ErrorOptions)`. The `service` argument aligns with the surrounding log component vocabulary — `"paprika"` is thrown from `PaprikaClient`, `"embeddings"` from `EmbeddingClient`. Message format: `"<service> circuit breaker is open (endpoint=<url>)"`.
+
+**`isNodeError(error: unknown): error is NodeJS.ErrnoException`** — type guard for any `Error` whose `code` property is set by the runtime (typical for `fs`/`net`/`child_process`). Use as `if (isNodeError(err) && err.code === "ENOENT") { ... }`. Imported by `disk-cache.ts`, `vector-store.ts`, and `config.ts`.
 
 ### config.ts — Application configuration loading
 
