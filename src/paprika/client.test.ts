@@ -1098,7 +1098,7 @@ describe("PaprikaClient", () => {
 
     it("AC6.1 - onBreak emits exactly one warn 'paprika circuit breaker opened' after 5 distinct failing tool calls", async () => {
       const { testLog, records } = makePinoCapture();
-      // Fail every request — 5 tool calls × 3 retries = 15 fetches before breaker opens
+      // Fail every request — 5 tool calls × 4 attempts each (1 initial + 3 retries) = 20 fetches before breaker opens
       server.use(
         http.get(`${API_BASE}/recipes/`, () => {
           return HttpResponse.json({ result: [] }, { status: 503 });
