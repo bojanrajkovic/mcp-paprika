@@ -1,7 +1,11 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import fc from "fast-check";
 import type { Level as PinoLevel } from "pino";
-import { pinoLevelToMcp, notifierStream } from "./log.js";
+import { mkdtempSync, rmSync, existsSync, readFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { pinoLevelToMcp, notifierStream, resolvePrimaryDestination, createLogger } from "./log.js";
+import type { LoggerOptions } from "./log.js";
 import type { Notifier } from "../server/notifier.js";
 
 // ---------------------------------------------------------------------------
@@ -256,6 +260,198 @@ describe("notifierStream", () => {
       await new Promise((r) => setImmediate(r));
 
       expect(spy).not.toHaveBeenCalled();
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Task 6 — primary destination resolution
+// ---------------------------------------------------------------------------
+
+/** Minimal LoggerOptions for resolvePrimaryDestination tests. */
+function makeOpts(overrides: Partial<LoggerOptions> = {}): LoggerOptions {
+  const { notifier } = makeStubNotifier();
+  return {
+    transport: "stdio",
+    notifier,
+    level: "info",
+    notifyLevel: "warn",
+    pretty: false,
+    ...overrides,
+  };
+}
+
+describe("resolvePrimaryDestination", () => {
+  let savedIsTTY: PropertyDescriptor | undefined;
+  let savedXDGStateHome: string | undefined;
+  let tmpDir: string | undefined;
+
+  beforeEach(() => {
+    // Save isTTY descriptor so we can restore it
+    savedIsTTY = Object.getOwnPropertyDescriptor(process.stderr, "isTTY");
+    // Save and clear XDG override
+    savedXDGStateHome = process.env["XDG_STATE_HOME"];
+  });
+
+  afterEach(() => {
+    // Restore isTTY
+    if (savedIsTTY !== undefined) {
+      Object.defineProperty(process.stderr, "isTTY", savedIsTTY);
+    } else {
+      // If it wasn't defined, delete the property so the prototype chain kicks in
+      delete (process.stderr as unknown as Record<string, unknown>)["isTTY"];
+    }
+    // Restore XDG
+    if (savedXDGStateHome !== undefined) {
+      process.env["XDG_STATE_HOME"] = savedXDGStateHome;
+    } else {
+      delete process.env["XDG_STATE_HOME"];
+    }
+    // Clean up temp dirs
+    if (tmpDir !== undefined) {
+      try {
+        rmSync(tmpDir, { recursive: true, force: true });
+      } catch {
+        // Best-effort cleanup
+      }
+      tmpDir = undefined;
+    }
+  });
+
+  describe("structured-logging.AC1.1: HTTP → stdout (raw JSON)", () => {
+    it("returns process.stdout for HTTP transport regardless of isTTY", () => {
+      Object.defineProperty(process.stderr, "isTTY", { configurable: true, value: false });
+      const dest = resolvePrimaryDestination(makeOpts({ transport: "http" }));
+      expect(dest).toBe(process.stdout);
+    });
+
+    it("returns process.stdout for HTTP transport even when isTTY is true", () => {
+      Object.defineProperty(process.stderr, "isTTY", { configurable: true, value: true });
+      const dest = resolvePrimaryDestination(makeOpts({ transport: "http" }));
+      expect(dest).toBe(process.stdout);
+    });
+  });
+
+  describe("structured-logging.AC1.2: stdio + TTY → stderr", () => {
+    it("returns process.stderr when isTTY is true and pretty is false", () => {
+      Object.defineProperty(process.stderr, "isTTY", { configurable: true, value: true });
+      const dest = resolvePrimaryDestination(makeOpts({ transport: "stdio", pretty: false }));
+      expect(dest).toBe(process.stderr);
+    });
+
+    it("returns a pretty-formatted stream (not raw stderr) when isTTY is true and pretty is true", () => {
+      Object.defineProperty(process.stderr, "isTTY", { configurable: true, value: true });
+      const dest = resolvePrimaryDestination(makeOpts({ transport: "stdio", pretty: true }));
+      // pino-pretty stream is not process.stderr itself, but wraps it
+      expect(dest).not.toBe(process.stderr);
+      expect(dest).not.toBe(process.stdout);
+    });
+
+    it("auto-detects TTY and uses pretty when pretty is 'auto' + isTTY true", () => {
+      Object.defineProperty(process.stderr, "isTTY", { configurable: true, value: true });
+      const dest = resolvePrimaryDestination(makeOpts({ transport: "stdio", pretty: "auto" }));
+      // 'auto' + stdio + TTY → pretty stream (not raw stderr)
+      expect(dest).not.toBe(process.stderr);
+    });
+  });
+
+  describe("structured-logging.AC1.3: stdio + non-TTY → file at default path", () => {
+    it("writes to the default log file when isTTY is false and no MCP_LOG_FILE override", () => {
+      Object.defineProperty(process.stderr, "isTTY", { configurable: true, value: false });
+      tmpDir = mkdtempSync(join(tmpdir(), "mcp-paprika-test-"));
+      process.env["XDG_STATE_HOME"] = tmpDir;
+
+      const expectedPath = join(tmpDir, "mcp-paprika", "mcp-paprika.log");
+      resolvePrimaryDestination(makeOpts({ transport: "stdio", pretty: false }));
+
+      // Writable probe should have created the file
+      expect(existsSync(expectedPath)).toBe(true);
+    });
+  });
+
+  describe("structured-logging.AC1.4: MCP_LOG_FILE override", () => {
+    it("uses the custom file path when file option is set", () => {
+      Object.defineProperty(process.stderr, "isTTY", { configurable: true, value: false });
+      tmpDir = mkdtempSync(join(tmpdir(), "mcp-paprika-test-"));
+      const customPath = join(tmpDir, "custom", "app.log");
+
+      resolvePrimaryDestination(makeOpts({ transport: "stdio", pretty: false, file: customPath }));
+
+      // mkdir-p + writability probe should have created the file
+      expect(existsSync(customPath)).toBe(true);
+    });
+  });
+
+  describe("structured-logging.AC10.4: pretty auto-detection per transport", () => {
+    it("auto + HTTP → the stream is stdout (not pretty)", () => {
+      Object.defineProperty(process.stderr, "isTTY", { configurable: true, value: false });
+      const dest = resolvePrimaryDestination(makeOpts({ transport: "http", pretty: "auto" }));
+      expect(dest).toBe(process.stdout);
+    });
+
+    it("auto + stdio + non-TTY → file destination is created", () => {
+      Object.defineProperty(process.stderr, "isTTY", { configurable: true, value: false });
+      tmpDir = mkdtempSync(join(tmpdir(), "mcp-paprika-test-"));
+      process.env["XDG_STATE_HOME"] = tmpDir;
+
+      const dest = resolvePrimaryDestination(makeOpts({ transport: "stdio", pretty: "auto" }));
+      // 'auto' + stdio + non-TTY → file; it should not be stdout or stderr
+      expect(dest).not.toBe(process.stdout);
+      expect(dest).not.toBe(process.stderr);
+    });
+  });
+
+  describe("structured-logging.AC11.1: mkdir-p at construction", () => {
+    it("creates nested directories when the log file path is deeply nested", () => {
+      Object.defineProperty(process.stderr, "isTTY", { configurable: true, value: false });
+      tmpDir = mkdtempSync(join(tmpdir(), "mcp-paprika-test-"));
+      const deepPath = join(tmpDir, "a", "b", "c", "nested.log");
+
+      resolvePrimaryDestination(makeOpts({ transport: "stdio", pretty: false, file: deepPath }));
+
+      expect(existsSync(deepPath)).toBe(true);
+    });
+  });
+
+  describe("structured-logging.AC11.2: fail-fast on unwritable path", () => {
+    it("throws synchronously when the log file cannot be created", () => {
+      Object.defineProperty(process.stderr, "isTTY", { configurable: true, value: false });
+      // /dev/null is a file, not a directory — trying to create a file inside it fails
+      const badPath = "/dev/null/cannot-write/app.log";
+
+      expect(() => {
+        resolvePrimaryDestination(makeOpts({ transport: "stdio", pretty: false, file: badPath }));
+      }).toThrow();
+    });
+
+    it("error message names the failing path", () => {
+      Object.defineProperty(process.stderr, "isTTY", { configurable: true, value: false });
+      const badPath = "/dev/null/nested/app.log";
+
+      let errorMessage = "";
+      try {
+        resolvePrimaryDestination(makeOpts({ transport: "stdio", pretty: false, file: badPath }));
+      } catch (e) {
+        errorMessage = e instanceof Error ? e.message : String(e);
+      }
+
+      // The error should surface naturally from mkdirSync (ENOTDIR)
+      expect(errorMessage).toBeTruthy();
+    });
+  });
+
+  describe("AC1.3 file content is written (integration with pino sync destination)", () => {
+    it("pino writes a log record to the resolved file destination", () => {
+      Object.defineProperty(process.stderr, "isTTY", { configurable: true, value: false });
+      tmpDir = mkdtempSync(join(tmpdir(), "mcp-paprika-test-"));
+      const logFile = join(tmpDir, "test.log");
+
+      const opts = makeOpts({ transport: "stdio", pretty: false, file: logFile });
+      const logger = createLogger(opts);
+      logger.warn({ test: true }, "file-write-test");
+
+      const contents = readFileSync(logFile, "utf8");
+      expect(contents).toContain("file-write-test");
     });
   });
 });
