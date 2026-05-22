@@ -80,7 +80,7 @@ export async function buildAppContext(
   log.info("authenticated with paprika");
 
   log.info("initializing disk cache");
-  const cache = new DiskCache(getCacheDir());
+  const cache = new DiskCache(getCacheDir(), log.child({ component: "disk-cache" }));
   await cache.init();
 
   const auth = await buildAuthContext(config, cache, log);

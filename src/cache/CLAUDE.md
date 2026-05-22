@@ -1,6 +1,6 @@
 # Caching Layer
 
-Last verified: 2026-05-21
+Last verified: 2026-05-22
 
 ## Files
 
@@ -76,11 +76,10 @@ Persistence layer for the Paprika recipe library. Stores full recipe and categor
 
 **Construction:**
 
-`new DiskCache(cacheDir: string)`
+`new DiskCache(cacheDir: string, log?: Logger)`
 
 - `cacheDir` — absolute path to the cache directory (typically from `getCacheDir()` in `src/utils/xdg.ts`)
-
-Diagnostic messages are written directly to `process.stderr`.
+- `log` — optional pino `Logger`; defaults to a silent logger when omitted. Pass `appLog.child({ component: "disk-cache" })` from `buildAppContext`. Corruption and schema-mismatch warnings are emitted at `warn` level on this logger; cold-start ENOENT and idempotent-removal silences are intentional and documented with inline comments.
 
 **Lifecycle:**
 

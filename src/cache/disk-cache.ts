@@ -2,10 +2,16 @@ import { mkdir, open, readFile, readdir, rename, unlink } from "node:fs/promises
 import { join } from "node:path";
 import { Mutex } from "async-mutex";
 import { z } from "zod";
+import type { Logger } from "pino";
+import pino from "pino";
 import { RecipeStoredSchema, CategoryStoredSchema, PantryItemStoredSchema } from "../paprika/types.js";
 import type { Recipe, Category, RecipeEntry, DiffResult, PantryItem } from "../paprika/types.js";
 import { OAuthClientSchema, OAuthTokenSchema } from "../auth/types.js";
 import type { OAuthClient, OAuthToken } from "../auth/types.js";
+
+// Module-level silent logger used as default when no logger is provided.
+// This avoids allocating a new silent pino on every constructor call.
+const SILENT = pino({ level: "silent" });
 
 // Type guard for NodeJS.ErrnoException. Mirrors the local helper in
 // utils/config.ts but is intentionally not exported from there — each
@@ -42,6 +48,7 @@ export class DiskCache {
   private readonly _oauthClientsDir: string;
   private readonly _oauthTokensDir: string;
   private readonly _writeLock = new Mutex();
+  private readonly log: Logger;
 
   // Null until init() is called. diff*() and flush() assert non-null.
   private _index: CacheIndex | null = null;
@@ -55,7 +62,7 @@ export class DiskCache {
   private readonly _pendingOAuthClients: Map<string, OAuthClient> = new Map();
   private readonly _pendingOAuthTokens: Map<string, OAuthToken> = new Map();
 
-  constructor(cacheDir: string) {
+  constructor(cacheDir: string, log?: Logger) {
     this._cacheDir = cacheDir;
     this._indexPath = join(cacheDir, "index.json");
     this._recipesDir = join(cacheDir, "recipes");
@@ -63,6 +70,7 @@ export class DiskCache {
     this._pantryDir = join(cacheDir, "pantry");
     this._oauthClientsDir = join(cacheDir, "oauthClients");
     this._oauthTokensDir = join(cacheDir, "oauthTokens");
+    this.log = log ?? SILENT;
   }
 
   async init(): Promise<void> {
@@ -83,6 +91,7 @@ export class DiskCache {
       raw = await readFile(this._indexPath, "utf-8");
     } catch (error: unknown) {
       if (isNodeError(error) && error.code === "ENOENT") {
+        // Cold-start: index file doesn't exist yet on first run. Silent by design.
         this._index = { recipes: {}, categories: {}, pantry: {}, oauthClients: {}, oauthTokens: {} };
         return;
       }
@@ -92,15 +101,15 @@ export class DiskCache {
     let parsed: unknown;
     try {
       parsed = JSON.parse(raw);
-    } catch {
-      process.stderr.write("DiskCache: corrupt index.json (invalid JSON), resetting to empty index\n");
+    } catch (err) {
+      this.log.warn({ err, path: this._indexPath }, "corrupt index.json, resetting to empty index");
       this._index = { recipes: {}, categories: {}, pantry: {}, oauthClients: {}, oauthTokens: {} };
       return;
     }
 
     const result = CacheIndexSchema.safeParse(parsed);
     if (!result.success) {
-      process.stderr.write("DiskCache: corrupt index.json (schema mismatch), resetting to empty index\n");
+      this.log.warn({ path: this._indexPath }, "schema mismatch on index.json, resetting to empty index");
       this._index = { recipes: {}, categories: {}, pantry: {}, oauthClients: {}, oauthTokens: {} };
       return;
     }
@@ -299,6 +308,7 @@ export class DiskCache {
       raw = await readFile(filePath, "utf-8");
     } catch (error: unknown) {
       if (isNodeError(error) && error.code === "ENOENT") {
+        // Cold-start: index file doesn't exist yet on first run. Silent by design.
         return null;
       }
       throw error;
@@ -324,6 +334,7 @@ export class DiskCache {
       files = await readdir(dir);
     } catch (error: unknown) {
       if (isNodeError(error) && error.code === "ENOENT") {
+        // Cold-start: directory doesn't exist yet on first run. Silent by design.
         return [...result.values()];
       }
       throw error;
@@ -361,6 +372,7 @@ export class DiskCache {
       if (!isNodeError(error) || error.code !== "ENOENT") {
         throw error;
       }
+      // Idempotent removal: file already gone is the desired end state.
     }
 
     delete indexRecord[key];
