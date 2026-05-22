@@ -125,7 +125,7 @@ describe("notifierStream", () => {
     });
   });
 
-  describe("structured-logging.AC2.2: info-level record does NOT fan out when threshold is warn (stream always delivers)", () => {
+  describe("notifierStream itself always processes — multistream owns thresholding (AC2.2 is verified via integration in Task 7)", () => {
     it("notifierStream itself always passes records — threshold filtering is pino multistream's job", async () => {
       // The Writable itself has no threshold filter; filtering happens at the multistream level.
       // This test verifies the stream processes records regardless of level.
@@ -201,11 +201,20 @@ describe("notifierStream", () => {
       const stream = notifierStream(notifier);
       const line = pinoLine({ level: LEVEL_WARN, msg: "rejected" });
 
-      // The write should complete without throwing
-      await expect(writeAsync(stream, line)).resolves.toBeUndefined();
+      const unhandled: unknown[] = [];
+      const onUR = (e: unknown) => unhandled.push(e);
+      process.on("unhandledRejection", onUR);
+      try {
+        // The write should complete without throwing
+        await expect(writeAsync(stream, line)).resolves.toBeUndefined();
 
-      // Let the rejected promise settle — no unhandled rejection should surface
-      await new Promise((r) => setImmediate(r));
+        // Let the rejected promise settle — no unhandled rejection should surface
+        await new Promise((r) => setImmediate(r));
+      } finally {
+        process.off("unhandledRejection", onUR);
+      }
+
+      expect(unhandled).toEqual([]);
     });
   });
 
