@@ -1,6 +1,6 @@
 # Server Composition Root
 
-Last verified: 2026-05-21
+Last verified: 2026-05-22
 
 ## Purpose
 
@@ -20,15 +20,16 @@ This split exists so the same business logic (tools, resources, sync engine) can
 
 Process-wide, heavyweight, shared state. Built once per process by `buildAppContext`.
 
-| Field         | Type                  | Description                                                                |
-| ------------- | --------------------- | -------------------------------------------------------------------------- |
-| `client`      | `PaprikaClient`       | Authenticated Paprika HTTP client                                          |
-| `cache`       | `DiskCache`           | On-disk persistence layer                                                  |
-| `store`       | `RecipeStore`         | In-memory recipe query layer                                               |
-| `pantryStore` | `PantryStore`         | In-memory pantry query layer                                               |
-| `vectorStore` | `VectorStore \| null` | Semantic-search index; `null` when embeddings are not configured           |
-| `notifier`    | `Notifier`            | Notification surface — decouples callers from any one `McpServer` instance |
-| `auth`        | `AuthContext \| null` | OAuth 2.1 runtime state; `null` in stdio mode (no auth required)           |
+| Field         | Type                  | Description                                                                                                                                                                                   |
+| ------------- | --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `client`      | `PaprikaClient`       | Authenticated Paprika HTTP client                                                                                                                                                             |
+| `cache`       | `DiskCache`           | On-disk persistence layer                                                                                                                                                                     |
+| `store`       | `RecipeStore`         | In-memory recipe query layer                                                                                                                                                                  |
+| `pantryStore` | `PantryStore`         | In-memory pantry query layer                                                                                                                                                                  |
+| `vectorStore` | `VectorStore \| null` | Semantic-search index; `null` when embeddings are not configured                                                                                                                              |
+| `notifier`    | `Notifier`            | Notification surface — decouples callers from any one `McpServer` instance                                                                                                                    |
+| `auth`        | `AuthContext \| null` | OAuth 2.1 runtime state; `null` in stdio mode (no auth required)                                                                                                                              |
+| `log`         | `Logger`              | Process-wide pino root from `src/utils/log.ts`. Children created via `parent.child({component: "..."})` flow to component-scoped sites. `warn+` records fan out to MCP clients automatically. |
 
 All fields are `readonly`. Notably **no `server`** — `AppContext` is intentionally agnostic to how many MCP sessions exist.
 
@@ -65,15 +66,23 @@ Abstraction over MCP server notifications. Every code path that historically cal
 - Notifier methods never throw. Transport failures are swallowed (stdio) or contained per-server (HTTP).
 - `broadcastNotifier` materializes the snapshot into an array before iteration so that adding or removing a session mid-broadcast (especially during the async `loggingMessage` path) cannot cause iterator invalidation.
 
-### Deferred-getter pattern (stdio chicken-and-egg)
+### Deferred-getter pattern and bootstrap order
 
-The stdio entry point has a strict three-step construction order:
+The transport entry points construct components in this order:
 
-1. **Build the notifier first** with a getter closure: `let server; const notifier = singleServerNotifier(() => server)`. The getter returns `undefined` at this point — that is fine; notifier methods are only called at runtime, well after step 3.
-2. **Build the `AppContext`** with that notifier: `const { app, sync } = await buildAppContext(config, notifier)`. `SyncEngine` is constructed inside here and captures the notifier — it never reads `app.server` because there isn't one yet (and `AppContext` has no `server` field by design).
-3. **Build the `McpServer`** from the `AppContext` and assign it into the closure: `server = buildMcpServer(app)`. From this point forward, notifier method calls resolve to a real server.
+1. **Build the notifier** with a getter closure: `let server; const notifier = singleServerNotifier(() => server)`. The getter returns `undefined` at this point — that is fine; notifier methods are only called at runtime, well after step 3.
+2. **Build the logger** via `createLogger({transport, notifier, ...config.logging})`. The logger is constructed before `AppContext` so that startup records emitted inside `buildAppContext` ("mcp-paprika starting", authentication, cache hydration) flow through the structured logger rather than the legacy shim. Pre-McpServer log calls that fan out through the notifier silently no-op because the notifier's getter still returns `undefined` — this is safe by design.
+3. **Build the `AppContext`** with that notifier and logger: `const { app, sync } = await buildAppContext(config, notifier)`. `SyncEngine` is constructed inside here and captures the notifier — it never reads `app.server` because there isn't one yet (and `AppContext` has no `server` field by design).
+4. **Build the `McpServer`** (stdio) or session map (HTTP) from the `AppContext` and assign into the closure: `server = buildMcpServer(app)`. From this point forward, notifier method calls resolve to a real server.
+5. **`server.connect` / `app.listen`** — begin accepting protocol traffic.
 
-If anyone restructures `src/index.ts`, preserve this ordering — collapsing it (e.g. trying to construct the server before the `AppContext`) makes the cycle unresolvable.
+If anyone restructures `src/index.ts` or `src/transport/`, preserve this ordering — collapsing it (e.g. trying to construct the server before the `AppContext`) makes the cycle unresolvable.
+
+### Logging behavior at startup
+
+**Startup info record is level-gated.** `buildAppContext` emits `log.info({transport}, "mcp-paprika starting")` as its first act. With the default `MCP_LOG_LEVEL=info`, this record appears in pod logs, stderr, and any configured log file. If an operator sets `MCP_LOG_LEVEL=warn` (or higher), the record is silently suppressed — this is the intentional behavior change vs. the legacy unconditional stderr shim. Operators who need a startup signal at warn+ should keep `MCP_LOG_LEVEL=info` (the default) or rely on process-supervisor logs.
+
+**SIGINT/SIGTERM handler uses `process.stderr.write` directly.** The signal handler in `src/index.ts` does not use the structured logger because the logger may be torn down or never built at signal time (e.g., early startup failure before `createLogger` returns). This is the one intentional production-code exception to the "no `process.stderr.write`" rule.
 
 ### buildAppContext
 
