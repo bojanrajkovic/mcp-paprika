@@ -36,7 +36,7 @@ Called exactly once per process by `buildAppContext`. Returns a pino logger conf
 | `"stdio"` | `"auto"` | `false`      | pino-pretty to file                      |
 
 **Redacted paths** (applied to both streams, censor value `"[Redacted]"`):
-`*.authorization`, `*.password`, `*.token`, `*.client_secret`, `*.access_token`, `*.refresh_token`, `*.id_token`
+Top-level, 1-deep (`*.field`), and 2-deep (`*.*.field`) wildcards for each of the 7 credential field names: `authorization`, `password`, `token`, `client_secret`, `access_token`, `refresh_token`, `id_token`. This covers 21 paths total — bare top-level, one object wrapper, and two object wrappers (e.g., `req.headers.authorization`).
 
 **File destination safety:** `mkdir -p` runs synchronously at construction. If the directory cannot be created or the file cannot be opened for writing, `createLogger` throws synchronously with a clear error message — no silent fallback to stderr.
 

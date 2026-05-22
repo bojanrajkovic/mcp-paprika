@@ -685,37 +685,32 @@ describe("createLogger (composition)", () => {
     });
   });
 
-  describe("Known limitation: *.field wildcard redaction scope", () => {
-    // Pino's *.field wildcard (from fast-redact) matches exactly ONE path segment prefix.
-    // It does NOT match top-level keys (zero segments) or deeply-nested keys (2+ segments).
-    // Top-level credential fields like { authorization: "..." } are NOT redacted by *.authorization.
-    // Operators who log top-level credentials must use explicit path "authorization" in REDACT_PATHS.
-    it("known limitation: *.authorization does NOT redact a top-level authorization field", () => {
+  describe("AC2.7 — redacts credentials at top-level, one deep, and two deep", () => {
+    // REDACT_PATHS covers top-level, *.field (1-deep), and *.*.field (2-deep) for each
+    // credential field name. This ensures credentials are redacted regardless of nesting depth
+    // up to two levels (the common pattern for HTTP headers and nested auth objects).
+    it("redacts a top-level authorization field", () => {
       const { opts, logFile } = makeFileOpts({ level: "info", notifyLevel: "fatal" });
       const logger = createLogger(opts);
 
-      // Top-level field — *.authorization matches nested.authorization, NOT bare authorization
       logger.info({ authorization: "Bearer top-level-secret" }, "top-level-credential");
 
       const [line] = readLogLines(logFile);
       expect(line).toBeDefined();
-      // The value is NOT redacted — this documents the limitation, not desired behavior
-      expect(line!["authorization"]).toBe("Bearer top-level-secret");
+      expect(line!["authorization"]).toBe("[Redacted]");
     });
 
-    it("known limitation: *.authorization does NOT redact fields nested 2+ levels deep", () => {
+    it("redacts authorization nested 2 levels deep", () => {
       const { opts, logFile } = makeFileOpts({ level: "info", notifyLevel: "fatal" });
       const logger = createLogger(opts);
 
-      // Two-level nesting — *.authorization only matches one level
       logger.info({ req: { headers: { authorization: "Bearer deep-secret" } } }, "deep-credential");
 
       const [line] = readLogLines(logFile);
       expect(line).toBeDefined();
       const req = line!["req"] as Record<string, unknown>;
       const headers = req["headers"] as Record<string, unknown>;
-      // Not redacted at 2+ levels — documents the scope limitation
-      expect(headers["authorization"]).toBe("Bearer deep-secret");
+      expect(headers["authorization"]).toBe("[Redacted]");
     });
   });
 });

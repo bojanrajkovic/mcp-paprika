@@ -71,13 +71,27 @@ export interface MCPFanoutRecord {
 // ---------------------------------------------------------------------------
 
 const REDACT_PATHS: ReadonlyArray<string> = [
+  "authorization",
   "*.authorization",
+  "*.*.authorization",
+  "password",
   "*.password",
+  "*.*.password",
+  "token",
   "*.token",
+  "*.*.token",
+  "client_secret",
   "*.client_secret",
+  "*.*.client_secret",
+  "access_token",
   "*.access_token",
+  "*.*.access_token",
+  "refresh_token",
   "*.refresh_token",
+  "*.*.refresh_token",
+  "id_token",
   "*.id_token",
+  "*.*.id_token",
 ];
 
 // Numeric pino level values → level names (pino serializes numeric levels)
