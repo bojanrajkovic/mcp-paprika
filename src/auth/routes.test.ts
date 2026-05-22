@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import pino from "pino";
 import { nowSeconds } from "./tokens.js";
+import { makePinoCapture } from "../tools/tool-test-utils.js";
 import { Hono } from "hono";
 import {
   buildAuthRoutes,
@@ -20,6 +21,9 @@ import { makeVerifiedIdentity } from "./__fixtures__/oauth-state.js";
 import { createJwksFor } from "./oidc-client.js";
 import type { JWTVerifyGetKey } from "jose";
 import { useMswServer } from "../__fixtures__/msw.js";
+
+// Pino numeric log levels for use in assertions (see pino docs: info=30, warn=40, error=50)
+const warnLevel = 40;
 
 // ============================================================================
 // F6: makeRoutesConfig — deduplicated buildAuthRoutes config factory
@@ -278,17 +282,21 @@ describe("Auth Routes", () => {
       // Only user@example.com is on the allowlist — unknown@example.com will be denied.
       const realJwks = createJwksFor(makeDiscoveryDoc(oidcStub.issuer));
 
+      // Capture pino records from the auth component logger (denial path uses auth, not oidcClient)
+      const { log: authLog, records } = makePinoCapture();
+
       const localAuthRequests = new AuthRequestStore();
       const localAuthCodes = new AuthCodeStore();
       const localApp = new Hono();
       localApp.route(
         "/",
-        buildAuthRoutes(
-          makeRoutesConfig(
+        buildAuthRoutes({
+          ...makeRoutesConfig(
             { clientStore, tokenStore, authRequests, authCodes, oidcStubIssuer: oidcStub.issuer },
             { jwks: realJwks, authRequests: localAuthRequests, authCodes: localAuthCodes },
           ),
-        ),
+          log: { auth: authLog, oidcClient: pino({ level: "silent" }) },
+        }),
       );
 
       // Override the stub identity to one not on the allowlist
@@ -316,46 +324,36 @@ describe("Auth Routes", () => {
       );
       const upstreamCode = new URL(authResp.headers.get("location")!).searchParams.get("code")!;
 
-      // Spy on stderr to capture allowlist denial log output
-      const stderrWrites: Array<string> = [];
-      const stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation((chunk: unknown) => {
-        stderrWrites.push(String(chunk));
-        return true;
-      });
+      // Drive the callback route
+      const res = await localApp.request(`/oauth/callback?code=${upstreamCode}&state=${ourState}`);
 
-      try {
-        // Drive the callback route
-        const res = await localApp.request(`/oauth/callback?code=${upstreamCode}&state=${ourState}`);
+      // Should redirect with error=access_denied and iss
+      expect(res.status).toBe(302);
+      const location = res.headers.get("location");
+      expect(location).toBeTruthy();
+      const loc = new URL(location!);
+      expect(loc.searchParams.get("error")).toBe("access_denied");
+      expect(loc.searchParams.get("iss")).toBe("https://mcp.example.com");
 
-        // Should redirect with error=access_denied and iss
-        expect(res.status).toBe(302);
-        const location = res.headers.get("location");
-        expect(location).toBeTruthy();
-        const loc = new URL(location!);
-        expect(loc.searchParams.get("error")).toBe("access_denied");
-        expect(loc.searchParams.get("iss")).toBe("https://mcp.example.com");
+      // Denial redirects MUST NOT leak identity claims back to the client —
+      // these go onto a URL forwarded to claude.ai. The full claims live in
+      // the operator log (asserted below); the on-the-wire copy is a generic message.
+      const description = loc.searchParams.get("error_description") ?? "";
+      expect(description).not.toContain("unknown@example.com");
+      expect(description).not.toContain("unknown-sub-999");
 
-        // Denial redirects MUST NOT leak identity claims back to the client —
-        // these go onto a URL forwarded to claude.ai. The full claims live in
-        // the operator's stderr log (asserted below); the on-the-wire copy is
-        // a generic message.
-        const description = loc.searchParams.get("error_description") ?? "";
-        expect(description).not.toContain("unknown@example.com");
-        expect(description).not.toContain("unknown-sub-999");
+      // AC3.4: id_token must NOT appear in captured log records (JWTs start with "eyJ")
+      expect(JSON.stringify(records)).not.toMatch(/eyJ/);
 
-        // Combine all stderr output
-        const allStderr = stderrWrites.join("");
-
-        // AC3.4: id_token must NOT appear in logs (JWTs always start with "eyJ")
-        expect(allStderr).not.toMatch(/eyJ/);
-
-        // AC3.4: identity claims MUST appear in the denial log
-        expect(allStderr).toMatch(/email=/);
-        expect(allStderr).toMatch(/sub=/);
-        expect(allStderr).toMatch(/allowlist denial/);
-      } finally {
-        stderrSpy.mockRestore();
-      }
+      // AC3.4: identity claims MUST appear in the denial log record as structured fields
+      expect(records).toContainEqual(
+        expect.objectContaining({
+          msg: "allowlist denied identity",
+          level: warnLevel,
+          email: "unknown@example.com",
+          sub: "unknown-sub-999",
+        }),
+      );
     });
 
     it("missing state → 400", async () => {
