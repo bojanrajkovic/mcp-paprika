@@ -858,6 +858,27 @@ describe("accessLog middleware (AC9.5)", () => {
     expect(paths).toContain("/healthz");
     expect(paths).toContain("/mcp");
   });
+
+  it("AC9.5: emits a record and re-propagates when next() itself throws", async () => {
+    // Defense-in-depth: even if a downstream middleware re-throws past Hono's
+    // onError (bypassing Hono's normal error-to-500 conversion), accessLog
+    // must still emit a record via its finally branch. The thrown error
+    // continues to propagate so upstream error handlers can act on it.
+    const { log, records } = makePinoCapture();
+    const middleware = accessLog(log);
+    const ctx = makeStubContext("GET", "/will-throw", 500);
+    const failingNext = async (): Promise<void> => {
+      throw new Error("downstream middleware rethrew");
+    };
+
+    await expect(middleware(ctx, failingNext)).rejects.toThrow("downstream middleware rethrew");
+
+    expect(records).toHaveLength(1);
+    expect(records[0]!["path"]).toBe("/will-throw");
+    expect(records[0]!["method"]).toBe("GET");
+    expect(records[0]!["status"]).toBe(500);
+    expect(records[0]!["level"]).toBe(50); // error
+  });
 });
 
 // ---------------------------------------------------------------------------

@@ -1368,6 +1368,20 @@ describe("Configuration loading", () => {
         }
       });
 
+      it("MCP_LOG_PRETTY with a typo is rejected by schema validation (not silently coerced)", () => {
+        // Regression test for a Codex finding: previously the env coercion
+        // mapped every non-recognised value to `false`, so typos like "treu"
+        // silently disabled pretty logging instead of surfacing the error.
+        const overrides = buildEnvOverrides({ MCP_LOG_PRETTY: "treu" });
+        const merged = deepMerge(validBase, overrides);
+        const result = paprikaConfigSchema.safeParse(merged);
+        expect(result.success).toBe(false);
+        if (!result.success) {
+          const offending = result.error.issues.find((i) => i.path.includes("pretty"));
+          expect(offending).toBeDefined();
+        }
+      });
+
       it("empty MCP_LOG_LEVEL is ignored (treated as not set)", () => {
         const overrides = buildEnvOverrides({ MCP_LOG_LEVEL: "" });
         const merged = deepMerge(validBase, overrides);

@@ -47,15 +47,23 @@ interface Session {
 export function accessLog(log: Logger) {
   return async (c: Context, next: Next): Promise<void> => {
     const t0 = performance.now();
-    await next();
-    const durationMs = Math.round(performance.now() - t0);
-    const status = c.res.status;
-    const fields = { method: c.req.method, path: c.req.path, status, durationMs };
+    try {
+      await next();
+    } finally {
+      // Log unconditionally, even if a downstream handler throws past Hono's
+      // onError. Hono's default behavior converts thrown errors into 500
+      // responses without re-throwing through next(), but wrapping in
+      // try/finally protects against future middleware that does re-throw
+      // and guarantees access-log telemetry for every request.
+      const durationMs = Math.round(performance.now() - t0);
+      const status = c.res.status;
+      const fields = { method: c.req.method, path: c.req.path, status, durationMs };
 
-    if (status >= 500) {
-      log.error(fields, "http request 5xx");
-    } else {
-      log.info(fields, "http request");
+      if (status >= 500) {
+        log.error(fields, "http request 5xx");
+      } else {
+        log.info(fields, "http request");
+      }
     }
   };
 }

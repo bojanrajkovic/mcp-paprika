@@ -341,7 +341,18 @@ export function buildEnvOverrides(env: NodeJS.ProcessEnv): Record<string, unknow
   if (env["MCP_LOG_FILE"]) logging["file"] = env["MCP_LOG_FILE"];
   if (env["MCP_LOG_PRETTY"] !== undefined && env["MCP_LOG_PRETTY"] !== "") {
     const raw = env["MCP_LOG_PRETTY"];
-    logging["pretty"] = raw === "auto" ? "auto" : raw === "true" || raw === "1";
+    // Only coerce known truthy/falsy/auto literals. Unknown values (typos like
+    // "treu") pass through as the raw string so the Zod schema rejects them
+    // with a clear validation error instead of silently defaulting to false.
+    if (raw === "auto") {
+      logging["pretty"] = "auto";
+    } else if (raw === "true" || raw === "1") {
+      logging["pretty"] = true;
+    } else if (raw === "false" || raw === "0") {
+      logging["pretty"] = false;
+    } else {
+      logging["pretty"] = raw;
+    }
   }
 
   if (env["REPLICATE_API_TOKEN"] !== undefined) features["replicateApiToken"] = env["REPLICATE_API_TOKEN"];
