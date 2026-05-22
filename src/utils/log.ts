@@ -11,9 +11,10 @@ import pretty from "pino-pretty";
 import { getLogDir } from "./xdg.js";
 
 // ---------------------------------------------------------------------------
-// Public re-exports: preserved from the old shim.
-// Ten production sites depend on toMessage.
-// Call sites using createLogger(prefix) will be migrated in Phase 4.
+// Public re-exports.
+// The deprecated string-form createLogger overload below has one remaining
+// caller (src/features/vector-store.ts); both the caller and the overload
+// are removed when that module migrates to the pino constructor pattern.
 // ---------------------------------------------------------------------------
 
 /**
@@ -29,7 +30,8 @@ export function toMessage(e: unknown): string {
 /**
  * @deprecated Use `createLogger(opts: LoggerOptions)` instead.
  * Returns a function that writes `[${prefix}] ${msg}\n` to stderr.
- * Preserved for backward compatibility during Phase 1-3; migrated in Phase 4.
+ * One caller remains in src/features/vector-store.ts; both the caller and
+ * this overload are removed when vector-store migrates to the pino pattern.
  */
 export function createLogger(prefix: string): (msg: string) => void;
 /**
