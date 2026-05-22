@@ -7,6 +7,7 @@ import { EmbeddingError, EmbeddingAPIError } from "./embedding-errors.js";
 import { recipeToEmbeddingText } from "./embeddings.js";
 import { makeRecipe } from "../cache/__fixtures__/recipes.js";
 import type { EmbeddingConfig } from "../utils/config.js";
+import { makePinoCapture } from "../tools/tool-test-utils.js";
 
 const BASE_URL = "https://api.example.com/v1";
 const API_KEY = "test-api-key";
@@ -367,5 +368,57 @@ describe("p3-u03-embeddings.AC5: recipeToEmbeddingText", () => {
 
     expect(text).not.toContain("Categories:");
     expect(text).toContain("Ingredients: flour");
+  });
+});
+
+describe("structured-logging.AC9.3: Per-attempt logging in EmbeddingClient.embedBatch", () => {
+  it("AC9.3.1 - retry path: emits debug start×2, warn retry×1, debug ok×1 on 500-then-success", async () => {
+    let callCount = 0;
+    server.use(
+      http.post(`${BASE_URL}/embeddings`, () => {
+        callCount++;
+        if (callCount === 1) return HttpResponse.json({}, { status: 500 });
+        return HttpResponse.json(makeEmbeddingResponse([[0.1, 0.2]]));
+      }),
+    );
+
+    const { log, records } = makePinoCapture();
+    const client = new EmbeddingClient(makeEmbeddingConfig(), log);
+    await client.embedBatch(["hello"]);
+
+    const startRecords = records.filter((r) => r["msg"] === "embedding request start");
+    expect(startRecords).toHaveLength(2);
+
+    const retryRecords = records.filter((r) => r["msg"] === "embedding request failed, retrying");
+    expect(retryRecords).toHaveLength(1);
+    expect(retryRecords[0]!["status"]).toBe(500);
+    expect(retryRecords[0]!["attempt"]).toBe(1);
+
+    const okRecords = records.filter((r) => r["msg"] === "embedding request ok");
+    expect(okRecords).toHaveLength(1);
+  });
+
+  it("AC9.3.2 - non-retryable path: emits error with status:400 attempt:1, no retry warn", async () => {
+    server.use(
+      http.post(`${BASE_URL}/embeddings`, () => {
+        return HttpResponse.json({}, { status: 400 });
+      }),
+    );
+
+    const { log, records } = makePinoCapture();
+    const client = new EmbeddingClient(makeEmbeddingConfig(), log);
+    try {
+      await client.embedBatch(["hello"]);
+    } catch {
+      // expected — non-retryable error
+    }
+
+    const errorRecords = records.filter((r) => r["msg"] === "embedding request failed (non-retryable)");
+    expect(errorRecords).toHaveLength(1);
+    expect(errorRecords[0]!["status"]).toBe(400);
+    expect(errorRecords[0]!["attempt"]).toBe(1);
+
+    const retryRecords = records.filter((r) => r["msg"] === "embedding request failed, retrying");
+    expect(retryRecords).toHaveLength(0);
   });
 });
