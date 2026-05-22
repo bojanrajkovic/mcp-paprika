@@ -1,4 +1,5 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { Logger } from "pino";
 
 import type { DiskCache } from "../cache/disk-cache.js";
 import type { PantryStore } from "../cache/pantry-store.js";
@@ -25,6 +26,8 @@ export interface AppContext {
   readonly notifier: Notifier;
   /** OAuth runtime state. null in stdio mode (auth not required). */
   readonly auth: AuthContext | null;
+  /** Structured pino logger for this process. Child loggers via `.child({component})`. */
+  readonly log: Logger;
 }
 
 /**

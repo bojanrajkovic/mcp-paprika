@@ -65,6 +65,7 @@ function makeE2eConfig(overrides: Partial<PaprikaConfig> = {}): PaprikaConfig {
     sync: { enabled: false, interval: 60_000 },
     transport: "http",
     http: { port: 0, host: "127.0.0.1", allowedHosts: [], allowedOrigins: [] },
+    logging: { level: "silent", notifyLevel: "fatal", pretty: false },
     oauth: {
       publicUrl: PUBLIC_URL,
       preset: undefined,

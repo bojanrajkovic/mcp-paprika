@@ -174,6 +174,14 @@ async function main(): Promise<void> {
   let server: McpServer | undefined;
   const notifier = singleServerNotifier(() => server);
 
+  const appLog = createLogger({
+    transport: "stdio",
+    notifier,
+    level: "silent", // tests must not emit noise to stderr
+    notifyLevel: "fatal",
+    pretty: false,
+  });
+
   const app: AppContext = {
     client: client as unknown as AppContext["client"],
     cache,
@@ -182,6 +190,7 @@ async function main(): Promise<void> {
     vectorStore: null, // discover tool intentionally not registered (no embeddings in e2e)
     notifier,
     auth: null,
+    log: appLog,
   };
 
   server = buildMcpServer(app);

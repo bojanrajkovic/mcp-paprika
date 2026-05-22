@@ -4,6 +4,7 @@ import { http, HttpResponse } from "msw";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import pino from "pino";
 import { PaprikaClient } from "./paprika/client.js";
 import { DiskCache } from "./cache/disk-cache.js";
 import { RecipeStore } from "./cache/recipe-store.js";
@@ -20,6 +21,7 @@ import { registerFilterTools } from "./tools/filter.js";
 import { registerCategoryTools } from "./tools/categories.js";
 
 const API_BASE = "https://paprikaapp.com/api/v2/sync";
+const SILENT_LOG = pino({ level: "silent" });
 
 function makeSnakeCaseRecipe(uid: string, overrides?: Partial<Record<string, unknown>>): object {
   return {
@@ -125,6 +127,7 @@ describe("Sync → Tool Pipeline Integration", () => {
         vectorStore: null,
         notifier,
         auth: null,
+        log: SILENT_LOG,
       };
 
       const engine = new SyncEngine(context, 100);
@@ -215,7 +218,7 @@ describe("Sync → Tool Pipeline Integration", () => {
         loggingMessage: async () => {},
       };
 
-      const context = { client, cache, store, pantryStore, vectorStore: null, notifier, auth: null };
+      const context = { client, cache, store, pantryStore, vectorStore: null, notifier, auth: null, log: SILENT_LOG };
       const engine = new SyncEngine(context, 100);
 
       // First sync
@@ -280,7 +283,7 @@ describe("Sync → Tool Pipeline Integration", () => {
         loggingMessage: async () => {},
       };
 
-      const context = { client, cache, store, pantryStore, vectorStore: null, notifier, auth: null };
+      const context = { client, cache, store, pantryStore, vectorStore: null, notifier, auth: null, log: SILENT_LOG };
       const engine = new SyncEngine(context, 100);
 
       // First sync: both recipes
@@ -364,7 +367,7 @@ describe("Sync → Tool Pipeline Integration", () => {
         loggingMessage: async () => {},
       };
 
-      const context = { client, cache, store, pantryStore, vectorStore: null, notifier, auth: null };
+      const context = { client, cache, store, pantryStore, vectorStore: null, notifier, auth: null, log: SILENT_LOG };
       const engine = new SyncEngine(context, 100);
       await engine.syncOnce();
 
@@ -443,7 +446,7 @@ describe("Sync → Tool Pipeline Integration", () => {
         loggingMessage: async () => {},
       };
 
-      const context = { client, cache, store, pantryStore, vectorStore: null, notifier, auth: null };
+      const context = { client, cache, store, pantryStore, vectorStore: null, notifier, auth: null, log: SILENT_LOG };
       const engine = new SyncEngine(context, 100);
 
       // First sync with original name
@@ -512,7 +515,7 @@ describe("Sync → Tool Pipeline Integration", () => {
         resourceListChanged: () => {},
         loggingMessage: async (): Promise<void> => {},
       };
-      const context = { client, cache, store, pantryStore, vectorStore: null, notifier, auth: null };
+      const context = { client, cache, store, pantryStore, vectorStore: null, notifier, auth: null, log: SILENT_LOG };
       const engine = new SyncEngine(context, 100);
       return { client, cache, store, pantryStore, engine };
     }
@@ -716,7 +719,7 @@ describe("Sync → Tool Pipeline Integration", () => {
       const store = new RecipeStore({ pendingWriteTtlMs: 50 });
       const pantryStore = new PantryStore({ pendingWriteTtlMs: 50 });
       const notifier = { resourceListChanged: () => {}, loggingMessage: async (): Promise<void> => {} };
-      const context = { client, cache, store, pantryStore, vectorStore: null, notifier, auth: null };
+      const context = { client, cache, store, pantryStore, vectorStore: null, notifier, auth: null, log: SILENT_LOG };
       const engine = new SyncEngine(context, 100);
 
       const stalePantryWire = makeSnakeCasePantryItem("PANTRY-UID-3", { ingredient: "Milk" });

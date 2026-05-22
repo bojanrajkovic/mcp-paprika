@@ -2,7 +2,7 @@
 // (Pure pinoLevelToMcp lives inside but the file constructs streams and calls fs I/O.)
 
 import type { Notifier } from "../server/notifier.js";
-import type { Level as PinoLevel } from "pino";
+import type { Level as PinoLevel, LevelWithSilent } from "pino";
 import { Writable } from "node:stream";
 import { mkdirSync, openSync, closeSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -52,8 +52,8 @@ export function createLogger(prefixOrOpts: string | LoggerOptions): ((msg: strin
 export interface LoggerOptions {
   readonly transport: "stdio" | "http";
   readonly notifier: Notifier;
-  readonly level: PinoLevel;
-  readonly notifyLevel: PinoLevel;
+  readonly level: LevelWithSilent;
+  readonly notifyLevel: LevelWithSilent;
   readonly pretty: boolean | "auto";
   readonly file?: string;
 }
@@ -106,13 +106,14 @@ const NUMERIC_TO_PINO_LEVEL: Record<number, PinoLevel> = {
 
 const PINO_INTERNAL_KEYS = new Set(["level", "time", "hostname", "pid", "v"]);
 
-const PINO_LEVEL_RANK: Record<PinoLevel, number> = {
+const PINO_LEVEL_RANK: Record<LevelWithSilent, number> = {
   trace: 10,
   debug: 20,
   info: 30,
   warn: 40,
   error: 50,
   fatal: 60,
+  silent: 70,
 };
 
 // ---------------------------------------------------------------------------
@@ -230,7 +231,7 @@ export function resolvePrimaryDestination(opts: LoggerOptions): NodeJS.WritableS
 // Root-level helper: pick the lower of two pino levels
 // ---------------------------------------------------------------------------
 
-function lowestLevel(a: PinoLevel, b: PinoLevel): PinoLevel {
+function lowestLevel(a: LevelWithSilent, b: LevelWithSilent): LevelWithSilent {
   return PINO_LEVEL_RANK[a] <= PINO_LEVEL_RANK[b] ? a : b;
 }
 

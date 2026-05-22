@@ -12,6 +12,7 @@
 
 // pattern: Imperative Shell
 
+import type { Logger } from "pino";
 import type { DiskCache } from "../cache/disk-cache.js";
 import type { PaprikaConfig } from "../utils/config.js";
 import { resolvePreset } from "./presets.js";
@@ -25,7 +26,11 @@ import { AuthCleanup } from "./cleanup.js";
 import { MAX_REGISTERED_CLIENTS } from "./routes.js";
 import type { AuthContext, ResolvedOAuthConfig } from "./types.js";
 
-export async function buildAuthContext(config: PaprikaConfig, cache: DiskCache): Promise<AuthContext | null> {
+export async function buildAuthContext(
+  config: PaprikaConfig,
+  cache: DiskCache,
+  parentLog: Logger,
+): Promise<AuthContext | null> {
   if (config.transport !== "http") return null;
 
   if (config.oauth === undefined) {
@@ -112,5 +117,9 @@ export async function buildAuthContext(config: PaprikaConfig, cache: DiskCache):
     tokenStore,
     clientStore,
     cleanup,
+    log: {
+      auth: parentLog.child({ component: "auth" }),
+      oidcClient: parentLog.child({ component: "oidc-client" }),
+    },
   };
 }

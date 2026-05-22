@@ -1,4 +1,5 @@
 import { vi } from "vitest";
+import pino from "pino";
 import type { ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
@@ -7,6 +8,8 @@ import { PantryStore } from "../cache/pantry-store.js";
 import type { RecipeStore } from "../cache/recipe-store.js";
 import type { Notifier } from "../server/notifier.js";
 import type { ServerContext } from "../types/server-context.js";
+
+const SILENT_LOG = pino({ level: "silent" });
 
 type ResourceEntry = {
   list: (() => Promise<unknown>) | undefined;
@@ -110,6 +113,7 @@ export function makeCtx(
     cache: overrides.cache ?? ({} as unknown as ServerContext["cache"]),
     notifier,
     auth: null,
+    log: SILENT_LOG,
   } satisfies ServerContext;
 }
 

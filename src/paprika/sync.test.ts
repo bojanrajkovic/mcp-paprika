@@ -1,4 +1,5 @@
 import { vi, describe, it, expect, afterEach, beforeEach, expectTypeOf } from "vitest";
+import pino from "pino";
 
 import { SyncEngine } from "./sync.js";
 import type { AppContext } from "../server/app-context.js";
@@ -11,6 +12,8 @@ import type { PantryItemUid, RecipeEntry, RecipeUid, SyncResult } from "./types.
 import { makeRecipe, makeCategory } from "../cache/__fixtures__/recipes.js";
 import { makePantryItem } from "../cache/__fixtures__/pantry.js";
 import { PantryStore as RealPantryStore } from "../cache/pantry-store.js";
+
+const SILENT_LOG = pino({ level: "silent" });
 
 function makeMockNotifier(): Notifier {
   return {
@@ -83,6 +86,7 @@ function makeTestContext(): AppContext {
     vectorStore: null,
     notifier: makeMockNotifier(),
     auth: null,
+    log: SILENT_LOG,
   };
 }
 
@@ -347,6 +351,7 @@ describe("syncOnce", () => {
       vectorStore: null,
       notifier: { ...makeMockNotifierDefault(), ...notifierOverrides } as Notifier,
       auth: null,
+      log: SILENT_LOG,
     };
     return new SyncEngine(context, 10);
   }
@@ -857,6 +862,7 @@ describe("syncOnce", () => {
         vectorStore: null,
         notifier: makeMockNotifier(),
         auth: null,
+        log: SILENT_LOG,
       };
       const engine = new SyncEngine(context, 10);
 
@@ -898,6 +904,7 @@ describe("syncOnce", () => {
         vectorStore: null,
         notifier: makeMockNotifier(),
         auth: null,
+        log: SILENT_LOG,
       };
       const engine = new SyncEngine(context, 10);
 
