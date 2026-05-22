@@ -1,5 +1,4 @@
 import { randomUUID } from "node:crypto";
-import { createLogger } from "../utils/log.js";
 import type { Server as NodeHttpServer } from "node:http";
 
 import { StreamableHTTPTransport } from "@hono/mcp";
@@ -27,8 +26,6 @@ const MCP_SESSION_HEADER = "mcp-session-id";
 export interface HttpTransportHandle extends TransportHandle {
   readonly port: number;
 }
-
-const log = createLogger("mcp-paprika");
 
 interface Session {
   server: McpServer;
@@ -75,11 +72,13 @@ export async function startHttp(config: PaprikaConfig): Promise<HttpTransportHan
   // included). See src/server/build.ts for the ordering rationale.
   const { app, sync } = await buildAppContext(config, notifier);
 
+  const log = app.log.child({ component: "transport-http" });
+
   if (config.sync.enabled) {
     sync.start();
-    log(`Sync engine started (interval: ${config.sync.interval.toString()}ms).`);
+    log.info({ intervalMs: config.sync.interval }, "sync engine started");
   } else {
-    log("Background sync disabled.");
+    log.info("background sync disabled");
   }
 
   const hono = new Hono();
@@ -236,12 +235,16 @@ export async function startHttp(config: PaprikaConfig): Promise<HttpTransportHan
     );
   });
 
-  log(`HTTP transport listening on http://${config.http.host}:${boundPort.toString()}/mcp`);
+  log.info({ url: `http://${config.http.host}:${boundPort.toString()}/mcp` }, "HTTP transport listening");
   if (app.auth !== null) {
-    log(`OAuth issuer: ${app.auth.config.publicUrl}`);
-    log(`OAuth upstream: ${app.auth.discovery.issuer} (${app.auth.config.scopes.join(" ")})`);
-    log(
-      `Allowlist: ${app.auth.config.allowlist.emails.length.toString()} email(s), ${app.auth.config.allowlist.subs.length.toString()} sub(s)`,
+    log.info({ issuer: app.auth.config.publicUrl }, "OAuth issuer");
+    log.info({ upstream: app.auth.discovery.issuer, scopes: app.auth.config.scopes.join(" ") }, "OAuth upstream");
+    log.info(
+      {
+        emails: app.auth.config.allowlist.emails.length,
+        subs: app.auth.config.allowlist.subs.length,
+      },
+      "identity allowlist",
     );
     app.auth.cleanup.start();
   }
@@ -249,12 +252,12 @@ export async function startHttp(config: PaprikaConfig): Promise<HttpTransportHan
   // makes buildAuthContext return a non-null AuthContext (or fail-fast). The
   // null branch is exercised only by transport tests that pass MCP_TRANSPORT=stdio
   // to skip the OAuth fixture — see src/transport/http.test.ts.
-  log(`Health probe: GET http://${config.http.host}:${boundPort.toString()}/healthz`);
+  log.info({ url: `http://${config.http.host}:${boundPort.toString()}/healthz` }, "health probe available");
 
   return {
     port: boundPort,
     async shutdown() {
-      log("HTTP shutdown: stopping sync engine and closing sessions...");
+      log.info("HTTP shutdown: stopping sync engine and closing sessions");
 
       // Order matters. node:http's `Server.close()` waits forever for
       // long-lived SSE GET streams to finish on their own. We must abort
@@ -295,7 +298,7 @@ export async function startHttp(config: PaprikaConfig): Promise<HttpTransportHan
         process.exit(1);
       }
 
-      log("HTTP shutdown complete.");
+      log.info("HTTP shutdown complete");
     },
   };
 }

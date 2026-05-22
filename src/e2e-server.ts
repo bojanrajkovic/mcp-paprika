@@ -30,8 +30,6 @@ import type {
   PantryItemUid,
 } from "./paprika/types.js";
 
-const log = createLogger("mcp-paprika-test");
-
 interface IMockPaprikaClient {
   authenticate(): Promise<void>;
   listRecipes(): Promise<Array<RecipeEntry>>;
@@ -111,7 +109,7 @@ class MockPaprikaClient implements IMockPaprikaClient {
   }
 
   async authenticate(): Promise<void> {
-    log("Mock authentication (no-op)");
+    // no-op
   }
 
   async listRecipes(): Promise<Array<RecipeEntry>> {
@@ -148,12 +146,26 @@ class MockPaprikaClient implements IMockPaprikaClient {
 }
 
 async function main(): Promise<void> {
-  log("Using mock Paprika client for testing...");
+  // Deferred-getter notifier (see src/index.ts for the rationale).
+  // Hoisted to top of main() so log can reference notifier and log calls
+  // below do not hit the TDZ.
+  let server: McpServer | undefined;
+  const notifier = singleServerNotifier(() => server);
+
+  const log = createLogger({
+    transport: "stdio",
+    notifier,
+    level: "info", // e2e startup messages should be visible
+    notifyLevel: "fatal",
+    pretty: true,
+  }).child({ component: "e2e" });
+
+  log.info("using mock Paprika client for testing");
   const client = new MockPaprikaClient();
   await client.authenticate();
-  log("Mock authentication complete.");
+  log.info("mock authentication complete");
 
-  log("Initializing disk cache...");
+  log.info("initializing disk cache");
   const cache = new DiskCache(getCacheDir());
   await cache.init();
 
@@ -164,23 +176,11 @@ async function main(): Promise<void> {
   }
   store.set(client.getMockRecipe());
   store.setCategories([client.getMockCategory()]);
-  log(`Hydrated store with ${store.size.toString()} recipes.`);
+  log.info({ count: store.size }, "hydrated recipe store");
 
   const pantryStore = new PantryStore();
   pantryStore.load([client.getMockPantryItem()]);
-  log("Hydrated pantry store with mock data.");
-
-  // Deferred-getter notifier (see src/index.ts for the rationale).
-  let server: McpServer | undefined;
-  const notifier = singleServerNotifier(() => server);
-
-  const appLog = createLogger({
-    transport: "stdio",
-    notifier,
-    level: "silent", // tests must not emit noise to stderr
-    notifyLevel: "fatal",
-    pretty: false,
-  });
+  log.info("hydrated pantry store with mock data");
 
   const app: AppContext = {
     client: client as unknown as AppContext["client"],
@@ -190,21 +190,21 @@ async function main(): Promise<void> {
     vectorStore: null, // discover tool intentionally not registered (no embeddings in e2e)
     notifier,
     auth: null,
-    log: appLog,
+    log,
   };
 
   server = buildMcpServer(app);
-  log("Registered tools and resources via buildMcpServer.");
-  log("Sync engine disabled for E2E testing.");
+  log.info("registered tools and resources via buildMcpServer");
+  log.info("sync engine disabled for E2E testing");
 
   process.on("SIGINT", () => {
-    log("SIGINT received, shutting down...");
+    log.info("SIGINT received, shutting down");
     process.exit(0);
   });
 
-  log("Connecting stdio transport...");
+  log.info("connecting stdio transport");
   await server.connect(new StdioServerTransport());
-  log("Server ready.");
+  log.info("server ready");
 }
 
 main().catch((err: unknown) => {
