@@ -10,7 +10,7 @@ Orchestrates business logic by composing the Paprika API client and caching laye
 
 ### embedding-errors.ts — Error hierarchy for embedding operations
 
-Two-class hierarchy with ES2024 `ErrorOptions` cause chaining support.
+Two-class hierarchy with ES2024 `ErrorOptions` cause chaining support. Local breaker-open events surface as `CircuitOpenError` from `../utils/errors.js` (shared with `PaprikaClient`); import from there rather than from `embedding-errors.ts`.
 
 | Class               | Extends          | Fields                                                 |
 | ------------------- | ---------------- | ------------------------------------------------------ |
@@ -25,21 +25,21 @@ HTTP errors (429, 500, 502, 503) and a circuit breaker (opens after 5 consecutiv
 half-open after 30s). Validates responses with Zod at the boundary. Per-instance resilience
 stack (no shared state between instances).
 
-| Export                     | Signature / Description                                                  |
-| -------------------------- | ------------------------------------------------------------------------ |
-| `EmbeddingClient`          | `constructor(config: Readonly<EmbeddingConfig>)` — resilient HTTP client |
-| `.embed(text)`             | `Promise<Array<number>>` — embed a single text                           |
-| `.embedBatch(texts)`       | `Promise<Array<Array<number>>>` — embed multiple texts in one call       |
-| `.dimensions`              | `number` getter — throws `EmbeddingError` if no call made yet            |
-| `EMBEDDING_SCHEMA_VERSION` | `number` constant — bump when `recipeToEmbeddingText` format changes     |
-| `recipeToEmbeddingText`    | `(recipe, categoryNames) => string` — pure function, no I/O              |
+| Export                     | Signature / Description                                                                                               |
+| -------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `EmbeddingClient`          | `constructor(config: Readonly<EmbeddingConfig>, log?: pino.Logger)` — resilient HTTP client; `log` defaults to silent |
+| `.embed(text)`             | `Promise<Array<number>>` — embed a single text                                                                        |
+| `.embedBatch(texts)`       | `Promise<Array<Array<number>>>` — embed multiple texts in one call                                                    |
+| `.dimensions`              | `number` getter — throws `EmbeddingError` if no call made yet                                                         |
+| `EMBEDDING_SCHEMA_VERSION` | `number` constant — bump when `recipeToEmbeddingText` format changes                                                  |
+| `recipeToEmbeddingText`    | `(recipe, categoryNames) => string` — pure function, no I/O                                                           |
 
 **Invariants:**
 
 - `EmbeddingClient` throws (does not return `Result`) because it wraps cockatiel which uses exceptions for control flow
 - `recipeToEmbeddingText` includes name, description, categories, ingredients, notes; excludes directions and nutritional info
 - **IMPORTANT:** When changing `recipeToEmbeddingText` (adding/removing fields, restructuring format), bump `EMBEDDING_SCHEMA_VERSION` so existing users get a full re-index on next startup
-- `BrokenCircuitError` from cockatiel is caught and re-thrown as `EmbeddingAPIError` with status 503
+- `BrokenCircuitError` from cockatiel is caught and re-thrown as `CircuitOpenError("embeddings", endpoint, { cause })` — no fabricated HTTP status; see `src/utils/errors.ts`
 
 ### vector-store-errors.ts — Error hierarchy for vector store operations
 
@@ -117,7 +117,9 @@ Per-instance `_log` child logger. Constructor takes optional `log?: Logger` (def
 
 Constructor takes optional `log?: Logger`. Per-attempt request lifecycle emits `debug` on start and success, `error` on non-retryable failure. Cockatiel retry hooks are installed in the constructor: `onRetry` → `warn`, `onGiveUp` → `error`.
 
-**Known anti-pattern (follow-up):** `embedBatch` catches `BrokenCircuitError` and re-throws as `EmbeddingAPIError(status=503, "Service unavailable (circuit open)")`. Phase 3 applied the same fix to `paprika/client.ts` via `CircuitOpenError`. Apply an equivalent refactor here as a follow-up: a new `EmbeddingCircuitOpenError` or shared `CircuitOpenError`-style class, without a fabricated HTTP status.
+**Resilience:** `wrap(breakerPolicy, retryPolicy)` — breaker outer, retry inner. The breaker sees one execution per `embedBatch` call regardless of how many retries that call exhausted internally; `maxAttempts: 3` means 3 retries, so each failing call makes 4 total network attempts. Breaker opens after 5 consecutive failing calls (`ConsecutiveBreaker(5)`), half-opens after 30 s.
+
+**Circuit open:** throws `CircuitOpenError("embeddings", endpoint, { cause: brokenCircuitError })` (imported from `../utils/errors.js`; shared with `PaprikaClient`) — no fabricated HTTP status. The error carries `service`, `endpoint`, and `cause: BrokenCircuitError` for structured access.
 
 ### buildDiscoverComponents
 

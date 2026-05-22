@@ -21,6 +21,7 @@ import pino, { type Logger } from "pino";
 import { z } from "zod";
 import type { Recipe } from "../paprika/types.js";
 import type { EmbeddingConfig } from "../utils/config.js";
+import { CircuitOpenError } from "../utils/errors.js";
 import { EmbeddingError, EmbeddingAPIError } from "./embedding-errors.js";
 
 /**
@@ -122,7 +123,10 @@ export class EmbeddingClient {
       }
     });
 
-    this._resilience = wrap(this._retryPolicy, this._breakerPolicy);
+    // Breaker OUTSIDE retry so the consecutive-failure counter increments
+    // once per embed call regardless of how many retries that call exhausted
+    // internally. Mirrors the wrap order in PaprikaClient.
+    this._resilience = wrap(this._breakerPolicy, this._retryPolicy);
   }
 
   /**
@@ -144,7 +148,8 @@ export class EmbeddingClient {
    *
    * @param texts - Array of texts to embed
    * @returns Array of embedding vectors (each is an array of numbers)
-   * @throws EmbeddingAPIError on permanent HTTP errors or circuit breaker open
+   * @throws EmbeddingAPIError on permanent HTTP errors from the embedding provider
+   * @throws CircuitOpenError when the local circuit breaker is open (no HTTP request issued)
    * @throws ZodError on response validation failure
    * @throws TransientHTTPError (internally caught by resilience) on transient failures
    */
@@ -197,7 +202,7 @@ export class EmbeddingClient {
       return result as Array<Array<number>>;
     } catch (error) {
       if (error instanceof BrokenCircuitError) {
-        throw new EmbeddingAPIError("Service unavailable (circuit open)", 503, endpoint);
+        throw new CircuitOpenError("embeddings", endpoint, { cause: error });
       }
       throw error;
     }

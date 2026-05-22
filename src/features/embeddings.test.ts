@@ -1,13 +1,16 @@
-import { describe, it, expect, beforeAll, afterAll, afterEach } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, afterEach, vi } from "vitest";
 import { setupServer } from "msw/node";
 import { http, HttpResponse } from "msw";
 import { ZodError } from "zod";
+import { BrokenCircuitError } from "cockatiel";
 import { EmbeddingClient } from "./embeddings.js";
 import { EmbeddingError, EmbeddingAPIError } from "./embedding-errors.js";
 import { recipeToEmbeddingText } from "./embeddings.js";
 import { makeRecipe } from "../cache/__fixtures__/recipes.js";
 import type { EmbeddingConfig } from "../utils/config.js";
 import { makePinoCapture } from "../tools/tool-test-utils.js";
+import { CircuitOpenError } from "../utils/errors.js";
+import { toMessage } from "../utils/log.js";
 
 const BASE_URL = "https://api.example.com/v1";
 const API_KEY = "test-api-key";
@@ -168,46 +171,11 @@ describe("EmbeddingClient", () => {
       }
     });
 
-    it("p3-u03-embeddings.AC2.3 - circuit breaker opens after 5 consecutive failures", async () => {
-      let callCount = 0;
-
-      server.use(
-        http.post(`${BASE_URL}/embeddings`, () => {
-          callCount++;
-          return HttpResponse.json({}, { status: 429 });
-        }),
-      );
-
-      // Use a dedicated client instance for this test to isolate circuit breaker state
-      const client = new EmbeddingClient(makeEmbeddingConfig());
-
-      // Make 5+ calls that all fail with retries exhausted
-      for (let i = 0; i < 6; i++) {
-        try {
-          await client.embedBatch(["test"]);
-        } catch (error) {
-          // Swallow errors to continue testing circuit breaker
-          void error;
-        }
-      }
-
-      // After exhausting retries on the 5th failure, the circuit should be open
-      // The 6th call should fail with "circuit open" without hitting the network
-      const networkCallsBeforeCircuit = callCount;
-
-      // Try one more call to verify circuit is open
-      try {
-        await client.embedBatch(["test"]);
-        expect.fail("Should have thrown EmbeddingAPIError for circuit open");
-      } catch (error) {
-        expect(error).toBeInstanceOf(EmbeddingAPIError);
-        expect((error as EmbeddingAPIError).message).toContain("circuit open");
-      }
-
-      // Verify the circuit call didn't hit the network
-      // (callCount stays the same because the request never executed)
-      expect(callCount).toBe(networkCallsBeforeCircuit);
-    });
+    // AC2.3 (circuit breaker behavior) is fully verified by the
+    // structured-logging.AC4+AC5 suite at the bottom of this file, which uses
+    // fake timers to drive cockatiel's backoff and asserts the new
+    // CircuitOpenError surface, the breaker-counts-calls semantics (5 calls ×
+    // 4 attempts = 20 fetches), and the 6th-call short-circuit.
   });
 
   describe("p3-u03-embeddings.AC3: Error handling for permanent failures", () => {
@@ -427,4 +395,109 @@ describe("structured-logging.AC9.3: Per-attempt logging in EmbeddingClient.embed
     const retryRecords = records.filter((r) => r["msg"] === "embedding request failed, retrying");
     expect(retryRecords).toHaveLength(0);
   });
+});
+
+describe("structured-logging.AC4+AC5: CircuitOpenError surface and breaker-counts-calls semantics", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  /**
+   * Trip the breaker by making 5 failing embed calls. Each call exhausts all
+   * retries (maxAttempts=3 → 4 total fetches per call) and counts as ONE
+   * breaker failure under the new wrap order. Must be called with fake timers
+   * active so retry backoffs don't block.
+   */
+  async function tripBreaker(client: EmbeddingClient): Promise<void> {
+    for (let i = 0; i < 5; i++) {
+      const p = client.embedBatch(["test"]).catch(() => {
+        /* expected */
+      });
+      await vi.runAllTimersAsync();
+      await p;
+    }
+  }
+
+  it("AC4-mirror: 5 failing embed calls trip the breaker and produce exactly 20 fetches (5 × 4)", async () => {
+    let fetchCount = 0;
+    server.use(
+      http.post(`${BASE_URL}/embeddings`, () => {
+        fetchCount++;
+        return HttpResponse.json({}, { status: 503 });
+      }),
+    );
+
+    vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout"] });
+    const client = new EmbeddingClient(makeEmbeddingConfig());
+
+    await tripBreaker(client);
+
+    // With breaker outside retry, each tool call counts as ONE breaker
+    // failure regardless of internal retries. 5 calls × 4 attempts each = 20.
+    expect(fetchCount).toBe(20);
+  }, 60000);
+
+  it("AC4.3-mirror: 6th call with open breaker throws CircuitOpenError without additional fetches", async () => {
+    let fetchCount = 0;
+    server.use(
+      http.post(`${BASE_URL}/embeddings`, () => {
+        fetchCount++;
+        return HttpResponse.json({}, { status: 503 });
+      }),
+    );
+
+    vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout"] });
+    const client = new EmbeddingClient(makeEmbeddingConfig());
+
+    await tripBreaker(client);
+    const fetchCountAfterTrip = fetchCount;
+
+    let caught: unknown;
+    try {
+      await client.embedBatch(["test"]);
+    } catch (err) {
+      caught = err;
+    }
+
+    expect(caught).toBeInstanceOf(CircuitOpenError);
+    expect(fetchCount).toBe(fetchCountAfterTrip);
+
+    if (caught instanceof CircuitOpenError) {
+      expect(caught.service).toBe("embeddings");
+      expect(caught.endpoint).toBe(`${BASE_URL}/embeddings`);
+      expect(caught.cause).toBeInstanceOf(BrokenCircuitError);
+    }
+  }, 60000);
+
+  it("AC5-mirror: CircuitOpenError surface has no fabricated HTTP 503", async () => {
+    server.use(
+      http.post(`${BASE_URL}/embeddings`, () => {
+        return HttpResponse.json({}, { status: 503 });
+      }),
+    );
+
+    vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout"] });
+    const client = new EmbeddingClient(makeEmbeddingConfig());
+
+    await tripBreaker(client);
+
+    let caught: unknown;
+    try {
+      await client.embedBatch(["test"]);
+    } catch (err) {
+      caught = err;
+    }
+
+    const msg = toMessage(caught);
+    expect(msg).toContain(`${BASE_URL}/embeddings`);
+    expect(msg).not.toContain("HTTP 503");
+    expect(msg).not.toContain("503");
+    expect(msg).toBe(`embeddings circuit breaker is open (endpoint=${BASE_URL}/embeddings)`);
+
+    // No EmbeddingAPIError surface — the breaker-open error is distinct.
+    expect(caught).not.toBeInstanceOf(EmbeddingAPIError);
+    if (caught instanceof CircuitOpenError) {
+      expect("status" in caught).toBe(false);
+    }
+  }, 60000);
 });
