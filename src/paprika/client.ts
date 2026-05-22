@@ -21,7 +21,7 @@ import {
   type RetryPolicy,
   type CircuitBreakerPolicy,
   type IPolicy,
-  type IDefaultPolicyContext,
+  type IRetryContext,
 } from "cockatiel";
 import pino from "pino";
 import type { Logger } from "pino";
@@ -121,7 +121,7 @@ export class PaprikaClient {
   private readonly log: Logger;
   private readonly retryPolicy: RetryPolicy;
   private readonly breakerPolicy: CircuitBreakerPolicy;
-  private readonly resilience: IPolicy<IDefaultPolicyContext, never>;
+  private readonly resilience: IPolicy<IRetryContext, never>;
 
   constructor(
     private readonly email: string,
@@ -267,7 +267,12 @@ export class PaprikaClient {
     schema: ZodType<T, ZodTypeDef, unknown>,
     body?: FormData | URLSearchParams,
   ): Promise<T> {
-    const execute = async (): Promise<T> => {
+    const execute = async (ctx: IRetryContext): Promise<T> => {
+      const attempt = ctx.attempt + 1;
+      const t0 = performance.now();
+
+      this.log.debug({ method, url, attempt }, "paprika request start");
+
       const headers: Record<string, string> = {};
       if (this.token) {
         headers["Authorization"] = `Bearer ${this.token}`;
@@ -292,20 +297,31 @@ export class PaprikaClient {
         throw error;
       }
 
+      const attemptDurationMs = Math.round(performance.now() - t0);
+      const status = response.status;
+
       if (!response.ok) {
-        if (RETRYABLE_STATUSES.has(response.status)) {
-          throw new TransientHTTPError(response.status);
+        if (RETRYABLE_STATUSES.has(status)) {
+          // Don't log here — onRetry hook will emit the warn when cockatiel retries.
+          throw new TransientHTTPError(status);
         }
 
-        if (response.status === 401) {
+        if (status === 401) {
+          this.log.info({ method, url, attempt, status }, "paprika 401, re-authenticating");
           throw new TokenExpiredError();
         }
 
-        throw new PaprikaAPIError("Request failed", response.status, url);
+        const err = new PaprikaAPIError("Request failed", status, url);
+        this.log.error(
+          { method, url, attempt, status, attemptDurationMs, err },
+          "paprika request failed (non-retryable)",
+        );
+        throw err;
       }
 
       const json: unknown = await response.json();
       const envelope = z.object({ result: schema }).parse(json);
+      this.log.debug({ method, url, attempt, status, attemptDurationMs }, "paprika request ok");
       return envelope.result as T;
     };
 
