@@ -19,6 +19,8 @@ import {
   wrap,
   BrokenCircuitError,
 } from "cockatiel";
+import pino from "pino";
+import type { Logger } from "pino";
 import { z } from "zod";
 import type { ZodType, ZodTypeDef } from "zod";
 import type { Category, PantryItem, Recipe, RecipeEntry, RecipeUid } from "./types.js";
@@ -27,6 +29,8 @@ import { PaprikaAuthError, PaprikaAPIError } from "./errors.js";
 
 const AUTH_URL = "https://paprikaapp.com/api/v1/account/login/";
 const API_BASE = "https://paprikaapp.com/api/v2/sync";
+
+const SILENT_LOG = pino({ level: "silent" });
 
 class TransientHTTPError extends Error {
   constructor(readonly status: number) {
@@ -125,11 +129,18 @@ function pantryItemToApiPayload(item: Readonly<PantryItem>): Record<string, unkn
 export class PaprikaClient {
   private token: string | null = null;
   private readonly _recipesBulkhead = bulkhead(5, Number.MAX_SAFE_INTEGER);
+  private readonly log: Logger;
 
   constructor(
     private readonly email: string,
     private readonly password: string,
-  ) {}
+    log?: Logger,
+  ) {
+    this.log = log ?? SILENT_LOG;
+    // Phase 3 wires per-attempt logging through this.log; this no-op touch
+    // satisfies noUnusedLocals until then.
+    void this.log;
+  }
 
   async authenticate(): Promise<void> {
     const response = await fetch(AUTH_URL, {
