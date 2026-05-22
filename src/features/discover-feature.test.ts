@@ -3,6 +3,7 @@ import type { SyncResult } from "../paprika/types.js";
 import type { RecipeUid } from "../paprika/types.js";
 import { RecipeStore } from "../cache/recipe-store.js";
 import { makeRecipe } from "../cache/__fixtures__/recipes.js";
+import { makePinoCapture } from "../tools/tool-test-utils.js";
 // mitt's package shape (flat-conditioned `exports`, .d.ts using `export default`) confuses
 // TS strict resolution under @tsconfig/strictest + nodenext into typing the default import
 // as the namespace. The namespace's `.default` member IS the function, so we recover the
@@ -207,7 +208,8 @@ describe("p3-u08-discover-wiring: buildDiscoverComponents", () => {
 
       await buildDiscoverComponents(config, store, syncEvents);
 
-      expect(vi.mocked(EmbeddingClient)).toHaveBeenCalledWith(embeddingsConfig);
+      // Second arg is the optional logger — undefined when no log is passed
+      expect(vi.mocked(EmbeddingClient)).toHaveBeenCalledWith(embeddingsConfig, undefined);
     });
 
     it("AC2.2: creates VectorStore with getCacheDir() and EmbeddingClient instance", async () => {
@@ -393,12 +395,13 @@ describe("p3-u08-discover-wiring: buildDiscoverComponents", () => {
       store.load([recipe], []);
       const syncEvents = makeMockSyncEvents();
       const config = makeEnabledConfig();
+      const { log, records } = makePinoCapture();
 
       mockVectorStore.size = 10;
       const testError = new Error("Embedding failed");
       mockVectorStore.indexRecipes.mockRejectedValueOnce(testError);
 
-      await buildDiscoverComponents(config, store, syncEvents);
+      await buildDiscoverComponents(config, store, syncEvents, log);
 
       const syncResult: SyncResult = {
         added: [recipe],
@@ -410,8 +413,9 @@ describe("p3-u08-discover-wiring: buildDiscoverComponents", () => {
       // Let async handler complete
       await new Promise((r) => setTimeout(r, 10));
 
-      expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining("Vector index error"));
-      expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining("Embedding failed"));
+      const errorRecords = records.filter((r) => r["msg"] === "vector index error during sync-driven re-index");
+      expect(errorRecords).toHaveLength(1);
+      expect(errorRecords[0]!["err"]).toBeDefined();
     });
 
     it("AC4.2: catches and logs error from vectorStore.removeRecipe", async () => {
@@ -420,12 +424,13 @@ describe("p3-u08-discover-wiring: buildDiscoverComponents", () => {
       store.load([], []);
       const syncEvents = makeMockSyncEvents();
       const config = makeEnabledConfig();
+      const { log, records } = makePinoCapture();
 
       mockVectorStore.size = 10;
       const testError = new Error("Remove failed");
       mockVectorStore.removeRecipe.mockRejectedValueOnce(testError);
 
-      await buildDiscoverComponents(config, store, syncEvents);
+      await buildDiscoverComponents(config, store, syncEvents, log);
 
       const syncResult: SyncResult = {
         added: [],
@@ -437,8 +442,39 @@ describe("p3-u08-discover-wiring: buildDiscoverComponents", () => {
       // Let async handler complete
       await new Promise((r) => setTimeout(r, 10));
 
-      expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining("Vector index error"));
-      expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining("Remove failed"));
+      const errorRecords = records.filter((r) => r["msg"] === "vector index error during sync-driven re-index");
+      expect(errorRecords).toHaveLength(1);
+      expect(errorRecords[0]!["err"]).toBeDefined();
+    });
+
+    it("structured-logging.AC9.4: emits structured error log on sync-driven re-index failure", async () => {
+      const { buildDiscoverComponents } = await import("./discover-feature.js");
+      const recipe = makeRecipe({ uid: "r1" as RecipeUid });
+      const store = new RecipeStore();
+      store.load([recipe], []);
+      const syncEvents = makeMockSyncEvents();
+      const config = makeEnabledConfig();
+      const { log, records } = makePinoCapture();
+
+      mockVectorStore.size = 10;
+      mockVectorStore.indexRecipes.mockRejectedValueOnce(new Error("indexing failed"));
+
+      await buildDiscoverComponents(config, store, syncEvents, log);
+
+      const syncResult: SyncResult = {
+        added: [recipe],
+        updated: [],
+        removedUids: [],
+      };
+      syncEvents.emit("sync:complete", syncResult);
+
+      // Let async handler complete
+      await new Promise((r) => setTimeout(r, 10));
+
+      const errorRecords = records.filter((r) => r["msg"] === "vector index error during sync-driven re-index");
+      expect(errorRecords).toHaveLength(1);
+      // Must carry the error object (not a string message)
+      expect(errorRecords[0]!["err"]).toBeDefined();
     });
 
     it("AC4.3: subsequent sync events still work after an error", async () => {

@@ -4,7 +4,6 @@ import { getCacheDir } from "../utils/xdg.js";
 import type { RecipeStore } from "../cache/recipe-store.js";
 import type { SyncResult } from "../paprika/types.js";
 import type { PaprikaConfig } from "../utils/config.js";
-import { toMessage } from "../utils/log.js";
 import type { Logger } from "pino";
 
 /**
@@ -39,13 +38,14 @@ export async function buildDiscoverComponents(
   log?: Logger,
 ): Promise<VectorStore | null> {
   const embeddingsConfig = config.features?.embeddings;
+  const discoverLog = log?.child({ component: "discover" });
 
   if (!embeddingsConfig) {
     process.stderr.write("[mcp-paprika] Semantic search: disabled\n");
     return null;
   }
 
-  const embedder = new EmbeddingClient(embeddingsConfig);
+  const embedder = new EmbeddingClient(embeddingsConfig, log?.child({ component: "embeddings" }));
   const vectorStore = new VectorStore(
     getCacheDir(),
     embedder,
@@ -81,7 +81,7 @@ export async function buildDiscoverComponents(
         await vectorStore.removeRecipe(uid);
       }
     } catch (err) {
-      process.stderr.write(`[mcp-paprika] Vector index error: ${toMessage(err)}\n`);
+      discoverLog?.error({ err }, "vector index error during sync-driven re-index");
     }
   });
 
