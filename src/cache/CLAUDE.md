@@ -138,6 +138,20 @@ Persistence layer for the Paprika recipe library. Stores full recipe and categor
 | `diffRecipes(entries)`    | `(entries: ReadonlyArray<RecipeEntry>): DiffResult`   | Classifies remote entries vs local recipe index into `added`/`changed`/`removed` |
 | `diffCategories(entries)` | `(entries: ReadonlyArray<CategoryEntry>): DiffResult` | Same algorithm applied to category index                                         |
 
+## Logger integration
+
+`DiskCache` accepts an optional `log?: Logger` in its constructor (default: silent pino). Production constructs it with `appLog.child({ component: "disk-cache" })` in `buildAppContext`. Tests omit the argument (silent).
+
+**Catch-site classification:**
+
+- ENOENT on `index.json` read — cold-start; silent by design.
+- Corrupt JSON in `index.json` — emits `warn` record `"corrupt index.json, resetting to empty index"`.
+- ENOENT on per-UID file read — cold-start cache miss; silent (returns `null`).
+- ENOENT on directory listing — cold-start; silent (returns empty).
+- ENOENT on unlink — idempotent removal; silent.
+
+The classification is durable — each silent catch carries an explanatory inline comment.
+
 ## Invariants
 
 ### RecipeStore

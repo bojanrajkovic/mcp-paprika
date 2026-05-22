@@ -104,8 +104,24 @@ anything that exposes a typed `on`/`off` for `sync:complete` and `sync:error`.
 - Cold-start re-index runs when vector store size is below 90% of recipe store size (catches stale/orphaned data)
 - Vector index is invalidated when the embedding model or `EMBEDDING_SCHEMA_VERSION` changes between runs
 - `sync:complete` handler indexes added/updated recipes and removes deleted ones
-- Errors during sync-triggered indexing are caught and logged to stderr (never crash the server)
+- Errors during sync-triggered indexing are caught and logged via a structured pino error record (never crash the server)
 - Runs exactly once per process (during `buildAppContext`), not per session — the returned `VectorStore` is shared across all sessions via `AppContext.vectorStore`
+
+## Logger integration
+
+### VectorStore
+
+Per-instance `_log` child logger. Constructor takes optional `log?: Logger` (default: silent). Corruption recovery emits `warn` for corrupt Vectra index and corrupt `hash-index.json`. ENOENT and parse-failure paths in read operations emit `debug` or stay silent per the per-site classification in source comments.
+
+### EmbeddingClient
+
+Constructor takes optional `log?: Logger`. Per-attempt request lifecycle emits `debug` on start and success, `error` on non-retryable failure. Cockatiel retry hooks are installed in the constructor: `onRetry` → `warn`, `onGiveUp` → `error`.
+
+**Known anti-pattern (follow-up):** `embedBatch` catches `BrokenCircuitError` and re-throws as `EmbeddingAPIError(status=503, "Service unavailable (circuit open)")`. Phase 3 applied the same fix to `paprika/client.ts` via `CircuitOpenError`. Apply an equivalent refactor here as a follow-up: a new `EmbeddingCircuitOpenError` or shared `CircuitOpenError`-style class, without a fabricated HTTP status.
+
+### buildDiscoverComponents
+
+Takes optional `log?: Logger` from `buildAppContext`. Derives child loggers for `discover`, `vector-store`, and `embeddings` components. The `sync:complete` handler's error catch emits a structured pino `error` record `"vector index error during sync-driven re-index"` without propagating — preserving the sync loop's never-throws contract.
 
 ## Dependencies
 
