@@ -70,7 +70,7 @@ export interface MCPFanoutRecord {
 // Internal constants
 // ---------------------------------------------------------------------------
 
-const REDACT_PATHS: ReadonlyArray<string> = [
+export const REDACT_PATHS: ReadonlyArray<string> = [
   "authorization",
   "*.authorization",
   "*.*.authorization",

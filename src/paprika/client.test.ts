@@ -9,7 +9,7 @@ import type { Logger } from "pino";
 import { BrokenCircuitError } from "cockatiel";
 import { PaprikaClient } from "./client.js";
 import { PaprikaAPIError, PaprikaAuthError, CircuitOpenError } from "./errors.js";
-import { toMessage } from "../utils/log.js";
+import { toMessage, REDACT_PATHS } from "../utils/log.js";
 import type { PantryItem, Recipe } from "./types.js";
 import { RecipeSchema, RecipeUidSchema, PantryItemUidSchema } from "./types.js";
 
@@ -1414,17 +1414,7 @@ describe("PaprikaClient", () => {
         {
           level: "trace",
           redact: {
-            paths: [
-              "authorization",
-              "*.authorization",
-              "*.*.authorization",
-              "password",
-              "*.password",
-              "*.*.password",
-              "token",
-              "*.token",
-              "*.*.token",
-            ],
+            paths: REDACT_PATHS as Array<string>,
             censor: "[Redacted]",
           },
         },
@@ -1463,7 +1453,7 @@ describe("PaprikaClient", () => {
         {
           level: "trace",
           redact: {
-            paths: ["authorization", "*.authorization", "*.*.authorization"],
+            paths: REDACT_PATHS as Array<string>,
             censor: "[Redacted]",
           },
         },
