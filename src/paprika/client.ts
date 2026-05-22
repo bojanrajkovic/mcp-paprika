@@ -29,7 +29,7 @@ import { z } from "zod";
 import type { ZodType, ZodTypeDef } from "zod";
 import type { Category, PantryItem, Recipe, RecipeEntry, RecipeUid } from "./types.js";
 import { AuthResponseSchema, CategorySchema, PantryItemSchema, RecipeEntrySchema, RecipeSchema } from "./types.js";
-import { PaprikaAuthError, PaprikaAPIError } from "./errors.js";
+import { PaprikaAuthError, PaprikaAPIError, CircuitOpenError } from "./errors.js";
 
 const AUTH_URL = "https://paprikaapp.com/api/v1/account/login/";
 const API_BASE = "https://paprikaapp.com/api/v2/sync";
@@ -313,7 +313,7 @@ export class PaprikaClient {
       return await this.resilience.execute(execute);
     } catch (error) {
       if (error instanceof BrokenCircuitError) {
-        throw new PaprikaAPIError("Service unavailable (circuit open)", 503, url);
+        throw new CircuitOpenError(url, { cause: error });
       }
 
       // Unwrap the retry marker so callers see the original undici TypeError —
@@ -336,7 +336,7 @@ export class PaprikaClient {
             throw new PaprikaAuthError("Authentication failed after re-auth (HTTP 401)");
           }
           if (retryError instanceof BrokenCircuitError) {
-            throw new PaprikaAPIError("Service unavailable (circuit open)", 503, url);
+            throw new CircuitOpenError(url, { cause: retryError });
           }
           if (retryError instanceof NetworkRetryableError) {
             throw retryError.cause;

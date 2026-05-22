@@ -6,8 +6,10 @@ import { gunzipSync } from "node:zlib";
 import { Writable } from "node:stream";
 import pino from "pino";
 import type { Logger } from "pino";
+import { BrokenCircuitError } from "cockatiel";
 import { PaprikaClient } from "./client.js";
-import { PaprikaAPIError, PaprikaAuthError } from "./errors.js";
+import { PaprikaAPIError, PaprikaAuthError, CircuitOpenError } from "./errors.js";
+import { toMessage } from "../utils/log.js";
 import type { PantryItem, Recipe } from "./types.js";
 import { RecipeSchema, RecipeUidSchema, PantryItemUidSchema } from "./types.js";
 
@@ -1186,6 +1188,113 @@ describe("PaprikaClient", () => {
 
       const resetRecords = records.filter((r) => r["msg"] === "paprika circuit breaker reset");
       expect(resetRecords).toHaveLength(1);
+    }, 60000);
+  });
+
+  // ---------------------------------------------------------------------------
+  // CircuitOpenError surface — Task 4 (AC4.2, AC4.3, AC5.5)
+  // ---------------------------------------------------------------------------
+
+  describe("structured-logging.AC4+AC5: CircuitOpenError replaces synthetic 503", () => {
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    /**
+     * Helper: trips the breaker by making 5 failing calls on the given client.
+     * Each call exhausts all retries (maxAttempts=3 → 4 total fetches per call).
+     * Must be called with fake timers active.
+     */
+    async function tripBreaker(client: PaprikaClient): Promise<void> {
+      for (let i = 0; i < 5; i++) {
+        // Start the call BEFORE awaiting timers — the call hangs on backoff delays
+        const p = client.listRecipes().catch(() => {
+          /* expected */
+        });
+        // Drain fake timers (retry backoffs) so the call can complete
+        await vi.runAllTimersAsync();
+        // Now the call has resolved (all retries exhausted, error swallowed)
+        await p;
+      }
+    }
+
+    it("AC4.2 - 5th distinct failing call trips breaker (onBreak fires once) and fetch count is 5×4=20", async () => {
+      const { testLog, records } = makePinoCapture();
+      let fetchCount = 0;
+      server.use(
+        http.get(`${API_BASE}/recipes/`, () => {
+          fetchCount++;
+          return HttpResponse.json({ result: [] }, { status: 503 });
+        }),
+      );
+
+      vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout"] });
+      const client = new PaprikaClient("test@example.com", "password", testLog);
+
+      await tripBreaker(client);
+
+      const breakRecords = records.filter((r) => r["msg"] === "paprika circuit breaker opened");
+      expect(breakRecords).toHaveLength(1);
+      // 5 calls × 4 total attempts (maxAttempts:3 means 4 total) = 20 fetches
+      expect(fetchCount).toBe(20);
+    }, 60000);
+
+    it("AC4.3 - 6th call with open breaker throws CircuitOpenError without additional fetches", async () => {
+      let fetchCount = 0;
+      server.use(
+        http.get(`${API_BASE}/recipes/`, () => {
+          fetchCount++;
+          return HttpResponse.json({ result: [] }, { status: 503 });
+        }),
+      );
+
+      vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout"] });
+      const client = new PaprikaClient("test@example.com", "password");
+
+      await tripBreaker(client);
+      const fetchCountAfterTrip = fetchCount;
+
+      // 6th call should throw CircuitOpenError without making any fetch
+      let caught: unknown;
+      try {
+        await client.listRecipes();
+      } catch (err) {
+        caught = err;
+      }
+
+      expect(caught).toBeInstanceOf(CircuitOpenError);
+      // No additional fetches were made
+      expect(fetchCount).toBe(fetchCountAfterTrip);
+
+      if (caught instanceof CircuitOpenError) {
+        expect(caught.endpoint).toBe(`${API_BASE}/recipes/`);
+        expect(caught.cause).toBeInstanceOf(BrokenCircuitError);
+      }
+    }, 60000);
+
+    it("AC5.5 - toMessage on CircuitOpenError never contains 'HTTP 503'", async () => {
+      server.use(
+        http.get(`${API_BASE}/recipes/`, () => {
+          return HttpResponse.json({ result: [] }, { status: 503 });
+        }),
+      );
+
+      vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout"] });
+      const client = new PaprikaClient("test@example.com", "password");
+
+      await tripBreaker(client);
+
+      let caught: unknown;
+      try {
+        await client.listRecipes();
+      } catch (err) {
+        caught = err;
+      }
+
+      const msg = toMessage(caught);
+      expect(msg).toContain(`${API_BASE}/recipes/`);
+      expect(msg).not.toContain("HTTP 503");
+      expect(msg).toBe(`Paprika client circuit breaker is open (endpoint=${API_BASE}/recipes/)`);
     }, 60000);
   });
 });
