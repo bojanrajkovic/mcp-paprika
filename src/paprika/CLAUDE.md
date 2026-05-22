@@ -152,7 +152,7 @@ Background polling loop that keeps local cache and in-memory store synchronized 
 
 **Construction:**
 
-- `new SyncEngine(context: AppContext, intervalMs: number)` — creates a new engine with the specified polling interval; does not start automatically. Takes `AppContext` (process-wide) rather than `SessionContext`/`ServerContext` because the sync loop is process-wide and must not be tied to a single MCP session. Notifications go through `context.notifier` so the same loop works for stdio (single server) and HTTP (broadcast across all live sessions).
+- `new SyncEngine(context: AppContext, intervalMs: number)` — creates a new engine with the specified polling interval; does not start automatically. Takes `AppContext` (process-wide) rather than `SessionContext`/`ServerContext` because the sync loop is process-wide and must not be tied to a single MCP session. Stores `this.log = context.log.child({ component: "sync" })` for all sync events. Notifications go through `context.notifier` so the same loop works for stdio (single server) and HTTP (broadcast across all live sessions).
 
 **Public API:**
 
@@ -199,11 +199,11 @@ Background polling loop that keeps local cache and in-memory store synchronized 
    - **Sweeps expired pending-writes:** `store.sweepPending()` and `pantryStore.sweepPending()` — TTL fallback for pending-deletes (and a defense for upserts where the canonical observation never arrives).
    - Sends MCP resource notification if recipe OR pantry changes exist: `context.notifier.resourceListChanged()` (called if any added/changed/removed/orphaned detected)
    - Emits `sync:complete` with `SyncResult` (always emitted, even for no-change cycles)
-   - Logs success: `await context.notifier.loggingMessage({ level: "info", data: "..." })`
+   - Logs success: `this.log.info({added, updated, removed}, "sync complete")` — record fans out to connected MCP clients only when `notifyLevel` is `"info"` or lower (default `"warn"` suppresses it; see behavior note below)
 
 5. **Error handling (all wrapped in try/catch):**
    - Catches any thrown error (API failures, cache errors, store errors)
-   - Logs error: `await context.notifier.loggingMessage({ level: "error", data: "..." })` (the notifier swallows transport failures internally — no extra try/catch around the logging call needed)
+   - Logs error: `this.log.error({err}, "sync failed")` — fans out to connected MCP clients automatically via the multistream (error ≥ default `notifyLevel: "warn"`)
    - Emits `sync:error` with the Error
    - Never re-throws — returns normally
 
@@ -225,6 +225,16 @@ Background polling loop that keeps local cache and in-memory store synchronized 
 - **Uses:** `AppContext` (client, cache, store, pantryStore, notifier — `server` is intentionally absent), `mitt` (event emitter), `node:timers/promises` (scheduler.wait), `./types.js` (Recipe, RecipeUid, SyncResult, DiffResult)
 - **Used by:** `src/server/build.ts` (`buildAppContext` constructs SyncEngine), `src/features/discover-feature.ts` (subscribes to `sync.events` for incremental re-indexing)
 - **Boundary:** Must not import from `tools/`, `resources/`, or `features/`
+
+### Sync-engine logging
+
+`SyncEngine` uses a pino child logger (`component: "sync"`) for all sync events. Progress messages (recipe diff counts, fetch counts, pantry counts, flush, sweep) emit at `debug` level. The `sync complete` record emits at `info` with `{added, updated, removed}` fields; `sync failed` emits at `error` with `{err}`.
+
+The previous `_log` static method is removed. All sync events emit pino records routed through the multistream fan-out (see `src/utils/CLAUDE.md`) — no direct `notifier.loggingMessage(...)` calls remain in the sync engine.
+
+#### Sync-success notifications: behavior change
+
+Prior to this migration, every successful sync emitted `notifications/message` at level `info` to all connected MCP clients. The structured-logging design routes sync-success to a pino `info` record, which by default does NOT fan out (`notifyLevel: "warn"`). Connected Claude sessions will no longer see periodic "sync complete" notifications. Operators or workflows that depend on these can opt back in by setting `MCP_LOG_NOTIFY_LEVEL=info`. Sync-failure notifications (`error`-level) are unaffected and continue to fan out by default.
 
 ## Dependencies
 
