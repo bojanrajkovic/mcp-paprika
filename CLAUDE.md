@@ -1,10 +1,12 @@
 # mcp-paprika
 
-Last verified: 2026-05-21
+Last verified: 2026-05-22
 
 MCP server for the Paprika recipe manager. Two transports: **stdio** (default; unauthenticated local pipe used by Claude Desktop, Claude Code, Cursor, mcp-cli) and **Streamable HTTP** (used by Claude Mobile and other remote MCP clients; ships with OAuth 2.1 + OIDC delegation). Selected via `MCP_TRANSPORT=stdio|http`.
 
-**Stdio note:** when running in stdio mode, `console.log` writes to stdout which is the MCP wire format. Any stray console output corrupts the protocol. Use `process.stderr.write()` for diagnostic messages or the MCP SDK's logging facility. The `no-console` oxlint rule enforces this.
+**Logging:** The process-wide pino logger lives at `app.log` (constructed inside `buildAppContext`). Components create children via `app.log.child({ component: "<flat-name>" })`. Records at or above `MCP_LOG_NOTIFY_LEVEL` (default `warn`) fan out to connected MCP clients automatically. See `src/utils/CLAUDE.md` for the full logger contract.
+
+**Stdio note:** when running in stdio mode, `console.log` writes to stdout which is the MCP wire format. Any stray console output corrupts the protocol. Component code must use the structured logger (`ctx.log` / child loggers); the `no-console` oxlint rule enforces this. Direct `process.stderr.write` is reserved for two documented exceptions: the SIGINT/SIGTERM handler in `src/index.ts` (logger may be torn down) and the `MCP_HTTP_*` misconfiguration warning in `src/transport/stdio.ts` (emitted before `buildAppContext` runs).
 
 ## Tech Stack
 
@@ -12,7 +14,7 @@ MCP server for the Paprika recipe manager. Two transports: **stdio** (default; u
 - **Language:** TypeScript 5.9 (extends `@tsconfig/strictest` + `@tsconfig/node24`)
 - **Module system:** ESM (`"type": "module"`)
 - **Package manager:** pnpm 11.1.2 (corepack-managed)
-- **Key dependencies:** @modelcontextprotocol/sdk (MCP protocol), hono + @hono/mcp + @hono/node-server (HTTP transport), zod (validation), luxon (dates), dotenv (env config), parse-duration (duration parsing), env-paths (XDG directories), neverthrow (error handling), cockatiel (resilience/retry), mitt (event emitter), vectra (local vector index), jose (OIDC/JWT), hono-rate-limiter (OAuth DCR rate limiting), async-mutex (DiskCache write serialization)
+- **Key dependencies:** @modelcontextprotocol/sdk (MCP protocol), hono + @hono/mcp + @hono/node-server (HTTP transport), zod (validation), luxon (dates), dotenv (env config), parse-duration (duration parsing), env-paths (XDG directories), neverthrow (error handling), cockatiel (resilience/retry), mitt (event emitter), vectra (local vector index), jose (OIDC/JWT), hono-rate-limiter (OAuth DCR rate limiting), async-mutex (DiskCache write serialization), pino + pino-pretty (structured logging)
 - **Container:** distroless `gcr.io/distroless/nodejs24-debian13:nonroot` runtime; 3-stage Dockerfile (builder → prod-deps prune → distroless)
 
 ## Commands
@@ -34,14 +36,14 @@ MCP server for the Paprika recipe manager. Two transports: **stdio** (default; u
 
 - `src/index.ts` — Transport dispatcher: loads config, dispatches to `startStdio` or `startHttp` based on `config.transport`, wires SIGINT/SIGTERM to the returned handle's `shutdown()`
 - `src/transport/` — Transport-specific entry points: `stdio.ts` (deferred-getter notifier, sync, then `server.connect(new StdioServerTransport())`) and `http.ts` (Hono app with `GET /healthz` + `ALL /mcp`, session map, graceful shutdown that aborts SSE streams before closing the HTTP server). `startHttp` returns an `HttpTransportHandle` with the bound port (useful for tests passing `port: 0`)
-- `src/server/` — Process-wide composition root: `AppContext`/`SessionContext` types, `Notifier` abstraction (`singleServerNotifier`, `broadcastNotifier`), `buildAppContext` (heavyweight shared state) and `buildMcpServer` (per-session tool/resource registration; discover tool gated on `vectorStore !== null`)
+- `src/server/` — Process-wide composition root: `AppContext`/`SessionContext` types, `Notifier` abstraction (`singleServerNotifier`, `broadcastNotifier`), `buildAppContext` (heavyweight shared state; constructs the pino root logger and threads it through `AppContext.log`, `AuthContext.log`, and `PaprikaClient`) and `buildMcpServer` (per-session tool/resource registration; discover tool gated on `vectorStore !== null`)
 - `src/paprika/` — Paprika API client with pantry read and write support (`listPantry()`, `savePantryItem()` methods)
 - `src/cache/` — Caching layer with `PantryStore` for in-memory queries and pantry persistence
 - `src/tools/` — MCP tool definitions including read tools (`list_pantry`, `get_pantry_item`) and write tools (`add_pantry_item`, `update_pantry_item`, `delete_pantry_item`) for pantry access
 - `src/resources/` — MCP resource definitions including `paprika://pantry/{uid}` resource template
 - `src/features/` — Feature implementations (semantic search wiring lives here; tool registration happens in `src/server/build.ts`)
 - `src/types/` — Shared type definitions including `PantryItem` and branded `PantryItemUid`; `ServerContext` is a backward-compat alias re-exporting `SessionContext` from `src/server/`
-- `src/utils/` — Cross-cutting utilities (including `config.ts` with `transport`/`http`/`oauth` schema fields)
+- `src/utils/` — Cross-cutting utilities: `config.ts` (with `transport`/`http`/`oauth`/`logging` schema blocks), `log.ts` (pino root logger factory with credential-redact policy and notifier fan-out stream), `xdg.ts`, `duration.ts`
 - `src/auth/` — OAuth 2.1 authorization-server surface (DCR, authorize, token, revoke), OIDC upstream client, opaque-token minting + persistence, and identity allowlist. Loaded only when `MCP_TRANSPORT=http`.
 - `scripts/` — Build and verification scripts (run via `npx tsx`), plus `healthcheck.mjs` (zero-dep Node script used by the Dockerfile HEALTHCHECK)
 - `Dockerfile` + `.dockerignore` — 3-stage container build targeting `gcr.io/distroless/nodejs24-debian13:nonroot`; pre-creates `/data/{config,cache}` with nonroot ownership so the disk cache writes work on first run
@@ -71,7 +73,7 @@ MCP server for the Paprika recipe manager. Two transports: **stdio** (default; u
 
 ### No Console
 
-`console.log` is banned via the `no-console` oxlint rule. This MCP server uses stdio transport — any stdout output corrupts the protocol wire format.
+`console.log` is banned via the `no-console` oxlint rule. In stdio transport, stdout carries the MCP wire format and any stray output corrupts the protocol. Use the structured logger (`ctx.log.child({ component: "..." })`) for diagnostics; the logger routes around stdout automatically.
 
 ## Testing
 
