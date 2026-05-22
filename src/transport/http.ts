@@ -6,6 +6,7 @@ import { serve, type ServerType } from "@hono/node-server";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
 import { Hono } from "hono";
+import type { Context, Next } from "hono";
 
 import { mcpAuthRouter, bearerAuth } from "@hono/mcp";
 import { buildAppContext, buildMcpServer } from "../server/build.js";
@@ -14,6 +15,7 @@ import type { PaprikaConfig } from "../utils/config.js";
 import type { TransportHandle } from "./stdio.js";
 import { buildAuthMetadataRouter } from "../auth/metadata.js";
 import { buildAuthRoutes, buildDcrRateLimit, buildClientCap, MAX_REGISTERED_CLIENTS } from "../auth/routes.js";
+import type { Logger } from "pino";
 
 const SHUTDOWN_TIMEOUT_MS = 10_000;
 const MCP_SESSION_HEADER = "mcp-session-id";
@@ -30,6 +32,32 @@ export interface HttpTransportHandle extends TransportHandle {
 interface Session {
   server: McpServer;
   transport: StreamableHTTPTransport;
+}
+
+/**
+ * Hono middleware factory that logs one structured record per request.
+ *
+ * Emits `info` for all 2xx/3xx/4xx responses and `error` for 5xx. The record
+ * carries `{method, path, status, durationMs}` so operators can correlate
+ * access patterns with structured log streams without parsing text.
+ *
+ * Exported for isolated unit testing — `startHttp` has no logger injection
+ * seam, so tests instantiate `accessLog` directly with a capture logger.
+ */
+export function accessLog(log: Logger) {
+  return async (c: Context, next: Next): Promise<void> => {
+    const t0 = performance.now();
+    await next();
+    const durationMs = Math.round(performance.now() - t0);
+    const status = c.res.status;
+    const fields = { method: c.req.method, path: c.req.path, status, durationMs };
+
+    if (status >= 500) {
+      log.error(fields, "http request 5xx");
+    } else {
+      log.info(fields, "http request");
+    }
+  };
 }
 
 /**
@@ -89,6 +117,10 @@ export async function startHttp(config: PaprikaConfig): Promise<HttpTransportHan
       sessions: sessions.size,
     }),
   );
+
+  // Access log: mounted after /healthz and BEFORE the auth block so 401s and
+  // all other auth-mediated responses are captured in the access log.
+  hono.use("*", accessLog(log));
 
   if (app.auth !== null) {
     // Capture auth to avoid null-checks inside callbacks (mirrors SyncEngine pattern)

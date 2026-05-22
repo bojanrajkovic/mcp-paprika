@@ -3,13 +3,14 @@ import { join } from "node:path";
 import { http, HttpResponse } from "msw";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
-import { startHttp, type HttpTransportHandle } from "./http.js";
+import { startHttp, accessLog, type HttpTransportHandle } from "./http.js";
 import type { PaprikaConfig } from "../utils/config.js";
 import { createOidcStub } from "../auth/__fixtures__/oidc-stub.js";
 import { DiskCache } from "../cache/disk-cache.js";
 import { makeOAuthClient } from "../cache/__fixtures__/oauth.js";
 import { useXdgIsolation } from "../__fixtures__/xdg-isolation.js";
 import { useMswServer } from "../__fixtures__/msw.js";
+import { makePinoCapture } from "../tools/tool-test-utils.js";
 
 /**
  * These tests drive the HTTP transport with raw `fetch`, not the MCP SDK
@@ -771,5 +772,89 @@ describe("HTTP transport — OAuth mounted", () => {
       // buildClientCap returns { error: "invalid_request", error_description: "client registration cap reached" }
       expect(doc["error_description"]).toContain("cap");
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// accessLog middleware unit tests (structured-logging.AC9.5)
+// These tests exercise the accessLog factory in isolation using stub Hono
+// Context objects — startHttp has no logger injection seam, so integration
+// testing of log records would require modifying its signature.
+// ---------------------------------------------------------------------------
+
+describe("accessLog middleware (AC9.5)", () => {
+  function makeStubContext(method: string, path: string, status: number) {
+    return {
+      req: { method, path },
+      res: { status },
+    } as unknown as import("hono").Context;
+  }
+
+  function makeNext() {
+    return async (): Promise<void> => {};
+  }
+
+  it("AC9.5: emits one info record for a 200 response", async () => {
+    const { log, records } = makePinoCapture();
+    const middleware = accessLog(log);
+    const ctx = makeStubContext("GET", "/healthz", 200);
+
+    await middleware(ctx, makeNext());
+
+    expect(records).toHaveLength(1);
+    const record = records[0];
+    expect(record?.["level"]).toBe(30); // pino info = 30
+    expect(record?.["method"]).toBe("GET");
+    expect(record?.["path"]).toBe("/healthz");
+    expect(record?.["status"]).toBe(200);
+    expect(typeof record?.["durationMs"]).toBe("number");
+    expect((record?.["durationMs"] as number) >= 0).toBe(true);
+    expect(record?.["msg"]).toBe("http request");
+  });
+
+  it("AC9.5: emits one error record for a 500 response", async () => {
+    const { log, records } = makePinoCapture();
+    const middleware = accessLog(log);
+    const ctx = makeStubContext("POST", "/mcp", 500);
+
+    await middleware(ctx, makeNext());
+
+    expect(records).toHaveLength(1);
+    const record = records[0];
+    expect(record?.["level"]).toBe(50); // pino error = 50
+    expect(record?.["method"]).toBe("POST");
+    expect(record?.["path"]).toBe("/mcp");
+    expect(record?.["status"]).toBe(500);
+    expect(record?.["msg"]).toBe("http request 5xx");
+  });
+
+  it("AC9.5: emits one info record (not error) for a 401 response", async () => {
+    const { log, records } = makePinoCapture();
+    const middleware = accessLog(log);
+    const ctx = makeStubContext("POST", "/mcp", 401);
+
+    await middleware(ctx, makeNext());
+
+    expect(records).toHaveLength(1);
+    const record = records[0];
+    expect(record?.["level"]).toBe(30); // pino info = 30, not error (50)
+    expect(record?.["status"]).toBe(401);
+    expect(record?.["msg"]).toBe("http request");
+  });
+
+  it("AC9.5: concurrent requests each emit exactly one record without duplication", async () => {
+    const { log, records } = makePinoCapture();
+    const middleware = accessLog(log);
+
+    const ctx1 = makeStubContext("GET", "/healthz", 200);
+    const ctx2 = makeStubContext("POST", "/mcp", 200);
+
+    await Promise.all([middleware(ctx1, makeNext()), middleware(ctx2, makeNext())]);
+
+    expect(records).toHaveLength(2);
+    // Each request produced exactly one record — no duplication.
+    const paths = records.map((r) => r["path"]);
+    expect(paths).toContain("/healthz");
+    expect(paths).toContain("/mcp");
   });
 });
