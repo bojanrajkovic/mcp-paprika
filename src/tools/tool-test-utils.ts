@@ -174,3 +174,25 @@ export function getText(result: CallToolResult): string {
   if (!first || first.type !== "text") throw new Error("Expected text content");
   return first.text;
 }
+
+/**
+ * Drives the given async call 5 times under fake timers so cockatiel's
+ * consecutive-failure circuit breaker (`ConsecutiveBreaker(5)`) trips open.
+ * The caller is responsible for activating fake timers
+ * (`vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout"] })`)
+ * and restoring them in `afterEach`. Each call's failure is swallowed so
+ * the loop can proceed; `await vi.runAllTimersAsync()` between calls drains
+ * the retry backoff queue.
+ *
+ * Used by both `paprika/client.test.ts` and `features/embeddings.test.ts`
+ * because both clients compose the same `wrap(breaker, retry)` pattern.
+ */
+export async function tripBreaker(makeCall: () => Promise<unknown>): Promise<void> {
+  for (let i = 0; i < 5; i++) {
+    const p = makeCall().catch(() => {
+      /* expected — call is meant to fail */
+    });
+    await vi.runAllTimersAsync();
+    await p;
+  }
+}

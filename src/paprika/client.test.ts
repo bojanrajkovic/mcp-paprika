@@ -7,7 +7,7 @@ import { Writable } from "node:stream";
 import pino from "pino";
 import type { Logger } from "pino";
 import { BrokenCircuitError } from "cockatiel";
-import { makePinoCapture } from "../tools/tool-test-utils.js";
+import { makePinoCapture, tripBreaker } from "../tools/tool-test-utils.js";
 import { PaprikaClient } from "./client.js";
 import { PaprikaAPIError, PaprikaAuthError } from "./errors.js";
 import { CircuitOpenError } from "../utils/errors.js";
@@ -1196,24 +1196,6 @@ describe("PaprikaClient", () => {
       vi.useRealTimers();
     });
 
-    /**
-     * Helper: trips the breaker by making 5 failing calls on the given client.
-     * Each call exhausts all retries (maxAttempts=3 → 4 total fetches per call).
-     * Must be called with fake timers active.
-     */
-    async function tripBreaker(client: PaprikaClient): Promise<void> {
-      for (let i = 0; i < 5; i++) {
-        // Start the call BEFORE awaiting timers — the call hangs on backoff delays
-        const p = client.listRecipes().catch(() => {
-          /* expected */
-        });
-        // Drain fake timers (retry backoffs) so the call can complete
-        await vi.runAllTimersAsync();
-        // Now the call has resolved (all retries exhausted, error swallowed)
-        await p;
-      }
-    }
-
     it("AC4.2 - 5th distinct failing call trips breaker (onBreak fires once) and fetch count is 5×4=20", async () => {
       const { log: testLog, records } = makePinoCapture();
       let fetchCount = 0;
@@ -1227,7 +1209,7 @@ describe("PaprikaClient", () => {
       vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout"] });
       const client = new PaprikaClient("test@example.com", "password", testLog);
 
-      await tripBreaker(client);
+      await tripBreaker(() => client.listRecipes());
 
       const breakRecords = records.filter((r) => r["msg"] === "paprika circuit breaker opened");
       expect(breakRecords).toHaveLength(1);
@@ -1247,7 +1229,7 @@ describe("PaprikaClient", () => {
       vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout"] });
       const client = new PaprikaClient("test@example.com", "password");
 
-      await tripBreaker(client);
+      await tripBreaker(() => client.listRecipes());
       const fetchCountAfterTrip = fetchCount;
 
       // 6th call should throw CircuitOpenError without making any fetch
@@ -1278,7 +1260,7 @@ describe("PaprikaClient", () => {
       vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout"] });
       const client = new PaprikaClient("test@example.com", "password");
 
-      await tripBreaker(client);
+      await tripBreaker(() => client.listRecipes());
 
       let caught: unknown;
       try {

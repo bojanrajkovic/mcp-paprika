@@ -135,7 +135,7 @@ export class AuthCleanup {
       try {
         await wait(this._intervalMs, undefined, { signal: this._ac.signal });
       } catch (err) {
-        if ((err as { name?: string }).name !== "AbortError") {
+        if (!(err instanceof Error && err.name === "AbortError")) {
           this._log.debug({ err }, "auth cleanup wait failed unexpectedly");
         }
         return;

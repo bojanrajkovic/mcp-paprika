@@ -8,7 +8,7 @@ import { EmbeddingError, EmbeddingAPIError } from "./embedding-errors.js";
 import { recipeToEmbeddingText } from "./embeddings.js";
 import { makeRecipe } from "../cache/__fixtures__/recipes.js";
 import type { EmbeddingConfig } from "../utils/config.js";
-import { makePinoCapture } from "../tools/tool-test-utils.js";
+import { makePinoCapture, tripBreaker } from "../tools/tool-test-utils.js";
 import { CircuitOpenError } from "../utils/errors.js";
 import { toMessage } from "../utils/log.js";
 
@@ -402,22 +402,6 @@ describe("structured-logging.AC4+AC5: CircuitOpenError surface and breaker-count
     vi.useRealTimers();
   });
 
-  /**
-   * Trip the breaker by making 5 failing embed calls. Each call exhausts all
-   * retries (maxAttempts=3 → 4 total fetches per call) and counts as ONE
-   * breaker failure under the new wrap order. Must be called with fake timers
-   * active so retry backoffs don't block.
-   */
-  async function tripBreaker(client: EmbeddingClient): Promise<void> {
-    for (let i = 0; i < 5; i++) {
-      const p = client.embedBatch(["test"]).catch(() => {
-        /* expected */
-      });
-      await vi.runAllTimersAsync();
-      await p;
-    }
-  }
-
   it("AC4-mirror: 5 failing embed calls trip the breaker and produce exactly 20 fetches (5 × 4)", async () => {
     let fetchCount = 0;
     server.use(
@@ -430,7 +414,7 @@ describe("structured-logging.AC4+AC5: CircuitOpenError surface and breaker-count
     vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout"] });
     const client = new EmbeddingClient(makeEmbeddingConfig());
 
-    await tripBreaker(client);
+    await tripBreaker(() => client.embedBatch(["test"]));
 
     // With breaker outside retry, each tool call counts as ONE breaker
     // failure regardless of internal retries. 5 calls × 4 attempts each = 20.
@@ -449,7 +433,7 @@ describe("structured-logging.AC4+AC5: CircuitOpenError surface and breaker-count
     vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout"] });
     const client = new EmbeddingClient(makeEmbeddingConfig());
 
-    await tripBreaker(client);
+    await tripBreaker(() => client.embedBatch(["test"]));
     const fetchCountAfterTrip = fetchCount;
 
     let caught: unknown;
@@ -479,7 +463,7 @@ describe("structured-logging.AC4+AC5: CircuitOpenError surface and breaker-count
     vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout"] });
     const client = new EmbeddingClient(makeEmbeddingConfig());
 
-    await tripBreaker(client);
+    await tripBreaker(() => client.embedBatch(["test"]));
 
     let caught: unknown;
     try {
