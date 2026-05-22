@@ -100,12 +100,17 @@ export class EmbeddingClient {
     });
 
     // event.attempt is the upcoming retry number (1 = first retry).
-    // Normalize: upcoming retry N → attempt N+1 in 1-indexed terms.
+    // Normalize: upcoming retry N → attempt N+1 in 1-indexed network-touch terms.
+    // The upcoming 2nd network touch = first retry = event.attempt 1 → log attempt 2.
+    // Mirrors the paprika client normalization pattern.
     this._retryPolicy.onRetry((event) => {
       if ("error" in event) {
         const err = event.error;
         const status = err instanceof TransientHTTPError ? err.status : undefined;
-        this._log.warn({ err, status, attempt: event.attempt }, "embedding request failed, retrying");
+        this._log.warn(
+          { err, status, attempt: event.attempt + 1, nextBackoffMs: event.delay },
+          "embedding request failed, retrying",
+        );
       }
     });
 

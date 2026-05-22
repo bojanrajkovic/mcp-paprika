@@ -392,7 +392,13 @@ describe("structured-logging.AC9.3: Per-attempt logging in EmbeddingClient.embed
     const retryRecords = records.filter((r) => r["msg"] === "embedding request failed, retrying");
     expect(retryRecords).toHaveLength(1);
     expect(retryRecords[0]!["status"]).toBe(500);
-    expect(retryRecords[0]!["attempt"]).toBe(1);
+    // attempt is 1-indexed network-touch: first retry = 2nd network touch → attempt 2
+    expect(retryRecords[0]!["attempt"]).toBe(2);
+    expect(typeof retryRecords[0]!["nextBackoffMs"]).toBe("number");
+
+    // Cross-assert: the second start debug record also reports attempt 2 — inline
+    // and onRetry-hook attempt fields must agree (mirrors AC3.3 from Phase 3).
+    expect(startRecords[1]!["attempt"]).toBe(2);
 
     const okRecords = records.filter((r) => r["msg"] === "embedding request ok");
     expect(okRecords).toHaveLength(1);
