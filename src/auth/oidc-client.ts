@@ -12,6 +12,7 @@ import { toMessage } from "../utils/log.js";
  */
 
 import { z } from "zod";
+import type { Logger } from "pino";
 import { createRemoteJWKSet, jwtVerify, type JWTVerifyGetKey } from "jose";
 import { OAuthMetadataValidationError } from "./errors.js";
 import { IdTokenPayloadSchema, type IdTokenPayload } from "./types.js";
@@ -65,12 +66,19 @@ export type DiscoveryDoc = z.infer<typeof DiscoveryDocSchema>;
  * @returns Validated discovery document
  * @throws OAuthMetadataValidationError if validation fails
  */
-export async function loadDiscovery(discoveryUrl: string, allowedAlgs: ReadonlyArray<string>): Promise<DiscoveryDoc> {
+export async function loadDiscovery(
+  discoveryUrl: string,
+  allowedAlgs: ReadonlyArray<string>,
+  log?: Logger,
+): Promise<DiscoveryDoc> {
   // Step 1: Verify discoveryUrl itself is https://
   const url = new URL(discoveryUrl);
   if (url.protocol !== "https:") {
     throw OAuthMetadataValidationError.nonHttps("discoveryUrl", discoveryUrl);
   }
+
+  const t0 = performance.now();
+  log?.debug({ method: "GET", url: url.toString(), attempt: 1 }, "oidc discovery start");
 
   // Step 2: Fetch with timeout
   let response: Response;
@@ -80,11 +88,18 @@ export async function loadDiscovery(discoveryUrl: string, allowedAlgs: ReadonlyA
       signal: AbortSignal.timeout(10_000),
     });
   } catch (cause) {
+    log?.error({ err: cause, method: "GET", url: url.toString(), attempt: 1 }, "oidc discovery fetch failed");
     throw new OAuthMetadataValidationError("failed to fetch OIDC discovery document", { cause });
   }
 
+  const attemptDurationMs = Math.round(performance.now() - t0);
+
   // Step 3: Check response status
   if (!response.ok) {
+    log?.error(
+      { method: "GET", url: url.toString(), attempt: 1, status: response.status, attemptDurationMs },
+      "oidc discovery returned non-ok",
+    );
     throw OAuthMetadataValidationError.discoveryFetchFailed(url.toString(), response.status);
   }
 
@@ -124,6 +139,11 @@ export async function loadDiscovery(discoveryUrl: string, allowedAlgs: ReadonlyA
   if (overlap.length === 0) {
     throw OAuthMetadataValidationError.noAlgOverlap(doc.id_token_signing_alg_values_supported, Array.from(allowedAlgs));
   }
+
+  log?.debug(
+    { method: "GET", url: url.toString(), attempt: 1, status: response.status, attemptDurationMs },
+    "oidc discovery ok",
+  );
 
   return doc;
 }

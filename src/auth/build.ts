@@ -87,7 +87,11 @@ export async function buildAuthContext(
   };
 
   // Fetch + validate upstream discovery document (rejects http:// endpoints; checks alg overlap)
-  const discovery = await loadDiscovery(resolved.discoveryUrl, resolved.allowedAlgs);
+  const discovery = await loadDiscovery(
+    resolved.discoveryUrl,
+    resolved.allowedAlgs,
+    parentLog.child({ component: "oidc-client" }),
+  );
   const jwks = createJwksFor(discovery);
 
   const clientStore = new DiskClientRegistrationStore(cache, resolved.publicUrl, MAX_REGISTERED_CLIENTS);
