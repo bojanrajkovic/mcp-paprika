@@ -129,9 +129,6 @@ export class PaprikaClient {
     log?: Logger,
   ) {
     this.log = log ?? SILENT_LOG;
-    // Phase 3 wires per-attempt logging through this.log; this no-op touch
-    // satisfies noUnusedLocals until then.
-    void this.log;
     this.retryPolicy = retry(handleType(TransientHTTPError).orType(NetworkRetryableError), {
       maxAttempts: 3,
       backoff: new ExponentialBackoff({
@@ -146,6 +143,38 @@ export class PaprikaClient {
     // Breaker is OUTSIDE retry: each distinct tool-call counts as one failure
     // toward the breaker threshold (not each retry attempt within that call).
     this.resilience = wrap(this.breakerPolicy, this.retryPolicy);
+
+    // Retry telemetry — fires BEFORE each backoff delay.
+    // event.attempt is the upcoming retry number (1 = first retry).
+    // Normalize: attempt N → Nth network touch (1-indexed).
+    // The upcoming 2nd network touch = first retry = event.attempt 1 → log attempt 2.
+    this.retryPolicy.onRetry((event) => {
+      if ("error" in event) {
+        this.log.warn(
+          { attempt: event.attempt + 1, nextBackoffMs: event.delay, err: event.error },
+          "paprika request failed, retrying",
+        );
+      }
+    });
+
+    this.retryPolicy.onGiveUp((event) => {
+      if ("error" in event) {
+        this.log.error({ err: event.error }, "paprika retries exhausted");
+      }
+    });
+
+    // Breaker state-change hooks.
+    this.breakerPolicy.onBreak(() => {
+      this.log.warn({}, "paprika circuit breaker opened");
+    });
+
+    this.breakerPolicy.onReset(() => {
+      this.log.info({}, "paprika circuit breaker reset");
+    });
+
+    this.breakerPolicy.onHalfOpen(() => {
+      this.log.info({}, "paprika circuit breaker half-open (probe pending)");
+    });
   }
 
   async authenticate(): Promise<void> {
