@@ -1,5 +1,7 @@
 import { vi } from "vitest";
+import { Writable } from "node:stream";
 import pino from "pino";
+import type { Logger } from "pino";
 import type { ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
@@ -10,6 +12,55 @@ import type { Notifier } from "../server/notifier.js";
 import type { ServerContext } from "../types/server-context.js";
 
 const SILENT_LOG = pino({ level: "silent" });
+
+/**
+ * Shape returned by `makePinoCapture()`. `log` is the capture logger;
+ * `records` is the live array of parsed JSON records; `clear()` empties it
+ * between assertions without recreating the logger.
+ */
+export type PinoCapture = {
+  readonly log: Logger;
+  readonly records: ReadonlyArray<Record<string, unknown>>;
+  clear(): void;
+};
+
+/**
+ * Builds a pino logger that writes newline-delimited JSON to an in-memory
+ * array. Useful in unit tests for asserting on structured log records without
+ * wiring up the full `createLogger` fan-out.
+ *
+ * Default level is `"trace"` so every record is captured regardless of
+ * severity. Pass a narrower level to restrict captured records.
+ *
+ * Usage:
+ * ```ts
+ * const { log, records } = makePinoCapture();
+ * // ... exercise code that uses log ...
+ * expect(records.find((r) => r["msg"] === "sync complete")).toBeDefined();
+ * ```
+ */
+export function makePinoCapture(level: pino.Level = "trace"): PinoCapture {
+  const records: Array<Record<string, unknown>> = [];
+  const stream = new Writable({
+    write(chunk: Buffer, _enc: BufferEncoding, cb: () => void) {
+      try {
+        const line = (chunk as Buffer).toString("utf8").trim();
+        if (line.length > 0) records.push(JSON.parse(line) as Record<string, unknown>);
+      } catch {
+        /* malformed chunk — drop */
+      }
+      cb();
+    },
+  });
+  const log = pino({ level }, stream);
+  return {
+    log,
+    records,
+    clear() {
+      records.length = 0;
+    },
+  };
+}
 
 type ResourceEntry = {
   list: (() => Promise<unknown>) | undefined;

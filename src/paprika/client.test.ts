@@ -7,6 +7,7 @@ import { Writable } from "node:stream";
 import pino from "pino";
 import type { Logger } from "pino";
 import { BrokenCircuitError } from "cockatiel";
+import { makePinoCapture } from "../tools/tool-test-utils.js";
 import { PaprikaClient } from "./client.js";
 import { PaprikaAPIError, PaprikaAuthError, CircuitOpenError } from "./errors.js";
 import { toMessage, REDACT_PATHS } from "../utils/log.js";
@@ -996,29 +997,13 @@ describe("PaprikaClient", () => {
   // Lifecycle hook logging tests — Task 3 (AC3.3, AC3.4, AC6.1, AC6.2, AC6.3)
   // ---------------------------------------------------------------------------
 
-  /**
-   * Helper: builds a pino logger that writes to an in-memory array.
-   * Returns the logger and the records array for assertions.
-   */
-  function makePinoCapture(): { testLog: Logger; records: Array<Record<string, unknown>> } {
-    const records: Array<Record<string, unknown>> = [];
-    const captureStream = new Writable({
-      write(chunk: Buffer, _enc: BufferEncoding, cb: () => void) {
-        records.push(JSON.parse(chunk.toString("utf8")) as Record<string, unknown>);
-        cb();
-      },
-    });
-    const testLog = pino({ level: "trace" }, captureStream) as Logger;
-    return { testLog, records };
-  }
-
   describe("structured-logging.AC3.3: onRetry hook emits warn records", () => {
     afterEach(() => {
       vi.useRealTimers();
     });
 
     it("AC3.3 - emits warn with attempt+1 and nextBackoffMs on first retry, another warn on second retry, no warn after success", async () => {
-      const { testLog, records } = makePinoCapture();
+      const { log: testLog, records } = makePinoCapture();
       let callCount = 0;
       server.use(
         http.get(`${API_BASE}/recipes/`, () => {
@@ -1071,7 +1056,7 @@ describe("PaprikaClient", () => {
     });
 
     it("AC3.4 - emits error 'paprika retries exhausted' after all 3 attempts fail", async () => {
-      const { testLog, records } = makePinoCapture();
+      const { log: testLog, records } = makePinoCapture();
       server.use(
         http.get(`${API_BASE}/recipes/`, () => {
           return HttpResponse.json({ result: [] }, { status: 503 });
@@ -1097,7 +1082,7 @@ describe("PaprikaClient", () => {
     });
 
     it("AC6.1 - onBreak emits exactly one warn 'paprika circuit breaker opened' after 5 distinct failing tool calls", async () => {
-      const { testLog, records } = makePinoCapture();
+      const { log: testLog, records } = makePinoCapture();
       // Fail every request — 5 tool calls × 4 attempts each (1 initial + 3 retries) = 20 fetches before breaker opens
       server.use(
         http.get(`${API_BASE}/recipes/`, () => {
@@ -1122,7 +1107,7 @@ describe("PaprikaClient", () => {
     }, 60000);
 
     it("AC6.3 - onHalfOpen emits info record when a probe starts after halfOpenAfter elapses", async () => {
-      const { testLog, records } = makePinoCapture();
+      const { log: testLog, records } = makePinoCapture();
       // All fetches succeed after the breaker is tripped
       let fetchCount = 0;
       server.use(
@@ -1163,7 +1148,7 @@ describe("PaprikaClient", () => {
     }, 60000);
 
     it("AC6.2 - onReset emits info record after successful half-open probe", async () => {
-      const { testLog, records } = makePinoCapture();
+      const { log: testLog, records } = makePinoCapture();
       let fetchCount = 0;
       server.use(
         http.get(`${API_BASE}/recipes/`, () => {
@@ -1229,7 +1214,7 @@ describe("PaprikaClient", () => {
     }
 
     it("AC4.2 - 5th distinct failing call trips breaker (onBreak fires once) and fetch count is 5×4=20", async () => {
-      const { testLog, records } = makePinoCapture();
+      const { log: testLog, records } = makePinoCapture();
       let fetchCount = 0;
       server.use(
         http.get(`${API_BASE}/recipes/`, () => {
@@ -1314,7 +1299,7 @@ describe("PaprikaClient", () => {
 
   describe("structured-logging.AC3.1+3.2: request start and request ok debug records", () => {
     it("AC3.1 - emits debug 'paprika request start' with method, url, attempt:1 on first call", async () => {
-      const { testLog, records } = makePinoCapture();
+      const { log: testLog, records } = makePinoCapture();
       server.use(
         http.get(`${API_BASE}/recipes/`, () => {
           return HttpResponse.json({ result: [] });
@@ -1332,7 +1317,7 @@ describe("PaprikaClient", () => {
     });
 
     it("AC3.2 - emits exactly one debug 'paprika request ok' with status:200, attempt:1, attemptDurationMs>=0", async () => {
-      const { testLog, records } = makePinoCapture();
+      const { log: testLog, records } = makePinoCapture();
       server.use(
         http.get(`${API_BASE}/recipes/`, () => {
           return HttpResponse.json({ result: [] });
@@ -1353,7 +1338,7 @@ describe("PaprikaClient", () => {
 
   describe("structured-logging.AC3.5: non-retryable failure emits error record, no retry warn", () => {
     it("AC3.5 - emits error 'paprika request failed (non-retryable)' on 400, no retry warn fires", async () => {
-      const { testLog, records } = makePinoCapture();
+      const { log: testLog, records } = makePinoCapture();
       server.use(
         http.get(`${API_BASE}/recipes/`, () => {
           return HttpResponse.json({}, { status: 400 });
@@ -1378,7 +1363,7 @@ describe("PaprikaClient", () => {
 
   describe("structured-logging.AC3.6: 401 re-auth signal emits info record", () => {
     it("AC3.6 - emits info 'paprika 401, re-authenticating' with status:401 and attempt:1 on first attempt", async () => {
-      const { testLog, records } = makePinoCapture();
+      const { log: testLog, records } = makePinoCapture();
       let authCallCount = 0;
       let apiCallCount = 0;
 
