@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
+import pino from "pino";
 import { nowSeconds } from "./tokens.js";
 import { Hono } from "hono";
 import {
@@ -59,6 +60,7 @@ function makeRoutesConfig(ctx: RoutesCtx, overrides: RoutesOverrides = {}): Auth
     discovery: makeDiscoveryDoc(ctx.oidcStubIssuer),
     jwks: overrides.jwks ?? ((async () => ({ keys: [] })) as unknown as JWTVerifyGetKey),
     publicUrl: "https://mcp.example.com",
+    log: { auth: pino({ level: "silent" }), oidcClient: pino({ level: "silent" }) },
   };
 }
 

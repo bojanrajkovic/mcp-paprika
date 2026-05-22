@@ -2,6 +2,7 @@ import { toMessage } from "../utils/log.js";
 import { Hono, type Context, type MiddlewareHandler } from "hono";
 import { rateLimiter } from "hono-rate-limiter";
 import { z } from "zod";
+import type { Logger } from "pino";
 import type { DiskClientRegistrationStore } from "./client-registration.js";
 import type { TokenStore } from "./token-store.js";
 import type { AuthRequestStore } from "./auth-request-store.js";
@@ -25,6 +26,7 @@ export interface AuthRoutesDeps {
   readonly discovery: DiscoveryDoc;
   readonly jwks: JWTVerifyGetKey;
   readonly publicUrl: string;
+  readonly log: { readonly auth: Logger; readonly oidcClient: Logger };
 }
 
 /**

@@ -150,6 +150,7 @@ export async function startHttp(config: PaprikaConfig): Promise<HttpTransportHan
         discovery: auth.discovery,
         jwks: auth.jwks,
         publicUrl: auth.config.publicUrl,
+        log: auth.log,
       }),
     );
 
