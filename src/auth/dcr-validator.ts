@@ -13,6 +13,7 @@
 import { z } from "zod";
 import { ok, err } from "neverthrow";
 import type { Result } from "neverthrow";
+import type { Logger } from "pino";
 import { OAuthMetadataValidationError } from "./errors.js";
 
 // ============================================================================
@@ -44,7 +45,7 @@ export interface ValidatedClientMetadataPatch {
 // ============================================================================
 
 // Helper: validate redirect URI scheme and hostname
-function isValidRedirectUri(uri: string): boolean {
+function isValidRedirectUri(uri: string, log?: Logger): boolean {
   try {
     const url = new URL(uri);
 
@@ -63,7 +64,8 @@ function isValidRedirectUri(uri: string): boolean {
     }
 
     return false;
-  } catch {
+  } catch (err) {
+    log?.debug({ err, uri }, "invalid redirect_uri rejected by parser");
     return false;
   }
 }
@@ -82,7 +84,7 @@ const ClientMetadataFieldsSchema = z.object({
 type ClientMetadataFields = z.infer<typeof ClientMetadataFieldsSchema>;
 
 // Shared helper: validate each redirect URI item in a non-empty array
-function validateRedirectUriItems(uris: string[], ctx: z.RefinementCtx): void {
+function validateRedirectUriItems(uris: Array<string>, ctx: z.RefinementCtx, log?: Logger): void {
   for (let i = 0; i < uris.length; i++) {
     const uri = uris[i];
     if (typeof uri !== "string") {
@@ -94,7 +96,8 @@ function validateRedirectUriItems(uris: string[], ctx: z.RefinementCtx): void {
     } else {
       try {
         new URL(uri);
-      } catch {
+      } catch (err) {
+        log?.debug({ err, uri, index: i }, "invalid redirect_uri item in DCR request");
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           path: ["redirect_uris", i],
@@ -103,7 +106,7 @@ function validateRedirectUriItems(uris: string[], ctx: z.RefinementCtx): void {
         continue;
       }
 
-      if (!isValidRedirectUri(uri)) {
+      if (!isValidRedirectUri(uri, log)) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           path: ["redirect_uris", i],
@@ -141,45 +144,51 @@ function validateGrantTypes(data: ClientMetadataFields, ctx: z.RefinementCtx): v
   }
 }
 
-// Schema for validateRegistration: redirect_uris REQUIRED (must be present and non-empty)
-const RegistrationMetadataSchema = ClientMetadataFieldsSchema.passthrough() // Allow and preserve other RFC 7591 fields
-  .superRefine((data, ctx) => {
-    // Validate redirect_uris: must be present, non-empty, valid URLs with our scheme rules
-    if (!Array.isArray(data.redirect_uris) || data.redirect_uris.length === 0) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["redirect_uris"],
-        message: "redirect_uris is required and must be a non-empty array of valid URLs",
-      });
-    } else {
-      validateRedirectUriItems(data.redirect_uris, ctx);
-    }
-
-    validateResponseTypes(data, ctx);
-    validateGrantTypes(data, ctx);
-  });
-
-type RegistrationMetadataInput = z.infer<typeof RegistrationMetadataSchema>;
-
-// Schema for validateUpdate: redirect_uris OPTIONAL (whole block skipped when absent)
-const UpdateMetadataSchema = ClientMetadataFieldsSchema.passthrough() // Allow and preserve other RFC 7591 fields
-  .superRefine((data, ctx) => {
-    // Validate redirect_uris if present: must be non-empty with valid scheme
-    if (data.redirect_uris !== undefined) {
+// Schema factory for validateRegistration: redirect_uris REQUIRED (must be present and non-empty).
+// Accepts an optional logger to emit debug records on URL parse failures.
+function makeRegistrationSchema(log?: Logger) {
+  return ClientMetadataFieldsSchema.passthrough() // Allow and preserve other RFC 7591 fields
+    .superRefine((data, ctx) => {
+      // Validate redirect_uris: must be present, non-empty, valid URLs with our scheme rules
       if (!Array.isArray(data.redirect_uris) || data.redirect_uris.length === 0) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           path: ["redirect_uris"],
-          message: "redirect_uris must be a non-empty array when present",
+          message: "redirect_uris is required and must be a non-empty array of valid URLs",
         });
       } else {
-        validateRedirectUriItems(data.redirect_uris, ctx);
+        validateRedirectUriItems(data.redirect_uris, ctx, log);
       }
-    }
 
-    validateResponseTypes(data, ctx);
-    validateGrantTypes(data, ctx);
-  });
+      validateResponseTypes(data, ctx);
+      validateGrantTypes(data, ctx);
+    });
+}
+
+type RegistrationMetadataInput = z.infer<ReturnType<typeof makeRegistrationSchema>>;
+
+// Schema factory for validateUpdate: redirect_uris OPTIONAL (whole block skipped when absent).
+// Accepts an optional logger to emit debug records on URL parse failures.
+function makeUpdateSchema(log?: Logger) {
+  return ClientMetadataFieldsSchema.passthrough() // Allow and preserve other RFC 7591 fields
+    .superRefine((data, ctx) => {
+      // Validate redirect_uris if present: must be non-empty with valid scheme
+      if (data.redirect_uris !== undefined) {
+        if (!Array.isArray(data.redirect_uris) || data.redirect_uris.length === 0) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["redirect_uris"],
+            message: "redirect_uris must be a non-empty array when present",
+          });
+        } else {
+          validateRedirectUriItems(data.redirect_uris, ctx, log);
+        }
+      }
+
+      validateResponseTypes(data, ctx);
+      validateGrantTypes(data, ctx);
+    });
+}
 
 // Helper: convert parsed data to ValidatedClientMetadata with defaults for registration
 function buildRegistrationMetadata(data: RegistrationMetadataInput): ValidatedClientMetadata {
@@ -240,10 +249,16 @@ function buildUpdateMetadataPatch(data: RegistrationMetadataInput): ValidatedCli
  * grant_types defaults to ["authorization_code", "refresh_token"].
  * response_types defaults to ["code"].
  * scope defaults to empty string.
+ *
+ * @param log — optional logger; when provided, URL parse failures on redirect_uris
+ *   emit debug records for diagnosability in production.
  */
-export function validateRegistration(meta: unknown): Result<ValidatedClientMetadata, OAuthMetadataValidationError> {
+export function validateRegistration(
+  meta: unknown,
+  log?: Logger,
+): Result<ValidatedClientMetadata, OAuthMetadataValidationError> {
   // Parse with Zod schema (includes field validation and redirect_uri scheme checks)
-  const parseResult = RegistrationMetadataSchema.safeParse(meta);
+  const parseResult = makeRegistrationSchema(log).safeParse(meta);
 
   if (!parseResult.success) {
     // Translate first Zod error to OAuth error
@@ -267,10 +282,16 @@ export function validateRegistration(meta: unknown): Result<ValidatedClientMetad
  * All fields are optional (partial updates per RFC 7592 §2.2).
  * Present fields pass the same validation as registration.
  * Omitted fields are NOT synthesized in the output (unlike registration).
+ *
+ * @param log — optional logger; when provided, URL parse failures on redirect_uris
+ *   emit debug records for diagnosability in production.
  */
-export function validateUpdate(meta: unknown): Result<ValidatedClientMetadataPatch, OAuthMetadataValidationError> {
+export function validateUpdate(
+  meta: unknown,
+  log?: Logger,
+): Result<ValidatedClientMetadataPatch, OAuthMetadataValidationError> {
   // Parse with Zod schema (includes field validation and redirect_uri scheme checks)
-  const parseResult = UpdateMetadataSchema.safeParse(meta);
+  const parseResult = makeUpdateSchema(log).safeParse(meta);
 
   if (!parseResult.success) {
     // Translate first Zod error to OAuth error

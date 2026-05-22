@@ -105,8 +105,8 @@ export class DiskClientRegistrationStore {
    * Throws OAuthMetadataValidationError on invalid metadata.
    */
   async registerClient(metaIn: unknown): Promise<OAuthClientInformationFull> {
-    // Validate via dcr-validator; match() usage per FCIS + project neverthrow rules
-    const validated = validateRegistration(metaIn).match(
+    // Validate via dcr-validator; pass logger for URL-parse debug diagnosability
+    const validated = validateRegistration(metaIn, this._log).match(
       (v) => v,
       (e) => {
         throw e;
@@ -165,8 +165,8 @@ export class DiskClientRegistrationStore {
     const existing = await this._cache.getOAuthClient(clientId);
     if (existing === null) throw OAuthClientNotFoundError.forId(clientId);
 
-    // Validate patch via dcr-validator
-    const validated = validateUpdate(metaIn).match(
+    // Validate patch via dcr-validator; pass logger for URL-parse debug diagnosability
+    const validated = validateUpdate(metaIn, this._log).match(
       (v) => v,
       (e) => {
         throw e;
@@ -223,8 +223,8 @@ export class DiskClientRegistrationStore {
     // Timing-safe comparison to prevent timing attacks
     try {
       return timingSafeEqual(Buffer.from(presentedHash, "hex"), Buffer.from(storedHash, "hex"));
-    } catch {
-      // If buffer conversion fails (invalid hex), return false
+    } catch (err) {
+      this._log.debug({ err, clientId }, "RAT timing-safe equality failed (likely invalid hex)");
       return false;
     }
   }

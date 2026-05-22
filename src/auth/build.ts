@@ -112,7 +112,7 @@ export async function buildAuthContext(
     authLog,
   );
 
-  const cleanup = new AuthCleanup(clientStore, tokenStore, cache, requestStore, codeStore);
+  const cleanup = new AuthCleanup(clientStore, tokenStore, cache, requestStore, codeStore, authLog);
 
   return {
     provider,

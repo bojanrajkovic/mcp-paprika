@@ -17,6 +17,7 @@
  */
 
 import { setTimeout as wait } from "node:timers/promises";
+import type { Logger } from "pino";
 import type { DiskCache } from "../cache/disk-cache.js";
 import type { AuthRequestStore } from "./auth-request-store.js";
 import type { AuthCodeStore } from "./auth-code-store.js";
@@ -35,6 +36,7 @@ export class AuthCleanup {
     private readonly _cache: DiskCache,
     private readonly _authRequests: AuthRequestStore,
     private readonly _authCodes: AuthCodeStore,
+    private readonly _log: Logger,
     private readonly _now: () => number = () => nowSeconds(),
     private readonly _intervalMs: number = CLEANUP_INTERVAL_MS,
   ) {}
@@ -127,13 +129,15 @@ export class AuthCleanup {
     while (this._ac !== null && !this._ac.signal.aborted) {
       try {
         await this.sweepOnce();
-      } catch {
-        // Never throws — loop must not crash on transient cache errors
+      } catch (err) {
+        this._log.debug({ err }, "auth cleanup sweep failed; continuing");
       }
       try {
         await wait(this._intervalMs, undefined, { signal: this._ac.signal });
-      } catch {
-        // AbortError from stop() — exit loop cleanly
+      } catch (err) {
+        if ((err as { name?: string }).name !== "AbortError") {
+          this._log.debug({ err }, "auth cleanup wait failed unexpectedly");
+        }
         return;
       }
     }
