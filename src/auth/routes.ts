@@ -143,6 +143,7 @@ export function buildAuthRoutes(deps: AuthRoutesDeps): Hono {
 
     return identityResult.match(
       async (identity) => {
+        deps.log.auth.info({ email: identity.email ?? null, sub: identity.sub ?? null }, "allowlist accepted identity");
         const ourAuthCode = generateOpaqueToken("mcp_ac_");
         deps.authCodes.put(ourAuthCode, {
           clientId: stored.clientId,

@@ -12,6 +12,7 @@
 
 import { randomUUID, timingSafeEqual } from "node:crypto";
 import { InvalidRequestError } from "@modelcontextprotocol/sdk/server/auth/errors.js";
+import type { Logger } from "pino";
 import { generateOpaqueToken, hashTokenForStorage, nowSeconds } from "./tokens.js";
 import { validateRegistration, validateUpdate } from "./dcr-validator.js";
 import { OAuthClientNotFoundError } from "./errors.js";
@@ -76,6 +77,7 @@ export class DiskClientRegistrationStore {
   constructor(
     private readonly _cache: DiskCache,
     private readonly _publicUrl: string,
+    private readonly _log: Logger,
     /**
      * Hard cap on the number of registered clients. Enforced atomically
      * inside `registerClient` (via `DiskCache.tryPutOAuthClient`) so concurrent
@@ -141,6 +143,10 @@ export class DiskClientRegistrationStore {
       throw new InvalidRequestError(`client registration cap reached (${result.currentCount.toString()} clients)`);
     }
     await this._cache.flush();
+    this._log.info(
+      { clientId: stored.clientId, redirectUriCount: stored.redirectUris.length },
+      "client registered via DCR",
+    );
 
     return storedToWire(stored, {
       registrationAccessToken,

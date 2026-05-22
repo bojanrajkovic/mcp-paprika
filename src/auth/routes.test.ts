@@ -89,7 +89,7 @@ describe("Auth Routes", () => {
     cache = new DiskCache(cacheDir);
     await cache.init();
 
-    clientStore = new DiskClientRegistrationStore(cache, "https://mcp.example.com");
+    clientStore = new DiskClientRegistrationStore(cache, "https://mcp.example.com", pino({ level: "silent" }));
     tokenStore = new TokenStore(cache);
     authRequests = new AuthRequestStore();
     authCodes = new AuthCodeStore();
@@ -352,6 +352,70 @@ describe("Auth Routes", () => {
           level: warnLevel,
           email: "unknown@example.com",
           sub: "unknown-sub-999",
+        }),
+      );
+    });
+
+    it("AC9.6: emits info record on allowlist hit", async () => {
+      // Build a local app wired to a capture logger so we can assert on the
+      // "allowlist accepted identity" record emitted in the success branch.
+      const realJwks = createJwksFor(makeDiscoveryDoc(oidcStub.issuer));
+
+      const { log: authLog, records } = makePinoCapture();
+
+      const localAuthRequests = new AuthRequestStore();
+      const localAuthCodes = new AuthCodeStore();
+      const localApp = new Hono();
+      localApp.route(
+        "/",
+        buildAuthRoutes({
+          ...makeRoutesConfig(
+            { clientStore, tokenStore, authRequests, authCodes, oidcStubIssuer: oidcStub.issuer },
+            { jwks: realJwks, authRequests: localAuthRequests, authCodes: localAuthCodes },
+          ),
+          log: { auth: authLog, oidcClient: pino({ level: "silent" }) },
+        }),
+      );
+
+      // Seed the local AuthRequestStore with an allowlisted user's nonce
+      const ourState = "mcp_state_accept_test";
+      const ourNonce = "mcp_nonce_accept_test";
+      localAuthRequests.put(ourState, {
+        clientId: "stub-client-id",
+        codeChallenge: "challenge",
+        codeChallengeMethod: "S256",
+        redirectUri: "https://claude.ai/callback",
+        resource: "https://mcp.example.com/",
+        claudeState: "claude_state_accept",
+        scope: "openid email",
+        ourNonce,
+        createdAt: nowSeconds(),
+      });
+
+      // Drive /authorize to register the nonce in the stub's codeToNonce map
+      const authResp = await fetch(
+        `${oidcStub.issuer}/authorize?nonce=${ourNonce}&state=${ourState}&redirect_uri=https://mcp.example.com/oauth/callback`,
+        { redirect: "manual" },
+      );
+      const upstreamCode = new URL(authResp.headers.get("location")!).searchParams.get("code")!;
+
+      // Drive the callback — user@example.com is on the allowlist
+      const res = await localApp.request(`/oauth/callback?code=${upstreamCode}&state=${ourState}`);
+
+      // Should redirect successfully with code+iss
+      expect(res.status).toBe(302);
+      const location = res.headers.get("location");
+      const loc = new URL(location!);
+      expect(loc.searchParams.get("error")).toBeNull();
+      expect(loc.searchParams.get("iss")).toBe("https://mcp.example.com");
+
+      // AC9.6: info record must be emitted for the accepted identity
+      expect(records).toContainEqual(
+        expect.objectContaining({
+          level: 30, // info
+          msg: "allowlist accepted identity",
+          email: "user@example.com",
+          sub: expect.any(String),
         }),
       );
     });
@@ -656,7 +720,11 @@ describe("Auth Routes", () => {
       const testCache = new DiskCache(`/tmp/test-cap-${Date.now()}-${Math.random().toString(36).slice(2)}`);
       await testCache.init();
 
-      const testClientStore = new DiskClientRegistrationStore(testCache, "https://mcp.example.com");
+      const testClientStore = new DiskClientRegistrationStore(
+        testCache,
+        "https://mcp.example.com",
+        pino({ level: "silent" }),
+      );
       const testApp = new Hono();
       testApp.use("/register", buildClientCap(testCache, 50));
       testApp.post("/register", (c) => c.json({ ok: true }, 201));

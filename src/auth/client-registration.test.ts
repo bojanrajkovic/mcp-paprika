@@ -4,6 +4,7 @@
  */
 
 import { describe, it, expect, beforeEach } from "vitest";
+import pino from "pino";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -13,6 +14,7 @@ import { DiskCache } from "../cache/disk-cache.js";
 import { hashTokenForStorage } from "./tokens.js";
 import { OAuthMetadataValidationError, OAuthClientNotFoundError } from "./errors.js";
 import { DiskClientRegistrationStore } from "./client-registration.js";
+import { makePinoCapture } from "../tools/tool-test-utils.js";
 
 // ============================================================================
 // Test Fixtures
@@ -45,7 +47,7 @@ describe("DiskClientRegistrationStore", () => {
     tempDir = await mkdtemp(join(tmpdir(), "paprika-client-reg-"));
     cache = new DiskCache(tempDir);
     await cache.init();
-    store = new DiskClientRegistrationStore(cache, "https://m.example.com");
+    store = new DiskClientRegistrationStore(cache, "https://m.example.com", pino({ level: "silent" }));
   });
 
   describe("registerClient", () => {
@@ -109,7 +111,7 @@ describe("DiskClientRegistrationStore", () => {
       // critical section as the write. This test would pass trivially if we
       // only had the middleware (since none of these requests go through the
       // middleware), and would fail without an atomic check inside registerClient.
-      const capped = new DiskClientRegistrationStore(cache, "https://m.example.com", 50);
+      const capped = new DiskClientRegistrationStore(cache, "https://m.example.com", pino({ level: "silent" }), 50);
 
       for (let i = 0; i < 49; i++) {
         await cache.putOAuthClient({
@@ -187,7 +189,7 @@ describe("DiskClientRegistrationStore", () => {
       // Simulate restart: create fresh DiskCache instance pointing to same tempDir
       const cache2 = new DiskCache(tempDir);
       await cache2.init();
-      const store2 = new DiskClientRegistrationStore(cache2, "https://m.example.com");
+      const store2 = new DiskClientRegistrationStore(cache2, "https://m.example.com", pino({ level: "silent" }));
 
       // Read from fresh instance
       const retrieved = await store2.getClient(original.client_id);
@@ -292,9 +294,28 @@ describe("DiskClientRegistrationStore", () => {
       // Verify it's gone after restart (persisted)
       const cache2 = new DiskCache(tempDir);
       await cache2.init();
-      const store2 = new DiskClientRegistrationStore(cache2, "https://m.example.com");
+      const store2 = new DiskClientRegistrationStore(cache2, "https://m.example.com", pino({ level: "silent" }));
       retrieved = await store2.getClient(registered.client_id);
       expect(retrieved).toBeUndefined();
+    });
+  });
+
+  describe("logging (AC9.6)", () => {
+    it("AC9.6: emits info record with clientId + redirectUriCount after registerClient succeeds", async () => {
+      const { log: captureLog, records } = makePinoCapture();
+      const logStore = new DiskClientRegistrationStore(cache, "https://m.example.com", captureLog);
+      const metaIn = makeWireRegistration();
+
+      const registered = await logStore.registerClient(metaIn);
+
+      expect(records).toContainEqual(
+        expect.objectContaining({
+          level: 30, // info
+          msg: "client registered via DCR",
+          clientId: registered.client_id,
+          redirectUriCount: 1,
+        }),
+      );
     });
   });
 });

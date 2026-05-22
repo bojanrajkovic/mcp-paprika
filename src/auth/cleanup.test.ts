@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import pino from "pino";
 import { mkdtemp, rm } from "node:fs/promises";
 import { nowSeconds } from "./tokens.js";
 import { tmpdir } from "node:os";
@@ -25,7 +26,7 @@ beforeEach(async () => {
   tmpDir = await mkdtemp(join(tmpdir(), "mcp-paprika-cleanup-test-"));
   cache = new DiskCache(tmpDir);
   await cache.init();
-  clientStore = new DiskClientRegistrationStore(cache, "https://example.com");
+  clientStore = new DiskClientRegistrationStore(cache, "https://example.com", pino({ level: "silent" }));
   tokenStore = new TokenStore(cache);
 });
 

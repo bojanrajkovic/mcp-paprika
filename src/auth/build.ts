@@ -94,7 +94,9 @@ export async function buildAuthContext(
   );
   const jwks = createJwksFor(discovery);
 
-  const clientStore = new DiskClientRegistrationStore(cache, resolved.publicUrl, MAX_REGISTERED_CLIENTS);
+  const authLog = parentLog.child({ component: "auth" });
+
+  const clientStore = new DiskClientRegistrationStore(cache, resolved.publicUrl, authLog, MAX_REGISTERED_CLIENTS);
   const tokenStore = new TokenStore(cache);
   const requestStore = new AuthRequestStore();
   const codeStore = new AuthCodeStore();
@@ -107,6 +109,7 @@ export async function buildAuthContext(
     discovery,
     resolved,
     resolved.publicUrl,
+    authLog,
   );
 
   const cleanup = new AuthCleanup(clientStore, tokenStore, cache, requestStore, codeStore);
@@ -122,7 +125,7 @@ export async function buildAuthContext(
     clientStore,
     cleanup,
     log: {
-      auth: parentLog.child({ component: "auth" }),
+      auth: authLog,
       oidcClient: parentLog.child({ component: "oidc-client" }),
     },
   };

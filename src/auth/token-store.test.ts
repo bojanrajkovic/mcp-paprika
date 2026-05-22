@@ -17,6 +17,7 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import pino from "pino";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -58,7 +59,7 @@ describe("TokenStore", () => {
     tempDir = await mkdtemp(join(tmpdir(), "paprika-token-store-"));
     cache = new DiskCacheImpl(tempDir);
     await cache.init();
-    clientStore = new DiskClientRegistrationStoreImpl(cache, "https://m.example.com");
+    clientStore = new DiskClientRegistrationStoreImpl(cache, "https://m.example.com", pino({ level: "silent" }));
 
     now = nowSeconds();
     const nowFn = vi.fn(() => now);
