@@ -20,10 +20,12 @@ Called exactly once per process by `buildAppContext`. Returns a pino logger conf
 | ------------- | --------------------- | -------- | ----------------------------------------------------------------------------------------------- |
 | `transport`   | `"stdio" \| "http"`   | —        | Drives primary destination selection                                                            |
 | `notifier`    | `Notifier`            | —        | Fan-out target; `loggingMessage(...)` is called fire-and-forget                                 |
-| `level`       | `PinoLevel`           | `"info"` | Primary stream threshold                                                                        |
-| `notifyLevel` | `PinoLevel`           | `"warn"` | Fan-out threshold; `warn+` records reach connected MCP clients automatically                    |
+| `level`       | `LevelWithSilent`     | `"info"` | Primary stream threshold                                                                        |
+| `notifyLevel` | `LevelWithSilent`     | `"warn"` | Fan-out threshold; `warn+` records reach connected MCP clients automatically                    |
 | `pretty`      | `boolean \| "auto"`   | `"auto"` | `"auto"` = pretty for stdio (TTY → stderr, non-TTY → file), raw JSON for HTTP                   |
 | `file`        | `string \| undefined` | —        | Override the default file path for stdio non-TTY; default is `getLogDir() + "/mcp-paprika.log"` |
+
+`LevelWithSilent` is pino's native type — `"trace" | "debug" | "info" | "warn" | "error" | "fatal" | "silent"`. The `"silent"` value is reachable only when constructing `LoggerOptions` directly (the e2e harness uses this to suppress test noise). The Zod schema in `src/utils/config.ts` deliberately excludes `"silent"` from the operator-facing `MCP_LOG_LEVEL` / `MCP_LOG_NOTIFY_LEVEL` enum so production logging cannot be silenced via env vars.
 
 **Primary destination routing:**
 
