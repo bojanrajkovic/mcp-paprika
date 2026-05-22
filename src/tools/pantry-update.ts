@@ -1,4 +1,4 @@
-import { createLogger, toMessage } from "../utils/log.js";
+import { toMessage } from "../utils/log.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
@@ -9,9 +9,8 @@ import { textResult } from "./helpers.js";
 import { commitPantryItem, pantryItemToMarkdown, pantryStartGuard } from "./pantry-helpers.js";
 import type { ServerContext } from "../types/server-context.js";
 
-const log = createLogger("mcp-paprika:update_pantry_item");
-
 export function registerUpdatePantryItemTool(server: McpServer, ctx: ServerContext): void {
+  const log = ctx.log.child({ component: "update_pantry_item" });
   server.registerTool(
     "update_pantry_item",
     {
@@ -81,7 +80,7 @@ export function registerUpdatePantryItemTool(server: McpServer, ctx: ServerConte
             await commitPantryItem(ctx, saved);
           } catch (error) {
             const message = toMessage(error);
-            log(`savePantryItem failed for uid=${updated.uid}: ${message}`);
+            log.error({ err: error, uid: args.uid }, "savePantryItem failed");
             return textResult(`Failed to update pantry item: ${message}`);
           }
 

@@ -1,4 +1,4 @@
-import { createLogger, toMessage } from "../utils/log.js";
+import { toMessage } from "../utils/log.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
@@ -7,9 +7,8 @@ import { textResult } from "./helpers.js";
 import { commitPantryItem, pantryStartGuard } from "./pantry-helpers.js";
 import type { ServerContext } from "../types/server-context.js";
 
-const log = createLogger("mcp-paprika:delete_pantry_item");
-
 export function registerDeletePantryItemTool(server: McpServer, ctx: ServerContext): void {
+  const log = ctx.log.child({ component: "delete_pantry_item" });
   server.registerTool(
     "delete_pantry_item",
     {
@@ -52,7 +51,7 @@ export function registerDeletePantryItemTool(server: McpServer, ctx: ServerConte
             await commitPantryItem(ctx, saved);
           } catch (error) {
             const message = toMessage(error);
-            log(`savePantryItem (soft-delete) failed for uid=${trashed.uid}: ${message}`);
+            log.error({ err: error, uid: args.uid }, "savePantryItem failed");
             return textResult(`Failed to delete pantry item: ${message}`);
           }
 

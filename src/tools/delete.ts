@@ -1,4 +1,4 @@
-import { createLogger, toMessage } from "../utils/log.js";
+import { toMessage } from "../utils/log.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
@@ -6,9 +6,8 @@ import { RecipeUidSchema } from "../paprika/types.js";
 import { coldStartGuard, commitRecipe, textResult } from "./helpers.js";
 import type { ServerContext } from "../types/server-context.js";
 
-const log = createLogger("mcp-paprika:delete_recipe");
-
 export function registerDeleteTool(server: McpServer, ctx: ServerContext): void {
+  const log = ctx.log.child({ component: "delete_recipe" });
   server.registerTool(
     "delete_recipe",
     {
@@ -41,7 +40,7 @@ export function registerDeleteTool(server: McpServer, ctx: ServerContext): void 
             await commitRecipe(ctx, saved);
           } catch (error) {
             const message = toMessage(error);
-            log(`saveRecipe (soft-delete) failed for uid=${trashed.uid}: ${message}`);
+            log.error({ err: error, uid: args.uid }, "saveRecipe failed");
             return textResult(`Failed to delete recipe: ${message}`);
           }
 

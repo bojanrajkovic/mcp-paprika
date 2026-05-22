@@ -1,4 +1,4 @@
-import { createLogger, toMessage } from "../utils/log.js";
+import { toMessage } from "../utils/log.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
@@ -7,9 +7,8 @@ import type { CategoryUid, Recipe } from "../paprika/types.js";
 import { coldStartGuard, commitRecipe, recipeToMarkdown, resolveCategoryNames, textResult } from "./helpers.js";
 import type { ServerContext } from "../types/server-context.js";
 
-const log = createLogger("mcp-paprika:create_recipe");
-
 export function registerCreateTool(server: McpServer, ctx: ServerContext): void {
+  const log = ctx.log.child({ component: "create_recipe" });
   server.registerTool(
     "create_recipe",
     {
@@ -84,7 +83,7 @@ export function registerCreateTool(server: McpServer, ctx: ServerContext): void 
           } catch (error) {
             // AC2.8: store/cache not updated — commitRecipe not reached
             const message = toMessage(error);
-            log(`saveRecipe failed for name=${args.name}: ${message}`);
+            log.error({ err: error, name: args.name }, "saveRecipe failed");
             return textResult(`Failed to create recipe: ${message}`);
           }
 

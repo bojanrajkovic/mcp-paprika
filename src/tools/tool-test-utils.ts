@@ -149,7 +149,7 @@ export function makeTestServer(): {
 export function makeCtx(
   store: RecipeStore,
   server: McpServer,
-  overrides: Partial<Pick<ServerContext, "client" | "cache" | "pantryStore" | "vectorStore" | "notifier">> = {},
+  overrides: Partial<Pick<ServerContext, "client" | "cache" | "pantryStore" | "vectorStore" | "notifier" | "log">> = {},
 ): ServerContext {
   const notifier: Notifier = overrides.notifier ?? {
     resourceListChanged: () => {},
@@ -164,7 +164,7 @@ export function makeCtx(
     cache: overrides.cache ?? ({} as unknown as ServerContext["cache"]),
     notifier,
     auth: null,
-    log: SILENT_LOG,
+    log: overrides.log ?? SILENT_LOG,
   } satisfies ServerContext;
 }
 
