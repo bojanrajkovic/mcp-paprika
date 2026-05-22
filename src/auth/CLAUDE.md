@@ -1,6 +1,6 @@
 # OAuth 2.1 Authorization Layer
 
-Last verified: 2026-05-20
+Last verified: 2026-05-22
 
 ## Purpose
 
@@ -75,17 +75,18 @@ The SDK `AuthInfo` type is returned by `verifyAccessToken`. The `extra` field ca
 
 `AuthContext` is the OAuth runtime state bundle stored as `AppContext.auth`. All fields are `readonly`.
 
-| Field          | Type                          | Description                                           |
-| -------------- | ----------------------------- | ----------------------------------------------------- |
-| `provider`     | `MintingOAuthServerProvider`  | SDK OAuthServerProvider implementation                |
-| `config`       | `ResolvedOAuthConfig`         | Fully resolved OAuth config (post-preset expansion)   |
-| `discovery`    | `DiscoveryDoc`                | Upstream OIDC discovery document (fetched at startup) |
-| `jwks`         | `JWTVerifyGetKey`             | jose JWKS key resolver for id_token verification      |
-| `authRequests` | `AuthRequestStore`            | In-memory 5-min TTL store for pre-callback state      |
-| `authCodes`    | `AuthCodeStore`               | In-memory 60-s TTL store for post-callback state      |
-| `tokenStore`   | `TokenStore`                  | Access + refresh token lifecycle manager              |
-| `clientStore`  | `DiskClientRegistrationStore` | Persistent registered-client store                    |
-| `cleanup`      | `AuthCleanup`                 | Background cleanup task handle                        |
+| Field          | Type                                   | Description                                                                                                                      |
+| -------------- | -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `provider`     | `MintingOAuthServerProvider`           | SDK OAuthServerProvider implementation                                                                                           |
+| `config`       | `ResolvedOAuthConfig`                  | Fully resolved OAuth config (post-preset expansion)                                                                              |
+| `discovery`    | `DiscoveryDoc`                         | Upstream OIDC discovery document (fetched at startup)                                                                            |
+| `jwks`         | `JWTVerifyGetKey`                      | jose JWKS key resolver for id_token verification                                                                                 |
+| `authRequests` | `AuthRequestStore`                     | In-memory 5-min TTL store for pre-callback state                                                                                 |
+| `authCodes`    | `AuthCodeStore`                        | In-memory 60-s TTL store for post-callback state                                                                                 |
+| `tokenStore`   | `TokenStore`                           | Access + refresh token lifecycle manager                                                                                         |
+| `clientStore`  | `DiskClientRegistrationStore`          | Persistent registered-client store                                                                                               |
+| `cleanup`      | `AuthCleanup`                          | Background cleanup task handle                                                                                                   |
+| `log`          | `{ auth: Logger; oidcClient: Logger }` | Component-scoped pino child loggers; `auth` for local route/policy/cleanup/DCR logic, `oidc-client` for upstream OIDC HTTP calls |
 
 ### OAuthClient persistence schema
 
@@ -184,11 +185,30 @@ Persisted to `DiskCache` as `oauth/tokens/${tokenHash}.json`. `tokenHash` is the
 
 ### Logging
 
-- Plaintext tokens are never logged; only `tokenHash` values appear in log output.
-- Identity claims (email address, subject ID) are logged at warn level when the allowlist denies access (`OAuthAllowlistDenialError`), and at info level on allowlist acceptance (`routes.ts` success branch, `msg: "allowlist accepted identity"`).
-- `DiskClientRegistrationStore` emits `info "client registered via DCR"` with `{ clientId, redirectUriCount }` after each successful DCR.
-- `MintingOAuthServerProvider` emits three info-level state-transition records: `"access token minted (authorization_code grant)"`, `"access token minted (refresh_token grant)"`, `"access token revoked"` — all carry `{ tokenHash, clientId, sub }`.
-- The revocation record fires ONLY after `TokenStore.revoke()` succeeds — the early no-op returns (unknown token, wrong client) produce no log output, preserving RFC 7009 §2.2 privacy intent.
+**Component split.** Auth code uses two component loggers, both sourced from `AuthContext.log`:
+
+- `auth` — local route/policy/cleanup/DCR logic: allowlist accept/deny, OAuth state transitions, silent-catch debug sites, DCR registration.
+- `oidc-client` — upstream OIDC HTTP calls: discovery fetch, id_token verification failures. JWKS fetches go through `jose.createRemoteJWKSet` which is opaque to per-fetch instrumentation; JWKS-related failures surface only as id_token verification failures logged at the `routes.ts` error site.
+
+**State transitions at info level.** The following info records are emitted on each successful state change:
+
+- `"client registered via DCR"` — `DiskClientRegistrationStore.registerClient`, fields `{ clientId, redirectUriCount }`.
+- `"access token minted (authorization_code grant)"` — `MintingOAuthServerProvider.exchangeAuthorizationCode`, fields `{ tokenHash, clientId, sub }`.
+- `"access token minted (refresh_token grant)"` — `MintingOAuthServerProvider.exchangeRefreshToken`, fields `{ tokenHash, clientId, sub }`.
+- `"access token revoked"` — `MintingOAuthServerProvider.revokeToken` after `TokenStore.revoke()` succeeds; fields `{ tokenHash, clientId, sub }`. The early no-op returns (unknown token, wrong client) produce no record, preserving RFC 7009 §2.2 privacy intent.
+
+**Identity claims in allowlist records.** `email` and `sub` appear explicitly in allowlist accept/deny records — they're identity-gating audit logs, not operational telemetry, so they're not redacted.
+
+- `"allowlist accepted identity"` — info, fields `{ email, sub }` — emitted in `routes.ts` on the success branch.
+- `"allowlist denied identity"` — warn, fields `{ reason, email, sub }` — emitted in `routes.ts` on the `OAuthAllowlistDenialError` branch; fans out to connected MCP clients via `notifications/message` automatically.
+
+**Token field redaction.** The root logger's redact config covers `*.authorization`, `*.password`, `*.token`, `*.client_secret`, `*.access_token`, `*.refresh_token`, and `*.id_token`. Auth code must not pass raw token values through pino fields — log identifiers (`tokenHash`, `clientId`) instead. `tokenHash` is the SHA-256 hex of the plaintext bearer token and is safe to include verbatim.
+
+**Silent-catch debug logs.** Three modules log at `debug` when their normally-silent catch paths fire. Operators can enable `MCP_LOG_LEVEL=debug` to diagnose these paths in production:
+
+- `cleanup.ts` — sweep loop catches: `"auth cleanup sweep failed; continuing"` and `"auth cleanup wait failed unexpectedly"`.
+- `dcr-validator.ts` — URL parse catches: `"invalid redirect_uri rejected by parser"` and `"invalid redirect_uri item in DCR request"`.
+- `client-registration.ts` — timing-safe-equal catch: `"RAT timing-safe equality failed (likely invalid hex)"`, field `{ clientId }`.
 
 ### Concurrency
 
