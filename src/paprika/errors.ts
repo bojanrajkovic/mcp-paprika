@@ -1,10 +1,11 @@
 /**
  * Error class hierarchy for Paprika API operations.
  *
- * Three-class structure:
+ * Four-class structure:
  * - PaprikaError: base class for all Paprika-related errors
  * - PaprikaAuthError: authentication failures (extends PaprikaError)
  * - PaprikaAPIError: HTTP errors with status and endpoint (extends PaprikaError)
+ * - CircuitOpenError: circuit breaker is open; no HTTP request was issued (extends PaprikaError)
  *
  * All classes support ES2024 ErrorOptions for cause chaining.
  */
@@ -47,6 +48,25 @@ export class PaprikaAPIError extends PaprikaError {
     super(`${message} (HTTP ${status} from ${endpoint})`, options);
     this.name = "PaprikaAPIError";
     this.status = status;
+    this.endpoint = endpoint;
+  }
+}
+
+/**
+ * Error thrown when the cockatiel circuit breaker is open and rejects a call
+ * without issuing any network request.
+ *
+ * Distinct from PaprikaAPIError: there is no HTTP status code because no HTTP
+ * request was made. The cause is always the cockatiel BrokenCircuitError.
+ *
+ * Message format: "Paprika client circuit breaker is open (endpoint=<url>)"
+ */
+export class CircuitOpenError extends PaprikaError {
+  override readonly name = "CircuitOpenError";
+  readonly endpoint: string;
+
+  constructor(endpoint: string, options?: ErrorOptions) {
+    super(`Paprika client circuit breaker is open (endpoint=${endpoint})`, options);
     this.endpoint = endpoint;
   }
 }
