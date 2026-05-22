@@ -1,6 +1,6 @@
 # Paprika API Client
 
-Last verified: 2026-05-21
+Last verified: 2026-05-22
 
 ## Files
 
@@ -62,13 +62,15 @@ HTTP client for the Paprika Cloud Sync API. Handles authentication, request form
 - Entry schemas: `RecipeEntrySchema`, `CategoryEntrySchema`
 - UID schemas: `RecipeUidSchema`, `CategoryUidSchema`
 
-### Error Hierarchy (errors.ts)
+### Error hierarchy (errors.ts)
 
-Three-class hierarchy, all supporting ES2024 `ErrorOptions` for cause chaining:
+All classes extend `PaprikaError` and support ES2024 `ErrorOptions` for cause chaining.
 
-- `PaprikaError` — Base class for all Paprika-related errors
-- `PaprikaAuthError extends PaprikaError` — Authentication failures (default message: "Authentication failed")
-- `PaprikaAPIError extends PaprikaError` — HTTP errors; carries `readonly status: number` and `readonly endpoint: string`; message formatted as `"message (HTTP status from endpoint)"`
+| Class              | Extends        | Carries                                 | When thrown                                              |
+| ------------------ | -------------- | --------------------------------------- | -------------------------------------------------------- |
+| `PaprikaAuthError` | `PaprikaError` | (cause)                                 | Authentication failures                                  |
+| `PaprikaAPIError`  | `PaprikaError` | `status`, `endpoint`                    | Real HTTP errors from Paprika                            |
+| `CircuitOpenError` | `PaprikaError` | `endpoint`, `cause: BrokenCircuitError` | Local circuit breaker is open; no network request issued |
 
 ### PaprikaClient (client.ts)
 
@@ -80,7 +82,7 @@ Typed HTTP client wrapping the Paprika Cloud Sync API.
 
 **Construction:**
 
-- `new PaprikaClient(email: string, password: string)` — stores credentials, no I/O
+- `new PaprikaClient(email: string, password: string, log?: pino.Logger)` — stores credentials and wires resilience policies; no I/O. When `log` is omitted, a silent logger is used (safe for tests that don't capture output).
 
 **Public API:**
 
@@ -101,10 +103,29 @@ Typed HTTP client wrapping the Paprika Cloud Sync API.
 - `buildPantryFormData(item: Readonly<PantryItem>): FormData` — converts pantry item to snake_case JSON via `pantryItemToApiPayload`, gzip-compresses, wraps in FormData with `data.gz` blob
 - `request<T>(method, url, schema, body?): Promise<T>` — authenticated v2 API calls with:
   - Bearer token header (when token exists)
-  - Cockatiel retry (HTTP 429/500/502/503 and network-level fetch failures — DNS, TCP reset, TLS handshake, abort; undici throws a bare `TypeError` for these and the client wraps them in a private `NetworkRetryableError` marker so `handleType` matches) + circuit breaker (5 consecutive failures of either kind)
+  - **Resilience:** `wrap(breakerPolicy, retryPolicy)` — breaker outermost, retry innermost. The breaker sees one execution per tool call regardless of how many retries that call exhausted internally. Retry: `maxAttempts: 3` means 3 retries, so each failing tool call makes 4 total network attempts before the retry gives up. Breaker: opens after 5 consecutive failing tool calls (`ConsecutiveBreaker(5)`), half-opens after 30 s.
+  - **Retryable conditions:** HTTP 429/500/502/503 and network-level fetch failures (DNS, TCP reset, TLS handshake, abort). `fetch` throws a bare `TypeError` for network failures; `request()` wraps those in a private `NetworkRetryableError` marker so `handleType` can match them.
+  - **Circuit open:** throws `CircuitOpenError(url, { cause: brokenCircuitError })` — no fabricated HTTP status. The error carries `endpoint` and `cause: BrokenCircuitError` for structured access.
+  - **Per-attempt logging:** debug on request start (`{method, url, attempt}`) and on success (`{method, url, attempt, status, attemptDurationMs}`); info on 401 before re-auth; error on non-retryable HTTP failure (`{method, url, attempt, status, attemptDurationMs}`). Retry and give-up telemetry comes from the lifecycle hooks (see below), not inline log calls.
   - 401 re-auth retry (single attempt)
   - Response envelope unwrapping (`{ result: T }` → `T`)
   - Zod schema validation of inner value
+
+**Attempt numbering:** `attempt` in all log records is 1-indexed for the network-touch count. The first `fetch` call logs `attempt: 1`; the first retry logs `attempt: 2`; and so on. Cockatiel's `IRetryContext.attempt` is 0-indexed — both the inline log calls and the `onRetry` hook normalize via `+ 1`.
+
+**Resilience policy lifecycle:**
+
+The constructor installs five hooks after building `this.resilience`. These fire for every `PaprikaClient` instance (the client is process-singleton, so hooks live for the process lifetime).
+
+| Hook                       | Level | Payload                                    | Fires                                                                              |
+| -------------------------- | ----- | ------------------------------------------ | ---------------------------------------------------------------------------------- |
+| `retryPolicy.onRetry`      | warn  | `{attempt: 1-indexed, nextBackoffMs, err}` | Once per failed attempt that will be retried; fires before the backoff delay       |
+| `retryPolicy.onGiveUp`     | error | `{err}`                                    | Once when all retries are exhausted                                                |
+| `breakerPolicy.onBreak`    | warn  | —                                          | Once per closed→open transition; fans out to MCP clients via `notifyLevel: "warn"` |
+| `breakerPolicy.onReset`    | info  | —                                          | When breaker closes after a successful half-open probe                             |
+| `breakerPolicy.onHalfOpen` | info  | —                                          | When breaker transitions to half-open                                              |
+
+`onBreak` fires exactly once per closed→open transition. Subsequent calls while the breaker is open do not re-fire it.
 
 **Pantry write wire format** (verified 2026-05-08 against macOS Paprika.app v3.8.4 build:41 via mitmproxy):
 
