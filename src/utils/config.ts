@@ -117,6 +117,17 @@ const embeddingConfigSchema = z.object({
   model: z.string().min(1),
 });
 
+const pinoLevelSchema = z.enum(["trace", "debug", "info", "warn", "error", "fatal"]);
+
+const loggingSchema = z
+  .object({
+    level: pinoLevelSchema.default("info"),
+    notifyLevel: pinoLevelSchema.default("warn"),
+    pretty: z.union([z.boolean(), z.literal("auto")]).default("auto"),
+    file: z.string().optional(),
+  })
+  .default({});
+
 export const paprikaConfigSchema = z
   .object({
     paprika: z.preprocess(
@@ -194,6 +205,7 @@ export const paprikaConfigSchema = z
           .default({}),
       })
       .optional(),
+    logging: loggingSchema,
   })
   .superRefine((cfg, ctx) => {
     if (cfg.transport !== "http") return;

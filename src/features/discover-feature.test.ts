@@ -40,12 +40,15 @@ function makeMockSyncEvents() {
   return mitt<{ "sync:complete": SyncResult; "sync:error": Error }>();
 }
 
+const DEFAULT_LOGGING = { level: "info" as const, notifyLevel: "warn" as const, pretty: "auto" as const };
+
 function makeEnabledConfig(overrides: Record<string, unknown> = {}) {
   return {
     transport: "stdio" as const,
     paprika: { email: "test@example.com", password: "pass" },
     sync: { enabled: true, interval: 5000, pendingWriteTtl: 60000 },
     http: { port: 3000, host: "0.0.0.0", allowedHosts: [], allowedOrigins: [] },
+    logging: DEFAULT_LOGGING,
     features: {
       embeddings: {
         apiKey: "test-key",
@@ -64,6 +67,7 @@ function makeDisabledConfig(withFeaturesEmpty = false) {
       paprika: { email: "test@example.com", password: "pass" },
       sync: { enabled: true, interval: 5000, pendingWriteTtl: 60000 },
       http: { port: 3000, host: "0.0.0.0", allowedHosts: [], allowedOrigins: [] },
+      logging: DEFAULT_LOGGING,
       features: {},
     };
   }
@@ -72,6 +76,7 @@ function makeDisabledConfig(withFeaturesEmpty = false) {
     paprika: { email: "test@example.com", password: "pass" },
     sync: { enabled: true, interval: 5000, pendingWriteTtl: 60000 },
     http: { port: 3000, host: "0.0.0.0", allowedHosts: [], allowedOrigins: [] },
+    logging: DEFAULT_LOGGING,
   };
 }
 
@@ -194,6 +199,7 @@ describe("p3-u08-discover-wiring: buildDiscoverComponents", () => {
         paprika: { email: "test@example.com", password: "pass" },
         sync: { enabled: true, interval: 5000, pendingWriteTtl: 60000 },
         http: { port: 3000, host: "0.0.0.0", allowedHosts: [], allowedOrigins: [] },
+        logging: DEFAULT_LOGGING,
         features: {
           embeddings: embeddingsConfig,
         },

@@ -84,6 +84,7 @@ function makePaprikaConfig() {
     paprika: { email: "test@example.com", password: "pass" },
     sync: { enabled: true, interval: 5000, pendingWriteTtl: 60000 },
     http: { port: 0, host: "127.0.0.1", allowedHosts: [], allowedOrigins: [] },
+    logging: { level: "info" as const, notifyLevel: "warn" as const, pretty: "auto" as const },
     features: { embeddings: makeOllamaConfig() },
   };
 }
