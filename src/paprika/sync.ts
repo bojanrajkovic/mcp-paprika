@@ -1,6 +1,8 @@
 import { scheduler } from "node:timers/promises";
 import { createRequire } from "node:module";
 
+import type { Logger } from "pino";
+
 import type { AppContext } from "../server/app-context.js";
 import type { PantryItem, Recipe, RecipeUid, SyncResult } from "./types.js";
 
@@ -42,11 +44,13 @@ export class SyncEngine {
   private readonly _intervalMs: number;
   private readonly _events: SyncEventEmitter;
   private readonly _eventsView: Pick<SyncEventEmitter, "on" | "off">;
+  private readonly log: Logger;
   private _ac: AbortController | null = null;
 
   constructor(context: AppContext, intervalMs: number) {
     this._context = context;
     this._intervalMs = intervalMs;
+    this.log = context.log.child({ component: "sync" });
     // CJS require returns unknown; mitt's default export is a factory function that returns the emitter
     this._events = (mittFactory as CallableFunction)() as SyncEventEmitter;
     this._eventsView = {
@@ -78,12 +82,13 @@ export class SyncEngine {
   async syncOnce(): Promise<void> {
     try {
       // 1. Recipe sync path
-      SyncEngine._log("Fetching recipe list...");
+      this.log.debug("fetching recipe list");
       const entries = await this._context.client.listRecipes();
-      SyncEngine._log(`Got ${entries.length} recipe entries.`);
+      this.log.debug({ count: entries.length }, "fetched recipe list");
       const diff = this._context.cache.diffRecipes(entries);
-      SyncEngine._log(
-        `Recipe diff: ${diff.added.length} added, ${diff.changed.length} changed, ${diff.removed.length} removed.`,
+      this.log.debug(
+        { added: diff.added.length, changed: diff.changed.length, removed: diff.removed.length },
+        "recipe diff computed",
       );
 
       // Filter the diff through pending-writes (issue #57). A pending-upsert
@@ -112,9 +117,9 @@ export class SyncEngine {
       // Fetch recipes if any exist
       let fetchedRecipes: Array<Recipe> = [];
       if (uidsToFetch.length > 0) {
-        SyncEngine._log(`Fetching ${uidsToFetch.length} recipes...`);
+        this.log.debug({ count: uidsToFetch.length }, "fetching recipes");
         fetchedRecipes = await this._context.client.getRecipes(uidsToFetch);
-        SyncEngine._log(`Fetched ${fetchedRecipes.length} recipes.`);
+        this.log.debug({ count: fetchedRecipes.length }, "fetched recipes");
       }
 
       // Write fetched recipes to cache and store
@@ -144,18 +149,18 @@ export class SyncEngine {
       }
 
       // 2. Category sync path (replace-all)
-      SyncEngine._log("Fetching categories...");
+      this.log.debug("fetching categories");
       const categories = await this._context.client.listCategories();
-      SyncEngine._log(`Got ${categories.length} categories.`);
+      this.log.debug({ count: categories.length }, "fetched categories");
       this._context.store.setCategories(categories);
       for (const category of categories) {
         await this._context.cache.putCategory(category, category.uid);
       }
 
       // 3. Pantry sync (replace-all with orphan cleanup)
-      SyncEngine._log("Fetching pantry...");
+      this.log.debug("fetching pantry");
       const pantryItems = await this._context.client.listPantry();
-      SyncEngine._log(`Got ${pantryItems.length.toString()} pantry items.`);
+      this.log.debug({ count: pantryItems.length }, "fetched pantry");
 
       const cachedPantryItems = await this._context.cache.getAllPantryItems();
 
@@ -214,11 +219,11 @@ export class SyncEngine {
       }
 
       if (orphanPantryUids.length > 0) {
-        SyncEngine._log(`Removed ${orphanPantryUids.length.toString()} orphan pantry items.`);
+        this.log.debug({ count: orphanPantryUids.length }, "removed orphan pantry items");
       }
 
       // 4. Finalization
-      SyncEngine._log("Flushing cache to disk...");
+      this.log.debug("flushing cache to disk");
       await this._context.cache.flush();
 
       // Sweep expired pending-writes (issue #57 TTL fallback). Pending-deletes
@@ -227,9 +232,7 @@ export class SyncEngine {
       const sweptStore = this._context.store.sweepPending();
       const sweptPantry = this._context.pantryStore.sweepPending();
       if (sweptStore > 0 || sweptPantry > 0) {
-        SyncEngine._log(
-          `Swept ${sweptStore.toString()} recipe and ${sweptPantry.toString()} pantry pending-writes past TTL.`,
-        );
+        this.log.debug({ sweptStore, sweptPantry }, "swept pending writes past TTL");
       }
 
       // Determine if changes exist
@@ -254,34 +257,19 @@ export class SyncEngine {
       };
       this._events.emit("sync:complete", result);
 
-      SyncEngine._log(
-        `Sync complete: ${addedRecipes.length} added, ${updatedRecipes.length} updated, ${filteredRemoved.length} removed.`,
+      this.log.info(
+        { added: addedRecipes.length, updated: updatedRecipes.length, removed: filteredRemoved.length },
+        "sync complete",
       );
-
-      // Log success via MCP — notifier swallows transport errors internally
-      await this._context.notifier.loggingMessage({
-        level: "info",
-        data: `Sync complete: ${addedRecipes.length} added, ${updatedRecipes.length} updated, ${filteredRemoved.length} removed`,
-      });
     } catch (error: unknown) {
       // Convert caught value to Error
       const err = error instanceof Error ? error : new Error(String(error));
 
-      SyncEngine._log(`Sync failed: ${err.message}`);
-
-      // Log error via MCP — notifier swallows transport errors internally
-      await this._context.notifier.loggingMessage({
-        level: "error",
-        data: `Sync failed: ${err.message}`,
-      });
+      this.log.error({ err }, "sync failed");
 
       // Emit error event
       this._events.emit("sync:error", err);
     }
-  }
-
-  private static _log(msg: string): void {
-    process.stderr.write(`[mcp-paprika:sync] ${msg}\n`);
   }
 
   private async _loop(): Promise<void> {
