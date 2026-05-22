@@ -2,6 +2,7 @@ import { vi, describe, it, expect, afterEach, beforeEach, expectTypeOf } from "v
 import pino from "pino";
 
 import { SyncEngine } from "./sync.js";
+import { createLogger } from "../utils/log.js";
 import type { AppContext } from "../server/app-context.js";
 import type { Notifier } from "../server/notifier.js";
 import type { RecipeStore } from "../cache/recipe-store.js";
@@ -634,39 +635,60 @@ describe("syncOnce", () => {
     expect(events).toContain("complete");
   });
 
-  it("AC7.1: notifier.loggingMessage called with level info on success", async () => {
+  it("AC7.1: success emits info record that fans out to notifier", async () => {
+    // Use notifyLevel: "info" so info records fan out during this test.
+    // Default production notifyLevel is "warn"; this override is test-only.
     const loggingMessage = vi.fn().mockResolvedValue(undefined);
+    const notifier: Notifier = { resourceListChanged: vi.fn(), loggingMessage };
+    const log = createLogger({ transport: "stdio", notifier, level: "trace", notifyLevel: "info", pretty: false });
 
-    const engine = makeSyncEngine(undefined, undefined, undefined, {
-      loggingMessage,
-    });
+    const context: AppContext = {
+      client: makeMockClientDefault(),
+      cache: makeMockCacheDefault(),
+      store: makeMockStoreDefault(),
+      pantryStore: makeMockPantryStoreDefault(),
+      vectorStore: null,
+      notifier,
+      auth: null,
+      log,
+    };
+    const engine = new SyncEngine(context, 10);
     await engine.syncOnce();
 
     expect(loggingMessage).toHaveBeenCalledWith(
       expect.objectContaining({
         level: "info",
+        data: expect.objectContaining({ msg: "sync complete" }),
       }),
     );
   });
 
-  it("AC7.2: notifier.loggingMessage called with level error on failure", async () => {
+  it("AC7.2: failure emits error record that fans out to notifier", async () => {
+    // Use notifyLevel: "warn" (default) — error records fan out.
     const loggingMessage = vi.fn().mockResolvedValue(undefined);
+    const notifier: Notifier = { resourceListChanged: vi.fn(), loggingMessage };
+    const log = createLogger({ transport: "stdio", notifier, level: "trace", notifyLevel: "warn", pretty: false });
 
-    const engine = makeSyncEngine(
-      {
+    const context: AppContext = {
+      client: {
+        ...makeMockClientDefault(),
         listRecipes: vi.fn().mockRejectedValue(new Error("API Error")),
-      },
-      undefined,
-      undefined,
-      {
-        loggingMessage,
-      },
-    );
+      } as unknown as PaprikaClient,
+      cache: makeMockCacheDefault(),
+      store: makeMockStoreDefault(),
+      pantryStore: makeMockPantryStoreDefault(),
+      vectorStore: null,
+      notifier,
+      auth: null,
+      log,
+    };
+    const engine = new SyncEngine(context, 10);
     await engine.syncOnce();
 
     expect(loggingMessage).toHaveBeenCalledWith(
       expect.objectContaining({
         level: "error",
+        data: expect.objectContaining({ msg: "sync failed" }),
       }),
     );
   });
