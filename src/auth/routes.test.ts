@@ -282,8 +282,11 @@ describe("Auth Routes", () => {
       // Only user@example.com is on the allowlist — unknown@example.com will be denied.
       const realJwks = createJwksFor(makeDiscoveryDoc(oidcStub.issuer));
 
-      // Capture pino records from the auth component logger (denial path uses auth, not oidcClient)
-      const { log: authLog, records } = makePinoCapture();
+      // Capture pino records from the auth component logger (denial path uses auth, not oidcClient).
+      // Mirror src/auth/build.ts: production passes parentLog.child({ component: "auth" }) so
+      // records carry the component field. Wrapping here locks that contract in.
+      const { log: captureLog, records } = makePinoCapture();
+      const authLog = captureLog.child({ component: "auth" });
 
       const localAuthRequests = new AuthRequestStore();
       const localAuthCodes = new AuthCodeStore();
@@ -345,11 +348,13 @@ describe("Auth Routes", () => {
       // AC3.4: id_token must NOT appear in captured log records (JWTs start with "eyJ")
       expect(JSON.stringify(records)).not.toMatch(/eyJ/);
 
-      // AC3.4: identity claims MUST appear in the denial log record as structured fields
+      // AC3.4: identity claims MUST appear in the denial log record as structured fields,
+      // and the record must carry component: "auth" (mirrors src/auth/build.ts child logger).
       expect(records).toContainEqual(
         expect.objectContaining({
           msg: "allowlist denied identity",
           level: warnLevel,
+          component: "auth",
           email: "unknown@example.com",
           sub: "unknown-sub-999",
         }),
@@ -361,7 +366,10 @@ describe("Auth Routes", () => {
       // "allowlist accepted identity" record emitted in the success branch.
       const realJwks = createJwksFor(makeDiscoveryDoc(oidcStub.issuer));
 
-      const { log: authLog, records } = makePinoCapture();
+      // Mirror src/auth/build.ts: production passes parentLog.child({ component: "auth" }) so
+      // records carry the component field. Wrapping here locks that contract in.
+      const { log: captureLog, records } = makePinoCapture();
+      const authLog = captureLog.child({ component: "auth" });
 
       const localAuthRequests = new AuthRequestStore();
       const localAuthCodes = new AuthCodeStore();
@@ -409,11 +417,13 @@ describe("Auth Routes", () => {
       expect(loc.searchParams.get("error")).toBeNull();
       expect(loc.searchParams.get("iss")).toBe("https://mcp.example.com");
 
-      // AC9.6: info record must be emitted for the accepted identity
+      // AC9.6: info record must be emitted for the accepted identity, and must carry
+      // component: "auth" (mirrors src/auth/build.ts child logger contract).
       expect(records).toContainEqual(
         expect.objectContaining({
           level: 30, // info
           msg: "allowlist accepted identity",
+          component: "auth",
           email: "user@example.com",
           sub: expect.any(String),
         }),
