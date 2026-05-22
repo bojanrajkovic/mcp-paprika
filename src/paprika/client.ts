@@ -18,6 +18,10 @@ import {
   handleType,
   wrap,
   BrokenCircuitError,
+  type RetryPolicy,
+  type CircuitBreakerPolicy,
+  type IPolicy,
+  type IDefaultPolicyContext,
 } from "cockatiel";
 import pino from "pino";
 import type { Logger } from "pino";
@@ -60,21 +64,6 @@ class TokenExpiredError extends Error {
 }
 
 const RETRYABLE_STATUSES = new Set([429, 500, 502, 503]);
-
-const retryPolicy = retry(handleType(TransientHTTPError).orType(NetworkRetryableError), {
-  maxAttempts: 3,
-  backoff: new ExponentialBackoff({
-    initialDelay: 500,
-    maxDelay: 10_000,
-  }),
-});
-
-const breakerPolicy = circuitBreaker(handleType(TransientHTTPError).orType(NetworkRetryableError), {
-  halfOpenAfter: 30_000,
-  breaker: new ConsecutiveBreaker(5),
-});
-
-const resilience = wrap(retryPolicy, breakerPolicy);
 
 function recipeToApiPayload(recipe: Readonly<Recipe>): Record<string, unknown> {
   return {
@@ -130,6 +119,9 @@ export class PaprikaClient {
   private token: string | null = null;
   private readonly _recipesBulkhead = bulkhead(5, Number.MAX_SAFE_INTEGER);
   private readonly log: Logger;
+  private readonly retryPolicy: RetryPolicy;
+  private readonly breakerPolicy: CircuitBreakerPolicy;
+  private readonly resilience: IPolicy<IDefaultPolicyContext, never>;
 
   constructor(
     private readonly email: string,
@@ -140,6 +132,20 @@ export class PaprikaClient {
     // Phase 3 wires per-attempt logging through this.log; this no-op touch
     // satisfies noUnusedLocals until then.
     void this.log;
+    this.retryPolicy = retry(handleType(TransientHTTPError).orType(NetworkRetryableError), {
+      maxAttempts: 3,
+      backoff: new ExponentialBackoff({
+        initialDelay: 500,
+        maxDelay: 10_000,
+      }),
+    });
+    this.breakerPolicy = circuitBreaker(handleType(TransientHTTPError).orType(NetworkRetryableError), {
+      halfOpenAfter: 30_000,
+      breaker: new ConsecutiveBreaker(5),
+    });
+    // Breaker is OUTSIDE retry: each distinct tool-call counts as one failure
+    // toward the breaker threshold (not each retry attempt within that call).
+    this.resilience = wrap(this.breakerPolicy, this.retryPolicy);
   }
 
   async authenticate(): Promise<void> {
@@ -275,7 +281,7 @@ export class PaprikaClient {
     };
 
     try {
-      return await resilience.execute(execute);
+      return await this.resilience.execute(execute);
     } catch (error) {
       if (error instanceof BrokenCircuitError) {
         throw new PaprikaAPIError("Service unavailable (circuit open)", 503, url);
@@ -295,7 +301,7 @@ export class PaprikaClient {
         await this.authenticate();
 
         try {
-          return await resilience.execute(execute);
+          return await this.resilience.execute(execute);
         } catch (retryError) {
           if (retryError instanceof TokenExpiredError) {
             throw new PaprikaAuthError("Authentication failed after re-auth (HTTP 401)");
