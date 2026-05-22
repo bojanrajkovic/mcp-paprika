@@ -96,6 +96,16 @@ dependencies (leaf module).
 | -------------------- | ------- | ------------------------------------------- |
 | `DurationParseError` | `Error` | `input: string \| number`, `reason: string` |
 
+### errors.ts — Cross-cutting error classes
+
+Single export. Houses error classes that span more than one domain module — currently just the shared circuit-open surface.
+
+| Class              | Extends | Carries                                            | When thrown                                                                                   |
+| ------------------ | ------- | -------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `CircuitOpenError` | `Error` | `service`, `endpoint`, `cause: BrokenCircuitError` | Any cockatiel-backed client's breaker rejects a call (no HTTP request issued; no fake status) |
+
+Constructor: `new CircuitOpenError(service: string, endpoint: string, options?: ErrorOptions)`. The `service` argument names the client for the human-readable message and for structured log fields. Use short identifiers that align with the surrounding log component vocabulary — e.g., `"paprika"` (thrown from `PaprikaClient`) and `"embeddings"` (thrown from `EmbeddingClient`). Message format: `"<service> circuit breaker is open (endpoint=<url>)"`.
+
 ### config.ts — Application configuration loading
 
 Loads configuration from three sources with priority: env vars > `.env` file > `config.json` > zod

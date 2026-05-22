@@ -9,7 +9,8 @@ import type { Logger } from "pino";
 import { BrokenCircuitError } from "cockatiel";
 import { makePinoCapture } from "../tools/tool-test-utils.js";
 import { PaprikaClient } from "./client.js";
-import { PaprikaAPIError, PaprikaAuthError, CircuitOpenError } from "./errors.js";
+import { PaprikaAPIError, PaprikaAuthError } from "./errors.js";
+import { CircuitOpenError } from "../utils/errors.js";
 import { toMessage, REDACT_PATHS } from "../utils/log.js";
 import type { PantryItem, Recipe } from "./types.js";
 import { RecipeSchema, RecipeUidSchema, PantryItemUidSchema } from "./types.js";
@@ -1289,7 +1290,7 @@ describe("PaprikaClient", () => {
       const msg = toMessage(caught);
       expect(msg).toContain(`${API_BASE}/recipes/`);
       expect(msg).not.toContain("HTTP 503");
-      expect(msg).toBe(`Paprika client circuit breaker is open (endpoint=${API_BASE}/recipes/)`);
+      expect(msg).toBe(`paprika circuit breaker is open (endpoint=${API_BASE}/recipes/)`);
     }, 60000);
   });
 

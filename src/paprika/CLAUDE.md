@@ -64,13 +64,15 @@ HTTP client for the Paprika Cloud Sync API. Handles authentication, request form
 
 ### Error hierarchy (errors.ts)
 
-All classes extend `PaprikaError` and support ES2024 `ErrorOptions` for cause chaining.
+Paprika-specific classes all extend `PaprikaError` and support ES2024 `ErrorOptions` for cause chaining. The circuit-open surface is the shared `CircuitOpenError` from `src/utils/errors.ts` — same class also used by `EmbeddingClient`; import it from `../utils/errors.js`.
 
-| Class              | Extends        | Carries                                 | When thrown                                              |
-| ------------------ | -------------- | --------------------------------------- | -------------------------------------------------------- |
-| `PaprikaAuthError` | `PaprikaError` | (cause)                                 | Authentication failures                                  |
-| `PaprikaAPIError`  | `PaprikaError` | `status`, `endpoint`                    | Real HTTP errors from Paprika                            |
-| `CircuitOpenError` | `PaprikaError` | `endpoint`, `cause: BrokenCircuitError` | Local circuit breaker is open; no network request issued |
+| Class              | Extends        | Carries                                            | When thrown                                              |
+| ------------------ | -------------- | -------------------------------------------------- | -------------------------------------------------------- |
+| `PaprikaAuthError` | `PaprikaError` | (cause)                                            | Authentication failures                                  |
+| `PaprikaAPIError`  | `PaprikaError` | `status`, `endpoint`                               | Real HTTP errors from Paprika                            |
+| `CircuitOpenError` | `Error`        | `service`, `endpoint`, `cause: BrokenCircuitError` | Local circuit breaker is open; no network request issued |
+
+`PaprikaClient` throws `new CircuitOpenError("paprika", url, { cause: brokenCircuitError })`. The `service` field disambiguates breaker-open events that reach a shared log aggregator from `EmbeddingClient` (`"embeddings"`) or any future client that mounts cockatiel.
 
 ### PaprikaClient (client.ts)
 
@@ -105,7 +107,7 @@ Typed HTTP client wrapping the Paprika Cloud Sync API.
   - Bearer token header (when token exists)
   - **Resilience:** `wrap(breakerPolicy, retryPolicy)` — breaker outermost, retry innermost. The breaker sees one execution per tool call regardless of how many retries that call exhausted internally. Retry: `maxAttempts: 3` means 3 retries, so each failing tool call makes 4 total network attempts before the retry gives up. Breaker: opens after 5 consecutive failing tool calls (`ConsecutiveBreaker(5)`), half-opens after 30 s.
   - **Retryable conditions:** HTTP 429/500/502/503 and network-level fetch failures (DNS, TCP reset, TLS handshake, abort). `fetch` throws a bare `TypeError` for network failures; `request()` wraps those in a private `NetworkRetryableError` marker so `handleType` can match them.
-  - **Circuit open:** throws `CircuitOpenError(url, { cause: brokenCircuitError })` — no fabricated HTTP status. The error carries `endpoint` and `cause: BrokenCircuitError` for structured access.
+  - **Circuit open:** throws `CircuitOpenError("paprika", url, { cause: brokenCircuitError })` (imported from `../utils/errors.js`; shared with `EmbeddingClient`) — no fabricated HTTP status. The error carries `service`, `endpoint`, and `cause: BrokenCircuitError` for structured access.
   - **Per-attempt logging:** debug on request start (`{method, url, attempt}`) and on success (`{method, url, attempt, status, attemptDurationMs}`); info on 401 before re-auth; error on non-retryable HTTP failure (`{method, url, attempt, status, attemptDurationMs}`). Retry and give-up telemetry comes from the lifecycle hooks (see below), not inline log calls.
   - 401 re-auth retry (single attempt)
   - Response envelope unwrapping (`{ result: T }` → `T`)
