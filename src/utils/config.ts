@@ -18,6 +18,10 @@ const ENV_VAR_HINTS: Readonly<Record<string, string>> = {
   "http.host": "MCP_HTTP_HOST",
   "http.allowedHosts": "MCP_ALLOWED_HOSTS",
   "http.allowedOrigins": "MCP_ALLOWED_ORIGINS",
+  "logging.level": "MCP_LOG_LEVEL",
+  "logging.notifyLevel": "MCP_LOG_NOTIFY_LEVEL",
+  "logging.pretty": "MCP_LOG_PRETTY",
+  "logging.file": "MCP_LOG_FILE",
   "features.replicateApiToken": "REPLICATE_API_TOKEN",
   "features.embeddings.apiKey": "OPENAI_API_KEY",
   "features.embeddings.baseUrl": "OPENAI_BASE_URL",
@@ -306,11 +310,13 @@ function loadDotEnv(configDir: string): void {
 }
 
 // Maps known env vars to the nested config object structure.
-function buildEnvOverrides(env: NodeJS.ProcessEnv): Record<string, unknown> {
+/** @internal Pure helper for env-var routing. Exported for testing only. */
+export function buildEnvOverrides(env: NodeJS.ProcessEnv): Record<string, unknown> {
   const overrides: Record<string, unknown> = {};
   const paprika: Record<string, unknown> = {};
   const sync: Record<string, unknown> = {};
   const http: Record<string, unknown> = {};
+  const logging: Record<string, unknown> = {};
   const features: Record<string, unknown> = {};
   const embeddings: Record<string, unknown> = {};
   const oauth: Record<string, unknown> = {};
@@ -329,6 +335,14 @@ function buildEnvOverrides(env: NodeJS.ProcessEnv): Record<string, unknown> {
   if (env["MCP_HTTP_HOST"] !== undefined) http["host"] = env["MCP_HTTP_HOST"];
   if (env["MCP_ALLOWED_HOSTS"] !== undefined) http["allowedHosts"] = env["MCP_ALLOWED_HOSTS"];
   if (env["MCP_ALLOWED_ORIGINS"] !== undefined) http["allowedOrigins"] = env["MCP_ALLOWED_ORIGINS"];
+
+  if (env["MCP_LOG_LEVEL"]) logging["level"] = env["MCP_LOG_LEVEL"];
+  if (env["MCP_LOG_NOTIFY_LEVEL"]) logging["notifyLevel"] = env["MCP_LOG_NOTIFY_LEVEL"];
+  if (env["MCP_LOG_FILE"]) logging["file"] = env["MCP_LOG_FILE"];
+  if (env["MCP_LOG_PRETTY"] !== undefined && env["MCP_LOG_PRETTY"] !== "") {
+    const raw = env["MCP_LOG_PRETTY"];
+    logging["pretty"] = raw === "auto" ? "auto" : raw === "true" || raw === "1";
+  }
 
   if (env["REPLICATE_API_TOKEN"] !== undefined) features["replicateApiToken"] = env["REPLICATE_API_TOKEN"];
   if (env["OPENAI_API_KEY"] !== undefined) embeddings["apiKey"] = env["OPENAI_API_KEY"];
@@ -352,6 +366,7 @@ function buildEnvOverrides(env: NodeJS.ProcessEnv): Record<string, unknown> {
   if (Object.keys(embeddings).length > 0) features["embeddings"] = embeddings;
   if (Object.keys(allowlist).length > 0) oauth["allowlist"] = allowlist;
   if (Object.keys(features).length > 0) overrides["features"] = features;
+  if (Object.keys(logging).length > 0) overrides["logging"] = logging;
   if (Object.keys(oauth).length > 0) overrides["oauth"] = oauth;
   if (Object.keys(paprika).length > 0) overrides["paprika"] = paprika;
   if (Object.keys(sync).length > 0) overrides["sync"] = sync;
