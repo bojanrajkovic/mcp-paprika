@@ -61,6 +61,19 @@ export function accessLog(log: Logger) {
 }
 
 /**
+ * Options for `startHttp`. All fields are optional and intended for testing.
+ * Production callers should pass only `config`.
+ */
+export type StartHttpOptions = {
+  /**
+   * Override the transport-level pino logger. When provided, replaces
+   * `app.log.child({ component: "transport-http" })` so integration tests
+   * can capture access-log records without spinning up a real multistream.
+   */
+  readonly _testLog?: Logger;
+};
+
+/**
  * Start the server as a Streamable HTTP endpoint. Returns a handle whose
  * `shutdown()` aborts open SSE streams, evicts all sessions, drains the
  * HTTP server, and stops the sync engine — all under a hard timeout.
@@ -78,7 +91,7 @@ export function accessLog(log: Logger) {
  *   session ids return 404; non-initialize requests without a session id
  *   return 400.
  */
-export async function startHttp(config: PaprikaConfig): Promise<HttpTransportHandle> {
+export async function startHttp(config: PaprikaConfig, opts: StartHttpOptions = {}): Promise<HttpTransportHandle> {
   const sessions = new Map<string, Session>();
 
   // DNS rebinding protection: derive once at startup. The SDK's transport
@@ -100,7 +113,7 @@ export async function startHttp(config: PaprikaConfig): Promise<HttpTransportHan
   // included). See src/server/build.ts for the ordering rationale.
   const { app, sync } = await buildAppContext(config, notifier);
 
-  const log = app.log.child({ component: "transport-http" });
+  const log = opts._testLog ?? app.log.child({ component: "transport-http" });
 
   if (config.sync.enabled) {
     sync.start();
@@ -111,16 +124,17 @@ export async function startHttp(config: PaprikaConfig): Promise<HttpTransportHan
 
   const hono = new Hono();
 
+  // Access log: mounted BEFORE /healthz and /mcp so every route's responses
+  // are captured — including the liveness probe. Also before the auth block
+  // so 401s and all other auth-mediated responses are captured.
+  hono.use("*", accessLog(log));
+
   hono.get("/healthz", (c) =>
     c.json({
       ok: true,
       sessions: sessions.size,
     }),
   );
-
-  // Access log: mounted after /healthz and BEFORE the auth block so 401s and
-  // all other auth-mediated responses are captured in the access log.
-  hono.use("*", accessLog(log));
 
   if (app.auth !== null) {
     // Capture auth to avoid null-checks inside callbacks (mirrors SyncEngine pattern)

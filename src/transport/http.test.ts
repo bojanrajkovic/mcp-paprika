@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { http, HttpResponse } from "msw";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
-import { startHttp, accessLog, type HttpTransportHandle } from "./http.js";
+import { startHttp, accessLog, type HttpTransportHandle, type StartHttpOptions } from "./http.js";
 import type { PaprikaConfig } from "../utils/config.js";
 import { createOidcStub } from "../auth/__fixtures__/oidc-stub.js";
 import { DiskCache } from "../cache/disk-cache.js";
@@ -777,9 +777,9 @@ describe("HTTP transport — OAuth mounted", () => {
 
 // ---------------------------------------------------------------------------
 // accessLog middleware unit tests (structured-logging.AC9.5)
-// These tests exercise the accessLog factory in isolation using stub Hono
-// Context objects — startHttp has no logger injection seam, so integration
-// testing of log records would require modifying its signature.
+// Unit tests exercise the accessLog factory in isolation using stub Hono
+// Context objects. Integration tests below (AC9.5-integration) boot the real
+// startHttp app and verify the router-placement contract.
 // ---------------------------------------------------------------------------
 
 describe("accessLog middleware (AC9.5)", () => {
@@ -856,5 +856,64 @@ describe("accessLog middleware (AC9.5)", () => {
     const paths = records.map((r) => r["path"]);
     expect(paths).toContain("/healthz");
     expect(paths).toContain("/mcp");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Integration tests: accessLog placement via real startHttp router (AC9.5-integration)
+//
+// These boot the real app with an injected test logger to verify that the
+// accessLog middleware is mounted BEFORE /healthz in Hono's route chain, so
+// requests to /healthz actually emit log records. The unit tests above bypass
+// Hono's router entirely and cannot catch middleware placement bugs.
+// ---------------------------------------------------------------------------
+
+describe("accessLog middleware placement — integration (AC9.5-integration)", () => {
+  it("AC9.5-int-1: GET /healthz emits an access-log record with {method, path, status}", async () => {
+    const { log, records } = makePinoCapture();
+    // _testLog injects the capture logger as the transport-level logger used by accessLog.
+    const opts: StartHttpOptions = { _testLog: log };
+    const handle = await startHttp(makeConfig(), opts);
+    try {
+      await fetch(`http://127.0.0.1:${handle.port.toString()}/healthz`);
+
+      // There must be at least one record for /healthz.
+      const healthzRecords = records.filter((r) => r["path"] === "/healthz");
+      expect(healthzRecords.length).toBeGreaterThan(0);
+      const r = healthzRecords[0]!;
+      expect(r["method"]).toBe("GET");
+      expect(r["status"]).toBe(200);
+    } finally {
+      await handle.shutdown();
+    }
+  });
+
+  it("AC9.5-int-2: POST /mcp without session id emits an access-log record for /mcp", async () => {
+    // Confirms accessLog also runs for /mcp (not just /healthz). A POST /mcp
+    // with no session id and a non-initialize body returns 400 — info level.
+    // The 5xx fan-out path (error level → notifier multistream) is covered
+    // by structural inspection: accessLog is constructed from
+    // `app.log.child({component: "transport-http"})` and `app.log` carries
+    // the notifier-backed multistream, so error records automatically fan out.
+    // The multistream wiring itself is tested in src/utils/log.test.ts.
+    const { log, records } = makePinoCapture();
+    const opts: StartHttpOptions = { _testLog: log };
+    const handle = await startHttp(makeConfig(), opts);
+    try {
+      await fetch(`http://127.0.0.1:${handle.port.toString()}/mcp`, {
+        method: "POST",
+        headers: { "content-type": "application/json", accept: "application/json" },
+        body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }),
+      });
+
+      const mcpRecords = records.filter((r) => r["path"] === "/mcp");
+      expect(mcpRecords.length).toBeGreaterThan(0);
+      const r = mcpRecords[0]!;
+      expect(r["method"]).toBe("POST");
+      expect(r["status"]).toBe(400);
+      expect(r["level"]).toBe(30); // info; 5xx would be error (50)
+    } finally {
+      await handle.shutdown();
+    }
   });
 });
