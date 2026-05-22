@@ -12,9 +12,11 @@ import { getLogDir } from "./xdg.js";
 
 // ---------------------------------------------------------------------------
 // Public re-exports.
-// The deprecated string-form createLogger overload below has one remaining
-// caller (src/features/vector-store.ts); both the caller and the overload
-// are removed when that module migrates to the pino constructor pattern.
+// The deprecated string-form createLogger overload below has zero remaining
+// callers (the last caller, src/features/vector-store.ts, was migrated to the
+// pino constructor pattern in Phase 6). The overload and implementation are
+// kept for one release cycle to avoid breaking any untracked callers, then
+// removed in the next cleanup pass.
 // ---------------------------------------------------------------------------
 
 /**
@@ -30,8 +32,8 @@ export function toMessage(e: unknown): string {
 /**
  * @deprecated Use `createLogger(opts: LoggerOptions)` instead.
  * Returns a function that writes `[${prefix}] ${msg}\n` to stderr.
- * One caller remains in src/features/vector-store.ts; both the caller and
- * this overload are removed when vector-store migrates to the pino pattern.
+ * Zero callers remain (migrated in Phase 6). Retained for one release cycle;
+ * remove in the next cleanup pass.
  */
 export function createLogger(prefix: string): (msg: string) => void;
 /**

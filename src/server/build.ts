@@ -162,7 +162,7 @@ export async function buildAppContext(
     log.warn({ err: errorBox.value }, "initial sync failed; background sync will retry");
   }
 
-  const vectorStore = await buildDiscoverComponents(config, store, sync.events);
+  const vectorStore = await buildDiscoverComponents(config, store, sync.events, log);
 
   const app: AppContext = {
     client,

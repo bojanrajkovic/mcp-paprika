@@ -1,6 +1,6 @@
 # Feature Implementations
 
-Last verified: 2026-05-15
+Last verified: 2026-05-22
 
 ## Purpose
 
@@ -56,19 +56,19 @@ with SHA-256 content-hash change detection (persisted to `hash-index.json`), bat
 via `EmbeddingClient`, semantic search, and corruption recovery (backs up and recreates on
 corrupt Vectra index or hash-index.json).
 
-| Export            | Signature / Description                                                                     |
-| ----------------- | ------------------------------------------------------------------------------------------- |
-| `contentHash`     | `(text: string) => string` — SHA-256 hex digest for change detection                        |
-| `SemanticResult`  | `type { uid, score, recipeName }` — single search result                                    |
-| `IndexingResult`  | `type { indexed, skipped, total }` — batch indexing summary                                 |
-| `VectorStore`     | `constructor(cacheDir, embedder, modelId, schemaVersion)` — vector store instance           |
-| `.init()`         | `Promise<void>` — creates directory, Vectra index, loads hash map; recovers from corruption |
-| `.indexRecipes()` | `Promise<IndexingResult>` — batch index with change detection, batches of 500               |
-| `.indexRecipe()`  | `Promise<IndexingResult>` — convenience single-recipe wrapper                               |
-| `.search()`       | `Promise<ReadonlyArray<SemanticResult>>` — semantic search, default topK=10                 |
-| `.removeRecipe()` | `Promise<void>` — remove recipe from index and hash map                                     |
-| `.clearHashes()`  | `void` — reset in-memory hash index to force full re-embedding                              |
-| `.size`           | `number` getter — count of indexed recipes (via hash map)                                   |
+| Export            | Signature / Description                                                                                                                                                                                                             |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `contentHash`     | `(text: string) => string` — SHA-256 hex digest for change detection                                                                                                                                                                |
+| `SemanticResult`  | `type { uid, score, recipeName }` — single search result                                                                                                                                                                            |
+| `IndexingResult`  | `type { indexed, skipped, total }` — batch indexing summary                                                                                                                                                                         |
+| `VectorStore`     | `constructor(cacheDir, embedder, modelId, schemaVersion, log?)` — vector store instance; `log` is an optional pino `Logger`, defaults to silent. Pass `appLog.child({ component: "vector-store" })` from `buildDiscoverComponents`. |
+| `.init()`         | `Promise<void>` — creates directory, Vectra index, loads hash map; recovers from corruption                                                                                                                                         |
+| `.indexRecipes()` | `Promise<IndexingResult>` — batch index with change detection, batches of 500                                                                                                                                                       |
+| `.indexRecipe()`  | `Promise<IndexingResult>` — convenience single-recipe wrapper                                                                                                                                                                       |
+| `.search()`       | `Promise<ReadonlyArray<SemanticResult>>` — semantic search, default topK=10                                                                                                                                                         |
+| `.removeRecipe()` | `Promise<void>` — remove recipe from index and hash map                                                                                                                                                                             |
+| `.clearHashes()`  | `void` — reset in-memory hash index to force full re-embedding                                                                                                                                                                      |
+| `.size`           | `number` getter — count of indexed recipes (via hash map)                                                                                                                                                                           |
 
 **Invariants:**
 
@@ -93,10 +93,10 @@ once per server instance when `app.vectorStore !== null`.
 A local `SyncEventsView` interface decouples this module from `SyncEngine`; it accepts
 anything that exposes a typed `on`/`off` for `sync:complete` and `sync:error`.
 
-| Export                    | Signature / Description                                                                                         |
-| ------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| `buildDiscoverComponents` | `(config, store, syncEvents) => Promise<VectorStore \| null>` — builds + wires the semantic-search components   |
-| `SyncEventsView`          | `interface` describing the subset of `SyncEngine.events` (`on`/`off` for `sync:complete` and `sync:error`) used |
+| Export                    | Signature / Description                                                                                                                                                                                           |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `buildDiscoverComponents` | `(config, store, syncEvents, log?) => Promise<VectorStore \| null>` — builds + wires the semantic-search components; optional `log` is threaded as `log?.child({ component: "vector-store" })` into `VectorStore` |
+| `SyncEventsView`          | `interface` describing the subset of `SyncEngine.events` (`on`/`off` for `sync:complete` and `sync:error`) used                                                                                                   |
 
 **Invariants:**
 

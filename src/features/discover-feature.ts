@@ -5,6 +5,7 @@ import type { RecipeStore } from "../cache/recipe-store.js";
 import type { SyncResult } from "../paprika/types.js";
 import type { PaprikaConfig } from "../utils/config.js";
 import { toMessage } from "../utils/log.js";
+import type { Logger } from "pino";
 
 /**
  * View over the SyncEngine event stream. Matches `SyncEngine.events` (a
@@ -35,6 +36,7 @@ export async function buildDiscoverComponents(
   config: PaprikaConfig,
   store: RecipeStore,
   syncEvents: SyncEventsView,
+  log?: Logger,
 ): Promise<VectorStore | null> {
   const embeddingsConfig = config.features?.embeddings;
 
@@ -44,7 +46,13 @@ export async function buildDiscoverComponents(
   }
 
   const embedder = new EmbeddingClient(embeddingsConfig);
-  const vectorStore = new VectorStore(getCacheDir(), embedder, embeddingsConfig.model, EMBEDDING_SCHEMA_VERSION);
+  const vectorStore = new VectorStore(
+    getCacheDir(),
+    embedder,
+    embeddingsConfig.model,
+    EMBEDDING_SCHEMA_VERSION,
+    log?.child({ component: "vector-store" }),
+  );
   await vectorStore.init();
 
   // Cold-start initial indexing: the initial sync.syncOnce() in the entry

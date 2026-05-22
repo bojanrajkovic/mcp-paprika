@@ -57,8 +57,9 @@ import { LocalIndex } from "vectra";
 import type { EmbeddingClient } from "./embeddings.js";
 import { recipeToEmbeddingText } from "./embeddings.js";
 import { VectorStoreError } from "./vector-store-errors.js";
+import type { Logger } from "pino";
+import pino from "pino";
 import type { Recipe, CategoryUid } from "../paprika/types.js";
-import { createLogger } from "../utils/log.js";
 
 const HashIndexSchema = z.record(z.string(), z.string());
 
@@ -69,7 +70,8 @@ function isNodeError(error: unknown): error is NodeJS.ErrnoException {
   return error instanceof Error && "code" in error;
 }
 
-const log = createLogger("mcp-paprika:vectors");
+// Module-level silent logger used as default when no logger is provided.
+const SILENT = pino({ level: "silent" });
 
 const VectorMetaSchema = z.object({
   model: z.string(),
@@ -85,9 +87,10 @@ export class VectorStore {
   private readonly _embedder: EmbeddingClient;
   private readonly _modelId: string;
   private readonly _schemaVersion: number;
+  private readonly _log: Logger;
   private _hashes: Record<string, string> = {};
 
-  constructor(cacheDir: string, embedder: EmbeddingClient, modelId: string, schemaVersion: number) {
+  constructor(cacheDir: string, embedder: EmbeddingClient, modelId: string, schemaVersion: number, log?: Logger) {
     this._vectorsDir = join(cacheDir, "vectors");
     this._hashIndexPath = join(this._vectorsDir, "hash-index.json");
     this._metaPath = join(this._vectorsDir, "vector-meta.json");
@@ -95,6 +98,7 @@ export class VectorStore {
     this._embedder = embedder;
     this._modelId = modelId;
     this._schemaVersion = schemaVersion;
+    this._log = log ?? SILENT;
   }
 
   async init(): Promise<void> {
@@ -107,7 +111,7 @@ export class VectorStore {
         await this._index.createIndex();
       }
     } catch {
-      log("corrupt Vectra index, backing up and recreating");
+      this._log.warn({ vectorsDir: this._vectorsDir }, "corrupt Vectra index, backing up and recreating");
       const backupDir = `${this._vectorsDir}.bak`;
       await cp(this._vectorsDir, backupDir, { recursive: true, force: true });
       await this._index.createIndex({ version: 1, deleteIfExists: true });
@@ -122,11 +126,18 @@ export class VectorStore {
     const meta = await this._loadMeta();
     if (meta !== null) {
       if (meta.model !== this._modelId) {
-        log(`embedding model changed (${meta.model} → ${this._modelId}), clearing vector index`);
+        this._log.info(
+          { previousModel: meta.model, newModel: this._modelId },
+          "embedding model changed, clearing vector index",
+        );
         this._hashes = {};
       } else if ((meta.schemaVersion ?? 0) !== this._schemaVersion) {
-        log(
-          `embedding schema version changed (${String(meta.schemaVersion ?? 0)} → ${String(this._schemaVersion)}), clearing vector index`,
+        this._log.info(
+          {
+            previousSchemaVersion: meta.schemaVersion ?? 0,
+            newSchemaVersion: this._schemaVersion,
+          },
+          "embedding schema version changed, clearing vector index",
         );
         this._hashes = {};
       }
@@ -139,6 +150,7 @@ export class VectorStore {
       raw = await readFile(this._hashIndexPath, "utf-8");
     } catch (error: unknown) {
       if (isNodeError(error) && error.code === "ENOENT") {
+        // Cold-start: hash-index.json doesn't exist yet. Silent by design.
         this._hashes = {};
         return;
       }
@@ -148,8 +160,8 @@ export class VectorStore {
     let parsed: unknown;
     try {
       parsed = JSON.parse(raw);
-    } catch {
-      log("corrupt hash-index.json (invalid JSON), backing up and resetting");
+    } catch (err) {
+      this._log.warn({ err, path: this._hashIndexPath }, "corrupt hash-index.json, backing up and resetting");
       await this._backupFile(this._hashIndexPath, `${this._hashIndexPath}.bak`);
       this._hashes = {};
       return;
@@ -157,7 +169,7 @@ export class VectorStore {
 
     const result = HashIndexSchema.safeParse(parsed);
     if (!result.success) {
-      log("corrupt hash-index.json (schema mismatch), backing up and resetting");
+      this._log.warn({ path: this._hashIndexPath }, "schema mismatch on hash-index.json, backing up and resetting");
       await this._backupFile(this._hashIndexPath, `${this._hashIndexPath}.bak`);
       this._hashes = {};
       return;
@@ -172,6 +184,7 @@ export class VectorStore {
       raw = await readFile(this._metaPath, "utf-8");
     } catch (error: unknown) {
       if (isNodeError(error) && error.code === "ENOENT") {
+        // Cold-start: vector-meta.json doesn't exist yet. Silent by design.
         return null;
       }
       throw error;
@@ -179,7 +192,8 @@ export class VectorStore {
 
     try {
       return VectorMetaSchema.parse(JSON.parse(raw));
-    } catch {
+    } catch (err) {
+      this._log.debug({ err, path: this._metaPath }, "could not parse vector-meta.json; will re-detect model/schema");
       return null;
     }
   }
@@ -203,6 +217,7 @@ export class VectorStore {
       if (!isNodeError(error) || error.code !== "ENOENT") {
         throw error;
       }
+      // Idempotent removal: file already gone is the desired end state.
     }
   }
 

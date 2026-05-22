@@ -55,7 +55,7 @@ Top-level, 1-deep (`*.field`), and 2-deep (`*.*.field`) wildcards for each of th
 | `error`    | `error`    |
 | `fatal`    | `critical` |
 
-**Deprecated overload:** `createLogger(prefix: string)` is a `@deprecated` overload that returns `(msg: string) => void` writing `[prefix] msg\n` to stderr. One caller remains in `src/features/vector-store.ts`; the caller and this overload are removed when vector-store migrates to the pino constructor pattern.
+**Deprecated overload:** `createLogger(prefix: string)` is a `@deprecated` overload that returns `(msg: string) => void` writing `[prefix] msg\n` to stderr. Zero callers remain (the last caller, `src/features/vector-store.ts`, was migrated to the pino constructor pattern in Phase 6). The overload is retained for one release cycle and will be removed in the next cleanup pass.
 
 **`toMessage(e)`:** `(e: unknown) => string` — extracts a human-readable message from an unknown thrown value: `e.message` if `e instanceof Error`, else `String(e)`. Ten production sites across the codebase depend on this export.
 
