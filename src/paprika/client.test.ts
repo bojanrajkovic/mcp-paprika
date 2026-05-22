@@ -1049,6 +1049,16 @@ describe("PaprikaClient", () => {
       // Second warn: about to run the 3rd network touch (attempt 3)
       expect(retryWarns[1]!["attempt"]).toBe(3);
 
+      // Cross-assert: onRetry's attempt numbers are consistent with the inline debug log
+      // at the same log site (ctx.attempt + 1). The warn fires BEFORE the retry; the
+      // debug "paprika request start" fires at the start of that same attempt. Both should
+      // carry the same attempt number for the same network touch.
+      const startsForAttempt2 = records.filter((r) => r["msg"] === "paprika request start" && r["attempt"] === 2);
+      expect(startsForAttempt2).toHaveLength(1);
+
+      const startsForAttempt3 = records.filter((r) => r["msg"] === "paprika request start" && r["attempt"] === 3);
+      expect(startsForAttempt3).toHaveLength(1);
+
       // Final call succeeded — no give-up error record
       const giveUps = records.filter((r) => r["msg"] === "paprika retries exhausted");
       expect(giveUps).toHaveLength(0);
