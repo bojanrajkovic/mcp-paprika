@@ -455,3 +455,233 @@ describe("resolvePrimaryDestination", () => {
     });
   });
 });
+
+// ---------------------------------------------------------------------------
+// Task 7 — createLogger composition: redact, defaults, multistream constraint
+// ---------------------------------------------------------------------------
+
+describe("createLogger (composition)", () => {
+  let savedIsTTY: PropertyDescriptor | undefined;
+  let tmpDir: string | undefined;
+
+  beforeEach(() => {
+    savedIsTTY = Object.getOwnPropertyDescriptor(process.stderr, "isTTY");
+    // Always non-TTY so we can use file destination for capturing output
+    Object.defineProperty(process.stderr, "isTTY", { configurable: true, value: false });
+  });
+
+  afterEach(() => {
+    if (savedIsTTY !== undefined) {
+      Object.defineProperty(process.stderr, "isTTY", savedIsTTY);
+    } else {
+      delete (process.stderr as unknown as Record<string, unknown>)["isTTY"];
+    }
+    if (tmpDir !== undefined) {
+      try {
+        rmSync(tmpDir, { recursive: true, force: true });
+      } catch {
+        // Best-effort
+      }
+      tmpDir = undefined;
+    }
+  });
+
+  /** Build a createLogger opts with a file destination. */
+  function makeFileOpts(overrides: Partial<LoggerOptions> = {}): { opts: LoggerOptions; logFile: string } {
+    const td = mkdtempSync(join(tmpdir(), "mcp-paprika-test-"));
+    tmpDir = td;
+    const logFile = join(td, "app.log");
+    const { notifier } = makeStubNotifier();
+    const opts: LoggerOptions = {
+      transport: "stdio",
+      notifier,
+      level: "info",
+      notifyLevel: "warn",
+      pretty: false,
+      file: logFile,
+      ...overrides,
+    };
+    return { opts, logFile };
+  }
+
+  /** Read and parse all JSON lines from a log file. */
+  function readLogLines(logFile: string): Array<Record<string, unknown>> {
+    const contents = readFileSync(logFile, "utf8");
+    return contents
+      .split("\n")
+      .filter((l) => l.trim().length > 0)
+      .map((l) => JSON.parse(l) as Record<string, unknown>);
+  }
+
+  describe("structured-logging.AC2.7: credential redaction in primary stream", () => {
+    const sensitiveFields = [
+      "authorization",
+      "password",
+      "token",
+      "client_secret",
+      "access_token",
+      "refresh_token",
+      "id_token",
+    ] as const;
+
+    for (const field of sensitiveFields) {
+      it(`redacts ${field} nested one level deep (*.field wildcard — primary stream)`, () => {
+        const { opts, logFile } = makeFileOpts({ level: "info", notifyLevel: "fatal" });
+        const logger = createLogger(opts);
+
+        logger.info({ nested: { [field]: "super-secret" } }, "sensitive-nested");
+
+        const [line] = readLogLines(logFile);
+        expect(line).toBeDefined();
+        const nested = line!["nested"] as Record<string, unknown>;
+        // Pino *.field wildcard matches one level deep (nested.field)
+        expect(nested[field]).toBe("[Redacted]");
+      });
+    }
+  });
+
+  describe("structured-logging.AC2.7: credential redaction in fan-out payload", () => {
+    it("fan-out data contains redacted values, not originals", async () => {
+      const { notifier, spy } = makeStubNotifier();
+      const { opts, logFile: _ } = makeFileOpts({ notifier, level: "warn", notifyLevel: "warn" });
+      const logger = createLogger(opts);
+
+      logger.warn({ nested: { authorization: "Bearer abc123" } }, "auth-log");
+
+      // Give fire-and-forget a tick
+      await new Promise((r) => setImmediate(r));
+
+      expect(spy).toHaveBeenCalledTimes(1);
+      const data = spy.mock.calls[0]![0].data as Record<string, unknown>;
+      const nested = data["nested"] as Record<string, unknown>;
+      expect(nested["authorization"]).toBe("[Redacted]");
+      expect(nested["authorization"]).not.toBe("Bearer abc123");
+    });
+  });
+
+  describe("structured-logging.AC2.2: info does NOT fan out with default notifyLevel: warn", () => {
+    it("log.info does not call loggingMessage when notifyLevel is warn", async () => {
+      const { notifier, spy } = makeStubNotifier();
+      const { opts } = makeFileOpts({
+        notifier,
+        level: "info",
+        notifyLevel: "warn",
+      });
+      const logger = createLogger(opts);
+
+      logger.info("should not fan out");
+      await new Promise((r) => setImmediate(r));
+
+      expect(spy).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("structured-logging.AC2.3: configurable notifyLevel threshold", () => {
+    it("log.info fans out when notifyLevel is info", async () => {
+      const { notifier, spy } = makeStubNotifier();
+      const { opts } = makeFileOpts({
+        notifier,
+        level: "info",
+        notifyLevel: "info",
+      });
+      const logger = createLogger(opts);
+
+      logger.info("should fan out");
+      await new Promise((r) => setImmediate(r));
+
+      expect(spy).toHaveBeenCalledTimes(1);
+      expect(spy.mock.calls[0]![0].level).toBe("info");
+    });
+
+    it("log.warn does NOT fan out when notifyLevel is error", async () => {
+      const { notifier, spy } = makeStubNotifier();
+      const { opts } = makeFileOpts({
+        notifier,
+        level: "warn",
+        notifyLevel: "error",
+      });
+      const logger = createLogger(opts);
+
+      logger.warn("should not fan out");
+      await new Promise((r) => setImmediate(r));
+
+      expect(spy).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("structured-logging.AC10.3: defaults composition", () => {
+    it("logger .level getter returns 'info' when level=info and notifyLevel=warn", () => {
+      const { opts } = makeFileOpts({ level: "info", notifyLevel: "warn" });
+      const logger = createLogger(opts);
+      // Root level is min(info, warn) = info
+      expect(logger.level).toBe("info");
+    });
+
+    it("log.warn reaches fan-out but log.info does not (default thresholds)", async () => {
+      const { notifier, spy } = makeStubNotifier();
+      const { opts } = makeFileOpts({
+        notifier,
+        level: "info",
+        notifyLevel: "warn",
+      });
+      const logger = createLogger(opts);
+
+      logger.info("this should not fan out");
+      await new Promise((r) => setImmediate(r));
+      expect(spy).not.toHaveBeenCalled();
+
+      logger.warn("this should fan out");
+      await new Promise((r) => setImmediate(r));
+      expect(spy).toHaveBeenCalledTimes(1);
+      expect(spy.mock.calls[0]![0].level).toBe("warning");
+    });
+  });
+
+  describe("Multistream root-level constraint (inverse case)", () => {
+    it("root logger level is notifyLevel when notifyLevel < level", async () => {
+      const { notifier, spy } = makeStubNotifier();
+      const { opts } = makeFileOpts({
+        notifier,
+        level: "warn",
+        notifyLevel: "info",
+      });
+      const logger = createLogger(opts);
+
+      // Root level should be min(warn, info) = info
+      expect(logger.level).toBe("info");
+
+      // An info record reaches the root; it's filtered by primary (level:warn)
+      // but passes through to fan-out (level:info)
+      logger.info("info-to-fanout");
+      await new Promise((r) => setImmediate(r));
+
+      expect(spy).toHaveBeenCalledTimes(1);
+      expect(spy.mock.calls[0]![0].level).toBe("info");
+    });
+  });
+
+  describe("AC2.1: full integration — warn fans out with curated payload", () => {
+    it("log.warn produces loggingMessage with correct MCP level and payload via full createLogger", async () => {
+      const { notifier, spy } = makeStubNotifier();
+      const { opts } = makeFileOpts({
+        notifier,
+        level: "info",
+        notifyLevel: "warn",
+      });
+      const logger = createLogger(opts);
+
+      logger.warn({ foo: "bar" }, "boom");
+      await new Promise((r) => setImmediate(r));
+
+      expect(spy).toHaveBeenCalledTimes(1);
+      const call = spy.mock.calls[0]![0];
+      expect(call.level).toBe("warning");
+      const data = call.data as Record<string, unknown>;
+      expect(data["msg"]).toBe("boom");
+      expect(data["foo"]).toBe("bar");
+      // Pino internals stripped
+      expect(data).not.toHaveProperty("level");
+      expect(data).not.toHaveProperty("time");
+    });
+  });
+});
