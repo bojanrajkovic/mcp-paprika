@@ -41,7 +41,7 @@ export async function buildDiscoverComponents(
   const discoverLog = log?.child({ component: "discover" });
 
   if (!embeddingsConfig) {
-    process.stderr.write("[mcp-paprika] Semantic search: disabled\n");
+    discoverLog?.info("semantic search disabled");
     return null;
   }
 
@@ -85,6 +85,6 @@ export async function buildDiscoverComponents(
     }
   });
 
-  process.stderr.write("[mcp-paprika] Semantic search: enabled\n");
+  discoverLog?.info("semantic search enabled");
   return vectorStore;
 }

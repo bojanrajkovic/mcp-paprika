@@ -83,13 +83,9 @@ function makeDisabledConfig(withFeaturesEmpty = false) {
 
 describe("p3-u08-discover-wiring: buildDiscoverComponents", () => {
   let mockVectorStore: any;
-  let stderrSpy: any;
 
   beforeEach(async () => {
     vi.clearAllMocks();
-    if (stderrSpy) {
-      stderrSpy.mockRestore();
-    }
 
     // Get the mocked modules
     const { EmbeddingClient } = await import("./embeddings.js");
@@ -110,14 +106,9 @@ describe("p3-u08-discover-wiring: buildDiscoverComponents", () => {
       }
     }
     vi.mocked(VectorStore).mockImplementation(MockVectorStore as any);
-
-    stderrSpy = vi.spyOn(process.stderr, "write").mockReturnValue(true);
   });
 
   afterEach(() => {
-    if (stderrSpy) {
-      stderrSpy.mockRestore();
-    }
     vi.clearAllMocks();
   });
 
@@ -146,40 +137,49 @@ describe("p3-u08-discover-wiring: buildDiscoverComponents", () => {
       expect(vectorStore).toBeNull();
     });
 
-    it("AC1.3: logs 'Semantic search: enabled' to stderr when embeddings configured", async () => {
+    it("AC1.3: emits structured info log 'semantic search enabled' when embeddings configured", async () => {
       const { buildDiscoverComponents } = await import("./discover-feature.js");
       const store = new RecipeStore();
       store.load([], []);
       const syncEvents = makeMockSyncEvents();
       const config = makeEnabledConfig();
+      const { log, records } = makePinoCapture();
 
-      await buildDiscoverComponents(config, store, syncEvents);
+      await buildDiscoverComponents(config, store, syncEvents, log);
 
-      expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining("Semantic search: enabled"));
+      const infoRecords = records.filter((r) => r["msg"] === "semantic search enabled");
+      expect(infoRecords).toHaveLength(1);
+      expect(infoRecords[0]!["level"]).toBe(30); // pino info = 30
     });
 
-    it("AC1.4: logs 'Semantic search: disabled' to stderr when embeddings not configured", async () => {
+    it("AC1.4: emits structured info log 'semantic search disabled' when embeddings not configured", async () => {
       const { buildDiscoverComponents } = await import("./discover-feature.js");
       const store = new RecipeStore();
       store.load([], []);
       const syncEvents = makeMockSyncEvents();
       const config = makeDisabledConfig();
+      const { log, records } = makePinoCapture();
 
-      await buildDiscoverComponents(config, store, syncEvents);
+      await buildDiscoverComponents(config, store, syncEvents, log);
 
-      expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining("Semantic search: disabled"));
+      const infoRecords = records.filter((r) => r["msg"] === "semantic search disabled");
+      expect(infoRecords).toHaveLength(1);
+      expect(infoRecords[0]!["level"]).toBe(30); // pino info = 30
     });
 
-    it("AC1.4 (alternative): logs 'Semantic search: disabled' when features.embeddings is undefined", async () => {
+    it("AC1.4 (alternative): emits 'semantic search disabled' when features.embeddings is undefined", async () => {
       const { buildDiscoverComponents } = await import("./discover-feature.js");
       const store = new RecipeStore();
       store.load([], []);
       const syncEvents = makeMockSyncEvents();
       const config = makeDisabledConfig(true);
+      const { log, records } = makePinoCapture();
 
-      await buildDiscoverComponents(config, store, syncEvents);
+      await buildDiscoverComponents(config, store, syncEvents, log);
 
-      expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining("Semantic search: disabled"));
+      const infoRecords = records.filter((r) => r["msg"] === "semantic search disabled");
+      expect(infoRecords).toHaveLength(1);
+      expect(infoRecords[0]!["level"]).toBe(30); // pino info = 30
     });
   });
 
