@@ -10,15 +10,6 @@ import pino from "pino";
 import pretty from "pino-pretty";
 import { getLogDir } from "./xdg.js";
 
-// ---------------------------------------------------------------------------
-// Public re-exports.
-// The deprecated string-form createLogger overload below has zero remaining
-// callers (the last caller, src/features/vector-store.ts, was migrated to the
-// pino constructor pattern in Phase 6). The overload and implementation are
-// kept for one release cycle to avoid breaking any untracked callers, then
-// removed in the next cleanup pass.
-// ---------------------------------------------------------------------------
-
 /**
  * Extract a human-readable message from an unknown thrown value.
  *
@@ -27,26 +18,6 @@ import { getLogDir } from "./xdg.js";
  */
 export function toMessage(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
-}
-
-/**
- * @deprecated Use `createLogger(opts: LoggerOptions)` instead.
- * Returns a function that writes `[${prefix}] ${msg}\n` to stderr.
- * Zero callers remain (migrated in Phase 6). Retained for one release cycle;
- * remove in the next cleanup pass.
- */
-export function createLogger(prefix: string): (msg: string) => void;
-/**
- * Construct a pino logger with multistream output.
- * @see LoggerOptions for configuration details.
- */
-export function createLogger(opts: LoggerOptions): pino.Logger;
-export function createLogger(prefixOrOpts: string | LoggerOptions): ((msg: string) => void) | pino.Logger {
-  if (typeof prefixOrOpts === "string") {
-    const prefix = prefixOrOpts;
-    return (msg) => process.stderr.write(`[${prefix}] ${msg}\n`);
-  }
-  return _createLogger(prefixOrOpts);
 }
 
 // ---------------------------------------------------------------------------
@@ -240,12 +211,11 @@ function lowestLevel(a: LevelWithSilent, b: LevelWithSilent): LevelWithSilent {
 }
 
 // ---------------------------------------------------------------------------
-// Private implementation: _createLogger
-// Public overloads are defined above to preserve backward compat.
+// createLogger
 // ---------------------------------------------------------------------------
 
 /**
- * Internal implementation. Construct a pino logger with two output streams:
+ * Construct a pino logger with two output streams:
  * - A primary destination (stdout JSON for HTTP; pino-pretty to stderr or
  *   file for stdio), filtered at `opts.level`.
  * - A notifier fan-out Writable that maps records to MCP logging messages,
@@ -254,7 +224,7 @@ function lowestLevel(a: LevelWithSilent, b: LevelWithSilent): LevelWithSilent {
  * Redact paths are baked in at construction and apply to both streams.
  * Called exactly once per process by `buildAppContext`.
  */
-function _createLogger(opts: LoggerOptions): pino.Logger {
+export function createLogger(opts: LoggerOptions): pino.Logger {
   const primary = resolvePrimaryDestination(opts);
   const fanout = notifierStream(opts.notifier);
   const rootLevel = lowestLevel(opts.level, opts.notifyLevel);
