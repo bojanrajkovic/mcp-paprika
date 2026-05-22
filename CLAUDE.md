@@ -73,14 +73,6 @@ MCP server for the Paprika recipe manager. Two transports: **stdio** (default; u
 
 `console.log` is banned via the `no-console` oxlint rule. This MCP server uses stdio transport — any stdout output corrupts the protocol wire format.
 
-## Dependency Policy
-
-Minimize runtime dependencies. Every new dependency must justify its inclusion:
-
-- Prefer Node.js built-in modules when available
-- Evaluate bundle size and maintenance status before adding packages
-- Current runtime deps: `@hono/mcp`, `@hono/node-server`, `@modelcontextprotocol/sdk`, `async-mutex`, `cockatiel`, `dotenv`, `env-paths`, `hono`, `hono-rate-limiter`, `jose`, `luxon`, `mitt`, `neverthrow`, `parse-duration`, `vectra`, `zod`
-
 ## Testing
 
 - **Runner:** vitest
