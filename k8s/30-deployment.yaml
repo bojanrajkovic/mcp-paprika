@@ -47,7 +47,7 @@ spec:
             # the `google` preset; client credentials + allowlist live in
             # the mcp-paprika Secret.
             - name: MCP_PUBLIC_URL
-              value: https://<your-public-url>
+              value: https://<public-host>
             # google preset works for Google accounts. For other IdPs set this
             # to entra/okta/auth0/keycloak, or drop it and set
             # MCP_OIDC_DISCOVERY_URL instead. See docs/configuration.md.

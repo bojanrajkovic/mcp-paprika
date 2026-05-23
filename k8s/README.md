@@ -12,11 +12,11 @@ and Dynamic Client Registration. Images are published to GHCR at
 
 Replace all `<placeholder>` values before applying:
 
-| Placeholder         | File                                           | Description                                                                                                                                  |
-| ------------------- | ---------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| `<tag>`             | `30-deployment.yaml`                           | Image tag — pick a release from [ghcr.io/bojanrajkovic/mcp-paprika](https://github.com/bojanrajkovic/mcp-paprika/pkgs/container/mcp-paprika) |
-| `<your-public-url>` | `30-deployment.yaml`, `20-secret.example.yaml` | Publicly reachable URL for this deployment (e.g. `https://paprika.example.com`) — no trailing slash                                          |
-| `<storage-class>`   | `10-pvc.yaml`                                  | Storage class name for the data PVC (e.g. `standard`, `local-path` on k3s)                                                                   |
+| Placeholder       | File                                           | Description                                                                                                                                  |
+| ----------------- | ---------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `<tag>`           | `30-deployment.yaml`                           | Image tag — pick a release from [ghcr.io/bojanrajkovic/mcp-paprika](https://github.com/bojanrajkovic/mcp-paprika/pkgs/container/mcp-paprika) |
+| `<public-host>`   | `30-deployment.yaml`, `20-secret.example.yaml` | Hostname of your deployment (e.g. `paprika.example.com`); `https://` is prepended in the manifest                                            |
+| `<storage-class>` | `10-pvc.yaml`                                  | Storage class name for the data PVC (e.g. `standard`, `local-path` on k3s)                                                                   |
 
 `MCP_OIDC_PRESET` defaults to `google`; change it in `30-deployment.yaml` for
 other IdPs, or replace it with `MCP_OIDC_DISCOVERY_URL`. See
@@ -39,7 +39,7 @@ own pointing at the `mcp-paprika` Service on port 80.
 2. Create an **OAuth 2.0 Client ID** of type **Web application**.
 3. Under **Authorized redirect URIs**, add exactly:
    ```
-   https://<your-public-url>/oauth/callback
+   https://<public-host>/oauth/callback
    ```
 4. Save the `client_id` and `client_secret` — they go into the K8s Secret next.
 
@@ -78,14 +78,14 @@ First start does a full Paprika sync and builds the disk cache — the
 
 ```sh
 # Health check
-curl -sf https://<your-public-url>/healthz | jq
+curl -sf https://<public-host>/healthz | jq
 
 # OAuth metadata — issuer must match MCP_PUBLIC_URL exactly.
-curl -sf https://<your-public-url>/.well-known/oauth-authorization-server | jq .issuer
+curl -sf https://<public-host>/.well-known/oauth-authorization-server | jq .issuer
 ```
 
 Add as a Claude connector: claude.ai → Settings → Connectors → Add custom
-connector → `https://<your-public-url>/mcp`. Claude redirects to Google for
+connector → `https://<public-host>/mcp`. Claude redirects to Google for
 sign-in; once you're back, the connector is authorized.
 
 ## Update the image
