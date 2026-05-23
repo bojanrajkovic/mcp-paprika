@@ -18,9 +18,12 @@ Replace all `<placeholder>` values before applying:
 | `<public-host>`   | `30-deployment.yaml`, `20-secret.example.yaml` | Hostname of your deployment (e.g. `paprika.example.com`); `https://` is prepended in the manifest                                            |
 | `<storage-class>` | `10-pvc.yaml`                                  | Storage class name for the data PVC (e.g. `standard`, `local-path` on k3s)                                                                   |
 
-`MCP_OIDC_PRESET` defaults to `google`; change it in `30-deployment.yaml` for
-other IdPs, or replace it with `MCP_OIDC_DISCOVERY_URL`. See
-[docs/configuration.md](../docs/configuration.md) for the full OAuth reference.
+`MCP_OIDC_PRESET` defaults to `google`. Tenant-bound presets (`entra`, `okta`,
+`auth0`, `keycloak`) also require `MCP_OIDC_DISCOVERY_URL` in the Secret —
+omitting it causes the server to exit at startup. Alternatively, drop
+`MCP_OIDC_PRESET` entirely and set only `MCP_OIDC_DISCOVERY_URL` for any
+OIDC-compliant IdP. See [docs/configuration.md](../docs/configuration.md) for
+the full OAuth reference.
 
 **No storage class?** Two changes required:
 
