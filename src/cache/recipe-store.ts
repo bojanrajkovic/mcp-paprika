@@ -34,6 +34,7 @@ export class RecipeStore {
   private readonly categories: Map<CategoryUid, Category> = new Map();
   private readonly _pendingWrites: Map<RecipeUid, PendingWrite> = new Map();
   private readonly _pendingWriteTtlMs: number;
+  private _hasSynced = false;
 
   constructor(opts?: { readonly pendingWriteTtlMs?: number }) {
     this._pendingWriteTtlMs = opts?.pendingWriteTtlMs ?? DEFAULT_PENDING_WRITE_TTL_MS;
@@ -48,6 +49,15 @@ export class RecipeStore {
     for (const category of categories) {
       this.categories.set(category.uid, category);
     }
+    this._hasSynced = true;
+  }
+
+  get hasSynced(): boolean {
+    return this._hasSynced;
+  }
+
+  markSynced(): void {
+    this._hasSynced = true;
   }
 
   get(uid: RecipeUid): Recipe | undefined {

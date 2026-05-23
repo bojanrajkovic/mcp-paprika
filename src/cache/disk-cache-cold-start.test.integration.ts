@@ -289,6 +289,7 @@ describe("DiskCache cold-start persistence integration", () => {
       for (const recipe of cachedRecipes) {
         store.set(recipe);
       }
+      store.markSynced();
 
       // Setup tool
       const { server, callTool } = makeTestServer();
@@ -336,6 +337,7 @@ describe("DiskCache cold-start persistence integration", () => {
       for (const recipe of cachedRecipes) {
         store.set(recipe);
       }
+      store.markSynced();
 
       // Register and call search tool
       const { server, callTool } = makeTestServer();

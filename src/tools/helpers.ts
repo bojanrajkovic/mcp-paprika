@@ -8,7 +8,7 @@ export function textResult(text: string): { content: [{ type: "text"; text: stri
 }
 
 export function coldStartGuard(ctx: ServerContext): Result<void, ReturnType<typeof textResult>> {
-  if (ctx.store.size === 0) {
+  if (!ctx.store.hasSynced) {
     return err(textResult("Recipe store is not yet synced. Try again in a few seconds."));
   }
   return ok(undefined);

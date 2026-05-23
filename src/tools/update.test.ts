@@ -273,11 +273,8 @@ describe("p2-recipe-crud: update_recipe tool", () => {
 
     it("p2-recipe-crud.AC3.11: inTrash: false — saveRecipe called with inTrash: false (restore)", async () => {
       const recipe = makeRecipe({ inTrash: true });
-      // coldStartGuard checks store.size which excludes trashed recipes — load a non-trashed
-      // sentinel so the guard passes and we can exercise the restore path
-      const sentinel = makeRecipe();
       const store = new RecipeStore();
-      store.load([recipe, sentinel], []);
+      store.load([recipe], []);
 
       const mockSaveRecipe = vi.fn();
       const mockNotifySync = vi.fn().mockResolvedValue(undefined);

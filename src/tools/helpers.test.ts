@@ -6,10 +6,10 @@ import type { DiskCache } from "../cache/disk-cache.js";
 import type { PaprikaClient } from "../paprika/client.js";
 import { SILENT_LOG } from "../utils/log.js";
 
-// Minimal ServerContext stub — only `store.size` matters for coldStartGuard
+// Minimal ServerContext stub — only `store.hasSynced` matters for coldStartGuard
 const makeCtx = (size: number) =>
   ({
-    store: { size } as unknown as ServerContext["store"],
+    store: { size, hasSynced: size > 0 } as unknown as ServerContext["store"],
     client: {} as unknown as ServerContext["client"],
     cache: {} as unknown as ServerContext["cache"],
     pantryStore: {} as unknown as ServerContext["pantryStore"],

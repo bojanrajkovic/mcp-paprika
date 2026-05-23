@@ -223,6 +223,7 @@ export class SyncEngine {
       }
 
       // 4. Finalization
+      this._context.store.markSynced();
       this.log.debug("flushing cache to disk");
       await this._context.cache.flush();
 
