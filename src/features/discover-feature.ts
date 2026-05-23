@@ -2,7 +2,7 @@ import { EmbeddingClient, EMBEDDING_SCHEMA_VERSION } from "./embeddings.js";
 import { VectorStore } from "./vector-store.js";
 import { getCacheDir } from "../utils/xdg.js";
 import type { RecipeStore } from "../cache/recipe-store.js";
-import type { SyncResult } from "../paprika/types.js";
+import type { AnySyncResult } from "../paprika/types.js";
 import type { PaprikaConfig } from "../utils/config.js";
 import type { Logger } from "pino";
 
@@ -12,9 +12,9 @@ import type { Logger } from "pino";
  * pulling a hard dependency on `SyncEngine` itself.
  */
 export interface SyncEventsView {
-  on(event: "sync:complete", handler: (data: SyncResult) => void): void;
+  on(event: "sync:complete", handler: (data: AnySyncResult) => void): void;
   on(event: "sync:error", handler: (data: Error) => void): void;
-  off(event: "sync:complete", handler?: (data: SyncResult) => void): void;
+  off(event: "sync:complete", handler?: (data: AnySyncResult) => void): void;
   off(event: "sync:error", handler?: (data: Error) => void): void;
 }
 
@@ -67,9 +67,10 @@ export async function buildDiscoverComponents(
 
   syncEvents.on("sync:complete", async (result) => {
     try {
-      const changed = [...result.added, ...result.updated];
+      if (result.changeType !== "recipes") return;
+      const changed = [...result.changes.added, ...result.changes.updated];
 
-      if (changed.length === 0 && result.removedUids.length === 0) {
+      if (changed.length === 0 && result.changes.removedUids.length === 0) {
         return;
       }
 
@@ -77,7 +78,7 @@ export async function buildDiscoverComponents(
         await vectorStore.indexRecipes(changed, (uids) => store.resolveCategories(uids));
       }
 
-      for (const uid of result.removedUids) {
+      for (const uid of result.changes.removedUids) {
         await vectorStore.removeRecipe(uid);
       }
     } catch (err) {

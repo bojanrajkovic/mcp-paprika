@@ -4,7 +4,7 @@ import { createRequire } from "node:module";
 import type { Logger } from "pino";
 
 import type { AppContext } from "../server/app-context.js";
-import type { PantryItem, Recipe, RecipeUid, SyncResult } from "./types.js";
+import type { AnySyncResult, PantryItem, Recipe, RecipeUid, RecipeSyncResult, PantrySyncResult } from "./types.js";
 
 function pantryItemsEqual(a: PantryItem, b: PantryItem): boolean {
   return (
@@ -24,7 +24,7 @@ function pantryItemsEqual(a: PantryItem, b: PantryItem): boolean {
 }
 
 type SyncEvents = {
-  "sync:complete": SyncResult;
+  "sync:complete": AnySyncResult;
   "sync:error": Error;
 };
 
@@ -195,11 +195,12 @@ export class SyncEngine {
       // (quantity/notes/in-stock/etc.) by field-wise comparison; without this, MCP
       // clients would see stale resource content until an add or remove triggered
       // a notification.
-      const updatedPantryUids = effectivePantry.filter((incoming) => {
+      const updatedPantryItems = effectivePantry.filter((incoming) => {
         const cached = cachedPantryByUid.get(incoming.uid);
         return cached !== undefined && !pantryItemsEqual(cached, incoming);
       });
-      const pantryHasChanges = orphanPantryUids.length > 0 || newPantryUids.length > 0 || updatedPantryUids.length > 0;
+      const newPantrySet = new Set(newPantryUids);
+      const addedPantryItems = effectivePantry.filter((item) => newPantrySet.has(item.uid));
 
       await Promise.all(orphanPantryUids.map((uid) => this._context.cache.removePantryItem(uid)));
       this._context.pantryStore.load(effectivePantry);
@@ -239,27 +240,24 @@ export class SyncEngine {
         this.log.debug({ sweptStore, sweptPantry }, "swept pending writes past TTL");
       }
 
-      // Determine if changes exist
-      const hasChanges =
-        filteredAdded.length > 0 || filteredChanged.length > 0 || filteredRemoved.length > 0 || pantryHasChanges;
-
-      // Send resource notification if changes exist
-      if (hasChanges) {
-        this._context.notifier.resourceListChanged();
-      }
-
       // Partition fetched recipes: added vs updated
       const addedSet = new Set(filteredAdded);
       const addedRecipes = fetchedRecipes.filter((r) => addedSet.has(r.uid));
       const updatedRecipes = fetchedRecipes.filter((r) => !addedSet.has(r.uid));
 
-      // Build and emit SyncResult
-      const result: SyncResult = {
-        added: addedRecipes,
-        updated: updatedRecipes,
-        removedUids: filteredRemoved,
+      // Emit one sync:complete event per entity type. Subscribers decide whether
+      // to notify based on changes content; syncOnce no longer calls the notifier
+      // directly.
+      const recipeResult: RecipeSyncResult = {
+        changeType: "recipes",
+        changes: { added: addedRecipes, updated: updatedRecipes, removedUids: filteredRemoved },
       };
-      this._events.emit("sync:complete", result);
+      const pantryResult: PantrySyncResult = {
+        changeType: "pantry",
+        changes: { added: addedPantryItems, updated: updatedPantryItems, removedUids: orphanPantryUids },
+      };
+      this._events.emit("sync:complete", recipeResult);
+      this._events.emit("sync:complete", pantryResult);
 
       this.log.info(
         { added: addedRecipes.length, updated: updatedRecipes.length, removed: filteredRemoved.length },

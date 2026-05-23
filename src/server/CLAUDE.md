@@ -1,6 +1,6 @@
 # Server Composition Root
 
-Last verified: 2026-05-22
+Last verified: 2026-05-23
 
 ## Purpose
 
@@ -90,7 +90,7 @@ If anyone restructures `src/index.ts` or `src/transport/`, preserve this orderin
 buildAppContext(config: PaprikaConfig, notifier: Notifier): Promise<{ app: AppContext; sync: SyncEngine }>
 ```
 
-Process-wide builder. Authenticates the Paprika client, hydrates `DiskCache`, `RecipeStore`, and `PantryStore` from disk, constructs `SyncEngine`, **runs the initial `sync.syncOnce()`**, then calls `buildDiscoverComponents` (which subscribes the vector store to `sync.events` for incremental re-indexing). Returns the assembled `AppContext` plus the `SyncEngine`; the caller starts the background loop with `sync.start()` if `config.sync.enabled`.
+Process-wide builder. Authenticates the Paprika client, hydrates `DiskCache`, `RecipeStore`, and `PantryStore` from disk, constructs `SyncEngine`, **wires the `sync:complete` → `resourceListChanged` subscriber**, **runs the initial `sync.syncOnce()`**, then calls `buildDiscoverComponents` (which subscribes the vector store to `sync.events` for incremental re-indexing). Returns the assembled `AppContext` plus the `SyncEngine`; the caller starts the background loop with `sync.start()` if `config.sync.enabled`.
 
 Reads `config.sync.pendingWriteTtl` and threads it as `pendingWriteTtlMs` into both `new RecipeStore({ pendingWriteTtlMs })` and `new PantryStore({ pendingWriteTtlMs })` so the sync engine's per-cycle `sweepPending()` calls use the configured TTL.
 
@@ -100,6 +100,7 @@ Reads `config.sync.pendingWriteTtl` and threads it as `pendingWriteTtlMs` into b
 2. Hydrate caches and stores from disk (recipes and pantry only — the cache deliberately has no `getAllCategories()`).
    2.5. **`await buildAuthContext(config, cache)`** — returns `null` for stdio; for HTTP, fetches the OIDC discovery document and assembles all OAuth stores and the provider. Throws on discovery failure (fail-fast: no value running HTTP mode if auth is broken).
 3. Construct `SyncEngine` against a placeholder `AppContext` whose `vectorStore: null`. Safe because `SyncEngine` never reads `vectorStore`. The `auth` value from step 2.5 is passed here.
+   3.5. **Wire the `sync:complete` → `resourceListChanged` subscriber** immediately after `new SyncEngine()`. This subscriber is permanent (never `off()`'d) and calls `notifier.resourceListChanged()` whenever any entity's `changes.added`, `changes.updated`, or `changes.removedUids` is non-empty. The engine emits two events per cycle (`changeType: "recipes"` and `changeType: "pantry"`); the subscriber is entity-agnostic and responds to either.
 4. **`await sync.syncOnce()`.** Categories live only in `RecipeStore` (populated by `setCategories()`, which is called only from inside `syncOnce()`). Cold-start vector indexing in `buildDiscoverComponents` resolves category names per recipe; if it runs before the first sync, embeddings get computed with empty categories and stay that way until a recipe mutation re-embeds. On warm restarts with unchanged remote hashes, the post-build sync emits nothing, so the `sync:complete` subscription never gets the chance to fix it.
 5. Build discover components against the now-hydrated store. The "real" `AppContext` with the populated `vectorStore` and `auth` is what the caller receives.
 

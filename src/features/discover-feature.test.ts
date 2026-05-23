@@ -1,8 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import type { SyncResult } from "../paprika/types.js";
+import type { AnySyncResult, RecipeSyncResult } from "../paprika/types.js";
 import type { RecipeUid } from "../paprika/types.js";
 import { RecipeStore } from "../cache/recipe-store.js";
 import { makeRecipe } from "../cache/__fixtures__/recipes.js";
+import { makePantryItem } from "../cache/__fixtures__/pantry.js";
 import { makePinoCapture, DEFAULT_LOGGING_CONFIG } from "../tools/tool-test-utils.js";
 // mitt's package shape (flat-conditioned `exports`, .d.ts using `export default`) confuses
 // TS strict resolution under @tsconfig/strictest + nodenext into typing the default import
@@ -38,7 +39,7 @@ function makeMockVectorStore() {
 
 // Helper to create a mock sync events view (mitt-backed)
 function makeMockSyncEvents() {
-  return mitt<{ "sync:complete": SyncResult; "sync:error": Error }>();
+  return mitt<{ "sync:complete": AnySyncResult; "sync:error": Error }>();
 }
 
 function makeEnabledConfig(overrides: Record<string, unknown> = {}) {
@@ -317,10 +318,9 @@ describe("p3-u08-discover-wiring: buildDiscoverComponents", () => {
 
       await buildDiscoverComponents(config, store, syncEvents);
 
-      const syncResult: SyncResult = {
-        added: [recipe1],
-        updated: [recipe2],
-        removedUids: [],
+      const syncResult: RecipeSyncResult = {
+        changeType: "recipes",
+        changes: { added: [recipe1], updated: [recipe2], removedUids: [] },
       };
       syncEvents.emit("sync:complete", syncResult);
 
@@ -344,10 +344,9 @@ describe("p3-u08-discover-wiring: buildDiscoverComponents", () => {
 
       await buildDiscoverComponents(config, store, syncEvents);
 
-      const syncResult: SyncResult = {
-        added: [],
-        updated: [],
-        removedUids: ["uid1" as RecipeUid, "uid2" as RecipeUid],
+      const syncResult: RecipeSyncResult = {
+        changeType: "recipes",
+        changes: { added: [], updated: [], removedUids: ["uid1" as RecipeUid, "uid2" as RecipeUid] },
       };
       syncEvents.emit("sync:complete", syncResult);
 
@@ -370,12 +369,36 @@ describe("p3-u08-discover-wiring: buildDiscoverComponents", () => {
 
       await buildDiscoverComponents(config, store, syncEvents);
 
-      const syncResult: SyncResult = {
-        added: [],
-        updated: [],
-        removedUids: [],
+      const syncResult: RecipeSyncResult = {
+        changeType: "recipes",
+        changes: { added: [], updated: [], removedUids: [] },
       };
       syncEvents.emit("sync:complete", syncResult);
+
+      // Let async handler complete
+      await new Promise((r) => setTimeout(r, 10));
+
+      expect(mockVectorStore.indexRecipes).not.toHaveBeenCalled();
+      expect(mockVectorStore.removeRecipe).not.toHaveBeenCalled();
+    });
+
+    it("AC3.5: skips indexing when changeType is pantry (not recipes)", async () => {
+      const { buildDiscoverComponents } = await import("./discover-feature.js");
+      const store = new RecipeStore();
+      store.load([], []);
+      const syncEvents = makeMockSyncEvents();
+      const config = makeEnabledConfig();
+
+      mockVectorStore.size = 10;
+
+      await buildDiscoverComponents(config, store, syncEvents);
+
+      // Emit a pantry event — the subscriber must ignore it
+      const pantryResult: AnySyncResult = {
+        changeType: "pantry",
+        changes: { added: [makePantryItem()], updated: [], removedUids: [] },
+      };
+      syncEvents.emit("sync:complete", pantryResult);
 
       // Let async handler complete
       await new Promise((r) => setTimeout(r, 10));
@@ -401,10 +424,9 @@ describe("p3-u08-discover-wiring: buildDiscoverComponents", () => {
 
       await buildDiscoverComponents(config, store, syncEvents, log);
 
-      const syncResult: SyncResult = {
-        added: [recipe],
-        updated: [],
-        removedUids: [],
+      const syncResult: RecipeSyncResult = {
+        changeType: "recipes",
+        changes: { added: [recipe], updated: [], removedUids: [] },
       };
       syncEvents.emit("sync:complete", syncResult);
 
@@ -430,10 +452,9 @@ describe("p3-u08-discover-wiring: buildDiscoverComponents", () => {
 
       await buildDiscoverComponents(config, store, syncEvents, log);
 
-      const syncResult: SyncResult = {
-        added: [],
-        updated: [],
-        removedUids: ["uid1" as RecipeUid],
+      const syncResult: RecipeSyncResult = {
+        changeType: "recipes",
+        changes: { added: [], updated: [], removedUids: ["uid1" as RecipeUid] },
       };
       syncEvents.emit("sync:complete", syncResult);
 
@@ -459,10 +480,9 @@ describe("p3-u08-discover-wiring: buildDiscoverComponents", () => {
 
       await buildDiscoverComponents(config, store, syncEvents, log);
 
-      const syncResult: SyncResult = {
-        added: [recipe],
-        updated: [],
-        removedUids: [],
+      const syncResult: RecipeSyncResult = {
+        changeType: "recipes",
+        changes: { added: [recipe], updated: [], removedUids: [] },
       };
       syncEvents.emit("sync:complete", syncResult);
 
@@ -490,20 +510,18 @@ describe("p3-u08-discover-wiring: buildDiscoverComponents", () => {
       await buildDiscoverComponents(config, store, syncEvents);
 
       // First sync: error
-      const syncResult1: SyncResult = {
-        added: [recipe1],
-        updated: [],
-        removedUids: [],
+      const syncResult1: RecipeSyncResult = {
+        changeType: "recipes",
+        changes: { added: [recipe1], updated: [], removedUids: [] },
       };
       syncEvents.emit("sync:complete", syncResult1);
 
       await new Promise((r) => setTimeout(r, 10));
 
       // Second sync: success
-      const syncResult2: SyncResult = {
-        added: [recipe2],
-        updated: [],
-        removedUids: [],
+      const syncResult2: RecipeSyncResult = {
+        changeType: "recipes",
+        changes: { added: [recipe2], updated: [], removedUids: [] },
       };
       syncEvents.emit("sync:complete", syncResult2);
 

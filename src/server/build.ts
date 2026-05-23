@@ -132,6 +132,16 @@ export async function buildAppContext(
   };
   const sync = new SyncEngine(syncCtx, config.sync.interval);
 
+  // Translate sync:complete events into MCP resource-list notifications.
+  // Wired here (not inside SyncEngine) so the engine stays decoupled from the
+  // notifier decision — subscribers pick what to do with each entity's changes.
+  sync.events.on("sync:complete", (result) => {
+    const { added, updated, removedUids } = result.changes;
+    if (added.length > 0 || updated.length > 0 || removedUids.length > 0) {
+      notifier.resourceListChanged();
+    }
+  });
+
   // Run the initial sync BEFORE building discover components.
   //
   // `RecipeStore.setCategories()` is only ever called from within
