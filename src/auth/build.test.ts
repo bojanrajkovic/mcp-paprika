@@ -16,6 +16,7 @@ import { createOidcStub } from "./__fixtures__/oidc-stub.js";
 import type { PaprikaConfig } from "../utils/config.js";
 import { useXdgIsolation } from "../__fixtures__/xdg-isolation.js";
 import { useMswServer } from "../__fixtures__/msw.js";
+import { SILENT_LOG } from "../utils/log.js";
 
 const msw = useMswServer([], { onUnhandledRequest: "bypass" });
 const xdg = useXdgIsolation("mcp-paprika-build-auth");
@@ -66,7 +67,7 @@ describe("buildAuthContext", () => {
       await cache.init();
 
       const config = makeStdioConfig();
-      const result = await buildAuthContext(config, cache);
+      const result = await buildAuthContext(config, cache, SILENT_LOG);
 
       expect(result).toBeNull();
     });
@@ -87,7 +88,9 @@ describe("buildAuthContext", () => {
         // no oauth block
       } as unknown as PaprikaConfig;
 
-      await expect(buildAuthContext(config, cache)).rejects.toThrow("OAuth config required for HTTP transport");
+      await expect(buildAuthContext(config, cache, SILENT_LOG)).rejects.toThrow(
+        "OAuth config required for HTTP transport",
+      );
     });
   });
 
@@ -107,7 +110,7 @@ describe("buildAuthContext", () => {
       await cache.init();
 
       const config = makeHttpConfig("https://accounts.example.test");
-      const result = await buildAuthContext(config, cache);
+      const result = await buildAuthContext(config, cache, SILENT_LOG);
 
       expect(result).not.toBeNull();
       // All required AuthContext fields must be present
@@ -140,7 +143,7 @@ describe("buildAuthContext", () => {
       await cache.init();
 
       const config = makeHttpConfig("https://accounts.example.test");
-      await expect(buildAuthContext(config, cache)).rejects.toThrow();
+      await expect(buildAuthContext(config, cache, SILENT_LOG)).rejects.toThrow();
     });
   });
 });

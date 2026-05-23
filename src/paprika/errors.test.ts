@@ -1,5 +1,7 @@
 import { describe, it, expect } from "vitest";
+import { BrokenCircuitError } from "cockatiel";
 import { PaprikaError, PaprikaAuthError, PaprikaAPIError } from "./errors.js";
+import { CircuitOpenError } from "../utils/errors.js";
 
 describe("Error class hierarchy", () => {
   describe("paprika-types.AC4.1: Inheritance chain", () => {
@@ -149,6 +151,65 @@ describe("Error class hierarchy", () => {
     it("should set name to 'PaprikaAPIError' for PaprikaAPIError instances", () => {
       const error = new PaprikaAPIError("error", 500, "/api/test");
       expect(error.name).toBe("PaprikaAPIError");
+    });
+  });
+
+  describe("structured-logging.AC5: CircuitOpenError", () => {
+    const SERVICE = "paprika";
+    const ENDPOINT = "https://www.paprikaapp.com/api/v2/sync/recipes/";
+
+    // AC5.1: error instanceof CircuitOpenError === true
+    it("AC5.1: is an instance of CircuitOpenError and Error", () => {
+      const err = new CircuitOpenError(SERVICE, ENDPOINT);
+      expect(err instanceof CircuitOpenError).toBe(true);
+      expect(err instanceof Error).toBe(true);
+    });
+
+    // AC5.2: no .status property; not instanceof PaprikaAPIError
+    it("AC5.2: does not have a status property and is not instanceof PaprikaAPIError", () => {
+      const err = new CircuitOpenError(SERVICE, ENDPOINT);
+      expect("status" in err).toBe(false);
+      expect(err instanceof PaprikaAPIError).toBe(false);
+    });
+
+    // AC5.3: message contains endpoint URL; does NOT contain "503" or "HTTP 503"
+    it("AC5.3: message contains the endpoint URL and no fabricated HTTP status", () => {
+      const err = new CircuitOpenError(SERVICE, ENDPOINT);
+      expect(err.message).toContain(ENDPOINT);
+      expect(err.message).not.toContain("503");
+      expect(err.message).not.toContain("HTTP 503");
+    });
+
+    // AC5.4: cause is BrokenCircuitError (real instance from cockatiel)
+    it("AC5.4: cause is instanceof BrokenCircuitError when provided", () => {
+      const brokenCircuit = new BrokenCircuitError();
+      const err = new CircuitOpenError(SERVICE, ENDPOINT, { cause: brokenCircuit });
+      expect(err.cause instanceof BrokenCircuitError).toBe(true);
+      expect(err.cause).toBe(brokenCircuit);
+    });
+
+    // Additional: endpoint property accessible
+    it("exposes endpoint as a readonly property matching the constructor argument", () => {
+      const err = new CircuitOpenError(SERVICE, ENDPOINT);
+      expect(err.endpoint).toBe(ENDPOINT);
+    });
+
+    // Additional: service property accessible
+    it("exposes service as a readonly property matching the constructor argument", () => {
+      const err = new CircuitOpenError(SERVICE, ENDPOINT);
+      expect(err.service).toBe(SERVICE);
+    });
+
+    // Additional: name property set correctly
+    it("has name set to 'CircuitOpenError'", () => {
+      const err = new CircuitOpenError(SERVICE, ENDPOINT);
+      expect(err.name).toBe("CircuitOpenError");
+    });
+
+    // Additional: message format matches the documented pattern
+    it("message format renders as '<service> circuit breaker is open (endpoint=<url>)'", () => {
+      const err = new CircuitOpenError(SERVICE, ENDPOINT);
+      expect(err.message).toBe(`paprika circuit breaker is open (endpoint=${ENDPOINT})`);
     });
   });
 });

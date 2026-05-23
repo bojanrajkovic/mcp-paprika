@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { SILENT_LOG } from "../utils/log.js";
 import { mkdtemp, rm } from "node:fs/promises";
 import { nowSeconds } from "./tokens.js";
 import { tmpdir } from "node:os";
@@ -25,7 +26,7 @@ beforeEach(async () => {
   tmpDir = await mkdtemp(join(tmpdir(), "mcp-paprika-cleanup-test-"));
   cache = new DiskCache(tmpDir);
   await cache.init();
-  clientStore = new DiskClientRegistrationStore(cache, "https://example.com");
+  clientStore = new DiskClientRegistrationStore(cache, "https://example.com", SILENT_LOG);
   tokenStore = new TokenStore(cache);
 });
 
@@ -56,7 +57,7 @@ describe("sweepOnce", () => {
 
     const authRequests = new AuthRequestStore();
     const authCodes = new AuthCodeStore();
-    const cleanup = new AuthCleanup(clientStore, tokenStore, cache, authRequests, authCodes, () => clock.v);
+    const cleanup = new AuthCleanup(clientStore, tokenStore, cache, authRequests, authCodes, SILENT_LOG, () => clock.v);
     const result = await cleanup.sweepOnce();
 
     expect(result.clientsRemoved).toBe(1);
@@ -90,7 +91,7 @@ describe("sweepOnce", () => {
 
     const authRequests = new AuthRequestStore();
     const authCodes = new AuthCodeStore();
-    const cleanup = new AuthCleanup(clientStore, tokenStore, cache, authRequests, authCodes, () => clock.v);
+    const cleanup = new AuthCleanup(clientStore, tokenStore, cache, authRequests, authCodes, SILENT_LOG, () => clock.v);
     const result = await cleanup.sweepOnce();
 
     expect(result.clientsRemoved).toBe(1);
@@ -115,7 +116,7 @@ describe("sweepOnce", () => {
 
     const authRequests = new AuthRequestStore();
     const authCodes = new AuthCodeStore();
-    const cleanup = new AuthCleanup(clientStore, tokenStore, cache, authRequests, authCodes, () => clock.v);
+    const cleanup = new AuthCleanup(clientStore, tokenStore, cache, authRequests, authCodes, SILENT_LOG, () => clock.v);
 
     const first = await cleanup.sweepOnce();
     expect(first.clientsRemoved).toBe(1);
@@ -135,7 +136,7 @@ describe("sweepOnce", () => {
     authRequests.put("state-1", makeAuthRequestState({ createdAt: clock.v - 10 * 60 })); // > 5min old
     authCodes.put("code-1", makeAuthCodeState({ createdAt: clock.v - 120 })); // > 60s old
 
-    const cleanup = new AuthCleanup(clientStore, tokenStore, cache, authRequests, authCodes, () => clock.v);
+    const cleanup = new AuthCleanup(clientStore, tokenStore, cache, authRequests, authCodes, SILENT_LOG, () => clock.v);
     const result = await cleanup.sweepOnce();
 
     expect(result.authRequestsRemoved).toBe(1);
@@ -152,7 +153,7 @@ describe("sweepOnce", () => {
 
     const authRequests = new AuthRequestStore();
     const authCodes = new AuthCodeStore();
-    const cleanup = new AuthCleanup(clientStore, tokenStore, cache, authRequests, authCodes, () => clock.v);
+    const cleanup = new AuthCleanup(clientStore, tokenStore, cache, authRequests, authCodes, SILENT_LOG, () => clock.v);
     const result = await cleanup.sweepOnce();
 
     expect(result.clientsRemoved).toBe(0);
@@ -198,7 +199,7 @@ describe("sweepOnce", () => {
 
     const authRequests = new AuthRequestStore();
     const authCodes = new AuthCodeStore();
-    const cleanup = new AuthCleanup(clientStore, tokenStore, cache, authRequests, authCodes, () => clock.v);
+    const cleanup = new AuthCleanup(clientStore, tokenStore, cache, authRequests, authCodes, SILENT_LOG, () => clock.v);
     const result = await cleanup.sweepOnce();
 
     expect(result.expiredTokensRemoved).toBe(1);
@@ -226,7 +227,7 @@ describe("sweepOnce", () => {
 
     const authRequests = new AuthRequestStore();
     const authCodes = new AuthCodeStore();
-    const cleanup = new AuthCleanup(clientStore, tokenStore, cache, authRequests, authCodes, () => clock.v);
+    const cleanup = new AuthCleanup(clientStore, tokenStore, cache, authRequests, authCodes, SILENT_LOG, () => clock.v);
     const result = await cleanup.sweepOnce();
 
     expect(result.clientsRemoved).toBe(1);
@@ -250,6 +251,7 @@ describe("lifecycle", () => {
       cache,
       authRequests,
       authCodes,
+      SILENT_LOG,
       () => nowSeconds(),
       24 * 60 * 60 * 1000,
     );
@@ -271,6 +273,7 @@ describe("lifecycle", () => {
       cache,
       authRequests,
       authCodes,
+      SILENT_LOG,
       () => nowSeconds(),
       24 * 60 * 60 * 1000,
     );
@@ -288,7 +291,16 @@ describe("lifecycle", () => {
     const authRequests = new AuthRequestStore();
     const authCodes = new AuthCodeStore();
     // Short interval so at least one cycle completes in 100ms
-    const cleanup = new AuthCleanup(clientStore, tokenStore, cache, authRequests, authCodes, () => nowSeconds(), 50);
+    const cleanup = new AuthCleanup(
+      clientStore,
+      tokenStore,
+      cache,
+      authRequests,
+      authCodes,
+      SILENT_LOG,
+      () => nowSeconds(),
+      50,
+    );
 
     cleanup.start();
     await new Promise((r) => setTimeout(r, 100)); // let one error cycle run + recover

@@ -1,4 +1,7 @@
 import { vi } from "vitest";
+import { Writable } from "node:stream";
+import pino from "pino";
+import type { Logger } from "pino";
 import type { ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
@@ -7,6 +10,56 @@ import { PantryStore } from "../cache/pantry-store.js";
 import type { RecipeStore } from "../cache/recipe-store.js";
 import type { Notifier } from "../server/notifier.js";
 import type { ServerContext } from "../types/server-context.js";
+import { SILENT_LOG } from "../utils/log.js";
+
+/**
+ * Shape returned by `makePinoCapture()`. `log` is the capture logger;
+ * `records` is the live array of parsed JSON records; `clear()` empties it
+ * between assertions without recreating the logger.
+ */
+export type PinoCapture = {
+  readonly log: Logger;
+  readonly records: ReadonlyArray<Record<string, unknown>>;
+  clear(): void;
+};
+
+/**
+ * Builds a pino logger that writes newline-delimited JSON to an in-memory
+ * array. Useful in unit tests for asserting on structured log records without
+ * wiring up the full `createLogger` fan-out.
+ *
+ * Default level is `"trace"` so every record is captured regardless of
+ * severity. Pass a narrower level to restrict captured records.
+ *
+ * Usage:
+ * ```ts
+ * const { log, records } = makePinoCapture();
+ * // ... exercise code that uses log ...
+ * expect(records.find((r) => r["msg"] === "sync complete")).toBeDefined();
+ * ```
+ */
+export function makePinoCapture(level: pino.Level = "trace"): PinoCapture {
+  const records: Array<Record<string, unknown>> = [];
+  const stream = new Writable({
+    write(chunk: Buffer, _enc: BufferEncoding, cb: () => void) {
+      try {
+        const line = (chunk as Buffer).toString("utf8").trim();
+        if (line.length > 0) records.push(JSON.parse(line) as Record<string, unknown>);
+      } catch {
+        /* malformed chunk — drop */
+      }
+      cb();
+    },
+  });
+  const log = pino({ level }, stream);
+  return {
+    log,
+    records,
+    clear() {
+      records.length = 0;
+    },
+  };
+}
 
 type ResourceEntry = {
   list: (() => Promise<unknown>) | undefined;
@@ -95,7 +148,7 @@ export function makeTestServer(): {
 export function makeCtx(
   store: RecipeStore,
   server: McpServer,
-  overrides: Partial<Pick<ServerContext, "client" | "cache" | "pantryStore" | "vectorStore" | "notifier">> = {},
+  overrides: Partial<Pick<ServerContext, "client" | "cache" | "pantryStore" | "vectorStore" | "notifier" | "log">> = {},
 ): ServerContext {
   const notifier: Notifier = overrides.notifier ?? {
     resourceListChanged: () => {},
@@ -110,6 +163,7 @@ export function makeCtx(
     cache: overrides.cache ?? ({} as unknown as ServerContext["cache"]),
     notifier,
     auth: null,
+    log: overrides.log ?? SILENT_LOG,
   } satisfies ServerContext;
 }
 
@@ -118,4 +172,49 @@ export function getText(result: CallToolResult): string {
   const first = result.content[0];
   if (!first || first.type !== "text") throw new Error("Expected text content");
   return first.text;
+}
+
+/**
+ * Logging-config shape that suppresses all output. Use for transport-test
+ * setups (or anywhere a config literal is needed but logger noise isn't).
+ * `notifyLevel: "fatal"` blocks fan-out at any sub-fatal level — no level
+ * the production code emits today will reach the notifier through this.
+ */
+export const SILENT_LOGGING_CONFIG = {
+  level: "silent" as const,
+  notifyLevel: "fatal" as const,
+  pretty: false as const,
+};
+
+/**
+ * Default logging-config shape matching the schema defaults from
+ * `paprikaConfigSchema`. Use when tests want production-like log behavior
+ * but as a literal rather than going through `loadConfig()`.
+ */
+export const DEFAULT_LOGGING_CONFIG = {
+  level: "info" as const,
+  notifyLevel: "warn" as const,
+  pretty: "auto" as const,
+};
+
+/**
+ * Drives the given async call 5 times under fake timers so cockatiel's
+ * consecutive-failure circuit breaker (`ConsecutiveBreaker(5)`) trips open.
+ * The caller is responsible for activating fake timers
+ * (`vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout"] })`)
+ * and restoring them in `afterEach`. Each call's failure is swallowed so
+ * the loop can proceed; `await vi.runAllTimersAsync()` between calls drains
+ * the retry backoff queue.
+ *
+ * Used by both `paprika/client.test.ts` and `features/embeddings.test.ts`
+ * because both clients compose the same `wrap(breaker, retry)` pattern.
+ */
+export async function tripBreaker(makeCall: () => Promise<unknown>): Promise<void> {
+  for (let i = 0; i < 5; i++) {
+    const p = makeCall().catch(() => {
+      /* expected — call is meant to fail */
+    });
+    await vi.runAllTimersAsync();
+    await p;
+  }
 }

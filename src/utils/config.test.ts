@@ -1,6 +1,13 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { z } from "zod";
-import { ConfigError, paprikaConfigSchema, type EmbeddingConfig, loadConfig } from "./config.js";
+import {
+  ConfigError,
+  paprikaConfigSchema,
+  type EmbeddingConfig,
+  loadConfig,
+  buildEnvOverrides,
+  deepMerge,
+} from "./config.js";
 import { mkdtempSync, writeFileSync, rmSync, chmodSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -1189,6 +1196,212 @@ describe("Configuration loading", () => {
         } finally {
           stdoutSpy.mockRestore();
           consoleLogSpy.mockRestore();
+        }
+      });
+    });
+  });
+
+  // structured-logging.AC10: Logger config knobs route through PaprikaConfig
+  describe("structured-logging.AC10: logging block schema and env var routing", () => {
+    const validBase = { paprika: { email: "user@test.com", password: "secret" } };
+
+    // Task 2: Schema tests
+    describe("structured-logging.AC10.1: schema rejects invalid logging.level", () => {
+      it("rejects logging.level='info-ish' with a validation error", () => {
+        const input = { ...validBase, logging: { level: "info-ish" } };
+        const result = paprikaConfigSchema.safeParse(input);
+        expect(result.success).toBe(false);
+        if (!result.success) {
+          const error = ConfigError.validation(result.error.issues);
+          expect(error.kind).toBe("validation");
+          // Should mention the offending path
+          expect(error.reason).toContain("logging.level");
+        }
+      });
+
+      it("rejects logging.notifyLevel='silent' (silent is not a valid pino level here)", () => {
+        const input = { ...validBase, logging: { notifyLevel: "silent" } };
+        const result = paprikaConfigSchema.safeParse(input);
+        expect(result.success).toBe(false);
+      });
+    });
+
+    describe("structured-logging.AC10.3: logging block defaults", () => {
+      it("defaults level to 'info' when no logging block provided", () => {
+        const result = paprikaConfigSchema.safeParse(validBase);
+        expect(result.success).toBe(true);
+        if (result.success) {
+          expect(result.data.logging.level).toBe("info");
+        }
+      });
+
+      it("defaults notifyLevel to 'warn' when no logging block provided", () => {
+        const result = paprikaConfigSchema.safeParse(validBase);
+        expect(result.success).toBe(true);
+        if (result.success) {
+          expect(result.data.logging.notifyLevel).toBe("warn");
+        }
+      });
+
+      it("defaults pretty to 'auto' when no logging block provided", () => {
+        const result = paprikaConfigSchema.safeParse(validBase);
+        expect(result.success).toBe(true);
+        if (result.success) {
+          expect(result.data.logging.pretty).toBe("auto");
+        }
+      });
+
+      it("defaults file to undefined when no logging block provided", () => {
+        const result = paprikaConfigSchema.safeParse(validBase);
+        expect(result.success).toBe(true);
+        if (result.success) {
+          expect(result.data.logging.file).toBeUndefined();
+        }
+      });
+
+      it("accepts all valid pino levels for logging.level", () => {
+        const validLevels = ["trace", "debug", "info", "warn", "error", "fatal"] as const;
+        for (const level of validLevels) {
+          const result = paprikaConfigSchema.safeParse({ ...validBase, logging: { level } });
+          expect(result.success).toBe(true);
+        }
+      });
+
+      it("accepts pretty=true and pretty=false as boolean overrides", () => {
+        const resultTrue = paprikaConfigSchema.safeParse({ ...validBase, logging: { pretty: true } });
+        expect(resultTrue.success).toBe(true);
+        if (resultTrue.success) expect(resultTrue.data.logging.pretty).toBe(true);
+
+        const resultFalse = paprikaConfigSchema.safeParse({ ...validBase, logging: { pretty: false } });
+        expect(resultFalse.success).toBe(true);
+        if (resultFalse.success) expect(resultFalse.data.logging.pretty).toBe(false);
+      });
+
+      it("accepts a file path override", () => {
+        const result = paprikaConfigSchema.safeParse({ ...validBase, logging: { file: "/tmp/test.log" } });
+        expect(result.success).toBe(true);
+        if (result.success) {
+          expect(result.data.logging.file).toBe("/tmp/test.log");
+        }
+      });
+    });
+
+    // Task 3: Env var routing tests (using synthetic env via exported buildEnvOverrides)
+    describe("structured-logging.AC10.2: MCP_LOG_* env var routing", () => {
+      it("MCP_LOG_LEVEL=debug routes to logging.level", () => {
+        const overrides = buildEnvOverrides({ MCP_LOG_LEVEL: "debug" });
+        const merged = deepMerge(validBase, overrides);
+        const result = paprikaConfigSchema.safeParse(merged);
+        expect(result.success).toBe(true);
+        if (result.success) {
+          expect(result.data.logging.level).toBe("debug");
+        }
+      });
+
+      it("MCP_LOG_NOTIFY_LEVEL=info routes to logging.notifyLevel", () => {
+        const overrides = buildEnvOverrides({ MCP_LOG_NOTIFY_LEVEL: "info" });
+        const merged = deepMerge(validBase, overrides);
+        const result = paprikaConfigSchema.safeParse(merged);
+        expect(result.success).toBe(true);
+        if (result.success) {
+          expect(result.data.logging.notifyLevel).toBe("info");
+        }
+      });
+
+      it("MCP_LOG_FILE=/tmp/x.log routes to logging.file", () => {
+        const overrides = buildEnvOverrides({ MCP_LOG_FILE: "/tmp/x.log" });
+        const merged = deepMerge(validBase, overrides);
+        const result = paprikaConfigSchema.safeParse(merged);
+        expect(result.success).toBe(true);
+        if (result.success) {
+          expect(result.data.logging.file).toBe("/tmp/x.log");
+        }
+      });
+
+      it("MCP_LOG_PRETTY=true coerces to boolean true", () => {
+        const overrides = buildEnvOverrides({ MCP_LOG_PRETTY: "true" });
+        const merged = deepMerge(validBase, overrides);
+        const result = paprikaConfigSchema.safeParse(merged);
+        expect(result.success).toBe(true);
+        if (result.success) {
+          expect(result.data.logging.pretty).toBe(true);
+        }
+      });
+
+      it("MCP_LOG_PRETTY=false coerces to boolean false", () => {
+        const overrides = buildEnvOverrides({ MCP_LOG_PRETTY: "false" });
+        const merged = deepMerge(validBase, overrides);
+        const result = paprikaConfigSchema.safeParse(merged);
+        expect(result.success).toBe(true);
+        if (result.success) {
+          expect(result.data.logging.pretty).toBe(false);
+        }
+      });
+
+      it("MCP_LOG_PRETTY=1 coerces to boolean true", () => {
+        const overrides = buildEnvOverrides({ MCP_LOG_PRETTY: "1" });
+        const merged = deepMerge(validBase, overrides);
+        const result = paprikaConfigSchema.safeParse(merged);
+        expect(result.success).toBe(true);
+        if (result.success) {
+          expect(result.data.logging.pretty).toBe(true);
+        }
+      });
+
+      it("MCP_LOG_PRETTY=0 coerces to boolean false", () => {
+        const overrides = buildEnvOverrides({ MCP_LOG_PRETTY: "0" });
+        const merged = deepMerge(validBase, overrides);
+        const result = paprikaConfigSchema.safeParse(merged);
+        expect(result.success).toBe(true);
+        if (result.success) {
+          expect(result.data.logging.pretty).toBe(false);
+        }
+      });
+
+      it("MCP_LOG_PRETTY=auto passes through as the literal 'auto'", () => {
+        const overrides = buildEnvOverrides({ MCP_LOG_PRETTY: "auto" });
+        const merged = deepMerge(validBase, overrides);
+        const result = paprikaConfigSchema.safeParse(merged);
+        expect(result.success).toBe(true);
+        if (result.success) {
+          expect(result.data.logging.pretty).toBe("auto");
+        }
+      });
+
+      it("MCP_LOG_PRETTY with a typo is rejected by schema validation (not silently coerced)", () => {
+        // Regression test for a Codex finding: previously the env coercion
+        // mapped every non-recognised value to `false`, so typos like "treu"
+        // silently disabled pretty logging instead of surfacing the error.
+        const overrides = buildEnvOverrides({ MCP_LOG_PRETTY: "treu" });
+        const merged = deepMerge(validBase, overrides);
+        const result = paprikaConfigSchema.safeParse(merged);
+        expect(result.success).toBe(false);
+        if (!result.success) {
+          const offending = result.error.issues.find((i) => i.path.includes("pretty"));
+          expect(offending).toBeDefined();
+        }
+      });
+
+      it("empty MCP_LOG_LEVEL is ignored (treated as not set)", () => {
+        const overrides = buildEnvOverrides({ MCP_LOG_LEVEL: "" });
+        const merged = deepMerge(validBase, overrides);
+        const result = paprikaConfigSchema.safeParse(merged);
+        expect(result.success).toBe(true);
+        if (result.success) {
+          // Should fall back to schema default
+          expect(result.data.logging.level).toBe("info");
+        }
+      });
+
+      it("invalid MCP_LOG_LEVEL value causes loadConfig to return a validation ConfigError", () => {
+        const overrides = buildEnvOverrides({ MCP_LOG_LEVEL: "info-ish" });
+        const merged = deepMerge(validBase, overrides);
+        const result = paprikaConfigSchema.safeParse(merged);
+        expect(result.success).toBe(false);
+        if (!result.success) {
+          const error = ConfigError.validation(result.error.issues);
+          expect(error.kind).toBe("validation");
+          expect(error.reason).toContain("logging.level");
         }
       });
     });

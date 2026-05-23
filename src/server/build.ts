@@ -32,8 +32,6 @@ import { createLogger } from "../utils/log.js";
 const SERVER_NAME = "mcp-paprika";
 const SERVER_VERSION = "0.0.0";
 
-const log = createLogger("mcp-paprika");
-
 /**
  * Build the process-wide AppContext and SyncEngine.
  *
@@ -62,19 +60,37 @@ export async function buildAppContext(
   config: PaprikaConfig,
   notifier: Notifier,
 ): Promise<{ app: AppContext; sync: SyncEngine }> {
-  log("Authenticating with Paprika...");
-  const client = new PaprikaClient(config.paprika.email, config.paprika.password);
-  await client.authenticate();
-  log("Authenticated successfully.");
+  const log = createLogger({
+    transport: config.transport,
+    notifier,
+    level: config.logging.level,
+    notifyLevel: config.logging.notifyLevel,
+    pretty: config.logging.pretty,
+    ...(config.logging.file !== undefined ? { file: config.logging.file } : {}),
+  });
+  log.info({ transport: config.transport }, "mcp-paprika starting");
 
-  log("Initializing disk cache...");
-  const cache = new DiskCache(getCacheDir());
+  log.info("authenticating with paprika");
+  const client = new PaprikaClient(
+    config.paprika.email,
+    config.paprika.password,
+    log.child({ component: "paprika-client" }),
+  );
+  await client.authenticate();
+  log.info("authenticated with paprika");
+
+  log.info("initializing disk cache");
+  const cache = new DiskCache(getCacheDir(), log.child({ component: "disk-cache" }));
   await cache.init();
 
-  const auth = await buildAuthContext(config, cache);
+  const auth = await buildAuthContext(config, cache, log);
   if (auth !== null) {
-    log(
-      `OAuth configured: issuer=${auth.config.publicUrl}, allowlist=${(auth.config.allowlist.emails.length + auth.config.allowlist.subs.length).toString()} entries`,
+    log.info(
+      {
+        issuer: auth.config.publicUrl,
+        allowlistSize: auth.config.allowlist.emails.length + auth.config.allowlist.subs.length,
+      },
+      "oauth configured",
     );
   }
 
@@ -88,14 +104,14 @@ export async function buildAppContext(
   for (const recipe of cachedRecipes) {
     store.set(recipe);
   }
-  log(`Hydrated store with ${cachedRecipes.length.toString()} cached recipes.`);
+  log.info({ count: cachedRecipes.length }, "hydrated recipe store from cache");
 
   const pantryStore = new PantryStore({ pendingWriteTtlMs });
   const cachedPantryItems = await cache.getAllPantryItems();
   if (cachedPantryItems.length > 0) {
     pantryStore.load(cachedPantryItems);
   }
-  log(`Hydrated pantry store with ${cachedPantryItems.length.toString()} cached pantry items.`);
+  log.info({ count: cachedPantryItems.length }, "hydrated pantry store from cache");
 
   // SyncEngine only reads client/cache/store/pantryStore/notifier — never
   // vectorStore — so it is safe to construct with a placeholder appContext
@@ -109,6 +125,7 @@ export async function buildAppContext(
     vectorStore: null,
     notifier,
     auth, // null for stdio, populated for HTTP
+    log,
   };
   const sync = new SyncEngine(syncCtx, config.sync.interval);
 
@@ -126,7 +143,7 @@ export async function buildAppContext(
   // `syncOnce()` is documented to never throw (any failure is logged + emitted
   // as `sync:error`), so this is safe to await unconditionally — same fail-soft
   // semantics as the pre-Phase-1 entry point.
-  log("Running initial sync...");
+  log.info("running initial sync");
   // `syncOnce()` never throws — instead it emits `sync:complete` on success or
   // `sync:error` on failure. Subscribe so the startup log reflects the actual
   // outcome rather than always claiming success (#76). Wrap the capture in an
@@ -140,12 +157,12 @@ export async function buildAppContext(
   await sync.syncOnce();
   sync.events.off("sync:error", onError);
   if (errorBox.value === null) {
-    log("Initial sync complete.");
+    log.info("initial sync complete");
   } else {
-    log(`Initial sync failed: ${errorBox.value.message}. Continuing startup; background sync will retry.`);
+    log.warn({ err: errorBox.value }, "initial sync failed; background sync will retry");
   }
 
-  const vectorStore = await buildDiscoverComponents(config, store, sync.events);
+  const vectorStore = await buildDiscoverComponents(config, store, sync.events, log);
 
   const app: AppContext = {
     client,
@@ -155,6 +172,7 @@ export async function buildAppContext(
     vectorStore,
     notifier,
     auth, // null for stdio, populated for HTTP
+    log,
   };
 
   return { app, sync };

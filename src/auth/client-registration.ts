@@ -12,6 +12,7 @@
 
 import { randomUUID, timingSafeEqual } from "node:crypto";
 import { InvalidRequestError } from "@modelcontextprotocol/sdk/server/auth/errors.js";
+import type { Logger } from "pino";
 import { generateOpaqueToken, hashTokenForStorage, nowSeconds } from "./tokens.js";
 import { validateRegistration, validateUpdate } from "./dcr-validator.js";
 import { OAuthClientNotFoundError } from "./errors.js";
@@ -76,6 +77,7 @@ export class DiskClientRegistrationStore {
   constructor(
     private readonly _cache: DiskCache,
     private readonly _publicUrl: string,
+    private readonly log: Logger,
     /**
      * Hard cap on the number of registered clients. Enforced atomically
      * inside `registerClient` (via `DiskCache.tryPutOAuthClient`) so concurrent
@@ -103,8 +105,8 @@ export class DiskClientRegistrationStore {
    * Throws OAuthMetadataValidationError on invalid metadata.
    */
   async registerClient(metaIn: unknown): Promise<OAuthClientInformationFull> {
-    // Validate via dcr-validator; match() usage per FCIS + project neverthrow rules
-    const validated = validateRegistration(metaIn).match(
+    // Validate via dcr-validator; pass logger for URL-parse debug diagnosability
+    const validated = validateRegistration(metaIn, this.log).match(
       (v) => v,
       (e) => {
         throw e;
@@ -141,6 +143,10 @@ export class DiskClientRegistrationStore {
       throw new InvalidRequestError(`client registration cap reached (${result.currentCount.toString()} clients)`);
     }
     await this._cache.flush();
+    this.log.info(
+      { clientId: stored.clientId, redirectUriCount: stored.redirectUris.length },
+      "client registered via DCR",
+    );
 
     return storedToWire(stored, {
       registrationAccessToken,
@@ -159,8 +165,8 @@ export class DiskClientRegistrationStore {
     const existing = await this._cache.getOAuthClient(clientId);
     if (existing === null) throw OAuthClientNotFoundError.forId(clientId);
 
-    // Validate patch via dcr-validator
-    const validated = validateUpdate(metaIn).match(
+    // Validate patch via dcr-validator; pass logger for URL-parse debug diagnosability
+    const validated = validateUpdate(metaIn, this.log).match(
       (v) => v,
       (e) => {
         throw e;
@@ -217,8 +223,8 @@ export class DiskClientRegistrationStore {
     // Timing-safe comparison to prevent timing attacks
     try {
       return timingSafeEqual(Buffer.from(presentedHash, "hex"), Buffer.from(storedHash, "hex"));
-    } catch {
-      // If buffer conversion fails (invalid hex), return false
+    } catch (err) {
+      this.log.debug({ err, clientId }, "RAT timing-safe equality failed (likely invalid hex)");
       return false;
     }
   }

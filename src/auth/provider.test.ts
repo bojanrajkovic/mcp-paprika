@@ -8,7 +8,9 @@ import { AuthCodeStore } from "./auth-code-store.js";
 import { DiskCache } from "../cache/disk-cache.js";
 import { makeDefaultOidcStub, makeDiscoveryDoc } from "./__fixtures__/oidc-stub.js";
 import { makeAuthCodeState, makeVerifiedIdentity } from "./__fixtures__/oauth-state.js";
-import { ACCESS_TOKEN_TTL_SECONDS } from "./tokens.js";
+import { ACCESS_TOKEN_TTL_SECONDS, hashTokenForStorage } from "./tokens.js";
+import { makePinoCapture } from "../tools/tool-test-utils.js";
+import { SILENT_LOG } from "../utils/log.js";
 import type { OAuthClientInformationFull } from "@modelcontextprotocol/sdk/shared/auth.js";
 import type { AuthCodeState } from "./types.js";
 import { useMswServer } from "../__fixtures__/msw.js";
@@ -60,7 +62,7 @@ describe("MintingOAuthServerProvider", () => {
     cache = new DiskCache(cacheDir);
     await cache.init();
 
-    clientStore = new DiskClientRegistrationStore(cache, "https://mcp.example.com");
+    clientStore = new DiskClientRegistrationStore(cache, "https://mcp.example.com", SILENT_LOG);
     tokenStore = new TokenStore(cache);
     authRequests = new AuthRequestStore();
     authCodes = new AuthCodeStore();
@@ -87,6 +89,7 @@ describe("MintingOAuthServerProvider", () => {
         allowedAlgs: ["RS256"],
       },
       "https://mcp.example.com",
+      SILENT_LOG,
     );
 
     // Create mock client for testing
@@ -446,6 +449,136 @@ describe("MintingOAuthServerProvider", () => {
       await expect(provider.challengeForAuthorizationCode(mockClient, "unknown-code")).rejects.toMatchObject({
         errorCode: "invalid_grant",
       });
+    });
+  });
+
+  describe("logging (AC9.6)", () => {
+    // Separate capture setup for logging tests — don't pollute the shared fixture.
+    let logProvider: MintingOAuthServerProvider;
+    let logRecords: ReadonlyArray<Record<string, unknown>>;
+
+    beforeEach(async () => {
+      const { log: captureLog, records } = makePinoCapture();
+      logRecords = records;
+
+      // Fresh clientStore with silent logger (we're only capturing logProvider's logger)
+      const logClientStore = new DiskClientRegistrationStore(cache, "https://mcp.example.com", SILENT_LOG);
+      const discovery = makeDiscoveryDoc(oidcStub.issuer);
+
+      logProvider = new MintingOAuthServerProvider(
+        logClientStore,
+        tokenStore,
+        authRequests,
+        authCodes,
+        discovery,
+        {
+          discoveryUrl: `${oidcStub.issuer}/.well-known/openid-configuration`,
+          publicUrl: "https://mcp.example.com",
+          presetName: null,
+          clientId: "stub-client-id",
+          clientSecret: "stub-client-secret",
+          scopes: ["openid", "email"],
+          emailVerifiedPolicy: "if-present",
+          trustProxy: false,
+          allowlist: { emails: ["user@example.com"], subs: [] },
+          allowedAlgs: ["RS256"],
+        },
+        "https://mcp.example.com",
+        captureLog,
+      );
+
+      // Register a client for logProvider to use
+      const stored = await logClientStore.registerClient({
+        client_name: "Log Test Client",
+        redirect_uris: ["https://claude.ai/callback"],
+      });
+      mockClient = {
+        client_id: stored.client_id,
+        client_name: "Log Test Client",
+        redirect_uris: ["https://claude.ai/callback"],
+      } as OAuthClientInformationFull;
+    });
+
+    it("AC9.6: emits info record on authorization_code grant token mint", async () => {
+      const code = "log-test-ac-code";
+      authCodes.put(code, makeProviderAuthCode(mockClient));
+
+      const tokens = await logProvider.exchangeAuthorizationCode(
+        mockClient,
+        code,
+        undefined,
+        "https://claude.ai/callback",
+        new URL("https://mcp.example.com/"),
+      );
+
+      const expectedHash = hashTokenForStorage(tokens.access_token);
+      expect(logRecords).toContainEqual(
+        expect.objectContaining({
+          level: 30, // info
+          msg: "access token minted (authorization_code grant)",
+          tokenHash: expectedHash,
+          clientId: mockClient.client_id,
+          sub: "user-sub-123",
+        }),
+      );
+    });
+
+    it("AC9.6: emits info record on refresh_token grant token mint", async () => {
+      const pair = await tokenStore.issueAccessRefreshPair({
+        clientId: mockClient.client_id,
+        identity: makeVerifiedIdentity({ email: "user@example.com", sub: "user-sub-123" }),
+        scope: "openid email",
+        resource: "https://mcp.example.com/",
+      });
+
+      const newTokens = await logProvider.exchangeRefreshToken(mockClient, pair.refresh.plaintext);
+
+      const expectedHash = hashTokenForStorage(newTokens.access_token);
+      expect(logRecords).toContainEqual(
+        expect.objectContaining({
+          level: 30, // info
+          msg: "access token minted (refresh_token grant)",
+          tokenHash: expectedHash,
+          clientId: mockClient.client_id,
+          sub: "user-sub-123",
+        }),
+      );
+    });
+
+    it("AC9.6: emits info record on token revocation", async () => {
+      const pair = await tokenStore.issueAccessRefreshPair({
+        clientId: mockClient.client_id,
+        identity: makeVerifiedIdentity({ email: "user@example.com", sub: "user-sub-123" }),
+        scope: "openid email",
+        resource: "https://mcp.example.com/",
+      });
+
+      await logProvider.revokeToken(mockClient, {
+        token: pair.access.plaintext,
+        token_type_hint: "access_token",
+      });
+
+      const expectedHash = hashTokenForStorage(pair.access.plaintext);
+      expect(logRecords).toContainEqual(
+        expect.objectContaining({
+          level: 30, // info
+          msg: "access token revoked",
+          tokenHash: expectedHash,
+          clientId: mockClient.client_id,
+          sub: "user-sub-123",
+        }),
+      );
+    });
+
+    it("AC9.6: no revocation log on no-op revoke (unknown token)", async () => {
+      await logProvider.revokeToken(mockClient, {
+        token: "unknown-token-does-not-exist",
+        token_type_hint: "access_token",
+      });
+
+      // No revocation record should be emitted for a no-op
+      const revocationRecords = logRecords.filter((r) => r["msg"] === "access token revoked");
+      expect(revocationRecords).toHaveLength(0);
     });
   });
 });

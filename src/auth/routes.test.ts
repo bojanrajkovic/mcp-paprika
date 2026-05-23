@@ -1,5 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
+import { SILENT_LOG } from "../utils/log.js";
 import { nowSeconds } from "./tokens.js";
+import { makePinoCapture } from "../tools/tool-test-utils.js";
 import { Hono } from "hono";
 import {
   buildAuthRoutes,
@@ -19,6 +21,9 @@ import { makeVerifiedIdentity } from "./__fixtures__/oauth-state.js";
 import { createJwksFor } from "./oidc-client.js";
 import type { JWTVerifyGetKey } from "jose";
 import { useMswServer } from "../__fixtures__/msw.js";
+
+// Pino numeric log levels for use in assertions (see pino docs: info=30, warn=40, error=50)
+const warnLevel = 40;
 
 // ============================================================================
 // F6: makeRoutesConfig — deduplicated buildAuthRoutes config factory
@@ -59,6 +64,7 @@ function makeRoutesConfig(ctx: RoutesCtx, overrides: RoutesOverrides = {}): Auth
     discovery: makeDiscoveryDoc(ctx.oidcStubIssuer),
     jwks: overrides.jwks ?? ((async () => ({ keys: [] })) as unknown as JWTVerifyGetKey),
     publicUrl: "https://mcp.example.com",
+    log: { auth: SILENT_LOG, oidcClient: SILENT_LOG },
   };
 }
 
@@ -83,7 +89,7 @@ describe("Auth Routes", () => {
     cache = new DiskCache(cacheDir);
     await cache.init();
 
-    clientStore = new DiskClientRegistrationStore(cache, "https://mcp.example.com");
+    clientStore = new DiskClientRegistrationStore(cache, "https://mcp.example.com", SILENT_LOG);
     tokenStore = new TokenStore(cache);
     authRequests = new AuthRequestStore();
     authCodes = new AuthCodeStore();
@@ -276,17 +282,24 @@ describe("Auth Routes", () => {
       // Only user@example.com is on the allowlist — unknown@example.com will be denied.
       const realJwks = createJwksFor(makeDiscoveryDoc(oidcStub.issuer));
 
+      // Capture pino records from the auth component logger (denial path uses auth, not oidcClient).
+      // Mirror src/auth/build.ts: production passes parentLog.child({ component: "auth" }) so
+      // records carry the component field. Wrapping here locks that contract in.
+      const { log: captureLog, records } = makePinoCapture();
+      const authLog = captureLog.child({ component: "auth" });
+
       const localAuthRequests = new AuthRequestStore();
       const localAuthCodes = new AuthCodeStore();
       const localApp = new Hono();
       localApp.route(
         "/",
-        buildAuthRoutes(
-          makeRoutesConfig(
+        buildAuthRoutes({
+          ...makeRoutesConfig(
             { clientStore, tokenStore, authRequests, authCodes, oidcStubIssuer: oidcStub.issuer },
             { jwks: realJwks, authRequests: localAuthRequests, authCodes: localAuthCodes },
           ),
-        ),
+          log: { auth: authLog, oidcClient: SILENT_LOG },
+        }),
       );
 
       // Override the stub identity to one not on the allowlist
@@ -314,46 +327,107 @@ describe("Auth Routes", () => {
       );
       const upstreamCode = new URL(authResp.headers.get("location")!).searchParams.get("code")!;
 
-      // Spy on stderr to capture allowlist denial log output
-      const stderrWrites: Array<string> = [];
-      const stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation((chunk: unknown) => {
-        stderrWrites.push(String(chunk));
-        return true;
+      // Drive the callback route
+      const res = await localApp.request(`/oauth/callback?code=${upstreamCode}&state=${ourState}`);
+
+      // Should redirect with error=access_denied and iss
+      expect(res.status).toBe(302);
+      const location = res.headers.get("location");
+      expect(location).toBeTruthy();
+      const loc = new URL(location!);
+      expect(loc.searchParams.get("error")).toBe("access_denied");
+      expect(loc.searchParams.get("iss")).toBe("https://mcp.example.com");
+
+      // Denial redirects MUST NOT leak identity claims back to the client —
+      // these go onto a URL forwarded to claude.ai. The full claims live in
+      // the operator log (asserted below); the on-the-wire copy is a generic message.
+      const description = loc.searchParams.get("error_description") ?? "";
+      expect(description).not.toContain("unknown@example.com");
+      expect(description).not.toContain("unknown-sub-999");
+
+      // AC3.4: id_token must NOT appear in captured log records (JWTs start with "eyJ")
+      expect(JSON.stringify(records)).not.toMatch(/eyJ/);
+
+      // AC3.4: identity claims MUST appear in the denial log record as structured fields,
+      // and the record must carry component: "auth" (mirrors src/auth/build.ts child logger).
+      expect(records).toContainEqual(
+        expect.objectContaining({
+          msg: "allowlist denied identity",
+          level: warnLevel,
+          component: "auth",
+          email: "unknown@example.com",
+          sub: "unknown-sub-999",
+        }),
+      );
+    });
+
+    it("AC9.6: emits info record on allowlist hit", async () => {
+      // Build a local app wired to a capture logger so we can assert on the
+      // "allowlist accepted identity" record emitted in the success branch.
+      const realJwks = createJwksFor(makeDiscoveryDoc(oidcStub.issuer));
+
+      // Mirror src/auth/build.ts: production passes parentLog.child({ component: "auth" }) so
+      // records carry the component field. Wrapping here locks that contract in.
+      const { log: captureLog, records } = makePinoCapture();
+      const authLog = captureLog.child({ component: "auth" });
+
+      const localAuthRequests = new AuthRequestStore();
+      const localAuthCodes = new AuthCodeStore();
+      const localApp = new Hono();
+      localApp.route(
+        "/",
+        buildAuthRoutes({
+          ...makeRoutesConfig(
+            { clientStore, tokenStore, authRequests, authCodes, oidcStubIssuer: oidcStub.issuer },
+            { jwks: realJwks, authRequests: localAuthRequests, authCodes: localAuthCodes },
+          ),
+          log: { auth: authLog, oidcClient: SILENT_LOG },
+        }),
+      );
+
+      // Seed the local AuthRequestStore with an allowlisted user's nonce
+      const ourState = "mcp_state_accept_test";
+      const ourNonce = "mcp_nonce_accept_test";
+      localAuthRequests.put(ourState, {
+        clientId: "stub-client-id",
+        codeChallenge: "challenge",
+        codeChallengeMethod: "S256",
+        redirectUri: "https://claude.ai/callback",
+        resource: "https://mcp.example.com/",
+        claudeState: "claude_state_accept",
+        scope: "openid email",
+        ourNonce,
+        createdAt: nowSeconds(),
       });
 
-      try {
-        // Drive the callback route
-        const res = await localApp.request(`/oauth/callback?code=${upstreamCode}&state=${ourState}`);
+      // Drive /authorize to register the nonce in the stub's codeToNonce map
+      const authResp = await fetch(
+        `${oidcStub.issuer}/authorize?nonce=${ourNonce}&state=${ourState}&redirect_uri=https://mcp.example.com/oauth/callback`,
+        { redirect: "manual" },
+      );
+      const upstreamCode = new URL(authResp.headers.get("location")!).searchParams.get("code")!;
 
-        // Should redirect with error=access_denied and iss
-        expect(res.status).toBe(302);
-        const location = res.headers.get("location");
-        expect(location).toBeTruthy();
-        const loc = new URL(location!);
-        expect(loc.searchParams.get("error")).toBe("access_denied");
-        expect(loc.searchParams.get("iss")).toBe("https://mcp.example.com");
+      // Drive the callback — user@example.com is on the allowlist
+      const res = await localApp.request(`/oauth/callback?code=${upstreamCode}&state=${ourState}`);
 
-        // Denial redirects MUST NOT leak identity claims back to the client —
-        // these go onto a URL forwarded to claude.ai. The full claims live in
-        // the operator's stderr log (asserted below); the on-the-wire copy is
-        // a generic message.
-        const description = loc.searchParams.get("error_description") ?? "";
-        expect(description).not.toContain("unknown@example.com");
-        expect(description).not.toContain("unknown-sub-999");
+      // Should redirect successfully with code+iss
+      expect(res.status).toBe(302);
+      const location = res.headers.get("location");
+      const loc = new URL(location!);
+      expect(loc.searchParams.get("error")).toBeNull();
+      expect(loc.searchParams.get("iss")).toBe("https://mcp.example.com");
 
-        // Combine all stderr output
-        const allStderr = stderrWrites.join("");
-
-        // AC3.4: id_token must NOT appear in logs (JWTs always start with "eyJ")
-        expect(allStderr).not.toMatch(/eyJ/);
-
-        // AC3.4: identity claims MUST appear in the denial log
-        expect(allStderr).toMatch(/email=/);
-        expect(allStderr).toMatch(/sub=/);
-        expect(allStderr).toMatch(/allowlist denial/);
-      } finally {
-        stderrSpy.mockRestore();
-      }
+      // AC9.6: info record must be emitted for the accepted identity, and must carry
+      // component: "auth" (mirrors src/auth/build.ts child logger contract).
+      expect(records).toContainEqual(
+        expect.objectContaining({
+          level: 30, // info
+          msg: "allowlist accepted identity",
+          component: "auth",
+          email: "user@example.com",
+          sub: expect.any(String),
+        }),
+      );
     });
 
     it("missing state → 400", async () => {
@@ -656,7 +730,7 @@ describe("Auth Routes", () => {
       const testCache = new DiskCache(`/tmp/test-cap-${Date.now()}-${Math.random().toString(36).slice(2)}`);
       await testCache.init();
 
-      const testClientStore = new DiskClientRegistrationStore(testCache, "https://mcp.example.com");
+      const testClientStore = new DiskClientRegistrationStore(testCache, "https://mcp.example.com", SILENT_LOG);
       const testApp = new Hono();
       testApp.use("/register", buildClientCap(testCache, 50));
       testApp.post("/register", (c) => c.json({ ok: true }, 201));

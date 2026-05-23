@@ -14,10 +14,15 @@ import {
   handleType,
   wrap,
   BrokenCircuitError,
+  type IPolicy,
+  type IRetryContext,
 } from "cockatiel";
+import type { Logger } from "pino";
+import { SILENT_LOG } from "../utils/log.js";
 import { z } from "zod";
 import type { Recipe } from "../paprika/types.js";
 import type { EmbeddingConfig } from "../utils/config.js";
+import { CircuitOpenError } from "../utils/errors.js";
 import { EmbeddingError, EmbeddingAPIError } from "./embedding-errors.js";
 
 /**
@@ -70,15 +75,17 @@ export class EmbeddingClient {
   private readonly _baseUrl: string;
   private readonly _apiKey: string;
   private readonly _model: string;
+  private readonly log: Logger;
   private readonly _retryPolicy: ReturnType<typeof retry>;
   private readonly _breakerPolicy: ReturnType<typeof circuitBreaker>;
-  private readonly _resilience: ReturnType<typeof wrap>;
+  private readonly _resilience: IPolicy<IRetryContext, never>;
   private _dimensions: number | null = null;
 
-  constructor(config: Readonly<EmbeddingConfig>) {
+  constructor(config: Readonly<EmbeddingConfig>, log?: Logger) {
     this._baseUrl = config.baseUrl.replace(/\/+$/, "");
     this._apiKey = config.apiKey;
     this._model = config.model;
+    this.log = log ?? SILENT_LOG;
 
     // Per-instance resilience stack
     this._retryPolicy = retry(handleType(TransientHTTPError), {
@@ -94,7 +101,44 @@ export class EmbeddingClient {
       breaker: new ConsecutiveBreaker(5),
     });
 
-    this._resilience = wrap(this._retryPolicy, this._breakerPolicy);
+    // event.attempt is the 0-indexed upcoming-retry counter; +1 yields the
+    // 1-indexed network-touch attempt number that the inline log site uses.
+    this._retryPolicy.onRetry((event) => {
+      if ("error" in event) {
+        const err = event.error;
+        const status = err instanceof TransientHTTPError ? err.status : undefined;
+        this.log.warn(
+          { err, status, attempt: event.attempt + 1, nextBackoffMs: event.delay },
+          "embedding request failed, retrying",
+        );
+      }
+    });
+
+    this._retryPolicy.onGiveUp((event) => {
+      if ("error" in event) {
+        const err = event.error;
+        const status = err instanceof TransientHTTPError ? err.status : undefined;
+        this.log.error({ err, status }, "embedding request gave up after retries");
+      }
+    });
+
+    // Breaker state-change hooks. `onBreak` reaches connected MCP clients via
+    // the default `notifyLevel: "warn"` fan-out; reset/half-open stay on the
+    // primary log stream by design.
+    this._breakerPolicy.onBreak(() => {
+      this.log.warn({}, "embedding circuit breaker opened");
+    });
+    this._breakerPolicy.onReset(() => {
+      this.log.info({}, "embedding circuit breaker reset");
+    });
+    this._breakerPolicy.onHalfOpen(() => {
+      this.log.info({}, "embedding circuit breaker half-open (probe pending)");
+    });
+
+    // Breaker OUTSIDE retry so the consecutive-failure counter increments
+    // once per embed call regardless of how many retries that call exhausted
+    // internally.
+    this._resilience = wrap(this._breakerPolicy, this._retryPolicy);
   }
 
   /**
@@ -116,14 +160,19 @@ export class EmbeddingClient {
    *
    * @param texts - Array of texts to embed
    * @returns Array of embedding vectors (each is an array of numbers)
-   * @throws EmbeddingAPIError on permanent HTTP errors or circuit breaker open
+   * @throws EmbeddingAPIError on permanent HTTP errors from the embedding provider
+   * @throws CircuitOpenError when the local circuit breaker is open (no HTTP request issued)
    * @throws ZodError on response validation failure
    * @throws TransientHTTPError (internally caught by resilience) on transient failures
    */
   async embedBatch(texts: ReadonlyArray<string>): Promise<Array<Array<number>>> {
     const endpoint = `${this._baseUrl}/embeddings`;
 
-    const execute = async (): Promise<Array<Array<number>>> => {
+    const execute = async (ctx: IRetryContext): Promise<Array<Array<number>>> => {
+      const attempt = ctx.attempt + 1;
+      const t0 = performance.now();
+      this.log.debug({ attempt }, "embedding request start");
+
       const response = await fetch(endpoint, {
         method: "POST",
         headers: {
@@ -139,8 +188,10 @@ export class EmbeddingClient {
       // Check for transient vs permanent errors
       if (!response.ok) {
         if (RETRYABLE_STATUSES.has(response.status)) {
+          // onRetry hook will log the warn; just throw for cockatiel to handle
           throw new TransientHTTPError(response.status);
         }
+        this.log.error({ status: response.status, attempt }, "embedding request failed (non-retryable)");
         throw new EmbeddingAPIError("Embedding API error", response.status, endpoint);
       }
 
@@ -153,6 +204,8 @@ export class EmbeddingClient {
         this._dimensions = parsed.data[0]!.embedding.length;
       }
 
+      const attemptDurationMs = Math.round(performance.now() - t0);
+      this.log.debug({ attempt, attemptDurationMs }, "embedding request ok");
       return parsed.data.map((d) => d.embedding);
     };
 
@@ -161,7 +214,7 @@ export class EmbeddingClient {
       return result as Array<Array<number>>;
     } catch (error) {
       if (error instanceof BrokenCircuitError) {
-        throw new EmbeddingAPIError("Service unavailable (circuit open)", 503, endpoint);
+        throw new CircuitOpenError("embeddings", endpoint, { cause: error });
       }
       throw error;
     }

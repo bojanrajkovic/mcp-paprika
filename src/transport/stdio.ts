@@ -4,9 +4,6 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { buildAppContext, buildMcpServer } from "../server/build.js";
 import { singleServerNotifier } from "../server/notifier.js";
 import type { PaprikaConfig } from "../utils/config.js";
-import { createLogger } from "../utils/log.js";
-
-const log = createLogger("mcp-paprika");
 
 export interface TransportHandle {
   shutdown(): Promise<void>;
@@ -50,16 +47,18 @@ export async function startStdio(config: PaprikaConfig): Promise<TransportHandle
   const { app, sync } = await buildAppContext(config, notifier);
   server = buildMcpServer(app);
 
+  const log = app.log.child({ component: "transport-stdio" });
+
   if (config.sync.enabled) {
     sync.start();
-    log(`Sync engine started (interval: ${config.sync.interval.toString()}ms).`);
+    log.info({ intervalMs: config.sync.interval }, "sync engine started");
   } else {
-    log("Background sync disabled.");
+    log.info("background sync disabled");
   }
 
-  log("Connecting stdio transport...");
+  log.info("connecting stdio transport");
   await server.connect(new StdioServerTransport());
-  log("Server ready.");
+  log.info("server ready");
 
   return {
     async shutdown() {

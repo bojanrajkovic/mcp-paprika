@@ -1,10 +1,17 @@
-import { describe, it, expect, beforeAll, afterAll, afterEach } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, afterEach, vi } from "vitest";
 import { setupServer } from "msw/node";
 import { http, HttpResponse } from "msw";
 import { ZodError } from "zod";
 import { gunzipSync } from "node:zlib";
+import { Writable } from "node:stream";
+import pino from "pino";
+import type { Logger } from "pino";
+import { BrokenCircuitError } from "cockatiel";
+import { makePinoCapture, tripBreaker } from "../tools/tool-test-utils.js";
 import { PaprikaClient } from "./client.js";
 import { PaprikaAPIError, PaprikaAuthError } from "./errors.js";
+import { CircuitOpenError } from "../utils/errors.js";
+import { toMessage, REDACT_PATHS } from "../utils/log.js";
 import type { PantryItem, Recipe } from "./types.js";
 import { RecipeSchema, RecipeUidSchema, PantryItemUidSchema } from "./types.js";
 
@@ -984,6 +991,461 @@ describe("PaprikaClient", () => {
       } catch (error) {
         expect(error).toBeInstanceOf(ZodError);
       }
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Lifecycle hook logging tests — Task 3 (AC3.3, AC3.4, AC6.1, AC6.2, AC6.3)
+  // ---------------------------------------------------------------------------
+
+  describe("structured-logging.AC3.3: onRetry hook emits warn records", () => {
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it("AC3.3 - emits warn with attempt+1 and nextBackoffMs on first retry, another warn on second retry, no warn after success", async () => {
+      const { log: testLog, records } = makePinoCapture();
+      let callCount = 0;
+      server.use(
+        http.get(`${API_BASE}/recipes/`, () => {
+          callCount++;
+          if (callCount <= 2) {
+            return HttpResponse.json({ result: [] }, { status: 503 });
+          }
+          return HttpResponse.json({ result: [] });
+        }),
+      );
+
+      vi.useFakeTimers();
+      const client = new PaprikaClient("test@example.com", "password", testLog);
+      const callPromise = client.listRecipes();
+      await vi.runAllTimersAsync();
+      await callPromise;
+
+      const retryWarns = records.filter((r) => r["msg"] === "paprika request failed, retrying");
+      // Two failures before final success → two retry warns
+      expect(retryWarns).toHaveLength(2);
+
+      // First warn: about to run the 2nd network touch (attempt 2)
+      expect(retryWarns[0]!["attempt"]).toBe(2);
+      expect(typeof retryWarns[0]!["nextBackoffMs"]).toBe("number");
+      expect((retryWarns[0]!["nextBackoffMs"] as number) >= 0).toBe(true);
+      expect(retryWarns[0]!["err"]).toBeDefined();
+
+      // Second warn: about to run the 3rd network touch (attempt 3)
+      expect(retryWarns[1]!["attempt"]).toBe(3);
+
+      // Cross-assert: onRetry's attempt numbers are consistent with the inline debug log
+      // at the same log site (ctx.attempt + 1). The warn fires BEFORE the retry; the
+      // debug "paprika request start" fires at the start of that same attempt. Both should
+      // carry the same attempt number for the same network touch.
+      const startsForAttempt2 = records.filter((r) => r["msg"] === "paprika request start" && r["attempt"] === 2);
+      expect(startsForAttempt2).toHaveLength(1);
+
+      const startsForAttempt3 = records.filter((r) => r["msg"] === "paprika request start" && r["attempt"] === 3);
+      expect(startsForAttempt3).toHaveLength(1);
+
+      // Final call succeeded — no give-up error record
+      const giveUps = records.filter((r) => r["msg"] === "paprika retries exhausted");
+      expect(giveUps).toHaveLength(0);
+    }, 15000);
+  });
+
+  describe("structured-logging.AC3.4: onGiveUp hook emits error record when retries exhausted", () => {
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it("AC3.4 - emits error 'paprika retries exhausted' after all 3 attempts fail", async () => {
+      const { log: testLog, records } = makePinoCapture();
+      server.use(
+        http.get(`${API_BASE}/recipes/`, () => {
+          return HttpResponse.json({ result: [] }, { status: 503 });
+        }),
+      );
+
+      vi.useFakeTimers();
+      const client = new PaprikaClient("test@example.com", "password", testLog);
+      const callPromise = client.listRecipes().catch(() => {
+        /* expected rejection */
+      });
+      await vi.runAllTimersAsync();
+      await callPromise;
+
+      const giveUps = records.filter((r) => r["msg"] === "paprika retries exhausted");
+      expect(giveUps).toHaveLength(1);
+    }, 15000);
+  });
+
+  describe("structured-logging.AC6: Breaker lifecycle hooks emit log records", () => {
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it("AC6.1 - onBreak emits exactly one warn 'paprika circuit breaker opened' after 5 distinct failing tool calls", async () => {
+      const { log: testLog, records } = makePinoCapture();
+      // Fail every request — 5 tool calls × 4 attempts each (1 initial + 3 retries) = 20 fetches before breaker opens
+      server.use(
+        http.get(`${API_BASE}/recipes/`, () => {
+          return HttpResponse.json({ result: [] }, { status: 503 });
+        }),
+      );
+
+      vi.useFakeTimers();
+      const client = new PaprikaClient("test@example.com", "password", testLog);
+
+      // Make 5 failing tool calls — each exhausts all 3 retries
+      for (let i = 0; i < 5; i++) {
+        const p = client.listRecipes().catch(() => {
+          /* expected */
+        });
+        await vi.runAllTimersAsync();
+        await p;
+      }
+
+      const breakRecords = records.filter((r) => r["msg"] === "paprika circuit breaker opened");
+      expect(breakRecords).toHaveLength(1);
+    }, 60000);
+
+    it("AC6.3 - onHalfOpen emits info record when a probe starts after halfOpenAfter elapses", async () => {
+      const { log: testLog, records } = makePinoCapture();
+      // All fetches succeed after the breaker is tripped
+      let fetchCount = 0;
+      server.use(
+        http.get(`${API_BASE}/recipes/`, () => {
+          fetchCount++;
+          // Fail enough times to trip the breaker (5 calls × 4 attempts each = 20),
+          // then succeed on the probe
+          if (fetchCount <= 20) {
+            return HttpResponse.json({ result: [] }, { status: 503 });
+          }
+          return HttpResponse.json({ result: [] });
+        }),
+      );
+
+      // Use fake timers that also fake Date so Date.now() advances with timers
+      vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout"] });
+      const client = new PaprikaClient("test@example.com", "password", testLog);
+
+      // Trip the breaker: 5 failing calls (each exhausts maxAttempts=3, so 4 total fetches)
+      for (let i = 0; i < 5; i++) {
+        const p = client.listRecipes().catch(() => {
+          /* expected */
+        });
+        await vi.runAllTimersAsync();
+        await p;
+      }
+
+      // Advance Date.now() past halfOpenAfter (30_000ms) so the next execute() enters half-open.
+      vi.advanceTimersByTime(35_000);
+
+      // The probe triggers onHalfOpen inside execute()
+      const probePromise = client.listRecipes();
+      await vi.runAllTimersAsync();
+      await probePromise;
+
+      const halfOpenRecords = records.filter((r) => r["msg"] === "paprika circuit breaker half-open (probe pending)");
+      expect(halfOpenRecords).toHaveLength(1);
+    }, 60000);
+
+    it("AC6.2 - onReset emits info record after successful half-open probe", async () => {
+      const { log: testLog, records } = makePinoCapture();
+      let fetchCount = 0;
+      server.use(
+        http.get(`${API_BASE}/recipes/`, () => {
+          fetchCount++;
+          // Fail 20 fetches (5 calls × 4 attempts), then succeed on probe
+          if (fetchCount <= 20) {
+            return HttpResponse.json({ result: [] }, { status: 503 });
+          }
+          return HttpResponse.json({ result: [] });
+        }),
+      );
+
+      vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout"] });
+      const client = new PaprikaClient("test@example.com", "password", testLog);
+
+      // Trip the breaker: 5 failing calls
+      for (let i = 0; i < 5; i++) {
+        const p = client.listRecipes().catch(() => {
+          /* expected */
+        });
+        await vi.runAllTimersAsync();
+        await p;
+      }
+
+      // Advance past halfOpenAfter to allow half-open probe
+      vi.advanceTimersByTime(35_000);
+
+      // Make a successful half-open probe — onReset fires after probe succeeds
+      const probePromise = client.listRecipes();
+      await vi.runAllTimersAsync();
+      await probePromise;
+
+      const resetRecords = records.filter((r) => r["msg"] === "paprika circuit breaker reset");
+      expect(resetRecords).toHaveLength(1);
+    }, 60000);
+  });
+
+  // ---------------------------------------------------------------------------
+  // CircuitOpenError surface — Task 4 (AC4.2, AC4.3, AC5.5)
+  // ---------------------------------------------------------------------------
+
+  describe("structured-logging.AC4+AC5: CircuitOpenError replaces synthetic 503", () => {
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it("AC4.2 - 5th distinct failing call trips breaker (onBreak fires once) and fetch count is 5×4=20", async () => {
+      const { log: testLog, records } = makePinoCapture();
+      let fetchCount = 0;
+      server.use(
+        http.get(`${API_BASE}/recipes/`, () => {
+          fetchCount++;
+          return HttpResponse.json({ result: [] }, { status: 503 });
+        }),
+      );
+
+      vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout"] });
+      const client = new PaprikaClient("test@example.com", "password", testLog);
+
+      await tripBreaker(() => client.listRecipes());
+
+      const breakRecords = records.filter((r) => r["msg"] === "paprika circuit breaker opened");
+      expect(breakRecords).toHaveLength(1);
+      // 5 calls × 4 total attempts (maxAttempts:3 means 4 total) = 20 fetches
+      expect(fetchCount).toBe(20);
+    }, 60000);
+
+    it("AC4.3 - 6th call with open breaker throws CircuitOpenError without additional fetches", async () => {
+      let fetchCount = 0;
+      server.use(
+        http.get(`${API_BASE}/recipes/`, () => {
+          fetchCount++;
+          return HttpResponse.json({ result: [] }, { status: 503 });
+        }),
+      );
+
+      vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout"] });
+      const client = new PaprikaClient("test@example.com", "password");
+
+      await tripBreaker(() => client.listRecipes());
+      const fetchCountAfterTrip = fetchCount;
+
+      // 6th call should throw CircuitOpenError without making any fetch
+      let caught: unknown;
+      try {
+        await client.listRecipes();
+      } catch (err) {
+        caught = err;
+      }
+
+      expect(caught).toBeInstanceOf(CircuitOpenError);
+      // No additional fetches were made
+      expect(fetchCount).toBe(fetchCountAfterTrip);
+
+      if (caught instanceof CircuitOpenError) {
+        expect(caught.endpoint).toBe(`${API_BASE}/recipes/`);
+        expect(caught.cause).toBeInstanceOf(BrokenCircuitError);
+      }
+    }, 60000);
+
+    it("AC5.5 - toMessage on CircuitOpenError never contains 'HTTP 503'", async () => {
+      server.use(
+        http.get(`${API_BASE}/recipes/`, () => {
+          return HttpResponse.json({ result: [] }, { status: 503 });
+        }),
+      );
+
+      vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout"] });
+      const client = new PaprikaClient("test@example.com", "password");
+
+      await tripBreaker(() => client.listRecipes());
+
+      let caught: unknown;
+      try {
+        await client.listRecipes();
+      } catch (err) {
+        caught = err;
+      }
+
+      const msg = toMessage(caught);
+      expect(msg).toContain(`${API_BASE}/recipes/`);
+      expect(msg).not.toContain("HTTP 503");
+      expect(msg).toBe(`paprika circuit breaker is open (endpoint=${API_BASE}/recipes/)`);
+    }, 60000);
+  });
+
+  // ---------------------------------------------------------------------------
+  // Per-attempt response-path logging — Task 5 (AC3.1, AC3.2, AC3.5, AC3.6, AC3.7)
+  // ---------------------------------------------------------------------------
+
+  describe("structured-logging.AC3.1+3.2: request start and request ok debug records", () => {
+    it("AC3.1 - emits debug 'paprika request start' with method, url, attempt:1 on first call", async () => {
+      const { log: testLog, records } = makePinoCapture();
+      server.use(
+        http.get(`${API_BASE}/recipes/`, () => {
+          return HttpResponse.json({ result: [] });
+        }),
+      );
+
+      const client = new PaprikaClient("test@example.com", "password", testLog);
+      await client.listRecipes();
+
+      const startRecords = records.filter((r) => r["msg"] === "paprika request start");
+      expect(startRecords.length).toBeGreaterThanOrEqual(1);
+      expect(startRecords[0]!["method"]).toBe("GET");
+      expect(typeof startRecords[0]!["url"]).toBe("string");
+      expect(startRecords[0]!["attempt"]).toBe(1);
+    });
+
+    it("AC3.2 - emits exactly one debug 'paprika request ok' with status:200, attempt:1, attemptDurationMs>=0", async () => {
+      const { log: testLog, records } = makePinoCapture();
+      server.use(
+        http.get(`${API_BASE}/recipes/`, () => {
+          return HttpResponse.json({ result: [] });
+        }),
+      );
+
+      const client = new PaprikaClient("test@example.com", "password", testLog);
+      await client.listRecipes();
+
+      const okRecords = records.filter((r) => r["msg"] === "paprika request ok");
+      expect(okRecords).toHaveLength(1);
+      expect(okRecords[0]!["attempt"]).toBe(1);
+      expect(okRecords[0]!["status"]).toBe(200);
+      expect(typeof okRecords[0]!["attemptDurationMs"]).toBe("number");
+      expect((okRecords[0]!["attemptDurationMs"] as number) >= 0).toBe(true);
+    });
+  });
+
+  describe("structured-logging.AC3.5: non-retryable failure emits error record, no retry warn", () => {
+    it("AC3.5 - emits error 'paprika request failed (non-retryable)' on 400, no retry warn fires", async () => {
+      const { log: testLog, records } = makePinoCapture();
+      server.use(
+        http.get(`${API_BASE}/recipes/`, () => {
+          return HttpResponse.json({}, { status: 400 });
+        }),
+      );
+
+      const client = new PaprikaClient("test@example.com", "password", testLog);
+      await client.listRecipes().catch(() => {
+        /* expected */
+      });
+
+      const errorRecords = records.filter((r) => r["msg"] === "paprika request failed (non-retryable)");
+      expect(errorRecords).toHaveLength(1);
+      expect(errorRecords[0]!["status"]).toBe(400);
+      expect(errorRecords[0]!["attempt"]).toBe(1);
+
+      // 400 is not in RETRYABLE_STATUSES, so onRetry must not fire
+      const retryWarns = records.filter((r) => r["msg"] === "paprika request failed, retrying");
+      expect(retryWarns).toHaveLength(0);
+    });
+  });
+
+  describe("structured-logging.AC3.6: 401 re-auth signal emits info record", () => {
+    it("AC3.6 - emits info 'paprika 401, re-authenticating' with status:401 and attempt:1 on first attempt", async () => {
+      const { log: testLog, records } = makePinoCapture();
+      let authCallCount = 0;
+      let apiCallCount = 0;
+
+      server.use(
+        http.post(AUTH_URL, () => {
+          authCallCount++;
+          return HttpResponse.json({ result: { token: "fresh-token" } });
+        }),
+        http.get(`${API_BASE}/recipes/`, () => {
+          apiCallCount++;
+          if (apiCallCount === 1) {
+            return HttpResponse.json({}, { status: 401 });
+          }
+          return HttpResponse.json({ result: [] });
+        }),
+      );
+
+      const client = new PaprikaClient("test@example.com", "password", testLog);
+      // Authenticate first so the client has a token (401 without token → auth error, not re-auth)
+      await client.authenticate();
+      await client.listRecipes();
+
+      const reAuthRecords = records.filter((r) => r["msg"] === "paprika 401, re-authenticating");
+      expect(reAuthRecords.length).toBeGreaterThanOrEqual(1);
+      expect(reAuthRecords[0]!["status"]).toBe(401);
+      expect(reAuthRecords[0]!["attempt"]).toBe(1);
+      expect(authCallCount).toBeGreaterThanOrEqual(2); // initial auth + re-auth
+    });
+  });
+
+  describe("structured-logging.AC3.7: no token leaks in captured log records", () => {
+    it("AC3.7 - captured records from a failing request contain no bearer token values", async () => {
+      const secretToken = "supersecret-bearer-token-xyz-unique";
+      const records: Array<Record<string, unknown>> = [];
+      const captureStream = new Writable({
+        write(chunk: Buffer, _enc: BufferEncoding, cb: () => void) {
+          records.push(JSON.parse(chunk.toString("utf8")) as Record<string, unknown>);
+          cb();
+        },
+      });
+      // Use a logger with redact config matching createLogger's REDACT_PATHS
+      const redactLog = pino(
+        {
+          level: "trace",
+          redact: {
+            paths: REDACT_PATHS as Array<string>,
+            censor: "[Redacted]",
+          },
+        },
+        captureStream,
+      ) as Logger;
+
+      server.use(
+        http.get(`${API_BASE}/recipes/`, () => {
+          return HttpResponse.json({}, { status: 400 });
+        }),
+      );
+
+      // Build a client with the redact-enabled logger
+      const client = new PaprikaClient("test@example.com", secretToken, redactLog);
+      // Authenticate so the token is set (but since auth URL is not stubbed, it will fail)
+      // Instead, directly make a request — the token is set as password, not auth token yet.
+      // Just verify that no field in any record contains the secret token.
+      await client.listRecipes().catch(() => {
+        /* expected: 400 error */
+      });
+
+      // Serialize all records to string and verify no leak
+      const allRecordsAsJson = JSON.stringify(records);
+      expect(allRecordsAsJson).not.toContain(secretToken);
+    });
+
+    it("AC3.7 belt-and-suspenders - pino redact censors authorization header when logged directly", () => {
+      const records: Array<Record<string, unknown>> = [];
+      const captureStream = new Writable({
+        write(chunk: Buffer, _enc: BufferEncoding, cb: () => void) {
+          records.push(JSON.parse(chunk.toString("utf8")) as Record<string, unknown>);
+          cb();
+        },
+      });
+      const redactLog = pino(
+        {
+          level: "trace",
+          redact: {
+            paths: REDACT_PATHS as Array<string>,
+            censor: "[Redacted]",
+          },
+        },
+        captureStream,
+      ) as Logger;
+
+      // Log a payload with an authorization header directly to the test logger
+      redactLog.warn({ headers: { authorization: "Bearer super-secret-token" } }, "test-redact-check");
+
+      expect(records).toHaveLength(1);
+      const record = records[0]!;
+      const headers = record["headers"] as Record<string, unknown>;
+      expect(headers["authorization"]).toBe("[Redacted]");
+      expect(JSON.stringify(record)).not.toContain("super-secret-token");
     });
   });
 });

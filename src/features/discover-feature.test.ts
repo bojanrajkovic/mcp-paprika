@@ -3,6 +3,7 @@ import type { SyncResult } from "../paprika/types.js";
 import type { RecipeUid } from "../paprika/types.js";
 import { RecipeStore } from "../cache/recipe-store.js";
 import { makeRecipe } from "../cache/__fixtures__/recipes.js";
+import { makePinoCapture, DEFAULT_LOGGING_CONFIG } from "../tools/tool-test-utils.js";
 // mitt's package shape (flat-conditioned `exports`, .d.ts using `export default`) confuses
 // TS strict resolution under @tsconfig/strictest + nodenext into typing the default import
 // as the namespace. The namespace's `.default` member IS the function, so we recover the
@@ -46,6 +47,7 @@ function makeEnabledConfig(overrides: Record<string, unknown> = {}) {
     paprika: { email: "test@example.com", password: "pass" },
     sync: { enabled: true, interval: 5000, pendingWriteTtl: 60000 },
     http: { port: 3000, host: "0.0.0.0", allowedHosts: [], allowedOrigins: [] },
+    logging: DEFAULT_LOGGING_CONFIG,
     features: {
       embeddings: {
         apiKey: "test-key",
@@ -64,6 +66,7 @@ function makeDisabledConfig(withFeaturesEmpty = false) {
       paprika: { email: "test@example.com", password: "pass" },
       sync: { enabled: true, interval: 5000, pendingWriteTtl: 60000 },
       http: { port: 3000, host: "0.0.0.0", allowedHosts: [], allowedOrigins: [] },
+      logging: DEFAULT_LOGGING_CONFIG,
       features: {},
     };
   }
@@ -72,18 +75,15 @@ function makeDisabledConfig(withFeaturesEmpty = false) {
     paprika: { email: "test@example.com", password: "pass" },
     sync: { enabled: true, interval: 5000, pendingWriteTtl: 60000 },
     http: { port: 3000, host: "0.0.0.0", allowedHosts: [], allowedOrigins: [] },
+    logging: DEFAULT_LOGGING_CONFIG,
   };
 }
 
 describe("p3-u08-discover-wiring: buildDiscoverComponents", () => {
   let mockVectorStore: any;
-  let stderrSpy: any;
 
   beforeEach(async () => {
     vi.clearAllMocks();
-    if (stderrSpy) {
-      stderrSpy.mockRestore();
-    }
 
     // Get the mocked modules
     const { EmbeddingClient } = await import("./embeddings.js");
@@ -104,14 +104,9 @@ describe("p3-u08-discover-wiring: buildDiscoverComponents", () => {
       }
     }
     vi.mocked(VectorStore).mockImplementation(MockVectorStore as any);
-
-    stderrSpy = vi.spyOn(process.stderr, "write").mockReturnValue(true);
   });
 
   afterEach(() => {
-    if (stderrSpy) {
-      stderrSpy.mockRestore();
-    }
     vi.clearAllMocks();
   });
 
@@ -140,40 +135,49 @@ describe("p3-u08-discover-wiring: buildDiscoverComponents", () => {
       expect(vectorStore).toBeNull();
     });
 
-    it("AC1.3: logs 'Semantic search: enabled' to stderr when embeddings configured", async () => {
+    it("AC1.3: emits structured info log 'semantic search enabled' when embeddings configured", async () => {
       const { buildDiscoverComponents } = await import("./discover-feature.js");
       const store = new RecipeStore();
       store.load([], []);
       const syncEvents = makeMockSyncEvents();
       const config = makeEnabledConfig();
+      const { log, records } = makePinoCapture();
 
-      await buildDiscoverComponents(config, store, syncEvents);
+      await buildDiscoverComponents(config, store, syncEvents, log);
 
-      expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining("Semantic search: enabled"));
+      const infoRecords = records.filter((r) => r["msg"] === "semantic search enabled");
+      expect(infoRecords).toHaveLength(1);
+      expect(infoRecords[0]!["level"]).toBe(30); // pino info = 30
     });
 
-    it("AC1.4: logs 'Semantic search: disabled' to stderr when embeddings not configured", async () => {
+    it("AC1.4: emits structured info log 'semantic search disabled' when embeddings not configured", async () => {
       const { buildDiscoverComponents } = await import("./discover-feature.js");
       const store = new RecipeStore();
       store.load([], []);
       const syncEvents = makeMockSyncEvents();
       const config = makeDisabledConfig();
+      const { log, records } = makePinoCapture();
 
-      await buildDiscoverComponents(config, store, syncEvents);
+      await buildDiscoverComponents(config, store, syncEvents, log);
 
-      expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining("Semantic search: disabled"));
+      const infoRecords = records.filter((r) => r["msg"] === "semantic search disabled");
+      expect(infoRecords).toHaveLength(1);
+      expect(infoRecords[0]!["level"]).toBe(30); // pino info = 30
     });
 
-    it("AC1.4 (alternative): logs 'Semantic search: disabled' when features.embeddings is undefined", async () => {
+    it("AC1.4 (alternative): emits 'semantic search disabled' when features.embeddings is undefined", async () => {
       const { buildDiscoverComponents } = await import("./discover-feature.js");
       const store = new RecipeStore();
       store.load([], []);
       const syncEvents = makeMockSyncEvents();
       const config = makeDisabledConfig(true);
+      const { log, records } = makePinoCapture();
 
-      await buildDiscoverComponents(config, store, syncEvents);
+      await buildDiscoverComponents(config, store, syncEvents, log);
 
-      expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining("Semantic search: disabled"));
+      const infoRecords = records.filter((r) => r["msg"] === "semantic search disabled");
+      expect(infoRecords).toHaveLength(1);
+      expect(infoRecords[0]!["level"]).toBe(30); // pino info = 30
     });
   });
 
@@ -194,6 +198,7 @@ describe("p3-u08-discover-wiring: buildDiscoverComponents", () => {
         paprika: { email: "test@example.com", password: "pass" },
         sync: { enabled: true, interval: 5000, pendingWriteTtl: 60000 },
         http: { port: 3000, host: "0.0.0.0", allowedHosts: [], allowedOrigins: [] },
+        logging: DEFAULT_LOGGING_CONFIG,
         features: {
           embeddings: embeddingsConfig,
         },
@@ -201,7 +206,8 @@ describe("p3-u08-discover-wiring: buildDiscoverComponents", () => {
 
       await buildDiscoverComponents(config, store, syncEvents);
 
-      expect(vi.mocked(EmbeddingClient)).toHaveBeenCalledWith(embeddingsConfig);
+      // Second arg is the optional logger — undefined when no log is passed
+      expect(vi.mocked(EmbeddingClient)).toHaveBeenCalledWith(embeddingsConfig, undefined);
     });
 
     it("AC2.2: creates VectorStore with getCacheDir() and EmbeddingClient instance", async () => {
@@ -387,12 +393,13 @@ describe("p3-u08-discover-wiring: buildDiscoverComponents", () => {
       store.load([recipe], []);
       const syncEvents = makeMockSyncEvents();
       const config = makeEnabledConfig();
+      const { log, records } = makePinoCapture();
 
       mockVectorStore.size = 10;
       const testError = new Error("Embedding failed");
       mockVectorStore.indexRecipes.mockRejectedValueOnce(testError);
 
-      await buildDiscoverComponents(config, store, syncEvents);
+      await buildDiscoverComponents(config, store, syncEvents, log);
 
       const syncResult: SyncResult = {
         added: [recipe],
@@ -404,8 +411,9 @@ describe("p3-u08-discover-wiring: buildDiscoverComponents", () => {
       // Let async handler complete
       await new Promise((r) => setTimeout(r, 10));
 
-      expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining("Vector index error"));
-      expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining("Embedding failed"));
+      const errorRecords = records.filter((r) => r["msg"] === "vector index error during sync-driven re-index");
+      expect(errorRecords).toHaveLength(1);
+      expect(errorRecords[0]!["err"]).toBeDefined();
     });
 
     it("AC4.2: catches and logs error from vectorStore.removeRecipe", async () => {
@@ -414,12 +422,13 @@ describe("p3-u08-discover-wiring: buildDiscoverComponents", () => {
       store.load([], []);
       const syncEvents = makeMockSyncEvents();
       const config = makeEnabledConfig();
+      const { log, records } = makePinoCapture();
 
       mockVectorStore.size = 10;
       const testError = new Error("Remove failed");
       mockVectorStore.removeRecipe.mockRejectedValueOnce(testError);
 
-      await buildDiscoverComponents(config, store, syncEvents);
+      await buildDiscoverComponents(config, store, syncEvents, log);
 
       const syncResult: SyncResult = {
         added: [],
@@ -431,8 +440,39 @@ describe("p3-u08-discover-wiring: buildDiscoverComponents", () => {
       // Let async handler complete
       await new Promise((r) => setTimeout(r, 10));
 
-      expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining("Vector index error"));
-      expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining("Remove failed"));
+      const errorRecords = records.filter((r) => r["msg"] === "vector index error during sync-driven re-index");
+      expect(errorRecords).toHaveLength(1);
+      expect(errorRecords[0]!["err"]).toBeDefined();
+    });
+
+    it("structured-logging.AC9.4: emits structured error log on sync-driven re-index failure", async () => {
+      const { buildDiscoverComponents } = await import("./discover-feature.js");
+      const recipe = makeRecipe({ uid: "r1" as RecipeUid });
+      const store = new RecipeStore();
+      store.load([recipe], []);
+      const syncEvents = makeMockSyncEvents();
+      const config = makeEnabledConfig();
+      const { log, records } = makePinoCapture();
+
+      mockVectorStore.size = 10;
+      mockVectorStore.indexRecipes.mockRejectedValueOnce(new Error("indexing failed"));
+
+      await buildDiscoverComponents(config, store, syncEvents, log);
+
+      const syncResult: SyncResult = {
+        added: [recipe],
+        updated: [],
+        removedUids: [],
+      };
+      syncEvents.emit("sync:complete", syncResult);
+
+      // Let async handler complete
+      await new Promise((r) => setTimeout(r, 10));
+
+      const errorRecords = records.filter((r) => r["msg"] === "vector index error during sync-driven re-index");
+      expect(errorRecords).toHaveLength(1);
+      // Must carry the error object (not a string message)
+      expect(errorRecords[0]!["err"]).toBeDefined();
     });
 
     it("AC4.3: subsequent sync events still work after an error", async () => {

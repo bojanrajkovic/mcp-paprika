@@ -8,6 +8,7 @@ import { DiskCache } from "./disk-cache.js";
 import { makeRecipe, makeCategory } from "./__fixtures__/recipes.js";
 import { makePantryItem } from "./__fixtures__/pantry.js";
 import { makeOAuthClient, makeOAuthToken } from "./__fixtures__/oauth.js";
+import { makePinoCapture } from "../tools/tool-test-utils.js";
 
 // Mock fs/promises to allow injecting failures into rename.
 // The factory function imports the real module and overrides only rename with a spy.
@@ -81,17 +82,19 @@ describe("DiskCache", () => {
       expect(parsed).toEqual({ recipes: {}, categories: {}, pantry: {}, oauthClients: {}, oauthTokens: {} });
     });
 
-    it("AC1.4: resets to empty index and calls log when index.json is present but fails schema validation", async () => {
+    it("AC1.4: resets to empty index and emits warn log when index.json is present but fails schema validation", async () => {
       // Write an invalid index.json (just a string, not an object)
       const indexPath = join(tempDir, "index.json");
       await writeFile(indexPath, JSON.stringify("just a string"));
 
-      const stderrSpy = vi.spyOn(process.stderr, "write").mockReturnValue(true);
-      const cache = new DiskCache(tempDir);
+      const { log, records } = makePinoCapture();
+      const cache = new DiskCache(tempDir, log);
       await cache.init();
 
-      // Verify log was called with a message containing 'corrupt'
-      expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining("corrupt"));
+      // Verify a warn record (pino level 40) was emitted with the schema-mismatch message
+      const warnRecords = records.filter((r) => r["level"] === 40);
+      expect(warnRecords).toHaveLength(1);
+      expect(warnRecords[0]!["msg"]).toBe("schema mismatch on index.json, resetting to empty index");
 
       // Verify that flush() writes an empty index
       await cache.flush();
@@ -99,7 +102,43 @@ describe("DiskCache", () => {
       const parsed = JSON.parse(content);
 
       expect(parsed).toEqual({ recipes: {}, categories: {}, pantry: {}, oauthClients: {}, oauthTokens: {} });
-      stderrSpy.mockRestore();
+    });
+
+    it("AC9.1: emits warn log when index.json contains invalid JSON (corrupt file)", async () => {
+      // Write corrupt (non-parseable) JSON to index.json
+      const indexPath = join(tempDir, "index.json");
+      await writeFile(indexPath, "{ broken json");
+
+      const { log, records } = makePinoCapture();
+      const cache = new DiskCache(tempDir, log);
+      await cache.init();
+
+      // Verify a warn record (pino level 40) was emitted with the corrupt-JSON message
+      const warnRecords = records.filter((r) => r["level"] === 40);
+      expect(warnRecords).toHaveLength(1);
+      expect(warnRecords[0]!["msg"]).toBe("corrupt index.json, resetting to empty index");
+      // The record must include the path field
+      expect(warnRecords[0]!).toHaveProperty("path", indexPath);
+
+      // Verify the cache still initializes with an empty index
+      await cache.flush();
+      const content = await readFile(indexPath, "utf-8");
+      const parsed = JSON.parse(content);
+
+      expect(parsed).toEqual({ recipes: {}, categories: {}, pantry: {}, oauthClients: {}, oauthTokens: {} });
+    });
+
+    it("AC9.1b: emits no log records when index.json is absent (cold-start ENOENT)", async () => {
+      // Verify no index.json exists initially
+      const indexPath = join(tempDir, "index.json");
+      await expect(stat(indexPath)).rejects.toThrow();
+
+      const { log, records } = makePinoCapture();
+      const cache = new DiskCache(tempDir, log);
+      await cache.init();
+
+      // No records should be emitted for normal cold-start
+      expect(records).toHaveLength(0);
     });
 
     it("AC1.5: rethrows non-ENOENT I/O errors (e.g. permission denied)", async () => {

@@ -3,13 +3,15 @@ import { join } from "node:path";
 import { http, HttpResponse } from "msw";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
-import { startHttp, type HttpTransportHandle } from "./http.js";
+import { Hono } from "hono";
+import { startHttp, accessLog, type HttpTransportHandle, type StartHttpOptions } from "./http.js";
 import type { PaprikaConfig } from "../utils/config.js";
 import { createOidcStub } from "../auth/__fixtures__/oidc-stub.js";
 import { DiskCache } from "../cache/disk-cache.js";
 import { makeOAuthClient } from "../cache/__fixtures__/oauth.js";
 import { useXdgIsolation } from "../__fixtures__/xdg-isolation.js";
 import { useMswServer } from "../__fixtures__/msw.js";
+import { makePinoCapture, SILENT_LOGGING_CONFIG } from "../tools/tool-test-utils.js";
 
 /**
  * These tests drive the HTTP transport with raw `fetch`, not the MCP SDK
@@ -119,6 +121,7 @@ function makeConfig(overrides: Partial<PaprikaConfig> = {}): PaprikaConfig {
     sync: { enabled: false, interval: 60_000 },
     transport: "stdio",
     http: { port: 0, host: "127.0.0.1", allowedHosts: [], allowedOrigins: [] },
+    logging: SILENT_LOGGING_CONFIG,
     ...overrides,
   } as PaprikaConfig;
 }
@@ -536,6 +539,7 @@ function makeOAuthConfig(): PaprikaConfig {
     sync: { enabled: false, interval: 60_000 },
     transport: "http",
     http: { port: 0, host: "127.0.0.1", allowedHosts: [], allowedOrigins: [] },
+    logging: SILENT_LOGGING_CONFIG,
     oauth: {
       publicUrl: PUBLIC_URL,
       preset: undefined,
@@ -769,5 +773,198 @@ describe("HTTP transport — OAuth mounted", () => {
       // buildClientCap returns { error: "invalid_request", error_description: "client registration cap reached" }
       expect(doc["error_description"]).toContain("cap");
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// accessLog middleware unit tests (structured-logging.AC9.5)
+// Unit tests exercise the accessLog factory in isolation using stub Hono
+// Context objects. Integration tests below (AC9.5-integration) boot the real
+// startHttp app and verify the router-placement contract.
+// ---------------------------------------------------------------------------
+
+describe("accessLog middleware (AC9.5)", () => {
+  function makeStubContext(method: string, path: string, status: number) {
+    return {
+      req: { method, path },
+      res: { status },
+    } as unknown as import("hono").Context;
+  }
+
+  function makeNext() {
+    return async (): Promise<void> => {};
+  }
+
+  it("AC9.5: emits one info record for a 200 response", async () => {
+    const { log, records } = makePinoCapture();
+    const middleware = accessLog(log);
+    const ctx = makeStubContext("GET", "/healthz", 200);
+
+    await middleware(ctx, makeNext());
+
+    expect(records).toHaveLength(1);
+    const record = records[0];
+    expect(record?.["level"]).toBe(30); // pino info = 30
+    expect(record?.["method"]).toBe("GET");
+    expect(record?.["path"]).toBe("/healthz");
+    expect(record?.["status"]).toBe(200);
+    expect(typeof record?.["durationMs"]).toBe("number");
+    expect((record?.["durationMs"] as number) >= 0).toBe(true);
+    expect(record?.["msg"]).toBe("http request");
+  });
+
+  it("AC9.5: emits one error record for a 500 response", async () => {
+    const { log, records } = makePinoCapture();
+    const middleware = accessLog(log);
+    const ctx = makeStubContext("POST", "/mcp", 500);
+
+    await middleware(ctx, makeNext());
+
+    expect(records).toHaveLength(1);
+    const record = records[0];
+    expect(record?.["level"]).toBe(50); // pino error = 50
+    expect(record?.["method"]).toBe("POST");
+    expect(record?.["path"]).toBe("/mcp");
+    expect(record?.["status"]).toBe(500);
+    expect(record?.["msg"]).toBe("http request 5xx");
+  });
+
+  it("AC9.5: emits one info record (not error) for a 401 response", async () => {
+    const { log, records } = makePinoCapture();
+    const middleware = accessLog(log);
+    const ctx = makeStubContext("POST", "/mcp", 401);
+
+    await middleware(ctx, makeNext());
+
+    expect(records).toHaveLength(1);
+    const record = records[0];
+    expect(record?.["level"]).toBe(30); // pino info = 30, not error (50)
+    expect(record?.["status"]).toBe(401);
+    expect(record?.["msg"]).toBe("http request");
+  });
+
+  it("AC9.5: concurrent requests each emit exactly one record without duplication", async () => {
+    const { log, records } = makePinoCapture();
+    const middleware = accessLog(log);
+
+    const ctx1 = makeStubContext("GET", "/healthz", 200);
+    const ctx2 = makeStubContext("POST", "/mcp", 200);
+
+    await Promise.all([middleware(ctx1, makeNext()), middleware(ctx2, makeNext())]);
+
+    expect(records).toHaveLength(2);
+    // Each request produced exactly one record — no duplication.
+    const paths = records.map((r) => r["path"]);
+    expect(paths).toContain("/healthz");
+    expect(paths).toContain("/mcp");
+  });
+
+  it("AC9.5: emits a record and re-propagates when next() itself throws", async () => {
+    // Defense-in-depth: even if a downstream middleware re-throws past Hono's
+    // onError (bypassing Hono's normal error-to-500 conversion), accessLog
+    // must still emit a record via its finally branch. The thrown error
+    // continues to propagate so upstream error handlers can act on it.
+    const { log, records } = makePinoCapture();
+    const middleware = accessLog(log);
+    const ctx = makeStubContext("GET", "/will-throw", 500);
+    const failingNext = async (): Promise<void> => {
+      throw new Error("downstream middleware rethrew");
+    };
+
+    await expect(middleware(ctx, failingNext)).rejects.toThrow("downstream middleware rethrew");
+
+    expect(records).toHaveLength(1);
+    expect(records[0]!["path"]).toBe("/will-throw");
+    expect(records[0]!["method"]).toBe("GET");
+    expect(records[0]!["status"]).toBe(500);
+    expect(records[0]!["level"]).toBe(50); // error
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Integration tests: accessLog placement via real startHttp router (AC9.5-integration)
+//
+// These boot the real app with an injected test logger to verify that the
+// accessLog middleware is mounted BEFORE /healthz in Hono's route chain, so
+// requests to /healthz actually emit log records. The unit tests above bypass
+// Hono's router entirely and cannot catch middleware placement bugs.
+// ---------------------------------------------------------------------------
+
+describe("accessLog middleware placement — integration (AC9.5-integration)", () => {
+  it("AC9.5-int-1: GET /healthz emits an access-log record with {method, path, status}", async () => {
+    const { log, records } = makePinoCapture();
+    // _testLog injects the capture logger as the transport-level logger used by accessLog.
+    const opts: StartHttpOptions = { _testLog: log };
+    const handle = await startHttp(makeConfig(), opts);
+    try {
+      await fetch(`http://127.0.0.1:${handle.port.toString()}/healthz`);
+
+      // There must be at least one record for /healthz.
+      const healthzRecords = records.filter((r) => r["path"] === "/healthz");
+      expect(healthzRecords.length).toBeGreaterThan(0);
+      const r = healthzRecords[0]!;
+      expect(r["method"]).toBe("GET");
+      expect(r["status"]).toBe(200);
+    } finally {
+      await handle.shutdown();
+    }
+  });
+
+  it("AC9.5-int-2: POST /mcp without session id emits an access-log record for /mcp", async () => {
+    // Confirms accessLog also runs for /mcp (not just /healthz). A POST /mcp
+    // with no session id and a non-initialize body returns 400 — info level.
+    // The 5xx fan-out path (error level → notifier multistream) is covered
+    // by structural inspection: accessLog is constructed from
+    // `app.log.child({component: "transport-http"})` and `app.log` carries
+    // the notifier-backed multistream, so error records automatically fan out.
+    // The multistream wiring itself is tested in src/utils/log.test.ts.
+    const { log, records } = makePinoCapture();
+    const opts: StartHttpOptions = { _testLog: log };
+    const handle = await startHttp(makeConfig(), opts);
+    try {
+      await fetch(`http://127.0.0.1:${handle.port.toString()}/mcp`, {
+        method: "POST",
+        headers: { "content-type": "application/json", accept: "application/json" },
+        body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }),
+      });
+
+      const mcpRecords = records.filter((r) => r["path"] === "/mcp");
+      expect(mcpRecords.length).toBeGreaterThan(0);
+      const r = mcpRecords[0]!;
+      expect(r["method"]).toBe("POST");
+      expect(r["status"]).toBe(400);
+      expect(r["level"]).toBe(30); // info; 5xx would be error (50)
+    } finally {
+      await handle.shutdown();
+    }
+  });
+
+  it("AC9.5-int-3: 5xx response through real Hono router emits error-level access-log record", async () => {
+    // Drives a real 5xx through Hono's router (not a stub Context) by mounting
+    // accessLog on a fresh Hono app, then registering a route that throws.
+    // Hono's default error handler converts the throw into a 500 response;
+    // accessLog observes c.res.status === 500 after next() returns and emits
+    // an error-level record. This proves the placement-via-router contract
+    // for the 5xx path that AC9.5 calls out (fan-out condition: error level
+    // >= default notifyLevel "warn", structurally guaranteed by the multistream
+    // that app.log carries in production).
+    const { log, records } = makePinoCapture();
+    const app = new Hono();
+    app.use("*", accessLog(log));
+    app.get("/boom", () => {
+      throw new Error("simulated server failure");
+    });
+
+    const res = await app.request("/boom");
+    expect(res.status).toBe(500);
+
+    const boomRecords = records.filter((r) => r["path"] === "/boom");
+    expect(boomRecords).toHaveLength(1);
+    const r = boomRecords[0]!;
+    expect(r["method"]).toBe("GET");
+    expect(r["status"]).toBe(500);
+    expect(r["level"]).toBe(50); // pino numeric level for error
+    expect(r["msg"]).toBe("http request 5xx");
+    expect(typeof r["durationMs"]).toBe("number");
   });
 });

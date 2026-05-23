@@ -1,10 +1,12 @@
 /**
  * Error class hierarchy for Paprika API operations.
  *
- * Three-class structure:
- * - PaprikaError: base class for all Paprika-related errors
+ * - PaprikaError: base class for Paprika-specific errors
  * - PaprikaAuthError: authentication failures (extends PaprikaError)
  * - PaprikaAPIError: HTTP errors with status and endpoint (extends PaprikaError)
+ *
+ * The circuit-open surface lives in `src/utils/errors.ts` as the shared
+ * `CircuitOpenError` (also used by `EmbeddingClient`); import it from there.
  *
  * All classes support ES2024 ErrorOptions for cause chaining.
  */

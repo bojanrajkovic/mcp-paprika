@@ -1,6 +1,6 @@
 # Caching Layer
 
-Last verified: 2026-05-21
+Last verified: 2026-05-22
 
 ## Files
 
@@ -76,11 +76,10 @@ Persistence layer for the Paprika recipe library. Stores full recipe and categor
 
 **Construction:**
 
-`new DiskCache(cacheDir: string)`
+`new DiskCache(cacheDir: string, log?: Logger)`
 
 - `cacheDir` — absolute path to the cache directory (typically from `getCacheDir()` in `src/utils/xdg.ts`)
-
-Diagnostic messages are written directly to `process.stderr`.
+- `log` — optional pino `Logger`; defaults to a silent logger when omitted. Pass `appLog.child({ component: "disk-cache" })` from `buildAppContext`. Corruption and schema-mismatch warnings are emitted at `warn` level on this logger; cold-start ENOENT and idempotent-removal silences are intentional and documented with inline comments.
 
 **Lifecycle:**
 
@@ -138,6 +137,20 @@ Diagnostic messages are written directly to `process.stderr`.
 | ------------------------- | ----------------------------------------------------- | -------------------------------------------------------------------------------- |
 | `diffRecipes(entries)`    | `(entries: ReadonlyArray<RecipeEntry>): DiffResult`   | Classifies remote entries vs local recipe index into `added`/`changed`/`removed` |
 | `diffCategories(entries)` | `(entries: ReadonlyArray<CategoryEntry>): DiffResult` | Same algorithm applied to category index                                         |
+
+## Logger integration
+
+`DiskCache` accepts an optional `log?: Logger` in its constructor (default: silent pino). Production constructs it with `appLog.child({ component: "disk-cache" })` in `buildAppContext`. Tests omit the argument (silent).
+
+**Catch-site classification:**
+
+- ENOENT on `index.json` read — cold-start; silent by design.
+- Corrupt JSON in `index.json` — emits `warn` record `"corrupt index.json, resetting to empty index"`.
+- ENOENT on per-UID file read — cold-start cache miss; silent (returns `null`).
+- ENOENT on directory listing — cold-start; silent (returns empty).
+- ENOENT on unlink — idempotent removal; silent.
+
+The classification is durable — each silent catch carries an explanatory inline comment.
 
 ## Invariants
 

@@ -4,6 +4,7 @@ import { coldStartGuard, textResult, recipeToMarkdown, commitRecipe, resolveCate
 import type { ServerContext } from "../types/server-context.js";
 import type { DiskCache } from "../cache/disk-cache.js";
 import type { PaprikaClient } from "../paprika/client.js";
+import { SILENT_LOG } from "../utils/log.js";
 
 // Minimal ServerContext stub — only `store.size` matters for coldStartGuard
 const makeCtx = (size: number) =>
@@ -19,6 +20,7 @@ const makeCtx = (size: number) =>
       loggingMessage: async () => {},
     },
     auth: null,
+    log: SILENT_LOG,
   }) satisfies ServerContext;
 
 describe("p2-u02-shared-helpers: shared helper functions", () => {
@@ -277,6 +279,7 @@ describe("p2-u02-shared-helpers: shared helper functions", () => {
           loggingMessage: vi.fn().mockResolvedValue(undefined),
         },
         auth: null,
+        log: SILENT_LOG,
       } satisfies ServerContext;
 
       const saved = makeRecipe();
@@ -324,6 +327,7 @@ describe("p2-u02-shared-helpers: shared helper functions", () => {
           loggingMessage: vi.fn().mockResolvedValue(undefined),
         },
         auth: null,
+        log: SILENT_LOG,
       } satisfies ServerContext;
 
       const saved = makeRecipe();
@@ -355,6 +359,7 @@ describe("p2-u02-shared-helpers: shared helper functions", () => {
           loggingMessage: vi.fn().mockResolvedValue(undefined),
         },
         auth: null,
+        log: SILENT_LOG,
       } satisfies ServerContext;
 
       const saved = makeRecipe({ name: "Test Recipe" });
@@ -389,6 +394,7 @@ describe("p2-u02-shared-helpers: shared helper functions", () => {
           loggingMessage: vi.fn().mockResolvedValue(undefined),
         },
         auth: null,
+        log: SILENT_LOG,
       } satisfies ServerContext;
 
       const saved = makeRecipe({ name: "Test Recipe" });

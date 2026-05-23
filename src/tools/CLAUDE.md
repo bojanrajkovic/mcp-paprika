@@ -1,6 +1,6 @@
 # MCP Tool Definitions
 
-Last verified: 2026-05-21
+Last verified: 2026-05-22
 
 > Pantry write tools (`add_pantry_item`, `update_pantry_item`) normalize any user-supplied `expirationDate` through `normalizePaprikaDate()` (`paprika/dates.ts`) before persisting. Accepts ISO 8601, `yyyy-MM-dd`, `yyyy/MM/dd`, or the already-Paprika `yyyy-MM-dd HH:mm:ss`. Unparseable input returns a `textResult` error to the LLM rather than writing garbage. `add_pantry_item` stamps `purchaseDate` via `paprikaDateToday()` (today at midnight, Paprika wire format) and generates UIDs as **uppercase** UUID v4 to match what Paprika.app emits.
 
@@ -61,6 +61,20 @@ export function registerMyTool(server: McpServer, ctx: ServerContext): void {
 ```
 
 **Variant: external dependencies.** Tools that require services beyond `ServerContext` accept additional constructor-injected parameters. Example: `registerDiscoverTool(server, ctx, vectorStore: VectorStore)` receives the vector store instance from `index.ts`.
+
+## Logger pattern
+
+Each `register*Tool(server, ctx)` creates its own component-scoped child logger at the top of the function body:
+
+```typescript
+const log = ctx.log.child({ component: "<mcp-tool-name>" });
+```
+
+Component names match the MCP tool name in snake_case (e.g., `add_pantry_item`, `create_recipe`). The child is captured in the handler closures and lives for the session lifetime.
+
+Catch sites use pino's structured method form: `log.error({ err, ...identifyingFields }, "operation failed")`. The identifying fields are the request-scope keys available before the failure (e.g., `uid`, `ingredient`, `name`) — not the full args object. The user-facing `textResult` keeps a human-readable message; the structured record is separate.
+
+Error-level records fan out to connected MCP clients automatically via the multistream (error ≥ default `notifyLevel: "warn"`).
 
 ## Shared Helpers
 

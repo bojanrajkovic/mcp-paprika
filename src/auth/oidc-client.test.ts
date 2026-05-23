@@ -12,6 +12,8 @@ import { makeRsaJwt, makeEs256Jwt, makeHs256Jwt } from "./__fixtures__/jose-keys
 import type { JWK } from "jose";
 import type { JWTVerifyGetKey } from "jose";
 import { useMswServer } from "../__fixtures__/msw.js";
+import { makePinoCapture } from "../tools/tool-test-utils.js";
+import { REDACT_PATHS } from "../utils/log.js";
 
 const server = useMswServer();
 
@@ -214,6 +216,99 @@ describe("loadDiscovery", () => {
 
     expect(doc.id_token_signing_alg_values_supported).toContain("RS256");
     expect(doc.id_token_signing_alg_values_supported).toContain("HS256");
+  });
+
+  describe("per-attempt logging", () => {
+    const discoveryUrl = "https://idp.example.com/.well-known/openid-configuration";
+    const allowedAlgs = ["RS256"];
+
+    it("emits debug record on successful discovery", async () => {
+      server.use(
+        http.get(discoveryUrl, () =>
+          HttpResponse.json({
+            issuer: "https://idp.example.com",
+            authorization_endpoint: "https://idp.example.com/authorize",
+            token_endpoint: "https://idp.example.com/token",
+            jwks_uri: "https://idp.example.com/jwks",
+            id_token_signing_alg_values_supported: ["RS256"],
+          }),
+        ),
+      );
+
+      const { log, records } = makePinoCapture();
+      await loadDiscovery(discoveryUrl, allowedAlgs, log);
+
+      const startRecord = records.find((r) => r["msg"] === "oidc discovery start");
+      expect(startRecord).toBeDefined();
+      expect(startRecord?.["method"]).toBe("GET");
+      expect(startRecord?.["url"]).toBe(discoveryUrl);
+      expect(startRecord?.["attempt"]).toBe(1);
+
+      const okRecord = records.find((r) => r["msg"] === "oidc discovery ok");
+      expect(okRecord).toBeDefined();
+      expect(okRecord?.["method"]).toBe("GET");
+      expect(okRecord?.["url"]).toBe(discoveryUrl);
+      expect(okRecord?.["attempt"]).toBe(1);
+      expect(typeof okRecord?.["status"]).toBe("number");
+      expect(typeof okRecord?.["attemptDurationMs"]).toBe("number");
+    });
+
+    it("emits error record on non-ok HTTP response", async () => {
+      server.use(http.get(discoveryUrl, () => new HttpResponse(null, { status: 503 })));
+
+      const { log, records } = makePinoCapture();
+      await expect(loadDiscovery(discoveryUrl, allowedAlgs, log)).rejects.toThrow(OAuthMetadataValidationError);
+
+      const errorRecord = records.find((r) => r["msg"] === "oidc discovery returned non-ok");
+      expect(errorRecord).toBeDefined();
+      expect(errorRecord?.["method"]).toBe("GET");
+      expect(errorRecord?.["url"]).toBe(discoveryUrl);
+      expect(errorRecord?.["attempt"]).toBe(1);
+      expect(errorRecord?.["status"]).toBe(503);
+      expect(typeof errorRecord?.["attemptDurationMs"]).toBe("number");
+    });
+
+    it("emits error record on fetch network failure", async () => {
+      server.use(http.get(discoveryUrl, () => HttpResponse.error()));
+
+      const { log, records } = makePinoCapture();
+      await expect(loadDiscovery(discoveryUrl, allowedAlgs, log)).rejects.toThrow(OAuthMetadataValidationError);
+
+      const errorRecord = records.find((r) => r["msg"] === "oidc discovery fetch failed");
+      expect(errorRecord).toBeDefined();
+      expect(errorRecord?.["method"]).toBe("GET");
+      expect(errorRecord?.["url"]).toBe(discoveryUrl);
+      expect(errorRecord?.["attempt"]).toBe(1);
+      expect(errorRecord?.["err"]).toBeDefined();
+    });
+
+    it("AC3.7: no token-like values appear in any oidc-client log record", async () => {
+      server.use(
+        http.get(discoveryUrl, () =>
+          HttpResponse.json({
+            issuer: "https://idp.example.com",
+            authorization_endpoint: "https://idp.example.com/authorize",
+            token_endpoint: "https://idp.example.com/token",
+            jwks_uri: "https://idp.example.com/jwks",
+            id_token_signing_alg_values_supported: ["RS256"],
+          }),
+        ),
+      );
+
+      const { log, records } = makePinoCapture();
+      await loadDiscovery(discoveryUrl, allowedAlgs, log);
+
+      // Verify REDACT_PATHS are not present as keys in any log record
+      for (const record of records) {
+        for (const path of REDACT_PATHS) {
+          // Top-level path keys (e.g. "authorization" → check for "authorization" key)
+          const topLevelKey = path.split(".")[0];
+          if (topLevelKey !== undefined) {
+            expect(record[topLevelKey], `log record should not contain '${topLevelKey}' (REDACT_PATH)`).toBeUndefined();
+          }
+        }
+      }
+    });
   });
 });
 

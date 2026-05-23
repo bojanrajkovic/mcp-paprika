@@ -1,7 +1,7 @@
-import { toMessage } from "../utils/log.js";
 import { Hono, type Context, type MiddlewareHandler } from "hono";
 import { rateLimiter } from "hono-rate-limiter";
 import { z } from "zod";
+import type { Logger } from "pino";
 import type { DiskClientRegistrationStore } from "./client-registration.js";
 import type { TokenStore } from "./token-store.js";
 import type { AuthRequestStore } from "./auth-request-store.js";
@@ -25,6 +25,7 @@ export interface AuthRoutesDeps {
   readonly discovery: DiscoveryDoc;
   readonly jwks: JWTVerifyGetKey;
   readonly publicUrl: string;
+  readonly log: { readonly auth: Logger; readonly oidcClient: Logger };
 }
 
 /**
@@ -106,7 +107,7 @@ export function buildAuthRoutes(deps: AuthRoutesDeps): Hono {
       }
       idToken = validated.data.id_token;
     } catch (cause) {
-      process.stderr.write(`[auth] upstream token exchange failed: ${toMessage(cause)}\n`);
+      deps.log.oidcClient.error({ err: cause }, "upstream token exchange failed");
       return redirectToClient(c, stored.redirectUri, {
         error: "server_error",
         error_description: "upstream code exchange failed",
@@ -125,7 +126,7 @@ export function buildAuthRoutes(deps: AuthRoutesDeps): Hono {
         allowedAlgs: deps.oidcConfig.allowedAlgs,
       });
     } catch (cause) {
-      process.stderr.write(`[auth] id_token verification failed: ${toMessage(cause)}\n`);
+      deps.log.oidcClient.error({ err: cause }, "id_token verification failed");
       return redirectToClient(c, stored.redirectUri, {
         error: "access_denied",
         error_description: "id_token verification failed",
@@ -142,6 +143,7 @@ export function buildAuthRoutes(deps: AuthRoutesDeps): Hono {
 
     return identityResult.match(
       async (identity) => {
+        deps.log.auth.info({ email: identity.email ?? null, sub: identity.sub ?? null }, "allowlist accepted identity");
         const ourAuthCode = generateOpaqueToken("mcp_ac_");
         deps.authCodes.put(ourAuthCode, {
           clientId: stored.clientId,
@@ -161,12 +163,17 @@ export function buildAuthRoutes(deps: AuthRoutesDeps): Hono {
       },
       (denial) => {
         // AC3.4: deny alert — log identity claims only, never the id_token.
-        // The full denial reason (including email/sub) goes to operator stderr;
+        // The full denial reason (including email/sub) goes to the auth logger;
         // the redirect-back error_description is generic so we don't leak the
         // user's email or subject id through claude.ai (or the user's browser
         // history) on a denial.
-        process.stderr.write(
-          `[auth] allowlist denial: ${denial.message} email=${denial.identity.email ?? "-"} sub=${denial.identity.sub ?? "-"}\n`,
+        deps.log.auth.warn(
+          {
+            reason: denial.message,
+            email: denial.identity.email ?? null,
+            sub: denial.identity.sub ?? null,
+          },
+          "allowlist denied identity",
         );
         return redirectToClient(c, stored.redirectUri, {
           error: "access_denied",

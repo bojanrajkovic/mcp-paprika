@@ -9,6 +9,7 @@ import { mkdtemp, rm, writeFile, readFile, mkdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { EmbeddingClient } from "./embeddings.js";
+import { makePinoCapture } from "../tools/tool-test-utils.js";
 
 describe("VectorStore contentHash", () => {
   describe("AC5.1: SHA-256 stability", () => {
@@ -173,9 +174,7 @@ describe("VectorStore init", () => {
   });
 
   describe("AC1.3: Corruption recovery - invalid JSON", () => {
-    it("recovers from corrupted hash-index.json (invalid JSON)", async () => {
-      const stderrSpy = vi.spyOn(process.stderr, "write").mockReturnValue(true);
-
+    it("recovers from corrupted hash-index.json (invalid JSON) and emits warn log", async () => {
       const { LocalIndex } = await import("vectra");
 
       const mockIsIndexCreated = vi.spyOn((LocalIndex as any).prototype, "isIndexCreated");
@@ -189,11 +188,15 @@ describe("VectorStore init", () => {
       mockIsIndexCreated.mockResolvedValue(true);
 
       const embedder = makeMockEmbedder();
-      const store = new VectorStore(tempDir, embedder, "test-model", 1);
+      const { log, records } = makePinoCapture();
+      const store = new VectorStore(tempDir, embedder, "test-model", 1, log);
       await store.init();
 
-      // Verify stderr logged corruption message
-      expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining("corrupt"));
+      // Verify warn record (pino level 40) was emitted with corruption message
+      const warnRecords = records.filter((r) => r["level"] === 40);
+      expect(warnRecords).toHaveLength(1);
+      expect(warnRecords[0]!["msg"]).toBe("corrupt hash-index.json, backing up and resetting");
+      expect(warnRecords[0]!).toHaveProperty("path", hashIndexPath);
 
       // Verify backup was created
       const backupPath = `${hashIndexPath}.bak`;
@@ -202,13 +205,9 @@ describe("VectorStore init", () => {
 
       // Verify store was reset to empty
       expect(store.size).toBe(0);
-
-      stderrSpy.mockRestore();
     });
 
-    it("recovers from corrupted hash-index.json (schema mismatch)", async () => {
-      const stderrSpy = vi.spyOn(process.stderr, "write").mockReturnValue(true);
-
+    it("recovers from corrupted hash-index.json (schema mismatch) and emits warn log", async () => {
       const { LocalIndex } = await import("vectra");
 
       const mockIsIndexCreated = vi.spyOn((LocalIndex as any).prototype, "isIndexCreated");
@@ -222,23 +221,22 @@ describe("VectorStore init", () => {
       mockIsIndexCreated.mockResolvedValue(true);
 
       const embedder = makeMockEmbedder();
-      const store = new VectorStore(tempDir, embedder, "test-model", 1);
+      const { log, records } = makePinoCapture();
+      const store = new VectorStore(tempDir, embedder, "test-model", 1, log);
       await store.init();
 
-      // Verify stderr logged corruption message
-      expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining("corrupt"));
+      // Verify warn record (pino level 40) was emitted with schema-mismatch message
+      const warnRecords = records.filter((r) => r["level"] === 40);
+      expect(warnRecords).toHaveLength(1);
+      expect(warnRecords[0]!["msg"]).toBe("schema mismatch on hash-index.json, backing up and resetting");
 
       // Verify store was reset to empty
       expect(store.size).toBe(0);
-
-      stderrSpy.mockRestore();
     });
   });
 
   describe("AC1.4: Corruption recovery - corrupted Vectra index", () => {
-    it("recovers from corrupted Vectra index by recreating", async () => {
-      const stderrSpy = vi.spyOn(process.stderr, "write").mockReturnValue(true);
-
+    it("recovers from corrupted Vectra index by recreating and emits warn log", async () => {
       const { LocalIndex } = await import("vectra");
 
       const mockIsIndexCreated = vi.spyOn((LocalIndex as any).prototype, "isIndexCreated");
@@ -249,22 +247,22 @@ describe("VectorStore init", () => {
       mockCreateIndex.mockResolvedValue(undefined);
 
       const embedder = makeMockEmbedder();
-      const store = new VectorStore(tempDir, embedder, "test-model", 1);
+      const { log, records } = makePinoCapture();
+      const store = new VectorStore(tempDir, embedder, "test-model", 1, log);
       await store.init();
 
-      // Verify stderr logged corruption message
-      expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining("corrupt"));
+      // Verify warn record (pino level 40) was emitted with corruption message
+      const warnRecords = records.filter((r) => r["level"] === 40);
+      expect(warnRecords).toHaveLength(1);
+      expect(warnRecords[0]!["msg"]).toBe("corrupt Vectra index, backing up and recreating");
 
       // Verify hash map was cleared
       expect(store.size).toBe(0);
-
-      stderrSpy.mockRestore();
     });
   });
 
   describe("Model change detection", () => {
-    it("clears hashes when stored model differs from current model", async () => {
-      const stderrSpy = vi.spyOn(process.stderr, "write").mockReturnValue(true);
+    it("clears hashes when stored model differs from current model and emits info log", async () => {
       const { LocalIndex } = await import("vectra");
       const mockIsIndexCreated = vi.spyOn((LocalIndex as any).prototype, "isIndexCreated");
       const mockBeginUpdate = vi.spyOn((LocalIndex as any).prototype, "beginUpdate");
@@ -279,26 +277,30 @@ describe("VectorStore init", () => {
       const embedder = makeMockEmbedder();
       embedder.embedBatch.mockResolvedValue([[1, 0, 0]]);
 
-      // First run with model-a: index a recipe
+      // First run with model-a: index a recipe (no capture needed for first run)
       const store1 = new VectorStore(tempDir, embedder, "model-a", 1);
       await store1.init();
       const recipe = makeRecipe({ uid: "recipe-1" as RecipeUid });
       await store1.indexRecipes([recipe], () => []);
       expect(store1.size).toBe(1);
 
-      // Second run with model-b: should clear hashes
+      // Second run with model-b: should clear hashes and emit info log
       vi.clearAllMocks();
       mockIsIndexCreated.mockResolvedValue(true);
-      const store2 = new VectorStore(tempDir, embedder, "model-b", 1);
+      const { log, records } = makePinoCapture();
+      const store2 = new VectorStore(tempDir, embedder, "model-b", 1, log);
       await store2.init();
 
       expect(store2.size).toBe(0);
-      expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining("embedding model changed"));
-      stderrSpy.mockRestore();
+      // info level = pino numeric 30
+      const infoRecords = records.filter((r) => r["level"] === 30);
+      const modelChangedRecord = infoRecords.find((r) => r["msg"] === "embedding model changed, clearing vector index");
+      expect(modelChangedRecord).toBeDefined();
+      expect(modelChangedRecord!["previousModel"]).toBe("model-a");
+      expect(modelChangedRecord!["newModel"]).toBe("model-b");
     });
 
-    it("clears hashes when schema version changes between runs", async () => {
-      const stderrSpy = vi.spyOn(process.stderr, "write").mockReturnValue(true);
+    it("clears hashes when schema version changes between runs and emits info log", async () => {
       const { LocalIndex } = await import("vectra");
       const mockIsIndexCreated = vi.spyOn((LocalIndex as any).prototype, "isIndexCreated");
       const mockBeginUpdate = vi.spyOn((LocalIndex as any).prototype, "beginUpdate");
@@ -313,7 +315,7 @@ describe("VectorStore init", () => {
       const embedder = makeMockEmbedder();
       embedder.embedBatch.mockResolvedValue([[1, 0, 0]]);
 
-      // First run with schema version 1
+      // First run with schema version 1 (no capture for first run)
       const store1 = new VectorStore(tempDir, embedder, "same-model", 1);
       await store1.init();
       const recipe = makeRecipe({ uid: "recipe-1" as RecipeUid });
@@ -323,12 +325,17 @@ describe("VectorStore init", () => {
       // Second run with schema version 2 (embedding text format changed)
       vi.clearAllMocks();
       mockIsIndexCreated.mockResolvedValue(true);
-      const store2 = new VectorStore(tempDir, embedder, "same-model", 2);
+      const { log, records } = makePinoCapture();
+      const store2 = new VectorStore(tempDir, embedder, "same-model", 2, log);
       await store2.init();
 
       expect(store2.size).toBe(0);
-      expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining("embedding schema version changed"));
-      stderrSpy.mockRestore();
+      // info level = pino numeric 30
+      const infoRecords = records.filter((r) => r["level"] === 30);
+      const schemaChangedRecord = infoRecords.find(
+        (r) => r["msg"] === "embedding schema version changed, clearing vector index",
+      );
+      expect(schemaChangedRecord).toBeDefined();
     });
 
     it("preserves hashes when model is unchanged between runs", async () => {
@@ -359,6 +366,42 @@ describe("VectorStore init", () => {
       await store2.init();
 
       expect(store2.size).toBe(1);
+    });
+  });
+
+  describe("AC9.2: Logger injection and cold-start silence", () => {
+    it("backward-compat: VectorStore(cacheDir, embedder, modelId, schemaVersion) without log still works", async () => {
+      const { LocalIndex } = await import("vectra");
+      const mockIsIndexCreated = vi.spyOn((LocalIndex as any).prototype, "isIndexCreated");
+      const mockCreateIndex = vi.spyOn((LocalIndex as any).prototype, "createIndex");
+
+      mockIsIndexCreated.mockResolvedValue(false);
+      mockCreateIndex.mockResolvedValue(undefined);
+
+      const embedder = makeMockEmbedder();
+      // No log argument — defaults to silent logger
+      const store = new VectorStore(tempDir, embedder, "test-model", 1);
+      await store.init();
+
+      expect(store.size).toBe(0);
+    });
+
+    it("emits no log records on cold-start when hash-index.json is absent (ENOENT)", async () => {
+      const { LocalIndex } = await import("vectra");
+      const mockIsIndexCreated = vi.spyOn((LocalIndex as any).prototype, "isIndexCreated");
+      const mockCreateIndex = vi.spyOn((LocalIndex as any).prototype, "createIndex");
+
+      mockIsIndexCreated.mockResolvedValue(false);
+      mockCreateIndex.mockResolvedValue(undefined);
+
+      const embedder = makeMockEmbedder();
+      const { log, records } = makePinoCapture();
+      const store = new VectorStore(tempDir, embedder, "test-model", 1, log);
+      await store.init();
+
+      // ENOENT on hash-index.json is silent by design (cold-start)
+      // Only the normal initialization path runs: no corruption = no records
+      expect(records).toHaveLength(0);
     });
   });
 });

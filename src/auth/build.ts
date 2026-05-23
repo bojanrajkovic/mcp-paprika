@@ -12,6 +12,7 @@
 
 // pattern: Imperative Shell
 
+import type { Logger } from "pino";
 import type { DiskCache } from "../cache/disk-cache.js";
 import type { PaprikaConfig } from "../utils/config.js";
 import { resolvePreset } from "./presets.js";
@@ -25,7 +26,11 @@ import { AuthCleanup } from "./cleanup.js";
 import { MAX_REGISTERED_CLIENTS } from "./routes.js";
 import type { AuthContext, ResolvedOAuthConfig } from "./types.js";
 
-export async function buildAuthContext(config: PaprikaConfig, cache: DiskCache): Promise<AuthContext | null> {
+export async function buildAuthContext(
+  config: PaprikaConfig,
+  cache: DiskCache,
+  parentLog: Logger,
+): Promise<AuthContext | null> {
   if (config.transport !== "http") return null;
 
   if (config.oauth === undefined) {
@@ -81,11 +86,14 @@ export async function buildAuthContext(config: PaprikaConfig, cache: DiskCache):
     allowlist: config.oauth.allowlist,
   };
 
+  const authLog = parentLog.child({ component: "auth" });
+  const oidcClientLog = parentLog.child({ component: "oidc-client" });
+
   // Fetch + validate upstream discovery document (rejects http:// endpoints; checks alg overlap)
-  const discovery = await loadDiscovery(resolved.discoveryUrl, resolved.allowedAlgs);
+  const discovery = await loadDiscovery(resolved.discoveryUrl, resolved.allowedAlgs, oidcClientLog);
   const jwks = createJwksFor(discovery);
 
-  const clientStore = new DiskClientRegistrationStore(cache, resolved.publicUrl, MAX_REGISTERED_CLIENTS);
+  const clientStore = new DiskClientRegistrationStore(cache, resolved.publicUrl, authLog, MAX_REGISTERED_CLIENTS);
   const tokenStore = new TokenStore(cache);
   const requestStore = new AuthRequestStore();
   const codeStore = new AuthCodeStore();
@@ -98,9 +106,10 @@ export async function buildAuthContext(config: PaprikaConfig, cache: DiskCache):
     discovery,
     resolved,
     resolved.publicUrl,
+    authLog,
   );
 
-  const cleanup = new AuthCleanup(clientStore, tokenStore, cache, requestStore, codeStore);
+  const cleanup = new AuthCleanup(clientStore, tokenStore, cache, requestStore, codeStore, authLog);
 
   return {
     provider,
@@ -112,5 +121,9 @@ export async function buildAuthContext(config: PaprikaConfig, cache: DiskCache):
     tokenStore,
     clientStore,
     cleanup,
+    log: {
+      auth: authLog,
+      oidcClient: oidcClientLog,
+    },
   };
 }

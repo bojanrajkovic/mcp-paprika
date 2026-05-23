@@ -1,5 +1,4 @@
 import { randomUUID } from "node:crypto";
-import { createLogger } from "../utils/log.js";
 import type { Server as NodeHttpServer } from "node:http";
 
 import { StreamableHTTPTransport } from "@hono/mcp";
@@ -7,6 +6,7 @@ import { serve, type ServerType } from "@hono/node-server";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
 import { Hono } from "hono";
+import type { Context, Next } from "hono";
 
 import { mcpAuthRouter, bearerAuth } from "@hono/mcp";
 import { buildAppContext, buildMcpServer } from "../server/build.js";
@@ -15,6 +15,7 @@ import type { PaprikaConfig } from "../utils/config.js";
 import type { TransportHandle } from "./stdio.js";
 import { buildAuthMetadataRouter } from "../auth/metadata.js";
 import { buildAuthRoutes, buildDcrRateLimit, buildClientCap, MAX_REGISTERED_CLIENTS } from "../auth/routes.js";
+import type { Logger } from "pino";
 
 const SHUTDOWN_TIMEOUT_MS = 10_000;
 const MCP_SESSION_HEADER = "mcp-session-id";
@@ -28,12 +29,57 @@ export interface HttpTransportHandle extends TransportHandle {
   readonly port: number;
 }
 
-const log = createLogger("mcp-paprika");
-
 interface Session {
   server: McpServer;
   transport: StreamableHTTPTransport;
 }
+
+/**
+ * Hono middleware factory that logs one structured record per request.
+ *
+ * Emits `info` for all 2xx/3xx/4xx responses and `error` for 5xx. The record
+ * carries `{method, path, status, durationMs}` so operators can correlate
+ * access patterns with structured log streams without parsing text.
+ *
+ * Exported for isolated unit testing — `startHttp` has no logger injection
+ * seam, so tests instantiate `accessLog` directly with a capture logger.
+ */
+export function accessLog(log: Logger) {
+  return async (c: Context, next: Next): Promise<void> => {
+    const t0 = performance.now();
+    try {
+      await next();
+    } finally {
+      // Log unconditionally, even if a downstream handler throws past Hono's
+      // onError. Hono's default behavior converts thrown errors into 500
+      // responses without re-throwing through next(), but wrapping in
+      // try/finally protects against future middleware that does re-throw
+      // and guarantees access-log telemetry for every request.
+      const durationMs = Math.round(performance.now() - t0);
+      const status = c.res.status;
+      const fields = { method: c.req.method, path: c.req.path, status, durationMs };
+
+      if (status >= 500) {
+        log.error(fields, "http request 5xx");
+      } else {
+        log.info(fields, "http request");
+      }
+    }
+  };
+}
+
+/**
+ * Options for `startHttp`. All fields are optional and intended for testing.
+ * Production callers should pass only `config`.
+ */
+export type StartHttpOptions = {
+  /**
+   * Override the transport-level pino logger. When provided, replaces
+   * `app.log.child({ component: "transport-http" })` so integration tests
+   * can capture access-log records without spinning up a real multistream.
+   */
+  readonly _testLog?: Logger;
+};
 
 /**
  * Start the server as a Streamable HTTP endpoint. Returns a handle whose
@@ -53,7 +99,7 @@ interface Session {
  *   session ids return 404; non-initialize requests without a session id
  *   return 400.
  */
-export async function startHttp(config: PaprikaConfig): Promise<HttpTransportHandle> {
+export async function startHttp(config: PaprikaConfig, opts: StartHttpOptions = {}): Promise<HttpTransportHandle> {
   const sessions = new Map<string, Session>();
 
   // DNS rebinding protection: derive once at startup. The SDK's transport
@@ -75,14 +121,21 @@ export async function startHttp(config: PaprikaConfig): Promise<HttpTransportHan
   // included). See src/server/build.ts for the ordering rationale.
   const { app, sync } = await buildAppContext(config, notifier);
 
+  const log = opts._testLog ?? app.log.child({ component: "transport-http" });
+
   if (config.sync.enabled) {
     sync.start();
-    log(`Sync engine started (interval: ${config.sync.interval.toString()}ms).`);
+    log.info({ intervalMs: config.sync.interval }, "sync engine started");
   } else {
-    log("Background sync disabled.");
+    log.info("background sync disabled");
   }
 
   const hono = new Hono();
+
+  // Access log: mounted BEFORE /healthz and /mcp so every route's responses
+  // are captured — including the liveness probe. Also before the auth block
+  // so 401s and all other auth-mediated responses are captured.
+  hono.use("*", accessLog(log));
 
   hono.get("/healthz", (c) =>
     c.json({
@@ -151,6 +204,7 @@ export async function startHttp(config: PaprikaConfig): Promise<HttpTransportHan
         discovery: auth.discovery,
         jwks: auth.jwks,
         publicUrl: auth.config.publicUrl,
+        log: auth.log,
       }),
     );
 
@@ -236,12 +290,16 @@ export async function startHttp(config: PaprikaConfig): Promise<HttpTransportHan
     );
   });
 
-  log(`HTTP transport listening on http://${config.http.host}:${boundPort.toString()}/mcp`);
+  log.info({ url: `http://${config.http.host}:${boundPort.toString()}/mcp` }, "HTTP transport listening");
   if (app.auth !== null) {
-    log(`OAuth issuer: ${app.auth.config.publicUrl}`);
-    log(`OAuth upstream: ${app.auth.discovery.issuer} (${app.auth.config.scopes.join(" ")})`);
-    log(
-      `Allowlist: ${app.auth.config.allowlist.emails.length.toString()} email(s), ${app.auth.config.allowlist.subs.length.toString()} sub(s)`,
+    log.info({ issuer: app.auth.config.publicUrl }, "OAuth issuer");
+    log.info({ upstream: app.auth.discovery.issuer, scopes: app.auth.config.scopes.join(" ") }, "OAuth upstream");
+    log.info(
+      {
+        emails: app.auth.config.allowlist.emails.length,
+        subs: app.auth.config.allowlist.subs.length,
+      },
+      "identity allowlist",
     );
     app.auth.cleanup.start();
   }
@@ -249,12 +307,12 @@ export async function startHttp(config: PaprikaConfig): Promise<HttpTransportHan
   // makes buildAuthContext return a non-null AuthContext (or fail-fast). The
   // null branch is exercised only by transport tests that pass MCP_TRANSPORT=stdio
   // to skip the OAuth fixture — see src/transport/http.test.ts.
-  log(`Health probe: GET http://${config.http.host}:${boundPort.toString()}/healthz`);
+  log.info({ url: `http://${config.http.host}:${boundPort.toString()}/healthz` }, "health probe available");
 
   return {
     port: boundPort,
     async shutdown() {
-      log("HTTP shutdown: stopping sync engine and closing sessions...");
+      log.info("HTTP shutdown: stopping sync engine and closing sessions");
 
       // Order matters. node:http's `Server.close()` waits forever for
       // long-lived SSE GET streams to finish on their own. We must abort
@@ -295,7 +353,7 @@ export async function startHttp(config: PaprikaConfig): Promise<HttpTransportHan
         process.exit(1);
       }
 
-      log("HTTP shutdown complete.");
+      log.info("HTTP shutdown complete");
     },
   };
 }

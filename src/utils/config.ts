@@ -6,6 +6,7 @@ import dotenv from "dotenv";
 import { ok, err, type Result } from "neverthrow";
 import { parseDuration } from "./duration.js";
 import { getConfigDir } from "./xdg.js";
+import { isNodeError } from "./errors.js";
 
 const ENV_VAR_HINTS: Readonly<Record<string, string>> = {
   "paprika.email": "PAPRIKA_EMAIL",
@@ -18,6 +19,10 @@ const ENV_VAR_HINTS: Readonly<Record<string, string>> = {
   "http.host": "MCP_HTTP_HOST",
   "http.allowedHosts": "MCP_ALLOWED_HOSTS",
   "http.allowedOrigins": "MCP_ALLOWED_ORIGINS",
+  "logging.level": "MCP_LOG_LEVEL",
+  "logging.notifyLevel": "MCP_LOG_NOTIFY_LEVEL",
+  "logging.pretty": "MCP_LOG_PRETTY",
+  "logging.file": "MCP_LOG_FILE",
   "features.replicateApiToken": "REPLICATE_API_TOKEN",
   "features.embeddings.apiKey": "OPENAI_API_KEY",
   "features.embeddings.baseUrl": "OPENAI_BASE_URL",
@@ -117,6 +122,17 @@ const embeddingConfigSchema = z.object({
   model: z.string().min(1),
 });
 
+const pinoLevelSchema = z.enum(["trace", "debug", "info", "warn", "error", "fatal"]);
+
+const loggingSchema = z
+  .object({
+    level: pinoLevelSchema.default("info"),
+    notifyLevel: pinoLevelSchema.default("warn"),
+    pretty: z.union([z.boolean(), z.literal("auto")]).default("auto"),
+    file: z.string().optional(),
+  })
+  .default({});
+
 export const paprikaConfigSchema = z
   .object({
     paprika: z.preprocess(
@@ -194,6 +210,7 @@ export const paprikaConfigSchema = z
           .default({}),
       })
       .optional(),
+    logging: loggingSchema,
   })
   .superRefine((cfg, ctx) => {
     if (cfg.transport !== "http") return;
@@ -257,11 +274,6 @@ export const paprikaConfigSchema = z
 export type PaprikaConfig = z.infer<typeof paprikaConfigSchema>;
 export type EmbeddingConfig = z.infer<typeof embeddingConfigSchema>;
 
-// Type guard for NodeJS.ErrnoException
-function isNodeError(error: unknown): error is NodeJS.ErrnoException {
-  return error instanceof Error && "code" in error;
-}
-
 // Reads config.json from configDir. ENOENT returns ok({}). Invalid JSON and permission errors return err.
 function readConfigFile(configDir: string): Result<Record<string, unknown>, ConfigError> {
   const filePath = join(configDir, "config.json");
@@ -294,11 +306,13 @@ function loadDotEnv(configDir: string): void {
 }
 
 // Maps known env vars to the nested config object structure.
-function buildEnvOverrides(env: NodeJS.ProcessEnv): Record<string, unknown> {
+/** @internal Pure helper for env-var routing. Exported for testing only. */
+export function buildEnvOverrides(env: NodeJS.ProcessEnv): Record<string, unknown> {
   const overrides: Record<string, unknown> = {};
   const paprika: Record<string, unknown> = {};
   const sync: Record<string, unknown> = {};
   const http: Record<string, unknown> = {};
+  const logging: Record<string, unknown> = {};
   const features: Record<string, unknown> = {};
   const embeddings: Record<string, unknown> = {};
   const oauth: Record<string, unknown> = {};
@@ -317,6 +331,24 @@ function buildEnvOverrides(env: NodeJS.ProcessEnv): Record<string, unknown> {
   if (env["MCP_HTTP_HOST"] !== undefined) http["host"] = env["MCP_HTTP_HOST"];
   if (env["MCP_ALLOWED_HOSTS"] !== undefined) http["allowedHosts"] = env["MCP_ALLOWED_HOSTS"];
   if (env["MCP_ALLOWED_ORIGINS"] !== undefined) http["allowedOrigins"] = env["MCP_ALLOWED_ORIGINS"];
+
+  if (env["MCP_LOG_LEVEL"] !== undefined && env["MCP_LOG_LEVEL"] !== "") {
+    logging["level"] = env["MCP_LOG_LEVEL"];
+  }
+  if (env["MCP_LOG_NOTIFY_LEVEL"] !== undefined && env["MCP_LOG_NOTIFY_LEVEL"] !== "") {
+    logging["notifyLevel"] = env["MCP_LOG_NOTIFY_LEVEL"];
+  }
+  if (env["MCP_LOG_FILE"] !== undefined && env["MCP_LOG_FILE"] !== "") {
+    logging["file"] = env["MCP_LOG_FILE"];
+  }
+  if (env["MCP_LOG_PRETTY"] !== undefined && env["MCP_LOG_PRETTY"] !== "") {
+    const raw = env["MCP_LOG_PRETTY"];
+    // "auto" is the only string the schema accepts verbatim; otherwise reuse
+    // BOOLEAN_STRINGS to coerce "true"/"1"/"false"/"0". Unknown values fall
+    // through as the raw string so the Zod schema rejects typos like "treu"
+    // with a clear validation error instead of silently defaulting to false.
+    logging["pretty"] = raw === "auto" ? "auto" : (BOOLEAN_STRINGS[raw] ?? raw);
+  }
 
   if (env["REPLICATE_API_TOKEN"] !== undefined) features["replicateApiToken"] = env["REPLICATE_API_TOKEN"];
   if (env["OPENAI_API_KEY"] !== undefined) embeddings["apiKey"] = env["OPENAI_API_KEY"];
@@ -340,6 +372,7 @@ function buildEnvOverrides(env: NodeJS.ProcessEnv): Record<string, unknown> {
   if (Object.keys(embeddings).length > 0) features["embeddings"] = embeddings;
   if (Object.keys(allowlist).length > 0) oauth["allowlist"] = allowlist;
   if (Object.keys(features).length > 0) overrides["features"] = features;
+  if (Object.keys(logging).length > 0) overrides["logging"] = logging;
   if (Object.keys(oauth).length > 0) overrides["oauth"] = oauth;
   if (Object.keys(paprika).length > 0) overrides["paprika"] = paprika;
   if (Object.keys(sync).length > 0) overrides["sync"] = sync;

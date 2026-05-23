@@ -1,6 +1,6 @@
 # OAuth 2.1 Authorization Layer
 
-Last verified: 2026-05-20
+Last verified: 2026-05-22
 
 ## Purpose
 
@@ -20,9 +20,9 @@ This module is loaded only when `MCP_TRANSPORT=http`. In stdio mode, `buildAuthC
 - `ttl-store.ts` — Generic base class `TtlStore<T extends { createdAt: number }>` with `put`, `consume` (delete-before-TTL-check, single-use), `sweepExpired`, and `size`; clock-injectable via `now` option. Extended by `AuthRequestStore` and `AuthCodeStore`.
 - `auth-request-store.ts` — In-memory 5-minute TTL store for `AuthRequestState` (keyed by our state parameter, carries PKCE challenge + nonce + client + redirect context). Extends `TtlStore`; exposes `put` / `consume` (single-use).
 - `auth-code-store.ts` — In-memory 60-second TTL store for `AuthCodeState` (keyed by our authorization code; holds the verified identity). Extends `TtlStore`; adds `peek()` (read-without-consume, lazy-evicts expired entries). Single-use consume enforced via `TtlStore.consume`. Distinct from `auth-request-store.ts` to keep pre- and post-callback state separate.
-- `client-registration.ts` — `DiskClientRegistrationStore` implementing the SDK `OAuthRegisteredClientsStore` interface; persists registered clients to `DiskCache`'s `oauth/clients/` namespace; enforces `registrationAccessTokenHash` on management endpoints; issues UUIDv4 `clientId` (delegated to SDK); takes a `maxClients` ctor param and atomically enforces the cap via `DiskCache.tryPutOAuthClient` (throws `InvalidRequestError` on overflow so @hono/mcp returns 400)
+- `client-registration.ts` — `DiskClientRegistrationStore` implementing the SDK `OAuthRegisteredClientsStore` interface; persists registered clients to `DiskCache`'s `oauth/clients/` namespace; enforces `registrationAccessTokenHash` on management endpoints; issues UUIDv4 `clientId` (delegated to SDK); takes a required `Logger` as 3rd ctor param and an optional `maxClients` as 4th, atomically enforces the cap via `DiskCache.tryPutOAuthClient` (throws `InvalidRequestError` on overflow so @hono/mcp returns 400); emits `info "client registered via DCR"` with `clientId` + `redirectUriCount` after each successful registration
 - `token-store.ts` — `TokenStore`: `issueAccessRefreshPair`, `lookupAccessToken`, `lookupRefreshToken`, `getTokenRecord` (any-kind by plaintext, used for ownership checks), `rotateRefresh`, `revoke`, `removeAllForClient`; all tokens stored by their `tokenHash` (SHA-256 hex of plaintext); enforces RFC 8707 resource binding, RFC 6749 §6 scope-subset-only on refresh, and refresh-token client binding (`rotateRefresh` requires `expectedClientId`); serializes refresh rotation through an internal `async-mutex` `_rotateLock` so concurrent rotations on the same plaintext can't both consume the token
-- `provider.ts` — `MintingOAuthServerProvider` implementing the SDK `OAuthServerProvider` interface; orchestrates the authorization code flow using the four stores; constructs the upstream OIDC authorize redirect, handles the callback, and issues tokens
+- `provider.ts` — `MintingOAuthServerProvider` implementing the SDK `OAuthServerProvider` interface; orchestrates the authorization code flow using the four stores; constructs the upstream OIDC authorize redirect, handles the callback, and issues tokens; takes a required `Logger` as 8th ctor param; emits `info "access token minted (authorization_code grant)"`, `info "access token minted (refresh_token grant)"`, and `info "access token revoked"` — each with `tokenHash`, `clientId`, and `sub` fields
 - `routes.ts` — Hono route handlers for `/oauth/callback` (receives upstream IdP redirect), `PUT /register/:clientId` (RFC 7592 client update), and `DELETE /register/:clientId` (RFC 7592 client delete); exports `buildDcrRateLimit({trustProxy})` (key derivation depends on the flag) and `buildClientCap` middleware factories plus the `MAX_REGISTERED_CLIENTS` constant (also imported by `build.ts` so the middleware fast-path and the atomic store-level enforcement share one value)
 - `metadata.ts` — `buildCustomizedAuthorizationServerMetadata(config)` returns RFC 8414 metadata override object; `buildAuthMetadataRouter(config)` returns the Hono router that serves `/.well-known/oauth-authorization-server` (mounted before `mcpAuthRouter` so first-match-wins overrides library defaults)
 - `cleanup.ts` — `AuthCleanup` background task (start/stop via `AbortController`, 6h interval); periodically removes clients with `lastTokenActivityAt < now - 90d` (cascade-removes their tokens), expired auth-request states, expired auth-code states, AND any OAuth tokens whose `expiresAt < now` whose owning client is still active (covers the refresh-rotation orphans — `rotateRefresh` deletes the prior refresh but not the prior access). Mirrors the `SyncEngine` lifecycle contract.
@@ -75,17 +75,18 @@ The SDK `AuthInfo` type is returned by `verifyAccessToken`. The `extra` field ca
 
 `AuthContext` is the OAuth runtime state bundle stored as `AppContext.auth`. All fields are `readonly`.
 
-| Field          | Type                          | Description                                           |
-| -------------- | ----------------------------- | ----------------------------------------------------- |
-| `provider`     | `MintingOAuthServerProvider`  | SDK OAuthServerProvider implementation                |
-| `config`       | `ResolvedOAuthConfig`         | Fully resolved OAuth config (post-preset expansion)   |
-| `discovery`    | `DiscoveryDoc`                | Upstream OIDC discovery document (fetched at startup) |
-| `jwks`         | `JWTVerifyGetKey`             | jose JWKS key resolver for id_token verification      |
-| `authRequests` | `AuthRequestStore`            | In-memory 5-min TTL store for pre-callback state      |
-| `authCodes`    | `AuthCodeStore`               | In-memory 60-s TTL store for post-callback state      |
-| `tokenStore`   | `TokenStore`                  | Access + refresh token lifecycle manager              |
-| `clientStore`  | `DiskClientRegistrationStore` | Persistent registered-client store                    |
-| `cleanup`      | `AuthCleanup`                 | Background cleanup task handle                        |
+| Field          | Type                                   | Description                                                                                                                      |
+| -------------- | -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `provider`     | `MintingOAuthServerProvider`           | SDK OAuthServerProvider implementation                                                                                           |
+| `config`       | `ResolvedOAuthConfig`                  | Fully resolved OAuth config (post-preset expansion)                                                                              |
+| `discovery`    | `DiscoveryDoc`                         | Upstream OIDC discovery document (fetched at startup)                                                                            |
+| `jwks`         | `JWTVerifyGetKey`                      | jose JWKS key resolver for id_token verification                                                                                 |
+| `authRequests` | `AuthRequestStore`                     | In-memory 5-min TTL store for pre-callback state                                                                                 |
+| `authCodes`    | `AuthCodeStore`                        | In-memory 60-s TTL store for post-callback state                                                                                 |
+| `tokenStore`   | `TokenStore`                           | Access + refresh token lifecycle manager                                                                                         |
+| `clientStore`  | `DiskClientRegistrationStore`          | Persistent registered-client store                                                                                               |
+| `cleanup`      | `AuthCleanup`                          | Background cleanup task handle                                                                                                   |
+| `log`          | `{ auth: Logger; oidcClient: Logger }` | Component-scoped pino child loggers; `auth` for local route/policy/cleanup/DCR logic, `oidc-client` for upstream OIDC HTTP calls |
 
 ### OAuthClient persistence schema
 
@@ -184,8 +185,34 @@ Persisted to `DiskCache` as `oauth/tokens/${tokenHash}.json`. `tokenHash` is the
 
 ### Logging
 
-- Plaintext tokens are never logged; only `tokenHash` values appear in log output.
-- Identity claims (email address, subject ID) are logged at warn level only when the allowlist denies access (`OAuthAllowlistDenialError`); they are not logged at any other point.
+**Component split.** Auth code uses two component loggers, both sourced from `AuthContext.log`:
+
+- `auth` — local route/policy/cleanup/DCR logic: allowlist accept/deny, OAuth state transitions, silent-catch debug sites, DCR registration.
+- `oidc-client` — upstream OIDC HTTP calls: discovery fetch, id_token verification failures. JWKS fetches go through `jose.createRemoteJWKSet` which is opaque to per-fetch instrumentation; JWKS-related failures surface only as id_token verification failures logged at the `routes.ts` error site.
+
+**State transitions at info level.** The following info records are emitted on each successful state change:
+
+- `"client registered via DCR"` — `DiskClientRegistrationStore.registerClient`, fields `{ clientId, redirectUriCount }`.
+- `"access token minted (authorization_code grant)"` — `MintingOAuthServerProvider.exchangeAuthorizationCode`, fields `{ tokenHash, clientId, sub }`.
+- `"access token minted (refresh_token grant)"` — `MintingOAuthServerProvider.exchangeRefreshToken`, fields `{ tokenHash, clientId, sub }`.
+- `"access token revoked"` — `MintingOAuthServerProvider.revokeToken` after `TokenStore.revoke()` succeeds; fields `{ tokenHash, clientId, sub }`. The early no-op returns (unknown token, wrong client) produce no record, preserving RFC 7009 §2.2 privacy intent.
+
+**Identity claims in allowlist records.** `email` and `sub` appear explicitly in allowlist accept/deny records — they're identity-gating audit logs, not operational telemetry, so they're not redacted.
+
+- `"allowlist accepted identity"` — info, fields `{ email, sub }` — emitted in `routes.ts` on the success branch.
+- `"allowlist denied identity"` — warn, fields `{ reason, email, sub }` — emitted in `routes.ts` on the `OAuthAllowlistDenialError` branch; fans out to connected MCP clients via `notifications/message` automatically.
+
+#### Allowlist denial notifications: behavior change
+
+Prior to the structured-logging migration, allowlist denials wrote a single `[auth]` line to stderr only. The new behavior emits a `warn`-level pino record that fans out to all connected MCP clients via `notifications/message` automatically (because `warn` meets the default `notifyLevel: "warn"` threshold). Operators wanting to suppress these notifications from MCP clients can set `MCP_LOG_NOTIFY_LEVEL=error` — at that threshold only `error`+`fatal` records fan out, and denial records stay in the primary log stream only.
+
+**Token field redaction.** The root logger's redact config covers `*.authorization`, `*.password`, `*.token`, `*.client_secret`, `*.access_token`, `*.refresh_token`, and `*.id_token`. Auth code must not pass raw token values through pino fields — log identifiers (`tokenHash`, `clientId`) instead. `tokenHash` is the SHA-256 hex of the plaintext bearer token and is safe to include verbatim.
+
+**Silent-catch debug logs.** Three modules log at `debug` when their normally-silent catch paths fire. Operators can enable `MCP_LOG_LEVEL=debug` to diagnose these paths in production:
+
+- `cleanup.ts` — sweep loop catches: `"auth cleanup sweep failed; continuing"` and `"auth cleanup wait failed unexpectedly"`.
+- `dcr-validator.ts` — URL parse catches: `"invalid redirect_uri rejected by parser"` and `"invalid redirect_uri item in DCR request"`.
+- `client-registration.ts` — timing-safe-equal catch: `"RAT timing-safe equality failed (likely invalid hex)"`, field `{ clientId }`.
 
 ### Concurrency
 

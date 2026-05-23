@@ -14,6 +14,7 @@
  */
 
 import { z } from "zod";
+import type { Logger } from "pino";
 import type { JWTVerifyGetKey } from "jose";
 import type { DiscoveryDoc } from "./oidc-client.js";
 import type { AuthRequestStore } from "./auth-request-store.js";
@@ -268,4 +269,8 @@ export interface AuthContext {
   readonly tokenStore: TokenStore;
   readonly clientStore: DiskClientRegistrationStore;
   readonly cleanup: AuthCleanup;
+  readonly log: {
+    readonly auth: Logger;
+    readonly oidcClient: Logger;
+  };
 }

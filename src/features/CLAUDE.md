@@ -1,6 +1,6 @@
 # Feature Implementations
 
-Last verified: 2026-05-15
+Last verified: 2026-05-22
 
 ## Purpose
 
@@ -10,7 +10,7 @@ Orchestrates business logic by composing the Paprika API client and caching laye
 
 ### embedding-errors.ts — Error hierarchy for embedding operations
 
-Two-class hierarchy with ES2024 `ErrorOptions` cause chaining support.
+Two-class hierarchy with ES2024 `ErrorOptions` cause chaining support. Local breaker-open events surface as `CircuitOpenError` from `../utils/errors.js` (shared with `PaprikaClient`); import from there rather than from `embedding-errors.ts`.
 
 | Class               | Extends          | Fields                                                 |
 | ------------------- | ---------------- | ------------------------------------------------------ |
@@ -25,21 +25,21 @@ HTTP errors (429, 500, 502, 503) and a circuit breaker (opens after 5 consecutiv
 half-open after 30s). Validates responses with Zod at the boundary. Per-instance resilience
 stack (no shared state between instances).
 
-| Export                     | Signature / Description                                                  |
-| -------------------------- | ------------------------------------------------------------------------ |
-| `EmbeddingClient`          | `constructor(config: Readonly<EmbeddingConfig>)` — resilient HTTP client |
-| `.embed(text)`             | `Promise<Array<number>>` — embed a single text                           |
-| `.embedBatch(texts)`       | `Promise<Array<Array<number>>>` — embed multiple texts in one call       |
-| `.dimensions`              | `number` getter — throws `EmbeddingError` if no call made yet            |
-| `EMBEDDING_SCHEMA_VERSION` | `number` constant — bump when `recipeToEmbeddingText` format changes     |
-| `recipeToEmbeddingText`    | `(recipe, categoryNames) => string` — pure function, no I/O              |
+| Export                     | Signature / Description                                                                                               |
+| -------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `EmbeddingClient`          | `constructor(config: Readonly<EmbeddingConfig>, log?: pino.Logger)` — resilient HTTP client; `log` defaults to silent |
+| `.embed(text)`             | `Promise<Array<number>>` — embed a single text                                                                        |
+| `.embedBatch(texts)`       | `Promise<Array<Array<number>>>` — embed multiple texts in one call                                                    |
+| `.dimensions`              | `number` getter — throws `EmbeddingError` if no call made yet                                                         |
+| `EMBEDDING_SCHEMA_VERSION` | `number` constant — bump when `recipeToEmbeddingText` format changes                                                  |
+| `recipeToEmbeddingText`    | `(recipe, categoryNames) => string` — pure function, no I/O                                                           |
 
 **Invariants:**
 
 - `EmbeddingClient` throws (does not return `Result`) because it wraps cockatiel which uses exceptions for control flow
 - `recipeToEmbeddingText` includes name, description, categories, ingredients, notes; excludes directions and nutritional info
 - **IMPORTANT:** When changing `recipeToEmbeddingText` (adding/removing fields, restructuring format), bump `EMBEDDING_SCHEMA_VERSION` so existing users get a full re-index on next startup
-- `BrokenCircuitError` from cockatiel is caught and re-thrown as `EmbeddingAPIError` with status 503
+- `BrokenCircuitError` from cockatiel is caught and re-thrown as `CircuitOpenError("embeddings", endpoint, { cause })` — no fabricated HTTP status; see `src/utils/errors.ts`
 
 ### vector-store-errors.ts — Error hierarchy for vector store operations
 
@@ -56,19 +56,19 @@ with SHA-256 content-hash change detection (persisted to `hash-index.json`), bat
 via `EmbeddingClient`, semantic search, and corruption recovery (backs up and recreates on
 corrupt Vectra index or hash-index.json).
 
-| Export            | Signature / Description                                                                     |
-| ----------------- | ------------------------------------------------------------------------------------------- |
-| `contentHash`     | `(text: string) => string` — SHA-256 hex digest for change detection                        |
-| `SemanticResult`  | `type { uid, score, recipeName }` — single search result                                    |
-| `IndexingResult`  | `type { indexed, skipped, total }` — batch indexing summary                                 |
-| `VectorStore`     | `constructor(cacheDir, embedder, modelId, schemaVersion)` — vector store instance           |
-| `.init()`         | `Promise<void>` — creates directory, Vectra index, loads hash map; recovers from corruption |
-| `.indexRecipes()` | `Promise<IndexingResult>` — batch index with change detection, batches of 500               |
-| `.indexRecipe()`  | `Promise<IndexingResult>` — convenience single-recipe wrapper                               |
-| `.search()`       | `Promise<ReadonlyArray<SemanticResult>>` — semantic search, default topK=10                 |
-| `.removeRecipe()` | `Promise<void>` — remove recipe from index and hash map                                     |
-| `.clearHashes()`  | `void` — reset in-memory hash index to force full re-embedding                              |
-| `.size`           | `number` getter — count of indexed recipes (via hash map)                                   |
+| Export            | Signature / Description                                                                                                                                                                                                             |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `contentHash`     | `(text: string) => string` — SHA-256 hex digest for change detection                                                                                                                                                                |
+| `SemanticResult`  | `type { uid, score, recipeName }` — single search result                                                                                                                                                                            |
+| `IndexingResult`  | `type { indexed, skipped, total }` — batch indexing summary                                                                                                                                                                         |
+| `VectorStore`     | `constructor(cacheDir, embedder, modelId, schemaVersion, log?)` — vector store instance; `log` is an optional pino `Logger`, defaults to silent. Pass `appLog.child({ component: "vector-store" })` from `buildDiscoverComponents`. |
+| `.init()`         | `Promise<void>` — creates directory, Vectra index, loads hash map; recovers from corruption                                                                                                                                         |
+| `.indexRecipes()` | `Promise<IndexingResult>` — batch index with change detection, batches of 500                                                                                                                                                       |
+| `.indexRecipe()`  | `Promise<IndexingResult>` — convenience single-recipe wrapper                                                                                                                                                                       |
+| `.search()`       | `Promise<ReadonlyArray<SemanticResult>>` — semantic search, default topK=10                                                                                                                                                         |
+| `.removeRecipe()` | `Promise<void>` — remove recipe from index and hash map                                                                                                                                                                             |
+| `.clearHashes()`  | `void` — reset in-memory hash index to force full re-embedding                                                                                                                                                                      |
+| `.size`           | `number` getter — count of indexed recipes (via hash map)                                                                                                                                                                           |
 
 **Invariants:**
 
@@ -93,10 +93,10 @@ once per server instance when `app.vectorStore !== null`.
 A local `SyncEventsView` interface decouples this module from `SyncEngine`; it accepts
 anything that exposes a typed `on`/`off` for `sync:complete` and `sync:error`.
 
-| Export                    | Signature / Description                                                                                         |
-| ------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| `buildDiscoverComponents` | `(config, store, syncEvents) => Promise<VectorStore \| null>` — builds + wires the semantic-search components   |
-| `SyncEventsView`          | `interface` describing the subset of `SyncEngine.events` (`on`/`off` for `sync:complete` and `sync:error`) used |
+| Export                    | Signature / Description                                                                                                                                                                                           |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `buildDiscoverComponents` | `(config, store, syncEvents, log?) => Promise<VectorStore \| null>` — builds + wires the semantic-search components; optional `log` is threaded as `log?.child({ component: "vector-store" })` into `VectorStore` |
+| `SyncEventsView`          | `interface` describing the subset of `SyncEngine.events` (`on`/`off` for `sync:complete` and `sync:error`) used                                                                                                   |
 
 **Invariants:**
 
@@ -104,8 +104,26 @@ anything that exposes a typed `on`/`off` for `sync:complete` and `sync:error`.
 - Cold-start re-index runs when vector store size is below 90% of recipe store size (catches stale/orphaned data)
 - Vector index is invalidated when the embedding model or `EMBEDDING_SCHEMA_VERSION` changes between runs
 - `sync:complete` handler indexes added/updated recipes and removes deleted ones
-- Errors during sync-triggered indexing are caught and logged to stderr (never crash the server)
+- Errors during sync-triggered indexing are caught and logged via a structured pino error record (never crash the server)
 - Runs exactly once per process (during `buildAppContext`), not per session — the returned `VectorStore` is shared across all sessions via `AppContext.vectorStore`
+
+## Logger integration
+
+### VectorStore
+
+Per-instance `log` child logger. Constructor takes optional `log?: Logger` (default: silent). Corruption recovery emits `warn` for corrupt Vectra index and corrupt `hash-index.json`. ENOENT and parse-failure paths in read operations emit `debug` or stay silent per the per-site classification in source comments.
+
+### EmbeddingClient
+
+Constructor takes optional `log?: Logger`. Per-attempt request lifecycle emits `debug` on start and success, `error` on non-retryable failure. Cockatiel retry hooks are installed in the constructor: `onRetry` → `warn`, `onGiveUp` → `error`.
+
+**Resilience:** `wrap(breakerPolicy, retryPolicy)` — breaker outer, retry inner. The breaker sees one execution per `embedBatch` call regardless of how many retries that call exhausted internally; `maxAttempts: 3` means 3 retries, so each failing call makes 4 total network attempts. Breaker opens after 5 consecutive failing calls (`ConsecutiveBreaker(5)`), half-opens after 30 s.
+
+**Circuit open:** throws `CircuitOpenError("embeddings", endpoint, { cause: brokenCircuitError })` (imported from `../utils/errors.js`; shared with `PaprikaClient`) — no fabricated HTTP status. The error carries `service`, `endpoint`, and `cause: BrokenCircuitError` for structured access.
+
+### buildDiscoverComponents
+
+Takes optional `log?: Logger` from `buildAppContext`. Derives child loggers for `discover`, `vector-store`, and `embeddings` components. The `sync:complete` handler's error catch emits a structured pino `error` record `"vector index error during sync-driven re-index"` without propagating — preserving the sync loop's never-throws contract.
 
 ## Dependencies
 

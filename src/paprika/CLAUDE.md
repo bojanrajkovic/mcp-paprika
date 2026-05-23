@@ -1,6 +1,6 @@
 # Paprika API Client
 
-Last verified: 2026-05-21
+Last verified: 2026-05-22
 
 ## Files
 
@@ -62,13 +62,17 @@ HTTP client for the Paprika Cloud Sync API. Handles authentication, request form
 - Entry schemas: `RecipeEntrySchema`, `CategoryEntrySchema`
 - UID schemas: `RecipeUidSchema`, `CategoryUidSchema`
 
-### Error Hierarchy (errors.ts)
+### Error hierarchy (errors.ts)
 
-Three-class hierarchy, all supporting ES2024 `ErrorOptions` for cause chaining:
+Paprika-specific classes all extend `PaprikaError` and support ES2024 `ErrorOptions` for cause chaining. The circuit-open surface is the shared `CircuitOpenError` from `src/utils/errors.ts` — same class also used by `EmbeddingClient`; import it from `../utils/errors.js`.
 
-- `PaprikaError` — Base class for all Paprika-related errors
-- `PaprikaAuthError extends PaprikaError` — Authentication failures (default message: "Authentication failed")
-- `PaprikaAPIError extends PaprikaError` — HTTP errors; carries `readonly status: number` and `readonly endpoint: string`; message formatted as `"message (HTTP status from endpoint)"`
+| Class              | Extends        | Carries                                            | When thrown                                              |
+| ------------------ | -------------- | -------------------------------------------------- | -------------------------------------------------------- |
+| `PaprikaAuthError` | `PaprikaError` | (cause)                                            | Authentication failures                                  |
+| `PaprikaAPIError`  | `PaprikaError` | `status`, `endpoint`                               | Real HTTP errors from Paprika                            |
+| `CircuitOpenError` | `Error`        | `service`, `endpoint`, `cause: BrokenCircuitError` | Local circuit breaker is open; no network request issued |
+
+`PaprikaClient` throws `new CircuitOpenError("paprika", url, { cause: brokenCircuitError })`. The `service` field disambiguates breaker-open events that reach a shared log aggregator from `EmbeddingClient` (`"embeddings"`) or any future client that mounts cockatiel.
 
 ### PaprikaClient (client.ts)
 
@@ -80,7 +84,7 @@ Typed HTTP client wrapping the Paprika Cloud Sync API.
 
 **Construction:**
 
-- `new PaprikaClient(email: string, password: string)` — stores credentials, no I/O
+- `new PaprikaClient(email: string, password: string, log?: pino.Logger)` — stores credentials and wires resilience policies; no I/O. When `log` is omitted, a silent logger is used (safe for tests that don't capture output).
 
 **Public API:**
 
@@ -101,10 +105,29 @@ Typed HTTP client wrapping the Paprika Cloud Sync API.
 - `buildPantryFormData(item: Readonly<PantryItem>): FormData` — converts pantry item to snake_case JSON via `pantryItemToApiPayload`, gzip-compresses, wraps in FormData with `data.gz` blob
 - `request<T>(method, url, schema, body?): Promise<T>` — authenticated v2 API calls with:
   - Bearer token header (when token exists)
-  - Cockatiel retry (HTTP 429/500/502/503 and network-level fetch failures — DNS, TCP reset, TLS handshake, abort; undici throws a bare `TypeError` for these and the client wraps them in a private `NetworkRetryableError` marker so `handleType` matches) + circuit breaker (5 consecutive failures of either kind)
+  - **Resilience:** `wrap(breakerPolicy, retryPolicy)` — breaker outermost, retry innermost. The breaker sees one execution per tool call regardless of how many retries that call exhausted internally. Retry: `maxAttempts: 3` means 3 retries, so each failing tool call makes 4 total network attempts before the retry gives up. Breaker: opens after 5 consecutive failing tool calls (`ConsecutiveBreaker(5)`), half-opens after 30 s.
+  - **Retryable conditions:** HTTP 429/500/502/503 and network-level fetch failures (DNS, TCP reset, TLS handshake, abort). `fetch` throws a bare `TypeError` for network failures; `request()` wraps those in a private `NetworkRetryableError` marker so `handleType` can match them.
+  - **Circuit open:** throws `CircuitOpenError("paprika", url, { cause: brokenCircuitError })` (imported from `../utils/errors.js`; shared with `EmbeddingClient`) — no fabricated HTTP status. The error carries `service`, `endpoint`, and `cause: BrokenCircuitError` for structured access.
+  - **Per-attempt logging:** debug on request start (`{method, url, attempt}`) and on success (`{method, url, attempt, status, attemptDurationMs}`); info on 401 before re-auth; error on non-retryable HTTP failure (`{method, url, attempt, status, attemptDurationMs}`). Retry and give-up telemetry comes from the lifecycle hooks (see below), not inline log calls.
   - 401 re-auth retry (single attempt)
   - Response envelope unwrapping (`{ result: T }` → `T`)
   - Zod schema validation of inner value
+
+**Attempt numbering:** `attempt` in all log records is 1-indexed for the network-touch count. The first `fetch` call logs `attempt: 1`; the first retry logs `attempt: 2`; and so on. Cockatiel's `IRetryContext.attempt` is 0-indexed — both the inline log calls and the `onRetry` hook normalize via `+ 1`.
+
+**Resilience policy lifecycle:**
+
+The constructor installs five hooks after building `this.resilience`. These fire for every `PaprikaClient` instance (the client is process-singleton, so hooks live for the process lifetime).
+
+| Hook                       | Level | Payload                                    | Fires                                                                              |
+| -------------------------- | ----- | ------------------------------------------ | ---------------------------------------------------------------------------------- |
+| `retryPolicy.onRetry`      | warn  | `{attempt: 1-indexed, nextBackoffMs, err}` | Once per failed attempt that will be retried; fires before the backoff delay       |
+| `retryPolicy.onGiveUp`     | error | `{err}`                                    | Once when all retries are exhausted                                                |
+| `breakerPolicy.onBreak`    | warn  | —                                          | Once per closed→open transition; fans out to MCP clients via `notifyLevel: "warn"` |
+| `breakerPolicy.onReset`    | info  | —                                          | When breaker closes after a successful half-open probe                             |
+| `breakerPolicy.onHalfOpen` | info  | —                                          | When breaker transitions to half-open                                              |
+
+`onBreak` fires exactly once per closed→open transition. Subsequent calls while the breaker is open do not re-fire it.
 
 **Pantry write wire format** (verified 2026-05-08 against macOS Paprika.app v3.8.4 build:41 via mitmproxy):
 
@@ -131,7 +154,7 @@ Background polling loop that keeps local cache and in-memory store synchronized 
 
 **Construction:**
 
-- `new SyncEngine(context: AppContext, intervalMs: number)` — creates a new engine with the specified polling interval; does not start automatically. Takes `AppContext` (process-wide) rather than `SessionContext`/`ServerContext` because the sync loop is process-wide and must not be tied to a single MCP session. Notifications go through `context.notifier` so the same loop works for stdio (single server) and HTTP (broadcast across all live sessions).
+- `new SyncEngine(context: AppContext, intervalMs: number)` — creates a new engine with the specified polling interval; does not start automatically. Takes `AppContext` (process-wide) rather than `SessionContext`/`ServerContext` because the sync loop is process-wide and must not be tied to a single MCP session. Stores `this.log = context.log.child({ component: "sync" })` for all sync events. Notifications go through `context.notifier` so the same loop works for stdio (single server) and HTTP (broadcast across all live sessions).
 
 **Public API:**
 
@@ -178,11 +201,11 @@ Background polling loop that keeps local cache and in-memory store synchronized 
    - **Sweeps expired pending-writes:** `store.sweepPending()` and `pantryStore.sweepPending()` — TTL fallback for pending-deletes (and a defense for upserts where the canonical observation never arrives).
    - Sends MCP resource notification if recipe OR pantry changes exist: `context.notifier.resourceListChanged()` (called if any added/changed/removed/orphaned detected)
    - Emits `sync:complete` with `SyncResult` (always emitted, even for no-change cycles)
-   - Logs success: `await context.notifier.loggingMessage({ level: "info", data: "..." })`
+   - Logs success: `this.log.info({added, updated, removed}, "sync complete")` — record fans out to connected MCP clients only when `notifyLevel` is `"info"` or lower (default `"warn"` suppresses it; see behavior note below)
 
 5. **Error handling (all wrapped in try/catch):**
    - Catches any thrown error (API failures, cache errors, store errors)
-   - Logs error: `await context.notifier.loggingMessage({ level: "error", data: "..." })` (the notifier swallows transport failures internally — no extra try/catch around the logging call needed)
+   - Logs error: `this.log.error({err}, "sync failed")` — fans out to connected MCP clients automatically via the multistream (error ≥ default `notifyLevel: "warn"`)
    - Emits `sync:error` with the Error
    - Never re-throws — returns normally
 
@@ -204,6 +227,16 @@ Background polling loop that keeps local cache and in-memory store synchronized 
 - **Uses:** `AppContext` (client, cache, store, pantryStore, notifier — `server` is intentionally absent), `mitt` (event emitter), `node:timers/promises` (scheduler.wait), `./types.js` (Recipe, RecipeUid, SyncResult, DiffResult)
 - **Used by:** `src/server/build.ts` (`buildAppContext` constructs SyncEngine), `src/features/discover-feature.ts` (subscribes to `sync.events` for incremental re-indexing)
 - **Boundary:** Must not import from `tools/`, `resources/`, or `features/`
+
+### Sync-engine logging
+
+`SyncEngine` uses a pino child logger (`component: "sync"`) for all sync events. Progress messages (recipe diff counts, fetch counts, pantry counts, flush, sweep) emit at `debug` level. The `sync complete` record emits at `info` with `{added, updated, removed}` fields; `sync failed` emits at `error` with `{err}`.
+
+The previous `_log` static method is removed. All sync events emit pino records routed through the multistream fan-out (see `src/utils/CLAUDE.md`) — no direct `notifier.loggingMessage(...)` calls remain in the sync engine.
+
+#### Sync-success notifications: behavior change
+
+Prior to this migration, every successful sync emitted `notifications/message` at level `info` to all connected MCP clients. The structured-logging design routes sync-success to a pino `info` record, which by default does NOT fan out (`notifyLevel: "warn"`). Connected Claude sessions will no longer see periodic "sync complete" notifications. Operators or workflows that depend on these can opt back in by setting `MCP_LOG_NOTIFY_LEVEL=info`. Sync-failure notifications (`error`-level) are unaffected and continue to fan out by default.
 
 ## Dependencies
 

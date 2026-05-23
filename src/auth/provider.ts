@@ -15,7 +15,8 @@ import type { DiskClientRegistrationStore } from "./client-registration.js";
 import type { TokenStore } from "./token-store.js";
 import type { AuthRequestStore } from "./auth-request-store.js";
 import type { AuthCodeStore } from "./auth-code-store.js";
-import { generateOpaqueToken, ACCESS_TOKEN_TTL_SECONDS, nowSeconds } from "./tokens.js";
+import type { Logger } from "pino";
+import { generateOpaqueToken, ACCESS_TOKEN_TTL_SECONDS, nowSeconds, hashTokenForStorage } from "./tokens.js";
 import type { Context } from "hono";
 import type { DiscoveryDoc } from "./oidc-client.js";
 import type { ResolvedOAuthConfig } from "./types.js";
@@ -41,6 +42,7 @@ export class MintingOAuthServerProvider implements OAuthServerProvider {
     private readonly _discovery: DiscoveryDoc,
     private readonly _oidcConfig: ResolvedOAuthConfig,
     private readonly _publicUrl: string,
+    private readonly log: Logger,
   ) {}
 
   get clientsStore(): OAuthRegisteredClientsStore {
@@ -124,6 +126,12 @@ export class MintingOAuthServerProvider implements OAuthServerProvider {
       resource: state.resource,
     });
 
+    const tokenHash = hashTokenForStorage(pair.access.plaintext);
+    this.log.info(
+      { tokenHash, clientId: state.clientId, sub: state.identity.sub },
+      "access token minted (authorization_code grant)",
+    );
+
     return {
       access_token: pair.access.plaintext,
       refresh_token: pair.refresh.plaintext,
@@ -142,14 +150,23 @@ export class MintingOAuthServerProvider implements OAuthServerProvider {
     // RFC 6749 §6 / OAuth 2.1 §4.3.1 — a refresh_token belongs to the client
     // it was issued to. TokenStore.rotateRefresh enforces that by comparing
     // expectedClientId to the stored record (atomically under its mutex).
+    // The returned IssuedPair.identity carries the rotated-out token's
+    // identity so we can log `sub` without a separate disk read.
     const result = await this._tokenStore.rotateRefresh(refreshToken, client.client_id, scopes, resource?.toString());
     return result.match(
-      (pair) => ({
-        access_token: pair.access.plaintext,
-        refresh_token: pair.refresh.plaintext,
-        token_type: "Bearer",
-        expires_in: ACCESS_TOKEN_TTL_SECONDS,
-      }),
+      (pair) => {
+        const tokenHash = hashTokenForStorage(pair.access.plaintext);
+        this.log.info(
+          { tokenHash, clientId: client.client_id, sub: pair.identity.sub },
+          "access token minted (refresh_token grant)",
+        );
+        return {
+          access_token: pair.access.plaintext,
+          refresh_token: pair.refresh.plaintext,
+          token_type: "Bearer",
+          expires_in: ACCESS_TOKEN_TTL_SECONDS,
+        };
+      },
       (e) => {
         throw e; // OAuthTokenError factories return SDK error subclasses, which the library serializes
       },
@@ -174,5 +191,9 @@ export class MintingOAuthServerProvider implements OAuthServerProvider {
     if (record === null) return;
     if (record.clientId !== client.client_id) return;
     await this._tokenStore.revoke(request.token);
+    this.log.info(
+      { tokenHash: record.tokenHash, clientId: client.client_id, sub: record.identity.sub },
+      "access token revoked",
+    );
   }
 }

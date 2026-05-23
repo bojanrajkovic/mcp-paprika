@@ -3,7 +3,7 @@ import { RecipeStore } from "../cache/recipe-store.js";
 import { PantryStore } from "../cache/pantry-store.js";
 import { makePantryItem } from "../cache/__fixtures__/pantry.js";
 import { registerAddPantryItemTool } from "./pantry-add.js";
-import { makeTestServer, makeCtx, getText } from "./tool-test-utils.js";
+import { makeTestServer, makeCtx, getText, makePinoCapture } from "./tool-test-utils.js";
 import type { PaprikaClient } from "../paprika/client.js";
 import type { DiskCache } from "../cache/disk-cache.js";
 import type { PantryItemUid } from "../paprika/types.js";
@@ -252,7 +252,7 @@ describe("pantry-mutations.AC4: add_pantry_item tool", () => {
     expect(pantryStore.size).toBe(0);
   });
 
-  it("observability.1: savePantryItem error is written to stderr so it appears in pod logs", async () => {
+  it("observability.1: savePantryItem error is captured as a structured log record", async () => {
     const store = new RecipeStore();
     const pantryStore = new PantryStore();
     pantryStore.load([]);
@@ -260,22 +260,20 @@ describe("pantry-mutations.AC4: add_pantry_item tool", () => {
     const mockSavePantryItem = vi.fn().mockRejectedValue(new TypeError("fetch failed"));
     const mockNotifySync = vi.fn().mockResolvedValue(undefined);
 
-    const stderrSpy = vi.spyOn(process.stderr, "write").mockReturnValue(true);
-    try {
-      const { server, callTool } = makeTestServer();
-      const ctx = makeCtx(store, server, {
-        pantryStore,
-        client: { savePantryItem: mockSavePantryItem, notifySync: mockNotifySync } as unknown as PaprikaClient,
-      });
-      registerAddPantryItemTool(server, ctx);
+    const { log, records } = makePinoCapture();
+    const { server, callTool } = makeTestServer();
+    const ctx = makeCtx(store, server, {
+      pantryStore,
+      log,
+      client: { savePantryItem: mockSavePantryItem, notifySync: mockNotifySync } as unknown as PaprikaClient,
+    });
+    registerAddPantryItemTool(server, ctx);
 
-      await callTool("add_pantry_item", { ingredient: "Butter" });
+    await callTool("add_pantry_item", { ingredient: "Butter" });
 
-      const stderrWrites = stderrSpy.mock.calls.map((call) => String(call[0])).join("");
-      expect(stderrWrites).toContain("add_pantry_item");
-      expect(stderrWrites).toContain("fetch failed");
-    } finally {
-      stderrSpy.mockRestore();
-    }
+    const errorRecord = records.find((r) => r["msg"] === "savePantryItem failed");
+    expect(errorRecord).toBeDefined();
+    expect(errorRecord?.["component"]).toBe("add_pantry_item");
+    expect((errorRecord?.["err"] as { message?: string })?.message).toContain("fetch failed");
   });
 });

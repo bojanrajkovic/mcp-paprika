@@ -2,12 +2,9 @@
 import { startHttp } from "./transport/http.js";
 import { startStdio, type TransportHandle } from "./transport/stdio.js";
 import { loadConfig } from "./utils/config.js";
-import { createLogger, toMessage } from "./utils/log.js";
-
-const log = createLogger("mcp-paprika");
+import { toMessage } from "./utils/log.js";
 
 async function main(): Promise<void> {
-  log("Loading configuration...");
   const config = loadConfig().match(
     (cfg) => cfg,
     (err) => {
@@ -18,7 +15,10 @@ async function main(): Promise<void> {
   const handle: TransportHandle = config.transport === "http" ? await startHttp(config) : await startStdio(config);
 
   const onSignal = (signal: string) => {
-    log(`${signal} received, shutting down...`);
+    // process.stderr.write is used here intentionally — the structured logger may not
+    // be built yet (early startup failure) or may already be torn down at signal time.
+    // See src/server/CLAUDE.md for the documented exception.
+    process.stderr.write(`${signal} received, shutting down...\n`);
     handle.shutdown().then(
       () => process.exit(0),
       (err: unknown) => {
