@@ -48,16 +48,19 @@ spec:
             # the mcp-paprika Secret.
             - name: MCP_PUBLIC_URL
               value: https://<public-host>
-            # google preset works for Google accounts. For other IdPs set this
-            # to entra/okta/auth0/keycloak, or drop it and set
-            # MCP_OIDC_DISCOVERY_URL instead. See docs/configuration.md.
+            # google preset works for Google accounts. Tenant-bound presets
+            # (entra, okta, auth0, keycloak) also require MCP_OIDC_DISCOVERY_URL
+            # in the Secret — omitting it causes the server to exit at startup.
+            # Alternatively, drop this var and set MCP_OIDC_DISCOVERY_URL only.
+            # See docs/configuration.md for the full OAuth reference.
             - name: MCP_OIDC_PRESET
               value: google
-            # Set to true when a trusted reverse proxy sanitizes
-            # X-Forwarded-For before reaching this pod. See
-            # docs/configuration.md § "Trust proxy".
+            # Leave false unless a trusted reverse proxy (nginx, Tailscale
+            # Funnel, Cloudflare) sanitizes X-Forwarded-For before this pod.
+            # Setting true without a sanitizing proxy lets clients spoof IPs
+            # and bypass DCR rate limiting. See docs/configuration.md § "Trust proxy".
             - name: MCP_TRUST_PROXY
-              value: "true"
+              value: "false"
           envFrom:
             - secretRef:
                 name: mcp-paprika
