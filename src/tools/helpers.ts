@@ -24,6 +24,25 @@ export function recipeToMarkdown(recipe: Recipe, categoryNames: Array<string>): 
     lines.push(`**Categories:** ${categoryNames.join(", ")}`);
   }
 
+  lines.push("");
+  lines.push(`**Created:** ${recipe.created}`);
+
+  if (recipe.rating > 0) {
+    lines.push(`**Rating:** ${recipe.rating.toString()}/5`);
+  }
+
+  if (recipe.isPinned) {
+    lines.push(`**Pinned:** Yes`);
+  }
+
+  if (recipe.onGroceryList) {
+    lines.push(`**On Grocery List:** Yes`);
+  }
+
+  if (recipe.onFavorites) {
+    lines.push(`**On Favorites:** Yes`);
+  }
+
   if (recipe.description) {
     lines.push("");
     lines.push(recipe.description);

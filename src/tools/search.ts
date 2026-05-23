@@ -56,5 +56,14 @@ function formatSearchHit(result: ScoredResult, categoryNames: Array<string>): st
   if (timeParts.length > 0) {
     lines.push(timeParts.join(" · "));
   }
+  if (result.recipe.rating > 0) {
+    lines.push(`**Rating:** ${result.recipe.rating.toString()}/5`);
+  }
+  if (result.recipe.isPinned) {
+    lines.push(`**Pinned:** Yes`);
+  }
+  if (result.recipe.onGroceryList) {
+    lines.push(`**On Grocery List:** Yes`);
+  }
   return lines.join("\n");
 }

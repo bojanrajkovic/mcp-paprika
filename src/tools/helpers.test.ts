@@ -207,6 +207,61 @@ describe("p2-u02-shared-helpers: shared helper functions", () => {
       const output = recipeToMarkdown(recipe, []);
       expect(output).not.toContain("**Source:**");
     });
+
+    it("p2-u02-shared-helpers.AC3.4k: created field always appears in output", () => {
+      const recipe = makeRecipe({ created: "2026-03-15T10:00:00Z" });
+      const output = recipeToMarkdown(recipe, []);
+      expect(output).toContain("**Created:**");
+      expect(output).toContain("2026-03-15T10:00:00Z");
+    });
+
+    it("p2-u02-shared-helpers.AC3.4l-pos: rating appears as X/5 when > 0", () => {
+      const recipe = makeRecipe({ rating: 4 });
+      const output = recipeToMarkdown(recipe, []);
+      expect(output).toContain("**Rating:** 4/5");
+    });
+
+    it("p2-u02-shared-helpers.AC3.4l-neg: rating section omitted when rating is 0", () => {
+      const recipe = makeRecipe({ rating: 0 });
+      const output = recipeToMarkdown(recipe, []);
+      expect(output).not.toContain("**Rating:**");
+    });
+
+    it("p2-u02-shared-helpers.AC3.4m-pos: isPinned appears when true", () => {
+      const recipe = makeRecipe({ isPinned: true });
+      const output = recipeToMarkdown(recipe, []);
+      expect(output).toContain("**Pinned:** Yes");
+    });
+
+    it("p2-u02-shared-helpers.AC3.4m-neg: isPinned section omitted when false", () => {
+      const recipe = makeRecipe({ isPinned: false });
+      const output = recipeToMarkdown(recipe, []);
+      expect(output).not.toContain("**Pinned:**");
+    });
+
+    it("p2-u02-shared-helpers.AC3.4n-pos: onGroceryList appears when true", () => {
+      const recipe = makeRecipe({ onGroceryList: true });
+      const output = recipeToMarkdown(recipe, []);
+      expect(output).toContain("**On Grocery List:** Yes");
+    });
+
+    it("p2-u02-shared-helpers.AC3.4n-neg: onGroceryList section omitted when false", () => {
+      const recipe = makeRecipe({ onGroceryList: false });
+      const output = recipeToMarkdown(recipe, []);
+      expect(output).not.toContain("**On Grocery List:**");
+    });
+
+    it("p2-u02-shared-helpers.AC3.4o-pos: onFavorites appears when true", () => {
+      const recipe = makeRecipe({ onFavorites: true });
+      const output = recipeToMarkdown(recipe, []);
+      expect(output).toContain("**On Favorites:** Yes");
+    });
+
+    it("p2-u02-shared-helpers.AC3.4o-neg: onFavorites section omitted when false", () => {
+      const recipe = makeRecipe({ onFavorites: false });
+      const output = recipeToMarkdown(recipe, []);
+      expect(output).not.toContain("**On Favorites:**");
+    });
   });
 
   describe("p2-recipe-crud.AC-helpers: resolveCategoryNames", () => {

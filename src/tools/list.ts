@@ -39,7 +39,14 @@ export function registerListTool(server: McpServer, ctx: ServerContext): void {
           const lines = page.map((recipe) => {
             const categoryNames = ctx.store.resolveCategories(recipe.categories);
             const cats = categoryNames.length > 0 ? ` [${categoryNames.join(", ")}]` : "";
-            return `- **${recipe.name}**${cats} (uid: ${recipe.uid})`;
+            const meta: Array<string> = [];
+            const dateOnly = recipe.created.slice(0, 10);
+            meta.push(`created: ${dateOnly}`);
+            if (recipe.rating > 0) meta.push(`rating: ${recipe.rating.toString()}/5`);
+            if (recipe.isPinned) meta.push("pinned");
+            if (recipe.onGroceryList) meta.push("on grocery list");
+            const metaSuffix = ` · ${meta.join(" · ")}`;
+            return `- **${recipe.name}**${cats} (uid: ${recipe.uid})${metaSuffix}`;
           });
 
           return textResult(header + "\n" + lines.join("\n"));

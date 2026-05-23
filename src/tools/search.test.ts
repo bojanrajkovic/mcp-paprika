@@ -130,6 +130,66 @@ describe("p2-discovery-tools: search_recipes tool", () => {
       expect(text.toLowerCase()).toContain("no recipes");
     });
 
+    it("p2-discovery-tools.AC1.7-pos: rating appears in search hit when > 0", async () => {
+      const store = new RecipeStore();
+      store.load([makeRecipe({ name: "Chocolate Cake", rating: 5 })], []);
+      const { server, callTool } = makeTestServer();
+      registerSearchTool(server, makeCtx(store, server));
+
+      const result = await callTool("search_recipes", { query: "chocolate", limit: 20 });
+      expect(getText(result)).toContain("5/5");
+    });
+
+    it("p2-discovery-tools.AC1.7-neg: rating absent from search hit when 0", async () => {
+      const store = new RecipeStore();
+      store.load([makeRecipe({ name: "Chocolate Cake", rating: 0 })], []);
+      const { server, callTool } = makeTestServer();
+      registerSearchTool(server, makeCtx(store, server));
+
+      const result = await callTool("search_recipes", { query: "chocolate", limit: 20 });
+      expect(getText(result)).not.toContain("/5");
+    });
+
+    it("p2-discovery-tools.AC1.8-pos: pinned marker appears in search hit when isPinned is true", async () => {
+      const store = new RecipeStore();
+      store.load([makeRecipe({ name: "Chocolate Cake", isPinned: true })], []);
+      const { server, callTool } = makeTestServer();
+      registerSearchTool(server, makeCtx(store, server));
+
+      const result = await callTool("search_recipes", { query: "chocolate", limit: 20 });
+      expect(getText(result)).toContain("Pinned");
+    });
+
+    it("p2-discovery-tools.AC1.8-neg: pinned marker absent from search hit when isPinned is false", async () => {
+      const store = new RecipeStore();
+      store.load([makeRecipe({ name: "Chocolate Cake", isPinned: false })], []);
+      const { server, callTool } = makeTestServer();
+      registerSearchTool(server, makeCtx(store, server));
+
+      const result = await callTool("search_recipes", { query: "chocolate", limit: 20 });
+      expect(getText(result)).not.toContain("Pinned");
+    });
+
+    it("p2-discovery-tools.AC1.9-pos: on-grocery-list marker appears in search hit when onGroceryList is true", async () => {
+      const store = new RecipeStore();
+      store.load([makeRecipe({ name: "Chocolate Cake", onGroceryList: true })], []);
+      const { server, callTool } = makeTestServer();
+      registerSearchTool(server, makeCtx(store, server));
+
+      const result = await callTool("search_recipes", { query: "chocolate", limit: 20 });
+      expect(getText(result)).toContain("Grocery List");
+    });
+
+    it("p2-discovery-tools.AC1.9-neg: on-grocery-list marker absent from search hit when onGroceryList is false", async () => {
+      const store = new RecipeStore();
+      store.load([makeRecipe({ name: "Chocolate Cake", onGroceryList: false })], []);
+      const { server, callTool } = makeTestServer();
+      registerSearchTool(server, makeCtx(store, server));
+
+      const result = await callTool("search_recipes", { query: "chocolate", limit: 20 });
+      expect(getText(result)).not.toContain("Grocery List");
+    });
+
     it("p2-discovery-tools.AC1.invocation: search_recipes logs invocation at info level with tool name and query", async () => {
       const { log, records } = makePinoCapture();
       const store = new RecipeStore();
