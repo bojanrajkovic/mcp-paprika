@@ -18,8 +18,9 @@ Replace all `<placeholder>` values before applying:
 | `<your-public-url>` | `30-deployment.yaml`, `20-secret.example.yaml` | Publicly reachable URL for this deployment (e.g. `https://paprika.example.com`) — no trailing slash                                          |
 | `<storage-class>`   | `10-pvc.yaml`                                  | Storage class name for the data PVC (e.g. `standard`, `local-path` on k3s)                                                                   |
 
-`MCP_OIDC_PRESET` defaults to `google`; change it in `30-deployment.yaml` if
-you're using a different upstream OIDC provider.
+`MCP_OIDC_PRESET` defaults to `google`; change it in `30-deployment.yaml` for
+other IdPs, or replace it with `MCP_OIDC_DISCOVERY_URL`. See
+[docs/configuration.md](../docs/configuration.md) for the full OAuth reference.
 
 **No storage class?** Replace the `persistentVolumeClaim` volume block in
 `30-deployment.yaml` with `emptyDir: {}`. The disk cache rebuilds on startup
