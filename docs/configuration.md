@@ -47,7 +47,7 @@ Environment variables always win. If you set `PAPRIKA_EMAIL` as an env var and a
 | `MCP_OIDC_EMAIL_VERIFIED_POLICY` | `oauth.emailVerifiedPolicy` | No           | —         | Email verification policy: `strict`, `skip`, or `if-present`                  |
 | `MCP_OIDC_ALLOWED_ALGS`          | `oauth.allowedAlgs`         | No           | `RS256` ³ | Allowed JWT signing algorithms (comma-separated)                              |
 
-¹ Exactly one of `MCP_OIDC_PRESET` or `MCP_OIDC_DISCOVERY_URL` must be set when `MCP_TRANSPORT=http`.
+¹ At least one of `MCP_OIDC_PRESET` or `MCP_OIDC_DISCOVERY_URL` must be set when `MCP_TRANSPORT=http`. For tenant-bound presets (`entra`, `okta`, `auth0`, `keycloak`), both must be set — the preset names the provider, `MCP_OIDC_DISCOVERY_URL` supplies the tenant-specific discovery endpoint. For `google`, the preset alone is sufficient (discovery URL is hardcoded). Setting only `MCP_OIDC_DISCOVERY_URL` (no preset) works for any OIDC-compliant IdP.
 ² At least one of `MCP_ALLOWED_EMAILS` or `MCP_ALLOWED_SUBS` must be non-empty when `MCP_TRANSPORT=http`.
 ³ Code-level default from presets; keycloak preset defaults to `RS256, ES256`. Set this only to override the preset's default.
 
@@ -200,8 +200,9 @@ The server uses structured [pino](https://getpino.io/) logging. In stdio mode, l
 to stderr (TTY) or a file (non-TTY) to keep stdout clean for the MCP wire format. In
 HTTP mode, logs go to stdout as raw JSON.
 
-`MCP_LOG_PRETTY=auto` (the default) uses pino-pretty when stderr is a TTY, and raw JSON
-otherwise. `MCP_LOG_FILE` overrides the default file path used in stdio non-TTY mode;
+`MCP_LOG_PRETTY=auto` (the default) uses pino-pretty for all stdio output — both TTY
+(to stderr) and non-TTY (to the log file). HTTP transport always emits raw JSON to
+stdout regardless of this setting. `MCP_LOG_FILE` overrides the default file path used in stdio non-TTY mode;
 the default is `<log-dir>/mcp-paprika.log`.
 
 Records at or above `MCP_LOG_NOTIFY_LEVEL` (default `warn`) are automatically forwarded
