@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.2.0](https://github.com/bojanrajkovic/mcp-paprika/compare/v1.1.0...v1.2.0) (2026-05-23)
+
+
+### Features
+
+* **http:** add DNS rebinding protection toggles for direct internet exposure ([#93](https://github.com/bojanrajkovic/mcp-paprika/issues/93)) ([f76303b](https://github.com/bojanrajkovic/mcp-paprika/commit/f76303b894354af4aea8e9d81cbc32025649c18e))
+* **k8s:** add Kubernetes manifests for self-hosted HTTP deployment ([#84](https://github.com/bojanrajkovic/mcp-paprika/issues/84)) ([c1ff307](https://github.com/bojanrajkovic/mcp-paprika/commit/c1ff3075c924e47cbfdeca099f710ef97864f1f5))
+* **logging:** per-tool invocation logs and health probe access-log exclusion ([#97](https://github.com/bojanrajkovic/mcp-paprika/issues/97)) ([e7cac7d](https://github.com/bojanrajkovic/mcp-paprika/commit/e7cac7dedde7eb52abd0cc44062d0c046d6080ef))
+* **transport:** add OAuth 2.1 authentication to HTTP transport ([#83](https://github.com/bojanrajkovic/mcp-paprika/issues/83)) ([ea519d9](https://github.com/bojanrajkovic/mcp-paprika/commit/ea519d91dea509e15d482fbbea55e5fd01a7c837))
+
+
+### Bug Fixes
+
+* **deps:** update dependency @hono/node-server to v1.19.14 ([#79](https://github.com/bojanrajkovic/mcp-paprika/issues/79)) ([9cd2093](https://github.com/bojanrajkovic/mcp-paprika/commit/9cd2093d3e13db2c62e99570df4cb9814dd8afd3))
+* **paprika:** retry network-level fetch failures and log write-tool errors ([#95](https://github.com/bojanrajkovic/mcp-paprika/issues/95)) ([8cd823d](https://github.com/bojanrajkovic/mcp-paprika/commit/8cd823dc9618535fdcd9fce1e664eca32e1fe45b))
+* **sync:** shield in-flight writes from sync reconciliation race ([#92](https://github.com/bojanrajkovic/mcp-paprika/issues/92)) ([509e6e1](https://github.com/bojanrajkovic/mcp-paprika/commit/509e6e19051a81d7908545073b00ad787de95c7a))
+
 ## [1.1.0](https://github.com/bojanrajkovic/mcp-paprika/compare/v1.0.4...v1.1.0) (2026-05-18)
 
 
