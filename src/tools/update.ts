@@ -40,6 +40,7 @@ export function registerUpdateTool(server: McpServer, ctx: ServerContext): void 
       },
     },
     async (args) => {
+      log.info({ tool: "update_recipe", uid: args.uid }, "tool invoked");
       return coldStartGuard(ctx).match(
         async (): Promise<CallToolResult> => {
           const uid = RecipeUidSchema.parse(args.uid);

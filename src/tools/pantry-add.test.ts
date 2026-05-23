@@ -276,4 +276,32 @@ describe("pantry-mutations.AC4: add_pantry_item tool", () => {
     expect(errorRecord?.["component"]).toBe("add_pantry_item");
     expect((errorRecord?.["err"] as { message?: string })?.message).toContain("fetch failed");
   });
+
+  it("pantry-mutations.AC4.invocation: add_pantry_item logs invocation at info level with ingredient", async () => {
+    const { log, records } = makePinoCapture();
+    const store = new RecipeStore();
+    const pantryStore = new PantryStore();
+    pantryStore.load([]);
+    const mockSavePantryItem = vi.fn().mockImplementation(async (item: unknown) => item);
+    const mockNotifySync = vi.fn().mockResolvedValue(undefined);
+    const mockPutPantryItem = vi.fn();
+    const mockFlush = vi.fn().mockResolvedValue(undefined);
+
+    const { server, callTool } = makeTestServer();
+    const ctx = makeCtx(store, server, {
+      log,
+      pantryStore,
+      client: { savePantryItem: mockSavePantryItem, notifySync: mockNotifySync } as unknown as PaprikaClient,
+      cache: { putPantryItem: mockPutPantryItem, flush: mockFlush } as unknown as DiskCache,
+    });
+    registerAddPantryItemTool(server, ctx);
+
+    await callTool("add_pantry_item", { ingredient: "Butter" });
+
+    const invocation = records.find((r) => r["msg"] === "tool invoked");
+    expect(invocation).toBeDefined();
+    expect(invocation?.["tool"]).toBe("add_pantry_item");
+    expect(invocation?.["ingredient"]).toBe("Butter");
+    expect(invocation?.["level"]).toBe(30); // pino info = 30
+  });
 });

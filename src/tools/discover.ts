@@ -7,6 +7,7 @@ import type { VectorStore, SemanticResult } from "../features/vector-store.js";
 import type { Recipe, RecipeUid } from "../paprika/types.js";
 
 export function registerDiscoverTool(server: McpServer, ctx: ServerContext, vectorStore: VectorStore): void {
+  const log = ctx.log.child({ component: "discover_recipes" });
   server.registerTool(
     "discover_recipes",
     {
@@ -25,6 +26,7 @@ export function registerDiscoverTool(server: McpServer, ctx: ServerContext, vect
       },
     },
     async (args) => {
+      log.info({ tool: "discover_recipes", ...args }, "tool invoked");
       return coldStartGuard(ctx).match(
         async (): Promise<CallToolResult> => {
           const results = await vectorStore.search(args.query, args.topK);

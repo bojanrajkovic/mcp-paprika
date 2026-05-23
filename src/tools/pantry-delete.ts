@@ -20,6 +20,7 @@ export function registerDeletePantryItemTool(server: McpServer, ctx: ServerConte
       },
     },
     async (args) => {
+      log.info({ tool: "delete_pantry_item", uid: args.uid }, "tool invoked");
       return pantryStartGuard(ctx).match(
         async (): Promise<CallToolResult> => {
           const uid = PantryItemUidSchema.parse(args.uid);

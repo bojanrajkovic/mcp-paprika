@@ -32,6 +32,7 @@ export function registerCreateTool(server: McpServer, ctx: ServerContext): void 
       },
     },
     async (args) => {
+      log.info({ tool: "create_recipe", name: args.name }, "tool invoked");
       return coldStartGuard(ctx).match(
         async (): Promise<CallToolResult> => {
           // Resolve category names → UIDs (AC2.4, AC2.7)

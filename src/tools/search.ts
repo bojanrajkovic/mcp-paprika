@@ -6,6 +6,7 @@ import { coldStartGuard, textResult } from "./helpers.js";
 import type { ServerContext } from "../types/server-context.js";
 
 export function registerSearchTool(server: McpServer, ctx: ServerContext): void {
+  const log = ctx.log.child({ component: "search_recipes" });
   server.registerTool(
     "search_recipes",
     {
@@ -24,6 +25,7 @@ export function registerSearchTool(server: McpServer, ctx: ServerContext): void 
       },
     },
     async (args) => {
+      log.info({ tool: "search_recipes", ...args }, "tool invoked");
       return coldStartGuard(ctx).match(
         async (): Promise<CallToolResult> => {
           const results = ctx.store.search(args.query, { limit: args.limit });

@@ -44,8 +44,14 @@ interface Session {
  * Exported for isolated unit testing — `startHttp` has no logger injection
  * seam, so tests instantiate `accessLog` directly with a capture logger.
  */
+const PROBE_PATHS = new Set(["/healthz"]);
+
 export function accessLog(log: Logger) {
   return async (c: Context, next: Next): Promise<void> => {
+    if (PROBE_PATHS.has(c.req.path)) {
+      await next();
+      return;
+    }
     const t0 = performance.now();
     try {
       await next();

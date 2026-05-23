@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { RecipeStore } from "../cache/recipe-store.js";
 import { makeRecipe, makeCategory } from "../cache/__fixtures__/recipes.js";
 import { registerSearchTool } from "./search.js";
-import { makeTestServer, makeCtx, getText } from "./tool-test-utils.js";
+import { makeTestServer, makeCtx, getText, makePinoCapture } from "./tool-test-utils.js";
 
 describe("p2-discovery-tools: search_recipes tool", () => {
   describe("p2-discovery-tools.AC1: search_recipes", () => {
@@ -128,6 +128,22 @@ describe("p2-discovery-tools: search_recipes tool", () => {
       // Must be a normal text response (not error), containing the query
       expect(result.isError).toBeFalsy();
       expect(text.toLowerCase()).toContain("no recipes");
+    });
+
+    it("p2-discovery-tools.AC1.invocation: search_recipes logs invocation at info level with tool name and query", async () => {
+      const { log, records } = makePinoCapture();
+      const store = new RecipeStore();
+      store.load([makeRecipe({ name: "Chocolate Cake" })], []);
+      const { server, callTool } = makeTestServer();
+      registerSearchTool(server, makeCtx(store, server, { log }));
+
+      await callTool("search_recipes", { query: "chocolate", limit: 20 });
+
+      const invocation = records.find((r) => r["msg"] === "tool invoked");
+      expect(invocation).toBeDefined();
+      expect(invocation?.["tool"]).toBe("search_recipes");
+      expect(invocation?.["query"]).toBe("chocolate");
+      expect(invocation?.["level"]).toBe(30); // pino info = 30
     });
   });
 });

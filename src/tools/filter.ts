@@ -9,6 +9,8 @@ import type { ServerContext } from "../types/server-context.js";
 import type { TimeConstraints } from "../cache/recipe-store.js";
 
 export function registerFilterTools(server: McpServer, ctx: ServerContext): void {
+  const logIngredient = ctx.log.child({ component: "filter_by_ingredient" });
+  const logTime = ctx.log.child({ component: "filter_by_time" });
   server.registerTool(
     "filter_by_ingredient",
     {
@@ -31,6 +33,7 @@ export function registerFilterTools(server: McpServer, ctx: ServerContext): void
       },
     },
     async (args) => {
+      logIngredient.info({ tool: "filter_by_ingredient", ...args }, "tool invoked");
       return coldStartGuard(ctx).match(
         async (): Promise<CallToolResult> => {
           const results = ctx.store.filterByIngredients(args.ingredients, args.mode, args.limit);
@@ -65,6 +68,7 @@ export function registerFilterTools(server: McpServer, ctx: ServerContext): void
       },
     },
     async (args) => {
+      logTime.info({ tool: "filter_by_time", ...args }, "tool invoked");
       return coldStartGuard(ctx).match(
         async (): Promise<CallToolResult> => {
           const constraintsResult = parseMaybeMinutes(args.maxPrepTime).andThen((maxPrepTime) =>

@@ -20,6 +20,7 @@ export function registerDeleteTool(server: McpServer, ctx: ServerContext): void 
       },
     },
     async (args) => {
+      log.info({ tool: "delete_recipe", uid: args.uid }, "tool invoked");
       return coldStartGuard(ctx).match(
         async (): Promise<CallToolResult> => {
           const uid = RecipeUidSchema.parse(args.uid);

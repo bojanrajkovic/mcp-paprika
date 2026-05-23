@@ -7,6 +7,7 @@ import { textResult } from "./helpers.js";
 import type { ServerContext } from "../types/server-context.js";
 
 export function registerGetPantryItemTool(server: McpServer, ctx: ServerContext): void {
+  const log = ctx.log.child({ component: "get_pantry_item" });
   server.registerTool(
     "get_pantry_item",
     {
@@ -20,6 +21,7 @@ export function registerGetPantryItemTool(server: McpServer, ctx: ServerContext)
       },
     },
     async (args) => {
+      log.info({ tool: "get_pantry_item", ...args }, "tool invoked");
       return pantryStartGuard(ctx).match(
         async (): Promise<CallToolResult> => {
           if (!args.uid && !args.ingredient) {
