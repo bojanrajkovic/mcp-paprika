@@ -158,8 +158,12 @@ upstream OIDC provider and issues its own opaque access tokens to MCP clients.
 
 ### Choosing an OIDC provider
 
-Either set `MCP_OIDC_PRESET` to a built-in preset, or set `MCP_OIDC_DISCOVERY_URL`
-to the discovery endpoint of any OIDC-compliant IdP (not both).
+For `google`, set only `MCP_OIDC_PRESET=google` — the discovery URL is hardcoded.
+For tenant-bound presets (`entra`, `okta`, `auth0`, `keycloak`), set **both**
+`MCP_OIDC_PRESET` and `MCP_OIDC_DISCOVERY_URL` — the preset names the provider and
+the discovery URL supplies the tenant-specific endpoint; omitting either causes the
+server to exit at startup. For any other OIDC-compliant IdP, set only
+`MCP_OIDC_DISCOVERY_URL` (no preset).
 
 **Built-in presets** (`MCP_OIDC_PRESET`):
 
