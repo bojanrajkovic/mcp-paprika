@@ -22,9 +22,12 @@ Replace all `<placeholder>` values before applying:
 other IdPs, or replace it with `MCP_OIDC_DISCOVERY_URL`. See
 [docs/configuration.md](../docs/configuration.md) for the full OAuth reference.
 
-**No storage class?** Replace the `persistentVolumeClaim` volume block in
-`30-deployment.yaml` with `emptyDir: {}`. The disk cache rebuilds on startup
-(~2–5 min); OAuth DCR state is lost on pod delete.
+**No storage class?** Two changes required:
+
+1. In `30-deployment.yaml`, replace the `persistentVolumeClaim` volume block with `emptyDir: {}`
+2. Remove `- 10-pvc.yaml` from the `resources:` list in `kustomization.yaml`
+
+The disk cache rebuilds on startup (~2–5 min); OAuth DCR state is lost on pod delete.
 
 ## Ingress
 
