@@ -5,6 +5,7 @@ import { coldStartGuard, textResult } from "./helpers.js";
 import type { ServerContext } from "../types/server-context.js";
 
 export function registerListTool(server: McpServer, ctx: ServerContext): void {
+  const log = ctx.log.child({ component: "list_recipes" });
   server.registerTool(
     "list_recipes",
     {
@@ -23,6 +24,7 @@ export function registerListTool(server: McpServer, ctx: ServerContext): void {
       },
     },
     async (args) => {
+      log.info({ tool: "list_recipes", ...args }, "tool invoked");
       return coldStartGuard(ctx).match(
         async (): Promise<CallToolResult> => {
           const all = ctx.store.getAll().sort((a, b) => a.name.localeCompare(b.name));

@@ -29,6 +29,7 @@ export function registerAddPantryItemTool(server: McpServer, ctx: ServerContext)
       },
     },
     async (args) => {
+      log.info({ tool: "add_pantry_item", ingredient: args.ingredient }, "tool invoked");
       return pantryStartGuard(ctx).match(
         async (): Promise<CallToolResult> => {
           // Duplicate-ingredient guard (AC4.5)

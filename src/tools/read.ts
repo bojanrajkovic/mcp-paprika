@@ -6,6 +6,7 @@ import { coldStartGuard, recipeToMarkdown, textResult } from "./helpers.js";
 import type { ServerContext } from "../types/server-context.js";
 
 export function registerReadTool(server: McpServer, ctx: ServerContext): void {
+  const log = ctx.log.child({ component: "read_recipe" });
   server.registerTool(
     "read_recipe",
     {
@@ -19,6 +20,7 @@ export function registerReadTool(server: McpServer, ctx: ServerContext): void {
       },
     },
     async (args) => {
+      log.info({ tool: "read_recipe", ...args }, "tool invoked");
       return coldStartGuard(ctx).match(
         async (): Promise<CallToolResult> => {
           if (!args.uid && !args.title) {

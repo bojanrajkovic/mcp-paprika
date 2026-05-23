@@ -798,7 +798,7 @@ describe("accessLog middleware (AC9.5)", () => {
   it("AC9.5: emits one info record for a 200 response", async () => {
     const { log, records } = makePinoCapture();
     const middleware = accessLog(log);
-    const ctx = makeStubContext("GET", "/healthz", 200);
+    const ctx = makeStubContext("GET", "/mcp", 200);
 
     await middleware(ctx, makeNext());
 
@@ -806,11 +806,21 @@ describe("accessLog middleware (AC9.5)", () => {
     const record = records[0];
     expect(record?.["level"]).toBe(30); // pino info = 30
     expect(record?.["method"]).toBe("GET");
-    expect(record?.["path"]).toBe("/healthz");
+    expect(record?.["path"]).toBe("/mcp");
     expect(record?.["status"]).toBe(200);
     expect(typeof record?.["durationMs"]).toBe("number");
     expect((record?.["durationMs"] as number) >= 0).toBe(true);
     expect(record?.["msg"]).toBe("http request");
+  });
+
+  it("AC9.5: does not emit a record for GET /healthz (health probe excluded from access log)", async () => {
+    const { log, records } = makePinoCapture();
+    const middleware = accessLog(log);
+    const ctx = makeStubContext("GET", "/healthz", 200);
+
+    await middleware(ctx, makeNext());
+
+    expect(records).toHaveLength(0);
   });
 
   it("AC9.5: emits one error record for a 500 response", async () => {
@@ -847,7 +857,7 @@ describe("accessLog middleware (AC9.5)", () => {
     const { log, records } = makePinoCapture();
     const middleware = accessLog(log);
 
-    const ctx1 = makeStubContext("GET", "/healthz", 200);
+    const ctx1 = makeStubContext("GET", "/register", 200);
     const ctx2 = makeStubContext("POST", "/mcp", 200);
 
     await Promise.all([middleware(ctx1, makeNext()), middleware(ctx2, makeNext())]);
@@ -855,7 +865,7 @@ describe("accessLog middleware (AC9.5)", () => {
     expect(records).toHaveLength(2);
     // Each request produced exactly one record — no duplication.
     const paths = records.map((r) => r["path"]);
-    expect(paths).toContain("/healthz");
+    expect(paths).toContain("/register");
     expect(paths).toContain("/mcp");
   });
 
@@ -885,26 +895,25 @@ describe("accessLog middleware (AC9.5)", () => {
 // Integration tests: accessLog placement via real startHttp router (AC9.5-integration)
 //
 // These boot the real app with an injected test logger to verify that the
-// accessLog middleware is mounted BEFORE /healthz in Hono's route chain, so
-// requests to /healthz actually emit log records. The unit tests above bypass
-// Hono's router entirely and cannot catch middleware placement bugs.
+// accessLog middleware is mounted BEFORE /healthz in Hono's route chain, but
+// health probe paths are explicitly excluded so k8s liveness polls do not
+// flood the structured log. The unit tests above bypass Hono's router entirely
+// and cannot catch middleware placement bugs.
 // ---------------------------------------------------------------------------
 
 describe("accessLog middleware placement — integration (AC9.5-integration)", () => {
-  it("AC9.5-int-1: GET /healthz emits an access-log record with {method, path, status}", async () => {
+  it("AC9.5-int-1: GET /healthz is served correctly but does not emit an access-log record", async () => {
     const { log, records } = makePinoCapture();
     // _testLog injects the capture logger as the transport-level logger used by accessLog.
     const opts: StartHttpOptions = { _testLog: log };
     const handle = await startHttp(makeConfig(), opts);
     try {
-      await fetch(`http://127.0.0.1:${handle.port.toString()}/healthz`);
+      const res = await fetch(`http://127.0.0.1:${handle.port.toString()}/healthz`);
 
-      // There must be at least one record for /healthz.
+      // Health probe is served (200 ok) but must not produce a log record.
+      expect(res.status).toBe(200);
       const healthzRecords = records.filter((r) => r["path"] === "/healthz");
-      expect(healthzRecords.length).toBeGreaterThan(0);
-      const r = healthzRecords[0]!;
-      expect(r["method"]).toBe("GET");
-      expect(r["status"]).toBe(200);
+      expect(healthzRecords).toHaveLength(0);
     } finally {
       await handle.shutdown();
     }

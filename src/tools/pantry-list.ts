@@ -5,6 +5,7 @@ import { textResult } from "./helpers.js";
 import type { ServerContext } from "../types/server-context.js";
 
 export function registerListPantryTool(server: McpServer, ctx: ServerContext): void {
+  const log = ctx.log.child({ component: "list_pantry" });
   server.registerTool(
     "list_pantry",
     {
@@ -13,6 +14,7 @@ export function registerListPantryTool(server: McpServer, ctx: ServerContext): v
       inputSchema: {},
     },
     async () => {
+      log.info({ tool: "list_pantry" }, "tool invoked");
       return pantryStartGuard(ctx).match(
         async (): Promise<CallToolResult> => {
           const all = ctx.pantryStore.getAll().sort((a, b) => a.ingredient.localeCompare(b.ingredient));

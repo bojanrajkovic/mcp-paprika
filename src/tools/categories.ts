@@ -5,6 +5,7 @@ import { coldStartGuard, textResult } from "./helpers.js";
 import type { ServerContext } from "../types/server-context.js";
 
 export function registerCategoryTools(server: McpServer, ctx: ServerContext): void {
+  const log = ctx.log.child({ component: "list_categories" });
   server.registerTool(
     "list_categories",
     {
@@ -13,6 +14,7 @@ export function registerCategoryTools(server: McpServer, ctx: ServerContext): vo
       inputSchema: {},
     },
     async (_args) => {
+      log.info({ tool: "list_categories" }, "tool invoked");
       return coldStartGuard(ctx).match(
         async (): Promise<CallToolResult> => {
           const categories = ctx.store.getAllCategories();
