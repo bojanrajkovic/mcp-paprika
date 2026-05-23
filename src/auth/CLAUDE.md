@@ -20,7 +20,7 @@ This module is loaded only when `MCP_TRANSPORT=http`. In stdio mode, `buildAuthC
 - `ttl-store.ts` — Generic base class `TtlStore<T extends { createdAt: number }>` with `put`, `consume` (delete-before-TTL-check, single-use), `sweepExpired`, and `size`; clock-injectable via `now` option. Extended by `AuthRequestStore` and `AuthCodeStore`.
 - `auth-request-store.ts` — In-memory 5-minute TTL store for `AuthRequestState` (keyed by our state parameter, carries PKCE challenge + nonce + client + redirect context). Extends `TtlStore`; exposes `put` / `consume` (single-use).
 - `auth-code-store.ts` — In-memory 60-second TTL store for `AuthCodeState` (keyed by our authorization code; holds the verified identity). Extends `TtlStore`; adds `peek()` (read-without-consume, lazy-evicts expired entries). Single-use consume enforced via `TtlStore.consume`. Distinct from `auth-request-store.ts` to keep pre- and post-callback state separate.
-- `client-registration.ts` — `DiskClientRegistrationStore` implementing the SDK `OAuthRegisteredClientsStore` interface; persists registered clients to `DiskCache`'s `oauth/clients/` namespace; enforces `registrationAccessTokenHash` on management endpoints; issues UUIDv4 `clientId` (delegated to SDK); takes a required `Logger` as 3rd ctor param and an optional `maxClients` as 4th, atomically enforces the cap via `DiskCache.tryPutOAuthClient` (throws `InvalidRequestError` on overflow so @hono/mcp returns 400); emits `info "client registered via DCR"` with `clientId` + `redirectUriCount` after each successful registration
+- `client-registration.ts` — `DiskClientRegistrationStore` implementing the SDK `OAuthRegisteredClientsStore` interface; persists registered clients via `DiskCacheRoot.oauthClients`; enforces `registrationAccessTokenHash` on management endpoints; issues UUIDv4 `clientId` (delegated to SDK); takes a required `Logger` as 3rd ctor param and an optional `maxClients` as 4th, atomically enforces the cap via `oauthClients.tryPut` (throws `InvalidRequestError` on overflow so @hono/mcp returns 400); emits `info "client registered via DCR"` with `clientId` + `redirectUriCount` after each successful registration
 - `token-store.ts` — `TokenStore`: `issueAccessRefreshPair`, `lookupAccessToken`, `lookupRefreshToken`, `getTokenRecord` (any-kind by plaintext, used for ownership checks), `rotateRefresh`, `revoke`, `removeAllForClient`; all tokens stored by their `tokenHash` (SHA-256 hex of plaintext); enforces RFC 8707 resource binding, RFC 6749 §6 scope-subset-only on refresh, and refresh-token client binding (`rotateRefresh` requires `expectedClientId`); serializes refresh rotation through an internal `async-mutex` `_rotateLock` so concurrent rotations on the same plaintext can't both consume the token
 - `provider.ts` — `MintingOAuthServerProvider` implementing the SDK `OAuthServerProvider` interface; orchestrates the authorization code flow using the four stores; constructs the upstream OIDC authorize redirect, handles the callback, and issues tokens; takes a required `Logger` as 8th ctor param; emits `info "access token minted (authorization_code grant)"`, `info "access token minted (refresh_token grant)"`, and `info "access token revoked"` — each with `tokenHash`, `clientId`, and `sub` fields
 - `routes.ts` — Hono route handlers for `/oauth/callback` (receives upstream IdP redirect), `PUT /register/:clientId` (RFC 7592 client update), and `DELETE /register/:clientId` (RFC 7592 client delete); exports `buildDcrRateLimit({trustProxy})` (key derivation depends on the flag) and `buildClientCap` middleware factories plus the `MAX_REGISTERED_CLIENTS` constant (also imported by `build.ts` so the middleware fast-path and the atomic store-level enforcement share one value)
@@ -90,7 +90,7 @@ The SDK `AuthInfo` type is returned by `verifyAccessToken`. The `extra` field ca
 
 ### OAuthClient persistence schema
 
-Persisted to `DiskCache` as `oauth/clients/${clientId}.json`. All fields are required except `clientName`.
+Persisted by `DiskCacheRoot.oauthClients` as `oauthClients/${clientId}.json`. All fields are required except `clientName`.
 
 | Field                         | Type                         | Notes                                                                    |
 | ----------------------------- | ---------------------------- | ------------------------------------------------------------------------ |
@@ -111,7 +111,7 @@ Persisted to `DiskCache` as `oauth/clients/${clientId}.json`. All fields are req
 
 ### OAuthToken persistence schema
 
-Persisted to `DiskCache` as `oauth/tokens/${tokenHash}.json`. `tokenHash` is the 64-character lowercase hex SHA-256 of the plaintext bearer token.
+Persisted by `DiskCacheRoot.oauthTokens` as `oauthTokens/${tokenHash}.json`. `tokenHash` is the 64-character lowercase hex SHA-256 of the plaintext bearer token.
 
 | Field             | Type                         | Notes                                                                   |
 | ----------------- | ---------------------------- | ----------------------------------------------------------------------- |
@@ -142,7 +142,7 @@ Persisted to `DiskCache` as `oauth/tokens/${tokenHash}.json`. `tokenHash` is the
 
 - Clients are keyed by `clientId` (UUIDv4 issued by the SDK); filename is `${clientId}.json`.
 - Tokens are keyed by `tokenHash` (64-char SHA-256 hex); filename is `${tokenHash}.json`; `OAuthTokenSchema` enforces the 64-char hex regex on every read, so filename-equals-field is enforced at both write and read.
-- All `DiskCache` writes (client and token) are serialized via `async-mutex`; `cache.flush()` is called after every mutating OAuth operation to guarantee durability before the response is sent.
+- All OAuth writes (client and token) are serialized via per-subcache `async-mutex` instances; `cache.flush()` is called after every mutating OAuth operation to guarantee durability before the response is sent.
 - Auth codes (`AuthCodeStore`) and auth-request states (`AuthRequestStore`) are in-memory only — they do not persist across server restarts.
 - The RAT (registration access token) plaintext is returned exactly once in the DCR response body and never stored; only its SHA-256 hash is persisted in `registrationAccessTokenHash`.
 
@@ -164,7 +164,7 @@ Persisted to `DiskCache` as `oauth/tokens/${tokenHash}.json`. `tokenHash` is the
 - Public-client only: `token_endpoint_auth_method` must be `"none"` in every registration or update request; any other value is rejected with `invalid_client_metadata`.
 - The RAT is issued at registration as a random opaque token, hashed before storage, and returned in plaintext exactly once in the `201 Created` DCR response.
 - DCR rate-limit: 10 registrations per hour per IP address (enforced via `buildDcrRateLimit` in `routes.ts`). Scoped to `POST /register` only — RFC 7592 `PUT`/`DELETE /register/:id` calls do NOT consume the bucket. The per-request key is the connection's remote address by default (`trustProxy: false`); set `MCP_TRUST_PROXY=true` only when a sanitizing reverse proxy is in front, otherwise an attacker can spoof `x-forwarded-for` per request and bypass the limit.
-- Hard cap: maximum `MAX_REGISTERED_CLIENTS` (50) registered clients. Enforced in two places: `buildClientCap` middleware (`routes.ts`) returns a fast-path 429 for the common single-request overflow, and `DiskClientRegistrationStore.registerClient` does the authoritative atomic check inside `DiskCache.tryPutOAuthClient` (under the same `_writeLock` as the put). The atomic path returns 400 `invalid_request` for the race case — both observers passed the middleware but only one wins the lock.
+- Hard cap: maximum `MAX_REGISTERED_CLIENTS` (50) registered clients. Enforced in two places: `buildClientCap` middleware (`routes.ts`) returns a fast-path 429 for the common single-request overflow, and `DiskClientRegistrationStore.registerClient` does the authoritative atomic check inside `OAuthClientDiskCache.tryPut` (under the same per-subcache mutex as the put). The atomic path returns 400 `invalid_request` for the race case — both observers passed the middleware but only one wins the lock.
 - Cleanup: `AuthCleanup` marks clients with `lastTokenActivityAt < now - DCR_CLIENT_STALE_DAYS` as stale and removes them along with all their tokens. It also evicts OAuth tokens past `expiresAt` whose owning client is still active — required because `rotateRefresh` deletes the prior refresh but not the prior access, so active sessions accumulate one expired access record per refresh. The background task runs every 6 hours.
 
 ### HTTP surface
@@ -216,8 +216,8 @@ Prior to the structured-logging migration, allowlist denials wrote a single `[au
 
 ### Concurrency
 
-- `DiskCache` `async-mutex` serializes all OAuth writes (clients and tokens); concurrent calls queue in FIFO order; a failed operation does not poison subsequent ones.
-- `TokenStore.rotateRefresh` also wraps its full lookup → validate → consume → mint sequence in its own `async-mutex` `_rotateLock`. The DiskCache mutex alone is not sufficient: the window between `lookupRefreshToken` (a read) and `removeOAuthToken` (a write) lets two concurrent rotations both observe the same token as valid. Single mutex per store is fine — rotations are bounded by `ACCESS_TOKEN_TTL_SECONDS` (~one per active session per 24h).
+- The per-subcache mutex on `DiskCacheRoot.oauthClients` and `oauthTokens` serializes all OAuth writes; concurrent calls queue in FIFO order; a failed operation does not poison subsequent ones.
+- `TokenStore.rotateRefresh` also wraps its full lookup → validate → consume → mint sequence in its own `async-mutex` `_rotateLock`. The subcache mutex alone is not sufficient: the window between `oauthTokens.get` (a read) and `oauthTokens.remove` (a write) lets two concurrent rotations both observe the same token as valid. Single mutex per store is fine — rotations are bounded by `ACCESS_TOKEN_TTL_SECONDS` (~one per active session per 24h).
 - In-memory stores (`AuthRequestStore`, `AuthCodeStore`) assume single-threaded Node.js event-loop execution; no per-store mutex is needed because all operations are synchronous (no `await` within a store method).
 
 ## Dependencies
@@ -236,15 +236,15 @@ Prior to the structured-logging migration, allowlist denials wrote a single `[au
 
 - `oidc-client.ts` — uses `jose`
 - `auth-request-store.ts`, `auth-code-store.ts` — extend `ttl-store.ts`; import from `types.ts` and `tokens.ts`
-- `client-registration.ts` — uses `src/cache/disk-cache.ts` (via `DiskCache`)
-- `token-store.ts` — uses `src/cache/disk-cache.ts`
+- `client-registration.ts` — uses `src/cache/disk/` (via `DiskCacheRoot.oauthClients`)
+- `token-store.ts` — uses `src/cache/disk/` (via `DiskCacheRoot.oauthClients` and `.oauthTokens`)
 - `provider.ts` — uses all stores, `oidc-client.ts`, and `allowlist.ts`
 - `routes.ts` — uses `provider.ts`, `client-registration.ts`, `hono-rate-limiter`
 - `metadata.ts` — uses `types.ts` and `@modelcontextprotocol/sdk`
-- `cleanup.ts` — uses stores and `src/cache/disk-cache.ts`
-- `build.ts` — composes all of the above; imports `src/utils/config.ts` and `src/cache/disk-cache.ts`
+- `cleanup.ts` — uses stores and `src/cache/disk/` (via `DiskCacheRoot.oauthClients` and `.oauthTokens`)
+- `build.ts` — composes all of the above; imports `src/utils/config.ts` and `src/cache/disk/`
 
-**External dependencies:** `@modelcontextprotocol/sdk` (OAuth provider/client interfaces), `jose` (JWKS, jwtVerify), `hono-rate-limiter` (rate limiting middleware), `async-mutex` (via `DiskCache`)
+**External dependencies:** `@modelcontextprotocol/sdk` (OAuth provider/client interfaces), `jose` (JWKS, jwtVerify), `hono-rate-limiter` (rate limiting middleware), `async-mutex` (via `DiskCacheRoot`'s per-subcache mutexes)
 
 **Used by:**
 
@@ -253,6 +253,6 @@ Prior to the structured-logging migration, allowlist denials wrote a single `[au
 
 ## Boundaries
 
-- `src/auth/` may import from: `src/cache/` (DiskCache only), `src/utils/config.ts` and `src/utils/xdg.ts`, `@modelcontextprotocol/sdk`, `jose`, `hono-rate-limiter`, `zod`, `neverthrow`, `node:crypto`.
+- `src/auth/` may import from: `src/cache/disk/` (DiskCacheRoot only), `src/utils/config.ts` and `src/utils/xdg.ts`, `@modelcontextprotocol/sdk`, `jose`, `hono-rate-limiter`, `zod`, `neverthrow`, `node:crypto`.
 - `src/auth/` must NOT import from: `src/tools/`, `src/resources/`, `src/features/`, `src/paprika/`, `src/server/`, `src/transport/`.
 - Only `src/server/build.ts` and `src/transport/http.ts` may import from `src/auth/`.

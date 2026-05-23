@@ -6,7 +6,7 @@ Last verified: 2026-05-23
 
 - `recipe-store.ts` — In-memory cache for recipes and categories with CRUD operations and query methods
 - `pantry-store.ts` — In-memory query layer for pantry items (replace-all semantics, no hashing)
-- `disk-cache.ts` — Persistent disk cache for the Paprika recipe library between server restarts
+- `disk/` — Persistence layer: `DiskCacheRoot` and per-entity subcaches. See `disk/CLAUDE.md` for the full contract.
 
 ## Purpose
 
@@ -70,87 +70,17 @@ In-memory query layer for pantry items, hydrated by the sync engine. Extends `En
 | `pendingWriteCount`           | `number` getter                                 | Count of pending-write entries (test/diagnostic only)                                           |
 | `findByIngredient(query)`     | `(query: string): Array<PantryItem>`            | Tiered case-insensitive lookup: exact match > starts-with > contains; at most one tier returned |
 
-### DiskCache
+### DiskCacheRoot
 
-Persistence layer for the Paprika recipe library. Stores full recipe and category JSON on disk and maintains an in-memory index (`uid → hash`) for efficient sync diffing. Must be initialised with `init()` before any other method is called. All writes are deferred: `put*()` buffers to memory; `flush()` writes everything atomically.
+Persistence layer for every entity the server caches. Composed of one `DiskCache<T>` instance per entity (`recipes`, `categories`, `pantry`, `oauthClients`, `oauthTokens`) plus a one-shot legacy-index migration that runs on first boot to upgrade installs from the unified-index layout.
 
-**Construction:**
+**Construction:** `new DiskCacheRoot(cacheDir: string, log?: Logger)`. Production passes `appLog.child({ component: "disk-cache" })`.
 
-`new DiskCache(cacheDir: string, log?: Logger)`
+**Public API:** every subcache exposes `get`/`getAll`/`put`/`remove`/`flush`/`has`/`size`; the root exposes `init()` and `flush()`. Specialised entities add behaviour: `cache.recipes.diff(entries)` returns the added/changed/removed classification used by the sync loop; `cache.oauthClients.tryPut(client, max)` is the atomic DCR-cap check.
 
-- `cacheDir` — absolute path to the cache directory (typically from `getCacheDir()` in `src/utils/xdg.ts`)
-- `log` — optional pino `Logger`; defaults to a silent logger when omitted. Pass `appLog.child({ component: "disk-cache" })` from `buildAppContext`. Corruption and schema-mismatch warnings are emitted at `warn` level on this logger; cold-start ENOENT and idempotent-removal silences are intentional and documented with inline comments.
+There is no `getAllCategories`, `removeCategory`, or category diff — categories use replace-all semantics and the on-disk files are read directly when needed.
 
-**Lifecycle:**
-
-| Method    | Signature           | Description                                                                       |
-| --------- | ------------------- | --------------------------------------------------------------------------------- |
-| `init()`  | `(): Promise<void>` | Creates `recipes/` and `categories/` subdirs; loads or recovers `index.json`      |
-| `flush()` | `(): Promise<void>` | Writes all pending files (fsynced), commits index atomically via temp-then-rename |
-
-**Recipe methods:**
-
-| Method                    | Signature                                | Description                                                                   |
-| ------------------------- | ---------------------------------------- | ----------------------------------------------------------------------------- |
-| `getRecipe(uid)`          | `(uid: string): Promise<Recipe \| null>` | Returns pending entry or reads/validates from disk; `null` on miss            |
-| `putRecipe(recipe, hash)` | `(recipe: Recipe, hash: string): void`   | Buffers to pending map; updates `_index` in memory; no file I/O               |
-| `removeRecipe(uid)`       | `(uid: string): Promise<void>`           | Deletes file (idempotent); removes from `_index` and pending map              |
-| `getAllRecipes()`         | `(): Promise<Array<Recipe>>`             | Merges pending map with all `.json` files in `recipes/`; pending shadows disk |
-
-**Category methods:**
-
-| Method                        | Signature                                  | Description                                                        |
-| ----------------------------- | ------------------------------------------ | ------------------------------------------------------------------ |
-| `getCategory(uid)`            | `(uid: string): Promise<Category \| null>` | Returns pending entry or reads/validates from disk; `null` on miss |
-| `putCategory(category, hash)` | `(category: Category, hash: string): void` | Buffers to pending map; updates `_index` in memory; no file I/O    |
-
-**Pantry methods:**
-
-| Method                  | Signature                        | Description                                                                           |
-| ----------------------- | -------------------------------- | ------------------------------------------------------------------------------------- |
-| `putPantryItem(item)`   | `(item: PantryItem): void`       | Buffers to pending map; updates `_index.pantry[uid]` to empty string (no hash needed) |
-| `removePantryItem(uid)` | `(uid: string): Promise<void>`   | Deletes file (idempotent); removes from `_index.pantry` and pending map               |
-| `getAllPantryItems()`   | `(): Promise<Array<PantryItem>>` | Merges pending map with all `.json` files in `pantry/`; pending shadows disk          |
-
-**OAuth client methods:**
-
-| Method                           | Signature                                                                                          | Description                                                                                                                                                                     |
-| -------------------------------- | -------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `putOAuthClient(client)`         | `(client: OAuthClient): Promise<void>`                                                             | Locks, buffers to pending map, sets index placeholder; flush writes the file                                                                                                    |
-| `tryPutOAuthClient(client, max)` | `(client: OAuthClient, maxClients: number): Promise<{ok:true} \| {ok:false, currentCount:number}>` | Atomic check-and-put under `_writeLock`: counts current clients (re-puts of an existing `clientId` skip the count) and only writes if under `max`. Used by DCR cap enforcement. |
-| `getOAuthClient(clientId)`       | `(clientId: string): Promise<OAuthClient \| null>`                                                 | Pending-first; disk fallback; validates via `OAuthClientSchema`                                                                                                                 |
-| `removeOAuthClient(clientId)`    | `(clientId: string): Promise<void>`                                                                | Locked; unlinks file (idempotent); removes index + pending entries                                                                                                              |
-| `getAllOAuthClients()`           | `(): Promise<Array<OAuthClient>>`                                                                  | Pending shadows disk merge                                                                                                                                                      |
-
-**OAuth token methods:**
-
-| Method                        | Signature                                          | Description                                                                   |
-| ----------------------------- | -------------------------------------------------- | ----------------------------------------------------------------------------- |
-| `putOAuthToken(token)`        | `(token: OAuthToken): Promise<void>`               | Locks, buffers, indexes by `token.tokenHash` (filename = `${tokenHash}.json`) |
-| `getOAuthToken(tokenHash)`    | `(tokenHash: string): Promise<OAuthToken \| null>` | Pending-first; disk fallback; validates via `OAuthTokenSchema`                |
-| `removeOAuthToken(tokenHash)` | `(tokenHash: string): Promise<void>`               | Locked; unlinks; idempotent                                                   |
-| `getAllOAuthTokens()`         | `(): Promise<Array<OAuthToken>>`                   | Pending shadows disk merge                                                    |
-
-**Diff methods (synchronous):**
-
-| Method                    | Signature                                             | Description                                                                      |
-| ------------------------- | ----------------------------------------------------- | -------------------------------------------------------------------------------- |
-| `diffRecipes(entries)`    | `(entries: ReadonlyArray<RecipeEntry>): DiffResult`   | Classifies remote entries vs local recipe index into `added`/`changed`/`removed` |
-| `diffCategories(entries)` | `(entries: ReadonlyArray<CategoryEntry>): DiffResult` | Same algorithm applied to category index                                         |
-
-## Logger integration
-
-`DiskCache` accepts an optional `log?: Logger` in its constructor (default: silent pino). Production constructs it with `appLog.child({ component: "disk-cache" })` in `buildAppContext`. Tests omit the argument (silent).
-
-**Catch-site classification:**
-
-- ENOENT on `index.json` read — cold-start; silent by design.
-- Corrupt JSON in `index.json` — emits `warn` record `"corrupt index.json, resetting to empty index"`.
-- ENOENT on per-UID file read — cold-start cache miss; silent (returns `null`).
-- ENOENT on directory listing — cold-start; silent (returns empty).
-- ENOENT on unlink — idempotent removal; silent.
-
-The classification is durable — each silent catch carries an explanatory inline comment.
+See `disk/CLAUDE.md` for the full contract, on-disk layout, migration semantics, mutex model, per-entity invariants, and catch-site classification.
 
 ## Invariants
 
@@ -168,7 +98,7 @@ The classification is durable — each silent catch carries an explanatory inlin
 - `load()` clears existing items before populating, so it always reflects the latest API snapshot (replace-all semantics)
 - `load([])` still flips `hasSynced` to `true` — an empty pantry is a valid synced state
 - `findByIngredient()` returns at most one tier (exact > starts-with > contains); ties within a tier are returned in insertion order
-- All read methods are pure (no I/O); the store is rehydrated from `DiskCache.getAllPantryItems()` on startup and refreshed by the sync engine
+- All read methods are pure (no I/O); the store is rehydrated from `cache.pantry.getAll()` on startup and refreshed by the sync engine
 - The tombstone set survives sync cycles: `delete()` adds unconditionally; `set()` clears for that UID; `load(items)` clears only for UIDs present in `items` (resurrection). Tombstones for UIDs that stay absent from the snapshot persist, so delayed retries past a sync interval still get the idempotent "already deleted" signal. `delete()` tombstones even when the UID is absent from `_items` to defend against a sync-race in which `commitPantryItem`'s awaits let `syncOnce()` remove the UID before the local commit lands. After every `load()` and `set()`, the tombstone set is disjoint from `_items`
 
 ### Pending-writes (issue #57)
@@ -179,26 +109,12 @@ Both `RecipeStore` and `PantryStore` inherit pending-writes tracking from `Entit
 - Clearing is **content-equality-based for upserts**: recipes clear when the canonical entry's hash matches the local cache; pantry items clear when the incoming item is field-wise equal via `pantryItemsEqual`. UID-presence-only clearing was rejected because the UID can appear in the canonical list with pre-write content while propagation is still in flight.
 - The commit helpers (`commitRecipe` / `commitPantryItem`) wrap cache I/O in `try { … } catch { clearPending(uid); throw }` so a failed local commit doesn't leave a UID shielded for the full TTL window.
 
-### DiskCache
-
-- `DiskCache` requires `init()` before `flush()`, `getAllRecipes()`, `putRecipe()`, `removeRecipe()`, `putCategory()`, `putPantryItem()`, `removePantryItem()`, `getAllPantryItems()`, `diffRecipes()`, or `diffCategories()` — calling any of these before `init()` throws
-- `flush()` must be called after each batch of `put*()` calls to persist data to disk; until then, data lives only in memory and will be lost on restart
-- `getAllRecipes()` and `getAllPantryItems()` merge pending (not-yet-flushed) entries with disk files; pending entries shadow disk for the same UID
-- There is no `removeCategory()` or `getAllCategories()` — categories are always re-synced from the API; the cache only stores them for diffing
-- `diffRecipes()` and `diffCategories()` reflect `putRecipe()`/`putCategory()` calls immediately (before `flush()`) because `put*()` updates `_index` in memory
-- Pantry items use replace-all semantics (no diffPantryItems method); the `_index.pantry` field stores empty-string placeholders (no hash) for each UID
-- **Async-mutex serialization:** All mutating methods (`putX`, `removeX`, `flush`) execute inside an internal `async-mutex`-backed `Mutex` (`_writeLock`). Concurrent calls queue in FIFO order. A failed operation does not poison subsequent ones (`async-mutex` releases the lock on exception and runs the next queued caller normally). This guarantees that `flush()` snapshots a consistent state: a `put*` whose returned promise resolves before a `flush()` starts is included in the snapshot; one that resolves after is not. The previously-undocumented snapshot/clear race is closed. **Re-entrance is forbidden:** no locked method may call another locked method on the same `DiskCache` instance — `async-mutex` would deadlock.
-- **OAuth-client filenames** use `${clientId}.json` — `clientId` is a UUIDv4 generated by `@modelcontextprotocol/sdk`. DiskCache does not validate UUID shape; the schema layer (`OAuthClientSchema`) does.
-- **OAuth-token filenames** use `${tokenHash}.json` where `tokenHash` is the 64-char SHA-256 hex of the plaintext bearer token. `OAuthTokenSchema` enforces this shape on every parse, so AC4.6 ("filename equals tokenHash field") is enforced at both write and read.
-- **Plaintext tokens never hit disk.** The token-store layer (Phase 5) hashes before calling `putOAuthToken`.
-- **No client secrets exist.** The server is public-client only — `OAuthClientSchema` has no `clientSecret` / `clientSecretHash` field. AC4.5 follows from the schema.
-
 ## Dependencies
 
-- **Uses:** `entity/` (EntityStore base class and PendingWrite type), `paprika/types` (Recipe, Category, PantryItem types), `utils/duration` (parseDuration for time filtering), Node.js built-in fs/promises
+- **Uses:** `entity/` (EntityStore base class and PendingWrite type), `paprika/types` (Recipe, Category, PantryItem types), `utils/duration` (parseDuration for time filtering)
 - **Used by:**
   - `features/` (via `RecipeStore`)
-  - `paprika/sync.ts` (via `DiskCache` and `PantryStore` for diff/replace-all sync)
+  - `paprika/sync.ts` (via `cache.recipes.diff` / `cache.pantry` / `PantryStore` for diff and replace-all sync)
   - `tools/` and `resources/` (via `ctx.pantryStore` for pantry reads; `ctx.store` for recipe reads)
-  - `index.ts` (constructs `DiskCache` with `getCacheDir()`, `RecipeStore`, and `PantryStore`)
+  - `server/build.ts` (constructs `DiskCacheRoot` with `getCacheDir()`, `RecipeStore`, and `PantryStore`)
 - **Boundary:** Must not import from `tools/`, `resources/`, or `features/`
