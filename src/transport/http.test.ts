@@ -7,7 +7,7 @@ import { Hono } from "hono";
 import { startHttp, accessLog, type HttpTransportHandle, type StartHttpOptions } from "./http.js";
 import type { PaprikaConfig } from "../utils/config.js";
 import { createOidcStub } from "../auth/__fixtures__/oidc-stub.js";
-import { DiskCache } from "../cache/disk-cache.js";
+import { DiskCacheRoot } from "../cache/disk/index.js";
 import { makeOAuthClient } from "../cache/__fixtures__/oauth.js";
 import { useXdgIsolation } from "../__fixtures__/xdg-isolation.js";
 import { useMswServer } from "../__fixtures__/msw.js";
@@ -750,14 +750,14 @@ describe("HTTP transport — OAuth mounted", () => {
       // check sees >= 50 existing clients.  buildClientCap reads cache.getAllOAuthClients()
       // on every POST /register — fresh disk files are visible on the very next call.
       const cacheDir = join(oauthXdg.dir(), "mcp-paprika");
-      const seedCache = new DiskCache(cacheDir);
+      const seedCache = new DiskCacheRoot(cacheDir);
       await seedCache.init();
 
       // Count existing clients (from other tests in this suite).
-      const existing = await seedCache.getAllOAuthClients();
+      const existing = await seedCache.oauthClients.getAll();
       const needed = 50 - existing.length;
       for (let i = 0; i < needed; i++) {
-        await seedCache.putOAuthClient(makeOAuthClient());
+        await seedCache.oauthClients.put(makeOAuthClient());
       }
       await seedCache.flush();
 

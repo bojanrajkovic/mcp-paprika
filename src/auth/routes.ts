@@ -9,7 +9,7 @@ import type { AuthCodeStore } from "./auth-code-store.js";
 import type { ResolvedOAuthConfig } from "./types.js";
 import type { DiscoveryDoc } from "./oidc-client.js";
 import type { JWTVerifyGetKey } from "jose";
-import type { DiskCache } from "../cache/disk-cache.js";
+import type { DiskCacheRoot } from "../cache/disk/index.js";
 import { generateOpaqueToken, nowSeconds } from "./tokens.js";
 import { verifyIdToken } from "./oidc-client.js";
 import type { IdTokenPayload } from "./types.js";
@@ -366,11 +366,11 @@ function getRemoteAddress(c: Context): string | null {
  * case where the cap is obviously hit; the atomic store check closes the
  * race window for the rest.
  */
-export function buildClientCap(cache: DiskCache, max: number): MiddlewareHandler {
+export function buildClientCap(cache: DiskCacheRoot, max: number): MiddlewareHandler {
   return async (c, next) => {
     if (c.req.path !== "/register" || c.req.method !== "POST") return next();
 
-    const clients = await cache.getAllOAuthClients();
+    const clients = await cache.oauthClients.getAll();
     if (clients.length >= max) {
       return c.json({ error: "invalid_request", error_description: "client registration cap reached" }, 429);
     }

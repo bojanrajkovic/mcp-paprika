@@ -62,8 +62,8 @@ describe("buildAuthContext", () => {
   describe("BA.1: returns null for stdio transport", () => {
     it("returns null when config.transport is 'stdio'", async () => {
       // PLAN says (phase_07.md:305-306): if config.transport !== "http" return null
-      const { DiskCache } = await import("../cache/disk-cache.js");
-      const cache = new DiskCache(xdg.dir());
+      const { DiskCacheRoot } = await import("../cache/disk/index.js");
+      const cache = new DiskCacheRoot(xdg.dir());
       await cache.init();
 
       const config = makeStdioConfig();
@@ -76,8 +76,8 @@ describe("buildAuthContext", () => {
   describe("BA.2: throws for http + no oauth config (defensive guard)", () => {
     it("throws Error when transport is http but oauth config is undefined", async () => {
       // PLAN says (phase_07.md:307-310): defensive guard for http without oauth block
-      const { DiskCache } = await import("../cache/disk-cache.js");
-      const cache = new DiskCache(xdg.dir());
+      const { DiskCacheRoot } = await import("../cache/disk/index.js");
+      const cache = new DiskCacheRoot(xdg.dir());
       await cache.init();
 
       const config: PaprikaConfig = {
@@ -105,8 +105,8 @@ describe("buildAuthContext", () => {
       });
       msw.use(...oidcStub.handlers);
 
-      const { DiskCache } = await import("../cache/disk-cache.js");
-      const cache = new DiskCache(xdg.dir());
+      const { DiskCacheRoot } = await import("../cache/disk/index.js");
+      const cache = new DiskCacheRoot(xdg.dir());
       await cache.init();
 
       const config = makeHttpConfig("https://accounts.example.test");
@@ -138,8 +138,8 @@ describe("buildAuthContext", () => {
         ),
       );
 
-      const { DiskCache } = await import("../cache/disk-cache.js");
-      const cache = new DiskCache(xdg.dir());
+      const { DiskCacheRoot } = await import("../cache/disk/index.js");
+      const cache = new DiskCacheRoot(xdg.dir());
       await cache.init();
 
       const config = makeHttpConfig("https://accounts.example.test");

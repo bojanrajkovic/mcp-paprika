@@ -85,7 +85,7 @@ export class SyncEngine {
       this.log.debug("fetching recipe list");
       const entries = await this._context.client.listRecipes();
       this.log.debug({ count: entries.length }, "fetched recipe list");
-      const diff = this._context.cache.diffRecipes(entries);
+      const diff = this._context.cache.recipes.diff(entries);
       this.log.debug(
         { added: diff.added.length, changed: diff.changed.length, removed: diff.removed.length },
         "recipe diff computed",
@@ -124,12 +124,12 @@ export class SyncEngine {
 
       // Write fetched recipes to cache and store
       for (const recipe of fetchedRecipes) {
-        await this._context.cache.putRecipe(recipe, recipe.hash);
+        await this._context.cache.recipes.put(recipe);
         this._context.store.set(recipe);
       }
 
       // Remove deleted recipes (async, use Promise.all for concurrency)
-      await Promise.all(filteredRemoved.map((uid) => this._context.cache.removeRecipe(uid)));
+      await Promise.all(filteredRemoved.map((uid) => this._context.cache.recipes.remove(uid)));
       for (const uid of filteredRemoved) {
         this._context.store.delete(uid as RecipeUid);
       }
@@ -158,7 +158,7 @@ export class SyncEngine {
       this.log.debug({ count: categories.length }, "fetched categories");
       this._context.store.setCategories(categories);
       for (const category of categories) {
-        await this._context.cache.putCategory(category, category.uid);
+        await this._context.cache.categories.put(category);
       }
 
       // 3. Pantry sync (replace-all with orphan cleanup)
@@ -166,7 +166,7 @@ export class SyncEngine {
       const pantryItems = await this._context.client.listPantry();
       this.log.debug({ count: pantryItems.length }, "fetched pantry");
 
-      const cachedPantryItems = await this._context.cache.getAllPantryItems();
+      const cachedPantryItems = await this._context.cache.pantry.getAll();
 
       // Pending-writes filtering (issue #57). For pending-upserts we exclude
       // the UID from the canonical incoming list and pull our local version
@@ -202,10 +202,10 @@ export class SyncEngine {
       const newPantrySet = new Set(newPantryUids);
       const addedPantryItems = effectivePantry.filter((item) => newPantrySet.has(item.uid));
 
-      await Promise.all(orphanPantryUids.map((uid) => this._context.cache.removePantryItem(uid)));
+      await Promise.all(orphanPantryUids.map((uid) => this._context.cache.pantry.remove(uid)));
       this._context.pantryStore.load(effectivePantry);
       for (const item of effectivePantry) {
-        await this._context.cache.putPantryItem(item);
+        await this._context.cache.pantry.put(item);
       }
 
       // Observation-based clearing for pantry pending-upserts: clear only when

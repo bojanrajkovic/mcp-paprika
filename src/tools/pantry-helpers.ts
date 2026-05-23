@@ -62,7 +62,7 @@ export async function commitPantryItem(ctx: ServerContext, saved: Readonly<Pantr
     const uid: PantryItemUid = saved.uid;
     ctx.pantryStore.markPendingDelete(uid);
     try {
-      await ctx.cache.removePantryItem(uid);
+      await ctx.cache.pantry.remove(uid);
       await ctx.cache.flush();
     } catch (e) {
       ctx.pantryStore.clearPending(uid);
@@ -74,7 +74,7 @@ export async function commitPantryItem(ctx: ServerContext, saved: Readonly<Pantr
   } else {
     ctx.pantryStore.markPendingUpsert(saved.uid);
     try {
-      await ctx.cache.putPantryItem(saved);
+      await ctx.cache.pantry.put(saved);
       await ctx.cache.flush();
     } catch (e) {
       ctx.pantryStore.clearPending(saved.uid);

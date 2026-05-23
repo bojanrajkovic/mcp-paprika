@@ -5,7 +5,7 @@ import { DiskClientRegistrationStore } from "./client-registration.js";
 import { TokenStore } from "./token-store.js";
 import { AuthRequestStore } from "./auth-request-store.js";
 import { AuthCodeStore } from "./auth-code-store.js";
-import { DiskCache } from "../cache/disk-cache.js";
+import { DiskCacheRoot } from "../cache/disk/index.js";
 import { makeDefaultOidcStub, makeDiscoveryDoc } from "./__fixtures__/oidc-stub.js";
 import { makeAuthCodeState, makeVerifiedIdentity } from "./__fixtures__/oauth-state.js";
 import { ACCESS_TOKEN_TTL_SECONDS, hashTokenForStorage } from "./tokens.js";
@@ -42,7 +42,7 @@ const oidcStub = makeDefaultOidcStub();
 
 describe("MintingOAuthServerProvider", () => {
   let cacheDir: string;
-  let cache: DiskCache;
+  let cache: DiskCacheRoot;
   let clientStore: DiskClientRegistrationStore;
   let tokenStore: TokenStore;
   let authRequests: AuthRequestStore;
@@ -59,7 +59,7 @@ describe("MintingOAuthServerProvider", () => {
     cacheDir = `/tmp/test-oauth-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
     // Initialize cache and stores
-    cache = new DiskCache(cacheDir);
+    cache = new DiskCacheRoot(cacheDir);
     await cache.init();
 
     clientStore = new DiskClientRegistrationStore(cache, "https://mcp.example.com", SILENT_LOG);

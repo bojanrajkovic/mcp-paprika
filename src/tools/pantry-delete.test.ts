@@ -5,7 +5,7 @@ import { makePantryItem } from "../cache/__fixtures__/pantry.js";
 import { registerDeletePantryItemTool } from "./pantry-delete.js";
 import { makeTestServer, makeCtx, getText } from "./tool-test-utils.js";
 import type { PaprikaClient } from "../paprika/client.js";
-import type { DiskCache } from "../cache/disk-cache.js";
+import type { DiskCacheRoot } from "../cache/disk/index.js";
 import type { PantryItemUid } from "../paprika/types.js";
 import { PaprikaAPIError } from "../paprika/errors.js";
 
@@ -33,10 +33,9 @@ describe("pantry-mutations.AC6: delete_pantry_item tool", () => {
       pantryStore,
       client: { savePantryItem: mockSavePantryItem, notifySync: mockNotifySync } as unknown as PaprikaClient,
       cache: {
-        putPantryItem: mockPutPantryItem,
-        removePantryItem: mockRemovePantryItem,
+        pantry: { put: mockPutPantryItem, remove: mockRemovePantryItem },
         flush: mockFlush,
-      } as unknown as DiskCache,
+      } as unknown as DiskCacheRoot,
     });
     registerDeletePantryItemTool(server, ctx);
 
@@ -82,10 +81,9 @@ describe("pantry-mutations.AC6: delete_pantry_item tool", () => {
       pantryStore,
       client: { savePantryItem: mockSavePantryItem, notifySync: mockNotifySync } as unknown as PaprikaClient,
       cache: {
-        putPantryItem: mockPutPantryItem,
-        removePantryItem: mockRemovePantryItem,
+        pantry: { put: mockPutPantryItem, remove: mockRemovePantryItem },
         flush: mockFlush,
-      } as unknown as DiskCache,
+      } as unknown as DiskCacheRoot,
     });
     registerDeletePantryItemTool(server, ctx);
 
@@ -122,10 +120,9 @@ describe("pantry-mutations.AC6: delete_pantry_item tool", () => {
       pantryStore,
       client: { savePantryItem: mockSavePantryItem, notifySync: mockNotifySync } as unknown as PaprikaClient,
       cache: {
-        putPantryItem: mockPutPantryItem,
-        removePantryItem: mockRemovePantryItem,
+        pantry: { put: mockPutPantryItem, remove: mockRemovePantryItem },
         flush: mockFlush,
-      } as unknown as DiskCache,
+      } as unknown as DiskCacheRoot,
     });
     registerDeletePantryItemTool(server, ctx);
 
@@ -156,10 +153,9 @@ describe("pantry-mutations.AC6: delete_pantry_item tool", () => {
       pantryStore,
       client: { savePantryItem: mockSavePantryItem, notifySync: mockNotifySync } as unknown as PaprikaClient,
       cache: {
-        putPantryItem: mockPutPantryItem,
-        removePantryItem: mockRemovePantryItem,
+        pantry: { put: mockPutPantryItem, remove: mockRemovePantryItem },
         flush: mockFlush,
-      } as unknown as DiskCache,
+      } as unknown as DiskCacheRoot,
     });
     registerDeletePantryItemTool(server, ctx);
 
@@ -195,10 +191,9 @@ describe("pantry-mutations.AC6: delete_pantry_item tool", () => {
       pantryStore,
       client: { savePantryItem: mockSavePantryItem, notifySync: mockNotifySync } as unknown as PaprikaClient,
       cache: {
-        putPantryItem: mockPutPantryItem,
-        removePantryItem: mockRemovePantryItem,
+        pantry: { put: mockPutPantryItem, remove: mockRemovePantryItem },
         flush: mockFlush,
-      } as unknown as DiskCache,
+      } as unknown as DiskCacheRoot,
     });
     registerDeletePantryItemTool(server, ctx);
 
@@ -246,10 +241,9 @@ describe("pantry-mutations.AC6: delete_pantry_item tool", () => {
       pantryStore,
       client: { savePantryItem: mockSavePantryItem, notifySync: mockNotifySync } as unknown as PaprikaClient,
       cache: {
-        putPantryItem: mockPutPantryItem,
-        removePantryItem: mockRemovePantryItem,
+        pantry: { put: mockPutPantryItem, remove: mockRemovePantryItem },
         flush: mockFlush,
-      } as unknown as DiskCache,
+      } as unknown as DiskCacheRoot,
     });
     registerDeletePantryItemTool(server, ctx);
 

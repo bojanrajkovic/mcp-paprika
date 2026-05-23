@@ -6,7 +6,7 @@ import type { AppContext } from "../server/app-context.js";
 import type { Notifier } from "../server/notifier.js";
 import type { RecipeStore } from "../cache/recipe-store.js";
 import type { PaprikaClient } from "./client.js";
-import type { DiskCache } from "../cache/disk-cache.js";
+import type { DiskCacheRoot } from "../cache/disk/index.js";
 import type { PantryStore } from "../cache/pantry-store.js";
 import type { AnySyncResult, PantryItemUid, RecipeEntry, RecipeUid } from "./types.js";
 import { makeRecipe, makeCategory } from "../cache/__fixtures__/recipes.js";
@@ -42,17 +42,21 @@ function makeMockClient(): PaprikaClient {
   } as unknown as PaprikaClient;
 }
 
-function makeMockCache(): DiskCache {
+function makeMockCache(): DiskCacheRoot {
   return {
-    diffRecipes: vi.fn().mockReturnValue({ added: [], changed: [], removed: [] }),
-    putRecipe: vi.fn(),
-    removeRecipe: vi.fn().mockResolvedValue(undefined),
-    putCategory: vi.fn(),
-    getAllPantryItems: vi.fn().mockResolvedValue([]),
-    putPantryItem: vi.fn(),
-    removePantryItem: vi.fn().mockResolvedValue(undefined),
+    recipes: {
+      diff: vi.fn().mockReturnValue({ added: [], changed: [], removed: [] }),
+      put: vi.fn(),
+      remove: vi.fn().mockResolvedValue(undefined),
+    },
+    categories: { put: vi.fn() },
+    pantry: {
+      getAll: vi.fn().mockResolvedValue([]),
+      put: vi.fn(),
+      remove: vi.fn().mockResolvedValue(undefined),
+    },
     flush: vi.fn().mockResolvedValue(undefined),
-  } as unknown as DiskCache;
+  } as unknown as DiskCacheRoot;
 }
 
 function makeMockPantryStore(): PantryStore {
@@ -281,17 +285,33 @@ describe("syncOnce", () => {
     } as unknown as PaprikaClient;
   }
 
-  function makeMockCacheDefault(): DiskCache {
+  // Cache mock overrides take a nested shape that mirrors DiskCacheRoot's
+  // composition API. Tests pass `{ recipes: { put: spy } }` and the factory
+  // shallow-merges each subcache with its defaults.
+  type CacheMockOverrides = {
+    recipes?: Partial<DiskCacheRoot["recipes"]>;
+    categories?: Partial<DiskCacheRoot["categories"]>;
+    pantry?: Partial<DiskCacheRoot["pantry"]>;
+    flush?: () => Promise<void>;
+  };
+
+  function makeMockCacheDefault(overrides?: CacheMockOverrides): DiskCacheRoot {
     return {
-      diffRecipes: vi.fn().mockReturnValue({ added: [], changed: [], removed: [] }),
-      putRecipe: vi.fn(),
-      removeRecipe: vi.fn().mockResolvedValue(undefined),
-      putCategory: vi.fn(),
-      getAllPantryItems: vi.fn().mockResolvedValue([]),
-      putPantryItem: vi.fn(),
-      removePantryItem: vi.fn().mockResolvedValue(undefined),
-      flush: vi.fn().mockResolvedValue(undefined),
-    } as unknown as DiskCache;
+      recipes: {
+        diff: vi.fn().mockReturnValue({ added: [], changed: [], removed: [] }),
+        put: vi.fn(),
+        remove: vi.fn().mockResolvedValue(undefined),
+        ...overrides?.recipes,
+      },
+      categories: { put: vi.fn(), ...overrides?.categories },
+      pantry: {
+        getAll: vi.fn().mockResolvedValue([]),
+        put: vi.fn(),
+        remove: vi.fn().mockResolvedValue(undefined),
+        ...overrides?.pantry,
+      },
+      flush: overrides?.flush ?? vi.fn().mockResolvedValue(undefined),
+    } as unknown as DiskCacheRoot;
   }
 
   function makeMockStoreDefault(): RecipeStore {
@@ -337,14 +357,14 @@ describe("syncOnce", () => {
 
   function makeSyncEngine(
     clientOverrides?: Partial<PaprikaClient>,
-    cacheOverrides?: Partial<DiskCache>,
+    cacheOverrides?: CacheMockOverrides,
     storeOverrides?: Partial<RecipeStore>,
     notifierOverrides?: Partial<Notifier>,
     pantryStoreOverrides?: Partial<PantryStore>,
   ): SyncEngine {
     const context: AppContext = {
       client: { ...makeMockClientDefault(), ...clientOverrides } as PaprikaClient,
-      cache: { ...makeMockCacheDefault(), ...cacheOverrides } as DiskCache,
+      cache: makeMockCacheDefault(cacheOverrides),
       store: { ...makeMockStoreDefault(), ...storeOverrides } as RecipeStore,
       pantryStore: { ...makeMockPantryStoreDefault(), ...pantryStoreOverrides } as PantryStore,
       vectorStore: null,
@@ -372,8 +392,10 @@ describe("syncOnce", () => {
         getRecipes: vi.fn().mockResolvedValue([recipe]),
       },
       {
-        diffRecipes: vi.fn().mockReturnValue({ added: ["recipe-1"], changed: [], removed: [] }),
-        putRecipe,
+        recipes: {
+          diff: vi.fn().mockReturnValue({ added: ["recipe-1"], changed: [], removed: [] }),
+          put: putRecipe,
+        },
       },
       {
         set,
@@ -381,7 +403,7 @@ describe("syncOnce", () => {
     );
     await engine.syncOnce();
 
-    expect(putRecipe).toHaveBeenCalledWith(recipe, recipe.hash);
+    expect(putRecipe).toHaveBeenCalledWith(recipe);
     expect(set).toHaveBeenCalledWith(recipe);
   });
 
@@ -398,8 +420,10 @@ describe("syncOnce", () => {
         getRecipes: vi.fn().mockResolvedValue([recipe]),
       },
       {
-        diffRecipes: vi.fn().mockReturnValue({ added: [], changed: ["recipe-1"], removed: [] }),
-        putRecipe,
+        recipes: {
+          diff: vi.fn().mockReturnValue({ added: [], changed: ["recipe-1"], removed: [] }),
+          put: putRecipe,
+        },
       },
       {
         set,
@@ -407,7 +431,7 @@ describe("syncOnce", () => {
     );
     await engine.syncOnce();
 
-    expect(putRecipe).toHaveBeenCalledWith(recipe, recipe.hash);
+    expect(putRecipe).toHaveBeenCalledWith(recipe);
     expect(set).toHaveBeenCalledWith(recipe);
   });
 
@@ -418,8 +442,10 @@ describe("syncOnce", () => {
     const engine = makeSyncEngine(
       undefined,
       {
-        diffRecipes: vi.fn().mockReturnValue({ added: [], changed: [], removed: ["recipe-1"] }),
-        removeRecipe,
+        recipes: {
+          diff: vi.fn().mockReturnValue({ added: [], changed: [], removed: ["recipe-1"] }),
+          remove: removeRecipe,
+        },
       },
       {
         delete: storeDelete,
@@ -448,12 +474,14 @@ describe("syncOnce", () => {
         getRecipes: vi.fn().mockResolvedValue([addedRecipe, changedRecipe]),
       },
       {
-        diffRecipes: vi.fn().mockReturnValue({
-          added: ["recipe-added"],
-          changed: ["recipe-changed"],
-          removed: [removedUid],
-        }),
-        removeRecipe,
+        recipes: {
+          diff: vi.fn().mockReturnValue({
+            added: ["recipe-added"],
+            changed: ["recipe-changed"],
+            removed: [removedUid],
+          }),
+          remove: removeRecipe,
+        },
       },
       {
         delete: storeDelete,
@@ -521,7 +549,7 @@ describe("syncOnce", () => {
     expect(setCategories).toHaveBeenCalledWith([category1, category2]);
   });
 
-  it("AC4.2: cache.putCategory called for each category", async () => {
+  it("AC4.2: cache.categories.put called for each category", async () => {
     const category1 = makeCategory();
     const category2 = makeCategory();
 
@@ -532,13 +560,13 @@ describe("syncOnce", () => {
         listCategories: vi.fn().mockResolvedValue([category1, category2]),
       },
       {
-        putCategory,
+        categories: { put: putCategory },
       },
     );
     await engine.syncOnce();
 
-    expect(putCategory).toHaveBeenCalledWith(category1, category1.uid);
-    expect(putCategory).toHaveBeenCalledWith(category2, category2.uid);
+    expect(putCategory).toHaveBeenCalledWith(category1);
+    expect(putCategory).toHaveBeenCalledWith(category2);
   });
 
   it("AC5.1: sync:complete subscriber calls resourceListChanged when recipe changes exist", async () => {
@@ -553,7 +581,7 @@ describe("syncOnce", () => {
         getRecipes: vi.fn().mockResolvedValue([recipe]),
       },
       {
-        diffRecipes: vi.fn().mockReturnValue({ added: ["recipe-1"], changed: [], removed: [] }),
+        recipes: { diff: vi.fn().mockReturnValue({ added: ["recipe-1"], changed: [], removed: [] }) },
       },
     );
     engine.events.on("sync:complete", (result) => {
@@ -745,7 +773,7 @@ describe("syncOnce", () => {
           listPantry: vi.fn().mockResolvedValue([item1, item2]),
         },
         {
-          putPantryItem,
+          pantry: { put: putPantryItem },
         },
       );
 
@@ -769,8 +797,10 @@ describe("syncOnce", () => {
           listPantry: vi.fn().mockResolvedValue([keeper, newItem]),
         },
         {
-          getAllPantryItems: vi.fn().mockResolvedValue([orphan1, orphan2, keeper]),
-          removePantryItem,
+          pantry: {
+            getAll: vi.fn().mockResolvedValue([orphan1, orphan2, keeper]),
+            remove: removePantryItem,
+          },
         },
       );
 
@@ -804,8 +834,8 @@ describe("syncOnce", () => {
           listPantry: vi.fn().mockResolvedValue([newItem]),
         },
         {
-          diffRecipes: vi.fn().mockReturnValue({ added: [], changed: [], removed: [] }),
-          getAllPantryItems: vi.fn().mockResolvedValue([]),
+          recipes: { diff: vi.fn().mockReturnValue({ added: [], changed: [], removed: [] }) },
+          pantry: { getAll: vi.fn().mockResolvedValue([]) },
         },
       );
       wireNotifier(engine1, resourceListChanged);
@@ -822,8 +852,8 @@ describe("syncOnce", () => {
           listPantry: vi.fn().mockResolvedValue([]),
         },
         {
-          diffRecipes: vi.fn().mockReturnValue({ added: [], changed: [], removed: [] }),
-          getAllPantryItems: vi.fn().mockResolvedValue([]),
+          recipes: { diff: vi.fn().mockReturnValue({ added: [], changed: [], removed: [] }) },
+          pantry: { getAll: vi.fn().mockResolvedValue([]) },
         },
       );
       wireNotifier(engine2, resourceListChanged2);
@@ -849,8 +879,8 @@ describe("syncOnce", () => {
           listPantry: vi.fn().mockResolvedValue([incomingItem]),
         },
         {
-          diffRecipes: vi.fn().mockReturnValue({ added: [], changed: [], removed: [] }),
-          getAllPantryItems: vi.fn().mockResolvedValue([cachedItem]),
+          recipes: { diff: vi.fn().mockReturnValue({ added: [], changed: [], removed: [] }) },
+          pantry: { getAll: vi.fn().mockResolvedValue([cachedItem]) },
         },
       );
       engine.events.on("sync:complete", (result) => {
@@ -873,8 +903,8 @@ describe("syncOnce", () => {
           listPantry: vi.fn().mockResolvedValue([newItem]),
         },
         {
-          diffRecipes: vi.fn().mockReturnValue({ added: [], changed: [], removed: [] }),
-          getAllPantryItems: vi.fn().mockResolvedValue([]),
+          recipes: { diff: vi.fn().mockReturnValue({ added: [], changed: [], removed: [] }) },
+          pantry: { getAll: vi.fn().mockResolvedValue([]) },
         },
       );
 
@@ -901,8 +931,8 @@ describe("syncOnce", () => {
           listPantry: vi.fn().mockResolvedValue([incomingItem]),
         },
         {
-          diffRecipes: vi.fn().mockReturnValue({ added: [], changed: [], removed: [] }),
-          getAllPantryItems: vi.fn().mockResolvedValue([cachedItem]),
+          recipes: { diff: vi.fn().mockReturnValue({ added: [], changed: [], removed: [] }) },
+          pantry: { getAll: vi.fn().mockResolvedValue([cachedItem]) },
         },
       );
 
@@ -927,8 +957,8 @@ describe("syncOnce", () => {
           listPantry: vi.fn().mockResolvedValue([]),
         },
         {
-          diffRecipes: vi.fn().mockReturnValue({ added: [], changed: [], removed: [] }),
-          getAllPantryItems: vi.fn().mockResolvedValue([orphanItem]),
+          recipes: { diff: vi.fn().mockReturnValue({ added: [], changed: [], removed: [] }) },
+          pantry: { getAll: vi.fn().mockResolvedValue([orphanItem]) },
         },
       );
 
@@ -951,8 +981,8 @@ describe("syncOnce", () => {
           listPantry: vi.fn().mockResolvedValue([]),
         },
         {
-          diffRecipes: vi.fn().mockReturnValue({ added: [], changed: [], removed: [] }),
-          getAllPantryItems: vi.fn().mockResolvedValue([]),
+          recipes: { diff: vi.fn().mockReturnValue({ added: [], changed: [], removed: [] }) },
+          pantry: { getAll: vi.fn().mockResolvedValue([]) },
         },
       );
 
@@ -981,15 +1011,19 @@ describe("syncOnce", () => {
           listPantry: vi.fn().mockResolvedValue([item]),
         } as unknown as PaprikaClient,
         cache: {
-          diffRecipes: vi.fn().mockReturnValue({ added: [], changed: [], removed: [] }),
-          putRecipe: vi.fn(),
-          removeRecipe: vi.fn().mockResolvedValue(undefined),
-          putCategory: vi.fn(),
-          getAllPantryItems: vi.fn().mockResolvedValue([]),
-          putPantryItem: vi.fn(),
-          removePantryItem: vi.fn().mockResolvedValue(undefined),
+          recipes: {
+            diff: vi.fn().mockReturnValue({ added: [], changed: [], removed: [] }),
+            put: vi.fn(),
+            remove: vi.fn().mockResolvedValue(undefined),
+          },
+          categories: { put: vi.fn() },
+          pantry: {
+            getAll: vi.fn().mockResolvedValue([]),
+            put: vi.fn(),
+            remove: vi.fn().mockResolvedValue(undefined),
+          },
           flush: vi.fn().mockResolvedValue(undefined),
-        } as unknown as DiskCache,
+        } as unknown as DiskCacheRoot,
         store: {
           set: vi.fn(),
           delete: vi.fn(),
@@ -1024,15 +1058,19 @@ describe("syncOnce", () => {
           listPantry: vi.fn().mockResolvedValue([]),
         } as unknown as PaprikaClient,
         cache: {
-          diffRecipes: vi.fn().mockReturnValue({ added: [], changed: [], removed: [] }),
-          putRecipe: vi.fn(),
-          removeRecipe: vi.fn().mockResolvedValue(undefined),
-          putCategory: vi.fn(),
-          getAllPantryItems: vi.fn().mockResolvedValue([]),
-          putPantryItem: vi.fn(),
-          removePantryItem: vi.fn().mockResolvedValue(undefined),
+          recipes: {
+            diff: vi.fn().mockReturnValue({ added: [], changed: [], removed: [] }),
+            put: vi.fn(),
+            remove: vi.fn().mockResolvedValue(undefined),
+          },
+          categories: { put: vi.fn() },
+          pantry: {
+            getAll: vi.fn().mockResolvedValue([]),
+            put: vi.fn(),
+            remove: vi.fn().mockResolvedValue(undefined),
+          },
           flush: vi.fn().mockResolvedValue(undefined),
-        } as unknown as DiskCache,
+        } as unknown as DiskCacheRoot,
         store: {
           set: vi.fn(),
           delete: vi.fn(),

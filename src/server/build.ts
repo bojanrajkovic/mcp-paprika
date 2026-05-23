@@ -1,6 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
-import { DiskCache } from "../cache/disk-cache.js";
+import { DiskCacheRoot } from "../cache/disk/index.js";
 import { PantryStore } from "../cache/pantry-store.js";
 import { RecipeStore } from "../cache/recipe-store.js";
 import { buildDiscoverComponents } from "../features/discover-feature.js";
@@ -80,7 +80,7 @@ export async function buildAppContext(
   log.info("authenticated with paprika");
 
   log.info("initializing disk cache");
-  const cache = new DiskCache(getCacheDir(), log.child({ component: "disk-cache" }));
+  const cache = new DiskCacheRoot(getCacheDir(), log.child({ component: "disk-cache" }));
   await cache.init();
 
   const auth = await buildAuthContext(config, cache, log);
@@ -100,7 +100,7 @@ export async function buildAppContext(
   // src/cache/CLAUDE.md "Pending-writes (issue #57)" and codex P2 on PR #92.
   const pendingWriteTtlMs = config.sync.enabled ? config.sync.pendingWriteTtl : 0;
   const store = new RecipeStore({ pendingWriteTtlMs });
-  const cachedRecipes = await cache.getAllRecipes();
+  const cachedRecipes = await cache.recipes.getAll();
   for (const recipe of cachedRecipes) {
     store.set(recipe);
   }
@@ -110,7 +110,7 @@ export async function buildAppContext(
   log.info({ count: cachedRecipes.length }, "hydrated recipe store from cache");
 
   const pantryStore = new PantryStore({ pendingWriteTtlMs });
-  const cachedPantryItems = await cache.getAllPantryItems();
+  const cachedPantryItems = await cache.pantry.getAll();
   if (cachedPantryItems.length > 0) {
     pantryStore.load(cachedPantryItems);
   }

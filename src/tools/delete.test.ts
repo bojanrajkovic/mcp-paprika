@@ -4,7 +4,7 @@ import { makeRecipe } from "../cache/__fixtures__/recipes.js";
 import { registerDeleteTool } from "./delete.js";
 import { makeTestServer, makeCtx, getText } from "./tool-test-utils.js";
 import type { PaprikaClient } from "../paprika/client.js";
-import type { DiskCache } from "../cache/disk-cache.js";
+import type { DiskCacheRoot } from "../cache/disk/index.js";
 
 describe("p2-recipe-crud: delete_recipe tool", () => {
   describe("p2-recipe-crud.AC4: delete_recipe soft-deletes by UID", () => {
@@ -24,7 +24,7 @@ describe("p2-recipe-crud: delete_recipe tool", () => {
       const { server, callTool } = makeTestServer();
       const ctx = makeCtx(store, server, {
         client: { saveRecipe: mockSaveRecipe, notifySync: mockNotifySync } as unknown as PaprikaClient,
-        cache: { putRecipe: mockPutRecipe, flush: mockFlush } as unknown as DiskCache,
+        cache: { recipes: { put: mockPutRecipe }, flush: mockFlush } as unknown as DiskCacheRoot,
       });
       registerDeleteTool(server, ctx);
 
@@ -52,7 +52,7 @@ describe("p2-recipe-crud: delete_recipe tool", () => {
       const { server, callTool } = makeTestServer();
       const ctx = makeCtx(store, server, {
         client: { saveRecipe: mockSaveRecipe, notifySync: mockNotifySync } as unknown as PaprikaClient,
-        cache: { putRecipe: mockPutRecipe, flush: mockFlush } as unknown as DiskCache,
+        cache: { recipes: { put: mockPutRecipe }, flush: mockFlush } as unknown as DiskCacheRoot,
       });
       registerDeleteTool(server, ctx);
 
@@ -78,13 +78,13 @@ describe("p2-recipe-crud: delete_recipe tool", () => {
       const { server, callTool } = makeTestServer();
       const ctx = makeCtx(store, server, {
         client: { saveRecipe: mockSaveRecipe, notifySync: mockNotifySync } as unknown as PaprikaClient,
-        cache: { putRecipe: mockPutRecipe, flush: mockFlush } as unknown as DiskCache,
+        cache: { recipes: { put: mockPutRecipe }, flush: mockFlush } as unknown as DiskCacheRoot,
       });
       registerDeleteTool(server, ctx);
 
       await callTool("delete_recipe", { uid: recipe.uid });
 
-      expect(mockPutRecipe).toHaveBeenCalledWith(trashed, trashed.hash);
+      expect(mockPutRecipe).toHaveBeenCalledWith(trashed);
       expect(mockFlush).toHaveBeenCalledOnce();
       expect(store.get(recipe.uid)?.inTrash).toBe(true);
     });
@@ -102,7 +102,7 @@ describe("p2-recipe-crud: delete_recipe tool", () => {
       const { server, callTool } = makeTestServer();
       const ctx = makeCtx(store, server, {
         client: { saveRecipe: mockSaveRecipe, notifySync: mockNotifySync } as unknown as PaprikaClient,
-        cache: { putRecipe: mockPutRecipe, flush: mockFlush } as unknown as DiskCache,
+        cache: { recipes: { put: mockPutRecipe }, flush: mockFlush } as unknown as DiskCacheRoot,
       });
       registerDeleteTool(server, ctx);
 
@@ -128,7 +128,7 @@ describe("p2-recipe-crud: delete_recipe tool", () => {
       const { server, callTool } = makeTestServer();
       const ctx = makeCtx(store, server, {
         client: { saveRecipe: mockSaveRecipe, notifySync: mockNotifySync } as unknown as PaprikaClient,
-        cache: { putRecipe: mockPutRecipe, flush: mockFlush } as unknown as DiskCache,
+        cache: { recipes: { put: mockPutRecipe }, flush: mockFlush } as unknown as DiskCacheRoot,
       });
       registerDeleteTool(server, ctx);
 
@@ -154,7 +154,7 @@ describe("p2-recipe-crud: delete_recipe tool", () => {
       const { server, callTool } = makeTestServer();
       const ctx = makeCtx(store, server, {
         client: { saveRecipe: mockSaveRecipe, notifySync: mockNotifySync } as unknown as PaprikaClient,
-        cache: { putRecipe: mockPutRecipe, flush: mockFlush } as unknown as DiskCache,
+        cache: { recipes: { put: mockPutRecipe }, flush: mockFlush } as unknown as DiskCacheRoot,
       });
       registerDeleteTool(server, ctx);
 
@@ -177,7 +177,7 @@ describe("p2-recipe-crud: delete_recipe tool", () => {
       const { server, callTool } = makeTestServer();
       const ctx = makeCtx(store, server, {
         client: { saveRecipe: mockSaveRecipe, notifySync: mockNotifySync } as unknown as PaprikaClient,
-        cache: { putRecipe: mockPutRecipe, flush: mockFlush } as unknown as DiskCache,
+        cache: { recipes: { put: mockPutRecipe }, flush: mockFlush } as unknown as DiskCacheRoot,
       });
       registerDeleteTool(server, ctx);
 

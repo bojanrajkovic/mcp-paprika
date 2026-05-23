@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import { makeRecipe, makeCategory } from "../cache/__fixtures__/recipes.js";
 import { coldStartGuard, textResult, recipeToMarkdown, commitRecipe, resolveCategoryNames } from "./helpers.js";
 import type { ServerContext } from "../types/server-context.js";
-import type { DiskCache } from "../cache/disk-cache.js";
+import type { DiskCacheRoot } from "../cache/disk/index.js";
 import type { PaprikaClient } from "../paprika/client.js";
 import { SILENT_LOG } from "../utils/log.js";
 
@@ -319,7 +319,7 @@ describe("p2-u02-shared-helpers: shared helper functions", () => {
       const mockResourceListChanged = vi.fn();
 
       const ctx = {
-        cache: { putRecipe: mockPutRecipe, flush: mockFlush } as unknown as DiskCache,
+        cache: { recipes: { put: mockPutRecipe }, flush: mockFlush } as unknown as DiskCacheRoot,
         client: { notifySync: mockNotifySync } as unknown as PaprikaClient,
         store: {
           set: mockStoreSet,
@@ -367,7 +367,7 @@ describe("p2-u02-shared-helpers: shared helper functions", () => {
       });
 
       const ctx = {
-        cache: { putRecipe: mockPutRecipe, flush: mockFlush } as unknown as DiskCache,
+        cache: { recipes: { put: mockPutRecipe }, flush: mockFlush } as unknown as DiskCacheRoot,
         client: { notifySync: mockNotifySync } as unknown as PaprikaClient,
         store: {
           set: mockStoreSet,
@@ -399,7 +399,7 @@ describe("p2-u02-shared-helpers: shared helper functions", () => {
       const mockResourceListChanged = vi.fn();
 
       const ctx = {
-        cache: { putRecipe: mockPutRecipe, flush: mockFlush } as unknown as DiskCache,
+        cache: { recipes: { put: mockPutRecipe }, flush: mockFlush } as unknown as DiskCacheRoot,
         client: { notifySync: mockNotifySync } as unknown as PaprikaClient,
         store: {
           set: mockStoreSet,
@@ -433,7 +433,7 @@ describe("p2-u02-shared-helpers: shared helper functions", () => {
       const mockResourceListChanged = vi.fn();
 
       const ctx = {
-        cache: { putRecipe: mockPutRecipe, flush: mockFlush } as unknown as DiskCache,
+        cache: { recipes: { put: mockPutRecipe }, flush: mockFlush } as unknown as DiskCacheRoot,
         client: { notifySync: mockNotifySync } as unknown as PaprikaClient,
         store: {
           set: mockStoreSet,

@@ -17,7 +17,7 @@ import { generateOpaqueToken, hashTokenForStorage, nowSeconds } from "./tokens.j
 import { validateRegistration, validateUpdate } from "./dcr-validator.js";
 import { OAuthClientNotFoundError } from "./errors.js";
 import type { OAuthClient } from "./types.js";
-import { DiskCache } from "../cache/disk-cache.js";
+import type { DiskCacheRoot } from "../cache/disk/index.js";
 
 // ============================================================================
 // Wire Format Conversion
@@ -75,7 +75,7 @@ function storedToWire(
 
 export class DiskClientRegistrationStore {
   constructor(
-    private readonly _cache: DiskCache,
+    private readonly _cache: DiskCacheRoot,
     private readonly _publicUrl: string,
     private readonly log: Logger,
     /**
@@ -94,7 +94,7 @@ export class DiskClientRegistrationStore {
    * Returns undefined if not found.
    */
   async getClient(clientId: string): Promise<OAuthClientInformationFull | undefined> {
-    const client = await this._cache.getOAuthClient(clientId);
+    const client = await this._cache.oauthClients.get(clientId);
     if (client === null) return undefined;
     return storedToWire(client);
   }
@@ -138,7 +138,7 @@ export class DiskClientRegistrationStore {
     // the authoritative race-safe enforcement. On overflow we throw an OAuth
     // `InvalidRequestError` so @hono/mcp's DCR handler returns 400 with the
     // standard `invalid_request` error code (rather than a 500).
-    const result = await this._cache.tryPutOAuthClient(stored, this._maxClients);
+    const result = await this._cache.oauthClients.tryPut(stored, this._maxClients);
     if (!result.ok) {
       throw new InvalidRequestError(`client registration cap reached (${result.currentCount.toString()} clients)`);
     }
@@ -162,7 +162,7 @@ export class DiskClientRegistrationStore {
    * Throws OAuthMetadataValidationError on invalid metadata.
    */
   async updateClient(clientId: string, metaIn: unknown): Promise<OAuthClientInformationFull> {
-    const existing = await this._cache.getOAuthClient(clientId);
+    const existing = await this._cache.oauthClients.get(clientId);
     if (existing === null) throw OAuthClientNotFoundError.forId(clientId);
 
     // Validate patch via dcr-validator; pass logger for URL-parse debug diagnosability
@@ -187,7 +187,7 @@ export class DiskClientRegistrationStore {
       updatedAt: now,
     };
 
-    await this._cache.putOAuthClient(updated);
+    await this._cache.oauthClients.put(updated);
     await this._cache.flush();
 
     return storedToWire(updated, {
@@ -200,7 +200,7 @@ export class DiskClientRegistrationStore {
    * Removes from cache and disk. No cascade — the DELETE /register/:id route composes with TokenStore.removeAllForClient.
    */
   async deleteClient(clientId: string): Promise<void> {
-    await this._cache.removeOAuthClient(clientId);
+    await this._cache.oauthClients.remove(clientId);
     await this._cache.flush();
   }
 
@@ -209,7 +209,7 @@ export class DiskClientRegistrationStore {
    * Returns true if the hashes match, false otherwise (including client not found).
    */
   async verifyRegistrationAccessToken(clientId: string, presentedToken: string): Promise<boolean> {
-    const client = await this._cache.getOAuthClient(clientId);
+    const client = await this._cache.oauthClients.get(clientId);
     if (client === null) return false;
 
     const presentedHash = hashTokenForStorage(presentedToken);

@@ -10,7 +10,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 
-import { DiskCache } from "../cache/disk-cache.js";
+import { DiskCacheRoot } from "../cache/disk/index.js";
 import { hashTokenForStorage } from "./tokens.js";
 import { OAuthMetadataValidationError, OAuthClientNotFoundError } from "./errors.js";
 import { DiskClientRegistrationStore } from "./client-registration.js";
@@ -40,12 +40,12 @@ function makeWireRegistration(): Record<string, unknown> {
 
 describe("DiskClientRegistrationStore", () => {
   let tempDir: string;
-  let cache: DiskCache;
+  let cache: DiskCacheRoot;
   let store: DiskClientRegistrationStore;
 
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), "paprika-client-reg-"));
-    cache = new DiskCache(tempDir);
+    cache = new DiskCacheRoot(tempDir);
     await cache.init();
     store = new DiskClientRegistrationStore(cache, "https://m.example.com", SILENT_LOG);
   });
@@ -114,7 +114,7 @@ describe("DiskClientRegistrationStore", () => {
       const capped = new DiskClientRegistrationStore(cache, "https://m.example.com", SILENT_LOG, 50);
 
       for (let i = 0; i < 49; i++) {
-        await cache.putOAuthClient({
+        await cache.oauthClients.put({
           clientId: randomUUID(),
           clientIdIssuedAt: 0,
           registrationAccessTokenHash: "a".repeat(64),
@@ -152,7 +152,7 @@ describe("DiskClientRegistrationStore", () => {
       }
 
       // The disk index must show exactly 50 clients, not 51-54.
-      const all = await cache.getAllOAuthClients();
+      const all = await cache.oauthClients.getAll();
       expect(all.length).toBe(50);
     });
   });
@@ -187,7 +187,7 @@ describe("DiskClientRegistrationStore", () => {
       const original = await store.registerClient(metaIn);
 
       // Simulate restart: create fresh DiskCache instance pointing to same tempDir
-      const cache2 = new DiskCache(tempDir);
+      const cache2 = new DiskCacheRoot(tempDir);
       await cache2.init();
       const store2 = new DiskClientRegistrationStore(cache2, "https://m.example.com", SILENT_LOG);
 
@@ -199,7 +199,7 @@ describe("DiskClientRegistrationStore", () => {
       expect(retrieved!.client_id_issued_at).toBe(original.client_id_issued_at);
 
       // Verify hash was persisted (by checking that the plaintext RAT hashes to the stored hash)
-      const storedClient = await cache2.getOAuthClient(original.client_id);
+      const storedClient = await cache2.oauthClients.get(original.client_id);
       expect(storedClient).not.toBeNull();
       const hashOfOriginalRat = hashTokenForStorage(original.registration_access_token!);
       expect(storedClient!.registrationAccessTokenHash).toBe(hashOfOriginalRat);
@@ -229,7 +229,7 @@ describe("DiskClientRegistrationStore", () => {
       expect("registration_access_token" in updated).toBe(false);
 
       // Verify that the stored RAT hash is preserved (plaintext from original still hashes correctly)
-      const storedClient = await cache.getOAuthClient(registered.client_id);
+      const storedClient = await cache.oauthClients.get(registered.client_id);
       expect(storedClient).not.toBeNull();
       const hashOfOriginalRat = hashTokenForStorage(registered.registration_access_token!);
       expect(storedClient!.registrationAccessTokenHash).toBe(hashOfOriginalRat);
@@ -292,7 +292,7 @@ describe("DiskClientRegistrationStore", () => {
       expect(retrieved).toBeUndefined();
 
       // Verify it's gone after restart (persisted)
-      const cache2 = new DiskCache(tempDir);
+      const cache2 = new DiskCacheRoot(tempDir);
       await cache2.init();
       const store2 = new DiskClientRegistrationStore(cache2, "https://m.example.com", SILENT_LOG);
       retrieved = await store2.getClient(registered.client_id);

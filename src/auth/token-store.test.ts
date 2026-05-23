@@ -21,8 +21,8 @@ import { SILENT_LOG } from "../utils/log.js";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { DiskCache } from "../cache/disk-cache.js";
-import { DiskCache as DiskCacheImpl } from "../cache/disk-cache.js";
+import type { DiskCacheRoot as DiskCache } from "../cache/disk/index.js";
+import { DiskCacheRoot as DiskCacheImpl } from "../cache/disk/index.js";
 import type { DiskClientRegistrationStore } from "./client-registration.js";
 import { DiskClientRegistrationStore as DiskClientRegistrationStoreImpl } from "./client-registration.js";
 import { TokenStore } from "./token-store.js";
@@ -94,8 +94,8 @@ describe("TokenStore", () => {
       const accessHash = hashTokenForStorage(pair1.access.plaintext);
       const refreshHash = hashTokenForStorage(pair1.refresh.plaintext);
 
-      const stored1 = await cache.getOAuthToken(accessHash);
-      const stored2 = await cache.getOAuthToken(refreshHash);
+      const stored1 = await cache.oauthTokens.get(accessHash);
+      const stored2 = await cache.oauthTokens.get(refreshHash);
 
       expect(stored1).not.toBeNull();
       expect(stored2).not.toBeNull();
@@ -320,7 +320,7 @@ describe("TokenStore", () => {
         () => null,
       )!;
       const r2Hash = hashTokenForStorage(r2Plaintext);
-      const r2Record = await cache.getOAuthToken(r2Hash);
+      const r2Record = await cache.oauthTokens.get(r2Hash);
 
       expect(r2Record?.rotatedFromHash).toBe(hashTokenForStorage(r1.plaintext));
     });
@@ -485,7 +485,7 @@ describe("TokenStore", () => {
         store.removeAllForClient(input.clientId),
       ]);
 
-      const remaining = (await cache.getAllOAuthTokens()).filter((t) => t.clientId === input.clientId);
+      const remaining = (await cache.oauthTokens.getAll()).filter((t) => t.clientId === input.clientId);
       expect(remaining).toEqual([]);
     });
   });

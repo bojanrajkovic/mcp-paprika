@@ -14,7 +14,7 @@ import { DiskClientRegistrationStore } from "./client-registration.js";
 import { TokenStore } from "./token-store.js";
 import { AuthRequestStore } from "./auth-request-store.js";
 import { AuthCodeStore } from "./auth-code-store.js";
-import { DiskCache } from "../cache/disk-cache.js";
+import { DiskCacheRoot } from "../cache/disk/index.js";
 import { makeDefaultOidcStub, makeDiscoveryDoc } from "./__fixtures__/oidc-stub.js";
 import { OAuthClientNotFoundError } from "./errors.js";
 import { makeVerifiedIdentity } from "./__fixtures__/oauth-state.js";
@@ -73,7 +73,7 @@ function makeRoutesConfig(ctx: RoutesCtx, overrides: RoutesOverrides = {}): Auth
 const oidcStub = makeDefaultOidcStub();
 
 describe("Auth Routes", () => {
-  let cache: DiskCache;
+  let cache: DiskCacheRoot;
   let app: Hono;
   let authRequests: AuthRequestStore;
   let authCodes: AuthCodeStore;
@@ -86,7 +86,7 @@ describe("Auth Routes", () => {
 
   beforeEach(async () => {
     const cacheDir = `/tmp/test-routes-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    cache = new DiskCache(cacheDir);
+    cache = new DiskCacheRoot(cacheDir);
     await cache.init();
 
     clientStore = new DiskClientRegistrationStore(cache, "https://mcp.example.com", SILENT_LOG);
@@ -727,7 +727,7 @@ describe("Auth Routes", () => {
       // PLAN says (phase_06.md:723): The `buildClientCap(cache, max)` middleware prevents DCR registration
       // when the server has reached the max registered clients.
       // Test: Pre-populate cache with 50 clients, then 51st POST /register returns 429 with cap error_description.
-      const testCache = new DiskCache(`/tmp/test-cap-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+      const testCache = new DiskCacheRoot(`/tmp/test-cap-${Date.now()}-${Math.random().toString(36).slice(2)}`);
       await testCache.init();
 
       const testClientStore = new DiskClientRegistrationStore(testCache, "https://mcp.example.com", SILENT_LOG);
