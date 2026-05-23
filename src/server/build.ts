@@ -104,6 +104,9 @@ export async function buildAppContext(
   for (const recipe of cachedRecipes) {
     store.set(recipe);
   }
+  if (cachedRecipes.length > 0) {
+    store.markSynced();
+  }
   log.info({ count: cachedRecipes.length }, "hydrated recipe store from cache");
 
   const pantryStore = new PantryStore({ pendingWriteTtlMs });

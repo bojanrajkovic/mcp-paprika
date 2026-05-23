@@ -193,6 +193,110 @@ describe("p2-recipe-crud: update_recipe tool", () => {
       expect(mockSaveRecipe).not.toHaveBeenCalled();
     });
 
+    it("p2-recipe-crud.AC3.8: rating provided — saveRecipe called with that rating", async () => {
+      const recipe = makeRecipe({ rating: 0 });
+      const store = new RecipeStore();
+      store.load([recipe], []);
+
+      const mockSaveRecipe = vi.fn();
+      const mockNotifySync = vi.fn().mockResolvedValue(undefined);
+      const mockPutRecipe = vi.fn();
+      const mockFlush = vi.fn().mockResolvedValue(undefined);
+
+      const updated = makeRecipe({ rating: 3 });
+      mockSaveRecipe.mockResolvedValue(updated);
+
+      const { server, callTool } = makeTestServer();
+      const ctx = makeCtx(store, server, {
+        client: { saveRecipe: mockSaveRecipe, notifySync: mockNotifySync } as unknown as PaprikaClient,
+        cache: { putRecipe: mockPutRecipe, flush: mockFlush } as unknown as DiskCache,
+      });
+      registerUpdateTool(server, ctx);
+
+      await callTool("update_recipe", { uid: recipe.uid, rating: 3 });
+
+      const callArgs = mockSaveRecipe.mock.calls[0]?.[0];
+      expect(callArgs?.rating).toBe(3);
+    });
+
+    it("p2-recipe-crud.AC3.9: notes provided — saveRecipe called with that value", async () => {
+      const recipe = makeRecipe({ notes: null });
+      const store = new RecipeStore();
+      store.load([recipe], []);
+
+      const mockSaveRecipe = vi.fn();
+      const mockNotifySync = vi.fn().mockResolvedValue(undefined);
+      const mockPutRecipe = vi.fn();
+      const mockFlush = vi.fn().mockResolvedValue(undefined);
+
+      const updated = makeRecipe({ notes: "test note" });
+      mockSaveRecipe.mockResolvedValue(updated);
+
+      const { server, callTool } = makeTestServer();
+      const ctx = makeCtx(store, server, {
+        client: { saveRecipe: mockSaveRecipe, notifySync: mockNotifySync } as unknown as PaprikaClient,
+        cache: { putRecipe: mockPutRecipe, flush: mockFlush } as unknown as DiskCache,
+      });
+      registerUpdateTool(server, ctx);
+
+      await callTool("update_recipe", { uid: recipe.uid, notes: "test note" });
+
+      const callArgs = mockSaveRecipe.mock.calls[0]?.[0];
+      expect(callArgs?.notes).toBe("test note");
+    });
+
+    it("p2-recipe-crud.AC3.10: inTrash: true — saveRecipe called with inTrash: true", async () => {
+      const recipe = makeRecipe({ inTrash: false });
+      const store = new RecipeStore();
+      store.load([recipe], []);
+
+      const mockSaveRecipe = vi.fn();
+      const mockNotifySync = vi.fn().mockResolvedValue(undefined);
+      const mockPutRecipe = vi.fn();
+      const mockFlush = vi.fn().mockResolvedValue(undefined);
+
+      const updated = makeRecipe({ inTrash: true });
+      mockSaveRecipe.mockResolvedValue(updated);
+
+      const { server, callTool } = makeTestServer();
+      const ctx = makeCtx(store, server, {
+        client: { saveRecipe: mockSaveRecipe, notifySync: mockNotifySync } as unknown as PaprikaClient,
+        cache: { putRecipe: mockPutRecipe, flush: mockFlush } as unknown as DiskCache,
+      });
+      registerUpdateTool(server, ctx);
+
+      await callTool("update_recipe", { uid: recipe.uid, inTrash: true });
+
+      const callArgs = mockSaveRecipe.mock.calls[0]?.[0];
+      expect(callArgs?.inTrash).toBe(true);
+    });
+
+    it("p2-recipe-crud.AC3.11: inTrash: false — saveRecipe called with inTrash: false (restore)", async () => {
+      const recipe = makeRecipe({ inTrash: true });
+      const store = new RecipeStore();
+      store.load([recipe], []);
+
+      const mockSaveRecipe = vi.fn();
+      const mockNotifySync = vi.fn().mockResolvedValue(undefined);
+      const mockPutRecipe = vi.fn();
+      const mockFlush = vi.fn().mockResolvedValue(undefined);
+
+      const updated = makeRecipe({ inTrash: false });
+      mockSaveRecipe.mockResolvedValue(updated);
+
+      const { server, callTool } = makeTestServer();
+      const ctx = makeCtx(store, server, {
+        client: { saveRecipe: mockSaveRecipe, notifySync: mockNotifySync } as unknown as PaprikaClient,
+        cache: { putRecipe: mockPutRecipe, flush: mockFlush } as unknown as DiskCache,
+      });
+      registerUpdateTool(server, ctx);
+
+      await callTool("update_recipe", { uid: recipe.uid, inTrash: false });
+
+      const callArgs = mockSaveRecipe.mock.calls[0]?.[0];
+      expect(callArgs?.inTrash).toBe(false);
+    });
+
     it("p2-recipe-crud.AC3.X (edge case): empty categories array replaces with empty list", async () => {
       const catA = makeCategory({ name: "Category A" });
       const recipe = makeRecipe({ categories: [catA.uid] });
