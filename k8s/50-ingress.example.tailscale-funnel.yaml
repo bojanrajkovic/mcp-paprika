@@ -1,0 +1,28 @@
+# Example: Tailscale Funnel ingress for public internet exposure.
+# Not included in kustomization.yaml — ingress setup is environment-specific.
+# Copy this file and adapt it (or write your own) for your ingress controller.
+#
+# The ingress class is `tailscale`; the `tailscale.com/funnel: "true"`
+# annotation flips the Tailscale operator from tailnet-only to Funnel mode
+# (publicly reachable). `tls.hosts[0]` is the funnel name segment — Tailscale
+# prefixes it with your tailnet name to produce the final public hostname.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: mcp-paprika-funnel
+  namespace: mcp-paprika
+  labels:
+    app.kubernetes.io/name: mcp-paprika
+    app.kubernetes.io/instance: mcp-paprika
+  annotations:
+    tailscale.com/funnel: "true"
+spec:
+  ingressClassName: tailscale
+  tls:
+    - hosts:
+        - <tailscale-funnel-hostname>
+  defaultBackend:
+    service:
+      name: mcp-paprika
+      port:
+        number: 80

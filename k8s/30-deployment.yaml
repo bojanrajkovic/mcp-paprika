@@ -1,0 +1,105 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mcp-paprika
+  namespace: mcp-paprika
+  labels:
+    app.kubernetes.io/name: mcp-paprika
+    app.kubernetes.io/instance: mcp-paprika
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: mcp-paprika
+      app.kubernetes.io/instance: mcp-paprika
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: mcp-paprika
+        app.kubernetes.io/instance: mcp-paprika
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: mcp-paprika
+          # Bump tag on each push; see README § "Update the image".
+          image: ghcr.io/bojanrajkovic/mcp-paprika:<tag>
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 3000
+          env:
+            - name: MCP_TRANSPORT
+              value: http
+            - name: MCP_HTTP_PORT
+              value: "3000"
+            - name: MCP_HTTP_HOST
+              value: 0.0.0.0
+            # OAuth deployment fields. Set MCP_PUBLIC_URL to the publicly
+            # reachable URL for this deployment. Upstream IdP is Google via
+            # the `google` preset; client credentials + allowlist live in
+            # the mcp-paprika Secret.
+            - name: MCP_PUBLIC_URL
+              value: https://<public-host>
+            # google preset works for Google accounts. Tenant-bound presets
+            # (entra, okta, auth0, keycloak) also require MCP_OIDC_DISCOVERY_URL
+            # in the Secret — omitting it causes the server to exit at startup.
+            # Alternatively, drop this var and set MCP_OIDC_DISCOVERY_URL only.
+            # See docs/configuration.md for the full OAuth reference.
+            - name: MCP_OIDC_PRESET
+              value: google
+            # Leave false unless a trusted reverse proxy (nginx, Tailscale
+            # Funnel, Cloudflare) sanitizes X-Forwarded-For before this pod.
+            # Setting true without a sanitizing proxy lets clients spoof IPs
+            # and bypass DCR rate limiting. See docs/configuration.md § "Trust proxy".
+            - name: MCP_TRUST_PROXY
+              value: "false"
+          envFrom:
+            - secretRef:
+                name: mcp-paprika
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 5
+            failureThreshold: 60
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 30
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              memory: 1Gi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: mcp-paprika-data
+          # No storage class? Replace the above with:
+          # emptyDir: {}
+          # Cache rebuilds on restart; OAuth state is lost on pod delete.
+      terminationGracePeriodSeconds: 30
