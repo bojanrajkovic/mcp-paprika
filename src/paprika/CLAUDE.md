@@ -1,6 +1,6 @@
 # Paprika API Client
 
-Last verified: 2026-05-22
+Last verified: 2026-05-23
 
 ## Files
 
@@ -39,7 +39,12 @@ HTTP client for the Paprika Cloud Sync API. Handles authentication, request form
 **Domain Types:**
 
 - `RecipeInput` — Recipe creation/update input (requires `name`, `ingredients`, `directions`; excludes `uid`, `hash`, `created`)
-- `SyncResult` — `{added: Recipe[], updated: Recipe[], removedUids: string[]}`
+- `EntityChanges<T>` — `{added: ReadonlyArray<T>, updated: ReadonlyArray<T>, removedUids: ReadonlyArray<string>}` — change set for one entity type
+- `SyncEntityType` — `"recipes" | "pantry"` — closed union of entity types sync can produce; adding a new type requires explicit extension
+- `SyncResult<K extends SyncEntityType, T extends object>` — generic discriminated-union variant: `{changeType: K, changes: EntityChanges<T>}`
+- `RecipeSyncResult` — `SyncResult<"recipes", Recipe>` — concrete recipe variant
+- `PantrySyncResult` — `SyncResult<"pantry", PantryItem>` — concrete pantry variant
+- `AnySyncResult` — `RecipeSyncResult | PantrySyncResult` — union used as the `sync:complete` event payload
 - `DiffResult` — `{added: string[], changed: string[], removed: string[]}`
 
 ### Zod Schemas
@@ -154,15 +159,15 @@ Background polling loop that keeps local cache and in-memory store synchronized 
 
 **Construction:**
 
-- `new SyncEngine(context: AppContext, intervalMs: number)` — creates a new engine with the specified polling interval; does not start automatically. Takes `AppContext` (process-wide) rather than `SessionContext`/`ServerContext` because the sync loop is process-wide and must not be tied to a single MCP session. Stores `this.log = context.log.child({ component: "sync" })` for all sync events. Notifications go through `context.notifier` so the same loop works for stdio (single server) and HTTP (broadcast across all live sessions).
+- `new SyncEngine(context: AppContext, intervalMs: number)` — creates a new engine with the specified polling interval; does not start automatically. Takes `AppContext` (process-wide) rather than `SessionContext`/`ServerContext` because the sync loop is process-wide and must not be tied to a single MCP session. Stores `this.log = context.log.child({ component: "sync" })` for all sync events. The engine does **not** call `context.notifier` directly — resource-list notification is the responsibility of a `sync:complete` subscriber wired in `buildAppContext`.
 
 **Public API:**
 
 - `start(): void` — begins async polling loop at `intervalMs` interval; no-op if already running
 - `stop(): void` — aborts loop via AbortController; no-op if not running
-- `syncOnce(): Promise<void>` — runs one full sync cycle (recipe diff-and-fetch, category replace-all, cache flush, MCP notification, logging); never throws
+- `syncOnce(): Promise<void>` — runs one full sync cycle (recipe diff-and-fetch, category replace-all, pantry replace-all, cache flush, logging); never throws; does **not** call the notifier directly
 - `events` getter — returns `Pick<SyncEventEmitter, "on" | "off">` for subscribing to events:
-  - `sync:complete` event fires with `SyncResult` payload (recipes added, updated, and removed UIDs) on successful cycle
+  - `sync:complete` event fires **twice per cycle** — once with a `RecipeSyncResult` (`changeType: "recipes"`), once with a `PantrySyncResult` (`changeType: "pantry"`). Subscribers narrow by `result.changeType`.
   - `sync:error` event fires with `Error` on cycle failure
 
 **Algorithm (syncOnce):**
@@ -199,8 +204,7 @@ Background polling loop that keeps local cache and in-memory store synchronized 
 4. **Finalization:**
    - Flushes cache once: `await cache.flush()`
    - **Sweeps expired pending-writes:** `store.sweepPending()` and `pantryStore.sweepPending()` — TTL fallback for pending-deletes (and a defense for upserts where the canonical observation never arrives).
-   - Sends MCP resource notification if recipe OR pantry changes exist: `context.notifier.resourceListChanged()` (called if any added/changed/removed/orphaned detected)
-   - Emits `sync:complete` with `SyncResult` (always emitted, even for no-change cycles)
+   - Emits **two** `sync:complete` events per cycle: first a `RecipeSyncResult` (`changeType: "recipes"`), then a `PantrySyncResult` (`changeType: "pantry"`). Both are emitted even for no-change cycles (empty `changes` arrays). The engine does **not** call the notifier — a subscriber in `buildAppContext` does.
    - Logs success: `this.log.info({added, updated, removed}, "sync complete")` — record fans out to connected MCP clients only when `notifyLevel` is `"info"` or lower (default `"warn"` suppresses it; see behavior note below)
 
 5. **Error handling (all wrapped in try/catch):**
@@ -214,7 +218,7 @@ Background polling loop that keeps local cache and in-memory store synchronized 
 - `syncOnce()` never throws — errors are caught, logged, and emitted as events
 - `start()` when already running is a no-op (no duplicate loops via `_ac` check)
 - `stop()` when not running is a no-op (no-op if `_ac` is null)
-- Recipe or pantry changes trigger `notifier.resourceListChanged()`; no-change cycles do not. Recipe changes are detected via `diffRecipes` filtered by pending-writes (hash-based: `filteredAdded`, `filteredChanged`, `filteredRemoved`); pantry changes are detected via Set difference between `effectivePantry` and cached items plus `pantryItemsEqual()` for same-UID content edits
+- `syncOnce()` does **not** call `notifier.resourceListChanged()` — a `sync:complete` subscriber in `buildAppContext` drives notifications. Recipe changes are detectable via `RecipeSyncResult.changes` (filtered by pending-writes, hash-based: `filteredAdded`, `filteredChanged`, `filteredRemoved`); pantry changes are detectable via `PantrySyncResult.changes` (Set difference + `pantryItemsEqual()` for same-UID content edits)
 - Cache is flushed exactly once per cycle (single `await cache.flush()` after all mutations)
 - Removed recipes are deleted concurrently via `Promise.all()` for efficiency
 - Orphaned pantry items are deleted concurrently via `Promise.all()` for efficiency
@@ -224,7 +228,7 @@ Background polling loop that keeps local cache and in-memory store synchronized 
 
 **Dependencies:**
 
-- **Uses:** `AppContext` (client, cache, store, pantryStore, notifier — `server` is intentionally absent), `mitt` (event emitter), `node:timers/promises` (scheduler.wait), `./types.js` (Recipe, RecipeUid, SyncResult, DiffResult)
+- **Uses:** `AppContext` (client, cache, store, pantryStore, notifier — `server` is intentionally absent; notifier is used via subscriber pattern only), `mitt` (event emitter), `node:timers/promises` (scheduler.wait), `./types.js` (Recipe, RecipeUid, AnySyncResult, RecipeSyncResult, PantrySyncResult, DiffResult)
 - **Used by:** `src/server/build.ts` (`buildAppContext` constructs SyncEngine), `src/features/discover-feature.ts` (subscribes to `sync.events` for incremental re-indexing)
 - **Boundary:** Must not import from `tools/`, `resources/`, or `features/`
 

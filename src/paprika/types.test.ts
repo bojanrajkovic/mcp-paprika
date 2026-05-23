@@ -20,7 +20,9 @@ import {
   type PantryItem,
   type AuthResponse,
   type RecipeInput,
-  type SyncResult,
+  type RecipeSyncResult,
+  type PantrySyncResult,
+  type AnySyncResult,
   type DiffResult,
 } from "./types.js";
 
@@ -525,30 +527,42 @@ describe("Domain Types", () => {
   });
 
   describe("paprika-types.AC3.3: SyncResult structure", () => {
-    it("should allow empty SyncResult", () => {
-      const emptySyncResult: SyncResult = {
-        added: [],
-        updated: [],
-        removedUids: [],
+    it("should allow empty RecipeSyncResult", () => {
+      const emptyRecipeResult: RecipeSyncResult = {
+        changeType: "recipes",
+        changes: { added: [], updated: [], removedUids: [] },
       };
 
-      expect(emptySyncResult.added).toEqual([]);
-      expect(emptySyncResult.updated).toEqual([]);
-      expect(emptySyncResult.removedUids).toEqual([]);
+      expect(emptyRecipeResult.changeType).toBe("recipes");
+      expect(emptyRecipeResult.changes.added).toEqual([]);
+      expect(emptyRecipeResult.changes.updated).toEqual([]);
+      expect(emptyRecipeResult.changes.removedUids).toEqual([]);
     });
 
-    it("should have correct property names", () => {
-      type AssertHasAdded = "added" extends keyof SyncResult ? true : never;
-      type AssertHasUpdated = "updated" extends keyof SyncResult ? true : never;
-      type AssertHasRemovedUids = "removedUids" extends keyof SyncResult ? true : never;
+    it("should allow empty PantrySyncResult", () => {
+      const emptyPantryResult: PantrySyncResult = {
+        changeType: "pantry",
+        changes: { added: [], updated: [], removedUids: [] },
+      };
 
-      const _checkAdded: AssertHasAdded = true;
-      const _checkUpdated: AssertHasUpdated = true;
-      const _checkRemovedUids: AssertHasRemovedUids = true;
+      expect(emptyPantryResult.changeType).toBe("pantry");
+      expect(emptyPantryResult.changes.added).toEqual([]);
+      expect(emptyPantryResult.changes.updated).toEqual([]);
+      expect(emptyPantryResult.changes.removedUids).toEqual([]);
+    });
 
-      expect(_checkAdded).toBe(true);
-      expect(_checkUpdated).toBe(true);
-      expect(_checkRemovedUids).toBe(true);
+    it("should have correct property names on SyncResult variants", () => {
+      type AssertHasChangeType = "changeType" extends keyof RecipeSyncResult ? true : never;
+      type AssertHasChanges = "changes" extends keyof RecipeSyncResult ? true : never;
+      type AssertAnySyncResultIsUnion = AnySyncResult extends RecipeSyncResult | PantrySyncResult ? true : never;
+
+      const _checkChangeType: AssertHasChangeType = true;
+      const _checkChanges: AssertHasChanges = true;
+      const _checkUnion: AssertAnySyncResultIsUnion = true;
+
+      expect(_checkChangeType).toBe(true);
+      expect(_checkChanges).toBe(true);
+      expect(_checkUnion).toBe(true);
     });
   });
 

@@ -8,7 +8,7 @@ import type { RecipeStore } from "../cache/recipe-store.js";
 import type { PaprikaClient } from "./client.js";
 import type { DiskCache } from "../cache/disk-cache.js";
 import type { PantryStore } from "../cache/pantry-store.js";
-import type { PantryItemUid, RecipeEntry, RecipeUid, SyncResult } from "./types.js";
+import type { AnySyncResult, PantryItemUid, RecipeEntry, RecipeUid } from "./types.js";
 import { makeRecipe, makeCategory } from "../cache/__fixtures__/recipes.js";
 import { makePantryItem } from "../cache/__fixtures__/pantry.js";
 import { PantryStore as RealPantryStore } from "../cache/pantry-store.js";
@@ -119,12 +119,8 @@ describe("SyncEngine", () => {
     }
 
     expect(handlerCalled).toBe(true);
-    expect(syncCompleteEvents).toHaveLength(1);
-    expect(syncCompleteEvents[0]).toEqual({
-      added: [],
-      updated: [],
-      removedUids: [],
-    });
+    // Two events per cycle: recipe result first, pantry result second
+    expect(syncCompleteEvents.length).toBeGreaterThanOrEqual(2);
 
     engine.stop();
   });
@@ -163,14 +159,14 @@ describe("SyncEngine", () => {
     engine.start();
     engine.start(); // Second call should be ignored
 
-    // Wait for at least 3 sync:complete events
+    // Wait for at least 6 sync:complete events (2 per cycle × 3 cycles)
     const syncCompleteEvents: unknown[] = [];
     engine.events.on("sync:complete", () => {
       syncCompleteEvents.push(1);
     });
 
     let attempts = 0;
-    while (syncCompleteEvents.length < 3 && attempts < 100) {
+    while (syncCompleteEvents.length < 6 && attempts < 100) {
       await new Promise((resolve) => setTimeout(resolve, 5));
       attempts++;
     }
@@ -205,29 +201,32 @@ describe("SyncEngine", () => {
     expect(typeof engine.events.off).toBe("function");
   });
 
-  it("AC2.2: sync:complete handler receives SyncResult", async () => {
-    let receivedResult: unknown = null;
-    let handlerCalled = false;
+  it("AC2.2: sync:complete handler receives AnySyncResult (two events per cycle)", async () => {
+    const receivedResults: AnySyncResult[] = [];
 
     engine.events.on("sync:complete", (result) => {
-      receivedResult = result;
-      handlerCalled = true;
+      receivedResults.push(result);
     });
 
     engine.start();
 
-    // Poll until handler is called
+    // Poll until both events (recipe + pantry) are received
     let attempts = 0;
-    while (!handlerCalled && attempts < 100) {
+    while (receivedResults.length < 2 && attempts < 100) {
       await new Promise((resolve) => setTimeout(resolve, 5));
       attempts++;
     }
 
-    expect(handlerCalled).toBe(true);
-    expect(receivedResult).toEqual({
-      added: [],
-      updated: [],
-      removedUids: [],
+    expect(receivedResults).toHaveLength(2);
+    // First event: recipe result
+    expect(receivedResults[0]).toEqual({
+      changeType: "recipes",
+      changes: { added: [], updated: [], removedUids: [] },
+    });
+    // Second event: pantry result
+    expect(receivedResults[1]).toEqual({
+      changeType: "pantry",
+      changes: { added: [], updated: [], removedUids: [] },
     });
 
     engine.stop();
@@ -461,37 +460,44 @@ describe("syncOnce", () => {
       },
     );
 
-    let receivedResult: unknown = null;
+    const receivedResults: AnySyncResult[] = [];
     engine.events.on("sync:complete", (result) => {
-      receivedResult = result;
+      receivedResults.push(result);
     });
 
     await engine.syncOnce();
 
-    const result = receivedResult as SyncResult;
-    expect(result.added).toHaveLength(1);
-    expect(result.added[0]).toEqual(addedRecipe);
-    expect(result.updated).toHaveLength(1);
-    expect(result.updated[0]).toEqual(changedRecipe);
-    expect(result.removedUids).toEqual([removedUid]);
+    // Two events emitted: recipe first, pantry second
+    expect(receivedResults).toHaveLength(2);
+    const recipeResult = receivedResults[0]!;
+    expect(recipeResult.changeType).toBe("recipes");
+    expect(recipeResult.changes.added).toHaveLength(1);
+    expect(recipeResult.changes.added[0]).toEqual(addedRecipe);
+    expect(recipeResult.changes.updated).toHaveLength(1);
+    expect(recipeResult.changes.updated[0]).toEqual(changedRecipe);
+    expect(recipeResult.changes.removedUids).toEqual([removedUid]);
     expect(removeRecipe).toHaveBeenCalledWith(removedUid);
     expect(storeDelete).toHaveBeenCalledWith(removedUid);
   });
 
-  it("AC3.5: No changes detected emits sync:complete with empty arrays", async () => {
+  it("AC3.5: No changes detected emits sync:complete with empty changes (two events)", async () => {
     const engine = makeSyncEngine();
 
-    let receivedResult: unknown = null;
+    const receivedResults: AnySyncResult[] = [];
     engine.events.on("sync:complete", (result) => {
-      receivedResult = result;
+      receivedResults.push(result);
     });
 
     await engine.syncOnce();
 
-    expect(receivedResult).toEqual({
-      added: [],
-      updated: [],
-      removedUids: [],
+    expect(receivedResults).toHaveLength(2);
+    expect(receivedResults[0]).toEqual({
+      changeType: "recipes",
+      changes: { added: [], updated: [], removedUids: [] },
+    });
+    expect(receivedResults[1]).toEqual({
+      changeType: "pantry",
+      changes: { added: [], updated: [], removedUids: [] },
     });
   });
 
@@ -535,7 +541,7 @@ describe("syncOnce", () => {
     expect(putCategory).toHaveBeenCalledWith(category2, category2.uid);
   });
 
-  it("AC5.1: notifier.resourceListChanged called when recipe changes exist", async () => {
+  it("AC5.1: sync:complete subscriber calls resourceListChanged when recipe changes exist", async () => {
     const recipe = makeRecipe({ uid: "recipe-1" as RecipeUid });
     const entry: RecipeEntry = { uid: recipe.uid, hash: recipe.hash };
 
@@ -549,21 +555,27 @@ describe("syncOnce", () => {
       {
         diffRecipes: vi.fn().mockReturnValue({ added: ["recipe-1"], changed: [], removed: [] }),
       },
-      undefined,
-      {
-        resourceListChanged,
-      },
     );
+    engine.events.on("sync:complete", (result) => {
+      const { added, updated, removedUids } = result.changes;
+      if (added.length > 0 || updated.length > 0 || removedUids.length > 0) {
+        resourceListChanged();
+      }
+    });
     await engine.syncOnce();
 
     expect(resourceListChanged).toHaveBeenCalled();
   });
 
-  it("AC5.2: notifier.resourceListChanged NOT called when no recipe changes", async () => {
+  it("AC5.2: sync:complete subscriber does NOT call resourceListChanged when no changes", async () => {
     const resourceListChanged = vi.fn();
 
-    const engine = makeSyncEngine(undefined, undefined, undefined, {
-      resourceListChanged,
+    const engine = makeSyncEngine();
+    engine.events.on("sync:complete", (result) => {
+      const { added, updated, removedUids } = result.changes;
+      if (added.length > 0 || updated.length > 0 || removedUids.length > 0) {
+        resourceListChanged();
+      }
     });
     await engine.syncOnce();
 
@@ -771,10 +783,19 @@ describe("syncOnce", () => {
       expect(removePantryItem).not.toHaveBeenCalledWith(newItem.uid);
     });
 
-    it("pantry-read.AC4.4 Success: notifier.resourceListChanged called when pantry changes exist, not when no changes", async () => {
+    it("pantry-read.AC4.4 Success: subscriber calls resourceListChanged when pantry changes exist, not when no changes", async () => {
       const newItem = makePantryItem();
 
       const resourceListChanged = vi.fn();
+
+      function wireNotifier(eng: SyncEngine, fn: () => void): void {
+        eng.events.on("sync:complete", (result) => {
+          const { added, updated, removedUids } = result.changes;
+          if (added.length > 0 || updated.length > 0 || removedUids.length > 0) {
+            fn();
+          }
+        });
+      }
 
       // Test with pantry change
       const engine1 = makeSyncEngine(
@@ -786,11 +807,8 @@ describe("syncOnce", () => {
           diffRecipes: vi.fn().mockReturnValue({ added: [], changed: [], removed: [] }),
           getAllPantryItems: vi.fn().mockResolvedValue([]),
         },
-        undefined,
-        {
-          resourceListChanged,
-        },
       );
+      wireNotifier(engine1, resourceListChanged);
 
       await engine1.syncOnce();
       expect(resourceListChanged).toHaveBeenCalledOnce();
@@ -807,17 +825,14 @@ describe("syncOnce", () => {
           diffRecipes: vi.fn().mockReturnValue({ added: [], changed: [], removed: [] }),
           getAllPantryItems: vi.fn().mockResolvedValue([]),
         },
-        undefined,
-        {
-          resourceListChanged: resourceListChanged2,
-        },
       );
+      wireNotifier(engine2, resourceListChanged2);
 
       await engine2.syncOnce();
       expect(resourceListChanged2).not.toHaveBeenCalled();
     });
 
-    it("pantry-read.AC4.4 Success: notifier.resourceListChanged fires when same-UID pantry item content changes", async () => {
+    it("pantry-read.AC4.4 Success: subscriber fires when same-UID pantry item content changes", async () => {
       const sharedUid = "uid-shared" as PantryItemUid;
       const cachedItem = makePantryItem({ uid: sharedUid, ingredient: "Old Ingredient", quantity: "1" });
       const incomingItem = makePantryItem({
@@ -837,14 +852,119 @@ describe("syncOnce", () => {
           diffRecipes: vi.fn().mockReturnValue({ added: [], changed: [], removed: [] }),
           getAllPantryItems: vi.fn().mockResolvedValue([cachedItem]),
         },
-        undefined,
-        {
-          resourceListChanged,
-        },
       );
+      engine.events.on("sync:complete", (result) => {
+        const { added, updated, removedUids } = result.changes;
+        if (added.length > 0 || updated.length > 0 || removedUids.length > 0) {
+          resourceListChanged();
+        }
+      });
 
       await engine.syncOnce();
       expect(resourceListChanged).toHaveBeenCalledOnce();
+    });
+
+    it("SyncResult (pantry) changes.added populated when new pantry items synced", async () => {
+      const newItem = makePantryItem();
+
+      const engine = makeSyncEngine(
+        {
+          listRecipes: vi.fn().mockResolvedValue([]),
+          listPantry: vi.fn().mockResolvedValue([newItem]),
+        },
+        {
+          diffRecipes: vi.fn().mockReturnValue({ added: [], changed: [], removed: [] }),
+          getAllPantryItems: vi.fn().mockResolvedValue([]),
+        },
+      );
+
+      const receivedResults: AnySyncResult[] = [];
+      engine.events.on("sync:complete", (result) => receivedResults.push(result));
+      await engine.syncOnce();
+
+      const pantryResult = receivedResults.find((r) => r.changeType === "pantry");
+      expect(pantryResult).toBeDefined();
+      expect(pantryResult!.changes.added).toHaveLength(1);
+      expect(pantryResult!.changes.added[0]).toEqual(newItem);
+      expect(pantryResult!.changes.updated).toHaveLength(0);
+      expect(pantryResult!.changes.removedUids).toHaveLength(0);
+    });
+
+    it("SyncResult (pantry) changes.updated populated when same-UID content changes", async () => {
+      const sharedUid = "uid-shared" as PantryItemUid;
+      const cachedItem = makePantryItem({ uid: sharedUid, quantity: "1" });
+      const incomingItem = makePantryItem({ uid: sharedUid, quantity: "2" });
+
+      const engine = makeSyncEngine(
+        {
+          listRecipes: vi.fn().mockResolvedValue([]),
+          listPantry: vi.fn().mockResolvedValue([incomingItem]),
+        },
+        {
+          diffRecipes: vi.fn().mockReturnValue({ added: [], changed: [], removed: [] }),
+          getAllPantryItems: vi.fn().mockResolvedValue([cachedItem]),
+        },
+      );
+
+      const receivedResults: AnySyncResult[] = [];
+      engine.events.on("sync:complete", (result) => receivedResults.push(result));
+      await engine.syncOnce();
+
+      const pantryResult = receivedResults.find((r) => r.changeType === "pantry");
+      expect(pantryResult).toBeDefined();
+      expect(pantryResult!.changes.added).toHaveLength(0);
+      expect(pantryResult!.changes.updated).toHaveLength(1);
+      expect(pantryResult!.changes.updated[0]).toEqual(incomingItem);
+      expect(pantryResult!.changes.removedUids).toHaveLength(0);
+    });
+
+    it("SyncResult (pantry) changes.removedUids populated when pantry items removed", async () => {
+      const orphanItem = makePantryItem();
+
+      const engine = makeSyncEngine(
+        {
+          listRecipes: vi.fn().mockResolvedValue([]),
+          listPantry: vi.fn().mockResolvedValue([]),
+        },
+        {
+          diffRecipes: vi.fn().mockReturnValue({ added: [], changed: [], removed: [] }),
+          getAllPantryItems: vi.fn().mockResolvedValue([orphanItem]),
+        },
+      );
+
+      const receivedResults: AnySyncResult[] = [];
+      engine.events.on("sync:complete", (result) => receivedResults.push(result));
+      await engine.syncOnce();
+
+      const pantryResult = receivedResults.find((r) => r.changeType === "pantry");
+      expect(pantryResult).toBeDefined();
+      expect(pantryResult!.changes.added).toHaveLength(0);
+      expect(pantryResult!.changes.updated).toHaveLength(0);
+      expect(pantryResult!.changes.removedUids).toHaveLength(1);
+      expect(pantryResult!.changes.removedUids[0]).toBe(orphanItem.uid);
+    });
+
+    it("SyncResult (pantry) changes empty when no pantry changes", async () => {
+      const engine = makeSyncEngine(
+        {
+          listRecipes: vi.fn().mockResolvedValue([]),
+          listPantry: vi.fn().mockResolvedValue([]),
+        },
+        {
+          diffRecipes: vi.fn().mockReturnValue({ added: [], changed: [], removed: [] }),
+          getAllPantryItems: vi.fn().mockResolvedValue([]),
+        },
+      );
+
+      const receivedResults: AnySyncResult[] = [];
+      engine.events.on("sync:complete", (result) => receivedResults.push(result));
+      await engine.syncOnce();
+
+      const pantryResult = receivedResults.find((r) => r.changeType === "pantry");
+      expect(pantryResult).toBeDefined();
+      expect(pantryResult!.changes.added).toHaveLength(0);
+      expect(pantryResult!.changes.updated).toHaveLength(0);
+      expect(pantryResult!.changes.removedUids).toHaveLength(0);
     });
 
     it("pantry-read.AC4.5 Success: REAL PantryStore hasSynced flips to true after sync", async () => {

@@ -22,7 +22,7 @@ import { makeRecipe } from "../cache/__fixtures__/recipes.js";
 import { makeTestServer, makeCtx, getText, DEFAULT_LOGGING_CONFIG } from "../tools/tool-test-utils.js";
 import { registerDiscoverTool } from "../tools/discover.js";
 import type { EmbeddingConfig } from "../utils/config.js";
-import type { SyncResult } from "../paprika/types.js";
+import type { AnySyncResult, RecipeSyncResult } from "../paprika/types.js";
 import type { RecipeUid } from "../paprika/types.js";
 
 // mitt's package shape (flat-conditioned `exports`, .d.ts using `export default`) confuses
@@ -76,7 +76,7 @@ const ollamaAvailable = await isOllamaAvailable();
 // Suppress stderr output from VectorStore logging during tests
 const stderrSpy = vi.spyOn(process.stderr, "write").mockReturnValue(true);
 
-type SyncEvents = { "sync:complete": SyncResult; "sync:error": Error };
+type SyncEvents = { "sync:complete": AnySyncResult; "sync:error": Error };
 
 function makePaprikaConfig() {
   return {
@@ -150,10 +150,9 @@ describe.skipIf(!ollamaAvailable)("buildDiscoverComponents + registerDiscoverToo
       description: "Roman pasta with creamy sauce",
     });
 
-    const syncResult: SyncResult = {
-      added: [recipe2],
-      updated: [],
-      removedUids: [],
+    const syncResult: RecipeSyncResult = {
+      changeType: "recipes",
+      changes: { added: [recipe2], updated: [], removedUids: [] },
     };
     syncEvents.emit("sync:complete", syncResult);
 
@@ -178,10 +177,9 @@ describe.skipIf(!ollamaAvailable)("buildDiscoverComponents + registerDiscoverToo
 
     await buildDiscoverComponents(config, store, syncEvents);
 
-    const syncResult: SyncResult = {
-      added: [],
-      updated: [],
-      removedUids: ["r1" as RecipeUid],
+    const syncResult: RecipeSyncResult = {
+      changeType: "recipes",
+      changes: { added: [], updated: [], removedUids: ["r1" as RecipeUid] },
     };
     syncEvents.emit("sync:complete", syncResult);
 
@@ -210,10 +208,9 @@ describe.skipIf(!ollamaAvailable)("buildDiscoverComponents + registerDiscoverToo
     expect(vectorStore).not.toBeNull();
     registerDiscoverTool(server, ctx, vectorStore!);
 
-    const syncResult: SyncResult = {
-      added: [recipe],
-      updated: [],
-      removedUids: [],
+    const syncResult: RecipeSyncResult = {
+      changeType: "recipes",
+      changes: { added: [recipe], updated: [], removedUids: [] },
     };
     syncEvents.emit("sync:complete", syncResult);
 
