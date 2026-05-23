@@ -81,12 +81,14 @@ function FindProxyForURL(url, host) {
 EOF
 
 # ── Cleanup (runs on exit and Ctrl+C) ─────────────────────────────────────────
+PAC_SERVER_PID=""
+MITMDUMP_PID=""
 cleanup() {
   echo ""
   echo "→ Tearing down..."
   networksetup -setautoproxystate "$NETWORK_SERVICE" off 2>/dev/null || true
-  kill "$MITMDUMP_PID" 2>/dev/null || true
-  kill "$PAC_SERVER_PID" 2>/dev/null || true
+  [[ -n "$MITMDUMP_PID" ]] && kill "$MITMDUMP_PID" 2>/dev/null || true
+  [[ -n "$PAC_SERVER_PID" ]] && kill "$PAC_SERVER_PID" 2>/dev/null || true
   rm -rf "$TMPDIR_PAC"
   echo "→ Proxy disabled. Capture saved to: $OUT_FILE"
   echo ""
