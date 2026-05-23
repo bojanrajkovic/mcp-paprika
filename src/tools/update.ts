@@ -16,7 +16,9 @@ export function registerUpdateTool(server: McpServer, ctx: ServerContext): void 
         "Update an existing recipe by UID. Only provided fields are changed; " +
         "omitted fields retain their existing values. If categories is provided, " +
         "it replaces the existing category list entirely; omitting categories " +
-        "leaves the existing list unchanged.",
+        "leaves the existing list unchanged. " +
+        "Pass inTrash: true to move to trash (soft-delete, reversible) or inTrash: false to restore. " +
+        "Use delete_recipe for a dedicated trash workflow.",
       inputSchema: {
         uid: z.string().describe("Recipe UID to update"),
         name: z.string().optional().describe("New recipe name"),
@@ -36,6 +38,7 @@ export function registerUpdateTool(server: McpServer, ctx: ServerContext): void 
         sourceUrl: z.string().optional().describe("New source URL"),
         difficulty: z.string().optional().describe("New difficulty level"),
         rating: z.number().int().min(0).max(5).optional().describe("New rating 0–5"),
+        inTrash: z.boolean().optional().describe("true = move to trash, false = restore from trash"),
         nutritionalInfo: z.string().optional().describe("New nutritional information"),
       },
     },
@@ -75,6 +78,7 @@ export function registerUpdateTool(server: McpServer, ctx: ServerContext): void 
             ...(args.sourceUrl !== undefined && { sourceUrl: args.sourceUrl }),
             ...(args.difficulty !== undefined && { difficulty: args.difficulty }),
             ...(args.rating !== undefined && { rating: args.rating }),
+            ...(args.inTrash !== undefined && { inTrash: args.inTrash }),
             ...(args.nutritionalInfo !== undefined && { nutritionalInfo: args.nutritionalInfo }),
             categories: resolvedCategories, // always set — either resolved or existing
           };
