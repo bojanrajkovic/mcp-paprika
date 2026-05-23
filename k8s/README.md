@@ -1,26 +1,36 @@
 # Kubernetes manifests
 
-Deploys mcp-paprika to the k3s homelab (`default` kubectl context).
+Deploys mcp-paprika using the Streamable HTTP transport with OAuth 2.1 + PKCE
+and Dynamic Client Registration. Images are published to GHCR at
+`ghcr.io/bojanrajkovic/mcp-paprika`.
 
-- **Storage:** `longhorn-ssd` (distributed; PVC survives node moves)
-- **Public ingress:** **Tailscale Funnel** at `https://paprika.gaur-kardashev.ts.net` — OAuth 2.1 + PKCE + Dynamic Client Registration is built into the server, with Google as the upstream IdP
-- **Image registry:** Harbor at `harbor.services.coderinserepeat.com/library/`
 - **Namespace:** `mcp-paprika` (created by `00-namespace.yaml`)
+- **Storage:** PVC — pick a storage class for your cluster (see Customization)
+- **Ingress:** not included — see below
 
-## Build & push the image
+## Customization
 
-The cluster runs amd64; the Mac is arm64. Use buildx with an explicit platform:
+Replace all `<placeholder>` values before applying:
 
-```sh
-TAG=1.2.0-rc1
-HARBOR=harbor.services.coderinserepeat.com/mcp-paprika/mcp-paprika
-docker buildx build --platform linux/amd64 \
-  -t "${HARBOR}:${TAG}" \
-  --push .
-```
+| Placeholder         | File                                           | Description                                                                                                                                  |
+| ------------------- | ---------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `<tag>`             | `30-deployment.yaml`                           | Image tag — pick a release from [ghcr.io/bojanrajkovic/mcp-paprika](https://github.com/bojanrajkovic/mcp-paprika/pkgs/container/mcp-paprika) |
+| `<your-public-url>` | `30-deployment.yaml`, `20-secret.example.yaml` | Publicly reachable URL for this deployment (e.g. `https://paprika.example.com`) — no trailing slash                                          |
+| `<storage-class>`   | `10-pvc.yaml`                                  | Storage class name for the data PVC (e.g. `standard`, `local-path` on k3s)                                                                   |
 
-You'll need `docker login harbor.services.coderinserepeat.com` first.
-Update the `image:` tag in `k8s/30-deployment.yaml` to match.
+`MCP_OIDC_PRESET` defaults to `google`; change it in `30-deployment.yaml` if
+you're using a different upstream OIDC provider.
+
+**No storage class?** Replace the `persistentVolumeClaim` volume block in
+`30-deployment.yaml` with `emptyDir: {}`. The disk cache rebuilds on startup
+(~2–5 min); OAuth DCR state is lost on pod delete.
+
+## Ingress
+
+`kustomization.yaml` does not include an ingress resource — the right shape
+depends entirely on your ingress controller. `50-ingress.example.tailscale-funnel.yaml`
+shows a working Tailscale Funnel configuration; copy and adapt it, or write your
+own pointing at the `mcp-paprika` Service on port 80.
 
 ## Register the Google OAuth client (one-time)
 
@@ -28,7 +38,7 @@ Update the `image:` tag in `k8s/30-deployment.yaml` to match.
 2. Create an **OAuth 2.0 Client ID** of type **Web application**.
 3. Under **Authorized redirect URIs**, add exactly:
    ```
-   https://paprika.gaur-kardashev.ts.net/oauth/callback
+   https://<your-public-url>/oauth/callback
    ```
 4. Save the `client_id` and `client_secret` — they go into the K8s Secret next.
 
@@ -37,10 +47,10 @@ Update the `image:` tag in `k8s/30-deployment.yaml` to match.
 The secret is NOT in `kustomization.yaml` so real credentials never get committed:
 
 ```sh
-kubectl --context=default apply -f k8s/00-namespace.yaml
+kubectl apply -f k8s/00-namespace.yaml
 
 # Imperative (recommended — no secret YAML on disk):
-kubectl --context=default -n mcp-paprika create secret generic mcp-paprika \
+kubectl -n mcp-paprika create secret generic mcp-paprika \
   --from-literal=PAPRIKA_EMAIL='you@example.com' \
   --from-literal=PAPRIKA_PASSWORD='...' \
   --from-literal=MCP_OIDC_CLIENT_ID='...apps.googleusercontent.com' \
@@ -50,14 +60,14 @@ kubectl --context=default -n mcp-paprika create secret generic mcp-paprika \
 # Or copy the template (k8s/secret.yaml is gitignored):
 cp k8s/20-secret.example.yaml k8s/secret.yaml
 $EDITOR k8s/secret.yaml
-kubectl --context=default apply -f k8s/secret.yaml
+kubectl apply -f k8s/secret.yaml
 ```
 
 ## Deploy
 
 ```sh
-kubectl --context=default apply -k k8s/
-kubectl --context=default -n mcp-paprika rollout status deploy/mcp-paprika
+kubectl apply -k k8s/
+kubectl -n mcp-paprika rollout status deploy/mcp-paprika
 ```
 
 First start does a full Paprika sync and builds the disk cache — the
@@ -66,32 +76,29 @@ First start does a full Paprika sync and builds the disk cache — the
 ## Verify
 
 ```sh
-# Healthz over the funnel (may take ~30s after first apply for Tailscale to
-# provision the public hostname; check `kubectl -n mcp-paprika get ingress`
-# for the status.loadBalancer.ingress hostname).
-curl -sf https://paprika.gaur-kardashev.ts.net/healthz | jq
+# Health check
+curl -sf https://<your-public-url>/healthz | jq
 
-# OAuth metadata — issuer must match MCP_PUBLIC_URL exactly, no trailing slash.
-curl -sf https://paprika.gaur-kardashev.ts.net/.well-known/oauth-authorization-server | jq .issuer
+# OAuth metadata — issuer must match MCP_PUBLIC_URL exactly.
+curl -sf https://<your-public-url>/.well-known/oauth-authorization-server | jq .issuer
 ```
 
 Add as a Claude connector: claude.ai → Settings → Connectors → Add custom
-connector → `https://paprika.gaur-kardashev.ts.net/mcp`. Claude redirects
-to Google for sign-in; once you're back, the connector is authorized.
+connector → `https://<your-public-url>/mcp`. Claude redirects to Google for
+sign-in; once you're back, the connector is authorized.
 
-## Iterate
+## Update the image
 
 ```sh
-docker buildx build --platform linux/amd64 \
-  -t "${HARBOR}:${TAG}" --push .
-kubectl --context=default -n mcp-paprika set image deploy/mcp-paprika mcp-paprika="${HARBOR}:${TAG}"
-kubectl --context=default -n mcp-paprika rollout status deploy/mcp-paprika
+kubectl -n mcp-paprika set image deploy/mcp-paprika \
+  mcp-paprika=ghcr.io/bojanrajkovic/mcp-paprika:<new-tag>
+kubectl -n mcp-paprika rollout status deploy/mcp-paprika
 ```
 
 ## Teardown
 
 ```sh
-kubectl --context=default delete -k k8s/
-kubectl --context=default -n mcp-paprika delete pvc mcp-paprika-data   # longhorn reclaim is Delete
-kubectl --context=default delete ns mcp-paprika
+kubectl delete -k k8s/
+kubectl -n mcp-paprika delete pvc mcp-paprika-data
+kubectl delete ns mcp-paprika
 ```

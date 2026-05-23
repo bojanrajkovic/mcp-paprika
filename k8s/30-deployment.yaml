@@ -29,8 +29,8 @@ spec:
           type: RuntimeDefault
       containers:
         - name: mcp-paprika
-          # Bump tag on each push; `kubectl set image` or rollout restart for redeploys.
-          image: harbor.services.coderinserepeat.com/mcp-paprika/mcp-paprika:1.2.0-rc1
+          # Bump tag on each push; see README § "Update the image".
+          image: ghcr.io/bojanrajkovic/mcp-paprika:<tag>
           imagePullPolicy: IfNotPresent
           ports:
             - name: http
@@ -42,19 +42,19 @@ spec:
               value: "3000"
             - name: MCP_HTTP_HOST
               value: 0.0.0.0
-            # OAuth deployment fields. Public URL comes from the Tailscale
-            # Funnel ingress (host paprika → paprika.gaur-kardashev.ts.net).
-            # Upstream IdP is Google via the `google` preset; client credentials
-            # + allowlist live in the mcp-paprika Secret.
+            # OAuth deployment fields. Set MCP_PUBLIC_URL to the publicly
+            # reachable URL for this deployment. Upstream IdP is Google via
+            # the `google` preset; client credentials + allowlist live in
+            # the mcp-paprika Secret.
             - name: MCP_PUBLIC_URL
-              value: https://paprika.gaur-kardashev.ts.net
+              value: https://<your-public-url>
+            # Change to `custom` + set MCP_OIDC_ISSUER if using a different IdP.
             - name: MCP_OIDC_PRESET
               value: google
-            # Tailscale Funnel is the only ingress in front of this pod and it
-            # sanitizes X-Forwarded-For, so MCP_TRUST_PROXY=true lets the DCR
-            # rate-limiter key off the real client tailnet address instead of
-            # collapsing every public request into the funnel pod's address.
-            # See src/auth/routes.ts:buildDcrRateLimit for the safety analysis.
+            # Set to true when a trusted reverse proxy sanitizes
+            # X-Forwarded-For before reaching this pod. Lets the DCR
+            # rate-limiter key off the real client IP instead of the proxy
+            # address. See src/auth/routes.ts:buildDcrRateLimit.
             - name: MCP_TRUST_PROXY
               value: "true"
           envFrom:
@@ -95,4 +95,7 @@ spec:
         - name: data
           persistentVolumeClaim:
             claimName: mcp-paprika-data
+          # No storage class? Replace the above with:
+          # emptyDir: {}
+          # Cache rebuilds on restart; OAuth state is lost on pod delete.
       terminationGracePeriodSeconds: 30

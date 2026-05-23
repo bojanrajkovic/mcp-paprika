@@ -8,7 +8,8 @@ resources:
   - 10-pvc.yaml
   - 30-deployment.yaml
   - 40-service.yaml
-  - 50-ingress.yaml
+  # Ingress is NOT included — it's too environment-specific.
+  # See 50-ingress.example.tailscale-funnel.yaml for a Tailscale Funnel example.
   # Secret is applied separately — see k8s/README.md.
   # Don't add secret.yaml here; it's gitignored.
 

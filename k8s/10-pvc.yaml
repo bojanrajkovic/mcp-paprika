@@ -8,7 +8,7 @@ metadata:
     app.kubernetes.io/instance: mcp-paprika
 spec:
   accessModes: [ReadWriteOnce]
-  storageClassName: longhorn-ssd
+  storageClassName: <storage-class>
   resources:
     requests:
       storage: 2Gi
