@@ -1,4 +1,5 @@
 import type { Recipe, Category, RecipeUid, CategoryUid } from "../paprika/types.js";
+import { EntityStore } from "../entity/index.js";
 import { parseDuration } from "../utils/duration.js";
 
 export type SearchOptions = {
@@ -18,55 +19,21 @@ export type TimeConstraints = {
   readonly maxTotalTime?: number;
 };
 
-// See PantryStore for the rationale behind pending-writes bookkeeping
-// (issue #57). Same shape, applied to recipes.
-type PendingWriteKind = "upsert" | "delete";
-
-type PendingWrite = {
-  readonly kind: PendingWriteKind;
-  readonly at: number;
-};
-
-const DEFAULT_PENDING_WRITE_TTL_MS = 60_000;
-
-export class RecipeStore {
-  private readonly recipes: Map<RecipeUid, Recipe> = new Map();
+export class RecipeStore extends EntityStore<Recipe, RecipeUid> {
   private readonly categories: Map<CategoryUid, Category> = new Map();
-  private readonly _pendingWrites: Map<RecipeUid, PendingWrite> = new Map();
-  private readonly _pendingWriteTtlMs: number;
-  private _hasSynced = false;
 
   constructor(opts?: { readonly pendingWriteTtlMs?: number }) {
-    this._pendingWriteTtlMs = opts?.pendingWriteTtlMs ?? DEFAULT_PENDING_WRITE_TTL_MS;
+    super(opts ?? {});
   }
 
   load(recipes: ReadonlyArray<Recipe>, categories: ReadonlyArray<Category>): void {
-    this.recipes.clear();
-    for (const recipe of recipes) {
-      this.recipes.set(recipe.uid, recipe);
-    }
-    this.categories.clear();
-    for (const category of categories) {
-      this.categories.set(category.uid, category);
-    }
-    this._hasSynced = true;
+    this.baseLoad(recipes);
+    this.setCategories(categories);
   }
 
-  get hasSynced(): boolean {
-    return this._hasSynced;
-  }
-
-  markSynced(): void {
-    this._hasSynced = true;
-  }
-
-  get(uid: RecipeUid): Recipe | undefined {
-    return this.recipes.get(uid);
-  }
-
-  getAll(): Array<Recipe> {
+  override getAll(): Array<Recipe> {
     const results: Array<Recipe> = [];
-    for (const recipe of this.recipes.values()) {
+    for (const recipe of this._items.values()) {
       if (!recipe.inTrash) {
         results.push(recipe);
       }
@@ -74,17 +41,9 @@ export class RecipeStore {
     return results;
   }
 
-  set(recipe: Recipe): void {
-    this.recipes.set(recipe.uid, recipe);
-  }
-
-  delete(uid: RecipeUid): void {
-    this.recipes.delete(uid);
-  }
-
-  get size(): number {
+  override get size(): number {
     let count = 0;
-    for (const recipe of this.recipes.values()) {
+    for (const recipe of this._items.values()) {
       if (!recipe.inTrash) {
         count++;
       }
@@ -126,7 +85,7 @@ export class RecipeStore {
 
     const results: Array<ScoredResult> = [];
 
-    for (const recipe of this.recipes.values()) {
+    for (const recipe of this._items.values()) {
       if (recipe.inTrash) continue;
 
       if (lowerQuery === "") {
@@ -270,46 +229,6 @@ export class RecipeStore {
 
     const contains = recipes.filter((r) => r.name.toLowerCase().includes(lowerTitle));
     return contains;
-  }
-
-  markPendingUpsert(uid: RecipeUid, at: number = Date.now()): void {
-    // TTL <= 0 disables pending-write tracking entirely. Used when the
-    // background sync loop is disabled — without periodic syncOnce calls to
-    // sweep, marks would accumulate indefinitely (codex P2, PR #92).
-    if (this._pendingWriteTtlMs <= 0) return;
-    this._pendingWrites.set(uid, { kind: "upsert", at });
-  }
-
-  markPendingDelete(uid: RecipeUid, at: number = Date.now()): void {
-    if (this._pendingWriteTtlMs <= 0) return;
-    this._pendingWrites.set(uid, { kind: "delete", at });
-  }
-
-  isPendingUpsert(uid: RecipeUid): boolean {
-    return this._pendingWrites.get(uid)?.kind === "upsert";
-  }
-
-  isPendingDelete(uid: RecipeUid): boolean {
-    return this._pendingWrites.get(uid)?.kind === "delete";
-  }
-
-  clearPending(uid: RecipeUid): void {
-    this._pendingWrites.delete(uid);
-  }
-
-  sweepPending(now: number = Date.now()): number {
-    let removed = 0;
-    for (const [uid, entry] of this._pendingWrites) {
-      if (now - entry.at >= this._pendingWriteTtlMs) {
-        this._pendingWrites.delete(uid);
-        removed += 1;
-      }
-    }
-    return removed;
-  }
-
-  get pendingWriteCount(): number {
-    return this._pendingWrites.size;
   }
 }
 

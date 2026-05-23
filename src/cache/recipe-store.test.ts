@@ -1042,7 +1042,7 @@ describe("RecipeStore", () => {
       });
     });
 
-    describe("recipe-query-store.AC7.4: Imports only from paprika/types and utils/duration (plus npm packages)", () => {
+    describe("recipe-query-store.AC7.4: Imports only from entity, paprika/types, and utils/duration (plus npm packages)", () => {
       it("verifies all relative imports match allowed paths", () => {
         const __filename = fileURLToPath(import.meta.url);
         const __dirname = dirname(__filename);
@@ -1054,7 +1054,9 @@ describe("RecipeStore", () => {
         const importPaths = relativeImports.map((line) => line.match(/["']([^"']+)["']/)?.[1]).filter(Boolean);
 
         for (const importPath of importPaths) {
-          expect(importPath).toMatch(/^\.\.\/paprika\/types\.js$|^\.\.\/utils\/duration\.js$/);
+          expect(importPath).toMatch(
+            /^\.\.\/entity\/index\.js$|^\.\.\/paprika\/types\.js$|^\.\.\/utils\/duration\.js$/,
+          );
         }
       });
     });

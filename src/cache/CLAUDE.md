@@ -1,6 +1,6 @@
 # Caching Layer
 
-Last verified: 2026-05-22
+Last verified: 2026-05-23
 
 ## Files
 
@@ -16,11 +16,11 @@ Caches Paprika API responses to reduce API calls and improve response times for 
 
 ### RecipeStore
 
-Core in-memory cache for recipes and categories with CRUD operations and query methods.
+Core in-memory cache for recipes and categories with CRUD operations and query methods. Extends `EntityStore<Recipe, RecipeUid>` (see `../entity/CLAUDE.md` for the base class contract and pending-writes invariants).
 
 **Construction:**
 
-`new RecipeStore(opts?: { pendingWriteTtlMs?: number })` — `pendingWriteTtlMs` defaults to `60_000`; controls the TTL fallback for the pending-writes map (see "Pending-writes (issue #57)" below).
+`new RecipeStore(opts?: { pendingWriteTtlMs?: number })` — `pendingWriteTtlMs` defaults to `60_000`; controls the TTL fallback for the pending-writes map (see `../entity/CLAUDE.md`).
 
 **Exported Types:**
 
@@ -39,36 +39,36 @@ Core in-memory cache for recipes and categories with CRUD operations and query m
 - `filterByTime(constraints)` - Filter and sort recipes by duration constraints
 - `findByName(title)` - Tiered name lookup (exact > starts-with > contains)
 - Category operations: `getCategory()`, `getAllCategories()`, `setCategories()`, `resolveCategories()`
-- Pending-writes (see invariants below): `markPendingUpsert(uid, at?)`, `markPendingDelete(uid, at?)`, `isPendingUpsert(uid)`, `isPendingDelete(uid)`, `clearPending(uid)`, `sweepPending(now?): number`, `pendingWriteCount` (getter)
+- Pending-writes (inherited from `EntityStore`; see `../entity/CLAUDE.md`): `markPendingUpsert(uid, at?)`, `markPendingDelete(uid, at?)`, `isPendingUpsert(uid)`, `isPendingDelete(uid)`, `clearPending(uid)`, `sweepPending(now?): number`, `pendingWriteCount` (getter)
 
 ### PantryStore
 
-In-memory query layer for pantry items, hydrated by the sync engine. Mirrors the `RecipeStore` shape but is intentionally simpler: pantry items have no hash, no categories, and no time/ingredient filtering — just CRUD plus a tiered name lookup.
+In-memory query layer for pantry items, hydrated by the sync engine. Extends `EntityStore<PantryItem, PantryItemUid>` (see `../entity/CLAUDE.md`). Intentionally simpler than `RecipeStore`: pantry items have no hash, no categories, and no time/ingredient filtering — just CRUD plus a tiered name lookup.
 
 **Construction:**
 
-`new PantryStore(opts?: { pendingWriteTtlMs?: number })` — starts empty with `hasSynced = false`. `pendingWriteTtlMs` defaults to `60_000`; controls the TTL fallback for the pending-writes map (see "Pending-writes (issue #57)" below).
+`new PantryStore(opts?: { pendingWriteTtlMs?: number })` — starts empty with `hasSynced = false`. `pendingWriteTtlMs` defaults to `60_000`; controls the TTL fallback for the pending-writes map (see `../entity/CLAUDE.md`).
 
 **Methods:**
 
-| Method                        | Signature                                       | Description                                                                                      |
-| ----------------------------- | ----------------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| `load(items)`                 | `(items: ReadonlyArray<PantryItem>): void`      | Clears existing items, repopulates from `items`, sets `hasSynced = true`                         |
-| `get(uid)`                    | `(uid: PantryItemUid): PantryItem \| undefined` | Direct UID lookup                                                                                |
-| `getAll()`                    | `(): Array<PantryItem>`                         | Returns all items (insertion order)                                                              |
-| `set(item)`                   | `(item: PantryItem): void`                      | Upsert by `item.uid`                                                                             |
-| `delete(uid)`                 | `(uid: PantryItemUid): void`                    | Removes the entry if present (no-op otherwise); records UID in the tombstone set when present    |
-| `isTombstone(uid)`            | `(uid: PantryItemUid): boolean`                 | `true` if `uid` was soft-deleted via `delete()` since the last `load()` (in-session tombstone)   |
-| `markPendingUpsert(uid, at?)` | `(uid: PantryItemUid, at?: number): void`       | Records a pending upsert (see "Pending-writes (issue #57)" below); `at` defaults to `Date.now()` |
-| `markPendingDelete(uid, at?)` | `(uid: PantryItemUid, at?: number): void`       | Records a pending delete; `at` defaults to `Date.now()`                                          |
-| `isPendingUpsert(uid)`        | `(uid: PantryItemUid): boolean`                 | `true` iff the most recent pending mark for `uid` is `upsert`                                    |
-| `isPendingDelete(uid)`        | `(uid: PantryItemUid): boolean`                 | `true` iff the most recent pending mark for `uid` is `delete`                                    |
-| `clearPending(uid)`           | `(uid: PantryItemUid): void`                    | Drops any pending mark for `uid` (idempotent)                                                    |
-| `sweepPending(now?)`          | `(now?: number): number`                        | Evicts pending entries older than `pendingWriteTtlMs`; returns count evicted                     |
-| `size`                        | `number` getter                                 | Count of items                                                                                   |
-| `hasSynced`                   | `boolean` getter                                | `true` after the first `load()` call (even when `items.length === 0`)                            |
-| `pendingWriteCount`           | `number` getter                                 | Count of pending-write entries (test/diagnostic only)                                            |
-| `findByIngredient(query)`     | `(query: string): Array<PantryItem>`            | Tiered case-insensitive lookup: exact match > starts-with > contains; at most one tier returned  |
+| Method                        | Signature                                       | Description                                                                                     |
+| ----------------------------- | ----------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `load(items)`                 | `(items: ReadonlyArray<PantryItem>): void`      | Clears existing items, repopulates from `items`, sets `hasSynced = true`                        |
+| `get(uid)`                    | `(uid: PantryItemUid): PantryItem \| undefined` | Direct UID lookup                                                                               |
+| `getAll()`                    | `(): Array<PantryItem>`                         | Returns all items (insertion order)                                                             |
+| `set(item)`                   | `(item: PantryItem): void`                      | Upsert by `item.uid`                                                                            |
+| `delete(uid)`                 | `(uid: PantryItemUid): void`                    | Removes the entry if present (no-op otherwise); records UID in the tombstone set when present   |
+| `isTombstone(uid)`            | `(uid: PantryItemUid): boolean`                 | `true` if `uid` was soft-deleted via `delete()` since the last `load()` (in-session tombstone)  |
+| `markPendingUpsert(uid, at?)` | `(uid: PantryItemUid, at?: number): void`       | Inherited from `EntityStore`; see `../entity/CLAUDE.md`                                         |
+| `markPendingDelete(uid, at?)` | `(uid: PantryItemUid, at?: number): void`       | Inherited from `EntityStore`; see `../entity/CLAUDE.md`                                         |
+| `isPendingUpsert(uid)`        | `(uid: PantryItemUid): boolean`                 | Inherited from `EntityStore`; see `../entity/CLAUDE.md`                                         |
+| `isPendingDelete(uid)`        | `(uid: PantryItemUid): boolean`                 | Inherited from `EntityStore`; see `../entity/CLAUDE.md`                                         |
+| `clearPending(uid)`           | `(uid: PantryItemUid): void`                    | Inherited from `EntityStore`; see `../entity/CLAUDE.md`                                         |
+| `sweepPending(now?)`          | `(now?: number): number`                        | Inherited from `EntityStore`; see `../entity/CLAUDE.md`                                         |
+| `size`                        | `number` getter                                 | Count of items                                                                                  |
+| `hasSynced`                   | `boolean` getter                                | `true` after the first `load()` call (even when `items.length === 0`)                           |
+| `pendingWriteCount`           | `number` getter                                 | Count of pending-write entries (test/diagnostic only)                                           |
+| `findByIngredient(query)`     | `(query: string): Array<PantryItem>`            | Tiered case-insensitive lookup: exact match > starts-with > contains; at most one tier returned |
 
 ### DiskCache
 
@@ -173,15 +173,11 @@ The classification is durable — each silent catch carries an explanatory inlin
 
 ### Pending-writes (issue #57)
 
-Both `RecipeStore` and `PantryStore` carry an independent `Map<Uid, { kind: "upsert" | "delete", at: number }>` keyed by item UID. The sync engine consults this map (via `isPendingUpsert` / `isPendingDelete`) to skip reconciliation for UIDs that were just written locally but whose canonical-list state from Paprika may still be stale. Pending-writes is **separate from the pantry tombstone set**: tombstones drive the delete-tool's idempotent "already deleted" message; pending-writes shield the sync loop from rolling back or resurrecting in-flight writes. Recipe store has no tombstone equivalent — pending-writes is its only session-state mechanism.
+Both `RecipeStore` and `PantryStore` inherit pending-writes tracking from `EntityStore`. See `../entity/CLAUDE.md` for the full invariants. Key cache-layer points:
 
-- `markPendingUpsert(uid)` and `markPendingDelete(uid)` overwrite any prior mark for the same UID (last write wins).
-- Clearing is **hash/content-equality-based for upserts**: recipes clear when the canonical entry's hash matches the local cache; pantry items clear when the incoming item is field-wise equal to the cached version via `pantryItemsEqual`. UID-presence-only clearing was rejected (codex P1, PR #92) because the UID is already in the canonical list with pre-write content while propagation is in flight, which would drop protection one cycle too early for updates and let the next cycle re-fetch stale data.
-- Pending-deletes are never observation-cleared because Paprika omits soft-deleted pantry items from `listPantry` — absence is ambiguous between "propagated" and "not yet propagated". TTL is the only clearing mechanism for that direction.
-- `sweepPending(now?)` is the TTL fallback (called by `SyncEngine.syncOnce()` at the end of every cycle). Default TTL is 60_000 ms; configurable per-store via the constructor.
-- **TTL ≤ 0 disables pending-write tracking entirely**: `markPendingUpsert` / `markPendingDelete` become no-ops. `buildAppContext` passes `pendingWriteTtlMs: 0` when `config.sync.enabled === false`, because `syncOnce()` never runs after startup in that mode and unswept marks would accumulate indefinitely (codex P2 round 3, PR #92).
-- The commit helpers (`commitRecipe` / `commitPantryItem`) wrap cache I/O in `try { ... } catch { clearPending; throw }` so a failed local commit doesn't leave the UID shielded for the full TTL window (codex P2, PR #92).
-- All pending-writes methods are pure in-memory operations and never throw.
+- Pending-writes is **separate from the pantry tombstone set**: tombstones drive the delete-tool's idempotent "already deleted" message; pending-writes shield the sync loop from rolling back or resurrecting in-flight writes.
+- Clearing is **content-equality-based for upserts**: recipes clear when the canonical entry's hash matches the local cache; pantry items clear when the incoming item is field-wise equal via `pantryItemsEqual`. UID-presence-only clearing was rejected because the UID can appear in the canonical list with pre-write content while propagation is still in flight.
+- The commit helpers (`commitRecipe` / `commitPantryItem`) wrap cache I/O in `try { … } catch { clearPending(uid); throw }` so a failed local commit doesn't leave a UID shielded for the full TTL window.
 
 ### DiskCache
 
@@ -199,7 +195,7 @@ Both `RecipeStore` and `PantryStore` carry an independent `Map<Uid, { kind: "ups
 
 ## Dependencies
 
-- **Uses:** `paprika/types` (Recipe, Category, PantryItem types), `utils/duration` (parseDuration for time filtering), Node.js built-in fs/promises
+- **Uses:** `entity/` (EntityStore base class and PendingWrite type), `paprika/types` (Recipe, Category, PantryItem types), `utils/duration` (parseDuration for time filtering), Node.js built-in fs/promises
 - **Used by:**
   - `features/` (via `RecipeStore`)
   - `paprika/sync.ts` (via `DiskCache` and `PantryStore` for diff/replace-all sync)
