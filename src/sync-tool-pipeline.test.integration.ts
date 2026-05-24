@@ -7,6 +7,9 @@ import { join } from "node:path";
 import { PaprikaClient } from "./paprika/client.js";
 import { AisleStore } from "./cache/aisle-store.js";
 import { DiskCacheRoot } from "./cache/disk/index.js";
+import { GroceryIngredientStore } from "./cache/grocery-ingredient-store.js";
+import { GroceryItemStore } from "./cache/grocery-item-store.js";
+import { GroceryListStore } from "./cache/grocery-list-store.js";
 import { RecipeStore } from "./cache/recipe-store.js";
 import { PantryStore } from "./cache/pantry-store.js";
 import { SyncEngine } from "./paprika/sync.js";
@@ -128,6 +131,9 @@ describe("Sync → Tool Pipeline Integration", () => {
         store,
         pantryStore,
         aisleStore,
+        groceryListStore: new GroceryListStore(),
+        groceryItemStore: new GroceryItemStore(),
+        groceryIngredientStore: new GroceryIngredientStore(),
         vectorStore: null,
         notifier,
         auth: null,
@@ -223,6 +229,9 @@ describe("Sync → Tool Pipeline Integration", () => {
         store,
         pantryStore,
         aisleStore,
+        groceryListStore: new GroceryListStore(),
+        groceryItemStore: new GroceryItemStore(),
+        groceryIngredientStore: new GroceryIngredientStore(),
         vectorStore: null,
         notifier,
         auth: null,
@@ -293,6 +302,9 @@ describe("Sync → Tool Pipeline Integration", () => {
         store,
         pantryStore,
         aisleStore,
+        groceryListStore: new GroceryListStore(),
+        groceryItemStore: new GroceryItemStore(),
+        groceryIngredientStore: new GroceryIngredientStore(),
         vectorStore: null,
         notifier,
         auth: null,
@@ -385,6 +397,9 @@ describe("Sync → Tool Pipeline Integration", () => {
         store,
         pantryStore,
         aisleStore,
+        groceryListStore: new GroceryListStore(),
+        groceryItemStore: new GroceryItemStore(),
+        groceryIngredientStore: new GroceryIngredientStore(),
         vectorStore: null,
         notifier,
         auth: null,
@@ -469,6 +484,9 @@ describe("Sync → Tool Pipeline Integration", () => {
         store,
         pantryStore,
         aisleStore,
+        groceryListStore: new GroceryListStore(),
+        groceryItemStore: new GroceryItemStore(),
+        groceryIngredientStore: new GroceryIngredientStore(),
         vectorStore: null,
         notifier,
         auth: null,
@@ -548,6 +566,9 @@ describe("Sync → Tool Pipeline Integration", () => {
         store,
         pantryStore,
         aisleStore,
+        groceryListStore: new GroceryListStore(),
+        groceryItemStore: new GroceryItemStore(),
+        groceryIngredientStore: new GroceryIngredientStore(),
         vectorStore: null,
         notifier,
         auth: null,
@@ -740,6 +761,9 @@ describe("Sync → Tool Pipeline Integration", () => {
         store,
         pantryStore,
         aisleStore,
+        groceryListStore: new GroceryListStore(),
+        groceryItemStore: new GroceryItemStore(),
+        groceryIngredientStore: new GroceryIngredientStore(),
         vectorStore: null,
         notifier,
         auth: null,

@@ -14,6 +14,9 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { AisleStore } from "./cache/aisle-store.js";
 import { DiskCacheRoot } from "./cache/disk/index.js";
+import { GroceryIngredientStore } from "./cache/grocery-ingredient-store.js";
+import { GroceryItemStore } from "./cache/grocery-item-store.js";
+import { GroceryListStore } from "./cache/grocery-list-store.js";
 import { RecipeStore } from "./cache/recipe-store.js";
 import { PantryStore } from "./cache/pantry-store.js";
 import { buildMcpServer } from "./server/build.js";
@@ -191,6 +194,9 @@ async function main(): Promise<void> {
     store,
     pantryStore,
     aisleStore,
+    groceryListStore: new GroceryListStore(),
+    groceryItemStore: new GroceryItemStore(),
+    groceryIngredientStore: new GroceryIngredientStore(),
     vectorStore: null, // discover tool intentionally not registered (no embeddings in e2e)
     notifier,
     auth: null,

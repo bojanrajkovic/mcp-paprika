@@ -15,6 +15,9 @@ import { makePantryItem } from "../cache/__fixtures__/pantry.js";
 import { makeAisle } from "../cache/__fixtures__/aisles.js";
 import { PantryStore as RealPantryStore } from "../cache/pantry-store.js";
 import { AisleStore as RealAisleStore } from "../cache/aisle-store.js";
+import { GroceryIngredientStore } from "../cache/grocery-ingredient-store.js";
+import { GroceryItemStore } from "../cache/grocery-item-store.js";
+import { GroceryListStore } from "../cache/grocery-list-store.js";
 
 function makeMockNotifier(): Notifier {
   return {
@@ -115,6 +118,9 @@ function makeTestContext(): AppContext {
     store: makeMockStore(),
     pantryStore: makeMockPantryStore(),
     aisleStore: makeMockAisleStore(),
+    groceryListStore: new GroceryListStore(),
+    groceryItemStore: new GroceryItemStore(),
+    groceryIngredientStore: new GroceryIngredientStore(),
     vectorStore: null,
     notifier: makeMockNotifier(),
     auth: null,
@@ -406,6 +412,9 @@ describe("syncOnce", () => {
       store: { ...makeMockStoreDefault(), ...storeOverrides } as RecipeStore,
       pantryStore: { ...makeMockPantryStoreDefault(), ...pantryStoreOverrides } as PantryStore,
       aisleStore: { ...makeMockAisleStore(), ...aisleStoreOverrides } as AisleStore,
+      groceryListStore: new GroceryListStore(),
+      groceryItemStore: new GroceryItemStore(),
+      groceryIngredientStore: new GroceryIngredientStore(),
       vectorStore: null,
       notifier: { ...makeMockNotifierDefault(), ...notifierOverrides } as Notifier,
       auth: null,
@@ -726,6 +735,9 @@ describe("syncOnce", () => {
       store: makeMockStoreDefault(),
       pantryStore: makeMockPantryStoreDefault(),
       aisleStore: makeMockAisleStore(),
+      groceryListStore: new GroceryListStore(),
+      groceryItemStore: new GroceryItemStore(),
+      groceryIngredientStore: new GroceryIngredientStore(),
       vectorStore: null,
       notifier,
       auth: null,
@@ -757,6 +769,9 @@ describe("syncOnce", () => {
       store: makeMockStoreDefault(),
       pantryStore: makeMockPantryStoreDefault(),
       aisleStore: makeMockAisleStore(),
+      groceryListStore: new GroceryListStore(),
+      groceryItemStore: new GroceryItemStore(),
+      groceryIngredientStore: new GroceryIngredientStore(),
       vectorStore: null,
       notifier,
       auth: null,
@@ -1080,6 +1095,9 @@ describe("syncOnce", () => {
         } as unknown as RecipeStore,
         pantryStore: realPantryStore,
         aisleStore: new RealAisleStore(),
+        groceryListStore: new GroceryListStore(),
+        groceryItemStore: new GroceryItemStore(),
+        groceryIngredientStore: new GroceryIngredientStore(),
         vectorStore: null,
         notifier: makeMockNotifier(),
         auth: null,
@@ -1131,6 +1149,9 @@ describe("syncOnce", () => {
         } as unknown as RecipeStore,
         pantryStore: realPantryStore,
         aisleStore: new RealAisleStore(),
+        groceryListStore: new GroceryListStore(),
+        groceryItemStore: new GroceryItemStore(),
+        groceryIngredientStore: new GroceryIngredientStore(),
         vectorStore: null,
         notifier: makeMockNotifier(),
         auth: null,

@@ -2,6 +2,9 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
 import { AisleStore } from "../cache/aisle-store.js";
 import { DiskCacheRoot } from "../cache/disk/index.js";
+import { GroceryIngredientStore } from "../cache/grocery-ingredient-store.js";
+import { GroceryItemStore } from "../cache/grocery-item-store.js";
+import { GroceryListStore } from "../cache/grocery-list-store.js";
 import { PantryStore } from "../cache/pantry-store.js";
 import { RecipeStore } from "../cache/recipe-store.js";
 import { buildDiscoverComponents } from "../features/discover-feature.js";
@@ -124,6 +127,27 @@ export async function buildAppContext(
   }
   log.info({ count: cachedAisles.length }, "hydrated aisle store from cache");
 
+  const groceryListStore = new GroceryListStore({ pendingWriteTtlMs });
+  const cachedGroceryLists = await cache.groceryLists.getAll();
+  if (cachedGroceryLists.length > 0) {
+    groceryListStore.load(cachedGroceryLists);
+  }
+  log.info({ count: cachedGroceryLists.length }, "hydrated grocery list store from cache");
+
+  const groceryItemStore = new GroceryItemStore({ pendingWriteTtlMs });
+  const cachedGroceryItems = await cache.groceryItems.getAll();
+  if (cachedGroceryItems.length > 0) {
+    groceryItemStore.load(cachedGroceryItems);
+  }
+  log.info({ count: cachedGroceryItems.length }, "hydrated grocery item store from cache");
+
+  const groceryIngredientStore = new GroceryIngredientStore();
+  const cachedGroceryIngredients = (await cache.groceryIngredients.getAll()).filter((i) => !i.deleted);
+  if (cachedGroceryIngredients.length > 0) {
+    groceryIngredientStore.load(cachedGroceryIngredients);
+  }
+  log.info({ count: cachedGroceryIngredients.length }, "hydrated grocery ingredient store from cache");
+
   // SyncEngine only reads client/cache/store/pantryStore/notifier — never
   // vectorStore — so it is safe to construct with a placeholder appContext
   // whose vectorStore is null. The vector store is then built with
@@ -134,6 +158,9 @@ export async function buildAppContext(
     store,
     pantryStore,
     aisleStore,
+    groceryListStore,
+    groceryItemStore,
+    groceryIngredientStore,
     vectorStore: null,
     notifier,
     auth, // null for stdio, populated for HTTP
@@ -193,6 +220,9 @@ export async function buildAppContext(
     store,
     pantryStore,
     aisleStore,
+    groceryListStore,
+    groceryItemStore,
+    groceryIngredientStore,
     vectorStore,
     notifier,
     auth, // null for stdio, populated for HTTP

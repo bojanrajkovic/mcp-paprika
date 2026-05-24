@@ -14,6 +14,9 @@ const makeCtx = (size: number) =>
     cache: {} as unknown as ServerContext["cache"],
     pantryStore: {} as unknown as ServerContext["pantryStore"],
     aisleStore: {} as unknown as ServerContext["aisleStore"],
+    groceryListStore: {} as unknown as ServerContext["groceryListStore"],
+    groceryItemStore: {} as unknown as ServerContext["groceryItemStore"],
+    groceryIngredientStore: {} as unknown as ServerContext["groceryIngredientStore"],
     vectorStore: null,
     server: {} as unknown as ServerContext["server"],
     notifier: {
@@ -329,6 +332,9 @@ describe("p2-u02-shared-helpers: shared helper functions", () => {
         } as unknown as ServerContext["store"],
         pantryStore: {} as unknown as ServerContext["pantryStore"],
         aisleStore: {} as unknown as ServerContext["aisleStore"],
+        groceryListStore: {} as unknown as ServerContext["groceryListStore"],
+        groceryItemStore: {} as unknown as ServerContext["groceryItemStore"],
+        groceryIngredientStore: {} as unknown as ServerContext["groceryIngredientStore"],
         vectorStore: null,
         server: {} as unknown as ServerContext["server"],
         notifier: {
@@ -378,6 +384,9 @@ describe("p2-u02-shared-helpers: shared helper functions", () => {
         } as unknown as ServerContext["store"],
         pantryStore: {} as unknown as ServerContext["pantryStore"],
         aisleStore: {} as unknown as ServerContext["aisleStore"],
+        groceryListStore: {} as unknown as ServerContext["groceryListStore"],
+        groceryItemStore: {} as unknown as ServerContext["groceryItemStore"],
+        groceryIngredientStore: {} as unknown as ServerContext["groceryIngredientStore"],
         vectorStore: null,
         server: {} as unknown as ServerContext["server"],
         notifier: {
@@ -411,6 +420,9 @@ describe("p2-u02-shared-helpers: shared helper functions", () => {
         } as unknown as ServerContext["store"],
         pantryStore: {} as unknown as ServerContext["pantryStore"],
         aisleStore: {} as unknown as ServerContext["aisleStore"],
+        groceryListStore: {} as unknown as ServerContext["groceryListStore"],
+        groceryItemStore: {} as unknown as ServerContext["groceryItemStore"],
+        groceryIngredientStore: {} as unknown as ServerContext["groceryIngredientStore"],
         vectorStore: null,
         server: {} as unknown as ServerContext["server"],
         notifier: {
@@ -447,6 +459,9 @@ describe("p2-u02-shared-helpers: shared helper functions", () => {
         } as unknown as ServerContext["store"],
         pantryStore: {} as unknown as ServerContext["pantryStore"],
         aisleStore: {} as unknown as ServerContext["aisleStore"],
+        groceryListStore: {} as unknown as ServerContext["groceryListStore"],
+        groceryItemStore: {} as unknown as ServerContext["groceryItemStore"],
+        groceryIngredientStore: {} as unknown as ServerContext["groceryIngredientStore"],
         vectorStore: null,
         server: {} as unknown as ServerContext["server"],
         notifier: {
