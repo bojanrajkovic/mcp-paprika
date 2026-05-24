@@ -14,6 +14,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { buildAuthContext } from "./build.js";
 import { createOidcStub } from "./__fixtures__/oidc-stub.js";
 import type { PaprikaConfig } from "../utils/config.js";
+import { DiskCacheRoot } from "../cache/disk/index.js";
 import { useXdgIsolation } from "../__fixtures__/xdg-isolation.js";
 import { useMswServer } from "../__fixtures__/msw.js";
 import { SILENT_LOG } from "../utils/log.js";
@@ -62,7 +63,6 @@ describe("buildAuthContext", () => {
   describe("BA.1: returns null for stdio transport", () => {
     it("returns null when config.transport is 'stdio'", async () => {
       // PLAN says (phase_07.md:305-306): if config.transport !== "http" return null
-      const { DiskCacheRoot } = await import("../cache/disk/index.js");
       const cache = new DiskCacheRoot(xdg.dir());
       await cache.init();
 
@@ -76,7 +76,6 @@ describe("buildAuthContext", () => {
   describe("BA.2: throws for http + no oauth config (defensive guard)", () => {
     it("throws Error when transport is http but oauth config is undefined", async () => {
       // PLAN says (phase_07.md:307-310): defensive guard for http without oauth block
-      const { DiskCacheRoot } = await import("../cache/disk/index.js");
       const cache = new DiskCacheRoot(xdg.dir());
       await cache.init();
 
@@ -105,7 +104,6 @@ describe("buildAuthContext", () => {
       });
       msw.use(...oidcStub.handlers);
 
-      const { DiskCacheRoot } = await import("../cache/disk/index.js");
       const cache = new DiskCacheRoot(xdg.dir());
       await cache.init();
 
@@ -138,7 +136,6 @@ describe("buildAuthContext", () => {
         ),
       );
 
-      const { DiskCacheRoot } = await import("../cache/disk/index.js");
       const cache = new DiskCacheRoot(xdg.dir());
       await cache.init();
 
