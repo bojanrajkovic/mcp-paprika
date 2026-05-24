@@ -12,8 +12,8 @@ import { PaprikaClient } from "./client.js";
 import { PaprikaAPIError, PaprikaAuthError } from "./errors.js";
 import { CircuitOpenError } from "../utils/errors.js";
 import { toMessage, REDACT_PATHS } from "../utils/log.js";
-import type { PantryItem, Recipe } from "./types.js";
-import { RecipeSchema, RecipeUidSchema, PantryItemUidSchema } from "./types.js";
+import type { PantryItem, Recipe, Aisle } from "./types.js";
+import { RecipeSchema, RecipeUidSchema, PantryItemUidSchema, AisleUidSchema } from "./types.js";
 
 const AUTH_URL = "https://paprikaapp.com/api/v1/account/login/";
 const API_BASE = "https://paprikaapp.com/api/v2/sync";
@@ -1438,6 +1438,125 @@ describe("PaprikaClient", () => {
       const headers = record["headers"] as Record<string, unknown>;
       expect(headers["authorization"]).toBe("[Redacted]");
       expect(JSON.stringify(record)).not.toContain("super-secret-token");
+    });
+  });
+
+  describe("aisle-client.AC1: listAisles()", () => {
+    function makeWireAisle(overrides?: Partial<Record<string, unknown>>): Record<string, unknown> {
+      return {
+        uid: "AABBCCDDEEFF00112233445566778899AABBCCDDEEFF00112233445566778899",
+        name: "Produce",
+        order_flag: 1,
+        deleted: false,
+        ...overrides,
+      };
+    }
+
+    it("aisle-client.AC1.1 - GETs from /groceryaisles/ and returns Aisle[] with camelCase fields", async () => {
+      server.use(
+        http.get(`${API_BASE}/groceryaisles/`, () => {
+          return HttpResponse.json({
+            result: [
+              makeWireAisle({ name: "Produce", order_flag: 1 }),
+              makeWireAisle({ uid: "CUSTOM-UID", name: "Dairy", order_flag: 2 }),
+            ],
+          });
+        }),
+      );
+
+      const client = new PaprikaClient("test@example.com", "password");
+      const aisles = await client.listAisles();
+
+      expect(aisles).toHaveLength(2);
+      expect(aisles[0]!.name).toBe("Produce");
+      expect(aisles[0]!.orderFlag).toBe(1);
+      expect(aisles[0]!.deleted).toBe(false);
+      expect(aisles[1]!.name).toBe("Dairy");
+      expect(aisles[1]!.uid).toBe("CUSTOM-UID");
+    });
+
+    it("aisle-client.AC1.2 - returns [] when /groceryaisles/ returns empty result", async () => {
+      server.use(http.get(`${API_BASE}/groceryaisles/`, () => HttpResponse.json({ result: [] })));
+
+      const client = new PaprikaClient("test@example.com", "password");
+      const aisles = await client.listAisles();
+
+      expect(aisles).toStrictEqual([]);
+    });
+
+    it("aisle-client.AC1.3 - defaults deleted to false when missing from wire payload", async () => {
+      server.use(
+        http.get(`${API_BASE}/groceryaisles/`, () => {
+          return HttpResponse.json({
+            result: [{ uid: "AABB", name: "Deli", order_flag: 5 }],
+          });
+        }),
+      );
+
+      const client = new PaprikaClient("test@example.com", "password");
+      const aisles = await client.listAisles();
+
+      expect(aisles[0]!.deleted).toBe(false);
+    });
+  });
+
+  describe("aisle-client.AC2: saveAisle()", () => {
+    function makeTestAisle(overrides?: Partial<Aisle>): Aisle {
+      return {
+        uid: AisleUidSchema.parse("A1B2C3D4-E5F6-7890-ABCD-EF1234567890"),
+        name: "Produce",
+        orderFlag: 3,
+        deleted: false,
+        ...overrides,
+      } as Aisle;
+    }
+
+    it("aisle-client.AC2.1 - POSTs to /groceryaisles/ and returns input aisle", async () => {
+      let capturedUrl = "";
+
+      server.use(
+        http.post(`${API_BASE}/groceryaisles/`, ({ request }) => {
+          capturedUrl = request.url;
+          return HttpResponse.json({ result: true });
+        }),
+      );
+
+      const client = new PaprikaClient("test@example.com", "password");
+      const input = makeTestAisle();
+      const result = await client.saveAisle(input);
+
+      expect(capturedUrl).toBe(`${API_BASE}/groceryaisles/`);
+      expect(result.uid).toBe(input.uid);
+      expect(result.name).toBe(input.name);
+    });
+
+    it("aisle-client.AC2.2 - body is gzipped JSON array with 4 snake_case keys", async () => {
+      let body: Array<Record<string, unknown>> | null = null;
+
+      server.use(
+        http.post(`${API_BASE}/groceryaisles/`, async ({ request }) => {
+          const formData = await request.formData();
+          const dataBlob = formData.get("data") as Blob;
+          const arrayBuffer = await dataBlob.arrayBuffer();
+          const decompressed = gunzipSync(Buffer.from(arrayBuffer));
+          body = JSON.parse(decompressed.toString()) as Array<Record<string, unknown>>;
+          return HttpResponse.json({ result: true });
+        }),
+      );
+
+      const client = new PaprikaClient("test@example.com", "password");
+      await client.saveAisle(makeTestAisle({ name: "Bakery", orderFlag: 7 }));
+
+      expect(body).not.toBeNull();
+      expect(Array.isArray(body)).toBe(true);
+      expect(body!).toHaveLength(1);
+      const payload = body![0]!;
+      expect(Object.keys(payload)).toHaveLength(4);
+      expect(payload).toHaveProperty("uid");
+      expect(payload).toHaveProperty("name");
+      expect(payload).toHaveProperty("order_flag", 7);
+      expect(payload).toHaveProperty("deleted", false);
+      expect(payload).not.toHaveProperty("orderFlag");
     });
   });
 });

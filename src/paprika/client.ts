@@ -26,8 +26,15 @@ import {
 import type { Logger } from "pino";
 import { z } from "zod";
 import type { ZodType, ZodTypeDef } from "zod";
-import type { Category, PantryItem, Recipe, RecipeEntry, RecipeUid } from "./types.js";
-import { AuthResponseSchema, CategorySchema, PantryItemSchema, RecipeEntrySchema, RecipeSchema } from "./types.js";
+import type { Aisle, Category, PantryItem, Recipe, RecipeEntry, RecipeUid } from "./types.js";
+import {
+  AisleSchema,
+  AuthResponseSchema,
+  CategorySchema,
+  PantryItemSchema,
+  RecipeEntrySchema,
+  RecipeSchema,
+} from "./types.js";
 import { PaprikaAuthError, PaprikaAPIError } from "./errors.js";
 import { CircuitOpenError } from "../utils/errors.js";
 import { SILENT_LOG } from "../utils/log.js";
@@ -94,6 +101,15 @@ function recipeToApiPayload(recipe: Readonly<Recipe>): Record<string, unknown> {
     on_grocery_list: recipe.onGroceryList,
     scale: recipe.scale,
     nutritional_info: recipe.nutritionalInfo,
+  };
+}
+
+function aisleToApiPayload(aisle: Readonly<Aisle>): Record<string, unknown> {
+  return {
+    uid: aisle.uid,
+    name: aisle.name,
+    order_flag: aisle.orderFlag,
+    deleted: aisle.deleted,
   };
 }
 
@@ -206,6 +222,10 @@ export class PaprikaClient {
     return this.request("GET", `${API_BASE}/categories/`, z.array(CategorySchema));
   }
 
+  async listAisles(): Promise<Array<Aisle>> {
+    return this.request("GET", `${API_BASE}/groceryaisles/`, z.array(AisleSchema));
+  }
+
   async listPantry(): Promise<Array<PantryItem>> {
     return this.request("GET", `${API_BASE}/pantry/`, z.array(PantryItemSchema));
   }
@@ -214,6 +234,12 @@ export class PaprikaClient {
     const formData = this.buildRecipeFormData(recipe);
     await this.request("POST", `${API_BASE}/recipe/${recipe.uid}/`, z.boolean(), formData);
     return recipe as Recipe;
+  }
+
+  async saveAisle(aisle: Readonly<Aisle>): Promise<Aisle> {
+    const formData = this.buildAisleFormData(aisle);
+    await this.request("POST", `${API_BASE}/groceryaisles/`, z.boolean(), formData);
+    return aisle as Aisle;
   }
 
   async savePantryItem(item: Readonly<PantryItem>): Promise<PantryItem> {
@@ -243,6 +269,16 @@ export class PaprikaClient {
     const blob = new Blob([compressed]);
     const formData = new FormData();
     formData.append("data", blob, "data.gz");
+    return formData;
+  }
+
+  private buildAisleFormData(aisle: Readonly<Aisle>): FormData {
+    const payload = [aisleToApiPayload(aisle)];
+    const json = JSON.stringify(payload);
+    const compressed = gzipSync(json);
+    const blob = new Blob([compressed]);
+    const formData = new FormData();
+    formData.append("data", blob, "file");
     return formData;
   }
 
