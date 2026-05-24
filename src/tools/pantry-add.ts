@@ -23,7 +23,12 @@ export function registerAddPantryItemTool(server: McpServer, ctx: ServerContext)
       inputSchema: {
         ingredient: z.string().min(1).describe("Ingredient name (required)"),
         quantity: z.string().optional().describe("Quantity, e.g. '1 lb'"),
-        aisle: z.string().optional().describe("Aisle name (display)"),
+        aisle: z
+          .string()
+          .optional()
+          .describe(
+            "Aisle display name; call list_aisles first to pick an existing name. Unknown names auto-create a new aisle.",
+          ),
         expirationDate: z.string().optional().describe("Expiration date as ISO string; sets hasExpiration=true"),
         inStock: z.boolean().optional().describe("Whether the item is currently in stock (default: true)"),
         notes: z.string().optional().describe("Free-form notes"),

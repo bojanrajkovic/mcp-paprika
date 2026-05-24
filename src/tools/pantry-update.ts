@@ -23,7 +23,12 @@ export function registerUpdatePantryItemTool(server: McpServer, ctx: ServerConte
         uid: z.string().describe("Pantry item UID to update"),
         ingredient: z.string().optional().describe("New ingredient name"),
         quantity: z.string().optional().describe("New quantity"),
-        aisle: z.string().optional().describe("New aisle (display name)"),
+        aisle: z
+          .string()
+          .optional()
+          .describe(
+            "New aisle display name; call list_aisles first to pick an existing name. Unknown names auto-create a new aisle.",
+          ),
         expirationDate: z
           .string()
           .nullable()
