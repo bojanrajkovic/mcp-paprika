@@ -26,11 +26,24 @@ import {
 import type { Logger } from "pino";
 import { z } from "zod";
 import type { ZodType, ZodTypeDef } from "zod";
-import type { Aisle, Category, PantryItem, Recipe, RecipeEntry, RecipeUid } from "./types.js";
+import type {
+  Aisle,
+  Category,
+  GroceryIngredient,
+  GroceryItem,
+  GroceryList,
+  PantryItem,
+  Recipe,
+  RecipeEntry,
+  RecipeUid,
+} from "./types.js";
 import {
   AisleSchema,
   AuthResponseSchema,
   CategorySchema,
+  GroceryIngredientSchema,
+  GroceryItemSchema,
+  GroceryListSchema,
   PantryItemSchema,
   RecipeEntrySchema,
   RecipeSchema,
@@ -126,6 +139,44 @@ function pantryItemToApiPayload(item: Readonly<PantryItem>): Record<string, unkn
     purchase_date: item.purchaseDate,
     notes: item.notes,
     deleted: item.deleted,
+  };
+}
+
+function groceryListToApiPayload(list: Readonly<GroceryList>): Record<string, unknown> {
+  return {
+    uid: list.uid,
+    name: list.name,
+    order_flag: list.orderFlag,
+    is_default: list.isDefault,
+    reminders_list: list.remindersList,
+    deleted: list.deleted,
+  };
+}
+
+function groceryItemToApiPayload(item: Readonly<GroceryItem>): Record<string, unknown> {
+  return {
+    uid: item.uid,
+    name: item.name,
+    ingredient: item.ingredient,
+    aisle: item.aisle,
+    aisle_uid: item.aisleUid,
+    list_uid: item.listUid,
+    purchased: item.purchased,
+    deleted: item.deleted,
+    order_flag: item.orderFlag,
+    quantity: item.quantity,
+    instruction: item.instruction,
+    recipe: item.recipe,
+    separate: item.separate,
+  };
+}
+
+function groceryIngredientToApiPayload(ingredient: Readonly<GroceryIngredient>): Record<string, unknown> {
+  return {
+    uid: ingredient.uid,
+    name: ingredient.name,
+    aisle_uid: ingredient.aisleUid,
+    deleted: ingredient.deleted,
   };
 }
 
@@ -226,6 +277,18 @@ export class PaprikaClient {
     return this.request("GET", `${API_BASE}/groceryaisles/`, z.array(AisleSchema));
   }
 
+  async listGroceryLists(): Promise<Array<GroceryList>> {
+    return this.request("GET", `${API_BASE}/grocerylists/`, z.array(GroceryListSchema));
+  }
+
+  async listGroceryItems(): Promise<Array<GroceryItem>> {
+    return this.request("GET", `${API_BASE}/groceries/`, z.array(GroceryItemSchema));
+  }
+
+  async listGroceryIngredients(): Promise<Array<GroceryIngredient>> {
+    return this.request("GET", `${API_BASE}/groceryingredients/`, z.array(GroceryIngredientSchema));
+  }
+
   async listPantry(): Promise<Array<PantryItem>> {
     return this.request("GET", `${API_BASE}/pantry/`, z.array(PantryItemSchema));
   }
@@ -250,6 +313,24 @@ export class PaprikaClient {
     // Verified 2026-05-08 against macOS Paprika.app v3.8.4 (build:41).
     await this.request("POST", `${API_BASE}/pantry/`, z.boolean(), formData);
     return item as PantryItem;
+  }
+
+  async saveGroceryList(list: Readonly<GroceryList>): Promise<GroceryList> {
+    const formData = this.buildGroceryListFormData(list);
+    await this.request("POST", `${API_BASE}/grocerylists/`, z.boolean(), formData);
+    return list as GroceryList;
+  }
+
+  async saveGroceryItems(items: ReadonlyArray<Readonly<GroceryItem>>): Promise<ReadonlyArray<GroceryItem>> {
+    const formData = this.buildGroceryItemsFormData(items);
+    await this.request("POST", `${API_BASE}/groceries/`, z.boolean(), formData);
+    return items;
+  }
+
+  async saveGroceryIngredient(ingredient: Readonly<GroceryIngredient>): Promise<GroceryIngredient> {
+    const formData = this.buildGroceryIngredientFormData(ingredient);
+    await this.request("POST", `${API_BASE}/groceryingredients/`, z.boolean(), formData);
+    return ingredient as GroceryIngredient;
   }
 
   async notifySync(): Promise<void> {
@@ -287,6 +368,36 @@ export class PaprikaClient {
     // multipart field name="data" filename="file". The Paprika app batches when
     // multiple changes happen quickly; we always send a one-item batch.
     const payload = [pantryItemToApiPayload(item)];
+    const json = JSON.stringify(payload);
+    const compressed = gzipSync(json);
+    const blob = new Blob([compressed]);
+    const formData = new FormData();
+    formData.append("data", blob, "file");
+    return formData;
+  }
+
+  private buildGroceryListFormData(list: Readonly<GroceryList>): FormData {
+    const payload = [groceryListToApiPayload(list)];
+    const json = JSON.stringify(payload);
+    const compressed = gzipSync(json);
+    const blob = new Blob([compressed]);
+    const formData = new FormData();
+    formData.append("data", blob, "file");
+    return formData;
+  }
+
+  private buildGroceryItemsFormData(items: ReadonlyArray<Readonly<GroceryItem>>): FormData {
+    const payload = items.map((item) => groceryItemToApiPayload(item));
+    const json = JSON.stringify(payload);
+    const compressed = gzipSync(json);
+    const blob = new Blob([compressed]);
+    const formData = new FormData();
+    formData.append("data", blob, "file");
+    return formData;
+  }
+
+  private buildGroceryIngredientFormData(ingredient: Readonly<GroceryIngredient>): FormData {
+    const payload = [groceryIngredientToApiPayload(ingredient)];
     const json = JSON.stringify(payload);
     const compressed = gzipSync(json);
     const blob = new Blob([compressed]);
