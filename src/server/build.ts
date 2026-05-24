@@ -20,7 +20,6 @@ import { registerUpdatePantryItemTool } from "../tools/pantry-update.js";
 import { registerReadTool } from "../tools/read.js";
 import { registerSearchTool } from "../tools/search.js";
 import { registerUpdateTool } from "../tools/update.js";
-import { registerPantryResources } from "../resources/pantry.js";
 import { registerRecipeResources } from "../resources/recipes.js";
 import type { PaprikaConfig } from "../utils/config.js";
 import { getCacheDir } from "../utils/xdg.js";
@@ -136,6 +135,7 @@ export async function buildAppContext(
   // Wired here (not inside SyncEngine) so the engine stays decoupled from the
   // notifier decision — subscribers pick what to do with each entity's changes.
   sync.events.on("sync:complete", (result) => {
+    if (result.changeType !== "recipes") return;
     const { added, updated, removedUids } = result.changes;
     if (added.length > 0 || updated.length > 0 || removedUids.length > 0) {
       notifier.resourceListChanged();
@@ -194,7 +194,7 @@ export async function buildAppContext(
 /**
  * Build a fully-registered McpServer for the given AppContext.
  *
- * Registers all 14 tools and both resource families. Called once for stdio,
+ * Registers all 14 tools and the recipe resource family. Called once for stdio,
  * once per session for HTTP. Tool registration is pure (closures over the
  * session context), so registering the same tool name on N independent
  * server instances is safe — there is no module-level mutable state.
@@ -225,7 +225,6 @@ export function buildMcpServer(app: AppContext): McpServer {
   }
 
   registerRecipeResources(server, sessionCtx);
-  registerPantryResources(server, sessionCtx);
 
   return server;
 }

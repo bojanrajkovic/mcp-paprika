@@ -9,7 +9,7 @@ import type { DiskCacheRoot } from "../cache/disk/index.js";
 
 describe("pantry-mutations.AC3: commitPantryItem helper", () => {
   describe("AC3.1: upsert branch (deleted: false)", () => {
-    it("should call putPantryItem, flush, set, resourceListChanged, notifySync in order", async () => {
+    it("should call putPantryItem, flush, set, notifySync in order", async () => {
       // Arrange
       const saved = makePantryItem({ deleted: false });
       const pantryStore = new PantryStore();
@@ -39,10 +39,10 @@ describe("pantry-mutations.AC3: commitPantryItem helper", () => {
       // Assert: verify full ordering using invocationCallOrder
       expect(mockPutPantryItem.mock.invocationCallOrder[0]).toBeLessThan(mockFlush.mock.invocationCallOrder[0]!);
       expect(mockFlush.mock.invocationCallOrder[0]).toBeLessThan(setSpy.mock.invocationCallOrder[0]!);
-      expect(setSpy.mock.invocationCallOrder[0]).toBeLessThan(stub.resourceListChanged.mock.invocationCallOrder[0]!);
-      expect(stub.resourceListChanged.mock.invocationCallOrder[0]).toBeLessThan(
-        mockNotifySync.mock.invocationCallOrder[0]!,
-      );
+      expect(setSpy.mock.invocationCallOrder[0]).toBeLessThan(mockNotifySync.mock.invocationCallOrder[0]!);
+
+      // Assert: no resource-list notification — pantry has no resource surface
+      expect(stub.resourceListChanged).not.toHaveBeenCalled();
 
       // Assert: verify delete-branch mocks were NOT called
       expect(mockRemovePantryItem).not.toHaveBeenCalled();
@@ -55,7 +55,7 @@ describe("pantry-mutations.AC3: commitPantryItem helper", () => {
   });
 
   describe("AC3.2: delete branch (deleted: true)", () => {
-    it("should call removePantryItem, flush, delete, resourceListChanged, notifySync in order", async () => {
+    it("should call removePantryItem, flush, delete, notifySync in order", async () => {
       // Arrange
       const item = makePantryItem({ deleted: false });
       const saved = { ...item, deleted: true };
@@ -87,10 +87,10 @@ describe("pantry-mutations.AC3: commitPantryItem helper", () => {
       // Assert: verify full ordering using invocationCallOrder
       expect(mockRemovePantryItem.mock.invocationCallOrder[0]).toBeLessThan(mockFlush.mock.invocationCallOrder[0]!);
       expect(mockFlush.mock.invocationCallOrder[0]).toBeLessThan(deleteSpy.mock.invocationCallOrder[0]!);
-      expect(deleteSpy.mock.invocationCallOrder[0]).toBeLessThan(stub.resourceListChanged.mock.invocationCallOrder[0]!);
-      expect(stub.resourceListChanged.mock.invocationCallOrder[0]).toBeLessThan(
-        mockNotifySync.mock.invocationCallOrder[0]!,
-      );
+      expect(deleteSpy.mock.invocationCallOrder[0]).toBeLessThan(mockNotifySync.mock.invocationCallOrder[0]!);
+
+      // Assert: no resource-list notification — pantry has no resource surface
+      expect(stub.resourceListChanged).not.toHaveBeenCalled();
 
       // Assert: verify upsert-branch mocks were NOT called
       expect(mockPutPantryItem).not.toHaveBeenCalled();

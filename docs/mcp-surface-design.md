@@ -75,7 +75,7 @@ child items so a single resource read gives the user complete context to discuss
 | ----------- | ---------------------- | --------------------- | -------------------------------------------------------------------------------------------------- |
 | Recipe      | Tools + resource       | Content → both        | Conforming. Enrich resource metadata header (currently only adds UID; add URI and sync timestamp). |
 | Category    | `list_categories` tool | Reference → list tool | Conforming. No change.                                                                             |
-| Pantry item | Tools + resource       | Data → tools only     | Non-conforming. Retire `paprika://pantry/{uid}` resource (#104).                                   |
+| Pantry item | Tools only             | Data → tools only     | Conforming. `paprika://pantry/{uid}` resource retired (#104).                                      |
 
 Grocery lists, grocery items, aisles, menus, and meal entries do not exist yet
 and will be built to the matrix from the start.

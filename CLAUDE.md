@@ -40,7 +40,7 @@ MCP server for the Paprika recipe manager. Two transports: **stdio** (default; u
 - `src/paprika/` — Paprika API client with pantry read and write support (`listPantry()`, `savePantryItem()` methods)
 - `src/cache/` — In-memory stores (`RecipeStore`, `PantryStore`) plus the persistence layer at `src/cache/disk/` (`DiskCacheRoot` and per-entity subcaches)
 - `src/tools/` — MCP tool definitions including read tools (`list_pantry`, `get_pantry_item`) and write tools (`add_pantry_item`, `update_pantry_item`, `delete_pantry_item`) for pantry access
-- `src/resources/` — MCP resource definitions including `paprika://pantry/{uid}` resource template
+- `src/resources/` — MCP resource definitions including `paprika://recipe/{uid}` resource template
 - `src/features/` — Feature implementations (semantic search wiring lives here; tool registration happens in `src/server/build.ts`)
 - `src/types/` — Shared type definitions including `PantryItem` and branded `PantryItemUid`; `ServerContext` is a backward-compat alias re-exporting `SessionContext` from `src/server/`
 - `src/utils/` — Cross-cutting utilities: `config.ts` (with `transport`/`http`/`oauth`/`logging` schema blocks), `log.ts` (pino root logger factory with credential-redact policy and notifier fan-out stream), `xdg.ts`, `duration.ts`
