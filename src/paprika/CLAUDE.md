@@ -118,7 +118,7 @@ Typed HTTP client wrapping the Paprika Cloud Sync API.
 **Private API:**
 
 - `buildRecipeFormData(recipe: Readonly<Recipe>): FormData` — converts recipe to snake_case JSON, gzip-compresses, wraps in FormData with `data.gz` blob
-- `buildPantryFormData(item: Readonly<PantryItem>): FormData` — converts pantry item to snake_case JSON via `pantryItemToApiPayload`, gzip-compresses, wraps in FormData with `data.gz` blob
+- `buildPantryItemsFormData(items: ReadonlyArray<Readonly<PantryItem>>): FormData` — maps items via `pantryItemToApiPayload`, gzip-compresses array, wraps in FormData with `data.gz` blob
 - `buildGroceryListFormData(list: Readonly<GroceryList>): FormData` — single-element array of `groceryListToApiPayload(list)`, gzip-compressed, field `data` filename `file`
 - `buildGroceryItemsFormData(items: ReadonlyArray<Readonly<GroceryItem>>): FormData` — N-element array mapped via `groceryItemToApiPayload`, gzip-compressed, field `data` filename `file`
 - `buildGroceryIngredientFormData(ingredient: Readonly<GroceryIngredient>): FormData` — single-element array of `groceryIngredientToApiPayload(ingredient)`, gzip-compressed, field `data` filename `file`
