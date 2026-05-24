@@ -119,7 +119,9 @@ export async function buildAppContext(
 
   const aisleStore = new AisleStore({ pendingWriteTtlMs });
   const cachedAisles = (await cache.aisles.getAll()).filter((a) => !a.deleted);
-  aisleStore.load(cachedAisles);
+  if (cachedAisles.length > 0) {
+    aisleStore.load(cachedAisles);
+  }
   log.info({ count: cachedAisles.length }, "hydrated aisle store from cache");
 
   // SyncEngine only reads client/cache/store/pantryStore/notifier — never
