@@ -12,8 +12,16 @@ import { PaprikaClient } from "./client.js";
 import { PaprikaAPIError, PaprikaAuthError } from "./errors.js";
 import { CircuitOpenError } from "../utils/errors.js";
 import { toMessage, REDACT_PATHS } from "../utils/log.js";
-import type { PantryItem, Recipe, Aisle } from "./types.js";
-import { RecipeSchema, RecipeUidSchema, PantryItemUidSchema, AisleUidSchema } from "./types.js";
+import type { PantryItem, Recipe, Aisle, GroceryList, GroceryItem, GroceryIngredient } from "./types.js";
+import {
+  RecipeSchema,
+  RecipeUidSchema,
+  PantryItemUidSchema,
+  AisleUidSchema,
+  GroceryListUidSchema,
+  GroceryItemUidSchema,
+  GroceryIngredientUidSchema,
+} from "./types.js";
 
 const AUTH_URL = "https://paprikaapp.com/api/v1/account/login/";
 const API_BASE = "https://paprikaapp.com/api/v2/sync";
@@ -71,6 +79,47 @@ function makeCamelCasePantryItem(uid: string, overrides?: Partial<PantryItem>): 
   };
 
   return { ...defaults, ...overrides };
+}
+
+function makeTestGroceryList(overrides?: Partial<GroceryList>): GroceryList {
+  return {
+    uid: GroceryListUidSchema.parse("GL000000-0000-0000-0000-000000000001"),
+    name: "Groceries",
+    orderFlag: 0,
+    isDefault: true,
+    remindersList: "",
+    deleted: false,
+    ...overrides,
+  } as GroceryList;
+}
+
+function makeTestGroceryItem(overrides?: Partial<GroceryItem>): GroceryItem {
+  return {
+    uid: GroceryItemUidSchema.parse("GI000000-0000-0000-0000-000000000001"),
+    name: "Apples",
+    ingredient: "Apples",
+    aisle: "Produce",
+    aisleUid: "AI000000-0000-0000-0000-000000000001",
+    listUid: "GL000000-0000-0000-0000-000000000001",
+    purchased: false,
+    deleted: false,
+    orderFlag: 0,
+    quantity: "6",
+    instruction: "",
+    recipe: null,
+    separate: false,
+    ...overrides,
+  } as GroceryItem;
+}
+
+function makeTestGroceryIngredient(overrides?: Partial<GroceryIngredient>): GroceryIngredient {
+  return {
+    uid: GroceryIngredientUidSchema.parse("GN000000-0000-0000-0000-000000000001"),
+    name: "Milk",
+    aisleUid: "AI000000-0000-0000-0000-000000000002",
+    deleted: false,
+    ...overrides,
+  } as GroceryIngredient;
 }
 
 const server = setupServer();
@@ -1557,6 +1606,342 @@ describe("PaprikaClient", () => {
       expect(payload).toHaveProperty("order_flag", 7);
       expect(payload).toHaveProperty("deleted", false);
       expect(payload).not.toHaveProperty("orderFlag");
+    });
+  });
+
+  describe("grocery-infra.AC2.1: listGroceryLists()", () => {
+    function makeWireGroceryList(overrides?: Partial<Record<string, unknown>>): Record<string, unknown> {
+      return {
+        uid: "GL000000-0000-0000-0000-000000000001",
+        name: "Groceries",
+        order_flag: 0,
+        is_default: true,
+        reminders_list: "",
+        deleted: false,
+        ...overrides,
+      };
+    }
+
+    it("grocery-infra.AC2.1 - GETs from /grocerylists/ and returns GroceryList[] with camelCase fields", async () => {
+      server.use(
+        http.get(`${API_BASE}/grocerylists/`, () => {
+          return HttpResponse.json({
+            result: [
+              makeWireGroceryList({ name: "Groceries", order_flag: 0, is_default: true }),
+              makeWireGroceryList({
+                uid: "GL000000-0000-0000-0000-000000000002",
+                name: "Weekend",
+                order_flag: 1,
+                is_default: false,
+              }),
+            ],
+          });
+        }),
+      );
+
+      const client = new PaprikaClient("test@example.com", "password");
+      const lists = await client.listGroceryLists();
+
+      expect(lists).toHaveLength(2);
+      expect(lists[0]!.name).toBe("Groceries");
+      expect(lists[0]!.orderFlag).toBe(0);
+      expect(lists[0]!.isDefault).toBe(true);
+      expect(lists[0]!.remindersList).toBe("");
+      expect(lists[0]!.deleted).toBe(false);
+      expect(lists[1]!.name).toBe("Weekend");
+      expect(lists[1]!.isDefault).toBe(false);
+    });
+  });
+
+  describe("grocery-infra.AC2.2: listGroceryItems()", () => {
+    function makeWireGroceryItem(overrides?: Partial<Record<string, unknown>>): Record<string, unknown> {
+      return {
+        uid: "GI000000-0000-0000-0000-000000000001",
+        name: "Apples",
+        ingredient: "Apples",
+        aisle: "Produce",
+        aisle_uid: "AI000000-0000-0000-0000-000000000001",
+        list_uid: "GL000000-0000-0000-0000-000000000001",
+        purchased: false,
+        deleted: false,
+        order_flag: 0,
+        quantity: "6",
+        instruction: "",
+        recipe: null,
+        separate: false,
+        ...overrides,
+      };
+    }
+
+    it("grocery-infra.AC2.2 - GETs from /groceries/ and returns GroceryItem[] with camelCase fields", async () => {
+      server.use(
+        http.get(`${API_BASE}/groceries/`, () => {
+          return HttpResponse.json({
+            result: [
+              makeWireGroceryItem({ name: "Apples", aisle_uid: "AI-001", list_uid: "GL-001", order_flag: 2 }),
+              makeWireGroceryItem({
+                uid: "GI000000-0000-0000-0000-000000000002",
+                name: "Bread",
+                aisle: "Bakery",
+                aisle_uid: "AI-002",
+                list_uid: "GL-001",
+                order_flag: 5,
+              }),
+            ],
+          });
+        }),
+      );
+
+      const client = new PaprikaClient("test@example.com", "password");
+      const items = await client.listGroceryItems();
+
+      expect(items).toHaveLength(2);
+      expect(items[0]!.name).toBe("Apples");
+      expect(items[0]!.aisleUid).toBe("AI-001");
+      expect(items[0]!.listUid).toBe("GL-001");
+      expect(items[0]!.orderFlag).toBe(2);
+      expect(items[0]!.recipe).toBeNull();
+      expect(items[1]!.name).toBe("Bread");
+      expect(items[1]!.aisleUid).toBe("AI-002");
+    });
+  });
+
+  describe("grocery-infra.AC2.3: listGroceryIngredients()", () => {
+    function makeWireGroceryIngredient(overrides?: Partial<Record<string, unknown>>): Record<string, unknown> {
+      return {
+        uid: "GN000000-0000-0000-0000-000000000001",
+        name: "Milk",
+        aisle_uid: "AI000000-0000-0000-0000-000000000002",
+        deleted: false,
+        ...overrides,
+      };
+    }
+
+    it("grocery-infra.AC2.3 - GETs from /groceryingredients/ and returns GroceryIngredient[] with aisleUid", async () => {
+      server.use(
+        http.get(`${API_BASE}/groceryingredients/`, () => {
+          return HttpResponse.json({
+            result: [
+              makeWireGroceryIngredient({ name: "Milk", aisle_uid: "AI-DAIRY" }),
+              makeWireGroceryIngredient({
+                uid: "GN000000-0000-0000-0000-000000000002",
+                name: "Eggs",
+                aisle_uid: "AI-DAIRY",
+              }),
+            ],
+          });
+        }),
+      );
+
+      const client = new PaprikaClient("test@example.com", "password");
+      const ingredients = await client.listGroceryIngredients();
+
+      expect(ingredients).toHaveLength(2);
+      expect(ingredients[0]!.name).toBe("Milk");
+      expect(ingredients[0]!.aisleUid).toBe("AI-DAIRY");
+      expect(ingredients[0]!.deleted).toBe(false);
+      expect(ingredients[1]!.name).toBe("Eggs");
+      expect(ingredients[1]!.aisleUid).toBe("AI-DAIRY");
+    });
+  });
+
+  describe("grocery-infra.AC2.4: saveGroceryList()", () => {
+    it("grocery-infra.AC2.4 - POSTs to /grocerylists/ with 6 snake_case keys and returns input list", async () => {
+      let body: Array<Record<string, unknown>> | null = null;
+
+      server.use(
+        http.post(`${API_BASE}/grocerylists/`, async ({ request }) => {
+          const formData = await request.formData();
+          const dataBlob = formData.get("data") as Blob;
+          const arrayBuffer = await dataBlob.arrayBuffer();
+          const decompressed = gunzipSync(Buffer.from(arrayBuffer));
+          body = JSON.parse(decompressed.toString()) as Array<Record<string, unknown>>;
+          return HttpResponse.json({ result: true });
+        }),
+      );
+
+      const client = new PaprikaClient("test@example.com", "password");
+      const input = makeTestGroceryList({ name: "Weekend", orderFlag: 1, isDefault: false });
+      const result = await client.saveGroceryList(input);
+
+      expect(result.uid).toBe(input.uid);
+      expect(result.name).toBe(input.name);
+
+      expect(body).not.toBeNull();
+      expect(Array.isArray(body)).toBe(true);
+      expect(body!).toHaveLength(1);
+      const payload = body![0]!;
+      expect(Object.keys(payload)).toHaveLength(6);
+      expect(payload).toHaveProperty("uid");
+      expect(payload).toHaveProperty("name", "Weekend");
+      expect(payload).toHaveProperty("order_flag", 1);
+      expect(payload).toHaveProperty("is_default", false);
+      expect(payload).toHaveProperty("reminders_list");
+      expect(payload).toHaveProperty("deleted", false);
+      expect(payload).not.toHaveProperty("orderFlag");
+      expect(payload).not.toHaveProperty("isDefault");
+      expect(payload).not.toHaveProperty("remindersList");
+    });
+  });
+
+  describe("grocery-infra.AC2.5: saveGroceryItems()", () => {
+    it("grocery-infra.AC2.5 - POSTs to /groceries/ with 13 snake_case keys per item and returns input items", async () => {
+      let body: Array<Record<string, unknown>> | null = null;
+
+      server.use(
+        http.post(`${API_BASE}/groceries/`, async ({ request }) => {
+          const formData = await request.formData();
+          const dataBlob = formData.get("data") as Blob;
+          const arrayBuffer = await dataBlob.arrayBuffer();
+          const decompressed = gunzipSync(Buffer.from(arrayBuffer));
+          body = JSON.parse(decompressed.toString()) as Array<Record<string, unknown>>;
+          return HttpResponse.json({ result: true });
+        }),
+      );
+
+      const client = new PaprikaClient("test@example.com", "password");
+      const item1 = makeTestGroceryItem({ name: "Apples", orderFlag: 0 });
+      const item2 = makeTestGroceryItem({
+        uid: GroceryItemUidSchema.parse("GI000000-0000-0000-0000-000000000002"),
+        name: "Bread",
+        orderFlag: 1,
+      });
+      const result = await client.saveGroceryItems([item1, item2]);
+
+      expect(result).toHaveLength(2);
+      expect(result[0]!.name).toBe("Apples");
+      expect(result[1]!.name).toBe("Bread");
+
+      expect(body).not.toBeNull();
+      expect(Array.isArray(body)).toBe(true);
+      expect(body!).toHaveLength(2);
+      const payload = body![0]!;
+      expect(Object.keys(payload)).toHaveLength(13);
+      expect(payload).toHaveProperty("uid");
+      expect(payload).toHaveProperty("name", "Apples");
+      expect(payload).toHaveProperty("ingredient");
+      expect(payload).toHaveProperty("aisle");
+      expect(payload).toHaveProperty("aisle_uid");
+      expect(payload).toHaveProperty("list_uid");
+      expect(payload).toHaveProperty("purchased", false);
+      expect(payload).toHaveProperty("deleted", false);
+      expect(payload).toHaveProperty("order_flag", 0);
+      expect(payload).toHaveProperty("quantity");
+      expect(payload).toHaveProperty("instruction");
+      expect(payload).toHaveProperty("recipe", null);
+      expect(payload).toHaveProperty("separate", false);
+      expect(payload).not.toHaveProperty("aisleUid");
+      expect(payload).not.toHaveProperty("listUid");
+      expect(payload).not.toHaveProperty("orderFlag");
+    });
+  });
+
+  describe("grocery-infra.AC2.6: saveGroceryIngredient()", () => {
+    it("grocery-infra.AC2.6 - POSTs to /groceryingredients/ with 4 snake_case keys and returns input ingredient", async () => {
+      let body: Array<Record<string, unknown>> | null = null;
+
+      server.use(
+        http.post(`${API_BASE}/groceryingredients/`, async ({ request }) => {
+          const formData = await request.formData();
+          const dataBlob = formData.get("data") as Blob;
+          const arrayBuffer = await dataBlob.arrayBuffer();
+          const decompressed = gunzipSync(Buffer.from(arrayBuffer));
+          body = JSON.parse(decompressed.toString()) as Array<Record<string, unknown>>;
+          return HttpResponse.json({ result: true });
+        }),
+      );
+
+      const client = new PaprikaClient("test@example.com", "password");
+      const input = makeTestGroceryIngredient({ name: "Butter", aisleUid: "AI-DAIRY" });
+      const result = await client.saveGroceryIngredient(input);
+
+      expect(result.uid).toBe(input.uid);
+      expect(result.name).toBe(input.name);
+      expect(result.aisleUid).toBe(input.aisleUid);
+
+      expect(body).not.toBeNull();
+      expect(Array.isArray(body)).toBe(true);
+      expect(body!).toHaveLength(1);
+      const payload = body![0]!;
+      expect(Object.keys(payload)).toHaveLength(4);
+      expect(payload).toHaveProperty("uid");
+      expect(payload).toHaveProperty("name", "Butter");
+      expect(payload).toHaveProperty("aisle_uid", "AI-DAIRY");
+      expect(payload).toHaveProperty("deleted", false);
+      expect(payload).not.toHaveProperty("aisleUid");
+    });
+  });
+
+  describe("grocery-infra.AC2.7: savePantryItems() batch", () => {
+    it("grocery-infra.AC2.7 - savePantryItems() sends all N items in a single POST", async () => {
+      let body: Array<Record<string, unknown>> | null = null;
+
+      server.use(
+        http.post(`${API_BASE}/pantry/`, async ({ request }) => {
+          const formData = await request.formData();
+          const dataBlob = formData.get("data") as Blob;
+          const arrayBuffer = await dataBlob.arrayBuffer();
+          const decompressed = gunzipSync(Buffer.from(arrayBuffer));
+          body = JSON.parse(decompressed.toString()) as Array<Record<string, unknown>>;
+          return HttpResponse.json({ result: true });
+        }),
+      );
+
+      const client = new PaprikaClient("test@example.com", "password");
+      const item1 = makeCamelCasePantryItem("pantry-uid-001", { ingredient: "Flour" });
+      const item2 = makeCamelCasePantryItem("pantry-uid-002", { ingredient: "Sugar" });
+      const result = await client.savePantryItems([item1, item2]);
+
+      expect(result).toHaveLength(2);
+      expect(result[0]!.ingredient).toBe("Flour");
+      expect(result[1]!.ingredient).toBe("Sugar");
+
+      expect(body).not.toBeNull();
+      expect(Array.isArray(body)).toBe(true);
+      expect(body!).toHaveLength(2);
+    });
+  });
+
+  describe("grocery-infra.AC2.8: listGroceryLists() non-retryable error", () => {
+    it("grocery-infra.AC2.8 - 400 from /grocerylists/ throws PaprikaAPIError with status 400 and grocerylists endpoint", async () => {
+      server.use(
+        http.get(`${API_BASE}/grocerylists/`, () => {
+          return HttpResponse.json({ error: "bad request" }, { status: 400 });
+        }),
+      );
+
+      const client = new PaprikaClient("test@example.com", "password");
+
+      try {
+        await client.listGroceryLists();
+        expect.fail("Should have thrown PaprikaAPIError");
+      } catch (error) {
+        expect(error).toBeInstanceOf(PaprikaAPIError);
+        expect((error as PaprikaAPIError).status).toBe(400);
+        expect((error as PaprikaAPIError).endpoint).toContain("grocerylists");
+      }
+    });
+  });
+
+  describe("grocery-infra.AC2.9: listGroceryItems() retry on 503", () => {
+    it("grocery-infra.AC2.9 - 503 twice then 200 from /groceries/ results in successful return", async () => {
+      let callCount = 0;
+
+      server.use(
+        http.get(`${API_BASE}/groceries/`, () => {
+          callCount++;
+          if (callCount < 3) {
+            return HttpResponse.json({ error: "service unavailable" }, { status: 503 });
+          }
+          return HttpResponse.json({ result: [] });
+        }),
+      );
+
+      const client = new PaprikaClient("test@example.com", "password");
+      const items = await client.listGroceryItems();
+
+      expect(items).toStrictEqual([]);
+      expect(callCount).toBe(3);
     });
   });
 });
