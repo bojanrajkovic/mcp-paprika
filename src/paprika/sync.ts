@@ -172,6 +172,11 @@ export class SyncEngine {
       const pendingUpsertedAisles = cachedAisles.filter((a) => this._context.aisleStore.isPendingUpsert(a.uid));
       const effectiveAisles = [...incomingAislesFiltered, ...pendingUpsertedAisles];
 
+      const cachedAisleUids = new Set(cachedAisles.map((a) => a.uid));
+      const effectiveAisleUids = new Set(effectiveAisles.map((a) => a.uid));
+      const orphanAisleUids = [...cachedAisleUids].filter((uid) => !effectiveAisleUids.has(uid));
+      await Promise.all(orphanAisleUids.map((uid) => this._context.cache.aisles.remove(uid)));
+
       this._context.aisleStore.load(effectiveAisles);
       await Promise.all(effectiveAisles.map((a) => this._context.cache.aisles.put(a)));
 

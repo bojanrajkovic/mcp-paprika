@@ -59,25 +59,24 @@ export function registerAddPantryItemTool(server: McpServer, ctx: ServerContext)
           // listPantry returns; Paprika servers accept either case but matching the
           // app keeps round-tripped UIDs consistent.
           const uid = PantryItemUidSchema.parse(crypto.randomUUID().toUpperCase());
-          const { aisle, aisleUid } = await ensureAisle(ctx, args.aisle ?? "");
-          const newItem: PantryItem = {
-            uid,
-            ingredient: args.ingredient,
-            quantity: args.quantity ?? "",
-            aisle,
-            aisleUid,
-            expirationDate,
-            hasExpiration: expirationDate !== null, // AC4.2, AC4.3
-            inStock: args.inStock ?? true,
-            // Today's date at midnight (Paprika's wire format); matches what
-            // Paprika.app stamps when the user adds an item.
-            purchaseDate: paprikaDateToday(),
-            notes: args.notes ?? null,
-            deleted: false,
-          };
-
           let saved: PantryItem;
           try {
+            const { aisle, aisleUid } = await ensureAisle(ctx, args.aisle ?? "");
+            const newItem: PantryItem = {
+              uid,
+              ingredient: args.ingredient,
+              quantity: args.quantity ?? "",
+              aisle,
+              aisleUid,
+              expirationDate,
+              hasExpiration: expirationDate !== null, // AC4.2, AC4.3
+              inStock: args.inStock ?? true,
+              // Today's date at midnight (Paprika's wire format); matches what
+              // Paprika.app stamps when the user adds an item.
+              purchaseDate: paprikaDateToday(),
+              notes: args.notes ?? null,
+              deleted: false,
+            };
             saved = await ctx.client.savePantryItem(newItem);
             await commitPantryItem(ctx, saved);
           } catch (error) {
