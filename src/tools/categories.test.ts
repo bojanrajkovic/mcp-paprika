@@ -83,6 +83,32 @@ describe("p2-discovery-tools: list_categories tool", () => {
       expect(getText(result).toLowerCase()).toContain("try again");
     });
 
+    it("includes UIDs in output", async () => {
+      const cat = makeCategory({ uid: "cat-uid-1" as CategoryUid, name: "Desserts" });
+      const store = new RecipeStore();
+      store.load([makeRecipe({ categories: [cat.uid] })], [cat]);
+      const { server, callTool } = makeTestServer();
+      registerCategoryTools(server, makeCtx(store, server));
+
+      const result = await callTool("list_categories", {});
+      expect(getText(result)).toContain("uid: `cat-uid-1`");
+    });
+
+    it("renders child categories indented under parents", async () => {
+      const parent = makeCategory({ uid: "parent-1" as CategoryUid, name: "Baking", parentUid: null });
+      const child = makeCategory({ uid: "child-1" as CategoryUid, name: "Cakes", parentUid: "parent-1" });
+      const store = new RecipeStore();
+      store.load([makeRecipe({ categories: [parent.uid, child.uid] })], [parent, child]);
+      const { server, callTool } = makeTestServer();
+      registerCategoryTools(server, makeCtx(store, server));
+
+      const result = await callTool("list_categories", {});
+      const text = getText(result);
+
+      expect(text).toContain("- **Baking**");
+      expect(text).toContain("  - **Cakes**");
+    });
+
     it("p2-discovery-tools.AC4.5: store with recipes but no categories returns empty message", async () => {
       const store = new RecipeStore();
       // Load recipes but pass empty categories array

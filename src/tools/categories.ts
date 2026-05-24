@@ -51,9 +51,33 @@ export function registerCategoryTools(server: McpServer, ctx: ServerContext): vo
 }
 
 function formatCategoryList(categories: Array<Category>, countMap: Map<string, number>): string {
-  const lines = categories.map((c) => {
-    const count = countMap.get(c.uid) ?? 0;
-    return `- **${c.name}** (${String(count)} ${count === 1 ? "recipe" : "recipes"})`;
-  });
+  const byParent = new Map<string | null, Array<Category>>();
+  for (const c of categories) {
+    const key = c.parentUid ?? null;
+    const group = byParent.get(key);
+    if (group) {
+      group.push(c);
+    } else {
+      byParent.set(key, [c]);
+    }
+  }
+
+  const lines: Array<string> = [];
+
+  function walk(parentUid: string | null, depth: number): void {
+    const children = byParent.get(parentUid);
+    if (!children) return;
+    const sorted = children.toSorted((a, b) => a.name.localeCompare(b.name));
+    const indent = "  ".repeat(depth);
+    for (const c of sorted) {
+      const count = countMap.get(c.uid) ?? 0;
+      lines.push(
+        `${indent}- **${c.name}** (${String(count)} ${count === 1 ? "recipe" : "recipes"}) — uid: \`${c.uid}\``,
+      );
+      walk(c.uid, depth + 1);
+    }
+  }
+
+  walk(null, 0);
   return `## Recipe Categories\n\n${lines.join("\n")}`;
 }
