@@ -172,7 +172,13 @@ export async function buildAppContext(
   // Wired here (not inside SyncEngine) so the engine stays decoupled from the
   // notifier decision — subscribers pick what to do with each entity's changes.
   sync.events.on("sync:complete", (result) => {
-    if (result.changeType !== "recipes") return;
+    if (
+      result.changeType !== "recipes" &&
+      result.changeType !== "grocery-lists" &&
+      result.changeType !== "grocery-items"
+    ) {
+      return;
+    }
     const { added, updated, removedUids } = result.changes;
     if (added.length > 0 || updated.length > 0 || removedUids.length > 0) {
       notifier.resourceListChanged();

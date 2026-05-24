@@ -47,6 +47,9 @@ function makeMockClient(): PaprikaClient {
     listCategories: vi.fn().mockResolvedValue([]),
     listAisles: vi.fn().mockResolvedValue([]),
     listPantry: vi.fn().mockResolvedValue([]),
+    listGroceryLists: vi.fn().mockResolvedValue([]),
+    listGroceryItems: vi.fn().mockResolvedValue([]),
+    listGroceryIngredients: vi.fn().mockResolvedValue([]),
   } as unknown as PaprikaClient;
 }
 
@@ -65,6 +68,21 @@ function makeMockCache(): DiskCacheRoot {
     pantry: {
       getAll: vi.fn().mockResolvedValue([]),
       put: vi.fn(),
+      remove: vi.fn().mockResolvedValue(undefined),
+    },
+    groceryLists: {
+      getAll: vi.fn().mockResolvedValue([]),
+      put: vi.fn().mockResolvedValue(undefined),
+      remove: vi.fn().mockResolvedValue(undefined),
+    },
+    groceryItems: {
+      getAll: vi.fn().mockResolvedValue([]),
+      put: vi.fn().mockResolvedValue(undefined),
+      remove: vi.fn().mockResolvedValue(undefined),
+    },
+    groceryIngredients: {
+      getAll: vi.fn().mockResolvedValue([]),
+      put: vi.fn().mockResolvedValue(undefined),
       remove: vi.fn().mockResolvedValue(undefined),
     },
     flush: vi.fn().mockResolvedValue(undefined),
@@ -198,14 +216,14 @@ describe("SyncEngine", () => {
     engine.start();
     engine.start(); // Second call should be ignored
 
-    // Wait for at least 6 sync:complete events (2 per cycle × 3 cycles)
+    // Wait for at least 12 sync:complete events (4 per cycle × 3 cycles)
     const syncCompleteEvents: unknown[] = [];
     engine.events.on("sync:complete", () => {
       syncCompleteEvents.push(1);
     });
 
     let attempts = 0;
-    while (syncCompleteEvents.length < 6 && attempts < 100) {
+    while (syncCompleteEvents.length < 12 && attempts < 100) {
       await new Promise((resolve) => setTimeout(resolve, 5));
       attempts++;
     }
@@ -240,7 +258,7 @@ describe("SyncEngine", () => {
     expect(typeof engine.events.off).toBe("function");
   });
 
-  it("AC2.2: sync:complete handler receives AnySyncResult (two events per cycle)", async () => {
+  it("AC2.2: sync:complete handler receives AnySyncResult (four events per cycle)", async () => {
     const receivedResults: AnySyncResult[] = [];
 
     engine.events.on("sync:complete", (result) => {
@@ -249,14 +267,14 @@ describe("SyncEngine", () => {
 
     engine.start();
 
-    // Poll until both events (recipe + pantry) are received
+    // Poll until all four events (recipe, pantry, grocery-lists, grocery-items) are received
     let attempts = 0;
-    while (receivedResults.length < 2 && attempts < 100) {
+    while (receivedResults.length < 4 && attempts < 100) {
       await new Promise((resolve) => setTimeout(resolve, 5));
       attempts++;
     }
 
-    expect(receivedResults).toHaveLength(2);
+    expect(receivedResults).toHaveLength(4);
     // First event: recipe result
     expect(receivedResults[0]).toEqual({
       changeType: "recipes",
@@ -265,6 +283,16 @@ describe("SyncEngine", () => {
     // Second event: pantry result
     expect(receivedResults[1]).toEqual({
       changeType: "pantry",
+      changes: { added: [], updated: [], removedUids: [] },
+    });
+    // Third event: grocery-lists result
+    expect(receivedResults[2]).toEqual({
+      changeType: "grocery-lists",
+      changes: { added: [], updated: [], removedUids: [] },
+    });
+    // Fourth event: grocery-items result
+    expect(receivedResults[3]).toEqual({
+      changeType: "grocery-items",
       changes: { added: [], updated: [], removedUids: [] },
     });
 
@@ -318,6 +346,9 @@ describe("syncOnce", () => {
       listCategories: vi.fn().mockResolvedValue([]),
       listAisles: vi.fn().mockResolvedValue([]),
       listPantry: vi.fn().mockResolvedValue([]),
+      listGroceryLists: vi.fn().mockResolvedValue([]),
+      listGroceryItems: vi.fn().mockResolvedValue([]),
+      listGroceryIngredients: vi.fn().mockResolvedValue([]),
     } as unknown as PaprikaClient;
   }
 
@@ -329,6 +360,9 @@ describe("syncOnce", () => {
     categories?: Partial<DiskCacheRoot["categories"]>;
     aisles?: Partial<DiskCacheRoot["aisles"]>;
     pantry?: Partial<DiskCacheRoot["pantry"]>;
+    groceryLists?: Partial<DiskCacheRoot["groceryLists"]>;
+    groceryItems?: Partial<DiskCacheRoot["groceryItems"]>;
+    groceryIngredients?: Partial<DiskCacheRoot["groceryIngredients"]>;
     flush?: () => Promise<void>;
   };
 
@@ -351,6 +385,24 @@ describe("syncOnce", () => {
         put: vi.fn(),
         remove: vi.fn().mockResolvedValue(undefined),
         ...overrides?.pantry,
+      },
+      groceryLists: {
+        getAll: vi.fn().mockResolvedValue([]),
+        put: vi.fn().mockResolvedValue(undefined),
+        remove: vi.fn().mockResolvedValue(undefined),
+        ...overrides?.groceryLists,
+      },
+      groceryItems: {
+        getAll: vi.fn().mockResolvedValue([]),
+        put: vi.fn().mockResolvedValue(undefined),
+        remove: vi.fn().mockResolvedValue(undefined),
+        ...overrides?.groceryItems,
+      },
+      groceryIngredients: {
+        getAll: vi.fn().mockResolvedValue([]),
+        put: vi.fn().mockResolvedValue(undefined),
+        remove: vi.fn().mockResolvedValue(undefined),
+        ...overrides?.groceryIngredients,
       },
       flush: overrides?.flush ?? vi.fn().mockResolvedValue(undefined),
     } as unknown as DiskCacheRoot;
@@ -543,8 +595,8 @@ describe("syncOnce", () => {
 
     await engine.syncOnce();
 
-    // Two events emitted: recipe first, pantry second
-    expect(receivedResults).toHaveLength(2);
+    // Four events emitted: recipe, pantry, grocery-lists, grocery-items
+    expect(receivedResults).toHaveLength(4);
     const recipeResult = receivedResults[0]!;
     expect(recipeResult.changeType).toBe("recipes");
     expect(recipeResult.changes.added).toHaveLength(1);
@@ -556,7 +608,7 @@ describe("syncOnce", () => {
     expect(storeDelete).toHaveBeenCalledWith(removedUid);
   });
 
-  it("AC3.5: No changes detected emits sync:complete with empty changes (two events)", async () => {
+  it("AC3.5: No changes detected emits sync:complete with empty changes (four events)", async () => {
     const engine = makeSyncEngine();
 
     const receivedResults: AnySyncResult[] = [];
@@ -566,13 +618,21 @@ describe("syncOnce", () => {
 
     await engine.syncOnce();
 
-    expect(receivedResults).toHaveLength(2);
+    expect(receivedResults).toHaveLength(4);
     expect(receivedResults[0]).toEqual({
       changeType: "recipes",
       changes: { added: [], updated: [], removedUids: [] },
     });
     expect(receivedResults[1]).toEqual({
       changeType: "pantry",
+      changes: { added: [], updated: [], removedUids: [] },
+    });
+    expect(receivedResults[2]).toEqual({
+      changeType: "grocery-lists",
+      changes: { added: [], updated: [], removedUids: [] },
+    });
+    expect(receivedResults[3]).toEqual({
+      changeType: "grocery-items",
       changes: { added: [], updated: [], removedUids: [] },
     });
   });
@@ -1066,6 +1126,9 @@ describe("syncOnce", () => {
           listCategories: vi.fn().mockResolvedValue([]),
           listAisles: vi.fn().mockResolvedValue([]),
           listPantry: vi.fn().mockResolvedValue([item]),
+          listGroceryLists: vi.fn().mockResolvedValue([]),
+          listGroceryItems: vi.fn().mockResolvedValue([]),
+          listGroceryIngredients: vi.fn().mockResolvedValue([]),
         } as unknown as PaprikaClient,
         cache: {
           recipes: {
@@ -1078,6 +1141,21 @@ describe("syncOnce", () => {
           pantry: {
             getAll: vi.fn().mockResolvedValue([]),
             put: vi.fn(),
+            remove: vi.fn().mockResolvedValue(undefined),
+          },
+          groceryLists: {
+            getAll: vi.fn().mockResolvedValue([]),
+            put: vi.fn().mockResolvedValue(undefined),
+            remove: vi.fn().mockResolvedValue(undefined),
+          },
+          groceryItems: {
+            getAll: vi.fn().mockResolvedValue([]),
+            put: vi.fn().mockResolvedValue(undefined),
+            remove: vi.fn().mockResolvedValue(undefined),
+          },
+          groceryIngredients: {
+            getAll: vi.fn().mockResolvedValue([]),
+            put: vi.fn().mockResolvedValue(undefined),
             remove: vi.fn().mockResolvedValue(undefined),
           },
           flush: vi.fn().mockResolvedValue(undefined),
@@ -1120,6 +1198,9 @@ describe("syncOnce", () => {
           listCategories: vi.fn().mockResolvedValue([]),
           listAisles: vi.fn().mockResolvedValue([]),
           listPantry: vi.fn().mockResolvedValue([]),
+          listGroceryLists: vi.fn().mockResolvedValue([]),
+          listGroceryItems: vi.fn().mockResolvedValue([]),
+          listGroceryIngredients: vi.fn().mockResolvedValue([]),
         } as unknown as PaprikaClient,
         cache: {
           recipes: {
@@ -1132,6 +1213,21 @@ describe("syncOnce", () => {
           pantry: {
             getAll: vi.fn().mockResolvedValue([]),
             put: vi.fn(),
+            remove: vi.fn().mockResolvedValue(undefined),
+          },
+          groceryLists: {
+            getAll: vi.fn().mockResolvedValue([]),
+            put: vi.fn().mockResolvedValue(undefined),
+            remove: vi.fn().mockResolvedValue(undefined),
+          },
+          groceryItems: {
+            getAll: vi.fn().mockResolvedValue([]),
+            put: vi.fn().mockResolvedValue(undefined),
+            remove: vi.fn().mockResolvedValue(undefined),
+          },
+          groceryIngredients: {
+            getAll: vi.fn().mockResolvedValue([]),
+            put: vi.fn().mockResolvedValue(undefined),
             remove: vi.fn().mockResolvedValue(undefined),
           },
           flush: vi.fn().mockResolvedValue(undefined),

@@ -82,6 +82,9 @@ beforeEach(async () => {
     http.get(`${API_BASE}/categories/`, () => HttpResponse.json({ result: [] })),
     http.get(`${API_BASE}/groceryaisles/`, () => HttpResponse.json({ result: [] })),
     http.get(`${API_BASE}/pantry/`, () => HttpResponse.json({ result: [] })),
+    http.get(`${API_BASE}/grocerylists/`, () => HttpResponse.json({ result: [] })),
+    http.get(`${API_BASE}/groceries/`, () => HttpResponse.json({ result: [] })),
+    http.get(`${API_BASE}/groceryingredients/`, () => HttpResponse.json({ result: [] })),
   );
 });
 
