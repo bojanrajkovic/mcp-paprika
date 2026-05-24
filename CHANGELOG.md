@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.3.0](https://github.com/bojanrajkovic/mcp-paprika/compare/v1.2.0...v1.3.0) (2026-05-24)
+
+
+### Features
+
+* **tools:** expose inTrash in update_recipe, add tests for rating/notes/inTrash ([#99](https://github.com/bojanrajkovic/mcp-paprika/issues/99)) ([37a2bef](https://github.com/bojanrajkovic/mcp-paprika/commit/37a2bef47ed12286e0258f0e3b3d8f12c6904ae0))
+* **tools:** surface created, rating, isPinned, onGroceryList, onFavorites in recipe outputs ([708fe1d](https://github.com/bojanrajkovic/mcp-paprika/commit/708fe1d3d2d7a1d2c9e450d7327a4b7c74f6fcdc))
+
+
+### Refactoring
+
+* **cache:** split DiskCache into generic base and per-entity subclasses (issue [#89](https://github.com/bojanrajkovic/mcp-paprika/issues/89)) ([#102](https://github.com/bojanrajkovic/mcp-paprika/issues/102)) ([78b8c11](https://github.com/bojanrajkovic/mcp-paprika/commit/78b8c11e1086456bb3d2dce76abcfcf4bf3f409a))
+* **entity:** extract EntityStore abstract base class (issue [#88](https://github.com/bojanrajkovic/mcp-paprika/issues/88)) ([#101](https://github.com/bojanrajkovic/mcp-paprika/issues/101)) ([0ed40b0](https://github.com/bojanrajkovic/mcp-paprika/commit/0ed40b06c65fd09aa07ebbd3672bf58b48054e0f))
+* **sync:** unify resource notifications through sync:complete events ([#100](https://github.com/bojanrajkovic/mcp-paprika/issues/100)) ([570849a](https://github.com/bojanrajkovic/mcp-paprika/commit/570849ad209091fd578975258500f9898c153a1d))
+
 ## [1.2.0](https://github.com/bojanrajkovic/mcp-paprika/compare/v1.1.0...v1.2.0) (2026-05-23)
 
 
