@@ -1,5 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
+import { AisleStore } from "../cache/aisle-store.js";
 import { DiskCacheRoot } from "../cache/disk/index.js";
 import { PantryStore } from "../cache/pantry-store.js";
 import { RecipeStore } from "../cache/recipe-store.js";
@@ -12,6 +13,7 @@ import { registerDeleteTool } from "../tools/delete.js";
 import { registerDiscoverTool } from "../tools/discover.js";
 import { registerFilterTools } from "../tools/filter.js";
 import { registerListTool } from "../tools/list.js";
+import { registerAislesTool } from "../tools/aisles.js";
 import { registerAddPantryItemTool } from "../tools/pantry-add.js";
 import { registerDeletePantryItemTool } from "../tools/pantry-delete.js";
 import { registerGetPantryItemTool } from "../tools/pantry-get.js";
@@ -115,6 +117,11 @@ export async function buildAppContext(
   }
   log.info({ count: cachedPantryItems.length }, "hydrated pantry store from cache");
 
+  const aisleStore = new AisleStore({ pendingWriteTtlMs });
+  const cachedAisles = (await cache.aisles.getAll()).filter((a) => !a.deleted);
+  aisleStore.load(cachedAisles);
+  log.info({ count: cachedAisles.length }, "hydrated aisle store from cache");
+
   // SyncEngine only reads client/cache/store/pantryStore/notifier — never
   // vectorStore — so it is safe to construct with a placeholder appContext
   // whose vectorStore is null. The vector store is then built with
@@ -124,6 +131,7 @@ export async function buildAppContext(
     cache,
     store,
     pantryStore,
+    aisleStore,
     vectorStore: null,
     notifier,
     auth, // null for stdio, populated for HTTP
@@ -182,6 +190,7 @@ export async function buildAppContext(
     cache,
     store,
     pantryStore,
+    aisleStore,
     vectorStore,
     notifier,
     auth, // null for stdio, populated for HTTP
@@ -219,6 +228,7 @@ export function buildMcpServer(app: AppContext): McpServer {
   registerAddPantryItemTool(server, sessionCtx);
   registerUpdatePantryItemTool(server, sessionCtx);
   registerDeletePantryItemTool(server, sessionCtx);
+  registerAislesTool(server, sessionCtx);
 
   if (app.vectorStore !== null) {
     registerDiscoverTool(server, sessionCtx, app.vectorStore);
