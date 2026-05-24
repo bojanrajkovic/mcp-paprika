@@ -14,6 +14,12 @@ import {
   AisleStoredSchema,
   AisleSchema,
   AuthResponseSchema,
+  GroceryListSchema,
+  GroceryListStoredSchema,
+  GroceryItemSchema,
+  GroceryItemStoredSchema,
+  GroceryIngredientSchema,
+  GroceryIngredientStoredSchema,
   type RecipeUid,
   type CategoryUid,
   type RecipeEntry,
@@ -1080,6 +1086,187 @@ describe("pantry-mutations.AC1: Schema and payload converter", () => {
       if (!result.success) {
         const deletedError = result.error.issues.find((issue) => issue.path.includes("deleted"));
         expect(deletedError).toBeDefined();
+      }
+    });
+  });
+});
+
+describe("Grocery Schema Round-Trips", () => {
+  describe("grocery-infra.AC1.1: GroceryList wire and stored round-trip", () => {
+    const wireList = {
+      uid: "034E15F1-B26F-4665-B19D-C89F0F046AFB",
+      name: "My List Name",
+      order_flag: 1,
+      is_default: false,
+      reminders_list: "Paprika",
+      deleted: false,
+    };
+
+    it("should parse GroceryList wire JSON and transform to camelCase", () => {
+      const result = GroceryListSchema.safeParse(wireList);
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.uid).toBe("034E15F1-B26F-4665-B19D-C89F0F046AFB");
+        expect(result.data.name).toBe("My List Name");
+        expect(result.data.orderFlag).toBe(1);
+        expect(result.data.isDefault).toBe(false);
+        expect(result.data.remindersList).toBe("Paprika");
+        expect(result.data.deleted).toBe(false);
+      }
+    });
+
+    it("should round-trip through GroceryListStoredSchema without loss", () => {
+      const wireResult = GroceryListSchema.safeParse(wireList);
+      expect(wireResult.success).toBe(true);
+      if (!wireResult.success) return;
+
+      const storedResult = GroceryListStoredSchema.safeParse(wireResult.data);
+      expect(storedResult.success).toBe(true);
+      if (storedResult.success) {
+        expect(storedResult.data).toEqual(wireResult.data);
+      }
+    });
+  });
+
+  describe("grocery-infra.AC1.2: GroceryItem wire and stored round-trip", () => {
+    const wireItem = {
+      uid: "12D1EE66-2DC3-4B65-BF4E-71CB050ECD95",
+      name: "2 lbs Butter",
+      ingredient: "Butter",
+      aisle: "Dairy",
+      aisle_uid: "F94467760BF4BC6B9521FFA9329D0F1DBCCA0F5AC0808BD8552FB375A565FB9E",
+      list_uid: "034E15F1-B26F-4665-B19D-C89F0F046AFB",
+      purchased: false,
+      deleted: false,
+      order_flag: 0,
+      quantity: "2 lbs",
+      instruction: "",
+      recipe: null,
+      separate: false,
+    };
+
+    it("should parse GroceryItem wire JSON and transform to camelCase preserving name display format", () => {
+      const result = GroceryItemSchema.safeParse(wireItem);
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.uid).toBe("12D1EE66-2DC3-4B65-BF4E-71CB050ECD95");
+        expect(result.data.name).toBe("2 lbs Butter");
+        expect(result.data.ingredient).toBe("Butter");
+        expect(result.data.aisle).toBe("Dairy");
+        expect(result.data.aisleUid).toBe("F94467760BF4BC6B9521FFA9329D0F1DBCCA0F5AC0808BD8552FB375A565FB9E");
+        expect(result.data.listUid).toBe("034E15F1-B26F-4665-B19D-C89F0F046AFB");
+        expect(result.data.purchased).toBe(false);
+        expect(result.data.deleted).toBe(false);
+        expect(result.data.orderFlag).toBe(0);
+        expect(result.data.quantity).toBe("2 lbs");
+        expect(result.data.instruction).toBe("");
+        expect(result.data.recipe).toBeNull();
+        expect(result.data.separate).toBe(false);
+      }
+    });
+
+    it("should round-trip through GroceryItemStoredSchema without loss", () => {
+      const wireResult = GroceryItemSchema.safeParse(wireItem);
+      expect(wireResult.success).toBe(true);
+      if (!wireResult.success) return;
+
+      const storedResult = GroceryItemStoredSchema.safeParse(wireResult.data);
+      expect(storedResult.success).toBe(true);
+      if (storedResult.success) {
+        expect(storedResult.data).toEqual(wireResult.data);
+      }
+    });
+  });
+
+  describe("grocery-infra.AC1.3: GroceryIngredient wire and stored round-trip", () => {
+    const wireIngredient = {
+      uid: "E72FC5C6-61B3-40D9-B3B8-84437FB6F73B",
+      name: "mcp-cap item-1",
+      aisle_uid: "F94467760BF4BC6B9521FFA9329D0F1DBCCA0F5AC0808BD8552FB375A565FB9E",
+      deleted: false,
+    };
+
+    it("should parse GroceryIngredient wire JSON and transform aisle_uid to aisleUid", () => {
+      const result = GroceryIngredientSchema.safeParse(wireIngredient);
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.uid).toBe("E72FC5C6-61B3-40D9-B3B8-84437FB6F73B");
+        expect(result.data.name).toBe("mcp-cap item-1");
+        expect(result.data.aisleUid).toBe("F94467760BF4BC6B9521FFA9329D0F1DBCCA0F5AC0808BD8552FB375A565FB9E");
+        expect(result.data.deleted).toBe(false);
+      }
+    });
+
+    it("should round-trip through GroceryIngredientStoredSchema without loss", () => {
+      const wireResult = GroceryIngredientSchema.safeParse(wireIngredient);
+      expect(wireResult.success).toBe(true);
+      if (!wireResult.success) return;
+
+      const storedResult = GroceryIngredientStoredSchema.safeParse(wireResult.data);
+      expect(storedResult.success).toBe(true);
+      if (storedResult.success) {
+        expect(storedResult.data).toEqual(wireResult.data);
+      }
+    });
+  });
+
+  describe("grocery-infra.AC1.4: Wire JSON with deleted omitted defaults to false", () => {
+    it("should default deleted to false when omitted from GroceryList wire JSON", () => {
+      const wireList = {
+        uid: "034E15F1-B26F-4665-B19D-C89F0F046AFB",
+        name: "My List",
+        order_flag: 1,
+        is_default: false,
+        reminders_list: "Paprika",
+        // deleted intentionally omitted
+      };
+
+      const result = GroceryListSchema.safeParse(wireList);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.deleted).toBe(false);
+      }
+    });
+
+    it("should default deleted to false when omitted from GroceryItem wire JSON", () => {
+      const wireItem = {
+        uid: "12D1EE66-2DC3-4B65-BF4E-71CB050ECD95",
+        name: "Butter",
+        ingredient: "Butter",
+        aisle: "Dairy",
+        aisle_uid: "F94467760BF4BC6B9521FFA9329D0F1DBCCA0F5AC0808BD8552FB375A565FB9E",
+        list_uid: "034E15F1-B26F-4665-B19D-C89F0F046AFB",
+        purchased: false,
+        // deleted intentionally omitted
+        order_flag: 0,
+        quantity: "",
+        instruction: "",
+        recipe: null,
+        separate: false,
+      };
+
+      const result = GroceryItemSchema.safeParse(wireItem);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.deleted).toBe(false);
+      }
+    });
+
+    it("should default deleted to false when omitted from GroceryIngredient wire JSON", () => {
+      const wireIngredient = {
+        uid: "E72FC5C6-61B3-40D9-B3B8-84437FB6F73B",
+        name: "mcp-cap item-1",
+        aisle_uid: "F94467760BF4BC6B9521FFA9329D0F1DBCCA0F5AC0808BD8552FB375A565FB9E",
+        // deleted intentionally omitted
+      };
+
+      const result = GroceryIngredientSchema.safeParse(wireIngredient);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.deleted).toBe(false);
       }
     });
   });
