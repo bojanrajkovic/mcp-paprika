@@ -1,7 +1,7 @@
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { coldStartGuard, textResult } from "./helpers.js";
+import { coldStartGuard, recipeMetadataLines, textResult } from "./helpers.js";
 import type { ServerContext } from "../types/server-context.js";
 import type { VectorStore, SemanticResult } from "../features/vector-store.js";
 import type { Recipe, RecipeUid } from "../paprika/types.js";
@@ -65,15 +65,12 @@ function formatDiscoverHit(index: number, recipe: Recipe, score: number, categor
   const percentage = Math.round(score * 100);
   const lines: Array<string> = [];
   lines.push(`${String(index)}. **${recipe.name}** — ${String(percentage)}% match`);
+  lines.push(`   UID: \`${recipe.uid}\``);
   if (categoryNames.length > 0) {
     lines.push(`   **Categories:** ${categoryNames.join(", ")}`);
   }
-  const timeParts: Array<string> = [];
-  if (recipe.prepTime) timeParts.push(`Prep: ${recipe.prepTime}`);
-  if (recipe.cookTime) timeParts.push(`Cook: ${recipe.cookTime}`);
-  if (timeParts.length > 0) {
-    lines.push(`   ${timeParts.join(" · ")}`);
+  for (const line of recipeMetadataLines(recipe)) {
+    lines.push(`   ${line}`);
   }
-  lines.push(`   UID: \`${recipe.uid}\``);
   return lines.join("\n");
 }

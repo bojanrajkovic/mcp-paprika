@@ -4,7 +4,7 @@ import { z } from "zod";
 import { ok, type Result } from "neverthrow";
 import type { Recipe } from "../paprika/types.js";
 import { parseDuration } from "../utils/duration.js";
-import { coldStartGuard, textResult } from "./helpers.js";
+import { coldStartGuard, recipeMetadataLines, textResult } from "./helpers.js";
 import type { ServerContext } from "../types/server-context.js";
 import type { TimeConstraints } from "../cache/recipe-store.js";
 
@@ -123,14 +123,10 @@ function formatRecipeList(recipes: Array<Recipe>, ctx: ServerContext): string {
 function formatRecipeItem(recipe: Recipe, categoryNames: Array<string>): string {
   const lines: Array<string> = [];
   lines.push(`## ${recipe.name}`);
+  lines.push(`UID: \`${recipe.uid}\``);
   if (categoryNames.length > 0) {
     lines.push(`**Categories:** ${categoryNames.join(", ")}`);
   }
-  const timeParts: Array<string> = [];
-  if (recipe.prepTime) timeParts.push(`Prep: ${recipe.prepTime}`);
-  if (recipe.totalTime) timeParts.push(`Total: ${recipe.totalTime}`);
-  if (timeParts.length > 0) {
-    lines.push(timeParts.join(" · "));
-  }
+  lines.push(...recipeMetadataLines(recipe));
   return lines.join("\n");
 }

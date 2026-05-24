@@ -106,6 +106,27 @@ export function recipeToMarkdown(recipe: Recipe, categoryNames: Array<string>): 
   return lines.join("\n");
 }
 
+export function recipeMetadataLines(recipe: Recipe): Array<string> {
+  const lines: Array<string> = [];
+  const timeParts: Array<string> = [];
+  if (recipe.prepTime) timeParts.push(`Prep: ${recipe.prepTime}`);
+  if (recipe.cookTime) timeParts.push(`Cook: ${recipe.cookTime}`);
+  if (recipe.totalTime) timeParts.push(`Total: ${recipe.totalTime}`);
+  if (timeParts.length > 0) {
+    lines.push(timeParts.join(" · "));
+  }
+  if (recipe.rating > 0) {
+    lines.push(`**Rating:** ${recipe.rating.toString()}/5`);
+  }
+  if (recipe.isPinned) {
+    lines.push(`**Pinned:** Yes`);
+  }
+  if (recipe.onGroceryList) {
+    lines.push(`**On Grocery List:** Yes`);
+  }
+  return lines;
+}
+
 /**
  * Persists a saved recipe to the local cache and store, then triggers cloud sync.
  * Called by all write tools after ctx.client.saveRecipe() returns.

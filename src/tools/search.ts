@@ -2,7 +2,7 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { ScoredResult } from "../cache/recipe-store.js";
-import { coldStartGuard, textResult } from "./helpers.js";
+import { coldStartGuard, recipeMetadataLines, textResult } from "./helpers.js";
 import type { ServerContext } from "../types/server-context.js";
 
 export function registerSearchTool(server: McpServer, ctx: ServerContext): void {
@@ -47,23 +47,10 @@ export function registerSearchTool(server: McpServer, ctx: ServerContext): void 
 function formatSearchHit(result: ScoredResult, categoryNames: Array<string>): string {
   const lines: Array<string> = [];
   lines.push(`## ${result.recipe.name}`);
+  lines.push(`UID: \`${result.recipe.uid}\``);
   if (categoryNames.length > 0) {
     lines.push(`**Categories:** ${categoryNames.join(", ")}`);
   }
-  const timeParts: Array<string> = [];
-  if (result.recipe.prepTime) timeParts.push(`Prep: ${result.recipe.prepTime}`);
-  if (result.recipe.totalTime) timeParts.push(`Total: ${result.recipe.totalTime}`);
-  if (timeParts.length > 0) {
-    lines.push(timeParts.join(" · "));
-  }
-  if (result.recipe.rating > 0) {
-    lines.push(`**Rating:** ${result.recipe.rating.toString()}/5`);
-  }
-  if (result.recipe.isPinned) {
-    lines.push(`**Pinned:** Yes`);
-  }
-  if (result.recipe.onGroceryList) {
-    lines.push(`**On Grocery List:** Yes`);
-  }
+  lines.push(...recipeMetadataLines(result.recipe));
   return lines.join("\n");
 }
