@@ -1,7 +1,9 @@
 import { describe, it, expect, vi } from "vitest";
 import { RecipeStore } from "../cache/recipe-store.js";
 import { PantryStore } from "../cache/pantry-store.js";
+import { AisleStore } from "../cache/aisle-store.js";
 import { makePantryItem } from "../cache/__fixtures__/pantry.js";
+import { makeAisle } from "../cache/__fixtures__/aisles.js";
 import { registerAddPantryItemTool } from "./pantry-add.js";
 import { makeTestServer, makeCtx, getText, makePinoCapture } from "./tool-test-utils.js";
 import type { PaprikaClient } from "../paprika/client.js";
@@ -130,6 +132,10 @@ describe("pantry-mutations.AC4: add_pantry_item tool", () => {
     const pantryStore = new PantryStore();
     pantryStore.load([]);
 
+    const produceAisle = makeAisle({ name: "Produce" });
+    const aisleStore = new AisleStore();
+    aisleStore.load([produceAisle]);
+
     const mockSavePantryItem = vi.fn();
     const mockNotifySync = vi.fn().mockResolvedValue(undefined);
     const mockPutPantryItem = vi.fn();
@@ -140,6 +146,7 @@ describe("pantry-mutations.AC4: add_pantry_item tool", () => {
     const { server, callTool } = makeTestServer();
     const ctx = makeCtx(store, server, {
       pantryStore,
+      aisleStore,
       client: { savePantryItem: mockSavePantryItem, notifySync: mockNotifySync } as unknown as PaprikaClient,
       cache: { pantry: { put: mockPutPantryItem }, flush: mockFlush } as unknown as DiskCacheRoot,
     });
@@ -157,8 +164,53 @@ describe("pantry-mutations.AC4: add_pantry_item tool", () => {
     expect(callArgs?.ingredient).toBe("Apples");
     expect(callArgs?.quantity).toBe("6");
     expect(callArgs?.aisle).toBe("Produce");
+    expect(callArgs?.aisleUid).toBe(produceAisle.uid);
     expect(callArgs?.inStock).toBe(false);
     expect(callArgs?.notes).toBe("for the pie");
+  });
+
+  it("pantry-mutations.AC4.4b: unknown aisle is auto-created and threads through", async () => {
+    const store = new RecipeStore();
+    const pantryStore = new PantryStore();
+    pantryStore.load([]);
+
+    const aisleStore = new AisleStore();
+    aisleStore.load([]);
+
+    const savedAisle = makeAisle({ name: "Exotic" });
+    const mockSaveAisle = vi.fn().mockResolvedValue(savedAisle);
+    const mockSavePantryItem = vi.fn().mockImplementation(async (item) => item);
+    const mockNotifySync = vi.fn().mockResolvedValue(undefined);
+    const mockPutPantryItem = vi.fn();
+    const mockPutAisle = vi.fn();
+    const mockFlush = vi.fn().mockResolvedValue(undefined);
+
+    const { server, callTool } = makeTestServer();
+    const ctx = makeCtx(store, server, {
+      pantryStore,
+      aisleStore,
+      client: {
+        saveAisle: mockSaveAisle,
+        savePantryItem: mockSavePantryItem,
+        notifySync: mockNotifySync,
+      } as unknown as PaprikaClient,
+      cache: {
+        pantry: { put: mockPutPantryItem },
+        aisles: { put: mockPutAisle },
+        flush: mockFlush,
+      } as unknown as DiskCacheRoot,
+    });
+    registerAddPantryItemTool(server, ctx);
+
+    await callTool("add_pantry_item", {
+      ingredient: "Dragon Fruit",
+      aisle: "Exotic",
+    });
+
+    expect(mockSaveAisle).toHaveBeenCalledOnce();
+    const pantryArgs = mockSavePantryItem.mock.calls[0]?.[0];
+    expect(pantryArgs?.aisle).toBe(savedAisle.name);
+    expect(pantryArgs?.aisleUid).toBe(savedAisle.uid);
   });
 
   it("pantry-mutations.AC4.5: duplicate ingredient (case-insensitive) rejected with existing UID", async () => {

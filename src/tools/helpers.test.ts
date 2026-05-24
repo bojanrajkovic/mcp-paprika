@@ -13,6 +13,7 @@ const makeCtx = (size: number) =>
     client: {} as unknown as ServerContext["client"],
     cache: {} as unknown as ServerContext["cache"],
     pantryStore: {} as unknown as ServerContext["pantryStore"],
+    aisleStore: {} as unknown as ServerContext["aisleStore"],
     vectorStore: null,
     server: {} as unknown as ServerContext["server"],
     notifier: {
@@ -327,6 +328,7 @@ describe("p2-u02-shared-helpers: shared helper functions", () => {
           markPendingDelete: vi.fn(),
         } as unknown as ServerContext["store"],
         pantryStore: {} as unknown as ServerContext["pantryStore"],
+        aisleStore: {} as unknown as ServerContext["aisleStore"],
         vectorStore: null,
         server: {} as unknown as ServerContext["server"],
         notifier: {
@@ -375,6 +377,7 @@ describe("p2-u02-shared-helpers: shared helper functions", () => {
           markPendingDelete: vi.fn(),
         } as unknown as ServerContext["store"],
         pantryStore: {} as unknown as ServerContext["pantryStore"],
+        aisleStore: {} as unknown as ServerContext["aisleStore"],
         vectorStore: null,
         server: {} as unknown as ServerContext["server"],
         notifier: {
@@ -407,6 +410,7 @@ describe("p2-u02-shared-helpers: shared helper functions", () => {
           markPendingDelete: vi.fn(),
         } as unknown as ServerContext["store"],
         pantryStore: {} as unknown as ServerContext["pantryStore"],
+        aisleStore: {} as unknown as ServerContext["aisleStore"],
         vectorStore: null,
         server: {} as unknown as ServerContext["server"],
         notifier: {
@@ -442,6 +446,7 @@ describe("p2-u02-shared-helpers: shared helper functions", () => {
           clearPending: mockClearPending,
         } as unknown as ServerContext["store"],
         pantryStore: {} as unknown as ServerContext["pantryStore"],
+        aisleStore: {} as unknown as ServerContext["aisleStore"],
         vectorStore: null,
         server: {} as unknown as ServerContext["server"],
         notifier: {

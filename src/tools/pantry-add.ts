@@ -7,6 +7,7 @@ import { PantryItemUidSchema } from "../paprika/types.js";
 import type { PantryItem } from "../paprika/types.js";
 import { normalizePaprikaDate, paprikaDateToday } from "../paprika/dates.js";
 import { textResult } from "./helpers.js";
+import { ensureAisle } from "./aisle-helpers.js";
 import { commitPantryItem, pantryItemToMarkdown, pantryStartGuard } from "./pantry-helpers.js";
 import type { ServerContext } from "../types/server-context.js";
 
@@ -58,12 +59,13 @@ export function registerAddPantryItemTool(server: McpServer, ctx: ServerContext)
           // listPantry returns; Paprika servers accept either case but matching the
           // app keeps round-tripped UIDs consistent.
           const uid = PantryItemUidSchema.parse(crypto.randomUUID().toUpperCase());
+          const { aisle, aisleUid } = await ensureAisle(ctx, args.aisle ?? "");
           const newItem: PantryItem = {
             uid,
             ingredient: args.ingredient,
             quantity: args.quantity ?? "",
-            aisle: args.aisle ?? "",
-            aisleUid: "",
+            aisle,
+            aisleUid,
             expirationDate,
             hasExpiration: expirationDate !== null, // AC4.2, AC4.3
             inStock: args.inStock ?? true,
