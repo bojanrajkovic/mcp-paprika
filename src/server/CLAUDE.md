@@ -23,9 +23,10 @@ Process-wide, heavyweight, shared state. Built once per process by `buildAppCont
 | Field         | Type                  | Description                                                                                                                                                                                   |
 | ------------- | --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `client`      | `PaprikaClient`       | Authenticated Paprika HTTP client                                                                                                                                                             |
-| `cache`       | `DiskCacheRoot`       | On-disk persistence layer (per-entity subcaches under `cache.recipes`, `cache.pantry`, `cache.oauthClients`, etc.). See `../cache/disk/CLAUDE.md`.                                            |
+| `cache`       | `DiskCacheRoot`       | On-disk persistence layer (per-entity subcaches under `cache.recipes`, `cache.pantry`, `cache.aisles`, `cache.oauthClients`, etc.). See `../cache/disk/CLAUDE.md`.                            |
 | `store`       | `RecipeStore`         | In-memory recipe query layer                                                                                                                                                                  |
 | `pantryStore` | `PantryStore`         | In-memory pantry query layer                                                                                                                                                                  |
+| `aisleStore`  | `AisleStore`          | In-memory aisle query layer; `hasSynced` after first sync; used by `ensureAisle` in pantry write tools for aisle resolution and auto-creation                                                 |
 | `vectorStore` | `VectorStore \| null` | Semantic-search index; `null` when embeddings are not configured                                                                                                                              |
 | `notifier`    | `Notifier`            | Notification surface — decouples callers from any one `McpServer` instance                                                                                                                    |
 | `auth`        | `AuthContext \| null` | OAuth 2.1 runtime state; `null` in stdio mode (no auth required)                                                                                                                              |
@@ -110,7 +111,7 @@ Reads `config.sync.pendingWriteTtl` and threads it as `pendingWriteTtlMs` into b
 buildMcpServer(app: AppContext): McpServer
 ```
 
-Per-session builder. Constructs a fresh `McpServer`, wraps `app` into a `SessionContext` by adding the server reference, and registers all 14 tools plus the recipe resource family. `registerDiscoverTool` is registered only when `app.vectorStore !== null` (semantic search is opt-in via config).
+Per-session builder. Constructs a fresh `McpServer`, wraps `app` into a `SessionContext` by adding the server reference, and registers all 15 tools plus the recipe resource family. `registerDiscoverTool` is registered only when `app.vectorStore !== null` (semantic search is opt-in via config).
 
 **Called once for stdio; called once per session for HTTP** (Phase 3). Tool registration is pure — each `registerXxxTool` only closes over the per-session `SessionContext` and calls `server.registerTool(...)`. There is no module-level mutable state, so registering the same tool name on N independent server instances is safe.
 

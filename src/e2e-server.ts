@@ -12,6 +12,7 @@
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { AisleStore } from "./cache/aisle-store.js";
 import { DiskCacheRoot } from "./cache/disk/index.js";
 import { RecipeStore } from "./cache/recipe-store.js";
 import { PantryStore } from "./cache/pantry-store.js";
@@ -181,11 +182,15 @@ async function main(): Promise<void> {
   pantryStore.load([client.getMockPantryItem()]);
   log.info("hydrated pantry store with mock data");
 
+  const aisleStore = new AisleStore();
+  aisleStore.load([]);
+
   const app: AppContext = {
     client: client as unknown as AppContext["client"],
     cache,
     store,
     pantryStore,
+    aisleStore,
     vectorStore: null, // discover tool intentionally not registered (no embeddings in e2e)
     notifier,
     auth: null,

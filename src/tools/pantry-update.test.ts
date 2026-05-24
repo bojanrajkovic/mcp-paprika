@@ -1,7 +1,9 @@
 import { describe, it, expect, vi } from "vitest";
 import { RecipeStore } from "../cache/recipe-store.js";
 import { PantryStore } from "../cache/pantry-store.js";
+import { AisleStore } from "../cache/aisle-store.js";
 import { makePantryItem } from "../cache/__fixtures__/pantry.js";
+import { makeAisle } from "../cache/__fixtures__/aisles.js";
 import { registerUpdatePantryItemTool } from "./pantry-update.js";
 import { makeTestServer, makeCtx, getText } from "./tool-test-utils.js";
 import type { PaprikaClient } from "../paprika/client.js";
@@ -255,6 +257,114 @@ describe("pantry-mutations.AC5: update_pantry_item tool", () => {
 
     expect(text.toLowerCase()).toContain("not yet synced");
     expect(mockSavePantryItem).not.toHaveBeenCalled();
+  });
+
+  it("pantry-mutations.AC5.aisle-resolve: known aisle sets both aisle and aisleUid", async () => {
+    const store = new RecipeStore();
+    const pantryStore = new PantryStore();
+    const dairyAisle = makeAisle({ name: "Dairy" });
+    const aisleStore = new AisleStore();
+    aisleStore.load([dairyAisle]);
+    const item = makePantryItem({
+      uid: "uid-1" as PantryItemUid,
+      aisle: "Old Aisle",
+      aisleUid: "old-uid",
+    });
+    pantryStore.load([item]);
+
+    const mockSavePantryItem = vi.fn().mockImplementation(async (i) => i);
+    const mockNotifySync = vi.fn().mockResolvedValue(undefined);
+    const mockPutPantryItem = vi.fn();
+    const mockFlush = vi.fn().mockResolvedValue(undefined);
+
+    const { server, callTool } = makeTestServer();
+    const ctx = makeCtx(store, server, {
+      pantryStore,
+      aisleStore,
+      client: { savePantryItem: mockSavePantryItem, notifySync: mockNotifySync } as unknown as PaprikaClient,
+      cache: { pantry: { put: mockPutPantryItem }, flush: mockFlush } as unknown as DiskCacheRoot,
+    });
+    registerUpdatePantryItemTool(server, ctx);
+
+    await callTool("update_pantry_item", { uid: "uid-1", aisle: "Dairy" });
+
+    const callArgs = mockSavePantryItem.mock.calls[0]?.[0];
+    expect(callArgs?.aisle).toBe("Dairy");
+    expect(callArgs?.aisleUid).toBe(dairyAisle.uid);
+  });
+
+  it("pantry-mutations.AC5.aisle-preserve: omitting aisle preserves both aisle and aisleUid", async () => {
+    const store = new RecipeStore();
+    const pantryStore = new PantryStore();
+    const aisleStore = new AisleStore();
+    aisleStore.load([]);
+    const item = makePantryItem({
+      uid: "uid-1" as PantryItemUid,
+      aisle: "Frozen",
+      aisleUid: "frozen-uid",
+    });
+    pantryStore.load([item]);
+
+    const mockSavePantryItem = vi.fn().mockImplementation(async (i) => i);
+    const mockNotifySync = vi.fn().mockResolvedValue(undefined);
+    const mockPutPantryItem = vi.fn();
+    const mockFlush = vi.fn().mockResolvedValue(undefined);
+
+    const { server, callTool } = makeTestServer();
+    const ctx = makeCtx(store, server, {
+      pantryStore,
+      aisleStore,
+      client: { savePantryItem: mockSavePantryItem, notifySync: mockNotifySync } as unknown as PaprikaClient,
+      cache: { pantry: { put: mockPutPantryItem }, flush: mockFlush } as unknown as DiskCacheRoot,
+    });
+    registerUpdatePantryItemTool(server, ctx);
+
+    await callTool("update_pantry_item", { uid: "uid-1", quantity: "3 lbs" });
+
+    const callArgs = mockSavePantryItem.mock.calls[0]?.[0];
+    expect(callArgs?.aisle).toBe("Frozen");
+    expect(callArgs?.aisleUid).toBe("frozen-uid");
+  });
+
+  it("pantry-mutations.AC5.aisle-autocreate: unknown aisle is created and both fields set", async () => {
+    const store = new RecipeStore();
+    const pantryStore = new PantryStore();
+    const aisleStore = new AisleStore();
+    aisleStore.load([]);
+    const item = makePantryItem({ uid: "uid-1" as PantryItemUid });
+    pantryStore.load([item]);
+
+    const newAisle = makeAisle({ name: "International" });
+    const mockSaveAisle = vi.fn().mockResolvedValue(newAisle);
+    const mockSavePantryItem = vi.fn().mockImplementation(async (i) => i);
+    const mockNotifySync = vi.fn().mockResolvedValue(undefined);
+    const mockPutPantryItem = vi.fn();
+    const mockPutAisle = vi.fn().mockResolvedValue(undefined);
+    const mockFlush = vi.fn().mockResolvedValue(undefined);
+
+    const { server, callTool } = makeTestServer();
+    const ctx = makeCtx(store, server, {
+      pantryStore,
+      aisleStore,
+      client: {
+        saveAisle: mockSaveAisle,
+        savePantryItem: mockSavePantryItem,
+        notifySync: mockNotifySync,
+      } as unknown as PaprikaClient,
+      cache: {
+        pantry: { put: mockPutPantryItem },
+        aisles: { put: mockPutAisle },
+        flush: mockFlush,
+      } as unknown as DiskCacheRoot,
+    });
+    registerUpdatePantryItemTool(server, ctx);
+
+    await callTool("update_pantry_item", { uid: "uid-1", aisle: "International" });
+
+    expect(mockSaveAisle).toHaveBeenCalledOnce();
+    const callArgs = mockSavePantryItem.mock.calls[0]?.[0];
+    expect(callArgs?.aisle).toBe(newAisle.name);
+    expect(callArgs?.aisleUid).toBe(newAisle.uid);
   });
 
   it("pantry-mutations.AC5.6: savePantryItem API error returns error message, cache/store not mutated", async () => {

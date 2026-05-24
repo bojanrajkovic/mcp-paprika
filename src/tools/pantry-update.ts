@@ -6,6 +6,7 @@ import { PantryItemUidSchema } from "../paprika/types.js";
 import type { PantryItem } from "../paprika/types.js";
 import { normalizePaprikaDate } from "../paprika/dates.js";
 import { textResult } from "./helpers.js";
+import { ensureAisle } from "./aisle-helpers.js";
 import { commitPantryItem, pantryItemToMarkdown, pantryStartGuard } from "./pantry-helpers.js";
 import type { ServerContext } from "../types/server-context.js";
 
@@ -22,7 +23,12 @@ export function registerUpdatePantryItemTool(server: McpServer, ctx: ServerConte
         uid: z.string().describe("Pantry item UID to update"),
         ingredient: z.string().optional().describe("New ingredient name"),
         quantity: z.string().optional().describe("New quantity"),
-        aisle: z.string().optional().describe("New aisle (display name)"),
+        aisle: z
+          .string()
+          .optional()
+          .describe(
+            "New aisle display name; call list_aisles first to pick an existing name. Unknown names auto-create a new aisle.",
+          ),
         expirationDate: z
           .string()
           .nullable()
@@ -64,19 +70,23 @@ export function registerUpdatePantryItemTool(server: McpServer, ctx: ServerConte
           const newHasExpiration =
             args.expirationDate !== undefined ? args.expirationDate !== null : existing.hasExpiration;
 
-          const updated: PantryItem = {
-            ...existing,
-            ...(args.ingredient !== undefined && { ingredient: args.ingredient }),
-            ...(args.quantity !== undefined && { quantity: args.quantity }),
-            ...(args.aisle !== undefined && { aisle: args.aisle }),
-            ...(args.inStock !== undefined && { inStock: args.inStock }),
-            ...(args.notes !== undefined && { notes: args.notes }),
-            expirationDate: newExpirationDate,
-            hasExpiration: newHasExpiration,
-          };
-
           let saved: PantryItem;
           try {
+            // Resolve aisle: when provided, look up or auto-create to get both
+            // the display name and its UID (fixes the stale-UID bug where the
+            // old code updated `aisle` display but left `aisleUid` stale).
+            const aisleUpdate = args.aisle !== undefined ? await ensureAisle(ctx, args.aisle) : undefined;
+
+            const updated: PantryItem = {
+              ...existing,
+              ...(args.ingredient !== undefined && { ingredient: args.ingredient }),
+              ...(args.quantity !== undefined && { quantity: args.quantity }),
+              ...(aisleUpdate !== undefined && { aisle: aisleUpdate.aisle, aisleUid: aisleUpdate.aisleUid }),
+              ...(args.inStock !== undefined && { inStock: args.inStock }),
+              ...(args.notes !== undefined && { notes: args.notes }),
+              expirationDate: newExpirationDate,
+              hasExpiration: newHasExpiration,
+            };
             saved = await ctx.client.savePantryItem(updated);
             await commitPantryItem(ctx, saved);
           } catch (error) {

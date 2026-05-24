@@ -17,6 +17,7 @@ Purpose: Defines MCP tools that AI assistants can invoke. Each tool file exports
 | `filter_by_time`       | `filter.ts`      | Filter recipes by prep/cook/total time constraints        |
 | `discover_recipes`     | `discover.ts`    | Semantic search via VectorStore (natural language)        |
 | `list_categories`      | `categories.ts`  | List all categories with recipe counts                    |
+| `list_aisles`          | `aisles.ts`      | List all aisles sorted by orderFlag, with UID per aisle   |
 | `list_pantry`          | `pantry-list.ts` | List all pantry items sorted alphabetically by ingredient |
 
 ### CRUD Tools
@@ -88,6 +89,14 @@ Utilities imported by recipe tool handlers from `./helpers.js`.
 - **`commitRecipe(ctx, saved)`** -- Persists a saved recipe to cache and store, triggers cloud sync. Order: `ctx.store.markPendingUpsert(saved.uid)` or `markPendingDelete(saved.uid)` based on `saved.inTrash` (sync, FIRST) → `cache.recipes.put` (async) → `cache.flush` (async) → `store.set` (sync) → `ctx.notifier.resourceListChanged()` (sync) → `notifySync` (async). The pending-write mark is set BEFORE any cache I/O so an in-flight sync cycle that observes the cache mid-commit (between awaits) still sees the pending-write flag and skips reconciling our UID. See `cache/CLAUDE.md` Pending-writes section. Called by all write tools after `ctx.client.saveRecipe()`.
 - **`resolveCategoryNames(all, names)`** -- Resolves human-readable category display names to UIDs. Case-insensitive linear scan. Returns `{ uids, unknown }` for warnings.
 
+### `aisle-helpers.ts`
+
+Utilities for aisle resolution imported by pantry write tools from `./aisle-helpers.js`.
+
+- **`aisleStartGuard(ctx)`** — Returns `Ok<void>` when `ctx.aisleStore.hasSynced`, `Err<CallToolResult>` otherwise. Used by `list_aisles`.
+- **`commitAisle(ctx, aisle)`** — Upsert-only commit: `markPendingUpsert(uid)` (sync, FIRST) → `cache.aisles.put` (async) → `cache.flush` (async) → `aisleStore.set` (sync) → `notifySync` (async). Wraps cache I/O in try/catch that calls `clearPending(uid)` on failure. No delete branch — aisles are never deleted from the server-side via this server.
+- **`ensureAisle(ctx, name)`** — Resolves an aisle display name to `{ aisle: string, aisleUid: string }`. Empty string → `{aisle: "", aisleUid: ""}` without I/O. Found in store → `{aisle: match.name, aisleUid: match.uid}` without I/O. Not found → auto-creates via `client.saveAisle()` using an uppercase UUID v4 UID (matching Paprika.app's wire format for user-created aisles; built-in default aisles use 64-char uppercase hex). Called by `add_pantry_item` and `update_pantry_item` write tools.
+
 ### `pantry-helpers.ts`
 
 Utilities imported by pantry tool handlers from `./pantry-helpers.js`.
@@ -114,5 +123,5 @@ Shared test utilities for direct tool handler invocation without a real MCP serv
 
 ## Dependencies
 
-- **Used by:** `src/server/build.ts` (`buildMcpServer` registers all 14 tools per server instance; `registerDiscoverTool` only when `app.vectorStore !== null`)
+- **Used by:** `src/server/build.ts` (`buildMcpServer` registers all 15 tools per server instance; `registerDiscoverTool` only when `app.vectorStore !== null`)
 - **Uses:** `types/` (ServerContext alias) and `server/` (`SessionContext`, `Notifier` types), `utils/` (parseDuration -- runtime), `paprika/types.ts` (Zod schemas at runtime + type-only imports), `cache/recipe-store.ts` (type-only imports), `features/vector-store.ts` (type-only imports for `VectorStore`, `SemanticResult`)

@@ -7,6 +7,7 @@ import { PantryItemUidSchema } from "../paprika/types.js";
 import type { PantryItem } from "../paprika/types.js";
 import { normalizePaprikaDate, paprikaDateToday } from "../paprika/dates.js";
 import { textResult } from "./helpers.js";
+import { ensureAisle } from "./aisle-helpers.js";
 import { commitPantryItem, pantryItemToMarkdown, pantryStartGuard } from "./pantry-helpers.js";
 import type { ServerContext } from "../types/server-context.js";
 
@@ -22,7 +23,12 @@ export function registerAddPantryItemTool(server: McpServer, ctx: ServerContext)
       inputSchema: {
         ingredient: z.string().min(1).describe("Ingredient name (required)"),
         quantity: z.string().optional().describe("Quantity, e.g. '1 lb'"),
-        aisle: z.string().optional().describe("Aisle name (display)"),
+        aisle: z
+          .string()
+          .optional()
+          .describe(
+            "Aisle display name; call list_aisles first to pick an existing name. Unknown names auto-create a new aisle.",
+          ),
         expirationDate: z.string().optional().describe("Expiration date as ISO string; sets hasExpiration=true"),
         inStock: z.boolean().optional().describe("Whether the item is currently in stock (default: true)"),
         notes: z.string().optional().describe("Free-form notes"),
@@ -58,24 +64,24 @@ export function registerAddPantryItemTool(server: McpServer, ctx: ServerContext)
           // listPantry returns; Paprika servers accept either case but matching the
           // app keeps round-tripped UIDs consistent.
           const uid = PantryItemUidSchema.parse(crypto.randomUUID().toUpperCase());
-          const newItem: PantryItem = {
-            uid,
-            ingredient: args.ingredient,
-            quantity: args.quantity ?? "",
-            aisle: args.aisle ?? "",
-            aisleUid: "",
-            expirationDate,
-            hasExpiration: expirationDate !== null, // AC4.2, AC4.3
-            inStock: args.inStock ?? true,
-            // Today's date at midnight (Paprika's wire format); matches what
-            // Paprika.app stamps when the user adds an item.
-            purchaseDate: paprikaDateToday(),
-            notes: args.notes ?? null,
-            deleted: false,
-          };
-
           let saved: PantryItem;
           try {
+            const { aisle, aisleUid } = await ensureAisle(ctx, args.aisle ?? "");
+            const newItem: PantryItem = {
+              uid,
+              ingredient: args.ingredient,
+              quantity: args.quantity ?? "",
+              aisle,
+              aisleUid,
+              expirationDate,
+              hasExpiration: expirationDate !== null, // AC4.2, AC4.3
+              inStock: args.inStock ?? true,
+              // Today's date at midnight (Paprika's wire format); matches what
+              // Paprika.app stamps when the user adds an item.
+              purchaseDate: paprikaDateToday(),
+              notes: args.notes ?? null,
+              deleted: false,
+            };
             saved = await ctx.client.savePantryItem(newItem);
             await commitPantryItem(ctx, saved);
           } catch (error) {

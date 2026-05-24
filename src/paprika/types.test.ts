@@ -10,6 +10,9 @@ import {
   PantryItemUidSchema,
   PantryItemStoredSchema,
   PantryItemSchema,
+  AisleUidSchema,
+  AisleStoredSchema,
+  AisleSchema,
   AuthResponseSchema,
   type RecipeUid,
   type CategoryUid,
@@ -18,6 +21,8 @@ import {
   type Category,
   type PantryItemUid,
   type PantryItem,
+  type AisleUid,
+  type Aisle,
   type AuthResponse,
   type RecipeInput,
   type RecipeSyncResult,
@@ -828,6 +833,95 @@ describe("pantry-read.AC1: PantryItem types", () => {
         inStock: true,
         purchaseDate: null,
         notes: null,
+        deleted: false,
+      };
+      expect(_test).toBeDefined();
+    });
+  });
+});
+
+describe("aisle-types: Aisle schemas and branded UID", () => {
+  describe("aisle-types.AC1: AisleUidSchema accepts both UID formats", () => {
+    it("accepts 64-char uppercase hex (default/built-in aisle format)", () => {
+      const hexUid = "A".repeat(64);
+      const parsed = AisleUidSchema.parse(hexUid);
+      const variable: AisleUid = parsed;
+      expect(variable).toBe(hexUid);
+    });
+
+    it("accepts uppercase UUID v4 (custom/auto-created aisle format)", () => {
+      const uuidUid = "A1B2C3D4-E5F6-7890-ABCD-EF1234567890";
+      const parsed = AisleUidSchema.parse(uuidUid);
+      const variable: AisleUid = parsed;
+      expect(variable).toBe(uuidUid);
+    });
+
+    it("does not allow a plain string to be assigned to AisleUid", () => {
+      const plain = "just-a-string";
+      // @ts-expect-error plain string is not assignable to AisleUid
+      const _uid: AisleUid = plain;
+      expect(_uid).toBeDefined();
+    });
+  });
+
+  describe("aisle-types.AC2: AisleSchema transforms wire snake_case to camelCase", () => {
+    it("transforms order_flag to orderFlag", () => {
+      const wire = { uid: "AABBCC", name: "Produce", order_flag: 3 };
+      const result = AisleSchema.safeParse(wire);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.orderFlag).toBe(3);
+        expect(result.data.name).toBe("Produce");
+        expect(result.data.uid).toBe("AABBCC");
+      }
+    });
+
+    it("defaults deleted to false when absent from wire payload", () => {
+      const wire = { uid: "AABBCC", name: "Dairy", order_flag: 1 };
+      const result = AisleSchema.safeParse(wire);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.deleted).toBe(false);
+      }
+    });
+
+    it("parses deleted: true from wire payload", () => {
+      const wire = { uid: "AABBCC", name: "Old", order_flag: 0, deleted: true };
+      const result = AisleSchema.safeParse(wire);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.deleted).toBe(true);
+      }
+    });
+  });
+
+  describe("aisle-types.AC3: AisleStoredSchema validates camelCase with no transform", () => {
+    it("parses camelCase stored JSON without transformation", () => {
+      const stored = { uid: "AABBCC", name: "Produce", orderFlag: 3, deleted: false };
+      const result = AisleStoredSchema.safeParse(stored);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data).toEqual(stored);
+      }
+    });
+
+    it("defaults deleted to false when absent from stored JSON", () => {
+      const stored = { uid: "AABBCC", name: "Dairy", orderFlag: 1 };
+      const result = AisleStoredSchema.safeParse(stored);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.deleted).toBe(false);
+      }
+    });
+  });
+
+  describe("aisle-types.AC4: Aisle type export", () => {
+    it("exported Aisle type is accessible and structurally correct", () => {
+      type CheckAisle = Aisle;
+      const _test: CheckAisle = {
+        uid: AisleUidSchema.parse("AABB"),
+        name: "Produce",
+        orderFlag: 2,
         deleted: false,
       };
       expect(_test).toBeDefined();

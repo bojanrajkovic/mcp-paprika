@@ -1,6 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { Logger } from "pino";
 
+import type { AisleStore } from "../cache/aisle-store.js";
 import type { DiskCacheRoot } from "../cache/disk/index.js";
 import type { PantryStore } from "../cache/pantry-store.js";
 import type { RecipeStore } from "../cache/recipe-store.js";
@@ -22,6 +23,7 @@ export interface AppContext {
   readonly cache: DiskCacheRoot;
   readonly store: RecipeStore;
   readonly pantryStore: PantryStore;
+  readonly aisleStore: AisleStore;
   readonly vectorStore: VectorStore | null;
   readonly notifier: Notifier;
   /** OAuth runtime state. null in stdio mode (auth not required). */

@@ -158,6 +158,37 @@ export class SyncEngine {
       this._context.store.setCategories(categories);
       await Promise.all(categories.map((category) => this._context.cache.categories.put(category)));
 
+      // 2.5. Aisle sync (replace-all with pending-write filtering)
+      // Aisles sync before pantry so aisle data is available for resolution
+      // when ensureAisle is called from pantry write tools.
+      this.log.debug("fetching aisles");
+      const aisles = await this._context.client.listAisles();
+      this.log.debug({ count: aisles.length }, "fetched aisles");
+      const cachedAisles = await this._context.cache.aisles.getAll();
+
+      const incomingAislesFiltered = aisles.filter(
+        (a) => !a.deleted && !this._context.aisleStore.isPendingUpsert(a.uid),
+      );
+      const pendingUpsertedAisles = cachedAisles.filter((a) => this._context.aisleStore.isPendingUpsert(a.uid));
+      const effectiveAisles = [...incomingAislesFiltered, ...pendingUpsertedAisles];
+
+      const cachedAisleUids = new Set(cachedAisles.map((a) => a.uid));
+      const effectiveAisleUids = new Set(effectiveAisles.map((a) => a.uid));
+      const orphanAisleUids = [...cachedAisleUids].filter((uid) => !effectiveAisleUids.has(uid));
+      await Promise.all(orphanAisleUids.map((uid) => this._context.cache.aisles.remove(uid)));
+
+      this._context.aisleStore.load(effectiveAisles);
+      await Promise.all(effectiveAisles.map((a) => this._context.cache.aisles.put(a)));
+
+      // Observation-based clearing: if a pending-upsert UID appears in the
+      // canonical list, the server confirmed the write — clear immediately
+      // rather than waiting for TTL, so subsequent syncs pick up server changes.
+      for (const aisle of aisles) {
+        if (this._context.aisleStore.isPendingUpsert(aisle.uid)) {
+          this._context.aisleStore.clearPending(aisle.uid);
+        }
+      }
+
       // 3. Pantry sync (replace-all with orphan cleanup)
       this.log.debug("fetching pantry");
       const pantryItems = await this._context.client.listPantry();
@@ -231,8 +262,9 @@ export class SyncEngine {
       // that our soft-delete propagated.
       const sweptStore = this._context.store.sweepPending();
       const sweptPantry = this._context.pantryStore.sweepPending();
-      if (sweptStore > 0 || sweptPantry > 0) {
-        this.log.debug({ sweptStore, sweptPantry }, "swept pending writes past TTL");
+      const sweptAisles = this._context.aisleStore.sweepPending();
+      if (sweptStore > 0 || sweptPantry > 0 || sweptAisles > 0) {
+        this.log.debug({ sweptStore, sweptPantry, sweptAisles }, "swept pending writes past TTL");
       }
 
       // Partition fetched recipes: added vs updated

@@ -5,8 +5,8 @@ import { z } from "zod";
 
 import { OAuthTokenSchema } from "../../auth/types.js";
 import type { OAuthToken } from "../../auth/types.js";
-import { CategoryStoredSchema, PantryItemStoredSchema } from "../../paprika/types.js";
-import type { Category, PantryItem } from "../../paprika/types.js";
+import { AisleStoredSchema, CategoryStoredSchema, PantryItemStoredSchema } from "../../paprika/types.js";
+import type { Aisle, Category, PantryItem } from "../../paprika/types.js";
 import { isNodeError } from "../../utils/errors.js";
 import { SILENT_LOG } from "../../utils/log.js";
 
@@ -39,6 +39,7 @@ export class DiskCacheRoot {
   readonly recipes: RecipeDiskCache;
   readonly categories: DiskCache<Category>;
   readonly pantry: DiskCache<PantryItem>;
+  readonly aisles: DiskCache<Aisle>;
   readonly oauthClients: OAuthClientDiskCache;
   readonly oauthTokens: DiskCache<OAuthToken>;
 
@@ -64,6 +65,12 @@ export class DiskCacheRoot {
       getKey: (i) => i.uid,
       ...logOpts,
     });
+    this.aisles = new DiskCache<Aisle>({
+      subdir: join(cacheDir, "aisles"),
+      parse: (raw) => AisleStoredSchema.parse(raw),
+      getKey: (a) => a.uid,
+      ...logOpts,
+    });
     this.oauthClients = new OAuthClientDiskCache({ subdir: join(cacheDir, "oauthClients"), ...logOpts });
     this.oauthTokens = new DiskCache<OAuthToken>({
       subdir: join(cacheDir, "oauthTokens"),
@@ -72,7 +79,7 @@ export class DiskCacheRoot {
       ...logOpts,
     });
 
-    this._subcaches = [this.recipes, this.categories, this.pantry, this.oauthClients, this.oauthTokens];
+    this._subcaches = [this.recipes, this.categories, this.pantry, this.aisles, this.oauthClients, this.oauthTokens];
   }
 
   async init(): Promise<void> {
