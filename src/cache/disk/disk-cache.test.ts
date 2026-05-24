@@ -8,6 +8,9 @@ import { DiskCacheRoot } from "./index.js";
 import { makeRecipe, makeCategory } from "../__fixtures__/recipes.js";
 import { makePantryItem } from "../__fixtures__/pantry.js";
 import { makeOAuthClient, makeOAuthToken } from "../__fixtures__/oauth.js";
+import { makeGroceryList } from "../__fixtures__/grocery-lists.js";
+import { makeGroceryItem } from "../__fixtures__/grocery-items.js";
+import { makeGroceryIngredient } from "../__fixtures__/grocery-ingredients.js";
 import { makePinoCapture } from "../../tools/tool-test-utils.js";
 
 // Mock fs/promises so the rename used by the recipes index temp-then-rename
@@ -34,7 +37,17 @@ describe("DiskCacheRoot", () => {
       const cache = new DiskCacheRoot(tempDir);
       await cache.init();
 
-      for (const sub of ["recipes", "categories", "pantry", "oauthClients", "oauthTokens"]) {
+      for (const sub of [
+        "recipes",
+        "categories",
+        "pantry",
+        "aisles",
+        "oauthClients",
+        "oauthTokens",
+        "grocerylists",
+        "groceryitems",
+        "groceryingredients",
+      ]) {
         expect((await stat(join(tempDir, sub))).isDirectory()).toBe(true);
       }
     });
@@ -432,6 +445,88 @@ describe("DiskCacheRoot", () => {
 
       const all = await cache.oauthTokens.getAll();
       expect(all).toHaveLength(0);
+    });
+  });
+
+  describe("grocery subcaches — AC1.9", () => {
+    it("init creates grocerylists, groceryitems, groceryingredients subdirectories", async () => {
+      const cache = new DiskCacheRoot(tempDir);
+      await cache.init();
+
+      for (const sub of ["grocerylists", "groceryitems", "groceryingredients"]) {
+        expect((await stat(join(tempDir, sub))).isDirectory()).toBe(true);
+      }
+    });
+
+    it("groceryLists: put + flush + get round-trips through disk", async () => {
+      const cache = new DiskCacheRoot(tempDir);
+      await cache.init();
+      const list = makeGroceryList();
+      await cache.groceryLists.put(list);
+      await cache.flush();
+
+      const cache2 = new DiskCacheRoot(tempDir);
+      await cache2.init();
+      const all = await cache2.groceryLists.getAll();
+      expect(all).toHaveLength(1);
+      expect(all[0]).toEqual(list);
+    });
+
+    it("groceryItems: put + flush + get round-trips through disk", async () => {
+      const cache = new DiskCacheRoot(tempDir);
+      await cache.init();
+      const item = makeGroceryItem();
+      await cache.groceryItems.put(item);
+      await cache.flush();
+
+      const cache2 = new DiskCacheRoot(tempDir);
+      await cache2.init();
+      const all = await cache2.groceryItems.getAll();
+      expect(all).toHaveLength(1);
+      expect(all[0]).toEqual(item);
+    });
+
+    it("groceryIngredients: put + flush + get round-trips through disk", async () => {
+      const cache = new DiskCacheRoot(tempDir);
+      await cache.init();
+      const ingredient = makeGroceryIngredient();
+      await cache.groceryIngredients.put(ingredient);
+      await cache.flush();
+
+      const cache2 = new DiskCacheRoot(tempDir);
+      await cache2.init();
+      const all = await cache2.groceryIngredients.getAll();
+      expect(all).toHaveLength(1);
+      expect(all[0]).toEqual(ingredient);
+    });
+
+    it("all three grocery subcaches survive a full put → flush → new root → init → getAll round-trip", async () => {
+      const cache = new DiskCacheRoot(tempDir);
+      await cache.init();
+
+      const list = makeGroceryList({ name: "Weekly Shopping" });
+      const item = makeGroceryItem({ name: "Avocados" });
+      const ingredient = makeGroceryIngredient({ name: "Garlic" });
+
+      await cache.groceryLists.put(list);
+      await cache.groceryItems.put(item);
+      await cache.groceryIngredients.put(ingredient);
+      await cache.flush();
+
+      const cache2 = new DiskCacheRoot(tempDir);
+      await cache2.init();
+
+      const lists = await cache2.groceryLists.getAll();
+      expect(lists).toHaveLength(1);
+      expect(lists[0]).toEqual(list);
+
+      const items = await cache2.groceryItems.getAll();
+      expect(items).toHaveLength(1);
+      expect(items[0]).toEqual(item);
+
+      const ingredients = await cache2.groceryIngredients.getAll();
+      expect(ingredients).toHaveLength(1);
+      expect(ingredients[0]).toEqual(ingredient);
     });
   });
 

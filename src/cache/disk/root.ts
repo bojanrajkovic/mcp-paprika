@@ -5,8 +5,15 @@ import { z } from "zod";
 
 import { OAuthTokenSchema } from "../../auth/types.js";
 import type { OAuthToken } from "../../auth/types.js";
-import { AisleStoredSchema, CategoryStoredSchema, PantryItemStoredSchema } from "../../paprika/types.js";
-import type { Aisle, Category, PantryItem } from "../../paprika/types.js";
+import {
+  AisleStoredSchema,
+  CategoryStoredSchema,
+  GroceryIngredientStoredSchema,
+  GroceryItemStoredSchema,
+  GroceryListStoredSchema,
+  PantryItemStoredSchema,
+} from "../../paprika/types.js";
+import type { Aisle, Category, GroceryIngredient, GroceryItem, GroceryList, PantryItem } from "../../paprika/types.js";
 import { isNodeError } from "../../utils/errors.js";
 import { SILENT_LOG } from "../../utils/log.js";
 
@@ -42,6 +49,9 @@ export class DiskCacheRoot {
   readonly aisles: DiskCache<Aisle>;
   readonly oauthClients: OAuthClientDiskCache;
   readonly oauthTokens: DiskCache<OAuthToken>;
+  readonly groceryLists: DiskCache<GroceryList>;
+  readonly groceryItems: DiskCache<GroceryItem>;
+  readonly groceryIngredients: DiskCache<GroceryIngredient>;
 
   private readonly _cacheDir: string;
   private readonly _subcaches: ReadonlyArray<InitFlushable>;
@@ -78,8 +88,36 @@ export class DiskCacheRoot {
       getKey: (t) => t.tokenHash,
       ...logOpts,
     });
+    this.groceryLists = new DiskCache<GroceryList>({
+      subdir: join(cacheDir, "grocerylists"),
+      parse: (raw) => GroceryListStoredSchema.parse(raw),
+      getKey: (l) => l.uid,
+      ...logOpts,
+    });
+    this.groceryItems = new DiskCache<GroceryItem>({
+      subdir: join(cacheDir, "groceryitems"),
+      parse: (raw) => GroceryItemStoredSchema.parse(raw),
+      getKey: (i) => i.uid,
+      ...logOpts,
+    });
+    this.groceryIngredients = new DiskCache<GroceryIngredient>({
+      subdir: join(cacheDir, "groceryingredients"),
+      parse: (raw) => GroceryIngredientStoredSchema.parse(raw),
+      getKey: (i) => i.uid,
+      ...logOpts,
+    });
 
-    this._subcaches = [this.recipes, this.categories, this.pantry, this.aisles, this.oauthClients, this.oauthTokens];
+    this._subcaches = [
+      this.recipes,
+      this.categories,
+      this.pantry,
+      this.aisles,
+      this.oauthClients,
+      this.oauthTokens,
+      this.groceryLists,
+      this.groceryItems,
+      this.groceryIngredients,
+    ];
   }
 
   async init(): Promise<void> {
