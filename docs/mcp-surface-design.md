@@ -39,16 +39,16 @@ individual read, no CRUD, and no resource surface.
 
 ## Decision Matrix
 
-| Entity       | Class     | Resource                       | Tool Surface                                                                                                                                     |
-| ------------ | --------- | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Recipe       | Content   | `paprika://recipe/{uid}`       | `read_recipe`, `search_recipes`, `filter_by_ingredient`, `filter_by_time`, `discover_recipes`, `create_recipe`, `update_recipe`, `delete_recipe` |
-| Category     | Reference | —                              | `list_categories`                                                                                                                                |
-| Pantry item  | Data      | —                              | `list_pantry`, `get_pantry_item`, `add_pantry_item`, `update_pantry_item`, `delete_pantry_item`                                                  |
-| Grocery list | Content   | `paprika://grocery-list/{uid}` | `list_grocery_lists`, `read_grocery_list`, `create_grocery_list`, `delete_grocery_list`                                                          |
-| Grocery item | Data      | —                              | `list_grocery_items`, `add_grocery_item`, `update_grocery_item`, `delete_grocery_item`, `check_grocery_item`                                     |
-| Aisle        | Reference | —                              | `list_aisles`                                                                                                                                    |
-| Menu         | Content   | `paprika://menu/{uid}`         | `list_menus`, `read_menu`, `create_menu`, `update_menu`, `delete_menu`                                                                           |
-| Meal entry   | Data      | —                              | `list_meals` (with date/recipe filters), `add_meal`, `delete_meal`                                                                               |
+| Entity       | Class     | Resource                       | Tool Surface                                                                                                                                                     |
+| ------------ | --------- | ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Recipe       | Content   | `paprika://recipe/{uid}`       | `list_recipes`, `read_recipe`, `search_recipes`, `filter_by_ingredient`, `filter_by_time`, `discover_recipes`, `create_recipe`, `update_recipe`, `delete_recipe` |
+| Category     | Reference | —                              | `list_categories`                                                                                                                                                |
+| Pantry item  | Data      | —                              | `list_pantry`, `get_pantry_item`, `add_pantry_item`, `update_pantry_item`, `delete_pantry_item`                                                                  |
+| Grocery list | Content   | `paprika://grocery-list/{uid}` | `list_grocery_lists`, `read_grocery_list`, `create_grocery_list`, `delete_grocery_list`                                                                          |
+| Grocery item | Data      | —                              | `list_grocery_items`, `add_grocery_item`, `update_grocery_item`, `delete_grocery_item`, `check_grocery_item`                                                     |
+| Aisle        | Reference | —                              | `list_aisles`                                                                                                                                                    |
+| Menu         | Content   | `paprika://menu/{uid}`         | `list_menus`, `read_menu`, `create_menu`, `update_menu`, `delete_menu`                                                                                           |
+| Meal entry   | Data      | —                              | `list_meals` (with date/recipe filters), `add_meal`, `delete_meal`                                                                                               |
 
 ## Resource Rendering Contract
 
@@ -71,11 +71,12 @@ child items so a single resource read gives the user complete context to discuss
 
 ## Audit of Existing Surface
 
-| Entity      | Current Surface        | Matrix                | Status                                                                                             |
-| ----------- | ---------------------- | --------------------- | -------------------------------------------------------------------------------------------------- |
-| Recipe      | Tools + resource       | Content → both        | Conforming. Enrich resource metadata header (currently only adds UID; add URI and sync timestamp). |
-| Category    | `list_categories` tool | Reference → list tool | Conforming. No change.                                                                             |
-| Pantry item | Tools only             | Data → tools only     | Conforming. `paprika://pantry/{uid}` resource retired (#104).                                      |
+| Entity      | Current Surface        | Matrix                | Status                                                                          |
+| ----------- | ---------------------- | --------------------- | ------------------------------------------------------------------------------- |
+| Recipe      | Tools + resource       | Content → both        | Conforming. Resource metadata header includes UID, URI, Last synced, and Photo. |
+| Category    | `list_categories` tool | Reference → list tool | Conforming. No change.                                                          |
+| Aisle       | `list_aisles` tool     | Reference → list tool | Conforming. No change.                                                          |
+| Pantry item | Tools only             | Data → tools only     | Conforming. `paprika://pantry/{uid}` resource retired (#104).                   |
 
-Grocery lists, grocery items, aisles, menus, and meal entries do not exist yet
+Grocery lists, grocery items, menus, and meal entries do not exist yet
 and will be built to the matrix from the start.
