@@ -34,7 +34,7 @@ export class PantryStore extends EntityStore<PantryItem, PantryItemUid> {
   override delete(uid: PantryItemUid): void {
     // Always tombstone, regardless of whether `uid` is currently in `_items`.
     // The only caller is `commitPantryItem`'s delete branch (post-successful
-    // savePantryItem), but several awaits separate the save from the local
+    // savePantryItems), but several awaits separate the save from the local
     // commit; SyncEngine.syncOnce() can interleave a `load(...)` that wipes
     // the UID from `_items` before commit lands. Conditioning the tombstone
     // on `_items.has(uid)` would silently drop the idempotent retry signal

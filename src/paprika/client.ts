@@ -305,14 +305,14 @@ export class PaprikaClient {
     return aisle as Aisle;
   }
 
-  async savePantryItem(item: Readonly<PantryItem>): Promise<PantryItem> {
-    const formData = this.buildPantryFormData(item);
+  async savePantryItems(items: ReadonlyArray<Readonly<PantryItem>>): Promise<ReadonlyArray<PantryItem>> {
+    const formData = this.buildPantryItemsFormData(items);
     // Pantry writes (add, update, soft-delete) all POST to the collection URL;
     // the UID lives in the body, not the URL. Diverges from `saveRecipe`
     // (which uses /sync/recipe/{uid}/) and matches `groceryaisles`/`groceryingredients`.
     // Verified 2026-05-08 against macOS Paprika.app v3.8.4 (build:41).
     await this.request("POST", `${API_BASE}/pantry/`, z.boolean(), formData);
-    return item as PantryItem;
+    return items;
   }
 
   async saveGroceryList(list: Readonly<GroceryList>): Promise<GroceryList> {
@@ -363,11 +363,11 @@ export class PaprikaClient {
     return formData;
   }
 
-  private buildPantryFormData(item: Readonly<PantryItem>): FormData {
-    // Wire format: gzipped JSON of `[item]` (single-element array), uploaded as
-    // multipart field name="data" filename="file". The Paprika app batches when
-    // multiple changes happen quickly; we always send a one-item batch.
-    const payload = [pantryItemToApiPayload(item)];
+  private buildPantryItemsFormData(items: ReadonlyArray<Readonly<PantryItem>>): FormData {
+    // Wire format: gzipped JSON array of items, uploaded as multipart field
+    // name="data" filename="file". The Paprika app batches when multiple changes
+    // happen quickly; callers may send a one-item or multi-item batch.
+    const payload = items.map((item) => pantryItemToApiPayload(item));
     const json = JSON.stringify(payload);
     const compressed = gzipSync(json);
     const blob = new Blob([compressed]);

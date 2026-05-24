@@ -719,7 +719,7 @@ describe("PaprikaClient", () => {
     });
   });
 
-  describe("pantry-mutations.AC1: pantryItemToApiPayload (via savePantryItem wire body)", () => {
+  describe("pantry-mutations.AC1: pantryItemToApiPayload (via savePantryItems wire body)", () => {
     it("pantry-mutations.AC1.4 - payload has exactly 12 snake_case keys, no camelCase", async () => {
       const uid = "pantry-test-1";
       let body: Array<Record<string, unknown>> | null = null;
@@ -736,7 +736,7 @@ describe("PaprikaClient", () => {
       );
 
       const client = new PaprikaClient("test@example.com", "password");
-      await client.savePantryItem(makeCamelCasePantryItem(uid));
+      await client.savePantryItems([makeCamelCasePantryItem(uid)]);
 
       expect(body).toBeDefined();
       expect(Array.isArray(body)).toBe(true);
@@ -777,8 +777,8 @@ describe("PaprikaClient", () => {
       );
 
       const client = new PaprikaClient("test@example.com", "password");
-      await client.savePantryItem(makeCamelCasePantryItem(uid, { deleted: false }));
-      await client.savePantryItem(makeCamelCasePantryItem(uid, { deleted: true }));
+      await client.savePantryItems([makeCamelCasePantryItem(uid, { deleted: false })]);
+      await client.savePantryItems([makeCamelCasePantryItem(uid, { deleted: true })]);
 
       expect(bodies).toHaveLength(2);
       expect(bodies[0]![0]!["deleted"]).toBe(false);
@@ -801,13 +801,13 @@ describe("PaprikaClient", () => {
       );
 
       const client = new PaprikaClient("test@example.com", "password");
-      await client.savePantryItem(
+      await client.savePantryItems([
         makeCamelCasePantryItem(uid, {
           expirationDate: null,
           purchaseDate: null,
           notes: null,
         }),
-      );
+      ]);
 
       expect(body).toBeDefined();
       const payload = body![0]!;
@@ -817,8 +817,8 @@ describe("PaprikaClient", () => {
     });
   });
 
-  describe("pantry-mutations.AC2: savePantryItem", () => {
-    it("pantry-mutations.AC2.1 - savePantryItem POSTs to collection URL and returns input item", async () => {
+  describe("pantry-mutations.AC2: savePantryItems", () => {
+    it("pantry-mutations.AC2.1 - savePantryItems POSTs to collection URL and returns input items", async () => {
       const uid = "pantry-test-4";
       let capturedUrl = "";
 
@@ -831,12 +831,12 @@ describe("PaprikaClient", () => {
 
       const client = new PaprikaClient("test@example.com", "password");
       const input = makeCamelCasePantryItem(uid);
-      const result = await client.savePantryItem(input);
+      const [result] = await client.savePantryItems([input]);
 
       expect(capturedUrl).toBe(`${API_BASE}/pantry/`);
-      expect(result.uid).toBe(input.uid);
-      expect(result.ingredient).toBe(input.ingredient);
-      expect(result.deleted).toBe(input.deleted);
+      expect(result?.uid).toBe(input.uid);
+      expect(result?.ingredient).toBe(input.ingredient);
+      expect(result?.deleted).toBe(input.deleted);
     });
 
     it("pantry-mutations.AC2.2 - HTTP 401 triggers re-auth retry", async () => {
@@ -860,9 +860,9 @@ describe("PaprikaClient", () => {
 
       const client = new PaprikaClient("test@example.com", "password");
       await client.authenticate();
-      const result = await client.savePantryItem(makeCamelCasePantryItem(uid));
+      const [result] = await client.savePantryItems([makeCamelCasePantryItem(uid)]);
 
-      expect(result.uid).toBe(uid);
+      expect(result?.uid).toBe(uid);
       expect(authCallCount).toBe(2);
       expect(pantryCallCount).toBe(2);
     });
@@ -884,9 +884,9 @@ describe("PaprikaClient", () => {
         );
 
         const client = new PaprikaClient("test@example.com", "password");
-        const result = await client.savePantryItem(makeCamelCasePantryItem(uid));
+        const [result] = await client.savePantryItems([makeCamelCasePantryItem(uid)]);
 
-        expect(result.uid).toBe(uid);
+        expect(result?.uid).toBe(uid);
         expect(pantryCallCount).toBe(2);
       },
       5000,
@@ -907,9 +907,9 @@ describe("PaprikaClient", () => {
       );
 
       const client = new PaprikaClient("test@example.com", "password");
-      const result = await client.savePantryItem(makeCamelCasePantryItem(uid));
+      const [result] = await client.savePantryItems([makeCamelCasePantryItem(uid)]);
 
-      expect(result.uid).toBe(uid);
+      expect(result?.uid).toBe(uid);
       expect(pantryCallCount).toBe(2);
     });
 
@@ -928,7 +928,7 @@ describe("PaprikaClient", () => {
 
       let caught: unknown;
       try {
-        await client.savePantryItem(makeCamelCasePantryItem(uid));
+        await client.savePantryItems([makeCamelCasePantryItem(uid)]);
         expect.fail("Should have thrown");
       } catch (error) {
         caught = error;
@@ -955,7 +955,7 @@ describe("PaprikaClient", () => {
       const client = new PaprikaClient("test@example.com", "password");
 
       try {
-        await client.savePantryItem(makeCamelCasePantryItem(uid));
+        await client.savePantryItems([makeCamelCasePantryItem(uid)]);
         expect.fail("Should have thrown PaprikaAPIError");
       } catch (error) {
         expect(error).toBeInstanceOf(PaprikaAPIError);
@@ -978,7 +978,7 @@ describe("PaprikaClient", () => {
       const client = new PaprikaClient("test@example.com", "password");
 
       try {
-        await client.savePantryItem(makeCamelCasePantryItem(uid));
+        await client.savePantryItems([makeCamelCasePantryItem(uid)]);
         expect.fail("Should have thrown ZodError");
       } catch (error) {
         expect(error).toBeInstanceOf(ZodError);
