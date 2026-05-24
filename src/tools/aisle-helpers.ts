@@ -1,8 +1,11 @@
 import { err, ok, type Result } from "neverthrow";
+import { Mutex } from "async-mutex";
 import type { Aisle, AisleUid } from "../paprika/types.js";
 import { AisleUidSchema } from "../paprika/types.js";
 import type { ServerContext } from "../types/server-context.js";
 import { textResult } from "./helpers.js";
+
+const ensureAisleMutex = new Mutex();
 
 export function aisleStartGuard(ctx: ServerContext): Result<void, ReturnType<typeof textResult>> {
   if (!ctx.aisleStore.hasSynced) {
@@ -44,18 +47,28 @@ export async function ensureAisle(ctx: ServerContext, name: string): Promise<{ a
     return { aisle: match.name, aisleUid: match.uid };
   }
 
-  const existing = ctx.aisleStore.getAll();
-  const maxOrder = existing.length === 0 ? 0 : Math.max(...existing.map((a) => a.orderFlag)) + 1;
-  const uid = AisleUidSchema.parse(crypto.randomUUID().toUpperCase());
-  const newAisle: Aisle = {
-    uid,
-    name,
-    orderFlag: maxOrder,
-    deleted: false,
-  };
+  // Mutex serializes the create path so concurrent pantry writes for the same
+  // new aisle name don't both miss resolveByName and create duplicate aisles.
+  return ensureAisleMutex.runExclusive(async () => {
+    // Re-check after acquiring — a concurrent caller may have created it.
+    const recheck = ctx.aisleStore.resolveByName(name);
+    if (recheck !== undefined) {
+      return { aisle: recheck.name, aisleUid: recheck.uid };
+    }
 
-  const saved = await ctx.client.saveAisle(newAisle);
-  await commitAisle(ctx, saved);
+    const existing = ctx.aisleStore.getAll();
+    const maxOrder = existing.length === 0 ? 0 : Math.max(...existing.map((a) => a.orderFlag)) + 1;
+    const uid = AisleUidSchema.parse(crypto.randomUUID().toUpperCase());
+    const newAisle: Aisle = {
+      uid,
+      name,
+      orderFlag: maxOrder,
+      deleted: false,
+    };
 
-  return { aisle: saved.name, aisleUid: saved.uid };
+    const saved = await ctx.client.saveAisle(newAisle);
+    await commitAisle(ctx, saved);
+
+    return { aisle: saved.name, aisleUid: saved.uid };
+  });
 }
