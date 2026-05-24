@@ -24,6 +24,9 @@ HTTP client for the Paprika Cloud Sync API. Handles authentication, request form
 - `CategoryUid` — Branded string type for category identifiers, validated by `CategoryUidSchema`
 - `PantryItemUid` — Branded string type for pantry item identifiers, validated by `PantryItemUidSchema`
 - `AisleUid` — Branded string type for aisle identifiers, validated by `AisleUidSchema` (unconstrained `z.string().brand()`; accepts both 64-char uppercase hex used by Paprika's default aisles and uppercase UUID v4 used by user-created aisles)
+- `GroceryListUid` — Branded string type for grocery list identifiers, validated by `GroceryListUidSchema`
+- `GroceryItemUid` — Branded string type for grocery item identifiers, validated by `GroceryItemUidSchema`
+- `GroceryIngredientUid` — Branded string type for grocery ingredient identifiers, validated by `GroceryIngredientUidSchema`
 
 **Entry Types:**
 
@@ -36,17 +39,22 @@ HTTP client for the Paprika Cloud Sync API. Handles authentication, request form
 - `Category` — Category with `uid`, `name`, `orderFlag`, `parentUid`; output of `CategoryStoredSchema` and `CategorySchema`
 - `PantryItem` — Pantry inventory item with 11 fields (`uid`, `ingredient`, `quantity`, `aisle`, `aisleUid`, `expirationDate`, `hasExpiration`, `inStock`, `purchaseDate`, `notes`, `deleted`); output of `PantryItemStoredSchema` and `PantryItemSchema`. The `deleted` field is `optional().default(false)` on both schemas — read responses may omit it for live items, but the parsed object always carries a concrete boolean.
 - `Aisle` — Aisle catalog entry with `uid`, `name`, `orderFlag`, `deleted`; output of `AisleStoredSchema` and `AisleSchema`. The `deleted` field is `optional().default(false)`.
+- `GroceryList` — Grocery list with `uid`, `name`, `orderFlag`, `isDefault`, `remindersList`, `deleted`; output of `GroceryListStoredSchema` and `GroceryListSchema`. The `deleted` field is `optional().default(false)`.
+- `GroceryItem` — Grocery list item with 13 fields (`uid`, `name`, `ingredient`, `aisle`, `aisleUid`, `listUid`, `purchased`, `deleted`, `orderFlag`, `quantity`, `instruction`, `recipe`, `separate`); output of `GroceryItemStoredSchema` and `GroceryItemSchema`. The `deleted` field is `optional().default(false)`; `recipe` is `string | null`.
+- `GroceryIngredient` — Grocery ingredient catalog entry with `uid`, `name`, `aisleUid`, `deleted`; output of `GroceryIngredientStoredSchema` and `GroceryIngredientSchema`. The `deleted` field is `optional().default(false)`.
 - `AuthResponse` — Authentication response `{result: {token: string}}`; output of `AuthResponseSchema`
 
 **Domain Types:**
 
 - `RecipeInput` — Recipe creation/update input (requires `name`, `ingredients`, `directions`; excludes `uid`, `hash`, `created`)
 - `EntityChanges<T>` — `{added: ReadonlyArray<T>, updated: ReadonlyArray<T>, removedUids: ReadonlyArray<string>}` — change set for one entity type
-- `SyncEntityType` — `"recipes" | "pantry"` — closed union of entity types sync can produce; adding a new type requires explicit extension
+- `SyncEntityType` — `"recipes" | "pantry" | "grocery-lists" | "grocery-items"` — closed union of entity types sync can produce; adding a new type requires explicit extension
 - `SyncResult<K extends SyncEntityType, T extends object>` — generic discriminated-union variant: `{changeType: K, changes: EntityChanges<T>}`
 - `RecipeSyncResult` — `SyncResult<"recipes", Recipe>` — concrete recipe variant
 - `PantrySyncResult` — `SyncResult<"pantry", PantryItem>` — concrete pantry variant
-- `AnySyncResult` — `RecipeSyncResult | PantrySyncResult` — union used as the `sync:complete` event payload
+- `GroceryListSyncResult` — `SyncResult<"grocery-lists", GroceryList>` — concrete grocery list variant
+- `GroceryItemSyncResult` — `SyncResult<"grocery-items", GroceryItem>` — concrete grocery item variant
+- `AnySyncResult` — `RecipeSyncResult | PantrySyncResult | GroceryListSyncResult | GroceryItemSyncResult` — union used as the `sync:complete` event payload
 - `DiffResult` — `{added: string[], changed: string[], removed: string[]}`
 
 ### Zod Schemas
@@ -56,6 +64,9 @@ HTTP client for the Paprika Cloud Sync API. Handles authentication, request form
 - `RecipeSchema` — Validates and transforms full recipe objects from API (snake_case input → camelCase Recipe)
 - `CategorySchema` — Validates and transforms category objects from API (snake_case input → camelCase Category)
 - `PantryItemSchema` — Validates and transforms pantry items from API (snake_case input → camelCase PantryItem)
+- `GroceryListSchema` — Validates and transforms grocery lists from API (`order_flag`, `is_default`, `reminders_list` → camelCase `GroceryList`)
+- `GroceryItemSchema` — Validates and transforms grocery items from API (`aisle_uid`, `list_uid`, `order_flag` → camelCase `GroceryItem`)
+- `GroceryIngredientSchema` — Validates and transforms grocery ingredients from API (`aisle_uid` → camelCase `GroceryIngredient`)
 - `AuthResponseSchema` — Validates authentication responses
 
 **Stored Format Schemas** (validate camelCase JSON from disk, no transform):
@@ -64,6 +75,9 @@ HTTP client for the Paprika Cloud Sync API. Handles authentication, request form
 - `CategoryStoredSchema` — Validates camelCase category JSON read from disk (no transform)
 - `PantryItemStoredSchema` — Validates camelCase pantry item JSON read from disk (no transform)
 - `AisleStoredSchema` — Validates camelCase aisle JSON read from disk (no transform)
+- `GroceryListStoredSchema` — Validates camelCase grocery list JSON read from disk (no transform)
+- `GroceryItemStoredSchema` — Validates camelCase grocery item JSON read from disk (no transform)
+- `GroceryIngredientStoredSchema` — Validates camelCase grocery ingredient JSON read from disk (no transform)
 
 **Entry and UID Schemas:**
 
@@ -181,7 +195,7 @@ Background polling loop that keeps local cache and in-memory store synchronized 
 - `stop(): void` — aborts loop via AbortController; no-op if not running
 - `syncOnce(): Promise<void>` — runs one full sync cycle (recipe diff-and-fetch, category replace-all, pantry replace-all, cache flush, logging); never throws; does **not** call the notifier directly
 - `events` getter — returns `Pick<SyncEventEmitter, "on" | "off">` for subscribing to events:
-  - `sync:complete` event fires **twice per cycle** — once with a `RecipeSyncResult` (`changeType: "recipes"`), once with a `PantrySyncResult` (`changeType: "pantry"`). Subscribers narrow by `result.changeType`.
+  - `sync:complete` event fires **four times per cycle** — `RecipeSyncResult` (`changeType: "recipes"`), `PantrySyncResult` (`changeType: "pantry"`), `GroceryListSyncResult` (`changeType: "grocery-lists"`), `GroceryItemSyncResult` (`changeType: "grocery-items"`). Subscribers narrow by `result.changeType`.
   - `sync:error` event fires with `Error` on cycle failure
 
 **Algorithm (syncOnce):**
@@ -202,6 +216,12 @@ Background polling loop that keeps local cache and in-memory store synchronized 
    - Replaces store categories: `store.setCategories(categories)`
    - Writes each category to cache: `cache.categories.put(category)` (categories use replace-all; no hash maintained)
 
+2.5. **Aisle sync (replace-all with pending-write filtering):**
+
+- Fetches all aisles: `client.listAisles()`; filters `deleted: true` and pending-upsert UIDs; splices cached pending-upserts back in (effectiveAisles)
+- Removes orphan aisles, loads effective list into `aisleStore`, writes to cache
+- Observation-based clearing for pending-upserts: if a pending-upsert UID appears in the canonical list, clears immediately (aisles use UID presence alone — no content-equality check)
+
 3. **Pantry sync (replace-all with orphan cleanup, pending-writes filtered):**
    - Fetches all pantry items: `client.listPantry()` → fully hydrated `Array<PantryItem>`
    - Reads cached items: `cachedPantryItems = await cache.pantry.getAll()`
@@ -215,13 +235,30 @@ Background polling loop that keeps local cache and in-memory store synchronized 
    - **Observation-based clearing:** walks the **raw** `pantryItems` (not the filtered list) and calls `pantryStore.clearPending(uid)` for any UID that has a pending-upsert and appears in the canonical list. Pending-deletes are NOT observation-cleared — Paprika omits soft-deleted items from `listPantry` (case B; verified against Paprika.app), so absence is ambiguous and TTL is the only safe clearing mechanism for the delete direction.
    - Logs orphan count when > 0
 
-4. **Finalization:**
+4. **Grocery list sync (replace-all with orphan cleanup, pending-writes filtered):**
+   - Same pattern as pantry sync, applied to `client.listGroceryLists()` → `GroceryListStore`
+   - Content equality detected via `groceryListsEqual()` (field-by-field comparison: `uid`, `name`, `orderFlag`, `isDefault`, `remindersList`, `deleted`)
+   - Observation-based clearing: walks raw server response and calls `groceryListStore.clearPending(uid)` when a pending-upsert's content matches the cached version via `groceryListsEqual()`
+   - Logs orphan count when > 0
+
+5. **Grocery item sync (replace-all with orphan cleanup, pending-writes filtered):**
+   - Same pattern as grocery list sync, independently applied to `client.listGroceryItems()` → `GroceryItemStore`
+   - Content equality detected via `groceryItemsEqual()` (field-by-field: `uid`, `name`, `ingredient`, `aisle`, `aisleUid`, `listUid`, `purchased`, `deleted`, `orderFlag`, `quantity`, `instruction`, `recipe`, `separate`)
+   - Logs orphan count when > 0
+
+6. **Ingredient catalog sync (replace-all, no pending-writes):**
+   - Fetches `client.listGroceryIngredients()`, filters `deleted: true` items, removes orphan cached entries, loads into `groceryIngredientStore`, writes to cache
+   - No pending-write filtering (GroceryIngredientStore has no pending-writes)
+   - No `sync:complete` event emitted for ingredients (reference entity, not a content entity)
+   - Logs orphan count when > 0
+
+7. **Finalization:**
    - Flushes cache once: `await cache.flush()`
-   - **Sweeps expired pending-writes:** `store.sweepPending()` and `pantryStore.sweepPending()` — TTL fallback for pending-deletes (and a defense for upserts where the canonical observation never arrives).
-   - Emits **two** `sync:complete` events per cycle: first a `RecipeSyncResult` (`changeType: "recipes"`), then a `PantrySyncResult` (`changeType: "pantry"`). Both are emitted even for no-change cycles (empty `changes` arrays). The engine does **not** call the notifier — a subscriber in `buildAppContext` does.
+   - **Sweeps expired pending-writes:** `store.sweepPending()`, `pantryStore.sweepPending()`, `aisleStore.sweepPending()`, `groceryListStore.sweepPending()`, `groceryItemStore.sweepPending()` — TTL fallback for pending-deletes. `groceryIngredientStore` is NOT swept (no pending-writes).
+   - Emits **four** `sync:complete` events per cycle: `RecipeSyncResult` (`changeType: "recipes"`), `PantrySyncResult` (`changeType: "pantry"`), `GroceryListSyncResult` (`changeType: "grocery-lists"`), `GroceryItemSyncResult` (`changeType: "grocery-items"`). All four are emitted even for no-change cycles. The engine does **not** call the notifier — a subscriber in `buildAppContext` does.
    - Logs success: `this.log.info({added, updated, removed}, "sync complete")` — record fans out to connected MCP clients only when `notifyLevel` is `"info"` or lower (default `"warn"` suppresses it; see behavior note below)
 
-5. **Error handling (all wrapped in try/catch):**
+8. **Error handling (all wrapped in try/catch):**
    - Catches any thrown error (API failures, cache errors, store errors)
    - Logs error: `this.log.error({err}, "sync failed")` — fans out to connected MCP clients automatically via the multistream (error ≥ default `notifyLevel: "warn"`)
    - Emits `sync:error` with the Error
@@ -232,17 +269,18 @@ Background polling loop that keeps local cache and in-memory store synchronized 
 - `syncOnce()` never throws — errors are caught, logged, and emitted as events
 - `start()` when already running is a no-op (no duplicate loops via `_ac` check)
 - `stop()` when not running is a no-op (no-op if `_ac` is null)
-- `syncOnce()` does **not** call `notifier.resourceListChanged()` — a `sync:complete` subscriber in `buildAppContext` drives notifications. Recipe changes are detectable via `RecipeSyncResult.changes` (filtered by pending-writes, hash-based: `filteredAdded`, `filteredChanged`, `filteredRemoved`); pantry changes are detectable via `PantrySyncResult.changes` (Set difference + `pantryItemsEqual()` for same-UID content edits)
+- `syncOnce()` does **not** call `notifier.resourceListChanged()` — a `sync:complete` subscriber in `buildAppContext` drives notifications. Recipe changes are detectable via `RecipeSyncResult.changes` (filtered by pending-writes, hash-based: `filteredAdded`, `filteredChanged`, `filteredRemoved`); pantry changes via `PantrySyncResult.changes`; grocery-list changes via `GroceryListSyncResult.changes`; grocery-item changes via `GroceryItemSyncResult.changes`.
 - Cache is flushed exactly once per cycle (single `await cache.flush()` after all mutations)
 - Removed recipes are deleted concurrently via `Promise.all()` for efficiency
-- Orphaned pantry items are deleted concurrently via `Promise.all()` for efficiency
+- Orphaned pantry, grocery list, grocery item, and ingredient entries are deleted concurrently via `Promise.all()` for efficiency
 - Loop respects AbortController signal and cleanly exits on `stop()`
 - `pantryStore.load(items)` is called unconditionally even when `effectivePantry` is empty, setting `hasSynced = true` after first sync
-- Both stores' `sweepPending()` runs every cycle (TTL fallback for pending-writes; see `cache/CLAUDE.md` Pending-writes section). Observation-based clearing handles upserts; the sweep is the only clearing mechanism for pending-deletes
+- Five stores' `sweepPending()` runs every cycle (store, pantryStore, aisleStore, groceryListStore, groceryItemStore). `groceryIngredientStore` is NOT swept (no pending-writes). Observation-based clearing handles upserts; TTL sweep is the only clearing mechanism for pending-deletes.
+- No `sync:complete` event is emitted for the ingredient catalog (it is a reference entity, not a user-facing content entity with MCP resource surface)
 
 **Dependencies:**
 
-- **Uses:** `AppContext` (client, cache, store, pantryStore, notifier — `server` is intentionally absent; notifier is used via subscriber pattern only), `mitt` (event emitter), `node:timers/promises` (scheduler.wait), `./types.js` (Recipe, RecipeUid, AnySyncResult, RecipeSyncResult, PantrySyncResult, DiffResult)
+- **Uses:** `AppContext` (client, cache, store, pantryStore, aisleStore, groceryListStore, groceryItemStore, groceryIngredientStore — `server` and `notifier` are intentionally absent; notifier is used via subscriber pattern only), `mitt` (event emitter), `node:timers/promises` (scheduler.wait), `./types.js` (Recipe, RecipeUid, GroceryList, GroceryItem, AnySyncResult, RecipeSyncResult, PantrySyncResult, GroceryListSyncResult, GroceryItemSyncResult, DiffResult)
 - **Used by:** `src/server/build.ts` (`buildAppContext` constructs SyncEngine), `src/features/discover-feature.ts` (subscribes to `sync.events` for incremental re-indexing)
 - **Boundary:** Must not import from `tools/`, `resources/`, or `features/`
 
