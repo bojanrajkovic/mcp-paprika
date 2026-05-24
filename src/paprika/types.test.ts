@@ -27,6 +27,8 @@ import {
   type RecipeInput,
   type RecipeSyncResult,
   type PantrySyncResult,
+  type GroceryListSyncResult,
+  type GroceryItemSyncResult,
   type AnySyncResult,
   type DiffResult,
 } from "./types.js";
@@ -559,7 +561,13 @@ describe("Domain Types", () => {
     it("should have correct property names on SyncResult variants", () => {
       type AssertHasChangeType = "changeType" extends keyof RecipeSyncResult ? true : never;
       type AssertHasChanges = "changes" extends keyof RecipeSyncResult ? true : never;
-      type AssertAnySyncResultIsUnion = AnySyncResult extends RecipeSyncResult | PantrySyncResult ? true : never;
+      type AssertAnySyncResultIsUnion = AnySyncResult extends
+        | RecipeSyncResult
+        | PantrySyncResult
+        | GroceryListSyncResult
+        | GroceryItemSyncResult
+        ? true
+        : never;
 
       const _checkChangeType: AssertHasChangeType = true;
       const _checkChanges: AssertHasChanges = true;
