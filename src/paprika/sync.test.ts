@@ -9,7 +9,7 @@ import type { PaprikaClient } from "./client.js";
 import type { DiskCacheRoot } from "../cache/disk/index.js";
 import type { PantryStore } from "../cache/pantry-store.js";
 import type { AisleStore } from "../cache/aisle-store.js";
-import type { AnySyncResult, PantryItemUid, RecipeEntry, RecipeUid } from "./types.js";
+import type { AnySyncResult, GroceryItemUid, GroceryListUid, PantryItemUid, RecipeEntry, RecipeUid } from "./types.js";
 import { makeRecipe, makeCategory } from "../cache/__fixtures__/recipes.js";
 import { makePantryItem } from "../cache/__fixtures__/pantry.js";
 import { makeAisle } from "../cache/__fixtures__/aisles.js";
@@ -18,6 +18,8 @@ import { AisleStore as RealAisleStore } from "../cache/aisle-store.js";
 import { GroceryIngredientStore } from "../cache/grocery-ingredient-store.js";
 import { GroceryItemStore } from "../cache/grocery-item-store.js";
 import { GroceryListStore } from "../cache/grocery-list-store.js";
+import { makeGroceryList } from "../cache/__fixtures__/grocery-lists.js";
+import { makeGroceryItem } from "../cache/__fixtures__/grocery-items.js";
 
 function makeMockNotifier(): Notifier {
   return {
@@ -1381,6 +1383,542 @@ describe("syncOnce", () => {
       await engine.syncOnce();
 
       expect(sweepPending).toHaveBeenCalledOnce();
+    });
+  });
+
+  describe("grocery-list-sync: Grocery list sync step", () => {
+    it("grocery-list-sync.AC3.1a: fetched lists are loaded into store and written to cache", async () => {
+      const list1 = makeGroceryList({ uid: "gl-1" as GroceryListUid });
+      const list2 = makeGroceryList({ uid: "gl-2" as GroceryListUid });
+
+      const putList = vi.fn().mockResolvedValue(undefined);
+      const groceryListStore = new GroceryListStore();
+      const loadSpy = vi.spyOn(groceryListStore, "load");
+
+      const context: AppContext = {
+        client: {
+          ...makeMockClient(),
+          listGroceryLists: vi.fn().mockResolvedValue([list1, list2]),
+        } as unknown as PaprikaClient,
+        cache: {
+          ...makeMockCache(),
+          groceryLists: {
+            getAll: vi.fn().mockResolvedValue([]),
+            put: putList,
+            remove: vi.fn().mockResolvedValue(undefined),
+          },
+        } as unknown as DiskCacheRoot,
+        store: makeMockStore(),
+        pantryStore: makeMockPantryStore(),
+        aisleStore: makeMockAisleStore(),
+        groceryListStore,
+        groceryItemStore: new GroceryItemStore(),
+        groceryIngredientStore: new GroceryIngredientStore(),
+        vectorStore: null,
+        notifier: makeMockNotifier(),
+        auth: null,
+        log: SILENT_LOG,
+      };
+      const engine = new SyncEngine(context, 10);
+      await engine.syncOnce();
+
+      expect(loadSpy).toHaveBeenCalledWith(expect.arrayContaining([list1, list2]));
+      expect(putList).toHaveBeenCalledWith(list1);
+      expect(putList).toHaveBeenCalledWith(list2);
+    });
+
+    it("grocery-list-sync.AC3.1b: orphan lists (cached but not in server response) are removed from cache", async () => {
+      const orphanList = makeGroceryList({ uid: "gl-orphan" as GroceryListUid });
+      const incomingList = makeGroceryList({ uid: "gl-incoming" as GroceryListUid });
+
+      const removeList = vi.fn().mockResolvedValue(undefined);
+      const groceryListStore = new GroceryListStore();
+
+      const context: AppContext = {
+        client: {
+          ...makeMockClient(),
+          listGroceryLists: vi.fn().mockResolvedValue([incomingList]),
+        } as unknown as PaprikaClient,
+        cache: {
+          ...makeMockCache(),
+          groceryLists: {
+            getAll: vi.fn().mockResolvedValue([orphanList, incomingList]),
+            put: vi.fn().mockResolvedValue(undefined),
+            remove: removeList,
+          },
+        } as unknown as DiskCacheRoot,
+        store: makeMockStore(),
+        pantryStore: makeMockPantryStore(),
+        aisleStore: makeMockAisleStore(),
+        groceryListStore,
+        groceryItemStore: new GroceryItemStore(),
+        groceryIngredientStore: new GroceryIngredientStore(),
+        vectorStore: null,
+        notifier: makeMockNotifier(),
+        auth: null,
+        log: SILENT_LOG,
+      };
+      const engine = new SyncEngine(context, 10);
+      await engine.syncOnce();
+
+      expect(removeList).toHaveBeenCalledWith(orphanList.uid);
+      expect(removeList).not.toHaveBeenCalledWith(incomingList.uid);
+    });
+
+    it("grocery-list-sync.AC3.1c: pending-upserted lists are preserved from cache (not overwritten by server)", async () => {
+      const pendingList = makeGroceryList({ uid: "gl-pending" as GroceryListUid, name: "Local Version" });
+      const serverList = makeGroceryList({ uid: "gl-pending" as GroceryListUid, name: "Server Version" });
+
+      const groceryListStore = new GroceryListStore();
+      groceryListStore.markPendingUpsert(pendingList.uid);
+      const loadSpy = vi.spyOn(groceryListStore, "load");
+
+      const context: AppContext = {
+        client: {
+          ...makeMockClient(),
+          listGroceryLists: vi.fn().mockResolvedValue([serverList]),
+        } as unknown as PaprikaClient,
+        cache: {
+          ...makeMockCache(),
+          groceryLists: {
+            getAll: vi.fn().mockResolvedValue([pendingList]),
+            put: vi.fn().mockResolvedValue(undefined),
+            remove: vi.fn().mockResolvedValue(undefined),
+          },
+        } as unknown as DiskCacheRoot,
+        store: makeMockStore(),
+        pantryStore: makeMockPantryStore(),
+        aisleStore: makeMockAisleStore(),
+        groceryListStore,
+        groceryItemStore: new GroceryItemStore(),
+        groceryIngredientStore: new GroceryIngredientStore(),
+        vectorStore: null,
+        notifier: makeMockNotifier(),
+        auth: null,
+        log: SILENT_LOG,
+      };
+      const engine = new SyncEngine(context, 10);
+      await engine.syncOnce();
+
+      // The effective list should contain the pending (cached) version, not the server version
+      const loadedArg = loadSpy.mock.calls[0]![0] as Array<ReturnType<typeof makeGroceryList>>;
+      const loadedList = loadedArg.find((l) => l.uid === pendingList.uid);
+      expect(loadedList).toBeDefined();
+      expect(loadedList!.name).toBe("Local Version");
+    });
+
+    it("grocery-list-sync.AC3.1d: pending-deleted lists from server are filtered out", async () => {
+      const pendingDeleteList = makeGroceryList({ uid: "gl-pending-del" as GroceryListUid });
+      const otherList = makeGroceryList({ uid: "gl-other" as GroceryListUid });
+
+      const groceryListStore = new GroceryListStore();
+      groceryListStore.markPendingDelete(pendingDeleteList.uid);
+      const loadSpy = vi.spyOn(groceryListStore, "load");
+
+      const context: AppContext = {
+        client: {
+          ...makeMockClient(),
+          listGroceryLists: vi.fn().mockResolvedValue([pendingDeleteList, otherList]),
+        } as unknown as PaprikaClient,
+        cache: {
+          ...makeMockCache(),
+          groceryLists: {
+            getAll: vi.fn().mockResolvedValue([]),
+            put: vi.fn().mockResolvedValue(undefined),
+            remove: vi.fn().mockResolvedValue(undefined),
+          },
+        } as unknown as DiskCacheRoot,
+        store: makeMockStore(),
+        pantryStore: makeMockPantryStore(),
+        aisleStore: makeMockAisleStore(),
+        groceryListStore,
+        groceryItemStore: new GroceryItemStore(),
+        groceryIngredientStore: new GroceryIngredientStore(),
+        vectorStore: null,
+        notifier: makeMockNotifier(),
+        auth: null,
+        log: SILENT_LOG,
+      };
+      const engine = new SyncEngine(context, 10);
+      await engine.syncOnce();
+
+      const loadedArg = loadSpy.mock.calls[0]![0] as Array<ReturnType<typeof makeGroceryList>>;
+      const loadedUids = loadedArg.map((l) => l.uid);
+      expect(loadedUids).not.toContain(pendingDeleteList.uid);
+      expect(loadedUids).toContain(otherList.uid);
+    });
+  });
+
+  describe("grocery-item-sync: Grocery item sync step", () => {
+    it("grocery-item-sync.AC3.2a: fetched items are loaded into store and written to cache", async () => {
+      const item1 = makeGroceryItem({ uid: "gi-1" as GroceryItemUid });
+      const item2 = makeGroceryItem({ uid: "gi-2" as GroceryItemUid });
+
+      const putItem = vi.fn().mockResolvedValue(undefined);
+      const groceryItemStore = new GroceryItemStore();
+      const loadSpy = vi.spyOn(groceryItemStore, "load");
+
+      const context: AppContext = {
+        client: {
+          ...makeMockClient(),
+          listGroceryItems: vi.fn().mockResolvedValue([item1, item2]),
+        } as unknown as PaprikaClient,
+        cache: {
+          ...makeMockCache(),
+          groceryItems: {
+            getAll: vi.fn().mockResolvedValue([]),
+            put: putItem,
+            remove: vi.fn().mockResolvedValue(undefined),
+          },
+        } as unknown as DiskCacheRoot,
+        store: makeMockStore(),
+        pantryStore: makeMockPantryStore(),
+        aisleStore: makeMockAisleStore(),
+        groceryListStore: new GroceryListStore(),
+        groceryItemStore,
+        groceryIngredientStore: new GroceryIngredientStore(),
+        vectorStore: null,
+        notifier: makeMockNotifier(),
+        auth: null,
+        log: SILENT_LOG,
+      };
+      const engine = new SyncEngine(context, 10);
+      await engine.syncOnce();
+
+      expect(loadSpy).toHaveBeenCalledWith(expect.arrayContaining([item1, item2]));
+      expect(putItem).toHaveBeenCalledWith(item1);
+      expect(putItem).toHaveBeenCalledWith(item2);
+    });
+
+    it("grocery-item-sync.AC3.2b: orphan items are removed from cache", async () => {
+      const orphanItem = makeGroceryItem({ uid: "gi-orphan" as GroceryItemUid });
+      const incomingItem = makeGroceryItem({ uid: "gi-incoming" as GroceryItemUid });
+
+      const removeItem = vi.fn().mockResolvedValue(undefined);
+
+      const context: AppContext = {
+        client: {
+          ...makeMockClient(),
+          listGroceryItems: vi.fn().mockResolvedValue([incomingItem]),
+        } as unknown as PaprikaClient,
+        cache: {
+          ...makeMockCache(),
+          groceryItems: {
+            getAll: vi.fn().mockResolvedValue([orphanItem, incomingItem]),
+            put: vi.fn().mockResolvedValue(undefined),
+            remove: removeItem,
+          },
+        } as unknown as DiskCacheRoot,
+        store: makeMockStore(),
+        pantryStore: makeMockPantryStore(),
+        aisleStore: makeMockAisleStore(),
+        groceryListStore: new GroceryListStore(),
+        groceryItemStore: new GroceryItemStore(),
+        groceryIngredientStore: new GroceryIngredientStore(),
+        vectorStore: null,
+        notifier: makeMockNotifier(),
+        auth: null,
+        log: SILENT_LOG,
+      };
+      const engine = new SyncEngine(context, 10);
+      await engine.syncOnce();
+
+      expect(removeItem).toHaveBeenCalledWith(orphanItem.uid);
+      expect(removeItem).not.toHaveBeenCalledWith(incomingItem.uid);
+    });
+
+    it("grocery-item-sync.AC3.2c: pending-write filtering works independently from grocery list sync", async () => {
+      const pendingItem = makeGroceryItem({ uid: "gi-pending" as GroceryItemUid, name: "Local Item" });
+      const serverItem = makeGroceryItem({ uid: "gi-pending" as GroceryItemUid, name: "Server Item" });
+
+      const groceryItemStore = new GroceryItemStore();
+      groceryItemStore.markPendingUpsert(pendingItem.uid);
+      const loadSpy = vi.spyOn(groceryItemStore, "load");
+
+      const context: AppContext = {
+        client: {
+          ...makeMockClient(),
+          listGroceryItems: vi.fn().mockResolvedValue([serverItem]),
+        } as unknown as PaprikaClient,
+        cache: {
+          ...makeMockCache(),
+          groceryItems: {
+            getAll: vi.fn().mockResolvedValue([pendingItem]),
+            put: vi.fn().mockResolvedValue(undefined),
+            remove: vi.fn().mockResolvedValue(undefined),
+          },
+        } as unknown as DiskCacheRoot,
+        store: makeMockStore(),
+        pantryStore: makeMockPantryStore(),
+        aisleStore: makeMockAisleStore(),
+        groceryListStore: new GroceryListStore(),
+        groceryItemStore,
+        groceryIngredientStore: new GroceryIngredientStore(),
+        vectorStore: null,
+        notifier: makeMockNotifier(),
+        auth: null,
+        log: SILENT_LOG,
+      };
+      const engine = new SyncEngine(context, 10);
+      await engine.syncOnce();
+
+      const loadedArg = loadSpy.mock.calls[0]![0] as Array<ReturnType<typeof makeGroceryItem>>;
+      const loadedItem = loadedArg.find((i) => i.uid === pendingItem.uid);
+      expect(loadedItem).toBeDefined();
+      expect(loadedItem!.name).toBe("Local Item");
+    });
+  });
+
+  describe("grocery-sync-events: sync:complete event emission for grocery entities", () => {
+    it("grocery-sync-events.AC3.4: sync:complete emits GroceryListSyncResult with correct added/updated/removedUids", async () => {
+      const newList = makeGroceryList({ uid: "gl-new" as GroceryListUid });
+      const changedList = makeGroceryList({ uid: "gl-changed" as GroceryListUid, name: "Updated Name" });
+      const cachedChangedList = makeGroceryList({ uid: "gl-changed" as GroceryListUid, name: "Old Name" });
+      const orphanList = makeGroceryList({ uid: "gl-orphan" as GroceryListUid });
+
+      const engine = makeSyncEngine(
+        {
+          listGroceryLists: vi.fn().mockResolvedValue([newList, changedList]),
+        },
+        {
+          groceryLists: {
+            // Cached: changedList (old version) + orphanList
+            getAll: vi.fn().mockResolvedValue([cachedChangedList, orphanList]),
+            put: vi.fn().mockResolvedValue(undefined),
+            remove: vi.fn().mockResolvedValue(undefined),
+          },
+        },
+      );
+
+      const receivedResults: AnySyncResult[] = [];
+      engine.events.on("sync:complete", (result) => receivedResults.push(result));
+      await engine.syncOnce();
+
+      const listResult = receivedResults.find((r) => r.changeType === "grocery-lists");
+      expect(listResult).toBeDefined();
+      expect(listResult!.changes.added).toHaveLength(1);
+      expect(listResult!.changes.added[0]).toEqual(newList);
+      expect(listResult!.changes.updated).toHaveLength(1);
+      expect(listResult!.changes.updated[0]).toEqual(changedList);
+      expect(listResult!.changes.removedUids).toHaveLength(1);
+      expect(listResult!.changes.removedUids[0]).toBe(orphanList.uid);
+    });
+
+    it("grocery-sync-events.AC3.5: sync:complete emits GroceryItemSyncResult with correct added/updated/removedUids", async () => {
+      const newItem = makeGroceryItem({ uid: "gi-new" as GroceryItemUid });
+      const changedItem = makeGroceryItem({ uid: "gi-changed" as GroceryItemUid, name: "Updated Item" });
+      const cachedChangedItem = makeGroceryItem({ uid: "gi-changed" as GroceryItemUid, name: "Old Item" });
+      const orphanItem = makeGroceryItem({ uid: "gi-orphan" as GroceryItemUid });
+
+      const engine = makeSyncEngine(
+        {
+          listGroceryItems: vi.fn().mockResolvedValue([newItem, changedItem]),
+        },
+        {
+          groceryItems: {
+            getAll: vi.fn().mockResolvedValue([cachedChangedItem, orphanItem]),
+            put: vi.fn().mockResolvedValue(undefined),
+            remove: vi.fn().mockResolvedValue(undefined),
+          },
+        },
+      );
+
+      const receivedResults: AnySyncResult[] = [];
+      engine.events.on("sync:complete", (result) => receivedResults.push(result));
+      await engine.syncOnce();
+
+      const itemResult = receivedResults.find((r) => r.changeType === "grocery-items");
+      expect(itemResult).toBeDefined();
+      expect(itemResult!.changes.added).toHaveLength(1);
+      expect(itemResult!.changes.added[0]).toEqual(newItem);
+      expect(itemResult!.changes.updated).toHaveLength(1);
+      expect(itemResult!.changes.updated[0]).toEqual(changedItem);
+      expect(itemResult!.changes.removedUids).toHaveLength(1);
+      expect(itemResult!.changes.removedUids[0]).toBe(orphanItem.uid);
+    });
+  });
+
+  describe("grocery-sweep: sweepPending for grocery stores", () => {
+    it("grocery-sweep.AC3.7: sweepPending is called for both grocery list store and grocery item store during finalization", async () => {
+      const groceryListStore = new GroceryListStore();
+      const groceryItemStore = new GroceryItemStore();
+      const sweepListSpy = vi.spyOn(groceryListStore, "sweepPending");
+      const sweepItemSpy = vi.spyOn(groceryItemStore, "sweepPending");
+
+      const context: AppContext = {
+        client: makeMockClient(),
+        cache: makeMockCache(),
+        store: makeMockStore(),
+        pantryStore: makeMockPantryStore(),
+        aisleStore: makeMockAisleStore(),
+        groceryListStore,
+        groceryItemStore,
+        groceryIngredientStore: new GroceryIngredientStore(),
+        vectorStore: null,
+        notifier: makeMockNotifier(),
+        auth: null,
+        log: SILENT_LOG,
+      };
+      const engine = new SyncEngine(context, 10);
+      await engine.syncOnce();
+
+      expect(sweepListSpy).toHaveBeenCalledOnce();
+      expect(sweepItemSpy).toHaveBeenCalledOnce();
+    });
+  });
+
+  describe("grocery-observation-clearing: Observation-based pending-upsert clearing", () => {
+    it("grocery-observation-clearing.AC3.9a: grocery list pending-upsert is cleared when server content matches cached content", async () => {
+      const list = makeGroceryList({ uid: "gl-match" as GroceryListUid, name: "Same Name" });
+      // Server response has same content as what's cached
+      const serverList = { ...list };
+
+      const groceryListStore = new GroceryListStore();
+      groceryListStore.markPendingUpsert(list.uid);
+      const clearPendingSpy = vi.spyOn(groceryListStore, "clearPending");
+
+      const context: AppContext = {
+        client: {
+          ...makeMockClient(),
+          listGroceryLists: vi.fn().mockResolvedValue([serverList]),
+        } as unknown as PaprikaClient,
+        cache: {
+          ...makeMockCache(),
+          groceryLists: {
+            getAll: vi.fn().mockResolvedValue([list]),
+            put: vi.fn().mockResolvedValue(undefined),
+            remove: vi.fn().mockResolvedValue(undefined),
+          },
+        } as unknown as DiskCacheRoot,
+        store: makeMockStore(),
+        pantryStore: makeMockPantryStore(),
+        aisleStore: makeMockAisleStore(),
+        groceryListStore,
+        groceryItemStore: new GroceryItemStore(),
+        groceryIngredientStore: new GroceryIngredientStore(),
+        vectorStore: null,
+        notifier: makeMockNotifier(),
+        auth: null,
+        log: SILENT_LOG,
+      };
+      const engine = new SyncEngine(context, 10);
+      await engine.syncOnce();
+
+      expect(clearPendingSpy).toHaveBeenCalledWith(list.uid);
+    });
+
+    it("grocery-observation-clearing.AC3.9b: grocery list pending-upsert is NOT cleared when server content differs from cached content", async () => {
+      const cachedList = makeGroceryList({ uid: "gl-diff" as GroceryListUid, name: "Local Name" });
+      const serverList = makeGroceryList({ uid: "gl-diff" as GroceryListUid, name: "Different Server Name" });
+
+      const groceryListStore = new GroceryListStore();
+      groceryListStore.markPendingUpsert(cachedList.uid);
+      const clearPendingSpy = vi.spyOn(groceryListStore, "clearPending");
+
+      const context: AppContext = {
+        client: {
+          ...makeMockClient(),
+          listGroceryLists: vi.fn().mockResolvedValue([serverList]),
+        } as unknown as PaprikaClient,
+        cache: {
+          ...makeMockCache(),
+          groceryLists: {
+            getAll: vi.fn().mockResolvedValue([cachedList]),
+            put: vi.fn().mockResolvedValue(undefined),
+            remove: vi.fn().mockResolvedValue(undefined),
+          },
+        } as unknown as DiskCacheRoot,
+        store: makeMockStore(),
+        pantryStore: makeMockPantryStore(),
+        aisleStore: makeMockAisleStore(),
+        groceryListStore,
+        groceryItemStore: new GroceryItemStore(),
+        groceryIngredientStore: new GroceryIngredientStore(),
+        vectorStore: null,
+        notifier: makeMockNotifier(),
+        auth: null,
+        log: SILENT_LOG,
+      };
+      const engine = new SyncEngine(context, 10);
+      await engine.syncOnce();
+
+      expect(clearPendingSpy).not.toHaveBeenCalledWith(cachedList.uid);
+    });
+
+    it("grocery-observation-clearing.AC3.9c: grocery item pending-upsert is cleared when server content matches cached content", async () => {
+      const item = makeGroceryItem({ uid: "gi-match" as GroceryItemUid, name: "Same Item" });
+      const serverItem = { ...item };
+
+      const groceryItemStore = new GroceryItemStore();
+      groceryItemStore.markPendingUpsert(item.uid);
+      const clearPendingSpy = vi.spyOn(groceryItemStore, "clearPending");
+
+      const context: AppContext = {
+        client: {
+          ...makeMockClient(),
+          listGroceryItems: vi.fn().mockResolvedValue([serverItem]),
+        } as unknown as PaprikaClient,
+        cache: {
+          ...makeMockCache(),
+          groceryItems: {
+            getAll: vi.fn().mockResolvedValue([item]),
+            put: vi.fn().mockResolvedValue(undefined),
+            remove: vi.fn().mockResolvedValue(undefined),
+          },
+        } as unknown as DiskCacheRoot,
+        store: makeMockStore(),
+        pantryStore: makeMockPantryStore(),
+        aisleStore: makeMockAisleStore(),
+        groceryListStore: new GroceryListStore(),
+        groceryItemStore,
+        groceryIngredientStore: new GroceryIngredientStore(),
+        vectorStore: null,
+        notifier: makeMockNotifier(),
+        auth: null,
+        log: SILENT_LOG,
+      };
+      const engine = new SyncEngine(context, 10);
+      await engine.syncOnce();
+
+      expect(clearPendingSpy).toHaveBeenCalledWith(item.uid);
+    });
+
+    it("grocery-observation-clearing.AC3.9d: grocery item pending-upsert is NOT cleared when server content differs from cached content", async () => {
+      const cachedItem = makeGroceryItem({ uid: "gi-diff" as GroceryItemUid, name: "Local Item" });
+      const serverItem = makeGroceryItem({ uid: "gi-diff" as GroceryItemUid, name: "Different Server Item" });
+
+      const groceryItemStore = new GroceryItemStore();
+      groceryItemStore.markPendingUpsert(cachedItem.uid);
+      const clearPendingSpy = vi.spyOn(groceryItemStore, "clearPending");
+
+      const context: AppContext = {
+        client: {
+          ...makeMockClient(),
+          listGroceryItems: vi.fn().mockResolvedValue([serverItem]),
+        } as unknown as PaprikaClient,
+        cache: {
+          ...makeMockCache(),
+          groceryItems: {
+            getAll: vi.fn().mockResolvedValue([cachedItem]),
+            put: vi.fn().mockResolvedValue(undefined),
+            remove: vi.fn().mockResolvedValue(undefined),
+          },
+        } as unknown as DiskCacheRoot,
+        store: makeMockStore(),
+        pantryStore: makeMockPantryStore(),
+        aisleStore: makeMockAisleStore(),
+        groceryListStore: new GroceryListStore(),
+        groceryItemStore,
+        groceryIngredientStore: new GroceryIngredientStore(),
+        vectorStore: null,
+        notifier: makeMockNotifier(),
+        auth: null,
+        log: SILENT_LOG,
+      };
+      const engine = new SyncEngine(context, 10);
+      await engine.syncOnce();
+
+      expect(clearPendingSpy).not.toHaveBeenCalledWith(cachedItem.uid);
     });
   });
 });
