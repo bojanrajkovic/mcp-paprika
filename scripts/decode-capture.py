@@ -26,15 +26,35 @@ import gzip
 import json
 from mitmproxy import http
 
+try:
+    import brotli as _brotli
+
+    def _brotli_decompress(data: bytes) -> bytes:
+        return _brotli.decompress(data)
+
+except ImportError:
+    _brotli = None  # type: ignore[assignment]
+
+    def _brotli_decompress(data: bytes) -> bytes:
+        raise RuntimeError("brotli not installed")
+
+
+def _decompress(raw: bytes) -> bytes:
+    try:
+        return gzip.decompress(raw)
+    except Exception:
+        pass
+    try:
+        return _brotli_decompress(raw)
+    except Exception:
+        pass
+    return raw
+
 
 def _decode_body(raw: bytes, content_type: str) -> object:
     if not raw:
         return None
-    # Try gzip decompression first
-    try:
-        raw = gzip.decompress(raw)
-    except Exception:
-        pass
+    raw = _decompress(raw)
     # multipart form-data → decode each part
     if "boundary=" in content_type:
         boundary = ("--" + content_type.split("boundary=", 1)[1].strip()).encode()
@@ -44,10 +64,7 @@ def _decode_body(raw: bytes, content_type: str) -> object:
                 continue
             _, content = part.split(b"\r\n\r\n", 1)
             content = content.rstrip(b"\r\n--")
-            try:
-                content = gzip.decompress(content)
-            except Exception:
-                pass
+            content = _decompress(content)
             try:
                 parts.append(json.loads(content))
             except Exception:
