@@ -30,6 +30,7 @@ export function registerAddPantryItemTool(server: McpServer, ctx: ServerContext)
             "Aisle display name; call list_aisles first to pick an existing name. Unknown names auto-create a new aisle.",
           ),
         expirationDate: z.string().optional().describe("Expiration date as ISO string; sets hasExpiration=true"),
+        purchaseDate: z.string().optional().describe("Purchase date as ISO string (default: today)"),
         inStock: z.boolean().optional().describe("Whether the item is currently in stock (default: true)"),
         notes: z.string().optional().describe("Free-form notes"),
       },
@@ -64,6 +65,14 @@ export function registerAddPantryItemTool(server: McpServer, ctx: ServerContext)
           // listPantry returns; Paprika servers accept either case but matching the
           // app keeps round-tripped UIDs consistent.
           const uid = PantryItemUidSchema.parse(crypto.randomUUID().toUpperCase());
+          const purchaseDate =
+            args.purchaseDate !== undefined ? normalizePaprikaDate(args.purchaseDate) : paprikaDateToday();
+          if (args.purchaseDate !== undefined && purchaseDate === null) {
+            return textResult(
+              `Could not parse purchaseDate "${args.purchaseDate}". Use ISO 8601 (e.g., "2026-12-31") or "yyyy-MM-dd HH:mm:ss".`,
+            );
+          }
+
           let saved: PantryItem;
           try {
             const { aisle, aisleUid } = await ensureAisle(ctx, args.aisle ?? "");
@@ -76,9 +85,7 @@ export function registerAddPantryItemTool(server: McpServer, ctx: ServerContext)
               expirationDate,
               hasExpiration: expirationDate !== null, // AC4.2, AC4.3
               inStock: args.inStock ?? true,
-              // Today's date at midnight (Paprika's wire format); matches what
-              // Paprika.app stamps when the user adds an item.
-              purchaseDate: paprikaDateToday(),
+              purchaseDate,
               notes: args.notes ?? null,
               deleted: false,
             };

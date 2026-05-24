@@ -34,6 +34,7 @@ export function registerUpdatePantryItemTool(server: McpServer, ctx: ServerConte
           .nullable()
           .optional()
           .describe("Set expiration date; pass null to clear. hasExpiration is derived from this."),
+        purchaseDate: z.string().nullable().optional().describe("Set purchase date; pass null to clear"),
         inStock: z.boolean().optional().describe("Set in-stock status"),
         notes: z.string().nullable().optional().describe("Set notes; pass null to clear"),
       },
@@ -70,6 +71,21 @@ export function registerUpdatePantryItemTool(server: McpServer, ctx: ServerConte
           const newHasExpiration =
             args.expirationDate !== undefined ? args.expirationDate !== null : existing.hasExpiration;
 
+          let newPurchaseDate: string | null;
+          if (args.purchaseDate === undefined) {
+            newPurchaseDate = existing.purchaseDate;
+          } else if (args.purchaseDate === null) {
+            newPurchaseDate = null;
+          } else {
+            const normalized = normalizePaprikaDate(args.purchaseDate);
+            if (normalized === null) {
+              return textResult(
+                `Could not parse purchaseDate "${args.purchaseDate}". Use ISO 8601 (e.g., "2026-12-31") or "yyyy-MM-dd HH:mm:ss".`,
+              );
+            }
+            newPurchaseDate = normalized;
+          }
+
           let saved: PantryItem;
           try {
             // Resolve aisle: when provided, look up or auto-create to get both
@@ -86,6 +102,7 @@ export function registerUpdatePantryItemTool(server: McpServer, ctx: ServerConte
               ...(args.notes !== undefined && { notes: args.notes }),
               expirationDate: newExpirationDate,
               hasExpiration: newHasExpiration,
+              purchaseDate: newPurchaseDate,
             };
             saved = await ctx.client.savePantryItem(updated);
             await commitPantryItem(ctx, saved);

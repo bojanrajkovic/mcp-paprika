@@ -28,7 +28,9 @@ export function registerListPantryTool(server: McpServer, ctx: ServerContext): v
           const lines = all.map((item) => {
             const qty = item.quantity !== "" ? ` (${item.quantity})` : "";
             const aisle = item.aisle !== "" ? ` — ${item.aisle}` : "";
-            return `- **${item.ingredient}**${qty}${aisle} (uid: \`${item.uid}\`)`;
+            const status = item.inStock ? "" : " · **out of stock**";
+            const expires = item.expirationDate !== null ? ` · expires ${item.expirationDate}` : "";
+            return `- **${item.ingredient}**${qty}${aisle}${status}${expires} (uid: \`${item.uid}\`)`;
           });
 
           return textResult(header + "\n" + lines.join("\n"));
