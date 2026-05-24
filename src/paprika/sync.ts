@@ -150,6 +150,7 @@ export class SyncEngine {
       // Recipe sync is complete; mark the store as synced now so recipe tools
       // remain available even if category or pantry sync subsequently fails.
       this._context.store.markSynced();
+      this._context.store.setLastSyncedAt();
 
       // 2. Category sync path (replace-all)
       this.log.debug("fetching categories");

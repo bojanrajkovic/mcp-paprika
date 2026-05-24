@@ -75,8 +75,8 @@ describe("p2-u10-resource-reg: MCP Recipe Resources", () => {
   });
 
   describe("p2-u10-resource-reg.AC2: Individual recipes are readable as MCP resources", () => {
-    describe("p2-u10-resource-reg.AC2.1: Read handler returns content with UID header", () => {
-      it("prepends **UID:** header to recipe markdown", async () => {
+    describe("p2-u10-resource-reg.AC2.1: Read handler returns content with metadata header", () => {
+      it("prepends UID and URI header lines to recipe markdown", async () => {
         const { server, callResource } = makeTestServer();
         const store = new RecipeStore();
 
@@ -95,8 +95,82 @@ describe("p2-u10-resource-reg: MCP Recipe Resources", () => {
           contents: Array<{ text: string }>;
         };
 
-        const text = result.contents[0]?.text;
+        const text = result.contents[0]?.text ?? "";
         expect(text).toMatch(/^\*\*UID:\*\*\s`test-recipe`/);
+        expect(text).toContain("**URI:** `paprika://recipe/test-recipe`");
+      });
+
+      it("includes Last synced when store has been synced", async () => {
+        const { server, callResource } = makeTestServer();
+        const store = new RecipeStore();
+
+        const recipe = makeRecipe({ uid: "test-recipe" as RecipeUid, name: "Test" });
+        store.load([recipe], []);
+        store.setLastSyncedAt(new Date("2026-05-24T12:00:00Z"));
+
+        const ctx = makeCtx(store, server);
+        registerRecipeResources(server, ctx);
+
+        const result = (await callResource("recipes", "test-recipe")) as {
+          contents: Array<{ text: string }>;
+        };
+
+        expect(result.contents[0]?.text).toContain("**Last synced:** 2026-05-24T12:00:00.000Z");
+      });
+
+      it("omits Last synced when store has never been synced", async () => {
+        const { server, callResource } = makeTestServer();
+        const store = new RecipeStore();
+
+        const recipe = makeRecipe({ uid: "test-recipe" as RecipeUid, name: "Test" });
+        store.load([recipe], []);
+
+        const ctx = makeCtx(store, server);
+        registerRecipeResources(server, ctx);
+
+        const result = (await callResource("recipes", "test-recipe")) as {
+          contents: Array<{ text: string }>;
+        };
+
+        expect(result.contents[0]?.text).not.toContain("**Last synced:**");
+      });
+
+      it("includes Photo when recipe has an image URL", async () => {
+        const { server, callResource } = makeTestServer();
+        const store = new RecipeStore();
+
+        const recipe = makeRecipe({
+          uid: "test-recipe" as RecipeUid,
+          name: "Test",
+          imageUrl: "https://example.com/photo.jpg",
+        });
+        store.load([recipe], []);
+
+        const ctx = makeCtx(store, server);
+        registerRecipeResources(server, ctx);
+
+        const result = (await callResource("recipes", "test-recipe")) as {
+          contents: Array<{ text: string }>;
+        };
+
+        expect(result.contents[0]?.text).toContain("**Photo:** https://example.com/photo.jpg");
+      });
+
+      it("omits Photo when recipe has no image URL", async () => {
+        const { server, callResource } = makeTestServer();
+        const store = new RecipeStore();
+
+        const recipe = makeRecipe({ uid: "test-recipe" as RecipeUid, name: "Test", imageUrl: "" });
+        store.load([recipe], []);
+
+        const ctx = makeCtx(store, server);
+        registerRecipeResources(server, ctx);
+
+        const result = (await callResource("recipes", "test-recipe")) as {
+          contents: Array<{ text: string }>;
+        };
+
+        expect(result.contents[0]?.text).not.toContain("**Photo:**");
       });
     });
 

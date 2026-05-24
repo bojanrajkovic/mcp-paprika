@@ -29,7 +29,20 @@ export function registerRecipeResources(server: McpServer, ctx: ServerContext): 
         throw new Error(`Recipe not found: ${uid}`);
       }
       const categoryNames = ctx.store.resolveCategories(recipe.categories);
-      const content = `**UID:** \`${uid}\`\n\n${recipeToMarkdown(recipe, categoryNames)}`;
+
+      const headerLines = [`**UID:** \`${uid}\``, `**URI:** \`paprika://recipe/${uid}\``];
+
+      const lastSynced = ctx.store.lastSyncedAt;
+      if (lastSynced) {
+        headerLines.push(`**Last synced:** ${lastSynced.toISOString()}`);
+      }
+
+      const photoUrl = recipe.imageUrl || recipe.photoUrl;
+      if (photoUrl) {
+        headerLines.push(`**Photo:** ${photoUrl}`);
+      }
+
+      const content = `${headerLines.join("\n")}\n\n${recipeToMarkdown(recipe, categoryNames)}`;
       return {
         contents: [
           {

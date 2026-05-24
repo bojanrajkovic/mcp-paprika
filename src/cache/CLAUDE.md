@@ -40,6 +40,7 @@ Core in-memory cache for recipes and categories with CRUD operations and query m
 - `filterByTime(constraints)` - Filter and sort recipes by duration constraints
 - `findByName(title)` - Tiered name lookup (exact > starts-with > contains)
 - Category operations: `getCategory()`, `getAllCategories()`, `setCategories()`, `resolveCategories()`
+- Sync metadata: `lastSyncedAt` (getter, `Date | null`), `setLastSyncedAt(at?)` — timestamp of last successful recipe sync; set by `SyncEngine.syncOnce()` after recipe reconciliation; used by recipe resource metadata header
 - Pending-writes (inherited from `EntityStore`; see `../entity/CLAUDE.md`): `markPendingUpsert(uid, at?)`, `markPendingDelete(uid, at?)`, `isPendingUpsert(uid)`, `isPendingDelete(uid)`, `clearPending(uid)`, `sweepPending(now?): number`, `pendingWriteCount` (getter)
 
 ### PantryStore

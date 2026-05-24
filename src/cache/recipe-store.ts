@@ -21,9 +21,18 @@ export type TimeConstraints = {
 
 export class RecipeStore extends EntityStore<Recipe, RecipeUid> {
   private readonly categories: Map<CategoryUid, Category> = new Map();
+  private _lastSyncedAt: Date | null = null;
 
   constructor(opts?: { readonly pendingWriteTtlMs?: number }) {
     super(opts ?? {});
+  }
+
+  get lastSyncedAt(): Date | null {
+    return this._lastSyncedAt;
+  }
+
+  setLastSyncedAt(at: Date = new Date()): void {
+    this._lastSyncedAt = at;
   }
 
   load(recipes: ReadonlyArray<Recipe>, categories: ReadonlyArray<Category>): void {
