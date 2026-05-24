@@ -294,7 +294,7 @@ export class SyncEngine {
         this.log.debug({ count: orphanPantryUids.length }, "removed orphan pantry items");
       }
 
-      // 5. Grocery list sync (replace-all with orphan cleanup)
+      // 4. Grocery list sync (replace-all with orphan cleanup)
       this.log.debug("fetching grocery lists");
       const groceryLists = await this._context.client.listGroceryLists();
       this.log.debug({ count: groceryLists.length }, "fetched grocery lists");
@@ -340,7 +340,7 @@ export class SyncEngine {
         this.log.debug({ count: orphanGroceryListUids.length }, "removed orphan grocery lists");
       }
 
-      // 6. Grocery item sync (replace-all with orphan cleanup)
+      // 5. Grocery item sync (replace-all with orphan cleanup)
       this.log.debug("fetching grocery items");
       const groceryItems = await this._context.client.listGroceryItems();
       this.log.debug({ count: groceryItems.length }, "fetched grocery items");
@@ -386,7 +386,7 @@ export class SyncEngine {
         this.log.debug({ count: orphanGroceryItemUids.length }, "removed orphan grocery items");
       }
 
-      // 7. Ingredient catalog sync (replace-all, no pending-writes)
+      // 6. Ingredient catalog sync (replace-all, no pending-writes)
       this.log.debug("fetching grocery ingredients");
       const groceryIngredients = await this._context.client.listGroceryIngredients();
       this.log.debug({ count: groceryIngredients.length }, "fetched grocery ingredients");
@@ -406,7 +406,7 @@ export class SyncEngine {
         this.log.debug({ count: orphanIngredientUids.length }, "removed orphan grocery ingredients");
       }
 
-      // 4. Finalization
+      // 7. Finalization
       this.log.debug("flushing cache to disk");
       await this._context.cache.flush();
 

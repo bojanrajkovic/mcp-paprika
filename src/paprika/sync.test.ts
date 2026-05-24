@@ -1636,6 +1636,47 @@ describe("syncOnce", () => {
       expect(removeItem).not.toHaveBeenCalledWith(incomingItem.uid);
     });
 
+    it("grocery-item-sync.AC3.2d: pending-deleted items from server are filtered out", async () => {
+      const pendingDeleteItem = makeGroceryItem({ uid: "gi-pending-del" as GroceryItemUid });
+      const otherItem = makeGroceryItem({ uid: "gi-other" as GroceryItemUid });
+
+      const groceryItemStore = new GroceryItemStore();
+      groceryItemStore.markPendingDelete(pendingDeleteItem.uid);
+      const loadSpy = vi.spyOn(groceryItemStore, "load");
+
+      const context: AppContext = {
+        client: {
+          ...makeMockClient(),
+          listGroceryItems: vi.fn().mockResolvedValue([pendingDeleteItem, otherItem]),
+        } as unknown as PaprikaClient,
+        cache: {
+          ...makeMockCache(),
+          groceryItems: {
+            getAll: vi.fn().mockResolvedValue([]),
+            put: vi.fn().mockResolvedValue(undefined),
+            remove: vi.fn().mockResolvedValue(undefined),
+          },
+        } as unknown as DiskCacheRoot,
+        store: makeMockStore(),
+        pantryStore: makeMockPantryStore(),
+        aisleStore: makeMockAisleStore(),
+        groceryListStore: new GroceryListStore(),
+        groceryItemStore,
+        groceryIngredientStore: new GroceryIngredientStore(),
+        vectorStore: null,
+        notifier: makeMockNotifier(),
+        auth: null,
+        log: SILENT_LOG,
+      };
+      const engine = new SyncEngine(context, 10);
+      await engine.syncOnce();
+
+      const loadedArg = loadSpy.mock.calls[0]![0] as Array<ReturnType<typeof makeGroceryItem>>;
+      const loadedUids = loadedArg.map((i) => i.uid);
+      expect(loadedUids).not.toContain(pendingDeleteItem.uid);
+      expect(loadedUids).toContain(otherItem.uid);
+    });
+
     it("grocery-item-sync.AC3.2c: pending-write filtering works independently from grocery list sync", async () => {
       const pendingItem = makeGroceryItem({ uid: "gi-pending" as GroceryItemUid, name: "Local Item" });
       const serverItem = makeGroceryItem({ uid: "gi-pending" as GroceryItemUid, name: "Server Item" });
