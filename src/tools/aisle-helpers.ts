@@ -47,6 +47,12 @@ export async function ensureAisle(ctx: ServerContext, name: string): Promise<{ a
     return { aisle: match.name, aisleUid: match.uid };
   }
 
+  // Guard: if the store hasn't synced we can't distinguish "doesn't exist" from
+  // "not loaded yet" — creating would duplicate an aisle that sync will surface.
+  if (!ctx.aisleStore.hasSynced) {
+    throw new Error("Aisle list is not yet synced. Try again in a few seconds.");
+  }
+
   // Mutex serializes the create path so concurrent pantry writes for the same
   // new aisle name don't both miss resolveByName and create duplicate aisles.
   return ensureAisleMutex.runExclusive(async () => {
