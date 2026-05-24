@@ -108,7 +108,6 @@ function pantryItemToApiPayload(item: Readonly<PantryItem>): Record<string, unkn
     has_expiration: item.hasExpiration,
     in_stock: item.inStock,
     purchase_date: item.purchaseDate,
-    location_uid: item.locationUid,
     notes: item.notes,
     deleted: item.deleted,
   };

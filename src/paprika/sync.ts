@@ -17,7 +17,6 @@ function pantryItemsEqual(a: PantryItem, b: PantryItem): boolean {
     a.hasExpiration === b.hasExpiration &&
     a.inStock === b.inStock &&
     a.purchaseDate === b.purchaseDate &&
-    a.locationUid === b.locationUid &&
     a.notes === b.notes &&
     a.deleted === b.deleted
   );

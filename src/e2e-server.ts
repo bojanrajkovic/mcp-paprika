@@ -91,7 +91,6 @@ class MockPaprikaClient implements IMockPaprikaClient {
     hasExpiration: false,
     inStock: true,
     purchaseDate: null,
-    locationUid: null,
     notes: null,
     deleted: false,
   };

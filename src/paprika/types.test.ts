@@ -678,7 +678,6 @@ describe("pantry-read.AC1: PantryItem types", () => {
         has_expiration: true,
         in_stock: true,
         purchase_date: "2026-01-01 00:00:00",
-        location_uid: "location-1",
         notes: "Store in cool place",
       };
 
@@ -692,7 +691,6 @@ describe("pantry-read.AC1: PantryItem types", () => {
         expect(item.hasExpiration).toBe(true);
         expect(item.inStock).toBe(true);
         expect(item.purchaseDate).toBe("2026-01-01 00:00:00");
-        expect(item.locationUid).toBe("location-1");
         expect(item.uid).toBe("pantry-123");
         expect(item.ingredient).toBe("Flour");
         expect(item.quantity).toBe("2 cups");
@@ -714,7 +712,6 @@ describe("pantry-read.AC1: PantryItem types", () => {
         hasExpiration: true,
         inStock: true,
         purchaseDate: "2026-01-01 00:00:00",
-        locationUid: "location-1",
         notes: "Store in cool place",
       };
 
@@ -742,7 +739,7 @@ describe("pantry-read.AC1: PantryItem types", () => {
     });
   });
 
-  describe("pantry-read.AC1.4: null expirationDate/purchaseDate/locationUid/notes accepted", () => {
+  describe("pantry-read.AC1.4: null expirationDate/purchaseDate/notes accepted", () => {
     it("should accept wire JSON with expiration_date: null", () => {
       const wireItem = {
         uid: "pantry-123",
@@ -754,7 +751,6 @@ describe("pantry-read.AC1: PantryItem types", () => {
         has_expiration: false,
         in_stock: true,
         purchase_date: null,
-        location_uid: null,
         notes: null,
       };
 
@@ -764,7 +760,6 @@ describe("pantry-read.AC1: PantryItem types", () => {
       if (result.success) {
         expect(result.data.expirationDate).toBe(null);
         expect(result.data.purchaseDate).toBe(null);
-        expect(result.data.locationUid).toBe(null);
         expect(result.data.notes).toBe(null);
       }
     });
@@ -780,7 +775,6 @@ describe("pantry-read.AC1: PantryItem types", () => {
         hasExpiration: false,
         inStock: true,
         purchaseDate: null,
-        locationUid: null,
         notes: null,
       };
 
@@ -790,7 +784,6 @@ describe("pantry-read.AC1: PantryItem types", () => {
       if (result.success) {
         expect(result.data.expirationDate).toBe(null);
         expect(result.data.purchaseDate).toBe(null);
-        expect(result.data.locationUid).toBe(null);
         expect(result.data.notes).toBe(null);
       }
     });
@@ -808,7 +801,6 @@ describe("pantry-read.AC1: PantryItem types", () => {
         has_expiration: false,
         in_stock: true,
         purchase_date: null,
-        location_uid: null,
         notes: null,
       };
 
@@ -835,7 +827,6 @@ describe("pantry-read.AC1: PantryItem types", () => {
         hasExpiration: false,
         inStock: true,
         purchaseDate: null,
-        locationUid: null,
         notes: null,
         deleted: false,
       };
@@ -857,7 +848,6 @@ describe("pantry-mutations.AC1: Schema and payload converter", () => {
         has_expiration: true,
         in_stock: true,
         purchase_date: "2026-01-01 00:00:00",
-        location_uid: "location-1",
         notes: "Store in cool place",
         deleted: false,
       };
@@ -892,7 +882,6 @@ describe("pantry-mutations.AC1: Schema and payload converter", () => {
         has_expiration: true,
         in_stock: true,
         purchase_date: "2026-01-01 00:00:00",
-        location_uid: "location-1",
         notes: "Store in cool place",
       };
 
@@ -917,7 +906,6 @@ describe("pantry-mutations.AC1: Schema and payload converter", () => {
         hasExpiration: true,
         inStock: true,
         purchaseDate: "2026-01-01 00:00:00",
-        locationUid: "location-1",
         notes: "Store in cool place",
       };
 
@@ -942,7 +930,6 @@ describe("pantry-mutations.AC1: Schema and payload converter", () => {
         has_expiration: false,
         in_stock: true,
         purchase_date: null,
-        location_uid: null,
         notes: null,
         deleted: false,
       };
@@ -954,7 +941,6 @@ describe("pantry-mutations.AC1: Schema and payload converter", () => {
         const camelCaseItem = parseResult.data;
         expect(camelCaseItem.expirationDate).toBe(null);
         expect(camelCaseItem.purchaseDate).toBe(null);
-        expect(camelCaseItem.locationUid).toBe(null);
         expect(camelCaseItem.notes).toBe(null);
 
         // Verify round-trip through stored schema preserves nulls
@@ -964,7 +950,6 @@ describe("pantry-mutations.AC1: Schema and payload converter", () => {
         if (storedResult.success) {
           expect(storedResult.data.expirationDate).toBe(null);
           expect(storedResult.data.purchaseDate).toBe(null);
-          expect(storedResult.data.locationUid).toBe(null);
           expect(storedResult.data.notes).toBe(null);
         }
       }
@@ -983,7 +968,6 @@ describe("pantry-mutations.AC1: Schema and payload converter", () => {
         has_expiration: true,
         in_stock: true,
         purchase_date: "2026-01-01 00:00:00",
-        location_uid: "location-1",
         notes: "Store in cool place",
         deleted: "true", // string instead of boolean
       };

@@ -70,7 +70,6 @@ export function registerAddPantryItemTool(server: McpServer, ctx: ServerContext)
             // Today's date at midnight (Paprika's wire format); matches what
             // Paprika.app stamps when the user adds an item.
             purchaseDate: paprikaDateToday(),
-            locationUid: null,
             notes: args.notes ?? null,
             deleted: false,
           };

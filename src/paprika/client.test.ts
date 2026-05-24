@@ -66,7 +66,6 @@ function makeCamelCasePantryItem(uid: string, overrides?: Partial<PantryItem>): 
     hasExpiration: false,
     inStock: true,
     purchaseDate: null,
-    locationUid: null,
     notes: null,
     deleted: false,
   };
@@ -660,7 +659,6 @@ describe("PaprikaClient", () => {
       has_expiration: boolean;
       in_stock: boolean;
       purchase_date: string | null;
-      location_uid: string | null;
       notes: string | null;
     };
 
@@ -675,7 +673,6 @@ describe("PaprikaClient", () => {
         has_expiration: false,
         in_stock: true,
         purchase_date: "2026-01-01 00:00:00",
-        location_uid: null,
         notes: null,
         ...overrides,
       };
@@ -704,7 +701,6 @@ describe("PaprikaClient", () => {
       expect(pantryItems[0]!.hasExpiration).toBe(false);
       expect(pantryItems[0]!.inStock).toBe(true);
       expect(pantryItems[0]!.purchaseDate).toBe("2026-01-01 00:00:00");
-      expect(pantryItems[0]!.locationUid).toBe(null);
       expect(pantryItems[1]!.uid).toBe("pantry-2");
       expect(pantryItems[1]!.ingredient).toBe("Another Item");
     });
@@ -746,7 +742,7 @@ describe("PaprikaClient", () => {
       expect(Array.isArray(body)).toBe(true);
       expect(body!).toHaveLength(1);
       const payload = body![0]!;
-      expect(Object.keys(payload).length).toBe(12);
+      expect(Object.keys(payload).length).toBe(11);
       expect(payload).toHaveProperty("uid");
       expect(payload).toHaveProperty("ingredient");
       expect(payload).toHaveProperty("quantity");
@@ -756,7 +752,6 @@ describe("PaprikaClient", () => {
       expect(payload).toHaveProperty("has_expiration");
       expect(payload).toHaveProperty("in_stock");
       expect(payload).toHaveProperty("purchase_date");
-      expect(payload).toHaveProperty("location_uid");
       expect(payload).toHaveProperty("notes");
       expect(payload).toHaveProperty("deleted");
       expect(payload).not.toHaveProperty("aisleUid");
@@ -764,7 +759,6 @@ describe("PaprikaClient", () => {
       expect(payload).not.toHaveProperty("hasExpiration");
       expect(payload).not.toHaveProperty("inStock");
       expect(payload).not.toHaveProperty("purchaseDate");
-      expect(payload).not.toHaveProperty("locationUid");
     });
 
     it("pantry-mutations.AC1.5 - deleted flag is included and emitted correctly", async () => {
@@ -811,7 +805,6 @@ describe("PaprikaClient", () => {
         makeCamelCasePantryItem(uid, {
           expirationDate: null,
           purchaseDate: null,
-          locationUid: null,
           notes: null,
         }),
       );
@@ -820,7 +813,6 @@ describe("PaprikaClient", () => {
       const payload = body![0]!;
       expect(payload["expiration_date"]).toBeNull();
       expect(payload["purchase_date"]).toBeNull();
-      expect(payload["location_uid"]).toBeNull();
       expect(payload["notes"]).toBeNull();
     });
   });

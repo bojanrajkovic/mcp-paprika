@@ -181,7 +181,6 @@ export const PantryItemStoredSchema = z.object({
   hasExpiration: z.boolean(),
   inStock: z.boolean(),
   purchaseDate: z.string().nullable(),
-  locationUid: z.string().nullable(),
   notes: z.string().nullable(),
   deleted: z.boolean().optional().default(false),
 });
@@ -203,19 +202,17 @@ export const PantryItemSchema = z
     has_expiration: z.boolean(),
     in_stock: z.boolean(),
     purchase_date: z.string().nullable(),
-    location_uid: z.string().nullable(),
     notes: z.string().nullable(),
     deleted: z.boolean().optional().default(false),
   })
   .transform(
-    ({ aisle_uid, expiration_date, has_expiration, in_stock, purchase_date, location_uid, ...rest }): PantryItem => ({
+    ({ aisle_uid, expiration_date, has_expiration, in_stock, purchase_date, ...rest }): PantryItem => ({
       ...rest,
       aisleUid: aisle_uid,
       expirationDate: expiration_date,
       hasExpiration: has_expiration,
       inStock: in_stock,
       purchaseDate: purchase_date,
-      locationUid: location_uid,
     }),
   );
 

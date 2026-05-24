@@ -47,7 +47,6 @@ describe("pantry-mutations.AC4: add_pantry_item tool", () => {
     expect(callArgs?.expirationDate).toBe(null);
     expect(callArgs?.hasExpiration).toBe(false);
     expect(callArgs?.inStock).toBe(true);
-    expect(callArgs?.locationUid).toBe(null);
     expect(callArgs?.notes).toBe(null);
     expect(callArgs?.deleted).toBe(false);
 
