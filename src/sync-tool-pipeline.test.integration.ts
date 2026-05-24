@@ -5,6 +5,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { PaprikaClient } from "./paprika/client.js";
+import { AisleStore } from "./cache/aisle-store.js";
 import { DiskCacheRoot } from "./cache/disk/index.js";
 import { RecipeStore } from "./cache/recipe-store.js";
 import { PantryStore } from "./cache/pantry-store.js";
@@ -71,6 +72,14 @@ beforeEach(async () => {
   // Create a unique temp directory for each test
   tempDir = await mkdtemp(join(tmpdir(), "paprika-sync-tool-"));
   server.resetHandlers();
+  // Baseline handlers: always-empty endpoints every test needs. Individual tests
+  // override only what they care about via server.use() (last-registered wins in MSW).
+  server.use(
+    http.get(`${API_BASE}/recipes/`, () => HttpResponse.json({ result: [] })),
+    http.get(`${API_BASE}/categories/`, () => HttpResponse.json({ result: [] })),
+    http.get(`${API_BASE}/groceryaisles/`, () => HttpResponse.json({ result: [] })),
+    http.get(`${API_BASE}/pantry/`, () => HttpResponse.json({ result: [] })),
+  );
 });
 
 afterEach(async () => {
@@ -98,12 +107,6 @@ describe("Sync → Tool Pipeline Integration", () => {
           });
           return HttpResponse.json({ result: recipe });
         }),
-        http.get(`${API_BASE}/categories/`, () => {
-          return HttpResponse.json({ result: [] });
-        }),
-        http.get(`${API_BASE}/pantry/`, () => {
-          return HttpResponse.json({ result: [] });
-        }),
       );
 
       // Create real instances
@@ -113,6 +116,7 @@ describe("Sync → Tool Pipeline Integration", () => {
 
       const store = new RecipeStore();
       const pantryStore = new PantryStore();
+      const aisleStore = new AisleStore();
       const notifier = {
         resourceListChanged: () => {},
         loggingMessage: async () => {},
@@ -123,6 +127,7 @@ describe("Sync → Tool Pipeline Integration", () => {
         cache,
         store,
         pantryStore,
+        aisleStore,
         vectorStore: null,
         notifier,
         auth: null,
@@ -198,12 +203,6 @@ describe("Sync → Tool Pipeline Integration", () => {
           });
           return HttpResponse.json({ result: recipe });
         }),
-        http.get(`${API_BASE}/categories/`, () => {
-          return HttpResponse.json({ result: [] });
-        }),
-        http.get(`${API_BASE}/pantry/`, () => {
-          return HttpResponse.json({ result: [] });
-        }),
       );
 
       // Setup
@@ -212,12 +211,23 @@ describe("Sync → Tool Pipeline Integration", () => {
       await cache.init();
       const store = new RecipeStore();
       const pantryStore = new PantryStore();
+      const aisleStore = new AisleStore();
       const notifier = {
         resourceListChanged: () => {},
         loggingMessage: async () => {},
       };
 
-      const context = { client, cache, store, pantryStore, vectorStore: null, notifier, auth: null, log: SILENT_LOG };
+      const context = {
+        client,
+        cache,
+        store,
+        pantryStore,
+        aisleStore,
+        vectorStore: null,
+        notifier,
+        auth: null,
+        log: SILENT_LOG,
+      };
       const engine = new SyncEngine(context, 100);
 
       // First sync
@@ -263,12 +273,6 @@ describe("Sync → Tool Pipeline Integration", () => {
           });
           return HttpResponse.json({ result: recipe });
         }),
-        http.get(`${API_BASE}/categories/`, () => {
-          return HttpResponse.json({ result: [] });
-        }),
-        http.get(`${API_BASE}/pantry/`, () => {
-          return HttpResponse.json({ result: [] });
-        }),
       );
 
       // Setup
@@ -277,12 +281,23 @@ describe("Sync → Tool Pipeline Integration", () => {
       await cache.init();
       const store = new RecipeStore();
       const pantryStore = new PantryStore();
+      const aisleStore = new AisleStore();
       const notifier = {
         resourceListChanged: () => {},
         loggingMessage: async () => {},
       };
 
-      const context = { client, cache, store, pantryStore, vectorStore: null, notifier, auth: null, log: SILENT_LOG };
+      const context = {
+        client,
+        cache,
+        store,
+        pantryStore,
+        aisleStore,
+        vectorStore: null,
+        notifier,
+        auth: null,
+        log: SILENT_LOG,
+      };
       const engine = new SyncEngine(context, 100);
 
       // First sync: both recipes
@@ -350,9 +365,6 @@ describe("Sync → Tool Pipeline Integration", () => {
             ],
           });
         }),
-        http.get(`${API_BASE}/pantry/`, () => {
-          return HttpResponse.json({ result: [] });
-        }),
       );
 
       // Setup and sync
@@ -361,12 +373,23 @@ describe("Sync → Tool Pipeline Integration", () => {
       await cache.init();
       const store = new RecipeStore();
       const pantryStore = new PantryStore();
+      const aisleStore = new AisleStore();
       const notifier = {
         resourceListChanged: () => {},
         loggingMessage: async () => {},
       };
 
-      const context = { client, cache, store, pantryStore, vectorStore: null, notifier, auth: null, log: SILENT_LOG };
+      const context = {
+        client,
+        cache,
+        store,
+        pantryStore,
+        aisleStore,
+        vectorStore: null,
+        notifier,
+        auth: null,
+        log: SILENT_LOG,
+      };
       const engine = new SyncEngine(context, 100);
       await engine.syncOnce();
 
@@ -426,12 +449,6 @@ describe("Sync → Tool Pipeline Integration", () => {
           });
           return HttpResponse.json({ result: recipe });
         }),
-        http.get(`${API_BASE}/categories/`, () => {
-          return HttpResponse.json({ result: [] });
-        }),
-        http.get(`${API_BASE}/pantry/`, () => {
-          return HttpResponse.json({ result: [] });
-        }),
       );
 
       // Setup
@@ -440,12 +457,23 @@ describe("Sync → Tool Pipeline Integration", () => {
       await cache.init();
       const store = new RecipeStore();
       const pantryStore = new PantryStore();
+      const aisleStore = new AisleStore();
       const notifier = {
         resourceListChanged: () => {},
         loggingMessage: async () => {},
       };
 
-      const context = { client, cache, store, pantryStore, vectorStore: null, notifier, auth: null, log: SILENT_LOG };
+      const context = {
+        client,
+        cache,
+        store,
+        pantryStore,
+        aisleStore,
+        vectorStore: null,
+        notifier,
+        auth: null,
+        log: SILENT_LOG,
+      };
       const engine = new SyncEngine(context, 100);
 
       // First sync with original name
@@ -509,11 +537,22 @@ describe("Sync → Tool Pipeline Integration", () => {
       const cache = new DiskCacheRoot(tempDir);
       const store = new RecipeStore();
       const pantryStore = new PantryStore();
+      const aisleStore = new AisleStore();
       const notifier = {
         resourceListChanged: () => {},
         loggingMessage: async (): Promise<void> => {},
       };
-      const context = { client, cache, store, pantryStore, vectorStore: null, notifier, auth: null, log: SILENT_LOG };
+      const context = {
+        client,
+        cache,
+        store,
+        pantryStore,
+        aisleStore,
+        vectorStore: null,
+        notifier,
+        auth: null,
+        log: SILENT_LOG,
+      };
       const engine = new SyncEngine(context, 100);
       return { client, cache, store, pantryStore, engine };
     }
@@ -522,11 +561,6 @@ describe("Sync → Tool Pipeline Integration", () => {
       // The stale canonical list is empty (Paprika hadn't propagated our write
       // when sync's listPantry was issued). Without protection, sync would
       // treat our just-upserted UID as an orphan and remove it locally.
-      server.use(
-        http.get(`${API_BASE}/recipes/`, () => HttpResponse.json({ result: [] })),
-        http.get(`${API_BASE}/categories/`, () => HttpResponse.json({ result: [] })),
-        http.get(`${API_BASE}/pantry/`, () => HttpResponse.json({ result: [] })),
-      );
 
       const { cache, pantryStore, engine } = makeRaceContext();
       await cache.init();
@@ -545,11 +579,7 @@ describe("Sync → Tool Pipeline Integration", () => {
 
     it("AC5.2: pantry delete is not resurrected by a sync with stale (pre-delete) canonical list", async () => {
       const stalePantryWire = makeSnakeCasePantryItem("PANTRY-UID-2", { ingredient: "Eggs" });
-      server.use(
-        http.get(`${API_BASE}/recipes/`, () => HttpResponse.json({ result: [] })),
-        http.get(`${API_BASE}/categories/`, () => HttpResponse.json({ result: [] })),
-        http.get(`${API_BASE}/pantry/`, () => HttpResponse.json({ result: [stalePantryWire] })),
-      );
+      server.use(http.get(`${API_BASE}/pantry/`, () => HttpResponse.json({ result: [stalePantryWire] })));
 
       const { pantryStore, cache, engine } = makeRaceContext();
       await cache.init();
@@ -565,12 +595,6 @@ describe("Sync → Tool Pipeline Integration", () => {
     });
 
     it("AC5.3: recipe upsert is not removed by a sync with stale (pre-write) canonical list", async () => {
-      server.use(
-        http.get(`${API_BASE}/recipes/`, () => HttpResponse.json({ result: [] })),
-        http.get(`${API_BASE}/categories/`, () => HttpResponse.json({ result: [] })),
-        http.get(`${API_BASE}/pantry/`, () => HttpResponse.json({ result: [] })),
-      );
-
       const { cache, store, engine } = makeRaceContext();
       await cache.init();
 
@@ -599,8 +623,6 @@ describe("Sync → Tool Pipeline Integration", () => {
             result: makeSnakeCaseRecipe(params["uid"] as string, { name: "Pre-Trash Version", in_trash: false }),
           }),
         ),
-        http.get(`${API_BASE}/categories/`, () => HttpResponse.json({ result: [] })),
-        http.get(`${API_BASE}/pantry/`, () => HttpResponse.json({ result: [] })),
       );
 
       const { cache, store, engine } = makeRaceContext();
@@ -648,11 +670,7 @@ describe("Sync → Tool Pipeline Integration", () => {
 
       // First sync: canonical list returns the pre-write version (different quantity).
       const stalePantryWire = makeSnakeCasePantryItem("PANTRY-UPDATE", { ingredient: "Eggs", quantity: "1 dozen" });
-      server.use(
-        http.get(`${API_BASE}/recipes/`, () => HttpResponse.json({ result: [] })),
-        http.get(`${API_BASE}/categories/`, () => HttpResponse.json({ result: [] })),
-        http.get(`${API_BASE}/pantry/`, () => HttpResponse.json({ result: [stalePantryWire] })),
-      );
+      server.use(http.get(`${API_BASE}/pantry/`, () => HttpResponse.json({ result: [stalePantryWire] })));
       await engine.syncOnce();
       // Pending-upsert must still be set — content didn't match.
       expect(pantryStore.isPendingUpsert(updated.uid)).toBe(true);
@@ -687,8 +705,6 @@ describe("Sync → Tool Pipeline Integration", () => {
         http.get(`${API_BASE}/recipe/:uid/`, ({ params }) =>
           HttpResponse.json({ result: makeSnakeCaseRecipe(params["uid"] as string, { name: "Before Edit" }) }),
         ),
-        http.get(`${API_BASE}/categories/`, () => HttpResponse.json({ result: [] })),
-        http.get(`${API_BASE}/pantry/`, () => HttpResponse.json({ result: [] })),
       );
       await engine.syncOnce();
       // Pending-upsert must still be set — hash didn't match.
@@ -716,16 +732,23 @@ describe("Sync → Tool Pipeline Integration", () => {
       await cache.init();
       const store = new RecipeStore({ pendingWriteTtlMs: 50 });
       const pantryStore = new PantryStore({ pendingWriteTtlMs: 50 });
+      const aisleStore = new AisleStore();
       const notifier = { resourceListChanged: () => {}, loggingMessage: async (): Promise<void> => {} };
-      const context = { client, cache, store, pantryStore, vectorStore: null, notifier, auth: null, log: SILENT_LOG };
+      const context = {
+        client,
+        cache,
+        store,
+        pantryStore,
+        aisleStore,
+        vectorStore: null,
+        notifier,
+        auth: null,
+        log: SILENT_LOG,
+      };
       const engine = new SyncEngine(context, 100);
 
       const stalePantryWire = makeSnakeCasePantryItem("PANTRY-UID-3", { ingredient: "Milk" });
-      server.use(
-        http.get(`${API_BASE}/recipes/`, () => HttpResponse.json({ result: [] })),
-        http.get(`${API_BASE}/categories/`, () => HttpResponse.json({ result: [] })),
-        http.get(`${API_BASE}/pantry/`, () => HttpResponse.json({ result: [stalePantryWire] })),
-      );
+      server.use(http.get(`${API_BASE}/pantry/`, () => HttpResponse.json({ result: [stalePantryWire] })));
 
       const uid = "PANTRY-UID-3" as PantryItemUid;
       pantryStore.load([]);
