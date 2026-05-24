@@ -193,7 +193,7 @@ Background polling loop that keeps local cache and in-memory store synchronized 
 
 - `start(): void` — begins async polling loop at `intervalMs` interval; no-op if already running
 - `stop(): void` — aborts loop via AbortController; no-op if not running
-- `syncOnce(): Promise<void>` — runs one full sync cycle (recipe diff-and-fetch, category replace-all, pantry replace-all, cache flush, logging); never throws; does **not** call the notifier directly
+- `syncOnce(): Promise<void>` — runs one full sync cycle across all entities (see Algorithm below); never throws; does **not** call the notifier directly
 - `events` getter — returns `Pick<SyncEventEmitter, "on" | "off">` for subscribing to events:
   - `sync:complete` event fires **four times per cycle** — `RecipeSyncResult` (`changeType: "recipes"`), `PantrySyncResult` (`changeType: "pantry"`), `GroceryListSyncResult` (`changeType: "grocery-lists"`), `GroceryItemSyncResult` (`changeType: "grocery-items"`). Subscribers narrow by `result.changeType`.
   - `sync:error` event fires with `Error` on cycle failure
