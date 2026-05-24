@@ -1,6 +1,6 @@
 # MCP Tool Definitions
 
-Last verified: 2026-05-22
+Last verified: 2026-05-24
 
 > Pantry write tools (`add_pantry_item`, `update_pantry_item`) normalize any user-supplied `expirationDate` through `normalizePaprikaDate()` (`paprika/dates.ts`) before persisting. Accepts ISO 8601, `yyyy-MM-dd`, `yyyy/MM/dd`, or the already-Paprika `yyyy-MM-dd HH:mm:ss`. Unparseable input returns a `textResult` error to the LLM rather than writing garbage. `add_pantry_item` stamps `purchaseDate` via `paprikaDateToday()` (today at midnight, Paprika wire format) and generates UIDs as **uppercase** UUID v4 to match what Paprika.app emits.
 
@@ -103,7 +103,7 @@ Utilities imported by pantry tool handlers from `./pantry-helpers.js`.
 
 - **`pantryStartGuard(ctx)`** -- Returns `Ok<void>` when pantry is synced, `Err<CallToolResult>` when not yet synced. Always use `.match()` to handle both branches.
 - **`pantryItemToMarkdown(item)`** -- Renders a pantry item as markdown with ingredient, UID, and in-stock status (always rendered) plus quantity, aisle, expiration date, purchase date, and notes when present (omits empty strings and `null` optional fields).
-- **`commitPantryItem(ctx, saved)`** -- Persists a saved pantry item to the local cache and store, then triggers cloud sync. Branches on `saved.deleted`: the upsert branch calls `pantryStore.markPendingUpsert(saved.uid)` (sync, FIRST) → `cache.pantry.put` (async) → `cache.flush` (async) → `pantryStore.set` (sync) → `notifySync` (async); the delete branch calls `pantryStore.markPendingDelete(saved.uid)` (sync, FIRST) → `cache.pantry.remove` (async) → `cache.flush` (async) → `pantryStore.delete` (sync) → `notifySync` (async). The pending-write mark is set BEFORE any cache I/O so an in-flight sync cycle that observes the cache mid-commit still sees the pending-write flag and skips reconciling our UID (see `cache/CLAUDE.md` Pending-writes section). Called by all pantry write tools after `ctx.client.savePantryItem()`. Do NOT call `ctx.client.notifySync()` separately in the tool handler — `commitPantryItem` already calls it. No `resourceListChanged()` is emitted — pantry items have no resource surface.
+- **`commitPantryItem(ctx, saved)`** -- Persists a saved pantry item to the local cache and store, then triggers cloud sync. Branches on `saved.deleted`: the upsert branch calls `pantryStore.markPendingUpsert(saved.uid)` (sync, FIRST) → `cache.pantry.put` (async) → `cache.flush` (async) → `pantryStore.set` (sync) → `notifySync` (async); the delete branch calls `pantryStore.markPendingDelete(saved.uid)` (sync, FIRST) → `cache.pantry.remove` (async) → `cache.flush` (async) → `pantryStore.delete` (sync) → `notifySync` (async). The pending-write mark is set BEFORE any cache I/O so an in-flight sync cycle that observes the cache mid-commit still sees the pending-write flag and skips reconciling our UID (see `cache/CLAUDE.md` Pending-writes section). Called by all pantry write tools after `ctx.client.savePantryItems()`. Do NOT call `ctx.client.notifySync()` separately in the tool handler — `commitPantryItem` already calls it. No `resourceListChanged()` is emitted — pantry items have no resource surface.
 
 ## Testing (`tool-test-utils.ts`)
 

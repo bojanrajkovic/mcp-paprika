@@ -89,12 +89,12 @@ export function registerAddPantryItemTool(server: McpServer, ctx: ServerContext)
               notes: args.notes ?? null,
               deleted: false,
             };
-            saved = await ctx.client.savePantryItem(newItem);
+            saved = (await ctx.client.savePantryItems([newItem]))[0]!;
             await commitPantryItem(ctx, saved);
           } catch (error) {
             // AC4.7: store/cache not updated — commitPantryItem not reached
             const message = toMessage(error);
-            log.error({ err: error, ingredient: args.ingredient }, "savePantryItem failed");
+            log.error({ err: error, ingredient: args.ingredient }, "savePantryItems failed");
             return textResult(`Failed to add pantry item: ${message}`);
           }
 

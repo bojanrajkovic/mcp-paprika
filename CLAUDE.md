@@ -1,6 +1,6 @@
 # mcp-paprika
 
-Last verified: 2026-05-22
+Last verified: 2026-05-24
 
 MCP server for the Paprika recipe manager. Two transports: **stdio** (default; unauthenticated local pipe used by Claude Desktop, Claude Code, Cursor, mcp-cli) and **Streamable HTTP** (used by Claude Mobile and other remote MCP clients; ships with OAuth 2.1 + OIDC delegation). Selected via `MCP_TRANSPORT=stdio|http`.
 
@@ -36,9 +36,9 @@ MCP server for the Paprika recipe manager. Two transports: **stdio** (default; u
 
 - `src/index.ts` — Transport dispatcher: loads config, dispatches to `startStdio` or `startHttp` based on `config.transport`, wires SIGINT/SIGTERM to the returned handle's `shutdown()`
 - `src/transport/` — Transport-specific entry points: `stdio.ts` (deferred-getter notifier, sync, then `server.connect(new StdioServerTransport())`) and `http.ts` (Hono app with `GET /healthz` + `ALL /mcp`, session map, graceful shutdown that aborts SSE streams before closing the HTTP server). `startHttp` returns an `HttpTransportHandle` with the bound port (useful for tests passing `port: 0`)
-- `src/server/` — Process-wide composition root: `AppContext`/`SessionContext` types, `Notifier` abstraction (`singleServerNotifier`, `broadcastNotifier`), `buildAppContext` (heavyweight shared state; constructs the pino root logger and threads it through `AppContext.log`, `AuthContext.log`, and `PaprikaClient`) and `buildMcpServer` (per-session tool/resource registration; discover tool gated on `vectorStore !== null`)
-- `src/paprika/` — Paprika API client with pantry read and write support (`listPantry()`, `savePantryItem()` methods)
-- `src/cache/` — In-memory stores (`RecipeStore`, `PantryStore`) plus the persistence layer at `src/cache/disk/` (`DiskCacheRoot` and per-entity subcaches)
+- `src/server/` — Process-wide composition root: `AppContext`/`SessionContext` types, `Notifier` abstraction (`singleServerNotifier`, `broadcastNotifier`), `buildAppContext` (heavyweight shared state; constructs the pino root logger and threads it through `AppContext.log`, `AuthContext.log`, and `PaprikaClient`; AppContext includes three grocery store fields: `groceryListStore`, `groceryItemStore`, `groceryIngredientStore`) and `buildMcpServer` (per-session tool/resource registration; discover tool gated on `vectorStore !== null`)
+- `src/paprika/` — Paprika API client with pantry, grocery, and recipe read and write support (`listPantry()`, `savePantryItems()`, `listGroceryLists()`, `listGroceryItems()`, `listGroceryIngredients()`, `saveGroceryList()`, `saveGroceryItems()`, `saveGroceryIngredient()` methods)
+- `src/cache/` — In-memory stores (`RecipeStore`, `PantryStore`, `AisleStore`, `GroceryListStore`, `GroceryItemStore`, `GroceryIngredientStore`) plus the persistence layer at `src/cache/disk/` (`DiskCacheRoot` and per-entity subcaches, including `groceryLists`, `groceryItems`, `groceryIngredients`)
 - `src/tools/` — MCP tool definitions including read tools (`list_pantry`, `get_pantry_item`) and write tools (`add_pantry_item`, `update_pantry_item`, `delete_pantry_item`) for pantry access
 - `src/resources/` — MCP resource definitions including `paprika://recipe/{uid}` resource template
 - `src/features/` — Feature implementations (semantic search wiring lives here; tool registration happens in `src/server/build.ts`)

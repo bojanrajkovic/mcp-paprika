@@ -7,6 +7,9 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 
 import { AisleStore } from "../cache/aisle-store.js";
+import { GroceryIngredientStore } from "../cache/grocery-ingredient-store.js";
+import { GroceryItemStore } from "../cache/grocery-item-store.js";
+import { GroceryListStore } from "../cache/grocery-list-store.js";
 import { PantryStore } from "../cache/pantry-store.js";
 import type { RecipeStore } from "../cache/recipe-store.js";
 import type { Notifier } from "../server/notifier.js";
@@ -150,7 +153,19 @@ export function makeCtx(
   store: RecipeStore,
   server: McpServer,
   overrides: Partial<
-    Pick<ServerContext, "client" | "cache" | "pantryStore" | "aisleStore" | "vectorStore" | "notifier" | "log">
+    Pick<
+      ServerContext,
+      | "client"
+      | "cache"
+      | "pantryStore"
+      | "aisleStore"
+      | "groceryListStore"
+      | "groceryItemStore"
+      | "groceryIngredientStore"
+      | "vectorStore"
+      | "notifier"
+      | "log"
+    >
   > = {},
 ): ServerContext {
   const notifier: Notifier = overrides.notifier ?? {
@@ -162,6 +177,9 @@ export function makeCtx(
     server,
     pantryStore: overrides.pantryStore ?? new PantryStore(),
     aisleStore: overrides.aisleStore ?? new AisleStore(),
+    groceryListStore: overrides.groceryListStore ?? new GroceryListStore(),
+    groceryItemStore: overrides.groceryItemStore ?? new GroceryItemStore(),
+    groceryIngredientStore: overrides.groceryIngredientStore ?? new GroceryIngredientStore(),
     vectorStore: overrides.vectorStore ?? null,
     client: overrides.client ?? ({} as unknown as ServerContext["client"]),
     cache: overrides.cache ?? ({} as unknown as ServerContext["cache"]),

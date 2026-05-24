@@ -3,6 +3,9 @@ import type { Logger } from "pino";
 
 import type { AisleStore } from "../cache/aisle-store.js";
 import type { DiskCacheRoot } from "../cache/disk/index.js";
+import type { GroceryIngredientStore } from "../cache/grocery-ingredient-store.js";
+import type { GroceryItemStore } from "../cache/grocery-item-store.js";
+import type { GroceryListStore } from "../cache/grocery-list-store.js";
 import type { PantryStore } from "../cache/pantry-store.js";
 import type { RecipeStore } from "../cache/recipe-store.js";
 import type { VectorStore } from "../features/vector-store.js";
@@ -24,6 +27,9 @@ export interface AppContext {
   readonly store: RecipeStore;
   readonly pantryStore: PantryStore;
   readonly aisleStore: AisleStore;
+  readonly groceryListStore: GroceryListStore;
+  readonly groceryItemStore: GroceryItemStore;
+  readonly groceryIngredientStore: GroceryIngredientStore;
   readonly vectorStore: VectorStore | null;
   readonly notifier: Notifier;
   /** OAuth runtime state. null in stdio mode (auth not required). */

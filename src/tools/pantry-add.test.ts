@@ -17,17 +17,17 @@ describe("pantry-mutations.AC4: add_pantry_item tool", () => {
     const pantryStore = new PantryStore();
     pantryStore.load([]);
 
-    const mockSavePantryItem = vi.fn();
+    const mockSavePantryItems = vi.fn();
     const mockNotifySync = vi.fn().mockResolvedValue(undefined);
     const mockPutPantryItem = vi.fn();
     const mockFlush = vi.fn().mockResolvedValue(undefined);
 
-    mockSavePantryItem.mockImplementation(async (item) => item);
+    mockSavePantryItems.mockImplementation(async (items) => items);
 
     const { server, callTool } = makeTestServer();
     const ctx = makeCtx(store, server, {
       pantryStore,
-      client: { savePantryItem: mockSavePantryItem, notifySync: mockNotifySync } as unknown as PaprikaClient,
+      client: { savePantryItems: mockSavePantryItems, notifySync: mockNotifySync } as unknown as PaprikaClient,
       cache: { pantry: { put: mockPutPantryItem }, flush: mockFlush } as unknown as DiskCacheRoot,
     });
     registerAddPantryItemTool(server, ctx);
@@ -38,9 +38,9 @@ describe("pantry-mutations.AC4: add_pantry_item tool", () => {
     const text = getText(result);
 
     expect(text).toContain("# Butter");
-    expect(mockSavePantryItem).toHaveBeenCalledOnce();
+    expect(mockSavePantryItems).toHaveBeenCalledOnce();
 
-    const callArgs = mockSavePantryItem.mock.calls[0]?.[0];
+    const [callArgs] = mockSavePantryItems.mock.calls[0]?.[0] ?? [];
     expect(callArgs).toBeDefined();
     expect(callArgs?.ingredient).toBe("Butter");
     expect(callArgs?.quantity).toBe("");
@@ -69,17 +69,17 @@ describe("pantry-mutations.AC4: add_pantry_item tool", () => {
     const pantryStore = new PantryStore();
     pantryStore.load([]);
 
-    const mockSavePantryItem = vi.fn();
+    const mockSavePantryItems = vi.fn();
     const mockNotifySync = vi.fn().mockResolvedValue(undefined);
     const mockPutPantryItem = vi.fn();
     const mockFlush = vi.fn().mockResolvedValue(undefined);
 
-    mockSavePantryItem.mockImplementation(async (item) => item);
+    mockSavePantryItems.mockImplementation(async (items) => items);
 
     const { server, callTool } = makeTestServer();
     const ctx = makeCtx(store, server, {
       pantryStore,
-      client: { savePantryItem: mockSavePantryItem, notifySync: mockNotifySync } as unknown as PaprikaClient,
+      client: { savePantryItems: mockSavePantryItems, notifySync: mockNotifySync } as unknown as PaprikaClient,
       cache: { pantry: { put: mockPutPantryItem }, flush: mockFlush } as unknown as DiskCacheRoot,
     });
     registerAddPantryItemTool(server, ctx);
@@ -89,7 +89,7 @@ describe("pantry-mutations.AC4: add_pantry_item tool", () => {
       expirationDate: "2026-12-31",
     });
 
-    const callArgs = mockSavePantryItem.mock.calls[0]?.[0];
+    const [callArgs] = mockSavePantryItems.mock.calls[0]?.[0] ?? [];
     // User input is normalized to Paprika wire format ("yyyy-MM-dd HH:mm:ss" at midnight).
     expect(callArgs?.expirationDate).toBe("2026-12-31 00:00:00");
     expect(callArgs?.hasExpiration).toBe(true);
@@ -100,17 +100,17 @@ describe("pantry-mutations.AC4: add_pantry_item tool", () => {
     const pantryStore = new PantryStore();
     pantryStore.load([]);
 
-    const mockSavePantryItem = vi.fn();
+    const mockSavePantryItems = vi.fn();
     const mockNotifySync = vi.fn().mockResolvedValue(undefined);
     const mockPutPantryItem = vi.fn();
     const mockFlush = vi.fn().mockResolvedValue(undefined);
 
-    mockSavePantryItem.mockImplementation(async (item) => item);
+    mockSavePantryItems.mockImplementation(async (items) => items);
 
     const { server, callTool } = makeTestServer();
     const ctx = makeCtx(store, server, {
       pantryStore,
-      client: { savePantryItem: mockSavePantryItem, notifySync: mockNotifySync } as unknown as PaprikaClient,
+      client: { savePantryItems: mockSavePantryItems, notifySync: mockNotifySync } as unknown as PaprikaClient,
       cache: { pantry: { put: mockPutPantryItem }, flush: mockFlush } as unknown as DiskCacheRoot,
     });
     registerAddPantryItemTool(server, ctx);
@@ -119,7 +119,7 @@ describe("pantry-mutations.AC4: add_pantry_item tool", () => {
       ingredient: "Eggs",
     });
 
-    const callArgs = mockSavePantryItem.mock.calls[0]?.[0];
+    const [callArgs] = mockSavePantryItems.mock.calls[0]?.[0] ?? [];
     expect(callArgs?.expirationDate).toBe(null);
     expect(callArgs?.hasExpiration).toBe(false);
     // Note: The handler input schema does not accept hasExpiration, so there's
@@ -136,18 +136,18 @@ describe("pantry-mutations.AC4: add_pantry_item tool", () => {
     const aisleStore = new AisleStore();
     aisleStore.load([produceAisle]);
 
-    const mockSavePantryItem = vi.fn();
+    const mockSavePantryItems = vi.fn();
     const mockNotifySync = vi.fn().mockResolvedValue(undefined);
     const mockPutPantryItem = vi.fn();
     const mockFlush = vi.fn().mockResolvedValue(undefined);
 
-    mockSavePantryItem.mockImplementation(async (item) => item);
+    mockSavePantryItems.mockImplementation(async (items) => items);
 
     const { server, callTool } = makeTestServer();
     const ctx = makeCtx(store, server, {
       pantryStore,
       aisleStore,
-      client: { savePantryItem: mockSavePantryItem, notifySync: mockNotifySync } as unknown as PaprikaClient,
+      client: { savePantryItems: mockSavePantryItems, notifySync: mockNotifySync } as unknown as PaprikaClient,
       cache: { pantry: { put: mockPutPantryItem }, flush: mockFlush } as unknown as DiskCacheRoot,
     });
     registerAddPantryItemTool(server, ctx);
@@ -160,7 +160,7 @@ describe("pantry-mutations.AC4: add_pantry_item tool", () => {
       notes: "for the pie",
     });
 
-    const callArgs = mockSavePantryItem.mock.calls[0]?.[0];
+    const [callArgs] = mockSavePantryItems.mock.calls[0]?.[0] ?? [];
     expect(callArgs?.ingredient).toBe("Apples");
     expect(callArgs?.quantity).toBe("6");
     expect(callArgs?.aisle).toBe("Produce");
@@ -179,7 +179,7 @@ describe("pantry-mutations.AC4: add_pantry_item tool", () => {
 
     const savedAisle = makeAisle({ name: "Exotic" });
     const mockSaveAisle = vi.fn().mockResolvedValue(savedAisle);
-    const mockSavePantryItem = vi.fn().mockImplementation(async (item) => item);
+    const mockSavePantryItems = vi.fn().mockImplementation(async (items) => items);
     const mockNotifySync = vi.fn().mockResolvedValue(undefined);
     const mockPutPantryItem = vi.fn();
     const mockPutAisle = vi.fn();
@@ -191,7 +191,7 @@ describe("pantry-mutations.AC4: add_pantry_item tool", () => {
       aisleStore,
       client: {
         saveAisle: mockSaveAisle,
-        savePantryItem: mockSavePantryItem,
+        savePantryItems: mockSavePantryItems,
         notifySync: mockNotifySync,
       } as unknown as PaprikaClient,
       cache: {
@@ -208,7 +208,7 @@ describe("pantry-mutations.AC4: add_pantry_item tool", () => {
     });
 
     expect(mockSaveAisle).toHaveBeenCalledOnce();
-    const pantryArgs = mockSavePantryItem.mock.calls[0]?.[0];
+    const [pantryArgs] = mockSavePantryItems.mock.calls[0]?.[0] ?? [];
     expect(pantryArgs?.aisle).toBe(savedAisle.name);
     expect(pantryArgs?.aisleUid).toBe(savedAisle.uid);
   });
@@ -219,7 +219,7 @@ describe("pantry-mutations.AC4: add_pantry_item tool", () => {
     const existingItem = makePantryItem({ ingredient: "Butter", uid: "existing-uid" as PantryItemUid });
     pantryStore.load([existingItem]);
 
-    const mockSavePantryItem = vi.fn();
+    const mockSavePantryItems = vi.fn();
     const mockNotifySync = vi.fn().mockResolvedValue(undefined);
     const mockPutPantryItem = vi.fn();
     const mockFlush = vi.fn().mockResolvedValue(undefined);
@@ -227,7 +227,7 @@ describe("pantry-mutations.AC4: add_pantry_item tool", () => {
     const { server, callTool } = makeTestServer();
     const ctx = makeCtx(store, server, {
       pantryStore,
-      client: { savePantryItem: mockSavePantryItem, notifySync: mockNotifySync } as unknown as PaprikaClient,
+      client: { savePantryItems: mockSavePantryItems, notifySync: mockNotifySync } as unknown as PaprikaClient,
       cache: { pantry: { put: mockPutPantryItem }, flush: mockFlush } as unknown as DiskCacheRoot,
     });
     registerAddPantryItemTool(server, ctx);
@@ -239,7 +239,7 @@ describe("pantry-mutations.AC4: add_pantry_item tool", () => {
 
     expect(text).toContain("existing-uid");
     expect(text).toContain("update_pantry_item");
-    expect(mockSavePantryItem).not.toHaveBeenCalled();
+    expect(mockSavePantryItems).not.toHaveBeenCalled();
     expect(mockPutPantryItem).not.toHaveBeenCalled();
     expect(pantryStore.size).toBe(1);
     expect(pantryStore.get("existing-uid" as PantryItemUid)).toBeDefined();
@@ -249,7 +249,7 @@ describe("pantry-mutations.AC4: add_pantry_item tool", () => {
     const store = new RecipeStore();
     const pantryStore = new PantryStore(); // hasSynced === false
 
-    const mockSavePantryItem = vi.fn();
+    const mockSavePantryItems = vi.fn();
     const mockNotifySync = vi.fn().mockResolvedValue(undefined);
     const mockPutPantryItem = vi.fn();
     const mockFlush = vi.fn().mockResolvedValue(undefined);
@@ -257,7 +257,7 @@ describe("pantry-mutations.AC4: add_pantry_item tool", () => {
     const { server, callTool } = makeTestServer();
     const ctx = makeCtx(store, server, {
       pantryStore,
-      client: { savePantryItem: mockSavePantryItem, notifySync: mockNotifySync } as unknown as PaprikaClient,
+      client: { savePantryItems: mockSavePantryItems, notifySync: mockNotifySync } as unknown as PaprikaClient,
       cache: { pantry: { put: mockPutPantryItem }, flush: mockFlush } as unknown as DiskCacheRoot,
     });
     registerAddPantryItemTool(server, ctx);
@@ -268,25 +268,25 @@ describe("pantry-mutations.AC4: add_pantry_item tool", () => {
     const text = getText(result);
 
     expect(text.toLowerCase()).toContain("not yet synced");
-    expect(mockSavePantryItem).not.toHaveBeenCalled();
+    expect(mockSavePantryItems).not.toHaveBeenCalled();
   });
 
-  it("pantry-mutations.AC4.7: savePantryItem API error returns error message, cache/store not mutated", async () => {
+  it("pantry-mutations.AC4.7: savePantryItems API error returns error message, cache/store not mutated", async () => {
     const store = new RecipeStore();
     const pantryStore = new PantryStore();
     pantryStore.load([]);
 
-    const mockSavePantryItem = vi.fn();
+    const mockSavePantryItems = vi.fn();
     const mockNotifySync = vi.fn().mockResolvedValue(undefined);
     const mockPutPantryItem = vi.fn();
     const mockFlush = vi.fn().mockResolvedValue(undefined);
 
-    mockSavePantryItem.mockRejectedValue(new PaprikaAPIError("Server error", 500, "https://example/api"));
+    mockSavePantryItems.mockRejectedValue(new PaprikaAPIError("Server error", 500, "https://example/api"));
 
     const { server, callTool } = makeTestServer();
     const ctx = makeCtx(store, server, {
       pantryStore,
-      client: { savePantryItem: mockSavePantryItem, notifySync: mockNotifySync } as unknown as PaprikaClient,
+      client: { savePantryItems: mockSavePantryItems, notifySync: mockNotifySync } as unknown as PaprikaClient,
       cache: { pantry: { put: mockPutPantryItem }, flush: mockFlush } as unknown as DiskCacheRoot,
     });
     registerAddPantryItemTool(server, ctx);
@@ -303,12 +303,12 @@ describe("pantry-mutations.AC4: add_pantry_item tool", () => {
     expect(pantryStore.size).toBe(0);
   });
 
-  it("observability.1: savePantryItem error is captured as a structured log record", async () => {
+  it("observability.1: savePantryItems error is captured as a structured log record", async () => {
     const store = new RecipeStore();
     const pantryStore = new PantryStore();
     pantryStore.load([]);
 
-    const mockSavePantryItem = vi.fn().mockRejectedValue(new TypeError("fetch failed"));
+    const mockSavePantryItems = vi.fn().mockRejectedValue(new TypeError("fetch failed"));
     const mockNotifySync = vi.fn().mockResolvedValue(undefined);
 
     const { log, records } = makePinoCapture();
@@ -316,13 +316,13 @@ describe("pantry-mutations.AC4: add_pantry_item tool", () => {
     const ctx = makeCtx(store, server, {
       pantryStore,
       log,
-      client: { savePantryItem: mockSavePantryItem, notifySync: mockNotifySync } as unknown as PaprikaClient,
+      client: { savePantryItems: mockSavePantryItems, notifySync: mockNotifySync } as unknown as PaprikaClient,
     });
     registerAddPantryItemTool(server, ctx);
 
     await callTool("add_pantry_item", { ingredient: "Butter" });
 
-    const errorRecord = records.find((r) => r["msg"] === "savePantryItem failed");
+    const errorRecord = records.find((r) => r["msg"] === "savePantryItems failed");
     expect(errorRecord).toBeDefined();
     expect(errorRecord?.["component"]).toBe("add_pantry_item");
     expect((errorRecord?.["err"] as { message?: string })?.message).toContain("fetch failed");
@@ -333,7 +333,7 @@ describe("pantry-mutations.AC4: add_pantry_item tool", () => {
     const store = new RecipeStore();
     const pantryStore = new PantryStore();
     pantryStore.load([]);
-    const mockSavePantryItem = vi.fn().mockImplementation(async (item: unknown) => item);
+    const mockSavePantryItems = vi.fn().mockImplementation(async (items: unknown) => items);
     const mockNotifySync = vi.fn().mockResolvedValue(undefined);
     const mockPutPantryItem = vi.fn();
     const mockFlush = vi.fn().mockResolvedValue(undefined);
@@ -342,7 +342,7 @@ describe("pantry-mutations.AC4: add_pantry_item tool", () => {
     const ctx = makeCtx(store, server, {
       log,
       pantryStore,
-      client: { savePantryItem: mockSavePantryItem, notifySync: mockNotifySync } as unknown as PaprikaClient,
+      client: { savePantryItems: mockSavePantryItems, notifySync: mockNotifySync } as unknown as PaprikaClient,
       cache: { pantry: { put: mockPutPantryItem }, flush: mockFlush } as unknown as DiskCacheRoot,
     });
     registerAddPantryItemTool(server, ctx);
