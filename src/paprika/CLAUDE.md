@@ -23,6 +23,7 @@ HTTP client for the Paprika Cloud Sync API. Handles authentication, request form
 - `RecipeUid` — Branded string type for recipe identifiers, validated by `RecipeUidSchema`
 - `CategoryUid` — Branded string type for category identifiers, validated by `CategoryUidSchema`
 - `PantryItemUid` — Branded string type for pantry item identifiers, validated by `PantryItemUidSchema`
+- `AisleUid` — Branded string type for aisle identifiers, validated by `AisleUidSchema` (unconstrained `z.string().brand()`; accepts both 64-char uppercase hex used by Paprika's default aisles and uppercase UUID v4 used by user-created aisles)
 
 **Entry Types:**
 
@@ -34,6 +35,7 @@ HTTP client for the Paprika Cloud Sync API. Handles authentication, request form
 - `Recipe` — Full recipe object with 28 fields; output of `RecipeStoredSchema` and `RecipeSchema`
 - `Category` — Category with `uid`, `name`, `orderFlag`, `parentUid`; output of `CategoryStoredSchema` and `CategorySchema`
 - `PantryItem` — Pantry inventory item with 11 fields (`uid`, `ingredient`, `quantity`, `aisle`, `aisleUid`, `expirationDate`, `hasExpiration`, `inStock`, `purchaseDate`, `notes`, `deleted`); output of `PantryItemStoredSchema` and `PantryItemSchema`. The `deleted` field is `optional().default(false)` on both schemas — read responses may omit it for live items, but the parsed object always carries a concrete boolean.
+- `Aisle` — Aisle catalog entry with `uid`, `name`, `orderFlag`, `deleted`; output of `AisleStoredSchema` and `AisleSchema`. The `deleted` field is `optional().default(false)`.
 - `AuthResponse` — Authentication response `{result: {token: string}}`; output of `AuthResponseSchema`
 
 **Domain Types:**
@@ -61,6 +63,7 @@ HTTP client for the Paprika Cloud Sync API. Handles authentication, request form
 - `RecipeStoredSchema` — Validates camelCase recipe JSON read from disk (no transform)
 - `CategoryStoredSchema` — Validates camelCase category JSON read from disk (no transform)
 - `PantryItemStoredSchema` — Validates camelCase pantry item JSON read from disk (no transform)
+- `AisleStoredSchema` — Validates camelCase aisle JSON read from disk (no transform)
 
 **Entry and UID Schemas:**
 
@@ -99,6 +102,8 @@ Typed HTTP client wrapping the Paprika Cloud Sync API.
 - `getRecipes(uids: ReadonlyArray<string>): Promise<Array<Recipe>>` — fans out to `getRecipe()` with bulkhead(5) concurrency limit
 - `listCategories(): Promise<Array<Category>>` — fetches category list, then hydrates each with bulkhead(5) concurrency limit independent of recipe bulkhead
 - `listPantry(): Promise<Array<PantryItem>>` — fetches fully-hydrated pantry items from `/api/v2/sync/pantry/` (no entry/detail split; all items are complete objects)
+- `listAisles(): Promise<Array<Aisle>>` — fetches aisle catalog from `/api/v2/sync/groceryaisles/`; same pattern as `listCategories()`
+- `saveAisle(aisle: Readonly<Aisle>): Promise<Aisle>` — POSTs gzip-encoded single-element JSON array to `/api/v2/sync/groceryaisles/` (same multipart shape as `savePantryItem`); server responds `{result: true}`; returns the input aisle on success (caller is responsible for local commit via `commitAisle`)
 - `saveRecipe(recipe: Readonly<Recipe>): Promise<Recipe>` — serializes recipe to camelCase-to-snake_case JSON, gzip-compresses, POSTs as `FormData` with `data.gz` attachment
 - `savePantryItem(item: Readonly<PantryItem>): Promise<PantryItem>` — serializes pantry item to camelCase-to-snake_case JSON wrapped in a single-element array, gzip-compresses, POSTs as `FormData` with field `data` filename `file` to the **collection URL** `/api/v2/sync/pantry/` (NO UID in path — diverges from `saveRecipe`). Returns the input item on success (Paprika responds with `{result: true}`, not the saved object). All operations (add, update, soft-delete) use this same endpoint and body shape; the soft-delete is expressed by toggling `deleted: true` on the item. Paprika upserts by `uid` — POSTing with an unknown UID creates the item.
 - `deleteRecipe(uid: RecipeUid): Promise<void>` — soft-delete: fetches recipe, sets `inTrash: true`, saves, then calls `notifySync()`

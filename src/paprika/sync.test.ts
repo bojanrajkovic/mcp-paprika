@@ -8,10 +8,13 @@ import type { RecipeStore } from "../cache/recipe-store.js";
 import type { PaprikaClient } from "./client.js";
 import type { DiskCacheRoot } from "../cache/disk/index.js";
 import type { PantryStore } from "../cache/pantry-store.js";
+import type { AisleStore } from "../cache/aisle-store.js";
 import type { AnySyncResult, PantryItemUid, RecipeEntry, RecipeUid } from "./types.js";
 import { makeRecipe, makeCategory } from "../cache/__fixtures__/recipes.js";
 import { makePantryItem } from "../cache/__fixtures__/pantry.js";
+import { makeAisle } from "../cache/__fixtures__/aisles.js";
 import { PantryStore as RealPantryStore } from "../cache/pantry-store.js";
+import { AisleStore as RealAisleStore } from "../cache/aisle-store.js";
 
 function makeMockNotifier(): Notifier {
   return {
@@ -38,6 +41,7 @@ function makeMockClient(): PaprikaClient {
     listRecipes: vi.fn().mockResolvedValue([]),
     getRecipes: vi.fn().mockResolvedValue([]),
     listCategories: vi.fn().mockResolvedValue([]),
+    listAisles: vi.fn().mockResolvedValue([]),
     listPantry: vi.fn().mockResolvedValue([]),
   } as unknown as PaprikaClient;
 }
@@ -50,6 +54,10 @@ function makeMockCache(): DiskCacheRoot {
       remove: vi.fn().mockResolvedValue(undefined),
     },
     categories: { put: vi.fn() },
+    aisles: {
+      getAll: vi.fn().mockResolvedValue([]),
+      put: vi.fn(),
+    },
     pantry: {
       getAll: vi.fn().mockResolvedValue([]),
       put: vi.fn(),
@@ -57,6 +65,25 @@ function makeMockCache(): DiskCacheRoot {
     },
     flush: vi.fn().mockResolvedValue(undefined),
   } as unknown as DiskCacheRoot;
+}
+
+function makeMockAisleStore(): AisleStore {
+  return {
+    load: vi.fn(),
+    set: vi.fn(),
+    getAll: vi.fn().mockReturnValue([]),
+    resolveByName: vi.fn().mockReturnValue(undefined),
+    isPendingUpsert: vi.fn().mockReturnValue(false),
+    isPendingDelete: vi.fn().mockReturnValue(false),
+    clearPending: vi.fn(),
+    sweepPending: vi.fn().mockReturnValue(0),
+    get hasSynced() {
+      return true;
+    },
+    get size() {
+      return 0;
+    },
+  } as unknown as AisleStore;
 }
 
 function makeMockPantryStore(): PantryStore {
@@ -86,6 +113,7 @@ function makeTestContext(): AppContext {
     cache: makeMockCache(),
     store: makeMockStore(),
     pantryStore: makeMockPantryStore(),
+    aisleStore: makeMockAisleStore(),
     vectorStore: null,
     notifier: makeMockNotifier(),
     auth: null,
@@ -281,6 +309,7 @@ describe("syncOnce", () => {
       listRecipes: vi.fn().mockResolvedValue([]),
       getRecipes: vi.fn().mockResolvedValue([]),
       listCategories: vi.fn().mockResolvedValue([]),
+      listAisles: vi.fn().mockResolvedValue([]),
       listPantry: vi.fn().mockResolvedValue([]),
     } as unknown as PaprikaClient;
   }
@@ -291,6 +320,7 @@ describe("syncOnce", () => {
   type CacheMockOverrides = {
     recipes?: Partial<DiskCacheRoot["recipes"]>;
     categories?: Partial<DiskCacheRoot["categories"]>;
+    aisles?: Partial<DiskCacheRoot["aisles"]>;
     pantry?: Partial<DiskCacheRoot["pantry"]>;
     flush?: () => Promise<void>;
   };
@@ -304,6 +334,11 @@ describe("syncOnce", () => {
         ...overrides?.recipes,
       },
       categories: { put: vi.fn(), ...overrides?.categories },
+      aisles: {
+        getAll: vi.fn().mockResolvedValue([]),
+        put: vi.fn(),
+        ...overrides?.aisles,
+      },
       pantry: {
         getAll: vi.fn().mockResolvedValue([]),
         put: vi.fn(),
@@ -312,6 +347,25 @@ describe("syncOnce", () => {
       },
       flush: overrides?.flush ?? vi.fn().mockResolvedValue(undefined),
     } as unknown as DiskCacheRoot;
+  }
+
+  function makeMockAisleStoreDefault(): AisleStore {
+    return {
+      load: vi.fn(),
+      set: vi.fn(),
+      getAll: vi.fn().mockReturnValue([]),
+      resolveByName: vi.fn().mockReturnValue(undefined),
+      isPendingUpsert: vi.fn().mockReturnValue(false),
+      isPendingDelete: vi.fn().mockReturnValue(false),
+      clearPending: vi.fn(),
+      sweepPending: vi.fn().mockReturnValue(0),
+      get hasSynced() {
+        return true;
+      },
+      get size() {
+        return 0;
+      },
+    } as unknown as AisleStore;
   }
 
   function makeMockStoreDefault(): RecipeStore {
@@ -361,12 +415,14 @@ describe("syncOnce", () => {
     storeOverrides?: Partial<RecipeStore>,
     notifierOverrides?: Partial<Notifier>,
     pantryStoreOverrides?: Partial<PantryStore>,
+    aisleStoreOverrides?: Partial<AisleStore>,
   ): SyncEngine {
     const context: AppContext = {
       client: { ...makeMockClientDefault(), ...clientOverrides } as PaprikaClient,
       cache: makeMockCacheDefault(cacheOverrides),
       store: { ...makeMockStoreDefault(), ...storeOverrides } as RecipeStore,
       pantryStore: { ...makeMockPantryStoreDefault(), ...pantryStoreOverrides } as PantryStore,
+      aisleStore: { ...makeMockAisleStoreDefault(), ...aisleStoreOverrides } as AisleStore,
       vectorStore: null,
       notifier: { ...makeMockNotifierDefault(), ...notifierOverrides } as Notifier,
       auth: null,
@@ -686,6 +742,7 @@ describe("syncOnce", () => {
       cache: makeMockCacheDefault(),
       store: makeMockStoreDefault(),
       pantryStore: makeMockPantryStoreDefault(),
+      aisleStore: makeMockAisleStoreDefault(),
       vectorStore: null,
       notifier,
       auth: null,
@@ -716,6 +773,7 @@ describe("syncOnce", () => {
       cache: makeMockCacheDefault(),
       store: makeMockStoreDefault(),
       pantryStore: makeMockPantryStoreDefault(),
+      aisleStore: makeMockAisleStoreDefault(),
       vectorStore: null,
       notifier,
       auth: null,
@@ -1008,6 +1066,7 @@ describe("syncOnce", () => {
           listRecipes: vi.fn().mockResolvedValue([]),
           getRecipes: vi.fn().mockResolvedValue([]),
           listCategories: vi.fn().mockResolvedValue([]),
+          listAisles: vi.fn().mockResolvedValue([]),
           listPantry: vi.fn().mockResolvedValue([item]),
         } as unknown as PaprikaClient,
         cache: {
@@ -1017,6 +1076,7 @@ describe("syncOnce", () => {
             remove: vi.fn().mockResolvedValue(undefined),
           },
           categories: { put: vi.fn() },
+          aisles: { getAll: vi.fn().mockResolvedValue([]), put: vi.fn() },
           pantry: {
             getAll: vi.fn().mockResolvedValue([]),
             put: vi.fn(),
@@ -1035,6 +1095,7 @@ describe("syncOnce", () => {
           sweepPending: vi.fn().mockReturnValue(0),
         } as unknown as RecipeStore,
         pantryStore: realPantryStore,
+        aisleStore: new RealAisleStore(),
         vectorStore: null,
         notifier: makeMockNotifier(),
         auth: null,
@@ -1055,6 +1116,7 @@ describe("syncOnce", () => {
           listRecipes: vi.fn().mockResolvedValue([]),
           getRecipes: vi.fn().mockResolvedValue([]),
           listCategories: vi.fn().mockResolvedValue([]),
+          listAisles: vi.fn().mockResolvedValue([]),
           listPantry: vi.fn().mockResolvedValue([]),
         } as unknown as PaprikaClient,
         cache: {
@@ -1064,6 +1126,7 @@ describe("syncOnce", () => {
             remove: vi.fn().mockResolvedValue(undefined),
           },
           categories: { put: vi.fn() },
+          aisles: { getAll: vi.fn().mockResolvedValue([]), put: vi.fn() },
           pantry: {
             getAll: vi.fn().mockResolvedValue([]),
             put: vi.fn(),
@@ -1082,6 +1145,7 @@ describe("syncOnce", () => {
           sweepPending: vi.fn().mockReturnValue(0),
         } as unknown as RecipeStore,
         pantryStore: realPantryStore,
+        aisleStore: new RealAisleStore(),
         vectorStore: null,
         notifier: makeMockNotifier(),
         auth: null,
@@ -1118,6 +1182,103 @@ describe("syncOnce", () => {
 
       // Should emit sync:error
       expect(receivedError).toBe(testError);
+    });
+  });
+
+  describe("aisle-sync: Aisle sync step (step 2.5)", () => {
+    it("aisle-sync.AC1: listAisles() is called during syncOnce()", async () => {
+      const listAisles = vi.fn().mockResolvedValue([]);
+      const engine = makeSyncEngine({ listAisles });
+
+      await engine.syncOnce();
+
+      expect(listAisles).toHaveBeenCalledOnce();
+    });
+
+    it("aisle-sync.AC2: non-deleted aisles are written to cache and aisleStore.load() is called", async () => {
+      const aisle1 = makeAisle({ name: "Produce" });
+      const aisle2 = makeAisle({ name: "Dairy" });
+
+      const putAisle = vi.fn();
+      const load = vi.fn();
+
+      const engine = makeSyncEngine(
+        { listAisles: vi.fn().mockResolvedValue([aisle1, aisle2]) },
+        { aisles: { getAll: vi.fn().mockResolvedValue([]), put: putAisle } },
+        undefined,
+        undefined,
+        undefined,
+        { load, sweepPending: vi.fn().mockReturnValue(0) },
+      );
+
+      await engine.syncOnce();
+
+      expect(putAisle).toHaveBeenCalledTimes(2);
+      expect(putAisle).toHaveBeenCalledWith(aisle1);
+      expect(putAisle).toHaveBeenCalledWith(aisle2);
+      expect(load).toHaveBeenCalledOnce();
+      expect(load).toHaveBeenCalledWith(expect.arrayContaining([aisle1, aisle2]));
+    });
+
+    it("aisle-sync.AC3: deleted aisles are filtered out before store.load() and cache.put()", async () => {
+      const active = makeAisle({ name: "Produce" });
+      const deleted = makeAisle({ name: "Old", deleted: true });
+
+      const putAisle = vi.fn();
+      const load = vi.fn();
+
+      const engine = makeSyncEngine(
+        { listAisles: vi.fn().mockResolvedValue([active, deleted]) },
+        { aisles: { getAll: vi.fn().mockResolvedValue([]), put: putAisle } },
+        undefined,
+        undefined,
+        undefined,
+        { load, sweepPending: vi.fn().mockReturnValue(0) },
+      );
+
+      await engine.syncOnce();
+
+      expect(putAisle).toHaveBeenCalledTimes(1);
+      expect(putAisle).toHaveBeenCalledWith(active);
+      expect(putAisle).not.toHaveBeenCalledWith(deleted);
+      expect(load).toHaveBeenCalledWith(expect.not.arrayContaining([deleted]));
+    });
+
+    it("aisle-sync.AC4: pending-upsert aisles from cache override incoming list entries", async () => {
+      const pendingAisle = makeAisle({ name: "Custom Pending" });
+      // Incoming list doesn't contain the pending aisle (propagation lag)
+      const otherAisle = makeAisle({ name: "Produce" });
+
+      const putAisle = vi.fn();
+      const load = vi.fn();
+
+      const engine = makeSyncEngine(
+        { listAisles: vi.fn().mockResolvedValue([otherAisle]) },
+        { aisles: { getAll: vi.fn().mockResolvedValue([pendingAisle]), put: putAisle } },
+        undefined,
+        undefined,
+        undefined,
+        {
+          load,
+          isPendingUpsert: vi.fn().mockImplementation((uid) => uid === pendingAisle.uid),
+          sweepPending: vi.fn().mockReturnValue(0),
+        },
+      );
+
+      await engine.syncOnce();
+
+      // load() receives both: the non-pending incoming aisle + the pending aisle from cache
+      expect(load).toHaveBeenCalledWith(expect.arrayContaining([otherAisle, pendingAisle]));
+    });
+
+    it("aisle-sync.AC5: sweepPending is called during finalization", async () => {
+      const sweepPending = vi.fn().mockReturnValue(0);
+
+      const engine = makeSyncEngine(undefined, undefined, undefined, undefined, undefined, { sweepPending });
+
+      await engine.syncOnce();
+
+      expect(sweepPending).toHaveBeenCalledOnce();
     });
   });
 });
