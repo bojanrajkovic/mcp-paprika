@@ -1,4 +1,3 @@
-// pattern: Functional Core
 import type { GroceryIngredient } from "../paprika/types.js";
 
 /**
