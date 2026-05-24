@@ -43,10 +43,8 @@ export function pantryItemToMarkdown(item: PantryItem): string {
  * Called by all pantry write tools after `ctx.client.savePantryItem()` returns.
  *
  * Branches on `saved.deleted`:
- * - Upsert (deleted: false): putPantryItem (sync) → flush (async) → set (sync) →
- *   notifier.resourceListChanged (sync) → notifySync (async)
- * - Delete (deleted: true):  removePantryItem (async) → flush (async) → delete (sync) →
- *   notifier.resourceListChanged (sync) → notifySync (async)
+ * - Upsert (deleted: false): putPantryItem (sync) → flush (async) → set (sync) → notifySync (async)
+ * - Delete (deleted: true):  removePantryItem (async) → flush (async) → delete (sync) → notifySync (async)
  *
  * Do NOT call `ctx.client.notifySync()` separately in the tool handler —
  * commitPantryItem already calls it.
@@ -69,7 +67,6 @@ export async function commitPantryItem(ctx: ServerContext, saved: Readonly<Pantr
       throw e;
     }
     ctx.pantryStore.delete(uid);
-    ctx.notifier.resourceListChanged();
     await ctx.client.notifySync();
   } else {
     ctx.pantryStore.markPendingUpsert(saved.uid);
@@ -81,7 +78,6 @@ export async function commitPantryItem(ctx: ServerContext, saved: Readonly<Pantr
       throw e;
     }
     ctx.pantryStore.set(saved);
-    ctx.notifier.resourceListChanged();
     await ctx.client.notifySync();
   }
 }

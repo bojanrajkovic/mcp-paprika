@@ -115,6 +115,6 @@ Both `RecipeStore` and `PantryStore` inherit pending-writes tracking from `Entit
 - **Used by:**
   - `features/` (via `RecipeStore`)
   - `paprika/sync.ts` (via `cache.recipes.diff` / `cache.pantry` / `PantryStore` for diff and replace-all sync)
-  - `tools/` and `resources/` (via `ctx.pantryStore` for pantry reads; `ctx.store` for recipe reads)
+  - `tools/` (via `ctx.pantryStore` for pantry reads; `ctx.store` for recipe reads) and `resources/` (via `ctx.store` for recipe reads only — pantry has no resource surface)
   - `server/build.ts` (constructs `DiskCacheRoot` with `getCacheDir()`, `RecipeStore`, and `PantryStore`)
 - **Boundary:** Must not import from `tools/`, `resources/`, or `features/`

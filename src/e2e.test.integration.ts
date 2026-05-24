@@ -117,10 +117,9 @@ describe("MCP Server end-to-end round-trip", () => {
     expect(recipeResource).toBeDefined();
     expect(recipeResource?.name).toBeDefined();
 
-    // Verify pantry resource is registered
+    // Verify pantry resource is NOT registered — pantry items are Data-class, tools-only
     const pantryResource = result.resources.find((r) => r.uri.startsWith("paprika://pantry/"));
-    expect(pantryResource).toBeDefined();
-    expect(pantryResource?.name).toBeDefined();
+    expect(pantryResource).toBeUndefined();
   });
 
   it("lists resources and reads a valid recipe", async () => {
