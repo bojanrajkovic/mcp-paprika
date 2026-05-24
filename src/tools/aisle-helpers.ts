@@ -38,11 +38,12 @@ export async function commitAisle(ctx: ServerContext, aisle: Readonly<Aisle>): P
  * uppercase hex strings — both formats are accepted by the server).
  */
 export async function ensureAisle(ctx: ServerContext, name: string): Promise<{ aisle: string; aisleUid: string }> {
-  if (name === "") {
+  const trimmedName = name.trim();
+  if (trimmedName === "") {
     return { aisle: "", aisleUid: "" };
   }
 
-  const match = ctx.aisleStore.resolveByName(name);
+  const match = ctx.aisleStore.resolveByName(trimmedName);
   if (match !== undefined) {
     return { aisle: match.name, aisleUid: match.uid };
   }
@@ -57,7 +58,7 @@ export async function ensureAisle(ctx: ServerContext, name: string): Promise<{ a
   // new aisle name don't both miss resolveByName and create duplicate aisles.
   return ensureAisleMutex.runExclusive(async () => {
     // Re-check after acquiring — a concurrent caller may have created it.
-    const recheck = ctx.aisleStore.resolveByName(name);
+    const recheck = ctx.aisleStore.resolveByName(trimmedName);
     if (recheck !== undefined) {
       return { aisle: recheck.name, aisleUid: recheck.uid };
     }
@@ -67,7 +68,7 @@ export async function ensureAisle(ctx: ServerContext, name: string): Promise<{ a
     const uid = AisleUidSchema.parse(crypto.randomUUID().toUpperCase());
     const newAisle: Aisle = {
       uid,
-      name,
+      name: trimmedName,
       orderFlag: maxOrder,
       deleted: false,
     };

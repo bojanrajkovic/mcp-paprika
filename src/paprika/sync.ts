@@ -180,6 +180,15 @@ export class SyncEngine {
       this._context.aisleStore.load(effectiveAisles);
       await Promise.all(effectiveAisles.map((a) => this._context.cache.aisles.put(a)));
 
+      // Observation-based clearing: if a pending-upsert UID appears in the
+      // canonical list, the server confirmed the write — clear immediately
+      // rather than waiting for TTL, so subsequent syncs pick up server changes.
+      for (const aisle of aisles) {
+        if (this._context.aisleStore.isPendingUpsert(aisle.uid)) {
+          this._context.aisleStore.clearPending(aisle.uid);
+        }
+      }
+
       // 3. Pantry sync (replace-all with orphan cleanup)
       this.log.debug("fetching pantry");
       const pantryItems = await this._context.client.listPantry();
