@@ -349,25 +349,6 @@ describe("syncOnce", () => {
     } as unknown as DiskCacheRoot;
   }
 
-  function makeMockAisleStoreDefault(): AisleStore {
-    return {
-      load: vi.fn(),
-      set: vi.fn(),
-      getAll: vi.fn().mockReturnValue([]),
-      resolveByName: vi.fn().mockReturnValue(undefined),
-      isPendingUpsert: vi.fn().mockReturnValue(false),
-      isPendingDelete: vi.fn().mockReturnValue(false),
-      clearPending: vi.fn(),
-      sweepPending: vi.fn().mockReturnValue(0),
-      get hasSynced() {
-        return true;
-      },
-      get size() {
-        return 0;
-      },
-    } as unknown as AisleStore;
-  }
-
   function makeMockStoreDefault(): RecipeStore {
     return {
       set: vi.fn(),
@@ -422,7 +403,7 @@ describe("syncOnce", () => {
       cache: makeMockCacheDefault(cacheOverrides),
       store: { ...makeMockStoreDefault(), ...storeOverrides } as RecipeStore,
       pantryStore: { ...makeMockPantryStoreDefault(), ...pantryStoreOverrides } as PantryStore,
-      aisleStore: { ...makeMockAisleStoreDefault(), ...aisleStoreOverrides } as AisleStore,
+      aisleStore: { ...makeMockAisleStore(), ...aisleStoreOverrides } as AisleStore,
       vectorStore: null,
       notifier: { ...makeMockNotifierDefault(), ...notifierOverrides } as Notifier,
       auth: null,
@@ -742,7 +723,7 @@ describe("syncOnce", () => {
       cache: makeMockCacheDefault(),
       store: makeMockStoreDefault(),
       pantryStore: makeMockPantryStoreDefault(),
-      aisleStore: makeMockAisleStoreDefault(),
+      aisleStore: makeMockAisleStore(),
       vectorStore: null,
       notifier,
       auth: null,
@@ -773,7 +754,7 @@ describe("syncOnce", () => {
       cache: makeMockCacheDefault(),
       store: makeMockStoreDefault(),
       pantryStore: makeMockPantryStoreDefault(),
-      aisleStore: makeMockAisleStoreDefault(),
+      aisleStore: makeMockAisleStore(),
       vectorStore: null,
       notifier,
       auth: null,

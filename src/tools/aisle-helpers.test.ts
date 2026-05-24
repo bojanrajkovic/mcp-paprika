@@ -18,9 +18,8 @@ function makeAisleCtx(
     flush?: () => Promise<void>;
   },
 ): ServerContext {
-  const store = new RecipeStore();
   const { server } = makeTestServer();
-  return makeCtx(store, server, {
+  return makeCtx(new RecipeStore(), server, {
     aisleStore,
     client: {
       saveAisle: overrides?.saveAisle ?? vi.fn(),
@@ -38,25 +37,19 @@ describe("aisle-helpers", () => {
     it("aisle-helpers.AC1.1: returns Ok when aisleStore has synced", () => {
       const aisleStore = new AisleStore();
       aisleStore.load([]);
-      const { server } = makeTestServer();
-      const ctx = makeCtx(new RecipeStore(), server, { aisleStore });
-      const result = aisleStartGuard(ctx);
+      const result = aisleStartGuard(makeAisleCtx(aisleStore));
       expect(result.isOk()).toBe(true);
     });
 
     it("aisle-helpers.AC1.2: returns Err when aisleStore has not synced", () => {
       const aisleStore = new AisleStore();
-      const { server } = makeTestServer();
-      const ctx = makeCtx(new RecipeStore(), server, { aisleStore });
-      const result = aisleStartGuard(ctx);
+      const result = aisleStartGuard(makeAisleCtx(aisleStore));
       expect(result.isErr()).toBe(true);
     });
 
     it("aisle-helpers.AC1.3: Err message mentions not yet synced", () => {
       const aisleStore = new AisleStore();
-      const { server } = makeTestServer();
-      const ctx = makeCtx(new RecipeStore(), server, { aisleStore });
-      const result = aisleStartGuard(ctx);
+      const result = aisleStartGuard(makeAisleCtx(aisleStore));
       result.match(
         () => {
           throw new Error("should not be ok");
@@ -199,15 +192,11 @@ describe("aisle-helpers", () => {
       const aisleStore = new AisleStore();
       aisleStore.load([]);
 
-      let passedAisle: Aisle | undefined;
-      const saveAisle = vi.fn().mockImplementation(async (a: Aisle) => {
-        passedAisle = a;
-        return a;
-      });
-
+      const saveAisle = vi.fn().mockImplementation(async (a: Aisle) => a);
       const ctx = makeAisleCtx(aisleStore, { saveAisle });
       await ensureAisle(ctx, "New Aisle");
 
+      const passedAisle = saveAisle.mock.calls[0]?.[0] as Aisle | undefined;
       const uuidUppercaseRegex = /^[0-9A-F]{8}-[0-9A-F]{4}-[1-5][0-9A-F]{3}-[89AB][0-9A-F]{3}-[0-9A-F]{12}$/;
       expect(passedAisle?.uid).toMatch(uuidUppercaseRegex);
     });
@@ -216,15 +205,11 @@ describe("aisle-helpers", () => {
       const aisleStore = new AisleStore();
       aisleStore.load([]);
 
-      let passedAisle: Aisle | undefined;
-      const saveAisle = vi.fn().mockImplementation(async (a: Aisle) => {
-        passedAisle = a;
-        return a;
-      });
-
+      const saveAisle = vi.fn().mockImplementation(async (a: Aisle) => a);
       const ctx = makeAisleCtx(aisleStore, { saveAisle });
       await ensureAisle(ctx, "First Aisle");
 
+      const passedAisle = saveAisle.mock.calls[0]?.[0] as Aisle | undefined;
       expect(passedAisle?.orderFlag).toBe(0);
     });
 
@@ -234,15 +219,11 @@ describe("aisle-helpers", () => {
       const a2 = makeAisle({ orderFlag: 7 });
       aisleStore.load([a1, a2]);
 
-      let passedAisle: Aisle | undefined;
-      const saveAisle = vi.fn().mockImplementation(async (a: Aisle) => {
-        passedAisle = a;
-        return a;
-      });
-
+      const saveAisle = vi.fn().mockImplementation(async (a: Aisle) => a);
       const ctx = makeAisleCtx(aisleStore, { saveAisle });
       await ensureAisle(ctx, "New Aisle");
 
+      const passedAisle = saveAisle.mock.calls[0]?.[0] as Aisle | undefined;
       expect(passedAisle?.orderFlag).toBe(8);
     });
   });
