@@ -157,9 +157,7 @@ export class SyncEngine {
       const categories = await this._context.client.listCategories();
       this.log.debug({ count: categories.length }, "fetched categories");
       this._context.store.setCategories(categories);
-      for (const category of categories) {
-        await this._context.cache.categories.put(category);
-      }
+      await Promise.all(categories.map((category) => this._context.cache.categories.put(category)));
 
       // 3. Pantry sync (replace-all with orphan cleanup)
       this.log.debug("fetching pantry");
@@ -204,9 +202,7 @@ export class SyncEngine {
 
       await Promise.all(orphanPantryUids.map((uid) => this._context.cache.pantry.remove(uid)));
       this._context.pantryStore.load(effectivePantry);
-      for (const item of effectivePantry) {
-        await this._context.cache.pantry.put(item);
-      }
+      await Promise.all(effectivePantry.map((item) => this._context.cache.pantry.put(item)));
 
       // Observation-based clearing for pantry pending-upserts: clear only when
       // the canonical item's content equals our local cached content. UID

@@ -13,6 +13,17 @@ import { SILENT_LOG } from "../../utils/log.js";
 // window. Non-ENOENT codes (EISDIR, EACCES, …) are rethrown so unexpected
 // errors are never silently swallowed.
 
+/** Open + write + fsync + close — one atomic durable write per call. */
+export async function writeFileAtomic(path: string, contents: string): Promise<void> {
+  const fh = await open(path, "w");
+  try {
+    await fh.writeFile(contents);
+    await fh.sync();
+  } finally {
+    await fh.close();
+  }
+}
+
 export interface DiskCacheOptions<T> {
   readonly subdir: string;
   /**
@@ -174,14 +185,10 @@ export class DiskCache<T> {
   }
 
   has(key: string): boolean {
-    return this._pending.has(key) || this._knownKeys.has(key);
+    return this._knownKeys.has(key);
   }
 
   get size(): number {
-    // _knownKeys mirrors disk-presence; _pending may contain in-flight items
-    // not yet reflected on disk. A pending put adds to _knownKeys so size is
-    // the union, but the Set already dedupes against itself; we only need to
-    // count pending keys not in _knownKeys, which by construction is zero.
     return this._knownKeys.size;
   }
 
@@ -202,19 +209,8 @@ export class DiskCache<T> {
     this._pending.clear();
   }
 
-  /**
-   * Open + write + fsync + close. Each call is its own atomic durable write;
-   * if the process crashes after `close()`, the file is on disk in its
-   * intended state. Subclasses use this for both data files and index files.
-   */
   protected async _writeFileAtomic(path: string, contents: string): Promise<void> {
-    const fh = await open(path, "w");
-    try {
-      await fh.writeFile(contents);
-      await fh.sync();
-    } finally {
-      await fh.close();
-    }
+    return writeFileAtomic(path, contents);
   }
 
   protected _assertInitialized(method: string): void {

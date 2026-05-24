@@ -16,7 +16,6 @@ const RecipeIndexSchema = z.record(z.string(), z.string());
 
 export class RecipeDiskCache extends DiskCache<Recipe> {
   private readonly _hashes: Map<string, string> = new Map();
-  private readonly _indexPath: string;
 
   constructor(opts: { readonly subdir: string; readonly log?: Logger }) {
     super({
@@ -25,14 +24,13 @@ export class RecipeDiskCache extends DiskCache<Recipe> {
       getKey: (r) => r.uid,
       ...(opts.log !== undefined ? { log: opts.log } : {}),
     });
-    this._indexPath = join(opts.subdir, "index.json");
   }
 
   override async init(): Promise<void> {
     await super.init();
     let raw: string;
     try {
-      raw = await readFile(this._indexPath, "utf-8");
+      raw = await readFile(join(this._subdir, "index.json"), "utf-8");
     } catch (error: unknown) {
       if (isNodeError(error) && error.code === "ENOENT") {
         // Cold-start: no recipes index yet. Silent by design.
@@ -44,12 +42,18 @@ export class RecipeDiskCache extends DiskCache<Recipe> {
     try {
       parsed = JSON.parse(raw);
     } catch (err) {
-      this.log.warn({ err, path: this._indexPath }, "corrupt recipes index.json, resetting to empty index");
+      this.log.warn(
+        { err, path: join(this._subdir, "index.json") },
+        "corrupt recipes index.json, resetting to empty index",
+      );
       return;
     }
     const result = RecipeIndexSchema.safeParse(parsed);
     if (!result.success) {
-      this.log.warn({ path: this._indexPath }, "schema mismatch on recipes index.json, resetting to empty index");
+      this.log.warn(
+        { path: join(this._subdir, "index.json") },
+        "schema mismatch on recipes index.json, resetting to empty index",
+      );
       return;
     }
     for (const [uid, hash] of Object.entries(result.data)) {
@@ -117,6 +121,6 @@ export class RecipeDiskCache extends DiskCache<Recipe> {
     for (const [uid, hash] of this._hashes) obj[uid] = hash;
     const tmpPath = join(this._subdir, `.index-${Date.now().toString()}.tmp`);
     await this._writeFileAtomic(tmpPath, JSON.stringify(obj, null, 2));
-    await rename(tmpPath, this._indexPath);
+    await rename(tmpPath, join(this._subdir, "index.json"));
   }
 }

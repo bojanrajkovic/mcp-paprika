@@ -1,4 +1,4 @@
-import { mkdir, open, readFile, rename, unlink } from "node:fs/promises";
+import { mkdir, readFile, rename, unlink } from "node:fs/promises";
 import { join } from "node:path";
 import type { Logger } from "pino";
 import { z } from "zod";
@@ -10,7 +10,7 @@ import type { Category, PantryItem } from "../../paprika/types.js";
 import { isNodeError } from "../../utils/errors.js";
 import { SILENT_LOG } from "../../utils/log.js";
 
-import { DiskCache } from "./base.js";
+import { DiskCache, writeFileAtomic } from "./base.js";
 import { OAuthClientDiskCache } from "./oauth-clients.js";
 import { RecipeDiskCache } from "./recipes.js";
 
@@ -133,7 +133,7 @@ export class DiskCacheRoot {
       await mkdir(recipesDir, { recursive: true });
       const targetPath = join(recipesDir, "index.json");
       const tmpPath = join(recipesDir, `.index-${Date.now().toString()}.tmp`);
-      await this._writeFileAtomic(tmpPath, JSON.stringify(recipesParsed.data, null, 2));
+      await writeFileAtomic(tmpPath, JSON.stringify(recipesParsed.data, null, 2));
       await rename(tmpPath, targetPath);
       this.log.info(
         { count: Object.keys(recipesParsed.data).length },
@@ -156,16 +156,6 @@ export class DiskCacheRoot {
       if (!isNodeError(error) || error.code !== "ENOENT") {
         throw error;
       }
-    }
-  }
-
-  private async _writeFileAtomic(path: string, contents: string): Promise<void> {
-    const fh = await open(path, "w");
-    try {
-      await fh.writeFile(contents);
-      await fh.sync();
-    } finally {
-      await fh.close();
     }
   }
 }
