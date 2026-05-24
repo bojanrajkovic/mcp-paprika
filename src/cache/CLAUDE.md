@@ -6,6 +6,7 @@ Last verified: 2026-05-23
 
 - `recipe-store.ts` — In-memory cache for recipes and categories with CRUD operations and query methods
 - `pantry-store.ts` — In-memory query layer for pantry items (replace-all semantics, no hashing)
+- `aisle-store.ts` — In-memory query layer for aisles (replace-all semantics, `resolveByName` for case-insensitive lookup)
 - `disk/` — Persistence layer: `DiskCacheRoot` and per-entity subcaches. See `disk/CLAUDE.md` for the full contract.
 
 ## Purpose
@@ -70,9 +71,27 @@ In-memory query layer for pantry items, hydrated by the sync engine. Extends `En
 | `pendingWriteCount`           | `number` getter                                 | Count of pending-write entries (test/diagnostic only)                                           |
 | `findByIngredient(query)`     | `(query: string): Array<PantryItem>`            | Tiered case-insensitive lookup: exact match > starts-with > contains; at most one tier returned |
 
+### AisleStore
+
+In-memory query layer for aisles, hydrated by the sync engine. Extends `EntityStore<Aisle, AisleUid>` (see `../entity/CLAUDE.md`). Replace-all semantics matching `PantryStore`.
+
+**Construction:** `new AisleStore(opts?: { pendingWriteTtlMs?: number })` — starts empty with `hasSynced = false`.
+
+**Methods:**
+
+| Method             | Description                                                                            |
+| ------------------ | -------------------------------------------------------------------------------------- | ---------- |
+| `load(items)`      | Clears and repopulates from `items`, sets `hasSynced = true`                           |
+| `getAll()`         | Returns all items (insertion order)                                                    |
+| `set(aisle)`       | Upsert by `aisle.uid` (inherited from `EntityStore`)                                   |
+| `resolveByName(n)` | Case-insensitive exact lookup; returns `Aisle                                          | undefined` |
+| Pending-writes     | `markPendingUpsert`, `isPendingUpsert`, `clearPending`, `sweepPending` (all inherited) |
+
+No delete branch — aisles are a reference catalog; auto-creation is a side-effect of pantry writes.
+
 ### DiskCacheRoot
 
-Persistence layer for every entity the server caches. Composed of one `DiskCache<T>` instance per entity (`recipes`, `categories`, `pantry`, `oauthClients`, `oauthTokens`) plus a one-shot legacy-index migration that runs on first boot to upgrade installs from the unified-index layout.
+Persistence layer for every entity the server caches. Composed of one `DiskCache<T>` instance per entity (`recipes`, `categories`, `pantry`, `aisles`, `oauthClients`, `oauthTokens`) plus a one-shot legacy-index migration that runs on first boot to upgrade installs from the unified-index layout.
 
 **Construction:** `new DiskCacheRoot(cacheDir: string, log?: Logger)`. Production passes `appLog.child({ component: "disk-cache" })`.
 
