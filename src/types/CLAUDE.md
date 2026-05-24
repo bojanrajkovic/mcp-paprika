@@ -16,15 +16,15 @@ export type ServerContext = SessionContext;
 
 `ServerContext` re-exports `SessionContext` from `../server/app-context.js`. All existing tool/resource handlers that took `ServerContext` continue to work unchanged, and now also have `ctx.notifier` and `ctx.vectorStore` available on `ctx`.
 
-| Field         | Type                  | Description                                                        |
-| ------------- | --------------------- | ------------------------------------------------------------------ |
-| `client`      | `PaprikaClient`       | HTTP client for the Paprika cloud API                              |
-| `cache`       | `DiskCache`           | Local on-disk persistence layer                                    |
-| `store`       | `RecipeStore`         | Higher-level recipe query abstraction over DiskCache               |
-| `pantryStore` | `PantryStore`         | In-memory pantry query layer                                       |
-| `vectorStore` | `VectorStore \| null` | Semantic-search index; `null` when embeddings are not configured   |
-| `notifier`    | `Notifier`            | Abstraction for MCP notifications (resource-list-changed, logging) |
-| `server`      | `McpServer`           | Per-session MCP wire protocol handler                              |
+| Field         | Type                  | Description                                                                           |
+| ------------- | --------------------- | ------------------------------------------------------------------------------------- |
+| `client`      | `PaprikaClient`       | HTTP client for the Paprika cloud API                                                 |
+| `cache`       | `DiskCacheRoot`       | Local on-disk persistence layer (per-entity subcaches; see `../cache/disk/CLAUDE.md`) |
+| `store`       | `RecipeStore`         | Higher-level recipe query abstraction over `DiskCacheRoot.recipes`                    |
+| `pantryStore` | `PantryStore`         | In-memory pantry query layer                                                          |
+| `vectorStore` | `VectorStore \| null` | Semantic-search index; `null` when embeddings are not configured                      |
+| `notifier`    | `Notifier`            | Abstraction for MCP notifications (resource-list-changed, logging)                    |
+| `server`      | `McpServer`           | Per-session MCP wire protocol handler                                                 |
 
 All fields are `readonly`.
 

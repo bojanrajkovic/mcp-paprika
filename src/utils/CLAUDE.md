@@ -57,7 +57,7 @@ Top-level, 1-deep (`*.field`), and 2-deep (`*.*.field`) wildcards for each of th
 
 **`toMessage(e)`:** `(e: unknown) => string` — extracts a human-readable message from an unknown thrown value: `e.message` if `e instanceof Error`, else `String(e)`. Ten production sites across the codebase depend on this export.
 
-**`SILENT_LOG`:** a process-wide silent pino `Logger` exported as the canonical default for optional `log?: Logger` parameters on classes and functions. Production callers (`DiskCache`, `VectorStore`, `EmbeddingClient`, `PaprikaClient`) fall back to it when no logger is threaded; tests import it instead of constructing per-test `pino({ level: "silent" })` instances. Pino's silent level short-circuits every log method to a no-op, so the shared instance is safe across modules.
+**`SILENT_LOG`:** a process-wide silent pino `Logger` exported as the canonical default for optional `log?: Logger` parameters on classes and functions. Production callers (`DiskCacheRoot` and per-entity subcaches, `VectorStore`, `EmbeddingClient`, `PaprikaClient`) fall back to it when no logger is threaded; tests import it instead of constructing per-test `pino({ level: "silent" })` instances. Pino's silent level short-circuits every log method to a no-op, so the shared instance is safe across modules.
 
 ### xdg.ts — Platform-native application directory paths
 
@@ -110,7 +110,7 @@ Houses error classes, types, and small helpers that span more than one domain mo
 
 Constructor: `new CircuitOpenError(service: CircuitService, endpoint: string, options?: ErrorOptions)`. The `service` argument aligns with the surrounding log component vocabulary — `"paprika"` is thrown from `PaprikaClient`, `"embeddings"` from `EmbeddingClient`. Message format: `"<service> circuit breaker is open (endpoint=<url>)"`.
 
-**`isNodeError(error: unknown): error is NodeJS.ErrnoException`** — type guard for any `Error` whose `code` property is set by the runtime (typical for `fs`/`net`/`child_process`). Use as `if (isNodeError(err) && err.code === "ENOENT") { ... }`. Imported by `disk-cache.ts`, `vector-store.ts`, and `config.ts`.
+**`isNodeError(error: unknown): error is NodeJS.ErrnoException`** — type guard for any `Error` whose `code` property is set by the runtime (typical for `fs`/`net`/`child_process`). Use as `if (isNodeError(err) && err.code === "ENOENT") { ... }`. Imported by `cache/disk/base.ts`, `cache/disk/recipes.ts`, `cache/disk/root.ts`, `vector-store.ts`, and `config.ts`.
 
 ### config.ts — Application configuration loading
 

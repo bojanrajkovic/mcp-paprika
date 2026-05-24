@@ -5,7 +5,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { PaprikaClient } from "./paprika/client.js";
-import { DiskCache } from "./cache/disk-cache.js";
+import { DiskCacheRoot } from "./cache/disk/index.js";
 import { RecipeStore } from "./cache/recipe-store.js";
 import { PantryStore } from "./cache/pantry-store.js";
 import { SyncEngine } from "./paprika/sync.js";
@@ -108,7 +108,7 @@ describe("Sync → Tool Pipeline Integration", () => {
 
       // Create real instances
       const client = new PaprikaClient("test@example.com", "password");
-      const cache = new DiskCache(tempDir);
+      const cache = new DiskCacheRoot(tempDir);
       await cache.init();
 
       const store = new RecipeStore();
@@ -208,7 +208,7 @@ describe("Sync → Tool Pipeline Integration", () => {
 
       // Setup
       const client = new PaprikaClient("test@example.com", "password");
-      const cache = new DiskCache(tempDir);
+      const cache = new DiskCacheRoot(tempDir);
       await cache.init();
       const store = new RecipeStore();
       const pantryStore = new PantryStore();
@@ -273,7 +273,7 @@ describe("Sync → Tool Pipeline Integration", () => {
 
       // Setup
       const client = new PaprikaClient("test@example.com", "password");
-      const cache = new DiskCache(tempDir);
+      const cache = new DiskCacheRoot(tempDir);
       await cache.init();
       const store = new RecipeStore();
       const pantryStore = new PantryStore();
@@ -357,7 +357,7 @@ describe("Sync → Tool Pipeline Integration", () => {
 
       // Setup and sync
       const client = new PaprikaClient("test@example.com", "password");
-      const cache = new DiskCache(tempDir);
+      const cache = new DiskCacheRoot(tempDir);
       await cache.init();
       const store = new RecipeStore();
       const pantryStore = new PantryStore();
@@ -436,7 +436,7 @@ describe("Sync → Tool Pipeline Integration", () => {
 
       // Setup
       const client = new PaprikaClient("test@example.com", "password");
-      const cache = new DiskCache(tempDir);
+      const cache = new DiskCacheRoot(tempDir);
       await cache.init();
       const store = new RecipeStore();
       const pantryStore = new PantryStore();
@@ -501,13 +501,13 @@ describe("Sync → Tool Pipeline Integration", () => {
 
     function makeRaceContext(): {
       client: PaprikaClient;
-      cache: DiskCache;
+      cache: DiskCacheRoot;
       store: RecipeStore;
       pantryStore: PantryStore;
       engine: SyncEngine;
     } {
       const client = new PaprikaClient("test@example.com", "password");
-      const cache = new DiskCache(tempDir);
+      const cache = new DiskCacheRoot(tempDir);
       const store = new RecipeStore();
       const pantryStore = new PantryStore();
       const notifier = {
@@ -534,7 +534,7 @@ describe("Sync → Tool Pipeline Integration", () => {
 
       const item = makePantryItem({ uid: "PANTRY-UID-1" as PantryItemUid, ingredient: "Eggs" });
       pantryStore.load([item]);
-      await cache.putPantryItem(item);
+      await cache.pantry.put(item);
       await cache.flush();
       pantryStore.markPendingUpsert(item.uid);
 
@@ -576,7 +576,7 @@ describe("Sync → Tool Pipeline Integration", () => {
       await cache.init();
 
       const recipe = makeRecipe({ uid: "recipe-just-written" as RecipeUid, name: "Just Written", hash: "hash-new" });
-      await cache.putRecipe(recipe, recipe.hash);
+      await cache.recipes.put(recipe);
       await cache.flush();
       store.set(recipe);
       store.markPendingUpsert(recipe.uid);
@@ -613,7 +613,7 @@ describe("Sync → Tool Pipeline Integration", () => {
         hash: "hash-post-trash",
         inTrash: true,
       });
-      await cache.putRecipe(trashedRecipe, trashedRecipe.hash);
+      await cache.recipes.put(trashedRecipe);
       await cache.flush();
       store.set(trashedRecipe);
       store.markPendingDelete(trashedRecipe.uid);
@@ -643,7 +643,7 @@ describe("Sync → Tool Pipeline Integration", () => {
         purchaseDate: "2026-05-21 00:00:00",
       });
       pantryStore.load([updated]);
-      await cache.putPantryItem(updated);
+      await cache.pantry.put(updated);
       await cache.flush();
       pantryStore.markPendingUpsert(updated.uid);
 
@@ -675,7 +675,7 @@ describe("Sync → Tool Pipeline Integration", () => {
       await cache.init();
 
       const recipe = makeRecipe({ uid: "recipe-edit" as RecipeUid, name: "After Edit", hash: "hash-new" });
-      await cache.putRecipe(recipe, recipe.hash);
+      await cache.recipes.put(recipe);
       await cache.flush();
       store.set(recipe);
       store.markPendingUpsert(recipe.uid);
@@ -713,7 +713,7 @@ describe("Sync → Tool Pipeline Integration", () => {
       // sweepPending runs (called at end of syncOnce), pending-delete clears
       // and the next sync reconciles canonical state normally.
       const client = new PaprikaClient("test@example.com", "password");
-      const cache = new DiskCache(tempDir);
+      const cache = new DiskCacheRoot(tempDir);
       await cache.init();
       const store = new RecipeStore({ pendingWriteTtlMs: 50 });
       const pantryStore = new PantryStore({ pendingWriteTtlMs: 50 });

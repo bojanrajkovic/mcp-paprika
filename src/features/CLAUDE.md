@@ -74,7 +74,7 @@ corrupt Vectra index or hash-index.json).
 
 - `VectorStore` throws (does not return `Result`) because it wraps Vectra and `EmbeddingClient` which use exceptions
 - Content hash uses SHA-256 of `recipeToEmbeddingText()` output; unchanged recipes are skipped during indexing
-- Hash map persisted via atomic write (write-to-tmp + rename) following `DiskCache` pattern
+- Hash map persisted via atomic write (write-to-tmp + rename) — same pattern `RecipeDiskCache` uses for `recipes/index.json` (see `../cache/disk/CLAUDE.md`)
 - Corruption recovery: corrupt Vectra index is backed up to `.bak` dir and recreated; corrupt `hash-index.json` is renamed to `.bak` and reset
 - Model ID and schema version are tracked in `vector-meta.json`; a mismatch on startup clears the hash index to force re-embedding
 - Batch size is 500 texts per embedding API call

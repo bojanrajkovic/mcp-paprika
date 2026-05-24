@@ -8,7 +8,7 @@ The server boots in a fixed order. Each step depends on the previous one complet
 
 1. **Load config** — merges env vars, `.env`, and `config.json` (see [configuration](configuration.md))
 2. **Authenticate** — `PaprikaClient` POSTs email/password to Paprika's v1 login endpoint, stores the JWT
-3. **Initialize disk cache** — `DiskCache` creates directories and loads `index.json` (recipe UID → content hash map)
+3. **Initialize disk cache** — `DiskCacheRoot` creates per-entity directories, loads `recipes/index.json` (recipe UID → content hash map), and runs the one-shot legacy-index migration if a unified `index.json` from a pre-#89 install is present
 4. **Hydrate recipe store** — reads all cached recipes from disk into the in-memory `RecipeStore`
 5. **Create MCP server** — constructs the `McpServer` instance
 6. **Register tools** — 9 core tools (search, filter, CRUD, categories, list)
@@ -34,26 +34,29 @@ Recipes are cached in two layers:
 - **Category resolution** — `Map<CategoryUid, Category>` for UID → display name lookups
 - **Exclusions** — trashed recipes are excluded from all query methods (direct UID lookup still works)
 
-### On-disk: DiskCache
+### On-disk: DiskCacheRoot
 
-`DiskCache` persists recipes as individual JSON files in the cache directory. It handles the startup cold-start case: if the server restarts, recipes are loaded from disk into the `RecipeStore` before the first sync, so tools are immediately usable.
+`DiskCacheRoot` (`src/cache/disk/`) persists every cached entity as individual JSON files under a per-entity subdirectory. It handles the startup cold-start case: if the server restarts, recipes are loaded from disk into the `RecipeStore` before the first sync, so tools are immediately usable.
 
 Structure:
 
 ```
 ~/.cache/mcp-paprika/
-├── index.json              # UID → content hash map
 ├── recipes/
+│   ├── index.json          # uid → content hash map (only index file)
 │   ├── {uid}.json          # Individual recipe files
 │   └── ...
-└── categories/
-    ├── {uid}.json
-    └── ...
+├── categories/{uid}.json
+├── pantry/{uid}.json
+├── oauthClients/{clientId}.json
+└── oauthTokens/{tokenHash}.json
 ```
 
-Writes are buffered in memory and flushed atomically (write to temp file, then rename). The `index.json` tracks content hashes so the sync engine can detect what changed remotely without re-downloading everything.
+Writes are buffered in memory per subcache and flushed atomically: each data file is fsynced individually, and the recipes index is temp-then-rename'd inside the recipes subcache's own mutex. The recipes index tracks content hashes so the sync engine can detect what changed remotely without re-downloading everything. Other entities derive their key set from the directory listing (no index file needed).
 
-**Corruption recovery:** if `index.json` or any recipe file has invalid JSON, the cache logs a warning and resets to empty. The next sync repopulates everything.
+**Corruption recovery:** if `recipes/index.json` or any data file has invalid JSON, the cache logs a warning and resets to empty for that namespace. The next sync repopulates everything.
+
+**Legacy migration:** installs from before issue #89 carried a unified `<cacheDir>/index.json`; `DiskCacheRoot.init()` detects it on first boot, extracts the recipes namespace to `recipes/index.json`, and deletes the legacy file. The migration is idempotent and crash-safe (write new file first, then delete old).
 
 ## Sync engine
 
@@ -146,7 +149,7 @@ The codebase uses two error strategies depending on context:
 src/
 ├── index.ts           # Entry point: config → auth → cache → server → sync → transport
 ├── paprika/           # Paprika API client and sync engine
-├── cache/             # DiskCache (persistent) and RecipeStore (in-memory)
+├── cache/             # RecipeStore + PantryStore (in-memory); cache/disk/ has DiskCacheRoot (persistent)
 ├── tools/             # MCP tool definitions (one file per tool or tool group)
 ├── resources/         # MCP resource definitions
 ├── features/          # Feature implementations (embeddings, vector store, discover wiring)

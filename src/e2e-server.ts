@@ -12,7 +12,7 @@
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { DiskCache } from "./cache/disk-cache.js";
+import { DiskCacheRoot } from "./cache/disk/index.js";
 import { RecipeStore } from "./cache/recipe-store.js";
 import { PantryStore } from "./cache/pantry-store.js";
 import { buildMcpServer } from "./server/build.js";
@@ -166,11 +166,11 @@ async function main(): Promise<void> {
   log.info("mock authentication complete");
 
   log.info("initializing disk cache");
-  const cache = new DiskCache(getCacheDir(), log.child({ component: "disk-cache" }));
+  const cache = new DiskCacheRoot(getCacheDir(), log.child({ component: "disk-cache" }));
   await cache.init();
 
   const store = new RecipeStore();
-  const cachedRecipes = await cache.getAllRecipes();
+  const cachedRecipes = await cache.recipes.getAll();
   for (const recipe of cachedRecipes) {
     store.set(recipe);
   }

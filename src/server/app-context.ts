@@ -1,7 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { Logger } from "pino";
 
-import type { DiskCache } from "../cache/disk-cache.js";
+import type { DiskCacheRoot } from "../cache/disk/index.js";
 import type { PantryStore } from "../cache/pantry-store.js";
 import type { RecipeStore } from "../cache/recipe-store.js";
 import type { VectorStore } from "../features/vector-store.js";
@@ -19,7 +19,7 @@ import type { Notifier } from "./notifier.js";
  */
 export interface AppContext {
   readonly client: PaprikaClient;
-  readonly cache: DiskCache;
+  readonly cache: DiskCacheRoot;
   readonly store: RecipeStore;
   readonly pantryStore: PantryStore;
   readonly vectorStore: VectorStore | null;

@@ -133,7 +133,7 @@ export async function commitRecipe(ctx: ServerContext, saved: Recipe): Promise<v
     ctx.store.markPendingUpsert(saved.uid);
   }
   try {
-    await ctx.cache.putRecipe(saved, saved.hash); // async — buffers to memory with mutex
+    await ctx.cache.recipes.put(saved); // async — buffers to memory with mutex
     await ctx.cache.flush(); // async — writes pending entries to disk
   } catch (e) {
     // Local commit failed before reaching the store/notifier. Clear the pending

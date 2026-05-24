@@ -7,15 +7,15 @@ import { DiskClientRegistrationStore } from "./client-registration.js";
 import { TokenStore } from "./token-store.js";
 import { AuthRequestStore } from "./auth-request-store.js";
 import { AuthCodeStore } from "./auth-code-store.js";
-import { DiskCache } from "../cache/disk-cache.js";
+import { DiskCacheRoot } from "../cache/disk/index.js";
 
 describe("OAuth Metadata Customization", () => {
-  let cache: DiskCache;
+  let cache: DiskCacheRoot;
   let provider: MintingOAuthServerProvider;
 
   beforeEach(async () => {
     const cacheDir = `/tmp/test-metadata-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    cache = new DiskCache(cacheDir);
+    cache = new DiskCacheRoot(cacheDir);
     await cache.init();
 
     const clientStore = new DiskClientRegistrationStore(cache, "https://mcp.example.com", SILENT_LOG);

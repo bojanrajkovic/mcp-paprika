@@ -13,7 +13,7 @@ import { err, ok, type Result } from "neverthrow";
 import { Mutex } from "async-mutex";
 import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
 import type { OAuthError } from "@modelcontextprotocol/sdk/server/auth/errors.js";
-import type { DiskCache } from "../cache/disk-cache.js";
+import type { DiskCacheRoot } from "../cache/disk/index.js";
 import {
   generateOpaqueToken,
   hashTokenForStorage,
@@ -56,7 +56,7 @@ export class TokenStore {
   private readonly _rotateLock = new Mutex();
 
   constructor(
-    private readonly _cache: DiskCache,
+    private readonly _cache: DiskCacheRoot,
     private readonly _now: () => number = () => nowSeconds(),
   ) {}
 
@@ -100,8 +100,8 @@ export class TokenStore {
       createdAt: now,
     };
 
-    await this._cache.putOAuthToken(access);
-    await this._cache.putOAuthToken(refresh);
+    await this._cache.oauthTokens.put(access);
+    await this._cache.oauthTokens.put(refresh);
     await this._bumpLastActivity(input.clientId, now);
     await this._cache.flush();
 
@@ -124,7 +124,7 @@ export class TokenStore {
    */
   async lookupAccessToken(plaintext: string): Promise<AuthInfo | null> {
     const hash = hashTokenForStorage(plaintext);
-    const record = await this._cache.getOAuthToken(hash);
+    const record = await this._cache.oauthTokens.get(hash);
     if (record === null || record.kind !== "access") return null;
     if (record.expiresAt < this._now()) return null; // lazy eviction
 
@@ -156,7 +156,7 @@ export class TokenStore {
    */
   async lookupRefreshToken(plaintext: string): Promise<OAuthToken | null> {
     const hash = hashTokenForStorage(plaintext);
-    const record = await this._cache.getOAuthToken(hash);
+    const record = await this._cache.oauthTokens.get(hash);
     if (record === null || record.kind !== "refresh") return null;
     if (record.expiresAt < this._now()) return null;
     return record;
@@ -215,7 +215,7 @@ export class TokenStore {
       }
 
       // Invalidate the old refresh token IMMEDIATELY (AC7.7)
-      await this._cache.removeOAuthToken(existing.tokenHash);
+      await this._cache.oauthTokens.remove(existing.tokenHash);
       await this._cache.flush();
 
       // Mint the new pair with rotation linkage
@@ -225,7 +225,7 @@ export class TokenStore {
       const accessExpiresAt = now + ACCESS_TOKEN_TTL_SECONDS;
       const refreshExpiresAt = now + REFRESH_TOKEN_TTL_SECONDS;
 
-      await this._cache.putOAuthToken({
+      await this._cache.oauthTokens.put({
         tokenHash: hashTokenForStorage(accessPlain),
         kind: "access",
         clientId: existing.clientId,
@@ -235,7 +235,7 @@ export class TokenStore {
         expiresAt: accessExpiresAt,
         createdAt: now,
       });
-      await this._cache.putOAuthToken({
+      await this._cache.oauthTokens.put({
         tokenHash: hashTokenForStorage(refreshPlain),
         kind: "refresh",
         clientId: existing.clientId,
@@ -268,7 +268,7 @@ export class TokenStore {
    */
   async getTokenRecord(plaintext: string): Promise<OAuthToken | null> {
     const hash = hashTokenForStorage(plaintext);
-    return this._cache.getOAuthToken(hash);
+    return this._cache.oauthTokens.get(hash);
   }
 
   /**
@@ -289,7 +289,7 @@ export class TokenStore {
   async revoke(plaintext: string): Promise<void> {
     await this._rotateLock.runExclusive(async () => {
       const hash = hashTokenForStorage(plaintext);
-      await this._cache.removeOAuthToken(hash);
+      await this._cache.oauthTokens.remove(hash);
       await this._cache.flush();
     });
   }
@@ -309,9 +309,9 @@ export class TokenStore {
    */
   async removeAllForClient(clientId: string): Promise<void> {
     await this._rotateLock.runExclusive(async () => {
-      const all = await this._cache.getAllOAuthTokens();
+      const all = await this._cache.oauthTokens.getAll();
       const matching = all.filter((t) => t.clientId === clientId);
-      await Promise.all(matching.map((t) => this._cache.removeOAuthToken(t.tokenHash)));
+      await Promise.all(matching.map((t) => this._cache.oauthTokens.remove(t.tokenHash)));
       await this._cache.flush();
     });
   }
@@ -323,8 +323,8 @@ export class TokenStore {
    * (race with deletion). Does not flush — caller is responsible.
    */
   private async _bumpLastActivity(clientId: string, now: number): Promise<void> {
-    const client = await this._cache.getOAuthClient(clientId);
+    const client = await this._cache.oauthClients.get(clientId);
     if (client === null) return; // race with deletion
-    await this._cache.putOAuthClient({ ...client, lastTokenActivityAt: now });
+    await this._cache.oauthClients.put({ ...client, lastTokenActivityAt: now });
   }
 }

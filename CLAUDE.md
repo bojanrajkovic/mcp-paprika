@@ -14,7 +14,7 @@ MCP server for the Paprika recipe manager. Two transports: **stdio** (default; u
 - **Language:** TypeScript 5.9 (extends `@tsconfig/strictest` + `@tsconfig/node24`)
 - **Module system:** ESM (`"type": "module"`)
 - **Package manager:** pnpm 11.1.2 (corepack-managed)
-- **Key dependencies:** @modelcontextprotocol/sdk (MCP protocol), hono + @hono/mcp + @hono/node-server (HTTP transport), zod (validation), luxon (dates), dotenv (env config), parse-duration (duration parsing), env-paths (XDG directories), neverthrow (error handling), cockatiel (resilience/retry), mitt (event emitter), vectra (local vector index), jose (OIDC/JWT), hono-rate-limiter (OAuth DCR rate limiting), async-mutex (DiskCache write serialization), pino + pino-pretty (structured logging)
+- **Key dependencies:** @modelcontextprotocol/sdk (MCP protocol), hono + @hono/mcp + @hono/node-server (HTTP transport), zod (validation), luxon (dates), dotenv (env config), parse-duration (duration parsing), env-paths (XDG directories), neverthrow (error handling), cockatiel (resilience/retry), mitt (event emitter), vectra (local vector index), jose (OIDC/JWT), hono-rate-limiter (OAuth DCR rate limiting), async-mutex (per-subcache write serialization), pino + pino-pretty (structured logging)
 - **Container:** distroless `gcr.io/distroless/nodejs24-debian13:nonroot` runtime; 3-stage Dockerfile (builder → prod-deps prune → distroless)
 
 ## Commands
@@ -38,7 +38,7 @@ MCP server for the Paprika recipe manager. Two transports: **stdio** (default; u
 - `src/transport/` — Transport-specific entry points: `stdio.ts` (deferred-getter notifier, sync, then `server.connect(new StdioServerTransport())`) and `http.ts` (Hono app with `GET /healthz` + `ALL /mcp`, session map, graceful shutdown that aborts SSE streams before closing the HTTP server). `startHttp` returns an `HttpTransportHandle` with the bound port (useful for tests passing `port: 0`)
 - `src/server/` — Process-wide composition root: `AppContext`/`SessionContext` types, `Notifier` abstraction (`singleServerNotifier`, `broadcastNotifier`), `buildAppContext` (heavyweight shared state; constructs the pino root logger and threads it through `AppContext.log`, `AuthContext.log`, and `PaprikaClient`) and `buildMcpServer` (per-session tool/resource registration; discover tool gated on `vectorStore !== null`)
 - `src/paprika/` — Paprika API client with pantry read and write support (`listPantry()`, `savePantryItem()` methods)
-- `src/cache/` — Caching layer with `PantryStore` for in-memory queries and pantry persistence
+- `src/cache/` — In-memory stores (`RecipeStore`, `PantryStore`) plus the persistence layer at `src/cache/disk/` (`DiskCacheRoot` and per-entity subcaches)
 - `src/tools/` — MCP tool definitions including read tools (`list_pantry`, `get_pantry_item`) and write tools (`add_pantry_item`, `update_pantry_item`, `delete_pantry_item`) for pantry access
 - `src/resources/` — MCP resource definitions including `paprika://pantry/{uid}` resource template
 - `src/features/` — Feature implementations (semantic search wiring lives here; tool registration happens in `src/server/build.ts`)

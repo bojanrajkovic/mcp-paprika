@@ -4,7 +4,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { nowSeconds } from "./tokens.js";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { DiskCache } from "../cache/disk-cache.js";
+import { DiskCacheRoot } from "../cache/disk/index.js";
 import { AuthRequestStore } from "./auth-request-store.js";
 import { AuthCodeStore } from "./auth-code-store.js";
 import { DiskClientRegistrationStore } from "./client-registration.js";
@@ -18,13 +18,13 @@ import { makeAuthRequestState, makeAuthCodeState } from "./__fixtures__/oauth-st
 // ---------------------------------------------------------------------------
 
 let tmpDir: string;
-let cache: DiskCache;
+let cache: DiskCacheRoot;
 let clientStore: DiskClientRegistrationStore;
 let tokenStore: TokenStore;
 
 beforeEach(async () => {
   tmpDir = await mkdtemp(join(tmpdir(), "mcp-paprika-cleanup-test-"));
-  cache = new DiskCache(tmpDir);
+  cache = new DiskCacheRoot(tmpDir);
   await cache.init();
   clientStore = new DiskClientRegistrationStore(cache, "https://example.com", SILENT_LOG);
   tokenStore = new TokenStore(cache);
@@ -51,8 +51,8 @@ describe("sweepOnce", () => {
       clientId: "00000000-0000-0000-0000-000000000002",
       lastTokenActivityAt: clock.v - 10 * 86400,
     });
-    await cache.putOAuthClient(staleClient);
-    await cache.putOAuthClient(freshClient);
+    await cache.oauthClients.put(staleClient);
+    await cache.oauthClients.put(freshClient);
     await cache.flush();
 
     const authRequests = new AuthRequestStore();
@@ -61,8 +61,8 @@ describe("sweepOnce", () => {
     const result = await cleanup.sweepOnce();
 
     expect(result.clientsRemoved).toBe(1);
-    expect(await cache.getOAuthClient("00000000-0000-0000-0000-000000000001")).toBeNull();
-    expect(await cache.getOAuthClient("00000000-0000-0000-0000-000000000002")).not.toBeNull();
+    expect(await cache.oauthClients.get("00000000-0000-0000-0000-000000000001")).toBeNull();
+    expect(await cache.oauthClients.get("00000000-0000-0000-0000-000000000002")).not.toBeNull();
   });
 
   it(// PLAN says (phase_07.md:228): AC5.4 — stale-client deletion cascades: all tokens with matching clientId removed
@@ -73,8 +73,8 @@ describe("sweepOnce", () => {
 
     const staleClient = makeOAuthClient({ clientId: staleClientId, lastTokenActivityAt: clock.v - 91 * 86400 });
     const freshClient = makeOAuthClient({ clientId: freshClientId, lastTokenActivityAt: clock.v - 5 * 86400 });
-    await cache.putOAuthClient(staleClient);
-    await cache.putOAuthClient(freshClient);
+    await cache.oauthClients.put(staleClient);
+    await cache.oauthClients.put(freshClient);
 
     // Mint 3 tokens for the stale client
     const staleToken1 = makeOAuthToken({ clientId: staleClientId });
@@ -83,10 +83,10 @@ describe("sweepOnce", () => {
     // Mint 1 token for the fresh client
     const freshToken = makeOAuthToken({ clientId: freshClientId });
 
-    await cache.putOAuthToken(staleToken1);
-    await cache.putOAuthToken(staleToken2);
-    await cache.putOAuthToken(staleToken3);
-    await cache.putOAuthToken(freshToken);
+    await cache.oauthTokens.put(staleToken1);
+    await cache.oauthTokens.put(staleToken2);
+    await cache.oauthTokens.put(staleToken3);
+    await cache.oauthTokens.put(freshToken);
     await cache.flush();
 
     const authRequests = new AuthRequestStore();
@@ -97,11 +97,11 @@ describe("sweepOnce", () => {
     expect(result.clientsRemoved).toBe(1);
     expect(result.tokensRemoved).toBe(3);
     // All 3 stale-client tokens removed
-    expect(await cache.getOAuthToken(staleToken1.tokenHash)).toBeNull();
-    expect(await cache.getOAuthToken(staleToken2.tokenHash)).toBeNull();
-    expect(await cache.getOAuthToken(staleToken3.tokenHash)).toBeNull();
+    expect(await cache.oauthTokens.get(staleToken1.tokenHash)).toBeNull();
+    expect(await cache.oauthTokens.get(staleToken2.tokenHash)).toBeNull();
+    expect(await cache.oauthTokens.get(staleToken3.tokenHash)).toBeNull();
     // Fresh-client token still present
-    expect(await cache.getOAuthToken(freshToken.tokenHash)).not.toBeNull();
+    expect(await cache.oauthTokens.get(freshToken.tokenHash)).not.toBeNull();
   });
 
   it(// PLAN says (phase_07.md:233): AC5.5 — sweepOnce is idempotent: second run on same state is a no-op
@@ -111,7 +111,7 @@ describe("sweepOnce", () => {
       clientId: "00000000-0000-0000-0000-000000000020",
       lastTokenActivityAt: clock.v - 91 * 86400,
     });
-    await cache.putOAuthClient(staleClient);
+    await cache.oauthClients.put(staleClient);
     await cache.flush();
 
     const authRequests = new AuthRequestStore();
@@ -148,7 +148,7 @@ describe("sweepOnce", () => {
   it("sweepOnce returns zero counts when nothing is stale", async () => {
     const clock = { v: 1_700_000_000 };
     const freshClient = makeOAuthClient({ lastTokenActivityAt: clock.v - 1 * 86400 });
-    await cache.putOAuthClient(freshClient);
+    await cache.oauthClients.put(freshClient);
     await cache.flush();
 
     const authRequests = new AuthRequestStore();
@@ -172,7 +172,7 @@ describe("sweepOnce", () => {
     // mechanism.
     const clock = { v: 1_700_000_000 };
     const activeClientId = "00000000-0000-0000-0000-000000000030";
-    await cache.putOAuthClient(makeOAuthClient({ clientId: activeClientId, lastTokenActivityAt: clock.v - 86400 }));
+    await cache.oauthClients.put(makeOAuthClient({ clientId: activeClientId, lastTokenActivityAt: clock.v - 86400 }));
 
     // Expired access token belonging to the active client — should be removed.
     const expiredAccess = makeOAuthToken({
@@ -192,9 +192,9 @@ describe("sweepOnce", () => {
       kind: "refresh",
       expiresAt: clock.v + 30 * 86400,
     });
-    await cache.putOAuthToken(expiredAccess);
-    await cache.putOAuthToken(liveAccess);
-    await cache.putOAuthToken(liveRefresh);
+    await cache.oauthTokens.put(expiredAccess);
+    await cache.oauthTokens.put(liveAccess);
+    await cache.oauthTokens.put(liveRefresh);
     await cache.flush();
 
     const authRequests = new AuthRequestStore();
@@ -204,9 +204,9 @@ describe("sweepOnce", () => {
 
     expect(result.expiredTokensRemoved).toBe(1);
     expect(result.clientsRemoved).toBe(0); // client wasn't stale
-    expect(await cache.getOAuthToken(expiredAccess.tokenHash)).toBeNull();
-    expect(await cache.getOAuthToken(liveAccess.tokenHash)).not.toBeNull();
-    expect(await cache.getOAuthToken(liveRefresh.tokenHash)).not.toBeNull();
+    expect(await cache.oauthTokens.get(expiredAccess.tokenHash)).toBeNull();
+    expect(await cache.oauthTokens.get(liveAccess.tokenHash)).not.toBeNull();
+    expect(await cache.oauthTokens.get(liveRefresh.tokenHash)).not.toBeNull();
   });
 
   it("expired tokens belonging to a stale client are counted in the cascade, not double-counted", async () => {
@@ -217,12 +217,14 @@ describe("sweepOnce", () => {
     // expiredTokensRemoved (orphan sweep) does not.
     const clock = { v: 1_700_000_000 };
     const staleClientId = "00000000-0000-0000-0000-000000000040";
-    await cache.putOAuthClient(makeOAuthClient({ clientId: staleClientId, lastTokenActivityAt: clock.v - 91 * 86400 }));
+    await cache.oauthClients.put(
+      makeOAuthClient({ clientId: staleClientId, lastTokenActivityAt: clock.v - 91 * 86400 }),
+    );
     const expiredTokenForStaleClient = makeOAuthToken({
       clientId: staleClientId,
       expiresAt: clock.v - 60,
     });
-    await cache.putOAuthToken(expiredTokenForStaleClient);
+    await cache.oauthTokens.put(expiredTokenForStaleClient);
     await cache.flush();
 
     const authRequests = new AuthRequestStore();
@@ -286,7 +288,7 @@ describe("lifecycle", () => {
   });
 
   it("loop never throws — a synthetic cache error in sweepOnce doesn't crash the loop", async () => {
-    vi.spyOn(cache, "getAllOAuthClients").mockRejectedValueOnce(new Error("disk full"));
+    vi.spyOn(cache.oauthClients, "getAll").mockRejectedValueOnce(new Error("disk full"));
 
     const authRequests = new AuthRequestStore();
     const authCodes = new AuthCodeStore();

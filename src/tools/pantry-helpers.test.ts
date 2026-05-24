@@ -5,7 +5,7 @@ import { makePantryItem } from "../cache/__fixtures__/pantry.js";
 import { commitPantryItem } from "./pantry-helpers.js";
 import { makeTestServer, makeCtx, makeStubNotifier } from "./tool-test-utils.js";
 import type { PaprikaClient } from "../paprika/client.js";
-import type { DiskCache } from "../cache/disk-cache.js";
+import type { DiskCacheRoot } from "../cache/disk/index.js";
 
 describe("pantry-mutations.AC3: commitPantryItem helper", () => {
   describe("AC3.1: upsert branch (deleted: false)", () => {
@@ -26,10 +26,9 @@ describe("pantry-mutations.AC3: commitPantryItem helper", () => {
       const ctx = makeCtx(new RecipeStore(), server, {
         client: { notifySync: mockNotifySync } as unknown as PaprikaClient,
         cache: {
-          putPantryItem: mockPutPantryItem,
-          removePantryItem: mockRemovePantryItem,
+          pantry: { put: mockPutPantryItem, remove: mockRemovePantryItem },
           flush: mockFlush,
-        } as unknown as DiskCache,
+        } as unknown as DiskCacheRoot,
         pantryStore,
         notifier: stub.notifier,
       });
@@ -75,10 +74,9 @@ describe("pantry-mutations.AC3: commitPantryItem helper", () => {
       const ctx = makeCtx(new RecipeStore(), server, {
         client: { notifySync: mockNotifySync } as unknown as PaprikaClient,
         cache: {
-          putPantryItem: mockPutPantryItem,
-          removePantryItem: mockRemovePantryItem,
+          pantry: { put: mockPutPantryItem, remove: mockRemovePantryItem },
           flush: mockFlush,
-        } as unknown as DiskCache,
+        } as unknown as DiskCacheRoot,
         pantryStore,
         notifier: stub.notifier,
       });
@@ -122,10 +120,9 @@ describe("pantry-mutations.AC3: commitPantryItem helper", () => {
       const ctx = makeCtx(new RecipeStore(), server, {
         client: { notifySync: mockNotifySync } as unknown as PaprikaClient,
         cache: {
-          putPantryItem: mockPutPantryItem,
-          removePantryItem: mockRemovePantryItem,
+          pantry: { put: mockPutPantryItem, remove: mockRemovePantryItem },
           flush: mockFlush,
-        } as unknown as DiskCache,
+        } as unknown as DiskCacheRoot,
         pantryStore,
         notifier: stub.notifier,
       });
@@ -162,10 +159,9 @@ describe("pantry-mutations.AC3: commitPantryItem helper", () => {
       const ctx = makeCtx(new RecipeStore(), server, {
         client: { notifySync: mockNotifySync } as unknown as PaprikaClient,
         cache: {
-          putPantryItem: mockPutPantryItem,
-          removePantryItem: mockRemovePantryItem,
+          pantry: { put: mockPutPantryItem, remove: mockRemovePantryItem },
           flush: mockFlush,
-        } as unknown as DiskCache,
+        } as unknown as DiskCacheRoot,
         pantryStore,
         notifier: stub.notifier,
       });
@@ -200,10 +196,9 @@ describe("pantry-mutations.AC3: commitPantryItem helper", () => {
       const ctx = makeCtx(new RecipeStore(), server, {
         client: { notifySync: mockNotifySync } as unknown as PaprikaClient,
         cache: {
-          putPantryItem: mockPutPantryItem,
-          removePantryItem: mockRemovePantryItem,
+          pantry: { put: mockPutPantryItem, remove: mockRemovePantryItem },
           flush: mockFlush,
-        } as unknown as DiskCache,
+        } as unknown as DiskCacheRoot,
         pantryStore,
         notifier: stub.notifier,
       });
@@ -232,10 +227,9 @@ describe("pantry-mutations.AC3: commitPantryItem helper", () => {
       const ctx = makeCtx(new RecipeStore(), server, {
         client: { notifySync: mockNotifySync } as unknown as PaprikaClient,
         cache: {
-          putPantryItem: mockPutPantryItem,
-          removePantryItem: mockRemovePantryItem,
+          pantry: { put: mockPutPantryItem, remove: mockRemovePantryItem },
           flush: mockFlush,
-        } as unknown as DiskCache,
+        } as unknown as DiskCacheRoot,
         pantryStore,
         notifier: stub.notifier,
       });

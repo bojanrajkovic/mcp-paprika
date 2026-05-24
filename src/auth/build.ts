@@ -13,7 +13,7 @@
 // pattern: Imperative Shell
 
 import type { Logger } from "pino";
-import type { DiskCache } from "../cache/disk-cache.js";
+import type { DiskCacheRoot } from "../cache/disk/index.js";
 import type { PaprikaConfig } from "../utils/config.js";
 import { resolvePreset } from "./presets.js";
 import { loadDiscovery, createJwksFor } from "./oidc-client.js";
@@ -28,7 +28,7 @@ import type { AuthContext, ResolvedOAuthConfig } from "./types.js";
 
 export async function buildAuthContext(
   config: PaprikaConfig,
-  cache: DiskCache,
+  cache: DiskCacheRoot,
   parentLog: Logger,
 ): Promise<AuthContext | null> {
   if (config.transport !== "http") return null;

@@ -18,7 +18,7 @@
 
 import { setTimeout as wait } from "node:timers/promises";
 import type { Logger } from "pino";
-import type { DiskCache } from "../cache/disk-cache.js";
+import type { DiskCacheRoot } from "../cache/disk/index.js";
 import type { AuthRequestStore } from "./auth-request-store.js";
 import type { AuthCodeStore } from "./auth-code-store.js";
 import type { DiskClientRegistrationStore } from "./client-registration.js";
@@ -33,7 +33,7 @@ export class AuthCleanup {
   constructor(
     private readonly _clientStore: DiskClientRegistrationStore,
     private readonly _tokenStore: TokenStore,
-    private readonly _cache: DiskCache,
+    private readonly _cache: DiskCacheRoot,
     private readonly _authRequests: AuthRequestStore,
     private readonly _authCodes: AuthCodeStore,
     private readonly log: Logger,
@@ -77,13 +77,13 @@ export class AuthCleanup {
 
     // (1) Stale DCR clients: lastTokenActivityAt older than DCR_CLIENT_STALE_DAYS (90d)
     const cutoff = now - DCR_CLIENT_STALE_DAYS * 86400;
-    const allClients = await this._cache.getAllOAuthClients();
+    const allClients = await this._cache.oauthClients.getAll();
     const stale = allClients.filter((c) => c.lastTokenActivityAt < cutoff);
 
     // Fetch tokens once. Precompute per-client counts for the cascade loop and
     // collect expired tokens for the orphan sweep in (3). One pass over all
     // tokens, then we partition by stale-client cascade vs. expired-orphan.
-    const allTokens = await this._cache.getAllOAuthTokens();
+    const allTokens = await this._cache.oauthTokens.getAll();
     const tokensByClient = new Map<string, number>();
     for (const t of allTokens) {
       tokensByClient.set(t.clientId, (tokensByClient.get(t.clientId) ?? 0) + 1);
@@ -109,7 +109,7 @@ export class AuthCleanup {
     let expiredTokensRemoved = 0;
     const expiredOrphans = allTokens.filter((t) => t.expiresAt < now && !staleClientIds.has(t.clientId));
     if (expiredOrphans.length > 0) {
-      await Promise.all(expiredOrphans.map((t) => this._cache.removeOAuthToken(t.tokenHash)));
+      await Promise.all(expiredOrphans.map((t) => this._cache.oauthTokens.remove(t.tokenHash)));
       await this._cache.flush();
       expiredTokensRemoved = expiredOrphans.length;
     }
