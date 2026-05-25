@@ -17,8 +17,17 @@ Registers the `paprika://recipe/{uid}` resource template with list and read call
 - **List callback:** Returns all non-trashed recipes with `uri: "paprika://recipe/{uid}"`, `name: recipe.name`, and `mimeType: "text/markdown"` for each. Returns `{ resources: [] }` when store is empty.
 - **Read callback:** Returns a recipe as markdown with a metadata header prepended: `**UID:**`, `**URI:**` (always), `**Last synced:**` (when store has been synced), and `**Photo:**` (when recipe has an image URL). Category UIDs are resolved to display names. Throws an error if the UID does not exist.
 
+### Grocery List Resources
+
+**Function:** `registerGroceryListResources(server: McpServer, ctx: ServerContext): void`
+
+Registers the `paprika://grocery-list/{uid}` resource template with list and read callbacks:
+
+- **List callback:** Returns all non-deleted grocery lists from `ctx.groceryListStore.getAll()` mapped to `uri: "paprika://grocery-list/{uid}"`, `name: list.name`, and `mimeType: "text/markdown"` for each.
+- **Read callback:** Takes the `uid` variable from the URI pattern. Looks up the list in `ctx.groceryListStore`. If not found, throws `Error("Grocery list not found: ${uid}")`. Otherwise builds a metadata header with `**UID:**` and `**URI:**` (always) plus `**Last synced:**` (when `ctx.groceryListStore.lastSyncedAt` is not null), fetches items via `ctx.groceryItemStore.getByListUid(uid)`, and renders the full body via `groceryListToMarkdown(list, items)`. Returns `{ contents: [{ uri, mimeType: "text/markdown", text }] }`.
+
 ## Dependencies
 
-- **Uses:** `tools/helpers.ts` (runtime import of `recipeToMarkdown`), `types/server-context.ts` (ServerContext type), `paprika/types.ts` (type-only import for `RecipeUid`)
-- **Used by:** `src/server/build.ts` (MCP server registration via `registerRecipeResources`)
-- **Boundary:** May not import at runtime from `paprika/` or `cache/` directly (except `import type`). Runtime imports of helper files under `tools/` (e.g. `tools/helpers.js`) are allowed.
+- **Uses:** `tools/helpers.ts` (runtime import of `recipeToMarkdown`), `tools/grocery-helpers.ts` (runtime import of `groceryListToMarkdown`), `types/server-context.ts` (ServerContext type), `paprika/types.ts` (type-only imports for `RecipeUid`, `GroceryListUid`)
+- **Used by:** `src/server/build.ts` (MCP server registration via `registerRecipeResources` and `registerGroceryListResources`)
+- **Boundary:** May not import at runtime from `paprika/` or `cache/` directly (except `import type`). Runtime imports of helper files under `tools/` (e.g. `tools/helpers.js`, `tools/grocery-helpers.js`) are allowed.

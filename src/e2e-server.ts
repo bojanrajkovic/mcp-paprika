@@ -14,6 +14,9 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { AisleStore } from "./cache/aisle-store.js";
 import { DiskCacheRoot } from "./cache/disk/index.js";
+import { GroceryIngredientStore } from "./cache/grocery-ingredient-store.js";
+import { GroceryItemStore } from "./cache/grocery-item-store.js";
+import { GroceryListStore } from "./cache/grocery-list-store.js";
 import { RecipeStore } from "./cache/recipe-store.js";
 import { PantryStore } from "./cache/pantry-store.js";
 import { buildMcpServer } from "./server/build.js";
@@ -185,12 +188,22 @@ async function main(): Promise<void> {
   const aisleStore = new AisleStore();
   aisleStore.load([]);
 
+  const groceryListStore = new GroceryListStore();
+  groceryListStore.load([]);
+  const groceryItemStore = new GroceryItemStore();
+  groceryItemStore.load([]);
+  const groceryIngredientStore = new GroceryIngredientStore();
+  groceryIngredientStore.load([]);
+
   const app: AppContext = {
     client: client as unknown as AppContext["client"],
     cache,
     store,
     pantryStore,
     aisleStore,
+    groceryListStore,
+    groceryItemStore,
+    groceryIngredientStore,
     vectorStore: null, // discover tool intentionally not registered (no embeddings in e2e)
     notifier,
     auth: null,

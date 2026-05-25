@@ -248,6 +248,117 @@ export const PantryItemSchema = z
     }),
   );
 
+// Branded UID schemas for grocery entities
+export const GroceryListUidSchema = z.string().brand("GroceryListUid");
+export type GroceryListUid = z.infer<typeof GroceryListUidSchema>;
+
+export const GroceryItemUidSchema = z.string().brand("GroceryItemUid");
+export type GroceryItemUid = z.infer<typeof GroceryItemUidSchema>;
+
+export const GroceryIngredientUidSchema = z.string().brand("GroceryIngredientUid");
+export type GroceryIngredientUid = z.infer<typeof GroceryIngredientUidSchema>;
+
+// GroceryListStoredSchema — validates camelCase JSON read back from disk. No transform.
+export const GroceryListStoredSchema = z.object({
+  uid: GroceryListUidSchema,
+  name: z.string(),
+  orderFlag: z.number().int(),
+  isDefault: z.boolean(),
+  remindersList: z.string(),
+  deleted: z.boolean().optional().default(false),
+});
+
+export type GroceryList = z.infer<typeof GroceryListStoredSchema>;
+
+// GroceryListSchema — accepts snake_case wire format, transforms to camelCase GroceryList.
+export const GroceryListSchema = z
+  .object({
+    uid: GroceryListUidSchema,
+    name: z.string(),
+    order_flag: z.number().int(),
+    is_default: z.boolean(),
+    reminders_list: z.string(),
+    deleted: z.boolean().optional().default(false),
+  })
+  .transform(
+    ({ order_flag, is_default, reminders_list, ...rest }): GroceryList => ({
+      ...rest,
+      orderFlag: order_flag,
+      isDefault: is_default,
+      remindersList: reminders_list,
+    }),
+  );
+
+// GroceryItemStoredSchema — validates camelCase JSON read back from disk. No transform.
+export const GroceryItemStoredSchema = z.object({
+  uid: GroceryItemUidSchema,
+  name: z.string(),
+  ingredient: z.string(),
+  aisle: z.string(),
+  aisleUid: z.string(),
+  listUid: z.string(),
+  purchased: z.boolean(),
+  deleted: z.boolean().optional().default(false),
+  orderFlag: z.number().int(),
+  quantity: z.string(),
+  instruction: z.string(),
+  recipe: z.string().nullable(),
+  separate: z.boolean(),
+});
+
+export type GroceryItem = z.infer<typeof GroceryItemStoredSchema>;
+
+// GroceryItemSchema — accepts snake_case wire format, transforms to camelCase GroceryItem.
+export const GroceryItemSchema = z
+  .object({
+    uid: GroceryItemUidSchema,
+    name: z.string(),
+    ingredient: z.string(),
+    aisle: z.string(),
+    aisle_uid: z.string(),
+    list_uid: z.string(),
+    purchased: z.boolean(),
+    deleted: z.boolean().optional().default(false),
+    order_flag: z.number().int(),
+    quantity: z.string(),
+    instruction: z.string(),
+    recipe: z.string().nullable(),
+    separate: z.boolean(),
+  })
+  .transform(
+    ({ aisle_uid, list_uid, order_flag, ...rest }): GroceryItem => ({
+      ...rest,
+      aisleUid: aisle_uid,
+      listUid: list_uid,
+      orderFlag: order_flag,
+    }),
+  );
+
+// GroceryIngredientStoredSchema — validates camelCase JSON read back from disk. No transform.
+export const GroceryIngredientStoredSchema = z.object({
+  uid: GroceryIngredientUidSchema,
+  name: z.string(),
+  aisleUid: z.string(),
+  deleted: z.boolean().optional().default(false),
+});
+
+export type GroceryIngredient = z.infer<typeof GroceryIngredientStoredSchema>;
+
+// GroceryIngredientSchema — accepts snake_case wire format, transforms to camelCase GroceryIngredient.
+export const GroceryIngredientSchema = z
+  .object({
+    uid: GroceryIngredientUidSchema,
+    name: z.string(),
+    aisle_uid: z.string(),
+    deleted: z.boolean().optional().default(false),
+  })
+  .transform(
+    ({ aisle_uid, ...rest }): GroceryIngredient => ({
+      ...rest,
+      aisleUid: aisle_uid,
+    }),
+  );
+
 // AuthResponseSchema - nested object, no transform needed
 export const AuthResponseSchema = z.object({
   result: z.object({
@@ -271,7 +382,7 @@ export type EntityChanges<T> = {
 
 // Closed set of entity types sync can produce. Adding a new entity type here
 // requires extending this union deliberately.
-export type SyncEntityType = "recipes" | "pantry";
+export type SyncEntityType = "recipes" | "pantry" | "grocery-lists" | "grocery-items";
 
 // K is locked to SyncEntityType; T is the entity item type.
 export type SyncResult<K extends SyncEntityType, T extends object> = {
@@ -281,9 +392,11 @@ export type SyncResult<K extends SyncEntityType, T extends object> = {
 
 export type RecipeSyncResult = SyncResult<"recipes", Recipe>;
 export type PantrySyncResult = SyncResult<"pantry", PantryItem>;
+export type GroceryListSyncResult = SyncResult<"grocery-lists", GroceryList>;
+export type GroceryItemSyncResult = SyncResult<"grocery-items", GroceryItem>;
 
 // Union used as the sync:complete event payload.
-export type AnySyncResult = RecipeSyncResult | PantrySyncResult;
+export type AnySyncResult = RecipeSyncResult | PantrySyncResult | GroceryListSyncResult | GroceryItemSyncResult;
 
 export type DiffResult = {
   readonly added: ReadonlyArray<string>;

@@ -40,7 +40,7 @@ export function pantryItemToMarkdown(item: PantryItem): string {
 
 /**
  * Persists a saved pantry item to the local cache and store, then triggers cloud sync.
- * Called by all pantry write tools after `ctx.client.savePantryItem()` returns.
+ * Called by all pantry write tools after `ctx.client.savePantryItems()` returns.
  *
  * Branches on `saved.deleted`:
  * - Upsert (deleted: false): putPantryItem (sync) → flush (async) → set (sync) → notifySync (async)

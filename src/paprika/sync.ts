@@ -4,7 +4,18 @@ import { createRequire } from "node:module";
 import type { Logger } from "pino";
 
 import type { AppContext } from "../server/app-context.js";
-import type { AnySyncResult, PantryItem, Recipe, RecipeUid, RecipeSyncResult, PantrySyncResult } from "./types.js";
+import type {
+  AnySyncResult,
+  GroceryItem,
+  GroceryItemSyncResult,
+  GroceryList,
+  GroceryListSyncResult,
+  PantryItem,
+  Recipe,
+  RecipeUid,
+  RecipeSyncResult,
+  PantrySyncResult,
+} from "./types.js";
 
 function pantryItemsEqual(a: PantryItem, b: PantryItem): boolean {
   return (
@@ -19,6 +30,35 @@ function pantryItemsEqual(a: PantryItem, b: PantryItem): boolean {
     a.purchaseDate === b.purchaseDate &&
     a.notes === b.notes &&
     a.deleted === b.deleted
+  );
+}
+
+function groceryListsEqual(a: GroceryList, b: GroceryList): boolean {
+  return (
+    a.uid === b.uid &&
+    a.name === b.name &&
+    a.orderFlag === b.orderFlag &&
+    a.isDefault === b.isDefault &&
+    a.remindersList === b.remindersList &&
+    a.deleted === b.deleted
+  );
+}
+
+function groceryItemsEqual(a: GroceryItem, b: GroceryItem): boolean {
+  return (
+    a.uid === b.uid &&
+    a.name === b.name &&
+    a.ingredient === b.ingredient &&
+    a.aisle === b.aisle &&
+    a.aisleUid === b.aisleUid &&
+    a.listUid === b.listUid &&
+    a.purchased === b.purchased &&
+    a.deleted === b.deleted &&
+    a.orderFlag === b.orderFlag &&
+    a.quantity === b.quantity &&
+    a.instruction === b.instruction &&
+    a.recipe === b.recipe &&
+    a.separate === b.separate
   );
 }
 
@@ -254,7 +294,120 @@ export class SyncEngine {
         this.log.debug({ count: orphanPantryUids.length }, "removed orphan pantry items");
       }
 
-      // 4. Finalization
+      // 4. Grocery list sync (replace-all with orphan cleanup)
+      this.log.debug("fetching grocery lists");
+      const groceryLists = await this._context.client.listGroceryLists();
+      this.log.debug({ count: groceryLists.length }, "fetched grocery lists");
+
+      const cachedGroceryLists = await this._context.cache.groceryLists.getAll();
+
+      const incomingGroceryListsFiltered = groceryLists.filter(
+        (list) =>
+          !this._context.groceryListStore.isPendingDelete(list.uid) &&
+          !this._context.groceryListStore.isPendingUpsert(list.uid),
+      );
+      const pendingUpsertedGroceryLists = cachedGroceryLists.filter((list) =>
+        this._context.groceryListStore.isPendingUpsert(list.uid),
+      );
+      const effectiveGroceryLists = [...incomingGroceryListsFiltered, ...pendingUpsertedGroceryLists];
+
+      const cachedGroceryListUids = new Set(cachedGroceryLists.map((l) => l.uid));
+      const effectiveGroceryListUids = new Set(effectiveGroceryLists.map((l) => l.uid));
+      const orphanGroceryListUids = [...cachedGroceryListUids].filter((uid) => !effectiveGroceryListUids.has(uid));
+      const newGroceryListUids = [...effectiveGroceryListUids].filter((uid) => !cachedGroceryListUids.has(uid));
+      const cachedGroceryListByUid = new Map(cachedGroceryLists.map((l) => [l.uid, l]));
+
+      const updatedGroceryLists = effectiveGroceryLists.filter((incoming) => {
+        const cached = cachedGroceryListByUid.get(incoming.uid);
+        return cached !== undefined && !groceryListsEqual(cached, incoming);
+      });
+      const newGroceryListSet = new Set(newGroceryListUids);
+      const addedGroceryLists = effectiveGroceryLists.filter((l) => newGroceryListSet.has(l.uid));
+
+      await Promise.all(orphanGroceryListUids.map((uid) => this._context.cache.groceryLists.remove(uid)));
+      this._context.groceryListStore.load(effectiveGroceryLists);
+      this._context.groceryListStore.setLastSyncedAt();
+      await Promise.all(effectiveGroceryLists.map((l) => this._context.cache.groceryLists.put(l)));
+
+      for (const list of groceryLists) {
+        if (!this._context.groceryListStore.isPendingUpsert(list.uid)) continue;
+        const cached = cachedGroceryListByUid.get(list.uid);
+        if (cached !== undefined && groceryListsEqual(cached, list)) {
+          this._context.groceryListStore.clearPending(list.uid);
+        }
+      }
+
+      if (orphanGroceryListUids.length > 0) {
+        this.log.debug({ count: orphanGroceryListUids.length }, "removed orphan grocery lists");
+      }
+
+      // 5. Grocery item sync (replace-all with orphan cleanup)
+      this.log.debug("fetching grocery items");
+      const groceryItems = await this._context.client.listGroceryItems();
+      this.log.debug({ count: groceryItems.length }, "fetched grocery items");
+
+      const cachedGroceryItems = await this._context.cache.groceryItems.getAll();
+
+      const incomingGroceryItemsFiltered = groceryItems.filter(
+        (item) =>
+          !this._context.groceryItemStore.isPendingDelete(item.uid) &&
+          !this._context.groceryItemStore.isPendingUpsert(item.uid),
+      );
+      const pendingUpsertedGroceryItems = cachedGroceryItems.filter((item) =>
+        this._context.groceryItemStore.isPendingUpsert(item.uid),
+      );
+      const effectiveGroceryItems = [...incomingGroceryItemsFiltered, ...pendingUpsertedGroceryItems];
+
+      const cachedGroceryItemUids = new Set(cachedGroceryItems.map((i) => i.uid));
+      const effectiveGroceryItemUids = new Set(effectiveGroceryItems.map((i) => i.uid));
+      const orphanGroceryItemUids = [...cachedGroceryItemUids].filter((uid) => !effectiveGroceryItemUids.has(uid));
+      const newGroceryItemUids = [...effectiveGroceryItemUids].filter((uid) => !cachedGroceryItemUids.has(uid));
+      const cachedGroceryItemByUid = new Map(cachedGroceryItems.map((i) => [i.uid, i]));
+
+      const updatedGroceryItems = effectiveGroceryItems.filter((incoming) => {
+        const cached = cachedGroceryItemByUid.get(incoming.uid);
+        return cached !== undefined && !groceryItemsEqual(cached, incoming);
+      });
+      const newGroceryItemSet = new Set(newGroceryItemUids);
+      const addedGroceryItems = effectiveGroceryItems.filter((i) => newGroceryItemSet.has(i.uid));
+
+      await Promise.all(orphanGroceryItemUids.map((uid) => this._context.cache.groceryItems.remove(uid)));
+      this._context.groceryItemStore.load(effectiveGroceryItems);
+      await Promise.all(effectiveGroceryItems.map((i) => this._context.cache.groceryItems.put(i)));
+
+      for (const item of groceryItems) {
+        if (!this._context.groceryItemStore.isPendingUpsert(item.uid)) continue;
+        const cached = cachedGroceryItemByUid.get(item.uid);
+        if (cached !== undefined && groceryItemsEqual(cached, item)) {
+          this._context.groceryItemStore.clearPending(item.uid);
+        }
+      }
+
+      if (orphanGroceryItemUids.length > 0) {
+        this.log.debug({ count: orphanGroceryItemUids.length }, "removed orphan grocery items");
+      }
+
+      // 6. Ingredient catalog sync (replace-all, no pending-writes)
+      this.log.debug("fetching grocery ingredients");
+      const groceryIngredients = await this._context.client.listGroceryIngredients();
+      this.log.debug({ count: groceryIngredients.length }, "fetched grocery ingredients");
+
+      const filteredIngredients = groceryIngredients.filter((i) => !i.deleted);
+
+      const cachedIngredients = await this._context.cache.groceryIngredients.getAll();
+      const cachedIngredientUids = new Set(cachedIngredients.map((i) => i.uid));
+      const filteredIngredientUids = new Set(filteredIngredients.map((i) => i.uid));
+      const orphanIngredientUids = [...cachedIngredientUids].filter((uid) => !filteredIngredientUids.has(uid));
+
+      await Promise.all(orphanIngredientUids.map((uid) => this._context.cache.groceryIngredients.remove(uid)));
+      this._context.groceryIngredientStore.load(filteredIngredients);
+      await Promise.all(filteredIngredients.map((i) => this._context.cache.groceryIngredients.put(i)));
+
+      if (orphanIngredientUids.length > 0) {
+        this.log.debug({ count: orphanIngredientUids.length }, "removed orphan grocery ingredients");
+      }
+
+      // 7. Finalization
       this.log.debug("flushing cache to disk");
       await this._context.cache.flush();
 
@@ -264,8 +417,13 @@ export class SyncEngine {
       const sweptStore = this._context.store.sweepPending();
       const sweptPantry = this._context.pantryStore.sweepPending();
       const sweptAisles = this._context.aisleStore.sweepPending();
-      if (sweptStore > 0 || sweptPantry > 0 || sweptAisles > 0) {
-        this.log.debug({ sweptStore, sweptPantry, sweptAisles }, "swept pending writes past TTL");
+      const sweptGroceryLists = this._context.groceryListStore.sweepPending();
+      const sweptGroceryItems = this._context.groceryItemStore.sweepPending();
+      if (sweptStore > 0 || sweptPantry > 0 || sweptAisles > 0 || sweptGroceryLists > 0 || sweptGroceryItems > 0) {
+        this.log.debug(
+          { sweptStore, sweptPantry, sweptAisles, sweptGroceryLists, sweptGroceryItems },
+          "swept pending writes past TTL",
+        );
       }
 
       // Partition fetched recipes: added vs updated
@@ -284,8 +442,18 @@ export class SyncEngine {
         changeType: "pantry",
         changes: { added: addedPantryItems, updated: updatedPantryItems, removedUids: orphanPantryUids },
       };
+      const groceryListResult: GroceryListSyncResult = {
+        changeType: "grocery-lists",
+        changes: { added: addedGroceryLists, updated: updatedGroceryLists, removedUids: orphanGroceryListUids },
+      };
+      const groceryItemResult: GroceryItemSyncResult = {
+        changeType: "grocery-items",
+        changes: { added: addedGroceryItems, updated: updatedGroceryItems, removedUids: orphanGroceryItemUids },
+      };
       this._events.emit("sync:complete", recipeResult);
       this._events.emit("sync:complete", pantryResult);
+      this._events.emit("sync:complete", groceryListResult);
+      this._events.emit("sync:complete", groceryItemResult);
 
       this.log.info(
         { added: addedRecipes.length, updated: updatedRecipes.length, removed: filteredRemoved.length },

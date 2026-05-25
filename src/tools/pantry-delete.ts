@@ -48,11 +48,11 @@ export function registerDeletePantryItemTool(server: McpServer, ctx: ServerConte
           const trashed = { ...existing, deleted: true };
 
           try {
-            const saved = await ctx.client.savePantryItem(trashed);
+            const saved = (await ctx.client.savePantryItems([trashed]))[0]!;
             await commitPantryItem(ctx, saved);
           } catch (error) {
             const message = toMessage(error);
-            log.error({ err: error, uid: args.uid }, "savePantryItem failed");
+            log.error({ err: error, uid: args.uid }, "savePantryItems failed");
             return textResult(`Failed to delete pantry item: ${message}`);
           }
 

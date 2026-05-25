@@ -1,15 +1,15 @@
 # Persistence Layer (`cache/disk/`)
 
-Last verified: 2026-05-23
+Last verified: 2026-05-24
 
-On-disk persistence for every entity the server caches: recipes, categories, pantry items, aisles, OAuth clients, OAuth tokens. The module exposes a generic base (`DiskCache<T>`), two specialised subclasses where the entity has behaviour beyond key-value storage (`RecipeDiskCache`, `OAuthClientDiskCache`), and a composition root (`DiskCacheRoot`) that owns one instance per entity plus a one-shot legacy-format migration.
+On-disk persistence for every entity the server caches: recipes, categories, pantry items, aisles, OAuth clients, OAuth tokens, grocery lists, grocery items, grocery ingredients. The module exposes a generic base (`DiskCache<T>`), two specialised subclasses where the entity has behaviour beyond key-value storage (`RecipeDiskCache`, `OAuthClientDiskCache`), and a composition root (`DiskCacheRoot`) that owns one instance per entity plus a one-shot legacy-format migration. All three grocery entities use plain `DiskCache<T>` — no specialised subclass.
 
 ## Files
 
 - `base.ts` — generic `DiskCache<T>` with init/get/getAll/put/remove/flush/has/size and a `_writePending` template-method hook.
 - `recipes.ts` — `RecipeDiskCache extends DiskCache<Recipe>`; carries a uid → hash map for `diff()` and rewrites `recipes/index.json` on every flush.
 - `oauth-clients.ts` — `OAuthClientDiskCache extends DiskCache<OAuthClient>`; adds `tryPut(client, max)` for atomic DCR-cap enforcement.
-- `root.ts` — `DiskCacheRoot` composes the six subcaches (recipes, categories, pantry, aisles, oauthClients, oauthTokens), exposes `init()`/`flush()`, and runs the legacy-index migration on first boot.
+- `root.ts` — `DiskCacheRoot` composes nine subcaches (recipes, categories, pantry, aisles, oauthClients, oauthTokens, groceryLists, groceryItems, groceryIngredients), exposes `init()`/`flush()`, and runs the legacy-index migration on first boot.
 - `index.ts` — barrel.
 
 ## On-disk layout
@@ -24,8 +24,13 @@ On-disk persistence for every entity the server caches: recipes, categories, pan
 ├── pantry/<uid>.json
 ├── aisles/<uid>.json
 ├── oauthClients/<clientId>.json
-└── oauthTokens/<tokenHash>.json
+├── oauthTokens/<tokenHash>.json
+├── grocerylists/<uid>.json
+├── groceryitems/<uid>.json
+└── groceryingredients/<uid>.json
 ```
+
+Directory names use lowercase (matching existing entity directory convention). The corresponding `DiskCacheRoot` fields use camelCase: `groceryLists`, `groceryItems`, `groceryIngredients`.
 
 The legacy unified `<cacheDir>/index.json` is gone. Only the `recipes` namespace carried real hashes; the other namespaces stored empty-string placeholders equivalent to the directory listing the new subcaches build on init.
 
@@ -95,7 +100,7 @@ Owns one instance per entity and exposes `init()` + `flush()`. Construction:
 new DiskCacheRoot(cacheDir, log?)
 ```
 
-The three entities that don't need behaviour beyond key-value storage (`categories`, `pantry`, `oauthTokens`) are instantiated directly from the base `DiskCache<T>` with a config object. The other two (`recipes`, `oauthClients`) are their dedicated subclasses.
+Seven entities that don't need behaviour beyond key-value storage (`categories`, `pantry`, `aisles`, `oauthTokens`, `groceryLists`, `groceryItems`, `groceryIngredients`) are instantiated directly from the base `DiskCache<T>` with a config object. The other two (`recipes`, `oauthClients`) are their dedicated subclasses.
 
 `init()` is two-phase: first run `_maybeMigrateLegacyIndex` (see below), then `Promise.all` over each subcache's own `init()`.
 
@@ -135,7 +140,7 @@ Constructor accepts an optional `log?: Logger`; defaults to `SILENT_LOG`. In pro
 - Schema mismatch on `recipes/index.json` → emits `warn "schema mismatch on recipes index.json, resetting to empty index"`.
 - Corrupt or malformed legacy `index.json` → emits `warn "corrupt legacy index.json — discarding"` or `warn "legacy index.json present but recipes namespace is missing or malformed — discarding"`; the file is deleted.
 
-## Adding a sixth entity
+## Adding another entity
 
 1. New file `src/cache/disk/<entity>.ts` — only if the entity needs behaviour beyond key-value (a separate index, an atomic check-and-put, etc.). If it doesn't, skip this step.
 2. In `DiskCacheRoot`'s constructor: one config object (or one `new <Entity>DiskCache({...})` call), one `_subcaches` array entry.

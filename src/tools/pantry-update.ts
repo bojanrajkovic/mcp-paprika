@@ -104,11 +104,11 @@ export function registerUpdatePantryItemTool(server: McpServer, ctx: ServerConte
               hasExpiration: newHasExpiration,
               purchaseDate: newPurchaseDate,
             };
-            saved = await ctx.client.savePantryItem(updated);
+            saved = (await ctx.client.savePantryItems([updated]))[0]!;
             await commitPantryItem(ctx, saved);
           } catch (error) {
             const message = toMessage(error);
-            log.error({ err: error, uid: args.uid }, "savePantryItem failed");
+            log.error({ err: error, uid: args.uid }, "savePantryItems failed");
             return textResult(`Failed to update pantry item: ${message}`);
           }
 

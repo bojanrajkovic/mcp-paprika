@@ -20,18 +20,18 @@ describe("pantry-mutations.AC6: delete_pantry_item tool", () => {
     });
     pantryStore.load([item]);
 
-    const mockSavePantryItem = vi.fn();
+    const mockSavePantryItems = vi.fn();
     const mockNotifySync = vi.fn().mockResolvedValue(undefined);
     const mockPutPantryItem = vi.fn();
     const mockRemovePantryItem = vi.fn().mockResolvedValue(undefined);
     const mockFlush = vi.fn().mockResolvedValue(undefined);
 
-    mockSavePantryItem.mockImplementation(async (itemArg) => itemArg);
+    mockSavePantryItems.mockImplementation(async (items) => items);
 
     const { server, callTool } = makeTestServer();
     const ctx = makeCtx(store, server, {
       pantryStore,
-      client: { savePantryItem: mockSavePantryItem, notifySync: mockNotifySync } as unknown as PaprikaClient,
+      client: { savePantryItems: mockSavePantryItems, notifySync: mockNotifySync } as unknown as PaprikaClient,
       cache: {
         pantry: { put: mockPutPantryItem, remove: mockRemovePantryItem },
         flush: mockFlush,
@@ -45,9 +45,9 @@ describe("pantry-mutations.AC6: delete_pantry_item tool", () => {
     const text = getText(result);
 
     expect(text).toContain('Pantry item "Butter" has been deleted.');
-    expect(mockSavePantryItem).toHaveBeenCalledOnce();
+    expect(mockSavePantryItems).toHaveBeenCalledOnce();
 
-    const callArgs = mockSavePantryItem.mock.calls[0]?.[0];
+    const [callArgs] = mockSavePantryItems.mock.calls[0]?.[0] ?? [];
     expect(callArgs?.deleted).toBe(true);
     expect(callArgs?.ingredient).toBe("Butter");
 
@@ -70,7 +70,7 @@ describe("pantry-mutations.AC6: delete_pantry_item tool", () => {
     });
     pantryStore.load([item]);
 
-    const mockSavePantryItem = vi.fn();
+    const mockSavePantryItems = vi.fn();
     const mockNotifySync = vi.fn().mockResolvedValue(undefined);
     const mockPutPantryItem = vi.fn();
     const mockRemovePantryItem = vi.fn().mockResolvedValue(undefined);
@@ -79,7 +79,7 @@ describe("pantry-mutations.AC6: delete_pantry_item tool", () => {
     const { server, callTool } = makeTestServer();
     const ctx = makeCtx(store, server, {
       pantryStore,
-      client: { savePantryItem: mockSavePantryItem, notifySync: mockNotifySync } as unknown as PaprikaClient,
+      client: { savePantryItems: mockSavePantryItems, notifySync: mockNotifySync } as unknown as PaprikaClient,
       cache: {
         pantry: { put: mockPutPantryItem, remove: mockRemovePantryItem },
         flush: mockFlush,
@@ -94,7 +94,7 @@ describe("pantry-mutations.AC6: delete_pantry_item tool", () => {
 
     expect(text).toContain("already deleted");
     expect(text).toContain("Butter");
-    expect(mockSavePantryItem).not.toHaveBeenCalled();
+    expect(mockSavePantryItems).not.toHaveBeenCalled();
     expect(mockRemovePantryItem).not.toHaveBeenCalled();
 
     // Verify store state unchanged
@@ -109,7 +109,7 @@ describe("pantry-mutations.AC6: delete_pantry_item tool", () => {
     const pantryStore = new PantryStore();
     pantryStore.load([]);
 
-    const mockSavePantryItem = vi.fn();
+    const mockSavePantryItems = vi.fn();
     const mockNotifySync = vi.fn().mockResolvedValue(undefined);
     const mockPutPantryItem = vi.fn();
     const mockRemovePantryItem = vi.fn().mockResolvedValue(undefined);
@@ -118,7 +118,7 @@ describe("pantry-mutations.AC6: delete_pantry_item tool", () => {
     const { server, callTool } = makeTestServer();
     const ctx = makeCtx(store, server, {
       pantryStore,
-      client: { savePantryItem: mockSavePantryItem, notifySync: mockNotifySync } as unknown as PaprikaClient,
+      client: { savePantryItems: mockSavePantryItems, notifySync: mockNotifySync } as unknown as PaprikaClient,
       cache: {
         pantry: { put: mockPutPantryItem, remove: mockRemovePantryItem },
         flush: mockFlush,
@@ -133,7 +133,7 @@ describe("pantry-mutations.AC6: delete_pantry_item tool", () => {
 
     // Genuine unknown-UID case: not in items, not in tombstone set.
     expect(text).toContain("No pantry item found");
-    expect(mockSavePantryItem).not.toHaveBeenCalled();
+    expect(mockSavePantryItems).not.toHaveBeenCalled();
     expect(mockRemovePantryItem).not.toHaveBeenCalled();
     expect(pantryStore.size).toBe(0);
   });
@@ -142,7 +142,7 @@ describe("pantry-mutations.AC6: delete_pantry_item tool", () => {
     const store = new RecipeStore();
     const pantryStore = new PantryStore(); // hasSynced === false
 
-    const mockSavePantryItem = vi.fn();
+    const mockSavePantryItems = vi.fn();
     const mockNotifySync = vi.fn().mockResolvedValue(undefined);
     const mockPutPantryItem = vi.fn();
     const mockRemovePantryItem = vi.fn().mockResolvedValue(undefined);
@@ -151,7 +151,7 @@ describe("pantry-mutations.AC6: delete_pantry_item tool", () => {
     const { server, callTool } = makeTestServer();
     const ctx = makeCtx(store, server, {
       pantryStore,
-      client: { savePantryItem: mockSavePantryItem, notifySync: mockNotifySync } as unknown as PaprikaClient,
+      client: { savePantryItems: mockSavePantryItems, notifySync: mockNotifySync } as unknown as PaprikaClient,
       cache: {
         pantry: { put: mockPutPantryItem, remove: mockRemovePantryItem },
         flush: mockFlush,
@@ -165,10 +165,10 @@ describe("pantry-mutations.AC6: delete_pantry_item tool", () => {
     const text = getText(result);
 
     expect(text.toLowerCase()).toContain("not yet synced");
-    expect(mockSavePantryItem).not.toHaveBeenCalled();
+    expect(mockSavePantryItems).not.toHaveBeenCalled();
   });
 
-  it("pantry-mutations.AC6.5: savePantryItem API error returns error message, cache/store not mutated", async () => {
+  it("pantry-mutations.AC6.5: savePantryItems API error returns error message, cache/store not mutated", async () => {
     const store = new RecipeStore();
     const pantryStore = new PantryStore();
     const item = makePantryItem({
@@ -178,18 +178,18 @@ describe("pantry-mutations.AC6: delete_pantry_item tool", () => {
     });
     pantryStore.load([item]);
 
-    const mockSavePantryItem = vi.fn();
+    const mockSavePantryItems = vi.fn();
     const mockNotifySync = vi.fn().mockResolvedValue(undefined);
     const mockPutPantryItem = vi.fn();
     const mockRemovePantryItem = vi.fn().mockResolvedValue(undefined);
     const mockFlush = vi.fn().mockResolvedValue(undefined);
 
-    mockSavePantryItem.mockRejectedValue(new PaprikaAPIError("server timeout", 500, "https://example/api"));
+    mockSavePantryItems.mockRejectedValue(new PaprikaAPIError("server timeout", 500, "https://example/api"));
 
     const { server, callTool } = makeTestServer();
     const ctx = makeCtx(store, server, {
       pantryStore,
-      client: { savePantryItem: mockSavePantryItem, notifySync: mockNotifySync } as unknown as PaprikaClient,
+      client: { savePantryItems: mockSavePantryItems, notifySync: mockNotifySync } as unknown as PaprikaClient,
       cache: {
         pantry: { put: mockPutPantryItem, remove: mockRemovePantryItem },
         flush: mockFlush,
@@ -230,7 +230,7 @@ describe("pantry-mutations.AC6: delete_pantry_item tool", () => {
     // both removes from items AND records a tombstone.
     pantryStore.delete("uid-retry" as PantryItemUid);
 
-    const mockSavePantryItem = vi.fn();
+    const mockSavePantryItems = vi.fn();
     const mockNotifySync = vi.fn().mockResolvedValue(undefined);
     const mockPutPantryItem = vi.fn();
     const mockRemovePantryItem = vi.fn().mockResolvedValue(undefined);
@@ -239,7 +239,7 @@ describe("pantry-mutations.AC6: delete_pantry_item tool", () => {
     const { server, callTool } = makeTestServer();
     const ctx = makeCtx(store, server, {
       pantryStore,
-      client: { savePantryItem: mockSavePantryItem, notifySync: mockNotifySync } as unknown as PaprikaClient,
+      client: { savePantryItems: mockSavePantryItems, notifySync: mockNotifySync } as unknown as PaprikaClient,
       cache: {
         pantry: { put: mockPutPantryItem, remove: mockRemovePantryItem },
         flush: mockFlush,
@@ -252,7 +252,7 @@ describe("pantry-mutations.AC6: delete_pantry_item tool", () => {
 
     expect(text).toContain("already deleted");
     expect(text).toContain("uid-retry");
-    expect(mockSavePantryItem).not.toHaveBeenCalled();
+    expect(mockSavePantryItems).not.toHaveBeenCalled();
     expect(mockRemovePantryItem).not.toHaveBeenCalled();
   });
 });

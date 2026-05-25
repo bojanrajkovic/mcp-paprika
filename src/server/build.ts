@@ -2,6 +2,9 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
 import { AisleStore } from "../cache/aisle-store.js";
 import { DiskCacheRoot } from "../cache/disk/index.js";
+import { GroceryIngredientStore } from "../cache/grocery-ingredient-store.js";
+import { GroceryItemStore } from "../cache/grocery-item-store.js";
+import { GroceryListStore } from "../cache/grocery-list-store.js";
 import { PantryStore } from "../cache/pantry-store.js";
 import { RecipeStore } from "../cache/recipe-store.js";
 import { buildDiscoverComponents } from "../features/discover-feature.js";
@@ -14,6 +17,20 @@ import { registerDiscoverTool } from "../tools/discover.js";
 import { registerFilterTools } from "../tools/filter.js";
 import { registerListTool } from "../tools/list.js";
 import { registerAislesTool } from "../tools/aisles.js";
+import {
+  registerCreateGroceryListTool,
+  registerDeleteGroceryListTool,
+  registerListGroceryListsTool,
+  registerReadGroceryListTool,
+  registerRenameGroceryListTool,
+} from "../tools/grocery-list.js";
+import {
+  registerAddGroceryItemsTool,
+  registerUpdateGroceryItemTool,
+  registerDeleteGroceryItemTool,
+} from "../tools/grocery-item.js";
+import { registerMoveToPantryTool } from "../tools/grocery-move.js";
+import { registerClearPurchasedTool, registerClearAllTool } from "../tools/grocery-clear.js";
 import { registerAddPantryItemTool } from "../tools/pantry-add.js";
 import { registerDeletePantryItemTool } from "../tools/pantry-delete.js";
 import { registerGetPantryItemTool } from "../tools/pantry-get.js";
@@ -23,6 +40,7 @@ import { registerReadTool } from "../tools/read.js";
 import { registerSearchTool } from "../tools/search.js";
 import { registerUpdateTool } from "../tools/update.js";
 import { registerRecipeResources } from "../resources/recipes.js";
+import { registerGroceryListResources } from "../resources/grocery-lists.js";
 import type { PaprikaConfig } from "../utils/config.js";
 import { getCacheDir } from "../utils/xdg.js";
 import type { AppContext, SessionContext } from "./app-context.js";
@@ -124,6 +142,27 @@ export async function buildAppContext(
   }
   log.info({ count: cachedAisles.length }, "hydrated aisle store from cache");
 
+  const groceryListStore = new GroceryListStore({ pendingWriteTtlMs });
+  const cachedGroceryLists = await cache.groceryLists.getAll();
+  if (cachedGroceryLists.length > 0) {
+    groceryListStore.load(cachedGroceryLists);
+  }
+  log.info({ count: cachedGroceryLists.length }, "hydrated grocery list store from cache");
+
+  const groceryItemStore = new GroceryItemStore({ pendingWriteTtlMs });
+  const cachedGroceryItems = await cache.groceryItems.getAll();
+  if (cachedGroceryItems.length > 0) {
+    groceryItemStore.load(cachedGroceryItems);
+  }
+  log.info({ count: cachedGroceryItems.length }, "hydrated grocery item store from cache");
+
+  const groceryIngredientStore = new GroceryIngredientStore();
+  const cachedGroceryIngredients = (await cache.groceryIngredients.getAll()).filter((i) => !i.deleted);
+  if (cachedGroceryIngredients.length > 0) {
+    groceryIngredientStore.load(cachedGroceryIngredients);
+  }
+  log.info({ count: cachedGroceryIngredients.length }, "hydrated grocery ingredient store from cache");
+
   // SyncEngine only reads client/cache/store/pantryStore/notifier — never
   // vectorStore — so it is safe to construct with a placeholder appContext
   // whose vectorStore is null. The vector store is then built with
@@ -134,6 +173,9 @@ export async function buildAppContext(
     store,
     pantryStore,
     aisleStore,
+    groceryListStore,
+    groceryItemStore,
+    groceryIngredientStore,
     vectorStore: null,
     notifier,
     auth, // null for stdio, populated for HTTP
@@ -145,7 +187,13 @@ export async function buildAppContext(
   // Wired here (not inside SyncEngine) so the engine stays decoupled from the
   // notifier decision — subscribers pick what to do with each entity's changes.
   sync.events.on("sync:complete", (result) => {
-    if (result.changeType !== "recipes") return;
+    if (
+      result.changeType !== "recipes" &&
+      result.changeType !== "grocery-lists" &&
+      result.changeType !== "grocery-items"
+    ) {
+      return;
+    }
     const { added, updated, removedUids } = result.changes;
     if (added.length > 0 || updated.length > 0 || removedUids.length > 0) {
       notifier.resourceListChanged();
@@ -193,6 +241,9 @@ export async function buildAppContext(
     store,
     pantryStore,
     aisleStore,
+    groceryListStore,
+    groceryItemStore,
+    groceryIngredientStore,
     vectorStore,
     notifier,
     auth, // null for stdio, populated for HTTP
@@ -205,7 +256,7 @@ export async function buildAppContext(
 /**
  * Build a fully-registered McpServer for the given AppContext.
  *
- * Registers all 14 tools and the recipe resource family. Called once for stdio,
+ * Registers all 26 tools and the recipe and grocery-list resource families. Called once for stdio,
  * once per session for HTTP. Tool registration is pure (closures over the
  * session context), so registering the same tool name on N independent
  * server instances is safe — there is no module-level mutable state.
@@ -231,12 +282,24 @@ export function buildMcpServer(app: AppContext): McpServer {
   registerUpdatePantryItemTool(server, sessionCtx);
   registerDeletePantryItemTool(server, sessionCtx);
   registerAislesTool(server, sessionCtx);
+  registerListGroceryListsTool(server, sessionCtx);
+  registerReadGroceryListTool(server, sessionCtx);
+  registerCreateGroceryListTool(server, sessionCtx);
+  registerRenameGroceryListTool(server, sessionCtx);
+  registerDeleteGroceryListTool(server, sessionCtx);
+  registerAddGroceryItemsTool(server, sessionCtx);
+  registerUpdateGroceryItemTool(server, sessionCtx);
+  registerDeleteGroceryItemTool(server, sessionCtx);
+  registerMoveToPantryTool(server, sessionCtx);
+  registerClearPurchasedTool(server, sessionCtx);
+  registerClearAllTool(server, sessionCtx);
 
   if (app.vectorStore !== null) {
     registerDiscoverTool(server, sessionCtx, app.vectorStore);
   }
 
   registerRecipeResources(server, sessionCtx);
+  registerGroceryListResources(server, sessionCtx);
 
   return server;
 }

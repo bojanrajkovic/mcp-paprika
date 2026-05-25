@@ -1,10 +1,12 @@
 # Entity Store
 
-Last verified: 2026-05-23
+Last verified: 2026-05-24
 
 ## Purpose
 
-Provides `EntityStore<T, UID>`, a typed abstract base class that eliminates duplicate pending-writes and sync-state plumbing across in-memory entity stores (RecipeStore, PantryStore, and future GroceryStore). Without it, each store duplicates the same `Map<UID, PendingWrite>` TTL-sweep pattern and `hasSynced` flag.
+Provides `EntityStore<T, UID>`, a typed abstract base class that eliminates duplicate pending-writes and sync-state plumbing across in-memory entity stores (RecipeStore, PantryStore, AisleStore, GroceryListStore, and GroceryItemStore). Without it, each store duplicates the same `Map<UID, PendingWrite>` TTL-sweep pattern and `hasSynced` flag.
+
+`GroceryIngredientStore` does **NOT** extend `EntityStore` — it is a plain class with no pending-writes, no tombstones, and no `sweepPending`. It is keyed by lowercase ingredient name rather than UID.
 
 ## Contracts
 
@@ -15,7 +17,8 @@ Provides `EntityStore<T, UID>`, a typed abstract base class that eliminates dupl
 ## Dependencies
 
 - **Uses:** nothing within the project (no imports from `paprika/`, `cache/`, `tools/`, etc.)
-- **Used by:** `cache/recipe-store.ts`, `cache/pantry-store.ts`
+- **Used by:** `cache/recipe-store.ts`, `cache/pantry-store.ts`, `cache/aisle-store.ts`, `cache/grocery-list-store.ts`, `cache/grocery-item-store.ts`
+- **NOT used by:** `cache/grocery-ingredient-store.ts` (plain class; see Purpose above)
 - **Boundary:** must remain import-free relative to the rest of the project
 
 ## Key Decisions
@@ -26,7 +29,7 @@ Provides `EntityStore<T, UID>`, a typed abstract base class that eliminates dupl
 
 ## Invariants — Pending-writes
 
-Both `RecipeStore` and `PantryStore` inherit a `Map<UID, PendingWrite>` from `EntityStore`. The sync engine consults it to skip reconciliation for UIDs whose canonical-list state from Paprika is still stale after a local write.
+`RecipeStore`, `PantryStore`, `AisleStore`, `GroceryListStore`, and `GroceryItemStore` all inherit a `Map<UID, PendingWrite>` from `EntityStore`. The sync engine consults it to skip reconciliation for UIDs whose canonical-list state from Paprika is still stale after a local write.
 
 - `markPendingUpsert(uid)` and `markPendingDelete(uid)` overwrite any prior mark (last write wins).
 - Upserts clear on content-equality observation; deletes never observation-clear (Paprika omits soft-deleted items — absence is ambiguous). TTL is the only clearing mechanism for deletes.
