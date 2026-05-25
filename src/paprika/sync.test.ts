@@ -1,4 +1,5 @@
 import { vi, describe, it, expect, afterEach, beforeEach, expectTypeOf } from "vitest";
+import { fromAny } from "@total-typescript/shoehorn";
 
 import { SyncEngine, syncReplaceAllEntity } from "./sync.js";
 import { createLogger, SILENT_LOG } from "../utils/log.js";
@@ -39,7 +40,7 @@ function makeMockNotifier(): Notifier {
 }
 
 function makeMockStore(): RecipeStore {
-  return {
+  return fromAny({
     set: vi.fn(),
     delete: vi.fn(),
     setCategories: vi.fn(),
@@ -49,11 +50,11 @@ function makeMockStore(): RecipeStore {
     isPendingDelete: vi.fn().mockReturnValue(false),
     clearPending: vi.fn(),
     sweepPending: vi.fn().mockReturnValue(0),
-  } as unknown as RecipeStore;
+  });
 }
 
 function makeMockClient(): PaprikaClient {
-  return {
+  return fromAny({
     listRecipes: vi.fn().mockResolvedValue([]),
     getRecipes: vi.fn().mockResolvedValue([]),
     listCategories: vi.fn().mockResolvedValue([]),
@@ -62,11 +63,11 @@ function makeMockClient(): PaprikaClient {
     listGroceryLists: vi.fn().mockResolvedValue([]),
     listGroceryItems: vi.fn().mockResolvedValue([]),
     listGroceryIngredients: vi.fn().mockResolvedValue([]),
-  } as unknown as PaprikaClient;
+  });
 }
 
 function makeMockCache(): DiskCacheRoot {
-  return {
+  return fromAny({
     recipes: {
       diff: vi.fn().mockReturnValue({ added: [], changed: [], removed: [] }),
       put: vi.fn(),
@@ -98,11 +99,11 @@ function makeMockCache(): DiskCacheRoot {
       remove: vi.fn().mockResolvedValue(undefined),
     },
     flush: vi.fn().mockResolvedValue(undefined),
-  } as unknown as DiskCacheRoot;
+  });
 }
 
 function makeMockAisleStore(): AisleStore {
-  return {
+  return fromAny({
     load: vi.fn(),
     set: vi.fn(),
     getAll: vi.fn().mockReturnValue([]),
@@ -117,11 +118,11 @@ function makeMockAisleStore(): AisleStore {
     get size() {
       return 0;
     },
-  } as unknown as AisleStore;
+  });
 }
 
 function makeMockPantryStore(): PantryStore {
-  return {
+  return fromAny({
     load: vi.fn(),
     set: vi.fn(),
     delete: vi.fn(),
@@ -138,7 +139,7 @@ function makeMockPantryStore(): PantryStore {
     get size() {
       return 0;
     },
-  } as unknown as PantryStore;
+  });
 }
 
 function makeTestContext(): AppContext {
@@ -352,7 +353,7 @@ describe("SyncEngine", () => {
 
 describe("syncOnce", () => {
   function makeMockClientDefault(): PaprikaClient {
-    return {
+    return fromAny({
       listRecipes: vi.fn().mockResolvedValue([]),
       getRecipes: vi.fn().mockResolvedValue([]),
       listCategories: vi.fn().mockResolvedValue([]),
@@ -361,7 +362,7 @@ describe("syncOnce", () => {
       listGroceryLists: vi.fn().mockResolvedValue([]),
       listGroceryItems: vi.fn().mockResolvedValue([]),
       listGroceryIngredients: vi.fn().mockResolvedValue([]),
-    } as unknown as PaprikaClient;
+    });
   }
 
   // Cache mock overrides take a nested shape that mirrors DiskCacheRoot's
@@ -379,7 +380,7 @@ describe("syncOnce", () => {
   };
 
   function makeMockCacheDefault(overrides?: CacheMockOverrides): DiskCacheRoot {
-    return {
+    return fromAny({
       recipes: {
         diff: vi.fn().mockReturnValue({ added: [], changed: [], removed: [] }),
         put: vi.fn(),
@@ -417,11 +418,11 @@ describe("syncOnce", () => {
         ...overrides?.groceryIngredients,
       },
       flush: overrides?.flush ?? vi.fn().mockResolvedValue(undefined),
-    } as unknown as DiskCacheRoot;
+    });
   }
 
   function makeMockStoreDefault(): RecipeStore {
-    return {
+    return fromAny({
       set: vi.fn(),
       delete: vi.fn(),
       setCategories: vi.fn(),
@@ -431,11 +432,11 @@ describe("syncOnce", () => {
       isPendingDelete: vi.fn().mockReturnValue(false),
       clearPending: vi.fn(),
       sweepPending: vi.fn().mockReturnValue(0),
-    } as unknown as RecipeStore;
+    });
   }
 
   function makeMockPantryStoreDefault(): PantryStore {
-    return {
+    return fromAny({
       load: vi.fn(),
       set: vi.fn(),
       delete: vi.fn(),
@@ -452,7 +453,7 @@ describe("syncOnce", () => {
       get size() {
         return 0;
       },
-    } as unknown as PantryStore;
+    });
   }
 
   function makeMockNotifierDefault(): Notifier {
@@ -833,10 +834,10 @@ describe("syncOnce", () => {
     const log = createLogger({ transport: "stdio", notifier, level: "trace", notifyLevel: "warn", pretty: false });
 
     const context: AppContext = {
-      client: {
+      client: fromAny({
         ...makeMockClientDefault(),
         listRecipes: vi.fn().mockRejectedValue(new Error("API Error")),
-      } as unknown as PaprikaClient,
+      }),
       cache: makeMockCacheDefault(),
       store: makeMockStoreDefault(),
       pantryStore: makeMockPantryStoreDefault(),
@@ -1132,7 +1133,7 @@ describe("syncOnce", () => {
       expect(realPantryStore.hasSynced).toBe(false);
 
       const context: AppContext = {
-        client: {
+        client: fromAny({
           listRecipes: vi.fn().mockResolvedValue([]),
           getRecipes: vi.fn().mockResolvedValue([]),
           listCategories: vi.fn().mockResolvedValue([]),
@@ -1141,8 +1142,8 @@ describe("syncOnce", () => {
           listGroceryLists: vi.fn().mockResolvedValue([]),
           listGroceryItems: vi.fn().mockResolvedValue([]),
           listGroceryIngredients: vi.fn().mockResolvedValue([]),
-        } as unknown as PaprikaClient,
-        cache: {
+        }),
+        cache: fromAny({
           recipes: {
             diff: vi.fn().mockReturnValue({ added: [], changed: [], removed: [] }),
             put: vi.fn(),
@@ -1171,8 +1172,8 @@ describe("syncOnce", () => {
             remove: vi.fn().mockResolvedValue(undefined),
           },
           flush: vi.fn().mockResolvedValue(undefined),
-        } as unknown as DiskCacheRoot,
-        store: {
+        }),
+        store: fromAny({
           set: vi.fn(),
           delete: vi.fn(),
           setCategories: vi.fn(),
@@ -1182,7 +1183,7 @@ describe("syncOnce", () => {
           isPendingDelete: vi.fn().mockReturnValue(false),
           clearPending: vi.fn(),
           sweepPending: vi.fn().mockReturnValue(0),
-        } as unknown as RecipeStore,
+        }),
         pantryStore: realPantryStore,
         aisleStore: new RealAisleStore(),
         groceryListStore: new GroceryListStore(),
@@ -1204,7 +1205,7 @@ describe("syncOnce", () => {
       const realPantryStore = new RealPantryStore();
 
       const context: AppContext = {
-        client: {
+        client: fromAny({
           listRecipes: vi.fn().mockResolvedValue([]),
           getRecipes: vi.fn().mockResolvedValue([]),
           listCategories: vi.fn().mockResolvedValue([]),
@@ -1213,8 +1214,8 @@ describe("syncOnce", () => {
           listGroceryLists: vi.fn().mockResolvedValue([]),
           listGroceryItems: vi.fn().mockResolvedValue([]),
           listGroceryIngredients: vi.fn().mockResolvedValue([]),
-        } as unknown as PaprikaClient,
-        cache: {
+        }),
+        cache: fromAny({
           recipes: {
             diff: vi.fn().mockReturnValue({ added: [], changed: [], removed: [] }),
             put: vi.fn(),
@@ -1243,8 +1244,8 @@ describe("syncOnce", () => {
             remove: vi.fn().mockResolvedValue(undefined),
           },
           flush: vi.fn().mockResolvedValue(undefined),
-        } as unknown as DiskCacheRoot,
-        store: {
+        }),
+        store: fromAny({
           set: vi.fn(),
           delete: vi.fn(),
           setCategories: vi.fn(),
@@ -1254,7 +1255,7 @@ describe("syncOnce", () => {
           isPendingDelete: vi.fn().mockReturnValue(false),
           clearPending: vi.fn(),
           sweepPending: vi.fn().mockReturnValue(0),
-        } as unknown as RecipeStore,
+        }),
         pantryStore: realPantryStore,
         aisleStore: new RealAisleStore(),
         groceryListStore: new GroceryListStore(),
@@ -1406,18 +1407,18 @@ describe("syncOnce", () => {
       const loadSpy = vi.spyOn(groceryListStore, "load");
 
       const context: AppContext = {
-        client: {
+        client: fromAny({
           ...makeMockClient(),
           listGroceryLists: vi.fn().mockResolvedValue([list1, list2]),
-        } as unknown as PaprikaClient,
-        cache: {
+        }),
+        cache: fromAny({
           ...makeMockCache(),
           groceryLists: {
             getAll: vi.fn().mockResolvedValue([]),
             put: putList,
             remove: vi.fn().mockResolvedValue(undefined),
           },
-        } as unknown as DiskCacheRoot,
+        }),
         store: makeMockStore(),
         pantryStore: makeMockPantryStore(),
         aisleStore: makeMockAisleStore(),
@@ -1445,18 +1446,18 @@ describe("syncOnce", () => {
       const groceryListStore = new GroceryListStore();
 
       const context: AppContext = {
-        client: {
+        client: fromAny({
           ...makeMockClient(),
           listGroceryLists: vi.fn().mockResolvedValue([incomingList]),
-        } as unknown as PaprikaClient,
-        cache: {
+        }),
+        cache: fromAny({
           ...makeMockCache(),
           groceryLists: {
             getAll: vi.fn().mockResolvedValue([orphanList, incomingList]),
             put: vi.fn().mockResolvedValue(undefined),
             remove: removeList,
           },
-        } as unknown as DiskCacheRoot,
+        }),
         store: makeMockStore(),
         pantryStore: makeMockPantryStore(),
         aisleStore: makeMockAisleStore(),
@@ -1484,18 +1485,18 @@ describe("syncOnce", () => {
       const loadSpy = vi.spyOn(groceryListStore, "load");
 
       const context: AppContext = {
-        client: {
+        client: fromAny({
           ...makeMockClient(),
           listGroceryLists: vi.fn().mockResolvedValue([serverList]),
-        } as unknown as PaprikaClient,
-        cache: {
+        }),
+        cache: fromAny({
           ...makeMockCache(),
           groceryLists: {
             getAll: vi.fn().mockResolvedValue([pendingList]),
             put: vi.fn().mockResolvedValue(undefined),
             remove: vi.fn().mockResolvedValue(undefined),
           },
-        } as unknown as DiskCacheRoot,
+        }),
         store: makeMockStore(),
         pantryStore: makeMockPantryStore(),
         aisleStore: makeMockAisleStore(),
@@ -1526,18 +1527,18 @@ describe("syncOnce", () => {
       const loadSpy = vi.spyOn(groceryListStore, "load");
 
       const context: AppContext = {
-        client: {
+        client: fromAny({
           ...makeMockClient(),
           listGroceryLists: vi.fn().mockResolvedValue([pendingDeleteList, otherList]),
-        } as unknown as PaprikaClient,
-        cache: {
+        }),
+        cache: fromAny({
           ...makeMockCache(),
           groceryLists: {
             getAll: vi.fn().mockResolvedValue([]),
             put: vi.fn().mockResolvedValue(undefined),
             remove: vi.fn().mockResolvedValue(undefined),
           },
-        } as unknown as DiskCacheRoot,
+        }),
         store: makeMockStore(),
         pantryStore: makeMockPantryStore(),
         aisleStore: makeMockAisleStore(),
@@ -1569,18 +1570,18 @@ describe("syncOnce", () => {
       const loadSpy = vi.spyOn(groceryItemStore, "load");
 
       const context: AppContext = {
-        client: {
+        client: fromAny({
           ...makeMockClient(),
           listGroceryItems: vi.fn().mockResolvedValue([item1, item2]),
-        } as unknown as PaprikaClient,
-        cache: {
+        }),
+        cache: fromAny({
           ...makeMockCache(),
           groceryItems: {
             getAll: vi.fn().mockResolvedValue([]),
             put: putItem,
             remove: vi.fn().mockResolvedValue(undefined),
           },
-        } as unknown as DiskCacheRoot,
+        }),
         store: makeMockStore(),
         pantryStore: makeMockPantryStore(),
         aisleStore: makeMockAisleStore(),
@@ -1607,18 +1608,18 @@ describe("syncOnce", () => {
       const removeItem = vi.fn().mockResolvedValue(undefined);
 
       const context: AppContext = {
-        client: {
+        client: fromAny({
           ...makeMockClient(),
           listGroceryItems: vi.fn().mockResolvedValue([incomingItem]),
-        } as unknown as PaprikaClient,
-        cache: {
+        }),
+        cache: fromAny({
           ...makeMockCache(),
           groceryItems: {
             getAll: vi.fn().mockResolvedValue([orphanItem, incomingItem]),
             put: vi.fn().mockResolvedValue(undefined),
             remove: removeItem,
           },
-        } as unknown as DiskCacheRoot,
+        }),
         store: makeMockStore(),
         pantryStore: makeMockPantryStore(),
         aisleStore: makeMockAisleStore(),
@@ -1646,18 +1647,18 @@ describe("syncOnce", () => {
       const loadSpy = vi.spyOn(groceryItemStore, "load");
 
       const context: AppContext = {
-        client: {
+        client: fromAny({
           ...makeMockClient(),
           listGroceryItems: vi.fn().mockResolvedValue([pendingDeleteItem, otherItem]),
-        } as unknown as PaprikaClient,
-        cache: {
+        }),
+        cache: fromAny({
           ...makeMockCache(),
           groceryItems: {
             getAll: vi.fn().mockResolvedValue([]),
             put: vi.fn().mockResolvedValue(undefined),
             remove: vi.fn().mockResolvedValue(undefined),
           },
-        } as unknown as DiskCacheRoot,
+        }),
         store: makeMockStore(),
         pantryStore: makeMockPantryStore(),
         aisleStore: makeMockAisleStore(),
@@ -1687,18 +1688,18 @@ describe("syncOnce", () => {
       const loadSpy = vi.spyOn(groceryItemStore, "load");
 
       const context: AppContext = {
-        client: {
+        client: fromAny({
           ...makeMockClient(),
           listGroceryItems: vi.fn().mockResolvedValue([serverItem]),
-        } as unknown as PaprikaClient,
-        cache: {
+        }),
+        cache: fromAny({
           ...makeMockCache(),
           groceryItems: {
             getAll: vi.fn().mockResolvedValue([pendingItem]),
             put: vi.fn().mockResolvedValue(undefined),
             remove: vi.fn().mockResolvedValue(undefined),
           },
-        } as unknown as DiskCacheRoot,
+        }),
         store: makeMockStore(),
         pantryStore: makeMockPantryStore(),
         aisleStore: makeMockAisleStore(),
@@ -1829,18 +1830,18 @@ describe("syncOnce", () => {
       const clearPendingSpy = vi.spyOn(groceryListStore, "clearPending");
 
       const context: AppContext = {
-        client: {
+        client: fromAny({
           ...makeMockClient(),
           listGroceryLists: vi.fn().mockResolvedValue([serverList]),
-        } as unknown as PaprikaClient,
-        cache: {
+        }),
+        cache: fromAny({
           ...makeMockCache(),
           groceryLists: {
             getAll: vi.fn().mockResolvedValue([list]),
             put: vi.fn().mockResolvedValue(undefined),
             remove: vi.fn().mockResolvedValue(undefined),
           },
-        } as unknown as DiskCacheRoot,
+        }),
         store: makeMockStore(),
         pantryStore: makeMockPantryStore(),
         aisleStore: makeMockAisleStore(),
@@ -1867,18 +1868,18 @@ describe("syncOnce", () => {
       const clearPendingSpy = vi.spyOn(groceryListStore, "clearPending");
 
       const context: AppContext = {
-        client: {
+        client: fromAny({
           ...makeMockClient(),
           listGroceryLists: vi.fn().mockResolvedValue([serverList]),
-        } as unknown as PaprikaClient,
-        cache: {
+        }),
+        cache: fromAny({
           ...makeMockCache(),
           groceryLists: {
             getAll: vi.fn().mockResolvedValue([cachedList]),
             put: vi.fn().mockResolvedValue(undefined),
             remove: vi.fn().mockResolvedValue(undefined),
           },
-        } as unknown as DiskCacheRoot,
+        }),
         store: makeMockStore(),
         pantryStore: makeMockPantryStore(),
         aisleStore: makeMockAisleStore(),
@@ -1905,18 +1906,18 @@ describe("syncOnce", () => {
       const clearPendingSpy = vi.spyOn(groceryItemStore, "clearPending");
 
       const context: AppContext = {
-        client: {
+        client: fromAny({
           ...makeMockClient(),
           listGroceryItems: vi.fn().mockResolvedValue([serverItem]),
-        } as unknown as PaprikaClient,
-        cache: {
+        }),
+        cache: fromAny({
           ...makeMockCache(),
           groceryItems: {
             getAll: vi.fn().mockResolvedValue([item]),
             put: vi.fn().mockResolvedValue(undefined),
             remove: vi.fn().mockResolvedValue(undefined),
           },
-        } as unknown as DiskCacheRoot,
+        }),
         store: makeMockStore(),
         pantryStore: makeMockPantryStore(),
         aisleStore: makeMockAisleStore(),
@@ -1943,18 +1944,18 @@ describe("syncOnce", () => {
       const clearPendingSpy = vi.spyOn(groceryItemStore, "clearPending");
 
       const context: AppContext = {
-        client: {
+        client: fromAny({
           ...makeMockClient(),
           listGroceryItems: vi.fn().mockResolvedValue([serverItem]),
-        } as unknown as PaprikaClient,
-        cache: {
+        }),
+        cache: fromAny({
           ...makeMockCache(),
           groceryItems: {
             getAll: vi.fn().mockResolvedValue([cachedItem]),
             put: vi.fn().mockResolvedValue(undefined),
             remove: vi.fn().mockResolvedValue(undefined),
           },
-        } as unknown as DiskCacheRoot,
+        }),
         store: makeMockStore(),
         pantryStore: makeMockPantryStore(),
         aisleStore: makeMockAisleStore(),
@@ -1983,18 +1984,18 @@ describe("syncOnce", () => {
       const loadSpy = vi.spyOn(groceryIngredientStore, "load");
 
       const context: AppContext = {
-        client: {
+        client: fromAny({
           ...makeMockClient(),
           listGroceryIngredients: vi.fn().mockResolvedValue([activeIngredient, deletedIngredient]),
-        } as unknown as PaprikaClient,
-        cache: {
+        }),
+        cache: fromAny({
           ...makeMockCache(),
           groceryIngredients: {
             getAll: vi.fn().mockResolvedValue([]),
             put: putIngredient,
             remove: vi.fn().mockResolvedValue(undefined),
           },
-        } as unknown as DiskCacheRoot,
+        }),
         store: makeMockStore(),
         pantryStore: makeMockPantryStore(),
         aisleStore: makeMockAisleStore(),
@@ -2024,18 +2025,18 @@ describe("syncOnce", () => {
       const removeIngredient = vi.fn().mockResolvedValue(undefined);
 
       const context: AppContext = {
-        client: {
+        client: fromAny({
           ...makeMockClient(),
           listGroceryIngredients: vi.fn().mockResolvedValue([activeIngredient]),
-        } as unknown as PaprikaClient,
-        cache: {
+        }),
+        cache: fromAny({
           ...makeMockCache(),
           groceryIngredients: {
             getAll: vi.fn().mockResolvedValue([orphanIngredient, activeIngredient]),
             put: vi.fn().mockResolvedValue(undefined),
             remove: removeIngredient,
           },
-        } as unknown as DiskCacheRoot,
+        }),
         store: makeMockStore(),
         pantryStore: makeMockPantryStore(),
         aisleStore: makeMockAisleStore(),
@@ -2204,18 +2205,18 @@ describe("syncOnce", () => {
 
       // After syncOnce() the store is replaced with server data
       const context: AppContext = {
-        client: {
+        client: fromAny({
           ...makeMockClient(),
           listGroceryLists: vi.fn().mockResolvedValue([]),
-        } as unknown as PaprikaClient,
-        cache: {
+        }),
+        cache: fromAny({
           ...makeMockCache(),
           groceryLists: {
             getAll: vi.fn().mockResolvedValue([cachedList]),
             put: vi.fn().mockResolvedValue(undefined),
             remove: vi.fn().mockResolvedValue(undefined),
           },
-        } as unknown as DiskCacheRoot,
+        }),
         store: makeMockStore(),
         pantryStore: makeMockPantryStore(),
         aisleStore: makeMockAisleStore(),
@@ -2249,18 +2250,18 @@ describe("syncOnce", () => {
 
       // After syncOnce() the store is reloaded from effective items
       const context: AppContext = {
-        client: {
+        client: fromAny({
           ...makeMockClient(),
           listGroceryItems: vi.fn().mockResolvedValue([cachedItem]),
-        } as unknown as PaprikaClient,
-        cache: {
+        }),
+        cache: fromAny({
           ...makeMockCache(),
           groceryItems: {
             getAll: vi.fn().mockResolvedValue([cachedItem]),
             put: vi.fn().mockResolvedValue(undefined),
             remove: vi.fn().mockResolvedValue(undefined),
           },
-        } as unknown as DiskCacheRoot,
+        }),
         store: makeMockStore(),
         pantryStore: makeMockPantryStore(),
         aisleStore: makeMockAisleStore(),
@@ -2294,18 +2295,18 @@ describe("syncOnce", () => {
 
       // After syncOnce() the store is reloaded from server data
       const context: AppContext = {
-        client: {
+        client: fromAny({
           ...makeMockClient(),
           listGroceryIngredients: vi.fn().mockResolvedValue([cachedIngredient]),
-        } as unknown as PaprikaClient,
-        cache: {
+        }),
+        cache: fromAny({
           ...makeMockCache(),
           groceryIngredients: {
             getAll: vi.fn().mockResolvedValue([cachedIngredient]),
             put: vi.fn().mockResolvedValue(undefined),
             remove: vi.fn().mockResolvedValue(undefined),
           },
-        } as unknown as DiskCacheRoot,
+        }),
         store: makeMockStore(),
         pantryStore: makeMockPantryStore(),
         aisleStore: makeMockAisleStore(),
@@ -2331,12 +2332,11 @@ describe("syncReplaceAllEntity", () => {
   type GList = ReturnType<typeof makeGroceryList>;
 
   function makeCache(initial: ReadonlyArray<GList> = []) {
-    const c = {
-      getAll: vi.fn().mockResolvedValue(initial),
-      put: vi.fn().mockResolvedValue(undefined),
-      remove: vi.fn().mockResolvedValue(undefined),
-    };
-    return c as unknown as Pick<DiskCache<GList>, "getAll" | "put" | "remove"> & typeof c;
+    const getAll = vi.fn().mockResolvedValue(initial);
+    const put = vi.fn().mockResolvedValue(undefined);
+    const remove = vi.fn().mockResolvedValue(undefined);
+    const cache: Pick<DiskCache<GList>, "getAll" | "put" | "remove"> = fromAny({ getAll, put, remove });
+    return { cache, getAll, put, remove };
   }
 
   function listsEqual(a: ReturnType<typeof makeGroceryList>, b: ReturnType<typeof makeGroceryList>): boolean {
@@ -2345,7 +2345,7 @@ describe("syncReplaceAllEntity", () => {
 
   it("returns empty changes when fetch and cache are both empty", async () => {
     const store = new GroceryListStore();
-    const cache = makeCache([]);
+    const { cache } = makeCache([]);
     const result = await syncReplaceAllEntity({
       fetch: async () => [],
       cache,
@@ -2362,7 +2362,7 @@ describe("syncReplaceAllEntity", () => {
   it("returns added for UIDs present in fetch but not in cache", async () => {
     const list = makeGroceryList();
     const store = new GroceryListStore();
-    const cache = makeCache([]);
+    const { cache } = makeCache([]);
     const result = await syncReplaceAllEntity({
       fetch: async () => [list],
       cache,
@@ -2381,7 +2381,7 @@ describe("syncReplaceAllEntity", () => {
     const list = makeGroceryList({ name: "Old Name" });
     const updated = { ...list, name: "New Name" };
     const store = new GroceryListStore();
-    const cache = makeCache([list]);
+    const { cache } = makeCache([list]);
     const result = await syncReplaceAllEntity({
       fetch: async () => [updated],
       cache,
@@ -2399,7 +2399,7 @@ describe("syncReplaceAllEntity", () => {
   it("returns removedUids and calls cache.remove for UIDs in cache but not in effective", async () => {
     const list = makeGroceryList();
     const store = new GroceryListStore();
-    const cache = makeCache([list]);
+    const { cache, remove } = makeCache([list]);
     const result = await syncReplaceAllEntity({
       fetch: async () => [],
       cache,
@@ -2410,7 +2410,7 @@ describe("syncReplaceAllEntity", () => {
     });
     expect(result.removedUids).toHaveLength(1);
     expect(result.removedUids[0]).toBe(list.uid);
-    expect(cache.remove).toHaveBeenCalledWith(list.uid);
+    expect(remove).toHaveBeenCalledWith(list.uid);
     expect(result.added).toHaveLength(0);
     expect(result.updated).toHaveLength(0);
   });
@@ -2420,7 +2420,7 @@ describe("syncReplaceAllEntity", () => {
     const serverVersion = { ...list, name: "Server (stale)" };
     const store = new GroceryListStore();
     store.markPendingUpsert(list.uid);
-    const cache = makeCache([list]);
+    const { cache } = makeCache([list]);
     const result = await syncReplaceAllEntity({
       fetch: async () => [serverVersion],
       cache,
@@ -2442,7 +2442,7 @@ describe("syncReplaceAllEntity", () => {
     const store = new GroceryListStore();
     store.load([list]);
     store.markPendingDelete(list.uid);
-    const cache = makeCache([]);
+    const { cache } = makeCache([]);
     const result = await syncReplaceAllEntity({
       fetch: async () => [list],
       cache,
@@ -2460,7 +2460,7 @@ describe("syncReplaceAllEntity", () => {
     const list = makeGroceryList();
     const store = new GroceryListStore();
     store.markPendingUpsert(list.uid);
-    const cache = makeCache([list]);
+    const { cache } = makeCache([list]);
     await syncReplaceAllEntity({
       fetch: async () => [list], // server caught up — same content
       cache,
@@ -2477,7 +2477,7 @@ describe("syncReplaceAllEntity", () => {
     const staleServer = { ...list, name: "Old server version" };
     const store = new GroceryListStore();
     store.markPendingUpsert(list.uid);
-    const cache = makeCache([list]);
+    const { cache } = makeCache([list]);
     await syncReplaceAllEntity({
       fetch: async () => [staleServer],
       cache,
@@ -2493,13 +2493,13 @@ describe("syncReplaceAllEntity", () => {
     const list = makeGroceryList();
     const store = new GroceryListStore();
     const loadSpy = vi.spyOn(store, "load");
-    const cache = makeCache([]);
+    const { cache, put } = makeCache([]);
     const afterLoadOrder: Array<string> = [];
     loadSpy.mockImplementation((...args) => {
       afterLoadOrder.push("load");
       return GroceryListStore.prototype.load.call(store, ...args);
     });
-    cache.put.mockImplementation(async () => {
+    put.mockImplementation(async () => {
       afterLoadOrder.push("put");
     });
     const afterLoad = vi.fn(() => {
@@ -2523,7 +2523,7 @@ describe("syncReplaceAllEntity", () => {
 
   it("propagates errors from fetch", async () => {
     const store = new GroceryListStore();
-    const cache = makeCache([]);
+    const { cache } = makeCache([]);
     await expect(
       syncReplaceAllEntity({
         fetch: async () => {
@@ -2541,11 +2541,11 @@ describe("syncReplaceAllEntity", () => {
   it("propagates errors from cache.getAll", async () => {
     const list = makeGroceryList();
     const store = new GroceryListStore();
-    const cache = {
+    const cache: Pick<DiskCache<GList>, "getAll" | "put" | "remove"> = fromAny({
       getAll: vi.fn().mockRejectedValue(new Error("disk error")),
       put: vi.fn(),
       remove: vi.fn(),
-    };
+    });
     await expect(
       syncReplaceAllEntity({
         fetch: async () => [list],

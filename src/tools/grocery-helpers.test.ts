@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
+import { fromAny } from "@total-typescript/shoehorn";
 import { GroceryItemStore } from "../cache/grocery-item-store.js";
 import { GroceryListStore } from "../cache/grocery-list-store.js";
 import { RecipeStore } from "../cache/recipe-store.js";
@@ -6,8 +7,6 @@ import { makeGroceryItem } from "../cache/__fixtures__/grocery-items.js";
 import { makeGroceryList } from "../cache/__fixtures__/grocery-lists.js";
 import { commitGroceryItem, commitGroceryItemsBatch, commitGroceryList, groceryStartGuard } from "./grocery-helpers.js";
 import { makeCtx, makeStubNotifier, makeTestServer, getText } from "./tool-test-utils.js";
-import type { PaprikaClient } from "../paprika/client.js";
-import type { DiskCacheRoot } from "../cache/disk/index.js";
 
 describe("groceryStartGuard", () => {
   it("returns Err when neither store is synced", () => {
@@ -97,11 +96,11 @@ describe("commitGroceryList", () => {
 
       const { server } = makeTestServer();
       const ctx = makeCtx(new RecipeStore(), server, {
-        client: { notifySync: mockNotifySync } as unknown as PaprikaClient,
-        cache: {
+        client: fromAny({ notifySync: mockNotifySync }),
+        cache: fromAny({
           groceryLists: { put: mockPutGroceryList, remove: mockRemoveGroceryList },
           flush: mockFlush,
-        } as unknown as DiskCacheRoot,
+        }),
         groceryListStore,
         notifier: stub.notifier,
       });
@@ -145,11 +144,11 @@ describe("commitGroceryList", () => {
 
       const { server } = makeTestServer();
       const ctx = makeCtx(new RecipeStore(), server, {
-        client: { notifySync: mockNotifySync } as unknown as PaprikaClient,
-        cache: {
+        client: fromAny({ notifySync: mockNotifySync }),
+        cache: fromAny({
           groceryLists: { put: mockPutGroceryList, remove: mockRemoveGroceryList },
           flush: mockFlush,
-        } as unknown as DiskCacheRoot,
+        }),
         groceryListStore,
         notifier: stub.notifier,
       });
@@ -191,11 +190,11 @@ describe("commitGroceryList", () => {
 
       const { server } = makeTestServer();
       const ctx = makeCtx(new RecipeStore(), server, {
-        client: { notifySync: mockNotifySync } as unknown as PaprikaClient,
-        cache: {
+        client: fromAny({ notifySync: mockNotifySync }),
+        cache: fromAny({
           groceryLists: { put: mockPutGroceryList, remove: mockRemoveGroceryList },
           flush: mockFlush,
-        } as unknown as DiskCacheRoot,
+        }),
         groceryListStore,
         notifier: stub.notifier,
       });
@@ -234,11 +233,11 @@ describe("commitGroceryList", () => {
 
       const { server } = makeTestServer();
       const ctx = makeCtx(new RecipeStore(), server, {
-        client: { notifySync: mockNotifySync } as unknown as PaprikaClient,
-        cache: {
+        client: fromAny({ notifySync: mockNotifySync }),
+        cache: fromAny({
           groceryLists: { put: mockPutGroceryList, remove: mockRemoveGroceryList },
           flush: mockFlush,
-        } as unknown as DiskCacheRoot,
+        }),
         groceryListStore,
         notifier: stub.notifier,
       });
@@ -274,8 +273,8 @@ describe("commitGroceryItemsBatch", () => {
     const stub = makeStubNotifier();
     const { server } = makeTestServer();
     const ctx = makeCtx(new RecipeStore(), server, {
-      client: { notifySync: mockNotifySync } as unknown as PaprikaClient,
-      cache: { groceryItems: {}, flush: mockFlush } as unknown as DiskCacheRoot,
+      client: fromAny({ notifySync: mockNotifySync }),
+      cache: fromAny({ groceryItems: {}, flush: mockFlush }),
       groceryItemStore,
       notifier: stub.notifier,
     });
@@ -297,8 +296,8 @@ describe("commitGroceryItemsBatch", () => {
     const stub = makeStubNotifier();
     const { server } = makeTestServer();
     const ctx = makeCtx(new RecipeStore(), server, {
-      client: { notifySync: mockNotifySync } as unknown as PaprikaClient,
-      cache: { groceryItems: { put: mockPut, remove: mockRemove }, flush: mockFlush } as unknown as DiskCacheRoot,
+      client: fromAny({ notifySync: mockNotifySync }),
+      cache: fromAny({ groceryItems: { put: mockPut, remove: mockRemove }, flush: mockFlush }),
       groceryItemStore,
       notifier: stub.notifier,
     });
@@ -324,8 +323,8 @@ describe("commitGroceryItemsBatch", () => {
     const stub = makeStubNotifier();
     const { server } = makeTestServer();
     const ctx = makeCtx(new RecipeStore(), server, {
-      client: { notifySync: mockNotifySync } as unknown as PaprikaClient,
-      cache: { groceryItems: { put: mockPut, remove: mockRemove }, flush: mockFlush } as unknown as DiskCacheRoot,
+      client: fromAny({ notifySync: mockNotifySync }),
+      cache: fromAny({ groceryItems: { put: mockPut, remove: mockRemove }, flush: mockFlush }),
       groceryItemStore,
       notifier: stub.notifier,
     });
@@ -349,11 +348,11 @@ describe("commitGroceryItemsBatch", () => {
     const stub = makeStubNotifier();
     const { server } = makeTestServer();
     const ctx = makeCtx(new RecipeStore(), server, {
-      client: { notifySync: mockNotifySync } as unknown as PaprikaClient,
-      cache: {
+      client: fromAny({ notifySync: mockNotifySync }),
+      cache: fromAny({
         groceryItems: { put: vi.fn().mockResolvedValue(undefined), remove: vi.fn() },
         flush: mockFlush,
-      } as unknown as DiskCacheRoot,
+      }),
       groceryItemStore,
       notifier: stub.notifier,
     });
@@ -383,11 +382,11 @@ describe("commitGroceryItem", () => {
 
       const { server } = makeTestServer();
       const ctx = makeCtx(new RecipeStore(), server, {
-        client: { notifySync: mockNotifySync } as unknown as PaprikaClient,
-        cache: {
+        client: fromAny({ notifySync: mockNotifySync }),
+        cache: fromAny({
           groceryItems: { put: mockPutGroceryItem, remove: mockRemoveGroceryItem },
           flush: mockFlush,
-        } as unknown as DiskCacheRoot,
+        }),
         groceryItemStore,
         notifier: stub.notifier,
       });
@@ -431,11 +430,11 @@ describe("commitGroceryItem", () => {
 
       const { server } = makeTestServer();
       const ctx = makeCtx(new RecipeStore(), server, {
-        client: { notifySync: mockNotifySync } as unknown as PaprikaClient,
-        cache: {
+        client: fromAny({ notifySync: mockNotifySync }),
+        cache: fromAny({
           groceryItems: { put: mockPutGroceryItem, remove: mockRemoveGroceryItem },
           flush: mockFlush,
-        } as unknown as DiskCacheRoot,
+        }),
         groceryItemStore,
         notifier: stub.notifier,
       });
@@ -477,11 +476,11 @@ describe("commitGroceryItem", () => {
 
       const { server } = makeTestServer();
       const ctx = makeCtx(new RecipeStore(), server, {
-        client: { notifySync: mockNotifySync } as unknown as PaprikaClient,
-        cache: {
+        client: fromAny({ notifySync: mockNotifySync }),
+        cache: fromAny({
           groceryItems: { put: mockPutGroceryItem, remove: mockRemoveGroceryItem },
           flush: mockFlush,
-        } as unknown as DiskCacheRoot,
+        }),
         groceryItemStore,
         notifier: stub.notifier,
       });
@@ -520,11 +519,11 @@ describe("commitGroceryItem", () => {
 
       const { server } = makeTestServer();
       const ctx = makeCtx(new RecipeStore(), server, {
-        client: { notifySync: mockNotifySync } as unknown as PaprikaClient,
-        cache: {
+        client: fromAny({ notifySync: mockNotifySync }),
+        cache: fromAny({
           groceryItems: { put: mockPutGroceryItem, remove: mockRemoveGroceryItem },
           flush: mockFlush,
-        } as unknown as DiskCacheRoot,
+        }),
         groceryItemStore,
         notifier: stub.notifier,
       });
