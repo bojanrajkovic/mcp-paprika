@@ -37,8 +37,9 @@ FROM node:24-bookworm-slim AS prod-deps
 WORKDIR /app
 RUN corepack enable
 
-COPY package.json pnpm-lock.yaml ./
 RUN --mount=type=cache,target=/root/.local/share/pnpm/store \
+    --mount=type=bind,source=package.json,target=package.json \
+    --mount=type=bind,source=pnpm-lock.yaml,target=pnpm-lock.yaml \
     pnpm install --frozen-lockfile --prod --ignore-scripts
 
 
@@ -50,10 +51,10 @@ FROM gcr.io/distroless/nodejs24-debian13:nonroot
 
 WORKDIR /app
 
-COPY --from=prod-deps /app/node_modules ./node_modules
-COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/package.json ./package.json
-COPY scripts/healthcheck.mjs ./scripts/healthcheck.mjs
+COPY --link --from=prod-deps /app/node_modules ./node_modules
+COPY --link --from=builder /app/dist ./dist
+COPY --link --from=builder /app/package.json ./package.json
+COPY --link scripts/healthcheck.mjs ./scripts/healthcheck.mjs
 
 # `/data` is the documented mount point. Pre-create the XDG sub-dirs with
 # nonroot ownership so the disk cache and vector index can write on the
