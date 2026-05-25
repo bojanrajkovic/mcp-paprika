@@ -18,7 +18,7 @@
 
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { SILENT_LOG } from "../utils/log.js";
-import { mkdtemp } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { DiskCacheRoot as DiskCache } from "../cache/disk/index.js";
@@ -70,8 +70,9 @@ describe("TokenStore", () => {
     await clientStore.registerClient(makeWireRegistration());
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     vi.clearAllMocks();
+    await rm(tempDir, { recursive: true, force: true });
   });
 
   describe("issueAccessRefreshPair", () => {

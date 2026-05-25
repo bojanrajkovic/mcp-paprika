@@ -1,4 +1,7 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { SILENT_LOG } from "../utils/log.js";
 import { nowSeconds } from "./tokens.js";
 import { makePinoCapture } from "../tools/tool-test-utils.js";
@@ -73,6 +76,7 @@ function makeRoutesConfig(ctx: RoutesCtx, overrides: RoutesOverrides = {}): Auth
 const oidcStub = makeDefaultOidcStub();
 
 describe("Auth Routes", () => {
+  let cacheDir: string;
   let cache: DiskCacheRoot;
   let app: Hono;
   let authRequests: AuthRequestStore;
@@ -85,7 +89,7 @@ describe("Auth Routes", () => {
   const msw = useMswServer([...oidcStub.handlers], { onReset: () => oidcStub.resetOverrides() });
 
   beforeEach(async () => {
-    const cacheDir = `/tmp/test-routes-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    cacheDir = await mkdtemp(join(tmpdir(), "paprika-routes-"));
     cache = new DiskCacheRoot(cacheDir);
     await cache.init();
 
@@ -103,6 +107,10 @@ describe("Auth Routes", () => {
         makeRoutesConfig({ clientStore, tokenStore, authRequests, authCodes, oidcStubIssuer: oidcStub.issuer }),
       ),
     );
+  });
+
+  afterEach(async () => {
+    await rm(cacheDir, { recursive: true, force: true });
   });
 
   describe("GET /oauth/callback", () => {
@@ -727,7 +735,8 @@ describe("Auth Routes", () => {
       // PLAN says (phase_06.md:723): The `buildClientCap(cache, max)` middleware prevents DCR registration
       // when the server has reached the max registered clients.
       // Test: Pre-populate cache with 50 clients, then 51st POST /register returns 429 with cap error_description.
-      const testCache = new DiskCacheRoot(`/tmp/test-cap-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+      const capDir = await mkdtemp(join(tmpdir(), "paprika-cap-"));
+      const testCache = new DiskCacheRoot(capDir);
       await testCache.init();
 
       const testClientStore = new DiskClientRegistrationStore(testCache, "https://mcp.example.com", SILENT_LOG);
@@ -754,6 +763,7 @@ describe("Auth Routes", () => {
       expect(res51.status).toBe(429);
       const json = (await res51.json()) as Record<string, unknown>;
       expect(json["error_description"]).toContain("cap");
+      await rm(capDir, { recursive: true, force: true });
     });
   });
 

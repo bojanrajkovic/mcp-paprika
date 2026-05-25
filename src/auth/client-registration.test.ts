@@ -3,9 +3,9 @@
  * Covers RFC 7591/7592 client registration, update, deletion, and RAT verification.
  */
 
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { SILENT_LOG } from "../utils/log.js";
-import { mkdtemp } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
@@ -48,6 +48,10 @@ describe("DiskClientRegistrationStore", () => {
     cache = new DiskCacheRoot(tempDir);
     await cache.init();
     store = new DiskClientRegistrationStore(cache, "https://m.example.com", SILENT_LOG);
+  });
+
+  afterEach(async () => {
+    await rm(tempDir, { recursive: true, force: true });
   });
 
   describe("registerClient", () => {

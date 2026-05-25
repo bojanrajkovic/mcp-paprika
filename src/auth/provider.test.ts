@@ -1,4 +1,7 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { URL } from "node:url";
 import { MintingOAuthServerProvider } from "./provider.js";
 import { DiskClientRegistrationStore } from "./client-registration.js";
@@ -56,7 +59,7 @@ describe("MintingOAuthServerProvider", () => {
 
   beforeEach(async () => {
     // Setup test directory
-    cacheDir = `/tmp/test-oauth-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    cacheDir = await mkdtemp(join(tmpdir(), "paprika-provider-"));
 
     // Initialize cache and stores
     cache = new DiskCacheRoot(cacheDir);
@@ -103,6 +106,10 @@ describe("MintingOAuthServerProvider", () => {
       client_name: "Test Client",
       redirect_uris: ["https://claude.ai/callback"],
     } as OAuthClientInformationFull;
+  });
+
+  afterEach(async () => {
+    await rm(cacheDir, { recursive: true, force: true });
   });
 
   describe("authorize", () => {

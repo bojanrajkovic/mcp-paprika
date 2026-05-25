@@ -1,4 +1,7 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { SILENT_LOG } from "../utils/log.js";
 import { Hono } from "hono";
 import { buildCustomizedAuthorizationServerMetadata, buildAuthMetadataRouter } from "./metadata.js";
@@ -10,11 +13,12 @@ import { AuthCodeStore } from "./auth-code-store.js";
 import { DiskCacheRoot } from "../cache/disk/index.js";
 
 describe("OAuth Metadata Customization", () => {
+  let cacheDir: string;
   let cache: DiskCacheRoot;
   let provider: MintingOAuthServerProvider;
 
   beforeEach(async () => {
-    const cacheDir = `/tmp/test-metadata-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    cacheDir = await mkdtemp(join(tmpdir(), "paprika-metadata-"));
     cache = new DiskCacheRoot(cacheDir);
     await cache.init();
 
@@ -50,6 +54,10 @@ describe("OAuth Metadata Customization", () => {
       "https://mcp.example.com",
       SILENT_LOG,
     );
+  });
+
+  afterEach(async () => {
+    await rm(cacheDir, { recursive: true, force: true });
   });
 
   describe("buildCustomizedAuthorizationServerMetadata", () => {
