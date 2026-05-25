@@ -10,28 +10,33 @@ Purpose: Defines MCP tools that AI assistants can invoke. Each tool file exports
 
 ### Discovery & Query Tools
 
-| Tool                   | File             | Description                                               |
-| ---------------------- | ---------------- | --------------------------------------------------------- |
-| `search_recipes`       | `search.ts`      | Full-text search by name, ingredients, or description     |
-| `filter_by_ingredient` | `filter.ts`      | Filter recipes by ingredient (all/any mode)               |
-| `filter_by_time`       | `filter.ts`      | Filter recipes by prep/cook/total time constraints        |
-| `discover_recipes`     | `discover.ts`    | Semantic search via VectorStore (natural language)        |
-| `list_categories`      | `categories.ts`  | List all categories with recipe counts                    |
-| `list_aisles`          | `aisles.ts`      | List all aisles sorted by orderFlag, with UID per aisle   |
-| `list_pantry`          | `pantry-list.ts` | List all pantry items sorted alphabetically by ingredient |
+| Tool                   | File              | Description                                                                           |
+| ---------------------- | ----------------- | ------------------------------------------------------------------------------------- |
+| `search_recipes`       | `search.ts`       | Full-text search by name, ingredients, or description                                 |
+| `filter_by_ingredient` | `filter.ts`       | Filter recipes by ingredient (all/any mode)                                           |
+| `filter_by_time`       | `filter.ts`       | Filter recipes by prep/cook/total time constraints                                    |
+| `discover_recipes`     | `discover.ts`     | Semantic search via VectorStore (natural language)                                    |
+| `list_categories`      | `categories.ts`   | List all categories with recipe counts                                                |
+| `list_aisles`          | `aisles.ts`       | List all aisles sorted by orderFlag, with UID per aisle                               |
+| `list_pantry`          | `pantry-list.ts`  | List all pantry items sorted alphabetically by ingredient                             |
+| `list_grocery_lists`   | `grocery-list.ts` | List all grocery lists sorted alphabetically by name, with item counts                |
+| `read_grocery_list`    | `grocery-list.ts` | Fetch grocery list by UID or name (tiered fuzzy match), returns list metadata + items |
 
 ### CRUD Tools
 
-| Tool                 | File               | Description                                                                                                       |
-| -------------------- | ------------------ | ----------------------------------------------------------------------------------------------------------------- |
-| `read_recipe`        | `read.ts`          | Fetch recipe by UID or title (exact/prefix/contains match)                                                        |
-| `create_recipe`      | `create.ts`        | Create a new recipe with name, ingredients, directions, and optional fields                                       |
-| `update_recipe`      | `update.ts`        | Update existing recipe — partial merge, categories fully replace when provided                                    |
-| `delete_recipe`      | `delete.ts`        | Soft-delete recipe by UID (moves to trash, reversible in Paprika app)                                             |
-| `get_pantry_item`    | `pantry-get.ts`    | Fetch pantry item by UID or ingredient (fuzzy match, with disambiguation)                                         |
-| `add_pantry_item`    | `pantry-add.ts`    | Add a new pantry item; rejects duplicate ingredients (case-insensitive exact match) with the existing UID         |
-| `update_pantry_item` | `pantry-update.ts` | Update existing pantry item — partial merge; `hasExpiration` is auto-derived when `expirationDate` is provided    |
-| `delete_pantry_item` | `pantry-delete.ts` | Soft-delete pantry item by UID; idempotent — retried calls return "already deleted" via the store's tombstone set |
+| Tool                  | File               | Description                                                                                                        |
+| --------------------- | ------------------ | ------------------------------------------------------------------------------------------------------------------ |
+| `read_recipe`         | `read.ts`          | Fetch recipe by UID or title (exact/prefix/contains match)                                                         |
+| `create_recipe`       | `create.ts`        | Create a new recipe with name, ingredients, directions, and optional fields                                        |
+| `update_recipe`       | `update.ts`        | Update existing recipe — partial merge, categories fully replace when provided                                     |
+| `delete_recipe`       | `delete.ts`        | Soft-delete recipe by UID (moves to trash, reversible in Paprika app)                                              |
+| `get_pantry_item`     | `pantry-get.ts`    | Fetch pantry item by UID or ingredient (fuzzy match, with disambiguation)                                          |
+| `add_pantry_item`     | `pantry-add.ts`    | Add a new pantry item; rejects duplicate ingredients (case-insensitive exact match) with the existing UID          |
+| `update_pantry_item`  | `pantry-update.ts` | Update existing pantry item — partial merge; `hasExpiration` is auto-derived when `expirationDate` is provided     |
+| `delete_pantry_item`  | `pantry-delete.ts` | Soft-delete pantry item by UID; idempotent — retried calls return "already deleted" via the store's tombstone set  |
+| `create_grocery_list` | `grocery-list.ts`  | Create a new grocery list; rejects duplicate names (case-insensitive exact match) with the existing UID            |
+| `rename_grocery_list` | `grocery-list.ts`  | Rename a grocery list; same-name is a no-op, rejects conflicts with other lists                                    |
+| `delete_grocery_list` | `grocery-list.ts`  | Soft-delete grocery list by UID; idempotent — retried calls return "already deleted" via the store's tombstone set |
 
 ## Registration Pattern
 
