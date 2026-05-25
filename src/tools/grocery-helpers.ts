@@ -113,15 +113,21 @@ export async function commitGroceryItemsBatch(
     }
     markedUids.push(item.uid);
   }
+  const clearPending = () => {
+    for (const uid of markedUids) ctx.groceryItemStore.clearPending(uid);
+  };
+  const opsResults = await Promise.allSettled(
+    items.map((item) => (item.deleted ? ctx.cache.groceryItems.remove(item.uid) : ctx.cache.groceryItems.put(item))),
+  );
+  const opsFailure = opsResults.find((r): r is PromiseRejectedResult => r.status === "rejected");
+  if (opsFailure !== undefined) {
+    clearPending();
+    throw opsFailure.reason;
+  }
   try {
-    await Promise.all(
-      items.map((item) => (item.deleted ? ctx.cache.groceryItems.remove(item.uid) : ctx.cache.groceryItems.put(item))),
-    );
     await ctx.cache.flush();
   } catch (e) {
-    for (const uid of markedUids) {
-      ctx.groceryItemStore.clearPending(uid);
-    }
+    clearPending();
     throw e;
   }
   for (const item of items) {

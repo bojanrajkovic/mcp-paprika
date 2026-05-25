@@ -364,6 +364,37 @@ describe("commitGroceryItemsBatch", () => {
     expect(stub.resourceListChanged).not.toHaveBeenCalled();
     expect(mockNotifySync).not.toHaveBeenCalled();
   });
+
+  it("on cache put failure, clears all pending marks and does not flush or notify", async () => {
+    const item1 = makeGroceryItem({ deleted: false });
+    const item2 = makeGroceryItem({ deleted: false });
+    const groceryItemStore = new GroceryItemStore();
+    const clearPendingSpy = vi.spyOn(groceryItemStore, "clearPending");
+    const mockFlush = vi.fn().mockResolvedValue(undefined);
+    const mockNotifySync = vi.fn().mockResolvedValue(undefined);
+    const stub = makeStubNotifier();
+    const { server } = makeTestServer();
+    const ctx = makeCtx(new RecipeStore(), server, {
+      client: fromAny({ notifySync: mockNotifySync }),
+      cache: fromAny({
+        groceryItems: {
+          put: vi.fn().mockRejectedValue(new Error("disk full")),
+          remove: vi.fn(),
+        },
+        flush: mockFlush,
+      }),
+      groceryItemStore,
+      notifier: stub.notifier,
+    });
+    await expect(commitGroceryItemsBatch(ctx, [item1, item2])).rejects.toThrow("disk full");
+    expect(clearPendingSpy).toHaveBeenCalledWith(item1.uid);
+    expect(clearPendingSpy).toHaveBeenCalledWith(item2.uid);
+    expect(groceryItemStore.isPendingUpsert(item1.uid)).toBe(false);
+    expect(groceryItemStore.isPendingUpsert(item2.uid)).toBe(false);
+    expect(mockFlush).not.toHaveBeenCalled();
+    expect(stub.resourceListChanged).not.toHaveBeenCalled();
+    expect(mockNotifySync).not.toHaveBeenCalled();
+  });
 });
 
 describe("commitGroceryItem", () => {
