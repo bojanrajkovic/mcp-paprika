@@ -1,5 +1,34 @@
 # Changelog
 
+## [1.4.0](https://github.com/bojanrajkovic/mcp-paprika/compare/v1.3.0...v1.4.0) (2026-05-25)
+
+
+### Features
+
+* add grocery tools and resource surface ([#113](https://github.com/bojanrajkovic/mcp-paprika/issues/113)) ([e4d7226](https://github.com/bojanrajkovic/mcp-paprika/commit/e4d722690bce446dd8c55011d7235634fb453a89))
+* **pantry:** replace add_pantry_item with batch add_pantry_items ([#123](https://github.com/bojanrajkovic/mcp-paprika/issues/123)) ([5a064dc](https://github.com/bojanrajkovic/mcp-paprika/commit/5a064dc6655a762169bfd0f514c6441c9bf96a65))
+* **resources:** enrich recipe resource metadata header ([94fd73e](https://github.com/bojanrajkovic/mcp-paprika/commit/94fd73edee1edb61c4505f1a1e5acf92e820208e))
+* **tools:** add aisle sync, list_aisles tool, and aisle resolution for pantry writes ([#107](https://github.com/bojanrajkovic/mcp-paprika/issues/107)) ([599c385](https://github.com/bojanrajkovic/mcp-paprika/commit/599c38559aaec9af5487b3d8b8b929cb617f5ce2))
+* **tools:** add purchaseDate input and enrich list_pantry output ([d26ff16](https://github.com/bojanrajkovic/mcp-paprika/commit/d26ff1606059bcfbe5cbbb2aa2fbf2e9953bc8ec))
+* **tools:** add UIDs and hierarchy to list_categories output ([4233042](https://github.com/bojanrajkovic/mcp-paprika/commit/4233042d3f2521ca23ea8ebd5e78cec75daa806b))
+
+
+### Bug Fixes
+
+* **deps:** update dependency hono to v4.12.22 ([#112](https://github.com/bojanrajkovic/mcp-paprika/issues/112)) ([81d82de](https://github.com/bojanrajkovic/mcp-paprika/commit/81d82de8c824f7675682bc69a8b434418a5ffa06))
+* **deps:** update dependency hono to v4.12.23 ([#114](https://github.com/bojanrajkovic/mcp-paprika/issues/114)) ([65c38a0](https://github.com/bojanrajkovic/mcp-paprika/commit/65c38a0dc4ba52e143b4b15ff54165d3ac46323c))
+* **types:** remove dead locationUid field from PantryItem ([b98661c](https://github.com/bojanrajkovic/mcp-paprika/commit/b98661c50b21aefd0b1243c7b1a037a2fdbb3f33)), closes [#56](https://github.com/bojanrajkovic/mcp-paprika/issues/56)
+
+
+### Refactoring
+
+* **entity:** extract TombstoneEntityStore base class ([#119](https://github.com/bojanrajkovic/mcp-paprika/issues/119)) ([e30a497](https://github.com/bojanrajkovic/mcp-paprika/commit/e30a497b667411501ffb34f3c71428aa6b0479b0))
+* **paprika:** extract postEntities helper in PaprikaClient ([#120](https://github.com/bojanrajkovic/mcp-paprika/issues/120)) ([4df021f](https://github.com/bojanrajkovic/mcp-paprika/commit/4df021fd9af56ecf3bd99ec110a025d7e9f44e7f))
+* retire paprika://pantry/{uid} resource surface ([#106](https://github.com/bojanrajkovic/mcp-paprika/issues/106)) ([69d00ee](https://github.com/bojanrajkovic/mcp-paprika/commit/69d00ee4f8675d55d401e3adba613b4b2741a665))
+* **sync:** extract syncReplaceAllEntity + batch commit helpers ([#121](https://github.com/bojanrajkovic/mcp-paprika/issues/121)) ([6d6fe6c](https://github.com/bojanrajkovic/mcp-paprika/commit/6d6fe6c57603a012cad293f9d487233e9b41b726))
+* **test:** migrate remaining as unknown as casts to fromAny ([#122](https://github.com/bojanrajkovic/mcp-paprika/issues/122)) ([dd5d9bd](https://github.com/bojanrajkovic/mcp-paprika/commit/dd5d9bd7d97acffc2d078b7cca7f876c568f5477))
+* **tools:** normalize recipe summary fields across list-like tools ([78ccd56](https://github.com/bojanrajkovic/mcp-paprika/commit/78ccd56cfa7ef646162ed70a34fabf02f5ee4988))
+
 ## [1.3.0](https://github.com/bojanrajkovic/mcp-paprika/compare/v1.2.0...v1.3.0) (2026-05-24)
 
 
