@@ -17,9 +17,7 @@ export function registerMoveToPantryTool(server: McpServer, ctx: ServerContext):
     "move_to_pantry",
     {
       description:
-        "Move one or more grocery items to the pantry. Creates pantry items first (with today's purchase date), " +
-        "then deletes the grocery items. If the grocery delete fails after pantry creation, returns a structured " +
-        "partial-failure message so the caller can manually clean up.",
+        "Move one or more grocery items to the pantry. Creates pantry items (with today's purchase date), then deletes the grocery items.",
       inputSchema: {
         uids: z.array(z.string().min(1)).min(1).describe("Grocery item UIDs to move to pantry"),
       },

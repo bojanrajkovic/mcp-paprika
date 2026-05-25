@@ -13,8 +13,7 @@ export function registerListGroceryListsTool(server: McpServer, ctx: ServerConte
   server.registerTool(
     "list_grocery_lists",
     {
-      description:
-        "List all grocery lists sorted alphabetically by name. Returns the name, UID, and item count for each list. Use read_grocery_list with the UID for full details including items.",
+      description: "List all grocery lists sorted alphabetically by name, with UID and item count per list.",
       inputSchema: {},
     },
     async () => {
@@ -156,9 +155,7 @@ export function registerRenameGroceryListTool(server: McpServer, ctx: ServerCont
   server.registerTool(
     "rename_grocery_list",
     {
-      description:
-        "Rename an existing grocery list. If the new name matches the current name (case-insensitive), " +
-        "returns the list unchanged (no-op). Rejects if the new name conflicts with a different existing list.",
+      description: "Rename a grocery list. Rejects if the new name conflicts with a different existing list.",
       inputSchema: {
         uid: z.string().describe("Grocery list UID to rename"),
         newName: z.string().min(1).describe("New name for the grocery list"),
@@ -216,10 +213,7 @@ export function registerDeleteGroceryListTool(server: McpServer, ctx: ServerCont
   server.registerTool(
     "delete_grocery_list",
     {
-      description:
-        "Soft-delete a grocery list by UID. Idempotent: a second delete on the same UID " +
-        "returns a friendly 'already deleted' message without re-saving. Does not cascade to items " +
-        "(Paprika handles item cleanup server-side). Requires an exact UID.",
+      description: "Delete a grocery list by UID.",
       inputSchema: {
         uid: z.string().describe("Grocery list UID to delete"),
       },

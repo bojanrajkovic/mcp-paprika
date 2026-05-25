@@ -13,9 +13,7 @@ export function registerClearPurchasedTool(server: McpServer, ctx: ServerContext
   server.registerTool(
     "clear_purchased",
     {
-      description:
-        "Clear all purchased items from a grocery list via a single batch delete. " +
-        "Returns an informational message if there are no purchased items to clear.",
+      description: "Clear all purchased items from a grocery list.",
       inputSchema: {
         listUid: z.string().min(1).describe("Grocery list UID to clear purchased items from"),
       },
@@ -60,9 +58,7 @@ export function registerClearAllTool(server: McpServer, ctx: ServerContext): voi
   server.registerTool(
     "clear_all",
     {
-      description:
-        "Clear all items from a grocery list via a single batch delete. " +
-        "Returns an informational message if the list is already empty.",
+      description: "Clear all items from a grocery list.",
       inputSchema: {
         listUid: z.string().min(1).describe("Grocery list UID to clear all items from"),
       },

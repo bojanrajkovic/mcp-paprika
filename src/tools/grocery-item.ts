@@ -28,8 +28,7 @@ export function registerAddGroceryItemsTool(server: McpServer, ctx: ServerContex
     "add_grocery_items",
     {
       description:
-        "Add one or more items to a grocery list. Before adding, call read_grocery_list to check for " +
-        "existing items with the same ingredient — consolidate quantities rather than creating duplicates.",
+        "Add one or more items to a grocery list. Check read_grocery_list first to avoid duplicate ingredients — no server-side duplicate guard.",
       inputSchema: {
         listUid: z.string().min(1).describe("UID of the grocery list to add items to"),
         items: z.array(itemInputSchema).min(1).describe("Array of items to add (1 or more)"),
@@ -207,9 +206,7 @@ export function registerDeleteGroceryItemTool(server: McpServer, ctx: ServerCont
   server.registerTool(
     "delete_grocery_item",
     {
-      description:
-        "Soft-delete a grocery item by UID. Idempotent: a second delete on the same UID " +
-        "returns a friendly 'already deleted' message without re-saving. Requires an exact UID.",
+      description: "Delete a grocery item by UID.",
       inputSchema: {
         uid: z.string().describe("Grocery item UID to delete"),
       },
