@@ -256,7 +256,7 @@ export async function buildAppContext(
 /**
  * Build a fully-registered McpServer for the given AppContext.
  *
- * Registers all 14 tools and the recipe resource family. Called once for stdio,
+ * Registers all 26 tools and the recipe and grocery-list resource families. Called once for stdio,
  * once per session for HTTP. Tool registration is pure (closures over the
  * session context), so registering the same tool name on N independent
  * server instances is safe — there is no module-level mutable state.
