@@ -61,17 +61,29 @@ export function registerMoveToPantryTool(server: McpServer, ctx: ServerContext):
             deleted: false,
           }));
 
-          // Step 3: CREATE FIRST — save pantry items
+          // Step 3: CREATE FIRST — save pantry items (API call separated from
+          // local commit so the error message distinguishes the two failure modes)
           let savedPantry: ReadonlyArray<PantryItem>;
           try {
             savedPantry = await ctx.client.savePantryItems(pantryItems);
+          } catch (error) {
+            const message = toMessage(error);
+            log.error({ err: error, uids: args.uids }, "savePantryItems failed");
+            return textResult(`Failed to create pantry items: ${message}. No grocery items were deleted.`);
+          }
+
+          try {
             for (const saved of savedPantry) {
               await commitPantryItem(ctx, saved);
             }
           } catch (error) {
             const message = toMessage(error);
-            log.error({ err: error, uids: args.uids }, "savePantryItems failed");
-            return textResult(`Failed to create pantry items: ${message}. No grocery items were deleted.`);
+            log.error({ err: error, uids: args.uids }, "commitPantryItem failed after API success");
+            const pantryUids = savedPantry.map((p) => p.uid).join(", ");
+            return textResult(
+              `Pantry items were created on the server (UIDs: ${pantryUids}) but the local cache commit failed: ${message}. ` +
+                `Grocery items were NOT deleted. The pantry items will appear after the next sync cycle.`,
+            );
           }
 
           // Step 4: THEN DELETE — soft-delete grocery items

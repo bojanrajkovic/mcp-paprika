@@ -356,6 +356,43 @@ describe("move_to_pantry tool", () => {
     expect(mockRemoveGroceryItem).not.toHaveBeenCalled();
   });
 
+  it("pantry commit failure after API success returns structured message with created UIDs", async () => {
+    const item = makeGroceryItem({
+      uid: "CFAIL-1" as GroceryItemUid,
+      ingredient: "Rice",
+      listUid: "LIST-1",
+    });
+    groceryItemStore.load([item]);
+
+    const knownUid = "PANTRY-COMMIT-FAIL" as PantryItemUid;
+    mockSavePantryItems.mockResolvedValueOnce([
+      {
+        uid: knownUid,
+        ingredient: "Rice",
+        aisle: "",
+        aisleUid: "",
+        quantity: "",
+        expirationDate: null,
+        hasExpiration: false,
+        inStock: true,
+        purchaseDate: "2026-01-01 00:00:00",
+        notes: null,
+        deleted: false,
+      },
+    ]);
+    mockFlush.mockRejectedValueOnce(new Error("disk full"));
+
+    const { callTool } = makeMoveCtx();
+
+    const result = await callTool("move_to_pantry", { uids: ["CFAIL-1"] });
+    const text = getText(result);
+
+    expect(text).toContain("PANTRY-COMMIT-FAIL");
+    expect(text.toLowerCase()).toContain("local cache commit failed");
+    expect(text.toLowerCase()).toContain("grocery items were not deleted");
+    expect(mockSaveGroceryItems).not.toHaveBeenCalled();
+  });
+
   it("AC3.6: partial failure message includes the pantry UIDs returned by savePantryItems", async () => {
     const item = makeGroceryItem({
       uid: "PFAIL-2" as GroceryItemUid,
