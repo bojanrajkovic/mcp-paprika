@@ -40,6 +40,9 @@ Purpose: Defines MCP tools that AI assistants can invoke. Each tool file exports
 | `add_grocery_items`   | `grocery-item.ts`  | Add 1..N items to a grocery list in a single batch POST; auto-resolves aisle from ingredient catalog or uses explicit aisle and updates catalog; `name` field is `"quantity ingredient"` or just `ingredient` when quantity empty; no duplicate guard — LLM-driven via tool description |
 | `update_grocery_item` | `grocery-item.ts`  | Partial-merge update for a grocery item; recalculates `name` when `quantity` changes; `ingredient` is not updatable via this tool                                                                                                                                                       |
 | `delete_grocery_item` | `grocery-item.ts`  | Soft-delete a grocery item by UID; idempotent — retried calls return "already deleted" via the store's tombstone set                                                                                                                                                                    |
+| `move_to_pantry`      | `grocery-move.ts`  | Move one or more grocery items to pantry (create-first order); returns structured partial-failure message if grocery delete fails after pantry creation                                                                                                                                 |
+| `clear_purchased`     | `grocery-clear.ts` | Clear all purchased items from a grocery list via a single batch delete; no-op (informational message) when no purchased items exist                                                                                                                                                    |
+| `clear_all`           | `grocery-clear.ts` | Clear all items from a grocery list via a single batch delete; no-op (informational message) when list is already empty                                                                                                                                                                 |
 
 ## Registration Pattern
 
@@ -150,5 +153,5 @@ Shared test utilities for direct tool handler invocation without a real MCP serv
 
 ## Dependencies
 
-- **Used by:** `src/server/build.ts` (`buildMcpServer` registers all 23 tools per server instance; `registerDiscoverTool` only when `app.vectorStore !== null`)
+- **Used by:** `src/server/build.ts` (`buildMcpServer` registers all 26 tools per server instance; `registerDiscoverTool` only when `app.vectorStore !== null`)
 - **Uses:** `types/` (ServerContext alias) and `server/` (`SessionContext`, `Notifier` types), `utils/` (parseDuration -- runtime), `paprika/types.ts` (Zod schemas at runtime + type-only imports), `cache/recipe-store.ts` (type-only imports), `features/vector-store.ts` (type-only imports for `VectorStore`, `SemanticResult`)
