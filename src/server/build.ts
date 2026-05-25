@@ -40,6 +40,7 @@ import { registerReadTool } from "../tools/read.js";
 import { registerSearchTool } from "../tools/search.js";
 import { registerUpdateTool } from "../tools/update.js";
 import { registerRecipeResources } from "../resources/recipes.js";
+import { registerGroceryListResources } from "../resources/grocery-lists.js";
 import type { PaprikaConfig } from "../utils/config.js";
 import { getCacheDir } from "../utils/xdg.js";
 import type { AppContext, SessionContext } from "./app-context.js";
@@ -298,6 +299,7 @@ export function buildMcpServer(app: AppContext): McpServer {
   }
 
   registerRecipeResources(server, sessionCtx);
+  registerGroceryListResources(server, sessionCtx);
 
   return server;
 }
