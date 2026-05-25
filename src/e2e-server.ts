@@ -188,15 +188,22 @@ async function main(): Promise<void> {
   const aisleStore = new AisleStore();
   aisleStore.load([]);
 
+  const groceryListStore = new GroceryListStore();
+  groceryListStore.load([]);
+  const groceryItemStore = new GroceryItemStore();
+  groceryItemStore.load([]);
+  const groceryIngredientStore = new GroceryIngredientStore();
+  groceryIngredientStore.load([]);
+
   const app: AppContext = {
     client: client as unknown as AppContext["client"],
     cache,
     store,
     pantryStore,
     aisleStore,
-    groceryListStore: new GroceryListStore(),
-    groceryItemStore: new GroceryItemStore(),
-    groceryIngredientStore: new GroceryIngredientStore(),
+    groceryListStore,
+    groceryItemStore,
+    groceryIngredientStore,
     vectorStore: null, // discover tool intentionally not registered (no embeddings in e2e)
     notifier,
     auth: null,

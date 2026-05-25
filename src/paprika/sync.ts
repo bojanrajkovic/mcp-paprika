@@ -326,6 +326,7 @@ export class SyncEngine {
 
       await Promise.all(orphanGroceryListUids.map((uid) => this._context.cache.groceryLists.remove(uid)));
       this._context.groceryListStore.load(effectiveGroceryLists);
+      this._context.groceryListStore.setLastSyncedAt();
       await Promise.all(effectiveGroceryLists.map((l) => this._context.cache.groceryLists.put(l)));
 
       for (const list of groceryLists) {
