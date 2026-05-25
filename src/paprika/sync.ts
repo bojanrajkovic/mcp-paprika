@@ -3,9 +3,12 @@ import { createRequire } from "node:module";
 
 import type { Logger } from "pino";
 
+import type { DiskCache } from "../cache/disk/base.js";
+import type { TombstoneEntityStore } from "../entity/tombstone-store.js";
 import type { AppContext } from "../server/app-context.js";
 import type {
   AnySyncResult,
+  EntityChanges,
   GroceryItem,
   GroceryItemSyncResult,
   GroceryList,
@@ -60,6 +63,62 @@ function groceryItemsEqual(a: GroceryItem, b: GroceryItem): boolean {
     a.recipe === b.recipe &&
     a.separate === b.separate
   );
+}
+
+type ReplaceAllEntityOptions<T extends { uid: UID }, UID extends string> = {
+  readonly fetch: () => Promise<ReadonlyArray<T>>;
+  readonly cache: Pick<DiskCache<T>, "getAll" | "put" | "remove">;
+  readonly store: TombstoneEntityStore<T, UID>;
+  readonly equals: (a: T, b: T) => boolean;
+  readonly label: string;
+  readonly log: Logger;
+  readonly afterLoad?: () => void;
+};
+
+export async function syncReplaceAllEntity<T extends { uid: UID }, UID extends string>(
+  opts: ReplaceAllEntityOptions<T, UID>,
+): Promise<EntityChanges<T>> {
+  const rawIncoming = await opts.fetch();
+  const cached = await opts.cache.getAll();
+  const cachedByUid = new Map<UID, T>(cached.map((item) => [item.uid, item]));
+  const cachedUids = new Set<UID>(cached.map((item) => item.uid));
+
+  const incomingFiltered = rawIncoming.filter(
+    (item) => !opts.store.isPendingDelete(item.uid) && !opts.store.isPendingUpsert(item.uid),
+  );
+  const pendingUpserted = cached.filter((item) => opts.store.isPendingUpsert(item.uid));
+  const effective = [...incomingFiltered, ...pendingUpserted];
+  const effectiveUids = new Set<UID>(effective.map((item) => item.uid));
+
+  const orphanUids = [...cachedUids].filter((uid) => !effectiveUids.has(uid));
+  const newUids = new Set<UID>([...effectiveUids].filter((uid) => !cachedUids.has(uid)));
+
+  const updated = effective.filter((incoming) => {
+    const cachedItem = cachedByUid.get(incoming.uid);
+    return cachedItem !== undefined && !opts.equals(cachedItem, incoming);
+  });
+  const added = effective.filter((item) => newUids.has(item.uid));
+
+  await Promise.all(orphanUids.map((uid) => opts.cache.remove(uid)));
+  opts.store.load(effective);
+  opts.afterLoad?.();
+  await Promise.all(effective.map((item) => opts.cache.put(item)));
+
+  // Observation-based clearing: walk rawIncoming (not effective) so pending-upsert
+  // UIDs that were spliced out still get checked against the snapshot.
+  for (const item of rawIncoming) {
+    if (!opts.store.isPendingUpsert(item.uid)) continue;
+    const cachedItem = cachedByUid.get(item.uid);
+    if (cachedItem !== undefined && opts.equals(cachedItem, item)) {
+      opts.store.clearPending(item.uid);
+    }
+  }
+
+  if (orphanUids.length > 0) {
+    opts.log.debug({ count: orphanUids.length }, `removed orphan ${opts.label}`);
+  }
+
+  return { added, updated, removedUids: orphanUids };
 }
 
 type SyncEvents = {
@@ -232,160 +291,37 @@ export class SyncEngine {
 
       // 3. Pantry sync (replace-all with orphan cleanup)
       this.log.debug("fetching pantry");
-      const pantryItems = await this._context.client.listPantry();
-      this.log.debug({ count: pantryItems.length }, "fetched pantry");
-
-      const cachedPantryItems = await this._context.cache.pantry.getAll();
-
-      // Pending-writes filtering (issue #57). For pending-upserts we exclude
-      // the UID from the canonical incoming list and pull our local version
-      // from cache instead — that protects both directions of the race
-      // (incoming has stale content, or incoming is missing our UID
-      // entirely). For pending-deletes we exclude the UID from incoming so
-      // pantryStore.load() and the cache.putPantryItem loop don't resurrect
-      // a just-deleted item. Paprika empirically omits soft-deleted items
-      // from listPantry (case B), so we don't observation-clear pending
-      // deletes — TTL is the only safe clearing mechanism for that direction.
-      const incomingFiltered = pantryItems.filter(
-        (item) =>
-          !this._context.pantryStore.isPendingDelete(item.uid) && !this._context.pantryStore.isPendingUpsert(item.uid),
-      );
-      const pendingUpsertedItems = cachedPantryItems.filter((item) =>
-        this._context.pantryStore.isPendingUpsert(item.uid),
-      );
-      const effectivePantry = [...incomingFiltered, ...pendingUpsertedItems];
-
-      const cachedPantryUids = new Set(cachedPantryItems.map((item) => item.uid));
-      const effectivePantryUids = new Set(effectivePantry.map((item) => item.uid));
-      const orphanPantryUids = [...cachedPantryUids].filter((uid) => !effectivePantryUids.has(uid));
-      const newPantryUids = [...effectivePantryUids].filter((uid) => !cachedPantryUids.has(uid));
-      const cachedPantryByUid = new Map(cachedPantryItems.map((item) => [item.uid, item]));
-      // Pantry items have no hash field, so detect content edits to existing UIDs
-      // (quantity/notes/in-stock/etc.) by field-wise comparison; without this, MCP
-      // clients would see stale resource content until an add or remove triggered
-      // a notification.
-      const updatedPantryItems = effectivePantry.filter((incoming) => {
-        const cached = cachedPantryByUid.get(incoming.uid);
-        return cached !== undefined && !pantryItemsEqual(cached, incoming);
+      const pantryChanges = await syncReplaceAllEntity({
+        fetch: () => this._context.client.listPantry(),
+        cache: this._context.cache.pantry,
+        store: this._context.pantryStore,
+        equals: pantryItemsEqual,
+        label: "pantry items",
+        log: this.log,
       });
-      const newPantrySet = new Set(newPantryUids);
-      const addedPantryItems = effectivePantry.filter((item) => newPantrySet.has(item.uid));
-
-      await Promise.all(orphanPantryUids.map((uid) => this._context.cache.pantry.remove(uid)));
-      this._context.pantryStore.load(effectivePantry);
-      await Promise.all(effectivePantry.map((item) => this._context.cache.pantry.put(item)));
-
-      // Observation-based clearing for pantry pending-upserts: clear only when
-      // the canonical item's content equals our local cached content. UID
-      // presence alone is insufficient for updates — the UID is already in
-      // listPantry with the PRE-write quantity/notes/in-stock while propagation
-      // is in flight, and clearing on UID presence would drop protection on
-      // the first sync cycle and let the next cycle reload the stale content
-      // (codex P1, PR #92).
-      for (const item of pantryItems) {
-        if (!this._context.pantryStore.isPendingUpsert(item.uid)) continue;
-        const cached = cachedPantryByUid.get(item.uid);
-        if (cached !== undefined && pantryItemsEqual(cached, item)) {
-          this._context.pantryStore.clearPending(item.uid);
-        }
-      }
-
-      if (orphanPantryUids.length > 0) {
-        this.log.debug({ count: orphanPantryUids.length }, "removed orphan pantry items");
-      }
 
       // 4. Grocery list sync (replace-all with orphan cleanup)
       this.log.debug("fetching grocery lists");
-      const groceryLists = await this._context.client.listGroceryLists();
-      this.log.debug({ count: groceryLists.length }, "fetched grocery lists");
-
-      const cachedGroceryLists = await this._context.cache.groceryLists.getAll();
-
-      const incomingGroceryListsFiltered = groceryLists.filter(
-        (list) =>
-          !this._context.groceryListStore.isPendingDelete(list.uid) &&
-          !this._context.groceryListStore.isPendingUpsert(list.uid),
-      );
-      const pendingUpsertedGroceryLists = cachedGroceryLists.filter((list) =>
-        this._context.groceryListStore.isPendingUpsert(list.uid),
-      );
-      const effectiveGroceryLists = [...incomingGroceryListsFiltered, ...pendingUpsertedGroceryLists];
-
-      const cachedGroceryListUids = new Set(cachedGroceryLists.map((l) => l.uid));
-      const effectiveGroceryListUids = new Set(effectiveGroceryLists.map((l) => l.uid));
-      const orphanGroceryListUids = [...cachedGroceryListUids].filter((uid) => !effectiveGroceryListUids.has(uid));
-      const newGroceryListUids = [...effectiveGroceryListUids].filter((uid) => !cachedGroceryListUids.has(uid));
-      const cachedGroceryListByUid = new Map(cachedGroceryLists.map((l) => [l.uid, l]));
-
-      const updatedGroceryLists = effectiveGroceryLists.filter((incoming) => {
-        const cached = cachedGroceryListByUid.get(incoming.uid);
-        return cached !== undefined && !groceryListsEqual(cached, incoming);
+      const groceryListChanges = await syncReplaceAllEntity({
+        fetch: () => this._context.client.listGroceryLists(),
+        cache: this._context.cache.groceryLists,
+        store: this._context.groceryListStore,
+        equals: groceryListsEqual,
+        label: "grocery lists",
+        log: this.log,
+        afterLoad: () => this._context.groceryListStore.setLastSyncedAt(),
       });
-      const newGroceryListSet = new Set(newGroceryListUids);
-      const addedGroceryLists = effectiveGroceryLists.filter((l) => newGroceryListSet.has(l.uid));
-
-      await Promise.all(orphanGroceryListUids.map((uid) => this._context.cache.groceryLists.remove(uid)));
-      this._context.groceryListStore.load(effectiveGroceryLists);
-      this._context.groceryListStore.setLastSyncedAt();
-      await Promise.all(effectiveGroceryLists.map((l) => this._context.cache.groceryLists.put(l)));
-
-      for (const list of groceryLists) {
-        if (!this._context.groceryListStore.isPendingUpsert(list.uid)) continue;
-        const cached = cachedGroceryListByUid.get(list.uid);
-        if (cached !== undefined && groceryListsEqual(cached, list)) {
-          this._context.groceryListStore.clearPending(list.uid);
-        }
-      }
-
-      if (orphanGroceryListUids.length > 0) {
-        this.log.debug({ count: orphanGroceryListUids.length }, "removed orphan grocery lists");
-      }
 
       // 5. Grocery item sync (replace-all with orphan cleanup)
       this.log.debug("fetching grocery items");
-      const groceryItems = await this._context.client.listGroceryItems();
-      this.log.debug({ count: groceryItems.length }, "fetched grocery items");
-
-      const cachedGroceryItems = await this._context.cache.groceryItems.getAll();
-
-      const incomingGroceryItemsFiltered = groceryItems.filter(
-        (item) =>
-          !this._context.groceryItemStore.isPendingDelete(item.uid) &&
-          !this._context.groceryItemStore.isPendingUpsert(item.uid),
-      );
-      const pendingUpsertedGroceryItems = cachedGroceryItems.filter((item) =>
-        this._context.groceryItemStore.isPendingUpsert(item.uid),
-      );
-      const effectiveGroceryItems = [...incomingGroceryItemsFiltered, ...pendingUpsertedGroceryItems];
-
-      const cachedGroceryItemUids = new Set(cachedGroceryItems.map((i) => i.uid));
-      const effectiveGroceryItemUids = new Set(effectiveGroceryItems.map((i) => i.uid));
-      const orphanGroceryItemUids = [...cachedGroceryItemUids].filter((uid) => !effectiveGroceryItemUids.has(uid));
-      const newGroceryItemUids = [...effectiveGroceryItemUids].filter((uid) => !cachedGroceryItemUids.has(uid));
-      const cachedGroceryItemByUid = new Map(cachedGroceryItems.map((i) => [i.uid, i]));
-
-      const updatedGroceryItems = effectiveGroceryItems.filter((incoming) => {
-        const cached = cachedGroceryItemByUid.get(incoming.uid);
-        return cached !== undefined && !groceryItemsEqual(cached, incoming);
+      const groceryItemChanges = await syncReplaceAllEntity({
+        fetch: () => this._context.client.listGroceryItems(),
+        cache: this._context.cache.groceryItems,
+        store: this._context.groceryItemStore,
+        equals: groceryItemsEqual,
+        label: "grocery items",
+        log: this.log,
       });
-      const newGroceryItemSet = new Set(newGroceryItemUids);
-      const addedGroceryItems = effectiveGroceryItems.filter((i) => newGroceryItemSet.has(i.uid));
-
-      await Promise.all(orphanGroceryItemUids.map((uid) => this._context.cache.groceryItems.remove(uid)));
-      this._context.groceryItemStore.load(effectiveGroceryItems);
-      await Promise.all(effectiveGroceryItems.map((i) => this._context.cache.groceryItems.put(i)));
-
-      for (const item of groceryItems) {
-        if (!this._context.groceryItemStore.isPendingUpsert(item.uid)) continue;
-        const cached = cachedGroceryItemByUid.get(item.uid);
-        if (cached !== undefined && groceryItemsEqual(cached, item)) {
-          this._context.groceryItemStore.clearPending(item.uid);
-        }
-      }
-
-      if (orphanGroceryItemUids.length > 0) {
-        this.log.debug({ count: orphanGroceryItemUids.length }, "removed orphan grocery items");
-      }
 
       // 6. Ingredient catalog sync (replace-all, no pending-writes)
       this.log.debug("fetching grocery ingredients");
@@ -438,18 +374,9 @@ export class SyncEngine {
         changeType: "recipes",
         changes: { added: addedRecipes, updated: updatedRecipes, removedUids: filteredRemoved },
       };
-      const pantryResult: PantrySyncResult = {
-        changeType: "pantry",
-        changes: { added: addedPantryItems, updated: updatedPantryItems, removedUids: orphanPantryUids },
-      };
-      const groceryListResult: GroceryListSyncResult = {
-        changeType: "grocery-lists",
-        changes: { added: addedGroceryLists, updated: updatedGroceryLists, removedUids: orphanGroceryListUids },
-      };
-      const groceryItemResult: GroceryItemSyncResult = {
-        changeType: "grocery-items",
-        changes: { added: addedGroceryItems, updated: updatedGroceryItems, removedUids: orphanGroceryItemUids },
-      };
+      const pantryResult: PantrySyncResult = { changeType: "pantry", changes: pantryChanges };
+      const groceryListResult: GroceryListSyncResult = { changeType: "grocery-lists", changes: groceryListChanges };
+      const groceryItemResult: GroceryItemSyncResult = { changeType: "grocery-items", changes: groceryItemChanges };
       this._events.emit("sync:complete", recipeResult);
       this._events.emit("sync:complete", pantryResult);
       this._events.emit("sync:complete", groceryListResult);

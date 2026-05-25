@@ -4,7 +4,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { GroceryListUidSchema } from "../paprika/types.js";
 import { textResult } from "./helpers.js";
-import { commitGroceryItem, groceryStartGuard } from "./grocery-helpers.js";
+import { commitGroceryItemsBatch, groceryStartGuard } from "./grocery-helpers.js";
 import type { ServerContext } from "../types/server-context.js";
 
 export function registerClearPurchasedTool(server: McpServer, ctx: ServerContext): void {
@@ -35,9 +35,7 @@ export function registerClearPurchasedTool(server: McpServer, ctx: ServerContext
           const trashed = purchased.map((item) => ({ ...item, deleted: true }));
           try {
             const saved = await ctx.client.saveGroceryItems(trashed);
-            for (const s of saved) {
-              await commitGroceryItem(ctx, s);
-            }
+            await commitGroceryItemsBatch(ctx, saved);
           } catch (error) {
             const message = toMessage(error);
             log.error({ err: error, listUid: args.listUid }, "saveGroceryItems (clear_purchased) failed");
@@ -80,9 +78,7 @@ export function registerClearAllTool(server: McpServer, ctx: ServerContext): voi
           const trashed = items.map((item) => ({ ...item, deleted: true }));
           try {
             const saved = await ctx.client.saveGroceryItems(trashed);
-            for (const s of saved) {
-              await commitGroceryItem(ctx, s);
-            }
+            await commitGroceryItemsBatch(ctx, saved);
           } catch (error) {
             const message = toMessage(error);
             log.error({ err: error, listUid: args.listUid }, "saveGroceryItems (clear_all) failed");

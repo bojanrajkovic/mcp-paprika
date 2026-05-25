@@ -93,6 +93,63 @@ export async function commitGroceryItem(ctx: ServerContext, saved: Readonly<Groc
 }
 
 /**
+ * Batch variant of `commitGroceryItem`. Commits multiple grocery items with a
+ * single cache flush, a single `resourceListChanged`, and a single `notifySync`.
+ *
+ * Marks all pending writes before any cache I/O. On cache failure, clears all
+ * pending marks before re-throwing so no UID is left shielded until TTL.
+ */
+export async function commitGroceryItemsBatch(
+  ctx: ServerContext,
+  items: ReadonlyArray<Readonly<GroceryItem>>,
+): Promise<void> {
+  if (items.length === 0) return;
+  const markedUids: Array<GroceryItemUid> = [];
+  for (const item of items) {
+    if (item.deleted) {
+      ctx.groceryItemStore.markPendingDelete(item.uid);
+    } else {
+      ctx.groceryItemStore.markPendingUpsert(item.uid);
+    }
+    markedUids.push(item.uid);
+  }
+  const clearPending = () => {
+    for (const uid of markedUids) ctx.groceryItemStore.clearPending(uid);
+  };
+  // allSettled (not Promise.all): fail-fast would let in-flight ops race the
+  // clearPending call in the catch block. We wait for every op to settle first.
+  //
+  // All-or-nothing store semantics on failure is intentional: saveGroceryItems()
+  // already succeeded, so any local cache/store divergence is temporary and
+  // reconciled by the next sync. Clearing all pending marks on failure is
+  // strictly better than leaving some marked — a marked UID suppresses sync
+  // reconciliation until TTL, which would keep stale local state around longer.
+  const opsResults = await Promise.allSettled(
+    items.map((item) => (item.deleted ? ctx.cache.groceryItems.remove(item.uid) : ctx.cache.groceryItems.put(item))),
+  );
+  const opsFailure = opsResults.find((r): r is PromiseRejectedResult => r.status === "rejected");
+  if (opsFailure !== undefined) {
+    clearPending();
+    throw opsFailure.reason;
+  }
+  try {
+    await ctx.cache.flush();
+  } catch (e) {
+    clearPending();
+    throw e;
+  }
+  for (const item of items) {
+    if (item.deleted) {
+      ctx.groceryItemStore.delete(item.uid);
+    } else {
+      ctx.groceryItemStore.set(item);
+    }
+  }
+  ctx.notifier.resourceListChanged();
+  await ctx.client.notifySync();
+}
+
+/**
  * Renders a grocery list as markdown with metadata and a table of items.
  */
 export function groceryListToMarkdown(list: GroceryList, items: ReadonlyArray<GroceryItem>): string {

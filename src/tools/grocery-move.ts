@@ -6,8 +6,8 @@ import { GroceryItemUidSchema, PantryItemUidSchema } from "../paprika/types.js";
 import type { GroceryItem, PantryItem } from "../paprika/types.js";
 import { paprikaDateToday } from "../paprika/dates.js";
 import { textResult } from "./helpers.js";
-import { commitPantryItem } from "./pantry-helpers.js";
-import { commitGroceryItem, groceryStartGuard } from "./grocery-helpers.js";
+import { commitPantryItemsBatch } from "./pantry-helpers.js";
+import { commitGroceryItemsBatch, groceryStartGuard } from "./grocery-helpers.js";
 import type { ServerContext } from "../types/server-context.js";
 
 export function registerMoveToPantryTool(server: McpServer, ctx: ServerContext): void {
@@ -73,12 +73,10 @@ export function registerMoveToPantryTool(server: McpServer, ctx: ServerContext):
           }
 
           try {
-            for (const saved of savedPantry) {
-              await commitPantryItem(ctx, saved);
-            }
+            await commitPantryItemsBatch(ctx, savedPantry);
           } catch (error) {
             const message = toMessage(error);
-            log.error({ err: error, uids: args.uids }, "commitPantryItem failed after API success");
+            log.error({ err: error, uids: args.uids }, "commitPantryItemsBatch failed after API success");
             const pantryUids = savedPantry.map((p) => p.uid).join(", ");
             return textResult(
               `Pantry items were created on the server (UIDs: ${pantryUids}) but the local cache commit failed: ${message}. ` +
@@ -90,9 +88,7 @@ export function registerMoveToPantryTool(server: McpServer, ctx: ServerContext):
           const trashedGrocery = items.map((gi) => ({ ...gi, deleted: true }));
           try {
             const savedGrocery = await ctx.client.saveGroceryItems(trashedGrocery);
-            for (const saved of savedGrocery) {
-              await commitGroceryItem(ctx, saved);
-            }
+            await commitGroceryItemsBatch(ctx, savedGrocery);
           } catch (error) {
             // Partial failure: pantry items created but grocery delete failed.
             // Return structured message so user knows the state.

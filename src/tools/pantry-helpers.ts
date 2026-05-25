@@ -39,6 +39,62 @@ export function pantryItemToMarkdown(item: PantryItem): string {
 }
 
 /**
+ * Batch variant of `commitPantryItem`. Commits multiple pantry items with a single
+ * cache flush and a single `notifySync`. No `resourceListChanged` — pantry has no
+ * MCP resource surface.
+ *
+ * Marks all pending writes before any cache I/O. On cache failure, clears all
+ * pending marks before re-throwing so no UID is left shielded until TTL.
+ */
+export async function commitPantryItemsBatch(
+  ctx: ServerContext,
+  items: ReadonlyArray<Readonly<PantryItem>>,
+): Promise<void> {
+  if (items.length === 0) return;
+  const markedUids: Array<PantryItemUid> = [];
+  for (const item of items) {
+    if (item.deleted) {
+      ctx.pantryStore.markPendingDelete(item.uid);
+    } else {
+      ctx.pantryStore.markPendingUpsert(item.uid);
+    }
+    markedUids.push(item.uid);
+  }
+  const clearPending = () => {
+    for (const uid of markedUids) ctx.pantryStore.clearPending(uid);
+  };
+  // allSettled (not Promise.all): fail-fast would let in-flight ops race the
+  // clearPending call in the catch block. We wait for every op to settle first.
+  //
+  // All-or-nothing store semantics on failure is intentional: savePantryItems()
+  // already succeeded, so any local cache/store divergence is temporary and
+  // reconciled by the next sync. Clearing all pending marks on failure avoids
+  // suppressing sync reconciliation until TTL.
+  const opsResults = await Promise.allSettled(
+    items.map((item) => (item.deleted ? ctx.cache.pantry.remove(item.uid) : ctx.cache.pantry.put(item))),
+  );
+  const opsFailure = opsResults.find((r): r is PromiseRejectedResult => r.status === "rejected");
+  if (opsFailure !== undefined) {
+    clearPending();
+    throw opsFailure.reason;
+  }
+  try {
+    await ctx.cache.flush();
+  } catch (e) {
+    clearPending();
+    throw e;
+  }
+  for (const item of items) {
+    if (item.deleted) {
+      ctx.pantryStore.delete(item.uid);
+    } else {
+      ctx.pantryStore.set(item);
+    }
+  }
+  await ctx.client.notifySync();
+}
+
+/**
  * Persists a saved pantry item to the local cache and store, then triggers cloud sync.
  * Called by all pantry write tools after `ctx.client.savePantryItems()` returns.
  *

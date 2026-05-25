@@ -1,6 +1,6 @@
 # Paprika API Client
 
-Last verified: 2026-05-25
+Last verified: 2026-05-26
 
 ## Files
 
@@ -174,6 +174,37 @@ The constructor installs five hooks after building `this.resilience`. These fire
 - **Used by:** `features/`, `tools/`, `resources/`
 - **Boundary:** Must not import from `tools/`, `resources/`, or `features/`
 
+### `syncReplaceAllEntity` (sync.ts)
+
+A standalone generic helper that implements the replace-all-with-pending-write-filtering sync pattern shared by pantry, grocery list, and grocery item sync. Exported for unit testing.
+
+**Type:**
+
+```typescript
+type ReplaceAllEntityOptions<T extends { uid: UID }, UID extends string> = {
+  readonly fetch: () => Promise<ReadonlyArray<T>>;
+  readonly cache: Pick<DiskCache<T>, "getAll" | "put" | "remove">;
+  readonly store: TombstoneEntityStore<T, UID>;
+  readonly equals: (a: T, b: T) => boolean;
+  readonly label: string;
+  readonly log: Logger;
+  readonly afterLoad?: () => void;
+};
+```
+
+**Algorithm:**
+
+1. `fetch()` → `rawIncoming`; `cache.getAll()` → `cached`; build `cachedByUid` map from `cached`.
+2. Filter `rawIncoming` to drop pending-delete and pending-upsert UIDs → `incomingFiltered`.
+3. Splice pending-upserted cached items back in → `effective = [...incomingFiltered, ...pendingUpserted]`.
+4. Compute orphan UIDs (in cached, not in effectiveUids) → `cache.remove` for each.
+5. `store.load(effective)`; fire `afterLoad?.()` (used for `setLastSyncedAt()`).
+6. `cache.put(item)` for each effective item.
+7. **Observation-based clearing:** walk `rawIncoming` (not `effective`) — for each pending-upsert UID whose cached snapshot passes `equals(cachedItem, rawItem)`, call `store.clearPending(uid)`. Walking raw ensures spliced-out UIDs are still checked.
+8. Return `{ added, updated, removedUids }` as `EntityChanges<T>`.
+
+Key design choices: `cache: Pick<DiskCache<T>, ...>` narrows to methods actually used; `afterLoad?` decouples `setLastSyncedAt()` from the function signature; observation-based clearing walks `rawIncoming` (not `effective`) to preserve the guarantee that spliced-out UIDs still get checked.
+
 ### SyncEngine (sync.ts)
 
 Background polling loop that keeps local cache and in-memory store synchronized with Paprika Cloud Sync API.
@@ -181,6 +212,7 @@ Background polling loop that keeps local cache and in-memory store synchronized 
 **Exports:**
 
 - `SyncEngine` — class with `start()`, `stop()`, `syncOnce()`, and `events` getter
+- `syncReplaceAllEntity` — standalone generic helper for the replace-all-with-pending-write-filtering pattern; see above
 
 **Construction:**
 
@@ -220,28 +252,19 @@ Background polling loop that keeps local cache and in-memory store synchronized 
 - Observation-based clearing for pending-upserts: if a pending-upsert UID appears in the canonical list, clears immediately (aisles use UID presence alone — no content-equality check)
 
 3. **Pantry sync (replace-all with orphan cleanup, pending-writes filtered):**
-   - Fetches all pantry items: `client.listPantry()` → fully hydrated `Array<PantryItem>`
-   - Reads cached items: `cachedPantryItems = await cache.pantry.getAll()`
-   - **Builds `effectivePantry`** (issue #57): filters incoming items to drop UIDs that are pending-upsert OR pending-delete, then concatenates `cachedPantryItems` filtered down to pending-upserts. This protects both directions of the upsert race (incoming has stale content, or incoming omits our UID) and prevents pending-deletes from being resurrected.
-   - Computes orphan UIDs against **effectivePantry** (cached but not in effective list) via Set difference
-   - Computes new UIDs (in effective list but not cached)
-   - Computes updated UIDs (UID present in both sets, but field-wise content differs) via `pantryItemsEqual()` — pantry items have no hash field, so content edits to existing UIDs (quantity, in-stock, notes, etc.) are detected by direct field comparison
-   - Removes orphans concurrently: `Promise.all(orphanUids.map(uid => cache.pantry.remove(uid)))`
-   - Loads effective items into store (unconditionally): `pantryStore.load(effectivePantry)` (sets `hasSynced = true` even when empty)
-   - Writes each effective item to cache: `cache.pantry.put(item)` for all items (even unchanged ones, ensuring updates propagate)
-   - **Observation-based clearing:** walks the **raw** `pantryItems` (not the filtered list) and calls `pantryStore.clearPending(uid)` for any UID that has a pending-upsert and appears in the canonical list. Pending-deletes are NOT observation-cleared — Paprika omits soft-deleted items from `listPantry` (case B; verified against Paprika.app), so absence is ambiguous and TTL is the only safe clearing mechanism for the delete direction.
-   - Logs orphan count when > 0
+   - Delegated to `syncReplaceAllEntity({ fetch: client.listPantry, cache: cache.pantry, store: pantryStore, equals: pantryItemsEqual, label: "pantry items", log })`.
+   - `pantryItemsEqual()` compares all 11 fields — pantry items have no hash field, so content edits (quantity, in-stock, notes, etc.) are detected by field-wise comparison.
+   - Returns `{ added, updated, removedUids }` as `pantryChanges`.
 
 4. **Grocery list sync (replace-all with orphan cleanup, pending-writes filtered):**
-   - Same pattern as pantry sync, applied to `client.listGroceryLists()` → `GroceryListStore`
-   - Content equality detected via `groceryListsEqual()` (field-by-field comparison: `uid`, `name`, `orderFlag`, `isDefault`, `remindersList`, `deleted`)
-   - Observation-based clearing: walks raw server response and calls `groceryListStore.clearPending(uid)` when a pending-upsert's content matches the cached version via `groceryListsEqual()`
-   - Logs orphan count when > 0
+   - Delegated to `syncReplaceAllEntity({ ..., fetch: client.listGroceryLists, store: groceryListStore, equals: groceryListsEqual, afterLoad: () => groceryListStore.setLastSyncedAt() })`.
+   - `groceryListsEqual()` compares `uid`, `name`, `orderFlag`, `isDefault`, `remindersList`, `deleted`.
+   - Returns `groceryListChanges`.
 
 5. **Grocery item sync (replace-all with orphan cleanup, pending-writes filtered):**
-   - Same pattern as grocery list sync, independently applied to `client.listGroceryItems()` → `GroceryItemStore`
-   - Content equality detected via `groceryItemsEqual()` (field-by-field: `uid`, `name`, `ingredient`, `aisle`, `aisleUid`, `listUid`, `purchased`, `deleted`, `orderFlag`, `quantity`, `instruction`, `recipe`, `separate`)
-   - Logs orphan count when > 0
+   - Delegated to `syncReplaceAllEntity({ ..., fetch: client.listGroceryItems, store: groceryItemStore, equals: groceryItemsEqual })`.
+   - `groceryItemsEqual()` compares all 13 fields including `purchased`, `orderFlag`, `instruction`, `recipe`, `separate`.
+   - Returns `groceryItemChanges`.
 
 6. **Ingredient catalog sync (replace-all, no pending-writes):**
    - Fetches `client.listGroceryIngredients()`, filters `deleted: true` items, removes orphan cached entries, loads into `groceryIngredientStore`, writes to cache

@@ -11,7 +11,12 @@ import {
 import type { GroceryItem } from "../paprika/types.js";
 import { textResult } from "./helpers.js";
 import { ensureAisle } from "./aisle-helpers.js";
-import { commitGroceryItem, groceryItemToMarkdown, groceryStartGuard } from "./grocery-helpers.js";
+import {
+  commitGroceryItem,
+  commitGroceryItemsBatch,
+  groceryItemToMarkdown,
+  groceryStartGuard,
+} from "./grocery-helpers.js";
 import type { ServerContext } from "../types/server-context.js";
 
 const itemInputSchema = z.object({
@@ -138,9 +143,7 @@ export function registerAddGroceryItemsTool(server: McpServer, ctx: ServerContex
           let savedItems: ReadonlyArray<GroceryItem>;
           try {
             savedItems = await ctx.client.saveGroceryItems(builtItems);
-            for (const saved of savedItems) {
-              await commitGroceryItem(ctx, saved);
-            }
+            await commitGroceryItemsBatch(ctx, savedItems);
           } catch (error) {
             const message = toMessage(error);
             log.error({ err: error, listUid: args.listUid }, "saveGroceryItems failed");
