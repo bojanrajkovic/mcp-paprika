@@ -93,6 +93,49 @@ export async function commitGroceryItem(ctx: ServerContext, saved: Readonly<Groc
 }
 
 /**
+ * Batch variant of `commitGroceryItem`. Commits multiple grocery items with a
+ * single cache flush, a single `resourceListChanged`, and a single `notifySync`.
+ *
+ * Marks all pending writes before any cache I/O. On cache failure, clears all
+ * pending marks before re-throwing so no UID is left shielded until TTL.
+ */
+export async function commitGroceryItemsBatch(
+  ctx: ServerContext,
+  items: ReadonlyArray<Readonly<GroceryItem>>,
+): Promise<void> {
+  if (items.length === 0) return;
+  const markedUids: Array<GroceryItemUid> = [];
+  for (const item of items) {
+    if (item.deleted) {
+      ctx.groceryItemStore.markPendingDelete(item.uid);
+    } else {
+      ctx.groceryItemStore.markPendingUpsert(item.uid);
+    }
+    markedUids.push(item.uid);
+  }
+  try {
+    await Promise.all(
+      items.map((item) => (item.deleted ? ctx.cache.groceryItems.remove(item.uid) : ctx.cache.groceryItems.put(item))),
+    );
+    await ctx.cache.flush();
+  } catch (e) {
+    for (const uid of markedUids) {
+      ctx.groceryItemStore.clearPending(uid);
+    }
+    throw e;
+  }
+  for (const item of items) {
+    if (item.deleted) {
+      ctx.groceryItemStore.delete(item.uid);
+    } else {
+      ctx.groceryItemStore.set(item);
+    }
+  }
+  ctx.notifier.resourceListChanged();
+  await ctx.client.notifySync();
+}
+
+/**
  * Renders a grocery list as markdown with metadata and a table of items.
  */
 export function groceryListToMarkdown(list: GroceryList, items: ReadonlyArray<GroceryItem>): string {

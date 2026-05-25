@@ -4,7 +4,7 @@ import { GroceryListStore } from "../cache/grocery-list-store.js";
 import { RecipeStore } from "../cache/recipe-store.js";
 import { makeGroceryItem } from "../cache/__fixtures__/grocery-items.js";
 import { makeGroceryList } from "../cache/__fixtures__/grocery-lists.js";
-import { commitGroceryItem, commitGroceryList, groceryStartGuard } from "./grocery-helpers.js";
+import { commitGroceryItem, commitGroceryItemsBatch, commitGroceryList, groceryStartGuard } from "./grocery-helpers.js";
 import { makeCtx, makeStubNotifier, makeTestServer, getText } from "./tool-test-utils.js";
 import type { PaprikaClient } from "../paprika/client.js";
 import type { DiskCacheRoot } from "../cache/disk/index.js";
@@ -263,6 +263,107 @@ describe("commitGroceryList", () => {
       // Item should still be in store
       expect(groceryListStore.get(list.uid)).toEqual(list);
     });
+  });
+});
+
+describe("commitGroceryItemsBatch", () => {
+  it("no-ops when items array is empty", async () => {
+    const groceryItemStore = new GroceryItemStore();
+    const mockFlush = vi.fn().mockResolvedValue(undefined);
+    const mockNotifySync = vi.fn().mockResolvedValue(undefined);
+    const stub = makeStubNotifier();
+    const { server } = makeTestServer();
+    const ctx = makeCtx(new RecipeStore(), server, {
+      client: { notifySync: mockNotifySync } as unknown as PaprikaClient,
+      cache: { groceryItems: {}, flush: mockFlush } as unknown as DiskCacheRoot,
+      groceryItemStore,
+      notifier: stub.notifier,
+    });
+    await commitGroceryItemsBatch(ctx, []);
+    expect(mockFlush).not.toHaveBeenCalled();
+    expect(stub.resourceListChanged).not.toHaveBeenCalled();
+    expect(mockNotifySync).not.toHaveBeenCalled();
+  });
+
+  it("N items → exactly 1 flush, 1 resourceListChanged, 1 notifySync", async () => {
+    const item1 = makeGroceryItem({ deleted: false });
+    const item2 = makeGroceryItem({ deleted: false });
+    const groceryItemStore = new GroceryItemStore();
+    const setSpy = vi.spyOn(groceryItemStore, "set");
+    const mockPut = vi.fn().mockResolvedValue(undefined);
+    const mockRemove = vi.fn().mockResolvedValue(undefined);
+    const mockFlush = vi.fn().mockResolvedValue(undefined);
+    const mockNotifySync = vi.fn().mockResolvedValue(undefined);
+    const stub = makeStubNotifier();
+    const { server } = makeTestServer();
+    const ctx = makeCtx(new RecipeStore(), server, {
+      client: { notifySync: mockNotifySync } as unknown as PaprikaClient,
+      cache: { groceryItems: { put: mockPut, remove: mockRemove }, flush: mockFlush } as unknown as DiskCacheRoot,
+      groceryItemStore,
+      notifier: stub.notifier,
+    });
+    await commitGroceryItemsBatch(ctx, [item1, item2]);
+    expect(mockPut).toHaveBeenCalledTimes(2);
+    expect(mockFlush).toHaveBeenCalledTimes(1);
+    expect(setSpy).toHaveBeenCalledTimes(2);
+    expect(stub.resourceListChanged).toHaveBeenCalledTimes(1);
+    expect(mockNotifySync).toHaveBeenCalledTimes(1);
+  });
+
+  it("mixed upsert and delete in one batch", async () => {
+    const upserted = makeGroceryItem({ deleted: false });
+    const deleted = makeGroceryItem({ deleted: true });
+    const groceryItemStore = new GroceryItemStore();
+    groceryItemStore.load([deleted]);
+    const setSpy = vi.spyOn(groceryItemStore, "set");
+    const deleteSpy = vi.spyOn(groceryItemStore, "delete");
+    const mockPut = vi.fn().mockResolvedValue(undefined);
+    const mockRemove = vi.fn().mockResolvedValue(undefined);
+    const mockFlush = vi.fn().mockResolvedValue(undefined);
+    const mockNotifySync = vi.fn().mockResolvedValue(undefined);
+    const stub = makeStubNotifier();
+    const { server } = makeTestServer();
+    const ctx = makeCtx(new RecipeStore(), server, {
+      client: { notifySync: mockNotifySync } as unknown as PaprikaClient,
+      cache: { groceryItems: { put: mockPut, remove: mockRemove }, flush: mockFlush } as unknown as DiskCacheRoot,
+      groceryItemStore,
+      notifier: stub.notifier,
+    });
+    await commitGroceryItemsBatch(ctx, [upserted, deleted]);
+    expect(mockPut).toHaveBeenCalledWith(upserted);
+    expect(mockRemove).toHaveBeenCalledWith(deleted.uid);
+    expect(setSpy).toHaveBeenCalledWith(upserted);
+    expect(deleteSpy).toHaveBeenCalledWith(deleted.uid);
+    expect(mockFlush).toHaveBeenCalledTimes(1);
+    expect(stub.resourceListChanged).toHaveBeenCalledTimes(1);
+    expect(mockNotifySync).toHaveBeenCalledTimes(1);
+  });
+
+  it("on cache flush failure, clears all pending marks before re-throwing", async () => {
+    const item1 = makeGroceryItem({ deleted: false });
+    const item2 = makeGroceryItem({ deleted: false });
+    const groceryItemStore = new GroceryItemStore();
+    const clearPendingSpy = vi.spyOn(groceryItemStore, "clearPending");
+    const mockFlush = vi.fn().mockRejectedValue(new Error("flush failed"));
+    const mockNotifySync = vi.fn().mockResolvedValue(undefined);
+    const stub = makeStubNotifier();
+    const { server } = makeTestServer();
+    const ctx = makeCtx(new RecipeStore(), server, {
+      client: { notifySync: mockNotifySync } as unknown as PaprikaClient,
+      cache: {
+        groceryItems: { put: vi.fn().mockResolvedValue(undefined), remove: vi.fn() },
+        flush: mockFlush,
+      } as unknown as DiskCacheRoot,
+      groceryItemStore,
+      notifier: stub.notifier,
+    });
+    await expect(commitGroceryItemsBatch(ctx, [item1, item2])).rejects.toThrow("flush failed");
+    expect(clearPendingSpy).toHaveBeenCalledWith(item1.uid);
+    expect(clearPendingSpy).toHaveBeenCalledWith(item2.uid);
+    expect(groceryItemStore.isPendingUpsert(item1.uid)).toBe(false);
+    expect(groceryItemStore.isPendingUpsert(item2.uid)).toBe(false);
+    expect(stub.resourceListChanged).not.toHaveBeenCalled();
+    expect(mockNotifySync).not.toHaveBeenCalled();
   });
 });
 
