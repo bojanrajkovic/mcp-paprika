@@ -17,6 +17,13 @@ import { registerDiscoverTool } from "../tools/discover.js";
 import { registerFilterTools } from "../tools/filter.js";
 import { registerListTool } from "../tools/list.js";
 import { registerAislesTool } from "../tools/aisles.js";
+import {
+  registerCreateGroceryListTool,
+  registerDeleteGroceryListTool,
+  registerListGroceryListsTool,
+  registerReadGroceryListTool,
+  registerRenameGroceryListTool,
+} from "../tools/grocery-list.js";
 import { registerAddPantryItemTool } from "../tools/pantry-add.js";
 import { registerDeletePantryItemTool } from "../tools/pantry-delete.js";
 import { registerGetPantryItemTool } from "../tools/pantry-get.js";
@@ -267,6 +274,11 @@ export function buildMcpServer(app: AppContext): McpServer {
   registerUpdatePantryItemTool(server, sessionCtx);
   registerDeletePantryItemTool(server, sessionCtx);
   registerAislesTool(server, sessionCtx);
+  registerListGroceryListsTool(server, sessionCtx);
+  registerReadGroceryListTool(server, sessionCtx);
+  registerCreateGroceryListTool(server, sessionCtx);
+  registerRenameGroceryListTool(server, sessionCtx);
+  registerDeleteGroceryListTool(server, sessionCtx);
 
   if (app.vectorStore !== null) {
     registerDiscoverTool(server, sessionCtx, app.vectorStore);
