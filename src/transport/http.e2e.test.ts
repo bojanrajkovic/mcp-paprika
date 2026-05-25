@@ -20,6 +20,7 @@ import { randomBytes, createHash } from "node:crypto";
 import { http, HttpResponse } from "msw";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { fromAny } from "@total-typescript/shoehorn";
 import { startHttp, type HttpTransportHandle } from "./http.js";
 import type { PaprikaConfig } from "../utils/config.js";
 import { createOidcStub } from "../auth/__fixtures__/oidc-stub.js";
@@ -61,7 +62,7 @@ function paprikaMockHandlers() {
 // ============================================================================
 
 function makeE2eConfig(overrides: Partial<PaprikaConfig> = {}): PaprikaConfig {
-  return {
+  return fromAny({
     paprika: { email: "test@example.com", password: "secret" },
     sync: { enabled: false, interval: 60_000 },
     transport: "http",
@@ -81,7 +82,7 @@ function makeE2eConfig(overrides: Partial<PaprikaConfig> = {}): PaprikaConfig {
       allowlist: { emails: [ALLOWED_EMAIL], subs: [] },
     },
     ...overrides,
-  } as unknown as PaprikaConfig;
+  });
 }
 
 // ============================================================================

@@ -1,24 +1,23 @@
+import { fromAny } from "@total-typescript/shoehorn";
 import { describe, it, expect, vi } from "vitest";
 import { makeRecipe, makeCategory } from "../cache/__fixtures__/recipes.js";
 import { coldStartGuard, textResult, recipeToMarkdown, commitRecipe, resolveCategoryNames } from "./helpers.js";
 import type { ServerContext } from "../types/server-context.js";
-import type { DiskCacheRoot } from "../cache/disk/index.js";
-import type { PaprikaClient } from "../paprika/client.js";
 import { SILENT_LOG } from "../utils/log.js";
 
 // Minimal ServerContext stub — only `store.hasSynced` matters for coldStartGuard
 const makeCtx = (size: number) =>
   ({
-    store: { size, hasSynced: size > 0 } as unknown as ServerContext["store"],
-    client: {} as unknown as ServerContext["client"],
-    cache: {} as unknown as ServerContext["cache"],
-    pantryStore: {} as unknown as ServerContext["pantryStore"],
-    aisleStore: {} as unknown as ServerContext["aisleStore"],
-    groceryListStore: {} as unknown as ServerContext["groceryListStore"],
-    groceryItemStore: {} as unknown as ServerContext["groceryItemStore"],
-    groceryIngredientStore: {} as unknown as ServerContext["groceryIngredientStore"],
+    store: fromAny({ size, hasSynced: size > 0 }),
+    client: fromAny({}),
+    cache: fromAny({}),
+    pantryStore: fromAny({}),
+    aisleStore: fromAny({}),
+    groceryListStore: fromAny({}),
+    groceryItemStore: fromAny({}),
+    groceryIngredientStore: fromAny({}),
     vectorStore: null,
-    server: {} as unknown as ServerContext["server"],
+    server: fromAny({}),
     notifier: {
       resourceListChanged: () => {},
       loggingMessage: async () => {},
@@ -323,20 +322,20 @@ describe("p2-u02-shared-helpers: shared helper functions", () => {
       const mockResourceListChanged = vi.fn();
 
       const ctx = {
-        cache: { recipes: { put: mockPutRecipe }, flush: mockFlush } as unknown as DiskCacheRoot,
-        client: { notifySync: mockNotifySync } as unknown as PaprikaClient,
-        store: {
+        cache: fromAny({ recipes: { put: mockPutRecipe }, flush: mockFlush }),
+        client: fromAny({ notifySync: mockNotifySync }),
+        store: fromAny({
           set: mockStoreSet,
           markPendingUpsert: vi.fn(),
           markPendingDelete: vi.fn(),
-        } as unknown as ServerContext["store"],
-        pantryStore: {} as unknown as ServerContext["pantryStore"],
-        aisleStore: {} as unknown as ServerContext["aisleStore"],
-        groceryListStore: {} as unknown as ServerContext["groceryListStore"],
-        groceryItemStore: {} as unknown as ServerContext["groceryItemStore"],
-        groceryIngredientStore: {} as unknown as ServerContext["groceryIngredientStore"],
+        }),
+        pantryStore: fromAny({}),
+        aisleStore: fromAny({}),
+        groceryListStore: fromAny({}),
+        groceryItemStore: fromAny({}),
+        groceryIngredientStore: fromAny({}),
         vectorStore: null,
-        server: {} as unknown as ServerContext["server"],
+        server: fromAny({}),
         notifier: {
           resourceListChanged: mockResourceListChanged,
           loggingMessage: vi.fn().mockResolvedValue(undefined),
@@ -375,20 +374,20 @@ describe("p2-u02-shared-helpers: shared helper functions", () => {
       });
 
       const ctx = {
-        cache: { recipes: { put: mockPutRecipe }, flush: mockFlush } as unknown as DiskCacheRoot,
-        client: { notifySync: mockNotifySync } as unknown as PaprikaClient,
-        store: {
+        cache: fromAny({ recipes: { put: mockPutRecipe }, flush: mockFlush }),
+        client: fromAny({ notifySync: mockNotifySync }),
+        store: fromAny({
           set: mockStoreSet,
           markPendingUpsert: vi.fn(),
           markPendingDelete: vi.fn(),
-        } as unknown as ServerContext["store"],
-        pantryStore: {} as unknown as ServerContext["pantryStore"],
-        aisleStore: {} as unknown as ServerContext["aisleStore"],
-        groceryListStore: {} as unknown as ServerContext["groceryListStore"],
-        groceryItemStore: {} as unknown as ServerContext["groceryItemStore"],
-        groceryIngredientStore: {} as unknown as ServerContext["groceryIngredientStore"],
+        }),
+        pantryStore: fromAny({}),
+        aisleStore: fromAny({}),
+        groceryListStore: fromAny({}),
+        groceryItemStore: fromAny({}),
+        groceryIngredientStore: fromAny({}),
         vectorStore: null,
-        server: {} as unknown as ServerContext["server"],
+        server: fromAny({}),
         notifier: {
           resourceListChanged: mockResourceListChanged,
           loggingMessage: vi.fn().mockResolvedValue(undefined),
@@ -411,20 +410,20 @@ describe("p2-u02-shared-helpers: shared helper functions", () => {
       const mockResourceListChanged = vi.fn();
 
       const ctx = {
-        cache: { recipes: { put: mockPutRecipe }, flush: mockFlush } as unknown as DiskCacheRoot,
-        client: { notifySync: mockNotifySync } as unknown as PaprikaClient,
-        store: {
+        cache: fromAny({ recipes: { put: mockPutRecipe }, flush: mockFlush }),
+        client: fromAny({ notifySync: mockNotifySync }),
+        store: fromAny({
           set: mockStoreSet,
           markPendingUpsert: vi.fn(),
           markPendingDelete: vi.fn(),
-        } as unknown as ServerContext["store"],
-        pantryStore: {} as unknown as ServerContext["pantryStore"],
-        aisleStore: {} as unknown as ServerContext["aisleStore"],
-        groceryListStore: {} as unknown as ServerContext["groceryListStore"],
-        groceryItemStore: {} as unknown as ServerContext["groceryItemStore"],
-        groceryIngredientStore: {} as unknown as ServerContext["groceryIngredientStore"],
+        }),
+        pantryStore: fromAny({}),
+        aisleStore: fromAny({}),
+        groceryListStore: fromAny({}),
+        groceryItemStore: fromAny({}),
+        groceryIngredientStore: fromAny({}),
         vectorStore: null,
-        server: {} as unknown as ServerContext["server"],
+        server: fromAny({}),
         notifier: {
           resourceListChanged: mockResourceListChanged,
           loggingMessage: vi.fn().mockResolvedValue(undefined),
@@ -449,21 +448,21 @@ describe("p2-u02-shared-helpers: shared helper functions", () => {
       const mockResourceListChanged = vi.fn();
 
       const ctx = {
-        cache: { recipes: { put: mockPutRecipe }, flush: mockFlush } as unknown as DiskCacheRoot,
-        client: { notifySync: mockNotifySync } as unknown as PaprikaClient,
-        store: {
+        cache: fromAny({ recipes: { put: mockPutRecipe }, flush: mockFlush }),
+        client: fromAny({ notifySync: mockNotifySync }),
+        store: fromAny({
           set: mockStoreSet,
           markPendingUpsert: mockMarkPendingUpsert,
           markPendingDelete: vi.fn(),
           clearPending: mockClearPending,
-        } as unknown as ServerContext["store"],
-        pantryStore: {} as unknown as ServerContext["pantryStore"],
-        aisleStore: {} as unknown as ServerContext["aisleStore"],
-        groceryListStore: {} as unknown as ServerContext["groceryListStore"],
-        groceryItemStore: {} as unknown as ServerContext["groceryItemStore"],
-        groceryIngredientStore: {} as unknown as ServerContext["groceryIngredientStore"],
+        }),
+        pantryStore: fromAny({}),
+        aisleStore: fromAny({}),
+        groceryListStore: fromAny({}),
+        groceryItemStore: fromAny({}),
+        groceryIngredientStore: fromAny({}),
         vectorStore: null,
-        server: {} as unknown as ServerContext["server"],
+        server: fromAny({}),
         notifier: {
           resourceListChanged: mockResourceListChanged,
           loggingMessage: vi.fn().mockResolvedValue(undefined),

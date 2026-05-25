@@ -1,3 +1,4 @@
+import { fromAny } from "@total-typescript/shoehorn";
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import type { Mocked } from "vitest";
 import { contentHash, VectorStore } from "./vector-store.js";
@@ -103,13 +104,13 @@ vi.mock("vectra", () => {
 });
 
 function makeMockEmbedder(): Mocked<EmbeddingClient> {
-  return {
+  return fromAny({
     embed: vi.fn<(text: string) => Promise<Array<number>>>(),
     embedBatch: vi.fn<(texts: ReadonlyArray<string>) => Promise<Array<Array<number>>>>(),
     get dimensions() {
       return 3;
     },
-  } as unknown as Mocked<EmbeddingClient>;
+  });
 }
 
 describe("VectorStore init", () => {

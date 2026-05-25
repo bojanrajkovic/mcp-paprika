@@ -1,10 +1,9 @@
+import { fromAny } from "@total-typescript/shoehorn";
 import { describe, it, expect, vi } from "vitest";
 import { RecipeStore } from "../cache/recipe-store.js";
 import { makeRecipe, makeCategory } from "../cache/__fixtures__/recipes.js";
 import { registerUpdateTool } from "./update.js";
 import { makeTestServer, makeCtx, getText } from "./tool-test-utils.js";
-import type { PaprikaClient } from "../paprika/client.js";
-import type { DiskCacheRoot } from "../cache/disk/index.js";
 
 describe("p2-recipe-crud: update_recipe tool", () => {
   describe("p2-recipe-crud.AC3: update_recipe applies partial updates", () => {
@@ -23,8 +22,8 @@ describe("p2-recipe-crud: update_recipe tool", () => {
 
       const { server, callTool } = makeTestServer();
       const ctx = makeCtx(store, server, {
-        client: { saveRecipe: mockSaveRecipe, notifySync: mockNotifySync } as unknown as PaprikaClient,
-        cache: { recipes: { put: mockPutRecipe }, flush: mockFlush } as unknown as DiskCacheRoot,
+        client: fromAny({ saveRecipe: mockSaveRecipe, notifySync: mockNotifySync }),
+        cache: fromAny({ recipes: { put: mockPutRecipe }, flush: mockFlush }),
       });
       registerUpdateTool(server, ctx);
 
@@ -52,8 +51,8 @@ describe("p2-recipe-crud: update_recipe tool", () => {
 
       const { server, callTool } = makeTestServer();
       const ctx = makeCtx(store, server, {
-        client: { saveRecipe: mockSaveRecipe, notifySync: mockNotifySync } as unknown as PaprikaClient,
-        cache: { recipes: { put: mockPutRecipe }, flush: mockFlush } as unknown as DiskCacheRoot,
+        client: fromAny({ saveRecipe: mockSaveRecipe, notifySync: mockNotifySync }),
+        cache: fromAny({ recipes: { put: mockPutRecipe }, flush: mockFlush }),
       });
       registerUpdateTool(server, ctx);
 
@@ -80,8 +79,8 @@ describe("p2-recipe-crud: update_recipe tool", () => {
 
       const { server, callTool } = makeTestServer();
       const ctx = makeCtx(store, server, {
-        client: { saveRecipe: mockSaveRecipe, notifySync: mockNotifySync } as unknown as PaprikaClient,
-        cache: { recipes: { put: mockPutRecipe }, flush: mockFlush } as unknown as DiskCacheRoot,
+        client: fromAny({ saveRecipe: mockSaveRecipe, notifySync: mockNotifySync }),
+        cache: fromAny({ recipes: { put: mockPutRecipe }, flush: mockFlush }),
       });
       registerUpdateTool(server, ctx);
 
@@ -106,8 +105,8 @@ describe("p2-recipe-crud: update_recipe tool", () => {
 
       const { server, callTool } = makeTestServer();
       const ctx = makeCtx(store, server, {
-        client: { saveRecipe: mockSaveRecipe, notifySync: mockNotifySync } as unknown as PaprikaClient,
-        cache: { recipes: { put: mockPutRecipe }, flush: mockFlush } as unknown as DiskCacheRoot,
+        client: fromAny({ saveRecipe: mockSaveRecipe, notifySync: mockNotifySync }),
+        cache: fromAny({ recipes: { put: mockPutRecipe }, flush: mockFlush }),
       });
       registerUpdateTool(server, ctx);
 
@@ -132,8 +131,8 @@ describe("p2-recipe-crud: update_recipe tool", () => {
 
       const { server, callTool } = makeTestServer();
       const ctx = makeCtx(store, server, {
-        client: { saveRecipe: mockSaveRecipe, notifySync: mockNotifySync } as unknown as PaprikaClient,
-        cache: { recipes: { put: mockPutRecipe }, flush: mockFlush } as unknown as DiskCacheRoot,
+        client: fromAny({ saveRecipe: mockSaveRecipe, notifySync: mockNotifySync }),
+        cache: fromAny({ recipes: { put: mockPutRecipe }, flush: mockFlush }),
       });
       registerUpdateTool(server, ctx);
 
@@ -158,8 +157,8 @@ describe("p2-recipe-crud: update_recipe tool", () => {
 
       const { server, callTool } = makeTestServer();
       const ctx = makeCtx(store, server, {
-        client: { saveRecipe: mockSaveRecipe, notifySync: mockNotifySync } as unknown as PaprikaClient,
-        cache: { recipes: { put: mockPutRecipe }, flush: mockFlush } as unknown as DiskCacheRoot,
+        client: fromAny({ saveRecipe: mockSaveRecipe, notifySync: mockNotifySync }),
+        cache: fromAny({ recipes: { put: mockPutRecipe }, flush: mockFlush }),
       });
       registerUpdateTool(server, ctx);
 
@@ -181,8 +180,8 @@ describe("p2-recipe-crud: update_recipe tool", () => {
 
       const { server, callTool } = makeTestServer();
       const ctx = makeCtx(store, server, {
-        client: { saveRecipe: mockSaveRecipe, notifySync: mockNotifySync } as unknown as PaprikaClient,
-        cache: { recipes: { put: mockPutRecipe }, flush: mockFlush } as unknown as DiskCacheRoot,
+        client: fromAny({ saveRecipe: mockSaveRecipe, notifySync: mockNotifySync }),
+        cache: fromAny({ recipes: { put: mockPutRecipe }, flush: mockFlush }),
       });
       registerUpdateTool(server, ctx);
 
@@ -208,8 +207,8 @@ describe("p2-recipe-crud: update_recipe tool", () => {
 
       const { server, callTool } = makeTestServer();
       const ctx = makeCtx(store, server, {
-        client: { saveRecipe: mockSaveRecipe, notifySync: mockNotifySync } as unknown as PaprikaClient,
-        cache: { recipes: { put: mockPutRecipe }, flush: mockFlush } as unknown as DiskCacheRoot,
+        client: fromAny({ saveRecipe: mockSaveRecipe, notifySync: mockNotifySync }),
+        cache: fromAny({ recipes: { put: mockPutRecipe }, flush: mockFlush }),
       });
       registerUpdateTool(server, ctx);
 
@@ -234,8 +233,8 @@ describe("p2-recipe-crud: update_recipe tool", () => {
 
       const { server, callTool } = makeTestServer();
       const ctx = makeCtx(store, server, {
-        client: { saveRecipe: mockSaveRecipe, notifySync: mockNotifySync } as unknown as PaprikaClient,
-        cache: { recipes: { put: mockPutRecipe }, flush: mockFlush } as unknown as DiskCacheRoot,
+        client: fromAny({ saveRecipe: mockSaveRecipe, notifySync: mockNotifySync }),
+        cache: fromAny({ recipes: { put: mockPutRecipe }, flush: mockFlush }),
       });
       registerUpdateTool(server, ctx);
 
@@ -260,8 +259,8 @@ describe("p2-recipe-crud: update_recipe tool", () => {
 
       const { server, callTool } = makeTestServer();
       const ctx = makeCtx(store, server, {
-        client: { saveRecipe: mockSaveRecipe, notifySync: mockNotifySync } as unknown as PaprikaClient,
-        cache: { recipes: { put: mockPutRecipe }, flush: mockFlush } as unknown as DiskCacheRoot,
+        client: fromAny({ saveRecipe: mockSaveRecipe, notifySync: mockNotifySync }),
+        cache: fromAny({ recipes: { put: mockPutRecipe }, flush: mockFlush }),
       });
       registerUpdateTool(server, ctx);
 
@@ -286,8 +285,8 @@ describe("p2-recipe-crud: update_recipe tool", () => {
 
       const { server, callTool } = makeTestServer();
       const ctx = makeCtx(store, server, {
-        client: { saveRecipe: mockSaveRecipe, notifySync: mockNotifySync } as unknown as PaprikaClient,
-        cache: { recipes: { put: mockPutRecipe }, flush: mockFlush } as unknown as DiskCacheRoot,
+        client: fromAny({ saveRecipe: mockSaveRecipe, notifySync: mockNotifySync }),
+        cache: fromAny({ recipes: { put: mockPutRecipe }, flush: mockFlush }),
       });
       registerUpdateTool(server, ctx);
 
@@ -313,8 +312,8 @@ describe("p2-recipe-crud: update_recipe tool", () => {
 
       const { server, callTool } = makeTestServer();
       const ctx = makeCtx(store, server, {
-        client: { saveRecipe: mockSaveRecipe, notifySync: mockNotifySync } as unknown as PaprikaClient,
-        cache: { recipes: { put: mockPutRecipe }, flush: mockFlush } as unknown as DiskCacheRoot,
+        client: fromAny({ saveRecipe: mockSaveRecipe, notifySync: mockNotifySync }),
+        cache: fromAny({ recipes: { put: mockPutRecipe }, flush: mockFlush }),
       });
       registerUpdateTool(server, ctx);
 

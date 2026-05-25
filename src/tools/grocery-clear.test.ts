@@ -1,3 +1,4 @@
+import { fromAny } from "@total-typescript/shoehorn";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { RecipeStore } from "../cache/recipe-store.js";
 import { GroceryListStore } from "../cache/grocery-list-store.js";
@@ -6,8 +7,6 @@ import { makeGroceryList } from "../cache/__fixtures__/grocery-lists.js";
 import { makeGroceryItem } from "../cache/__fixtures__/grocery-items.js";
 import { registerClearPurchasedTool, registerClearAllTool } from "./grocery-clear.js";
 import { makeTestServer, makeCtx, getText, makeStubNotifier } from "./tool-test-utils.js";
-import type { PaprikaClient } from "../paprika/client.js";
-import type { DiskCacheRoot } from "../cache/disk/root.js";
 import type { GroceryListUid, GroceryItemUid } from "../paprika/types.js";
 
 describe("clear_purchased tool", () => {
@@ -38,14 +37,14 @@ describe("clear_purchased tool", () => {
     const ctx = makeCtx(new RecipeStore(), server, {
       groceryListStore,
       groceryItemStore,
-      client: {
+      client: fromAny({
         saveGroceryItems: mockSaveGroceryItems,
         notifySync: mockNotifySync,
-      } as unknown as PaprikaClient,
-      cache: {
+      }),
+      cache: fromAny({
         groceryItems: { remove: mockRemoveGroceryItem },
         flush: mockFlush,
-      } as unknown as DiskCacheRoot,
+      }),
       notifier,
     });
     registerClearPurchasedTool(server, ctx);
@@ -129,14 +128,14 @@ describe("clear_purchased tool", () => {
     const ctx = makeCtx(new RecipeStore(), server, {
       groceryListStore: freshGroceryListStore,
       groceryItemStore: freshGroceryItemStore,
-      client: {
+      client: fromAny({
         saveGroceryItems: mockSaveGroceryItems,
         notifySync: mockNotifySync,
-      } as unknown as PaprikaClient,
-      cache: {
+      }),
+      cache: fromAny({
         groceryItems: { remove: mockRemoveGroceryItem },
         flush: mockFlush,
-      } as unknown as DiskCacheRoot,
+      }),
       notifier,
     });
     registerClearPurchasedTool(server, ctx);
@@ -189,14 +188,14 @@ describe("clear_all tool", () => {
     const ctx = makeCtx(new RecipeStore(), server, {
       groceryListStore,
       groceryItemStore,
-      client: {
+      client: fromAny({
         saveGroceryItems: mockSaveGroceryItems,
         notifySync: mockNotifySync,
-      } as unknown as PaprikaClient,
-      cache: {
+      }),
+      cache: fromAny({
         groceryItems: { remove: mockRemoveGroceryItem },
         flush: mockFlush,
-      } as unknown as DiskCacheRoot,
+      }),
       notifier,
     });
     registerClearAllTool(server, ctx);
@@ -270,14 +269,14 @@ describe("clear_all tool", () => {
     const ctx = makeCtx(new RecipeStore(), server, {
       groceryListStore: freshGroceryListStore,
       groceryItemStore: freshGroceryItemStore,
-      client: {
+      client: fromAny({
         saveGroceryItems: mockSaveGroceryItems,
         notifySync: mockNotifySync,
-      } as unknown as PaprikaClient,
-      cache: {
+      }),
+      cache: fromAny({
         groceryItems: { remove: mockRemoveGroceryItem },
         flush: mockFlush,
-      } as unknown as DiskCacheRoot,
+      }),
       notifier,
     });
     registerClearAllTool(server, ctx);

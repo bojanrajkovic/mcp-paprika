@@ -1,3 +1,4 @@
+import { fromAny } from "@total-typescript/shoehorn";
 import { describe, it, expect, vi } from "vitest";
 import { AisleStore } from "../cache/aisle-store.js";
 import { makeAisle } from "../cache/__fixtures__/aisles.js";
@@ -5,8 +6,6 @@ import { aisleStartGuard, commitAisle, ensureAisle } from "./aisle-helpers.js";
 import { makeTestServer, makeCtx } from "./tool-test-utils.js";
 import { RecipeStore } from "../cache/recipe-store.js";
 import type { ServerContext } from "../types/server-context.js";
-import type { PaprikaClient } from "../paprika/client.js";
-import type { DiskCacheRoot } from "../cache/disk/index.js";
 import type { Aisle } from "../paprika/types.js";
 
 function makeAisleCtx(
@@ -21,14 +20,14 @@ function makeAisleCtx(
   const { server } = makeTestServer();
   return makeCtx(new RecipeStore(), server, {
     aisleStore,
-    client: {
+    client: fromAny({
       saveAisle: overrides?.saveAisle ?? vi.fn(),
       notifySync: overrides?.notifySync ?? vi.fn().mockResolvedValue(undefined),
-    } as unknown as PaprikaClient,
-    cache: {
+    }),
+    cache: fromAny({
       aisles: { put: overrides?.putAisle ?? vi.fn().mockResolvedValue(undefined) },
       flush: overrides?.flush ?? vi.fn().mockResolvedValue(undefined),
-    } as unknown as DiskCacheRoot,
+    }),
   });
 }
 

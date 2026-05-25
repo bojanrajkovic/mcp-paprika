@@ -1,3 +1,4 @@
+import { fromAny } from "@total-typescript/shoehorn";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import fc from "fast-check";
 import type { Level as PinoLevel } from "pino";
@@ -308,7 +309,8 @@ describe("resolvePrimaryDestination", () => {
       Object.defineProperty(process.stderr, "isTTY", savedIsTTY);
     } else {
       // If it wasn't defined, delete the property so the prototype chain kicks in
-      delete (process.stderr as unknown as Record<string, unknown>)["isTTY"];
+      const stderr: Record<string, unknown> = fromAny(process.stderr);
+      delete stderr["isTTY"];
     }
     // Restore XDG
     if (savedXDGStateHome !== undefined) {
@@ -483,7 +485,8 @@ describe("createLogger (composition)", () => {
     if (savedIsTTY !== undefined) {
       Object.defineProperty(process.stderr, "isTTY", savedIsTTY);
     } else {
-      delete (process.stderr as unknown as Record<string, unknown>)["isTTY"];
+      const stderr: Record<string, unknown> = fromAny(process.stderr);
+      delete stderr["isTTY"];
     }
     if (tmpDir !== undefined) {
       try {

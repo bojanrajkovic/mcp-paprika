@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { fromAny } from "@total-typescript/shoehorn";
 import { RecipeStore } from "../cache/recipe-store.js";
 import { PantryStore } from "../cache/pantry-store.js";
 import { GroceryListStore } from "../cache/grocery-list-store.js";
@@ -7,8 +8,6 @@ import { makeGroceryList } from "../cache/__fixtures__/grocery-lists.js";
 import { makeGroceryItem } from "../cache/__fixtures__/grocery-items.js";
 import { registerMoveToPantryTool } from "./grocery-move.js";
 import { makeTestServer, makeCtx, getText, makeStubNotifier } from "./tool-test-utils.js";
-import type { PaprikaClient } from "../paprika/client.js";
-import type { DiskCacheRoot } from "../cache/disk/root.js";
 import type { GroceryListUid, GroceryItemUid, PantryItemUid } from "../paprika/types.js";
 
 describe("move_to_pantry tool", () => {
@@ -47,16 +46,16 @@ describe("move_to_pantry tool", () => {
       pantryStore,
       groceryListStore,
       groceryItemStore,
-      client: {
+      client: fromAny({
         savePantryItems: mockSavePantryItems,
         saveGroceryItems: mockSaveGroceryItems,
         notifySync: mockNotifySync,
-      } as unknown as PaprikaClient,
-      cache: {
+      }),
+      cache: fromAny({
         pantry: { put: mockPutPantryItem },
         groceryItems: { remove: mockRemoveGroceryItem },
         flush: mockFlush,
-      } as unknown as DiskCacheRoot,
+      }),
       notifier,
     });
     registerMoveToPantryTool(server, ctx);
@@ -244,16 +243,16 @@ describe("move_to_pantry tool", () => {
       pantryStore: freshPantryStore,
       groceryListStore,
       groceryItemStore,
-      client: {
+      client: fromAny({
         savePantryItems: mockSavePantryItems,
         saveGroceryItems: mockSaveGroceryItems,
         notifySync: mockNotifySync,
-      } as unknown as PaprikaClient,
-      cache: {
+      }),
+      cache: fromAny({
         pantry: { put: mockPutPantryItem },
         groceryItems: { remove: mockRemoveGroceryItem },
         flush: mockFlush,
-      } as unknown as DiskCacheRoot,
+      }),
       notifier,
     });
     registerMoveToPantryTool(server, ctx);
@@ -277,16 +276,16 @@ describe("move_to_pantry tool", () => {
       pantryStore,
       groceryListStore: freshGroceryListStore,
       groceryItemStore: freshGroceryItemStore,
-      client: {
+      client: fromAny({
         savePantryItems: mockSavePantryItems,
         saveGroceryItems: mockSaveGroceryItems,
         notifySync: mockNotifySync,
-      } as unknown as PaprikaClient,
-      cache: {
+      }),
+      cache: fromAny({
         pantry: { put: mockPutPantryItem },
         groceryItems: { remove: mockRemoveGroceryItem },
         flush: mockFlush,
-      } as unknown as DiskCacheRoot,
+      }),
       notifier,
     });
     registerMoveToPantryTool(server, ctx);

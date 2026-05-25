@@ -30,8 +30,9 @@ import type { RecipeUid } from "../paprika/types.js";
 // as the namespace. The namespace's `.default` member IS the function, so we recover the
 // callable type by casting through `unknown` to `typeof _mitt.default`. Runtime is unaffected
 // (esModuleInterop unwraps the default at the JS layer).
+import { fromAny } from "@total-typescript/shoehorn";
 import _mitt from "mitt";
-const mitt = _mitt as unknown as typeof _mitt.default;
+const mitt: typeof _mitt.default = fromAny(_mitt);
 
 // Module-level tempDir variable used by the mock below.
 // Each test will create its own temp directory via beforeEach.

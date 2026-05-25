@@ -3,6 +3,7 @@
  * Uses MSW to intercept fetch calls to discovery and JWKS endpoints.
  */
 
+import { fromAny } from "@total-typescript/shoehorn";
 import { describe, it, expect } from "vitest";
 import { nowSeconds } from "./tokens.js";
 import { http, HttpResponse } from "msw";
@@ -649,7 +650,7 @@ describe("verifyIdToken", () => {
       aud: clientId,
       sub: "user-email-string",
       email: "user@x.com",
-      email_verified: "true" as unknown as boolean, // intentional cast to test coercion
+      email_verified: fromAny("true"), // intentional cast to test coercion
       nonce,
       exp: now + 60,
       iat: now,

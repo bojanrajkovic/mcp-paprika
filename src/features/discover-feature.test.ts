@@ -10,8 +10,9 @@ import { makePinoCapture, DEFAULT_LOGGING_CONFIG } from "../tools/tool-test-util
 // as the namespace. The namespace's `.default` member IS the function, so we recover the
 // callable type by casting through `unknown` to `typeof _mitt.default`. Runtime is unaffected
 // (esModuleInterop unwraps the default at the JS layer).
+import { fromAny } from "@total-typescript/shoehorn";
 import _mitt from "mitt";
-const mitt = _mitt as unknown as typeof _mitt.default;
+const mitt: typeof _mitt.default = fromAny(_mitt);
 
 // Mock all the feature dependencies
 vi.mock("./embeddings.js", () => ({

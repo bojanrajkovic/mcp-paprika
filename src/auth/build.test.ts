@@ -8,6 +8,7 @@
  * - Throws when discovery returns 500
  */
 
+import { fromAny } from "@total-typescript/shoehorn";
 import { http, HttpResponse } from "msw";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
@@ -31,16 +32,16 @@ afterEach(async () => {
 });
 
 function makeStdioConfig(): PaprikaConfig {
-  return {
+  return fromAny({
     paprika: { email: "test@example.com", password: "secret" },
     sync: { enabled: false, interval: 60_000 },
     transport: "stdio",
     http: { port: 3000, host: "127.0.0.1", allowedHosts: [], allowedOrigins: [] },
-  } as unknown as PaprikaConfig;
+  });
 }
 
 function makeHttpConfig(oauthIssuer: string): PaprikaConfig {
-  return {
+  return fromAny({
     paprika: { email: "test@example.com", password: "secret" },
     sync: { enabled: false, interval: 60_000 },
     transport: "http",
@@ -56,7 +57,7 @@ function makeHttpConfig(oauthIssuer: string): PaprikaConfig {
       clientSecret: "test-client-secret",
       allowlist: { emails: ["user@example.com"], subs: [] },
     },
-  } as unknown as PaprikaConfig;
+  });
 }
 
 describe("buildAuthContext", () => {
@@ -79,13 +80,13 @@ describe("buildAuthContext", () => {
       const cache = new DiskCacheRoot(xdg.dir());
       await cache.init();
 
-      const config: PaprikaConfig = {
+      const config: PaprikaConfig = fromAny({
         paprika: { email: "test@example.com", password: "secret" },
         sync: { enabled: false, interval: 60_000 },
         transport: "http",
         http: { port: 0, host: "127.0.0.1", allowedHosts: [], allowedOrigins: [] },
         // no oauth block
-      } as unknown as PaprikaConfig;
+      });
 
       await expect(buildAuthContext(config, cache, SILENT_LOG)).rejects.toThrow(
         "OAuth config required for HTTP transport",

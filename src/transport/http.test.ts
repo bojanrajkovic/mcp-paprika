@@ -1,5 +1,6 @@
 import { join } from "node:path";
 
+import { fromAny } from "@total-typescript/shoehorn";
 import { http, HttpResponse } from "msw";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
@@ -534,7 +535,7 @@ describe("HTTP transport (Streamable HTTP)", () => {
 // ============================================================================
 
 function makeOAuthConfig(): PaprikaConfig {
-  return {
+  return fromAny({
     paprika: { email: "test@example.com", password: "secret" },
     sync: { enabled: false, interval: 60_000 },
     transport: "http",
@@ -555,7 +556,7 @@ function makeOAuthConfig(): PaprikaConfig {
       trustProxy: true,
       allowlist: { emails: ["user@example.com"], subs: [] },
     },
-  } as unknown as PaprikaConfig;
+  });
 }
 
 function makeClaudeAiRegistration(): Record<string, unknown> {
@@ -784,11 +785,11 @@ describe("HTTP transport — OAuth mounted", () => {
 // ---------------------------------------------------------------------------
 
 describe("accessLog middleware (AC9.5)", () => {
-  function makeStubContext(method: string, path: string, status: number) {
-    return {
+  function makeStubContext(method: string, path: string, status: number): import("hono").Context {
+    return fromAny({
       req: { method, path },
       res: { status },
-    } as unknown as import("hono").Context;
+    });
   }
 
   function makeNext() {
