@@ -8,7 +8,11 @@ import { makeGroceryList } from "../cache/__fixtures__/grocery-lists.js";
 import { makeGroceryItem } from "../cache/__fixtures__/grocery-items.js";
 import { makeGroceryIngredient } from "../cache/__fixtures__/grocery-ingredients.js";
 import { makeAisle } from "../cache/__fixtures__/aisles.js";
-import { registerAddGroceryItemsTool, registerUpdateGroceryItemTool } from "./grocery-item.js";
+import {
+  registerAddGroceryItemsTool,
+  registerUpdateGroceryItemTool,
+  registerDeleteGroceryItemTool,
+} from "./grocery-item.js";
 import { makeTestServer, makeCtx, getText, makeStubNotifier } from "./tool-test-utils.js";
 import type { PaprikaClient } from "../paprika/client.js";
 import type { DiskCacheRoot } from "../cache/disk/root.js";
@@ -482,6 +486,157 @@ describe("update_grocery_item tool", () => {
     const text = getText(result);
 
     expect(text.toLowerCase()).toContain("not yet synced");
+    expect(mockSaveGroceryItems).not.toHaveBeenCalled();
+  });
+});
+
+describe("delete_grocery_item tool", () => {
+  let groceryListStore: GroceryListStore;
+  let groceryItemStore: GroceryItemStore;
+  let groceryIngredientStore: GroceryIngredientStore;
+  let aisleStore: AisleStore;
+
+  let mockSaveGroceryItems: ReturnType<typeof vi.fn>;
+  let mockNotifySync: ReturnType<typeof vi.fn>;
+  let mockPutGroceryItem: ReturnType<typeof vi.fn>;
+  let mockRemoveGroceryItem: ReturnType<typeof vi.fn>;
+  let mockFlush: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    groceryListStore = new GroceryListStore();
+    groceryItemStore = new GroceryItemStore();
+    groceryIngredientStore = new GroceryIngredientStore();
+    aisleStore = new AisleStore();
+
+    mockSaveGroceryItems = vi.fn().mockImplementation(async (items) => items);
+    mockNotifySync = vi.fn().mockResolvedValue(undefined);
+    mockPutGroceryItem = vi.fn().mockResolvedValue(undefined);
+    mockRemoveGroceryItem = vi.fn().mockResolvedValue(undefined);
+    mockFlush = vi.fn().mockResolvedValue(undefined);
+
+    groceryListStore.load([makeGroceryList({ uid: "LIST-1" as GroceryListUid, name: "Weekly" })]);
+    groceryIngredientStore.load([]);
+    aisleStore.load([]);
+  });
+
+  function makeDeleteCtx() {
+    const { notifier, resourceListChanged } = makeStubNotifier();
+    const { server, callTool } = makeTestServer();
+    const ctx = makeCtx(new RecipeStore(), server, {
+      groceryListStore,
+      groceryItemStore,
+      groceryIngredientStore,
+      aisleStore,
+      client: {
+        saveGroceryItems: mockSaveGroceryItems,
+        notifySync: mockNotifySync,
+      } as unknown as PaprikaClient,
+      cache: {
+        groceryItems: { put: mockPutGroceryItem, remove: mockRemoveGroceryItem },
+        flush: mockFlush,
+      } as unknown as DiskCacheRoot,
+      notifier,
+    });
+    registerDeleteGroceryItemTool(server, ctx);
+    return { server, callTool, notifier, resourceListChanged, ctx };
+  }
+
+  it("grocery-surface.AC2.8: delete existing item sets deleted:true and commits", async () => {
+    const existingItem = makeGroceryItem({
+      uid: "ITEM-DEL-1" as GroceryItemUid,
+      ingredient: "Milk",
+      listUid: "LIST-1",
+      deleted: false,
+    });
+    groceryItemStore.load([existingItem]);
+
+    const { callTool } = makeDeleteCtx();
+
+    const result = await callTool("delete_grocery_item", {
+      uid: "ITEM-DEL-1",
+    });
+    const text = getText(result);
+
+    // Response should confirm deletion
+    expect(text.toLowerCase()).toContain("deleted");
+    expect(text).toContain("Milk");
+
+    // saveGroceryItems called with deleted:true
+    expect(mockSaveGroceryItems).toHaveBeenCalledOnce();
+    const savedItems = mockSaveGroceryItems.mock.calls[0]?.[0] as Array<{
+      uid: string;
+      deleted: boolean;
+    }>;
+    expect(savedItems).toHaveLength(1);
+    const saved = savedItems[0];
+    expect(saved?.deleted).toBe(true);
+    expect(saved?.uid).toBe("ITEM-DEL-1");
+
+    // commit path: remove called (delete branch of commitGroceryItem)
+    expect(mockRemoveGroceryItem).toHaveBeenCalledOnce();
+  });
+
+  it("grocery-surface.AC2.12: sync-not-ready blocks delete_grocery_item when stores not loaded", async () => {
+    const freshListStore = new GroceryListStore();
+    const freshItemStore = new GroceryItemStore();
+
+    const { notifier } = makeStubNotifier();
+    const { server, callTool } = makeTestServer();
+    const ctx = makeCtx(new RecipeStore(), server, {
+      groceryListStore: freshListStore,
+      groceryItemStore: freshItemStore,
+      groceryIngredientStore,
+      aisleStore,
+      client: {
+        saveGroceryItems: mockSaveGroceryItems,
+        notifySync: mockNotifySync,
+      } as unknown as PaprikaClient,
+      cache: {
+        groceryItems: { put: mockPutGroceryItem, remove: mockRemoveGroceryItem },
+        flush: mockFlush,
+      } as unknown as DiskCacheRoot,
+      notifier,
+    });
+    registerDeleteGroceryItemTool(server, ctx);
+
+    const result = await callTool("delete_grocery_item", { uid: "ITEM-1" });
+    const text = getText(result);
+
+    expect(text.toLowerCase()).toContain("not yet synced");
+    expect(mockSaveGroceryItems).not.toHaveBeenCalled();
+  });
+
+  it("grocery-surface.AC2.13: delete a tombstoned UID returns already-deleted message", async () => {
+    const existingItem = makeGroceryItem({
+      uid: "ITEM-DEL-2" as GroceryItemUid,
+      ingredient: "Eggs",
+    });
+    // Load item and then delete it to create a tombstone
+    groceryItemStore.load([existingItem]);
+    groceryItemStore.delete("ITEM-DEL-2" as GroceryItemUid);
+
+    const { callTool } = makeDeleteCtx();
+
+    const result = await callTool("delete_grocery_item", {
+      uid: "ITEM-DEL-2",
+    });
+    const text = getText(result);
+
+    expect(text.toLowerCase()).toContain("already deleted");
+    expect(mockSaveGroceryItems).not.toHaveBeenCalled();
+  });
+
+  it("grocery-surface.AC2.13: delete a UID never in the store returns not-found message", async () => {
+    groceryItemStore.load([]);
+
+    const { callTool } = makeDeleteCtx();
+
+    const result = await callTool("delete_grocery_item", {
+      uid: "NEVER-EXISTED",
+    });
+    const text = getText(result);
+
+    expect(text.toLowerCase()).toContain("no grocery item found");
     expect(mockSaveGroceryItems).not.toHaveBeenCalled();
   });
 });
