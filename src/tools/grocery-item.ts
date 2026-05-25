@@ -52,26 +52,29 @@ export function registerAddGroceryItemsTool(server: McpServer, ctx: ServerContex
           }
 
           // Build all GroceryItem objects, resolving aisles first
-          let builtItems: Array<GroceryItem>;
+          const builtItems: Array<GroceryItem> = [];
+          const batchAisleCache = new Map<string, { aisle: string; aisleUid: string }>();
+          const catalogUpdated = new Set<string>();
           try {
-            builtItems = await Promise.all(
-              args.items.map(async (item) => {
-                const ingredient = item.ingredient;
-                const quantity = item.quantity ?? "";
-                const instruction = item.instruction ?? "";
-                const uid = GroceryItemUidSchema.parse(crypto.randomUUID().toUpperCase());
-                const name = quantity !== "" ? `${quantity} ${ingredient}` : ingredient;
+            for (const item of args.items) {
+              const ingredient = item.ingredient;
+              const ingredientKey = ingredient.toLowerCase();
+              const quantity = item.quantity ?? "";
+              const instruction = item.instruction ?? "";
+              const uid = GroceryItemUidSchema.parse(crypto.randomUUID().toUpperCase());
+              const name = quantity !== "" ? `${quantity} ${ingredient}` : ingredient;
 
-                let aisle: string;
-                let aisleUid: string;
+              let aisle: string;
+              let aisleUid: string;
 
-                if (item.aisle !== undefined) {
-                  // Explicit aisle: resolve via ensureAisle, then update ingredient catalog
-                  const resolved = await ensureAisle(ctx, item.aisle);
-                  aisle = resolved.aisle;
-                  aisleUid = resolved.aisleUid;
+              if (item.aisle !== undefined) {
+                const resolved = await ensureAisle(ctx, item.aisle);
+                aisle = resolved.aisle;
+                aisleUid = resolved.aisleUid;
+                batchAisleCache.set(ingredientKey, { aisle, aisleUid });
 
-                  // Update ingredient catalog (create or update)
+                if (!catalogUpdated.has(ingredientKey)) {
+                  catalogUpdated.add(ingredientKey);
                   const catalogEntry = ctx.groceryIngredientStore.lookupByName(ingredient);
                   if (catalogEntry !== undefined) {
                     await ctx.client.saveGroceryIngredient({ ...catalogEntry, aisleUid });
@@ -83,8 +86,13 @@ export function registerAddGroceryItemsTool(server: McpServer, ctx: ServerContex
                       deleted: false,
                     });
                   }
+                }
+              } else {
+                const batchHit = batchAisleCache.get(ingredientKey);
+                if (batchHit !== undefined) {
+                  aisle = batchHit.aisle;
+                  aisleUid = batchHit.aisleUid;
                 } else {
-                  // Auto-resolve aisle from ingredient catalog
                   const catalogEntry = ctx.groceryIngredientStore.lookupByName(ingredient);
                   if (catalogEntry !== undefined) {
                     const resolvedAisle = ctx.aisleStore.get(AisleUidSchema.parse(catalogEntry.aisleUid));
@@ -95,24 +103,25 @@ export function registerAddGroceryItemsTool(server: McpServer, ctx: ServerContex
                     aisleUid = "";
                   }
                 }
+              }
 
-                return {
-                  uid,
-                  name,
-                  ingredient,
-                  quantity,
-                  aisle,
-                  aisleUid,
-                  listUid: args.listUid,
-                  purchased: false,
-                  deleted: false,
-                  orderFlag: 0,
-                  instruction,
-                  recipe: null,
-                  separate: false,
-                } satisfies GroceryItem;
-              }),
-            );
+              const built: GroceryItem = {
+                uid,
+                name,
+                ingredient,
+                quantity,
+                aisle,
+                aisleUid,
+                listUid: args.listUid,
+                purchased: false,
+                deleted: false,
+                orderFlag: 0,
+                instruction,
+                recipe: null,
+                separate: false,
+              };
+              builtItems.push(built);
+            }
           } catch (error) {
             const message = toMessage(error);
             log.error({ err: error, listUid: args.listUid }, "aisle resolution failed");

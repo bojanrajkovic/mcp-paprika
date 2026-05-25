@@ -252,6 +252,60 @@ describe("add_grocery_items tool", () => {
     expect(mockSaveGroceryItems).not.toHaveBeenCalled();
   });
 
+  it("in-batch aisle inference: later item without aisle inherits from earlier item with explicit aisle", async () => {
+    const { callTool } = makeAddCtx();
+
+    await callTool("add_grocery_items", {
+      listUid: "LIST-1",
+      items: [{ ingredient: "Milk", aisle: "Produce" }, { ingredient: "Milk" }],
+    });
+
+    const savedItems = mockSaveGroceryItems.mock.calls[0]?.[0] as Array<{ ingredient: string; aisle: string }>;
+    expect(savedItems).toHaveLength(2);
+    expect(savedItems[0]?.aisle).toBe("Produce");
+    expect(savedItems[1]?.aisle).toBe("Produce");
+  });
+
+  it("duplicate ingredient with explicit aisle calls saveGroceryIngredient only once per ingredient", async () => {
+    const mockSaveAisle = vi.fn().mockImplementation(async (a: unknown) => a);
+    const { notifier } = makeStubNotifier();
+    const { server, callTool: callTool2 } = makeTestServer();
+    aisleStore.load([makeAisle({ uid: "AISLE-1" as AisleUid, name: "Produce" })]);
+    const ctx = makeCtx(new RecipeStore(), server, {
+      groceryListStore,
+      groceryItemStore,
+      groceryIngredientStore,
+      aisleStore,
+      client: {
+        saveGroceryItems: mockSaveGroceryItems,
+        saveGroceryIngredient: mockSaveGroceryIngredient,
+        saveAisle: mockSaveAisle,
+        notifySync: mockNotifySync,
+      } as unknown as PaprikaClient,
+      cache: {
+        groceryItems: { put: mockPutGroceryItem },
+        aisles: { put: vi.fn() },
+        flush: mockFlush,
+      } as unknown as DiskCacheRoot,
+      notifier,
+    });
+    registerAddGroceryItemsTool(server, ctx);
+
+    await callTool2("add_grocery_items", {
+      listUid: "LIST-1",
+      items: [
+        { ingredient: "Chicken", aisle: "Meat" },
+        { ingredient: "Chicken", aisle: "Meat" },
+        { ingredient: "Chicken", aisle: "Meat" },
+      ],
+    });
+
+    const ingredientCalls = mockSaveGroceryIngredient.mock.calls.filter(
+      (call: Array<unknown>) => (call[0] as { name: string }).name === "Chicken",
+    );
+    expect(ingredientCalls).toHaveLength(1);
+  });
+
   it("grocery-surface.AC2.12: sync-not-ready blocks add_grocery_items when stores not loaded", async () => {
     // Fresh stores with no .load() called
     const freshListStore = new GroceryListStore();
