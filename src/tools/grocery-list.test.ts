@@ -1,11 +1,19 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { RecipeStore } from "../cache/recipe-store.js";
 import { GroceryListStore } from "../cache/grocery-list-store.js";
 import { GroceryItemStore } from "../cache/grocery-item-store.js";
 import { makeGroceryList } from "../cache/__fixtures__/grocery-lists.js";
 import { makeGroceryItem } from "../cache/__fixtures__/grocery-items.js";
-import { makeTestServer, makeCtx, getText } from "./tool-test-utils.js";
-import { registerListGroceryListsTool, registerReadGroceryListTool } from "./grocery-list.js";
+import { makeTestServer, makeCtx, getText, makeStubNotifier } from "./tool-test-utils.js";
+import type { PaprikaClient } from "../paprika/client.js";
+import type { DiskCacheRoot } from "../cache/disk/root.js";
+import {
+  registerListGroceryListsTool,
+  registerReadGroceryListTool,
+  registerCreateGroceryListTool,
+  registerRenameGroceryListTool,
+  registerDeleteGroceryListTool,
+} from "./grocery-list.js";
 
 describe("list_grocery_lists tool", () => {
   it("grocery-surface.AC1.9: returns sync-not-ready message when stores not loaded", async () => {
@@ -272,5 +280,383 @@ describe("read_grocery_list tool", () => {
     const text = getText(result);
 
     expect(text.toLowerCase()).toContain("uid or name");
+  });
+});
+
+// Helper to build write-tool ctx with mocked client and cache
+function makeWriteToolCtx(
+  groceryListStore: GroceryListStore,
+  groceryItemStore: GroceryItemStore,
+  server: ReturnType<typeof makeTestServer>["server"],
+) {
+  const mockSaveGroceryList = vi.fn().mockImplementation(async (list: unknown) => list);
+  const mockNotifySync = vi.fn().mockResolvedValue(undefined);
+  const mockPutGroceryList = vi.fn();
+  const mockRemoveGroceryList = vi.fn();
+  const mockFlush = vi.fn().mockResolvedValue(undefined);
+  const { notifier, resourceListChanged } = makeStubNotifier();
+
+  const ctx = makeCtx(new RecipeStore(), server, {
+    groceryListStore,
+    groceryItemStore,
+    client: {
+      saveGroceryList: mockSaveGroceryList,
+      notifySync: mockNotifySync,
+    } as unknown as PaprikaClient,
+    cache: {
+      groceryLists: { put: mockPutGroceryList, remove: mockRemoveGroceryList },
+      flush: mockFlush,
+    } as unknown as DiskCacheRoot,
+    notifier,
+  });
+
+  return {
+    ctx,
+    mockSaveGroceryList,
+    mockNotifySync,
+    mockPutGroceryList,
+    mockRemoveGroceryList,
+    mockFlush,
+    resourceListChanged,
+  };
+}
+
+describe("create_grocery_list tool", () => {
+  it("grocery-surface.AC1.9: returns sync-not-ready message when stores not loaded", async () => {
+    const groceryListStore = new GroceryListStore();
+    const groceryItemStore = new GroceryItemStore();
+    // DO NOT call .load() on either store
+
+    const { server, callTool } = makeTestServer();
+    const { ctx } = makeWriteToolCtx(groceryListStore, groceryItemStore, server);
+    registerCreateGroceryListTool(server, ctx);
+
+    const result = await callTool("create_grocery_list", { name: "Weekly Shopping" });
+    const text = getText(result);
+
+    expect(text.toLowerCase()).toContain("not yet synced");
+  });
+
+  it("grocery-surface.AC1.4: creates list with uppercase UUID and correct defaults", async () => {
+    const groceryListStore = new GroceryListStore();
+    const groceryItemStore = new GroceryItemStore();
+    groceryListStore.load([]);
+    groceryItemStore.load([]);
+
+    const { server, callTool } = makeTestServer();
+    const { ctx, mockSaveGroceryList, resourceListChanged } = makeWriteToolCtx(
+      groceryListStore,
+      groceryItemStore,
+      server,
+    );
+    registerCreateGroceryListTool(server, ctx);
+
+    const result = await callTool("create_grocery_list", { name: "Weekly Shopping" });
+    const text = getText(result);
+
+    expect(text).toContain("Weekly Shopping");
+    expect(mockSaveGroceryList).toHaveBeenCalledOnce();
+    const savedArg = mockSaveGroceryList.mock.calls[0]![0] as Record<string, unknown>;
+    expect(savedArg["name"]).toBe("Weekly Shopping");
+    expect(savedArg["isDefault"]).toBe(false);
+    expect(savedArg["orderFlag"]).toBe(0);
+    expect(savedArg["remindersList"]).toBe("Paprika");
+    expect(savedArg["deleted"]).toBe(false);
+    // UID must be uppercase UUID format
+    expect(typeof savedArg["uid"]).toBe("string");
+    expect(savedArg["uid"] as string).toMatch(/^[0-9A-F-]{36}$/);
+    expect(resourceListChanged).toHaveBeenCalledOnce();
+  });
+
+  it("grocery-surface.AC1.4: store contains the new list after creation", async () => {
+    const groceryListStore = new GroceryListStore();
+    const groceryItemStore = new GroceryItemStore();
+    groceryListStore.load([]);
+    groceryItemStore.load([]);
+
+    const { server, callTool } = makeTestServer();
+    const { ctx } = makeWriteToolCtx(groceryListStore, groceryItemStore, server);
+    registerCreateGroceryListTool(server, ctx);
+
+    await callTool("create_grocery_list", { name: "Weekly Shopping" });
+
+    // Store should contain the new list after commit
+    const all = groceryListStore.getAll();
+    expect(all).toHaveLength(1);
+    expect(all[0]!.name).toBe("Weekly Shopping");
+  });
+
+  it("grocery-surface.AC1.7: rejects duplicate name (exact case-insensitive match)", async () => {
+    const groceryListStore = new GroceryListStore();
+    const groceryItemStore = new GroceryItemStore();
+    const existing = makeGroceryList({ name: "Weekly Shopping" });
+    groceryListStore.load([existing]);
+    groceryItemStore.load([]);
+
+    const { server, callTool } = makeTestServer();
+    const { ctx, mockSaveGroceryList } = makeWriteToolCtx(groceryListStore, groceryItemStore, server);
+    registerCreateGroceryListTool(server, ctx);
+
+    const result = await callTool("create_grocery_list", { name: "weekly shopping" });
+    const text = getText(result);
+
+    expect(text).toContain("already exists");
+    expect(text).toContain(existing.uid);
+    expect(mockSaveGroceryList).not.toHaveBeenCalled();
+  });
+
+  it("grocery-surface.AC1.7: allows creation when name matches only by starts-with (not exact)", async () => {
+    const groceryListStore = new GroceryListStore();
+    const groceryItemStore = new GroceryItemStore();
+    const existing = makeGroceryList({ name: "Weekly Shopping Costco" });
+    groceryListStore.load([existing]);
+    groceryItemStore.load([]);
+
+    const { server, callTool } = makeTestServer();
+    const { ctx, mockSaveGroceryList } = makeWriteToolCtx(groceryListStore, groceryItemStore, server);
+    registerCreateGroceryListTool(server, ctx);
+
+    // "Weekly Shopping" is a prefix of "Weekly Shopping Costco" but not an exact match
+    const result = await callTool("create_grocery_list", { name: "Weekly Shopping" });
+    const text = getText(result);
+
+    // Should succeed (not rejected), save should be called
+    expect(mockSaveGroceryList).toHaveBeenCalledOnce();
+    expect(text).toContain("Weekly Shopping");
+  });
+});
+
+describe("rename_grocery_list tool", () => {
+  it("grocery-surface.AC1.9: returns sync-not-ready message when stores not loaded", async () => {
+    const groceryListStore = new GroceryListStore();
+    const groceryItemStore = new GroceryItemStore();
+    // DO NOT call .load()
+
+    const { server, callTool } = makeTestServer();
+    const { ctx } = makeWriteToolCtx(groceryListStore, groceryItemStore, server);
+    registerRenameGroceryListTool(server, ctx);
+
+    const result = await callTool("rename_grocery_list", { uid: "some-uid", newName: "New Name" });
+    const text = getText(result);
+
+    expect(text.toLowerCase()).toContain("not yet synced");
+  });
+
+  it("grocery-surface.AC1.5: returns not-found when UID does not match any list", async () => {
+    const groceryListStore = new GroceryListStore();
+    const groceryItemStore = new GroceryItemStore();
+    groceryListStore.load([]);
+    groceryItemStore.load([]);
+
+    const { server, callTool } = makeTestServer();
+    const { ctx } = makeWriteToolCtx(groceryListStore, groceryItemStore, server);
+    registerRenameGroceryListTool(server, ctx);
+
+    const result = await callTool("rename_grocery_list", { uid: "nonexistent-uid", newName: "New Name" });
+    const text = getText(result);
+
+    expect(text.toLowerCase()).toContain("no grocery list found");
+  });
+
+  it("grocery-surface.AC1.5: renames list and calls save", async () => {
+    const groceryListStore = new GroceryListStore();
+    const groceryItemStore = new GroceryItemStore();
+    const list = makeGroceryList({ name: "Weekly Shopping" });
+    groceryListStore.load([list]);
+    groceryItemStore.load([]);
+
+    const { server, callTool } = makeTestServer();
+    const { ctx, mockSaveGroceryList, resourceListChanged } = makeWriteToolCtx(
+      groceryListStore,
+      groceryItemStore,
+      server,
+    );
+    registerRenameGroceryListTool(server, ctx);
+
+    const result = await callTool("rename_grocery_list", { uid: list.uid, newName: "Costco Run" });
+    const text = getText(result);
+
+    expect(text).toContain("Costco Run");
+    expect(mockSaveGroceryList).toHaveBeenCalledOnce();
+    const savedArg = mockSaveGroceryList.mock.calls[0]![0] as Record<string, unknown>;
+    expect(savedArg["name"]).toBe("Costco Run");
+    expect(savedArg["uid"]).toBe(list.uid);
+    expect(resourceListChanged).toHaveBeenCalledOnce();
+  });
+
+  it("grocery-surface.AC1.10: same name (exact case) is a no-op, does not call save", async () => {
+    const groceryListStore = new GroceryListStore();
+    const groceryItemStore = new GroceryItemStore();
+    const list = makeGroceryList({ name: "Weekly Shopping" });
+    groceryListStore.load([list]);
+    groceryItemStore.load([]);
+
+    const { server, callTool } = makeTestServer();
+    const { ctx, mockSaveGroceryList } = makeWriteToolCtx(groceryListStore, groceryItemStore, server);
+    registerRenameGroceryListTool(server, ctx);
+
+    const result = await callTool("rename_grocery_list", { uid: list.uid, newName: "Weekly Shopping" });
+    const text = getText(result);
+
+    // Should return existing list markdown without saving
+    expect(text).toContain("Weekly Shopping");
+    expect(text).toContain(list.uid);
+    expect(mockSaveGroceryList).not.toHaveBeenCalled();
+  });
+
+  it("grocery-surface.AC1.10: same name (different case) is a no-op, does not call save", async () => {
+    const groceryListStore = new GroceryListStore();
+    const groceryItemStore = new GroceryItemStore();
+    const list = makeGroceryList({ name: "Weekly Shopping" });
+    groceryListStore.load([list]);
+    groceryItemStore.load([]);
+
+    const { server, callTool } = makeTestServer();
+    const { ctx, mockSaveGroceryList } = makeWriteToolCtx(groceryListStore, groceryItemStore, server);
+    registerRenameGroceryListTool(server, ctx);
+
+    const result = await callTool("rename_grocery_list", { uid: list.uid, newName: "weekly shopping" });
+    const text = getText(result);
+
+    expect(mockSaveGroceryList).not.toHaveBeenCalled();
+    expect(text).toContain("Weekly Shopping");
+  });
+
+  it("grocery-surface.AC1.8: rejects rename when newName conflicts with another list", async () => {
+    const groceryListStore = new GroceryListStore();
+    const groceryItemStore = new GroceryItemStore();
+    const listA = makeGroceryList({ name: "Weekly Shopping" });
+    const listB = makeGroceryList({ name: "Costco Run" });
+    groceryListStore.load([listA, listB]);
+    groceryItemStore.load([]);
+
+    const { server, callTool } = makeTestServer();
+    const { ctx, mockSaveGroceryList } = makeWriteToolCtx(groceryListStore, groceryItemStore, server);
+    registerRenameGroceryListTool(server, ctx);
+
+    const result = await callTool("rename_grocery_list", { uid: listA.uid, newName: "Costco Run" });
+    const text = getText(result);
+
+    expect(text).toContain("already exists");
+    expect(text).toContain(listB.uid);
+    expect(mockSaveGroceryList).not.toHaveBeenCalled();
+  });
+});
+
+describe("delete_grocery_list tool", () => {
+  it("grocery-surface.AC1.9: returns sync-not-ready message when stores not loaded", async () => {
+    const groceryListStore = new GroceryListStore();
+    const groceryItemStore = new GroceryItemStore();
+    // DO NOT call .load()
+
+    const { server, callTool } = makeTestServer();
+    const { ctx } = makeWriteToolCtx(groceryListStore, groceryItemStore, server);
+    registerDeleteGroceryListTool(server, ctx);
+
+    const result = await callTool("delete_grocery_list", { uid: "some-uid" });
+    const text = getText(result);
+
+    expect(text.toLowerCase()).toContain("not yet synced");
+  });
+
+  it("grocery-surface.AC1.6: returns not-found for unknown UID (not tombstoned)", async () => {
+    const groceryListStore = new GroceryListStore();
+    const groceryItemStore = new GroceryItemStore();
+    groceryListStore.load([]);
+    groceryItemStore.load([]);
+
+    const { server, callTool } = makeTestServer();
+    const { ctx, mockSaveGroceryList } = makeWriteToolCtx(groceryListStore, groceryItemStore, server);
+    registerDeleteGroceryListTool(server, ctx);
+
+    const result = await callTool("delete_grocery_list", { uid: "nonexistent-uid" });
+    const text = getText(result);
+
+    expect(text.toLowerCase()).toContain("no grocery list found");
+    expect(mockSaveGroceryList).not.toHaveBeenCalled();
+  });
+
+  it("grocery-surface.AC1.6: soft-deletes list by setting deleted: true", async () => {
+    const groceryListStore = new GroceryListStore();
+    const groceryItemStore = new GroceryItemStore();
+    const list = makeGroceryList({ name: "Weekly Shopping" });
+    groceryListStore.load([list]);
+    groceryItemStore.load([]);
+
+    const { server, callTool } = makeTestServer();
+    const { ctx, mockSaveGroceryList, resourceListChanged } = makeWriteToolCtx(
+      groceryListStore,
+      groceryItemStore,
+      server,
+    );
+    registerDeleteGroceryListTool(server, ctx);
+
+    const result = await callTool("delete_grocery_list", { uid: list.uid });
+    const text = getText(result);
+
+    expect(text).toContain("deleted");
+    expect(mockSaveGroceryList).toHaveBeenCalledOnce();
+    const savedArg = mockSaveGroceryList.mock.calls[0]![0] as Record<string, unknown>;
+    expect(savedArg["deleted"]).toBe(true);
+    expect(savedArg["uid"]).toBe(list.uid);
+    expect(resourceListChanged).toHaveBeenCalledOnce();
+  });
+
+  it("grocery-surface.AC1.6: list becomes tombstoned after deletion", async () => {
+    const groceryListStore = new GroceryListStore();
+    const groceryItemStore = new GroceryItemStore();
+    const list = makeGroceryList({ name: "Weekly Shopping" });
+    groceryListStore.load([list]);
+    groceryItemStore.load([]);
+
+    const { server, callTool } = makeTestServer();
+    const { ctx } = makeWriteToolCtx(groceryListStore, groceryItemStore, server);
+    registerDeleteGroceryListTool(server, ctx);
+
+    await callTool("delete_grocery_list", { uid: list.uid });
+
+    expect(groceryListStore.isTombstone(list.uid)).toBe(true);
+  });
+
+  it("grocery-surface.AC1.11: tombstoned (already-deleted) UID returns idempotent message", async () => {
+    const groceryListStore = new GroceryListStore();
+    const groceryItemStore = new GroceryItemStore();
+    const list = makeGroceryList({ name: "Weekly Shopping" });
+    groceryListStore.load([list]);
+    groceryItemStore.load([]);
+
+    const { server, callTool } = makeTestServer();
+    const { ctx, mockSaveGroceryList } = makeWriteToolCtx(groceryListStore, groceryItemStore, server);
+    registerDeleteGroceryListTool(server, ctx);
+
+    // First delete — tombstones the UID
+    await callTool("delete_grocery_list", { uid: list.uid });
+    mockSaveGroceryList.mockClear();
+
+    // Second delete — should return idempotent message, NOT call save again
+    const result = await callTool("delete_grocery_list", { uid: list.uid });
+    const text = getText(result);
+
+    expect(text.toLowerCase()).toContain("already deleted");
+    expect(mockSaveGroceryList).not.toHaveBeenCalled();
+  });
+
+  it("grocery-surface.AC1.6: does not cascade to items (no saveGroceryItems call)", async () => {
+    const groceryListStore = new GroceryListStore();
+    const groceryItemStore = new GroceryItemStore();
+    const list = makeGroceryList({ name: "Weekly Shopping" });
+    const item = makeGroceryItem({ listUid: list.uid });
+    groceryListStore.load([list]);
+    groceryItemStore.load([item]);
+
+    const { server, callTool } = makeTestServer();
+    const { ctx, mockSaveGroceryList } = makeWriteToolCtx(groceryListStore, groceryItemStore, server);
+    registerDeleteGroceryListTool(server, ctx);
+
+    await callTool("delete_grocery_list", { uid: list.uid });
+
+    // Only saveGroceryList should be called — no saveGroceryItems
+    expect(mockSaveGroceryList).toHaveBeenCalledOnce();
+    // client mock has no saveGroceryItems — if it were called it would throw
   });
 });
