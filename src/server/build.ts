@@ -31,7 +31,7 @@ import {
 } from "../tools/grocery-item.js";
 import { registerMoveToPantryTool } from "../tools/grocery-move.js";
 import { registerClearPurchasedTool, registerClearAllTool } from "../tools/grocery-clear.js";
-import { registerAddPantryItemTool } from "../tools/pantry-add.js";
+import { registerAddPantryItemsTool } from "../tools/pantry-batch-add.js";
 import { registerDeletePantryItemTool } from "../tools/pantry-delete.js";
 import { registerGetPantryItemTool } from "../tools/pantry-get.js";
 import { registerListPantryTool } from "../tools/pantry-list.js";
@@ -46,10 +46,13 @@ import { getCacheDir } from "../utils/xdg.js";
 import type { AppContext, SessionContext } from "./app-context.js";
 import type { Notifier } from "./notifier.js";
 import { buildAuthContext } from "../auth/build.js";
+import { createRequire } from "node:module";
 import { createLogger } from "../utils/log.js";
 
 const SERVER_NAME = "mcp-paprika";
-const SERVER_VERSION = "0.0.0";
+const _require = createRequire(import.meta.url);
+const _pkg = _require("../../package.json") as { version: string };
+const SERVER_VERSION = _pkg.version;
 
 /**
  * Build the process-wide AppContext and SyncEngine.
@@ -278,7 +281,7 @@ export function buildMcpServer(app: AppContext): McpServer {
   registerDeleteTool(server, sessionCtx);
   registerListPantryTool(server, sessionCtx);
   registerGetPantryItemTool(server, sessionCtx);
-  registerAddPantryItemTool(server, sessionCtx);
+  registerAddPantryItemsTool(server, sessionCtx);
   registerUpdatePantryItemTool(server, sessionCtx);
   registerDeletePantryItemTool(server, sessionCtx);
   registerAislesTool(server, sessionCtx);
