@@ -1,13 +1,3 @@
-/**
- * Typed HTTP client for the Paprika Cloud Sync API.
- *
- * Encapsulates authentication against the v1 login endpoint
- * and resilient request execution against the v2 data endpoint.
- *
- * Provides recipe and category read methods, plus write methods
- * added in P1-U07 (saveRecipe, deleteRecipe, notifySync).
- */
-
 import { gzipSync } from "node:zlib";
 import {
   ExponentialBackoff,
@@ -294,42 +284,35 @@ export class PaprikaClient {
   }
 
   async saveRecipe(recipe: Readonly<Recipe>): Promise<Recipe> {
-    const formData = this.buildRecipeFormData(recipe);
+    const formData = this.buildEntityFormData(recipeToApiPayload(recipe), "data.gz");
     await this.request("POST", `${API_BASE}/recipe/${recipe.uid}/`, z.boolean(), formData);
     return recipe as Recipe;
   }
 
   async saveAisle(aisle: Readonly<Aisle>): Promise<Aisle> {
-    const formData = this.buildAisleFormData(aisle);
-    await this.request("POST", `${API_BASE}/groceryaisles/`, z.boolean(), formData);
+    await this.postEntities(`${API_BASE}/groceryaisles/`, [aisle], aisleToApiPayload);
     return aisle as Aisle;
   }
 
   async savePantryItems(items: ReadonlyArray<Readonly<PantryItem>>): Promise<ReadonlyArray<PantryItem>> {
-    const formData = this.buildPantryItemsFormData(items);
-    // Pantry writes (add, update, soft-delete) all POST to the collection URL;
-    // the UID lives in the body, not the URL. Diverges from `saveRecipe`
-    // (which uses /sync/recipe/{uid}/) and matches `groceryaisles`/`groceryingredients`.
-    // Verified 2026-05-08 against macOS Paprika.app v3.8.4 (build:41).
-    await this.request("POST", `${API_BASE}/pantry/`, z.boolean(), formData);
+    // Pantry writes POST to the collection URL; the UID lives in the body, not the URL.
+    // Diverges from `saveRecipe` (which uses /sync/recipe/{uid}/). Verified 2026-05-08.
+    await this.postEntities(`${API_BASE}/pantry/`, items, pantryItemToApiPayload);
     return items;
   }
 
   async saveGroceryList(list: Readonly<GroceryList>): Promise<GroceryList> {
-    const formData = this.buildGroceryListFormData(list);
-    await this.request("POST", `${API_BASE}/grocerylists/`, z.boolean(), formData);
+    await this.postEntities(`${API_BASE}/grocerylists/`, [list], groceryListToApiPayload);
     return list as GroceryList;
   }
 
   async saveGroceryItems(items: ReadonlyArray<Readonly<GroceryItem>>): Promise<ReadonlyArray<GroceryItem>> {
-    const formData = this.buildGroceryItemsFormData(items);
-    await this.request("POST", `${API_BASE}/groceries/`, z.boolean(), formData);
+    await this.postEntities(`${API_BASE}/groceries/`, items, groceryItemToApiPayload);
     return items;
   }
 
   async saveGroceryIngredient(ingredient: Readonly<GroceryIngredient>): Promise<GroceryIngredient> {
-    const formData = this.buildGroceryIngredientFormData(ingredient);
-    await this.request("POST", `${API_BASE}/groceryingredients/`, z.boolean(), formData);
+    await this.postEntities(`${API_BASE}/groceryingredients/`, [ingredient], groceryIngredientToApiPayload);
     return ingredient as GroceryIngredient;
   }
 
@@ -343,67 +326,22 @@ export class PaprikaClient {
     await this.notifySync();
   }
 
-  private buildRecipeFormData(recipe: Readonly<Recipe>): FormData {
-    const payload = recipeToApiPayload(recipe);
+  private buildEntityFormData(payload: unknown, filename = "file"): FormData {
     const json = JSON.stringify(payload);
     const compressed = gzipSync(json);
     const blob = new Blob([compressed]);
     const formData = new FormData();
-    formData.append("data", blob, "data.gz");
+    formData.append("data", blob, filename);
     return formData;
   }
 
-  private buildAisleFormData(aisle: Readonly<Aisle>): FormData {
-    const payload = [aisleToApiPayload(aisle)];
-    const json = JSON.stringify(payload);
-    const compressed = gzipSync(json);
-    const blob = new Blob([compressed]);
-    const formData = new FormData();
-    formData.append("data", blob, "file");
-    return formData;
-  }
-
-  private buildPantryItemsFormData(items: ReadonlyArray<Readonly<PantryItem>>): FormData {
-    // Wire format: gzipped JSON array of items, uploaded as multipart field
-    // name="data" filename="file". The Paprika app batches when multiple changes
-    // happen quickly; callers may send a one-item or multi-item batch.
-    const payload = items.map((item) => pantryItemToApiPayload(item));
-    const json = JSON.stringify(payload);
-    const compressed = gzipSync(json);
-    const blob = new Blob([compressed]);
-    const formData = new FormData();
-    formData.append("data", blob, "file");
-    return formData;
-  }
-
-  private buildGroceryListFormData(list: Readonly<GroceryList>): FormData {
-    const payload = [groceryListToApiPayload(list)];
-    const json = JSON.stringify(payload);
-    const compressed = gzipSync(json);
-    const blob = new Blob([compressed]);
-    const formData = new FormData();
-    formData.append("data", blob, "file");
-    return formData;
-  }
-
-  private buildGroceryItemsFormData(items: ReadonlyArray<Readonly<GroceryItem>>): FormData {
-    const payload = items.map((item) => groceryItemToApiPayload(item));
-    const json = JSON.stringify(payload);
-    const compressed = gzipSync(json);
-    const blob = new Blob([compressed]);
-    const formData = new FormData();
-    formData.append("data", blob, "file");
-    return formData;
-  }
-
-  private buildGroceryIngredientFormData(ingredient: Readonly<GroceryIngredient>): FormData {
-    const payload = [groceryIngredientToApiPayload(ingredient)];
-    const json = JSON.stringify(payload);
-    const compressed = gzipSync(json);
-    const blob = new Blob([compressed]);
-    const formData = new FormData();
-    formData.append("data", blob, "file");
-    return formData;
+  private async postEntities<T>(
+    url: string,
+    items: ReadonlyArray<Readonly<T>>,
+    toPayload: (item: Readonly<T>) => Record<string, unknown>,
+  ): Promise<void> {
+    const formData = this.buildEntityFormData(items.map((item) => toPayload(item)));
+    await this.request("POST", url, z.boolean(), formData);
   }
 
   private async request<T>(
