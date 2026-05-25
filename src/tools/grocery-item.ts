@@ -22,10 +22,10 @@ const itemInputSchema = z.object({
   instruction: z.string().optional().describe("Free-form notes for this item"),
 });
 
-export function registerAddGroceryItemTool(server: McpServer, ctx: ServerContext): void {
-  const log = ctx.log.child({ component: "add_grocery_item" });
+export function registerAddGroceryItemsTool(server: McpServer, ctx: ServerContext): void {
+  const log = ctx.log.child({ component: "add_grocery_items" });
   server.registerTool(
-    "add_grocery_item",
+    "add_grocery_items",
     {
       description:
         "Add one or more items to a grocery list. Before adding, call read_grocery_list to check for " +
@@ -36,7 +36,7 @@ export function registerAddGroceryItemTool(server: McpServer, ctx: ServerContext
       },
     },
     async (args) => {
-      log.info({ tool: "add_grocery_item", listUid: args.listUid, count: args.items.length }, "tool invoked");
+      log.info({ tool: "add_grocery_items", listUid: args.listUid, count: args.items.length }, "tool invoked");
       return groceryStartGuard(ctx).match(
         async (): Promise<CallToolResult> => {
           // Validate listUid

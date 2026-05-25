@@ -8,13 +8,13 @@ import { makeGroceryList } from "../cache/__fixtures__/grocery-lists.js";
 import { makeGroceryItem } from "../cache/__fixtures__/grocery-items.js";
 import { makeGroceryIngredient } from "../cache/__fixtures__/grocery-ingredients.js";
 import { makeAisle } from "../cache/__fixtures__/aisles.js";
-import { registerAddGroceryItemTool, registerUpdateGroceryItemTool } from "./grocery-item.js";
+import { registerAddGroceryItemsTool, registerUpdateGroceryItemTool } from "./grocery-item.js";
 import { makeTestServer, makeCtx, getText, makeStubNotifier } from "./tool-test-utils.js";
 import type { PaprikaClient } from "../paprika/client.js";
 import type { DiskCacheRoot } from "../cache/disk/root.js";
 import type { GroceryListUid, GroceryItemUid, AisleUid } from "../paprika/types.js";
 
-describe("add_grocery_item tool", () => {
+describe("add_grocery_items tool", () => {
   let groceryListStore: GroceryListStore;
   let groceryItemStore: GroceryItemStore;
   let groceryIngredientStore: GroceryIngredientStore;
@@ -63,14 +63,14 @@ describe("add_grocery_item tool", () => {
       } as unknown as DiskCacheRoot,
       notifier,
     });
-    registerAddGroceryItemTool(server, ctx);
+    registerAddGroceryItemsTool(server, ctx);
     return { server, callTool, notifier, resourceListChanged, ctx };
   }
 
   it("grocery-surface.AC2.1: single item with quantity creates name as 'quantity ingredient'", async () => {
     const { callTool } = makeAddCtx();
 
-    const result = await callTool("add_grocery_item", {
+    const result = await callTool("add_grocery_items", {
       listUid: "LIST-1",
       items: [{ ingredient: "Chicken", quantity: "2 lbs" }],
     });
@@ -94,7 +94,7 @@ describe("add_grocery_item tool", () => {
   it("grocery-surface.AC2.1: single item with empty quantity creates name as just ingredient", async () => {
     const { callTool } = makeAddCtx();
 
-    await callTool("add_grocery_item", {
+    await callTool("add_grocery_items", {
       listUid: "LIST-1",
       items: [{ ingredient: "Butter" }],
     });
@@ -109,7 +109,7 @@ describe("add_grocery_item tool", () => {
   it("grocery-surface.AC2.2: batch of 3 items calls saveGroceryItems once with all 3", async () => {
     const { callTool } = makeAddCtx();
 
-    const result = await callTool("add_grocery_item", {
+    const result = await callTool("add_grocery_items", {
       listUid: "LIST-1",
       items: [
         { ingredient: "Apples", quantity: "6" },
@@ -136,7 +136,7 @@ describe("add_grocery_item tool", () => {
     const { callTool } = makeAddCtx();
 
     // "Butter" is in the ingredient catalog with aisleUid "AISLE-1" → "Produce"
-    await callTool("add_grocery_item", {
+    await callTool("add_grocery_items", {
       listUid: "LIST-1",
       items: [{ ingredient: "Butter" }],
     });
@@ -158,7 +158,7 @@ describe("add_grocery_item tool", () => {
     const { callTool } = makeAddCtx();
 
     // "Unknown Spice" is NOT in the ingredient catalog
-    await callTool("add_grocery_item", {
+    await callTool("add_grocery_items", {
       listUid: "LIST-1",
       items: [{ ingredient: "Unknown Spice" }],
     });
@@ -200,9 +200,9 @@ describe("add_grocery_item tool", () => {
       } as unknown as DiskCacheRoot,
       notifier,
     });
-    registerAddGroceryItemTool(server, ctx);
+    registerAddGroceryItemsTool(server, ctx);
 
-    await callTool2("add_grocery_item", {
+    await callTool2("add_grocery_items", {
       listUid: "LIST-1",
       items: [{ ingredient: "Butter", aisle: "Dairy" }],
     });
@@ -221,7 +221,7 @@ describe("add_grocery_item tool", () => {
   it("grocery-surface.AC2.9: invalid listUid returns error without calling saveGroceryItems", async () => {
     const { callTool } = makeAddCtx();
 
-    const result = await callTool("add_grocery_item", {
+    const result = await callTool("add_grocery_items", {
       listUid: "NONEXISTENT",
       items: [{ ingredient: "Butter" }],
     });
@@ -235,7 +235,7 @@ describe("add_grocery_item tool", () => {
     const { callTool } = makeAddCtx();
 
     // An empty ingredient string should be rejected — all-or-nothing
-    const result = await callTool("add_grocery_item", {
+    const result = await callTool("add_grocery_items", {
       listUid: "LIST-1",
       items: [
         { ingredient: "Apples" },
@@ -248,7 +248,7 @@ describe("add_grocery_item tool", () => {
     expect(mockSaveGroceryItems).not.toHaveBeenCalled();
   });
 
-  it("grocery-surface.AC2.12: sync-not-ready blocks add_grocery_item when stores not loaded", async () => {
+  it("grocery-surface.AC2.12: sync-not-ready blocks add_grocery_items when stores not loaded", async () => {
     // Fresh stores with no .load() called
     const freshListStore = new GroceryListStore();
     const freshItemStore = new GroceryItemStore();
@@ -271,9 +271,9 @@ describe("add_grocery_item tool", () => {
       } as unknown as DiskCacheRoot,
       notifier,
     });
-    registerAddGroceryItemTool(server, ctx);
+    registerAddGroceryItemsTool(server, ctx);
 
-    const result = await callTool("add_grocery_item", {
+    const result = await callTool("add_grocery_items", {
       listUid: "LIST-1",
       items: [{ ingredient: "Butter" }],
     });
