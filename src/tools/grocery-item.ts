@@ -80,6 +80,7 @@ export function registerAddGroceryItemsTool(server: McpServer, ctx: ServerContex
                     const updated = { ...catalogEntry, aisleUid };
                     await ctx.client.saveGroceryIngredient(updated);
                     ctx.groceryIngredientStore.set(updated);
+                    await ctx.cache.groceryIngredients.put(updated);
                   } else {
                     const created = {
                       uid: GroceryIngredientUidSchema.parse(crypto.randomUUID().toUpperCase()),
@@ -89,6 +90,7 @@ export function registerAddGroceryItemsTool(server: McpServer, ctx: ServerContex
                     };
                     await ctx.client.saveGroceryIngredient(created);
                     ctx.groceryIngredientStore.set(created);
+                    await ctx.cache.groceryIngredients.put(created);
                   }
                 }
               } else {

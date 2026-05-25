@@ -63,6 +63,7 @@ describe("add_grocery_items tool", () => {
       } as unknown as PaprikaClient,
       cache: {
         groceryItems: { put: mockPutGroceryItem },
+        groceryIngredients: { put: vi.fn() },
         flush: mockFlush,
       } as unknown as DiskCacheRoot,
       notifier,
