@@ -1,3 +1,4 @@
+import { fromAny } from "@total-typescript/shoehorn";
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { createHash } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
@@ -27,13 +28,13 @@ function textToVector(text: string): Array<number> {
  * Returns vectors based on text content, ensuring reproducible search results.
  */
 function makeDeterministicEmbedder(): EmbeddingClient {
-  return {
+  return fromAny({
     embed: vi.fn(async (text: string) => textToVector(text)),
     embedBatch: vi.fn(async (texts: ReadonlyArray<string>) => texts.map((t) => textToVector(t))),
     get dimensions() {
       return 3;
     },
-  } as unknown as EmbeddingClient;
+  });
 }
 
 describe("VectorStore integration tests with real Vectra", () => {

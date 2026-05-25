@@ -1,3 +1,4 @@
+import { fromAny } from "@total-typescript/shoehorn";
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -65,7 +66,7 @@ function makeRoutesConfig(ctx: RoutesCtx, overrides: RoutesOverrides = {}): Auth
       allowedAlgs: ["RS256"],
     },
     discovery: makeDiscoveryDoc(ctx.oidcStubIssuer),
-    jwks: overrides.jwks ?? ((async () => ({ keys: [] })) as unknown as JWTVerifyGetKey),
+    jwks: overrides.jwks ?? fromAny(async () => ({ keys: [] })),
     publicUrl: "https://mcp.example.com",
     log: { auth: SILENT_LOG, oidcClient: SILENT_LOG },
   };

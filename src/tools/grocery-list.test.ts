@@ -1,3 +1,4 @@
+import { fromAny } from "@total-typescript/shoehorn";
 import { describe, it, expect, vi } from "vitest";
 import { RecipeStore } from "../cache/recipe-store.js";
 import { GroceryListStore } from "../cache/grocery-list-store.js";
@@ -5,8 +6,6 @@ import { GroceryItemStore } from "../cache/grocery-item-store.js";
 import { makeGroceryList } from "../cache/__fixtures__/grocery-lists.js";
 import { makeGroceryItem } from "../cache/__fixtures__/grocery-items.js";
 import { makeTestServer, makeCtx, getText, makeStubNotifier } from "./tool-test-utils.js";
-import type { PaprikaClient } from "../paprika/client.js";
-import type { DiskCacheRoot } from "../cache/disk/root.js";
 import {
   registerListGroceryListsTool,
   registerReadGroceryListTool,
@@ -299,14 +298,14 @@ function makeWriteToolCtx(
   const ctx = makeCtx(new RecipeStore(), server, {
     groceryListStore,
     groceryItemStore,
-    client: {
+    client: fromAny({
       saveGroceryList: mockSaveGroceryList,
       notifySync: mockNotifySync,
-    } as unknown as PaprikaClient,
-    cache: {
+    }),
+    cache: fromAny({
       groceryLists: { put: mockPutGroceryList, remove: mockRemoveGroceryList },
       flush: mockFlush,
-    } as unknown as DiskCacheRoot,
+    }),
     notifier,
   });
 

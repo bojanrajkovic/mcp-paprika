@@ -1,3 +1,4 @@
+import { fromAny } from "@total-typescript/shoehorn";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { RecipeStore } from "../cache/recipe-store.js";
 import { GroceryListStore } from "../cache/grocery-list-store.js";
@@ -14,8 +15,6 @@ import {
   registerDeleteGroceryItemTool,
 } from "./grocery-item.js";
 import { makeTestServer, makeCtx, getText, makeStubNotifier } from "./tool-test-utils.js";
-import type { PaprikaClient } from "../paprika/client.js";
-import type { DiskCacheRoot } from "../cache/disk/root.js";
 import type { GroceryListUid, GroceryItemUid, AisleUid } from "../paprika/types.js";
 
 describe("add_grocery_items tool", () => {
@@ -56,16 +55,16 @@ describe("add_grocery_items tool", () => {
       groceryItemStore,
       groceryIngredientStore,
       aisleStore,
-      client: {
+      client: fromAny({
         saveGroceryItems: mockSaveGroceryItems,
         saveGroceryIngredient: mockSaveGroceryIngredient,
         notifySync: mockNotifySync,
-      } as unknown as PaprikaClient,
-      cache: {
+      }),
+      cache: fromAny({
         groceryItems: { put: mockPutGroceryItem },
         groceryIngredients: { put: vi.fn() },
         flush: mockFlush,
-      } as unknown as DiskCacheRoot,
+      }),
       notifier,
     });
     registerAddGroceryItemsTool(server, ctx);
@@ -192,17 +191,17 @@ describe("add_grocery_items tool", () => {
       groceryItemStore,
       groceryIngredientStore,
       aisleStore,
-      client: {
+      client: fromAny({
         saveGroceryItems: mockSaveGroceryItems,
         saveGroceryIngredient: mockSaveGroceryIngredient,
         saveAisle: mockSaveAisle,
         notifySync: mockNotifySync,
-      } as unknown as PaprikaClient,
-      cache: {
+      }),
+      cache: fromAny({
         groceryItems: { put: mockPutGroceryItem },
         aisles: { put: vi.fn().mockResolvedValue(undefined) },
         flush: mockFlush,
-      } as unknown as DiskCacheRoot,
+      }),
       notifier,
     });
     registerAddGroceryItemsTool(server, ctx);
@@ -277,17 +276,17 @@ describe("add_grocery_items tool", () => {
       groceryItemStore,
       groceryIngredientStore,
       aisleStore,
-      client: {
+      client: fromAny({
         saveGroceryItems: mockSaveGroceryItems,
         saveGroceryIngredient: mockSaveGroceryIngredient,
         saveAisle: mockSaveAisle,
         notifySync: mockNotifySync,
-      } as unknown as PaprikaClient,
-      cache: {
+      }),
+      cache: fromAny({
         groceryItems: { put: mockPutGroceryItem },
         aisles: { put: vi.fn() },
         flush: mockFlush,
-      } as unknown as DiskCacheRoot,
+      }),
       notifier,
     });
     registerAddGroceryItemsTool(server, ctx);
@@ -318,17 +317,17 @@ describe("add_grocery_items tool", () => {
       groceryItemStore,
       groceryIngredientStore,
       aisleStore,
-      client: {
+      client: fromAny({
         saveGroceryItems: mockSaveGroceryItems,
         saveGroceryIngredient: mockSaveGroceryIngredient,
         saveAisle: mockSaveAisle,
         notifySync: mockNotifySync,
-      } as unknown as PaprikaClient,
-      cache: {
+      }),
+      cache: fromAny({
         groceryItems: { put: mockPutGroceryItem },
         aisles: { put: vi.fn() },
         flush: mockFlush,
-      } as unknown as DiskCacheRoot,
+      }),
       notifier,
     });
     registerAddGroceryItemsTool(server, ctx);
@@ -362,15 +361,15 @@ describe("add_grocery_items tool", () => {
       groceryItemStore: freshItemStore,
       groceryIngredientStore,
       aisleStore,
-      client: {
+      client: fromAny({
         saveGroceryItems: mockSaveGroceryItems,
         saveGroceryIngredient: mockSaveGroceryIngredient,
         notifySync: mockNotifySync,
-      } as unknown as PaprikaClient,
-      cache: {
+      }),
+      cache: fromAny({
         groceryItems: { put: mockPutGroceryItem },
         flush: mockFlush,
-      } as unknown as DiskCacheRoot,
+      }),
       notifier,
     });
     registerAddGroceryItemsTool(server, ctx);
@@ -421,14 +420,14 @@ describe("update_grocery_item tool", () => {
       groceryItemStore,
       groceryIngredientStore,
       aisleStore,
-      client: {
+      client: fromAny({
         saveGroceryItems: mockSaveGroceryItems,
         notifySync: mockNotifySync,
-      } as unknown as PaprikaClient,
-      cache: {
+      }),
+      cache: fromAny({
         groceryItems: { put: mockPutGroceryItem },
         flush: mockFlush,
-      } as unknown as DiskCacheRoot,
+      }),
       notifier,
     });
     registerUpdateGroceryItemTool(server, ctx);
@@ -565,14 +564,14 @@ describe("update_grocery_item tool", () => {
       groceryItemStore: freshItemStore,
       groceryIngredientStore,
       aisleStore,
-      client: {
+      client: fromAny({
         saveGroceryItems: mockSaveGroceryItems,
         notifySync: mockNotifySync,
-      } as unknown as PaprikaClient,
-      cache: {
+      }),
+      cache: fromAny({
         groceryItems: { put: mockPutGroceryItem },
         flush: mockFlush,
-      } as unknown as DiskCacheRoot,
+      }),
       notifier,
     });
     registerUpdateGroceryItemTool(server, ctx);
@@ -625,14 +624,14 @@ describe("delete_grocery_item tool", () => {
       groceryItemStore,
       groceryIngredientStore,
       aisleStore,
-      client: {
+      client: fromAny({
         saveGroceryItems: mockSaveGroceryItems,
         notifySync: mockNotifySync,
-      } as unknown as PaprikaClient,
-      cache: {
+      }),
+      cache: fromAny({
         groceryItems: { put: mockPutGroceryItem, remove: mockRemoveGroceryItem },
         flush: mockFlush,
-      } as unknown as DiskCacheRoot,
+      }),
       notifier,
     });
     registerDeleteGroceryItemTool(server, ctx);
@@ -685,14 +684,14 @@ describe("delete_grocery_item tool", () => {
       groceryItemStore: freshItemStore,
       groceryIngredientStore,
       aisleStore,
-      client: {
+      client: fromAny({
         saveGroceryItems: mockSaveGroceryItems,
         notifySync: mockNotifySync,
-      } as unknown as PaprikaClient,
-      cache: {
+      }),
+      cache: fromAny({
         groceryItems: { put: mockPutGroceryItem, remove: mockRemoveGroceryItem },
         flush: mockFlush,
-      } as unknown as DiskCacheRoot,
+      }),
       notifier,
     });
     registerDeleteGroceryItemTool(server, ctx);

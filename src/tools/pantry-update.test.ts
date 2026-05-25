@@ -1,3 +1,4 @@
+import { fromAny } from "@total-typescript/shoehorn";
 import { describe, it, expect, vi } from "vitest";
 import { RecipeStore } from "../cache/recipe-store.js";
 import { PantryStore } from "../cache/pantry-store.js";
@@ -6,8 +7,6 @@ import { makePantryItem } from "../cache/__fixtures__/pantry.js";
 import { makeAisle } from "../cache/__fixtures__/aisles.js";
 import { registerUpdatePantryItemTool } from "./pantry-update.js";
 import { makeTestServer, makeCtx, getText } from "./tool-test-utils.js";
-import type { PaprikaClient } from "../paprika/client.js";
-import type { DiskCacheRoot } from "../cache/disk/index.js";
 import type { PantryItemUid } from "../paprika/types.js";
 import { PaprikaAPIError } from "../paprika/errors.js";
 
@@ -35,8 +34,8 @@ describe("pantry-mutations.AC5: update_pantry_item tool", () => {
     const { server, callTool } = makeTestServer();
     const ctx = makeCtx(store, server, {
       pantryStore,
-      client: { savePantryItems: mockSavePantryItems, notifySync: mockNotifySync } as unknown as PaprikaClient,
-      cache: { pantry: { put: mockPutPantryItem }, flush: mockFlush } as unknown as DiskCacheRoot,
+      client: fromAny({ savePantryItems: mockSavePantryItems, notifySync: mockNotifySync }),
+      cache: fromAny({ pantry: { put: mockPutPantryItem }, flush: mockFlush }),
     });
     registerUpdatePantryItemTool(server, ctx);
 
@@ -79,8 +78,8 @@ describe("pantry-mutations.AC5: update_pantry_item tool", () => {
     const { server, callTool } = makeTestServer();
     const ctx = makeCtx(store, server, {
       pantryStore,
-      client: { savePantryItems: mockSavePantryItems, notifySync: mockNotifySync } as unknown as PaprikaClient,
-      cache: { pantry: { put: mockPutPantryItem }, flush: mockFlush } as unknown as DiskCacheRoot,
+      client: fromAny({ savePantryItems: mockSavePantryItems, notifySync: mockNotifySync }),
+      cache: fromAny({ pantry: { put: mockPutPantryItem }, flush: mockFlush }),
     });
     registerUpdatePantryItemTool(server, ctx);
 
@@ -116,8 +115,8 @@ describe("pantry-mutations.AC5: update_pantry_item tool", () => {
     const { server, callTool } = makeTestServer();
     const ctx = makeCtx(store, server, {
       pantryStore,
-      client: { savePantryItems: mockSavePantryItems, notifySync: mockNotifySync } as unknown as PaprikaClient,
-      cache: { pantry: { put: mockPutPantryItem }, flush: mockFlush } as unknown as DiskCacheRoot,
+      client: fromAny({ savePantryItems: mockSavePantryItems, notifySync: mockNotifySync }),
+      cache: fromAny({ pantry: { put: mockPutPantryItem }, flush: mockFlush }),
     });
     registerUpdatePantryItemTool(server, ctx);
 
@@ -152,8 +151,8 @@ describe("pantry-mutations.AC5: update_pantry_item tool", () => {
     const { server, callTool } = makeTestServer();
     const ctx = makeCtx(store, server, {
       pantryStore,
-      client: { savePantryItems: mockSavePantryItems, notifySync: mockNotifySync } as unknown as PaprikaClient,
-      cache: { pantry: { put: mockPutPantryItem }, flush: mockFlush } as unknown as DiskCacheRoot,
+      client: fromAny({ savePantryItems: mockSavePantryItems, notifySync: mockNotifySync }),
+      cache: fromAny({ pantry: { put: mockPutPantryItem }, flush: mockFlush }),
     });
     registerUpdatePantryItemTool(server, ctx);
 
@@ -187,8 +186,8 @@ describe("pantry-mutations.AC5: update_pantry_item tool", () => {
     const { server, callTool } = makeTestServer();
     const ctx = makeCtx(store, server, {
       pantryStore,
-      client: { savePantryItems: mockSavePantryItems, notifySync: mockNotifySync } as unknown as PaprikaClient,
-      cache: { pantry: { put: mockPutPantryItem }, flush: mockFlush } as unknown as DiskCacheRoot,
+      client: fromAny({ savePantryItems: mockSavePantryItems, notifySync: mockNotifySync }),
+      cache: fromAny({ pantry: { put: mockPutPantryItem }, flush: mockFlush }),
     });
     registerUpdatePantryItemTool(server, ctx);
 
@@ -215,8 +214,8 @@ describe("pantry-mutations.AC5: update_pantry_item tool", () => {
     const { server, callTool } = makeTestServer();
     const ctx = makeCtx(store, server, {
       pantryStore,
-      client: { savePantryItems: mockSavePantryItems, notifySync: mockNotifySync } as unknown as PaprikaClient,
-      cache: { pantry: { put: mockPutPantryItem }, flush: mockFlush } as unknown as DiskCacheRoot,
+      client: fromAny({ savePantryItems: mockSavePantryItems, notifySync: mockNotifySync }),
+      cache: fromAny({ pantry: { put: mockPutPantryItem }, flush: mockFlush }),
     });
     registerUpdatePantryItemTool(server, ctx);
 
@@ -244,8 +243,8 @@ describe("pantry-mutations.AC5: update_pantry_item tool", () => {
     const { server, callTool } = makeTestServer();
     const ctx = makeCtx(store, server, {
       pantryStore,
-      client: { savePantryItems: mockSavePantryItems, notifySync: mockNotifySync } as unknown as PaprikaClient,
-      cache: { pantry: { put: mockPutPantryItem }, flush: mockFlush } as unknown as DiskCacheRoot,
+      client: fromAny({ savePantryItems: mockSavePantryItems, notifySync: mockNotifySync }),
+      cache: fromAny({ pantry: { put: mockPutPantryItem }, flush: mockFlush }),
     });
     registerUpdatePantryItemTool(server, ctx);
 
@@ -281,8 +280,8 @@ describe("pantry-mutations.AC5: update_pantry_item tool", () => {
     const ctx = makeCtx(store, server, {
       pantryStore,
       aisleStore,
-      client: { savePantryItems: mockSavePantryItems, notifySync: mockNotifySync } as unknown as PaprikaClient,
-      cache: { pantry: { put: mockPutPantryItem }, flush: mockFlush } as unknown as DiskCacheRoot,
+      client: fromAny({ savePantryItems: mockSavePantryItems, notifySync: mockNotifySync }),
+      cache: fromAny({ pantry: { put: mockPutPantryItem }, flush: mockFlush }),
     });
     registerUpdatePantryItemTool(server, ctx);
 
@@ -314,8 +313,8 @@ describe("pantry-mutations.AC5: update_pantry_item tool", () => {
     const ctx = makeCtx(store, server, {
       pantryStore,
       aisleStore,
-      client: { savePantryItems: mockSavePantryItems, notifySync: mockNotifySync } as unknown as PaprikaClient,
-      cache: { pantry: { put: mockPutPantryItem }, flush: mockFlush } as unknown as DiskCacheRoot,
+      client: fromAny({ savePantryItems: mockSavePantryItems, notifySync: mockNotifySync }),
+      cache: fromAny({ pantry: { put: mockPutPantryItem }, flush: mockFlush }),
     });
     registerUpdatePantryItemTool(server, ctx);
 
@@ -346,16 +345,16 @@ describe("pantry-mutations.AC5: update_pantry_item tool", () => {
     const ctx = makeCtx(store, server, {
       pantryStore,
       aisleStore,
-      client: {
+      client: fromAny({
         saveAisle: mockSaveAisle,
         savePantryItems: mockSavePantryItems,
         notifySync: mockNotifySync,
-      } as unknown as PaprikaClient,
-      cache: {
+      }),
+      cache: fromAny({
         pantry: { put: mockPutPantryItem },
         aisles: { put: mockPutAisle },
         flush: mockFlush,
-      } as unknown as DiskCacheRoot,
+      }),
     });
     registerUpdatePantryItemTool(server, ctx);
 
@@ -386,8 +385,8 @@ describe("pantry-mutations.AC5: update_pantry_item tool", () => {
     const { server, callTool } = makeTestServer();
     const ctx = makeCtx(store, server, {
       pantryStore,
-      client: { savePantryItems: mockSavePantryItems, notifySync: mockNotifySync } as unknown as PaprikaClient,
-      cache: { pantry: { put: mockPutPantryItem }, flush: mockFlush } as unknown as DiskCacheRoot,
+      client: fromAny({ savePantryItems: mockSavePantryItems, notifySync: mockNotifySync }),
+      cache: fromAny({ pantry: { put: mockPutPantryItem }, flush: mockFlush }),
     });
     registerUpdatePantryItemTool(server, ctx);
 

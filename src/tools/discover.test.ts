@@ -1,5 +1,6 @@
+import { fromAny } from "@total-typescript/shoehorn";
 import { describe, it, expect, vi } from "vitest";
-import type { VectorStore, SemanticResult } from "../features/vector-store.js";
+import type { SemanticResult } from "../features/vector-store.js";
 import { RecipeStore } from "../cache/recipe-store.js";
 import { makeRecipe, makeCategory } from "../cache/__fixtures__/recipes.js";
 import type { RecipeUid } from "../paprika/types.js";
@@ -19,7 +20,7 @@ describe("p3-u06-discover-tool: discover_recipes tool", () => {
       store.load([makeRecipe({ name: "Test Recipe" })], []);
       const { server, callTool } = makeTestServer();
       const mockVs = makeMockVectorStore([{ uid: "test-uid", score: 0.9, recipeName: "Test Recipe" }]);
-      registerDiscoverTool(server, makeCtx(store, server), mockVs as unknown as VectorStore);
+      registerDiscoverTool(server, makeCtx(store, server), fromAny(mockVs));
 
       // Should not throw "Tool not registered"
       await expect(callTool("discover_recipes", { query: "test" })).resolves.toBeTruthy();
@@ -30,7 +31,7 @@ describe("p3-u06-discover-tool: discover_recipes tool", () => {
       store.load([makeRecipe()], []);
       const { server, callTool } = makeTestServer();
       const mockVs = makeMockVectorStore();
-      registerDiscoverTool(server, makeCtx(store, server), mockVs as unknown as VectorStore);
+      registerDiscoverTool(server, makeCtx(store, server), fromAny(mockVs));
 
       // Pass topK: 5 explicitly (mirrors what the SDK provides when caller omits topK,
       // since z.default(5) ensures the handler always receives 5 for omitted topK).
@@ -44,7 +45,7 @@ describe("p3-u06-discover-tool: discover_recipes tool", () => {
       store.load([makeRecipe()], []);
       const { server, callTool } = makeTestServer();
       const mockVs = makeMockVectorStore();
-      registerDiscoverTool(server, makeCtx(store, server), mockVs as unknown as VectorStore);
+      registerDiscoverTool(server, makeCtx(store, server), fromAny(mockVs));
 
       await callTool("discover_recipes", { query: "test", topK: 10 });
 
@@ -58,7 +59,7 @@ describe("p3-u06-discover-tool: discover_recipes tool", () => {
       store.load([makeRecipe({ uid: "recipe-1" as RecipeUid })], []);
       const { server, callTool } = makeTestServer();
       const mockVs = makeMockVectorStore([{ uid: "recipe-1", score: 0.85, recipeName: "Pasta" }]);
-      registerDiscoverTool(server, makeCtx(store, server), mockVs as unknown as VectorStore);
+      registerDiscoverTool(server, makeCtx(store, server), fromAny(mockVs));
 
       await callTool("discover_recipes", { query: "italian", topK: 7 });
 
@@ -70,7 +71,7 @@ describe("p3-u06-discover-tool: discover_recipes tool", () => {
       store.load([makeRecipe({ uid: "recipe-1" as RecipeUid, name: "Chocolate Cake" })], []);
       const { server, callTool } = makeTestServer();
       const mockVs = makeMockVectorStore([{ uid: "recipe-1", score: 0.923, recipeName: "Chocolate Cake" }]);
-      registerDiscoverTool(server, makeCtx(store, server), mockVs as unknown as VectorStore);
+      registerDiscoverTool(server, makeCtx(store, server), fromAny(mockVs));
 
       const result = await callTool("discover_recipes", { query: "chocolate" });
       const text = getText(result);
@@ -85,7 +86,7 @@ describe("p3-u06-discover-tool: discover_recipes tool", () => {
       store.load([makeRecipe({ uid: "recipe-1" as RecipeUid, name: "Cake", categories: [category.uid] })], [category]);
       const { server, callTool } = makeTestServer();
       const mockVs = makeMockVectorStore([{ uid: "recipe-1", score: 0.9, recipeName: "Cake" }]);
-      registerDiscoverTool(server, makeCtx(store, server), mockVs as unknown as VectorStore);
+      registerDiscoverTool(server, makeCtx(store, server), fromAny(mockVs));
 
       const result = await callTool("discover_recipes", { query: "dessert" });
       const text = getText(result);
@@ -98,7 +99,7 @@ describe("p3-u06-discover-tool: discover_recipes tool", () => {
       store.load([makeRecipe({ uid: "recipe-1" as RecipeUid, name: "Bread", categories: [] })], []);
       const { server, callTool } = makeTestServer();
       const mockVs = makeMockVectorStore([{ uid: "recipe-1", score: 0.9, recipeName: "Bread" }]);
-      registerDiscoverTool(server, makeCtx(store, server), mockVs as unknown as VectorStore);
+      registerDiscoverTool(server, makeCtx(store, server), fromAny(mockVs));
 
       const result = await callTool("discover_recipes", { query: "bread" });
       const text = getText(result);
@@ -121,7 +122,7 @@ describe("p3-u06-discover-tool: discover_recipes tool", () => {
       );
       const { server, callTool } = makeTestServer();
       const mockVs = makeMockVectorStore([{ uid: "recipe-1", score: 0.9, recipeName: "Pasta" }]);
-      registerDiscoverTool(server, makeCtx(store, server), mockVs as unknown as VectorStore);
+      registerDiscoverTool(server, makeCtx(store, server), fromAny(mockVs));
 
       const result = await callTool("discover_recipes", { query: "pasta" });
       const text = getText(result);
@@ -145,7 +146,7 @@ describe("p3-u06-discover-tool: discover_recipes tool", () => {
       );
       const { server, callTool } = makeTestServer();
       const mockVs = makeMockVectorStore([{ uid: "recipe-1", score: 0.9, recipeName: "Soup" }]);
-      registerDiscoverTool(server, makeCtx(store, server), mockVs as unknown as VectorStore);
+      registerDiscoverTool(server, makeCtx(store, server), fromAny(mockVs));
 
       const result = await callTool("discover_recipes", { query: "soup" });
       const text = getText(result);
@@ -159,7 +160,7 @@ describe("p3-u06-discover-tool: discover_recipes tool", () => {
       store.load([makeRecipe({ uid: "abc-def-123" as RecipeUid, name: "Test Recipe" })], []);
       const { server, callTool } = makeTestServer();
       const mockVs = makeMockVectorStore([{ uid: "abc-def-123", score: 0.9, recipeName: "Test Recipe" }]);
-      registerDiscoverTool(server, makeCtx(store, server), mockVs as unknown as VectorStore);
+      registerDiscoverTool(server, makeCtx(store, server), fromAny(mockVs));
 
       const result = await callTool("discover_recipes", { query: "test" });
       const text = getText(result);
@@ -174,7 +175,7 @@ describe("p3-u06-discover-tool: discover_recipes tool", () => {
       store.load([makeRecipe()], []);
       const { server, callTool } = makeTestServer();
       const mockVs = makeMockVectorStore([]);
-      registerDiscoverTool(server, makeCtx(store, server), mockVs as unknown as VectorStore);
+      registerDiscoverTool(server, makeCtx(store, server), fromAny(mockVs));
 
       const result = await callTool("discover_recipes", { query: "nonexistent" });
       const text = getText(result);
@@ -190,7 +191,7 @@ describe("p3-u06-discover-tool: discover_recipes tool", () => {
         { uid: "deleted-1", score: 0.9, recipeName: "Deleted Recipe" },
         { uid: "deleted-2", score: 0.85, recipeName: "Also Deleted" },
       ]);
-      registerDiscoverTool(server, makeCtx(store, server), mockVs as unknown as VectorStore);
+      registerDiscoverTool(server, makeCtx(store, server), fromAny(mockVs));
 
       const result = await callTool("discover_recipes", { query: "deleted" });
       const text = getText(result);
@@ -215,7 +216,7 @@ describe("p3-u06-discover-tool: discover_recipes tool", () => {
         { uid: "deleted", score: 0.9, recipeName: "Deleted" },
         { uid: "recipe-3", score: 0.85, recipeName: "Existing 2" },
       ]);
-      registerDiscoverTool(server, makeCtx(store, server), mockVs as unknown as VectorStore);
+      registerDiscoverTool(server, makeCtx(store, server), fromAny(mockVs));
 
       const result = await callTool("discover_recipes", { query: "test" });
       const text = getText(result);
@@ -240,7 +241,7 @@ describe("p3-u06-discover-tool: discover_recipes tool", () => {
         { uid: "deleted", score: 0.9, recipeName: "Deleted" },
         { uid: "recipe-3", score: 0.85, recipeName: "Third" },
       ]);
-      registerDiscoverTool(server, makeCtx(store, server), mockVs as unknown as VectorStore);
+      registerDiscoverTool(server, makeCtx(store, server), fromAny(mockVs));
 
       const result = await callTool("discover_recipes", { query: "test" });
       const text = getText(result);
@@ -255,7 +256,7 @@ describe("p3-u06-discover-tool: discover_recipes tool", () => {
       const store = new RecipeStore(); // not loaded — size === 0
       const { server, callTool } = makeTestServer();
       const mockVs = makeMockVectorStore();
-      registerDiscoverTool(server, makeCtx(store, server), mockVs as unknown as VectorStore);
+      registerDiscoverTool(server, makeCtx(store, server), fromAny(mockVs));
 
       const result = await callTool("discover_recipes", { query: "anything" });
       const text = getText(result);
