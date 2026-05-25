@@ -201,3 +201,60 @@ export function registerUpdateGroceryItemTool(server: McpServer, ctx: ServerCont
     },
   );
 }
+
+export function registerDeleteGroceryItemTool(server: McpServer, ctx: ServerContext): void {
+  const log = ctx.log.child({ component: "delete_grocery_item" });
+  server.registerTool(
+    "delete_grocery_item",
+    {
+      description:
+        "Soft-delete a grocery item by UID. Idempotent: a second delete on the same UID " +
+        "returns a friendly 'already deleted' message without re-saving. Requires an exact UID.",
+      inputSchema: {
+        uid: z.string().describe("Grocery item UID to delete"),
+      },
+    },
+    async (args) => {
+      log.info({ tool: "delete_grocery_item", uid: args.uid }, "tool invoked");
+      return groceryStartGuard(ctx).match(
+        async (): Promise<CallToolResult> => {
+          const uid = GroceryItemUidSchema.parse(args.uid);
+          const existing = ctx.groceryItemStore.get(uid);
+
+          if (!existing) {
+            // Distinguish "I deleted this in this session" (tombstone) from
+            // "never existed". The store's tombstone set tracks UIDs deleted
+            // via this client since the last sync; a retried delete on a
+            // previously-deleted UID returns the idempotent "already deleted"
+            // signal callers expect.
+            if (ctx.groceryItemStore.isTombstone(uid)) {
+              return textResult(`Grocery item with UID "${args.uid}" is already deleted.`);
+            }
+            return textResult(`No grocery item found with UID "${args.uid}".`);
+          }
+
+          if (existing.deleted) {
+            // Defense-in-depth: if a tombstone ever lands in the items map
+            // (e.g., from a future sync that returns deleted items), still
+            // report it as already-deleted rather than re-saving.
+            return textResult(`Grocery item "${existing.ingredient}" is already deleted.`);
+          }
+
+          const trashed = { ...existing, deleted: true };
+
+          try {
+            const saved = (await ctx.client.saveGroceryItems([trashed]))[0]!;
+            await commitGroceryItem(ctx, saved);
+          } catch (error) {
+            const message = toMessage(error);
+            log.error({ err: error, uid: args.uid }, "saveGroceryItems failed");
+            return textResult(`Failed to delete grocery item: ${message}`);
+          }
+
+          return textResult(`Grocery item "${existing.ingredient}" has been deleted.`);
+        },
+        (guard) => guard,
+      );
+    },
+  );
+}
