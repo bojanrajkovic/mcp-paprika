@@ -10,10 +10,10 @@ importers:
     dependencies:
       '@hono/mcp':
         specifier: 0.2.5
-        version: 0.2.5(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))(hono-rate-limiter@0.5.3(hono@4.12.8))(hono@4.12.8)(zod@3.25.76)
+        version: 0.2.5(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))(hono-rate-limiter@0.5.3(hono@4.12.22))(hono@4.12.22)(zod@3.25.76)
       '@hono/node-server':
         specifier: 1.19.14
-        version: 1.19.14(hono@4.12.8)
+        version: 1.19.14(hono@4.12.22)
       '@modelcontextprotocol/sdk':
         specifier: ^1.29.0
         version: 1.29.0(zod@3.25.76)
@@ -30,11 +30,11 @@ importers:
         specifier: ^4.0.0
         version: 4.0.0
       hono:
-        specifier: 4.12.8
-        version: 4.12.8
+        specifier: 4.12.22
+        version: 4.12.22
       hono-rate-limiter:
         specifier: ^0.5.3
-        version: 0.5.3(hono@4.12.8)
+        version: 0.5.3(hono@4.12.22)
       jose:
         specifier: ^6.2.3
         version: 6.2.3
@@ -1466,6 +1466,10 @@ packages:
       unstorage:
         optional: true
 
+  hono@4.12.22:
+    resolution: {integrity: sha512-7fvVPbB92zNRsQke+uiRGwtTuef0tB2Dg4hWxYfFNvkQhIltWoyi0ONReM5LWA+jJWS3nfT5lTq+qbsIpX0IQw==}
+    engines: {node: '>=16.9.0'}
+
   hono@4.12.8:
     resolution: {integrity: sha512-VJCEvtrezO1IAR+kqEYnxUOoStaQPGrCmX3j4wDTNOcD1uRPFpGlwQUIW8niPuvHXaTUxeOUl5MMDGrl+tmO9A==}
     engines: {node: '>=16.9.0'}
@@ -2655,11 +2659,11 @@ snapshots:
       protobufjs: 7.5.7
       yargs: 17.7.2
 
-  '@hono/mcp@0.2.5(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))(hono-rate-limiter@0.5.3(hono@4.12.8))(hono@4.12.8)(zod@3.25.76)':
+  '@hono/mcp@0.2.5(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))(hono-rate-limiter@0.5.3(hono@4.12.22))(hono@4.12.22)(zod@3.25.76)':
     dependencies:
       '@modelcontextprotocol/sdk': 1.29.0(zod@3.25.76)
-      hono: 4.12.8
-      hono-rate-limiter: 0.5.3(hono@4.12.8)
+      hono: 4.12.22
+      hono-rate-limiter: 0.5.3(hono@4.12.22)
       pkce-challenge: 5.0.1
       zod: 3.25.76
 
@@ -2667,9 +2671,9 @@ snapshots:
     dependencies:
       hono: 4.12.8
 
-  '@hono/node-server@1.19.14(hono@4.12.8)':
+  '@hono/node-server@1.19.14(hono@4.12.22)':
     dependencies:
-      hono: 4.12.8
+      hono: 4.12.22
 
   '@inquirer/ansi@2.0.5': {}
 
@@ -3576,9 +3580,11 @@ snapshots:
 
   help-me@5.0.0: {}
 
-  hono-rate-limiter@0.5.3(hono@4.12.8):
+  hono-rate-limiter@0.5.3(hono@4.12.22):
     dependencies:
-      hono: 4.12.8
+      hono: 4.12.22
+
+  hono@4.12.22: {}
 
   hono@4.12.8: {}
 
