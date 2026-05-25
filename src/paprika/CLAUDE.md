@@ -1,6 +1,6 @@
 # Paprika API Client
 
-Last verified: 2026-05-24
+Last verified: 2026-05-25
 
 ## Files
 
@@ -131,11 +131,8 @@ Typed HTTP client wrapping the Paprika Cloud Sync API.
 
 **Private API:**
 
-- `buildRecipeFormData(recipe: Readonly<Recipe>): FormData` — converts recipe to snake_case JSON, gzip-compresses, wraps in FormData with `data.gz` blob
-- `buildPantryItemsFormData(items: ReadonlyArray<Readonly<PantryItem>>): FormData` — maps items via `pantryItemToApiPayload`, gzip-compresses array, wraps in FormData with `data.gz` blob
-- `buildGroceryListFormData(list: Readonly<GroceryList>): FormData` — single-element array of `groceryListToApiPayload(list)`, gzip-compressed, field `data` filename `file`
-- `buildGroceryItemsFormData(items: ReadonlyArray<Readonly<GroceryItem>>): FormData` — N-element array mapped via `groceryItemToApiPayload`, gzip-compressed, field `data` filename `file`
-- `buildGroceryIngredientFormData(ingredient: Readonly<GroceryIngredient>): FormData` — single-element array of `groceryIngredientToApiPayload(ingredient)`, gzip-compressed, field `data` filename `file`
+- `buildEntityFormData(payload: unknown, filename = "file"): FormData` — stringifies `payload` to JSON, gzip-compresses, wraps in a `Blob`, appends to `FormData` as field `"data"` with the given `filename`. Used by `saveRecipe` (with `filename = "data.gz"`) and by `postEntities` (with the default `"file"`)
+- `postEntities<T>(url: string, items: ReadonlyArray<Readonly<T>>, toPayload: (item: Readonly<T>) => Record<string, unknown>): Promise<void>` — maps `items` through `toPayload`, passes the resulting array to `buildEntityFormData`, then calls `request("POST", url, z.boolean(), formData)`. Used by all five non-recipe save methods (`saveAisle`, `savePantryItems`, `saveGroceryList`, `saveGroceryItems`, `saveGroceryIngredient`)
 - `request<T>(method, url, schema, body?): Promise<T>` — authenticated v2 API calls with:
   - Bearer token header (when token exists)
   - **Resilience:** `wrap(breakerPolicy, retryPolicy)` — breaker outermost, retry innermost. The breaker sees one execution per tool call regardless of how many retries that call exhausted internally. Retry: `maxAttempts: 3` means 3 retries, so each failing tool call makes 4 total network attempts before the retry gives up. Breaker: opens after 5 consecutive failing tool calls (`ConsecutiveBreaker(5)`), half-opens after 30 s.
