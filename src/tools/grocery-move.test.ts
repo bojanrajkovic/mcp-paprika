@@ -312,6 +312,50 @@ describe("move_to_pantry tool", () => {
     expect(mockSaveGroceryItems).not.toHaveBeenCalled();
   });
 
+  it("duplicate UIDs are deduplicated — only one pantry item created per unique UID", async () => {
+    const item = makeGroceryItem({
+      uid: "DUP-1" as GroceryItemUid,
+      ingredient: "Butter",
+      listUid: "LIST-1",
+    });
+    groceryItemStore.load([item]);
+
+    const { callTool } = makeMoveCtx();
+
+    const result = await callTool("move_to_pantry", { uids: ["DUP-1", "DUP-1", "DUP-1"] });
+    const text = getText(result);
+
+    expect(text.toLowerCase()).toContain("moved");
+    expect(mockSavePantryItems).toHaveBeenCalledOnce();
+    const savedPantry = mockSavePantryItems.mock.calls[0]?.[0] as Array<unknown>;
+    expect(savedPantry).toHaveLength(1);
+    expect(mockSaveGroceryItems).toHaveBeenCalledOnce();
+    const savedGrocery = mockSaveGroceryItems.mock.calls[0]?.[0] as Array<unknown>;
+    expect(savedGrocery).toHaveLength(1);
+  });
+
+  it("pantry-create failure returns structured error without deleting grocery items", async () => {
+    const item = makeGroceryItem({
+      uid: "PFAIL-3" as GroceryItemUid,
+      ingredient: "Chicken",
+      listUid: "LIST-1",
+    });
+    groceryItemStore.load([item]);
+
+    mockSavePantryItems.mockRejectedValue(new Error("pantry API down"));
+
+    const { callTool } = makeMoveCtx();
+
+    const result = await callTool("move_to_pantry", { uids: ["PFAIL-3"] });
+    const text = getText(result);
+
+    expect(text.toLowerCase()).toContain("failed to create pantry items");
+    expect(text.toLowerCase()).toContain("pantry api down");
+    expect(text.toLowerCase()).toContain("no grocery items were deleted");
+    expect(mockSaveGroceryItems).not.toHaveBeenCalled();
+    expect(mockRemoveGroceryItem).not.toHaveBeenCalled();
+  });
+
   it("AC3.6: partial failure message includes the pantry UIDs returned by savePantryItems", async () => {
     const item = makeGroceryItem({
       uid: "PFAIL-2" as GroceryItemUid,

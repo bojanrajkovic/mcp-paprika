@@ -30,10 +30,13 @@ export function registerMoveToPantryTool(server: McpServer, ctx: ServerContext):
             return textResult("Pantry is not yet synced. Try again in a few seconds.");
           }
 
-          // Step 1: Validate all UIDs exist and are not tombstoned
+          // Step 1: Validate all UIDs exist, are not tombstoned, and deduplicate
+          const seen = new Set<string>();
           const items: Array<GroceryItem> = [];
           for (const rawUid of args.uids) {
             const uid = GroceryItemUidSchema.parse(rawUid);
+            if (seen.has(uid)) continue;
+            seen.add(uid);
             const item = ctx.groceryItemStore.get(uid);
             if (!item) {
               if (ctx.groceryItemStore.isTombstone(uid)) {
@@ -60,9 +63,16 @@ export function registerMoveToPantryTool(server: McpServer, ctx: ServerContext):
           }));
 
           // Step 3: CREATE FIRST — save pantry items
-          const savedPantry = await ctx.client.savePantryItems(pantryItems);
-          for (const saved of savedPantry) {
-            await commitPantryItem(ctx, saved);
+          let savedPantry: ReadonlyArray<PantryItem>;
+          try {
+            savedPantry = await ctx.client.savePantryItems(pantryItems);
+            for (const saved of savedPantry) {
+              await commitPantryItem(ctx, saved);
+            }
+          } catch (error) {
+            const message = toMessage(error);
+            log.error({ err: error, uids: args.uids }, "savePantryItems failed");
+            return textResult(`Failed to create pantry items: ${message}. No grocery items were deleted.`);
           }
 
           // Step 4: THEN DELETE — soft-delete grocery items
