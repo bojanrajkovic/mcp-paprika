@@ -63,6 +63,13 @@ export async function commitPantryItemsBatch(
   const clearPending = () => {
     for (const uid of markedUids) ctx.pantryStore.clearPending(uid);
   };
+  // allSettled (not Promise.all): fail-fast would let in-flight ops race the
+  // clearPending call in the catch block. We wait for every op to settle first.
+  //
+  // All-or-nothing store semantics on failure is intentional: savePantryItems()
+  // already succeeded, so any local cache/store divergence is temporary and
+  // reconciled by the next sync. Clearing all pending marks on failure avoids
+  // suppressing sync reconciliation until TTL.
   const opsResults = await Promise.allSettled(
     items.map((item) => (item.deleted ? ctx.cache.pantry.remove(item.uid) : ctx.cache.pantry.put(item))),
   );
