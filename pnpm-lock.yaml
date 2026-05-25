@@ -10,10 +10,10 @@ importers:
     dependencies:
       '@hono/mcp':
         specifier: 0.2.5
-        version: 0.2.5(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))(hono-rate-limiter@0.5.3(hono@4.12.22))(hono@4.12.22)(zod@3.25.76)
+        version: 0.2.5(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))(hono-rate-limiter@0.5.3(hono@4.12.23))(hono@4.12.23)(zod@3.25.76)
       '@hono/node-server':
         specifier: 1.19.14
-        version: 1.19.14(hono@4.12.22)
+        version: 1.19.14(hono@4.12.23)
       '@modelcontextprotocol/sdk':
         specifier: ^1.29.0
         version: 1.29.0(zod@3.25.76)
@@ -30,11 +30,11 @@ importers:
         specifier: ^4.0.0
         version: 4.0.0
       hono:
-        specifier: 4.12.22
-        version: 4.12.22
+        specifier: 4.12.23
+        version: 4.12.23
       hono-rate-limiter:
         specifier: ^0.5.3
-        version: 0.5.3(hono@4.12.22)
+        version: 0.5.3(hono@4.12.23)
       jose:
         specifier: ^6.2.3
         version: 6.2.3
@@ -1470,8 +1470,8 @@ packages:
     resolution: {integrity: sha512-7fvVPbB92zNRsQke+uiRGwtTuef0tB2Dg4hWxYfFNvkQhIltWoyi0ONReM5LWA+jJWS3nfT5lTq+qbsIpX0IQw==}
     engines: {node: '>=16.9.0'}
 
-  hono@4.12.8:
-    resolution: {integrity: sha512-VJCEvtrezO1IAR+kqEYnxUOoStaQPGrCmX3j4wDTNOcD1uRPFpGlwQUIW8niPuvHXaTUxeOUl5MMDGrl+tmO9A==}
+  hono@4.12.23:
+    resolution: {integrity: sha512-eIaZ9qDgu7XV0pxOCrg7/WhnQ6Ivm22UcxhXx/A3dcbqbbYgBEkc6e/J/s7j2tS96zoB0S9VBdLwQNCWwUo4LA==}
     engines: {node: '>=16.9.0'}
 
   html-escaper@2.0.2:
@@ -2659,21 +2659,21 @@ snapshots:
       protobufjs: 7.5.7
       yargs: 17.7.2
 
-  '@hono/mcp@0.2.5(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))(hono-rate-limiter@0.5.3(hono@4.12.22))(hono@4.12.22)(zod@3.25.76)':
+  '@hono/mcp@0.2.5(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))(hono-rate-limiter@0.5.3(hono@4.12.23))(hono@4.12.23)(zod@3.25.76)':
     dependencies:
       '@modelcontextprotocol/sdk': 1.29.0(zod@3.25.76)
-      hono: 4.12.22
-      hono-rate-limiter: 0.5.3(hono@4.12.22)
+      hono: 4.12.23
+      hono-rate-limiter: 0.5.3(hono@4.12.23)
       pkce-challenge: 5.0.1
       zod: 3.25.76
 
-  '@hono/node-server@1.19.11(hono@4.12.8)':
-    dependencies:
-      hono: 4.12.8
-
-  '@hono/node-server@1.19.14(hono@4.12.22)':
+  '@hono/node-server@1.19.11(hono@4.12.22)':
     dependencies:
       hono: 4.12.22
+
+  '@hono/node-server@1.19.14(hono@4.12.23)':
+    dependencies:
+      hono: 4.12.23
 
   '@inquirer/ansi@2.0.5': {}
 
@@ -2717,7 +2717,7 @@ snapshots:
 
   '@modelcontextprotocol/sdk@1.29.0(zod@3.25.76)':
     dependencies:
-      '@hono/node-server': 1.19.11(hono@4.12.8)
+      '@hono/node-server': 1.19.11(hono@4.12.22)
       ajv: 8.18.0
       ajv-formats: 3.0.1(ajv@8.18.0)
       content-type: 1.0.5
@@ -2727,7 +2727,7 @@ snapshots:
       eventsource-parser: 3.0.6
       express: 5.2.1
       express-rate-limit: 8.3.1(express@5.2.1)
-      hono: 4.12.8
+      hono: 4.12.22
       jose: 6.2.2
       json-schema-typed: 8.0.2
       pkce-challenge: 5.0.1
@@ -3580,13 +3580,13 @@ snapshots:
 
   help-me@5.0.0: {}
 
-  hono-rate-limiter@0.5.3(hono@4.12.22):
+  hono-rate-limiter@0.5.3(hono@4.12.23):
     dependencies:
-      hono: 4.12.22
+      hono: 4.12.23
 
   hono@4.12.22: {}
 
-  hono@4.12.8: {}
+  hono@4.12.23: {}
 
   html-escaper@2.0.2: {}
 
