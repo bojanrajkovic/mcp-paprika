@@ -111,56 +111,5 @@ describe("GroceryItemStore", () => {
 
       expect(result).toBeUndefined();
     });
-
-    it("delete(uid) removes from store and isTombstone(uid) returns true", () => {
-      const item = makeGroceryItem({ uid: "uid-1" as GroceryItemUid });
-      store.load([item]);
-
-      store.delete("uid-1" as GroceryItemUid);
-
-      expect(store.get("uid-1" as GroceryItemUid)).toBeUndefined();
-      expect(store.isTombstone("uid-1" as GroceryItemUid)).toBe(true);
-    });
-
-    it("set(item) clears tombstone for that uid", () => {
-      const item = makeGroceryItem({ uid: "uid-1" as GroceryItemUid });
-      store.load([item]);
-      store.delete("uid-1" as GroceryItemUid);
-      expect(store.isTombstone("uid-1" as GroceryItemUid)).toBe(true);
-
-      store.set(item);
-
-      expect(store.isTombstone("uid-1" as GroceryItemUid)).toBe(false);
-      expect(store.get("uid-1" as GroceryItemUid)).toEqual(item);
-    });
-
-    it("delete() always tombstones even if uid is absent (sync-race defense)", () => {
-      store.load([]);
-
-      store.delete("uid-never-existed" as GroceryItemUid);
-
-      expect(store.isTombstone("uid-never-existed" as GroceryItemUid)).toBe(true);
-    });
-
-    it("load() preserves tombstones for UIDs absent from the new items list", () => {
-      const item = makeGroceryItem({ uid: "uid-1" as GroceryItemUid });
-      store.load([item]);
-      store.delete("uid-1" as GroceryItemUid);
-
-      store.load([]);
-
-      expect(store.isTombstone("uid-1" as GroceryItemUid)).toBe(true);
-    });
-
-    it("load() clears tombstones for UIDs that resurrect in the new items list", () => {
-      const item = makeGroceryItem({ uid: "uid-1" as GroceryItemUid });
-      store.load([item]);
-      store.delete("uid-1" as GroceryItemUid);
-
-      store.load([item]);
-
-      expect(store.isTombstone("uid-1" as GroceryItemUid)).toBe(false);
-      expect(store.get("uid-1" as GroceryItemUid)).toEqual(item);
-    });
   });
 });

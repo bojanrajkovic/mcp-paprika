@@ -1,6 +1,6 @@
 # mcp-paprika
 
-Last verified: 2026-05-24
+Last verified: 2026-05-25
 
 MCP server for the Paprika recipe manager. Two transports: **stdio** (default; unauthenticated local pipe used by Claude Desktop, Claude Code, Cursor, mcp-cli) and **Streamable HTTP** (used by Claude Mobile and other remote MCP clients; ships with OAuth 2.1 + OIDC delegation). Selected via `MCP_TRANSPORT=stdio|http`.
 
@@ -106,7 +106,7 @@ Hooks must not be bypassed. Fix issues before committing. If you commit before r
 
 ### Pull Requests
 
-This project squash merges PRs, using the PR body as the merge commit description. PR bodies should contain a `## Summary` section with bullet points only — no test plans, checklists, or transient verification content. Transient content like test plans, verification checklists, and progress tracking should go in a PR comment and be kept up to date as they change.
+This project squash merges PRs, so the PR body becomes the merge commit description. Write it as "what shipped in this commit" — readable months later in `git log`. Open with a one-or-two-sentence lead (no `## Summary` header — the title is the summary), then bulleted or paragraph detail. Transient content (test plans, verification checklists, screenshots) goes in a PR comment posted after the PR is created, not in the body.
 
 ### CI
 
