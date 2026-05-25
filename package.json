@@ -39,7 +39,7 @@
     "cockatiel": "^3.2.1",
     "dotenv": "^17.4.2",
     "env-paths": "^4.0.0",
-    "hono": "4.12.22",
+    "hono": "4.12.23",
     "hono-rate-limiter": "^0.5.3",
     "jose": "^6.2.3",
     "luxon": "^3.7.2",
