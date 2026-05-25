@@ -1,6 +1,6 @@
 # Caching Layer
 
-Last verified: 2026-05-24
+Last verified: 2026-05-25
 
 ## Files
 
@@ -48,7 +48,7 @@ Core in-memory cache for recipes and categories with CRUD operations and query m
 
 ### PantryStore
 
-In-memory query layer for pantry items, hydrated by the sync engine. Extends `EntityStore<PantryItem, PantryItemUid>` (see `../entity/CLAUDE.md`). Intentionally simpler than `RecipeStore`: pantry items have no hash, no categories, and no time/ingredient filtering — just CRUD plus a tiered name lookup.
+In-memory query layer for pantry items, hydrated by the sync engine. Extends `TombstoneEntityStore<PantryItem, PantryItemUid>` (see `../entity/CLAUDE.md` for the base class contract, pending-writes invariants, and tombstone invariants).
 
 **Construction:**
 
@@ -95,7 +95,7 @@ No delete branch — aisles are a reference catalog; auto-creation is a side-eff
 
 ### GroceryListStore
 
-In-memory query layer for grocery lists, hydrated by the sync engine. Extends `EntityStore<GroceryList, GroceryListUid>` (see `../entity/CLAUDE.md`). Replace-all semantics matching `PantryStore`. Tombstones track UIDs soft-deleted by this client; the set survives sync cycles.
+In-memory query layer for grocery lists, hydrated by the sync engine. Extends `TombstoneEntityStore<GroceryList, GroceryListUid>` (see `../entity/CLAUDE.md` for the base class contract, pending-writes invariants, and tombstone invariants).
 
 **Construction:** `new GroceryListStore(opts?: { pendingWriteTtlMs?: number })` — starts empty with `hasSynced = false`.
 
@@ -115,13 +115,12 @@ In-memory query layer for grocery lists, hydrated by the sync engine. Extends `E
 
 **Invariants:**
 
-- Tombstone set is disjoint from `_items` after every `load()` and `set()`
-- `delete()` tombstones even when the UID is absent from `_items` (sync-race defense)
+- Tombstone invariants: see `../entity/CLAUDE.md`
 - `load([])` still flips `hasSynced` to `true`
 
 ### GroceryItemStore
 
-In-memory query layer for grocery items, hydrated by the sync engine. Extends `EntityStore<GroceryItem, GroceryItemUid>` (see `../entity/CLAUDE.md`). Replace-all semantics matching `GroceryListStore`. Tombstones track UIDs soft-deleted by this client.
+In-memory query layer for grocery items, hydrated by the sync engine. Extends `TombstoneEntityStore<GroceryItem, GroceryItemUid>` (see `../entity/CLAUDE.md` for the base class contract, pending-writes invariants, and tombstone invariants).
 
 **Construction:** `new GroceryItemStore(opts?: { pendingWriteTtlMs?: number })` — starts empty with `hasSynced = false`.
 
@@ -142,7 +141,7 @@ In-memory query layer for grocery items, hydrated by the sync engine. Extends `E
 
 **Invariants:**
 
-- Same tombstone invariants as `GroceryListStore`
+- Tombstone invariants: see `../entity/CLAUDE.md`
 - `getByListUid` and `getPurchasedByList` iterate `_items` directly (excludes tombstoned UIDs that were deleted via `delete()` before `load()`)
 
 ### GroceryIngredientStore
@@ -196,7 +195,7 @@ See `disk/CLAUDE.md` for the full contract, on-disk layout, migration semantics,
 - `load([])` still flips `hasSynced` to `true` — an empty pantry is a valid synced state
 - `findByIngredient()` returns at most one tier (exact > starts-with > contains); ties within a tier are returned in insertion order
 - All read methods are pure (no I/O); the store is rehydrated from `cache.pantry.getAll()` on startup and refreshed by the sync engine
-- The tombstone set survives sync cycles: `delete()` adds unconditionally; `set()` clears for that UID; `load(items)` clears only for UIDs present in `items` (resurrection). Tombstones for UIDs that stay absent from the snapshot persist, so delayed retries past a sync interval still get the idempotent "already deleted" signal. `delete()` tombstones even when the UID is absent from `_items` to defend against a sync-race in which `commitPantryItem`'s awaits let `syncOnce()` remove the UID before the local commit lands. After every `load()` and `set()`, the tombstone set is disjoint from `_items`
+- Tombstone invariants: see `../entity/CLAUDE.md` — PantryStore inherits all tombstone behaviour from `TombstoneEntityStore`
 
 ### Pending-writes (issue #57)
 
@@ -208,7 +207,7 @@ See `disk/CLAUDE.md` for the full contract, on-disk layout, migration semantics,
 
 ## Dependencies
 
-- **Uses:** `entity/` (EntityStore base class and PendingWrite type), `paprika/types` (Recipe, Category, PantryItem, GroceryList, GroceryItem, GroceryIngredient types), `utils/duration` (parseDuration for time filtering)
+- **Uses:** `entity/` (EntityStore, TombstoneEntityStore base classes and PendingWrite type), `paprika/types` (Recipe, Category, PantryItem, GroceryList, GroceryItem, GroceryIngredient types), `utils/duration` (parseDuration for time filtering)
 - **Used by:**
   - `features/` (via `RecipeStore`)
   - `paprika/sync.ts` (via `cache.recipes.diff` / `cache.pantry` / `PantryStore` / `GroceryListStore` / `GroceryItemStore` / `GroceryIngredientStore` for diff and replace-all sync)

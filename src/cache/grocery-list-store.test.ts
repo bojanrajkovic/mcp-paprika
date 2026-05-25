@@ -106,28 +106,6 @@ describe("GroceryListStore", () => {
       expect(result).toBeUndefined();
     });
 
-    it("delete(uid) removes from store and isTombstone(uid) returns true", () => {
-      const list = makeGroceryList({ uid: "uid-1" as GroceryListUid });
-      store.load([list]);
-
-      store.delete("uid-1" as GroceryListUid);
-
-      expect(store.get("uid-1" as GroceryListUid)).toBeUndefined();
-      expect(store.isTombstone("uid-1" as GroceryListUid)).toBe(true);
-    });
-
-    it("set(item) clears tombstone for that uid", () => {
-      const list = makeGroceryList({ uid: "uid-1" as GroceryListUid });
-      store.load([list]);
-      store.delete("uid-1" as GroceryListUid);
-      expect(store.isTombstone("uid-1" as GroceryListUid)).toBe(true);
-
-      store.set(list);
-
-      expect(store.isTombstone("uid-1" as GroceryListUid)).toBe(false);
-      expect(store.get("uid-1" as GroceryListUid)).toEqual(list);
-    });
-
     it("findByName excludes deleted (tombstoned) lists", () => {
       const list = makeGroceryList({ uid: "uid-1" as GroceryListUid, name: "Weekly Groceries" });
       store.load([list]);
