@@ -182,6 +182,9 @@ describe("grocery-surface.AC4: Grocery list MCP resource", () => {
       expect(text).toContain("Dairy");
       expect(text).toContain("Milk");
       expect(text).toContain("1 gal");
+      expect(text).toContain("Purchased");
+      expect(text).toContain("| No |");
+      expect(text).toContain("| Yes |");
     });
   });
 
