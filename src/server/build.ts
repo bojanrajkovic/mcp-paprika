@@ -29,6 +29,7 @@ import {
   registerUpdateGroceryItemTool,
   registerDeleteGroceryItemTool,
 } from "../tools/grocery-item.js";
+import { registerMoveToPantryTool } from "../tools/grocery-move.js";
 import { registerAddPantryItemTool } from "../tools/pantry-add.js";
 import { registerDeletePantryItemTool } from "../tools/pantry-delete.js";
 import { registerGetPantryItemTool } from "../tools/pantry-get.js";
@@ -287,6 +288,7 @@ export function buildMcpServer(app: AppContext): McpServer {
   registerAddGroceryItemsTool(server, sessionCtx);
   registerUpdateGroceryItemTool(server, sessionCtx);
   registerDeleteGroceryItemTool(server, sessionCtx);
+  registerMoveToPantryTool(server, sessionCtx);
 
   if (app.vectorStore !== null) {
     registerDiscoverTool(server, sessionCtx, app.vectorStore);
