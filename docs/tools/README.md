@@ -1,6 +1,6 @@
 # Tools reference
 
-mcp-paprika exposes 21 MCP tools. Each page below covers parameters, behavior, and examples.
+mcp-paprika exposes 26 MCP tools. Each page below covers parameters, behavior, and examples.
 
 ## Discovery and query
 
@@ -21,6 +21,17 @@ mcp-paprika exposes 21 MCP tools. Each page below covers parameters, behavior, a
 | [create_recipe](create-recipe.md) | Create a new recipe                           |
 | [update_recipe](update-recipe.md) | Update an existing recipe (partial updates)   |
 | [delete_recipe](delete-recipe.md) | Soft-delete a recipe (moves to Paprika trash) |
+
+## Pantry and aisle management
+
+| Tool                                        | Description                                           |
+| ------------------------------------------- | ----------------------------------------------------- |
+| [list_aisles](list-aisles.md)               | List all aisles sorted by order flag then name        |
+| [list_pantry](list-pantry.md)               | List all pantry items sorted alphabetically           |
+| [get_pantry_item](get-pantry-item.md)       | Get a pantry item by UID or fuzzy ingredient name     |
+| [add_pantry_items](add-pantry-items.md)     | Add one or more items to the pantry in a single batch |
+| [update_pantry_item](update-pantry-item.md) | Update an existing pantry item (partial updates)      |
+| [delete_pantry_item](delete-pantry-item.md) | Soft-delete a pantry item by UID                      |
 
 ## Grocery list management
 

@@ -250,7 +250,7 @@ describe("HTTP transport (Streamable HTTP)", () => {
           "delete_recipe",
           "list_pantry",
           "get_pantry_item",
-          "add_pantry_item",
+          "add_pantry_items",
           "update_pantry_item",
           "delete_pantry_item",
         ]) {
