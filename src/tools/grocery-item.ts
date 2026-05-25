@@ -77,14 +77,18 @@ export function registerAddGroceryItemsTool(server: McpServer, ctx: ServerContex
                   catalogUpdated.add(ingredientKey);
                   const catalogEntry = ctx.groceryIngredientStore.lookupByName(ingredient);
                   if (catalogEntry !== undefined) {
-                    await ctx.client.saveGroceryIngredient({ ...catalogEntry, aisleUid });
+                    const updated = { ...catalogEntry, aisleUid };
+                    await ctx.client.saveGroceryIngredient(updated);
+                    ctx.groceryIngredientStore.set(updated);
                   } else {
-                    await ctx.client.saveGroceryIngredient({
+                    const created = {
                       uid: GroceryIngredientUidSchema.parse(crypto.randomUUID().toUpperCase()),
                       name: ingredient,
                       aisleUid,
                       deleted: false,
-                    });
+                    };
+                    await ctx.client.saveGroceryIngredient(created);
+                    ctx.groceryIngredientStore.set(created);
                   }
                 }
               } else {

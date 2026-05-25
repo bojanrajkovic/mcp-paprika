@@ -27,6 +27,10 @@ export class GroceryIngredientStore {
     this._hasSynced = true;
   }
 
+  set(ingredient: GroceryIngredient): void {
+    this._items.set(ingredient.name.toLowerCase(), ingredient);
+  }
+
   lookupByName(name: string): GroceryIngredient | undefined {
     return this._items.get(name.toLowerCase());
   }

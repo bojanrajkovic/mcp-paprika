@@ -306,6 +306,49 @@ describe("add_grocery_items tool", () => {
     expect(ingredientCalls).toHaveLength(1);
   });
 
+  it("cross-invocation: explicit aisle in first call is auto-resolved in second call via updated store", async () => {
+    const mockSaveAisle = vi.fn().mockImplementation(async (a: unknown) => a);
+    const { notifier } = makeStubNotifier();
+    const { server, callTool: callTool3 } = makeTestServer();
+    aisleStore.load([makeAisle({ uid: "AISLE-1" as AisleUid, name: "Produce" })]);
+    groceryIngredientStore.load([]);
+    const ctx = makeCtx(new RecipeStore(), server, {
+      groceryListStore,
+      groceryItemStore,
+      groceryIngredientStore,
+      aisleStore,
+      client: {
+        saveGroceryItems: mockSaveGroceryItems,
+        saveGroceryIngredient: mockSaveGroceryIngredient,
+        saveAisle: mockSaveAisle,
+        notifySync: mockNotifySync,
+      } as unknown as PaprikaClient,
+      cache: {
+        groceryItems: { put: mockPutGroceryItem },
+        aisles: { put: vi.fn() },
+        flush: mockFlush,
+      } as unknown as DiskCacheRoot,
+      notifier,
+    });
+    registerAddGroceryItemsTool(server, ctx);
+
+    await callTool3("add_grocery_items", {
+      listUid: "LIST-1",
+      items: [{ ingredient: "Tofu", aisle: "Deli" }],
+    });
+
+    mockSaveGroceryItems.mockClear();
+
+    await callTool3("add_grocery_items", {
+      listUid: "LIST-1",
+      items: [{ ingredient: "Tofu" }],
+    });
+
+    const secondCallItems = mockSaveGroceryItems.mock.calls[0]?.[0] as Array<{ aisle: string }>;
+    expect(secondCallItems).toHaveLength(1);
+    expect(secondCallItems[0]?.aisle).toBe("Deli");
+  });
+
   it("grocery-surface.AC2.12: sync-not-ready blocks add_grocery_items when stores not loaded", async () => {
     // Fresh stores with no .load() called
     const freshListStore = new GroceryListStore();
