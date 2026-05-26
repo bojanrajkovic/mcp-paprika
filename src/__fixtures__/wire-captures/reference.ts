@@ -1,0 +1,443 @@
+// Generated from docs/wire-captures/reference.har.json — do not edit
+// Regenerate with: npx tsx scripts/generate-har-fixtures.ts
+
+import { fromTraffic } from "@msw/source/traffic";
+import type Har from "har-format";
+import type { HttpHandler } from "msw";
+
+/* eslint-disable */
+
+const har = {
+  log: {
+    version: "1.2",
+    creator: {
+      name: "mitmproxy + decode-capture.py",
+      version: "1.0",
+    },
+    entries: [
+      {
+        comment: "GET sync status (entity count catalog)",
+        startedDateTime: "2026-05-26T11:12:44.316340+00:00",
+        time: 0,
+        request: {
+          method: "GET",
+          url: "https://www.paprikaapp.com/api/v2/sync/status/",
+          httpVersion: "HTTP/1.1",
+          cookies: [],
+          headers: [
+            {
+              name: "Authorization",
+              value: "[REDACTED]",
+            },
+          ],
+          queryString: [],
+          headersSize: -1,
+          bodySize: 0,
+        },
+        response: {
+          status: 200,
+          statusText: "OK",
+          httpVersion: "HTTP/1.1",
+          cookies: [],
+          headers: [
+            {
+              name: "Content-Type",
+              value: "application/json",
+            },
+          ],
+          content: {
+            size: 257,
+            mimeType: "application/json",
+            text: '{"result": {"categories": 89, "recipes": 952, "photos": 8, "groceries": 1323, "grocerylists": 26, "groceryaisles": 421, "groceryingredients": 75, "meals": 41, "mealtypes": 60, "bookmarks": 0, "pantry": 950, "pantrylocations": 0, "menus": 2, "menuitems": 2}}',
+          },
+          redirectURL: "",
+          headersSize: -1,
+          bodySize: 257,
+        },
+        cache: {},
+        timings: {
+          send: 0,
+          wait: 0,
+          receive: 0,
+        },
+      },
+      {
+        comment: "GET grocery lists (startup sync)",
+        startedDateTime: "2026-05-26T11:12:44.316571+00:00",
+        time: 0,
+        request: {
+          method: "GET",
+          url: "https://www.paprikaapp.com/api/v2/sync/grocerylists/",
+          httpVersion: "HTTP/1.1",
+          cookies: [],
+          headers: [
+            {
+              name: "Authorization",
+              value: "[REDACTED]",
+            },
+          ],
+          queryString: [],
+          headersSize: -1,
+          bodySize: 0,
+        },
+        response: {
+          status: 200,
+          statusText: "OK",
+          httpVersion: "HTTP/1.1",
+          cookies: [],
+          headers: [
+            {
+              name: "Content-Type",
+              value: "application/json",
+            },
+          ],
+          content: {
+            size: 182,
+            mimeType: "application/json",
+            text: '{"result": [{"uid": "9E12FCF54A89FC52EA8E1C5DA1BDA62A6617ED8BDC2AEB6F291B93C7A399F6F6", "name": "My Grocery List", "order_flag": 0, "is_default": true, "reminders_list": "Paprika"}]}',
+          },
+          redirectURL: "",
+          headersSize: -1,
+          bodySize: 182,
+        },
+        cache: {},
+        timings: {
+          send: 0,
+          wait: 0,
+          receive: 0,
+        },
+      },
+      {
+        comment: "GET grocery aisles (startup sync)",
+        startedDateTime: "2026-05-26T11:12:44.316603+00:00",
+        time: 0,
+        request: {
+          method: "GET",
+          url: "https://www.paprikaapp.com/api/v2/sync/groceryaisles/",
+          httpVersion: "HTTP/1.1",
+          cookies: [],
+          headers: [
+            {
+              name: "Authorization",
+              value: "[REDACTED]",
+            },
+          ],
+          queryString: [],
+          headersSize: -1,
+          bodySize: 0,
+        },
+        response: {
+          status: 200,
+          statusText: "OK",
+          httpVersion: "HTTP/1.1",
+          cookies: [],
+          headers: [
+            {
+              name: "Content-Type",
+              value: "application/json",
+            },
+          ],
+          content: {
+            size: 384,
+            mimeType: "application/json",
+            text: '{"result": [{"uid": "B49385D0-881F-4C7D-9C41-3CFF26490EED", "name": "Pasta", "order_flag": 29}, {"uid": "1A58CBF1-47A9-45C9-B8C7-7B1866F58EA8", "name": "Oils & Vinegars", "order_flag": 28}, {"uid": "0EA0B49D-5D07-4468-B8B6-783B1F41B9D1", "name": "Spices", "order_flag": 27}], "_truncated": true, "_total_count": 28, "_note": "Showing 3 of 28 items. Full response truncated for size."}',
+          },
+          redirectURL: "",
+          headersSize: -1,
+          bodySize: 3217,
+        },
+        cache: {},
+        timings: {
+          send: 0,
+          wait: 0,
+          receive: 0,
+        },
+      },
+      {
+        comment: "GET grocery items (startup sync)",
+        startedDateTime: "2026-05-26T11:12:44.316608+00:00",
+        time: 0,
+        request: {
+          method: "GET",
+          url: "https://www.paprikaapp.com/api/v2/sync/groceries/",
+          httpVersion: "HTTP/1.1",
+          cookies: [],
+          headers: [
+            {
+              name: "Authorization",
+              value: "[REDACTED]",
+            },
+          ],
+          queryString: [],
+          headersSize: -1,
+          bodySize: 0,
+        },
+        response: {
+          status: 200,
+          statusText: "OK",
+          httpVersion: "HTTP/1.1",
+          cookies: [],
+          headers: [
+            {
+              name: "Content-Type",
+              value: "application/json",
+            },
+          ],
+          content: {
+            size: 14,
+            mimeType: "application/json",
+            text: '{"result": []}',
+          },
+          redirectURL: "",
+          headersSize: -1,
+          bodySize: 14,
+        },
+        cache: {},
+        timings: {
+          send: 0,
+          wait: 0,
+          receive: 0,
+        },
+      },
+      {
+        comment: "POST app statistics (telemetry on startup)",
+        startedDateTime: "2026-05-26T11:12:44.316614+00:00",
+        time: 0,
+        request: {
+          method: "POST",
+          url: "https://www.paprikaapp.com/api/v2/statistics/",
+          httpVersion: "HTTP/1.1",
+          cookies: [],
+          headers: [
+            {
+              name: "Authorization",
+              value: "[REDACTED]",
+            },
+          ],
+          queryString: [],
+          headersSize: -1,
+          bodySize: 210,
+          postData: {
+            mimeType: "application/json",
+            text: '[{"install_uid": "574748c2-8fac-4caf-881d-9c3b742bb32d", "is_activating_now": false, "os_version": "macOS 26.4.1", "app_version": "3.8.4", "os": "macOS", "sync_email": "[REDACTED_EMAIL]", "is_activated": true}]',
+          },
+        },
+        response: {
+          status: 200,
+          statusText: "OK",
+          httpVersion: "HTTP/1.1",
+          cookies: [],
+          headers: [
+            {
+              name: "Content-Type",
+              value: "application/json",
+            },
+          ],
+          content: {
+            size: 16,
+            mimeType: "application/json",
+            text: '{"result": true}',
+          },
+          redirectURL: "",
+          headersSize: -1,
+          bodySize: 16,
+        },
+        cache: {},
+        timings: {
+          send: 0,
+          wait: 0,
+          receive: 0,
+        },
+      },
+      {
+        comment: "GET pantry items (startup sync)",
+        startedDateTime: "2026-05-26T11:12:44.316631+00:00",
+        time: 0,
+        request: {
+          method: "GET",
+          url: "https://www.paprikaapp.com/api/v2/sync/pantry/",
+          httpVersion: "HTTP/1.1",
+          cookies: [],
+          headers: [
+            {
+              name: "Authorization",
+              value: "[REDACTED]",
+            },
+          ],
+          queryString: [],
+          headersSize: -1,
+          bodySize: 0,
+        },
+        response: {
+          status: 200,
+          statusText: "OK",
+          httpVersion: "HTTP/1.1",
+          cookies: [],
+          headers: [
+            {
+              name: "Content-Type",
+              value: "application/json",
+            },
+          ],
+          content: {
+            size: 1028,
+            mimeType: "application/json",
+            text: '{"result": [{"uid": "A4402CA4-1919-4D88-B22E-165559A32D91", "ingredient": "Red Enchilada Sauce", "aisle": "International", "expiration_date": "2028-05-21 00:00:00", "has_expiration": true, "in_stock": true, "purchase_date": "2026-05-21 00:00:00", "quantity": "1 ct", "aisle_uid": "", "location_uid": null, "notes": null}, {"uid": "FE332579-EA7D-458B-A02E-F4CF02EAADAA", "ingredient": "Shredded Mozzarella", "aisle": "Dairy", "expiration_date": "2026-06-25 00:00:00", "has_expiration": true, "in_stock": true, "purchase_date": "2026-05-21 00:00:00", "quantity": "1 ct", "aisle_uid": "", "location_uid": null, "notes": null}, {"uid": "6E956D5C-EE11-4241-8224-F3BC8BD3B9A5", "ingredient": "Butter Bread", "aisle": "Bread", "expiration_date": "2026-06-04 00:00:00", "has_expiration": true, "in_stock": true, "purchase_date": "2026-05-21 00:00:00", "quantity": "1 ct", "aisle_uid": "", "location_uid": null, "notes": null}], "_truncated": true, "_total_count": 13, "_note": "Showing 3 of 13 items. Full response truncated for size."}',
+          },
+          redirectURL: "",
+          headersSize: -1,
+          bodySize: 3941,
+        },
+        cache: {},
+        timings: {
+          send: 0,
+          wait: 0,
+          receive: 0,
+        },
+      },
+      {
+        comment: "GET meal types catalog (user-customizable, like aisles)",
+        startedDateTime: "2026-05-26T11:13:14.629418+00:00",
+        time: 0,
+        request: {
+          method: "GET",
+          url: "https://www.paprikaapp.com/api/v2/sync/mealtypes/",
+          httpVersion: "HTTP/1.1",
+          cookies: [],
+          headers: [
+            {
+              name: "Authorization",
+              value: "[REDACTED]",
+            },
+          ],
+          queryString: [],
+          headersSize: -1,
+          bodySize: 0,
+        },
+        response: {
+          status: 200,
+          statusText: "OK",
+          httpVersion: "HTTP/1.1",
+          cookies: [],
+          headers: [
+            {
+              name: "Content-Type",
+              value: "application/json",
+            },
+          ],
+          content: {
+            size: 802,
+            mimeType: "application/json",
+            text: '{"result": [{"uid": "913D33C7FD39DB8C8C4514669B011F617D911345592CC77B309B812667959720", "name": "Breakfast", "color": "", "order_flag": 0, "original_type": 0, "export_all_day": false, "export_time": "08:00:00"}, {"uid": "74B7DE10D8791D7B501CB5DC41365994F2CC80227B7CE5CB2548E24AF26DC939", "name": "Lunch", "color": "", "order_flag": 1, "original_type": 1, "export_all_day": false, "export_time": "12:00:00"}, {"uid": "216713D08860CFA0D9787EA5C6CEBC8A8F5B73777F91C904853AC234BB9DF642", "name": "Dinner", "color": "", "order_flag": 2, "original_type": 2, "export_all_day": false, "export_time": "18:00:00"}, {"uid": "CAE5ADDAAB3EAE7D5AF8F19F3D0CEAC64E1ADE90C94A9BB3C9E5B8E2BA0D6F15", "name": "Snacks", "color": "", "order_flag": 3, "original_type": 3, "export_all_day": false, "export_time": "15:00:00"}]}',
+          },
+          redirectURL: "",
+          headersSize: -1,
+          bodySize: 802,
+        },
+        cache: {},
+        timings: {
+          send: 0,
+          wait: 0,
+          receive: 0,
+        },
+      },
+      {
+        comment: "GET meals (full history, unpaginated \u2014 shows is_ingredient + scale fields)",
+        startedDateTime: "2026-05-26T11:13:14.629624+00:00",
+        time: 0,
+        request: {
+          method: "GET",
+          url: "https://www.paprikaapp.com/api/v2/sync/meals/",
+          httpVersion: "HTTP/1.1",
+          cookies: [],
+          headers: [
+            {
+              name: "Authorization",
+              value: "[REDACTED]",
+            },
+          ],
+          queryString: [],
+          headersSize: -1,
+          bodySize: 0,
+        },
+        response: {
+          status: 200,
+          statusText: "OK",
+          httpVersion: "HTTP/1.1",
+          cookies: [],
+          headers: [
+            {
+              name: "Content-Type",
+              value: "application/json",
+            },
+          ],
+          content: {
+            size: 370,
+            mimeType: "application/json",
+            text: '{"result": [{"uid": "EXAMPLE-MEAL-UID", "recipe_uid": "EXAMPLE-RECIPE-UID", "name": "Example Recipe", "date": "2026-05-26 00:00:00", "type": 2, "type_uid": "216713D08860CFA0D9787EA5C6CEBC8A8F5B73777F91C904853AC234BB9DF642", "order_flag": 0, "is_ingredient": false, "scale": null}], "_note": "Synthetic example showing GET response shape (9 fields). Real UIDs redacted."}',
+          },
+          redirectURL: "",
+          headersSize: -1,
+          bodySize: 370,
+        },
+        cache: {},
+        timings: {
+          send: 0,
+          wait: 0,
+          receive: 0,
+        },
+      },
+    ],
+  },
+} as const;
+
+interface Fixture {
+  readonly method: string;
+  readonly url: string;
+  readonly status: number;
+  readonly requestBody: unknown;
+  readonly responseBody: unknown;
+}
+
+function parseBody(text: string | undefined): unknown {
+  if (!text) return null;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return text;
+  }
+}
+
+function buildFixtures() {
+  const map = new Map<string, Fixture>();
+  for (const entry of har.log.entries) {
+    if (!entry.comment) continue;
+    const req = entry.request as { postData?: { text?: string }; method: string; url: string };
+    map.set(entry.comment, {
+      method: req.method,
+      url: req.url,
+      status: entry.response.status,
+      requestBody: parseBody(req.postData?.text),
+      responseBody: parseBody(entry.response.content.text),
+    });
+  }
+  return map;
+}
+
+const fixtureMap = buildFixtures();
+
+export type FixtureKey =
+  | "GET sync status (entity count catalog)"
+  | "GET grocery lists (startup sync)"
+  | "GET grocery aisles (startup sync)"
+  | "GET grocery items (startup sync)"
+  | "POST app statistics (telemetry on startup)"
+  | "GET pantry items (startup sync)"
+  | "GET meal types catalog (user-customizable, like aisles)"
+  | "GET meals (full history, unpaginated — shows is_ingredient + scale fields)";
+
+export function fixture(key: FixtureKey): Fixture {
+  return fixtureMap.get(key)!;
+}
+
+export const handlers: ReadonlyArray<HttpHandler> = fromTraffic(har as unknown as Har.Har);

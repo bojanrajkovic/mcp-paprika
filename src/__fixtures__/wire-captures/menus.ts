@@ -1,0 +1,833 @@
+// Generated from docs/wire-captures/menus.har.json — do not edit
+// Regenerate with: npx tsx scripts/generate-har-fixtures.ts
+
+import { fromTraffic } from "@msw/source/traffic";
+import type Har from "har-format";
+import type { HttpHandler } from "msw";
+
+/* eslint-disable */
+
+const har = {
+  log: {
+    version: "1.2",
+    creator: {
+      name: "mitmproxy + decode-capture.py",
+      version: "1.0",
+    },
+    entries: [
+      {
+        comment: "create 1-day menu ([mcp-cap] Test Menu 1)",
+        startedDateTime: "2026-05-26T03:34:04.295345+00:00",
+        time: 0,
+        request: {
+          method: "POST",
+          url: "https://www.paprikaapp.com/api/v2/sync/menus/",
+          httpVersion: "HTTP/1.1",
+          cookies: [],
+          headers: [
+            {
+              name: "Content-Type",
+              value: "multipart/form-data",
+            },
+            {
+              name: "Authorization",
+              value: "[REDACTED]",
+            },
+          ],
+          queryString: [],
+          headersSize: -1,
+          bodySize: 143,
+          postData: {
+            mimeType: "application/octet-stream",
+            text: '[[{"days": 1, "deleted": false, "name": "[mcp-cap] Test Menu 1", "order_flag": 0, "uid": "13A42BA9-4C06-4FDC-A5DB-AE9191DF5251", "notes": ""}]]',
+          },
+        },
+        response: {
+          status: 200,
+          statusText: "OK",
+          httpVersion: "HTTP/1.1",
+          cookies: [],
+          headers: [
+            {
+              name: "Content-Type",
+              value: "application/json",
+            },
+          ],
+          content: {
+            size: 16,
+            mimeType: "application/json",
+            text: '{"result": true}',
+          },
+          redirectURL: "",
+          headersSize: -1,
+          bodySize: 16,
+        },
+        cache: {},
+        timings: {
+          send: 0,
+          wait: 0,
+          receive: 0,
+        },
+      },
+      {
+        comment: "add menuitem: Breakfast recipe (Bacon Broccoli Cheddar Crustless Quiche) to day 1",
+        startedDateTime: "2026-05-26T03:34:04.295542+00:00",
+        time: 0,
+        request: {
+          method: "POST",
+          url: "https://www.paprikaapp.com/api/v2/sync/menuitems/",
+          httpVersion: "HTTP/1.1",
+          cookies: [],
+          headers: [
+            {
+              name: "Content-Type",
+              value: "multipart/form-data",
+            },
+            {
+              name: "Authorization",
+              value: "[REDACTED]",
+            },
+          ],
+          queryString: [],
+          headersSize: -1,
+          bodySize: 355,
+          postData: {
+            mimeType: "application/octet-stream",
+            text: '[[{"day": 1, "deleted": false, "order_flag": 0, "name": "Bacon Broccoli Cheddar Crustless Quiche", "menu_uid": "13A42BA9-4C06-4FDC-A5DB-AE9191DF5251", "recipe_uid": "3AF6BDB7-4EA5-444C-A00A-1C5C989DE1E1-6735-000003A768881804", "type_uid": "913D33C7FD39DB8C8C4514669B011F617D911345592CC77B309B812667959720", "uid": "D7911C7C-0F3C-4A47-ACA3-2964D831EA69"}]]',
+          },
+        },
+        response: {
+          status: 200,
+          statusText: "OK",
+          httpVersion: "HTTP/1.1",
+          cookies: [],
+          headers: [
+            {
+              name: "Content-Type",
+              value: "application/json",
+            },
+          ],
+          content: {
+            size: 16,
+            mimeType: "application/json",
+            text: '{"result": true}',
+          },
+          redirectURL: "",
+          headersSize: -1,
+          bodySize: 16,
+        },
+        cache: {},
+        timings: {
+          send: 0,
+          wait: 0,
+          receive: 0,
+        },
+      },
+      {
+        comment: "add menuitem: Lunch recipe (Bacon Onion Cheese Rolls) to day 1",
+        startedDateTime: "2026-05-26T03:34:04.295549+00:00",
+        time: 0,
+        request: {
+          method: "POST",
+          url: "https://www.paprikaapp.com/api/v2/sync/menuitems/",
+          httpVersion: "HTTP/1.1",
+          cookies: [],
+          headers: [
+            {
+              name: "Content-Type",
+              value: "multipart/form-data",
+            },
+            {
+              name: "Authorization",
+              value: "[REDACTED]",
+            },
+          ],
+          queryString: [],
+          headersSize: -1,
+          bodySize: 337,
+          postData: {
+            mimeType: "application/octet-stream",
+            text: '[[{"recipe_uid": "607C56F1-8CFC-40AF-9F6F-B135A75243C1", "menu_uid": "13A42BA9-4C06-4FDC-A5DB-AE9191DF5251", "deleted": false, "order_flag": 1, "type_uid": "74B7DE10D8791D7B501CB5DC41365994F2CC80227B7CE5CB2548E24AF26DC939", "name": "Bacon Onion Cheese Rolls & Poppy Seed Glaze", "day": 1, "uid": "6ACE153C-3932-4AE3-9B5C-74BD77E28DA0"}]]',
+          },
+        },
+        response: {
+          status: 200,
+          statusText: "OK",
+          httpVersion: "HTTP/1.1",
+          cookies: [],
+          headers: [
+            {
+              name: "Content-Type",
+              value: "application/json",
+            },
+          ],
+          content: {
+            size: 16,
+            mimeType: "application/json",
+            text: '{"result": true}',
+          },
+          redirectURL: "",
+          headersSize: -1,
+          bodySize: 16,
+        },
+        cache: {},
+        timings: {
+          send: 0,
+          wait: 0,
+          receive: 0,
+        },
+      },
+      {
+        comment: "add menuitem: Dinner recipe ((Not) Butter Chicken) to day 1",
+        startedDateTime: "2026-05-26T03:34:04.295554+00:00",
+        time: 0,
+        request: {
+          method: "POST",
+          url: "https://www.paprikaapp.com/api/v2/sync/menuitems/",
+          httpVersion: "HTTP/1.1",
+          cookies: [],
+          headers: [
+            {
+              name: "Content-Type",
+              value: "multipart/form-data",
+            },
+            {
+              name: "Authorization",
+              value: "[REDACTED]",
+            },
+          ],
+          queryString: [],
+          headersSize: -1,
+          bodySize: 336,
+          postData: {
+            mimeType: "application/octet-stream",
+            text: '[[{"menu_uid": "13A42BA9-4C06-4FDC-A5DB-AE9191DF5251", "name": "(Not) Butter Chicken", "deleted": false, "type_uid": "216713D08860CFA0D9787EA5C6CEBC8A8F5B73777F91C904853AC234BB9DF642", "day": 1, "order_flag": 2, "uid": "6C4C909E-7F1B-4F93-8598-E881A6D379CF", "recipe_uid": "DF8BD763-2ADA-49E2-AA2C-05A47A81B007-6735-000003ABB738847D"}]]',
+          },
+        },
+        response: {
+          status: 200,
+          statusText: "OK",
+          httpVersion: "HTTP/1.1",
+          cookies: [],
+          headers: [
+            {
+              name: "Content-Type",
+              value: "application/json",
+            },
+          ],
+          content: {
+            size: 16,
+            mimeType: "application/json",
+            text: '{"result": true}',
+          },
+          redirectURL: "",
+          headersSize: -1,
+          bodySize: 16,
+        },
+        cache: {},
+        timings: {
+          send: 0,
+          wait: 0,
+          receive: 0,
+        },
+      },
+      {
+        comment: "edit menuitem: change type from Breakfast to Snacks",
+        startedDateTime: "2026-05-26T03:34:04.295558+00:00",
+        time: 0,
+        request: {
+          method: "POST",
+          url: "https://www.paprikaapp.com/api/v2/sync/menuitems/",
+          httpVersion: "HTTP/1.1",
+          cookies: [],
+          headers: [
+            {
+              name: "Content-Type",
+              value: "multipart/form-data",
+            },
+            {
+              name: "Authorization",
+              value: "[REDACTED]",
+            },
+          ],
+          queryString: [],
+          headersSize: -1,
+          bodySize: 355,
+          postData: {
+            mimeType: "application/octet-stream",
+            text: '[[{"deleted": false, "recipe_uid": "3AF6BDB7-4EA5-444C-A00A-1C5C989DE1E1-6735-000003A768881804", "order_flag": 0, "uid": "D7911C7C-0F3C-4A47-ACA3-2964D831EA69", "menu_uid": "13A42BA9-4C06-4FDC-A5DB-AE9191DF5251", "day": 1, "type_uid": "CAE5ADDAAB3EAE7D474EC14086EB0429CAE123F3E5865BDF4879183A7D444BE1", "name": "Bacon Broccoli Cheddar Crustless Quiche"}]]',
+          },
+        },
+        response: {
+          status: 200,
+          statusText: "OK",
+          httpVersion: "HTTP/1.1",
+          cookies: [],
+          headers: [
+            {
+              name: "Content-Type",
+              value: "application/json",
+            },
+          ],
+          content: {
+            size: 16,
+            mimeType: "application/json",
+            text: '{"result": true}',
+          },
+          redirectURL: "",
+          headersSize: -1,
+          bodySize: 16,
+        },
+        cache: {},
+        timings: {
+          send: 0,
+          wait: 0,
+          receive: 0,
+        },
+      },
+      {
+        comment: "delete menuitem: remove Lunch recipe (soft-delete)",
+        startedDateTime: "2026-05-26T03:34:04.295562+00:00",
+        time: 0,
+        request: {
+          method: "POST",
+          url: "https://www.paprikaapp.com/api/v2/sync/menuitems/",
+          httpVersion: "HTTP/1.1",
+          cookies: [],
+          headers: [
+            {
+              name: "Content-Type",
+              value: "multipart/form-data",
+            },
+            {
+              name: "Authorization",
+              value: "[REDACTED]",
+            },
+          ],
+          queryString: [],
+          headersSize: -1,
+          bodySize: 336,
+          postData: {
+            mimeType: "application/octet-stream",
+            text: '[[{"recipe_uid": "607C56F1-8CFC-40AF-9F6F-B135A75243C1", "day": 1, "type_uid": "74B7DE10D8791D7B501CB5DC41365994F2CC80227B7CE5CB2548E24AF26DC939", "order_flag": 1, "deleted": true, "name": "Bacon Onion Cheese Rolls & Poppy Seed Glaze", "uid": "6ACE153C-3932-4AE3-9B5C-74BD77E28DA0", "menu_uid": "13A42BA9-4C06-4FDC-A5DB-AE9191DF5251"}]]',
+          },
+        },
+        response: {
+          status: 200,
+          statusText: "OK",
+          httpVersion: "HTTP/1.1",
+          cookies: [],
+          headers: [
+            {
+              name: "Content-Type",
+              value: "application/json",
+            },
+          ],
+          content: {
+            size: 16,
+            mimeType: "application/json",
+            text: '{"result": true}',
+          },
+          redirectURL: "",
+          headersSize: -1,
+          bodySize: 16,
+        },
+        cache: {},
+        timings: {
+          send: 0,
+          wait: 0,
+          receive: 0,
+        },
+      },
+      {
+        comment: "rename menu to [mcp-cap] Test Menu 1 Edited",
+        startedDateTime: "2026-05-26T03:34:04.295566+00:00",
+        time: 0,
+        request: {
+          method: "POST",
+          url: "https://www.paprikaapp.com/api/v2/sync/menus/",
+          httpVersion: "HTTP/1.1",
+          cookies: [],
+          headers: [
+            {
+              name: "Content-Type",
+              value: "multipart/form-data",
+            },
+            {
+              name: "Authorization",
+              value: "[REDACTED]",
+            },
+          ],
+          queryString: [],
+          headersSize: -1,
+          bodySize: 150,
+          postData: {
+            mimeType: "application/octet-stream",
+            text: '[[{"name": "[mcp-cap] Test Menu 1 Edited", "uid": "13A42BA9-4C06-4FDC-A5DB-AE9191DF5251", "days": 1, "order_flag": 0, "deleted": false, "notes": ""}]]',
+          },
+        },
+        response: {
+          status: 200,
+          statusText: "OK",
+          httpVersion: "HTTP/1.1",
+          cookies: [],
+          headers: [
+            {
+              name: "Content-Type",
+              value: "application/json",
+            },
+          ],
+          content: {
+            size: 16,
+            mimeType: "application/json",
+            text: '{"result": true}',
+          },
+          redirectURL: "",
+          headersSize: -1,
+          bodySize: 16,
+        },
+        cache: {},
+        timings: {
+          send: 0,
+          wait: 0,
+          receive: 0,
+        },
+      },
+      {
+        comment: "delete menu (soft-delete)",
+        startedDateTime: "2026-05-26T03:34:04.295569+00:00",
+        time: 0,
+        request: {
+          method: "POST",
+          url: "https://www.paprikaapp.com/api/v2/sync/menus/",
+          httpVersion: "HTTP/1.1",
+          cookies: [],
+          headers: [
+            {
+              name: "Content-Type",
+              value: "multipart/form-data",
+            },
+            {
+              name: "Authorization",
+              value: "[REDACTED]",
+            },
+          ],
+          queryString: [],
+          headersSize: -1,
+          bodySize: 149,
+          postData: {
+            mimeType: "application/octet-stream",
+            text: '[[{"deleted": true, "name": "[mcp-cap] Test Menu 1 Edited", "notes": "", "uid": "13A42BA9-4C06-4FDC-A5DB-AE9191DF5251", "order_flag": 0, "days": 1}]]',
+          },
+        },
+        response: {
+          status: 200,
+          statusText: "OK",
+          httpVersion: "HTTP/1.1",
+          cookies: [],
+          headers: [
+            {
+              name: "Content-Type",
+              value: "application/json",
+            },
+          ],
+          content: {
+            size: 16,
+            mimeType: "application/json",
+            text: '{"result": true}',
+          },
+          redirectURL: "",
+          headersSize: -1,
+          bodySize: 16,
+        },
+        cache: {},
+        timings: {
+          send: 0,
+          wait: 0,
+          receive: 0,
+        },
+      },
+      {
+        comment: "cascade delete menuitem after menu deletion",
+        startedDateTime: "2026-05-26T03:34:04.295574+00:00",
+        time: 0,
+        request: {
+          method: "POST",
+          url: "https://www.paprikaapp.com/api/v2/sync/menuitems/",
+          httpVersion: "HTTP/1.1",
+          cookies: [],
+          headers: [
+            {
+              name: "Content-Type",
+              value: "multipart/form-data",
+            },
+            {
+              name: "Authorization",
+              value: "[REDACTED]",
+            },
+          ],
+          queryString: [],
+          headersSize: -1,
+          bodySize: 619,
+          postData: {
+            mimeType: "application/octet-stream",
+            text: '[[{"name": "Bacon Broccoli Cheddar Crustless Quiche", "order_flag": 0, "day": 1, "deleted": true, "uid": "D7911C7C-0F3C-4A47-ACA3-2964D831EA69", "menu_uid": null, "recipe_uid": "3AF6BDB7-4EA5-444C-A00A-1C5C989DE1E1-6735-000003A768881804", "type_uid": "CAE5ADDAAB3EAE7D474EC14086EB0429CAE123F3E5865BDF4879183A7D444BE1"}, {"deleted": true, "uid": "6C4C909E-7F1B-4F93-8598-E881A6D379CF", "type_uid": "216713D08860CFA0D9787EA5C6CEBC8A8F5B73777F91C904853AC234BB9DF642", "day": 1, "order_flag": 2, "recipe_uid": "DF8BD763-2ADA-49E2-AA2C-05A47A81B007-6735-000003ABB738847D", "menu_uid": null, "name": "(Not) Butter Chicken"}]]',
+          },
+        },
+        response: {
+          status: 200,
+          statusText: "OK",
+          httpVersion: "HTTP/1.1",
+          cookies: [],
+          headers: [
+            {
+              name: "Content-Type",
+              value: "application/json",
+            },
+          ],
+          content: {
+            size: 16,
+            mimeType: "application/json",
+            text: '{"result": true}',
+          },
+          redirectURL: "",
+          headersSize: -1,
+          bodySize: 16,
+        },
+        cache: {},
+        timings: {
+          send: 0,
+          wait: 0,
+          receive: 0,
+        },
+      },
+      {
+        comment: "create 3-day menu ([mcp-cap] Multi-Day)",
+        startedDateTime: "2026-05-26T03:34:04.295578+00:00",
+        time: 0,
+        request: {
+          method: "POST",
+          url: "https://www.paprikaapp.com/api/v2/sync/menus/",
+          httpVersion: "HTTP/1.1",
+          cookies: [],
+          headers: [
+            {
+              name: "Content-Type",
+              value: "multipart/form-data",
+            },
+            {
+              name: "Authorization",
+              value: "[REDACTED]",
+            },
+          ],
+          queryString: [],
+          headersSize: -1,
+          bodySize: 141,
+          postData: {
+            mimeType: "application/octet-stream",
+            text: '[[{"name": "[mcp-cap] Multi-Day", "order_flag": 0, "uid": "8D2D2C00-6731-4FD1-B0B8-331B0A07AD35", "deleted": false, "days": 3, "notes": ""}]]',
+          },
+        },
+        response: {
+          status: 200,
+          statusText: "OK",
+          httpVersion: "HTTP/1.1",
+          cookies: [],
+          headers: [
+            {
+              name: "Content-Type",
+              value: "application/json",
+            },
+          ],
+          content: {
+            size: 16,
+            mimeType: "application/json",
+            text: '{"result": true}',
+          },
+          redirectURL: "",
+          headersSize: -1,
+          bodySize: 16,
+        },
+        cache: {},
+        timings: {
+          send: 0,
+          wait: 0,
+          receive: 0,
+        },
+      },
+      {
+        comment: "add menuitem: Dinner recipe ((Not) Butter Chicken) to multi-day menu day 1",
+        startedDateTime: "2026-05-26T03:34:04.295581+00:00",
+        time: 0,
+        request: {
+          method: "POST",
+          url: "https://www.paprikaapp.com/api/v2/sync/menuitems/",
+          httpVersion: "HTTP/1.1",
+          cookies: [],
+          headers: [
+            {
+              name: "Content-Type",
+              value: "multipart/form-data",
+            },
+            {
+              name: "Authorization",
+              value: "[REDACTED]",
+            },
+          ],
+          queryString: [],
+          headersSize: -1,
+          bodySize: 336,
+          postData: {
+            mimeType: "application/octet-stream",
+            text: '[[{"type_uid": "216713D08860CFA0D9787EA5C6CEBC8A8F5B73777F91C904853AC234BB9DF642", "day": 1, "deleted": false, "uid": "ECE53CD5-338F-4B6E-A5ED-2B4F75C906AE", "name": "(Not) Butter Chicken", "menu_uid": "8D2D2C00-6731-4FD1-B0B8-331B0A07AD35", "order_flag": 0, "recipe_uid": "DF8BD763-2ADA-49E2-AA2C-05A47A81B007-6735-000003ABB738847D"}]]',
+          },
+        },
+        response: {
+          status: 200,
+          statusText: "OK",
+          httpVersion: "HTTP/1.1",
+          cookies: [],
+          headers: [
+            {
+              name: "Content-Type",
+              value: "application/json",
+            },
+          ],
+          content: {
+            size: 16,
+            mimeType: "application/json",
+            text: '{"result": true}',
+          },
+          redirectURL: "",
+          headersSize: -1,
+          bodySize: 16,
+        },
+        cache: {},
+        timings: {
+          send: 0,
+          wait: 0,
+          receive: 0,
+        },
+      },
+      {
+        comment: "add menuitem: Dinner recipe (20 Minute Honey Mustard Chicken) to multi-day menu day 3",
+        startedDateTime: "2026-05-26T03:34:04.295585+00:00",
+        time: 0,
+        request: {
+          method: "POST",
+          url: "https://www.paprikaapp.com/api/v2/sync/menuitems/",
+          httpVersion: "HTTP/1.1",
+          cookies: [],
+          headers: [
+            {
+              name: "Content-Type",
+              value: "multipart/form-data",
+            },
+            {
+              name: "Authorization",
+              value: "[REDACTED]",
+            },
+          ],
+          queryString: [],
+          headersSize: -1,
+          bodySize: 347,
+          postData: {
+            mimeType: "application/octet-stream",
+            text: '[[{"uid": "049D9829-C21F-4C08-B06C-CA3B0A91B1D8", "order_flag": 1, "menu_uid": "8D2D2C00-6731-4FD1-B0B8-331B0A07AD35", "day": 3, "type_uid": "216713D08860CFA0D9787EA5C6CEBC8A8F5B73777F91C904853AC234BB9DF642", "name": "20 Minute Honey Mustard Chicken", "deleted": false, "recipe_uid": "855E201D-9382-44CD-8D8D-B31B303BE0BE-6735-000003A2D8094745"}]]',
+          },
+        },
+        response: {
+          status: 200,
+          statusText: "OK",
+          httpVersion: "HTTP/1.1",
+          cookies: [],
+          headers: [
+            {
+              name: "Content-Type",
+              value: "application/json",
+            },
+          ],
+          content: {
+            size: 16,
+            mimeType: "application/json",
+            text: '{"result": true}',
+          },
+          redirectURL: "",
+          headersSize: -1,
+          bodySize: 16,
+        },
+        cache: {},
+        timings: {
+          send: 0,
+          wait: 0,
+          receive: 0,
+        },
+      },
+      {
+        comment: "delete multi-day menu (soft-delete)",
+        startedDateTime: "2026-05-26T03:34:04.295588+00:00",
+        time: 0,
+        request: {
+          method: "POST",
+          url: "https://www.paprikaapp.com/api/v2/sync/menus/",
+          httpVersion: "HTTP/1.1",
+          cookies: [],
+          headers: [
+            {
+              name: "Content-Type",
+              value: "multipart/form-data",
+            },
+            {
+              name: "Authorization",
+              value: "[REDACTED]",
+            },
+          ],
+          queryString: [],
+          headersSize: -1,
+          bodySize: 140,
+          postData: {
+            mimeType: "application/octet-stream",
+            text: '[[{"uid": "8D2D2C00-6731-4FD1-B0B8-331B0A07AD35", "deleted": true, "name": "[mcp-cap] Multi-Day", "days": 3, "order_flag": 0, "notes": ""}]]',
+          },
+        },
+        response: {
+          status: 200,
+          statusText: "OK",
+          httpVersion: "HTTP/1.1",
+          cookies: [],
+          headers: [
+            {
+              name: "Content-Type",
+              value: "application/json",
+            },
+          ],
+          content: {
+            size: 16,
+            mimeType: "application/json",
+            text: '{"result": true}',
+          },
+          redirectURL: "",
+          headersSize: -1,
+          bodySize: 16,
+        },
+        cache: {},
+        timings: {
+          send: 0,
+          wait: 0,
+          receive: 0,
+        },
+      },
+      {
+        comment: "cascade delete menuitems after multi-day menu deletion (batch: 2 items)",
+        startedDateTime: "2026-05-26T03:34:04.295595+00:00",
+        time: 0,
+        request: {
+          method: "POST",
+          url: "https://www.paprikaapp.com/api/v2/sync/menuitems/",
+          httpVersion: "HTTP/1.1",
+          cookies: [],
+          headers: [
+            {
+              name: "Content-Type",
+              value: "multipart/form-data",
+            },
+            {
+              name: "Authorization",
+              value: "[REDACTED]",
+            },
+          ],
+          queryString: [],
+          headersSize: -1,
+          bodySize: 611,
+          postData: {
+            mimeType: "application/octet-stream",
+            text: '[[{"deleted": true, "day": 1, "name": "(Not) Butter Chicken", "uid": "ECE53CD5-338F-4B6E-A5ED-2B4F75C906AE", "menu_uid": null, "order_flag": 0, "type_uid": "216713D08860CFA0D9787EA5C6CEBC8A8F5B73777F91C904853AC234BB9DF642", "recipe_uid": "DF8BD763-2ADA-49E2-AA2C-05A47A81B007-6735-000003ABB738847D"}, {"type_uid": "216713D08860CFA0D9787EA5C6CEBC8A8F5B73777F91C904853AC234BB9DF642", "day": 3, "recipe_uid": "855E201D-9382-44CD-8D8D-B31B303BE0BE-6735-000003A2D8094745", "uid": "049D9829-C21F-4C08-B06C-CA3B0A91B1D8", "menu_uid": null, "deleted": true, "name": "20 Minute Honey Mustard Chicken", "order_flag": 1}]]',
+          },
+        },
+        response: {
+          status: 200,
+          statusText: "OK",
+          httpVersion: "HTTP/1.1",
+          cookies: [],
+          headers: [
+            {
+              name: "Content-Type",
+              value: "application/json",
+            },
+          ],
+          content: {
+            size: 16,
+            mimeType: "application/json",
+            text: '{"result": true}',
+          },
+          redirectURL: "",
+          headersSize: -1,
+          bodySize: 16,
+        },
+        cache: {},
+        timings: {
+          send: 0,
+          wait: 0,
+          receive: 0,
+        },
+      },
+    ],
+  },
+} as const;
+
+interface Fixture {
+  readonly method: string;
+  readonly url: string;
+  readonly status: number;
+  readonly requestBody: unknown;
+  readonly responseBody: unknown;
+}
+
+function parseBody(text: string | undefined): unknown {
+  if (!text) return null;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return text;
+  }
+}
+
+function buildFixtures() {
+  const map = new Map<string, Fixture>();
+  for (const entry of har.log.entries) {
+    if (!entry.comment) continue;
+    const req = entry.request as { postData?: { text?: string }; method: string; url: string };
+    map.set(entry.comment, {
+      method: req.method,
+      url: req.url,
+      status: entry.response.status,
+      requestBody: parseBody(req.postData?.text),
+      responseBody: parseBody(entry.response.content.text),
+    });
+  }
+  return map;
+}
+
+const fixtureMap = buildFixtures();
+
+export type FixtureKey =
+  | "create 1-day menu ([mcp-cap] Test Menu 1)"
+  | "add menuitem: Breakfast recipe (Bacon Broccoli Cheddar Crustless Quiche) to day 1"
+  | "add menuitem: Lunch recipe (Bacon Onion Cheese Rolls) to day 1"
+  | "add menuitem: Dinner recipe ((Not) Butter Chicken) to day 1"
+  | "edit menuitem: change type from Breakfast to Snacks"
+  | "delete menuitem: remove Lunch recipe (soft-delete)"
+  | "rename menu to [mcp-cap] Test Menu 1 Edited"
+  | "delete menu (soft-delete)"
+  | "cascade delete menuitem after menu deletion"
+  | "create 3-day menu ([mcp-cap] Multi-Day)"
+  | "add menuitem: Dinner recipe ((Not) Butter Chicken) to multi-day menu day 1"
+  | "add menuitem: Dinner recipe (20 Minute Honey Mustard Chicken) to multi-day menu day 3"
+  | "delete multi-day menu (soft-delete)"
+  | "cascade delete menuitems after multi-day menu deletion (batch: 2 items)";
+
+export function fixture(key: FixtureKey): Fixture {
+  return fixtureMap.get(key)!;
+}
+
+export const handlers: ReadonlyArray<HttpHandler> = fromTraffic(har as unknown as Har.Har);

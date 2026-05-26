@@ -1,0 +1,443 @@
+{
+  "log": {
+    "version": "1.2",
+    "creator": {
+      "name": "mitmproxy + decode-capture.py",
+      "version": "1.0"
+    },
+    "entries": [
+      {
+        "comment": "add recipe meal: (Not) Butter Chicken as Breakfast on 2026-05-26",
+        "startedDateTime": "2026-05-26T03:34:04.295601+00:00",
+        "time": 0,
+        "request": {
+          "method": "POST",
+          "url": "https://www.paprikaapp.com/api/v2/sync/meals/",
+          "httpVersion": "HTTP/1.1",
+          "cookies": [],
+          "headers": [
+            {
+              "name": "Content-Type",
+              "value": "multipart/form-data"
+            },
+            {
+              "name": "Authorization",
+              "value": "[REDACTED]"
+            }
+          ],
+          "queryString": [],
+          "headersSize": -1,
+          "bodySize": 316,
+          "postData": {
+            "mimeType": "application/octet-stream",
+            "text": "[[{\"recipe_uid\": \"DF8BD763-2ADA-49E2-AA2C-05A47A81B007-6735-000003ABB738847D\", \"deleted\": false, \"order_flag\": 0, \"type_uid\": \"913D33C7FD39DB8C8C4514669B011F617D911345592CC77B309B812667959720\", \"uid\": \"BF0FF316-1A3F-4AEF-BCD1-87FC6B21586C\", \"date\": \"2026-05-26 00:00:00\", \"name\": \"(Not) Butter Chicken\", \"type\": 0}]]"
+          }
+        },
+        "response": {
+          "status": 200,
+          "statusText": "OK",
+          "httpVersion": "HTTP/1.1",
+          "cookies": [],
+          "headers": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ],
+          "content": {
+            "size": 16,
+            "mimeType": "application/json",
+            "text": "{\"result\": true}"
+          },
+          "redirectURL": "",
+          "headersSize": -1,
+          "bodySize": 16
+        },
+        "cache": {},
+        "timings": {
+          "send": 0,
+          "wait": 0,
+          "receive": 0
+        }
+      },
+      {
+        "comment": "add freeform meal: [mcp-cap] sandwich as Lunch on 2026-05-26",
+        "startedDateTime": "2026-05-26T03:34:04.295605+00:00",
+        "time": 0,
+        "request": {
+          "method": "POST",
+          "url": "https://www.paprikaapp.com/api/v2/sync/meals/",
+          "httpVersion": "HTTP/1.1",
+          "cookies": [],
+          "headers": [
+            {
+              "name": "Content-Type",
+              "value": "multipart/form-data"
+            },
+            {
+              "name": "Authorization",
+              "value": "[REDACTED]"
+            }
+          ],
+          "queryString": [],
+          "headersSize": -1,
+          "bodySize": 258,
+          "postData": {
+            "mimeType": "application/octet-stream",
+            "text": "[[{\"name\": \"[mcp-cap] sandwich\", \"order_flag\": 1, \"date\": \"2026-05-26 00:00:00\", \"uid\": \"31E01665-751F-494B-BC74-1C29EBACF632\", \"type\": 1, \"deleted\": false, \"type_uid\": \"74B7DE10D8791D7B501CB5DC41365994F2CC80227B7CE5CB2548E24AF26DC939\", \"recipe_uid\": null}]]"
+          }
+        },
+        "response": {
+          "status": 200,
+          "statusText": "OK",
+          "httpVersion": "HTTP/1.1",
+          "cookies": [],
+          "headers": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ],
+          "content": {
+            "size": 16,
+            "mimeType": "application/json",
+            "text": "{\"result\": true}"
+          },
+          "redirectURL": "",
+          "headersSize": -1,
+          "bodySize": 16
+        },
+        "cache": {},
+        "timings": {
+          "send": 0,
+          "wait": 0,
+          "receive": 0
+        }
+      },
+      {
+        "comment": "edit meal: change type from Breakfast to Dinner",
+        "startedDateTime": "2026-05-26T03:34:04.295609+00:00",
+        "time": 0,
+        "request": {
+          "method": "POST",
+          "url": "https://www.paprikaapp.com/api/v2/sync/meals/",
+          "httpVersion": "HTTP/1.1",
+          "cookies": [],
+          "headers": [
+            {
+              "name": "Content-Type",
+              "value": "multipart/form-data"
+            },
+            {
+              "name": "Authorization",
+              "value": "[REDACTED]"
+            }
+          ],
+          "queryString": [],
+          "headersSize": -1,
+          "bodySize": 316,
+          "postData": {
+            "mimeType": "application/octet-stream",
+            "text": "[[{\"recipe_uid\": \"DF8BD763-2ADA-49E2-AA2C-05A47A81B007-6735-000003ABB738847D\", \"name\": \"(Not) Butter Chicken\", \"deleted\": false, \"type_uid\": \"216713D08860CFA0D9787EA5C6CEBC8A8F5B73777F91C904853AC234BB9DF642\", \"order_flag\": 0, \"date\": \"2026-05-26 00:00:00\", \"uid\": \"BF0FF316-1A3F-4AEF-BCD1-87FC6B21586C\", \"type\": 2}]]"
+          }
+        },
+        "response": {
+          "status": 200,
+          "statusText": "OK",
+          "httpVersion": "HTTP/1.1",
+          "cookies": [],
+          "headers": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ],
+          "content": {
+            "size": 16,
+            "mimeType": "application/json",
+            "text": "{\"result\": true}"
+          },
+          "redirectURL": "",
+          "headersSize": -1,
+          "bodySize": 16
+        },
+        "cache": {},
+        "timings": {
+          "send": 0,
+          "wait": 0,
+          "receive": 0
+        }
+      },
+      {
+        "comment": "delete freeform meal: [mcp-cap] sandwich (soft-delete)",
+        "startedDateTime": "2026-05-26T03:34:04.295612+00:00",
+        "time": 0,
+        "request": {
+          "method": "POST",
+          "url": "https://www.paprikaapp.com/api/v2/sync/meals/",
+          "httpVersion": "HTTP/1.1",
+          "cookies": [],
+          "headers": [
+            {
+              "name": "Content-Type",
+              "value": "multipart/form-data"
+            },
+            {
+              "name": "Authorization",
+              "value": "[REDACTED]"
+            }
+          ],
+          "queryString": [],
+          "headersSize": -1,
+          "bodySize": 257,
+          "postData": {
+            "mimeType": "application/octet-stream",
+            "text": "[[{\"order_flag\": 1, \"deleted\": true, \"name\": \"[mcp-cap] sandwich\", \"date\": \"2026-05-26 00:00:00\", \"type\": 1, \"type_uid\": \"74B7DE10D8791D7B501CB5DC41365994F2CC80227B7CE5CB2548E24AF26DC939\", \"recipe_uid\": null, \"uid\": \"31E01665-751F-494B-BC74-1C29EBACF632\"}]]"
+          }
+        },
+        "response": {
+          "status": 200,
+          "statusText": "OK",
+          "httpVersion": "HTTP/1.1",
+          "cookies": [],
+          "headers": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ],
+          "content": {
+            "size": 16,
+            "mimeType": "application/json",
+            "text": "{\"result\": true}"
+          },
+          "redirectURL": "",
+          "headersSize": -1,
+          "bodySize": 16
+        },
+        "cache": {},
+        "timings": {
+          "send": 0,
+          "wait": 0,
+          "receive": 0
+        }
+      },
+      {
+        "comment": "delete recipe meal: (Not) Butter Chicken (soft-delete)",
+        "startedDateTime": "2026-05-26T03:34:04.295615+00:00",
+        "time": 0,
+        "request": {
+          "method": "POST",
+          "url": "https://www.paprikaapp.com/api/v2/sync/meals/",
+          "httpVersion": "HTTP/1.1",
+          "cookies": [],
+          "headers": [
+            {
+              "name": "Content-Type",
+              "value": "multipart/form-data"
+            },
+            {
+              "name": "Authorization",
+              "value": "[REDACTED]"
+            }
+          ],
+          "queryString": [],
+          "headersSize": -1,
+          "bodySize": 315,
+          "postData": {
+            "mimeType": "application/octet-stream",
+            "text": "[[{\"deleted\": true, \"order_flag\": 0, \"name\": \"(Not) Butter Chicken\", \"date\": \"2026-05-26 00:00:00\", \"type\": 2, \"type_uid\": \"216713D08860CFA0D9787EA5C6CEBC8A8F5B73777F91C904853AC234BB9DF642\", \"recipe_uid\": \"DF8BD763-2ADA-49E2-AA2C-05A47A81B007-6735-000003ABB738847D\", \"uid\": \"BF0FF316-1A3F-4AEF-BCD1-87FC6B21586C\"}]]"
+          }
+        },
+        "response": {
+          "status": 200,
+          "statusText": "OK",
+          "httpVersion": "HTTP/1.1",
+          "cookies": [],
+          "headers": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ],
+          "content": {
+            "size": 16,
+            "mimeType": "application/json",
+            "text": "{\"result\": true}"
+          },
+          "redirectURL": "",
+          "headersSize": -1,
+          "bodySize": 16
+        },
+        "cache": {},
+        "timings": {
+          "send": 0,
+          "wait": 0,
+          "receive": 0
+        }
+      },
+      {
+        "comment": "add menu to planner: batch 2 meals from [mcp-cap] Multi-Day starting 2026-05-27",
+        "startedDateTime": "2026-05-26T03:34:04.295620+00:00",
+        "time": 0,
+        "request": {
+          "method": "POST",
+          "url": "https://www.paprikaapp.com/api/v2/sync/meals/",
+          "httpVersion": "HTTP/1.1",
+          "cookies": [],
+          "headers": [
+            {
+              "name": "Content-Type",
+              "value": "multipart/form-data"
+            },
+            {
+              "name": "Authorization",
+              "value": "[REDACTED]"
+            }
+          ],
+          "queryString": [],
+          "headersSize": -1,
+          "bodySize": 641,
+          "postData": {
+            "mimeType": "application/octet-stream",
+            "text": "[[{\"uid\": \"CD914A17-E924-4A07-844A-5A76458BE6FF\", \"date\": \"2026-05-27 00:00:00\", \"order_flag\": 0, \"recipe_uid\": \"DF8BD763-2ADA-49E2-AA2C-05A47A81B007-6735-000003ABB738847D\", \"type\": 2, \"name\": \"(Not) Butter Chicken\", \"deleted\": false, \"type_uid\": \"216713D08860CFA0D9787EA5C6CEBC8A8F5B73777F91C904853AC234BB9DF642\"}, {\"deleted\": false, \"name\": \"20 Minute Honey Mustard Chicken\", \"uid\": \"9A7EE4D1-29F9-4923-9F3C-6801BA1D3069\", \"type\": 2, \"order_flag\": 0, \"date\": \"2026-05-29 00:00:00\", \"type_uid\": \"216713D08860CFA0D9787EA5C6CEBC8A8F5B73777F91C904853AC234BB9DF642\", \"recipe_uid\": \"855E201D-9382-44CD-8D8D-B31B303BE0BE-6735-000003A2D8094745\"}]]"
+          }
+        },
+        "response": {
+          "status": 200,
+          "statusText": "OK",
+          "httpVersion": "HTTP/1.1",
+          "cookies": [],
+          "headers": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ],
+          "content": {
+            "size": 16,
+            "mimeType": "application/json",
+            "text": "{\"result\": true}"
+          },
+          "redirectURL": "",
+          "headersSize": -1,
+          "bodySize": 16
+        },
+        "cache": {},
+        "timings": {
+          "send": 0,
+          "wait": 0,
+          "receive": 0
+        }
+      },
+      {
+        "comment": "delete meal from planner: 20 Minute Honey Mustard on 2026-05-29 (soft-delete)",
+        "startedDateTime": "2026-05-26T03:34:04.295625+00:00",
+        "time": 0,
+        "request": {
+          "method": "POST",
+          "url": "https://www.paprikaapp.com/api/v2/sync/meals/",
+          "httpVersion": "HTTP/1.1",
+          "cookies": [],
+          "headers": [
+            {
+              "name": "Content-Type",
+              "value": "multipart/form-data"
+            },
+            {
+              "name": "Authorization",
+              "value": "[REDACTED]"
+            }
+          ],
+          "queryString": [],
+          "headersSize": -1,
+          "bodySize": 326,
+          "postData": {
+            "mimeType": "application/octet-stream",
+            "text": "[[{\"deleted\": true, \"name\": \"20 Minute Honey Mustard Chicken\", \"uid\": \"9A7EE4D1-29F9-4923-9F3C-6801BA1D3069\", \"type\": 2, \"order_flag\": 0, \"date\": \"2026-05-29 00:00:00\", \"type_uid\": \"216713D08860CFA0D9787EA5C6CEBC8A8F5B73777F91C904853AC234BB9DF642\", \"recipe_uid\": \"855E201D-9382-44CD-8D8D-B31B303BE0BE-6735-000003A2D8094745\"}]]"
+          }
+        },
+        "response": {
+          "status": 200,
+          "statusText": "OK",
+          "httpVersion": "HTTP/1.1",
+          "cookies": [],
+          "headers": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ],
+          "content": {
+            "size": 16,
+            "mimeType": "application/json",
+            "text": "{\"result\": true}"
+          },
+          "redirectURL": "",
+          "headersSize": -1,
+          "bodySize": 16
+        },
+        "cache": {},
+        "timings": {
+          "send": 0,
+          "wait": 0,
+          "receive": 0
+        }
+      },
+      {
+        "comment": "delete meal from planner: (Not) Butter Chicken on 2026-05-27 (soft-delete)",
+        "startedDateTime": "2026-05-26T03:34:04.295628+00:00",
+        "time": 0,
+        "request": {
+          "method": "POST",
+          "url": "https://www.paprikaapp.com/api/v2/sync/meals/",
+          "httpVersion": "HTTP/1.1",
+          "cookies": [],
+          "headers": [
+            {
+              "name": "Content-Type",
+              "value": "multipart/form-data"
+            },
+            {
+              "name": "Authorization",
+              "value": "[REDACTED]"
+            }
+          ],
+          "queryString": [],
+          "headersSize": -1,
+          "bodySize": 315,
+          "postData": {
+            "mimeType": "application/octet-stream",
+            "text": "[[{\"deleted\": true, \"name\": \"(Not) Butter Chicken\", \"uid\": \"CD914A17-E924-4A07-844A-5A76458BE6FF\", \"type\": 2, \"order_flag\": 0, \"date\": \"2026-05-27 00:00:00\", \"type_uid\": \"216713D08860CFA0D9787EA5C6CEBC8A8F5B73777F91C904853AC234BB9DF642\", \"recipe_uid\": \"DF8BD763-2ADA-49E2-AA2C-05A47A81B007-6735-000003ABB738847D\"}]]"
+          }
+        },
+        "response": {
+          "status": 200,
+          "statusText": "OK",
+          "httpVersion": "HTTP/1.1",
+          "cookies": [],
+          "headers": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ],
+          "content": {
+            "size": 16,
+            "mimeType": "application/json",
+            "text": "{\"result\": true}"
+          },
+          "redirectURL": "",
+          "headersSize": -1,
+          "bodySize": 16
+        },
+        "cache": {},
+        "timings": {
+          "send": 0,
+          "wait": 0,
+          "receive": 0
+        }
+      }
+    ]
+  }
+}
