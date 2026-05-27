@@ -31,6 +31,7 @@ MCP server for the Paprika recipe manager. Two transports: **stdio** (default; u
 | `pnpm format`       | Format all files with oxfmt                                                                                                                                                                                                                                                                                        |
 | `pnpm format:check` | Check formatting without writing changes                                                                                                                                                                                                                                                                           |
 | `pnpm prepare`      | Install lefthook git hooks (runs automatically after `pnpm install`)                                                                                                                                                                                                                                               |
+| `pnpm generate:fixtures` | Regenerate typed TypeScript fixture modules from HAR wire captures in `docs/wire-captures/`. Run after editing or adding `.har.json` files.                                                                                                                                                                  |
 
 ## Project Structure
 
@@ -45,7 +46,8 @@ MCP server for the Paprika recipe manager. Two transports: **stdio** (default; u
 - `src/types/` — Shared type definitions including `PantryItem` and branded `PantryItemUid`; `ServerContext` is a backward-compat alias re-exporting `SessionContext` from `src/server/`
 - `src/utils/` — Cross-cutting utilities: `config.ts` (with `transport`/`http`/`oauth`/`logging` schema blocks), `log.ts` (pino root logger factory with credential-redact policy and notifier fan-out stream), `xdg.ts`, `duration.ts`
 - `src/auth/` — OAuth 2.1 authorization-server surface (DCR, authorize, token, revoke), OIDC upstream client, opaque-token minting + persistence, and identity allowlist. Loaded only when `MCP_TRANSPORT=http`.
-- `scripts/` — Build and verification scripts (run via `npx tsx`), plus `healthcheck.mjs` (zero-dep Node script used by the Dockerfile HEALTHCHECK)
+- `scripts/` — Build and verification scripts (run via `npx tsx`), plus `healthcheck.mjs` (zero-dep Node script used by the Dockerfile HEALTHCHECK) and `generate-har-fixtures.ts` (HAR → typed fixture codegen)
+- `docs/wire-captures/` — Sanitized HAR 1.2 recordings of Paprika Cloud Sync API traffic captured via mitmproxy. Named entries cover menus, meals, and reference GET shapes for all entity types. See `docs/wire-captures/README.md`
 - `Dockerfile` + `.dockerignore` — 3-stage container build targeting `gcr.io/distroless/nodejs24-debian13:nonroot`; pre-creates `/data/{config,cache}` with nonroot ownership so the disk cache writes work on first run
 - `.github/workflows/` — CI and PR validation workflows
 
