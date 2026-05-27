@@ -95,13 +95,11 @@ function recipeToApiPayload(recipe: Readonly<Recipe>): Record<string, unknown> {
     photo: recipe.photo,
     photo_hash: recipe.photoHash,
     photo_large: recipe.photoLarge,
-    photo_url: recipe.photoUrl,
     source: recipe.source,
     source_url: recipe.sourceUrl,
     on_favorites: recipe.onFavorites,
     in_trash: recipe.inTrash,
     is_pinned: recipe.isPinned,
-    on_grocery_list: recipe.onGroceryList,
     scale: recipe.scale,
     nutritional_info: recipe.nutritionalInfo,
   };
@@ -127,7 +125,6 @@ function pantryItemToApiPayload(item: Readonly<PantryItem>): Record<string, unkn
     has_expiration: item.hasExpiration,
     in_stock: item.inStock,
     purchase_date: item.purchaseDate,
-    notes: item.notes,
     deleted: item.deleted,
   };
 }

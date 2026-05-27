@@ -138,7 +138,7 @@ describe("wire-shape drift detection", () => {
   describe("PaprikaClient POST serialization vs wire captures", () => {
     const server = useMswServer([], { onUnhandledRequest: "bypass" });
 
-    it("saveRecipe sends wire POST keys plus on_grocery_list + photo_url, minus deleted (#125, #127)", async () => {
+    it("saveRecipe sends wire POST keys minus deleted (#125)", async () => {
       const wirePostKeys = wireKeys(writeFixture("create recipe ([mcp-cap] Test Recipe)"), "request");
       const recipe = RecipeSchema.parse(makeSnakeCaseRecipe("FEA35DA4-FAKE")) as Recipe;
 
@@ -159,11 +159,8 @@ describe("wire-shape drift detection", () => {
       await client.saveRecipe(recipe);
 
       const payloadKeys = Object.keys(body!).sort();
-      // #127: we send on_grocery_list + photo_url (server-computed, app omits)
       // #125: we omit deleted (app sends deleted: false on all recipe POSTs)
-      expect(payloadKeys).toEqual(
-        [...wirePostKeys, "on_grocery_list", "photo_url"].filter((k) => k !== "deleted").sort(),
-      );
+      expect(payloadKeys).toEqual(wirePostKeys.filter((k) => k !== "deleted").sort());
     });
 
     it("hard-delete (empty trash) has same shape as trash with both in_trash + deleted true", () => {
@@ -180,7 +177,7 @@ describe("wire-shape drift detection", () => {
       expect(body[0]!["deleted"]).toBe(true);
     });
 
-    it("savePantryItems sends wire POST keys plus notes (#126)", async () => {
+    it("savePantryItems sends exact wire POST keys", async () => {
       const wirePostKeys = wireKeys(writeFixture("create pantry item (mcp-cap Test Flour)"), "request");
       const pantryItem: PantryItem = {
         uid: PantryItemUidSchema.parse("PT-TEST-1"),
@@ -198,8 +195,7 @@ describe("wire-shape drift detection", () => {
 
       const payload = await capturePostBody(server, `${API_BASE}/pantry/`, (c) => c.savePantryItems([pantryItem]));
       const payloadKeys = Object.keys(payload).sort();
-      // #126: we send notes (app omits it when null)
-      expect(payloadKeys).toEqual([...wirePostKeys, "notes"].sort());
+      expect(payloadKeys).toEqual(wirePostKeys);
     });
 
     it("saveGroceryList sends exact wire POST keys", async () => {

@@ -520,7 +520,6 @@ describe("PaprikaClient", () => {
       expect(payload).toHaveProperty("on_favorites");
       expect(payload).toHaveProperty("in_trash");
       expect(payload).toHaveProperty("is_pinned");
-      expect(payload).toHaveProperty("on_grocery_list");
       expect(payload).toHaveProperty("nutritional_info");
 
       // AC1.2: Assert camelCase equivalents do NOT exist
@@ -528,8 +527,12 @@ describe("PaprikaClient", () => {
       expect(payload).not.toHaveProperty("imageUrl");
       expect(payload).not.toHaveProperty("onFavorites");
 
-      // AC1.3: Assert exactly 28 fields
-      expect(Object.keys(payload!).length).toBe(28);
+      // AC1.2: Assert server-computed read-only fields are NOT present (#127)
+      expect(payload).not.toHaveProperty("on_grocery_list");
+      expect(payload).not.toHaveProperty("photo_url");
+
+      // AC1.3: Assert exactly 26 fields
+      expect(Object.keys(payload!).length).toBe(26);
     });
 
     it("p1-u07-client-writes.AC1.4 - saveRecipe returns the input recipe", async () => {
@@ -735,7 +738,7 @@ describe("PaprikaClient", () => {
       expect(Array.isArray(body)).toBe(true);
       expect(body!).toHaveLength(1);
       const payload = body![0]!;
-      expect(Object.keys(payload).length).toBe(11);
+      expect(Object.keys(payload).length).toBe(10);
       expect(payload).toHaveProperty("uid");
       expect(payload).toHaveProperty("ingredient");
       expect(payload).toHaveProperty("quantity");
@@ -745,7 +748,6 @@ describe("PaprikaClient", () => {
       expect(payload).toHaveProperty("has_expiration");
       expect(payload).toHaveProperty("in_stock");
       expect(payload).toHaveProperty("purchase_date");
-      expect(payload).toHaveProperty("notes");
       expect(payload).toHaveProperty("deleted");
       expect(payload).not.toHaveProperty("aisleUid");
       expect(payload).not.toHaveProperty("expirationDate");
@@ -806,7 +808,7 @@ describe("PaprikaClient", () => {
       const payload = body![0]!;
       expect(payload["expiration_date"]).toBeNull();
       expect(payload["purchase_date"]).toBeNull();
-      expect(payload["notes"]).toBeNull();
+      expect(payload).not.toHaveProperty("notes");
     });
   });
 
