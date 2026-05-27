@@ -13,8 +13,8 @@ import { GroceryListStore } from "./cache/grocery-list-store.js";
 import { RecipeStore } from "./cache/recipe-store.js";
 import { PantryStore } from "./cache/pantry-store.js";
 import { SyncEngine } from "./paprika/sync.js";
-import { makeCategory, makeRecipe } from "./cache/__fixtures__/recipes.js";
-import { makePantryItem } from "./cache/__fixtures__/pantry.js";
+import { makeCategory, makeRecipe, makeSnakeCaseRecipe } from "./cache/__fixtures__/recipes.js";
+import { makePantryItem, makeSnakeCasePantryItem } from "./cache/__fixtures__/pantry.js";
 import type { PantryItem, PantryItemUid, RecipeUid } from "./paprika/types.js";
 import { makeTestServer, makeCtx, getText } from "./tools/tool-test-utils.js";
 import { registerSearchTool } from "./tools/search.js";
@@ -25,40 +25,6 @@ import { registerCategoryTools } from "./tools/categories.js";
 import { SILENT_LOG } from "./utils/log.js";
 
 const API_BASE = "https://paprikaapp.com/api/v2/sync";
-
-function makeSnakeCaseRecipe(uid: string, overrides?: Partial<Record<string, unknown>>): object {
-  return {
-    uid,
-    hash: `hash-${uid}`,
-    name: `Recipe ${uid}`,
-    categories: [],
-    ingredients: "eggs, flour",
-    directions: "Mix and bake.",
-    description: null,
-    notes: null,
-    prep_time: null,
-    cook_time: null,
-    total_time: null,
-    servings: null,
-    difficulty: null,
-    rating: 0,
-    created: "2024-01-01T00:00:00Z",
-    image_url: "",
-    photo: null,
-    photo_hash: null,
-    photo_large: null,
-    photo_url: null,
-    source: null,
-    source_url: null,
-    on_favorites: false,
-    in_trash: false,
-    is_pinned: false,
-    on_grocery_list: false,
-    scale: null,
-    nutritional_info: null,
-    ...overrides,
-  };
-}
 
 const server = setupServer();
 let tempDir: string;
@@ -530,23 +496,6 @@ describe("Sync → Tool Pipeline Integration", () => {
   });
 
   describe("AC5: Write→sync propagation race protection (issue #57)", () => {
-    function makeSnakeCasePantryItem(uid: string, overrides?: Partial<Record<string, unknown>>): object {
-      return {
-        uid,
-        ingredient: `Item ${uid}`,
-        quantity: "1",
-        aisle: "",
-        aisle_uid: "",
-        expiration_date: null,
-        has_expiration: false,
-        in_stock: true,
-        purchase_date: "2026-05-21 00:00:00",
-        notes: null,
-        deleted: false,
-        ...overrides,
-      };
-    }
-
     function makeRaceContext(): {
       client: PaprikaClient;
       cache: DiskCacheRoot;
@@ -693,7 +642,8 @@ describe("Sync → Tool Pipeline Integration", () => {
       pantryStore.markPendingUpsert(updated.uid);
 
       // First sync: canonical list returns the pre-write version (different quantity).
-      const stalePantryWire = makeSnakeCasePantryItem("PANTRY-UPDATE", { ingredient: "Eggs", quantity: "1 dozen" });
+      const wireDefaults = { ingredient: "Eggs", purchase_date: "2026-05-21 00:00:00" };
+      const stalePantryWire = makeSnakeCasePantryItem("PANTRY-UPDATE", { ...wireDefaults, quantity: "1 dozen" });
       server.use(http.get(`${API_BASE}/pantry/`, () => HttpResponse.json({ result: [stalePantryWire] })));
       await engine.syncOnce();
       // Pending-upsert must still be set — content didn't match.
@@ -701,7 +651,7 @@ describe("Sync → Tool Pipeline Integration", () => {
       expect(pantryStore.get(updated.uid)?.quantity).toBe("2 dozen");
 
       // Second sync: canonical list now matches our local content.
-      const propagatedWire = makeSnakeCasePantryItem("PANTRY-UPDATE", { ingredient: "Eggs", quantity: "2 dozen" });
+      const propagatedWire = makeSnakeCasePantryItem("PANTRY-UPDATE", { ...wireDefaults, quantity: "2 dozen" });
       server.use(http.get(`${API_BASE}/pantry/`, () => HttpResponse.json({ result: [propagatedWire] })));
       await engine.syncOnce();
       // Pending-upsert cleared because content matched.

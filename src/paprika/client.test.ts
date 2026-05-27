@@ -22,42 +22,11 @@ import {
   GroceryItemUidSchema,
   GroceryIngredientUidSchema,
 } from "./types.js";
+import { makeSnakeCaseRecipe } from "../cache/__fixtures__/recipes.js";
+import { makeSnakeCasePantryItem } from "../cache/__fixtures__/pantry.js";
 
 const AUTH_URL = "https://paprikaapp.com/api/v1/account/login/";
 const API_BASE = "https://paprikaapp.com/api/v2/sync";
-
-function makeSnakeCaseRecipe(uid: string): object {
-  return {
-    uid,
-    hash: `hash-${uid}`,
-    name: `Recipe ${uid}`,
-    categories: [],
-    ingredients: "eggs, flour",
-    directions: "Mix and bake.",
-    description: null,
-    notes: null,
-    prep_time: null,
-    cook_time: null,
-    total_time: null,
-    servings: null,
-    difficulty: null,
-    rating: 0,
-    created: "2024-01-01T00:00:00Z",
-    image_url: "",
-    photo: null,
-    photo_hash: null,
-    photo_large: null,
-    photo_url: null,
-    source: null,
-    source_url: null,
-    on_favorites: false,
-    in_trash: false,
-    is_pinned: false,
-    on_grocery_list: false,
-    scale: null,
-    nutritional_info: null,
-  };
-}
 
 function makeCamelCaseRecipe(uid: string): Recipe {
   return RecipeSchema.parse(makeSnakeCaseRecipe(uid));
@@ -698,42 +667,17 @@ describe("PaprikaClient", () => {
   });
 
   describe("pantry-read.AC1: listPantry", () => {
-    type PantryItemWire = {
-      uid: string;
-      ingredient: string;
-      quantity: string;
-      aisle: string;
-      aisle_uid: string;
-      expiration_date: string | null;
-      has_expiration: boolean;
-      in_stock: boolean;
-      purchase_date: string | null;
-      notes: string | null;
-    };
-
-    function makeSnakeCasePantryItem(overrides?: Partial<PantryItemWire>): PantryItemWire {
-      return {
-        uid: "pantry-1",
-        ingredient: "Test Ingredient",
-        quantity: "1",
-        aisle: "Produce",
-        aisle_uid: "aisle-1",
-        expiration_date: null,
-        has_expiration: false,
-        in_stock: true,
-        purchase_date: "2026-01-01 00:00:00",
-        notes: null,
-        ...overrides,
-      };
-    }
-
     it("pantry-read.AC1.5 - returns PantryItem[] with camelCase fields from /api/v2/sync/pantry/", async () => {
       server.use(
         http.get(`${API_BASE}/pantry/`, () => {
           return HttpResponse.json({
             result: [
-              makeSnakeCasePantryItem({ uid: "pantry-1" }),
-              makeSnakeCasePantryItem({ uid: "pantry-2", ingredient: "Another Item" }),
+              makeSnakeCasePantryItem("pantry-1", { aisle: "Produce", aisle_uid: "aisle-1" }),
+              makeSnakeCasePantryItem("pantry-2", {
+                ingredient: "Another Item",
+                aisle: "Produce",
+                aisle_uid: "aisle-1",
+              }),
             ],
           });
         }),
@@ -744,7 +688,7 @@ describe("PaprikaClient", () => {
 
       expect(pantryItems).toHaveLength(2);
       expect(pantryItems[0]!.uid).toBe("pantry-1");
-      expect(pantryItems[0]!.ingredient).toBe("Test Ingredient");
+      expect(pantryItems[0]!.ingredient).toBe("Item pantry-1");
       expect(pantryItems[0]!.aisleUid).toBe("aisle-1");
       expect(pantryItems[0]!.expirationDate).toBe(null);
       expect(pantryItems[0]!.hasExpiration).toBe(false);
