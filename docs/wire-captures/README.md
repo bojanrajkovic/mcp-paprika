@@ -16,9 +16,9 @@ Chicken as Breakfast on 2026-05-26").
 
 ### Key wire format findings from `writes.har.json`
 
-**Recipe deletion** uses the singular endpoint (`POST /api/v2/sync/recipe/{uid}/`), not the collection URL. The payload is a full recipe object with `in_trash: true` set. This differs from pantry and grocery item deletes, which use `deleted: true` on the collection endpoint.
+**Deletion semantics** differ by entity type. Recipes use `in_trash: true` on the full recipe object, POSTed to the singular endpoint (`POST /api/v2/sync/recipe/{uid}/`). All other entities (pantry, grocery items/lists, categories, meals, menus, menuitems) use `deleted: true` on the entity body, POSTed to the collection endpoint. There is no hard-delete wire operation — all deletes are soft-deletes that the server filters from subsequent GETs.
 
-**Photo upload** is a three-step sequence: (1) POST the recipe with `photo_uid` set to `/api/v2/sync/recipe/{recipe_uid}/`, (2) POST the photo binary to `/api/v2/sync/photo/{photo_uid}/`, (3) POST the recipe again with `photo_hash` set to the server-returned hash. Deleting a photo POSTs a tombstone to `/api/v2/sync/photo/{photo_uid}/`.
+**Photo upload** is a three-step sequence: (1) POST the recipe to `/api/v2/sync/recipe/{recipe_uid}/` with `photo` and `photo_large` set to filenames and `photo_hash` set, (2) POST the photo metadata + binary to `/api/v2/sync/photo/{photo_uid}/`, (3) POST the recipe again to confirm. Deleting a photo POSTs a tombstone (`deleted: true`) to `/api/v2/sync/photo/{photo_uid}/`.
 
 **Grocery ingredient auto-creation:** when adding grocery items, the client also POSTs corresponding `GroceryIngredient` entries to `/api/v2/sync/groceryingredients/`. Ingredient records are created or upserted alongside their items rather than pre-existing in the catalog.
 

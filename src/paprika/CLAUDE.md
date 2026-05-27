@@ -178,9 +178,9 @@ The constructor installs five hooks after building `this.resilience`. These fire
 
 Three-step sequence:
 
-1. `POST /api/v2/sync/recipe/{recipe_uid}/` — recipe object with `photo_uid` set to the new photo's UID
+1. `POST /api/v2/sync/recipe/{recipe_uid}/` — recipe object with `photo`/`photo_large` set to filenames and `photo_hash` set
 2. `POST /api/v2/sync/photo/{photo_uid}/` — photo metadata (7 fields: `deleted`, `filename`, `hash`, `name`, `order_flag`, `recipe_uid`, `uid`) as multipart, with the binary image data
-3. `POST /api/v2/sync/recipe/{recipe_uid}/` — recipe object again with `photo_hash` set to the server-returned hash
+3. `POST /api/v2/sync/recipe/{recipe_uid}/` — recipe object again to confirm the upload
 
 Deleting a photo POSTs a tombstone (`deleted: true`) to `/api/v2/sync/photo/{photo_uid}/`.
 
