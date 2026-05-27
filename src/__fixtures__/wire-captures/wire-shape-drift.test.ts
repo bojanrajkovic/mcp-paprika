@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { fixture as refFixture } from "./reference.js";
 import { fixture as mealFixture } from "./meals.js";
 import { fixture as menuFixture } from "./menus.js";
+import { fixture as writeFixture } from "./writes.js";
 
 /**
  * Wire-shape drift detection tests.
@@ -31,6 +32,7 @@ function wireKeys(entry: { requestBody: unknown; responseBody: unknown }, source
 
   const keySet = new Set<string>();
   for (const item of items) {
+    if (typeof item !== "object" || item === null) continue;
     for (const key of Object.keys(item)) {
       keySet.add(key);
     }
@@ -208,6 +210,182 @@ describe("wire-shape drift detection", () => {
         "photos",
         "recipes",
       ]);
+    });
+  });
+
+  describe("write POST body shapes (writes.har.json)", () => {
+    describe("recipe writes", () => {
+      it("recipe POST body has 27 fields (omits on_grocery_list + photo_url from GET shape, adds deleted)", () => {
+        const keys = wireKeys(writeFixture("create recipe ([mcp-cap] Test Recipe)"), "request");
+        expect(keys).toEqual([
+          "categories",
+          "cook_time",
+          "created",
+          "deleted",
+          "description",
+          "difficulty",
+          "directions",
+          "hash",
+          "image_url",
+          "in_trash",
+          "ingredients",
+          "is_pinned",
+          "name",
+          "notes",
+          "nutritional_info",
+          "on_favorites",
+          "photo",
+          "photo_hash",
+          "photo_large",
+          "prep_time",
+          "rating",
+          "scale",
+          "servings",
+          "source",
+          "source_url",
+          "total_time",
+          "uid",
+        ]);
+        expect(keys.length).toBe(27);
+      });
+
+      it("recipe edit has same shape as create", () => {
+        const createKeys = wireKeys(writeFixture("create recipe ([mcp-cap] Test Recipe)"), "request");
+        const editKeys = wireKeys(writeFixture("edit recipe: rating and difficulty"), "request");
+        expect(editKeys).toEqual(createKeys);
+      });
+
+      it("recipe trash sets in_trash: true", () => {
+        const f = writeFixture("trash recipe ([mcp-cap] Test Recipe)");
+        const body = f.requestBody as Array<Record<string, unknown>>;
+        expect(body[0]!["in_trash"]).toBe(true);
+      });
+
+      it("recipe POST uses singular URL (/recipe/{uid}/, not /recipes/)", () => {
+        const f = writeFixture("create recipe ([mcp-cap] Test Recipe)");
+        expect(f.url).toMatch(/\/sync\/recipe\/[A-F0-9-]+\/$/);
+        expect(f.url).not.toContain("/recipes/");
+      });
+    });
+
+    describe("photo writes", () => {
+      it("photo upload has expected fields", () => {
+        const keys = wireKeys(writeFixture("upload photo to recipe"), "request");
+        expect(keys).toEqual(["deleted", "filename", "hash", "name", "order_flag", "recipe_uid", "uid"]);
+      });
+
+      it("photo delete is a tombstone with same shape", () => {
+        const f = writeFixture("delete photo from recipe (tombstone)");
+        const keys = wireKeys(f, "request");
+        expect(keys).toEqual(["deleted", "filename", "hash", "name", "order_flag", "recipe_uid", "uid"]);
+        const body = f.requestBody as Array<Record<string, unknown>>;
+        expect(body[0]!["deleted"]).toBe(true);
+      });
+    });
+
+    describe("category writes", () => {
+      it("category POST body matches GET shape plus deleted", () => {
+        const keys = wireKeys(writeFixture("create category ([mcp-cap] Test Category)"), "request");
+        expect(keys).toEqual(["deleted", "name", "order_flag", "parent_uid", "uid"]);
+      });
+
+      it("category delete uses same shape with deleted: true", () => {
+        const f = writeFixture("delete category ([mcp-cap] Renamed Category)");
+        const body = f.requestBody as Array<Array<Record<string, unknown>>>;
+        expect(body[0]![0]!["deleted"]).toBe(true);
+      });
+    });
+
+    describe("pantry writes", () => {
+      it("pantry POST body has 10 fields (omits notes + location_uid from GET shape, adds deleted)", () => {
+        const keys = wireKeys(writeFixture("create pantry item (mcp-cap Test Flour)"), "request");
+        expect(keys).toEqual([
+          "aisle",
+          "aisle_uid",
+          "deleted",
+          "expiration_date",
+          "has_expiration",
+          "in_stock",
+          "ingredient",
+          "purchase_date",
+          "quantity",
+          "uid",
+        ]);
+      });
+
+      it("pantry edit/delete have same shape as create", () => {
+        const createKeys = wireKeys(writeFixture("create pantry item (mcp-cap Test Flour)"), "request");
+        const editKeys = wireKeys(writeFixture("edit pantry item: rename to [mcp-cap] Edited Flour"), "request");
+        const deleteKeys = wireKeys(writeFixture("delete pantry item ([mcp-cap] Edited Flour)"), "request");
+        expect(editKeys).toEqual(createKeys);
+        expect(deleteKeys).toEqual(createKeys);
+      });
+
+      it("pantry delete uses deleted: true (soft-delete on collection URL)", () => {
+        const f = writeFixture("delete pantry item ([mcp-cap] Edited Flour)");
+        const body = f.requestBody as Array<Array<Record<string, unknown>>>;
+        expect(body[0]![0]!["deleted"]).toBe(true);
+        expect(f.url).toContain("/sync/pantry/");
+      });
+    });
+
+    describe("grocery list writes", () => {
+      it("grocery list POST body matches GET shape plus deleted", () => {
+        const keys = wireKeys(writeFixture("create grocery list ([mcp-cap] Test List)"), "request");
+        expect(keys).toEqual(["deleted", "is_default", "name", "order_flag", "reminders_list", "uid"]);
+      });
+
+      it("grocery list delete uses deleted: true", () => {
+        const f = writeFixture("delete grocery list ([mcp-cap] Renamed List)");
+        const body = f.requestBody as Array<Array<Record<string, unknown>>>;
+        expect(body[0]![0]!["deleted"]).toBe(true);
+      });
+    });
+
+    describe("grocery item writes", () => {
+      it("grocery item POST body has 13 fields", () => {
+        const keys = wireKeys(writeFixture("add grocery item: [mcp-cap] Milk"), "request");
+        expect(keys).toEqual([
+          "aisle",
+          "aisle_uid",
+          "deleted",
+          "ingredient",
+          "instruction",
+          "list_uid",
+          "name",
+          "order_flag",
+          "purchased",
+          "quantity",
+          "recipe",
+          "separate",
+          "uid",
+        ]);
+      });
+
+      it("purchased update has same shape as add", () => {
+        const addKeys = wireKeys(writeFixture("add grocery item: [mcp-cap] Milk"), "request");
+        const purchasedKeys = wireKeys(writeFixture("mark grocery item purchased ([mcp-cap] Milk)"), "request");
+        expect(purchasedKeys).toEqual(addKeys);
+      });
+
+      it("mark purchased sets purchased: true", () => {
+        const f = writeFixture("mark grocery item purchased ([mcp-cap] Milk)");
+        const body = f.requestBody as Array<Array<Record<string, unknown>>>;
+        expect(body[0]![0]!["purchased"]).toBe(true);
+      });
+
+      it("grocery item delete uses deleted: true", () => {
+        const f = writeFixture("delete grocery item ([mcp-cap] Bread)");
+        const body = f.requestBody as Array<Array<Record<string, unknown>>>;
+        expect(body[0]![0]!["deleted"]).toBe(true);
+      });
+    });
+
+    describe("grocery ingredient writes", () => {
+      it("grocery ingredient POST body has 4 fields (GET shape plus deleted)", () => {
+        const keys = wireKeys(writeFixture("auto-create grocery ingredient (mcp-cap milk)"), "request");
+        expect(keys).toEqual(["aisle_uid", "deleted", "name", "uid"]);
+      });
     });
   });
 });
