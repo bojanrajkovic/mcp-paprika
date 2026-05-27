@@ -16,7 +16,7 @@ Chicken as Breakfast on 2026-05-26").
 
 ### Key wire format findings from `writes.har.json`
 
-**Deletion semantics** differ by entity type. Recipes use `in_trash: true` on the full recipe object, POSTed to the singular endpoint (`POST /api/v2/sync/recipe/{uid}/`). All other entities (pantry, grocery items/lists, categories, meals, menus, menuitems) use `deleted: true` on the entity body, POSTed to the collection endpoint. There is no hard-delete wire operation — all deletes are soft-deletes that the server filters from subsequent GETs.
+**Deletion semantics** differ by entity type and have two tiers. Recipes use `in_trash: true` on the full recipe object (soft-delete / move to trash), POSTed to the singular endpoint (`POST /api/v2/sync/recipe/{uid}/`). Permanent recipe deletion (empty trash) likely uses `deleted: true` on the same endpoint — not yet captured (#125). All other entities (pantry, grocery items/lists, categories, meals, menus, menuitems) use `deleted: true` on the entity body, POSTed to the collection endpoint.
 
 **Photo upload** is a three-step sequence: (1) POST the recipe to `/api/v2/sync/recipe/{recipe_uid}/` with `photo` and `photo_large` set to filenames and `photo_hash` set, (2) POST the photo metadata + binary to `/api/v2/sync/photo/{photo_uid}/`, (3) POST the recipe again to confirm. Deleting a photo POSTs a tombstone (`deleted: true`) to `/api/v2/sync/photo/{photo_uid}/`.
 
