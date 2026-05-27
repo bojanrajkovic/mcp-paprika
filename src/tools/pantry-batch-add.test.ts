@@ -268,7 +268,6 @@ describe("add_pantry_items tool", () => {
           quantity: "6",
           aisle: "Produce",
           inStock: false,
-          notes: "for the pie",
         },
       ],
     });
@@ -279,7 +278,7 @@ describe("add_pantry_items tool", () => {
     expect(savedItem?.aisle).toBe("Produce");
     expect(savedItem?.aisleUid).toBe("AISLE-1");
     expect(savedItem?.inStock).toBe(false);
-    expect(savedItem?.notes).toBe("for the pie");
+    expect(savedItem?.notes).toBe(null);
   });
 
   it("pantry-batch.14: mixed duplicates and valid items — correct split in response", async () => {

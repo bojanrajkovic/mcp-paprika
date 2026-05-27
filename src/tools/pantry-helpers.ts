@@ -30,11 +30,6 @@ export function pantryItemToMarkdown(item: PantryItem): string {
   if (item.purchaseDate !== null) {
     lines.push(`**Purchased:** ${item.purchaseDate}`);
   }
-  if (item.notes !== null) {
-    lines.push("");
-    lines.push(`**Notes:** ${item.notes}`);
-  }
-
   return lines.join("\n");
 }
 
