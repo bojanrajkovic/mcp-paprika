@@ -10,6 +10,10 @@ export function pantryStartGuard(ctx: ServerContext): Result<void, ReturnType<ty
   return ok(undefined);
 }
 
+// notes is on PantryItem (the GET wire includes it) but no Paprika client
+// exposes a UI for pantry notes and no captured item has a non-null value.
+// Omitted from display and from POST payloads; retained in the schema so
+// the parser doesn't reject the field if the server starts populating it.
 export function pantryItemToMarkdown(item: PantryItem): string {
   const lines: Array<string> = [];
 
