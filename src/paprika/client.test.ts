@@ -23,6 +23,7 @@ import {
   GroceryIngredientUidSchema,
 } from "./types.js";
 import { makeSnakeCaseRecipe } from "../cache/__fixtures__/recipes.js";
+import { makeSnakeCasePantryItem } from "../cache/__fixtures__/pantry.js";
 
 const AUTH_URL = "https://paprikaapp.com/api/v1/account/login/";
 const API_BASE = "https://paprikaapp.com/api/v2/sync";
@@ -666,42 +667,17 @@ describe("PaprikaClient", () => {
   });
 
   describe("pantry-read.AC1: listPantry", () => {
-    type PantryItemWire = {
-      uid: string;
-      ingredient: string;
-      quantity: string;
-      aisle: string;
-      aisle_uid: string;
-      expiration_date: string | null;
-      has_expiration: boolean;
-      in_stock: boolean;
-      purchase_date: string | null;
-      notes: string | null;
-    };
-
-    function makeSnakeCasePantryItem(overrides?: Partial<PantryItemWire>): PantryItemWire {
-      return {
-        uid: "pantry-1",
-        ingredient: "Test Ingredient",
-        quantity: "1",
-        aisle: "Produce",
-        aisle_uid: "aisle-1",
-        expiration_date: null,
-        has_expiration: false,
-        in_stock: true,
-        purchase_date: "2026-01-01 00:00:00",
-        notes: null,
-        ...overrides,
-      };
-    }
-
     it("pantry-read.AC1.5 - returns PantryItem[] with camelCase fields from /api/v2/sync/pantry/", async () => {
       server.use(
         http.get(`${API_BASE}/pantry/`, () => {
           return HttpResponse.json({
             result: [
-              makeSnakeCasePantryItem({ uid: "pantry-1" }),
-              makeSnakeCasePantryItem({ uid: "pantry-2", ingredient: "Another Item" }),
+              makeSnakeCasePantryItem("pantry-1", { aisle: "Produce", aisle_uid: "aisle-1" }),
+              makeSnakeCasePantryItem("pantry-2", {
+                ingredient: "Another Item",
+                aisle: "Produce",
+                aisle_uid: "aisle-1",
+              }),
             ],
           });
         }),
@@ -712,7 +688,7 @@ describe("PaprikaClient", () => {
 
       expect(pantryItems).toHaveLength(2);
       expect(pantryItems[0]!.uid).toBe("pantry-1");
-      expect(pantryItems[0]!.ingredient).toBe("Test Ingredient");
+      expect(pantryItems[0]!.ingredient).toBe("Item pantry-1");
       expect(pantryItems[0]!.aisleUid).toBe("aisle-1");
       expect(pantryItems[0]!.expirationDate).toBe(null);
       expect(pantryItems[0]!.hasExpiration).toBe(false);
