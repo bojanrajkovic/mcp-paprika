@@ -80,6 +80,69 @@ describe("wire-shape drift detection", () => {
         "uid",
       ]);
     });
+
+    it("recipe entry list returns uid+hash pairs (not full recipes)", () => {
+      const f = refFixture("GET recipe entries (uid+hash list, not full recipes)");
+      const body = f.responseBody as { result: Array<Record<string, unknown>> };
+      expect(Object.keys(body.result[0]!).sort()).toEqual(["hash", "uid"]);
+    });
+
+    it("individual recipe has all 28 fields", () => {
+      const f = refFixture("GET individual recipe (full 28-field shape)");
+      const body = f.responseBody as { result: Record<string, unknown> };
+      const keys = Object.keys(body.result).sort();
+      expect(keys).toEqual([
+        "categories",
+        "cook_time",
+        "created",
+        "description",
+        "difficulty",
+        "directions",
+        "hash",
+        "image_url",
+        "in_trash",
+        "ingredients",
+        "is_pinned",
+        "name",
+        "notes",
+        "nutritional_info",
+        "on_favorites",
+        "on_grocery_list",
+        "photo",
+        "photo_hash",
+        "photo_large",
+        "photo_url",
+        "prep_time",
+        "rating",
+        "scale",
+        "servings",
+        "source",
+        "source_url",
+        "total_time",
+        "uid",
+      ]);
+      expect(keys.length).toBe(28);
+    });
+
+    it("category GET fields match expected schema", () => {
+      const keys = wireKeys(refFixture("GET categories (fully hydrated)"), "response");
+      expect(keys).toEqual(["name", "order_flag", "parent_uid", "uid"]);
+    });
+
+    it("grocery ingredient GET fields match expected schema", () => {
+      const keys = wireKeys(refFixture("GET grocery ingredients (aisle mapping catalog)"), "response");
+      expect(keys).toEqual(["aisle_uid", "name", "uid"]);
+    });
+
+    it("photo metadata has expected fields", () => {
+      const keys = wireKeys(refFixture("GET photos (recipe photo metadata)"), "response");
+      expect(keys).toEqual(["filename", "hash", "name", "order_flag", "recipe_uid", "uid"]);
+    });
+
+    it("pantry locations endpoint returns 404", () => {
+      const f = refFixture("GET pantry locations (404 — endpoint not implemented)");
+      expect(f.status).toBe(404);
+    });
   });
 
   describe("meal POST body shapes", () => {

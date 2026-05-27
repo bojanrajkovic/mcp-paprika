@@ -377,6 +377,374 @@
           "wait": 0,
           "receive": 0
         }
+      },
+      {
+        "comment": "GET recipe entries (uid+hash list, not full recipes)",
+        "startedDateTime": "2026-05-27T00:30:12.375757+00:00",
+        "time": 0,
+        "request": {
+          "method": "GET",
+          "url": "https://www.paprikaapp.com/api/v2/sync/recipes/",
+          "httpVersion": "HTTP/1.1",
+          "cookies": [],
+          "headers": [
+            {
+              "name": "Authorization",
+              "value": "[REDACTED]"
+            }
+          ],
+          "queryString": [],
+          "headersSize": -1,
+          "bodySize": 0
+        },
+        "response": {
+          "status": 200,
+          "statusText": "OK",
+          "httpVersion": "HTTP/1.1",
+          "cookies": [],
+          "headers": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ],
+          "content": {
+            "size": 531,
+            "mimeType": "application/json",
+            "text": "{\"result\": [{\"uid\": \"014031E3-BC74-4CA8-B345-36EBE9C9794B\", \"hash\": \"CD0E76986FBBCB4BA2D2B5995E58712B5C1E783A98FED4055733CD9C73FEC5AE\"}, {\"uid\": \"014C5274-A7CA-4B91-949C-4256801DB6E1\", \"hash\": \"F5DE421BE696AA817057FB58B5A4728112FFF7B1C36E9E54382504814E37CD29\"}, {\"uid\": \"03268A0B-7EEA-4E2C-841B-3BC215C6608E\", \"hash\": \"77406F8A3BD7AC071F6DB56F5CA60AA5B51F4D7A5E9D62AC53DC6A2747590F74\"}], \"_truncated\": true, \"_total_count\": 256, \"_note\": \"Showing 3 of 256 entries. Entry format is uid+hash; full recipe requires individual fetch.\"}"
+          },
+          "redirectURL": "",
+          "headersSize": -1,
+          "bodySize": 531
+        },
+        "cache": {},
+        "timings": {
+          "send": 0,
+          "wait": 0,
+          "receive": 0
+        }
+      },
+      {
+        "comment": "GET individual recipe (full 28-field shape)",
+        "startedDateTime": "2026-05-27T00:30:12.376213+00:00",
+        "time": 0,
+        "request": {
+          "method": "GET",
+          "url": "https://www.paprikaapp.com/api/v2/sync/recipe/{uid}/",
+          "httpVersion": "HTTP/1.1",
+          "cookies": [],
+          "headers": [
+            {
+              "name": "Authorization",
+              "value": "[REDACTED]"
+            }
+          ],
+          "queryString": [],
+          "headersSize": -1,
+          "bodySize": 0
+        },
+        "response": {
+          "status": 200,
+          "statusText": "OK",
+          "httpVersion": "HTTP/1.1",
+          "cookies": [],
+          "headers": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ],
+          "content": {
+            "size": 843,
+            "mimeType": "application/json",
+            "text": "{\"result\": {\"uid\": \"EXAMPLE-RECIPE-UID\", \"name\": \"Example Recipe\", \"ingredients\": \"3 medium garlic clov...\", \"directions\": \"Stir together garlic...\", \"description\": \"\", \"notes\": \"\", \"nutritional_info\": \"\", \"servings\": \"4 to 6\", \"difficulty\": \"\", \"prep_time\": \"50 mins\", \"cook_time\": \"5 hrs\", \"total_time\": \"\", \"source\": \"foodandwine.com\", \"source_url\": \"https://www.foodandw...\", \"image_url\": \"https://www.foodandw...\", \"photo\": \"0D65A1FD-53B5-41C7-9EB6-DEF2D52F22F2.jpg\", \"photo_hash\": \"34B60965F58DAAF4F4E7...\", \"photo_large\": null, \"scale\": null, \"hash\": \"EXAMPLE-HASH\", \"categories\": [], \"rating\": 0, \"in_trash\": false, \"is_pinned\": false, \"on_favorites\": false, \"on_grocery_list\": false, \"created\": \"2024-12-23 20:43:51\", \"photo_url\": \"http://s3.amazonaws....\"}, \"_note\": \"Single recipe fetch. Field values sanitized; structure is real.\"}"
+          },
+          "redirectURL": "",
+          "headersSize": -1,
+          "bodySize": 843
+        },
+        "cache": {},
+        "timings": {
+          "send": 0,
+          "wait": 0,
+          "receive": 0
+        }
+      },
+      {
+        "comment": "GET categories (fully hydrated)",
+        "startedDateTime": "2026-05-27T00:30:12.376301+00:00",
+        "time": 0,
+        "request": {
+          "method": "GET",
+          "url": "https://www.paprikaapp.com/api/v2/sync/categories/",
+          "httpVersion": "HTTP/1.1",
+          "cookies": [],
+          "headers": [
+            {
+              "name": "Authorization",
+              "value": "[REDACTED]"
+            }
+          ],
+          "queryString": [],
+          "headersSize": -1,
+          "bodySize": 0
+        },
+        "response": {
+          "status": 200,
+          "statusText": "OK",
+          "httpVersion": "HTTP/1.1",
+          "cookies": [],
+          "headers": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ],
+          "content": {
+            "size": 370,
+            "mimeType": "application/json",
+            "text": "{\"result\": [{\"uid\": \"647E822C-434E-42D4-94A7-C42CC34A0246\", \"order_flag\": 31, \"name\": \"AIP\", \"parent_uid\": null}, {\"uid\": \"2F479ADE-7058-4C8F-B4EC-54BD3AD48E77\", \"order_flag\": 31, \"name\": \"Side Dishes\", \"parent_uid\": null}, {\"uid\": \"37BEB314-15B7-4A81-AD0B-3BA1F7CC5305\", \"order_flag\": 30, \"name\": \"Entrees\", \"parent_uid\": null}], \"_truncated\": true, \"_total_count\": 43}"
+          },
+          "redirectURL": "",
+          "headersSize": -1,
+          "bodySize": 370
+        },
+        "cache": {},
+        "timings": {
+          "send": 0,
+          "wait": 0,
+          "receive": 0
+        }
+      },
+      {
+        "comment": "GET grocery ingredients (aisle mapping catalog)",
+        "startedDateTime": "2026-05-27T00:30:12.376390+00:00",
+        "time": 0,
+        "request": {
+          "method": "GET",
+          "url": "https://www.paprikaapp.com/api/v2/sync/groceryingredients/",
+          "httpVersion": "HTTP/1.1",
+          "cookies": [],
+          "headers": [
+            {
+              "name": "Authorization",
+              "value": "[REDACTED]"
+            }
+          ],
+          "queryString": [],
+          "headersSize": -1,
+          "bodySize": 0
+        },
+        "response": {
+          "status": 200,
+          "statusText": "OK",
+          "httpVersion": "HTTP/1.1",
+          "cookies": [],
+          "headers": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ],
+          "content": {
+            "size": 337,
+            "mimeType": "application/json",
+            "text": "{\"result\": [{\"uid\": \"BA2732AA-AD01-4D74-8EAB-F86AFD4A07DB\", \"name\": \"mcp-cap clear-2\", \"aisle_uid\": null}, {\"uid\": \"6AA4E2A3-1651-4440-96C1-678E8709D5C0\", \"name\": \"mcp-cap clear-1\", \"aisle_uid\": null}, {\"uid\": \"0EDBBA3D-92C2-4C38-B357-59A85665F1CC\", \"name\": \"mcp-cap batch-3\", \"aisle_uid\": null}], \"_truncated\": true, \"_total_count\": 68}"
+          },
+          "redirectURL": "",
+          "headersSize": -1,
+          "bodySize": 337
+        },
+        "cache": {},
+        "timings": {
+          "send": 0,
+          "wait": 0,
+          "receive": 0
+        }
+      },
+      {
+        "comment": "GET photos (recipe photo metadata)",
+        "startedDateTime": "2026-05-27T00:30:12.376447+00:00",
+        "time": 0,
+        "request": {
+          "method": "GET",
+          "url": "https://www.paprikaapp.com/api/v2/sync/photos/",
+          "httpVersion": "HTTP/1.1",
+          "cookies": [],
+          "headers": [
+            {
+              "name": "Authorization",
+              "value": "[REDACTED]"
+            }
+          ],
+          "queryString": [],
+          "headersSize": -1,
+          "bodySize": 0
+        },
+        "response": {
+          "status": 200,
+          "statusText": "OK",
+          "httpVersion": "HTTP/1.1",
+          "cookies": [],
+          "headers": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ],
+          "content": {
+            "size": 958,
+            "mimeType": "application/json",
+            "text": "{\"result\": [{\"uid\": \"5C6784FE-B901-4BA4-A053-5CE0FD9FD082\", \"filename\": \"5C6784FE-B901-4BA4-A053-5CE0FD9FD082.jpg\", \"recipe_uid\": \"1732B280-7B68-4D49-9A94-576B4392D7B2\", \"order_flag\": 0, \"name\": \"1\", \"hash\": \"7A9CEEDA77CC30D0E94D6D42A800A98A79B26811DA2F250425AFD782B94B95DC\"}, {\"uid\": \"A25807CE-2ADE-4A65-B2B9-4447C3DD3D48-5407-00000622FFEDF2EB\", \"filename\": \"A25807CE-2ADE-4A65-B2B9-4447C3DD3D48-5407-00000622FFEDF2EB.jpg\", \"recipe_uid\": \"CE756545-3A8C-48F6-8850-A6964EB3E7B8-5407-00000621BF333FF4\", \"order_flag\": 0, \"name\": \"1\", \"hash\": \"E02603D96477AC7FE6C0DDA93EA3FF1D4E5676E0C72210222CC65EA5B86E3360\"}, {\"uid\": \"5A354915-3999-4C6A-997E-856A2E257E65-38682-00002576272D491F\", \"filename\": \"5A354915-3999-4C6A-997E-856A2E257E65-38682-00002576272D491F.jpg\", \"recipe_uid\": \"29222db3-8166-4a20-9080-cf0a3b222ab0\", \"order_flag\": 0, \"name\": \"1\", \"hash\": \"2C9CC2D22D1606AC9F4CF94592E6251CE00A40615735590F0531B946E2A0D1A2\"}], \"_truncated\": true, \"_total_count\": 5}"
+          },
+          "redirectURL": "",
+          "headersSize": -1,
+          "bodySize": 958
+        },
+        "cache": {},
+        "timings": {
+          "send": 0,
+          "wait": 0,
+          "receive": 0
+        }
+      },
+      {
+        "comment": "GET pantry locations (404 \u2014 endpoint not implemented)",
+        "startedDateTime": "2026-05-27T00:30:12.376453+00:00",
+        "time": 0,
+        "request": {
+          "method": "GET",
+          "url": "https://www.paprikaapp.com/api/v2/sync/pantrylocations/",
+          "httpVersion": "HTTP/1.1",
+          "cookies": [],
+          "headers": [
+            {
+              "name": "Authorization",
+              "value": "[REDACTED]"
+            }
+          ],
+          "queryString": [],
+          "headersSize": -1,
+          "bodySize": 0
+        },
+        "response": {
+          "status": 404,
+          "statusText": "Not Found",
+          "httpVersion": "HTTP/1.1",
+          "cookies": [],
+          "headers": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ],
+          "content": {
+            "size": 47,
+            "mimeType": "application/json",
+            "text": "{\"error\": {\"code\": 0, \"message\": \"Not found.\"}}"
+          },
+          "redirectURL": "",
+          "headersSize": -1,
+          "bodySize": 47
+        },
+        "cache": {},
+        "timings": {
+          "send": 0,
+          "wait": 0,
+          "receive": 0
+        }
+      },
+      {
+        "comment": "GET menus (empty \u2014 test data cleaned up)",
+        "startedDateTime": "2026-05-27T00:30:12.376458+00:00",
+        "time": 0,
+        "request": {
+          "method": "GET",
+          "url": "https://www.paprikaapp.com/api/v2/sync/menus/",
+          "httpVersion": "HTTP/1.1",
+          "cookies": [],
+          "headers": [
+            {
+              "name": "Authorization",
+              "value": "[REDACTED]"
+            }
+          ],
+          "queryString": [],
+          "headersSize": -1,
+          "bodySize": 0
+        },
+        "response": {
+          "status": 200,
+          "statusText": "OK",
+          "httpVersion": "HTTP/1.1",
+          "cookies": [],
+          "headers": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ],
+          "content": {
+            "size": 14,
+            "mimeType": "application/json",
+            "text": "{\"result\": []}"
+          },
+          "redirectURL": "",
+          "headersSize": -1,
+          "bodySize": 14
+        },
+        "cache": {},
+        "timings": {
+          "send": 0,
+          "wait": 0,
+          "receive": 0
+        }
+      },
+      {
+        "comment": "GET menu items (empty \u2014 test data cleaned up)",
+        "startedDateTime": "2026-05-27T00:30:12.376461+00:00",
+        "time": 0,
+        "request": {
+          "method": "GET",
+          "url": "https://www.paprikaapp.com/api/v2/sync/menuitems/",
+          "httpVersion": "HTTP/1.1",
+          "cookies": [],
+          "headers": [
+            {
+              "name": "Authorization",
+              "value": "[REDACTED]"
+            }
+          ],
+          "queryString": [],
+          "headersSize": -1,
+          "bodySize": 0
+        },
+        "response": {
+          "status": 200,
+          "statusText": "OK",
+          "httpVersion": "HTTP/1.1",
+          "cookies": [],
+          "headers": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ],
+          "content": {
+            "size": 14,
+            "mimeType": "application/json",
+            "text": "{\"result\": []}"
+          },
+          "redirectURL": "",
+          "headersSize": -1,
+          "bodySize": 14
+        },
+        "cache": {},
+        "timings": {
+          "send": 0,
+          "wait": 0,
+          "receive": 0
+        }
       }
     ]
   }
