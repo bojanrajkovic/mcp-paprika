@@ -22,42 +22,10 @@ import {
   GroceryItemUidSchema,
   GroceryIngredientUidSchema,
 } from "./types.js";
+import { makeSnakeCaseRecipe } from "../cache/__fixtures__/recipes.js";
 
 const AUTH_URL = "https://paprikaapp.com/api/v1/account/login/";
 const API_BASE = "https://paprikaapp.com/api/v2/sync";
-
-function makeSnakeCaseRecipe(uid: string): object {
-  return {
-    uid,
-    hash: `hash-${uid}`,
-    name: `Recipe ${uid}`,
-    categories: [],
-    ingredients: "eggs, flour",
-    directions: "Mix and bake.",
-    description: null,
-    notes: null,
-    prep_time: null,
-    cook_time: null,
-    total_time: null,
-    servings: null,
-    difficulty: null,
-    rating: 0,
-    created: "2024-01-01T00:00:00Z",
-    image_url: "",
-    photo: null,
-    photo_hash: null,
-    photo_large: null,
-    photo_url: null,
-    source: null,
-    source_url: null,
-    on_favorites: false,
-    in_trash: false,
-    is_pinned: false,
-    on_grocery_list: false,
-    scale: null,
-    nutritional_info: null,
-  };
-}
 
 function makeCamelCaseRecipe(uid: string): Recipe {
   return RecipeSchema.parse(makeSnakeCaseRecipe(uid));

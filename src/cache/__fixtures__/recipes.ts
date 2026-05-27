@@ -52,6 +52,44 @@ export function makeCategory(overrides?: Partial<Category>): Category {
   };
 }
 
+/**
+ * Produces a recipe in the Paprika API snake_case wire format (pre-schema-transform).
+ * Used by client.test.ts and sync-tool-pipeline integration tests that mock raw API responses.
+ */
+export function makeSnakeCaseRecipe(uid: string, overrides?: Partial<Record<string, unknown>>): object {
+  return {
+    uid,
+    hash: `hash-${uid}`,
+    name: `Recipe ${uid}`,
+    categories: [],
+    ingredients: "eggs, flour",
+    directions: "Mix and bake.",
+    description: null,
+    notes: null,
+    prep_time: null,
+    cook_time: null,
+    total_time: null,
+    servings: null,
+    difficulty: null,
+    rating: 0,
+    created: "2024-01-01T00:00:00Z",
+    image_url: "",
+    photo: null,
+    photo_hash: null,
+    photo_large: null,
+    photo_url: null,
+    source: null,
+    source_url: null,
+    on_favorites: false,
+    in_trash: false,
+    is_pinned: false,
+    on_grocery_list: false,
+    scale: null,
+    nutritional_info: null,
+    ...overrides,
+  };
+}
+
 /** A trashed recipe for edge-case tests. */
 export const TRASHED_RECIPE = makeRecipe({
   uid: "trashed-1" as RecipeUid,
