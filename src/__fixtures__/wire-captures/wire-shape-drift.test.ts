@@ -166,6 +166,20 @@ describe("wire-shape drift detection", () => {
       );
     });
 
+    it("hard-delete (empty trash) has same shape as trash with both in_trash + deleted true", () => {
+      const trashKeys = wireKeys(writeFixture("trash recipe ([mcp-cap] Test Recipe)"), "request");
+      const hardDeleteKeys = wireKeys(
+        writeFixture("hard-delete recipe (empty trash — both in_trash + deleted)"),
+        "request",
+      );
+      expect(hardDeleteKeys).toEqual(trashKeys);
+
+      const f = writeFixture("hard-delete recipe (empty trash — both in_trash + deleted)");
+      const body = f.requestBody as Array<Record<string, unknown>>;
+      expect(body[0]!["in_trash"]).toBe(true);
+      expect(body[0]!["deleted"]).toBe(true);
+    });
+
     it("savePantryItems sends wire POST keys plus notes (#126)", async () => {
       const wirePostKeys = wireKeys(writeFixture("create pantry item (mcp-cap Test Flour)"), "request");
       const pantryItem: PantryItem = {

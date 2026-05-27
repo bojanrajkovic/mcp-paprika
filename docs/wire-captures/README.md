@@ -7,16 +7,16 @@ Chicken as Breakfast on 2026-05-26").
 
 ## Files
 
-| File                 | Entries | Covers                                                                               |
-| -------------------- | ------- | ------------------------------------------------------------------------------------ |
-| `menus.har.json`     | 14      | Menu CRUD, menuitem CRUD, multi-day menus, cascade deletes                           |
-| `meals.har.json`     | 8       | Recipe meals, freeform meals, type changes, add-menu-to-planner                      |
-| `reference.har.json` | 16      | Sync status catalog, mealtypes, startup sync GETs (groceries/pantry/aisles)          |
-| `writes.har.json`    | 30      | Recipe CRUD, photo upload/delete, category CRUD, pantry CRUD, grocery list/item CRUD |
+| File                 | Entries | Covers                                                                                             |
+| -------------------- | ------- | -------------------------------------------------------------------------------------------------- |
+| `menus.har.json`     | 14      | Menu CRUD, menuitem CRUD, multi-day menus, cascade deletes                                         |
+| `meals.har.json`     | 8       | Recipe meals, freeform meals, type changes, add-menu-to-planner                                    |
+| `reference.har.json` | 16      | Sync status catalog, mealtypes, startup sync GETs (groceries/pantry/aisles)                        |
+| `writes.har.json`    | 31      | Recipe CRUD + hard-delete, photo upload/delete, category CRUD, pantry CRUD, grocery list/item CRUD |
 
 ### Key wire format findings from `writes.har.json`
 
-**Deletion semantics** differ by entity type and have two tiers. Recipes use `in_trash: true` on the full recipe object (soft-delete / move to trash), POSTed to the singular endpoint (`POST /api/v2/sync/recipe/{uid}/`). Permanent recipe deletion (empty trash) sets both `in_trash: true` and `deleted: true` on the same 27-field shape to the same singular endpoint (confirmed via mitmproxy capture; sanitized HAR pending #125). All other entities (pantry, grocery items/lists, categories, meals, menus, menuitems) use `deleted: true` on the entity body, POSTed to the collection endpoint.
+**Deletion semantics** differ by entity type and have two tiers. Recipes use `in_trash: true` on the full recipe object (soft-delete / move to trash), POSTed to the singular endpoint (`POST /api/v2/sync/recipe/{uid}/`). Permanent recipe deletion (empty trash) sets both `in_trash: true` and `deleted: true` on the same 27-field shape to the same singular endpoint. All other entities (pantry, grocery items/lists, categories, meals, menus, menuitems) use `deleted: true` on the entity body, POSTed to the collection endpoint.
 
 **Photo upload** is a three-step sequence: (1) POST the recipe to `/api/v2/sync/recipe/{recipe_uid}/` with `photo` and `photo_large` set to filenames and `photo_hash` set, (2) POST the photo metadata + binary to `/api/v2/sync/photo/{photo_uid}/`, (3) POST the recipe again to confirm. Deleting a photo POSTs a tombstone (`deleted: true`) to `/api/v2/sync/photo/{photo_uid}/`.
 

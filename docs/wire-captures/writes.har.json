@@ -715,6 +715,60 @@
         }
       },
       {
+        "comment": "hard-delete recipe (empty trash — both in_trash + deleted)",
+        "startedDateTime": "2026-05-26T22:00:00.000000+00:00",
+        "time": 0,
+        "request": {
+          "method": "POST",
+          "url": "https://paprikaapp.com/api/v2/sync/recipe/FEA35DA4-3D6A-4A50-93CA-0B707AAAA52C/",
+          "httpVersion": "HTTP/1.1",
+          "cookies": [],
+          "headers": [
+            {
+              "name": "Content-Type",
+              "value": "multipart/form-data"
+            },
+            {
+              "name": "Authorization",
+              "value": "[REDACTED]"
+            }
+          ],
+          "queryString": [],
+          "headersSize": -1,
+          "bodySize": 1046,
+          "postData": {
+            "mimeType": "application/octet-stream",
+            "text": "[{\"servings\": \"4\", \"on_favorites\": false, \"rating\": 4, \"categories\": [\"2D6BB5F8-909E-4B2B-9E67-9668C2737639\"], \"nutritional_info\": \"\", \"difficulty\": \"Medium\", \"image_url\": null, \"directions\": \"Step 1: Mix dry ingredients.\\nStep 2: Add wet ingredients.\\nStep 3: Bake at 350F for 25 minutes.\", \"deleted\": true, \"name\": \"[mcp-cap] Test Recipe\", \"prep_time\": \"15 min\", \"source_url\": \"https://example.com/recipe\", \"photo_hash\": \"B5B18E4BB32C067DD5E8CA944A9A3146C05396F2C637859E217825BBFD78256C\", \"description\": \"A test recipe for wire capture\", \"ingredients\": \"2 cups flour\\n1 cup sugar\\n3 eggs\\n1 tsp vanilla\", \"cook_time\": \"30 min\", \"in_trash\": true, \"scale\": null, \"created\": \"2026-05-26 22:14:24\", \"uid\": \"FEA35DA4-3D6A-4A50-93CA-0B707AAAA52C\", \"is_pinned\": false, \"total_time\": \"\", \"source\": \"Test Source\", \"notes\": \"[mcp-cap] test notes for wire capture\", \"photo_large\": \"05D19FA6-0114-4C02-AE07-46CBBC8B8C8D.jpg\", \"hash\": \"1EEA23962C08A6537EC8841B234F0162A45E600427F0CC81605AE2347AC360C4\", \"photo\": \"8CE826E9-3C64-473F-B431-BD60C226749D.jpg\"}]"
+          }
+        },
+        "response": {
+          "status": 200,
+          "statusText": "OK",
+          "httpVersion": "HTTP/1.1",
+          "cookies": [],
+          "headers": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ],
+          "content": {
+            "size": 16,
+            "mimeType": "application/json",
+            "text": "{\"result\": true}"
+          },
+          "redirectURL": "",
+          "headersSize": -1,
+          "bodySize": 16
+        },
+        "cache": {},
+        "timings": {
+          "send": 0,
+          "wait": 0,
+          "receive": 0
+        }
+      },
+      {
         "comment": "rename category to [mcp-cap] Renamed Category",
         "startedDateTime": "2026-05-26T22:00:00.000000+00:00",
         "time": 0,
