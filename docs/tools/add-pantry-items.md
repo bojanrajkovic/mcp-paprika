@@ -13,7 +13,6 @@ Add one or more items to the pantry in a single batch.
 | `items[].expirationDate` | string  | No       | `null`  | Expiration date as ISO 8601 or Paprika wire format; sets `hasExpiration = true`                               |
 | `items[].purchaseDate`   | string  | No       | today   | Purchase date; defaults to today at midnight in Paprika wire format                                           |
 | `items[].inStock`        | boolean | No       | `true`  | Whether the item is currently in stock                                                                        |
-| `items[].notes`          | string  | No       | `null`  | Free-form notes                                                                                               |
 
 ## Behavior
 
@@ -49,7 +48,7 @@ Multiple items with optional fields:
     "items": [
       { "ingredient": "Apples", "quantity": "6", "aisle": "Produce" },
       { "ingredient": "Milk", "quantity": "1 gallon", "aisle": "Dairy", "expirationDate": "2026-06-15" },
-      { "ingredient": "Eggs", "quantity": "1 dozen", "inStock": false, "notes": "need to restock" }
+      { "ingredient": "Eggs", "quantity": "1 dozen", "inStock": false }
     ]
   }
 }

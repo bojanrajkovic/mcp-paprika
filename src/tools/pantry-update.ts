@@ -36,7 +36,6 @@ export function registerUpdatePantryItemTool(server: McpServer, ctx: ServerConte
           .describe("Set expiration date; pass null to clear. hasExpiration is derived from this."),
         purchaseDate: z.string().nullable().optional().describe("Set purchase date; pass null to clear"),
         inStock: z.boolean().optional().describe("Set in-stock status"),
-        notes: z.string().nullable().optional().describe("Set notes; pass null to clear"),
       },
     },
     async (args) => {
@@ -99,7 +98,6 @@ export function registerUpdatePantryItemTool(server: McpServer, ctx: ServerConte
               ...(args.quantity !== undefined && { quantity: args.quantity }),
               ...(aisleUpdate !== undefined && { aisle: aisleUpdate.aisle, aisleUid: aisleUpdate.aisleUid }),
               ...(args.inStock !== undefined && { inStock: args.inStock }),
-              ...(args.notes !== undefined && { notes: args.notes }),
               expirationDate: newExpirationDate,
               hasExpiration: newHasExpiration,
               purchaseDate: newPurchaseDate,

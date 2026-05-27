@@ -1,6 +1,6 @@
 # Paprika API Client
 
-Last verified: 2026-05-26
+Last verified: 2026-05-27
 
 ## Files
 
@@ -167,6 +167,7 @@ The constructor installs five hooks after building `this.resilience`. These fire
 - Date format: `yyyy-MM-dd HH:mm:ss` (no T, no timezone, no fractional seconds) — see `src/paprika/dates.ts` for helpers
 - UID: uppercase UUID v4 (Paprika is case-insensitive but its app emits uppercase)
 - All operations use the same shape: add, update, and soft-delete are differentiated only by item content; soft-delete sets `deleted: true`. The `aisleUid` is a 64-char uppercase hex string (Paprika's aisle catalog ID, NOT a UUID).
+- Fields sent: `uid`, `ingredient`, `quantity`, `aisle`, `aisle_uid`, `expiration_date`, `has_expiration`, `in_stock`, `purchase_date`, `deleted` (10 fields). The `notes` field present on the `PantryItem` type is **not** sent — the macOS app omits it from POST bodies (confirmed via wire capture).
 
 **Recipe deletion wire format** (verified via `docs/wire-captures/writes.har.json`):
 

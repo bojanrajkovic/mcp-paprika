@@ -23,7 +23,6 @@ const itemInputSchema = z.object({
   expirationDate: z.string().optional().describe("Expiration date as ISO string; sets hasExpiration=true"),
   purchaseDate: z.string().optional().describe("Purchase date as ISO string (default: today)"),
   inStock: z.boolean().optional().describe("Whether the item is currently in stock (default: true)"),
-  notes: z.string().optional().describe("Free-form notes"),
 });
 
 export function registerAddPantryItemsTool(server: McpServer, ctx: ServerContext): void {
@@ -149,7 +148,7 @@ export function registerAddPantryItemsTool(server: McpServer, ctx: ServerContext
                 hasExpiration: dates.expirationDate !== null,
                 inStock: item.inStock ?? true,
                 purchaseDate: dates.purchaseDate,
-                notes: item.notes ?? null,
+                notes: null,
                 deleted: false,
               });
             }
