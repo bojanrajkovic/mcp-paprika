@@ -13,7 +13,6 @@ Update an existing pantry item by UID. Only provided fields are changed; omitted
 | `expirationDate` | string \| null | No       | unchanged | Set expiration date (ISO 8601 or Paprika wire format); pass `null` to clear. `hasExpiration` is derived automatically. |
 | `purchaseDate`   | string \| null | No       | unchanged | Set purchase date; pass `null` to clear                                                                                |
 | `inStock`        | boolean        | No       | unchanged | Set in-stock status                                                                                                    |
-| `notes`          | string \| null | No       | unchanged | Set notes; pass `null` to clear                                                                                        |
 
 ## Behavior
 
