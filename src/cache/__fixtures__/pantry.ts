@@ -20,7 +20,6 @@ export function makeSnakeCasePantryItem(uid: string, overrides?: Partial<Record<
     purchase_date: "2026-01-01 00:00:00",
     notes: null,
     location_uid: null,
-    deleted: false,
     ...overrides,
   };
 }

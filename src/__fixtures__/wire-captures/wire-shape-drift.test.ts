@@ -17,17 +17,25 @@ import { fixture as menuFixture } from "./menus.js";
 function wireKeys(entry: { requestBody: unknown; responseBody: unknown }, source: "request" | "response"): string[] {
   const body = source === "request" ? entry.requestBody : entry.responseBody;
   if (!body || typeof body !== "object") return [];
+
+  let items: Array<Record<string, unknown>> = [];
   const result = (body as Record<string, unknown>)["result"];
   if (Array.isArray(result) && result.length > 0) {
-    return Object.keys(result[0] as Record<string, unknown>).sort();
+    items = result as Array<Record<string, unknown>>;
+  } else if (Array.isArray(body)) {
+    const inner = Array.isArray(body[0])
+      ? (body[0] as Array<Record<string, unknown>>)
+      : (body as Array<Record<string, unknown>>);
+    items = inner;
   }
-  if (Array.isArray(body)) {
-    const inner = Array.isArray(body[0]) ? body[0] : body;
-    if (inner.length > 0) {
-      return Object.keys(inner[0] as Record<string, unknown>).sort();
+
+  const keySet = new Set<string>();
+  for (const item of items) {
+    for (const key of Object.keys(item)) {
+      keySet.add(key);
     }
   }
-  return [];
+  return [...keySet].sort();
 }
 
 describe("wire-shape drift detection", () => {

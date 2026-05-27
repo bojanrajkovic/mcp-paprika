@@ -21,7 +21,7 @@ const har = {
         time: 0,
         request: {
           method: "POST",
-          url: "https://www.paprikaapp.com/api/v2/sync/menus/",
+          url: "https://paprikaapp.com/api/v2/sync/menus/",
           httpVersion: "HTTP/1.1",
           cookies: [],
           headers: [
@@ -75,7 +75,7 @@ const har = {
         time: 0,
         request: {
           method: "POST",
-          url: "https://www.paprikaapp.com/api/v2/sync/menuitems/",
+          url: "https://paprikaapp.com/api/v2/sync/menuitems/",
           httpVersion: "HTTP/1.1",
           cookies: [],
           headers: [
@@ -129,7 +129,7 @@ const har = {
         time: 0,
         request: {
           method: "POST",
-          url: "https://www.paprikaapp.com/api/v2/sync/menuitems/",
+          url: "https://paprikaapp.com/api/v2/sync/menuitems/",
           httpVersion: "HTTP/1.1",
           cookies: [],
           headers: [
@@ -183,7 +183,7 @@ const har = {
         time: 0,
         request: {
           method: "POST",
-          url: "https://www.paprikaapp.com/api/v2/sync/menuitems/",
+          url: "https://paprikaapp.com/api/v2/sync/menuitems/",
           httpVersion: "HTTP/1.1",
           cookies: [],
           headers: [
@@ -237,7 +237,7 @@ const har = {
         time: 0,
         request: {
           method: "POST",
-          url: "https://www.paprikaapp.com/api/v2/sync/menuitems/",
+          url: "https://paprikaapp.com/api/v2/sync/menuitems/",
           httpVersion: "HTTP/1.1",
           cookies: [],
           headers: [
@@ -291,7 +291,7 @@ const har = {
         time: 0,
         request: {
           method: "POST",
-          url: "https://www.paprikaapp.com/api/v2/sync/menuitems/",
+          url: "https://paprikaapp.com/api/v2/sync/menuitems/",
           httpVersion: "HTTP/1.1",
           cookies: [],
           headers: [
@@ -345,7 +345,7 @@ const har = {
         time: 0,
         request: {
           method: "POST",
-          url: "https://www.paprikaapp.com/api/v2/sync/menus/",
+          url: "https://paprikaapp.com/api/v2/sync/menus/",
           httpVersion: "HTTP/1.1",
           cookies: [],
           headers: [
@@ -399,7 +399,7 @@ const har = {
         time: 0,
         request: {
           method: "POST",
-          url: "https://www.paprikaapp.com/api/v2/sync/menus/",
+          url: "https://paprikaapp.com/api/v2/sync/menus/",
           httpVersion: "HTTP/1.1",
           cookies: [],
           headers: [
@@ -453,7 +453,7 @@ const har = {
         time: 0,
         request: {
           method: "POST",
-          url: "https://www.paprikaapp.com/api/v2/sync/menuitems/",
+          url: "https://paprikaapp.com/api/v2/sync/menuitems/",
           httpVersion: "HTTP/1.1",
           cookies: [],
           headers: [
@@ -507,7 +507,7 @@ const har = {
         time: 0,
         request: {
           method: "POST",
-          url: "https://www.paprikaapp.com/api/v2/sync/menus/",
+          url: "https://paprikaapp.com/api/v2/sync/menus/",
           httpVersion: "HTTP/1.1",
           cookies: [],
           headers: [
@@ -561,7 +561,7 @@ const har = {
         time: 0,
         request: {
           method: "POST",
-          url: "https://www.paprikaapp.com/api/v2/sync/menuitems/",
+          url: "https://paprikaapp.com/api/v2/sync/menuitems/",
           httpVersion: "HTTP/1.1",
           cookies: [],
           headers: [
@@ -615,7 +615,7 @@ const har = {
         time: 0,
         request: {
           method: "POST",
-          url: "https://www.paprikaapp.com/api/v2/sync/menuitems/",
+          url: "https://paprikaapp.com/api/v2/sync/menuitems/",
           httpVersion: "HTTP/1.1",
           cookies: [],
           headers: [
@@ -669,7 +669,7 @@ const har = {
         time: 0,
         request: {
           method: "POST",
-          url: "https://www.paprikaapp.com/api/v2/sync/menus/",
+          url: "https://paprikaapp.com/api/v2/sync/menus/",
           httpVersion: "HTTP/1.1",
           cookies: [],
           headers: [
@@ -723,7 +723,7 @@ const har = {
         time: 0,
         request: {
           method: "POST",
-          url: "https://www.paprikaapp.com/api/v2/sync/menuitems/",
+          url: "https://paprikaapp.com/api/v2/sync/menuitems/",
           httpVersion: "HTTP/1.1",
           cookies: [],
           headers: [

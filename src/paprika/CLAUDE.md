@@ -168,6 +168,26 @@ The constructor installs five hooks after building `this.resilience`. These fire
 - UID: uppercase UUID v4 (Paprika is case-insensitive but its app emits uppercase)
 - All operations use the same shape: add, update, and soft-delete are differentiated only by item content; soft-delete sets `deleted: true`. The `aisleUid` is a 64-char uppercase hex string (Paprika's aisle catalog ID, NOT a UUID).
 
+**Recipe deletion wire format** (verified via `docs/wire-captures/writes.har.json`):
+
+- Endpoint: `POST /api/v2/sync/recipe/{uid}/` (singular URL with UID in path — diverges from pantry/grocery deletes which use the collection URL)
+- Body: full recipe object with `in_trash: true`; the same multipart `FormData` shape as `saveRecipe`
+- The current `deleteRecipe()` implementation fetches the recipe, sets `inTrash: true`, and saves via `saveRecipe()`, which matches this wire format exactly
+
+**Photo upload wire format** (verified via `docs/wire-captures/writes.har.json`):
+
+Three-step sequence:
+
+1. `POST /api/v2/sync/recipe/{recipe_uid}/` — recipe object with `photo_uid` set to the new photo's UID
+2. `POST /api/v2/sync/photo/{photo_uid}/` — photo metadata (7 fields: `deleted`, `filename`, `hash`, `name`, `order_flag`, `recipe_uid`, `uid`) as multipart, with the binary image data
+3. `POST /api/v2/sync/recipe/{recipe_uid}/` — recipe object again with `photo_hash` set to the server-returned hash
+
+Deleting a photo POSTs a tombstone (`deleted: true`) to `/api/v2/sync/photo/{photo_uid}/`.
+
+**Grocery ingredient auto-creation** (verified via `docs/wire-captures/writes.har.json`):
+
+When the Paprika app adds grocery items, it also POSTs corresponding `GroceryIngredient` entries to `/api/v2/sync/groceryingredients/` in the same request cycle. Ingredient records are upserted by UID alongside their items — the ingredient catalog is not a pre-populated reference; it grows as items are added.
+
 **Dependencies:**
 
 - **Uses:** `node:zlib` (gzip compression), `zod` (response validation), `cockatiel` (retry + circuit breaker + bulkhead), `./types.js` (schemas), `./errors.js` (error classes)

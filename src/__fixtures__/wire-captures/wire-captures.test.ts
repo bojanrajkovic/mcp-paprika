@@ -53,7 +53,7 @@ describe("wire capture fixtures", () => {
       server.listen({ onUnhandledRequest: "error" });
 
       try {
-        const response = await fetch("https://www.paprikaapp.com/api/v2/sync/meals/", {
+        const response = await fetch("https://paprikaapp.com/api/v2/sync/meals/", {
           method: "POST",
           headers: { "Content-Type": "application/octet-stream" },
         });

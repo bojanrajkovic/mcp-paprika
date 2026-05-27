@@ -21,7 +21,7 @@ const har = {
         time: 0,
         request: {
           method: "GET",
-          url: "https://www.paprikaapp.com/api/v2/sync/status/",
+          url: "https://paprikaapp.com/api/v2/sync/status/",
           httpVersion: "HTTP/1.1",
           cookies: [],
           headers: [
@@ -67,7 +67,7 @@ const har = {
         time: 0,
         request: {
           method: "GET",
-          url: "https://www.paprikaapp.com/api/v2/sync/grocerylists/",
+          url: "https://paprikaapp.com/api/v2/sync/grocerylists/",
           httpVersion: "HTTP/1.1",
           cookies: [],
           headers: [
@@ -113,7 +113,7 @@ const har = {
         time: 0,
         request: {
           method: "GET",
-          url: "https://www.paprikaapp.com/api/v2/sync/groceryaisles/",
+          url: "https://paprikaapp.com/api/v2/sync/groceryaisles/",
           httpVersion: "HTTP/1.1",
           cookies: [],
           headers: [
@@ -159,7 +159,7 @@ const har = {
         time: 0,
         request: {
           method: "GET",
-          url: "https://www.paprikaapp.com/api/v2/sync/groceries/",
+          url: "https://paprikaapp.com/api/v2/sync/groceries/",
           httpVersion: "HTTP/1.1",
           cookies: [],
           headers: [
@@ -205,7 +205,7 @@ const har = {
         time: 0,
         request: {
           method: "POST",
-          url: "https://www.paprikaapp.com/api/v2/statistics/",
+          url: "https://paprikaapp.com/api/v2/statistics/",
           httpVersion: "HTTP/1.1",
           cookies: [],
           headers: [
@@ -255,7 +255,7 @@ const har = {
         time: 0,
         request: {
           method: "GET",
-          url: "https://www.paprikaapp.com/api/v2/sync/pantry/",
+          url: "https://paprikaapp.com/api/v2/sync/pantry/",
           httpVersion: "HTTP/1.1",
           cookies: [],
           headers: [
@@ -301,7 +301,7 @@ const har = {
         time: 0,
         request: {
           method: "GET",
-          url: "https://www.paprikaapp.com/api/v2/sync/mealtypes/",
+          url: "https://paprikaapp.com/api/v2/sync/mealtypes/",
           httpVersion: "HTTP/1.1",
           cookies: [],
           headers: [
@@ -347,7 +347,7 @@ const har = {
         time: 0,
         request: {
           method: "GET",
-          url: "https://www.paprikaapp.com/api/v2/sync/meals/",
+          url: "https://paprikaapp.com/api/v2/sync/meals/",
           httpVersion: "HTTP/1.1",
           cookies: [],
           headers: [
@@ -393,7 +393,7 @@ const har = {
         time: 0,
         request: {
           method: "GET",
-          url: "https://www.paprikaapp.com/api/v2/sync/recipes/",
+          url: "https://paprikaapp.com/api/v2/sync/recipes/",
           httpVersion: "HTTP/1.1",
           cookies: [],
           headers: [
@@ -439,7 +439,7 @@ const har = {
         time: 0,
         request: {
           method: "GET",
-          url: "https://www.paprikaapp.com/api/v2/sync/recipe/{uid}/",
+          url: "https://paprikaapp.com/api/v2/sync/recipe/EXAMPLE-RECIPE-UID/",
           httpVersion: "HTTP/1.1",
           cookies: [],
           headers: [
@@ -485,7 +485,7 @@ const har = {
         time: 0,
         request: {
           method: "GET",
-          url: "https://www.paprikaapp.com/api/v2/sync/categories/",
+          url: "https://paprikaapp.com/api/v2/sync/categories/",
           httpVersion: "HTTP/1.1",
           cookies: [],
           headers: [
@@ -531,7 +531,7 @@ const har = {
         time: 0,
         request: {
           method: "GET",
-          url: "https://www.paprikaapp.com/api/v2/sync/groceryingredients/",
+          url: "https://paprikaapp.com/api/v2/sync/groceryingredients/",
           httpVersion: "HTTP/1.1",
           cookies: [],
           headers: [
@@ -577,7 +577,7 @@ const har = {
         time: 0,
         request: {
           method: "GET",
-          url: "https://www.paprikaapp.com/api/v2/sync/photos/",
+          url: "https://paprikaapp.com/api/v2/sync/photos/",
           httpVersion: "HTTP/1.1",
           cookies: [],
           headers: [
@@ -623,7 +623,7 @@ const har = {
         time: 0,
         request: {
           method: "GET",
-          url: "https://www.paprikaapp.com/api/v2/sync/pantrylocations/",
+          url: "https://paprikaapp.com/api/v2/sync/pantrylocations/",
           httpVersion: "HTTP/1.1",
           cookies: [],
           headers: [
@@ -669,7 +669,7 @@ const har = {
         time: 0,
         request: {
           method: "GET",
-          url: "https://www.paprikaapp.com/api/v2/sync/menus/",
+          url: "https://paprikaapp.com/api/v2/sync/menus/",
           httpVersion: "HTTP/1.1",
           cookies: [],
           headers: [
@@ -715,7 +715,7 @@ const har = {
         time: 0,
         request: {
           method: "GET",
-          url: "https://www.paprikaapp.com/api/v2/sync/menuitems/",
+          url: "https://paprikaapp.com/api/v2/sync/menuitems/",
           httpVersion: "HTTP/1.1",
           cookies: [],
           headers: [

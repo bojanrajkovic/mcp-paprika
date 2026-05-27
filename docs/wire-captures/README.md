@@ -7,11 +7,20 @@ Chicken as Breakfast on 2026-05-26").
 
 ## Files
 
-| File                 | Entries | Covers                                                                      |
-| -------------------- | ------- | --------------------------------------------------------------------------- |
-| `menus.har.json`     | 14      | Menu CRUD, menuitem CRUD, multi-day menus, cascade deletes                  |
-| `meals.har.json`     | 8       | Recipe meals, freeform meals, type changes, add-menu-to-planner             |
-| `reference.har.json` | 8       | Sync status catalog, mealtypes, startup sync GETs (groceries/pantry/aisles) |
+| File                 | Entries | Covers                                                                               |
+| -------------------- | ------- | ------------------------------------------------------------------------------------ |
+| `menus.har.json`     | 14      | Menu CRUD, menuitem CRUD, multi-day menus, cascade deletes                           |
+| `meals.har.json`     | 8       | Recipe meals, freeform meals, type changes, add-menu-to-planner                      |
+| `reference.har.json` | 16      | Sync status catalog, mealtypes, startup sync GETs (groceries/pantry/aisles)          |
+| `writes.har.json`    | 30      | Recipe CRUD, photo upload/delete, category CRUD, pantry CRUD, grocery list/item CRUD |
+
+### Key wire format findings from `writes.har.json`
+
+**Recipe deletion** uses the singular endpoint (`POST /api/v2/sync/recipe/{uid}/`), not the collection URL. The payload is a full recipe object with `in_trash: true` set. This differs from pantry and grocery item deletes, which use `deleted: true` on the collection endpoint.
+
+**Photo upload** is a three-step sequence: (1) POST the recipe with `photo_uid` set to `/api/v2/sync/recipe/{recipe_uid}/`, (2) POST the photo binary to `/api/v2/sync/photo/{photo_uid}/`, (3) POST the recipe again with `photo_hash` set to the server-returned hash. Deleting a photo POSTs a tombstone to `/api/v2/sync/photo/{photo_uid}/`.
+
+**Grocery ingredient auto-creation:** when adding grocery items, the client also POSTs corresponding `GroceryIngredient` entries to `/api/v2/sync/groceryingredients/`. Ingredient records are created or upserted alongside their items rather than pre-existing in the catalog.
 
 ## Using in Tests
 
@@ -29,7 +38,7 @@ import { fixture } from "../__fixtures__/wire-captures/meals.js";
 const f = fixture("add recipe meal: (Not) Butter Chicken as Breakfast on 2026-05-26");
 
 f.method; // "POST"
-f.url; // "https://www.paprikaapp.com/api/v2/sync/meals/"
+f.url; // "https://paprikaapp.com/api/v2/sync/meals/"
 f.status; // 200
 f.requestBody; // parsed JSON (the decoded multipart body)
 f.responseBody; // parsed JSON ({result: true})
@@ -49,7 +58,7 @@ describe("meal planner tools", () => {
   const server = useMswServer([...mealHandlers]);
 
   it("creates a meal via the API", async () => {
-    // fetch("https://www.paprikaapp.com/api/v2/sync/meals/", { method: "POST" })
+    // fetch("https://paprikaapp.com/api/v2/sync/meals/", { method: "POST" })
     // will return {result: true} from the HAR recording
   });
 });
