@@ -178,7 +178,7 @@ if (savedUid !== null) {
 // Step 5.1: get_pantry_item by UID returns the updated item (cross-tool: store reflects update)
 if (savedUid !== null) {
   try {
-    const text = await callTool("get_pantry_item", { uid: savedUid });
+    const text = await callTool("get_pantry_item", { lookup: { uid: savedUid } });
     if (/\*\*Quantity:\*\*\s*2 cups/.test(text)) {
       steps.push({
         name: "5.1 get_pantry_item reflects update",

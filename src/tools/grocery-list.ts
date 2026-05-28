@@ -47,33 +47,38 @@ export function registerReadGroceryListTool(server: McpServer, ctx: ServerContex
     "read_grocery_list",
     {
       description:
-        "Get a grocery list by UID or name. When both are provided, UID takes precedence. " +
-        "Name lookup is tiered (exact → starts-with → contains) and case-insensitive. Returns " +
-        "a disambiguation list when multiple lists match the same tier.",
+        "Get a grocery list by UID or name. Name lookup is tiered (exact → starts-with → contains) " +
+        "and case-insensitive, with a disambiguation list when multiple lists match the same tier. " +
+        'Pass exactly one shape: {"uid": "..."} or {"name": "..."}.',
       inputSchema: {
-        uid: z.string().optional().describe("Exact grocery list UID"),
-        name: z.string().optional().describe("Grocery list name (tiered fuzzy match)"),
+        lookup: z
+          .union([
+            z
+              .object({ uid: z.string().min(1) })
+              .strict()
+              .describe('Exact grocery list UID, e.g. {"uid": "..."}.'),
+            z
+              .object({ name: z.string().min(1) })
+              .strict()
+              .describe('Grocery list name fuzzy match, e.g. {"name": "Weekly Shopping"}.'),
+          ])
+          .describe('Pick exactly one shape: {"uid": "..."} or {"name": "..."}.'),
       },
     },
     async (args) => {
-      log.info({ tool: "read_grocery_list", ...args }, "tool invoked");
+      log.info({ tool: "read_grocery_list", ...args.lookup }, "tool invoked");
       return groceryStartGuard(ctx).match(
         async (): Promise<CallToolResult> => {
-          if (!args.uid && !args.name) {
-            return textResult("Please provide either a uid or name to look up a grocery list.");
-          }
-
-          if (args.uid) {
-            const list = ctx.groceryListStore.get(GroceryListUidSchema.parse(args.uid));
+          if ("uid" in args.lookup) {
+            const list = ctx.groceryListStore.get(GroceryListUidSchema.parse(args.lookup.uid));
             if (!list) {
-              return textResult(`No grocery list found with UID "${args.uid}".`);
+              return textResult(`No grocery list found with UID "${args.lookup.uid}".`);
             }
             const items = ctx.groceryItemStore.getByListUid(list.uid);
             return textResult(groceryListToMarkdown(list, items));
           }
 
-          // name is truthy here (else branch of the uid check)
-          const name = args.name!;
+          const name = args.lookup.name;
           const matches = ctx.groceryListStore.findByName(name);
 
           if (matches.length === 0) {

@@ -139,7 +139,7 @@ describe("Sync → Tool Pipeline Integration", () => {
 
       // Read tool should return synced recipe
       const readResult = await testServer.callTool("read_recipe", {
-        uid: "recipe-1" as RecipeUid,
+        lookup: { uid: "recipe-1" as RecipeUid },
       });
       expect(getText(readResult)).toContain("Scrambled Eggs");
     });
@@ -406,7 +406,7 @@ describe("Sync → Tool Pipeline Integration", () => {
 
       // Test read_recipe
       const readResult = await testServer.callTool("read_recipe", {
-        uid: "eggs",
+        lookup: { uid: "eggs" },
       });
       expect(getText(readResult)).toContain("Scrambled Eggs");
       expect(getText(readResult)).toContain("Breakfast");

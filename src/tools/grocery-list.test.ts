@@ -123,7 +123,7 @@ describe("read_grocery_list tool", () => {
     const ctx = makeCtx(new RecipeStore(), server, { groceryListStore, groceryItemStore });
     registerReadGroceryListTool(server, ctx);
 
-    const result = await callTool("read_grocery_list", { uid: "some-uid" });
+    const result = await callTool("read_grocery_list", { lookup: { uid: "some-uid" } });
     const text = getText(result);
 
     expect(text.toLowerCase()).toContain("not yet synced");
@@ -139,7 +139,7 @@ describe("read_grocery_list tool", () => {
     const ctx = makeCtx(new RecipeStore(), server, { groceryListStore, groceryItemStore });
     registerReadGroceryListTool(server, ctx);
 
-    const result = await callTool("read_grocery_list", { uid: "nonexistent-uid" });
+    const result = await callTool("read_grocery_list", { lookup: { uid: "nonexistent-uid" } });
     const text = getText(result);
 
     expect(text.toLowerCase()).toContain("no grocery list found");
@@ -160,7 +160,7 @@ describe("read_grocery_list tool", () => {
     const ctx = makeCtx(new RecipeStore(), server, { groceryListStore, groceryItemStore });
     registerReadGroceryListTool(server, ctx);
 
-    const result = await callTool("read_grocery_list", { uid: list.uid });
+    const result = await callTool("read_grocery_list", { lookup: { uid: list.uid } });
     const text = getText(result);
 
     expect(text).toContain("Weekly Shopping");
@@ -181,7 +181,7 @@ describe("read_grocery_list tool", () => {
     const ctx = makeCtx(new RecipeStore(), server, { groceryListStore, groceryItemStore });
     registerReadGroceryListTool(server, ctx);
 
-    const result = await callTool("read_grocery_list", { name: "Weekly Shopping" });
+    const result = await callTool("read_grocery_list", { lookup: { name: "Weekly Shopping" } });
     const text = getText(result);
 
     expect(text).toContain("Weekly Shopping");
@@ -200,7 +200,7 @@ describe("read_grocery_list tool", () => {
     const ctx = makeCtx(new RecipeStore(), server, { groceryListStore, groceryItemStore });
     registerReadGroceryListTool(server, ctx);
 
-    const result = await callTool("read_grocery_list", { name: "Weekly" });
+    const result = await callTool("read_grocery_list", { lookup: { name: "Weekly" } });
     const text = getText(result);
 
     expect(text).toContain("Weekly Shopping");
@@ -219,7 +219,7 @@ describe("read_grocery_list tool", () => {
     const ctx = makeCtx(new RecipeStore(), server, { groceryListStore, groceryItemStore });
     registerReadGroceryListTool(server, ctx);
 
-    const result = await callTool("read_grocery_list", { name: "Shopping" });
+    const result = await callTool("read_grocery_list", { lookup: { name: "Shopping" } });
     const text = getText(result);
 
     expect(text).toContain("Weekly Shopping");
@@ -236,7 +236,7 @@ describe("read_grocery_list tool", () => {
     const ctx = makeCtx(new RecipeStore(), server, { groceryListStore, groceryItemStore });
     registerReadGroceryListTool(server, ctx);
 
-    const result = await callTool("read_grocery_list", { name: "Completely Different" });
+    const result = await callTool("read_grocery_list", { lookup: { name: "Completely Different" } });
     const text = getText(result);
 
     expect(text.toLowerCase()).toContain("no grocery list found");
@@ -256,29 +256,13 @@ describe("read_grocery_list tool", () => {
     const ctx = makeCtx(new RecipeStore(), server, { groceryListStore, groceryItemStore });
     registerReadGroceryListTool(server, ctx);
 
-    const result = await callTool("read_grocery_list", { name: "Weekly" });
+    const result = await callTool("read_grocery_list", { lookup: { name: "Weekly" } });
     const text = getText(result);
 
     expect(text).toContain("Multiple grocery lists match");
     expect(text).toContain(listA.uid);
     expect(text).toContain(listB.uid);
     expect(text).toContain("Please re-invoke with a specific uid");
-  });
-
-  it("grocery-surface.AC1.2: requires at least one of uid or name", async () => {
-    const groceryListStore = new GroceryListStore();
-    const groceryItemStore = new GroceryItemStore();
-    groceryListStore.load([]);
-    groceryItemStore.load([]);
-
-    const { server, callTool } = makeTestServer();
-    const ctx = makeCtx(new RecipeStore(), server, { groceryListStore, groceryItemStore });
-    registerReadGroceryListTool(server, ctx);
-
-    const result = await callTool("read_grocery_list", {});
-    const text = getText(result);
-
-    expect(text.toLowerCase()).toContain("uid or name");
   });
 });
 

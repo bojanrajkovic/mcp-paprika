@@ -15,7 +15,7 @@ describe("pantry-get tool", () => {
     const recipeStore = new RecipeStore();
     registerGetPantryItemTool(server, makeCtx(recipeStore, server, { pantryStore }));
 
-    const result = await callTool("get_pantry_item", { uid: item.uid });
+    const result = await callTool("get_pantry_item", { lookup: { uid: item.uid } });
     const text = getText(result);
 
     // Should contain the markdown heading with ingredient name
@@ -32,7 +32,7 @@ describe("pantry-get tool", () => {
     const recipeStore = new RecipeStore();
     registerGetPantryItemTool(server, makeCtx(recipeStore, server, { pantryStore }));
 
-    const result = await callTool("get_pantry_item", { ingredient: "Brown" });
+    const result = await callTool("get_pantry_item", { lookup: { ingredient: "Brown" } });
     const text = getText(result);
 
     // Single match should return full markdown details
@@ -52,7 +52,7 @@ describe("pantry-get tool", () => {
     const recipeStore = new RecipeStore();
     registerGetPantryItemTool(server, makeCtx(recipeStore, server, { pantryStore }));
 
-    const result = await callTool("get_pantry_item", { ingredient: "Apple" });
+    const result = await callTool("get_pantry_item", { lookup: { ingredient: "Apple" } });
     const text = getText(result);
 
     // All three ingredient names must be present
@@ -79,7 +79,7 @@ describe("pantry-get tool", () => {
     const recipeStore = new RecipeStore();
     registerGetPantryItemTool(server, makeCtx(recipeStore, server, { pantryStore }));
 
-    const result = await callTool("get_pantry_item", { uid: "does-not-exist" });
+    const result = await callTool("get_pantry_item", { lookup: { uid: "does-not-exist" } });
     const text = getText(result);
 
     expect(text.toLowerCase()).toContain("no pantry item found");
@@ -94,7 +94,7 @@ describe("pantry-get tool", () => {
     const recipeStore = new RecipeStore();
     registerGetPantryItemTool(server, makeCtx(recipeStore, server, { pantryStore }));
 
-    const result = await callTool("get_pantry_item", { ingredient: "Caviar" });
+    const result = await callTool("get_pantry_item", { lookup: { ingredient: "Caviar" } });
     const text = getText(result);
 
     expect(text.toLowerCase()).toContain("no pantry items found matching");
@@ -108,46 +108,9 @@ describe("pantry-get tool", () => {
     const recipeStore = new RecipeStore();
     registerGetPantryItemTool(server, makeCtx(recipeStore, server, { pantryStore }));
 
-    const result = await callTool("get_pantry_item", { uid: "anything" });
+    const result = await callTool("get_pantry_item", { lookup: { uid: "anything" } });
     const text = getText(result);
 
     expect(text.toLowerCase()).toContain("not yet synced");
-  });
-
-  it("pantry-read.AC5.8: neither uid nor ingredient provided is rejected", async () => {
-    const item = makePantryItem();
-    const pantryStore = new PantryStore();
-    pantryStore.load([item]);
-
-    const { server, callTool } = makeTestServer();
-    const recipeStore = new RecipeStore();
-    registerGetPantryItemTool(server, makeCtx(recipeStore, server, { pantryStore }));
-
-    const result = await callTool("get_pantry_item", {});
-    const text = getText(result);
-
-    expect(text.toLowerCase()).toContain("either a uid");
-  });
-
-  it("UID precedence: when both uid and ingredient provided, uid takes precedence", async () => {
-    const item1 = makePantryItem({ ingredient: "Salt" });
-    const item2 = makePantryItem({ ingredient: "Match" });
-    const pantryStore = new PantryStore();
-    pantryStore.load([item1, item2]);
-
-    const { server, callTool } = makeTestServer();
-    const recipeStore = new RecipeStore();
-    registerGetPantryItemTool(server, makeCtx(recipeStore, server, { pantryStore }));
-
-    // Call with both uid (item1) and ingredient that would match item2
-    const result = await callTool("get_pantry_item", {
-      uid: item1.uid,
-      ingredient: "Match",
-    });
-    const text = getText(result);
-
-    // Should return item1's details, not item2
-    expect(text).toContain("# Salt");
-    expect(text).not.toContain("# Match");
   });
 });
