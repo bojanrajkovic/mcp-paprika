@@ -359,6 +359,87 @@ export const GroceryIngredientSchema = z
     }),
   );
 
+// Branded UID schemas for meals
+export const MealUidSchema = z.string().brand("MealUid");
+export type MealUid = z.infer<typeof MealUidSchema>;
+
+export const MealTypeUidSchema = z.string().brand("MealTypeUid");
+export type MealTypeUid = z.infer<typeof MealTypeUidSchema>;
+
+// MealStoredSchema — validates camelCase JSON read back from disk. No transform.
+export const MealStoredSchema = z.object({
+  uid: MealUidSchema,
+  recipeUid: z.string().nullable(),
+  name: z.string(),
+  date: z.string(),
+  type: z.number().int().nonnegative(),
+  typeUid: z.string(),
+  orderFlag: z.number().int(),
+  isIngredient: z.boolean(),
+  scale: z.string().nullable(),
+  deleted: z.boolean().optional().default(false),
+});
+
+export type Meal = z.infer<typeof MealStoredSchema>;
+
+// MealSchema — accepts snake_case wire format, transforms to camelCase Meal.
+export const MealSchema = z
+  .object({
+    uid: MealUidSchema,
+    recipe_uid: z.string().nullable(),
+    name: z.string(),
+    date: z.string(),
+    type: z.number().int().nonnegative(),
+    type_uid: z.string(),
+    order_flag: z.number().int(),
+    is_ingredient: z.boolean(),
+    scale: z.string().nullable(),
+    deleted: z.boolean().optional().default(false),
+  })
+  .transform(
+    ({ recipe_uid, type_uid, order_flag, is_ingredient, ...rest }): Meal => ({
+      ...rest,
+      recipeUid: recipe_uid,
+      typeUid: type_uid,
+      orderFlag: order_flag,
+      isIngredient: is_ingredient,
+    }),
+  );
+
+// MealTypeStoredSchema — validates camelCase JSON read back from disk. No transform.
+export const MealTypeStoredSchema = z.object({
+  uid: MealTypeUidSchema,
+  name: z.string(),
+  color: z.string(),
+  orderFlag: z.number().int(),
+  originalType: z.number().int(),
+  exportAllDay: z.boolean(),
+  exportTime: z.string(),
+});
+
+export type MealType = z.infer<typeof MealTypeStoredSchema>;
+
+// MealTypeSchema — accepts snake_case wire format, transforms to camelCase MealType.
+export const MealTypeSchema = z
+  .object({
+    uid: MealTypeUidSchema,
+    name: z.string(),
+    color: z.string(),
+    order_flag: z.number().int(),
+    original_type: z.number().int(),
+    export_all_day: z.boolean(),
+    export_time: z.string(),
+  })
+  .transform(
+    ({ order_flag, original_type, export_all_day, export_time, ...rest }): MealType => ({
+      ...rest,
+      orderFlag: order_flag,
+      originalType: original_type,
+      exportAllDay: export_all_day,
+      exportTime: export_time,
+    }),
+  );
+
 // AuthResponseSchema - nested object, no transform needed
 export const AuthResponseSchema = z.object({
   result: z.object({

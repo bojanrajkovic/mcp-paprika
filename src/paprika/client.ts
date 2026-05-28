@@ -22,6 +22,8 @@ import type {
   GroceryIngredient,
   GroceryItem,
   GroceryList,
+  Meal,
+  MealType,
   PantryItem,
   Recipe,
   RecipeEntry,
@@ -34,6 +36,8 @@ import {
   GroceryIngredientSchema,
   GroceryItemSchema,
   GroceryListSchema,
+  MealSchema,
+  MealTypeSchema,
   PantryItemSchema,
   RecipeEntrySchema,
   RecipeSchema,
@@ -274,6 +278,14 @@ export class PaprikaClient {
 
   async listGroceryIngredients(): Promise<Array<GroceryIngredient>> {
     return this.request("GET", `${API_BASE}/groceryingredients/`, z.array(GroceryIngredientSchema));
+  }
+
+  async listMeals(): Promise<Array<Meal>> {
+    return this.request("GET", `${API_BASE}/meals/`, z.array(MealSchema));
+  }
+
+  async listMealTypes(): Promise<Array<MealType>> {
+    return this.request("GET", `${API_BASE}/mealtypes/`, z.array(MealTypeSchema));
   }
 
   async listPantry(): Promise<Array<PantryItem>> {
