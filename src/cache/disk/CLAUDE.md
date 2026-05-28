@@ -1,15 +1,15 @@
 # Persistence Layer (`cache/disk/`)
 
-Last verified: 2026-05-24
+Last verified: 2026-05-27
 
-On-disk persistence for every entity the server caches: recipes, categories, pantry items, aisles, OAuth clients, OAuth tokens, grocery lists, grocery items, grocery ingredients. The module exposes a generic base (`DiskCache<T>`), two specialised subclasses where the entity has behaviour beyond key-value storage (`RecipeDiskCache`, `OAuthClientDiskCache`), and a composition root (`DiskCacheRoot`) that owns one instance per entity plus a one-shot legacy-format migration. All three grocery entities use plain `DiskCache<T>` — no specialised subclass.
+On-disk persistence for every entity the server caches: recipes, categories, pantry items, aisles, OAuth clients, OAuth tokens, grocery lists, grocery items, grocery ingredients, meals, meal types. The module exposes a generic base (`DiskCache<T>`), two specialised subclasses where the entity has behaviour beyond key-value storage (`RecipeDiskCache`, `OAuthClientDiskCache`), and a composition root (`DiskCacheRoot`) that owns one instance per entity plus a one-shot legacy-format migration. All three grocery entities and both meal entities use plain `DiskCache<T>` — no specialised subclass.
 
 ## Files
 
 - `base.ts` — generic `DiskCache<T>` with init/get/getAll/put/remove/flush/has/size and a `_writePending` template-method hook.
 - `recipes.ts` — `RecipeDiskCache extends DiskCache<Recipe>`; carries a uid → hash map for `diff()` and rewrites `recipes/index.json` on every flush.
 - `oauth-clients.ts` — `OAuthClientDiskCache extends DiskCache<OAuthClient>`; adds `tryPut(client, max)` for atomic DCR-cap enforcement.
-- `root.ts` — `DiskCacheRoot` composes nine subcaches (recipes, categories, pantry, aisles, oauthClients, oauthTokens, groceryLists, groceryItems, groceryIngredients), exposes `init()`/`flush()`, and runs the legacy-index migration on first boot.
+- `root.ts` — `DiskCacheRoot` composes eleven subcaches (recipes, categories, pantry, aisles, oauthClients, oauthTokens, groceryLists, groceryItems, groceryIngredients, meals, mealTypes), exposes `init()`/`flush()`, and runs the legacy-index migration on first boot.
 - `index.ts` — barrel.
 
 ## On-disk layout
@@ -27,7 +27,9 @@ On-disk persistence for every entity the server caches: recipes, categories, pan
 ├── oauthTokens/<tokenHash>.json
 ├── grocerylists/<uid>.json
 ├── groceryitems/<uid>.json
-└── groceryingredients/<uid>.json
+├── groceryingredients/<uid>.json
+├── meals/<uid>.json
+└── mealtypes/<uid>.json
 ```
 
 Directory names use lowercase (matching existing entity directory convention). The corresponding `DiskCacheRoot` fields use camelCase: `groceryLists`, `groceryItems`, `groceryIngredients`.
@@ -100,7 +102,7 @@ Owns one instance per entity and exposes `init()` + `flush()`. Construction:
 new DiskCacheRoot(cacheDir, log?)
 ```
 
-Seven entities that don't need behaviour beyond key-value storage (`categories`, `pantry`, `aisles`, `oauthTokens`, `groceryLists`, `groceryItems`, `groceryIngredients`) are instantiated directly from the base `DiskCache<T>` with a config object. The other two (`recipes`, `oauthClients`) are their dedicated subclasses.
+Nine entities that don't need behaviour beyond key-value storage (`categories`, `pantry`, `aisles`, `oauthTokens`, `groceryLists`, `groceryItems`, `groceryIngredients`, `meals`, `mealTypes`) are instantiated directly from the base `DiskCache<T>` with a config object. The other two (`recipes`, `oauthClients`) are their dedicated subclasses.
 
 `init()` is two-phase: first run `_maybeMigrateLegacyIndex` (see below), then `Promise.all` over each subcache's own `init()`.
 

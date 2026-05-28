@@ -1,6 +1,6 @@
 # Caching Layer
 
-Last verified: 2026-05-25
+Last verified: 2026-05-27
 
 ## Files
 
@@ -10,6 +10,8 @@ Last verified: 2026-05-25
 - `grocery-list-store.ts` — In-memory query layer for grocery lists (EntityStore subclass; tombstones, `findByName`, `lastSyncedAt`)
 - `grocery-item-store.ts` — In-memory query layer for grocery items (EntityStore subclass; tombstones, `getByListUid`, `getPurchasedByList`)
 - `grocery-ingredient-store.ts` — In-memory lookup layer for grocery ingredients (plain class, not EntityStore; keyed by lowercase name; no pending-writes)
+- `meal-store.ts` — In-memory query layer for meals (TombstoneEntityStore subclass; `getByRecipeUid`, `lastCookedAt`, `getInDateRange`)
+- `meal-type-store.ts` — In-memory query layer for meal types (EntityStore subclass; `resolveByName` for case-insensitive lookup, like AisleStore)
 - `disk/` — Persistence layer: `DiskCacheRoot` and per-entity subcaches. See `disk/CLAUDE.md` for the full contract.
 
 ## Purpose
@@ -166,13 +168,48 @@ In-memory lookup layer for grocery ingredients. This is a **plain class**, NOT a
 - Names that differ only by case point to the same entry (last writer wins if there are duplicates from the server)
 - `sweepPending()` does not exist on this class — the sync engine does not call it for ingredients
 
+### MealStore
+
+In-memory query layer for meals, hydrated by the sync engine. Extends `TombstoneEntityStore<Meal, MealUid>` (see `../entity/CLAUDE.md` for the base class contract, pending-writes invariants, and tombstone invariants).
+
+**Construction:** `new MealStore(opts?: { pendingWriteTtlMs?: number })` — starts empty with `hasSynced = false`.
+
+**Methods:**
+
+| Method                  | Description                                                                                                                    |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `load(items)`           | Clears and repopulates from `items`, sets `hasSynced = true`                                                                   |
+| `get(uid)` / `getAll()` | Direct UID lookup or all items (inherited)                                                                                     |
+| `getByRecipeUid(uid)`   | Returns all non-deleted, non-ingredient meals for a recipe UID                                                                 |
+| `lastCookedAt(uid)`     | Most recent meal date (Paprika wire format) for a recipe, or `null`; excludes `isIngredient: true` entries                     |
+| `getInDateRange(opts?)` | Filtered query with optional `since`/`until` (DateTime), `recipeUid`, `typeUid`, `offset`, `limit`; date-descending            |
+| Pending-writes          | `markPendingUpsert`, `markPendingDelete`, `isPendingUpsert`, `isPendingDelete`, `clearPending`, `sweepPending` (all inherited) |
+
+**Note:** `getByRecipeUid` and `lastCookedAt` filter out `isIngredient: true` entries — prep-work entries don't count as "cooked." `getInDateRange` also excludes ingredient entries. The `recipeUid` parameter is `string` (not branded `RecipeUid`) because `Meal.recipeUid` is `string | null`.
+
+### MealTypeStore
+
+In-memory query layer for meal types, hydrated by the sync engine. Extends `EntityStore<MealType, MealTypeUid>` (see `../entity/CLAUDE.md`). Replace-all semantics matching `AisleStore`.
+
+**Construction:** `new MealTypeStore(opts?: { pendingWriteTtlMs?: number })` — starts empty with `hasSynced = false`.
+
+**Methods:**
+
+| Method             | Description                                                    |
+| ------------------ | -------------------------------------------------------------- |
+| `load(items)`      | Clears and repopulates from `items`, sets `hasSynced = true`   |
+| `getAll()`         | Returns all items (insertion order)                            |
+| `resolveByName(n)` | Case-insensitive exact lookup; returns `MealType \| undefined` |
+
+No delete or tombstone support — meal types are a reference catalog.
+
 ### DiskCacheRoot
 
-Persistence layer for every entity the server caches. Composed of one `DiskCache<T>` instance per entity (`recipes`, `categories`, `pantry`, `aisles`, `oauthClients`, `oauthTokens`, `groceryLists`, `groceryItems`, `groceryIngredients`) plus a one-shot legacy-index migration that runs on first boot to upgrade installs from the unified-index layout.
+Persistence layer for every entity the server caches. Composed of one `DiskCache<T>` instance per entity (`recipes`, `categories`, `pantry`, `aisles`, `oauthClients`, `oauthTokens`, `groceryLists`, `groceryItems`, `groceryIngredients`, `meals`, `mealTypes`) plus a one-shot legacy-index migration that runs on first boot to upgrade installs from the unified-index layout.
 
 **Construction:** `new DiskCacheRoot(cacheDir: string, log?: Logger)`. Production passes `appLog.child({ component: "disk-cache" })`.
 
-**Public API:** every subcache exposes `get`/`getAll`/`put`/`remove`/`flush`/`has`/`size`; the root exposes `init()` and `flush()`. Specialised entities add behaviour: `cache.recipes.diff(entries)` returns the added/changed/removed classification used by the sync loop; `cache.oauthClients.tryPut(client, max)` is the atomic DCR-cap check. The grocery subcaches (`cache.groceryLists`, `cache.groceryItems`, `cache.groceryIngredients`) are plain `DiskCache<T>` instances with no special subclass.
+**Public API:** every subcache exposes `get`/`getAll`/`put`/`remove`/`flush`/`has`/`size`; the root exposes `init()` and `flush()`. Specialised entities add behaviour: `cache.recipes.diff(entries)` returns the added/changed/removed classification used by the sync loop; `cache.oauthClients.tryPut(client, max)` is the atomic DCR-cap check. The grocery subcaches (`cache.groceryLists`, `cache.groceryItems`, `cache.groceryIngredients`) and meal subcaches (`cache.meals`, `cache.mealTypes`) are plain `DiskCache<T>` instances with no special subclass.
 
 There is no `getAllCategories`, `removeCategory`, or category diff — categories use replace-all semantics and the on-disk files are read directly when needed.
 
@@ -199,7 +236,7 @@ See `disk/CLAUDE.md` for the full contract, on-disk layout, migration semantics,
 
 ### Pending-writes (issue #57)
 
-`RecipeStore`, `PantryStore`, `AisleStore`, `GroceryListStore`, and `GroceryItemStore` all inherit pending-writes tracking from `EntityStore`. `GroceryIngredientStore` does NOT inherit from `EntityStore` and has no pending-writes. See `../entity/CLAUDE.md` for the full invariants. Key cache-layer points:
+`RecipeStore`, `PantryStore`, `AisleStore`, `GroceryListStore`, `GroceryItemStore`, `MealStore`, and `MealTypeStore` all inherit pending-writes tracking from `EntityStore`. `GroceryIngredientStore` does NOT inherit from `EntityStore` and has no pending-writes. See `../entity/CLAUDE.md` for the full invariants. Key cache-layer points:
 
 - Pending-writes is **separate from the pantry tombstone set**: tombstones drive the delete-tool's idempotent "already deleted" message; pending-writes shield the sync loop from rolling back or resurrecting in-flight writes.
 - Clearing is **content-equality-based for upserts**: recipes clear when the canonical entry's hash matches the local cache; pantry items clear when the incoming item is field-wise equal via `pantryItemsEqual`. UID-presence-only clearing was rejected because the UID can appear in the canonical list with pre-write content while propagation is still in flight.

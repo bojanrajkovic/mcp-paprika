@@ -1,6 +1,6 @@
 # Server Composition Root
 
-Last verified: 2026-05-24
+Last verified: 2026-05-27
 
 ## Purpose
 
@@ -30,6 +30,8 @@ Process-wide, heavyweight, shared state. Built once per process by `buildAppCont
 | `groceryListStore`       | `GroceryListStore`       | In-memory grocery list query layer; EntityStore subclass with tombstones, `findByName`, `lastSyncedAt`                                                                                                                                     |
 | `groceryItemStore`       | `GroceryItemStore`       | In-memory grocery item query layer; EntityStore subclass with tombstones, `getByListUid`, `getPurchasedByList`                                                                                                                             |
 | `groceryIngredientStore` | `GroceryIngredientStore` | In-memory grocery ingredient lookup (plain class, not EntityStore; keyed by lowercase name; no pending-writes)                                                                                                                             |
+| `mealStore`              | `MealStore`              | In-memory meal query layer (TombstoneEntityStore subclass; `getByRecipeUid`, `lastCookedAt`, `getInDateRange`; `isIngredient` entries excluded from queries)                                                                               |
+| `mealTypeStore`          | `MealTypeStore`          | In-memory meal type query layer (EntityStore subclass; `resolveByName` for case-insensitive lookup, reference catalog like AisleStore)                                                                                                     |
 | `vectorStore`            | `VectorStore \| null`    | Semantic-search index; `null` when embeddings are not configured                                                                                                                                                                           |
 | `notifier`               | `Notifier`               | Notification surface — decouples callers from any one `McpServer` instance                                                                                                                                                                 |
 | `auth`                   | `AuthContext \| null`    | OAuth 2.1 runtime state; `null` in stdio mode (no auth required)                                                                                                                                                                           |
@@ -101,7 +103,7 @@ Reads `config.sync.pendingWriteTtl` and threads it as `pendingWriteTtlMs` into `
 **Construction order is load-bearing:**
 
 1. Authenticate (this is where bad credentials fast-fail — `syncOnce()` swallows everything).
-2. Hydrate caches and stores from disk: recipes (RecipeStore), pantry (PantryStore), aisles (AisleStore, filtered `!deleted`), grocery lists (GroceryListStore), grocery items (GroceryItemStore), grocery ingredients (GroceryIngredientStore, filtered `!deleted`). Categories are not pre-hydrated — the cache deliberately has no `getAllCategories()`.
+2. Hydrate caches and stores from disk: recipes (RecipeStore), pantry (PantryStore), aisles (AisleStore, filtered `!deleted`), grocery lists (GroceryListStore), grocery items (GroceryItemStore), grocery ingredients (GroceryIngredientStore, filtered `!deleted`), meals (MealStore, filtered `!deleted`), meal types (MealTypeStore). Categories are not pre-hydrated — the cache deliberately has no `getAllCategories()`.
    2.5. **`await buildAuthContext(config, cache)`** — returns `null` for stdio; for HTTP, fetches the OIDC discovery document and assembles all OAuth stores and the provider. Throws on discovery failure (fail-fast: no value running HTTP mode if auth is broken).
 3. Construct `SyncEngine` against a placeholder `AppContext` whose `vectorStore: null`. Safe because `SyncEngine` never reads `vectorStore`. The `auth` value from step 2.5 is passed here.
    3.5. **Wire the `sync:complete` → `resourceListChanged` subscriber** immediately after `new SyncEngine()`. This subscriber is permanent (never `off()`'d) and calls `notifier.resourceListChanged()` when `changeType` is `"recipes"`, `"grocery-lists"`, or `"grocery-items"` AND any of `changes.added`, `changes.updated`, or `changes.removedUids` is non-empty. Pantry (`"pantry"`) is excluded — pantry items have no MCP resource surface. The engine emits four events per cycle; the subscriber narrows by `changeType`.
@@ -114,7 +116,7 @@ Reads `config.sync.pendingWriteTtl` and threads it as `pendingWriteTtlMs` into `
 buildMcpServer(app: AppContext): McpServer
 ```
 
-Per-session builder. Constructs a fresh `McpServer`, wraps `app` into a `SessionContext` by adding the server reference, and registers all 26 tools plus the recipe and grocery-list resource families. `registerDiscoverTool` is registered only when `app.vectorStore !== null` (semantic search is opt-in via config).
+Per-session builder. Constructs a fresh `McpServer`, wraps `app` into a `SessionContext` by adding the server reference, and registers all 27 tools plus the recipe and grocery-list resource families. `registerDiscoverTool` is registered only when `app.vectorStore !== null` (semantic search is opt-in via config).
 
 **Called once for stdio; called once per session for HTTP** (Phase 3). Tool registration is pure — each `registerXxxTool` only closes over the per-session `SessionContext` and calls `server.registerTool(...)`. There is no module-level mutable state, so registering the same tool name on N independent server instances is safe.
 
