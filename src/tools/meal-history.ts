@@ -68,11 +68,20 @@ export function registerMealHistoryTool(server: McpServer, ctx: ServerContext): 
           .string()
           .optional()
           .describe("End date (inclusive). Accepts ISO 8601 or yyyy-MM-dd. Overrides the 30-day default."),
+        // Discriminated union: pick exactly one shape. Avoids the ambiguity of
+        // a single overloaded string (e.g. a custom mealtype named "2").
         type: z
-          .string()
+          .union([
+            z.object({ name: z.string() }).describe('Resolve by name, e.g. {"name": "Dinner"}.'),
+            z.object({ uid: z.string() }).describe('Use a mealtype UID directly, e.g. {"uid": "216713D08860..."}.'),
+            z
+              .object({ builtin: z.number().int().min(0).max(3) })
+              .describe('Pick a built-in: 0=Breakfast, 1=Lunch, 2=Dinner, 3=Snacks. e.g. {"builtin": 2}.'),
+          ])
           .optional()
           .describe(
-            'Meal type filter — a name like "Dinner" or an integer string like "2". ' + "Searches all time when set.",
+            "Meal type filter. Searches all time when set. Pick exactly one shape: " +
+              '{"name": "Dinner"} | {"uid": "<mealtype UID>"} | {"builtin": 2}.',
           ),
         offset: z.number().int().nonnegative().optional().default(0).describe("Pagination offset (default: 0)"),
         limit: z
@@ -91,29 +100,27 @@ export function registerMealHistoryTool(server: McpServer, ctx: ServerContext): 
         async (): Promise<CallToolResult> => {
           let typeUid: string | undefined;
           if (args.type !== undefined) {
-            const asInt = Number.parseInt(args.type, 10);
-            if (!Number.isNaN(asInt)) {
+            if ("uid" in args.type) {
+              typeUid = args.type.uid;
+            } else if ("name" in args.type) {
+              const mt = ctx.mealTypeStore.resolveByName(args.type.name);
+              if (mt === undefined) {
+                return textResult(
+                  `Unknown meal type "${args.type.name}". Use list_meal_history without a type filter to see available meal types in context.`,
+                );
+              }
+              typeUid = mt.uid;
+            } else {
+              const builtinInt = args.type.builtin;
               for (const mt of ctx.mealTypeStore.getAll()) {
-                if (mt.originalType === asInt) {
+                if (mt.originalType === builtinInt) {
                   typeUid = mt.uid;
                   break;
                 }
               }
               if (typeUid === undefined) {
-                for (const mt of ctx.mealTypeStore.getAll()) {
-                  if (mt.orderFlag === asInt) {
-                    typeUid = mt.uid;
-                    break;
-                  }
-                }
-              }
-            } else {
-              const mt = ctx.mealTypeStore.resolveByName(args.type);
-              if (mt !== undefined) {
-                typeUid = mt.uid;
-              } else {
                 return textResult(
-                  `Unknown meal type "${args.type}". Use list_meal_history without a type filter to see available meal types in context.`,
+                  `No built-in meal type found with index ${builtinInt.toString()} (expected 0=Breakfast, 1=Lunch, 2=Dinner, 3=Snacks).`,
                 );
               }
             }

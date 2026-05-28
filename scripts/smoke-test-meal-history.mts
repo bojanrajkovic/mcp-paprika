@@ -118,10 +118,10 @@ console.log(getText(test1));
 console.log();
 
 console.log("════════════════════════════════════════════════════════════");
-console.log("TEST 2: list_meal_history filtered by type='Dinner' (last 30 days N/A — use date range)");
+console.log('TEST 2: list_meal_history filtered by type: {name: "Dinner"}');
 console.log("════════════════════════════════════════════════════════════");
 const test2 = (await handlers.get("list_meal_history")!({
-  type: "Dinner",
+  type: { name: "Dinner" },
   since: "2020-09-20",
   until: "2020-09-26",
 })) as { content: Array<{ type: string; text: string }> };
@@ -129,10 +129,10 @@ console.log(getText(test2));
 console.log();
 
 console.log("════════════════════════════════════════════════════════════");
-console.log("TEST 3: list_meal_history filtered by type='0' (Breakfast as integer)");
+console.log("TEST 3: list_meal_history filtered by type: {builtin: 0} (Breakfast)");
 console.log("════════════════════════════════════════════════════════════");
 const test3 = (await handlers.get("list_meal_history")!({
-  type: "0",
+  type: { builtin: 0 },
   since: "2020-09-20",
   until: "2020-09-26",
 })) as { content: Array<{ type: string; text: string }> };
@@ -140,10 +140,10 @@ console.log(getText(test3));
 console.log();
 
 console.log("════════════════════════════════════════════════════════════");
-console.log("TEST 4: list_meal_history with unknown type");
+console.log('TEST 4: list_meal_history with unknown type: {name: "Brunch"}');
 console.log("════════════════════════════════════════════════════════════");
 const test4 = (await handlers.get("list_meal_history")!({
-  type: "Brunch",
+  type: { name: "Brunch" },
 })) as { content: Array<{ type: string; text: string }> };
 console.log(getText(test4));
 console.log();

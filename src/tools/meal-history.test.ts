@@ -93,7 +93,7 @@ describe("list_meal_history tool", () => {
       makeMeal({ name: "Steak", date: "2026-05-20 00:00:00", type: 2, typeUid: "dinner-uid" }),
     ]);
 
-    const result = await callTool("list_meal_history", { type: "Breakfast" });
+    const result = await callTool("list_meal_history", { type: { name: "Breakfast" } });
     const text = getText(result);
     expect(text).toContain("Eggs");
     expect(text).not.toContain("Steak");
@@ -101,17 +101,29 @@ describe("list_meal_history tool", () => {
 
   it("returns error for unknown type name", async () => {
     mealStore.load([]);
-    const result = await callTool("list_meal_history", { type: "Brunch" });
+    const result = await callTool("list_meal_history", { type: { name: "Brunch" } });
     expect(getText(result)).toContain("Unknown meal type");
   });
 
-  it("resolves type by integer string", async () => {
+  it("filters by uid directly", async () => {
     mealStore.load([
       makeMeal({ name: "Eggs", date: "2026-05-20 00:00:00", type: 0, typeUid: "breakfast-uid" }),
       makeMeal({ name: "Steak", date: "2026-05-20 00:00:00", type: 2, typeUid: "dinner-uid" }),
     ]);
 
-    const result = await callTool("list_meal_history", { type: "0" });
+    const result = await callTool("list_meal_history", { type: { uid: "dinner-uid" } });
+    const text = getText(result);
+    expect(text).toContain("Steak");
+    expect(text).not.toContain("Eggs");
+  });
+
+  it("resolves type by builtin integer", async () => {
+    mealStore.load([
+      makeMeal({ name: "Eggs", date: "2026-05-20 00:00:00", type: 0, typeUid: "breakfast-uid" }),
+      makeMeal({ name: "Steak", date: "2026-05-20 00:00:00", type: 2, typeUid: "dinner-uid" }),
+    ]);
+
+    const result = await callTool("list_meal_history", { type: { builtin: 0 } });
     const text = getText(result);
     expect(text).toContain("Eggs");
     expect(text).not.toContain("Steak");
