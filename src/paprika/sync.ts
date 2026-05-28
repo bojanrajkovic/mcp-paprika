@@ -359,7 +359,7 @@ export class SyncEngine {
         this.log.debug({ count: orphanIngredientUids.length }, "removed orphan grocery ingredients");
       }
 
-      // 6.5. MealType sync (replace-all, no pending-writes — reference catalog like aisles)
+      // 7. MealType sync (replace-all, no pending-writes — reference catalog like aisles)
       this.log.debug("fetching meal types");
       const mealTypes = await this._context.client.listMealTypes();
       this.log.debug({ count: mealTypes.length }, "fetched meal types");
@@ -377,7 +377,7 @@ export class SyncEngine {
         this.log.debug({ count: orphanMealTypeUids.length }, "removed orphan meal types");
       }
 
-      // 6.75. Meal sync (replace-all with orphan cleanup, pending-writes filtered)
+      // 8. Meal sync (replace-all with orphan cleanup, pending-writes filtered)
       this.log.debug("fetching meals");
       await syncReplaceAllEntity({
         fetch: () => this._context.client.listMeals(),
@@ -388,7 +388,7 @@ export class SyncEngine {
         log: this.log,
       });
 
-      // 7. Finalization
+      // 9. Finalization
       this.log.debug("flushing cache to disk");
       await this._context.cache.flush();
 

@@ -303,28 +303,27 @@ Background polling loop that keeps local cache and in-memory store synchronized 
    - No `sync:complete` event emitted for ingredients (reference entity, not a content entity)
    - Logs orphan count when > 0
 
-6.5. **MealType sync (replace-all, no pending-writes):**
+7. **MealType sync (replace-all, no pending-writes):**
+   - Fetches `client.listMealTypes()`, removes orphan cached entries, loads into `mealTypeStore`, writes to cache
+   - No pending-write filtering (reference catalog like aisles). No `sync:complete` event.
 
-- Fetches `client.listMealTypes()`, removes orphan cached entries, loads into `mealTypeStore`, writes to cache
-- No pending-write filtering (reference catalog like aisles). No `sync:complete` event.
+8. **Meal sync (replace-all with orphan cleanup, pending-writes filtered):**
+   - Delegated to `syncReplaceAllEntity({ ..., fetch: client.listMeals, store: mealStore, equals: mealsEqual })`.
+   - `mealsEqual()` compares all 10 fields.
+   - No `sync:complete` event (meals have no MCP resource surface).
 
-  6.75. **Meal sync (replace-all with orphan cleanup, pending-writes filtered):**
-
-- Delegated to `syncReplaceAllEntity({ ..., fetch: client.listMeals, store: mealStore, equals: mealsEqual })`.
-- `mealsEqual()` compares all 10 fields.
-- No `sync:complete` event (meals have no MCP resource surface).
-
-7. **Finalization:**
+9. **Finalization:**
    - Flushes cache once: `await cache.flush()`
    - **Sweeps expired pending-writes:** `store.sweepPending()`, `pantryStore.sweepPending()`, `aisleStore.sweepPending()`, `groceryListStore.sweepPending()`, `groceryItemStore.sweepPending()`, `mealStore.sweepPending()`, `mealTypeStore.sweepPending()` — TTL fallback for pending-deletes. `groceryIngredientStore` is NOT swept (no pending-writes).
    - Emits **four** `sync:complete` events per cycle: `RecipeSyncResult` (`changeType: "recipes"`), `PantrySyncResult` (`changeType: "pantry"`), `GroceryListSyncResult` (`changeType: "grocery-lists"`), `GroceryItemSyncResult` (`changeType: "grocery-items"`). All four are emitted even for no-change cycles. The engine does **not** call the notifier — a subscriber in `buildAppContext` does.
    - Logs success: `this.log.info({added, updated, removed}, "sync complete")` — record fans out to connected MCP clients only when `notifyLevel` is `"info"` or lower (default `"warn"` suppresses it; see behavior note below)
 
-8. **Error handling (all wrapped in try/catch):**
-   - Catches any thrown error (API failures, cache errors, store errors)
-   - Logs error: `this.log.error({err}, "sync failed")` — fans out to connected MCP clients automatically via the multistream (error ≥ default `notifyLevel: "warn"`)
-   - Emits `sync:error` with the Error
-   - Never re-throws — returns normally
+10. **Error handling (all wrapped in try/catch):**
+
+- Catches any thrown error (API failures, cache errors, store errors)
+- Logs error: `this.log.error({err}, "sync failed")` — fans out to connected MCP clients automatically via the multistream (error ≥ default `notifyLevel: "warn"`)
+- Emits `sync:error` with the Error
+- Never re-throws — returns normally
 
 **Invariants:**
 
