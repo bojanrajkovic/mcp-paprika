@@ -53,9 +53,12 @@ export function registerReadGroceryListTool(server: McpServer, ctx: ServerContex
       inputSchema: {
         lookup: z
           .union([
-            z.object({ uid: z.string() }).strict().describe('Exact grocery list UID, e.g. {"uid": "..."}.'),
             z
-              .object({ name: z.string() })
+              .object({ uid: z.string().min(1) })
+              .strict()
+              .describe('Exact grocery list UID, e.g. {"uid": "..."}.'),
+            z
+              .object({ name: z.string().min(1) })
               .strict()
               .describe('Grocery list name fuzzy match, e.g. {"name": "Weekly Shopping"}.'),
           ])
