@@ -24,8 +24,16 @@ function parseInputDate(input: string): DateTime | null {
   return null;
 }
 
-function formatMealLine(meal: Meal, typeNames: Map<string, string>): { typeName: string; entry: string } {
-  const typeName = typeNames.get(meal.typeUid) ?? `Type ${meal.type.toString()}`;
+function formatMealLine(
+  meal: Meal,
+  typeNames: Map<string, string>,
+  typeByOriginalType: Map<number, string>,
+): { typeName: string; entry: string } {
+  // typeUid is the primary lookup, but older meals (predating Paprika's
+  // mealtypes catalog) carry typeUid: null and rely on the `type` integer
+  // (which corresponds to MealType.originalType in the catalog).
+  const lookup = meal.typeUid !== null ? typeNames.get(meal.typeUid) : typeByOriginalType.get(meal.type);
+  const typeName = lookup ?? `Type ${meal.type.toString()}`;
   const isFreeform = meal.recipeUid === null || meal.recipeUid === "";
   const entry = isFreeform ? `${meal.name} *(freeform)*` : meal.name;
   return { typeName, entry };
@@ -153,8 +161,10 @@ export function registerMealHistoryTool(server: McpServer, ctx: ServerContext): 
           }
 
           const typeNames = new Map<string, string>();
+          const typeByOriginalType = new Map<number, string>();
           for (const mt of ctx.mealTypeStore.getAll()) {
             typeNames.set(mt.uid, mt.name);
+            typeByOriginalType.set(mt.originalType, mt.name);
           }
 
           const grouped = new Map<string, Array<{ typeName: string; entry: string }>>();
@@ -165,7 +175,7 @@ export function registerMealHistoryTool(server: McpServer, ctx: ServerContext): 
               entries = [];
               grouped.set(dateKey, entries);
             }
-            entries.push(formatMealLine(meal, typeNames));
+            entries.push(formatMealLine(meal, typeNames, typeByOriginalType));
           }
 
           const lines: Array<string> = [];

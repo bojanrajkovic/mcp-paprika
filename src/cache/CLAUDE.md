@@ -185,7 +185,7 @@ In-memory query layer for meals, hydrated by the sync engine. Extends `Tombstone
 | `getInDateRange(opts?)` | Filtered query with optional `since`/`until` (DateTime), `recipeUid`, `typeUid`, `offset`, `limit`; date-descending            |
 | Pending-writes          | `markPendingUpsert`, `markPendingDelete`, `isPendingUpsert`, `isPendingDelete`, `clearPending`, `sweepPending` (all inherited) |
 
-**Note:** `getByRecipeUid` and `lastCookedAt` filter out `isIngredient: true` entries — prep-work entries don't count as "cooked." `getInDateRange` also excludes ingredient entries. The `recipeUid` parameter is `string` (not branded `RecipeUid`) because `Meal.recipeUid` is `string | null`.
+**Note:** `getByRecipeUid` and `lastCookedAt` filter out `isIngredient: true` entries — prep-work entries don't count as "cooked." `getInDateRange` also excludes ingredient entries. The `recipeUid` parameter is `string` (not branded `RecipeUid`) because `Meal.recipeUid` is `string | null`. The `typeUid` filter compares against `Meal.typeUid` which is also `string | null` — meals with `typeUid: null` (older entries predating Paprika's mealtypes catalog) only match when no `typeUid` filter is set.
 
 ### MealTypeStore
 

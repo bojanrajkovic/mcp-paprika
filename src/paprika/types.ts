@@ -367,13 +367,15 @@ export const MealTypeUidSchema = z.string().brand("MealTypeUid");
 export type MealTypeUid = z.infer<typeof MealTypeUidSchema>;
 
 // MealStoredSchema — validates camelCase JSON read back from disk. No transform.
+// `typeUid` is nullable because legacy meals (created before Paprika's mealtypes
+// feature) carry `null` for this field; new meals always carry a real UID.
 export const MealStoredSchema = z.object({
   uid: MealUidSchema,
   recipeUid: z.string().nullable(),
   name: z.string(),
   date: z.string(),
   type: z.number().int().nonnegative(),
-  typeUid: z.string(),
+  typeUid: z.string().nullable(),
   orderFlag: z.number().int(),
   isIngredient: z.boolean(),
   scale: z.string().nullable(),
@@ -390,7 +392,7 @@ export const MealSchema = z
     name: z.string(),
     date: z.string(),
     type: z.number().int().nonnegative(),
-    type_uid: z.string(),
+    type_uid: z.string().nullable(),
     order_flag: z.number().int(),
     is_ingredient: z.boolean(),
     scale: z.string().nullable(),
@@ -407,6 +409,10 @@ export const MealSchema = z
   );
 
 // MealTypeStoredSchema — validates camelCase JSON read back from disk. No transform.
+// `exportTime` accepts both a time string ("18:00:00") and seconds-since-midnight
+// integer (64800). Current Paprika production responses always return integers;
+// the string shape was observed only in older HAR captures and is kept as a
+// defensive union. Not used by the read-only history feature.
 export const MealTypeStoredSchema = z.object({
   uid: MealTypeUidSchema,
   name: z.string(),
@@ -414,7 +420,7 @@ export const MealTypeStoredSchema = z.object({
   orderFlag: z.number().int(),
   originalType: z.number().int(),
   exportAllDay: z.boolean(),
-  exportTime: z.string(),
+  exportTime: z.union([z.string(), z.number()]),
 });
 
 export type MealType = z.infer<typeof MealTypeStoredSchema>;
@@ -428,7 +434,7 @@ export const MealTypeSchema = z
     order_flag: z.number().int(),
     original_type: z.number().int(),
     export_all_day: z.boolean(),
-    export_time: z.string(),
+    export_time: z.union([z.string(), z.number()]),
   })
   .transform(
     ({ order_flag, original_type, export_all_day, export_time, ...rest }): MealType => ({
