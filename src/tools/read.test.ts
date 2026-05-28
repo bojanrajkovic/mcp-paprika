@@ -15,7 +15,7 @@ describe("p2-recipe-crud: read_recipe tool", () => {
       const { server, callTool } = makeTestServer();
       registerReadTool(server, makeCtx(store, server));
 
-      const result = await callTool("read_recipe", { uid: recipe.uid });
+      const result = await callTool("read_recipe", { lookup: { uid: recipe.uid } });
       const text = getText(result);
 
       expect(text).toContain("# Chocolate Cake");
@@ -29,7 +29,7 @@ describe("p2-recipe-crud: read_recipe tool", () => {
       const { server, callTool } = makeTestServer();
       registerReadTool(server, makeCtx(store, server));
 
-      const result = await callTool("read_recipe", { uid: recipe.uid });
+      const result = await callTool("read_recipe", { lookup: { uid: recipe.uid } });
       const text = getText(result);
 
       expect(text).toContain("# Chocolate Cake");
@@ -42,7 +42,7 @@ describe("p2-recipe-crud: read_recipe tool", () => {
       const { server, callTool } = makeTestServer();
       registerReadTool(server, makeCtx(store, server));
 
-      const result = await callTool("read_recipe", { title: "Chocolate Cake" });
+      const result = await callTool("read_recipe", { lookup: { title: "Chocolate Cake" } });
       const text = getText(result);
 
       expect(text).toContain("# Chocolate Cake");
@@ -54,7 +54,7 @@ describe("p2-recipe-crud: read_recipe tool", () => {
       const { server, callTool } = makeTestServer();
       registerReadTool(server, makeCtx(store, server));
 
-      const result = await callTool("read_recipe", { title: "Choco" });
+      const result = await callTool("read_recipe", { lookup: { title: "Choco" } });
       const text = getText(result);
 
       expect(text).toContain("# Chocolate Cake");
@@ -66,7 +66,7 @@ describe("p2-recipe-crud: read_recipe tool", () => {
       const { server, callTool } = makeTestServer();
       registerReadTool(server, makeCtx(store, server));
 
-      const result = await callTool("read_recipe", { title: "late Ca" });
+      const result = await callTool("read_recipe", { lookup: { title: "late Ca" } });
       const text = getText(result);
 
       expect(text).toContain("# Chocolate Cake");
@@ -78,7 +78,7 @@ describe("p2-recipe-crud: read_recipe tool", () => {
       const { server, callTool } = makeTestServer();
       registerReadTool(server, makeCtx(store, server));
 
-      const result = await callTool("read_recipe", { title: "Pasta" });
+      const result = await callTool("read_recipe", { lookup: { title: "Pasta" } });
       const text = getText(result);
 
       // Must contain both names
@@ -96,7 +96,7 @@ describe("p2-recipe-crud: read_recipe tool", () => {
       const { server, callTool } = makeTestServer();
       registerReadTool(server, makeCtx(store, server));
 
-      const result = await callTool("read_recipe", { uid: "nonexistent-uid" });
+      const result = await callTool("read_recipe", { lookup: { uid: "nonexistent-uid" } });
       const text = getText(result);
 
       expect(text.toLowerCase()).toContain("found");
@@ -108,22 +108,10 @@ describe("p2-recipe-crud: read_recipe tool", () => {
       const { server, callTool } = makeTestServer();
       registerReadTool(server, makeCtx(store, server));
 
-      const result = await callTool("read_recipe", { title: "Zyzzyva Surprise" });
+      const result = await callTool("read_recipe", { lookup: { title: "Zyzzyva Surprise" } });
       const text = getText(result);
 
       expect(text.toLowerCase()).toContain("found");
-    });
-
-    it("p2-recipe-crud.AC1.7: neither uid nor title provided returns error message", async () => {
-      const store = new RecipeStore();
-      store.load([makeRecipe()], []);
-      const { server, callTool } = makeTestServer();
-      registerReadTool(server, makeCtx(store, server));
-
-      const result = await callTool("read_recipe", {});
-      const text = getText(result);
-
-      expect(text.toLowerCase()).toContain("provide either");
     });
 
     it("p2-recipe-crud.AC1.8: cold-start (empty store) returns cold-start guard error", async () => {
@@ -131,30 +119,10 @@ describe("p2-recipe-crud: read_recipe tool", () => {
       const { server, callTool } = makeTestServer();
       registerReadTool(server, makeCtx(store, server));
 
-      const result = await callTool("read_recipe", { uid: "anything" });
+      const result = await callTool("read_recipe", { lookup: { uid: "anything" } });
       const text = getText(result);
 
       expect(text.toLowerCase()).toContain("try again");
-    });
-
-    it("p2-recipe-crud.AC1.9: uid takes precedence over title", async () => {
-      const recipe1 = makeRecipe({ name: "First Recipe" });
-      const recipe2 = makeRecipe({ name: "First" });
-      const store = new RecipeStore();
-      store.load([recipe1, recipe2], []);
-      const { server, callTool } = makeTestServer();
-      registerReadTool(server, makeCtx(store, server));
-
-      // Call with recipe1's uid and recipe2's name
-      const result = await callTool("read_recipe", {
-        uid: recipe1.uid,
-        title: recipe2.name,
-      });
-      const text = getText(result);
-
-      // Should return recipe1's content (UID wins)
-      expect(text).toContain("# First Recipe");
-      expect(text).not.toContain("# First\n"); // Avoid matching "First Recipe" as partial
     });
   });
 
@@ -168,7 +136,7 @@ describe("p2-recipe-crud: read_recipe tool", () => {
       const { server, callTool } = makeTestServer();
       registerReadTool(server, makeCtx(store, server, { mealStore }));
 
-      const result = await callTool("read_recipe", { uid: recipe.uid });
+      const result = await callTool("read_recipe", { lookup: { uid: recipe.uid } });
       expect(getText(result)).toContain("**Last Cooked:** 2026-03-15");
     });
   });

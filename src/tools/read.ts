@@ -11,51 +11,48 @@ export function registerReadTool(server: McpServer, ctx: ServerContext): void {
     "read_recipe",
     {
       description:
-        "Read a recipe by UID or title. When both are provided, UID takes precedence. " +
-        "Title lookup is fuzzy (exact → starts-with → contains). Returns a disambiguation " +
-        "list when multiple recipes match the same tier.",
+        "Read a recipe by UID or title. Title lookup is fuzzy (exact → starts-with → contains) " +
+        "and returns a disambiguation list when multiple recipes match the same tier. " +
+        'Pass exactly one shape: {"uid": "..."} or {"title": "..."}.',
       inputSchema: {
-        uid: z.string().optional().describe("Exact recipe UID"),
-        title: z.string().optional().describe("Recipe title (fuzzy match)"),
+        lookup: z
+          .union([
+            z.object({ uid: z.string() }).describe('Exact recipe UID, e.g. {"uid": "..."}.'),
+            z.object({ title: z.string() }).describe('Recipe title fuzzy match, e.g. {"title": "Chocolate Cake"}.'),
+          ])
+          .describe('Pick exactly one shape: {"uid": "..."} or {"title": "..."}.'),
       },
     },
     async (args) => {
-      log.info({ tool: "read_recipe", ...args }, "tool invoked");
+      log.info({ tool: "read_recipe", ...args.lookup }, "tool invoked");
       return coldStartGuard(ctx).match(
         async (): Promise<CallToolResult> => {
-          if (!args.uid && !args.title) {
-            return textResult("Please provide either a uid or a title.");
-          }
-
-          // UID lookup takes precedence when both are provided (AC1.9)
-          if (args.uid) {
-            const recipe = ctx.store.get(RecipeUidSchema.parse(args.uid));
+          if ("uid" in args.lookup) {
+            const recipe = ctx.store.get(RecipeUidSchema.parse(args.lookup.uid));
             if (!recipe) {
-              return textResult(`No recipe found with UID "${args.uid}".`);
+              return textResult(`No recipe found with UID "${args.lookup.uid}".`);
             }
             const categoryNames = ctx.store.resolveCategories(recipe.categories);
             const lastCooked = ctx.mealStore.lastCookedAt(recipe.uid);
             return textResult(recipeToMarkdown(recipe, categoryNames, lastCooked));
           }
 
-          // Title fuzzy search — args.title is defined here
-          const matches = ctx.store.findByName(args.title!);
+          const matches = ctx.store.findByName(args.lookup.title);
 
           if (matches.length === 0) {
-            return textResult(`No recipes found matching "${args.title}".`);
+            return textResult(`No recipes found matching "${args.lookup.title}".`);
           }
 
           if (matches.length === 1) {
-            const recipe = matches[0]!; // safe: length === 1
+            const recipe = matches[0]!;
             const categoryNames = ctx.store.resolveCategories(recipe.categories);
             const lastCooked = ctx.mealStore.lastCookedAt(recipe.uid);
             return textResult(recipeToMarkdown(recipe, categoryNames, lastCooked));
           }
 
-          // Disambiguation list (AC1.4)
           const list = matches.map((r) => `- ${r.name} (UID: ${r.uid})`).join("\n");
           return textResult(
-            `Multiple recipes match "${args.title}":\n${list}\n\nPlease re-invoke with a specific uid.`,
+            `Multiple recipes match "${args.lookup.title}":\n${list}\n\nPlease re-invoke with a specific uid.`,
           );
         },
         (guard) => guard,
