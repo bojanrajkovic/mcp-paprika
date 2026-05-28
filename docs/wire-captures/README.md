@@ -160,8 +160,9 @@ computer-use, decode, sanitize, HAR conversion, and fixture generation.
 Or manually:
 
 1. Capture traffic with `scripts/capture-api.sh`
-2. Decode with `mitmdump -nr <file> -s scripts/decode-capture.py`
-3. Sanitize (strip credentials — see the skill for the full pattern)
-4. Convert to HAR 1.2 with unique `comment` fields per entry
-5. Save to `docs/wire-captures/<entity>.har.json`
-6. Run `pnpm generate:fixtures`
+2. Survey flows: `mitmdump -nr <file> -s scripts/decode-to-har.py`
+3. Write a `<capture>.comments.json` sidecar mapping each flow index to a descriptive comment string (or `"skip"` to drop noise like `/sync/status/`)
+4. Emit the sanitized HAR: `mitmdump -nr <file> -s scripts/decode-to-har.py --set comments=<json> --set out=docs/wire-captures/<entity>.har.json` — the script handles decompression, credential redaction, host normalization, and (critically) preserves native JSON value types byte-equivalently
+5. Run `pnpm generate:fixtures`
+
+`scripts/decode-capture.py` still exists for ad-hoc inspection (prints decoded JSON to stdout per flow). Don't use it as the basis for hand-constructing HAR entries — that's the workflow that produced the export_time / original_type wire-format bugs surfaced in commits a32e660 and 8d37480. Use `decode-to-har.py` instead.

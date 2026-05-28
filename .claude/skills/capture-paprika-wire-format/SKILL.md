@@ -215,26 +215,37 @@ Before the full capture, verify the pipeline works:
 
 ### Phase 6: Convert to HAR
 
-Convert sanitized entries to HAR 1.2 format:
+Use `scripts/decode-to-har.py` — a mitmproxy addon that emits HAR 1.2 directly. Your job is to write a JSON sidecar mapping each captured flow to a comment name (or `"skip"`).
 
-- Each entry gets a descriptive `comment` field (the name)
-- Request body goes in `entry.request.postData.text` as JSON string
-- Response body goes in `entry.response.content.text` as JSON string
-- Authorization header value set to `[REDACTED]`
-- Save to `docs/wire-captures/<entity>.har.json`
+**Step 1 — survey the flows:**
 
-**CRITICAL: preserve native JSON types from the decoder output VERBATIM.** Do NOT reformat any values during HAR construction:
+```bash
+mitmdump -nr /tmp/claude-<session-id>/<entity>-capture.mitm \
+  -s scripts/decode-to-har.py 2>&1 | grep -E '^( *[0-9]+:|=|[0-9]+ paprika)'
+```
 
-- Integers stay integers — do NOT convert seconds-since-midnight (`28800`) to time strings (`"08:00:00"`), Unix timestamps to ISO dates, or numeric IDs to padded strings.
-- Strings stay strings — do NOT normalize date formats, casing, or whitespace.
-- Nulls stay nulls — do NOT substitute empty strings, empty arrays, or omit the field.
-- Field order may differ from the source (JSON has no canonical order), but every key-value pair must round-trip byte-equivalently under `JSON.parse(JSON.stringify(...))`.
+This prints a numbered list of every paprikaapp.com flow in the capture (non-paprika flows are ignored entirely). Example output:
 
-The HAR is supposed to be a **faithful wire recording**. Any "helpful" reformatting silently corrupts the ground truth that schemas, tests, and drift detection rely on. If you find yourself thinking "this would be more readable as X" — stop. Preserve the wire shape.
+```
+=== Flow → URL mapping (use this to write the .comments.json) ===
+  0: # GET https://www.paprikaapp.com/api/v2/sync/status/
+  1: # POST https://www.paprikaapp.com/api/v2/statistics/
+  2: # POST https://www.paprikaapp.com/api/v2/sync/mealtypes/
+  3: # POST https://www.paprikaapp.com/api/v2/sync/notify/
+  4: # POST https://www.paprikaapp.com/api/v2/sync/mealtypes/
+```
 
-A subtle failure mode: when an LLM (you) constructs the HAR body string by hand, it's easy to accidentally quote numbers that look semantically like times, IDs, or dates. Mechanically copy values from the decoder JSON output; don't paraphrase.
+**Step 2 — write the comments sidecar** to `/tmp/claude-<session-id>/<entity>-capture.comments.json`. Use `"skip"` for status/statistics/notify noise; use a descriptive name for everything else:
 
-Verify after writing the HAR: `python3 -c "import json; har = json.load(open('docs/wire-captures/<file>.har.json')); print(json.loads(har['log']['entries'][0]['response']['content']['text']))"` — eyeball the types against the decoder output.
+```json
+{
+  "0": "skip",
+  "1": "skip",
+  "2": "create mealtype ([mcp-cap] Brunch — custom type with original_type: null)",
+  "3": "skip",
+  "4": "delete mealtype ([mcp-cap] Brunch soft-delete)"
+}
+```
 
 **Comment naming convention:**
 
@@ -245,6 +256,36 @@ Verify after writing the HAR: `python3 -c "import json; har = json.load(open('do
 - `cascade delete <children> after <parent> deletion` — for cascading deletes
 
 **Comments must be unique within a HAR file** — the codegen keys fixtures by comment.
+
+**Step 3 — emit the HAR:**
+
+```bash
+mitmdump -nr /tmp/claude-<session-id>/<entity>-capture.mitm \
+  -s scripts/decode-to-har.py \
+  --set comments=/tmp/claude-<session-id>/<entity>-capture.comments.json \
+  --set out=docs/wire-captures/<entity>.har.json
+```
+
+**Step 4 — verify:**
+
+```bash
+# Confirm value types preserved (eyeball integers, nulls, booleans):
+python3 -c "
+import json
+h = json.load(open('docs/wire-captures/<entity>.har.json'))
+for e in h['log']['entries']:
+    print(e['comment'])
+    if e['request'].get('postData'):
+        body = json.loads(e['request']['postData']['text'])
+        print(' ', body if not isinstance(body, list) else body[0])
+"
+
+# Confirm no credentials leaked:
+grep -iE "(eyJ[A-Za-z0-9_-]{10,}|bearer |brajkov|coderinserepeat|password)" docs/wire-captures/<entity>.har.json
+# MUST return empty
+```
+
+**Do NOT hand-construct HAR entries from decoder output.** The script is the only sanctioned path — it preserves native JSON types verbatim and handles redaction. Hand-construction has historically introduced silent value corruption (integers quoted as time strings, etc.).
 
 ### Phase 7: Generate Typed Fixtures
 
@@ -311,15 +352,16 @@ curl -sf -H "Authorization: Bearer $(curl -sf -X POST \
 
 ## Quick Reference
 
-| Phase    | Key Command                                             | Output                                     |
-| -------- | ------------------------------------------------------- | ------------------------------------------ |
-| Setup    | `networksetup -setautoproxystate "$NETWORK_SERVICE" on` | PAC proxy active                           |
-| Capture  | computer-use MCP driving Paprika UI                     | `.mitm` file                               |
-| Decode   | `mitmdump -nr <file> -s scripts/decode-capture.py`      | JSON to stdout                             |
-| Sanitize | Strip REDACT_PATHS + JWT + email patterns               | Clean JSON                                 |
-| HAR      | Convert to HAR 1.2 with `comment` names                 | `docs/wire-captures/<name>.har.json`       |
-| Generate | `pnpm generate:fixtures`                                | `src/__fixtures__/wire-captures/<name>.ts` |
-| Validate | `pnpm typecheck && pnpm lint && pnpm test`              | All green                                  |
+| Phase    | Key Command                                                                                                          | Output                                     |
+| -------- | -------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
+| Setup    | `networksetup -setautoproxystate "$NETWORK_SERVICE" on`                                                              | PAC proxy active                           |
+| Capture  | computer-use MCP driving Paprika UI                                                                                  | `.mitm` file                               |
+| Inspect  | `mitmdump -nr <file> -s scripts/decode-capture.py`                                                                   | Decoded JSON to stdout (optional)          |
+| Survey   | `mitmdump -nr <file> -s scripts/decode-to-har.py`                                                                    | Flow → URL mapping to stderr               |
+| Comments | Write `<capture>.comments.json` mapping flow indices → comment names (or `"skip"`)                                   | JSON sidecar                               |
+| HAR      | `mitmdump -nr <file> -s scripts/decode-to-har.py --set comments=<json> --set out=docs/wire-captures/<name>.har.json` | `docs/wire-captures/<name>.har.json`       |
+| Generate | `pnpm generate:fixtures`                                                                                             | `src/__fixtures__/wire-captures/<name>.ts` |
+| Validate | `pnpm typecheck && pnpm lint && pnpm test`                                                                           | All green                                  |
 
 ## Common Mistakes
 
