@@ -78,8 +78,8 @@ formats:
 import { fixture } from "../__fixtures__/wire-captures/meals.js";
 
 const f = fixture("add recipe meal: (Not) Butter Chicken as Breakfast on 2026-05-26");
-const body = f.requestBody as Array<Array<Record<string, unknown>>>;
-const meal = body[0]![0]!;
+const body = f.requestBody as Array<Record<string, unknown>>;
+const meal = body[0]!;
 
 // meal is the real wire shape:
 // { uid, recipe_uid, name, date, type, type_uid, order_flag, deleted }

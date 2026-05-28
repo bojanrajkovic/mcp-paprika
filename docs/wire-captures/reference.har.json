@@ -210,7 +210,7 @@
           "bodySize": 210,
           "postData": {
             "mimeType": "application/json",
-            "text": "[{\"install_uid\": \"00000000-0000-4000-a000-000000000000\", \"is_activating_now\": false, \"os_version\": \"macOS 26.4.1\", \"app_version\": \"3.8.4\", \"os\": \"macOS\", \"sync_email\": \"[REDACTED_EMAIL]\", \"is_activated\": true}]"
+            "text": "{\"install_uid\": \"00000000-0000-4000-a000-000000000000\", \"is_activating_now\": false, \"os_version\": \"macOS 26.4.1\", \"app_version\": \"3.8.4\", \"os\": \"macOS\", \"sync_email\": \"[REDACTED_EMAIL]\", \"is_activated\": true}"
           }
         },
         "response": {

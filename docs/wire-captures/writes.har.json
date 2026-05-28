@@ -306,7 +306,7 @@
           "bodySize": 175,
           "postData": {
             "mimeType": "application/octet-stream",
-            "text": "[[{\"parent_uid\": \"81ED2F6A-7128-4915-90D3-484C26F3A564\", \"uid\": \"2D6BB5F8-909E-4B2B-9E67-9668C2737639\", \"name\": \"[mcp-cap] Test Category\", \"order_flag\": 0, \"deleted\": false}]]"
+            "text": "[{\"parent_uid\": \"81ED2F6A-7128-4915-90D3-484C26F3A564\", \"uid\": \"2D6BB5F8-909E-4B2B-9E67-9668C2737639\", \"name\": \"[mcp-cap] Test Category\", \"order_flag\": 0, \"deleted\": false}]"
           }
         },
         "response": {
@@ -360,7 +360,7 @@
           "bodySize": 903,
           "postData": {
             "mimeType": "application/octet-stream",
-            "text": "[{\"rating\": 0, \"nutritional_info\": \"\", \"photo\": null, \"in_trash\": false, \"deleted\": false, \"servings\": \"4\", \"ingredients\": \"2 cups flour\\n1 cup sugar\\n3 eggs\\n1 tsp vanilla\", \"prep_time\": \"15 min\", \"photo_hash\": null, \"name\": \"[mcp-cap] Test Recipe\", \"directions\": \"Step 1: Mix dry ingredients.\\nStep 2: Add wet ingredients.\\nStep 3: Bake at 350F for 25 minutes.\", \"source_url\": \"https://example.com/recipe\", \"notes\": \"[mcp-cap] test notes for wire capture\", \"uid\": \"FEA35DA4-3D6A-4A50-93CA-0B707AAAA52C\", \"description\": \"A test recipe for wire capture\", \"created\": \"2026-05-26 22:14:24\", \"cook_time\": \"30 min\", \"scale\": null, \"photo_large\": null, \"total_time\": \"\", \"is_pinned\": false, \"source\": \"Test Source\", \"hash\": \"3C2CF02F8F771445BEB487A837CD3C4EF4FE59EAAF28BE0956197D9F9E3D34FB\", \"on_favorites\": false, \"difficulty\": \"\", \"categories\": [\"2D6BB5F8-909E-4B2B-9E67-9668C2737639\"], \"image_url\": null}]"
+            "text": "{\"rating\": 0, \"nutritional_info\": \"\", \"photo\": null, \"in_trash\": false, \"deleted\": false, \"servings\": \"4\", \"ingredients\": \"2 cups flour\\n1 cup sugar\\n3 eggs\\n1 tsp vanilla\", \"prep_time\": \"15 min\", \"photo_hash\": null, \"name\": \"[mcp-cap] Test Recipe\", \"directions\": \"Step 1: Mix dry ingredients.\\nStep 2: Add wet ingredients.\\nStep 3: Bake at 350F for 25 minutes.\", \"source_url\": \"https://example.com/recipe\", \"notes\": \"[mcp-cap] test notes for wire capture\", \"uid\": \"FEA35DA4-3D6A-4A50-93CA-0B707AAAA52C\", \"description\": \"A test recipe for wire capture\", \"created\": \"2026-05-26 22:14:24\", \"cook_time\": \"30 min\", \"scale\": null, \"photo_large\": null, \"total_time\": \"\", \"is_pinned\": false, \"source\": \"Test Source\", \"hash\": \"3C2CF02F8F771445BEB487A837CD3C4EF4FE59EAAF28BE0956197D9F9E3D34FB\", \"on_favorites\": false, \"difficulty\": \"\", \"categories\": [\"2D6BB5F8-909E-4B2B-9E67-9668C2737639\"], \"image_url\": null}"
           }
         },
         "response": {
@@ -414,7 +414,7 @@
           "bodySize": 909,
           "postData": {
             "mimeType": "application/octet-stream",
-            "text": "[{\"nutritional_info\": \"\", \"rating\": 4, \"photo\": null, \"in_trash\": false, \"deleted\": false, \"servings\": \"4\", \"ingredients\": \"2 cups flour\\n1 cup sugar\\n3 eggs\\n1 tsp vanilla\", \"prep_time\": \"15 min\", \"photo_hash\": null, \"name\": \"[mcp-cap] Test Recipe\", \"directions\": \"Step 1: Mix dry ingredients.\\nStep 2: Add wet ingredients.\\nStep 3: Bake at 350F for 25 minutes.\", \"source_url\": \"https://example.com/recipe\", \"notes\": \"[mcp-cap] test notes for wire capture\", \"uid\": \"FEA35DA4-3D6A-4A50-93CA-0B707AAAA52C\", \"description\": \"A test recipe for wire capture\", \"created\": \"2026-05-26 22:14:24\", \"cook_time\": \"30 min\", \"scale\": null, \"photo_large\": null, \"total_time\": \"\", \"is_pinned\": false, \"source\": \"Test Source\", \"hash\": \"9B124B2F8AC9AE6E2C810396A485D7E73615DA25207118A564BDDF7DFD9FF371\", \"on_favorites\": false, \"difficulty\": \"Medium\", \"categories\": [\"2D6BB5F8-909E-4B2B-9E67-9668C2737639\"], \"image_url\": null}]"
+            "text": "{\"nutritional_info\": \"\", \"rating\": 4, \"photo\": null, \"in_trash\": false, \"deleted\": false, \"servings\": \"4\", \"ingredients\": \"2 cups flour\\n1 cup sugar\\n3 eggs\\n1 tsp vanilla\", \"prep_time\": \"15 min\", \"photo_hash\": null, \"name\": \"[mcp-cap] Test Recipe\", \"directions\": \"Step 1: Mix dry ingredients.\\nStep 2: Add wet ingredients.\\nStep 3: Bake at 350F for 25 minutes.\", \"source_url\": \"https://example.com/recipe\", \"notes\": \"[mcp-cap] test notes for wire capture\", \"uid\": \"FEA35DA4-3D6A-4A50-93CA-0B707AAAA52C\", \"description\": \"A test recipe for wire capture\", \"created\": \"2026-05-26 22:14:24\", \"cook_time\": \"30 min\", \"scale\": null, \"photo_large\": null, \"total_time\": \"\", \"is_pinned\": false, \"source\": \"Test Source\", \"hash\": \"9B124B2F8AC9AE6E2C810396A485D7E73615DA25207118A564BDDF7DFD9FF371\", \"on_favorites\": false, \"difficulty\": \"Medium\", \"categories\": [\"2D6BB5F8-909E-4B2B-9E67-9668C2737639\"], \"image_url\": null}"
           }
         },
         "response": {
@@ -576,7 +576,7 @@
           "bodySize": 1047,
           "postData": {
             "mimeType": "application/octet-stream",
-            "text": "[{\"servings\": \"4\", \"on_favorites\": false, \"rating\": 4, \"categories\": [\"2D6BB5F8-909E-4B2B-9E67-9668C2737639\"], \"nutritional_info\": \"\", \"difficulty\": \"Medium\", \"image_url\": null, \"directions\": \"Step 1: Mix dry ingredients.\\nStep 2: Add wet ingredients.\\nStep 3: Bake at 350F for 25 minutes.\", \"deleted\": false, \"prep_time\": \"15 min\", \"name\": \"[mcp-cap] Test Recipe\", \"source_url\": \"https://example.com/recipe\", \"photo_hash\": \"B5B18E4BB32C067DD5E8CA944A9A3146C05396F2C637859E217825BBFD78256C\", \"description\": \"A test recipe for wire capture\", \"ingredients\": \"2 cups flour\\n1 cup sugar\\n3 eggs\\n1 tsp vanilla\", \"cook_time\": \"30 min\", \"in_trash\": false, \"scale\": null, \"created\": \"2026-05-26 22:14:24\", \"uid\": \"FEA35DA4-3D6A-4A50-93CA-0B707AAAA52C\", \"is_pinned\": false, \"total_time\": \"\", \"source\": \"Test Source\", \"notes\": \"[mcp-cap] test notes for wire capture\", \"photo_large\": \"05D19FA6-0114-4C02-AE07-46CBBC8B8C8D.jpg\", \"hash\": \"0EA71CB7E8660F6FAB6457004E5A5572C45C06001E7E2E0BD48826156BA0E88F\", \"photo\": \"8CE826E9-3C64-473F-B431-BD60C226749D.jpg\"}]"
+            "text": "{\"servings\": \"4\", \"on_favorites\": false, \"rating\": 4, \"categories\": [\"2D6BB5F8-909E-4B2B-9E67-9668C2737639\"], \"nutritional_info\": \"\", \"difficulty\": \"Medium\", \"image_url\": null, \"directions\": \"Step 1: Mix dry ingredients.\\nStep 2: Add wet ingredients.\\nStep 3: Bake at 350F for 25 minutes.\", \"deleted\": false, \"prep_time\": \"15 min\", \"name\": \"[mcp-cap] Test Recipe\", \"source_url\": \"https://example.com/recipe\", \"photo_hash\": \"B5B18E4BB32C067DD5E8CA944A9A3146C05396F2C637859E217825BBFD78256C\", \"description\": \"A test recipe for wire capture\", \"ingredients\": \"2 cups flour\\n1 cup sugar\\n3 eggs\\n1 tsp vanilla\", \"cook_time\": \"30 min\", \"in_trash\": false, \"scale\": null, \"created\": \"2026-05-26 22:14:24\", \"uid\": \"FEA35DA4-3D6A-4A50-93CA-0B707AAAA52C\", \"is_pinned\": false, \"total_time\": \"\", \"source\": \"Test Source\", \"notes\": \"[mcp-cap] test notes for wire capture\", \"photo_large\": \"05D19FA6-0114-4C02-AE07-46CBBC8B8C8D.jpg\", \"hash\": \"0EA71CB7E8660F6FAB6457004E5A5572C45C06001E7E2E0BD48826156BA0E88F\", \"photo\": \"8CE826E9-3C64-473F-B431-BD60C226749D.jpg\"}"
           }
         },
         "response": {
@@ -630,7 +630,7 @@
           "bodySize": 282,
           "postData": {
             "mimeType": "application/octet-stream",
-            "text": "[{\"filename\": \"05D19FA6-0114-4C02-AE07-46CBBC8B8C8D.jpg\", \"uid\": \"05D19FA6-0114-4C02-AE07-46CBBC8B8C8D\", \"order_flag\": 0, \"name\": \"1\", \"hash\": \"67BF77DD6E1341A2C63F0C7D5F8A8DCB3A4C9997565994CC04C46D790780DA13\", \"recipe_uid\": \"FEA35DA4-3D6A-4A50-93CA-0B707AAAA52C\", \"deleted\": true}]"
+            "text": "{\"filename\": \"05D19FA6-0114-4C02-AE07-46CBBC8B8C8D.jpg\", \"uid\": \"05D19FA6-0114-4C02-AE07-46CBBC8B8C8D\", \"order_flag\": 0, \"name\": \"1\", \"hash\": \"67BF77DD6E1341A2C63F0C7D5F8A8DCB3A4C9997565994CC04C46D790780DA13\", \"recipe_uid\": \"FEA35DA4-3D6A-4A50-93CA-0B707AAAA52C\", \"deleted\": true}"
           }
         },
         "response": {
@@ -684,7 +684,7 @@
           "bodySize": 1046,
           "postData": {
             "mimeType": "application/octet-stream",
-            "text": "[{\"servings\": \"4\", \"on_favorites\": false, \"rating\": 4, \"categories\": [\"2D6BB5F8-909E-4B2B-9E67-9668C2737639\"], \"nutritional_info\": \"\", \"difficulty\": \"Medium\", \"image_url\": null, \"directions\": \"Step 1: Mix dry ingredients.\\nStep 2: Add wet ingredients.\\nStep 3: Bake at 350F for 25 minutes.\", \"deleted\": false, \"name\": \"[mcp-cap] Test Recipe\", \"prep_time\": \"15 min\", \"source_url\": \"https://example.com/recipe\", \"photo_hash\": \"B5B18E4BB32C067DD5E8CA944A9A3146C05396F2C637859E217825BBFD78256C\", \"description\": \"A test recipe for wire capture\", \"ingredients\": \"2 cups flour\\n1 cup sugar\\n3 eggs\\n1 tsp vanilla\", \"cook_time\": \"30 min\", \"in_trash\": true, \"scale\": null, \"created\": \"2026-05-26 22:14:24\", \"uid\": \"FEA35DA4-3D6A-4A50-93CA-0B707AAAA52C\", \"is_pinned\": false, \"total_time\": \"\", \"source\": \"Test Source\", \"notes\": \"[mcp-cap] test notes for wire capture\", \"photo_large\": \"05D19FA6-0114-4C02-AE07-46CBBC8B8C8D.jpg\", \"hash\": \"1EEA23962C08A6537EC8841B234F0162A45E600427F0CC81605AE2347AC360C4\", \"photo\": \"8CE826E9-3C64-473F-B431-BD60C226749D.jpg\"}]"
+            "text": "{\"servings\": \"4\", \"on_favorites\": false, \"rating\": 4, \"categories\": [\"2D6BB5F8-909E-4B2B-9E67-9668C2737639\"], \"nutritional_info\": \"\", \"difficulty\": \"Medium\", \"image_url\": null, \"directions\": \"Step 1: Mix dry ingredients.\\nStep 2: Add wet ingredients.\\nStep 3: Bake at 350F for 25 minutes.\", \"deleted\": false, \"name\": \"[mcp-cap] Test Recipe\", \"prep_time\": \"15 min\", \"source_url\": \"https://example.com/recipe\", \"photo_hash\": \"B5B18E4BB32C067DD5E8CA944A9A3146C05396F2C637859E217825BBFD78256C\", \"description\": \"A test recipe for wire capture\", \"ingredients\": \"2 cups flour\\n1 cup sugar\\n3 eggs\\n1 tsp vanilla\", \"cook_time\": \"30 min\", \"in_trash\": true, \"scale\": null, \"created\": \"2026-05-26 22:14:24\", \"uid\": \"FEA35DA4-3D6A-4A50-93CA-0B707AAAA52C\", \"is_pinned\": false, \"total_time\": \"\", \"source\": \"Test Source\", \"notes\": \"[mcp-cap] test notes for wire capture\", \"photo_large\": \"05D19FA6-0114-4C02-AE07-46CBBC8B8C8D.jpg\", \"hash\": \"1EEA23962C08A6537EC8841B234F0162A45E600427F0CC81605AE2347AC360C4\", \"photo\": \"8CE826E9-3C64-473F-B431-BD60C226749D.jpg\"}"
           }
         },
         "response": {
@@ -715,7 +715,7 @@
         }
       },
       {
-        "comment": "hard-delete recipe (empty trash — both in_trash + deleted)",
+        "comment": "hard-delete recipe (empty trash \u2014 both in_trash + deleted)",
         "startedDateTime": "2026-05-26T22:00:00.000000+00:00",
         "time": 0,
         "request": {
@@ -738,7 +738,7 @@
           "bodySize": 1046,
           "postData": {
             "mimeType": "application/octet-stream",
-            "text": "[{\"servings\": \"4\", \"on_favorites\": false, \"rating\": 4, \"categories\": [\"2D6BB5F8-909E-4B2B-9E67-9668C2737639\"], \"nutritional_info\": \"\", \"difficulty\": \"Medium\", \"image_url\": null, \"directions\": \"Step 1: Mix dry ingredients.\\nStep 2: Add wet ingredients.\\nStep 3: Bake at 350F for 25 minutes.\", \"deleted\": true, \"name\": \"[mcp-cap] Test Recipe\", \"prep_time\": \"15 min\", \"source_url\": \"https://example.com/recipe\", \"photo_hash\": \"B5B18E4BB32C067DD5E8CA944A9A3146C05396F2C637859E217825BBFD78256C\", \"description\": \"A test recipe for wire capture\", \"ingredients\": \"2 cups flour\\n1 cup sugar\\n3 eggs\\n1 tsp vanilla\", \"cook_time\": \"30 min\", \"in_trash\": true, \"scale\": null, \"created\": \"2026-05-26 22:14:24\", \"uid\": \"FEA35DA4-3D6A-4A50-93CA-0B707AAAA52C\", \"is_pinned\": false, \"total_time\": \"\", \"source\": \"Test Source\", \"notes\": \"[mcp-cap] test notes for wire capture\", \"photo_large\": \"05D19FA6-0114-4C02-AE07-46CBBC8B8C8D.jpg\", \"hash\": \"1EEA23962C08A6537EC8841B234F0162A45E600427F0CC81605AE2347AC360C4\", \"photo\": \"8CE826E9-3C64-473F-B431-BD60C226749D.jpg\"}]"
+            "text": "{\"servings\": \"4\", \"on_favorites\": false, \"rating\": 4, \"categories\": [\"2D6BB5F8-909E-4B2B-9E67-9668C2737639\"], \"nutritional_info\": \"\", \"difficulty\": \"Medium\", \"image_url\": null, \"directions\": \"Step 1: Mix dry ingredients.\\nStep 2: Add wet ingredients.\\nStep 3: Bake at 350F for 25 minutes.\", \"deleted\": true, \"name\": \"[mcp-cap] Test Recipe\", \"prep_time\": \"15 min\", \"source_url\": \"https://example.com/recipe\", \"photo_hash\": \"B5B18E4BB32C067DD5E8CA944A9A3146C05396F2C637859E217825BBFD78256C\", \"description\": \"A test recipe for wire capture\", \"ingredients\": \"2 cups flour\\n1 cup sugar\\n3 eggs\\n1 tsp vanilla\", \"cook_time\": \"30 min\", \"in_trash\": true, \"scale\": null, \"created\": \"2026-05-26 22:14:24\", \"uid\": \"FEA35DA4-3D6A-4A50-93CA-0B707AAAA52C\", \"is_pinned\": false, \"total_time\": \"\", \"source\": \"Test Source\", \"notes\": \"[mcp-cap] test notes for wire capture\", \"photo_large\": \"05D19FA6-0114-4C02-AE07-46CBBC8B8C8D.jpg\", \"hash\": \"1EEA23962C08A6537EC8841B234F0162A45E600427F0CC81605AE2347AC360C4\", \"photo\": \"8CE826E9-3C64-473F-B431-BD60C226749D.jpg\"}"
           }
         },
         "response": {
@@ -792,7 +792,7 @@
           "bodySize": 178,
           "postData": {
             "mimeType": "application/octet-stream",
-            "text": "[[{\"uid\": \"2D6BB5F8-909E-4B2B-9E67-9668C2737639\", \"deleted\": false, \"order_flag\": 0, \"name\": \"[mcp-cap] Renamed Category\", \"parent_uid\": \"81ED2F6A-7128-4915-90D3-484C26F3A564\"}]]"
+            "text": "[{\"uid\": \"2D6BB5F8-909E-4B2B-9E67-9668C2737639\", \"deleted\": false, \"order_flag\": 0, \"name\": \"[mcp-cap] Renamed Category\", \"parent_uid\": \"81ED2F6A-7128-4915-90D3-484C26F3A564\"}]"
           }
         },
         "response": {
@@ -846,7 +846,7 @@
           "bodySize": 177,
           "postData": {
             "mimeType": "application/octet-stream",
-            "text": "[[{\"name\": \"[mcp-cap] Renamed Category\", \"uid\": \"2D6BB5F8-909E-4B2B-9E67-9668C2737639\", \"deleted\": true, \"parent_uid\": \"81ED2F6A-7128-4915-90D3-484C26F3A564\", \"order_flag\": 0}]]"
+            "text": "[{\"name\": \"[mcp-cap] Renamed Category\", \"uid\": \"2D6BB5F8-909E-4B2B-9E67-9668C2737639\", \"deleted\": true, \"parent_uid\": \"81ED2F6A-7128-4915-90D3-484C26F3A564\", \"order_flag\": 0}]"
           }
         },
         "response": {
@@ -900,7 +900,7 @@
           "bodySize": 341,
           "postData": {
             "mimeType": "application/octet-stream",
-            "text": "[[{\"ingredient\": \"mcp-cap Test Flour\", \"uid\": \"AD167487-A223-48AE-9A02-4D460B106D28\", \"deleted\": false, \"in_stock\": true, \"aisle_uid\": \"AFADC523FB4CFA907914740E22016338CBD90DDFA42177B87F9E46F2B376EB28\", \"has_expiration\": false, \"purchase_date\": \"2026-05-26 00:00:00\", \"aisle\": \"Breads and Cereals\", \"quantity\": \"\", \"expiration_date\": null}]]"
+            "text": "[{\"ingredient\": \"mcp-cap Test Flour\", \"uid\": \"AD167487-A223-48AE-9A02-4D460B106D28\", \"deleted\": false, \"in_stock\": true, \"aisle_uid\": \"AFADC523FB4CFA907914740E22016338CBD90DDFA42177B87F9E46F2B376EB28\", \"has_expiration\": false, \"purchase_date\": \"2026-05-26 00:00:00\", \"aisle\": \"Breads and Cereals\", \"quantity\": \"\", \"expiration_date\": null}]"
           }
         },
         "response": {
@@ -954,7 +954,7 @@
           "bodySize": 345,
           "postData": {
             "mimeType": "application/octet-stream",
-            "text": "[[{\"deleted\": false, \"uid\": \"AD167487-A223-48AE-9A02-4D460B106D28\", \"has_expiration\": false, \"purchase_date\": \"2026-05-26 00:00:00\", \"expiration_date\": null, \"ingredient\": \"[mcp-cap] Edited Flour\", \"in_stock\": true, \"aisle_uid\": \"AFADC523FB4CFA907914740E22016338CBD90DDFA42177B87F9E46F2B376EB28\", \"quantity\": \"\", \"aisle\": \"Breads and Cereals\"}]]"
+            "text": "[{\"deleted\": false, \"uid\": \"AD167487-A223-48AE-9A02-4D460B106D28\", \"has_expiration\": false, \"purchase_date\": \"2026-05-26 00:00:00\", \"expiration_date\": null, \"ingredient\": \"[mcp-cap] Edited Flour\", \"in_stock\": true, \"aisle_uid\": \"AFADC523FB4CFA907914740E22016338CBD90DDFA42177B87F9E46F2B376EB28\", \"quantity\": \"\", \"aisle\": \"Breads and Cereals\"}]"
           }
         },
         "response": {
@@ -1008,7 +1008,7 @@
           "bodySize": 348,
           "postData": {
             "mimeType": "application/octet-stream",
-            "text": "[[{\"quantity\": \"5 lb\", \"expiration_date\": null, \"ingredient\": \"[mcp-cap] Edited Flour\", \"aisle_uid\": \"AFADC523FB4CFA907914740E22016338CBD90DDFA42177B87F9E46F2B376EB28\", \"has_expiration\": false, \"deleted\": true, \"purchase_date\": \"2026-05-26 00:00:00\", \"aisle\": \"Breads and Cereals\", \"in_stock\": true, \"uid\": \"AD167487-A223-48AE-9A02-4D460B106D28\"}]]"
+            "text": "[{\"quantity\": \"5 lb\", \"expiration_date\": null, \"ingredient\": \"[mcp-cap] Edited Flour\", \"aisle_uid\": \"AFADC523FB4CFA907914740E22016338CBD90DDFA42177B87F9E46F2B376EB28\", \"has_expiration\": false, \"deleted\": true, \"purchase_date\": \"2026-05-26 00:00:00\", \"aisle\": \"Breads and Cereals\", \"in_stock\": true, \"uid\": \"AD167487-A223-48AE-9A02-4D460B106D28\"}]"
           }
         },
         "response": {
@@ -1062,7 +1062,7 @@
           "bodySize": 167,
           "postData": {
             "mimeType": "application/octet-stream",
-            "text": "[[{\"order_flag\": 1, \"is_default\": false, \"reminders_list\": \"Paprika\", \"deleted\": false, \"uid\": \"90ACAF2C-B0E9-4D46-A50A-3F00C9DF360D\", \"name\": \"[mcp-cap] Test List\"}]]"
+            "text": "[{\"order_flag\": 1, \"is_default\": false, \"reminders_list\": \"Paprika\", \"deleted\": false, \"uid\": \"90ACAF2C-B0E9-4D46-A50A-3F00C9DF360D\", \"name\": \"[mcp-cap] Test List\"}]"
           }
         },
         "response": {
@@ -1116,7 +1116,7 @@
           "bodySize": 426,
           "postData": {
             "mimeType": "application/octet-stream",
-            "text": "[[{\"aisle\": \"Canned and Jar Goods\", \"quantity\": \"\", \"list_uid\": \"9E12FCF54A89FC52EA8E1C5DA1BDA62A6617ED8BDC2AEB6F291B93C7A399F6F6\", \"order_flag\": 0, \"name\": \"[mcp-cap] Milk\", \"recipe\": null, \"aisle_uid\": \"02C70C54CAA4A4F7A7CAE38B5169974AF7B10941C8659E805EFC31F0A71314B8\", \"ingredient\": \"mcp-cap Milk\", \"deleted\": false, \"purchased\": false, \"uid\": \"0A91A12D-74D3-4987-BBBE-C36D3FABF505\", \"separate\": false, \"instruction\": \"\"}]]"
+            "text": "[{\"aisle\": \"Canned and Jar Goods\", \"quantity\": \"\", \"list_uid\": \"9E12FCF54A89FC52EA8E1C5DA1BDA62A6617ED8BDC2AEB6F291B93C7A399F6F6\", \"order_flag\": 0, \"name\": \"[mcp-cap] Milk\", \"recipe\": null, \"aisle_uid\": \"02C70C54CAA4A4F7A7CAE38B5169974AF7B10941C8659E805EFC31F0A71314B8\", \"ingredient\": \"mcp-cap Milk\", \"deleted\": false, \"purchased\": false, \"uid\": \"0A91A12D-74D3-4987-BBBE-C36D3FABF505\", \"separate\": false, \"instruction\": \"\"}]"
           }
         },
         "response": {
@@ -1170,7 +1170,7 @@
           "bodySize": 174,
           "postData": {
             "mimeType": "application/octet-stream",
-            "text": "[[{\"deleted\": false, \"name\": \"mcp-cap milk\", \"uid\": \"27770D1B-EEBD-4A89-B147-74FE4C88E3B6\", \"aisle_uid\": \"02C70C54CAA4A4F7A7CAE38B5169974AF7B10941C8659E805EFC31F0A71314B8\"}]]"
+            "text": "[{\"deleted\": false, \"name\": \"mcp-cap milk\", \"uid\": \"27770D1B-EEBD-4A89-B147-74FE4C88E3B6\", \"aisle_uid\": \"02C70C54CAA4A4F7A7CAE38B5169974AF7B10941C8659E805EFC31F0A71314B8\"}]"
           }
         },
         "response": {
@@ -1224,7 +1224,7 @@
           "bodySize": 385,
           "postData": {
             "mimeType": "application/octet-stream",
-            "text": "[[{\"recipe\": null, \"aisle\": \"Seafood\", \"list_uid\": \"9E12FCF54A89FC52EA8E1C5DA1BDA62A6617ED8BDC2AEB6F291B93C7A399F6F6\", \"separate\": false, \"order_flag\": 1, \"deleted\": false, \"ingredient\": \"mcp-cap Eggs\", \"quantity\": \"\", \"purchased\": false, \"instruction\": \"\", \"name\": \"[mcp-cap] Eggs\", \"aisle_uid\": \"76CFAFC5-7A60-4896-AD9B-05D9C5EC840F\", \"uid\": \"77304522-DB36-425D-A4BF-22D9BAFE74E4\"}]]"
+            "text": "[{\"recipe\": null, \"aisle\": \"Seafood\", \"list_uid\": \"9E12FCF54A89FC52EA8E1C5DA1BDA62A6617ED8BDC2AEB6F291B93C7A399F6F6\", \"separate\": false, \"order_flag\": 1, \"deleted\": false, \"ingredient\": \"mcp-cap Eggs\", \"quantity\": \"\", \"purchased\": false, \"instruction\": \"\", \"name\": \"[mcp-cap] Eggs\", \"aisle_uid\": \"76CFAFC5-7A60-4896-AD9B-05D9C5EC840F\", \"uid\": \"77304522-DB36-425D-A4BF-22D9BAFE74E4\"}]"
           }
         },
         "response": {
@@ -1278,7 +1278,7 @@
           "bodySize": 146,
           "postData": {
             "mimeType": "application/octet-stream",
-            "text": "[[{\"aisle_uid\": \"76CFAFC5-7A60-4896-AD9B-05D9C5EC840F\", \"uid\": \"F37F0AC5-385A-4D8F-B651-3B07E1461F4A\", \"deleted\": false, \"name\": \"mcp-cap eggs\"}]]"
+            "text": "[{\"aisle_uid\": \"76CFAFC5-7A60-4896-AD9B-05D9C5EC840F\", \"uid\": \"F37F0AC5-385A-4D8F-B651-3B07E1461F4A\", \"deleted\": false, \"name\": \"mcp-cap eggs\"}]"
           }
         },
         "response": {
@@ -1332,7 +1332,7 @@
           "bodySize": 414,
           "postData": {
             "mimeType": "application/octet-stream",
-            "text": "[[{\"aisle\": \"Bakery\", \"quantity\": \"\", \"list_uid\": \"9E12FCF54A89FC52EA8E1C5DA1BDA62A6617ED8BDC2AEB6F291B93C7A399F6F6\", \"order_flag\": 2, \"name\": \"[mcp-cap] Bread\", \"recipe\": null, \"aisle_uid\": \"75DDAF84BB511A4C01E9CAADB18F7381FE3C3A2F358FFE78089BF3BEC18220DC\", \"ingredient\": \"mcp-cap Bread\", \"deleted\": false, \"purchased\": false, \"uid\": \"BE01BBD9-243C-4DDF-9368-58EB42BC877F\", \"separate\": false, \"instruction\": \"\"}]]"
+            "text": "[{\"aisle\": \"Bakery\", \"quantity\": \"\", \"list_uid\": \"9E12FCF54A89FC52EA8E1C5DA1BDA62A6617ED8BDC2AEB6F291B93C7A399F6F6\", \"order_flag\": 2, \"name\": \"[mcp-cap] Bread\", \"recipe\": null, \"aisle_uid\": \"75DDAF84BB511A4C01E9CAADB18F7381FE3C3A2F358FFE78089BF3BEC18220DC\", \"ingredient\": \"mcp-cap Bread\", \"deleted\": false, \"purchased\": false, \"uid\": \"BE01BBD9-243C-4DDF-9368-58EB42BC877F\", \"separate\": false, \"instruction\": \"\"}]"
           }
         },
         "response": {
@@ -1386,7 +1386,7 @@
           "bodySize": 175,
           "postData": {
             "mimeType": "application/octet-stream",
-            "text": "[[{\"aisle_uid\": \"75DDAF84BB511A4C01E9CAADB18F7381FE3C3A2F358FFE78089BF3BEC18220DC\", \"deleted\": false, \"name\": \"mcp-cap bread\", \"uid\": \"C0370E4F-769B-4CE0-825F-02C42714F6E9\"}]]"
+            "text": "[{\"aisle_uid\": \"75DDAF84BB511A4C01E9CAADB18F7381FE3C3A2F358FFE78089BF3BEC18220DC\", \"deleted\": false, \"name\": \"mcp-cap bread\", \"uid\": \"C0370E4F-769B-4CE0-825F-02C42714F6E9\"}]"
           }
         },
         "response": {
@@ -1440,7 +1440,7 @@
           "bodySize": 425,
           "postData": {
             "mimeType": "application/octet-stream",
-            "text": "[[{\"recipe\": null, \"aisle\": \"Canned and Jar Goods\", \"list_uid\": \"9E12FCF54A89FC52EA8E1C5DA1BDA62A6617ED8BDC2AEB6F291B93C7A399F6F6\", \"separate\": false, \"order_flag\": 0, \"deleted\": false, \"ingredient\": \"mcp-cap Milk\", \"quantity\": \"\", \"purchased\": true, \"instruction\": \"\", \"name\": \"[mcp-cap] Milk\", \"aisle_uid\": \"02C70C54CAA4A4F7A7CAE38B5169974AF7B10941C8659E805EFC31F0A71314B8\", \"uid\": \"0A91A12D-74D3-4987-BBBE-C36D3FABF505\"}]]"
+            "text": "[{\"recipe\": null, \"aisle\": \"Canned and Jar Goods\", \"list_uid\": \"9E12FCF54A89FC52EA8E1C5DA1BDA62A6617ED8BDC2AEB6F291B93C7A399F6F6\", \"separate\": false, \"order_flag\": 0, \"deleted\": false, \"ingredient\": \"mcp-cap Milk\", \"quantity\": \"\", \"purchased\": true, \"instruction\": \"\", \"name\": \"[mcp-cap] Milk\", \"aisle_uid\": \"02C70C54CAA4A4F7A7CAE38B5169974AF7B10941C8659E805EFC31F0A71314B8\", \"uid\": \"0A91A12D-74D3-4987-BBBE-C36D3FABF505\"}]"
           }
         },
         "response": {
@@ -1494,7 +1494,7 @@
           "bodySize": 413,
           "postData": {
             "mimeType": "application/octet-stream",
-            "text": "[[{\"aisle\": \"Bakery\", \"quantity\": \"\", \"list_uid\": \"9E12FCF54A89FC52EA8E1C5DA1BDA62A6617ED8BDC2AEB6F291B93C7A399F6F6\", \"order_flag\": 2, \"name\": \"[mcp-cap] Bread\", \"recipe\": null, \"aisle_uid\": \"75DDAF84BB511A4C01E9CAADB18F7381FE3C3A2F358FFE78089BF3BEC18220DC\", \"ingredient\": \"mcp-cap Bread\", \"deleted\": true, \"purchased\": false, \"uid\": \"BE01BBD9-243C-4DDF-9368-58EB42BC877F\", \"separate\": false, \"instruction\": \"\"}]]"
+            "text": "[{\"aisle\": \"Bakery\", \"quantity\": \"\", \"list_uid\": \"9E12FCF54A89FC52EA8E1C5DA1BDA62A6617ED8BDC2AEB6F291B93C7A399F6F6\", \"order_flag\": 2, \"name\": \"[mcp-cap] Bread\", \"recipe\": null, \"aisle_uid\": \"75DDAF84BB511A4C01E9CAADB18F7381FE3C3A2F358FFE78089BF3BEC18220DC\", \"ingredient\": \"mcp-cap Bread\", \"deleted\": true, \"purchased\": false, \"uid\": \"BE01BBD9-243C-4DDF-9368-58EB42BC877F\", \"separate\": false, \"instruction\": \"\"}]"
           }
         },
         "response": {
@@ -1548,7 +1548,7 @@
           "bodySize": 170,
           "postData": {
             "mimeType": "application/octet-stream",
-            "text": "[[{\"uid\": \"90ACAF2C-B0E9-4D46-A50A-3F00C9DF360D\", \"deleted\": false, \"is_default\": false, \"name\": \"[mcp-cap] Renamed List\", \"order_flag\": 1, \"reminders_list\": \"Paprika\"}]]"
+            "text": "[{\"uid\": \"90ACAF2C-B0E9-4D46-A50A-3F00C9DF360D\", \"deleted\": false, \"is_default\": false, \"name\": \"[mcp-cap] Renamed List\", \"order_flag\": 1, \"reminders_list\": \"Paprika\"}]"
           }
         },
         "response": {
@@ -1602,7 +1602,7 @@
           "bodySize": 169,
           "postData": {
             "mimeType": "application/octet-stream",
-            "text": "[[{\"reminders_list\": \"Paprika\", \"name\": \"[mcp-cap] Renamed List\", \"order_flag\": 1, \"is_default\": false, \"uid\": \"90ACAF2C-B0E9-4D46-A50A-3F00C9DF360D\", \"deleted\": true}]]"
+            "text": "[{\"reminders_list\": \"Paprika\", \"name\": \"[mcp-cap] Renamed List\", \"order_flag\": 1, \"is_default\": false, \"uid\": \"90ACAF2C-B0E9-4D46-A50A-3F00C9DF360D\", \"deleted\": true}]"
           }
         },
         "response": {

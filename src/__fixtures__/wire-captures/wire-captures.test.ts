@@ -16,24 +16,24 @@ describe("wire capture fixtures", () => {
 
     it("returns a freeform meal fixture", () => {
       const f = mealFixture("add freeform meal: [mcp-cap] sandwich as Lunch on 2026-05-26");
-      const body = f.requestBody as Array<Array<Record<string, unknown>>>;
-      expect(body[0]![0]!["recipe_uid"]).toBeNull();
-      expect(body[0]![0]!["name"]).toBe("[mcp-cap] sandwich");
+      const body = f.requestBody as Array<Record<string, unknown>>;
+      expect(body[0]!["recipe_uid"]).toBeNull();
+      expect(body[0]!["name"]).toBe("[mcp-cap] sandwich");
     });
 
     it("returns a menu fixture by comment key", () => {
       const f = menuFixture("create 1-day menu ([mcp-cap] Test Menu 1)");
       expect(f.method).toBe("POST");
       expect(f.url).toContain("/sync/menus/");
-      const body = f.requestBody as Array<Array<Record<string, unknown>>>;
-      expect(body[0]![0]!["name"]).toBe("[mcp-cap] Test Menu 1");
-      expect(body[0]![0]!["days"]).toBe(1);
+      const body = f.requestBody as Array<Record<string, unknown>>;
+      expect(body[0]!["name"]).toBe("[mcp-cap] Test Menu 1");
+      expect(body[0]!["days"]).toBe(1);
     });
 
     it("returns a multi-day menu item fixture with day offset", () => {
       const f = menuFixture("add menuitem: Dinner recipe (20 Minute Honey Mustard Chicken) to multi-day menu day 3");
-      const body = f.requestBody as Array<Array<Record<string, unknown>>>;
-      expect(body[0]![0]!["day"]).toBe(3);
+      const body = f.requestBody as Array<Record<string, unknown>>;
+      expect(body[0]!["day"]).toBe(3);
     });
   });
 

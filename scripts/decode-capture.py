@@ -69,6 +69,10 @@ def _decode_body(raw: bytes, content_type: str) -> object:
                 parts.append(json.loads(content))
             except Exception:
                 parts.append(content.decode("utf-8", errors="replace"))
+        # Single-field multipart (e.g. one "data" blob): unwrap so the
+        # output is the payload itself, not a spurious outer array.
+        if len(parts) == 1:
+            return parts[0]
         return parts
     # JSON
     try:

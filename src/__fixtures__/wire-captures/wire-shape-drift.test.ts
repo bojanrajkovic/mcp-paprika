@@ -43,10 +43,9 @@ function wireKeys(entry: { requestBody: unknown; responseBody: unknown }, source
   if (Array.isArray(result) && result.length > 0) {
     items = result as Array<Record<string, unknown>>;
   } else if (Array.isArray(body)) {
-    const inner = Array.isArray(body[0])
-      ? (body[0] as Array<Record<string, unknown>>)
-      : (body as Array<Record<string, unknown>>);
-    items = inner;
+    items = body as Array<Record<string, unknown>>;
+  } else {
+    items = [body as Record<string, unknown>];
   }
 
   const keySet = new Set<string>();
@@ -172,9 +171,9 @@ describe("wire-shape drift detection", () => {
       expect(hardDeleteKeys).toEqual(trashKeys);
 
       const f = writeFixture("hard-delete recipe (empty trash — both in_trash + deleted)");
-      const body = f.requestBody as Array<Record<string, unknown>>;
-      expect(body[0]!["in_trash"]).toBe(true);
-      expect(body[0]!["deleted"]).toBe(true);
+      const body = f.requestBody as Record<string, unknown>;
+      expect(body["in_trash"]).toBe(true);
+      expect(body["deleted"]).toBe(true);
     });
 
     it("savePantryItems sends exact wire POST keys", async () => {
