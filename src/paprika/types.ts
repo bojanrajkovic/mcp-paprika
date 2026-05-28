@@ -410,14 +410,16 @@ export const MealSchema = z
 
 // MealTypeStoredSchema — validates camelCase JSON read back from disk. No transform.
 // `exportTime` is seconds since midnight (e.g. 28800 = 08:00, 64800 = 18:00).
-// Not used by the read-only history feature; preserved for fidelity to the
-// wire shape.
+// `originalType` is the integer mapping back to one of the four built-in types
+// (Breakfast=0, Lunch=1, Dinner=2, Snacks=3) for built-in types, or `null` for
+// user-created custom types. Verified via mealtypes.har.json capture.
+// Neither field is used by the read-only history feature; preserved for fidelity.
 export const MealTypeStoredSchema = z.object({
   uid: MealTypeUidSchema,
   name: z.string(),
   color: z.string(),
   orderFlag: z.number().int(),
-  originalType: z.number().int(),
+  originalType: z.number().int().nullable(),
   exportAllDay: z.boolean(),
   exportTime: z.number().int().nonnegative(),
 });
@@ -431,7 +433,7 @@ export const MealTypeSchema = z
     name: z.string(),
     color: z.string(),
     order_flag: z.number().int(),
-    original_type: z.number().int(),
+    original_type: z.number().int().nullable(),
     export_all_day: z.boolean(),
     export_time: z.number().int().nonnegative(),
   })

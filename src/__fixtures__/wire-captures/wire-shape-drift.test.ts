@@ -23,6 +23,7 @@ import type { Recipe, PantryItem, GroceryList, GroceryItem, GroceryIngredient } 
 import { makeSnakeCaseRecipe } from "../../cache/__fixtures__/recipes.js";
 import { makeSnakeCasePantryItem } from "../../cache/__fixtures__/pantry.js";
 import { makeSnakeCaseMeal, makeSnakeCaseMealType } from "../../cache/__fixtures__/meals.js";
+import { fixture as mealtypeFixture } from "./mealtypes.js";
 
 /**
  * Wire-shape drift detection tests.
@@ -150,6 +151,27 @@ describe("wire-shape drift detection", () => {
       const wireGetKeys = wireKeys(refFixture("GET meal types catalog (user-customizable, like aisles)"), "response");
       const schemaKeys = schemaInputKeys(MealTypeSchema);
       expect(schemaKeys).toEqual(wireGetKeys);
+    });
+
+    it("MealTypeSchema fields are a superset of POST create body (plus deleted)", () => {
+      const wirePostKeys = wireKeys(
+        mealtypeFixture("create mealtype ([mcp-cap] Brunch — custom type with original_type: null)"),
+        "request",
+      );
+      const schemaKeys = schemaInputKeys(MealTypeSchema);
+      // POST body carries `deleted` (false on create, true on soft-delete); schema does not model it
+      // because GET responses omit it for live items.
+      expect(schemaKeys).toEqual(wirePostKeys.filter((k) => k !== "deleted").sort());
+    });
+
+    it("MealTypeSchema accepts custom mealtypes with original_type: null from real POST capture", () => {
+      const f = mealtypeFixture("create mealtype ([mcp-cap] Brunch — custom type with original_type: null)");
+      const body = f.requestBody as Array<Record<string, unknown>>;
+      const item = body[0]!;
+      expect(item["original_type"]).toBeNull();
+      // Round-trip through the schema to confirm null is accepted.
+      const parsed = MealTypeSchema.parse(item);
+      expect(parsed.originalType).toBeNull();
     });
   });
 

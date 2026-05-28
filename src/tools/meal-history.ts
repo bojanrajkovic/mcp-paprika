@@ -164,7 +164,11 @@ export function registerMealHistoryTool(server: McpServer, ctx: ServerContext): 
           const typeByOriginalType = new Map<number, string>();
           for (const mt of ctx.mealTypeStore.getAll()) {
             typeNames.set(mt.uid, mt.name);
-            typeByOriginalType.set(mt.originalType, mt.name);
+            // Only built-in types have a non-null originalType; custom types
+            // can only be looked up by typeUid.
+            if (mt.originalType !== null) {
+              typeByOriginalType.set(mt.originalType, mt.name);
+            }
           }
 
           const grouped = new Map<string, Array<{ typeName: string; entry: string }>>();
