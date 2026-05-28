@@ -17,6 +17,8 @@ import { DiskCacheRoot } from "./cache/disk/index.js";
 import { GroceryIngredientStore } from "./cache/grocery-ingredient-store.js";
 import { GroceryItemStore } from "./cache/grocery-item-store.js";
 import { GroceryListStore } from "./cache/grocery-list-store.js";
+import { MealStore } from "./cache/meal-store.js";
+import { MealTypeStore } from "./cache/meal-type-store.js";
 import { RecipeStore } from "./cache/recipe-store.js";
 import { PantryStore } from "./cache/pantry-store.js";
 import { buildMcpServer } from "./server/build.js";
@@ -204,6 +206,8 @@ async function main(): Promise<void> {
     groceryListStore,
     groceryItemStore,
     groceryIngredientStore,
+    mealStore: new MealStore(),
+    mealTypeStore: new MealTypeStore(),
     vectorStore: null, // discover tool intentionally not registered (no embeddings in e2e)
     notifier,
     auth: null,
