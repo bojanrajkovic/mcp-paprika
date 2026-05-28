@@ -359,34 +359,45 @@ export class SyncEngine {
         this.log.debug({ count: orphanIngredientUids.length }, "removed orphan grocery ingredients");
       }
 
-      // 7. MealType sync (replace-all, no pending-writes — reference catalog like aisles)
-      this.log.debug("fetching meal types");
-      const mealTypes = await this._context.client.listMealTypes();
-      this.log.debug({ count: mealTypes.length }, "fetched meal types");
+      // 7+8. Meal type + meal sync (best-effort). Isolated in their own try
+      // block so a meal-side failure (network blip, schema regression on the
+      // /mealtypes/ or /meals/ endpoint) cannot abort the rest of the cycle
+      // and leave already-fetched recipe/grocery store mutations unflushed.
+      // The meal-history read surface is strictly additive — degrading it to
+      // stale data for one cycle is preferable to regressing core sync.
+      try {
+        // 7. MealType sync (replace-all, no pending-writes — reference catalog like aisles)
+        this.log.debug("fetching meal types");
+        const mealTypes = await this._context.client.listMealTypes();
+        this.log.debug({ count: mealTypes.length }, "fetched meal types");
 
-      const cachedMealTypes = await this._context.cache.mealTypes.getAll();
-      const cachedMealTypeUids = new Set(cachedMealTypes.map((mt) => mt.uid));
-      const incomingMealTypeUids = new Set(mealTypes.map((mt) => mt.uid));
-      const orphanMealTypeUids = [...cachedMealTypeUids].filter((uid) => !incomingMealTypeUids.has(uid));
-      await Promise.all(orphanMealTypeUids.map((uid) => this._context.cache.mealTypes.remove(uid)));
+        const cachedMealTypes = await this._context.cache.mealTypes.getAll();
+        const cachedMealTypeUids = new Set(cachedMealTypes.map((mt) => mt.uid));
+        const incomingMealTypeUids = new Set(mealTypes.map((mt) => mt.uid));
+        const orphanMealTypeUids = [...cachedMealTypeUids].filter((uid) => !incomingMealTypeUids.has(uid));
+        await Promise.all(orphanMealTypeUids.map((uid) => this._context.cache.mealTypes.remove(uid)));
 
-      this._context.mealTypeStore.load(mealTypes);
-      await Promise.all(mealTypes.map((mt) => this._context.cache.mealTypes.put(mt)));
+        this._context.mealTypeStore.load(mealTypes);
+        await Promise.all(mealTypes.map((mt) => this._context.cache.mealTypes.put(mt)));
 
-      if (orphanMealTypeUids.length > 0) {
-        this.log.debug({ count: orphanMealTypeUids.length }, "removed orphan meal types");
+        if (orphanMealTypeUids.length > 0) {
+          this.log.debug({ count: orphanMealTypeUids.length }, "removed orphan meal types");
+        }
+
+        // 8. Meal sync (replace-all with orphan cleanup, pending-writes filtered)
+        this.log.debug("fetching meals");
+        await syncReplaceAllEntity({
+          fetch: () => this._context.client.listMeals(),
+          cache: this._context.cache.meals,
+          store: this._context.mealStore,
+          equals: mealsEqual,
+          label: "meals",
+          log: this.log,
+        });
+      } catch (mealError: unknown) {
+        const err = mealError instanceof Error ? mealError : new Error(String(mealError));
+        this.log.warn({ err }, "meal sync failed; core sync will continue");
       }
-
-      // 8. Meal sync (replace-all with orphan cleanup, pending-writes filtered)
-      this.log.debug("fetching meals");
-      await syncReplaceAllEntity({
-        fetch: () => this._context.client.listMeals(),
-        cache: this._context.cache.meals,
-        store: this._context.mealStore,
-        equals: mealsEqual,
-        label: "meals",
-        log: this.log,
-      });
 
       // 9. Finalization
       this.log.debug("flushing cache to disk");

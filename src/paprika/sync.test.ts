@@ -2430,6 +2430,54 @@ describe("syncOnce", () => {
       expect(realGroceryIngredientStore.getAll()[0]).toEqual(cachedIngredient);
     });
   });
+
+  describe("meal sync isolation (best-effort, does not abort core sync)", () => {
+    it("listMealTypes() failure does not propagate to sync:error and core sync continues", async () => {
+      const engine = makeSyncEngine({
+        listMealTypes: vi.fn().mockRejectedValue(new Error("mealtypes endpoint down")),
+      });
+
+      let receivedError: Error | null = null;
+      engine.events.on("sync:error", (error) => {
+        receivedError = error;
+      });
+
+      await expect(engine.syncOnce()).resolves.toBeUndefined();
+      // Meal failure must NOT surface as sync:error — that's reserved for
+      // core-pipeline failures that abort the cycle.
+      expect(receivedError).toBeNull();
+    });
+
+    it("listMeals() failure does not propagate to sync:error and core sync continues", async () => {
+      const engine = makeSyncEngine({
+        listMeals: vi.fn().mockRejectedValue(new Error("meals endpoint 503")),
+      });
+
+      let receivedError: Error | null = null;
+      engine.events.on("sync:error", (error) => {
+        receivedError = error;
+      });
+
+      await expect(engine.syncOnce()).resolves.toBeUndefined();
+      expect(receivedError).toBeNull();
+    });
+
+    it("core sync:complete events still emit when meal sync fails", async () => {
+      const engine = makeSyncEngine({
+        listMeals: vi.fn().mockRejectedValue(new Error("meals down")),
+      });
+
+      const completeEvents: Array<string> = [];
+      engine.events.on("sync:complete", (result) => {
+        completeEvents.push(result.changeType);
+      });
+
+      await engine.syncOnce();
+
+      // Four core sync:complete events fire regardless of meal-side failure
+      expect(completeEvents).toEqual(expect.arrayContaining(["recipes", "pantry", "grocery-lists", "grocery-items"]));
+    });
+  });
 });
 
 describe("syncReplaceAllEntity", () => {
