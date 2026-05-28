@@ -10,6 +10,8 @@ import { AisleStore } from "../cache/aisle-store.js";
 import { GroceryIngredientStore } from "../cache/grocery-ingredient-store.js";
 import { GroceryItemStore } from "../cache/grocery-item-store.js";
 import { GroceryListStore } from "../cache/grocery-list-store.js";
+import { MealStore } from "../cache/meal-store.js";
+import { MealTypeStore } from "../cache/meal-type-store.js";
 import { PantryStore } from "../cache/pantry-store.js";
 import type { RecipeStore } from "../cache/recipe-store.js";
 import type { Notifier } from "../server/notifier.js";
@@ -162,6 +164,8 @@ export function makeCtx(
       | "groceryListStore"
       | "groceryItemStore"
       | "groceryIngredientStore"
+      | "mealStore"
+      | "mealTypeStore"
       | "vectorStore"
       | "notifier"
       | "log"
@@ -180,6 +184,8 @@ export function makeCtx(
     groceryListStore: overrides.groceryListStore ?? new GroceryListStore(),
     groceryItemStore: overrides.groceryItemStore ?? new GroceryItemStore(),
     groceryIngredientStore: overrides.groceryIngredientStore ?? new GroceryIngredientStore(),
+    mealStore: overrides.mealStore ?? new MealStore(),
+    mealTypeStore: overrides.mealTypeStore ?? new MealTypeStore(),
     vectorStore: overrides.vectorStore ?? null,
     client: overrides.client ?? ({} as unknown as ServerContext["client"]),
     cache: overrides.cache ?? ({} as unknown as ServerContext["cache"]),

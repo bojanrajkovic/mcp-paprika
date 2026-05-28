@@ -15,11 +15,15 @@ import {
   GroceryItemUidSchema,
   GroceryIngredientSchema,
   GroceryIngredientUidSchema,
+  MealSchema,
+  MealTypeSchema,
   CategorySchema,
 } from "../../paprika/types.js";
 import type { Recipe, PantryItem, GroceryList, GroceryItem, GroceryIngredient } from "../../paprika/types.js";
 import { makeSnakeCaseRecipe } from "../../cache/__fixtures__/recipes.js";
 import { makeSnakeCasePantryItem } from "../../cache/__fixtures__/pantry.js";
+import { makeSnakeCaseMeal, makeSnakeCaseMealType } from "../../cache/__fixtures__/meals.js";
+import { fixture as mealtypeFixture } from "./mealtypes.js";
 
 /**
  * Wire-shape drift detection tests.
@@ -131,6 +135,46 @@ describe("wire-shape drift detection", () => {
       const schemaKeys = schemaInputKeys(GroceryIngredientSchema);
       // GET responses omit deleted for live items; schema has it with optional().default(false)
       expect(schemaKeys).toEqual([...wireGetKeys, "deleted"].sort());
+    });
+
+    it("MealSchema accepts all fields from GET meals (plus deleted)", () => {
+      const wireGetKeys = wireKeys(
+        refFixture("GET meals (full history, unpaginated — shows is_ingredient + scale fields)"),
+        "response",
+      );
+      const schemaKeys = schemaInputKeys(MealSchema);
+      // GET responses omit deleted for live meals; schema has it with optional().default(false)
+      expect(schemaKeys).toEqual([...wireGetKeys, "deleted"].sort());
+    });
+
+    it("MealTypeSchema accepts all fields from GET meal types (plus deleted)", () => {
+      const wireGetKeys = wireKeys(refFixture("GET meal types catalog (user-customizable, like aisles)"), "response");
+      const schemaKeys = schemaInputKeys(MealTypeSchema);
+      // GET responses omit deleted for live items; schema has it with optional().default(false)
+      // so the sync layer can filter soft-deleted mealtypes (same pattern as aisles/grocery entities).
+      expect(schemaKeys).toEqual([...wireGetKeys, "deleted"].sort());
+    });
+
+    it("MealTypeSchema matches POST create body exactly (deleted included)", () => {
+      const wirePostKeys = wireKeys(
+        mealtypeFixture("create mealtype ([mcp-cap] Brunch — custom type with original_type: null)"),
+        "request",
+      );
+      const schemaKeys = schemaInputKeys(MealTypeSchema);
+      // Schema now models `deleted` so the sync layer can filter soft-deleted
+      // mealtypes (same as aisles/grocery entities). POST body carries it as
+      // `false` on create and `true` on soft-delete — exact match either way.
+      expect(schemaKeys).toEqual(wirePostKeys);
+    });
+
+    it("MealTypeSchema accepts custom mealtypes with original_type: null from real POST capture", () => {
+      const f = mealtypeFixture("create mealtype ([mcp-cap] Brunch — custom type with original_type: null)");
+      const body = f.requestBody as Array<Record<string, unknown>>;
+      const item = body[0]!;
+      expect(item["original_type"]).toBeNull();
+      // Round-trip through the schema to confirm null is accepted.
+      const parsed = MealTypeSchema.parse(item);
+      expect(parsed.originalType).toBeNull();
     });
   });
 
@@ -261,6 +305,21 @@ describe("wire-shape drift detection", () => {
     it("makeSnakeCasePantryItem matches GET pantry fields exactly", () => {
       const wireGetKeys = wireKeys(refFixture("GET pantry items (startup sync)"), "response");
       const factoryKeys = Object.keys(makeSnakeCasePantryItem("test")).sort();
+      expect(factoryKeys).toEqual(wireGetKeys);
+    });
+
+    it("makeSnakeCaseMeal matches GET meal fields exactly", () => {
+      const wireGetKeys = wireKeys(
+        refFixture("GET meals (full history, unpaginated — shows is_ingredient + scale fields)"),
+        "response",
+      );
+      const factoryKeys = Object.keys(makeSnakeCaseMeal("test")).sort();
+      expect(factoryKeys).toEqual(wireGetKeys);
+    });
+
+    it("makeSnakeCaseMealType matches GET meal type fields exactly", () => {
+      const wireGetKeys = wireKeys(refFixture("GET meal types catalog (user-customizable, like aisles)"), "response");
+      const factoryKeys = Object.keys(makeSnakeCaseMealType("test")).sort();
       expect(factoryKeys).toEqual(wireGetKeys);
     });
   });

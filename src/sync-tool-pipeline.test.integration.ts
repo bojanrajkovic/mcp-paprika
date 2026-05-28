@@ -10,6 +10,8 @@ import { DiskCacheRoot } from "./cache/disk/index.js";
 import { GroceryIngredientStore } from "./cache/grocery-ingredient-store.js";
 import { GroceryItemStore } from "./cache/grocery-item-store.js";
 import { GroceryListStore } from "./cache/grocery-list-store.js";
+import { MealStore } from "./cache/meal-store.js";
+import { MealTypeStore } from "./cache/meal-type-store.js";
 import { RecipeStore } from "./cache/recipe-store.js";
 import { PantryStore } from "./cache/pantry-store.js";
 import { SyncEngine } from "./paprika/sync.js";
@@ -51,6 +53,8 @@ beforeEach(async () => {
     http.get(`${API_BASE}/grocerylists/`, () => HttpResponse.json({ result: [] })),
     http.get(`${API_BASE}/groceries/`, () => HttpResponse.json({ result: [] })),
     http.get(`${API_BASE}/groceryingredients/`, () => HttpResponse.json({ result: [] })),
+    http.get(`${API_BASE}/mealtypes/`, () => HttpResponse.json({ result: [] })),
+    http.get(`${API_BASE}/meals/`, () => HttpResponse.json({ result: [] })),
   );
 });
 
@@ -103,6 +107,8 @@ describe("Sync → Tool Pipeline Integration", () => {
         groceryListStore: new GroceryListStore(),
         groceryItemStore: new GroceryItemStore(),
         groceryIngredientStore: new GroceryIngredientStore(),
+        mealStore: new MealStore(),
+        mealTypeStore: new MealTypeStore(),
         vectorStore: null,
         notifier,
         auth: null,
@@ -201,6 +207,8 @@ describe("Sync → Tool Pipeline Integration", () => {
         groceryListStore: new GroceryListStore(),
         groceryItemStore: new GroceryItemStore(),
         groceryIngredientStore: new GroceryIngredientStore(),
+        mealStore: new MealStore(),
+        mealTypeStore: new MealTypeStore(),
         vectorStore: null,
         notifier,
         auth: null,
@@ -274,6 +282,8 @@ describe("Sync → Tool Pipeline Integration", () => {
         groceryListStore: new GroceryListStore(),
         groceryItemStore: new GroceryItemStore(),
         groceryIngredientStore: new GroceryIngredientStore(),
+        mealStore: new MealStore(),
+        mealTypeStore: new MealTypeStore(),
         vectorStore: null,
         notifier,
         auth: null,
@@ -369,6 +379,8 @@ describe("Sync → Tool Pipeline Integration", () => {
         groceryListStore: new GroceryListStore(),
         groceryItemStore: new GroceryItemStore(),
         groceryIngredientStore: new GroceryIngredientStore(),
+        mealStore: new MealStore(),
+        mealTypeStore: new MealTypeStore(),
         vectorStore: null,
         notifier,
         auth: null,
@@ -456,6 +468,8 @@ describe("Sync → Tool Pipeline Integration", () => {
         groceryListStore: new GroceryListStore(),
         groceryItemStore: new GroceryItemStore(),
         groceryIngredientStore: new GroceryIngredientStore(),
+        mealStore: new MealStore(),
+        mealTypeStore: new MealTypeStore(),
         vectorStore: null,
         notifier,
         auth: null,
@@ -521,6 +535,8 @@ describe("Sync → Tool Pipeline Integration", () => {
         groceryListStore: new GroceryListStore(),
         groceryItemStore: new GroceryItemStore(),
         groceryIngredientStore: new GroceryIngredientStore(),
+        mealStore: new MealStore(),
+        mealTypeStore: new MealTypeStore(),
         vectorStore: null,
         notifier,
         auth: null,
@@ -717,6 +733,8 @@ describe("Sync → Tool Pipeline Integration", () => {
         groceryListStore: new GroceryListStore(),
         groceryItemStore: new GroceryItemStore(),
         groceryIngredientStore: new GroceryIngredientStore(),
+        mealStore: new MealStore(),
+        mealTypeStore: new MealTypeStore(),
         vectorStore: null,
         notifier,
         auth: null,

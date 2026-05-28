@@ -5,6 +5,8 @@ import { DiskCacheRoot } from "../cache/disk/index.js";
 import { GroceryIngredientStore } from "../cache/grocery-ingredient-store.js";
 import { GroceryItemStore } from "../cache/grocery-item-store.js";
 import { GroceryListStore } from "../cache/grocery-list-store.js";
+import { MealStore } from "../cache/meal-store.js";
+import { MealTypeStore } from "../cache/meal-type-store.js";
 import { PantryStore } from "../cache/pantry-store.js";
 import { RecipeStore } from "../cache/recipe-store.js";
 import { buildDiscoverComponents } from "../features/discover-feature.js";
@@ -31,6 +33,7 @@ import {
 } from "../tools/grocery-item.js";
 import { registerMoveToPantryTool } from "../tools/grocery-move.js";
 import { registerClearPurchasedTool, registerClearAllTool } from "../tools/grocery-clear.js";
+import { registerMealHistoryTool } from "../tools/meal-history.js";
 import { registerAddPantryItemsTool } from "../tools/pantry-batch-add.js";
 import { registerDeletePantryItemTool } from "../tools/pantry-delete.js";
 import { registerGetPantryItemTool } from "../tools/pantry-get.js";
@@ -166,6 +169,20 @@ export async function buildAppContext(
   }
   log.info({ count: cachedGroceryIngredients.length }, "hydrated grocery ingredient store from cache");
 
+  const mealStore = new MealStore({ pendingWriteTtlMs });
+  const cachedMeals = (await cache.meals.getAll()).filter((m) => !m.deleted);
+  if (cachedMeals.length > 0) {
+    mealStore.load(cachedMeals);
+  }
+  log.info({ count: cachedMeals.length }, "hydrated meal store from cache");
+
+  const mealTypeStore = new MealTypeStore({ pendingWriteTtlMs });
+  const cachedMealTypes = (await cache.mealTypes.getAll()).filter((mt) => !mt.deleted);
+  if (cachedMealTypes.length > 0) {
+    mealTypeStore.load(cachedMealTypes);
+  }
+  log.info({ count: cachedMealTypes.length }, "hydrated meal type store from cache");
+
   // SyncEngine only reads client/cache/store/pantryStore/notifier — never
   // vectorStore — so it is safe to construct with a placeholder appContext
   // whose vectorStore is null. The vector store is then built with
@@ -179,6 +196,8 @@ export async function buildAppContext(
     groceryListStore,
     groceryItemStore,
     groceryIngredientStore,
+    mealStore,
+    mealTypeStore,
     vectorStore: null,
     notifier,
     auth, // null for stdio, populated for HTTP
@@ -247,6 +266,8 @@ export async function buildAppContext(
     groceryListStore,
     groceryItemStore,
     groceryIngredientStore,
+    mealStore,
+    mealTypeStore,
     vectorStore,
     notifier,
     auth, // null for stdio, populated for HTTP
@@ -296,6 +317,7 @@ export function buildMcpServer(app: AppContext): McpServer {
   registerMoveToPantryTool(server, sessionCtx);
   registerClearPurchasedTool(server, sessionCtx);
   registerClearAllTool(server, sessionCtx);
+  registerMealHistoryTool(server, sessionCtx);
 
   if (app.vectorStore !== null) {
     registerDiscoverTool(server, sessionCtx, app.vectorStore);

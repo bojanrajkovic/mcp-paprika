@@ -34,7 +34,8 @@ export function registerReadTool(server: McpServer, ctx: ServerContext): void {
               return textResult(`No recipe found with UID "${args.uid}".`);
             }
             const categoryNames = ctx.store.resolveCategories(recipe.categories);
-            return textResult(recipeToMarkdown(recipe, categoryNames));
+            const lastCooked = ctx.mealStore.lastCookedAt(recipe.uid);
+            return textResult(recipeToMarkdown(recipe, categoryNames, lastCooked));
           }
 
           // Title fuzzy search — args.title is defined here
@@ -47,7 +48,8 @@ export function registerReadTool(server: McpServer, ctx: ServerContext): void {
           if (matches.length === 1) {
             const recipe = matches[0]!; // safe: length === 1
             const categoryNames = ctx.store.resolveCategories(recipe.categories);
-            return textResult(recipeToMarkdown(recipe, categoryNames));
+            const lastCooked = ctx.mealStore.lastCookedAt(recipe.uid);
+            return textResult(recipeToMarkdown(recipe, categoryNames, lastCooked));
           }
 
           // Disambiguation list (AC1.4)

@@ -11,9 +11,20 @@ import {
   GroceryIngredientStoredSchema,
   GroceryItemStoredSchema,
   GroceryListStoredSchema,
+  MealStoredSchema,
+  MealTypeStoredSchema,
   PantryItemStoredSchema,
 } from "../../paprika/types.js";
-import type { Aisle, Category, GroceryIngredient, GroceryItem, GroceryList, PantryItem } from "../../paprika/types.js";
+import type {
+  Aisle,
+  Category,
+  GroceryIngredient,
+  GroceryItem,
+  GroceryList,
+  Meal,
+  MealType,
+  PantryItem,
+} from "../../paprika/types.js";
 import { isNodeError } from "../../utils/errors.js";
 import { SILENT_LOG } from "../../utils/log.js";
 
@@ -52,6 +63,8 @@ export class DiskCacheRoot {
   readonly groceryLists: DiskCache<GroceryList>;
   readonly groceryItems: DiskCache<GroceryItem>;
   readonly groceryIngredients: DiskCache<GroceryIngredient>;
+  readonly meals: DiskCache<Meal>;
+  readonly mealTypes: DiskCache<MealType>;
 
   private readonly _cacheDir: string;
   private readonly _subcaches: ReadonlyArray<InitFlushable>;
@@ -106,6 +119,18 @@ export class DiskCacheRoot {
       getKey: (i) => i.uid,
       ...logOpts,
     });
+    this.meals = new DiskCache<Meal>({
+      subdir: join(cacheDir, "meals"),
+      parse: (raw) => MealStoredSchema.parse(raw),
+      getKey: (m) => m.uid,
+      ...logOpts,
+    });
+    this.mealTypes = new DiskCache<MealType>({
+      subdir: join(cacheDir, "mealtypes"),
+      parse: (raw) => MealTypeStoredSchema.parse(raw),
+      getKey: (mt) => mt.uid,
+      ...logOpts,
+    });
 
     this._subcaches = [
       this.recipes,
@@ -117,6 +142,8 @@ export class DiskCacheRoot {
       this.groceryLists,
       this.groceryItems,
       this.groceryIngredients,
+      this.meals,
+      this.mealTypes,
     ];
   }
 

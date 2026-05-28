@@ -1,6 +1,6 @@
 # MCP Tool Definitions
 
-Last verified: 2026-05-26
+Last verified: 2026-05-27
 
 > Pantry write tools (`add_pantry_items`, `update_pantry_item`) normalize any user-supplied `expirationDate` through `normalizePaprikaDate()` (`paprika/dates.ts`) before persisting. Accepts ISO 8601, `yyyy-MM-dd`, `yyyy/MM/dd`, or the already-Paprika `yyyy-MM-dd HH:mm:ss`. Unparseable input returns a `textResult` error to the LLM rather than writing garbage. `add_pantry_items` stamps `purchaseDate` via `paprikaDateToday()` (today at midnight, Paprika wire format) and generates UIDs as **uppercase** UUID v4 to match what Paprika.app emits.
 
@@ -10,17 +10,18 @@ Purpose: Defines MCP tools that AI assistants can invoke. Each tool file exports
 
 ### Discovery & Query Tools
 
-| Tool                   | File              | Description                                                                           |
-| ---------------------- | ----------------- | ------------------------------------------------------------------------------------- |
-| `search_recipes`       | `search.ts`       | Full-text search by name, ingredients, or description                                 |
-| `filter_by_ingredient` | `filter.ts`       | Filter recipes by ingredient (all/any mode)                                           |
-| `filter_by_time`       | `filter.ts`       | Filter recipes by prep/cook/total time constraints                                    |
-| `discover_recipes`     | `discover.ts`     | Semantic search via VectorStore (natural language)                                    |
-| `list_categories`      | `categories.ts`   | List all categories with recipe counts                                                |
-| `list_aisles`          | `aisles.ts`       | List all aisles sorted by orderFlag, with UID per aisle                               |
-| `list_pantry`          | `pantry-list.ts`  | List all pantry items sorted alphabetically by ingredient                             |
-| `list_grocery_lists`   | `grocery-list.ts` | List all grocery lists sorted alphabetically by name, with item counts                |
-| `read_grocery_list`    | `grocery-list.ts` | Fetch grocery list by UID or name (tiered fuzzy match), returns list metadata + items |
+| Tool                   | File              | Description                                                                                                |
+| ---------------------- | ----------------- | ---------------------------------------------------------------------------------------------------------- |
+| `search_recipes`       | `search.ts`       | Full-text search by name, ingredients, or description                                                      |
+| `filter_by_ingredient` | `filter.ts`       | Filter recipes by ingredient (all/any mode)                                                                |
+| `filter_by_time`       | `filter.ts`       | Filter recipes by prep/cook/total time constraints                                                         |
+| `discover_recipes`     | `discover.ts`     | Semantic search via VectorStore (natural language)                                                         |
+| `list_categories`      | `categories.ts`   | List all categories with recipe counts                                                                     |
+| `list_aisles`          | `aisles.ts`       | List all aisles sorted by orderFlag, with UID per aisle                                                    |
+| `list_meal_history`    | `meal-history.ts` | Browse meal planner history — calendar-style grouped by date, with type/recipe/date filters and pagination |
+| `list_pantry`          | `pantry-list.ts`  | List all pantry items sorted alphabetically by ingredient                                                  |
+| `list_grocery_lists`   | `grocery-list.ts` | List all grocery lists sorted alphabetically by name, with item counts                                     |
+| `read_grocery_list`    | `grocery-list.ts` | Fetch grocery list by UID or name (tiered fuzzy match), returns list metadata + items                      |
 
 ### CRUD Tools
 
@@ -96,7 +97,7 @@ Utilities imported by recipe tool handlers from `./helpers.js`.
 
 - **`textResult(text)`** -- Wraps a string in the MCP `CallToolResult` envelope.
 - **`coldStartGuard(ctx)`** -- Returns `Ok<void>` when store is synced, `Err<CallToolResult>` when empty. Always use `.match()` to handle both branches.
-- **`recipeToMarkdown(recipe, categoryNames)`** -- Renders a full recipe as markdown. Resolve categories via `ctx.store.resolveCategories()` before calling. Omits empty optional fields.
+- **`recipeToMarkdown(recipe, categoryNames, lastCookedAt?)`** -- Renders a full recipe as markdown. Resolve categories via `ctx.store.resolveCategories()` before calling. When `lastCookedAt` is provided (non-null string), appends a `**Last Cooked:** {date-only}` line. Omits empty optional fields.
 - **`commitRecipe(ctx, saved)`** -- Persists a saved recipe to cache and store, triggers cloud sync. Order: `ctx.store.markPendingUpsert(saved.uid)` or `markPendingDelete(saved.uid)` based on `saved.inTrash` (sync, FIRST) → `cache.recipes.put` (async) → `cache.flush` (async) → `store.set` (sync) → `ctx.notifier.resourceListChanged()` (sync) → `notifySync` (async). The pending-write mark is set BEFORE any cache I/O so an in-flight sync cycle that observes the cache mid-commit (between awaits) still sees the pending-write flag and skips reconciling our UID. See `cache/CLAUDE.md` Pending-writes section. Called by all write tools after `ctx.client.saveRecipe()`.
 - **`resolveCategoryNames(all, names)`** -- Resolves human-readable category display names to UIDs. Case-insensitive linear scan. Returns `{ uids, unknown }` for warnings.
 

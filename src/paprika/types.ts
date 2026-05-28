@@ -359,6 +359,101 @@ export const GroceryIngredientSchema = z
     }),
   );
 
+// Branded UID schemas for meals
+export const MealUidSchema = z.string().brand("MealUid");
+export type MealUid = z.infer<typeof MealUidSchema>;
+
+export const MealTypeUidSchema = z.string().brand("MealTypeUid");
+export type MealTypeUid = z.infer<typeof MealTypeUidSchema>;
+
+// MealStoredSchema — validates camelCase JSON read back from disk. No transform.
+// `typeUid` is nullable because legacy meals (created before Paprika's mealtypes
+// feature) carry `null` for this field; new meals always carry a real UID.
+export const MealStoredSchema = z.object({
+  uid: MealUidSchema,
+  recipeUid: z.string().nullable(),
+  name: z.string(),
+  date: z.string(),
+  type: z.number().int().nonnegative(),
+  typeUid: z.string().nullable(),
+  orderFlag: z.number().int(),
+  isIngredient: z.boolean(),
+  scale: z.string().nullable(),
+  deleted: z.boolean().optional().default(false),
+});
+
+export type Meal = z.infer<typeof MealStoredSchema>;
+
+// MealSchema — accepts snake_case wire format, transforms to camelCase Meal.
+export const MealSchema = z
+  .object({
+    uid: MealUidSchema,
+    recipe_uid: z.string().nullable(),
+    name: z.string(),
+    date: z.string(),
+    type: z.number().int().nonnegative(),
+    type_uid: z.string().nullable(),
+    order_flag: z.number().int(),
+    is_ingredient: z.boolean(),
+    scale: z.string().nullable(),
+    deleted: z.boolean().optional().default(false),
+  })
+  .transform(
+    ({ recipe_uid, type_uid, order_flag, is_ingredient, ...rest }): Meal => ({
+      ...rest,
+      recipeUid: recipe_uid,
+      typeUid: type_uid,
+      orderFlag: order_flag,
+      isIngredient: is_ingredient,
+    }),
+  );
+
+// MealTypeStoredSchema — validates camelCase JSON read back from disk. No transform.
+// `exportTime` is seconds since midnight (e.g. 28800 = 08:00, 64800 = 18:00).
+// `originalType` is the integer mapping back to one of the four built-in types
+// (Breakfast=0, Lunch=1, Dinner=2, Snacks=3) for built-in types, or `null` for
+// user-created custom types. Verified via mealtypes.har.json capture.
+// `deleted` mirrors the other catalog entities (aisles, grocery ingredients):
+// optional+default false because GET responses omit it for live items, but
+// the soft-delete wire format POSTs it as `true` (see mealtypes.har.json
+// "delete mealtype" capture).
+// None of these fields are used by the read-only history feature; preserved
+// for fidelity and so the sync layer can filter tombstones.
+export const MealTypeStoredSchema = z.object({
+  uid: MealTypeUidSchema,
+  name: z.string(),
+  color: z.string(),
+  orderFlag: z.number().int(),
+  originalType: z.number().int().nullable(),
+  exportAllDay: z.boolean(),
+  exportTime: z.number().int().nonnegative(),
+  deleted: z.boolean().optional().default(false),
+});
+
+export type MealType = z.infer<typeof MealTypeStoredSchema>;
+
+// MealTypeSchema — accepts snake_case wire format, transforms to camelCase MealType.
+export const MealTypeSchema = z
+  .object({
+    uid: MealTypeUidSchema,
+    name: z.string(),
+    color: z.string(),
+    order_flag: z.number().int(),
+    original_type: z.number().int().nullable(),
+    export_all_day: z.boolean(),
+    export_time: z.number().int().nonnegative(),
+    deleted: z.boolean().optional().default(false),
+  })
+  .transform(
+    ({ order_flag, original_type, export_all_day, export_time, ...rest }): MealType => ({
+      ...rest,
+      orderFlag: order_flag,
+      originalType: original_type,
+      exportAllDay: export_all_day,
+      exportTime: export_time,
+    }),
+  );
+
 // AuthResponseSchema - nested object, no transform needed
 export const AuthResponseSchema = z.object({
   result: z.object({

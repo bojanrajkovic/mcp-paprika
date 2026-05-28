@@ -13,6 +13,7 @@ import type {
   GroceryItemSyncResult,
   GroceryList,
   GroceryListSyncResult,
+  Meal,
   PantryItem,
   Recipe,
   RecipeUid,
@@ -43,6 +44,21 @@ function groceryListsEqual(a: GroceryList, b: GroceryList): boolean {
     a.orderFlag === b.orderFlag &&
     a.isDefault === b.isDefault &&
     a.remindersList === b.remindersList &&
+    a.deleted === b.deleted
+  );
+}
+
+function mealsEqual(a: Meal, b: Meal): boolean {
+  return (
+    a.uid === b.uid &&
+    a.recipeUid === b.recipeUid &&
+    a.name === b.name &&
+    a.date === b.date &&
+    a.type === b.type &&
+    a.typeUid === b.typeUid &&
+    a.orderFlag === b.orderFlag &&
+    a.isIngredient === b.isIngredient &&
+    a.scale === b.scale &&
     a.deleted === b.deleted
   );
 }
@@ -343,7 +359,55 @@ export class SyncEngine {
         this.log.debug({ count: orphanIngredientUids.length }, "removed orphan grocery ingredients");
       }
 
-      // 7. Finalization
+      // 7+8. Meal type + meal sync (best-effort). Isolated in their own try
+      // block so a meal-side failure (network blip, schema regression on the
+      // /mealtypes/ or /meals/ endpoint) cannot abort the rest of the cycle
+      // and leave already-fetched recipe/grocery store mutations unflushed.
+      // The meal-history read surface is strictly additive — degrading it to
+      // stale data for one cycle is preferable to regressing core sync.
+      try {
+        // 7. MealType sync (replace-all, no pending-writes — reference catalog like aisles).
+        // Filter `deleted: true` like aisles do: GET responses normally omit
+        // deleted items, but POSTs use `deleted: true` for soft-deletes (see
+        // mealtypes.har.json) so the field is on the schema, and any tombstone
+        // that does reach the wire must not be loaded as an active mealtype.
+        this.log.debug("fetching meal types");
+        const mealTypesRaw = await this._context.client.listMealTypes();
+        const mealTypes = mealTypesRaw.filter((mt) => !mt.deleted);
+        this.log.debug(
+          { count: mealTypes.length, filtered: mealTypesRaw.length - mealTypes.length },
+          "fetched meal types",
+        );
+
+        const cachedMealTypes = await this._context.cache.mealTypes.getAll();
+        const cachedMealTypeUids = new Set(cachedMealTypes.map((mt) => mt.uid));
+        const incomingMealTypeUids = new Set(mealTypes.map((mt) => mt.uid));
+        const orphanMealTypeUids = [...cachedMealTypeUids].filter((uid) => !incomingMealTypeUids.has(uid));
+        await Promise.all(orphanMealTypeUids.map((uid) => this._context.cache.mealTypes.remove(uid)));
+
+        this._context.mealTypeStore.load(mealTypes);
+        await Promise.all(mealTypes.map((mt) => this._context.cache.mealTypes.put(mt)));
+
+        if (orphanMealTypeUids.length > 0) {
+          this.log.debug({ count: orphanMealTypeUids.length }, "removed orphan meal types");
+        }
+
+        // 8. Meal sync (replace-all with orphan cleanup, pending-writes filtered)
+        this.log.debug("fetching meals");
+        await syncReplaceAllEntity({
+          fetch: () => this._context.client.listMeals(),
+          cache: this._context.cache.meals,
+          store: this._context.mealStore,
+          equals: mealsEqual,
+          label: "meals",
+          log: this.log,
+        });
+      } catch (mealError: unknown) {
+        const err = mealError instanceof Error ? mealError : new Error(String(mealError));
+        this.log.warn({ err }, "meal sync failed; core sync will continue");
+      }
+
+      // 9. Finalization
       this.log.debug("flushing cache to disk");
       await this._context.cache.flush();
 
@@ -355,9 +419,19 @@ export class SyncEngine {
       const sweptAisles = this._context.aisleStore.sweepPending();
       const sweptGroceryLists = this._context.groceryListStore.sweepPending();
       const sweptGroceryItems = this._context.groceryItemStore.sweepPending();
-      if (sweptStore > 0 || sweptPantry > 0 || sweptAisles > 0 || sweptGroceryLists > 0 || sweptGroceryItems > 0) {
+      const sweptMeals = this._context.mealStore.sweepPending();
+      const sweptMealTypes = this._context.mealTypeStore.sweepPending();
+      if (
+        sweptStore > 0 ||
+        sweptPantry > 0 ||
+        sweptAisles > 0 ||
+        sweptGroceryLists > 0 ||
+        sweptGroceryItems > 0 ||
+        sweptMeals > 0 ||
+        sweptMealTypes > 0
+      ) {
         this.log.debug(
-          { sweptStore, sweptPantry, sweptAisles, sweptGroceryLists, sweptGroceryItems },
+          { sweptStore, sweptPantry, sweptAisles, sweptGroceryLists, sweptGroceryItems, sweptMeals, sweptMealTypes },
           "swept pending writes past TTL",
         );
       }

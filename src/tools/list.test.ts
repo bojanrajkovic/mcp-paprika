@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { RecipeStore } from "../cache/recipe-store.js";
+import { MealStore } from "../cache/meal-store.js";
 import { makeRecipe } from "../cache/__fixtures__/recipes.js";
+import { makeMeal } from "../cache/__fixtures__/meals.js";
 import { registerListTool } from "./list.js";
 import { makeTestServer, makeCtx, getText } from "./tool-test-utils.js";
 
@@ -118,6 +120,21 @@ describe("p2-discovery-tools: list_recipes tool", () => {
       const text = getText(result);
 
       expect(text).toContain("Showing 3 of 10");
+    });
+  });
+
+  describe("lastCookedAt enrichment", () => {
+    it("includes last cooked metadata when meal history exists", async () => {
+      const recipe = makeRecipe({ name: "Pasta" });
+      const store = new RecipeStore();
+      store.load([recipe], []);
+      const mealStore = new MealStore();
+      mealStore.load([makeMeal({ recipeUid: recipe.uid, date: "2026-04-10 00:00:00" })]);
+      const { server, callTool } = makeTestServer();
+      registerListTool(server, makeCtx(store, server, { mealStore }));
+
+      const result = await callTool("list_recipes", { offset: 0, limit: 25 });
+      expect(getText(result)).toContain("last cooked: 2026-04-10");
     });
   });
 });

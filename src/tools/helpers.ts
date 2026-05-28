@@ -14,7 +14,7 @@ export function coldStartGuard(ctx: ServerContext): Result<void, ReturnType<type
   return ok(undefined);
 }
 
-export function recipeToMarkdown(recipe: Recipe, categoryNames: Array<string>): string {
+export function recipeToMarkdown(recipe: Recipe, categoryNames: Array<string>, lastCookedAt?: string | null): string {
   const lines: Array<string> = [];
 
   lines.push(`# ${recipe.name}`);
@@ -26,6 +26,10 @@ export function recipeToMarkdown(recipe: Recipe, categoryNames: Array<string>): 
 
   lines.push("");
   lines.push(`**Created:** ${recipe.created}`);
+
+  if (lastCookedAt) {
+    lines.push(`**Last Cooked:** ${lastCookedAt.slice(0, 10)}`);
+  }
 
   if (recipe.rating > 0) {
     lines.push(`**Rating:** ${recipe.rating.toString()}/5`);
@@ -106,7 +110,7 @@ export function recipeToMarkdown(recipe: Recipe, categoryNames: Array<string>): 
   return lines.join("\n");
 }
 
-export function recipeMetadataLines(recipe: Recipe): Array<string> {
+export function recipeMetadataLines(recipe: Recipe, lastCookedAt?: string | null): Array<string> {
   const lines: Array<string> = [];
   const timeParts: Array<string> = [];
   if (recipe.prepTime) timeParts.push(`Prep: ${recipe.prepTime}`);
@@ -117,6 +121,9 @@ export function recipeMetadataLines(recipe: Recipe): Array<string> {
   }
   if (recipe.rating > 0) {
     lines.push(`**Rating:** ${recipe.rating.toString()}/5`);
+  }
+  if (lastCookedAt) {
+    lines.push(`**Last Cooked:** ${lastCookedAt.slice(0, 10)}`);
   }
   if (recipe.isPinned) {
     lines.push(`**Pinned:** Yes`);
