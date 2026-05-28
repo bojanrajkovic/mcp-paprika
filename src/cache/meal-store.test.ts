@@ -44,6 +44,16 @@ describe("MealStore", () => {
     it("returns empty for unknown recipe", () => {
       expect(store.getByRecipeUid("recipe-99")).toHaveLength(0);
     });
+
+    it("excludes deleted meals", () => {
+      store.load([
+        makeMeal({ recipeUid: "recipe-1", name: "Live", date: "2026-01-10 00:00:00" }),
+        makeMeal({ recipeUid: "recipe-1", name: "Tombstone", date: "2026-01-15 00:00:00", deleted: true }),
+      ]);
+      const meals = store.getByRecipeUid("recipe-1");
+      expect(meals).toHaveLength(1);
+      expect(meals[0]!.name).toBe("Live");
+    });
   });
 
   describe("lastCookedAt", () => {
@@ -72,6 +82,15 @@ describe("MealStore", () => {
     it("returns null when all entries are isIngredient", () => {
       store.load([makeMeal({ recipeUid: "recipe-1", date: "2026-01-15 00:00:00", isIngredient: true })]);
       expect(store.lastCookedAt("recipe-1")).toBeNull();
+    });
+
+    it("excludes deleted meals", () => {
+      store.load([
+        makeMeal({ recipeUid: "recipe-1", date: "2026-01-15 00:00:00" }),
+        // A later deleted entry must NOT shadow the live one as "most recent"
+        makeMeal({ recipeUid: "recipe-1", date: "2026-03-20 00:00:00", deleted: true }),
+      ]);
+      expect(store.lastCookedAt("recipe-1")).toBe("2026-01-15 00:00:00");
     });
   });
 
@@ -116,6 +135,42 @@ describe("MealStore", () => {
       const { meals, total } = store.getInDateRange({ typeUid: "l" });
       expect(total).toBe(1);
       expect(meals[0]!.name).toBe("Feb Lunch");
+    });
+
+    it("includes legacy meals (typeUid: null) matching legacyTypeInteger", () => {
+      // Add a legacy meal: no typeUid, just the integer type
+      store.load([
+        makeMeal({ name: "Legacy Dinner", date: "2026-01-10 00:00:00", type: 2, typeUid: null }),
+        makeMeal({ name: "Modern Dinner", date: "2026-01-15 00:00:00", type: 2, typeUid: "dinner-uid" }),
+        makeMeal({ name: "Legacy Lunch", date: "2026-01-10 00:00:00", type: 1, typeUid: null }),
+      ]);
+      const { meals, total } = store.getInDateRange({
+        typeUid: "dinner-uid",
+        legacyTypeInteger: 2,
+      });
+      expect(total).toBe(2);
+      expect(meals.map((m) => m.name).sort()).toEqual(["Legacy Dinner", "Modern Dinner"]);
+    });
+
+    it("does not match legacy meals when legacyTypeInteger is omitted (custom-type filter)", () => {
+      store.load([
+        makeMeal({ name: "Legacy Dinner", date: "2026-01-10 00:00:00", type: 2, typeUid: null }),
+        makeMeal({ name: "Custom Type", date: "2026-01-15 00:00:00", type: 4, typeUid: "custom-uid" }),
+      ]);
+      // typeUid set, but no legacyTypeInteger → legacy meals must NOT match
+      const { meals, total } = store.getInDateRange({ typeUid: "custom-uid" });
+      expect(total).toBe(1);
+      expect(meals[0]!.name).toBe("Custom Type");
+    });
+
+    it("excludes deleted meals from all queries", () => {
+      store.load([
+        makeMeal({ recipeUid: "recipe-1", name: "Live Meal", date: "2026-01-10 00:00:00" }),
+        makeMeal({ recipeUid: "recipe-1", name: "Deleted Meal", date: "2026-01-15 00:00:00", deleted: true }),
+      ]);
+      const { meals, total } = store.getInDateRange();
+      expect(total).toBe(1);
+      expect(meals[0]!.name).toBe("Live Meal");
     });
 
     it("sorts date-descending, then type-ascending within same date", () => {

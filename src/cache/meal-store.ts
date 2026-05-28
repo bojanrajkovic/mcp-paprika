@@ -7,6 +7,15 @@ export interface MealDateRangeOpts {
   readonly until?: DateTime | undefined;
   readonly recipeUid?: string | undefined;
   readonly typeUid?: string | undefined;
+  /**
+   * When `typeUid` resolves to a built-in mealtype (Breakfast/Lunch/Dinner/
+   * Snacks — those with non-null `originalType`), pass the integer here so
+   * legacy meals (predating Paprika's user-customizable mealtypes catalog —
+   * i.e. `meal.typeUid === null`) with a matching `meal.type` integer are
+   * also returned. Omit for custom-type filters; legacy meals have no UID
+   * relationship to custom types.
+   */
+  readonly legacyTypeInteger?: number | undefined;
   readonly offset?: number | undefined;
   readonly limit?: number | undefined;
 }
@@ -20,6 +29,26 @@ function parseMealDate(date: string): DateTime {
   return DateTime.fromFormat(date, "yyyy-MM-dd HH:mm:ss", { zone: "utc" });
 }
 
+// Should the meal be hidden from all history queries?
+// `deleted: true` items can land in the in-memory store via syncReplaceAllEntity
+// (the sync engine loads every wire item; tombstone filtering is the query
+// layer's job). `isIngredient: true` items are prep-work entries, not served
+// meals — see lastCookedAt comment for the rationale.
+function isHidden(meal: Meal): boolean {
+  return meal.deleted || meal.isIngredient;
+}
+
+function matchesTypeFilter(meal: Meal, opts: MealDateRangeOpts): boolean {
+  if (opts.typeUid === undefined) return true;
+  if (meal.typeUid === opts.typeUid) return true;
+  // Legacy meals (typeUid: null) carry only the integer `type`. When the
+  // caller targets a built-in, accept legacy meals whose integer matches.
+  if (meal.typeUid === null && opts.legacyTypeInteger !== undefined && meal.type === opts.legacyTypeInteger) {
+    return true;
+  }
+  return false;
+}
+
 export class MealStore extends TombstoneEntityStore<Meal, MealUid> {
   constructor(opts?: { readonly pendingWriteTtlMs?: number }) {
     super(opts ?? {});
@@ -28,7 +57,8 @@ export class MealStore extends TombstoneEntityStore<Meal, MealUid> {
   getByRecipeUid(recipeUid: string): Array<Meal> {
     const result: Array<Meal> = [];
     for (const meal of this._items.values()) {
-      if (meal.recipeUid === recipeUid && !meal.isIngredient) {
+      if (isHidden(meal)) continue;
+      if (meal.recipeUid === recipeUid) {
         result.push(meal);
       }
     }
@@ -40,7 +70,8 @@ export class MealStore extends TombstoneEntityStore<Meal, MealUid> {
     let latestDt: DateTime | null = null;
 
     for (const meal of this._items.values()) {
-      if (meal.recipeUid !== recipeUid || meal.isIngredient) continue;
+      if (isHidden(meal)) continue;
+      if (meal.recipeUid !== recipeUid) continue;
       const dt = parseMealDate(meal.date);
       if (!dt.isValid) continue;
       if (latestDt === null || dt > latestDt) {
@@ -56,10 +87,10 @@ export class MealStore extends TombstoneEntityStore<Meal, MealUid> {
     const filtered: Array<{ meal: Meal; dt: DateTime }> = [];
 
     for (const meal of this._items.values()) {
-      if (meal.isIngredient) continue;
+      if (isHidden(meal)) continue;
 
       if (opts?.recipeUid !== undefined && meal.recipeUid !== opts.recipeUid) continue;
-      if (opts?.typeUid !== undefined && meal.typeUid !== opts.typeUid) continue;
+      if (opts !== undefined && !matchesTypeFilter(meal, opts)) continue;
 
       const dt = parseMealDate(meal.date);
       if (!dt.isValid) continue;

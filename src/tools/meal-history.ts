@@ -99,9 +99,19 @@ export function registerMealHistoryTool(server: McpServer, ctx: ServerContext): 
       return mealStartGuard(ctx).match(
         async (): Promise<CallToolResult> => {
           let typeUid: string | undefined;
+          // Captured when the resolved typeUid belongs to a built-in mealtype
+          // (non-null originalType). MealStore.getInDateRange uses it to also
+          // surface legacy meals (typeUid: null, integer-only) matching the
+          // built-in. Undefined for custom-type filters.
+          let legacyTypeInteger: number | undefined;
           if (args.type !== undefined) {
             if ("uid" in args.type) {
-              typeUid = args.type.uid;
+              const wantedUid = args.type.uid;
+              typeUid = wantedUid;
+              const mt = ctx.mealTypeStore.getAll().find((m) => m.uid === wantedUid);
+              if (mt?.originalType !== undefined && mt.originalType !== null) {
+                legacyTypeInteger = mt.originalType;
+              }
             } else if ("name" in args.type) {
               const mt = ctx.mealTypeStore.resolveByName(args.type.name);
               if (mt === undefined) {
@@ -110,11 +120,15 @@ export function registerMealHistoryTool(server: McpServer, ctx: ServerContext): 
                 );
               }
               typeUid = mt.uid;
+              if (mt.originalType !== null) {
+                legacyTypeInteger = mt.originalType;
+              }
             } else {
               const builtinInt = args.type.builtin;
               for (const mt of ctx.mealTypeStore.getAll()) {
                 if (mt.originalType === builtinInt) {
                   typeUid = mt.uid;
+                  legacyTypeInteger = builtinInt;
                   break;
                 }
               }
@@ -159,6 +173,7 @@ export function registerMealHistoryTool(server: McpServer, ctx: ServerContext): 
             until,
             recipeUid: args.recipe_uid,
             typeUid,
+            legacyTypeInteger,
             offset,
             limit,
           });
