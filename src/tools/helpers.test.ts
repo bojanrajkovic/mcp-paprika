@@ -1,7 +1,14 @@
 import { fromAny } from "@total-typescript/shoehorn";
 import { describe, it, expect, vi } from "vitest";
 import { makeRecipe, makeCategory } from "../cache/__fixtures__/recipes.js";
-import { coldStartGuard, textResult, recipeToMarkdown, commitRecipe, resolveCategoryNames } from "./helpers.js";
+import {
+  coldStartGuard,
+  textResult,
+  recipeToMarkdown,
+  recipeMetadataLines,
+  commitRecipe,
+  resolveCategoryNames,
+} from "./helpers.js";
 import type { ServerContext } from "../types/server-context.js";
 import { SILENT_LOG } from "../utils/log.js";
 
@@ -16,6 +23,8 @@ const makeCtx = (size: number) =>
     groceryListStore: fromAny({}),
     groceryItemStore: fromAny({}),
     groceryIngredientStore: fromAny({}),
+    mealStore: fromAny({}),
+    mealTypeStore: fromAny({}),
     vectorStore: null,
     server: fromAny({}),
     notifier: {
@@ -267,6 +276,38 @@ describe("p2-u02-shared-helpers: shared helper functions", () => {
     });
   });
 
+  describe("lastCookedAt parameter", () => {
+    it("recipeToMarkdown includes Last Cooked when provided", () => {
+      const recipe = makeRecipe({ name: "Test" });
+      const output = recipeToMarkdown(recipe, [], "2026-05-20 00:00:00");
+      expect(output).toContain("**Last Cooked:** 2026-05-20");
+    });
+
+    it("recipeToMarkdown omits Last Cooked when null", () => {
+      const recipe = makeRecipe({ name: "Test" });
+      const output = recipeToMarkdown(recipe, [], null);
+      expect(output).not.toContain("**Last Cooked:**");
+    });
+
+    it("recipeToMarkdown omits Last Cooked when omitted", () => {
+      const recipe = makeRecipe({ name: "Test" });
+      const output = recipeToMarkdown(recipe, []);
+      expect(output).not.toContain("**Last Cooked:**");
+    });
+
+    it("recipeMetadataLines includes Last Cooked when provided", () => {
+      const recipe = makeRecipe({ rating: 0 });
+      const lines = recipeMetadataLines(recipe, "2026-03-15 00:00:00");
+      expect(lines).toContain("**Last Cooked:** 2026-03-15");
+    });
+
+    it("recipeMetadataLines omits Last Cooked when null", () => {
+      const recipe = makeRecipe({ rating: 0 });
+      const lines = recipeMetadataLines(recipe, null);
+      expect(lines.some((l) => l.includes("Last Cooked"))).toBe(false);
+    });
+  });
+
   describe("p2-recipe-crud.AC-helpers: resolveCategoryNames", () => {
     it("p2-recipe-crud.AC-helpers.1: exact name match returns the category's UID in uids and empty unknown array", () => {
       const cat = makeCategory({ name: "Desserts" });
@@ -334,6 +375,8 @@ describe("p2-u02-shared-helpers: shared helper functions", () => {
         groceryListStore: fromAny({}),
         groceryItemStore: fromAny({}),
         groceryIngredientStore: fromAny({}),
+        mealStore: fromAny({}),
+        mealTypeStore: fromAny({}),
         vectorStore: null,
         server: fromAny({}),
         notifier: {
@@ -386,6 +429,8 @@ describe("p2-u02-shared-helpers: shared helper functions", () => {
         groceryListStore: fromAny({}),
         groceryItemStore: fromAny({}),
         groceryIngredientStore: fromAny({}),
+        mealStore: fromAny({}),
+        mealTypeStore: fromAny({}),
         vectorStore: null,
         server: fromAny({}),
         notifier: {
@@ -422,6 +467,8 @@ describe("p2-u02-shared-helpers: shared helper functions", () => {
         groceryListStore: fromAny({}),
         groceryItemStore: fromAny({}),
         groceryIngredientStore: fromAny({}),
+        mealStore: fromAny({}),
+        mealTypeStore: fromAny({}),
         vectorStore: null,
         server: fromAny({}),
         notifier: {
@@ -461,6 +508,8 @@ describe("p2-u02-shared-helpers: shared helper functions", () => {
         groceryListStore: fromAny({}),
         groceryItemStore: fromAny({}),
         groceryIngredientStore: fromAny({}),
+        mealStore: fromAny({}),
+        mealTypeStore: fromAny({}),
         vectorStore: null,
         server: fromAny({}),
         notifier: {

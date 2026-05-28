@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { RecipeStore } from "../cache/recipe-store.js";
+import { MealStore } from "../cache/meal-store.js";
 import { makeRecipe, makeCategory } from "../cache/__fixtures__/recipes.js";
+import { makeMeal } from "../cache/__fixtures__/meals.js";
 import { registerSearchTool } from "./search.js";
 import { makeTestServer, makeCtx, getText, makePinoCapture } from "./tool-test-utils.js";
 
@@ -204,6 +206,21 @@ describe("p2-discovery-tools: search_recipes tool", () => {
       expect(invocation?.["tool"]).toBe("search_recipes");
       expect(invocation?.["query"]).toBe("chocolate");
       expect(invocation?.["level"]).toBe(30); // pino info = 30
+    });
+  });
+
+  describe("lastCookedAt enrichment", () => {
+    it("includes Last Cooked in search results when meal history exists", async () => {
+      const recipe = makeRecipe({ name: "Chicken Soup", ingredients: "chicken, broth" });
+      const store = new RecipeStore();
+      store.load([recipe], []);
+      const mealStore = new MealStore();
+      mealStore.load([makeMeal({ recipeUid: recipe.uid, date: "2026-05-01 00:00:00" })]);
+      const { server, callTool } = makeTestServer();
+      registerSearchTool(server, makeCtx(store, server, { mealStore }));
+
+      const result = await callTool("search_recipes", { query: "chicken", limit: 20 });
+      expect(getText(result)).toContain("**Last Cooked:** 2026-05-01");
     });
   });
 });

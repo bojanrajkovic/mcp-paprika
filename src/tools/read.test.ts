@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { RecipeStore } from "../cache/recipe-store.js";
+import { MealStore } from "../cache/meal-store.js";
 import { makeRecipe, makeCategory } from "../cache/__fixtures__/recipes.js";
+import { makeMeal } from "../cache/__fixtures__/meals.js";
 import { registerReadTool } from "./read.js";
 import { makeTestServer, makeCtx, getText } from "./tool-test-utils.js";
 
@@ -153,6 +155,21 @@ describe("p2-recipe-crud: read_recipe tool", () => {
       // Should return recipe1's content (UID wins)
       expect(text).toContain("# First Recipe");
       expect(text).not.toContain("# First\n"); // Avoid matching "First Recipe" as partial
+    });
+  });
+
+  describe("lastCookedAt enrichment", () => {
+    it("includes Last Cooked when meal history exists for the recipe", async () => {
+      const recipe = makeRecipe({ name: "Pasta" });
+      const store = new RecipeStore();
+      store.load([recipe], []);
+      const mealStore = new MealStore();
+      mealStore.load([makeMeal({ recipeUid: recipe.uid, date: "2026-03-15 00:00:00" })]);
+      const { server, callTool } = makeTestServer();
+      registerReadTool(server, makeCtx(store, server, { mealStore }));
+
+      const result = await callTool("read_recipe", { uid: recipe.uid });
+      expect(getText(result)).toContain("**Last Cooked:** 2026-03-15");
     });
   });
 });

@@ -28,6 +28,8 @@ import { AisleStore as RealAisleStore } from "../cache/aisle-store.js";
 import { GroceryIngredientStore } from "../cache/grocery-ingredient-store.js";
 import { GroceryItemStore } from "../cache/grocery-item-store.js";
 import { GroceryListStore } from "../cache/grocery-list-store.js";
+import { MealStore } from "../cache/meal-store.js";
+import { MealTypeStore } from "../cache/meal-type-store.js";
 import { makeGroceryList } from "../cache/__fixtures__/grocery-lists.js";
 import { makeGroceryItem } from "../cache/__fixtures__/grocery-items.js";
 import { makeGroceryIngredient } from "../cache/__fixtures__/grocery-ingredients.js";
@@ -63,6 +65,8 @@ function makeMockClient(): PaprikaClient {
     listGroceryLists: vi.fn().mockResolvedValue([]),
     listGroceryItems: vi.fn().mockResolvedValue([]),
     listGroceryIngredients: vi.fn().mockResolvedValue([]),
+    listMeals: vi.fn().mockResolvedValue([]),
+    listMealTypes: vi.fn().mockResolvedValue([]),
   });
 }
 
@@ -94,6 +98,16 @@ function makeMockCache(): DiskCacheRoot {
       remove: vi.fn().mockResolvedValue(undefined),
     },
     groceryIngredients: {
+      getAll: vi.fn().mockResolvedValue([]),
+      put: vi.fn().mockResolvedValue(undefined),
+      remove: vi.fn().mockResolvedValue(undefined),
+    },
+    meals: {
+      getAll: vi.fn().mockResolvedValue([]),
+      put: vi.fn().mockResolvedValue(undefined),
+      remove: vi.fn().mockResolvedValue(undefined),
+    },
+    mealTypes: {
       getAll: vi.fn().mockResolvedValue([]),
       put: vi.fn().mockResolvedValue(undefined),
       remove: vi.fn().mockResolvedValue(undefined),
@@ -152,6 +166,8 @@ function makeTestContext(): AppContext {
     groceryListStore: new GroceryListStore(),
     groceryItemStore: new GroceryItemStore(),
     groceryIngredientStore: new GroceryIngredientStore(),
+    mealStore: new MealStore(),
+    mealTypeStore: new MealTypeStore(),
     vectorStore: null,
     notifier: makeMockNotifier(),
     auth: null,
@@ -362,6 +378,8 @@ describe("syncOnce", () => {
       listGroceryLists: vi.fn().mockResolvedValue([]),
       listGroceryItems: vi.fn().mockResolvedValue([]),
       listGroceryIngredients: vi.fn().mockResolvedValue([]),
+      listMeals: vi.fn().mockResolvedValue([]),
+      listMealTypes: vi.fn().mockResolvedValue([]),
     });
   }
 
@@ -416,6 +434,16 @@ describe("syncOnce", () => {
         put: vi.fn().mockResolvedValue(undefined),
         remove: vi.fn().mockResolvedValue(undefined),
         ...overrides?.groceryIngredients,
+      },
+      meals: {
+        getAll: vi.fn().mockResolvedValue([]),
+        put: vi.fn().mockResolvedValue(undefined),
+        remove: vi.fn().mockResolvedValue(undefined),
+      },
+      mealTypes: {
+        getAll: vi.fn().mockResolvedValue([]),
+        put: vi.fn().mockResolvedValue(undefined),
+        remove: vi.fn().mockResolvedValue(undefined),
       },
       flush: overrides?.flush ?? vi.fn().mockResolvedValue(undefined),
     });
@@ -480,6 +508,8 @@ describe("syncOnce", () => {
       groceryListStore: new GroceryListStore(),
       groceryItemStore: new GroceryItemStore(),
       groceryIngredientStore: new GroceryIngredientStore(),
+      mealStore: new MealStore(),
+      mealTypeStore: new MealTypeStore(),
       vectorStore: null,
       notifier: { ...makeMockNotifierDefault(), ...notifierOverrides } as Notifier,
       auth: null,
@@ -811,6 +841,8 @@ describe("syncOnce", () => {
       groceryListStore: new GroceryListStore(),
       groceryItemStore: new GroceryItemStore(),
       groceryIngredientStore: new GroceryIngredientStore(),
+      mealStore: new MealStore(),
+      mealTypeStore: new MealTypeStore(),
       vectorStore: null,
       notifier,
       auth: null,
@@ -845,6 +877,8 @@ describe("syncOnce", () => {
       groceryListStore: new GroceryListStore(),
       groceryItemStore: new GroceryItemStore(),
       groceryIngredientStore: new GroceryIngredientStore(),
+      mealStore: new MealStore(),
+      mealTypeStore: new MealTypeStore(),
       vectorStore: null,
       notifier,
       auth: null,
@@ -1142,6 +1176,8 @@ describe("syncOnce", () => {
           listGroceryLists: vi.fn().mockResolvedValue([]),
           listGroceryItems: vi.fn().mockResolvedValue([]),
           listGroceryIngredients: vi.fn().mockResolvedValue([]),
+          listMeals: vi.fn().mockResolvedValue([]),
+          listMealTypes: vi.fn().mockResolvedValue([]),
         }),
         cache: fromAny({
           recipes: {
@@ -1171,6 +1207,16 @@ describe("syncOnce", () => {
             put: vi.fn().mockResolvedValue(undefined),
             remove: vi.fn().mockResolvedValue(undefined),
           },
+          meals: {
+            getAll: vi.fn().mockResolvedValue([]),
+            put: vi.fn().mockResolvedValue(undefined),
+            remove: vi.fn().mockResolvedValue(undefined),
+          },
+          mealTypes: {
+            getAll: vi.fn().mockResolvedValue([]),
+            put: vi.fn().mockResolvedValue(undefined),
+            remove: vi.fn().mockResolvedValue(undefined),
+          },
           flush: vi.fn().mockResolvedValue(undefined),
         }),
         store: fromAny({
@@ -1189,6 +1235,8 @@ describe("syncOnce", () => {
         groceryListStore: new GroceryListStore(),
         groceryItemStore: new GroceryItemStore(),
         groceryIngredientStore: new GroceryIngredientStore(),
+        mealStore: new MealStore(),
+        mealTypeStore: new MealTypeStore(),
         vectorStore: null,
         notifier: makeMockNotifier(),
         auth: null,
@@ -1214,6 +1262,8 @@ describe("syncOnce", () => {
           listGroceryLists: vi.fn().mockResolvedValue([]),
           listGroceryItems: vi.fn().mockResolvedValue([]),
           listGroceryIngredients: vi.fn().mockResolvedValue([]),
+          listMeals: vi.fn().mockResolvedValue([]),
+          listMealTypes: vi.fn().mockResolvedValue([]),
         }),
         cache: fromAny({
           recipes: {
@@ -1243,6 +1293,16 @@ describe("syncOnce", () => {
             put: vi.fn().mockResolvedValue(undefined),
             remove: vi.fn().mockResolvedValue(undefined),
           },
+          meals: {
+            getAll: vi.fn().mockResolvedValue([]),
+            put: vi.fn().mockResolvedValue(undefined),
+            remove: vi.fn().mockResolvedValue(undefined),
+          },
+          mealTypes: {
+            getAll: vi.fn().mockResolvedValue([]),
+            put: vi.fn().mockResolvedValue(undefined),
+            remove: vi.fn().mockResolvedValue(undefined),
+          },
           flush: vi.fn().mockResolvedValue(undefined),
         }),
         store: fromAny({
@@ -1261,6 +1321,8 @@ describe("syncOnce", () => {
         groceryListStore: new GroceryListStore(),
         groceryItemStore: new GroceryItemStore(),
         groceryIngredientStore: new GroceryIngredientStore(),
+        mealStore: new MealStore(),
+        mealTypeStore: new MealTypeStore(),
         vectorStore: null,
         notifier: makeMockNotifier(),
         auth: null,
@@ -1425,6 +1487,8 @@ describe("syncOnce", () => {
         groceryListStore,
         groceryItemStore: new GroceryItemStore(),
         groceryIngredientStore: new GroceryIngredientStore(),
+        mealStore: new MealStore(),
+        mealTypeStore: new MealTypeStore(),
         vectorStore: null,
         notifier: makeMockNotifier(),
         auth: null,
@@ -1464,6 +1528,8 @@ describe("syncOnce", () => {
         groceryListStore,
         groceryItemStore: new GroceryItemStore(),
         groceryIngredientStore: new GroceryIngredientStore(),
+        mealStore: new MealStore(),
+        mealTypeStore: new MealTypeStore(),
         vectorStore: null,
         notifier: makeMockNotifier(),
         auth: null,
@@ -1503,6 +1569,8 @@ describe("syncOnce", () => {
         groceryListStore,
         groceryItemStore: new GroceryItemStore(),
         groceryIngredientStore: new GroceryIngredientStore(),
+        mealStore: new MealStore(),
+        mealTypeStore: new MealTypeStore(),
         vectorStore: null,
         notifier: makeMockNotifier(),
         auth: null,
@@ -1545,6 +1613,8 @@ describe("syncOnce", () => {
         groceryListStore,
         groceryItemStore: new GroceryItemStore(),
         groceryIngredientStore: new GroceryIngredientStore(),
+        mealStore: new MealStore(),
+        mealTypeStore: new MealTypeStore(),
         vectorStore: null,
         notifier: makeMockNotifier(),
         auth: null,
@@ -1588,6 +1658,8 @@ describe("syncOnce", () => {
         groceryListStore: new GroceryListStore(),
         groceryItemStore,
         groceryIngredientStore: new GroceryIngredientStore(),
+        mealStore: new MealStore(),
+        mealTypeStore: new MealTypeStore(),
         vectorStore: null,
         notifier: makeMockNotifier(),
         auth: null,
@@ -1626,6 +1698,8 @@ describe("syncOnce", () => {
         groceryListStore: new GroceryListStore(),
         groceryItemStore: new GroceryItemStore(),
         groceryIngredientStore: new GroceryIngredientStore(),
+        mealStore: new MealStore(),
+        mealTypeStore: new MealTypeStore(),
         vectorStore: null,
         notifier: makeMockNotifier(),
         auth: null,
@@ -1665,6 +1739,8 @@ describe("syncOnce", () => {
         groceryListStore: new GroceryListStore(),
         groceryItemStore,
         groceryIngredientStore: new GroceryIngredientStore(),
+        mealStore: new MealStore(),
+        mealTypeStore: new MealTypeStore(),
         vectorStore: null,
         notifier: makeMockNotifier(),
         auth: null,
@@ -1706,6 +1782,8 @@ describe("syncOnce", () => {
         groceryListStore: new GroceryListStore(),
         groceryItemStore,
         groceryIngredientStore: new GroceryIngredientStore(),
+        mealStore: new MealStore(),
+        mealTypeStore: new MealTypeStore(),
         vectorStore: null,
         notifier: makeMockNotifier(),
         auth: null,
@@ -1806,6 +1884,8 @@ describe("syncOnce", () => {
         groceryListStore,
         groceryItemStore,
         groceryIngredientStore: new GroceryIngredientStore(),
+        mealStore: new MealStore(),
+        mealTypeStore: new MealTypeStore(),
         vectorStore: null,
         notifier: makeMockNotifier(),
         auth: null,
@@ -1848,6 +1928,8 @@ describe("syncOnce", () => {
         groceryListStore,
         groceryItemStore: new GroceryItemStore(),
         groceryIngredientStore: new GroceryIngredientStore(),
+        mealStore: new MealStore(),
+        mealTypeStore: new MealTypeStore(),
         vectorStore: null,
         notifier: makeMockNotifier(),
         auth: null,
@@ -1886,6 +1968,8 @@ describe("syncOnce", () => {
         groceryListStore,
         groceryItemStore: new GroceryItemStore(),
         groceryIngredientStore: new GroceryIngredientStore(),
+        mealStore: new MealStore(),
+        mealTypeStore: new MealTypeStore(),
         vectorStore: null,
         notifier: makeMockNotifier(),
         auth: null,
@@ -1924,6 +2008,8 @@ describe("syncOnce", () => {
         groceryListStore: new GroceryListStore(),
         groceryItemStore,
         groceryIngredientStore: new GroceryIngredientStore(),
+        mealStore: new MealStore(),
+        mealTypeStore: new MealTypeStore(),
         vectorStore: null,
         notifier: makeMockNotifier(),
         auth: null,
@@ -1962,6 +2048,8 @@ describe("syncOnce", () => {
         groceryListStore: new GroceryListStore(),
         groceryItemStore,
         groceryIngredientStore: new GroceryIngredientStore(),
+        mealStore: new MealStore(),
+        mealTypeStore: new MealTypeStore(),
         vectorStore: null,
         notifier: makeMockNotifier(),
         auth: null,
@@ -1987,6 +2075,8 @@ describe("syncOnce", () => {
         client: fromAny({
           ...makeMockClient(),
           listGroceryIngredients: vi.fn().mockResolvedValue([activeIngredient, deletedIngredient]),
+          listMeals: vi.fn().mockResolvedValue([]),
+          listMealTypes: vi.fn().mockResolvedValue([]),
         }),
         cache: fromAny({
           ...makeMockCache(),
@@ -2002,6 +2092,8 @@ describe("syncOnce", () => {
         groceryListStore: new GroceryListStore(),
         groceryItemStore: new GroceryItemStore(),
         groceryIngredientStore,
+        mealStore: new MealStore(),
+        mealTypeStore: new MealTypeStore(),
         vectorStore: null,
         notifier: makeMockNotifier(),
         auth: null,
@@ -2028,6 +2120,8 @@ describe("syncOnce", () => {
         client: fromAny({
           ...makeMockClient(),
           listGroceryIngredients: vi.fn().mockResolvedValue([activeIngredient]),
+          listMeals: vi.fn().mockResolvedValue([]),
+          listMealTypes: vi.fn().mockResolvedValue([]),
         }),
         cache: fromAny({
           ...makeMockCache(),
@@ -2043,6 +2137,8 @@ describe("syncOnce", () => {
         groceryListStore: new GroceryListStore(),
         groceryItemStore: new GroceryItemStore(),
         groceryIngredientStore: new GroceryIngredientStore(),
+        mealStore: new MealStore(),
+        mealTypeStore: new MealTypeStore(),
         vectorStore: null,
         notifier: makeMockNotifier(),
         auth: null,
@@ -2223,6 +2319,8 @@ describe("syncOnce", () => {
         groceryListStore: realGroceryListStore,
         groceryItemStore: new GroceryItemStore(),
         groceryIngredientStore: new GroceryIngredientStore(),
+        mealStore: new MealStore(),
+        mealTypeStore: new MealTypeStore(),
         vectorStore: null,
         notifier: makeMockNotifier(),
         auth: null,
@@ -2268,6 +2366,8 @@ describe("syncOnce", () => {
         groceryListStore: new GroceryListStore(),
         groceryItemStore: realGroceryItemStore,
         groceryIngredientStore: new GroceryIngredientStore(),
+        mealStore: new MealStore(),
+        mealTypeStore: new MealTypeStore(),
         vectorStore: null,
         notifier: makeMockNotifier(),
         auth: null,
@@ -2298,6 +2398,8 @@ describe("syncOnce", () => {
         client: fromAny({
           ...makeMockClient(),
           listGroceryIngredients: vi.fn().mockResolvedValue([cachedIngredient]),
+          listMeals: vi.fn().mockResolvedValue([]),
+          listMealTypes: vi.fn().mockResolvedValue([]),
         }),
         cache: fromAny({
           ...makeMockCache(),
@@ -2313,6 +2415,8 @@ describe("syncOnce", () => {
         groceryListStore: new GroceryListStore(),
         groceryItemStore: new GroceryItemStore(),
         groceryIngredientStore: realGroceryIngredientStore,
+        mealStore: new MealStore(),
+        mealTypeStore: new MealTypeStore(),
         vectorStore: null,
         notifier: makeMockNotifier(),
         auth: null,
