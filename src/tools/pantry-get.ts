@@ -19,9 +19,10 @@ export function registerGetPantryItemTool(server: McpServer, ctx: ServerContext)
       inputSchema: {
         lookup: z
           .union([
-            z.object({ uid: z.string() }).describe('Exact pantry item UID, e.g. {"uid": "..."}.'),
+            z.object({ uid: z.string() }).strict().describe('Exact pantry item UID, e.g. {"uid": "..."}.'),
             z
               .object({ ingredient: z.string() })
+              .strict()
               .describe('Ingredient name fuzzy match, e.g. {"ingredient": "Olive Oil"}.'),
           ])
           .describe('Pick exactly one shape: {"uid": "..."} or {"ingredient": "..."}.'),

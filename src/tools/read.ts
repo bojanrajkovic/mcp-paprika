@@ -17,8 +17,11 @@ export function registerReadTool(server: McpServer, ctx: ServerContext): void {
       inputSchema: {
         lookup: z
           .union([
-            z.object({ uid: z.string() }).describe('Exact recipe UID, e.g. {"uid": "..."}.'),
-            z.object({ title: z.string() }).describe('Recipe title fuzzy match, e.g. {"title": "Chocolate Cake"}.'),
+            z.object({ uid: z.string() }).strict().describe('Exact recipe UID, e.g. {"uid": "..."}.'),
+            z
+              .object({ title: z.string() })
+              .strict()
+              .describe('Recipe title fuzzy match, e.g. {"title": "Chocolate Cake"}.'),
           ])
           .describe('Pick exactly one shape: {"uid": "..."} or {"title": "..."}.'),
       },

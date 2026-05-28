@@ -72,10 +72,14 @@ export function registerMealHistoryTool(server: McpServer, ctx: ServerContext): 
         // a single overloaded string (e.g. a custom mealtype named "2").
         type: z
           .union([
-            z.object({ name: z.string() }).describe('Resolve by name, e.g. {"name": "Dinner"}.'),
-            z.object({ uid: z.string() }).describe('Use a mealtype UID directly, e.g. {"uid": "216713D08860..."}.'),
+            z.object({ name: z.string() }).strict().describe('Resolve by name, e.g. {"name": "Dinner"}.'),
+            z
+              .object({ uid: z.string() })
+              .strict()
+              .describe('Use a mealtype UID directly, e.g. {"uid": "216713D08860..."}.'),
             z
               .object({ builtin: z.number().int().min(0).max(3) })
+              .strict()
               .describe('Pick a built-in: 0=Breakfast, 1=Lunch, 2=Dinner, 3=Snacks. e.g. {"builtin": 2}.'),
           ])
           .optional()
