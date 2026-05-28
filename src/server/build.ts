@@ -177,7 +177,7 @@ export async function buildAppContext(
   log.info({ count: cachedMeals.length }, "hydrated meal store from cache");
 
   const mealTypeStore = new MealTypeStore({ pendingWriteTtlMs });
-  const cachedMealTypes = await cache.mealTypes.getAll();
+  const cachedMealTypes = (await cache.mealTypes.getAll()).filter((mt) => !mt.deleted);
   if (cachedMealTypes.length > 0) {
     mealTypeStore.load(cachedMealTypes);
   }

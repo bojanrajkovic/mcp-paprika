@@ -147,21 +147,24 @@ describe("wire-shape drift detection", () => {
       expect(schemaKeys).toEqual([...wireGetKeys, "deleted"].sort());
     });
 
-    it("MealTypeSchema accepts all fields from GET meal types", () => {
+    it("MealTypeSchema accepts all fields from GET meal types (plus deleted)", () => {
       const wireGetKeys = wireKeys(refFixture("GET meal types catalog (user-customizable, like aisles)"), "response");
       const schemaKeys = schemaInputKeys(MealTypeSchema);
-      expect(schemaKeys).toEqual(wireGetKeys);
+      // GET responses omit deleted for live items; schema has it with optional().default(false)
+      // so the sync layer can filter soft-deleted mealtypes (same pattern as aisles/grocery entities).
+      expect(schemaKeys).toEqual([...wireGetKeys, "deleted"].sort());
     });
 
-    it("MealTypeSchema fields are a superset of POST create body (plus deleted)", () => {
+    it("MealTypeSchema matches POST create body exactly (deleted included)", () => {
       const wirePostKeys = wireKeys(
         mealtypeFixture("create mealtype ([mcp-cap] Brunch — custom type with original_type: null)"),
         "request",
       );
       const schemaKeys = schemaInputKeys(MealTypeSchema);
-      // POST body carries `deleted` (false on create, true on soft-delete); schema does not model it
-      // because GET responses omit it for live items.
-      expect(schemaKeys).toEqual(wirePostKeys.filter((k) => k !== "deleted").sort());
+      // Schema now models `deleted` so the sync layer can filter soft-deleted
+      // mealtypes (same as aisles/grocery entities). POST body carries it as
+      // `false` on create and `true` on soft-delete — exact match either way.
+      expect(schemaKeys).toEqual(wirePostKeys);
     });
 
     it("MealTypeSchema accepts custom mealtypes with original_type: null from real POST capture", () => {

@@ -366,10 +366,18 @@ export class SyncEngine {
       // The meal-history read surface is strictly additive — degrading it to
       // stale data for one cycle is preferable to regressing core sync.
       try {
-        // 7. MealType sync (replace-all, no pending-writes — reference catalog like aisles)
+        // 7. MealType sync (replace-all, no pending-writes — reference catalog like aisles).
+        // Filter `deleted: true` like aisles do: GET responses normally omit
+        // deleted items, but POSTs use `deleted: true` for soft-deletes (see
+        // mealtypes.har.json) so the field is on the schema, and any tombstone
+        // that does reach the wire must not be loaded as an active mealtype.
         this.log.debug("fetching meal types");
-        const mealTypes = await this._context.client.listMealTypes();
-        this.log.debug({ count: mealTypes.length }, "fetched meal types");
+        const mealTypesRaw = await this._context.client.listMealTypes();
+        const mealTypes = mealTypesRaw.filter((mt) => !mt.deleted);
+        this.log.debug(
+          { count: mealTypes.length, filtered: mealTypesRaw.length - mealTypes.length },
+          "fetched meal types",
+        );
 
         const cachedMealTypes = await this._context.cache.mealTypes.getAll();
         const cachedMealTypeUids = new Set(cachedMealTypes.map((mt) => mt.uid));

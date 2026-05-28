@@ -33,6 +33,7 @@ export function makeMealType(overrides?: Partial<MealType>): MealType {
     originalType: mealTypeCounter - 1,
     exportAllDay: false,
     exportTime: 43200, // 12:00 = 12 * 3600 (seconds since midnight)
+    deleted: false,
     ...overrides,
   };
 }

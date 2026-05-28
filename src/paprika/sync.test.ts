@@ -2477,6 +2477,44 @@ describe("syncOnce", () => {
       // Four core sync:complete events fire regardless of meal-side failure
       expect(completeEvents).toEqual(expect.arrayContaining(["recipes", "pantry", "grocery-lists", "grocery-items"]));
     });
+
+    it("filters soft-deleted meal types out of the store load", async () => {
+      const liveMt = {
+        uid: "live-uid",
+        name: "Live",
+        color: "",
+        orderFlag: 0,
+        originalType: 0,
+        exportAllDay: false,
+        exportTime: 0,
+        deleted: false,
+      };
+      const deletedMt = {
+        uid: "dead-uid",
+        name: "Dead",
+        color: "",
+        orderFlag: 1,
+        originalType: 1,
+        exportAllDay: false,
+        exportTime: 0,
+        deleted: true,
+      };
+
+      const load = vi.fn();
+      const engine = makeSyncEngine({ listMealTypes: vi.fn().mockResolvedValue([liveMt, deletedMt]) });
+      // Replace mealTypeStore.load via context spy
+      // Cannot easily intercept; instead assert via cache.put (only live one written)
+      const putMealType = vi.fn();
+      const ctxAny = (engine as unknown as { _context: AppContext })._context;
+      (ctxAny.cache.mealTypes as unknown as { put: typeof putMealType }).put = putMealType;
+      (ctxAny.cache.mealTypes as unknown as { getAll: typeof load }).getAll = vi.fn().mockResolvedValue([]);
+
+      await engine.syncOnce();
+
+      // Only the live mealtype is persisted; the deleted one is filtered before cache.put
+      expect(putMealType).toHaveBeenCalledTimes(1);
+      expect(putMealType).toHaveBeenCalledWith(liveMt);
+    });
   });
 });
 
