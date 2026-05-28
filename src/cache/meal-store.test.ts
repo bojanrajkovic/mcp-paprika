@@ -92,6 +92,22 @@ describe("MealStore", () => {
       ]);
       expect(store.lastCookedAt("recipe-1")).toBe("2026-01-15 00:00:00");
     });
+
+    it("excludes future planner entries", () => {
+      const now = DateTime.fromISO("2026-03-01T00:00:00", { zone: "utc" });
+      store.load([
+        makeMeal({ recipeUid: "recipe-1", date: "2026-01-15 00:00:00" }),
+        // A scheduled future planner entry should NOT count as last cooked
+        makeMeal({ recipeUid: "recipe-1", date: "2026-04-20 00:00:00" }),
+      ]);
+      expect(store.lastCookedAt("recipe-1", now)).toBe("2026-01-15 00:00:00");
+    });
+
+    it("returns null when only future entries exist", () => {
+      const now = DateTime.fromISO("2026-03-01T00:00:00", { zone: "utc" });
+      store.load([makeMeal({ recipeUid: "recipe-1", date: "2026-04-20 00:00:00" })]);
+      expect(store.lastCookedAt("recipe-1", now)).toBeNull();
+    });
   });
 
   describe("getInDateRange", () => {

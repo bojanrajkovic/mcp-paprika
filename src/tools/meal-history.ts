@@ -182,6 +182,16 @@ export function registerMealHistoryTool(server: McpServer, ctx: ServerContext): 
             return textResult("No meals found matching the given filters.");
           }
 
+          // Offset beyond the end of the result set — non-empty total but
+          // empty page. Render a clear empty-page message instead of a
+          // misleading "Showing 0 meals (<no range>)" header.
+          if (meals.length === 0) {
+            return textResult(
+              `No meals at offset ${offset.toString()} of ${total.toString()} total. ` +
+                `Try a lower offset (the last page starts at offset ${Math.max(0, total - limit).toString()}).`,
+            );
+          }
+
           const typeNames = new Map<string, string>();
           const typeByOriginalType = new Map<number, string>();
           for (const mt of ctx.mealTypeStore.getAll()) {
@@ -210,10 +220,13 @@ export function registerMealHistoryTool(server: McpServer, ctx: ServerContext): 
           const lastDate = meals.length > 0 ? meals[0]!.date.slice(0, 10) : "";
           const rangeLabel = firstDate === lastDate ? firstDate : `${firstDate} – ${lastDate}`;
 
-          if (total <= limit) {
+          // Clean header only when no offset AND everything fits in one page;
+          // otherwise show the full pagination context so the header always
+          // reflects what's actually rendered.
+          if (offset === 0 && total <= limit) {
             lines.push(`**Showing ${total.toString()} meals (${rangeLabel})**`);
           } else {
-            const end = Math.min(offset + limit, total);
+            const end = offset + meals.length;
             lines.push(
               `**Showing ${(offset + 1).toString()}–${end.toString()} of ${total.toString()} meals (${rangeLabel})**`,
             );

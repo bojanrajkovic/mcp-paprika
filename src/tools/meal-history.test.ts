@@ -168,4 +168,37 @@ describe("list_meal_history tool", () => {
     const result = await callTool("list_meal_history", { since: "not-a-date" });
     expect(getText(result)).toContain("Could not parse since date");
   });
+
+  it("renders correct header when nonzero offset and total <= limit", async () => {
+    // 3 meals, offset 1, default limit 50 — header must reflect the actual
+    // sliced subset (entries 2–3 of 3), not "Showing 3 meals" matching the
+    // total.
+    const meals = Array.from({ length: 3 }, (_, i) =>
+      makeMeal({
+        name: `Meal ${String(i)}`,
+        date: `2026-05-${String(20 + i).padStart(2, "0")} 00:00:00`,
+      }),
+    );
+    mealStore.load(meals);
+
+    const result = await callTool("list_meal_history", {
+      since: "2026-05-19",
+      until: "2026-05-30",
+      offset: 1,
+    });
+    const text = getText(result);
+    expect(text).toContain("2–3 of 3");
+    expect(text).not.toMatch(/Showing 3 meals \(/);
+  });
+
+  it("returns empty-page message when offset is past the end", async () => {
+    mealStore.load([makeMeal({ name: "Only Meal", date: "2026-05-20 00:00:00" })]);
+
+    const result = await callTool("list_meal_history", {
+      since: "2026-05-19",
+      until: "2026-05-30",
+      offset: 5,
+    });
+    expect(getText(result)).toContain("No meals at offset 5 of 1 total");
+  });
 });

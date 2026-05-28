@@ -65,7 +65,7 @@ export class MealStore extends TombstoneEntityStore<Meal, MealUid> {
     return result;
   }
 
-  lastCookedAt(recipeUid: string): string | null {
+  lastCookedAt(recipeUid: string, nowUtc: DateTime = DateTime.utc()): string | null {
     let latest: string | null = null;
     let latestDt: DateTime | null = null;
 
@@ -74,6 +74,10 @@ export class MealStore extends TombstoneEntityStore<Meal, MealUid> {
       if (meal.recipeUid !== recipeUid) continue;
       const dt = parseMealDate(meal.date);
       if (!dt.isValid) continue;
+      // Exclude future planner entries — "last cooked" means actually eaten,
+      // not scheduled. A planner entry dated next Tuesday shouldn't surface
+      // as a recipe's most-recent cooking date.
+      if (dt > nowUtc) continue;
       if (latestDt === null || dt > latestDt) {
         latestDt = dt;
         latest = meal.date;
