@@ -34,7 +34,8 @@ export function registerSearchTool(server: McpServer, ctx: ServerContext): void 
           }
           const lines = results.map((r) => {
             const categoryNames = ctx.store.resolveCategories(r.recipe.categories);
-            return formatSearchHit(r, categoryNames);
+            const lastCooked = ctx.mealStore.lastCookedAt(r.recipe.uid);
+            return formatSearchHit(r, categoryNames, lastCooked);
           });
           return textResult(lines.join("\n\n---\n\n"));
         },
@@ -44,13 +45,13 @@ export function registerSearchTool(server: McpServer, ctx: ServerContext): void 
   );
 }
 
-function formatSearchHit(result: ScoredResult, categoryNames: Array<string>): string {
+function formatSearchHit(result: ScoredResult, categoryNames: Array<string>, lastCookedAt?: string | null): string {
   const lines: Array<string> = [];
   lines.push(`## ${result.recipe.name}`);
   lines.push(`UID: \`${result.recipe.uid}\``);
   if (categoryNames.length > 0) {
     lines.push(`**Categories:** ${categoryNames.join(", ")}`);
   }
-  lines.push(...recipeMetadataLines(result.recipe));
+  lines.push(...recipeMetadataLines(result.recipe, lastCookedAt));
   return lines.join("\n");
 }

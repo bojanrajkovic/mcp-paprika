@@ -43,6 +43,8 @@ export function registerListTool(server: McpServer, ctx: ServerContext): void {
             const dateOnly = recipe.created.slice(0, 10);
             meta.push(`created: ${dateOnly}`);
             if (recipe.rating > 0) meta.push(`rating: ${recipe.rating.toString()}/5`);
+            const lastCooked = ctx.mealStore.lastCookedAt(recipe.uid);
+            if (lastCooked) meta.push(`last cooked: ${lastCooked.slice(0, 10)}`);
             if (recipe.isPinned) meta.push("pinned");
             if (recipe.onGroceryList) meta.push("on grocery list");
             const metaSuffix = ` · ${meta.join(" · ")}`;
