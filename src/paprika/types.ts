@@ -409,10 +409,9 @@ export const MealSchema = z
   );
 
 // MealTypeStoredSchema — validates camelCase JSON read back from disk. No transform.
-// `exportTime` accepts both a time string ("18:00:00") and seconds-since-midnight
-// integer (64800). Current Paprika production responses always return integers;
-// the string shape was observed only in older HAR captures and is kept as a
-// defensive union. Not used by the read-only history feature.
+// `exportTime` is seconds since midnight (e.g. 28800 = 08:00, 64800 = 18:00).
+// Not used by the read-only history feature; preserved for fidelity to the
+// wire shape.
 export const MealTypeStoredSchema = z.object({
   uid: MealTypeUidSchema,
   name: z.string(),
@@ -420,7 +419,7 @@ export const MealTypeStoredSchema = z.object({
   orderFlag: z.number().int(),
   originalType: z.number().int(),
   exportAllDay: z.boolean(),
-  exportTime: z.union([z.string(), z.number()]),
+  exportTime: z.number().int().nonnegative(),
 });
 
 export type MealType = z.infer<typeof MealTypeStoredSchema>;
@@ -434,7 +433,7 @@ export const MealTypeSchema = z
     order_flag: z.number().int(),
     original_type: z.number().int(),
     export_all_day: z.boolean(),
-    export_time: z.union([z.string(), z.number()]),
+    export_time: z.number().int().nonnegative(),
   })
   .transform(
     ({ order_flag, original_type, export_all_day, export_time, ...rest }): MealType => ({

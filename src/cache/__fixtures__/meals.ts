@@ -32,7 +32,7 @@ export function makeMealType(overrides?: Partial<MealType>): MealType {
     orderFlag: mealTypeCounter,
     originalType: mealTypeCounter - 1,
     exportAllDay: false,
-    exportTime: "12:00:00",
+    exportTime: 43200, // 12:00 = 12 * 3600 (seconds since midnight)
     ...overrides,
   };
 }
@@ -60,7 +60,7 @@ export function makeSnakeCaseMealType(uid: string, overrides?: Partial<Record<st
     order_flag: 0,
     original_type: 0,
     export_all_day: false,
-    export_time: "12:00:00",
+    export_time: 43200, // 12:00 = 12 * 3600 (seconds since midnight)
     ...overrides,
   };
 }
