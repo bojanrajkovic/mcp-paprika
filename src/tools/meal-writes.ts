@@ -6,7 +6,7 @@ import { z } from "zod";
 import { MealUidSchema, RecipeUidSchema } from "../paprika/types.js";
 import type { Meal, MealType, RecipeUid } from "../paprika/types.js";
 import { textResult } from "./helpers.js";
-import { commitMealsBatch, mealStartGuard, mealToMarkdown, mealTypeSpecSchema } from "./meal-helpers.js";
+import { commitMeal, commitMealsBatch, mealStartGuard, mealToMarkdown, mealTypeSpecSchema } from "./meal-helpers.js";
 import { parseInputDate, toWireDateFormat } from "../utils/dates.js";
 import type { ServerContext } from "../types/server-context.js";
 
@@ -263,6 +263,180 @@ export function registerAddMealsTool(server: McpServer, ctx: ServerContext): voi
 
           const header = `Added ${savedItems.length.toString()} meal(s) to the planner.`;
           return textResult(`${header}\n\n${cards.join("\n\n---\n\n")}`);
+        },
+        (guard) => guard,
+      );
+    },
+  );
+}
+
+const updateMealInputSchema = z.object({
+  uid: MealUidSchema,
+  recipe_uid: RecipeUidSchema.nullable()
+    .optional()
+    .describe("Update recipe link. Pass null to demote a recipe meal to freeform (requires name)."),
+  name: z.string().min(1).optional().describe("Update display name. Required when demoting via recipe_uid: null."),
+  date: z.string().min(1).optional().describe("Update date (ISO 8601 or yyyy-MM-dd)."),
+  type: mealTypeSpecSchema.optional().describe("Update meal type (same DU as add_meals)."),
+  scale: z.string().min(1).nullable().optional().describe("Update scale. Pass null to clear."),
+});
+
+export function registerUpdateMealTool(server: McpServer, ctx: ServerContext): void {
+  const log = ctx.log.child({ component: "update_meal" });
+  server.registerTool(
+    "update_meal",
+    {
+      description:
+        "Update an existing meal by UID. Partial merge: only provided fields change; omitted fields are " +
+        "preserved. To clear scale, pass scale: null. To demote a recipe meal to freeform, pass recipe_uid: null " +
+        "along with an explicit name. Updates with no effective change (e.g., recipe_uid: null on an already-" +
+        "freeform meal with no other fields supplied) return the existing meal without re-POSTing. The " +
+        "is_ingredient and deleted fields are not updatable via this tool.",
+      inputSchema: updateMealInputSchema.shape,
+    },
+    async (args) => {
+      log.info({ tool: "update_meal", uid: args.uid }, "tool invoked");
+      return mealStartGuard(ctx).match(
+        async (): Promise<CallToolResult> => {
+          const uid = args.uid;
+          const existing = ctx.mealStore.get(uid);
+
+          // Three-tier miss detection (mirrors pantry-delete.ts)
+          if (existing === undefined) {
+            if (ctx.mealStore.isTombstone(uid)) {
+              return textResult(`Meal with UID "${uid}" is already deleted.`);
+            }
+            return textResult(`No meal found with UID "${uid}".`);
+          }
+          if (existing.deleted) {
+            // Defense-in-depth
+            return textResult(`Meal "${existing.name}" is already deleted.`);
+          }
+
+          // Resolve type if supplied via the file-private helper (introduced in Phase 2)
+          let typeInteger: number | undefined;
+          let typeUid: string | null | undefined;
+          if (args.type !== undefined) {
+            const result = resolveMealTypeSpec(ctx, args.type);
+            if (!result.ok) {
+              if (result.reason === "unknown_uid") {
+                return textResult(`Unknown meal type UID "${result.uid}".`);
+              }
+              if (result.reason === "unknown_name") {
+                const knownList = result.knownNames.join(", ");
+                return textResult(
+                  `Unknown meal type "${result.name}". Known types: ${knownList}. ` +
+                    `Use the {uid} or {builtin} discriminator to reference a custom meal type.`,
+                );
+              }
+              return textResult(
+                `No built-in meal type found with index ${result.index.toString()} ` +
+                  `(expected 0=Breakfast, 1=Lunch, 2=Dinner, 3=Snacks).`,
+              );
+            }
+            typeInteger = result.resolved.originalType ?? 0;
+            typeUid = result.resolved.uid;
+          }
+
+          // Resolve date if supplied
+          let normalizedDate: string | undefined;
+          if (args.date !== undefined) {
+            const parsed = parseInputDate(args.date);
+            if (parsed === null) {
+              return textResult(
+                `Could not parse date "${args.date}". Use ISO 8601 (e.g., "2026-06-15") or "yyyy-MM-dd HH:mm:ss".`,
+              );
+            }
+            normalizedDate = toWireDateFormat(parsed);
+          }
+
+          // Resolve recipe_uid and name interaction
+          let newRecipeUid: string | null = existing.recipeUid;
+          let newName: string = existing.name;
+
+          if (args.recipe_uid !== undefined) {
+            if (args.recipe_uid === null) {
+              // Demotion to freeform
+              if (
+                existing.recipeUid === null &&
+                args.name === undefined &&
+                args.date === undefined &&
+                args.type === undefined &&
+                args.scale === undefined
+              ) {
+                // AC3.9: idempotent no-op — meal already freeform, nothing else changing
+                const typeNameByUid = new Map<string, string>();
+                for (const mt of ctx.mealTypeStore.getAll()) typeNameByUid.set(mt.uid, mt.name);
+                const typeName =
+                  existing.typeUid !== null
+                    ? (typeNameByUid.get(existing.typeUid) ?? `Type ${existing.type.toString()}`)
+                    : `Type ${existing.type.toString()}`;
+                return textResult(mealToMarkdown(existing, typeName, null));
+              }
+              if (args.name === undefined) {
+                // AC3.10: demotion requires explicit name
+                return textResult(
+                  `Demoting a recipe meal to freeform requires an explicit name. ` +
+                    `Add 'name: "<your label>"' to the call.`,
+                );
+              }
+              newRecipeUid = null;
+              newName = args.name;
+            } else {
+              // Re-link / promote
+              newRecipeUid = args.recipe_uid;
+              if (args.name !== undefined) {
+                newName = args.name;
+              } else {
+                // args.recipe_uid is already RecipeUid-branded (input schema uses RecipeUidSchema.nullable().optional())
+                const recipe = ctx.store.get(args.recipe_uid);
+                if (recipe === undefined) {
+                  return textResult(
+                    `recipe_uid "${args.recipe_uid}" is not known to the local recipe store; ` +
+                      `either supply name explicitly or wait for the next sync and retry.`,
+                  );
+                }
+                newName = recipe.name;
+              }
+            }
+          } else if (args.name !== undefined) {
+            // Name update without recipe_uid change
+            newName = args.name;
+          }
+
+          // Spread-merge — mirrors pantry-update.ts lines 95-104
+          const updated: Meal = {
+            ...existing,
+            recipeUid: newRecipeUid,
+            name: newName,
+            ...(normalizedDate !== undefined && { date: normalizedDate }),
+            ...(typeInteger !== undefined && { type: typeInteger }),
+            ...(typeUid !== undefined && { typeUid }),
+            // scale: undefined keeps existing; explicit null clears.
+            ...(args.scale !== undefined && { scale: args.scale }),
+          };
+
+          let saved: Meal;
+          try {
+            saved = (await ctx.client.saveMeals([updated]))[0]!;
+            await commitMeal(ctx, saved);
+          } catch (error) {
+            const message = toMessage(error);
+            log.error({ err: error, uid }, "saveMeals failed");
+            return textResult(`Failed to update meal: ${message}`);
+          }
+
+          const typeNameByUid = new Map<string, string>();
+          for (const mt of ctx.mealTypeStore.getAll()) typeNameByUid.set(mt.uid, mt.name);
+          const typeName =
+            saved.typeUid !== null
+              ? (typeNameByUid.get(saved.typeUid) ?? `Type ${saved.type.toString()}`)
+              : `Type ${saved.type.toString()}`;
+          // saved.recipeUid is `string | null` per MealStoredSchema (intentionally unbranded); cast follows the
+          // src/tools/discover.ts:40 precedent (`ctx.store.get(result.uid as RecipeUid)`).
+          const recipeName =
+            saved.recipeUid !== null ? (ctx.store.get(saved.recipeUid as RecipeUid)?.name ?? null) : null;
+          return textResult(mealToMarkdown(saved, typeName, recipeName));
         },
         (guard) => guard,
       );
