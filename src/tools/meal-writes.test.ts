@@ -192,6 +192,32 @@ describe("add_meals tool — success paths", () => {
     expect(storedMeal?.scale).toBe("2");
   });
 
+  it("date with time-of-day → normalized to midnight; date-only + datetime on same day share a bucket", async () => {
+    // Codex regression (PR #143): without `.startOf("day")` normalization, two items
+    // posted with `"2026-06-15"` and `"2026-06-15T18:30:00Z"` would land as distinct
+    // date strings ("...00:00:00" vs "...18:30:00") and form separate buckets in
+    // `getMaxOrderFlagOn`, so both would get order_flag: 0 — but Paprika.app stores
+    // meals at midnight (per docs/wire-captures/meals.har.json) and list_meal_history
+    // groups by `date.slice(0, 10)`. Drop time-of-day so the wire and the planner stay
+    // in sync.
+    const { callTool } = makeAddCtx();
+
+    await callTool("add_meals", {
+      items: [
+        { name: "Day-only Dinner", date: "2026-06-15", type: { builtin: 2 } },
+        { name: "Datetime Dinner", date: "2026-06-15T18:30:00Z", type: { builtin: 2 } },
+      ],
+    });
+
+    const savedPayload: ReadonlyArray<Meal> = mockSaveMeals.mock.calls[0]?.[0] ?? [];
+    expect(savedPayload).toHaveLength(2);
+    expect(savedPayload[0]?.date).toBe("2026-06-15 00:00:00");
+    expect(savedPayload[1]?.date).toBe("2026-06-15 00:00:00");
+    // Same bucket → adjacent order_flags, not both 0
+    expect(savedPayload[0]?.orderFlag).toBe(0);
+    expect(savedPayload[1]?.orderFlag).toBe(1);
+  });
+
   it("AC1.6: two items in same (date, typeUid) bucket → orderFlag 0 and 1", async () => {
     // Empty bucket: no existing meals for this date/type combination.
     const { callTool } = makeAddCtx();

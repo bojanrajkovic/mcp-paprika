@@ -66,7 +66,10 @@ const recipeMealItemSchema = z
     date: z
       .string()
       .min(1)
-      .describe("Meal date or datetime. Accepts ISO 8601 or yyyy-MM-dd. Normalized to Paprika wire format (UTC)."),
+      .describe(
+        "Meal date. Accepts ISO 8601 date or datetime; the meal planner is day-granular, " +
+          "so any time-of-day component is dropped — stored as `yyyy-MM-dd 00:00:00` (UTC).",
+      ),
     type: mealTypeSpecSchema.describe(
       'Meal type. Pick exactly one shape: {"name": "Dinner"} | {"uid": "<MealType UID>"} | {"builtin": 2}.',
     ),
@@ -85,7 +88,10 @@ const freeformMealItemSchema = z
     date: z
       .string()
       .min(1)
-      .describe("Meal date or datetime. Accepts ISO 8601 or yyyy-MM-dd. Normalized to Paprika wire format (UTC)."),
+      .describe(
+        "Meal date. Accepts ISO 8601 date or datetime; the meal planner is day-granular, " +
+          "so any time-of-day component is dropped — stored as `yyyy-MM-dd 00:00:00` (UTC).",
+      ),
     type: mealTypeSpecSchema.describe(
       'Meal type. Pick exactly one shape: {"name": "Dinner"} | {"uid": "<MealType UID>"} | {"builtin": 2}.',
     ),
@@ -147,7 +153,11 @@ export function registerAddMealsTool(server: McpServer, ctx: ServerContext): voi
           for (let i = 0; i < args.items.length; i++) {
             const item = args.items[i]!;
 
-            // Date
+            // Date. The meal planner is day-granular (Paprika.app stores meals at
+            // midnight per docs/wire-captures/meals.har.json, and list_meal_history
+            // groups by date.slice(0, 10)); drop any time-of-day component the
+            // caller supplied so two items on the same calendar day land in the
+            // same (date, typeUid) bucket for order_flag assignment.
             const parsedDate = parseInputDate(item.date);
             if (parsedDate === null) {
               errors.push(
@@ -156,7 +166,7 @@ export function registerAddMealsTool(server: McpServer, ctx: ServerContext): voi
               );
               continue;
             }
-            const normalizedDate = toWireDateFormat(parsedDate);
+            const normalizedDate = toWireDateFormat(parsedDate.startOf("day"));
 
             // Meal type resolution via shared helper (file-private)
             const typeResult = resolveMealTypeSpec(ctx, item.type);
@@ -305,7 +315,14 @@ export function registerAddMealsTool(server: McpServer, ctx: ServerContext): voi
 //                         at runtime if the meal is currently recipe-linked,
 //                         omitted is a no-op for already-freeform meals.
 const updateMealCommonFields = {
-  date: z.string().min(1).optional().describe("Update date (ISO 8601 or yyyy-MM-dd)."),
+  date: z
+    .string()
+    .min(1)
+    .optional()
+    .describe(
+      "Update date (ISO 8601 date or datetime). Time-of-day component is dropped — meals " +
+        "are day-granular and store at midnight UTC.",
+    ),
   type: mealTypeSpecSchema.optional().describe("Update meal type (same DU as add_meals)."),
   scale: z.string().min(1).nullable().optional().describe("Update scale. Pass null to clear."),
 } as const;
@@ -406,7 +423,8 @@ export function registerUpdateMealTool(server: McpServer, ctx: ServerContext): v
             typeUid = result.resolved.uid;
           }
 
-          // Resolve date if supplied
+          // Resolve date if supplied. Same calendar-day normalization as add_meals —
+          // see the comment there for why we drop time-of-day.
           let normalizedDate: string | undefined;
           if (op.date !== undefined) {
             const parsed = parseInputDate(op.date);
@@ -415,7 +433,7 @@ export function registerUpdateMealTool(server: McpServer, ctx: ServerContext): v
                 `Could not parse date "${op.date}". Use ISO 8601 (e.g., "2026-06-15") or "yyyy-MM-dd HH:mm:ss".`,
               );
             }
-            normalizedDate = toWireDateFormat(parsed);
+            normalizedDate = toWireDateFormat(parsed.startOf("day"));
           }
 
           // Resolve recipe_uid and name interaction. The structural union ensures we
