@@ -191,7 +191,11 @@ export function registerAddMealsTool(server: McpServer, ctx: ServerContext): voi
               normalizedDate,
               typeName: resolvedType.name,
               typeUid: resolvedType.uid,
-              typeInteger: resolvedType.originalType ?? 0,
+              // Custom meal types (user-created) carry `originalType: null`; fall back to the
+              // type's `orderFlag` so each custom type keeps a distinct, stable wire integer
+              // and round-trips through `mealsEqual` on the next sync. Collapsing to 0 would
+              // put every custom-type meal in the Breakfast bucket.
+              typeInteger: resolvedType.originalType ?? resolvedType.orderFlag,
               resolvedName,
               recipeUid: item.recipe_uid ?? null,
               scale: item.scale ?? null,
@@ -334,7 +338,9 @@ export function registerUpdateMealTool(server: McpServer, ctx: ServerContext): v
                   `(expected 0=Breakfast, 1=Lunch, 2=Dinner, 3=Snacks).`,
               );
             }
-            typeInteger = result.resolved.originalType ?? 0;
+            // Custom meal types carry `originalType: null`; orderFlag preserves a distinct
+            // wire integer per custom type (see add_meals comment for the full rationale).
+            typeInteger = result.resolved.originalType ?? result.resolved.orderFlag;
             typeUid = result.resolved.uid;
           }
 

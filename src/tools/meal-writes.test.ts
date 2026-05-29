@@ -22,6 +22,11 @@ const BREAKFAST_UID = "breakfast-uid" as MealTypeUid;
 const LUNCH_UID = "lunch-uid" as MealTypeUid;
 const DINNER_UID = "dinner-uid" as MealTypeUid;
 const SNACKS_UID = "snacks-uid" as MealTypeUid;
+// Custom meal type — `originalType: null` (user-created, not one of the 4
+// built-ins). `orderFlag: 4` mirrors the wire capture for "[mcp-cap] Brunch"
+// (docs/wire-captures/mealtypes.har.json); orderFlag is the fallback wire
+// `type` integer when originalType is null.
+const BRUNCH_UID = "brunch-uid" as MealTypeUid;
 const TACOS_UID = "tacos-recipe-uid" as RecipeUid;
 
 /**
@@ -270,6 +275,27 @@ describe("add_meals tool — success paths", () => {
 
     const savedPayload: ReadonlyArray<Meal> = mockSaveMeals.mock.calls[0]?.[0] ?? [];
     expect(savedPayload[0]?.orderFlag).toBe(6);
+  });
+
+  it("custom meal type → wire `type` integer falls back to the type's orderFlag, not 0", async () => {
+    // A custom (user-created) meal type carries `originalType: null`. The wire
+    // schema requires a non-negative integer for `type`, and `mealsEqual` includes
+    // `type` in the equality check — collapsing every custom-type meal to 0
+    // would put them in Breakfast's bucket and cause sync drift on next read.
+    mealTypeStore.load([
+      ...makeBuiltins(),
+      makeMealType({ uid: BRUNCH_UID, name: "Brunch", originalType: null, orderFlag: 4 }),
+    ]);
+
+    const { callTool } = makeAddCtx();
+
+    await callTool("add_meals", {
+      items: [{ name: "Sunday Brunch", date: "2026-07-04", type: { uid: BRUNCH_UID } }],
+    });
+
+    const savedPayload: ReadonlyArray<Meal> = mockSaveMeals.mock.calls[0]?.[0] ?? [];
+    expect(savedPayload[0]?.typeUid).toBe(BRUNCH_UID);
+    expect(savedPayload[0]?.type).toBe(4);
   });
 });
 
@@ -577,6 +603,31 @@ describe("update_meal — success paths (AC3.1-3.6)", () => {
     // Wire payload also carried scale: null to the API
     const payload = mockSaveMeals.mock.calls[0]?.[0] as ReadonlyArray<Meal>;
     expect(payload[0]?.scale).toBeNull();
+  });
+
+  it("update_meal to a custom meal type → wire `type` falls back to the type's orderFlag, not 0", async () => {
+    // Mirrors the add_meals custom-type test: when the new type is custom
+    // (`originalType: null`), the update path must use the type's `orderFlag`
+    // for the wire `type` integer rather than collapsing to Breakfast's 0.
+    mealTypeStore.load([
+      ...makeBuiltins(),
+      makeMealType({ uid: BRUNCH_UID, name: "Brunch", originalType: null, orderFlag: 4 }),
+    ]);
+
+    const original = makeMeal({ uid: TEST_MEAL_UID, typeUid: DINNER_UID, type: 2 });
+    mealStore.load([original]);
+
+    const { callTool } = makeUpdateCtx();
+
+    await callTool("update_meal", { uid: TEST_MEAL_UID, type: { uid: BRUNCH_UID } });
+
+    const stored = mealStore.get(TEST_MEAL_UID);
+    expect(stored?.typeUid).toBe(BRUNCH_UID);
+    expect(stored?.type).toBe(4);
+
+    const payload = mockSaveMeals.mock.calls[0]?.[0] as ReadonlyArray<Meal>;
+    expect(payload[0]?.typeUid).toBe(BRUNCH_UID);
+    expect(payload[0]?.type).toBe(4);
   });
 });
 

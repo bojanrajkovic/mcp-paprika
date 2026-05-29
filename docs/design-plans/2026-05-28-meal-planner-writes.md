@@ -43,17 +43,17 @@ The design intentionally avoids invention: every structural decision is traced t
 - **meal-planner-writes.AC3.4 Success:** `update_meal({uid, recipe_uid: "<new-uid>", name: "Custom Name"})` → explicit `name` overrides recipe-based auto-resolve; `name: "Custom Name"`, `recipe_uid: <new-uid>`.
 - **meal-planner-writes.AC3.5 Success:** `update_meal({uid, recipe_uid: null, name: "Leftover Chili"})` → recipe meal demoted to freeform; `recipe_uid: null`, `name: "Leftover Chili"`.
 - **meal-planner-writes.AC3.6 Success:** `update_meal({uid, scale: null})` → `scale` cleared to `null`.
-- **meal-planner-writes.AC3.7 Failure:** `update_meal({uid: "<unknown>"})` → returns `"No meal found with UID '<unknown>'."`.
-- **meal-planner-writes.AC3.8 Failure:** `update_meal({uid: "<tombstoned>"})` → returns `"Meal '<name>' is already deleted."`.
+- **meal-planner-writes.AC3.7 Failure:** `update_meal({uid: "<unknown>"})` → returns `"No meal found with UID \"<unknown>\"."`.
+- **meal-planner-writes.AC3.8 Failure:** `update_meal({uid: "<tombstoned>"})` → returns `"Meal with UID \"<uid>\" is already deleted."` (tombstone path) or `"Meal \"<name>\" is already deleted."` (defense-in-depth path).
 - **meal-planner-writes.AC3.9 Failure:** `update_meal({uid: "<freeform>", recipe_uid: null})` on a meal that is already freeform (`recipe_uid` already `null`) → no-op-style: returns the unchanged meal (idempotent), no POST.
-- **meal-planner-writes.AC3.10 Failure:** `update_meal({uid: "<recipe-meal>", recipe_uid: null})` without a merged `name` (the existing meal had a name auto-resolved from the now-removed recipe) → returns a clear error that demotion requires a `name`.
+- **meal-planner-writes.AC3.10 Failure:** `update_meal({uid: "<recipe-meal>", recipe_uid: null})` without a merged `name` (the existing meal had a name auto-resolved from the now-removed recipe) → returns `"Demoting a recipe meal to freeform requires an explicit name. Add 'name: \"<your label>\"' to the call."` (the inner phrase keeps its single quotes because it shows JSON object-literal syntax).
 
 ### meal-planner-writes.AC4: `delete_meal` soft-deletes idempotently
 
-- **meal-planner-writes.AC4.1 Success:** `delete_meal({uid: "<known-active>"})` → wire payload carries `deleted: true`; `MealStore.get(uid)` reflects deleted state; `MealStore.isTombstone(uid)` becomes true; tool returns `"Meal '<name>' on <date> deleted."`.
-- **meal-planner-writes.AC4.2 Success:** `delete_meal({uid: "<known-active>"})` followed immediately by `delete_meal({uid: "<same-uid>"})` → second call returns `"Meal '...' is already deleted."` (tombstone path) without re-POSTing.
-- **meal-planner-writes.AC4.3 Failure:** `delete_meal({uid: "<unknown>"})` → returns `"No meal found with UID '<unknown>'."`.
-- **meal-planner-writes.AC4.4 Edge:** `delete_meal({uid: "<known>"})` where `MealStore.get(uid).deleted` is already `true` (rare race) → defense-in-depth returns `"Meal '...' is already deleted."` without re-POSTing.
+- **meal-planner-writes.AC4.1 Success:** `delete_meal({uid: "<known-active>"})` → wire payload carries `deleted: true`; `MealStore.get(uid)` reflects deleted state; `MealStore.isTombstone(uid)` becomes true; tool returns `"Meal \"<name>\" on <date> deleted."`.
+- **meal-planner-writes.AC4.2 Success:** `delete_meal({uid: "<known-active>"})` followed immediately by `delete_meal({uid: "<same-uid>"})` → second call returns `"Meal with UID \"<uid>\" is already deleted."` (tombstone path) without re-POSTing.
+- **meal-planner-writes.AC4.3 Failure:** `delete_meal({uid: "<unknown>"})` → returns `"No meal found with UID \"<unknown>\"."`.
+- **meal-planner-writes.AC4.4 Edge:** `delete_meal({uid: "<known>"})` where `MealStore.get(uid).deleted` is already `true` (rare race) → defense-in-depth returns `"Meal \"<name>\" is already deleted."` without re-POSTing.
 
 ### meal-planner-writes.AC5: All three tools follow the established commit pattern
 
@@ -181,7 +181,7 @@ Update semantics: `undefined` keeps existing, explicit `null` clears for `recipe
 
 **`add_meals`** sequence:
 
-1. Sync guards: `mealStartGuard(ctx)` + `mealTypeStartGuard(ctx)`.
+1. Sync guard: `mealStartGuard(ctx)`. (No `mealTypeStartGuard` — type resolution failures surface as per-item validation errors.)
 2. All-or-nothing validation pass: parse `date` via `parseInputDate`; resolve `type` DU inline (rich error per item with available types); enforce cross-field `recipe_uid? + name?` rule; if `recipe_uid` set and `name` omitted, look up `RecipeStore.get(recipe_uid)?.name` (no error if missing — server is source of truth).
 3. If any item fails, return one text result enumerating every failing index.
 4. UID mint per item: `crypto.randomUUID().toUpperCase()` parsed through `MealUidSchema`.
@@ -193,7 +193,7 @@ Update semantics: `undefined` keeps existing, explicit `null` clears for `recipe
 **`update_meal`** sequence:
 
 1. Sync guards.
-2. Fetch existing via `ctx.mealStore.get(uid)`. If absent, run the tombstone idempotency sequence (`"Meal '...' is already deleted."` vs `"No meal found with UID '...'."`). Defense-in-depth on `existing.deleted`.
+2. Fetch existing via `ctx.mealStore.get(uid)`. If absent, run the tombstone idempotency sequence (`"Meal with UID \"<uid>\" is already deleted."` vs `"No meal found with UID \"<uid>\"."`). Defense-in-depth on `existing.deleted` returns `"Meal \"<name>\" is already deleted."`.
 3. Resolve partial inputs: parse `date` if supplied; resolve `type` DU if supplied; if `recipe_uid` changed and `name` omitted, re-resolve from `RecipeStore`; if `recipe_uid: null` is supplied, require merged `name`.
 4. Spread-merge mirroring `pantry-update.ts:88-104`.
 5. Single POST + `commitMeal(ctx, saved)`.
@@ -205,7 +205,7 @@ Update semantics: `undefined` keeps existing, explicit `null` clears for `recipe
 2. Idempotency sequence mirroring `pantry-delete.ts:29-46`: `get(uid)` → if absent and `isTombstone(uid)` → "already deleted"; if absent and not tombstoned → "no meal found"; if present and `existing.deleted` → "already deleted" (defense-in-depth).
 3. Set `deleted: true`.
 4. Single POST + `commitMeal`.
-5. Return: `"Meal '<name>' on <date> deleted."`.
+5. Return: `"Meal \"<name>\" on <date> deleted."`.
 
 ## Existing Patterns
 
