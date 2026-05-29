@@ -34,6 +34,7 @@ import {
 import { registerMoveToPantryTool } from "../tools/grocery-move.js";
 import { registerClearPurchasedTool, registerClearAllTool } from "../tools/grocery-clear.js";
 import { registerMealHistoryTool } from "../tools/meal-history.js";
+import { registerAddMealsTool, registerDeleteMealTool, registerUpdateMealTool } from "../tools/meal-writes.js";
 import { registerAddPantryItemsTool } from "../tools/pantry-batch-add.js";
 import { registerDeletePantryItemTool } from "../tools/pantry-delete.js";
 import { registerGetPantryItemTool } from "../tools/pantry-get.js";
@@ -318,6 +319,9 @@ export function buildMcpServer(app: AppContext): McpServer {
   registerClearPurchasedTool(server, sessionCtx);
   registerClearAllTool(server, sessionCtx);
   registerMealHistoryTool(server, sessionCtx);
+  registerAddMealsTool(server, sessionCtx);
+  registerUpdateMealTool(server, sessionCtx);
+  registerDeleteMealTool(server, sessionCtx);
 
   if (app.vectorStore !== null) {
     registerDiscoverTool(server, sessionCtx, app.vectorStore);
