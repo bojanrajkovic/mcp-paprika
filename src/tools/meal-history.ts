@@ -2,17 +2,10 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { DateTime } from "luxon";
 import { z } from "zod";
-import { err, ok, type Result } from "neverthrow";
+import { mealStartGuard, mealTypeSpecSchema } from "./meal-helpers.js";
 import { textResult } from "./helpers.js";
 import type { ServerContext } from "../types/server-context.js";
 import type { Meal } from "../paprika/types.js";
-
-function mealStartGuard(ctx: ServerContext): Result<void, ReturnType<typeof textResult>> {
-  if (!ctx.mealStore.hasSynced) {
-    return err(textResult("Meal history is not yet synced. Try again in a few seconds."));
-  }
-  return ok(undefined);
-}
 
 function parseInputDate(input: string): DateTime | null {
   for (const fmt of ["yyyy-MM-dd HH:mm:ss", "yyyy-MM-dd'T'HH:mm:ss", "yyyy-MM-dd"]) {
@@ -70,21 +63,7 @@ export function registerMealHistoryTool(server: McpServer, ctx: ServerContext): 
           .describe("End date (inclusive). Accepts ISO 8601 or yyyy-MM-dd. Overrides the 30-day default."),
         // Discriminated union: pick exactly one shape. Avoids the ambiguity of
         // a single overloaded string (e.g. a custom mealtype named "2").
-        type: z
-          .union([
-            z
-              .object({ name: z.string().min(1) })
-              .strict()
-              .describe('Resolve by name, e.g. {"name": "Dinner"}.'),
-            z
-              .object({ uid: z.string().min(1) })
-              .strict()
-              .describe('Use a mealtype UID directly, e.g. {"uid": "216713D08860..."}.'),
-            z
-              .object({ builtin: z.number().int().min(0).max(3) })
-              .strict()
-              .describe('Pick a built-in: 0=Breakfast, 1=Lunch, 2=Dinner, 3=Snacks. e.g. {"builtin": 2}.'),
-          ])
+        type: mealTypeSpecSchema
           .optional()
           .describe(
             "Meal type filter. Searches all time when set. Pick exactly one shape: " +

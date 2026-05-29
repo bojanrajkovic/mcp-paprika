@@ -38,6 +38,7 @@ import {
   GroceryListSchema,
   MealSchema,
   MealTypeSchema,
+  mealToApiPayload,
   PantryItemSchema,
   RecipeEntrySchema,
   RecipeSchema,
@@ -323,6 +324,11 @@ export class PaprikaClient {
   async saveGroceryIngredient(ingredient: Readonly<GroceryIngredient>): Promise<GroceryIngredient> {
     await this.postEntities(`${API_BASE}/groceryingredients/`, [ingredient], groceryIngredientToApiPayload);
     return ingredient as GroceryIngredient;
+  }
+
+  async saveMeals(items: ReadonlyArray<Readonly<Meal>>): Promise<ReadonlyArray<Meal>> {
+    await this.postEntities(`${API_BASE}/meals/`, items, mealToApiPayload);
+    return items;
   }
 
   async notifySync(): Promise<void> {

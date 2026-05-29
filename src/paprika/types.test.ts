@@ -20,6 +20,8 @@ import {
   GroceryItemStoredSchema,
   GroceryIngredientSchema,
   GroceryIngredientStoredSchema,
+  MealSchema,
+  mealToApiPayload,
   type RecipeUid,
   type CategoryUid,
   type RecipeEntry,
@@ -37,6 +39,7 @@ import {
   type GroceryItemSyncResult,
   type AnySyncResult,
   type DiffResult,
+  type Meal,
 } from "./types.js";
 
 describe("Branded UID Schemas and Entry Schemas", () => {
@@ -1269,5 +1272,75 @@ describe("Grocery Schema Round-Trips", () => {
         expect(result.data.deleted).toBe(false);
       }
     });
+  });
+});
+
+describe("meal-payload: mealToApiPayload round-trip via MealSchema", () => {
+  const wireMeal = {
+    uid: "MEAL-UID-123",
+    recipe_uid: "RECIPE-UID-456",
+    name: "Chicken Stir Fry",
+    date: "2026-06-15 00:00:00",
+    type: 2,
+    type_uid: "TYPE-UID-789",
+    order_flag: 0,
+    is_ingredient: false,
+    scale: "2x",
+    deleted: false,
+  };
+
+  it("round-trips through MealSchema.parse and back to the same camelCase shape", () => {
+    const parsed: Meal = MealSchema.parse(wireMeal);
+    const payload = mealToApiPayload(parsed);
+    const roundTripped: Meal = MealSchema.parse(payload);
+    expect(roundTripped).toEqual(parsed);
+  });
+
+  it("produces all 10 expected snake_case keys in the payload", () => {
+    const parsed: Meal = MealSchema.parse(wireMeal);
+    const payload = mealToApiPayload(parsed);
+    const keys = Object.keys(payload);
+    expect(keys).toEqual(
+      expect.arrayContaining([
+        "uid",
+        "recipe_uid",
+        "name",
+        "date",
+        "type",
+        "type_uid",
+        "order_flag",
+        "is_ingredient",
+        "scale",
+        "deleted",
+      ]),
+    );
+    expect(keys).toHaveLength(10);
+  });
+
+  it("passes null fields through unchanged", () => {
+    const nullWireMeal = {
+      uid: "MEAL-UID-NULL",
+      recipe_uid: null,
+      name: "Null Meal",
+      date: "2026-06-15 00:00:00",
+      type: 0,
+      type_uid: null,
+      order_flag: 1,
+      is_ingredient: false,
+      scale: null,
+      deleted: false,
+    };
+    const parsed: Meal = MealSchema.parse(nullWireMeal);
+    const payload = mealToApiPayload(parsed);
+    expect(payload["recipe_uid"]).toBeNull();
+    expect(payload["type_uid"]).toBeNull();
+    expect(payload["scale"]).toBeNull();
+  });
+
+  it("propagates deleted: true back to the payload", () => {
+    const deletedWireMeal = { ...wireMeal, deleted: true };
+    const parsed: Meal = MealSchema.parse(deletedWireMeal);
+    const payload = mealToApiPayload(parsed);
+    expect(payload["deleted"]).toBe(true);
   });
 });

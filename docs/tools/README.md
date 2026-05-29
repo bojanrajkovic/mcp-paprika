@@ -1,6 +1,6 @@
 # Tools reference
 
-mcp-paprika exposes 26 MCP tools. Each page below covers parameters, behavior, and examples.
+mcp-paprika exposes 29 MCP tools. Each page below covers parameters, behavior, and examples.
 
 ## Discovery and query
 
@@ -53,3 +53,11 @@ mcp-paprika exposes 26 MCP tools. Each page below covers parameters, behavior, a
 | [move_to_pantry](move-to-pantry.md)           | Move grocery items to pantry (create-first order)  |
 | [clear_purchased](clear-purchased.md)         | Clear all purchased items from a list              |
 | [clear_all](clear-all.md)                     | Clear all items from a list                        |
+
+## Meal planner management
+
+| Tool                          | Description                                                                      |
+| ----------------------------- | -------------------------------------------------------------------------------- |
+| [add_meals](add-meals.md)     | Add one or more meals to the planner in a single batch with per-index validation |
+| [update_meal](update-meal.md) | Partial-merge update for a single meal (date, type, recipe link, scale)          |
+| [delete_meal](delete-meal.md) | Soft-delete a meal by UID; idempotent                                            |

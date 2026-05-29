@@ -1,6 +1,6 @@
 # Paprika API Client
 
-Last verified: 2026-05-27 (meals/mealtypes added)
+Last verified: 2026-05-28
 
 ## Files
 
@@ -136,6 +136,7 @@ Typed HTTP client wrapping the Paprika Cloud Sync API.
 - `saveGroceryList(list: Readonly<GroceryList>): Promise<GroceryList>` — POSTs gzip-encoded single-element JSON array to `/api/v2/sync/grocerylists/`; returns input list on `{result: true}`
 - `saveGroceryItems(items: ReadonlyArray<Readonly<GroceryItem>>): Promise<ReadonlyArray<GroceryItem>>` — POSTs gzip-encoded N-element JSON array to `/api/v2/sync/groceries/`; batch-capable (sends all items in one request); returns input items on `{result: true}`
 - `saveGroceryIngredient(ingredient: Readonly<GroceryIngredient>): Promise<GroceryIngredient>` — POSTs gzip-encoded single-element JSON array to `/api/v2/sync/groceryingredients/`; returns input ingredient on `{result: true}`
+- `saveMeals(items: ReadonlyArray<Readonly<Meal>>): Promise<ReadonlyArray<Meal>>` — POSTs gzip-encoded N-element JSON array to `/api/v2/sync/meals/`; batch-capable (sends all items in one request); identity-returns `items` on `{result: true}` (Paprika does not echo saved objects). Delegates to `postEntities` with `mealToApiPayload` as the `toPayload` transformer. `mealToApiPayload(item: Readonly<Meal>): Record<string, unknown>` is the inverse of `MealSchema`'s read-side camelCase transform — maps camelCase fields back to snake_case wire names (`recipe_uid`, `type_uid`, `order_flag`, `is_ingredient`).
 - `deleteRecipe(uid: RecipeUid): Promise<void>` — soft-delete: fetches recipe, sets `inTrash: true`, saves, then calls `notifySync()`
 - `notifySync(): Promise<void>` — POSTs to `/api/v2/sync/notify/` to trigger cloud sync propagation
 

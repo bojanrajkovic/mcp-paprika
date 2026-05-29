@@ -1,6 +1,6 @@
 # Cross-Cutting Utilities
 
-Last verified: 2026-05-22
+Last verified: 2026-05-29
 
 ## Purpose
 
@@ -97,6 +97,22 @@ dependencies (leaf module).
 | Class                | Extends | Fields                                      |
 | -------------------- | ------- | ------------------------------------------- |
 | `DurationParseError` | `Error` | `input: string \| number`, `reason: string` |
+
+### dates.ts — Meal-planner date helpers
+
+Pure helpers for parsing user-supplied date input and rendering Paprika's meal wire date
+format. `parseInputDate` and `toWireDateFormat` operate purely in UTC and model a UTC
+instant — used for since/until window comparisons in `list_meal_history`.
+`parseInputMealDate` honors an embedded UTC offset on ISO inputs so that the user's local
+calendar day is preserved when storing a meal date; the other two formats remain UTC-
+anchored. No I/O. No internal dependencies (leaf module). Consumed by meal tools to
+normalize date arguments before persistence or comparison.
+
+| Function                    | Returns            | Description                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| --------------------------- | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `parseInputDate(input)`     | `DateTime \| null` | Tries `yyyy-MM-dd HH:mm:ss`, `yyyy-MM-dd'T'HH:mm:ss`, and `yyyy-MM-dd` in order (parsed as UTC), then ISO 8601 as fallback (parsed as UTC, ignoring any embedded offset); returns `null` when no format matches. UTC-instant semantics — use for since/until window comparisons                                                                                                                                                   |
+| `toWireDateFormat(dt)`      | `string`           | Renders a `DateTime` as Paprika's wire date format (`yyyy-MM-dd HH:mm:ss`) in UTC                                                                                                                                                                                                                                                                                                                                                 |
+| `parseInputMealDate(input)` | `string \| null`   | Returns the user's intended local calendar day as a Paprika meal-wire string at midnight (`yyyy-MM-dd 00:00:00`). Tries the same explicit formats as `parseInputDate` (UTC-anchored), then ISO 8601 with `setZone: true` so offset-bearing inputs (e.g. `2026-06-15T22:00:00-08:00`) preserve the typed-in calendar day instead of UTC-shifting. Calendar-day semantics — use for the `date` field on `add_meals` / `update_meal` |
 
 ### errors.ts — Cross-cutting error classes and helpers
 
@@ -255,7 +271,7 @@ oauth: {
 
 ## Dependencies
 
-- **Leaf modules (no internal imports):** `xdg.ts` (uses `env-paths`), `duration.ts` (uses `luxon`, `parse-duration`, `neverthrow`)
+- **Leaf modules (no internal imports):** `xdg.ts` (uses `env-paths`), `duration.ts` (uses `luxon`, `parse-duration`, `neverthrow`), `dates.ts` (uses `luxon`)
 - **Non-leaf modules (utils-internal):** `log.ts` imports from `../server/notifier.js` (for `Notifier` type) and `./xdg.js` (for `getLogDir()`); also uses `pino`, `pino-pretty`, `node:stream`, `node:fs`, `node:path`
 - **Non-leaf modules:** `config.ts` imports from `xdg.ts` and `duration.ts`; also uses `dotenv`, `zod`, `neverthrow`
 - **Used by:** All other `src/` modules may import from `src/utils/`

@@ -408,6 +408,23 @@ export const MealSchema = z
     }),
   );
 
+// mealToApiPayload — inverse of MealSchema's read transform. Accepts the camelCase
+// Meal shape and emits the snake_case wire payload expected by the Paprika Cloud Sync API.
+export function mealToApiPayload(item: Readonly<Meal>): Record<string, unknown> {
+  return {
+    uid: item.uid,
+    recipe_uid: item.recipeUid,
+    name: item.name,
+    date: item.date,
+    type: item.type,
+    type_uid: item.typeUid,
+    order_flag: item.orderFlag,
+    is_ingredient: item.isIngredient,
+    scale: item.scale,
+    deleted: item.deleted,
+  };
+}
+
 // MealTypeStoredSchema — validates camelCase JSON read back from disk. No transform.
 // `exportTime` is seconds since midnight (e.g. 28800 = 08:00, 64800 = 18:00).
 // `originalType` is the integer mapping back to one of the four built-in types

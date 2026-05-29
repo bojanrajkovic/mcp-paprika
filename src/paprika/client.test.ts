@@ -12,7 +12,7 @@ import { PaprikaClient } from "./client.js";
 import { PaprikaAPIError, PaprikaAuthError } from "./errors.js";
 import { CircuitOpenError } from "../utils/errors.js";
 import { toMessage, REDACT_PATHS } from "../utils/log.js";
-import type { PantryItem, Recipe, Aisle, GroceryList, GroceryItem, GroceryIngredient } from "./types.js";
+import type { PantryItem, Recipe, Aisle, GroceryList, GroceryItem, GroceryIngredient, Meal } from "./types.js";
 import {
   RecipeSchema,
   RecipeUidSchema,
@@ -21,9 +21,12 @@ import {
   GroceryListUidSchema,
   GroceryItemUidSchema,
   GroceryIngredientUidSchema,
+  MealUidSchema,
+  mealToApiPayload,
 } from "./types.js";
 import { makeSnakeCaseRecipe } from "../cache/__fixtures__/recipes.js";
 import { makeSnakeCasePantryItem } from "../cache/__fixtures__/pantry.js";
+import { makeMeal } from "../cache/__fixtures__/meals.js";
 
 const AUTH_URL = "https://paprikaapp.com/api/v1/account/login/";
 const API_BASE = "https://paprikaapp.com/api/v2/sync";
@@ -1888,6 +1891,94 @@ describe("PaprikaClient", () => {
 
       expect(items).toStrictEqual([]);
       expect(callCount).toBe(3);
+    });
+  });
+
+  describe("meal-infra.AC1: saveMeals()", () => {
+    it("meal-infra.AC1.1 - saveMeals() POSTs to /meals/ with 10 snake_case keys per item and returns input items", async () => {
+      let body: Array<Record<string, unknown>> | null = null;
+
+      server.use(
+        http.post(`${API_BASE}/meals/`, async ({ request }) => {
+          const formData = await request.formData();
+          const dataBlob = formData.get("data") as Blob;
+          const arrayBuffer = await dataBlob.arrayBuffer();
+          const decompressed = gunzipSync(Buffer.from(arrayBuffer));
+          body = JSON.parse(decompressed.toString()) as Array<Record<string, unknown>>;
+          return HttpResponse.json({ result: true });
+        }),
+      );
+
+      const client = new PaprikaClient("test@example.com", "password");
+      const meal1 = makeMeal({ uid: MealUidSchema.parse("meal-uid-001"), name: "Breakfast" });
+      const meal2 = makeMeal({ uid: MealUidSchema.parse("meal-uid-002"), name: "Dinner" });
+      const items: ReadonlyArray<Meal> = [meal1, meal2];
+      const result = await client.saveMeals(items);
+
+      // identity return
+      expect(result).toBe(items);
+
+      // wire body shape
+      expect(body).not.toBeNull();
+      expect(Array.isArray(body)).toBe(true);
+      expect(body!).toHaveLength(2);
+      const payload = body![0]!;
+      expect(Object.keys(payload)).toHaveLength(10);
+      expect(payload).toHaveProperty("uid", "meal-uid-001");
+      expect(payload).toHaveProperty("recipe_uid", null);
+      expect(payload).toHaveProperty("name", "Breakfast");
+      expect(payload).toHaveProperty("date");
+      expect(payload).toHaveProperty("type");
+      expect(payload).toHaveProperty("type_uid");
+      expect(payload).toHaveProperty("order_flag");
+      expect(payload).toHaveProperty("is_ingredient");
+      expect(payload).toHaveProperty("scale");
+      expect(payload).toHaveProperty("deleted");
+      expect(payload).not.toHaveProperty("recipeUid");
+      expect(payload).not.toHaveProperty("typeUid");
+      expect(payload).not.toHaveProperty("orderFlag");
+      expect(payload).not.toHaveProperty("isIngredient");
+    });
+
+    it("meal-infra.AC1.2 - saveMeals() body matches items.map(mealToApiPayload)", async () => {
+      let body: Array<Record<string, unknown>> | null = null;
+
+      server.use(
+        http.post(`${API_BASE}/meals/`, async ({ request }) => {
+          const formData = await request.formData();
+          const dataBlob = formData.get("data") as Blob;
+          const arrayBuffer = await dataBlob.arrayBuffer();
+          const decompressed = gunzipSync(Buffer.from(arrayBuffer));
+          body = JSON.parse(decompressed.toString()) as Array<Record<string, unknown>>;
+          return HttpResponse.json({ result: true });
+        }),
+      );
+
+      const client = new PaprikaClient("test@example.com", "password");
+      const meal = makeMeal({ uid: MealUidSchema.parse("meal-uid-003"), name: "Lunch", type: 1 });
+      await client.saveMeals([meal]);
+
+      expect(body).not.toBeNull();
+      expect(body).toStrictEqual([meal].map(mealToApiPayload));
+    });
+
+    it("meal-infra.AC1.3 - saveMeals() 400 from /meals/ throws PaprikaAPIError with status 400 and meals endpoint", async () => {
+      server.use(
+        http.post(`${API_BASE}/meals/`, () => {
+          return HttpResponse.json({ error: "bad request" }, { status: 400 });
+        }),
+      );
+
+      const client = new PaprikaClient("test@example.com", "password");
+
+      try {
+        await client.saveMeals([makeMeal({ uid: MealUidSchema.parse("meal-uid-004") })]);
+        expect.fail("Should have thrown PaprikaAPIError");
+      } catch (error) {
+        expect(error).toBeInstanceOf(PaprikaAPIError);
+        expect((error as PaprikaAPIError).status).toBe(400);
+        expect((error as PaprikaAPIError).endpoint).toContain("meals");
+      }
     });
   });
 });

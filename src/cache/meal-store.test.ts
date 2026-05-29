@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { DateTime } from "luxon";
 import { MealStore } from "./meal-store.js";
 import { makeMeal } from "./__fixtures__/meals.js";
+import type { MealUid } from "../paprika/types.js";
 
 describe("MealStore", () => {
   let store: MealStore;
@@ -209,6 +210,103 @@ describe("MealStore", () => {
       });
       expect(total).toBe(0);
       expect(meals).toHaveLength(0);
+    });
+  });
+
+  describe("getMaxOrderFlagOn", () => {
+    const DATE = "2026-06-01 00:00:00";
+    const OTHER_DATE = "2026-06-02 00:00:00";
+    const TYPE_UID = "type-uid-x";
+
+    // meal-planner-writes.AC7.1: returns the maximum orderFlag for a matching (date, typeUid) bucket
+    it("returns the highest orderFlag among matching meals", () => {
+      store.load([
+        makeMeal({ date: DATE, typeUid: TYPE_UID, orderFlag: 0 }),
+        makeMeal({ date: DATE, typeUid: TYPE_UID, orderFlag: 1 }),
+      ]);
+      expect(store.getMaxOrderFlagOn(DATE, TYPE_UID)).toBe(1);
+    });
+
+    // meal-planner-writes.AC7.2: returns null (not 0, not -1) when no matching meal
+    it("returns null when no meals match the (date, typeUid) bucket", () => {
+      store.load([]);
+      expect(store.getMaxOrderFlagOn(DATE, TYPE_UID)).toBeNull();
+    });
+
+    it("returns null for a different date with no meals on the target date", () => {
+      store.load([makeMeal({ date: OTHER_DATE, typeUid: TYPE_UID, orderFlag: 5 })]);
+      expect(store.getMaxOrderFlagOn(DATE, TYPE_UID)).toBeNull();
+    });
+
+    // meal-planner-writes.AC7.3: tombstoned/deleted meals are excluded
+    it("excludes server-side deleted meals (deleted: true in load)", () => {
+      store.load([
+        makeMeal({ date: DATE, typeUid: TYPE_UID, orderFlag: 0 }),
+        makeMeal({ date: DATE, typeUid: TYPE_UID, orderFlag: 1 }),
+        makeMeal({ date: DATE, typeUid: TYPE_UID, orderFlag: 5, deleted: true }),
+      ]);
+      expect(store.getMaxOrderFlagOn(DATE, TYPE_UID)).toBe(1);
+    });
+
+    it("excludes in-session deleted meals (tombstoned via store.delete)", () => {
+      const target = makeMeal({ date: DATE, typeUid: TYPE_UID, orderFlag: 5 });
+      store.load([
+        makeMeal({ date: DATE, typeUid: TYPE_UID, orderFlag: 0 }),
+        makeMeal({ date: DATE, typeUid: TYPE_UID, orderFlag: 1 }),
+        target,
+      ]);
+      store.delete(target.uid);
+      expect(store.getMaxOrderFlagOn(DATE, TYPE_UID)).toBe(1);
+    });
+
+    // meal-planner-writes.AC7.4: isIngredient: true meals are excluded
+    it("excludes isIngredient meals from the max calculation", () => {
+      store.load([
+        makeMeal({ date: DATE, typeUid: TYPE_UID, orderFlag: 0 }),
+        makeMeal({ date: DATE, typeUid: TYPE_UID, orderFlag: 1 }),
+        makeMeal({ date: DATE, typeUid: TYPE_UID, orderFlag: 5, isIngredient: true }),
+      ]);
+      expect(store.getMaxOrderFlagOn(DATE, TYPE_UID)).toBe(1);
+    });
+
+    // meal-planner-writes.AC7.5: null typeUid bucket is isolated from non-null buckets
+    it("null typeUid bucket does not collide with non-null typeUid bucket on the same date", () => {
+      store.load([
+        makeMeal({ date: DATE, typeUid: TYPE_UID, orderFlag: 7 }),
+        makeMeal({ date: DATE, typeUid: null, orderFlag: 2 }),
+      ]);
+      expect(store.getMaxOrderFlagOn(DATE, null)).toBe(2);
+      expect(store.getMaxOrderFlagOn(DATE, TYPE_UID)).toBe(7);
+    });
+
+    it("returns null for the null typeUid bucket when only non-null typeUid meals are present", () => {
+      store.load([makeMeal({ date: DATE, typeUid: TYPE_UID, orderFlag: 3 })]);
+      expect(store.getMaxOrderFlagOn(DATE, null)).toBeNull();
+    });
+
+    it("excludes pending-delete meals so soft-delete + same-bucket add_meals doesn't inflate flags", () => {
+      // Regression for the code-review finding: between markPendingDelete and
+      // store.delete (the cache-flush window), commitMeal hasn't yet mutated
+      // the in-memory entry. Without filtering on isPendingDelete, the
+      // soon-to-be-gone meal counts toward the bucket max and the next add_meals
+      // assigns a higher flag than necessary, drifting flags upward across
+      // delete+add cycles.
+      const movingUid = "uid-pending-delete" as MealUid;
+      store.load([
+        makeMeal({ uid: movingUid, date: DATE, typeUid: TYPE_UID, orderFlag: 5 }),
+        makeMeal({ date: DATE, typeUid: TYPE_UID, orderFlag: 2 }),
+      ]);
+      // Before pending-delete, the bucket max is 5 (the moving meal).
+      expect(store.getMaxOrderFlagOn(DATE, TYPE_UID)).toBe(5);
+
+      // Simulate commitMeal's delete-branch state: the UID is marked pending-
+      // delete but the entry is still in _items (delete() hasn't run yet).
+      store.markPendingDelete(movingUid);
+
+      // After pending-delete, the bucket max ignores the moving meal and
+      // returns the next-highest flag — so the subsequent add_meals call
+      // would get orderFlag 3, not 6.
+      expect(store.getMaxOrderFlagOn(DATE, TYPE_UID)).toBe(2);
     });
   });
 });
