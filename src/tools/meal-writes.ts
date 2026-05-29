@@ -373,15 +373,21 @@ export function registerUpdateMealTool(server: McpServer, ctx: ServerContext): v
                     : `Type ${existing.type.toString()}`;
                 return textResult(mealToMarkdown(existing, typeName, null));
               }
-              if (args.name === undefined) {
-                // AC3.10: demotion requires explicit name
+              if (existing.recipeUid !== null && args.name === undefined) {
+                // AC3.10: demotion requires explicit name (only when the meal
+                // is currently recipe-linked; already-freeform meals with
+                // recipe_uid: null just proceed to the spread-merge below)
                 return textResult(
                   `Demoting a recipe meal to freeform requires an explicit name. ` +
                     `Add 'name: "<your label>"' to the call.`,
                 );
               }
               newRecipeUid = null;
-              newName = args.name;
+              if (args.name !== undefined) {
+                newName = args.name;
+              }
+              // else: existing.recipeUid was already null and no new name was
+              // supplied — keep existing.name unchanged (no demotion occurring)
             } else {
               // Re-link / promote
               newRecipeUid = args.recipe_uid;

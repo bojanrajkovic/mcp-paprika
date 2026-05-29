@@ -693,6 +693,28 @@ describe("update_meal — failure/edge paths (AC3.7-3.10)", () => {
     );
     expect(mockSaveMeals).not.toHaveBeenCalled();
   });
+
+  it("AC3.9 extended: already-freeform meal + recipe_uid: null + scale: '2' → scale updates, no demotion error", async () => {
+    // Regression: an already-freeform meal supplying recipe_uid: null alongside
+    // another field (scale) must NOT hit the demotion-requires-name guard.
+    // The guard should only fire when existing.recipeUid !== null.
+    const meal = makeMeal({ uid: TEST_MEAL_UID, recipeUid: null, name: "Cereal", scale: null });
+    mealStore.load([meal]);
+
+    const { callTool } = makeUpdateCtx();
+
+    const result = await callTool("update_meal", { uid: TEST_MEAL_UID, recipe_uid: null, scale: "2" });
+    const text = getText(result);
+
+    // Must NOT return the demotion error
+    expect(text).not.toContain("Demoting a recipe meal to freeform requires an explicit name");
+    // saveMeals IS called — the scale update is persisted
+    expect(mockSaveMeals).toHaveBeenCalledTimes(1);
+    // The updated meal in the store reflects the new scale, preserved name and recipeUid
+    expect(mealStore.get(TEST_MEAL_UID)?.scale).toBe("2");
+    expect(mealStore.get(TEST_MEAL_UID)?.recipeUid).toBeNull();
+    expect(mealStore.get(TEST_MEAL_UID)?.name).toBe("Cereal");
+  });
 });
 
 // ---------------------------------------------------------------------------
