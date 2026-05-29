@@ -277,11 +277,13 @@ describe("add_meals tool — success paths", () => {
     expect(savedPayload[0]?.orderFlag).toBe(6);
   });
 
-  it("custom meal type → wire `type` integer falls back to the type's orderFlag, not 0", async () => {
-    // A custom (user-created) meal type carries `originalType: null`. The wire
-    // schema requires a non-negative integer for `type`, and `mealsEqual` includes
-    // `type` in the equality check — collapsing every custom-type meal to 0
-    // would put them in Breakfast's bucket and cause sync drift on next read.
+  it("custom meal type → wire payload sets type_uid + sends vestigial type:0", async () => {
+    // Custom (user-created) meal types carry `originalType: null`. Paprika.app
+    // dispatches rendering off `type_uid` when set, and Paprika's server preserves
+    // whatever integer we POST in `type` verbatim (verified via direct API +
+    // UI eyeball, 2026-05-29). So `type: 0` is the correct vestigial value —
+    // `mealsEqual` round-trips cleanly and the UI still shows the meal under the
+    // custom type. Regression guards against re-introducing speculative remappings.
     mealTypeStore.load([
       ...makeBuiltins(),
       makeMealType({ uid: BRUNCH_UID, name: "Brunch", originalType: null, orderFlag: 4 }),
@@ -295,7 +297,7 @@ describe("add_meals tool — success paths", () => {
 
     const savedPayload: ReadonlyArray<Meal> = mockSaveMeals.mock.calls[0]?.[0] ?? [];
     expect(savedPayload[0]?.typeUid).toBe(BRUNCH_UID);
-    expect(savedPayload[0]?.type).toBe(4);
+    expect(savedPayload[0]?.type).toBe(0);
   });
 });
 
@@ -605,10 +607,11 @@ describe("update_meal — success paths (AC3.1-3.6)", () => {
     expect(payload[0]?.scale).toBeNull();
   });
 
-  it("update_meal to a custom meal type → wire `type` falls back to the type's orderFlag, not 0", async () => {
+  it("update_meal to a custom meal type → wire payload sets type_uid + sends vestigial type:0", async () => {
     // Mirrors the add_meals custom-type test: when the new type is custom
-    // (`originalType: null`), the update path must use the type's `orderFlag`
-    // for the wire `type` integer rather than collapsing to Breakfast's 0.
+    // (`originalType: null`), the update path sets `type_uid` and sends the
+    // vestigial `type: 0` integer. Paprika.app's UI dispatches off `type_uid`;
+    // the server preserves the integer verbatim.
     mealTypeStore.load([
       ...makeBuiltins(),
       makeMealType({ uid: BRUNCH_UID, name: "Brunch", originalType: null, orderFlag: 4 }),
@@ -623,11 +626,11 @@ describe("update_meal — success paths (AC3.1-3.6)", () => {
 
     const stored = mealStore.get(TEST_MEAL_UID);
     expect(stored?.typeUid).toBe(BRUNCH_UID);
-    expect(stored?.type).toBe(4);
+    expect(stored?.type).toBe(0);
 
     const payload = mockSaveMeals.mock.calls[0]?.[0] as ReadonlyArray<Meal>;
     expect(payload[0]?.typeUid).toBe(BRUNCH_UID);
-    expect(payload[0]?.type).toBe(4);
+    expect(payload[0]?.type).toBe(0);
   });
 });
 

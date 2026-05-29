@@ -191,11 +191,12 @@ export function registerAddMealsTool(server: McpServer, ctx: ServerContext): voi
               normalizedDate,
               typeName: resolvedType.name,
               typeUid: resolvedType.uid,
-              // Custom meal types (user-created) carry `originalType: null`; fall back to the
-              // type's `orderFlag` so each custom type keeps a distinct, stable wire integer
-              // and round-trips through `mealsEqual` on the next sync. Collapsing to 0 would
-              // put every custom-type meal in the Breakfast bucket.
-              typeInteger: resolvedType.originalType ?? resolvedType.orderFlag,
+              // Custom (user-created) meal types carry `originalType: null`. When `typeUid` is
+              // set, `Meal.type` is vestigial — Paprika.app's UI dispatches off `type_uid`, and
+              // the server preserves whatever integer we POST verbatim, so `0` round-trips
+              // through `mealsEqual` cleanly. (Verified via direct API experiment + UI eyeball,
+              // 2026-05-29.)
+              typeInteger: resolvedType.originalType ?? 0,
               resolvedName,
               recipeUid: item.recipe_uid ?? null,
               scale: item.scale ?? null,
@@ -338,9 +339,9 @@ export function registerUpdateMealTool(server: McpServer, ctx: ServerContext): v
                   `(expected 0=Breakfast, 1=Lunch, 2=Dinner, 3=Snacks).`,
               );
             }
-            // Custom meal types carry `originalType: null`; orderFlag preserves a distinct
-            // wire integer per custom type (see add_meals comment for the full rationale).
-            typeInteger = result.resolved.originalType ?? result.resolved.orderFlag;
+            // Custom mealtypes carry `originalType: null`; `Meal.type` is vestigial when
+            // `type_uid` is set (see add_meals comment for the full rationale).
+            typeInteger = result.resolved.originalType ?? 0;
             typeUid = result.resolved.uid;
           }
 
