@@ -105,7 +105,7 @@ export async function commitMealsBatch(ctx: ServerContext, items: ReadonlyArray<
   const opsFailure = opsResults.find((r): r is PromiseRejectedResult => r.status === "rejected");
   if (opsFailure !== undefined) {
     clearPending();
-    throw opsFailure.reason as unknown;
+    throw opsFailure.reason;
   }
   try {
     await ctx.cache.flush();
