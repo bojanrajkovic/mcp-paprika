@@ -35,8 +35,14 @@ export const mealTypeSpecSchema = z.union([
 ]);
 
 export function mealStartGuard(ctx: ServerContext): Result<void, ReturnType<typeof textResult>> {
-  if (!ctx.mealStore.hasSynced) {
-    return err(textResult("Meal history is not yet synced. Try again in a few seconds."));
+  // Both stores must be synced. The mealtype store is required by the type DU
+  // resolver (`resolveMealTypeSpec` in `meal-writes.ts`, `meal-history.ts` filters);
+  // without it, every "Dinner" / "Lunch" lookup returns undefined and the user sees
+  // "Unknown meal type" errors that look like input mistakes but are actually a
+  // cold-cache state. Guarding both up front turns that into a clear "still
+  // syncing" message instead.
+  if (!ctx.mealStore.hasSynced || !ctx.mealTypeStore.hasSynced) {
+    return err(textResult("Meal data is not yet synced. Try again in a few seconds."));
   }
   return ok(undefined);
 }

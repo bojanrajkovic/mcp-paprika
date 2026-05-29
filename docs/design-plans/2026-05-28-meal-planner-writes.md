@@ -232,7 +232,7 @@ Update semantics: `undefined` keeps existing, explicit `null` clears for `recipe
 
 **`add_meals`** sequence:
 
-1. Sync guard: `mealStartGuard(ctx)`. (No `mealTypeStartGuard` — type resolution failures surface as per-item validation errors.)
+1. Sync guard: `mealStartGuard(ctx)` — checks BOTH `mealStore.hasSynced` and `mealTypeStore.hasSynced`. The mealtype check is required because `resolveMealTypeSpec` reads from `mealTypeStore`; without the guard, a cold-cache state would surface as a misleading "Unknown meal type" per-item error rather than a clear "still syncing" message.
 2. All-or-nothing validation pass: parse `date` via `parseInputDate`; resolve `type` DU inline (rich error per item with available types); the structural-union per-item shape has already enforced "recipe-linked XOR freeform" at the schema layer. For recipe-linked items, look up `RecipeStore.get(recipe_uid)?.name` (returns error if missing — server is source of truth for recipe identity).
 3. If any item fails, return one text result enumerating every failing index.
 4. UID mint per item: `crypto.randomUUID().toUpperCase()` parsed through `MealUidSchema`.

@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { fromAny } from "@total-typescript/shoehorn";
 import { MealStore } from "../cache/meal-store.js";
+import { MealTypeStore } from "../cache/meal-type-store.js";
 import { RecipeStore } from "../cache/recipe-store.js";
 import { makeMeal } from "../cache/__fixtures__/meals.js";
 import type { MealTypeUid } from "../paprika/types.js";
@@ -61,9 +62,10 @@ describe("meal-planner-writes.AC6.1: mealTypeSpecSchema is exported and parseabl
 describe("mealStartGuard", () => {
   it("returns Err when mealStore has not yet synced", () => {
     const mealStore = new MealStore();
-    // hasSynced is false before load() is called
+    const mealTypeStore = new MealTypeStore();
+    mealTypeStore.load([]); // mealTypeStore synced but mealStore is not
     const { server } = makeTestServer();
-    const ctx = makeCtx(new RecipeStore(), server, { mealStore });
+    const ctx = makeCtx(new RecipeStore(), server, { mealStore, mealTypeStore });
 
     const result = mealStartGuard(ctx);
     result.match(
@@ -76,11 +78,34 @@ describe("mealStartGuard", () => {
     );
   });
 
-  it("returns Ok when mealStore has synced", () => {
+  it("returns Err when mealTypeStore has not yet synced (Codex regression: cold-cache disguised as user error)", () => {
+    // Without the dual-store check, write tools would happily call resolveMealTypeSpec
+    // against an empty mealTypeStore and surface "Unknown meal type 'Dinner'" — looks
+    // like a user input mistake but is actually a not-yet-synced state.
     const mealStore = new MealStore();
-    mealStore.load([]); // load() marks hasSynced = true
+    mealStore.load([]); // mealStore synced
+    const mealTypeStore = new MealTypeStore(); // mealTypeStore NOT synced
     const { server } = makeTestServer();
-    const ctx = makeCtx(new RecipeStore(), server, { mealStore });
+    const ctx = makeCtx(new RecipeStore(), server, { mealStore, mealTypeStore });
+
+    const result = mealStartGuard(ctx);
+    result.match(
+      () => {
+        throw new Error("Expected Err, got Ok");
+      },
+      (errVal) => {
+        expect(errVal.content[0]?.type).toBe("text");
+      },
+    );
+  });
+
+  it("returns Ok when both stores have synced", () => {
+    const mealStore = new MealStore();
+    mealStore.load([]);
+    const mealTypeStore = new MealTypeStore();
+    mealTypeStore.load([]);
+    const { server } = makeTestServer();
+    const ctx = makeCtx(new RecipeStore(), server, { mealStore, mealTypeStore });
 
     const result = mealStartGuard(ctx);
     result.match(
