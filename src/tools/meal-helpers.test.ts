@@ -3,9 +3,18 @@ import { fromAny } from "@total-typescript/shoehorn";
 import { MealStore } from "../cache/meal-store.js";
 import { MealTypeStore } from "../cache/meal-type-store.js";
 import { RecipeStore } from "../cache/recipe-store.js";
-import { makeMeal } from "../cache/__fixtures__/meals.js";
-import type { MealTypeUid } from "../paprika/types.js";
-import { commitMeal, commitMealsBatch, mealStartGuard, mealToMarkdown, mealTypeSpecSchema } from "./meal-helpers.js";
+import { makeMeal, makeMealType } from "../cache/__fixtures__/meals.js";
+import { makeRecipe } from "../cache/__fixtures__/recipes.js";
+import type { MealTypeUid, RecipeUid } from "../paprika/types.js";
+import {
+  commitMeal,
+  commitMealsBatch,
+  mealStartGuard,
+  mealToMarkdown,
+  mealTypeSpecSchema,
+  renderMealCard,
+  resolveMealTypeSpec,
+} from "./meal-helpers.js";
 import { makeTestServer, makeCtx, makeStubNotifier } from "./tool-test-utils.js";
 
 // ---------------------------------------------------------------------------
@@ -114,6 +123,68 @@ describe("mealStartGuard", () => {
         throw new Error(`Expected Ok, got Err: ${JSON.stringify(errVal)}`);
       },
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// resolveMealTypeSpec — shared type-DU resolver (#141)
+// ---------------------------------------------------------------------------
+
+describe("resolveMealTypeSpec", () => {
+  function makeResolverCtx() {
+    const mealStore = new MealStore();
+    mealStore.load([]);
+    const mealTypeStore = new MealTypeStore();
+    mealTypeStore.load([
+      makeMealType({ uid: "breakfast-uid" as MealTypeUid, name: "Breakfast", originalType: 0, orderFlag: 0 }),
+      makeMealType({ uid: "lunch-uid" as MealTypeUid, name: "Lunch", originalType: 1, orderFlag: 1 }),
+      makeMealType({ uid: "dinner-uid" as MealTypeUid, name: "Dinner", originalType: 2, orderFlag: 2 }),
+      makeMealType({ uid: "custom-uid" as MealTypeUid, name: "Brunch", originalType: null, orderFlag: 4 }),
+    ]);
+    const { server } = makeTestServer();
+    return makeCtx(new RecipeStore(), server, { mealStore, mealTypeStore });
+  }
+
+  it("resolves a known {name} (case-insensitive)", () => {
+    const result = resolveMealTypeSpec(makeResolverCtx(), { name: "dinner" });
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.resolved.uid).toBe("dinner-uid");
+  });
+
+  it("resolves a known {uid}", () => {
+    const result = resolveMealTypeSpec(makeResolverCtx(), { uid: "custom-uid" as MealTypeUid });
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.resolved.name).toBe("Brunch");
+  });
+
+  it("resolves a {builtin} index to its meal type", () => {
+    const result = resolveMealTypeSpec(makeResolverCtx(), { builtin: 1 });
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.resolved.uid).toBe("lunch-uid");
+  });
+
+  it("returns unknown_uid for an unknown UID", () => {
+    const result = resolveMealTypeSpec(makeResolverCtx(), { uid: "nope" as MealTypeUid });
+    expect(result.ok).toBe(false);
+    if (!result.ok && result.reason === "unknown_uid") expect(result.uid).toBe("nope");
+    else throw new Error(`Expected unknown_uid, got ${JSON.stringify(result)}`);
+  });
+
+  it("returns unknown_name with the known-names list for hinting", () => {
+    const result = resolveMealTypeSpec(makeResolverCtx(), { name: "Supper" });
+    expect(result.ok).toBe(false);
+    if (!result.ok && result.reason === "unknown_name") {
+      expect(result.name).toBe("Supper");
+      expect(result.knownNames).toEqual(["Breakfast", "Lunch", "Dinner", "Brunch"]);
+    } else throw new Error(`Expected unknown_name, got ${JSON.stringify(result)}`);
+  });
+
+  it("returns unknown_builtin when no loaded type carries that originalType", () => {
+    // No Snacks(3) loaded.
+    const result = resolveMealTypeSpec(makeResolverCtx(), { builtin: 3 });
+    expect(result.ok).toBe(false);
+    if (!result.ok && result.reason === "unknown_builtin") expect(result.index).toBe(3);
+    else throw new Error(`Expected unknown_builtin, got ${JSON.stringify(result)}`);
   });
 });
 
@@ -587,5 +658,45 @@ describe("mealToMarkdown renderer", () => {
     expect(result).toContain(`**UID:** \`${meal.uid}\``);
     expect(result).toContain("**Date:** 2026-03-15 12:00:00");
     expect(result).toContain("**Type:** Dinner");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// renderMealCard — ctx-aware display-name resolution + render (#141 follow-on)
+// ---------------------------------------------------------------------------
+
+describe("renderMealCard", () => {
+  function makeCardCtx() {
+    const store = new RecipeStore();
+    store.markSynced();
+    store.set(makeRecipe({ uid: "tacos-uid" as RecipeUid, name: "Tacos" }));
+    const mealStore = new MealStore();
+    mealStore.load([]);
+    const mealTypeStore = new MealTypeStore();
+    mealTypeStore.load([
+      makeMealType({ uid: "dinner-uid" as MealTypeUid, name: "Dinner", originalType: 2, orderFlag: 2 }),
+    ]);
+    const { server } = makeTestServer();
+    return makeCtx(store, server, { mealStore, mealTypeStore });
+  }
+
+  it("resolves typeName from mealTypeStore and recipeName from the recipe store", () => {
+    const meal = makeMeal({ name: "Taco Night", recipeUid: "tacos-uid", type: 2, typeUid: "dinner-uid" });
+    const result = renderMealCard(makeCardCtx(), meal);
+    expect(result).toContain("**Type:** Dinner");
+    expect(result).toContain("**Recipe:** Tacos (`tacos-uid`)");
+  });
+
+  it("falls back to `Type N` when typeUid is unknown", () => {
+    const meal = makeMeal({ name: "Mystery", recipeUid: null, type: 7, typeUid: "unknown-uid" });
+    const result = renderMealCard(makeCardCtx(), meal);
+    expect(result).toContain("**Type:** Type 7");
+  });
+
+  it("renders _(freeform)_ for a null recipeUid and `Type N` for a null typeUid", () => {
+    const meal = makeMeal({ name: "Leftovers", recipeUid: null, type: 1, typeUid: null });
+    const result = renderMealCard(makeCardCtx(), meal);
+    expect(result).toContain("**Recipe:** _(freeform)_");
+    expect(result).toContain("**Type:** Type 1");
   });
 });
