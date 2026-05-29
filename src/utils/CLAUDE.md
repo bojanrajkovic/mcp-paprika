@@ -1,6 +1,6 @@
 # Cross-Cutting Utilities
 
-Last verified: 2026-05-22
+Last verified: 2026-05-28
 
 ## Purpose
 
@@ -97,6 +97,18 @@ dependencies (leaf module).
 | Class                | Extends | Fields                                      |
 | -------------------- | ------- | ------------------------------------------- |
 | `DurationParseError` | `Error` | `input: string \| number`, `reason: string` |
+
+### dates.ts — Meal-planner date helpers
+
+Pure helpers for parsing user-supplied date input and rendering Paprika's meal wire date
+format. All operations happen in UTC (`zone: "utc"` on every Luxon constructor). No I/O.
+No internal dependencies (leaf module). Consumed by meal write tools to normalize the `date`
+argument before persistence.
+
+| Function                | Returns            | Description                                                                                                                                       |
+| ----------------------- | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `parseInputDate(input)` | `DateTime \| null` | Tries `yyyy-MM-dd HH:mm:ss`, `yyyy-MM-dd'T'HH:mm:ss`, and `yyyy-MM-dd` in order, then ISO 8601 as fallback; returns `null` when no format matches |
+| `toWireDateFormat(dt)`  | `string`           | Renders a `DateTime` as Paprika's wire date format (`yyyy-MM-dd HH:mm:ss`) in UTC                                                                 |
 
 ### errors.ts — Cross-cutting error classes and helpers
 
@@ -255,7 +267,7 @@ oauth: {
 
 ## Dependencies
 
-- **Leaf modules (no internal imports):** `xdg.ts` (uses `env-paths`), `duration.ts` (uses `luxon`, `parse-duration`, `neverthrow`)
+- **Leaf modules (no internal imports):** `xdg.ts` (uses `env-paths`), `duration.ts` (uses `luxon`, `parse-duration`, `neverthrow`), `dates.ts` (uses `luxon`)
 - **Non-leaf modules (utils-internal):** `log.ts` imports from `../server/notifier.js` (for `Notifier` type) and `./xdg.js` (for `getLogDir()`); also uses `pino`, `pino-pretty`, `node:stream`, `node:fs`, `node:path`
 - **Non-leaf modules:** `config.ts` imports from `xdg.ts` and `duration.ts`; also uses `dotenv`, `zod`, `neverthrow`
 - **Used by:** All other `src/` modules may import from `src/utils/`
