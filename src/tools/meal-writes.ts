@@ -84,6 +84,7 @@ const mealItemInputSchema = z
     message: "Either recipe_uid or name must be provided.",
   });
 
+// Exported for direct Zod-validation tests (see meal-writes.test.ts AC2.3 and AC2.5).
 export const addMealsInputSchema = z.object({
   items: z
     .array(mealItemInputSchema)

@@ -360,6 +360,37 @@ describe("add_meals tool — failure paths", () => {
     expect(mealStore.size).toBe(initialSize);
   });
 
+  it("AC2.3: schema .refine() rejects items missing both recipe_uid and name", () => {
+    // callTool bypasses Zod, so the .refine() that runs in production at the SDK
+    // boundary must be exercised by calling safeParse() directly on the exported
+    // schema. This confirms the constraint that reaches MCP clients.
+    const result = addMealsInputSchema.safeParse({ items: [{ date: "2026-06-15", type: { builtin: 0 } }] });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      const messages = result.error.issues.map((i) => i.message);
+      const hasRefineError = messages.some((m) => m === "Either recipe_uid or name must be provided.");
+      expect(hasRefineError).toBe(true);
+    }
+  });
+
+  it("AC2.3b: unknown recipe_uid (not in local store) → per-index error, saveMeals NOT called", async () => {
+    // The failure-paths beforeEach seeds store with store.load([], []), so TACOS_UID
+    // is not present. Supplying only recipe_uid (no name) hits the lookup branch that
+    // emits the actionable "not known to the local recipe store" error.
+    const { callTool } = makeFailCtx();
+    const initialSize = mealStore.size;
+
+    const result = await callTool("add_meals", {
+      items: [{ recipe_uid: TACOS_UID, date: "2026-06-15", type: { builtin: 2 } }],
+    });
+    const text = getText(result);
+
+    expect(text).toContain("is not known to the local recipe store");
+    expect(text).toContain("either supply name explicitly or wait for the next sync");
+    expect(mockSaveMeals).not.toHaveBeenCalled();
+    expect(mealStore.size).toBe(initialSize);
+  });
+
   it("AC2.4: multiple invalid items → all errors enumerated, header 'Could not add 3 meals:'", async () => {
     const { callTool } = makeFailCtx();
     const initialSize = mealStore.size;
