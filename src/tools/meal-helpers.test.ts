@@ -66,7 +66,6 @@ describe("mealStartGuard", () => {
     const ctx = makeCtx(new RecipeStore(), server, { mealStore });
 
     const result = mealStartGuard(ctx);
-    expect(result.isErr()).toBe(true);
     result.match(
       () => {
         throw new Error("Expected Err, got Ok");
@@ -84,7 +83,12 @@ describe("mealStartGuard", () => {
     const ctx = makeCtx(new RecipeStore(), server, { mealStore });
 
     const result = mealStartGuard(ctx);
-    expect(result.isOk()).toBe(true);
+    result.match(
+      () => {},
+      (errVal) => {
+        throw new Error(`Expected Ok, got Err: ${JSON.stringify(errVal)}`);
+      },
+    );
   });
 });
 
