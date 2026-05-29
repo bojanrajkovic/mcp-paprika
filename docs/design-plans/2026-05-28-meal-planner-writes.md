@@ -9,7 +9,8 @@ The design intentionally avoids invention: every structural decision is traced t
 ## Definition of Done
 
 - **Three new MCP tools ship: `add_meals` (batch), `update_meal`, `delete_meal`** — backed by a new `PaprikaClient.saveMeals` POST helper and `commitMeal` / `commitMealsBatch` cache helpers that mirror the pantry-item pattern (no `resourceListChanged`, since meals have no resource surface per `docs/mcp-surface-design.md`).
-- **Inputs match the LLM-agent UX:** `type` is a Zod discriminated union (`{name} | {uid} | {builtin}`) reusing the read-side resolver shape with case-insensitive, whitespace-trimmed name lookup; `date` accepts an ISO date or datetime and normalizes to UTC `"yyyy-MM-dd HH:mm:ss"`; `recipe_uid` is optional and auto-resolves `name` from `RecipeStore` unless the caller explicitly supplied a name; UIDs are client-minted via `crypto.randomUUID().toUpperCase()`.
+- **Inputs match the LLM-agent UX:** `type` is a Zod discriminated union (`{name} | {uid} | {builtin}`) reusing the read-side resolver shape with case-insensitive, whitespace-trimmed name lookup; `date` accepts an ISO date or datetime and normalizes to UTC `"yyyy-MM-dd HH:mm:ss"`; **`recipe_uid` and `name` are structurally exclusive** — a meal is either recipe-linked (display name auto-resolves from the recipe) or freeform (caller-supplied name) but never both. UIDs are client-minted via `crypto.randomUUID().toUpperCase()`.
+- **Custom names on recipe-linked meals are dead data:** Paprika.app's UI dispatches a recipe-linked meal's display name off `recipe_uid` (looking up the recipe's stored name) and never renders the stored `name` field on the meal itself. The server preserves whatever `name` we POST, but the LLM-facing tool surface enforces the structural constraint so callers don't end up storing labels nobody can see. To label a recipe-linked dinner "Mom's Lasagna," use a freeform meal (no `recipe_uid`) — that's what Paprika.app's UI lets the user author too. Verified via direct API experiment + UI eyeball, 2026-05-29.
 - **Semantics match established conventions:** batch validation is all-or-nothing with per-item error detail; update uses spread-merge (undefined = keep, explicit `null` = clear); delete is idempotent via the existing `MealStore` tombstone set and distinguishes "already deleted" from "never existed". `order_flag` defaults to `max+1` within the same (date, type) bucket; `is_ingredient` is tool-internal and always `false`.
 - **Documentation lands in the same PR:** `docs/mcp-surface-design.md` matrix row for meals is updated to reflect the shipped surface; the audit table gains rows for grocery lists, grocery items, and meals (the stale `list_meals` reference becomes `list_meal_history`). `src/tools/CLAUDE.md` and `src/paprika/CLAUDE.md` document the new helpers and client method. `docs/tools/add-meals.md`, `docs/tools/update-meal.md`, and `docs/tools/delete-meal.md` ship as new per-tool docs; `docs/tools/README.md` gets a new "Meal planner management" section.
 - **Out of scope:** `add_menu_to_planner` (#137); `paprika://meal/{uid}` resource template; per-UID `get_meal` tool; any read-side changes (already shipped in #133, `list_meal_history`).
@@ -21,7 +22,7 @@ The design intentionally avoids invention: every structural decision is traced t
 - **meal-planner-writes.AC1.1 Success:** Single-item batch with `recipe_uid`, `date`, `type` → meal lands in `MealStore` with `name` auto-resolved from `RecipeStore.get(recipe_uid).name`; tool returns a markdown card including the new UID.
 - **meal-planner-writes.AC1.2 Success:** Single-item batch with `name` (no `recipe_uid`), `date`, `type` → freeform meal lands with `recipe_uid: null` and the caller-supplied `name`.
 - **meal-planner-writes.AC1.3 Success:** Multi-item batch (e.g., a week of dinners) → all items land in one POST and one `commitMealsBatch` call; tool returns one card per item.
-- **meal-planner-writes.AC1.4 Success:** Item with `recipe_uid` AND explicit `name` → caller-supplied `name` is used, not the recipe's name.
+- **meal-planner-writes.AC1.4 Failure:** Item with both `recipe_uid` AND `name` → structural-union rejection at the schema layer (recipe-linked variant forbids `name`; freeform variant forbids `recipe_uid`). The combination is invalid input — a stored custom name on a recipe-linked meal would never render in Paprika.app.
 - **meal-planner-writes.AC1.5 Success:** Item with `scale: "2"` → wire payload carries `scale: "2"`; subsequent `MealStore.get(uid).scale` returns `"2"`.
 - **meal-planner-writes.AC1.6 Success:** Two items in the same batch targeting the same `(date, typeUid)` bucket → first gets `order_flag: max+1`, second gets `max+2` (local `nextFlag` map increments per assignment).
 - **meal-planner-writes.AC1.7 Success:** Adding to an empty `(date, typeUid)` bucket → `order_flag: 0`.
@@ -31,22 +32,23 @@ The design intentionally avoids invention: every structural decision is traced t
 
 - **meal-planner-writes.AC2.1 Failure:** Batch with one item whose `date` is unparseable → tool returns an error text result naming the failing index AND its specific error; no items are POSTed; `MealStore` unchanged.
 - **meal-planner-writes.AC2.2 Failure:** Batch with one item whose `type` is `{name: "Brunch"}` and no such meal type exists → error result naming the index and listing the known types ("Known types: Breakfast, Lunch, Dinner, Snacks. Use the {uid} or {builtin} discriminator to reference a custom meal type.").
-- **meal-planner-writes.AC2.3 Failure:** Batch with one item missing both `recipe_uid` and `name` → error result naming the index and the `.refine()` message.
+- **meal-planner-writes.AC2.3 Failure:** Batch with one item missing both `recipe_uid` and `name` → structural-union rejection at the schema layer (neither variant matches an item with no `recipe_uid` and no `name`).
 - **meal-planner-writes.AC2.4 Failure:** Batch with multiple invalid items → error result enumerates **every** failing index, not just the first.
 - **meal-planner-writes.AC2.5 Edge:** Empty `items: []` array → Zod `.min(1)` rejects with a clear validation error before the handler runs.
 
 ### meal-planner-writes.AC3: `update_meal` partially updates an existing meal
 
-- **meal-planner-writes.AC3.1 Success:** `update_meal({uid, date: "2026-06-15"})` → only `date` changes; all other fields preserved.
-- **meal-planner-writes.AC3.2 Success:** `update_meal({uid, type: {name: "Lunch"}})` → both wire `type` and `type_uid` update to the resolved Lunch values; other fields preserved.
-- **meal-planner-writes.AC3.3 Success:** `update_meal({uid, recipe_uid: "<new-uid>"})` where prior meal had `name: "Avocado Toast"` (freeform) → `name` re-resolves to the new recipe's name; `recipe_uid` updates.
-- **meal-planner-writes.AC3.4 Success:** `update_meal({uid, recipe_uid: "<new-uid>", name: "Custom Name"})` → explicit `name` overrides recipe-based auto-resolve; `name: "Custom Name"`, `recipe_uid: <new-uid>`.
-- **meal-planner-writes.AC3.5 Success:** `update_meal({uid, recipe_uid: null, name: "Leftover Chili"})` → recipe meal demoted to freeform; `recipe_uid: null`, `name: "Leftover Chili"`.
-- **meal-planner-writes.AC3.6 Success:** `update_meal({uid, scale: null})` → `scale` cleared to `null`.
-- **meal-planner-writes.AC3.7 Failure:** `update_meal({uid: "<unknown>"})` → returns `"No meal found with UID \"<unknown>\"."`.
-- **meal-planner-writes.AC3.8 Failure:** `update_meal({uid: "<tombstoned>"})` → returns `"Meal with UID \"<uid>\" is already deleted."` (tombstone path) or `"Meal \"<name>\" is already deleted."` (defense-in-depth path).
-- **meal-planner-writes.AC3.9 Failure:** `update_meal({uid: "<freeform>", recipe_uid: null})` on a meal that is already freeform (`recipe_uid` already `null`) → no-op-style: returns the unchanged meal (idempotent), no POST.
-- **meal-planner-writes.AC3.10 Failure:** `update_meal({uid: "<recipe-meal>", recipe_uid: null})` without a merged `name` (the existing meal had a name auto-resolved from the now-removed recipe) → returns `"Demoting a recipe meal to freeform requires an explicit name. Add 'name: \"<your label>\"' to the call."` (the inner phrase keeps its single quotes because it shows JSON object-literal syntax).
+- **meal-planner-writes.AC3.1 Success:** `update_meal({uid, update: {date: "2026-06-15"}})` → only `date` changes; all other fields preserved.
+- **meal-planner-writes.AC3.2 Success:** `update_meal({uid, update: {type: {name: "Lunch"}}})` → both wire `type` and `type_uid` update to the resolved Lunch values; other fields preserved.
+- **meal-planner-writes.AC3.3 Success:** `update_meal({uid, update: {recipe_uid: "<new-uid>"}})` where prior meal had `name: "Avocado Toast"` (freeform) → `name` re-resolves to the new recipe's name; `recipe_uid` updates.
+- **meal-planner-writes.AC3.4 Failure:** `update_meal({uid, update: {recipe_uid: "<new-uid>", name: "Custom Name"}})` → structural-union rejection at the schema layer (recipe-touch variant forbids `name`; name-only variant forbids `recipe_uid`; demote variant requires `recipe_uid: null`). To use a custom label, demote first via `update_meal({uid, update: {recipe_uid: null, name: "<your label>"}})`.
+- **meal-planner-writes.AC3.5 Success:** `update_meal({uid, update: {recipe_uid: null, name: "Leftover Chili"}})` → recipe meal demoted to freeform; `recipe_uid: null`, `name: "Leftover Chili"`.
+- **meal-planner-writes.AC3.6 Success:** `update_meal({uid, update: {scale: null}})` → `scale` cleared to `null`.
+- **meal-planner-writes.AC3.7 Failure:** `update_meal({uid: "<unknown>", update: {name: "..."}})` → returns `"No meal found with UID \"<unknown>\"."`.
+- **meal-planner-writes.AC3.8 Failure:** `update_meal({uid: "<tombstoned>", update: {name: "..."}})` → returns `"Meal with UID \"<uid>\" is already deleted."` (tombstone path) or `"Meal \"<name>\" is already deleted."` (defense-in-depth path).
+- **meal-planner-writes.AC3.9 Failure:** `update_meal({uid: "<freeform>", update: {recipe_uid: null}})` on a meal that is already freeform (`recipe_uid` already `null`) → no-op-style: returns the unchanged meal (idempotent), no POST.
+- **meal-planner-writes.AC3.10 Failure:** `update_meal({uid: "<recipe-meal>", update: {recipe_uid: null}})` without a merged `name` (the existing meal had a name auto-resolved from the now-removed recipe) → returns `"Demoting a recipe meal to freeform requires an explicit name. Add 'name: \"<your label>\"' to the call."` (the inner phrase keeps its single quotes because it shows JSON object-literal syntax).
+- **meal-planner-writes.AC3.11 Failure:** `update_meal({uid: "<recipe-meal>", update: {name: "Custom"}})` (name-only update on a recipe-linked meal) → returns a runtime error explaining names auto-resolve from the recipe and pointing at the demote-first remediation. Schema permits the shape (name-update variant); runtime guard enforces the freeform-only semantic.
 
 ### meal-planner-writes.AC4: `delete_meal` soft-deletes idempotently
 
@@ -147,42 +149,89 @@ const mealTypeSpecSchema = z.discriminatedUnion("kind", [
 ### Per-tool input schemas (in `meal-writes.ts`)
 
 ```typescript
-const mealItemInputSchema = z
+// add_meals: per-item shape is a structural z.union — each item is EITHER
+// recipe-linked (no name allowed; auto-resolved from RecipeStore) OR freeform
+// (no recipe_uid allowed). Both variants are .strict() so unrecognized fields
+// fail the variant entirely. Property-presence dispatch mirrors mealTypeSpecSchema.
+const recipeMealItemSchema = z
   .object({
-    recipe_uid: z.string().min(1).optional(),
-    name: z.string().min(1).optional(),
+    recipe_uid: RecipeUidSchema,
     date: z.string().min(1),
     type: mealTypeSpecSchema,
     scale: z.string().min(1).nullable().optional(),
   })
-  .refine((v) => v.recipe_uid !== undefined || (v.name !== undefined && v.name.length > 0), {
-    message: "Either recipe_uid or name must be provided.",
-  });
+  .strict();
+
+const freeformMealItemSchema = z
+  .object({
+    name: z.string().min(1),
+    date: z.string().min(1),
+    type: mealTypeSpecSchema,
+    scale: z.string().min(1).nullable().optional(),
+  })
+  .strict();
+
+const mealItemInputSchema = z.union([recipeMealItemSchema, freeformMealItemSchema]);
 
 const addMealsInputSchema = z.object({
   items: z.array(mealItemInputSchema).min(1),
 });
 
+// update_meal: outer object holds `uid` and an `update` payload whose shape is
+// a z.union of three .strict() variants. MCP's registerTool requires a flat
+// ZodRawShape at the outermost level, which is why the union lives nested under
+// `update` rather than at the top.
+//
+//   recipeUpdateVariant — touch the recipe link (set/change) or change nothing
+//                         link-side. No `name` allowed.
+//   nameUpdateVariant   — set `name` on a freeform meal. No `recipe_uid` allowed.
+//                         Handler rejects at runtime if existing meal is recipe-linked.
+//   demoteVariant       — recipe_uid: null. Optional name (required at runtime
+//                         when meal is currently recipe-linked).
+const recipeUpdateVariant = z
+  .object({
+    recipe_uid: RecipeUidSchema.optional(),
+    date: z.string().min(1).optional(),
+    type: mealTypeSpecSchema.optional(),
+    scale: z.string().min(1).nullable().optional(),
+  })
+  .strict();
+
+const nameUpdateVariant = z
+  .object({
+    name: z.string().min(1),
+    date: z.string().min(1).optional(),
+    type: mealTypeSpecSchema.optional(),
+    scale: z.string().min(1).nullable().optional(),
+  })
+  .strict();
+
+const demoteVariant = z
+  .object({
+    recipe_uid: z.literal(null),
+    name: z.string().min(1).optional(),
+    date: z.string().min(1).optional(),
+    type: mealTypeSpecSchema.optional(),
+    scale: z.string().min(1).nullable().optional(),
+  })
+  .strict();
+
 const updateMealInputSchema = z.object({
   uid: MealUidSchema,
-  recipe_uid: z.string().min(1).nullable().optional(),
-  name: z.string().min(1).optional(),
-  date: z.string().min(1).optional(),
-  type: mealTypeSpecSchema.optional(),
-  scale: z.string().min(1).nullable().optional(),
+  update: z.union([recipeUpdateVariant, nameUpdateVariant, demoteVariant]),
 });
 
 const deleteMealInputSchema = z.object({ uid: MealUidSchema });
 ```
 
-Update semantics: `undefined` keeps existing, explicit `null` clears for `recipe_uid` and `scale`. `recipe_uid: null` demotes a recipe meal to freeform (requires merged `name` to be present, else returns a text error). `name` re-resolves from `RecipeStore` if `recipe_uid` changed and `name` was omitted. `is_ingredient` and `deleted` are tool-internal; not in any input schema.
+Update semantics: `undefined` keeps existing, explicit `null` clears for `recipe_uid` and `scale`. `recipe_uid: null` demotes a recipe meal to freeform (requires `name` to be present when the meal is currently recipe-linked, else returns a text error). `name` re-resolves from `RecipeStore` when `recipe_uid` changes; same-UID resubmits preserve `name` (partial-merge). `is_ingredient` and `deleted` are tool-internal; not in any input schema.
 
 ### Tool contracts
 
 **`add_meals`** sequence:
 
 1. Sync guard: `mealStartGuard(ctx)`. (No `mealTypeStartGuard` — type resolution failures surface as per-item validation errors.)
-2. All-or-nothing validation pass: parse `date` via `parseInputDate`; resolve `type` DU inline (rich error per item with available types); enforce cross-field `recipe_uid? + name?` rule; if `recipe_uid` set and `name` omitted, look up `RecipeStore.get(recipe_uid)?.name` (no error if missing — server is source of truth).
+2. All-or-nothing validation pass: parse `date` via `parseInputDate`; resolve `type` DU inline (rich error per item with available types); the structural-union per-item shape has already enforced "recipe-linked XOR freeform" at the schema layer. For recipe-linked items, look up `RecipeStore.get(recipe_uid)?.name` (returns error if missing — server is source of truth for recipe identity).
 3. If any item fails, return one text result enumerating every failing index.
 4. UID mint per item: `crypto.randomUUID().toUpperCase()` parsed through `MealUidSchema`.
 5. `order_flag` = `(getMaxOrderFlagOn(normalizedDate, typeUid) ?? -1) + 1`. For multi-item batches sharing a `(date, typeUid)` bucket, cache `nextFlag` per key in a local `Map` and increment per assignment.
@@ -194,7 +243,7 @@ Update semantics: `undefined` keeps existing, explicit `null` clears for `recipe
 
 1. Sync guards.
 2. Fetch existing via `ctx.mealStore.get(uid)`. If absent, run the tombstone idempotency sequence (`"Meal with UID \"<uid>\" is already deleted."` vs `"No meal found with UID \"<uid>\"."`). Defense-in-depth on `existing.deleted` returns `"Meal \"<name>\" is already deleted."`.
-3. Resolve partial inputs: parse `date` if supplied; resolve `type` DU if supplied; if `recipe_uid` changed and `name` omitted, re-resolve from `RecipeStore`; if `recipe_uid: null` is supplied, require merged `name`.
+3. Destructure `args.update` and dispatch on the structural variant via property presence: `recipeUpdateVariant` (set/change link; if `recipe_uid` differs from existing, re-resolve `name` from `RecipeStore`), `nameUpdateVariant` (runtime guard rejects if existing meal is recipe-linked), `demoteVariant` (require merged `name` when existing meal is currently recipe-linked; no-op return when meal is already freeform and no other fields change). Parse `date` if supplied; resolve `type` DU if supplied.
 4. Spread-merge mirroring `pantry-update.ts:88-104`.
 5. Single POST + `commitMeal(ctx, saved)`.
 6. Return: text result rendering the updated meal.
@@ -284,7 +333,7 @@ Five phases. Phase 1 produces the leaves (no dependencies on each other); Phases
 
 **Acceptance criteria covered:** `meal-planner-writes.AC3.*`.
 
-**Done when:** tool tests cover partial updates per field, `recipe_uid: null` demotion (with merged-`name` validation), `recipe_uid` change auto-re-resolving `name`, explicit `name` override on `recipe_uid` change, idempotent miss on unknown UID, and defense-in-depth on `existing.deleted`.
+**Done when:** tool tests cover partial updates per field (under the nested `update` payload), `recipe_uid: null` demotion (with merged-`name` validation), `recipe_uid` change auto-re-resolving `name`, structural rejection of the `{recipe_uid, name}` combo, idempotent miss on unknown UID, and defense-in-depth on `existing.deleted`.
 
 <!-- END_PHASE_3 -->
 

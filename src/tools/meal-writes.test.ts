@@ -9,6 +9,7 @@ import { makeRecipe } from "../cache/__fixtures__/recipes.js";
 import {
   registerAddMealsTool,
   addMealsInputSchema,
+  updateMealInputSchema,
   registerUpdateMealTool,
   registerDeleteMealTool,
 } from "./meal-writes.js";
@@ -24,8 +25,9 @@ const DINNER_UID = "dinner-uid" as MealTypeUid;
 const SNACKS_UID = "snacks-uid" as MealTypeUid;
 // Custom meal type — `originalType: null` (user-created, not one of the 4
 // built-ins). `orderFlag: 4` mirrors the wire capture for "[mcp-cap] Brunch"
-// (docs/wire-captures/mealtypes.har.json); orderFlag is the fallback wire
-// `type` integer when originalType is null.
+// (docs/wire-captures/mealtypes.har.json). `Meal.type` is vestigial when
+// `type_uid` is set, so the wire integer defaults to `0` regardless of the
+// mealtype's orderFlag (verified via direct API experiment 2026-05-29).
 const BRUNCH_UID = "brunch-uid" as MealTypeUid;
 const TACOS_UID = "tacos-recipe-uid" as RecipeUid;
 
@@ -162,21 +164,18 @@ describe("add_meals tool — success paths", () => {
     expect(separatorCount).toBe(4);
   });
 
-  it("AC1.4: recipe_uid AND explicit name → caller-supplied name wins over recipe name", async () => {
-    const { callTool } = makeAddCtx();
-
-    await callTool("add_meals", {
+  it("AC1.4: schema rejects {recipe_uid, name} together at the item shape (structural union)", () => {
+    // `mealItemInputSchema` is a z.union of two strict variants: recipe-linked (no
+    // name allowed; auto-resolved from recipe) and freeform (no recipe_uid allowed).
+    // Codex flagged that a stored custom name on a recipe-linked meal is dead data
+    // (Paprika.app dispatches display off recipe_uid). Wire experiment 2026-05-29
+    // confirmed the server preserves the name but the UI never renders it, so we
+    // shut the door at the schema level. Use a freeform meal (omit recipe_uid) for
+    // custom labels.
+    const result = addMealsInputSchema.safeParse({
       items: [{ recipe_uid: TACOS_UID, name: "Custom Taco Night", date: "2026-06-15", type: { builtin: 2 } }],
     });
-
-    const savedPayload: ReadonlyArray<Meal> = mockSaveMeals.mock.calls[0]?.[0] ?? [];
-    const wireMeal = savedPayload[0]!;
-    expect(wireMeal.name).toBe("Custom Taco Night");
-    // recipe link is still preserved
-    expect(wireMeal.recipeUid).toBe(TACOS_UID);
-
-    const storedMeal = mealStore.get(wireMeal.uid as MealUid);
-    expect(storedMeal?.name).toBe("Custom Taco Night");
+    expect(result.success).toBe(false);
   });
 
   it("AC1.5: scale flows through to wire payload and MealStore", async () => {
@@ -375,36 +374,13 @@ describe("add_meals tool — failure paths", () => {
     expect(mealStore.size).toBe(initialSize);
   });
 
-  it("AC2.3: missing both recipe_uid and name → belt-and-suspenders error branch", async () => {
-    // The callTool path bypasses Zod schema validation, so the .refine() check
-    // does NOT run. The handler's belt-and-suspenders branch fires instead, which
-    // produces a lowercase "either recipe_uid or name must be provided." message.
-    const { callTool } = makeFailCtx();
-    const initialSize = mealStore.size;
-
-    const result = await callTool("add_meals", {
-      items: [{ date: "2026-06-15", type: { builtin: 0 } }],
-    });
-    const text = getText(result);
-
-    // Match case-insensitively because callTool bypasses Zod; the
-    // belt-and-suspenders branch produces lowercase "either recipe_uid..."
-    expect(text.toLowerCase()).toContain("either recipe_uid or name must be provided");
-    expect(mockSaveMeals).not.toHaveBeenCalled();
-    expect(mealStore.size).toBe(initialSize);
-  });
-
-  it("AC2.3: schema .refine() rejects items missing both recipe_uid and name", () => {
-    // callTool bypasses Zod, so the .refine() that runs in production at the SDK
-    // boundary must be exercised by calling safeParse() directly on the exported
-    // schema. This confirms the constraint that reaches MCP clients.
+  it("AC2.3: schema rejects items missing both recipe_uid and name (structural union)", () => {
+    // Per-item shape is z.union([recipeMealItemSchema, freeformMealItemSchema]) with
+    // both variants strict. An item with neither recipe_uid nor name matches no
+    // variant. The previous .refine()-style belt-and-suspenders branch in the
+    // handler is gone — the schema is now the single enforcement layer.
     const result = addMealsInputSchema.safeParse({ items: [{ date: "2026-06-15", type: { builtin: 0 } }] });
     expect(result.success).toBe(false);
-    if (!result.success) {
-      const messages = result.error.issues.map((i) => i.message);
-      const hasRefineError = messages.some((m) => m === "Either recipe_uid or name must be provided.");
-      expect(hasRefineError).toBe(true);
-    }
   });
 
   it("AC2.3b: unknown recipe_uid (not in local store) → per-index error, saveMeals NOT called", async () => {
@@ -420,7 +396,7 @@ describe("add_meals tool — failure paths", () => {
     const text = getText(result);
 
     expect(text).toContain("is not known to the local recipe store");
-    expect(text).toContain("either supply name explicitly or wait for the next sync");
+    expect(text).toContain("wait for the next sync and retry");
     expect(mockSaveMeals).not.toHaveBeenCalled();
     expect(mealStore.size).toBe(initialSize);
   });
@@ -528,7 +504,7 @@ describe("update_meal — success paths (AC3.1-3.6)", () => {
 
     const { callTool } = makeUpdateCtx();
 
-    await callTool("update_meal", { uid: TEST_MEAL_UID, date: "2026-06-15" });
+    await callTool("update_meal", { uid: TEST_MEAL_UID, update: { date: "2026-06-15" } });
 
     const stored = mealStore.get(TEST_MEAL_UID);
     expect(stored?.date).toBe("2026-06-15 00:00:00");
@@ -542,7 +518,7 @@ describe("update_meal — success paths (AC3.1-3.6)", () => {
 
     const { callTool } = makeUpdateCtx();
 
-    await callTool("update_meal", { uid: TEST_MEAL_UID, type: { name: "Lunch" } });
+    await callTool("update_meal", { uid: TEST_MEAL_UID, update: { type: { name: "Lunch" } } });
 
     const stored = mealStore.get(TEST_MEAL_UID);
     expect(stored?.typeUid).toBe(LUNCH_UID);
@@ -556,7 +532,7 @@ describe("update_meal — success paths (AC3.1-3.6)", () => {
 
     const { callTool } = makeUpdateCtx();
 
-    await callTool("update_meal", { uid: TEST_MEAL_UID, recipe_uid: TACOS_UID });
+    await callTool("update_meal", { uid: TEST_MEAL_UID, update: { recipe_uid: TACOS_UID } });
 
     const stored = mealStore.get(TEST_MEAL_UID);
     expect(stored?.recipeUid).toBe(TACOS_UID);
@@ -564,17 +540,16 @@ describe("update_meal — success paths (AC3.1-3.6)", () => {
     expect(stored?.name).toBe("Tacos");
   });
 
-  it("AC3.4: freeform meal + recipe_uid + explicit name → explicit name wins", async () => {
-    const original = makeMeal({ uid: TEST_MEAL_UID, recipeUid: null, name: "Old Name" });
-    mealStore.load([original]);
-
-    const { callTool } = makeUpdateCtx();
-
-    await callTool("update_meal", { uid: TEST_MEAL_UID, recipe_uid: TACOS_UID, name: "Custom Name" });
-
-    const stored = mealStore.get(TEST_MEAL_UID);
-    expect(stored?.recipeUid).toBe(TACOS_UID);
-    expect(stored?.name).toBe("Custom Name");
+  it("AC3.4: schema rejects update with {recipe_uid: <UID>, name: <X>} (structural union)", () => {
+    // Same rationale as AC1.4: a stored custom name on a recipe-linked meal is dead
+    // data in Paprika.app's UI. The update payload union enforces this — only the
+    // demote variant (recipe_uid: null + optional name) accepts name alongside a
+    // recipe_uid key.
+    const result = updateMealInputSchema.safeParse({
+      uid: TEST_MEAL_UID,
+      update: { recipe_uid: TACOS_UID, name: "Custom Name" },
+    });
+    expect(result.success).toBe(false);
   });
 
   it("AC3.5: recipe meal + recipe_uid: null + name → demoted to freeform, new name set", async () => {
@@ -583,7 +558,7 @@ describe("update_meal — success paths (AC3.1-3.6)", () => {
 
     const { callTool } = makeUpdateCtx();
 
-    await callTool("update_meal", { uid: TEST_MEAL_UID, recipe_uid: null, name: "Leftover Chili" });
+    await callTool("update_meal", { uid: TEST_MEAL_UID, update: { recipe_uid: null, name: "Leftover Chili" } });
 
     const stored = mealStore.get(TEST_MEAL_UID);
     expect(stored?.recipeUid).toBeNull();
@@ -596,7 +571,7 @@ describe("update_meal — success paths (AC3.1-3.6)", () => {
 
     const { callTool } = makeUpdateCtx();
 
-    await callTool("update_meal", { uid: TEST_MEAL_UID, scale: null });
+    await callTool("update_meal", { uid: TEST_MEAL_UID, update: { scale: null } });
 
     // Store reflects cleared scale
     const stored = mealStore.get(TEST_MEAL_UID);
@@ -622,7 +597,7 @@ describe("update_meal — success paths (AC3.1-3.6)", () => {
 
     const { callTool } = makeUpdateCtx();
 
-    await callTool("update_meal", { uid: TEST_MEAL_UID, type: { uid: BRUNCH_UID } });
+    await callTool("update_meal", { uid: TEST_MEAL_UID, update: { type: { uid: BRUNCH_UID } } });
 
     const stored = mealStore.get(TEST_MEAL_UID);
     expect(stored?.typeUid).toBe(BRUNCH_UID);
@@ -679,7 +654,7 @@ describe("update_meal — failure/edge paths (AC3.7-3.10)", () => {
   it("AC3.7: unknown UID → 'No meal found...' error, no POST", async () => {
     const { callTool } = makeUpdateCtx();
 
-    const result = await callTool("update_meal", { uid: "UNKNOWN-UID" as MealUid, name: "Anything" });
+    const result = await callTool("update_meal", { uid: "UNKNOWN-UID" as MealUid, update: { name: "Anything" } });
     const text = getText(result);
 
     expect(text).toBe('No meal found with UID "UNKNOWN-UID".');
@@ -694,7 +669,7 @@ describe("update_meal — failure/edge paths (AC3.7-3.10)", () => {
 
     const { callTool } = makeUpdateCtx();
 
-    const result = await callTool("update_meal", { uid: TEST_MEAL_UID, name: "Anything" });
+    const result = await callTool("update_meal", { uid: TEST_MEAL_UID, update: { name: "Anything" } });
     const text = getText(result);
 
     expect(text).toBe(`Meal with UID "${TEST_MEAL_UID}" is already deleted.`);
@@ -708,7 +683,7 @@ describe("update_meal — failure/edge paths (AC3.7-3.10)", () => {
 
     const { callTool } = makeUpdateCtx();
 
-    const result = await callTool("update_meal", { uid: TEST_MEAL_UID, name: "Anything" });
+    const result = await callTool("update_meal", { uid: TEST_MEAL_UID, update: { name: "Anything" } });
     const text = getText(result);
 
     expect(text).toBe(`Meal "Ghost Meal" is already deleted.`);
@@ -722,7 +697,7 @@ describe("update_meal — failure/edge paths (AC3.7-3.10)", () => {
 
     const { callTool } = makeUpdateCtx();
 
-    const result = await callTool("update_meal", { uid: TEST_MEAL_UID, recipe_uid: null });
+    const result = await callTool("update_meal", { uid: TEST_MEAL_UID, update: { recipe_uid: null } });
     const text = getText(result);
 
     // No POST should have been issued
@@ -739,7 +714,7 @@ describe("update_meal — failure/edge paths (AC3.7-3.10)", () => {
 
     const { callTool } = makeUpdateCtx();
 
-    const result = await callTool("update_meal", { uid: TEST_MEAL_UID, recipe_uid: null });
+    const result = await callTool("update_meal", { uid: TEST_MEAL_UID, update: { recipe_uid: null } });
     const text = getText(result);
 
     expect(text).toBe(
@@ -757,7 +732,7 @@ describe("update_meal — failure/edge paths (AC3.7-3.10)", () => {
 
     const { callTool } = makeUpdateCtx();
 
-    const result = await callTool("update_meal", { uid: TEST_MEAL_UID, recipe_uid: null, scale: "2" });
+    const result = await callTool("update_meal", { uid: TEST_MEAL_UID, update: { recipe_uid: null, scale: "2" } });
     const text = getText(result);
 
     // Must NOT return the demotion error

@@ -53,19 +53,16 @@ function resolveMealTypeSpec(ctx: ServerContext, spec: z.infer<typeof mealTypeSp
   return { ok: true, resolved };
 }
 
-const mealItemInputSchema = z
+// Each meal item is structurally either recipe-linked OR freeform — never both.
+// Custom `name` on a recipe-linked meal is dead data: Paprika.app dispatches the
+// display name off `recipe_uid` and never renders the stored `name`. Verified via
+// direct API experiment + UI eyeball, 2026-05-29. Property-presence dispatch via
+// z.union of `.strict()` objects mirrors `mealTypeSpecSchema`.
+const recipeMealItemSchema = z
   .object({
-    recipe_uid: RecipeUidSchema.optional().describe(
-      "Recipe UID to link this meal to. When omitted, supply name to create a freeform meal.",
+    recipe_uid: RecipeUidSchema.describe(
+      "Recipe UID to link this meal to. Display name auto-resolves from the recipe.",
     ),
-    name: z
-      .string()
-      .min(1)
-      .optional()
-      .describe(
-        "Display name for the meal. Auto-resolved from recipe when recipe_uid is provided and name is omitted; " +
-          "supplying both uses the caller-provided name.",
-      ),
     date: z
       .string()
       .min(1)
@@ -80,9 +77,28 @@ const mealItemInputSchema = z
       .optional()
       .describe("Optional recipe scale (e.g., '2' for double). Pass null to omit."),
   })
-  .refine((v) => v.recipe_uid !== undefined || (v.name !== undefined && v.name.length > 0), {
-    message: "Either recipe_uid or name must be provided.",
-  });
+  .strict();
+
+const freeformMealItemSchema = z
+  .object({
+    name: z.string().min(1).describe("Display name for a freeform (non-recipe) meal."),
+    date: z
+      .string()
+      .min(1)
+      .describe("Meal date or datetime. Accepts ISO 8601 or yyyy-MM-dd. Normalized to Paprika wire format (UTC)."),
+    type: mealTypeSpecSchema.describe(
+      'Meal type. Pick exactly one shape: {"name": "Dinner"} | {"uid": "<MealType UID>"} | {"builtin": 2}.',
+    ),
+    scale: z
+      .string()
+      .min(1)
+      .nullable()
+      .optional()
+      .describe("Optional recipe scale (e.g., '2' for double). Pass null to omit."),
+  })
+  .strict();
+
+const mealItemInputSchema = z.union([recipeMealItemSchema, freeformMealItemSchema]);
 
 // Exported for direct Zod-validation tests (see meal-writes.test.ts AC2.3 and AC2.5).
 export const addMealsInputSchema = z.object({
@@ -98,12 +114,15 @@ export function registerAddMealsTool(server: McpServer, ctx: ServerContext): voi
     "add_meals",
     {
       description:
-        "Add one or more meals to the meal planner. Each item can link to a recipe (recipe_uid + " +
-        "optional name override) or stand alone as a freeform meal (name only). Date is normalized " +
-        "to Paprika's wire format. Meal type accepts name, UID, or built-in index (0=Breakfast, " +
-        "1=Lunch, 2=Dinner, 3=Snacks). All items validate up-front; if ANY item is invalid the " +
-        "entire batch is rejected with a per-index error enumeration so callers can fix all problems " +
-        "in one pass.",
+        "Add one or more meals to the meal planner. Each item is EITHER recipe-linked (supply " +
+        "recipe_uid; display name auto-resolves from the recipe) OR freeform (supply name; no " +
+        "recipe). The two shapes are mutually exclusive — Paprika.app's UI dispatches display " +
+        "off recipe_uid for linked meals, so a stored custom name on a recipe-linked meal would " +
+        "never render. Use a freeform meal (no recipe_uid) when you want a custom label. Date is " +
+        "normalized to Paprika's wire format. Meal type accepts name, UID, or built-in index " +
+        "(0=Breakfast, 1=Lunch, 2=Dinner, 3=Snacks). All items validate up-front; if ANY item " +
+        "is invalid the entire batch is rejected with a per-index error enumeration so callers " +
+        "can fix all problems in one pass.",
       inputSchema: addMealsInputSchema.shape,
     },
     async (args) => {
@@ -160,30 +179,26 @@ export function registerAddMealsTool(server: McpServer, ctx: ServerContext): voi
             }
             const resolvedType = typeResult.resolved;
 
-            // Cross-field: recipe_uid OR name (the Zod .refine() already enforced this;
-            // here we resolve the display name when only recipe_uid was supplied).
+            // Structural union guarantees exactly one of {recipe_uid, name} is set.
+            // Recipe-linked: name always auto-resolves from RecipeStore (Paprika.app
+            // dispatches display off recipe_uid; a stored custom name would be
+            // invisible). Freeform: caller-provided name is used verbatim.
             let resolvedName: string;
-            if (item.name !== undefined) {
-              resolvedName = item.name;
-            } else if (item.recipe_uid !== undefined) {
-              // item.recipe_uid is already RecipeUid-branded (input schema uses RecipeUidSchema.optional())
+            let recipeUid: string | null;
+            if ("recipe_uid" in item) {
               const recipe = ctx.store.get(item.recipe_uid);
               if (recipe === undefined) {
                 errors.push(
                   `Item ${i.toString()}: recipe_uid "${item.recipe_uid}" is not known to the local recipe store; ` +
-                    `either supply name explicitly or wait for the next sync and retry.`,
+                    `wait for the next sync and retry, or supply a freeform meal (omit recipe_uid, supply name).`,
                 );
                 continue;
               }
               resolvedName = recipe.name;
+              recipeUid = item.recipe_uid;
             } else {
-              // Belt and suspenders: the Zod .refine() at the schema level already
-              // guarantees one of recipe_uid or name is supplied, so this branch is
-              // unreachable in practice. Kept as a structural safeguard against
-              // schema drift; if the refine is removed or weakened in the future,
-              // this prevents a silently malformed meal record.
-              errors.push(`Item ${i.toString()}: either recipe_uid or name must be provided.`);
-              continue;
+              resolvedName = item.name;
+              recipeUid = null;
             }
 
             resolved.push({
@@ -198,7 +213,7 @@ export function registerAddMealsTool(server: McpServer, ctx: ServerContext): voi
               // 2026-05-29.)
               typeInteger: resolvedType.originalType ?? 0,
               resolvedName,
-              recipeUid: item.recipe_uid ?? null,
+              recipeUid,
               scale: item.scale ?? null,
             });
           }
@@ -275,15 +290,57 @@ export function registerAddMealsTool(server: McpServer, ctx: ServerContext): voi
   );
 }
 
-const updateMealInputSchema = z.object({
-  uid: MealUidSchema,
-  recipe_uid: RecipeUidSchema.nullable()
-    .optional()
-    .describe("Update recipe link. Pass null to demote a recipe meal to freeform (requires name)."),
-  name: z.string().min(1).optional().describe("Update display name. Required when demoting via recipe_uid: null."),
+// Structural union over the link/name decision lives one level deep so it can
+// sit inside a flat ZodRawShape (MCP's top-level requirement). Same rationale
+// as `mealItemInputSchema`: `name` on a recipe-linked meal is dead data because
+// Paprika.app dispatches display off `recipe_uid`. Three `.strict()` variants
+// dispatched by property presence:
+//
+//   recipeUpdateVariant — touch the recipe link (set/change) or change nothing
+//                         link-side. No `name` allowed.
+//   nameUpdateVariant   — set `name` on a freeform meal. No `recipe_uid` allowed.
+//                         Handler rejects at runtime if the existing meal is
+//                         recipe-linked.
+//   demoteVariant       — recipe_uid: null (demotion). Optional name — required
+//                         at runtime if the meal is currently recipe-linked,
+//                         omitted is a no-op for already-freeform meals.
+const updateMealCommonFields = {
   date: z.string().min(1).optional().describe("Update date (ISO 8601 or yyyy-MM-dd)."),
   type: mealTypeSpecSchema.optional().describe("Update meal type (same DU as add_meals)."),
   scale: z.string().min(1).nullable().optional().describe("Update scale. Pass null to clear."),
+} as const;
+
+const recipeUpdateVariant = z
+  .object({
+    recipe_uid: RecipeUidSchema.optional().describe(
+      "Recipe UID. Omit to leave the link unchanged. Display name auto-resolves from the new recipe.",
+    ),
+    ...updateMealCommonFields,
+  })
+  .strict();
+
+const nameUpdateVariant = z
+  .object({
+    name: z.string().min(1).describe("New display name. Only valid for freeform (no recipe_uid) meals."),
+    ...updateMealCommonFields,
+  })
+  .strict();
+
+const demoteVariant = z
+  .object({
+    recipe_uid: z.literal(null).describe("Pass null to demote a recipe meal to freeform."),
+    name: z.string().min(1).optional().describe("New display name. Required when demoting from a recipe meal."),
+    ...updateMealCommonFields,
+  })
+  .strict();
+
+export const updateMealInputSchema = z.object({
+  uid: MealUidSchema,
+  update: z
+    .union([recipeUpdateVariant, nameUpdateVariant, demoteVariant])
+    .describe(
+      "Update payload. Pick exactly one shape: {recipe_uid?, date?, type?, scale?} | {name, date?, type?, scale?} | {recipe_uid: null, name?, date?, type?, scale?}. Supplying both recipe_uid (a UID) and name is rejected — Paprika.app dispatches display off recipe_uid, so a stored custom name on a recipe-linked meal would never render. Use a freeform meal if you need a custom label.",
+    ),
 });
 
 export function registerUpdateMealTool(server: McpServer, ctx: ServerContext): void {
@@ -292,11 +349,13 @@ export function registerUpdateMealTool(server: McpServer, ctx: ServerContext): v
     "update_meal",
     {
       description:
-        "Update an existing meal by UID. Partial merge: only provided fields change; omitted fields are " +
-        "preserved. To clear scale, pass scale: null. To demote a recipe meal to freeform, pass recipe_uid: null " +
-        "along with an explicit name. Updates with no effective change (e.g., recipe_uid: null on an already-" +
-        "freeform meal with no other fields supplied) return the existing meal without re-POSTing. The " +
-        "is_ingredient and deleted fields are not updatable via this tool.",
+        "Update an existing meal by UID. The `update` payload is a discriminated union: pick exactly one " +
+        "of {recipe_uid?, ...other} | {name, ...other} | {recipe_uid: null, name?, ...other}. Recipe link " +
+        "and display name are structurally exclusive: name auto-resolves from the recipe for linked meals, " +
+        "and Paprika.app would never render a stored custom name on a recipe-linked meal. To set a custom " +
+        "label, use a freeform meal (no recipe_uid) or demote first via recipe_uid: null + name. Partial " +
+        "merge: omitted fields are preserved. To clear scale, pass scale: null. The is_ingredient and " +
+        "deleted fields are not updatable via this tool.",
       inputSchema: updateMealInputSchema.shape,
     },
     async (args) => {
@@ -304,6 +363,7 @@ export function registerUpdateMealTool(server: McpServer, ctx: ServerContext): v
       return mealStartGuard(ctx).match(
         async (): Promise<CallToolResult> => {
           const uid = args.uid;
+          const op = args.update;
           const existing = ctx.mealStore.get(uid);
 
           // Three-tier miss detection (mirrors pantry-delete.ts)
@@ -318,11 +378,12 @@ export function registerUpdateMealTool(server: McpServer, ctx: ServerContext): v
             return textResult(`Meal "${existing.name}" is already deleted.`);
           }
 
-          // Resolve type if supplied via the file-private helper (introduced in Phase 2)
+          // Resolve type if supplied via the file-private helper (introduced in Phase 2).
+          // All three variants of `op` carry `type` as an optional shared field.
           let typeInteger: number | undefined;
           let typeUid: string | null | undefined;
-          if (args.type !== undefined) {
-            const result = resolveMealTypeSpec(ctx, args.type);
+          if (op.type !== undefined) {
+            const result = resolveMealTypeSpec(ctx, op.type);
             if (!result.ok) {
               if (result.reason === "unknown_uid") {
                 return textResult(`Unknown meal type UID "${result.uid}".`);
@@ -347,29 +408,32 @@ export function registerUpdateMealTool(server: McpServer, ctx: ServerContext): v
 
           // Resolve date if supplied
           let normalizedDate: string | undefined;
-          if (args.date !== undefined) {
-            const parsed = parseInputDate(args.date);
+          if (op.date !== undefined) {
+            const parsed = parseInputDate(op.date);
             if (parsed === null) {
               return textResult(
-                `Could not parse date "${args.date}". Use ISO 8601 (e.g., "2026-06-15") or "yyyy-MM-dd HH:mm:ss".`,
+                `Could not parse date "${op.date}". Use ISO 8601 (e.g., "2026-06-15") or "yyyy-MM-dd HH:mm:ss".`,
               );
             }
             normalizedDate = toWireDateFormat(parsed);
           }
 
-          // Resolve recipe_uid and name interaction
+          // Resolve recipe_uid and name interaction. The structural union ensures we
+          // never see (recipe_uid: <UID>, name: <X>) together — that combination
+          // matches no variant and is rejected at parse time.
           let newRecipeUid: string | null = existing.recipeUid;
           let newName: string = existing.name;
 
-          if (args.recipe_uid !== undefined) {
-            if (args.recipe_uid === null) {
-              // Demotion to freeform
+          if ("recipe_uid" in op) {
+            if (op.recipe_uid === null) {
+              // demoteVariant: { recipe_uid: null, name?: string, ...common }
+              const demoteOp = op as z.infer<typeof demoteVariant>;
               if (
                 existing.recipeUid === null &&
-                args.name === undefined &&
-                args.date === undefined &&
-                args.type === undefined &&
-                args.scale === undefined
+                demoteOp.name === undefined &&
+                demoteOp.date === undefined &&
+                demoteOp.type === undefined &&
+                demoteOp.scale === undefined
               ) {
                 // AC3.9: idempotent no-op — meal already freeform, nothing else changing
                 const typeNameByUid = new Map<string, string>();
@@ -380,41 +444,50 @@ export function registerUpdateMealTool(server: McpServer, ctx: ServerContext): v
                     : `Type ${existing.type.toString()}`;
                 return textResult(mealToMarkdown(existing, typeName, null));
               }
-              if (existing.recipeUid !== null && args.name === undefined) {
-                // AC3.10: demotion requires explicit name (only when the meal
-                // is currently recipe-linked; already-freeform meals with
-                // recipe_uid: null just proceed to the spread-merge below)
+              if (existing.recipeUid !== null && demoteOp.name === undefined) {
+                // AC3.10: demotion requires explicit name when meal is currently recipe-linked
                 return textResult(
                   `Demoting a recipe meal to freeform requires an explicit name. ` +
                     `Add 'name: "<your label>"' to the call.`,
                 );
               }
               newRecipeUid = null;
-              if (args.name !== undefined) {
-                newName = args.name;
+              if (demoteOp.name !== undefined) {
+                newName = demoteOp.name;
               }
-              // else: existing.recipeUid was already null and no new name was
-              // supplied — keep existing.name unchanged (no demotion occurring)
-            } else {
-              // Re-link / promote
-              newRecipeUid = args.recipe_uid;
-              if (args.name !== undefined) {
-                newName = args.name;
-              } else {
-                // args.recipe_uid is already RecipeUid-branded (input schema uses RecipeUidSchema.nullable().optional())
-                const recipe = ctx.store.get(args.recipe_uid);
+              // else: existing.recipeUid was already null and no new name supplied —
+              // preserve existing.name (no demotion occurring)
+            } else if (op.recipe_uid !== undefined) {
+              // recipeUpdateVariant with recipe_uid set. Structural union guarantees
+              // no `name` here. Same-UID resubmit is a no-op on the name (partial-merge
+              // contract); different UID triggers auto-resolve from the new recipe.
+              const newLink = op.recipe_uid;
+              newRecipeUid = newLink;
+              if (newLink !== existing.recipeUid) {
+                const recipe = ctx.store.get(newLink);
                 if (recipe === undefined) {
                   return textResult(
-                    `recipe_uid "${args.recipe_uid}" is not known to the local recipe store; ` +
-                      `either supply name explicitly or wait for the next sync and retry.`,
+                    `recipe_uid "${newLink}" is not known to the local recipe store; ` +
+                      `wait for the next sync and retry.`,
                   );
                 }
                 newName = recipe.name;
               }
             }
-          } else if (args.name !== undefined) {
-            // Name update without recipe_uid change
-            newName = args.name;
+            // else: "recipe_uid" key present with value undefined — preserve existing link.
+          } else if ("name" in op) {
+            // nameUpdateVariant: { name: string, ...common }
+            // Only valid for already-freeform meals — stored custom names on recipe-linked
+            // meals would never render in Paprika.app.
+            const nameOp = op as z.infer<typeof nameUpdateVariant>;
+            if (existing.recipeUid !== null) {
+              return textResult(
+                `Cannot set name on the recipe-linked meal "${existing.name}". ` +
+                  `Names auto-resolve from the recipe. To use a custom label, demote first via ` +
+                  `update_meal({uid, update: {recipe_uid: null, name: "<your label>"}}).`,
+              );
+            }
+            newName = nameOp.name;
           }
 
           // Spread-merge — mirrors pantry-update.ts lines 95-104
@@ -426,7 +499,7 @@ export function registerUpdateMealTool(server: McpServer, ctx: ServerContext): v
             ...(typeInteger !== undefined && { type: typeInteger }),
             ...(typeUid !== undefined && { typeUid }),
             // scale: undefined keeps existing; explicit null clears.
-            ...(args.scale !== undefined && { scale: args.scale }),
+            ...(op.scale !== undefined && { scale: op.scale }),
           };
 
           let saved: Meal;
