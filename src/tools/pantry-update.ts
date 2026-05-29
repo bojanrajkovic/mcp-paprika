@@ -20,7 +20,7 @@ export function registerUpdatePantryItemTool(server: McpServer, ctx: ServerConte
         "omitted fields retain their existing values. Setting expirationDate also " +
         "updates hasExpiration accordingly.",
       inputSchema: {
-        uid: z.string().describe("Pantry item UID to update"),
+        uid: PantryItemUidSchema.describe("Pantry item UID to update"),
         ingredient: z.string().optional().describe("New ingredient name"),
         quantity: z.string().optional().describe("New quantity"),
         aisle: z
@@ -42,8 +42,7 @@ export function registerUpdatePantryItemTool(server: McpServer, ctx: ServerConte
       log.info({ tool: "update_pantry_item", uid: args.uid }, "tool invoked");
       return pantryStartGuard(ctx).match(
         async (): Promise<CallToolResult> => {
-          const uid = PantryItemUidSchema.parse(args.uid);
-          const existing = ctx.pantryStore.get(uid);
+          const existing = ctx.pantryStore.get(args.uid);
 
           if (!existing) {
             return textResult(`No pantry item found with UID "${args.uid}".`);

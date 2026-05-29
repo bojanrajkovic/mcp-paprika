@@ -4,16 +4,18 @@ Get a pantry item by UID or ingredient name.
 
 ## Parameters
 
-| Name         | Type   | Required | Default | Description                   |
-| ------------ | ------ | -------- | ------- | ----------------------------- |
-| `uid`        | string | No       | —       | Exact pantry item UID         |
-| `ingredient` | string | No       | —       | Ingredient name (fuzzy match) |
+| Name     | Type   | Required | Description                                                             |
+| -------- | ------ | -------- | ----------------------------------------------------------------------- |
+| `lookup` | object | Yes      | Pick exactly one shape: `{ "uid": "..." }` or `{ "ingredient": "..." }` |
 
-At least one of `uid` or `ingredient` must be provided.
+The `lookup` value is one of:
+
+- `{ "uid": "..." }` — exact pantry item UID
+- `{ "ingredient": "..." }` — ingredient name (fuzzy match)
+
+Pass exactly one shape. Supplying both keys, or neither, is rejected at the schema boundary — there is no precedence fallback.
 
 ## Behavior
-
-When both `uid` and `ingredient` are provided, `uid` takes precedence and the ingredient is ignored.
 
 **UID lookup** is exact — returns the item with that UID or a not-found message.
 
@@ -29,7 +31,7 @@ By UID:
 {
   "name": "get_pantry_item",
   "arguments": {
-    "uid": "A1B2C3D4-E5F6-7890-ABCD-EF1234567890"
+    "lookup": { "uid": "A1B2C3D4-E5F6-7890-ABCD-EF1234567890" }
   }
 }
 ```
@@ -40,7 +42,7 @@ By ingredient name:
 {
   "name": "get_pantry_item",
   "arguments": {
-    "ingredient": "butter"
+    "lookup": { "ingredient": "butter" }
   }
 }
 ```

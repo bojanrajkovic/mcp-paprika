@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { DateTime } from "luxon";
 import { MealStore } from "./meal-store.js";
 import { makeMeal } from "./__fixtures__/meals.js";
-import type { MealUid } from "../paprika/types.js";
+import type { MealUid, RecipeUid, MealTypeUid } from "../paprika/types.js";
 
 describe("MealStore", () => {
   let store: MealStore;
@@ -32,18 +32,18 @@ describe("MealStore", () => {
     });
 
     it("returns meals for a specific recipe", () => {
-      const meals = store.getByRecipeUid("recipe-1");
+      const meals = store.getByRecipeUid("recipe-1" as RecipeUid);
       expect(meals).toHaveLength(2);
       expect(meals.map((m) => m.name).sort()).toEqual(["Monday dinner", "Thursday dinner"]);
     });
 
     it("excludes isIngredient entries", () => {
-      const meals = store.getByRecipeUid("recipe-1");
+      const meals = store.getByRecipeUid("recipe-1" as RecipeUid);
       expect(meals.every((m) => !m.isIngredient)).toBe(true);
     });
 
     it("returns empty for unknown recipe", () => {
-      expect(store.getByRecipeUid("recipe-99")).toHaveLength(0);
+      expect(store.getByRecipeUid("recipe-99" as RecipeUid)).toHaveLength(0);
     });
 
     it("excludes deleted meals", () => {
@@ -51,7 +51,7 @@ describe("MealStore", () => {
         makeMeal({ recipeUid: "recipe-1", name: "Live", date: "2026-01-10 00:00:00" }),
         makeMeal({ recipeUid: "recipe-1", name: "Tombstone", date: "2026-01-15 00:00:00", deleted: true }),
       ]);
-      const meals = store.getByRecipeUid("recipe-1");
+      const meals = store.getByRecipeUid("recipe-1" as RecipeUid);
       expect(meals).toHaveLength(1);
       expect(meals[0]!.name).toBe("Live");
     });
@@ -64,12 +64,12 @@ describe("MealStore", () => {
         makeMeal({ recipeUid: "recipe-1", date: "2026-03-20 00:00:00" }),
         makeMeal({ recipeUid: "recipe-1", date: "2026-02-10 00:00:00" }),
       ]);
-      expect(store.lastCookedAt("recipe-1")).toBe("2026-03-20 00:00:00");
+      expect(store.lastCookedAt("recipe-1" as RecipeUid)).toBe("2026-03-20 00:00:00");
     });
 
     it("returns null for unknown recipe", () => {
       store.load([makeMeal({ recipeUid: "recipe-1", date: "2026-01-15 00:00:00" })]);
-      expect(store.lastCookedAt("recipe-99")).toBeNull();
+      expect(store.lastCookedAt("recipe-99" as RecipeUid)).toBeNull();
     });
 
     it("excludes isIngredient entries", () => {
@@ -77,12 +77,12 @@ describe("MealStore", () => {
         makeMeal({ recipeUid: "recipe-1", date: "2026-01-15 00:00:00" }),
         makeMeal({ recipeUid: "recipe-1", date: "2026-03-20 00:00:00", isIngredient: true }),
       ]);
-      expect(store.lastCookedAt("recipe-1")).toBe("2026-01-15 00:00:00");
+      expect(store.lastCookedAt("recipe-1" as RecipeUid)).toBe("2026-01-15 00:00:00");
     });
 
     it("returns null when all entries are isIngredient", () => {
       store.load([makeMeal({ recipeUid: "recipe-1", date: "2026-01-15 00:00:00", isIngredient: true })]);
-      expect(store.lastCookedAt("recipe-1")).toBeNull();
+      expect(store.lastCookedAt("recipe-1" as RecipeUid)).toBeNull();
     });
 
     it("excludes deleted meals", () => {
@@ -91,7 +91,7 @@ describe("MealStore", () => {
         // A later deleted entry must NOT shadow the live one as "most recent"
         makeMeal({ recipeUid: "recipe-1", date: "2026-03-20 00:00:00", deleted: true }),
       ]);
-      expect(store.lastCookedAt("recipe-1")).toBe("2026-01-15 00:00:00");
+      expect(store.lastCookedAt("recipe-1" as RecipeUid)).toBe("2026-01-15 00:00:00");
     });
 
     it("excludes future planner entries", () => {
@@ -101,13 +101,13 @@ describe("MealStore", () => {
         // A scheduled future planner entry should NOT count as last cooked
         makeMeal({ recipeUid: "recipe-1", date: "2026-04-20 00:00:00" }),
       ]);
-      expect(store.lastCookedAt("recipe-1", now)).toBe("2026-01-15 00:00:00");
+      expect(store.lastCookedAt("recipe-1" as RecipeUid, now)).toBe("2026-01-15 00:00:00");
     });
 
     it("returns null when only future entries exist", () => {
       const now = DateTime.fromISO("2026-03-01T00:00:00", { zone: "utc" });
       store.load([makeMeal({ recipeUid: "recipe-1", date: "2026-04-20 00:00:00" })]);
-      expect(store.lastCookedAt("recipe-1", now)).toBeNull();
+      expect(store.lastCookedAt("recipe-1" as RecipeUid, now)).toBeNull();
     });
   });
 
@@ -143,13 +143,13 @@ describe("MealStore", () => {
     });
 
     it("filters by recipeUid", () => {
-      const { meals, total } = store.getInDateRange({ recipeUid: "recipe-1" });
+      const { meals, total } = store.getInDateRange({ recipeUid: "recipe-1" as RecipeUid });
       expect(total).toBe(2);
       expect(meals.map((m) => m.name).sort()).toEqual(["Jan Dinner", "Mar Dinner"]);
     });
 
     it("filters by typeUid", () => {
-      const { meals, total } = store.getInDateRange({ typeUid: "l" });
+      const { meals, total } = store.getInDateRange({ typeUid: "l" as MealTypeUid });
       expect(total).toBe(1);
       expect(meals[0]!.name).toBe("Feb Lunch");
     });
@@ -162,7 +162,7 @@ describe("MealStore", () => {
         makeMeal({ name: "Legacy Lunch", date: "2026-01-10 00:00:00", type: 1, typeUid: null }),
       ]);
       const { meals, total } = store.getInDateRange({
-        typeUid: "dinner-uid",
+        typeUid: "dinner-uid" as MealTypeUid,
         legacyTypeInteger: 2,
       });
       expect(total).toBe(2);
@@ -175,7 +175,7 @@ describe("MealStore", () => {
         makeMeal({ name: "Custom Type", date: "2026-01-15 00:00:00", type: 4, typeUid: "custom-uid" }),
       ]);
       // typeUid set, but no legacyTypeInteger → legacy meals must NOT match
-      const { meals, total } = store.getInDateRange({ typeUid: "custom-uid" });
+      const { meals, total } = store.getInDateRange({ typeUid: "custom-uid" as MealTypeUid });
       expect(total).toBe(1);
       expect(meals[0]!.name).toBe("Custom Type");
     });

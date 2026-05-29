@@ -20,7 +20,7 @@ export function registerUpdateTool(server: McpServer, ctx: ServerContext): void 
         "Pass inTrash: true to move to trash (soft-delete, reversible) or inTrash: false to restore. " +
         "Use delete_recipe for a dedicated trash workflow.",
       inputSchema: {
-        uid: z.string().describe("Recipe UID to update"),
+        uid: RecipeUidSchema.describe("Recipe UID to update"),
         name: z.string().optional().describe("New recipe name"),
         ingredients: z.string().optional().describe("New ingredients list"),
         directions: z.string().optional().describe("New cooking directions"),
@@ -46,8 +46,7 @@ export function registerUpdateTool(server: McpServer, ctx: ServerContext): void 
       log.info({ tool: "update_recipe", uid: args.uid }, "tool invoked");
       return coldStartGuard(ctx).match(
         async (): Promise<CallToolResult> => {
-          const uid = RecipeUidSchema.parse(args.uid);
-          const existing = ctx.store.get(uid);
+          const existing = ctx.store.get(args.uid);
 
           if (!existing) {
             return textResult(`No recipe found with UID "${args.uid}".`);

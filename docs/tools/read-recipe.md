@@ -4,12 +4,16 @@ Read a recipe by UID or title. Returns the full recipe with ingredients, directi
 
 ## Parameters
 
-| Name    | Type   | Required | Default | Description                |
-| ------- | ------ | -------- | ------- | -------------------------- |
-| `uid`   | string | No       | —       | Exact recipe UID           |
-| `title` | string | No       | —       | Recipe title (fuzzy match) |
+| Name     | Type   | Required | Description                                                        |
+| -------- | ------ | -------- | ------------------------------------------------------------------ |
+| `lookup` | object | Yes      | Pick exactly one shape: `{ "uid": "..." }` or `{ "title": "..." }` |
 
-At least one of `uid` or `title` must be provided. When both are given, `uid` takes precedence.
+The `lookup` value is one of:
+
+- `{ "uid": "..." }` — exact recipe UID
+- `{ "title": "..." }` — recipe title (fuzzy match)
+
+Pass exactly one shape. Supplying both keys, or neither, is rejected at the schema boundary — there is no precedence fallback.
 
 ## Behavior
 
@@ -31,7 +35,7 @@ By UID (from a previous search or list result):
 {
   "name": "read_recipe",
   "arguments": {
-    "uid": "ABC123-DEF456"
+    "lookup": { "uid": "ABC123-DEF456" }
   }
 }
 ```
@@ -42,7 +46,7 @@ By title:
 {
   "name": "read_recipe",
   "arguments": {
-    "title": "chicken parmesan"
+    "lookup": { "title": "chicken parmesan" }
   }
 }
 ```

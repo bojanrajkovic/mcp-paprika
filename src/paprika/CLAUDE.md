@@ -20,12 +20,14 @@ HTTP client for the Paprika Cloud Sync API. Handles authentication, request form
 
 **Branded UIDs:**
 
-- `RecipeUid` — Branded string type for recipe identifiers, validated by `RecipeUidSchema`
+`RecipeUidSchema`, `PantryItemUidSchema`, `GroceryListUidSchema`, and `GroceryItemUidSchema` are `z.string().min(1).brand(...)` — the non-empty constraint is part of the brand, so it applies uniformly to entity primary-key `uid` fields and to tool input fields without per-site `.min(1)`. `AisleUidSchema` stays deliberately unconstrained (it doubles as a "no aisle" empty sentinel and accepts two ID formats). Foreign-key reference fields (`listUid`, `aisleUid`, meal `recipeUid`/`typeUid`) are plain `z.string()` in the entity schemas, not the branded schemas, and are unaffected.
+
+- `RecipeUid` — Branded string type for recipe identifiers, validated by `RecipeUidSchema` (non-empty)
 - `CategoryUid` — Branded string type for category identifiers, validated by `CategoryUidSchema`
-- `PantryItemUid` — Branded string type for pantry item identifiers, validated by `PantryItemUidSchema`
+- `PantryItemUid` — Branded string type for pantry item identifiers, validated by `PantryItemUidSchema` (non-empty)
 - `AisleUid` — Branded string type for aisle identifiers, validated by `AisleUidSchema` (unconstrained `z.string().brand()`; accepts both 64-char uppercase hex used by Paprika's default aisles and uppercase UUID v4 used by user-created aisles)
-- `GroceryListUid` — Branded string type for grocery list identifiers, validated by `GroceryListUidSchema`
-- `GroceryItemUid` — Branded string type for grocery item identifiers, validated by `GroceryItemUidSchema`
+- `GroceryListUid` — Branded string type for grocery list identifiers, validated by `GroceryListUidSchema` (non-empty)
+- `GroceryItemUid` — Branded string type for grocery item identifiers, validated by `GroceryItemUidSchema` (non-empty)
 - `GroceryIngredientUid` — Branded string type for grocery ingredient identifiers, validated by `GroceryIngredientUidSchema`
 - `MealUid` — Branded string type for meal identifiers, validated by `MealUidSchema`
 - `MealTypeUid` — Branded string type for meal type identifiers, validated by `MealTypeUidSchema`

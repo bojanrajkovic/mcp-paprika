@@ -2,7 +2,7 @@ import { z } from "zod";
 import type { SetRequired } from "type-fest";
 
 // Branded UID schemas using z.string().brand()
-export const RecipeUidSchema = z.string().brand("RecipeUid");
+export const RecipeUidSchema = z.string().min(1).brand("RecipeUid");
 export const CategoryUidSchema = z.string().brand("CategoryUid");
 
 // Derived UID types via z.infer<>
@@ -197,7 +197,7 @@ export const AisleSchema = z
   );
 
 // Branded UID schemas for pantry items
-export const PantryItemUidSchema = z.string().brand("PantryItemUid");
+export const PantryItemUidSchema = z.string().min(1).brand("PantryItemUid");
 
 // Derived UID type via z.infer<>
 export type PantryItemUid = z.infer<typeof PantryItemUidSchema>;
@@ -249,10 +249,10 @@ export const PantryItemSchema = z
   );
 
 // Branded UID schemas for grocery entities
-export const GroceryListUidSchema = z.string().brand("GroceryListUid");
+export const GroceryListUidSchema = z.string().min(1).brand("GroceryListUid");
 export type GroceryListUid = z.infer<typeof GroceryListUidSchema>;
 
-export const GroceryItemUidSchema = z.string().brand("GroceryItemUid");
+export const GroceryItemUidSchema = z.string().min(1).brand("GroceryItemUid");
 export type GroceryItemUid = z.infer<typeof GroceryItemUidSchema>;
 
 export const GroceryIngredientUidSchema = z.string().brand("GroceryIngredientUid");

@@ -1,12 +1,12 @@
 import { DateTime } from "luxon";
 import { TombstoneEntityStore } from "../entity/index.js";
-import type { Meal, MealUid } from "../paprika/types.js";
+import type { Meal, MealUid, RecipeUid, MealTypeUid } from "../paprika/types.js";
 
 export interface MealDateRangeOpts {
   readonly since?: DateTime | undefined;
   readonly until?: DateTime | undefined;
-  readonly recipeUid?: string | undefined;
-  readonly typeUid?: string | undefined;
+  readonly recipeUid?: RecipeUid | undefined;
+  readonly typeUid?: MealTypeUid | undefined;
   /**
    * When `typeUid` resolves to a built-in mealtype (Breakfast/Lunch/Dinner/
    * Snacks — those with non-null `originalType`), pass the integer here so
@@ -54,7 +54,7 @@ export class MealStore extends TombstoneEntityStore<Meal, MealUid> {
     super(opts ?? {});
   }
 
-  getByRecipeUid(recipeUid: string): Array<Meal> {
+  getByRecipeUid(recipeUid: RecipeUid): Array<Meal> {
     const result: Array<Meal> = [];
     for (const meal of this._items.values()) {
       if (isHidden(meal)) continue;
@@ -65,7 +65,7 @@ export class MealStore extends TombstoneEntityStore<Meal, MealUid> {
     return result;
   }
 
-  lastCookedAt(recipeUid: string, nowUtc: DateTime = DateTime.utc()): string | null {
+  lastCookedAt(recipeUid: RecipeUid, nowUtc: DateTime = DateTime.utc()): string | null {
     let latest: string | null = null;
     let latestDt: DateTime | null = null;
 
@@ -129,6 +129,12 @@ export class MealStore extends TombstoneEntityStore<Meal, MealUid> {
    * typeUid is matched exactly, including null — meals with typeUid: null
    * (legacy entries predating Paprika's mealtypes catalog) form their own bucket
    * per date and never collide with non-null typeUid buckets on the same date.
+   *
+   * Unlike the recipe/type filters on the read methods, `typeUid` here stays
+   * plain `string | null` (not branded `MealTypeUid`): update_meal computes the
+   * destination bucket from the *existing* meal's `typeUid` when the type isn't
+   * changing, and `Meal.typeUid` is the untrusted plain-string wire field — so
+   * branding the parameter would only force a cast back at that call site.
    *
    * Pending-delete UIDs are excluded: between `markPendingDelete` and
    * `delete`, the meal is still in `_items` with `deleted: false` (commitMeal

@@ -1,7 +1,6 @@
 import { toMessage } from "../utils/log.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { z } from "zod";
 import { PantryItemUidSchema } from "../paprika/types.js";
 import { textResult } from "./helpers.js";
 import { commitPantryItem, pantryStartGuard } from "./pantry-helpers.js";
@@ -16,15 +15,14 @@ export function registerDeletePantryItemTool(server: McpServer, ctx: ServerConte
         "Soft-delete a pantry item by UID. Idempotent: a second delete on the same UID " +
         "returns a friendly 'already deleted' message without re-saving. Requires an exact UID.",
       inputSchema: {
-        uid: z.string().describe("Pantry item UID to delete"),
+        uid: PantryItemUidSchema.describe("Pantry item UID to delete"),
       },
     },
     async (args) => {
       log.info({ tool: "delete_pantry_item", uid: args.uid }, "tool invoked");
       return pantryStartGuard(ctx).match(
         async (): Promise<CallToolResult> => {
-          const uid = PantryItemUidSchema.parse(args.uid);
-          const existing = ctx.pantryStore.get(uid);
+          const existing = ctx.pantryStore.get(args.uid);
 
           if (!existing) {
             // Distinguish "I deleted this in this session" (tombstone) from
@@ -32,7 +30,7 @@ export function registerDeletePantryItemTool(server: McpServer, ctx: ServerConte
             // via this client since the last sync; a retried delete on a
             // previously-deleted UID returns the idempotent "already deleted"
             // signal callers expect.
-            if (ctx.pantryStore.isTombstone(uid)) {
+            if (ctx.pantryStore.isTombstone(args.uid)) {
               return textResult(`Pantry item with UID "${args.uid}" is already deleted.`);
             }
             return textResult(`No pantry item found with UID "${args.uid}".`);

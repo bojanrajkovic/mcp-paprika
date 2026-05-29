@@ -34,7 +34,7 @@ export function registerAddGroceryItemsTool(server: McpServer, ctx: ServerContex
       description:
         "Add one or more items to a grocery list. Check read_grocery_list first to avoid duplicate ingredients — no server-side duplicate guard.",
       inputSchema: {
-        listUid: z.string().min(1).describe("UID of the grocery list to add items to"),
+        listUid: GroceryListUidSchema.describe("UID of the grocery list to add items to"),
         items: z.array(itemInputSchema).min(1).describe("Array of items to add (1 or more)"),
       },
     },
@@ -42,9 +42,8 @@ export function registerAddGroceryItemsTool(server: McpServer, ctx: ServerContex
       log.info({ tool: "add_grocery_items", listUid: args.listUid, count: args.items.length }, "tool invoked");
       return groceryStartGuard(ctx).match(
         async (): Promise<CallToolResult> => {
-          // Validate listUid
-          const listUid = GroceryListUidSchema.parse(args.listUid);
-          const list = ctx.groceryListStore.get(listUid);
+          // Validate listUid (already brand-typed by the input schema)
+          const list = ctx.groceryListStore.get(args.listUid);
           if (list === undefined) {
             return textResult(`Grocery list with UID "${args.listUid}" not found.`);
           }
@@ -168,7 +167,7 @@ export function registerUpdateGroceryItemTool(server: McpServer, ctx: ServerCont
       description:
         "Update an existing grocery item. Only provided fields are changed; omitted fields retain their current values.",
       inputSchema: {
-        uid: z.string().min(1).describe("UID of the grocery item to update"),
+        uid: GroceryItemUidSchema.describe("UID of the grocery item to update"),
         quantity: z.string().optional().describe("New quantity; set to empty string to clear"),
         aisle: z.string().optional().describe("New aisle display name"),
         instruction: z.string().optional().describe("New free-form notes"),
@@ -179,8 +178,7 @@ export function registerUpdateGroceryItemTool(server: McpServer, ctx: ServerCont
       log.info({ tool: "update_grocery_item", uid: args.uid }, "tool invoked");
       return groceryStartGuard(ctx).match(
         async (): Promise<CallToolResult> => {
-          const uid = GroceryItemUidSchema.parse(args.uid);
-          const existing = ctx.groceryItemStore.get(uid);
+          const existing = ctx.groceryItemStore.get(args.uid);
           if (existing === undefined) {
             return textResult(`No grocery item found with UID "${args.uid}".`);
           }
@@ -225,15 +223,14 @@ export function registerDeleteGroceryItemTool(server: McpServer, ctx: ServerCont
     {
       description: "Delete a grocery item by UID.",
       inputSchema: {
-        uid: z.string().describe("Grocery item UID to delete"),
+        uid: GroceryItemUidSchema.describe("Grocery item UID to delete"),
       },
     },
     async (args) => {
       log.info({ tool: "delete_grocery_item", uid: args.uid }, "tool invoked");
       return groceryStartGuard(ctx).match(
         async (): Promise<CallToolResult> => {
-          const uid = GroceryItemUidSchema.parse(args.uid);
-          const existing = ctx.groceryItemStore.get(uid);
+          const existing = ctx.groceryItemStore.get(args.uid);
 
           if (!existing) {
             // Distinguish "I deleted this in this session" (tombstone) from
@@ -241,7 +238,7 @@ export function registerDeleteGroceryItemTool(server: McpServer, ctx: ServerCont
             // via this client since the last sync; a retried delete on a
             // previously-deleted UID returns the idempotent "already deleted"
             // signal callers expect.
-            if (ctx.groceryItemStore.isTombstone(uid)) {
+            if (ctx.groceryItemStore.isTombstone(args.uid)) {
               return textResult(`Grocery item with UID "${args.uid}" is already deleted.`);
             }
             return textResult(`No grocery item found with UID "${args.uid}".`);
