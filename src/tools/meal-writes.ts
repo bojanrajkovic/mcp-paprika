@@ -4,54 +4,18 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { MealUidSchema, RecipeUidSchema } from "../paprika/types.js";
-import type { Meal, MealType, RecipeUid } from "../paprika/types.js";
+import type { Meal } from "../paprika/types.js";
 import { textResult } from "./helpers.js";
-import { commitMeal, commitMealsBatch, mealStartGuard, mealToMarkdown, mealTypeSpecSchema } from "./meal-helpers.js";
+import {
+  commitMeal,
+  commitMealsBatch,
+  mealStartGuard,
+  mealTypeSpecSchema,
+  renderMealCard,
+  resolveMealTypeSpec,
+} from "./meal-helpers.js";
 import { parseInputMealDate } from "../utils/dates.js";
 import type { ServerContext } from "../types/server-context.js";
-
-// File-private helper used by registerAddMealsTool and registerUpdateMealTool.
-// Returns a typed result so callers can compose user-facing prefixes (e.g.,
-// "Item N (type {name: \"...\"}):" for add_meals, "" for update_meal) without
-// the helper baking format strings.
-type MealTypeResolveResult =
-  | { readonly ok: true; readonly resolved: MealType }
-  | { readonly ok: false; readonly reason: "unknown_uid"; readonly uid: string }
-  | {
-      readonly ok: false;
-      readonly reason: "unknown_name";
-      readonly name: string;
-      readonly knownNames: ReadonlyArray<string>;
-    }
-  | { readonly ok: false; readonly reason: "unknown_builtin"; readonly index: number };
-
-function resolveMealTypeSpec(ctx: ServerContext, spec: z.infer<typeof mealTypeSpecSchema>): MealTypeResolveResult {
-  if ("uid" in spec) {
-    const resolved = ctx.mealTypeStore.getAll().find((mt) => mt.uid === spec.uid);
-    if (resolved === undefined) {
-      return { ok: false, reason: "unknown_uid", uid: spec.uid };
-    }
-    return { ok: true, resolved };
-  }
-  if ("name" in spec) {
-    const resolved = ctx.mealTypeStore.resolveByName(spec.name);
-    if (resolved === undefined) {
-      return {
-        ok: false,
-        reason: "unknown_name",
-        name: spec.name,
-        knownNames: ctx.mealTypeStore.getAll().map((mt) => mt.name),
-      };
-    }
-    return { ok: true, resolved };
-  }
-  const builtinInt = spec.builtin;
-  const resolved = ctx.mealTypeStore.getAll().find((mt) => mt.originalType === builtinInt);
-  if (resolved === undefined) {
-    return { ok: false, reason: "unknown_builtin", index: builtinInt };
-  }
-  return { ok: true, resolved };
-}
 
 // Each meal item is structurally either recipe-linked OR freeform — never both.
 // Custom `name` on a recipe-linked meal is dead data: Paprika.app dispatches the
@@ -274,21 +238,7 @@ export function registerAddMealsTool(server: McpServer, ctx: ServerContext): voi
           }
 
           // ----- Stage 4: render response -----
-          const typeNameByUid = new Map<string, string>();
-          for (const mt of ctx.mealTypeStore.getAll()) typeNameByUid.set(mt.uid, mt.name);
-
-          const cards = savedItems.map((meal) => {
-            const typeName =
-              meal.typeUid !== null
-                ? (typeNameByUid.get(meal.typeUid) ?? `Type ${meal.type.toString()}`)
-                : `Type ${meal.type.toString()}`;
-            // meal.recipeUid is `string | null` per MealStoredSchema (types.ts:374) — the field is intentionally
-            // unbranded at the schema level. Cast to RecipeUid for the store lookup, matching the convention
-            // in src/tools/discover.ts:40 (`ctx.store.get(result.uid as RecipeUid)`).
-            const recipeName =
-              meal.recipeUid !== null ? (ctx.store.get(meal.recipeUid as RecipeUid)?.name ?? null) : null;
-            return mealToMarkdown(meal, typeName, recipeName);
-          });
+          const cards = savedItems.map((meal) => renderMealCard(ctx, meal));
 
           const header = `Added ${savedItems.length.toString()} meal(s) to the planner.`;
           return textResult(`${header}\n\n${cards.join("\n\n---\n\n")}`);
@@ -453,13 +403,7 @@ export function registerUpdateMealTool(server: McpServer, ctx: ServerContext): v
                 demoteOp.scale === undefined
               ) {
                 // AC3.9: idempotent no-op — meal already freeform, nothing else changing
-                const typeNameByUid = new Map<string, string>();
-                for (const mt of ctx.mealTypeStore.getAll()) typeNameByUid.set(mt.uid, mt.name);
-                const typeName =
-                  existing.typeUid !== null
-                    ? (typeNameByUid.get(existing.typeUid) ?? `Type ${existing.type.toString()}`)
-                    : `Type ${existing.type.toString()}`;
-                return textResult(mealToMarkdown(existing, typeName, null));
+                return textResult(renderMealCard(ctx, existing));
               }
               if (existing.recipeUid !== null && demoteOp.name === undefined) {
                 // AC3.10: demotion requires explicit name when meal is currently recipe-linked
@@ -549,15 +493,7 @@ export function registerUpdateMealTool(server: McpServer, ctx: ServerContext): v
             updated.orderFlag === existing.orderFlag &&
             updated.scale === existing.scale
           ) {
-            const typeNameByUid = new Map<string, string>();
-            for (const mt of ctx.mealTypeStore.getAll()) typeNameByUid.set(mt.uid, mt.name);
-            const typeName =
-              existing.typeUid !== null
-                ? (typeNameByUid.get(existing.typeUid) ?? `Type ${existing.type.toString()}`)
-                : `Type ${existing.type.toString()}`;
-            const recipeName =
-              existing.recipeUid !== null ? (ctx.store.get(existing.recipeUid as RecipeUid)?.name ?? null) : null;
-            return textResult(mealToMarkdown(existing, typeName, recipeName));
+            return textResult(renderMealCard(ctx, existing));
           }
 
           let saved: Meal;
@@ -570,17 +506,7 @@ export function registerUpdateMealTool(server: McpServer, ctx: ServerContext): v
             return textResult(`Failed to update meal: ${message}`);
           }
 
-          const typeNameByUid = new Map<string, string>();
-          for (const mt of ctx.mealTypeStore.getAll()) typeNameByUid.set(mt.uid, mt.name);
-          const typeName =
-            saved.typeUid !== null
-              ? (typeNameByUid.get(saved.typeUid) ?? `Type ${saved.type.toString()}`)
-              : `Type ${saved.type.toString()}`;
-          // saved.recipeUid is `string | null` per MealStoredSchema (intentionally unbranded); cast follows the
-          // src/tools/discover.ts:40 precedent (`ctx.store.get(result.uid as RecipeUid)`).
-          const recipeName =
-            saved.recipeUid !== null ? (ctx.store.get(saved.recipeUid as RecipeUid)?.name ?? null) : null;
-          return textResult(mealToMarkdown(saved, typeName, recipeName));
+          return textResult(renderMealCard(ctx, saved));
         },
         (guard) => guard,
       );

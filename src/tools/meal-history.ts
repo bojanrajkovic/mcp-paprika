@@ -2,20 +2,11 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { DateTime } from "luxon";
 import { z } from "zod";
-import { mealStartGuard, mealTypeSpecSchema } from "./meal-helpers.js";
+import { mealStartGuard, mealTypeSpecSchema, resolveMealTypeSpec } from "./meal-helpers.js";
 import { textResult } from "./helpers.js";
+import { parseInputDate } from "../utils/dates.js";
 import type { ServerContext } from "../types/server-context.js";
 import type { Meal } from "../paprika/types.js";
-
-function parseInputDate(input: string): DateTime | null {
-  for (const fmt of ["yyyy-MM-dd HH:mm:ss", "yyyy-MM-dd'T'HH:mm:ss", "yyyy-MM-dd"]) {
-    const dt = DateTime.fromFormat(input, fmt, { zone: "utc" });
-    if (dt.isValid) return dt;
-  }
-  const iso = DateTime.fromISO(input, { zone: "utc" });
-  if (iso.isValid) return iso;
-  return null;
-}
 
 function formatMealLine(
   meal: Meal,
@@ -91,38 +82,33 @@ export function registerMealHistoryTool(server: McpServer, ctx: ServerContext): 
           // built-in. Undefined for custom-type filters.
           let legacyTypeInteger: number | undefined;
           if (args.type !== undefined) {
-            if ("uid" in args.type) {
-              const wantedUid = args.type.uid;
-              typeUid = wantedUid;
-              const mt = ctx.mealTypeStore.getAll().find((m) => m.uid === wantedUid);
-              if (mt?.originalType !== undefined && mt.originalType !== null) {
-                legacyTypeInteger = mt.originalType;
+            // Shared resolver (#141) — same dispatch the write tools use. Format
+            // rich, actionable errors from the structured result (an unknown
+            // {uid} now errors rather than silently filtering by the literal
+            // uid, matching the {name}/{builtin} branches and the write side).
+            const result = resolveMealTypeSpec(ctx, args.type);
+            if (!result.ok) {
+              if (result.reason === "unknown_uid") {
+                return textResult(`Unknown meal type UID "${result.uid}".`);
               }
-            } else if ("name" in args.type) {
-              const mt = ctx.mealTypeStore.resolveByName(args.type.name);
-              if (mt === undefined) {
+              if (result.reason === "unknown_name") {
+                const knownList = result.knownNames.join(", ");
                 return textResult(
-                  `Unknown meal type "${args.type.name}". Use list_meal_history without a type filter to see available meal types in context.`,
+                  `Unknown meal type "${result.name}". Known types: ${knownList}. ` +
+                    `Use the {uid} or {builtin} discriminator to reference a custom meal type.`,
                 );
               }
-              typeUid = mt.uid;
-              if (mt.originalType !== null) {
-                legacyTypeInteger = mt.originalType;
-              }
-            } else {
-              const builtinInt = args.type.builtin;
-              for (const mt of ctx.mealTypeStore.getAll()) {
-                if (mt.originalType === builtinInt) {
-                  typeUid = mt.uid;
-                  legacyTypeInteger = builtinInt;
-                  break;
-                }
-              }
-              if (typeUid === undefined) {
-                return textResult(
-                  `No built-in meal type found with index ${builtinInt.toString()} (expected 0=Breakfast, 1=Lunch, 2=Dinner, 3=Snacks).`,
-                );
-              }
+              return textResult(
+                `No built-in meal type found with index ${result.index.toString()} ` +
+                  `(expected 0=Breakfast, 1=Lunch, 2=Dinner, 3=Snacks).`,
+              );
+            }
+            typeUid = result.resolved.uid;
+            // Built-in types carry a non-null originalType; surface legacy
+            // (null-typeUid, integer-only) meals matching it. Custom types
+            // (originalType: null) filter by typeUid alone.
+            if (result.resolved.originalType !== null) {
+              legacyTypeInteger = result.resolved.originalType;
             }
           }
 

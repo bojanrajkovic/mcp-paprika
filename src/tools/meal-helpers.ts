@@ -1,7 +1,7 @@
 // pattern: Imperative Shell
 import { err, ok, type Result } from "neverthrow";
 import { z } from "zod";
-import type { Meal, MealUid } from "../paprika/types.js";
+import type { Meal, MealType, MealUid, RecipeUid } from "../paprika/types.js";
 import { MealTypeUidSchema } from "../paprika/types.js";
 import type { ServerContext } from "../types/server-context.js";
 import { textResult } from "./helpers.js";
@@ -34,13 +34,72 @@ export const mealTypeSpecSchema = z.union([
   z.object({ builtin: z.number().int().min(0).max(3) }).strict(),
 ]);
 
+/**
+ * Structured result of resolving a `mealTypeSpecSchema` union variant against
+ * `mealTypeStore`. The resolver never formats user-facing text — it returns the
+ * resolved `MealType` on a hit, or one of three error reasons callers map to
+ * their own message style (terse for `update_meal`, per-index-prefixed for
+ * `add_meals`, single-filter for `list_meal_history`). `unknown_name` carries
+ * `knownNames` so callers can list the available types as a remediation hint.
+ */
+export type MealTypeResolveResult =
+  | { readonly ok: true; readonly resolved: MealType }
+  | { readonly ok: false; readonly reason: "unknown_uid"; readonly uid: string }
+  | {
+      readonly ok: false;
+      readonly reason: "unknown_name";
+      readonly name: string;
+      readonly knownNames: ReadonlyArray<string>;
+    }
+  | { readonly ok: false; readonly reason: "unknown_builtin"; readonly index: number };
+
+/**
+ * Resolve a meal-type spec (`{name} | {uid} | {builtin}`) against `mealTypeStore`.
+ * Shared by the read side (`meal-history.ts`) and the write side (`meal-writes.ts`)
+ * so the dispatch logic lives in exactly one place. Built-in meal types carry
+ * `originalType: 0..3` (Breakfast/Lunch/Dinner/Snacks); user-created custom types
+ * carry `originalType: null`. Callers derive their own projection from the resolved
+ * `MealType`: the read side reads `originalType` to surface legacy (null-`typeUid`)
+ * meals, the write side sends `originalType ?? 0` as the vestigial wire integer.
+ */
+export function resolveMealTypeSpec(
+  ctx: ServerContext,
+  spec: z.infer<typeof mealTypeSpecSchema>,
+): MealTypeResolveResult {
+  if ("uid" in spec) {
+    const resolved = ctx.mealTypeStore.getAll().find((mt) => mt.uid === spec.uid);
+    if (resolved === undefined) {
+      return { ok: false, reason: "unknown_uid", uid: spec.uid };
+    }
+    return { ok: true, resolved };
+  }
+  if ("name" in spec) {
+    const resolved = ctx.mealTypeStore.resolveByName(spec.name);
+    if (resolved === undefined) {
+      return {
+        ok: false,
+        reason: "unknown_name",
+        name: spec.name,
+        knownNames: ctx.mealTypeStore.getAll().map((mt) => mt.name),
+      };
+    }
+    return { ok: true, resolved };
+  }
+  const builtinInt = spec.builtin;
+  const resolved = ctx.mealTypeStore.getAll().find((mt) => mt.originalType === builtinInt);
+  if (resolved === undefined) {
+    return { ok: false, reason: "unknown_builtin", index: builtinInt };
+  }
+  return { ok: true, resolved };
+}
+
 export function mealStartGuard(ctx: ServerContext): Result<void, ReturnType<typeof textResult>> {
   // Both stores must be synced. The mealtype store is required by the type DU
-  // resolver (`resolveMealTypeSpec` in `meal-writes.ts`, `meal-history.ts` filters);
-  // without it, every "Dinner" / "Lunch" lookup returns undefined and the user sees
-  // "Unknown meal type" errors that look like input mistakes but are actually a
-  // cold-cache state. Guarding both up front turns that into a clear "still
-  // syncing" message instead.
+  // resolver (`resolveMealTypeSpec`, used by both `meal-writes.ts` and
+  // `meal-history.ts`); without it, every "Dinner" / "Lunch" lookup returns
+  // undefined and the user sees "Unknown meal type" errors that look like input
+  // mistakes but are actually a cold-cache state. Guarding both up front turns
+  // that into a clear "still syncing" message instead.
   if (!ctx.mealStore.hasSynced || !ctx.mealTypeStore.hasSynced) {
     return err(textResult("Meal data is not yet synced. Try again in a few seconds."));
   }
@@ -150,4 +209,27 @@ export function mealToMarkdown(meal: Readonly<Meal>, typeName: string, recipeNam
     lines.push(`**Scale:** ${meal.scale}`);
   }
   return lines.join("\n");
+}
+
+/**
+ * Resolve a meal's display names from context, then render its markdown card.
+ * Wraps the pure `mealToMarkdown` with the ctx-dependent lookups every meal-write
+ * response path repeats: typeName from `mealTypeStore` (with a `Type N` fallback
+ * for unknown or legacy types), and recipeName from the recipe store. Meals with
+ * `typeUid: null` (legacy, predating the mealtypes catalog) fall straight through
+ * to the integer-labelled fallback; meals with `recipeUid: null` render as
+ * freeform. Building the (tiny) type-name map per call keeps the signature to
+ * `(ctx, meal)` — the catalog has only a handful of entries.
+ */
+export function renderMealCard(ctx: ServerContext, meal: Readonly<Meal>): string {
+  const typeNameByUid = new Map<string, string>();
+  for (const mt of ctx.mealTypeStore.getAll()) typeNameByUid.set(mt.uid, mt.name);
+  const typeName =
+    meal.typeUid !== null
+      ? (typeNameByUid.get(meal.typeUid) ?? `Type ${meal.type.toString()}`)
+      : `Type ${meal.type.toString()}`;
+  // meal.recipeUid is `string | null` per MealStoredSchema (intentionally unbranded);
+  // the cast for the store lookup mirrors the convention in src/tools/discover.ts:40.
+  const recipeName = meal.recipeUid !== null ? (ctx.store.get(meal.recipeUid as RecipeUid)?.name ?? null) : null;
+  return mealToMarkdown(meal, typeName, recipeName);
 }

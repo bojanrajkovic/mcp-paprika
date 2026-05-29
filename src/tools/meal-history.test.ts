@@ -99,10 +99,34 @@ describe("list_meal_history tool", () => {
     expect(text).not.toContain("Steak");
   });
 
-  it("returns error for unknown type name", async () => {
+  it("returns error for unknown type name with rich remediation hint", async () => {
     mealStore.load([]);
     const result = await callTool("list_meal_history", { type: { name: "Brunch" } });
-    expect(getText(result)).toContain("Unknown meal type");
+    const text = getText(result);
+    // Rich error texture back-ported from the write tools (#141): name the bad
+    // input, list the known types, and point at the alternate discriminators.
+    expect(text).toContain('Unknown meal type "Brunch"');
+    expect(text).toContain("Known types: Breakfast, Lunch, Dinner");
+    expect(text).toContain("Use the {uid} or {builtin} discriminator to reference a custom meal type.");
+  });
+
+  it("returns error for unknown type uid", async () => {
+    // Convergence (#141): an unknown {uid} filter now errors instead of silently
+    // filtering by the literal uid and returning "No meals found" — matching the
+    // {name}/{builtin} branches and the write side.
+    mealStore.load([makeMeal({ name: "Steak", date: "2026-05-20 00:00:00", type: 2, typeUid: "dinner-uid" })]);
+    const result = await callTool("list_meal_history", { type: { uid: "nonexistent-uid" } });
+    expect(getText(result)).toContain('Unknown meal type UID "nonexistent-uid"');
+  });
+
+  it("returns error for unknown builtin index", async () => {
+    // mealTypeStore is seeded with Breakfast(0), Lunch(1), Dinner(2) but no
+    // Snacks(3), so builtin: 3 resolves to nothing.
+    mealStore.load([]);
+    const result = await callTool("list_meal_history", { type: { builtin: 3 } });
+    const text = getText(result);
+    expect(text).toContain("No built-in meal type found with index 3");
+    expect(text).toContain("0=Breakfast, 1=Lunch, 2=Dinner, 3=Snacks");
   });
 
   it("filters by uid directly", async () => {

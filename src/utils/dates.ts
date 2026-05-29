@@ -5,8 +5,9 @@ import { DateTime } from "luxon";
  * Tries explicit formats first (Paprika wire format, RFC-like, date-only),
  * then ISO 8601 as a fallback. Returns null when no format matches.
  *
- * Mirrors the inline parseInputDate currently in src/tools/meal-history.ts;
- * intentional duplication will be resolved by a follow-up issue.
+ * UTC-instant semantics — used by list_meal_history for since/until window
+ * comparisons. For the calendar-day-preserving variant used when storing a
+ * meal's `date` field, see `parseInputMealDate`.
  */
 export function parseInputDate(input: string): DateTime | null {
   for (const fmt of ["yyyy-MM-dd HH:mm:ss", "yyyy-MM-dd'T'HH:mm:ss", "yyyy-MM-dd"]) {
