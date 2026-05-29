@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { DateTime } from "luxon";
 import { MealStore } from "./meal-store.js";
 import { makeMeal } from "./__fixtures__/meals.js";
+import type { MealUid } from "../paprika/types.js";
 
 describe("MealStore", () => {
   let store: MealStore;
@@ -281,6 +282,31 @@ describe("MealStore", () => {
     it("returns null for the null typeUid bucket when only non-null typeUid meals are present", () => {
       store.load([makeMeal({ date: DATE, typeUid: TYPE_UID, orderFlag: 3 })]);
       expect(store.getMaxOrderFlagOn(DATE, null)).toBeNull();
+    });
+
+    it("excludes pending-delete meals so soft-delete + same-bucket add_meals doesn't inflate flags", () => {
+      // Regression for the code-review finding: between markPendingDelete and
+      // store.delete (the cache-flush window), commitMeal hasn't yet mutated
+      // the in-memory entry. Without filtering on isPendingDelete, the
+      // soon-to-be-gone meal counts toward the bucket max and the next add_meals
+      // assigns a higher flag than necessary, drifting flags upward across
+      // delete+add cycles.
+      const movingUid = "uid-pending-delete" as MealUid;
+      store.load([
+        makeMeal({ uid: movingUid, date: DATE, typeUid: TYPE_UID, orderFlag: 5 }),
+        makeMeal({ date: DATE, typeUid: TYPE_UID, orderFlag: 2 }),
+      ]);
+      // Before pending-delete, the bucket max is 5 (the moving meal).
+      expect(store.getMaxOrderFlagOn(DATE, TYPE_UID)).toBe(5);
+
+      // Simulate commitMeal's delete-branch state: the UID is marked pending-
+      // delete but the entry is still in _items (delete() hasn't run yet).
+      store.markPendingDelete(movingUid);
+
+      // After pending-delete, the bucket max ignores the moving meal and
+      // returns the next-highest flag — so the subsequent add_meals call
+      // would get orderFlag 3, not 6.
+      expect(store.getMaxOrderFlagOn(DATE, TYPE_UID)).toBe(2);
     });
   });
 });

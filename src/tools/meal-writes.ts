@@ -7,7 +7,7 @@ import { MealUidSchema, RecipeUidSchema } from "../paprika/types.js";
 import type { Meal, MealType, RecipeUid } from "../paprika/types.js";
 import { textResult } from "./helpers.js";
 import { commitMeal, commitMealsBatch, mealStartGuard, mealToMarkdown, mealTypeSpecSchema } from "./meal-helpers.js";
-import { parseInputDate, toWireDateFormat } from "../utils/dates.js";
+import { parseInputMealDate } from "../utils/dates.js";
 import type { ServerContext } from "../types/server-context.js";
 
 // File-private helper used by registerAddMealsTool and registerUpdateMealTool.
@@ -155,18 +155,17 @@ export function registerAddMealsTool(server: McpServer, ctx: ServerContext): voi
 
             // Date. The meal planner is day-granular (Paprika.app stores meals at
             // midnight per docs/wire-captures/meals.har.json, and list_meal_history
-            // groups by date.slice(0, 10)); drop any time-of-day component the
-            // caller supplied so two items on the same calendar day land in the
-            // same (date, typeUid) bucket for order_flag assignment.
-            const parsedDate = parseInputDate(item.date);
-            if (parsedDate === null) {
+            // groups by date.slice(0, 10)); `parseInputMealDate` extracts the user's
+            // intended calendar day in the input's own zone — so "2026-06-15T22:00:00-08:00"
+            // stays on June 15 rather than UTC-shifting to June 16.
+            const normalizedDate = parseInputMealDate(item.date);
+            if (normalizedDate === null) {
               errors.push(
                 `Item ${i.toString()}: could not parse date "${item.date}". ` +
                   `Use ISO 8601 (e.g., "2026-06-15" or "2026-06-15T18:30:00Z") or "yyyy-MM-dd HH:mm:ss".`,
               );
               continue;
             }
-            const normalizedDate = toWireDateFormat(parsedDate.startOf("day"));
 
             // Meal type resolution via shared helper (file-private)
             const typeResult = resolveMealTypeSpec(ctx, item.type);
@@ -424,16 +423,16 @@ export function registerUpdateMealTool(server: McpServer, ctx: ServerContext): v
           }
 
           // Resolve date if supplied. Same calendar-day normalization as add_meals —
-          // see the comment there for why we drop time-of-day.
+          // see the comment there for why we extract the input's own-zone day.
           let normalizedDate: string | undefined;
           if (op.date !== undefined) {
-            const parsed = parseInputDate(op.date);
+            const parsed = parseInputMealDate(op.date);
             if (parsed === null) {
               return textResult(
                 `Could not parse date "${op.date}". Use ISO 8601 (e.g., "2026-06-15") or "yyyy-MM-dd HH:mm:ss".`,
               );
             }
-            normalizedDate = toWireDateFormat(parsed.startOf("day"));
+            normalizedDate = parsed;
           }
 
           // Resolve recipe_uid and name interaction. The structural union ensures we
@@ -492,7 +491,9 @@ export function registerUpdateMealTool(server: McpServer, ctx: ServerContext): v
                 newName = recipe.name;
               }
             }
-            // else: "recipe_uid" key present with value undefined — preserve existing link.
+            // Zod's `.optional()` strips absent keys from the parsed output, so
+            // there is no third state for `op.recipe_uid` here (`null` and a
+            // RecipeUid are the only reachable values inside this branch).
           } else if ("name" in op) {
             // nameUpdateVariant: { name: string, ...common }
             // Only valid for already-freeform meals — stored custom names on recipe-linked
@@ -532,6 +533,32 @@ export function registerUpdateMealTool(server: McpServer, ctx: ServerContext): v
             // scale: undefined keeps existing; explicit null clears.
             ...(op.scale !== undefined && { scale: op.scale }),
           };
+
+          // No-op short-circuit: an LLM call like `update_meal({uid, update: {}})`
+          // parses (recipeUpdateVariant has all-optional fields) and reaches here
+          // with `updated` field-wise equal to `existing`. POSTing it would be a
+          // wasted round-trip + a spurious notifySync. Return the existing meal
+          // markdown so the caller sees the current state rather than a sham
+          // success message.
+          if (
+            updated.recipeUid === existing.recipeUid &&
+            updated.name === existing.name &&
+            updated.date === existing.date &&
+            updated.type === existing.type &&
+            updated.typeUid === existing.typeUid &&
+            updated.orderFlag === existing.orderFlag &&
+            updated.scale === existing.scale
+          ) {
+            const typeNameByUid = new Map<string, string>();
+            for (const mt of ctx.mealTypeStore.getAll()) typeNameByUid.set(mt.uid, mt.name);
+            const typeName =
+              existing.typeUid !== null
+                ? (typeNameByUid.get(existing.typeUid) ?? `Type ${existing.type.toString()}`)
+                : `Type ${existing.type.toString()}`;
+            const recipeName =
+              existing.recipeUid !== null ? (ctx.store.get(existing.recipeUid as RecipeUid)?.name ?? null) : null;
+            return textResult(mealToMarkdown(existing, typeName, recipeName));
+          }
 
           let saved: Meal;
           try {

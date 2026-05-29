@@ -1,6 +1,6 @@
 # Cross-Cutting Utilities
 
-Last verified: 2026-05-28
+Last verified: 2026-05-29
 
 ## Purpose
 
@@ -101,14 +101,18 @@ dependencies (leaf module).
 ### dates.ts — Meal-planner date helpers
 
 Pure helpers for parsing user-supplied date input and rendering Paprika's meal wire date
-format. All operations happen in UTC (`zone: "utc"` on every Luxon constructor). No I/O.
-No internal dependencies (leaf module). Consumed by meal write tools to normalize the `date`
-argument before persistence.
+format. `parseInputDate` and `toWireDateFormat` operate purely in UTC and model a UTC
+instant — used for since/until window comparisons in `list_meal_history`.
+`parseInputMealDate` honors an embedded UTC offset on ISO inputs so that the user's local
+calendar day is preserved when storing a meal date; the other two formats remain UTC-
+anchored. No I/O. No internal dependencies (leaf module). Consumed by meal tools to
+normalize date arguments before persistence or comparison.
 
-| Function                | Returns            | Description                                                                                                                                       |
-| ----------------------- | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `parseInputDate(input)` | `DateTime \| null` | Tries `yyyy-MM-dd HH:mm:ss`, `yyyy-MM-dd'T'HH:mm:ss`, and `yyyy-MM-dd` in order, then ISO 8601 as fallback; returns `null` when no format matches |
-| `toWireDateFormat(dt)`  | `string`           | Renders a `DateTime` as Paprika's wire date format (`yyyy-MM-dd HH:mm:ss`) in UTC                                                                 |
+| Function                    | Returns            | Description                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| --------------------------- | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `parseInputDate(input)`     | `DateTime \| null` | Tries `yyyy-MM-dd HH:mm:ss`, `yyyy-MM-dd'T'HH:mm:ss`, and `yyyy-MM-dd` in order (parsed as UTC), then ISO 8601 as fallback (parsed as UTC, ignoring any embedded offset); returns `null` when no format matches. UTC-instant semantics — use for since/until window comparisons                                                                                                                                                   |
+| `toWireDateFormat(dt)`      | `string`           | Renders a `DateTime` as Paprika's wire date format (`yyyy-MM-dd HH:mm:ss`) in UTC                                                                                                                                                                                                                                                                                                                                                 |
+| `parseInputMealDate(input)` | `string \| null`   | Returns the user's intended local calendar day as a Paprika meal-wire string at midnight (`yyyy-MM-dd 00:00:00`). Tries the same explicit formats as `parseInputDate` (UTC-anchored), then ISO 8601 with `setZone: true` so offset-bearing inputs (e.g. `2026-06-15T22:00:00-08:00`) preserve the typed-in calendar day instead of UTC-shifting. Calendar-day semantics — use for the `date` field on `add_meals` / `update_meal` |
 
 ### errors.ts — Cross-cutting error classes and helpers
 

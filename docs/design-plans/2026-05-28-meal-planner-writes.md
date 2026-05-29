@@ -139,10 +139,23 @@ Implementation is an O(n) walk over `_items.values()`. No new index — the meal
 ### Shared schema (hoisted to `meal-helpers.ts`)
 
 ```typescript
-const mealTypeSpecSchema = z.discriminatedUnion("kind", [
-  z.object({ name: z.string().min(1) }).transform((o) => ({ kind: "name" as const, ...o })),
-  z.object({ uid: MealTypeUidSchema }).transform((o) => ({ kind: "uid" as const, ...o })),
-  z.object({ builtin: z.number().int().min(0).max(3) }).transform((o) => ({ kind: "builtin" as const, ...o })),
+// Plain z.union of three .strict() objects with property-presence dispatch.
+// (An earlier design draft used z.discriminatedUnion("kind", ...) with .transform
+// to add discriminator fields; that was simpler to reason about but added a
+// caller-visible `kind` key. The shipped form keeps the wire shape clean —
+// callers pass {name: "Dinner"} | {uid: "..."} | {builtin: 2}, the resolver
+// dispatches via `"name" in spec` / `"uid" in spec` checks.)
+const mealTypeSpecSchema = z.union([
+  z
+    .object({
+      name: z
+        .string()
+        .min(1)
+        .transform((s) => s.trim()),
+    })
+    .strict(),
+  z.object({ uid: MealTypeUidSchema }).strict(),
+  z.object({ builtin: z.number().int().min(0).max(3) }).strict(),
 ]);
 ```
 

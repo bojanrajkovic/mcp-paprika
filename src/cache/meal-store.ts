@@ -129,11 +129,18 @@ export class MealStore extends TombstoneEntityStore<Meal, MealUid> {
    * typeUid is matched exactly, including null — meals with typeUid: null
    * (legacy entries predating Paprika's mealtypes catalog) form their own bucket
    * per date and never collide with non-null typeUid buckets on the same date.
+   *
+   * Pending-delete UIDs are excluded: between `markPendingDelete` and
+   * `delete`, the meal is still in `_items` with `deleted: false` (commitMeal
+   * doesn't mutate the entry, just the pending-writes set). Without this filter
+   * a soft-delete + same-bucket add_meals within the cache-flush window would
+   * inflate the new meal's `orderFlag` by counting the soon-to-be-gone meal.
    */
   getMaxOrderFlagOn(date: string, typeUid: string | null): number | null {
     let max: number | null = null;
     for (const meal of this._items.values()) {
       if (isHidden(meal)) continue;
+      if (this.isPendingDelete(meal.uid)) continue;
       if (meal.date !== date) continue;
       if (meal.typeUid !== typeUid) continue;
       if (max === null || meal.orderFlag > max) {

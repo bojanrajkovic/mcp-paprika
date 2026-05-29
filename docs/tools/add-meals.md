@@ -4,20 +4,35 @@ Add one or more meals to the meal planner in a single batch. All items are valid
 
 ## Parameters
 
-| Name                 | Type   | Required | Default | Description                                                                                                                                |
-| -------------------- | ------ | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| `items`              | array  | Yes      | —       | Array of meals to add (1 or more)                                                                                                          |
-| `items[].recipe_uid` | string | No       | —       | Recipe UID to link this meal to. When provided and `name` is omitted, the meal name is auto-resolved from the recipe store.                |
-| `items[].name`       | string | No       | —       | Display name for the meal. Required when `recipe_uid` is omitted. When both are supplied, this value is used instead of the recipe's name. |
-| `items[].date`       | string | Yes      | —       | Meal date. Accepts ISO 8601 (`2026-06-15`, `2026-06-15T18:30:00Z`) or `yyyy-MM-dd HH:mm:ss`. Normalized to Paprika wire format (UTC).      |
-| `items[].type`       | object | Yes      | —       | Meal type. One of: `{"name": "Dinner"}`, `{"uid": "<MealType UID>"}`, or `{"builtin": 2}`. See "Meal type" under Behavior.                 |
-| `items[].scale`      | string | No       | `null`  | Recipe scale, e.g. `"2"` for double. Pass `null` or omit to use the recipe's default scale.                                                |
+| Name    | Type  | Required | Description                       |
+| ------- | ----- | -------- | --------------------------------- |
+| `items` | array | Yes      | Array of meals to add (1 or more) |
 
-Either `recipe_uid` or `name` must be provided for each item.
+Each item is structurally one of two shapes — recipe-linked OR freeform. The two are mutually exclusive: supplying both `recipe_uid` and `name` (or neither) is rejected at parse time.
+
+### Recipe-linked item shape
+
+| Field        | Type           | Required | Description                                                                                         |
+| ------------ | -------------- | -------- | --------------------------------------------------------------------------------------------------- |
+| `recipe_uid` | string         | Yes      | Recipe UID. Display name auto-resolves from the recipe — `name` is not allowed on this shape.       |
+| `date`       | string         | Yes      | Meal date. Accepts ISO 8601 (`2026-06-15`, `2026-06-15T18:30:00-08:00`) or `yyyy-MM-dd HH:mm:ss`.   |
+| `type`       | object         | Yes      | Meal type DU: `{"name": "Dinner"}`, `{"uid": "<MealType UID>"}`, or `{"builtin": 2}`. See Behavior. |
+| `scale`      | string \| null | No       | Recipe scale, e.g. `"2"` for double. Pass `null` or omit for default.                               |
+
+### Freeform item shape
+
+| Field   | Type           | Required | Description                                                                                                              |
+| ------- | -------------- | -------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `name`  | string         | Yes      | Display name. Use this shape when there is no recipe — for ad-hoc meals like "Leftovers" or labels like "Mom's Lasagna". |
+| `date`  | string         | Yes      | Same as above.                                                                                                           |
+| `type`  | object         | Yes      | Same as above.                                                                                                           |
+| `scale` | string \| null | No       | Same as above.                                                                                                           |
 
 ## Behavior
 
-**Date normalization.** Dates are parsed and normalized to Paprika wire format (`yyyy-MM-dd HH:mm:ss` UTC). Unparseable dates produce a per-index error and the batch is rejected before any API calls are made.
+**Recipe-linked vs freeform — mutually exclusive.** Paprika.app dispatches a recipe-linked meal's display name off `recipe_uid` (it looks up the recipe and renders that name); a custom `name` stored alongside `recipe_uid` would never render in the UI. The two item shapes structurally enforce this — use the freeform shape (no `recipe_uid`) when you want a custom label like "Mom's Lasagna".
+
+**Date normalization.** Dates parse as ISO 8601 or `yyyy-MM-dd`. The wire string stored is always `yyyy-MM-dd 00:00:00` taken from the input's own calendar day — for offset-bearing inputs (`2026-06-15T22:00:00-08:00`), the user's local June 15 is preserved rather than UTC-shifted to June 16. The meal planner is day-granular, so any time-of-day component is dropped. Unparseable dates produce a per-index error and the batch is rejected before any API calls are made.
 
 **Meal type.** The `type` field accepts three discriminator shapes:
 
@@ -25,7 +40,7 @@ Either `recipe_uid` or `name` must be provided for each item.
 - `{"uid": "<MealType UID>"}` — resolved by UID directly.
 - `{"builtin": 0}` — resolved by integer index: 0 = Breakfast, 1 = Lunch, 2 = Dinner, 3 = Snacks.
 
-**Recipe linking.** When `recipe_uid` is provided and `name` is omitted, the meal name is resolved from the local recipe store. If the recipe isn't in the local store (not yet synced), the item fails validation with an error advising you to supply `name` explicitly or wait for the next sync. When `recipe_uid` is omitted entirely, the meal is freeform and carries no recipe link.
+**Recipe linking.** Recipe-linked items resolve the display name from the local recipe store. If the recipe isn't in the local store (not yet synced), the item fails validation with an error advising you to wait for the next sync, or to supply a freeform meal (omit `recipe_uid`, supply `name`).
 
 **Order placement.** Each meal is placed at the end of its `(date, type)` bucket. The `order_flag` is assigned as `max(existing flags) + 1`, starting at 0 for an empty bucket. When multiple items in the same batch share a bucket, they're assigned sequential flags in input order — the bucket's state in the store doesn't change mid-batch.
 
@@ -33,11 +48,11 @@ Either `recipe_uid` or `name` must be provided for each item.
 
 **No duplicate guard.** There's no server-side check for duplicate meals. Review the planner (via `list_meal_history`) before adding if duplicates are a concern.
 
-**Sync requirement.** Both the meal store and meal type store must be synced before this tool can run. If called before the first sync completes, the tool returns an error.
+**Sync requirement.** Both the meal store and meal type store must be synced before this tool can run. If called before the first sync completes, the tool returns "Meal data is not yet synced. Try again in a few seconds."
 
 ## Examples
 
-Single recipe meal, linked to a recipe by UID:
+Single recipe-linked meal:
 
 ```json
 {
@@ -54,7 +69,7 @@ Single recipe meal, linked to a recipe by UID:
 }
 ```
 
-Single freeform meal (no recipe link):
+Single freeform meal (custom label, no recipe):
 
 ```json
 {
@@ -71,7 +86,7 @@ Single freeform meal (no recipe link):
 }
 ```
 
-Week of dinners in one batch:
+Week of dinners in one batch (mix of recipe-linked + freeform):
 
 ```json
 {
@@ -87,6 +102,30 @@ Week of dinners in one batch:
   }
 }
 ```
+
+### Rejected shapes
+
+Supplying both `recipe_uid` and `name` in a single item is rejected at parse time — neither variant matches:
+
+```json
+{
+  "name": "add_meals",
+  "arguments": {
+    "items": [
+      {
+        "recipe_uid": "A1B2C3D4-E5F6-7890-ABCD-EF1234567890",
+        "name": "Custom Taco Night",
+        "date": "2026-06-15",
+        "type": { "builtin": 2 }
+      }
+    ]
+  }
+}
+```
+
+Returns a Zod union error. Use the freeform shape (omit `recipe_uid`) if you want a custom label.
+
+Supplying neither is also rejected — every item needs to be one of the two shapes.
 
 ## Sample output
 

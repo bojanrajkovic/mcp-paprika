@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { DateTime } from "luxon";
-import { parseInputDate, toWireDateFormat } from "./dates.js";
+import { parseInputDate, parseInputMealDate, toWireDateFormat } from "./dates.js";
 
 describe("parseInputDate and toWireDateFormat", () => {
   describe("parseInputDate — Paprika wire format (yyyy-MM-dd HH:mm:ss)", () => {
@@ -90,6 +90,44 @@ describe("parseInputDate and toWireDateFormat", () => {
       expect(dtEastern.isValid).toBe(true);
       const formatted = toWireDateFormat(dtEastern);
       expect(formatted).toBe("2026-06-15 14:30:00");
+    });
+  });
+
+  describe("parseInputMealDate — calendar-day extraction", () => {
+    it("returns wire format at midnight for date-only input", () => {
+      expect(parseInputMealDate("2026-06-15")).toBe("2026-06-15 00:00:00");
+    });
+
+    it("drops time-of-day for a wire-format input", () => {
+      expect(parseInputMealDate("2026-06-15 18:30:45")).toBe("2026-06-15 00:00:00");
+    });
+
+    it("drops time-of-day for an RFC-like input without offset", () => {
+      expect(parseInputMealDate("2026-06-15T18:30:45")).toBe("2026-06-15 00:00:00");
+    });
+
+    it("preserves the input's calendar day even when the offset would UTC-shift past midnight (US-Pacific evening)", () => {
+      // 2026-06-15T22:00:00-08:00 is 2026-06-16T06:00:00Z. The user typed June 15;
+      // they mean June 15. parseInputDate + UTC conversion would store June 16;
+      // parseInputMealDate honors the input's embedded offset and stores June 15.
+      expect(parseInputMealDate("2026-06-15T22:00:00-08:00")).toBe("2026-06-15 00:00:00");
+    });
+
+    it("preserves the input's calendar day for positive offsets (Tokyo early morning)", () => {
+      // 2026-06-15T02:00:00+09:00 is 2026-06-14T17:00:00Z. The user typed June 15;
+      // UTC conversion would store June 14. We store June 15.
+      expect(parseInputMealDate("2026-06-15T02:00:00+09:00")).toBe("2026-06-15 00:00:00");
+    });
+
+    it("treats Z-suffix as UTC (which is also a zone, just trivially)", () => {
+      // 2026-06-15T22:00:00Z — the embedded zone IS UTC, so the calendar day is June 15.
+      expect(parseInputMealDate("2026-06-15T22:00:00Z")).toBe("2026-06-15 00:00:00");
+    });
+
+    it("returns null for unparseable input", () => {
+      expect(parseInputMealDate("not a date")).toBeNull();
+      expect(parseInputMealDate("")).toBeNull();
+      expect(parseInputMealDate("2026-13-99")).toBeNull();
     });
   });
 });

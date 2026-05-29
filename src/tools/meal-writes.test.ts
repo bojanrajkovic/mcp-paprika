@@ -218,6 +218,22 @@ describe("add_meals tool — success paths", () => {
     expect(savedPayload[1]?.orderFlag).toBe(1);
   });
 
+  it("offset-bearing date input → stored at the input's local calendar day, not UTC-shifted", async () => {
+    // Code-review regression: `parseInputDate` + `.startOf("day")` operating in UTC
+    // would shift "2026-06-15T22:00:00-08:00" (June 15 10pm US-Pacific) to
+    // June 16 06:00Z → "2026-06-16 00:00:00" stored. The user typed June 15;
+    // `parseInputMealDate` now honors the input's embedded offset so the stored
+    // day matches the user's intent.
+    const { callTool } = makeAddCtx();
+
+    await callTool("add_meals", {
+      items: [{ name: "US-Pacific Late Dinner", date: "2026-06-15T22:00:00-08:00", type: { builtin: 2 } }],
+    });
+
+    const savedPayload: ReadonlyArray<Meal> = mockSaveMeals.mock.calls[0]?.[0] ?? [];
+    expect(savedPayload[0]?.date).toBe("2026-06-15 00:00:00");
+  });
+
   it("AC1.6: two items in same (date, typeUid) bucket → orderFlag 0 and 1", async () => {
     // Empty bucket: no existing meals for this date/type combination.
     const { callTool } = makeAddCtx();
@@ -693,6 +709,61 @@ describe("update_meal — success paths (AC3.1-3.6)", () => {
     const stored = mealStore.get(TEST_MEAL_UID);
     expect(stored?.orderFlag).toBe(7); // unchanged
     expect(stored?.scale).toBe("2");
+  });
+
+  it("AC3.11: name-only update on a recipe-linked meal → runtime rejection ('demote first'); no POST", async () => {
+    // Code-review regression: the runtime guard in update_meal rejects name-only
+    // updates on recipe-linked meals because Paprika.app dispatches display off
+    // recipe_uid and would never render a stored custom name. Schema permits the
+    // shape (nameUpdateVariant doesn't know about the existing meal); runtime
+    // enforces the freeform-only semantic. Without this test, a future refactor
+    // could quietly drop the guard.
+    const recipeLinked = makeMeal({
+      uid: TEST_MEAL_UID,
+      recipeUid: TACOS_UID,
+      name: "Tacos",
+    });
+    mealStore.load([recipeLinked]);
+
+    const { callTool } = makeUpdateCtx();
+    const result = await callTool("update_meal", {
+      uid: TEST_MEAL_UID,
+      update: { name: "Mom's Tacos" },
+    });
+    const text = getText(result);
+
+    expect(text).toContain("Cannot set name on the recipe-linked meal");
+    expect(text).toContain("demote first");
+    expect(mockSaveMeals).not.toHaveBeenCalled();
+    // Stored name is unchanged.
+    expect(mealStore.get(TEST_MEAL_UID)?.name).toBe("Tacos");
+  });
+
+  it("no-effective-change update_meal call → short-circuits without POST or notifySync", async () => {
+    // Code-review regression: `update_meal({uid, update: {}})` parses as
+    // recipeUpdateVariant (all fields optional). Without a short-circuit the
+    // handler would build `updated = {...existing}` and POST a wasted round-
+    // trip + trigger notifySync. The short-circuit detects field-wise equality
+    // and returns the existing meal markdown instead.
+    const original = makeMeal({
+      uid: TEST_MEAL_UID,
+      typeUid: DINNER_UID,
+      type: 2,
+      date: "2026-06-15 00:00:00",
+      name: "Existing",
+      orderFlag: 3,
+      scale: null,
+    });
+    mealStore.load([original]);
+
+    const { callTool } = makeUpdateCtx();
+    const result = await callTool("update_meal", { uid: TEST_MEAL_UID, update: {} });
+
+    expect(mockSaveMeals).not.toHaveBeenCalled();
+    expect(mockNotifySync).not.toHaveBeenCalled();
+    // Response still renders the meal so the caller sees the current state.
+    const text = getText(result);
+    expect(text).toContain("Existing");
   });
 });
 
