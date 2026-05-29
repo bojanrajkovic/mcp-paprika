@@ -24,22 +24,26 @@ export function coldStartGuard(ctx: ServerContext): Result<void, ReturnType<type
  * The UID member is branded (e.g. `RecipeUidSchema`), so `args.lookup.uid` is
  * already brand-typed after parse — no cast at the store lookup. The text key
  * stays per-entity (`title` / `ingredient` / `name`) because each is the
- * accurate label for its entity; pass it as `textKey` and the describe text
- * is templated to match.
+ * accurate label for its entity. The text-member description defaults to a
+ * template built from `entityLabel`/`textKey`/`textExample`; pass `textDescribe`
+ * to override it verbatim when the template reads awkwardly (e.g. pantry, whose
+ * natural phrasing is "Ingredient name fuzzy match", not "Pantry item ingredient
+ * fuzzy match").
  */
 export function uidOrTextLookupSchema<UidSchema extends z.ZodTypeAny, TextKey extends string>(config: {
   readonly uidSchema: UidSchema;
   readonly textKey: TextKey;
   readonly entityLabel: string;
-  readonly textExample: string;
+  readonly textExample?: string;
+  readonly textDescribe?: string;
 }) {
-  const { uidSchema, textKey, entityLabel, textExample } = config;
+  const { uidSchema, textKey, entityLabel, textExample, textDescribe } = config;
   const capitalized = entityLabel.charAt(0).toUpperCase() + entityLabel.slice(1);
   const uidMember = z.object({ uid: uidSchema }).strict().describe(`Exact ${entityLabel} UID, e.g. {"uid": "..."}.`);
   const textMember = z
     .object({ [textKey]: z.string().min(1) } as { [P in TextKey]: z.ZodString })
     .strict()
-    .describe(`${capitalized} ${textKey} fuzzy match, e.g. {"${textKey}": "${textExample}"}.`);
+    .describe(textDescribe ?? `${capitalized} ${textKey} fuzzy match, e.g. {"${textKey}": "${textExample}"}.`);
   return z.union([uidMember, textMember]).describe(`Pick exactly one shape: {"uid": "..."} or {"${textKey}": "..."}.`);
 }
 

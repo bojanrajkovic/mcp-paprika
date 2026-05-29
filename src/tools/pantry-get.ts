@@ -20,7 +20,9 @@ export function registerGetPantryItemTool(server: McpServer, ctx: ServerContext)
           uidSchema: PantryItemUidSchema,
           textKey: "ingredient",
           entityLabel: "pantry item",
-          textExample: "Olive Oil",
+          // Override the template — "Pantry item ingredient fuzzy match" reads
+          // awkwardly; the natural phrasing matches the pre-#142 describe text.
+          textDescribe: 'Ingredient name fuzzy match, e.g. {"ingredient": "Olive Oil"}.',
         }),
       },
     },
