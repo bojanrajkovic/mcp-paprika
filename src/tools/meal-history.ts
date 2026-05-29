@@ -7,7 +7,7 @@ import { textResult } from "./helpers.js";
 import { parseInputDate } from "../utils/dates.js";
 import { RecipeUidSchema } from "../paprika/types.js";
 import type { ServerContext } from "../types/server-context.js";
-import type { Meal } from "../paprika/types.js";
+import type { Meal, MealTypeUid } from "../paprika/types.js";
 
 function formatMealLine(
   meal: Meal,
@@ -75,7 +75,7 @@ export function registerMealHistoryTool(server: McpServer, ctx: ServerContext): 
       log.info({ tool: "list_meal_history", ...args }, "tool invoked");
       return mealStartGuard(ctx).match(
         async (): Promise<CallToolResult> => {
-          let typeUid: string | undefined;
+          let typeUid: MealTypeUid | undefined;
           // Captured when the resolved typeUid belongs to a built-in mealtype
           // (non-null originalType). MealStore.getInDateRange uses it to also
           // surface legacy meals (typeUid: null, integer-only) matching the

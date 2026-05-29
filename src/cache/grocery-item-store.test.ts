@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { GroceryItemStore } from "./grocery-item-store.js";
 import { makeGroceryItem } from "./__fixtures__/grocery-items.js";
-import type { GroceryItemUid } from "../paprika/types.js";
+import type { GroceryItemUid, GroceryListUid } from "../paprika/types.js";
 
 describe("GroceryItemStore", () => {
   let store: GroceryItemStore;
@@ -17,7 +17,7 @@ describe("GroceryItemStore", () => {
       const itemB1 = makeGroceryItem({ listUid: "list-B" });
       store.load([itemA1, itemA2, itemB1]);
 
-      const results = store.getByListUid("list-A");
+      const results = store.getByListUid("list-A" as GroceryListUid);
 
       expect(results).toHaveLength(2);
       const uids = results.map((r) => r.uid);
@@ -30,7 +30,7 @@ describe("GroceryItemStore", () => {
       const item = makeGroceryItem({ listUid: "list-A" });
       store.load([item]);
 
-      const results = store.getByListUid("list-X");
+      const results = store.getByListUid("list-X" as GroceryListUid);
 
       expect(results).toHaveLength(0);
     });
@@ -40,7 +40,7 @@ describe("GroceryItemStore", () => {
       store.load([item]);
       store.delete("uid-1" as GroceryItemUid);
 
-      const results = store.getByListUid("list-A");
+      const results = store.getByListUid("list-A" as GroceryListUid);
 
       expect(results).toHaveLength(0);
     });
@@ -52,7 +52,7 @@ describe("GroceryItemStore", () => {
       const notPurchased = makeGroceryItem({ listUid: "list-A", purchased: false });
       store.load([purchased, notPurchased]);
 
-      const results = store.getPurchasedByList("list-A");
+      const results = store.getPurchasedByList("list-A" as GroceryListUid);
 
       expect(results).toHaveLength(1);
       expect(results[0]?.uid).toBe(purchased.uid);
@@ -63,7 +63,7 @@ describe("GroceryItemStore", () => {
       const purchasedB = makeGroceryItem({ listUid: "list-B", purchased: true });
       store.load([purchasedA, purchasedB]);
 
-      const results = store.getPurchasedByList("list-A");
+      const results = store.getPurchasedByList("list-A" as GroceryListUid);
 
       expect(results).toHaveLength(1);
       expect(results[0]?.uid).toBe(purchasedA.uid);
@@ -73,7 +73,7 @@ describe("GroceryItemStore", () => {
       const item = makeGroceryItem({ listUid: "list-A", purchased: false });
       store.load([item]);
 
-      const results = store.getPurchasedByList("list-A");
+      const results = store.getPurchasedByList("list-A" as GroceryListUid);
 
       expect(results).toHaveLength(0);
     });
@@ -82,7 +82,7 @@ describe("GroceryItemStore", () => {
       const item = makeGroceryItem({ listUid: "list-B", purchased: true });
       store.load([item]);
 
-      const results = store.getPurchasedByList("list-A");
+      const results = store.getPurchasedByList("list-A" as GroceryListUid);
 
       expect(results).toHaveLength(0);
     });

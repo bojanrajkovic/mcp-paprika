@@ -145,6 +145,7 @@ In-memory query layer for grocery items, hydrated by the sync engine. Extends `T
 
 - Tombstone invariants: see `../entity/CLAUDE.md`
 - `getByListUid` and `getPurchasedByList` iterate `_items` directly (excludes tombstoned UIDs that were deleted via `delete()` before `load()`)
+- Both take a branded `GroceryListUid` (the parent list's primary key); the comparison runs against the plain-string `GroceryItem.listUid` wire field, which is fine since a brand is a string subtype
 
 ### GroceryIngredientStore
 
@@ -186,7 +187,7 @@ In-memory query layer for meals, hydrated by the sync engine. Extends `Tombstone
 | `getMaxOrderFlagOn(date, typeUid)` | Returns the highest `orderFlag` among non-deleted, non-ingredient meals on `date` with matching `typeUid`; returns `null` when no matching meal exists. Used by `add_meals` to assign new flags. The `typeUid` parameter is `string \| null`; legacy meals with `typeUid: null` form their own bucket per date and never collide with non-null buckets. Pending-delete UIDs (marked via `markPendingDelete` but not yet `delete()`d) are excluded so a soft-delete + same-bucket add within the cache-flush window doesn't inflate the new meal's `orderFlag`. |
 | Pending-writes                     | `markPendingUpsert`, `markPendingDelete`, `isPendingUpsert`, `isPendingDelete`, `clearPending`, `sweepPending` (all inherited)                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 
-**Note:** `getByRecipeUid` and `lastCookedAt` filter out `isIngredient: true` entries — prep-work entries don't count as "cooked." `getInDateRange` also excludes ingredient entries. The `recipeUid` parameter is `string` (not branded `RecipeUid`) because `Meal.recipeUid` is `string | null`. The `typeUid` filter compares against `Meal.typeUid` which is also `string | null` — meals with `typeUid: null` (older entries predating Paprika's mealtypes catalog) only match when no `typeUid` filter is set.
+**Note:** `getByRecipeUid` and `lastCookedAt` filter out `isIngredient: true` entries — prep-work entries don't count as "cooked." `getInDateRange` also excludes ingredient entries. The `recipeUid` parameter (on `getByRecipeUid`, `lastCookedAt`, and the `getInDateRange` filter) is branded `RecipeUid`, and the `getInDateRange` `typeUid` filter is branded `MealTypeUid` — callers always supply a resolved primary key, so the brand catches wrong-entity UIDs at compile time even though the comparison runs against the plain-string `Meal.recipeUid` / `Meal.typeUid` wire fields (a brand is a string subtype, so `branded !== plain` still type-checks). `getMaxOrderFlagOn`'s `typeUid` deliberately stays plain `string | null`: `update_meal` derives the destination bucket from the _existing_ meal's `Meal.typeUid` (the untrusted plain wire field) when the type isn't changing, so branding it would only force a cast back at that call site. Meals with `typeUid: null` (older entries predating Paprika's mealtypes catalog) only match when no `typeUid` filter is set.
 
 ### MealTypeStore
 
