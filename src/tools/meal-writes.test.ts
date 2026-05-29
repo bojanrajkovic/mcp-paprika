@@ -6,7 +6,7 @@ import { MealStore } from "../cache/meal-store.js";
 import { MealTypeStore } from "../cache/meal-type-store.js";
 import { makeMeal, makeMealType } from "../cache/__fixtures__/meals.js";
 import { makeRecipe } from "../cache/__fixtures__/recipes.js";
-import { registerAddMealsTool } from "./meal-writes.js";
+import { registerAddMealsTool, addMealsInputSchema } from "./meal-writes.js";
 import { makeTestServer, makeCtx, getText } from "./tool-test-utils.js";
 import type { MealTypeUid, RecipeUid, MealUid, Meal } from "../paprika/types.js";
 
@@ -264,5 +264,143 @@ describe("add_meals tool — success paths", () => {
 
     const savedPayload: ReadonlyArray<Meal> = mockSaveMeals.mock.calls[0]?.[0] ?? [];
     expect(savedPayload[0]?.orderFlag).toBe(6);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Failure paths
+// ---------------------------------------------------------------------------
+
+describe("add_meals tool — failure paths", () => {
+  let mealStore: MealStore;
+  let mealTypeStore: MealTypeStore;
+  let store: RecipeStore;
+
+  let mockSaveMeals: ReturnType<typeof vi.fn>;
+  let mockNotifySync: ReturnType<typeof vi.fn>;
+  let mockPut: ReturnType<typeof vi.fn>;
+  let mockFlush: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    mealStore = new MealStore();
+    mealTypeStore = new MealTypeStore();
+    store = new RecipeStore();
+
+    mealStore.load([]);
+    mealTypeStore.load(makeBuiltins());
+    store.load([], []);
+
+    mockSaveMeals = vi.fn().mockImplementation(async (items: ReadonlyArray<Meal>) => items);
+    mockNotifySync = vi.fn().mockResolvedValue(undefined);
+    mockPut = vi.fn().mockResolvedValue(undefined);
+    mockFlush = vi.fn().mockResolvedValue(undefined);
+  });
+
+  function makeFailCtx() {
+    const { server, callTool } = makeTestServer();
+    const ctx = makeCtx(store, server, {
+      mealStore,
+      mealTypeStore,
+      client: fromAny({ saveMeals: mockSaveMeals, notifySync: mockNotifySync }),
+      cache: fromAny({ meals: { put: mockPut, remove: vi.fn() }, flush: mockFlush }),
+    });
+    registerAddMealsTool(server, ctx);
+    return { callTool, ctx };
+  }
+
+  it("AC2.1: unparseable date → error text names index and bad date value", async () => {
+    const { callTool } = makeFailCtx();
+    const initialSize = mealStore.size;
+
+    const result = await callTool("add_meals", {
+      items: [{ recipe_uid: TACOS_UID, date: "not-a-date", type: { builtin: 2 } }],
+    });
+    const text = getText(result);
+
+    expect(text).toContain('Item 0: could not parse date "not-a-date"');
+    expect(mockSaveMeals).not.toHaveBeenCalled();
+    expect(mealStore.size).toBe(initialSize);
+  });
+
+  it("AC2.2: unknown type name 'Brunch' → exact error string with known types list", async () => {
+    const { callTool } = makeFailCtx();
+    const initialSize = mealStore.size;
+
+    const result = await callTool("add_meals", {
+      items: [{ name: "Weekend Brunch", date: "2026-06-15", type: { name: "Brunch" } }],
+    });
+    const text = getText(result);
+
+    // Exact format from the implementation: Item <i> (type {name: "<input>"}): ...
+    expect(text).toContain(
+      'Item 0 (type {name: "Brunch"}): unknown meal type "Brunch". ' +
+        "Known types: Breakfast, Lunch, Dinner, Snacks. " +
+        "Use the {uid} or {builtin} discriminator to reference a custom meal type.",
+    );
+    expect(mockSaveMeals).not.toHaveBeenCalled();
+    expect(mealStore.size).toBe(initialSize);
+  });
+
+  it("AC2.3: missing both recipe_uid and name → belt-and-suspenders error branch", async () => {
+    // The callTool path bypasses Zod schema validation, so the .refine() check
+    // does NOT run. The handler's belt-and-suspenders branch fires instead, which
+    // produces a lowercase "either recipe_uid or name must be provided." message.
+    const { callTool } = makeFailCtx();
+    const initialSize = mealStore.size;
+
+    const result = await callTool("add_meals", {
+      items: [{ date: "2026-06-15", type: { builtin: 0 } }],
+    });
+    const text = getText(result);
+
+    // Match case-insensitively because callTool bypasses Zod; the
+    // belt-and-suspenders branch produces lowercase "either recipe_uid..."
+    expect(text.toLowerCase()).toContain("either recipe_uid or name must be provided");
+    expect(mockSaveMeals).not.toHaveBeenCalled();
+    expect(mealStore.size).toBe(initialSize);
+  });
+
+  it("AC2.4: multiple invalid items → all errors enumerated, header 'Could not add 3 meals:'", async () => {
+    const { callTool } = makeFailCtx();
+    const initialSize = mealStore.size;
+
+    const result = await callTool("add_meals", {
+      items: [
+        // Item 0: bad date (no type needed — date parse fails first)
+        { name: "Bad Date Item", date: "bad", type: { builtin: 2 } },
+        // Item 1: unknown meal type name
+        { name: "Good Date Bad Type", date: "2026-06-15", type: { name: "Brunch" } },
+        // Item 2: also bad date
+        { name: "Also Bad Date", date: "also-bad", type: { builtin: 0 } },
+      ],
+    });
+    const text = getText(result);
+
+    // Header names the total count
+    expect(text).toContain("Could not add 3 meals:");
+    // Items 0 and 2 are date-parse errors (format: "Item N: could not parse...").
+    // Item 1 is a type-name error (format: "Item N (type {name: ...}): ...").
+    // Check for each error by its unique content rather than a bare "Item N:" prefix.
+    expect(text).toContain('could not parse date "bad"');
+    expect(text).toContain('unknown meal type "Brunch"');
+    expect(text).toContain('could not parse date "also-bad"');
+    // Each index must appear somewhere in the text
+    expect(text).toContain("Item 0:");
+    expect(text).toContain("Item 1 (");
+    expect(text).toContain("Item 2:");
+    expect(mockSaveMeals).not.toHaveBeenCalled();
+    expect(mealStore.size).toBe(initialSize);
+  });
+
+  it("AC2.5: empty items array → Zod .min(1) rejects before the handler runs", () => {
+    // callTool bypasses Zod validation, so this AC must be tested via the
+    // exported schema's .safeParse() method rather than through callTool.
+    const result = addMealsInputSchema.safeParse({ items: [] });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      const messages = result.error.issues.map((i) => i.message);
+      const hasMinError = messages.some((m) => m.toLowerCase().includes("at least one meal item"));
+      expect(hasMinError).toBe(true);
+    }
   });
 });

@@ -84,7 +84,7 @@ const mealItemInputSchema = z
     message: "Either recipe_uid or name must be provided.",
   });
 
-const addMealsInputSchema = z.object({
+export const addMealsInputSchema = z.object({
   items: z
     .array(mealItemInputSchema)
     .min(1, "At least one meal item is required.")
