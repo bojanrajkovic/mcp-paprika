@@ -443,3 +443,54 @@ export function registerUpdateMealTool(server: McpServer, ctx: ServerContext): v
     },
   );
 }
+
+const deleteMealInputSchema = z.object({
+  uid: MealUidSchema,
+});
+
+export function registerDeleteMealTool(server: McpServer, ctx: ServerContext): void {
+  const log = ctx.log.child({ component: "delete_meal" });
+  server.registerTool(
+    "delete_meal",
+    {
+      description:
+        "Soft-delete a meal from the planner by UID. Idempotent: a second delete on the same UID " +
+        "returns a friendly 'already deleted' message without re-POSTing. Requires an exact UID.",
+      inputSchema: deleteMealInputSchema.shape,
+    },
+    async (args) => {
+      log.info({ tool: "delete_meal", uid: args.uid }, "tool invoked");
+      return mealStartGuard(ctx).match(
+        async (): Promise<CallToolResult> => {
+          const uid = args.uid;
+          const existing = ctx.mealStore.get(uid);
+
+          if (existing === undefined) {
+            // Tombstone vs never-existed
+            if (ctx.mealStore.isTombstone(uid)) {
+              return textResult(`Meal with UID "${uid}" is already deleted.`);
+            }
+            return textResult(`No meal found with UID "${uid}".`);
+          }
+          if (existing.deleted) {
+            // Defense-in-depth
+            return textResult(`Meal "${existing.name}" is already deleted.`);
+          }
+
+          const trashed: Meal = { ...existing, deleted: true };
+          try {
+            const saved = (await ctx.client.saveMeals([trashed]))[0]!;
+            await commitMeal(ctx, saved);
+          } catch (error) {
+            const message = toMessage(error);
+            log.error({ err: error, uid }, "saveMeals failed");
+            return textResult(`Failed to delete meal: ${message}`);
+          }
+
+          return textResult(`Meal "${existing.name}" on ${existing.date} deleted.`);
+        },
+        (guard) => guard,
+      );
+    },
+  );
+}
