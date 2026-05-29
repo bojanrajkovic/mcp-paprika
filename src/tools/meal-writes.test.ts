@@ -7,6 +7,7 @@ import { MealTypeStore } from "../cache/meal-type-store.js";
 import { makeMeal, makeMealType } from "../cache/__fixtures__/meals.js";
 import { makeRecipe } from "../cache/__fixtures__/recipes.js";
 import { registerAddMealsTool, addMealsInputSchema, registerUpdateMealTool } from "./meal-writes.js";
+import { mealToMarkdown } from "./meal-helpers.js";
 import { makeTestServer, makeCtx, getText } from "./tool-test-utils.js";
 import type { MealTypeUid, RecipeUid, MealUid, Meal } from "../paprika/types.js";
 
@@ -571,5 +572,120 @@ describe("update_meal — success paths (AC3.1-3.6)", () => {
     // Wire payload also carried scale: null to the API
     const payload = mockSaveMeals.mock.calls[0]?.[0] as ReadonlyArray<Meal>;
     expect(payload[0]?.scale).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// update_meal — failure/edge paths (AC3.7-3.10)
+// ---------------------------------------------------------------------------
+
+describe("update_meal — failure/edge paths (AC3.7-3.10)", () => {
+  let mealStore: MealStore;
+  let mealTypeStore: MealTypeStore;
+  let store: RecipeStore;
+
+  let mockSaveMeals: ReturnType<typeof vi.fn>;
+  let mockNotifySync: ReturnType<typeof vi.fn>;
+  let mockPut: ReturnType<typeof vi.fn>;
+  let mockFlush: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    mealStore = new MealStore();
+    mealTypeStore = new MealTypeStore();
+    store = new RecipeStore();
+
+    // No meals seeded; individual tests seed what they need.
+    mealStore.load([]);
+    mealTypeStore.load(makeBuiltins());
+    store.load([], []);
+
+    mockSaveMeals = vi.fn().mockImplementation(async (items: ReadonlyArray<Meal>) => items);
+    mockNotifySync = vi.fn().mockResolvedValue(undefined);
+    mockPut = vi.fn().mockResolvedValue(undefined);
+    mockFlush = vi.fn().mockResolvedValue(undefined);
+  });
+
+  function makeUpdateCtx() {
+    const { server, callTool } = makeTestServer();
+    const ctx = makeCtx(store, server, {
+      mealStore,
+      mealTypeStore,
+      client: fromAny({ saveMeals: mockSaveMeals, notifySync: mockNotifySync }),
+      cache: fromAny({ meals: { put: mockPut, remove: vi.fn() }, flush: mockFlush }),
+    });
+    registerUpdateMealTool(server, ctx);
+    return { callTool, ctx };
+  }
+
+  it("AC3.7: unknown UID → 'No meal found...' error, no POST", async () => {
+    const { callTool } = makeUpdateCtx();
+
+    const result = await callTool("update_meal", { uid: "UNKNOWN-UID" as MealUid, name: "Anything" });
+    const text = getText(result);
+
+    expect(text).toBe('No meal found with UID "UNKNOWN-UID".');
+    expect(mockSaveMeals).not.toHaveBeenCalled();
+  });
+
+  it("AC3.8 tombstone: deleted via mealStore.delete() → tombstone error string, no POST", async () => {
+    // Seed then delete to create a tombstone entry.
+    const meal = makeMeal({ uid: TEST_MEAL_UID });
+    mealStore.load([meal]);
+    mealStore.delete(TEST_MEAL_UID);
+
+    const { callTool } = makeUpdateCtx();
+
+    const result = await callTool("update_meal", { uid: TEST_MEAL_UID, name: "Anything" });
+    const text = getText(result);
+
+    expect(text).toBe(`Meal with UID "${TEST_MEAL_UID}" is already deleted.`);
+    expect(mockSaveMeals).not.toHaveBeenCalled();
+  });
+
+  it("AC3.8 defense-in-depth: meal.deleted === true in store → name-based error string, no POST", async () => {
+    // Simulate a deleted meal still present in the items map (defense-in-depth branch).
+    const meal = makeMeal({ uid: TEST_MEAL_UID, name: "Ghost Meal", deleted: true });
+    mealStore.load([meal]);
+
+    const { callTool } = makeUpdateCtx();
+
+    const result = await callTool("update_meal", { uid: TEST_MEAL_UID, name: "Anything" });
+    const text = getText(result);
+
+    expect(text).toBe(`Meal "Ghost Meal" is already deleted.`);
+    expect(mockSaveMeals).not.toHaveBeenCalled();
+  });
+
+  it("AC3.9: freeform meal + recipe_uid: null + no other fields → no POST, returns existing card", async () => {
+    // Meal already freeform; passing recipe_uid: null with nothing else is a no-op.
+    const meal = makeMeal({ uid: TEST_MEAL_UID, recipeUid: null, typeUid: DINNER_UID, type: 2 });
+    mealStore.load([meal]);
+
+    const { callTool } = makeUpdateCtx();
+
+    const result = await callTool("update_meal", { uid: TEST_MEAL_UID, recipe_uid: null });
+    const text = getText(result);
+
+    // No POST should have been issued
+    expect(mockSaveMeals).not.toHaveBeenCalled();
+    // Returned text must be exactly the existing meal's markdown card
+    const expectedCard = mealToMarkdown(meal, "Dinner", null);
+    expect(text).toBe(expectedCard);
+  });
+
+  it("AC3.10: recipe meal + recipe_uid: null + no name → demotion error, no POST", async () => {
+    // Has a recipe link but caller did not supply an explicit name for the demotion.
+    const meal = makeMeal({ uid: TEST_MEAL_UID, recipeUid: TACOS_UID, name: "Tacos" });
+    mealStore.load([meal]);
+
+    const { callTool } = makeUpdateCtx();
+
+    const result = await callTool("update_meal", { uid: TEST_MEAL_UID, recipe_uid: null });
+    const text = getText(result);
+
+    expect(text).toBe(
+      `Demoting a recipe meal to freeform requires an explicit name. Add 'name: "<your label>"' to the call.`,
+    );
+    expect(mockSaveMeals).not.toHaveBeenCalled();
   });
 });
