@@ -573,6 +573,12 @@ describe("uidOrTextLookupSchema", () => {
     expect(() => schema.parse({ title: "" })).toThrow();
   });
 
+  it("rejects an empty uid (branded schema enforces .min(1))", () => {
+    // #142 regression guard: the branded uid member must keep the non-empty
+    // constraint the pre-refactor inline z.string().min(1) enforced.
+    expect(() => schema.parse({ uid: "" })).toThrow();
+  });
+
   it("templates per-entity describe text from the config", () => {
     // The union-level description names the alternate shapes; the text key is
     // interpolated so each entity reads naturally.
