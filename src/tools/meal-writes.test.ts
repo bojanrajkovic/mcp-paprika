@@ -6,7 +6,12 @@ import { MealStore } from "../cache/meal-store.js";
 import { MealTypeStore } from "../cache/meal-type-store.js";
 import { makeMeal, makeMealType } from "../cache/__fixtures__/meals.js";
 import { makeRecipe } from "../cache/__fixtures__/recipes.js";
-import { registerAddMealsTool, addMealsInputSchema, registerUpdateMealTool } from "./meal-writes.js";
+import {
+  registerAddMealsTool,
+  addMealsInputSchema,
+  registerUpdateMealTool,
+  registerDeleteMealTool,
+} from "./meal-writes.js";
 import { mealToMarkdown } from "./meal-helpers.js";
 import { makeTestServer, makeCtx, getText } from "./tool-test-utils.js";
 import type { MealTypeUid, RecipeUid, MealUid, Meal } from "../paprika/types.js";
@@ -686,6 +691,121 @@ describe("update_meal — failure/edge paths (AC3.7-3.10)", () => {
     expect(text).toBe(
       `Demoting a recipe meal to freeform requires an explicit name. Add 'name: "<your label>"' to the call.`,
     );
+    expect(mockSaveMeals).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// delete_meal — AC4.1-AC4.4
+// ---------------------------------------------------------------------------
+
+const DELETE_MEAL_UID = "delete-meal-uid-1" as MealUid;
+
+describe("delete_meal — AC4.1-AC4.4", () => {
+  let mealStore: MealStore;
+  let mealTypeStore: MealTypeStore;
+  let store: RecipeStore;
+
+  let mockSaveMeals: ReturnType<typeof vi.fn>;
+  let mockNotifySync: ReturnType<typeof vi.fn>;
+  let mockPut: ReturnType<typeof vi.fn>;
+  let mockRemove: ReturnType<typeof vi.fn>;
+  let mockFlush: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    mealStore = new MealStore();
+    mealTypeStore = new MealTypeStore();
+    store = new RecipeStore();
+
+    mealTypeStore.load(makeBuiltins());
+    store.load([], []);
+
+    mockSaveMeals = vi.fn().mockImplementation(async (items: ReadonlyArray<Meal>) => items);
+    mockNotifySync = vi.fn().mockResolvedValue(undefined);
+    mockPut = vi.fn().mockResolvedValue(undefined);
+    mockRemove = vi.fn().mockResolvedValue(undefined);
+    mockFlush = vi.fn().mockResolvedValue(undefined);
+  });
+
+  function makeDeleteCtx() {
+    const { server, callTool } = makeTestServer();
+    const ctx = makeCtx(store, server, {
+      mealStore,
+      mealTypeStore,
+      client: fromAny({ saveMeals: mockSaveMeals, notifySync: mockNotifySync }),
+      cache: fromAny({ meals: { put: mockPut, remove: mockRemove }, flush: mockFlush }),
+    });
+    registerDeleteMealTool(server, ctx);
+    return { callTool, ctx };
+  }
+
+  it("AC4.1: happy path — wire payload has deleted: true, store tombstones UID, returns success message", async () => {
+    const meal = makeMeal({ uid: DELETE_MEAL_UID, name: "Tacos", date: "2026-06-15 18:00:00", deleted: false });
+    mealStore.load([meal]);
+
+    const { callTool } = makeDeleteCtx();
+
+    const result = await callTool("delete_meal", { uid: DELETE_MEAL_UID });
+    const text = getText(result);
+
+    // Exact success message format
+    expect(text).toBe(`Meal "Tacos" on 2026-06-15 18:00:00 deleted.`);
+
+    // Wire payload carried deleted: true
+    const payload = mockSaveMeals.mock.calls[0]?.[0] as ReadonlyArray<Meal>;
+    expect(payload).toHaveLength(1);
+    expect(payload[0]?.deleted).toBe(true);
+
+    // commitMeal delete branch removes from _items and tombstones the UID
+    expect(mealStore.get(DELETE_MEAL_UID)).toBeUndefined();
+    expect(mealStore.isTombstone(DELETE_MEAL_UID)).toBe(true);
+  });
+
+  it("AC4.2: tombstone retry — second call returns 'already deleted', saveMeals NOT called again", async () => {
+    const meal = makeMeal({ uid: DELETE_MEAL_UID, name: "Tacos", date: "2026-06-15 18:00:00", deleted: false });
+    mealStore.load([meal]);
+
+    const { callTool } = makeDeleteCtx();
+
+    // First delete — succeeds and tombstones
+    await callTool("delete_meal", { uid: DELETE_MEAL_UID });
+
+    // Second delete — tombstone short-circuit
+    const result = await callTool("delete_meal", { uid: DELETE_MEAL_UID });
+    const text = getText(result);
+
+    expect(text).toBe(`Meal with UID "${DELETE_MEAL_UID}" is already deleted.`);
+    // Measured AFTER the second call: saveMeals was only ever called once
+    expect(mockSaveMeals.mock.calls.length).toBe(1);
+  });
+
+  it("AC4.3: unknown UID — 'No meal found...' error, saveMeals NOT called", async () => {
+    // Empty store — no meals, no tombstones
+    mealStore.load([]);
+
+    const { callTool } = makeDeleteCtx();
+
+    const result = await callTool("delete_meal", { uid: "UNKNOWN" as MealUid });
+    const text = getText(result);
+
+    expect(text).toBe(`No meal found with UID "UNKNOWN".`);
+    expect(mockSaveMeals).not.toHaveBeenCalled();
+  });
+
+  it("AC4.4: defense-in-depth — meal.deleted already true in store, no re-POST", async () => {
+    // Bypass normal commit path: set() directly to place a deleted meal in the items map
+    // (simulates a rare race where a deleted=true record ends up in the store).
+    const deletedMeal = makeMeal({ uid: DELETE_MEAL_UID, name: "Stale", date: "2026-06-15 00:00:00", deleted: true });
+    mealStore.load([]);
+    // Use set() directly — NOT load() or mealStore.delete() — to seed the defense-in-depth state
+    mealStore.set(deletedMeal);
+
+    const { callTool } = makeDeleteCtx();
+
+    const result = await callTool("delete_meal", { uid: DELETE_MEAL_UID });
+    const text = getText(result);
+
+    expect(text).toBe(`Meal "Stale" is already deleted.`);
     expect(mockSaveMeals).not.toHaveBeenCalled();
   });
 });
