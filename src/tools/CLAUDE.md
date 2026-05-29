@@ -44,6 +44,9 @@ Purpose: Defines MCP tools that AI assistants can invoke. Each tool file exports
 | `move_to_pantry`      | `grocery-move.ts`     | Move one or more grocery items to pantry (create-first order); returns structured partial-failure message if grocery delete fails after pantry creation                                                                                                                                 |
 | `clear_purchased`     | `grocery-clear.ts`    | Clear all purchased items from a grocery list via a single batch delete; no-op (informational message) when no purchased items exist                                                                                                                                                    |
 | `clear_all`           | `grocery-clear.ts`    | Clear all items from a grocery list via a single batch delete; no-op (informational message) when list is already empty                                                                                                                                                                 |
+| `add_meals`           | `meal-writes.ts`      | Add 1..N meals to the planner in a single batch POST; all-or-nothing validation; per-index error enumeration; per-bucket `order_flag` assignment                                                                                                                                        |
+| `update_meal`         | `meal-writes.ts`      | Partial-merge update for a meal; supports recipe link demotion (`recipe_uid: null` with explicit `name`) and promotion (`recipe_uid: <new>` auto-resolves `name` from RecipeStore unless overridden); idempotent no-op for `recipe_uid: null` on already-freeform meals                 |
+| `delete_meal`         | `meal-writes.ts`      | Soft-delete a meal by UID; idempotent — retried calls return "already deleted" via the store's tombstone set                                                                                                                                                                            |
 
 ## Registration Pattern
 
@@ -138,6 +141,20 @@ Utilities imported by grocery list tool handlers from `./grocery-helpers.js`.
 - **`groceryListToMarkdown(list, items)`** -- Renders a grocery list as markdown. Outputs the list name as H1, UID, item count, then a markdown table of items (ingredient, quantity, aisle, purchased status). Empty string fields render as `—`.
 - **`groceryItemToMarkdown(item)`** -- Renders a single grocery item as markdown. Outputs ingredient as H1, UID, list UID, then conditionally quantity, aisle, purchased status, and instruction/notes when non-empty.
 
+### `meal-helpers.ts`
+
+Utilities imported by meal tool handlers from `./meal-helpers.js`.
+
+- **`mealTypeSpecSchema`** -- Exported Zod `z.union` of three `.strict()` objects for meal type resolution: `{name}` (trims whitespace via `.transform()`), `{uid}`, and `{builtin}`. Property-presence dispatch — callers pass exactly one variant. Used by both `meal-history.ts` and `meal-writes.ts`.
+- **`mealStartGuard(ctx)`** -- Returns `Ok<void>` when `ctx.mealStore.hasSynced`, `Err<CallToolResult>` otherwise. Always use `.match()` to handle both branches.
+- **`commitMeal(ctx, saved)`** -- Persists a saved meal to the local cache and store, then triggers cloud sync. Same pending-marks-then-cache-then-store-then-notifySync sequence as `commitPantryItem`: the upsert branch calls `mealStore.markPendingUpsert(saved.uid)` (sync, FIRST) → `cache.meals.put` (async) → `cache.flush` (async) → `mealStore.set` (sync) → `notifySync` (async); the delete branch calls `mealStore.markPendingDelete(saved.uid)` (sync, FIRST) → `cache.meals.remove` (async) → `cache.flush` (async) → `mealStore.delete` (sync) → `notifySync` (async). No `ctx.notifier.resourceListChanged()` is emitted — meals have no MCP resource surface.
+- **`commitMealsBatch(ctx, items)`** -- Batch variant of `commitMeal`. Commits N meals with a single `cache.flush()` and a single `notifySync()`. Marks all pending writes before any cache I/O; on cache failure, clears ALL marked UIDs before re-throwing. No `resourceListChanged()` — meals have no MCP resource surface. Used by `add_meals`.
+- **`mealToMarkdown(meal, typeName, recipeName)`** -- Pure renderer for a single meal. Takes pre-resolved display names from the caller (caller is responsible for looking up `typeName` from `mealTypeStore` and `recipeName` from recipe store).
+
+### `meal-writes.ts`
+
+Exports `registerAddMealsTool`, `registerUpdateMealTool`, and `registerDeleteMealTool`. All three meal write tools live in one file, mirroring `grocery-item.ts`'s multi-tool pattern. A file-private `resolveMealTypeSpec` helper is shared between `registerAddMealsTool` and `registerUpdateMealTool` — it resolves the `mealTypeSpecSchema` union variant to a concrete `{ typeUid: string | null; type: number }` pair using `mealTypeStore.resolveByName`, `mealTypeStore.get`, or built-in integer mapping.
+
 ## Testing (`tool-test-utils.ts`)
 
 Shared test utilities for direct tool handler invocation without a real MCP server.
@@ -156,5 +173,5 @@ Shared test utilities for direct tool handler invocation without a real MCP serv
 
 ## Dependencies
 
-- **Used by:** `src/server/build.ts` (`buildMcpServer` registers all 26 tools per server instance; `registerDiscoverTool` only when `app.vectorStore !== null`)
+- **Used by:** `src/server/build.ts` (`buildMcpServer` registers all 29 tools per server instance; `registerDiscoverTool` only when `app.vectorStore !== null`)
 - **Uses:** `types/` (ServerContext alias) and `server/` (`SessionContext`, `Notifier` types), `utils/` (parseDuration -- runtime), `paprika/types.ts` (Zod schemas at runtime + type-only imports), `cache/recipe-store.ts` (type-only imports), `features/vector-store.ts` (type-only imports for `VectorStore`, `SemanticResult`)
