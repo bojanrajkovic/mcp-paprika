@@ -23,10 +23,10 @@ Update an existing meal planner entry by UID. Only provided fields change; omitt
 - `recipe_uid: null` — demotes a recipe meal to freeform. Requires an explicit `name`; if `name` is omitted and the meal is currently recipe-linked, the call returns an error: `Demoting a recipe meal to freeform requires an explicit name.`
 - `recipe_uid: null` on a meal that is already freeform with no other fields supplied is a no-op. The existing meal card is returned without re-posting to Paprika.
 
-**Miss detection.** The tool checks for the meal UID in three tiers:
+**Miss detection.** The tool checks for the meal UID in three tiers (the first two are mutually exclusive at the store lookup — a UID is either in the tombstone set or absent entirely, never both):
 
-1. Not in the meal store at all → `No meal found with UID "<uid>".`
-2. In the store's tombstone set (previously deleted via this server) → `Meal with UID "<uid>" is already deleted.`
+1. In the store's tombstone set (previously deleted via this server) → `Meal with UID "<uid>" is already deleted.`
+2. Not in the meal store at all → `No meal found with UID "<uid>".`
 3. In the store but with `deleted: true` (defense-in-depth) → `Meal "<name>" is already deleted.`
 
 **Non-updatable fields.** `is_ingredient`, `deleted`, and `order_flag` are not exposed in the update schema. The existing values are always preserved unchanged.
