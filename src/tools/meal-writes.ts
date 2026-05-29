@@ -508,6 +508,18 @@ export function registerUpdateMealTool(server: McpServer, ctx: ServerContext): v
             newName = nameOp.name;
           }
 
+          // When `date` or `type` changes, the meal is moving to a different planner
+          // bucket. Reassign `orderFlag` using `getMaxOrderFlagOn + 1` (same convention
+          // as add_meals at line 223) so the meal doesn't collide with an existing
+          // meal that already holds the old flag in the destination bucket. Same-
+          // bucket updates preserve the original flag — keep-the-position semantics.
+          const destDate = normalizedDate ?? existing.date;
+          const destTypeUid = typeUid !== undefined ? typeUid : existing.typeUid;
+          const bucketChanged = destDate !== existing.date || destTypeUid !== existing.typeUid;
+          const newOrderFlag = bucketChanged
+            ? (ctx.mealStore.getMaxOrderFlagOn(destDate, destTypeUid) ?? -1) + 1
+            : existing.orderFlag;
+
           // Spread-merge — mirrors pantry-update.ts lines 95-104
           const updated: Meal = {
             ...existing,
@@ -516,6 +528,7 @@ export function registerUpdateMealTool(server: McpServer, ctx: ServerContext): v
             ...(normalizedDate !== undefined && { date: normalizedDate }),
             ...(typeInteger !== undefined && { type: typeInteger }),
             ...(typeUid !== undefined && { typeUid }),
+            orderFlag: newOrderFlag,
             // scale: undefined keeps existing; explicit null clears.
             ...(op.scale !== undefined && { scale: op.scale }),
           };

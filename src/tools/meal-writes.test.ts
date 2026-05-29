@@ -514,7 +514,7 @@ describe("update_meal — success paths (AC3.1-3.6)", () => {
     return { callTool, ctx };
   }
 
-  it("AC3.1: date-only update → date field updated, all other fields preserved", async () => {
+  it("AC3.1: date-only update → date field updated, non-bucket fields preserved", async () => {
     // Seed a dinner meal with all fields set; only date will change.
     const original = makeMeal({
       uid: TEST_MEAL_UID,
@@ -534,8 +534,10 @@ describe("update_meal — success paths (AC3.1-3.6)", () => {
 
     const stored = mealStore.get(TEST_MEAL_UID);
     expect(stored?.date).toBe("2026-06-15 00:00:00");
-    // All other fields must be unchanged from the original
-    expect(stored).toEqual({ ...original, date: "2026-06-15 00:00:00" });
+    // Date change moves the meal to a new (date, typeUid) bucket, so orderFlag
+    // is reassigned (max+1 in the destination, which is empty here = 0). All
+    // other non-bucket-derived fields are preserved.
+    expect(stored).toEqual({ ...original, date: "2026-06-15 00:00:00", orderFlag: 0 });
   });
 
   it("AC3.2: type update → typeUid becomes LUNCH_UID and type integer becomes 1", async () => {
@@ -632,6 +634,65 @@ describe("update_meal — success paths (AC3.1-3.6)", () => {
     const payload = mockSaveMeals.mock.calls[0]?.[0] as ReadonlyArray<Meal>;
     expect(payload[0]?.typeUid).toBe(BRUNCH_UID);
     expect(payload[0]?.type).toBe(0);
+  });
+
+  it("moving a meal to a different (date, typeUid) bucket → orderFlag becomes max+1 in destination", async () => {
+    // Codex regression (PR #143): the spread-merge previously preserved the
+    // source bucket's orderFlag when moving a meal, which could collide with an
+    // existing meal at the same flag in the destination. add_meals avoids this
+    // via getMaxOrderFlagOn + 1; update_meal must do the same when `date` or
+    // `type` changes.
+    const moving = makeMeal({
+      uid: TEST_MEAL_UID,
+      typeUid: LUNCH_UID,
+      type: 1,
+      date: "2026-06-10 00:00:00",
+      orderFlag: 0, // would collide with the destination's existing flag-0 meal
+    });
+    const destBucketExisting = makeMeal({
+      uid: "existing-dinner-uid" as MealUid,
+      typeUid: DINNER_UID,
+      type: 2,
+      date: "2026-06-15 00:00:00",
+      orderFlag: 0,
+    });
+    mealStore.load([moving, destBucketExisting]);
+
+    const { callTool } = makeUpdateCtx();
+
+    await callTool("update_meal", {
+      uid: TEST_MEAL_UID,
+      update: { date: "2026-06-15", type: { name: "Dinner" } },
+    });
+
+    const stored = mealStore.get(TEST_MEAL_UID);
+    expect(stored?.date).toBe("2026-06-15 00:00:00");
+    expect(stored?.typeUid).toBe(DINNER_UID);
+    expect(stored?.orderFlag).toBe(1); // max+1 in destination, not preserved 0
+
+    const payload = mockSaveMeals.mock.calls[0]?.[0] as ReadonlyArray<Meal>;
+    expect(payload[0]?.orderFlag).toBe(1);
+  });
+
+  it("update without changing date or type → orderFlag preserved (keep-the-position)", async () => {
+    // Counter-test to the bucket-move test above. Same-bucket updates should
+    // leave the flag alone, otherwise we'd churn position on every edit.
+    const original = makeMeal({
+      uid: TEST_MEAL_UID,
+      typeUid: DINNER_UID,
+      type: 2,
+      date: "2026-06-15 00:00:00",
+      orderFlag: 7,
+      scale: "1",
+    });
+    mealStore.load([original]);
+
+    const { callTool } = makeUpdateCtx();
+    await callTool("update_meal", { uid: TEST_MEAL_UID, update: { scale: "2" } });
+
+    const stored = mealStore.get(TEST_MEAL_UID);
+    expect(stored?.orderFlag).toBe(7); // unchanged
+    expect(stored?.scale).toBe("2");
   });
 });
 
