@@ -118,4 +118,28 @@ export class MealStore extends TombstoneEntityStore<Meal, MealUid> {
 
     return { meals, total };
   }
+
+  /**
+   * Returns the highest `orderFlag` among non-deleted, non-ingredient meals
+   * matching (date, typeUid). Returns null when no matching meal exists; callers
+   * use `(result ?? -1) + 1` to compute the next flag for an append.
+   *
+   * Date is matched exactly against the Paprika wire-format date string (the
+   * caller is responsible for normalizing input through toWireDateFormat first).
+   * typeUid is matched exactly, including null — meals with typeUid: null
+   * (legacy entries predating Paprika's mealtypes catalog) form their own bucket
+   * per date and never collide with non-null typeUid buckets on the same date.
+   */
+  getMaxOrderFlagOn(date: string, typeUid: string | null): number | null {
+    let max: number | null = null;
+    for (const meal of this._items.values()) {
+      if (isHidden(meal)) continue;
+      if (meal.date !== date) continue;
+      if (meal.typeUid !== typeUid) continue;
+      if (max === null || meal.orderFlag > max) {
+        max = meal.orderFlag;
+      }
+    }
+    return max;
+  }
 }
