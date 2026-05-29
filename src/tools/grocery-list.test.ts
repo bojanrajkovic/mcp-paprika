@@ -239,7 +239,9 @@ describe("read_grocery_list tool", () => {
     const result = await callTool("read_grocery_list", { lookup: { name: "Completely Different" } });
     const text = getText(result);
 
-    expect(text.toLowerCase()).toContain("no grocery list found");
+    // #142: the no-match wording is normalized to the plural form shared by
+    // read_recipe / get_pantry_item via the consolidated formatLookupOutcome.
+    expect(text.toLowerCase()).toContain("no grocery lists found matching");
   });
 
   it("grocery-surface.AC1.3: returns disambiguation when multiple lists match the same tier", async () => {

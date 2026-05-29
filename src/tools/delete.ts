@@ -1,7 +1,6 @@
 import { toMessage } from "../utils/log.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { z } from "zod";
 import { RecipeUidSchema } from "../paprika/types.js";
 import { coldStartGuard, commitRecipe, textResult } from "./helpers.js";
 import type { ServerContext } from "../types/server-context.js";
@@ -16,15 +15,14 @@ export function registerDeleteTool(server: McpServer, ctx: ServerContext): void 
         "This operation is reversible — trashed recipes can be recovered in the Paprika app. " +
         "Requires an exact UID; fuzzy title matching is not supported to prevent accidental deletion.",
       inputSchema: {
-        uid: z.string().describe("Recipe UID to delete"),
+        uid: RecipeUidSchema.describe("Recipe UID to delete"),
       },
     },
     async (args) => {
       log.info({ tool: "delete_recipe", uid: args.uid }, "tool invoked");
       return coldStartGuard(ctx).match(
         async (): Promise<CallToolResult> => {
-          const uid = RecipeUidSchema.parse(args.uid);
-          const recipe = ctx.store.get(uid);
+          const recipe = ctx.store.get(args.uid);
 
           if (!recipe) {
             return textResult(`No recipe found with UID "${args.uid}".`);

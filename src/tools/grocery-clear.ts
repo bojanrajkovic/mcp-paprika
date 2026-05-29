@@ -1,7 +1,6 @@
 import { toMessage } from "../utils/log.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { z } from "zod";
 import { GroceryListUidSchema } from "../paprika/types.js";
 import { textResult } from "./helpers.js";
 import { commitGroceryItemsBatch, groceryStartGuard } from "./grocery-helpers.js";
@@ -14,15 +13,14 @@ export function registerClearPurchasedTool(server: McpServer, ctx: ServerContext
     {
       description: "Clear all purchased items from a grocery list.",
       inputSchema: {
-        listUid: z.string().min(1).describe("Grocery list UID to clear purchased items from"),
+        listUid: GroceryListUidSchema.describe("Grocery list UID to clear purchased items from"),
       },
     },
     async (args) => {
       log.info({ tool: "clear_purchased", listUid: args.listUid }, "tool invoked");
       return groceryStartGuard(ctx).match(
         async (): Promise<CallToolResult> => {
-          const uid = GroceryListUidSchema.parse(args.listUid);
-          const list = ctx.groceryListStore.get(uid);
+          const list = ctx.groceryListStore.get(args.listUid);
           if (!list) {
             return textResult(`No grocery list found with UID "${args.listUid}".`);
           }
@@ -57,15 +55,14 @@ export function registerClearAllTool(server: McpServer, ctx: ServerContext): voi
     {
       description: "Clear all items from a grocery list.",
       inputSchema: {
-        listUid: z.string().min(1).describe("Grocery list UID to clear all items from"),
+        listUid: GroceryListUidSchema.describe("Grocery list UID to clear all items from"),
       },
     },
     async (args) => {
       log.info({ tool: "clear_all", listUid: args.listUid }, "tool invoked");
       return groceryStartGuard(ctx).match(
         async (): Promise<CallToolResult> => {
-          const uid = GroceryListUidSchema.parse(args.listUid);
-          const list = ctx.groceryListStore.get(uid);
+          const list = ctx.groceryListStore.get(args.listUid);
           if (!list) {
             return textResult(`No grocery list found with UID "${args.listUid}".`);
           }

@@ -1,8 +1,13 @@
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { z } from "zod";
 import { RecipeUidSchema } from "../paprika/types.js";
-import { coldStartGuard, recipeToMarkdown, textResult } from "./helpers.js";
+import {
+  coldStartGuard,
+  formatLookupOutcome,
+  recipeToMarkdown,
+  resolveLookup,
+  uidOrTextLookupSchema,
+} from "./helpers.js";
 import type { ServerContext } from "../types/server-context.js";
 
 export function registerReadTool(server: McpServer, ctx: ServerContext): void {
@@ -15,51 +20,33 @@ export function registerReadTool(server: McpServer, ctx: ServerContext): void {
         "and returns a disambiguation list when multiple recipes match the same tier. " +
         'Pass exactly one shape: {"uid": "..."} or {"title": "..."}.',
       inputSchema: {
-        lookup: z
-          .union([
-            z
-              .object({ uid: z.string().min(1) })
-              .strict()
-              .describe('Exact recipe UID, e.g. {"uid": "..."}.'),
-            z
-              .object({ title: z.string().min(1) })
-              .strict()
-              .describe('Recipe title fuzzy match, e.g. {"title": "Chocolate Cake"}.'),
-          ])
-          .describe('Pick exactly one shape: {"uid": "..."} or {"title": "..."}.'),
+        lookup: uidOrTextLookupSchema({
+          uidSchema: RecipeUidSchema,
+          textKey: "title",
+          entityLabel: "recipe",
+          textExample: "Chocolate Cake",
+        }),
       },
     },
     async (args) => {
       log.info({ tool: "read_recipe", ...args.lookup }, "tool invoked");
       return coldStartGuard(ctx).match(
         async (): Promise<CallToolResult> => {
-          if ("uid" in args.lookup) {
-            const recipe = ctx.store.get(RecipeUidSchema.parse(args.lookup.uid));
-            if (!recipe) {
-              return textResult(`No recipe found with UID "${args.lookup.uid}".`);
-            }
-            const categoryNames = ctx.store.resolveCategories(recipe.categories);
-            const lastCooked = ctx.mealStore.lastCookedAt(recipe.uid);
-            return textResult(recipeToMarkdown(recipe, categoryNames, lastCooked));
-          }
-
-          const matches = ctx.store.findByName(args.lookup.title);
-
-          if (matches.length === 0) {
-            return textResult(`No recipes found matching "${args.lookup.title}".`);
-          }
-
-          if (matches.length === 1) {
-            const recipe = matches[0]!;
-            const categoryNames = ctx.store.resolveCategories(recipe.categories);
-            const lastCooked = ctx.mealStore.lastCookedAt(recipe.uid);
-            return textResult(recipeToMarkdown(recipe, categoryNames, lastCooked));
-          }
-
-          const list = matches.map((r) => `- ${r.name} (UID: ${r.uid})`).join("\n");
-          return textResult(
-            `Multiple recipes match "${args.lookup.title}":\n${list}\n\nPlease re-invoke with a specific uid.`,
-          );
+          const query = "uid" in args.lookup ? { uid: args.lookup.uid } : { text: args.lookup.title };
+          const outcome = resolveLookup(query, {
+            get: (uid) => ctx.store.get(uid),
+            findByText: (text) => ctx.store.findByName(text),
+          });
+          return formatLookupOutcome(outcome, {
+            entityNoun: "recipe",
+            renderOne: (recipe) =>
+              recipeToMarkdown(
+                recipe,
+                ctx.store.resolveCategories(recipe.categories),
+                ctx.mealStore.lastCookedAt(recipe.uid),
+              ),
+            disambiguationLine: (recipe) => `- ${recipe.name} (UID: ${recipe.uid})`,
+          });
         },
         (guard) => guard,
       );

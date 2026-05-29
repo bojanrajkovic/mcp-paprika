@@ -18,7 +18,7 @@ export function registerMoveToPantryTool(server: McpServer, ctx: ServerContext):
       description:
         "Move one or more grocery items to the pantry. Creates pantry items (with today's purchase date), then deletes the grocery items.",
       inputSchema: {
-        uids: z.array(z.string().min(1)).min(1).describe("Grocery item UIDs to move to pantry"),
+        uids: z.array(GroceryItemUidSchema).min(1).describe("Grocery item UIDs to move to pantry"),
       },
     },
     async (args) => {
@@ -29,19 +29,19 @@ export function registerMoveToPantryTool(server: McpServer, ctx: ServerContext):
             return textResult("Pantry is not yet synced. Try again in a few seconds.");
           }
 
-          // Step 1: Validate all UIDs exist, are not tombstoned, and deduplicate
+          // Step 1: Validate all UIDs exist, are not tombstoned, and deduplicate.
+          // uids are already brand-typed by the input schema — no per-element parse.
           const seen = new Set<string>();
           const items: Array<GroceryItem> = [];
-          for (const rawUid of args.uids) {
-            const uid = GroceryItemUidSchema.parse(rawUid);
+          for (const uid of args.uids) {
             if (seen.has(uid)) continue;
             seen.add(uid);
             const item = ctx.groceryItemStore.get(uid);
             if (!item) {
               if (ctx.groceryItemStore.isTombstone(uid)) {
-                return textResult(`Grocery item with UID "${rawUid}" is already deleted.`);
+                return textResult(`Grocery item with UID "${uid}" is already deleted.`);
               }
-              return textResult(`No grocery item found with UID "${rawUid}".`);
+              return textResult(`No grocery item found with UID "${uid}".`);
             }
             items.push(item);
           }

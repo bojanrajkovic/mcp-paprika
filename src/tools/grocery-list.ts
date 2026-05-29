@@ -5,7 +5,7 @@ import { z } from "zod";
 import { GroceryListUidSchema } from "../paprika/types.js";
 import type { GroceryList } from "../paprika/types.js";
 import { groceryStartGuard, groceryListToMarkdown, commitGroceryList } from "./grocery-helpers.js";
-import { textResult } from "./helpers.js";
+import { formatLookupOutcome, resolveLookup, textResult, uidOrTextLookupSchema } from "./helpers.js";
 import type { ServerContext } from "../types/server-context.js";
 
 export function registerListGroceryListsTool(server: McpServer, ctx: ServerContext): void {
@@ -51,50 +51,28 @@ export function registerReadGroceryListTool(server: McpServer, ctx: ServerContex
         "and case-insensitive, with a disambiguation list when multiple lists match the same tier. " +
         'Pass exactly one shape: {"uid": "..."} or {"name": "..."}.',
       inputSchema: {
-        lookup: z
-          .union([
-            z
-              .object({ uid: z.string().min(1) })
-              .strict()
-              .describe('Exact grocery list UID, e.g. {"uid": "..."}.'),
-            z
-              .object({ name: z.string().min(1) })
-              .strict()
-              .describe('Grocery list name fuzzy match, e.g. {"name": "Weekly Shopping"}.'),
-          ])
-          .describe('Pick exactly one shape: {"uid": "..."} or {"name": "..."}.'),
+        lookup: uidOrTextLookupSchema({
+          uidSchema: GroceryListUidSchema,
+          textKey: "name",
+          entityLabel: "grocery list",
+          textExample: "Weekly Shopping",
+        }),
       },
     },
     async (args) => {
       log.info({ tool: "read_grocery_list", ...args.lookup }, "tool invoked");
       return groceryStartGuard(ctx).match(
         async (): Promise<CallToolResult> => {
-          if ("uid" in args.lookup) {
-            const list = ctx.groceryListStore.get(GroceryListUidSchema.parse(args.lookup.uid));
-            if (!list) {
-              return textResult(`No grocery list found with UID "${args.lookup.uid}".`);
-            }
-            const items = ctx.groceryItemStore.getByListUid(list.uid);
-            return textResult(groceryListToMarkdown(list, items));
-          }
-
-          const name = args.lookup.name;
-          const matches = ctx.groceryListStore.findByName(name);
-
-          if (matches.length === 0) {
-            return textResult(`No grocery list found matching "${name}".`);
-          }
-
-          if (matches.length === 1) {
-            const list = matches[0]!;
-            const items = ctx.groceryItemStore.getByListUid(list.uid);
-            return textResult(groceryListToMarkdown(list, items));
-          }
-
-          const lines = matches.map((list) => `- **${list.name}** (uid: \`${list.uid}\`)`).join("\n");
-          return textResult(
-            `Multiple grocery lists match "${name}":\n${lines}\n\nPlease re-invoke with a specific uid.`,
-          );
+          const query = "uid" in args.lookup ? { uid: args.lookup.uid } : { text: args.lookup.name };
+          const outcome = resolveLookup(query, {
+            get: (uid) => ctx.groceryListStore.get(uid),
+            findByText: (text) => ctx.groceryListStore.findByName(text),
+          });
+          return formatLookupOutcome(outcome, {
+            entityNoun: "grocery list",
+            renderOne: (list) => groceryListToMarkdown(list, ctx.groceryItemStore.getByListUid(list.uid)),
+            disambiguationLine: (list) => `- **${list.name}** (uid: \`${list.uid}\`)`,
+          });
         },
         (guard) => guard,
       );
@@ -162,7 +140,7 @@ export function registerRenameGroceryListTool(server: McpServer, ctx: ServerCont
     {
       description: "Rename a grocery list. Rejects if the new name conflicts with a different existing list.",
       inputSchema: {
-        uid: z.string().describe("Grocery list UID to rename"),
+        uid: GroceryListUidSchema.describe("Grocery list UID to rename"),
         newName: z.string().min(1).describe("New name for the grocery list"),
       },
     },
@@ -170,8 +148,7 @@ export function registerRenameGroceryListTool(server: McpServer, ctx: ServerCont
       log.info({ tool: "rename_grocery_list", uid: args.uid, newName: args.newName }, "tool invoked");
       return groceryStartGuard(ctx).match(
         async (): Promise<CallToolResult> => {
-          const uid = GroceryListUidSchema.parse(args.uid);
-          const existing = ctx.groceryListStore.get(uid);
+          const existing = ctx.groceryListStore.get(args.uid);
 
           if (!existing) {
             return textResult(`No grocery list found with UID "${args.uid}".`);
@@ -186,7 +163,7 @@ export function registerRenameGroceryListTool(server: McpServer, ctx: ServerCont
           // Conflict check: reject if another list (different UID) has the exact same name.
           const conflictMatches = ctx.groceryListStore.findByName(args.newName);
           const conflict = conflictMatches.find(
-            (l) => l.name.toLowerCase() === args.newName.toLowerCase() && l.uid !== uid,
+            (l) => l.name.toLowerCase() === args.newName.toLowerCase() && l.uid !== args.uid,
           );
           if (conflict !== undefined) {
             return textResult(
@@ -220,19 +197,18 @@ export function registerDeleteGroceryListTool(server: McpServer, ctx: ServerCont
     {
       description: "Delete a grocery list by UID.",
       inputSchema: {
-        uid: z.string().describe("Grocery list UID to delete"),
+        uid: GroceryListUidSchema.describe("Grocery list UID to delete"),
       },
     },
     async (args) => {
       log.info({ tool: "delete_grocery_list", uid: args.uid }, "tool invoked");
       return groceryStartGuard(ctx).match(
         async (): Promise<CallToolResult> => {
-          const uid = GroceryListUidSchema.parse(args.uid);
-          const existing = ctx.groceryListStore.get(uid);
+          const existing = ctx.groceryListStore.get(args.uid);
 
           if (!existing) {
             // Distinguish "deleted in this session" (tombstone) from "never existed".
-            if (ctx.groceryListStore.isTombstone(uid)) {
+            if (ctx.groceryListStore.isTombstone(args.uid)) {
               return textResult(`Grocery list with UID "${args.uid}" is already deleted.`);
             }
             return textResult(`No grocery list found with UID "${args.uid}".`);

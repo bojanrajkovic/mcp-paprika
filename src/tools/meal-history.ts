@@ -5,6 +5,7 @@ import { z } from "zod";
 import { mealStartGuard, mealTypeSpecSchema, resolveMealTypeSpec } from "./meal-helpers.js";
 import { textResult } from "./helpers.js";
 import { parseInputDate } from "../utils/dates.js";
+import { RecipeUidSchema } from "../paprika/types.js";
 import type { ServerContext } from "../types/server-context.js";
 import type { Meal } from "../paprika/types.js";
 
@@ -40,10 +41,9 @@ export function registerMealHistoryTool(server: McpServer, ctx: ServerContext): 
         "last have tacos', 'show me dinner plans for this month', or 'what's on the meal " +
         "planner'. For recipe details (ingredients, directions), use read_recipe instead.",
       inputSchema: {
-        recipe_uid: z
-          .string()
-          .optional()
-          .describe("Filter to meals for a specific recipe UID. Searches all time when set."),
+        recipe_uid: RecipeUidSchema.optional().describe(
+          "Filter to meals for a specific recipe UID. Searches all time when set.",
+        ),
         since: z
           .string()
           .optional()
