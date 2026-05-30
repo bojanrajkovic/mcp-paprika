@@ -19,6 +19,7 @@ const ENV_VAR_HINTS: Readonly<Record<string, string>> = {
   "http.host": "MCP_HTTP_HOST",
   "http.allowedHosts": "MCP_ALLOWED_HOSTS",
   "http.allowedOrigins": "MCP_ALLOWED_ORIGINS",
+  "http.shutdownDrainMs": "MCP_HTTP_SHUTDOWN_DRAIN_MS",
   "logging.level": "MCP_LOG_LEVEL",
   "logging.notifyLevel": "MCP_LOG_NOTIFY_LEVEL",
   "logging.pretty": "MCP_LOG_PRETTY",
@@ -170,6 +171,14 @@ export const paprikaConfigSchema = z
         // without a proxy should set these. See docs/configuration.md.
         allowedHosts: listField.default([]),
         allowedOrigins: listField.default([]),
+        // Pre-drain delay on SIGTERM: after shutdown begins, /healthz reports
+        // not-ready and the server keeps serving for this long before closing
+        // connections. Gives Kubernetes time to remove the pod from Service
+        // endpoints and for kube-proxy/ingress routing to propagate, so a
+        // request routed just before deletion isn't dropped. Keep it well under
+        // terminationGracePeriodSeconds (the shutdown also reserves up to
+        // SHUTDOWN_TIMEOUT_MS to drain). Set 0 to disable (tests, stdio).
+        shutdownDrainMs: durationField.default("5s"),
       })
       .default({}),
     features: z
@@ -331,6 +340,7 @@ export function buildEnvOverrides(env: NodeJS.ProcessEnv): Record<string, unknow
   if (env["MCP_HTTP_HOST"] !== undefined) http["host"] = env["MCP_HTTP_HOST"];
   if (env["MCP_ALLOWED_HOSTS"] !== undefined) http["allowedHosts"] = env["MCP_ALLOWED_HOSTS"];
   if (env["MCP_ALLOWED_ORIGINS"] !== undefined) http["allowedOrigins"] = env["MCP_ALLOWED_ORIGINS"];
+  if (env["MCP_HTTP_SHUTDOWN_DRAIN_MS"] !== undefined) http["shutdownDrainMs"] = env["MCP_HTTP_SHUTDOWN_DRAIN_MS"];
 
   if (env["MCP_LOG_LEVEL"] !== undefined && env["MCP_LOG_LEVEL"] !== "") {
     logging["level"] = env["MCP_LOG_LEVEL"];
