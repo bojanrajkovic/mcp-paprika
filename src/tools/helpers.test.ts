@@ -31,6 +31,8 @@ const makeCtx = (size: number) =>
     groceryIngredientStore: fromAny({}),
     mealStore: fromAny({}),
     mealTypeStore: fromAny({}),
+    menuStore: fromAny({}),
+    menuItemStore: fromAny({}),
     vectorStore: null,
     server: fromAny({}),
     notifier: {
@@ -383,6 +385,8 @@ describe("p2-u02-shared-helpers: shared helper functions", () => {
         groceryIngredientStore: fromAny({}),
         mealStore: fromAny({}),
         mealTypeStore: fromAny({}),
+        menuStore: fromAny({}),
+        menuItemStore: fromAny({}),
         vectorStore: null,
         server: fromAny({}),
         notifier: {
@@ -437,6 +441,8 @@ describe("p2-u02-shared-helpers: shared helper functions", () => {
         groceryIngredientStore: fromAny({}),
         mealStore: fromAny({}),
         mealTypeStore: fromAny({}),
+        menuStore: fromAny({}),
+        menuItemStore: fromAny({}),
         vectorStore: null,
         server: fromAny({}),
         notifier: {
@@ -475,6 +481,8 @@ describe("p2-u02-shared-helpers: shared helper functions", () => {
         groceryIngredientStore: fromAny({}),
         mealStore: fromAny({}),
         mealTypeStore: fromAny({}),
+        menuStore: fromAny({}),
+        menuItemStore: fromAny({}),
         vectorStore: null,
         server: fromAny({}),
         notifier: {
@@ -516,6 +524,8 @@ describe("p2-u02-shared-helpers: shared helper functions", () => {
         groceryIngredientStore: fromAny({}),
         mealStore: fromAny({}),
         mealTypeStore: fromAny({}),
+        menuStore: fromAny({}),
+        menuItemStore: fromAny({}),
         vectorStore: null,
         server: fromAny({}),
         notifier: {

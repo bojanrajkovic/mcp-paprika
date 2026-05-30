@@ -7,6 +7,8 @@ import { GroceryItemStore } from "../cache/grocery-item-store.js";
 import { GroceryListStore } from "../cache/grocery-list-store.js";
 import { MealStore } from "../cache/meal-store.js";
 import { MealTypeStore } from "../cache/meal-type-store.js";
+import { MenuStore } from "../cache/menu-store.js";
+import { MenuItemStore } from "../cache/menu-item-store.js";
 import { PantryStore } from "../cache/pantry-store.js";
 import { RecipeStore } from "../cache/recipe-store.js";
 import { buildDiscoverComponents } from "../features/discover-feature.js";
@@ -185,6 +187,20 @@ export async function buildAppContext(
   }
   log.info({ count: cachedMealTypes.length }, "hydrated meal type store from cache");
 
+  const menuStore = new MenuStore({ pendingWriteTtlMs });
+  const cachedMenus = (await cache.menus.getAll()).filter((m) => !m.deleted);
+  if (cachedMenus.length > 0) {
+    menuStore.load(cachedMenus);
+  }
+  log.info({ count: cachedMenus.length }, "hydrated menu store from cache");
+
+  const menuItemStore = new MenuItemStore({ pendingWriteTtlMs });
+  const cachedMenuItems = (await cache.menuItems.getAll()).filter((mi) => !mi.deleted);
+  if (cachedMenuItems.length > 0) {
+    menuItemStore.load(cachedMenuItems);
+  }
+  log.info({ count: cachedMenuItems.length }, "hydrated menu item store from cache");
+
   // SyncEngine only reads client/cache/store/pantryStore/notifier — never
   // vectorStore — so it is safe to construct with a placeholder appContext
   // whose vectorStore is null. The vector store is then built with
@@ -200,6 +216,8 @@ export async function buildAppContext(
     groceryIngredientStore,
     mealStore,
     mealTypeStore,
+    menuStore,
+    menuItemStore,
     vectorStore: null,
     notifier,
     auth, // null for stdio, populated for HTTP
@@ -214,7 +232,9 @@ export async function buildAppContext(
     if (
       result.changeType !== "recipes" &&
       result.changeType !== "grocery-lists" &&
-      result.changeType !== "grocery-items"
+      result.changeType !== "grocery-items" &&
+      result.changeType !== "menus" &&
+      result.changeType !== "menu-items"
     ) {
       return;
     }
@@ -270,6 +290,8 @@ export async function buildAppContext(
     groceryIngredientStore,
     mealStore,
     mealTypeStore,
+    menuStore,
+    menuItemStore,
     vectorStore,
     notifier,
     auth, // null for stdio, populated for HTTP

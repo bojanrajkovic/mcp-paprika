@@ -4,9 +4,13 @@ import {
   GroceryListStoredSchema,
   GroceryItemStoredSchema,
   GroceryIngredientStoredSchema,
+  MenuStoredSchema,
+  MenuItemStoredSchema,
   type GroceryListUid,
   type GroceryItemUid,
   type GroceryIngredientUid,
+  type MenuUid,
+  type MenuItemUid,
 } from "./types.js";
 
 describe("Grocery schema property-based tests", () => {
@@ -92,6 +96,64 @@ describe("Grocery schema property-based tests", () => {
             if (!first.success) return;
 
             const second = GroceryIngredientStoredSchema.safeParse(first.data);
+            expect(second.success).toBe(true);
+            if (second.success) {
+              expect(second.data).toEqual(first.data);
+            }
+          },
+        ),
+      );
+    });
+  });
+
+  describe("menu-infra: Menu stored schema idempotent round-trip", () => {
+    it("Property: parsing a valid Menu through MenuStoredSchema is idempotent", () => {
+      fc.assert(
+        fc.property(
+          fc.record({
+            uid: fc.string({ minLength: 1 }).map((s) => s as MenuUid),
+            name: fc.string(),
+            days: fc.integer({ min: 0, max: 60 }),
+            orderFlag: fc.integer({ min: 0, max: 100 }),
+            notes: fc.string(),
+            deleted: fc.boolean(),
+          }),
+          (menu) => {
+            const first = MenuStoredSchema.safeParse(menu);
+            expect(first.success).toBe(true);
+            if (!first.success) return;
+
+            const second = MenuStoredSchema.safeParse(first.data);
+            expect(second.success).toBe(true);
+            if (second.success) {
+              expect(second.data).toEqual(first.data);
+            }
+          },
+        ),
+      );
+    });
+  });
+
+  describe("menu-infra: MenuItem stored schema idempotent round-trip", () => {
+    it("Property: parsing a valid MenuItem through MenuItemStoredSchema is idempotent (nullable menuUid/recipeUid)", () => {
+      fc.assert(
+        fc.property(
+          fc.record({
+            uid: fc.string({ minLength: 1 }).map((s) => s as MenuItemUid),
+            menuUid: fc.oneof(fc.constant(null), fc.string()),
+            recipeUid: fc.oneof(fc.constant(null), fc.string()),
+            name: fc.string(),
+            day: fc.integer({ min: 0, max: 60 }),
+            typeUid: fc.string(),
+            orderFlag: fc.integer({ min: 0, max: 100 }),
+            deleted: fc.boolean(),
+          }),
+          (item) => {
+            const first = MenuItemStoredSchema.safeParse(item);
+            expect(first.success).toBe(true);
+            if (!first.success) return;
+
+            const second = MenuItemStoredSchema.safeParse(first.data);
             expect(second.success).toBe(true);
             if (second.success) {
               expect(second.data).toEqual(first.data);

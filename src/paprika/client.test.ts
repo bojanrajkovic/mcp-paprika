@@ -12,7 +12,17 @@ import { PaprikaClient } from "./client.js";
 import { PaprikaAPIError, PaprikaAuthError } from "./errors.js";
 import { CircuitOpenError } from "../utils/errors.js";
 import { toMessage, REDACT_PATHS } from "../utils/log.js";
-import type { PantryItem, Recipe, Aisle, GroceryList, GroceryItem, GroceryIngredient, Meal } from "./types.js";
+import type {
+  PantryItem,
+  Recipe,
+  Aisle,
+  GroceryList,
+  GroceryItem,
+  GroceryIngredient,
+  Meal,
+  Menu,
+  MenuItem,
+} from "./types.js";
 import {
   RecipeSchema,
   RecipeUidSchema,
@@ -23,10 +33,15 @@ import {
   GroceryIngredientUidSchema,
   MealUidSchema,
   mealToApiPayload,
+  MenuUidSchema,
+  MenuItemUidSchema,
+  menuToApiPayload,
+  menuItemToApiPayload,
 } from "./types.js";
 import { makeSnakeCaseRecipe } from "../cache/__fixtures__/recipes.js";
 import { makeSnakeCasePantryItem } from "../cache/__fixtures__/pantry.js";
 import { makeMeal } from "../cache/__fixtures__/meals.js";
+import { makeMenu, makeMenuItem, makeSnakeCaseMenu, makeSnakeCaseMenuItem } from "../cache/__fixtures__/menus.js";
 
 const AUTH_URL = "https://paprikaapp.com/api/v1/account/login/";
 const API_BASE = "https://paprikaapp.com/api/v2/sync";
@@ -1978,6 +1993,179 @@ describe("PaprikaClient", () => {
         expect(error).toBeInstanceOf(PaprikaAPIError);
         expect((error as PaprikaAPIError).status).toBe(400);
         expect((error as PaprikaAPIError).endpoint).toContain("meals");
+      }
+    });
+  });
+
+  describe("menu-infra: listMenus()", () => {
+    it("GETs from /menus/ and returns Menu[] with camelCase fields", async () => {
+      server.use(
+        http.get(`${API_BASE}/menus/`, () => {
+          return HttpResponse.json({
+            result: [
+              makeSnakeCaseMenu("MENU-1", { name: "Week 1", days: 3, order_flag: 2 }),
+              makeSnakeCaseMenu("MENU-2", { name: "Week 2", days: 1, order_flag: 5 }),
+            ],
+          });
+        }),
+      );
+
+      const client = new PaprikaClient("test@example.com", "password");
+      const menus = await client.listMenus();
+
+      expect(menus).toHaveLength(2);
+      expect(menus[0]!.uid).toBe("MENU-1");
+      expect(menus[0]!.name).toBe("Week 1");
+      expect(menus[0]!.days).toBe(3);
+      expect(menus[0]!.orderFlag).toBe(2);
+      expect(menus[1]!.name).toBe("Week 2");
+      expect(menus[1]!.orderFlag).toBe(5);
+    });
+  });
+
+  describe("menu-infra: listMenuItems()", () => {
+    it("GETs from /menuitems/ and returns MenuItem[] with camelCase fields", async () => {
+      server.use(
+        http.get(`${API_BASE}/menuitems/`, () => {
+          return HttpResponse.json({
+            result: [
+              makeSnakeCaseMenuItem("MI-1", { menu_uid: "MENU-1", recipe_uid: "R-1", day: 1, type_uid: "T-1" }),
+              makeSnakeCaseMenuItem("MI-2", { menu_uid: null, recipe_uid: null, day: 2, type_uid: "T-2" }),
+            ],
+          });
+        }),
+      );
+
+      const client = new PaprikaClient("test@example.com", "password");
+      const items = await client.listMenuItems();
+
+      expect(items).toHaveLength(2);
+      expect(items[0]!.uid).toBe("MI-1");
+      expect(items[0]!.menuUid).toBe("MENU-1");
+      expect(items[0]!.recipeUid).toBe("R-1");
+      expect(items[0]!.day).toBe(1);
+      expect(items[0]!.typeUid).toBe("T-1");
+      // cascade-delete tombstone: menu_uid and recipe_uid arrive as null
+      expect(items[1]!.menuUid).toBeNull();
+      expect(items[1]!.recipeUid).toBeNull();
+    });
+  });
+
+  describe("menu-infra: saveMenus()", () => {
+    it("POSTs to /menus/ with 6 snake_case keys per item and identity-returns input", async () => {
+      let body: Array<Record<string, unknown>> | null = null;
+
+      server.use(
+        http.post(`${API_BASE}/menus/`, async ({ request }) => {
+          const formData = await request.formData();
+          const dataBlob = formData.get("data") as Blob;
+          const arrayBuffer = await dataBlob.arrayBuffer();
+          const decompressed = gunzipSync(Buffer.from(arrayBuffer));
+          body = JSON.parse(decompressed.toString()) as Array<Record<string, unknown>>;
+          return HttpResponse.json({ result: true });
+        }),
+      );
+
+      const client = new PaprikaClient("test@example.com", "password");
+      const menu1: Menu = makeMenu({ uid: MenuUidSchema.parse("MENU-1"), name: "Week 1" });
+      const menu2: Menu = makeMenu({ uid: MenuUidSchema.parse("MENU-2"), name: "Week 2" });
+      const items: ReadonlyArray<Menu> = [menu1, menu2];
+      const result = await client.saveMenus(items);
+
+      expect(result).toBe(items);
+
+      expect(body).not.toBeNull();
+      expect(Array.isArray(body)).toBe(true);
+      expect(body!).toHaveLength(2);
+      expect(body).toStrictEqual(items.map(menuToApiPayload));
+      const payload = body![0]!;
+      expect(Object.keys(payload)).toHaveLength(6);
+      expect(payload).toHaveProperty("uid", "MENU-1");
+      expect(payload).toHaveProperty("name", "Week 1");
+      expect(payload).toHaveProperty("days");
+      expect(payload).toHaveProperty("order_flag");
+      expect(payload).toHaveProperty("notes");
+      expect(payload).toHaveProperty("deleted");
+      expect(payload).not.toHaveProperty("orderFlag");
+    });
+
+    it("400 from /menus/ throws PaprikaAPIError with status 400 and menus endpoint", async () => {
+      server.use(
+        http.post(`${API_BASE}/menus/`, () => {
+          return HttpResponse.json({ error: "bad request" }, { status: 400 });
+        }),
+      );
+
+      const client = new PaprikaClient("test@example.com", "password");
+
+      try {
+        await client.saveMenus([makeMenu({ uid: MenuUidSchema.parse("MENU-ERR") })]);
+        expect.fail("Should have thrown PaprikaAPIError");
+      } catch (error) {
+        expect(error).toBeInstanceOf(PaprikaAPIError);
+        expect((error as PaprikaAPIError).status).toBe(400);
+        expect((error as PaprikaAPIError).endpoint).toContain("menus");
+      }
+    });
+  });
+
+  describe("menu-infra: saveMenuItems()", () => {
+    it("POSTs to /menuitems/ with 8 snake_case keys per item and identity-returns input", async () => {
+      let body: Array<Record<string, unknown>> | null = null;
+
+      server.use(
+        http.post(`${API_BASE}/menuitems/`, async ({ request }) => {
+          const formData = await request.formData();
+          const dataBlob = formData.get("data") as Blob;
+          const arrayBuffer = await dataBlob.arrayBuffer();
+          const decompressed = gunzipSync(Buffer.from(arrayBuffer));
+          body = JSON.parse(decompressed.toString()) as Array<Record<string, unknown>>;
+          return HttpResponse.json({ result: true });
+        }),
+      );
+
+      const client = new PaprikaClient("test@example.com", "password");
+      const item1: MenuItem = makeMenuItem({ uid: MenuItemUidSchema.parse("MI-1"), name: "Quiche" });
+      const item2: MenuItem = makeMenuItem({ uid: MenuItemUidSchema.parse("MI-2"), name: "Soup" });
+      const items: ReadonlyArray<MenuItem> = [item1, item2];
+      const result = await client.saveMenuItems(items);
+
+      expect(result).toBe(items);
+
+      expect(body).not.toBeNull();
+      expect(Array.isArray(body)).toBe(true);
+      expect(body!).toHaveLength(2);
+      expect(body).toStrictEqual(items.map(menuItemToApiPayload));
+      const payload = body![0]!;
+      expect(Object.keys(payload)).toHaveLength(8);
+      expect(payload).toHaveProperty("uid", "MI-1");
+      expect(payload).toHaveProperty("menu_uid");
+      expect(payload).toHaveProperty("recipe_uid");
+      expect(payload).toHaveProperty("name", "Quiche");
+      expect(payload).toHaveProperty("day");
+      expect(payload).toHaveProperty("type_uid");
+      expect(payload).toHaveProperty("order_flag");
+      expect(payload).toHaveProperty("deleted");
+      expect(payload).not.toHaveProperty("menuUid");
+      expect(payload).not.toHaveProperty("typeUid");
+    });
+
+    it("400 from /menuitems/ throws PaprikaAPIError with status 400 and menuitems endpoint", async () => {
+      server.use(
+        http.post(`${API_BASE}/menuitems/`, () => {
+          return HttpResponse.json({ error: "bad request" }, { status: 400 });
+        }),
+      );
+
+      const client = new PaprikaClient("test@example.com", "password");
+
+      try {
+        await client.saveMenuItems([makeMenuItem({ uid: MenuItemUidSchema.parse("MI-ERR") })]);
+        expect.fail("Should have thrown PaprikaAPIError");
+      } catch (error) {
+        expect(error).toBeInstanceOf(PaprikaAPIError);
+        expect((error as PaprikaAPIError).status).toBe(400);
+        expect((error as PaprikaAPIError).endpoint).toContain("menuitems");
       }
     });
   });

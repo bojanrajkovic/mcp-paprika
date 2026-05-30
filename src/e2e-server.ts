@@ -19,6 +19,8 @@ import { GroceryItemStore } from "./cache/grocery-item-store.js";
 import { GroceryListStore } from "./cache/grocery-list-store.js";
 import { MealStore } from "./cache/meal-store.js";
 import { MealTypeStore } from "./cache/meal-type-store.js";
+import { MenuStore } from "./cache/menu-store.js";
+import { MenuItemStore } from "./cache/menu-item-store.js";
 import { RecipeStore } from "./cache/recipe-store.js";
 import { PantryStore } from "./cache/pantry-store.js";
 import { buildMcpServer } from "./server/build.js";
@@ -197,6 +199,11 @@ async function main(): Promise<void> {
   const groceryIngredientStore = new GroceryIngredientStore();
   groceryIngredientStore.load([]);
 
+  const menuStore = new MenuStore();
+  menuStore.load([]);
+  const menuItemStore = new MenuItemStore();
+  menuItemStore.load([]);
+
   const app: AppContext = {
     client: client as unknown as AppContext["client"],
     cache,
@@ -208,6 +215,8 @@ async function main(): Promise<void> {
     groceryIngredientStore,
     mealStore: new MealStore(),
     mealTypeStore: new MealTypeStore(),
+    menuStore,
+    menuItemStore,
     vectorStore: null, // discover tool intentionally not registered (no embeddings in e2e)
     notifier,
     auth: null,

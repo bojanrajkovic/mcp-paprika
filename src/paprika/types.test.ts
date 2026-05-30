@@ -22,6 +22,12 @@ import {
   GroceryIngredientStoredSchema,
   MealSchema,
   mealToApiPayload,
+  MenuSchema,
+  MenuStoredSchema,
+  menuToApiPayload,
+  MenuItemSchema,
+  MenuItemStoredSchema,
+  menuItemToApiPayload,
   type RecipeUid,
   type CategoryUid,
   type RecipeEntry,
@@ -37,9 +43,13 @@ import {
   type PantrySyncResult,
   type GroceryListSyncResult,
   type GroceryItemSyncResult,
+  type MenuSyncResult,
+  type MenuItemSyncResult,
   type AnySyncResult,
   type DiffResult,
   type Meal,
+  type Menu,
+  type MenuItem,
 } from "./types.js";
 
 describe("Branded UID Schemas and Entry Schemas", () => {
@@ -575,6 +585,8 @@ describe("Domain Types", () => {
         | PantrySyncResult
         | GroceryListSyncResult
         | GroceryItemSyncResult
+        | MenuSyncResult
+        | MenuItemSyncResult
         ? true
         : never;
 
@@ -1342,5 +1354,167 @@ describe("meal-payload: mealToApiPayload round-trip via MealSchema", () => {
     const parsed: Meal = MealSchema.parse(deletedWireMeal);
     const payload = mealToApiPayload(parsed);
     expect(payload["deleted"]).toBe(true);
+  });
+});
+
+describe("menu-infra: Menu schema round-trips", () => {
+  const wireMenu = {
+    uid: "13A42BA9-4C06-4FDC-A5DB-AE9191DF5251",
+    name: "[mcp-cap] Test Menu 1",
+    days: 3,
+    order_flag: 2,
+    notes: "Weeknight plan",
+    deleted: false,
+  };
+
+  it("parses Menu wire JSON and transforms order_flag to orderFlag", () => {
+    const result = MenuSchema.safeParse(wireMenu);
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.uid).toBe("13A42BA9-4C06-4FDC-A5DB-AE9191DF5251");
+      expect(result.data.name).toBe("[mcp-cap] Test Menu 1");
+      expect(result.data.days).toBe(3);
+      expect(result.data.orderFlag).toBe(2);
+      expect(result.data.notes).toBe("Weeknight plan");
+      expect(result.data.deleted).toBe(false);
+    }
+  });
+
+  it("round-trips through MenuStoredSchema without loss", () => {
+    const wireResult = MenuSchema.safeParse(wireMenu);
+    expect(wireResult.success).toBe(true);
+    if (!wireResult.success) return;
+
+    const storedResult = MenuStoredSchema.safeParse(wireResult.data);
+    expect(storedResult.success).toBe(true);
+    if (storedResult.success) {
+      expect(storedResult.data).toEqual(wireResult.data);
+    }
+  });
+
+  it("defaults deleted to false when omitted from wire JSON", () => {
+    const { deleted: _deleted, ...withoutDeleted } = wireMenu;
+    const result = MenuSchema.safeParse(withoutDeleted);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.deleted).toBe(false);
+    }
+  });
+
+  it("menuToApiPayload round-trips through MenuSchema and produces 6 snake_case keys", () => {
+    const parsed: Menu = MenuSchema.parse(wireMenu);
+    const payload = menuToApiPayload(parsed);
+    const roundTripped: Menu = MenuSchema.parse(payload);
+    expect(roundTripped).toEqual(parsed);
+
+    const keys = Object.keys(payload);
+    expect(keys).toEqual(expect.arrayContaining(["uid", "name", "days", "order_flag", "notes", "deleted"]));
+    expect(keys).toHaveLength(6);
+    expect(payload).not.toHaveProperty("orderFlag");
+  });
+
+  it("propagates deleted: true back to the payload", () => {
+    const parsed: Menu = MenuSchema.parse({ ...wireMenu, deleted: true });
+    const payload = menuToApiPayload(parsed);
+    expect(payload["deleted"]).toBe(true);
+  });
+});
+
+describe("menu-infra: MenuItem schema round-trips", () => {
+  const wireItem = {
+    uid: "D7911C7C-0F3C-4A47-ACA3-2964D831EA69",
+    menu_uid: "13A42BA9-4C06-4FDC-A5DB-AE9191DF5251",
+    recipe_uid: "3AF6BDB7-4EA5-444C-A00A-1C5C989DE1E1-6735-000003A768881804",
+    name: "Bacon Broccoli Cheddar Crustless Quiche",
+    day: 1,
+    type_uid: "913D33C7FD39DB8C8C4514669B011F617D911345592CC77B309B812667959720",
+    order_flag: 0,
+    deleted: false,
+  };
+
+  it("parses MenuItem wire JSON and transforms snake_case keys to camelCase", () => {
+    const result = MenuItemSchema.safeParse(wireItem);
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.uid).toBe("D7911C7C-0F3C-4A47-ACA3-2964D831EA69");
+      expect(result.data.menuUid).toBe("13A42BA9-4C06-4FDC-A5DB-AE9191DF5251");
+      expect(result.data.recipeUid).toBe("3AF6BDB7-4EA5-444C-A00A-1C5C989DE1E1-6735-000003A768881804");
+      expect(result.data.name).toBe("Bacon Broccoli Cheddar Crustless Quiche");
+      expect(result.data.day).toBe(1);
+      expect(result.data.typeUid).toBe("913D33C7FD39DB8C8C4514669B011F617D911345592CC77B309B812667959720");
+      expect(result.data.orderFlag).toBe(0);
+      expect(result.data.deleted).toBe(false);
+    }
+  });
+
+  it("round-trips through MenuItemStoredSchema without loss", () => {
+    const wireResult = MenuItemSchema.safeParse(wireItem);
+    expect(wireResult.success).toBe(true);
+    if (!wireResult.success) return;
+
+    const storedResult = MenuItemStoredSchema.safeParse(wireResult.data);
+    expect(storedResult.success).toBe(true);
+    if (storedResult.success) {
+      expect(storedResult.data).toEqual(wireResult.data);
+    }
+  });
+
+  it("accepts null menu_uid (cascade-delete tombstone) and null recipe_uid", () => {
+    const result = MenuItemSchema.safeParse({ ...wireItem, menu_uid: null, recipe_uid: null });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.menuUid).toBeNull();
+      expect(result.data.recipeUid).toBeNull();
+    }
+  });
+
+  it("defaults deleted to false when omitted from wire JSON", () => {
+    const { deleted: _deleted, ...withoutDeleted } = wireItem;
+    const result = MenuItemSchema.safeParse(withoutDeleted);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.deleted).toBe(false);
+    }
+  });
+
+  it("menuItemToApiPayload round-trips through MenuItemSchema and produces 8 snake_case keys", () => {
+    const parsed: MenuItem = MenuItemSchema.parse(wireItem);
+    const payload = menuItemToApiPayload(parsed);
+    const roundTripped: MenuItem = MenuItemSchema.parse(payload);
+    expect(roundTripped).toEqual(parsed);
+
+    const keys = Object.keys(payload);
+    expect(keys).toEqual(
+      expect.arrayContaining(["uid", "menu_uid", "recipe_uid", "name", "day", "type_uid", "order_flag", "deleted"]),
+    );
+    expect(keys).toHaveLength(8);
+    expect(payload).not.toHaveProperty("menuUid");
+    expect(payload).not.toHaveProperty("recipeUid");
+    expect(payload).not.toHaveProperty("typeUid");
+    expect(payload).not.toHaveProperty("orderFlag");
+  });
+
+  it("passes null menu_uid / recipe_uid through the payload unchanged", () => {
+    const parsed: MenuItem = MenuItemSchema.parse({ ...wireItem, menu_uid: null, recipe_uid: null });
+    const payload = menuItemToApiPayload(parsed);
+    expect(payload["menu_uid"]).toBeNull();
+    expect(payload["recipe_uid"]).toBeNull();
+  });
+
+  it("MenuSyncResult and MenuItemSyncResult are members of AnySyncResult", () => {
+    const menuResult: MenuSyncResult = {
+      changeType: "menus",
+      changes: { added: [], updated: [], removedUids: [] },
+    };
+    const menuItemResult: MenuItemSyncResult = {
+      changeType: "menu-items",
+      changes: { added: [], updated: [], removedUids: [] },
+    };
+    const asAny: ReadonlyArray<AnySyncResult> = [menuResult, menuItemResult];
+
+    expect(asAny[0]!.changeType).toBe("menus");
+    expect(asAny[1]!.changeType).toBe("menu-items");
   });
 });

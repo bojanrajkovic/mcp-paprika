@@ -8,6 +8,8 @@ import type { GroceryItemStore } from "../cache/grocery-item-store.js";
 import type { GroceryListStore } from "../cache/grocery-list-store.js";
 import type { MealStore } from "../cache/meal-store.js";
 import type { MealTypeStore } from "../cache/meal-type-store.js";
+import type { MenuStore } from "../cache/menu-store.js";
+import type { MenuItemStore } from "../cache/menu-item-store.js";
 import type { PantryStore } from "../cache/pantry-store.js";
 import type { RecipeStore } from "../cache/recipe-store.js";
 import type { VectorStore } from "../features/vector-store.js";
@@ -34,6 +36,8 @@ export interface AppContext {
   readonly groceryIngredientStore: GroceryIngredientStore;
   readonly mealStore: MealStore;
   readonly mealTypeStore: MealTypeStore;
+  readonly menuStore: MenuStore;
+  readonly menuItemStore: MenuItemStore;
   readonly vectorStore: VectorStore | null;
   readonly notifier: Notifier;
   /** OAuth runtime state. null in stdio mode (auth not required). */

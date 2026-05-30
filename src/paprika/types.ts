@@ -471,6 +471,104 @@ export const MealTypeSchema = z
     }),
   );
 
+// Branded UID schemas for menu entities
+export const MenuUidSchema = z.string().min(1).brand("MenuUid");
+export type MenuUid = z.infer<typeof MenuUidSchema>;
+
+export const MenuItemUidSchema = z.string().min(1).brand("MenuItemUid");
+export type MenuItemUid = z.infer<typeof MenuItemUidSchema>;
+
+// MenuStoredSchema — validates camelCase JSON read back from disk. No transform.
+export const MenuStoredSchema = z.object({
+  uid: MenuUidSchema,
+  name: z.string(),
+  days: z.number().int().nonnegative(),
+  orderFlag: z.number().int(),
+  notes: z.string(),
+  deleted: z.boolean().optional().default(false),
+});
+
+export type Menu = z.infer<typeof MenuStoredSchema>;
+
+// MenuSchema — accepts snake_case wire format, transforms to camelCase Menu.
+export const MenuSchema = z
+  .object({
+    uid: MenuUidSchema,
+    name: z.string(),
+    days: z.number().int().nonnegative(),
+    order_flag: z.number().int(),
+    notes: z.string(),
+    deleted: z.boolean().optional().default(false),
+  })
+  .transform(({ order_flag, ...rest }): Menu => ({ ...rest, orderFlag: order_flag }));
+
+// menuToApiPayload — inverse of MenuSchema's read transform. Accepts the camelCase
+// Menu shape and emits the snake_case wire payload expected by the Paprika Cloud Sync API.
+export function menuToApiPayload(item: Readonly<Menu>): Record<string, unknown> {
+  return {
+    uid: item.uid,
+    name: item.name,
+    days: item.days,
+    order_flag: item.orderFlag,
+    notes: item.notes,
+    deleted: item.deleted,
+  };
+}
+
+// MenuItemStoredSchema — validates camelCase JSON read back from disk. No transform.
+// `menuUid` is nullable: a cascade-deleted menuitem has `menu_uid: null` on the wire
+// (the menu's soft-delete nulls the back-reference). `recipeUid` is nullable as a
+// defensive read — the wire format does not guarantee a recipe link exists.
+export const MenuItemStoredSchema = z.object({
+  uid: MenuItemUidSchema,
+  menuUid: z.string().nullable(),
+  recipeUid: z.string().nullable(),
+  name: z.string(),
+  day: z.number().int().nonnegative(),
+  typeUid: z.string(),
+  orderFlag: z.number().int(),
+  deleted: z.boolean().optional().default(false),
+});
+
+export type MenuItem = z.infer<typeof MenuItemStoredSchema>;
+
+// MenuItemSchema — accepts snake_case wire format, transforms to camelCase MenuItem.
+export const MenuItemSchema = z
+  .object({
+    uid: MenuItemUidSchema,
+    menu_uid: z.string().nullable(),
+    recipe_uid: z.string().nullable(),
+    name: z.string(),
+    day: z.number().int().nonnegative(),
+    type_uid: z.string(),
+    order_flag: z.number().int(),
+    deleted: z.boolean().optional().default(false),
+  })
+  .transform(
+    ({ menu_uid, recipe_uid, type_uid, order_flag, ...rest }): MenuItem => ({
+      ...rest,
+      menuUid: menu_uid,
+      recipeUid: recipe_uid,
+      typeUid: type_uid,
+      orderFlag: order_flag,
+    }),
+  );
+
+// menuItemToApiPayload — inverse of MenuItemSchema's read transform. Accepts the
+// camelCase MenuItem shape and emits the snake_case wire payload.
+export function menuItemToApiPayload(item: Readonly<MenuItem>): Record<string, unknown> {
+  return {
+    uid: item.uid,
+    menu_uid: item.menuUid,
+    recipe_uid: item.recipeUid,
+    name: item.name,
+    day: item.day,
+    type_uid: item.typeUid,
+    order_flag: item.orderFlag,
+    deleted: item.deleted,
+  };
+}
+
 // AuthResponseSchema - nested object, no transform needed
 export const AuthResponseSchema = z.object({
   result: z.object({
@@ -494,7 +592,7 @@ export type EntityChanges<T> = {
 
 // Closed set of entity types sync can produce. Adding a new entity type here
 // requires extending this union deliberately.
-export type SyncEntityType = "recipes" | "pantry" | "grocery-lists" | "grocery-items";
+export type SyncEntityType = "recipes" | "pantry" | "grocery-lists" | "grocery-items" | "menus" | "menu-items";
 
 // K is locked to SyncEntityType; T is the entity item type.
 export type SyncResult<K extends SyncEntityType, T extends object> = {
@@ -506,9 +604,17 @@ export type RecipeSyncResult = SyncResult<"recipes", Recipe>;
 export type PantrySyncResult = SyncResult<"pantry", PantryItem>;
 export type GroceryListSyncResult = SyncResult<"grocery-lists", GroceryList>;
 export type GroceryItemSyncResult = SyncResult<"grocery-items", GroceryItem>;
+export type MenuSyncResult = SyncResult<"menus", Menu>;
+export type MenuItemSyncResult = SyncResult<"menu-items", MenuItem>;
 
 // Union used as the sync:complete event payload.
-export type AnySyncResult = RecipeSyncResult | PantrySyncResult | GroceryListSyncResult | GroceryItemSyncResult;
+export type AnySyncResult =
+  | RecipeSyncResult
+  | PantrySyncResult
+  | GroceryListSyncResult
+  | GroceryItemSyncResult
+  | MenuSyncResult
+  | MenuItemSyncResult;
 
 export type DiffResult = {
   readonly added: ReadonlyArray<string>;

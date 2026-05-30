@@ -16,6 +16,8 @@ import type {
   GroceryIngredientUid,
   GroceryItemUid,
   GroceryListUid,
+  MenuItemUid,
+  MenuUid,
   PantryItemUid,
   RecipeEntry,
   RecipeUid,
@@ -30,9 +32,12 @@ import { GroceryItemStore } from "../cache/grocery-item-store.js";
 import { GroceryListStore } from "../cache/grocery-list-store.js";
 import { MealStore } from "../cache/meal-store.js";
 import { MealTypeStore } from "../cache/meal-type-store.js";
+import { MenuStore } from "../cache/menu-store.js";
+import { MenuItemStore } from "../cache/menu-item-store.js";
 import { makeGroceryList } from "../cache/__fixtures__/grocery-lists.js";
 import { makeGroceryItem } from "../cache/__fixtures__/grocery-items.js";
 import { makeGroceryIngredient } from "../cache/__fixtures__/grocery-ingredients.js";
+import { makeMenu, makeMenuItem } from "../cache/__fixtures__/menus.js";
 
 function makeMockNotifier(): Notifier {
   return {
@@ -67,6 +72,8 @@ function makeMockClient(): PaprikaClient {
     listGroceryIngredients: vi.fn().mockResolvedValue([]),
     listMeals: vi.fn().mockResolvedValue([]),
     listMealTypes: vi.fn().mockResolvedValue([]),
+    listMenus: vi.fn().mockResolvedValue([]),
+    listMenuItems: vi.fn().mockResolvedValue([]),
   });
 }
 
@@ -108,6 +115,16 @@ function makeMockCache(): DiskCacheRoot {
       remove: vi.fn().mockResolvedValue(undefined),
     },
     mealTypes: {
+      getAll: vi.fn().mockResolvedValue([]),
+      put: vi.fn().mockResolvedValue(undefined),
+      remove: vi.fn().mockResolvedValue(undefined),
+    },
+    menus: {
+      getAll: vi.fn().mockResolvedValue([]),
+      put: vi.fn().mockResolvedValue(undefined),
+      remove: vi.fn().mockResolvedValue(undefined),
+    },
+    menuItems: {
       getAll: vi.fn().mockResolvedValue([]),
       put: vi.fn().mockResolvedValue(undefined),
       remove: vi.fn().mockResolvedValue(undefined),
@@ -168,6 +185,8 @@ function makeTestContext(): AppContext {
     groceryIngredientStore: new GroceryIngredientStore(),
     mealStore: new MealStore(),
     mealTypeStore: new MealTypeStore(),
+    menuStore: new MenuStore(),
+    menuItemStore: new MenuItemStore(),
     vectorStore: null,
     notifier: makeMockNotifier(),
     auth: null,
@@ -245,14 +264,14 @@ describe("SyncEngine", () => {
     engine.start();
     engine.start(); // Second call should be ignored
 
-    // Wait for at least 12 sync:complete events (4 per cycle × 3 cycles)
+    // Wait for at least 18 sync:complete events (6 per cycle × 3 cycles)
     const syncCompleteEvents: unknown[] = [];
     engine.events.on("sync:complete", () => {
       syncCompleteEvents.push(1);
     });
 
     let attempts = 0;
-    while (syncCompleteEvents.length < 12 && attempts < 100) {
+    while (syncCompleteEvents.length < 18 && attempts < 100) {
       await new Promise((resolve) => setTimeout(resolve, 5));
       attempts++;
     }
@@ -287,7 +306,7 @@ describe("SyncEngine", () => {
     expect(typeof engine.events.off).toBe("function");
   });
 
-  it("AC2.2: sync:complete handler receives AnySyncResult (four events per cycle)", async () => {
+  it("AC2.2: sync:complete handler receives AnySyncResult (six events per cycle)", async () => {
     const receivedResults: AnySyncResult[] = [];
 
     engine.events.on("sync:complete", (result) => {
@@ -296,14 +315,14 @@ describe("SyncEngine", () => {
 
     engine.start();
 
-    // Poll until all four events (recipe, pantry, grocery-lists, grocery-items) are received
+    // Poll until all six events (recipe, pantry, grocery-lists, grocery-items, menus, menu-items) are received
     let attempts = 0;
-    while (receivedResults.length < 4 && attempts < 100) {
+    while (receivedResults.length < 6 && attempts < 100) {
       await new Promise((resolve) => setTimeout(resolve, 5));
       attempts++;
     }
 
-    expect(receivedResults).toHaveLength(4);
+    expect(receivedResults).toHaveLength(6);
     // First event: recipe result
     expect(receivedResults[0]).toEqual({
       changeType: "recipes",
@@ -322,6 +341,16 @@ describe("SyncEngine", () => {
     // Fourth event: grocery-items result
     expect(receivedResults[3]).toEqual({
       changeType: "grocery-items",
+      changes: { added: [], updated: [], removedUids: [] },
+    });
+    // Fifth event: menus result
+    expect(receivedResults[4]).toEqual({
+      changeType: "menus",
+      changes: { added: [], updated: [], removedUids: [] },
+    });
+    // Sixth event: menu-items result
+    expect(receivedResults[5]).toEqual({
+      changeType: "menu-items",
       changes: { added: [], updated: [], removedUids: [] },
     });
 
@@ -380,6 +409,8 @@ describe("syncOnce", () => {
       listGroceryIngredients: vi.fn().mockResolvedValue([]),
       listMeals: vi.fn().mockResolvedValue([]),
       listMealTypes: vi.fn().mockResolvedValue([]),
+      listMenus: vi.fn().mockResolvedValue([]),
+      listMenuItems: vi.fn().mockResolvedValue([]),
     });
   }
 
@@ -394,6 +425,8 @@ describe("syncOnce", () => {
     groceryLists?: Partial<DiskCacheRoot["groceryLists"]>;
     groceryItems?: Partial<DiskCacheRoot["groceryItems"]>;
     groceryIngredients?: Partial<DiskCacheRoot["groceryIngredients"]>;
+    menus?: Partial<DiskCacheRoot["menus"]>;
+    menuItems?: Partial<DiskCacheRoot["menuItems"]>;
     flush?: () => Promise<void>;
   };
 
@@ -444,6 +477,18 @@ describe("syncOnce", () => {
         getAll: vi.fn().mockResolvedValue([]),
         put: vi.fn().mockResolvedValue(undefined),
         remove: vi.fn().mockResolvedValue(undefined),
+      },
+      menus: {
+        getAll: vi.fn().mockResolvedValue([]),
+        put: vi.fn().mockResolvedValue(undefined),
+        remove: vi.fn().mockResolvedValue(undefined),
+        ...overrides?.menus,
+      },
+      menuItems: {
+        getAll: vi.fn().mockResolvedValue([]),
+        put: vi.fn().mockResolvedValue(undefined),
+        remove: vi.fn().mockResolvedValue(undefined),
+        ...overrides?.menuItems,
       },
       flush: overrides?.flush ?? vi.fn().mockResolvedValue(undefined),
     });
@@ -510,6 +555,8 @@ describe("syncOnce", () => {
       groceryIngredientStore: new GroceryIngredientStore(),
       mealStore: new MealStore(),
       mealTypeStore: new MealTypeStore(),
+      menuStore: new MenuStore(),
+      menuItemStore: new MenuItemStore(),
       vectorStore: null,
       notifier: { ...makeMockNotifierDefault(), ...notifierOverrides } as Notifier,
       auth: null,
@@ -638,8 +685,8 @@ describe("syncOnce", () => {
 
     await engine.syncOnce();
 
-    // Four events emitted: recipe, pantry, grocery-lists, grocery-items
-    expect(receivedResults).toHaveLength(4);
+    // Six events emitted: recipe, pantry, grocery-lists, grocery-items, menus, menu-items
+    expect(receivedResults).toHaveLength(6);
     const recipeResult = receivedResults[0]!;
     expect(recipeResult.changeType).toBe("recipes");
     expect(recipeResult.changes.added).toHaveLength(1);
@@ -651,7 +698,7 @@ describe("syncOnce", () => {
     expect(storeDelete).toHaveBeenCalledWith(removedUid);
   });
 
-  it("AC3.5: No changes detected emits sync:complete with empty changes (four events)", async () => {
+  it("AC3.5: No changes detected emits sync:complete with empty changes (six events)", async () => {
     const engine = makeSyncEngine();
 
     const receivedResults: AnySyncResult[] = [];
@@ -661,7 +708,7 @@ describe("syncOnce", () => {
 
     await engine.syncOnce();
 
-    expect(receivedResults).toHaveLength(4);
+    expect(receivedResults).toHaveLength(6);
     expect(receivedResults[0]).toEqual({
       changeType: "recipes",
       changes: { added: [], updated: [], removedUids: [] },
@@ -676,6 +723,14 @@ describe("syncOnce", () => {
     });
     expect(receivedResults[3]).toEqual({
       changeType: "grocery-items",
+      changes: { added: [], updated: [], removedUids: [] },
+    });
+    expect(receivedResults[4]).toEqual({
+      changeType: "menus",
+      changes: { added: [], updated: [], removedUids: [] },
+    });
+    expect(receivedResults[5]).toEqual({
+      changeType: "menu-items",
       changes: { added: [], updated: [], removedUids: [] },
     });
   });
@@ -843,6 +898,8 @@ describe("syncOnce", () => {
       groceryIngredientStore: new GroceryIngredientStore(),
       mealStore: new MealStore(),
       mealTypeStore: new MealTypeStore(),
+      menuStore: new MenuStore(),
+      menuItemStore: new MenuItemStore(),
       vectorStore: null,
       notifier,
       auth: null,
@@ -879,6 +936,8 @@ describe("syncOnce", () => {
       groceryIngredientStore: new GroceryIngredientStore(),
       mealStore: new MealStore(),
       mealTypeStore: new MealTypeStore(),
+      menuStore: new MenuStore(),
+      menuItemStore: new MenuItemStore(),
       vectorStore: null,
       notifier,
       auth: null,
@@ -1217,6 +1276,16 @@ describe("syncOnce", () => {
             put: vi.fn().mockResolvedValue(undefined),
             remove: vi.fn().mockResolvedValue(undefined),
           },
+          menus: {
+            getAll: vi.fn().mockResolvedValue([]),
+            put: vi.fn().mockResolvedValue(undefined),
+            remove: vi.fn().mockResolvedValue(undefined),
+          },
+          menuItems: {
+            getAll: vi.fn().mockResolvedValue([]),
+            put: vi.fn().mockResolvedValue(undefined),
+            remove: vi.fn().mockResolvedValue(undefined),
+          },
           flush: vi.fn().mockResolvedValue(undefined),
         }),
         store: fromAny({
@@ -1237,6 +1306,8 @@ describe("syncOnce", () => {
         groceryIngredientStore: new GroceryIngredientStore(),
         mealStore: new MealStore(),
         mealTypeStore: new MealTypeStore(),
+        menuStore: new MenuStore(),
+        menuItemStore: new MenuItemStore(),
         vectorStore: null,
         notifier: makeMockNotifier(),
         auth: null,
@@ -1303,6 +1374,16 @@ describe("syncOnce", () => {
             put: vi.fn().mockResolvedValue(undefined),
             remove: vi.fn().mockResolvedValue(undefined),
           },
+          menus: {
+            getAll: vi.fn().mockResolvedValue([]),
+            put: vi.fn().mockResolvedValue(undefined),
+            remove: vi.fn().mockResolvedValue(undefined),
+          },
+          menuItems: {
+            getAll: vi.fn().mockResolvedValue([]),
+            put: vi.fn().mockResolvedValue(undefined),
+            remove: vi.fn().mockResolvedValue(undefined),
+          },
           flush: vi.fn().mockResolvedValue(undefined),
         }),
         store: fromAny({
@@ -1323,6 +1404,8 @@ describe("syncOnce", () => {
         groceryIngredientStore: new GroceryIngredientStore(),
         mealStore: new MealStore(),
         mealTypeStore: new MealTypeStore(),
+        menuStore: new MenuStore(),
+        menuItemStore: new MenuItemStore(),
         vectorStore: null,
         notifier: makeMockNotifier(),
         auth: null,
@@ -1489,6 +1572,8 @@ describe("syncOnce", () => {
         groceryIngredientStore: new GroceryIngredientStore(),
         mealStore: new MealStore(),
         mealTypeStore: new MealTypeStore(),
+        menuStore: new MenuStore(),
+        menuItemStore: new MenuItemStore(),
         vectorStore: null,
         notifier: makeMockNotifier(),
         auth: null,
@@ -1530,6 +1615,8 @@ describe("syncOnce", () => {
         groceryIngredientStore: new GroceryIngredientStore(),
         mealStore: new MealStore(),
         mealTypeStore: new MealTypeStore(),
+        menuStore: new MenuStore(),
+        menuItemStore: new MenuItemStore(),
         vectorStore: null,
         notifier: makeMockNotifier(),
         auth: null,
@@ -1571,6 +1658,8 @@ describe("syncOnce", () => {
         groceryIngredientStore: new GroceryIngredientStore(),
         mealStore: new MealStore(),
         mealTypeStore: new MealTypeStore(),
+        menuStore: new MenuStore(),
+        menuItemStore: new MenuItemStore(),
         vectorStore: null,
         notifier: makeMockNotifier(),
         auth: null,
@@ -1615,6 +1704,8 @@ describe("syncOnce", () => {
         groceryIngredientStore: new GroceryIngredientStore(),
         mealStore: new MealStore(),
         mealTypeStore: new MealTypeStore(),
+        menuStore: new MenuStore(),
+        menuItemStore: new MenuItemStore(),
         vectorStore: null,
         notifier: makeMockNotifier(),
         auth: null,
@@ -1660,6 +1751,8 @@ describe("syncOnce", () => {
         groceryIngredientStore: new GroceryIngredientStore(),
         mealStore: new MealStore(),
         mealTypeStore: new MealTypeStore(),
+        menuStore: new MenuStore(),
+        menuItemStore: new MenuItemStore(),
         vectorStore: null,
         notifier: makeMockNotifier(),
         auth: null,
@@ -1700,6 +1793,8 @@ describe("syncOnce", () => {
         groceryIngredientStore: new GroceryIngredientStore(),
         mealStore: new MealStore(),
         mealTypeStore: new MealTypeStore(),
+        menuStore: new MenuStore(),
+        menuItemStore: new MenuItemStore(),
         vectorStore: null,
         notifier: makeMockNotifier(),
         auth: null,
@@ -1741,6 +1836,8 @@ describe("syncOnce", () => {
         groceryIngredientStore: new GroceryIngredientStore(),
         mealStore: new MealStore(),
         mealTypeStore: new MealTypeStore(),
+        menuStore: new MenuStore(),
+        menuItemStore: new MenuItemStore(),
         vectorStore: null,
         notifier: makeMockNotifier(),
         auth: null,
@@ -1784,6 +1881,8 @@ describe("syncOnce", () => {
         groceryIngredientStore: new GroceryIngredientStore(),
         mealStore: new MealStore(),
         mealTypeStore: new MealTypeStore(),
+        menuStore: new MenuStore(),
+        menuItemStore: new MenuItemStore(),
         vectorStore: null,
         notifier: makeMockNotifier(),
         auth: null,
@@ -1868,6 +1967,117 @@ describe("syncOnce", () => {
     });
   });
 
+  describe("menu-sync: sync:complete event emission for menu entities", () => {
+    it("sync:complete emits MenuSyncResult with correct added/updated/removedUids", async () => {
+      const newMenu = makeMenu({ uid: "menu-new" as MenuUid });
+      const changedMenu = makeMenu({ uid: "menu-changed" as MenuUid, name: "Updated Plan" });
+      const cachedChangedMenu = makeMenu({ uid: "menu-changed" as MenuUid, name: "Old Plan" });
+      const orphanMenu = makeMenu({ uid: "menu-orphan" as MenuUid });
+
+      const engine = makeSyncEngine(
+        {
+          listMenus: vi.fn().mockResolvedValue([newMenu, changedMenu]),
+        },
+        {
+          menus: {
+            getAll: vi.fn().mockResolvedValue([cachedChangedMenu, orphanMenu]),
+            put: vi.fn().mockResolvedValue(undefined),
+            remove: vi.fn().mockResolvedValue(undefined),
+          },
+        },
+      );
+
+      const receivedResults: AnySyncResult[] = [];
+      engine.events.on("sync:complete", (result) => receivedResults.push(result));
+      await engine.syncOnce();
+
+      const menuResult = receivedResults.find((r) => r.changeType === "menus");
+      expect(menuResult).toBeDefined();
+      expect(menuResult!.changes.added).toHaveLength(1);
+      expect(menuResult!.changes.added[0]).toEqual(newMenu);
+      expect(menuResult!.changes.updated).toHaveLength(1);
+      expect(menuResult!.changes.updated[0]).toEqual(changedMenu);
+      expect(menuResult!.changes.removedUids).toHaveLength(1);
+      expect(menuResult!.changes.removedUids[0]).toBe(orphanMenu.uid);
+    });
+
+    it("sync:complete emits MenuItemSyncResult with correct added/updated/removedUids", async () => {
+      const newItem = makeMenuItem({ uid: "mi-new" as MenuItemUid });
+      const changedItem = makeMenuItem({ uid: "mi-changed" as MenuItemUid, name: "Updated Item" });
+      const cachedChangedItem = makeMenuItem({ uid: "mi-changed" as MenuItemUid, name: "Old Item" });
+      const orphanItem = makeMenuItem({ uid: "mi-orphan" as MenuItemUid });
+
+      const engine = makeSyncEngine(
+        {
+          listMenuItems: vi.fn().mockResolvedValue([newItem, changedItem]),
+        },
+        {
+          menuItems: {
+            getAll: vi.fn().mockResolvedValue([cachedChangedItem, orphanItem]),
+            put: vi.fn().mockResolvedValue(undefined),
+            remove: vi.fn().mockResolvedValue(undefined),
+          },
+        },
+      );
+
+      const receivedResults: AnySyncResult[] = [];
+      engine.events.on("sync:complete", (result) => receivedResults.push(result));
+      await engine.syncOnce();
+
+      const itemResult = receivedResults.find((r) => r.changeType === "menu-items");
+      expect(itemResult).toBeDefined();
+      expect(itemResult!.changes.added).toHaveLength(1);
+      expect(itemResult!.changes.added[0]).toEqual(newItem);
+      expect(itemResult!.changes.updated).toHaveLength(1);
+      expect(itemResult!.changes.updated[0]).toEqual(changedItem);
+      expect(itemResult!.changes.removedUids).toHaveLength(1);
+      expect(itemResult!.changes.removedUids[0]).toBe(orphanItem.uid);
+    });
+
+    it("menuStore.setLastSyncedAt is invoked during menu sync (afterLoad hook)", async () => {
+      const engine = makeSyncEngine();
+      const ctx = (engine as unknown as { _context: AppContext })._context;
+      const spy = vi.spyOn(ctx.menuStore, "setLastSyncedAt");
+
+      await engine.syncOnce();
+
+      expect(spy).toHaveBeenCalled();
+    });
+
+    it("menu sync failure is best-effort and does not surface as sync:error", async () => {
+      const engine = makeSyncEngine({
+        listMenus: vi.fn().mockRejectedValue(new Error("menus endpoint 503")),
+      });
+
+      let receivedError: Error | null = null;
+      engine.events.on("sync:error", (error) => {
+        receivedError = error;
+      });
+
+      const completeEvents: Array<string> = [];
+      engine.events.on("sync:complete", (result) => completeEvents.push(result.changeType));
+
+      await expect(engine.syncOnce()).resolves.toBeUndefined();
+      expect(receivedError).toBeNull();
+      // Core events still fire; menu/menu-item events still emit (with empty changes)
+      expect(completeEvents).toEqual(
+        expect.arrayContaining(["recipes", "pantry", "grocery-lists", "grocery-items", "menus", "menu-items"]),
+      );
+    });
+
+    it("sweepPending is called for both menu store and menu item store during finalization", async () => {
+      const engine = makeSyncEngine();
+      const ctx = (engine as unknown as { _context: AppContext })._context;
+      const sweepMenuSpy = vi.spyOn(ctx.menuStore, "sweepPending");
+      const sweepMenuItemSpy = vi.spyOn(ctx.menuItemStore, "sweepPending");
+
+      await engine.syncOnce();
+
+      expect(sweepMenuSpy).toHaveBeenCalledOnce();
+      expect(sweepMenuItemSpy).toHaveBeenCalledOnce();
+    });
+  });
+
   describe("grocery-sweep: sweepPending for grocery stores", () => {
     it("grocery-sweep.AC3.7: sweepPending is called for both grocery list store and grocery item store during finalization", async () => {
       const groceryListStore = new GroceryListStore();
@@ -1886,6 +2096,8 @@ describe("syncOnce", () => {
         groceryIngredientStore: new GroceryIngredientStore(),
         mealStore: new MealStore(),
         mealTypeStore: new MealTypeStore(),
+        menuStore: new MenuStore(),
+        menuItemStore: new MenuItemStore(),
         vectorStore: null,
         notifier: makeMockNotifier(),
         auth: null,
@@ -1930,6 +2142,8 @@ describe("syncOnce", () => {
         groceryIngredientStore: new GroceryIngredientStore(),
         mealStore: new MealStore(),
         mealTypeStore: new MealTypeStore(),
+        menuStore: new MenuStore(),
+        menuItemStore: new MenuItemStore(),
         vectorStore: null,
         notifier: makeMockNotifier(),
         auth: null,
@@ -1970,6 +2184,8 @@ describe("syncOnce", () => {
         groceryIngredientStore: new GroceryIngredientStore(),
         mealStore: new MealStore(),
         mealTypeStore: new MealTypeStore(),
+        menuStore: new MenuStore(),
+        menuItemStore: new MenuItemStore(),
         vectorStore: null,
         notifier: makeMockNotifier(),
         auth: null,
@@ -2010,6 +2226,8 @@ describe("syncOnce", () => {
         groceryIngredientStore: new GroceryIngredientStore(),
         mealStore: new MealStore(),
         mealTypeStore: new MealTypeStore(),
+        menuStore: new MenuStore(),
+        menuItemStore: new MenuItemStore(),
         vectorStore: null,
         notifier: makeMockNotifier(),
         auth: null,
@@ -2050,6 +2268,8 @@ describe("syncOnce", () => {
         groceryIngredientStore: new GroceryIngredientStore(),
         mealStore: new MealStore(),
         mealTypeStore: new MealTypeStore(),
+        menuStore: new MenuStore(),
+        menuItemStore: new MenuItemStore(),
         vectorStore: null,
         notifier: makeMockNotifier(),
         auth: null,
@@ -2094,6 +2314,8 @@ describe("syncOnce", () => {
         groceryIngredientStore,
         mealStore: new MealStore(),
         mealTypeStore: new MealTypeStore(),
+        menuStore: new MenuStore(),
+        menuItemStore: new MenuItemStore(),
         vectorStore: null,
         notifier: makeMockNotifier(),
         auth: null,
@@ -2139,6 +2361,8 @@ describe("syncOnce", () => {
         groceryIngredientStore: new GroceryIngredientStore(),
         mealStore: new MealStore(),
         mealTypeStore: new MealTypeStore(),
+        menuStore: new MenuStore(),
+        menuItemStore: new MenuItemStore(),
         vectorStore: null,
         notifier: makeMockNotifier(),
         auth: null,
@@ -2162,14 +2386,16 @@ describe("syncOnce", () => {
       engine.events.on("sync:complete", (result) => receivedResults.push(result));
       await engine.syncOnce();
 
-      // Should have exactly 4 events (recipes, pantry, grocery-lists, grocery-items) — NOT ingredients
-      expect(receivedResults).toHaveLength(4);
+      // Should have exactly 6 events (recipes, pantry, grocery-lists, grocery-items, menus, menu-items) — NOT ingredients
+      expect(receivedResults).toHaveLength(6);
       const changeTypes = receivedResults.map((r) => r.changeType);
       expect(changeTypes).not.toContain("grocery-ingredients");
       expect(changeTypes).toContain("recipes");
       expect(changeTypes).toContain("pantry");
       expect(changeTypes).toContain("grocery-lists");
       expect(changeTypes).toContain("grocery-items");
+      expect(changeTypes).toContain("menus");
+      expect(changeTypes).toContain("menu-items");
     });
   });
 
@@ -2321,6 +2547,8 @@ describe("syncOnce", () => {
         groceryIngredientStore: new GroceryIngredientStore(),
         mealStore: new MealStore(),
         mealTypeStore: new MealTypeStore(),
+        menuStore: new MenuStore(),
+        menuItemStore: new MenuItemStore(),
         vectorStore: null,
         notifier: makeMockNotifier(),
         auth: null,
@@ -2368,6 +2596,8 @@ describe("syncOnce", () => {
         groceryIngredientStore: new GroceryIngredientStore(),
         mealStore: new MealStore(),
         mealTypeStore: new MealTypeStore(),
+        menuStore: new MenuStore(),
+        menuItemStore: new MenuItemStore(),
         vectorStore: null,
         notifier: makeMockNotifier(),
         auth: null,
@@ -2417,6 +2647,8 @@ describe("syncOnce", () => {
         groceryIngredientStore: realGroceryIngredientStore,
         mealStore: new MealStore(),
         mealTypeStore: new MealTypeStore(),
+        menuStore: new MenuStore(),
+        menuItemStore: new MenuItemStore(),
         vectorStore: null,
         notifier: makeMockNotifier(),
         auth: null,
