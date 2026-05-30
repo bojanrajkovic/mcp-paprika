@@ -114,6 +114,38 @@ describe("p2-recipe-crud: create_recipe tool", () => {
       expect(callArgs?.rating).toBe(0);
     });
 
+    it("p2-recipe-crud.AC2.3b: created is emitted in Paprika wire format, not ISO-8601 (regression #159)", async () => {
+      const store = new RecipeStore();
+      store.load([makeRecipe()], []);
+
+      const mockSaveRecipe = vi.fn();
+      const mockNotifySync = vi.fn().mockResolvedValue(undefined);
+      const mockPutRecipe = vi.fn();
+      const mockFlush = vi.fn().mockResolvedValue(undefined);
+
+      mockSaveRecipe.mockResolvedValue(makeRecipe());
+
+      const { server, callTool } = makeTestServer();
+      const ctx = makeCtx(store, server, {
+        client: fromAny({ saveRecipe: mockSaveRecipe, notifySync: mockNotifySync }),
+        cache: fromAny({ recipes: { put: mockPutRecipe }, flush: mockFlush }),
+      });
+      registerCreateTool(server, ctx);
+
+      await callTool("create_recipe", {
+        name: "Dated Recipe",
+        ingredients: "one ingredient",
+        directions: "do it",
+      });
+
+      // Paprika's /sync/recipe/ endpoint rejects ISO-8601 `created` with HTTP 500;
+      // it requires the wire format `yyyy-MM-dd HH:mm:ss` (no T, no Z, no millis).
+      const callArgs = mockSaveRecipe.mock.calls[0]?.[0];
+      expect(callArgs?.created).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/);
+      expect(callArgs?.created).not.toContain("T");
+      expect(callArgs?.created).not.toContain("Z");
+    });
+
     it("p2-recipe-crud.AC2.4: category names are resolved to UIDs", async () => {
       const category = makeCategory({ name: "Soups" });
       const store = new RecipeStore();
