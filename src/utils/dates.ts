@@ -28,35 +28,61 @@ export function toWireDateFormat(dt: DateTime): string {
 }
 
 /**
- * Parse a user-supplied date or datetime and return the user's intended local
- * calendar day as a Paprika meal-wire string at midnight ("yyyy-MM-dd 00:00:00").
+ * Parse a user-supplied date or datetime into the `DateTime` representing the
+ * user's intended local calendar day. The day-extracting core that both
+ * `parseInputMealDate` (wire string) and meal-planner date arithmetic build on.
  *
  * For inputs that carry a UTC offset ("2026-06-15T22:00:00-08:00") this honors
  * that offset's calendar day rather than converting to UTC first — so the user
- * who typed June 15 sees June 15 stored, regardless of whether 22:00 in their
- * zone crosses the UTC date boundary. For bare datetimes and date-only inputs
- * the behavior is unchanged (the day part is taken as-is).
- *
- * Use this for meal `date` fields specifically. The meal planner is day-
- * granular, and the wire string functions as a calendar-day label rather than
- * a UTC instant — Paprika.app stores meals at midnight per the wire captures
- * (`docs/wire-captures/meals.har.json`) and `list_meal_history` groups by
- * `date.slice(0, 10)`.
+ * who typed June 15 sees June 15, regardless of whether 22:00 in their zone
+ * crosses the UTC date boundary. For bare datetimes and date-only inputs the
+ * day part is taken as-is (parsed as UTC by convention). The returned DateTime
+ * keeps its parsed zone; render it with `toMealWireDate`, which formats in that
+ * zone so the calendar day is preserved.
  *
  * Returns null when the input doesn't parse as any supported format.
  */
-export function parseInputMealDate(input: string): string | null {
+export function parseInputMealDay(input: string): DateTime | null {
   // Same explicit-format priority as parseInputDate; these formats carry no
   // zone information so we treat them as UTC by convention.
   for (const fmt of ["yyyy-MM-dd HH:mm:ss", "yyyy-MM-dd'T'HH:mm:ss", "yyyy-MM-dd"]) {
     const dt = DateTime.fromFormat(input, fmt, { zone: "utc" });
-    if (dt.isValid) return `${dt.toFormat("yyyy-MM-dd")} 00:00:00`;
+    if (dt.isValid) return dt;
   }
   // ISO 8601 fallback. `setZone: true` honors the input's embedded offset
-  // (e.g. `-08:00`) so the date portion below reflects that zone rather than
-  // a UTC-shifted day. For inputs without an offset (bare datetimes) the
-  // earlier `yyyy-MM-dd'T'HH:mm:ss` format match catches them first.
+  // (e.g. `-08:00`) so the rendered date reflects that zone rather than a
+  // UTC-shifted day. For inputs without an offset (bare datetimes) the earlier
+  // `yyyy-MM-dd'T'HH:mm:ss` format match catches them first.
   const iso = DateTime.fromISO(input, { setZone: true });
-  if (iso.isValid) return `${iso.toFormat("yyyy-MM-dd")} 00:00:00`;
+  if (iso.isValid) return iso;
   return null;
+}
+
+/**
+ * Render a `DateTime` as a Paprika meal-wire string at midnight
+ * ("yyyy-MM-dd 00:00:00"). Formats in the DateTime's own zone (NOT UTC) so the
+ * calendar day from `parseInputMealDay` is preserved — the meal planner is
+ * day-granular and the wire string functions as a calendar-day label rather
+ * than a UTC instant (Paprika.app stores meals at midnight per the wire
+ * captures, `docs/wire-captures/meals.har.json`). Use this for day arithmetic
+ * too: `toMealWireDate(startDay.plus({ days: offset }))` is DST-free because the
+ * time-of-day is discarded.
+ */
+export function toMealWireDate(dt: DateTime): string {
+  return `${dt.toFormat("yyyy-MM-dd")} 00:00:00`;
+}
+
+/**
+ * Parse a user-supplied date or datetime and return the user's intended local
+ * calendar day as a Paprika meal-wire string at midnight ("yyyy-MM-dd 00:00:00").
+ * Thin composition of `parseInputMealDay` + `toMealWireDate` — the single source
+ * of truth for "user date input → stored meal `date`". Used by `add_meals` /
+ * `update_meal`; `list_meal_history` instead uses `parseInputDate` +
+ * `toWireDateFormat` for its UTC-anchored since/until comparisons.
+ *
+ * Returns null when the input doesn't parse as any supported format.
+ */
+export function parseInputMealDate(input: string): string | null {
+  const dt = parseInputMealDay(input);
+  return dt === null ? null : toMealWireDate(dt);
 }

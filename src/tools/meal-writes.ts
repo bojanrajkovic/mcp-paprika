@@ -9,6 +9,7 @@ import { textResult } from "./helpers.js";
 import {
   commitMeal,
   commitMealsBatch,
+  makeMealOrderFlagAssigner,
   mealStartGuard,
   mealTypeSpecSchema,
   renderMealCard,
@@ -197,34 +198,25 @@ export function registerAddMealsTool(server: McpServer, ctx: ServerContext): voi
             return textResult(`${header}\n\n${errors.join("\n")}`);
           }
 
-          // ----- Stage 2: assign order_flag per (date, typeUid) bucket -----
-          // The Map caches the next free flag per bucket so multiple items in the same
-          // batch sharing a bucket get sequential flags (the bucket state in MealStore
-          // does not change between iterations — none have been saved yet).
-          const nextFlag = new Map<string, number>();
-          const bucketKey = (date: string, typeUid: string | null): string => `${date}|${typeUid ?? "null"}`;
+          // ----- Stage 2: assign order_flag per calendar DATE -----
+          // order_flag sequences per date across ALL meal types, not per
+          // (date, type) — see makeMealOrderFlagAssigner for the wire-capture
+          // rationale. The assigner seeds each date from the store and increments
+          // within the batch so same-date items get sequential flags.
+          const assignFlag = makeMealOrderFlagAssigner(ctx);
 
-          const builtItems: Array<Meal> = resolved.map((r) => {
-            const key = bucketKey(r.normalizedDate, r.typeUid);
-            let flag = nextFlag.get(key);
-            if (flag === undefined) {
-              flag = (ctx.mealStore.getMaxOrderFlagOn(r.normalizedDate, r.typeUid) ?? -1) + 1;
-            }
-            nextFlag.set(key, flag + 1);
-
-            return {
-              uid: MealUidSchema.parse(crypto.randomUUID().toUpperCase()),
-              recipeUid: r.recipeUid,
-              name: r.resolvedName,
-              date: r.normalizedDate,
-              type: r.typeInteger,
-              typeUid: r.typeUid,
-              orderFlag: flag,
-              isIngredient: false,
-              scale: r.scale,
-              deleted: false,
-            };
-          });
+          const builtItems: Array<Meal> = resolved.map((r) => ({
+            uid: MealUidSchema.parse(crypto.randomUUID().toUpperCase()),
+            recipeUid: r.recipeUid,
+            name: r.resolvedName,
+            date: r.normalizedDate,
+            type: r.typeInteger,
+            typeUid: r.typeUid,
+            orderFlag: assignFlag(r.normalizedDate),
+            isIngredient: false,
+            scale: r.scale,
+            deleted: false,
+          }));
 
           // ----- Stage 3: single batch POST -----
           let savedItems: ReadonlyArray<Meal>;
@@ -453,17 +445,15 @@ export function registerUpdateMealTool(server: McpServer, ctx: ServerContext): v
             newName = nameOp.name;
           }
 
-          // When `date` or `type` changes, the meal is moving to a different planner
-          // bucket. Reassign `orderFlag` using `getMaxOrderFlagOn + 1` (same convention
-          // as add_meals at line 223) so the meal doesn't collide with an existing
-          // meal that already holds the old flag in the destination bucket. Same-
-          // bucket updates preserve the original flag — keep-the-position semantics.
+          // order_flag sequences per calendar DATE (all meal types on a day share
+          // one sequence — see makeMealOrderFlagAssigner). When `date` changes, the
+          // meal moves to the destination date's sequence; reassign to that date's
+          // max+1 so it doesn't collide with a meal already holding the old flag
+          // there. A type change WITHOUT a date change stays in the same date
+          // sequence, so the flag is preserved — keep-the-position semantics.
           const destDate = normalizedDate ?? existing.date;
-          const destTypeUid = typeUid !== undefined ? typeUid : existing.typeUid;
-          const bucketChanged = destDate !== existing.date || destTypeUid !== existing.typeUid;
-          const newOrderFlag = bucketChanged
-            ? (ctx.mealStore.getMaxOrderFlagOn(destDate, destTypeUid) ?? -1) + 1
-            : existing.orderFlag;
+          const dateChanged = destDate !== existing.date;
+          const newOrderFlag = dateChanged ? (ctx.mealStore.getMaxOrderFlagOn(destDate) ?? -1) + 1 : existing.orderFlag;
 
           // Spread-merge — mirrors pantry-update.ts lines 95-104
           const updated: Meal = {

@@ -93,6 +93,32 @@ export function resolveMealTypeSpec(
   return { ok: true, resolved };
 }
 
+/**
+ * Builds a stateful, per-date `order_flag` assigner for a batch of new meals.
+ *
+ * `order_flag` sequences PER CALENDAR DATE — all meal types on a given day share
+ * one sequence, NOT a separate sequence per (date, type). The wire capture is
+ * decisive: two same-date meals of different types post as `order_flag` 0 and 1,
+ * while two same-type meals on different dates both post as 0
+ * (`docs/wire-captures/meals.har.json`). `MealStore.getMaxOrderFlagOn(date)`
+ * seeds each date from the persisted store state; the returned closure then
+ * hands out an increasing counter per date so multiple meals in ONE batch that
+ * share a date get sequential flags. A per-batch counter is required because the
+ * built meals are not yet in the store — without it, two same-date items in one
+ * batch would both read the same seed and collide.
+ *
+ * Shared by `add_meals` (Stage 2) and `add_menu_to_planner` so the per-date
+ * sequencing lives in exactly one tested place.
+ */
+export function makeMealOrderFlagAssigner(ctx: ServerContext): (date: string) => number {
+  const next = new Map<string, number>();
+  return (date) => {
+    const flag = next.get(date) ?? (ctx.mealStore.getMaxOrderFlagOn(date) ?? -1) + 1;
+    next.set(date, flag + 1);
+    return flag;
+  };
+}
+
 export function mealStartGuard(ctx: ServerContext): Result<void, ReturnType<typeof textResult>> {
   // Both stores must be synced. The mealtype store is required by the type DU
   // resolver (`resolveMealTypeSpec`, used by both `meal-writes.ts` and

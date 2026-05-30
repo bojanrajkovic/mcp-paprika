@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { DateTime } from "luxon";
-import { parseInputDate, parseInputMealDate, toWireDateFormat } from "./dates.js";
+import { parseInputDate, parseInputMealDate, parseInputMealDay, toMealWireDate, toWireDateFormat } from "./dates.js";
 
 describe("parseInputDate and toWireDateFormat", () => {
   describe("parseInputDate — Paprika wire format (yyyy-MM-dd HH:mm:ss)", () => {
@@ -128,6 +128,55 @@ describe("parseInputDate and toWireDateFormat", () => {
       expect(parseInputMealDate("not a date")).toBeNull();
       expect(parseInputMealDate("")).toBeNull();
       expect(parseInputMealDate("2026-13-99")).toBeNull();
+    });
+  });
+
+  describe("parseInputMealDay + toMealWireDate", () => {
+    it("parseInputMealDay returns a DateTime carrying the typed calendar day", () => {
+      const dt = parseInputMealDay("2026-06-15");
+      expect(dt).not.toBeNull();
+      expect(dt!.year).toBe(2026);
+      expect(dt!.month).toBe(6);
+      expect(dt!.day).toBe(15);
+    });
+
+    it("parseInputMealDay returns null for unparseable input", () => {
+      expect(parseInputMealDay("not a date")).toBeNull();
+      expect(parseInputMealDay("")).toBeNull();
+      expect(parseInputMealDay("2026-13-99")).toBeNull();
+    });
+
+    it("toMealWireDate renders any DateTime at midnight in its own zone", () => {
+      const dt = parseInputMealDay("2026-06-15 18:30:45");
+      expect(toMealWireDate(dt!)).toBe("2026-06-15 00:00:00");
+    });
+
+    it("preserves an offset-bearing input's calendar day (renders in the embedded zone, not UTC)", () => {
+      // 2026-06-15T22:00:00-08:00 is 2026-06-16T06:00:00Z. toMealWireDate must
+      // format in the input's own zone so the typed June 15 survives.
+      const dt = parseInputMealDay("2026-06-15T22:00:00-08:00");
+      expect(toMealWireDate(dt!)).toBe("2026-06-15 00:00:00");
+    });
+
+    it("day arithmetic is DST-free: start + (N−1) days lands on the right calendar day", () => {
+      // A 3-day span starting 2026-05-27 → day 1 = 05-27, day 3 = 05-29 (mirrors
+      // the add-menu-to-planner wire capture).
+      const start = parseInputMealDay("2026-05-27");
+      expect(start).not.toBeNull();
+      expect(toMealWireDate(start!.plus({ days: 0 }))).toBe("2026-05-27 00:00:00");
+      expect(toMealWireDate(start!.plus({ days: 2 }))).toBe("2026-05-29 00:00:00");
+    });
+
+    it("parseInputMealDate equals toMealWireDate(parseInputMealDay(...)) — composition holds", () => {
+      for (const input of [
+        "2026-06-15",
+        "2026-06-15 18:30:45",
+        "2026-06-15T22:00:00-08:00",
+        "2026-06-15T02:00:00+09:00",
+      ]) {
+        const viaDay = parseInputMealDay(input);
+        expect(parseInputMealDate(input)).toBe(viaDay === null ? null : toMealWireDate(viaDay));
+      }
     });
   });
 });
