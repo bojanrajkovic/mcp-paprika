@@ -221,7 +221,11 @@ export function registerDeleteMenuTool(server: McpServer, ctx: ServerContext): v
           // failure to tombstone the menu leaves orphaned-but-visible items the next
           // sync can reconcile rather than a parent with invisible children.
           if (items.length > 0) {
-            const trashedItems = items.map((item) => ({ ...item, deleted: true }));
+            // Null the back-reference on each tombstone: the Paprika app's cascade
+            // posts menu_uid: null when a menu's soft-delete removes its items (see
+            // docs/wire-captures/menus.har.json "cascade delete menuitem after menu
+            // deletion"). This is the case MenuItem.menuUid is nullable for.
+            const trashedItems = items.map((item) => ({ ...item, menuUid: null, deleted: true }));
             try {
               const savedItems = await ctx.client.saveMenuItems(trashedItems);
               await commitMenuItemsBatch(ctx, savedItems);
