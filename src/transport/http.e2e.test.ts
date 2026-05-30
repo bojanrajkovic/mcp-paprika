@@ -17,7 +17,7 @@
 
 import { randomBytes, createHash } from "node:crypto";
 
-import { http, HttpResponse } from "msw";
+import { failLoudOnUpstream, paprikaSyncMockHandlers } from "../__fixtures__/paprika-msw.js";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { fromAny } from "@total-typescript/shoehorn";
@@ -35,27 +35,15 @@ import { SILENT_LOGGING_CONFIG } from "../tools/tool-test-utils.js";
 const OIDC_ISSUER = "https://accounts.google.com";
 const PUBLIC_URL = "https://m.example.test";
 const ALLOWED_EMAIL = "user@x.com";
-const PAPRIKA_AUTH_URL = "https://paprikaapp.com/api/v1/account/login/";
-const PAPRIKA_API_BASE = "https://paprikaapp.com/api/v2/sync";
 
 // ============================================================================
 // MSW server (process-level, shared across all tests)
 // ============================================================================
 
-const msw = useMswServer([], { onUnhandledRequest: "bypass" });
-
-// ============================================================================
-// Paprika API mock handlers
-// ============================================================================
-
-function paprikaMockHandlers() {
-  return [
-    http.post(PAPRIKA_AUTH_URL, () => HttpResponse.json({ result: { token: "test-token" } })),
-    http.get(`${PAPRIKA_API_BASE}/recipes/`, () => HttpResponse.json({ result: [] })),
-    http.get(`${PAPRIKA_API_BASE}/categories/`, () => HttpResponse.json({ result: [] })),
-    http.get(`${PAPRIKA_API_BASE}/pantry/`, () => HttpResponse.json({ result: [] })),
-  ];
-}
+// failLoudOnUpstream: any unmocked real-host request errors (bypassing the
+// in-process localhost server the tests drive), so a missing Paprika/OIDC mock
+// fails immediately instead of silently hitting the network and stalling.
+const msw = useMswServer([], { onUnhandledRequest: failLoudOnUpstream });
 
 // ============================================================================
 // Config factory
@@ -231,7 +219,7 @@ describe("HTTP e2e: full claude.ai connector flow", () => {
       clientSecret: "test-upstream-secret",
       defaultIdentity: { email: ALLOWED_EMAIL, sub: "google-user-1", emailVerified: true },
     });
-    msw.use(...oidcStub.handlers, ...paprikaMockHandlers());
+    msw.use(...oidcStub.handlers, ...paprikaSyncMockHandlers());
 
     handle = await startHttp(makeE2eConfig());
     port = handle.port;

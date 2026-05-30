@@ -12,6 +12,7 @@ import { DiskCacheRoot } from "../cache/disk/index.js";
 import { makeOAuthClient } from "../cache/__fixtures__/oauth.js";
 import { useXdgIsolation } from "../__fixtures__/xdg-isolation.js";
 import { useMswServer } from "../__fixtures__/msw.js";
+import { failLoudOnUpstream, paprikaSyncMockHandlers, PAPRIKA_API_BASE } from "../__fixtures__/paprika-msw.js";
 import { makePinoCapture, SILENT_LOGGING_CONFIG } from "../tools/tool-test-utils.js";
 
 /**
@@ -22,9 +23,6 @@ import { makePinoCapture, SILENT_LOGGING_CONFIG } from "../tools/tool-test-utils
  * shape we care about (status codes, `mcp-session-id` header, SSE framing)
  * without the SDK client layering opinions on top.
  */
-
-const PAPRIKA_API_BASE = "https://paprikaapp.com/api/v2/sync";
-const PAPRIKA_AUTH_URL = "https://paprikaapp.com/api/v1/account/login/";
 
 // Declare OIDC_ISSUER and PUBLIC_URL here (same as used in OAuth section below)
 // so they can be referenced by module-level oidcStub initialization.
@@ -78,7 +76,9 @@ function paprikaMockHandlers() {
     nutritional_info: null,
   };
   return [
-    http.post(PAPRIKA_AUTH_URL, () => HttpResponse.json({ result: { token: "test-token" } })),
+    // Recipe + category data so coldStartGuard and the recipe/category tools see
+    // a hydrated store. These override the empty defaults from
+    // paprikaSyncMockHandlers() below — MSW resolves the first matching handler.
     http.get(`${PAPRIKA_API_BASE}/recipes/`, () => HttpResponse.json({ result: [mockRecipeEntry] })),
     http.get(`${PAPRIKA_API_BASE}/recipe/:uid/`, () => HttpResponse.json({ result: mockRecipe })),
     http.get(`${PAPRIKA_API_BASE}/categories/`, () =>
@@ -99,7 +99,9 @@ function paprikaMockHandlers() {
         },
       }),
     ),
-    http.get(`${PAPRIKA_API_BASE}/pantry/`, () => HttpResponse.json({ result: [] })),
+    // Auth + every sync entity (empty), so the startup sync never escapes to the
+    // real paprikaapp.com. See src/__fixtures__/paprika-msw.ts.
+    ...paprikaSyncMockHandlers(),
   ];
 }
 
@@ -108,7 +110,7 @@ function paprikaMockHandlers() {
 // nested OAuth describe's beforeAll, which runs before the first test's outer beforeEach.
 // Note: msw's lifecycle hooks are wired by the composable; variable is used indirectly.
 void useMswServer([...paprikaMockHandlers(), ...oidcStub.handlers], {
-  onUnhandledRequest: "bypass",
+  onUnhandledRequest: failLoudOnUpstream,
   onReset: () => oidcStub.resetOverrides(),
 });
 const xdg = useXdgIsolation("mcp-paprika-http");

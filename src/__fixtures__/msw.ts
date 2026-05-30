@@ -31,9 +31,15 @@ export type UseMswServerOptions = {
    * MSW `onUnhandledRequest` policy. Defaults to "error" (MSW default) so
    * unexpected requests surface immediately as test failures. Set to "bypass"
    * when the test intentionally lets some requests through to real network
-   * (or when another layer handles unmatched routes).
+   * (or when another layer handles unmatched routes). A callback may be passed
+   * for host-scoped policies (e.g. `failLoudOnUpstream` — error on real upstream
+   * hosts, bypass the in-process localhost server the test drives).
    */
-  readonly onUnhandledRequest?: "error" | "warn" | "bypass";
+  readonly onUnhandledRequest?:
+    | "error"
+    | "warn"
+    | "bypass"
+    | ((request: Request, print: { warning: () => void; error: () => void }) => void);
   /**
    * Optional callback run in `afterEach` alongside `server.resetHandlers()`.
    * Useful for calling `oidcStub.resetOverrides()` in tests that share a
