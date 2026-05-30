@@ -192,11 +192,11 @@ describe("add_meals tool — success paths", () => {
     expect(storedMeal?.scale).toBe("2");
   });
 
-  it("date with time-of-day → normalized to midnight; date-only + datetime on same day share a bucket", async () => {
-    // Codex regression (PR #143): without `.startOf("day")` normalization, two items
-    // posted with `"2026-06-15"` and `"2026-06-15T18:30:00Z"` would land as distinct
-    // date strings ("...00:00:00" vs "...18:30:00") and form separate buckets in
-    // `getMaxOrderFlagOn`, so both would get order_flag: 0 — but Paprika.app stores
+  it("date with time-of-day → normalized to midnight; date-only + datetime on same day share a date sequence", async () => {
+    // Codex regression (PR #143): without midnight normalization, two items posted
+    // with `"2026-06-15"` and `"2026-06-15T18:30:00Z"` would land as distinct date
+    // strings ("...00:00:00" vs "...18:30:00") and form separate per-date sequences
+    // in `getMaxOrderFlagOn`, so both would get order_flag: 0 — but Paprika.app stores
     // meals at midnight (per docs/wire-captures/meals.har.json) and list_meal_history
     // groups by `date.slice(0, 10)`. Drop time-of-day so the wire and the planner stay
     // in sync.
@@ -234,8 +234,8 @@ describe("add_meals tool — success paths", () => {
     expect(savedPayload[0]?.date).toBe("2026-06-15 00:00:00");
   });
 
-  it("AC1.6: two items in same (date, typeUid) bucket → orderFlag 0 and 1", async () => {
-    // Empty bucket: no existing meals for this date/type combination.
+  it("AC1.6: two items on the same date → orderFlag 0 and 1", async () => {
+    // Empty date sequence: no existing meals on this date.
     const { callTool } = makeAddCtx();
 
     await callTool("add_meals", {
@@ -251,7 +251,29 @@ describe("add_meals tool — success paths", () => {
     expect(savedPayload[1]?.orderFlag).toBe(1);
   });
 
-  it("AC1.7: adding to empty (date, typeUid) bucket → orderFlag: 0", async () => {
+  it("two items on the same date but DIFFERENT meal types → orderFlag 0 and 1 (per-date, not per-type)", async () => {
+    // The decisive per-date assertion, grounded in the wire capture: a Breakfast
+    // and a Lunch on 2026-05-26 posted as order_flag 0 and 1, NOT 0 and 0 — the
+    // sequence spans all types on a day (docs/wire-captures/meals.har.json entries
+    // 0 and 1). A per-(date, type) bucket would give each type its own 0.
+    const { callTool } = makeAddCtx();
+
+    await callTool("add_meals", {
+      items: [
+        { name: "Morning Oats", date: "2026-05-26", type: { builtin: 0 } },
+        { name: "Lunch Sandwich", date: "2026-05-26", type: { builtin: 1 } },
+      ],
+    });
+
+    const savedPayload: ReadonlyArray<Meal> = mockSaveMeals.mock.calls[0]?.[0] ?? [];
+    expect(savedPayload).toHaveLength(2);
+    expect(savedPayload[0]?.typeUid).toBe(BREAKFAST_UID);
+    expect(savedPayload[1]?.typeUid).toBe(LUNCH_UID);
+    expect(savedPayload[0]?.orderFlag).toBe(0);
+    expect(savedPayload[1]?.orderFlag).toBe(1);
+  });
+
+  it("AC1.7: adding to an empty date → orderFlag: 0", async () => {
     const { callTool } = makeAddCtx();
 
     await callTool("add_meals", {
@@ -550,9 +572,9 @@ describe("update_meal — success paths (AC3.1-3.6)", () => {
 
     const stored = mealStore.get(TEST_MEAL_UID);
     expect(stored?.date).toBe("2026-06-15 00:00:00");
-    // Date change moves the meal to a new (date, typeUid) bucket, so orderFlag
-    // is reassigned (max+1 in the destination, which is empty here = 0). All
-    // other non-bucket-derived fields are preserved.
+    // Date change moves the meal to the destination date's order sequence, so
+    // orderFlag is reassigned (max+1 in the destination, which is empty here = 0).
+    // All other non-date-derived fields are preserved.
     expect(stored).toEqual({ ...original, date: "2026-06-15 00:00:00", orderFlag: 0 });
   });
 
@@ -652,27 +674,27 @@ describe("update_meal — success paths (AC3.1-3.6)", () => {
     expect(payload[0]?.type).toBe(0);
   });
 
-  it("moving a meal to a different (date, typeUid) bucket → orderFlag becomes max+1 in destination", async () => {
+  it("moving a meal to a different date → orderFlag becomes max+1 in the destination date", async () => {
     // Codex regression (PR #143): the spread-merge previously preserved the
-    // source bucket's orderFlag when moving a meal, which could collide with an
-    // existing meal at the same flag in the destination. add_meals avoids this
-    // via getMaxOrderFlagOn + 1; update_meal must do the same when `date` or
-    // `type` changes.
+    // source orderFlag when moving a meal, which could collide with an existing
+    // meal at the same flag on the destination date. add_meals avoids this via
+    // getMaxOrderFlagOn + 1; update_meal must do the same when `date` changes.
+    // (order_flag sequences per DATE — see makeMealOrderFlagAssigner.)
     const moving = makeMeal({
       uid: TEST_MEAL_UID,
       typeUid: LUNCH_UID,
       type: 1,
       date: "2026-06-10 00:00:00",
-      orderFlag: 0, // would collide with the destination's existing flag-0 meal
+      orderFlag: 0, // would collide with the destination date's existing flag-0 meal
     });
-    const destBucketExisting = makeMeal({
+    const destDateExisting = makeMeal({
       uid: "existing-dinner-uid" as MealUid,
       typeUid: DINNER_UID,
       type: 2,
       date: "2026-06-15 00:00:00",
       orderFlag: 0,
     });
-    mealStore.load([moving, destBucketExisting]);
+    mealStore.load([moving, destDateExisting]);
 
     const { callTool } = makeUpdateCtx();
 
@@ -684,15 +706,44 @@ describe("update_meal — success paths (AC3.1-3.6)", () => {
     const stored = mealStore.get(TEST_MEAL_UID);
     expect(stored?.date).toBe("2026-06-15 00:00:00");
     expect(stored?.typeUid).toBe(DINNER_UID);
-    expect(stored?.orderFlag).toBe(1); // max+1 in destination, not preserved 0
+    expect(stored?.orderFlag).toBe(1); // max+1 on the destination date, not preserved 0
 
     const payload = mockSaveMeals.mock.calls[0]?.[0] as ReadonlyArray<Meal>;
     expect(payload[0]?.orderFlag).toBe(1);
   });
 
-  it("update without changing date or type → orderFlag preserved (keep-the-position)", async () => {
-    // Counter-test to the bucket-move test above. Same-bucket updates should
-    // leave the flag alone, otherwise we'd churn position on every edit.
+  it("changing ONLY the meal type (same date) → orderFlag preserved (per-date, not per-type)", async () => {
+    // Per-date order_flag regression guard: a type change that keeps the date does
+    // NOT move the meal to a new order sequence, so the flag must be preserved.
+    // Under the old per-(date, type) logic this would have re-sequenced to max+1
+    // of the destination type bucket; per-date keeps the position.
+    const sameDateExisting = makeMeal({
+      uid: "existing-breakfast-uid" as MealUid,
+      typeUid: BREAKFAST_UID,
+      type: 0,
+      date: "2026-06-15 00:00:00",
+      orderFlag: 0,
+    });
+    const original = makeMeal({
+      uid: TEST_MEAL_UID,
+      typeUid: LUNCH_UID,
+      type: 1,
+      date: "2026-06-15 00:00:00",
+      orderFlag: 1,
+    });
+    mealStore.load([sameDateExisting, original]);
+
+    const { callTool } = makeUpdateCtx();
+    await callTool("update_meal", { uid: TEST_MEAL_UID, update: { type: { name: "Dinner" } } });
+
+    const stored = mealStore.get(TEST_MEAL_UID);
+    expect(stored?.typeUid).toBe(DINNER_UID);
+    expect(stored?.orderFlag).toBe(1); // unchanged — same date, no re-sequence
+  });
+
+  it("update without changing date → orderFlag preserved (keep-the-position)", async () => {
+    // Counter-test to the date-move test above. Same-date updates should leave
+    // the flag alone, otherwise we'd churn position on every edit.
     const original = makeMeal({
       uid: TEST_MEAL_UID,
       typeUid: DINNER_UID,

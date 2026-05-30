@@ -9,6 +9,7 @@ import type { MealTypeUid, RecipeUid } from "../paprika/types.js";
 import {
   commitMeal,
   commitMealsBatch,
+  makeMealOrderFlagAssigner,
   mealStartGuard,
   mealToMarkdown,
   mealTypeSpecSchema,
@@ -185,6 +186,55 @@ describe("resolveMealTypeSpec", () => {
     expect(result.ok).toBe(false);
     if (!result.ok && result.reason === "unknown_builtin") expect(result.index).toBe(3);
     else throw new Error(`Expected unknown_builtin, got ${JSON.stringify(result)}`);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// makeMealOrderFlagAssigner — per-date batch order_flag sequencing
+// ---------------------------------------------------------------------------
+
+describe("makeMealOrderFlagAssigner", () => {
+  const DATE = "2026-06-15 00:00:00";
+  const OTHER_DATE = "2026-06-16 00:00:00";
+
+  function makeAssignerCtx(mealStore: MealStore) {
+    const { server } = makeTestServer();
+    return makeCtx(new RecipeStore(), server, { mealStore });
+  }
+
+  it("seeds an empty date at 0 and increments within the batch", () => {
+    const mealStore = new MealStore();
+    mealStore.load([]);
+    const assign = makeMealOrderFlagAssigner(makeAssignerCtx(mealStore));
+
+    expect(assign(DATE)).toBe(0);
+    expect(assign(DATE)).toBe(1);
+    expect(assign(DATE)).toBe(2);
+  });
+
+  it("seeds from the store's existing per-date max + 1", () => {
+    const mealStore = new MealStore();
+    // Two existing meals on DATE; highest orderFlag is 4 (spanning types).
+    mealStore.load([
+      makeMeal({ date: DATE, typeUid: "breakfast-uid", orderFlag: 2 }),
+      makeMeal({ date: DATE, typeUid: "dinner-uid", orderFlag: 4 }),
+    ]);
+    const assign = makeMealOrderFlagAssigner(makeAssignerCtx(mealStore));
+
+    expect(assign(DATE)).toBe(5);
+    expect(assign(DATE)).toBe(6);
+  });
+
+  it("tracks distinct dates independently", () => {
+    const mealStore = new MealStore();
+    mealStore.load([]);
+    const assign = makeMealOrderFlagAssigner(makeAssignerCtx(mealStore));
+
+    // Interleaved dates each keep their own running counter.
+    expect(assign(DATE)).toBe(0);
+    expect(assign(OTHER_DATE)).toBe(0);
+    expect(assign(DATE)).toBe(1);
+    expect(assign(OTHER_DATE)).toBe(1);
   });
 });
 

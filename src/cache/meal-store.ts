@@ -120,35 +120,34 @@ export class MealStore extends TombstoneEntityStore<Meal, MealUid> {
   }
 
   /**
-   * Returns the highest `orderFlag` among non-deleted, non-ingredient meals
-   * matching (date, typeUid). Returns null when no matching meal exists; callers
-   * use `(result ?? -1) + 1` to compute the next flag for an append.
+   * Returns the highest `orderFlag` among non-deleted, non-ingredient meals on
+   * `date`, across ALL meal types on that day. Returns null when no meal exists
+   * on the date; callers use `(result ?? -1) + 1` to compute the next flag for
+   * an append.
+   *
+   * `order_flag` sequences PER CALENDAR DATE, not per (date, type): all meal
+   * types on a given day share one ordering sequence. The wire capture is
+   * decisive — two same-date meals of different types post as `order_flag` 0
+   * and 1, while two same-type meals on different dates both post as 0
+   * (`docs/wire-captures/meals.har.json`). So this method matches on `date`
+   * only; meal type does not partition the sequence.
    *
    * Date is matched exactly against the Paprika wire-format date string (the
-   * caller is responsible for normalizing input through toWireDateFormat first).
-   * typeUid is matched exactly, including null — meals with typeUid: null
-   * (legacy entries predating Paprika's mealtypes catalog) form their own bucket
-   * per date and never collide with non-null typeUid buckets on the same date.
-   *
-   * Unlike the recipe/type filters on the read methods, `typeUid` here stays
-   * plain `string | null` (not branded `MealTypeUid`): update_meal computes the
-   * destination bucket from the *existing* meal's `typeUid` when the type isn't
-   * changing, and `Meal.typeUid` is the untrusted plain-string wire field — so
-   * branding the parameter would only force a cast back at that call site.
+   * caller is responsible for normalizing input through `parseInputMealDate`
+   * first).
    *
    * Pending-delete UIDs are excluded: between `markPendingDelete` and
    * `delete`, the meal is still in `_items` with `deleted: false` (commitMeal
    * doesn't mutate the entry, just the pending-writes set). Without this filter
-   * a soft-delete + same-bucket add_meals within the cache-flush window would
-   * inflate the new meal's `orderFlag` by counting the soon-to-be-gone meal.
+   * a soft-delete + same-date add within the cache-flush window would inflate
+   * the new meal's `orderFlag` by counting the soon-to-be-gone meal.
    */
-  getMaxOrderFlagOn(date: string, typeUid: string | null): number | null {
+  getMaxOrderFlagOn(date: string): number | null {
     let max: number | null = null;
     for (const meal of this._items.values()) {
       if (isHidden(meal)) continue;
       if (this.isPendingDelete(meal.uid)) continue;
       if (meal.date !== date) continue;
-      if (meal.typeUid !== typeUid) continue;
       if (max === null || meal.orderFlag > max) {
         max = meal.orderFlag;
       }
