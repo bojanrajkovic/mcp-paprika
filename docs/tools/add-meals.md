@@ -42,7 +42,7 @@ Each item is structurally one of two shapes — recipe-linked OR freeform. The t
 
 **Recipe linking.** Recipe-linked items resolve the display name from the local recipe store. If the recipe isn't in the local store (not yet synced), the item fails validation with an error advising you to wait for the next sync, or to supply a freeform meal (omit `recipe_uid`, supply `name`).
 
-**Order placement.** Each meal is placed at the end of its `(date, type)` bucket. The `order_flag` is assigned as `max(existing flags) + 1`, starting at 0 for an empty bucket. When multiple items in the same batch share a bucket, they're assigned sequential flags in input order — the bucket's state in the store doesn't change mid-batch.
+**Order placement.** `order_flag` sequences per calendar **date** — all meal types on a given day share one sequence, _not_ a separate sequence per `(date, type)`. Each meal is placed at the end of its date: `order_flag = max(existing flags on that date) + 1`, starting at 0 for a date with no meals. When multiple items in the same batch share a date, they're assigned sequential flags in materialization order — the store's per-date max is seeded once and advanced within the batch so same-date items don't collide.
 
 **All-or-nothing validation.** Every item is validated before any API calls. A single invalid item causes the entire batch to fail with a numbered error for each failing item. Items at passing indices are not added.
 

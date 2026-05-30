@@ -4,10 +4,10 @@ An [MCP](https://modelcontextprotocol.io/) server for [Paprika](https://www.papr
 
 ## Features
 
-- **26 tools** for recipe, pantry, and grocery management — search, filter, CRUD, categories, pagination, pantry inventory, aisles, grocery list management, grocery item management
+- **40 tools** for recipe, pantry, grocery, meal-planner, and menu management — search, filter, CRUD, categories, pagination, pantry inventory, aisles, grocery lists and items, meal planning (history, meal types, dated planner entries), and menus (recipe collections, their items, and one-shot add-to-planner)
 - **Semantic search** via `discover_recipes` — find recipes by natural language description using any OpenAI-compatible embedding provider
 - **Background sync** — keeps your local cache in sync with Paprika's cloud
-- **MCP resources** — expose recipes as `paprika://recipe/{uid}` and grocery lists as `paprika://grocery-list/{uid}` resources
+- **MCP resources** — expose recipes as `paprika://recipe/{uid}`, grocery lists as `paprika://grocery-list/{uid}`, and menus as `paprika://menu/{uid}` resources
 - **Two transports** — stdio (default, for CLI clients) and Streamable HTTP (for mobile/web clients)
 - **Container image** — `Dockerfile` ships a distroless runtime ready for self-hosting
 
