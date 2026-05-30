@@ -10,24 +10,40 @@ import { mealTypeSpecSchema, resolveMealTypeSpec } from "./meal-helpers.js";
 import { commitMenu, commitMenuItem, commitMenuItemsBatch, menuStartGuard, menuToMarkdown } from "./menu-helpers.js";
 import type { ServerContext } from "../types/server-context.js";
 
-// One menuitem to add: a recipe-linked entry placed on a specific day with a
-// meal type. Display name auto-resolves from the recipe (like add_meals), so no
-// `name` field is accepted. `.strict()` rejects extra keys at the Zod boundary.
-const addMenuItemSchema = z
+// One menuitem to add. Structurally EITHER recipe-linked (recipe_uid; display
+// name auto-resolves from the recipe) OR freeform (name; no recipe), mirroring
+// add_meals — Paprika.app dispatches a menuitem's display off recipe_uid, so a
+// stored custom name on a recipe-linked item would never render. The z.union of
+// two `.strict()` objects rejects extra keys (including supplying BOTH recipe_uid
+// and name) at the Zod boundary, surfacing the constraint structurally.
+const menuItemDay = z
+  .number()
+  .int()
+  .positive()
+  .describe("1-indexed day within the menu. Days beyond the menu's current span auto-extend the menu.");
+const menuItemType = mealTypeSpecSchema.describe(
+  'Meal type. Pick exactly one shape: {"name": "Dinner"} | {"uid": "<MealType UID>"} | {"builtin": 2}.',
+);
+
+const recipeMenuItemSchema = z
   .object({
     recipe_uid: RecipeUidSchema.describe(
       "Recipe UID to place on the menu. Display name auto-resolves from the recipe.",
     ),
-    day: z
-      .number()
-      .int()
-      .positive()
-      .describe("1-indexed day within the menu. Days beyond the menu's current span auto-extend the menu."),
-    type: mealTypeSpecSchema.describe(
-      'Meal type. Pick exactly one shape: {"name": "Dinner"} | {"uid": "<MealType UID>"} | {"builtin": 2}.',
-    ),
+    day: menuItemDay,
+    type: menuItemType,
   })
   .strict();
+
+const freeformMenuItemSchema = z
+  .object({
+    name: z.string().min(1).describe("Display name for a freeform (non-recipe) menuitem."),
+    day: menuItemDay,
+    type: menuItemType,
+  })
+  .strict();
+
+const addMenuItemSchema = z.union([recipeMenuItemSchema, freeformMenuItemSchema]);
 
 export const addMenuItemsInputSchema = z.object({
   menu: uidOrTextLookupSchema({
@@ -39,7 +55,7 @@ export const addMenuItemsInputSchema = z.object({
   items: z
     .array(addMenuItemSchema)
     .min(1, "At least one menu item is required.")
-    .describe("Array of recipe-linked menuitems to add (1 or more)."),
+    .describe("Array of menuitems to add (1 or more); each is recipe-linked OR freeform."),
 });
 
 export function registerAddMenuItemsTool(server: McpServer, ctx: ServerContext): void {
@@ -48,13 +64,14 @@ export function registerAddMenuItemsTool(server: McpServer, ctx: ServerContext):
     "add_menu_items",
     {
       description:
-        "Add one or more recipe-linked menuitems to a menu (saved meal plan). Look the menu up by UID or " +
-        "name (tiered fuzzy match). Each item carries a recipe_uid (display name auto-resolves from the " +
-        "recipe), a 1-indexed day, and a meal type (name, UID, or built-in index 0=Breakfast, 1=Lunch, " +
-        "2=Dinner, 3=Snacks). If any day falls beyond the menu's current span the menu is automatically " +
-        "extended to fit before the items are added. All items validate up-front; if ANY item is invalid " +
-        "the entire batch is rejected with a per-index error enumeration so callers can fix every problem " +
-        "in one pass.",
+        "Add one or more menuitems to a menu (saved meal plan). Look the menu up by UID or name (tiered " +
+        "fuzzy match). Each item is EITHER recipe-linked (supply recipe_uid; display name auto-resolves " +
+        "from the recipe) OR freeform (supply name; no recipe) — the two are mutually exclusive, matching " +
+        "add_meals. Each item also carries a 1-indexed day and a meal type (name, UID, or built-in index " +
+        "0=Breakfast, 1=Lunch, 2=Dinner, 3=Snacks). If any day falls beyond the menu's current span the " +
+        "menu is automatically extended to fit before the items are added. All items validate up-front; " +
+        "if ANY item is invalid the entire batch is rejected with a per-index error enumeration so callers " +
+        "can fix every problem in one pass.",
       inputSchema: addMenuItemsInputSchema.shape,
     },
     async (args) => {
@@ -89,7 +106,7 @@ export function registerAddMenuItemsTool(server: McpServer, ctx: ServerContext):
             readonly day: number;
             readonly typeUid: string;
             readonly resolvedName: string;
-            readonly recipeUid: string;
+            readonly recipeUid: string | null;
           };
 
           const errors: Array<string> = [];
@@ -98,15 +115,26 @@ export function registerAddMenuItemsTool(server: McpServer, ctx: ServerContext):
           for (let i = 0; i < args.items.length; i++) {
             const item = args.items[i]!;
 
-            // Recipe must be known to the local store so we can denormalize the
-            // display name (matching add_meals' recipe-link contract).
-            const recipe = ctx.store.get(item.recipe_uid);
-            if (recipe === undefined) {
-              errors.push(
-                `Item ${i.toString()}: recipe_uid "${item.recipe_uid}" is not known to the local recipe store; ` +
-                  `wait for the next sync and retry.`,
-              );
-              continue;
+            // Recipe-linked XOR freeform — the structural union guarantees exactly
+            // one shape. Recipe items denormalize the display name from the local
+            // store (matching add_meals' recipe-link contract); freeform items keep
+            // the supplied name and store recipeUid: null.
+            let recipeUid: string | null;
+            let resolvedName: string;
+            if ("recipe_uid" in item) {
+              const recipe = ctx.store.get(item.recipe_uid);
+              if (recipe === undefined) {
+                errors.push(
+                  `Item ${i.toString()}: recipe_uid "${item.recipe_uid}" is not known to the local recipe store; ` +
+                    `wait for the next sync and retry, or supply a freeform item (omit recipe_uid, supply name).`,
+                );
+                continue;
+              }
+              recipeUid = item.recipe_uid;
+              resolvedName = recipe.name;
+            } else {
+              recipeUid = null;
+              resolvedName = item.name;
             }
 
             // Meal type resolution via the shared helper (same DU as add_meals).
@@ -132,8 +160,8 @@ export function registerAddMenuItemsTool(server: McpServer, ctx: ServerContext):
             resolved.push({
               day: item.day,
               typeUid: typeResult.resolved.uid,
-              resolvedName: recipe.name,
-              recipeUid: item.recipe_uid,
+              resolvedName,
+              recipeUid,
             });
           }
 
