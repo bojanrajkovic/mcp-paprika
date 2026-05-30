@@ -322,6 +322,84 @@ describe("update_menu_item tool", () => {
     expect(saved.name).toBe("Tacos"); // preserved
   });
 
+  it("auto-extends the parent menu (saved first) when a day-move exceeds its span", async () => {
+    const menu = makeMenu({ uid: "m-1" as MenuUid, name: "Plan", days: 2 });
+    const item = makeMenuItem({
+      uid: "mi-1" as MenuItemUid,
+      menuUid: "m-1",
+      day: 1,
+      recipeUid: TACOS_UID,
+      name: "Tacos",
+      orderFlag: 0,
+    });
+    const { menuStore, menuItemStore } = syncedStores({ menus: [menu], items: [item] });
+    const { server, callTool } = makeTestServer();
+    const { ctx, mockSaveMenus, mockSaveMenuItems } = makeWriteToolCtx(
+      syncedRecipeStore(),
+      menuStore,
+      menuItemStore,
+      server,
+    );
+    registerUpdateMenuItemTool(server, ctx);
+
+    const text = getText(await callTool("update_menu_item", { uid: "mi-1", day: 5 }));
+
+    // menu extended to day 5 and saved BEFORE the item move
+    expect(mockSaveMenus).toHaveBeenCalledOnce();
+    expect((mockSaveMenus.mock.calls[0]![0] as Menu[])[0]!.days).toBe(5);
+    expect(mockSaveMenus.mock.invocationCallOrder[0]!).toBeLessThan(mockSaveMenuItems.mock.invocationCallOrder[0]!);
+    expect((mockSaveMenuItems.mock.calls[0]![0] as MenuItem[])[0]!.day).toBe(5);
+    expect(text).toContain("Extended the menu to 5 day(s).");
+  });
+
+  it("does NOT extend the menu when the new day is within span", async () => {
+    const menu = makeMenu({ uid: "m-1" as MenuUid, days: 4 });
+    const item = makeMenuItem({
+      uid: "mi-1" as MenuItemUid,
+      menuUid: "m-1",
+      day: 1,
+      recipeUid: TACOS_UID,
+      name: "Tacos",
+    });
+    const { menuStore, menuItemStore } = syncedStores({ menus: [menu], items: [item] });
+    const { server, callTool } = makeTestServer();
+    const { ctx, mockSaveMenus } = makeWriteToolCtx(syncedRecipeStore(), menuStore, menuItemStore, server);
+    registerUpdateMenuItemTool(server, ctx);
+
+    await callTool("update_menu_item", { uid: "mi-1", day: 3 });
+    expect(mockSaveMenus).not.toHaveBeenCalled();
+  });
+
+  it("recomputes orderFlag to destination-day max+1 when the day changes", async () => {
+    const menu = makeMenu({ uid: "m-1" as MenuUid, days: 3 });
+    const moving = makeMenuItem({
+      uid: "mi-move" as MenuItemUid,
+      menuUid: "m-1",
+      day: 1,
+      recipeUid: TACOS_UID,
+      name: "Tacos",
+      orderFlag: 0,
+    });
+    // Destination day 2 already holds an item at orderFlag 0 → the moved item lands at 1.
+    const sitting = makeMenuItem({
+      uid: "mi-sit" as MenuItemUid,
+      menuUid: "m-1",
+      day: 2,
+      recipeUid: SOUP_UID,
+      name: "Soup",
+      orderFlag: 0,
+    });
+    const { menuStore, menuItemStore } = syncedStores({ menus: [menu], items: [moving, sitting] });
+    const { server, callTool } = makeTestServer();
+    const { ctx, mockSaveMenuItems } = makeWriteToolCtx(syncedRecipeStore(), menuStore, menuItemStore, server);
+    registerUpdateMenuItemTool(server, ctx);
+
+    await callTool("update_menu_item", { uid: "mi-move", day: 2 });
+    const saved = (mockSaveMenuItems.mock.calls[0]![0] as MenuItem[])[0]!;
+    expect(saved.day).toBe(2);
+    expect(saved.orderFlag).toBe(1); // dest-day max (0) + 1, no collision
+  });
+
   it("re-resolves the display name when recipe_uid changes", async () => {
     const item = makeMenuItem({
       uid: "mi-1" as MenuItemUid,

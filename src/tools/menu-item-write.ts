@@ -4,7 +4,7 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { MenuItemUidSchema, MenuUidSchema, RecipeUidSchema } from "../paprika/types.js";
-import type { Menu, MenuItem } from "../paprika/types.js";
+import type { Menu, MenuItem, MenuUid } from "../paprika/types.js";
 import { resolveLookup, textResult, uidOrTextLookupSchema } from "./helpers.js";
 import { mealTypeSpecSchema, resolveMealTypeSpec } from "./meal-helpers.js";
 import { commitMenu, commitMenuItem, commitMenuItemsBatch, menuStartGuard, menuToMarkdown } from "./menu-helpers.js";
@@ -246,8 +246,9 @@ export function registerUpdateMenuItemTool(server: McpServer, ctx: ServerContext
       description:
         "Update an existing menuitem by UID. Provide at least one of day, type, or recipe_uid; omitted " +
         "fields keep their current values. Changing recipe_uid re-resolves the display name from the new " +
-        "recipe. The menu link (menu_uid) is not editable via this tool — delete and re-add to move an item " +
-        "between menus.",
+        "recipe. Moving an item to a later day auto-extends the menu's span if needed (so it stays visible) " +
+        "and re-sequences its order within the destination day. The menu link (menu_uid) is not editable " +
+        "via this tool — delete and re-add to move an item between menus.",
       inputSchema: updateMenuItemInputSchema.shape,
     },
     async (args) => {
@@ -309,11 +310,51 @@ export function registerUpdateMenuItemTool(server: McpServer, ctx: ServerContext
             newName = recipe.name;
           }
 
+          // Destination day + whether the move changes the (menuUid, day) ordering bucket.
+          const newDay = args.day ?? existing.day;
+          const dayChanged = args.day !== undefined && args.day !== existing.day;
+
+          // (A) Auto-expand the parent menu when a day-move pushes the item past the
+          // menu's current span — otherwise menuToMarkdown (Day 1..menu.days) silently
+          // hides it. Mirrors add_menu_items' auto-expand. Skipped for an orphaned item
+          // (menuUid null) or a menu not known locally.
+          let extendedTo: number | null = null;
+          if (args.day !== undefined && existing.menuUid !== null) {
+            const parent = ctx.menuStore.get(existing.menuUid as MenuUid);
+            if (parent !== undefined && newDay > parent.days) {
+              const expanded: Menu = { ...parent, days: newDay };
+              try {
+                const savedMenu = (await ctx.client.saveMenus([expanded]))[0] ?? expanded;
+                await commitMenu(ctx, savedMenu);
+                extendedTo = newDay;
+              } catch (error) {
+                const message = toMessage(error);
+                log.error({ err: error, uid }, "saveMenus (update_menu_item auto-expand) failed");
+                return textResult(
+                  `Failed to extend the menu to ${newDay.toString()} day(s) for the move: ${message}. ` +
+                    `The item was not moved.`,
+                );
+              }
+            }
+          }
+
+          // (B) Recompute orderFlag for the destination (menuUid, day) bucket when the day
+          // changes, so the moved item doesn't collide with a flag already in that day
+          // (mirrors update_meal's bucket-change recompute). Seed from the dest-day max.
+          let newOrderFlag = existing.orderFlag;
+          if (dayChanged && existing.menuUid !== null) {
+            const destItems = ctx.menuItemStore
+              .getByMenuUid(existing.menuUid as MenuUid)
+              .filter((it) => it.day === newDay && it.uid !== existing.uid);
+            newOrderFlag = destItems.reduce((max, it) => Math.max(max, it.orderFlag), -1) + 1;
+          }
+
           const merged: MenuItem = {
             ...existing,
             ...(args.day !== undefined && { day: args.day }),
             ...(newTypeUid !== undefined && { typeUid: newTypeUid }),
             ...(args.recipe_uid !== undefined && { recipeUid: newRecipeUid, name: newName }),
+            orderFlag: newOrderFlag,
           };
 
           let saved: MenuItem;
@@ -326,7 +367,8 @@ export function registerUpdateMenuItemTool(server: McpServer, ctx: ServerContext
             return textResult(`Failed to update menu item: ${message}`);
           }
 
-          return textResult(`Menu item "${saved.name}" updated (day ${saved.day.toString()}).`);
+          const extendNote = extendedTo !== null ? `Extended the menu to ${extendedTo.toString()} day(s). ` : "";
+          return textResult(`${extendNote}Menu item "${saved.name}" updated (day ${saved.day.toString()}).`);
         },
         (guard) => guard,
       );
