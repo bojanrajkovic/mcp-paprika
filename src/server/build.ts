@@ -19,6 +19,7 @@ import { registerDiscoverTool } from "../tools/discover.js";
 import { registerFilterTools } from "../tools/filter.js";
 import { registerListTool } from "../tools/list.js";
 import { registerAislesTool } from "../tools/aisles.js";
+import { registerMealTypesTool } from "../tools/meal-types.js";
 import {
   registerCreateGroceryListTool,
   registerDeleteGroceryListTool,
@@ -307,6 +308,7 @@ export function buildMcpServer(app: AppContext): McpServer {
   registerUpdatePantryItemTool(server, sessionCtx);
   registerDeletePantryItemTool(server, sessionCtx);
   registerAislesTool(server, sessionCtx);
+  registerMealTypesTool(server, sessionCtx);
   registerListGroceryListsTool(server, sessionCtx);
   registerReadGroceryListTool(server, sessionCtx);
   registerCreateGroceryListTool(server, sessionCtx);

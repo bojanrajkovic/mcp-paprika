@@ -107,6 +107,21 @@ export function mealStartGuard(ctx: ServerContext): Result<void, ReturnType<type
 }
 
 /**
+ * Sync guard for the read-only `list_meal_types` tool. Narrower than
+ * `mealStartGuard`, which requires BOTH the meal and meal-type stores synced
+ * (its callers resolve meal-type specs while reading meals). Listing the
+ * meal-type catalog only touches `mealTypeStore`, so gating on the meal store
+ * too would surface a misleading "not yet synced" when only meals are cold.
+ * Mirrors `aisleStartGuard` (the other reference-catalog list guard).
+ */
+export function mealTypeStartGuard(ctx: ServerContext): Result<void, ReturnType<typeof textResult>> {
+  if (!ctx.mealTypeStore.hasSynced) {
+    return err(textResult("Meal types are not yet synced. Try again in a few seconds."));
+  }
+  return ok(undefined);
+}
+
+/**
  * Persists a saved meal to the local cache and store, then triggers cloud sync.
  * Branches on `saved.deleted`:
  *   upsert: markPendingUpsert(uid) → cache.meals.put → cache.flush → store.set → notifySync
