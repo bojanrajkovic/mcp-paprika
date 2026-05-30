@@ -8,7 +8,7 @@ import { makeMenu, makeMenuItem } from "../cache/__fixtures__/menus.js";
 import { makeMealType } from "../cache/__fixtures__/meals.js";
 import { makeTestServer, makeCtx, getText, makeStubNotifier } from "./tool-test-utils.js";
 import { registerCreateMenuTool, registerUpdateMenuTool, registerDeleteMenuTool } from "./menu-write.js";
-import type { MealTypeUid, Menu, MenuItem, MenuUid } from "../paprika/types.js";
+import type { MealTypeUid, Menu, MenuItem, MenuItemUid, MenuUid } from "../paprika/types.js";
 
 function syncedMealTypeStore(): MealTypeStore {
   const store = new MealTypeStore();
@@ -241,8 +241,8 @@ describe("update_menu tool", () => {
 
   it("rejects a days-shrink that would orphan menuitems, naming the conflicts", async () => {
     const menu = makeMenu({ uid: "m-1" as MenuUid, name: "Big Plan", days: 5 });
-    const day3 = makeMenuItem({ uid: "mi-3" as never, menuUid: "m-1", day: 3, name: "Soup" });
-    const day5 = makeMenuItem({ uid: "mi-5" as never, menuUid: "m-1", day: 5, name: "Steak" });
+    const day3 = makeMenuItem({ uid: "mi-3" as MenuItemUid, menuUid: "m-1", day: 3, name: "Soup" });
+    const day5 = makeMenuItem({ uid: "mi-5" as MenuItemUid, menuUid: "m-1", day: 5, name: "Steak" });
     const { menuStore, menuItemStore } = syncedStores({ menus: [menu], items: [day3, day5] });
     const { server, callTool } = makeTestServer();
     const { ctx, mockSaveMenus } = makeWriteToolCtx(menuStore, menuItemStore, server);
@@ -258,7 +258,7 @@ describe("update_menu tool", () => {
 
   it("allows a days-shrink that keeps every menuitem in range", async () => {
     const menu = makeMenu({ uid: "m-1" as MenuUid, name: "Plan", days: 5 });
-    const day2 = makeMenuItem({ uid: "mi-2" as never, menuUid: "m-1", day: 2, name: "Soup" });
+    const day2 = makeMenuItem({ uid: "mi-2" as MenuItemUid, menuUid: "m-1", day: 2, name: "Soup" });
     const { menuStore, menuItemStore } = syncedStores({ menus: [menu], items: [day2] });
     const { server, callTool } = makeTestServer();
     const { ctx, mockSaveMenus } = makeWriteToolCtx(menuStore, menuItemStore, server);
@@ -307,8 +307,8 @@ describe("delete_menu tool", () => {
 
   it("cascades the tombstone to every menuitem before tombstoning the menu", async () => {
     const menu = makeMenu({ uid: "m-1" as MenuUid, name: "Holiday" });
-    const item1 = makeMenuItem({ uid: "mi-1" as never, menuUid: "m-1", name: "Turkey" });
-    const item2 = makeMenuItem({ uid: "mi-2" as never, menuUid: "m-1", name: "Pie" });
+    const item1 = makeMenuItem({ uid: "mi-1" as MenuItemUid, menuUid: "m-1", name: "Turkey" });
+    const item2 = makeMenuItem({ uid: "mi-2" as MenuItemUid, menuUid: "m-1", name: "Pie" });
     const { menuStore, menuItemStore } = syncedStores({ menus: [menu], items: [item1, item2] });
     const { server, callTool } = makeTestServer();
     const { ctx, mockSaveMenus, mockSaveMenuItems } = makeWriteToolCtx(menuStore, menuItemStore, server);
@@ -323,6 +323,8 @@ describe("delete_menu tool", () => {
     const savedItems = mockSaveMenuItems.mock.calls[0]![0] as MenuItem[];
     expect(savedItems).toHaveLength(2);
     expect(savedItems.every((i) => i.deleted)).toBe(true);
+    // cascade tombstones null the back-reference, matching the wire capture
+    expect(savedItems.every((i) => i.menuUid === null)).toBe(true);
 
     // parent tombstoned after
     expect(mockSaveMenus).toHaveBeenCalledOnce();
@@ -362,7 +364,7 @@ describe("delete_menu tool", () => {
 
   it("does not tombstone the menu when the cascade item save fails", async () => {
     const menu = makeMenu({ uid: "m-1" as MenuUid, name: "Holiday" });
-    const item = makeMenuItem({ uid: "mi-1" as never, menuUid: "m-1", name: "Turkey" });
+    const item = makeMenuItem({ uid: "mi-1" as MenuItemUid, menuUid: "m-1", name: "Turkey" });
     const { menuStore, menuItemStore } = syncedStores({ menus: [menu], items: [item] });
     const { server, callTool } = makeTestServer();
     const { ctx, mockSaveMenus, mockSaveMenuItems } = makeWriteToolCtx(menuStore, menuItemStore, server);
