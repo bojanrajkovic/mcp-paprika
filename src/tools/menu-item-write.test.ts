@@ -8,7 +8,12 @@ import { makeMenu, makeMenuItem } from "../cache/__fixtures__/menus.js";
 import { makeMealType } from "../cache/__fixtures__/meals.js";
 import { makeRecipe } from "../cache/__fixtures__/recipes.js";
 import { makeTestServer, makeCtx, getText, makeStubNotifier } from "./tool-test-utils.js";
-import { registerAddMenuItemsTool, registerUpdateMenuItemTool, registerDeleteMenuItemTool } from "./menu-item-write.js";
+import {
+  registerAddMenuItemsTool,
+  registerUpdateMenuItemTool,
+  registerDeleteMenuItemTool,
+  addMenuItemsInputSchema,
+} from "./menu-item-write.js";
 import type { MealTypeUid, Menu, MenuItem, MenuItemUid, MenuUid, RecipeUid } from "../paprika/types.js";
 
 const TACOS_UID = "recipe-tacos" as RecipeUid;
@@ -141,6 +146,70 @@ describe("add_menu_items tool", () => {
     expect(text).toContain('Added 2 item(s) to menu "Holiday"');
     expect(resourceListChanged).toHaveBeenCalled();
     expect(menuItemStore.getByMenuUid("m-1" as MenuUid)).toHaveLength(2);
+  });
+
+  it("adds a freeform menuitem (name, no recipe_uid) materializing recipeUid null", async () => {
+    const menu = makeMenu({ uid: "m-1" as MenuUid, name: "Holiday", days: 1 });
+    const { menuStore, menuItemStore } = syncedStores({ menus: [menu] });
+    const { server, callTool } = makeTestServer();
+    const { ctx, mockSaveMenuItems } = makeWriteToolCtx(syncedRecipeStore(), menuStore, menuItemStore, server);
+    registerAddMenuItemsTool(server, ctx);
+
+    const text = getText(
+      await callTool("add_menu_items", {
+        menu: { uid: "m-1" },
+        items: [{ name: "Leftover Surprise", day: 1, type: { name: "Dinner" } }],
+      }),
+    );
+
+    expect(mockSaveMenuItems).toHaveBeenCalledOnce();
+    const saved = mockSaveMenuItems.mock.calls[0]![0] as MenuItem[];
+    expect(saved).toHaveLength(1);
+    expect(saved[0]!.recipeUid).toBe(null);
+    expect(saved[0]!.name).toBe("Leftover Surprise");
+    expect(saved[0]!.typeUid).toBe("dinner-uid");
+    expect(saved[0]!.deleted).toBe(false);
+    expect(text).toContain("Leftover Surprise");
+  });
+
+  it("mixes recipe-linked and freeform items in one batch", async () => {
+    const menu = makeMenu({ uid: "m-1" as MenuUid, name: "Holiday", days: 1 });
+    const { menuStore, menuItemStore } = syncedStores({ menus: [menu] });
+    const { server, callTool } = makeTestServer();
+    const { ctx, mockSaveMenuItems } = makeWriteToolCtx(syncedRecipeStore(), menuStore, menuItemStore, server);
+    registerAddMenuItemsTool(server, ctx);
+
+    await callTool("add_menu_items", {
+      menu: { uid: "m-1" },
+      items: [
+        { recipe_uid: TACOS_UID, day: 1, type: { name: "Dinner" } },
+        { name: "Leftovers", day: 1, type: { name: "Dinner" } },
+      ],
+    });
+
+    const saved = mockSaveMenuItems.mock.calls[0]![0] as MenuItem[];
+    expect(saved[0]!.recipeUid).toBe(TACOS_UID);
+    expect(saved[0]!.name).toBe("Tacos");
+    expect(saved[1]!.recipeUid).toBe(null);
+    expect(saved[1]!.name).toBe("Leftovers");
+  });
+
+  it("schema accepts recipe-only and freeform variants, rejects both-at-once", () => {
+    const base = { menu: { uid: "m-1" } };
+    expect(
+      addMenuItemsInputSchema.safeParse({ ...base, items: [{ recipe_uid: "r", day: 1, type: { name: "Dinner" } }] })
+        .success,
+    ).toBe(true);
+    expect(
+      addMenuItemsInputSchema.safeParse({ ...base, items: [{ name: "Leftovers", day: 1, type: { name: "Dinner" } }] })
+        .success,
+    ).toBe(true);
+    expect(
+      addMenuItemsInputSchema.safeParse({
+        ...base,
+        items: [{ recipe_uid: "r", name: "Both", day: 1, type: { name: "Dinner" } }],
+      }).success,
+    ).toBe(false);
   });
 
   it("assigns menu-wide sequential order_flag, seeded from the existing menu max", async () => {
