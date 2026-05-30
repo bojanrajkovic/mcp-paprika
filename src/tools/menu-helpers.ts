@@ -4,12 +4,19 @@ import type { ServerContext } from "../types/server-context.js";
 import { textResult } from "./helpers.js";
 
 /**
- * Returns Ok when both menu stores are synced, Err<CallToolResult> otherwise.
- * Both stores must be synced because `read_menu` and the `paprika://menu/{uid}`
- * resource inline menuitems. Mirrors `groceryStartGuard`.
+ * Returns Ok when the menu, menu-item, AND meal-type stores are all synced,
+ * Err<CallToolResult> otherwise. `menuStore`/`menuItemStore` back a menu and its
+ * inlined items; `mealTypeStore` is required because `read_menu`, the menu write
+ * tools, and the `paprika://menu/{uid}` resource render each item's meal-type
+ * name and sort within a day by the type's order. Meal-type sync is best-effort
+ * and can fail/lag independently of menu sync (see the try/catch blocks in
+ * `sync.ts`); without this check a cold `mealTypeStore` renders every item with
+ * an opaque `typeUid` sorted as unknown. Gating here yields a clear "still
+ * syncing" message instead — mirroring `mealStartGuard`, which likewise gates on
+ * `mealTypeStore`.
  */
 export function menuStartGuard(ctx: ServerContext): Result<void, ReturnType<typeof textResult>> {
-  if (!ctx.menuStore.hasSynced || !ctx.menuItemStore.hasSynced) {
+  if (!ctx.menuStore.hasSynced || !ctx.menuItemStore.hasSynced || !ctx.mealTypeStore.hasSynced) {
     return err(textResult("Menu data is not yet synced. Try again in a few seconds."));
   }
   return ok(undefined);
