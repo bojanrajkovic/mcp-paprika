@@ -4,6 +4,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { RecipeUidSchema } from "../paprika/types.js";
 import type { CategoryUid, Recipe } from "../paprika/types.js";
+import { formatPaprikaDate } from "../paprika/dates.js";
 import { coldStartGuard, commitRecipe, recipeToMarkdown, resolveCategoryNames, textResult } from "./helpers.js";
 import type { ServerContext } from "../types/server-context.js";
 
@@ -43,8 +44,10 @@ export function registerCreateTool(server: McpServer, ctx: ServerContext): void 
 
           const warnings = unknownCategories.map((name) => `Warning: category "${name}" not found and was skipped.`);
 
-          // Build the full Recipe object — all 28 fields required by the type
-          // hash: "" — Paprika API returns the real hash in the saveRecipe response
+          // Build the full Recipe object — all 28 fields required by the type.
+          // hash: "" — Paprika stores the client-supplied hash verbatim (it does
+          // not derive one), and the save response is just `{result: true}`, so we
+          // have nothing better to send on create. The next sync reconciles it.
           const uid = RecipeUidSchema.parse(crypto.randomUUID());
           const newRecipe: Recipe = {
             uid,
@@ -61,7 +64,7 @@ export function registerCreateTool(server: McpServer, ctx: ServerContext): void 
             servings: args.servings ?? null,
             difficulty: args.difficulty ?? null,
             rating: args.rating ?? 0, // AC2.3: omitted → 0 (Paprika's default)
-            created: new Date().toISOString(),
+            created: formatPaprikaDate(new Date()), // yyyy-MM-dd HH:mm:ss — Paprika 500s on ISO-8601 (#159)
             imageUrl: "",
             photo: null,
             photoHash: null,
