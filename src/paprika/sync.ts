@@ -372,7 +372,20 @@ export class SyncEngine {
       const groceryIngredients = await this._context.client.listGroceryIngredients();
       this.log.debug({ count: groceryIngredients.length }, "fetched grocery ingredients");
 
-      const filteredIngredients = groceryIngredients.filter((i) => !i.deleted);
+      // Drop deleted entries AND entries with no aisle. Paprika returns
+      // aisle_uid: null for an ingredient that was never filed into an aisle
+      // (GroceryIngredientSchema coerces that to ""). Such a row carries no aisle
+      // memory — add_grocery_items resolves it to "" and the item then defaults to
+      // "Miscellaneous", identical to having no catalog entry at all — so keeping it
+      // just bloats the catalog. (Historically the null value also aborted the whole
+      // sync cycle before meals/menus could sync.) Warn on the dropped count so the
+      // drop is observable rather than silent.
+      const liveIngredients = groceryIngredients.filter((i) => !i.deleted);
+      const filteredIngredients = liveIngredients.filter((i) => i.aisleUid !== "");
+      const droppedNoAisle = liveIngredients.length - filteredIngredients.length;
+      if (droppedNoAisle > 0) {
+        this.log.warn({ count: droppedNoAisle }, "dropped grocery ingredients with no aisle");
+      }
 
       const cachedIngredients = await this._context.cache.groceryIngredients.getAll();
       const cachedIngredientUids = new Set(cachedIngredients.map((i) => i.uid));

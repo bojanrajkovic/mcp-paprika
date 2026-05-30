@@ -229,7 +229,7 @@ export const PantryItemSchema = z
     ingredient: z.string(),
     quantity: z.string(),
     aisle: z.string(),
-    aisle_uid: z.string(),
+    aisle_uid: z.string().nullable(),
     expiration_date: z.string().nullable(),
     has_expiration: z.boolean(),
     in_stock: z.boolean(),
@@ -240,7 +240,7 @@ export const PantryItemSchema = z
   .transform(
     ({ aisle_uid, expiration_date, has_expiration, in_stock, purchase_date, ...rest }): PantryItem => ({
       ...rest,
-      aisleUid: aisle_uid,
+      aisleUid: aisle_uid ?? "",
       expirationDate: expiration_date,
       hasExpiration: has_expiration,
       inStock: in_stock,
@@ -315,7 +315,7 @@ export const GroceryItemSchema = z
     name: z.string(),
     ingredient: z.string(),
     aisle: z.string(),
-    aisle_uid: z.string(),
+    aisle_uid: z.string().nullable(),
     list_uid: z.string(),
     purchased: z.boolean(),
     deleted: z.boolean().optional().default(false),
@@ -328,7 +328,7 @@ export const GroceryItemSchema = z
   .transform(
     ({ aisle_uid, list_uid, order_flag, ...rest }): GroceryItem => ({
       ...rest,
-      aisleUid: aisle_uid,
+      aisleUid: aisle_uid ?? "",
       listUid: list_uid,
       orderFlag: order_flag,
     }),
@@ -349,13 +349,13 @@ export const GroceryIngredientSchema = z
   .object({
     uid: GroceryIngredientUidSchema,
     name: z.string(),
-    aisle_uid: z.string(),
+    aisle_uid: z.string().nullable(),
     deleted: z.boolean().optional().default(false),
   })
   .transform(
     ({ aisle_uid, ...rest }): GroceryIngredient => ({
       ...rest,
-      aisleUid: aisle_uid,
+      aisleUid: aisle_uid ?? "",
     }),
   );
 

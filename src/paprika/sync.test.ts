@@ -230,6 +230,23 @@ describe("SyncEngine", () => {
     engine.stop();
   });
 
+  it("drops grocery ingredients with no aisle (empty aisleUid) and keeps aisled ones", async () => {
+    const ctx = makeTestContext();
+    const aisled = makeGroceryIngredient({ name: "white pepper", aisleUid: "AISLE-PRODUCE" });
+    const noAisle = makeGroceryIngredient({ name: "baby formula", aisleUid: "" });
+    vi.mocked(ctx.client.listGroceryIngredients).mockResolvedValue([aisled, noAisle]);
+
+    const localEngine = new SyncEngine(ctx, 10);
+    await localEngine.syncOnce();
+
+    const names = ctx.groceryIngredientStore.getAll().map((i) => i.name);
+    expect(names).toContain("white pepper");
+    expect(names).not.toContain("baby formula");
+    // The dropped entry is never written to the disk cache.
+    expect(ctx.cache.groceryIngredients.put).toHaveBeenCalledWith(aisled);
+    expect(ctx.cache.groceryIngredients.put).not.toHaveBeenCalledWith(noAisle);
+  });
+
   it("AC1.2: stop() breaks the loop", async () => {
     const syncCompleteEvents: unknown[] = [];
 

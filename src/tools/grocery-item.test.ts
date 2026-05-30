@@ -349,6 +349,42 @@ describe("add_grocery_items tool", () => {
     expect(secondCallItems[0]?.aisle).toBe("Deli");
   });
 
+  it("assigns the Miscellaneous aisle when no aisle is specified and there is no catalog match", async () => {
+    aisleStore.load([
+      makeAisle({ uid: "AISLE-1" as AisleUid, name: "Produce" }),
+      makeAisle({ uid: "AISLE-MISC" as AisleUid, name: "Miscellaneous" }),
+    ]);
+    groceryIngredientStore.load([]); // no catalog memory for "bundt pan"
+    const { callTool } = makeAddCtx();
+
+    await callTool("add_grocery_items", {
+      listUid: "LIST-1",
+      items: [{ ingredient: "bundt pan" }],
+    });
+
+    const posted = mockSaveGroceryItems.mock.calls[0]?.[0] as Array<{ aisle: string; aisleUid: string }>;
+    expect(posted).toHaveLength(1);
+    expect(posted[0]?.aisle).toBe("Miscellaneous");
+    expect(posted[0]?.aisleUid).toBe("AISLE-MISC");
+    // Miscellaneous is a default placement, not learned memory — no catalog entry is written.
+    expect(mockSaveGroceryIngredient).not.toHaveBeenCalled();
+  });
+
+  it("falls back to empty aisle when no aisle, no catalog match, and no Miscellaneous aisle exists", async () => {
+    // beforeEach loaded only "Produce" — no Miscellaneous in the catalog.
+    groceryIngredientStore.load([]);
+    const { callTool } = makeAddCtx();
+
+    await callTool("add_grocery_items", {
+      listUid: "LIST-1",
+      items: [{ ingredient: "bundt pan" }],
+    });
+
+    const posted = mockSaveGroceryItems.mock.calls[0]?.[0] as Array<{ aisle: string; aisleUid: string }>;
+    expect(posted[0]?.aisle).toBe("");
+    expect(posted[0]?.aisleUid).toBe("");
+  });
+
   it("grocery-surface.AC2.12: sync-not-ready blocks add_grocery_items when stores not loaded", async () => {
     // Fresh stores with no .load() called
     const freshListStore = new GroceryListStore();

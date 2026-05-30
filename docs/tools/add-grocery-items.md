@@ -4,14 +4,14 @@ Add one or more items to a grocery list in a single batch.
 
 ## Parameters
 
-| Name                  | Type   | Required | Default | Description                                                      |
-| --------------------- | ------ | -------- | ------- | ---------------------------------------------------------------- |
-| `listUid`             | string | Yes      | —       | UID of the grocery list to add items to                          |
-| `items`               | array  | Yes      | —       | Array of items to add (1 or more)                                |
-| `items[].ingredient`  | string | Yes      | —       | Ingredient name (required)                                       |
-| `items[].quantity`    | string | No       | —       | Quantity, e.g. `"2 lbs"`                                         |
-| `items[].aisle`       | string | No       | —       | Aisle display name; omit to auto-resolve from ingredient catalog |
-| `items[].instruction` | string | No       | —       | Free-form notes for this item                                    |
+| Name                  | Type   | Required | Default | Description                                                                                        |
+| --------------------- | ------ | -------- | ------- | -------------------------------------------------------------------------------------------------- |
+| `listUid`             | string | Yes      | —       | UID of the grocery list to add items to                                                            |
+| `items`               | array  | Yes      | —       | Array of items to add (1 or more)                                                                  |
+| `items[].ingredient`  | string | Yes      | —       | Ingredient name (required)                                                                         |
+| `items[].quantity`    | string | No       | —       | Quantity, e.g. `"2 lbs"`                                                                           |
+| `items[].aisle`       | string | No       | —       | Aisle display name; omit to auto-resolve from the ingredient catalog (falls back to Miscellaneous) |
+| `items[].instruction` | string | No       | —       | Free-form notes for this item                                                                      |
 
 ## Behavior
 
@@ -19,7 +19,7 @@ Before calling this tool, use `read_grocery_list` to check for existing items wi
 
 All items in the batch are validated before any API calls are made (all-or-nothing). If any item fails validation (e.g., empty ingredient), no items are added.
 
-**Aisle resolution:** when `aisle` is omitted, the aisle is auto-resolved from the ingredient catalog. When `aisle` is provided explicitly, the catalog entry for that ingredient is created or updated so future auto-resolves pick up the new aisle.
+**Aisle resolution:** when `aisle` is omitted, the aisle is auto-resolved from the ingredient catalog (Paprika's per-ingredient aisle memory). When `aisle` is provided explicitly, the catalog entry for that ingredient is created or updated so future auto-resolves pick up the new aisle. When `aisle` is omitted **and** the ingredient has no catalog match, the item is placed in the built-in **Miscellaneous** aisle — matching Paprika.app, which never leaves an item aisle-less. (If the account has no Miscellaneous aisle, the item is added with no aisle.) A Miscellaneous-default placement does **not** write an ingredient-catalog entry — only an explicit aisle records aisle memory.
 
 **Name denormalization:** each item's internal `name` field is stored as `"quantity ingredient"` when quantity is non-empty, or just `"ingredient"` when quantity is empty.
 

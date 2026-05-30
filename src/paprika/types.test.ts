@@ -1287,6 +1287,70 @@ describe("Grocery Schema Round-Trips", () => {
   });
 });
 
+describe("grocery-infra: null aisle_uid coerces to empty-string sentinel", () => {
+  // Paprika returns aisle_uid: null for entities with no assigned aisle (e.g. an
+  // ingredient added to a list without an aisle). The wire schemas accept null and
+  // collapse it to the established "" = no-aisle sentinel so the stored schema's
+  // aisleUid: z.string() still holds. Regression guard: a single such row used to
+  // throw mid-sync and abort the whole cycle before meals/menus synced.
+  it('GroceryIngredientSchema maps aisle_uid: null to aisleUid: ""', () => {
+    const result = GroceryIngredientSchema.safeParse({
+      uid: "E72FC5C6-61B3-40D9-B3B8-84437FB6F73B",
+      name: "baby formula",
+      aisle_uid: null,
+      deleted: false,
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.aisleUid).toBe("");
+      expect(GroceryIngredientStoredSchema.safeParse(result.data).success).toBe(true);
+    }
+  });
+
+  it('GroceryItemSchema maps aisle_uid: null to aisleUid: ""', () => {
+    const result = GroceryItemSchema.safeParse({
+      uid: "12D1EE66-2DC3-4B65-BF4E-71CB050ECD95",
+      name: "Butter",
+      ingredient: "Butter",
+      aisle: "",
+      aisle_uid: null,
+      list_uid: "034E15F1-B26F-4665-B19D-C89F0F046AFB",
+      purchased: false,
+      deleted: false,
+      order_flag: 0,
+      quantity: "",
+      instruction: "",
+      recipe: null,
+      separate: false,
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.aisleUid).toBe("");
+      expect(GroceryItemStoredSchema.safeParse(result.data).success).toBe(true);
+    }
+  });
+
+  it('PantryItemSchema maps aisle_uid: null to aisleUid: ""', () => {
+    const result = PantryItemSchema.safeParse({
+      uid: "pantry-123",
+      ingredient: "Flour",
+      quantity: "2 cups",
+      aisle: "",
+      aisle_uid: null,
+      expiration_date: null,
+      has_expiration: false,
+      in_stock: true,
+      purchase_date: null,
+      notes: null,
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.aisleUid).toBe("");
+      expect(PantryItemStoredSchema.safeParse(result.data).success).toBe(true);
+    }
+  });
+});
+
 describe("meal-payload: mealToApiPayload round-trip via MealSchema", () => {
   const wireMeal = {
     uid: "MEAL-UID-123",

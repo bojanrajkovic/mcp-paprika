@@ -22,7 +22,13 @@ import type { ServerContext } from "../types/server-context.js";
 const itemInputSchema = z.object({
   ingredient: z.string().min(1).describe("Ingredient name (required)"),
   quantity: z.string().optional().describe("Quantity, e.g. '2 lbs'"),
-  aisle: z.string().optional().describe("Aisle display name; omit to auto-resolve from ingredient catalog."),
+  aisle: z
+    .string()
+    .optional()
+    .describe(
+      "Aisle display name; omit to auto-resolve from the ingredient catalog. " +
+        "When omitted and the ingredient has no catalog match, the item is placed in the Miscellaneous aisle.",
+    ),
   instruction: z.string().optional().describe("Free-form notes for this item"),
 });
 
@@ -104,14 +110,18 @@ export function registerAddGroceryItemsTool(server: McpServer, ctx: ServerContex
                   aisleUid = batchHit.aisleUid;
                 } else {
                   const catalogEntry = ctx.groceryIngredientStore.lookupByName(ingredient);
-                  if (catalogEntry !== undefined) {
-                    const resolvedAisle = ctx.aisleStore.get(AisleUidSchema.parse(catalogEntry.aisleUid));
-                    aisle = resolvedAisle !== undefined ? resolvedAisle.name : "";
-                    aisleUid = resolvedAisle !== undefined ? resolvedAisle.uid : "";
-                  } else {
-                    aisle = "";
-                    aisleUid = "";
-                  }
+                  const resolvedAisle =
+                    catalogEntry !== undefined
+                      ? ctx.aisleStore.get(AisleUidSchema.parse(catalogEntry.aisleUid))
+                      : undefined;
+                  // No catalog memory (or it points at a now-missing aisle): place the
+                  // item in the built-in "Miscellaneous" aisle, matching Paprika.app,
+                  // which never leaves an item aisle-less. Fall back to "" only when the
+                  // catalog has no Miscellaneous aisle (user-deleted, or a non-English
+                  // catalog) — never auto-create it; it's a Paprika built-in.
+                  const placement = resolvedAisle ?? ctx.aisleStore.resolveByName("Miscellaneous");
+                  aisle = placement?.name ?? "";
+                  aisleUid = placement?.uid ?? "";
                 }
               }
 
