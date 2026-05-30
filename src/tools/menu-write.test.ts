@@ -201,6 +201,31 @@ describe("update_menu tool", () => {
     expect(text).toContain("**Days:** 4");
   });
 
+  it("rejects a rename that collides with a different menu's name", async () => {
+    const a = makeMenu({ uid: "m-1" as MenuUid, name: "Weeknights" });
+    const b = makeMenu({ uid: "m-2" as MenuUid, name: "Holiday" });
+    const { menuStore, menuItemStore } = syncedStores({ menus: [a, b] });
+    const { server, callTool } = makeTestServer();
+    const { ctx, mockSaveMenus } = makeWriteToolCtx(menuStore, menuItemStore, server);
+    registerUpdateMenuTool(server, ctx);
+
+    const text = getText(await callTool("update_menu", { lookup: { uid: "m-1" }, name: "Holiday" }));
+    expect(text).toContain('A menu named "Holiday" already exists (UID: m-2).');
+    expect(mockSaveMenus).not.toHaveBeenCalled();
+  });
+
+  it("allows a no-op rename to the menu's own name (case-insensitive) alongside another change", async () => {
+    const menu = makeMenu({ uid: "m-1" as MenuUid, name: "Holiday", notes: "old" });
+    const { menuStore, menuItemStore } = syncedStores({ menus: [menu] });
+    const { server, callTool } = makeTestServer();
+    const { ctx, mockSaveMenus } = makeWriteToolCtx(menuStore, menuItemStore, server);
+    registerUpdateMenuTool(server, ctx);
+
+    getText(await callTool("update_menu", { lookup: { uid: "m-1" }, name: "holiday", notes: "new" }));
+    const savedArg = (mockSaveMenus.mock.calls[0]![0] as Menu[])[0]!;
+    expect(savedArg.notes).toBe("new");
+  });
+
   it("resolves the menu by name", async () => {
     const menu = makeMenu({ uid: "m-named" as MenuUid, name: "Summer Plan" });
     const { menuStore, menuItemStore } = syncedStores({ menus: [menu] });

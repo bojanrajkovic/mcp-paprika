@@ -78,7 +78,8 @@ export function registerUpdateMenuTool(server: McpServer, ctx: ServerContext): v
     {
       description:
         "Update a menu's name, day span, and/or notes. Look it up by UID or name (tiered fuzzy match, " +
-        "case-insensitive). Provide at least one of name, days, or notes. Shrinking days below the highest " +
+        "case-insensitive). Provide at least one of name, days, or notes. Renaming to a name already used " +
+        "by a different menu is rejected (the existing UID is surfaced). Shrinking days below the highest " +
         "day that already has a planned recipe is rejected (the conflicting recipes are named) — move or " +
         "delete those menuitems first. " +
         'Pass exactly one lookup shape: {"uid": "..."} or {"name": "..."}.',
@@ -124,6 +125,23 @@ export function registerUpdateMenuTool(server: McpServer, ctx: ServerContext): v
           }
 
           const existing = outcome.entity;
+
+          // Name-conflict guard: reject a rename that collides with a DIFFERENT menu
+          // (mirrors create_menu's duplicate guard and rename_grocery_list). A no-op
+          // rename to the menu's own current name is allowed and falls through.
+          if (args.name !== undefined) {
+            const newName = args.name;
+            if (newName.toLowerCase() !== existing.name.toLowerCase()) {
+              const conflict = ctx.menuStore
+                .findByName(newName)
+                .find((m) => m.name.toLowerCase() === newName.toLowerCase() && m.uid !== existing.uid);
+              if (conflict !== undefined) {
+                return textResult(
+                  `A menu named "${conflict.name}" already exists (UID: ${conflict.uid}). Choose a different name.`,
+                );
+              }
+            }
+          }
 
           // Days-shrink guard: refuse to orphan menuitems that would fall outside the
           // new span. maxDay is the highest day among live items; conflicts are the
