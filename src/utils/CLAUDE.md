@@ -170,6 +170,9 @@ http: {
   host:            string     // bind host, default "0.0.0.0"
   allowedHosts:    string[]   // DNS rebinding Host allowlist (listField, default [])
   allowedOrigins:  string[]   // DNS rebinding Origin allowlist (listField, default [])
+  shutdownDrainMs: number     // SIGTERM readiness-drain delay in ms (durationField, default "5s").
+                              // /healthz reports not-ready and the server keeps serving for this
+                              // long before draining, so k8s de-routes the pod first. 0 disables.
 }
 ```
 
@@ -177,12 +180,13 @@ http: {
 
 **HTTP env-var mapping table:**
 
-| Env var               | Config path           |
-| --------------------- | --------------------- |
-| `MCP_HTTP_PORT`       | `http.port`           |
-| `MCP_HTTP_HOST`       | `http.host`           |
-| `MCP_ALLOWED_HOSTS`   | `http.allowedHosts`   |
-| `MCP_ALLOWED_ORIGINS` | `http.allowedOrigins` |
+| Env var                      | Config path            |
+| ---------------------------- | ---------------------- |
+| `MCP_HTTP_PORT`              | `http.port`            |
+| `MCP_HTTP_HOST`              | `http.host`            |
+| `MCP_ALLOWED_HOSTS`          | `http.allowedHosts`    |
+| `MCP_ALLOWED_ORIGINS`        | `http.allowedOrigins`  |
+| `MCP_HTTP_SHUTDOWN_DRAIN_MS` | `http.shutdownDrainMs` |
 
 **`logging` block** (`paprikaConfigSchema.logging`):
 

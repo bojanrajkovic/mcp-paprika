@@ -123,7 +123,7 @@ function makeConfig(overrides: Partial<PaprikaConfig> = {}): PaprikaConfig {
     paprika: { email: "test@example.com", password: "secret" },
     sync: { enabled: false, interval: 60_000 },
     transport: "stdio",
-    http: { port: 0, host: "127.0.0.1", allowedHosts: [], allowedOrigins: [] },
+    http: { port: 0, host: "127.0.0.1", allowedHosts: [], allowedOrigins: [], shutdownDrainMs: 0 },
     logging: SILENT_LOGGING_CONFIG,
     ...overrides,
   } as PaprikaConfig;
@@ -406,7 +406,13 @@ describe("HTTP transport (Streamable HTTP)", () => {
     it("rejects POST /mcp with a disallowed Origin header", async () => {
       const handle = await startHttp(
         makeConfig({
-          http: { port: 0, host: "127.0.0.1", allowedHosts: [], allowedOrigins: ["https://allowed.example.test"] },
+          http: {
+            port: 0,
+            host: "127.0.0.1",
+            allowedHosts: [],
+            allowedOrigins: ["https://allowed.example.test"],
+            shutdownDrainMs: 0,
+          },
         }),
       );
       try {
@@ -428,7 +434,13 @@ describe("HTTP transport (Streamable HTTP)", () => {
     it("rejects POST /mcp when allowedOrigins is set and no Origin header is sent", async () => {
       const handle = await startHttp(
         makeConfig({
-          http: { port: 0, host: "127.0.0.1", allowedHosts: [], allowedOrigins: ["https://allowed.example.test"] },
+          http: {
+            port: 0,
+            host: "127.0.0.1",
+            allowedHosts: [],
+            allowedOrigins: ["https://allowed.example.test"],
+            shutdownDrainMs: 0,
+          },
         }),
       );
       try {
@@ -449,7 +461,13 @@ describe("HTTP transport (Streamable HTTP)", () => {
     it("accepts POST /mcp with an allowed Origin header", async () => {
       const handle = await startHttp(
         makeConfig({
-          http: { port: 0, host: "127.0.0.1", allowedHosts: [], allowedOrigins: ["https://allowed.example.test"] },
+          http: {
+            port: 0,
+            host: "127.0.0.1",
+            allowedHosts: [],
+            allowedOrigins: ["https://allowed.example.test"],
+            shutdownDrainMs: 0,
+          },
         }),
       );
       try {
@@ -529,6 +547,38 @@ describe("HTTP transport (Streamable HTTP)", () => {
       sseController.abort();
       await ssePromise;
     });
+
+    it("fails readiness (/healthz 503) during the pre-drain window, then refuses connections", async () => {
+      const handle = await startHttp(
+        makeConfig({
+          http: { port: 0, host: "127.0.0.1", allowedHosts: [], allowedOrigins: [], shutdownDrainMs: 300 },
+        }),
+      );
+      const port = handle.port;
+
+      const before = await fetch(`http://127.0.0.1:${port.toString()}/healthz`);
+      expect(before.status).toBe(200);
+
+      // Begin shutdown but don't await — we're inside the 300ms readiness-drain
+      // window, during which the server keeps serving but reports not-ready so
+      // Kubernetes de-routes the pod before connections close.
+      const shutdownPromise = handle.shutdown();
+
+      const during = await fetch(`http://127.0.0.1:${port.toString()}/healthz`);
+      expect(during.status).toBe(503);
+      expect(await during.json()).toMatchObject({ ok: false, draining: true });
+
+      await shutdownPromise;
+
+      // After the drain completes the server is fully down.
+      let refused = false;
+      try {
+        await fetch(`http://127.0.0.1:${port.toString()}/healthz`);
+      } catch {
+        refused = true;
+      }
+      expect(refused).toBe(true);
+    });
   });
 });
 
@@ -541,7 +591,7 @@ function makeOAuthConfig(): PaprikaConfig {
     paprika: { email: "test@example.com", password: "secret" },
     sync: { enabled: false, interval: 60_000 },
     transport: "http",
-    http: { port: 0, host: "127.0.0.1", allowedHosts: [], allowedOrigins: [] },
+    http: { port: 0, host: "127.0.0.1", allowedHosts: [], allowedOrigins: [], shutdownDrainMs: 0 },
     logging: SILENT_LOGGING_CONFIG,
     oauth: {
       publicUrl: PUBLIC_URL,

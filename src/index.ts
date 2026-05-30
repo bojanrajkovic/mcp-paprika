@@ -14,7 +14,17 @@ async function main(): Promise<void> {
 
   const handle: TransportHandle = config.transport === "http" ? await startHttp(config) : await startStdio(config);
 
+  let shuttingDown = false;
   const onSignal = (signal: string) => {
+    // Re-entry guard: k8s sends one SIGTERM, but a user may Ctrl-C twice (or a
+    // SIGINT can follow a SIGTERM). A second shutdown() would call
+    // nodeServer.close() on an already-closing server and reject. Ignore
+    // repeats — the first shutdown owns the exit.
+    if (shuttingDown) {
+      process.stderr.write(`${signal} received during shutdown; ignoring.\n`);
+      return;
+    }
+    shuttingDown = true;
     // process.stderr.write is used here intentionally — the structured logger may not
     // be built yet (early startup failure) or may already be torn down at signal time.
     // See src/server/CLAUDE.md for the documented exception.

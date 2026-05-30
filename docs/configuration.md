@@ -24,12 +24,13 @@ Environment variables always win. If you set `PAPRIKA_EMAIL` as an env var and a
 
 ### HTTP transport
 
-| Variable              | Config path           | Required | Default     | Description                                                   |
-| --------------------- | --------------------- | -------- | ----------- | ------------------------------------------------------------- |
-| `MCP_HTTP_PORT`       | `http.port`           | No       | `3000`      | Port to bind when `MCP_TRANSPORT=http` (1–65535)              |
-| `MCP_HTTP_HOST`       | `http.host`           | No       | `"0.0.0.0"` | Host to bind when `MCP_TRANSPORT=http`                        |
-| `MCP_ALLOWED_HOSTS`   | `http.allowedHosts`   | No       | `[]`        | Host-header allowlist (DNS rebinding protection)              |
-| `MCP_ALLOWED_ORIGINS` | `http.allowedOrigins` | No       | `[]`        | Origin-header allowlist (browser-only; locks out CLI clients) |
+| Variable                     | Config path            | Required | Default     | Description                                                                                                                                                                                                                                                                                     |
+| ---------------------------- | ---------------------- | -------- | ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `MCP_HTTP_PORT`              | `http.port`            | No       | `3000`      | Port to bind when `MCP_TRANSPORT=http` (1–65535)                                                                                                                                                                                                                                                |
+| `MCP_HTTP_HOST`              | `http.host`            | No       | `"0.0.0.0"` | Host to bind when `MCP_TRANSPORT=http`                                                                                                                                                                                                                                                          |
+| `MCP_ALLOWED_HOSTS`          | `http.allowedHosts`    | No       | `[]`        | Host-header allowlist (DNS rebinding protection)                                                                                                                                                                                                                                                |
+| `MCP_ALLOWED_ORIGINS`        | `http.allowedOrigins`  | No       | `[]`        | Origin-header allowlist (browser-only; locks out CLI clients)                                                                                                                                                                                                                                   |
+| `MCP_HTTP_SHUTDOWN_DRAIN_MS` | `http.shutdownDrainMs` | No       | `"5s"`      | Readiness-drain delay on SIGTERM: `/healthz` reports not-ready and the server keeps serving for this long before closing connections, so Kubernetes de-routes the pod before drain. Accepts a duration (`"5s"`) or milliseconds. Keep well under `terminationGracePeriodSeconds`; `0` disables. |
 
 ### OAuth 2.1 (required when `MCP_TRANSPORT=http`)
 
@@ -149,6 +150,32 @@ for it.
 - Host and Origin values are matched exactly against the incoming header.
   Include the port if your clients send one (e.g. `mcp.example.com:443`).
 - Either list automatically enables enforcement. There's no separate toggle.
+
+### Graceful shutdown (Kubernetes)
+
+On `SIGTERM` the server shuts down in two phases:
+
+1. **Readiness drain** — `/healthz` immediately starts returning `503` (so
+   Kubernetes marks the pod not-ready and removes it from the Service
+   endpoints), and the server keeps serving for `MCP_HTTP_SHUTDOWN_DRAIN_MS`
+   (default `5s`). This window lets endpoint removal and kube-proxy / ingress
+   routing propagate so a request routed just before the pod was deleted still
+   reaches a working server instead of a refused connection.
+2. **Drain** — the sync engine stops, open SSE streams are aborted, the HTTP
+   server stops accepting new connections, in-flight requests are allowed to
+   finish, and idle keep-alive sockets are closed immediately
+   (`closeIdleConnections`). A hard `10s` timeout force-closes anything still
+   open (`closeAllConnections`) so the process exits within the grace period.
+
+Budget the timing so the **total** stays under `terminationGracePeriodSeconds`:
+the drain delay plus the `10s` drain timeout (default `5 + 10 = 15s`) must be
+less than the grace period (the chart/manifest default is `30s`). Set
+`MCP_HTTP_SHUTDOWN_DRAIN_MS=0` to disable the drain delay (appropriate when not
+running under an orchestrator, or for a single-replica `Recreate` rollout where
+there is no other replica to route to).
+
+The container runs `node` as PID 1 (distroless exec-form entrypoint), so SIGTERM
+reaches the process directly — no shell wrapper to swallow it.
 
 ## OAuth 2.1
 

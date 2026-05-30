@@ -122,6 +122,11 @@ export async function startHttp(config: PaprikaConfig, opts: StartHttpOptions = 
   // evicted by an unrelated DELETE).
   const notifier = broadcastNotifier(() => [...sessions.values()].map((s) => s.server));
 
+  // Flipped true at the start of shutdown() so the readiness probe (/healthz)
+  // begins failing and Kubernetes removes this pod from the Service endpoints
+  // before we close connections. See the pre-drain delay in shutdown().
+  let draining = false;
+
   // buildAppContext runs the initial sync internally so cold-start vector
   // indexing happens against a fully-populated RecipeStore (categories
   // included). See src/server/build.ts for the ordering rationale.
@@ -143,12 +148,15 @@ export async function startHttp(config: PaprikaConfig, opts: StartHttpOptions = 
   // so 401s and all other auth-mediated responses are captured.
   hono.use("*", accessLog(log));
 
-  hono.get("/healthz", (c) =>
-    c.json({
-      ok: true,
-      sessions: sessions.size,
-    }),
-  );
+  hono.get("/healthz", (c) => {
+    // While draining, fail readiness (503) so Kubernetes stops routing new
+    // traffic here. The pod is terminating, so kubelet ignores the matching
+    // liveness failure rather than restarting it.
+    if (draining) {
+      return c.json({ ok: false, draining: true, sessions: sessions.size }, 503);
+    }
+    return c.json({ ok: true, sessions: sessions.size });
+  });
 
   if (app.auth !== null) {
     // Capture auth to avoid null-checks inside callbacks (mirrors SyncEngine pattern)
@@ -318,13 +326,34 @@ export async function startHttp(config: PaprikaConfig, opts: StartHttpOptions = 
   return {
     port: boundPort,
     async shutdown() {
+      const nodeServer = httpServer as unknown as NodeHttpServer;
+
+      // Phase 1 — readiness drain. Flip /healthz to 503 and keep serving for
+      // config.http.shutdownDrainMs so Kubernetes de-routes this pod (endpoint
+      // removal + kube-proxy/ingress propagation) before we close anything.
+      // Requests already in flight or routed during the propagation window
+      // still get a working server. Skipped when the delay is 0 (stdio/tests).
+      draining = true;
+      if (config.http.shutdownDrainMs > 0) {
+        log.info({ drainMs: config.http.shutdownDrainMs }, "HTTP shutdown: readiness draining");
+        await new Promise<void>((resolve) => {
+          setTimeout(resolve, config.http.shutdownDrainMs);
+        });
+      }
+
+      // Phase 2 — stop the sync engine and close sessions/connections.
       log.info("HTTP shutdown: stopping sync engine and closing sessions");
 
-      // Order matters. node:http's `Server.close()` waits forever for
-      // long-lived SSE GET streams to finish on their own. We must abort
-      // every open transport first (which terminates its SSE writer), then
-      // drain the HTTP server. Wrap the whole sequence in a hard timeout
-      // so a misbehaving session can't hold shutdown forever.
+      // Order matters. node:http's `Server.close()` stops accepting new
+      // connections but then waits for existing ones to finish on their own —
+      // long-lived SSE GET streams and idle keep-alive sockets never do. We
+      // abort every open transport first (terminating its SSE writer), then
+      // `close()` + `closeIdleConnections()` so in-flight requests get to
+      // finish while idle keep-alive sockets are released immediately. Without
+      // the idle close, `close()` blocks until the timeout below — which on
+      // SIGTERM means a needless 10s pause before the pod exits. The whole
+      // sequence is wrapped in a hard timeout so a stuck in-flight request
+      // can't hold shutdown past the k8s grace period.
       const drain = async (): Promise<void> => {
         sync.stop();
         app.auth?.cleanup.stop();
@@ -334,11 +363,11 @@ export async function startHttp(config: PaprikaConfig, opts: StartHttpOptions = 
         sessions.clear();
 
         await new Promise<void>((resolve, reject) => {
-          const nodeServer = httpServer as unknown as NodeHttpServer;
           nodeServer.close((err) => {
             if (err) reject(err);
             else resolve();
           });
+          nodeServer.closeIdleConnections();
         });
       };
 
@@ -350,13 +379,16 @@ export async function startHttp(config: PaprikaConfig, opts: StartHttpOptions = 
         }, SHUTDOWN_TIMEOUT_MS).unref();
       });
 
-      await Promise.race([drain(), timeout]);
+      // The drain promise must not surface as an unhandled rejection if the
+      // timeout wins the race; swallow late errors (the process is exiting).
+      await Promise.race([drain().catch(() => undefined), timeout]);
 
       if (timedOut) {
-        process.stderr.write(
-          `[mcp-paprika] Shutdown exceeded ${SHUTDOWN_TIMEOUT_MS.toString()}ms timeout; forcing exit.\n`,
-        );
-        process.exit(1);
+        // A request is still in-flight past the deadline. Force the remaining
+        // sockets closed so we exit cleanly within the grace period rather than
+        // being SIGKILLed; this is the abnormal path, hence the warning.
+        log.warn({ timeoutMs: SHUTDOWN_TIMEOUT_MS }, "shutdown exceeded timeout; forcing open connections closed");
+        nodeServer.closeAllConnections();
       }
 
       log.info("HTTP shutdown complete");
