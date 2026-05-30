@@ -49,7 +49,7 @@ The `update` field is a structural union. Each shape is exclusive of the others 
 
 **Date normalization.** `date` accepts ISO 8601 (with or without time-of-day) or `yyyy-MM-dd`. The wire string stored is always `yyyy-MM-dd 00:00:00` taken from the input's own calendar day — for offset-bearing inputs (`2026-06-15T22:00:00-08:00`), the user's local June 15 is preserved rather than UTC-shifted to June 16.
 
-**Order flag on bucket move.** If `date` or `type` changes, the meal is moving to a different `(date, typeUid)` bucket — `orderFlag` is reassigned via `getMaxOrderFlagOn(destBucket) + 1` to avoid collisions in the destination. Same-bucket updates preserve the original `orderFlag` (keep-the-position semantic).
+**Order flag on date move.** `order_flag` sequences per calendar **date** — all meal types on a day share one sequence, not a separate sequence per `(date, type)`. If `date` changes, the meal moves to a different date and `orderFlag` is reassigned via `getMaxOrderFlagOn(destDate) + 1` to land at the end of the destination date. A type-only change on the same date preserves the original `orderFlag` (keep-the-position semantic), since the date bucket is unchanged.
 
 **No-effective-change short-circuit.** If the merged payload is field-wise equal to the existing meal (e.g. `update: {}`), the tool returns the existing meal markdown without re-posting to Paprika or triggering a sync notification.
 

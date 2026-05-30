@@ -1,6 +1,6 @@
 # Tools reference
 
-mcp-paprika exposes 29 MCP tools. Each page below covers parameters, behavior, and examples.
+mcp-paprika exposes 41 MCP tools (`discover_recipes` registers only when an embedding provider is configured). Each page below covers parameters, behavior, and examples.
 
 ## Discovery and query
 
@@ -56,8 +56,24 @@ mcp-paprika exposes 29 MCP tools. Each page below covers parameters, behavior, a
 
 ## Meal planner management
 
-| Tool                          | Description                                                                      |
-| ----------------------------- | -------------------------------------------------------------------------------- |
-| [add_meals](add-meals.md)     | Add one or more meals to the planner in a single batch with per-index validation |
-| [update_meal](update-meal.md) | Partial-merge update for a single meal (date, type, recipe link, scale)          |
-| [delete_meal](delete-meal.md) | Soft-delete a meal by UID; idempotent                                            |
+| Tool                                          | Description                                                                       |
+| --------------------------------------------- | --------------------------------------------------------------------------------- |
+| [list_meal_history](list-meal-history.md)     | Calendar-style view of planned meals grouped by date, with filters and pagination |
+| [list_meal_types](list-meal-types.md)         | List built-in and custom meal types (name → UID) — read-only catalog              |
+| [add_meals](add-meals.md)                     | Add one or more meals to the planner in a single batch with per-index validation  |
+| [update_meal](update-meal.md)                 | Partial-merge update for a single meal (date, type, recipe link, scale)           |
+| [delete_meal](delete-meal.md)                 | Soft-delete a meal by UID; idempotent                                             |
+| [add_menu_to_planner](add-menu-to-planner.md) | Instantiate a saved menu's recipes as dated planner meals (one-way copy)          |
+
+## Menu management
+
+| Tool                                    | Description                                                           |
+| --------------------------------------- | --------------------------------------------------------------------- |
+| [list_menus](list-menus.md)             | List all menus in Paprika order, with item count and day span         |
+| [read_menu](read-menu.md)               | Read a menu by UID or name, rendered day by day with item/recipe UIDs |
+| [create_menu](create-menu.md)           | Create a new menu (name, day span, notes); rejects duplicate names    |
+| [update_menu](update-menu.md)           | Update a menu's name, day span, and/or notes                          |
+| [delete_menu](delete-menu.md)           | Delete a menu and cascade-delete its planned recipes                  |
+| [add_menu_items](add-menu-items.md)     | Add recipe-linked menuitems in a batch; auto-extends the menu span    |
+| [update_menu_item](update-menu-item.md) | Update a menuitem's day, meal type, or linked recipe                  |
+| [delete_menu_item](delete-menu-item.md) | Soft-delete a single menuitem by UID; idempotent                      |
