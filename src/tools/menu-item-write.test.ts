@@ -143,9 +143,9 @@ describe("add_menu_items tool", () => {
     expect(menuItemStore.getByMenuUid("m-1" as MenuUid)).toHaveLength(2);
   });
 
-  it("assigns sequential order_flag within a (menu, day) bucket, seeded from existing max", async () => {
+  it("assigns menu-wide sequential order_flag, seeded from the existing menu max", async () => {
     const menu = makeMenu({ uid: "m-1" as MenuUid, name: "Plan", days: 1 });
-    // Existing item on day 1 holds orderFlag 0 → new items start at 1.
+    // Existing item holds the menu-wide max orderFlag 0 → new items start at 1.
     const existing = makeMenuItem({ uid: "mi-existing" as MenuItemUid, menuUid: "m-1", day: 1, orderFlag: 0 });
     const { menuStore, menuItemStore } = syncedStores({ menus: [menu], items: [existing] });
     const { server, callTool } = makeTestServer();
@@ -164,8 +164,8 @@ describe("add_menu_items tool", () => {
     expect(saved.map((i) => i.orderFlag)).toEqual([1, 2]);
   });
 
-  it("uses independent order_flag counters across different days", async () => {
-    const menu = makeMenu({ uid: "m-1" as MenuUid, name: "Plan", days: 2 });
+  it("numbers order_flag menu-wide across days, not per-day (matches the wire capture)", async () => {
+    const menu = makeMenu({ uid: "m-1" as MenuUid, name: "Plan", days: 3 });
     const { menuStore, menuItemStore } = syncedStores({ menus: [menu] });
     const { server, callTool } = makeTestServer();
     const { ctx, mockSaveMenuItems } = makeWriteToolCtx(syncedRecipeStore(), menuStore, menuItemStore, server);
@@ -175,13 +175,14 @@ describe("add_menu_items tool", () => {
       menu: { uid: "m-1" },
       items: [
         { recipe_uid: TACOS_UID, day: 1, type: { name: "Dinner" } },
-        { recipe_uid: SOUP_UID, day: 2, type: { name: "Dinner" } },
+        { recipe_uid: SOUP_UID, day: 3, type: { name: "Dinner" } },
       ],
     });
 
+    // day-1 item = 0, day-3 item = 1 (menu-wide), mirroring menus.har.json's multi-day menu.
     const saved = mockSaveMenuItems.mock.calls[0]![0] as MenuItem[];
     expect(saved.find((i) => i.day === 1)!.orderFlag).toBe(0);
-    expect(saved.find((i) => i.day === 2)!.orderFlag).toBe(0);
+    expect(saved.find((i) => i.day === 3)!.orderFlag).toBe(1);
   });
 
   it("auto-expands the menu day span when an item overflows it, committing the menu first", async () => {
@@ -370,7 +371,7 @@ describe("update_menu_item tool", () => {
     expect(mockSaveMenus).not.toHaveBeenCalled();
   });
 
-  it("recomputes orderFlag to destination-day max+1 when the day changes", async () => {
+  it("re-sequences a moved item to the menu-wide max+1 when the day changes", async () => {
     const menu = makeMenu({ uid: "m-1" as MenuUid, days: 3 });
     const moving = makeMenuItem({
       uid: "mi-move" as MenuItemUid,
@@ -380,16 +381,25 @@ describe("update_menu_item tool", () => {
       name: "Tacos",
       orderFlag: 0,
     });
-    // Destination day 2 already holds an item at orderFlag 0 → the moved item lands at 1.
-    const sitting = makeMenuItem({
-      uid: "mi-sit" as MenuItemUid,
+    const onDay2 = makeMenuItem({
+      uid: "mi-2" as MenuItemUid,
       menuUid: "m-1",
       day: 2,
       recipeUid: SOUP_UID,
       name: "Soup",
-      orderFlag: 0,
+      orderFlag: 1,
     });
-    const { menuStore, menuItemStore } = syncedStores({ menus: [menu], items: [moving, sitting] });
+    // A higher flag on a *third* day proves the new flag is menu-wide, not per-day:
+    // per-day(day 2) would yield 2 (dest max 1 +1); menu-wide yields 3 (global max 2 +1).
+    const onDay3 = makeMenuItem({
+      uid: "mi-3" as MenuItemUid,
+      menuUid: "m-1",
+      day: 3,
+      recipeUid: SOUP_UID,
+      name: "Soup",
+      orderFlag: 2,
+    });
+    const { menuStore, menuItemStore } = syncedStores({ menus: [menu], items: [moving, onDay2, onDay3] });
     const { server, callTool } = makeTestServer();
     const { ctx, mockSaveMenuItems } = makeWriteToolCtx(syncedRecipeStore(), menuStore, menuItemStore, server);
     registerUpdateMenuItemTool(server, ctx);
@@ -397,7 +407,7 @@ describe("update_menu_item tool", () => {
     await callTool("update_menu_item", { uid: "mi-move", day: 2 });
     const saved = (mockSaveMenuItems.mock.calls[0]![0] as MenuItem[])[0]!;
     expect(saved.day).toBe(2);
-    expect(saved.orderFlag).toBe(1); // dest-day max (0) + 1, no collision
+    expect(saved.orderFlag).toBe(3); // menu-wide max (2) + 1
   });
 
   it("re-resolves the display name when recipe_uid changes", async () => {

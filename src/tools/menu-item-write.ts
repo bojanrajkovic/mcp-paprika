@@ -170,36 +170,25 @@ export function registerAddMenuItemsTool(server: McpServer, ctx: ServerContext):
             }
           }
 
-          // ----- Stage 3: assign orderFlag per (menuUid, day) bucket -----
-          // Seed each bucket from the highest existing orderFlag among live items
-          // on that day, then hand out sequential flags within the batch. The store
-          // does not change between iterations (nothing is saved yet), so the cached
-          // counter keeps same-bucket items in submission order.
+          // ----- Stage 3: assign menu-wide sequential orderFlag -----
+          // Paprika numbers menuitem order_flag across the WHOLE menu, not per day:
+          // the wire capture shows a multi-day menu's day-1 item at order_flag 0 and
+          // its day-3 item at order_flag 1 (docs/wire-captures/menus.har.json). Seed
+          // from the current menu-wide max and hand out a single increasing counter
+          // across the batch in submission order, regardless of day.
           const liveItems = ctx.menuItemStore.getByMenuUid(menu.uid);
-          const nextFlag = new Map<number, number>();
-          const seedFlag = (day: number): number => {
-            const onDay = liveItems.filter((item) => item.day === day);
-            return onDay.reduce((max, item) => Math.max(max, item.orderFlag), -1) + 1;
-          };
+          const seedFlag = liveItems.reduce((max, item) => Math.max(max, item.orderFlag), -1) + 1;
 
-          const builtItems: Array<MenuItem> = resolved.map((r) => {
-            let flag = nextFlag.get(r.day);
-            if (flag === undefined) {
-              flag = seedFlag(r.day);
-            }
-            nextFlag.set(r.day, flag + 1);
-
-            return {
-              uid: MenuItemUidSchema.parse(crypto.randomUUID().toUpperCase()),
-              menuUid: menu.uid,
-              recipeUid: r.recipeUid,
-              name: r.resolvedName,
-              day: r.day,
-              typeUid: r.typeUid,
-              orderFlag: flag,
-              deleted: false,
-            };
-          });
+          const builtItems: Array<MenuItem> = resolved.map((r, idx) => ({
+            uid: MenuItemUidSchema.parse(crypto.randomUUID().toUpperCase()),
+            menuUid: menu.uid,
+            recipeUid: r.recipeUid,
+            name: r.resolvedName,
+            day: r.day,
+            typeUid: r.typeUid,
+            orderFlag: seedFlag + idx,
+            deleted: false,
+          }));
 
           // ----- Stage 4: single batch POST + commit -----
           let savedItems: ReadonlyArray<MenuItem>;
@@ -338,15 +327,16 @@ export function registerUpdateMenuItemTool(server: McpServer, ctx: ServerContext
             }
           }
 
-          // (B) Recompute orderFlag for the destination (menuUid, day) bucket when the day
-          // changes, so the moved item doesn't collide with a flag already in that day
-          // (mirrors update_meal's bucket-change recompute). Seed from the dest-day max.
+          // (B) When the day changes, re-sequence the moved item to the END of the
+          // menu's order_flag run (menu-wide max + 1, excluding the item itself).
+          // order_flag is menu-wide — not per-day — per the wire capture (see Stage 3
+          // of add_menu_items), so this keeps it unique and places the move last.
           let newOrderFlag = existing.orderFlag;
           if (dayChanged && existing.menuUid !== null) {
-            const destItems = ctx.menuItemStore
+            const others = ctx.menuItemStore
               .getByMenuUid(existing.menuUid as MenuUid)
-              .filter((it) => it.day === newDay && it.uid !== existing.uid);
-            newOrderFlag = destItems.reduce((max, it) => Math.max(max, it.orderFlag), -1) + 1;
+              .filter((it) => it.uid !== existing.uid);
+            newOrderFlag = others.reduce((max, it) => Math.max(max, it.orderFlag), -1) + 1;
           }
 
           const merged: MenuItem = {
