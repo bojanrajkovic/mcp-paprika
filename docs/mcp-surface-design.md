@@ -33,9 +33,14 @@ for a user to attach individually. The model accesses them via list/get tools,
 which is sufficient. Exposing them as resources adds maintenance cost and
 duplicates the tool output with no consumer benefit.
 
-Reference-class entities (categories, aisles) exist so the model can resolve
-display names to UIDs when creating or filtering other entities. They need no
-individual read, no CRUD, and no resource surface.
+Reference-class entities (categories, aisles, meal types) exist so the model can
+resolve display names to UIDs when creating or filtering other entities. They
+need no individual read, no CRUD, and no resource surface. Note the split within
+the meal-planning domain: a meal _entry_ (a scheduled recipe on a date) is Data,
+but a meal _type_ (Breakfast, Dinner, a custom Brunch) is Reference — the catalog
+the model resolves a meal entry's type against. Creating a meal type is a
+configuration act (set once, by preference, in the Paprika app), not content the
+model authors, so it gets a list tool only.
 
 ## Decision Matrix
 
@@ -49,6 +54,7 @@ individual read, no CRUD, and no resource surface.
 | Aisle        | Reference | —                              | `list_aisles`                                                                                                                                                    |
 | Menu         | Content   | `paprika://menu/{uid}`         | `list_menus`, `read_menu`, `create_menu`, `update_menu`, `delete_menu`                                                                                           |
 | Meal entry   | Data      | —                              | `list_meal_history` (with date/recipe filters), `add_meals`, `update_meal`, `delete_meal`                                                                        |
+| Meal type    | Reference | —                              | `list_meal_types`                                                                                                                                                |
 
 ## Resource Rendering Contract
 
@@ -71,14 +77,15 @@ child items so a single resource read gives the user complete context to discuss
 
 ## Audit of Existing Surface
 
-| Entity       | Current Surface        | Matrix                | Status                                                                                                         |
-| ------------ | ---------------------- | --------------------- | -------------------------------------------------------------------------------------------------------------- |
-| Recipe       | Tools + resource       | Content → both        | Conforming. Resource metadata header includes UID, URI, Last synced, and Photo.                                |
-| Category     | `list_categories` tool | Reference → list tool | Conforming. No change.                                                                                         |
-| Aisle        | `list_aisles` tool     | Reference → list tool | Conforming. No change.                                                                                         |
-| Pantry item  | Tools only             | Data → tools only     | Conforming. `paprika://pantry/{uid}` resource retired (#104).                                                  |
-| Grocery list | Tools + resource       | Content → both        | Conforming. Tools cover list/read/create/rename/delete; `paprika://grocery-list/{uid}` resource inlines items. |
-| Grocery item | Tools only             | Data → tools only     | Conforming. Tools cover add/update/delete plus cross-entity `move_to_pantry`, `clear_purchased`, `clear_all`.  |
-| Meal entry   | Tools only             | Data → tools only     | Conforming. Tools cover `list_meal_history`, `add_meals`, `update_meal`, `delete_meal`.                        |
+| Entity       | Current Surface        | Matrix                | Status                                                                                                           |
+| ------------ | ---------------------- | --------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| Recipe       | Tools + resource       | Content → both        | Conforming. Resource metadata header includes UID, URI, Last synced, and Photo.                                  |
+| Category     | `list_categories` tool | Reference → list tool | Conforming. No change.                                                                                           |
+| Aisle        | `list_aisles` tool     | Reference → list tool | Conforming. No change.                                                                                           |
+| Pantry item  | Tools only             | Data → tools only     | Conforming. `paprika://pantry/{uid}` resource retired (#104).                                                    |
+| Grocery list | Tools + resource       | Content → both        | Conforming. Tools cover list/read/create/rename/delete; `paprika://grocery-list/{uid}` resource inlines items.   |
+| Grocery item | Tools only             | Data → tools only     | Conforming. Tools cover add/update/delete plus cross-entity `move_to_pantry`, `clear_purchased`, `clear_all`.    |
+| Meal entry   | Tools only             | Data → tools only     | Conforming. Tools cover `list_meal_history`, `add_meals`, `update_meal`, `delete_meal`.                          |
+| Meal type    | `list_meal_types` tool | Reference → list tool | Conforming. Created/edited in the Paprika app; MCP exposes a read-only list so agents resolve names→UIDs (#135). |
 
 Menus and the `add_menu_to_planner` cross-entity tool are still pending; tracked in #137.

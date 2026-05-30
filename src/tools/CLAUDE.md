@@ -10,18 +10,19 @@ Purpose: Defines MCP tools that AI assistants can invoke. Each tool file exports
 
 ### Discovery & Query Tools
 
-| Tool                   | File              | Description                                                                                                |
-| ---------------------- | ----------------- | ---------------------------------------------------------------------------------------------------------- |
-| `search_recipes`       | `search.ts`       | Full-text search by name, ingredients, or description                                                      |
-| `filter_by_ingredient` | `filter.ts`       | Filter recipes by ingredient (all/any mode)                                                                |
-| `filter_by_time`       | `filter.ts`       | Filter recipes by prep/cook/total time constraints                                                         |
-| `discover_recipes`     | `discover.ts`     | Semantic search via VectorStore (natural language)                                                         |
-| `list_categories`      | `categories.ts`   | List all categories with recipe counts                                                                     |
-| `list_aisles`          | `aisles.ts`       | List all aisles sorted by orderFlag, with UID per aisle                                                    |
-| `list_meal_history`    | `meal-history.ts` | Browse meal planner history — calendar-style grouped by date, with type/recipe/date filters and pagination |
-| `list_pantry`          | `pantry-list.ts`  | List all pantry items sorted alphabetically by ingredient                                                  |
-| `list_grocery_lists`   | `grocery-list.ts` | List all grocery lists sorted alphabetically by name, with item counts                                     |
-| `read_grocery_list`    | `grocery-list.ts` | Fetch grocery list by UID or name (tiered fuzzy match), returns list metadata + items                      |
+| Tool                   | File              | Description                                                                                                                            |
+| ---------------------- | ----------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `search_recipes`       | `search.ts`       | Full-text search by name, ingredients, or description                                                                                  |
+| `filter_by_ingredient` | `filter.ts`       | Filter recipes by ingredient (all/any mode)                                                                                            |
+| `filter_by_time`       | `filter.ts`       | Filter recipes by prep/cook/total time constraints                                                                                     |
+| `discover_recipes`     | `discover.ts`     | Semantic search via VectorStore (natural language)                                                                                     |
+| `list_categories`      | `categories.ts`   | List all categories with recipe counts                                                                                                 |
+| `list_aisles`          | `aisles.ts`       | List all aisles sorted by orderFlag, with UID per aisle                                                                                |
+| `list_meal_types`      | `meal-types.ts`   | List all meal types (built-in + custom) sorted by orderFlag then name; shows built-in/custom marker, calendar-export schedule, and UID |
+| `list_meal_history`    | `meal-history.ts` | Browse meal planner history — calendar-style grouped by date, with type/recipe/date filters and pagination                             |
+| `list_pantry`          | `pantry-list.ts`  | List all pantry items sorted alphabetically by ingredient                                                                              |
+| `list_grocery_lists`   | `grocery-list.ts` | List all grocery lists sorted alphabetically by name, with item counts                                                                 |
+| `read_grocery_list`    | `grocery-list.ts` | Fetch grocery list by UID or name (tiered fuzzy match), returns list metadata + items                                                  |
 
 ### CRUD Tools
 
@@ -153,6 +154,7 @@ Utilities imported by meal tool handlers from `./meal-helpers.js`.
 - **`mealTypeSpecSchema`** -- Exported Zod `z.union` of three `.strict()` objects for meal type resolution: `{name}` (trims whitespace via `.transform()`), `{uid}`, and `{builtin}`. Property-presence dispatch — callers pass exactly one variant. Used by both `meal-history.ts` and `meal-writes.ts`.
 - **`resolveMealTypeSpec(ctx, spec)`** -- Shared type-DU resolver used by `meal-history.ts` (read) and `meal-writes.ts` (write). Resolves a `mealTypeSpecSchema` variant against `mealTypeStore` and returns a `MealTypeResolveResult` discriminated union: `{ok: true, resolved: MealType}` on a hit, or one of three error reasons (`unknown_uid` / `unknown_name` with `knownNames` for hinting / `unknown_builtin`). Never formats user-facing text — each caller maps the reason to its own message style (per-index-prefixed for `add_meals`, single-filter for `update_meal` / `list_meal_history`) and derives its own projection from the resolved `MealType` (the read side reads `originalType` to surface legacy null-`typeUid` meals; the write side sends `originalType ?? 0` as the vestigial wire integer).
 - **`mealStartGuard(ctx)`** -- Returns `Ok<void>` when BOTH `ctx.mealStore.hasSynced` AND `ctx.mealTypeStore.hasSynced` are true, `Err<CallToolResult>` otherwise. The mealtype check is required because `resolveMealTypeSpec` reads from `mealTypeStore` — without it, cold-cache lookups surface as misleading "Unknown meal type" errors instead of a clear "still syncing" message. Always use `.match()` to handle both branches.
+- **`mealTypeStartGuard(ctx)`** -- Returns `Ok<void>` when `ctx.mealTypeStore.hasSynced`, `Err<CallToolResult>` otherwise. Narrower than `mealStartGuard` (no `mealStore` check) — used by the read-only `list_meal_types` tool, which only touches the meal-type catalog. Mirrors `aisleStartGuard`. Always use `.match()` to handle both branches.
 - **`commitMeal(ctx, saved)`** -- Persists a saved meal to the local cache and store, then triggers cloud sync. Same pending-marks-then-cache-then-store-then-notifySync sequence as `commitPantryItem`: the upsert branch calls `mealStore.markPendingUpsert(saved.uid)` (sync, FIRST) → `cache.meals.put` (async) → `cache.flush` (async) → `mealStore.set` (sync) → `notifySync` (async); the delete branch calls `mealStore.markPendingDelete(saved.uid)` (sync, FIRST) → `cache.meals.remove` (async) → `cache.flush` (async) → `mealStore.delete` (sync) → `notifySync` (async). No `ctx.notifier.resourceListChanged()` is emitted — meals have no MCP resource surface.
 - **`commitMealsBatch(ctx, items)`** -- Batch variant of `commitMeal`. Commits N meals with a single `cache.flush()` and a single `notifySync()`. Marks all pending writes before any cache I/O; on cache failure, clears ALL marked UIDs before re-throwing. No `resourceListChanged()` — meals have no MCP resource surface. Used by `add_meals`.
 - **`mealToMarkdown(meal, typeName, recipeName)`** -- Pure renderer for a single meal. Takes pre-resolved display names from the caller (caller is responsible for looking up `typeName` from `mealTypeStore` and `recipeName` from recipe store).
@@ -186,5 +188,5 @@ Shared test utilities for direct tool handler invocation without a real MCP serv
 
 ## Dependencies
 
-- **Used by:** `src/server/build.ts` (`buildMcpServer` registers all 29 tools per server instance; `registerDiscoverTool` only when `app.vectorStore !== null`)
+- **Used by:** `src/server/build.ts` (`buildMcpServer` registers all 30 tools per server instance; `registerDiscoverTool` only when `app.vectorStore !== null`)
 - **Uses:** `types/` (ServerContext alias) and `server/` (`SessionContext`, `Notifier` types), `utils/` (parseDuration -- runtime), `paprika/types.ts` (Zod schemas at runtime + type-only imports), `cache/recipe-store.ts` (type-only imports), `features/vector-store.ts` (type-only imports for `VectorStore`, `SemanticResult`)
