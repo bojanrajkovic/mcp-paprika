@@ -24,6 +24,8 @@ import type {
   GroceryList,
   Meal,
   MealType,
+  Menu,
+  MenuItem,
   PantryItem,
   Recipe,
   RecipeEntry,
@@ -39,6 +41,10 @@ import {
   MealSchema,
   MealTypeSchema,
   mealToApiPayload,
+  MenuItemSchema,
+  menuItemToApiPayload,
+  MenuSchema,
+  menuToApiPayload,
   PantryItemSchema,
   RecipeEntrySchema,
   RecipeSchema,
@@ -289,6 +295,14 @@ export class PaprikaClient {
     return this.request("GET", `${API_BASE}/mealtypes/`, z.array(MealTypeSchema));
   }
 
+  async listMenus(): Promise<Array<Menu>> {
+    return this.request("GET", `${API_BASE}/menus/`, z.array(MenuSchema));
+  }
+
+  async listMenuItems(): Promise<Array<MenuItem>> {
+    return this.request("GET", `${API_BASE}/menuitems/`, z.array(MenuItemSchema));
+  }
+
   async listPantry(): Promise<Array<PantryItem>> {
     return this.request("GET", `${API_BASE}/pantry/`, z.array(PantryItemSchema));
   }
@@ -328,6 +342,16 @@ export class PaprikaClient {
 
   async saveMeals(items: ReadonlyArray<Readonly<Meal>>): Promise<ReadonlyArray<Meal>> {
     await this.postEntities(`${API_BASE}/meals/`, items, mealToApiPayload);
+    return items;
+  }
+
+  async saveMenus(items: ReadonlyArray<Readonly<Menu>>): Promise<ReadonlyArray<Menu>> {
+    await this.postEntities(`${API_BASE}/menus/`, items, menuToApiPayload);
+    return items;
+  }
+
+  async saveMenuItems(items: ReadonlyArray<Readonly<MenuItem>>): Promise<ReadonlyArray<MenuItem>> {
+    await this.postEntities(`${API_BASE}/menuitems/`, items, menuItemToApiPayload);
     return items;
   }
 

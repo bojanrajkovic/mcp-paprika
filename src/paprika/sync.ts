@@ -14,6 +14,10 @@ import type {
   GroceryList,
   GroceryListSyncResult,
   Meal,
+  Menu,
+  MenuItem,
+  MenuSyncResult,
+  MenuItemSyncResult,
   PantryItem,
   Recipe,
   RecipeUid,
@@ -59,6 +63,30 @@ function mealsEqual(a: Meal, b: Meal): boolean {
     a.orderFlag === b.orderFlag &&
     a.isIngredient === b.isIngredient &&
     a.scale === b.scale &&
+    a.deleted === b.deleted
+  );
+}
+
+function menusEqual(a: Menu, b: Menu): boolean {
+  return (
+    a.uid === b.uid &&
+    a.name === b.name &&
+    a.days === b.days &&
+    a.orderFlag === b.orderFlag &&
+    a.notes === b.notes &&
+    a.deleted === b.deleted
+  );
+}
+
+function menuItemsEqual(a: MenuItem, b: MenuItem): boolean {
+  return (
+    a.uid === b.uid &&
+    a.menuUid === b.menuUid &&
+    a.recipeUid === b.recipeUid &&
+    a.name === b.name &&
+    a.day === b.day &&
+    a.typeUid === b.typeUid &&
+    a.orderFlag === b.orderFlag &&
     a.deleted === b.deleted
   );
 }
@@ -407,7 +435,43 @@ export class SyncEngine {
         this.log.warn({ err }, "meal sync failed; core sync will continue");
       }
 
-      // 9. Finalization
+      // 9+10. Menu + menu-item sync (best-effort). Isolated in their own try
+      // block so a menu-side failure cannot abort the rest of the cycle. The
+      // menu read/write surface is strictly additive — degrading it to stale
+      // data for one cycle is preferable to regressing core sync. Changes
+      // default to empty so the sync:complete emissions below are well-formed
+      // even when this block throws.
+      let menuChanges: EntityChanges<Menu> = { added: [], updated: [], removedUids: [] };
+      let menuItemChanges: EntityChanges<MenuItem> = { added: [], updated: [], removedUids: [] };
+      try {
+        // 9. Menu sync (replace-all with orphan cleanup, pending-writes filtered)
+        this.log.debug("fetching menus");
+        menuChanges = await syncReplaceAllEntity({
+          fetch: () => this._context.client.listMenus(),
+          cache: this._context.cache.menus,
+          store: this._context.menuStore,
+          equals: menusEqual,
+          label: "menus",
+          log: this.log,
+          afterLoad: () => this._context.menuStore.setLastSyncedAt(),
+        });
+
+        // 10. Menu-item sync (replace-all with orphan cleanup, pending-writes filtered)
+        this.log.debug("fetching menu items");
+        menuItemChanges = await syncReplaceAllEntity({
+          fetch: () => this._context.client.listMenuItems(),
+          cache: this._context.cache.menuItems,
+          store: this._context.menuItemStore,
+          equals: menuItemsEqual,
+          label: "menu items",
+          log: this.log,
+        });
+      } catch (menuError: unknown) {
+        const err = menuError instanceof Error ? menuError : new Error(String(menuError));
+        this.log.warn({ err }, "menu sync failed; core sync will continue");
+      }
+
+      // 11. Finalization
       this.log.debug("flushing cache to disk");
       await this._context.cache.flush();
 
@@ -421,6 +485,8 @@ export class SyncEngine {
       const sweptGroceryItems = this._context.groceryItemStore.sweepPending();
       const sweptMeals = this._context.mealStore.sweepPending();
       const sweptMealTypes = this._context.mealTypeStore.sweepPending();
+      const sweptMenus = this._context.menuStore.sweepPending();
+      const sweptMenuItems = this._context.menuItemStore.sweepPending();
       if (
         sweptStore > 0 ||
         sweptPantry > 0 ||
@@ -428,10 +494,22 @@ export class SyncEngine {
         sweptGroceryLists > 0 ||
         sweptGroceryItems > 0 ||
         sweptMeals > 0 ||
-        sweptMealTypes > 0
+        sweptMealTypes > 0 ||
+        sweptMenus > 0 ||
+        sweptMenuItems > 0
       ) {
         this.log.debug(
-          { sweptStore, sweptPantry, sweptAisles, sweptGroceryLists, sweptGroceryItems, sweptMeals, sweptMealTypes },
+          {
+            sweptStore,
+            sweptPantry,
+            sweptAisles,
+            sweptGroceryLists,
+            sweptGroceryItems,
+            sweptMeals,
+            sweptMealTypes,
+            sweptMenus,
+            sweptMenuItems,
+          },
           "swept pending writes past TTL",
         );
       }
@@ -451,10 +529,14 @@ export class SyncEngine {
       const pantryResult: PantrySyncResult = { changeType: "pantry", changes: pantryChanges };
       const groceryListResult: GroceryListSyncResult = { changeType: "grocery-lists", changes: groceryListChanges };
       const groceryItemResult: GroceryItemSyncResult = { changeType: "grocery-items", changes: groceryItemChanges };
+      const menuResult: MenuSyncResult = { changeType: "menus", changes: menuChanges };
+      const menuItemResult: MenuItemSyncResult = { changeType: "menu-items", changes: menuItemChanges };
       this._events.emit("sync:complete", recipeResult);
       this._events.emit("sync:complete", pantryResult);
       this._events.emit("sync:complete", groceryListResult);
       this._events.emit("sync:complete", groceryItemResult);
+      this._events.emit("sync:complete", menuResult);
+      this._events.emit("sync:complete", menuItemResult);
 
       this.log.info(
         { added: addedRecipes.length, updated: updatedRecipes.length, removed: filteredRemoved.length },

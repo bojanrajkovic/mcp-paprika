@@ -7,6 +7,8 @@ import { GroceryItemStore } from "../cache/grocery-item-store.js";
 import { GroceryListStore } from "../cache/grocery-list-store.js";
 import { MealStore } from "../cache/meal-store.js";
 import { MealTypeStore } from "../cache/meal-type-store.js";
+import { MenuStore } from "../cache/menu-store.js";
+import { MenuItemStore } from "../cache/menu-item-store.js";
 import { PantryStore } from "../cache/pantry-store.js";
 import { RecipeStore } from "../cache/recipe-store.js";
 import { buildDiscoverComponents } from "../features/discover-feature.js";
@@ -36,6 +38,7 @@ import { registerMoveToPantryTool } from "../tools/grocery-move.js";
 import { registerClearPurchasedTool, registerClearAllTool } from "../tools/grocery-clear.js";
 import { registerMealHistoryTool } from "../tools/meal-history.js";
 import { registerAddMealsTool, registerDeleteMealTool, registerUpdateMealTool } from "../tools/meal-writes.js";
+import { registerListMenusTool, registerReadMenuTool } from "../tools/menu-read.js";
 import { registerAddPantryItemsTool } from "../tools/pantry-batch-add.js";
 import { registerDeletePantryItemTool } from "../tools/pantry-delete.js";
 import { registerGetPantryItemTool } from "../tools/pantry-get.js";
@@ -46,6 +49,7 @@ import { registerSearchTool } from "../tools/search.js";
 import { registerUpdateTool } from "../tools/update.js";
 import { registerRecipeResources } from "../resources/recipes.js";
 import { registerGroceryListResources } from "../resources/grocery-lists.js";
+import { registerMenuResources } from "../resources/menus.js";
 import type { PaprikaConfig } from "../utils/config.js";
 import { getCacheDir } from "../utils/xdg.js";
 import type { AppContext, SessionContext } from "./app-context.js";
@@ -185,6 +189,20 @@ export async function buildAppContext(
   }
   log.info({ count: cachedMealTypes.length }, "hydrated meal type store from cache");
 
+  const menuStore = new MenuStore({ pendingWriteTtlMs });
+  const cachedMenus = (await cache.menus.getAll()).filter((m) => !m.deleted);
+  if (cachedMenus.length > 0) {
+    menuStore.load(cachedMenus);
+  }
+  log.info({ count: cachedMenus.length }, "hydrated menu store from cache");
+
+  const menuItemStore = new MenuItemStore({ pendingWriteTtlMs });
+  const cachedMenuItems = (await cache.menuItems.getAll()).filter((mi) => !mi.deleted);
+  if (cachedMenuItems.length > 0) {
+    menuItemStore.load(cachedMenuItems);
+  }
+  log.info({ count: cachedMenuItems.length }, "hydrated menu item store from cache");
+
   // SyncEngine only reads client/cache/store/pantryStore/notifier — never
   // vectorStore — so it is safe to construct with a placeholder appContext
   // whose vectorStore is null. The vector store is then built with
@@ -200,6 +218,8 @@ export async function buildAppContext(
     groceryIngredientStore,
     mealStore,
     mealTypeStore,
+    menuStore,
+    menuItemStore,
     vectorStore: null,
     notifier,
     auth, // null for stdio, populated for HTTP
@@ -214,7 +234,9 @@ export async function buildAppContext(
     if (
       result.changeType !== "recipes" &&
       result.changeType !== "grocery-lists" &&
-      result.changeType !== "grocery-items"
+      result.changeType !== "grocery-items" &&
+      result.changeType !== "menus" &&
+      result.changeType !== "menu-items"
     ) {
       return;
     }
@@ -270,6 +292,8 @@ export async function buildAppContext(
     groceryIngredientStore,
     mealStore,
     mealTypeStore,
+    menuStore,
+    menuItemStore,
     vectorStore,
     notifier,
     auth, // null for stdio, populated for HTTP
@@ -282,8 +306,8 @@ export async function buildAppContext(
 /**
  * Build a fully-registered McpServer for the given AppContext.
  *
- * Registers all 29 tools and the recipe and grocery-list resource families. Called once for stdio,
- * once per session for HTTP. Tool registration is pure (closures over the
+ * Registers all 31 tools and the recipe, grocery-list, and menu resource families. Called once for
+ * stdio, once per session for HTTP. Tool registration is pure (closures over the
  * session context), so registering the same tool name on N independent
  * server instances is safe — there is no module-level mutable state.
  *
@@ -324,6 +348,8 @@ export function buildMcpServer(app: AppContext): McpServer {
   registerAddMealsTool(server, sessionCtx);
   registerUpdateMealTool(server, sessionCtx);
   registerDeleteMealTool(server, sessionCtx);
+  registerListMenusTool(server, sessionCtx);
+  registerReadMenuTool(server, sessionCtx);
 
   if (app.vectorStore !== null) {
     registerDiscoverTool(server, sessionCtx, app.vectorStore);
@@ -331,6 +357,7 @@ export function buildMcpServer(app: AppContext): McpServer {
 
   registerRecipeResources(server, sessionCtx);
   registerGroceryListResources(server, sessionCtx);
+  registerMenuResources(server, sessionCtx);
 
   return server;
 }

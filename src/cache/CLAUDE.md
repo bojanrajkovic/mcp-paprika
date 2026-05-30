@@ -12,6 +12,8 @@ Last verified: 2026-05-29
 - `grocery-ingredient-store.ts` — In-memory lookup layer for grocery ingredients (plain class, not EntityStore; keyed by lowercase name; no pending-writes)
 - `meal-store.ts` — In-memory query layer for meals (TombstoneEntityStore subclass; `getByRecipeUid`, `lastCookedAt`, `getInDateRange`)
 - `meal-type-store.ts` — In-memory query layer for meal types (EntityStore subclass; `resolveByName` for case-insensitive lookup, like AisleStore)
+- `menu-store.ts` — In-memory query layer for menus (TombstoneEntityStore subclass; tombstones, `findByName`, `lastSyncedAt`; parent of menu items, like GroceryListStore)
+- `menu-item-store.ts` — In-memory query layer for menu items (TombstoneEntityStore subclass; tombstones, `getByMenuUid`, like GroceryItemStore)
 - `disk/` — Persistence layer: `DiskCacheRoot` and per-entity subcaches. See `disk/CLAUDE.md` for the full contract.
 
 ## Purpose
@@ -205,6 +207,44 @@ In-memory query layer for meal types, hydrated by the sync engine. Extends `Enti
 
 No delete or tombstone support — meal types are a reference catalog.
 
+### MenuStore
+
+In-memory query layer for menus, hydrated by the sync engine. Extends `TombstoneEntityStore<Menu, MenuUid>` (see `../entity/CLAUDE.md`). The parent/Content store in the menu pair, mirroring `GroceryListStore`.
+
+**Construction:** `new MenuStore(opts?: { pendingWriteTtlMs?: number })` — starts empty with `hasSynced = false`.
+
+**Methods:**
+
+| Method                  | Description                                                                      |
+| ----------------------- | -------------------------------------------------------------------------------- |
+| `load(items)`           | Clears and repopulates from `items`, sets `hasSynced = true`; un-tombstones UIDs |
+| `get(uid)` / `getAll()` | Direct UID lookup or all items (inherited)                                       |
+| `set(menu)`             | Upsert by `menu.uid`; clears tombstone for that UID                              |
+| `delete(uid)`           | Tombstones the UID unconditionally; removes from `_items`                        |
+| `findByName(query)`     | Tiered case-insensitive lookup: exact > starts-with > contains; at most one tier |
+| `lastSyncedAt`          | `Date \| null` getter — timestamp of last successful menu sync                   |
+| `setLastSyncedAt(at?)`  | Sets `lastSyncedAt`; defaults to `new Date()`                                    |
+| Pending-writes          | All inherited from `EntityStore`                                                 |
+
+### MenuItemStore
+
+In-memory query layer for menu items, hydrated by the sync engine. Extends `TombstoneEntityStore<MenuItem, MenuItemUid>` (see `../entity/CLAUDE.md`). The child/Data store in the menu pair, mirroring `GroceryItemStore`.
+
+**Construction:** `new MenuItemStore(opts?: { pendingWriteTtlMs?: number })` — starts empty with `hasSynced = false`.
+
+**Methods:**
+
+| Method                  | Description                                                                      |
+| ----------------------- | -------------------------------------------------------------------------------- |
+| `load(items)`           | Clears and repopulates from `items`, sets `hasSynced = true`; un-tombstones UIDs |
+| `get(uid)` / `getAll()` | Direct UID lookup or all items (inherited)                                       |
+| `set(item)`             | Upsert by `item.uid`; clears tombstone for that UID                              |
+| `delete(uid)`           | Tombstones the UID unconditionally; removes from `_items`                        |
+| `getByMenuUid(menuUid)` | Returns all non-tombstoned items whose `menuUid` matches the given value         |
+| Pending-writes          | All inherited from `EntityStore`                                                 |
+
+**Note:** `MenuItemStore` has no `findByName` or `lastSyncedAt` (parent `MenuStore` carries those). `getByMenuUid` takes a branded `MenuUid`; the comparison runs against the plain-string nullable `MenuItem.menuUid` wire field (a brand is a string subtype), and never matches a cascade-deleted item whose `menuUid` is `null`.
+
 ### DiskCacheRoot
 
 Persistence layer for every entity the server caches. Composed of one `DiskCache<T>` instance per entity (`recipes`, `categories`, `pantry`, `aisles`, `oauthClients`, `oauthTokens`, `groceryLists`, `groceryItems`, `groceryIngredients`, `meals`, `mealTypes`) plus a one-shot legacy-index migration that runs on first boot to upgrade installs from the unified-index layout.
@@ -238,7 +278,7 @@ See `disk/CLAUDE.md` for the full contract, on-disk layout, migration semantics,
 
 ### Pending-writes (issue #57)
 
-`RecipeStore`, `PantryStore`, `AisleStore`, `GroceryListStore`, `GroceryItemStore`, `MealStore`, and `MealTypeStore` all inherit pending-writes tracking from `EntityStore`. `GroceryIngredientStore` does NOT inherit from `EntityStore` and has no pending-writes. See `../entity/CLAUDE.md` for the full invariants. Key cache-layer points:
+`RecipeStore`, `PantryStore`, `AisleStore`, `GroceryListStore`, `GroceryItemStore`, `MealStore`, `MealTypeStore`, `MenuStore`, and `MenuItemStore` all inherit pending-writes tracking from `EntityStore`. `GroceryIngredientStore` does NOT inherit from `EntityStore` and has no pending-writes. See `../entity/CLAUDE.md` for the full invariants. Key cache-layer points:
 
 - Pending-writes is **separate from the pantry tombstone set**: tombstones drive the delete-tool's idempotent "already deleted" message; pending-writes shield the sync loop from rolling back or resurrecting in-flight writes.
 - Clearing is **content-equality-based for upserts**: recipes clear when the canonical entry's hash matches the local cache; pantry items clear when the incoming item is field-wise equal via `pantryItemsEqual`. UID-presence-only clearing was rejected because the UID can appear in the canonical list with pre-write content while propagation is still in flight.
