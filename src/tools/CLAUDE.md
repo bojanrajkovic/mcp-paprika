@@ -1,6 +1,6 @@
 # MCP Tool Definitions
 
-Last verified: 2026-05-29
+Last verified: 2026-05-30
 
 > Pantry write tools (`add_pantry_items`, `update_pantry_item`) normalize any user-supplied `expirationDate` through `normalizePaprikaDate()` (`paprika/dates.ts`) before persisting. Accepts ISO 8601, `yyyy-MM-dd`, `yyyy/MM/dd`, or the already-Paprika `yyyy-MM-dd HH:mm:ss`. Unparseable input returns a `textResult` error to the LLM rather than writing garbage. `add_pantry_items` stamps `purchaseDate` via `paprikaDateToday()` (today at midnight, Paprika wire format) and generates UIDs as **uppercase** UUID v4 to match what Paprika.app emits.
 
@@ -10,19 +10,21 @@ Purpose: Defines MCP tools that AI assistants can invoke. Each tool file exports
 
 ### Discovery & Query Tools
 
-| Tool                   | File              | Description                                                                                                                            |
-| ---------------------- | ----------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| `search_recipes`       | `search.ts`       | Full-text search by name, ingredients, or description                                                                                  |
-| `filter_by_ingredient` | `filter.ts`       | Filter recipes by ingredient (all/any mode)                                                                                            |
-| `filter_by_time`       | `filter.ts`       | Filter recipes by prep/cook/total time constraints                                                                                     |
-| `discover_recipes`     | `discover.ts`     | Semantic search via VectorStore (natural language)                                                                                     |
-| `list_categories`      | `categories.ts`   | List all categories with recipe counts                                                                                                 |
-| `list_aisles`          | `aisles.ts`       | List all aisles sorted by orderFlag, with UID per aisle                                                                                |
-| `list_meal_types`      | `meal-types.ts`   | List all meal types (built-in + custom) sorted by orderFlag then name; shows built-in/custom marker, calendar-export schedule, and UID |
-| `list_meal_history`    | `meal-history.ts` | Browse meal planner history — calendar-style grouped by date, with type/recipe/date filters and pagination                             |
-| `list_pantry`          | `pantry-list.ts`  | List all pantry items sorted alphabetically by ingredient                                                                              |
-| `list_grocery_lists`   | `grocery-list.ts` | List all grocery lists sorted alphabetically by name, with item counts                                                                 |
-| `read_grocery_list`    | `grocery-list.ts` | Fetch grocery list by UID or name (tiered fuzzy match), returns list metadata + items                                                  |
+| Tool                   | File              | Description                                                                                                                               |
+| ---------------------- | ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `search_recipes`       | `search.ts`       | Full-text search by name, ingredients, or description                                                                                     |
+| `filter_by_ingredient` | `filter.ts`       | Filter recipes by ingredient (all/any mode)                                                                                               |
+| `filter_by_time`       | `filter.ts`       | Filter recipes by prep/cook/total time constraints                                                                                        |
+| `discover_recipes`     | `discover.ts`     | Semantic search via VectorStore (natural language)                                                                                        |
+| `list_categories`      | `categories.ts`   | List all categories with recipe counts                                                                                                    |
+| `list_aisles`          | `aisles.ts`       | List all aisles sorted by orderFlag, with UID per aisle                                                                                   |
+| `list_meal_types`      | `meal-types.ts`   | List all meal types (built-in + custom) sorted by orderFlag then name; shows built-in/custom marker, calendar-export schedule, and UID    |
+| `list_meal_history`    | `meal-history.ts` | Browse meal planner history — calendar-style grouped by date, with type/recipe/date filters and pagination                                |
+| `list_pantry`          | `pantry-list.ts`  | List all pantry items sorted alphabetically by ingredient                                                                                 |
+| `list_grocery_lists`   | `grocery-list.ts` | List all grocery lists sorted alphabetically by name, with item counts                                                                    |
+| `read_grocery_list`    | `grocery-list.ts` | Fetch grocery list by UID or name (tiered fuzzy match), returns list metadata + items                                                     |
+| `list_menus`           | `menu-read.ts`    | List all menus (saved meal plans) in Paprika order (orderFlag then name), with item count and day span per menu                           |
+| `read_menu`            | `menu-read.ts`    | Fetch a menu by UID or name (tiered fuzzy match); renders the full day span with empty days, each item line carrying menuitem+recipe UIDs |
 
 ### CRUD Tools
 
@@ -147,6 +149,16 @@ Utilities imported by grocery list tool handlers from `./grocery-helpers.js`.
 - **`groceryListToMarkdown(list, items)`** -- Renders a grocery list as markdown. Outputs the list name as H1, UID, item count, then a markdown table of items (ingredient, quantity, aisle, purchased status). Empty string fields render as `—`.
 - **`groceryItemToMarkdown(item)`** -- Renders a single grocery item as markdown. Outputs ingredient as H1, UID, list UID, then conditionally quantity, aisle, purchased status, and instruction/notes when non-empty.
 
+### `menu-helpers.ts`
+
+Shared plumbing for the menu surface, imported from `./menu-helpers.js`. Cloned from `grocery-helpers.ts` (the parent/child Content+Data pair), NOT from `meal-helpers.ts` — menus have an MCP resource surface, so the commit helpers DO emit `resourceListChanged()` (the meal helpers do not).
+
+- **`menuStartGuard(ctx)`** -- Returns `Ok<void>` when both `ctx.menuStore.hasSynced` and `ctx.menuItemStore.hasSynced` are true, `Err<CallToolResult>` otherwise. Both stores must be synced because `read_menu` and the menu resource inline menuitems. Mirrors `groceryStartGuard`. Always use `.match()` to handle both branches.
+- **`menuToMarkdown(menu, items, mealTypes, opts?)`** -- Pure renderer for a menu and its items. Iterates the menu's full `days` span (Day 1..menu.days); a day with no items renders `_(no meals planned)_`. Within a day, items sort by their meal-type's `orderFlag` (an unknown `typeUid` sorts last), then by item `orderFlag`. Header: menu name (H1), UID, `Days: N`, and `Notes:` when non-empty. Each item line shows the resolved meal-type name and the recipe display name (`item.name`). When `opts.includeItemUids` is set, appends `` · item `<uid>` · recipe `<recipeUid>` `` (recipe clause omitted when `recipeUid` is null). Pure like `mealToMarkdown` — takes the `mealTypes` catalog array for `typeUid`→name/order resolution; both callers pass `ctx.mealTypeStore.getAll()`. `read_menu` passes `includeItemUids: true`; the `paprika://menu/{uid}` resource passes `false` (clean recipe-name lines, matching `groceryListToMarkdown`'s no-child-UID convention).
+- **`commitMenu(ctx, saved)`** -- Persists a saved menu to cache and store, then triggers cloud sync. Clone of `commitGroceryList`: branches on `saved.deleted` (markPending\* → put/remove → flush → set/delete → resourceListChanged → notifySync), wraps cache I/O in try/catch that calls `clearPending` on failure. Both branches call `ctx.notifier.resourceListChanged()` because menus have an MCP resource surface.
+- **`commitMenuItem(ctx, saved)`** -- Same pattern as `commitMenu` but operates on `menuItemStore` and `cache.menuItems`. Calls `resourceListChanged()` because menuitems are inlined in the menu resource. Used by single-item write tools.
+- **`commitMenuItemsBatch(ctx, items)`** -- Batch variant of `commitMenuItem`. Commits N menuitems with a single `cache.flush()`, a single `resourceListChanged()`, and a single `notifySync()`. Marks all pending writes before any cache I/O; on cache failure (via `Promise.allSettled`), clears ALL marked UIDs before re-throwing.
+
 ### `meal-helpers.ts`
 
 Utilities imported by meal tool handlers from `./meal-helpers.js`.
@@ -188,5 +200,5 @@ Shared test utilities for direct tool handler invocation without a real MCP serv
 
 ## Dependencies
 
-- **Used by:** `src/server/build.ts` (`buildMcpServer` registers all 30 tools per server instance; `registerDiscoverTool` only when `app.vectorStore !== null`)
+- **Used by:** `src/server/build.ts` (`buildMcpServer` registers all 32 tools per server instance; `registerDiscoverTool` only when `app.vectorStore !== null`)
 - **Uses:** `types/` (ServerContext alias) and `server/` (`SessionContext`, `Notifier` types), `utils/` (parseDuration -- runtime), `paprika/types.ts` (Zod schemas at runtime + type-only imports), `cache/recipe-store.ts` (type-only imports), `features/vector-store.ts` (type-only imports for `VectorStore`, `SemanticResult`)

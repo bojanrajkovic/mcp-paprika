@@ -31,6 +31,8 @@ HTTP client for the Paprika Cloud Sync API. Handles authentication, request form
 - `GroceryIngredientUid` — Branded string type for grocery ingredient identifiers, validated by `GroceryIngredientUidSchema`
 - `MealUid` — Branded string type for meal identifiers, validated by `MealUidSchema`
 - `MealTypeUid` — Branded string type for meal type identifiers, validated by `MealTypeUidSchema`
+- `MenuUid` — Branded string type for menu identifiers, validated by `MenuUidSchema` (non-empty)
+- `MenuItemUid` — Branded string type for menu item identifiers, validated by `MenuItemUidSchema` (non-empty)
 
 **Entry Types:**
 
@@ -48,19 +50,23 @@ HTTP client for the Paprika Cloud Sync API. Handles authentication, request form
 - `GroceryIngredient` — Grocery ingredient catalog entry with `uid`, `name`, `aisleUid`, `deleted`; output of `GroceryIngredientStoredSchema` and `GroceryIngredientSchema`. The `deleted` field is `optional().default(false)`.
 - `Meal` — Meal planner entry with 10 fields (`uid`, `recipeUid`, `name`, `date`, `type`, `typeUid`, `orderFlag`, `isIngredient`, `scale`, `deleted`); output of `MealStoredSchema` and `MealSchema`. `recipeUid` is `string | null` (not branded RecipeUid — wire format doesn't guarantee recipe exists). `typeUid` is `string | null` — older meals predating Paprika's mealtypes catalog carry `null`; in that case `type` (integer) maps to `MealType.originalType`. `deleted` is `optional().default(false)`.
 - `MealType` — Meal type catalog entry with 8 fields (`uid`, `name`, `color`, `orderFlag`, `originalType`, `exportAllDay`, `exportTime`, `deleted`); output of `MealTypeStoredSchema` and `MealTypeSchema`. The `deleted` field is `optional().default(false)` — GET responses omit it for live items, but the soft-delete wire format POSTs it as `true` (same pattern as aisles/grocery entities). `exportTime` is `number` (seconds since midnight: `28800` for 08:00, `64800` for 18:00). `originalType` is `number | null` — built-in types carry the integer mapping to one of the four defaults (Breakfast=0, Lunch=1, Dinner=2, Snacks=3); user-created custom types carry `null`. None of these are used by the read-only history feature directly, but the sync layer filters `deleted: true` before loading into `mealTypeStore`.
+- `Menu` — Saved meal plan with 6 fields (`uid`, `name`, `days`, `orderFlag`, `notes`, `deleted`); output of `MenuStoredSchema` and `MenuSchema`. `days` is the menu's total day span (1-indexed). `uid` is branded `MenuUid`. The `deleted` field is `optional().default(false)`.
+- `MenuItem` — One planned recipe within a menu, with 8 fields (`uid`, `menuUid`, `recipeUid`, `name`, `day`, `typeUid`, `orderFlag`, `deleted`); output of `MenuItemStoredSchema` and `MenuItemSchema`. `uid` is branded `MenuItemUid`. `menuUid` is `string | null` — a cascade-deleted menuitem carries `menu_uid: null` on the wire (the menu's soft-delete nulls the back-reference); it is plain `z.string().nullable()`, not branded. `recipeUid` is `string | null` (defensive read — wire does not guarantee a recipe link). `day` is the 1-indexed day within the menu's span; `name` is the denormalized recipe display name. The `deleted` field is `optional().default(false)`.
 - `AuthResponse` — Authentication response `{result: {token: string}}`; output of `AuthResponseSchema`
 
 **Domain Types:**
 
 - `RecipeInput` — Recipe creation/update input (requires `name`, `ingredients`, `directions`; excludes `uid`, `hash`, `created`)
 - `EntityChanges<T>` — `{added: ReadonlyArray<T>, updated: ReadonlyArray<T>, removedUids: ReadonlyArray<string>}` — change set for one entity type
-- `SyncEntityType` — `"recipes" | "pantry" | "grocery-lists" | "grocery-items"` — closed union of entity types sync can produce; adding a new type requires explicit extension
+- `SyncEntityType` — `"recipes" | "pantry" | "grocery-lists" | "grocery-items" | "menus" | "menu-items"` — closed union of entity types sync can produce; adding a new type requires explicit extension
 - `SyncResult<K extends SyncEntityType, T extends object>` — generic discriminated-union variant: `{changeType: K, changes: EntityChanges<T>}`
 - `RecipeSyncResult` — `SyncResult<"recipes", Recipe>` — concrete recipe variant
 - `PantrySyncResult` — `SyncResult<"pantry", PantryItem>` — concrete pantry variant
 - `GroceryListSyncResult` — `SyncResult<"grocery-lists", GroceryList>` — concrete grocery list variant
 - `GroceryItemSyncResult` — `SyncResult<"grocery-items", GroceryItem>` — concrete grocery item variant
-- `AnySyncResult` — `RecipeSyncResult | PantrySyncResult | GroceryListSyncResult | GroceryItemSyncResult` — union used as the `sync:complete` event payload
+- `MenuSyncResult` — `SyncResult<"menus", Menu>` — concrete menu variant
+- `MenuItemSyncResult` — `SyncResult<"menu-items", MenuItem>` — concrete menu item variant
+- `AnySyncResult` — `RecipeSyncResult | PantrySyncResult | GroceryListSyncResult | GroceryItemSyncResult | MenuSyncResult | MenuItemSyncResult` — union used as the `sync:complete` event payload
 - `DiffResult` — `{added: string[], changed: string[], removed: string[]}`
 
 ### Zod Schemas
@@ -75,6 +81,8 @@ HTTP client for the Paprika Cloud Sync API. Handles authentication, request form
 - `GroceryIngredientSchema` — Validates and transforms grocery ingredients from API (`aisle_uid` → camelCase `GroceryIngredient`)
 - `MealSchema` — Validates and transforms meals from API (`recipe_uid`, `type_uid`, `order_flag`, `is_ingredient` → camelCase `Meal`)
 - `MealTypeSchema` — Validates and transforms meal types from API (`order_flag`, `original_type`, `export_all_day`, `export_time` → camelCase `MealType`)
+- `MenuSchema` — Validates and transforms menus from API (`order_flag` → camelCase `Menu`)
+- `MenuItemSchema` — Validates and transforms menu items from API (`menu_uid`, `recipe_uid`, `type_uid`, `order_flag` → camelCase `MenuItem`)
 - `AuthResponseSchema` — Validates authentication responses
 
 **Stored Format Schemas** (validate camelCase JSON from disk, no transform):
@@ -88,6 +96,13 @@ HTTP client for the Paprika Cloud Sync API. Handles authentication, request form
 - `GroceryIngredientStoredSchema` — Validates camelCase grocery ingredient JSON read from disk (no transform)
 - `MealStoredSchema` — Validates camelCase meal JSON read from disk (no transform)
 - `MealTypeStoredSchema` — Validates camelCase meal type JSON read from disk (no transform)
+- `MenuStoredSchema` — Validates camelCase menu JSON read from disk (no transform)
+- `MenuItemStoredSchema` — Validates camelCase menu item JSON read from disk (no transform)
+
+**Payload mappers** (camelCase → snake_case wire, exported from `types.ts` following the `mealToApiPayload` convention so write tools can use them without importing `client.ts`):
+
+- `menuToApiPayload(item: Readonly<Menu>): Record<string, unknown>` — inverse of `MenuSchema`'s read transform; emits `order_flag` and the literal fields.
+- `menuItemToApiPayload(item: Readonly<MenuItem>): Record<string, unknown>` — inverse of `MenuItemSchema`'s read transform; emits `menu_uid`, `recipe_uid`, `type_uid`, `order_flag`.
 
 **Entry and UID Schemas:**
 
@@ -127,6 +142,8 @@ Typed HTTP client wrapping the Paprika Cloud Sync API.
 - `listCategories(): Promise<Array<Category>>` — fetches category list, then hydrates each with bulkhead(5) concurrency limit independent of recipe bulkhead
 - `listMeals(): Promise<Array<Meal>>` — fetches fully-hydrated meals from `/api/v2/sync/meals/`; parses via `MealSchema`
 - `listMealTypes(): Promise<Array<MealType>>` — fetches meal type catalog from `/api/v2/sync/mealtypes/`; parses via `MealTypeSchema`
+- `listMenus(): Promise<Array<Menu>>` — fetches menus from `/api/v2/sync/menus/`; parses via `MenuSchema`
+- `listMenuItems(): Promise<Array<MenuItem>>` — fetches menu items from `/api/v2/sync/menuitems/`; parses via `MenuItemSchema`
 - `listPantry(): Promise<Array<PantryItem>>` — fetches fully-hydrated pantry items from `/api/v2/sync/pantry/` (no entry/detail split; all items are complete objects)
 - `listAisles(): Promise<Array<Aisle>>` — fetches aisle catalog from `/api/v2/sync/groceryaisles/`; same pattern as `listCategories()`
 - `listGroceryLists(): Promise<Array<GroceryList>>` — fetches fully-hydrated grocery lists from `/api/v2/sync/grocerylists/`; parses via `GroceryListSchema`
@@ -139,6 +156,8 @@ Typed HTTP client wrapping the Paprika Cloud Sync API.
 - `saveGroceryItems(items: ReadonlyArray<Readonly<GroceryItem>>): Promise<ReadonlyArray<GroceryItem>>` — POSTs gzip-encoded N-element JSON array to `/api/v2/sync/groceries/`; batch-capable (sends all items in one request); returns input items on `{result: true}`
 - `saveGroceryIngredient(ingredient: Readonly<GroceryIngredient>): Promise<GroceryIngredient>` — POSTs gzip-encoded single-element JSON array to `/api/v2/sync/groceryingredients/`; returns input ingredient on `{result: true}`
 - `saveMeals(items: ReadonlyArray<Readonly<Meal>>): Promise<ReadonlyArray<Meal>>` — POSTs gzip-encoded N-element JSON array to `/api/v2/sync/meals/`; batch-capable (sends all items in one request); identity-returns `items` on `{result: true}` (Paprika does not echo saved objects). Delegates to `postEntities` with `mealToApiPayload` as the `toPayload` transformer. `mealToApiPayload(item: Readonly<Meal>): Record<string, unknown>` is the inverse of `MealSchema`'s read-side camelCase transform — maps camelCase fields back to snake_case wire names (`recipe_uid`, `type_uid`, `order_flag`, `is_ingredient`).
+- `saveMenus(items: ReadonlyArray<Readonly<Menu>>): Promise<ReadonlyArray<Menu>>` — POSTs gzip-encoded N-element JSON array to `/api/v2/sync/menus/` via `postEntities` with `menuToApiPayload`; batch-capable; identity-returns `items` on `{result: true}`.
+- `saveMenuItems(items: ReadonlyArray<Readonly<MenuItem>>): Promise<ReadonlyArray<MenuItem>>` — POSTs gzip-encoded N-element JSON array to `/api/v2/sync/menuitems/` via `postEntities` with `menuItemToApiPayload`; batch-capable; identity-returns `items` on `{result: true}`.
 - `deleteRecipe(uid: RecipeUid): Promise<void>` — soft-delete: fetches recipe, sets `inTrash: true`, saves, then calls `notifySync()`
 - `notifySync(): Promise<void>` — POSTs to `/api/v2/sync/notify/` to trigger cloud sync propagation
 
@@ -314,6 +333,13 @@ Background polling loop that keeps local cache and in-memory store synchronized 
    - Delegated to `syncReplaceAllEntity({ ..., fetch: client.listMeals, store: mealStore, equals: mealsEqual })`.
    - `mealsEqual()` compares all 10 fields.
    - No `sync:complete` event (meals have no MCP resource surface).
+
+8.5. **Menu + MenuItem sync (replace-all, pending-writes filtered, best-effort):**
+
+- Both delegated to `syncReplaceAllEntity` and wrapped in a single best-effort `try/catch` (like the meal block) so a menu-sync failure cannot abort grocery/recipe sync.
+- Menu sync: `fetch: client.listMenus`, `store: menuStore`, `equals: menusEqual` (compares `uid`/`name`/`days`/`orderFlag`/`notes`/`deleted`), `afterLoad: () => menuStore.setLastSyncedAt()`.
+- MenuItem sync: `fetch: client.listMenuItems`, `store: menuItemStore`, `equals: menuItemsEqual` (compares all 8 fields), no `afterLoad`.
+- **Both emit `sync:complete`** (`MenuSyncResult` and `MenuItemSyncResult`). Menus are the `paprika://menu/{uid}` resource, and menuitems are inlined in that resource — so a menuitem change must trigger a resource-list notification for the parent menu, exactly as grocery-item changes trigger grocery-list resource notifications.
 
 9. **Finalization:**
    - Flushes cache once: `await cache.flush()`

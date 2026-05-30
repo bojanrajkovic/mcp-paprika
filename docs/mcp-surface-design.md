@@ -53,6 +53,7 @@ model authors, so it gets a list tool only.
 | Grocery item | Data      | —                              | `list_grocery_items`, `add_grocery_item`, `update_grocery_item`, `delete_grocery_item`, `check_grocery_item`                                                     |
 | Aisle        | Reference | —                              | `list_aisles`                                                                                                                                                    |
 | Menu         | Content   | `paprika://menu/{uid}`         | `list_menus`, `read_menu`, `create_menu`, `update_menu`, `delete_menu`                                                                                           |
+| Menu item    | Data      | —                              | `add_menu_items`, `update_menu_item`, `delete_menu_item`                                                                                                         |
 | Meal entry   | Data      | —                              | `list_meal_history` (with date/recipe filters), `add_meals`, `update_meal`, `delete_meal`                                                                        |
 | Meal type    | Reference | —                              | `list_meal_types`                                                                                                                                                |
 
@@ -77,15 +78,17 @@ child items so a single resource read gives the user complete context to discuss
 
 ## Audit of Existing Surface
 
-| Entity       | Current Surface        | Matrix                | Status                                                                                                           |
-| ------------ | ---------------------- | --------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| Recipe       | Tools + resource       | Content → both        | Conforming. Resource metadata header includes UID, URI, Last synced, and Photo.                                  |
-| Category     | `list_categories` tool | Reference → list tool | Conforming. No change.                                                                                           |
-| Aisle        | `list_aisles` tool     | Reference → list tool | Conforming. No change.                                                                                           |
-| Pantry item  | Tools only             | Data → tools only     | Conforming. `paprika://pantry/{uid}` resource retired (#104).                                                    |
-| Grocery list | Tools + resource       | Content → both        | Conforming. Tools cover list/read/create/rename/delete; `paprika://grocery-list/{uid}` resource inlines items.   |
-| Grocery item | Tools only             | Data → tools only     | Conforming. Tools cover add/update/delete plus cross-entity `move_to_pantry`, `clear_purchased`, `clear_all`.    |
-| Meal entry   | Tools only             | Data → tools only     | Conforming. Tools cover `list_meal_history`, `add_meals`, `update_meal`, `delete_meal`.                          |
-| Meal type    | `list_meal_types` tool | Reference → list tool | Conforming. Created/edited in the Paprika app; MCP exposes a read-only list so agents resolve names→UIDs (#135). |
+| Entity       | Current Surface        | Matrix                | Status                                                                                                                                                                              |
+| ------------ | ---------------------- | --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Recipe       | Tools + resource       | Content → both        | Conforming. Resource metadata header includes UID, URI, Last synced, and Photo.                                                                                                     |
+| Category     | `list_categories` tool | Reference → list tool | Conforming. No change.                                                                                                                                                              |
+| Aisle        | `list_aisles` tool     | Reference → list tool | Conforming. No change.                                                                                                                                                              |
+| Pantry item  | Tools only             | Data → tools only     | Conforming. `paprika://pantry/{uid}` resource retired (#104).                                                                                                                       |
+| Grocery list | Tools + resource       | Content → both        | Conforming. Tools cover list/read/create/rename/delete; `paprika://grocery-list/{uid}` resource inlines items.                                                                      |
+| Grocery item | Tools only             | Data → tools only     | Conforming. Tools cover add/update/delete plus cross-entity `move_to_pantry`, `clear_purchased`, `clear_all`.                                                                       |
+| Meal entry   | Tools only             | Data → tools only     | Conforming. Tools cover `list_meal_history`, `add_meals`, `update_meal`, `delete_meal`.                                                                                             |
+| Meal type    | `list_meal_types` tool | Reference → list tool | Conforming. Created/edited in the Paprika app; MCP exposes a read-only list so agents resolve names→UIDs (#135).                                                                    |
+| Menu         | Tools + resource       | Content → both        | Read surface landed: `list_menus`, `read_menu`, and the `paprika://menu/{uid}` resource (inlines items). Write tools (`create_menu`, `update_menu`, `delete_menu`) tracked in #136. |
+| Menu item    | Tools only             | Data → tools only     | Read surface inlined in the menu resource and `read_menu`. Write tools (`add_menu_items`, `update_menu_item`, `delete_menu_item`) tracked in #136.                                  |
 
-Menus and the `add_menu_to_planner` cross-entity tool are still pending; tracked in #137.
+The `add_menu_to_planner` cross-entity tool (instantiate a menu's recipes as meal-planner entries) is still pending; tracked in #137.
