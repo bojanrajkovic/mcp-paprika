@@ -34,6 +34,31 @@ describe("normalizePhoto", () => {
     expect(fullMeta.width).toBe(1000);
     expect(fullMeta.height).toBe(500);
   });
+
+  it("caps the full image's longest edge to maxFullEdge, preserving aspect ratio", async () => {
+    // 4096x2048 (2:1) is the kind of oversized output an image-gen model can emit.
+    const png = await sharp({ create: { width: 4096, height: 2048, channels: 3, background: { r: 5, g: 6, b: 7 } } })
+      .png()
+      .toBuffer();
+
+    const { full } = await normalizePhoto(png, { maxFullEdge: 2048 });
+
+    const fullMeta = await sharp(full).metadata();
+    expect(fullMeta.width).toBe(2048);
+    expect(fullMeta.height).toBe(1024);
+  });
+
+  it("does not enlarge a sub-cap image when maxFullEdge is set", async () => {
+    const png = await sharp({ create: { width: 512, height: 512, channels: 3, background: { r: 1, g: 1, b: 1 } } })
+      .png()
+      .toBuffer();
+
+    const { full } = await normalizePhoto(png, { maxFullEdge: 2048 });
+
+    const fullMeta = await sharp(full).metadata();
+    expect(fullMeta.width).toBe(512);
+    expect(fullMeta.height).toBe(512);
+  });
 });
 
 describe("sha256Hex", () => {
