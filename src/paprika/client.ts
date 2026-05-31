@@ -113,6 +113,7 @@ function recipeToApiPayload(recipe: Readonly<Recipe>): Record<string, unknown> {
     is_pinned: recipe.isPinned,
     scale: recipe.scale,
     nutritional_info: recipe.nutritionalInfo,
+    deleted: recipe.deleted,
   };
 }
 
@@ -403,6 +404,17 @@ export class PaprikaClient {
   async deleteRecipe(uid: RecipeUid): Promise<void> {
     const recipe = await this.getRecipe(uid);
     await this.saveRecipe({ ...recipe, inTrash: true });
+    await this.notifySync();
+  }
+
+  // Hard-delete (empty trash): permanently removes the recipe server-side. POSTs
+  // the full recipe with both in_trash and deleted set, echoing the recipe's
+  // existing hash and created verbatim — the exact shape Paprika.app emits when
+  // emptying the trash (docs/wire-captures/writes.har.json). Unlike deleteRecipe
+  // (soft, reversible), this is irreversible (#125).
+  async hardDeleteRecipe(uid: RecipeUid): Promise<void> {
+    const recipe = await this.getRecipe(uid);
+    await this.saveRecipe({ ...recipe, inTrash: true, deleted: true });
     await this.notifySync();
   }
 

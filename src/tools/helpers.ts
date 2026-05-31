@@ -273,6 +273,27 @@ export async function commitRecipe(ctx: ServerContext, saved: Recipe): Promise<v
   await ctx.client.notifySync(); // async — signals Paprika cloud to propagate
 }
 
+// Hard-delete (empty-trash) commit: the recipe has been permanently removed
+// server-side, so purge it locally too. Unlike commitRecipe — whose soft-delete
+// branch still put+sets the recipe so it stays in the store (hidden, but
+// recoverable) — this REMOVES it from cache and store. markPendingDelete shields
+// the UID from sync resurrection until the canonical list drops it, mirroring the
+// soft-delete branch's ordering: mark first (before any await) so an in-flight
+// sync cycle observing the cache mid-commit still skips our UID (#125).
+export async function commitRecipeHardDelete(ctx: ServerContext, saved: Recipe): Promise<void> {
+  ctx.store.markPendingDelete(saved.uid);
+  try {
+    await ctx.cache.recipes.remove(saved.uid); // async — drops from memory buffer with mutex
+    await ctx.cache.flush(); // async — persists the removal to disk
+  } catch (e) {
+    ctx.store.clearPending(saved.uid); // don't suppress canonical reconciliation on a failed commit
+    throw e;
+  }
+  ctx.store.delete(saved.uid); // sync — removes from in-process store
+  ctx.notifier.resourceListChanged(); // sync — notifies MCP clients
+  await ctx.client.notifySync(); // async — signals Paprika cloud to propagate
+}
+
 /**
  * Resolves human-readable category display names to CategoryUid values.
  * Case-insensitive linear scan of all known categories.

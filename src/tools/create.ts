@@ -78,6 +78,7 @@ export function registerCreateTool(server: McpServer, ctx: ServerContext): void 
             onGroceryList: false,
             scale: null,
             nutritionalInfo: args.nutritionalInfo ?? null,
+            deleted: false, // a freshly created recipe is never a hard-delete tombstone (#125)
           };
 
           let saved: Recipe;

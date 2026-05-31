@@ -631,8 +631,10 @@ describe("PaprikaClient", () => {
       expect(payload).not.toHaveProperty("on_grocery_list");
       expect(payload).not.toHaveProperty("photo_url");
 
-      // AC1.3: Assert exactly 26 fields
-      expect(Object.keys(payload!).length).toBe(26);
+      // AC1.3: Assert exactly 27 fields — 26 plus `deleted`, which the payload now
+      // carries on every recipe POST (false on create/update, true on empty-trash) (#125).
+      expect(payload).toHaveProperty("deleted");
+      expect(Object.keys(payload!).length).toBe(27);
     });
 
     it("p1-u07-client-writes.AC1.4 - saveRecipe returns the input recipe", async () => {
@@ -765,6 +767,67 @@ describe("PaprikaClient", () => {
       }
 
       // Assert notify was never called
+      expect(notifyReached).toBe(false);
+    });
+  });
+
+  describe("recipe-hard-delete.AC: hardDeleteRecipe empties trash (#125)", () => {
+    it("GETs recipe, POSTs with both in_trash and deleted true, then calls notifySync", async () => {
+      const uid = "test-uid";
+      let capturedPayload: Record<string, unknown> | null = null;
+      let notifyReached = false;
+
+      server.use(
+        http.get(`${API_BASE}/recipe/${uid}/`, () => {
+          return HttpResponse.json({ result: makeSnakeCaseRecipe(uid) });
+        }),
+        http.post(`${API_BASE}/recipe/${uid}/`, async ({ request }) => {
+          const formData = await request.formData();
+          const dataBlob = formData.get("data") as Blob;
+          const arrayBuffer = await dataBlob.arrayBuffer();
+          const decompressed = gunzipSync(Buffer.from(arrayBuffer));
+          capturedPayload = JSON.parse(decompressed.toString()) as Record<string, unknown>;
+          return HttpResponse.json({ result: true });
+        }),
+        http.post(`${API_BASE}/notify/`, () => {
+          notifyReached = true;
+          return HttpResponse.json({ result: {} });
+        }),
+      );
+
+      const client = new PaprikaClient("test@example.com", "password");
+      await client.hardDeleteRecipe(RecipeUidSchema.parse(uid));
+
+      expect(capturedPayload).toBeDefined();
+      // The empty-trash payload carries BOTH flags (vs. soft-delete's in_trash only).
+      expect(capturedPayload!["in_trash"]).toBe(true);
+      expect(capturedPayload!["deleted"]).toBe(true);
+      expect(notifyReached).toBe(true);
+    });
+
+    it("404 from getRecipe throws and never POSTs or notifies", async () => {
+      const uid = "not-found";
+      let notifyReached = false;
+
+      server.use(
+        http.get(`${API_BASE}/recipe/${uid}/`, () => {
+          return HttpResponse.json({}, { status: 404 });
+        }),
+        http.post(`${API_BASE}/notify/`, () => {
+          notifyReached = true;
+          return HttpResponse.json({ result: {} });
+        }),
+      );
+
+      const client = new PaprikaClient("test@example.com", "password");
+
+      try {
+        await client.hardDeleteRecipe(RecipeUidSchema.parse(uid));
+        expect.fail("Should have thrown PaprikaAPIError");
+      } catch (error) {
+        expect(error).toBeInstanceOf(PaprikaAPIError);
+      }
+
       expect(notifyReached).toBe(false);
     });
   });

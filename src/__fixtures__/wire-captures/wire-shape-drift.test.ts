@@ -93,11 +93,14 @@ async function capturePostBody(
 
 describe("wire-shape drift detection", () => {
   describe("Zod GET schema input fields vs wire captures", () => {
-    it("RecipeSchema accepts all fields from GET individual recipe", () => {
+    it("RecipeSchema accepts all fields from GET individual recipe (plus deleted)", () => {
       const f = refFixture("GET individual recipe (full 28-field shape)");
       const wireGetKeys = Object.keys((f.responseBody as { result: Record<string, unknown> }).result).sort();
       const schemaKeys = schemaInputKeys(RecipeSchema);
-      expect(schemaKeys).toEqual(wireGetKeys);
+      // GET responses omit `deleted` for live recipes; the schema carries it with
+      // optional().default(false) so the empty-trash POST can set it and the sync
+      // layer can read it — same pattern as MealTypeSchema/aisles/grocery (#125).
+      expect(schemaKeys).toEqual([...wireGetKeys, "deleted"].sort());
     });
 
     it("CategorySchema accepts all fields from GET categories", () => {
@@ -181,7 +184,7 @@ describe("wire-shape drift detection", () => {
   describe("PaprikaClient POST serialization vs wire captures", () => {
     const server = useMswServer([], { onUnhandledRequest: "bypass" });
 
-    it("saveRecipe sends wire POST keys minus deleted (#125)", async () => {
+    it("saveRecipe sends exact wire POST keys including deleted (#125)", async () => {
       const wirePostKeys = wireKeys(writeFixture("create recipe ([mcp-cap] Test Recipe)"), "request");
       const recipe = RecipeSchema.parse(makeSnakeCaseRecipe("FEA35DA4-FAKE")) as Recipe;
 
@@ -202,8 +205,10 @@ describe("wire-shape drift detection", () => {
       await client.saveRecipe(recipe);
 
       const payloadKeys = Object.keys(body!).sort();
-      // #125: we omit deleted (app sends deleted: false on all recipe POSTs)
-      expect(payloadKeys).toEqual(wirePostKeys.filter((k) => k !== "deleted").sort());
+      // #125: deleted is now part of the payload — the app sends it on every recipe
+      // POST (false on create/update, true when emptying trash), and we need it to
+      // hard-delete. Our keys now match the capture exactly, with no omission.
+      expect(payloadKeys).toEqual(wirePostKeys.sort());
     });
 
     it("hard-delete (empty trash) has same shape as trash with both in_trash + deleted true", () => {

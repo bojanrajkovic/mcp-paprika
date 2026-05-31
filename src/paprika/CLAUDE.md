@@ -41,7 +41,7 @@ HTTP client for the Paprika Cloud Sync API. Handles authentication, request form
 
 **Object Types (API responses with snake_case → camelCase transforms):**
 
-- `Recipe` — Full recipe object with 28 fields; output of `RecipeStoredSchema` and `RecipeSchema`
+- `Recipe` — Full recipe object with 29 fields; output of `RecipeStoredSchema` and `RecipeSchema`. The `deleted` field is `optional().default(false)` on both schemas (same pattern as the other entities) — GET responses omit it for live recipes, but the parsed object always carries a concrete boolean. `deleted: true` alongside `inTrash: true` is the empty-trash (hard-delete) tombstone.
 - `Category` — Category with `uid`, `name`, `orderFlag`, `parentUid`; output of `CategoryStoredSchema` and `CategorySchema`
 - `PantryItem` — Pantry inventory item with 11 fields (`uid`, `ingredient`, `quantity`, `aisle`, `aisleUid`, `expirationDate`, `hasExpiration`, `inStock`, `purchaseDate`, `notes`, `deleted`); output of `PantryItemStoredSchema` and `PantryItemSchema`. The `deleted` field is `optional().default(false)` on both schemas — read responses may omit it for live items, but the parsed object always carries a concrete boolean. Wire `aisle_uid` is `z.string().nullable()`, coerced to `""` by the read transform; the stored `aisleUid` is always a string. **Note:** the wire format also carries `location_uid` (referencing the `pantrylocations` entity type), but `PantryItemSchema` does not parse it. The `pantrylocations` sync endpoint returns 404 as of May 2026.
 - `Aisle` — Aisle catalog entry with `uid`, `name`, `orderFlag`, `deleted`; output of `AisleStoredSchema` and `AisleSchema`. The `deleted` field is `optional().default(false)`.
@@ -159,6 +159,7 @@ Typed HTTP client wrapping the Paprika Cloud Sync API.
 - `saveMenus(items: ReadonlyArray<Readonly<Menu>>): Promise<ReadonlyArray<Menu>>` — POSTs gzip-encoded N-element JSON array to `/api/v2/sync/menus/` via `postEntities` with `menuToApiPayload`; batch-capable; identity-returns `items` on `{result: true}`.
 - `saveMenuItems(items: ReadonlyArray<Readonly<MenuItem>>): Promise<ReadonlyArray<MenuItem>>` — POSTs gzip-encoded N-element JSON array to `/api/v2/sync/menuitems/` via `postEntities` with `menuItemToApiPayload`; batch-capable; identity-returns `items` on `{result: true}`.
 - `deleteRecipe(uid: RecipeUid): Promise<void>` — soft-delete: fetches recipe, sets `inTrash: true`, saves, then calls `notifySync()`
+- `hardDeleteRecipe(uid: RecipeUid): Promise<void>` — hard-delete (empty trash): fetches recipe, sets BOTH `inTrash: true` and `deleted: true`, saves (echoing the recipe's existing hash and created verbatim — the exact shape Paprika.app emits when emptying the trash), then calls `notifySync()`. Irreversible, unlike `deleteRecipe`. The hash is NOT recomputed: Paprika validates `deleted` against the stored hash, so echoing the synced hash is sufficient (an empty hash on a locally-created recipe also succeeds).
 - `notifySync(): Promise<void>` — POSTs to `/api/v2/sync/notify/` to trigger cloud sync propagation
 
 **Private API:**
@@ -204,8 +205,8 @@ The constructor installs five hooks after building `this.resilience`. These fire
 **Recipe deletion wire format** (verified via `docs/wire-captures/writes.har.json`):
 
 - Endpoint: `POST /api/v2/sync/recipe/{uid}/` (singular URL with UID in path — diverges from pantry/grocery deletes which use the collection URL)
-- Body: full recipe object with `in_trash: true`; the same multipart `FormData` shape as `saveRecipe`
-- The current `deleteRecipe()` implementation fetches the recipe, sets `inTrash: true`, and saves via `saveRecipe()`, which matches this wire format exactly
+- **Soft-delete (move to trash, reversible):** full recipe object with `in_trash: true`, `deleted: false`; the same multipart `FormData` shape as `saveRecipe`. `deleteRecipe()` fetches the recipe, sets `inTrash: true`, and saves via `saveRecipe()`.
+- **Hard-delete (empty trash, irreversible):** byte-identical body with both `in_trash: true` AND `deleted: true` — the hash is echoed verbatim (NOT recomputed; Paprika validates `deleted` against the stored hash). `hardDeleteRecipe()` implements this. Exposed to MCP clients as the `empty_trash` tool, which guards that the recipe is already trashed.
 
 **Photo upload wire format** (verified via `docs/wire-captures/writes.har.json`):
 

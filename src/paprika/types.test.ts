@@ -182,6 +182,47 @@ describe("Full Object Schemas", () => {
         expect(recipe.description).toBe("A delicious chocolate cake");
         expect(recipe.rating).toBe(5);
         expect(recipe.created).toBe("2024-01-01T00:00:00Z");
+        // #125: GET responses omit `deleted` for live recipes; it defaults to false.
+        expect(recipe.deleted).toBe(false);
+      }
+    });
+
+    it("parses an explicit deleted: true from the empty-trash wire shape (#125)", () => {
+      const result = RecipeSchema.safeParse({
+        uid: "recipe-123",
+        hash: "hash-abc",
+        name: "Trashed Cake",
+        categories: [],
+        ingredients: "flour",
+        directions: "bake",
+        description: null,
+        notes: null,
+        prep_time: null,
+        cook_time: null,
+        total_time: null,
+        servings: null,
+        difficulty: null,
+        rating: 0,
+        created: "2024-01-01 00:00:00",
+        image_url: null,
+        photo: null,
+        photo_hash: null,
+        photo_large: null,
+        photo_url: null,
+        source: null,
+        source_url: null,
+        on_favorites: false,
+        in_trash: true,
+        is_pinned: false,
+        on_grocery_list: false,
+        scale: null,
+        nutritional_info: null,
+        deleted: true,
+      });
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.deleted).toBe(true);
+        expect(result.data.inTrash).toBe(true);
       }
     });
   });
@@ -670,6 +711,7 @@ describe("Type Exports Verification", () => {
         onGroceryList: false,
         scale: null,
         nutritionalInfo: null,
+        deleted: false,
       };
       expect(_testCheck).toBeDefined();
     });

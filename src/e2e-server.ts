@@ -80,6 +80,7 @@ class MockPaprikaClient implements IMockPaprikaClient {
     onGroceryList: false,
     scale: null,
     nutritionalInfo: null,
+    deleted: false,
   };
 
   private mockCategory: Category = {

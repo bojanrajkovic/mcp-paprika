@@ -32,6 +32,7 @@ const arbitraryRecipe = fc.record({
   onGroceryList: fc.boolean(),
   scale: fc.option(fc.string(), { nil: null }),
   nutritionalInfo: fc.option(fc.string(), { nil: null }),
+  deleted: fc.boolean(),
 });
 
 const arbitraryCategoryNames = fc.array(fc.string());
