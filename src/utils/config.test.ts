@@ -7,6 +7,7 @@ import {
   loadConfig,
   buildEnvOverrides,
   deepMerge,
+  resolveImageGenConfig,
 } from "./config.js";
 import { mkdtempSync, writeFileSync, rmSync, chmodSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -1404,6 +1405,118 @@ describe("Configuration loading", () => {
           expect(error.reason).toContain("logging.level");
         }
       });
+    });
+  });
+
+  describe("features.imageGen config", () => {
+    const validBase = { paprika: { email: "user@test.com", password: "secret" } };
+    const embeddings = { apiKey: "emb-key", baseUrl: "https://openrouter.ai/api/v1", model: "text-embedding-3-large" };
+
+    it("imageGen absent → resolveImageGenConfig returns null", () => {
+      const result = paprikaConfigSchema.safeParse(validBase);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.features?.imageGen).toBeUndefined();
+        expect(resolveImageGenConfig(result.data)).toBeNull();
+      }
+    });
+
+    it("dedicated apiKey only → resolves with default OpenRouter baseUrl", () => {
+      const input = { ...validBase, features: { imageGen: { apiKey: "img-key" } } };
+      const result = paprikaConfigSchema.safeParse(input);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(resolveImageGenConfig(result.data)).toEqual({
+          apiKey: "img-key",
+          baseUrl: "https://openrouter.ai/api/v1",
+        });
+      }
+    });
+
+    it("dedicated apiKey + baseUrl → resolves with the custom baseUrl", () => {
+      const input = { ...validBase, features: { imageGen: { apiKey: "img-key", baseUrl: "https://example.com/v1" } } };
+      const result = paprikaConfigSchema.safeParse(input);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(resolveImageGenConfig(result.data)).toEqual({
+          apiKey: "img-key",
+          baseUrl: "https://example.com/v1",
+        });
+      }
+    });
+
+    it("reuseEmbeddingsCreds=true with embeddings → resolves to embeddings creds", () => {
+      const input = { ...validBase, features: { embeddings, imageGen: { reuseEmbeddingsCreds: true } } };
+      const result = paprikaConfigSchema.safeParse(input);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(resolveImageGenConfig(result.data)).toEqual({
+          apiKey: "emb-key",
+          baseUrl: "https://openrouter.ai/api/v1",
+        });
+      }
+    });
+
+    it("reuseEmbeddingsCreds=true WITHOUT embeddings → validation error (hints embeddings)", () => {
+      const input = { ...validBase, features: { imageGen: { reuseEmbeddingsCreds: true } } };
+      const result = paprikaConfigSchema.safeParse(input);
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(ConfigError.validation(result.error.issues).reason).toContain("features.embeddings");
+      }
+    });
+
+    it("empty imageGen block (neither key nor reuse) → validation error with IMAGE_GEN_API_KEY hint", () => {
+      const input = { ...validBase, features: { imageGen: {} } };
+      const result = paprikaConfigSchema.safeParse(input);
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(ConfigError.validation(result.error.issues).reason).toContain("IMAGE_GEN_API_KEY");
+      }
+    });
+
+    it("both apiKey and reuseEmbeddingsCreds → validation error (mutually exclusive)", () => {
+      const input = { ...validBase, features: { embeddings, imageGen: { apiKey: "k", reuseEmbeddingsCreds: true } } };
+      const result = paprikaConfigSchema.safeParse(input);
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(ConfigError.validation(result.error.issues).reason).toContain("not both");
+      }
+    });
+
+    it("env routing: IMAGE_GEN_* vars populate features.imageGen", () => {
+      const overrides = buildEnvOverrides({
+        IMAGE_GEN_API_KEY: "env-img-key",
+        IMAGE_GEN_BASE_URL: "https://env.example/v1",
+        IMAGE_GEN_REUSE_EMBEDDINGS_CREDS: "false",
+      });
+      const merged = deepMerge(validBase, overrides);
+      const result = paprikaConfigSchema.safeParse(merged);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(resolveImageGenConfig(result.data)).toEqual({
+          apiKey: "env-img-key",
+          baseUrl: "https://env.example/v1",
+        });
+      }
+    });
+
+    it("env routing: IMAGE_GEN_REUSE_EMBEDDINGS_CREDS=true coerces to boolean and reuses", () => {
+      const overrides = buildEnvOverrides({
+        OPENAI_API_KEY: "emb-key",
+        OPENAI_BASE_URL: "https://openrouter.ai/api/v1",
+        EMBEDDING_MODEL: "text-embedding-3-large",
+        IMAGE_GEN_REUSE_EMBEDDINGS_CREDS: "true",
+      });
+      const merged = deepMerge(validBase, overrides);
+      const result = paprikaConfigSchema.safeParse(merged);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(resolveImageGenConfig(result.data)).toEqual({
+          apiKey: "emb-key",
+          baseUrl: "https://openrouter.ai/api/v1",
+        });
+      }
     });
   });
 });
