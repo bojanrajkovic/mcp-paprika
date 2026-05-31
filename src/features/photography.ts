@@ -25,23 +25,27 @@ import {
 } from "../utils/resilience.js";
 import { PhotographyError, PhotographyAPIError } from "./photography-errors.js";
 
-/**
- * Curated, user-facing model aliases mapped to their OpenRouter slugs. Aliases
- * are stable even if a provider renames a slug (e.g. "Nano Banana" is a Google
- * codename; the real slug is pinned here). More models are available on
- * OpenRouter — callers wanting one should open an issue rather than passing a
- * raw slug, so the curated set stays small and the modality handling stays correct.
- */
 /** Ordered curated model aliases — a tuple so it can seed the tool's `z.enum`. */
 export const PHOTO_MODELS = ["seedream", "nano-banana", "nano-banana-2", "gpt-image"] as const;
 
 export type PhotoModel = (typeof PHOTO_MODELS)[number];
 
-const MODEL_SLUGS: Record<PhotoModel, string> = {
-  seedream: "bytedance-seed/seedream-4.5",
-  "nano-banana": "google/gemini-2.5-flash-image",
-  "nano-banana-2": "google/gemini-3.1-flash-image-preview",
-  "gpt-image": "openai/gpt-5.4-image-2",
+/**
+ * Per-model OpenRouter slug + output modality, co-located so adding a model is a
+ * single edit and `Record<PhotoModel, …>` forces the compiler to keep every
+ * alias covered. Aliases are stable even if a provider renames a slug ("Nano
+ * Banana" is a Google codename; the real slug is pinned here). `imageOnly`
+ * models (Seedream) emit only an image and require `modalities: ["image"]`; the
+ * rest emit image+text and require `["image", "text"]` — sending the wrong value
+ * 404s with "no endpoints found that support the requested output modalities".
+ * More models exist on OpenRouter; callers wanting one should open an issue
+ * rather than passing a raw slug, so modality handling stays correct.
+ */
+const MODELS: Record<PhotoModel, { readonly slug: string; readonly imageOnly: boolean }> = {
+  seedream: { slug: "bytedance-seed/seedream-4.5", imageOnly: true },
+  "nano-banana": { slug: "google/gemini-2.5-flash-image", imageOnly: false },
+  "nano-banana-2": { slug: "google/gemini-3.1-flash-image-preview", imageOnly: false },
+  "gpt-image": { slug: "openai/gpt-5.4-image-2", imageOnly: false },
 };
 
 /** Default model: cheap, fast, strong food realism, flat per-image cost. */
@@ -50,11 +54,6 @@ export const DEFAULT_PHOTO_MODEL: PhotoModel = "seedream";
 /** Supported output aspect ratios (the tool's input enum). */
 export const PHOTO_ASPECT_RATIOS = ["1:1", "4:3", "3:2", "16:9"] as const;
 export type PhotoAspectRatio = (typeof PHOTO_ASPECT_RATIOS)[number];
-
-// Seedream emits image-only output; the Gemini/GPT models emit image+text.
-// Sending the wrong `modalities` yields a 404 "no endpoints found that support
-// the requested output modalities" from OpenRouter.
-const IMAGE_ONLY_MODELS: ReadonlySet<PhotoModel> = new Set<PhotoModel>(["seedream"]);
 
 // Generous ceiling: GPT Image 2 legitimately takes ~3 minutes. Past this we
 // abort rather than hang a tool call forever.
@@ -129,8 +128,8 @@ export class PhotographyClient {
    * - ZodError on a malformed response envelope
    */
   async generate(options: Readonly<GeneratePhotoOptions>): Promise<GeneratedPhoto> {
-    const slug = MODEL_SLUGS[options.model];
-    const modalities = IMAGE_ONLY_MODELS.has(options.model) ? ["image"] : ["image", "text"];
+    const { slug, imageOnly } = MODELS[options.model];
+    const modalities = imageOnly ? ["image"] : ["image", "text"];
     const content: string | Array<ContentPart> = options.referenceImage
       ? [
           { type: "text", text: options.prompt },
@@ -152,6 +151,9 @@ export class PhotographyClient {
       // steer the aspect ratio.
       image_config: { aspect_ratio: options.aspectRatio ?? "1:1" },
     };
+    // Serialize once — the body can carry a multi-MB base64 reference image
+    // (restyle), and the execute closure runs on every retry attempt.
+    const bodyJson = JSON.stringify(body);
 
     const execute = async (ctx: IRetryContext): Promise<GeneratedPhoto> => {
       const attempt = ctx.attempt + 1;
@@ -173,7 +175,7 @@ export class PhotographyClient {
             "Content-Type": "application/json",
             Authorization: `Bearer ${this._apiKey}`,
           },
-          body: JSON.stringify(body),
+          body: bodyJson,
           signal: controller.signal,
         });
 
