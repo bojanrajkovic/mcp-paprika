@@ -58,9 +58,13 @@ export async function commitCategoryDelete(ctx: ServerContext, category: Categor
   await ctx.client.notifySync();
 }
 
-/** Non-trashed recipes that reference the given category UID. */
+/**
+ * Recipes that reference the given category UID — INCLUDING trashed ones. The
+ * `delete_category` guard blocks on these so deleting a category can't leave a
+ * dangling UID on a recipe the user later restores from the trash.
+ */
 export function recipesReferencing(ctx: ServerContext, uid: CategoryUid): Array<Recipe> {
-  return ctx.store.getAll().filter((recipe) => recipe.categories.includes(uid));
+  return ctx.store.getAllIncludingTrashed().filter((recipe) => recipe.categories.includes(uid));
 }
 
 /**

@@ -218,6 +218,21 @@ describe("category-writes", () => {
       void ctx;
     });
 
+    it("refuses to delete a category referenced only by a TRASHED recipe", async () => {
+      const cat = makeCategory({ uid: "c" as CategoryUid, name: "Used" });
+      const { server, callTool, deleteCategory, ctx } = makeWriteCtx({
+        recipes: [makeRecipe({ categories: ["c" as CategoryUid], inTrash: true })],
+        categories: [cat],
+      });
+      registerDeleteCategoryTool(server, ctx);
+
+      const result = await callTool("delete_category", { uid: "c" });
+
+      expect(deleteCategory).not.toHaveBeenCalled();
+      expect(getText(result)).toContain("still assigned");
+      void ctx;
+    });
+
     it("reports an unknown / already-deleted category", async () => {
       const { server, callTool, deleteCategory, ctx } = makeWriteCtx({ categories: [] });
       registerDeleteCategoryTool(server, ctx);

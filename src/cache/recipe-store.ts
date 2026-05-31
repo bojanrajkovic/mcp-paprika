@@ -48,6 +48,16 @@ export class RecipeStore extends EntityStore<Recipe, RecipeUid> {
     return results;
   }
 
+  /**
+   * Every recipe including trashed ones (`getAll()` excludes `inTrash`). Used by
+   * the `delete_category` guard, which must block a category that a trashed —
+   * but restorable — recipe still references, so restoring it doesn't surface a
+   * dangling category UID.
+   */
+  getAllIncludingTrashed(): Array<Recipe> {
+    return [...this._items.values()];
+  }
+
   override get size(): number {
     let count = 0;
     for (const recipe of this._items.values()) {

@@ -120,7 +120,7 @@ describe("category-helpers", () => {
   });
 
   describe("recipesReferencing", () => {
-    it("returns only non-trashed recipes that reference the category", () => {
+    it("returns referencing recipes INCLUDING trashed ones (so delete can't orphan a restorable recipe)", () => {
       const { ctx } = makeCtx({
         recipes: [
           makeRecipe({ uid: "r1" as never, categories: ["c" as CategoryUid] }),
@@ -129,7 +129,7 @@ describe("category-helpers", () => {
         ],
       });
       const refs = recipesReferencing(ctx, "c" as CategoryUid);
-      expect(refs.map((r) => r.uid)).toEqual(["r1"]);
+      expect(refs.map((r) => r.uid).sort()).toEqual(["r1", "r3"]);
     });
   });
 

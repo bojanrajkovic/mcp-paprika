@@ -42,6 +42,7 @@ Core in-memory cache for recipes and categories with CRUD operations and query m
 
 - `load(recipes)` - Populate store with recipes (single argument — categories no longer stored here)
 - `get(uid) / getAll()` - Retrieve recipes by UID or all non-trashed recipes
+- `getAllIncludingTrashed()` - All recipes including `inTrash` ones (unlike `getAll()`); used by the `delete_category` reference guard so a trashed-but-restorable recipe still blocks category deletion
 - `set(recipe) / delete(uid)` - CRUD operations
 - `size` (getter) - Count of non-trashed recipes
 - `search(query, options?)` - Search recipes with tiered scoring and pagination
