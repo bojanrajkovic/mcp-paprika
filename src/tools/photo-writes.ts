@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
-import { lookup } from "node:dns/promises";
-import { isIP } from "node:net";
+import { lookup as dnsLookup } from "node:dns";
+import { isIP, type LookupFunction } from "node:net";
 
+import { Agent } from "undici";
 import ipaddr from "ipaddr.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
@@ -23,9 +24,9 @@ const FETCH_TIMEOUT_MS = 15_000;
  * CGNAT, multicast, reserved, etc. are all blocked. IPv4-mapped IPv6 addresses
  * (in either the dotted `::ffff:127.0.0.1` or hex `::ffff:7f00:1` form) are
  * resolved to their embedded IPv4 and classified there, so a mapped loopback
- * can't slip through.
+ * can't slip through. Exported for direct unit testing of the classification.
  */
-function isBlockedIp(ip: string): boolean {
+export function isBlockedIp(ip: string): boolean {
   let addr: ipaddr.IPv4 | ipaddr.IPv6;
   try {
     addr = ipaddr.parse(ip);
@@ -40,29 +41,32 @@ function isBlockedIp(ip: string): boolean {
 }
 
 /**
- * SSRF guard: rejects a URL whose host resolves to any loopback/link-local/private/
- * reserved address. Returns an error message, or null when the host is safe to fetch.
- * (Residual DNS-rebinding risk remains: the resolved address is checked, not pinned for
- * the fetch — acceptable for v1 alongside `redirect: "error"` and the size/format guards.)
+ * A DNS lookup that validates every resolved address against {@link isBlockedIp}
+ * and errors BEFORE the socket connects if any is private/reserved. Wired into
+ * {@link ssrfAgent} so the SAME resolution is used for validation AND the
+ * connection — closing the DNS-rebinding (TOCTOU) gap that a separate pre-check
+ * followed by `fetch()` (each doing its own lookup) would leave open.
  */
-async function blockPrivateHost(hostname: string): Promise<string | null> {
-  // URL.hostname wraps IPv6 literals in brackets (`[::1]`); strip them for isIP/lookup.
-  const host = hostname.replace(/^\[(.+)\]$/, "$1");
-  // A bare IP literal in the URL is checked directly (no DNS).
-  if (isIP(host) !== 0) {
-    return isBlockedIp(host) ? "URL resolves to a private or reserved address; refusing to fetch." : null;
-  }
-  let addresses: ReadonlyArray<{ address: string }>;
-  try {
-    addresses = await lookup(host, { all: true });
-  } catch (e) {
-    return `Could not resolve image host: ${toMessage(e)}`;
-  }
-  if (addresses.length === 0 || addresses.some((a) => isBlockedIp(a.address))) {
-    return "URL resolves to a private or reserved address; refusing to fetch.";
-  }
-  return null;
-}
+export const ssrfLookup: LookupFunction = (hostname, options, callback) => {
+  dnsLookup(hostname, options, (err, address, family) => {
+    if (err !== null) {
+      callback(err, "", 0);
+      return;
+    }
+    const addresses = Array.isArray(address) ? address.map((a) => a.address) : [address];
+    if (addresses.some((ip) => isBlockedIp(ip))) {
+      callback(new Error("Refusing to connect to a private or reserved address (SSRF guard)."), "", 0);
+      return;
+    }
+    callback(null, address, family);
+  });
+};
+
+/**
+ * Shared undici dispatcher whose connector resolves DNS through {@link ssrfLookup},
+ * so a fetched URL's connection is pinned to an SSRF-validated address (rebinding-safe).
+ */
+const ssrfAgent = new Agent({ connect: { lookup: ssrfLookup } });
 
 /** Reads a fetch body into a Buffer, aborting once MAX_IMAGE_BYTES is exceeded. */
 async function readCapped(res: Response): Promise<{ bytes: Buffer } | { error: string }> {
@@ -140,15 +144,23 @@ async function resolveBytes(args: {
     if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
       return { error: "Only http(s) image URLs are supported." };
     }
-    // SSRF guard: refuse hosts that resolve to loopback/link-local/private/reserved IPs.
-    const blocked = await blockPrivateHost(parsed.hostname);
-    if (blocked !== null) return { error: blocked };
+    // A bare IP-literal host skips DNS (undici connects directly, bypassing ssrfLookup),
+    // so validate it here. Hostnames are validated rebinding-safe by ssrfAgent at connect.
+    const literal = parsed.hostname.replace(/^\[(.+)\]$/, "$1");
+    if (isIP(literal) !== 0 && isBlockedIp(literal)) {
+      return { error: "URL resolves to a private or reserved address; refusing to fetch." };
+    }
 
     let res: Response;
     try {
-      // `redirect: "error"` prevents a public URL from redirecting to a private host,
-      // sidestepping the redirect-based SSRF bypass; the timeout bounds slow/endless responses.
-      res = await fetch(parsed, { redirect: "error", signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
+      // `dispatcher: ssrfAgent` pins the connection to an SSRF-validated address (closes
+      // DNS rebinding); `redirect: "error"` blocks redirect-to-private bypass; the timeout
+      // bounds slow/endless responses.
+      res = await fetch(parsed, {
+        dispatcher: ssrfAgent,
+        redirect: "error",
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+      } as RequestInit & { dispatcher: Agent });
     } catch (e) {
       return { error: `Failed to download image: ${toMessage(e)}` };
     }
@@ -183,6 +195,11 @@ export function registerUploadPhotoTool(server: McpServer, ctx: ServerContext): 
       );
       return coldStartGuard(ctx).match(
         async (): Promise<CallToolResult> => {
+          // Gate on the photo catalog being synced — order_flag/name are derived from the
+          // existing gallery, so uploading before photos sync could assign a colliding index.
+          if (!ctx.photoStore.hasSynced) {
+            return textResult("The photo catalog is still syncing; try again in a moment.");
+          }
           const recipe = ctx.store.get(args.recipe_uid);
           if (recipe === undefined) return textResult(`No recipe found with UID "${args.recipe_uid}".`);
 
@@ -253,6 +270,11 @@ export function registerDeletePhotoTool(server: McpServer, ctx: ServerContext): 
       log.info({ tool: "delete_photo", photo_uid: args.photo_uid }, "tool invoked");
       return coldStartGuard(ctx).match(
         async (): Promise<CallToolResult> => {
+          // Gate on the photo catalog being synced, else a not-yet-synced photo reads as
+          // "not found" and the idempotent tombstone signal would be wrong.
+          if (!ctx.photoStore.hasSynced) {
+            return textResult("The photo catalog is still syncing; try again in a moment.");
+          }
           const existing = ctx.photoStore.get(args.photo_uid);
           if (existing === undefined) {
             if (ctx.photoStore.isTombstone(args.photo_uid)) {

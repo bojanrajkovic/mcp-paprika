@@ -8,7 +8,7 @@ import { makeRecipe } from "../cache/__fixtures__/recipes.js";
 import { makePhoto } from "../cache/__fixtures__/photos.js";
 import { PhotoUidSchema, RecipeUidSchema, type Photo, type Recipe } from "../paprika/types.js";
 import { makeCtx, makeTestServer, getText } from "./tool-test-utils.js";
-import { registerUploadPhotoTool, registerDeletePhotoTool } from "./photo-writes.js";
+import { registerUploadPhotoTool, registerDeletePhotoTool, isBlockedIp, ssrfLookup } from "./photo-writes.js";
 
 const RECIPE_UID = RecipeUidSchema.parse("recipe-1");
 
@@ -20,11 +20,12 @@ beforeAll(async () => {
   jpegBase64 = bytes.toString("base64");
 });
 
-function setup(opts?: { photos?: Array<Photo>; recipe?: Recipe }) {
+function setup(opts?: { photos?: Array<Photo>; recipe?: Recipe; synced?: boolean }) {
   const store = new RecipeStore();
   store.load([opts?.recipe ?? makeRecipe({ uid: RECIPE_UID, name: "Test Recipe" })], []);
   const photoStore = new PhotoStore();
-  photoStore.load(opts?.photos ?? []);
+  // load() flips hasSynced=true; skip it to simulate the photo catalog not yet synced.
+  if (opts?.synced !== false) photoStore.load(opts?.photos ?? []);
 
   const uploadPhoto = vi.fn().mockResolvedValue(undefined);
   const deletePhoto = vi.fn().mockResolvedValue(undefined);
@@ -199,5 +200,59 @@ describe("delete_photo", () => {
     const result = await callTool("delete_photo", { photo_uid: "ghost" });
     expect(getText(result)).toContain("No photo found");
     expect(deletePhoto).not.toHaveBeenCalled();
+  });
+
+  it("refuses to delete until the photo catalog has synced", async () => {
+    const { callTool, deletePhoto } = setup({ synced: false });
+    const result = await callTool("delete_photo", { photo_uid: "p-1" });
+    expect(getText(result)).toContain("still syncing");
+    expect(deletePhoto).not.toHaveBeenCalled();
+  });
+});
+
+describe("upload_photo / photo-sync gate", () => {
+  it("refuses to upload until the photo catalog has synced (order_flag would be stale)", async () => {
+    const { callTool, uploadPhoto } = setup({ synced: false });
+    const result = await callTool("upload_photo", { recipe_uid: RECIPE_UID, image_base64: jpegBase64 });
+    expect(getText(result)).toContain("still syncing");
+    expect(uploadPhoto).not.toHaveBeenCalled();
+  });
+});
+
+describe("SSRF address guard", () => {
+  it("isBlockedIp allows public unicast and blocks loopback/private/link-local/mapped forms", () => {
+    expect(isBlockedIp("8.8.8.8")).toBe(false);
+    expect(isBlockedIp("93.184.216.34")).toBe(false);
+    expect(isBlockedIp("127.0.0.1")).toBe(true); // loopback
+    expect(isBlockedIp("10.0.0.1")).toBe(true); // private
+    expect(isBlockedIp("172.16.0.1")).toBe(true); // private
+    expect(isBlockedIp("192.168.1.1")).toBe(true); // private
+    expect(isBlockedIp("169.254.169.254")).toBe(true); // cloud metadata (link-local)
+    expect(isBlockedIp("100.64.0.1")).toBe(true); // CGNAT
+    expect(isBlockedIp("::1")).toBe(true); // IPv6 loopback
+    expect(isBlockedIp("fc00::1")).toBe(true); // IPv6 ULA
+    expect(isBlockedIp("::ffff:127.0.0.1")).toBe(true); // IPv4-mapped (dotted)
+    expect(isBlockedIp("::ffff:7f00:1")).toBe(true); // IPv4-mapped (hex, what Node normalizes to)
+    expect(isBlockedIp("not-an-ip")).toBe(true); // unparseable → blocked
+  });
+
+  // ssrfLookup is the undici Agent's connect-time resolver; it validates the SAME
+  // resolution used for the socket (closing DNS rebinding). IP-literal "hostnames"
+  // resolve offline, so this exercises the validation without real DNS.
+  const resolve = (host: string): Promise<{ err: Error | null; address: unknown }> =>
+    new Promise((res) => {
+      ssrfLookup(host, { all: false }, (err, address) => res({ err, address }));
+    });
+
+  it("ssrfLookup errors before connect when the resolved address is private/reserved", async () => {
+    const { err } = await resolve("169.254.169.254");
+    expect(err).toBeInstanceOf(Error);
+    expect((err as Error).message).toContain("SSRF guard");
+  });
+
+  it("ssrfLookup passes a public address through to the connection", async () => {
+    const { err, address } = await resolve("8.8.8.8");
+    expect(err).toBeNull();
+    expect(address).toBe("8.8.8.8");
   });
 });
