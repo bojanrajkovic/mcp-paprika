@@ -409,6 +409,30 @@ describe("PaprikaClient", () => {
       expect(recipe.imageUrl).toBe("");
     });
 
+    it("p1-u06-client-reads.AC2.3 - a 200 {error: 'not found'} envelope is normalized to a 404 PaprikaAPIError", async () => {
+      // Paprika signals a missing/hard-deleted recipe with HTTP 200 and an
+      // {error:{code,message}} body (NOT a 404, NOT a {result} envelope). The
+      // client must surface that as a 404 PaprikaAPIError, not a confusing
+      // ZodError from parsing it as a result. This is the #165 idempotency bug:
+      // empty_trash's "already deleted" branch keys on status === 404.
+      server.use(
+        http.get(`${API_BASE}/recipe/gone-uid/`, () =>
+          HttpResponse.json({ error: { code: 0, message: "Recipe not found." } }, { status: 200 }),
+        ),
+      );
+
+      const client = new PaprikaClient("test@example.com", "password");
+
+      try {
+        await client.getRecipe("gone-uid");
+        expect.fail("Should have thrown PaprikaAPIError");
+      } catch (error) {
+        expect(error).toBeInstanceOf(PaprikaAPIError);
+        expect((error as PaprikaAPIError).status).toBe(404);
+        expect((error as PaprikaAPIError).message).toContain("Recipe not found.");
+      }
+    });
+
     it("p1-u06-client-reads.AC2.2 - non-2xx response throws PaprikaAPIError", async () => {
       server.use(
         http.get(`${API_BASE}/recipe/not-found/`, () => {

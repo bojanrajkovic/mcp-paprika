@@ -88,6 +88,22 @@ class TokenExpiredError extends Error {
 
 const RETRYABLE_STATUSES = new Set([429, 500, 502, 503]);
 
+/**
+ * Paprika's v2 sync API sometimes signals an application error with HTTP 200 and
+ * an `{ error: { code, message } }` body instead of a proper status code — e.g. a
+ * GET for a hard-deleted (or never-existed) recipe returns
+ * `200 {"error":{"code":0,"message":"Recipe not found."}}`. This schema detects
+ * that envelope so `request()` can treat it as a failure rather than mis-parsing
+ * it as a `{ result }` body (which would throw an opaque ZodError). `code` is
+ * advisory (Paprika sends `0` for not-found), so callers key on the message.
+ */
+const ERROR_ENVELOPE_SCHEMA = z.object({
+  error: z.object({ code: z.number().optional(), message: z.string() }),
+});
+
+/** Matches Paprika's not-found error messages ("Recipe not found.", etc.). */
+const NOT_FOUND_MESSAGE = /not found/i;
+
 function recipeToApiPayload(recipe: Readonly<Recipe>): Record<string, unknown> {
   return {
     uid: recipe.uid,
@@ -601,6 +617,25 @@ export class PaprikaClient {
       }
 
       const json: unknown = await response.json();
+
+      // Paprika can return HTTP 200 with an `{ error: { code, message } }` body
+      // instead of `{ result }` (e.g. a GET for a hard-deleted recipe yields
+      // `200 {"error":{"code":0,"message":"Recipe not found."}}`). Surface it as a
+      // PaprikaAPIError rather than letting the result-envelope parse below throw
+      // an opaque ZodError. A "not found" message is normalized to a real 404 so
+      // callers keying on status (empty_trash's idempotency branch) behave as they
+      // would for a genuine 404; other error envelopes keep the wire status.
+      const errorEnvelope = ERROR_ENVELOPE_SCHEMA.safeParse(json);
+      if (errorEnvelope.success) {
+        const { message } = errorEnvelope.data.error;
+        const normalizedStatus = NOT_FOUND_MESSAGE.test(message) ? 404 : status;
+        this.log.info(
+          { method, url, attempt, status, normalizedStatus, message },
+          "paprika returned an error envelope over HTTP 200",
+        );
+        throw new PaprikaAPIError(message, normalizedStatus, url);
+      }
+
       const envelope = z.object({ result: schema }).parse(json);
       this.log.debug({ method, url, attempt, status, attemptDurationMs }, "paprika request ok");
       return envelope.result as T;
