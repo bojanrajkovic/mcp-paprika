@@ -1,6 +1,6 @@
 # Server Composition Root
 
-Last verified: 2026-05-30
+Last verified: 2026-05-31
 
 ## Purpose
 
@@ -34,6 +34,7 @@ Process-wide, heavyweight, shared state. Built once per process by `buildAppCont
 | `mealTypeStore`          | `MealTypeStore`          | In-memory meal type query layer (EntityStore subclass; `resolveByName` for case-insensitive lookup, reference catalog like AisleStore)                                                                                                     |
 | `menuStore`              | `MenuStore`              | In-memory menu query layer (TombstoneEntityStore subclass with tombstones, `findByName`, `lastSyncedAt`; parent/Content store, like GroceryListStore)                                                                                      |
 | `menuItemStore`          | `MenuItemStore`          | In-memory menu item query layer (TombstoneEntityStore subclass with tombstones, `getByMenuUid`; child/Data store, like GroceryItemStore)                                                                                                   |
+| `photoStore`             | `PhotoStore`             | In-memory recipe-photo query layer (TombstoneEntityStore subclass with tombstones, `getByRecipeUid` sorted by `orderFlag`; recipe-child entity like MealStore — no standalone MCP resource surface)                                        |
 | `vectorStore`            | `VectorStore \| null`    | Semantic-search index; `null` when embeddings are not configured                                                                                                                                                                           |
 | `notifier`               | `Notifier`               | Notification surface — decouples callers from any one `McpServer` instance                                                                                                                                                                 |
 | `auth`                   | `AuthContext \| null`    | OAuth 2.1 runtime state; `null` in stdio mode (no auth required)                                                                                                                                                                           |

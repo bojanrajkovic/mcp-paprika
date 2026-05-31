@@ -19,6 +19,7 @@ import type {
   MenuSyncResult,
   MenuItemSyncResult,
   PantryItem,
+  Photo,
   Recipe,
   RecipeUid,
   RecipeSyncResult,
@@ -87,6 +88,18 @@ function menuItemsEqual(a: MenuItem, b: MenuItem): boolean {
     a.day === b.day &&
     a.typeUid === b.typeUid &&
     a.orderFlag === b.orderFlag &&
+    a.deleted === b.deleted
+  );
+}
+
+function photosEqual(a: Photo, b: Photo): boolean {
+  return (
+    a.uid === b.uid &&
+    a.recipeUid === b.recipeUid &&
+    a.filename === b.filename &&
+    a.name === b.name &&
+    a.orderFlag === b.orderFlag &&
+    a.hash === b.hash &&
     a.deleted === b.deleted
   );
 }
@@ -484,6 +497,27 @@ export class SyncEngine {
         this.log.warn({ err }, "menu sync failed; core sync will continue");
       }
 
+      // 10.5. Photo sync (replace-all with orphan cleanup, pending-writes filtered,
+      // best-effort). Photos are a recipe-child entity with no standalone MCP
+      // resource surface (the recipe resource inlines photo fields), so — exactly
+      // like meals — this emits NO sync:complete event and adds NO SyncResult
+      // variant. Isolated in its own try block so a photo-side failure cannot abort
+      // the rest of the cycle; the photo read/write surface is strictly additive.
+      try {
+        this.log.debug("fetching photos");
+        await syncReplaceAllEntity({
+          fetch: () => this._context.client.listPhotos(),
+          cache: this._context.cache.photos,
+          store: this._context.photoStore,
+          equals: photosEqual,
+          label: "photos",
+          log: this.log,
+        });
+      } catch (photoError: unknown) {
+        const err = photoError instanceof Error ? photoError : new Error(String(photoError));
+        this.log.warn({ err }, "photo sync failed; core sync will continue");
+      }
+
       // 11. Finalization
       this.log.debug("flushing cache to disk");
       await this._context.cache.flush();
@@ -500,6 +534,7 @@ export class SyncEngine {
       const sweptMealTypes = this._context.mealTypeStore.sweepPending();
       const sweptMenus = this._context.menuStore.sweepPending();
       const sweptMenuItems = this._context.menuItemStore.sweepPending();
+      const sweptPhotos = this._context.photoStore.sweepPending();
       if (
         sweptStore > 0 ||
         sweptPantry > 0 ||
@@ -509,7 +544,8 @@ export class SyncEngine {
         sweptMeals > 0 ||
         sweptMealTypes > 0 ||
         sweptMenus > 0 ||
-        sweptMenuItems > 0
+        sweptMenuItems > 0 ||
+        sweptPhotos > 0
       ) {
         this.log.debug(
           {
@@ -522,6 +558,7 @@ export class SyncEngine {
             sweptMealTypes,
             sweptMenus,
             sweptMenuItems,
+            sweptPhotos,
           },
           "swept pending writes past TTL",
         );

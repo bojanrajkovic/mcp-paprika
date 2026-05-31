@@ -16,6 +16,7 @@ import {
   MenuItemStoredSchema,
   MenuStoredSchema,
   PantryItemStoredSchema,
+  PhotoStoredSchema,
 } from "../../paprika/types.js";
 import type {
   Aisle,
@@ -28,6 +29,7 @@ import type {
   Menu,
   MenuItem,
   PantryItem,
+  Photo,
 } from "../../paprika/types.js";
 import { isNodeError } from "../../utils/errors.js";
 import { SILENT_LOG } from "../../utils/log.js";
@@ -71,6 +73,7 @@ export class DiskCacheRoot {
   readonly mealTypes: DiskCache<MealType>;
   readonly menus: DiskCache<Menu>;
   readonly menuItems: DiskCache<MenuItem>;
+  readonly photos: DiskCache<Photo>;
 
   private readonly _cacheDir: string;
   private readonly _subcaches: ReadonlyArray<InitFlushable>;
@@ -149,6 +152,12 @@ export class DiskCacheRoot {
       getKey: (mi) => mi.uid,
       ...logOpts,
     });
+    this.photos = new DiskCache<Photo>({
+      subdir: join(cacheDir, "photos"),
+      parse: (raw) => PhotoStoredSchema.parse(raw),
+      getKey: (p) => p.uid,
+      ...logOpts,
+    });
 
     this._subcaches = [
       this.recipes,
@@ -164,6 +173,7 @@ export class DiskCacheRoot {
       this.mealTypes,
       this.menus,
       this.menuItems,
+      this.photos,
     ];
   }
 

@@ -52,6 +52,7 @@ beforeEach(async () => {
     http.get(`${API_BASE}/meals/`, () => HttpResponse.json({ result: [] })),
     http.get(`${API_BASE}/menus/`, () => HttpResponse.json({ result: [] })),
     http.get(`${API_BASE}/menuitems/`, () => HttpResponse.json({ result: [] })),
+    http.get(`${API_BASE}/photos/`, () => HttpResponse.json({ result: [] })),
   );
 });
 
