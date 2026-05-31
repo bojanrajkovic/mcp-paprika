@@ -20,7 +20,7 @@ export function isNodeError(error: unknown): error is NodeJS.ErrnoException {
  * here — that's intentional, so callers can't accidentally pass a typo or
  * an unknown service name.
  */
-export type CircuitService = "paprika" | "embeddings";
+export type CircuitService = "paprika" | "embeddings" | "photography";
 
 /**
  * Thrown when a cockatiel circuit breaker is open and rejects a call without
