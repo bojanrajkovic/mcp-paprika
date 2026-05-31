@@ -1484,6 +1484,18 @@ describe("Configuration loading", () => {
       }
     });
 
+    it("baseUrl + reuseEmbeddingsCreds → validation error (baseUrl would be silently ignored)", () => {
+      const input = {
+        ...validBase,
+        features: { embeddings, imageGen: { reuseEmbeddingsCreds: true, baseUrl: "https://openrouter.ai/api/v1" } },
+      };
+      const result = paprikaConfigSchema.safeParse(input);
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(ConfigError.validation(result.error.issues).reason).toContain("IMAGE_GEN_BASE_URL is ignored");
+      }
+    });
+
     it("env routing: IMAGE_GEN_* vars populate features.imageGen", () => {
       const overrides = buildEnvOverrides({
         IMAGE_GEN_API_KEY: "env-img-key",

@@ -332,6 +332,14 @@ export const paprikaConfigSchema = z
         message: "reuseEmbeddingsCreds=true requires features.embeddings to be configured",
       });
     }
+    if (reuse && imageGen.baseUrl !== undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["features", "imageGen", "baseUrl"],
+        message:
+          "IMAGE_GEN_BASE_URL is ignored when reuseEmbeddingsCreds=true (the embeddings base URL is used); unset one of them",
+      });
+    }
   });
 
 export type PaprikaConfig = z.infer<typeof paprikaConfigSchema>;
