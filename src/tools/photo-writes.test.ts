@@ -63,6 +63,8 @@ describe("upload_photo", () => {
     expect(photo.recipeUid).toBe(RECIPE_UID);
     expect(Buffer.isBuffer(thumbnail) && Buffer.isBuffer(full)).toBe(true);
     expect(getText(result)).toContain('Attached photo 1 to "Test Recipe"');
+    // The success message returns the generated photo UID so the caller can delete_photo it.
+    expect(getText(result)).toContain(photo.uid);
   });
 
   it("auto-assigns order_flag/name from the existing gallery (max + 1)", async () => {

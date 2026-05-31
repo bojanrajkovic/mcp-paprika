@@ -231,7 +231,7 @@ export function registerUploadPhotoTool(server: McpServer, ctx: ServerContext): 
             return textResult(`Failed to upload photo: ${toMessage(error)}`);
           }
 
-          return textResult(`Attached photo ${photo.name} to "${recipe.name}".`);
+          return textResult(`Attached photo ${photo.name} to "${recipe.name}" (photo UID: ${photo.uid}).`);
         },
         (guard) => guard,
       );
