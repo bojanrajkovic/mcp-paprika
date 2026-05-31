@@ -295,25 +295,34 @@ export async function commitRecipeHardDelete(ctx: ServerContext, saved: Recipe):
 }
 
 /**
- * Resolves human-readable category display names to CategoryUid values.
- * Case-insensitive linear scan of all known categories.
+ * Resolves category references to CategoryUid values. Each ref is matched
+ * UID-first (exact match against a known category's uid), then by display name
+ * (case-insensitive). A category UID and a display name are both unconstrained
+ * strings — `CategoryUidSchema` carries no format — so they can't be told apart
+ * by the schema; the union lives here. Lets callers pass either the UID returned
+ * by `list_categories` or a human-readable name.
  *
- * @returns uids — matched UIDs in the same order as input names
- *          unknown — names that had no matching category (caller should warn)
+ * @returns uids — matched UIDs in the same order as input refs
+ *          unknown — refs that matched neither a UID nor a name (caller should warn)
  */
-export function resolveCategoryNames(
+export function resolveCategoryRefs(
   all: Array<Category>,
-  names: Array<string>,
+  refs: Array<string>,
 ): { uids: Array<CategoryUid>; unknown: Array<string> } {
+  const byUid = new Set<string>(all.map((c) => c.uid));
   const uids: Array<CategoryUid> = [];
   const unknown: Array<string> = [];
-  for (const name of names) {
-    const lower = name.toLowerCase();
+  for (const ref of refs) {
+    if (byUid.has(ref)) {
+      uids.push(ref as CategoryUid);
+      continue;
+    }
+    const lower = ref.toLowerCase();
     const match = all.find((c) => c.name.toLowerCase() === lower);
     if (match) {
       uids.push(match.uid);
     } else {
-      unknown.push(name);
+      unknown.push(ref);
     }
   }
   return { uids, unknown };

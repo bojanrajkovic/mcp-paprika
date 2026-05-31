@@ -17,7 +17,7 @@ export function registerCategoryTools(server: McpServer, ctx: ServerContext): vo
       log.info({ tool: "list_categories" }, "tool invoked");
       return coldStartGuard(ctx).match(
         async (): Promise<CallToolResult> => {
-          const categories = ctx.store.getAllCategories();
+          const categories = ctx.categoryStore.getAll();
           if (categories.length === 0) {
             return textResult("No categories found in your recipe library.");
           }

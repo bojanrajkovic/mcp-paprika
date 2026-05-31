@@ -33,7 +33,7 @@ export function registerSearchTool(server: McpServer, ctx: ServerContext): void 
             return textResult(`No recipes found matching "${args.query}".`);
           }
           const lines = results.map((r) => {
-            const categoryNames = ctx.store.resolveCategories(r.recipe.categories);
+            const categoryNames = ctx.categoryStore.resolveNames(r.recipe.categories);
             const lastCooked = ctx.mealStore.lastCookedAt(r.recipe.uid);
             return formatSearchHit(r, categoryNames, lastCooked);
           });

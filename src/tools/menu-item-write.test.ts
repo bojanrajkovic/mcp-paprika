@@ -30,7 +30,7 @@ function syncedMealTypeStore(): MealTypeStore {
 
 function syncedRecipeStore(): RecipeStore {
   const store = new RecipeStore();
-  store.load([makeRecipe({ uid: TACOS_UID, name: "Tacos" }), makeRecipe({ uid: SOUP_UID, name: "Soup" })], []);
+  store.load([makeRecipe({ uid: TACOS_UID, name: "Tacos" }), makeRecipe({ uid: SOUP_UID, name: "Soup" })]);
   return store;
 }
 

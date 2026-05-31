@@ -42,7 +42,7 @@ export function registerReadTool(server: McpServer, ctx: ServerContext): void {
             renderOne: (recipe) =>
               recipeToMarkdown(
                 recipe,
-                ctx.store.resolveCategories(recipe.categories),
+                ctx.categoryStore.resolveNames(recipe.categories),
                 ctx.mealStore.lastCookedAt(recipe.uid),
               ),
             disambiguationLine: (recipe) => `- ${recipe.name} (UID: ${recipe.uid})`,

@@ -1,6 +1,7 @@
 import { EmbeddingClient, EMBEDDING_SCHEMA_VERSION } from "./embeddings.js";
 import { VectorStore } from "./vector-store.js";
 import { getCacheDir } from "../utils/xdg.js";
+import type { CategoryStore } from "../cache/category-store.js";
 import type { RecipeStore } from "../cache/recipe-store.js";
 import type { AnySyncResult } from "../paprika/types.js";
 import type { PaprikaConfig } from "../utils/config.js";
@@ -34,6 +35,7 @@ export interface SyncEventsView {
 export async function buildDiscoverComponents(
   config: PaprikaConfig,
   store: RecipeStore,
+  categoryStore: CategoryStore,
   syncEvents: SyncEventsView,
   log?: Logger,
 ): Promise<VectorStore | null> {
@@ -62,7 +64,7 @@ export async function buildDiscoverComponents(
   // crash, or a model/dimension change that invalidated the old vectors).
   if (store.size > 0 && vectorStore.size < store.size * 0.9) {
     vectorStore.clearHashes();
-    await vectorStore.indexRecipes(store.getAll(), (uids) => store.resolveCategories(uids));
+    await vectorStore.indexRecipes(store.getAll(), (uids) => categoryStore.resolveNames(uids));
   }
 
   syncEvents.on("sync:complete", async (result) => {
@@ -75,7 +77,7 @@ export async function buildDiscoverComponents(
       }
 
       if (changed.length > 0) {
-        await vectorStore.indexRecipes(changed, (uids) => store.resolveCategories(uids));
+        await vectorStore.indexRecipes(changed, (uids) => categoryStore.resolveNames(uids));
       }
 
       for (const uid of result.changes.removedUids) {

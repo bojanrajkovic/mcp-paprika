@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type { AnySyncResult, RecipeSyncResult } from "../paprika/types.js";
 import type { RecipeUid } from "../paprika/types.js";
 import { RecipeStore } from "../cache/recipe-store.js";
+import { CategoryStore } from "../cache/category-store.js";
 import { makeRecipe } from "../cache/__fixtures__/recipes.js";
 import { makePantryItem } from "../cache/__fixtures__/pantry.js";
 import { makePinoCapture, DEFAULT_LOGGING_CONFIG } from "../tools/tool-test-utils.js";
@@ -116,11 +117,12 @@ describe("p3-u08-discover-wiring: buildDiscoverComponents", () => {
     it("AC1.1: returns a vector store when embeddings config is present", async () => {
       const { buildDiscoverComponents } = await import("./discover-feature.js");
       const store = new RecipeStore();
-      store.load([], []);
+      const categoryStore = new CategoryStore();
+      store.load([]);
       const syncEvents = makeMockSyncEvents();
       const config = makeEnabledConfig();
 
-      const vectorStore = await buildDiscoverComponents(config, store, syncEvents);
+      const vectorStore = await buildDiscoverComponents(config, store, categoryStore, syncEvents);
 
       expect(vectorStore).not.toBeNull();
     });
@@ -128,11 +130,12 @@ describe("p3-u08-discover-wiring: buildDiscoverComponents", () => {
     it("AC1.2: returns null when embeddings config is absent", async () => {
       const { buildDiscoverComponents } = await import("./discover-feature.js");
       const store = new RecipeStore();
-      store.load([], []);
+      const categoryStore = new CategoryStore();
+      store.load([]);
       const syncEvents = makeMockSyncEvents();
       const config = makeDisabledConfig();
 
-      const vectorStore = await buildDiscoverComponents(config, store, syncEvents);
+      const vectorStore = await buildDiscoverComponents(config, store, categoryStore, syncEvents);
 
       expect(vectorStore).toBeNull();
     });
@@ -140,12 +143,13 @@ describe("p3-u08-discover-wiring: buildDiscoverComponents", () => {
     it("AC1.3: emits structured info log 'semantic search enabled' when embeddings configured", async () => {
       const { buildDiscoverComponents } = await import("./discover-feature.js");
       const store = new RecipeStore();
-      store.load([], []);
+      const categoryStore = new CategoryStore();
+      store.load([]);
       const syncEvents = makeMockSyncEvents();
       const config = makeEnabledConfig();
       const { log, records } = makePinoCapture();
 
-      await buildDiscoverComponents(config, store, syncEvents, log);
+      await buildDiscoverComponents(config, store, categoryStore, syncEvents, log);
 
       const infoRecords = records.filter((r) => r["msg"] === "semantic search enabled");
       expect(infoRecords).toHaveLength(1);
@@ -155,12 +159,13 @@ describe("p3-u08-discover-wiring: buildDiscoverComponents", () => {
     it("AC1.4: emits structured info log 'semantic search disabled' when embeddings not configured", async () => {
       const { buildDiscoverComponents } = await import("./discover-feature.js");
       const store = new RecipeStore();
-      store.load([], []);
+      const categoryStore = new CategoryStore();
+      store.load([]);
       const syncEvents = makeMockSyncEvents();
       const config = makeDisabledConfig();
       const { log, records } = makePinoCapture();
 
-      await buildDiscoverComponents(config, store, syncEvents, log);
+      await buildDiscoverComponents(config, store, categoryStore, syncEvents, log);
 
       const infoRecords = records.filter((r) => r["msg"] === "semantic search disabled");
       expect(infoRecords).toHaveLength(1);
@@ -170,12 +175,13 @@ describe("p3-u08-discover-wiring: buildDiscoverComponents", () => {
     it("AC1.4 (alternative): emits 'semantic search disabled' when features.embeddings is undefined", async () => {
       const { buildDiscoverComponents } = await import("./discover-feature.js");
       const store = new RecipeStore();
-      store.load([], []);
+      const categoryStore = new CategoryStore();
+      store.load([]);
       const syncEvents = makeMockSyncEvents();
       const config = makeDisabledConfig(true);
       const { log, records } = makePinoCapture();
 
-      await buildDiscoverComponents(config, store, syncEvents, log);
+      await buildDiscoverComponents(config, store, categoryStore, syncEvents, log);
 
       const infoRecords = records.filter((r) => r["msg"] === "semantic search disabled");
       expect(infoRecords).toHaveLength(1);
@@ -188,7 +194,8 @@ describe("p3-u08-discover-wiring: buildDiscoverComponents", () => {
       const { buildDiscoverComponents } = await import("./discover-feature.js");
       const { EmbeddingClient } = await import("./embeddings.js");
       const store = new RecipeStore();
-      store.load([], []);
+      const categoryStore = new CategoryStore();
+      store.load([]);
       const syncEvents = makeMockSyncEvents();
       const embeddingsConfig = {
         apiKey: "key123",
@@ -206,7 +213,7 @@ describe("p3-u08-discover-wiring: buildDiscoverComponents", () => {
         },
       };
 
-      await buildDiscoverComponents(config, store, syncEvents);
+      await buildDiscoverComponents(config, store, categoryStore, syncEvents);
 
       // Second arg is the optional logger — undefined when no log is passed
       expect(vi.mocked(EmbeddingClient)).toHaveBeenCalledWith(embeddingsConfig, undefined);
@@ -216,11 +223,12 @@ describe("p3-u08-discover-wiring: buildDiscoverComponents", () => {
       const { buildDiscoverComponents } = await import("./discover-feature.js");
       const { VectorStore } = await import("./vector-store.js");
       const store = new RecipeStore();
-      store.load([], []);
+      const categoryStore = new CategoryStore();
+      store.load([]);
       const syncEvents = makeMockSyncEvents();
       const config = makeEnabledConfig();
 
-      await buildDiscoverComponents(config, store, syncEvents);
+      await buildDiscoverComponents(config, store, categoryStore, syncEvents);
 
       // VectorStore constructor is mocked and should have been called with the right args
       const callArgs = vi.mocked(VectorStore).mock.calls[0]!;
@@ -231,11 +239,12 @@ describe("p3-u08-discover-wiring: buildDiscoverComponents", () => {
     it("AC2.3: calls vectorStore.init() before returning", async () => {
       const { buildDiscoverComponents } = await import("./discover-feature.js");
       const store = new RecipeStore();
-      store.load([], []);
+      const categoryStore = new CategoryStore();
+      store.load([]);
       const syncEvents = makeMockSyncEvents();
       const config = makeEnabledConfig();
 
-      await buildDiscoverComponents(config, store, syncEvents);
+      await buildDiscoverComponents(config, store, categoryStore, syncEvents);
 
       expect(mockVectorStore.init).toHaveBeenCalled();
     });
@@ -244,13 +253,14 @@ describe("p3-u08-discover-wiring: buildDiscoverComponents", () => {
       const { buildDiscoverComponents } = await import("./discover-feature.js");
       const recipe = makeRecipe({ uid: "recipe-1" as RecipeUid });
       const store = new RecipeStore();
-      store.load([recipe], []);
+      const categoryStore = new CategoryStore();
+      store.load([recipe]);
       const syncEvents = makeMockSyncEvents();
       const config = makeEnabledConfig();
 
       mockVectorStore.size = 0; // Empty vector store
 
-      await buildDiscoverComponents(config, store, syncEvents);
+      await buildDiscoverComponents(config, store, categoryStore, syncEvents);
 
       expect(mockVectorStore.clearHashes).toHaveBeenCalled();
       expect(mockVectorStore.indexRecipes).toHaveBeenCalled();
@@ -263,13 +273,14 @@ describe("p3-u08-discover-wiring: buildDiscoverComponents", () => {
       const { buildDiscoverComponents } = await import("./discover-feature.js");
       const recipes = Array.from({ length: 10 }, (_, i) => makeRecipe({ uid: `recipe-${String(i)}` as RecipeUid }));
       const store = new RecipeStore();
-      store.load(recipes, []);
+      const categoryStore = new CategoryStore();
+      store.load(recipes);
       const syncEvents = makeMockSyncEvents();
       const config = makeEnabledConfig();
 
       mockVectorStore.size = 10; // Fully indexed (>= 90% of store)
 
-      await buildDiscoverComponents(config, store, syncEvents);
+      await buildDiscoverComponents(config, store, categoryStore, syncEvents);
 
       expect(mockVectorStore.indexRecipes).not.toHaveBeenCalled();
     });
@@ -278,13 +289,14 @@ describe("p3-u08-discover-wiring: buildDiscoverComponents", () => {
       const { buildDiscoverComponents } = await import("./discover-feature.js");
       const recipes = Array.from({ length: 100 }, (_, i) => makeRecipe({ uid: `recipe-${String(i)}` as RecipeUid }));
       const store = new RecipeStore();
-      store.load(recipes, []);
+      const categoryStore = new CategoryStore();
+      store.load(recipes);
       const syncEvents = makeMockSyncEvents();
       const config = makeEnabledConfig();
 
       mockVectorStore.size = 2; // Only 2 entries (stale test data) vs 100 recipes
 
-      await buildDiscoverComponents(config, store, syncEvents);
+      await buildDiscoverComponents(config, store, categoryStore, syncEvents);
 
       expect(mockVectorStore.clearHashes).toHaveBeenCalled();
       expect(mockVectorStore.indexRecipes).toHaveBeenCalled();
@@ -293,13 +305,14 @@ describe("p3-u08-discover-wiring: buildDiscoverComponents", () => {
     it("cold-start: skips indexRecipes when store is empty", async () => {
       const { buildDiscoverComponents } = await import("./discover-feature.js");
       const store = new RecipeStore();
-      store.load([], []);
+      const categoryStore = new CategoryStore();
+      store.load([]);
       const syncEvents = makeMockSyncEvents();
       const config = makeEnabledConfig();
 
       mockVectorStore.size = 0;
 
-      await buildDiscoverComponents(config, store, syncEvents);
+      await buildDiscoverComponents(config, store, categoryStore, syncEvents);
 
       expect(mockVectorStore.indexRecipes).not.toHaveBeenCalled();
     });
@@ -311,13 +324,14 @@ describe("p3-u08-discover-wiring: buildDiscoverComponents", () => {
       const recipe1 = makeRecipe({ uid: "r1" as RecipeUid, name: "Recipe 1" });
       const recipe2 = makeRecipe({ uid: "r2" as RecipeUid, name: "Recipe 2" });
       const store = new RecipeStore();
-      store.load([recipe1, recipe2], []);
+      const categoryStore = new CategoryStore();
+      store.load([recipe1, recipe2]);
       const syncEvents = makeMockSyncEvents();
       const config = makeEnabledConfig();
 
       mockVectorStore.size = 10; // Skip cold-start indexing
 
-      await buildDiscoverComponents(config, store, syncEvents);
+      await buildDiscoverComponents(config, store, categoryStore, syncEvents);
 
       const syncResult: RecipeSyncResult = {
         changeType: "recipes",
@@ -337,13 +351,14 @@ describe("p3-u08-discover-wiring: buildDiscoverComponents", () => {
     it("AC3.3: calls vectorStore.removeRecipe for each removedUid", async () => {
       const { buildDiscoverComponents } = await import("./discover-feature.js");
       const store = new RecipeStore();
-      store.load([], []);
+      const categoryStore = new CategoryStore();
+      store.load([]);
       const syncEvents = makeMockSyncEvents();
       const config = makeEnabledConfig();
 
       mockVectorStore.size = 10; // Skip cold-start
 
-      await buildDiscoverComponents(config, store, syncEvents);
+      await buildDiscoverComponents(config, store, categoryStore, syncEvents);
 
       const syncResult: RecipeSyncResult = {
         changeType: "recipes",
@@ -362,13 +377,14 @@ describe("p3-u08-discover-wiring: buildDiscoverComponents", () => {
     it("AC3.4: skips indexing and removal when no changes", async () => {
       const { buildDiscoverComponents } = await import("./discover-feature.js");
       const store = new RecipeStore();
-      store.load([], []);
+      const categoryStore = new CategoryStore();
+      store.load([]);
       const syncEvents = makeMockSyncEvents();
       const config = makeEnabledConfig();
 
       mockVectorStore.size = 10;
 
-      await buildDiscoverComponents(config, store, syncEvents);
+      await buildDiscoverComponents(config, store, categoryStore, syncEvents);
 
       const syncResult: RecipeSyncResult = {
         changeType: "recipes",
@@ -386,13 +402,14 @@ describe("p3-u08-discover-wiring: buildDiscoverComponents", () => {
     it("AC3.5: skips indexing when changeType is pantry (not recipes)", async () => {
       const { buildDiscoverComponents } = await import("./discover-feature.js");
       const store = new RecipeStore();
-      store.load([], []);
+      const categoryStore = new CategoryStore();
+      store.load([]);
       const syncEvents = makeMockSyncEvents();
       const config = makeEnabledConfig();
 
       mockVectorStore.size = 10;
 
-      await buildDiscoverComponents(config, store, syncEvents);
+      await buildDiscoverComponents(config, store, categoryStore, syncEvents);
 
       // Emit a pantry event — the subscriber must ignore it
       const pantryResult: AnySyncResult = {
@@ -414,7 +431,8 @@ describe("p3-u08-discover-wiring: buildDiscoverComponents", () => {
       const { buildDiscoverComponents } = await import("./discover-feature.js");
       const recipe = makeRecipe({ uid: "r1" as RecipeUid });
       const store = new RecipeStore();
-      store.load([recipe], []);
+      const categoryStore = new CategoryStore();
+      store.load([recipe]);
       const syncEvents = makeMockSyncEvents();
       const config = makeEnabledConfig();
       const { log, records } = makePinoCapture();
@@ -423,7 +441,7 @@ describe("p3-u08-discover-wiring: buildDiscoverComponents", () => {
       const testError = new Error("Embedding failed");
       mockVectorStore.indexRecipes.mockRejectedValueOnce(testError);
 
-      await buildDiscoverComponents(config, store, syncEvents, log);
+      await buildDiscoverComponents(config, store, categoryStore, syncEvents, log);
 
       const syncResult: RecipeSyncResult = {
         changeType: "recipes",
@@ -442,7 +460,8 @@ describe("p3-u08-discover-wiring: buildDiscoverComponents", () => {
     it("AC4.2: catches and logs error from vectorStore.removeRecipe", async () => {
       const { buildDiscoverComponents } = await import("./discover-feature.js");
       const store = new RecipeStore();
-      store.load([], []);
+      const categoryStore = new CategoryStore();
+      store.load([]);
       const syncEvents = makeMockSyncEvents();
       const config = makeEnabledConfig();
       const { log, records } = makePinoCapture();
@@ -451,7 +470,7 @@ describe("p3-u08-discover-wiring: buildDiscoverComponents", () => {
       const testError = new Error("Remove failed");
       mockVectorStore.removeRecipe.mockRejectedValueOnce(testError);
 
-      await buildDiscoverComponents(config, store, syncEvents, log);
+      await buildDiscoverComponents(config, store, categoryStore, syncEvents, log);
 
       const syncResult: RecipeSyncResult = {
         changeType: "recipes",
@@ -471,7 +490,8 @@ describe("p3-u08-discover-wiring: buildDiscoverComponents", () => {
       const { buildDiscoverComponents } = await import("./discover-feature.js");
       const recipe = makeRecipe({ uid: "r1" as RecipeUid });
       const store = new RecipeStore();
-      store.load([recipe], []);
+      const categoryStore = new CategoryStore();
+      store.load([recipe]);
       const syncEvents = makeMockSyncEvents();
       const config = makeEnabledConfig();
       const { log, records } = makePinoCapture();
@@ -479,7 +499,7 @@ describe("p3-u08-discover-wiring: buildDiscoverComponents", () => {
       mockVectorStore.size = 10;
       mockVectorStore.indexRecipes.mockRejectedValueOnce(new Error("indexing failed"));
 
-      await buildDiscoverComponents(config, store, syncEvents, log);
+      await buildDiscoverComponents(config, store, categoryStore, syncEvents, log);
 
       const syncResult: RecipeSyncResult = {
         changeType: "recipes",
@@ -501,14 +521,15 @@ describe("p3-u08-discover-wiring: buildDiscoverComponents", () => {
       const recipe1 = makeRecipe({ uid: "r1" as RecipeUid });
       const recipe2 = makeRecipe({ uid: "r2" as RecipeUid });
       const store = new RecipeStore();
-      store.load([recipe1, recipe2], []);
+      const categoryStore = new CategoryStore();
+      store.load([recipe1, recipe2]);
       const syncEvents = makeMockSyncEvents();
       const config = makeEnabledConfig();
 
       mockVectorStore.size = 10;
       mockVectorStore.indexRecipes.mockRejectedValueOnce(new Error("First error")).mockResolvedValueOnce(undefined); // Second call succeeds
 
-      await buildDiscoverComponents(config, store, syncEvents);
+      await buildDiscoverComponents(config, store, categoryStore, syncEvents);
 
       // First sync: error
       const syncResult1: RecipeSyncResult = {

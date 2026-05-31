@@ -28,7 +28,7 @@ export function registerRecipeResources(server: McpServer, ctx: ServerContext): 
       if (!recipe) {
         throw new Error(`Recipe not found: ${uid}`);
       }
-      const categoryNames = ctx.store.resolveCategories(recipe.categories);
+      const categoryNames = ctx.categoryStore.resolveNames(recipe.categories);
 
       const headerLines = [`**UID:** \`${uid}\``, `**URI:** \`paprika://recipe/${uid}\``];
 

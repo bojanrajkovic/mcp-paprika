@@ -27,6 +27,7 @@ import { makePantryItem } from "../cache/__fixtures__/pantry.js";
 import { makeAisle } from "../cache/__fixtures__/aisles.js";
 import { PantryStore as RealPantryStore } from "../cache/pantry-store.js";
 import { AisleStore as RealAisleStore } from "../cache/aisle-store.js";
+import { CategoryStore as RealCategoryStore } from "../cache/category-store.js";
 import { GroceryIngredientStore } from "../cache/grocery-ingredient-store.js";
 import { GroceryItemStore } from "../cache/grocery-item-store.js";
 import { GroceryListStore } from "../cache/grocery-list-store.js";
@@ -48,7 +49,6 @@ function makeMockStore(): RecipeStore {
   return fromAny({
     set: vi.fn(),
     delete: vi.fn(),
-    setCategories: vi.fn(),
     markSynced: vi.fn(),
     setLastSyncedAt: vi.fn(),
     isPendingUpsert: vi.fn().mockReturnValue(false),
@@ -83,7 +83,11 @@ function makeMockCache(): DiskCacheRoot {
       put: vi.fn(),
       remove: vi.fn().mockResolvedValue(undefined),
     },
-    categories: { put: vi.fn() },
+    categories: {
+      getAll: vi.fn().mockResolvedValue([]),
+      put: vi.fn(),
+      remove: vi.fn().mockResolvedValue(undefined),
+    },
     aisles: {
       getAll: vi.fn().mockResolvedValue([]),
       put: vi.fn(),
@@ -451,7 +455,12 @@ describe("syncOnce", () => {
         remove: vi.fn().mockResolvedValue(undefined),
         ...overrides?.recipes,
       },
-      categories: { put: vi.fn(), ...overrides?.categories },
+      categories: {
+        getAll: vi.fn().mockResolvedValue([]),
+        put: vi.fn(),
+        remove: vi.fn().mockResolvedValue(undefined),
+        ...overrides?.categories,
+      },
       aisles: {
         getAll: vi.fn().mockResolvedValue([]),
         put: vi.fn(),
@@ -517,7 +526,6 @@ describe("syncOnce", () => {
     return fromAny({
       set: vi.fn(),
       delete: vi.fn(),
-      setCategories: vi.fn(),
       markSynced: vi.fn(),
       setLastSyncedAt: vi.fn(),
       isPendingUpsert: vi.fn().mockReturnValue(false),
@@ -754,24 +762,26 @@ describe("syncOnce", () => {
     });
   });
 
-  it("AC4.1: store.setCategories called with all fetched categories", async () => {
+  it("AC4.1: categoryStore loaded with all fetched categories", async () => {
     const category1 = makeCategory();
     const category2 = makeCategory();
 
-    const setCategories = vi.fn();
-
-    const engine = makeSyncEngine(
-      {
+    const categoryStore = new RealCategoryStore();
+    const context: AppContext = makeAppContext({
+      client: fromAny({
+        ...makeMockClientDefault(),
         listCategories: vi.fn().mockResolvedValue([category1, category2]),
-      },
-      undefined,
-      {
-        setCategories,
-      },
-    );
+      }),
+      cache: makeMockCacheDefault(),
+      store: makeMockStoreDefault(),
+      pantryStore: makeMockPantryStoreDefault(),
+      aisleStore: makeMockAisleStore(),
+      categoryStore,
+    });
+    const engine = new SyncEngine(context, 10);
     await engine.syncOnce();
 
-    expect(setCategories).toHaveBeenCalledWith([category1, category2]);
+    expect(categoryStore.getAll()).toEqual([category1, category2]);
   });
 
   it("AC4.2: cache.categories.put called for each category", async () => {
@@ -1245,7 +1255,11 @@ describe("syncOnce", () => {
             put: vi.fn(),
             remove: vi.fn().mockResolvedValue(undefined),
           },
-          categories: { put: vi.fn() },
+          categories: {
+            getAll: vi.fn().mockResolvedValue([]),
+            put: vi.fn(),
+            remove: vi.fn().mockResolvedValue(undefined),
+          },
           aisles: { getAll: vi.fn().mockResolvedValue([]), put: vi.fn() },
           pantry: {
             getAll: vi.fn().mockResolvedValue([]),
@@ -1292,7 +1306,6 @@ describe("syncOnce", () => {
         store: fromAny({
           set: vi.fn(),
           delete: vi.fn(),
-          setCategories: vi.fn(),
           markSynced: vi.fn(),
           setLastSyncedAt: vi.fn(),
           isPendingUpsert: vi.fn().mockReturnValue(false),
@@ -1333,7 +1346,11 @@ describe("syncOnce", () => {
             put: vi.fn(),
             remove: vi.fn().mockResolvedValue(undefined),
           },
-          categories: { put: vi.fn() },
+          categories: {
+            getAll: vi.fn().mockResolvedValue([]),
+            put: vi.fn(),
+            remove: vi.fn().mockResolvedValue(undefined),
+          },
           aisles: { getAll: vi.fn().mockResolvedValue([]), put: vi.fn() },
           pantry: {
             getAll: vi.fn().mockResolvedValue([]),
@@ -1380,7 +1397,6 @@ describe("syncOnce", () => {
         store: fromAny({
           set: vi.fn(),
           delete: vi.fn(),
-          setCategories: vi.fn(),
           markSynced: vi.fn(),
           setLastSyncedAt: vi.fn(),
           isPendingUpsert: vi.fn().mockReturnValue(false),

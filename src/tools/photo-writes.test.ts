@@ -22,7 +22,7 @@ beforeAll(async () => {
 
 function setup(opts?: { photos?: Array<Photo>; recipe?: Recipe; synced?: boolean }) {
   const store = new RecipeStore();
-  store.load([opts?.recipe ?? makeRecipe({ uid: RECIPE_UID, name: "Test Recipe" })], []);
+  store.load([opts?.recipe ?? makeRecipe({ uid: RECIPE_UID, name: "Test Recipe" })]);
   const photoStore = new PhotoStore();
   // load() flips hasSynced=true; skip it to simulate the photo catalog not yet synced.
   if (opts?.synced !== false) photoStore.load(opts?.photos ?? []);

@@ -8,6 +8,7 @@ import type { TombstoneEntityStore } from "../entity/tombstone-store.js";
 import type { AppContext } from "../server/app-context.js";
 import type {
   AnySyncResult,
+  Category,
   EntityChanges,
   GroceryItem,
   GroceryItemSyncResult,
@@ -25,6 +26,10 @@ import type {
   RecipeSyncResult,
   PantrySyncResult,
 } from "./types.js";
+
+function categoriesEqual(a: Category, b: Category): boolean {
+  return a.uid === b.uid && a.name === b.name && a.orderFlag === b.orderFlag && a.parentUid === b.parentUid;
+}
 
 function pantryItemsEqual(a: PantryItem, b: PantryItem): boolean {
   return (
@@ -308,12 +313,20 @@ export class SyncEngine {
       this._context.store.markSynced();
       this._context.store.setLastSyncedAt();
 
-      // 2. Category sync path (replace-all)
-      this.log.debug("fetching categories");
-      const categories = await this._context.client.listCategories();
-      this.log.debug({ count: categories.length }, "fetched categories");
-      this._context.store.setCategories(categories);
-      await Promise.all(categories.map((category) => this._context.cache.categories.put(category)));
+      // 2. Category sync (replace-all with pending-write filtering)
+      // Categories gained create/update/delete write tools (#108), so they need
+      // the same pending-write protection as pantry/grocery — a just-deleted
+      // category must not be resurrected by an in-flight snapshot. No
+      // sync:complete event: categories are a reference entity with no MCP
+      // resource surface (recipe rendering resolves category names on read).
+      await syncReplaceAllEntity({
+        fetch: () => this._context.client.listCategories(),
+        cache: this._context.cache.categories,
+        store: this._context.categoryStore,
+        equals: categoriesEqual,
+        label: "categories",
+        log: this.log,
+      });
 
       // 2.5. Aisle sync (replace-all with pending-write filtering)
       // Aisles sync before pantry so aisle data is available for resolution
@@ -526,6 +539,7 @@ export class SyncEngine {
       // rely on this for clearing since Paprika gives no observable signal
       // that our soft-delete propagated.
       const sweptStore = this._context.store.sweepPending();
+      const sweptCategories = this._context.categoryStore.sweepPending();
       const sweptPantry = this._context.pantryStore.sweepPending();
       const sweptAisles = this._context.aisleStore.sweepPending();
       const sweptGroceryLists = this._context.groceryListStore.sweepPending();
@@ -537,6 +551,7 @@ export class SyncEngine {
       const sweptPhotos = this._context.photoStore.sweepPending();
       if (
         sweptStore > 0 ||
+        sweptCategories > 0 ||
         sweptPantry > 0 ||
         sweptAisles > 0 ||
         sweptGroceryLists > 0 ||
@@ -550,6 +565,7 @@ export class SyncEngine {
         this.log.debug(
           {
             sweptStore,
+            sweptCategories,
             sweptPantry,
             sweptAisles,
             sweptGroceryLists,

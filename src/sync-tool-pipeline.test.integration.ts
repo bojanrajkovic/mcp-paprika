@@ -355,13 +355,16 @@ describe("Sync → Tool Pipeline Integration", () => {
       const engine = new SyncEngine(context, 100);
       await engine.syncOnce();
 
-      // Setup test server with multiple tools
+      // Setup test server with multiple tools. Share the synced `categoryStore`
+      // (categories live there now, not in RecipeStore) so category-name
+      // resolution sees what the sync populated.
       const testServer = makeTestServer();
-      registerSearchTool(testServer.server, makeCtx(store, testServer.server));
-      registerReadTool(testServer.server, makeCtx(store, testServer.server));
-      registerListTool(testServer.server, makeCtx(store, testServer.server));
-      registerFilterTools(testServer.server, makeCtx(store, testServer.server));
-      registerCategoryTools(testServer.server, makeCtx(store, testServer.server));
+      const toolOverrides = { categoryStore: context.categoryStore };
+      registerSearchTool(testServer.server, makeCtx(store, testServer.server, toolOverrides));
+      registerReadTool(testServer.server, makeCtx(store, testServer.server, toolOverrides));
+      registerListTool(testServer.server, makeCtx(store, testServer.server, toolOverrides));
+      registerFilterTools(testServer.server, makeCtx(store, testServer.server, toolOverrides));
+      registerCategoryTools(testServer.server, makeCtx(store, testServer.server, toolOverrides));
 
       // Test search_recipes
       const searchResult = await testServer.callTool("search_recipes", {

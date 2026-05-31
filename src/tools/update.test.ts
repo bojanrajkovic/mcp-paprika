@@ -10,7 +10,7 @@ describe("p2-recipe-crud: update_recipe tool", () => {
     it("p2-recipe-crud.AC3.1: provided fields are updated, omitted fields retain existing values", async () => {
       const recipe = makeRecipe({ name: "Old Name", servings: "2" });
       const store = new RecipeStore();
-      store.load([recipe], []);
+      store.load([recipe]);
 
       const mockSaveRecipe = vi.fn();
       const mockNotifySync = vi.fn().mockResolvedValue(undefined);
@@ -39,7 +39,7 @@ describe("p2-recipe-crud: update_recipe tool", () => {
       const catB = makeCategory({ name: "Category B" });
       const recipe = makeRecipe({ categories: [catA.uid] });
       const store = new RecipeStore();
-      store.load([recipe], [catA, catB]);
+      store.load([recipe]);
 
       const mockSaveRecipe = vi.fn();
       const mockNotifySync = vi.fn().mockResolvedValue(undefined);
@@ -54,6 +54,7 @@ describe("p2-recipe-crud: update_recipe tool", () => {
         client: fromAny({ saveRecipe: mockSaveRecipe, notifySync: mockNotifySync }),
         cache: fromAny({ recipes: { put: mockPutRecipe }, flush: mockFlush }),
       });
+      ctx.categoryStore.load([catA, catB]);
       registerUpdateTool(server, ctx);
 
       await callTool("update_recipe", { uid: recipe.uid, categories: ["Category B"] });
@@ -67,7 +68,7 @@ describe("p2-recipe-crud: update_recipe tool", () => {
       const catA = makeCategory({ name: "Category A" });
       const recipe = makeRecipe({ categories: [catA.uid] });
       const store = new RecipeStore();
-      store.load([recipe], [catA]);
+      store.load([recipe]);
 
       const mockSaveRecipe = vi.fn();
       const mockNotifySync = vi.fn().mockResolvedValue(undefined);
@@ -93,7 +94,7 @@ describe("p2-recipe-crud: update_recipe tool", () => {
     it("p2-recipe-crud.AC3.4: saveRecipe and notifySync called exactly once with merged recipe", async () => {
       const recipe = makeRecipe({ name: "Old", servings: "4" });
       const store = new RecipeStore();
-      store.load([recipe], []);
+      store.load([recipe]);
 
       const mockSaveRecipe = vi.fn();
       const mockNotifySync = vi.fn().mockResolvedValue(undefined);
@@ -122,7 +123,7 @@ describe("p2-recipe-crud: update_recipe tool", () => {
     it("p2-recipe-crud.AC3.5: UID not found returns not-found message", async () => {
       const recipe = makeRecipe();
       const store = new RecipeStore();
-      store.load([recipe], []);
+      store.load([recipe]);
 
       const mockSaveRecipe = vi.fn();
       const mockNotifySync = vi.fn().mockResolvedValue(undefined);
@@ -146,7 +147,7 @@ describe("p2-recipe-crud: update_recipe tool", () => {
     it("p2-recipe-crud.AC3.6: saveRecipe throws — returns error message, store not updated", async () => {
       const recipe = makeRecipe();
       const store = new RecipeStore();
-      store.load([recipe], []);
+      store.load([recipe]);
 
       const mockSaveRecipe = vi.fn();
       const mockNotifySync = vi.fn().mockResolvedValue(undefined);
@@ -195,7 +196,7 @@ describe("p2-recipe-crud: update_recipe tool", () => {
     it("p2-recipe-crud.AC3.8: rating provided — saveRecipe called with that rating", async () => {
       const recipe = makeRecipe({ rating: 0 });
       const store = new RecipeStore();
-      store.load([recipe], []);
+      store.load([recipe]);
 
       const mockSaveRecipe = vi.fn();
       const mockNotifySync = vi.fn().mockResolvedValue(undefined);
@@ -221,7 +222,7 @@ describe("p2-recipe-crud: update_recipe tool", () => {
     it("p2-recipe-crud.AC3.9: notes provided — saveRecipe called with that value", async () => {
       const recipe = makeRecipe({ notes: null });
       const store = new RecipeStore();
-      store.load([recipe], []);
+      store.load([recipe]);
 
       const mockSaveRecipe = vi.fn();
       const mockNotifySync = vi.fn().mockResolvedValue(undefined);
@@ -247,7 +248,7 @@ describe("p2-recipe-crud: update_recipe tool", () => {
     it("p2-recipe-crud.AC3.10: inTrash: true — saveRecipe called with inTrash: true", async () => {
       const recipe = makeRecipe({ inTrash: false });
       const store = new RecipeStore();
-      store.load([recipe], []);
+      store.load([recipe]);
 
       const mockSaveRecipe = vi.fn();
       const mockNotifySync = vi.fn().mockResolvedValue(undefined);
@@ -273,7 +274,7 @@ describe("p2-recipe-crud: update_recipe tool", () => {
     it("p2-recipe-crud.AC3.11: inTrash: false — saveRecipe called with inTrash: false (restore)", async () => {
       const recipe = makeRecipe({ inTrash: true });
       const store = new RecipeStore();
-      store.load([recipe], []);
+      store.load([recipe]);
 
       const mockSaveRecipe = vi.fn();
       const mockNotifySync = vi.fn().mockResolvedValue(undefined);
@@ -300,7 +301,7 @@ describe("p2-recipe-crud: update_recipe tool", () => {
       const catA = makeCategory({ name: "Category A" });
       const recipe = makeRecipe({ categories: [catA.uid] });
       const store = new RecipeStore();
-      store.load([recipe], [catA]);
+      store.load([recipe]);
 
       const mockSaveRecipe = vi.fn();
       const mockNotifySync = vi.fn().mockResolvedValue(undefined);

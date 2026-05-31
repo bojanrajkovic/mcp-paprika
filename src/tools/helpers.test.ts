@@ -7,7 +7,7 @@ import {
   recipeToMarkdown,
   recipeMetadataLines,
   commitRecipe,
-  resolveCategoryNames,
+  resolveCategoryRefs,
   uidOrTextLookupSchema,
   resolveLookup,
   formatLookupOutcome,
@@ -301,10 +301,10 @@ describe("p2-u02-shared-helpers: shared helper functions", () => {
     });
   });
 
-  describe("p2-recipe-crud.AC-helpers: resolveCategoryNames", () => {
+  describe("p2-recipe-crud.AC-helpers: resolveCategoryRefs", () => {
     it("p2-recipe-crud.AC-helpers.1: exact name match returns the category's UID in uids and empty unknown array", () => {
       const cat = makeCategory({ name: "Desserts" });
-      const result = resolveCategoryNames([cat], ["Desserts"]);
+      const result = resolveCategoryRefs([cat], ["Desserts"]);
       expect(result.uids).toHaveLength(1);
       expect(result.uids[0]).toBe(cat.uid);
       expect(result.unknown).toEqual([]);
@@ -312,7 +312,7 @@ describe("p2-u02-shared-helpers: shared helper functions", () => {
 
     it("p2-recipe-crud.AC-helpers.2: case-insensitive match (desserts matches Desserts) returns the UID, not in unknown", () => {
       const cat = makeCategory({ name: "Desserts" });
-      const result = resolveCategoryNames([cat], ["desserts"]);
+      const result = resolveCategoryRefs([cat], ["desserts"]);
       expect(result.uids).toHaveLength(1);
       expect(result.uids[0]).toBe(cat.uid);
       expect(result.unknown).toEqual([]);
@@ -320,7 +320,7 @@ describe("p2-u02-shared-helpers: shared helper functions", () => {
 
     it("p2-recipe-crud.AC-helpers.3: unrecognized name appears in unknown, not in uids", () => {
       const cat = makeCategory({ name: "Desserts" });
-      const result = resolveCategoryNames([cat], ["Breakfast"]);
+      const result = resolveCategoryRefs([cat], ["Breakfast"]);
       expect(result.uids).toEqual([]);
       expect(result.unknown).toEqual(["Breakfast"]);
     });
@@ -328,22 +328,37 @@ describe("p2-u02-shared-helpers: shared helper functions", () => {
     it("p2-recipe-crud.AC-helpers.4: mix of known and unknown — known go to uids, unknown go to unknown, both in input order", () => {
       const cat1 = makeCategory({ name: "Desserts" });
       const cat2 = makeCategory({ name: "Breakfast" });
-      const result = resolveCategoryNames([cat1, cat2], ["Breakfast", "Unknown", "Desserts", "Other"]);
+      const result = resolveCategoryRefs([cat1, cat2], ["Breakfast", "Unknown", "Desserts", "Other"]);
       expect(result.uids).toEqual([cat2.uid, cat1.uid]);
       expect(result.unknown).toEqual(["Unknown", "Other"]);
     });
 
     it("p2-recipe-crud.AC-helpers.5: empty names array returns uids: [], unknown: []", () => {
       const cat = makeCategory({ name: "Desserts" });
-      const result = resolveCategoryNames([cat], []);
+      const result = resolveCategoryRefs([cat], []);
       expect(result.uids).toEqual([]);
       expect(result.unknown).toEqual([]);
     });
 
     it("p2-recipe-crud.AC-helpers.6: empty all categories array with non-empty names returns all names in unknown", () => {
-      const result = resolveCategoryNames([], ["Desserts", "Breakfast"]);
+      const result = resolveCategoryRefs([], ["Desserts", "Breakfast"]);
       expect(result.uids).toEqual([]);
       expect(result.unknown).toEqual(["Desserts", "Breakfast"]);
+    });
+
+    it("p2-recipe-crud.AC-helpers.7: a ref that exactly matches a known UID resolves UID-first", () => {
+      const cat = makeCategory({ name: "Desserts" });
+      const result = resolveCategoryRefs([cat], [cat.uid]);
+      expect(result.uids).toEqual([cat.uid]);
+      expect(result.unknown).toEqual([]);
+    });
+
+    it("p2-recipe-crud.AC-helpers.8: UID and name refs can be mixed in one call", () => {
+      const cat1 = makeCategory({ name: "Desserts" });
+      const cat2 = makeCategory({ name: "Breakfast" });
+      const result = resolveCategoryRefs([cat1, cat2], [cat1.uid, "Breakfast", "Unknown"]);
+      expect(result.uids).toEqual([cat1.uid, cat2.uid]);
+      expect(result.unknown).toEqual(["Unknown"]);
     });
   });
 

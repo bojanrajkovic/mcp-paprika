@@ -5,7 +5,7 @@ import { z } from "zod";
 import { RecipeUidSchema } from "../paprika/types.js";
 import type { CategoryUid, Recipe } from "../paprika/types.js";
 import { formatPaprikaDate } from "../paprika/dates.js";
-import { coldStartGuard, commitRecipe, recipeToMarkdown, resolveCategoryNames, textResult } from "./helpers.js";
+import { coldStartGuard, commitRecipe, recipeToMarkdown, resolveCategoryRefs, textResult } from "./helpers.js";
 import type { ServerContext } from "../types/server-context.js";
 
 export function registerCreateTool(server: McpServer, ctx: ServerContext): void {
@@ -26,7 +26,14 @@ export function registerCreateTool(server: McpServer, ctx: ServerContext): void 
         prepTime: z.string().optional().describe("Prep time (e.g. '15 min')"),
         cookTime: z.string().optional().describe("Cook time (e.g. '30 min')"),
         totalTime: z.string().optional().describe("Total time (e.g. '45 min')"),
-        categories: z.array(z.string()).optional().describe("Category display names (case-insensitive)"),
+        categories: z
+          .array(z.string())
+          .optional()
+          .describe(
+            "Categories to assign. Each entry is either a category UID (from `list_categories`) or a display " +
+              "name (case-insensitive). Unknown names are skipped with a warning — create them first with " +
+              "`create_category` if needed.",
+          ),
         source: z.string().optional().describe("Source name"),
         sourceUrl: z.string().optional().describe("Source URL"),
         difficulty: z.string().optional().describe("Difficulty level"),
@@ -38,13 +45,13 @@ export function registerCreateTool(server: McpServer, ctx: ServerContext): void 
       log.info({ tool: "create_recipe", name: args.name }, "tool invoked");
       return coldStartGuard(ctx).match(
         async (): Promise<CallToolResult> => {
-          // Resolve category names → UIDs (AC2.4, AC2.7)
+          // Resolve category refs (UID or name) → UIDs (AC2.4, AC2.7)
           const { uids: categories, unknown: unknownCategories } =
             args.categories && args.categories.length > 0
-              ? resolveCategoryNames(ctx.store.getAllCategories(), args.categories)
+              ? resolveCategoryRefs(ctx.categoryStore.getAll(), args.categories)
               : { uids: [] as Array<CategoryUid>, unknown: [] as Array<string> };
 
-          const warnings = unknownCategories.map((name) => `Warning: category "${name}" not found and was skipped.`);
+          const warnings = unknownCategories.map((ref) => `Warning: category "${ref}" not found and was skipped.`);
 
           // Build the full Recipe object — all 28 fields required by the type.
           // hash: "" — Paprika stores the client-supplied hash verbatim (it does
@@ -94,7 +101,7 @@ export function registerCreateTool(server: McpServer, ctx: ServerContext): void 
             return textResult(`Failed to create recipe: ${message}`);
           }
 
-          const categoryNames = ctx.store.resolveCategories(saved.categories);
+          const categoryNames = ctx.categoryStore.resolveNames(saved.categories);
           const markdown = recipeToMarkdown(saved, categoryNames);
           const prefix = warnings.length > 0 ? warnings.join("\n") + "\n\n" : "";
           return textResult(prefix + markdown);
