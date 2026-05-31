@@ -36,6 +36,7 @@ export function makeRecipe(overrides?: Partial<Recipe>): Recipe {
     onGroceryList: false,
     scale: null,
     nutritionalInfo: null,
+    deleted: false,
     ...overrides,
   };
 }

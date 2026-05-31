@@ -57,6 +57,11 @@ export const RecipeStoredSchema = z.object({
   onGroceryList: z.boolean(),
   scale: z.string().nullable(),
   nutritionalInfo: z.string().nullable(),
+  // Hard-delete (empty-trash) tombstone. Live recipes omit it on the wire and on
+  // disk, so it defaults to false — same optional().default(false) pattern as the
+  // other entities. POSTing deleted:true alongside in_trash:true empties the recipe
+  // from the trash server-side, echoing the recipe's existing hash verbatim (#125).
+  deleted: z.boolean().optional().default(false),
 });
 
 // Recipe type derived from RecipeStoredSchema.
@@ -102,6 +107,9 @@ export const RecipeSchema = z
     on_grocery_list: z.boolean(),
     scale: z.string().nullable(),
     nutritional_info: z.string().nullable(),
+    // Wire name matches the stored name (`deleted`), so it passes through the
+    // transform untouched via ...rest — no destructuring/rename needed (#125).
+    deleted: z.boolean().optional().default(false),
   })
   .transform(
     ({

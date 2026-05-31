@@ -17,6 +17,7 @@ import { SyncEngine } from "../paprika/sync.js";
 import { registerCategoryTools } from "../tools/categories.js";
 import { registerCreateTool } from "../tools/create.js";
 import { registerDeleteTool } from "../tools/delete.js";
+import { registerEmptyTrashTool } from "../tools/empty-trash.js";
 import { registerDiscoverTool } from "../tools/discover.js";
 import { registerFilterTools } from "../tools/filter.js";
 import { registerListTool } from "../tools/list.js";
@@ -333,6 +334,7 @@ export function buildMcpServer(app: AppContext): McpServer {
   registerCreateTool(server, sessionCtx);
   registerUpdateTool(server, sessionCtx);
   registerDeleteTool(server, sessionCtx);
+  registerEmptyTrashTool(server, sessionCtx);
   registerListPantryTool(server, sessionCtx);
   registerGetPantryItemTool(server, sessionCtx);
   registerAddPantryItemsTool(server, sessionCtx);
