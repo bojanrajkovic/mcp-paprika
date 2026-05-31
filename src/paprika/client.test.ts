@@ -258,6 +258,88 @@ describe("PaprikaClient", () => {
       await expect(client.authenticate()).rejects.toThrow(ZodError);
     });
 
+    it("auth-retry.1 - transient network failure during auth retries then succeeds (#158)", async () => {
+      let calls = 0;
+      server.use(
+        http.post(AUTH_URL, () => {
+          calls++;
+          if (calls <= 2) return HttpResponse.error();
+          return HttpResponse.json({ result: { token: "valid-jwt-token" } });
+        }),
+      );
+
+      vi.useFakeTimers();
+      try {
+        const client = new PaprikaClient("test@example.com", "password");
+        const promise = client.authenticate();
+        await vi.runAllTimersAsync();
+        await expect(promise).resolves.toBeUndefined();
+        expect(calls).toBe(3);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("auth-retry.2 - transient 503 during auth retries then succeeds (#158)", async () => {
+      let calls = 0;
+      server.use(
+        http.post(AUTH_URL, () => {
+          calls++;
+          if (calls <= 2) return HttpResponse.json({}, { status: 503 });
+          return HttpResponse.json({ result: { token: "valid-jwt-token" } });
+        }),
+      );
+
+      vi.useFakeTimers();
+      try {
+        const client = new PaprikaClient("test@example.com", "password");
+        const promise = client.authenticate();
+        await vi.runAllTimersAsync();
+        await expect(promise).resolves.toBeUndefined();
+        expect(calls).toBe(3);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("auth-retry.3 - bad credentials (401) fail fast without retrying (#158)", async () => {
+      let calls = 0;
+      server.use(
+        http.post(AUTH_URL, () => {
+          calls++;
+          return HttpResponse.json({}, { status: 401 });
+        }),
+      );
+
+      const client = new PaprikaClient("test@example.com", "password");
+      await expect(client.authenticate()).rejects.toBeInstanceOf(PaprikaAuthError);
+      expect(calls).toBe(1); // no retry on a real auth rejection
+    });
+
+    it("auth-retry.4 - persistent network failure gives up (bounded) with PaprikaAuthError (#158)", async () => {
+      let calls = 0;
+      server.use(
+        http.post(AUTH_URL, () => {
+          calls++;
+          return HttpResponse.error();
+        }),
+      );
+
+      vi.useFakeTimers();
+      try {
+        const client = new PaprikaClient("test@example.com", "password");
+        // Attach the rejection handler BEFORE advancing timers so the eventual
+        // rejection (mid-backoff) is never momentarily unhandled.
+        const expectation = expect(client.authenticate()).rejects.toBeInstanceOf(PaprikaAuthError);
+        await vi.runAllTimersAsync();
+        await expectation;
+        expect(calls).toBeGreaterThan(1); // retried
+        expect(calls).toBeLessThanOrEqual(4); // but bounded, not infinite
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
     it("p1-u05-client-auth.AC1.5 - malformed response (result.token missing) throws ZodError", async () => {
       server.use(
         http.post(AUTH_URL, () => {

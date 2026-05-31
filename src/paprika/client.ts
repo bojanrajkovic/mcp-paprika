@@ -241,18 +241,59 @@ export class PaprikaClient {
   }
 
   async authenticate(): Promise<void> {
-    const response = await fetch(AUTH_URL, {
-      method: "POST",
-      body: new URLSearchParams({ email: this.email, password: this.password }),
-    });
+    // One authentication attempt. Classifies failures the same way request()
+    // does so the shared retry policy can tell transient blips (retry) from a
+    // real auth rejection (fail fast).
+    const attempt = async (): Promise<void> => {
+      let response: Response;
+      try {
+        response = await fetch(AUTH_URL, {
+          method: "POST",
+          body: new URLSearchParams({ email: this.email, password: this.password }),
+        });
+      } catch (error) {
+        // undici throws a bare TypeError for network-level failures (DNS, TCP
+        // reset, TLS handshake). Mark it retryable so a transient blip at
+        // startup backs off and retries instead of crashlooping the process (#158).
+        if (error instanceof TypeError) {
+          throw new NetworkRetryableError(error);
+        }
+        throw error;
+      }
 
-    if (!response.ok) {
-      throw new PaprikaAuthError(`Authentication failed (HTTP ${response.status.toString()})`);
+      if (!response.ok) {
+        // Transient upstream failures (5xx / 429) are worth retrying; a real
+        // auth rejection (401/403, bad credentials) is not — fail fast.
+        if (RETRYABLE_STATUSES.has(response.status)) {
+          throw new TransientHTTPError(response.status);
+        }
+        throw new PaprikaAuthError(`Authentication failed (HTTP ${response.status.toString()})`);
+      }
+
+      const json: unknown = await response.json();
+      const data = AuthResponseSchema.parse(json);
+      this.token = data.result.token;
+    };
+
+    // Reuse the same bounded retry policy as request() (maxAttempts: 3, exp
+    // backoff) so a transient network/5xx failure at startup retries instead of
+    // throwing on the first blip. The circuit breaker is intentionally NOT
+    // applied — startup auth is one-shot, not a hot path. Non-retryable errors
+    // (PaprikaAuthError on bad creds, ZodError on a malformed body) are not
+    // matched by the policy and propagate immediately.
+    try {
+      await this.retryPolicy.execute(attempt);
+    } catch (error) {
+      // Once the bounded retries are exhausted, surface a clean PaprikaAuthError
+      // (preserving the underlying cause) rather than the internal retry marker.
+      if (error instanceof NetworkRetryableError) {
+        throw new PaprikaAuthError("Authentication failed (network error)", { cause: error.cause });
+      }
+      if (error instanceof TransientHTTPError) {
+        throw new PaprikaAuthError(`Authentication failed (HTTP ${error.status.toString()})`, { cause: error });
+      }
+      throw error;
     }
-
-    const json: unknown = await response.json();
-    const data = AuthResponseSchema.parse(json);
-    this.token = data.result.token;
   }
 
   async listRecipes(): Promise<Array<RecipeEntry>> {
