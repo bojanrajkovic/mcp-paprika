@@ -161,6 +161,7 @@ export function makeCtx(
       | "mealTypeStore"
       | "menuStore"
       | "menuItemStore"
+      | "photoStore"
       | "vectorStore"
       | "notifier"
       | "log"

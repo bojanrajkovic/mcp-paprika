@@ -166,11 +166,14 @@ Typed HTTP client wrapping the Paprika Cloud Sync API.
 - `saveMenuItems(items: ReadonlyArray<Readonly<MenuItem>>): Promise<ReadonlyArray<MenuItem>>` — POSTs gzip-encoded N-element JSON array to `/api/v2/sync/menuitems/` via `postEntities` with `menuItemToApiPayload`; batch-capable; identity-returns `items` on `{result: true}`.
 - `deleteRecipe(uid: RecipeUid): Promise<void>` — soft-delete: fetches recipe, sets `inTrash: true`, saves, then calls `notifySync()`
 - `hardDeleteRecipe(uid: RecipeUid): Promise<void>` — hard-delete (empty trash): fetches recipe, sets BOTH `inTrash: true` and `deleted: true`, saves (echoing the recipe's existing hash and created verbatim — the exact shape Paprika.app emits when emptying the trash), then calls `notifySync()`. Irreversible, unlike `deleteRecipe`. The hash is NOT recomputed: Paprika validates `deleted` against the stored hash, so echoing the synced hash is sufficient (an empty hash on a locally-created recipe also succeeds).
+- `uploadPhoto(recipeWithPhoto, photo, thumbnail, full): Promise<void>` — attaches a photo to a recipe via the verified 3-request sequence (recipe POST with thumbnail → photo POST with full image → recipe re-POST). The caller (`upload_photo` tool) supplies the recipe with its `photo`/`photoLarge`/`photoHash` fields already set, the 7-field Photo entity, and the two normalized JPEG buffers. See the photo upload wire format below.
+- `deletePhoto(photo): Promise<void>` — soft-deletes a photo via a data-only tombstone POST to `/api/v2/sync/photo/{uid}/` (`deleted: true`, all 7 fields echoed including the original `hash`)
 - `notifySync(): Promise<void>` — POSTs to `/api/v2/sync/notify/` to trigger cloud sync propagation
 
 **Private API:**
 
 - `buildEntityFormData(payload: unknown, filename = "file"): FormData` — stringifies `payload` to JSON, gzip-compresses, wraps in a `Blob`, appends to `FormData` as field `"data"` with the given `filename`. Used by `saveRecipe` (with `filename = "data.gz"`) and by `postEntities` (with the default `"file"`)
+- `buildPhotoFormData(payload, imageBytes, imageFilename, dataFilename = "file"): FormData` — like `buildEntityFormData` but appends a second `photo_upload` part carrying RAW `image/jpeg` bytes (NOT gzipped, NOT base64) alongside the gzipped `data` part. Used by `uploadPhoto` for the recipe POST (thumbnail, `dataFilename = "data.gz"`) and the photo POST (full image, `"file"`)
 - `postEntities<T>(url: string, items: ReadonlyArray<Readonly<T>>, toPayload: (item: Readonly<T>) => Record<string, unknown>): Promise<void>` — maps `items` through `toPayload`, passes the resulting array to `buildEntityFormData`, then calls `request("POST", url, z.boolean(), formData)`. Used by all five non-recipe save methods (`saveAisle`, `savePantryItems`, `saveGroceryList`, `saveGroceryItems`, `saveGroceryIngredient`)
 - `request<T>(method, url, schema, body?): Promise<T>` — authenticated v2 API calls with:
   - Bearer token header (when token exists)
@@ -214,15 +217,17 @@ The constructor installs five hooks after building `this.resilience`. These fire
 - **Soft-delete (move to trash, reversible):** full recipe object with `in_trash: true`, `deleted: false`; the same multipart `FormData` shape as `saveRecipe`. `deleteRecipe()` fetches the recipe, sets `inTrash: true`, and saves via `saveRecipe()`.
 - **Hard-delete (empty trash, irreversible):** byte-identical body with both `in_trash: true` AND `deleted: true` — the hash is echoed verbatim (NOT recomputed; Paprika validates `deleted` against the stored hash). `hardDeleteRecipe()` implements this. Exposed to MCP clients as the `empty_trash` tool, which guards that the recipe is already trashed.
 
-**Photo upload wire format** (verified via `docs/wire-captures/writes.har.json`):
+**Photo upload wire format** (verified via `docs/wire-captures/writes.har.json` and a live probe, 2026-05-31):
 
-Three-step sequence:
+A photo carries **two distinct images with two distinct UIDs**: a ~280px thumbnail (→ `recipe.photo`) and the full image (→ `recipe.photo_large` = the Photo entity). `uploadPhoto()` replicates the macOS app's 3-request sequence:
 
-1. `POST /api/v2/sync/recipe/{recipe_uid}/` — recipe object with `photo`/`photo_large` set to filenames and `photo_hash` set
-2. `POST /api/v2/sync/photo/{photo_uid}/` — photo metadata (7 fields: `deleted`, `filename`, `hash`, `name`, `order_flag`, `recipe_uid`, `uid`) as multipart, with the binary image data
-3. `POST /api/v2/sync/recipe/{recipe_uid}/` — recipe object again to confirm the upload
+1. `POST /api/v2/sync/recipe/{recipe_uid}/` — recipe object with `photo` = **thumbnail's own uid** (`{thumbUid}.jpg`), `photo_large` = **photo-entity uid** (`{photoUid}.jpg`), and `photo_hash` = `sha256(thumbnail bytes)` (exact, verified) — multipart, carrying the **thumbnail** bytes as a raw `image/jpeg` `photo_upload` part.
+2. `POST /api/v2/sync/photo/{photo_uid}/` — the 7-field Photo entity metadata (`uid`, `recipe_uid`, `filename`, `name`, `order_flag`, `hash`, `deleted`) — multipart, carrying the **full** image bytes as a `photo_upload` part.
+3. `POST /api/v2/sync/recipe/{recipe_uid}/` — the recipe re-posted (the app's confirm step).
 
-Deleting a photo POSTs a tombstone (`deleted: true`) to `/api/v2/sync/photo/{photo_uid}/`.
+The recipe `hash` is **not** validated on a photo attach (the probe attached with an empty hash successfully) — only the `deleted` tombstone path validates the hash (#125). The Photo entity `hash` is `sha256` of the bytes WE upload (Paprika stores client hashes verbatim; exact app-interop hashing is #167). Images are normalized to JPEG via `sharp` in `tools/photo-helpers.ts` (the client takes prepared buffers).
+
+Deleting a photo POSTs a **data-only tombstone** (no `photo_upload` part) to `/api/v2/sync/photo/{photo_uid}/` with all 7 fields echoed and `deleted: true` (including the original create-time `hash`). `deletePhoto()` implements this.
 
 **Grocery ingredient auto-creation** (verified via `docs/wire-captures/writes.har.json`):
 

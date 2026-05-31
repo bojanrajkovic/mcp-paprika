@@ -3,3 +3,4 @@ allowBuilds:
   lefthook: true
   msw: true
   protobufjs: true
+  sharp: true

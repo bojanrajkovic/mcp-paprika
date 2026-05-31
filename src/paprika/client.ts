@@ -48,6 +48,7 @@ import {
   menuToApiPayload,
   PantryItemSchema,
   PhotoSchema,
+  photoToApiPayload,
   RecipeEntrySchema,
   RecipeSchema,
 } from "./types.js";
@@ -403,6 +404,56 @@ export class PaprikaClient {
     return items;
   }
 
+  /**
+   * Attaches a photo to a recipe, replicating the macOS app's captured 3-request
+   * sequence (`docs/wire-captures/writes.har.json`):
+   *
+   * 1. `POST /recipe/{uid}/` — the recipe with `photo` (thumbnail filename),
+   *    `photo_large` (full-image filename = the Photo entity), and `photo_hash`
+   *    (sha256 of the thumbnail) set, carrying the **thumbnail** bytes as a
+   *    `photo_upload` part.
+   * 2. `POST /photo/{photoUid}/` — the 7-field Photo entity metadata carrying the
+   *    **full** image bytes as a `photo_upload` part.
+   * 3. `POST /recipe/{uid}/` — the recipe re-posted (the app's confirm step).
+   *
+   * `recipeWithPhoto` must already carry the photo fields; `photo` is the full
+   * Photo entity (its `hash` is sha256 of the bytes WE upload — Paprika stores
+   * client hashes verbatim, so this stays self-consistent; exact-interop hashing
+   * is #167). The caller normalizes both images to JPEG and computes the hashes.
+   */
+  async uploadPhoto(
+    recipeWithPhoto: Readonly<Recipe>,
+    photo: Readonly<Photo>,
+    thumbnail: Buffer,
+    full: Buffer,
+  ): Promise<void> {
+    const thumbnailFilename = recipeWithPhoto.photo ?? `${photo.uid}.jpg`;
+    const recipePayload = recipeToApiPayload(recipeWithPhoto);
+
+    // 1. Recipe POST carrying the thumbnail.
+    const recipeForm = this.buildPhotoFormData(recipePayload, thumbnail, thumbnailFilename, "data.gz");
+    await this.request("POST", `${API_BASE}/recipe/${recipeWithPhoto.uid}/`, z.boolean(), recipeForm);
+
+    // 2. Photo POST carrying the full image.
+    const photoForm = this.buildPhotoFormData(photoToApiPayload(photo), full, photo.filename, "file");
+    await this.request("POST", `${API_BASE}/photo/${photo.uid}/`, z.boolean(), photoForm);
+
+    // 3. Recipe re-POST (confirm), matching the app's captured sequence.
+    const confirmForm = this.buildEntityFormData(recipePayload, "data.gz");
+    await this.request("POST", `${API_BASE}/recipe/${recipeWithPhoto.uid}/`, z.boolean(), confirmForm);
+  }
+
+  /**
+   * Soft-deletes a photo. POSTs a data-only tombstone (no `photo_upload` part) to
+   * `/photo/{uid}/` with all 7 fields echoed and `deleted: true` — including the
+   * original create-time `hash`, which Paprika stored verbatim
+   * (`docs/wire-captures/writes.har.json`).
+   */
+  async deletePhoto(photo: Readonly<Photo>): Promise<void> {
+    const form = this.buildEntityFormData(photoToApiPayload({ ...photo, deleted: true }), "file");
+    await this.request("POST", `${API_BASE}/photo/${photo.uid}/`, z.boolean(), form);
+  }
+
   async notifySync(): Promise<void> {
     await this.request("POST", `${API_BASE}/notify/`, z.unknown());
   }
@@ -430,6 +481,25 @@ export class PaprikaClient {
     const blob = new Blob([compressed]);
     const formData = new FormData();
     formData.append("data", blob, filename);
+    return formData;
+  }
+
+  /**
+   * Like {@link buildEntityFormData} but appends a second `photo_upload` part
+   * carrying RAW `image/jpeg` bytes (NOT gzipped, NOT base64) alongside the
+   * gzipped `data` part — the two-part multipart shape Paprika uses for photo
+   * uploads (`docs/wire-captures/`).
+   */
+  private buildPhotoFormData(
+    payload: unknown,
+    imageBytes: Buffer,
+    imageFilename: string,
+    dataFilename = "file",
+  ): FormData {
+    const compressed = gzipSync(JSON.stringify(payload));
+    const formData = new FormData();
+    formData.append("data", new Blob([compressed]), dataFilename);
+    formData.append("photo_upload", new Blob([imageBytes], { type: "image/jpeg" }), imageFilename);
     return formData;
   }
 
