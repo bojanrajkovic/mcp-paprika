@@ -145,6 +145,8 @@ Typed HTTP client wrapping the Paprika Cloud Sync API.
 - `getRecipe(uid: string): Promise<Recipe>` — fetches full recipe details from `/api/v2/sync/recipe/{uid}/`
 - `getRecipes(uids: ReadonlyArray<string>): Promise<Array<Recipe>>` — fans out to `getRecipe()` with bulkhead(5) concurrency limit
 - `listCategories(): Promise<Array<Category>>` — fetches category list, then hydrates each with bulkhead(5) concurrency limit independent of recipe bulkhead
+- `saveCategory(category: Readonly<Category>): Promise<Category>` — POSTs a single-element gzip array to `/api/v2/sync/categories/` with `deleted: false` via `postEntities`; returns the input category on `{result: true}`
+- `deleteCategory(category: Readonly<Category>): Promise<void>` — soft-delete tombstone POST to `/api/v2/sync/categories/` with `deleted: true` (all fields echoed); same collection-URL + deleted-flag pattern as pantry/grocery deletes
 - `listMeals(): Promise<Array<Meal>>` — fetches fully-hydrated meals from `/api/v2/sync/meals/`; parses via `MealSchema`
 - `listMealTypes(): Promise<Array<MealType>>` — fetches meal type catalog from `/api/v2/sync/mealtypes/`; parses via `MealTypeSchema`
 - `listMenus(): Promise<Array<Menu>>` — fetches menus from `/api/v2/sync/menus/`; parses via `MenuSchema`
@@ -174,7 +176,7 @@ Typed HTTP client wrapping the Paprika Cloud Sync API.
 
 - `buildEntityFormData(payload: unknown, filename = "file"): FormData` — stringifies `payload` to JSON, gzip-compresses, wraps in a `Blob`, appends to `FormData` as field `"data"` with the given `filename`. Used by `saveRecipe` (with `filename = "data.gz"`) and by `postEntities` (with the default `"file"`)
 - `buildPhotoFormData(payload, imageBytes, imageFilename, dataFilename = "file"): FormData` — like `buildEntityFormData` but appends a second `photo_upload` part carrying RAW `image/jpeg` bytes (NOT gzipped, NOT base64) alongside the gzipped `data` part. Used by `uploadPhoto` for the recipe POST (thumbnail, `dataFilename = "data.gz"`) and the photo POST (full image, `"file"`)
-- `postEntities<T>(url: string, items: ReadonlyArray<Readonly<T>>, toPayload: (item: Readonly<T>) => Record<string, unknown>): Promise<void>` — maps `items` through `toPayload`, passes the resulting array to `buildEntityFormData`, then calls `request("POST", url, z.boolean(), formData)`. Used by all five non-recipe save methods (`saveAisle`, `savePantryItems`, `saveGroceryList`, `saveGroceryItems`, `saveGroceryIngredient`)
+- `postEntities<T>(url: string, items: ReadonlyArray<Readonly<T>>, toPayload: (item: Readonly<T>) => Record<string, unknown>): Promise<void>` — maps `items` through `toPayload`, passes the resulting array to `buildEntityFormData`, then calls `request("POST", url, z.boolean(), formData)`. Used by all seven non-recipe save/delete methods (`saveCategory`, `deleteCategory`, `saveAisle`, `savePantryItems`, `saveGroceryList`, `saveGroceryItems`, `saveGroceryIngredient`)
 - `request<T>(method, url, schema, body?): Promise<T>` — authenticated v2 API calls with:
   - Bearer token header (when token exists)
   - **Resilience:** `wrap(breakerPolicy, retryPolicy)` — breaker outermost, retry innermost. The breaker sees one execution per tool call regardless of how many retries that call exhausted internally. Retry: `maxAttempts: 3` means 3 retries, so each failing tool call makes 4 total network attempts before the retry gives up. Breaker: opens after 5 consecutive failing tool calls (`ConsecutiveBreaker(5)`), half-opens after 30 s.
@@ -305,10 +307,9 @@ Background polling loop that keeps local cache and in-memory store synchronized 
    - Removes deleted recipes (concurrent): `Promise.all(filteredRemoved.map(uid => cache.recipes.remove(uid)))` and `store.delete(uid)`
    - **Observation-based clearing:** walks the raw `entries` from `listRecipes()` and calls `store.clearPending(uid)` for any UID that has a pending-upsert and appears in the canonical list.
 
-2. **Category sync (replace-all):**
-   - Fetches all categories: `client.listCategories()` → fully hydrated `Array<Category>`
-   - Replaces store categories: `store.setCategories(categories)`
-   - Writes each category to cache: `cache.categories.put(category)` (categories use replace-all; no hash maintained)
+2. **Category sync (replace-all with pending-write filtering):**
+   - Delegated to `syncReplaceAllEntity({ fetch: client.listCategories, cache: cache.categories, store: categoryStore, equals: categoriesEqual, label: "categories", log })` — gaining pending-write filtering + orphan cleanup, same as pantry/grocery. `categoriesEqual(a, b)` compares `uid`, `name`, `orderFlag`, and `parentUid`.
+   - No `sync:complete` event emitted; `SyncEntityType` union is NOT extended (reference entity, no MCP resource surface).
 
 2.5. **Aisle sync (replace-all with pending-write filtering):**
 
@@ -361,7 +362,7 @@ Background polling loop that keeps local cache and in-memory store synchronized 
 
 9. **Finalization:**
    - Flushes cache once: `await cache.flush()`
-   - **Sweeps expired pending-writes:** `store.sweepPending()`, `pantryStore.sweepPending()`, `aisleStore.sweepPending()`, `groceryListStore.sweepPending()`, `groceryItemStore.sweepPending()`, `mealStore.sweepPending()`, `mealTypeStore.sweepPending()`, `menuStore.sweepPending()`, `menuItemStore.sweepPending()`, `photoStore.sweepPending()` — TTL fallback for pending-deletes. `groceryIngredientStore` is NOT swept (no pending-writes).
+   - **Sweeps expired pending-writes:** `store.sweepPending()`, `categoryStore.sweepPending()`, `pantryStore.sweepPending()`, `aisleStore.sweepPending()`, `groceryListStore.sweepPending()`, `groceryItemStore.sweepPending()`, `mealStore.sweepPending()`, `mealTypeStore.sweepPending()`, `menuStore.sweepPending()`, `menuItemStore.sweepPending()`, `photoStore.sweepPending()` — TTL fallback for pending-deletes. `groceryIngredientStore` is NOT swept (no pending-writes).
    - Emits **four** `sync:complete` events per cycle: `RecipeSyncResult` (`changeType: "recipes"`), `PantrySyncResult` (`changeType: "pantry"`), `GroceryListSyncResult` (`changeType: "grocery-lists"`), `GroceryItemSyncResult` (`changeType: "grocery-items"`). All four are emitted even for no-change cycles. The engine does **not** call the notifier — a subscriber in `buildAppContext` does.
    - Logs success: `this.log.info({added, updated, removed}, "sync complete")` — record fans out to connected MCP clients only when `notifyLevel` is `"info"` or lower (default `"warn"` suppresses it; see behavior note below)
 
@@ -383,12 +384,12 @@ Background polling loop that keeps local cache and in-memory store synchronized 
 - Orphaned pantry, grocery list, grocery item, and ingredient entries are deleted concurrently via `Promise.all()` for efficiency
 - Loop respects AbortController signal and cleanly exits on `stop()`
 - `pantryStore.load(items)` is called unconditionally even when `effectivePantry` is empty, setting `hasSynced = true` after first sync
-- Ten stores' `sweepPending()` runs every cycle (store, pantryStore, aisleStore, groceryListStore, groceryItemStore, mealStore, mealTypeStore, menuStore, menuItemStore, photoStore). `groceryIngredientStore` is NOT swept (no pending-writes). Observation-based clearing handles upserts; TTL sweep is the only clearing mechanism for pending-deletes.
+- Eleven stores' `sweepPending()` runs every cycle (store, categoryStore, pantryStore, aisleStore, groceryListStore, groceryItemStore, mealStore, mealTypeStore, menuStore, menuItemStore, photoStore). `groceryIngredientStore` is NOT swept (no pending-writes). Observation-based clearing handles upserts; TTL sweep is the only clearing mechanism for pending-deletes.
 - No `sync:complete` event is emitted for the ingredient catalog, meal types, meals, or photos (reference/non-resource entities)
 
 **Dependencies:**
 
-- **Uses:** `AppContext` (client, cache, store, pantryStore, aisleStore, groceryListStore, groceryItemStore, groceryIngredientStore, mealStore, mealTypeStore — `server` and `notifier` are intentionally absent; notifier is used via subscriber pattern only), `mitt` (event emitter), `node:timers/promises` (scheduler.wait), `./types.js` (Recipe, RecipeUid, Meal, GroceryList, GroceryItem, AnySyncResult, RecipeSyncResult, PantrySyncResult, GroceryListSyncResult, GroceryItemSyncResult, DiffResult)
+- **Uses:** `AppContext` (client, cache, store, categoryStore, pantryStore, aisleStore, groceryListStore, groceryItemStore, groceryIngredientStore, mealStore, mealTypeStore — `server` and `notifier` are intentionally absent; notifier is used via subscriber pattern only), `mitt` (event emitter), `node:timers/promises` (scheduler.wait), `./types.js` (Recipe, RecipeUid, Meal, GroceryList, GroceryItem, AnySyncResult, RecipeSyncResult, PantrySyncResult, GroceryListSyncResult, GroceryItemSyncResult, DiffResult)
 - **Used by:** `src/server/build.ts` (`buildAppContext` constructs SyncEngine), `src/features/discover-feature.ts` (subscribes to `sync.events` for incremental re-indexing)
 - **Boundary:** Must not import from `tools/`, `resources/`, or `features/`
 
