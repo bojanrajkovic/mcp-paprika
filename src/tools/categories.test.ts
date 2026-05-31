@@ -116,6 +116,28 @@ describe("p2-discovery-tools: list_categories tool", () => {
       expect(text).toContain("  - **Cakes**");
     });
 
+    it("renders an orphaned category (dangling parentUid) at top level with a ⚠️ disclosure (#178)", async () => {
+      const orphan = makeCategory({ uid: "curries" as CategoryUid, name: "Curries", parentUid: "missing-parent" });
+      const root = makeCategory({ uid: "beef" as CategoryUid, name: "Beef", parentUid: null });
+      const store = new RecipeStore();
+      store.load([makeRecipe({ categories: [orphan.uid] })]);
+      const { server, callTool } = makeTestServer();
+      const ctx = makeCtx(store, server);
+      ctx.categoryStore.load([orphan, root]);
+      registerCategoryTools(server, ctx);
+
+      const text = getText(await callTool("list_categories", {}));
+
+      // Orphan is NOT silently hidden, renders at top level (no indent), flagged.
+      expect(text).toContain("- **Curries**");
+      expect(text).toContain("⚠️");
+      expect(text).toContain("missing-parent");
+      // Sanity: a normal root still renders without the orphan marker.
+      expect(text).toContain("- **Beef**");
+      const beefLine = text.split("\n").find((l) => l.includes("**Beef**"));
+      expect(beefLine).not.toContain("⚠️");
+    });
+
     it("p2-discovery-tools.AC4.5: store with recipes but no categories returns empty message", async () => {
       const store = new RecipeStore();
       store.load([makeRecipe({ categories: [] as Array<CategoryUid> })]);
