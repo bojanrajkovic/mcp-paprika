@@ -31,6 +31,7 @@ export function paprikaSyncMockHandlers(): Array<HttpHandler> {
     "meals",
     "menus",
     "menuitems",
+    "photos",
   ];
   return [
     http.post(PAPRIKA_AUTH_URL, () => HttpResponse.json({ result: { token: "test-token" } })),

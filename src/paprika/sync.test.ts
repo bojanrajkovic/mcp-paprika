@@ -35,6 +35,7 @@ import { makeGroceryList } from "../cache/__fixtures__/grocery-lists.js";
 import { makeGroceryItem } from "../cache/__fixtures__/grocery-items.js";
 import { makeGroceryIngredient } from "../cache/__fixtures__/grocery-ingredients.js";
 import { makeMenu, makeMenuItem } from "../cache/__fixtures__/menus.js";
+import { makePhoto } from "../cache/__fixtures__/photos.js";
 
 function makeMockNotifier(): Notifier {
   return {
@@ -71,6 +72,7 @@ function makeMockClient(): PaprikaClient {
     listMealTypes: vi.fn().mockResolvedValue([]),
     listMenus: vi.fn().mockResolvedValue([]),
     listMenuItems: vi.fn().mockResolvedValue([]),
+    listPhotos: vi.fn().mockResolvedValue([]),
   });
 }
 
@@ -122,6 +124,11 @@ function makeMockCache(): DiskCacheRoot {
       remove: vi.fn().mockResolvedValue(undefined),
     },
     menuItems: {
+      getAll: vi.fn().mockResolvedValue([]),
+      put: vi.fn().mockResolvedValue(undefined),
+      remove: vi.fn().mockResolvedValue(undefined),
+    },
+    photos: {
       getAll: vi.fn().mockResolvedValue([]),
       put: vi.fn().mockResolvedValue(undefined),
       remove: vi.fn().mockResolvedValue(undefined),
@@ -415,6 +422,7 @@ describe("syncOnce", () => {
       listMealTypes: vi.fn().mockResolvedValue([]),
       listMenus: vi.fn().mockResolvedValue([]),
       listMenuItems: vi.fn().mockResolvedValue([]),
+      listPhotos: vi.fn().mockResolvedValue([]),
     });
   }
 
@@ -431,6 +439,7 @@ describe("syncOnce", () => {
     groceryIngredients?: Partial<DiskCacheRoot["groceryIngredients"]>;
     menus?: Partial<DiskCacheRoot["menus"]>;
     menuItems?: Partial<DiskCacheRoot["menuItems"]>;
+    photos?: Partial<DiskCacheRoot["photos"]>;
     flush?: () => Promise<void>;
   };
 
@@ -493,6 +502,12 @@ describe("syncOnce", () => {
         put: vi.fn().mockResolvedValue(undefined),
         remove: vi.fn().mockResolvedValue(undefined),
         ...overrides?.menuItems,
+      },
+      photos: {
+        getAll: vi.fn().mockResolvedValue([]),
+        put: vi.fn().mockResolvedValue(undefined),
+        remove: vi.fn().mockResolvedValue(undefined),
+        ...overrides?.photos,
       },
       flush: overrides?.flush ?? vi.fn().mockResolvedValue(undefined),
     });
@@ -589,6 +604,16 @@ describe("syncOnce", () => {
 
     expect(putRecipe).toHaveBeenCalledWith(recipe);
     expect(set).toHaveBeenCalledWith(recipe);
+  });
+
+  it("AC-photos: photos fetched via listPhotos are written to the photo cache", async () => {
+    const photo = makePhoto({ recipeUid: "recipe-1" });
+    const putPhoto = vi.fn().mockResolvedValue(undefined);
+
+    const engine = makeSyncEngine({ listPhotos: vi.fn().mockResolvedValue([photo]) }, { photos: { put: putPhoto } });
+    await engine.syncOnce();
+
+    expect(putPhoto).toHaveBeenCalledWith(photo);
   });
 
   it("AC3.2: Changed recipes are fetched, written to cache, and updated in store", async () => {

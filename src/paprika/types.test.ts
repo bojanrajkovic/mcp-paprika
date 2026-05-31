@@ -28,6 +28,9 @@ import {
   MenuItemSchema,
   MenuItemStoredSchema,
   menuItemToApiPayload,
+  PhotoSchema,
+  PhotoStoredSchema,
+  photoToApiPayload,
   type RecipeUid,
   type CategoryUid,
   type RecipeEntry,
@@ -50,6 +53,7 @@ import {
   type Meal,
   type Menu,
   type MenuItem,
+  type Photo,
 } from "./types.js";
 
 describe("Branded UID Schemas and Entry Schemas", () => {
@@ -1622,5 +1626,66 @@ describe("menu-infra: MenuItem schema round-trips", () => {
 
     expect(asAny[0]!.changeType).toBe("menus");
     expect(asAny[1]!.changeType).toBe("menu-items");
+  });
+});
+
+describe("photo-infra: Photo schema round-trips", () => {
+  // The GET /sync/photos/ catalog row carries six fields — `deleted` is a
+  // write-only soft-delete flag and is absent on read.
+  const wirePhoto = {
+    uid: "2D6BAA0F-9C3E-4A1B-8E2D-1F0A9B8C7D6E",
+    recipe_uid: "3AF6BDB7-4EA5-444C-A00A-1C5C989DE1E1",
+    filename: "2D6BAA0F-9C3E-4A1B-8E2D-1F0A9B8C7D6E.jpg",
+    name: "1",
+    order_flag: 0,
+    hash: "0F1E2D3C4B5A69788796A5B4C3D2E1F00F1E2D3C4B5A69788796A5B4C3D2E1F0",
+  };
+
+  it("parses Photo wire JSON, maps snake_case keys, and defaults deleted to false", () => {
+    const result = PhotoSchema.safeParse(wirePhoto);
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.uid).toBe(wirePhoto.uid);
+      expect(result.data.recipeUid).toBe(wirePhoto.recipe_uid);
+      expect(result.data.filename).toBe(wirePhoto.filename);
+      expect(result.data.name).toBe("1");
+      expect(result.data.orderFlag).toBe(0);
+      expect(result.data.hash).toBe(wirePhoto.hash);
+      expect(result.data.deleted).toBe(false);
+    }
+  });
+
+  it("round-trips through PhotoStoredSchema without loss", () => {
+    const wireResult = PhotoSchema.safeParse(wirePhoto);
+    expect(wireResult.success).toBe(true);
+    if (!wireResult.success) return;
+
+    const storedResult = PhotoStoredSchema.safeParse(wireResult.data);
+    expect(storedResult.success).toBe(true);
+    if (storedResult.success) {
+      expect(storedResult.data).toEqual(wireResult.data);
+    }
+  });
+
+  it("photoToApiPayload round-trips through PhotoSchema and produces 7 snake_case keys", () => {
+    const parsed: Photo = PhotoSchema.parse({ ...wirePhoto, deleted: true });
+    const payload = photoToApiPayload(parsed);
+    const roundTripped: Photo = PhotoSchema.parse(payload);
+    expect(roundTripped).toEqual(parsed);
+
+    const keys = Object.keys(payload);
+    expect(keys).toEqual(
+      expect.arrayContaining(["uid", "recipe_uid", "filename", "name", "order_flag", "hash", "deleted"]),
+    );
+    expect(keys).toHaveLength(7);
+    expect(payload).not.toHaveProperty("recipeUid");
+    expect(payload).not.toHaveProperty("orderFlag");
+    expect(payload["deleted"]).toBe(true);
+  });
+
+  it("upholds the name == String(order_flag + 1) gallery invariant for the second photo", () => {
+    const second = PhotoSchema.parse({ ...wirePhoto, order_flag: 1, name: "2" });
+    expect(second.name).toBe(String(second.orderFlag + 1));
   });
 });

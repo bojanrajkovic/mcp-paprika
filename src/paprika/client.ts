@@ -27,6 +27,7 @@ import type {
   Menu,
   MenuItem,
   PantryItem,
+  Photo,
   Recipe,
   RecipeEntry,
   RecipeUid,
@@ -46,6 +47,7 @@ import {
   MenuSchema,
   menuToApiPayload,
   PantryItemSchema,
+  PhotoSchema,
   RecipeEntrySchema,
   RecipeSchema,
 } from "./types.js";
@@ -343,6 +345,10 @@ export class PaprikaClient {
 
   async listMenuItems(): Promise<Array<MenuItem>> {
     return this.request("GET", `${API_BASE}/menuitems/`, z.array(MenuItemSchema));
+  }
+
+  async listPhotos(): Promise<Array<Photo>> {
+    return this.request("GET", `${API_BASE}/photos/`, z.array(PhotoSchema));
   }
 
   async listPantry(): Promise<Array<PantryItem>> {

@@ -9,6 +9,7 @@ import { MealStore } from "../cache/meal-store.js";
 import { MealTypeStore } from "../cache/meal-type-store.js";
 import { MenuStore } from "../cache/menu-store.js";
 import { MenuItemStore } from "../cache/menu-item-store.js";
+import { PhotoStore } from "../cache/photo-store.js";
 import { PantryStore } from "../cache/pantry-store.js";
 import { RecipeStore } from "../cache/recipe-store.js";
 import { buildDiscoverComponents } from "../features/discover-feature.js";
@@ -211,6 +212,13 @@ export async function buildAppContext(
   }
   log.info({ count: cachedMenuItems.length }, "hydrated menu item store from cache");
 
+  const photoStore = new PhotoStore({ pendingWriteTtlMs });
+  const cachedPhotos = (await cache.photos.getAll()).filter((p) => !p.deleted);
+  if (cachedPhotos.length > 0) {
+    photoStore.load(cachedPhotos);
+  }
+  log.info({ count: cachedPhotos.length }, "hydrated photo store from cache");
+
   // SyncEngine only reads client/cache/store/pantryStore/notifier — never
   // vectorStore — so it is safe to construct with a placeholder appContext
   // whose vectorStore is null. The vector store is then built with
@@ -228,6 +236,7 @@ export async function buildAppContext(
     mealTypeStore,
     menuStore,
     menuItemStore,
+    photoStore,
     vectorStore: null,
     notifier,
     auth, // null for stdio, populated for HTTP
@@ -302,6 +311,7 @@ export async function buildAppContext(
     mealTypeStore,
     menuStore,
     menuItemStore,
+    photoStore,
     vectorStore,
     notifier,
     auth, // null for stdio, populated for HTTP

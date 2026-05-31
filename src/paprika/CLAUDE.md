@@ -1,6 +1,6 @@
 # Paprika API Client
 
-Last verified: 2026-05-30
+Last verified: 2026-05-31
 
 ## Files
 
@@ -33,6 +33,7 @@ HTTP client for the Paprika Cloud Sync API. Handles authentication, request form
 - `MealTypeUid` — Branded string type for meal type identifiers, validated by `MealTypeUidSchema`
 - `MenuUid` — Branded string type for menu identifiers, validated by `MenuUidSchema` (non-empty)
 - `MenuItemUid` — Branded string type for menu item identifiers, validated by `MenuItemUidSchema` (non-empty)
+- `PhotoUid` — Branded string type for recipe-photo identifiers, validated by `PhotoUidSchema` (non-empty)
 
 **Entry Types:**
 
@@ -52,6 +53,7 @@ HTTP client for the Paprika Cloud Sync API. Handles authentication, request form
 - `MealType` — Meal type catalog entry with 8 fields (`uid`, `name`, `color`, `orderFlag`, `originalType`, `exportAllDay`, `exportTime`, `deleted`); output of `MealTypeStoredSchema` and `MealTypeSchema`. The `deleted` field is `optional().default(false)` — GET responses omit it for live items, but the soft-delete wire format POSTs it as `true` (same pattern as aisles/grocery entities). `exportTime` is `number` (seconds since midnight: `28800` for 08:00, `64800` for 18:00). `originalType` is `number | null` — built-in types carry the integer mapping to one of the four defaults (Breakfast=0, Lunch=1, Dinner=2, Snacks=3); user-created custom types carry `null`. None of these are used by the read-only history feature directly, but the sync layer filters `deleted: true` before loading into `mealTypeStore`.
 - `Menu` — Saved meal plan with 6 fields (`uid`, `name`, `days`, `orderFlag`, `notes`, `deleted`); output of `MenuStoredSchema` and `MenuSchema`. `days` is the menu's total day span (1-indexed). `uid` is branded `MenuUid`. The `deleted` field is `optional().default(false)`.
 - `MenuItem` — One planned recipe within a menu, with 8 fields (`uid`, `menuUid`, `recipeUid`, `name`, `day`, `typeUid`, `orderFlag`, `deleted`); output of `MenuItemStoredSchema` and `MenuItemSchema`. `uid` is branded `MenuItemUid`. `menuUid` is `string | null` — a cascade-deleted menuitem carries `menu_uid: null` on the wire (the menu's soft-delete nulls the back-reference); it is plain `z.string().nullable()`, not branded. `recipeUid` is `string | null` (defensive read — wire does not guarantee a recipe link). `day` is the 1-indexed day within the menu's span; `name` is the denormalized recipe display name. The `deleted` field is `optional().default(false)`.
+- `Photo` — One recipe photo (gallery entry), with 7 fields (`uid`, `recipeUid`, `filename`, `name`, `orderFlag`, `hash`, `deleted`); output of `PhotoStoredSchema` and `PhotoSchema`. `uid` is branded `PhotoUid`. `recipeUid` is the plain-string FK to the owning recipe. `name` is the 1-indexed gallery label coupled to the 0-indexed `orderFlag` (`name == String(orderFlag + 1)`); `filename` is `{uid}.jpg`. The GET `/sync/photos/` catalog row carries six fields — `deleted` is a write-only soft-delete flag, so it is `optional().default(false)` on both schemas (read responses omit it). `hash` is a client-supplied digest stored verbatim by Paprika.
 - `AuthResponse` — Authentication response `{result: {token: string}}`; output of `AuthResponseSchema`
 
 **Domain Types:**
@@ -83,6 +85,7 @@ HTTP client for the Paprika Cloud Sync API. Handles authentication, request form
 - `MealTypeSchema` — Validates and transforms meal types from API (`order_flag`, `original_type`, `export_all_day`, `export_time` → camelCase `MealType`)
 - `MenuSchema` — Validates and transforms menus from API (`order_flag` → camelCase `Menu`)
 - `MenuItemSchema` — Validates and transforms menu items from API (`menu_uid`, `recipe_uid`, `type_uid`, `order_flag` → camelCase `MenuItem`)
+- `PhotoSchema` — Validates and transforms recipe photos from API (`recipe_uid`, `order_flag` → camelCase `Photo`)
 - `AuthResponseSchema` — Validates authentication responses
 
 **Stored Format Schemas** (validate camelCase JSON from disk, no transform):
@@ -98,11 +101,13 @@ HTTP client for the Paprika Cloud Sync API. Handles authentication, request form
 - `MealTypeStoredSchema` — Validates camelCase meal type JSON read from disk (no transform)
 - `MenuStoredSchema` — Validates camelCase menu JSON read from disk (no transform)
 - `MenuItemStoredSchema` — Validates camelCase menu item JSON read from disk (no transform)
+- `PhotoStoredSchema` — Validates camelCase recipe-photo JSON read from disk (no transform)
 
 **Payload mappers** (camelCase → snake_case wire, exported from `types.ts` following the `mealToApiPayload` convention so write tools can use them without importing `client.ts`):
 
 - `menuToApiPayload(item: Readonly<Menu>): Record<string, unknown>` — inverse of `MenuSchema`'s read transform; emits `order_flag` and the literal fields.
 - `menuItemToApiPayload(item: Readonly<MenuItem>): Record<string, unknown>` — inverse of `MenuItemSchema`'s read transform; emits `menu_uid`, `recipe_uid`, `type_uid`, `order_flag`.
+- `photoToApiPayload(item: Readonly<Photo>): Record<string, unknown>` — inverse of `PhotoSchema`'s read transform; emits the 7 snake_case fields (`uid`, `recipe_uid`, `filename`, `name`, `order_flag`, `hash`, `deleted`). Exported for the #169 photo write tools.
 
 **Entry and UID Schemas:**
 
@@ -144,6 +149,7 @@ Typed HTTP client wrapping the Paprika Cloud Sync API.
 - `listMealTypes(): Promise<Array<MealType>>` — fetches meal type catalog from `/api/v2/sync/mealtypes/`; parses via `MealTypeSchema`
 - `listMenus(): Promise<Array<Menu>>` — fetches menus from `/api/v2/sync/menus/`; parses via `MenuSchema`
 - `listMenuItems(): Promise<Array<MenuItem>>` — fetches menu items from `/api/v2/sync/menuitems/`; parses via `MenuItemSchema`
+- `listPhotos(): Promise<Array<Photo>>` — fetches the recipe-photo catalog from `/api/v2/sync/photos/`; parses via `PhotoSchema`
 - `listPantry(): Promise<Array<PantryItem>>` — fetches fully-hydrated pantry items from `/api/v2/sync/pantry/` (no entry/detail split; all items are complete objects)
 - `listAisles(): Promise<Array<Aisle>>` — fetches aisle catalog from `/api/v2/sync/groceryaisles/`; same pattern as `listCategories()`
 - `listGroceryLists(): Promise<Array<GroceryList>>` — fetches fully-hydrated grocery lists from `/api/v2/sync/grocerylists/`; parses via `GroceryListSchema`
@@ -343,9 +349,14 @@ Background polling loop that keeps local cache and in-memory store synchronized 
 - MenuItem sync: `fetch: client.listMenuItems`, `store: menuItemStore`, `equals: menuItemsEqual` (compares all 8 fields), no `afterLoad`.
 - **Both emit `sync:complete`** (`MenuSyncResult` and `MenuItemSyncResult`). Menus are the `paprika://menu/{uid}` resource, and menuitems are inlined in that resource — so a menuitem change must trigger a resource-list notification for the parent menu, exactly as grocery-item changes trigger grocery-list resource notifications.
 
+  8.6. **Photo sync (replace-all, pending-writes filtered, best-effort):**
+
+- Delegated to `syncReplaceAllEntity` in its own best-effort `try/catch` (like the meal block): `fetch: client.listPhotos`, `store: photoStore`, `equals: photosEqual` (compares all 7 fields), no `afterLoad`.
+- Emits **no** `sync:complete` event and has **no** `SyncResult` variant — photos are a recipe-child entity with no standalone MCP resource surface (the recipe resource inlines photo fields), exactly like meals. The `SyncEntityType` union is intentionally NOT extended for photos.
+
 9. **Finalization:**
    - Flushes cache once: `await cache.flush()`
-   - **Sweeps expired pending-writes:** `store.sweepPending()`, `pantryStore.sweepPending()`, `aisleStore.sweepPending()`, `groceryListStore.sweepPending()`, `groceryItemStore.sweepPending()`, `mealStore.sweepPending()`, `mealTypeStore.sweepPending()` — TTL fallback for pending-deletes. `groceryIngredientStore` is NOT swept (no pending-writes).
+   - **Sweeps expired pending-writes:** `store.sweepPending()`, `pantryStore.sweepPending()`, `aisleStore.sweepPending()`, `groceryListStore.sweepPending()`, `groceryItemStore.sweepPending()`, `mealStore.sweepPending()`, `mealTypeStore.sweepPending()`, `menuStore.sweepPending()`, `menuItemStore.sweepPending()`, `photoStore.sweepPending()` — TTL fallback for pending-deletes. `groceryIngredientStore` is NOT swept (no pending-writes).
    - Emits **four** `sync:complete` events per cycle: `RecipeSyncResult` (`changeType: "recipes"`), `PantrySyncResult` (`changeType: "pantry"`), `GroceryListSyncResult` (`changeType: "grocery-lists"`), `GroceryItemSyncResult` (`changeType: "grocery-items"`). All four are emitted even for no-change cycles. The engine does **not** call the notifier — a subscriber in `buildAppContext` does.
    - Logs success: `this.log.info({added, updated, removed}, "sync complete")` — record fans out to connected MCP clients only when `notifyLevel` is `"info"` or lower (default `"warn"` suppresses it; see behavior note below)
 
@@ -367,8 +378,8 @@ Background polling loop that keeps local cache and in-memory store synchronized 
 - Orphaned pantry, grocery list, grocery item, and ingredient entries are deleted concurrently via `Promise.all()` for efficiency
 - Loop respects AbortController signal and cleanly exits on `stop()`
 - `pantryStore.load(items)` is called unconditionally even when `effectivePantry` is empty, setting `hasSynced = true` after first sync
-- Seven stores' `sweepPending()` runs every cycle (store, pantryStore, aisleStore, groceryListStore, groceryItemStore, mealStore, mealTypeStore). `groceryIngredientStore` is NOT swept (no pending-writes). Observation-based clearing handles upserts; TTL sweep is the only clearing mechanism for pending-deletes.
-- No `sync:complete` event is emitted for the ingredient catalog, meal types, or meals (reference/non-resource entities)
+- Ten stores' `sweepPending()` runs every cycle (store, pantryStore, aisleStore, groceryListStore, groceryItemStore, mealStore, mealTypeStore, menuStore, menuItemStore, photoStore). `groceryIngredientStore` is NOT swept (no pending-writes). Observation-based clearing handles upserts; TTL sweep is the only clearing mechanism for pending-deletes.
+- No `sync:complete` event is emitted for the ingredient catalog, meal types, meals, or photos (reference/non-resource entities)
 
 **Dependencies:**
 

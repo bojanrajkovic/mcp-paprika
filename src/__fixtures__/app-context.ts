@@ -9,6 +9,7 @@ import { MealTypeStore } from "../cache/meal-type-store.js";
 import { MenuStore } from "../cache/menu-store.js";
 import { MenuItemStore } from "../cache/menu-item-store.js";
 import { PantryStore } from "../cache/pantry-store.js";
+import { PhotoStore } from "../cache/photo-store.js";
 import { RecipeStore } from "../cache/recipe-store.js";
 import type { AppContext, SessionContext } from "../server/app-context.js";
 import type { DiskCacheRoot } from "../cache/disk/index.js";
@@ -40,6 +41,7 @@ export function makeAppContext(overrides: Partial<AppContext> = {}): AppContext 
     mealTypeStore: new MealTypeStore(),
     menuStore: new MenuStore(),
     menuItemStore: new MenuItemStore(),
+    photoStore: new PhotoStore(),
     vectorStore: null,
     notifier: {
       resourceListChanged: () => {},
