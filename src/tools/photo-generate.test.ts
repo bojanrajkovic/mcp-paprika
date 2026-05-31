@@ -14,7 +14,8 @@ const RECIPE_UID = RecipeUidSchema.parse("recipe-1");
 
 let imageBytes: Buffer;
 beforeAll(async () => {
-  imageBytes = await sharp({ create: { width: 64, height: 64, channels: 3, background: { r: 10, g: 120, b: 200 } } })
+  // 600x400 so the ~280px preview thumbnail is distinguishably smaller than the full image.
+  imageBytes = await sharp({ create: { width: 600, height: 400, channels: 3, background: { r: 10, g: 120, b: 200 } } })
     .png()
     .toBuffer();
 });
@@ -97,7 +98,7 @@ describe("generate_photo", () => {
     expect(opts.aspectRatio).toBe("4:3");
   });
 
-  it("attach:false returns an inline image preview without uploading", async () => {
+  it("attach:false returns an inline ~280px thumbnail preview without uploading", async () => {
     const { callTool, uploadPhoto } = setup();
     const result = await callTool("generate_photo", { recipe_uid: RECIPE_UID, attach: false });
     expect(uploadPhoto).not.toHaveBeenCalled();
@@ -106,7 +107,9 @@ describe("generate_photo", () => {
     expect(imageBlock?.type).toBe("image");
     if (imageBlock?.type === "image") {
       expect(imageBlock.mimeType).toBe("image/jpeg");
-      expect(imageBlock.data.length).toBeGreaterThan(0);
+      // The preview is the thumbnail (≤280px longest edge), not the 600px full image.
+      const meta = await sharp(Buffer.from(imageBlock.data, "base64")).metadata();
+      expect(Math.max(meta.width ?? 0, meta.height ?? 0)).toBeLessThanOrEqual(280);
     }
   });
 

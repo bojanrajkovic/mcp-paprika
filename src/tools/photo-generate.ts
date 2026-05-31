@@ -155,15 +155,17 @@ export function registerGeneratePhotoTool(
 
           const costSuffix = generated.costUsd !== null ? ` (cost: $${generated.costUsd.toFixed(4)})` : "";
 
-          // Preview-only: return the image inline without persisting.
+          // Preview-only: return the lightweight ~280px thumbnail inline (not the
+          // full image — keeps the tool result small) without persisting. The
+          // saved version (attach:true) is the full-resolution image.
           if (!attach) {
             return {
               content: [
                 {
                   type: "text",
-                  text: `Generated a preview photo for "${recipe.name}" using ${model}${costSuffix}. Not attached — call again with attach:true to save it.`,
+                  text: `Generated a preview (≈280px thumbnail) for "${recipe.name}" using ${model}${costSuffix}. Not attached — call again with attach:true to save the full-resolution image.`,
                 },
-                { type: "image", data: full.toString("base64"), mimeType: "image/jpeg" },
+                { type: "image", data: thumbnail.toString("base64"), mimeType: "image/jpeg" },
               ],
             };
           }
