@@ -183,7 +183,8 @@ export function registerUploadPhotoTool(server: McpServer, ctx: ServerContext): 
     {
       description:
         "Attach a photo to a recipe. Provide the image as a `url` (PREFERRED — the server downloads it) OR, " +
-        "for programmatic callers, inline `image_base64`. The server normalizes any format (JPEG/PNG/WEBP/GIF) " +
+        "for programmatic callers, inline `image_base64`. If you created the recipe from a web page, pass that " +
+        "page's main/hero (og:image) image URL here as `url`. The server normalizes any format (JPEG/PNG/WEBP/GIF) " +
         "to JPEG and generates the thumbnail automatically. There is NO file-path option — the server cannot " +
         "read your local filesystem. Photos are appended to the recipe's gallery in order.",
       inputSchema: uploadPhotoInputSchema.shape,

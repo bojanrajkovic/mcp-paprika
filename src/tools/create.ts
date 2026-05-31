@@ -13,7 +13,9 @@ export function registerCreateTool(server: McpServer, ctx: ServerContext): void 
   server.registerTool(
     "create_recipe",
     {
-      description: "Create a new recipe in the Paprika account.",
+      description:
+        "Create a new recipe in the Paprika account. If you built this recipe from a web page, " +
+        "follow up with `upload_photo` and the page's main/hero (og:image) image URL to attach its photo.",
       inputSchema: {
         name: z.string().describe("Recipe name"),
         ingredients: z.string().describe("Ingredients list"),
