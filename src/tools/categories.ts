@@ -52,9 +52,18 @@ export function registerCategoryTools(server: McpServer, ctx: ServerContext): vo
 }
 
 function formatCategoryList(categories: Array<Category>, countMap: Map<string, number>): string {
+  // A category whose parentUid points at a UID not in the catalog is an
+  // "orphan" — its parent was removed externally (another client / import).
+  // The top-down walk below only reaches root-rooted subtrees, so an orphan
+  // would silently vanish from a tool that promises to list ALL categories.
+  // Re-root orphans (group them under `null`) so they always render, and flag
+  // them with a ⚠️ disclosure so the broken parent link stays visible (#178).
+  const existingUids = new Set<string>(categories.map((c) => c.uid));
+  const isOrphan = (c: Category): boolean => c.parentUid !== null && !existingUids.has(c.parentUid);
+
   const byParent = new Map<string | null, Array<Category>>();
   for (const c of categories) {
-    const key = c.parentUid ?? null;
+    const key = isOrphan(c) ? null : (c.parentUid ?? null);
     const group = byParent.get(key);
     if (group) {
       group.push(c);
@@ -72,8 +81,9 @@ function formatCategoryList(categories: Array<Category>, countMap: Map<string, n
     const indent = "  ".repeat(depth);
     for (const c of sorted) {
       const count = countMap.get(c.uid) ?? 0;
+      const orphanNote = isOrphan(c) ? ` ⚠️ _(orphaned: parent \`${c.parentUid ?? ""}\` not found)_` : "";
       lines.push(
-        `${indent}- **${c.name}** (${String(count)} ${count === 1 ? "recipe" : "recipes"}) — uid: \`${c.uid}\``,
+        `${indent}- **${c.name}** (${String(count)} ${count === 1 ? "recipe" : "recipes"}) — uid: \`${c.uid}\`${orphanNote}`,
       );
       walk(c.uid, depth + 1);
     }
