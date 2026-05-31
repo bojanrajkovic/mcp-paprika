@@ -1,6 +1,6 @@
 # Tools reference
 
-mcp-paprika exposes 42 MCP tools (`discover_recipes` registers only when an embedding provider is configured). Each page below covers parameters, behavior, and examples.
+mcp-paprika exposes 43 MCP tools. Two are feature-gated and register only when configured: `discover_recipes` (an embedding provider) and `generate_photo` (an image-generation provider). Each page below covers parameters, behavior, and examples.
 
 ## Discovery and query
 
@@ -15,13 +15,14 @@ mcp-paprika exposes 42 MCP tools (`discover_recipes` registers only when an embe
 
 ## Recipe management
 
-| Tool                              | Description                                                          |
-| --------------------------------- | -------------------------------------------------------------------- |
-| [read_recipe](read-recipe.md)     | Read a recipe by UID or fuzzy title match                            |
-| [create_recipe](create-recipe.md) | Create a new recipe                                                  |
-| [update_recipe](update-recipe.md) | Update an existing recipe (partial updates)                          |
-| [delete_recipe](delete-recipe.md) | Soft-delete a recipe (moves to Paprika trash)                        |
-| [empty_trash](empty-trash.md)     | Permanently delete an already-trashed recipe (irreversible; guarded) |
+| Tool                                | Description                                                               |
+| ----------------------------------- | ------------------------------------------------------------------------- |
+| [read_recipe](read-recipe.md)       | Read a recipe by UID or fuzzy title match                                 |
+| [create_recipe](create-recipe.md)   | Create a new recipe                                                       |
+| [update_recipe](update-recipe.md)   | Update an existing recipe (partial updates)                               |
+| [delete_recipe](delete-recipe.md)   | Soft-delete a recipe (moves to Paprika trash)                             |
+| [empty_trash](empty-trash.md)       | Permanently delete an already-trashed recipe (irreversible; guarded)      |
+| [generate_photo](generate-photo.md) | Generate an AI food photo for a recipe and attach it (requires image-gen) |
 
 ## Pantry and aisle management
 

@@ -71,6 +71,21 @@ Environment variables always win. If you set `PAPRIKA_EMAIL` as an env var and a
 
 All three embedding variables must be set together to enable semantic search. If any are missing, the `discover_recipes` tool won't be registered and the server logs `Semantic search: disabled` on startup.
 
+### Recipe photo generation (optional)
+
+| Variable                           | Config path                              | Required | Default                        | Description                                                   |
+| ---------------------------------- | ---------------------------------------- | -------- | ------------------------------ | ------------------------------------------------------------- |
+| `IMAGE_GEN_API_KEY`                | `features.imageGen.apiKey`               | No       | —                              | OpenRouter API key dedicated to image generation              |
+| `IMAGE_GEN_BASE_URL`               | `features.imageGen.baseUrl`              | No       | `https://openrouter.ai/api/v1` | OpenRouter base URL (only used with a dedicated key)          |
+| `IMAGE_GEN_REUSE_EMBEDDINGS_CREDS` | `features.imageGen.reuseEmbeddingsCreds` | No       | `false`                        | Reuse the embedding (`OPENAI_*`) credentials instead of a key |
+
+Image generation powers the `generate_photo` tool (OpenRouter chat-completions image models). Enable it **one** of two ways:
+
+- Set `IMAGE_GEN_API_KEY` (and optionally `IMAGE_GEN_BASE_URL`) — a **dedicated** key, which gives you an isolated OpenRouter billing line for photo generation; or
+- Set `IMAGE_GEN_REUSE_EMBEDDINGS_CREDS=true` to **reuse** your embedding provider's credentials (only valid when `features.embeddings` is configured and points at OpenRouter).
+
+Setting both, or setting neither while the block exists, is a configuration error. The **model is chosen per `generate_photo` call**, not in config. If image generation isn't enabled, `generate_photo` isn't registered.
+
 ### Sync interval format
 
 `PAPRIKA_SYNC_INTERVAL` and `PAPRIKA_SYNC_PENDING_WRITE_TTL` accept human-readable durations:
@@ -276,6 +291,9 @@ Place a `config.json` in the config directory. All fields are optional — you c
       "apiKey": "sk-...",
       "baseUrl": "http://localhost:11434/v1",
       "model": "nomic-embed-text"
+    },
+    "imageGen": {
+      "apiKey": "sk-or-..."
     }
   }
 }
@@ -296,6 +314,12 @@ PAPRIKA_SYNC_INTERVAL=15m
 OPENAI_BASE_URL=http://localhost:11434/v1
 OPENAI_API_KEY=ollama
 EMBEDDING_MODEL=nomic-embed-text
+
+# Optional: enable AI recipe-photo generation (generate_photo).
+# Either a dedicated OpenRouter key:
+IMAGE_GEN_API_KEY=sk-or-...
+# ...or reuse the embedding creds above (when they point at OpenRouter):
+# IMAGE_GEN_REUSE_EMBEDDINGS_CREDS=true
 ```
 
 HTTP with OAuth (remote MCP clients, claude.ai):

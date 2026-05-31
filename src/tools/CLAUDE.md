@@ -267,7 +267,7 @@ Exports `registerGeneratePhotoTool(server, ctx, photographyClient)` plus `genera
 - **Prompt building.** `recipeToPhotoPrompt(recipe, categoryNames, args.style?)` (from `features/photography.ts`) produces the generation prompt from name, description, categories, and optional style hint. Ingredients are deliberately excluded (they produce ingredient-infographic output, not food photography).
 - **Image-to-image (`restyle_existing: true`).** Fetches `recipe.photoUrl` (15s timeout, 10 MB cap) and passes the bytes as a `ReferenceImage`. Returns an error if the recipe has no photo.
 - **Normalization.** `normalizePhoto(generated.bytes, { maxFullEdge: 2048 })` caps the full image and makes the thumbnail, regardless of which model was used.
-- **Attach vs. preview.** When `attach: true` (default), calls `attachPhotoToRecipe` and gates on `ctx.photoStore.hasSynced`. When `attach: false`, returns an `EmbeddedResource` image inline without persisting.
+- **Attach vs. preview.** When `attach: true` (default), calls `attachPhotoToRecipe` and gates on `ctx.photoStore.hasSynced`. When `attach: false`, returns a CallToolResult with a text block + an inline `image` content block (the normalized `full` JPEG as base64) without persisting.
 - **Guards.** `coldStartGuard(ctx)` always; `ctx.photoStore.hasSynced` checked inside the handler for the attach path only.
 - **Cost logging.** `generated.costUsd` (from OpenRouter `usage.cost`) is appended to the success message and logged at `info` level.
 
