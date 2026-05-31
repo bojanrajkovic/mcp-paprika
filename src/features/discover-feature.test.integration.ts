@@ -18,6 +18,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { RecipeStore } from "../cache/recipe-store.js";
+import { CategoryStore } from "../cache/category-store.js";
 import { makeRecipe } from "../cache/__fixtures__/recipes.js";
 import { makeTestServer, makeCtx, getText, DEFAULT_LOGGING_CONFIG } from "../tools/tool-test-utils.js";
 import { registerDiscoverTool } from "../tools/discover.js";
@@ -104,23 +105,25 @@ describe.skipIf(!ollamaAvailable)("buildDiscoverComponents + registerDiscoverToo
 
   it("completes initialization without error when Ollama is available", async () => {
     const store = new RecipeStore();
-    store.load([], []);
+    const categoryStore = new CategoryStore();
+    store.load([]);
     const syncEvents = mitt<SyncEvents>();
     const config = makePaprikaConfig();
 
-    const vectorStore = await buildDiscoverComponents(config, store, syncEvents);
+    const vectorStore = await buildDiscoverComponents(config, store, categoryStore, syncEvents);
     expect(vectorStore).not.toBeNull();
   });
 
   it("registers discover_recipes tool when buildDiscoverComponents returns a vector store", async () => {
     const { server, callTool } = makeTestServer();
     const store = new RecipeStore();
-    store.load([], []);
+    const categoryStore = new CategoryStore();
+    store.load([]);
     const ctx = makeCtx(store, server);
     const syncEvents = mitt<SyncEvents>();
     const config = makePaprikaConfig();
 
-    const vectorStore = await buildDiscoverComponents(config, store, syncEvents);
+    const vectorStore = await buildDiscoverComponents(config, store, categoryStore, syncEvents);
     expect(vectorStore).not.toBeNull();
     registerDiscoverTool(server, ctx, vectorStore!);
 
@@ -137,12 +140,13 @@ describe.skipIf(!ollamaAvailable)("buildDiscoverComponents + registerDiscoverToo
       description: "Classic Italian chicken dish",
     });
     const store = new RecipeStore();
-    store.load([recipe1], []);
+    const categoryStore = new CategoryStore();
+    store.load([recipe1]);
     makeCtx(store, server);
     const syncEvents = mitt<SyncEvents>();
     const config = makePaprikaConfig();
 
-    await buildDiscoverComponents(config, store, syncEvents);
+    await buildDiscoverComponents(config, store, categoryStore, syncEvents);
 
     const recipe2 = makeRecipe({
       uid: "r2" as RecipeUid,
@@ -171,12 +175,13 @@ describe.skipIf(!ollamaAvailable)("buildDiscoverComponents + registerDiscoverToo
       description: "This will be deleted",
     });
     const store = new RecipeStore();
-    store.load([recipe1], []);
+    const categoryStore = new CategoryStore();
+    store.load([recipe1]);
     makeCtx(store, server);
     const syncEvents = mitt<SyncEvents>();
     const config = makePaprikaConfig();
 
-    await buildDiscoverComponents(config, store, syncEvents);
+    await buildDiscoverComponents(config, store, categoryStore, syncEvents);
 
     const syncResult: RecipeSyncResult = {
       changeType: "recipes",
@@ -200,12 +205,13 @@ describe.skipIf(!ollamaAvailable)("buildDiscoverComponents + registerDiscoverToo
     });
 
     const store = new RecipeStore();
-    store.load([recipe], []);
+    const categoryStore = new CategoryStore();
+    store.load([recipe]);
     const ctx = makeCtx(store, server);
     const syncEvents = mitt<SyncEvents>();
     const config = makePaprikaConfig();
 
-    const vectorStore = await buildDiscoverComponents(config, store, syncEvents);
+    const vectorStore = await buildDiscoverComponents(config, store, categoryStore, syncEvents);
     expect(vectorStore).not.toBeNull();
     registerDiscoverTool(server, ctx, vectorStore!);
 

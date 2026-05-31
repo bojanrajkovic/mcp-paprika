@@ -129,6 +129,21 @@ function aisleToApiPayload(aisle: Readonly<Aisle>): Record<string, unknown> {
   };
 }
 
+// The Category type carries no `deleted` field (the read schema omits it), but
+// the write wire format requires it: a create/rename POSTs `deleted: false`, a
+// soft-delete POSTs `deleted: true` (data-only tombstone), verified in
+// docs/wire-captures/writes.har.json. `deleted` is therefore an explicit
+// parameter rather than a field read off the entity.
+function categoryToApiPayload(category: Readonly<Category>, deleted: boolean): Record<string, unknown> {
+  return {
+    uid: category.uid,
+    name: category.name,
+    order_flag: category.orderFlag,
+    parent_uid: category.parentUid,
+    deleted,
+  };
+}
+
 function pantryItemToApiPayload(item: Readonly<PantryItem>): Record<string, unknown> {
   return {
     uid: item.uid,
@@ -365,6 +380,21 @@ export class PaprikaClient {
   async saveAisle(aisle: Readonly<Aisle>): Promise<Aisle> {
     await this.postEntities(`${API_BASE}/groceryaisles/`, [aisle], aisleToApiPayload);
     return aisle as Aisle;
+  }
+
+  // Create or rename/re-parent a category. POSTs a single-element gzip array to
+  // the collection URL with `deleted: false`; Paprika upserts by `uid`. Returns
+  // the input category on `{result: true}` (caller commits locally).
+  async saveCategory(category: Readonly<Category>): Promise<Category> {
+    await this.postEntities(`${API_BASE}/categories/`, [category], (c) => categoryToApiPayload(c, false));
+    return category as Category;
+  }
+
+  // Soft-delete a category via a tombstone POST (`deleted: true`, all fields
+  // echoed). Same collection URL as create/rename — the `deleted` flag is the
+  // only differentiator, mirroring the pantry/grocery delete pattern.
+  async deleteCategory(category: Readonly<Category>): Promise<void> {
+    await this.postEntities(`${API_BASE}/categories/`, [category], (c) => categoryToApiPayload(c, true));
   }
 
   async savePantryItems(items: ReadonlyArray<Readonly<PantryItem>>): Promise<ReadonlyArray<PantryItem>> {

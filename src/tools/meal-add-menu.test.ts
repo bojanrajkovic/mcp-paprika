@@ -45,13 +45,10 @@ type SetupOpts = {
 function setup(opts: SetupOpts = {}) {
   const recipeStore = new RecipeStore();
   if (opts.recipeSynced !== false) {
-    recipeStore.load(
-      [
-        makeRecipe({ uid: BUTTER_CHICKEN_UID, name: "(Not) Butter Chicken" }),
-        makeRecipe({ uid: HONEY_MUSTARD_UID, name: "20 Minute Honey Mustard Chicken" }),
-      ],
-      [],
-    );
+    recipeStore.load([
+      makeRecipe({ uid: BUTTER_CHICKEN_UID, name: "(Not) Butter Chicken" }),
+      makeRecipe({ uid: HONEY_MUSTARD_UID, name: "20 Minute Honey Mustard Chicken" }),
+    ]);
   }
 
   const menuStore = new MenuStore();

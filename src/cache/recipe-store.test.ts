@@ -3,8 +3,8 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { RecipeStore } from "./recipe-store.js";
-import { makeRecipe, makeCategory } from "./__fixtures__/recipes.js";
-import type { RecipeUid, CategoryUid } from "../paprika/types.js";
+import { makeRecipe } from "./__fixtures__/recipes.js";
+import type { RecipeUid } from "../paprika/types.js";
 
 describe("RecipeStore", () => {
   let store: RecipeStore;
@@ -14,29 +14,21 @@ describe("RecipeStore", () => {
   });
 
   describe("recipe-query-store.AC1: CRUD operations", () => {
-    describe("recipe-query-store.AC1.1: load() populates both Maps correctly", () => {
-      it("recipe-query-store.AC1.1: load() populates both Maps correctly", () => {
+    describe("recipe-query-store.AC1.1: load() populates the recipe Map correctly", () => {
+      it("recipe-query-store.AC1.1: load() populates the recipe Map correctly", () => {
         const recipes = [makeRecipe(), makeRecipe()];
-        const categories = [makeCategory(), makeCategory()];
 
-        store.load(recipes, categories);
+        store.load(recipes);
 
-        const recipe0 = store.get(recipes[0]!.uid);
-        const recipe1 = store.get(recipes[1]!.uid);
-        const cat0 = store.getCategory(categories[0]!.uid);
-        const cat1 = store.getCategory(categories[1]!.uid);
-
-        expect(recipe0).toBe(recipes[0]);
-        expect(recipe1).toBe(recipes[1]);
-        expect(cat0).toBe(categories[0]);
-        expect(cat1).toBe(categories[1]);
+        expect(store.get(recipes[0]!.uid)).toBe(recipes[0]);
+        expect(store.get(recipes[1]!.uid)).toBe(recipes[1]);
       });
     });
 
     describe("recipe-query-store.AC1.2: get() returns recipe with matching UID", () => {
       it("recipe-query-store.AC1.2: get() returns recipe with matching UID", () => {
         const recipe = makeRecipe();
-        store.load([recipe], []);
+        store.load([recipe]);
 
         const result = store.get(recipe.uid);
 
@@ -46,7 +38,7 @@ describe("RecipeStore", () => {
 
     describe("recipe-query-store.AC1.3: get() returns undefined for nonexistent UID", () => {
       it("recipe-query-store.AC1.3: get('nonexistent') returns undefined", () => {
-        store.load([], []);
+        store.load([]);
 
         const result = store.get("nonexistent" as RecipeUid);
 
@@ -60,7 +52,7 @@ describe("RecipeStore", () => {
         const nonTrashed2 = makeRecipe();
         const trashed = makeRecipe({ inTrash: true });
 
-        store.load([nonTrashed1, nonTrashed2, trashed], []);
+        store.load([nonTrashed1, nonTrashed2, trashed]);
 
         const results = store.getAll();
 
@@ -73,7 +65,7 @@ describe("RecipeStore", () => {
         const nonTrashed = makeRecipe();
         const trashed = makeRecipe({ inTrash: true });
 
-        store.load([nonTrashed, trashed], []);
+        store.load([nonTrashed, trashed]);
 
         const results = store.getAll();
 
@@ -139,7 +131,7 @@ describe("RecipeStore", () => {
         const nonTrashed2 = makeRecipe();
         const trashed = makeRecipe({ inTrash: true });
 
-        store.load([nonTrashed1, nonTrashed2, trashed], []);
+        store.load([nonTrashed1, nonTrashed2, trashed]);
 
         expect(store.size).toBe(2);
       });
@@ -149,85 +141,14 @@ describe("RecipeStore", () => {
       it("recipe-query-store.AC1.12: After load(), size reflects the number of non-trashed recipes in the input", () => {
         const recipes = [makeRecipe(), makeRecipe({ inTrash: true }), makeRecipe()];
 
-        store.load(recipes, []);
+        store.load(recipes);
 
         expect(store.size).toBe(2);
       });
     });
   });
 
-  describe("recipe-query-store.AC2: Category operations", () => {
-    describe("recipe-query-store.AC2.1: resolveCategories returns names for existing UIDs", () => {
-      it("recipe-query-store.AC2.1: resolveCategories(['uid-1', 'uid-2']) returns ['Name1', 'Name2'] when both exist", () => {
-        const cat1 = makeCategory({ uid: "uid-1" as CategoryUid, name: "Name1" });
-        const cat2 = makeCategory({ uid: "uid-2" as CategoryUid, name: "Name2" });
-
-        store.load([], [cat1, cat2]);
-        const result = store.resolveCategories(["uid-1" as CategoryUid, "uid-2" as CategoryUid]);
-
-        expect(result).toEqual(["Name1", "Name2"]);
-      });
-    });
-
-    describe("recipe-query-store.AC2.2: resolveCategories drops unknown UIDs", () => {
-      it("recipe-query-store.AC2.2: resolveCategories(['uid-1', 'unknown']) returns ['Name1'] (unknown UID dropped)", () => {
-        const cat1 = makeCategory({ uid: "uid-1" as CategoryUid, name: "Name1" });
-
-        store.load([], [cat1]);
-        const result = store.resolveCategories(["uid-1" as CategoryUid, "unknown" as CategoryUid]);
-
-        expect(result).toEqual(["Name1"]);
-      });
-    });
-
-    describe("recipe-query-store.AC2.3: resolveCategories returns empty for empty input", () => {
-      it("recipe-query-store.AC2.3: resolveCategories([]) returns []", () => {
-        store.load([], []);
-        const result = store.resolveCategories([]);
-
-        expect(result).toEqual([]);
-      });
-    });
-
-    describe("recipe-query-store.AC2.4: setCategories replaces all categories", () => {
-      it("recipe-query-store.AC2.4: setCategories(categories) replaces all categories; getCategory() reflects the new set", () => {
-        const oldCat = makeCategory({ uid: "old" as CategoryUid, name: "Old" });
-        const newCat1 = makeCategory({ uid: "new-1" as CategoryUid, name: "New1" });
-        const newCat2 = makeCategory({ uid: "new-2" as CategoryUid, name: "New2" });
-
-        store.load([], [oldCat]);
-        store.setCategories([newCat1, newCat2]);
-
-        expect(store.getCategory("old" as CategoryUid)).toBeUndefined();
-        expect(store.getCategory(newCat1.uid)).toBe(newCat1);
-        expect(store.getCategory(newCat2.uid)).toBe(newCat2);
-      });
-    });
-
-    describe("recipe-query-store.AC2.5: getAllCategories returns all in insertion order", () => {
-      it("recipe-query-store.AC2.5: getAllCategories() returns all categories in insertion order", () => {
-        const cat1 = makeCategory({ uid: "cat-1" as CategoryUid });
-        const cat2 = makeCategory({ uid: "cat-2" as CategoryUid });
-        const cat3 = makeCategory({ uid: "cat-3" as CategoryUid });
-
-        store.load([], [cat1, cat2, cat3]);
-        const result = store.getAllCategories();
-
-        expect(result).toEqual([cat1, cat2, cat3]);
-      });
-    });
-
-    describe("recipe-query-store.AC2.6: getCategory returns matching category", () => {
-      it("recipe-query-store.AC2.6: getCategory(uid) returns the category with matching UID", () => {
-        const cat = makeCategory();
-
-        store.load([], [cat]);
-        const result = store.getCategory(cat.uid);
-
-        expect(result).toBe(cat);
-      });
-    });
-  });
+  // Category operations moved to CategoryStore (#108) — see category-store.test.ts.
 
   describe("recipe-query-store.AC3: Search method", () => {
     describe("recipe-query-store.AC3.1: Case-insensitive substring match finds recipes by name", () => {
@@ -236,7 +157,7 @@ describe("RecipeStore", () => {
         const recipe2 = makeRecipe({ uid: "r2" as RecipeUid, name: "Carrot Cake" });
         const recipe3 = makeRecipe({ uid: "r3" as RecipeUid, name: "Brownies" });
 
-        store.load([recipe1, recipe2, recipe3], []);
+        store.load([recipe1, recipe2, recipe3]);
         const results = store.search("cake");
 
         expect(results).toHaveLength(2);
@@ -253,7 +174,7 @@ describe("RecipeStore", () => {
           description: "Contains special term",
         });
 
-        store.load([recipe], []);
+        store.load([recipe]);
         const results = store.search("special", { fields: "all" });
 
         expect(results).toHaveLength(1);
@@ -267,7 +188,7 @@ describe("RecipeStore", () => {
           notes: "Contains special note",
         });
 
-        store.load([recipe], []);
+        store.load([recipe]);
         const results = store.search("special", { fields: "all" });
 
         expect(results).toHaveLength(1);
@@ -281,7 +202,7 @@ describe("RecipeStore", () => {
           ingredients: "flour, sugar, special ingredient",
         });
 
-        store.load([recipe], []);
+        store.load([recipe]);
         const results = store.search("special", { fields: "all" });
 
         expect(results).toHaveLength(1);
@@ -302,7 +223,7 @@ describe("RecipeStore", () => {
           ingredients: "butter, eggs",
         });
 
-        store.load([recipe1, recipe2], []);
+        store.load([recipe1, recipe2]);
         const results = store.search("chocolate", { fields: "ingredients" });
 
         expect(results).toHaveLength(1);
@@ -321,7 +242,7 @@ describe("RecipeStore", () => {
           ingredients: "chocolate, flour",
         });
 
-        store.load([recipe1, recipe2], []);
+        store.load([recipe1, recipe2]);
         const results = store.search("chocolate", { fields: "name" });
 
         expect(results).toHaveLength(1);
@@ -352,7 +273,7 @@ describe("RecipeStore", () => {
           ingredients: "cake flour",
         });
 
-        store.load([exact, startsWith, contains, otherField], []);
+        store.load([exact, startsWith, contains, otherField]);
         const results = store.search("cake");
 
         expect(results).toHaveLength(4);
@@ -369,7 +290,7 @@ describe("RecipeStore", () => {
           description: "Cake-like brownie",
         });
 
-        store.load([recipe], []);
+        store.load([recipe]);
         const results = store.search("cake");
 
         expect(results).toHaveLength(1);
@@ -410,7 +331,7 @@ describe("RecipeStore", () => {
           ingredients: "cake",
         });
 
-        store.load([score3, score2A, score2B, score1A, score1B, score0A, score0B], []);
+        store.load([score3, score2A, score2B, score1A, score1B, score0A, score0B]);
         const results = store.search("cake");
 
         expect(results).toHaveLength(7);
@@ -445,7 +366,7 @@ describe("RecipeStore", () => {
           makeRecipe({ uid: "r5" as RecipeUid, name: "Cake E" }),
         ];
 
-        store.load(recipes, []);
+        store.load(recipes);
         const results = store.search("cake", { offset: 1, limit: 2 });
 
         expect(results).toHaveLength(2);
@@ -459,7 +380,7 @@ describe("RecipeStore", () => {
           makeRecipe({ uid: "r2" as RecipeUid, name: "Cake B" }),
         ];
 
-        store.load(recipes, []);
+        store.load(recipes);
         const results = store.search("cake");
 
         expect(results).toHaveLength(2);
@@ -471,7 +392,7 @@ describe("RecipeStore", () => {
         const recipe1 = makeRecipe({ uid: "r1" as RecipeUid, name: "Recipe One" });
         const recipe2 = makeRecipe({ uid: "r2" as RecipeUid, name: "Recipe Two" });
 
-        store.load([recipe1, recipe2], []);
+        store.load([recipe1, recipe2]);
         const results = store.search("");
 
         expect(results).toHaveLength(2);
@@ -491,7 +412,7 @@ describe("RecipeStore", () => {
           inTrash: true,
         });
 
-        store.load([normal, trashed], []);
+        store.load([normal, trashed]);
         const results = store.search("chocolate");
 
         expect(results).toHaveLength(1);
@@ -512,7 +433,7 @@ describe("RecipeStore", () => {
           ingredients: "flour, chocolate",
         });
 
-        store.load([recipe, noMatch], []);
+        store.load([recipe, noMatch]);
         const results = store.filterByIngredients(["flour", "sugar"], "all");
 
         expect(results).toHaveLength(1);
@@ -525,7 +446,7 @@ describe("RecipeStore", () => {
           ingredients: "flour, sugar, butter",
         });
 
-        store.load([recipe], []);
+        store.load([recipe]);
         const results = store.filterByIngredients(["flour", "chocolate"], "all");
 
         expect(results).toHaveLength(0);
@@ -543,7 +464,7 @@ describe("RecipeStore", () => {
           ingredients: "chocolate, butter",
         });
 
-        store.load([recipe1, recipe2], []);
+        store.load([recipe1, recipe2]);
         const results = store.filterByIngredients(["flour", "chocolate"], "any");
 
         expect(results).toHaveLength(2);
@@ -557,7 +478,7 @@ describe("RecipeStore", () => {
           ingredients: "flour, sugar",
         });
 
-        store.load([recipe], []);
+        store.load([recipe]);
         const results = store.filterByIngredients(["FLOUR"], "any");
 
         expect(results).toHaveLength(1);
@@ -573,7 +494,7 @@ describe("RecipeStore", () => {
           makeRecipe({ uid: "r3" as RecipeUid, ingredients: "flour" }),
         ];
 
-        store.load(recipes, []);
+        store.load(recipes);
         const results = store.filterByIngredients(["flour"], "any", 2);
 
         expect(results).toHaveLength(2);
@@ -585,7 +506,7 @@ describe("RecipeStore", () => {
         const recipe1 = makeRecipe({ uid: "r1" as RecipeUid });
         const recipe2 = makeRecipe({ uid: "r2" as RecipeUid });
 
-        store.load([recipe1, recipe2], []);
+        store.load([recipe1, recipe2]);
         const results = store.filterByIngredients([], "all");
 
         expect(results).toHaveLength(2);
@@ -604,7 +525,7 @@ describe("RecipeStore", () => {
           inTrash: true,
         });
 
-        store.load([normal, trashed], []);
+        store.load([normal, trashed]);
         const results = store.filterByIngredients(["flour"], "any");
 
         expect(results).toHaveLength(1);
@@ -627,7 +548,7 @@ describe("RecipeStore", () => {
           totalTime: "30 min",
         });
 
-        store.load([included, excluded], []);
+        store.load([included, excluded]);
         const results = store.filterByTime({ maxPrepTime: 20 });
 
         expect(results).toHaveLength(1);
@@ -641,7 +562,7 @@ describe("RecipeStore", () => {
           totalTime: "10 min",
         });
 
-        store.load([recipe], []);
+        store.load([recipe]);
         const results = store.filterByTime({ maxPrepTime: 20 });
 
         expect(results).toHaveLength(1);
@@ -662,7 +583,7 @@ describe("RecipeStore", () => {
           totalTime: "90 min",
         });
 
-        store.load([included, excluded], []);
+        store.load([included, excluded]);
         const results = store.filterByTime({ maxCookTime: 60 });
 
         expect(results).toHaveLength(1);
@@ -681,7 +602,7 @@ describe("RecipeStore", () => {
           totalTime: "90 min",
         });
 
-        store.load([included, excluded], []);
+        store.load([included, excluded]);
         const results = store.filterByTime({ maxTotalTime: 60 });
 
         expect(results).toHaveLength(1);
@@ -704,7 +625,7 @@ describe("RecipeStore", () => {
           totalTime: "70 min",
         });
 
-        store.load([passAll, failCook], []);
+        store.load([passAll, failCook]);
         const results = store.filterByTime({
           maxPrepTime: 15,
           maxCookTime: 45,
@@ -727,7 +648,7 @@ describe("RecipeStore", () => {
           totalTime: "not a real time",
         });
 
-        store.load([normal, unparseable], []);
+        store.load([normal, unparseable]);
         const results = store.filterByTime({ maxTotalTime: 60 });
 
         expect(results).toHaveLength(2);
@@ -753,7 +674,7 @@ describe("RecipeStore", () => {
           name: "Recipe 45",
         });
 
-        store.load([r60, r30, r45], []);
+        store.load([r60, r30, r45]);
         const results = store.filterByTime({});
 
         expect(results).toHaveLength(3);
@@ -778,7 +699,7 @@ describe("RecipeStore", () => {
           totalTime: null,
         });
 
-        store.load([unparseable, nullTime, parseable], []);
+        store.load([unparseable, nullTime, parseable]);
         const results = store.filterByTime({});
 
         expect(results).toHaveLength(3);
@@ -792,7 +713,7 @@ describe("RecipeStore", () => {
         const recipe1 = makeRecipe({ uid: "r1" as RecipeUid, totalTime: "30 min" });
         const recipe2 = makeRecipe({ uid: "r2" as RecipeUid, totalTime: "60 min" });
 
-        store.load([recipe1, recipe2], []);
+        store.load([recipe1, recipe2]);
         const results = store.filterByTime({});
 
         expect(results).toHaveLength(2);
@@ -806,7 +727,7 @@ describe("RecipeStore", () => {
           totalTime: "1:30",
         });
 
-        store.load([recipe], []);
+        store.load([recipe]);
         const results = store.filterByTime({ maxTotalTime: 90 });
 
         expect(results).toHaveLength(1);
@@ -822,7 +743,7 @@ describe("RecipeStore", () => {
           name: "Chocolate Cake",
         });
 
-        store.load([recipe], []);
+        store.load([recipe]);
         const results = store.findByName("chocolate cake");
 
         expect(results).toHaveLength(1);
@@ -841,7 +762,7 @@ describe("RecipeStore", () => {
           name: "Chocolate Chip Cookies",
         });
 
-        store.load([cake, cookies], []);
+        store.load([cake, cookies]);
         const results = store.findByName("chocolate c");
 
         expect(results).toHaveLength(2);
@@ -857,7 +778,7 @@ describe("RecipeStore", () => {
           name: "Dark Chocolate Cake",
         });
 
-        store.load([recipe], []);
+        store.load([recipe]);
         const results = store.findByName("chocolate");
 
         expect(results).toHaveLength(1);
@@ -876,7 +797,7 @@ describe("RecipeStore", () => {
           name: "Apple Strudel",
         });
 
-        store.load([pie, strudel], []);
+        store.load([pie, strudel]);
         const results = store.findByName("apple");
 
         expect(results).toHaveLength(2);
@@ -892,7 +813,7 @@ describe("RecipeStore", () => {
           name: "Chocolate Cake",
         });
 
-        store.load([recipe], []);
+        store.load([recipe]);
         const results = store.findByName("nonexistent recipe name");
 
         expect(results).toHaveLength(0);
@@ -911,7 +832,7 @@ describe("RecipeStore", () => {
           inTrash: true,
         });
 
-        store.load([normal, trashed], []);
+        store.load([normal, trashed]);
         const results = store.findByName("chocolate");
 
         expect(results).toHaveLength(1);

@@ -1,6 +1,6 @@
 # Feature Implementations
 
-Last verified: 2026-05-22
+Last verified: 2026-05-31
 
 ## Purpose
 
@@ -93,10 +93,10 @@ once per server instance when `app.vectorStore !== null`.
 A local `SyncEventsView` interface decouples this module from `SyncEngine`; it accepts
 anything that exposes a typed `on`/`off` for `sync:complete` and `sync:error`.
 
-| Export                    | Signature / Description                                                                                                                                                                                           |
-| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `buildDiscoverComponents` | `(config, store, syncEvents, log?) => Promise<VectorStore \| null>` — builds + wires the semantic-search components; optional `log` is threaded as `log?.child({ component: "vector-store" })` into `VectorStore` |
-| `SyncEventsView`          | `interface` describing the subset of `SyncEngine.events` (`on`/`off` for `sync:complete` and `sync:error`) used                                                                                                   |
+| Export                    | Signature / Description                                                                                                                                                                                                                                                                                                                                              |
+| ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `buildDiscoverComponents` | `(config, store, categoryStore, syncEvents, log?) => Promise<VectorStore \| null>` — builds + wires the semantic-search components; `categoryStore` (3rd param) is used for cold-start + sync re-index category name resolution via `categoryStore.resolveNames(uids)`; optional `log` is threaded as `log?.child({ component: "vector-store" })` into `VectorStore` |
+| `SyncEventsView`          | `interface` describing the subset of `SyncEngine.events` (`on`/`off` for `sync:complete` and `sync:error`) used                                                                                                                                                                                                                                                      |
 
 **Invariants:**
 
@@ -127,6 +127,6 @@ Takes optional `log?: Logger` from `buildAppContext`. Derives child loggers for 
 
 ## Dependencies
 
-- **Uses:** `paprika/` (types — `SyncResult`), `cache/recipe-store.ts` (type-only), `utils/` (config types, xdg), `cockatiel`, `vectra`, `zod`
+- **Uses:** `paprika/` (types — `SyncResult`), `cache/recipe-store.ts` (type-only), `cache/category-store.ts` (type-only), `utils/` (config types, xdg), `cockatiel`, `vectra`, `zod`
 - **Used by:** `src/server/build.ts` (`buildAppContext` calls `buildDiscoverComponents`; `buildMcpServer` imports `VectorStore` type and `registerDiscoverTool` separately), `tools/discover.ts` (consumes `VectorStore`, `SemanticResult` types)
 - **Boundary:** Must not import from `tools/` or `resources/` at runtime. Tool registration moved to `src/server/build.ts` in Phase 1 — `discover-feature.ts` no longer imports `registerDiscoverTool` (test files in this directory may still import from `tools/tool-test-utils.ts`; that is allowed because test code is outside the runtime boundary).

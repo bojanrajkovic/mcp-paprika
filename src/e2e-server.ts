@@ -13,6 +13,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { AisleStore } from "./cache/aisle-store.js";
+import { CategoryStore } from "./cache/category-store.js";
 import { DiskCacheRoot } from "./cache/disk/index.js";
 import { GroceryIngredientStore } from "./cache/grocery-ingredient-store.js";
 import { GroceryItemStore } from "./cache/grocery-item-store.js";
@@ -184,8 +185,10 @@ async function main(): Promise<void> {
     store.set(recipe);
   }
   store.set(client.getMockRecipe());
-  store.setCategories([client.getMockCategory()]);
   log.info({ count: store.size }, "hydrated recipe store");
+
+  const categoryStore = new CategoryStore();
+  categoryStore.load([client.getMockCategory()]);
 
   const pantryStore = new PantryStore();
   pantryStore.load([client.getMockPantryItem()]);
@@ -212,6 +215,7 @@ async function main(): Promise<void> {
     client: client as unknown as AppContext["client"],
     cache,
     store,
+    categoryStore,
     pantryStore,
     aisleStore,
     groceryListStore,

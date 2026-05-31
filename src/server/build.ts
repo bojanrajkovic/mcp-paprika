@@ -1,6 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
 import { AisleStore } from "../cache/aisle-store.js";
+import { CategoryStore } from "../cache/category-store.js";
 import { DiskCacheRoot } from "../cache/disk/index.js";
 import { GroceryIngredientStore } from "../cache/grocery-ingredient-store.js";
 import { GroceryItemStore } from "../cache/grocery-item-store.js";
@@ -16,6 +17,11 @@ import { buildDiscoverComponents } from "../features/discover-feature.js";
 import { PaprikaClient } from "../paprika/client.js";
 import { SyncEngine } from "../paprika/sync.js";
 import { registerCategoryTools } from "../tools/categories.js";
+import {
+  registerCreateCategoryTool,
+  registerUpdateCategoryTool,
+  registerDeleteCategoryTool,
+} from "../tools/category-writes.js";
 import { registerCreateTool } from "../tools/create.js";
 import { registerDeleteTool } from "../tools/delete.js";
 import { registerEmptyTrashTool } from "../tools/empty-trash.js";
@@ -80,17 +86,17 @@ const SERVER_VERSION = _pkg.version;
  *
  * 1. Authenticate the Paprika client (this is the real fast-fail for bad
  *    credentials — `authenticate()` throws; `syncOnce()` swallows everything).
- * 2. Hydrate `DiskCache`, `RecipeStore` (recipes only — the cache deliberately
- *    has no `getAllCategories()`), and `PantryStore`.
+ * 2. Hydrate `DiskCache`, `RecipeStore`, `CategoryStore`, and `PantryStore`
+ *    (and the rest) from disk.
  * 3. Construct `SyncEngine` against a placeholder `AppContext` (`vectorStore: null`).
  *    `SyncEngine` never reads `vectorStore`, so this is safe.
  * 4. **Run the initial `sync.syncOnce()`** before building discover components.
- *    This is the load-bearing step: `RecipeStore.setCategories()` is only
- *    called from inside `syncOnce()`, so cold-start vector indexing must run
- *    AFTER the first sync — otherwise embeddings get computed with empty
- *    category names and stay that way until a recipe mutation forces a
- *    re-embed (warm-restart + unchanged-hashes case). `syncOnce()` is
- *    documented to never throw, so this can't block startup.
+ *    On a cold start (empty cache) the `CategoryStore` is empty until the first
+ *    sync populates it, so cold-start vector indexing must run AFTER the first
+ *    sync — otherwise embeddings get computed with empty category names and stay
+ *    that way until a recipe mutation forces a re-embed (warm-restart +
+ *    unchanged-hashes case). `syncOnce()` is documented to never throw, so this
+ *    can't block startup.
  * 5. Build discover components (subscribes the vector store to `sync.events`
  *    for incremental re-indexing on subsequent cycles).
  *
@@ -149,6 +155,13 @@ export async function buildAppContext(
     store.markSynced();
   }
   log.info({ count: cachedRecipes.length }, "hydrated recipe store from cache");
+
+  const categoryStore = new CategoryStore({ pendingWriteTtlMs });
+  const cachedCategories = await cache.categories.getAll();
+  if (cachedCategories.length > 0) {
+    categoryStore.load(cachedCategories);
+  }
+  log.info({ count: cachedCategories.length }, "hydrated category store from cache");
 
   const pantryStore = new PantryStore({ pendingWriteTtlMs });
   const cachedPantryItems = await cache.pantry.getAll();
@@ -228,6 +241,7 @@ export async function buildAppContext(
     client,
     cache,
     store,
+    categoryStore,
     pantryStore,
     aisleStore,
     groceryListStore,
@@ -266,14 +280,14 @@ export async function buildAppContext(
 
   // Run the initial sync BEFORE building discover components.
   //
-  // `RecipeStore.setCategories()` is only ever called from within
-  // `SyncEngine.syncOnce()`. Cold-start indexing in `buildDiscoverComponents`
-  // calls `store.resolveCategories(uids)` per recipe to construct the
-  // embedding text — if categories are unpopulated, embeddings get computed
-  // with empty category names and stay that way until a recipe mutation
-  // (Codex #75 review). On a warm restart with unchanged remote hashes the
-  // post-build sync emits nothing, so the sync:complete subscription never
-  // gets a chance to fix it.
+  // Cold-start indexing in `buildDiscoverComponents` calls
+  // `categoryStore.resolveNames(uids)` per recipe to construct the embedding
+  // text. On a true cold start the `CategoryStore` is hydrated from an empty
+  // cache, so it stays empty until the first `syncOnce()` populates it — if
+  // indexing ran first, embeddings would be computed with empty category names
+  // and stay that way until a recipe mutation (Codex #75 review). On a warm
+  // restart with unchanged remote hashes the post-build sync emits nothing, so
+  // the sync:complete subscription never gets a chance to fix it.
   //
   // `syncOnce()` is documented to never throw (any failure is logged + emitted
   // as `sync:error`), so this is safe to await unconditionally — same fail-soft
@@ -297,12 +311,13 @@ export async function buildAppContext(
     log.warn({ err: errorBox.value }, "initial sync failed; background sync will retry");
   }
 
-  const vectorStore = await buildDiscoverComponents(config, store, sync.events, log);
+  const vectorStore = await buildDiscoverComponents(config, store, categoryStore, sync.events, log);
 
   const app: AppContext = {
     client,
     cache,
     store,
+    categoryStore,
     pantryStore,
     aisleStore,
     groceryListStore,
@@ -325,7 +340,7 @@ export async function buildAppContext(
 /**
  * Build a fully-registered McpServer for the given AppContext.
  *
- * Registers all 31 tools and the recipe, grocery-list, and menu resource families. Called once for
+ * Registers all 46 tools and the recipe, grocery-list, and menu resource families. Called once for
  * stdio, once per session for HTTP. Tool registration is pure (closures over the
  * session context), so registering the same tool name on N independent
  * server instances is safe — there is no module-level mutable state.
@@ -340,6 +355,9 @@ export function buildMcpServer(app: AppContext): McpServer {
   registerSearchTool(server, sessionCtx);
   registerFilterTools(server, sessionCtx);
   registerCategoryTools(server, sessionCtx);
+  registerCreateCategoryTool(server, sessionCtx);
+  registerUpdateCategoryTool(server, sessionCtx);
+  registerDeleteCategoryTool(server, sessionCtx);
   registerListTool(server, sessionCtx);
   registerReadTool(server, sessionCtx);
   registerCreateTool(server, sessionCtx);

@@ -4,7 +4,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { RecipeUidSchema } from "../paprika/types.js";
 import type { Recipe } from "../paprika/types.js";
-import { coldStartGuard, commitRecipe, recipeToMarkdown, resolveCategoryNames, textResult } from "./helpers.js";
+import { coldStartGuard, commitRecipe, recipeToMarkdown, resolveCategoryRefs, textResult } from "./helpers.js";
 import type { ServerContext } from "../types/server-context.js";
 
 export function registerUpdateTool(server: McpServer, ctx: ServerContext): void {
@@ -33,7 +33,11 @@ export function registerUpdateTool(server: McpServer, ctx: ServerContext): void 
         categories: z
           .array(z.string())
           .optional()
-          .describe("Category display names — replaces existing list when provided"),
+          .describe(
+            "Categories to assign — replaces the existing list when provided. Each entry is either a category " +
+              "UID (from `list_categories`) or a display name (case-insensitive). Unknown names are skipped " +
+              "with a warning.",
+          ),
         source: z.string().optional().describe("New source name"),
         sourceUrl: z.string().optional().describe("New source URL"),
         difficulty: z.string().optional().describe("New difficulty level"),
@@ -52,14 +56,14 @@ export function registerUpdateTool(server: McpServer, ctx: ServerContext): void 
             return textResult(`No recipe found with UID "${args.uid}".`);
           }
 
-          // Resolve categories if provided — replaces list entirely (AC3.2)
+          // Resolve category refs (UID or name) if provided — replaces list entirely (AC3.2)
           // Check !== undefined so empty array [] correctly removes all categories (AC3.3)
           const { uids: resolvedCategories, unknown: unknownCategories } =
             args.categories !== undefined
-              ? resolveCategoryNames(ctx.store.getAllCategories(), args.categories)
+              ? resolveCategoryRefs(ctx.categoryStore.getAll(), args.categories)
               : { uids: existing.categories, unknown: [] as Array<string> };
 
-          const warnings = unknownCategories.map((name) => `Warning: category "${name}" not found and was skipped.`);
+          const warnings = unknownCategories.map((ref) => `Warning: category "${ref}" not found and was skipped.`);
 
           // Partial merge: conditional spread omits keys when value is undefined (AC3.1)
           const updated: Recipe = {
@@ -92,7 +96,7 @@ export function registerUpdateTool(server: McpServer, ctx: ServerContext): void 
             return textResult(`Failed to update recipe: ${message}`);
           }
 
-          const categoryNames = ctx.store.resolveCategories(saved.categories);
+          const categoryNames = ctx.categoryStore.resolveNames(saved.categories);
           const markdown = recipeToMarkdown(saved, categoryNames);
           const prefix = warnings.length > 0 ? warnings.join("\n") + "\n\n" : "";
           return textResult(prefix + markdown);

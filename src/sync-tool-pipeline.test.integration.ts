@@ -117,8 +117,11 @@ describe("Sync → Tool Pipeline Integration", () => {
 
       // Setup test server and register tools
       const testServer = makeTestServer();
-      registerSearchTool(testServer.server, makeCtx(store, testServer.server));
-      registerReadTool(testServer.server, makeCtx(store, testServer.server));
+      registerSearchTool(
+        testServer.server,
+        makeCtx(store, testServer.server, { categoryStore: context.categoryStore }),
+      );
+      registerReadTool(testServer.server, makeCtx(store, testServer.server, { categoryStore: context.categoryStore }));
 
       // Search tool should return synced recipes
       const searchResult = await testServer.callTool("search_recipes", {
@@ -210,7 +213,10 @@ describe("Sync → Tool Pipeline Integration", () => {
 
       // Tools should find both recipes
       const testServer = makeTestServer();
-      registerSearchTool(testServer.server, makeCtx(store, testServer.server));
+      registerSearchTool(
+        testServer.server,
+        makeCtx(store, testServer.server, { categoryStore: context.categoryStore }),
+      );
 
       const searchResult = await testServer.callTool("search_recipes", {
         query: "salad",
@@ -277,7 +283,10 @@ describe("Sync → Tool Pipeline Integration", () => {
 
       // Search should not find the deleted recipe
       const testServer = makeTestServer();
-      registerSearchTool(testServer.server, makeCtx(store, testServer.server));
+      registerSearchTool(
+        testServer.server,
+        makeCtx(store, testServer.server, { categoryStore: context.categoryStore }),
+      );
 
       const searchResult = await testServer.callTool("search_recipes", {
         query: "salad",
@@ -355,13 +364,16 @@ describe("Sync → Tool Pipeline Integration", () => {
       const engine = new SyncEngine(context, 100);
       await engine.syncOnce();
 
-      // Setup test server with multiple tools
+      // Setup test server with multiple tools. Share the synced `categoryStore`
+      // (categories live there now, not in RecipeStore) so category-name
+      // resolution sees what the sync populated.
       const testServer = makeTestServer();
-      registerSearchTool(testServer.server, makeCtx(store, testServer.server));
-      registerReadTool(testServer.server, makeCtx(store, testServer.server));
-      registerListTool(testServer.server, makeCtx(store, testServer.server));
-      registerFilterTools(testServer.server, makeCtx(store, testServer.server));
-      registerCategoryTools(testServer.server, makeCtx(store, testServer.server));
+      const toolOverrides = { categoryStore: context.categoryStore };
+      registerSearchTool(testServer.server, makeCtx(store, testServer.server, toolOverrides));
+      registerReadTool(testServer.server, makeCtx(store, testServer.server, toolOverrides));
+      registerListTool(testServer.server, makeCtx(store, testServer.server, toolOverrides));
+      registerFilterTools(testServer.server, makeCtx(store, testServer.server, toolOverrides));
+      registerCategoryTools(testServer.server, makeCtx(store, testServer.server, toolOverrides));
 
       // Test search_recipes
       const searchResult = await testServer.callTool("search_recipes", {
@@ -457,7 +469,10 @@ describe("Sync → Tool Pipeline Integration", () => {
 
       // Tool should reflect the updated name
       const testServer = makeTestServer();
-      registerSearchTool(testServer.server, makeCtx(store, testServer.server));
+      registerSearchTool(
+        testServer.server,
+        makeCtx(store, testServer.server, { categoryStore: context.categoryStore }),
+      );
 
       const searchResult = await testServer.callTool("search_recipes", {
         query: "updated",

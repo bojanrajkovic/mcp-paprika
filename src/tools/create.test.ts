@@ -9,7 +9,7 @@ describe("p2-recipe-crud: create_recipe tool", () => {
   describe("p2-recipe-crud.AC2: create_recipe creates and persists a new recipe", () => {
     it("p2-recipe-crud.AC2.1: required fields create a recipe returned as markdown", async () => {
       const store = new RecipeStore();
-      store.load([makeRecipe()], []); // non-empty store
+      store.load([makeRecipe()]); // non-empty store
 
       const mockSaveRecipe = vi.fn();
       const mockNotifySync = vi.fn().mockResolvedValue(undefined);
@@ -40,7 +40,7 @@ describe("p2-recipe-crud: create_recipe tool", () => {
 
     it("p2-recipe-crud.AC2.2: optional fields are reflected in returned recipe", async () => {
       const store = new RecipeStore();
-      store.load([makeRecipe()], []);
+      store.load([makeRecipe()]);
 
       const mockSaveRecipe = vi.fn();
       const mockNotifySync = vi.fn().mockResolvedValue(undefined);
@@ -79,7 +79,7 @@ describe("p2-recipe-crud: create_recipe tool", () => {
 
     it("p2-recipe-crud.AC2.3: omitted optional fields default to null", async () => {
       const store = new RecipeStore();
-      store.load([makeRecipe()], []);
+      store.load([makeRecipe()]);
 
       const mockSaveRecipe = vi.fn();
       const mockNotifySync = vi.fn().mockResolvedValue(undefined);
@@ -116,7 +116,7 @@ describe("p2-recipe-crud: create_recipe tool", () => {
 
     it("p2-recipe-crud.AC2.3b: created is emitted in Paprika wire format, not ISO-8601 (regression #159)", async () => {
       const store = new RecipeStore();
-      store.load([makeRecipe()], []);
+      store.load([makeRecipe()]);
 
       const mockSaveRecipe = vi.fn();
       const mockNotifySync = vi.fn().mockResolvedValue(undefined);
@@ -149,7 +149,7 @@ describe("p2-recipe-crud: create_recipe tool", () => {
     it("p2-recipe-crud.AC2.4: category names are resolved to UIDs", async () => {
       const category = makeCategory({ name: "Soups" });
       const store = new RecipeStore();
-      store.load([makeRecipe()], [category]);
+      store.load([makeRecipe()]);
 
       const mockSaveRecipe = vi.fn();
       const mockNotifySync = vi.fn().mockResolvedValue(undefined);
@@ -164,6 +164,7 @@ describe("p2-recipe-crud: create_recipe tool", () => {
         client: fromAny({ saveRecipe: mockSaveRecipe, notifySync: mockNotifySync }),
         cache: fromAny({ recipes: { put: mockPutRecipe }, flush: mockFlush }),
       });
+      ctx.categoryStore.load([category]);
       registerCreateTool(server, ctx);
 
       await callTool("create_recipe", {
@@ -179,7 +180,7 @@ describe("p2-recipe-crud: create_recipe tool", () => {
 
     it("p2-recipe-crud.AC2.5: saveRecipe and notifySync called exactly once each", async () => {
       const store = new RecipeStore();
-      store.load([makeRecipe()], []);
+      store.load([makeRecipe()]);
 
       const mockSaveRecipe = vi.fn();
       const mockNotifySync = vi.fn().mockResolvedValue(undefined);
@@ -208,7 +209,7 @@ describe("p2-recipe-crud: create_recipe tool", () => {
 
     it("p2-recipe-crud.AC2.6: store.set and cache.putRecipe called with saved recipe", async () => {
       const store = new RecipeStore();
-      store.load([makeRecipe()], []);
+      store.load([makeRecipe()]);
 
       const mockSaveRecipe = vi.fn();
       const mockNotifySync = vi.fn().mockResolvedValue(undefined);
@@ -239,7 +240,7 @@ describe("p2-recipe-crud: create_recipe tool", () => {
     it("p2-recipe-crud.AC2.7: unknown category name is skipped with warning", async () => {
       const category = makeCategory({ name: "Desserts" });
       const store = new RecipeStore();
-      store.load([makeRecipe()], [category]);
+      store.load([makeRecipe()]);
 
       const mockSaveRecipe = vi.fn();
       const mockNotifySync = vi.fn().mockResolvedValue(undefined);
@@ -254,6 +255,7 @@ describe("p2-recipe-crud: create_recipe tool", () => {
         client: fromAny({ saveRecipe: mockSaveRecipe, notifySync: mockNotifySync }),
         cache: fromAny({ recipes: { put: mockPutRecipe }, flush: mockFlush }),
       });
+      ctx.categoryStore.load([category]);
       registerCreateTool(server, ctx);
 
       const result = await callTool("create_recipe", {
@@ -272,7 +274,7 @@ describe("p2-recipe-crud: create_recipe tool", () => {
 
     it("p2-recipe-crud.AC2.8: saveRecipe throws — returns error, store/cache not updated", async () => {
       const store = new RecipeStore();
-      store.load([makeRecipe()], []);
+      store.load([makeRecipe()]);
 
       const mockSaveRecipe = vi.fn();
       const mockNotifySync = vi.fn().mockResolvedValue(undefined);

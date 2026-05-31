@@ -4,7 +4,8 @@ Last verified: 2026-05-31
 
 ## Files
 
-- `recipe-store.ts` — In-memory cache for recipes and categories with CRUD operations and query methods
+- `recipe-store.ts` — In-memory cache for recipes with CRUD operations and query methods (no longer owns categories)
+- `category-store.ts` — In-memory query layer for categories (TombstoneEntityStore subclass; `resolveByName`, `resolveNames`, `getChildren`; single source of truth for category data)
 - `pantry-store.ts` — In-memory query layer for pantry items (replace-all semantics, no hashing)
 - `aisle-store.ts` — In-memory query layer for aisles (replace-all semantics, `resolveByName` for case-insensitive lookup)
 - `grocery-list-store.ts` — In-memory query layer for grocery lists (EntityStore subclass; tombstones, `findByName`, `lastSyncedAt`)
@@ -39,15 +40,15 @@ Core in-memory cache for recipes and categories with CRUD operations and query m
 
 **Methods:**
 
-- `load(recipes, categories)` - Populate store with recipes and categories
+- `load(recipes)` - Populate store with recipes (single argument — categories no longer stored here)
 - `get(uid) / getAll()` - Retrieve recipes by UID or all non-trashed recipes
+- `getAllIncludingTrashed()` - All recipes including `inTrash` ones (unlike `getAll()`); used by the `delete_category` reference guard so a trashed-but-restorable recipe still blocks category deletion
 - `set(recipe) / delete(uid)` - CRUD operations
 - `size` (getter) - Count of non-trashed recipes
 - `search(query, options?)` - Search recipes with tiered scoring and pagination
 - `filterByIngredients(terms, mode, limit?)` - Filter recipes by ingredient presence (all/any)
 - `filterByTime(constraints)` - Filter and sort recipes by duration constraints
 - `findByName(title)` - Tiered name lookup (exact > starts-with > contains)
-- Category operations: `getCategory()`, `getAllCategories()`, `setCategories()`, `resolveCategories()`
 - Sync metadata: `lastSyncedAt` (getter, `Date | null`), `setLastSyncedAt(at?)` — timestamp of last successful recipe sync; set by `SyncEngine.syncOnce()` after recipe reconciliation; used by recipe resource metadata header
 - Pending-writes (inherited from `EntityStore`; see `../entity/CLAUDE.md`): `markPendingUpsert(uid, at?)`, `markPendingDelete(uid, at?)`, `isPendingUpsert(uid)`, `isPendingDelete(uid)`, `clearPending(uid)`, `sweepPending(now?): number`, `pendingWriteCount` (getter)
 
@@ -97,6 +98,30 @@ In-memory query layer for aisles, hydrated by the sync engine. Extends `EntitySt
 | Pending-writes     | `markPendingUpsert`, `isPendingUpsert`, `clearPending`, `sweepPending` (all inherited) |
 
 No delete branch — aisles are a reference catalog; auto-creation is a side-effect of pantry writes.
+
+### CategoryStore
+
+In-memory query layer for recipe categories, hydrated by the sync engine. Extends `TombstoneEntityStore<Category, CategoryUid>` (see `../entity/CLAUDE.md` for the base class contract, pending-writes invariants, and tombstone invariants). Unlike the reference-catalog stores (`AisleStore`, `MealTypeStore`), categories have create/update/delete write tools, so the delete path needs pending-delete + tombstone protection. **Single source of truth for category data** — `RecipeStore` holds only the recipe→category UID foreign keys; name resolution for rendering goes through `resolveNames()` here.
+
+**Construction:** `new CategoryStore(opts?: { pendingWriteTtlMs?: number })` — starts empty with `hasSynced = false`.
+
+**Methods:**
+
+| Method                      | Signature                                                                                                      | Description                                                                                             |
+| --------------------------- | -------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `load(items)`               | `(items: ReadonlyArray<Category>): void`                                                                       | Clears and repopulates from `items`, sets `hasSynced = true`; un-tombstones resurrected UIDs            |
+| `get(uid)` / `getAll()`     | inherited                                                                                                      | Direct UID lookup or all items (inherited)                                                              |
+| `set(item)` / `delete(uid)` | inherited                                                                                                      | Upsert (clears tombstone) / tombstone-and-remove (inherited)                                            |
+| `resolveByName(name)`       | `(name: string): Category \| undefined`                                                                        | Case-insensitive exact lookup by display name                                                           |
+| `resolveNames(uids)`        | `(uids: ReadonlyArray<CategoryUid>): Array<string>`                                                            | Resolves UIDs to display names, skipping unknown UIDs; replaces the old `RecipeStore.resolveCategories` |
+| `getChildren(uid)`          | `(parentUid: CategoryUid): Array<Category>`                                                                    | Returns direct (non-tombstoned) children of the given category                                          |
+| Pending-writes              | `markPendingUpsert`, `markPendingDelete`, `isPendingUpsert`, `isPendingDelete`, `clearPending`, `sweepPending` | All inherited from `EntityStore`                                                                        |
+
+**Invariants:**
+
+- Tombstone invariants: see `../entity/CLAUDE.md`
+- `resolveNames` skips unknown UIDs silently (recipes may reference deleted/unknown categories)
+- `getChildren` iterates live items only (tombstoned UIDs are excluded from `_items`)
 
 ### GroceryListStore
 
@@ -272,7 +297,7 @@ Persistence layer for every entity the server caches. Composed of one `DiskCache
 
 **Public API:** every subcache exposes `get`/`getAll`/`put`/`remove`/`flush`/`has`/`size`; the root exposes `init()` and `flush()`. Specialised entities add behaviour: `cache.recipes.diff(entries)` returns the added/changed/removed classification used by the sync loop; `cache.oauthClients.tryPut(client, max)` is the atomic DCR-cap check. The grocery subcaches (`cache.groceryLists`, `cache.groceryItems`, `cache.groceryIngredients`) and meal subcaches (`cache.meals`, `cache.mealTypes`) are plain `DiskCache<T>` instances with no special subclass.
 
-There is no `getAllCategories`, `removeCategory`, or category diff — categories use replace-all semantics and the on-disk files are read directly when needed.
+The `categories` subcache is a plain `DiskCache<Category>` — no special subclass, no diff, no `getAllCategories`/`removeCategory`. Categories use replace-all semantics on the disk layer; the in-memory `CategoryStore` (not the disk cache directly) is the runtime query layer.
 
 See `disk/CLAUDE.md` for the full contract, on-disk layout, migration semantics, mutex model, per-entity invariants, and catch-site classification.
 
@@ -297,7 +322,7 @@ See `disk/CLAUDE.md` for the full contract, on-disk layout, migration semantics,
 
 ### Pending-writes (issue #57)
 
-`RecipeStore`, `PantryStore`, `AisleStore`, `GroceryListStore`, `GroceryItemStore`, `MealStore`, `MealTypeStore`, `MenuStore`, `MenuItemStore`, and `PhotoStore` all inherit pending-writes tracking from `EntityStore`. `GroceryIngredientStore` does NOT inherit from `EntityStore` and has no pending-writes. See `../entity/CLAUDE.md` for the full invariants. Key cache-layer points:
+`RecipeStore`, `CategoryStore`, `PantryStore`, `AisleStore`, `GroceryListStore`, `GroceryItemStore`, `MealStore`, `MealTypeStore`, `MenuStore`, `MenuItemStore`, and `PhotoStore` all inherit pending-writes tracking from `EntityStore`. `GroceryIngredientStore` does NOT inherit from `EntityStore` and has no pending-writes. See `../entity/CLAUDE.md` for the full invariants. Key cache-layer points:
 
 - Pending-writes is **separate from the pantry tombstone set**: tombstones drive the delete-tool's idempotent "already deleted" message; pending-writes shield the sync loop from rolling back or resurrecting in-flight writes.
 - Clearing is **content-equality-based for upserts**: recipes clear when the canonical entry's hash matches the local cache; pantry items clear when the incoming item is field-wise equal via `pantryItemsEqual`. UID-presence-only clearing was rejected because the UID can appear in the canonical list with pre-write content while propagation is still in flight.
@@ -310,5 +335,5 @@ See `disk/CLAUDE.md` for the full contract, on-disk layout, migration semantics,
   - `features/` (via `RecipeStore`)
   - `paprika/sync.ts` (via `cache.recipes.diff` / `cache.pantry` / `PantryStore` / `GroceryListStore` / `GroceryItemStore` / `GroceryIngredientStore` for diff and replace-all sync)
   - `tools/` (via `ctx.pantryStore` for pantry reads; `ctx.store` for recipe reads) and `resources/` (via `ctx.store` for recipe reads only)
-  - `server/build.ts` (constructs `DiskCacheRoot` with `getCacheDir()`, `RecipeStore`, `PantryStore`, `AisleStore`, `GroceryListStore`, `GroceryItemStore`, and `GroceryIngredientStore`)
+  - `server/build.ts` (constructs `DiskCacheRoot` with `getCacheDir()`, `RecipeStore`, `CategoryStore`, `PantryStore`, `AisleStore`, `GroceryListStore`, `GroceryItemStore`, and `GroceryIngredientStore`)
 - **Boundary:** Must not import from `tools/`, `resources/`, or `features/`

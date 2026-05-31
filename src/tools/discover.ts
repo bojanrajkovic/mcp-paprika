@@ -49,7 +49,7 @@ export function registerDiscoverTool(server: McpServer, ctx: ServerContext, vect
 
           // Format results with re-numbered indices
           const lines = enriched.map((entry, index) => {
-            const categoryNames = ctx.store.resolveCategories(entry.recipe.categories);
+            const categoryNames = ctx.categoryStore.resolveNames(entry.recipe.categories);
             return formatDiscoverHit(index + 1, entry.recipe, entry.result.score, categoryNames);
           });
 

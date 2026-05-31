@@ -10,7 +10,7 @@ describe("p2-discovery-tools: search_recipes tool", () => {
   describe("p2-discovery-tools.AC1: search_recipes", () => {
     it("p2-discovery-tools.AC1.1: non-empty store + matching query returns formatted results", async () => {
       const store = new RecipeStore();
-      store.load([makeRecipe({ name: "Chocolate Cake" })], []);
+      store.load([makeRecipe({ name: "Chocolate Cake" })]);
       const { server, callTool } = makeTestServer();
       registerSearchTool(server, makeCtx(store, server));
 
@@ -24,16 +24,13 @@ describe("p2-discovery-tools: search_recipes tool", () => {
 
     it("p2-discovery-tools.AC1.1 (extended): time fields are rendered when populated", async () => {
       const store = new RecipeStore();
-      store.load(
-        [
-          makeRecipe({
-            name: "Pasta Carbonara",
-            prepTime: "10 min",
-            totalTime: "25 min",
-          }),
-        ],
-        [],
-      );
+      store.load([
+        makeRecipe({
+          name: "Pasta Carbonara",
+          prepTime: "10 min",
+          totalTime: "25 min",
+        }),
+      ]);
       const { server, callTool } = makeTestServer();
       registerSearchTool(server, makeCtx(store, server));
 
@@ -50,10 +47,7 @@ describe("p2-discovery-tools: search_recipes tool", () => {
     it("p2-discovery-tools.AC1.2: limit defaults to 20 when store has many matches", async () => {
       const store = new RecipeStore();
       // Load 25 recipes all matching "recipe"
-      store.load(
-        Array.from({ length: 25 }, (_, i) => makeRecipe({ name: `Recipe ${String(i + 1)}` })),
-        [],
-      );
+      store.load(Array.from({ length: 25 }, (_, i) => makeRecipe({ name: `Recipe ${String(i + 1)}` })));
       const { server, callTool } = makeTestServer();
       registerSearchTool(server, makeCtx(store, server));
 
@@ -69,10 +63,7 @@ describe("p2-discovery-tools: search_recipes tool", () => {
 
     it("p2-discovery-tools.AC1.3: limit caps result count", async () => {
       const store = new RecipeStore();
-      store.load(
-        Array.from({ length: 10 }, (_, i) => makeRecipe({ name: `Recipe ${String(i + 1)}` })),
-        [],
-      );
+      store.load(Array.from({ length: 10 }, (_, i) => makeRecipe({ name: `Recipe ${String(i + 1)}` })));
       const { server, callTool } = makeTestServer();
       registerSearchTool(server, makeCtx(store, server));
 
@@ -89,9 +80,11 @@ describe("p2-discovery-tools: search_recipes tool", () => {
     it("p2-discovery-tools.AC1.4: category names appear in formatted results", async () => {
       const category = makeCategory({ name: "Dessert" });
       const store = new RecipeStore();
-      store.load([makeRecipe({ name: "Cake", categories: [category.uid] })], [category]);
+      store.load([makeRecipe({ name: "Cake", categories: [category.uid] })]);
       const { server, callTool } = makeTestServer();
-      registerSearchTool(server, makeCtx(store, server));
+      const ctx = makeCtx(store, server);
+      ctx.categoryStore.load([category]);
+      registerSearchTool(server, ctx);
 
       const result = await callTool("search_recipes", {
         query: "cake",
@@ -117,7 +110,7 @@ describe("p2-discovery-tools: search_recipes tool", () => {
 
     it("p2-discovery-tools.AC1.6: no matching recipes returns empty-result message (not an error)", async () => {
       const store = new RecipeStore();
-      store.load([makeRecipe({ name: "Pasta Carbonara" })], []);
+      store.load([makeRecipe({ name: "Pasta Carbonara" })]);
       const { server, callTool } = makeTestServer();
       registerSearchTool(server, makeCtx(store, server));
 
@@ -134,7 +127,7 @@ describe("p2-discovery-tools: search_recipes tool", () => {
 
     it("p2-discovery-tools.AC1.7-pos: rating appears in search hit when > 0", async () => {
       const store = new RecipeStore();
-      store.load([makeRecipe({ name: "Chocolate Cake", rating: 5 })], []);
+      store.load([makeRecipe({ name: "Chocolate Cake", rating: 5 })]);
       const { server, callTool } = makeTestServer();
       registerSearchTool(server, makeCtx(store, server));
 
@@ -144,7 +137,7 @@ describe("p2-discovery-tools: search_recipes tool", () => {
 
     it("p2-discovery-tools.AC1.7-neg: rating absent from search hit when 0", async () => {
       const store = new RecipeStore();
-      store.load([makeRecipe({ name: "Chocolate Cake", rating: 0 })], []);
+      store.load([makeRecipe({ name: "Chocolate Cake", rating: 0 })]);
       const { server, callTool } = makeTestServer();
       registerSearchTool(server, makeCtx(store, server));
 
@@ -154,7 +147,7 @@ describe("p2-discovery-tools: search_recipes tool", () => {
 
     it("p2-discovery-tools.AC1.8-pos: pinned marker appears in search hit when isPinned is true", async () => {
       const store = new RecipeStore();
-      store.load([makeRecipe({ name: "Chocolate Cake", isPinned: true })], []);
+      store.load([makeRecipe({ name: "Chocolate Cake", isPinned: true })]);
       const { server, callTool } = makeTestServer();
       registerSearchTool(server, makeCtx(store, server));
 
@@ -164,7 +157,7 @@ describe("p2-discovery-tools: search_recipes tool", () => {
 
     it("p2-discovery-tools.AC1.8-neg: pinned marker absent from search hit when isPinned is false", async () => {
       const store = new RecipeStore();
-      store.load([makeRecipe({ name: "Chocolate Cake", isPinned: false })], []);
+      store.load([makeRecipe({ name: "Chocolate Cake", isPinned: false })]);
       const { server, callTool } = makeTestServer();
       registerSearchTool(server, makeCtx(store, server));
 
@@ -174,7 +167,7 @@ describe("p2-discovery-tools: search_recipes tool", () => {
 
     it("p2-discovery-tools.AC1.9-pos: on-grocery-list marker appears in search hit when onGroceryList is true", async () => {
       const store = new RecipeStore();
-      store.load([makeRecipe({ name: "Chocolate Cake", onGroceryList: true })], []);
+      store.load([makeRecipe({ name: "Chocolate Cake", onGroceryList: true })]);
       const { server, callTool } = makeTestServer();
       registerSearchTool(server, makeCtx(store, server));
 
@@ -184,7 +177,7 @@ describe("p2-discovery-tools: search_recipes tool", () => {
 
     it("p2-discovery-tools.AC1.9-neg: on-grocery-list marker absent from search hit when onGroceryList is false", async () => {
       const store = new RecipeStore();
-      store.load([makeRecipe({ name: "Chocolate Cake", onGroceryList: false })], []);
+      store.load([makeRecipe({ name: "Chocolate Cake", onGroceryList: false })]);
       const { server, callTool } = makeTestServer();
       registerSearchTool(server, makeCtx(store, server));
 
@@ -195,7 +188,7 @@ describe("p2-discovery-tools: search_recipes tool", () => {
     it("p2-discovery-tools.AC1.invocation: search_recipes logs invocation at info level with tool name and query", async () => {
       const { log, records } = makePinoCapture();
       const store = new RecipeStore();
-      store.load([makeRecipe({ name: "Chocolate Cake" })], []);
+      store.load([makeRecipe({ name: "Chocolate Cake" })]);
       const { server, callTool } = makeTestServer();
       registerSearchTool(server, makeCtx(store, server, { log }));
 
@@ -213,7 +206,7 @@ describe("p2-discovery-tools: search_recipes tool", () => {
     it("includes Last Cooked in search results when meal history exists", async () => {
       const recipe = makeRecipe({ name: "Chicken Soup", ingredients: "chicken, broth" });
       const store = new RecipeStore();
-      store.load([recipe], []);
+      store.load([recipe]);
       const mealStore = new MealStore();
       mealStore.load([makeMeal({ recipeUid: recipe.uid, date: "2026-05-01 00:00:00" })]);
       const { server, callTool } = makeTestServer();

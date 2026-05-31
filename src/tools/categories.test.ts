@@ -11,18 +11,17 @@ describe("p2-discovery-tools: list_categories tool", () => {
       const catA = makeCategory({ name: "Desserts" });
       const catB = makeCategory({ name: "Mains" });
       const store = new RecipeStore();
-      store.load(
-        [
-          makeRecipe({ categories: [catA.uid] }),
-          makeRecipe({ categories: [catA.uid] }),
-          makeRecipe({ categories: [catB.uid] }),
-          // Trashed recipe — should NOT count
-          makeRecipe({ categories: [catA.uid], inTrash: true }),
-        ],
-        [catA, catB],
-      );
+      store.load([
+        makeRecipe({ categories: [catA.uid] }),
+        makeRecipe({ categories: [catA.uid] }),
+        makeRecipe({ categories: [catB.uid] }),
+        // Trashed recipe — should NOT count
+        makeRecipe({ categories: [catA.uid], inTrash: true }),
+      ]);
       const { server, callTool } = makeTestServer();
-      registerCategoryTools(server, makeCtx(store, server));
+      const ctx = makeCtx(store, server);
+      ctx.categoryStore.load([catA, catB]);
+      registerCategoryTools(server, ctx);
 
       const result = await callTool("list_categories", {});
       const text = getText(result);
@@ -41,9 +40,11 @@ describe("p2-discovery-tools: list_categories tool", () => {
       const catM = makeCategory({ name: "Main Courses" });
       const store = new RecipeStore();
       // Need at least one recipe so store.size > 0 (cold-start guard)
-      store.load([makeRecipe({ categories: [] as Array<CategoryUid> })], [catZ, catA, catM]);
+      store.load([makeRecipe({ categories: [] as Array<CategoryUid> })]);
       const { server, callTool } = makeTestServer();
-      registerCategoryTools(server, makeCtx(store, server));
+      const ctx = makeCtx(store, server);
+      ctx.categoryStore.load([catZ, catA, catM]);
+      registerCategoryTools(server, ctx);
 
       const result = await callTool("list_categories", {});
       const text = getText(result);
@@ -60,9 +61,11 @@ describe("p2-discovery-tools: list_categories tool", () => {
       const catEmpty = makeCategory({ name: "Empty Category" });
       const catFull = makeCategory({ name: "Full Category" });
       const store = new RecipeStore();
-      store.load([makeRecipe({ categories: [catFull.uid] })], [catEmpty, catFull]);
+      store.load([makeRecipe({ categories: [catFull.uid] })]);
       const { server, callTool } = makeTestServer();
-      registerCategoryTools(server, makeCtx(store, server));
+      const ctx = makeCtx(store, server);
+      ctx.categoryStore.load([catEmpty, catFull]);
+      registerCategoryTools(server, ctx);
 
       const result = await callTool("list_categories", {});
       const text = getText(result);
@@ -86,9 +89,11 @@ describe("p2-discovery-tools: list_categories tool", () => {
     it("includes UIDs in output", async () => {
       const cat = makeCategory({ uid: "cat-uid-1" as CategoryUid, name: "Desserts" });
       const store = new RecipeStore();
-      store.load([makeRecipe({ categories: [cat.uid] })], [cat]);
+      store.load([makeRecipe({ categories: [cat.uid] })]);
       const { server, callTool } = makeTestServer();
-      registerCategoryTools(server, makeCtx(store, server));
+      const ctx = makeCtx(store, server);
+      ctx.categoryStore.load([cat]);
+      registerCategoryTools(server, ctx);
 
       const result = await callTool("list_categories", {});
       expect(getText(result)).toContain("uid: `cat-uid-1`");
@@ -98,9 +103,11 @@ describe("p2-discovery-tools: list_categories tool", () => {
       const parent = makeCategory({ uid: "parent-1" as CategoryUid, name: "Baking", parentUid: null });
       const child = makeCategory({ uid: "child-1" as CategoryUid, name: "Cakes", parentUid: "parent-1" });
       const store = new RecipeStore();
-      store.load([makeRecipe({ categories: [parent.uid, child.uid] })], [parent, child]);
+      store.load([makeRecipe({ categories: [parent.uid, child.uid] })]);
       const { server, callTool } = makeTestServer();
-      registerCategoryTools(server, makeCtx(store, server));
+      const ctx = makeCtx(store, server);
+      ctx.categoryStore.load([parent, child]);
+      registerCategoryTools(server, ctx);
 
       const result = await callTool("list_categories", {});
       const text = getText(result);
@@ -111,16 +118,29 @@ describe("p2-discovery-tools: list_categories tool", () => {
 
     it("p2-discovery-tools.AC4.5: store with recipes but no categories returns empty message", async () => {
       const store = new RecipeStore();
-      // Load recipes but pass empty categories array
-      store.load([makeRecipe({ categories: [] as Array<CategoryUid> })], []);
+      store.load([makeRecipe({ categories: [] as Array<CategoryUid> })]);
       const { server, callTool } = makeTestServer();
-      registerCategoryTools(server, makeCtx(store, server));
+      const ctx = makeCtx(store, server);
+      ctx.categoryStore.load([]); // synced, but empty catalog
+      registerCategoryTools(server, ctx);
 
       const result = await callTool("list_categories", {});
       const text = getText(result);
 
       expect(result.isError).toBeFalsy();
       expect(text.toLowerCase()).toContain("no categories");
+    });
+
+    it("p2-discovery-tools.AC4.6: recipe store synced but category catalog not yet synced returns a wait hint", async () => {
+      const store = new RecipeStore();
+      store.load([makeRecipe({ categories: [] as Array<CategoryUid> })]);
+      const { server, callTool } = makeTestServer();
+      // categoryStore intentionally NOT loaded → hasSynced === false
+      registerCategoryTools(server, makeCtx(store, server));
+
+      const result = await callTool("list_categories", {});
+
+      expect(getText(result).toLowerCase()).toContain("still syncing");
     });
   });
 });

@@ -152,6 +152,7 @@ export function makeCtx(
       ServerContext,
       | "client"
       | "cache"
+      | "categoryStore"
       | "pantryStore"
       | "aisleStore"
       | "groceryListStore"

@@ -1,6 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
 import { AisleStore } from "../cache/aisle-store.js";
+import { CategoryStore } from "../cache/category-store.js";
 import { GroceryIngredientStore } from "../cache/grocery-ingredient-store.js";
 import { GroceryItemStore } from "../cache/grocery-item-store.js";
 import { GroceryListStore } from "../cache/grocery-list-store.js";
@@ -32,6 +33,7 @@ export function makeAppContext(overrides: Partial<AppContext> = {}): AppContext 
     client: {} as unknown as PaprikaClient,
     cache: {} as unknown as DiskCacheRoot,
     store: new RecipeStore(),
+    categoryStore: new CategoryStore(),
     pantryStore: new PantryStore(),
     aisleStore: new AisleStore(),
     groceryListStore: new GroceryListStore(),

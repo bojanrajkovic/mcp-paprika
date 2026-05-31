@@ -16,6 +16,7 @@ import type {
   PantryItem,
   Recipe,
   Aisle,
+  Category,
   GroceryList,
   GroceryItem,
   GroceryIngredient,
@@ -26,6 +27,7 @@ import type {
 import {
   RecipeSchema,
   RecipeUidSchema,
+  CategoryUidSchema,
   PantryItemUidSchema,
   AisleUidSchema,
   GroceryListUidSchema,
@@ -1715,6 +1717,69 @@ describe("PaprikaClient", () => {
       expect(payload).toHaveProperty("order_flag", 7);
       expect(payload).toHaveProperty("deleted", false);
       expect(payload).not.toHaveProperty("orderFlag");
+    });
+  });
+
+  describe("category-client: saveCategory() / deleteCategory()", () => {
+    function makeTestCategory(overrides?: Partial<Category>): Category {
+      return {
+        uid: CategoryUidSchema.parse("2D6BB5F8-909E-4B2B-9E67-9668C2737639"),
+        name: "Thai",
+        orderFlag: 0,
+        parentUid: null,
+        ...overrides,
+      };
+    }
+
+    it("saveCategory POSTs to /categories/ with deleted:false and 5 snake_case keys", async () => {
+      let capturedUrl = "";
+      let body: Array<Record<string, unknown>> | null = null;
+      server.use(
+        http.post(`${API_BASE}/categories/`, async ({ request }) => {
+          capturedUrl = request.url;
+          const formData = await request.formData();
+          const dataBlob = formData.get("data") as Blob;
+          const decompressed = gunzipSync(Buffer.from(await dataBlob.arrayBuffer()));
+          body = JSON.parse(decompressed.toString()) as Array<Record<string, unknown>>;
+          return HttpResponse.json({ result: true });
+        }),
+      );
+
+      const client = new PaprikaClient("test@example.com", "password");
+      const input = makeTestCategory({ name: "Curries", orderFlag: 2, parentUid: "PARENT-UID" });
+      const result = await client.saveCategory(input);
+
+      expect(capturedUrl).toBe(`${API_BASE}/categories/`);
+      expect(result.uid).toBe(input.uid);
+      const payload = body![0]!;
+      expect(Object.keys(payload)).toHaveLength(5);
+      expect(payload).toMatchObject({
+        uid: input.uid,
+        name: "Curries",
+        order_flag: 2,
+        parent_uid: "PARENT-UID",
+        deleted: false,
+      });
+      expect(payload).not.toHaveProperty("orderFlag");
+    });
+
+    it("deleteCategory POSTs the same shape with deleted:true (tombstone)", async () => {
+      let body: Array<Record<string, unknown>> | null = null;
+      server.use(
+        http.post(`${API_BASE}/categories/`, async ({ request }) => {
+          const formData = await request.formData();
+          const dataBlob = formData.get("data") as Blob;
+          const decompressed = gunzipSync(Buffer.from(await dataBlob.arrayBuffer()));
+          body = JSON.parse(decompressed.toString()) as Array<Record<string, unknown>>;
+          return HttpResponse.json({ result: true });
+        }),
+      );
+
+      const client = new PaprikaClient("test@example.com", "password");
+      await client.deleteCategory(makeTestCategory({ name: "Stale" }));
+
+      const payload = body![0]!;
+      expect(payload).toMatchObject({ name: "Stale", deleted: true });
     });
   });
 

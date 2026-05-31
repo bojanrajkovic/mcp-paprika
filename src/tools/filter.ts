@@ -118,7 +118,7 @@ function parseMaybeMinutes(input: string | undefined): Result<number | undefined
 
 function formatRecipeList(recipes: Array<Recipe>, ctx: ServerContext): string {
   const lines = recipes.map((recipe) => {
-    const categoryNames = ctx.store.resolveCategories(recipe.categories);
+    const categoryNames = ctx.categoryStore.resolveNames(recipe.categories);
     return formatRecipeItem(recipe, categoryNames);
   });
   return lines.join("\n\n---\n\n");
@@ -166,7 +166,7 @@ function unverifiedTimeFields(recipe: Recipe, constraints: TimeConstraints): Arr
 function formatTimeFilterResults(recipes: Array<Recipe>, ctx: ServerContext, constraints: TimeConstraints): string {
   return recipes
     .map((recipe) => {
-      const categoryNames = ctx.store.resolveCategories(recipe.categories);
+      const categoryNames = ctx.categoryStore.resolveNames(recipe.categories);
       const item = formatRecipeItem(recipe, categoryNames);
       const unverified = unverifiedTimeFields(recipe, constraints);
       if (unverified.length === 0) return item;

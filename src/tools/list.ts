@@ -37,7 +37,7 @@ export function registerListTool(server: McpServer, ctx: ServerContext): void {
 
           const header = `Showing ${page.length.toString()} of ${total.toString()} recipes (offset: ${args.offset.toString()}):\n`;
           const lines = page.map((recipe) => {
-            const categoryNames = ctx.store.resolveCategories(recipe.categories);
+            const categoryNames = ctx.categoryStore.resolveNames(recipe.categories);
             const cats = categoryNames.length > 0 ? ` [${categoryNames.join(", ")}]` : "";
             const meta: Array<string> = [];
             const dateOnly = recipe.created.slice(0, 10);

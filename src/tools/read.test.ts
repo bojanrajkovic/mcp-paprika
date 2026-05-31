@@ -11,7 +11,7 @@ describe("p2-recipe-crud: read_recipe tool", () => {
     it("p2-recipe-crud.AC1.1: UID lookup returns recipe as markdown with heading", async () => {
       const recipe = makeRecipe({ name: "Chocolate Cake" });
       const store = new RecipeStore();
-      store.load([recipe], []);
+      store.load([recipe]);
       const { server, callTool } = makeTestServer();
       registerReadTool(server, makeCtx(store, server));
 
@@ -25,9 +25,11 @@ describe("p2-recipe-crud: read_recipe tool", () => {
       const category = makeCategory({ name: "Dessert" });
       const recipe = makeRecipe({ name: "Chocolate Cake", categories: [category.uid] });
       const store = new RecipeStore();
-      store.load([recipe], [category]);
+      store.load([recipe]);
       const { server, callTool } = makeTestServer();
-      registerReadTool(server, makeCtx(store, server));
+      const ctx = makeCtx(store, server);
+      ctx.categoryStore.load([category]);
+      registerReadTool(server, ctx);
 
       const result = await callTool("read_recipe", { lookup: { uid: recipe.uid } });
       const text = getText(result);
@@ -38,7 +40,7 @@ describe("p2-recipe-crud: read_recipe tool", () => {
 
     it("p2-recipe-crud.AC1.2: exact title match returns recipe markdown", async () => {
       const store = new RecipeStore();
-      store.load([makeRecipe({ name: "Chocolate Cake" })], []);
+      store.load([makeRecipe({ name: "Chocolate Cake" })]);
       const { server, callTool } = makeTestServer();
       registerReadTool(server, makeCtx(store, server));
 
@@ -50,7 +52,7 @@ describe("p2-recipe-crud: read_recipe tool", () => {
 
     it("p2-recipe-crud.AC1.3: starts-with title match returns recipe markdown", async () => {
       const store = new RecipeStore();
-      store.load([makeRecipe({ name: "Chocolate Cake" })], []);
+      store.load([makeRecipe({ name: "Chocolate Cake" })]);
       const { server, callTool } = makeTestServer();
       registerReadTool(server, makeCtx(store, server));
 
@@ -62,7 +64,7 @@ describe("p2-recipe-crud: read_recipe tool", () => {
 
     it("p2-recipe-crud.AC1.3 (extended): contains title match returns recipe markdown", async () => {
       const store = new RecipeStore();
-      store.load([makeRecipe({ name: "Chocolate Cake" })], []);
+      store.load([makeRecipe({ name: "Chocolate Cake" })]);
       const { server, callTool } = makeTestServer();
       registerReadTool(server, makeCtx(store, server));
 
@@ -74,7 +76,7 @@ describe("p2-recipe-crud: read_recipe tool", () => {
 
     it("p2-recipe-crud.AC1.4: multiple title matches return disambiguation list", async () => {
       const store = new RecipeStore();
-      store.load([makeRecipe({ name: "Pasta Bolognese" }), makeRecipe({ name: "Pasta Carbonara" })], []);
+      store.load([makeRecipe({ name: "Pasta Bolognese" }), makeRecipe({ name: "Pasta Carbonara" })]);
       const { server, callTool } = makeTestServer();
       registerReadTool(server, makeCtx(store, server));
 
@@ -92,7 +94,7 @@ describe("p2-recipe-crud: read_recipe tool", () => {
 
     it("p2-recipe-crud.AC1.5: UID not found returns not-found message", async () => {
       const store = new RecipeStore();
-      store.load([makeRecipe()], []);
+      store.load([makeRecipe()]);
       const { server, callTool } = makeTestServer();
       registerReadTool(server, makeCtx(store, server));
 
@@ -104,7 +106,7 @@ describe("p2-recipe-crud: read_recipe tool", () => {
 
     it("p2-recipe-crud.AC1.6: title search with no matches returns not-found message", async () => {
       const store = new RecipeStore();
-      store.load([makeRecipe({ name: "Pasta" })], []);
+      store.load([makeRecipe({ name: "Pasta" })]);
       const { server, callTool } = makeTestServer();
       registerReadTool(server, makeCtx(store, server));
 
@@ -130,7 +132,7 @@ describe("p2-recipe-crud: read_recipe tool", () => {
     it("includes Last Cooked when meal history exists for the recipe", async () => {
       const recipe = makeRecipe({ name: "Pasta" });
       const store = new RecipeStore();
-      store.load([recipe], []);
+      store.load([recipe]);
       const mealStore = new MealStore();
       mealStore.load([makeMeal({ recipeUid: recipe.uid, date: "2026-03-15 00:00:00" })]);
       const { server, callTool } = makeTestServer();

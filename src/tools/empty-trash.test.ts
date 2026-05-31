@@ -11,7 +11,7 @@ import { makeTestServer, makeCtx, makeStubNotifier, getText } from "./tool-test-
 // cold-start guard passes; the commit path uses cache.recipes.remove (not put).
 function syncedStore(): RecipeStore {
   const store = new RecipeStore();
-  store.load([makeRecipe({ name: "Keeper" })], []); // flips hasSynced; content irrelevant to lookup
+  store.load([makeRecipe({ name: "Keeper" })]); // flips hasSynced; content irrelevant to lookup
   return store;
 }
 

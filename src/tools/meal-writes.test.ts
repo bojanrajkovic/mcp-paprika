@@ -66,7 +66,7 @@ describe("add_meals tool — success paths", () => {
     // Mark stores as synced with their initial state.
     mealStore.load([]);
     mealTypeStore.load(makeBuiltins());
-    store.load([makeRecipe({ uid: TACOS_UID, name: "Tacos" })], []);
+    store.load([makeRecipe({ uid: TACOS_UID, name: "Tacos" })]);
 
     mockSaveMeals = vi.fn().mockImplementation(async (items: ReadonlyArray<Meal>) => items);
     mockNotifySync = vi.fn().mockResolvedValue(undefined);
@@ -385,7 +385,7 @@ describe("add_meals tool — failure paths", () => {
 
     mealStore.load([]);
     mealTypeStore.load(makeBuiltins());
-    store.load([], []);
+    store.load([]);
 
     mockSaveMeals = vi.fn().mockImplementation(async (items: ReadonlyArray<Meal>) => items);
     mockNotifySync = vi.fn().mockResolvedValue(undefined);
@@ -532,7 +532,7 @@ describe("update_meal — success paths (AC3.1-3.6)", () => {
     store = new RecipeStore();
 
     mealTypeStore.load(makeBuiltins());
-    store.load([makeRecipe({ uid: TACOS_UID, name: "Tacos" })], []);
+    store.load([makeRecipe({ uid: TACOS_UID, name: "Tacos" })]);
 
     mockSaveMeals = vi.fn().mockImplementation(async (items: ReadonlyArray<Meal>) => items);
     mockNotifySync = vi.fn().mockResolvedValue(undefined);
@@ -840,7 +840,7 @@ describe("update_meal — failure/edge paths (AC3.7-3.10)", () => {
     // No meals seeded; individual tests seed what they need.
     mealStore.load([]);
     mealTypeStore.load(makeBuiltins());
-    store.load([], []);
+    store.load([]);
 
     mockSaveMeals = vi.fn().mockImplementation(async (items: ReadonlyArray<Meal>) => items);
     mockNotifySync = vi.fn().mockResolvedValue(undefined);
@@ -978,7 +978,7 @@ describe("delete_meal — AC4.1-AC4.4", () => {
     store = new RecipeStore();
 
     mealTypeStore.load(makeBuiltins());
-    store.load([], []);
+    store.load([]);
 
     mockSaveMeals = vi.fn().mockImplementation(async (items: ReadonlyArray<Meal>) => items);
     mockNotifySync = vi.fn().mockResolvedValue(undefined);

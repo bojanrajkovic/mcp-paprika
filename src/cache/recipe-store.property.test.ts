@@ -19,7 +19,7 @@ describe("RecipeStore property-based tests", () => {
             makeRecipe({ uid: "r5" as RecipeUid, name: "Apple" }),
           ];
 
-          store.load(recipes, []);
+          store.load(recipes);
           const results = store.search(query);
 
           for (let i = 0; i < results.length - 1; i++) {
@@ -42,7 +42,7 @@ describe("RecipeStore property-based tests", () => {
           const normal = makeRecipe({ uid: "normal" as RecipeUid, name: "Normal Recipe" });
           const trashed = makeRecipe({ uid: "trashed" as RecipeUid, name: "Trashed Recipe", inTrash: true });
 
-          store.load([normal, trashed], []);
+          store.load([normal, trashed]);
           const results = store.search(query);
 
           for (const result of results) {
@@ -71,7 +71,7 @@ describe("RecipeStore property-based tests", () => {
             inTrash: true,
           });
 
-          store.load([normal, trashed], []);
+          store.load([normal, trashed]);
           const results = store.filterByIngredients([term], "any");
 
           for (const recipe of results) {
@@ -99,7 +99,7 @@ describe("RecipeStore property-based tests", () => {
             totalTime: "not a real time",
           });
 
-          store.load([parseable, unparseable], []);
+          store.load([parseable, unparseable]);
           const results = store.filterByTime({ maxTotalTime: maxMinutes });
 
           const resultUids = new Set(results.map((r) => r.uid));
@@ -125,7 +125,7 @@ describe("RecipeStore property-based tests", () => {
             inTrash: true,
           });
 
-          store.load([normal, trashed], []);
+          store.load([normal, trashed]);
           const results = store.findByName(title);
 
           for (const recipe of results) {

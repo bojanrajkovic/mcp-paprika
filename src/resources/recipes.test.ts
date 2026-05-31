@@ -14,7 +14,7 @@ describe("p2-u10-resource-reg: MCP Recipe Resources", () => {
 
         const recipe1 = makeRecipe({ uid: "recipe-1" as RecipeUid, name: "Pasta" });
         const recipe2 = makeRecipe({ uid: "recipe-2" as RecipeUid, name: "Salad" });
-        store.load([recipe1, recipe2], []);
+        store.load([recipe1, recipe2]);
 
         const ctx = makeCtx(store, server);
         registerRecipeResources(server, ctx);
@@ -41,7 +41,7 @@ describe("p2-u10-resource-reg: MCP Recipe Resources", () => {
       it("returns { resources: [] } for empty store with no error", async () => {
         const { server, callResourceList } = makeTestServer();
         const store = new RecipeStore();
-        store.load([], []);
+        store.load([]);
 
         const ctx = makeCtx(store, server);
         registerRecipeResources(server, ctx);
@@ -59,7 +59,7 @@ describe("p2-u10-resource-reg: MCP Recipe Resources", () => {
 
         const nonTrashed = makeRecipe({ uid: "recipe-1" as RecipeUid, name: "Good Recipe" });
         const trashed = makeRecipe({ uid: "recipe-2" as RecipeUid, name: "Trashed Recipe", inTrash: true });
-        store.load([nonTrashed, trashed], []);
+        store.load([nonTrashed, trashed]);
 
         const ctx = makeCtx(store, server);
         registerRecipeResources(server, ctx);
@@ -86,7 +86,7 @@ describe("p2-u10-resource-reg: MCP Recipe Resources", () => {
           ingredients: "flour, sugar",
           directions: "Mix and bake",
         });
-        store.load([recipe], []);
+        store.load([recipe]);
 
         const ctx = makeCtx(store, server);
         registerRecipeResources(server, ctx);
@@ -105,7 +105,7 @@ describe("p2-u10-resource-reg: MCP Recipe Resources", () => {
         const store = new RecipeStore();
 
         const recipe = makeRecipe({ uid: "test-recipe" as RecipeUid, name: "Test" });
-        store.load([recipe], []);
+        store.load([recipe]);
         store.setLastSyncedAt(new Date("2026-05-24T12:00:00Z"));
 
         const ctx = makeCtx(store, server);
@@ -123,7 +123,7 @@ describe("p2-u10-resource-reg: MCP Recipe Resources", () => {
         const store = new RecipeStore();
 
         const recipe = makeRecipe({ uid: "test-recipe" as RecipeUid, name: "Test" });
-        store.load([recipe], []);
+        store.load([recipe]);
 
         const ctx = makeCtx(store, server);
         registerRecipeResources(server, ctx);
@@ -144,7 +144,7 @@ describe("p2-u10-resource-reg: MCP Recipe Resources", () => {
           name: "Test",
           imageUrl: "https://example.com/photo.jpg",
         });
-        store.load([recipe], []);
+        store.load([recipe]);
 
         const ctx = makeCtx(store, server);
         registerRecipeResources(server, ctx);
@@ -161,7 +161,7 @@ describe("p2-u10-resource-reg: MCP Recipe Resources", () => {
         const store = new RecipeStore();
 
         const recipe = makeRecipe({ uid: "test-recipe" as RecipeUid, name: "Test", imageUrl: "" });
-        store.load([recipe], []);
+        store.load([recipe]);
 
         const ctx = makeCtx(store, server);
         registerRecipeResources(server, ctx);
@@ -185,9 +185,10 @@ describe("p2-u10-resource-reg: MCP Recipe Resources", () => {
           name: "Cake",
           categories: ["cat-1" as CategoryUid],
         });
-        store.load([recipe], [category]);
+        store.load([recipe]);
 
         const ctx = makeCtx(store, server);
+        ctx.categoryStore.load([category]);
         registerRecipeResources(server, ctx);
 
         const result = (await callResource("recipes", "recipe-1")) as {
@@ -210,7 +211,7 @@ describe("p2-u10-resource-reg: MCP Recipe Resources", () => {
           ingredients: "test",
           directions: "test",
         });
-        store.load([recipe], []);
+        store.load([recipe]);
 
         const ctx = makeCtx(store, server);
         registerRecipeResources(server, ctx);
@@ -231,7 +232,7 @@ describe("p2-u10-resource-reg: MCP Recipe Resources", () => {
       it("throws error when recipe UID does not exist", async () => {
         const { server, callResource } = makeTestServer();
         const store = new RecipeStore();
-        store.load([], []);
+        store.load([]);
 
         const ctx = makeCtx(store, server);
         registerRecipeResources(server, ctx);

@@ -10,7 +10,7 @@ describe("p2-recipe-crud: delete_recipe tool", () => {
     it("p2-recipe-crud.AC4.1: recipe soft-deleted (inTrash: true) and confirmation returned", async () => {
       const recipe = makeRecipe({ name: "Pasta Carbonara" });
       const store = new RecipeStore();
-      store.load([recipe], []);
+      store.load([recipe]);
 
       const mockSaveRecipe = vi.fn();
       const mockNotifySync = vi.fn().mockResolvedValue(undefined);
@@ -38,7 +38,7 @@ describe("p2-recipe-crud: delete_recipe tool", () => {
     it("p2-recipe-crud.AC4.2: saveRecipe called with inTrash: true, notifySync called once", async () => {
       const recipe = makeRecipe({ name: "Pasta Carbonara" });
       const store = new RecipeStore();
-      store.load([recipe], []);
+      store.load([recipe]);
 
       const mockSaveRecipe = vi.fn();
       const mockNotifySync = vi.fn().mockResolvedValue(undefined);
@@ -64,7 +64,7 @@ describe("p2-recipe-crud: delete_recipe tool", () => {
     it("p2-recipe-crud.AC4.3: store.set and cache.putRecipe called with trashed recipe", async () => {
       const recipe = makeRecipe({ name: "Pasta Carbonara" });
       const store = new RecipeStore();
-      store.load([recipe], []);
+      store.load([recipe]);
 
       const mockSaveRecipe = vi.fn();
       const mockNotifySync = vi.fn().mockResolvedValue(undefined);
@@ -91,7 +91,7 @@ describe("p2-recipe-crud: delete_recipe tool", () => {
     it("p2-recipe-crud.AC4.4: UID not found returns not-found message", async () => {
       const recipe = makeRecipe();
       const store = new RecipeStore();
-      store.load([recipe], []);
+      store.load([recipe]);
 
       const mockSaveRecipe = vi.fn();
       const mockNotifySync = vi.fn().mockResolvedValue(undefined);
@@ -117,7 +117,7 @@ describe("p2-recipe-crud: delete_recipe tool", () => {
       const nonTrashedRecipe = makeRecipe({ name: "Pasta Bolognese" });
       const trashedRecipe = makeRecipe({ name: "Trashed Recipe", inTrash: true });
       const store = new RecipeStore();
-      store.load([nonTrashedRecipe, trashedRecipe], []);
+      store.load([nonTrashedRecipe, trashedRecipe]);
 
       const mockSaveRecipe = vi.fn();
       const mockNotifySync = vi.fn().mockResolvedValue(undefined);
@@ -141,7 +141,7 @@ describe("p2-recipe-crud: delete_recipe tool", () => {
     it("p2-recipe-crud.AC4.6: saveRecipe throws — returns error message", async () => {
       const recipe = makeRecipe();
       const store = new RecipeStore();
-      store.load([recipe], []);
+      store.load([recipe]);
 
       const mockSaveRecipe = vi.fn();
       const mockNotifySync = vi.fn().mockResolvedValue(undefined);

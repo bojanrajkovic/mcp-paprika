@@ -1,4 +1,4 @@
-import type { Recipe, Category, RecipeUid, CategoryUid } from "../paprika/types.js";
+import type { Recipe, RecipeUid } from "../paprika/types.js";
 import { EntityStore } from "../entity/index.js";
 import { parseDuration } from "../utils/duration.js";
 
@@ -20,7 +20,6 @@ export type TimeConstraints = {
 };
 
 export class RecipeStore extends EntityStore<Recipe, RecipeUid> {
-  private readonly categories: Map<CategoryUid, Category> = new Map();
   private _lastSyncedAt: Date | null = null;
 
   constructor(opts?: { readonly pendingWriteTtlMs?: number }) {
@@ -35,9 +34,8 @@ export class RecipeStore extends EntityStore<Recipe, RecipeUid> {
     this._lastSyncedAt = at;
   }
 
-  load(recipes: ReadonlyArray<Recipe>, categories: ReadonlyArray<Category>): void {
+  load(recipes: ReadonlyArray<Recipe>): void {
     this.baseLoad(recipes);
-    this.setCategories(categories);
   }
 
   override getAll(): Array<Recipe> {
@@ -50,6 +48,16 @@ export class RecipeStore extends EntityStore<Recipe, RecipeUid> {
     return results;
   }
 
+  /**
+   * Every recipe including trashed ones (`getAll()` excludes `inTrash`). Used by
+   * the `delete_category` guard, which must block a category that a trashed —
+   * but restorable — recipe still references, so restoring it doesn't surface a
+   * dangling category UID.
+   */
+  getAllIncludingTrashed(): Array<Recipe> {
+    return [...this._items.values()];
+  }
+
   override get size(): number {
     let count = 0;
     for (const recipe of this._items.values()) {
@@ -58,32 +66,6 @@ export class RecipeStore extends EntityStore<Recipe, RecipeUid> {
       }
     }
     return count;
-  }
-
-  getCategory(uid: CategoryUid): Category | undefined {
-    return this.categories.get(uid);
-  }
-
-  getAllCategories(): Array<Category> {
-    return [...this.categories.values()];
-  }
-
-  setCategories(categories: ReadonlyArray<Category>): void {
-    this.categories.clear();
-    for (const category of categories) {
-      this.categories.set(category.uid, category);
-    }
-  }
-
-  resolveCategories(categoryUids: ReadonlyArray<CategoryUid>): Array<string> {
-    const names: Array<string> = [];
-    for (const uid of categoryUids) {
-      const category = this.categories.get(uid);
-      if (category) {
-        names.push(category.name);
-      }
-    }
-    return names;
   }
 
   search(query: string, options?: SearchOptions): Array<ScoredResult> {

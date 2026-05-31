@@ -2,6 +2,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { Logger } from "pino";
 
 import type { AisleStore } from "../cache/aisle-store.js";
+import type { CategoryStore } from "../cache/category-store.js";
 import type { DiskCacheRoot } from "../cache/disk/index.js";
 import type { GroceryIngredientStore } from "../cache/grocery-ingredient-store.js";
 import type { GroceryItemStore } from "../cache/grocery-item-store.js";
@@ -30,6 +31,7 @@ export interface AppContext {
   readonly client: PaprikaClient;
   readonly cache: DiskCacheRoot;
   readonly store: RecipeStore;
+  readonly categoryStore: CategoryStore;
   readonly pantryStore: PantryStore;
   readonly aisleStore: AisleStore;
   readonly groceryListStore: GroceryListStore;
