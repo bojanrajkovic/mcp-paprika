@@ -1,7 +1,13 @@
 import { lookup as dnsLookup } from "node:dns";
 import { isIP, type LookupFunction } from "node:net";
 
-import { Agent } from "undici";
+// IMPORTANT: import `fetch` from undici (NOT the global fetch). The `ssrfAgent`
+// dispatcher below is an undici `Agent` from THIS undici copy; passing it to
+// Node's built-in global `fetch` (a different bundled undici) fails with
+// `UND_ERR_INVALID_ARG: invalid onRequestStart method` because the two undici
+// versions have incompatible handler interfaces. Using undici's own `fetch`
+// keeps the dispatcher and the fetch on the same copy.
+import { Agent, fetch as undiciFetch, type Dispatcher, type Response as UndiciResponse } from "undici";
 import ipaddr from "ipaddr.js";
 
 import { toMessage } from "../utils/log.js";
@@ -63,7 +69,7 @@ export const ssrfLookup: LookupFunction = (hostname, options, callback) => {
 const ssrfAgent = new Agent({ connect: { lookup: ssrfLookup } });
 
 /** Reads a fetch body into a Buffer, aborting once `maxBytes` is exceeded (streaming, not post-hoc). */
-async function readCapped(res: Response, maxBytes: number): Promise<{ bytes: Buffer } | { error: string }> {
+async function readCapped(res: UndiciResponse, maxBytes: number): Promise<{ bytes: Buffer } | { error: string }> {
   const declared = res.headers.get("content-length");
   if (declared !== null && declared !== "" && Number(declared) > maxBytes) {
     return { error: `Image too large (${declared} bytes; max ${maxBytes.toString()}).` };
@@ -97,7 +103,7 @@ async function readCapped(res: Response, maxBytes: number): Promise<{ bytes: Buf
  */
 export async function fetchImageBytes(
   url: string,
-  opts?: { readonly maxBytes?: number; readonly timeoutMs?: number },
+  opts?: { readonly maxBytes?: number; readonly timeoutMs?: number; readonly dispatcher?: Dispatcher },
 ): Promise<{ bytes: Buffer; contentType: string | null } | { error: string }> {
   const maxBytes = opts?.maxBytes ?? MAX_IMAGE_BYTES;
   const timeoutMs = opts?.timeoutMs ?? FETCH_TIMEOUT_MS;
@@ -118,13 +124,15 @@ export async function fetchImageBytes(
     return { error: "URL resolves to a private or reserved address; refusing to fetch." };
   }
 
-  let res: Response;
+  let res: UndiciResponse;
   try {
-    res = await fetch(parsed, {
-      dispatcher: ssrfAgent,
+    // `opts.dispatcher` is a test seam (inject an undici MockAgent); production
+    // always uses the SSRF-validating ssrfAgent.
+    res = await undiciFetch(parsed, {
+      dispatcher: opts?.dispatcher ?? ssrfAgent,
       redirect: "error",
       signal: AbortSignal.timeout(timeoutMs),
-    } as RequestInit & { dispatcher: Agent });
+    });
   } catch (e) {
     return { error: `Failed to download image: ${toMessage(e)}` };
   }
