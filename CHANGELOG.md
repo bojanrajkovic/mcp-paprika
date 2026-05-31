@@ -1,5 +1,28 @@
 # Changelog
 
+## [1.6.0](https://github.com/bojanrajkovic/mcp-paprika/compare/v1.5.0...v1.6.0) (2026-05-31)
+
+
+### Features
+
+* **category:** add category CRUD tools and dedicated CategoryStore ([#176](https://github.com/bojanrajkovic/mcp-paprika/issues/176)) ([748f2db](https://github.com/bojanrajkovic/mcp-paprika/commit/748f2db514ed58e5781b893a200f7c3629f49272))
+* **photo:** add generate_photo tool for AI recipe photos ([#180](https://github.com/bojanrajkovic/mcp-paprika/issues/180)) ([bb76157](https://github.com/bojanrajkovic/mcp-paprika/commit/bb76157cf7cc872b481eb763411a01b4dc7ed1e7))
+* **photos:** add photo read/sync scaffolding (PhotoSchema, PhotoStore, photos sync) ([#171](https://github.com/bojanrajkovic/mcp-paprika/issues/171)) ([e253105](https://github.com/bojanrajkovic/mcp-paprika/commit/e2531056a993f4304e312a5ef3012b132364aad0))
+* **photos:** add upload_photo and delete_photo write tools ([#172](https://github.com/bojanrajkovic/mcp-paprika/issues/172)) ([27cc598](https://github.com/bojanrajkovic/mcp-paprika/commit/27cc59825d930e819fbeff109556c194d2ba5cd6))
+* **recipe:** add empty_trash tool for permanent recipe deletion ([#165](https://github.com/bojanrajkovic/mcp-paprika/issues/165)) ([7c5a78c](https://github.com/bojanrajkovic/mcp-paprika/commit/7c5a78c8c01e0c807f00359c2d4f7cfd490dce33))
+
+
+### Bug Fixes
+
+* **category:** render orphaned categories in list_categories instead of hiding them ([#179](https://github.com/bojanrajkovic/mcp-paprika/issues/179)) ([ae4233d](https://github.com/bojanrajkovic/mcp-paprika/commit/ae4233d5f5e4e089a5bab35954c8272d297160ee))
+* **paprika:** treat Paprika's HTTP 200 {error} envelope as a failure ([#182](https://github.com/bojanrajkovic/mcp-paprika/issues/182)) ([b266e23](https://github.com/bojanrajkovic/mcp-paprika/commit/b266e23afd6921af82965d4129073049b4b1f8a1))
+* **photo:** use undici's fetch for the SSRF-dispatched image download ([#181](https://github.com/bojanrajkovic/mcp-paprika/issues/181)) ([f6a165d](https://github.com/bojanrajkovic/mcp-paprika/commit/f6a165d4a2560fb809dea2a6253e961ec01b20bd))
+
+
+### Refactoring
+
+* **test:** centralize AppContext construction in makeAppContext factory ([#170](https://github.com/bojanrajkovic/mcp-paprika/issues/170)) ([8a55182](https://github.com/bojanrajkovic/mcp-paprika/commit/8a55182ef960e1bb61349736d1dc8b04e89b3dc7))
+
 ## [1.5.0](https://github.com/bojanrajkovic/mcp-paprika/compare/v1.4.0...v1.5.0) (2026-05-31)
 
 
