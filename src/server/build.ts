@@ -14,6 +14,7 @@ import { PhotoStore } from "../cache/photo-store.js";
 import { PantryStore } from "../cache/pantry-store.js";
 import { RecipeStore } from "../cache/recipe-store.js";
 import { buildDiscoverComponents } from "../features/discover-feature.js";
+import { PhotographyClient } from "../features/photography.js";
 import { PaprikaClient } from "../paprika/client.js";
 import { SyncEngine } from "../paprika/sync.js";
 import { registerCategoryTools } from "../tools/categories.js";
@@ -26,6 +27,7 @@ import { registerCreateTool } from "../tools/create.js";
 import { registerDeleteTool } from "../tools/delete.js";
 import { registerEmptyTrashTool } from "../tools/empty-trash.js";
 import { registerUploadPhotoTool, registerDeletePhotoTool } from "../tools/photo-writes.js";
+import { registerGeneratePhotoTool } from "../tools/photo-generate.js";
 import { registerDiscoverTool } from "../tools/discover.js";
 import { registerFilterTools } from "../tools/filter.js";
 import { registerListTool } from "../tools/list.js";
@@ -66,7 +68,7 @@ import { registerUpdateTool } from "../tools/update.js";
 import { registerRecipeResources } from "../resources/recipes.js";
 import { registerGroceryListResources } from "../resources/grocery-lists.js";
 import { registerMenuResources } from "../resources/menus.js";
-import type { PaprikaConfig } from "../utils/config.js";
+import { resolveImageGenConfig, type PaprikaConfig } from "../utils/config.js";
 import { getCacheDir } from "../utils/xdg.js";
 import type { AppContext, SessionContext } from "./app-context.js";
 import type { Notifier } from "./notifier.js";
@@ -253,6 +255,7 @@ export async function buildAppContext(
     menuItemStore,
     photoStore,
     vectorStore: null,
+    photographyClient: null,
     notifier,
     auth, // null for stdio, populated for HTTP
     log,
@@ -313,6 +316,13 @@ export async function buildAppContext(
 
   const vectorStore = await buildDiscoverComponents(config, store, categoryStore, sync.events, log);
 
+  // Image generation (generate_photo) is opt-in: build the client only when the
+  // imageGen credentials resolve (dedicated key or reuse-embeddings). Null
+  // otherwise, which leaves the tool unregistered (mirrors vectorStore/discover).
+  const resolvedImageGen = resolveImageGenConfig(config);
+  const photographyClient =
+    resolvedImageGen !== null ? new PhotographyClient(resolvedImageGen, log.child({ component: "photography" })) : null;
+
   const app: AppContext = {
     client,
     cache,
@@ -329,6 +339,7 @@ export async function buildAppContext(
     menuItemStore,
     photoStore,
     vectorStore,
+    photographyClient,
     notifier,
     auth, // null for stdio, populated for HTTP
     log,
@@ -400,6 +411,9 @@ export function buildMcpServer(app: AppContext): McpServer {
 
   if (app.vectorStore !== null) {
     registerDiscoverTool(server, sessionCtx, app.vectorStore);
+  }
+  if (app.photographyClient !== null) {
+    registerGeneratePhotoTool(server, sessionCtx, app.photographyClient);
   }
 
   registerRecipeResources(server, sessionCtx);

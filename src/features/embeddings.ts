@@ -6,40 +6,19 @@
  * - recipeToEmbeddingText: pure function for converting recipes to embedding text
  */
 
-import {
-  ExponentialBackoff,
-  ConsecutiveBreaker,
-  retry,
-  circuitBreaker,
-  handleType,
-  wrap,
-  BrokenCircuitError,
-  type IPolicy,
-  type IRetryContext,
-} from "cockatiel";
+import type { IRetryContext } from "cockatiel";
 import type { Logger } from "pino";
 import { SILENT_LOG } from "../utils/log.js";
 import { z } from "zod";
 import type { Recipe } from "../paprika/types.js";
 import type { EmbeddingConfig } from "../utils/config.js";
-import { CircuitOpenError } from "../utils/errors.js";
+import {
+  createResilientExecutor,
+  TransientHTTPError,
+  RETRYABLE_STATUSES,
+  type ResilientExecutor,
+} from "../utils/resilience.js";
 import { EmbeddingError, EmbeddingAPIError } from "./embedding-errors.js";
-
-/**
- * Internal error class to signal transient HTTP errors for cockatiel.
- * Not exported — used only within this module for resilience signaling.
- */
-class TransientHTTPError extends Error {
-  constructor(readonly status: number) {
-    super(`Transient HTTP error (${status.toString()})`);
-    this.name = "TransientHTTPError";
-  }
-}
-
-/**
- * HTTP status codes that should trigger retry.
- */
-const RETRYABLE_STATUSES = new Set([429, 500, 502, 503]);
 
 /**
  * Zod schema for validating embedding API responses.
@@ -76,9 +55,7 @@ export class EmbeddingClient {
   private readonly _apiKey: string;
   private readonly _model: string;
   private readonly log: Logger;
-  private readonly _retryPolicy: ReturnType<typeof retry>;
-  private readonly _breakerPolicy: ReturnType<typeof circuitBreaker>;
-  private readonly _resilience: IPolicy<IRetryContext, never>;
+  private readonly _executor: ResilientExecutor;
   private _dimensions: number | null = null;
 
   constructor(config: Readonly<EmbeddingConfig>, log?: Logger) {
@@ -87,58 +64,13 @@ export class EmbeddingClient {
     this._model = config.model;
     this.log = log ?? SILENT_LOG;
 
-    // Per-instance resilience stack
-    this._retryPolicy = retry(handleType(TransientHTTPError), {
-      maxAttempts: 3,
-      backoff: new ExponentialBackoff({
-        initialDelay: 500,
-        maxDelay: 10_000,
-      }),
+    // Per-instance resilience stack (breaker outside retry; see resilience.ts).
+    // `logLabel: "embedding"` preserves the existing log-message wording.
+    this._executor = createResilientExecutor({
+      service: "embeddings",
+      logLabel: "embedding",
+      log: this.log,
     });
-
-    this._breakerPolicy = circuitBreaker(handleType(TransientHTTPError), {
-      halfOpenAfter: 30_000,
-      breaker: new ConsecutiveBreaker(5),
-    });
-
-    // event.attempt is the 0-indexed upcoming-retry counter; +1 yields the
-    // 1-indexed network-touch attempt number that the inline log site uses.
-    this._retryPolicy.onRetry((event) => {
-      if ("error" in event) {
-        const err = event.error;
-        const status = err instanceof TransientHTTPError ? err.status : undefined;
-        this.log.warn(
-          { err, status, attempt: event.attempt + 1, nextBackoffMs: event.delay },
-          "embedding request failed, retrying",
-        );
-      }
-    });
-
-    this._retryPolicy.onGiveUp((event) => {
-      if ("error" in event) {
-        const err = event.error;
-        const status = err instanceof TransientHTTPError ? err.status : undefined;
-        this.log.error({ err, status }, "embedding request gave up after retries");
-      }
-    });
-
-    // Breaker state-change hooks. `onBreak` reaches connected MCP clients via
-    // the default `notifyLevel: "warn"` fan-out; reset/half-open stay on the
-    // primary log stream by design.
-    this._breakerPolicy.onBreak(() => {
-      this.log.warn({}, "embedding circuit breaker opened");
-    });
-    this._breakerPolicy.onReset(() => {
-      this.log.info({}, "embedding circuit breaker reset");
-    });
-    this._breakerPolicy.onHalfOpen(() => {
-      this.log.info({}, "embedding circuit breaker half-open (probe pending)");
-    });
-
-    // Breaker OUTSIDE retry so the consecutive-failure counter increments
-    // once per embed call regardless of how many retries that call exhausted
-    // internally.
-    this._resilience = wrap(this._breakerPolicy, this._retryPolicy);
   }
 
   /**
@@ -209,15 +141,9 @@ export class EmbeddingClient {
       return parsed.data.map((d) => d.embedding);
     };
 
-    try {
-      const result = await this._resilience.execute(execute);
-      return result as Array<Array<number>>;
-    } catch (error) {
-      if (error instanceof BrokenCircuitError) {
-        throw new CircuitOpenError("embeddings", endpoint, { cause: error });
-      }
-      throw error;
-    }
+    // The executor maps a tripped breaker to CircuitOpenError("embeddings", endpoint);
+    // permanent errors (EmbeddingAPIError) and ZodError propagate unchanged.
+    return this._executor.execute(endpoint, execute);
   }
 
   /**

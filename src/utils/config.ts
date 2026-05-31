@@ -28,6 +28,9 @@ const ENV_VAR_HINTS: Readonly<Record<string, string>> = {
   "features.embeddings.apiKey": "OPENAI_API_KEY",
   "features.embeddings.baseUrl": "OPENAI_BASE_URL",
   "features.embeddings.model": "EMBEDDING_MODEL",
+  "features.imageGen.apiKey": "IMAGE_GEN_API_KEY",
+  "features.imageGen.baseUrl": "IMAGE_GEN_BASE_URL",
+  "features.imageGen.reuseEmbeddingsCreds": "IMAGE_GEN_REUSE_EMBEDDINGS_CREDS",
   "oauth.publicUrl": "MCP_PUBLIC_URL",
   "oauth.preset": "MCP_OIDC_PRESET",
   "oauth.discoveryUrl": "MCP_OIDC_DISCOVERY_URL",
@@ -123,6 +126,25 @@ const embeddingConfigSchema = z.object({
   model: z.string().min(1),
 });
 
+// Image generation (OpenRouter chat-completions) feature config. Unlike
+// embeddings, the model is NOT configured here — it is selected per
+// `generate_photo` tool call. Credentials come from one of two mutually
+// exclusive paths, enforced by `.superRefine` below:
+//   - a dedicated key (`apiKey`, optional `baseUrl`) → isolated OpenRouter
+//     cost tracking for image generation, OR
+//   - `reuseEmbeddingsCreds: true` → borrow `features.embeddings.{apiKey,baseUrl}`
+//     (both already point at OpenRouter in the common single-account setup).
+const imageGenConfigSchema = z.object({
+  apiKey: z.string().min(1).optional(),
+  baseUrl: z.string().min(1).optional(),
+  reuseEmbeddingsCreds: booleanField.default(false),
+});
+
+// Default base URL for the dedicated-key path. OpenRouter is the only provider
+// that serves the image-generation models behind the `generate_photo` tool via
+// chat-completions image output.
+const DEFAULT_IMAGE_GEN_BASE_URL = "https://openrouter.ai/api/v1";
+
 const pinoLevelSchema = z.enum(["trace", "debug", "info", "warn", "error", "fatal"]);
 
 const loggingSchema = z
@@ -185,6 +207,7 @@ export const paprikaConfigSchema = z
       .object({
         replicateApiToken: z.string().min(1).optional(),
         embeddings: embeddingConfigSchema.optional(),
+        imageGen: imageGenConfigSchema.optional(),
       })
       .optional(),
     oauth: z
@@ -278,10 +301,80 @@ export const paprikaConfigSchema = z
         message: "MCP_OIDC_CLIENT_ID and MCP_OIDC_CLIENT_SECRET are required when MCP_TRANSPORT=http",
       });
     }
+  })
+  // Image-generation credential resolution is independent of transport. When the
+  // block is present it must resolve to a usable credential via exactly one path.
+  .superRefine((cfg, ctx) => {
+    const imageGen = cfg.features?.imageGen;
+    if (!imageGen) return;
+
+    const hasKey = imageGen.apiKey !== undefined;
+    const reuse = imageGen.reuseEmbeddingsCreds;
+
+    if (hasKey && reuse) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["features", "imageGen", "apiKey"],
+        message: "set either IMAGE_GEN_API_KEY or IMAGE_GEN_REUSE_EMBEDDINGS_CREDS, not both",
+      });
+    }
+    if (!hasKey && !reuse) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["features", "imageGen", "apiKey"],
+        message: "image generation requires either an API key or reuseEmbeddingsCreds=true",
+      });
+    }
+    if (reuse && !cfg.features?.embeddings) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["features", "imageGen", "reuseEmbeddingsCreds"],
+        message: "reuseEmbeddingsCreds=true requires features.embeddings to be configured",
+      });
+    }
+    if (reuse && imageGen.baseUrl !== undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["features", "imageGen", "baseUrl"],
+        message:
+          "IMAGE_GEN_BASE_URL is ignored when reuseEmbeddingsCreds=true (the embeddings base URL is used); unset one of them",
+      });
+    }
   });
 
 export type PaprikaConfig = z.infer<typeof paprikaConfigSchema>;
 export type EmbeddingConfig = z.infer<typeof embeddingConfigSchema>;
+export type ImageGenConfig = z.infer<typeof imageGenConfigSchema>;
+
+/**
+ * Effective image-generation credentials after resolving the dedicated-key vs
+ * reuse-embeddings paths. `model` is intentionally absent — it is a
+ * `generate_photo` tool-call parameter, not server config.
+ */
+export interface ResolvedImageGenConfig {
+  readonly apiKey: string;
+  readonly baseUrl: string;
+}
+
+/**
+ * Resolve `features.imageGen` to concrete credentials, or `null` when image
+ * generation is not enabled. The schema's `.superRefine` guarantees a present
+ * block is internally consistent; this function additionally tolerates the
+ * reuse-without-embeddings case by returning `null` (defense in depth).
+ */
+export function resolveImageGenConfig(config: PaprikaConfig): ResolvedImageGenConfig | null {
+  const imageGen = config.features?.imageGen;
+  if (!imageGen) return null;
+
+  if (imageGen.reuseEmbeddingsCreds) {
+    const embeddings = config.features?.embeddings;
+    return embeddings ? { apiKey: embeddings.apiKey, baseUrl: embeddings.baseUrl } : null;
+  }
+  if (imageGen.apiKey !== undefined) {
+    return { apiKey: imageGen.apiKey, baseUrl: imageGen.baseUrl ?? DEFAULT_IMAGE_GEN_BASE_URL };
+  }
+  return null;
+}
 
 // Reads config.json from configDir. ENOENT returns ok({}). Invalid JSON and permission errors return err.
 function readConfigFile(configDir: string): Result<Record<string, unknown>, ConfigError> {
@@ -324,6 +417,7 @@ export function buildEnvOverrides(env: NodeJS.ProcessEnv): Record<string, unknow
   const logging: Record<string, unknown> = {};
   const features: Record<string, unknown> = {};
   const embeddings: Record<string, unknown> = {};
+  const imageGen: Record<string, unknown> = {};
   const oauth: Record<string, unknown> = {};
   const allowlist: Record<string, unknown> = {};
 
@@ -365,6 +459,11 @@ export function buildEnvOverrides(env: NodeJS.ProcessEnv): Record<string, unknow
   if (env["OPENAI_BASE_URL"] !== undefined) embeddings["baseUrl"] = env["OPENAI_BASE_URL"];
   if (env["EMBEDDING_MODEL"] !== undefined) embeddings["model"] = env["EMBEDDING_MODEL"];
 
+  if (env["IMAGE_GEN_API_KEY"] !== undefined) imageGen["apiKey"] = env["IMAGE_GEN_API_KEY"];
+  if (env["IMAGE_GEN_BASE_URL"] !== undefined) imageGen["baseUrl"] = env["IMAGE_GEN_BASE_URL"];
+  if (env["IMAGE_GEN_REUSE_EMBEDDINGS_CREDS"] !== undefined)
+    imageGen["reuseEmbeddingsCreds"] = env["IMAGE_GEN_REUSE_EMBEDDINGS_CREDS"];
+
   if (env["MCP_PUBLIC_URL"] !== undefined) oauth["publicUrl"] = env["MCP_PUBLIC_URL"];
   if (env["MCP_OIDC_PRESET"] !== undefined) oauth["preset"] = env["MCP_OIDC_PRESET"];
   if (env["MCP_OIDC_DISCOVERY_URL"] !== undefined) oauth["discoveryUrl"] = env["MCP_OIDC_DISCOVERY_URL"];
@@ -380,6 +479,7 @@ export function buildEnvOverrides(env: NodeJS.ProcessEnv): Record<string, unknow
   if (env["MCP_ALLOWED_SUBS"] !== undefined) allowlist["subs"] = env["MCP_ALLOWED_SUBS"];
 
   if (Object.keys(embeddings).length > 0) features["embeddings"] = embeddings;
+  if (Object.keys(imageGen).length > 0) features["imageGen"] = imageGen;
   if (Object.keys(allowlist).length > 0) oauth["allowlist"] = allowlist;
   if (Object.keys(features).length > 0) overrides["features"] = features;
   if (Object.keys(logging).length > 0) overrides["logging"] = logging;

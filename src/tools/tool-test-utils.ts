@@ -164,6 +164,7 @@ export function makeCtx(
       | "menuItemStore"
       | "photoStore"
       | "vectorStore"
+      | "photographyClient"
       | "notifier"
       | "log"
     >

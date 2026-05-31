@@ -1,10 +1,26 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 
-import type { Photo, Recipe } from "../paprika/types.js";
+import { PhotoUidSchema, type Photo, type Recipe } from "../paprika/types.js";
 import type { ServerContext } from "../types/server-context.js";
 
 /** Longest edge (px) of the recipe thumbnail Paprika stores in `recipe.photo`. */
 const THUMBNAIL_PX = 280;
+
+/** Options for {@link normalizePhoto}. */
+export interface NormalizePhotoOptions {
+  /**
+   * Cap the `full` image's longest edge to this many pixels (preserving aspect,
+   * no enlargement). Omit to keep the source resolution (the original
+   * `upload_photo` behavior — a user-supplied image is left at native size).
+   *
+   * `generate_photo` sets this because image-generation models emit wildly
+   * different native sizes (1024²–4096², and Seedream's "1K" is already 2048²);
+   * a fixed cap keeps uploads "fairly small" regardless of which model the
+   * caller picked, deterministically, rather than trusting each model's
+   * inconsistent `image_size` knob.
+   */
+  readonly maxFullEdge?: number;
+}
 
 /**
  * Normalizes arbitrary input image bytes (PNG/WEBP/GIF/JPEG/…) into the two
@@ -13,19 +29,51 @@ const THUMBNAIL_PX = 280;
  * re-encoded to JPEG because Paprika stores every photo as JPEG. `.rotate()`
  * bakes in EXIF orientation before the orientation tag is dropped.
  *
+ * By default the `full` image keeps its source resolution; pass
+ * `opts.maxFullEdge` to cap it (see {@link NormalizePhotoOptions}).
+ *
  * `sharp` is imported lazily so building the MCP server never eagerly loads its
  * native libvips binary — only a real photo upload pays that cost (keeps stdio /
  * HTTP startup fast for the common no-photo path).
  */
-export async function normalizePhoto(input: Buffer): Promise<{ thumbnail: Buffer; full: Buffer }> {
+export async function normalizePhoto(
+  input: Buffer,
+  opts?: Readonly<NormalizePhotoOptions>,
+): Promise<{ thumbnail: Buffer; full: Buffer }> {
   const { default: sharp } = await import("sharp");
-  const full = await sharp(input).rotate().jpeg({ quality: 85 }).toBuffer();
-  const thumbnail = await sharp(input)
+
+  // Decode once: `.clone()` snapshots the rotated input so the full and thumbnail
+  // pipelines share it, and `Promise.all` lets libvips encode both in parallel.
+  const base = sharp(input).rotate();
+
+  const fullPipeline = base.clone();
+  if (opts?.maxFullEdge !== undefined) {
+    fullPipeline.resize(opts.maxFullEdge, opts.maxFullEdge, { fit: "inside", withoutEnlargement: true });
+  }
+  const thumbnailPipeline = base
+    .clone()
+    .resize(THUMBNAIL_PX, THUMBNAIL_PX, { fit: "inside", withoutEnlargement: true })
+    .jpeg({ quality: 80 });
+
+  const [full, thumbnail] = await Promise.all([
+    fullPipeline.jpeg({ quality: 85 }).toBuffer(),
+    thumbnailPipeline.toBuffer(),
+  ]);
+  return { thumbnail, full };
+}
+
+/**
+ * Produce just the ~280px thumbnail JPEG. Used by `generate_photo`'s preview
+ * (attach:false) path, which only needs the thumbnail — calling this avoids the
+ * wasted full-resolution encode that {@link normalizePhoto} would also produce.
+ */
+export async function makeThumbnail(input: Buffer): Promise<Buffer> {
+  const { default: sharp } = await import("sharp");
+  return sharp(input)
     .rotate()
     .resize(THUMBNAIL_PX, THUMBNAIL_PX, { fit: "inside", withoutEnlargement: true })
     .jpeg({ quality: 80 })
     .toBuffer();
-  return { thumbnail, full };
 }
 
 /**
@@ -36,6 +84,51 @@ export async function normalizePhoto(input: Buffer): Promise<{ thumbnail: Buffer
  */
 export function sha256Hex(bytes: Buffer): string {
   return createHash("sha256").update(bytes).digest("hex").toUpperCase();
+}
+
+/**
+ * Build the Photo entity + photo-bearing recipe from already-normalized bytes,
+ * run the client's verified 3-request upload sequence, and commit locally.
+ * Returns the created Photo.
+ *
+ * `order_flag`/`name` are auto-assigned from the synced gallery (max + 1), never
+ * caller-supplied — the same convention `add_meals` uses for `order_flag`. Two
+ * UIDs are generated: a thumbnail UID (→ `recipe.photo`) and the Photo entity
+ * UID (→ `recipe.photo_large`). Shared by `upload_photo` and `generate_photo`.
+ *
+ * Callers MUST gate on `ctx.photoStore.hasSynced` first — the order_flag derives
+ * from the gallery, so attaching before the photo catalog syncs could collide.
+ */
+export async function attachPhotoToRecipe(
+  ctx: ServerContext,
+  recipe: Readonly<Recipe>,
+  thumbnail: Buffer,
+  full: Buffer,
+): Promise<Photo> {
+  const existing = ctx.photoStore.getByRecipeUid(recipe.uid);
+  const orderFlag = existing.length > 0 ? Math.max(...existing.map((p) => p.orderFlag)) + 1 : 0;
+  const photoUid = PhotoUidSchema.parse(randomUUID().toUpperCase());
+  const thumbnailUid = randomUUID().toUpperCase();
+
+  const photo: Photo = {
+    uid: photoUid,
+    recipeUid: recipe.uid,
+    filename: `${photoUid}.jpg`,
+    name: String(orderFlag + 1),
+    orderFlag,
+    hash: sha256Hex(full),
+    deleted: false,
+  };
+  const recipeWithPhoto: Recipe = {
+    ...recipe,
+    photo: `${thumbnailUid}.jpg`,
+    photoLarge: `${photoUid}.jpg`,
+    photoHash: sha256Hex(thumbnail),
+  };
+
+  await ctx.client.uploadPhoto(recipeWithPhoto, photo, thumbnail, full);
+  await commitPhotoUpload(ctx, recipeWithPhoto, photo);
+  return photo;
 }
 
 /**

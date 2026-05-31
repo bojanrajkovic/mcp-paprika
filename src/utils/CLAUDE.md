@@ -1,6 +1,6 @@
 # Cross-Cutting Utilities
 
-Last verified: 2026-05-30
+Last verified: 2026-05-31
 
 ## Purpose
 
@@ -121,15 +121,31 @@ persistence or comparison.
 
 Houses error classes, types, and small helpers that span more than one domain module.
 
-`CircuitService` is a string union — `"paprika" | "embeddings"` — naming each client that mounts cockatiel resilience. Adding a new client requires extending this union; the compile error forces a deliberate decision rather than letting typos through.
+`CircuitService` is a string union — `"paprika" | "embeddings" | "photography"` — naming each client that mounts cockatiel resilience. Adding a new client requires extending this union; the compile error forces a deliberate decision rather than letting typos through.
 
 | Class              | Extends | Carries                                            | When thrown                                                                                   |
 | ------------------ | ------- | -------------------------------------------------- | --------------------------------------------------------------------------------------------- |
 | `CircuitOpenError` | `Error` | `service`, `endpoint`, `cause: BrokenCircuitError` | Any cockatiel-backed client's breaker rejects a call (no HTTP request issued; no fake status) |
 
-Constructor: `new CircuitOpenError(service: CircuitService, endpoint: string, options?: ErrorOptions)`. The `service` argument aligns with the surrounding log component vocabulary — `"paprika"` is thrown from `PaprikaClient`, `"embeddings"` from `EmbeddingClient`. Message format: `"<service> circuit breaker is open (endpoint=<url>)"`.
+Constructor: `new CircuitOpenError(service: CircuitService, endpoint: string, options?: ErrorOptions)`. The `service` argument aligns with the surrounding log component vocabulary — `"paprika"` is thrown from `PaprikaClient`, `"embeddings"` from `EmbeddingClient`, `"photography"` from `PhotographyClient`. Message format: `"<service> circuit breaker is open (endpoint=<url>)"`.
 
 **`isNodeError(error: unknown): error is NodeJS.ErrnoException`** — type guard for any `Error` whose `code` property is set by the runtime (typical for `fs`/`net`/`child_process`). Use as `if (isNodeError(err) && err.code === "ENOENT") { ... }`. Imported by `cache/disk/base.ts`, `cache/disk/recipes.ts`, `cache/disk/root.ts`, `vector-store.ts`, and `config.ts`.
+
+### resilience.ts — Shared cockatiel retry + circuit-breaker executor
+
+Shared resilience stack for OpenAI-compatible JSON HTTP clients (`EmbeddingClient`, `PhotographyClient`). `PaprikaClient` deliberately keeps its own bespoke stack (it adds `NetworkRetryableError` + token-refresh retries on top of the same underlying behavior).
+
+| Export                    | Signature / Description                                                                                                                                                                      |
+| ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `TransientHTTPError`      | `class(status: number)` — internal marker thrown inside a client's request function for 429/5xx; matched by cockatiel `handleType`; never escapes to callers                                 |
+| `RETRYABLE_STATUSES`      | `ReadonlySet<number>` — `{429, 500, 502, 503}` — HTTP statuses that trigger a retry                                                                                                          |
+| `ResilienceOptions`       | `interface { service, logLabel, log?, maxAttempts?, initialDelayMs?, maxDelayMs?, breakerThreshold?, halfOpenAfterMs? }` — construction options                                              |
+| `ResilientExecutor`       | `interface { execute<T>(endpoint, fn) }` — per-instance executor returned by `createResilientExecutor`                                                                                       |
+| `createResilientExecutor` | `(options: ResilienceOptions) => ResilientExecutor` — builds a per-instance breaker-wraps-retry stack; `BrokenCircuitError` is caught and re-thrown as `CircuitOpenError(service, endpoint)` |
+
+**Defaults:** `maxAttempts: 3` (3 retries → 4 total attempts), `initialDelayMs: 500`, `maxDelayMs: 10_000`, `breakerThreshold: 5` (consecutive failures), `halfOpenAfterMs: 30_000`. Log events: retry hook → `warn`, giveUp hook → `error`, breaker open → `warn`, reset/half-open → `info`.
+
+**Invariant:** Per-instance policies — no shared state between instances, so a breaker tripping in one client (or test) never leaks into another. Leaf module (only imports from `./log.js` and `./errors.js`).
 
 ### config.ts — Application configuration loading
 
@@ -143,10 +159,12 @@ startup cost.
 | `loadConfig()`        | `Result<PaprikaConfig, ConfigError>`                           |
 | `paprikaConfigSchema` | Zod schema used for validation; defines canonical config shape |
 
-| Type              | Description                                                                                     |
-| ----------------- | ----------------------------------------------------------------------------------------------- |
-| `PaprikaConfig`   | `{ paprika, sync, transport, http, logging, features?, oauth? }` — validated application config |
-| `EmbeddingConfig` | `{ apiKey, baseUrl, model }` — embedding provider config                                        |
+| Type                     | Description                                                                                                                         |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `PaprikaConfig`          | `{ paprika, sync, transport, http, logging, features?, oauth? }` — validated application config                                     |
+| `EmbeddingConfig`        | `{ apiKey, baseUrl, model }` — embedding provider config                                                                            |
+| `ImageGenConfig`         | `z.infer<typeof imageGenConfigSchema>` — raw validated image-gen config `{ apiKey?, baseUrl?, reuseEmbeddingsCreds }` (pre-resolve) |
+| `ResolvedImageGenConfig` | `interface { apiKey: string, baseUrl: string }` — concrete credentials after resolving the reuseEmbeddingsCreds path                |
 
 **`sync` block** (`paprikaConfigSchema.sync`):
 
@@ -161,6 +179,29 @@ sync: {
 ```
 
 All three are `durationField`s except `enabled`. `pendingWriteTtl` is consumed by `buildAppContext` and passed to both `new RecipeStore({ pendingWriteTtlMs })` and `new PantryStore({ pendingWriteTtlMs })`.
+
+**`features.imageGen` block** (`paprikaConfigSchema.features.imageGen` — optional):
+
+```
+features.imageGen: {
+  apiKey?:                string   // Dedicated OpenRouter API key for image generation
+  baseUrl?:               string   // Base URL (default "https://openrouter.ai/api/v1")
+  reuseEmbeddingsCreds:   boolean  // When true, borrow features.embeddings.{apiKey,baseUrl}
+                                   // (the common single-account setup); default false
+}
+```
+
+A `.superRefine` enforces exactly-one-of: `apiKey` XOR `reuseEmbeddingsCreds: true` (both → validation error; neither → validation error). `reuseEmbeddingsCreds: true` also requires `features.embeddings` to be configured. The model is NOT in config — it is chosen per `generate_photo` tool call.
+
+**`resolveImageGenConfig(config): ResolvedImageGenConfig | null`** — exported function that resolves `features.imageGen` to concrete `{ apiKey, baseUrl }`, or returns `null` when image generation is unconfigured. The `reuseEmbeddingsCreds` path reads `features.embeddings.{apiKey,baseUrl}`; `baseUrl` defaults to `"https://openrouter.ai/api/v1"` on both paths. Called once by `buildAppContext`.
+
+**Image-gen env-var mapping table:**
+
+| Env var                            | Config path                              |
+| ---------------------------------- | ---------------------------------------- |
+| `IMAGE_GEN_API_KEY`                | `features.imageGen.apiKey`               |
+| `IMAGE_GEN_BASE_URL`               | `features.imageGen.baseUrl`              |
+| `IMAGE_GEN_REUSE_EMBEDDINGS_CREDS` | `features.imageGen.reuseEmbeddingsCreds` |
 
 **`http` block** (`paprikaConfigSchema.http`):
 
@@ -278,7 +319,8 @@ oauth: {
 
 ## Dependencies
 
-- **Leaf modules (no internal imports):** `xdg.ts` (uses `env-paths`), `duration.ts` (uses `luxon`, `parse-duration`, `neverthrow`), `dates.ts` (uses `luxon`)
+- **Leaf modules (no internal imports):** `xdg.ts` (uses `env-paths`), `duration.ts` (uses `luxon`, `parse-duration`, `neverthrow`), `dates.ts` (uses `luxon`), `errors.ts`
+- **Near-leaf modules (utils-internal only):** `resilience.ts` imports `./log.js` (`SILENT_LOG`) and `./errors.js` (`CircuitOpenError`, `CircuitService`); also uses `cockatiel` and `pino` types
 - **Non-leaf modules (utils-internal):** `log.ts` imports from `../server/notifier.js` (for `Notifier` type) and `./xdg.js` (for `getLogDir()`); also uses `pino`, `pino-pretty`, `node:stream`, `node:fs`, `node:path`
 - **Non-leaf modules:** `config.ts` imports from `xdg.ts` and `duration.ts`; also uses `dotenv`, `zod`, `neverthrow`
-- **Used by:** All other `src/` modules may import from `src/utils/`
+- **Used by:** All other `src/` modules may import from `src/utils/`; `resilience.ts` is used by `features/embeddings.ts` and `features/photography.ts`

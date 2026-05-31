@@ -227,6 +227,7 @@ async function main(): Promise<void> {
     menuItemStore,
     photoStore,
     vectorStore: null, // discover tool intentionally not registered (no embeddings in e2e)
+    photographyClient: null, // generate_photo intentionally not registered (no imageGen in e2e)
     notifier,
     auth: null,
     log,
