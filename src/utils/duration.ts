@@ -42,7 +42,13 @@ function colonParser(input: string): Result<Duration, DurationParseError> | null
 }
 
 function humanAndIsoParser(input: string): Result<Duration, DurationParseError> | null {
-  const ms = parseDurationLib(input);
+  // parse-duration reads a number with a detached "+" (e.g. "5+ hours") as a bare
+  // millisecond count — "5" → 5ms — silently producing a wildly-wrong tiny value
+  // instead of "5 hours". Recipe time fields are full of these ("3+ hours",
+  // "10 min (plus 4+ hours rest)"). Strip a "+" that immediately follows a number
+  // so the duration reads correctly (#162).
+  const normalized = input.replace(/(\d)\s*\+/g, "$1");
+  const ms = parseDurationLib(normalized);
   if (ms === null || ms === undefined) {
     return null;
   }

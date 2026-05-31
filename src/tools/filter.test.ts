@@ -304,5 +304,63 @@ describe("p2-discovery-tools: filter_by_time tool", () => {
       expect(result.isError).toBeFalsy();
       expect(text.toLowerCase()).toContain("invalid");
     });
+
+    it("p2-discovery-tools.AC3.9: a genuinely-unparseable-time recipe is kept but flagged 'Time unverified' (#162, advisory)", async () => {
+      const store = new RecipeStore();
+      store.load(
+        [
+          makeRecipe({ name: "CleanRecipe", totalTime: "20 min" }),
+          makeRecipe({ name: "VagueRecipe", totalTime: "overnight" }),
+        ],
+        [],
+      );
+      const { server, callTool } = makeTestServer();
+      registerFilterTools(server, makeCtx(store, server));
+
+      const result = await callTool("filter_by_time", { maxTotalTime: "30 minutes", limit: 20 });
+      const text = getText(result);
+
+      // Lenient inclusion preserved (AC5.5): both are returned, the unparseable one not hidden.
+      expect(text).toContain("CleanRecipe");
+      expect(text).toContain("VagueRecipe");
+      // But only the unparseable one carries the advisory flag.
+      expect(text).toContain("Time unverified");
+      expect(text).toContain("total time");
+      expect((text.match(/Time unverified/g) ?? []).length).toBe(1);
+    });
+
+    it("p2-discovery-tools.AC3.10: recipes whose times all parse carry no advisory flag", async () => {
+      const store = new RecipeStore();
+      store.load([makeRecipe({ name: "AllClean", totalTime: "20 min" })], []);
+      const { server, callTool } = makeTestServer();
+      registerFilterTools(server, makeCtx(store, server));
+
+      const result = await callTool("filter_by_time", { maxTotalTime: "30 minutes", limit: 20 });
+      const text = getText(result);
+
+      expect(text).toContain("AllClean");
+      expect(text).not.toContain("Time unverified");
+    });
+
+    it("p2-discovery-tools.AC3.11: a '+'-suffixed time ('5+ hours') now parses and is correctly excluded (#162)", async () => {
+      const store = new RecipeStore();
+      store.load(
+        [
+          makeRecipe({ name: "QuickReal", totalTime: "20 min" }),
+          makeRecipe({ name: "LongPlus", totalTime: "5+ hours" }),
+        ],
+        [],
+      );
+      const { server, callTool } = makeTestServer();
+      registerFilterTools(server, makeCtx(store, server));
+
+      const result = await callTool("filter_by_time", { maxTotalTime: "30 minutes", limit: 20 });
+      const text = getText(result);
+
+      // "5+ hours" now reads as 5 hours → excluded; no longer leaks (and not just flagged).
+      expect(text).toContain("QuickReal");
+      expect(text).not.toContain("LongPlus");
+      expect(text).not.toContain("Time unverified");
+    });
   });
 });
