@@ -5,6 +5,7 @@ import { z } from "zod";
 import { RecipeUidSchema, type Photo } from "../paprika/types.js";
 import type { ServerContext } from "../types/server-context.js";
 import { toMessage } from "../utils/log.js";
+import { CircuitOpenError } from "../utils/errors.js";
 import {
   type PhotographyClient,
   type ReferenceImage,
@@ -13,14 +14,13 @@ import {
   PHOTO_ASPECT_RATIOS,
   DEFAULT_PHOTO_MODEL,
 } from "../features/photography.js";
+import { PhotographyError, PhotographyAPIError } from "../features/photography-errors.js";
 import { coldStartGuard, textResult } from "./helpers.js";
-import { attachPhotoToRecipe, normalizePhoto } from "./photo-helpers.js";
+import { attachPhotoToRecipe, normalizePhoto, makeThumbnail } from "./photo-helpers.js";
+import { fetchImageBytes } from "./photo-fetch.js";
 
 /** Longest edge (px) we cap generated `full` images to before upload (see normalizePhoto). */
 const GENERATED_MAX_FULL_EDGE = 2048;
-/** Reference-image (restyle) download cap. */
-const MAX_REFERENCE_BYTES = 10 * 1024 * 1024;
-const REFERENCE_FETCH_TIMEOUT_MS = 15_000;
 
 export const generatePhotoInputSchema = z.object({
   recipe_uid: RecipeUidSchema.describe("UID of the recipe to generate a photo for."),
@@ -60,28 +60,6 @@ export const generatePhotoInputSchema = z.object({
     .describe("When true (default), attach the generated image to the recipe. When false, return a preview only."),
 });
 
-/** Fetch the recipe's current photo bytes for image-to-image restyling. */
-async function fetchReferenceImage(url: string): Promise<{ image: ReferenceImage } | { error: string }> {
-  let res: Response;
-  try {
-    res = await fetch(url, { redirect: "error", signal: AbortSignal.timeout(REFERENCE_FETCH_TIMEOUT_MS) });
-  } catch (e) {
-    return { error: `Failed to download the existing photo to restyle: ${toMessage(e)}` };
-  }
-  if (!res.ok) return { error: `Failed to download the existing photo to restyle: HTTP ${res.status.toString()}` };
-
-  const declared = res.headers.get("content-length");
-  if (declared !== null && Number(declared) > MAX_REFERENCE_BYTES) {
-    return { error: "The existing photo is too large to restyle." };
-  }
-  const data = Buffer.from(await res.arrayBuffer());
-  if (data.length === 0) return { error: "The existing photo was empty." };
-  if (data.length > MAX_REFERENCE_BYTES) return { error: "The existing photo is too large to restyle." };
-
-  const mimeType = res.headers.get("content-type")?.split(";")[0]?.trim() ?? "image/jpeg";
-  return { image: { data, mimeType } };
-}
-
 export function registerGeneratePhotoTool(
   server: McpServer,
   ctx: ServerContext,
@@ -118,14 +96,29 @@ export function registerGeneratePhotoTool(
           // can reach — chat-uploaded bytes never arrive at an MCP server).
           let referenceImage: ReferenceImage | undefined;
           if (restyle) {
-            if (recipe.photoUrl === null || recipe.photoUrl === "") {
+            // The local store's photoUrl can lag a just-attached photo (the server
+            // assigns photo_url, which arrives on the next sync). Re-fetch the
+            // authoritative recipe so a generate→restyle chain uses the new photo;
+            // fall back to the cached value if the lookup fails.
+            let photoUrl = recipe.photoUrl;
+            try {
+              photoUrl = (await ctx.client.getRecipe(args.recipe_uid)).photoUrl;
+            } catch (error) {
+              log.warn(
+                { err: error, recipe_uid: args.recipe_uid },
+                "restyle: recipe re-fetch failed; using cached photoUrl",
+              );
+            }
+            if (photoUrl === null || photoUrl === "") {
               return textResult(
                 `"${recipe.name}" has no photo to restyle. Generate one first (restyle_existing:false), or use upload_photo.`,
               );
             }
-            const ref = await fetchReferenceImage(recipe.photoUrl);
-            if ("error" in ref) return textResult(ref.error);
-            referenceImage = ref.image;
+            // SSRF-safe fetch (same hardened path as upload_photo) — photoUrl is
+            // synced data, not inherently trusted to point only at public hosts.
+            const ref = await fetchImageBytes(photoUrl);
+            if ("error" in ref) return textResult(`Couldn't fetch the existing photo to restyle: ${ref.error}`);
+            referenceImage = { data: ref.bytes, mimeType: ref.contentType ?? "image/jpeg" };
           }
 
           const categoryNames = ctx.categoryStore.resolveNames(recipe.categories);
@@ -141,24 +134,40 @@ export function registerGeneratePhotoTool(
             });
           } catch (error) {
             log.error({ err: error, recipe_uid: args.recipe_uid, model }, "image generation failed");
+            if (error instanceof CircuitOpenError) {
+              return textResult(
+                "Image generation is temporarily unavailable — the provider circuit opened after repeated failures. Try again in a minute.",
+              );
+            }
+            if (error instanceof PhotographyAPIError) {
+              if (error.status === 401 || error.status === 403) {
+                return textResult(
+                  "Image generation failed: the provider rejected the credentials. Check IMAGE_GEN_API_KEY (or the reused OpenRouter key).",
+                );
+              }
+              return textResult(`Image generation failed (HTTP ${error.status.toString()}): ${toMessage(error)}`);
+            }
+            if (error instanceof PhotographyError) {
+              return textResult(
+                `The model returned no image (a refusal or text-only reply) — try a different model or a clearer style hint. (${toMessage(error)})`,
+              );
+            }
             return textResult(`Failed to generate photo: ${toMessage(error)}`);
-          }
-
-          let thumbnail: Buffer;
-          let full: Buffer;
-          try {
-            ({ thumbnail, full } = await normalizePhoto(generated.bytes, { maxFullEdge: GENERATED_MAX_FULL_EDGE }));
-          } catch (error) {
-            log.error({ err: error, recipe_uid: args.recipe_uid }, "normalizePhoto failed");
-            return textResult(`Generated an image but failed to process it: ${toMessage(error)}`);
           }
 
           const costSuffix = generated.costUsd !== null ? ` (cost: $${generated.costUsd.toFixed(4)})` : "";
 
-          // Preview-only: return the lightweight ~280px thumbnail inline (not the
-          // full image — keeps the tool result small) without persisting. The
-          // saved version (attach:true) is the full-resolution image.
+          // Preview-only: return just the lightweight ~280px thumbnail inline (no
+          // wasted full-resolution encode) without persisting. The saved version
+          // (attach:true) is the full-resolution image.
           if (!attach) {
+            let thumbnail: Buffer;
+            try {
+              thumbnail = await makeThumbnail(generated.bytes);
+            } catch (error) {
+              log.error({ err: error, recipe_uid: args.recipe_uid }, "makeThumbnail failed");
+              return textResult(`Generated an image but failed to process it: ${toMessage(error)}`);
+            }
             return {
               content: [
                 {
@@ -168,6 +177,16 @@ export function registerGeneratePhotoTool(
                 { type: "image", data: thumbnail.toString("base64"), mimeType: "image/jpeg" },
               ],
             };
+          }
+
+          // Attach path: normalize to the 2048px-capped full image + thumbnail.
+          let thumbnail: Buffer;
+          let full: Buffer;
+          try {
+            ({ thumbnail, full } = await normalizePhoto(generated.bytes, { maxFullEdge: GENERATED_MAX_FULL_EDGE }));
+          } catch (error) {
+            log.error({ err: error, recipe_uid: args.recipe_uid }, "normalizePhoto failed");
+            return textResult(`Generated an image but failed to process it: ${toMessage(error)}`);
           }
 
           let photo: Photo;

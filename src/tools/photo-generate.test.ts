@@ -9,6 +9,8 @@ import { RecipeUidSchema, type Recipe } from "../paprika/types.js";
 import { makeCtx, makeTestServer, getText } from "./tool-test-utils.js";
 import { registerGeneratePhotoTool } from "./photo-generate.js";
 import type { PhotographyClient, GeneratedPhoto, GeneratePhotoOptions } from "../features/photography.js";
+import { CircuitOpenError } from "../utils/errors.js";
+import { PhotographyError, PhotographyAPIError } from "../features/photography-errors.js";
 
 const RECIPE_UID = RecipeUidSchema.parse("recipe-1");
 
@@ -30,8 +32,9 @@ function setup(opts?: {
   generated?: Partial<GeneratedPhoto>;
   generate?: ReturnType<typeof vi.fn>;
 }) {
+  const recipe = opts?.recipe ?? makeRecipe({ uid: RECIPE_UID, name: "Test Recipe" });
   const store = new RecipeStore();
-  store.load([opts?.recipe ?? makeRecipe({ uid: RECIPE_UID, name: "Test Recipe" })]);
+  store.load([recipe]);
   const photoStore = new PhotoStore();
   // load() flips hasSynced=true; skip it to simulate the photo catalog not yet synced.
   if (opts?.synced !== false) photoStore.load([]);
@@ -45,11 +48,13 @@ function setup(opts?: {
   };
   const generate = opts?.generate ?? vi.fn().mockResolvedValue(generated);
   const uploadPhoto = vi.fn().mockResolvedValue(undefined);
+  // restyle re-fetches authoritative recipe state for the freshest photoUrl.
+  const getRecipe = vi.fn().mockResolvedValue(recipe);
 
   const { server, callTool } = makeTestServer();
   const ctx = makeCtx(store, server, {
     photoStore,
-    client: fromAny({ uploadPhoto, notifySync: vi.fn().mockResolvedValue(undefined) }),
+    client: fromAny({ uploadPhoto, getRecipe, notifySync: vi.fn().mockResolvedValue(undefined) }),
     cache: fromAny({
       recipes: { put: vi.fn().mockResolvedValue(undefined) },
       photos: { put: vi.fn().mockResolvedValue(undefined) },
@@ -58,7 +63,7 @@ function setup(opts?: {
   });
   const photographyClient = fromAny({ generate }) as PhotographyClient;
   registerGeneratePhotoTool(server, ctx, photographyClient);
-  return { callTool, generate, uploadPhoto };
+  return { callTool, generate, uploadPhoto, getRecipe };
 }
 
 function lastOptions(generate: ReturnType<typeof vi.fn>): GeneratePhotoOptions {
@@ -148,26 +153,87 @@ describe("generate_photo", () => {
     expect(generate).not.toHaveBeenCalled();
   });
 
-  it("restyle_existing fetches the current photo and passes it as a reference image", async () => {
+  it("restyle_existing re-fetches the authoritative recipe and passes its photo as a reference image", async () => {
     const recipe = makeRecipe({ uid: RECIPE_UID, name: "Test Recipe", photoUrl: "https://photos.example/p.jpg" });
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(imageBytes, { status: 200, headers: { "content-type": "image/png" } }) as unknown as Response,
     );
-    const { callTool, generate } = setup({ recipe });
+    const { callTool, generate, getRecipe } = setup({ recipe });
 
     await callTool("generate_photo", { recipe_uid: RECIPE_UID, restyle_existing: true });
 
+    expect(getRecipe).toHaveBeenCalledWith(RECIPE_UID);
     const opts = lastOptions(generate);
     expect(opts.referenceImage).toBeDefined();
     expect(opts.referenceImage?.mimeType).toBe("image/png");
     expect(opts.referenceImage?.data.equals(imageBytes)).toBe(true);
   });
 
-  it("surfaces a generation failure as a tool error", async () => {
+  it("restyle uses the re-fetched photoUrl even when the cached recipe has none (just-attached photo)", async () => {
+    // Store has no photoUrl yet (sync lag), but the authoritative re-fetch returns one.
+    const cached = makeRecipe({ uid: RECIPE_UID, name: "Test Recipe", photoUrl: null });
+    const fresh = makeRecipe({ uid: RECIPE_UID, name: "Test Recipe", photoUrl: "https://photos.example/new.jpg" });
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(imageBytes, { status: 200, headers: { "content-type": "image/jpeg" } }) as unknown as Response,
+    );
+    const { server, callTool } = makeTestServer();
+    const store = new RecipeStore();
+    store.load([cached]);
+    const photoStore = new PhotoStore();
+    photoStore.load([]);
+    const generate = vi.fn().mockResolvedValue({
+      bytes: imageBytes,
+      mimeType: "image/png",
+      costUsd: 0.04,
+      servedModel: "x",
+    });
+    const ctx = makeCtx(store, server, {
+      photoStore,
+      client: fromAny({
+        uploadPhoto: vi.fn().mockResolvedValue(undefined),
+        getRecipe: vi.fn().mockResolvedValue(fresh),
+        notifySync: vi.fn().mockResolvedValue(undefined),
+      }),
+      cache: fromAny({
+        recipes: { put: vi.fn().mockResolvedValue(undefined) },
+        photos: { put: vi.fn().mockResolvedValue(undefined) },
+        flush: vi.fn().mockResolvedValue(undefined),
+      }),
+    });
+    registerGeneratePhotoTool(server, ctx, fromAny({ generate }) as PhotographyClient);
+
+    const result = await callTool("generate_photo", { recipe_uid: RECIPE_UID, restyle_existing: true });
+
+    expect(getText(result)).not.toContain("no photo to restyle");
+    expect(lastOptions(generate).referenceImage).toBeDefined();
+  });
+
+  it("surfaces a generic generation failure as a tool error", async () => {
     const generate = vi.fn().mockRejectedValue(new Error("provider exploded"));
     const { callTool, uploadPhoto } = setup({ generate });
     const result = await callTool("generate_photo", { recipe_uid: RECIPE_UID });
     expect(getText(result)).toContain("Failed to generate photo");
     expect(uploadPhoto).not.toHaveBeenCalled();
+  });
+
+  it("a tripped breaker surfaces a 'temporarily unavailable' message", async () => {
+    const generate = vi.fn().mockRejectedValue(new CircuitOpenError("photography", "https://x/chat/completions"));
+    const { callTool } = setup({ generate });
+    const result = await callTool("generate_photo", { recipe_uid: RECIPE_UID });
+    expect(getText(result)).toContain("temporarily unavailable");
+  });
+
+  it("a 401 from the provider yields a credentials hint", async () => {
+    const generate = vi.fn().mockRejectedValue(new PhotographyAPIError("bad key", 401, "https://x/chat/completions"));
+    const { callTool } = setup({ generate });
+    const result = await callTool("generate_photo", { recipe_uid: RECIPE_UID });
+    expect(getText(result)).toContain("IMAGE_GEN_API_KEY");
+  });
+
+  it("a no-image refusal yields a model/style hint", async () => {
+    const generate = vi.fn().mockRejectedValue(new PhotographyError("returned no image"));
+    const { callTool } = setup({ generate });
+    const result = await callTool("generate_photo", { recipe_uid: RECIPE_UID });
+    expect(getText(result)).toContain("no image");
   });
 });
