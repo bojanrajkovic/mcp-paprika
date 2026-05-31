@@ -42,18 +42,38 @@ export async function normalizePhoto(
 ): Promise<{ thumbnail: Buffer; full: Buffer }> {
   const { default: sharp } = await import("sharp");
 
-  const fullPipeline = sharp(input).rotate();
+  // Decode once: `.clone()` snapshots the rotated input so the full and thumbnail
+  // pipelines share it, and `Promise.all` lets libvips encode both in parallel.
+  const base = sharp(input).rotate();
+
+  const fullPipeline = base.clone();
   if (opts?.maxFullEdge !== undefined) {
     fullPipeline.resize(opts.maxFullEdge, opts.maxFullEdge, { fit: "inside", withoutEnlargement: true });
   }
-  const full = await fullPipeline.jpeg({ quality: 85 }).toBuffer();
+  const thumbnailPipeline = base
+    .clone()
+    .resize(THUMBNAIL_PX, THUMBNAIL_PX, { fit: "inside", withoutEnlargement: true })
+    .jpeg({ quality: 80 });
 
-  const thumbnail = await sharp(input)
+  const [full, thumbnail] = await Promise.all([
+    fullPipeline.jpeg({ quality: 85 }).toBuffer(),
+    thumbnailPipeline.toBuffer(),
+  ]);
+  return { thumbnail, full };
+}
+
+/**
+ * Produce just the ~280px thumbnail JPEG. Used by `generate_photo`'s preview
+ * (attach:false) path, which only needs the thumbnail — calling this avoids the
+ * wasted full-resolution encode that {@link normalizePhoto} would also produce.
+ */
+export async function makeThumbnail(input: Buffer): Promise<Buffer> {
+  const { default: sharp } = await import("sharp");
+  return sharp(input)
     .rotate()
     .resize(THUMBNAIL_PX, THUMBNAIL_PX, { fit: "inside", withoutEnlargement: true })
     .jpeg({ quality: 80 })
     .toBuffer();
-  return { thumbnail, full };
 }
 
 /**
