@@ -119,7 +119,7 @@ Reads `config.sync.pendingWriteTtl` and threads it as `pendingWriteTtlMs` into `
 buildMcpServer(app: AppContext): McpServer
 ```
 
-Per-session builder. Constructs a fresh `McpServer`, wraps `app` into a `SessionContext` by adding the server reference, and registers all 41 unconditional tools plus the recipe, grocery-list, and menu resource families. `registerDiscoverTool` is registered only when `app.vectorStore !== null` (semantic search is opt-in via config).
+Per-session builder. Constructs a fresh `McpServer`, wraps `app` into a `SessionContext` by adding the server reference, and registers all 43 unconditional tools plus the recipe, grocery-list, and menu resource families. `registerDiscoverTool` is registered only when `app.vectorStore !== null` (semantic search is opt-in via config).
 
 **Called once for stdio; called once per session for HTTP** (Phase 3). Tool registration is pure — each `registerXxxTool` only closes over the per-session `SessionContext` and calls `server.registerTool(...)`. There is no module-level mutable state, so registering the same tool name on N independent server instances is safe.
 
