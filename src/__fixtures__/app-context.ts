@@ -45,6 +45,7 @@ export function makeAppContext(overrides: Partial<AppContext> = {}): AppContext 
     menuItemStore: new MenuItemStore(),
     photoStore: new PhotoStore(),
     vectorStore: null,
+    photographyClient: null,
     notifier: {
       resourceListChanged: () => {},
       loggingMessage: async () => {},

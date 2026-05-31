@@ -32,17 +32,17 @@ import { PhotographyError, PhotographyAPIError } from "./photography-errors.js";
  * OpenRouter — callers wanting one should open an issue rather than passing a
  * raw slug, so the curated set stays small and the modality handling stays correct.
  */
-const MODEL_SLUGS = {
+/** Ordered curated model aliases — a tuple so it can seed the tool's `z.enum`. */
+export const PHOTO_MODELS = ["seedream", "nano-banana", "nano-banana-2", "gpt-image"] as const;
+
+export type PhotoModel = (typeof PHOTO_MODELS)[number];
+
+const MODEL_SLUGS: Record<PhotoModel, string> = {
   seedream: "bytedance-seed/seedream-4.5",
   "nano-banana": "google/gemini-2.5-flash-image",
   "nano-banana-2": "google/gemini-3.1-flash-image-preview",
   "gpt-image": "openai/gpt-5.4-image-2",
-} as const;
-
-export type PhotoModel = keyof typeof MODEL_SLUGS;
-
-/** Ordered list of the curated model aliases (for the tool's input enum). */
-export const PHOTO_MODELS: ReadonlyArray<PhotoModel> = Object.keys(MODEL_SLUGS) as Array<PhotoModel>;
+};
 
 /** Default model: cheap, fast, strong food realism, flat per-image cost. */
 export const DEFAULT_PHOTO_MODEL: PhotoModel = "seedream";

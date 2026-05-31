@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import { lookup as dnsLookup } from "node:dns";
 import { isIP, type LookupFunction } from "node:net";
 
@@ -8,11 +7,11 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 
-import { PhotoUidSchema, RecipeUidSchema, type Photo, type Recipe } from "../paprika/types.js";
+import { PhotoUidSchema, RecipeUidSchema, type Photo } from "../paprika/types.js";
 import type { ServerContext } from "../types/server-context.js";
 import { toMessage } from "../utils/log.js";
 import { coldStartGuard, textResult } from "./helpers.js";
-import { commitPhotoDelete, commitPhotoUpload, normalizePhoto, sha256Hex } from "./photo-helpers.js";
+import { attachPhotoToRecipe, commitPhotoDelete, normalizePhoto } from "./photo-helpers.js";
 
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 const FETCH_TIMEOUT_MS = 15_000;
@@ -219,31 +218,9 @@ export function registerUploadPhotoTool(server: McpServer, ctx: ServerContext): 
             return textResult(`Failed to process image: ${toMessage(error)}`);
           }
 
-          // order_flag / name auto-assigned from the synced gallery (max + 1), never caller-supplied —
-          // same convention as add_meals never exposing order_flag. Staleness is cosmetic gallery order.
-          const existing = ctx.photoStore.getByRecipeUid(args.recipe_uid);
-          const orderFlag = existing.length > 0 ? Math.max(...existing.map((p) => p.orderFlag)) + 1 : 0;
-          const photoUid = PhotoUidSchema.parse(randomUUID().toUpperCase());
-          const thumbnailUid = randomUUID().toUpperCase();
-          const photo: Photo = {
-            uid: photoUid,
-            recipeUid: args.recipe_uid,
-            filename: `${photoUid}.jpg`,
-            name: String(orderFlag + 1),
-            orderFlag,
-            hash: sha256Hex(full),
-            deleted: false,
-          };
-          const recipeWithPhoto: Recipe = {
-            ...recipe,
-            photo: `${thumbnailUid}.jpg`,
-            photoLarge: `${photoUid}.jpg`,
-            photoHash: sha256Hex(thumbnail),
-          };
-
+          let photo: Photo;
           try {
-            await ctx.client.uploadPhoto(recipeWithPhoto, photo, thumbnail, full);
-            await commitPhotoUpload(ctx, recipeWithPhoto, photo);
+            photo = await attachPhotoToRecipe(ctx, recipe, thumbnail, full);
           } catch (error) {
             log.error({ err: error, recipe_uid: args.recipe_uid }, "uploadPhoto failed");
             return textResult(`Failed to upload photo: ${toMessage(error)}`);
