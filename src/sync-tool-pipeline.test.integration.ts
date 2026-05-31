@@ -117,8 +117,11 @@ describe("Sync → Tool Pipeline Integration", () => {
 
       // Setup test server and register tools
       const testServer = makeTestServer();
-      registerSearchTool(testServer.server, makeCtx(store, testServer.server));
-      registerReadTool(testServer.server, makeCtx(store, testServer.server));
+      registerSearchTool(
+        testServer.server,
+        makeCtx(store, testServer.server, { categoryStore: context.categoryStore }),
+      );
+      registerReadTool(testServer.server, makeCtx(store, testServer.server, { categoryStore: context.categoryStore }));
 
       // Search tool should return synced recipes
       const searchResult = await testServer.callTool("search_recipes", {
@@ -210,7 +213,10 @@ describe("Sync → Tool Pipeline Integration", () => {
 
       // Tools should find both recipes
       const testServer = makeTestServer();
-      registerSearchTool(testServer.server, makeCtx(store, testServer.server));
+      registerSearchTool(
+        testServer.server,
+        makeCtx(store, testServer.server, { categoryStore: context.categoryStore }),
+      );
 
       const searchResult = await testServer.callTool("search_recipes", {
         query: "salad",
@@ -277,7 +283,10 @@ describe("Sync → Tool Pipeline Integration", () => {
 
       // Search should not find the deleted recipe
       const testServer = makeTestServer();
-      registerSearchTool(testServer.server, makeCtx(store, testServer.server));
+      registerSearchTool(
+        testServer.server,
+        makeCtx(store, testServer.server, { categoryStore: context.categoryStore }),
+      );
 
       const searchResult = await testServer.callTool("search_recipes", {
         query: "salad",
@@ -460,7 +469,10 @@ describe("Sync → Tool Pipeline Integration", () => {
 
       // Tool should reflect the updated name
       const testServer = makeTestServer();
-      registerSearchTool(testServer.server, makeCtx(store, testServer.server));
+      registerSearchTool(
+        testServer.server,
+        makeCtx(store, testServer.server, { categoryStore: context.categoryStore }),
+      );
 
       const searchResult = await testServer.callTool("search_recipes", {
         query: "updated",

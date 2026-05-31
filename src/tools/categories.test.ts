@@ -118,16 +118,29 @@ describe("p2-discovery-tools: list_categories tool", () => {
 
     it("p2-discovery-tools.AC4.5: store with recipes but no categories returns empty message", async () => {
       const store = new RecipeStore();
-      // Load recipes but pass empty categories array
       store.load([makeRecipe({ categories: [] as Array<CategoryUid> })]);
       const { server, callTool } = makeTestServer();
-      registerCategoryTools(server, makeCtx(store, server));
+      const ctx = makeCtx(store, server);
+      ctx.categoryStore.load([]); // synced, but empty catalog
+      registerCategoryTools(server, ctx);
 
       const result = await callTool("list_categories", {});
       const text = getText(result);
 
       expect(result.isError).toBeFalsy();
       expect(text.toLowerCase()).toContain("no categories");
+    });
+
+    it("p2-discovery-tools.AC4.6: recipe store synced but category catalog not yet synced returns a wait hint", async () => {
+      const store = new RecipeStore();
+      store.load([makeRecipe({ categories: [] as Array<CategoryUid> })]);
+      const { server, callTool } = makeTestServer();
+      // categoryStore intentionally NOT loaded → hasSynced === false
+      registerCategoryTools(server, makeCtx(store, server));
+
+      const result = await callTool("list_categories", {});
+
+      expect(getText(result).toLowerCase()).toContain("still syncing");
     });
   });
 });

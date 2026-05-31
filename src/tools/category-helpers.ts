@@ -1,5 +1,22 @@
+import { ok, err, type Result } from "neverthrow";
 import type { Category, CategoryUid, Recipe } from "../paprika/types.js";
 import type { ServerContext } from "../types/server-context.js";
+import { coldStartGuard, textResult } from "./helpers.js";
+
+/**
+ * Readiness gate for every category tool. Composes `coldStartGuard` (recipe
+ * store synced — `list_categories` counts recipes per category, and
+ * `delete_category` scans recipes for references) with the category catalog's
+ * own `hasSynced`. Mirrors the exported `aisleStartGuard`/`mealStartGuard`
+ * pattern: returns a `Result<void, CallToolResult>` consumed via `.match()`.
+ */
+export function categoryStartGuard(ctx: ServerContext): Result<void, ReturnType<typeof textResult>> {
+  return coldStartGuard(ctx).andThen(() =>
+    ctx.categoryStore.hasSynced
+      ? ok(undefined)
+      : err(textResult("The category catalog is still syncing; try again in a moment.")),
+  );
+}
 
 /**
  * Persists a category create/rename/re-parent locally after the client POST.

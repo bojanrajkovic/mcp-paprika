@@ -1,7 +1,8 @@
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { Category } from "../paprika/types.js";
-import { coldStartGuard, textResult } from "./helpers.js";
+import { textResult } from "./helpers.js";
+import { categoryStartGuard } from "./category-helpers.js";
 import type { ServerContext } from "../types/server-context.js";
 
 export function registerCategoryTools(server: McpServer, ctx: ServerContext): void {
@@ -15,7 +16,7 @@ export function registerCategoryTools(server: McpServer, ctx: ServerContext): vo
     },
     async (_args) => {
       log.info({ tool: "list_categories" }, "tool invoked");
-      return coldStartGuard(ctx).match(
+      return categoryStartGuard(ctx).match(
         async (): Promise<CallToolResult> => {
           const categories = ctx.categoryStore.getAll();
           if (categories.length === 0) {
