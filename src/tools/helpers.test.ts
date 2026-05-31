@@ -16,31 +16,16 @@ import {
 import { RecipeUidSchema } from "../paprika/types.js";
 import { getText } from "./tool-test-utils.js";
 import type { ServerContext } from "../types/server-context.js";
-import { SILENT_LOG } from "../utils/log.js";
+import { makeServerContext } from "../__fixtures__/app-context.js";
 
 // Minimal ServerContext stub — only `store.hasSynced` matters for coldStartGuard
 const makeCtx = (size: number) =>
-  ({
+  makeServerContext({
     store: fromAny({ size, hasSynced: size > 0 }),
-    client: fromAny({}),
-    cache: fromAny({}),
-    pantryStore: fromAny({}),
-    aisleStore: fromAny({}),
-    groceryListStore: fromAny({}),
-    groceryItemStore: fromAny({}),
-    groceryIngredientStore: fromAny({}),
-    mealStore: fromAny({}),
-    mealTypeStore: fromAny({}),
-    menuStore: fromAny({}),
-    menuItemStore: fromAny({}),
-    vectorStore: null,
-    server: fromAny({}),
     notifier: {
       resourceListChanged: () => {},
       loggingMessage: async () => {},
     },
-    auth: null,
-    log: SILENT_LOG,
   }) satisfies ServerContext;
 
 describe("p2-u02-shared-helpers: shared helper functions", () => {
@@ -370,7 +355,7 @@ describe("p2-u02-shared-helpers: shared helper functions", () => {
       const mockStoreSet = vi.fn();
       const mockResourceListChanged = vi.fn();
 
-      const ctx = {
+      const ctx = makeServerContext({
         cache: fromAny({ recipes: { put: mockPutRecipe }, flush: mockFlush }),
         client: fromAny({ notifySync: mockNotifySync }),
         store: fromAny({
@@ -378,24 +363,11 @@ describe("p2-u02-shared-helpers: shared helper functions", () => {
           markPendingUpsert: vi.fn(),
           markPendingDelete: vi.fn(),
         }),
-        pantryStore: fromAny({}),
-        aisleStore: fromAny({}),
-        groceryListStore: fromAny({}),
-        groceryItemStore: fromAny({}),
-        groceryIngredientStore: fromAny({}),
-        mealStore: fromAny({}),
-        mealTypeStore: fromAny({}),
-        menuStore: fromAny({}),
-        menuItemStore: fromAny({}),
-        vectorStore: null,
-        server: fromAny({}),
         notifier: {
           resourceListChanged: mockResourceListChanged,
           loggingMessage: vi.fn().mockResolvedValue(undefined),
         },
-        auth: null,
-        log: SILENT_LOG,
-      } satisfies ServerContext;
+      }) satisfies ServerContext;
 
       const saved = makeRecipe();
       await commitRecipe(ctx, saved);
@@ -426,7 +398,7 @@ describe("p2-u02-shared-helpers: shared helper functions", () => {
         callOrder.push("resourceListChanged");
       });
 
-      const ctx = {
+      const ctx = makeServerContext({
         cache: fromAny({ recipes: { put: mockPutRecipe }, flush: mockFlush }),
         client: fromAny({ notifySync: mockNotifySync }),
         store: fromAny({
@@ -434,24 +406,11 @@ describe("p2-u02-shared-helpers: shared helper functions", () => {
           markPendingUpsert: vi.fn(),
           markPendingDelete: vi.fn(),
         }),
-        pantryStore: fromAny({}),
-        aisleStore: fromAny({}),
-        groceryListStore: fromAny({}),
-        groceryItemStore: fromAny({}),
-        groceryIngredientStore: fromAny({}),
-        mealStore: fromAny({}),
-        mealTypeStore: fromAny({}),
-        menuStore: fromAny({}),
-        menuItemStore: fromAny({}),
-        vectorStore: null,
-        server: fromAny({}),
         notifier: {
           resourceListChanged: mockResourceListChanged,
           loggingMessage: vi.fn().mockResolvedValue(undefined),
         },
-        auth: null,
-        log: SILENT_LOG,
-      } satisfies ServerContext;
+      }) satisfies ServerContext;
 
       const saved = makeRecipe();
       await commitRecipe(ctx, saved);
@@ -466,7 +425,7 @@ describe("p2-u02-shared-helpers: shared helper functions", () => {
       const mockStoreSet = vi.fn();
       const mockResourceListChanged = vi.fn();
 
-      const ctx = {
+      const ctx = makeServerContext({
         cache: fromAny({ recipes: { put: mockPutRecipe }, flush: mockFlush }),
         client: fromAny({ notifySync: mockNotifySync }),
         store: fromAny({
@@ -474,24 +433,11 @@ describe("p2-u02-shared-helpers: shared helper functions", () => {
           markPendingUpsert: vi.fn(),
           markPendingDelete: vi.fn(),
         }),
-        pantryStore: fromAny({}),
-        aisleStore: fromAny({}),
-        groceryListStore: fromAny({}),
-        groceryItemStore: fromAny({}),
-        groceryIngredientStore: fromAny({}),
-        mealStore: fromAny({}),
-        mealTypeStore: fromAny({}),
-        menuStore: fromAny({}),
-        menuItemStore: fromAny({}),
-        vectorStore: null,
-        server: fromAny({}),
         notifier: {
           resourceListChanged: mockResourceListChanged,
           loggingMessage: vi.fn().mockResolvedValue(undefined),
         },
-        auth: null,
-        log: SILENT_LOG,
-      } satisfies ServerContext;
+      }) satisfies ServerContext;
 
       const saved = makeRecipe({ name: "Test Recipe" });
       await commitRecipe(ctx, saved);
@@ -508,7 +454,7 @@ describe("p2-u02-shared-helpers: shared helper functions", () => {
       const mockClearPending = vi.fn();
       const mockResourceListChanged = vi.fn();
 
-      const ctx = {
+      const ctx = makeServerContext({
         cache: fromAny({ recipes: { put: mockPutRecipe }, flush: mockFlush }),
         client: fromAny({ notifySync: mockNotifySync }),
         store: fromAny({
@@ -517,24 +463,11 @@ describe("p2-u02-shared-helpers: shared helper functions", () => {
           markPendingDelete: vi.fn(),
           clearPending: mockClearPending,
         }),
-        pantryStore: fromAny({}),
-        aisleStore: fromAny({}),
-        groceryListStore: fromAny({}),
-        groceryItemStore: fromAny({}),
-        groceryIngredientStore: fromAny({}),
-        mealStore: fromAny({}),
-        mealTypeStore: fromAny({}),
-        menuStore: fromAny({}),
-        menuItemStore: fromAny({}),
-        vectorStore: null,
-        server: fromAny({}),
         notifier: {
           resourceListChanged: mockResourceListChanged,
           loggingMessage: vi.fn().mockResolvedValue(undefined),
         },
-        auth: null,
-        log: SILENT_LOG,
-      } satisfies ServerContext;
+      }) satisfies ServerContext;
 
       const saved = makeRecipe({ name: "Test Recipe" });
       await expect(commitRecipe(ctx, saved)).rejects.toThrow("disk full");
