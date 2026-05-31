@@ -1,5 +1,38 @@
 # Changelog
 
+## [1.5.0](https://github.com/bojanrajkovic/mcp-paprika/compare/v1.4.0...v1.5.0) (2026-05-31)
+
+
+### Features
+
+* **meals:** add add_menu_to_planner; fix order_flag to per-date ([#152](https://github.com/bojanrajkovic/mcp-paprika/issues/152)) ([d3ac991](https://github.com/bojanrajkovic/mcp-paprika/commit/d3ac991216819f24ff82e372627b10b0260ff16c)), closes [#137](https://github.com/bojanrajkovic/mcp-paprika/issues/137)
+* **meals:** add list_meal_types read tool ([#146](https://github.com/bojanrajkovic/mcp-paprika/issues/146)) ([8aa26c1](https://github.com/bojanrajkovic/mcp-paprika/commit/8aa26c111da741164f957e504606e496cb7ecec1)), closes [#135](https://github.com/bojanrajkovic/mcp-paprika/issues/135)
+* **meals:** add_meals / update_meal / delete_meal — meal-planner write tools ([#143](https://github.com/bojanrajkovic/mcp-paprika/issues/143)) ([ba66e60](https://github.com/bojanrajkovic/mcp-paprika/commit/ba66e60bd678d88ed3bd1e60ce23c046de6eaadc))
+* **meals:** read-only meal history via MCP ([#133](https://github.com/bojanrajkovic/mcp-paprika/issues/133)) ([b51f69c](https://github.com/bojanrajkovic/mcp-paprika/commit/b51f69ca49e67dcf45fdaffe6830ca1f1f30b7da))
+* **menus:** add add_menu_items / update_menu_item / delete_menu_item tools ([#150](https://github.com/bojanrajkovic/mcp-paprika/issues/150)) ([df5089b](https://github.com/bojanrajkovic/mcp-paprika/commit/df5089be7fe77899deb7b9bac111c8b08e37e28d))
+* **menus:** add create_menu / update_menu / delete_menu tools ([#151](https://github.com/bojanrajkovic/mcp-paprika/issues/151)) ([8263655](https://github.com/bojanrajkovic/mcp-paprika/commit/82636556475690e202c5ac628bd546bd87ed0e5b))
+* **menus:** add menu read surface, stores, and sync scaffolding ([#148](https://github.com/bojanrajkovic/mcp-paprika/issues/148)) ([39e347b](https://github.com/bojanrajkovic/mcp-paprika/commit/39e347b4f96c8817550783bc1cb5132a6a2a9d91))
+* **menus:** support freeform menuitems in add_menu_items ([#161](https://github.com/bojanrajkovic/mcp-paprika/issues/161)) ([5d7de20](https://github.com/bojanrajkovic/mcp-paprika/commit/5d7de20da8fd8a4e09cfd9b591654e80564018ac))
+
+
+### Bug Fixes
+
+* **auth:** retry startup authentication on transient failures ([#163](https://github.com/bojanrajkovic/mcp-paprika/issues/163)) ([d18bbd2](https://github.com/bojanrajkovic/mcp-paprika/commit/d18bbd2ae034fef7fc35ff4e0720e9d8fd192ed9)), closes [#158](https://github.com/bojanrajkovic/mcp-paprika/issues/158)
+* **capture:** remove spurious double-nesting from wire capture POST bodies ([a825af7](https://github.com/bojanrajkovic/mcp-paprika/commit/a825af71a762c22a90890321caaede6cbeafc8f2)), closes [#129](https://github.com/bojanrajkovic/mcp-paprika/issues/129)
+* **filter:** parse "+"-suffixed recipe times and flag unverifiable ones ([#164](https://github.com/bojanrajkovic/mcp-paprika/issues/164)) ([9a91b3a](https://github.com/bojanrajkovic/mcp-paprika/commit/9a91b3a7ea414650ef18c0961c054ef8fc9ec66d)), closes [#162](https://github.com/bojanrajkovic/mcp-paprika/issues/162)
+* **grocery:** accept null aisle_uid; drop no-aisle ingredients; default items to Miscellaneous ([#155](https://github.com/bojanrajkovic/mcp-paprika/issues/155)) ([e28f69f](https://github.com/bojanrajkovic/mcp-paprika/commit/e28f69f39eaa1cb936dc88d8efbeb6a2a2670722))
+* **paprika:** remove phantom notes from pantry POST payload ([#131](https://github.com/bojanrajkovic/mcp-paprika/issues/131)) ([e1c49cc](https://github.com/bojanrajkovic/mcp-paprika/commit/e1c49cc8257bd73d1b115eb54051cb407d40a70e))
+* **paprika:** remove server-computed photo_url and on_grocery_list from recipe POST ([#130](https://github.com/bojanrajkovic/mcp-paprika/issues/130)) ([c535813](https://github.com/bojanrajkovic/mcp-paprika/commit/c535813248fde4247b53b83d9456dced362d62d8)), closes [#127](https://github.com/bojanrajkovic/mcp-paprika/issues/127)
+* **recipe:** emit created in Paprika wire format so create_recipe works ([#160](https://github.com/bojanrajkovic/mcp-paprika/issues/160)) ([9395f88](https://github.com/bojanrajkovic/mcp-paprika/commit/9395f88e921dea97b4ac8ba5705d15a46ccdc14d)), closes [#159](https://github.com/bojanrajkovic/mcp-paprika/issues/159)
+* **transport:** correct HTTP graceful shutdown for Kubernetes ([#157](https://github.com/bojanrajkovic/mcp-paprika/issues/157)) ([57ec964](https://github.com/bojanrajkovic/mcp-paprika/commit/57ec964d96431f4ff92bfc2fa18238baee7bc624))
+
+
+### Refactoring
+
+* **meals:** consolidate shared meal helpers ([#141](https://github.com/bojanrajkovic/mcp-paprika/issues/141)) ([#144](https://github.com/bojanrajkovic/mcp-paprika/issues/144)) ([436b024](https://github.com/bojanrajkovic/mcp-paprika/commit/436b024692b2c8cd9fc7915a7fd051c10f18cfcd))
+* **tools:** brand UID input schemas and extract shared lookup helper ([#145](https://github.com/bojanrajkovic/mcp-paprika/issues/145)) ([693055f](https://github.com/bojanrajkovic/mcp-paprika/commit/693055fed36470b61f54b8b02cf0cc65231d205b))
+* **tools:** collapse uid?/name? lookup pairs into discriminated unions ([#139](https://github.com/bojanrajkovic/mcp-paprika/issues/139)) ([3ca1b65](https://github.com/bojanrajkovic/mcp-paprika/commit/3ca1b65c80bc13c3c5ec60a245278b6aa7c54df4))
+
 ## [1.4.0](https://github.com/bojanrajkovic/mcp-paprika/compare/v1.3.0...v1.4.0) (2026-05-25)
 
 
