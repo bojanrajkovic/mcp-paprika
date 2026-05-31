@@ -30,10 +30,7 @@ import { AisleStore as RealAisleStore } from "../cache/aisle-store.js";
 import { GroceryIngredientStore } from "../cache/grocery-ingredient-store.js";
 import { GroceryItemStore } from "../cache/grocery-item-store.js";
 import { GroceryListStore } from "../cache/grocery-list-store.js";
-import { MealStore } from "../cache/meal-store.js";
-import { MealTypeStore } from "../cache/meal-type-store.js";
-import { MenuStore } from "../cache/menu-store.js";
-import { MenuItemStore } from "../cache/menu-item-store.js";
+import { makeAppContext } from "../__fixtures__/app-context.js";
 import { makeGroceryList } from "../cache/__fixtures__/grocery-lists.js";
 import { makeGroceryItem } from "../cache/__fixtures__/grocery-items.js";
 import { makeGroceryIngredient } from "../cache/__fixtures__/grocery-ingredients.js";
@@ -174,24 +171,14 @@ function makeMockPantryStore(): PantryStore {
 }
 
 function makeTestContext(): AppContext {
-  return {
+  return makeAppContext({
     client: makeMockClient(),
     cache: makeMockCache(),
     store: makeMockStore(),
     pantryStore: makeMockPantryStore(),
     aisleStore: makeMockAisleStore(),
-    groceryListStore: new GroceryListStore(),
-    groceryItemStore: new GroceryItemStore(),
-    groceryIngredientStore: new GroceryIngredientStore(),
-    mealStore: new MealStore(),
-    mealTypeStore: new MealTypeStore(),
-    menuStore: new MenuStore(),
-    menuItemStore: new MenuItemStore(),
-    vectorStore: null,
     notifier: makeMockNotifier(),
-    auth: null,
-    log: SILENT_LOG,
-  };
+  });
 }
 
 describe("SyncEngine", () => {
@@ -561,24 +548,14 @@ describe("syncOnce", () => {
     pantryStoreOverrides?: Partial<PantryStore>,
     aisleStoreOverrides?: Partial<AisleStore>,
   ): SyncEngine {
-    const context: AppContext = {
+    const context: AppContext = makeAppContext({
       client: { ...makeMockClientDefault(), ...clientOverrides } as PaprikaClient,
       cache: makeMockCacheDefault(cacheOverrides),
       store: { ...makeMockStoreDefault(), ...storeOverrides } as RecipeStore,
       pantryStore: { ...makeMockPantryStoreDefault(), ...pantryStoreOverrides } as PantryStore,
       aisleStore: { ...makeMockAisleStore(), ...aisleStoreOverrides } as AisleStore,
-      groceryListStore: new GroceryListStore(),
-      groceryItemStore: new GroceryItemStore(),
-      groceryIngredientStore: new GroceryIngredientStore(),
-      mealStore: new MealStore(),
-      mealTypeStore: new MealTypeStore(),
-      menuStore: new MenuStore(),
-      menuItemStore: new MenuItemStore(),
-      vectorStore: null,
       notifier: { ...makeMockNotifierDefault(), ...notifierOverrides } as Notifier,
-      auth: null,
-      log: SILENT_LOG,
-    };
+    });
     return new SyncEngine(context, 10);
   }
 
@@ -904,24 +881,15 @@ describe("syncOnce", () => {
     const notifier: Notifier = { resourceListChanged: vi.fn(), loggingMessage };
     const log = createLogger({ transport: "stdio", notifier, level: "trace", notifyLevel: "info", pretty: false });
 
-    const context: AppContext = {
+    const context: AppContext = makeAppContext({
       client: makeMockClientDefault(),
       cache: makeMockCacheDefault(),
       store: makeMockStoreDefault(),
       pantryStore: makeMockPantryStoreDefault(),
       aisleStore: makeMockAisleStore(),
-      groceryListStore: new GroceryListStore(),
-      groceryItemStore: new GroceryItemStore(),
-      groceryIngredientStore: new GroceryIngredientStore(),
-      mealStore: new MealStore(),
-      mealTypeStore: new MealTypeStore(),
-      menuStore: new MenuStore(),
-      menuItemStore: new MenuItemStore(),
-      vectorStore: null,
       notifier,
-      auth: null,
       log,
-    };
+    });
     const engine = new SyncEngine(context, 10);
     await engine.syncOnce();
 
@@ -939,7 +907,7 @@ describe("syncOnce", () => {
     const notifier: Notifier = { resourceListChanged: vi.fn(), loggingMessage };
     const log = createLogger({ transport: "stdio", notifier, level: "trace", notifyLevel: "warn", pretty: false });
 
-    const context: AppContext = {
+    const context: AppContext = makeAppContext({
       client: fromAny({
         ...makeMockClientDefault(),
         listRecipes: vi.fn().mockRejectedValue(new Error("API Error")),
@@ -948,18 +916,9 @@ describe("syncOnce", () => {
       store: makeMockStoreDefault(),
       pantryStore: makeMockPantryStoreDefault(),
       aisleStore: makeMockAisleStore(),
-      groceryListStore: new GroceryListStore(),
-      groceryItemStore: new GroceryItemStore(),
-      groceryIngredientStore: new GroceryIngredientStore(),
-      mealStore: new MealStore(),
-      mealTypeStore: new MealTypeStore(),
-      menuStore: new MenuStore(),
-      menuItemStore: new MenuItemStore(),
-      vectorStore: null,
       notifier,
-      auth: null,
       log,
-    };
+    });
     const engine = new SyncEngine(context, 10);
     await engine.syncOnce();
 
@@ -1242,7 +1201,7 @@ describe("syncOnce", () => {
 
       expect(realPantryStore.hasSynced).toBe(false);
 
-      const context: AppContext = {
+      const context: AppContext = makeAppContext({
         client: fromAny({
           listRecipes: vi.fn().mockResolvedValue([]),
           getRecipes: vi.fn().mockResolvedValue([]),
@@ -1318,18 +1277,8 @@ describe("syncOnce", () => {
         }),
         pantryStore: realPantryStore,
         aisleStore: new RealAisleStore(),
-        groceryListStore: new GroceryListStore(),
-        groceryItemStore: new GroceryItemStore(),
-        groceryIngredientStore: new GroceryIngredientStore(),
-        mealStore: new MealStore(),
-        mealTypeStore: new MealTypeStore(),
-        menuStore: new MenuStore(),
-        menuItemStore: new MenuItemStore(),
-        vectorStore: null,
         notifier: makeMockNotifier(),
-        auth: null,
-        log: SILENT_LOG,
-      };
+      });
       const engine = new SyncEngine(context, 10);
 
       await engine.syncOnce();
@@ -1340,7 +1289,7 @@ describe("syncOnce", () => {
     it("pantry-read.AC4.6 Edge: Empty pantry from API handled gracefully", async () => {
       const realPantryStore = new RealPantryStore();
 
-      const context: AppContext = {
+      const context: AppContext = makeAppContext({
         client: fromAny({
           listRecipes: vi.fn().mockResolvedValue([]),
           getRecipes: vi.fn().mockResolvedValue([]),
@@ -1416,18 +1365,8 @@ describe("syncOnce", () => {
         }),
         pantryStore: realPantryStore,
         aisleStore: new RealAisleStore(),
-        groceryListStore: new GroceryListStore(),
-        groceryItemStore: new GroceryItemStore(),
-        groceryIngredientStore: new GroceryIngredientStore(),
-        mealStore: new MealStore(),
-        mealTypeStore: new MealTypeStore(),
-        menuStore: new MenuStore(),
-        menuItemStore: new MenuItemStore(),
-        vectorStore: null,
         notifier: makeMockNotifier(),
-        auth: null,
-        log: SILENT_LOG,
-      };
+      });
       const engine = new SyncEngine(context, 10);
 
       let errorEmitted = false;
@@ -1568,7 +1507,7 @@ describe("syncOnce", () => {
       const groceryListStore = new GroceryListStore();
       const loadSpy = vi.spyOn(groceryListStore, "load");
 
-      const context: AppContext = {
+      const context: AppContext = makeAppContext({
         client: fromAny({
           ...makeMockClient(),
           listGroceryLists: vi.fn().mockResolvedValue([list1, list2]),
@@ -1585,17 +1524,8 @@ describe("syncOnce", () => {
         pantryStore: makeMockPantryStore(),
         aisleStore: makeMockAisleStore(),
         groceryListStore,
-        groceryItemStore: new GroceryItemStore(),
-        groceryIngredientStore: new GroceryIngredientStore(),
-        mealStore: new MealStore(),
-        mealTypeStore: new MealTypeStore(),
-        menuStore: new MenuStore(),
-        menuItemStore: new MenuItemStore(),
-        vectorStore: null,
         notifier: makeMockNotifier(),
-        auth: null,
-        log: SILENT_LOG,
-      };
+      });
       const engine = new SyncEngine(context, 10);
       await engine.syncOnce();
 
@@ -1611,7 +1541,7 @@ describe("syncOnce", () => {
       const removeList = vi.fn().mockResolvedValue(undefined);
       const groceryListStore = new GroceryListStore();
 
-      const context: AppContext = {
+      const context: AppContext = makeAppContext({
         client: fromAny({
           ...makeMockClient(),
           listGroceryLists: vi.fn().mockResolvedValue([incomingList]),
@@ -1628,17 +1558,8 @@ describe("syncOnce", () => {
         pantryStore: makeMockPantryStore(),
         aisleStore: makeMockAisleStore(),
         groceryListStore,
-        groceryItemStore: new GroceryItemStore(),
-        groceryIngredientStore: new GroceryIngredientStore(),
-        mealStore: new MealStore(),
-        mealTypeStore: new MealTypeStore(),
-        menuStore: new MenuStore(),
-        menuItemStore: new MenuItemStore(),
-        vectorStore: null,
         notifier: makeMockNotifier(),
-        auth: null,
-        log: SILENT_LOG,
-      };
+      });
       const engine = new SyncEngine(context, 10);
       await engine.syncOnce();
 
@@ -1654,7 +1575,7 @@ describe("syncOnce", () => {
       groceryListStore.markPendingUpsert(pendingList.uid);
       const loadSpy = vi.spyOn(groceryListStore, "load");
 
-      const context: AppContext = {
+      const context: AppContext = makeAppContext({
         client: fromAny({
           ...makeMockClient(),
           listGroceryLists: vi.fn().mockResolvedValue([serverList]),
@@ -1671,17 +1592,8 @@ describe("syncOnce", () => {
         pantryStore: makeMockPantryStore(),
         aisleStore: makeMockAisleStore(),
         groceryListStore,
-        groceryItemStore: new GroceryItemStore(),
-        groceryIngredientStore: new GroceryIngredientStore(),
-        mealStore: new MealStore(),
-        mealTypeStore: new MealTypeStore(),
-        menuStore: new MenuStore(),
-        menuItemStore: new MenuItemStore(),
-        vectorStore: null,
         notifier: makeMockNotifier(),
-        auth: null,
-        log: SILENT_LOG,
-      };
+      });
       const engine = new SyncEngine(context, 10);
       await engine.syncOnce();
 
@@ -1700,7 +1612,7 @@ describe("syncOnce", () => {
       groceryListStore.markPendingDelete(pendingDeleteList.uid);
       const loadSpy = vi.spyOn(groceryListStore, "load");
 
-      const context: AppContext = {
+      const context: AppContext = makeAppContext({
         client: fromAny({
           ...makeMockClient(),
           listGroceryLists: vi.fn().mockResolvedValue([pendingDeleteList, otherList]),
@@ -1717,17 +1629,8 @@ describe("syncOnce", () => {
         pantryStore: makeMockPantryStore(),
         aisleStore: makeMockAisleStore(),
         groceryListStore,
-        groceryItemStore: new GroceryItemStore(),
-        groceryIngredientStore: new GroceryIngredientStore(),
-        mealStore: new MealStore(),
-        mealTypeStore: new MealTypeStore(),
-        menuStore: new MenuStore(),
-        menuItemStore: new MenuItemStore(),
-        vectorStore: null,
         notifier: makeMockNotifier(),
-        auth: null,
-        log: SILENT_LOG,
-      };
+      });
       const engine = new SyncEngine(context, 10);
       await engine.syncOnce();
 
@@ -1747,7 +1650,7 @@ describe("syncOnce", () => {
       const groceryItemStore = new GroceryItemStore();
       const loadSpy = vi.spyOn(groceryItemStore, "load");
 
-      const context: AppContext = {
+      const context: AppContext = makeAppContext({
         client: fromAny({
           ...makeMockClient(),
           listGroceryItems: vi.fn().mockResolvedValue([item1, item2]),
@@ -1763,18 +1666,9 @@ describe("syncOnce", () => {
         store: makeMockStore(),
         pantryStore: makeMockPantryStore(),
         aisleStore: makeMockAisleStore(),
-        groceryListStore: new GroceryListStore(),
         groceryItemStore,
-        groceryIngredientStore: new GroceryIngredientStore(),
-        mealStore: new MealStore(),
-        mealTypeStore: new MealTypeStore(),
-        menuStore: new MenuStore(),
-        menuItemStore: new MenuItemStore(),
-        vectorStore: null,
         notifier: makeMockNotifier(),
-        auth: null,
-        log: SILENT_LOG,
-      };
+      });
       const engine = new SyncEngine(context, 10);
       await engine.syncOnce();
 
@@ -1789,7 +1683,7 @@ describe("syncOnce", () => {
 
       const removeItem = vi.fn().mockResolvedValue(undefined);
 
-      const context: AppContext = {
+      const context: AppContext = makeAppContext({
         client: fromAny({
           ...makeMockClient(),
           listGroceryItems: vi.fn().mockResolvedValue([incomingItem]),
@@ -1805,18 +1699,8 @@ describe("syncOnce", () => {
         store: makeMockStore(),
         pantryStore: makeMockPantryStore(),
         aisleStore: makeMockAisleStore(),
-        groceryListStore: new GroceryListStore(),
-        groceryItemStore: new GroceryItemStore(),
-        groceryIngredientStore: new GroceryIngredientStore(),
-        mealStore: new MealStore(),
-        mealTypeStore: new MealTypeStore(),
-        menuStore: new MenuStore(),
-        menuItemStore: new MenuItemStore(),
-        vectorStore: null,
         notifier: makeMockNotifier(),
-        auth: null,
-        log: SILENT_LOG,
-      };
+      });
       const engine = new SyncEngine(context, 10);
       await engine.syncOnce();
 
@@ -1832,7 +1716,7 @@ describe("syncOnce", () => {
       groceryItemStore.markPendingDelete(pendingDeleteItem.uid);
       const loadSpy = vi.spyOn(groceryItemStore, "load");
 
-      const context: AppContext = {
+      const context: AppContext = makeAppContext({
         client: fromAny({
           ...makeMockClient(),
           listGroceryItems: vi.fn().mockResolvedValue([pendingDeleteItem, otherItem]),
@@ -1848,18 +1732,9 @@ describe("syncOnce", () => {
         store: makeMockStore(),
         pantryStore: makeMockPantryStore(),
         aisleStore: makeMockAisleStore(),
-        groceryListStore: new GroceryListStore(),
         groceryItemStore,
-        groceryIngredientStore: new GroceryIngredientStore(),
-        mealStore: new MealStore(),
-        mealTypeStore: new MealTypeStore(),
-        menuStore: new MenuStore(),
-        menuItemStore: new MenuItemStore(),
-        vectorStore: null,
         notifier: makeMockNotifier(),
-        auth: null,
-        log: SILENT_LOG,
-      };
+      });
       const engine = new SyncEngine(context, 10);
       await engine.syncOnce();
 
@@ -1877,7 +1752,7 @@ describe("syncOnce", () => {
       groceryItemStore.markPendingUpsert(pendingItem.uid);
       const loadSpy = vi.spyOn(groceryItemStore, "load");
 
-      const context: AppContext = {
+      const context: AppContext = makeAppContext({
         client: fromAny({
           ...makeMockClient(),
           listGroceryItems: vi.fn().mockResolvedValue([serverItem]),
@@ -1893,18 +1768,9 @@ describe("syncOnce", () => {
         store: makeMockStore(),
         pantryStore: makeMockPantryStore(),
         aisleStore: makeMockAisleStore(),
-        groceryListStore: new GroceryListStore(),
         groceryItemStore,
-        groceryIngredientStore: new GroceryIngredientStore(),
-        mealStore: new MealStore(),
-        mealTypeStore: new MealTypeStore(),
-        menuStore: new MenuStore(),
-        menuItemStore: new MenuItemStore(),
-        vectorStore: null,
         notifier: makeMockNotifier(),
-        auth: null,
-        log: SILENT_LOG,
-      };
+      });
       const engine = new SyncEngine(context, 10);
       await engine.syncOnce();
 
@@ -2102,7 +1968,7 @@ describe("syncOnce", () => {
       const sweepListSpy = vi.spyOn(groceryListStore, "sweepPending");
       const sweepItemSpy = vi.spyOn(groceryItemStore, "sweepPending");
 
-      const context: AppContext = {
+      const context: AppContext = makeAppContext({
         client: makeMockClient(),
         cache: makeMockCache(),
         store: makeMockStore(),
@@ -2110,16 +1976,8 @@ describe("syncOnce", () => {
         aisleStore: makeMockAisleStore(),
         groceryListStore,
         groceryItemStore,
-        groceryIngredientStore: new GroceryIngredientStore(),
-        mealStore: new MealStore(),
-        mealTypeStore: new MealTypeStore(),
-        menuStore: new MenuStore(),
-        menuItemStore: new MenuItemStore(),
-        vectorStore: null,
         notifier: makeMockNotifier(),
-        auth: null,
-        log: SILENT_LOG,
-      };
+      });
       const engine = new SyncEngine(context, 10);
       await engine.syncOnce();
 
@@ -2138,7 +1996,7 @@ describe("syncOnce", () => {
       groceryListStore.markPendingUpsert(list.uid);
       const clearPendingSpy = vi.spyOn(groceryListStore, "clearPending");
 
-      const context: AppContext = {
+      const context: AppContext = makeAppContext({
         client: fromAny({
           ...makeMockClient(),
           listGroceryLists: vi.fn().mockResolvedValue([serverList]),
@@ -2155,17 +2013,8 @@ describe("syncOnce", () => {
         pantryStore: makeMockPantryStore(),
         aisleStore: makeMockAisleStore(),
         groceryListStore,
-        groceryItemStore: new GroceryItemStore(),
-        groceryIngredientStore: new GroceryIngredientStore(),
-        mealStore: new MealStore(),
-        mealTypeStore: new MealTypeStore(),
-        menuStore: new MenuStore(),
-        menuItemStore: new MenuItemStore(),
-        vectorStore: null,
         notifier: makeMockNotifier(),
-        auth: null,
-        log: SILENT_LOG,
-      };
+      });
       const engine = new SyncEngine(context, 10);
       await engine.syncOnce();
 
@@ -2180,7 +2029,7 @@ describe("syncOnce", () => {
       groceryListStore.markPendingUpsert(cachedList.uid);
       const clearPendingSpy = vi.spyOn(groceryListStore, "clearPending");
 
-      const context: AppContext = {
+      const context: AppContext = makeAppContext({
         client: fromAny({
           ...makeMockClient(),
           listGroceryLists: vi.fn().mockResolvedValue([serverList]),
@@ -2197,17 +2046,8 @@ describe("syncOnce", () => {
         pantryStore: makeMockPantryStore(),
         aisleStore: makeMockAisleStore(),
         groceryListStore,
-        groceryItemStore: new GroceryItemStore(),
-        groceryIngredientStore: new GroceryIngredientStore(),
-        mealStore: new MealStore(),
-        mealTypeStore: new MealTypeStore(),
-        menuStore: new MenuStore(),
-        menuItemStore: new MenuItemStore(),
-        vectorStore: null,
         notifier: makeMockNotifier(),
-        auth: null,
-        log: SILENT_LOG,
-      };
+      });
       const engine = new SyncEngine(context, 10);
       await engine.syncOnce();
 
@@ -2222,7 +2062,7 @@ describe("syncOnce", () => {
       groceryItemStore.markPendingUpsert(item.uid);
       const clearPendingSpy = vi.spyOn(groceryItemStore, "clearPending");
 
-      const context: AppContext = {
+      const context: AppContext = makeAppContext({
         client: fromAny({
           ...makeMockClient(),
           listGroceryItems: vi.fn().mockResolvedValue([serverItem]),
@@ -2238,18 +2078,9 @@ describe("syncOnce", () => {
         store: makeMockStore(),
         pantryStore: makeMockPantryStore(),
         aisleStore: makeMockAisleStore(),
-        groceryListStore: new GroceryListStore(),
         groceryItemStore,
-        groceryIngredientStore: new GroceryIngredientStore(),
-        mealStore: new MealStore(),
-        mealTypeStore: new MealTypeStore(),
-        menuStore: new MenuStore(),
-        menuItemStore: new MenuItemStore(),
-        vectorStore: null,
         notifier: makeMockNotifier(),
-        auth: null,
-        log: SILENT_LOG,
-      };
+      });
       const engine = new SyncEngine(context, 10);
       await engine.syncOnce();
 
@@ -2264,7 +2095,7 @@ describe("syncOnce", () => {
       groceryItemStore.markPendingUpsert(cachedItem.uid);
       const clearPendingSpy = vi.spyOn(groceryItemStore, "clearPending");
 
-      const context: AppContext = {
+      const context: AppContext = makeAppContext({
         client: fromAny({
           ...makeMockClient(),
           listGroceryItems: vi.fn().mockResolvedValue([serverItem]),
@@ -2280,18 +2111,9 @@ describe("syncOnce", () => {
         store: makeMockStore(),
         pantryStore: makeMockPantryStore(),
         aisleStore: makeMockAisleStore(),
-        groceryListStore: new GroceryListStore(),
         groceryItemStore,
-        groceryIngredientStore: new GroceryIngredientStore(),
-        mealStore: new MealStore(),
-        mealTypeStore: new MealTypeStore(),
-        menuStore: new MenuStore(),
-        menuItemStore: new MenuItemStore(),
-        vectorStore: null,
         notifier: makeMockNotifier(),
-        auth: null,
-        log: SILENT_LOG,
-      };
+      });
       const engine = new SyncEngine(context, 10);
       await engine.syncOnce();
 
@@ -2308,7 +2130,7 @@ describe("syncOnce", () => {
       const groceryIngredientStore = new GroceryIngredientStore();
       const loadSpy = vi.spyOn(groceryIngredientStore, "load");
 
-      const context: AppContext = {
+      const context: AppContext = makeAppContext({
         client: fromAny({
           ...makeMockClient(),
           listGroceryIngredients: vi.fn().mockResolvedValue([activeIngredient, deletedIngredient]),
@@ -2326,18 +2148,9 @@ describe("syncOnce", () => {
         store: makeMockStore(),
         pantryStore: makeMockPantryStore(),
         aisleStore: makeMockAisleStore(),
-        groceryListStore: new GroceryListStore(),
-        groceryItemStore: new GroceryItemStore(),
         groceryIngredientStore,
-        mealStore: new MealStore(),
-        mealTypeStore: new MealTypeStore(),
-        menuStore: new MenuStore(),
-        menuItemStore: new MenuItemStore(),
-        vectorStore: null,
         notifier: makeMockNotifier(),
-        auth: null,
-        log: SILENT_LOG,
-      };
+      });
       const engine = new SyncEngine(context, 10);
       await engine.syncOnce();
 
@@ -2355,7 +2168,7 @@ describe("syncOnce", () => {
 
       const removeIngredient = vi.fn().mockResolvedValue(undefined);
 
-      const context: AppContext = {
+      const context: AppContext = makeAppContext({
         client: fromAny({
           ...makeMockClient(),
           listGroceryIngredients: vi.fn().mockResolvedValue([activeIngredient]),
@@ -2373,18 +2186,8 @@ describe("syncOnce", () => {
         store: makeMockStore(),
         pantryStore: makeMockPantryStore(),
         aisleStore: makeMockAisleStore(),
-        groceryListStore: new GroceryListStore(),
-        groceryItemStore: new GroceryItemStore(),
-        groceryIngredientStore: new GroceryIngredientStore(),
-        mealStore: new MealStore(),
-        mealTypeStore: new MealTypeStore(),
-        menuStore: new MenuStore(),
-        menuItemStore: new MenuItemStore(),
-        vectorStore: null,
         notifier: makeMockNotifier(),
-        auth: null,
-        log: SILENT_LOG,
-      };
+      });
       const engine = new SyncEngine(context, 10);
       await engine.syncOnce();
 
@@ -2543,7 +2346,7 @@ describe("syncOnce", () => {
       expect(realGroceryListStore.getAll()[0]).toEqual(cachedList);
 
       // After syncOnce() the store is replaced with server data
-      const context: AppContext = {
+      const context: AppContext = makeAppContext({
         client: fromAny({
           ...makeMockClient(),
           listGroceryLists: vi.fn().mockResolvedValue([]),
@@ -2560,17 +2363,8 @@ describe("syncOnce", () => {
         pantryStore: makeMockPantryStore(),
         aisleStore: makeMockAisleStore(),
         groceryListStore: realGroceryListStore,
-        groceryItemStore: new GroceryItemStore(),
-        groceryIngredientStore: new GroceryIngredientStore(),
-        mealStore: new MealStore(),
-        mealTypeStore: new MealTypeStore(),
-        menuStore: new MenuStore(),
-        menuItemStore: new MenuItemStore(),
-        vectorStore: null,
         notifier: makeMockNotifier(),
-        auth: null,
-        log: SILENT_LOG,
-      };
+      });
       const engine = new SyncEngine(context, 10);
       await engine.syncOnce();
 
@@ -2592,7 +2386,7 @@ describe("syncOnce", () => {
       expect(realGroceryItemStore.getAll()).toHaveLength(1);
 
       // After syncOnce() the store is reloaded from effective items
-      const context: AppContext = {
+      const context: AppContext = makeAppContext({
         client: fromAny({
           ...makeMockClient(),
           listGroceryItems: vi.fn().mockResolvedValue([cachedItem]),
@@ -2608,18 +2402,9 @@ describe("syncOnce", () => {
         store: makeMockStore(),
         pantryStore: makeMockPantryStore(),
         aisleStore: makeMockAisleStore(),
-        groceryListStore: new GroceryListStore(),
         groceryItemStore: realGroceryItemStore,
-        groceryIngredientStore: new GroceryIngredientStore(),
-        mealStore: new MealStore(),
-        mealTypeStore: new MealTypeStore(),
-        menuStore: new MenuStore(),
-        menuItemStore: new MenuItemStore(),
-        vectorStore: null,
         notifier: makeMockNotifier(),
-        auth: null,
-        log: SILENT_LOG,
-      };
+      });
       const engine = new SyncEngine(context, 10);
       await engine.syncOnce();
 
@@ -2641,7 +2426,7 @@ describe("syncOnce", () => {
       expect(realGroceryIngredientStore.getAll()).toHaveLength(1);
 
       // After syncOnce() the store is reloaded from server data
-      const context: AppContext = {
+      const context: AppContext = makeAppContext({
         client: fromAny({
           ...makeMockClient(),
           listGroceryIngredients: vi.fn().mockResolvedValue([cachedIngredient]),
@@ -2659,18 +2444,9 @@ describe("syncOnce", () => {
         store: makeMockStore(),
         pantryStore: makeMockPantryStore(),
         aisleStore: makeMockAisleStore(),
-        groceryListStore: new GroceryListStore(),
-        groceryItemStore: new GroceryItemStore(),
         groceryIngredientStore: realGroceryIngredientStore,
-        mealStore: new MealStore(),
-        mealTypeStore: new MealTypeStore(),
-        menuStore: new MenuStore(),
-        menuItemStore: new MenuItemStore(),
-        vectorStore: null,
         notifier: makeMockNotifier(),
-        auth: null,
-        log: SILENT_LOG,
-      };
+      });
       const engine = new SyncEngine(context, 10);
       await engine.syncOnce();
 

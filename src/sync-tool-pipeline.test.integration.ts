@@ -7,13 +7,7 @@ import { join } from "node:path";
 import { PaprikaClient } from "./paprika/client.js";
 import { AisleStore } from "./cache/aisle-store.js";
 import { DiskCacheRoot } from "./cache/disk/index.js";
-import { GroceryIngredientStore } from "./cache/grocery-ingredient-store.js";
-import { GroceryItemStore } from "./cache/grocery-item-store.js";
-import { GroceryListStore } from "./cache/grocery-list-store.js";
-import { MealStore } from "./cache/meal-store.js";
-import { MealTypeStore } from "./cache/meal-type-store.js";
-import { MenuStore } from "./cache/menu-store.js";
-import { MenuItemStore } from "./cache/menu-item-store.js";
+import { makeAppContext } from "./__fixtures__/app-context.js";
 import { RecipeStore } from "./cache/recipe-store.js";
 import { PantryStore } from "./cache/pantry-store.js";
 import { SyncEngine } from "./paprika/sync.js";
@@ -26,7 +20,6 @@ import { registerReadTool } from "./tools/read.js";
 import { registerListTool } from "./tools/list.js";
 import { registerFilterTools } from "./tools/filter.js";
 import { registerCategoryTools } from "./tools/categories.js";
-import { SILENT_LOG } from "./utils/log.js";
 
 const API_BASE = "https://paprikaapp.com/api/v2/sync";
 
@@ -102,24 +95,14 @@ describe("Sync → Tool Pipeline Integration", () => {
         loggingMessage: async () => {},
       };
 
-      const context = {
+      const context = makeAppContext({
         client,
         cache,
         store,
         pantryStore,
         aisleStore,
-        groceryListStore: new GroceryListStore(),
-        groceryItemStore: new GroceryItemStore(),
-        groceryIngredientStore: new GroceryIngredientStore(),
-        mealStore: new MealStore(),
-        mealTypeStore: new MealTypeStore(),
-        menuStore: new MenuStore(),
-        menuItemStore: new MenuItemStore(),
-        vectorStore: null,
         notifier,
-        auth: null,
-        log: SILENT_LOG,
-      };
+      });
 
       const engine = new SyncEngine(context, 100);
 
@@ -204,24 +187,14 @@ describe("Sync → Tool Pipeline Integration", () => {
         loggingMessage: async () => {},
       };
 
-      const context = {
+      const context = makeAppContext({
         client,
         cache,
         store,
         pantryStore,
         aisleStore,
-        groceryListStore: new GroceryListStore(),
-        groceryItemStore: new GroceryItemStore(),
-        groceryIngredientStore: new GroceryIngredientStore(),
-        mealStore: new MealStore(),
-        mealTypeStore: new MealTypeStore(),
-        menuStore: new MenuStore(),
-        menuItemStore: new MenuItemStore(),
-        vectorStore: null,
         notifier,
-        auth: null,
-        log: SILENT_LOG,
-      };
+      });
       const engine = new SyncEngine(context, 100);
 
       // First sync
@@ -281,24 +254,14 @@ describe("Sync → Tool Pipeline Integration", () => {
         loggingMessage: async () => {},
       };
 
-      const context = {
+      const context = makeAppContext({
         client,
         cache,
         store,
         pantryStore,
         aisleStore,
-        groceryListStore: new GroceryListStore(),
-        groceryItemStore: new GroceryItemStore(),
-        groceryIngredientStore: new GroceryIngredientStore(),
-        mealStore: new MealStore(),
-        mealTypeStore: new MealTypeStore(),
-        menuStore: new MenuStore(),
-        menuItemStore: new MenuItemStore(),
-        vectorStore: null,
         notifier,
-        auth: null,
-        log: SILENT_LOG,
-      };
+      });
       const engine = new SyncEngine(context, 100);
 
       // First sync: both recipes
@@ -380,24 +343,14 @@ describe("Sync → Tool Pipeline Integration", () => {
         loggingMessage: async () => {},
       };
 
-      const context = {
+      const context = makeAppContext({
         client,
         cache,
         store,
         pantryStore,
         aisleStore,
-        groceryListStore: new GroceryListStore(),
-        groceryItemStore: new GroceryItemStore(),
-        groceryIngredientStore: new GroceryIngredientStore(),
-        mealStore: new MealStore(),
-        mealTypeStore: new MealTypeStore(),
-        menuStore: new MenuStore(),
-        menuItemStore: new MenuItemStore(),
-        vectorStore: null,
         notifier,
-        auth: null,
-        log: SILENT_LOG,
-      };
+      });
       const engine = new SyncEngine(context, 100);
       await engine.syncOnce();
 
@@ -471,24 +424,14 @@ describe("Sync → Tool Pipeline Integration", () => {
         loggingMessage: async () => {},
       };
 
-      const context = {
+      const context = makeAppContext({
         client,
         cache,
         store,
         pantryStore,
         aisleStore,
-        groceryListStore: new GroceryListStore(),
-        groceryItemStore: new GroceryItemStore(),
-        groceryIngredientStore: new GroceryIngredientStore(),
-        mealStore: new MealStore(),
-        mealTypeStore: new MealTypeStore(),
-        menuStore: new MenuStore(),
-        menuItemStore: new MenuItemStore(),
-        vectorStore: null,
         notifier,
-        auth: null,
-        log: SILENT_LOG,
-      };
+      });
       const engine = new SyncEngine(context, 100);
 
       // First sync with original name
@@ -540,24 +483,14 @@ describe("Sync → Tool Pipeline Integration", () => {
         resourceListChanged: () => {},
         loggingMessage: async (): Promise<void> => {},
       };
-      const context = {
+      const context = makeAppContext({
         client,
         cache,
         store,
         pantryStore,
         aisleStore,
-        groceryListStore: new GroceryListStore(),
-        groceryItemStore: new GroceryItemStore(),
-        groceryIngredientStore: new GroceryIngredientStore(),
-        mealStore: new MealStore(),
-        mealTypeStore: new MealTypeStore(),
-        menuStore: new MenuStore(),
-        menuItemStore: new MenuItemStore(),
-        vectorStore: null,
         notifier,
-        auth: null,
-        log: SILENT_LOG,
-      };
+      });
       const engine = new SyncEngine(context, 100);
       return { client, cache, store, pantryStore, engine };
     }
@@ -740,24 +673,14 @@ describe("Sync → Tool Pipeline Integration", () => {
       const pantryStore = new PantryStore({ pendingWriteTtlMs: 50 });
       const aisleStore = new AisleStore();
       const notifier = { resourceListChanged: () => {}, loggingMessage: async (): Promise<void> => {} };
-      const context = {
+      const context = makeAppContext({
         client,
         cache,
         store,
         pantryStore,
         aisleStore,
-        groceryListStore: new GroceryListStore(),
-        groceryItemStore: new GroceryItemStore(),
-        groceryIngredientStore: new GroceryIngredientStore(),
-        mealStore: new MealStore(),
-        mealTypeStore: new MealTypeStore(),
-        menuStore: new MenuStore(),
-        menuItemStore: new MenuItemStore(),
-        vectorStore: null,
         notifier,
-        auth: null,
-        log: SILENT_LOG,
-      };
+      });
       const engine = new SyncEngine(context, 100);
 
       const stalePantryWire = makeSnakeCasePantryItem("PANTRY-UID-3", { ingredient: "Milk" });

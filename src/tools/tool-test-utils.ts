@@ -6,19 +6,10 @@ import type { ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 
-import { AisleStore } from "../cache/aisle-store.js";
-import { GroceryIngredientStore } from "../cache/grocery-ingredient-store.js";
-import { GroceryItemStore } from "../cache/grocery-item-store.js";
-import { GroceryListStore } from "../cache/grocery-list-store.js";
-import { MealStore } from "../cache/meal-store.js";
-import { MealTypeStore } from "../cache/meal-type-store.js";
-import { MenuStore } from "../cache/menu-store.js";
-import { MenuItemStore } from "../cache/menu-item-store.js";
-import { PantryStore } from "../cache/pantry-store.js";
+import { makeAppContext } from "../__fixtures__/app-context.js";
 import type { RecipeStore } from "../cache/recipe-store.js";
 import type { Notifier } from "../server/notifier.js";
 import type { ServerContext } from "../types/server-context.js";
-import { SILENT_LOG } from "../utils/log.js";
 
 /**
  * Shape returned by `makePinoCapture()`. `log` is the capture logger;
@@ -176,29 +167,11 @@ export function makeCtx(
     >
   > = {},
 ): ServerContext {
-  const notifier: Notifier = overrides.notifier ?? {
-    resourceListChanged: () => {},
-    loggingMessage: async () => {},
-  };
-  return {
-    store,
-    server,
-    pantryStore: overrides.pantryStore ?? new PantryStore(),
-    aisleStore: overrides.aisleStore ?? new AisleStore(),
-    groceryListStore: overrides.groceryListStore ?? new GroceryListStore(),
-    groceryItemStore: overrides.groceryItemStore ?? new GroceryItemStore(),
-    groceryIngredientStore: overrides.groceryIngredientStore ?? new GroceryIngredientStore(),
-    mealStore: overrides.mealStore ?? new MealStore(),
-    mealTypeStore: overrides.mealTypeStore ?? new MealTypeStore(),
-    menuStore: overrides.menuStore ?? new MenuStore(),
-    menuItemStore: overrides.menuItemStore ?? new MenuItemStore(),
-    vectorStore: overrides.vectorStore ?? null,
-    client: overrides.client ?? ({} as unknown as ServerContext["client"]),
-    cache: overrides.cache ?? ({} as unknown as ServerContext["cache"]),
-    notifier,
-    auth: null,
-    log: overrides.log ?? SILENT_LOG,
-  } satisfies ServerContext;
+  // Delegate every field default to the shared `makeAppContext` factory (see
+  // `src/__fixtures__/app-context.ts`) so a new AppContext field is added in one
+  // place. `overrides` is a subset of `Partial<AppContext>`, so it spreads
+  // straight through; `store` and `server` are the two positional params.
+  return { ...makeAppContext({ store, ...overrides }), server } satisfies ServerContext;
 }
 
 /** Extracts the text string from a CallToolResult's first content block. */
