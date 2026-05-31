@@ -29,6 +29,19 @@ describe("Duration parsing and formatting", () => {
       );
     });
 
+    it("duration-helper.AC1.2b: parseDuration('5+ hours') reads as 5 hours, not 5ms (#162)", () => {
+      // parse-duration reads a number with a detached "+" as bare milliseconds
+      // ("5" → 5ms); the normalizer strips the "+" so "5+ hours" → 5 hours.
+      parseDuration("5+ hours").match(
+        (duration) => {
+          expect(duration.as("minutes")).toBe(300);
+        },
+        () => {
+          expect.fail("Expected Ok but got Err");
+        },
+      );
+    });
+
     it("duration-helper.AC1.3: parseDuration('45 minutes') returns Ok with Duration of 45 minutes", () => {
       parseDuration("45 minutes").match(
         (duration) => {

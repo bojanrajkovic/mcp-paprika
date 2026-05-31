@@ -52,7 +52,11 @@ export function registerFilterTools(server: McpServer, ctx: ServerContext): void
     "filter_by_time",
     {
       description:
-        "Filter recipes by prep, cook, or total time. All constraints are optional. Results sorted by total time ascending.",
+        "Filter recipes by prep, cook, or total time. All constraints are optional; results are sorted by " +
+        "total time ascending. ADVISORY: a recipe whose relevant time can't be parsed (free-text like " +
+        '"5+ hours" or "overnight") is NOT hidden — it is included and flagged "Time unverified" so quick ' +
+        "recipes with odd time strings aren't silently dropped. For any flagged result, check the displayed " +
+        "time yourself rather than trusting the filter for that one.",
       inputSchema: {
         maxPrepTime: z.string().optional().describe('Maximum prep time (e.g., "30 minutes", "1 hr")'),
         maxCookTime: z.string().optional().describe('Maximum cook time (e.g., "45 min", "1 hour")'),
@@ -92,7 +96,7 @@ export function registerFilterTools(server: McpServer, ctx: ServerContext): void
               if (results.length === 0) {
                 return textResult("No recipes found matching the specified time constraints.");
               }
-              return textResult(formatRecipeList(results, ctx));
+              return textResult(formatTimeFilterResults(results, ctx, constraints));
             },
             (errorMsg) => textResult(errorMsg),
           );
@@ -129,4 +133,47 @@ function formatRecipeItem(recipe: Recipe, categoryNames: Array<string>): string 
   }
   lines.push(...recipeMetadataLines(recipe));
   return lines.join("\n");
+}
+
+// Which active time constraints could NOT be confirmed for this recipe. A recipe
+// is "verified" against a constraint only when its corresponding field parses —
+// inclusion already guarantees it's within the bound, since the store excludes
+// parse-and-exceed recipes. A null or unparseable field (free-text like
+// "5+ hours" or "overnight") is kept (the store stays lenient — AC5.5 / issue
+// #162) but can't be confirmed, so filter_by_time flags it as advisory rather
+// than silently presenting it as a clean match.
+function unverifiedTimeFields(recipe: Recipe, constraints: TimeConstraints): Array<string> {
+  const unverified: Array<string> = [];
+  const check = (max: number | undefined, value: string | null, label: string): void => {
+    if (max === undefined) return;
+    const parses =
+      value !== null &&
+      parseDuration(value).match(
+        () => true,
+        () => false,
+      );
+    if (!parses) unverified.push(label);
+  };
+  check(constraints.maxPrepTime, recipe.prepTime, "prep time");
+  check(constraints.maxCookTime, recipe.cookTime, "cook time");
+  check(constraints.maxTotalTime, recipe.totalTime, "total time");
+  return unverified;
+}
+
+// filter_by_time-specific renderer: same item formatting as filter_by_ingredient,
+// plus a one-line "Time unverified" advisory appended to any recipe whose time
+// couldn't be confirmed against the active constraints.
+function formatTimeFilterResults(recipes: Array<Recipe>, ctx: ServerContext, constraints: TimeConstraints): string {
+  return recipes
+    .map((recipe) => {
+      const categoryNames = ctx.store.resolveCategories(recipe.categories);
+      const item = formatRecipeItem(recipe, categoryNames);
+      const unverified = unverifiedTimeFields(recipe, constraints);
+      if (unverified.length === 0) return item;
+      return (
+        `${item}\n> ⚠️ _Time unverified — couldn't parse this recipe's ${unverified.join(" / ")} against your ` +
+        `limit, so it's shown rather than hidden. Check the displayed time before relying on it._`
+      );
+    })
+    .join("\n\n---\n\n");
 }
