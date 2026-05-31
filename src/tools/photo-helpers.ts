@@ -1,5 +1,4 @@
 import { createHash } from "node:crypto";
-import sharp from "sharp";
 
 import type { Photo, Recipe } from "../paprika/types.js";
 import type { ServerContext } from "../types/server-context.js";
@@ -13,8 +12,13 @@ const THUMBNAIL_PX = 280;
  * `recipe.photo_large`) and a ~280px `thumbnail` (→ `recipe.photo`). Both are
  * re-encoded to JPEG because Paprika stores every photo as JPEG. `.rotate()`
  * bakes in EXIF orientation before the orientation tag is dropped.
+ *
+ * `sharp` is imported lazily so building the MCP server never eagerly loads its
+ * native libvips binary — only a real photo upload pays that cost (keeps stdio /
+ * HTTP startup fast for the common no-photo path).
  */
 export async function normalizePhoto(input: Buffer): Promise<{ thumbnail: Buffer; full: Buffer }> {
+  const { default: sharp } = await import("sharp");
   const full = await sharp(input).rotate().jpeg({ quality: 85 }).toBuffer();
   const thumbnail = await sharp(input)
     .rotate()

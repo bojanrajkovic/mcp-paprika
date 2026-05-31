@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { lookup } from "node:dns/promises";
 import { isIP } from "node:net";
 
+import ipaddr from "ipaddr.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
@@ -15,34 +16,27 @@ import { commitPhotoDelete, commitPhotoUpload, normalizePhoto, sha256Hex } from 
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 const FETCH_TIMEOUT_MS = 15_000;
 
-/** True if an IPv4 dotted-quad is loopback/link-local/private/CGNAT/reserved. */
-function isBlockedV4(ip: string): boolean {
-  const octets = ip.split(".").map((s) => Number(s));
-  if (octets.length !== 4 || octets.some((n) => Number.isNaN(n) || n < 0 || n > 255)) return true;
-  const [a, b] = octets as [number, number, number, number];
-  if (a === 0 || a === 127) return true; // "this host" / loopback
-  if (a === 10) return true; // private
-  if (a === 172 && b >= 16 && b <= 31) return true; // private
-  if (a === 192 && b === 168) return true; // private
-  if (a === 169 && b === 254) return true; // link-local (incl. 169.254.169.254 cloud metadata)
-  if (a === 100 && b >= 64 && b <= 127) return true; // CGNAT
-  if (a >= 224) return true; // multicast / reserved
-  return false;
-}
-
-/** True if an IP string (v4 or v6) is one we must never let the server fetch (SSRF guard). */
+/**
+ * True if an IP string (v4 or v6) is one we must never let the server fetch
+ * (SSRF guard). Delegates classification to `ipaddr.js` — only `unicast`
+ * (public) addresses are allowed; loopback, private, link-local, unique-local,
+ * CGNAT, multicast, reserved, etc. are all blocked. IPv4-mapped IPv6 addresses
+ * (in either the dotted `::ffff:127.0.0.1` or hex `::ffff:7f00:1` form) are
+ * resolved to their embedded IPv4 and classified there, so a mapped loopback
+ * can't slip through.
+ */
 function isBlockedIp(ip: string): boolean {
-  const kind = isIP(ip);
-  if (kind === 4) return isBlockedV4(ip);
-  if (kind === 6) {
-    const lower = ip.toLowerCase();
-    if (lower === "::1" || lower === "::") return true; // loopback / unspecified
-    if (lower.startsWith("fe80") || lower.startsWith("fc") || lower.startsWith("fd")) return true; // link-local / ULA
-    const mapped = /^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/.exec(lower); // IPv4-mapped ::ffff:a.b.c.d
-    if (mapped) return isBlockedV4(mapped[1]!);
-    return false;
+  let addr: ipaddr.IPv4 | ipaddr.IPv6;
+  try {
+    addr = ipaddr.parse(ip);
+  } catch {
+    return true; // unparseable → block
   }
-  return true; // not a parseable IP → block
+  if (addr.kind() === "ipv6") {
+    const v6 = addr as ipaddr.IPv6;
+    if (v6.isIPv4MappedAddress()) return v6.toIPv4Address().range() !== "unicast";
+  }
+  return addr.range() !== "unicast";
 }
 
 /**

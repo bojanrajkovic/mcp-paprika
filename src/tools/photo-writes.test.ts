@@ -100,6 +100,8 @@ describe("upload_photo", () => {
     ["http://10.0.0.5/x.jpg", "private 10/8"],
     ["http://192.168.1.10/x.jpg", "private 192.168/16"],
     ["http://[::1]/x.jpg", "IPv6 loopback"],
+    ["http://[::ffff:127.0.0.1]/x.jpg", "IPv4-mapped IPv6 loopback (dotted)"],
+    ["http://[::ffff:7f00:1]/x.jpg", "IPv4-mapped IPv6 loopback (hex form Node normalizes to)"],
   ])("blocks SSRF to %s (%s) without fetching", async (url) => {
     const { callTool, uploadPhoto } = setup();
     const fetchSpy = vi.spyOn(globalThis, "fetch");
