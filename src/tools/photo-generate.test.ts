@@ -11,6 +11,14 @@ import { registerGeneratePhotoTool } from "./photo-generate.js";
 import type { PhotographyClient, GeneratedPhoto, GeneratePhotoOptions } from "../features/photography.js";
 import { CircuitOpenError } from "../utils/errors.js";
 import { PhotographyError, PhotographyAPIError } from "../features/photography-errors.js";
+import { fetchImageBytes } from "./photo-fetch.js";
+
+// restyle's image download is exercised end-to-end in photo-fetch.test.ts; here
+// we stub it to test generate_photo's restyle wiring.
+vi.mock("./photo-fetch.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./photo-fetch.js")>();
+  return { ...actual, fetchImageBytes: vi.fn() };
+});
 
 const RECIPE_UID = RecipeUidSchema.parse("recipe-1");
 
@@ -155,14 +163,13 @@ describe("generate_photo", () => {
 
   it("restyle_existing re-fetches the authoritative recipe and passes its photo as a reference image", async () => {
     const recipe = makeRecipe({ uid: RECIPE_UID, name: "Test Recipe", photoUrl: "https://photos.example/p.jpg" });
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(imageBytes, { status: 200, headers: { "content-type": "image/png" } }) as unknown as Response,
-    );
+    vi.mocked(fetchImageBytes).mockResolvedValue({ bytes: imageBytes, contentType: "image/png" });
     const { callTool, generate, getRecipe } = setup({ recipe });
 
     await callTool("generate_photo", { recipe_uid: RECIPE_UID, restyle_existing: true });
 
     expect(getRecipe).toHaveBeenCalledWith(RECIPE_UID);
+    expect(fetchImageBytes).toHaveBeenCalledWith("https://photos.example/p.jpg");
     const opts = lastOptions(generate);
     expect(opts.referenceImage).toBeDefined();
     expect(opts.referenceImage?.mimeType).toBe("image/png");
@@ -173,9 +180,7 @@ describe("generate_photo", () => {
     // Store has no photoUrl yet (sync lag), but the authoritative re-fetch returns one.
     const cached = makeRecipe({ uid: RECIPE_UID, name: "Test Recipe", photoUrl: null });
     const fresh = makeRecipe({ uid: RECIPE_UID, name: "Test Recipe", photoUrl: "https://photos.example/new.jpg" });
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(imageBytes, { status: 200, headers: { "content-type": "image/jpeg" } }) as unknown as Response,
-    );
+    vi.mocked(fetchImageBytes).mockResolvedValue({ bytes: imageBytes, contentType: "image/jpeg" });
     const { server, callTool } = makeTestServer();
     const store = new RecipeStore();
     store.load([cached]);

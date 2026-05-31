@@ -9,7 +9,15 @@ import { makePhoto } from "../cache/__fixtures__/photos.js";
 import { PhotoUidSchema, RecipeUidSchema, type Photo, type Recipe } from "../paprika/types.js";
 import { makeCtx, makeTestServer, getText } from "./tool-test-utils.js";
 import { registerUploadPhotoTool, registerDeletePhotoTool } from "./photo-writes.js";
-import { isBlockedIp, ssrfLookup } from "./photo-fetch.js";
+import { fetchImageBytes, isBlockedIp, ssrfLookup } from "./photo-fetch.js";
+
+// The URL download is exercised end-to-end (real undici fetch + dispatcher) in
+// photo-fetch.test.ts. Here we stub fetchImageBytes to test upload_photo's
+// handling of its results; isBlockedIp/ssrfLookup stay real for the unit tests.
+vi.mock("./photo-fetch.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./photo-fetch.js")>();
+  return { ...actual, fetchImageBytes: vi.fn() };
+});
 
 const RECIPE_UID = RecipeUidSchema.parse("recipe-1");
 
@@ -83,55 +91,27 @@ describe("upload_photo", () => {
     expect(photo.name).toBe("3");
   });
 
-  it("downloads from a url and uploads (server fetches the bytes)", async () => {
+  it("downloads from a url and uploads (server fetches the bytes via fetchImageBytes)", async () => {
     const { callTool, uploadPhoto } = setup();
-    const bytes = Buffer.from(jpegBase64, "base64");
-    const fetchSpy = vi
-      .spyOn(globalThis, "fetch")
-      .mockResolvedValue(new Response(bytes, { status: 200 }) as unknown as Response);
+    vi.mocked(fetchImageBytes).mockResolvedValue({
+      bytes: Buffer.from(jpegBase64, "base64"),
+      contentType: "image/jpeg",
+    });
 
-    // Public IP literal → skips DNS and the SSRF private-address check passes.
-    await callTool("upload_photo", { recipe_uid: RECIPE_UID, url: "https://93.184.216.34/cake.jpg" });
+    await callTool("upload_photo", { recipe_uid: RECIPE_UID, url: "https://images.example/cake.jpg" });
 
-    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(fetchImageBytes).toHaveBeenCalledWith("https://images.example/cake.jpg");
     expect(uploadPhoto).toHaveBeenCalledTimes(1);
-    fetchSpy.mockRestore();
   });
 
-  it.each([
-    ["http://169.254.169.254/latest/meta-data/", "cloud metadata (link-local)"],
-    ["http://127.0.0.1/x.jpg", "loopback"],
-    ["http://10.0.0.5/x.jpg", "private 10/8"],
-    ["http://192.168.1.10/x.jpg", "private 192.168/16"],
-    ["http://[::1]/x.jpg", "IPv6 loopback"],
-    ["http://[::ffff:127.0.0.1]/x.jpg", "IPv4-mapped IPv6 loopback (dotted)"],
-    ["http://[::ffff:7f00:1]/x.jpg", "IPv4-mapped IPv6 loopback (hex form Node normalizes to)"],
-  ])("blocks SSRF to %s (%s) without fetching", async (url) => {
+  it("surfaces a fetchImageBytes download error (e.g. too large / SSRF-blocked) without uploading", async () => {
     const { callTool, uploadPhoto } = setup();
-    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    vi.mocked(fetchImageBytes).mockResolvedValue({ error: "Image too large (exceeds 10485760 bytes)." });
 
-    const result = await callTool("upload_photo", { recipe_uid: RECIPE_UID, url });
-
-    expect(getText(result)).toContain("private or reserved address");
-    expect(fetchSpy).not.toHaveBeenCalled();
-    expect(uploadPhoto).not.toHaveBeenCalled();
-    fetchSpy.mockRestore();
-  });
-
-  it("rejects an over-cap image by Content-Length before buffering the body", async () => {
-    const { callTool, uploadPhoto } = setup();
-    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(Buffer.from(jpegBase64, "base64"), {
-        status: 200,
-        headers: { "content-length": String(11 * 1024 * 1024) },
-      }) as unknown as Response,
-    );
-
-    const result = await callTool("upload_photo", { recipe_uid: RECIPE_UID, url: "https://93.184.216.34/big.jpg" });
+    const result = await callTool("upload_photo", { recipe_uid: RECIPE_UID, url: "https://images.example/big.jpg" });
 
     expect(getText(result)).toContain("too large");
     expect(uploadPhoto).not.toHaveBeenCalled();
-    fetchSpy.mockRestore();
   });
 
   it("rejects when both url and image_base64 are provided", async () => {
