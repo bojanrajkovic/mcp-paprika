@@ -16,6 +16,8 @@ To prevent accidental data loss, `empty_trash` only acts on recipes that are **a
 
 Only exact UIDs are accepted; there is no fuzzy title matching, by design. Use `read_recipe` or `search_recipes` to find a UID.
 
+The trash check is authoritative: `empty_trash` asks Paprika for the recipe's current state rather than trusting the local cache, so it works even for a recipe you just trashed in the Paprika app (which this server may not have synced yet).
+
 The call is idempotent: running it again on a recipe that has already been purged returns a "no recipe found" message rather than an error.
 
 ## Example

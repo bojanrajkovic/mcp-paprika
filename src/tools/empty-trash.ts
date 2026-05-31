@@ -1,7 +1,8 @@
 import { toMessage } from "../utils/log.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { RecipeUidSchema } from "../paprika/types.js";
+import { RecipeUidSchema, type Recipe } from "../paprika/types.js";
+import { PaprikaAPIError } from "../paprika/errors.js";
 import { coldStartGuard, commitRecipeHardDelete, textResult } from "./helpers.js";
 import type { ServerContext } from "../types/server-context.js";
 
@@ -25,13 +26,27 @@ export function registerEmptyTrashTool(server: McpServer, ctx: ServerContext): v
       log.info({ tool: "empty_trash", uid: args.uid }, "tool invoked");
       return coldStartGuard(ctx).match(
         async (): Promise<CallToolResult> => {
-          // store.get returns trashed recipes (the only read path that does — see
-          // RecipeStore invariants), so a still-trashed recipe is found here while
-          // an already-purged one is not.
-          const recipe = ctx.store.get(args.uid);
-
-          if (!recipe) {
-            return textResult(`No recipe found with UID "${args.uid}". It may have already been permanently deleted.`);
+          // Fetch authoritative state from Paprika rather than the local store. A
+          // recipe trashed in the Paprika app reaches this server's store only on the
+          // next sync cycle (and one trashed before this feature shipped may never
+          // have loaded as trashed), so a local-only lookup could return a stale
+          // inTrash:false — or nothing at all — and wrongly refuse a genuinely
+          // trashed recipe. getRecipe is the source of truth for inTrash (#125).
+          let recipe: Recipe;
+          try {
+            recipe = await ctx.client.getRecipe(args.uid);
+          } catch (error) {
+            if (error instanceof PaprikaAPIError && error.status === 404) {
+              // Never existed, or already permanently deleted (trash emptied).
+              log.info({ uid: args.uid }, "empty_trash: recipe not found (404)");
+              return textResult(
+                `No recipe found with UID "${args.uid}". It may have already been permanently deleted.`,
+              );
+            }
+            // Transient/upstream failure — don't masquerade as "already deleted".
+            const message = toMessage(error);
+            log.error({ err: error, uid: args.uid }, "empty_trash lookup failed");
+            return textResult(`Failed to look up recipe "${args.uid}": ${message}`);
           }
 
           if (!recipe.inTrash) {
@@ -43,7 +58,7 @@ export function registerEmptyTrashTool(server: McpServer, ctx: ServerContext): v
 
           // Same wire shape as a soft-delete (in_trash: true) plus deleted: true —
           // the exact "empty trash" payload Paprika.app emits. The recipe's hash and
-          // created round-trip verbatim from the store.
+          // created round-trip verbatim from the fetched recipe.
           const tombstone = { ...recipe, inTrash: true, deleted: true };
 
           try {
