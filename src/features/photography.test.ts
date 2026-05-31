@@ -7,12 +7,14 @@ import {
   PHOTO_MODELS,
   DEFAULT_PHOTO_MODEL,
   PHOTO_ASPECT_RATIOS,
+  recipeToPhotoPrompt,
   type PhotoModel,
 } from "./photography.js";
 import { PhotographyError, PhotographyAPIError } from "./photography-errors.js";
 import type { ResolvedImageGenConfig } from "../utils/config.js";
 import { CircuitOpenError } from "../utils/errors.js";
 import { tripBreaker } from "../tools/tool-test-utils.js";
+import { makeRecipe } from "../cache/__fixtures__/recipes.js";
 
 const BASE_URL = "https://openrouter.ai/api/v1";
 const API_KEY = "test-img-key";
@@ -59,6 +61,49 @@ describe("PhotographyClient", () => {
       expect([...PHOTO_MODELS]).toEqual(["seedream", "nano-banana", "nano-banana-2", "gpt-image"]);
       expect(DEFAULT_PHOTO_MODEL).toBe("seedream");
       expect([...PHOTO_ASPECT_RATIOS]).toEqual(["1:1", "4:3", "3:2", "16:9"]);
+    });
+  });
+
+  describe("recipeToPhotoPrompt", () => {
+    it("includes name, description, category names, and editorial cues; NOT ingredients", () => {
+      const recipe = makeRecipe({
+        name: "Butter Chicken",
+        description: "A lighter butter chicken.",
+        ingredients: "chicken breasts, garam masala, tomato sauce, jasmine rice",
+      });
+      const prompt = recipeToPhotoPrompt(recipe, ["Indian", "Chicken"]);
+      expect(prompt).toContain("Butter Chicken");
+      expect(prompt).toContain("A lighter butter chicken.");
+      expect(prompt).toContain("Indian, Chicken");
+      expect(prompt).toContain("editorial style");
+      // The ingredient list must never be injected (scatter/infographic failure mode).
+      expect(prompt).not.toContain("garam masala");
+      expect(prompt).not.toContain("jasmine rice");
+    });
+
+    it("omits description and categories when absent (sparse recipe)", () => {
+      const recipe = makeRecipe({ name: "Blueberry Crumb Bars", description: "" });
+      const prompt = recipeToPhotoPrompt(recipe, []);
+      expect(prompt).toContain("Blueberry Crumb Bars");
+      expect(prompt).not.toContain("Cuisine/type:");
+      expect(prompt.trim()).toBe(
+        "Professional food photography of Blueberry Crumb Bars. Natural daylight, shallow depth of field, appetizing plating, editorial style.",
+      );
+    });
+
+    it("appends a trimmed style hint when provided", () => {
+      const recipe = makeRecipe({ name: "Bo Kho", description: "" });
+      const prompt = recipeToPhotoPrompt(recipe, [], "  on white marble, bright daylight  ");
+      expect(prompt).toContain("on white marble, bright daylight");
+      // style sits before the standing editorial cues
+      expect(prompt.indexOf("on white marble")).toBeLessThan(prompt.indexOf("editorial style"));
+    });
+
+    it("ignores a whitespace-only style hint", () => {
+      const recipe = makeRecipe({ name: "Soup", description: "" });
+      expect(recipeToPhotoPrompt(recipe, [], "   ")).toBe(
+        "Professional food photography of Soup. Natural daylight, shallow depth of field, appetizing plating, editorial style.",
+      );
     });
   });
 

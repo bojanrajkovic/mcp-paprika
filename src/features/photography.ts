@@ -15,6 +15,7 @@ import type { IRetryContext } from "cockatiel";
 import type { Logger } from "pino";
 import { z } from "zod";
 import { SILENT_LOG } from "../utils/log.js";
+import type { Recipe } from "../paprika/types.js";
 import type { ResolvedImageGenConfig } from "../utils/config.js";
 import {
   createResilientExecutor,
@@ -218,6 +219,42 @@ export class PhotographyClient {
 
     return this._executor.execute(this._endpoint, execute);
   }
+}
+
+/**
+ * Build the text-to-image prompt for a recipe.
+ *
+ * Uses the recipe NAME, DESCRIPTION, and resolved CATEGORY names plus editorial
+ * photo cues — deliberately NOT the ingredient list. Empirically, injecting the
+ * ingredient list makes models scatter raw ingredients around the plate or even
+ * render a labeled ingredient infographic; the dish name carries the signal and
+ * description/categories disambiguate it. An optional `style` hint (free text
+ * from the caller/agent) is appended last so it can steer or correct plating —
+ * the main escape hatch for obscure dishes the model may not recognize by name.
+ *
+ * Pure function, no I/O. Resolve category names via
+ * `ctx.categoryStore.resolveNames(recipe.categories)` before calling.
+ */
+export function recipeToPhotoPrompt(
+  recipe: Readonly<Recipe>,
+  categoryNames: ReadonlyArray<string>,
+  style?: string,
+): string {
+  const parts: Array<string> = [`Professional food photography of ${recipe.name}.`];
+
+  if (recipe.description) {
+    parts.push(recipe.description);
+  }
+  if (categoryNames.length > 0) {
+    parts.push(`Cuisine/type: ${categoryNames.join(", ")}.`);
+  }
+  const trimmedStyle = style?.trim();
+  if (trimmedStyle) {
+    parts.push(trimmedStyle);
+  }
+  parts.push("Natural daylight, shallow depth of field, appetizing plating, editorial style.");
+
+  return parts.join(" ");
 }
 
 function decodeDataUri(url: string): { bytes: Buffer; mimeType: string } {
