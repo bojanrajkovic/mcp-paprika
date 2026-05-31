@@ -1,4 +1,6 @@
 import { randomUUID } from "node:crypto";
+import { lookup } from "node:dns/promises";
+import { isIP } from "node:net";
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
@@ -11,6 +13,85 @@ import { coldStartGuard, textResult } from "./helpers.js";
 import { commitPhotoDelete, commitPhotoUpload, normalizePhoto, sha256Hex } from "./photo-helpers.js";
 
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
+const FETCH_TIMEOUT_MS = 15_000;
+
+/** True if an IPv4 dotted-quad is loopback/link-local/private/CGNAT/reserved. */
+function isBlockedV4(ip: string): boolean {
+  const octets = ip.split(".").map((s) => Number(s));
+  if (octets.length !== 4 || octets.some((n) => Number.isNaN(n) || n < 0 || n > 255)) return true;
+  const [a, b] = octets as [number, number, number, number];
+  if (a === 0 || a === 127) return true; // "this host" / loopback
+  if (a === 10) return true; // private
+  if (a === 172 && b >= 16 && b <= 31) return true; // private
+  if (a === 192 && b === 168) return true; // private
+  if (a === 169 && b === 254) return true; // link-local (incl. 169.254.169.254 cloud metadata)
+  if (a === 100 && b >= 64 && b <= 127) return true; // CGNAT
+  if (a >= 224) return true; // multicast / reserved
+  return false;
+}
+
+/** True if an IP string (v4 or v6) is one we must never let the server fetch (SSRF guard). */
+function isBlockedIp(ip: string): boolean {
+  const kind = isIP(ip);
+  if (kind === 4) return isBlockedV4(ip);
+  if (kind === 6) {
+    const lower = ip.toLowerCase();
+    if (lower === "::1" || lower === "::") return true; // loopback / unspecified
+    if (lower.startsWith("fe80") || lower.startsWith("fc") || lower.startsWith("fd")) return true; // link-local / ULA
+    const mapped = /^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/.exec(lower); // IPv4-mapped ::ffff:a.b.c.d
+    if (mapped) return isBlockedV4(mapped[1]!);
+    return false;
+  }
+  return true; // not a parseable IP → block
+}
+
+/**
+ * SSRF guard: rejects a URL whose host resolves to any loopback/link-local/private/
+ * reserved address. Returns an error message, or null when the host is safe to fetch.
+ * (Residual DNS-rebinding risk remains: the resolved address is checked, not pinned for
+ * the fetch — acceptable for v1 alongside `redirect: "error"` and the size/format guards.)
+ */
+async function blockPrivateHost(hostname: string): Promise<string | null> {
+  // URL.hostname wraps IPv6 literals in brackets (`[::1]`); strip them for isIP/lookup.
+  const host = hostname.replace(/^\[(.+)\]$/, "$1");
+  // A bare IP literal in the URL is checked directly (no DNS).
+  if (isIP(host) !== 0) {
+    return isBlockedIp(host) ? "URL resolves to a private or reserved address; refusing to fetch." : null;
+  }
+  let addresses: ReadonlyArray<{ address: string }>;
+  try {
+    addresses = await lookup(host, { all: true });
+  } catch (e) {
+    return `Could not resolve image host: ${toMessage(e)}`;
+  }
+  if (addresses.length === 0 || addresses.some((a) => isBlockedIp(a.address))) {
+    return "URL resolves to a private or reserved address; refusing to fetch.";
+  }
+  return null;
+}
+
+/** Reads a fetch body into a Buffer, aborting once MAX_IMAGE_BYTES is exceeded. */
+async function readCapped(res: Response): Promise<{ bytes: Buffer } | { error: string }> {
+  const declared = res.headers.get("content-length");
+  if (declared !== null && Number(declared) > MAX_IMAGE_BYTES) {
+    return { error: `Image too large (${declared} bytes; max ${MAX_IMAGE_BYTES.toString()}).` };
+  }
+  const reader = res.body?.getReader();
+  if (reader === undefined) return { error: "Empty image response." };
+  const chunks: Array<Buffer> = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.length;
+    if (total > MAX_IMAGE_BYTES) {
+      await reader.cancel();
+      return { error: `Image too large (exceeds ${MAX_IMAGE_BYTES.toString()} bytes).` };
+    }
+    chunks.push(Buffer.from(value));
+  }
+  return { bytes: Buffer.concat(chunks) };
+}
 
 export const uploadPhotoInputSchema = z.object({
   recipe_uid: RecipeUidSchema.describe("UID of the recipe to attach the photo to."),
@@ -65,18 +146,20 @@ async function resolveBytes(args: {
     if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
       return { error: "Only http(s) image URLs are supported." };
     }
+    // SSRF guard: refuse hosts that resolve to loopback/link-local/private/reserved IPs.
+    const blocked = await blockPrivateHost(parsed.hostname);
+    if (blocked !== null) return { error: blocked };
+
     let res: Response;
     try {
-      res = await fetch(parsed);
+      // `redirect: "error"` prevents a public URL from redirecting to a private host,
+      // sidestepping the redirect-based SSRF bypass; the timeout bounds slow/endless responses.
+      res = await fetch(parsed, { redirect: "error", signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
     } catch (e) {
       return { error: `Failed to download image: ${toMessage(e)}` };
     }
     if (!res.ok) return { error: `Failed to download image: HTTP ${res.status.toString()}` };
-    const buf = Buffer.from(await res.arrayBuffer());
-    if (buf.length > MAX_IMAGE_BYTES) {
-      return { error: `Image too large (${buf.length.toString()} bytes; max ${MAX_IMAGE_BYTES.toString()}).` };
-    }
-    return { bytes: buf };
+    return readCapped(res);
   }
 
   const buf = Buffer.from(args.image_base64!, "base64");

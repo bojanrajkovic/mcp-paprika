@@ -86,10 +86,45 @@ describe("upload_photo", () => {
       .spyOn(globalThis, "fetch")
       .mockResolvedValue(new Response(bytes, { status: 200 }) as unknown as Response);
 
-    await callTool("upload_photo", { recipe_uid: RECIPE_UID, url: "https://example.com/cake.jpg" });
+    // Public IP literal → skips DNS and the SSRF private-address check passes.
+    await callTool("upload_photo", { recipe_uid: RECIPE_UID, url: "https://93.184.216.34/cake.jpg" });
 
     expect(fetchSpy).toHaveBeenCalledTimes(1);
     expect(uploadPhoto).toHaveBeenCalledTimes(1);
+    fetchSpy.mockRestore();
+  });
+
+  it.each([
+    ["http://169.254.169.254/latest/meta-data/", "cloud metadata (link-local)"],
+    ["http://127.0.0.1/x.jpg", "loopback"],
+    ["http://10.0.0.5/x.jpg", "private 10/8"],
+    ["http://192.168.1.10/x.jpg", "private 192.168/16"],
+    ["http://[::1]/x.jpg", "IPv6 loopback"],
+  ])("blocks SSRF to %s (%s) without fetching", async (url) => {
+    const { callTool, uploadPhoto } = setup();
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+
+    const result = await callTool("upload_photo", { recipe_uid: RECIPE_UID, url });
+
+    expect(getText(result)).toContain("private or reserved address");
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(uploadPhoto).not.toHaveBeenCalled();
+    fetchSpy.mockRestore();
+  });
+
+  it("rejects an over-cap image by Content-Length before buffering the body", async () => {
+    const { callTool, uploadPhoto } = setup();
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(Buffer.from(jpegBase64, "base64"), {
+        status: 200,
+        headers: { "content-length": String(11 * 1024 * 1024) },
+      }) as unknown as Response,
+    );
+
+    const result = await callTool("upload_photo", { recipe_uid: RECIPE_UID, url: "https://93.184.216.34/big.jpg" });
+
+    expect(getText(result)).toContain("too large");
+    expect(uploadPhoto).not.toHaveBeenCalled();
     fetchSpy.mockRestore();
   });
 
