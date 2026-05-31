@@ -8,7 +8,8 @@ import { makeRecipe } from "../cache/__fixtures__/recipes.js";
 import { makePhoto } from "../cache/__fixtures__/photos.js";
 import { PhotoUidSchema, RecipeUidSchema, type Photo, type Recipe } from "../paprika/types.js";
 import { makeCtx, makeTestServer, getText } from "./tool-test-utils.js";
-import { registerUploadPhotoTool, registerDeletePhotoTool, isBlockedIp, ssrfLookup } from "./photo-writes.js";
+import { registerUploadPhotoTool, registerDeletePhotoTool } from "./photo-writes.js";
+import { isBlockedIp, ssrfLookup } from "./photo-fetch.js";
 
 const RECIPE_UID = RecipeUidSchema.parse("recipe-1");
 
