@@ -221,6 +221,60 @@ describe("Auth Routes", () => {
       expect(loc.searchParams.get("code")).toMatch(/^mcp_ac_/);
     });
 
+    it("redirects with temporarily_unavailable (not a code) when the auth-code store is full", async () => {
+      const realJwks = createJwksFor(makeDiscoveryDoc(oidcStub.issuer));
+
+      const localAuthRequests = new AuthRequestStore();
+      const fullAuthCodes = new AuthCodeStore({ maxEntries: 0 }); // every put is rejected
+      const localApp = new Hono();
+      localApp.route(
+        "/",
+        buildAuthRoutes(
+          makeRoutesConfig(
+            {
+              clientStore,
+              tokenStore,
+              authRequests,
+              authCodes,
+              pendingAuthorizations,
+              oidcStubIssuer: oidcStub.issuer,
+            },
+            { jwks: realJwks, authRequests: localAuthRequests, authCodes: fullAuthCodes },
+          ),
+        ),
+      );
+
+      const ourState = "mcp_state_fullcode_test";
+      const ourNonce = "mcp_nonce_fullcode_test";
+      localAuthRequests.put(ourState, {
+        clientId: "stub-client-id",
+        codeChallenge: "challenge",
+        codeChallengeMethod: "S256",
+        redirectUri: "https://claude.ai/callback",
+        resource: "https://mcp.example.com/",
+        claudeState: "claude_state_fullcode",
+        scope: "openid email",
+        ourNonce,
+        createdAt: nowSeconds(),
+      });
+
+      const authResp = await fetch(
+        `${oidcStub.issuer}/authorize?nonce=${ourNonce}&state=${ourState}&redirect_uri=https://mcp.example.com/oauth/callback`,
+        { redirect: "manual" },
+      );
+      const upstreamCode = new URL(authResp.headers.get("location")!).searchParams.get("code")!;
+
+      const res = await localApp.request(`/oauth/callback?code=${upstreamCode}&state=${ourState}`);
+
+      expect(res.status).toBe(302);
+      const loc = new URL(res.headers.get("location")!);
+      expect(loc.origin + loc.pathname).toBe("https://claude.ai/callback");
+      expect(loc.searchParams.get("error")).toBe("temporarily_unavailable");
+      expect(loc.searchParams.get("code")).toBeNull();
+      expect(loc.searchParams.get("state")).toBe("claude_state_fullcode");
+      expect(loc.searchParams.get("iss")).toBe("https://mcp.example.com");
+    });
+
     it("RFC 8414: uses HTTP Basic auth at upstream /token when discovery advertises only client_secret_basic", async () => {
       // The IdP doc here only lists `client_secret_basic`. /oauth/callback must
       // honor that and authenticate via Authorization: Basic — sending the
