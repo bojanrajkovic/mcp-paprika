@@ -115,6 +115,10 @@ export function registerUpdateCategoryTool(server: McpServer, ctx: ServerContext
 
           try {
             const saved = await ctx.client.saveCategory(updated);
+            // commitCategoryUpsert re-embeds the category's recipes at the
+            // chokepoint (before notifySync) — a rename changes the display name
+            // baked into their embedding text. App-side renames are handled by
+            // the sync:category-change event.
             await commitCategoryUpsert(ctx, saved);
             return textResult(`Updated category ${categorySummary(ctx, saved)}`);
           } catch (error) {

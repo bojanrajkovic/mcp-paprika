@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import type { AnySyncResult, RecipeSyncResult } from "../paprika/types.js";
-import type { RecipeUid } from "../paprika/types.js";
+import type { AnySyncResult, Category, EntityChanges, RecipeSyncResult } from "../paprika/types.js";
+import type { CategoryUid, RecipeUid } from "../paprika/types.js";
 import { RecipeStore } from "../cache/recipe-store.js";
 import { CategoryStore } from "../cache/category-store.js";
-import { makeRecipe } from "../cache/__fixtures__/recipes.js";
+import { makeRecipe, makeCategory } from "../cache/__fixtures__/recipes.js";
 import { makePantryItem } from "../cache/__fixtures__/pantry.js";
 import { makePinoCapture, DEFAULT_LOGGING_CONFIG } from "../tools/tool-test-utils.js";
 // mitt's package shape (flat-conditioned `exports`, .d.ts using `export default`) confuses
@@ -41,7 +41,11 @@ function makeMockVectorStore() {
 
 // Helper to create a mock sync events view (mitt-backed)
 function makeMockSyncEvents() {
-  return mitt<{ "sync:complete": AnySyncResult; "sync:error": Error }>();
+  return mitt<{
+    "sync:complete": AnySyncResult;
+    "sync:error": Error;
+    "sync:category-change": EntityChanges<Category>;
+  }>();
 }
 
 function makeEnabledConfig(overrides: Record<string, unknown> = {}) {
@@ -269,7 +273,7 @@ describe("p3-u08-discover-wiring: buildDiscoverComponents", () => {
       expect(typeof callArgs[1]).toBe("function"); // Second arg is resolver function
     });
 
-    it("cold-start: skips indexRecipes when vectorStore is sufficiently indexed", async () => {
+    it("cold-start: reconciles via indexRecipes WITHOUT clearing hashes when sufficiently indexed (#177)", async () => {
       const { buildDiscoverComponents } = await import("./discover-feature.js");
       const recipes = Array.from({ length: 10 }, (_, i) => makeRecipe({ uid: `recipe-${String(i)}` as RecipeUid }));
       const store = new RecipeStore();
@@ -278,11 +282,16 @@ describe("p3-u08-discover-wiring: buildDiscoverComponents", () => {
       const syncEvents = makeMockSyncEvents();
       const config = makeEnabledConfig();
 
-      mockVectorStore.size = 10; // Fully indexed (>= 90% of store)
+      mockVectorStore.size = 10; // Healthy index (>= 90% of store)
 
       await buildDiscoverComponents(config, store, categoryStore, syncEvents);
 
-      expect(mockVectorStore.indexRecipes).not.toHaveBeenCalled();
+      // No full wipe — but still reconcile, so a category renamed/deleted while
+      // the server was down (whose sync:category-change fired before this
+      // subscription existed) gets repaired. indexRecipes skips unchanged recipes
+      // by content hash, so this is cheap when nothing drifted.
+      expect(mockVectorStore.clearHashes).not.toHaveBeenCalled();
+      expect(mockVectorStore.indexRecipes).toHaveBeenCalled();
     });
 
     it("cold-start: re-indexes when vectorStore has stale/orphaned entries below 90% of store", async () => {
@@ -438,10 +447,12 @@ describe("p3-u08-discover-wiring: buildDiscoverComponents", () => {
       const { log, records } = makePinoCapture();
 
       mockVectorStore.size = 10;
-      const testError = new Error("Embedding failed");
-      mockVectorStore.indexRecipes.mockRejectedValueOnce(testError);
 
       await buildDiscoverComponents(config, store, categoryStore, syncEvents, log);
+
+      // Reject only the event-driven re-index; the startup reconcile already ran.
+      mockVectorStore.indexRecipes.mockClear();
+      mockVectorStore.indexRecipes.mockRejectedValueOnce(new Error("Embedding failed"));
 
       const syncResult: RecipeSyncResult = {
         changeType: "recipes",
@@ -497,9 +508,12 @@ describe("p3-u08-discover-wiring: buildDiscoverComponents", () => {
       const { log, records } = makePinoCapture();
 
       mockVectorStore.size = 10;
-      mockVectorStore.indexRecipes.mockRejectedValueOnce(new Error("indexing failed"));
 
       await buildDiscoverComponents(config, store, categoryStore, syncEvents, log);
+
+      // Reject only the event-driven re-index; the startup reconcile already ran.
+      mockVectorStore.indexRecipes.mockClear();
+      mockVectorStore.indexRecipes.mockRejectedValueOnce(new Error("indexing failed"));
 
       const syncResult: RecipeSyncResult = {
         changeType: "recipes",
@@ -527,9 +541,13 @@ describe("p3-u08-discover-wiring: buildDiscoverComponents", () => {
       const config = makeEnabledConfig();
 
       mockVectorStore.size = 10;
-      mockVectorStore.indexRecipes.mockRejectedValueOnce(new Error("First error")).mockResolvedValueOnce(undefined); // Second call succeeds
 
       await buildDiscoverComponents(config, store, categoryStore, syncEvents);
+
+      // Startup reconcile already consumed one call; reset so the two events map
+      // to the rejection-then-success sequence below.
+      mockVectorStore.indexRecipes.mockClear();
+      mockVectorStore.indexRecipes.mockRejectedValueOnce(new Error("First error")).mockResolvedValueOnce(undefined);
 
       // First sync: error
       const syncResult1: RecipeSyncResult = {
@@ -551,6 +569,172 @@ describe("p3-u08-discover-wiring: buildDiscoverComponents", () => {
 
       // Both should have been attempted
       expect(mockVectorStore.indexRecipes).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe("startup reconcile retry (#177)", () => {
+    it("retries a failed startup reconcile on the next sync:complete cycle", async () => {
+      const { buildDiscoverComponents } = await import("./discover-feature.js");
+      const recipe = makeRecipe({ uid: "r1" as RecipeUid });
+      const store = new RecipeStore();
+      const categoryStore = new CategoryStore();
+      store.load([recipe]);
+      const syncEvents = makeMockSyncEvents();
+      const config = makeEnabledConfig();
+      mockVectorStore.size = 10; // healthy index — reconcile is a cheap skip-scan
+
+      // Embeddings briefly down at boot: the startup reconcile fails.
+      mockVectorStore.indexRecipes.mockRejectedValueOnce(new Error("embeddings down"));
+
+      await buildDiscoverComponents(config, store, categoryStore, syncEvents);
+      expect(mockVectorStore.indexRecipes).toHaveBeenCalledTimes(1); // startup attempt
+
+      mockVectorStore.indexRecipes.mockClear();
+
+      // A no-change recipe cycle still retries the full reconcile.
+      const result: RecipeSyncResult = {
+        changeType: "recipes",
+        changes: { added: [], updated: [], removedUids: [] },
+      };
+      syncEvents.emit("sync:complete", result);
+      await new Promise((r) => setTimeout(r, 10));
+
+      expect(mockVectorStore.indexRecipes).toHaveBeenCalledTimes(1);
+      const retried = mockVectorStore.indexRecipes.mock.calls[0]![0] as ReadonlyArray<{ uid: string }>;
+      expect(retried.map((r) => r.uid)).toEqual(["r1"]); // full store re-scanned
+    });
+
+    it("does not retry once the startup reconcile has succeeded", async () => {
+      const { buildDiscoverComponents } = await import("./discover-feature.js");
+      const recipe = makeRecipe({ uid: "r1" as RecipeUid });
+      const store = new RecipeStore();
+      const categoryStore = new CategoryStore();
+      store.load([recipe]);
+      const syncEvents = makeMockSyncEvents();
+      const config = makeEnabledConfig();
+      mockVectorStore.size = 10;
+
+      // Startup reconcile succeeds (default mock resolves).
+      await buildDiscoverComponents(config, store, categoryStore, syncEvents);
+      mockVectorStore.indexRecipes.mockClear();
+
+      // A no-change cycle does no reconcile and no per-change indexing.
+      syncEvents.emit("sync:complete", {
+        changeType: "recipes",
+        changes: { added: [], updated: [], removedUids: [] },
+      });
+      await new Promise((r) => setTimeout(r, 10));
+
+      expect(mockVectorStore.indexRecipes).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("reindexRecipesForCategoryChange helper (#177)", () => {
+    const catA = "CAT-A" as CategoryUid;
+    const catB = "CAT-B" as CategoryUid;
+    const catC = "CAT-C" as CategoryUid;
+
+    function seededStore() {
+      const store = new RecipeStore();
+      store.load([
+        makeRecipe({ uid: "r1" as RecipeUid, categories: [catA] }),
+        makeRecipe({ uid: "r2" as RecipeUid, categories: [catB] }),
+        makeRecipe({ uid: "r3" as RecipeUid, categories: [catA, catC] }),
+      ]);
+      return store;
+    }
+
+    it("re-indexes only the recipes referencing a changed category UID", async () => {
+      const { reindexRecipesForCategoryChange } = await import("./discover-feature.js");
+      const store = seededStore();
+      const categoryStore = new CategoryStore();
+
+      await reindexRecipesForCategoryChange(fromAny(mockVectorStore), store, categoryStore, [catA]);
+
+      expect(mockVectorStore.indexRecipes).toHaveBeenCalledTimes(1);
+      const indexed = mockVectorStore.indexRecipes.mock.calls[0]![0] as ReadonlyArray<{ uid: string }>;
+      expect(indexed.map((r) => r.uid).sort()).toEqual(["r1", "r3"]);
+      expect(typeof mockVectorStore.indexRecipes.mock.calls[0]![1]).toBe("function"); // resolver
+    });
+
+    it("is a no-op when no recipe references any changed category", async () => {
+      const { reindexRecipesForCategoryChange } = await import("./discover-feature.js");
+      await reindexRecipesForCategoryChange(fromAny(mockVectorStore), seededStore(), new CategoryStore(), [
+        "CAT-NONE" as CategoryUid,
+      ]);
+      expect(mockVectorStore.indexRecipes).not.toHaveBeenCalled();
+    });
+
+    it("is a no-op for an empty changed-UID list", async () => {
+      const { reindexRecipesForCategoryChange } = await import("./discover-feature.js");
+      await reindexRecipesForCategoryChange(fromAny(mockVectorStore), seededStore(), new CategoryStore(), []);
+      expect(mockVectorStore.indexRecipes).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("sync:category-change subscription (#177)", () => {
+    const catA = "CAT-A" as CategoryUid;
+    const catB = "CAT-B" as CategoryUid;
+
+    async function wireWithRecipes() {
+      const { buildDiscoverComponents } = await import("./discover-feature.js");
+      const r1 = makeRecipe({ uid: "r1" as RecipeUid, categories: [catA] });
+      const r2 = makeRecipe({ uid: "r2" as RecipeUid, categories: [catB] });
+      const store = new RecipeStore();
+      store.load([r1, r2]);
+      const categoryStore = new CategoryStore();
+      const syncEvents = makeMockSyncEvents();
+      mockVectorStore.size = 10; // skip cold-start
+      const { log, records } = makePinoCapture();
+      await buildDiscoverComponents(makeEnabledConfig(), store, categoryStore, syncEvents, log);
+      // Discard the startup-reconcile indexRecipes call so the assertions below
+      // see only event-driven re-indexing (#177).
+      mockVectorStore.indexRecipes.mockClear();
+      return { syncEvents, records };
+    }
+
+    it("re-indexes recipes referencing a renamed (updated) category", async () => {
+      const { syncEvents } = await wireWithRecipes();
+
+      const changes: EntityChanges<Category> = {
+        added: [],
+        updated: [makeCategory({ uid: catA, name: "Renamed" })],
+        removedUids: [],
+      };
+      syncEvents.emit("sync:category-change", changes);
+      await new Promise((r) => setTimeout(r, 10));
+
+      expect(mockVectorStore.indexRecipes).toHaveBeenCalledTimes(1);
+      const indexed = mockVectorStore.indexRecipes.mock.calls[0]![0] as ReadonlyArray<{ uid: string }>;
+      expect(indexed.map((r) => r.uid)).toEqual(["r1"]);
+    });
+
+    it("re-indexes recipes referencing a removed category", async () => {
+      const { syncEvents } = await wireWithRecipes();
+
+      const changes: EntityChanges<Category> = { added: [], updated: [], removedUids: [catB] };
+      syncEvents.emit("sync:category-change", changes);
+      await new Promise((r) => setTimeout(r, 10));
+
+      expect(mockVectorStore.indexRecipes).toHaveBeenCalledTimes(1);
+      const indexed = mockVectorStore.indexRecipes.mock.calls[0]![0] as ReadonlyArray<{ uid: string }>;
+      expect(indexed.map((r) => r.uid)).toEqual(["r2"]);
+    });
+
+    it("isolates and logs an error thrown during category-change re-index", async () => {
+      const { syncEvents, records } = await wireWithRecipes();
+      mockVectorStore.indexRecipes.mockRejectedValueOnce(new Error("embeddings down"));
+
+      syncEvents.emit("sync:category-change", {
+        added: [],
+        updated: [makeCategory({ uid: catA, name: "Renamed" })],
+        removedUids: [],
+      });
+      await new Promise((r) => setTimeout(r, 10));
+
+      const errs = records.filter((r) => r["msg"] === "vector index error during category-change re-index");
+      expect(errs).toHaveLength(1);
+      expect(errs[0]!["err"]).toBeDefined();
     });
   });
 });

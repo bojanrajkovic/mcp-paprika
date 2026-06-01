@@ -8,7 +8,7 @@ import {
   registerDeleteCategoryTool,
 } from "./category-writes.js";
 import { makeTestServer, makeCtx, getText, seed } from "./tool-test-utils.js";
-import type { CategoryUid } from "../paprika/types.js";
+import type { CategoryUid, RecipeUid } from "../paprika/types.js";
 import type { ServerContext } from "../types/server-context.js";
 
 /** A ctx wired with synced recipe + category stores and mock client/cache for write tools. */
@@ -17,6 +17,7 @@ function makeWriteCtx(opts?: {
   categories?: ReturnType<typeof makeCategory>[];
   saveCategory?: ReturnType<typeof vi.fn>;
   deleteCategory?: ReturnType<typeof vi.fn>;
+  vectorStore?: { indexRecipes?: ReturnType<typeof vi.fn> };
 }): {
   ctx: ServerContext;
   server: ReturnType<typeof makeTestServer>["server"];
@@ -37,6 +38,7 @@ function makeWriteCtx(opts?: {
         categories: { put: vi.fn().mockResolvedValue(undefined), remove: vi.fn().mockResolvedValue(undefined) },
         flush: vi.fn().mockResolvedValue(undefined),
       }),
+      vectorStore: opts?.vectorStore ? fromAny(opts.vectorStore) : null,
     }),
     {
       recipes: opts?.recipes ?? [makeRecipe()],
@@ -172,6 +174,61 @@ describe("category-writes", () => {
       expect(saveCategory).not.toHaveBeenCalled();
       expect(getText(result)).toContain('No category found with UID "missing"');
       void ctx;
+    });
+  });
+
+  describe("update_category vector re-index on rename (#177)", () => {
+    it("re-indexes recipes assigned to the category when it is renamed", async () => {
+      const indexRecipes = vi.fn().mockResolvedValue(undefined);
+      const { server, callTool, ctx } = makeWriteCtx({
+        categories: [makeCategory({ uid: "c" as CategoryUid, name: "Old" })],
+        recipes: [
+          makeRecipe({ uid: "r1" as RecipeUid, categories: ["c" as CategoryUid] }),
+          makeRecipe({ uid: "r2" as RecipeUid, categories: [] }),
+        ],
+        vectorStore: { indexRecipes },
+      });
+      registerUpdateCategoryTool(server, ctx);
+
+      await callTool("update_category", { uid: "c", name: "New Name" });
+
+      expect(indexRecipes).toHaveBeenCalledTimes(1);
+      const indexed = indexRecipes.mock.calls[0]?.[0] as ReadonlyArray<{ uid: string }>;
+      expect(indexed.map((r) => r.uid)).toEqual(["r1"]);
+    });
+
+    it("does not embed when the category has no assigned recipes (create/re-parent no-op)", async () => {
+      const indexRecipes = vi.fn().mockResolvedValue(undefined);
+      const { server, callTool, ctx } = makeWriteCtx({
+        categories: [
+          makeCategory({ uid: "c" as CategoryUid, name: "Old" }),
+          makeCategory({ uid: "p" as CategoryUid, name: "Parent" }),
+        ],
+        recipes: [makeRecipe({ uid: "r1" as RecipeUid, categories: [] })], // none reference "c"
+        vectorStore: { indexRecipes },
+      });
+      registerUpdateCategoryTool(server, ctx);
+
+      // Re-parent under "p". No recipe references "c", so the chokepoint
+      // re-index helper early-returns before any embedding work. (A re-parent of
+      // a category WITH recipes would call indexRecipes, but the real store skips
+      // them by content hash since the display name is unchanged.)
+      await callTool("update_category", { uid: "c", parentUid: "p" });
+
+      expect(indexRecipes).not.toHaveBeenCalled();
+    });
+
+    it("succeeds without a vector store (semantic search disabled)", async () => {
+      const { server, callTool, ctx } = makeWriteCtx({
+        categories: [makeCategory({ uid: "c" as CategoryUid, name: "Old" })],
+        recipes: [makeRecipe({ uid: "r1" as RecipeUid, categories: ["c" as CategoryUid] })],
+        // no vectorStore → defaults to null
+      });
+      registerUpdateCategoryTool(server, ctx);
+
+      const result = await callTool("update_category", { uid: "c", name: "New Name" });
+
+      expect(getText(result)).toContain("Updated category");
     });
   });
 

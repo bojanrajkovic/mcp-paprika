@@ -2,6 +2,7 @@ import { ok, err, type Result } from "neverthrow";
 import type { Category, CategoryUid, Recipe } from "../paprika/types.js";
 import type { ServerContext } from "../types/server-context.js";
 import { coldStartGuard, textResult } from "./helpers.js";
+import { reindexRecipesForCategoryChange } from "../features/discover-feature.js";
 
 /**
  * Readiness gate for every category tool. Composes `coldStartGuard` (recipe
@@ -25,6 +26,12 @@ export function categoryStartGuard(ctx: ServerContext): Result<void, ReturnType<
  * UID against a stale snapshot. No `resourceListChanged()` — categories have no
  * MCP resource surface, and recipe rendering resolves category names through
  * `categoryStore` on read, so a rename is reflected on the next recipe read.
+ *
+ * Re-embeds recipes assigned to the category (a category's display name is part
+ * of their embedding text) at the chokepoint, BEFORE notifySync — mirroring
+ * `commitRecipe`'s `maintainRecipeIndex`. A notifySync rejection must not skip
+ * the re-index and leave a rename matching on the old name with no recovery (a
+ * repeat rename would no-op once the store already holds the new name).
  */
 export async function commitCategoryUpsert(ctx: ServerContext, category: Category): Promise<void> {
   ctx.categoryStore.markPendingUpsert(category.uid);
@@ -36,7 +43,29 @@ export async function commitCategoryUpsert(ctx: ServerContext, category: Categor
     throw e;
   }
   ctx.categoryStore.set(category);
+  await maintainCategoryRecipeIndex(ctx, category.uid);
   await ctx.client.notifySync();
+}
+
+/**
+ * Keep the semantic-search index in step with a category write. No-op when
+ * semantic search is disabled. Re-embeds every live recipe assigned to the
+ * category via {@link reindexRecipesForCategoryChange}: a create has no
+ * referencing recipes (early no-op), a re-parent leaves the display name
+ * unchanged so `indexRecipes` skips by content hash, and only a true rename
+ * re-embeds. Best-effort — a re-index failure must not fail a write already
+ * committed to Paprika, so it's logged, not thrown.
+ */
+async function maintainCategoryRecipeIndex(ctx: ServerContext, uid: CategoryUid): Promise<void> {
+  if (ctx.vectorStore === null) return;
+  try {
+    await reindexRecipesForCategoryChange(ctx.vectorStore, ctx.store, ctx.categoryStore, [uid]);
+  } catch (err) {
+    ctx.log.warn(
+      { err, uid },
+      "category re-index failed after write; embeddings may be stale until the next reconcile",
+    );
+  }
 }
 
 /**

@@ -267,6 +267,32 @@ describe("p3-u06-discover-tool: discover_recipes tool", () => {
       expect(text).toContain("1. **First**");
       expect(text).toContain("2. **Third**");
     });
+
+    it("p3-u06-discover-tool.AC4.3: excludes trashed recipes even though store.get returns them (#177)", async () => {
+      const { server, callTool } = makeTestServer();
+      const mockVs = makeMockVectorStore([
+        { uid: "live-1", score: 0.95, recipeName: "Live One" },
+        { uid: "trashed-1", score: 0.9, recipeName: "Trashed One" },
+      ]);
+      // A stale vector can outlive a soft-delete; `store.get` returns trashed
+      // recipes (unlike `getAll`), so the tool must guard on `inTrash`.
+      registerDiscoverTool(
+        server,
+        seed(makeCtx(new RecipeStore(), server), {
+          recipes: [
+            makeRecipe({ uid: "live-1" as RecipeUid, name: "Live One" }),
+            makeRecipe({ uid: "trashed-1" as RecipeUid, name: "Trashed One", inTrash: true }),
+          ],
+        }),
+        fromAny(mockVs),
+      );
+
+      const result = await callTool("discover_recipes", { query: "test" });
+      const text = getText(result);
+
+      expect(text).toContain("Live One");
+      expect(text).not.toContain("Trashed One");
+    });
   });
 
   describe("p3-u06-discover-tool.AC5: Cold-start guard", () => {

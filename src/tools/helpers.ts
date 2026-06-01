@@ -270,7 +270,45 @@ export async function commitRecipe(ctx: ServerContext, saved: Recipe): Promise<v
   }
   ctx.store.set(saved); // sync — updates in-process store
   ctx.notifier.resourceListChanged(); // sync — notifies MCP clients (single server or broadcast)
+
+  // Maintain the semantic-search index locally. The sync re-index path can't
+  // cover tool writes: the UID is pending here, so the recipe diff filters it
+  // out (sync.ts) and never re-embeds it. A trashed recipe is removed from the
+  // index (and re-added on restore — the upsert branch fires when inTrash flips
+  // back to false). Best-effort: a re-index failure must not fail a write that
+  // already succeeded against Paprika, so it's logged, not thrown.
+  //
+  // Runs BEFORE notifySync: the index tracks the local store, and a notifySync
+  // rejection (a network blip) must not skip index upkeep and leave a
+  // created/edited/trashed recipe missing or stale in discover_recipes while the
+  // write is already visible locally.
+  await maintainRecipeIndex(ctx, saved);
+
   await ctx.client.notifySync(); // async — signals Paprika cloud to propagate
+}
+
+/**
+ * Keep the vector index in step with a local recipe write. No-op when semantic
+ * search is disabled (`vectorStore === null`). Trashed recipes are removed so
+ * they can't surface in `discover_recipes`; live recipes are (re-)embedded via
+ * the vector store's content-hash change detection (a no-op when the embedding
+ * text is unchanged). Never throws — failures are logged so the recipe write,
+ * already committed and notified, still reports success.
+ */
+async function maintainRecipeIndex(ctx: ServerContext, saved: Recipe): Promise<void> {
+  if (ctx.vectorStore === null) return;
+  try {
+    if (saved.inTrash) {
+      await ctx.vectorStore.removeRecipe(saved.uid);
+    } else {
+      await ctx.vectorStore.indexRecipe(saved, ctx.categoryStore.resolveNames(saved.categories));
+    }
+  } catch (err) {
+    ctx.log.warn(
+      { err, uid: saved.uid },
+      "vector index maintenance failed after recipe write; embedding may be stale until the next full re-index",
+    );
+  }
 }
 
 // Hard-delete (empty-trash) commit: the recipe has been permanently removed
@@ -291,6 +329,14 @@ export async function commitRecipeHardDelete(ctx: ServerContext, saved: Recipe):
   }
   ctx.store.delete(saved.uid); // sync — removes from in-process store
   ctx.notifier.resourceListChanged(); // sync — notifies MCP clients
+
+  // Purge from the semantic-search index too — a hard-deleted recipe must not
+  // linger as a searchable vector. Best-effort (see `maintainRecipeIndex`); a
+  // trashed recipe was already removed at soft-delete, so this is typically a
+  // no-op, but empty_trash can also run on app-trashed recipes never seen here.
+  // Runs BEFORE notifySync so a notify failure can't skip the purge.
+  await maintainRecipeIndex(ctx, saved);
+
   await ctx.client.notifySync(); // async — signals Paprika cloud to propagate
 }
 

@@ -7,6 +7,7 @@ import {
   recipeToMarkdown,
   recipeMetadataLines,
   commitRecipe,
+  commitRecipeHardDelete,
   resolveCategoryRefs,
   uidOrTextLookupSchema,
   resolveLookup,
@@ -493,6 +494,73 @@ describe("p2-u02-shared-helpers: shared helper functions", () => {
       expect(mockResourceListChanged).not.toHaveBeenCalled();
       expect(mockNotifySync).not.toHaveBeenCalled();
     });
+  });
+});
+
+describe("recipe-write vector index maintenance (#177)", () => {
+  // commitRecipe/commitRecipeHardDelete keep the semantic-search index in step
+  // with local recipe writes, which the sync re-index path can't see (the UID
+  // is pending, so the recipe diff filters it out). Without this, a tool-created
+  // recipe is never embedded and a tool-edited one keeps its old embedding.
+
+  function makeIndexCtx(
+    overrides: {
+      indexRecipe?: ReturnType<typeof vi.fn>;
+      removeRecipe?: ReturnType<typeof vi.fn>;
+      vectorStore?: null;
+    } = {},
+  ): { ctx: ServerContext; indexRecipe: ReturnType<typeof vi.fn>; removeRecipe: ReturnType<typeof vi.fn> } {
+    const indexRecipe = overrides.indexRecipe ?? vi.fn().mockResolvedValue(undefined);
+    const removeRecipe = overrides.removeRecipe ?? vi.fn().mockResolvedValue(undefined);
+    const ctx = makeServerContext({
+      cache: fromAny({ recipes: { put: vi.fn(), remove: vi.fn() }, flush: vi.fn().mockResolvedValue(undefined) }),
+      client: fromAny({ notifySync: vi.fn().mockResolvedValue(undefined) }),
+      store: fromAny({ set: vi.fn(), delete: vi.fn(), markPendingUpsert: vi.fn(), markPendingDelete: vi.fn() }),
+      categoryStore: fromAny({ resolveNames: vi.fn(() => ["Desserts"]) }),
+      vectorStore: overrides.vectorStore === null ? null : fromAny({ indexRecipe, removeRecipe }),
+      notifier: { resourceListChanged: vi.fn(), loggingMessage: vi.fn().mockResolvedValue(undefined) },
+    }) satisfies ServerContext;
+    return { ctx, indexRecipe, removeRecipe };
+  }
+
+  it("indexes a live recipe with its resolved category names on commitRecipe", async () => {
+    const { ctx, indexRecipe, removeRecipe } = makeIndexCtx();
+    const saved = makeRecipe({ name: "Tiramisu" });
+    await commitRecipe(ctx, saved);
+    expect(indexRecipe).toHaveBeenCalledWith(saved, ["Desserts"]);
+    expect(removeRecipe).not.toHaveBeenCalled();
+  });
+
+  it("removes a trashed recipe from the index instead of embedding it", async () => {
+    const { ctx, indexRecipe, removeRecipe } = makeIndexCtx();
+    const saved = makeRecipe({ name: "Tiramisu", inTrash: true });
+    await commitRecipe(ctx, saved);
+    expect(removeRecipe).toHaveBeenCalledWith(saved.uid);
+    expect(indexRecipe).not.toHaveBeenCalled();
+  });
+
+  it("removes the recipe from the index on commitRecipeHardDelete", async () => {
+    const { ctx, indexRecipe, removeRecipe } = makeIndexCtx();
+    const saved = makeRecipe({ name: "Tiramisu", inTrash: true, deleted: true });
+    await commitRecipeHardDelete(ctx, saved);
+    expect(removeRecipe).toHaveBeenCalledWith(saved.uid);
+    expect(indexRecipe).not.toHaveBeenCalled();
+  });
+
+  it("makes no vector calls when semantic search is disabled (vectorStore null)", async () => {
+    const { ctx, indexRecipe, removeRecipe } = makeIndexCtx({ vectorStore: null });
+    await expect(commitRecipe(ctx, makeRecipe())).resolves.toBeUndefined();
+    expect(indexRecipe).not.toHaveBeenCalled();
+    expect(removeRecipe).not.toHaveBeenCalled();
+  });
+
+  it("still resolves the write when vector indexing throws (best-effort, logged not thrown)", async () => {
+    const indexRecipe = vi.fn().mockRejectedValue(new Error("embeddings down"));
+    const { ctx } = makeIndexCtx({ indexRecipe });
+    // The recipe is already committed + notified against Paprika; a stale
+    // embedding must not turn a successful write into a tool error.
+    await expect(commitRecipe(ctx, makeRecipe())).resolves.toBeUndefined();
+    expect(indexRecipe).toHaveBeenCalledTimes(1);
   });
 });
 
