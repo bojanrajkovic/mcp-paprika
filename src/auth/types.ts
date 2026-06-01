@@ -215,6 +215,22 @@ export const AuthRequestStateSchema = AuthFlowStateBaseSchema.extend({
 export type AuthRequestState = z.infer<typeof AuthRequestStateSchema>;
 
 // ============================================================================
+// In-Memory: PendingAuthorization (#147)
+// ============================================================================
+// Keyed by an opaque consent ticket; ~10-minute TTL. Holds the downstream
+// /authorize request while the user decides on the consent screen, BEFORE any
+// upstream redirect or ourState/ourNonce minting. On "allow", the consent
+// route mints those and constructs an AuthRequestState from this; on "deny" or
+// expiry it is simply dropped. `clientName` is the DCR-supplied (untrusted,
+// optional) display name shown on the screen.
+export const PendingAuthorizationSchema = AuthFlowStateBaseSchema.extend({
+  claudeState: z.string(),
+  clientName: z.string().optional(),
+});
+
+export type PendingAuthorization = z.infer<typeof PendingAuthorizationSchema>;
+
+// ============================================================================
 // In-Memory: AuthCodeState
 // ============================================================================
 // Keyed by our_auth_code; 60-second TTL
