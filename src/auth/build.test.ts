@@ -40,7 +40,7 @@ function makeStdioConfig(): PaprikaConfig {
   });
 }
 
-function makeHttpConfig(oauthIssuer: string): PaprikaConfig {
+function makeHttpConfig(oauthIssuer: string, redirectAllowlist: ReadonlyArray<string> = []): PaprikaConfig {
   return fromAny({
     paprika: { email: "test@example.com", password: "secret" },
     sync: { enabled: false, interval: 60_000 },
@@ -56,6 +56,7 @@ function makeHttpConfig(oauthIssuer: string): PaprikaConfig {
       clientId: "test-client-id",
       clientSecret: "test-client-secret",
       allowlist: { emails: ["user@example.com"], subs: [] },
+      redirectAllowlist,
     },
   });
 }
@@ -122,9 +123,50 @@ describe("buildAuthContext", () => {
       expect(result!.jwks).toBeDefined();
       expect(result!.authRequests).toBeDefined();
       expect(result!.authCodes).toBeDefined();
+      expect(result!.pendingAuthorizations).toBeDefined();
       expect(result!.tokenStore).toBeDefined();
       expect(result!.clientStore).toBeDefined();
       expect(result!.cleanup).toBeDefined();
+    });
+
+    it("normalizes raw redirect-allowlist entries to canonical origins (#147)", async () => {
+      const oidcStub = createOidcStub({
+        issuer: "https://accounts.example.test",
+        clientId: "test-client-id",
+        clientSecret: "test-client-secret",
+        defaultIdentity: { email: "user@example.com", sub: "user-sub-1", emailVerified: true },
+      });
+      msw.use(...oidcStub.handlers);
+
+      const cache = new DiskCacheRoot(xdg.dir());
+      await cache.init();
+
+      // Path + default port should collapse to the bare origin.
+      const config = makeHttpConfig("https://accounts.example.test", [
+        "https://claude.ai/api/mcp/auth_callback",
+        "https://claude.com:443",
+      ]);
+      const result = await buildAuthContext(config, cache, SILENT_LOG);
+
+      expect(result!.config.redirectAllowlist).toEqual(["https://claude.ai", "https://claude.com"]);
+    });
+
+    it("fails fast when a redirect-allowlist entry is malformed (#147)", async () => {
+      const oidcStub = createOidcStub({
+        issuer: "https://accounts.example.test",
+        clientId: "test-client-id",
+        clientSecret: "test-client-secret",
+        defaultIdentity: { email: "user@example.com", sub: "user-sub-1", emailVerified: true },
+      });
+      msw.use(...oidcStub.handlers);
+
+      const cache = new DiskCacheRoot(xdg.dir());
+      await cache.init();
+
+      // http for a non-loopback host is not a permitted redirect origin.
+      const config = makeHttpConfig("https://accounts.example.test", ["http://evil.example.com"]);
+
+      await expect(buildAuthContext(config, cache, SILENT_LOG)).rejects.toThrow(/redirect-allowlist origin/);
     });
   });
 

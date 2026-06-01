@@ -64,6 +64,7 @@ function makeRoutesConfig(ctx: RoutesCtx, overrides: RoutesOverrides = {}): Auth
       trustProxy: true,
       allowlist: { emails: ["user@example.com"], subs: [] },
       allowedAlgs: ["RS256"],
+      redirectAllowlist: [],
     },
     discovery: makeDiscoveryDoc(ctx.oidcStubIssuer),
     jwks: overrides.jwks ?? fromAny(async () => ({ keys: [] })),

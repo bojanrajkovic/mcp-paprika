@@ -607,6 +607,7 @@ function makeOAuthConfig(): PaprikaConfig {
       // everyone into one bucket and AC5.1 / AC5.2 would interfere.
       trustProxy: true,
       allowlist: { emails: ["user@example.com"], subs: [] },
+      redirectAllowlist: ["https://claude.ai"],
     },
   });
 }
