@@ -1,28 +1,20 @@
 import { fromAny } from "@total-typescript/shoehorn";
 import { describe, it, expect, vi } from "vitest";
 import { RecipeStore } from "../cache/recipe-store.js";
-import { MenuStore } from "../cache/menu-store.js";
-import { MenuItemStore } from "../cache/menu-item-store.js";
-import { MealTypeStore } from "../cache/meal-type-store.js";
 import { makeMenu, makeMenuItem } from "../cache/__fixtures__/menus.js";
 import { makeMealType } from "../cache/__fixtures__/meals.js";
-import { makeTestServer, makeCtx, getText, makeStubNotifier } from "./tool-test-utils.js";
+import { makeTestServer, makeCtx, getText, makeStubNotifier, seed } from "./tool-test-utils.js";
+import type { SeedData } from "./tool-test-utils.js";
 import { registerCreateMenuTool, registerUpdateMenuTool, registerDeleteMenuTool } from "./menu-write.js";
 import type { MealTypeUid, Menu, MenuItem, MenuItemUid, MenuUid } from "../paprika/types.js";
 
-function syncedMealTypeStore(): MealTypeStore {
-  const store = new MealTypeStore();
-  store.load([makeMealType({ uid: "dinner-uid" as MealTypeUid, name: "Dinner", orderFlag: 2, originalType: 2 })]);
-  return store;
-}
+const DINNER_TYPE = makeMealType({ uid: "dinner-uid" as MealTypeUid, name: "Dinner", orderFlag: 2, originalType: 2 });
 
 // Builds a write-tool ctx with mocked client + cache. `saveMenus` / `saveMenuItems`
 // identity-return their inputs (matching the real client's `{result: true}` behavior).
-function makeWriteToolCtx(
-  menuStore: MenuStore,
-  menuItemStore: MenuItemStore,
-  server: ReturnType<typeof makeTestServer>["server"],
-) {
+// `seedOverrides` merges over the synced baseline (mealTypes seeded, menus + menuItems
+// from opts); omit menus/menuItems to leave those stores cold for guard tests.
+function makeWriteToolCtx(seedOverrides?: SeedData) {
   const mockSaveMenus = vi.fn().mockImplementation(async (items: ReadonlyArray<Menu>) => items);
   const mockSaveMenuItems = vi.fn().mockImplementation(async (items: ReadonlyArray<MenuItem>) => items);
   const mockNotifySync = vi.fn().mockResolvedValue(undefined);
@@ -32,11 +24,9 @@ function makeWriteToolCtx(
   const mockRemoveMenuItem = vi.fn();
   const mockFlush = vi.fn().mockResolvedValue(undefined);
   const { notifier, resourceListChanged } = makeStubNotifier();
+  const { server, callTool } = makeTestServer();
 
   const ctx = makeCtx(new RecipeStore(), server, {
-    menuStore,
-    menuItemStore,
-    mealTypeStore: syncedMealTypeStore(),
     client: fromAny({
       saveMenus: mockSaveMenus,
       saveMenuItems: mockSaveMenuItems,
@@ -49,9 +39,14 @@ function makeWriteToolCtx(
     }),
     notifier,
   });
+  if (seedOverrides !== undefined) {
+    seed(ctx, { mealTypes: [DINNER_TYPE], ...seedOverrides });
+  }
 
   return {
     ctx,
+    server,
+    callTool,
     mockSaveMenus,
     mockSaveMenuItems,
     mockNotifySync,
@@ -64,22 +59,10 @@ function makeWriteToolCtx(
   };
 }
 
-function syncedStores(opts?: { menus?: Menu[]; items?: MenuItem[] }) {
-  const menuStore = new MenuStore();
-  const menuItemStore = new MenuItemStore();
-  menuStore.load(opts?.menus ?? []);
-  menuItemStore.load(opts?.items ?? []);
-  return { menuStore, menuItemStore };
-}
-
 describe("create_menu tool", () => {
   it("returns sync-not-ready message when stores not loaded", async () => {
-    const menuStore = new MenuStore();
-    const menuItemStore = new MenuItemStore();
-    // DO NOT call .load() on either store
-
-    const { server, callTool } = makeTestServer();
-    const { ctx } = makeWriteToolCtx(menuStore, menuItemStore, server);
+    const { ctx, server, callTool } = makeWriteToolCtx();
+    // DO NOT pass menus/menuItems keys — stores stay cold
     registerCreateMenuTool(server, ctx);
 
     const text = getText(await callTool("create_menu", { name: "Holiday" }));
@@ -87,9 +70,10 @@ describe("create_menu tool", () => {
   });
 
   it("creates a menu with uppercase UUID, default days, and renders markdown", async () => {
-    const { menuStore, menuItemStore } = syncedStores();
-    const { server, callTool } = makeTestServer();
-    const { ctx, mockSaveMenus, resourceListChanged } = makeWriteToolCtx(menuStore, menuItemStore, server);
+    const { ctx, server, callTool, mockSaveMenus, resourceListChanged } = makeWriteToolCtx({
+      menus: [],
+      menuItems: [],
+    });
     registerCreateMenuTool(server, ctx);
 
     const text = getText(await callTool("create_menu", { name: "Holiday" }));
@@ -104,13 +88,11 @@ describe("create_menu tool", () => {
     expect(savedArg.deleted).toBe(false);
     expect(savedArg.uid).toMatch(/^[0-9A-F-]{36}$/);
     expect(resourceListChanged).toHaveBeenCalledOnce();
-    expect(menuStore.getAll()).toHaveLength(1);
+    expect(ctx.menuStore.getAll()).toHaveLength(1);
   });
 
   it("honors explicit days and notes", async () => {
-    const { menuStore, menuItemStore } = syncedStores();
-    const { server, callTool } = makeTestServer();
-    const { ctx, mockSaveMenus } = makeWriteToolCtx(menuStore, menuItemStore, server);
+    const { ctx, server, callTool, mockSaveMenus } = makeWriteToolCtx({ menus: [], menuItems: [] });
     registerCreateMenuTool(server, ctx);
 
     const text = getText(await callTool("create_menu", { name: "Week", days: 7, notes: "low carb" }));
@@ -123,9 +105,7 @@ describe("create_menu tool", () => {
 
   it("assigns the next free orderFlag", async () => {
     const existing = makeMenu({ uid: "m-1" as MenuUid, name: "First", orderFlag: 4 });
-    const { menuStore, menuItemStore } = syncedStores({ menus: [existing] });
-    const { server, callTool } = makeTestServer();
-    const { ctx, mockSaveMenus } = makeWriteToolCtx(menuStore, menuItemStore, server);
+    const { ctx, server, callTool, mockSaveMenus } = makeWriteToolCtx({ menus: [existing], menuItems: [] });
     registerCreateMenuTool(server, ctx);
 
     await callTool("create_menu", { name: "Second" });
@@ -136,9 +116,7 @@ describe("create_menu tool", () => {
 
   it("rejects a duplicate name (exact, case-insensitive) and surfaces the existing UID", async () => {
     const existing = makeMenu({ uid: "m-dup" as MenuUid, name: "Thanksgiving" });
-    const { menuStore, menuItemStore } = syncedStores({ menus: [existing] });
-    const { server, callTool } = makeTestServer();
-    const { ctx, mockSaveMenus } = makeWriteToolCtx(menuStore, menuItemStore, server);
+    const { ctx, server, callTool, mockSaveMenus } = makeWriteToolCtx({ menus: [existing], menuItems: [] });
     registerCreateMenuTool(server, ctx);
 
     const text = getText(await callTool("create_menu", { name: "thanksgiving" }));
@@ -150,9 +128,7 @@ describe("create_menu tool", () => {
 
   it("allows creation when the name only matches by starts-with, not exact", async () => {
     const existing = makeMenu({ uid: "m-pre" as MenuUid, name: "Thanksgiving Dinner" });
-    const { menuStore, menuItemStore } = syncedStores({ menus: [existing] });
-    const { server, callTool } = makeTestServer();
-    const { ctx, mockSaveMenus } = makeWriteToolCtx(menuStore, menuItemStore, server);
+    const { ctx, server, callTool, mockSaveMenus } = makeWriteToolCtx({ menus: [existing], menuItems: [] });
     registerCreateMenuTool(server, ctx);
 
     getText(await callTool("create_menu", { name: "Thanksgiving" }));
@@ -162,10 +138,8 @@ describe("create_menu tool", () => {
 
 describe("update_menu tool", () => {
   it("returns sync-not-ready message when stores not loaded", async () => {
-    const menuStore = new MenuStore();
-    const menuItemStore = new MenuItemStore();
-    const { server, callTool } = makeTestServer();
-    const { ctx } = makeWriteToolCtx(menuStore, menuItemStore, server);
+    const { ctx, server, callTool } = makeWriteToolCtx();
+    // DO NOT pass menus/menuItems keys — stores stay cold
     registerUpdateMenuTool(server, ctx);
 
     const text = getText(await callTool("update_menu", { lookup: { uid: "m-1" }, name: "X" }));
@@ -174,9 +148,7 @@ describe("update_menu tool", () => {
 
   it("rejects when no mutable field is provided", async () => {
     const menu = makeMenu({ uid: "m-1" as MenuUid, name: "Plan" });
-    const { menuStore, menuItemStore } = syncedStores({ menus: [menu] });
-    const { server, callTool } = makeTestServer();
-    const { ctx, mockSaveMenus } = makeWriteToolCtx(menuStore, menuItemStore, server);
+    const { ctx, server, callTool, mockSaveMenus } = makeWriteToolCtx({ menus: [menu], menuItems: [] });
     registerUpdateMenuTool(server, ctx);
 
     const text = getText(await callTool("update_menu", { lookup: { uid: "m-1" } }));
@@ -186,9 +158,7 @@ describe("update_menu tool", () => {
 
   it("partial-merges name, days, and notes", async () => {
     const menu = makeMenu({ uid: "m-1" as MenuUid, name: "Old", days: 2, notes: "old notes" });
-    const { menuStore, menuItemStore } = syncedStores({ menus: [menu] });
-    const { server, callTool } = makeTestServer();
-    const { ctx, mockSaveMenus } = makeWriteToolCtx(menuStore, menuItemStore, server);
+    const { ctx, server, callTool, mockSaveMenus } = makeWriteToolCtx({ menus: [menu], menuItems: [] });
     registerUpdateMenuTool(server, ctx);
 
     const text = getText(await callTool("update_menu", { lookup: { uid: "m-1" }, name: "New", days: 4 }));
@@ -204,9 +174,7 @@ describe("update_menu tool", () => {
   it("rejects a rename that collides with a different menu's name", async () => {
     const a = makeMenu({ uid: "m-1" as MenuUid, name: "Weeknights" });
     const b = makeMenu({ uid: "m-2" as MenuUid, name: "Holiday" });
-    const { menuStore, menuItemStore } = syncedStores({ menus: [a, b] });
-    const { server, callTool } = makeTestServer();
-    const { ctx, mockSaveMenus } = makeWriteToolCtx(menuStore, menuItemStore, server);
+    const { ctx, server, callTool, mockSaveMenus } = makeWriteToolCtx({ menus: [a, b], menuItems: [] });
     registerUpdateMenuTool(server, ctx);
 
     const text = getText(await callTool("update_menu", { lookup: { uid: "m-1" }, name: "Holiday" }));
@@ -216,9 +184,7 @@ describe("update_menu tool", () => {
 
   it("allows a no-op rename to the menu's own name (case-insensitive) alongside another change", async () => {
     const menu = makeMenu({ uid: "m-1" as MenuUid, name: "Holiday", notes: "old" });
-    const { menuStore, menuItemStore } = syncedStores({ menus: [menu] });
-    const { server, callTool } = makeTestServer();
-    const { ctx, mockSaveMenus } = makeWriteToolCtx(menuStore, menuItemStore, server);
+    const { ctx, server, callTool, mockSaveMenus } = makeWriteToolCtx({ menus: [menu], menuItems: [] });
     registerUpdateMenuTool(server, ctx);
 
     getText(await callTool("update_menu", { lookup: { uid: "m-1" }, name: "holiday", notes: "new" }));
@@ -228,9 +194,7 @@ describe("update_menu tool", () => {
 
   it("resolves the menu by name", async () => {
     const menu = makeMenu({ uid: "m-named" as MenuUid, name: "Summer Plan" });
-    const { menuStore, menuItemStore } = syncedStores({ menus: [menu] });
-    const { server, callTool } = makeTestServer();
-    const { ctx, mockSaveMenus } = makeWriteToolCtx(menuStore, menuItemStore, server);
+    const { ctx, server, callTool, mockSaveMenus } = makeWriteToolCtx({ menus: [menu], menuItems: [] });
     registerUpdateMenuTool(server, ctx);
 
     getText(await callTool("update_menu", { lookup: { name: "summer" }, notes: "beach" }));
@@ -239,9 +203,7 @@ describe("update_menu tool", () => {
   });
 
   it("reports a UID miss without saving", async () => {
-    const { menuStore, menuItemStore } = syncedStores();
-    const { server, callTool } = makeTestServer();
-    const { ctx, mockSaveMenus } = makeWriteToolCtx(menuStore, menuItemStore, server);
+    const { ctx, server, callTool, mockSaveMenus } = makeWriteToolCtx({ menus: [], menuItems: [] });
     registerUpdateMenuTool(server, ctx);
 
     const text = getText(await callTool("update_menu", { lookup: { uid: "ghost" }, name: "X" }));
@@ -252,9 +214,7 @@ describe("update_menu tool", () => {
   it("disambiguates when a name matches multiple menus", async () => {
     const a = makeMenu({ uid: "m-a" as MenuUid, name: "Summer Plan A" });
     const b = makeMenu({ uid: "m-b" as MenuUid, name: "Summer Plan B" });
-    const { menuStore, menuItemStore } = syncedStores({ menus: [a, b] });
-    const { server, callTool } = makeTestServer();
-    const { ctx, mockSaveMenus } = makeWriteToolCtx(menuStore, menuItemStore, server);
+    const { ctx, server, callTool, mockSaveMenus } = makeWriteToolCtx({ menus: [a, b], menuItems: [] });
     registerUpdateMenuTool(server, ctx);
 
     const text = getText(await callTool("update_menu", { lookup: { name: "summer" }, days: 3 }));
@@ -268,9 +228,10 @@ describe("update_menu tool", () => {
     const menu = makeMenu({ uid: "m-1" as MenuUid, name: "Big Plan", days: 5 });
     const day3 = makeMenuItem({ uid: "mi-3" as MenuItemUid, menuUid: "m-1", day: 3, name: "Soup" });
     const day5 = makeMenuItem({ uid: "mi-5" as MenuItemUid, menuUid: "m-1", day: 5, name: "Steak" });
-    const { menuStore, menuItemStore } = syncedStores({ menus: [menu], items: [day3, day5] });
-    const { server, callTool } = makeTestServer();
-    const { ctx, mockSaveMenus } = makeWriteToolCtx(menuStore, menuItemStore, server);
+    const { ctx, server, callTool, mockSaveMenus } = makeWriteToolCtx({
+      menus: [menu],
+      menuItems: [day3, day5],
+    });
     registerUpdateMenuTool(server, ctx);
 
     const text = getText(await callTool("update_menu", { lookup: { uid: "m-1" }, days: 2 }));
@@ -284,9 +245,7 @@ describe("update_menu tool", () => {
   it("allows a days-shrink that keeps every menuitem in range", async () => {
     const menu = makeMenu({ uid: "m-1" as MenuUid, name: "Plan", days: 5 });
     const day2 = makeMenuItem({ uid: "mi-2" as MenuItemUid, menuUid: "m-1", day: 2, name: "Soup" });
-    const { menuStore, menuItemStore } = syncedStores({ menus: [menu], items: [day2] });
-    const { server, callTool } = makeTestServer();
-    const { ctx, mockSaveMenus } = makeWriteToolCtx(menuStore, menuItemStore, server);
+    const { ctx, server, callTool, mockSaveMenus } = makeWriteToolCtx({ menus: [menu], menuItems: [day2] });
     registerUpdateMenuTool(server, ctx);
 
     getText(await callTool("update_menu", { lookup: { uid: "m-1" }, days: 3 }));
@@ -297,10 +256,8 @@ describe("update_menu tool", () => {
 
 describe("delete_menu tool", () => {
   it("returns sync-not-ready message when stores not loaded", async () => {
-    const menuStore = new MenuStore();
-    const menuItemStore = new MenuItemStore();
-    const { server, callTool } = makeTestServer();
-    const { ctx } = makeWriteToolCtx(menuStore, menuItemStore, server);
+    const { ctx, server, callTool } = makeWriteToolCtx();
+    // DO NOT pass menus/menuItems keys — stores stay cold
     registerDeleteMenuTool(server, ctx);
 
     const text = getText(await callTool("delete_menu", { lookup: { uid: "m-1" } }));
@@ -309,13 +266,10 @@ describe("delete_menu tool", () => {
 
   it("deletes an empty menu (no menuitems) and tombstones only the menu", async () => {
     const menu = makeMenu({ uid: "m-1" as MenuUid, name: "Empty" });
-    const { menuStore, menuItemStore } = syncedStores({ menus: [menu] });
-    const { server, callTool } = makeTestServer();
-    const { ctx, mockSaveMenus, mockSaveMenuItems, resourceListChanged } = makeWriteToolCtx(
-      menuStore,
-      menuItemStore,
-      server,
-    );
+    const { ctx, server, callTool, mockSaveMenus, mockSaveMenuItems, resourceListChanged } = makeWriteToolCtx({
+      menus: [menu],
+      menuItems: [],
+    });
     registerDeleteMenuTool(server, ctx);
 
     const text = getText(await callTool("delete_menu", { lookup: { uid: "m-1" } }));
@@ -325,8 +279,8 @@ describe("delete_menu tool", () => {
     expect(mockSaveMenus).toHaveBeenCalledOnce();
     const savedMenu = (mockSaveMenus.mock.calls[0]![0] as Menu[])[0]!;
     expect(savedMenu.deleted).toBe(true);
-    expect(menuStore.get("m-1" as MenuUid)).toBeUndefined();
-    expect(menuStore.isTombstone("m-1" as MenuUid)).toBe(true);
+    expect(ctx.menuStore.get("m-1" as MenuUid)).toBeUndefined();
+    expect(ctx.menuStore.isTombstone("m-1" as MenuUid)).toBe(true);
     expect(resourceListChanged).toHaveBeenCalled();
   });
 
@@ -334,9 +288,10 @@ describe("delete_menu tool", () => {
     const menu = makeMenu({ uid: "m-1" as MenuUid, name: "Holiday" });
     const item1 = makeMenuItem({ uid: "mi-1" as MenuItemUid, menuUid: "m-1", name: "Turkey" });
     const item2 = makeMenuItem({ uid: "mi-2" as MenuItemUid, menuUid: "m-1", name: "Pie" });
-    const { menuStore, menuItemStore } = syncedStores({ menus: [menu], items: [item1, item2] });
-    const { server, callTool } = makeTestServer();
-    const { ctx, mockSaveMenus, mockSaveMenuItems } = makeWriteToolCtx(menuStore, menuItemStore, server);
+    const { ctx, server, callTool, mockSaveMenus, mockSaveMenuItems } = makeWriteToolCtx({
+      menus: [menu],
+      menuItems: [item1, item2],
+    });
     registerDeleteMenuTool(server, ctx);
 
     const text = getText(await callTool("delete_menu", { lookup: { uid: "m-1" } }));
@@ -359,14 +314,12 @@ describe("delete_menu tool", () => {
     expect(mockSaveMenuItems.mock.invocationCallOrder[0]!).toBeLessThan(mockSaveMenus.mock.invocationCallOrder[0]!);
 
     // stores reflect the cascade
-    expect(menuItemStore.getByMenuUid("m-1" as MenuUid)).toHaveLength(0);
-    expect(menuStore.get("m-1" as MenuUid)).toBeUndefined();
+    expect(ctx.menuItemStore.getByMenuUid("m-1" as MenuUid)).toHaveLength(0);
+    expect(ctx.menuStore.get("m-1" as MenuUid)).toBeUndefined();
   });
 
   it("reports a UID miss without saving", async () => {
-    const { menuStore, menuItemStore } = syncedStores();
-    const { server, callTool } = makeTestServer();
-    const { ctx, mockSaveMenus } = makeWriteToolCtx(menuStore, menuItemStore, server);
+    const { ctx, server, callTool, mockSaveMenus } = makeWriteToolCtx({ menus: [], menuItems: [] });
     registerDeleteMenuTool(server, ctx);
 
     const text = getText(await callTool("delete_menu", { lookup: { uid: "ghost" } }));
@@ -377,9 +330,7 @@ describe("delete_menu tool", () => {
   it("disambiguates a name that matches multiple menus without deleting", async () => {
     const a = makeMenu({ uid: "m-a" as MenuUid, name: "Weekly Plan A" });
     const b = makeMenu({ uid: "m-b" as MenuUid, name: "Weekly Plan B" });
-    const { menuStore, menuItemStore } = syncedStores({ menus: [a, b] });
-    const { server, callTool } = makeTestServer();
-    const { ctx, mockSaveMenus } = makeWriteToolCtx(menuStore, menuItemStore, server);
+    const { ctx, server, callTool, mockSaveMenus } = makeWriteToolCtx({ menus: [a, b], menuItems: [] });
     registerDeleteMenuTool(server, ctx);
 
     const text = getText(await callTool("delete_menu", { lookup: { name: "weekly" } }));
@@ -390,9 +341,10 @@ describe("delete_menu tool", () => {
   it("does not tombstone the menu when the cascade item save fails", async () => {
     const menu = makeMenu({ uid: "m-1" as MenuUid, name: "Holiday" });
     const item = makeMenuItem({ uid: "mi-1" as MenuItemUid, menuUid: "m-1", name: "Turkey" });
-    const { menuStore, menuItemStore } = syncedStores({ menus: [menu], items: [item] });
-    const { server, callTool } = makeTestServer();
-    const { ctx, mockSaveMenus, mockSaveMenuItems } = makeWriteToolCtx(menuStore, menuItemStore, server);
+    const { ctx, server, callTool, mockSaveMenus, mockSaveMenuItems } = makeWriteToolCtx({
+      menus: [menu],
+      menuItems: [item],
+    });
     mockSaveMenuItems.mockRejectedValueOnce(new Error("network down"));
     registerDeleteMenuTool(server, ctx);
 

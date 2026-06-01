@@ -6,7 +6,7 @@ import { RecipeStore } from "../cache/recipe-store.js";
 import { makeGroceryItem } from "../cache/__fixtures__/grocery-items.js";
 import { makeGroceryList } from "../cache/__fixtures__/grocery-lists.js";
 import { commitGroceryItem, commitGroceryItemsBatch, commitGroceryList, groceryStartGuard } from "./grocery-helpers.js";
-import { makeCtx, makeStubNotifier, makeTestServer, getText } from "./tool-test-utils.js";
+import { makeCtx, makeStubNotifier, makeTestServer, getText, seed } from "./tool-test-utils.js";
 
 describe("groceryStartGuard", () => {
   it("returns Err when neither store is synced", () => {
@@ -29,9 +29,9 @@ describe("groceryStartGuard", () => {
     const { server } = makeTestServer();
     const groceryListStore = new GroceryListStore();
     const groceryItemStore = new GroceryItemStore();
-    groceryListStore.load([]);
-    // groceryItemStore deliberately not loaded
     const ctx = makeCtx(new RecipeStore(), server, { groceryListStore, groceryItemStore });
+    seed(ctx, { groceryLists: [] });
+    // groceryItemStore deliberately not loaded
 
     groceryStartGuard(ctx).match(
       () => {
@@ -47,9 +47,9 @@ describe("groceryStartGuard", () => {
     const { server } = makeTestServer();
     const groceryListStore = new GroceryListStore();
     const groceryItemStore = new GroceryItemStore();
-    groceryItemStore.load([]);
-    // groceryListStore deliberately not loaded
     const ctx = makeCtx(new RecipeStore(), server, { groceryListStore, groceryItemStore });
+    seed(ctx, { groceryItems: [] });
+    // groceryListStore deliberately not loaded
 
     groceryStartGuard(ctx).match(
       () => {
@@ -65,9 +65,8 @@ describe("groceryStartGuard", () => {
     const { server } = makeTestServer();
     const groceryListStore = new GroceryListStore();
     const groceryItemStore = new GroceryItemStore();
-    groceryListStore.load([]);
-    groceryItemStore.load([]);
     const ctx = makeCtx(new RecipeStore(), server, { groceryListStore, groceryItemStore });
+    seed(ctx, { groceryLists: [], groceryItems: [] });
 
     groceryStartGuard(ctx).match(
       () => {
@@ -132,7 +131,6 @@ describe("commitGroceryList", () => {
       const list = makeGroceryList({ deleted: false });
       const deletedList = { ...list, deleted: true };
       const groceryListStore = new GroceryListStore();
-      groceryListStore.load([list]);
       const _setSpy = vi.spyOn(groceryListStore, "set");
       const deleteSpy = vi.spyOn(groceryListStore, "delete");
 
@@ -152,6 +150,7 @@ describe("commitGroceryList", () => {
         groceryListStore,
         notifier: stub.notifier,
       });
+      seed(ctx, { groceryLists: [list] });
 
       await commitGroceryList(ctx, deletedList);
 
@@ -221,7 +220,6 @@ describe("commitGroceryList", () => {
       const list = makeGroceryList({ deleted: false });
       const deletedList = { ...list, deleted: true };
       const groceryListStore = new GroceryListStore();
-      groceryListStore.load([list]);
       const deleteSpy = vi.spyOn(groceryListStore, "delete");
       const clearPendingSpy = vi.spyOn(groceryListStore, "clearPending");
 
@@ -241,6 +239,7 @@ describe("commitGroceryList", () => {
         groceryListStore,
         notifier: stub.notifier,
       });
+      seed(ctx, { groceryLists: [list] });
 
       await expect(commitGroceryList(ctx, deletedList)).rejects.toThrow("flush failed");
 
@@ -313,7 +312,6 @@ describe("commitGroceryItemsBatch", () => {
     const upserted = makeGroceryItem({ deleted: false });
     const deleted = makeGroceryItem({ deleted: true });
     const groceryItemStore = new GroceryItemStore();
-    groceryItemStore.load([deleted]);
     const setSpy = vi.spyOn(groceryItemStore, "set");
     const deleteSpy = vi.spyOn(groceryItemStore, "delete");
     const mockPut = vi.fn().mockResolvedValue(undefined);
@@ -328,6 +326,7 @@ describe("commitGroceryItemsBatch", () => {
       groceryItemStore,
       notifier: stub.notifier,
     });
+    seed(ctx, { groceryItems: [deleted] });
     await commitGroceryItemsBatch(ctx, [upserted, deleted]);
     expect(mockPut).toHaveBeenCalledWith(upserted);
     expect(mockRemove).toHaveBeenCalledWith(deleted.uid);
@@ -449,7 +448,6 @@ describe("commitGroceryItem", () => {
       const item = makeGroceryItem({ deleted: false });
       const deletedItem = { ...item, deleted: true };
       const groceryItemStore = new GroceryItemStore();
-      groceryItemStore.load([item]);
       const _setSpy = vi.spyOn(groceryItemStore, "set");
       const deleteSpy = vi.spyOn(groceryItemStore, "delete");
 
@@ -469,6 +467,7 @@ describe("commitGroceryItem", () => {
         groceryItemStore,
         notifier: stub.notifier,
       });
+      seed(ctx, { groceryItems: [item] });
 
       await commitGroceryItem(ctx, deletedItem);
 
@@ -538,7 +537,6 @@ describe("commitGroceryItem", () => {
       const item = makeGroceryItem({ deleted: false });
       const deletedItem = { ...item, deleted: true };
       const groceryItemStore = new GroceryItemStore();
-      groceryItemStore.load([item]);
       const deleteSpy = vi.spyOn(groceryItemStore, "delete");
       const clearPendingSpy = vi.spyOn(groceryItemStore, "clearPending");
 
@@ -558,6 +556,7 @@ describe("commitGroceryItem", () => {
         groceryItemStore,
         notifier: stub.notifier,
       });
+      seed(ctx, { groceryItems: [item] });
 
       await expect(commitGroceryItem(ctx, deletedItem)).rejects.toThrow("flush failed");
 

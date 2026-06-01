@@ -2,12 +2,11 @@ import { describe, it, expect, vi } from "vitest";
 import { fromAny } from "@total-typescript/shoehorn";
 import { MenuStore } from "../cache/menu-store.js";
 import { MenuItemStore } from "../cache/menu-item-store.js";
-import { MealTypeStore } from "../cache/meal-type-store.js";
 import { RecipeStore } from "../cache/recipe-store.js";
 import { makeMenu, makeMenuItem } from "../cache/__fixtures__/menus.js";
 import { makeMealType } from "../cache/__fixtures__/meals.js";
 import { commitMenu, commitMenuItem, commitMenuItemsBatch, menuStartGuard, menuToMarkdown } from "./menu-helpers.js";
-import { makeCtx, makeStubNotifier, makeTestServer, getText } from "./tool-test-utils.js";
+import { makeCtx, makeStubNotifier, makeTestServer, getText, seed } from "./tool-test-utils.js";
 import type { MealTypeUid, MenuItemUid, MenuUid } from "../paprika/types.js";
 
 const breakfast = makeMealType({
@@ -21,10 +20,7 @@ const dinner = makeMealType({ uid: "dinner-uid" as MealTypeUid, name: "Dinner", 
 describe("menuStartGuard", () => {
   it("returns Err when neither store is synced", () => {
     const { server } = makeTestServer();
-    const ctx = makeCtx(new RecipeStore(), server, {
-      menuStore: new MenuStore(),
-      menuItemStore: new MenuItemStore(),
-    });
+    const ctx = makeCtx(new RecipeStore(), server);
 
     menuStartGuard(ctx).match(
       () => {
@@ -38,9 +34,7 @@ describe("menuStartGuard", () => {
 
   it("returns Err when only menuStore is synced", () => {
     const { server } = makeTestServer();
-    const menuStore = new MenuStore();
-    menuStore.load([]);
-    const ctx = makeCtx(new RecipeStore(), server, { menuStore, menuItemStore: new MenuItemStore() });
+    const ctx = seed(makeCtx(new RecipeStore(), server), { menus: [] });
 
     menuStartGuard(ctx).match(
       () => {
@@ -54,13 +48,9 @@ describe("menuStartGuard", () => {
 
   it("returns Err when the menu stores are synced but meal types are not", () => {
     const { server } = makeTestServer();
-    const menuStore = new MenuStore();
-    const menuItemStore = new MenuItemStore();
-    menuStore.load([]);
-    menuItemStore.load([]);
-    // mealTypeStore defaults to an unsynced store via makeCtx — read_menu would
-    // otherwise render items with opaque typeUids, so the guard must block.
-    const ctx = makeCtx(new RecipeStore(), server, { menuStore, menuItemStore });
+    // mealTypeStore intentionally not seeded → hasSynced === false
+    // read_menu would otherwise render items with opaque typeUids, so the guard must block.
+    const ctx = seed(makeCtx(new RecipeStore(), server), { menus: [], menuItems: [] });
 
     menuStartGuard(ctx).match(
       () => {
@@ -74,13 +64,11 @@ describe("menuStartGuard", () => {
 
   it("returns Ok when all three stores are synced", () => {
     const { server } = makeTestServer();
-    const menuStore = new MenuStore();
-    const menuItemStore = new MenuItemStore();
-    const mealTypeStore = new MealTypeStore();
-    menuStore.load([]);
-    menuItemStore.load([]);
-    mealTypeStore.load([breakfast, dinner]);
-    const ctx = makeCtx(new RecipeStore(), server, { menuStore, menuItemStore, mealTypeStore });
+    const ctx = seed(makeCtx(new RecipeStore(), server), {
+      menus: [],
+      menuItems: [],
+      mealTypes: [breakfast, dinner],
+    });
 
     let reachedOk = false;
     menuStartGuard(ctx).match(

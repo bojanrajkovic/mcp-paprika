@@ -3,14 +3,11 @@ import { describe, it, expect, vi } from "vitest";
 import { RecipeStore } from "../cache/recipe-store.js";
 import { makeRecipe, makeCategory } from "../cache/__fixtures__/recipes.js";
 import { registerCreateTool } from "./create.js";
-import { makeTestServer, makeCtx, getText } from "./tool-test-utils.js";
+import { makeTestServer, makeCtx, getText, seed } from "./tool-test-utils.js";
 
 describe("p2-recipe-crud: create_recipe tool", () => {
   describe("p2-recipe-crud.AC2: create_recipe creates and persists a new recipe", () => {
     it("p2-recipe-crud.AC2.1: required fields create a recipe returned as markdown", async () => {
-      const store = new RecipeStore();
-      store.load([makeRecipe()]); // non-empty store
-
       const mockSaveRecipe = vi.fn();
       const mockNotifySync = vi.fn().mockResolvedValue(undefined);
       const mockPutRecipe = vi.fn();
@@ -20,10 +17,13 @@ describe("p2-recipe-crud: create_recipe tool", () => {
       mockSaveRecipe.mockResolvedValue(savedRecipe);
 
       const { server, callTool } = makeTestServer();
-      const ctx = makeCtx(store, server, {
-        client: fromAny({ saveRecipe: mockSaveRecipe, notifySync: mockNotifySync }),
-        cache: fromAny({ recipes: { put: mockPutRecipe }, flush: mockFlush }),
-      });
+      const ctx = seed(
+        makeCtx(new RecipeStore(), server, {
+          client: fromAny({ saveRecipe: mockSaveRecipe, notifySync: mockNotifySync }),
+          cache: fromAny({ recipes: { put: mockPutRecipe }, flush: mockFlush }),
+        }),
+        { recipes: [makeRecipe()] },
+      );
       registerCreateTool(server, ctx);
 
       const result = await callTool("create_recipe", {
@@ -39,9 +39,6 @@ describe("p2-recipe-crud: create_recipe tool", () => {
     });
 
     it("p2-recipe-crud.AC2.2: optional fields are reflected in returned recipe", async () => {
-      const store = new RecipeStore();
-      store.load([makeRecipe()]);
-
       const mockSaveRecipe = vi.fn();
       const mockNotifySync = vi.fn().mockResolvedValue(undefined);
       const mockPutRecipe = vi.fn();
@@ -56,10 +53,13 @@ describe("p2-recipe-crud: create_recipe tool", () => {
       mockSaveRecipe.mockResolvedValue(savedRecipe);
 
       const { server, callTool } = makeTestServer();
-      const ctx = makeCtx(store, server, {
-        client: fromAny({ saveRecipe: mockSaveRecipe, notifySync: mockNotifySync }),
-        cache: fromAny({ recipes: { put: mockPutRecipe }, flush: mockFlush }),
-      });
+      const ctx = seed(
+        makeCtx(new RecipeStore(), server, {
+          client: fromAny({ saveRecipe: mockSaveRecipe, notifySync: mockNotifySync }),
+          cache: fromAny({ recipes: { put: mockPutRecipe }, flush: mockFlush }),
+        }),
+        { recipes: [makeRecipe()] },
+      );
       registerCreateTool(server, ctx);
 
       const result = await callTool("create_recipe", {
@@ -78,9 +78,6 @@ describe("p2-recipe-crud: create_recipe tool", () => {
     });
 
     it("p2-recipe-crud.AC2.3: omitted optional fields default to null", async () => {
-      const store = new RecipeStore();
-      store.load([makeRecipe()]);
-
       const mockSaveRecipe = vi.fn();
       const mockNotifySync = vi.fn().mockResolvedValue(undefined);
       const mockPutRecipe = vi.fn();
@@ -90,10 +87,13 @@ describe("p2-recipe-crud: create_recipe tool", () => {
       mockSaveRecipe.mockResolvedValue(savedRecipe);
 
       const { server, callTool } = makeTestServer();
-      const ctx = makeCtx(store, server, {
-        client: fromAny({ saveRecipe: mockSaveRecipe, notifySync: mockNotifySync }),
-        cache: fromAny({ recipes: { put: mockPutRecipe }, flush: mockFlush }),
-      });
+      const ctx = seed(
+        makeCtx(new RecipeStore(), server, {
+          client: fromAny({ saveRecipe: mockSaveRecipe, notifySync: mockNotifySync }),
+          cache: fromAny({ recipes: { put: mockPutRecipe }, flush: mockFlush }),
+        }),
+        { recipes: [makeRecipe()] },
+      );
       registerCreateTool(server, ctx);
 
       await callTool("create_recipe", {
@@ -115,9 +115,6 @@ describe("p2-recipe-crud: create_recipe tool", () => {
     });
 
     it("p2-recipe-crud.AC2.3b: created is emitted in Paprika wire format, not ISO-8601 (regression #159)", async () => {
-      const store = new RecipeStore();
-      store.load([makeRecipe()]);
-
       const mockSaveRecipe = vi.fn();
       const mockNotifySync = vi.fn().mockResolvedValue(undefined);
       const mockPutRecipe = vi.fn();
@@ -126,10 +123,13 @@ describe("p2-recipe-crud: create_recipe tool", () => {
       mockSaveRecipe.mockResolvedValue(makeRecipe());
 
       const { server, callTool } = makeTestServer();
-      const ctx = makeCtx(store, server, {
-        client: fromAny({ saveRecipe: mockSaveRecipe, notifySync: mockNotifySync }),
-        cache: fromAny({ recipes: { put: mockPutRecipe }, flush: mockFlush }),
-      });
+      const ctx = seed(
+        makeCtx(new RecipeStore(), server, {
+          client: fromAny({ saveRecipe: mockSaveRecipe, notifySync: mockNotifySync }),
+          cache: fromAny({ recipes: { put: mockPutRecipe }, flush: mockFlush }),
+        }),
+        { recipes: [makeRecipe()] },
+      );
       registerCreateTool(server, ctx);
 
       await callTool("create_recipe", {
@@ -148,8 +148,6 @@ describe("p2-recipe-crud: create_recipe tool", () => {
 
     it("p2-recipe-crud.AC2.4: category names are resolved to UIDs", async () => {
       const category = makeCategory({ name: "Soups" });
-      const store = new RecipeStore();
-      store.load([makeRecipe()]);
 
       const mockSaveRecipe = vi.fn();
       const mockNotifySync = vi.fn().mockResolvedValue(undefined);
@@ -160,11 +158,13 @@ describe("p2-recipe-crud: create_recipe tool", () => {
       mockSaveRecipe.mockResolvedValue(savedRecipe);
 
       const { server, callTool } = makeTestServer();
-      const ctx = makeCtx(store, server, {
-        client: fromAny({ saveRecipe: mockSaveRecipe, notifySync: mockNotifySync }),
-        cache: fromAny({ recipes: { put: mockPutRecipe }, flush: mockFlush }),
-      });
-      ctx.categoryStore.load([category]);
+      const ctx = seed(
+        makeCtx(new RecipeStore(), server, {
+          client: fromAny({ saveRecipe: mockSaveRecipe, notifySync: mockNotifySync }),
+          cache: fromAny({ recipes: { put: mockPutRecipe }, flush: mockFlush }),
+        }),
+        { recipes: [makeRecipe()], categories: [category] },
+      );
       registerCreateTool(server, ctx);
 
       await callTool("create_recipe", {
@@ -179,9 +179,6 @@ describe("p2-recipe-crud: create_recipe tool", () => {
     });
 
     it("p2-recipe-crud.AC2.5: saveRecipe and notifySync called exactly once each", async () => {
-      const store = new RecipeStore();
-      store.load([makeRecipe()]);
-
       const mockSaveRecipe = vi.fn();
       const mockNotifySync = vi.fn().mockResolvedValue(undefined);
       const mockPutRecipe = vi.fn();
@@ -191,10 +188,13 @@ describe("p2-recipe-crud: create_recipe tool", () => {
       mockSaveRecipe.mockResolvedValue(savedRecipe);
 
       const { server, callTool } = makeTestServer();
-      const ctx = makeCtx(store, server, {
-        client: fromAny({ saveRecipe: mockSaveRecipe, notifySync: mockNotifySync }),
-        cache: fromAny({ recipes: { put: mockPutRecipe }, flush: mockFlush }),
-      });
+      const ctx = seed(
+        makeCtx(new RecipeStore(), server, {
+          client: fromAny({ saveRecipe: mockSaveRecipe, notifySync: mockNotifySync }),
+          cache: fromAny({ recipes: { put: mockPutRecipe }, flush: mockFlush }),
+        }),
+        { recipes: [makeRecipe()] },
+      );
       registerCreateTool(server, ctx);
 
       await callTool("create_recipe", {
@@ -208,9 +208,6 @@ describe("p2-recipe-crud: create_recipe tool", () => {
     });
 
     it("p2-recipe-crud.AC2.6: store.set and cache.putRecipe called with saved recipe", async () => {
-      const store = new RecipeStore();
-      store.load([makeRecipe()]);
-
       const mockSaveRecipe = vi.fn();
       const mockNotifySync = vi.fn().mockResolvedValue(undefined);
       const mockPutRecipe = vi.fn();
@@ -220,10 +217,13 @@ describe("p2-recipe-crud: create_recipe tool", () => {
       mockSaveRecipe.mockResolvedValue(savedRecipe);
 
       const { server, callTool } = makeTestServer();
-      const ctx = makeCtx(store, server, {
-        client: fromAny({ saveRecipe: mockSaveRecipe, notifySync: mockNotifySync }),
-        cache: fromAny({ recipes: { put: mockPutRecipe }, flush: mockFlush }),
-      });
+      const ctx = seed(
+        makeCtx(new RecipeStore(), server, {
+          client: fromAny({ saveRecipe: mockSaveRecipe, notifySync: mockNotifySync }),
+          cache: fromAny({ recipes: { put: mockPutRecipe }, flush: mockFlush }),
+        }),
+        { recipes: [makeRecipe()] },
+      );
       registerCreateTool(server, ctx);
 
       await callTool("create_recipe", {
@@ -234,13 +234,11 @@ describe("p2-recipe-crud: create_recipe tool", () => {
 
       expect(mockPutRecipe).toHaveBeenCalledWith(savedRecipe);
       expect(mockFlush).toHaveBeenCalledOnce();
-      expect(store.get(savedRecipe.uid)).toEqual(savedRecipe);
+      expect(ctx.store.get(savedRecipe.uid)).toEqual(savedRecipe);
     });
 
     it("p2-recipe-crud.AC2.7: unknown category name is skipped with warning", async () => {
       const category = makeCategory({ name: "Desserts" });
-      const store = new RecipeStore();
-      store.load([makeRecipe()]);
 
       const mockSaveRecipe = vi.fn();
       const mockNotifySync = vi.fn().mockResolvedValue(undefined);
@@ -251,11 +249,13 @@ describe("p2-recipe-crud: create_recipe tool", () => {
       mockSaveRecipe.mockResolvedValue(savedRecipe);
 
       const { server, callTool } = makeTestServer();
-      const ctx = makeCtx(store, server, {
-        client: fromAny({ saveRecipe: mockSaveRecipe, notifySync: mockNotifySync }),
-        cache: fromAny({ recipes: { put: mockPutRecipe }, flush: mockFlush }),
-      });
-      ctx.categoryStore.load([category]);
+      const ctx = seed(
+        makeCtx(new RecipeStore(), server, {
+          client: fromAny({ saveRecipe: mockSaveRecipe, notifySync: mockNotifySync }),
+          cache: fromAny({ recipes: { put: mockPutRecipe }, flush: mockFlush }),
+        }),
+        { recipes: [makeRecipe()], categories: [category] },
+      );
       registerCreateTool(server, ctx);
 
       const result = await callTool("create_recipe", {
@@ -273,9 +273,6 @@ describe("p2-recipe-crud: create_recipe tool", () => {
     });
 
     it("p2-recipe-crud.AC2.8: saveRecipe throws — returns error, store/cache not updated", async () => {
-      const store = new RecipeStore();
-      store.load([makeRecipe()]);
-
       const mockSaveRecipe = vi.fn();
       const mockNotifySync = vi.fn().mockResolvedValue(undefined);
       const mockPutRecipe = vi.fn();
@@ -284,10 +281,13 @@ describe("p2-recipe-crud: create_recipe tool", () => {
       mockSaveRecipe.mockRejectedValue(new Error("Network error"));
 
       const { server, callTool } = makeTestServer();
-      const ctx = makeCtx(store, server, {
-        client: fromAny({ saveRecipe: mockSaveRecipe, notifySync: mockNotifySync }),
-        cache: fromAny({ recipes: { put: mockPutRecipe }, flush: mockFlush }),
-      });
+      const ctx = seed(
+        makeCtx(new RecipeStore(), server, {
+          client: fromAny({ saveRecipe: mockSaveRecipe, notifySync: mockNotifySync }),
+          cache: fromAny({ recipes: { put: mockPutRecipe }, flush: mockFlush }),
+        }),
+        { recipes: [makeRecipe()] },
+      );
       registerCreateTool(server, ctx);
 
       const result = await callTool("create_recipe", {
@@ -303,7 +303,7 @@ describe("p2-recipe-crud: create_recipe tool", () => {
     });
 
     it("p2-recipe-crud.AC2.9: cold-start guard fires before any API call", async () => {
-      const store = new RecipeStore(); // not loaded — size === 0
+      // store not loaded — size === 0
 
       const mockSaveRecipe = vi.fn();
       const mockNotifySync = vi.fn().mockResolvedValue(undefined);
@@ -311,7 +311,7 @@ describe("p2-recipe-crud: create_recipe tool", () => {
       const mockFlush = vi.fn().mockResolvedValue(undefined);
 
       const { server, callTool } = makeTestServer();
-      const ctx = makeCtx(store, server, {
+      const ctx = makeCtx(new RecipeStore(), server, {
         client: fromAny({ saveRecipe: mockSaveRecipe, notifySync: mockNotifySync }),
         cache: fromAny({ recipes: { put: mockPutRecipe }, flush: mockFlush }),
       });

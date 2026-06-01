@@ -4,7 +4,7 @@ import { PantryStore } from "../cache/pantry-store.js";
 import { RecipeStore } from "../cache/recipe-store.js";
 import { makePantryItem } from "../cache/__fixtures__/pantry.js";
 import { commitPantryItem, commitPantryItemsBatch } from "./pantry-helpers.js";
-import { makeTestServer, makeCtx, makeStubNotifier } from "./tool-test-utils.js";
+import { makeTestServer, makeCtx, makeStubNotifier, seed } from "./tool-test-utils.js";
 
 describe("pantry-mutations.AC3: commitPantryItem helper", () => {
   describe("AC3.1: upsert branch (deleted: false)", () => {
@@ -59,7 +59,6 @@ describe("pantry-mutations.AC3: commitPantryItem helper", () => {
       const item = makePantryItem({ deleted: false });
       const saved = { ...item, deleted: true };
       const pantryStore = new PantryStore();
-      pantryStore.load([item]);
       const _setSpy = vi.spyOn(pantryStore, "set");
       const deleteSpy = vi.spyOn(pantryStore, "delete");
 
@@ -70,15 +69,18 @@ describe("pantry-mutations.AC3: commitPantryItem helper", () => {
       const stub = makeStubNotifier();
 
       const { server } = makeTestServer();
-      const ctx = makeCtx(new RecipeStore(), server, {
-        client: fromAny({ notifySync: mockNotifySync }),
-        cache: fromAny({
-          pantry: { put: mockPutPantryItem, remove: mockRemovePantryItem },
-          flush: mockFlush,
+      const ctx = seed(
+        makeCtx(new RecipeStore(), server, {
+          client: fromAny({ notifySync: mockNotifySync }),
+          cache: fromAny({
+            pantry: { put: mockPutPantryItem, remove: mockRemovePantryItem },
+            flush: mockFlush,
+          }),
+          pantryStore,
+          notifier: stub.notifier,
         }),
-        pantryStore,
-        notifier: stub.notifier,
-      });
+        { pantry: [item] },
+      );
 
       // Act
       await commitPantryItem(ctx, saved);
@@ -144,7 +146,6 @@ describe("pantry-mutations.AC3: commitPantryItem helper", () => {
       const item = makePantryItem({ deleted: false });
       const saved = { ...item, deleted: true };
       const pantryStore = new PantryStore();
-      pantryStore.load([item]);
       vi.spyOn(pantryStore, "set");
       const deleteSpy = vi.spyOn(pantryStore, "delete");
 
@@ -155,15 +156,18 @@ describe("pantry-mutations.AC3: commitPantryItem helper", () => {
       const stub = makeStubNotifier();
 
       const { server } = makeTestServer();
-      const ctx = makeCtx(new RecipeStore(), server, {
-        client: fromAny({ notifySync: mockNotifySync }),
-        cache: fromAny({
-          pantry: { put: mockPutPantryItem, remove: mockRemovePantryItem },
-          flush: mockFlush,
+      const ctx = seed(
+        makeCtx(new RecipeStore(), server, {
+          client: fromAny({ notifySync: mockNotifySync }),
+          cache: fromAny({
+            pantry: { put: mockPutPantryItem, remove: mockRemovePantryItem },
+            flush: mockFlush,
+          }),
+          pantryStore,
+          notifier: stub.notifier,
         }),
-        pantryStore,
-        notifier: stub.notifier,
-      });
+        { pantry: [item] },
+      );
 
       // Act & Assert
       await expect(commitPantryItem(ctx, saved)).rejects.toThrow("flush failed");
@@ -214,7 +218,6 @@ describe("pantry-mutations.AC3: commitPantryItem helper", () => {
       const item = makePantryItem({ deleted: false });
       const saved = { ...item, deleted: true };
       const pantryStore = new PantryStore();
-      pantryStore.load([item]);
 
       const mockPutPantryItem = vi.fn();
       const mockRemovePantryItem = vi.fn().mockRejectedValue(new Error("disk full"));
@@ -223,15 +226,18 @@ describe("pantry-mutations.AC3: commitPantryItem helper", () => {
       const stub = makeStubNotifier();
 
       const { server } = makeTestServer();
-      const ctx = makeCtx(new RecipeStore(), server, {
-        client: fromAny({ notifySync: mockNotifySync }),
-        cache: fromAny({
-          pantry: { put: mockPutPantryItem, remove: mockRemovePantryItem },
-          flush: mockFlush,
+      const ctx = seed(
+        makeCtx(new RecipeStore(), server, {
+          client: fromAny({ notifySync: mockNotifySync }),
+          cache: fromAny({
+            pantry: { put: mockPutPantryItem, remove: mockRemovePantryItem },
+            flush: mockFlush,
+          }),
+          pantryStore,
+          notifier: stub.notifier,
         }),
-        pantryStore,
-        notifier: stub.notifier,
-      });
+        { pantry: [item] },
+      );
 
       await expect(commitPantryItem(ctx, saved)).rejects.toThrow("disk full");
 
@@ -290,7 +296,6 @@ describe("commitPantryItemsBatch", () => {
     const deleted = makePantryItem({ deleted: false });
     const deletedItem = { ...deleted, deleted: true };
     const pantryStore = new PantryStore();
-    pantryStore.load([deleted]);
     const setSpy = vi.spyOn(pantryStore, "set");
     const deleteSpy = vi.spyOn(pantryStore, "delete");
     const mockPut = vi.fn().mockResolvedValue(undefined);
@@ -299,12 +304,15 @@ describe("commitPantryItemsBatch", () => {
     const mockNotifySync = vi.fn().mockResolvedValue(undefined);
     const stub = makeStubNotifier();
     const { server } = makeTestServer();
-    const ctx = makeCtx(new RecipeStore(), server, {
-      client: fromAny({ notifySync: mockNotifySync }),
-      cache: fromAny({ pantry: { put: mockPut, remove: mockRemove }, flush: mockFlush }),
-      pantryStore,
-      notifier: stub.notifier,
-    });
+    const ctx = seed(
+      makeCtx(new RecipeStore(), server, {
+        client: fromAny({ notifySync: mockNotifySync }),
+        cache: fromAny({ pantry: { put: mockPut, remove: mockRemove }, flush: mockFlush }),
+        pantryStore,
+        notifier: stub.notifier,
+      }),
+      { pantry: [deleted] },
+    );
     await commitPantryItemsBatch(ctx, [upserted, deletedItem]);
     expect(mockPut).toHaveBeenCalledWith(upserted);
     expect(mockRemove).toHaveBeenCalledWith(deletedItem.uid);

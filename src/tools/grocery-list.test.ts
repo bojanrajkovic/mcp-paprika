@@ -1,11 +1,10 @@
 import { fromAny } from "@total-typescript/shoehorn";
 import { describe, it, expect, vi } from "vitest";
 import { RecipeStore } from "../cache/recipe-store.js";
-import { GroceryListStore } from "../cache/grocery-list-store.js";
-import { GroceryItemStore } from "../cache/grocery-item-store.js";
 import { makeGroceryList } from "../cache/__fixtures__/grocery-lists.js";
 import { makeGroceryItem } from "../cache/__fixtures__/grocery-items.js";
-import { makeTestServer, makeCtx, getText, makeStubNotifier } from "./tool-test-utils.js";
+import { makeTestServer, makeCtx, getText, makeStubNotifier, seed } from "./tool-test-utils.js";
+import type { SeedData } from "./tool-test-utils.js";
 import {
   registerListGroceryListsTool,
   registerReadGroceryListTool,
@@ -16,12 +15,9 @@ import {
 
 describe("list_grocery_lists tool", () => {
   it("grocery-surface.AC1.9: returns sync-not-ready message when stores not loaded", async () => {
-    const groceryListStore = new GroceryListStore();
-    const groceryItemStore = new GroceryItemStore();
-    // DO NOT call .load() on either store
-
+    // DO NOT seed grocery stores
     const { server, callTool } = makeTestServer();
-    const ctx = makeCtx(new RecipeStore(), server, { groceryListStore, groceryItemStore });
+    const ctx = makeCtx(new RecipeStore(), server);
     registerListGroceryListsTool(server, ctx);
 
     const result = await callTool("list_grocery_lists", {});
@@ -31,13 +27,8 @@ describe("list_grocery_lists tool", () => {
   });
 
   it("grocery-surface.AC1.1: returns empty message when no lists exist", async () => {
-    const groceryListStore = new GroceryListStore();
-    const groceryItemStore = new GroceryItemStore();
-    groceryListStore.load([]);
-    groceryItemStore.load([]);
-
     const { server, callTool } = makeTestServer();
-    const ctx = makeCtx(new RecipeStore(), server, { groceryListStore, groceryItemStore });
+    const ctx = seed(makeCtx(new RecipeStore(), server), { groceryLists: [], groceryItems: [] });
     registerListGroceryListsTool(server, ctx);
 
     const result = await callTool("list_grocery_lists", {});
@@ -47,9 +38,6 @@ describe("list_grocery_lists tool", () => {
   });
 
   it("grocery-surface.AC1.1: returns list names, UIDs, and item counts", async () => {
-    const groceryListStore = new GroceryListStore();
-    const groceryItemStore = new GroceryItemStore();
-
     const listA = makeGroceryList({ name: "Weekly Shopping" });
     const listB = makeGroceryList({ name: "Costco Run" });
 
@@ -57,11 +45,11 @@ describe("list_grocery_lists tool", () => {
     const item2 = makeGroceryItem({ listUid: listA.uid });
     const item3 = makeGroceryItem({ listUid: listB.uid });
 
-    groceryListStore.load([listA, listB]);
-    groceryItemStore.load([item1, item2, item3]);
-
     const { server, callTool } = makeTestServer();
-    const ctx = makeCtx(new RecipeStore(), server, { groceryListStore, groceryItemStore });
+    const ctx = seed(makeCtx(new RecipeStore(), server), {
+      groceryLists: [listA, listB],
+      groceryItems: [item1, item2, item3],
+    });
     registerListGroceryListsTool(server, ctx);
 
     const result = await callTool("list_grocery_lists", {});
@@ -84,18 +72,15 @@ describe("list_grocery_lists tool", () => {
   });
 
   it("grocery-surface.AC1.1: sorts lists alphabetically by name", async () => {
-    const groceryListStore = new GroceryListStore();
-    const groceryItemStore = new GroceryItemStore();
-
     const listZ = makeGroceryList({ name: "Zebra Market" });
     const listA = makeGroceryList({ name: "Aldi Trip" });
     const listM = makeGroceryList({ name: "Monthly Stock" });
 
-    groceryListStore.load([listZ, listA, listM]);
-    groceryItemStore.load([]);
-
     const { server, callTool } = makeTestServer();
-    const ctx = makeCtx(new RecipeStore(), server, { groceryListStore, groceryItemStore });
+    const ctx = seed(makeCtx(new RecipeStore(), server), {
+      groceryLists: [listZ, listA, listM],
+      groceryItems: [],
+    });
     registerListGroceryListsTool(server, ctx);
 
     const result = await callTool("list_grocery_lists", {});
@@ -115,12 +100,9 @@ describe("list_grocery_lists tool", () => {
 
 describe("read_grocery_list tool", () => {
   it("grocery-surface.AC1.9: returns sync-not-ready message when stores not loaded", async () => {
-    const groceryListStore = new GroceryListStore();
-    const groceryItemStore = new GroceryItemStore();
-    // DO NOT call .load() on either store
-
+    // DO NOT seed grocery stores
     const { server, callTool } = makeTestServer();
-    const ctx = makeCtx(new RecipeStore(), server, { groceryListStore, groceryItemStore });
+    const ctx = makeCtx(new RecipeStore(), server);
     registerReadGroceryListTool(server, ctx);
 
     const result = await callTool("read_grocery_list", { lookup: { uid: "some-uid" } });
@@ -130,13 +112,8 @@ describe("read_grocery_list tool", () => {
   });
 
   it("grocery-surface.AC1.2: returns not-found when UID does not match any list", async () => {
-    const groceryListStore = new GroceryListStore();
-    const groceryItemStore = new GroceryItemStore();
-    groceryListStore.load([]);
-    groceryItemStore.load([]);
-
     const { server, callTool } = makeTestServer();
-    const ctx = makeCtx(new RecipeStore(), server, { groceryListStore, groceryItemStore });
+    const ctx = seed(makeCtx(new RecipeStore(), server), { groceryLists: [], groceryItems: [] });
     registerReadGroceryListTool(server, ctx);
 
     const result = await callTool("read_grocery_list", { lookup: { uid: "nonexistent-uid" } });
@@ -146,18 +123,15 @@ describe("read_grocery_list tool", () => {
   });
 
   it("grocery-surface.AC1.2: returns list metadata and items when fetched by UID", async () => {
-    const groceryListStore = new GroceryListStore();
-    const groceryItemStore = new GroceryItemStore();
-
     const list = makeGroceryList({ name: "Weekly Shopping" });
     const item1 = makeGroceryItem({ listUid: list.uid, ingredient: "Apples" });
     const item2 = makeGroceryItem({ listUid: list.uid, ingredient: "Milk" });
 
-    groceryListStore.load([list]);
-    groceryItemStore.load([item1, item2]);
-
     const { server, callTool } = makeTestServer();
-    const ctx = makeCtx(new RecipeStore(), server, { groceryListStore, groceryItemStore });
+    const ctx = seed(makeCtx(new RecipeStore(), server), {
+      groceryLists: [list],
+      groceryItems: [item1, item2],
+    });
     registerReadGroceryListTool(server, ctx);
 
     const result = await callTool("read_grocery_list", { lookup: { uid: list.uid } });
@@ -170,15 +144,10 @@ describe("read_grocery_list tool", () => {
   });
 
   it("grocery-surface.AC1.3: resolves by exact name match", async () => {
-    const groceryListStore = new GroceryListStore();
-    const groceryItemStore = new GroceryItemStore();
-
     const list = makeGroceryList({ name: "Weekly Shopping" });
-    groceryListStore.load([list]);
-    groceryItemStore.load([]);
 
     const { server, callTool } = makeTestServer();
-    const ctx = makeCtx(new RecipeStore(), server, { groceryListStore, groceryItemStore });
+    const ctx = seed(makeCtx(new RecipeStore(), server), { groceryLists: [list], groceryItems: [] });
     registerReadGroceryListTool(server, ctx);
 
     const result = await callTool("read_grocery_list", { lookup: { name: "Weekly Shopping" } });
@@ -189,15 +158,10 @@ describe("read_grocery_list tool", () => {
   });
 
   it("grocery-surface.AC1.3: resolves by starts-with name match", async () => {
-    const groceryListStore = new GroceryListStore();
-    const groceryItemStore = new GroceryItemStore();
-
     const list = makeGroceryList({ name: "Weekly Shopping" });
-    groceryListStore.load([list]);
-    groceryItemStore.load([]);
 
     const { server, callTool } = makeTestServer();
-    const ctx = makeCtx(new RecipeStore(), server, { groceryListStore, groceryItemStore });
+    const ctx = seed(makeCtx(new RecipeStore(), server), { groceryLists: [list], groceryItems: [] });
     registerReadGroceryListTool(server, ctx);
 
     const result = await callTool("read_grocery_list", { lookup: { name: "Weekly" } });
@@ -208,15 +172,10 @@ describe("read_grocery_list tool", () => {
   });
 
   it("grocery-surface.AC1.3: resolves by contains name match", async () => {
-    const groceryListStore = new GroceryListStore();
-    const groceryItemStore = new GroceryItemStore();
-
     const list = makeGroceryList({ name: "Weekly Shopping" });
-    groceryListStore.load([list]);
-    groceryItemStore.load([]);
 
     const { server, callTool } = makeTestServer();
-    const ctx = makeCtx(new RecipeStore(), server, { groceryListStore, groceryItemStore });
+    const ctx = seed(makeCtx(new RecipeStore(), server), { groceryLists: [list], groceryItems: [] });
     registerReadGroceryListTool(server, ctx);
 
     const result = await callTool("read_grocery_list", { lookup: { name: "Shopping" } });
@@ -227,13 +186,11 @@ describe("read_grocery_list tool", () => {
   });
 
   it("grocery-surface.AC1.3: returns not-found when name does not match any list", async () => {
-    const groceryListStore = new GroceryListStore();
-    const groceryItemStore = new GroceryItemStore();
-    groceryListStore.load([makeGroceryList({ name: "Weekly Shopping" })]);
-    groceryItemStore.load([]);
-
     const { server, callTool } = makeTestServer();
-    const ctx = makeCtx(new RecipeStore(), server, { groceryListStore, groceryItemStore });
+    const ctx = seed(makeCtx(new RecipeStore(), server), {
+      groceryLists: [makeGroceryList({ name: "Weekly Shopping" })],
+      groceryItems: [],
+    });
     registerReadGroceryListTool(server, ctx);
 
     const result = await callTool("read_grocery_list", { lookup: { name: "Completely Different" } });
@@ -245,17 +202,14 @@ describe("read_grocery_list tool", () => {
   });
 
   it("grocery-surface.AC1.3: returns disambiguation when multiple lists match the same tier", async () => {
-    const groceryListStore = new GroceryListStore();
-    const groceryItemStore = new GroceryItemStore();
-
     const listA = makeGroceryList({ name: "Weekly Shopping" });
     const listB = makeGroceryList({ name: "Weekly Costco" });
 
-    groceryListStore.load([listA, listB]);
-    groceryItemStore.load([]);
-
     const { server, callTool } = makeTestServer();
-    const ctx = makeCtx(new RecipeStore(), server, { groceryListStore, groceryItemStore });
+    const ctx = seed(makeCtx(new RecipeStore(), server), {
+      groceryLists: [listA, listB],
+      groceryItems: [],
+    });
     registerReadGroceryListTool(server, ctx);
 
     const result = await callTool("read_grocery_list", { lookup: { name: "Weekly" } });
@@ -269,11 +223,7 @@ describe("read_grocery_list tool", () => {
 });
 
 // Helper to build write-tool ctx with mocked client and cache
-function makeWriteToolCtx(
-  groceryListStore: GroceryListStore,
-  groceryItemStore: GroceryItemStore,
-  server: ReturnType<typeof makeTestServer>["server"],
-) {
+function makeWriteToolCtx(seedData: SeedData, server: ReturnType<typeof makeTestServer>["server"]) {
   const mockSaveGroceryList = vi.fn().mockImplementation(async (list: unknown) => list);
   const mockNotifySync = vi.fn().mockResolvedValue(undefined);
   const mockPutGroceryList = vi.fn();
@@ -282,8 +232,6 @@ function makeWriteToolCtx(
   const { notifier, resourceListChanged } = makeStubNotifier();
 
   const ctx = makeCtx(new RecipeStore(), server, {
-    groceryListStore,
-    groceryItemStore,
     client: fromAny({
       saveGroceryList: mockSaveGroceryList,
       notifySync: mockNotifySync,
@@ -294,6 +242,7 @@ function makeWriteToolCtx(
     }),
     notifier,
   });
+  seed(ctx, seedData);
 
   return {
     ctx,
@@ -308,12 +257,9 @@ function makeWriteToolCtx(
 
 describe("create_grocery_list tool", () => {
   it("grocery-surface.AC1.9: returns sync-not-ready message when stores not loaded", async () => {
-    const groceryListStore = new GroceryListStore();
-    const groceryItemStore = new GroceryItemStore();
-    // DO NOT call .load() on either store
-
+    // DO NOT seed grocery stores
     const { server, callTool } = makeTestServer();
-    const { ctx } = makeWriteToolCtx(groceryListStore, groceryItemStore, server);
+    const { ctx } = makeWriteToolCtx({}, server);
     registerCreateGroceryListTool(server, ctx);
 
     const result = await callTool("create_grocery_list", { name: "Weekly Shopping" });
@@ -323,15 +269,9 @@ describe("create_grocery_list tool", () => {
   });
 
   it("grocery-surface.AC1.4: creates list with uppercase UUID and correct defaults", async () => {
-    const groceryListStore = new GroceryListStore();
-    const groceryItemStore = new GroceryItemStore();
-    groceryListStore.load([]);
-    groceryItemStore.load([]);
-
     const { server, callTool } = makeTestServer();
     const { ctx, mockSaveGroceryList, resourceListChanged } = makeWriteToolCtx(
-      groceryListStore,
-      groceryItemStore,
+      { groceryLists: [], groceryItems: [] },
       server,
     );
     registerCreateGroceryListTool(server, ctx);
@@ -354,32 +294,22 @@ describe("create_grocery_list tool", () => {
   });
 
   it("grocery-surface.AC1.4: store contains the new list after creation", async () => {
-    const groceryListStore = new GroceryListStore();
-    const groceryItemStore = new GroceryItemStore();
-    groceryListStore.load([]);
-    groceryItemStore.load([]);
-
     const { server, callTool } = makeTestServer();
-    const { ctx } = makeWriteToolCtx(groceryListStore, groceryItemStore, server);
+    const { ctx } = makeWriteToolCtx({ groceryLists: [], groceryItems: [] }, server);
     registerCreateGroceryListTool(server, ctx);
 
     await callTool("create_grocery_list", { name: "Weekly Shopping" });
 
     // Store should contain the new list after commit
-    const all = groceryListStore.getAll();
+    const all = ctx.groceryListStore.getAll();
     expect(all).toHaveLength(1);
     expect(all[0]!.name).toBe("Weekly Shopping");
   });
 
   it("grocery-surface.AC1.7: rejects duplicate name (exact case-insensitive match)", async () => {
-    const groceryListStore = new GroceryListStore();
-    const groceryItemStore = new GroceryItemStore();
     const existing = makeGroceryList({ name: "Weekly Shopping" });
-    groceryListStore.load([existing]);
-    groceryItemStore.load([]);
-
     const { server, callTool } = makeTestServer();
-    const { ctx, mockSaveGroceryList } = makeWriteToolCtx(groceryListStore, groceryItemStore, server);
+    const { ctx, mockSaveGroceryList } = makeWriteToolCtx({ groceryLists: [existing], groceryItems: [] }, server);
     registerCreateGroceryListTool(server, ctx);
 
     const result = await callTool("create_grocery_list", { name: "weekly shopping" });
@@ -391,14 +321,9 @@ describe("create_grocery_list tool", () => {
   });
 
   it("grocery-surface.AC1.7: allows creation when name matches only by starts-with (not exact)", async () => {
-    const groceryListStore = new GroceryListStore();
-    const groceryItemStore = new GroceryItemStore();
     const existing = makeGroceryList({ name: "Weekly Shopping Costco" });
-    groceryListStore.load([existing]);
-    groceryItemStore.load([]);
-
     const { server, callTool } = makeTestServer();
-    const { ctx, mockSaveGroceryList } = makeWriteToolCtx(groceryListStore, groceryItemStore, server);
+    const { ctx, mockSaveGroceryList } = makeWriteToolCtx({ groceryLists: [existing], groceryItems: [] }, server);
     registerCreateGroceryListTool(server, ctx);
 
     // "Weekly Shopping" is a prefix of "Weekly Shopping Costco" but not an exact match
@@ -413,12 +338,9 @@ describe("create_grocery_list tool", () => {
 
 describe("rename_grocery_list tool", () => {
   it("grocery-surface.AC1.9: returns sync-not-ready message when stores not loaded", async () => {
-    const groceryListStore = new GroceryListStore();
-    const groceryItemStore = new GroceryItemStore();
-    // DO NOT call .load()
-
+    // DO NOT seed grocery stores
     const { server, callTool } = makeTestServer();
-    const { ctx } = makeWriteToolCtx(groceryListStore, groceryItemStore, server);
+    const { ctx } = makeWriteToolCtx({}, server);
     registerRenameGroceryListTool(server, ctx);
 
     const result = await callTool("rename_grocery_list", { uid: "some-uid", newName: "New Name" });
@@ -428,13 +350,8 @@ describe("rename_grocery_list tool", () => {
   });
 
   it("grocery-surface.AC1.5: returns not-found when UID does not match any list", async () => {
-    const groceryListStore = new GroceryListStore();
-    const groceryItemStore = new GroceryItemStore();
-    groceryListStore.load([]);
-    groceryItemStore.load([]);
-
     const { server, callTool } = makeTestServer();
-    const { ctx } = makeWriteToolCtx(groceryListStore, groceryItemStore, server);
+    const { ctx } = makeWriteToolCtx({ groceryLists: [], groceryItems: [] }, server);
     registerRenameGroceryListTool(server, ctx);
 
     const result = await callTool("rename_grocery_list", { uid: "nonexistent-uid", newName: "New Name" });
@@ -444,16 +361,10 @@ describe("rename_grocery_list tool", () => {
   });
 
   it("grocery-surface.AC1.5: renames list and calls save", async () => {
-    const groceryListStore = new GroceryListStore();
-    const groceryItemStore = new GroceryItemStore();
     const list = makeGroceryList({ name: "Weekly Shopping" });
-    groceryListStore.load([list]);
-    groceryItemStore.load([]);
-
     const { server, callTool } = makeTestServer();
     const { ctx, mockSaveGroceryList, resourceListChanged } = makeWriteToolCtx(
-      groceryListStore,
-      groceryItemStore,
+      { groceryLists: [list], groceryItems: [] },
       server,
     );
     registerRenameGroceryListTool(server, ctx);
@@ -470,14 +381,9 @@ describe("rename_grocery_list tool", () => {
   });
 
   it("grocery-surface.AC1.10: same name (exact case) is a no-op, does not call save", async () => {
-    const groceryListStore = new GroceryListStore();
-    const groceryItemStore = new GroceryItemStore();
     const list = makeGroceryList({ name: "Weekly Shopping" });
-    groceryListStore.load([list]);
-    groceryItemStore.load([]);
-
     const { server, callTool } = makeTestServer();
-    const { ctx, mockSaveGroceryList } = makeWriteToolCtx(groceryListStore, groceryItemStore, server);
+    const { ctx, mockSaveGroceryList } = makeWriteToolCtx({ groceryLists: [list], groceryItems: [] }, server);
     registerRenameGroceryListTool(server, ctx);
 
     const result = await callTool("rename_grocery_list", { uid: list.uid, newName: "Weekly Shopping" });
@@ -490,14 +396,9 @@ describe("rename_grocery_list tool", () => {
   });
 
   it("grocery-surface.AC1.10: same name (different case) is a no-op, does not call save", async () => {
-    const groceryListStore = new GroceryListStore();
-    const groceryItemStore = new GroceryItemStore();
     const list = makeGroceryList({ name: "Weekly Shopping" });
-    groceryListStore.load([list]);
-    groceryItemStore.load([]);
-
     const { server, callTool } = makeTestServer();
-    const { ctx, mockSaveGroceryList } = makeWriteToolCtx(groceryListStore, groceryItemStore, server);
+    const { ctx, mockSaveGroceryList } = makeWriteToolCtx({ groceryLists: [list], groceryItems: [] }, server);
     registerRenameGroceryListTool(server, ctx);
 
     const result = await callTool("rename_grocery_list", { uid: list.uid, newName: "weekly shopping" });
@@ -508,15 +409,10 @@ describe("rename_grocery_list tool", () => {
   });
 
   it("grocery-surface.AC1.8: rejects rename when newName conflicts with another list", async () => {
-    const groceryListStore = new GroceryListStore();
-    const groceryItemStore = new GroceryItemStore();
     const listA = makeGroceryList({ name: "Weekly Shopping" });
     const listB = makeGroceryList({ name: "Costco Run" });
-    groceryListStore.load([listA, listB]);
-    groceryItemStore.load([]);
-
     const { server, callTool } = makeTestServer();
-    const { ctx, mockSaveGroceryList } = makeWriteToolCtx(groceryListStore, groceryItemStore, server);
+    const { ctx, mockSaveGroceryList } = makeWriteToolCtx({ groceryLists: [listA, listB], groceryItems: [] }, server);
     registerRenameGroceryListTool(server, ctx);
 
     const result = await callTool("rename_grocery_list", { uid: listA.uid, newName: "Costco Run" });
@@ -530,12 +426,9 @@ describe("rename_grocery_list tool", () => {
 
 describe("delete_grocery_list tool", () => {
   it("grocery-surface.AC1.9: returns sync-not-ready message when stores not loaded", async () => {
-    const groceryListStore = new GroceryListStore();
-    const groceryItemStore = new GroceryItemStore();
-    // DO NOT call .load()
-
+    // DO NOT seed grocery stores
     const { server, callTool } = makeTestServer();
-    const { ctx } = makeWriteToolCtx(groceryListStore, groceryItemStore, server);
+    const { ctx } = makeWriteToolCtx({}, server);
     registerDeleteGroceryListTool(server, ctx);
 
     const result = await callTool("delete_grocery_list", { uid: "some-uid" });
@@ -545,13 +438,8 @@ describe("delete_grocery_list tool", () => {
   });
 
   it("grocery-surface.AC1.6: returns not-found for unknown UID (not tombstoned)", async () => {
-    const groceryListStore = new GroceryListStore();
-    const groceryItemStore = new GroceryItemStore();
-    groceryListStore.load([]);
-    groceryItemStore.load([]);
-
     const { server, callTool } = makeTestServer();
-    const { ctx, mockSaveGroceryList } = makeWriteToolCtx(groceryListStore, groceryItemStore, server);
+    const { ctx, mockSaveGroceryList } = makeWriteToolCtx({ groceryLists: [], groceryItems: [] }, server);
     registerDeleteGroceryListTool(server, ctx);
 
     const result = await callTool("delete_grocery_list", { uid: "nonexistent-uid" });
@@ -562,16 +450,10 @@ describe("delete_grocery_list tool", () => {
   });
 
   it("grocery-surface.AC1.6: soft-deletes list by setting deleted: true", async () => {
-    const groceryListStore = new GroceryListStore();
-    const groceryItemStore = new GroceryItemStore();
     const list = makeGroceryList({ name: "Weekly Shopping" });
-    groceryListStore.load([list]);
-    groceryItemStore.load([]);
-
     const { server, callTool } = makeTestServer();
     const { ctx, mockSaveGroceryList, resourceListChanged } = makeWriteToolCtx(
-      groceryListStore,
-      groceryItemStore,
+      { groceryLists: [list], groceryItems: [] },
       server,
     );
     registerDeleteGroceryListTool(server, ctx);
@@ -588,30 +470,20 @@ describe("delete_grocery_list tool", () => {
   });
 
   it("grocery-surface.AC1.6: list becomes tombstoned after deletion", async () => {
-    const groceryListStore = new GroceryListStore();
-    const groceryItemStore = new GroceryItemStore();
     const list = makeGroceryList({ name: "Weekly Shopping" });
-    groceryListStore.load([list]);
-    groceryItemStore.load([]);
-
     const { server, callTool } = makeTestServer();
-    const { ctx } = makeWriteToolCtx(groceryListStore, groceryItemStore, server);
+    const { ctx } = makeWriteToolCtx({ groceryLists: [list], groceryItems: [] }, server);
     registerDeleteGroceryListTool(server, ctx);
 
     await callTool("delete_grocery_list", { uid: list.uid });
 
-    expect(groceryListStore.isTombstone(list.uid)).toBe(true);
+    expect(ctx.groceryListStore.isTombstone(list.uid)).toBe(true);
   });
 
   it("grocery-surface.AC1.11: tombstoned (already-deleted) UID returns idempotent message", async () => {
-    const groceryListStore = new GroceryListStore();
-    const groceryItemStore = new GroceryItemStore();
     const list = makeGroceryList({ name: "Weekly Shopping" });
-    groceryListStore.load([list]);
-    groceryItemStore.load([]);
-
     const { server, callTool } = makeTestServer();
-    const { ctx, mockSaveGroceryList } = makeWriteToolCtx(groceryListStore, groceryItemStore, server);
+    const { ctx, mockSaveGroceryList } = makeWriteToolCtx({ groceryLists: [list], groceryItems: [] }, server);
     registerDeleteGroceryListTool(server, ctx);
 
     // First delete — tombstones the UID
@@ -627,15 +499,10 @@ describe("delete_grocery_list tool", () => {
   });
 
   it("grocery-surface.AC1.6: does not cascade to items (no saveGroceryItems call)", async () => {
-    const groceryListStore = new GroceryListStore();
-    const groceryItemStore = new GroceryItemStore();
     const list = makeGroceryList({ name: "Weekly Shopping" });
     const item = makeGroceryItem({ listUid: list.uid });
-    groceryListStore.load([list]);
-    groceryItemStore.load([item]);
-
     const { server, callTool } = makeTestServer();
-    const { ctx, mockSaveGroceryList } = makeWriteToolCtx(groceryListStore, groceryItemStore, server);
+    const { ctx, mockSaveGroceryList } = makeWriteToolCtx({ groceryLists: [list], groceryItems: [item] }, server);
     registerDeleteGroceryListTool(server, ctx);
 
     await callTool("delete_grocery_list", { uid: list.uid });

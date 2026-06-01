@@ -1,40 +1,32 @@
 import { describe, it, expect } from "vitest";
-import { MenuStore } from "../cache/menu-store.js";
-import { MenuItemStore } from "../cache/menu-item-store.js";
-import { MealTypeStore } from "../cache/meal-type-store.js";
 import { RecipeStore } from "../cache/recipe-store.js";
 import { makeMenu, makeMenuItem } from "../cache/__fixtures__/menus.js";
 import { makeMealType } from "../cache/__fixtures__/meals.js";
 import { registerListMenusTool, registerReadMenuTool } from "./menu-read.js";
-import { makeTestServer, makeCtx, getText } from "./tool-test-utils.js";
+import { makeTestServer, makeCtx, getText, seed } from "./tool-test-utils.js";
 import type { MealTypeUid, MenuItemUid, MenuUid } from "../paprika/types.js";
 
-function syncedMealTypeStore(): MealTypeStore {
-  const store = new MealTypeStore();
-  store.load([
-    makeMealType({ uid: "breakfast-uid" as MealTypeUid, name: "Breakfast", orderFlag: 0, originalType: 0 }),
-    makeMealType({ uid: "dinner-uid" as MealTypeUid, name: "Dinner", orderFlag: 2, originalType: 2 }),
-  ]);
-  return store;
-}
+const BREAKFAST = makeMealType({
+  uid: "breakfast-uid" as MealTypeUid,
+  name: "Breakfast",
+  orderFlag: 0,
+  originalType: 0,
+});
+const DINNER = makeMealType({ uid: "dinner-uid" as MealTypeUid, name: "Dinner", orderFlag: 2, originalType: 2 });
 
 function setup(opts: {
   menus: ReturnType<typeof makeMenu>[];
   items: ReturnType<typeof makeMenuItem>[];
   synced?: boolean;
 }) {
-  const menuStore = new MenuStore();
-  const menuItemStore = new MenuItemStore();
-  if (opts.synced ?? true) {
-    menuStore.load(opts.menus);
-    menuItemStore.load(opts.items);
-  }
-  const mealTypeStore = syncedMealTypeStore();
   const { server, callTool } = makeTestServer();
-  const ctx = makeCtx(new RecipeStore(), server, { menuStore, menuItemStore, mealTypeStore });
+  const ctx = makeCtx(new RecipeStore(), server);
+  if (opts.synced ?? true) {
+    seed(ctx, { menus: opts.menus, menuItems: opts.items, mealTypes: [BREAKFAST, DINNER] });
+  }
   registerListMenusTool(server, ctx);
   registerReadMenuTool(server, ctx);
-  return { callTool, menuStore, menuItemStore };
+  return { callTool };
 }
 
 describe("list_menus tool", () => {

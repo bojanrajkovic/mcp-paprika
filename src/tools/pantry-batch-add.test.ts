@@ -1,17 +1,15 @@
 import { fromAny } from "@total-typescript/shoehorn";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { RecipeStore } from "../cache/recipe-store.js";
-import { PantryStore } from "../cache/pantry-store.js";
 import { AisleStore } from "../cache/aisle-store.js";
 import { makePantryItem } from "../cache/__fixtures__/pantry.js";
 import { makeAisle } from "../cache/__fixtures__/aisles.js";
 import { registerAddPantryItemsTool } from "./pantry-batch-add.js";
-import { makeTestServer, makeCtx, getText, makePinoCapture } from "./tool-test-utils.js";
+import { makeTestServer, makeCtx, getText, makePinoCapture, seed } from "./tool-test-utils.js";
 import type { PantryItemUid, AisleUid } from "../paprika/types.js";
 import { PaprikaAPIError } from "../paprika/errors.js";
 
 describe("add_pantry_items tool", () => {
-  let pantryStore: PantryStore;
   let aisleStore: AisleStore;
 
   let mockSavePantryItems: ReturnType<typeof vi.fn>;
@@ -21,7 +19,6 @@ describe("add_pantry_items tool", () => {
   let mockFlush: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
-    pantryStore = new PantryStore();
     aisleStore = new AisleStore();
 
     mockSavePantryItems = vi.fn().mockImplementation(async (items) => items);
@@ -30,28 +27,29 @@ describe("add_pantry_items tool", () => {
     mockPutPantryItem = vi.fn().mockResolvedValue(undefined);
     mockFlush = vi.fn().mockResolvedValue(undefined);
 
-    pantryStore.load([]);
     aisleStore.load([makeAisle({ uid: "AISLE-1" as AisleUid, name: "Produce" })]);
   });
 
   function makeAddCtx() {
     const { server, callTool } = makeTestServer();
-    const ctx = makeCtx(new RecipeStore(), server, {
-      pantryStore,
-      aisleStore,
-      client: fromAny({
-        savePantryItems: mockSavePantryItems,
-        saveAisle: mockSaveAisle,
-        notifySync: mockNotifySync,
+    const ctx = seed(
+      makeCtx(new RecipeStore(), server, {
+        aisleStore,
+        client: fromAny({
+          savePantryItems: mockSavePantryItems,
+          saveAisle: mockSaveAisle,
+          notifySync: mockNotifySync,
+        }),
+        cache: fromAny({ pantry: { put: mockPutPantryItem }, flush: mockFlush }),
       }),
-      cache: fromAny({ pantry: { put: mockPutPantryItem }, flush: mockFlush }),
-    });
+      { pantry: [] },
+    );
     registerAddPantryItemsTool(server, ctx);
     return { server, callTool, ctx };
   }
 
   it("pantry-batch.1: single item with defaults creates pantry item with correct field values", async () => {
-    const { callTool } = makeAddCtx();
+    const { callTool, ctx } = makeAddCtx();
 
     const result = await callTool("add_pantry_items", { items: [{ ingredient: "Butter" }] });
     const text = getText(result);
@@ -76,7 +74,7 @@ describe("add_pantry_items tool", () => {
     const paprikaDateRegex = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/;
     expect(savedItem?.purchaseDate).toMatch(paprikaDateRegex);
 
-    expect(pantryStore.get(savedItem?.uid as PantryItemUid)).toBeDefined();
+    expect(ctx.pantryStore.get(savedItem?.uid as PantryItemUid)).toBeDefined();
   });
 
   it("pantry-batch.2: batch of 3 distinct items calls savePantryItems once with all 3", async () => {
@@ -118,8 +116,20 @@ describe("add_pantry_items tool", () => {
 
   it("pantry-batch.4: existing-pantry duplicate skipped with UID and merge suggestion", async () => {
     const existingItem = makePantryItem({ ingredient: "Butter", uid: "EXISTING-UID" as PantryItemUid });
-    pantryStore.load([existingItem]);
-    const { callTool } = makeAddCtx();
+    const { server, callTool } = makeTestServer();
+    const ctx = seed(
+      makeCtx(new RecipeStore(), server, {
+        aisleStore,
+        client: fromAny({
+          savePantryItems: mockSavePantryItems,
+          saveAisle: mockSaveAisle,
+          notifySync: mockNotifySync,
+        }),
+        cache: fromAny({ pantry: { put: mockPutPantryItem }, flush: mockFlush }),
+      }),
+      { pantry: [existingItem] },
+    );
+    registerAddPantryItemsTool(server, ctx);
 
     const result = await callTool("add_pantry_items", {
       items: [{ ingredient: "Eggs" }, { ingredient: "BUTTER" }], // BUTTER dupes existing
@@ -149,8 +159,20 @@ describe("add_pantry_items tool", () => {
   });
 
   it("pantry-batch.6: all duplicates short-circuits without API calls", async () => {
-    pantryStore.load([makePantryItem({ ingredient: "Butter", uid: "UID-1" as PantryItemUid })]);
-    const { callTool } = makeAddCtx();
+    const { server, callTool } = makeTestServer();
+    const ctx = seed(
+      makeCtx(new RecipeStore(), server, {
+        aisleStore,
+        client: fromAny({
+          savePantryItems: mockSavePantryItems,
+          saveAisle: mockSaveAisle,
+          notifySync: mockNotifySync,
+        }),
+        cache: fromAny({ pantry: { put: mockPutPantryItem }, flush: mockFlush }),
+      }),
+      { pantry: [makePantryItem({ ingredient: "Butter", uid: "UID-1" as PantryItemUid })] },
+    );
+    registerAddPantryItemsTool(server, ctx);
 
     const result = await callTool("add_pantry_items", { items: [{ ingredient: "butter" }] });
     const text = getText(result);
@@ -208,13 +230,12 @@ describe("add_pantry_items tool", () => {
   });
 
   it("pantry-batch.10: cold-start guard blocks call before pantry synced", async () => {
-    const unsynced = new PantryStore(); // hasSynced === false
     const { server, callTool } = makeTestServer();
     const ctx = makeCtx(new RecipeStore(), server, {
-      pantryStore: unsynced,
       client: fromAny({ savePantryItems: mockSavePantryItems, notifySync: mockNotifySync }),
       cache: fromAny({ pantry: { put: mockPutPantryItem }, flush: mockFlush }),
     });
+    // pantryStore not seeded → hasSynced === false
     registerAddPantryItemsTool(server, ctx);
 
     const result = await callTool("add_pantry_items", { items: [{ ingredient: "Butter" }] });
@@ -226,7 +247,7 @@ describe("add_pantry_items tool", () => {
 
   it("pantry-batch.11: savePantryItems API error returns error message, cache/store not mutated", async () => {
     mockSavePantryItems.mockRejectedValue(new PaprikaAPIError("Server error", 500, "https://example/api"));
-    const { callTool } = makeAddCtx();
+    const { callTool, ctx } = makeAddCtx();
 
     const result = await callTool("add_pantry_items", { items: [{ ingredient: "Butter" }] });
     const text = getText(result);
@@ -235,18 +256,20 @@ describe("add_pantry_items tool", () => {
     expect(text).toContain("Server error");
     expect(mockPutPantryItem).not.toHaveBeenCalled();
     expect(mockFlush).not.toHaveBeenCalled();
-    expect(pantryStore.size).toBe(0);
+    expect(ctx.pantryStore.size).toBe(0);
   });
 
   it("pantry-batch.12: invocation logged at info level with item count", async () => {
     const { log, records } = makePinoCapture();
     const { server, callTool } = makeTestServer();
-    const ctx = makeCtx(new RecipeStore(), server, {
-      log,
-      pantryStore,
-      client: fromAny({ savePantryItems: mockSavePantryItems, notifySync: mockNotifySync }),
-      cache: fromAny({ pantry: { put: mockPutPantryItem }, flush: mockFlush }),
-    });
+    const ctx = seed(
+      makeCtx(new RecipeStore(), server, {
+        log,
+        client: fromAny({ savePantryItems: mockSavePantryItems, notifySync: mockNotifySync }),
+        cache: fromAny({ pantry: { put: mockPutPantryItem }, flush: mockFlush }),
+      }),
+      { pantry: [] },
+    );
     registerAddPantryItemsTool(server, ctx);
 
     await callTool("add_pantry_items", { items: [{ ingredient: "Butter" }, { ingredient: "Eggs" }] });
@@ -282,8 +305,20 @@ describe("add_pantry_items tool", () => {
   });
 
   it("pantry-batch.14: mixed duplicates and valid items — correct split in response", async () => {
-    pantryStore.load([makePantryItem({ ingredient: "Butter", uid: "UID-BT" as PantryItemUid })]);
-    const { callTool } = makeAddCtx();
+    const { server, callTool } = makeTestServer();
+    const ctx = seed(
+      makeCtx(new RecipeStore(), server, {
+        aisleStore,
+        client: fromAny({
+          savePantryItems: mockSavePantryItems,
+          saveAisle: mockSaveAisle,
+          notifySync: mockNotifySync,
+        }),
+        cache: fromAny({ pantry: { put: mockPutPantryItem }, flush: mockFlush }),
+      }),
+      { pantry: [makePantryItem({ ingredient: "Butter", uid: "UID-BT" as PantryItemUid })] },
+    );
+    registerAddPantryItemsTool(server, ctx);
 
     const result = await callTool("add_pantry_items", {
       items: [
@@ -307,20 +342,22 @@ describe("add_pantry_items tool", () => {
     mockSaveAisle.mockResolvedValue(newAisle);
     const mockPutAisle = vi.fn().mockResolvedValue(undefined);
     const { server, callTool } = makeTestServer();
-    const ctx = makeCtx(new RecipeStore(), server, {
-      pantryStore,
-      aisleStore,
-      client: fromAny({
-        savePantryItems: mockSavePantryItems,
-        saveAisle: mockSaveAisle,
-        notifySync: mockNotifySync,
+    const ctx = seed(
+      makeCtx(new RecipeStore(), server, {
+        aisleStore,
+        client: fromAny({
+          savePantryItems: mockSavePantryItems,
+          saveAisle: mockSaveAisle,
+          notifySync: mockNotifySync,
+        }),
+        cache: fromAny({
+          pantry: { put: mockPutPantryItem },
+          aisles: { put: mockPutAisle },
+          flush: mockFlush,
+        }),
       }),
-      cache: fromAny({
-        pantry: { put: mockPutPantryItem },
-        aisles: { put: mockPutAisle },
-        flush: mockFlush,
-      }),
-    });
+      { pantry: [] },
+    );
     registerAddPantryItemsTool(server, ctx);
 
     await callTool("add_pantry_items", { items: [{ ingredient: "Dragon Fruit", aisle: "Exotic" }] });

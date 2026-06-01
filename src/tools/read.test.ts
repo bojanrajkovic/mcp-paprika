@@ -1,19 +1,17 @@
 import { describe, it, expect } from "vitest";
 import { RecipeStore } from "../cache/recipe-store.js";
-import { MealStore } from "../cache/meal-store.js";
 import { makeRecipe, makeCategory } from "../cache/__fixtures__/recipes.js";
 import { makeMeal } from "../cache/__fixtures__/meals.js";
 import { registerReadTool } from "./read.js";
-import { makeTestServer, makeCtx, getText } from "./tool-test-utils.js";
+import { makeTestServer, makeCtx, getText, seed } from "./tool-test-utils.js";
 
 describe("p2-recipe-crud: read_recipe tool", () => {
   describe("p2-recipe-crud.AC1: read_recipe", () => {
     it("p2-recipe-crud.AC1.1: UID lookup returns recipe as markdown with heading", async () => {
       const recipe = makeRecipe({ name: "Chocolate Cake" });
-      const store = new RecipeStore();
-      store.load([recipe]);
       const { server, callTool } = makeTestServer();
-      registerReadTool(server, makeCtx(store, server));
+      const ctx = seed(makeCtx(new RecipeStore(), server), { recipes: [recipe] });
+      registerReadTool(server, ctx);
 
       const result = await callTool("read_recipe", { lookup: { uid: recipe.uid } });
       const text = getText(result);
@@ -24,11 +22,11 @@ describe("p2-recipe-crud: read_recipe tool", () => {
     it("p2-recipe-crud.AC1.1 (extended): UID lookup includes category names", async () => {
       const category = makeCategory({ name: "Dessert" });
       const recipe = makeRecipe({ name: "Chocolate Cake", categories: [category.uid] });
-      const store = new RecipeStore();
-      store.load([recipe]);
       const { server, callTool } = makeTestServer();
-      const ctx = makeCtx(store, server);
-      ctx.categoryStore.load([category]);
+      const ctx = seed(makeCtx(new RecipeStore(), server), {
+        recipes: [recipe],
+        categories: [category],
+      });
       registerReadTool(server, ctx);
 
       const result = await callTool("read_recipe", { lookup: { uid: recipe.uid } });
@@ -39,10 +37,11 @@ describe("p2-recipe-crud: read_recipe tool", () => {
     });
 
     it("p2-recipe-crud.AC1.2: exact title match returns recipe markdown", async () => {
-      const store = new RecipeStore();
-      store.load([makeRecipe({ name: "Chocolate Cake" })]);
       const { server, callTool } = makeTestServer();
-      registerReadTool(server, makeCtx(store, server));
+      const ctx = seed(makeCtx(new RecipeStore(), server), {
+        recipes: [makeRecipe({ name: "Chocolate Cake" })],
+      });
+      registerReadTool(server, ctx);
 
       const result = await callTool("read_recipe", { lookup: { title: "Chocolate Cake" } });
       const text = getText(result);
@@ -51,10 +50,11 @@ describe("p2-recipe-crud: read_recipe tool", () => {
     });
 
     it("p2-recipe-crud.AC1.3: starts-with title match returns recipe markdown", async () => {
-      const store = new RecipeStore();
-      store.load([makeRecipe({ name: "Chocolate Cake" })]);
       const { server, callTool } = makeTestServer();
-      registerReadTool(server, makeCtx(store, server));
+      const ctx = seed(makeCtx(new RecipeStore(), server), {
+        recipes: [makeRecipe({ name: "Chocolate Cake" })],
+      });
+      registerReadTool(server, ctx);
 
       const result = await callTool("read_recipe", { lookup: { title: "Choco" } });
       const text = getText(result);
@@ -63,10 +63,11 @@ describe("p2-recipe-crud: read_recipe tool", () => {
     });
 
     it("p2-recipe-crud.AC1.3 (extended): contains title match returns recipe markdown", async () => {
-      const store = new RecipeStore();
-      store.load([makeRecipe({ name: "Chocolate Cake" })]);
       const { server, callTool } = makeTestServer();
-      registerReadTool(server, makeCtx(store, server));
+      const ctx = seed(makeCtx(new RecipeStore(), server), {
+        recipes: [makeRecipe({ name: "Chocolate Cake" })],
+      });
+      registerReadTool(server, ctx);
 
       const result = await callTool("read_recipe", { lookup: { title: "late Ca" } });
       const text = getText(result);
@@ -75,10 +76,11 @@ describe("p2-recipe-crud: read_recipe tool", () => {
     });
 
     it("p2-recipe-crud.AC1.4: multiple title matches return disambiguation list", async () => {
-      const store = new RecipeStore();
-      store.load([makeRecipe({ name: "Pasta Bolognese" }), makeRecipe({ name: "Pasta Carbonara" })]);
       const { server, callTool } = makeTestServer();
-      registerReadTool(server, makeCtx(store, server));
+      const ctx = seed(makeCtx(new RecipeStore(), server), {
+        recipes: [makeRecipe({ name: "Pasta Bolognese" }), makeRecipe({ name: "Pasta Carbonara" })],
+      });
+      registerReadTool(server, ctx);
 
       const result = await callTool("read_recipe", { lookup: { title: "Pasta" } });
       const text = getText(result);
@@ -93,10 +95,9 @@ describe("p2-recipe-crud: read_recipe tool", () => {
     });
 
     it("p2-recipe-crud.AC1.5: UID not found returns not-found message", async () => {
-      const store = new RecipeStore();
-      store.load([makeRecipe()]);
       const { server, callTool } = makeTestServer();
-      registerReadTool(server, makeCtx(store, server));
+      const ctx = seed(makeCtx(new RecipeStore(), server), { recipes: [makeRecipe()] });
+      registerReadTool(server, ctx);
 
       const result = await callTool("read_recipe", { lookup: { uid: "nonexistent-uid" } });
       const text = getText(result);
@@ -105,10 +106,11 @@ describe("p2-recipe-crud: read_recipe tool", () => {
     });
 
     it("p2-recipe-crud.AC1.6: title search with no matches returns not-found message", async () => {
-      const store = new RecipeStore();
-      store.load([makeRecipe({ name: "Pasta" })]);
       const { server, callTool } = makeTestServer();
-      registerReadTool(server, makeCtx(store, server));
+      const ctx = seed(makeCtx(new RecipeStore(), server), {
+        recipes: [makeRecipe({ name: "Pasta" })],
+      });
+      registerReadTool(server, ctx);
 
       const result = await callTool("read_recipe", { lookup: { title: "Zyzzyva Surprise" } });
       const text = getText(result);
@@ -117,9 +119,9 @@ describe("p2-recipe-crud: read_recipe tool", () => {
     });
 
     it("p2-recipe-crud.AC1.8: cold-start (empty store) returns cold-start guard error", async () => {
-      const store = new RecipeStore(); // not loaded — size === 0
+      // store not loaded — size === 0
       const { server, callTool } = makeTestServer();
-      registerReadTool(server, makeCtx(store, server));
+      registerReadTool(server, makeCtx(new RecipeStore(), server));
 
       const result = await callTool("read_recipe", { lookup: { uid: "anything" } });
       const text = getText(result);
@@ -131,12 +133,12 @@ describe("p2-recipe-crud: read_recipe tool", () => {
   describe("lastCookedAt enrichment", () => {
     it("includes Last Cooked when meal history exists for the recipe", async () => {
       const recipe = makeRecipe({ name: "Pasta" });
-      const store = new RecipeStore();
-      store.load([recipe]);
-      const mealStore = new MealStore();
-      mealStore.load([makeMeal({ recipeUid: recipe.uid, date: "2026-03-15 00:00:00" })]);
       const { server, callTool } = makeTestServer();
-      registerReadTool(server, makeCtx(store, server, { mealStore }));
+      const ctx = seed(makeCtx(new RecipeStore(), server), {
+        recipes: [recipe],
+        meals: [makeMeal({ recipeUid: recipe.uid, date: "2026-03-15 00:00:00" })],
+      });
+      registerReadTool(server, ctx);
 
       const result = await callTool("read_recipe", { lookup: { uid: recipe.uid } });
       expect(getText(result)).toContain("**Last Cooked:** 2026-03-15");

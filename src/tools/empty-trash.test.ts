@@ -4,16 +4,11 @@ import { RecipeStore } from "../cache/recipe-store.js";
 import { makeRecipe } from "../cache/__fixtures__/recipes.js";
 import { PaprikaAPIError } from "../paprika/errors.js";
 import { registerEmptyTrashTool } from "./empty-trash.js";
-import { makeTestServer, makeCtx, makeStubNotifier, getText } from "./tool-test-utils.js";
+import { makeTestServer, makeCtx, makeStubNotifier, getText, seed } from "./tool-test-utils.js";
 
 // empty_trash fetches authoritative state via ctx.client.getRecipe (NOT the local
 // store, which can lag app-side trash actions). The store only needs hasSynced so the
 // cold-start guard passes; the commit path uses cache.recipes.remove (not put).
-function syncedStore(): RecipeStore {
-  const store = new RecipeStore();
-  store.load([makeRecipe({ name: "Keeper" })]); // flips hasSynced; content irrelevant to lookup
-  return store;
-}
 
 function makeMocks(getRecipeImpl: ReturnType<typeof vi.fn>, savedOverride?: unknown) {
   const mockGetRecipe = getRecipeImpl;
@@ -37,10 +32,13 @@ describe("recipe-hard-delete: empty_trash tool (#125)", () => {
       );
 
       const { server, callTool } = makeTestServer();
-      const ctx = makeCtx(syncedStore(), server, {
-        client: fromAny({ getRecipe: mockGetRecipe, saveRecipe: mockSaveRecipe, notifySync: mockNotifySync }),
-        cache: fromAny({ recipes: { remove: mockRemove }, flush: mockFlush }),
-      });
+      const ctx = seed(
+        makeCtx(new RecipeStore(), server, {
+          client: fromAny({ getRecipe: mockGetRecipe, saveRecipe: mockSaveRecipe, notifySync: mockNotifySync }),
+          cache: fromAny({ recipes: { remove: mockRemove }, flush: mockFlush }),
+        }),
+        { recipes: [makeRecipe({ name: "Keeper" })] }, // flips hasSynced; content irrelevant to lookup
+      );
       registerEmptyTrashTool(server, ctx);
 
       const result = await callTool("empty_trash", { uid: trashed.uid });
@@ -59,10 +57,13 @@ describe("recipe-hard-delete: empty_trash tool (#125)", () => {
       );
 
       const { server, callTool } = makeTestServer();
-      const ctx = makeCtx(syncedStore(), server, {
-        client: fromAny({ getRecipe: mockGetRecipe, saveRecipe: mockSaveRecipe, notifySync: mockNotifySync }),
-        cache: fromAny({ recipes: { remove: mockRemove }, flush: mockFlush }),
-      });
+      const ctx = seed(
+        makeCtx(new RecipeStore(), server, {
+          client: fromAny({ getRecipe: mockGetRecipe, saveRecipe: mockSaveRecipe, notifySync: mockNotifySync }),
+          cache: fromAny({ recipes: { remove: mockRemove }, flush: mockFlush }),
+        }),
+        { recipes: [makeRecipe({ name: "Keeper" })] }, // flips hasSynced; content irrelevant to lookup
+      );
       registerEmptyTrashTool(server, ctx);
 
       await callTool("empty_trash", { uid: trashed.uid });
@@ -80,11 +81,14 @@ describe("recipe-hard-delete: empty_trash tool (#125)", () => {
       const { notifier, resourceListChanged } = makeStubNotifier();
 
       const { server, callTool } = makeTestServer();
-      const ctx = makeCtx(syncedStore(), server, {
-        client: fromAny({ getRecipe: mockGetRecipe, saveRecipe: mockSaveRecipe, notifySync: mockNotifySync }),
-        cache: fromAny({ recipes: { remove: mockRemove }, flush: mockFlush }),
-        notifier,
-      });
+      const ctx = seed(
+        makeCtx(new RecipeStore(), server, {
+          client: fromAny({ getRecipe: mockGetRecipe, saveRecipe: mockSaveRecipe, notifySync: mockNotifySync }),
+          cache: fromAny({ recipes: { remove: mockRemove }, flush: mockFlush }),
+          notifier,
+        }),
+        { recipes: [makeRecipe({ name: "Keeper" })] }, // flips hasSynced; content irrelevant to lookup
+      );
       registerEmptyTrashTool(server, ctx);
 
       await callTool("empty_trash", { uid: trashed.uid });
@@ -104,10 +108,13 @@ describe("recipe-hard-delete: empty_trash tool (#125)", () => {
       );
 
       const { server, callTool } = makeTestServer();
-      const ctx = makeCtx(syncedStore(), server, {
-        client: fromAny({ getRecipe: mockGetRecipe, saveRecipe: mockSaveRecipe, notifySync: mockNotifySync }),
-        cache: fromAny({ recipes: { remove: mockRemove }, flush: mockFlush }),
-      });
+      const ctx = seed(
+        makeCtx(new RecipeStore(), server, {
+          client: fromAny({ getRecipe: mockGetRecipe, saveRecipe: mockSaveRecipe, notifySync: mockNotifySync }),
+          cache: fromAny({ recipes: { remove: mockRemove }, flush: mockFlush }),
+        }),
+        { recipes: [makeRecipe({ name: "Keeper" })] }, // flips hasSynced; content irrelevant to lookup
+      );
       registerEmptyTrashTool(server, ctx);
 
       const result = await callTool("empty_trash", { uid: appTrashed.uid });
@@ -125,10 +132,13 @@ describe("recipe-hard-delete: empty_trash tool (#125)", () => {
       );
 
       const { server, callTool } = makeTestServer();
-      const ctx = makeCtx(syncedStore(), server, {
-        client: fromAny({ getRecipe: mockGetRecipe, saveRecipe: mockSaveRecipe, notifySync: mockNotifySync }),
-        cache: fromAny({ recipes: { remove: mockRemove }, flush: mockFlush }),
-      });
+      const ctx = seed(
+        makeCtx(new RecipeStore(), server, {
+          client: fromAny({ getRecipe: mockGetRecipe, saveRecipe: mockSaveRecipe, notifySync: mockNotifySync }),
+          cache: fromAny({ recipes: { remove: mockRemove }, flush: mockFlush }),
+        }),
+        { recipes: [makeRecipe({ name: "Keeper" })] }, // flips hasSynced; content irrelevant to lookup
+      );
       registerEmptyTrashTool(server, ctx);
 
       const result = await callTool("empty_trash", { uid: live.uid });
@@ -145,10 +155,13 @@ describe("recipe-hard-delete: empty_trash tool (#125)", () => {
       );
 
       const { server, callTool } = makeTestServer();
-      const ctx = makeCtx(syncedStore(), server, {
-        client: fromAny({ getRecipe: mockGetRecipe, saveRecipe: mockSaveRecipe, notifySync: mockNotifySync }),
-        cache: fromAny({ recipes: { remove: mockRemove }, flush: mockFlush }),
-      });
+      const ctx = seed(
+        makeCtx(new RecipeStore(), server, {
+          client: fromAny({ getRecipe: mockGetRecipe, saveRecipe: mockSaveRecipe, notifySync: mockNotifySync }),
+          cache: fromAny({ recipes: { remove: mockRemove }, flush: mockFlush }),
+        }),
+        { recipes: [makeRecipe({ name: "Keeper" })] }, // flips hasSynced; content irrelevant to lookup
+      );
       registerEmptyTrashTool(server, ctx);
 
       const result = await callTool("empty_trash", { uid: "nonexistent-uid" });
@@ -169,10 +182,13 @@ describe("recipe-hard-delete: empty_trash tool (#125)", () => {
       });
 
       const { server, callTool } = makeTestServer();
-      const ctx = makeCtx(syncedStore(), server, {
-        client: fromAny({ getRecipe: mockGetRecipe, saveRecipe: mockSaveRecipe, notifySync: mockNotifySync }),
-        cache: fromAny({ recipes: { remove: mockRemove }, flush: mockFlush }),
-      });
+      const ctx = seed(
+        makeCtx(new RecipeStore(), server, {
+          client: fromAny({ getRecipe: mockGetRecipe, saveRecipe: mockSaveRecipe, notifySync: mockNotifySync }),
+          cache: fromAny({ recipes: { remove: mockRemove }, flush: mockFlush }),
+        }),
+        { recipes: [makeRecipe({ name: "Keeper" })] }, // flips hasSynced; content irrelevant to lookup
+      );
       registerEmptyTrashTool(server, ctx);
 
       await callTool("empty_trash", { uid: trashed.uid }); // first: purges
@@ -193,10 +209,13 @@ describe("recipe-hard-delete: empty_trash tool (#125)", () => {
       const mockFlush = vi.fn().mockResolvedValue(undefined);
 
       const { server, callTool } = makeTestServer();
-      const ctx = makeCtx(syncedStore(), server, {
-        client: fromAny({ getRecipe: mockGetRecipe, saveRecipe: mockSaveRecipe, notifySync: mockNotifySync }),
-        cache: fromAny({ recipes: { remove: mockRemove }, flush: mockFlush }),
-      });
+      const ctx = seed(
+        makeCtx(new RecipeStore(), server, {
+          client: fromAny({ getRecipe: mockGetRecipe, saveRecipe: mockSaveRecipe, notifySync: mockNotifySync }),
+          cache: fromAny({ recipes: { remove: mockRemove }, flush: mockFlush }),
+        }),
+        { recipes: [makeRecipe({ name: "Keeper" })] }, // flips hasSynced; content irrelevant to lookup
+      );
       registerEmptyTrashTool(server, ctx);
 
       const result = await callTool("empty_trash", { uid: trashed.uid });
@@ -214,10 +233,13 @@ describe("recipe-hard-delete: empty_trash tool (#125)", () => {
       const { mockSaveRecipe, mockNotifySync, mockRemove, mockFlush } = makeMocks(vi.fn());
 
       const { server, callTool } = makeTestServer();
-      const ctx = makeCtx(syncedStore(), server, {
-        client: fromAny({ getRecipe: mockGetRecipe, saveRecipe: mockSaveRecipe, notifySync: mockNotifySync }),
-        cache: fromAny({ recipes: { remove: mockRemove }, flush: mockFlush }),
-      });
+      const ctx = seed(
+        makeCtx(new RecipeStore(), server, {
+          client: fromAny({ getRecipe: mockGetRecipe, saveRecipe: mockSaveRecipe, notifySync: mockNotifySync }),
+          cache: fromAny({ recipes: { remove: mockRemove }, flush: mockFlush }),
+        }),
+        { recipes: [makeRecipe({ name: "Keeper" })] }, // flips hasSynced; content irrelevant to lookup
+      );
       registerEmptyTrashTool(server, ctx);
 
       const result = await callTool("empty_trash", { uid: "some-uid" });
@@ -231,11 +253,11 @@ describe("recipe-hard-delete: empty_trash tool (#125)", () => {
 
   describe("empty-trash.AC4: cold-start guard", () => {
     it("empty-trash.AC4.1: store not yet synced returns the cold-start message without fetching", async () => {
-      const store = new RecipeStore(); // never load()ed → hasSynced false
       const { mockGetRecipe, mockSaveRecipe, mockNotifySync, mockRemove, mockFlush } = makeMocks(vi.fn());
 
       const { server, callTool } = makeTestServer();
-      const ctx = makeCtx(store, server, {
+      const ctx = makeCtx(new RecipeStore(), server, {
+        // never load()ed → hasSynced false
         client: fromAny({ getRecipe: mockGetRecipe, saveRecipe: mockSaveRecipe, notifySync: mockNotifySync }),
         cache: fromAny({ recipes: { remove: mockRemove }, flush: mockFlush }),
       });

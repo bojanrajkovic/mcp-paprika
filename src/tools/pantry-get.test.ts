@@ -1,19 +1,16 @@
 import { describe, it, expect } from "vitest";
 import { RecipeStore } from "../cache/recipe-store.js";
-import { PantryStore } from "../cache/pantry-store.js";
 import { makePantryItem } from "../cache/__fixtures__/pantry.js";
-import { makeTestServer, makeCtx, getText } from "./tool-test-utils.js";
+import { makeTestServer, makeCtx, getText, seed } from "./tool-test-utils.js";
 import { registerGetPantryItemTool } from "./pantry-get.js";
 
 describe("pantry-get tool", () => {
   it("pantry-read.AC5.3: UID lookup returns full item details as markdown", async () => {
     const item = makePantryItem({ ingredient: "Olive Oil" });
-    const pantryStore = new PantryStore();
-    pantryStore.load([item]);
 
     const { server, callTool } = makeTestServer();
-    const recipeStore = new RecipeStore();
-    registerGetPantryItemTool(server, makeCtx(recipeStore, server, { pantryStore }));
+    const ctx = seed(makeCtx(new RecipeStore(), server), { pantry: [item] });
+    registerGetPantryItemTool(server, ctx);
 
     const result = await callTool("get_pantry_item", { lookup: { uid: item.uid } });
     const text = getText(result);
@@ -25,12 +22,11 @@ describe("pantry-get tool", () => {
   });
 
   it("pantry-read.AC5.4: single fuzzy match returns item details", async () => {
-    const pantryStore = new PantryStore();
-    pantryStore.load([makePantryItem({ ingredient: "Brown Sugar" }), makePantryItem({ ingredient: "Flour" })]);
-
     const { server, callTool } = makeTestServer();
-    const recipeStore = new RecipeStore();
-    registerGetPantryItemTool(server, makeCtx(recipeStore, server, { pantryStore }));
+    const ctx = seed(makeCtx(new RecipeStore(), server), {
+      pantry: [makePantryItem({ ingredient: "Brown Sugar" }), makePantryItem({ ingredient: "Flour" })],
+    });
+    registerGetPantryItemTool(server, ctx);
 
     const result = await callTool("get_pantry_item", { lookup: { ingredient: "Brown" } });
     const text = getText(result);
@@ -40,17 +36,14 @@ describe("pantry-get tool", () => {
   });
 
   it("pantry-read.AC5.5: multiple fuzzy matches return disambiguation list", async () => {
-    const pantryStore = new PantryStore();
     const items = [
       makePantryItem({ ingredient: "Apple Pie Filling" }),
       makePantryItem({ ingredient: "Apple Cider" }),
       makePantryItem({ ingredient: "Apple Sauce" }),
     ];
-    pantryStore.load(items);
-
     const { server, callTool } = makeTestServer();
-    const recipeStore = new RecipeStore();
-    registerGetPantryItemTool(server, makeCtx(recipeStore, server, { pantryStore }));
+    const ctx = seed(makeCtx(new RecipeStore(), server), { pantry: items });
+    registerGetPantryItemTool(server, ctx);
 
     const result = await callTool("get_pantry_item", { lookup: { ingredient: "Apple" } });
     const text = getText(result);
@@ -72,12 +65,9 @@ describe("pantry-get tool", () => {
 
   it("pantry-read.AC5.6: unknown UID returns not-found message", async () => {
     const item = makePantryItem();
-    const pantryStore = new PantryStore();
-    pantryStore.load([item]);
-
     const { server, callTool } = makeTestServer();
-    const recipeStore = new RecipeStore();
-    registerGetPantryItemTool(server, makeCtx(recipeStore, server, { pantryStore }));
+    const ctx = seed(makeCtx(new RecipeStore(), server), { pantry: [item] });
+    registerGetPantryItemTool(server, ctx);
 
     const result = await callTool("get_pantry_item", { lookup: { uid: "does-not-exist" } });
     const text = getText(result);
@@ -87,12 +77,9 @@ describe("pantry-get tool", () => {
 
   it("pantry-read.AC5.6: unknown ingredient returns not-found message", async () => {
     const item = makePantryItem();
-    const pantryStore = new PantryStore();
-    pantryStore.load([item]);
-
     const { server, callTool } = makeTestServer();
-    const recipeStore = new RecipeStore();
-    registerGetPantryItemTool(server, makeCtx(recipeStore, server, { pantryStore }));
+    const ctx = seed(makeCtx(new RecipeStore(), server), { pantry: [item] });
+    registerGetPantryItemTool(server, ctx);
 
     const result = await callTool("get_pantry_item", { lookup: { ingredient: "Caviar" } });
     const text = getText(result);
@@ -101,12 +88,9 @@ describe("pantry-get tool", () => {
   });
 
   it("pantry-read.AC5.7: cold-start (hasSynced false) returns guard error", async () => {
-    const pantryStore = new PantryStore();
-    // DO NOT call load() — hasSynced remains false
-
+    // DO NOT seed pantry — hasSynced remains false
     const { server, callTool } = makeTestServer();
-    const recipeStore = new RecipeStore();
-    registerGetPantryItemTool(server, makeCtx(recipeStore, server, { pantryStore }));
+    registerGetPantryItemTool(server, makeCtx(new RecipeStore(), server));
 
     const result = await callTool("get_pantry_item", { lookup: { uid: "anything" } });
     const text = getText(result);

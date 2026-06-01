@@ -2,8 +2,6 @@
 import { fromAny } from "@total-typescript/shoehorn";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { RecipeStore } from "../cache/recipe-store.js";
-import { MealStore } from "../cache/meal-store.js";
-import { MealTypeStore } from "../cache/meal-type-store.js";
 import { makeMeal, makeMealType } from "../cache/__fixtures__/meals.js";
 import { makeRecipe } from "../cache/__fixtures__/recipes.js";
 import {
@@ -14,7 +12,8 @@ import {
   registerDeleteMealTool,
 } from "./meal-writes.js";
 import { mealToMarkdown } from "./meal-helpers.js";
-import { makeTestServer, makeCtx, getText } from "./tool-test-utils.js";
+import { makeTestServer, makeCtx, getText, seed } from "./tool-test-utils.js";
+import type { SeedData } from "./tool-test-utils.js";
 import type { MealTypeUid, RecipeUid, MealUid, Meal } from "../paprika/types.js";
 
 // Stable UIDs used across both describe blocks so tests don't depend on
@@ -49,45 +48,38 @@ function makeBuiltins() {
 // ---------------------------------------------------------------------------
 
 describe("add_meals tool — success paths", () => {
-  let mealStore: MealStore;
-  let mealTypeStore: MealTypeStore;
-  let store: RecipeStore;
-
   let mockSaveMeals: ReturnType<typeof vi.fn>;
   let mockNotifySync: ReturnType<typeof vi.fn>;
   let mockPut: ReturnType<typeof vi.fn>;
   let mockFlush: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
-    mealStore = new MealStore();
-    mealTypeStore = new MealTypeStore();
-    store = new RecipeStore();
-
-    // Mark stores as synced with their initial state.
-    mealStore.load([]);
-    mealTypeStore.load(makeBuiltins());
-    store.load([makeRecipe({ uid: TACOS_UID, name: "Tacos" })]);
-
     mockSaveMeals = vi.fn().mockImplementation(async (items: ReadonlyArray<Meal>) => items);
     mockNotifySync = vi.fn().mockResolvedValue(undefined);
     mockPut = vi.fn().mockResolvedValue(undefined);
     mockFlush = vi.fn().mockResolvedValue(undefined);
   });
 
-  function makeAddCtx() {
+  // Builds an add_meals ctx with mocked client + cache. `seedOverrides` merges
+  // over the synced baseline (empty meals, builtin meal types, Tacos recipe).
+  function makeAddCtx(seedOverrides?: SeedData) {
     const { server, callTool } = makeTestServer();
-    const ctx = makeCtx(store, server, {
-      mealStore,
-      mealTypeStore,
+    const ctx = makeCtx(new RecipeStore(), server, {
       client: fromAny({ saveMeals: mockSaveMeals, notifySync: mockNotifySync }),
       cache: fromAny({ meals: { put: mockPut, remove: vi.fn() }, flush: mockFlush }),
+    });
+    seed(ctx, {
+      meals: [],
+      mealTypes: makeBuiltins(),
+      recipes: [makeRecipe({ uid: TACOS_UID, name: "Tacos" })],
+      ...seedOverrides,
     });
     registerAddMealsTool(server, ctx);
     return { callTool, ctx };
   }
 
   it("AC1.1: recipe_uid + date + type → auto-resolved recipe name in markdown and MealStore", async () => {
-    const { callTool } = makeAddCtx();
+    const { callTool, ctx } = makeAddCtx();
 
     const result = await callTool("add_meals", {
       items: [{ recipe_uid: TACOS_UID, date: "2026-06-15", type: { name: "Dinner" } }],
@@ -108,14 +100,14 @@ describe("add_meals tool — success paths", () => {
     expect(wireMeal.recipeUid).toBe(TACOS_UID);
 
     // Also persisted to local store
-    const storedMeal = mealStore.get(wireMeal.uid as MealUid);
+    const storedMeal = ctx.mealStore.get(wireMeal.uid as MealUid);
     expect(storedMeal).toBeDefined();
     expect(storedMeal?.name).toBe("Tacos");
     expect(storedMeal?.recipeUid).toBe(TACOS_UID);
   });
 
   it("AC1.2: name only (no recipe_uid) → freeform meal with recipeUid: null", async () => {
-    const { callTool } = makeAddCtx();
+    const { callTool, ctx } = makeAddCtx();
 
     const result = await callTool("add_meals", {
       items: [{ name: "Avocado Toast", date: "2026-06-15", type: { builtin: 0 } }],
@@ -130,7 +122,7 @@ describe("add_meals tool — success paths", () => {
     expect(wireMeal.recipeUid).toBeNull();
     expect(wireMeal.name).toBe("Avocado Toast");
 
-    const storedMeal = mealStore.get(wireMeal.uid as MealUid);
+    const storedMeal = ctx.mealStore.get(wireMeal.uid as MealUid);
     expect(storedMeal?.recipeUid).toBeNull();
   });
 
@@ -179,7 +171,7 @@ describe("add_meals tool — success paths", () => {
   });
 
   it("AC1.5: scale flows through to wire payload and MealStore", async () => {
-    const { callTool } = makeAddCtx();
+    const { callTool, ctx } = makeAddCtx();
 
     await callTool("add_meals", {
       items: [{ name: "Big Batch Soup", date: "2026-06-15", type: { builtin: 1 }, scale: "2" }],
@@ -188,7 +180,7 @@ describe("add_meals tool — success paths", () => {
     const savedPayload: ReadonlyArray<Meal> = mockSaveMeals.mock.calls[0]?.[0] ?? [];
     expect(savedPayload[0]?.scale).toBe("2");
 
-    const storedMeal = mealStore.get(savedPayload[0]!.uid as MealUid);
+    const storedMeal = ctx.mealStore.get(savedPayload[0]!.uid as MealUid);
     expect(storedMeal?.scale).toBe("2");
   });
 
@@ -320,17 +312,17 @@ describe("add_meals tool — success paths", () => {
 
   it("Regression: existing meal with orderFlag 5 in bucket → new meal gets orderFlag 6", async () => {
     // Seed the store with an existing dinner on 2026-06-25 that already has orderFlag 5.
-    mealStore.load([
-      makeMeal({
-        uid: "existing-dinner-uid" as MealUid,
-        date: "2026-06-25 00:00:00",
-        typeUid: DINNER_UID,
-        type: 2,
-        orderFlag: 5,
-      }),
-    ]);
-
-    const { callTool } = makeAddCtx();
+    const { callTool } = makeAddCtx({
+      meals: [
+        makeMeal({
+          uid: "existing-dinner-uid" as MealUid,
+          date: "2026-06-25 00:00:00",
+          typeUid: DINNER_UID,
+          type: 2,
+          orderFlag: 5,
+        }),
+      ],
+    });
 
     await callTool("add_meals", {
       items: [{ name: "Late Addition", date: "2026-06-25", type: { builtin: 2 } }],
@@ -347,12 +339,12 @@ describe("add_meals tool — success paths", () => {
     // UI eyeball, 2026-05-29). So `type: 0` is the correct vestigial value —
     // `mealsEqual` round-trips cleanly and the UI still shows the meal under the
     // custom type. Regression guards against re-introducing speculative remappings.
-    mealTypeStore.load([
-      ...makeBuiltins(),
-      makeMealType({ uid: BRUNCH_UID, name: "Brunch", originalType: null, orderFlag: 4 }),
-    ]);
-
-    const { callTool } = makeAddCtx();
+    const { callTool } = makeAddCtx({
+      mealTypes: [
+        ...makeBuiltins(),
+        makeMealType({ uid: BRUNCH_UID, name: "Brunch", originalType: null, orderFlag: 4 }),
+      ],
+    });
 
     await callTool("add_meals", {
       items: [{ name: "Sunday Brunch", date: "2026-07-04", type: { uid: BRUNCH_UID } }],
@@ -369,45 +361,39 @@ describe("add_meals tool — success paths", () => {
 // ---------------------------------------------------------------------------
 
 describe("add_meals tool — failure paths", () => {
-  let mealStore: MealStore;
-  let mealTypeStore: MealTypeStore;
-  let store: RecipeStore;
-
   let mockSaveMeals: ReturnType<typeof vi.fn>;
   let mockNotifySync: ReturnType<typeof vi.fn>;
   let mockPut: ReturnType<typeof vi.fn>;
   let mockFlush: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
-    mealStore = new MealStore();
-    mealTypeStore = new MealTypeStore();
-    store = new RecipeStore();
-
-    mealStore.load([]);
-    mealTypeStore.load(makeBuiltins());
-    store.load([]);
-
     mockSaveMeals = vi.fn().mockImplementation(async (items: ReadonlyArray<Meal>) => items);
     mockNotifySync = vi.fn().mockResolvedValue(undefined);
     mockPut = vi.fn().mockResolvedValue(undefined);
     mockFlush = vi.fn().mockResolvedValue(undefined);
   });
 
-  function makeFailCtx() {
+  // Builds a failure-paths add_meals ctx. Baseline: empty meals, builtin meal
+  // types, empty recipe store (no TACOS_UID). Pass `seedOverrides` to adjust.
+  function makeFailCtx(seedOverrides?: SeedData) {
     const { server, callTool } = makeTestServer();
-    const ctx = makeCtx(store, server, {
-      mealStore,
-      mealTypeStore,
+    const ctx = makeCtx(new RecipeStore(), server, {
       client: fromAny({ saveMeals: mockSaveMeals, notifySync: mockNotifySync }),
       cache: fromAny({ meals: { put: mockPut, remove: vi.fn() }, flush: mockFlush }),
+    });
+    seed(ctx, {
+      meals: [],
+      mealTypes: makeBuiltins(),
+      recipes: [],
+      ...seedOverrides,
     });
     registerAddMealsTool(server, ctx);
     return { callTool, ctx };
   }
 
   it("AC2.1: unparseable date → error text names index and bad date value", async () => {
-    const { callTool } = makeFailCtx();
-    const initialSize = mealStore.size;
+    const { callTool, ctx } = makeFailCtx();
+    const initialSize = ctx.mealStore.size;
 
     const result = await callTool("add_meals", {
       items: [{ recipe_uid: TACOS_UID, date: "not-a-date", type: { builtin: 2 } }],
@@ -416,12 +402,12 @@ describe("add_meals tool — failure paths", () => {
 
     expect(text).toContain('Item 0: could not parse date "not-a-date"');
     expect(mockSaveMeals).not.toHaveBeenCalled();
-    expect(mealStore.size).toBe(initialSize);
+    expect(ctx.mealStore.size).toBe(initialSize);
   });
 
   it("AC2.2: unknown type name 'Brunch' → exact error string with known types list", async () => {
-    const { callTool } = makeFailCtx();
-    const initialSize = mealStore.size;
+    const { callTool, ctx } = makeFailCtx();
+    const initialSize = ctx.mealStore.size;
 
     const result = await callTool("add_meals", {
       items: [{ name: "Weekend Brunch", date: "2026-06-15", type: { name: "Brunch" } }],
@@ -435,7 +421,7 @@ describe("add_meals tool — failure paths", () => {
         "Use the {uid} or {builtin} discriminator to reference a custom meal type.",
     );
     expect(mockSaveMeals).not.toHaveBeenCalled();
-    expect(mealStore.size).toBe(initialSize);
+    expect(ctx.mealStore.size).toBe(initialSize);
   });
 
   it("AC2.3: schema rejects items missing both recipe_uid and name (structural union)", () => {
@@ -448,11 +434,11 @@ describe("add_meals tool — failure paths", () => {
   });
 
   it("AC2.3b: unknown recipe_uid (not in local store) → per-index error, saveMeals NOT called", async () => {
-    // The failure-paths beforeEach seeds store with store.load([], []), so TACOS_UID
+    // The failure-paths makeFailCtx seeds store with recipes: [], so TACOS_UID
     // is not present. Supplying only recipe_uid (no name) hits the lookup branch that
     // emits the actionable "not known to the local recipe store" error.
-    const { callTool } = makeFailCtx();
-    const initialSize = mealStore.size;
+    const { callTool, ctx } = makeFailCtx();
+    const initialSize = ctx.mealStore.size;
 
     const result = await callTool("add_meals", {
       items: [{ recipe_uid: TACOS_UID, date: "2026-06-15", type: { builtin: 2 } }],
@@ -462,12 +448,12 @@ describe("add_meals tool — failure paths", () => {
     expect(text).toContain("is not known to the local recipe store");
     expect(text).toContain("wait for the next sync and retry");
     expect(mockSaveMeals).not.toHaveBeenCalled();
-    expect(mealStore.size).toBe(initialSize);
+    expect(ctx.mealStore.size).toBe(initialSize);
   });
 
   it("AC2.4: multiple invalid items → all errors enumerated, header 'Could not add 3 meals:'", async () => {
-    const { callTool } = makeFailCtx();
-    const initialSize = mealStore.size;
+    const { callTool, ctx } = makeFailCtx();
+    const initialSize = ctx.mealStore.size;
 
     const result = await callTool("add_meals", {
       items: [
@@ -494,7 +480,7 @@ describe("add_meals tool — failure paths", () => {
     expect(text).toContain("Item 1 (");
     expect(text).toContain("Item 2:");
     expect(mockSaveMeals).not.toHaveBeenCalled();
-    expect(mealStore.size).toBe(initialSize);
+    expect(ctx.mealStore.size).toBe(initialSize);
   });
 
   it("AC2.5: empty items array → Zod .min(1) rejects before the handler runs", () => {
@@ -517,36 +503,31 @@ describe("add_meals tool — failure paths", () => {
 const TEST_MEAL_UID = "test-meal-uid-update-1" as MealUid;
 
 describe("update_meal — success paths (AC3.1-3.6)", () => {
-  let mealStore: MealStore;
-  let mealTypeStore: MealTypeStore;
-  let store: RecipeStore;
-
   let mockSaveMeals: ReturnType<typeof vi.fn>;
   let mockNotifySync: ReturnType<typeof vi.fn>;
   let mockPut: ReturnType<typeof vi.fn>;
   let mockFlush: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
-    mealStore = new MealStore();
-    mealTypeStore = new MealTypeStore();
-    store = new RecipeStore();
-
-    mealTypeStore.load(makeBuiltins());
-    store.load([makeRecipe({ uid: TACOS_UID, name: "Tacos" })]);
-
     mockSaveMeals = vi.fn().mockImplementation(async (items: ReadonlyArray<Meal>) => items);
     mockNotifySync = vi.fn().mockResolvedValue(undefined);
     mockPut = vi.fn().mockResolvedValue(undefined);
     mockFlush = vi.fn().mockResolvedValue(undefined);
   });
 
-  function makeUpdateCtx() {
+  // Builds an update_meal ctx with mocked client + cache. `seedOverrides` merges
+  // over the synced baseline (builtin meal types, Tacos recipe, no meals).
+  function makeUpdateCtx(seedOverrides?: SeedData) {
     const { server, callTool } = makeTestServer();
-    const ctx = makeCtx(store, server, {
-      mealStore,
-      mealTypeStore,
+    const ctx = makeCtx(new RecipeStore(), server, {
       client: fromAny({ saveMeals: mockSaveMeals, notifySync: mockNotifySync }),
       cache: fromAny({ meals: { put: mockPut, remove: vi.fn() }, flush: mockFlush }),
+    });
+    seed(ctx, {
+      mealTypes: makeBuiltins(),
+      recipes: [makeRecipe({ uid: TACOS_UID, name: "Tacos" })],
+      // meals key omitted → individual tests seed their own meal via seedOverrides
+      ...seedOverrides,
     });
     registerUpdateMealTool(server, ctx);
     return { callTool, ctx };
@@ -564,13 +545,11 @@ describe("update_meal — success paths (AC3.1-3.6)", () => {
       recipeUid: null,
       orderFlag: 3,
     });
-    mealStore.load([original]);
-
-    const { callTool } = makeUpdateCtx();
+    const { callTool, ctx } = makeUpdateCtx({ meals: [original] });
 
     await callTool("update_meal", { uid: TEST_MEAL_UID, update: { date: "2026-06-15" } });
 
-    const stored = mealStore.get(TEST_MEAL_UID);
+    const stored = ctx.mealStore.get(TEST_MEAL_UID);
     expect(stored?.date).toBe("2026-06-15 00:00:00");
     // Date change moves the meal to the destination date's order sequence, so
     // orderFlag is reassigned (max+1 in the destination, which is empty here = 0).
@@ -580,13 +559,11 @@ describe("update_meal — success paths (AC3.1-3.6)", () => {
 
   it("AC3.2: type update → typeUid becomes LUNCH_UID and type integer becomes 1", async () => {
     const original = makeMeal({ uid: TEST_MEAL_UID, typeUid: DINNER_UID, type: 2 });
-    mealStore.load([original]);
-
-    const { callTool } = makeUpdateCtx();
+    const { callTool, ctx } = makeUpdateCtx({ meals: [original] });
 
     await callTool("update_meal", { uid: TEST_MEAL_UID, update: { type: { name: "Lunch" } } });
 
-    const stored = mealStore.get(TEST_MEAL_UID);
+    const stored = ctx.mealStore.get(TEST_MEAL_UID);
     expect(stored?.typeUid).toBe(LUNCH_UID);
     expect(stored?.type).toBe(1);
   });
@@ -594,13 +571,11 @@ describe("update_meal — success paths (AC3.1-3.6)", () => {
   it("AC3.3: freeform meal + recipe_uid → auto-resolved name from store, recipeUid set", async () => {
     // A freeform meal (no recipe); promoting it by supplying a recipe_uid.
     const original = makeMeal({ uid: TEST_MEAL_UID, recipeUid: null, name: "Some Freeform Meal" });
-    mealStore.load([original]);
-
-    const { callTool } = makeUpdateCtx();
+    const { callTool, ctx } = makeUpdateCtx({ meals: [original] });
 
     await callTool("update_meal", { uid: TEST_MEAL_UID, update: { recipe_uid: TACOS_UID } });
 
-    const stored = mealStore.get(TEST_MEAL_UID);
+    const stored = ctx.mealStore.get(TEST_MEAL_UID);
     expect(stored?.recipeUid).toBe(TACOS_UID);
     // Name auto-resolved from RecipeStore — caller didn't supply one
     expect(stored?.name).toBe("Tacos");
@@ -620,27 +595,23 @@ describe("update_meal — success paths (AC3.1-3.6)", () => {
 
   it("AC3.5: recipe meal + recipe_uid: null + name → demoted to freeform, new name set", async () => {
     const original = makeMeal({ uid: TEST_MEAL_UID, recipeUid: TACOS_UID, name: "Tacos" });
-    mealStore.load([original]);
-
-    const { callTool } = makeUpdateCtx();
+    const { callTool, ctx } = makeUpdateCtx({ meals: [original] });
 
     await callTool("update_meal", { uid: TEST_MEAL_UID, update: { recipe_uid: null, name: "Leftover Chili" } });
 
-    const stored = mealStore.get(TEST_MEAL_UID);
+    const stored = ctx.mealStore.get(TEST_MEAL_UID);
     expect(stored?.recipeUid).toBeNull();
     expect(stored?.name).toBe("Leftover Chili");
   });
 
   it("AC3.6: scale: null → clears scale in MealStore AND on wire payload", async () => {
     const original = makeMeal({ uid: TEST_MEAL_UID, scale: "2", recipeUid: null });
-    mealStore.load([original]);
-
-    const { callTool } = makeUpdateCtx();
+    const { callTool, ctx } = makeUpdateCtx({ meals: [original] });
 
     await callTool("update_meal", { uid: TEST_MEAL_UID, update: { scale: null } });
 
     // Store reflects cleared scale
-    const stored = mealStore.get(TEST_MEAL_UID);
+    const stored = ctx.mealStore.get(TEST_MEAL_UID);
     expect(stored?.scale).toBeNull();
 
     // Wire payload also carried scale: null to the API
@@ -653,19 +624,18 @@ describe("update_meal — success paths (AC3.1-3.6)", () => {
     // (`originalType: null`), the update path sets `type_uid` and sends the
     // vestigial `type: 0` integer. Paprika.app's UI dispatches off `type_uid`;
     // the server preserves the integer verbatim.
-    mealTypeStore.load([
-      ...makeBuiltins(),
-      makeMealType({ uid: BRUNCH_UID, name: "Brunch", originalType: null, orderFlag: 4 }),
-    ]);
-
     const original = makeMeal({ uid: TEST_MEAL_UID, typeUid: DINNER_UID, type: 2 });
-    mealStore.load([original]);
-
-    const { callTool } = makeUpdateCtx();
+    const { callTool, ctx } = makeUpdateCtx({
+      mealTypes: [
+        ...makeBuiltins(),
+        makeMealType({ uid: BRUNCH_UID, name: "Brunch", originalType: null, orderFlag: 4 }),
+      ],
+      meals: [original],
+    });
 
     await callTool("update_meal", { uid: TEST_MEAL_UID, update: { type: { uid: BRUNCH_UID } } });
 
-    const stored = mealStore.get(TEST_MEAL_UID);
+    const stored = ctx.mealStore.get(TEST_MEAL_UID);
     expect(stored?.typeUid).toBe(BRUNCH_UID);
     expect(stored?.type).toBe(0);
 
@@ -694,16 +664,14 @@ describe("update_meal — success paths (AC3.1-3.6)", () => {
       date: "2026-06-15 00:00:00",
       orderFlag: 0,
     });
-    mealStore.load([moving, destDateExisting]);
-
-    const { callTool } = makeUpdateCtx();
+    const { callTool, ctx } = makeUpdateCtx({ meals: [moving, destDateExisting] });
 
     await callTool("update_meal", {
       uid: TEST_MEAL_UID,
       update: { date: "2026-06-15", type: { name: "Dinner" } },
     });
 
-    const stored = mealStore.get(TEST_MEAL_UID);
+    const stored = ctx.mealStore.get(TEST_MEAL_UID);
     expect(stored?.date).toBe("2026-06-15 00:00:00");
     expect(stored?.typeUid).toBe(DINNER_UID);
     expect(stored?.orderFlag).toBe(1); // max+1 on the destination date, not preserved 0
@@ -731,12 +699,11 @@ describe("update_meal — success paths (AC3.1-3.6)", () => {
       date: "2026-06-15 00:00:00",
       orderFlag: 1,
     });
-    mealStore.load([sameDateExisting, original]);
+    const { callTool, ctx } = makeUpdateCtx({ meals: [sameDateExisting, original] });
 
-    const { callTool } = makeUpdateCtx();
     await callTool("update_meal", { uid: TEST_MEAL_UID, update: { type: { name: "Dinner" } } });
 
-    const stored = mealStore.get(TEST_MEAL_UID);
+    const stored = ctx.mealStore.get(TEST_MEAL_UID);
     expect(stored?.typeUid).toBe(DINNER_UID);
     expect(stored?.orderFlag).toBe(1); // unchanged — same date, no re-sequence
   });
@@ -752,12 +719,11 @@ describe("update_meal — success paths (AC3.1-3.6)", () => {
       orderFlag: 7,
       scale: "1",
     });
-    mealStore.load([original]);
+    const { callTool, ctx } = makeUpdateCtx({ meals: [original] });
 
-    const { callTool } = makeUpdateCtx();
     await callTool("update_meal", { uid: TEST_MEAL_UID, update: { scale: "2" } });
 
-    const stored = mealStore.get(TEST_MEAL_UID);
+    const stored = ctx.mealStore.get(TEST_MEAL_UID);
     expect(stored?.orderFlag).toBe(7); // unchanged
     expect(stored?.scale).toBe("2");
   });
@@ -774,9 +740,8 @@ describe("update_meal — success paths (AC3.1-3.6)", () => {
       recipeUid: TACOS_UID,
       name: "Tacos",
     });
-    mealStore.load([recipeLinked]);
+    const { callTool, ctx } = makeUpdateCtx({ meals: [recipeLinked] });
 
-    const { callTool } = makeUpdateCtx();
     const result = await callTool("update_meal", {
       uid: TEST_MEAL_UID,
       update: { name: "Mom's Tacos" },
@@ -787,7 +752,7 @@ describe("update_meal — success paths (AC3.1-3.6)", () => {
     expect(text).toContain("demote first");
     expect(mockSaveMeals).not.toHaveBeenCalled();
     // Stored name is unchanged.
-    expect(mealStore.get(TEST_MEAL_UID)?.name).toBe("Tacos");
+    expect(ctx.mealStore.get(TEST_MEAL_UID)?.name).toBe("Tacos");
   });
 
   it("no-effective-change update_meal call → short-circuits without POST or notifySync", async () => {
@@ -805,9 +770,8 @@ describe("update_meal — success paths (AC3.1-3.6)", () => {
       orderFlag: 3,
       scale: null,
     });
-    mealStore.load([original]);
+    const { callTool } = makeUpdateCtx({ meals: [original] });
 
-    const { callTool } = makeUpdateCtx();
     const result = await callTool("update_meal", { uid: TEST_MEAL_UID, update: {} });
 
     expect(mockSaveMeals).not.toHaveBeenCalled();
@@ -823,38 +787,32 @@ describe("update_meal — success paths (AC3.1-3.6)", () => {
 // ---------------------------------------------------------------------------
 
 describe("update_meal — failure/edge paths (AC3.7-3.10)", () => {
-  let mealStore: MealStore;
-  let mealTypeStore: MealTypeStore;
-  let store: RecipeStore;
-
   let mockSaveMeals: ReturnType<typeof vi.fn>;
   let mockNotifySync: ReturnType<typeof vi.fn>;
   let mockPut: ReturnType<typeof vi.fn>;
   let mockFlush: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
-    mealStore = new MealStore();
-    mealTypeStore = new MealTypeStore();
-    store = new RecipeStore();
-
     // No meals seeded; individual tests seed what they need.
-    mealStore.load([]);
-    mealTypeStore.load(makeBuiltins());
-    store.load([]);
-
     mockSaveMeals = vi.fn().mockImplementation(async (items: ReadonlyArray<Meal>) => items);
     mockNotifySync = vi.fn().mockResolvedValue(undefined);
     mockPut = vi.fn().mockResolvedValue(undefined);
     mockFlush = vi.fn().mockResolvedValue(undefined);
   });
 
-  function makeUpdateCtx() {
+  // Builds a failure-paths update_meal ctx. Baseline: empty meals, builtin meal
+  // types, empty recipe store. Pass `seedOverrides` to stage per-test data.
+  function makeUpdateCtx(seedOverrides?: SeedData) {
     const { server, callTool } = makeTestServer();
-    const ctx = makeCtx(store, server, {
-      mealStore,
-      mealTypeStore,
+    const ctx = makeCtx(new RecipeStore(), server, {
       client: fromAny({ saveMeals: mockSaveMeals, notifySync: mockNotifySync }),
       cache: fromAny({ meals: { put: mockPut, remove: vi.fn() }, flush: mockFlush }),
+    });
+    seed(ctx, {
+      meals: [],
+      mealTypes: makeBuiltins(),
+      recipes: [],
+      ...seedOverrides,
     });
     registerUpdateMealTool(server, ctx);
     return { callTool, ctx };
@@ -873,10 +831,8 @@ describe("update_meal — failure/edge paths (AC3.7-3.10)", () => {
   it("AC3.8 tombstone: deleted via mealStore.delete() → tombstone error string, no POST", async () => {
     // Seed then delete to create a tombstone entry.
     const meal = makeMeal({ uid: TEST_MEAL_UID });
-    mealStore.load([meal]);
-    mealStore.delete(TEST_MEAL_UID);
-
-    const { callTool } = makeUpdateCtx();
+    const { callTool, ctx } = makeUpdateCtx({ meals: [meal] });
+    ctx.mealStore.delete(TEST_MEAL_UID);
 
     const result = await callTool("update_meal", { uid: TEST_MEAL_UID, update: { name: "Anything" } });
     const text = getText(result);
@@ -888,9 +844,7 @@ describe("update_meal — failure/edge paths (AC3.7-3.10)", () => {
   it("AC3.8 defense-in-depth: meal.deleted === true in store → name-based error string, no POST", async () => {
     // Simulate a deleted meal still present in the items map (defense-in-depth branch).
     const meal = makeMeal({ uid: TEST_MEAL_UID, name: "Ghost Meal", deleted: true });
-    mealStore.load([meal]);
-
-    const { callTool } = makeUpdateCtx();
+    const { callTool } = makeUpdateCtx({ meals: [meal] });
 
     const result = await callTool("update_meal", { uid: TEST_MEAL_UID, update: { name: "Anything" } });
     const text = getText(result);
@@ -902,9 +856,7 @@ describe("update_meal — failure/edge paths (AC3.7-3.10)", () => {
   it("AC3.9: freeform meal + recipe_uid: null + no other fields → no POST, returns existing card", async () => {
     // Meal already freeform; passing recipe_uid: null with nothing else is a no-op.
     const meal = makeMeal({ uid: TEST_MEAL_UID, recipeUid: null, typeUid: DINNER_UID, type: 2 });
-    mealStore.load([meal]);
-
-    const { callTool } = makeUpdateCtx();
+    const { callTool } = makeUpdateCtx({ meals: [meal] });
 
     const result = await callTool("update_meal", { uid: TEST_MEAL_UID, update: { recipe_uid: null } });
     const text = getText(result);
@@ -919,9 +871,7 @@ describe("update_meal — failure/edge paths (AC3.7-3.10)", () => {
   it("AC3.10: recipe meal + recipe_uid: null + no name → demotion error, no POST", async () => {
     // Has a recipe link but caller did not supply an explicit name for the demotion.
     const meal = makeMeal({ uid: TEST_MEAL_UID, recipeUid: TACOS_UID, name: "Tacos" });
-    mealStore.load([meal]);
-
-    const { callTool } = makeUpdateCtx();
+    const { callTool } = makeUpdateCtx({ meals: [meal] });
 
     const result = await callTool("update_meal", { uid: TEST_MEAL_UID, update: { recipe_uid: null } });
     const text = getText(result);
@@ -937,9 +887,7 @@ describe("update_meal — failure/edge paths (AC3.7-3.10)", () => {
     // another field (scale) must NOT hit the demotion-requires-name guard.
     // The guard should only fire when existing.recipeUid !== null.
     const meal = makeMeal({ uid: TEST_MEAL_UID, recipeUid: null, name: "Cereal", scale: null });
-    mealStore.load([meal]);
-
-    const { callTool } = makeUpdateCtx();
+    const { callTool, ctx } = makeUpdateCtx({ meals: [meal] });
 
     const result = await callTool("update_meal", { uid: TEST_MEAL_UID, update: { recipe_uid: null, scale: "2" } });
     const text = getText(result);
@@ -949,9 +897,9 @@ describe("update_meal — failure/edge paths (AC3.7-3.10)", () => {
     // saveMeals IS called — the scale update is persisted
     expect(mockSaveMeals).toHaveBeenCalledTimes(1);
     // The updated meal in the store reflects the new scale, preserved name and recipeUid
-    expect(mealStore.get(TEST_MEAL_UID)?.scale).toBe("2");
-    expect(mealStore.get(TEST_MEAL_UID)?.recipeUid).toBeNull();
-    expect(mealStore.get(TEST_MEAL_UID)?.name).toBe("Cereal");
+    expect(ctx.mealStore.get(TEST_MEAL_UID)?.scale).toBe("2");
+    expect(ctx.mealStore.get(TEST_MEAL_UID)?.recipeUid).toBeNull();
+    expect(ctx.mealStore.get(TEST_MEAL_UID)?.name).toBe("Cereal");
   });
 });
 
@@ -962,10 +910,6 @@ describe("update_meal — failure/edge paths (AC3.7-3.10)", () => {
 const DELETE_MEAL_UID = "delete-meal-uid-1" as MealUid;
 
 describe("delete_meal — AC4.1-AC4.4", () => {
-  let mealStore: MealStore;
-  let mealTypeStore: MealTypeStore;
-  let store: RecipeStore;
-
   let mockSaveMeals: ReturnType<typeof vi.fn>;
   let mockNotifySync: ReturnType<typeof vi.fn>;
   let mockPut: ReturnType<typeof vi.fn>;
@@ -973,13 +917,6 @@ describe("delete_meal — AC4.1-AC4.4", () => {
   let mockFlush: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
-    mealStore = new MealStore();
-    mealTypeStore = new MealTypeStore();
-    store = new RecipeStore();
-
-    mealTypeStore.load(makeBuiltins());
-    store.load([]);
-
     mockSaveMeals = vi.fn().mockImplementation(async (items: ReadonlyArray<Meal>) => items);
     mockNotifySync = vi.fn().mockResolvedValue(undefined);
     mockPut = vi.fn().mockResolvedValue(undefined);
@@ -987,13 +924,19 @@ describe("delete_meal — AC4.1-AC4.4", () => {
     mockFlush = vi.fn().mockResolvedValue(undefined);
   });
 
-  function makeDeleteCtx() {
+  // Builds a delete_meal ctx with mocked client + cache. `seedOverrides` merges
+  // over the synced baseline (builtin meal types, empty recipe store, no meals).
+  function makeDeleteCtx(seedOverrides?: SeedData) {
     const { server, callTool } = makeTestServer();
-    const ctx = makeCtx(store, server, {
-      mealStore,
-      mealTypeStore,
+    const ctx = makeCtx(new RecipeStore(), server, {
       client: fromAny({ saveMeals: mockSaveMeals, notifySync: mockNotifySync }),
       cache: fromAny({ meals: { put: mockPut, remove: mockRemove }, flush: mockFlush }),
+    });
+    seed(ctx, {
+      mealTypes: makeBuiltins(),
+      recipes: [],
+      // meals key omitted by default; tests supply via seedOverrides
+      ...seedOverrides,
     });
     registerDeleteMealTool(server, ctx);
     return { callTool, ctx };
@@ -1001,9 +944,7 @@ describe("delete_meal — AC4.1-AC4.4", () => {
 
   it("AC4.1: happy path — wire payload has deleted: true, store tombstones UID, returns success message", async () => {
     const meal = makeMeal({ uid: DELETE_MEAL_UID, name: "Tacos", date: "2026-06-15 18:00:00", deleted: false });
-    mealStore.load([meal]);
-
-    const { callTool } = makeDeleteCtx();
+    const { callTool, ctx } = makeDeleteCtx({ meals: [meal] });
 
     const result = await callTool("delete_meal", { uid: DELETE_MEAL_UID });
     const text = getText(result);
@@ -1017,15 +958,13 @@ describe("delete_meal — AC4.1-AC4.4", () => {
     expect(payload[0]?.deleted).toBe(true);
 
     // commitMeal delete branch removes from _items and tombstones the UID
-    expect(mealStore.get(DELETE_MEAL_UID)).toBeUndefined();
-    expect(mealStore.isTombstone(DELETE_MEAL_UID)).toBe(true);
+    expect(ctx.mealStore.get(DELETE_MEAL_UID)).toBeUndefined();
+    expect(ctx.mealStore.isTombstone(DELETE_MEAL_UID)).toBe(true);
   });
 
   it("AC4.2: tombstone retry — second call returns 'already deleted', saveMeals NOT called again", async () => {
     const meal = makeMeal({ uid: DELETE_MEAL_UID, name: "Tacos", date: "2026-06-15 18:00:00", deleted: false });
-    mealStore.load([meal]);
-
-    const { callTool } = makeDeleteCtx();
+    const { callTool } = makeDeleteCtx({ meals: [meal] });
 
     // First delete — succeeds and tombstones
     await callTool("delete_meal", { uid: DELETE_MEAL_UID });
@@ -1040,10 +979,8 @@ describe("delete_meal — AC4.1-AC4.4", () => {
   });
 
   it("AC4.3: unknown UID — 'No meal found...' error, saveMeals NOT called", async () => {
-    // Empty store — no meals, no tombstones
-    mealStore.load([]);
-
-    const { callTool } = makeDeleteCtx();
+    // Empty meals seeded → no meals, no tombstones
+    const { callTool } = makeDeleteCtx({ meals: [] });
 
     const result = await callTool("delete_meal", { uid: "UNKNOWN" as MealUid });
     const text = getText(result);
@@ -1055,12 +992,10 @@ describe("delete_meal — AC4.1-AC4.4", () => {
   it("AC4.4: defense-in-depth — meal.deleted already true in store, no re-POST", async () => {
     // Bypass normal commit path: set() directly to place a deleted meal in the items map
     // (simulates a rare race where a deleted=true record ends up in the store).
+    const { callTool, ctx } = makeDeleteCtx({ meals: [] });
     const deletedMeal = makeMeal({ uid: DELETE_MEAL_UID, name: "Stale", date: "2026-06-15 00:00:00", deleted: true });
-    mealStore.load([]);
     // Use set() directly — NOT load() or mealStore.delete() — to seed the defense-in-depth state
-    mealStore.set(deletedMeal);
-
-    const { callTool } = makeDeleteCtx();
+    ctx.mealStore.set(deletedMeal);
 
     const result = await callTool("delete_meal", { uid: DELETE_MEAL_UID });
     const text = getText(result);

@@ -1,13 +1,11 @@
 import { fromAny } from "@total-typescript/shoehorn";
 import { describe, it, expect, vi } from "vitest";
 import { RecipeStore } from "../cache/recipe-store.js";
-import { MenuStore } from "../cache/menu-store.js";
-import { MenuItemStore } from "../cache/menu-item-store.js";
-import { MealTypeStore } from "../cache/meal-type-store.js";
 import { makeMenu, makeMenuItem } from "../cache/__fixtures__/menus.js";
 import { makeMealType } from "../cache/__fixtures__/meals.js";
 import { makeRecipe } from "../cache/__fixtures__/recipes.js";
-import { makeTestServer, makeCtx, getText, makeStubNotifier } from "./tool-test-utils.js";
+import { makeTestServer, makeCtx, getText, makeStubNotifier, seed } from "./tool-test-utils.js";
+import type { SeedData } from "./tool-test-utils.js";
 import {
   registerAddMenuItemsTool,
   registerUpdateMenuItemTool,
@@ -19,37 +17,12 @@ import type { MealTypeUid, Menu, MenuItem, MenuItemUid, MenuUid, RecipeUid } fro
 const TACOS_UID = "recipe-tacos" as RecipeUid;
 const SOUP_UID = "recipe-soup" as RecipeUid;
 
-function syncedMealTypeStore(): MealTypeStore {
-  const store = new MealTypeStore();
-  store.load([
-    makeMealType({ uid: "breakfast-uid" as MealTypeUid, name: "Breakfast", orderFlag: 0, originalType: 0 }),
-    makeMealType({ uid: "dinner-uid" as MealTypeUid, name: "Dinner", orderFlag: 2, originalType: 2 }),
-  ]);
-  return store;
-}
-
-function syncedRecipeStore(): RecipeStore {
-  const store = new RecipeStore();
-  store.load([makeRecipe({ uid: TACOS_UID, name: "Tacos" }), makeRecipe({ uid: SOUP_UID, name: "Soup" })]);
-  return store;
-}
-
-function syncedStores(opts?: { menus?: Menu[]; items?: MenuItem[] }) {
-  const menuStore = new MenuStore();
-  const menuItemStore = new MenuItemStore();
-  menuStore.load(opts?.menus ?? []);
-  menuItemStore.load(opts?.items ?? []);
-  return { menuStore, menuItemStore };
-}
-
 // Builds a write-tool ctx with mocked client + cache. `saveMenus` / `saveMenuItems`
 // identity-return their inputs (matching the real client's `{result: true}` behavior).
-function makeWriteToolCtx(
-  recipeStore: RecipeStore,
-  menuStore: MenuStore,
-  menuItemStore: MenuItemStore,
-  server: ReturnType<typeof makeTestServer>["server"],
-) {
+// Always seeds recipes (Tacos, Soup) and mealTypes (Breakfast, Dinner); opts.menus and
+// opts.items default to [] (synced-but-empty). Omit opts entirely to leave menu/menuItem
+// stores cold (for the "stores not loaded" guard test — pass only recipes + mealTypes).
+function setup(opts?: { menus?: Menu[]; items?: MenuItem[] }) {
   const mockSaveMenus = vi.fn().mockImplementation(async (items: ReadonlyArray<Menu>) => items);
   const mockSaveMenuItems = vi.fn().mockImplementation(async (items: ReadonlyArray<MenuItem>) => items);
   const mockNotifySync = vi.fn().mockResolvedValue(undefined);
@@ -59,11 +32,9 @@ function makeWriteToolCtx(
   const mockRemoveMenuItem = vi.fn();
   const mockFlush = vi.fn().mockResolvedValue(undefined);
   const { notifier, resourceListChanged } = makeStubNotifier();
+  const { server, callTool } = makeTestServer();
 
-  const ctx = makeCtx(recipeStore, server, {
-    menuStore,
-    menuItemStore,
-    mealTypeStore: syncedMealTypeStore(),
+  const ctx = makeCtx(new RecipeStore(), server, {
     client: fromAny({
       saveMenus: mockSaveMenus,
       saveMenuItems: mockSaveMenuItems,
@@ -77,8 +48,28 @@ function makeWriteToolCtx(
     notifier,
   });
 
+  // Build the seed payload: always include recipes + mealTypes.
+  // Include menus/menuItems only when opts is provided (omitting them leaves those
+  // stores cold so the "stores not loaded" guard test fires correctly).
+  const seedData: SeedData = {
+    recipes: [makeRecipe({ uid: TACOS_UID, name: "Tacos" }), makeRecipe({ uid: SOUP_UID, name: "Soup" })],
+    mealTypes: [
+      makeMealType({ uid: "breakfast-uid" as MealTypeUid, name: "Breakfast", orderFlag: 0, originalType: 0 }),
+      makeMealType({ uid: "dinner-uid" as MealTypeUid, name: "Dinner", orderFlag: 2, originalType: 2 }),
+    ],
+    ...(opts !== undefined
+      ? {
+          menus: opts.menus ?? [],
+          menuItems: opts.items ?? [],
+        }
+      : {}),
+  };
+  seed(ctx, seedData);
+
   return {
     ctx,
+    server,
+    callTool,
     mockSaveMenus,
     mockSaveMenuItems,
     mockNotifySync,
@@ -93,11 +84,8 @@ function makeWriteToolCtx(
 
 describe("add_menu_items tool", () => {
   it("returns sync-not-ready message when stores not loaded", async () => {
-    const menuStore = new MenuStore();
-    const menuItemStore = new MenuItemStore();
-    // DO NOT call .load() on either store
-    const { server, callTool } = makeTestServer();
-    const { ctx } = makeWriteToolCtx(syncedRecipeStore(), menuStore, menuItemStore, server);
+    // Omit opts entirely → menus/menuItems stores stay cold
+    const { ctx, server, callTool } = setup();
     registerAddMenuItemsTool(server, ctx);
 
     const text = getText(
@@ -111,14 +99,9 @@ describe("add_menu_items tool", () => {
 
   it("adds a batch of items and denormalizes the recipe name", async () => {
     const menu = makeMenu({ uid: "m-1" as MenuUid, name: "Holiday", days: 2 });
-    const { menuStore, menuItemStore } = syncedStores({ menus: [menu] });
-    const { server, callTool } = makeTestServer();
-    const { ctx, mockSaveMenuItems, mockSaveMenus, resourceListChanged } = makeWriteToolCtx(
-      syncedRecipeStore(),
-      menuStore,
-      menuItemStore,
-      server,
-    );
+    const { ctx, server, callTool, mockSaveMenuItems, mockSaveMenus, resourceListChanged } = setup({
+      menus: [menu],
+    });
     registerAddMenuItemsTool(server, ctx);
 
     const text = getText(
@@ -145,14 +128,12 @@ describe("add_menu_items tool", () => {
     expect(saved.every((i) => !i.deleted)).toBe(true);
     expect(text).toContain('Added 2 item(s) to menu "Holiday"');
     expect(resourceListChanged).toHaveBeenCalled();
-    expect(menuItemStore.getByMenuUid("m-1" as MenuUid)).toHaveLength(2);
+    expect(ctx.menuItemStore.getByMenuUid("m-1" as MenuUid)).toHaveLength(2);
   });
 
   it("adds a freeform menuitem (name, no recipe_uid) materializing recipeUid null", async () => {
     const menu = makeMenu({ uid: "m-1" as MenuUid, name: "Holiday", days: 1 });
-    const { menuStore, menuItemStore } = syncedStores({ menus: [menu] });
-    const { server, callTool } = makeTestServer();
-    const { ctx, mockSaveMenuItems } = makeWriteToolCtx(syncedRecipeStore(), menuStore, menuItemStore, server);
+    const { ctx, server, callTool, mockSaveMenuItems } = setup({ menus: [menu] });
     registerAddMenuItemsTool(server, ctx);
 
     const text = getText(
@@ -174,9 +155,7 @@ describe("add_menu_items tool", () => {
 
   it("mixes recipe-linked and freeform items in one batch", async () => {
     const menu = makeMenu({ uid: "m-1" as MenuUid, name: "Holiday", days: 1 });
-    const { menuStore, menuItemStore } = syncedStores({ menus: [menu] });
-    const { server, callTool } = makeTestServer();
-    const { ctx, mockSaveMenuItems } = makeWriteToolCtx(syncedRecipeStore(), menuStore, menuItemStore, server);
+    const { ctx, server, callTool, mockSaveMenuItems } = setup({ menus: [menu] });
     registerAddMenuItemsTool(server, ctx);
 
     await callTool("add_menu_items", {
@@ -216,9 +195,7 @@ describe("add_menu_items tool", () => {
     const menu = makeMenu({ uid: "m-1" as MenuUid, name: "Plan", days: 1 });
     // Existing item holds the menu-wide max orderFlag 0 → new items start at 1.
     const existing = makeMenuItem({ uid: "mi-existing" as MenuItemUid, menuUid: "m-1", day: 1, orderFlag: 0 });
-    const { menuStore, menuItemStore } = syncedStores({ menus: [menu], items: [existing] });
-    const { server, callTool } = makeTestServer();
-    const { ctx, mockSaveMenuItems } = makeWriteToolCtx(syncedRecipeStore(), menuStore, menuItemStore, server);
+    const { ctx, server, callTool, mockSaveMenuItems } = setup({ menus: [menu], items: [existing] });
     registerAddMenuItemsTool(server, ctx);
 
     await callTool("add_menu_items", {
@@ -235,9 +212,7 @@ describe("add_menu_items tool", () => {
 
   it("numbers order_flag menu-wide across days, not per-day (matches the wire capture)", async () => {
     const menu = makeMenu({ uid: "m-1" as MenuUid, name: "Plan", days: 3 });
-    const { menuStore, menuItemStore } = syncedStores({ menus: [menu] });
-    const { server, callTool } = makeTestServer();
-    const { ctx, mockSaveMenuItems } = makeWriteToolCtx(syncedRecipeStore(), menuStore, menuItemStore, server);
+    const { ctx, server, callTool, mockSaveMenuItems } = setup({ menus: [menu] });
     registerAddMenuItemsTool(server, ctx);
 
     await callTool("add_menu_items", {
@@ -256,14 +231,7 @@ describe("add_menu_items tool", () => {
 
   it("auto-expands the menu day span when an item overflows it, committing the menu first", async () => {
     const menu = makeMenu({ uid: "m-1" as MenuUid, name: "Holiday", days: 1 });
-    const { menuStore, menuItemStore } = syncedStores({ menus: [menu] });
-    const { server, callTool } = makeTestServer();
-    const { ctx, mockSaveMenus, mockSaveMenuItems } = makeWriteToolCtx(
-      syncedRecipeStore(),
-      menuStore,
-      menuItemStore,
-      server,
-    );
+    const { ctx, server, callTool, mockSaveMenus, mockSaveMenuItems } = setup({ menus: [menu] });
     registerAddMenuItemsTool(server, ctx);
 
     const text = getText(
@@ -280,14 +248,12 @@ describe("add_menu_items tool", () => {
     expect(mockSaveMenuItems).toHaveBeenCalledOnce();
     expect(mockSaveMenus.mock.invocationCallOrder[0]!).toBeLessThan(mockSaveMenuItems.mock.invocationCallOrder[0]!);
     expect(text).toContain('Extended menu "Holiday" to 3 day(s).');
-    expect(menuStore.get("m-1" as MenuUid)!.days).toBe(3);
+    expect(ctx.menuStore.get("m-1" as MenuUid)!.days).toBe(3);
   });
 
   it("does NOT expand the menu when all days are in range", async () => {
     const menu = makeMenu({ uid: "m-1" as MenuUid, name: "Holiday", days: 5 });
-    const { menuStore, menuItemStore } = syncedStores({ menus: [menu] });
-    const { server, callTool } = makeTestServer();
-    const { ctx, mockSaveMenus } = makeWriteToolCtx(syncedRecipeStore(), menuStore, menuItemStore, server);
+    const { ctx, server, callTool, mockSaveMenus } = setup({ menus: [menu] });
     registerAddMenuItemsTool(server, ctx);
 
     await callTool("add_menu_items", {
@@ -300,14 +266,7 @@ describe("add_menu_items tool", () => {
 
   it("collects ALL per-index errors (unknown recipe + unknown type) and saves nothing", async () => {
     const menu = makeMenu({ uid: "m-1" as MenuUid, name: "Plan", days: 3 });
-    const { menuStore, menuItemStore } = syncedStores({ menus: [menu] });
-    const { server, callTool } = makeTestServer();
-    const { ctx, mockSaveMenuItems, mockSaveMenus } = makeWriteToolCtx(
-      syncedRecipeStore(),
-      menuStore,
-      menuItemStore,
-      server,
-    );
+    const { ctx, server, callTool, mockSaveMenuItems, mockSaveMenus } = setup({ menus: [menu] });
     registerAddMenuItemsTool(server, ctx);
 
     const text = getText(
@@ -328,9 +287,7 @@ describe("add_menu_items tool", () => {
   });
 
   it("reports a menu UID miss without saving", async () => {
-    const { menuStore, menuItemStore } = syncedStores();
-    const { server, callTool } = makeTestServer();
-    const { ctx, mockSaveMenuItems } = makeWriteToolCtx(syncedRecipeStore(), menuStore, menuItemStore, server);
+    const { ctx, server, callTool, mockSaveMenuItems } = setup({});
     registerAddMenuItemsTool(server, ctx);
 
     const text = getText(
@@ -346,10 +303,8 @@ describe("add_menu_items tool", () => {
 
 describe("update_menu_item tool", () => {
   it("returns sync-not-ready message when stores not loaded", async () => {
-    const menuStore = new MenuStore();
-    const menuItemStore = new MenuItemStore();
-    const { server, callTool } = makeTestServer();
-    const { ctx } = makeWriteToolCtx(syncedRecipeStore(), menuStore, menuItemStore, server);
+    // Omit opts entirely → menus/menuItems stores stay cold
+    const { ctx, server, callTool } = setup();
     registerUpdateMenuItemTool(server, ctx);
 
     const text = getText(await callTool("update_menu_item", { uid: "mi-1", day: 2 }));
@@ -358,9 +313,7 @@ describe("update_menu_item tool", () => {
 
   it("rejects when no mutable field is provided", async () => {
     const item = makeMenuItem({ uid: "mi-1" as MenuItemUid, menuUid: "m-1" });
-    const { menuStore, menuItemStore } = syncedStores({ items: [item] });
-    const { server, callTool } = makeTestServer();
-    const { ctx, mockSaveMenuItems } = makeWriteToolCtx(syncedRecipeStore(), menuStore, menuItemStore, server);
+    const { ctx, server, callTool, mockSaveMenuItems } = setup({ items: [item] });
     registerUpdateMenuItemTool(server, ctx);
 
     const text = getText(await callTool("update_menu_item", { uid: "mi-1" }));
@@ -378,9 +331,7 @@ describe("update_menu_item tool", () => {
       typeUid: "dinner-uid",
       orderFlag: 0,
     });
-    const { menuStore, menuItemStore } = syncedStores({ items: [item] });
-    const { server, callTool } = makeTestServer();
-    const { ctx, mockSaveMenuItems } = makeWriteToolCtx(syncedRecipeStore(), menuStore, menuItemStore, server);
+    const { ctx, server, callTool, mockSaveMenuItems } = setup({ items: [item] });
     registerUpdateMenuItemTool(server, ctx);
 
     await callTool("update_menu_item", { uid: "mi-1", day: 3, type: { name: "Breakfast" } });
@@ -402,14 +353,7 @@ describe("update_menu_item tool", () => {
       name: "Tacos",
       orderFlag: 0,
     });
-    const { menuStore, menuItemStore } = syncedStores({ menus: [menu], items: [item] });
-    const { server, callTool } = makeTestServer();
-    const { ctx, mockSaveMenus, mockSaveMenuItems } = makeWriteToolCtx(
-      syncedRecipeStore(),
-      menuStore,
-      menuItemStore,
-      server,
-    );
+    const { ctx, server, callTool, mockSaveMenus, mockSaveMenuItems } = setup({ menus: [menu], items: [item] });
     registerUpdateMenuItemTool(server, ctx);
 
     const text = getText(await callTool("update_menu_item", { uid: "mi-1", day: 5 }));
@@ -431,9 +375,7 @@ describe("update_menu_item tool", () => {
       recipeUid: TACOS_UID,
       name: "Tacos",
     });
-    const { menuStore, menuItemStore } = syncedStores({ menus: [menu], items: [item] });
-    const { server, callTool } = makeTestServer();
-    const { ctx, mockSaveMenus } = makeWriteToolCtx(syncedRecipeStore(), menuStore, menuItemStore, server);
+    const { ctx, server, callTool, mockSaveMenus } = setup({ menus: [menu], items: [item] });
     registerUpdateMenuItemTool(server, ctx);
 
     await callTool("update_menu_item", { uid: "mi-1", day: 3 });
@@ -468,9 +410,10 @@ describe("update_menu_item tool", () => {
       name: "Soup",
       orderFlag: 2,
     });
-    const { menuStore, menuItemStore } = syncedStores({ menus: [menu], items: [moving, onDay2, onDay3] });
-    const { server, callTool } = makeTestServer();
-    const { ctx, mockSaveMenuItems } = makeWriteToolCtx(syncedRecipeStore(), menuStore, menuItemStore, server);
+    const { ctx, server, callTool, mockSaveMenuItems } = setup({
+      menus: [menu],
+      items: [moving, onDay2, onDay3],
+    });
     registerUpdateMenuItemTool(server, ctx);
 
     await callTool("update_menu_item", { uid: "mi-move", day: 2 });
@@ -486,9 +429,7 @@ describe("update_menu_item tool", () => {
       recipeUid: TACOS_UID,
       name: "Tacos",
     });
-    const { menuStore, menuItemStore } = syncedStores({ items: [item] });
-    const { server, callTool } = makeTestServer();
-    const { ctx, mockSaveMenuItems } = makeWriteToolCtx(syncedRecipeStore(), menuStore, menuItemStore, server);
+    const { ctx, server, callTool, mockSaveMenuItems } = setup({ items: [item] });
     registerUpdateMenuItemTool(server, ctx);
 
     await callTool("update_menu_item", { uid: "mi-1", recipe_uid: SOUP_UID });
@@ -500,9 +441,7 @@ describe("update_menu_item tool", () => {
 
   it("rejects an unknown recipe_uid without saving", async () => {
     const item = makeMenuItem({ uid: "mi-1" as MenuItemUid, menuUid: "m-1" });
-    const { menuStore, menuItemStore } = syncedStores({ items: [item] });
-    const { server, callTool } = makeTestServer();
-    const { ctx, mockSaveMenuItems } = makeWriteToolCtx(syncedRecipeStore(), menuStore, menuItemStore, server);
+    const { ctx, server, callTool, mockSaveMenuItems } = setup({ items: [item] });
     registerUpdateMenuItemTool(server, ctx);
 
     const text = getText(await callTool("update_menu_item", { uid: "mi-1", recipe_uid: "recipe-ghost" as RecipeUid }));
@@ -511,9 +450,7 @@ describe("update_menu_item tool", () => {
   });
 
   it("reports a UID miss without saving", async () => {
-    const { menuStore, menuItemStore } = syncedStores();
-    const { server, callTool } = makeTestServer();
-    const { ctx, mockSaveMenuItems } = makeWriteToolCtx(syncedRecipeStore(), menuStore, menuItemStore, server);
+    const { ctx, server, callTool, mockSaveMenuItems } = setup({});
     registerUpdateMenuItemTool(server, ctx);
 
     const text = getText(await callTool("update_menu_item", { uid: "ghost", day: 2 }));
@@ -525,14 +462,7 @@ describe("update_menu_item tool", () => {
 describe("delete_menu_item tool", () => {
   it("tombstones the item and reports deletion", async () => {
     const item = makeMenuItem({ uid: "mi-1" as MenuItemUid, menuUid: "m-1", name: "Turkey" });
-    const { menuStore, menuItemStore } = syncedStores({ items: [item] });
-    const { server, callTool } = makeTestServer();
-    const { ctx, mockSaveMenuItems, resourceListChanged } = makeWriteToolCtx(
-      syncedRecipeStore(),
-      menuStore,
-      menuItemStore,
-      server,
-    );
+    const { ctx, server, callTool, mockSaveMenuItems, resourceListChanged } = setup({ items: [item] });
     registerDeleteMenuItemTool(server, ctx);
 
     const text = getText(await callTool("delete_menu_item", { uid: "mi-1" }));
@@ -540,16 +470,14 @@ describe("delete_menu_item tool", () => {
     expect(text).toContain('Menu item "Turkey" has been deleted.');
     const saved = (mockSaveMenuItems.mock.calls[0]![0] as MenuItem[])[0]!;
     expect(saved.deleted).toBe(true);
-    expect(menuItemStore.get("mi-1" as MenuItemUid)).toBeUndefined();
-    expect(menuItemStore.isTombstone("mi-1" as MenuItemUid)).toBe(true);
+    expect(ctx.menuItemStore.get("mi-1" as MenuItemUid)).toBeUndefined();
+    expect(ctx.menuItemStore.isTombstone("mi-1" as MenuItemUid)).toBe(true);
     expect(resourceListChanged).toHaveBeenCalled();
   });
 
   it("is idempotent: a second delete returns 'already deleted' without re-POSTing", async () => {
     const item = makeMenuItem({ uid: "mi-1" as MenuItemUid, menuUid: "m-1", name: "Turkey" });
-    const { menuStore, menuItemStore } = syncedStores({ items: [item] });
-    const { server, callTool } = makeTestServer();
-    const { ctx, mockSaveMenuItems } = makeWriteToolCtx(syncedRecipeStore(), menuStore, menuItemStore, server);
+    const { ctx, server, callTool, mockSaveMenuItems } = setup({ items: [item] });
     registerDeleteMenuItemTool(server, ctx);
 
     await callTool("delete_menu_item", { uid: "mi-1" });
@@ -561,9 +489,7 @@ describe("delete_menu_item tool", () => {
   });
 
   it("reports a UID miss (never existed) without saving", async () => {
-    const { menuStore, menuItemStore } = syncedStores();
-    const { server, callTool } = makeTestServer();
-    const { ctx, mockSaveMenuItems } = makeWriteToolCtx(syncedRecipeStore(), menuStore, menuItemStore, server);
+    const { ctx, server, callTool, mockSaveMenuItems } = setup({});
     registerDeleteMenuItemTool(server, ctx);
 
     const text = getText(await callTool("delete_menu_item", { uid: "ghost" }));
