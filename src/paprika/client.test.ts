@@ -927,6 +927,32 @@ describe("PaprikaClient", () => {
     });
   });
 
+  describe("recipe-fetch-concurrency (#174): configurable bulkhead with a reliability warn", () => {
+    const WARN_MSG =
+      "recipe fetch concurrency exceeds the recommended max; high concurrency against a single origin risks rate-limiting (429) and tripping the circuit breaker";
+
+    it("does not warn at the default concurrency", () => {
+      const { log: testLog, records } = makePinoCapture();
+      new PaprikaClient("test@example.com", "password", testLog);
+      expect(records.some((r) => r["msg"] === WARN_MSG)).toBe(false);
+    });
+
+    it("does not warn at the recommended max (20)", () => {
+      const { log: testLog, records } = makePinoCapture();
+      new PaprikaClient("test@example.com", "password", testLog, { recipeFetchConcurrency: 20 });
+      expect(records.some((r) => r["msg"] === WARN_MSG)).toBe(false);
+    });
+
+    it("warns when concurrency exceeds the recommended max", () => {
+      const { log: testLog, records } = makePinoCapture();
+      new PaprikaClient("test@example.com", "password", testLog, { recipeFetchConcurrency: 50 });
+      const warn = records.find((r) => r["msg"] === WARN_MSG);
+      expect(warn).toBeDefined();
+      expect(warn?.["recipeFetchConcurrency"]).toBe(50);
+      expect(warn?.["recommendedMax"]).toBe(20);
+    });
+  });
+
   describe("pantry-read.AC1: listPantry", () => {
     it("pantry-read.AC1.5 - returns PantryItem[] with camelCase fields from /api/v2/sync/pantry/", async () => {
       server.use(

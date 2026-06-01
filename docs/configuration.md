@@ -13,14 +13,15 @@ Environment variables always win. If you set `PAPRIKA_EMAIL` as an env var and a
 
 ### Core
 
-| Variable                         | Config path            | Required | Default   | Description                                                           |
-| -------------------------------- | ---------------------- | -------- | --------- | --------------------------------------------------------------------- |
-| `PAPRIKA_EMAIL`                  | `paprika.email`        | Yes      | —         | Paprika account email                                                 |
-| `PAPRIKA_PASSWORD`               | `paprika.password`     | Yes      | —         | Paprika account password                                              |
-| `PAPRIKA_SYNC_INTERVAL`          | `sync.interval`        | No       | `"15m"`   | Background sync polling interval                                      |
-| `PAPRIKA_SYNC_ENABLED`           | `sync.enabled`         | No       | `true`    | Enable background sync                                                |
-| `PAPRIKA_SYNC_PENDING_WRITE_TTL` | `sync.pendingWriteTtl` | No       | `"60s"`   | How long a local write is shielded from sync reconciliation           |
-| `MCP_TRANSPORT`                  | `transport`            | No       | `"stdio"` | Transport mode: `"stdio"` (CLI clients) or `"http"` (Streamable HTTP) |
+| Variable                          | Config path                   | Required | Default   | Description                                                           |
+| --------------------------------- | ----------------------------- | -------- | --------- | --------------------------------------------------------------------- |
+| `PAPRIKA_EMAIL`                   | `paprika.email`               | Yes      | —         | Paprika account email                                                 |
+| `PAPRIKA_PASSWORD`                | `paprika.password`            | Yes      | —         | Paprika account password                                              |
+| `PAPRIKA_SYNC_INTERVAL`           | `sync.interval`               | No       | `"15m"`   | Background sync polling interval                                      |
+| `PAPRIKA_SYNC_ENABLED`            | `sync.enabled`                | No       | `true`    | Enable background sync                                                |
+| `PAPRIKA_SYNC_PENDING_WRITE_TTL`  | `sync.pendingWriteTtl`        | No       | `"60s"`   | How long a local write is shielded from sync reconciliation           |
+| `PAPRIKA_SYNC_RECIPE_CONCURRENCY` | `sync.recipeFetchConcurrency` | No       | `5`       | Concurrent recipe fetches during sync (see note below)                |
+| `MCP_TRANSPORT`                   | `transport`                   | No       | `"stdio"` | Transport mode: `"stdio"` (CLI clients) or `"http"` (Streamable HTTP) |
 
 ### HTTP transport
 
@@ -98,6 +99,16 @@ Setting both, or setting neither while the block exists, is a configuration erro
 ### Sync enabled format
 
 `PAPRIKA_SYNC_ENABLED` accepts `"true"`, `"false"`, `"1"`, or `"0"`.
+
+### Recipe fetch concurrency
+
+The first sync after a cold start fetches each recipe individually (`listRecipes`, then one
+`getRecipe` per recipe), throttled by a concurrency bulkhead. `PAPRIKA_SYNC_RECIPE_CONCURRENCY`
+(default `5`) sets that limit. For most libraries the default is plenty — a few hundred recipes
+reconcile in a second or two. If you have a very large library and want a faster cold start, raise
+it; **reliability is the tradeoff** — high concurrency against a single origin makes rate-limiting
+(HTTP 429) and circuit-breaker trips more likely. Values above `20` are allowed but log a startup
+warning. The retry + circuit-breaker stack still protects you, but tune conservatively.
 
 ## HTTP transport
 

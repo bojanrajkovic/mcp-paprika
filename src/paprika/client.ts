@@ -60,6 +60,12 @@ import { SILENT_LOG } from "../utils/log.js";
 const AUTH_URL = "https://paprikaapp.com/api/v1/account/login/";
 const API_BASE = "https://paprikaapp.com/api/v2/sync";
 
+// Concurrency for the N+1 recipe fetch during sync (see PaprikaClient constructor).
+const DEFAULT_RECIPE_FETCH_CONCURRENCY = 5;
+// Above this, raising concurrency trades reliability for speed against a single origin
+// (429s, breaker trips); we allow it but warn (#174).
+const RECOMMENDED_MAX_RECIPE_FETCH_CONCURRENCY = 20;
+
 class TransientHTTPError extends Error {
   constructor(readonly status: number) {
     super(`Transient HTTP error (${status.toString()})`);
@@ -216,7 +222,7 @@ function groceryIngredientToApiPayload(ingredient: Readonly<GroceryIngredient>):
 
 export class PaprikaClient {
   private token: string | null = null;
-  private readonly _recipesBulkhead = bulkhead(5, Number.MAX_SAFE_INTEGER);
+  private readonly _recipesBulkhead: ReturnType<typeof bulkhead>;
   private readonly log: Logger;
   private readonly retryPolicy: RetryPolicy;
   private readonly breakerPolicy: CircuitBreakerPolicy;
@@ -226,8 +232,23 @@ export class PaprikaClient {
     private readonly email: string,
     private readonly password: string,
     log?: Logger,
+    opts?: { readonly recipeFetchConcurrency?: number },
   ) {
     this.log = log ?? SILENT_LOG;
+
+    // Cold-start sync fetches recipes N+1 (listRecipes then getRecipe per recipe),
+    // throttled by this bulkhead. Configurable so a large library can go faster (#174);
+    // reliability is the primary constraint, so values above the recommended max get a
+    // warning — high concurrency against a single origin risks 429s and tripping the
+    // breaker (which the retry/circuit-breaker stack then has to absorb).
+    const recipeFetchConcurrency = opts?.recipeFetchConcurrency ?? DEFAULT_RECIPE_FETCH_CONCURRENCY;
+    if (recipeFetchConcurrency > RECOMMENDED_MAX_RECIPE_FETCH_CONCURRENCY) {
+      this.log.warn(
+        { recipeFetchConcurrency, recommendedMax: RECOMMENDED_MAX_RECIPE_FETCH_CONCURRENCY },
+        "recipe fetch concurrency exceeds the recommended max; high concurrency against a single origin risks rate-limiting (429) and tripping the circuit breaker",
+      );
+    }
+    this._recipesBulkhead = bulkhead(recipeFetchConcurrency, Number.MAX_SAFE_INTEGER);
     this.retryPolicy = retry(handleType(TransientHTTPError).orType(NetworkRetryableError), {
       maxAttempts: 3,
       backoff: new ExponentialBackoff({
