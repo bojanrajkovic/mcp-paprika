@@ -34,11 +34,15 @@ export function registerDiscoverTool(server: McpServer, ctx: ServerContext, vect
             return textResult("No recipes found matching that description.");
           }
 
-          // Enrich results and filter out deleted recipes
+          // Enrich results and filter out recipes that are gone or trashed.
+          // `store.get` returns trashed recipes (unlike `getAll`), and a stale
+          // vector can outlive a soft-delete, so guard on `inTrash` here as
+          // defense-in-depth even though `commitRecipe` removes trashed recipes
+          // from the index.
           const enriched: Array<{ result: SemanticResult; recipe: Recipe }> = [];
           for (const result of results) {
             const recipe = ctx.store.get(result.uid as RecipeUid);
-            if (recipe) {
+            if (recipe && !recipe.inTrash) {
               enriched.push({ result, recipe });
             }
           }
