@@ -193,6 +193,23 @@ describe("JsonVectorIndex", () => {
       await expect(idx.beginUpdate()).rejects.toThrow(/in progress/i);
     });
 
+    it("does not pin the dimension from a transaction that is cancelled", async () => {
+      const idx = await freshIndex(); // empty: dimension not yet pinned
+      await idx.beginUpdate();
+      await idx.upsertItem({ id: "a", vector: [1, 0] }); // stages a 2-dim item
+      // A mismatched item fails against the in-transaction dimension, not a
+      // committed one.
+      await expect(idx.upsertItem({ id: "b", vector: [1, 0, 0] })).rejects.toThrow(/dimension/i);
+      idx.cancelUpdate();
+      // The cancelled transaction must NOT have pinned dimension=2 — a fresh
+      // index at a different dimension has to still work (it would throw before
+      // the fix, deadlocking re-indexing until restart).
+      await idx.upsertItem({ id: "c", vector: [1, 0, 0] });
+      const res = await idx.queryItems([1, 0, 0], 10);
+      expect(res.map((r) => r.item.id)).toEqual(["c"]);
+      expect(res[0]!.score).toBeCloseTo(1, 12);
+    });
+
     it("endUpdate persists a batch atomically", async () => {
       const idx = await freshIndex();
       await idx.beginUpdate();

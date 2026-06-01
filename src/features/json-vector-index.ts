@@ -233,6 +233,10 @@ export class JsonVectorIndex {
     await this._persist(this._update);
     this._data = this._update;
     this._update = undefined;
+    // Promote the dimension from the now-committed data (undefined when empty).
+    // Doing it here — not during `_addToUpdate` — keeps `_dimension` in sync with
+    // `_data`, so a rolled-back transaction can't leave it pinned.
+    this._dimension = this._data.items[0]?.vector.length;
   }
 
   /**
@@ -306,12 +310,18 @@ export class JsonVectorIndex {
   }
 
   private _addToUpdate(item: UpsertItem): void {
-    this._assertValidVector(item.vector, this._dimension);
+    // Enforce a single dimension within the transaction without pinning the
+    // committed `_dimension`: validate against the committed dimension, or — for
+    // a still-empty index — the first item already staged in THIS transaction.
+    // `_dimension` is promoted from committed data only in `endUpdate`, so a
+    // cancelled or failed transaction never leaves it pinned to data that was
+    // never committed.
+    const expectedDim = this._dimension ?? this._update!.items[0]?.vector.length;
+    this._assertValidVector(item.vector, expectedDim);
     const norm = vectorNorm(item.vector);
     if (norm === 0) {
       throw new Error(`Refusing to index zero-norm vector for id ${item.id}`);
     }
-    this._dimension ??= item.vector.length;
     const next: IndexItem = {
       id: item.id,
       vector: item.vector,
