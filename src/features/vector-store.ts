@@ -123,7 +123,12 @@ export class VectorStore {
       await cp(this._vectorsDir, backupDir, { recursive: true, force: true });
       await this._index.createIndex({ version: 1, deleteIfExists: true });
       this._hashes = {};
-      return; // Skip loading hash index — just cleared everything
+      // Persist the cleared hash map so it matches the now-empty index on disk.
+      // Without this, a restart before the first successful re-index would reload
+      // the stale hash-index.json against the empty index, and indexRecipes would
+      // skip every "unchanged" recipe — leaving the index permanently empty.
+      await this._persistHashes();
+      return; // Skip loading the (just-cleared) hash index — everything is reset
     }
 
     // Load hash map — follows DiskCache pattern (disk-cache.ts:60-88)

@@ -276,6 +276,14 @@ describe("VectorStore init", () => {
       mockLoadIndexData.mockRejectedValueOnce(new Error("Vector contains non-finite value at index 3"));
       mockCreateIndex.mockResolvedValue(undefined);
 
+      // A stale hash-index.json from before the corruption. Recovery must clear
+      // it on disk too, or a restart would reload these hashes against the now-
+      // empty index and skip every "unchanged" recipe forever.
+      const vectorsDir = join(tempDir, "vectors");
+      await mkdir(vectorsDir, { recursive: true });
+      const hashIndexPath = join(vectorsDir, "hash-index.json");
+      await writeFile(hashIndexPath, JSON.stringify({ "recipe-1": "hash-abc", "recipe-2": "hash-def" }));
+
       const embedder = makeMockEmbedder();
       const { log, records } = makePinoCapture();
       const store = new VectorStore(tempDir, embedder, "test-model", 1, log);
@@ -286,6 +294,8 @@ describe("VectorStore init", () => {
       expect(warnRecords[0]!["msg"]).toBe("corrupt vector index, backing up and recreating");
       expect(mockCreateIndex).toHaveBeenCalledWith({ version: 1, deleteIfExists: true });
       expect(store.size).toBe(0);
+      // The on-disk hash file is rewritten to empty (not left stale).
+      expect(JSON.parse(await readFile(hashIndexPath, "utf-8"))).toEqual({});
     });
   });
 
