@@ -36,6 +36,9 @@ describe("p2-recipe-crud: create_recipe tool", () => {
       expect(text).toContain("# Soup");
       expect(text).toContain("## Ingredients");
       expect(text).toContain("## Directions");
+      // The new recipe's UID is surfaced directly so the caller doesn't have to
+      // look it up to follow create_recipe with upload_photo / update_recipe.
+      expect(text).toContain(savedRecipe.uid);
     });
 
     it("p2-recipe-crud.AC2.2: optional fields are reflected in returned recipe", async () => {

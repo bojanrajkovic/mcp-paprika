@@ -17,6 +17,8 @@ describe("p2-recipe-crud: read_recipe tool", () => {
       const text = getText(result);
 
       expect(text).toContain("# Chocolate Cake");
+      // The UID is rendered so the caller can act on the recipe without a re-lookup.
+      expect(text).toContain(recipe.uid);
     });
 
     it("p2-recipe-crud.AC1.1 (extended): UID lookup includes category names", async () => {

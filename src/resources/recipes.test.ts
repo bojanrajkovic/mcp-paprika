@@ -88,8 +88,12 @@ describe("p2-u10-resource-reg: MCP Recipe Resources", () => {
         };
 
         const text = result.contents[0]?.text ?? "";
-        expect(text).toMatch(/^\*\*UID:\*\*\s`test-recipe`/);
-        expect(text).toContain("**URI:** `paprika://recipe/test-recipe`");
+        // The URI header leads; the UID is rendered once, by recipeToMarkdown in
+        // the body (no longer duplicated in the resource header — #195).
+        expect(text).toMatch(/^\*\*URI:\*\*\s`paprika:\/\/recipe\/test-recipe`/);
+        expect(text).toContain("**UID:** `test-recipe`");
+        // exactly one UID line (no duplication)
+        expect(text.match(/\*\*UID:\*\*/g)).toHaveLength(1);
       });
 
       it("includes Last synced when store has been synced", async () => {

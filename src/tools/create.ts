@@ -105,6 +105,8 @@ export function registerCreateTool(server: McpServer, ctx: ServerContext): void 
           const categoryNames = ctx.categoryStore.resolveNames(saved.categories);
           const markdown = recipeToMarkdown(saved, categoryNames);
           const prefix = warnings.length > 0 ? warnings.join("\n") + "\n\n" : "";
+          // The UID is rendered by recipeToMarkdown, so the caller can chain
+          // upload_photo / update_recipe without re-looking-up the new recipe.
           return textResult(prefix + markdown);
         },
         (guard) => guard,
