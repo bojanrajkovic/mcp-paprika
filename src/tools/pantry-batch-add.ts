@@ -5,7 +5,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { PantryItemUidSchema } from "../paprika/types.js";
 import type { PantryItem } from "../paprika/types.js";
-import { normalizePaprikaDate, paprikaDateToday } from "../paprika/dates.js";
+import { normalizeWire, todayWire } from "../utils/dates.js";
 import { textResult } from "./helpers.js";
 import { ensureAisle } from "./aisle-helpers.js";
 import { commitPantryItemsBatch, pantryItemToMarkdown, pantryStartGuard } from "./pantry-helpers.js";
@@ -48,7 +48,7 @@ export function registerAddPantryItemsTool(server: McpServer, ctx: ServerContext
           for (let i = 0; i < args.items.length; i++) {
             const item = args.items[i]!;
 
-            const expirationDate = item.expirationDate !== undefined ? normalizePaprikaDate(item.expirationDate) : null;
+            const expirationDate = item.expirationDate !== undefined ? normalizeWire(item.expirationDate) : null;
             if (item.expirationDate !== undefined && expirationDate === null) {
               return textResult(
                 `Item ${i.toString()} ("${item.ingredient}"): could not parse expirationDate "${item.expirationDate}". ` +
@@ -58,7 +58,7 @@ export function registerAddPantryItemsTool(server: McpServer, ctx: ServerContext
 
             let purchaseDate: string;
             if (item.purchaseDate !== undefined) {
-              const parsedPurchase = normalizePaprikaDate(item.purchaseDate);
+              const parsedPurchase = normalizeWire(item.purchaseDate);
               if (parsedPurchase === null) {
                 return textResult(
                   `Item ${i.toString()} ("${item.ingredient}"): could not parse purchaseDate "${item.purchaseDate}". ` +
@@ -67,7 +67,7 @@ export function registerAddPantryItemsTool(server: McpServer, ctx: ServerContext
               }
               purchaseDate = parsedPurchase;
             } else {
-              purchaseDate = paprikaDateToday();
+              purchaseDate = todayWire();
             }
 
             normalizedDates.push({ expirationDate, purchaseDate });

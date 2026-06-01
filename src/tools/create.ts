@@ -4,7 +4,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { RecipeUidSchema } from "../paprika/types.js";
 import type { CategoryUid, Recipe } from "../paprika/types.js";
-import { formatPaprikaDate } from "../paprika/dates.js";
+import { formatTimestampWire } from "../utils/dates.js";
 import { coldStartGuard, commitRecipe, recipeToMarkdown, resolveCategoryRefs, textResult } from "./helpers.js";
 import type { ServerContext } from "../types/server-context.js";
 
@@ -73,7 +73,7 @@ export function registerCreateTool(server: McpServer, ctx: ServerContext): void 
             servings: args.servings ?? null,
             difficulty: args.difficulty ?? null,
             rating: args.rating ?? 0, // AC2.3: omitted → 0 (Paprika's default)
-            created: formatPaprikaDate(new Date()), // yyyy-MM-dd HH:mm:ss — Paprika 500s on ISO-8601 (#159)
+            created: formatTimestampWire(new Date()), // yyyy-MM-dd HH:mm:ss — Paprika 500s on ISO-8601 (#159)
             imageUrl: "",
             photo: null,
             photoHash: null,

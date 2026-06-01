@@ -4,7 +4,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { PantryItemUidSchema } from "../paprika/types.js";
 import type { PantryItem } from "../paprika/types.js";
-import { normalizePaprikaDate } from "../paprika/dates.js";
+import { normalizeWire } from "../utils/dates.js";
 import { textResult } from "./helpers.js";
 import { ensureAisle } from "./aisle-helpers.js";
 import { commitPantryItem, pantryItemToMarkdown, pantryStartGuard } from "./pantry-helpers.js";
@@ -58,7 +58,7 @@ export function registerUpdatePantryItemTool(server: McpServer, ctx: ServerConte
           } else if (args.expirationDate === null) {
             newExpirationDate = null;
           } else {
-            const normalized = normalizePaprikaDate(args.expirationDate);
+            const normalized = normalizeWire(args.expirationDate);
             if (normalized === null) {
               return textResult(
                 `Could not parse expirationDate "${args.expirationDate}". Use ISO 8601 (e.g., "2026-12-31") or "yyyy-MM-dd HH:mm:ss".`,
@@ -75,7 +75,7 @@ export function registerUpdatePantryItemTool(server: McpServer, ctx: ServerConte
           } else if (args.purchaseDate === null) {
             newPurchaseDate = null;
           } else {
-            const normalized = normalizePaprikaDate(args.purchaseDate);
+            const normalized = normalizeWire(args.purchaseDate);
             if (normalized === null) {
               return textResult(
                 `Could not parse purchaseDate "${args.purchaseDate}". Use ISO 8601 (e.g., "2026-12-31") or "yyyy-MM-dd HH:mm:ss".`,

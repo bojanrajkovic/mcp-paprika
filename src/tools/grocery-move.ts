@@ -4,7 +4,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { GroceryItemUidSchema, PantryItemUidSchema } from "../paprika/types.js";
 import type { GroceryItem, PantryItem } from "../paprika/types.js";
-import { paprikaDateToday } from "../paprika/dates.js";
+import { todayWire } from "../utils/dates.js";
 import { textResult } from "./helpers.js";
 import { commitPantryItemsBatch } from "./pantry-helpers.js";
 import { commitGroceryItemsBatch, groceryStartGuard } from "./grocery-helpers.js";
@@ -56,7 +56,7 @@ export function registerMoveToPantryTool(server: McpServer, ctx: ServerContext):
             expirationDate: null,
             hasExpiration: false,
             inStock: true,
-            purchaseDate: paprikaDateToday(),
+            purchaseDate: todayWire(),
             notes: null,
             deleted: false,
           }));
