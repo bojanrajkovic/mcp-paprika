@@ -30,7 +30,10 @@ export function registerRecipeResources(server: McpServer, ctx: ServerContext): 
       }
       const categoryNames = ctx.categoryStore.resolveNames(recipe.categories);
 
-      const headerLines = [`**UID:** \`${uid}\``, `**URI:** \`paprika://recipe/${uid}\``];
+      // UID is rendered by recipeToMarkdown (shared with read_recipe), so the
+      // resource header carries only the metadata the body doesn't: URI, sync
+      // time, photo. (Avoids a duplicate UID line — Codex P3 on #195.)
+      const headerLines = [`**URI:** \`paprika://recipe/${uid}\``];
 
       const lastSynced = ctx.store.lastSyncedAt;
       if (lastSynced) {

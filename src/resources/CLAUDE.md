@@ -15,7 +15,7 @@ Defines MCP resources that AI assistants can read. Resources expose data (e.g., 
 Registers the `paprika://recipe/{uid}` resource template with list and read callbacks:
 
 - **List callback:** Returns all non-trashed recipes with `uri: "paprika://recipe/{uid}"`, `name: recipe.name`, and `mimeType: "text/markdown"` for each. Returns `{ resources: [] }` when store is empty.
-- **Read callback:** Returns a recipe as markdown with a metadata header prepended: `**UID:**`, `**URI:**` (always), `**Last synced:**` (when store has been synced), and `**Photo:**` (when recipe has an image URL). Category UIDs are resolved to display names. Throws an error if the UID does not exist.
+- **Read callback:** Returns a recipe as markdown with a metadata header prepended: `**URI:**` (always), `**Last synced:**` (when store has been synced), and `**Photo:**` (when recipe has an image URL). The UID is NOT in the header — `recipeToMarkdown` renders it in the body (shared with `read_recipe`), so the header would duplicate it. Category UIDs are resolved to display names. Throws an error if the UID does not exist.
 
 ### Grocery List Resources
 
