@@ -47,7 +47,9 @@ export interface SeedData {
  * entity or signature change touches this helper instead of every call site —
  * the same insulation {@link makeAppContext} gives AppContext construction.
  *
- * Returns the same `ctx` for chaining:
+ * Returns the same `ctx` for chaining. Generic over the context type so a
+ * `ServerContext`/`SessionContext` (which carries `server`) flows straight
+ * through `seed(makeCtx(...))` without narrowing to a bare `AppContext`:
  *
  * ```ts
  * const ctx = seed(makeCtx(new RecipeStore(), server), {
@@ -58,7 +60,7 @@ export interface SeedData {
  *
  * @see SeedData for the omitted-vs-empty-array semantics.
  */
-export function seed(ctx: AppContext, data: SeedData): AppContext {
+export function seed<T extends AppContext>(ctx: T, data: SeedData): T {
   if (data.recipes) ctx.store.load(data.recipes);
   if (data.categories) ctx.categoryStore.load(data.categories);
   if (data.pantry) ctx.pantryStore.load(data.pantry);
