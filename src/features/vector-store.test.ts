@@ -871,3 +871,61 @@ describe("VectorStore removeRecipe", () => {
     });
   });
 });
+
+describe("VectorStore write serialization (#177)", () => {
+  let tempDir: string;
+
+  beforeEach(async () => {
+    tempDir = await mkdtemp(join(tmpdir(), "paprika-vector-store-"));
+    vi.clearAllMocks();
+  });
+
+  afterEach(async () => {
+    await rm(tempDir, { recursive: true, force: true });
+    vi.clearAllMocks();
+  });
+
+  it("serializes overlapping indexRecipes calls so Vectra transactions never overlap", async () => {
+    // Two writers (sync:complete recipe handler + sync:category-change handler)
+    // can fire from one sync cycle without being awaited. Vectra's begin/endUpdate
+    // is a single transaction — a second beginUpdate while one is open throws.
+    // The write mutex must keep that from happening.
+    const { LocalIndex } = await import("vectra");
+    vi.spyOn((LocalIndex as any).prototype, "isIndexCreated").mockResolvedValue(false);
+    vi.spyOn((LocalIndex as any).prototype, "createIndex").mockResolvedValue(undefined);
+    vi.spyOn((LocalIndex as any).prototype, "upsertItem").mockResolvedValue(undefined);
+
+    let openTransactions = 0;
+    let maxOpen = 0;
+    vi.spyOn((LocalIndex as any).prototype, "beginUpdate").mockImplementation(async () => {
+      openTransactions++;
+      maxOpen = Math.max(maxOpen, openTransactions);
+      if (openTransactions > 1) throw new Error("Update already in progress");
+    });
+    vi.spyOn((LocalIndex as any).prototype, "endUpdate").mockImplementation(async () => {
+      openTransactions--;
+    });
+
+    const embedder = makeMockEmbedder();
+    // Slow embed so the two calls would interleave without the mutex.
+    embedder.embedBatch.mockImplementation(async (texts) => {
+      await new Promise((r) => setTimeout(r, 10));
+      return texts.map(() => [1, 0, 0]);
+    });
+
+    const store = new VectorStore(tempDir, embedder, "test-model", 1);
+    await store.init();
+
+    const r1 = makeRecipe({ uid: "r1" as RecipeUid });
+    const r2 = makeRecipe({ uid: "r2" as RecipeUid });
+
+    // Fire concurrently. Without serialization the second beginUpdate throws and
+    // one of these rejects (the handler's catch would then swallow it in prod,
+    // dropping that recipe's embedding update).
+    const results = await Promise.all([store.indexRecipes([r1], () => []), store.indexRecipes([r2], () => [])]);
+
+    expect(results[0]!.indexed).toBe(1);
+    expect(results[1]!.indexed).toBe(1);
+    expect(maxOpen).toBe(1); // never two transactions open at once
+  });
+});

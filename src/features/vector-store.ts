@@ -52,6 +52,7 @@ export function contentHash(text: string): string {
 
 import { mkdir, readFile, rename, cp, open } from "node:fs/promises";
 import { join } from "node:path";
+import { Mutex } from "async-mutex";
 import { z } from "zod";
 import { LocalIndex } from "vectra";
 import type { EmbeddingClient } from "./embeddings.js";
@@ -83,6 +84,13 @@ export class VectorStore {
   private readonly _schemaVersion: number;
   private readonly log: Logger;
   private _hashes: Record<string, string> = {};
+  // Serializes index mutations. The vector store is a process-wide singleton with
+  // multiple concurrent writers — the sync engine fires sync:complete (recipe)
+  // and sync:category-change handlers from one syncOnce() without awaiting them,
+  // and they both write here. Vectra's beginUpdate()/endUpdate() is a single
+  // transaction (a second beginUpdate while one is open throws), and `_hashes` +
+  // its persisted file are shared state, so every write runs exclusively (#177).
+  private readonly _writeMutex = new Mutex();
 
   constructor(cacheDir: string, embedder: EmbeddingClient, modelId: string, schemaVersion: number, log?: Logger) {
     this._vectorsDir = join(cacheDir, "vectors");
@@ -219,6 +227,15 @@ export class VectorStore {
     recipes: ReadonlyArray<Recipe>,
     resolveCats: (uids: ReadonlyArray<CategoryUid>) => ReadonlyArray<string>,
   ): Promise<IndexingResult> {
+    // Run exclusively so a concurrent indexRecipes/removeRecipe can't open an
+    // overlapping Vectra transaction or race the hash map (see `_writeMutex`).
+    return this._writeMutex.runExclusive(() => this._indexRecipesLocked(recipes, resolveCats));
+  }
+
+  private async _indexRecipesLocked(
+    recipes: ReadonlyArray<Recipe>,
+    resolveCats: (uids: ReadonlyArray<CategoryUid>) => ReadonlyArray<string>,
+  ): Promise<IndexingResult> {
     if (recipes.length === 0) {
       return { indexed: 0, skipped: 0, total: 0 };
     }
@@ -321,10 +338,13 @@ export class VectorStore {
   }
 
   async removeRecipe(uid: string): Promise<void> {
-    await this._index.deleteItem(uid);
-    if (uid in this._hashes) {
-      delete this._hashes[uid];
-      await this._persistHashes();
-    }
+    // Exclusive: shares the Vectra index + hash map with indexRecipes.
+    await this._writeMutex.runExclusive(async () => {
+      await this._index.deleteItem(uid);
+      if (uid in this._hashes) {
+        delete this._hashes[uid];
+        await this._persistHashes();
+      }
+    });
   }
 }
