@@ -188,7 +188,7 @@ describe("upload_photo", () => {
     expect(ctx.generatedImageStore.consume(token)).not.toBeNull();
   });
 
-  it("restores the token when the attach fails, so a retry with the same token works", async () => {
+  it("does NOT restore the token after an attach failure (avoids a duplicate photo on retry)", async () => {
     const { callTool, uploadPhoto, ctx } = setup();
     const token = ctx.generatedImageStore.put({
       bytes: Buffer.from(jpegBase64, "base64"),
@@ -196,15 +196,16 @@ describe("upload_photo", () => {
       recipeUid: RECIPE_UID,
       model: "seedream",
     });
-    uploadPhoto.mockRejectedValueOnce(new Error("transient Paprika error"));
+    uploadPhoto.mockRejectedValueOnce(new Error("commit failure after the remote upload"));
 
     const failed = await callTool("upload_photo", { recipe_uid: RECIPE_UID, source: { generation_token: token } });
     expect(getText(failed)).toContain("Failed to upload");
 
-    // The preview was restored; retrying with the SAME token now succeeds.
+    // attachPhotoToRecipe uploads to Paprika before the local commit, so the
+    // photo may already exist remotely. The token is consumed and NOT restored,
+    // so a retry can't re-attach (which would duplicate the photo).
     const retry = await callTool("upload_photo", { recipe_uid: RECIPE_UID, source: { generation_token: token } });
-    expect(getText(retry)).toContain("Attached photo");
-    expect(uploadPhoto).toHaveBeenCalledTimes(2);
+    expect(getText(retry).toLowerCase()).toContain("expired");
   });
 
   it("a token attaches at most once — a duplicate call gets the already-used error", async () => {

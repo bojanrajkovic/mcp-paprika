@@ -73,12 +73,15 @@ function sniffImage(bytes: Buffer): boolean {
 
 /**
  * Resolved image bytes plus provenance. For a generation_token source the token
- * is `consume`d up front (atomic single-use even under concurrent calls); the
- * returned `restore` puts the preview back if the later attach fails, so a retry
- * can still recover it. `generated` marks AI-model output so the caller applies
- * the same size cap a direct generate-and-attach would.
+ * is `consume`d atomically up front (single-use even under concurrent calls). It
+ * is `restore`d ONLY on a pure-validation failure (wrong recipe) — i.e. before
+ * any remote/local write — never after `attachPhotoToRecipe`, which does the
+ * remote `client.uploadPhoto` first: restoring after that could let a retry
+ * create a duplicate photo when only the post-upload local commit failed.
+ * `generated` marks AI-model output so the caller applies the same size cap a
+ * direct generate-and-attach would.
  */
-type ResolvedSource = { bytes: Buffer; generated: boolean; restore?: () => void } | { error: string };
+type ResolvedSource = { bytes: Buffer; generated: boolean } | { error: string };
 
 /** Resolves the image bytes from the chosen source, or returns an error message. */
 async function resolveSourceBytes(
@@ -96,8 +99,7 @@ async function resolveSourceBytes(
   if ("generation_token" in source) {
     // CONSUME atomically up front so the token is single-use even if two
     // upload_photo calls race (the synchronous delete runs before any await, so
-    // the second consume returns null). Restore below if validation or the later
-    // attach fails, so a mistargeted/retried request can still recover it.
+    // the second consume returns null).
     const token = source.generation_token;
     const entry = ctx.generatedImageStore.consume(token);
     if (entry === null) {
@@ -106,10 +108,12 @@ async function resolveSourceBytes(
       };
     }
     if (entry.recipeUid !== recipeUid) {
-      ctx.generatedImageStore.restore(token, entry); // valid token, wrong target — give it back
+      // Pure validation failure — no remote/local write happened, so giving the
+      // token back is safe and lets the caller retry with the right recipe_uid.
+      ctx.generatedImageStore.restore(token, entry);
       return { error: "That preview was generated for a different recipe; generate a new one for this recipe." };
     }
-    return { bytes: entry.bytes, generated: true, restore: () => ctx.generatedImageStore.restore(token, entry) };
+    return { bytes: entry.bytes, generated: true };
   }
 
   const buf = Buffer.from(source.image_base64, "base64");
@@ -165,7 +169,9 @@ export function registerUploadPhotoTool(server: McpServer, ctx: ServerContext): 
               resolved.generated ? { maxFullEdge: GENERATED_MAX_FULL_EDGE } : undefined,
             ));
           } catch (error) {
-            resolved.restore?.(); // give the preview token back so a retry works
+            // Token already consumed (a generated source); not restored — a
+            // failure here is rare for model output, and not restoring keeps the
+            // attach-failure path below uniformly duplicate-safe.
             log.error({ err: error, recipe_uid: args.recipe_uid }, "normalizePhoto failed");
             return textResult(`Failed to process image: ${toMessage(error)}`);
           }
@@ -174,7 +180,10 @@ export function registerUploadPhotoTool(server: McpServer, ctx: ServerContext): 
           try {
             photo = await attachPhotoToRecipe(ctx, recipe, thumbnail, full);
           } catch (error) {
-            resolved.restore?.(); // give the preview token back so a retry works
+            // Do NOT restore the token here: attachPhotoToRecipe uploads to
+            // Paprika BEFORE the local commit, so this error may mean the remote
+            // photo already exists. Restoring would let a retry create a
+            // duplicate. The preview is lost (regenerate) — the safe trade.
             log.error({ err: error, recipe_uid: args.recipe_uid }, "uploadPhoto failed");
             return textResult(`Failed to upload photo: ${toMessage(error)}`);
           }
