@@ -1,6 +1,6 @@
 # Server Composition Root
 
-Last verified: 2026-05-31
+Last verified: 2026-06-01
 
 ## Purpose
 
@@ -36,6 +36,7 @@ Process-wide, heavyweight, shared state. Built once per process by `buildAppCont
 | `menuStore`              | `MenuStore`                 | In-memory menu query layer (TombstoneEntityStore subclass with tombstones, `findByName`, `lastSyncedAt`; parent/Content store, like GroceryListStore)                                                                                      |
 | `menuItemStore`          | `MenuItemStore`             | In-memory menu item query layer (TombstoneEntityStore subclass with tombstones, `getByMenuUid`; child/Data store, like GroceryItemStore)                                                                                                   |
 | `photoStore`             | `PhotoStore`                | In-memory recipe-photo query layer (TombstoneEntityStore subclass with tombstones, `getByRecipeUid` sorted by `orderFlag`; recipe-child entity like MealStore — no standalone MCP resource surface)                                        |
+| `generatedImageStore`    | `GeneratedImageStore`       | Ephemeral, in-memory ring buffer (cap 8, ~1h TTL) of AI-generated photo previews keyed by `gen_` token; `generate_photo` stashes, `upload_photo`'s `generation_token` source consumes. No disk hydration; lost on restart                  |
 | `vectorStore`            | `VectorStore \| null`       | Semantic-search index; `null` when embeddings are not configured                                                                                                                                                                           |
 | `photographyClient`      | `PhotographyClient \| null` | OpenRouter image-generation client; `null` when `features.imageGen` is not configured (mirrors `vectorStore`)                                                                                                                              |
 | `notifier`               | `Notifier`                  | Notification surface — decouples callers from any one `McpServer` instance                                                                                                                                                                 |
