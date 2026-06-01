@@ -89,18 +89,21 @@ describe("VectorStore VectorStoreError", () => {
   });
 });
 
-// Mock setup for all init and operation tests
-vi.mock("vectra", () => {
-  const MockLocalIndex = vi.fn();
-  MockLocalIndex.prototype.isIndexCreated = vi.fn();
-  MockLocalIndex.prototype.createIndex = vi.fn();
-  MockLocalIndex.prototype.beginUpdate = vi.fn();
-  MockLocalIndex.prototype.endUpdate = vi.fn();
-  MockLocalIndex.prototype.cancelUpdate = vi.fn();
-  MockLocalIndex.prototype.upsertItem = vi.fn();
-  MockLocalIndex.prototype.deleteItem = vi.fn();
-  MockLocalIndex.prototype.queryItems = vi.fn();
-  return { LocalIndex: MockLocalIndex };
+// Mock setup for all init and operation tests. These exercise VectorStore's
+// orchestration (corruption recovery, hash map, model/schema invalidation) with
+// the underlying index stubbed; json-vector-index.test.ts covers the real index.
+vi.mock("./json-vector-index.js", () => {
+  const MockIndex = vi.fn();
+  MockIndex.prototype.isIndexCreated = vi.fn();
+  MockIndex.prototype.createIndex = vi.fn();
+  MockIndex.prototype.loadIndexData = vi.fn();
+  MockIndex.prototype.beginUpdate = vi.fn();
+  MockIndex.prototype.endUpdate = vi.fn();
+  MockIndex.prototype.cancelUpdate = vi.fn();
+  MockIndex.prototype.upsertItem = vi.fn();
+  MockIndex.prototype.deleteItem = vi.fn();
+  MockIndex.prototype.queryItems = vi.fn();
+  return { JsonVectorIndex: MockIndex };
 });
 
 function makeMockEmbedder(): Mocked<EmbeddingClient> {
@@ -127,10 +130,10 @@ describe("VectorStore init", () => {
   });
 
   describe("AC1.1: First run - creates index and empty hash map", () => {
-    it("creates Vectra index when none exists", async () => {
-      const { LocalIndex } = await import("vectra");
-      const mockIsIndexCreated = vi.spyOn((LocalIndex as any).prototype, "isIndexCreated");
-      const mockCreateIndex = vi.spyOn((LocalIndex as any).prototype, "createIndex");
+    it("creates the vector index when none exists", async () => {
+      const { JsonVectorIndex } = await import("./json-vector-index.js");
+      const mockIsIndexCreated = vi.spyOn((JsonVectorIndex as any).prototype, "isIndexCreated");
+      const mockCreateIndex = vi.spyOn((JsonVectorIndex as any).prototype, "createIndex");
 
       mockIsIndexCreated.mockResolvedValue(false);
       mockCreateIndex.mockResolvedValue(undefined);
@@ -147,10 +150,10 @@ describe("VectorStore init", () => {
 
   describe("AC1.2: Subsequent run - loads existing hash map and opens index", () => {
     it("loads valid hash-index.json and does not recreate index", async () => {
-      const { LocalIndex } = await import("vectra");
+      const { JsonVectorIndex } = await import("./json-vector-index.js");
 
-      const mockIsIndexCreated = vi.spyOn((LocalIndex as any).prototype, "isIndexCreated");
-      const mockCreateIndex = vi.spyOn((LocalIndex as any).prototype, "createIndex");
+      const mockIsIndexCreated = vi.spyOn((JsonVectorIndex as any).prototype, "isIndexCreated");
+      const mockCreateIndex = vi.spyOn((JsonVectorIndex as any).prototype, "createIndex");
 
       // Write valid hash-index.json before init
       const vectorsDir = join(tempDir, "vectors");
@@ -176,9 +179,9 @@ describe("VectorStore init", () => {
 
   describe("AC1.3: Corruption recovery - invalid JSON", () => {
     it("recovers from corrupted hash-index.json (invalid JSON) and emits warn log", async () => {
-      const { LocalIndex } = await import("vectra");
+      const { JsonVectorIndex } = await import("./json-vector-index.js");
 
-      const mockIsIndexCreated = vi.spyOn((LocalIndex as any).prototype, "isIndexCreated");
+      const mockIsIndexCreated = vi.spyOn((JsonVectorIndex as any).prototype, "isIndexCreated");
 
       // Write invalid JSON to hash-index.json
       const vectorsDir = join(tempDir, "vectors");
@@ -209,9 +212,9 @@ describe("VectorStore init", () => {
     });
 
     it("recovers from corrupted hash-index.json (schema mismatch) and emits warn log", async () => {
-      const { LocalIndex } = await import("vectra");
+      const { JsonVectorIndex } = await import("./json-vector-index.js");
 
-      const mockIsIndexCreated = vi.spyOn((LocalIndex as any).prototype, "isIndexCreated");
+      const mockIsIndexCreated = vi.spyOn((JsonVectorIndex as any).prototype, "isIndexCreated");
 
       // Write valid JSON but invalid schema (not a record, but an array)
       const vectorsDir = join(tempDir, "vectors");
@@ -236,12 +239,12 @@ describe("VectorStore init", () => {
     });
   });
 
-  describe("AC1.4: Corruption recovery - corrupted Vectra index", () => {
-    it("recovers from corrupted Vectra index by recreating and emits warn log", async () => {
-      const { LocalIndex } = await import("vectra");
+  describe("AC1.4: Corruption recovery - corrupted vector index", () => {
+    it("recovers from a corrupted vector index by recreating and emits warn log", async () => {
+      const { JsonVectorIndex } = await import("./json-vector-index.js");
 
-      const mockIsIndexCreated = vi.spyOn((LocalIndex as any).prototype, "isIndexCreated");
-      const mockCreateIndex = vi.spyOn((LocalIndex as any).prototype, "createIndex");
+      const mockIsIndexCreated = vi.spyOn((JsonVectorIndex as any).prototype, "isIndexCreated");
+      const mockCreateIndex = vi.spyOn((JsonVectorIndex as any).prototype, "createIndex");
 
       // Simulate corruption by throwing when calling isIndexCreated
       mockIsIndexCreated.mockRejectedValueOnce(new Error("Index corrupted"));
@@ -255,20 +258,54 @@ describe("VectorStore init", () => {
       // Verify warn record (pino level 40) was emitted with corruption message
       const warnRecords = records.filter((r) => r["level"] === 40);
       expect(warnRecords).toHaveLength(1);
-      expect(warnRecords[0]!["msg"]).toBe("corrupt Vectra index, backing up and recreating");
+      expect(warnRecords[0]!["msg"]).toBe("corrupt vector index, backing up and recreating");
 
       // Verify hash map was cleared
       expect(store.size).toBe(0);
+    });
+
+    it("recovers when an existing index loads as corrupt (loadIndexData throws) at init", async () => {
+      const { JsonVectorIndex } = await import("./json-vector-index.js");
+      const mockIsIndexCreated = vi.spyOn((JsonVectorIndex as any).prototype, "isIndexCreated");
+      const mockLoadIndexData = vi.spyOn((JsonVectorIndex as any).prototype, "loadIndexData");
+      const mockCreateIndex = vi.spyOn((JsonVectorIndex as any).prototype, "createIndex");
+
+      // Index file is present, but loading it fails validation (e.g. non-finite
+      // vector / ragged dimension) — the new eager load in init() must catch it.
+      mockIsIndexCreated.mockResolvedValue(true);
+      mockLoadIndexData.mockRejectedValueOnce(new Error("Vector contains non-finite value at index 3"));
+      mockCreateIndex.mockResolvedValue(undefined);
+
+      // A stale hash-index.json from before the corruption. Recovery must clear
+      // it on disk too, or a restart would reload these hashes against the now-
+      // empty index and skip every "unchanged" recipe forever.
+      const vectorsDir = join(tempDir, "vectors");
+      await mkdir(vectorsDir, { recursive: true });
+      const hashIndexPath = join(vectorsDir, "hash-index.json");
+      await writeFile(hashIndexPath, JSON.stringify({ "recipe-1": "hash-abc", "recipe-2": "hash-def" }));
+
+      const embedder = makeMockEmbedder();
+      const { log, records } = makePinoCapture();
+      const store = new VectorStore(tempDir, embedder, "test-model", 1, log);
+      await store.init();
+
+      const warnRecords = records.filter((r) => r["level"] === 40);
+      expect(warnRecords).toHaveLength(1);
+      expect(warnRecords[0]!["msg"]).toBe("corrupt vector index, backing up and recreating");
+      expect(mockCreateIndex).toHaveBeenCalledWith({ version: 1, deleteIfExists: true });
+      expect(store.size).toBe(0);
+      // The on-disk hash file is rewritten to empty (not left stale).
+      expect(JSON.parse(await readFile(hashIndexPath, "utf-8"))).toEqual({});
     });
   });
 
   describe("Model change detection", () => {
     it("clears hashes when stored model differs from current model and emits info log", async () => {
-      const { LocalIndex } = await import("vectra");
-      const mockIsIndexCreated = vi.spyOn((LocalIndex as any).prototype, "isIndexCreated");
-      const mockBeginUpdate = vi.spyOn((LocalIndex as any).prototype, "beginUpdate");
-      const mockUpsertItem = vi.spyOn((LocalIndex as any).prototype, "upsertItem");
-      const mockEndUpdate = vi.spyOn((LocalIndex as any).prototype, "endUpdate");
+      const { JsonVectorIndex } = await import("./json-vector-index.js");
+      const mockIsIndexCreated = vi.spyOn((JsonVectorIndex as any).prototype, "isIndexCreated");
+      const mockBeginUpdate = vi.spyOn((JsonVectorIndex as any).prototype, "beginUpdate");
+      const mockUpsertItem = vi.spyOn((JsonVectorIndex as any).prototype, "upsertItem");
+      const mockEndUpdate = vi.spyOn((JsonVectorIndex as any).prototype, "endUpdate");
 
       mockIsIndexCreated.mockResolvedValue(false);
       mockBeginUpdate.mockResolvedValue(undefined);
@@ -301,12 +338,39 @@ describe("VectorStore init", () => {
       expect(modelChangedRecord!["newModel"]).toBe("model-b");
     });
 
+    it("recreates the index (not just hashes) on model change so a new vector dimension cannot deadlock", async () => {
+      const { JsonVectorIndex } = await import("./json-vector-index.js");
+      const mockIsIndexCreated = vi.spyOn((JsonVectorIndex as any).prototype, "isIndexCreated");
+      const mockCreateIndex = vi.spyOn((JsonVectorIndex as any).prototype, "createIndex");
+      vi.spyOn((JsonVectorIndex as any).prototype, "loadIndexData").mockResolvedValue(undefined);
+
+      mockIsIndexCreated.mockResolvedValue(false);
+      mockCreateIndex.mockResolvedValue(undefined);
+      const embedder = makeMockEmbedder();
+      embedder.embedBatch.mockResolvedValue([[1, 0, 0]]);
+
+      // First run establishes vector-meta.json with model-a.
+      const store1 = new VectorStore(tempDir, embedder, "model-a", 1);
+      await store1.init();
+      await store1.indexRecipes([makeRecipe({ uid: "recipe-1" as RecipeUid })], () => []);
+
+      // Second run with a different model must call createIndex({deleteIfExists})
+      // to drop the stale-dimension vectors and un-pin the index dimension.
+      vi.clearAllMocks();
+      mockIsIndexCreated.mockResolvedValue(true);
+      const store2 = new VectorStore(tempDir, embedder, "model-b", 1);
+      await store2.init();
+
+      expect(mockCreateIndex).toHaveBeenCalledWith({ version: 1, deleteIfExists: true });
+      expect(store2.size).toBe(0);
+    });
+
     it("clears hashes when schema version changes between runs and emits info log", async () => {
-      const { LocalIndex } = await import("vectra");
-      const mockIsIndexCreated = vi.spyOn((LocalIndex as any).prototype, "isIndexCreated");
-      const mockBeginUpdate = vi.spyOn((LocalIndex as any).prototype, "beginUpdate");
-      const mockUpsertItem = vi.spyOn((LocalIndex as any).prototype, "upsertItem");
-      const mockEndUpdate = vi.spyOn((LocalIndex as any).prototype, "endUpdate");
+      const { JsonVectorIndex } = await import("./json-vector-index.js");
+      const mockIsIndexCreated = vi.spyOn((JsonVectorIndex as any).prototype, "isIndexCreated");
+      const mockBeginUpdate = vi.spyOn((JsonVectorIndex as any).prototype, "beginUpdate");
+      const mockUpsertItem = vi.spyOn((JsonVectorIndex as any).prototype, "upsertItem");
+      const mockEndUpdate = vi.spyOn((JsonVectorIndex as any).prototype, "endUpdate");
 
       mockIsIndexCreated.mockResolvedValue(false);
       mockBeginUpdate.mockResolvedValue(undefined);
@@ -340,11 +404,11 @@ describe("VectorStore init", () => {
     });
 
     it("preserves hashes when model is unchanged between runs", async () => {
-      const { LocalIndex } = await import("vectra");
-      const mockIsIndexCreated = vi.spyOn((LocalIndex as any).prototype, "isIndexCreated");
-      const mockBeginUpdate = vi.spyOn((LocalIndex as any).prototype, "beginUpdate");
-      const mockUpsertItem = vi.spyOn((LocalIndex as any).prototype, "upsertItem");
-      const mockEndUpdate = vi.spyOn((LocalIndex as any).prototype, "endUpdate");
+      const { JsonVectorIndex } = await import("./json-vector-index.js");
+      const mockIsIndexCreated = vi.spyOn((JsonVectorIndex as any).prototype, "isIndexCreated");
+      const mockBeginUpdate = vi.spyOn((JsonVectorIndex as any).prototype, "beginUpdate");
+      const mockUpsertItem = vi.spyOn((JsonVectorIndex as any).prototype, "upsertItem");
+      const mockEndUpdate = vi.spyOn((JsonVectorIndex as any).prototype, "endUpdate");
 
       mockIsIndexCreated.mockResolvedValue(false);
       mockBeginUpdate.mockResolvedValue(undefined);
@@ -372,9 +436,9 @@ describe("VectorStore init", () => {
 
   describe("AC9.2: Logger injection and cold-start silence", () => {
     it("backward-compat: VectorStore(cacheDir, embedder, modelId, schemaVersion) without log still works", async () => {
-      const { LocalIndex } = await import("vectra");
-      const mockIsIndexCreated = vi.spyOn((LocalIndex as any).prototype, "isIndexCreated");
-      const mockCreateIndex = vi.spyOn((LocalIndex as any).prototype, "createIndex");
+      const { JsonVectorIndex } = await import("./json-vector-index.js");
+      const mockIsIndexCreated = vi.spyOn((JsonVectorIndex as any).prototype, "isIndexCreated");
+      const mockCreateIndex = vi.spyOn((JsonVectorIndex as any).prototype, "createIndex");
 
       mockIsIndexCreated.mockResolvedValue(false);
       mockCreateIndex.mockResolvedValue(undefined);
@@ -388,9 +452,9 @@ describe("VectorStore init", () => {
     });
 
     it("emits no log records on cold-start when hash-index.json is absent (ENOENT)", async () => {
-      const { LocalIndex } = await import("vectra");
-      const mockIsIndexCreated = vi.spyOn((LocalIndex as any).prototype, "isIndexCreated");
-      const mockCreateIndex = vi.spyOn((LocalIndex as any).prototype, "createIndex");
+      const { JsonVectorIndex } = await import("./json-vector-index.js");
+      const mockIsIndexCreated = vi.spyOn((JsonVectorIndex as any).prototype, "isIndexCreated");
+      const mockCreateIndex = vi.spyOn((JsonVectorIndex as any).prototype, "createIndex");
 
       mockIsIndexCreated.mockResolvedValue(false);
       mockCreateIndex.mockResolvedValue(undefined);
@@ -422,12 +486,12 @@ describe("VectorStore indexRecipes", () => {
 
   describe("AC2.1: Embeds and upserts recipes with changed content hash", () => {
     it("calls embedBatch and upserts items for new recipes", async () => {
-      const { LocalIndex } = await import("vectra");
+      const { JsonVectorIndex } = await import("./json-vector-index.js");
 
-      const mockIsIndexCreated = vi.spyOn((LocalIndex as any).prototype, "isIndexCreated");
-      const mockBeginUpdate = vi.spyOn((LocalIndex as any).prototype, "beginUpdate");
-      const mockUpsertItem = vi.spyOn((LocalIndex as any).prototype, "upsertItem");
-      const mockEndUpdate = vi.spyOn((LocalIndex as any).prototype, "endUpdate");
+      const mockIsIndexCreated = vi.spyOn((JsonVectorIndex as any).prototype, "isIndexCreated");
+      const mockBeginUpdate = vi.spyOn((JsonVectorIndex as any).prototype, "beginUpdate");
+      const mockUpsertItem = vi.spyOn((JsonVectorIndex as any).prototype, "upsertItem");
+      const mockEndUpdate = vi.spyOn((JsonVectorIndex as any).prototype, "endUpdate");
 
       mockIsIndexCreated.mockResolvedValue(false);
       mockBeginUpdate.mockResolvedValue(undefined);
@@ -464,16 +528,53 @@ describe("VectorStore indexRecipes", () => {
       });
       expect(result).toEqual({ indexed: 2, skipped: 0, total: 2 });
     });
+
+    it("skips a recipe with a degenerate (zero-norm) embedding without aborting the batch", async () => {
+      const { JsonVectorIndex } = await import("./json-vector-index.js");
+      vi.spyOn((JsonVectorIndex as any).prototype, "isIndexCreated").mockResolvedValue(false);
+      vi.spyOn((JsonVectorIndex as any).prototype, "beginUpdate").mockResolvedValue(undefined);
+      const mockUpsertItem = vi.spyOn((JsonVectorIndex as any).prototype, "upsertItem").mockResolvedValue(undefined);
+      vi.spyOn((JsonVectorIndex as any).prototype, "endUpdate").mockResolvedValue(undefined);
+
+      const embedder = makeMockEmbedder();
+      // Second recipe's embedding is all-zero (degenerate) — must be skipped, not
+      // allowed to throw and roll back the good first recipe.
+      embedder.embedBatch.mockResolvedValue([
+        [1, 0, 0],
+        [0, 0, 0],
+      ]);
+
+      const { log, records } = makePinoCapture();
+      const store = new VectorStore(tempDir, embedder, "test-model", 1, log);
+      await store.init();
+
+      const good = makeRecipe({ uid: "recipe-good" as RecipeUid });
+      const bad = makeRecipe({ uid: "recipe-bad" as RecipeUid });
+      const result = await store.indexRecipes([good, bad], () => []);
+
+      expect(mockUpsertItem).toHaveBeenCalledTimes(1);
+      expect(mockUpsertItem).toHaveBeenCalledWith({
+        id: "recipe-good",
+        vector: [1, 0, 0],
+        metadata: { recipeName: good.name },
+      });
+      expect(result).toEqual({ indexed: 1, skipped: 0, total: 2 });
+      // The good recipe is hashed (skipped on a re-run); the bad one is not.
+      expect(store.size).toBe(1);
+      const warn = records.filter((r) => r["level"] === 40);
+      expect(warn).toHaveLength(1);
+      expect(warn[0]!["msg"]).toBe("skipping recipe whose embedding is zero or non-finite");
+    });
   });
 
   describe("AC2.2: Skips recipes with unchanged content hash", () => {
     it("skips recipes with matching content hash", async () => {
-      const { LocalIndex } = await import("vectra");
+      const { JsonVectorIndex } = await import("./json-vector-index.js");
 
-      const mockIsIndexCreated = vi.spyOn((LocalIndex as any).prototype, "isIndexCreated");
-      const mockBeginUpdate = vi.spyOn((LocalIndex as any).prototype, "beginUpdate");
-      const mockUpsertItem = vi.spyOn((LocalIndex as any).prototype, "upsertItem");
-      const mockEndUpdate = vi.spyOn((LocalIndex as any).prototype, "endUpdate");
+      const mockIsIndexCreated = vi.spyOn((JsonVectorIndex as any).prototype, "isIndexCreated");
+      const mockBeginUpdate = vi.spyOn((JsonVectorIndex as any).prototype, "beginUpdate");
+      const mockUpsertItem = vi.spyOn((JsonVectorIndex as any).prototype, "upsertItem");
+      const mockEndUpdate = vi.spyOn((JsonVectorIndex as any).prototype, "endUpdate");
 
       mockIsIndexCreated.mockResolvedValue(false);
       mockBeginUpdate.mockResolvedValue(undefined);
@@ -507,12 +608,12 @@ describe("VectorStore indexRecipes", () => {
 
   describe("AC2.3: Returns correct IndexingResult with counts", () => {
     it("returns correct indexed, skipped, total counts", async () => {
-      const { LocalIndex } = await import("vectra");
+      const { JsonVectorIndex } = await import("./json-vector-index.js");
 
-      const mockIsIndexCreated = vi.spyOn((LocalIndex as any).prototype, "isIndexCreated");
-      const mockBeginUpdate = vi.spyOn((LocalIndex as any).prototype, "beginUpdate");
-      const mockUpsertItem = vi.spyOn((LocalIndex as any).prototype, "upsertItem");
-      const mockEndUpdate = vi.spyOn((LocalIndex as any).prototype, "endUpdate");
+      const mockIsIndexCreated = vi.spyOn((JsonVectorIndex as any).prototype, "isIndexCreated");
+      const mockBeginUpdate = vi.spyOn((JsonVectorIndex as any).prototype, "beginUpdate");
+      const mockUpsertItem = vi.spyOn((JsonVectorIndex as any).prototype, "upsertItem");
+      const mockEndUpdate = vi.spyOn((JsonVectorIndex as any).prototype, "endUpdate");
 
       mockIsIndexCreated.mockResolvedValue(false);
       mockBeginUpdate.mockResolvedValue(undefined);
@@ -553,12 +654,12 @@ describe("VectorStore indexRecipes", () => {
 
   describe("AC2.4: Persists hash map after indexing", () => {
     it("writes updated hash-index.json after indexing", async () => {
-      const { LocalIndex } = await import("vectra");
+      const { JsonVectorIndex } = await import("./json-vector-index.js");
 
-      const mockIsIndexCreated = vi.spyOn((LocalIndex as any).prototype, "isIndexCreated");
-      const mockBeginUpdate = vi.spyOn((LocalIndex as any).prototype, "beginUpdate");
-      const mockUpsertItem = vi.spyOn((LocalIndex as any).prototype, "upsertItem");
-      const mockEndUpdate = vi.spyOn((LocalIndex as any).prototype, "endUpdate");
+      const mockIsIndexCreated = vi.spyOn((JsonVectorIndex as any).prototype, "isIndexCreated");
+      const mockBeginUpdate = vi.spyOn((JsonVectorIndex as any).prototype, "beginUpdate");
+      const mockUpsertItem = vi.spyOn((JsonVectorIndex as any).prototype, "upsertItem");
+      const mockEndUpdate = vi.spyOn((JsonVectorIndex as any).prototype, "endUpdate");
 
       mockIsIndexCreated.mockResolvedValue(false);
       mockBeginUpdate.mockResolvedValue(undefined);
@@ -586,9 +687,9 @@ describe("VectorStore indexRecipes", () => {
 
   describe("AC2.5: Empty recipe list returns zero counts", () => {
     it("returns { indexed: 0, skipped: 0, total: 0 } and does not call embedBatch", async () => {
-      const { LocalIndex } = await import("vectra");
+      const { JsonVectorIndex } = await import("./json-vector-index.js");
 
-      const mockIsIndexCreated = vi.spyOn((LocalIndex as any).prototype, "isIndexCreated");
+      const mockIsIndexCreated = vi.spyOn((JsonVectorIndex as any).prototype, "isIndexCreated");
 
       mockIsIndexCreated.mockResolvedValue(false);
 
@@ -606,12 +707,12 @@ describe("VectorStore indexRecipes", () => {
 
   describe("AC2.6: Hash map persists across VectorStore restarts", () => {
     it("loads previously saved hashes and skips unchanged recipes on restart", async () => {
-      const { LocalIndex } = await import("vectra");
+      const { JsonVectorIndex } = await import("./json-vector-index.js");
 
-      const mockIsIndexCreated = vi.spyOn((LocalIndex as any).prototype, "isIndexCreated");
-      const mockBeginUpdate = vi.spyOn((LocalIndex as any).prototype, "beginUpdate");
-      const mockUpsertItem = vi.spyOn((LocalIndex as any).prototype, "upsertItem");
-      const mockEndUpdate = vi.spyOn((LocalIndex as any).prototype, "endUpdate");
+      const mockIsIndexCreated = vi.spyOn((JsonVectorIndex as any).prototype, "isIndexCreated");
+      const mockBeginUpdate = vi.spyOn((JsonVectorIndex as any).prototype, "beginUpdate");
+      const mockUpsertItem = vi.spyOn((JsonVectorIndex as any).prototype, "upsertItem");
+      const mockEndUpdate = vi.spyOn((JsonVectorIndex as any).prototype, "endUpdate");
 
       mockIsIndexCreated.mockResolvedValue(false);
       mockBeginUpdate.mockResolvedValue(undefined);
@@ -664,10 +765,10 @@ describe("VectorStore search", () => {
 
   describe("AC3.1: Embeds query and returns SemanticResult array", () => {
     it("returns results with uid, score, and recipeName", async () => {
-      const { LocalIndex } = await import("vectra");
+      const { JsonVectorIndex } = await import("./json-vector-index.js");
 
-      const mockIsIndexCreated = vi.spyOn((LocalIndex as any).prototype, "isIndexCreated");
-      const mockQueryItems = vi.spyOn((LocalIndex as any).prototype, "queryItems");
+      const mockIsIndexCreated = vi.spyOn((JsonVectorIndex as any).prototype, "isIndexCreated");
+      const mockQueryItems = vi.spyOn((JsonVectorIndex as any).prototype, "queryItems");
 
       mockIsIndexCreated.mockResolvedValue(false);
       mockQueryItems.mockResolvedValue([
@@ -690,7 +791,7 @@ describe("VectorStore search", () => {
       const results = await store.search("pasta recipe", 10);
 
       expect(embedder.embed).toHaveBeenCalledWith("pasta recipe");
-      expect(mockQueryItems).toHaveBeenCalledWith([1, 0, 0], "pasta recipe", 10);
+      expect(mockQueryItems).toHaveBeenCalledWith([1, 0, 0], 10);
       expect(results).toEqual([
         { uid: "recipe-1", score: 0.95, recipeName: "Pasta" },
         { uid: "recipe-2", score: 0.87, recipeName: "Risotto" },
@@ -700,10 +801,10 @@ describe("VectorStore search", () => {
 
   describe("AC3.2: Results are ordered by descending similarity score", () => {
     it("returns results sorted by score descending", async () => {
-      const { LocalIndex } = await import("vectra");
+      const { JsonVectorIndex } = await import("./json-vector-index.js");
 
-      const mockIsIndexCreated = vi.spyOn((LocalIndex as any).prototype, "isIndexCreated");
-      const mockQueryItems = vi.spyOn((LocalIndex as any).prototype, "queryItems");
+      const mockIsIndexCreated = vi.spyOn((JsonVectorIndex as any).prototype, "isIndexCreated");
+      const mockQueryItems = vi.spyOn((JsonVectorIndex as any).prototype, "queryItems");
 
       mockIsIndexCreated.mockResolvedValue(false);
       mockQueryItems.mockResolvedValue([
@@ -737,10 +838,10 @@ describe("VectorStore search", () => {
 
   describe("AC3.3: Empty index returns empty array", () => {
     it("returns empty array when no results found", async () => {
-      const { LocalIndex } = await import("vectra");
+      const { JsonVectorIndex } = await import("./json-vector-index.js");
 
-      const mockIsIndexCreated = vi.spyOn((LocalIndex as any).prototype, "isIndexCreated");
-      const mockQueryItems = vi.spyOn((LocalIndex as any).prototype, "queryItems");
+      const mockIsIndexCreated = vi.spyOn((JsonVectorIndex as any).prototype, "isIndexCreated");
+      const mockQueryItems = vi.spyOn((JsonVectorIndex as any).prototype, "queryItems");
 
       mockIsIndexCreated.mockResolvedValue(false);
       mockQueryItems.mockResolvedValue([]);
@@ -771,15 +872,15 @@ describe("VectorStore removeRecipe", () => {
     vi.clearAllMocks();
   });
 
-  describe("AC4.1: Deletes item from Vectra and removes from hash map", () => {
-    it("removes recipe from both Vectra and hash map", async () => {
-      const { LocalIndex } = await import("vectra");
+  describe("AC4.1: Deletes item from the vector index and removes from hash map", () => {
+    it("removes recipe from both the vector index and hash map", async () => {
+      const { JsonVectorIndex } = await import("./json-vector-index.js");
 
-      const mockIsIndexCreated = vi.spyOn((LocalIndex as any).prototype, "isIndexCreated");
-      const mockBeginUpdate = vi.spyOn((LocalIndex as any).prototype, "beginUpdate");
-      const mockUpsertItem = vi.spyOn((LocalIndex as any).prototype, "upsertItem");
-      const mockEndUpdate = vi.spyOn((LocalIndex as any).prototype, "endUpdate");
-      const mockDeleteItem = vi.spyOn((LocalIndex as any).prototype, "deleteItem");
+      const mockIsIndexCreated = vi.spyOn((JsonVectorIndex as any).prototype, "isIndexCreated");
+      const mockBeginUpdate = vi.spyOn((JsonVectorIndex as any).prototype, "beginUpdate");
+      const mockUpsertItem = vi.spyOn((JsonVectorIndex as any).prototype, "upsertItem");
+      const mockEndUpdate = vi.spyOn((JsonVectorIndex as any).prototype, "endUpdate");
+      const mockDeleteItem = vi.spyOn((JsonVectorIndex as any).prototype, "deleteItem");
 
       mockIsIndexCreated.mockResolvedValue(false);
       mockBeginUpdate.mockResolvedValue(undefined);
@@ -804,7 +905,7 @@ describe("VectorStore removeRecipe", () => {
       mockDeleteItem.mockResolvedValue(undefined);
       await store.removeRecipe("recipe-1");
 
-      // Verify Vectra deleteItem was called
+      // Verify the index deleteItem was called
       expect(mockDeleteItem).toHaveBeenCalledWith("recipe-1");
 
       // Verify recipe removed from hash map
@@ -814,13 +915,13 @@ describe("VectorStore removeRecipe", () => {
 
   describe("AC4.2: Persists hash map after removal", () => {
     it("writes updated hash-index.json after removal", async () => {
-      const { LocalIndex } = await import("vectra");
+      const { JsonVectorIndex } = await import("./json-vector-index.js");
 
-      const mockIsIndexCreated = vi.spyOn((LocalIndex as any).prototype, "isIndexCreated");
-      const mockBeginUpdate = vi.spyOn((LocalIndex as any).prototype, "beginUpdate");
-      const mockUpsertItem = vi.spyOn((LocalIndex as any).prototype, "upsertItem");
-      const mockEndUpdate = vi.spyOn((LocalIndex as any).prototype, "endUpdate");
-      const mockDeleteItem = vi.spyOn((LocalIndex as any).prototype, "deleteItem");
+      const mockIsIndexCreated = vi.spyOn((JsonVectorIndex as any).prototype, "isIndexCreated");
+      const mockBeginUpdate = vi.spyOn((JsonVectorIndex as any).prototype, "beginUpdate");
+      const mockUpsertItem = vi.spyOn((JsonVectorIndex as any).prototype, "upsertItem");
+      const mockEndUpdate = vi.spyOn((JsonVectorIndex as any).prototype, "endUpdate");
+      const mockDeleteItem = vi.spyOn((JsonVectorIndex as any).prototype, "deleteItem");
 
       mockIsIndexCreated.mockResolvedValue(false);
       mockBeginUpdate.mockResolvedValue(undefined);
@@ -851,10 +952,10 @@ describe("VectorStore removeRecipe", () => {
 
   describe("AC4.3: Removing non-existent recipe does not throw", () => {
     it("silently succeeds when removing non-existent uid", async () => {
-      const { LocalIndex } = await import("vectra");
+      const { JsonVectorIndex } = await import("./json-vector-index.js");
 
-      const mockIsIndexCreated = vi.spyOn((LocalIndex as any).prototype, "isIndexCreated");
-      const mockDeleteItem = vi.spyOn((LocalIndex as any).prototype, "deleteItem");
+      const mockIsIndexCreated = vi.spyOn((JsonVectorIndex as any).prototype, "isIndexCreated");
+      const mockDeleteItem = vi.spyOn((JsonVectorIndex as any).prototype, "deleteItem");
 
       mockIsIndexCreated.mockResolvedValue(false);
       mockDeleteItem.mockResolvedValue(undefined);
@@ -885,24 +986,24 @@ describe("VectorStore write serialization (#177)", () => {
     vi.clearAllMocks();
   });
 
-  it("serializes overlapping indexRecipes calls so Vectra transactions never overlap", async () => {
+  it("serializes overlapping indexRecipes calls so vector-index transactions never overlap", async () => {
     // Two writers (sync:complete recipe handler + sync:category-change handler)
-    // can fire from one sync cycle without being awaited. Vectra's begin/endUpdate
+    // can fire from one sync cycle without being awaited. The index's begin/endUpdate
     // is a single transaction — a second beginUpdate while one is open throws.
     // The write mutex must keep that from happening.
-    const { LocalIndex } = await import("vectra");
-    vi.spyOn((LocalIndex as any).prototype, "isIndexCreated").mockResolvedValue(false);
-    vi.spyOn((LocalIndex as any).prototype, "createIndex").mockResolvedValue(undefined);
-    vi.spyOn((LocalIndex as any).prototype, "upsertItem").mockResolvedValue(undefined);
+    const { JsonVectorIndex } = await import("./json-vector-index.js");
+    vi.spyOn((JsonVectorIndex as any).prototype, "isIndexCreated").mockResolvedValue(false);
+    vi.spyOn((JsonVectorIndex as any).prototype, "createIndex").mockResolvedValue(undefined);
+    vi.spyOn((JsonVectorIndex as any).prototype, "upsertItem").mockResolvedValue(undefined);
 
     let openTransactions = 0;
     let maxOpen = 0;
-    vi.spyOn((LocalIndex as any).prototype, "beginUpdate").mockImplementation(async () => {
+    vi.spyOn((JsonVectorIndex as any).prototype, "beginUpdate").mockImplementation(async () => {
       openTransactions++;
       maxOpen = Math.max(maxOpen, openTransactions);
       if (openTransactions > 1) throw new Error("Update already in progress");
     });
-    vi.spyOn((LocalIndex as any).prototype, "endUpdate").mockImplementation(async () => {
+    vi.spyOn((JsonVectorIndex as any).prototype, "endUpdate").mockImplementation(async () => {
       openTransactions--;
     });
 

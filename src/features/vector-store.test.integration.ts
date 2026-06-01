@@ -37,7 +37,7 @@ function makeDeterministicEmbedder(): EmbeddingClient {
   });
 }
 
-describe("VectorStore integration tests with real Vectra", () => {
+describe("VectorStore integration tests with the real vector index", () => {
   let tempDir: string;
 
   beforeEach(async () => {

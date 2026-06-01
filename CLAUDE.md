@@ -14,7 +14,7 @@ MCP server for the Paprika recipe manager. Two transports: **stdio** (default; u
 - **Language:** TypeScript 5.9 (extends `@tsconfig/strictest` + `@tsconfig/node24`)
 - **Module system:** ESM (`"type": "module"`)
 - **Package manager:** pnpm 11.1.2 (corepack-managed)
-- **Key dependencies:** @modelcontextprotocol/sdk (MCP protocol), hono + @hono/mcp + @hono/node-server (HTTP transport), zod (validation), luxon (dates), dotenv (env config), parse-duration (duration parsing), env-paths (XDG directories), neverthrow (error handling), cockatiel (resilience/retry), mitt (event emitter), vectra (local vector index), jose (OIDC/JWT), hono-rate-limiter (OAuth DCR rate limiting), async-mutex (per-subcache write serialization), pino + pino-pretty (structured logging), sharp (image normalization for photo uploads)
+- **Key dependencies:** @modelcontextprotocol/sdk (MCP protocol), hono + @hono/mcp + @hono/node-server (HTTP transport), zod (validation), luxon (dates), dotenv (env config), parse-duration (duration parsing), env-paths (XDG directories), neverthrow (error handling), cockatiel (resilience/retry), mitt (event emitter), jose (OIDC/JWT), hono-rate-limiter (OAuth DCR rate limiting), async-mutex (per-subcache write serialization), pino + pino-pretty (structured logging), sharp (image normalization for photo uploads)
 - **Container:** distroless `gcr.io/distroless/nodejs24-debian13:nonroot` runtime; 3-stage Dockerfile (builder → prod-deps prune → distroless)
 
 ## Commands

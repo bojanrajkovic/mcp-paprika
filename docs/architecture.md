@@ -98,7 +98,7 @@ Semantic search is an optional feature that adds the `discover_recipes` tool. It
 
 **EmbeddingClient** — HTTP client for any OpenAI-compatible `/v1/embeddings` endpoint. Supports single and batch embedding. See [embedding providers](embedding-providers.md) for setup.
 
-**VectorStore** — wraps [Vectra](https://github.com/Stevenic/vectra) for local vector storage. Recipes are converted to embedding text (name, description, categories, ingredients, notes — excluding directions and nutritional info), embedded, and stored with SHA-256 content hashes for change detection.
+**VectorStore** — wraps the vendored `JsonVectorIndex` (a minimal file-backed cosine index) for local vector storage. Recipes are converted to embedding text (name, description, categories, ingredients, notes — excluding directions and nutritional info), embedded, and stored with SHA-256 content hashes for change detection.
 
 **Feature wiring** — `setupDiscoverFeature()` ties everything together:
 
@@ -141,7 +141,7 @@ The codebase uses two error strategies depending on context:
 
 **Core business logic** uses [neverthrow](https://github.com/supermacro/neverthrow) `Result<T, E>` types. Config loading, duration parsing, and other pure operations return `Result` and are composed with `.andThen()`, `.map()`, and `.match()`. No exceptions.
 
-**Infrastructure code** (Paprika client, embedding client, vector store) throws exceptions because it wraps libraries (cockatiel, Vectra) that use exceptions for control flow. These are caught at system boundaries — the sync engine's try/catch, the discover feature's error isolation handler, and the tool handlers.
+**Infrastructure code** (Paprika client, embedding client, vector store) throws exceptions because it wraps libraries (cockatiel) and a file-backed index that use exceptions for control flow. These are caught at system boundaries — the sync engine's try/catch, the discover feature's error isolation handler, and the tool handlers.
 
 ## Project structure
 
