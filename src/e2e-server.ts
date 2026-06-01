@@ -23,6 +23,7 @@ import { MealTypeStore } from "./cache/meal-type-store.js";
 import { MenuStore } from "./cache/menu-store.js";
 import { MenuItemStore } from "./cache/menu-item-store.js";
 import { PhotoStore } from "./cache/photo-store.js";
+import { GeneratedImageStore } from "./features/generated-image-store.js";
 import { RecipeStore } from "./cache/recipe-store.js";
 import { PantryStore } from "./cache/pantry-store.js";
 import { buildMcpServer } from "./server/build.js";
@@ -226,6 +227,7 @@ async function main(): Promise<void> {
     menuStore,
     menuItemStore,
     photoStore,
+    generatedImageStore: new GeneratedImageStore(),
     vectorStore: null, // discover tool intentionally not registered (no embeddings in e2e)
     photographyClient: null, // generate_photo intentionally not registered (no imageGen in e2e)
     notifier,

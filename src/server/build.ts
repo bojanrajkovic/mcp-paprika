@@ -15,6 +15,7 @@ import { PantryStore } from "../cache/pantry-store.js";
 import { RecipeStore } from "../cache/recipe-store.js";
 import { buildDiscoverComponents } from "../features/discover-feature.js";
 import { PhotographyClient } from "../features/photography.js";
+import { GeneratedImageStore } from "../features/generated-image-store.js";
 import { PaprikaClient } from "../paprika/client.js";
 import { SyncEngine } from "../paprika/sync.js";
 import { registerCategoryTools } from "../tools/categories.js";
@@ -236,6 +237,10 @@ export async function buildAppContext(
   }
   log.info({ count: cachedPhotos.length }, "hydrated photo store from cache");
 
+  // Ephemeral, in-memory only (no disk hydration): holds generated-photo
+  // previews awaiting attach-by-token (#photo-preview-attach).
+  const generatedImageStore = new GeneratedImageStore();
+
   // SyncEngine only reads client/cache/store/pantryStore/notifier — never
   // vectorStore — so it is safe to construct with a placeholder appContext
   // whose vectorStore is null. The vector store is then built with
@@ -255,6 +260,7 @@ export async function buildAppContext(
     menuStore,
     menuItemStore,
     photoStore,
+    generatedImageStore,
     vectorStore: null,
     photographyClient: null,
     notifier,
@@ -339,6 +345,7 @@ export async function buildAppContext(
     menuStore,
     menuItemStore,
     photoStore,
+    generatedImageStore,
     vectorStore,
     photographyClient,
     notifier,

@@ -12,6 +12,7 @@ import { MenuItemStore } from "../cache/menu-item-store.js";
 import { PantryStore } from "../cache/pantry-store.js";
 import { PhotoStore } from "../cache/photo-store.js";
 import { RecipeStore } from "../cache/recipe-store.js";
+import { GeneratedImageStore } from "../features/generated-image-store.js";
 import type { AppContext, SessionContext } from "../server/app-context.js";
 import type { DiskCacheRoot } from "../cache/disk/index.js";
 import type { PaprikaClient } from "../paprika/client.js";
@@ -44,6 +45,7 @@ export function makeAppContext(overrides: Partial<AppContext> = {}): AppContext 
     menuStore: new MenuStore(),
     menuItemStore: new MenuItemStore(),
     photoStore: new PhotoStore(),
+    generatedImageStore: new GeneratedImageStore(),
     vectorStore: null,
     photographyClient: null,
     notifier: {
