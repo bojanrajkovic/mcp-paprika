@@ -14,9 +14,8 @@ spec.
 
 - `shim.c` / `shim.h` — a one-function C `swiftcall` bridge that forwards `self` in
   the Swift self/context register, so we can `dlsym` and call the pure-Swift
-  `Recipe.hashValues` getter (it isn't `@objc`-reachable). See the durable writeup:
-  "Reverse-engineering a shipped app's internal logic by calling its framework
-  directly" (Outline / Resources).
+  `Recipe.hashValues` getter (it isn't `@objc`-reachable, so `objc_msgSend` can't
+  reach it; `@convention(method)` isn't expressible in a Swift typealias either).
 - `generate.swift` — loads the framework + its bundled Core Data model, builds
   in-memory `Recipe` objects spanning the edge cases (0/1/many categories with
   mixed-case UIDs, empty-vs-null fields, forward slashes, non-ASCII), calls
