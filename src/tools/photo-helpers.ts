@@ -126,8 +126,11 @@ export async function attachPhotoToRecipe(
     photoHash: sha256Hex(thumbnail),
   };
 
-  await ctx.client.uploadPhoto(recipeWithPhoto, photo, thumbnail, full);
-  await commitPhotoUpload(ctx, recipeWithPhoto, photo);
+  // uploadPhoto stamps the recipe's content hash (photo/photo_large/photo_hash are
+  // hashed fields) and returns the hashed recipe — commit that so the cache matches
+  // what was POSTed and the next sync doesn't re-fetch it (#167).
+  const savedRecipe = await ctx.client.uploadPhoto(recipeWithPhoto, photo, thumbnail, full);
+  await commitPhotoUpload(ctx, savedRecipe, photo);
   return photo;
 }
 

@@ -29,7 +29,12 @@ beforeAll(async () => {
 });
 
 function setup(opts?: { photos?: Array<Photo>; recipe?: Recipe; synced?: boolean }) {
-  const uploadPhoto = vi.fn().mockResolvedValue(undefined);
+  // Mirrors the real client: uploadPhoto returns the hash-stamped recipe, which
+  // attachPhotoToRecipe commits. Returning the input recipe is sufficient here (the
+  // hashing is the client's responsibility, covered in client.test.ts).
+  const uploadPhoto = vi.fn(
+    async (recipe: Recipe, _photo: Photo, _thumbnail: Buffer, _full: Buffer): Promise<Recipe> => recipe,
+  );
   const deletePhoto = vi.fn().mockResolvedValue(undefined);
   const { server, callTool } = makeTestServer();
   const ctx = seed(
@@ -85,7 +90,7 @@ describe("upload_photo", () => {
 
     await callTool("upload_photo", { recipe_uid: RECIPE_UID, image_base64: jpegBase64 });
 
-    const [, photo] = uploadPhoto.mock.calls[0] as [Recipe, Photo];
+    const [, photo] = uploadPhoto.mock.calls[0] as [Recipe, Photo, Buffer, Buffer];
     expect(photo.orderFlag).toBe(2);
     expect(photo.name).toBe("3");
   });
