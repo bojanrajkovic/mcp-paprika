@@ -124,6 +124,7 @@ export async function buildAppContext(
     config.paprika.email,
     config.paprika.password,
     log.child({ component: "paprika-client" }),
+    { recipeFetchConcurrency: config.sync.recipeFetchConcurrency },
   );
   await client.authenticate();
   log.info("authenticated with paprika");

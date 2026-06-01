@@ -182,15 +182,20 @@ startup cost.
 
 ```
 sync: {
-  enabled:         boolean   // Run the background polling loop (default true)
-  interval:        number    // Poll interval in milliseconds (durationField, default "15m")
-  pendingWriteTtl: number    // Window in milliseconds during which a local write is shielded
-                             // from sync reconciliation (durationField, default "60s"). See
-                             // src/cache/CLAUDE.md "Pending-writes (issue #57)".
+  enabled:                boolean // Run the background polling loop (default true)
+  interval:               number  // Poll interval in milliseconds (durationField, default "15m")
+  pendingWriteTtl:        number  // Window in milliseconds during which a local write is shielded
+                                  // from sync reconciliation (durationField, default "60s"). See
+                                  // src/cache/CLAUDE.md "Pending-writes (issue #57)".
+  recipeFetchConcurrency: number  // Bulkhead concurrency for the N+1 recipe fetch during sync
+                                  // (z.coerce.number().int().positive(), default 5). Raise it to
+                                  // speed up a large-library cold start; PaprikaClient warns above
+                                  // its recommended max (20) since high concurrency against one
+                                  // origin risks 429s. See #174.
 }
 ```
 
-All three are `durationField`s except `enabled`. `pendingWriteTtl` is consumed by `buildAppContext` and passed to both `new RecipeStore({ pendingWriteTtlMs })` and `new PantryStore({ pendingWriteTtlMs })`.
+`interval` and `pendingWriteTtl` are `durationField`s; `enabled` is a `booleanField`; `recipeFetchConcurrency` is a coerced positive integer. `pendingWriteTtl` is consumed by `buildAppContext` and passed to `new RecipeStore({ pendingWriteTtlMs })` / `new PantryStore({ pendingWriteTtlMs })`; `recipeFetchConcurrency` is threaded into `new PaprikaClient(..., { recipeFetchConcurrency })`.
 
 **`features.imageGen` block** (`paprikaConfigSchema.features.imageGen` — optional):
 
@@ -303,11 +308,12 @@ oauth: {
 
 **Sync env-var mapping table:**
 
-| Env var                          | Config path            |
-| -------------------------------- | ---------------------- |
-| `PAPRIKA_SYNC_ENABLED`           | `sync.enabled`         |
-| `PAPRIKA_SYNC_INTERVAL`          | `sync.interval`        |
-| `PAPRIKA_SYNC_PENDING_WRITE_TTL` | `sync.pendingWriteTtl` |
+| Env var                           | Config path                   |
+| --------------------------------- | ----------------------------- |
+| `PAPRIKA_SYNC_ENABLED`            | `sync.enabled`                |
+| `PAPRIKA_SYNC_INTERVAL`           | `sync.interval`               |
+| `PAPRIKA_SYNC_PENDING_WRITE_TTL`  | `sync.pendingWriteTtl`        |
+| `PAPRIKA_SYNC_RECIPE_CONCURRENCY` | `sync.recipeFetchConcurrency` |
 
 **OAuth env-var mapping table:**
 

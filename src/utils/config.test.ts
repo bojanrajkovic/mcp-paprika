@@ -166,6 +166,24 @@ describe("Configuration loading", () => {
         expect(result.data.sync.pendingWriteTtl).toBe(60000);
       }
     });
+
+    it("recipeFetchConcurrency defaults to 5 when not provided (#174)", () => {
+      const result = paprikaConfigSchema.safeParse(validBase);
+      expect(result.success && result.data.sync.recipeFetchConcurrency).toBe(5);
+    });
+
+    it("recipeFetchConcurrency coerces a numeric string and accepts custom values (#174)", () => {
+      const result = paprikaConfigSchema.safeParse({ ...validBase, sync: { recipeFetchConcurrency: "12" } });
+      expect(result.success && result.data.sync.recipeFetchConcurrency).toBe(12);
+    });
+
+    it("recipeFetchConcurrency rejects non-positive / non-integer values", () => {
+      expect(paprikaConfigSchema.safeParse({ ...validBase, sync: { recipeFetchConcurrency: 0 } }).success).toBe(false);
+      expect(paprikaConfigSchema.safeParse({ ...validBase, sync: { recipeFetchConcurrency: -3 } }).success).toBe(false);
+      expect(paprikaConfigSchema.safeParse({ ...validBase, sync: { recipeFetchConcurrency: 2.5 } }).success).toBe(
+        false,
+      );
+    });
   });
 
   describe("config-loader.AC4: Boolean field (PAPRIKA_SYNC_ENABLED)", () => {

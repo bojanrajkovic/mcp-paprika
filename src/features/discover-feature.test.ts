@@ -52,7 +52,7 @@ function makeEnabledConfig(overrides: Record<string, unknown> = {}) {
   return {
     transport: "stdio" as const,
     paprika: { email: "test@example.com", password: "pass" },
-    sync: { enabled: true, interval: 5000, pendingWriteTtl: 60000 },
+    sync: { enabled: true, interval: 5000, pendingWriteTtl: 60000, recipeFetchConcurrency: 5 },
     http: { port: 3000, host: "0.0.0.0", allowedHosts: [], allowedOrigins: [], shutdownDrainMs: 0 },
     logging: DEFAULT_LOGGING_CONFIG,
     features: {
@@ -71,7 +71,7 @@ function makeDisabledConfig(withFeaturesEmpty = false) {
     return {
       transport: "stdio" as const,
       paprika: { email: "test@example.com", password: "pass" },
-      sync: { enabled: true, interval: 5000, pendingWriteTtl: 60000 },
+      sync: { enabled: true, interval: 5000, pendingWriteTtl: 60000, recipeFetchConcurrency: 5 },
       http: { port: 3000, host: "0.0.0.0", allowedHosts: [], allowedOrigins: [], shutdownDrainMs: 0 },
       logging: DEFAULT_LOGGING_CONFIG,
       features: {},
@@ -80,7 +80,7 @@ function makeDisabledConfig(withFeaturesEmpty = false) {
   return {
     transport: "stdio" as const,
     paprika: { email: "test@example.com", password: "pass" },
-    sync: { enabled: true, interval: 5000, pendingWriteTtl: 60000 },
+    sync: { enabled: true, interval: 5000, pendingWriteTtl: 60000, recipeFetchConcurrency: 5 },
     http: { port: 3000, host: "0.0.0.0", allowedHosts: [], allowedOrigins: [], shutdownDrainMs: 0 },
     logging: DEFAULT_LOGGING_CONFIG,
   };
@@ -209,7 +209,7 @@ describe("p3-u08-discover-wiring: buildDiscoverComponents", () => {
       const config = {
         transport: "stdio" as const,
         paprika: { email: "test@example.com", password: "pass" },
-        sync: { enabled: true, interval: 5000, pendingWriteTtl: 60000 },
+        sync: { enabled: true, interval: 5000, pendingWriteTtl: 60000, recipeFetchConcurrency: 5 },
         http: { port: 3000, host: "0.0.0.0", allowedHosts: [], allowedOrigins: [], shutdownDrainMs: 0 },
         logging: DEFAULT_LOGGING_CONFIG,
         features: {

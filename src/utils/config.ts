@@ -14,6 +14,7 @@ const ENV_VAR_HINTS: Readonly<Record<string, string>> = {
   "sync.interval": "PAPRIKA_SYNC_INTERVAL",
   "sync.enabled": "PAPRIKA_SYNC_ENABLED",
   "sync.pendingWriteTtl": "PAPRIKA_SYNC_PENDING_WRITE_TTL",
+  "sync.recipeFetchConcurrency": "PAPRIKA_SYNC_RECIPE_CONCURRENCY",
   transport: "MCP_TRANSPORT",
   "http.port": "MCP_HTTP_PORT",
   "http.host": "MCP_HTTP_HOST",
@@ -174,6 +175,11 @@ export const paprikaConfigSchema = z
         // just-written item or resurrect the just-deleted one). Cleared on
         // observation for upserts; TTL-only for deletes. See issue #57.
         pendingWriteTtl: durationField.default("60s"),
+        // Concurrency for the N+1 recipe fetch during sync (`getRecipe` per changed
+        // recipe). Default 5. Raise it to speed up a large-library cold start;
+        // reliability is the primary constraint, so PaprikaClient warns above its
+        // recommended max (high concurrency against one origin risks 429s). See #174.
+        recipeFetchConcurrency: z.coerce.number().int().positive().default(5),
       })
       .default({}),
     // Transport selection. `stdio` (default) keeps the current behavior for all
@@ -428,6 +434,8 @@ export function buildEnvOverrides(env: NodeJS.ProcessEnv): Record<string, unknow
   if (env["PAPRIKA_SYNC_ENABLED"] !== undefined) sync["enabled"] = env["PAPRIKA_SYNC_ENABLED"];
   if (env["PAPRIKA_SYNC_PENDING_WRITE_TTL"] !== undefined)
     sync["pendingWriteTtl"] = env["PAPRIKA_SYNC_PENDING_WRITE_TTL"];
+  if (env["PAPRIKA_SYNC_RECIPE_CONCURRENCY"] !== undefined)
+    sync["recipeFetchConcurrency"] = env["PAPRIKA_SYNC_RECIPE_CONCURRENCY"];
 
   if (env["MCP_TRANSPORT"] !== undefined) overrides["transport"] = env["MCP_TRANSPORT"];
   if (env["MCP_HTTP_PORT"] !== undefined) http["port"] = env["MCP_HTTP_PORT"];

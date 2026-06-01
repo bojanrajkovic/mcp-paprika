@@ -138,14 +138,14 @@ Typed HTTP client wrapping the Paprika Cloud Sync API.
 
 **Construction:**
 
-- `new PaprikaClient(email: string, password: string, log?: pino.Logger)` — stores credentials and wires resilience policies; no I/O. When `log` is omitted, a silent logger is used (safe for tests that don't capture output).
+- `new PaprikaClient(email: string, password: string, log?: pino.Logger, opts?: { recipeFetchConcurrency?: number })` — stores credentials and wires resilience policies; no I/O. When `log` is omitted, a silent logger is used (safe for tests that don't capture output). `opts.recipeFetchConcurrency` sets the recipe-fetch bulkhead size (default 5, threaded from `config.sync.recipeFetchConcurrency`); a value above the recommended max (20) logs a `warn` at construction — high concurrency against a single origin risks 429s / breaker trips (#174).
 
 **Public API:**
 
 - `authenticate(): Promise<void>` — POSTs form-encoded credentials to v1 login endpoint, stores JWT token
 - `listRecipes(): Promise<Array<RecipeEntry>>` — fetches lightweight recipe list from `/api/v2/sync/recipes/`
 - `getRecipe(uid: string): Promise<Recipe>` — fetches full recipe details from `/api/v2/sync/recipe/{uid}/`
-- `getRecipes(uids: ReadonlyArray<string>): Promise<Array<Recipe>>` — fans out to `getRecipe()` with bulkhead(5) concurrency limit
+- `getRecipes(uids: ReadonlyArray<string>): Promise<Array<Recipe>>` — fans out to `getRecipe()` with a configurable concurrency bulkhead (default 5; `config.sync.recipeFetchConcurrency` / `PAPRIKA_SYNC_RECIPE_CONCURRENCY`, #174)
 - `listCategories(): Promise<Array<Category>>` — fetches category list, then hydrates each with bulkhead(5) concurrency limit independent of recipe bulkhead
 - `saveCategory(category: Readonly<Category>): Promise<Category>` — POSTs a single-element gzip array to `/api/v2/sync/categories/` with `deleted: false` via `postEntities`; returns the input category on `{result: true}`
 - `deleteCategory(category: Readonly<Category>): Promise<void>` — soft-delete tombstone POST to `/api/v2/sync/categories/` with `deleted: true` (all fields echoed); same collection-URL + deleted-flag pattern as pantry/grocery deletes
