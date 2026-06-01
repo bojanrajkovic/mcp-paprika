@@ -273,7 +273,7 @@ describe("p3-u08-discover-wiring: buildDiscoverComponents", () => {
       expect(typeof callArgs[1]).toBe("function"); // Second arg is resolver function
     });
 
-    it("cold-start: skips indexRecipes when vectorStore is sufficiently indexed", async () => {
+    it("cold-start: reconciles via indexRecipes WITHOUT clearing hashes when sufficiently indexed (#177)", async () => {
       const { buildDiscoverComponents } = await import("./discover-feature.js");
       const recipes = Array.from({ length: 10 }, (_, i) => makeRecipe({ uid: `recipe-${String(i)}` as RecipeUid }));
       const store = new RecipeStore();
@@ -282,11 +282,16 @@ describe("p3-u08-discover-wiring: buildDiscoverComponents", () => {
       const syncEvents = makeMockSyncEvents();
       const config = makeEnabledConfig();
 
-      mockVectorStore.size = 10; // Fully indexed (>= 90% of store)
+      mockVectorStore.size = 10; // Healthy index (>= 90% of store)
 
       await buildDiscoverComponents(config, store, categoryStore, syncEvents);
 
-      expect(mockVectorStore.indexRecipes).not.toHaveBeenCalled();
+      // No full wipe — but still reconcile, so a category renamed/deleted while
+      // the server was down (whose sync:category-change fired before this
+      // subscription existed) gets repaired. indexRecipes skips unchanged recipes
+      // by content hash, so this is cheap when nothing drifted.
+      expect(mockVectorStore.clearHashes).not.toHaveBeenCalled();
+      expect(mockVectorStore.indexRecipes).toHaveBeenCalled();
     });
 
     it("cold-start: re-indexes when vectorStore has stale/orphaned entries below 90% of store", async () => {
@@ -442,10 +447,12 @@ describe("p3-u08-discover-wiring: buildDiscoverComponents", () => {
       const { log, records } = makePinoCapture();
 
       mockVectorStore.size = 10;
-      const testError = new Error("Embedding failed");
-      mockVectorStore.indexRecipes.mockRejectedValueOnce(testError);
 
       await buildDiscoverComponents(config, store, categoryStore, syncEvents, log);
+
+      // Reject only the event-driven re-index; the startup reconcile already ran.
+      mockVectorStore.indexRecipes.mockClear();
+      mockVectorStore.indexRecipes.mockRejectedValueOnce(new Error("Embedding failed"));
 
       const syncResult: RecipeSyncResult = {
         changeType: "recipes",
@@ -501,9 +508,12 @@ describe("p3-u08-discover-wiring: buildDiscoverComponents", () => {
       const { log, records } = makePinoCapture();
 
       mockVectorStore.size = 10;
-      mockVectorStore.indexRecipes.mockRejectedValueOnce(new Error("indexing failed"));
 
       await buildDiscoverComponents(config, store, categoryStore, syncEvents, log);
+
+      // Reject only the event-driven re-index; the startup reconcile already ran.
+      mockVectorStore.indexRecipes.mockClear();
+      mockVectorStore.indexRecipes.mockRejectedValueOnce(new Error("indexing failed"));
 
       const syncResult: RecipeSyncResult = {
         changeType: "recipes",
@@ -531,9 +541,13 @@ describe("p3-u08-discover-wiring: buildDiscoverComponents", () => {
       const config = makeEnabledConfig();
 
       mockVectorStore.size = 10;
-      mockVectorStore.indexRecipes.mockRejectedValueOnce(new Error("First error")).mockResolvedValueOnce(undefined); // Second call succeeds
 
       await buildDiscoverComponents(config, store, categoryStore, syncEvents);
+
+      // Startup reconcile already consumed one call; reset so the two events map
+      // to the rejection-then-success sequence below.
+      mockVectorStore.indexRecipes.mockClear();
+      mockVectorStore.indexRecipes.mockRejectedValueOnce(new Error("First error")).mockResolvedValueOnce(undefined);
 
       // First sync: error
       const syncResult1: RecipeSyncResult = {
@@ -616,6 +630,9 @@ describe("p3-u08-discover-wiring: buildDiscoverComponents", () => {
       mockVectorStore.size = 10; // skip cold-start
       const { log, records } = makePinoCapture();
       await buildDiscoverComponents(makeEnabledConfig(), store, categoryStore, syncEvents, log);
+      // Discard the startup-reconcile indexRecipes call so the assertions below
+      // see only event-driven re-indexing (#177).
+      mockVectorStore.indexRecipes.mockClear();
       return { syncEvents, records };
     }
 

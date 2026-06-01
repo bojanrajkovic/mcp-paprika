@@ -85,14 +85,31 @@ export async function buildDiscoverComponents(
   );
   await vectorStore.init();
 
-  // Cold-start initial indexing: the initial sync.syncOnce() in the entry
-  // point fires sync:complete BEFORE this subscription exists. Re-index all
-  // recipes when the vector store is empty or significantly out of sync
-  // with the recipe store (stale test data, orphaned entries from a prior
-  // crash, or a model/dimension change that invalidated the old vectors).
-  if (store.size > 0 && vectorStore.size < store.size * 0.9) {
-    vectorStore.clearHashes();
-    await vectorStore.indexRecipes(store.getAll(), (uids) => categoryStore.resolveNames(uids));
+  // Cold-start reconciliation. The initial sync.syncOnce() in the entry point
+  // fires its events (sync:complete AND sync:category-change) BEFORE this
+  // subscription exists, so anything that changed while the server was down is
+  // missed by the live handlers and must be repaired here.
+  if (store.size > 0) {
+    try {
+      // A vector store significantly smaller than the recipe store is empty,
+      // corrupt, or model/schema-invalidated — force a full re-embed by
+      // clearing the hash map first.
+      if (vectorStore.size < store.size * 0.9) {
+        vectorStore.clearHashes();
+      }
+      // Always reconcile, even on a healthy index: indexRecipes re-embeds only
+      // recipes whose embedding text changed since last run (skipping the rest
+      // by content hash, so this is cheap when nothing drifted). This repairs
+      // category renames/deletes that landed while the server was down — the
+      // recipe set (and hashes) are unchanged, so the size check above wouldn't
+      // catch them, but the resolved category name in the embedding text has, so
+      // the affected recipes re-embed and the rest skip (#177).
+      await vectorStore.indexRecipes(store.getAll(), (uids) => categoryStore.resolveNames(uids));
+    } catch (err) {
+      // Best-effort: a transient embeddings outage at startup must not crash the
+      // process. Background sync + future writes will re-attempt indexing.
+      discoverLog?.error({ err }, "vector index error during startup reconcile");
+    }
   }
 
   syncEvents.on("sync:complete", async (result) => {

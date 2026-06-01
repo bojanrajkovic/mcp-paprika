@@ -270,7 +270,6 @@ export async function commitRecipe(ctx: ServerContext, saved: Recipe): Promise<v
   }
   ctx.store.set(saved); // sync — updates in-process store
   ctx.notifier.resourceListChanged(); // sync — notifies MCP clients (single server or broadcast)
-  await ctx.client.notifySync(); // async — signals Paprika cloud to propagate
 
   // Maintain the semantic-search index locally. The sync re-index path can't
   // cover tool writes: the UID is pending here, so the recipe diff filters it
@@ -278,7 +277,14 @@ export async function commitRecipe(ctx: ServerContext, saved: Recipe): Promise<v
   // index (and re-added on restore — the upsert branch fires when inTrash flips
   // back to false). Best-effort: a re-index failure must not fail a write that
   // already succeeded against Paprika, so it's logged, not thrown.
+  //
+  // Runs BEFORE notifySync: the index tracks the local store, and a notifySync
+  // rejection (a network blip) must not skip index upkeep and leave a
+  // created/edited/trashed recipe missing or stale in discover_recipes while the
+  // write is already visible locally.
   await maintainRecipeIndex(ctx, saved);
+
+  await ctx.client.notifySync(); // async — signals Paprika cloud to propagate
 }
 
 /**
@@ -323,13 +329,15 @@ export async function commitRecipeHardDelete(ctx: ServerContext, saved: Recipe):
   }
   ctx.store.delete(saved.uid); // sync — removes from in-process store
   ctx.notifier.resourceListChanged(); // sync — notifies MCP clients
-  await ctx.client.notifySync(); // async — signals Paprika cloud to propagate
 
   // Purge from the semantic-search index too — a hard-deleted recipe must not
   // linger as a searchable vector. Best-effort (see `maintainRecipeIndex`); a
   // trashed recipe was already removed at soft-delete, so this is typically a
   // no-op, but empty_trash can also run on app-trashed recipes never seen here.
+  // Runs BEFORE notifySync so a notify failure can't skip the purge.
   await maintainRecipeIndex(ctx, saved);
+
+  await ctx.client.notifySync(); // async — signals Paprika cloud to propagate
 }
 
 /**
