@@ -8,6 +8,7 @@
  * - mcp_rat_ = registration access token
  * - mcp_state_ = PKCE state parameter
  * - mcp_nonce_ = nonce parameter
+ * - mcp_consent_ = pending-authorization consent ticket (#147)
  *
  * No pepper/HMAC hardening is implemented in this version.
  * Future: Consider HMAC-SHA256(plaintext, pepper) as documented in design line 378.
@@ -19,7 +20,15 @@ import { randomBytes, createHash } from "node:crypto";
 // Token Type Identifiers
 // ============================================================================
 
-export const TOKEN_PREFIXES = ["mcp_at_", "mcp_rt_", "mcp_ac_", "mcp_rat_", "mcp_state_", "mcp_nonce_"] as const;
+export const TOKEN_PREFIXES = [
+  "mcp_at_",
+  "mcp_rt_",
+  "mcp_ac_",
+  "mcp_rat_",
+  "mcp_state_",
+  "mcp_nonce_",
+  "mcp_consent_",
+] as const;
 
 export type TokenPrefix = (typeof TOKEN_PREFIXES)[number];
 
@@ -90,6 +99,14 @@ export const AUTH_CODE_TTL_SECONDS = 60;
 
 /** Auth request store lifetime: 5 minutes */
 export const AUTH_REQUEST_TTL_SECONDS = 5 * 60;
+
+/**
+ * Pending-authorization (consent ticket) lifetime: 10 minutes (#147).
+ * Longer than AUTH_REQUEST because a human must read the consent screen and
+ * decide; single-use via the store's consume(), so the window is the only
+ * replay surface and 10 min keeps it tight while tolerant of a distracted user.
+ */
+export const PENDING_AUTHORIZATION_TTL_SECONDS = 10 * 60;
 
 /** JWKS cache lifetime: 10 minutes (jose default) */
 export const JWKS_CACHE_TTL_MS = 10 * 60 * 1000;

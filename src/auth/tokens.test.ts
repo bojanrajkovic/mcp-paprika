@@ -9,6 +9,7 @@ import {
   JWKS_CACHE_TTL_MS,
   DISCOVERY_CACHE_TTL_MS,
   DCR_CLIENT_STALE_DAYS,
+  PENDING_AUTHORIZATION_TTL_SECONDS,
 } from "./tokens.js";
 
 describe("auth/tokens: opaque token generation and hashing", () => {
@@ -40,6 +41,10 @@ describe("auth/tokens: opaque token generation and hashing", () => {
     it("DCR_CLIENT_STALE_DAYS = 90", () => {
       expect(DCR_CLIENT_STALE_DAYS).toBe(90);
     });
+
+    it("PENDING_AUTHORIZATION_TTL_SECONDS = 10 min in seconds", () => {
+      expect(PENDING_AUTHORIZATION_TTL_SECONDS).toBe(10 * 60);
+    });
   });
 
   describe("generateOpaqueToken", () => {
@@ -68,8 +73,16 @@ describe("auth/tokens: opaque token generation and hashing", () => {
       expect(tokens.size).toBe(1000);
     });
 
-    it("all six token prefixes work: mcp_at_, mcp_rt_, mcp_ac_, mcp_rat_, mcp_state_, mcp_nonce_", () => {
-      const prefixes = ["mcp_at_", "mcp_rt_", "mcp_ac_", "mcp_rat_", "mcp_state_", "mcp_nonce_"] as const;
+    it("all seven token prefixes work: mcp_at_, mcp_rt_, mcp_ac_, mcp_rat_, mcp_state_, mcp_nonce_, mcp_consent_", () => {
+      const prefixes = [
+        "mcp_at_",
+        "mcp_rt_",
+        "mcp_ac_",
+        "mcp_rat_",
+        "mcp_state_",
+        "mcp_nonce_",
+        "mcp_consent_",
+      ] as const;
       for (const prefix of prefixes) {
         const token = generateOpaqueToken(prefix);
         expect(token).toMatch(new RegExp(`^${prefix}`));
