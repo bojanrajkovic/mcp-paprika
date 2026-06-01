@@ -572,6 +572,63 @@ describe("p3-u08-discover-wiring: buildDiscoverComponents", () => {
     });
   });
 
+  describe("startup reconcile retry (#177)", () => {
+    it("retries a failed startup reconcile on the next sync:complete cycle", async () => {
+      const { buildDiscoverComponents } = await import("./discover-feature.js");
+      const recipe = makeRecipe({ uid: "r1" as RecipeUid });
+      const store = new RecipeStore();
+      const categoryStore = new CategoryStore();
+      store.load([recipe]);
+      const syncEvents = makeMockSyncEvents();
+      const config = makeEnabledConfig();
+      mockVectorStore.size = 10; // healthy index — reconcile is a cheap skip-scan
+
+      // Embeddings briefly down at boot: the startup reconcile fails.
+      mockVectorStore.indexRecipes.mockRejectedValueOnce(new Error("embeddings down"));
+
+      await buildDiscoverComponents(config, store, categoryStore, syncEvents);
+      expect(mockVectorStore.indexRecipes).toHaveBeenCalledTimes(1); // startup attempt
+
+      mockVectorStore.indexRecipes.mockClear();
+
+      // A no-change recipe cycle still retries the full reconcile.
+      const result: RecipeSyncResult = {
+        changeType: "recipes",
+        changes: { added: [], updated: [], removedUids: [] },
+      };
+      syncEvents.emit("sync:complete", result);
+      await new Promise((r) => setTimeout(r, 10));
+
+      expect(mockVectorStore.indexRecipes).toHaveBeenCalledTimes(1);
+      const retried = mockVectorStore.indexRecipes.mock.calls[0]![0] as ReadonlyArray<{ uid: string }>;
+      expect(retried.map((r) => r.uid)).toEqual(["r1"]); // full store re-scanned
+    });
+
+    it("does not retry once the startup reconcile has succeeded", async () => {
+      const { buildDiscoverComponents } = await import("./discover-feature.js");
+      const recipe = makeRecipe({ uid: "r1" as RecipeUid });
+      const store = new RecipeStore();
+      const categoryStore = new CategoryStore();
+      store.load([recipe]);
+      const syncEvents = makeMockSyncEvents();
+      const config = makeEnabledConfig();
+      mockVectorStore.size = 10;
+
+      // Startup reconcile succeeds (default mock resolves).
+      await buildDiscoverComponents(config, store, categoryStore, syncEvents);
+      mockVectorStore.indexRecipes.mockClear();
+
+      // A no-change cycle does no reconcile and no per-change indexing.
+      syncEvents.emit("sync:complete", {
+        changeType: "recipes",
+        changes: { added: [], updated: [], removedUids: [] },
+      });
+      await new Promise((r) => setTimeout(r, 10));
+
+      expect(mockVectorStore.indexRecipes).not.toHaveBeenCalled();
+    });
+  });
+
   describe("reindexRecipesForCategoryChange helper (#177)", () => {
     const catA = "CAT-A" as CategoryUid;
     const catB = "CAT-B" as CategoryUid;

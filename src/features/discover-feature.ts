@@ -85,36 +85,55 @@ export async function buildDiscoverComponents(
   );
   await vectorStore.init();
 
-  // Cold-start reconciliation. The initial sync.syncOnce() in the entry point
-  // fires its events (sync:complete AND sync:category-change) BEFORE this
-  // subscription exists, so anything that changed while the server was down is
-  // missed by the live handlers and must be repaired here.
-  if (store.size > 0) {
-    try {
-      // A vector store significantly smaller than the recipe store is empty,
-      // corrupt, or model/schema-invalidated — force a full re-embed by
-      // clearing the hash map first.
-      if (vectorStore.size < store.size * 0.9) {
-        vectorStore.clearHashes();
-      }
-      // Always reconcile, even on a healthy index: indexRecipes re-embeds only
-      // recipes whose embedding text changed since last run (skipping the rest
-      // by content hash, so this is cheap when nothing drifted). This repairs
-      // category renames/deletes that landed while the server was down — the
-      // recipe set (and hashes) are unchanged, so the size check above wouldn't
-      // catch them, but the resolved category name in the embedding text has, so
-      // the affected recipes re-embed and the rest skip (#177).
-      await vectorStore.indexRecipes(store.getAll(), (uids) => categoryStore.resolveNames(uids));
-    } catch (err) {
-      // Best-effort: a transient embeddings outage at startup must not crash the
-      // process. Background sync + future writes will re-attempt indexing.
-      discoverLog?.error({ err }, "vector index error during startup reconcile");
+  // Reconcile the whole index against the current store. indexRecipes re-embeds
+  // only recipes whose embedding text drifted since last run (skipping the rest
+  // by content hash, so this is cheap when nothing changed), and clears hashes
+  // first when the index is empty/corrupt/model-invalidated to force a full
+  // rebuild. Used at startup and as a retry (below).
+  const reconcileIndex = async (): Promise<void> => {
+    if (store.size === 0) return;
+    if (vectorStore.size < store.size * 0.9) {
+      vectorStore.clearHashes();
     }
+    await vectorStore.indexRecipes(store.getAll(), (uids) => categoryStore.resolveNames(uids));
+  };
+
+  // Startup reconciliation. The initial sync.syncOnce() in the entry point fires
+  // its events (sync:complete AND sync:category-change) BEFORE this subscription
+  // exists, so anything that changed while the server was down — notably a
+  // category rename, which changes no recipe hash — is missed by the live
+  // handlers and must be repaired here (#177).
+  //
+  // Best-effort: a transient embeddings outage at startup must not crash the
+  // process. On failure, flag a retry — the recipe sync:complete handler below
+  // re-attempts it on the next cycle (which fires even with no recipe changes),
+  // so a recovered embeddings backend self-heals without waiting for a recipe
+  // edit or a restart.
+  let reconcilePending = false;
+  try {
+    await reconcileIndex();
+  } catch (err) {
+    reconcilePending = true;
+    discoverLog?.error({ err }, "vector index error during startup reconcile; will retry on the next sync cycle");
   }
 
   syncEvents.on("sync:complete", async (result) => {
     try {
       if (result.changeType !== "recipes") return;
+
+      // Retry a failed startup reconcile (e.g. embeddings were down at boot).
+      // The recipes event fires every cycle, including no-change cycles, so this
+      // keeps retrying until the full index is repaired, then stops.
+      if (reconcilePending) {
+        reconcilePending = false;
+        try {
+          await reconcileIndex();
+        } catch (err) {
+          reconcilePending = true;
+          discoverLog?.error({ err }, "vector index startup-reconcile retry failed; will retry on the next cycle");
+        }
+      }
+
       const changed = [...result.changes.added, ...result.changes.updated];
 
       if (changed.length === 0 && result.changes.removedUids.length === 0) {
