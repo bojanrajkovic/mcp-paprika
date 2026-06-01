@@ -186,6 +186,14 @@ export async function syncReplaceAllEntity<T extends { uid: UID }, UID extends s
 type SyncEvents = {
   "sync:complete": AnySyncResult;
   "sync:error": Error;
+  // Category catalog changed (name edits / deletes pulled from the server).
+  // Separate from the resource-oriented `sync:complete` union because
+  // categories have no MCP resource surface — this event exists only so the
+  // discover feature can re-embed recipes whose embedding text bakes in a
+  // category's display name. Carries the same change set the category sync
+  // already computes; the subscriber re-indexes recipes referencing any
+  // `updated` or `removed` category UID.
+  "sync:category-change": EntityChanges<Category>;
 };
 
 // Use CommonJS require to work around TypeScript ESM resolution issues with mitt
@@ -319,7 +327,7 @@ export class SyncEngine {
       // category must not be resurrected by an in-flight snapshot. No
       // sync:complete event: categories are a reference entity with no MCP
       // resource surface (recipe rendering resolves category names on read).
-      await syncReplaceAllEntity({
+      const categoryChanges = await syncReplaceAllEntity({
         fetch: () => this._context.client.listCategories(),
         cache: this._context.cache.categories,
         store: this._context.categoryStore,
@@ -327,6 +335,16 @@ export class SyncEngine {
         label: "categories",
         log: this.log,
       });
+      // Re-embed recipes when a category's display name moved (rename) or the
+      // category went away (its name token must drop from referencing recipes).
+      // `added` is excluded: a brand-new category has no referencing recipes yet
+      // — those arrive via update_recipe, which re-embeds through recipe sync.
+      // `updated` may also carry re-parents/order changes, but the discover
+      // handler relies on the vector store's content-hash skip to make those a
+      // no-op rather than filtering name changes here (it lacks the old name).
+      if (categoryChanges.updated.length > 0 || categoryChanges.removedUids.length > 0) {
+        this._events.emit("sync:category-change", categoryChanges);
+      }
 
       // 2.5. Aisle sync (replace-all with pending-write filtering)
       // Aisles sync before pantry so aisle data is available for resolution

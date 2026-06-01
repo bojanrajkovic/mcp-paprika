@@ -294,6 +294,7 @@ Background polling loop that keeps local cache and in-memory store synchronized 
 - `events` getter — returns `Pick<SyncEventEmitter, "on" | "off">` for subscribing to events:
   - `sync:complete` event fires **four times per cycle** — `RecipeSyncResult` (`changeType: "recipes"`), `PantrySyncResult` (`changeType: "pantry"`), `GroceryListSyncResult` (`changeType: "grocery-lists"`), `GroceryItemSyncResult` (`changeType: "grocery-items"`). Subscribers narrow by `result.changeType`.
   - `sync:error` event fires with `Error` on cycle failure
+  - `sync:category-change` event fires with `EntityChanges<Category>` **only when the category catalog reports a name-relevant change** (`updated` or `removedUids` non-empty), at most once per cycle. Deliberately separate from `sync:complete`/`AnySyncResult` because categories have no MCP resource surface — this exists solely so `buildDiscoverComponents` can re-embed recipes whose embedding text bakes in a category's display name (#177). The `buildAppContext` resource-notification subscriber does not listen to it.
 
 **Algorithm (syncOnce):**
 
@@ -311,6 +312,7 @@ Background polling loop that keeps local cache and in-memory store synchronized 
 2. **Category sync (replace-all with pending-write filtering):**
    - Delegated to `syncReplaceAllEntity({ fetch: client.listCategories, cache: cache.categories, store: categoryStore, equals: categoriesEqual, label: "categories", log })` — gaining pending-write filtering + orphan cleanup, same as pantry/grocery. `categoriesEqual(a, b)` compares `uid`, `name`, `orderFlag`, and `parentUid`.
    - No `sync:complete` event emitted; `SyncEntityType` union is NOT extended (reference entity, no MCP resource surface).
+   - **Captures the returned `EntityChanges<Category>` and emits `sync:category-change`** when `updated` or `removedUids` is non-empty (#177). This is the only sync block that emits a non-`sync:complete` event — it lets the discover feature re-embed recipes whose embedding text contains a renamed/removed category's display name. `added` is excluded (a new category has no referencing recipes yet).
 
 2.5. **Aisle sync (replace-all with pending-write filtering):**
 

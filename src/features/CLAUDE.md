@@ -127,12 +127,14 @@ corrupt Vectra index or hash-index.json).
 once per server instance when `app.vectorStore !== null`.
 
 A local `SyncEventsView` interface decouples this module from `SyncEngine`; it accepts
-anything that exposes a typed `on`/`off` for `sync:complete` and `sync:error`.
+anything that exposes a typed `on`/`off` for `sync:complete`, `sync:error`, and
+`sync:category-change`.
 
-| Export                    | Signature / Description                                                                                                                                                                                                                                                                                                                                              |
-| ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `buildDiscoverComponents` | `(config, store, categoryStore, syncEvents, log?) => Promise<VectorStore \| null>` — builds + wires the semantic-search components; `categoryStore` (3rd param) is used for cold-start + sync re-index category name resolution via `categoryStore.resolveNames(uids)`; optional `log` is threaded as `log?.child({ component: "vector-store" })` into `VectorStore` |
-| `SyncEventsView`          | `interface` describing the subset of `SyncEngine.events` (`on`/`off` for `sync:complete` and `sync:error`) used                                                                                                                                                                                                                                                      |
+| Export                            | Signature / Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `buildDiscoverComponents`         | `(config, store, categoryStore, syncEvents, log?) => Promise<VectorStore \| null>` — builds + wires the semantic-search components; `categoryStore` (3rd param) is used for cold-start + sync re-index category name resolution via `categoryStore.resolveNames(uids)`; optional `log` is threaded as `log?.child({ component: "vector-store" })` into `VectorStore`                                                                                                                                                       |
+| `reindexRecipesForCategoryChange` | `(vectorStore, store, categoryStore, changedUids: ReadonlyArray<string>) => Promise<void>` — re-embed every live recipe referencing any changed category UID. The shared operation behind both category-rename paths (`update_category` tool hook and the `sync:category-change` subscriber). Precise without filtering: `indexRecipes` skips recipes whose embedding text is unchanged, so re-parents/reorders cost a hash recompute and no embedding call. No-op for empty `changedUids` or when nothing references them |
+| `SyncEventsView`                  | `interface` describing the subset of `SyncEngine.events` (`on`/`off` for `sync:complete`, `sync:error`, and `sync:category-change`) used                                                                                                                                                                                                                                                                                                                                                                                   |
 
 **Invariants:**
 
@@ -140,6 +142,7 @@ anything that exposes a typed `on`/`off` for `sync:complete` and `sync:error`.
 - Cold-start re-index runs when vector store size is below 90% of recipe store size (catches stale/orphaned data)
 - Vector index is invalidated when the embedding model or `EMBEDDING_SCHEMA_VERSION` changes between runs
 - `sync:complete` handler indexes added/updated recipes and removes deleted ones
+- `sync:category-change` handler re-embeds recipes referencing any `updated` or `removed` category UID — a category's display name is baked into its recipes' embedding text, and an app-side rename/delete changes no recipe hash, so the recipe sync never re-fetches them. Tool-side renames are handled directly by the `update_category` hook (#177)
 - Errors during sync-triggered indexing are caught and logged via a structured pino error record (never crash the server)
 - Runs exactly once per process (during `buildAppContext`), not per session — the returned `VectorStore` is shared across all sessions via `AppContext.vectorStore`
 
@@ -159,7 +162,7 @@ Constructor takes optional `log?: Logger`. Per-attempt request lifecycle emits `
 
 ### buildDiscoverComponents
 
-Takes optional `log?: Logger` from `buildAppContext`. Derives child loggers for `discover`, `vector-store`, and `embeddings` components. The `sync:complete` handler's error catch emits a structured pino `error` record `"vector index error during sync-driven re-index"` without propagating — preserving the sync loop's never-throws contract.
+Takes optional `log?: Logger` from `buildAppContext`. Derives child loggers for `discover`, `vector-store`, and `embeddings` components. The `sync:complete` handler's error catch emits a structured pino `error` record `"vector index error during sync-driven re-index"` without propagating — preserving the sync loop's never-throws contract. The `sync:category-change` handler does the same with `"vector index error during category-change re-index"`.
 
 ## Dependencies
 

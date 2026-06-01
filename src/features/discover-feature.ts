@@ -3,7 +3,7 @@ import { VectorStore } from "./vector-store.js";
 import { getCacheDir } from "../utils/xdg.js";
 import type { CategoryStore } from "../cache/category-store.js";
 import type { RecipeStore } from "../cache/recipe-store.js";
-import type { AnySyncResult } from "../paprika/types.js";
+import type { AnySyncResult, Category, EntityChanges } from "../paprika/types.js";
 import type { PaprikaConfig } from "../utils/config.js";
 import type { Logger } from "pino";
 
@@ -15,8 +15,36 @@ import type { Logger } from "pino";
 export interface SyncEventsView {
   on(event: "sync:complete", handler: (data: AnySyncResult) => void): void;
   on(event: "sync:error", handler: (data: Error) => void): void;
+  on(event: "sync:category-change", handler: (data: EntityChanges<Category>) => void): void;
   off(event: "sync:complete", handler?: (data: AnySyncResult) => void): void;
   off(event: "sync:error", handler?: (data: Error) => void): void;
+  off(event: "sync:category-change", handler?: (data: EntityChanges<Category>) => void): void;
+}
+
+/**
+ * Re-embed every live recipe that references any of the given category UIDs.
+ * The single operation behind both category-rename paths (the `update_category`
+ * tool hook and the `sync:category-change` subscriber), because a category's
+ * display name is baked into its recipes' embedding text via
+ * `recipeToEmbeddingText`.
+ *
+ * Precise without filtering to true renames: `vectorStore.indexRecipes` skips
+ * recipes whose embedding text (and thus content hash) is unchanged, so passing
+ * UIDs that only re-parented or reordered costs a hash recompute and no
+ * embedding API call. A removed category resolves to no name, dropping its token
+ * from referencing recipes' text — which the same change detection re-embeds.
+ */
+export async function reindexRecipesForCategoryChange(
+  vectorStore: VectorStore,
+  store: RecipeStore,
+  categoryStore: CategoryStore,
+  changedUids: ReadonlyArray<string>,
+): Promise<void> {
+  if (changedUids.length === 0) return;
+  const changed = new Set<string>(changedUids);
+  const affected = store.getAll().filter((recipe) => recipe.categories.some((uid) => changed.has(uid)));
+  if (affected.length === 0) return;
+  await vectorStore.indexRecipes(affected, (uids) => categoryStore.resolveNames(uids));
 }
 
 /**
@@ -85,6 +113,18 @@ export async function buildDiscoverComponents(
       }
     } catch (err) {
       discoverLog?.error({ err }, "vector index error during sync-driven re-index");
+    }
+  });
+
+  // App-side category renames/deletes don't change any recipe's hash, so the
+  // recipe sync above never re-fetches the affected recipes. Re-embed them when
+  // the category catalog reports a name-relevant change.
+  syncEvents.on("sync:category-change", async (changes) => {
+    try {
+      const changedUids = [...changes.updated.map((c) => c.uid), ...changes.removedUids];
+      await reindexRecipesForCategoryChange(vectorStore, store, categoryStore, changedUids);
+    } catch (err) {
+      discoverLog?.error({ err }, "vector index error during category-change re-index");
     }
   });
 

@@ -13,6 +13,9 @@ import type { PantryStore } from "../cache/pantry-store.js";
 import type { AisleStore } from "../cache/aisle-store.js";
 import type {
   AnySyncResult,
+  Category,
+  CategoryUid,
+  EntityChanges,
   GroceryIngredientUid,
   GroceryItemUid,
   GroceryListUid,
@@ -802,6 +805,64 @@ describe("syncOnce", () => {
 
     expect(putCategory).toHaveBeenCalledWith(category1);
     expect(putCategory).toHaveBeenCalledWith(category2);
+  });
+
+  it("AC4.3: emits sync:category-change when a category is renamed (cache vs server diff) (#177)", async () => {
+    const cat = makeCategory({ uid: "c" as CategoryUid, name: "Old" });
+    const renamed: Category = { ...cat, name: "New" };
+
+    // Disk cache holds the old name; the server now returns the new name → the
+    // category sync reports `updated`, which fires the re-embed signal.
+    const engine = makeSyncEngine(
+      { listCategories: vi.fn().mockResolvedValue([renamed]) },
+      { categories: { getAll: vi.fn().mockResolvedValue([cat]) } },
+    );
+
+    let received: EntityChanges<Category> | null = null;
+    engine.events.on("sync:category-change", (changes) => {
+      received = changes;
+    });
+    await engine.syncOnce();
+
+    expect(received).not.toBeNull();
+    const changes = received as unknown as EntityChanges<Category>;
+    expect(changes.updated.map((c) => c.uid)).toEqual(["c"]);
+    expect(changes.removedUids).toEqual([]);
+  });
+
+  it("AC4.4: emits sync:category-change with removedUids when a category disappears server-side (#177)", async () => {
+    const cat = makeCategory({ uid: "gone" as CategoryUid, name: "Gone" });
+
+    // Cached but no longer listed by the server → orphan → removedUids.
+    const engine = makeSyncEngine(
+      { listCategories: vi.fn().mockResolvedValue([]) },
+      { categories: { getAll: vi.fn().mockResolvedValue([cat]) } },
+    );
+
+    let received: EntityChanges<Category> | null = null;
+    engine.events.on("sync:category-change", (changes) => {
+      received = changes;
+    });
+    await engine.syncOnce();
+
+    expect(received).not.toBeNull();
+    const changes = received as unknown as EntityChanges<Category>;
+    expect(changes.removedUids).toEqual(["gone"]);
+  });
+
+  it("AC4.5: does NOT emit sync:category-change when the catalog is unchanged (#177)", async () => {
+    const cat = makeCategory({ uid: "c" as CategoryUid, name: "Same" });
+
+    const engine = makeSyncEngine(
+      { listCategories: vi.fn().mockResolvedValue([cat]) },
+      { categories: { getAll: vi.fn().mockResolvedValue([cat]) } },
+    );
+
+    const handler = vi.fn();
+    engine.events.on("sync:category-change", handler);
+    await engine.syncOnce();
+
+    expect(handler).not.toHaveBeenCalled();
   });
 
   it("AC5.1: sync:complete subscriber calls resourceListChanged when recipe changes exist", async () => {

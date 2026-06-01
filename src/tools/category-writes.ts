@@ -13,6 +13,7 @@ import {
   recipesReferencing,
   wouldCreateCycle,
 } from "./category-helpers.js";
+import { reindexRecipesForCategoryChange } from "../features/discover-feature.js";
 import type { ServerContext } from "../types/server-context.js";
 
 function categorySummary(ctx: ServerContext, category: Category): string {
@@ -107,6 +108,7 @@ export function registerUpdateCategoryTool(server: McpServer, ctx: ServerContext
             }
           }
 
+          const renamed = args.name !== undefined && args.name !== existing.name;
           const updated: Category = {
             ...existing,
             name: args.name ?? existing.name,
@@ -116,6 +118,22 @@ export function registerUpdateCategoryTool(server: McpServer, ctx: ServerContext
           try {
             const saved = await ctx.client.saveCategory(updated);
             await commitCategoryUpsert(ctx, saved);
+            // A rename changes the display name baked into every assigned
+            // recipe's embedding text. Re-embed those recipes now — the recipe
+            // sync can't see this (no recipe hash changed). Best-effort: a
+            // re-index failure must not fail a rename already committed to
+            // Paprika. Pure re-parents skip this (name unchanged); app-side
+            // renames are handled by the sync:category-change event.
+            if (renamed && ctx.vectorStore !== null) {
+              try {
+                await reindexRecipesForCategoryChange(ctx.vectorStore, ctx.store, ctx.categoryStore, [saved.uid]);
+              } catch (err) {
+                log.warn(
+                  { err, uid: saved.uid },
+                  "category rename re-index failed; embeddings may be stale until next sync",
+                );
+              }
+            }
             return textResult(`Updated category ${categorySummary(ctx, saved)}`);
           } catch (error) {
             log.error({ err: error, uid: args.uid }, "saveCategory failed");
