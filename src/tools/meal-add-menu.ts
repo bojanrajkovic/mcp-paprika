@@ -9,7 +9,7 @@ import type { Meal, MealType, RecipeUid } from "../paprika/types.js";
 import { coldStartGuard, resolveLookup, textResult, uidOrTextLookupSchema } from "./helpers.js";
 import { commitMealsBatch, makeMealOrderFlagAssigner } from "./meal-helpers.js";
 import { menuStartGuard } from "./menu-helpers.js";
-import { parseInputMealDay, toMealWireDate } from "../utils/dates.js";
+import { parseCalendarDay, formatCalendarDayWire } from "../utils/dates.js";
 import type { ServerContext } from "../types/server-context.js";
 
 // A menu item materialized into a planner meal: the menu's 1-indexed `day`, the
@@ -136,7 +136,7 @@ export function registerAddMenuToPlannerTool(server: McpServer, ctx: ServerConte
             }
 
             // Parse the start date once; a bad date dooms the whole batch.
-            const startDay = parseInputMealDay(args.start_date);
+            const startDay = parseCalendarDay(args.start_date);
             if (startDay === null) {
               return textResult(
                 `Could not parse start_date "${args.start_date}". ` +
@@ -201,7 +201,7 @@ export function registerAddMenuToPlannerTool(server: McpServer, ctx: ServerConte
               const offset = Math.max(0, item.day - 1);
               materialized.push({
                 day: item.day,
-                date: toMealWireDate(startDay.plus({ days: offset })),
+                date: formatCalendarDayWire(startDay.plus({ days: offset })),
                 typeName,
                 typeUid: item.typeUid,
                 type,

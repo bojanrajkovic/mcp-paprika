@@ -4,7 +4,7 @@ import { DateTime } from "luxon";
 import { z } from "zod";
 import { mealStartGuard, mealTypeSpecSchema, resolveMealTypeSpec } from "./meal-helpers.js";
 import { textResult } from "./helpers.js";
-import { parseInputDate } from "../utils/dates.js";
+import { parseInstant } from "../utils/dates.js";
 import { RecipeUidSchema } from "../paprika/types.js";
 import type { ServerContext } from "../types/server-context.js";
 import type { Meal, MealTypeUid } from "../paprika/types.js";
@@ -117,7 +117,7 @@ export function registerMealHistoryTool(server: McpServer, ctx: ServerContext): 
           let until: DateTime | undefined;
 
           if (args.since !== undefined) {
-            const parsed = parseInputDate(args.since);
+            const parsed = parseInstant(args.since);
             if (parsed === null) {
               return textResult(`Could not parse since date "${args.since}". Use yyyy-MM-dd or ISO 8601.`);
             }
@@ -125,7 +125,7 @@ export function registerMealHistoryTool(server: McpServer, ctx: ServerContext): 
           }
 
           if (args.until !== undefined) {
-            const parsed = parseInputDate(args.until);
+            const parsed = parseInstant(args.until);
             if (parsed === null) {
               return textResult(`Could not parse until date "${args.until}". Use yyyy-MM-dd or ISO 8601.`);
             }

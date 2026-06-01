@@ -7,8 +7,9 @@ Last verified: 2026-05-31
 - `types.ts` — Zod schemas and TypeScript types for Paprika API wire format (includes Meal and MealType entities)
 - `errors.ts` — Error class hierarchy for API operations
 - `client.ts` — Typed HTTP client for Paprika Cloud Sync API (auth, recipe/category/pantry/grocery reads, recipe/pantry/grocery writes, resilient requests)
-- `dates.ts` — Pure helpers for Paprika's pantry-wire date format (`yyyy-MM-dd HH:mm:ss`): `formatPaprikaDate(Date)`, `paprikaDateToday()`, `normalizePaprikaDate(string)` (accepts ISO 8601 / date-only / already-Paprika; returns `null` on unparseable input)
 - `sync.ts` — Background sync engine for polling and syncing recipes/categories with Paprika Cloud
+
+> Date/time helpers (wire format `yyyy-MM-dd HH:mm:ss`) live in `src/utils/dates.ts` — `normalizeWire`, `todayWire`, `formatTimestampWire` cover the pantry/grocery boundary. See `src/utils/CLAUDE.md`.
 
 ## Purpose
 
@@ -208,7 +209,7 @@ The constructor installs five hooks after building `this.resilience`. These fire
 - Endpoint: `POST /api/v2/sync/pantry/` (collection URL, NO UID in path — diverges from `saveRecipe` which uses `/sync/recipe/{uid}/`)
 - Body: gzipped JSON `Array<PantryItemWire>` (single-element array even for one item; Paprika.app batches when multiple changes happen quickly)
 - Multipart: field name `data`, filename `file`, content-type `application/octet-stream`
-- Date format: `yyyy-MM-dd HH:mm:ss` (no T, no timezone, no fractional seconds) — see `src/paprika/dates.ts` for helpers
+- Date format: `yyyy-MM-dd HH:mm:ss` (no T, no timezone, no fractional seconds) — see `src/utils/dates.ts` for helpers
 - UID: uppercase UUID v4 (Paprika is case-insensitive but its app emits uppercase)
 - All operations use the same shape: add, update, and soft-delete are differentiated only by item content; soft-delete sets `deleted: true`. The `aisleUid` is a 64-char uppercase hex string (Paprika's aisle catalog ID, NOT a UUID).
 - Fields sent: `uid`, `ingredient`, `quantity`, `aisle`, `aisle_uid`, `expiration_date`, `has_expiration`, `in_stock`, `purchase_date`, `deleted` (10 fields). The `notes` field present on the `PantryItem` type is **not** sent — the macOS app omits it from POST bodies (confirmed via wire capture).

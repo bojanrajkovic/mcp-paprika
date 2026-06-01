@@ -211,10 +211,10 @@ describe("add_meals tool — success paths", () => {
   });
 
   it("offset-bearing date input → stored at the input's local calendar day, not UTC-shifted", async () => {
-    // Code-review regression: `parseInputDate` + `.startOf("day")` operating in UTC
+    // Code-review regression: `parseInstant` + `.startOf("day")` operating in UTC
     // would shift "2026-06-15T22:00:00-08:00" (June 15 10pm US-Pacific) to
     // June 16 06:00Z → "2026-06-16 00:00:00" stored. The user typed June 15;
-    // `parseInputMealDate` now honors the input's embedded offset so the stored
+    // `parseCalendarDayWire` now honors the input's embedded offset so the stored
     // day matches the user's intent.
     const { callTool } = makeAddCtx();
 

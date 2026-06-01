@@ -10,7 +10,7 @@
 import { randomUUID } from "node:crypto";
 
 import { PaprikaClient } from "../src/paprika/client.js";
-import { paprikaDateToday } from "../src/paprika/dates.js";
+import { todayWire } from "../src/utils/dates.js";
 import { PantryItemUidSchema } from "../src/paprika/types.js";
 import type { PantryItem } from "../src/paprika/types.js";
 
@@ -87,7 +87,7 @@ async function runHappyPath(client: PaprikaClient, steps: Array<StepResult>): Pr
     expirationDate: null,
     hasExpiration: false,
     inStock: true,
-    purchaseDate: paprikaDateToday(),
+    purchaseDate: todayWire(),
     locationUid: null,
     notes: null,
     deleted: false,
@@ -205,7 +205,7 @@ async function runFailureProbes(
     expirationDate: null,
     hasExpiration: false,
     inStock: true,
-    purchaseDate: paprikaDateToday(),
+    purchaseDate: todayWire(),
     locationUid: null,
     notes: null,
     deleted: false, // <-- update (live item), not delete
@@ -276,7 +276,7 @@ async function runFailureProbes(
     expirationDate: null,
     hasExpiration: false,
     inStock: true,
-    purchaseDate: paprikaDateToday(),
+    purchaseDate: todayWire(),
     locationUid: null,
     notes: null,
     deleted: false,
@@ -311,7 +311,7 @@ async function runFailureProbes(
     expirationDate: null,
     hasExpiration: false,
     inStock: true,
-    purchaseDate: paprikaDateToday(),
+    purchaseDate: todayWire(),
     locationUid: null,
     notes: null,
     deleted: false,

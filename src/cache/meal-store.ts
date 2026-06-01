@@ -133,7 +133,7 @@ export class MealStore extends TombstoneEntityStore<Meal, MealUid> {
    * only; meal type does not partition the sequence.
    *
    * Date is matched exactly against the Paprika wire-format date string (the
-   * caller is responsible for normalizing input through `parseInputMealDate`
+   * caller is responsible for normalizing input through `parseCalendarDayWire`
    * first).
    *
    * Pending-delete UIDs are excluded: between `markPendingDelete` and

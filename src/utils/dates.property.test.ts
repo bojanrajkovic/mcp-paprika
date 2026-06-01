@@ -1,11 +1,17 @@
 import { describe, it, expect } from "vitest";
 import fc from "fast-check";
 import { DateTime } from "luxon";
-import { parseInputDate, parseInputMealDate, toWireDateFormat } from "./dates.js";
+import { parseCalendarDayWire, parseInstant } from "./dates.js";
+
+// The wire format a UTC DateTime renders to. parseInstant consumes this shape;
+// the deleted `toWireDateFormat` helper used to produce it, so these properties
+// build it inline (`dt.toUTC().toFormat(...)`) to keep parseInstant's round-trip
+// coverage without resurrecting a dead export.
+const WIRE_FORMAT = "yyyy-MM-dd HH:mm:ss";
 
 describe("dates.ts property-based tests", () => {
   describe("Property 1: Round-trip — wire format input", () => {
-    it("For any valid yyyy-MM-dd HH:mm:ss string, toWireDateFormat(parseInputDate(s)!) equals s", () => {
+    it("For any valid yyyy-MM-dd HH:mm:ss string, parseInstant(s) re-renders to s in UTC", () => {
       fc.assert(
         fc.property(
           fc.integer({ min: 1970, max: 2100 }),
@@ -21,9 +27,10 @@ describe("dates.ts property-based tests", () => {
               [String(hour).padStart(2, "0"), String(minute).padStart(2, "0"), String(second).padStart(2, "0")].join(
                 ":",
               );
-            const parsed = parseInputDate(s);
+            const parsed = parseInstant(s);
             expect(parsed).not.toBeNull();
-            expect(toWireDateFormat(parsed!)).toBe(s);
+            // parsed is already UTC, so toFormat renders the original string back.
+            expect(parsed!.toFormat(WIRE_FORMAT)).toBe(s);
           },
         ),
       );
@@ -31,7 +38,7 @@ describe("dates.ts property-based tests", () => {
   });
 
   describe("Property 2: UTC preservation", () => {
-    it("For any DateTime in an arbitrary IANA zone, parseInputDate(toWireDateFormat(dt)) preserves the UTC instant (truncated to second)", () => {
+    it("For any DateTime in an arbitrary IANA zone, parseInstant(<its UTC wire string>) preserves the UTC instant (truncated to second)", () => {
       const ianaZones = fc.constantFrom(
         "UTC",
         "America/New_York",
@@ -55,8 +62,8 @@ describe("dates.ts property-based tests", () => {
             // Skip invalid DateTime combinations (e.g., DST gaps)
             if (!dt.isValid) return;
 
-            const wire = toWireDateFormat(dt);
-            const reparsed = parseInputDate(wire);
+            const wire = dt.toUTC().toFormat(WIRE_FORMAT);
+            const reparsed = parseInstant(wire);
             expect(reparsed).not.toBeNull();
             // The wire format has no sub-second precision, so compare at second granularity
             expect(reparsed!.toMillis()).toBe(dt.toUTC().startOf("second").toMillis());
@@ -67,23 +74,23 @@ describe("dates.ts property-based tests", () => {
   });
 
   describe("Property 3: Null on malformed input", () => {
-    it("For arbitrary strings that do not parse as dates, parseInputDate returns null rather than throwing", () => {
+    it("For arbitrary strings that do not parse as dates, parseInstant returns null rather than throwing", () => {
       fc.assert(
         fc.property(
-          fc.string().filter((s) => parseInputDate(s) === null),
+          fc.string().filter((s) => parseInstant(s) === null),
           (s) => {
             // Should return null, not throw
-            expect(parseInputDate(s)).toBeNull();
+            expect(parseInstant(s)).toBeNull();
           },
         ),
       );
     });
   });
 
-  describe("Property 4: parseInputMealDate honors the input's embedded offset", () => {
-    it("For any local DateTime t in an arbitrary IANA zone, parseInputMealDate(t.toISO()) yields a wire string whose date portion matches t's local calendar day", () => {
-      // Property 2 above tested UTC-instant preservation through toWireDateFormat;
-      // this property tests the meal-write contract that parseInputMealDate
+  describe("Property 4: parseCalendarDayWire honors the input's embedded offset", () => {
+    it("For any local DateTime t in an arbitrary IANA zone, parseCalendarDayWire(t.toISO()) yields a wire string whose date portion matches t's local calendar day", () => {
+      // Property 2 above tested UTC-instant preservation through parseInstant;
+      // this property tests the meal-write contract that parseCalendarDayWire
       // preserves the user's LOCAL calendar day regardless of UTC shift. Without
       // this property, the TZ-offset drift bug (US-Pacific evening DateTime ending
       // up on the next UTC day) would not be caught by fast-check.
@@ -111,7 +118,7 @@ describe("dates.ts property-based tests", () => {
             const iso = dt.toISO();
             if (iso === null) return;
 
-            const wire = parseInputMealDate(iso);
+            const wire = parseCalendarDayWire(iso);
             expect(wire).not.toBeNull();
             // Wire date portion equals the input DT's local calendar day, not
             // its UTC-shifted day. The time portion is always midnight.

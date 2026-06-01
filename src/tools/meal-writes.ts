@@ -15,7 +15,7 @@ import {
   renderMealCard,
   resolveMealTypeSpec,
 } from "./meal-helpers.js";
-import { parseInputMealDate } from "../utils/dates.js";
+import { parseCalendarDayWire } from "../utils/dates.js";
 import type { ServerContext } from "../types/server-context.js";
 
 // Each meal item is structurally either recipe-linked OR freeform — never both.
@@ -120,10 +120,10 @@ export function registerAddMealsTool(server: McpServer, ctx: ServerContext): voi
 
             // Date. The meal planner is day-granular (Paprika.app stores meals at
             // midnight per docs/wire-captures/meals.har.json, and list_meal_history
-            // groups by date.slice(0, 10)); `parseInputMealDate` extracts the user's
+            // groups by date.slice(0, 10)); `parseCalendarDayWire` extracts the user's
             // intended calendar day in the input's own zone — so "2026-06-15T22:00:00-08:00"
             // stays on June 15 rather than UTC-shifting to June 16.
-            const normalizedDate = parseInputMealDate(item.date);
+            const normalizedDate = parseCalendarDayWire(item.date);
             if (normalizedDate === null) {
               errors.push(
                 `Item ${i.toString()}: could not parse date "${item.date}". ` +
@@ -368,7 +368,7 @@ export function registerUpdateMealTool(server: McpServer, ctx: ServerContext): v
           // see the comment there for why we extract the input's own-zone day.
           let normalizedDate: string | undefined;
           if (op.date !== undefined) {
-            const parsed = parseInputMealDate(op.date);
+            const parsed = parseCalendarDayWire(op.date);
             if (parsed === null) {
               return textResult(
                 `Could not parse date "${op.date}". Use ISO 8601 (e.g., "2026-06-15") or "yyyy-MM-dd HH:mm:ss".`,

@@ -98,24 +98,36 @@ dependencies (leaf module).
 | -------------------- | ------- | ------------------------------------------- |
 | `DurationParseError` | `Error` | `input: string \| number`, `reason: string` |
 
-### dates.ts — Meal-planner date helpers
+### dates.ts — Paprika wire date helpers
 
-Pure helpers for parsing user-supplied date input and rendering Paprika's meal wire date
-format. `parseInputDate` and `toWireDateFormat` operate purely in UTC and model a UTC
-instant — used for since/until window comparisons in `list_meal_history`.
-`parseInputMealDay` (and the `parseInputMealDate` string wrapper built on it) honors an
-embedded UTC offset on ISO inputs so that the user's local calendar day is preserved when
-storing a meal date; the other UTC-anchored formats remain unchanged. No I/O. No internal
-dependencies (leaf module). Consumed by meal tools to normalize date arguments before
-persistence or comparison.
+The single home for parsing user date input into Luxon `DateTime`s and rendering Paprika's
+wire format (`yyyy-MM-dd HH:mm:ss` — no timezone, no `T`, no fractional seconds). Absorbs
+the former `src/paprika/dates.ts` (pantry/grocery helpers) so one module owns "produce a
+Paprika wire date string." No I/O. No internal dependencies (leaf module, uses `luxon`).
 
-| Function                    | Returns            | Description                                                                                                                                                                                                                                                                                                                            |
-| --------------------------- | ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `parseInputDate(input)`     | `DateTime \| null` | Tries `yyyy-MM-dd HH:mm:ss`, `yyyy-MM-dd'T'HH:mm:ss`, and `yyyy-MM-dd` in order (parsed as UTC), then ISO 8601 as fallback (parsed as UTC, ignoring any embedded offset); returns `null` when no format matches. UTC-instant semantics — use for since/until window comparisons                                                        |
-| `toWireDateFormat(dt)`      | `string`           | Renders a `DateTime` as Paprika's wire date format (`yyyy-MM-dd HH:mm:ss`) in UTC                                                                                                                                                                                                                                                      |
-| `parseInputMealDay(input)`  | `DateTime \| null` | The calendar-day-extracting core. Same explicit-format priority as `parseInputDate` (UTC-anchored), then ISO 8601 with `setZone: true` so offset-bearing inputs keep their embedded zone. Returns the parsed `DateTime` (zone preserved) for callers that need date arithmetic; `null` on no match. Pair with `toMealWireDate`         |
-| `toMealWireDate(dt)`        | `string`           | Renders a `DateTime` at midnight as a Paprika meal-wire string (`yyyy-MM-dd 00:00:00`), formatting in the DateTime's OWN zone (not UTC) so the calendar day from `parseInputMealDay` survives. DST-free for day arithmetic (`toMealWireDate(day.plus({ days: n }))`) because time-of-day is discarded                                  |
-| `parseInputMealDate(input)` | `string \| null`   | Returns the user's intended local calendar day as a Paprika meal-wire string at midnight (`yyyy-MM-dd 00:00:00`). Thin composition of `parseInputMealDay` + `toMealWireDate` — the single source of truth for "user date input → stored meal `date`". Calendar-day semantics — use for the `date` field on `add_meals` / `update_meal` |
+**Two-axis naming convention** — a helper's name answers both questions:
+
+- **Return type** — `parse*` returns `DateTime | null` (for comparison/arithmetic);
+  `format*` / `today*` / `normalize*` return a wire `string`.
+- **Semantics** — `*Instant*` models a UTC moment; `*CalendarDay*` models a day on the
+  user's calendar, honoring an embedded ISO offset so the typed day survives a UTC-boundary
+  crossing (US-Pacific "June 15, 10 PM" stays June 15, not June 16). `formatTimestampWire`
+  and `todayWire` cover the pantry/grocery boundary, which records a full local timestamp.
+
+The helpers compose: `parseCalendarDayWire = formatCalendarDayWire ∘ parseCalendarDay`;
+`todayWire = formatCalendarDayWire(now)`; `normalizeWire` routes its midnight branches
+through `formatCalendarDayWire`; `parseInstant`/`parseCalendarDay` share a private
+`parseExplicit` prefix and diverge only on the ISO fallback's zone policy.
+
+| Function                      | Returns            | Description                                                                                                                                                                                                                                                                                              |
+| ----------------------------- | ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `parseInstant(input)`         | `DateTime \| null` | Tries `yyyy-MM-dd HH:mm:ss`, `yyyy-MM-dd'T'HH:mm:ss`, `yyyy-MM-dd` (parsed as UTC), then ISO 8601 (UTC, ignoring any embedded offset); `null` on no match. UTC-instant semantics — use for `list_meal_history` since/until comparisons                                                                   |
+| `parseCalendarDay(input)`     | `DateTime \| null` | The calendar-day-extracting core. Same explicit-format priority as `parseInstant`, then ISO 8601 with `setZone: true` so offset-bearing inputs keep their embedded zone. Returns the parsed `DateTime` (zone preserved) for date arithmetic. Pair with `formatCalendarDayWire`                           |
+| `formatCalendarDayWire(dt)`   | `string`           | Renders a `DateTime` at midnight (`yyyy-MM-dd 00:00:00`) in the DateTime's OWN zone (not UTC) so the calendar day survives. DST-free for day arithmetic (`formatCalendarDayWire(day.plus({ days: n }))`) because time-of-day is discarded                                                                |
+| `parseCalendarDayWire(input)` | `string \| null`   | User's intended local calendar day as a wire string at midnight. Composition of `parseCalendarDay` + `formatCalendarDayWire` — the single source of truth for "user date input → stored meal `date`" (`add_meals` / `update_meal`)                                                                       |
+| `formatTimestampWire(d)`      | `string`           | Formats a JS `Date` as a wire string, preserving its full local timestamp (NOT snapped to midnight). For recording a precise moment, e.g. a recipe's `created` field                                                                                                                                     |
+| `todayWire()`                 | `string`           | Today's local calendar day at midnight in wire format (`formatCalendarDayWire(DateTime.now())`). Mirrors the macOS app's `purchase_date` default                                                                                                                                                         |
+| `normalizeWire(input)`        | `string \| null`   | Lenient pantry normalizer: already-wire input returned verbatim (time-of-day **preserved** — the one branch that differs from `parseCalendarDayWire`); ISO / `yyyy-MM-dd` / `yyyy/MM/dd` snapped to midnight in the input's own zone; `null` on no match. For pantry `expiration_date` / `purchase_date` |
 
 ### errors.ts — Cross-cutting error classes and helpers
 
