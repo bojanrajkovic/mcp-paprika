@@ -692,7 +692,7 @@ describe("PaprikaClient", () => {
       expect(result.hash).not.toBe(input.hash);
     });
 
-    it("#167 - saveRecipe echoes the existing hash verbatim for a trashed recipe (does not recompute)", async () => {
+    it("#167 - saveRecipe recomputes the hash for a soft-delete / content edit while trashed", async () => {
       const uid = "test-uid";
       let payload: Record<string, unknown> | null = null;
 
@@ -709,13 +709,42 @@ describe("PaprikaClient", () => {
       );
 
       const client = new PaprikaClient("test@example.com", "password");
-      // Soft-delete shape: in_trash true. The existing hash already matches the server
-      // and the trash flip must not change it (#125), so it is echoed verbatim.
-      const trashed: Recipe = { ...makeCamelCaseRecipe(uid), inTrash: true };
-      const result = await client.saveRecipe(trashed);
+      // A trashed recipe whose content was also edited (e.g. update_recipe renaming +
+      // trashing in one call). in_trash is a soft-delete (not hash-validated), and the
+      // hash is trash-independent, so the edit must still produce a fresh, detectable
+      // hash — not the stale echo.
+      const trashedEdit: Recipe = { ...makeCamelCaseRecipe(uid), name: "Renamed while trashing", inTrash: true };
+      const result = await client.saveRecipe(trashedEdit);
 
-      expect(payload!["hash"]).toBe(trashed.hash);
-      expect(result.hash).toBe(trashed.hash);
+      expect(payload!["hash"]).toBe(computeRecipeHash(trashedEdit));
+      expect(payload!["hash"]).not.toBe(trashedEdit.hash);
+      expect(result.hash).toBe(computeRecipeHash(trashedEdit));
+    });
+
+    it("#167/#125 - saveRecipe echoes the existing hash verbatim for the hard-delete tombstone", async () => {
+      const uid = "test-uid";
+      let payload: Record<string, unknown> | null = null;
+
+      server.use(
+        http.post(`${API_BASE}/recipe/${uid}/`, async ({ request }) => {
+          const formData = await request.formData();
+          const dataBlob = formData.get("data") as Blob;
+          payload = JSON.parse(gunzipSync(Buffer.from(await dataBlob.arrayBuffer())).toString()) as Record<
+            string,
+            unknown
+          >;
+          return HttpResponse.json({ result: true });
+        }),
+      );
+
+      const client = new PaprikaClient("test@example.com", "password");
+      // Hard-delete tombstone: Paprika validates `deleted` against the stored hash, so
+      // it must be echoed verbatim even though content fields are present.
+      const tombstone: Recipe = { ...makeCamelCaseRecipe(uid), inTrash: true, deleted: true };
+      const result = await client.saveRecipe(tombstone);
+
+      expect(payload!["hash"]).toBe(tombstone.hash);
+      expect(result.hash).toBe(tombstone.hash);
     });
 
     it("p1-u07-client-writes.AC1.5 - Non-2xx response throws PaprikaAPIError", async () => {

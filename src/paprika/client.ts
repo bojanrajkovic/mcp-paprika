@@ -390,18 +390,23 @@ export class PaprikaClient {
 
   /**
    * Stamps the client-owned content hash so writes are hash-consistent with the
-   * server and the next sync stops re-fetching them (#167). This is the single
-   * chokepoint every recipe write crosses — `saveRecipe` and `uploadPhoto` both
-   * call it and return the result, so the wire payload and the locally-committed
+   * server and changes are detectable by every Paprika client (#167). This is the
+   * single chokepoint every recipe write crosses — `saveRecipe` and `uploadPhoto`
+   * both call it and return the result, so the wire payload and the locally-committed
    * recipe inherently carry the same hash.
    *
-   * Trash/hard-delete tombstones echo the existing hash verbatim (#125): the
-   * empty-trash tombstone is validated against the stored hash server-side, and a
-   * soft-delete's existing hash already matches the server — so only a live recipe
-   * gets a freshly computed hash.
+   * Only the hard-delete tombstone (`deleted: true`) echoes the existing hash
+   * verbatim: Paprika validates `deleted` against the stored hash server-side (#125),
+   * and there is no content to re-hash. Everything else recomputes — including a
+   * soft-delete or `inTrash` toggle. `computeRecipeHash` is trash-independent (it
+   * pins `in_trash`/`deleted` false), so a pure trash flip recomputes to the same
+   * content hash (a no-op for an already-current recipe), while a content edit that
+   * *also* sets `inTrash: true` (e.g. `update_recipe` renaming + trashing in one call)
+   * still gets a fresh, detectable hash. Soft-deletes are not hash-validated, so
+   * recomputing them is safe.
    */
   private stampContentHash(recipe: Readonly<Recipe>): Recipe {
-    return recipe.inTrash || recipe.deleted ? (recipe as Recipe) : { ...recipe, hash: computeRecipeHash(recipe) };
+    return recipe.deleted ? (recipe as Recipe) : { ...recipe, hash: computeRecipeHash(recipe) };
   }
 
   async saveRecipe(recipe: Readonly<Recipe>): Promise<Recipe> {
