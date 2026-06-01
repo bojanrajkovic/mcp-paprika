@@ -52,6 +52,7 @@ import {
   RecipeEntrySchema,
   RecipeSchema,
 } from "./types.js";
+import { computeRecipeHash } from "./recipe-hash.js";
 import { PaprikaAuthError, PaprikaAPIError } from "./errors.js";
 import { CircuitOpenError } from "../utils/errors.js";
 import { SILENT_LOG } from "../utils/log.js";
@@ -387,10 +388,27 @@ export class PaprikaClient {
     return this.request("GET", `${API_BASE}/pantry/`, z.array(PantryItemSchema));
   }
 
+  /**
+   * Stamps the client-owned content hash so writes are hash-consistent with the
+   * server and the next sync stops re-fetching them (#167). This is the single
+   * chokepoint every recipe write crosses — `saveRecipe` and `uploadPhoto` both
+   * call it and return the result, so the wire payload and the locally-committed
+   * recipe inherently carry the same hash.
+   *
+   * Trash/hard-delete tombstones echo the existing hash verbatim (#125): the
+   * empty-trash tombstone is validated against the stored hash server-side, and a
+   * soft-delete's existing hash already matches the server — so only a live recipe
+   * gets a freshly computed hash.
+   */
+  private stampContentHash(recipe: Readonly<Recipe>): Recipe {
+    return recipe.inTrash || recipe.deleted ? (recipe as Recipe) : { ...recipe, hash: computeRecipeHash(recipe) };
+  }
+
   async saveRecipe(recipe: Readonly<Recipe>): Promise<Recipe> {
-    const formData = this.buildEntityFormData(recipeToApiPayload(recipe), "data.gz");
-    await this.request("POST", `${API_BASE}/recipe/${recipe.uid}/`, z.boolean(), formData);
-    return recipe as Recipe;
+    const hashed = this.stampContentHash(recipe);
+    const formData = this.buildEntityFormData(recipeToApiPayload(hashed), "data.gz");
+    await this.request("POST", `${API_BASE}/recipe/${hashed.uid}/`, z.boolean(), formData);
+    return hashed;
   }
 
   async saveAisle(aisle: Readonly<Aisle>): Promise<Aisle> {
@@ -472,13 +490,17 @@ export class PaprikaClient {
     photo: Readonly<Photo>,
     thumbnail: Buffer,
     full: Buffer,
-  ): Promise<void> {
-    const thumbnailFilename = recipeWithPhoto.photo ?? `${photo.uid}.jpg`;
-    const recipePayload = recipeToApiPayload(recipeWithPhoto);
+  ): Promise<Recipe> {
+    // A photo attach changes photo/photo_large/photo_hash — all hashed fields — so
+    // the recipe always gets a freshly stamped content hash (#167). Returned to the
+    // caller so the locally-committed recipe matches what we POST.
+    const hashed = this.stampContentHash(recipeWithPhoto);
+    const thumbnailFilename = hashed.photo ?? `${photo.uid}.jpg`;
+    const recipePayload = recipeToApiPayload(hashed);
 
     // 1. Recipe POST carrying the thumbnail.
     const recipeForm = this.buildPhotoFormData(recipePayload, thumbnail, thumbnailFilename, "data.gz");
-    await this.request("POST", `${API_BASE}/recipe/${recipeWithPhoto.uid}/`, z.boolean(), recipeForm);
+    await this.request("POST", `${API_BASE}/recipe/${hashed.uid}/`, z.boolean(), recipeForm);
 
     // 2. Photo POST carrying the full image.
     const photoForm = this.buildPhotoFormData(photoToApiPayload(photo), full, photo.filename, "file");
@@ -486,7 +508,9 @@ export class PaprikaClient {
 
     // 3. Recipe re-POST (confirm), matching the app's captured sequence.
     const confirmForm = this.buildEntityFormData(recipePayload, "data.gz");
-    await this.request("POST", `${API_BASE}/recipe/${recipeWithPhoto.uid}/`, z.boolean(), confirmForm);
+    await this.request("POST", `${API_BASE}/recipe/${hashed.uid}/`, z.boolean(), confirmForm);
+
+    return hashed;
   }
 
   /**
