@@ -90,12 +90,19 @@ export class MintingOAuthServerProvider implements OAuthServerProvider {
     const clientNameProp = client.client_name !== undefined ? { clientName: client.client_name } : {};
 
     const ticket = generateOpaqueToken("mcp_consent_");
-    this._pendingAuthorizations.put(ticket, {
+    const held = this._pendingAuthorizations.put(ticket, {
       ...this._approved(client.client_id, params),
       ...clientNameProp,
       codeChallengeMethod: "S256",
       createdAt: nowSeconds(),
     });
+
+    // Pending store full of live entries (a /authorize flood): refuse rather
+    // than render a consent screen whose ticket was never stored.
+    if (!held) {
+      c.res = c.text("authorization temporarily unavailable, please retry", 503);
+      return;
+    }
 
     const { html, nonce } = renderConsentPage({
       ticket,

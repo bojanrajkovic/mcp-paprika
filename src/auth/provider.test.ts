@@ -12,7 +12,7 @@ import { PendingAuthorizationStore } from "./pending-authorization-store.js";
 import { DiskCacheRoot } from "../cache/disk/index.js";
 import { makeDefaultOidcStub, makeDiscoveryDoc } from "./__fixtures__/oidc-stub.js";
 import { makeAuthCodeState, makeVerifiedIdentity } from "./__fixtures__/oauth-state.js";
-import { ACCESS_TOKEN_TTL_SECONDS, hashTokenForStorage } from "./tokens.js";
+import { ACCESS_TOKEN_TTL_SECONDS, hashTokenForStorage, nowSeconds, MAX_INMEMORY_AUTH_ENTRIES } from "./tokens.js";
 import { makePinoCapture } from "../tools/tool-test-utils.js";
 import { SILENT_LOG } from "../utils/log.js";
 import type { OAuthClientInformationFull } from "@modelcontextprotocol/sdk/shared/auth.js";
@@ -256,6 +256,48 @@ describe("MintingOAuthServerProvider", () => {
       expect(ctx.html).not.toHaveBeenCalled();
       expect(ctx.redirect).toHaveBeenCalled();
       expect(pendingAuthorizations.size).toBe(0);
+    });
+
+    it("returns 503 instead of a consent screen when the pending store is full", async () => {
+      // Saturate the pending store to its cap with live entries.
+      for (let i = 0; i < MAX_INMEMORY_AUTH_ENTRIES; i++) {
+        pendingAuthorizations.put(`filler-${i}`, {
+          clientId: "123e4567-e89b-12d3-a456-426614174000",
+          codeChallenge: "c",
+          codeChallengeMethod: "S256",
+          redirectUri: "https://paprika-sync.app/cb",
+          resource: "",
+          claudeState: "",
+          scope: "",
+          createdAt: nowSeconds(),
+        });
+      }
+
+      const stored = await clientStore.registerClient({
+        client_name: "Sneaky",
+        redirect_uris: ["https://paprika-sync.app/cb"],
+      });
+      const unknownClient = {
+        client_id: stored.client_id,
+        redirect_uris: ["https://paprika-sync.app/cb"],
+      } as OAuthClientInformationFull;
+
+      const ctx = {
+        html: vi.fn(),
+        text: vi.fn((body: string, status: number) => new Response(body, { status })),
+        redirect: vi.fn(),
+      };
+
+      await provider.authorize(
+        unknownClient,
+        { scopes: ["openid"], redirectUri: "https://paprika-sync.app/cb", codeChallenge: "challenge123456789" },
+        ctx as any,
+      );
+
+      expect(ctx.html).not.toHaveBeenCalled();
+      expect((ctx as unknown as { res: Response }).res.status).toBe(503);
+      // No new pending entry was added beyond the saturating fillers.
+      expect(pendingAuthorizations.size).toBe(MAX_INMEMORY_AUTH_ENTRIES);
     });
   });
 

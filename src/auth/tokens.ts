@@ -116,3 +116,13 @@ export const DISCOVERY_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 
 /** DCR client registration stale threshold: 90 days */
 export const DCR_CLIENT_STALE_DAYS = 90;
+
+/**
+ * Hard cap on live entries in each in-memory auth TTL store (AuthRequestStore,
+ * AuthCodeStore, PendingAuthorizationStore). Bounds memory under a `/authorize`
+ * flood: an attacker cannot grow these maps without limit. The stores reject
+ * new puts (after first sweeping expired entries) once full, rather than
+ * evicting an existing in-flight entry — see `ttl-store.ts`. 50 is far above
+ * any realistic concurrent-login count for this deployment.
+ */
+export const MAX_INMEMORY_AUTH_ENTRIES = 50;

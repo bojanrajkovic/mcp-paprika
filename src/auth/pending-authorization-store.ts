@@ -14,17 +14,19 @@
  */
 
 import type { PendingAuthorization } from "./types.js";
-import { PENDING_AUTHORIZATION_TTL_SECONDS } from "./tokens.js";
+import { PENDING_AUTHORIZATION_TTL_SECONDS, MAX_INMEMORY_AUTH_ENTRIES } from "./tokens.js";
 import { TtlStore } from "./ttl-store.js";
 
 export class PendingAuthorizationStore extends TtlStore<PendingAuthorization> {
   /**
    * @param opts.ttlMs - TTL in milliseconds (default: PENDING_AUTHORIZATION_TTL_SECONDS * 1000)
    * @param opts.now - Clock function returning milliseconds (default: Date.now)
+   * @param opts.maxEntries - Entry cap (default: MAX_INMEMORY_AUTH_ENTRIES)
    */
-  constructor(opts?: { readonly ttlMs?: number; readonly now?: () => number }) {
+  constructor(opts?: { readonly ttlMs?: number; readonly now?: () => number; readonly maxEntries?: number }) {
     super({
       ttlMs: opts?.ttlMs ?? PENDING_AUTHORIZATION_TTL_SECONDS * 1000,
+      maxEntries: opts?.maxEntries ?? MAX_INMEMORY_AUTH_ENTRIES,
       ...(opts?.now !== undefined ? { now: opts.now } : {}),
     });
   }

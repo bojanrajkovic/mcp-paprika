@@ -11,6 +11,12 @@
  * TTL semantics: entry is expired when `entry.createdAt + ttlMs/1000 < now` (strict
  * less-than). At exact equality the entry is still valid.
  *
+ * Optional entry cap (`maxEntries`) bounds memory: once the store holds that many
+ * live entries, `put` rejects new keys (after first sweeping expired ones to
+ * reclaim slots) rather than evicting an existing entry. Rejecting protects
+ * in-flight entries — an attacker flooding the store cannot evict a legitimate
+ * auth that is mid-flow, only have its own brand-new write refused.
+ *
  * Clock injection (`now`) is available for testing.
  */
 
@@ -18,21 +24,34 @@ export class TtlStore<T extends { createdAt: number }> {
   protected readonly _entries: Map<string, T> = new Map();
   protected readonly _ttlMs: number;
   protected readonly _now: () => number;
+  protected readonly _maxEntries: number | undefined;
 
   /**
    * @param opts.ttlMs - TTL in milliseconds (required; subclasses provide the default)
    * @param opts.now - Clock function returning milliseconds (default: Date.now)
+   * @param opts.maxEntries - Hard cap on live entries (default: unbounded)
    */
-  constructor(opts: { readonly ttlMs: number; readonly now?: () => number }) {
+  constructor(opts: { readonly ttlMs: number; readonly now?: () => number; readonly maxEntries?: number }) {
     this._ttlMs = opts.ttlMs;
     this._now = opts.now ?? Date.now;
+    this._maxEntries = opts.maxEntries;
   }
 
   /**
-   * Store a value keyed by key.
+   * Store a value keyed by `key`.
+   *
+   * Returns `true` if stored, `false` if rejected because the store is full of
+   * live (unexpired) entries. Overwriting an existing key never counts against
+   * the cap. When at capacity for a NEW key, expired entries are swept first to
+   * reclaim slots before deciding to reject.
    */
-  put(key: string, value: T): void {
+  put(key: string, value: T): boolean {
+    if (this._maxEntries !== undefined && !this._entries.has(key) && this._entries.size >= this._maxEntries) {
+      this.sweepExpired();
+      if (this._entries.size >= this._maxEntries) return false;
+    }
     this._entries.set(key, value);
+    return true;
   }
 
   /**
