@@ -18,6 +18,7 @@ import { DiskClientRegistrationStore } from "./client-registration.js";
 import { TokenStore } from "./token-store.js";
 import { AuthRequestStore } from "./auth-request-store.js";
 import { AuthCodeStore } from "./auth-code-store.js";
+import { PendingAuthorizationStore } from "./pending-authorization-store.js";
 import { DiskCacheRoot } from "../cache/disk/index.js";
 import { makeDefaultOidcStub, makeDiscoveryDoc } from "./__fixtures__/oidc-stub.js";
 import { OAuthClientNotFoundError } from "./errors.js";
@@ -38,6 +39,7 @@ type RoutesCtx = {
   tokenStore: TokenStore;
   authRequests: AuthRequestStore;
   authCodes: AuthCodeStore;
+  pendingAuthorizations: PendingAuthorizationStore;
   oidcStubIssuer: string;
 };
 
@@ -45,6 +47,7 @@ type RoutesOverrides = {
   jwks?: JWTVerifyGetKey;
   authRequests?: AuthRequestStore;
   authCodes?: AuthCodeStore;
+  pendingAuthorizations?: PendingAuthorizationStore;
 };
 
 function makeRoutesConfig(ctx: RoutesCtx, overrides: RoutesOverrides = {}): AuthRoutesDeps {
@@ -53,6 +56,7 @@ function makeRoutesConfig(ctx: RoutesCtx, overrides: RoutesOverrides = {}): Auth
     tokenStore: ctx.tokenStore,
     authRequests: overrides.authRequests ?? ctx.authRequests,
     authCodes: overrides.authCodes ?? ctx.authCodes,
+    pendingAuthorizations: overrides.pendingAuthorizations ?? ctx.pendingAuthorizations,
     oidcConfig: {
       clientId: "stub-client-id",
       clientSecret: "stub-client-secret",
@@ -83,6 +87,7 @@ describe("Auth Routes", () => {
   let app: Hono;
   let authRequests: AuthRequestStore;
   let authCodes: AuthCodeStore;
+  let pendingAuthorizations: PendingAuthorizationStore;
   let clientStore: DiskClientRegistrationStore;
   let tokenStore: TokenStore;
 
@@ -99,6 +104,7 @@ describe("Auth Routes", () => {
     tokenStore = new TokenStore(cache);
     authRequests = new AuthRequestStore();
     authCodes = new AuthCodeStore();
+    pendingAuthorizations = new PendingAuthorizationStore();
 
     // Setup Hono app with routes
     app = new Hono();
@@ -106,7 +112,14 @@ describe("Auth Routes", () => {
     app.route(
       "/",
       buildAuthRoutes(
-        makeRoutesConfig({ clientStore, tokenStore, authRequests, authCodes, oidcStubIssuer: oidcStub.issuer }),
+        makeRoutesConfig({
+          clientStore,
+          tokenStore,
+          authRequests,
+          authCodes,
+          pendingAuthorizations,
+          oidcStubIssuer: oidcStub.issuer,
+        }),
       ),
     );
   });
@@ -159,7 +172,14 @@ describe("Auth Routes", () => {
         "/",
         buildAuthRoutes(
           makeRoutesConfig(
-            { clientStore, tokenStore, authRequests, authCodes, oidcStubIssuer: oidcStub.issuer },
+            {
+              clientStore,
+              tokenStore,
+              authRequests,
+              authCodes,
+              pendingAuthorizations,
+              oidcStubIssuer: oidcStub.issuer,
+            },
             { jwks: realJwks, authRequests: localAuthRequests, authCodes: localAuthCodes },
           ),
         ),
@@ -241,7 +261,14 @@ describe("Auth Routes", () => {
         "/",
         buildAuthRoutes({
           ...makeRoutesConfig(
-            { clientStore, tokenStore, authRequests, authCodes, oidcStubIssuer: oidcStub.issuer },
+            {
+              clientStore,
+              tokenStore,
+              authRequests,
+              authCodes,
+              pendingAuthorizations,
+              oidcStubIssuer: oidcStub.issuer,
+            },
             { jwks: realJwks, authRequests: localAuthRequests, authCodes: localAuthCodes },
           ),
           discovery: basicOnlyDiscovery,
@@ -305,7 +332,14 @@ describe("Auth Routes", () => {
         "/",
         buildAuthRoutes({
           ...makeRoutesConfig(
-            { clientStore, tokenStore, authRequests, authCodes, oidcStubIssuer: oidcStub.issuer },
+            {
+              clientStore,
+              tokenStore,
+              authRequests,
+              authCodes,
+              pendingAuthorizations,
+              oidcStubIssuer: oidcStub.issuer,
+            },
             { jwks: realJwks, authRequests: localAuthRequests, authCodes: localAuthCodes },
           ),
           log: { auth: authLog, oidcClient: SILENT_LOG },
@@ -388,7 +422,14 @@ describe("Auth Routes", () => {
         "/",
         buildAuthRoutes({
           ...makeRoutesConfig(
-            { clientStore, tokenStore, authRequests, authCodes, oidcStubIssuer: oidcStub.issuer },
+            {
+              clientStore,
+              tokenStore,
+              authRequests,
+              authCodes,
+              pendingAuthorizations,
+              oidcStubIssuer: oidcStub.issuer,
+            },
             { jwks: realJwks, authRequests: localAuthRequests, authCodes: localAuthCodes },
           ),
           log: { auth: authLog, oidcClient: SILENT_LOG },
@@ -766,6 +807,110 @@ describe("Auth Routes", () => {
       const json = (await res51.json()) as Record<string, unknown>;
       expect(json["error_description"]).toContain("cap");
       await rm(capDir, { recursive: true, force: true });
+    });
+  });
+
+  describe("POST /oauth/consent (#147)", () => {
+    function seedPending(ticket: string, overrides: Record<string, unknown> = {}): void {
+      pendingAuthorizations.put(ticket, {
+        clientId: "123e4567-e89b-12d3-a456-426614174000",
+        codeChallenge: "challenge-123",
+        codeChallengeMethod: "S256",
+        redirectUri: "https://paprika-sync.app/cb",
+        resource: "https://mcp.example.com/",
+        claudeState: "claude-state",
+        scope: "openid email",
+        clientName: "Sneaky",
+        createdAt: nowSeconds(),
+        ...overrides,
+      });
+    }
+
+    async function postConsent(app: Hono, ticket: string, decision: string): Promise<Response> {
+      return app.request("/oauth/consent", {
+        method: "POST",
+        headers: { "content-type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({ ticket, decision }).toString(),
+      });
+    }
+
+    it("allow → 302 to the upstream authorize endpoint and mints AuthRequestState", async () => {
+      seedPending("mcp_consent_allow");
+
+      const res = await postConsent(app, "mcp_consent_allow", "allow");
+
+      expect(res.status).toBe(302);
+      const location = new URL(res.headers.get("location")!);
+      expect(location.origin + location.pathname).toBe("https://idp.stub.example.com/authorize");
+      const ourState = location.searchParams.get("state")!;
+      const stored = authRequests.consume(ourState);
+      expect(stored?.redirectUri).toBe("https://paprika-sync.app/cb");
+      expect(stored?.claudeState).toBe("claude-state");
+      // ticket is single-use
+      expect(pendingAuthorizations.size).toBe(0);
+    });
+
+    it("deny → 200 terminal page, no redirect, no AuthRequestState minted", async () => {
+      seedPending("mcp_consent_deny");
+
+      const res = await postConsent(app, "mcp_consent_deny", "deny");
+
+      expect(res.status).toBe(200);
+      expect(res.headers.get("location")).toBeNull();
+      expect(res.headers.get("X-Frame-Options")).toBe("DENY");
+      expect(res.headers.get("Content-Security-Policy")).toContain("frame-ancestors 'none'");
+      const body = await res.text();
+      expect(body.toLowerCase()).toContain("denied");
+      expect(body).not.toContain("/oauth/callback");
+      expect(pendingAuthorizations.size).toBe(0);
+    });
+
+    it("unknown/expired ticket → 400 expired page", async () => {
+      const res = await postConsent(app, "mcp_consent_nope", "allow");
+
+      expect(res.status).toBe(400);
+      expect(res.headers.get("X-Frame-Options")).toBe("DENY");
+      expect((await res.text()).toLowerCase()).toContain("expired");
+    });
+
+    it("a ticket is single-use — replaying it yields the expired page", async () => {
+      seedPending("mcp_consent_replay");
+
+      const first = await postConsent(app, "mcp_consent_replay", "allow");
+      expect(first.status).toBe(302);
+
+      const second = await postConsent(app, "mcp_consent_replay", "allow");
+      expect(second.status).toBe(400);
+    });
+
+    it("logs consent granted at info and consent denied at warn (audit), with no raw ticket", async () => {
+      const { log: captureLog, records } = makePinoCapture();
+      const deps = {
+        ...makeRoutesConfig({
+          clientStore,
+          tokenStore,
+          authRequests,
+          authCodes,
+          pendingAuthorizations,
+          oidcStubIssuer: oidcStub.issuer,
+        }),
+        log: { auth: captureLog, oidcClient: SILENT_LOG },
+      };
+      const localApp = new Hono();
+      localApp.route("/", buildAuthRoutes(deps));
+
+      seedPending("mcp_consent_log_allow");
+      await postConsent(localApp, "mcp_consent_log_allow", "allow");
+      seedPending("mcp_consent_log_deny");
+      await postConsent(localApp, "mcp_consent_log_deny", "deny");
+
+      const granted = records.find((r) => r["msg"] === "consent granted");
+      const denied = records.find((r) => r["msg"] === "consent denied");
+      expect(granted?.["redirectOrigin"]).toBe("https://paprika-sync.app");
+      expect(denied?.["level"]).toBe(warnLevel);
+      expect(denied?.["redirectOrigin"]).toBe("https://paprika-sync.app");
+      // tickets must never be logged
+      expect(JSON.stringify(records)).not.toContain("mcp_consent_log_");
     });
   });
 

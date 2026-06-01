@@ -214,6 +214,7 @@ export async function startHttp(config: PaprikaConfig, opts: StartHttpOptions = 
         tokenStore: auth.tokenStore,
         authRequests: auth.authRequests,
         authCodes: auth.authCodes,
+        pendingAuthorizations: auth.pendingAuthorizations,
         oidcConfig: auth.config,
         discovery: auth.discovery,
         jwks: auth.jwks,
