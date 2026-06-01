@@ -197,17 +197,23 @@ describe("category-writes", () => {
       expect(indexed.map((r) => r.uid)).toEqual(["r1"]);
     });
 
-    it("does NOT re-index when the name is unchanged (pure metadata/re-parent update)", async () => {
+    it("does not embed when the category has no assigned recipes (create/re-parent no-op)", async () => {
       const indexRecipes = vi.fn().mockResolvedValue(undefined);
       const { server, callTool, ctx } = makeWriteCtx({
-        categories: [makeCategory({ uid: "c" as CategoryUid, name: "Old" })],
-        recipes: [makeRecipe({ uid: "r1" as RecipeUid, categories: ["c" as CategoryUid] })],
+        categories: [
+          makeCategory({ uid: "c" as CategoryUid, name: "Old" }),
+          makeCategory({ uid: "p" as CategoryUid, name: "Parent" }),
+        ],
+        recipes: [makeRecipe({ uid: "r1" as RecipeUid, categories: [] })], // none reference "c"
         vectorStore: { indexRecipes },
       });
       registerUpdateCategoryTool(server, ctx);
 
-      // Same name → the `renamed` guard is false, so no embedding work.
-      await callTool("update_category", { uid: "c", name: "Old" });
+      // Re-parent under "p". No recipe references "c", so the chokepoint
+      // re-index helper early-returns before any embedding work. (A re-parent of
+      // a category WITH recipes would call indexRecipes, but the real store skips
+      // them by content hash since the display name is unchanged.)
+      await callTool("update_category", { uid: "c", parentUid: "p" });
 
       expect(indexRecipes).not.toHaveBeenCalled();
     });
