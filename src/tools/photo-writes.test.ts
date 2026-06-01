@@ -7,7 +7,7 @@ import { makeRecipe } from "../cache/__fixtures__/recipes.js";
 import { makePhoto } from "../cache/__fixtures__/photos.js";
 import { PhotoUidSchema, RecipeUidSchema, type Photo, type Recipe } from "../paprika/types.js";
 import { makeCtx, makeTestServer, getText, seed } from "./tool-test-utils.js";
-import { registerUploadPhotoTool, registerDeletePhotoTool } from "./photo-writes.js";
+import { registerUploadPhotoTool, registerDeletePhotoTool, uploadPhotoInputSchema } from "./photo-writes.js";
 import { fetchImageBytes, isBlockedIp, ssrfLookup } from "./photo-fetch.js";
 
 // The URL download is exercised end-to-end (real undici fetch + dispatcher) in
@@ -61,7 +61,7 @@ describe("upload_photo", () => {
   it("uploads a base64 image: calls client.uploadPhoto with recipe photo fields + a first-photo entity", async () => {
     const { callTool, uploadPhoto } = setup();
 
-    const result = await callTool("upload_photo", { recipe_uid: RECIPE_UID, image_base64: jpegBase64 });
+    const result = await callTool("upload_photo", { recipe_uid: RECIPE_UID, source: { image_base64: jpegBase64 } });
 
     expect(uploadPhoto).toHaveBeenCalledTimes(1);
     const [recipeWithPhoto, photo, thumbnail, full] = uploadPhoto.mock.calls[0] as [Recipe, Photo, Buffer, Buffer];
@@ -88,7 +88,7 @@ describe("upload_photo", () => {
     ];
     const { callTool, uploadPhoto } = setup({ photos: existing });
 
-    await callTool("upload_photo", { recipe_uid: RECIPE_UID, image_base64: jpegBase64 });
+    await callTool("upload_photo", { recipe_uid: RECIPE_UID, source: { image_base64: jpegBase64 } });
 
     const [, photo] = uploadPhoto.mock.calls[0] as [Recipe, Photo, Buffer, Buffer];
     expect(photo.orderFlag).toBe(2);
@@ -102,7 +102,7 @@ describe("upload_photo", () => {
       contentType: "image/jpeg",
     });
 
-    await callTool("upload_photo", { recipe_uid: RECIPE_UID, url: "https://images.example/cake.jpg" });
+    await callTool("upload_photo", { recipe_uid: RECIPE_UID, source: { url: "https://images.example/cake.jpg" } });
 
     expect(fetchImageBytes).toHaveBeenCalledWith("https://images.example/cake.jpg");
     expect(uploadPhoto).toHaveBeenCalledTimes(1);
@@ -112,34 +112,158 @@ describe("upload_photo", () => {
     const { callTool, uploadPhoto } = setup();
     vi.mocked(fetchImageBytes).mockResolvedValue({ error: "Image too large (exceeds 10485760 bytes)." });
 
-    const result = await callTool("upload_photo", { recipe_uid: RECIPE_UID, url: "https://images.example/big.jpg" });
+    const result = await callTool("upload_photo", {
+      recipe_uid: RECIPE_UID,
+      source: { url: "https://images.example/big.jpg" },
+    });
 
     expect(getText(result)).toContain("too large");
     expect(uploadPhoto).not.toHaveBeenCalled();
   });
 
-  it("rejects when both url and image_base64 are provided", async () => {
+  it("schema rejects more than one source (exactly-one enforced by the union)", () => {
+    const both = uploadPhotoInputSchema.safeParse({
+      recipe_uid: RECIPE_UID,
+      source: { url: "https://example.com/a.jpg", image_base64: jpegBase64 },
+    });
+    expect(both.success).toBe(false);
+  });
+
+  it("schema rejects an empty source (no url/token/bytes)", () => {
+    expect(uploadPhotoInputSchema.safeParse({ recipe_uid: RECIPE_UID, source: {} }).success).toBe(false);
+  });
+
+  it("schema accepts each single source shape", () => {
+    expect(
+      uploadPhotoInputSchema.safeParse({ recipe_uid: RECIPE_UID, source: { url: "https://x.test/a.jpg" } }).success,
+    ).toBe(true);
+    expect(
+      uploadPhotoInputSchema.safeParse({ recipe_uid: RECIPE_UID, source: { generation_token: "gen_abc" } }).success,
+    ).toBe(true);
+    expect(uploadPhotoInputSchema.safeParse({ recipe_uid: RECIPE_UID, source: { image_base64: "abc" } }).success).toBe(
+      true,
+    );
+  });
+
+  it("attaches a previewed image by generation_token (no regeneration, no base64)", async () => {
+    const { callTool, uploadPhoto, ctx } = setup();
+    const token = ctx.generatedImageStore.put({
+      bytes: Buffer.from(jpegBase64, "base64"),
+      mimeType: "image/jpeg",
+      recipeUid: RECIPE_UID,
+      model: "seedream",
+    });
+
+    const result = await callTool("upload_photo", { recipe_uid: RECIPE_UID, source: { generation_token: token } });
+
+    expect(uploadPhoto).toHaveBeenCalledTimes(1);
+    expect(getText(result)).toContain('Attached photo 1 to "Test Recipe"');
+    // single-use: the token is spent
+    expect(ctx.generatedImageStore.consume(token)).toBeNull();
+  });
+
+  it("rejects an expired/unknown generation_token without uploading", async () => {
     const { callTool, uploadPhoto } = setup();
     const result = await callTool("upload_photo", {
       recipe_uid: RECIPE_UID,
-      url: "https://example.com/a.jpg",
-      image_base64: jpegBase64,
+      source: { generation_token: "gen_does_not_exist" },
     });
-    expect(getText(result)).toContain("exactly one");
+    expect(getText(result).toLowerCase()).toContain("expired");
     expect(uploadPhoto).not.toHaveBeenCalled();
   });
 
-  it("rejects when neither url nor image_base64 is provided", async () => {
-    const { callTool, uploadPhoto } = setup();
-    const result = await callTool("upload_photo", { recipe_uid: RECIPE_UID });
-    expect(getText(result)).toContain("exactly one");
+  it("rejects a generation_token minted for a different recipe and preserves it", async () => {
+    const { callTool, uploadPhoto, ctx } = setup();
+    const token = ctx.generatedImageStore.put({
+      bytes: Buffer.from(jpegBase64, "base64"),
+      mimeType: "image/jpeg",
+      recipeUid: "SOME-OTHER-RECIPE",
+      model: "seedream",
+    });
+    const result = await callTool("upload_photo", { recipe_uid: RECIPE_UID, source: { generation_token: token } });
+    expect(getText(result).toLowerCase()).toContain("different recipe");
     expect(uploadPhoto).not.toHaveBeenCalled();
+    // Validation failure restores the token — it is still attachable (here we
+    // confirm by consuming it back; in practice the caller would retry).
+    expect(ctx.generatedImageStore.consume(token)).not.toBeNull();
+  });
+
+  it("does NOT restore the token after an attach failure (avoids a duplicate photo on retry)", async () => {
+    const { callTool, uploadPhoto, ctx } = setup();
+    const token = ctx.generatedImageStore.put({
+      bytes: Buffer.from(jpegBase64, "base64"),
+      mimeType: "image/jpeg",
+      recipeUid: RECIPE_UID,
+      model: "seedream",
+    });
+    uploadPhoto.mockRejectedValueOnce(new Error("commit failure after the remote upload"));
+
+    const failed = await callTool("upload_photo", { recipe_uid: RECIPE_UID, source: { generation_token: token } });
+    expect(getText(failed)).toContain("Failed to upload");
+
+    // attachPhotoToRecipe uploads to Paprika before the local commit, so the
+    // photo may already exist remotely. The token is consumed and NOT restored,
+    // so a retry can't re-attach (which would duplicate the photo).
+    const retry = await callTool("upload_photo", { recipe_uid: RECIPE_UID, source: { generation_token: token } });
+    expect(getText(retry).toLowerCase()).toContain("expired");
+  });
+
+  it("a token attaches at most once — a duplicate call gets the already-used error", async () => {
+    const { callTool, uploadPhoto, ctx } = setup();
+    const token = ctx.generatedImageStore.put({
+      bytes: Buffer.from(jpegBase64, "base64"),
+      mimeType: "image/jpeg",
+      recipeUid: RECIPE_UID,
+      model: "seedream",
+    });
+
+    const first = await callTool("upload_photo", { recipe_uid: RECIPE_UID, source: { generation_token: token } });
+    expect(getText(first)).toContain("Attached photo");
+
+    // Consumed atomically on the first attach — a second (duplicate/retry) call
+    // cannot re-attach the same preview.
+    const second = await callTool("upload_photo", { recipe_uid: RECIPE_UID, source: { generation_token: token } });
+    expect(getText(second).toLowerCase()).toContain("expired");
+    expect(uploadPhoto).toHaveBeenCalledTimes(1);
+  });
+
+  it("caps a generated-token upload's full image at 2048px, but not a user-supplied one", async () => {
+    const { callTool, uploadPhoto, ctx } = setup();
+    const big3000 = await sharp({
+      create: { width: 3000, height: 2000, channels: 3, background: { r: 1, g: 2, b: 3 } },
+    })
+      .png()
+      .toBuffer();
+
+    // generated source → capped at 2048
+    const token = ctx.generatedImageStore.put({
+      bytes: big3000,
+      mimeType: "image/png",
+      recipeUid: RECIPE_UID,
+      model: "seedream",
+    });
+    await callTool("upload_photo", { recipe_uid: RECIPE_UID, source: { generation_token: token } });
+    const [, , , genFull] = uploadPhoto.mock.calls[0] as [Recipe, Photo, Buffer, Buffer];
+    const genMeta = await sharp(genFull).metadata();
+    expect(Math.max(genMeta.width ?? 0, genMeta.height ?? 0)).toBeLessThanOrEqual(2048);
+
+    // user-supplied base64 of the same size → NOT capped (native resolution kept)
+    uploadPhoto.mockClear();
+    const big3000Jpeg = (
+      await sharp({ create: { width: 3000, height: 2000, channels: 3, background: { r: 4, g: 5, b: 6 } } })
+        .jpeg()
+        .toBuffer()
+    ).toString("base64");
+    await callTool("upload_photo", { recipe_uid: RECIPE_UID, source: { image_base64: big3000Jpeg } });
+    const [, , , userFull] = uploadPhoto.mock.calls[0] as [Recipe, Photo, Buffer, Buffer];
+    const userMeta = await sharp(userFull).metadata();
+    expect(Math.max(userMeta.width ?? 0, userMeta.height ?? 0)).toBeGreaterThan(2048);
   });
 
   it("rejects non-image bytes via the magic-byte sniff", async () => {
     const { callTool, uploadPhoto } = setup();
     const notAnImage = Buffer.from("this is plainly not an image at all").toString("base64");
-    const result = await callTool("upload_photo", { recipe_uid: RECIPE_UID, image_base64: notAnImage });
+    const result = await callTool("upload_photo", { recipe_uid: RECIPE_UID, source: { image_base64: notAnImage } });
     expect(getText(result)).toContain("Unsupported image format");
     expect(uploadPhoto).not.toHaveBeenCalled();
   });
@@ -148,7 +272,7 @@ describe("upload_photo", () => {
     const { callTool, uploadPhoto } = setup();
     const result = await callTool("upload_photo", {
       recipe_uid: RecipeUidSchema.parse("nope"),
-      image_base64: jpegBase64,
+      source: { image_base64: jpegBase64 },
     });
     expect(getText(result)).toContain("No recipe found");
     expect(uploadPhoto).not.toHaveBeenCalled();
@@ -198,7 +322,7 @@ describe("delete_photo", () => {
 describe("upload_photo / photo-sync gate", () => {
   it("refuses to upload until the photo catalog has synced (order_flag would be stale)", async () => {
     const { callTool, uploadPhoto } = setup({ synced: false });
-    const result = await callTool("upload_photo", { recipe_uid: RECIPE_UID, image_base64: jpegBase64 });
+    const result = await callTool("upload_photo", { recipe_uid: RECIPE_UID, source: { image_base64: jpegBase64 } });
     expect(getText(result)).toContain("still syncing");
     expect(uploadPhoto).not.toHaveBeenCalled();
   });

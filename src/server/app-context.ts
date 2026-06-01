@@ -16,6 +16,7 @@ import type { PhotoStore } from "../cache/photo-store.js";
 import type { RecipeStore } from "../cache/recipe-store.js";
 import type { VectorStore } from "../features/vector-store.js";
 import type { PhotographyClient } from "../features/photography.js";
+import type { GeneratedImageStore } from "../features/generated-image-store.js";
 import type { PaprikaClient } from "../paprika/client.js";
 import type { AuthContext } from "../auth/types.js";
 import type { Notifier } from "./notifier.js";
@@ -46,6 +47,8 @@ export interface AppContext {
   readonly vectorStore: VectorStore | null;
   /** OpenRouter image-generation client; `null` when image generation is not configured. */
   readonly photographyClient: PhotographyClient | null;
+  /** Ephemeral cache of generated-photo previews, keyed by `gen_` token (#photo-preview-attach). */
+  readonly generatedImageStore: GeneratedImageStore;
   readonly notifier: Notifier;
   /** OAuth runtime state. null in stdio mode (auth not required). */
   readonly auth: AuthContext | null;

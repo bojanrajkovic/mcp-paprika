@@ -6,6 +6,14 @@ import type { ServerContext } from "../types/server-context.js";
 /** Longest edge (px) of the recipe thumbnail Paprika stores in `recipe.photo`. */
 const THUMBNAIL_PX = 280;
 
+/**
+ * Longest edge (px) AI-generated `full` images are capped to before upload.
+ * Shared by `generate_photo` (attach path) and `upload_photo` (generation_token
+ * source) so a previewed-then-saved image gets the same cap as a directly
+ * generated-and-attached one — see `NormalizePhotoOptions.maxFullEdge`.
+ */
+export const GENERATED_MAX_FULL_EDGE = 2048;
+
 /** Options for {@link normalizePhoto}. */
 export interface NormalizePhotoOptions {
   /**
