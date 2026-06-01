@@ -172,7 +172,7 @@ describe("upload_photo", () => {
     expect(uploadPhoto).not.toHaveBeenCalled();
   });
 
-  it("rejects a generation_token minted for a different recipe", async () => {
+  it("rejects a generation_token minted for a different recipe and preserves it", async () => {
     const { callTool, uploadPhoto, ctx } = setup();
     const token = ctx.generatedImageStore.put({
       bytes: Buffer.from(jpegBase64, "base64"),
@@ -183,6 +183,58 @@ describe("upload_photo", () => {
     const result = await callTool("upload_photo", { recipe_uid: RECIPE_UID, source: { generation_token: token } });
     expect(getText(result).toLowerCase()).toContain("different recipe");
     expect(uploadPhoto).not.toHaveBeenCalled();
+    // The token is NOT spent on a validation failure — still attachable.
+    expect(ctx.generatedImageStore.peek(token)).not.toBeNull();
+  });
+
+  it("preserves the token when the attach fails, so it can be retried", async () => {
+    const { callTool, uploadPhoto, ctx } = setup();
+    const token = ctx.generatedImageStore.put({
+      bytes: Buffer.from(jpegBase64, "base64"),
+      mimeType: "image/jpeg",
+      recipeUid: RECIPE_UID,
+      model: "seedream",
+    });
+    uploadPhoto.mockRejectedValueOnce(new Error("transient Paprika error"));
+
+    const result = await callTool("upload_photo", { recipe_uid: RECIPE_UID, source: { generation_token: token } });
+
+    expect(getText(result)).toContain("Failed to upload");
+    // Attach failed → the preview survives for a retry (not burned).
+    expect(ctx.generatedImageStore.peek(token)).not.toBeNull();
+  });
+
+  it("caps a generated-token upload's full image at 2048px, but not a user-supplied one", async () => {
+    const { callTool, uploadPhoto, ctx } = setup();
+    const big3000 = await sharp({
+      create: { width: 3000, height: 2000, channels: 3, background: { r: 1, g: 2, b: 3 } },
+    })
+      .png()
+      .toBuffer();
+
+    // generated source → capped at 2048
+    const token = ctx.generatedImageStore.put({
+      bytes: big3000,
+      mimeType: "image/png",
+      recipeUid: RECIPE_UID,
+      model: "seedream",
+    });
+    await callTool("upload_photo", { recipe_uid: RECIPE_UID, source: { generation_token: token } });
+    const [, , , genFull] = uploadPhoto.mock.calls[0] as [Recipe, Photo, Buffer, Buffer];
+    const genMeta = await sharp(genFull).metadata();
+    expect(Math.max(genMeta.width ?? 0, genMeta.height ?? 0)).toBeLessThanOrEqual(2048);
+
+    // user-supplied base64 of the same size → NOT capped (native resolution kept)
+    uploadPhoto.mockClear();
+    const big3000Jpeg = (
+      await sharp({ create: { width: 3000, height: 2000, channels: 3, background: { r: 4, g: 5, b: 6 } } })
+        .jpeg()
+        .toBuffer()
+    ).toString("base64");
+    await callTool("upload_photo", { recipe_uid: RECIPE_UID, source: { image_base64: big3000Jpeg } });
+    const [, , , userFull] = uploadPhoto.mock.calls[0] as [Recipe, Photo, Buffer, Buffer];
+    const userMeta = await sharp(userFull).metadata();
+    expect(Math.max(userMeta.width ?? 0, userMeta.height ?? 0)).toBeGreaterThan(2048);
   });
 
   it("rejects non-image bytes via the magic-byte sniff", async () => {

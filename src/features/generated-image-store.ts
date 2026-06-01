@@ -62,6 +62,22 @@ export class GeneratedImageStore {
     return token;
   }
 
+  /**
+   * Read an entry WITHOUT removing it; null if unknown or expired (an expired
+   * entry is lazily evicted). Use this to validate/use a token while leaving it
+   * spendable, then `consume` it only once the work that needed it has
+   * succeeded — so a failed or mistargeted attach doesn't burn the preview.
+   */
+  peek(token: string): GeneratedImageEntry | null {
+    const entry = this._entries.get(token);
+    if (entry === undefined) return null;
+    if (entry.createdAt + this._ttlMs / 1000 < Math.floor(this._now() / 1000)) {
+      this._entries.delete(token);
+      return null;
+    }
+    return entry;
+  }
+
   /** Retrieve and remove an entry; null if the token is unknown or expired. */
   consume(token: string): GeneratedImageEntry | null {
     const entry = this._entries.get(token);

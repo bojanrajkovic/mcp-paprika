@@ -6,7 +6,7 @@ import { PhotoUidSchema, RecipeUidSchema, type Photo } from "../paprika/types.js
 import type { ServerContext } from "../types/server-context.js";
 import { toMessage } from "../utils/log.js";
 import { coldStartGuard, textResult } from "./helpers.js";
-import { attachPhotoToRecipe, commitPhotoDelete, normalizePhoto } from "./photo-helpers.js";
+import { attachPhotoToRecipe, commitPhotoDelete, normalizePhoto, GENERATED_MAX_FULL_EDGE } from "./photo-helpers.js";
 import { fetchImageBytes, MAX_IMAGE_BYTES } from "./photo-fetch.js";
 
 /**
@@ -71,23 +71,32 @@ function sniffImage(bytes: Buffer): boolean {
   return false;
 }
 
+/**
+ * Resolved image bytes plus provenance. `consumeToken` is set for a
+ * generation_token source — the caller spends it (via `consume`) ONLY after a
+ * successful attach, so a wrong-recipe or transient-upload failure leaves the
+ * preview spendable for a retry. `generated` marks AI-model output so the caller
+ * applies the same size cap a direct generate-and-attach would.
+ */
+type ResolvedSource = { bytes: Buffer; generated: boolean; consumeToken?: string } | { error: string };
+
 /** Resolves the image bytes from the chosen source, or returns an error message. */
 async function resolveSourceBytes(
   source: UploadPhotoSource,
   ctx: ServerContext,
   recipeUid: string,
-): Promise<{ bytes: Buffer } | { error: string }> {
+): Promise<ResolvedSource> {
   if ("url" in source) {
     // SSRF-safe fetch (scheme + IP-literal guard, rebinding-safe dispatcher,
     // redirect block, streaming size cap) — shared with generate_photo's restyle.
     const fetched = await fetchImageBytes(source.url);
-    return "error" in fetched ? fetched : { bytes: fetched.bytes };
+    return "error" in fetched ? fetched : { bytes: fetched.bytes, generated: false };
   }
 
   if ("generation_token" in source) {
-    // Resolve a prior generate_photo preview to the exact bytes that were shown,
-    // without a base64 round-trip. Single-use: consuming spends the token.
-    const entry = ctx.generatedImageStore.consume(source.generation_token);
+    // PEEK (don't consume) so a validation failure or a failed attach below
+    // leaves the preview intact for a retry — the caller consumes on success.
+    const entry = ctx.generatedImageStore.peek(source.generation_token);
     if (entry === null) {
       return {
         error: "That generated preview has expired or was already attached. Generate a fresh one with generate_photo.",
@@ -96,7 +105,7 @@ async function resolveSourceBytes(
     if (entry.recipeUid !== recipeUid) {
       return { error: "That preview was generated for a different recipe; generate a new one for this recipe." };
     }
-    return { bytes: entry.bytes };
+    return { bytes: entry.bytes, generated: true, consumeToken: source.generation_token };
   }
 
   const buf = Buffer.from(source.image_base64, "base64");
@@ -104,7 +113,7 @@ async function resolveSourceBytes(
   if (buf.length > MAX_IMAGE_BYTES) {
     return { error: `Image too large (${buf.length.toString()} bytes; max ${MAX_IMAGE_BYTES.toString()}).` };
   }
-  return { bytes: buf };
+  return { bytes: buf, generated: false };
 }
 
 export function registerUploadPhotoTool(server: McpServer, ctx: ServerContext): void {
@@ -144,7 +153,13 @@ export function registerUploadPhotoTool(server: McpServer, ctx: ServerContext): 
           let thumbnail: Buffer;
           let full: Buffer;
           try {
-            ({ thumbnail, full } = await normalizePhoto(resolved.bytes));
+            // Cap generated-image output the same way generate_photo's attach
+            // path does, so preview-then-save and generate-and-attach store the
+            // same size. User-supplied url/base64 keep their native resolution.
+            ({ thumbnail, full } = await normalizePhoto(
+              resolved.bytes,
+              resolved.generated ? { maxFullEdge: GENERATED_MAX_FULL_EDGE } : undefined,
+            ));
           } catch (error) {
             log.error({ err: error, recipe_uid: args.recipe_uid }, "normalizePhoto failed");
             return textResult(`Failed to process image: ${toMessage(error)}`);
@@ -157,6 +172,10 @@ export function registerUploadPhotoTool(server: McpServer, ctx: ServerContext): 
             log.error({ err: error, recipe_uid: args.recipe_uid }, "uploadPhoto failed");
             return textResult(`Failed to upload photo: ${toMessage(error)}`);
           }
+
+          // Attach succeeded — NOW spend the preview token (no-op for url/base64),
+          // so it can't be reused but a failure above left it intact for a retry.
+          if (resolved.consumeToken !== undefined) ctx.generatedImageStore.consume(resolved.consumeToken);
 
           return textResult(`Attached photo ${photo.name} to "${recipe.name}" (photo UID: ${photo.uid}).`);
         },

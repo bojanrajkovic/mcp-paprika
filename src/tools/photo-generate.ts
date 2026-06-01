@@ -16,11 +16,8 @@ import {
 } from "../features/photography.js";
 import { PhotographyError, PhotographyAPIError } from "../features/photography-errors.js";
 import { coldStartGuard, textResult } from "./helpers.js";
-import { attachPhotoToRecipe, normalizePhoto, makeThumbnail } from "./photo-helpers.js";
+import { attachPhotoToRecipe, normalizePhoto, makeThumbnail, GENERATED_MAX_FULL_EDGE } from "./photo-helpers.js";
 import { fetchImageBytes } from "./photo-fetch.js";
-
-/** Longest edge (px) we cap generated `full` images to before upload (see normalizePhoto). */
-const GENERATED_MAX_FULL_EDGE = 2048;
 
 export const generatePhotoInputSchema = z.object({
   recipe_uid: RecipeUidSchema.describe("UID of the recipe to generate a photo for."),

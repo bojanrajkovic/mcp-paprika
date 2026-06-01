@@ -34,6 +34,25 @@ describe("GeneratedImageStore", () => {
     expect(new GeneratedImageStore().consume("gen_nope")).toBeNull();
   });
 
+  it("peek returns the entry without removing it; consume still works after", () => {
+    const store = new GeneratedImageStore();
+    const token = store.put(entry({ recipeUid: "R9" }));
+    expect(store.peek(token)?.recipeUid).toBe("R9");
+    expect(store.peek(token)?.recipeUid).toBe("R9"); // still there
+    expect(store.size).toBe(1);
+    expect(store.consume(token)).not.toBeNull(); // now spent
+    expect(store.peek(token)).toBeNull();
+  });
+
+  it("peek of an expired token returns null and evicts it", () => {
+    const clock = { value: 1_000_000_000 };
+    const store = new GeneratedImageStore({ ttlMs: 3_600_000, now: () => clock.value });
+    const token = store.put(entry());
+    clock.value += 3_600_000 + 1_000;
+    expect(store.peek(token)).toBeNull();
+    expect(store.size).toBe(0);
+  });
+
   it("mints distinct tokens for distinct puts", () => {
     const store = new GeneratedImageStore();
     const a = store.put(entry());
