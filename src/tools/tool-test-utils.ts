@@ -11,6 +11,11 @@ import type { RecipeStore } from "../cache/recipe-store.js";
 import type { Notifier } from "../server/notifier.js";
 import type { ServerContext } from "../types/server-context.js";
 
+// Re-export the store-hydration helper so call sites pull `seed` from the same
+// module as `makeCtx`/`makeTestServer` (one import line in tool/resource tests).
+export { seed } from "../__fixtures__/seed.js";
+export type { SeedData } from "../__fixtures__/seed.js";
+
 /**
  * Shape returned by `makePinoCapture()`. `log` is the capture logger;
  * `records` is the live array of parsed JSON records; `clear()` empties it
