@@ -1,11 +1,11 @@
 /**
- * Vector store implementation using Vectra for semantic search.
+ * Vector store implementation for semantic search.
  *
  * Provides recipe-aware vector operations with:
  * - Embedding lifecycle management (when/what to embed)
- * - Vector storage via Vectra LocalIndex
+ * - Vector storage via the vendored `JsonVectorIndex`
  * - Change detection via persisted content hash map
- * - Corruption recovery for both Vectra index and hash map
+ * - Corruption recovery for both the vector index and hash map
  */
 
 import { createHash } from "node:crypto";
@@ -54,7 +54,7 @@ import { mkdir, readFile, rename, cp, open } from "node:fs/promises";
 import { join } from "node:path";
 import { Mutex } from "async-mutex";
 import { z } from "zod";
-import { LocalIndex } from "vectra";
+import { JsonVectorIndex } from "./json-vector-index.js";
 import type { EmbeddingClient } from "./embeddings.js";
 import { recipeToEmbeddingText } from "./embeddings.js";
 import { VectorStoreError } from "./vector-store-errors.js";
@@ -78,7 +78,7 @@ export class VectorStore {
   private readonly _vectorsDir: string;
   private readonly _hashIndexPath: string;
   private readonly _metaPath: string;
-  private readonly _index: LocalIndex;
+  private readonly _index: JsonVectorIndex;
   private readonly _embedder: EmbeddingClient;
   private readonly _modelId: string;
   private readonly _schemaVersion: number;
@@ -87,7 +87,7 @@ export class VectorStore {
   // Serializes index mutations. The vector store is a process-wide singleton with
   // multiple concurrent writers — the sync engine fires sync:complete (recipe)
   // and sync:category-change handlers from one syncOnce() without awaiting them,
-  // and they both write here. Vectra's beginUpdate()/endUpdate() is a single
+  // and they both write here. The index's beginUpdate()/endUpdate() is a single
   // transaction (a second beginUpdate while one is open throws), and `_hashes` +
   // its persisted file are shared state, so every write runs exclusively (#177).
   private readonly _writeMutex = new Mutex();
@@ -96,7 +96,7 @@ export class VectorStore {
     this._vectorsDir = join(cacheDir, "vectors");
     this._hashIndexPath = join(this._vectorsDir, "hash-index.json");
     this._metaPath = join(this._vectorsDir, "vector-meta.json");
-    this._index = new LocalIndex(this._vectorsDir);
+    this._index = new JsonVectorIndex(this._vectorsDir);
     this._embedder = embedder;
     this._modelId = modelId;
     this._schemaVersion = schemaVersion;
@@ -106,14 +106,19 @@ export class VectorStore {
   async init(): Promise<void> {
     await mkdir(this._vectorsDir, { recursive: true });
 
-    // Create or open Vectra index, with corruption recovery (AC1.4)
+    // Create or open the vector index, with corruption recovery (AC1.4). An
+    // existing index is eagerly loaded+validated here (non-finite vectors,
+    // ragged dimensions, unparseable JSON all throw) so corruption is repaired
+    // at startup rather than surfacing later during a reconcile.
     try {
       const created = await this._index.isIndexCreated();
-      if (!created) {
+      if (created) {
+        await this._index.loadIndexData();
+      } else {
         await this._index.createIndex();
       }
     } catch {
-      this.log.warn({ vectorsDir: this._vectorsDir }, "corrupt Vectra index, backing up and recreating");
+      this.log.warn({ vectorsDir: this._vectorsDir }, "corrupt vector index, backing up and recreating");
       const backupDir = `${this._vectorsDir}.bak`;
       await cp(this._vectorsDir, backupDir, { recursive: true, force: true });
       await this._index.createIndex({ version: 1, deleteIfExists: true });
@@ -228,7 +233,7 @@ export class VectorStore {
     resolveCats: (uids: ReadonlyArray<CategoryUid>) => ReadonlyArray<string>,
   ): Promise<IndexingResult> {
     // Run exclusively so a concurrent indexRecipes/removeRecipe can't open an
-    // overlapping Vectra transaction or race the hash map (see `_writeMutex`).
+    // overlapping vector-index transaction or race the hash map (see `_writeMutex`).
     return this._writeMutex.runExclusive(() => this._indexRecipesLocked(recipes, resolveCats));
   }
 
@@ -269,7 +274,8 @@ export class VectorStore {
       allVectors.push(...vectors);
     }
 
-    // Upsert into Vectra
+    // Upsert into the vector index. The embedding text is stored alongside each
+    // vector so a future lexical/BM25 layer can rank over it without re-embedding.
     await this._index.beginUpdate();
     try {
       for (let i = 0; i < toEmbed.length; i++) {
@@ -277,7 +283,7 @@ export class VectorStore {
         await this._index.upsertItem({
           id: entry.recipe.uid,
           vector: allVectors[i]!,
-          metadata: { recipeName: entry.recipe.name },
+          metadata: { recipeName: entry.recipe.name, text: entry.text },
         });
       }
       await this._index.endUpdate();
@@ -329,7 +335,7 @@ export class VectorStore {
 
   async search(query: string, topK: number = 10): Promise<ReadonlyArray<SemanticResult>> {
     const vector = await this._embedder.embed(query);
-    const results = await this._index.queryItems(vector, query, topK);
+    const results = await this._index.queryItems(vector, topK);
     return results.map((r) => ({
       uid: r.item.id,
       score: r.score,
@@ -338,7 +344,7 @@ export class VectorStore {
   }
 
   async removeRecipe(uid: string): Promise<void> {
-    // Exclusive: shares the Vectra index + hash map with indexRecipes.
+    // Exclusive: shares the vector index + hash map with indexRecipes.
     await this._writeMutex.runExclusive(async () => {
       await this._index.deleteItem(uid);
       if (uid in this._hashes) {

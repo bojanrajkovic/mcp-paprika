@@ -272,7 +272,7 @@ describe.skipIf(!ollamaAvailable)("EmbeddingClient + VectorStore (Ollama)", () =
     expect(result).toEqual({ indexed: 0, skipped: 1, total: 1 });
     expect(embedBatchSpy).not.toHaveBeenCalled();
 
-    // Search should still work with the persisted Vectra index
+    // Search should still work with the persisted vector index
     const results = await store2.search("apple dessert baking");
     expect(results.length).toBeGreaterThan(0);
     expect(results[0]!.uid).toBe("pie-1");

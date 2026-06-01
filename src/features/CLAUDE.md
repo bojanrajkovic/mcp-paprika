@@ -1,6 +1,6 @@
 # Feature Implementations
 
-Last verified: 2026-05-31
+Last verified: 2026-06-01
 
 ## Purpose
 
@@ -85,12 +85,48 @@ Single error class with ES2024 `ErrorOptions` cause chaining support.
 | ------------------ | ------- | ------------------------------ |
 | `VectorStoreError` | `Error` | (base class for vector errors) |
 
+### json-vector-index.ts — Vendored local vector index
+
+`JsonVectorIndex` is the file-backed vector store behind `VectorStore`, replacing the
+`vectra` package (whose barrel eagerly loaded ~70 MB of unused embedding/tokenizer/NLP
+deps — gpt-tokenizer, openai, grpc, wink, cheerio, turndown). On-disk format is a subset
+of vectra's `index.json` (`{ version, items: [{ id, vector, norm, metadata }] }`), so an
+existing vectra index loads without a re-embed migration.
+
+| Export                                            | Signature / Description                                                                   |
+| ------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| `JsonVectorIndex`                                 | `constructor(folderPath)` — index over `<folderPath>/index.json`                          |
+| `.isIndexCreated()`                               | `Promise<boolean>` — whether the index file exists (no content validation)                |
+| `.createIndex(config?)`                           | `Promise<void>` — create empty index; throws if exists unless `{ deleteIfExists: true }`  |
+| `.loadIndexData()`                                | `Promise<void>` — load+validate; recomputes norms; throws on corruption (drives recovery) |
+| `.beginUpdate()`/`.endUpdate()`/`.cancelUpdate()` | transaction: snapshot / persist-then-swap / discard                                       |
+| `.upsertItem({id,vector,metadata?})`              | `Promise<void>` — insert/replace by id; recomputes norm                                   |
+| `.deleteItem(id)`                                 | `Promise<void>` — remove by id (no-op if absent)                                          |
+| `.queryItems(vector, topK)`                       | `Promise<Array<QueryResult>>` — cosine top-K, highest first                               |
+| `vectorNorm` / `dotProduct` / `cosineScore`       | pure cosine primitives (exported for tests)                                               |
+
+**Invariants:**
+
+- **Norm is a cache, never trusted.** Recomputed on every upsert and on load — a changed
+  vector can never leave a stale norm (a real bug in vectra's upsert that corrupts ranking).
+- **Boundary validation.** Vectors must be non-empty, all-finite, and share one dimension;
+  violations throw (treated as corruption / programmer error) rather than yield `NaN` scores.
+- **Total comparator.** Non-finite scores (zero-norm item, zero-norm query) are filtered
+  before ranking; ties break deterministically by id ascending. A zero-norm query yields `[]`.
+- **Crash-safe persistence.** Write-temp + `fsync(file)` + rename + `fsync(dir)`, versus
+  vectra's plain truncating `writeFile`. `endUpdate` persists before swapping live state.
+- **Zero-norm vectors are rejected on insert** (an all-zero embedding is pathological).
+- On-disk `index.json` is vectra-format-compatible; extra top-level keys (`metadata_config`)
+  are ignored on load.
+
 ### vector-store.ts — Vector store with semantic search and change detection
 
-`VectorStore` wraps Vectra `LocalIndex` for local vector storage. Provides recipe indexing
-with SHA-256 content-hash change detection (persisted to `hash-index.json`), batch embedding
-via `EmbeddingClient`, semantic search, and corruption recovery (backs up and recreates on
-corrupt Vectra index or hash-index.json).
+`VectorStore` wraps the vendored `JsonVectorIndex` for local vector storage. Provides recipe
+indexing with SHA-256 content-hash change detection (persisted to `hash-index.json`), batch
+embedding via `EmbeddingClient`, semantic search, and corruption recovery (backs up and
+recreates on a corrupt vector index or hash-index.json). The embedding text is stored in each
+item's metadata alongside `recipeName`, reserving a path for a future lexical/BM25 layer
+without re-embedding.
 
 | Export            | Signature / Description                                                                                                                                                                                                             |
 | ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -98,7 +134,7 @@ corrupt Vectra index or hash-index.json).
 | `SemanticResult`  | `type { uid, score, recipeName }` — single search result                                                                                                                                                                            |
 | `IndexingResult`  | `type { indexed, skipped, total }` — batch indexing summary                                                                                                                                                                         |
 | `VectorStore`     | `constructor(cacheDir, embedder, modelId, schemaVersion, log?)` — vector store instance; `log` is an optional pino `Logger`, defaults to silent. Pass `appLog.child({ component: "vector-store" })` from `buildDiscoverComponents`. |
-| `.init()`         | `Promise<void>` — creates directory, Vectra index, loads hash map; recovers from corruption                                                                                                                                         |
+| `.init()`         | `Promise<void>` — creates directory, vector index, loads hash map; recovers from corruption                                                                                                                                         |
 | `.indexRecipes()` | `Promise<IndexingResult>` — batch index with change detection, batches of 500                                                                                                                                                       |
 | `.indexRecipe()`  | `Promise<IndexingResult>` — convenience single-recipe wrapper                                                                                                                                                                       |
 | `.search()`       | `Promise<ReadonlyArray<SemanticResult>>` — semantic search, default topK=10                                                                                                                                                         |
@@ -108,11 +144,11 @@ corrupt Vectra index or hash-index.json).
 
 **Invariants:**
 
-- `VectorStore` throws (does not return `Result`) because it wraps Vectra and `EmbeddingClient` which use exceptions
-- **Writes are serialized via a per-instance `async-mutex`** (`indexRecipes` and `removeRecipe` run exclusively). The store is a process-wide singleton with concurrent writers — the sync engine fires the `sync:complete` recipe handler and the `sync:category-change` handler from one `syncOnce()` without awaiting them. Vectra's `beginUpdate()`/`endUpdate()` is a single transaction (a second `beginUpdate` while one is open throws), and the hash map + its persisted file are shared mutable state, so overlapping writes would corrupt or drop updates (#177)
+- `VectorStore` throws (does not return `Result`) because it wraps the vector index and `EmbeddingClient` which use exceptions
+- **Writes are serialized via a per-instance `async-mutex`** (`indexRecipes` and `removeRecipe` run exclusively). The store is a process-wide singleton with concurrent writers — the sync engine fires the `sync:complete` recipe handler and the `sync:category-change` handler from one `syncOnce()` without awaiting them. The index's `beginUpdate()`/`endUpdate()` is a single transaction (a second `beginUpdate` while one is open throws), and the hash map + its persisted file are shared mutable state, so overlapping writes would corrupt or drop updates (#177)
 - Content hash uses SHA-256 of `recipeToEmbeddingText()` output; unchanged recipes are skipped during indexing
 - Hash map persisted via atomic write (write-to-tmp + rename) — same pattern `RecipeDiskCache` uses for `recipes/index.json` (see `../cache/disk/CLAUDE.md`)
-- Corruption recovery: corrupt Vectra index is backed up to `.bak` dir and recreated; corrupt `hash-index.json` is renamed to `.bak` and reset
+- Corruption recovery: a corrupt vector index is backed up to `.bak` dir and recreated; corrupt `hash-index.json` is renamed to `.bak` and reset
 - Model ID and schema version are tracked in `vector-meta.json`; a mismatch on startup clears the hash index to force re-embedding
 - Batch size is 500 texts per embedding API call
 
@@ -151,7 +187,7 @@ anything that exposes a typed `on`/`off` for `sync:complete`, `sync:error`, and
 
 ### VectorStore
 
-Per-instance `log` child logger. Constructor takes optional `log?: Logger` (default: silent). Corruption recovery emits `warn` for corrupt Vectra index and corrupt `hash-index.json`. ENOENT and parse-failure paths in read operations emit `debug` or stay silent per the per-site classification in source comments.
+Per-instance `log` child logger. Constructor takes optional `log?: Logger` (default: silent). Corruption recovery emits `warn` for a corrupt vector index and corrupt `hash-index.json`. ENOENT and parse-failure paths in read operations emit `debug` or stay silent per the per-site classification in source comments.
 
 ### EmbeddingClient
 
@@ -167,6 +203,6 @@ Takes optional `log?: Logger` from `buildAppContext`. Derives child loggers for 
 
 ## Dependencies
 
-- **Uses:** `paprika/` (types — `SyncResult`, `Recipe`), `cache/recipe-store.ts` (type-only), `cache/category-store.ts` (type-only), `utils/` (config types, `resolveImageGenConfig`, `createResilientExecutor`, xdg), `cockatiel`, `vectra`, `zod`
+- **Uses:** `paprika/` (types — `SyncResult`, `Recipe`), `cache/recipe-store.ts` (type-only), `cache/category-store.ts` (type-only), `utils/` (config types, `resolveImageGenConfig`, `createResilientExecutor`, xdg), `cockatiel`, `zod`
 - **Used by:** `src/server/build.ts` (`buildAppContext` calls `buildDiscoverComponents` and constructs `PhotographyClient`; `buildMcpServer` imports `VectorStore`/`PhotographyClient` types and `registerDiscoverTool`/`registerGeneratePhotoTool` separately), `tools/discover.ts` (consumes `VectorStore`, `SemanticResult` types), `tools/photo-generate.ts` (consumes `PhotographyClient`, `recipeToPhotoPrompt`, `PHOTO_MODELS`, etc.)
 - **Boundary:** Must not import from `tools/` or `resources/` at runtime. Tool registration moved to `src/server/build.ts` in Phase 1 — `discover-feature.ts` no longer imports `registerDiscoverTool` (test files in this directory may still import from `tools/tool-test-utils.ts`; that is allowed because test code is outside the runtime boundary).
