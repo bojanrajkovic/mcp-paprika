@@ -102,7 +102,7 @@ existing vectra index loads without a re-embed migration.
 | `.beginUpdate()`/`.endUpdate()`/`.cancelUpdate()` | transaction: snapshot / persist-then-swap / discard                                       |
 | `.upsertItem({id,vector,metadata?})`              | `Promise<void>` — insert/replace by id; recomputes norm                                   |
 | `.deleteItem(id)`                                 | `Promise<void>` — remove by id (no-op if absent)                                          |
-| `.queryItems(vector, topK)`                       | `Promise<Array<QueryResult>>` — cosine top-K, highest first                               |
+| `.queryItems(vector, topK, minScore?)`            | `Promise<Array<QueryResult>>` — cosine top-K; `minScore` drops sub-cutoff hits pre-slice  |
 | `vectorNorm` / `dotProduct` / `cosineScore`       | pure cosine primitives (exported for tests)                                               |
 
 **Invariants:**
@@ -144,7 +144,7 @@ no hash, so a transient bad embedding self-heals on the next sync.
 | `.init()`         | `Promise<void>` — creates directory, vector index, loads hash map; recovers from corruption                                                                                                                                         |
 | `.indexRecipes()` | `Promise<IndexingResult>` — batch index with change detection, batches of 500                                                                                                                                                       |
 | `.indexRecipe()`  | `Promise<IndexingResult>` — convenience single-recipe wrapper                                                                                                                                                                       |
-| `.search()`       | `Promise<ReadonlyArray<SemanticResult>>` — semantic search, default topK=10                                                                                                                                                         |
+| `.search()`       | `(query, topK=10, minScore?)` → `Promise<ReadonlyArray<SemanticResult>>` — semantic search; `minScore` gates results by cosine similarity                                                                                           |
 | `.removeRecipe()` | `Promise<void>` — remove recipe from index and hash map                                                                                                                                                                             |
 | `.clearHashes()`  | `void` — reset in-memory hash index to force full re-embedding                                                                                                                                                                      |
 | `.size`           | `number` getter — count of indexed recipes (via hash map)                                                                                                                                                                           |

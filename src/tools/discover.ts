@@ -23,13 +23,21 @@ export function registerDiscoverTool(server: McpServer, ctx: ServerContext, vect
           .optional()
           .default(5)
           .describe("Maximum number of results to return (default: 5, max: 20)"),
+        minScore: z
+          .number()
+          .min(0)
+          .max(1)
+          .optional()
+          .describe(
+            "Optional minimum similarity (cosine, 0-1). Results below it are dropped before the top-K cut, so a query with few genuine matches returns only those instead of padding with weak ones. Omit for no filtering. Use a modest value (e.g. ~0.3) to gate on relevance.",
+          ),
       },
     },
     async (args) => {
       log.info({ tool: "discover_recipes", ...args }, "tool invoked");
       return coldStartGuard(ctx).match(
         async (): Promise<CallToolResult> => {
-          const results = await vectorStore.search(args.query, args.topK);
+          const results = await vectorStore.search(args.query, args.topK, args.minScore);
           if (results.length === 0) {
             return textResult("No recipes found matching that description.");
           }

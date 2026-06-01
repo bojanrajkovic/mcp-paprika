@@ -41,7 +41,7 @@ describe("p3-u06-discover-tool: discover_recipes tool", () => {
       // since z.default(5) ensures the handler always receives 5 for omitted topK).
       await callTool("discover_recipes", { query: "test", topK: 5 });
 
-      expect(mockVs.search).toHaveBeenCalledWith("test", 5);
+      expect(mockVs.search).toHaveBeenCalledWith("test", 5, undefined);
     });
 
     it("p3-u06-discover-tool.AC1.3: topK uses provided value", async () => {
@@ -55,7 +55,21 @@ describe("p3-u06-discover-tool: discover_recipes tool", () => {
 
       await callTool("discover_recipes", { query: "test", topK: 10 });
 
-      expect(mockVs.search).toHaveBeenCalledWith("test", 10);
+      expect(mockVs.search).toHaveBeenCalledWith("test", 10, undefined);
+    });
+
+    it("p3-u06-discover-tool.AC1.4: minScore is forwarded to vectorStore.search when provided", async () => {
+      const { server, callTool } = makeTestServer();
+      const mockVs = makeMockVectorStore();
+      registerDiscoverTool(
+        server,
+        seed(makeCtx(new RecipeStore(), server), { recipes: [makeRecipe()] }),
+        fromAny(mockVs),
+      );
+
+      await callTool("discover_recipes", { query: "test", topK: 5, minScore: 0.3 });
+
+      expect(mockVs.search).toHaveBeenCalledWith("test", 5, 0.3);
     });
   });
 
@@ -71,7 +85,7 @@ describe("p3-u06-discover-tool: discover_recipes tool", () => {
 
       await callTool("discover_recipes", { query: "italian", topK: 7 });
 
-      expect(mockVs.search).toHaveBeenCalledWith("italian", 7);
+      expect(mockVs.search).toHaveBeenCalledWith("italian", 7, undefined);
     });
 
     it("p3-u06-discover-tool.AC2.2: result includes recipe name with integer percentage match", async () => {
