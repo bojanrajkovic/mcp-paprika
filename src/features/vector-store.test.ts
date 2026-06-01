@@ -791,7 +791,7 @@ describe("VectorStore search", () => {
       const results = await store.search("pasta recipe", 10);
 
       expect(embedder.embed).toHaveBeenCalledWith("pasta recipe");
-      expect(mockQueryItems).toHaveBeenCalledWith([1, 0, 0], 10);
+      expect(mockQueryItems).toHaveBeenCalledWith([1, 0, 0], 10, undefined);
       expect(results).toEqual([
         { uid: "recipe-1", score: 0.95, recipeName: "Pasta" },
         { uid: "recipe-2", score: 0.87, recipeName: "Risotto" },

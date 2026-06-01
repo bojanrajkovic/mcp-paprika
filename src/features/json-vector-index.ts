@@ -280,8 +280,12 @@ export class JsonVectorIndex {
    * first. Non-finite scores (a zero-norm item, or a zero-norm query) are
    * filtered out rather than allowed to poison the ranking, and ties break
    * deterministically by id. A zero-norm query therefore yields no results.
+   *
+   * `minScore` (optional) drops results below a cosine cutoff *before* the
+   * top-K slice, so a query with few genuine matches returns only those rather
+   * than padding the list with near-zero-similarity noise.
    */
-  async queryItems(vector: ReadonlyArray<number>, topK: number): Promise<Array<QueryResult>> {
+  async queryItems(vector: ReadonlyArray<number>, topK: number, minScore?: number): Promise<Array<QueryResult>> {
     await this.loadIndexData();
     if (topK <= 0) {
       return [];
@@ -298,7 +302,9 @@ export class JsonVectorIndex {
     const scored: Array<{ item: IndexItem; score: number }> = [];
     for (const item of this._data!.items) {
       const score = cosineScore(vector, queryNorm, item.vector, item.norm);
-      scored.push({ item, score });
+      if (minScore === undefined || score >= minScore) {
+        scored.push({ item, score });
+      }
     }
 
     scored.sort((a, b) => b.score - a.score || (a.item.id < b.item.id ? -1 : a.item.id > b.item.id ? 1 : 0));

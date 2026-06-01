@@ -105,6 +105,14 @@ describe("JsonVectorIndex", () => {
       const res = await idx.queryItems([0, 0], 10);
       expect(res).toHaveLength(0);
     });
+
+    it("drops results below minScore before the top-K cut", async () => {
+      const idx = await freshIndex();
+      await idx.upsertItem({ id: "match", vector: [1, 0] }); // cosine 1.0
+      await idx.upsertItem({ id: "weak", vector: [1, 8] }); // cosine ~0.124
+      expect((await idx.queryItems([1, 0], 10)).map((r) => r.item.id)).toEqual(["match", "weak"]);
+      expect((await idx.queryItems([1, 0], 10, 0.5)).map((r) => r.item.id)).toEqual(["match"]);
+    });
   });
 
   describe("norm is a cache, not source of truth (vectra stale-norm bug fix)", () => {
