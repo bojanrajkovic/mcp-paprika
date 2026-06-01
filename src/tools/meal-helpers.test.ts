@@ -1,7 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { fromAny } from "@total-typescript/shoehorn";
 import { MealStore } from "../cache/meal-store.js";
-import { MealTypeStore } from "../cache/meal-type-store.js";
 import { RecipeStore } from "../cache/recipe-store.js";
 import { makeMeal, makeMealType } from "../cache/__fixtures__/meals.js";
 import { makeRecipe } from "../cache/__fixtures__/recipes.js";
@@ -16,7 +15,7 @@ import {
   renderMealCard,
   resolveMealTypeSpec,
 } from "./meal-helpers.js";
-import { makeTestServer, makeCtx, makeStubNotifier } from "./tool-test-utils.js";
+import { makeTestServer, makeCtx, makeStubNotifier, seed } from "./tool-test-utils.js";
 
 // ---------------------------------------------------------------------------
 // AC6.1: mealTypeSpecSchema is exported and correct
@@ -71,11 +70,11 @@ describe("meal-planner-writes.AC6.1: mealTypeSpecSchema is exported and parseabl
 
 describe("mealStartGuard", () => {
   it("returns Err when mealStore has not yet synced", () => {
-    const mealStore = new MealStore();
-    const mealTypeStore = new MealTypeStore();
-    mealTypeStore.load([]); // mealTypeStore synced but mealStore is not
     const { server } = makeTestServer();
-    const ctx = makeCtx(new RecipeStore(), server, { mealStore, mealTypeStore });
+    // mealTypeStore seeded (synced), mealStore omitted (cold)
+    const ctx = seed(makeCtx(new RecipeStore(), server), {
+      mealTypes: [], // mealTypeStore synced but mealStore is not
+    });
 
     const result = mealStartGuard(ctx);
     result.match(
@@ -92,11 +91,12 @@ describe("mealStartGuard", () => {
     // Without the dual-store check, write tools would happily call resolveMealTypeSpec
     // against an empty mealTypeStore and surface "Unknown meal type 'Dinner'" — looks
     // like a user input mistake but is actually a not-yet-synced state.
-    const mealStore = new MealStore();
-    mealStore.load([]); // mealStore synced
-    const mealTypeStore = new MealTypeStore(); // mealTypeStore NOT synced
     const { server } = makeTestServer();
-    const ctx = makeCtx(new RecipeStore(), server, { mealStore, mealTypeStore });
+    // mealStore seeded (synced), mealTypeStore omitted (cold)
+    const ctx = seed(makeCtx(new RecipeStore(), server), {
+      meals: [], // mealStore synced
+      // mealTypes key omitted → mealTypeStore NOT synced
+    });
 
     const result = mealStartGuard(ctx);
     result.match(
@@ -110,12 +110,11 @@ describe("mealStartGuard", () => {
   });
 
   it("returns Ok when both stores have synced", () => {
-    const mealStore = new MealStore();
-    mealStore.load([]);
-    const mealTypeStore = new MealTypeStore();
-    mealTypeStore.load([]);
     const { server } = makeTestServer();
-    const ctx = makeCtx(new RecipeStore(), server, { mealStore, mealTypeStore });
+    const ctx = seed(makeCtx(new RecipeStore(), server), {
+      meals: [],
+      mealTypes: [],
+    });
 
     const result = mealStartGuard(ctx);
     result.match(
@@ -133,17 +132,16 @@ describe("mealStartGuard", () => {
 
 describe("resolveMealTypeSpec", () => {
   function makeResolverCtx() {
-    const mealStore = new MealStore();
-    mealStore.load([]);
-    const mealTypeStore = new MealTypeStore();
-    mealTypeStore.load([
-      makeMealType({ uid: "breakfast-uid" as MealTypeUid, name: "Breakfast", originalType: 0, orderFlag: 0 }),
-      makeMealType({ uid: "lunch-uid" as MealTypeUid, name: "Lunch", originalType: 1, orderFlag: 1 }),
-      makeMealType({ uid: "dinner-uid" as MealTypeUid, name: "Dinner", originalType: 2, orderFlag: 2 }),
-      makeMealType({ uid: "custom-uid" as MealTypeUid, name: "Brunch", originalType: null, orderFlag: 4 }),
-    ]);
     const { server } = makeTestServer();
-    return makeCtx(new RecipeStore(), server, { mealStore, mealTypeStore });
+    return seed(makeCtx(new RecipeStore(), server), {
+      meals: [],
+      mealTypes: [
+        makeMealType({ uid: "breakfast-uid" as MealTypeUid, name: "Breakfast", originalType: 0, orderFlag: 0 }),
+        makeMealType({ uid: "lunch-uid" as MealTypeUid, name: "Lunch", originalType: 1, orderFlag: 1 }),
+        makeMealType({ uid: "dinner-uid" as MealTypeUid, name: "Dinner", originalType: 2, orderFlag: 2 }),
+        makeMealType({ uid: "custom-uid" as MealTypeUid, name: "Brunch", originalType: null, orderFlag: 4 }),
+      ],
+    });
   }
 
   it("resolves a known {name} (case-insensitive)", () => {
@@ -717,17 +715,12 @@ describe("mealToMarkdown renderer", () => {
 
 describe("renderMealCard", () => {
   function makeCardCtx() {
-    const store = new RecipeStore();
-    store.markSynced();
-    store.set(makeRecipe({ uid: "tacos-uid" as RecipeUid, name: "Tacos" }));
-    const mealStore = new MealStore();
-    mealStore.load([]);
-    const mealTypeStore = new MealTypeStore();
-    mealTypeStore.load([
-      makeMealType({ uid: "dinner-uid" as MealTypeUid, name: "Dinner", originalType: 2, orderFlag: 2 }),
-    ]);
     const { server } = makeTestServer();
-    return makeCtx(store, server, { mealStore, mealTypeStore });
+    return seed(makeCtx(new RecipeStore(), server), {
+      recipes: [makeRecipe({ uid: "tacos-uid" as RecipeUid, name: "Tacos" })],
+      meals: [],
+      mealTypes: [makeMealType({ uid: "dinner-uid" as MealTypeUid, name: "Dinner", originalType: 2, orderFlag: 2 })],
+    });
   }
 
   it("resolves typeName from mealTypeStore and recipeName from the recipe store", () => {

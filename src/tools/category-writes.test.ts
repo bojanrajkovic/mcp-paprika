@@ -7,7 +7,7 @@ import {
   registerUpdateCategoryTool,
   registerDeleteCategoryTool,
 } from "./category-writes.js";
-import { makeTestServer, makeCtx, getText } from "./tool-test-utils.js";
+import { makeTestServer, makeCtx, getText, seed } from "./tool-test-utils.js";
 import type { CategoryUid } from "../paprika/types.js";
 import type { ServerContext } from "../types/server-context.js";
 
@@ -25,22 +25,24 @@ function makeWriteCtx(opts?: {
   deleteCategory: ReturnType<typeof vi.fn>;
   notifySync: ReturnType<typeof vi.fn>;
 } {
-  const store = new RecipeStore();
-  store.load(opts?.recipes ?? [makeRecipe()]);
-
   const saveCategory = opts?.saveCategory ?? vi.fn().mockImplementation((c: unknown) => Promise.resolve(c));
   const deleteCategory = opts?.deleteCategory ?? vi.fn().mockResolvedValue(undefined);
   const notifySync = vi.fn().mockResolvedValue(undefined);
 
   const { server, callTool } = makeTestServer();
-  const ctx = makeCtx(store, server, {
-    client: fromAny({ saveCategory, deleteCategory, notifySync }),
-    cache: fromAny({
-      categories: { put: vi.fn().mockResolvedValue(undefined), remove: vi.fn().mockResolvedValue(undefined) },
-      flush: vi.fn().mockResolvedValue(undefined),
+  const ctx = seed(
+    makeCtx(new RecipeStore(), server, {
+      client: fromAny({ saveCategory, deleteCategory, notifySync }),
+      cache: fromAny({
+        categories: { put: vi.fn().mockResolvedValue(undefined), remove: vi.fn().mockResolvedValue(undefined) },
+        flush: vi.fn().mockResolvedValue(undefined),
+      }),
     }),
-  });
-  ctx.categoryStore.load(opts?.categories ?? []);
+    {
+      recipes: opts?.recipes ?? [makeRecipe()],
+      categories: opts?.categories ?? [],
+    },
+  );
 
   return { ctx, server, callTool, saveCategory, deleteCategory, notifySync };
 }

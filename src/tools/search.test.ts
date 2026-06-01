@@ -1,18 +1,18 @@
 import { describe, it, expect } from "vitest";
 import { RecipeStore } from "../cache/recipe-store.js";
-import { MealStore } from "../cache/meal-store.js";
 import { makeRecipe, makeCategory } from "../cache/__fixtures__/recipes.js";
 import { makeMeal } from "../cache/__fixtures__/meals.js";
 import { registerSearchTool } from "./search.js";
-import { makeTestServer, makeCtx, getText, makePinoCapture } from "./tool-test-utils.js";
+import { makeTestServer, makeCtx, getText, makePinoCapture, seed } from "./tool-test-utils.js";
 
 describe("p2-discovery-tools: search_recipes tool", () => {
   describe("p2-discovery-tools.AC1: search_recipes", () => {
     it("p2-discovery-tools.AC1.1: non-empty store + matching query returns formatted results", async () => {
-      const store = new RecipeStore();
-      store.load([makeRecipe({ name: "Chocolate Cake" })]);
       const { server, callTool } = makeTestServer();
-      registerSearchTool(server, makeCtx(store, server));
+      registerSearchTool(
+        server,
+        seed(makeCtx(new RecipeStore(), server), { recipes: [makeRecipe({ name: "Chocolate Cake" })] }),
+      );
 
       const result = await callTool("search_recipes", {
         query: "chocolate",
@@ -23,16 +23,13 @@ describe("p2-discovery-tools: search_recipes tool", () => {
     });
 
     it("p2-discovery-tools.AC1.1 (extended): time fields are rendered when populated", async () => {
-      const store = new RecipeStore();
-      store.load([
-        makeRecipe({
-          name: "Pasta Carbonara",
-          prepTime: "10 min",
-          totalTime: "25 min",
-        }),
-      ]);
       const { server, callTool } = makeTestServer();
-      registerSearchTool(server, makeCtx(store, server));
+      registerSearchTool(
+        server,
+        seed(makeCtx(new RecipeStore(), server), {
+          recipes: [makeRecipe({ name: "Pasta Carbonara", prepTime: "10 min", totalTime: "25 min" })],
+        }),
+      );
 
       const result = await callTool("search_recipes", {
         query: "pasta",
@@ -45,11 +42,14 @@ describe("p2-discovery-tools: search_recipes tool", () => {
     });
 
     it("p2-discovery-tools.AC1.2: limit defaults to 20 when store has many matches", async () => {
-      const store = new RecipeStore();
-      // Load 25 recipes all matching "recipe"
-      store.load(Array.from({ length: 25 }, (_, i) => makeRecipe({ name: `Recipe ${String(i + 1)}` })));
       const { server, callTool } = makeTestServer();
-      registerSearchTool(server, makeCtx(store, server));
+      // Load 25 recipes all matching "recipe"
+      registerSearchTool(
+        server,
+        seed(makeCtx(new RecipeStore(), server), {
+          recipes: Array.from({ length: 25 }, (_, i) => makeRecipe({ name: `Recipe ${String(i + 1)}` })),
+        }),
+      );
 
       // Pass limit: 20 explicitly (mirrors what the SDK provides when caller omits limit,
       // since z.default(20) ensures the handler always receives 20 for omitted limit).
@@ -62,10 +62,13 @@ describe("p2-discovery-tools: search_recipes tool", () => {
     });
 
     it("p2-discovery-tools.AC1.3: limit caps result count", async () => {
-      const store = new RecipeStore();
-      store.load(Array.from({ length: 10 }, (_, i) => makeRecipe({ name: `Recipe ${String(i + 1)}` })));
       const { server, callTool } = makeTestServer();
-      registerSearchTool(server, makeCtx(store, server));
+      registerSearchTool(
+        server,
+        seed(makeCtx(new RecipeStore(), server), {
+          recipes: Array.from({ length: 10 }, (_, i) => makeRecipe({ name: `Recipe ${String(i + 1)}` })),
+        }),
+      );
 
       const result = await callTool("search_recipes", {
         query: "recipe",
@@ -79,11 +82,11 @@ describe("p2-discovery-tools: search_recipes tool", () => {
 
     it("p2-discovery-tools.AC1.4: category names appear in formatted results", async () => {
       const category = makeCategory({ name: "Dessert" });
-      const store = new RecipeStore();
-      store.load([makeRecipe({ name: "Cake", categories: [category.uid] })]);
       const { server, callTool } = makeTestServer();
-      const ctx = makeCtx(store, server);
-      ctx.categoryStore.load([category]);
+      const ctx = seed(makeCtx(new RecipeStore(), server), {
+        recipes: [makeRecipe({ name: "Cake", categories: [category.uid] })],
+        categories: [category],
+      });
       registerSearchTool(server, ctx);
 
       const result = await callTool("search_recipes", {
@@ -95,9 +98,8 @@ describe("p2-discovery-tools: search_recipes tool", () => {
     });
 
     it("p2-discovery-tools.AC1.5: empty store returns cold-start Err payload", async () => {
-      const store = new RecipeStore(); // not loaded — size === 0
       const { server, callTool } = makeTestServer();
-      registerSearchTool(server, makeCtx(store, server));
+      registerSearchTool(server, makeCtx(new RecipeStore(), server)); // not loaded — size === 0
 
       const result = await callTool("search_recipes", {
         query: "anything",
@@ -109,10 +111,11 @@ describe("p2-discovery-tools: search_recipes tool", () => {
     });
 
     it("p2-discovery-tools.AC1.6: no matching recipes returns empty-result message (not an error)", async () => {
-      const store = new RecipeStore();
-      store.load([makeRecipe({ name: "Pasta Carbonara" })]);
       const { server, callTool } = makeTestServer();
-      registerSearchTool(server, makeCtx(store, server));
+      registerSearchTool(
+        server,
+        seed(makeCtx(new RecipeStore(), server), { recipes: [makeRecipe({ name: "Pasta Carbonara" })] }),
+      );
 
       const result = await callTool("search_recipes", {
         query: "sushi",
@@ -126,60 +129,72 @@ describe("p2-discovery-tools: search_recipes tool", () => {
     });
 
     it("p2-discovery-tools.AC1.7-pos: rating appears in search hit when > 0", async () => {
-      const store = new RecipeStore();
-      store.load([makeRecipe({ name: "Chocolate Cake", rating: 5 })]);
       const { server, callTool } = makeTestServer();
-      registerSearchTool(server, makeCtx(store, server));
+      registerSearchTool(
+        server,
+        seed(makeCtx(new RecipeStore(), server), { recipes: [makeRecipe({ name: "Chocolate Cake", rating: 5 })] }),
+      );
 
       const result = await callTool("search_recipes", { query: "chocolate", limit: 20 });
       expect(getText(result)).toContain("5/5");
     });
 
     it("p2-discovery-tools.AC1.7-neg: rating absent from search hit when 0", async () => {
-      const store = new RecipeStore();
-      store.load([makeRecipe({ name: "Chocolate Cake", rating: 0 })]);
       const { server, callTool } = makeTestServer();
-      registerSearchTool(server, makeCtx(store, server));
+      registerSearchTool(
+        server,
+        seed(makeCtx(new RecipeStore(), server), { recipes: [makeRecipe({ name: "Chocolate Cake", rating: 0 })] }),
+      );
 
       const result = await callTool("search_recipes", { query: "chocolate", limit: 20 });
       expect(getText(result)).not.toContain("/5");
     });
 
     it("p2-discovery-tools.AC1.8-pos: pinned marker appears in search hit when isPinned is true", async () => {
-      const store = new RecipeStore();
-      store.load([makeRecipe({ name: "Chocolate Cake", isPinned: true })]);
       const { server, callTool } = makeTestServer();
-      registerSearchTool(server, makeCtx(store, server));
+      registerSearchTool(
+        server,
+        seed(makeCtx(new RecipeStore(), server), { recipes: [makeRecipe({ name: "Chocolate Cake", isPinned: true })] }),
+      );
 
       const result = await callTool("search_recipes", { query: "chocolate", limit: 20 });
       expect(getText(result)).toContain("Pinned");
     });
 
     it("p2-discovery-tools.AC1.8-neg: pinned marker absent from search hit when isPinned is false", async () => {
-      const store = new RecipeStore();
-      store.load([makeRecipe({ name: "Chocolate Cake", isPinned: false })]);
       const { server, callTool } = makeTestServer();
-      registerSearchTool(server, makeCtx(store, server));
+      registerSearchTool(
+        server,
+        seed(makeCtx(new RecipeStore(), server), {
+          recipes: [makeRecipe({ name: "Chocolate Cake", isPinned: false })],
+        }),
+      );
 
       const result = await callTool("search_recipes", { query: "chocolate", limit: 20 });
       expect(getText(result)).not.toContain("Pinned");
     });
 
     it("p2-discovery-tools.AC1.9-pos: on-grocery-list marker appears in search hit when onGroceryList is true", async () => {
-      const store = new RecipeStore();
-      store.load([makeRecipe({ name: "Chocolate Cake", onGroceryList: true })]);
       const { server, callTool } = makeTestServer();
-      registerSearchTool(server, makeCtx(store, server));
+      registerSearchTool(
+        server,
+        seed(makeCtx(new RecipeStore(), server), {
+          recipes: [makeRecipe({ name: "Chocolate Cake", onGroceryList: true })],
+        }),
+      );
 
       const result = await callTool("search_recipes", { query: "chocolate", limit: 20 });
       expect(getText(result)).toContain("Grocery List");
     });
 
     it("p2-discovery-tools.AC1.9-neg: on-grocery-list marker absent from search hit when onGroceryList is false", async () => {
-      const store = new RecipeStore();
-      store.load([makeRecipe({ name: "Chocolate Cake", onGroceryList: false })]);
       const { server, callTool } = makeTestServer();
-      registerSearchTool(server, makeCtx(store, server));
+      registerSearchTool(
+        server,
+        seed(makeCtx(new RecipeStore(), server), {
+          recipes: [makeRecipe({ name: "Chocolate Cake", onGroceryList: false })],
+        }),
+      );
 
       const result = await callTool("search_recipes", { query: "chocolate", limit: 20 });
       expect(getText(result)).not.toContain("Grocery List");
@@ -187,10 +202,11 @@ describe("p2-discovery-tools: search_recipes tool", () => {
 
     it("p2-discovery-tools.AC1.invocation: search_recipes logs invocation at info level with tool name and query", async () => {
       const { log, records } = makePinoCapture();
-      const store = new RecipeStore();
-      store.load([makeRecipe({ name: "Chocolate Cake" })]);
       const { server, callTool } = makeTestServer();
-      registerSearchTool(server, makeCtx(store, server, { log }));
+      registerSearchTool(
+        server,
+        seed(makeCtx(new RecipeStore(), server, { log }), { recipes: [makeRecipe({ name: "Chocolate Cake" })] }),
+      );
 
       await callTool("search_recipes", { query: "chocolate", limit: 20 });
 
@@ -205,12 +221,12 @@ describe("p2-discovery-tools: search_recipes tool", () => {
   describe("lastCookedAt enrichment", () => {
     it("includes Last Cooked in search results when meal history exists", async () => {
       const recipe = makeRecipe({ name: "Chicken Soup", ingredients: "chicken, broth" });
-      const store = new RecipeStore();
-      store.load([recipe]);
-      const mealStore = new MealStore();
-      mealStore.load([makeMeal({ recipeUid: recipe.uid, date: "2026-05-01 00:00:00" })]);
       const { server, callTool } = makeTestServer();
-      registerSearchTool(server, makeCtx(store, server, { mealStore }));
+      const ctx = seed(makeCtx(new RecipeStore(), server), {
+        recipes: [recipe],
+        meals: [makeMeal({ recipeUid: recipe.uid, date: "2026-05-01 00:00:00" })],
+      });
+      registerSearchTool(server, ctx);
 
       const result = await callTool("search_recipes", { query: "chicken", limit: 20 });
       expect(getText(result)).toContain("**Last Cooked:** 2026-05-01");

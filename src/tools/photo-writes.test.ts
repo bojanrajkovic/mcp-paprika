@@ -3,11 +3,10 @@ import { fromAny } from "@total-typescript/shoehorn";
 import sharp from "sharp";
 
 import { RecipeStore } from "../cache/recipe-store.js";
-import { PhotoStore } from "../cache/photo-store.js";
 import { makeRecipe } from "../cache/__fixtures__/recipes.js";
 import { makePhoto } from "../cache/__fixtures__/photos.js";
 import { PhotoUidSchema, RecipeUidSchema, type Photo, type Recipe } from "../paprika/types.js";
-import { makeCtx, makeTestServer, getText } from "./tool-test-utils.js";
+import { makeCtx, makeTestServer, getText, seed } from "./tool-test-utils.js";
 import { registerUploadPhotoTool, registerDeletePhotoTool } from "./photo-writes.js";
 import { fetchImageBytes, isBlockedIp, ssrfLookup } from "./photo-fetch.js";
 
@@ -30,27 +29,27 @@ beforeAll(async () => {
 });
 
 function setup(opts?: { photos?: Array<Photo>; recipe?: Recipe; synced?: boolean }) {
-  const store = new RecipeStore();
-  store.load([opts?.recipe ?? makeRecipe({ uid: RECIPE_UID, name: "Test Recipe" })]);
-  const photoStore = new PhotoStore();
-  // load() flips hasSynced=true; skip it to simulate the photo catalog not yet synced.
-  if (opts?.synced !== false) photoStore.load(opts?.photos ?? []);
-
   const uploadPhoto = vi.fn().mockResolvedValue(undefined);
   const deletePhoto = vi.fn().mockResolvedValue(undefined);
   const { server, callTool } = makeTestServer();
-  const ctx = makeCtx(store, server, {
-    photoStore,
-    client: fromAny({ uploadPhoto, deletePhoto, notifySync: vi.fn().mockResolvedValue(undefined) }),
-    cache: fromAny({
-      recipes: { put: vi.fn().mockResolvedValue(undefined) },
-      photos: { put: vi.fn().mockResolvedValue(undefined), remove: vi.fn().mockResolvedValue(undefined) },
-      flush: vi.fn().mockResolvedValue(undefined),
+  const ctx = seed(
+    makeCtx(new RecipeStore(), server, {
+      client: fromAny({ uploadPhoto, deletePhoto, notifySync: vi.fn().mockResolvedValue(undefined) }),
+      cache: fromAny({
+        recipes: { put: vi.fn().mockResolvedValue(undefined) },
+        photos: { put: vi.fn().mockResolvedValue(undefined), remove: vi.fn().mockResolvedValue(undefined) },
+        flush: vi.fn().mockResolvedValue(undefined),
+      }),
     }),
-  });
+    {
+      recipes: [opts?.recipe ?? makeRecipe({ uid: RECIPE_UID, name: "Test Recipe" })],
+      // load() flips hasSynced=true; omit photos key to simulate the photo catalog not yet synced.
+      ...(opts?.synced !== false ? { photos: opts?.photos ?? [] } : {}),
+    },
+  );
   registerUploadPhotoTool(server, ctx);
   registerDeletePhotoTool(server, ctx);
-  return { callTool, uploadPhoto, deletePhoto, photoStore };
+  return { callTool, uploadPhoto, deletePhoto, ctx };
 }
 
 describe("upload_photo", () => {
@@ -164,12 +163,12 @@ describe("delete_photo", () => {
 
   it("is idempotent: a retried delete reports 'already deleted' without re-POSTing", async () => {
     const photo = makePhoto({ uid: PhotoUidSchema.parse("p-1"), recipeUid: RECIPE_UID });
-    const { callTool, deletePhoto, photoStore } = setup({ photos: [photo] });
+    const { callTool, deletePhoto, ctx } = setup({ photos: [photo] });
 
     await callTool("delete_photo", { photo_uid: "p-1" });
     deletePhoto.mockClear();
     // The store now tombstones p-1; a second delete should short-circuit.
-    expect(photoStore.isTombstone(PhotoUidSchema.parse("p-1"))).toBe(true);
+    expect(ctx.photoStore.isTombstone(PhotoUidSchema.parse("p-1"))).toBe(true);
     const result = await callTool("delete_photo", { photo_uid: "p-1" });
 
     expect(getText(result)).toContain("already deleted");

@@ -1,23 +1,19 @@
 import { fromAny } from "@total-typescript/shoehorn";
 import { describe, it, expect, vi } from "vitest";
 import { RecipeStore } from "../cache/recipe-store.js";
-import { PantryStore } from "../cache/pantry-store.js";
 import { makePantryItem } from "../cache/__fixtures__/pantry.js";
 import { registerDeletePantryItemTool } from "./pantry-delete.js";
-import { makeTestServer, makeCtx, getText } from "./tool-test-utils.js";
+import { makeTestServer, makeCtx, getText, seed } from "./tool-test-utils.js";
 import type { PantryItemUid } from "../paprika/types.js";
 import { PaprikaAPIError } from "../paprika/errors.js";
 
 describe("pantry-mutations.AC6: delete_pantry_item tool", () => {
   it("pantry-mutations.AC6.1: happy path — sets deleted=true and commits", async () => {
-    const store = new RecipeStore();
-    const pantryStore = new PantryStore();
     const item = makePantryItem({
       uid: "uid-1" as PantryItemUid,
       ingredient: "Butter",
       deleted: false,
     });
-    pantryStore.load([item]);
 
     const mockSavePantryItems = vi.fn();
     const mockNotifySync = vi.fn().mockResolvedValue(undefined);
@@ -28,14 +24,16 @@ describe("pantry-mutations.AC6: delete_pantry_item tool", () => {
     mockSavePantryItems.mockImplementation(async (items) => items);
 
     const { server, callTool } = makeTestServer();
-    const ctx = makeCtx(store, server, {
-      pantryStore,
-      client: fromAny({ savePantryItems: mockSavePantryItems, notifySync: mockNotifySync }),
-      cache: fromAny({
-        pantry: { put: mockPutPantryItem, remove: mockRemovePantryItem },
-        flush: mockFlush,
+    const ctx = seed(
+      makeCtx(new RecipeStore(), server, {
+        client: fromAny({ savePantryItems: mockSavePantryItems, notifySync: mockNotifySync }),
+        cache: fromAny({
+          pantry: { put: mockPutPantryItem, remove: mockRemovePantryItem },
+          flush: mockFlush,
+        }),
       }),
-    });
+      { pantry: [item] },
+    );
     registerDeletePantryItemTool(server, ctx);
 
     const result = await callTool("delete_pantry_item", {
@@ -55,19 +53,16 @@ describe("pantry-mutations.AC6: delete_pantry_item tool", () => {
     expect(mockPutPantryItem).not.toHaveBeenCalled();
 
     // Verify item is gone from the store
-    const after = pantryStore.get("uid-1" as PantryItemUid);
+    const after = ctx.pantryStore.get("uid-1" as PantryItemUid);
     expect(after).toBeUndefined();
   });
 
   it("pantry-mutations.AC6.2: idempotent already-deleted — returns message, no re-save", async () => {
-    const store = new RecipeStore();
-    const pantryStore = new PantryStore();
     const item = makePantryItem({
       uid: "uid-1" as PantryItemUid,
       ingredient: "Butter",
       deleted: true,
     });
-    pantryStore.load([item]);
 
     const mockSavePantryItems = vi.fn();
     const mockNotifySync = vi.fn().mockResolvedValue(undefined);
@@ -76,14 +71,16 @@ describe("pantry-mutations.AC6: delete_pantry_item tool", () => {
     const mockFlush = vi.fn().mockResolvedValue(undefined);
 
     const { server, callTool } = makeTestServer();
-    const ctx = makeCtx(store, server, {
-      pantryStore,
-      client: fromAny({ savePantryItems: mockSavePantryItems, notifySync: mockNotifySync }),
-      cache: fromAny({
-        pantry: { put: mockPutPantryItem, remove: mockRemovePantryItem },
-        flush: mockFlush,
+    const ctx = seed(
+      makeCtx(new RecipeStore(), server, {
+        client: fromAny({ savePantryItems: mockSavePantryItems, notifySync: mockNotifySync }),
+        cache: fromAny({
+          pantry: { put: mockPutPantryItem, remove: mockRemovePantryItem },
+          flush: mockFlush,
+        }),
       }),
-    });
+      { pantry: [item] },
+    );
     registerDeletePantryItemTool(server, ctx);
 
     const result = await callTool("delete_pantry_item", {
@@ -97,17 +94,13 @@ describe("pantry-mutations.AC6: delete_pantry_item tool", () => {
     expect(mockRemovePantryItem).not.toHaveBeenCalled();
 
     // Verify store state unchanged
-    expect(pantryStore.size).toBe(1);
-    const after = pantryStore.get("uid-1" as PantryItemUid);
+    expect(ctx.pantryStore.size).toBe(1);
+    const after = ctx.pantryStore.get("uid-1" as PantryItemUid);
     expect(after).toBeDefined();
     expect(after?.deleted).toBe(true);
   });
 
   it("pantry-mutations.AC6.3: unknown UID returns no-item-found, cache/store not mutated", async () => {
-    const store = new RecipeStore();
-    const pantryStore = new PantryStore();
-    pantryStore.load([]);
-
     const mockSavePantryItems = vi.fn();
     const mockNotifySync = vi.fn().mockResolvedValue(undefined);
     const mockPutPantryItem = vi.fn();
@@ -115,14 +108,16 @@ describe("pantry-mutations.AC6: delete_pantry_item tool", () => {
     const mockFlush = vi.fn().mockResolvedValue(undefined);
 
     const { server, callTool } = makeTestServer();
-    const ctx = makeCtx(store, server, {
-      pantryStore,
-      client: fromAny({ savePantryItems: mockSavePantryItems, notifySync: mockNotifySync }),
-      cache: fromAny({
-        pantry: { put: mockPutPantryItem, remove: mockRemovePantryItem },
-        flush: mockFlush,
+    const ctx = seed(
+      makeCtx(new RecipeStore(), server, {
+        client: fromAny({ savePantryItems: mockSavePantryItems, notifySync: mockNotifySync }),
+        cache: fromAny({
+          pantry: { put: mockPutPantryItem, remove: mockRemovePantryItem },
+          flush: mockFlush,
+        }),
       }),
-    });
+      { pantry: [] },
+    );
     registerDeletePantryItemTool(server, ctx);
 
     const result = await callTool("delete_pantry_item", {
@@ -134,13 +129,10 @@ describe("pantry-mutations.AC6: delete_pantry_item tool", () => {
     expect(text).toContain("No pantry item found");
     expect(mockSavePantryItems).not.toHaveBeenCalled();
     expect(mockRemovePantryItem).not.toHaveBeenCalled();
-    expect(pantryStore.size).toBe(0);
+    expect(ctx.pantryStore.size).toBe(0);
   });
 
   it("pantry-mutations.AC6.4: cold-start guard blocks call before pantry synced", async () => {
-    const store = new RecipeStore();
-    const pantryStore = new PantryStore(); // hasSynced === false
-
     const mockSavePantryItems = vi.fn();
     const mockNotifySync = vi.fn().mockResolvedValue(undefined);
     const mockPutPantryItem = vi.fn();
@@ -148,14 +140,14 @@ describe("pantry-mutations.AC6: delete_pantry_item tool", () => {
     const mockFlush = vi.fn().mockResolvedValue(undefined);
 
     const { server, callTool } = makeTestServer();
-    const ctx = makeCtx(store, server, {
-      pantryStore,
+    const ctx = makeCtx(new RecipeStore(), server, {
       client: fromAny({ savePantryItems: mockSavePantryItems, notifySync: mockNotifySync }),
       cache: fromAny({
         pantry: { put: mockPutPantryItem, remove: mockRemovePantryItem },
         flush: mockFlush,
       }),
     });
+    // pantryStore not seeded → hasSynced === false
     registerDeletePantryItemTool(server, ctx);
 
     const result = await callTool("delete_pantry_item", {
@@ -168,14 +160,11 @@ describe("pantry-mutations.AC6: delete_pantry_item tool", () => {
   });
 
   it("pantry-mutations.AC6.5: savePantryItems API error returns error message, cache/store not mutated", async () => {
-    const store = new RecipeStore();
-    const pantryStore = new PantryStore();
     const item = makePantryItem({
       uid: "uid-1" as PantryItemUid,
       ingredient: "Butter",
       deleted: false,
     });
-    pantryStore.load([item]);
 
     const mockSavePantryItems = vi.fn();
     const mockNotifySync = vi.fn().mockResolvedValue(undefined);
@@ -186,14 +175,16 @@ describe("pantry-mutations.AC6: delete_pantry_item tool", () => {
     mockSavePantryItems.mockRejectedValue(new PaprikaAPIError("server timeout", 500, "https://example/api"));
 
     const { server, callTool } = makeTestServer();
-    const ctx = makeCtx(store, server, {
-      pantryStore,
-      client: fromAny({ savePantryItems: mockSavePantryItems, notifySync: mockNotifySync }),
-      cache: fromAny({
-        pantry: { put: mockPutPantryItem, remove: mockRemovePantryItem },
-        flush: mockFlush,
+    const ctx = seed(
+      makeCtx(new RecipeStore(), server, {
+        client: fromAny({ savePantryItems: mockSavePantryItems, notifySync: mockNotifySync }),
+        cache: fromAny({
+          pantry: { put: mockPutPantryItem, remove: mockRemovePantryItem },
+          flush: mockFlush,
+        }),
       }),
-    });
+      { pantry: [item] },
+    );
     registerDeletePantryItemTool(server, ctx);
 
     const result = await callTool("delete_pantry_item", {
@@ -205,7 +196,7 @@ describe("pantry-mutations.AC6: delete_pantry_item tool", () => {
     expect(text).toContain("server timeout");
     expect(mockRemovePantryItem).not.toHaveBeenCalled();
     // Verify the original (not-yet-deleted) item is still in the store
-    const after = pantryStore.get("uid-1" as PantryItemUid);
+    const after = ctx.pantryStore.get("uid-1" as PantryItemUid);
     expect(after).toBeDefined();
     expect(after?.deleted).toBe(false);
   });
@@ -216,19 +207,6 @@ describe("pantry-mutations.AC6: delete_pantry_item tool", () => {
     // items map. Without a tombstone tracker, a retried delete would hit the
     // `!existing` branch and return "No pantry item found" — indistinguishable
     // from a genuinely invalid UID. Verifying the tombstone-aware path here.
-    const store = new RecipeStore();
-    const pantryStore = new PantryStore();
-    pantryStore.load([
-      makePantryItem({
-        uid: "uid-retry" as PantryItemUid,
-        ingredient: "Butter",
-        deleted: false,
-      }),
-    ]);
-    // Simulate the post-commit state: pantryStore.delete() was called, which
-    // both removes from items AND records a tombstone.
-    pantryStore.delete("uid-retry" as PantryItemUid);
-
     const mockSavePantryItems = vi.fn();
     const mockNotifySync = vi.fn().mockResolvedValue(undefined);
     const mockPutPantryItem = vi.fn();
@@ -236,14 +214,27 @@ describe("pantry-mutations.AC6: delete_pantry_item tool", () => {
     const mockFlush = vi.fn().mockResolvedValue(undefined);
 
     const { server, callTool } = makeTestServer();
-    const ctx = makeCtx(store, server, {
-      pantryStore,
-      client: fromAny({ savePantryItems: mockSavePantryItems, notifySync: mockNotifySync }),
-      cache: fromAny({
-        pantry: { put: mockPutPantryItem, remove: mockRemovePantryItem },
-        flush: mockFlush,
+    const ctx = seed(
+      makeCtx(new RecipeStore(), server, {
+        client: fromAny({ savePantryItems: mockSavePantryItems, notifySync: mockNotifySync }),
+        cache: fromAny({
+          pantry: { put: mockPutPantryItem, remove: mockRemovePantryItem },
+          flush: mockFlush,
+        }),
       }),
-    });
+      {
+        pantry: [
+          makePantryItem({
+            uid: "uid-retry" as PantryItemUid,
+            ingredient: "Butter",
+            deleted: false,
+          }),
+        ],
+      },
+    );
+    // Simulate the post-commit state: pantryStore.delete() was called, which
+    // both removes from items AND records a tombstone.
+    ctx.pantryStore.delete("uid-retry" as PantryItemUid);
     registerDeletePantryItemTool(server, ctx);
 
     const result = await callTool("delete_pantry_item", { uid: "uid-retry" });

@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { RecipeStore } from "../cache/recipe-store.js";
-import { makeTestServer, makeCtx } from "../tools/tool-test-utils.js";
+import { makeTestServer, makeCtx, seed } from "../tools/tool-test-utils.js";
 import { makeRecipe, makeCategory } from "../cache/__fixtures__/recipes.js";
 import { registerRecipeResources } from "./recipes.js";
 import type { RecipeUid, CategoryUid } from "../paprika/types.js";
@@ -10,13 +10,12 @@ describe("p2-u10-resource-reg: MCP Recipe Resources", () => {
     describe("p2-u10-resource-reg.AC1.1: List handler returns all non-trashed recipes with correct metadata", () => {
       it("returns recipes with uri, name, and mimeType for each", async () => {
         const { server, callResourceList } = makeTestServer();
-        const store = new RecipeStore();
 
         const recipe1 = makeRecipe({ uid: "recipe-1" as RecipeUid, name: "Pasta" });
         const recipe2 = makeRecipe({ uid: "recipe-2" as RecipeUid, name: "Salad" });
-        store.load([recipe1, recipe2]);
-
-        const ctx = makeCtx(store, server);
+        const ctx = seed(makeCtx(new RecipeStore(), server), {
+          recipes: [recipe1, recipe2],
+        });
         registerRecipeResources(server, ctx);
 
         const result = (await callResourceList("recipes")) as {
@@ -40,10 +39,7 @@ describe("p2-u10-resource-reg: MCP Recipe Resources", () => {
     describe("p2-u10-resource-reg.AC1.2: List handler returns empty array when store is empty", () => {
       it("returns { resources: [] } for empty store with no error", async () => {
         const { server, callResourceList } = makeTestServer();
-        const store = new RecipeStore();
-        store.load([]);
-
-        const ctx = makeCtx(store, server);
+        const ctx = seed(makeCtx(new RecipeStore(), server), { recipes: [] });
         registerRecipeResources(server, ctx);
 
         const result = (await callResourceList("recipes")) as { resources: Array<unknown> };
@@ -55,13 +51,12 @@ describe("p2-u10-resource-reg: MCP Recipe Resources", () => {
     describe("p2-u10-resource-reg.AC1.3: Trashed recipes are excluded from the list", () => {
       it("excludes recipes with inTrash: true from results", async () => {
         const { server, callResourceList } = makeTestServer();
-        const store = new RecipeStore();
 
         const nonTrashed = makeRecipe({ uid: "recipe-1" as RecipeUid, name: "Good Recipe" });
         const trashed = makeRecipe({ uid: "recipe-2" as RecipeUid, name: "Trashed Recipe", inTrash: true });
-        store.load([nonTrashed, trashed]);
-
-        const ctx = makeCtx(store, server);
+        const ctx = seed(makeCtx(new RecipeStore(), server), {
+          recipes: [nonTrashed, trashed],
+        });
         registerRecipeResources(server, ctx);
 
         const result = (await callResourceList("recipes")) as {
@@ -78,7 +73,6 @@ describe("p2-u10-resource-reg: MCP Recipe Resources", () => {
     describe("p2-u10-resource-reg.AC2.1: Read handler returns content with metadata header", () => {
       it("prepends UID and URI header lines to recipe markdown", async () => {
         const { server, callResource } = makeTestServer();
-        const store = new RecipeStore();
 
         const recipe = makeRecipe({
           uid: "test-recipe" as RecipeUid,
@@ -86,9 +80,7 @@ describe("p2-u10-resource-reg: MCP Recipe Resources", () => {
           ingredients: "flour, sugar",
           directions: "Mix and bake",
         });
-        store.load([recipe]);
-
-        const ctx = makeCtx(store, server);
+        const ctx = seed(makeCtx(new RecipeStore(), server), { recipes: [recipe] });
         registerRecipeResources(server, ctx);
 
         const result = (await callResource("recipes", "test-recipe")) as {
@@ -102,13 +94,11 @@ describe("p2-u10-resource-reg: MCP Recipe Resources", () => {
 
       it("includes Last synced when store has been synced", async () => {
         const { server, callResource } = makeTestServer();
-        const store = new RecipeStore();
 
         const recipe = makeRecipe({ uid: "test-recipe" as RecipeUid, name: "Test" });
-        store.load([recipe]);
+        const store = new RecipeStore();
+        const ctx = seed(makeCtx(store, server), { recipes: [recipe] });
         store.setLastSyncedAt(new Date("2026-05-24T12:00:00Z"));
-
-        const ctx = makeCtx(store, server);
         registerRecipeResources(server, ctx);
 
         const result = (await callResource("recipes", "test-recipe")) as {
@@ -120,12 +110,9 @@ describe("p2-u10-resource-reg: MCP Recipe Resources", () => {
 
       it("omits Last synced when store has never been synced", async () => {
         const { server, callResource } = makeTestServer();
-        const store = new RecipeStore();
 
         const recipe = makeRecipe({ uid: "test-recipe" as RecipeUid, name: "Test" });
-        store.load([recipe]);
-
-        const ctx = makeCtx(store, server);
+        const ctx = seed(makeCtx(new RecipeStore(), server), { recipes: [recipe] });
         registerRecipeResources(server, ctx);
 
         const result = (await callResource("recipes", "test-recipe")) as {
@@ -137,16 +124,13 @@ describe("p2-u10-resource-reg: MCP Recipe Resources", () => {
 
       it("includes Photo when recipe has an image URL", async () => {
         const { server, callResource } = makeTestServer();
-        const store = new RecipeStore();
 
         const recipe = makeRecipe({
           uid: "test-recipe" as RecipeUid,
           name: "Test",
           imageUrl: "https://example.com/photo.jpg",
         });
-        store.load([recipe]);
-
-        const ctx = makeCtx(store, server);
+        const ctx = seed(makeCtx(new RecipeStore(), server), { recipes: [recipe] });
         registerRecipeResources(server, ctx);
 
         const result = (await callResource("recipes", "test-recipe")) as {
@@ -158,12 +142,9 @@ describe("p2-u10-resource-reg: MCP Recipe Resources", () => {
 
       it("omits Photo when recipe has no image URL", async () => {
         const { server, callResource } = makeTestServer();
-        const store = new RecipeStore();
 
         const recipe = makeRecipe({ uid: "test-recipe" as RecipeUid, name: "Test", imageUrl: "" });
-        store.load([recipe]);
-
-        const ctx = makeCtx(store, server);
+        const ctx = seed(makeCtx(new RecipeStore(), server), { recipes: [recipe] });
         registerRecipeResources(server, ctx);
 
         const result = (await callResource("recipes", "test-recipe")) as {
@@ -177,7 +158,6 @@ describe("p2-u10-resource-reg: MCP Recipe Resources", () => {
     describe("p2-u10-resource-reg.AC2.2: Category UIDs are resolved to display names", () => {
       it("shows resolved category names in markdown", async () => {
         const { server, callResource } = makeTestServer();
-        const store = new RecipeStore();
 
         const category = makeCategory({ uid: "cat-1" as CategoryUid, name: "Desserts" });
         const recipe = makeRecipe({
@@ -185,10 +165,10 @@ describe("p2-u10-resource-reg: MCP Recipe Resources", () => {
           name: "Cake",
           categories: ["cat-1" as CategoryUid],
         });
-        store.load([recipe]);
-
-        const ctx = makeCtx(store, server);
-        ctx.categoryStore.load([category]);
+        const ctx = seed(makeCtx(new RecipeStore(), server), {
+          recipes: [recipe],
+          categories: [category],
+        });
         registerRecipeResources(server, ctx);
 
         const result = (await callResource("recipes", "recipe-1")) as {
@@ -203,7 +183,6 @@ describe("p2-u10-resource-reg: MCP Recipe Resources", () => {
     describe("p2-u10-resource-reg.AC2.3: Response includes correct mimeType and uri", () => {
       it("returns contents entry with text/markdown mimeType and uri.href", async () => {
         const { server, callResource } = makeTestServer();
-        const store = new RecipeStore();
 
         const recipe = makeRecipe({
           uid: "recipe-1" as RecipeUid,
@@ -211,9 +190,7 @@ describe("p2-u10-resource-reg: MCP Recipe Resources", () => {
           ingredients: "test",
           directions: "test",
         });
-        store.load([recipe]);
-
-        const ctx = makeCtx(store, server);
+        const ctx = seed(makeCtx(new RecipeStore(), server), { recipes: [recipe] });
         registerRecipeResources(server, ctx);
 
         const result = (await callResource("recipes", "recipe-1")) as {
@@ -231,10 +208,7 @@ describe("p2-u10-resource-reg: MCP Recipe Resources", () => {
     describe("p2-u10-resource-reg.AC2.4: Read handler throws error for nonexistent UID", () => {
       it("throws error when recipe UID does not exist", async () => {
         const { server, callResource } = makeTestServer();
-        const store = new RecipeStore();
-        store.load([]);
-
-        const ctx = makeCtx(store, server);
+        const ctx = seed(makeCtx(new RecipeStore(), server), { recipes: [] });
         registerRecipeResources(server, ctx);
 
         await expect(callResource("recipes", "nonexistent-uid")).rejects.toThrow();

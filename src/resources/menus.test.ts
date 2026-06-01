@@ -1,33 +1,22 @@
 import { describe, it, expect } from "vitest";
-import { MenuStore } from "../cache/menu-store.js";
-import { MenuItemStore } from "../cache/menu-item-store.js";
-import { MealTypeStore } from "../cache/meal-type-store.js";
 import { RecipeStore } from "../cache/recipe-store.js";
 import { makeMenu, makeMenuItem } from "../cache/__fixtures__/menus.js";
 import { makeMealType } from "../cache/__fixtures__/meals.js";
-import { makeTestServer, makeCtx } from "../tools/tool-test-utils.js";
+import { makeTestServer, makeCtx, seed } from "../tools/tool-test-utils.js";
 import { registerMenuResources } from "./menus.js";
 import type { MealTypeUid, MenuItemUid, MenuUid } from "../paprika/types.js";
-
-function syncedMealTypeStore(): MealTypeStore {
-  const store = new MealTypeStore();
-  store.load([makeMealType({ uid: "dinner-uid" as MealTypeUid, name: "Dinner", orderFlag: 2, originalType: 2 })]);
-  return store;
-}
 
 describe("menu MCP resource", () => {
   describe("list callback", () => {
     it("returns one entry per menu with name and uri format", async () => {
       const { server, callResourceList } = makeTestServer();
-      const menuStore = new MenuStore();
-      const menuItemStore = new MenuItemStore();
-      menuStore.load([
-        makeMenu({ uid: "m-1" as MenuUid, name: "Weekly" }),
-        makeMenu({ uid: "m-2" as MenuUid, name: "Party" }),
-      ]);
-      menuItemStore.load([]);
-
-      const ctx = makeCtx(new RecipeStore(), server, { menuStore, menuItemStore });
+      const ctx = seed(makeCtx(new RecipeStore(), server), {
+        menus: [
+          makeMenu({ uid: "m-1" as MenuUid, name: "Weekly" }),
+          makeMenu({ uid: "m-2" as MenuUid, name: "Party" }),
+        ],
+        menuItems: [],
+      });
       registerMenuResources(server, ctx);
 
       const result = (await callResourceList("menus")) as {
@@ -44,12 +33,10 @@ describe("menu MCP resource", () => {
 
     it("returns an empty resources array when the store is empty", async () => {
       const { server, callResourceList } = makeTestServer();
-      const menuStore = new MenuStore();
-      const menuItemStore = new MenuItemStore();
-      menuStore.load([]);
-      menuItemStore.load([]);
-
-      const ctx = makeCtx(new RecipeStore(), server, { menuStore, menuItemStore });
+      const ctx = seed(makeCtx(new RecipeStore(), server), {
+        menus: [],
+        menuItems: [],
+      });
       registerMenuResources(server, ctx);
 
       const result = (await callResourceList("menus")) as { resources: Array<unknown> };
@@ -60,15 +47,10 @@ describe("menu MCP resource", () => {
   describe("read callback", () => {
     it("prepends UID and URI header lines to the menu markdown", async () => {
       const { server, callResource } = makeTestServer();
-      const menuStore = new MenuStore();
-      const menuItemStore = new MenuItemStore();
-      menuStore.load([makeMenu({ uid: "m-read" as MenuUid, name: "Weekly", days: 1 })]);
-      menuItemStore.load([]);
-
-      const ctx = makeCtx(new RecipeStore(), server, {
-        menuStore,
-        menuItemStore,
-        mealTypeStore: syncedMealTypeStore(),
+      const ctx = seed(makeCtx(new RecipeStore(), server), {
+        menus: [makeMenu({ uid: "m-read" as MenuUid, name: "Weekly", days: 1 })],
+        menuItems: [],
+        mealTypes: [makeMealType({ uid: "dinner-uid" as MealTypeUid, name: "Dinner", orderFlag: 2, originalType: 2 })],
       });
       registerMenuResources(server, ctx);
 
@@ -84,17 +66,12 @@ describe("menu MCP resource", () => {
 
     it("includes Last synced when the menu store has been synced", async () => {
       const { server, callResource } = makeTestServer();
-      const menuStore = new MenuStore();
-      const menuItemStore = new MenuItemStore();
-      menuStore.load([makeMenu({ uid: "m-sync" as MenuUid, name: "Weekly" })]);
-      menuStore.setLastSyncedAt(new Date("2026-05-30T12:00:00Z"));
-      menuItemStore.load([]);
-
-      const ctx = makeCtx(new RecipeStore(), server, {
-        menuStore,
-        menuItemStore,
-        mealTypeStore: syncedMealTypeStore(),
+      const ctx = seed(makeCtx(new RecipeStore(), server), {
+        menus: [makeMenu({ uid: "m-sync" as MenuUid, name: "Weekly" })],
+        menuItems: [],
+        mealTypes: [makeMealType({ uid: "dinner-uid" as MealTypeUid, name: "Dinner", orderFlag: 2, originalType: 2 })],
       });
+      ctx.menuStore.setLastSyncedAt(new Date("2026-05-30T12:00:00Z"));
       registerMenuResources(server, ctx);
 
       const result = (await callResource("menus", "m-sync", "paprika://menu/m-sync")) as {
@@ -105,24 +82,19 @@ describe("menu MCP resource", () => {
 
     it("renders items but omits child UIDs (includeItemUids false)", async () => {
       const { server, callResource } = makeTestServer();
-      const menuStore = new MenuStore();
-      const menuItemStore = new MenuItemStore();
-      menuStore.load([makeMenu({ uid: "m-clean" as MenuUid, name: "Weekly", days: 1 })]);
-      menuItemStore.load([
-        makeMenuItem({
-          uid: "mi-clean" as MenuItemUid,
-          menuUid: "m-clean",
-          day: 1,
-          typeUid: "dinner-uid",
-          name: "Lasagna",
-          recipeUid: "recipe-9",
-        }),
-      ]);
-
-      const ctx = makeCtx(new RecipeStore(), server, {
-        menuStore,
-        menuItemStore,
-        mealTypeStore: syncedMealTypeStore(),
+      const ctx = seed(makeCtx(new RecipeStore(), server), {
+        menus: [makeMenu({ uid: "m-clean" as MenuUid, name: "Weekly", days: 1 })],
+        menuItems: [
+          makeMenuItem({
+            uid: "mi-clean" as MenuItemUid,
+            menuUid: "m-clean",
+            day: 1,
+            typeUid: "dinner-uid",
+            name: "Lasagna",
+            recipeUid: "recipe-9",
+          }),
+        ],
+        mealTypes: [makeMealType({ uid: "dinner-uid" as MealTypeUid, name: "Dinner", orderFlag: 2, originalType: 2 })],
       });
       registerMenuResources(server, ctx);
 
@@ -137,12 +109,10 @@ describe("menu MCP resource", () => {
 
     it("throws when the menu does not exist", async () => {
       const { server, callResource } = makeTestServer();
-      const menuStore = new MenuStore();
-      const menuItemStore = new MenuItemStore();
-      menuStore.load([]);
-      menuItemStore.load([]);
-
-      const ctx = makeCtx(new RecipeStore(), server, { menuStore, menuItemStore });
+      const ctx = seed(makeCtx(new RecipeStore(), server), {
+        menus: [],
+        menuItems: [],
+      });
       registerMenuResources(server, ctx);
 
       await expect(callResource("menus", "ghost", "paprika://menu/ghost")).rejects.toThrow("Menu not found: ghost");

@@ -1,22 +1,20 @@
 import { describe, it, expect } from "vitest";
 import { RecipeStore } from "../cache/recipe-store.js";
-import { PantryStore } from "../cache/pantry-store.js";
 import { makePantryItem } from "../cache/__fixtures__/pantry.js";
-import { makeTestServer, makeCtx, getText } from "./tool-test-utils.js";
+import { makeTestServer, makeCtx, getText, seed } from "./tool-test-utils.js";
 import { registerListPantryTool } from "./pantry-list.js";
 
 describe("pantry-list tool", () => {
   it("pantry-read.AC5.1: returns sorted listing with ingredient names and UIDs", async () => {
-    const pantryStore = new PantryStore();
-    pantryStore.load([
-      makePantryItem({ ingredient: "Sugar" }),
-      makePantryItem({ ingredient: "Apples" }),
-      makePantryItem({ ingredient: "Milk" }),
-    ]);
-
     const { server, callTool } = makeTestServer();
-    const recipeStore = new RecipeStore();
-    registerListPantryTool(server, makeCtx(recipeStore, server, { pantryStore }));
+    const ctx = seed(makeCtx(new RecipeStore(), server), {
+      pantry: [
+        makePantryItem({ ingredient: "Sugar" }),
+        makePantryItem({ ingredient: "Apples" }),
+        makePantryItem({ ingredient: "Milk" }),
+      ],
+    });
+    registerListPantryTool(server, ctx);
 
     const result = await callTool("list_pantry", {});
     const text = getText(result);
@@ -36,19 +34,16 @@ describe("pantry-list tool", () => {
     expect(milkIdx).toBeLessThan(sugarIdx);
 
     // Assert UIDs are present
-    const items = pantryStore.getAll();
+    const items = ctx.pantryStore.getAll();
     for (const item of items) {
       expect(text).toContain(item.uid);
     }
   });
 
   it("pantry-read.AC5.2: returns friendly message for empty pantry", async () => {
-    const pantryStore = new PantryStore();
-    pantryStore.load([]);
-
     const { server, callTool } = makeTestServer();
-    const recipeStore = new RecipeStore();
-    registerListPantryTool(server, makeCtx(recipeStore, server, { pantryStore }));
+    const ctx = seed(makeCtx(new RecipeStore(), server), { pantry: [] });
+    registerListPantryTool(server, ctx);
 
     const result = await callTool("list_pantry", {});
     const text = getText(result);
@@ -57,12 +52,9 @@ describe("pantry-list tool", () => {
   });
 
   it("pantry-read.AC5.7: cold-start (hasSynced false) returns guard error", async () => {
-    const pantryStore = new PantryStore();
-    // DO NOT call load() — hasSynced remains false
-
+    // DO NOT seed pantry — hasSynced remains false
     const { server, callTool } = makeTestServer();
-    const recipeStore = new RecipeStore();
-    registerListPantryTool(server, makeCtx(recipeStore, server, { pantryStore }));
+    registerListPantryTool(server, makeCtx(new RecipeStore(), server));
 
     const result = await callTool("list_pantry", {});
     const text = getText(result);

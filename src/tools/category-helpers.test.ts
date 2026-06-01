@@ -1,7 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { fromAny } from "@total-typescript/shoehorn";
 import { RecipeStore } from "../cache/recipe-store.js";
-import { CategoryStore } from "../cache/category-store.js";
 import { makeRecipe, makeCategory } from "../cache/__fixtures__/recipes.js";
 import { makeServerContext } from "../__fixtures__/app-context.js";
 import {
@@ -11,6 +10,7 @@ import {
   recipesReferencing,
   wouldCreateCycle,
 } from "./category-helpers.js";
+import { seed } from "./tool-test-utils.js";
 import type { CategoryUid } from "../paprika/types.js";
 import type { ServerContext } from "../types/server-context.js";
 
@@ -19,16 +19,12 @@ function makeCtx(overrides?: {
   categories?: ReturnType<typeof makeCategory>[];
   cache?: unknown;
   notifySync?: ReturnType<typeof vi.fn>;
-}): { ctx: ServerContext; categoryStore: CategoryStore; notifySync: ReturnType<typeof vi.fn> } {
+}): { ctx: ServerContext; notifySync: ReturnType<typeof vi.fn> } {
   const store = new RecipeStore();
-  store.load(overrides?.recipes ?? [makeRecipe()]);
-  const categoryStore = new CategoryStore();
-  categoryStore.load(overrides?.categories ?? []);
   const notifySync = overrides?.notifySync ?? vi.fn().mockResolvedValue(undefined);
 
   const ctx = makeServerContext({
     store,
-    categoryStore,
     client: fromAny({ notifySync }),
     cache: fromAny(
       overrides?.cache ?? {
@@ -37,26 +33,30 @@ function makeCtx(overrides?: {
       },
     ),
   });
-  return { ctx, categoryStore, notifySync };
+  seed(ctx, {
+    recipes: overrides?.recipes ?? [makeRecipe()],
+    categories: overrides?.categories ?? [],
+  });
+  return { ctx, notifySync };
 }
 
 describe("category-helpers", () => {
   describe("commitCategoryUpsert", () => {
     it("marks pending, persists, sets the store, and notifies", async () => {
       const category = makeCategory({ uid: "c" as CategoryUid });
-      const { ctx, categoryStore, notifySync } = makeCtx();
+      const { ctx, notifySync } = makeCtx();
 
       await commitCategoryUpsert(ctx, category);
 
-      expect(categoryStore.get("c" as CategoryUid)).toBe(category);
-      expect(categoryStore.isPendingUpsert("c" as CategoryUid)).toBe(true);
+      expect(ctx.categoryStore.get("c" as CategoryUid)).toBe(category);
+      expect(ctx.categoryStore.isPendingUpsert("c" as CategoryUid)).toBe(true);
       expect(notifySync).toHaveBeenCalledTimes(1);
     });
 
     it("clears the pending mark and rethrows when the cache write fails", async () => {
       const category = makeCategory({ uid: "c" as CategoryUid });
       const boom = new Error("disk full");
-      const { ctx, categoryStore, notifySync } = makeCtx({
+      const { ctx, notifySync } = makeCtx({
         cache: {
           categories: { put: vi.fn().mockRejectedValue(boom), remove: vi.fn() },
           flush: vi.fn().mockResolvedValue(undefined),
@@ -64,8 +64,8 @@ describe("category-helpers", () => {
       });
 
       await expect(commitCategoryUpsert(ctx, category)).rejects.toThrow("disk full");
-      expect(categoryStore.isPendingUpsert("c" as CategoryUid)).toBe(false);
-      expect(categoryStore.get("c" as CategoryUid)).toBeUndefined();
+      expect(ctx.categoryStore.isPendingUpsert("c" as CategoryUid)).toBe(false);
+      expect(ctx.categoryStore.get("c" as CategoryUid)).toBeUndefined();
       expect(notifySync).not.toHaveBeenCalled();
     });
   });
@@ -73,19 +73,19 @@ describe("category-helpers", () => {
   describe("commitCategoryDelete", () => {
     it("marks pending-delete, removes, and notifies", async () => {
       const category = makeCategory({ uid: "c" as CategoryUid });
-      const { ctx, categoryStore, notifySync } = makeCtx({ categories: [category] });
+      const { ctx, notifySync } = makeCtx({ categories: [category] });
 
       await commitCategoryDelete(ctx, category);
 
-      expect(categoryStore.get("c" as CategoryUid)).toBeUndefined();
-      expect(categoryStore.isTombstone("c" as CategoryUid)).toBe(true);
+      expect(ctx.categoryStore.get("c" as CategoryUid)).toBeUndefined();
+      expect(ctx.categoryStore.isTombstone("c" as CategoryUid)).toBe(true);
       expect(notifySync).toHaveBeenCalledTimes(1);
     });
 
     it("clears the pending mark and rethrows when the cache remove fails", async () => {
       const category = makeCategory({ uid: "c" as CategoryUid });
       const boom = new Error("io error");
-      const { ctx, categoryStore, notifySync } = makeCtx({
+      const { ctx, notifySync } = makeCtx({
         categories: [category],
         cache: {
           categories: { put: vi.fn(), remove: vi.fn().mockRejectedValue(boom) },
@@ -94,9 +94,9 @@ describe("category-helpers", () => {
       });
 
       await expect(commitCategoryDelete(ctx, category)).rejects.toThrow("io error");
-      expect(categoryStore.isPendingDelete("c" as CategoryUid)).toBe(false);
+      expect(ctx.categoryStore.isPendingDelete("c" as CategoryUid)).toBe(false);
       // Still present — the store delete never ran.
-      expect(categoryStore.get("c" as CategoryUid)).toBe(category);
+      expect(ctx.categoryStore.get("c" as CategoryUid)).toBe(category);
       expect(notifySync).not.toHaveBeenCalled();
     });
   });

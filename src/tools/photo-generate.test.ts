@@ -3,10 +3,9 @@ import { fromAny } from "@total-typescript/shoehorn";
 import sharp from "sharp";
 
 import { RecipeStore } from "../cache/recipe-store.js";
-import { PhotoStore } from "../cache/photo-store.js";
 import { makeRecipe } from "../cache/__fixtures__/recipes.js";
 import { RecipeUidSchema, type Recipe } from "../paprika/types.js";
-import { makeCtx, makeTestServer, getText } from "./tool-test-utils.js";
+import { makeCtx, makeTestServer, getText, seed } from "./tool-test-utils.js";
 import { registerGeneratePhotoTool } from "./photo-generate.js";
 import type { PhotographyClient, GeneratedPhoto, GeneratePhotoOptions } from "../features/photography.js";
 import { CircuitOpenError } from "../utils/errors.js";
@@ -41,11 +40,6 @@ function setup(opts?: {
   generate?: ReturnType<typeof vi.fn>;
 }) {
   const recipe = opts?.recipe ?? makeRecipe({ uid: RECIPE_UID, name: "Test Recipe" });
-  const store = new RecipeStore();
-  store.load([recipe]);
-  const photoStore = new PhotoStore();
-  // load() flips hasSynced=true; skip it to simulate the photo catalog not yet synced.
-  if (opts?.synced !== false) photoStore.load([]);
 
   const generated: GeneratedPhoto = {
     bytes: imageBytes,
@@ -60,15 +54,21 @@ function setup(opts?: {
   const getRecipe = vi.fn().mockResolvedValue(recipe);
 
   const { server, callTool } = makeTestServer();
-  const ctx = makeCtx(store, server, {
-    photoStore,
-    client: fromAny({ uploadPhoto, getRecipe, notifySync: vi.fn().mockResolvedValue(undefined) }),
-    cache: fromAny({
-      recipes: { put: vi.fn().mockResolvedValue(undefined) },
-      photos: { put: vi.fn().mockResolvedValue(undefined) },
-      flush: vi.fn().mockResolvedValue(undefined),
+  const ctx = seed(
+    makeCtx(new RecipeStore(), server, {
+      client: fromAny({ uploadPhoto, getRecipe, notifySync: vi.fn().mockResolvedValue(undefined) }),
+      cache: fromAny({
+        recipes: { put: vi.fn().mockResolvedValue(undefined) },
+        photos: { put: vi.fn().mockResolvedValue(undefined) },
+        flush: vi.fn().mockResolvedValue(undefined),
+      }),
     }),
-  });
+    {
+      recipes: [recipe],
+      // load() flips hasSynced=true; omit photos key to simulate the photo catalog not yet synced.
+      ...(opts?.synced !== false ? { photos: [] } : {}),
+    },
+  );
   const photographyClient = fromAny({ generate }) as PhotographyClient;
   registerGeneratePhotoTool(server, ctx, photographyClient);
   return { callTool, generate, uploadPhoto, getRecipe };
@@ -182,29 +182,27 @@ describe("generate_photo", () => {
     const fresh = makeRecipe({ uid: RECIPE_UID, name: "Test Recipe", photoUrl: "https://photos.example/new.jpg" });
     vi.mocked(fetchImageBytes).mockResolvedValue({ bytes: imageBytes, contentType: "image/jpeg" });
     const { server, callTool } = makeTestServer();
-    const store = new RecipeStore();
-    store.load([cached]);
-    const photoStore = new PhotoStore();
-    photoStore.load([]);
     const generate = vi.fn().mockResolvedValue({
       bytes: imageBytes,
       mimeType: "image/png",
       costUsd: 0.04,
       servedModel: "x",
     });
-    const ctx = makeCtx(store, server, {
-      photoStore,
-      client: fromAny({
-        uploadPhoto: vi.fn().mockResolvedValue(undefined),
-        getRecipe: vi.fn().mockResolvedValue(fresh),
-        notifySync: vi.fn().mockResolvedValue(undefined),
+    const ctx = seed(
+      makeCtx(new RecipeStore(), server, {
+        client: fromAny({
+          uploadPhoto: vi.fn().mockResolvedValue(undefined),
+          getRecipe: vi.fn().mockResolvedValue(fresh),
+          notifySync: vi.fn().mockResolvedValue(undefined),
+        }),
+        cache: fromAny({
+          recipes: { put: vi.fn().mockResolvedValue(undefined) },
+          photos: { put: vi.fn().mockResolvedValue(undefined) },
+          flush: vi.fn().mockResolvedValue(undefined),
+        }),
       }),
-      cache: fromAny({
-        recipes: { put: vi.fn().mockResolvedValue(undefined) },
-        photos: { put: vi.fn().mockResolvedValue(undefined) },
-        flush: vi.fn().mockResolvedValue(undefined),
-      }),
-    });
+      { recipes: [cached], photos: [] },
+    );
     registerGeneratePhotoTool(server, ctx, fromAny({ generate }) as PhotographyClient);
 
     const result = await callTool("generate_photo", { recipe_uid: RECIPE_UID, restyle_existing: true });

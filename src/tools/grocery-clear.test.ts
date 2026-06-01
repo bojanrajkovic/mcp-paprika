@@ -1,42 +1,35 @@
 import { fromAny } from "@total-typescript/shoehorn";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { RecipeStore } from "../cache/recipe-store.js";
-import { GroceryListStore } from "../cache/grocery-list-store.js";
-import { GroceryItemStore } from "../cache/grocery-item-store.js";
 import { makeGroceryList } from "../cache/__fixtures__/grocery-lists.js";
 import { makeGroceryItem } from "../cache/__fixtures__/grocery-items.js";
 import { registerClearPurchasedTool, registerClearAllTool } from "./grocery-clear.js";
-import { makeTestServer, makeCtx, getText, makeStubNotifier } from "./tool-test-utils.js";
+import { makeTestServer, makeCtx, getText, makeStubNotifier, seed } from "./tool-test-utils.js";
+import type { SeedData } from "./tool-test-utils.js";
 import type { GroceryListUid, GroceryItemUid } from "../paprika/types.js";
 
-describe("clear_purchased tool", () => {
-  let groceryListStore: GroceryListStore;
-  let groceryItemStore: GroceryItemStore;
+const WEEKLY_LIST = makeGroceryList({ uid: "LIST-1" as GroceryListUid, name: "Weekly" });
 
+describe("clear_purchased tool", () => {
   let mockSaveGroceryItems: ReturnType<typeof vi.fn>;
   let mockNotifySync: ReturnType<typeof vi.fn>;
   let mockRemoveGroceryItem: ReturnType<typeof vi.fn>;
   let mockFlush: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
-    groceryListStore = new GroceryListStore();
-    groceryItemStore = new GroceryItemStore();
-
     mockSaveGroceryItems = vi.fn().mockImplementation(async (items) => items);
     mockNotifySync = vi.fn().mockResolvedValue(undefined);
     mockRemoveGroceryItem = vi.fn().mockResolvedValue(undefined);
     mockFlush = vi.fn().mockResolvedValue(undefined);
-
-    groceryListStore.load([makeGroceryList({ uid: "LIST-1" as GroceryListUid, name: "Weekly" })]);
-    groceryItemStore.load([]);
   });
 
-  function makeClearCtx() {
+  // Builds a clear_purchased ctx with mocked client + cache. `seedOverrides` merges
+  // over the synced baseline (the Weekly grocery list, no items);
+  // pass `{ groceryItems: [...] }` to stage items, or omit keys for cold-store guard cases.
+  function makeClearCtx(seedOverrides?: SeedData) {
     const { notifier } = makeStubNotifier();
     const { server, callTool } = makeTestServer();
     const ctx = makeCtx(new RecipeStore(), server, {
-      groceryListStore,
-      groceryItemStore,
       client: fromAny({
         saveGroceryItems: mockSaveGroceryItems,
         notifySync: mockNotifySync,
@@ -47,6 +40,7 @@ describe("clear_purchased tool", () => {
       }),
       notifier,
     });
+    seed(ctx, { groceryLists: [WEEKLY_LIST], groceryItems: [], ...seedOverrides });
     registerClearPurchasedTool(server, ctx);
     return { server, callTool, notifier, ctx };
   }
@@ -70,9 +64,7 @@ describe("clear_purchased tool", () => {
       listUid: "LIST-1",
       purchased: false,
     });
-    groceryItemStore.load([purchasedItem1, purchasedItem2, unpurchasedItem]);
-
-    const { callTool } = makeClearCtx();
+    const { callTool, ctx } = makeClearCtx({ groceryItems: [purchasedItem1, purchasedItem2, unpurchasedItem] });
 
     const result = await callTool("clear_purchased", { listUid: "LIST-1" });
     const text = getText(result);
@@ -97,7 +89,7 @@ describe("clear_purchased tool", () => {
 
     // Unpurchased item remains in store
     const unpurchasedUid = "ITEM-U1" as GroceryItemUid;
-    expect(groceryItemStore.get(unpurchasedUid)).toBeDefined();
+    expect(ctx.groceryItemStore.get(unpurchasedUid)).toBeDefined();
   });
 
   it("grocery-surface.AC3.7: returns informational message when no purchased items, saveGroceryItems NOT called", async () => {
@@ -107,9 +99,7 @@ describe("clear_purchased tool", () => {
       listUid: "LIST-1",
       purchased: false,
     });
-    groceryItemStore.load([unpurchasedItem]);
-
-    const { callTool } = makeClearCtx();
+    const { callTool } = makeClearCtx({ groceryItems: [unpurchasedItem] });
 
     const result = await callTool("clear_purchased", { listUid: "LIST-1" });
     const text = getText(result);
@@ -120,14 +110,10 @@ describe("clear_purchased tool", () => {
   });
 
   it("grocery-not-synced guard: returns sync message when grocery stores not loaded", async () => {
-    const freshGroceryListStore = new GroceryListStore();
-    const freshGroceryItemStore = new GroceryItemStore();
-
+    // grocery stores left cold (keys omitted → hasSynced false) so the grocery guard fires.
     const { notifier } = makeStubNotifier();
     const { server, callTool } = makeTestServer();
     const ctx = makeCtx(new RecipeStore(), server, {
-      groceryListStore: freshGroceryListStore,
-      groceryItemStore: freshGroceryItemStore,
       client: fromAny({
         saveGroceryItems: mockSaveGroceryItems,
         notifySync: mockNotifySync,
@@ -138,6 +124,7 @@ describe("clear_purchased tool", () => {
       }),
       notifier,
     });
+    // No seed — stores are cold
     registerClearPurchasedTool(server, ctx);
 
     const result = await callTool("clear_purchased", { listUid: "LIST-1" });
@@ -148,8 +135,6 @@ describe("clear_purchased tool", () => {
   });
 
   it("invalid list UID returns not-found message without touching saves", async () => {
-    groceryItemStore.load([]);
-
     const { callTool } = makeClearCtx();
 
     const result = await callTool("clear_purchased", { listUid: "NEVER-EXISTED" });
@@ -161,33 +146,25 @@ describe("clear_purchased tool", () => {
 });
 
 describe("clear_all tool", () => {
-  let groceryListStore: GroceryListStore;
-  let groceryItemStore: GroceryItemStore;
-
   let mockSaveGroceryItems: ReturnType<typeof vi.fn>;
   let mockNotifySync: ReturnType<typeof vi.fn>;
   let mockRemoveGroceryItem: ReturnType<typeof vi.fn>;
   let mockFlush: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
-    groceryListStore = new GroceryListStore();
-    groceryItemStore = new GroceryItemStore();
-
     mockSaveGroceryItems = vi.fn().mockImplementation(async (items) => items);
     mockNotifySync = vi.fn().mockResolvedValue(undefined);
     mockRemoveGroceryItem = vi.fn().mockResolvedValue(undefined);
     mockFlush = vi.fn().mockResolvedValue(undefined);
-
-    groceryListStore.load([makeGroceryList({ uid: "LIST-1" as GroceryListUid, name: "Weekly" })]);
-    groceryItemStore.load([]);
   });
 
-  function makeClearAllCtx() {
+  // Builds a clear_all ctx with mocked client + cache. `seedOverrides` merges
+  // over the synced baseline (the Weekly grocery list, no items);
+  // pass `{ groceryItems: [...] }` to stage items, or omit keys for cold-store guard cases.
+  function makeClearAllCtx(seedOverrides?: SeedData) {
     const { notifier } = makeStubNotifier();
     const { server, callTool } = makeTestServer();
     const ctx = makeCtx(new RecipeStore(), server, {
-      groceryListStore,
-      groceryItemStore,
       client: fromAny({
         saveGroceryItems: mockSaveGroceryItems,
         notifySync: mockNotifySync,
@@ -198,6 +175,7 @@ describe("clear_all tool", () => {
       }),
       notifier,
     });
+    seed(ctx, { groceryLists: [WEEKLY_LIST], groceryItems: [], ...seedOverrides });
     registerClearAllTool(server, ctx);
     return { server, callTool, notifier, ctx };
   }
@@ -223,9 +201,7 @@ describe("clear_all tool", () => {
         purchased: true,
       }),
     ];
-    groceryItemStore.load(items);
-
-    const { callTool } = makeClearAllCtx();
+    const { callTool } = makeClearAllCtx({ groceryItems: items });
 
     const result = await callTool("clear_all", { listUid: "LIST-1" });
     const text = getText(result);
@@ -248,8 +224,6 @@ describe("clear_all tool", () => {
   });
 
   it("grocery-surface.AC3.8: empty list returns informational message, saveGroceryItems NOT called", async () => {
-    groceryItemStore.load([]);
-
     const { callTool } = makeClearAllCtx();
 
     const result = await callTool("clear_all", { listUid: "LIST-1" });
@@ -261,14 +235,10 @@ describe("clear_all tool", () => {
   });
 
   it("grocery-not-synced guard: returns sync message when grocery stores not loaded", async () => {
-    const freshGroceryListStore = new GroceryListStore();
-    const freshGroceryItemStore = new GroceryItemStore();
-
+    // grocery stores left cold (keys omitted → hasSynced false) so the grocery guard fires.
     const { notifier } = makeStubNotifier();
     const { server, callTool } = makeTestServer();
     const ctx = makeCtx(new RecipeStore(), server, {
-      groceryListStore: freshGroceryListStore,
-      groceryItemStore: freshGroceryItemStore,
       client: fromAny({
         saveGroceryItems: mockSaveGroceryItems,
         notifySync: mockNotifySync,
@@ -279,6 +249,7 @@ describe("clear_all tool", () => {
       }),
       notifier,
     });
+    // No seed — stores are cold
     registerClearAllTool(server, ctx);
 
     const result = await callTool("clear_all", { listUid: "LIST-1" });
@@ -289,8 +260,6 @@ describe("clear_all tool", () => {
   });
 
   it("invalid list UID returns not-found message without touching saves", async () => {
-    groceryItemStore.load([]);
-
     const { callTool } = makeClearAllCtx();
 
     const result = await callTool("clear_all", { listUid: "NEVER-EXISTED" });

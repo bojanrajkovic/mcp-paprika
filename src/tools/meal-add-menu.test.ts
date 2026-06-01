@@ -2,15 +2,11 @@
 import { fromAny } from "@total-typescript/shoehorn";
 import { describe, it, expect, vi } from "vitest";
 import { RecipeStore } from "../cache/recipe-store.js";
-import { MealStore } from "../cache/meal-store.js";
-import { MealTypeStore } from "../cache/meal-type-store.js";
-import { MenuStore } from "../cache/menu-store.js";
-import { MenuItemStore } from "../cache/menu-item-store.js";
 import { makeMeal, makeMealType } from "../cache/__fixtures__/meals.js";
 import { makeMenu, makeMenuItem } from "../cache/__fixtures__/menus.js";
 import { makeRecipe } from "../cache/__fixtures__/recipes.js";
 import { registerAddMenuToPlannerTool } from "./meal-add-menu.js";
-import { makeTestServer, makeCtx, getText } from "./tool-test-utils.js";
+import { makeTestServer, makeCtx, getText, seed } from "./tool-test-utils.js";
 import type { Meal, MealTypeUid, Menu, MenuItem, MenuUid, RecipeUid } from "../paprika/types.js";
 
 const BREAKFAST_UID = "breakfast-uid" as MealTypeUid;
@@ -43,48 +39,40 @@ type SetupOpts = {
 };
 
 function setup(opts: SetupOpts = {}) {
-  const recipeStore = new RecipeStore();
-  if (opts.recipeSynced !== false) {
-    recipeStore.load([
-      makeRecipe({ uid: BUTTER_CHICKEN_UID, name: "(Not) Butter Chicken" }),
-      makeRecipe({ uid: HONEY_MUSTARD_UID, name: "20 Minute Honey Mustard Chicken" }),
-    ]);
-  }
-
-  const menuStore = new MenuStore();
-  const menuItemStore = new MenuItemStore();
-  if (opts.menuSynced !== false) {
-    menuStore.load(opts.menus ?? []);
-    menuItemStore.load(opts.items ?? []);
-  }
-
-  const mealTypeStore = new MealTypeStore();
-  if (opts.mealTypeSynced !== false) {
-    mealTypeStore.load(makeBuiltins());
-  }
-
-  const mealStore = new MealStore();
-  if (opts.mealSynced !== false) {
-    mealStore.load(opts.existingMeals ?? []);
-  }
-
   const mockSaveMeals = vi.fn().mockImplementation(opts.saveMealsImpl ?? (async (items: ReadonlyArray<Meal>) => items));
   const mockNotifySync = vi.fn().mockResolvedValue(undefined);
   const mockPut = vi.fn().mockResolvedValue(undefined);
   const mockFlush = vi.fn().mockResolvedValue(undefined);
 
   const { server, callTool } = makeTestServer();
-  const ctx = makeCtx(recipeStore, server, {
-    menuStore,
-    menuItemStore,
-    mealStore,
-    mealTypeStore,
+  const ctx = makeCtx(new RecipeStore(), server, {
     client: fromAny({ saveMeals: mockSaveMeals, notifySync: mockNotifySync }),
     cache: fromAny({ meals: { put: mockPut, remove: vi.fn() }, flush: mockFlush }),
   });
+
+  // Each surface is seeded only when the corresponding *Synced flag is not false
+  seed(ctx, {
+    ...(opts.recipeSynced !== false
+      ? {
+          recipes: [
+            makeRecipe({ uid: BUTTER_CHICKEN_UID, name: "(Not) Butter Chicken" }),
+            makeRecipe({ uid: HONEY_MUSTARD_UID, name: "20 Minute Honey Mustard Chicken" }),
+          ],
+        }
+      : {}),
+    ...(opts.menuSynced !== false
+      ? {
+          menus: opts.menus ?? [],
+          menuItems: opts.items ?? [],
+        }
+      : {}),
+    ...(opts.mealTypeSynced !== false ? { mealTypes: makeBuiltins() } : {}),
+    ...(opts.mealSynced !== false ? { meals: opts.existingMeals ?? [] } : {}),
+  });
+
   registerAddMenuToPlannerTool(server, ctx);
 
-  return { callTool, mealStore, mockSaveMeals, mockFlush, mockNotifySync };
+  return { callTool, ctx, mockSaveMeals, mockFlush, mockNotifySync };
 }
 
 /** Two Dinner items on day 1 and day 3 — the exact shape of the wire capture. */
@@ -402,7 +390,7 @@ describe("add_menu_to_planner — rejection paths", () => {
   });
 
   it("saveMeals throws → error message, nothing committed", async () => {
-    const { callTool, mealStore } = setup({
+    const { callTool, ctx } = setup({
       ...multiDayMenu(),
       saveMealsImpl: async () => {
         throw new Error("network down");
@@ -414,6 +402,6 @@ describe("add_menu_to_planner — rejection paths", () => {
     );
     expect(text).toContain("Failed to add menu to planner: network down");
     // Nothing landed in the local store.
-    expect(mealStore.getInDateRange().total).toBe(0);
+    expect(ctx.mealStore.getInDateRange().total).toBe(0);
   });
 });

@@ -1,20 +1,16 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { fromAny } from "@total-typescript/shoehorn";
 import { RecipeStore } from "../cache/recipe-store.js";
-import { PantryStore } from "../cache/pantry-store.js";
-import { GroceryListStore } from "../cache/grocery-list-store.js";
-import { GroceryItemStore } from "../cache/grocery-item-store.js";
 import { makeGroceryList } from "../cache/__fixtures__/grocery-lists.js";
 import { makeGroceryItem } from "../cache/__fixtures__/grocery-items.js";
 import { registerMoveToPantryTool } from "./grocery-move.js";
-import { makeTestServer, makeCtx, getText, makeStubNotifier } from "./tool-test-utils.js";
+import { makeTestServer, makeCtx, getText, makeStubNotifier, seed } from "./tool-test-utils.js";
+import type { SeedData } from "./tool-test-utils.js";
 import type { GroceryListUid, GroceryItemUid, PantryItemUid } from "../paprika/types.js";
 
-describe("move_to_pantry tool", () => {
-  let pantryStore: PantryStore;
-  let groceryListStore: GroceryListStore;
-  let groceryItemStore: GroceryItemStore;
+const WEEKLY_LIST = makeGroceryList({ uid: "LIST-1" as GroceryListUid, name: "Weekly" });
 
+describe("move_to_pantry tool", () => {
   let mockSavePantryItems: ReturnType<typeof vi.fn>;
   let mockSaveGroceryItems: ReturnType<typeof vi.fn>;
   let mockNotifySync: ReturnType<typeof vi.fn>;
@@ -23,29 +19,22 @@ describe("move_to_pantry tool", () => {
   let mockFlush: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
-    pantryStore = new PantryStore();
-    groceryListStore = new GroceryListStore();
-    groceryItemStore = new GroceryItemStore();
-
     mockSavePantryItems = vi.fn().mockImplementation(async (items) => items);
     mockSaveGroceryItems = vi.fn().mockImplementation(async (items) => items);
     mockNotifySync = vi.fn().mockResolvedValue(undefined);
     mockPutPantryItem = vi.fn().mockResolvedValue(undefined);
     mockRemoveGroceryItem = vi.fn().mockResolvedValue(undefined);
     mockFlush = vi.fn().mockResolvedValue(undefined);
-
-    pantryStore.load([]);
-    groceryListStore.load([makeGroceryList({ uid: "LIST-1" as GroceryListUid, name: "Weekly" })]);
-    groceryItemStore.load([]);
   });
 
-  function makeMoveCtx() {
+  // Builds a move_to_pantry ctx with mocked client + cache. `seedOverrides` merges
+  // over the synced baseline (pantry empty, the Weekly grocery list, no items);
+  // pass `{ groceryItems: [...] }` to stage items, or override a key with an
+  // omission-by-bespoke-test for the cold-store guard cases below.
+  function makeMoveCtx(seedOverrides?: SeedData) {
     const { notifier, resourceListChanged } = makeStubNotifier();
     const { server, callTool } = makeTestServer();
     const ctx = makeCtx(new RecipeStore(), server, {
-      pantryStore,
-      groceryListStore,
-      groceryItemStore,
       client: fromAny({
         savePantryItems: mockSavePantryItems,
         saveGroceryItems: mockSaveGroceryItems,
@@ -58,6 +47,7 @@ describe("move_to_pantry tool", () => {
       }),
       notifier,
     });
+    seed(ctx, { pantry: [], groceryLists: [WEEKLY_LIST], groceryItems: [], ...seedOverrides });
     registerMoveToPantryTool(server, ctx);
     return { server, callTool, notifier, resourceListChanged, ctx };
   }
@@ -70,9 +60,7 @@ describe("move_to_pantry tool", () => {
       aisleUid: "AISLE-1",
       listUid: "LIST-1",
     });
-    groceryItemStore.load([item]);
-
-    const { callTool } = makeMoveCtx();
+    const { callTool } = makeMoveCtx({ groceryItems: [item] });
 
     const result = await callTool("move_to_pantry", { uids: ["ITEM-1"] });
     const text = getText(result);
@@ -139,9 +127,7 @@ describe("move_to_pantry tool", () => {
       makeGroceryItem({ uid: "BATCH-2" as GroceryItemUid, ingredient: "Milk", listUid: "LIST-1" }),
       makeGroceryItem({ uid: "BATCH-3" as GroceryItemUid, ingredient: "Eggs", listUid: "LIST-1" }),
     ];
-    groceryItemStore.load(items);
-
-    const { callTool } = makeMoveCtx();
+    const { callTool } = makeMoveCtx({ groceryItems: items });
 
     const result = await callTool("move_to_pantry", {
       uids: ["BATCH-1", "BATCH-2", "BATCH-3"],
@@ -181,11 +167,9 @@ describe("move_to_pantry tool", () => {
 
   it("grocery-surface.AC3.5: tombstoned UID returns already-deleted, neither save called", async () => {
     const item = makeGroceryItem({ uid: "TOMB-1" as GroceryItemUid, ingredient: "Milk" });
-    groceryItemStore.load([item]);
-    // Create tombstone by deleting after load
-    groceryItemStore.delete("TOMB-1" as GroceryItemUid);
-
-    const { callTool } = makeMoveCtx();
+    const { callTool, ctx } = makeMoveCtx({ groceryItems: [item] });
+    // Create tombstone by deleting after seeding
+    ctx.groceryItemStore.delete("TOMB-1" as GroceryItemUid);
 
     const result = await callTool("move_to_pantry", { uids: ["TOMB-1"] });
     const text = getText(result);
@@ -201,12 +185,10 @@ describe("move_to_pantry tool", () => {
       ingredient: "Butter",
       listUid: "LIST-1",
     });
-    groceryItemStore.load([item]);
-
     // Pantry save succeeds, grocery delete fails
     mockSaveGroceryItems.mockRejectedValue(new Error("network timeout"));
 
-    const { callTool } = makeMoveCtx();
+    const { callTool } = makeMoveCtx({ groceryItems: [item] });
 
     const result = await callTool("move_to_pantry", { uids: ["PFAIL-1"] });
     const text = getText(result);
@@ -233,16 +215,11 @@ describe("move_to_pantry tool", () => {
   });
 
   it("pantry-not-synced guard: returns pantry sync message when pantryStore not loaded", async () => {
-    // groceryListStore and groceryItemStore are loaded in beforeEach,
-    // but we use a fresh pantryStore that has NOT been loaded
-    const freshPantryStore = new PantryStore();
-
+    // grocery stores synced, but the pantry surface is left cold (key omitted →
+    // hasSynced false) so the pantry guard fires.
     const { notifier } = makeStubNotifier();
     const { server, callTool } = makeTestServer();
     const ctx = makeCtx(new RecipeStore(), server, {
-      pantryStore: freshPantryStore,
-      groceryListStore,
-      groceryItemStore,
       client: fromAny({
         savePantryItems: mockSavePantryItems,
         saveGroceryItems: mockSaveGroceryItems,
@@ -255,6 +232,7 @@ describe("move_to_pantry tool", () => {
       }),
       notifier,
     });
+    seed(ctx, { groceryLists: [WEEKLY_LIST], groceryItems: [] }); // pantry omitted → cold
     registerMoveToPantryTool(server, ctx);
 
     const result = await callTool("move_to_pantry", { uids: ["ITEM-1"] });
@@ -266,16 +244,11 @@ describe("move_to_pantry tool", () => {
   });
 
   it("grocery-not-synced guard: returns grocery sync message when grocery stores not loaded", async () => {
-    // Use fresh stores with no .load() called — grocery guard fires first
-    const freshGroceryListStore = new GroceryListStore();
-    const freshGroceryItemStore = new GroceryItemStore();
-
+    // pantry synced, but the grocery surface is left cold (keys omitted) so the
+    // grocery guard fires first.
     const { notifier } = makeStubNotifier();
     const { server, callTool } = makeTestServer();
     const ctx = makeCtx(new RecipeStore(), server, {
-      pantryStore,
-      groceryListStore: freshGroceryListStore,
-      groceryItemStore: freshGroceryItemStore,
       client: fromAny({
         savePantryItems: mockSavePantryItems,
         saveGroceryItems: mockSaveGroceryItems,
@@ -288,6 +261,7 @@ describe("move_to_pantry tool", () => {
       }),
       notifier,
     });
+    seed(ctx, { pantry: [] }); // groceryLists/groceryItems omitted → cold
     registerMoveToPantryTool(server, ctx);
 
     const result = await callTool("move_to_pantry", { uids: ["ITEM-1"] });
@@ -299,8 +273,6 @@ describe("move_to_pantry tool", () => {
   });
 
   it("unknown UID returns not-found message without touching saves", async () => {
-    groceryItemStore.load([]);
-
     const { callTool } = makeMoveCtx();
 
     const result = await callTool("move_to_pantry", { uids: ["NEVER-EXISTED"] });
@@ -317,9 +289,7 @@ describe("move_to_pantry tool", () => {
       ingredient: "Butter",
       listUid: "LIST-1",
     });
-    groceryItemStore.load([item]);
-
-    const { callTool } = makeMoveCtx();
+    const { callTool } = makeMoveCtx({ groceryItems: [item] });
 
     const result = await callTool("move_to_pantry", { uids: ["DUP-1", "DUP-1", "DUP-1"] });
     const text = getText(result);
@@ -339,11 +309,9 @@ describe("move_to_pantry tool", () => {
       ingredient: "Chicken",
       listUid: "LIST-1",
     });
-    groceryItemStore.load([item]);
-
     mockSavePantryItems.mockRejectedValue(new Error("pantry API down"));
 
-    const { callTool } = makeMoveCtx();
+    const { callTool } = makeMoveCtx({ groceryItems: [item] });
 
     const result = await callTool("move_to_pantry", { uids: ["PFAIL-3"] });
     const text = getText(result);
@@ -361,7 +329,6 @@ describe("move_to_pantry tool", () => {
       ingredient: "Rice",
       listUid: "LIST-1",
     });
-    groceryItemStore.load([item]);
 
     const knownUid = "PANTRY-COMMIT-FAIL" as PantryItemUid;
     mockSavePantryItems.mockResolvedValueOnce([
@@ -381,7 +348,7 @@ describe("move_to_pantry tool", () => {
     ]);
     mockFlush.mockRejectedValueOnce(new Error("disk full"));
 
-    const { callTool } = makeMoveCtx();
+    const { callTool } = makeMoveCtx({ groceryItems: [item] });
 
     const result = await callTool("move_to_pantry", { uids: ["CFAIL-1"] });
     const text = getText(result);
@@ -398,7 +365,6 @@ describe("move_to_pantry tool", () => {
       ingredient: "Cheese",
       listUid: "LIST-1",
     });
-    groceryItemStore.load([item]);
 
     // Override to return a specific UID we can assert on
     const knownPantryUid = "PANTRY-UID-KNOWN" as PantryItemUid;
@@ -419,7 +385,7 @@ describe("move_to_pantry tool", () => {
     ]);
     mockSaveGroceryItems.mockRejectedValue(new Error("server error"));
 
-    const { callTool } = makeMoveCtx();
+    const { callTool } = makeMoveCtx({ groceryItems: [item] });
 
     const result = await callTool("move_to_pantry", { uids: ["PFAIL-2"] });
     const text = getText(result);
