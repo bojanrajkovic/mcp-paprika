@@ -63,19 +63,19 @@ export class GeneratedImageStore {
   }
 
   /**
-   * Read an entry WITHOUT removing it; null if unknown or expired (an expired
-   * entry is lazily evicted). Use this to validate/use a token while leaving it
-   * spendable, then `consume` it only once the work that needed it has
-   * succeeded — so a failed or mistargeted attach doesn't burn the preview.
+   * Re-insert a previously-consumed entry under its ORIGINAL token, preserving
+   * `createdAt` (and thus its original expiry). The attach path `consume`s a
+   * token atomically up front — so single-use holds even under concurrent
+   * `upload_photo` calls (the synchronous delete runs before any `await`) — and
+   * `restore`s it only when the attach fails or was mistargeted, so a retry can
+   * still recover the exact preview. Evicts the oldest if at capacity.
    */
-  peek(token: string): GeneratedImageEntry | null {
-    const entry = this._entries.get(token);
-    if (entry === undefined) return null;
-    if (entry.createdAt + this._ttlMs / 1000 < Math.floor(this._now() / 1000)) {
-      this._entries.delete(token);
-      return null;
+  restore(token: string, entry: GeneratedImageEntry): void {
+    if (this._entries.size >= this._maxEntries && !this._entries.has(token)) {
+      const oldest = this._entries.keys().next().value;
+      if (oldest !== undefined) this._entries.delete(oldest);
     }
-    return entry;
+    this._entries.set(token, entry);
   }
 
   /** Retrieve and remove an entry; null if the token is unknown or expired. */

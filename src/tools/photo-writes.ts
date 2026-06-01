@@ -72,13 +72,13 @@ function sniffImage(bytes: Buffer): boolean {
 }
 
 /**
- * Resolved image bytes plus provenance. `consumeToken` is set for a
- * generation_token source — the caller spends it (via `consume`) ONLY after a
- * successful attach, so a wrong-recipe or transient-upload failure leaves the
- * preview spendable for a retry. `generated` marks AI-model output so the caller
- * applies the same size cap a direct generate-and-attach would.
+ * Resolved image bytes plus provenance. For a generation_token source the token
+ * is `consume`d up front (atomic single-use even under concurrent calls); the
+ * returned `restore` puts the preview back if the later attach fails, so a retry
+ * can still recover it. `generated` marks AI-model output so the caller applies
+ * the same size cap a direct generate-and-attach would.
  */
-type ResolvedSource = { bytes: Buffer; generated: boolean; consumeToken?: string } | { error: string };
+type ResolvedSource = { bytes: Buffer; generated: boolean; restore?: () => void } | { error: string };
 
 /** Resolves the image bytes from the chosen source, or returns an error message. */
 async function resolveSourceBytes(
@@ -94,18 +94,22 @@ async function resolveSourceBytes(
   }
 
   if ("generation_token" in source) {
-    // PEEK (don't consume) so a validation failure or a failed attach below
-    // leaves the preview intact for a retry — the caller consumes on success.
-    const entry = ctx.generatedImageStore.peek(source.generation_token);
+    // CONSUME atomically up front so the token is single-use even if two
+    // upload_photo calls race (the synchronous delete runs before any await, so
+    // the second consume returns null). Restore below if validation or the later
+    // attach fails, so a mistargeted/retried request can still recover it.
+    const token = source.generation_token;
+    const entry = ctx.generatedImageStore.consume(token);
     if (entry === null) {
       return {
         error: "That generated preview has expired or was already attached. Generate a fresh one with generate_photo.",
       };
     }
     if (entry.recipeUid !== recipeUid) {
+      ctx.generatedImageStore.restore(token, entry); // valid token, wrong target — give it back
       return { error: "That preview was generated for a different recipe; generate a new one for this recipe." };
     }
-    return { bytes: entry.bytes, generated: true, consumeToken: source.generation_token };
+    return { bytes: entry.bytes, generated: true, restore: () => ctx.generatedImageStore.restore(token, entry) };
   }
 
   const buf = Buffer.from(source.image_base64, "base64");
@@ -161,6 +165,7 @@ export function registerUploadPhotoTool(server: McpServer, ctx: ServerContext): 
               resolved.generated ? { maxFullEdge: GENERATED_MAX_FULL_EDGE } : undefined,
             ));
           } catch (error) {
+            resolved.restore?.(); // give the preview token back so a retry works
             log.error({ err: error, recipe_uid: args.recipe_uid }, "normalizePhoto failed");
             return textResult(`Failed to process image: ${toMessage(error)}`);
           }
@@ -169,14 +174,13 @@ export function registerUploadPhotoTool(server: McpServer, ctx: ServerContext): 
           try {
             photo = await attachPhotoToRecipe(ctx, recipe, thumbnail, full);
           } catch (error) {
+            resolved.restore?.(); // give the preview token back so a retry works
             log.error({ err: error, recipe_uid: args.recipe_uid }, "uploadPhoto failed");
             return textResult(`Failed to upload photo: ${toMessage(error)}`);
           }
 
-          // Attach succeeded — NOW spend the preview token (no-op for url/base64),
-          // so it can't be reused but a failure above left it intact for a retry.
-          if (resolved.consumeToken !== undefined) ctx.generatedImageStore.consume(resolved.consumeToken);
-
+          // Attach succeeded — the token was already consumed at resolve time, so
+          // it cannot be reused; nothing to restore.
           return textResult(`Attached photo ${photo.name} to "${recipe.name}" (photo UID: ${photo.uid}).`);
         },
         (guard) => guard,

@@ -34,23 +34,23 @@ describe("GeneratedImageStore", () => {
     expect(new GeneratedImageStore().consume("gen_nope")).toBeNull();
   });
 
-  it("peek returns the entry without removing it; consume still works after", () => {
+  it("restore re-inserts a consumed entry under the same token", () => {
     const store = new GeneratedImageStore();
     const token = store.put(entry({ recipeUid: "R9" }));
-    expect(store.peek(token)?.recipeUid).toBe("R9");
-    expect(store.peek(token)?.recipeUid).toBe("R9"); // still there
-    expect(store.size).toBe(1);
-    expect(store.consume(token)).not.toBeNull(); // now spent
-    expect(store.peek(token)).toBeNull();
+    const taken = store.consume(token)!;
+    expect(store.consume(token)).toBeNull(); // gone after consume
+    store.restore(token, taken);
+    expect(store.consume(token)?.recipeUid).toBe("R9"); // back under the same token
   });
 
-  it("peek of an expired token returns null and evicts it", () => {
-    const clock = { value: 1_000_000_000 };
-    const store = new GeneratedImageStore({ ttlMs: 3_600_000, now: () => clock.value });
-    const token = store.put(entry());
-    clock.value += 3_600_000 + 1_000;
-    expect(store.peek(token)).toBeNull();
-    expect(store.size).toBe(0);
+  it("restore evicts the oldest when at capacity", () => {
+    const store = new GeneratedImageStore({ maxEntries: 1 });
+    const t1 = store.put(entry({ recipeUid: "R1" }));
+    const taken = store.consume(t1)!;
+    const t2 = store.put(entry({ recipeUid: "R2" })); // fills the single slot
+    store.restore(t1, taken); // at cap for a new key → evicts t2
+    expect(store.consume(t2)).toBeNull();
+    expect(store.consume(t1)?.recipeUid).toBe("R1");
   });
 
   it("mints distinct tokens for distinct puts", () => {

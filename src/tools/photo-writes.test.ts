@@ -183,11 +183,12 @@ describe("upload_photo", () => {
     const result = await callTool("upload_photo", { recipe_uid: RECIPE_UID, source: { generation_token: token } });
     expect(getText(result).toLowerCase()).toContain("different recipe");
     expect(uploadPhoto).not.toHaveBeenCalled();
-    // The token is NOT spent on a validation failure — still attachable.
-    expect(ctx.generatedImageStore.peek(token)).not.toBeNull();
+    // Validation failure restores the token — it is still attachable (here we
+    // confirm by consuming it back; in practice the caller would retry).
+    expect(ctx.generatedImageStore.consume(token)).not.toBeNull();
   });
 
-  it("preserves the token when the attach fails, so it can be retried", async () => {
+  it("restores the token when the attach fails, so a retry with the same token works", async () => {
     const { callTool, uploadPhoto, ctx } = setup();
     const token = ctx.generatedImageStore.put({
       bytes: Buffer.from(jpegBase64, "base64"),
@@ -197,11 +198,32 @@ describe("upload_photo", () => {
     });
     uploadPhoto.mockRejectedValueOnce(new Error("transient Paprika error"));
 
-    const result = await callTool("upload_photo", { recipe_uid: RECIPE_UID, source: { generation_token: token } });
+    const failed = await callTool("upload_photo", { recipe_uid: RECIPE_UID, source: { generation_token: token } });
+    expect(getText(failed)).toContain("Failed to upload");
 
-    expect(getText(result)).toContain("Failed to upload");
-    // Attach failed → the preview survives for a retry (not burned).
-    expect(ctx.generatedImageStore.peek(token)).not.toBeNull();
+    // The preview was restored; retrying with the SAME token now succeeds.
+    const retry = await callTool("upload_photo", { recipe_uid: RECIPE_UID, source: { generation_token: token } });
+    expect(getText(retry)).toContain("Attached photo");
+    expect(uploadPhoto).toHaveBeenCalledTimes(2);
+  });
+
+  it("a token attaches at most once — a duplicate call gets the already-used error", async () => {
+    const { callTool, uploadPhoto, ctx } = setup();
+    const token = ctx.generatedImageStore.put({
+      bytes: Buffer.from(jpegBase64, "base64"),
+      mimeType: "image/jpeg",
+      recipeUid: RECIPE_UID,
+      model: "seedream",
+    });
+
+    const first = await callTool("upload_photo", { recipe_uid: RECIPE_UID, source: { generation_token: token } });
+    expect(getText(first)).toContain("Attached photo");
+
+    // Consumed atomically on the first attach — a second (duplicate/retry) call
+    // cannot re-attach the same preview.
+    const second = await callTool("upload_photo", { recipe_uid: RECIPE_UID, source: { generation_token: token } });
+    expect(getText(second).toLowerCase()).toContain("expired");
+    expect(uploadPhoto).toHaveBeenCalledTimes(1);
   });
 
   it("caps a generated-token upload's full image at 2048px, but not a user-supplied one", async () => {
