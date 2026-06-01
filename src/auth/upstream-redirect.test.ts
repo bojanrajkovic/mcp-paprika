@@ -64,4 +64,30 @@ describe("redirectUpstream", () => {
     expect(stored?.codeChallengeMethod).toBe("S256");
     expect(stored?.ourNonce).toBe(new URL(redirect.mock.calls[0]![0] as string).searchParams.get("nonce"));
   });
+
+  it("returns 503 (no upstream redirect) when the AuthRequestStore is full", () => {
+    const authRequests = new AuthRequestStore({ maxEntries: 1, now: () => 1_000_000 });
+    // Fill the single slot with an unrelated live entry.
+    authRequests.put("occupied", {
+      clientId: "123e4567-e89b-12d3-a456-426614174000",
+      codeChallenge: "x",
+      codeChallengeMethod: "S256",
+      redirectUri: "https://claude.ai/cb",
+      resource: "",
+      claudeState: "",
+      scope: "",
+      ourNonce: "n",
+      createdAt: 1000,
+    });
+
+    const text = vi.fn((body: string, status: number) => new Response(body, { status }));
+    const redirect = vi.fn((url: string, status: number) => new Response(null, { status, headers: { Location: url } }));
+    const ctx = { text, redirect } as unknown as Context;
+
+    redirectUpstream(ctx, makeDeps(authRequests), approved);
+
+    expect(redirect).not.toHaveBeenCalled();
+    const res = (ctx as unknown as { res: Response }).res;
+    expect(res.status).toBe(503);
+  });
 });

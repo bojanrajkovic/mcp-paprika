@@ -11,7 +11,7 @@
  */
 
 import type { AuthRequestState } from "./types.js";
-import { AUTH_REQUEST_TTL_SECONDS } from "./tokens.js";
+import { AUTH_REQUEST_TTL_SECONDS, MAX_INMEMORY_AUTH_ENTRIES } from "./tokens.js";
 import { TtlStore } from "./ttl-store.js";
 
 export class AuthRequestStore extends TtlStore<AuthRequestState> {
@@ -20,10 +20,12 @@ export class AuthRequestStore extends TtlStore<AuthRequestState> {
    *
    * @param opts.ttlMs - TTL in milliseconds (default: AUTH_REQUEST_TTL_SECONDS * 1000)
    * @param opts.now - Clock function returning milliseconds (default: Date.now)
+   * @param opts.maxEntries - Entry cap (default: MAX_INMEMORY_AUTH_ENTRIES)
    */
-  constructor(opts?: { readonly ttlMs?: number; readonly now?: () => number }) {
+  constructor(opts?: { readonly ttlMs?: number; readonly now?: () => number; readonly maxEntries?: number }) {
     super({
       ttlMs: opts?.ttlMs ?? AUTH_REQUEST_TTL_SECONDS * 1000,
+      maxEntries: opts?.maxEntries ?? MAX_INMEMORY_AUTH_ENTRIES,
       ...(opts?.now !== undefined ? { now: opts.now } : {}),
     });
   }

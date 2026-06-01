@@ -64,7 +64,7 @@ export function redirectUpstream(c: Context, deps: UpstreamRedirectDeps, approve
   const ourState = generateOpaqueToken("mcp_state_");
   const ourNonce = generateOpaqueToken("mcp_nonce_");
 
-  deps.authRequests.put(ourState, {
+  const stored = deps.authRequests.put(ourState, {
     clientId: approved.clientId,
     codeChallenge: approved.codeChallenge,
     codeChallengeMethod: "S256",
@@ -75,6 +75,13 @@ export function redirectUpstream(c: Context, deps: UpstreamRedirectDeps, approve
     ourNonce,
     createdAt: nowSeconds(),
   });
+
+  // Store full of live entries (a /authorize flood): refuse rather than send the
+  // user to the IdP with no state to come back to. They retry once it drains.
+  if (!stored) {
+    c.res = c.text("authorization temporarily unavailable, please retry", 503);
+    return;
+  }
 
   const upstreamUrl = new URL(deps.authorizationEndpoint);
   upstreamUrl.searchParams.set("response_type", "code");

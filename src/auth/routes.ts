@@ -149,7 +149,7 @@ export function buildAuthRoutes(deps: AuthRoutesDeps): Hono {
       async (identity) => {
         deps.log.auth.info({ email: identity.email ?? null, sub: identity.sub ?? null }, "allowlist accepted identity");
         const ourAuthCode = generateOpaqueToken("mcp_ac_");
-        deps.authCodes.put(ourAuthCode, {
+        const codeStored = deps.authCodes.put(ourAuthCode, {
           clientId: stored.clientId,
           codeChallenge: stored.codeChallenge,
           codeChallengeMethod: "S256",
@@ -159,6 +159,18 @@ export function buildAuthRoutes(deps: AuthRoutesDeps): Hono {
           identity,
           createdAt: nowSeconds(),
         });
+        // Auth-code store full of live codes: don't hand back a code that was
+        // never stored (it would fail at /token with invalid_grant). Return a
+        // retryable error at the callback instead. RFC 6749 §4.1.2.1.
+        if (!codeStored) {
+          deps.log.auth.warn({ clientId: stored.clientId }, "auth-code store full; rejecting callback");
+          return redirectToClient(c, stored.redirectUri, {
+            error: "temporarily_unavailable",
+            error_description: "authorization temporarily unavailable, please retry",
+            state: stored.claudeState,
+            iss: deps.publicUrl,
+          });
+        }
         return redirectToClient(c, stored.redirectUri, {
           code: ourAuthCode,
           state: stored.claudeState,
