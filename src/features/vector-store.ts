@@ -130,23 +130,29 @@ export class VectorStore {
     await this._loadHashIndex();
 
     // Invalidate vectors when the embedding model or schema version changes.
+    // Clearing only the hash map is not enough: a new model may emit a different
+    // vector dimension, and the index pins its dimension from the still-present
+    // old vectors — so every re-embed upsert (and every search) would throw a
+    // dimension mismatch and deadlock re-indexing. Recreate the index so its
+    // dimension un-pins and the stale-dimension vectors are dropped.
     const meta = await this._loadMeta();
     if (meta !== null) {
-      if (meta.model !== this._modelId) {
+      const modelChanged = meta.model !== this._modelId;
+      const schemaChanged = (meta.schemaVersion ?? 0) !== this._schemaVersion;
+      if (modelChanged) {
         this.log.info(
           { previousModel: meta.model, newModel: this._modelId },
           "embedding model changed, clearing vector index",
         );
-        this._hashes = {};
-      } else if ((meta.schemaVersion ?? 0) !== this._schemaVersion) {
+      } else if (schemaChanged) {
         this.log.info(
-          {
-            previousSchemaVersion: meta.schemaVersion ?? 0,
-            newSchemaVersion: this._schemaVersion,
-          },
+          { previousSchemaVersion: meta.schemaVersion ?? 0, newSchemaVersion: this._schemaVersion },
           "embedding schema version changed, clearing vector index",
         );
+      }
+      if (modelChanged || schemaChanged) {
         this._hashes = {};
+        await this._index.createIndex({ version: 1, deleteIfExists: true });
       }
     }
   }
@@ -274,17 +280,27 @@ export class VectorStore {
       allVectors.push(...vectors);
     }
 
-    // Upsert into the vector index. The embedding text is stored alongside each
-    // vector so a future lexical/BM25 layer can rank over it without re-embedding.
+    // Upsert into the vector index. A single recipe whose embedding is degenerate
+    // — all-zero or non-finite, both of which the index rejects — must not abort
+    // the whole batch and stall every other recipe, so skip+warn it here rather
+    // than letting upsertItem throw. A skipped recipe records no hash, so a
+    // transient bad embedding self-heals on the next sync cycle.
     await this._index.beginUpdate();
+    const committed: typeof toEmbed = [];
     try {
       for (let i = 0; i < toEmbed.length; i++) {
         const entry = toEmbed[i]!;
+        const vector = allVectors[i]!;
+        if (!vector.every(Number.isFinite) || vector.every((v) => v === 0)) {
+          this.log.warn({ uid: entry.recipe.uid }, "skipping recipe whose embedding is zero or non-finite");
+          continue;
+        }
         await this._index.upsertItem({
           id: entry.recipe.uid,
-          vector: allVectors[i]!,
-          metadata: { recipeName: entry.recipe.name, text: entry.text },
+          vector,
+          metadata: { recipeName: entry.recipe.name },
         });
+        committed.push(entry);
       }
       await this._index.endUpdate();
     } catch (error: unknown) {
@@ -294,14 +310,14 @@ export class VectorStore {
       });
     }
 
-    // Update hash map and model metadata
-    for (const entry of toEmbed) {
+    // Update hash map and model metadata — only for recipes actually indexed.
+    for (const entry of committed) {
       this._hashes[entry.recipe.uid] = entry.hash;
     }
     await this._persistHashes();
     await this._persistMeta();
 
-    return { indexed: toEmbed.length, skipped, total: recipes.length };
+    return { indexed: committed.length, skipped, total: recipes.length };
   }
 
   async indexRecipe(recipe: Readonly<Recipe>, categoryNames: ReadonlyArray<string>): Promise<IndexingResult> {

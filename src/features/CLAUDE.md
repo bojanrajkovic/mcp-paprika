@@ -111,11 +111,17 @@ existing vectra index loads without a re-embed migration.
   vector can never leave a stale norm (a real bug in vectra's upsert that corrupts ranking).
 - **Boundary validation.** Vectors must be non-empty, all-finite, and share one dimension;
   violations throw (treated as corruption / programmer error) rather than yield `NaN` scores.
-- **Total comparator.** Non-finite scores (zero-norm item, zero-norm query) are filtered
-  before ranking; ties break deterministically by id ascending. A zero-norm query yields `[]`.
-- **Crash-safe persistence.** Write-temp + `fsync(file)` + rename + `fsync(dir)`, versus
+- **Total comparator.** Stored items are guaranteed positive-norm, so the only non-finite
+  score comes from a zero-norm query — guarded once (`queryNorm === 0 → []`) rather than per
+  item. Ties break deterministically by id ascending.
+- **Crash-safe persistence.** Write-temp + `fsync(file)` + rename + best-effort `fsync(dir)`
+  (a dir-fsync failure is swallowed so it can't undo the already-renamed write), versus
   vectra's plain truncating `writeFile`. `endUpdate` persists before swapping live state.
-- **Zero-norm vectors are rejected on insert** (an all-zero embedding is pathological).
+- **Transaction snapshot is shallow.** `beginUpdate` copies the items _array_ (pointers), not
+  the vectors — valid because items are immutable (`_addToUpdate`/`_removeFromUpdate` replace
+  or remove slots, never mutate in place), so the big vectors aren't deep-cloned per write.
+- **Zero-norm vectors are rejected on insert and on load** (an all-zero embedding is
+  pathological; a persisted one is treated as corruption).
 - On-disk `index.json` is vectra-format-compatible; extra top-level keys (`metadata_config`)
   are ignored on load.
 
@@ -124,9 +130,10 @@ existing vectra index loads without a re-embed migration.
 `VectorStore` wraps the vendored `JsonVectorIndex` for local vector storage. Provides recipe
 indexing with SHA-256 content-hash change detection (persisted to `hash-index.json`), batch
 embedding via `EmbeddingClient`, semantic search, and corruption recovery (backs up and
-recreates on a corrupt vector index or hash-index.json). The embedding text is stored in each
-item's metadata alongside `recipeName`, reserving a path for a future lexical/BM25 layer
-without re-embedding.
+recreates on a corrupt vector index or hash-index.json). Item metadata stores only
+`recipeName` — the field `search()` surfaces. A recipe whose embedding comes back zero-norm or
+non-finite is skipped (warn) so one degenerate vector can't abort the whole batch; it records
+no hash, so a transient bad embedding self-heals on the next sync.
 
 | Export            | Signature / Description                                                                                                                                                                                                             |
 | ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -149,7 +156,7 @@ without re-embedding.
 - Content hash uses SHA-256 of `recipeToEmbeddingText()` output; unchanged recipes are skipped during indexing
 - Hash map persisted via atomic write (write-to-tmp + rename) — same pattern `RecipeDiskCache` uses for `recipes/index.json` (see `../cache/disk/CLAUDE.md`)
 - Corruption recovery: a corrupt vector index is backed up to `.bak` dir and recreated; corrupt `hash-index.json` is renamed to `.bak` and reset
-- Model ID and schema version are tracked in `vector-meta.json`; a mismatch on startup clears the hash index to force re-embedding
+- Model ID and schema version are tracked in `vector-meta.json`; a mismatch on startup clears the hash index **and recreates the index** (`createIndex({deleteIfExists})`) to force re-embedding. Recreating — not just clearing hashes — is required because a new model may change the vector dimension, and the index pins its dimension from the still-present old vectors; otherwise every re-embed upsert and every search would throw a dimension mismatch and deadlock re-indexing
 - Batch size is 500 texts per embedding API call
 
 ### discover-feature.ts — Process-wide wiring for semantic search

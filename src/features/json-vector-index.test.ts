@@ -164,6 +164,15 @@ describe("JsonVectorIndex", () => {
       const idx = new JsonVectorIndex(dir);
       await expect(idx.loadIndexData()).rejects.toThrow();
     });
+
+    it("throws on load when the persisted file contains a zero-norm vector", async () => {
+      await writeFile(
+        join(dir, "index.json"),
+        JSON.stringify({ version: 1, items: [{ id: "x", vector: [0, 0], metadata: {} }] }),
+      );
+      const idx = new JsonVectorIndex(dir);
+      await expect(idx.loadIndexData()).rejects.toThrow(/zero-norm/i);
+    });
   });
 
   describe("transactions", () => {

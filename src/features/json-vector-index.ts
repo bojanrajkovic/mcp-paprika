@@ -185,25 +185,35 @@ export class JsonVectorIndex {
     for (const item of parsed.items) {
       this._assertValidVector(item.vector, dimension);
       dimension ??= item.vector.length;
-      items.push({
-        id: item.id,
-        vector: item.vector,
-        norm: vectorNorm(item.vector), // recompute — never trust the persisted value
-        metadata: item.metadata,
-      });
+      const norm = vectorNorm(item.vector); // recompute — never trust the persisted value
+      // Reject zero-norm vectors as corruption (same bar as insert). This upholds
+      // the "every stored item has a positive norm" invariant that lets queryItems
+      // skip a per-item finite-score check.
+      if (norm === 0) {
+        throw new Error(`Index contains a zero-norm vector for id ${item.id}`);
+      }
+      items.push({ id: item.id, vector: item.vector, norm, metadata: item.metadata });
     }
 
     this._data = { version: parsed.version ?? 1, items };
     this._dimension = dimension;
   }
 
-  /** Begin a transaction: snapshot committed state so changes can be rolled back. */
+  /**
+   * Begin a transaction: snapshot committed state so changes can be rolled back.
+   *
+   * A *shallow* copy of the items array is enough — `_addToUpdate` and
+   * `_removeFromUpdate` only replace or remove array slots, never mutate an item
+   * object in place (and `IndexItem` is `readonly`). So `_update` and `_data`
+   * share the (large, immutable) vector arrays by reference until commit, instead
+   * of deep-cloning every vector on every transaction.
+   */
   async beginUpdate(): Promise<void> {
     if (this._update) {
       throw new Error("Update already in progress");
     }
     await this.loadIndexData();
-    this._update = structuredClone(this._data!);
+    this._update = { version: this._data!.version, items: [...this._data!.items] };
   }
 
   /** Discard the in-flight transaction without persisting. */
@@ -274,13 +284,17 @@ export class JsonVectorIndex {
     }
     this._assertValidVector(vector, this._dimension);
     const queryNorm = vectorNorm(vector);
+    // A score is non-finite only when a norm is zero. Stored items are guaranteed
+    // positive-norm (rejected at insert and on load), so the sole remaining source
+    // is a zero-norm query — guard it once here rather than per item in the loop.
+    if (queryNorm === 0) {
+      return [];
+    }
 
     const scored: Array<{ item: IndexItem; score: number }> = [];
     for (const item of this._data!.items) {
       const score = cosineScore(vector, queryNorm, item.vector, item.norm);
-      if (Number.isFinite(score)) {
-        scored.push({ item, score });
-      }
+      scored.push({ item, score });
     }
 
     scored.sort((a, b) => b.score - a.score || (a.item.id < b.item.id ? -1 : a.item.id > b.item.id ? 1 : 0));
@@ -347,7 +361,8 @@ export class JsonVectorIndex {
    * concurrent (mutex-serialized, but defensive) writer.
    */
   private async _persist(data: IndexData): Promise<void> {
-    await mkdir(this._folderPath, { recursive: true });
+    // The folder is created by `createIndex` (and by VectorStore.init) before any
+    // write, so no per-commit mkdir is needed on the hot path.
     const tmpPath = join(this._folderPath, `.${INDEX_FILE}-${process.pid.toString()}-${Date.now().toString()}.tmp`);
     const fh = await open(tmpPath, "w");
     try {
@@ -360,13 +375,23 @@ export class JsonVectorIndex {
     await this._fsyncDir(dirname(this._indexPath));
   }
 
-  /** fsync a directory so a rename within it is durable. Best-effort. */
+  /**
+   * fsync a directory so a rename within it is durable. Best-effort: the data
+   * file is already renamed into place by the time this runs, and some
+   * filesystems reject opening/fsync-ing a directory fd — so a failure here must
+   * not propagate and undo the committed write (it would leave in-memory state
+   * stale while the new index is already on disk).
+   */
   private async _fsyncDir(dir: string): Promise<void> {
-    const dh = await open(dir, "r");
     try {
-      await dh.sync();
-    } finally {
-      await dh.close();
+      const dh = await open(dir, "r");
+      try {
+        await dh.sync();
+      } finally {
+        await dh.close();
+      }
+    } catch {
+      // Directory fsync unsupported on this filesystem; the rename already landed.
     }
   }
 }

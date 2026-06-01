@@ -263,6 +263,30 @@ describe("VectorStore init", () => {
       // Verify hash map was cleared
       expect(store.size).toBe(0);
     });
+
+    it("recovers when an existing index loads as corrupt (loadIndexData throws) at init", async () => {
+      const { JsonVectorIndex } = await import("./json-vector-index.js");
+      const mockIsIndexCreated = vi.spyOn((JsonVectorIndex as any).prototype, "isIndexCreated");
+      const mockLoadIndexData = vi.spyOn((JsonVectorIndex as any).prototype, "loadIndexData");
+      const mockCreateIndex = vi.spyOn((JsonVectorIndex as any).prototype, "createIndex");
+
+      // Index file is present, but loading it fails validation (e.g. non-finite
+      // vector / ragged dimension) — the new eager load in init() must catch it.
+      mockIsIndexCreated.mockResolvedValue(true);
+      mockLoadIndexData.mockRejectedValueOnce(new Error("Vector contains non-finite value at index 3"));
+      mockCreateIndex.mockResolvedValue(undefined);
+
+      const embedder = makeMockEmbedder();
+      const { log, records } = makePinoCapture();
+      const store = new VectorStore(tempDir, embedder, "test-model", 1, log);
+      await store.init();
+
+      const warnRecords = records.filter((r) => r["level"] === 40);
+      expect(warnRecords).toHaveLength(1);
+      expect(warnRecords[0]!["msg"]).toBe("corrupt vector index, backing up and recreating");
+      expect(mockCreateIndex).toHaveBeenCalledWith({ version: 1, deleteIfExists: true });
+      expect(store.size).toBe(0);
+    });
   });
 
   describe("Model change detection", () => {
@@ -302,6 +326,33 @@ describe("VectorStore init", () => {
       expect(modelChangedRecord).toBeDefined();
       expect(modelChangedRecord!["previousModel"]).toBe("model-a");
       expect(modelChangedRecord!["newModel"]).toBe("model-b");
+    });
+
+    it("recreates the index (not just hashes) on model change so a new vector dimension cannot deadlock", async () => {
+      const { JsonVectorIndex } = await import("./json-vector-index.js");
+      const mockIsIndexCreated = vi.spyOn((JsonVectorIndex as any).prototype, "isIndexCreated");
+      const mockCreateIndex = vi.spyOn((JsonVectorIndex as any).prototype, "createIndex");
+      vi.spyOn((JsonVectorIndex as any).prototype, "loadIndexData").mockResolvedValue(undefined);
+
+      mockIsIndexCreated.mockResolvedValue(false);
+      mockCreateIndex.mockResolvedValue(undefined);
+      const embedder = makeMockEmbedder();
+      embedder.embedBatch.mockResolvedValue([[1, 0, 0]]);
+
+      // First run establishes vector-meta.json with model-a.
+      const store1 = new VectorStore(tempDir, embedder, "model-a", 1);
+      await store1.init();
+      await store1.indexRecipes([makeRecipe({ uid: "recipe-1" as RecipeUid })], () => []);
+
+      // Second run with a different model must call createIndex({deleteIfExists})
+      // to drop the stale-dimension vectors and un-pin the index dimension.
+      vi.clearAllMocks();
+      mockIsIndexCreated.mockResolvedValue(true);
+      const store2 = new VectorStore(tempDir, embedder, "model-b", 1);
+      await store2.init();
+
+      expect(mockCreateIndex).toHaveBeenCalledWith({ version: 1, deleteIfExists: true });
+      expect(store2.size).toBe(0);
     });
 
     it("clears hashes when schema version changes between runs and emits info log", async () => {
@@ -458,14 +509,51 @@ describe("VectorStore indexRecipes", () => {
       expect(mockUpsertItem).toHaveBeenCalledWith({
         id: "recipe-1",
         vector: [1, 0, 0],
-        metadata: { recipeName: recipe1.name, text: recipeToEmbeddingText(recipe1, []) },
+        metadata: { recipeName: recipe1.name },
       });
       expect(mockUpsertItem).toHaveBeenCalledWith({
         id: "recipe-2",
         vector: [0, 1, 0],
-        metadata: { recipeName: recipe2.name, text: recipeToEmbeddingText(recipe2, []) },
+        metadata: { recipeName: recipe2.name },
       });
       expect(result).toEqual({ indexed: 2, skipped: 0, total: 2 });
+    });
+
+    it("skips a recipe with a degenerate (zero-norm) embedding without aborting the batch", async () => {
+      const { JsonVectorIndex } = await import("./json-vector-index.js");
+      vi.spyOn((JsonVectorIndex as any).prototype, "isIndexCreated").mockResolvedValue(false);
+      vi.spyOn((JsonVectorIndex as any).prototype, "beginUpdate").mockResolvedValue(undefined);
+      const mockUpsertItem = vi.spyOn((JsonVectorIndex as any).prototype, "upsertItem").mockResolvedValue(undefined);
+      vi.spyOn((JsonVectorIndex as any).prototype, "endUpdate").mockResolvedValue(undefined);
+
+      const embedder = makeMockEmbedder();
+      // Second recipe's embedding is all-zero (degenerate) — must be skipped, not
+      // allowed to throw and roll back the good first recipe.
+      embedder.embedBatch.mockResolvedValue([
+        [1, 0, 0],
+        [0, 0, 0],
+      ]);
+
+      const { log, records } = makePinoCapture();
+      const store = new VectorStore(tempDir, embedder, "test-model", 1, log);
+      await store.init();
+
+      const good = makeRecipe({ uid: "recipe-good" as RecipeUid });
+      const bad = makeRecipe({ uid: "recipe-bad" as RecipeUid });
+      const result = await store.indexRecipes([good, bad], () => []);
+
+      expect(mockUpsertItem).toHaveBeenCalledTimes(1);
+      expect(mockUpsertItem).toHaveBeenCalledWith({
+        id: "recipe-good",
+        vector: [1, 0, 0],
+        metadata: { recipeName: good.name },
+      });
+      expect(result).toEqual({ indexed: 1, skipped: 0, total: 2 });
+      // The good recipe is hashed (skipped on a re-run); the bad one is not.
+      expect(store.size).toBe(1);
+      const warn = records.filter((r) => r["level"] === 40);
+      expect(warn).toHaveLength(1);
+      expect(warn[0]!["msg"]).toBe("skipping recipe whose embedding is zero or non-finite");
     });
   });
 
