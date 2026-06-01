@@ -45,6 +45,7 @@ Environment variables always win. If you set `PAPRIKA_EMAIL` as an env var and a
 | `MCP_ALLOWED_EMAILS`             | `oauth.allowlist.emails`    | Yes (http) ² | `[]`      | Comma-separated email addresses allowed to use the server                     |
 | `MCP_ALLOWED_SUBS`               | `oauth.allowlist.subs`      | Yes (http) ² | `[]`      | Comma-separated OIDC subject identifiers allowed to use the server            |
 | `MCP_TRUST_PROXY`                | `oauth.trustProxy`          | No           | `false`   | Trust `X-Forwarded-For` for DCR rate limiting (set behind a sanitizing proxy) |
+| `MCP_OAUTH_REDIRECT_ALLOWLIST`   | `oauth.redirectAllowlist`   | No           | `[]`      | Comma-separated recognized redirect origins (consent gate) — see below ⁴      |
 | `MCP_OIDC_SCOPES`                | `oauth.scopes`              | No           | —         | Extra OAuth scopes to request (comma-separated)                               |
 | `MCP_OIDC_EMAIL_VERIFIED_POLICY` | `oauth.emailVerifiedPolicy` | No           | —         | Email verification policy: `strict`, `skip`, or `if-present`                  |
 | `MCP_OIDC_ALLOWED_ALGS`          | `oauth.allowedAlgs`         | No           | `RS256` ³ | Allowed JWT signing algorithms (comma-separated)                              |
@@ -52,6 +53,8 @@ Environment variables always win. If you set `PAPRIKA_EMAIL` as an env var and a
 ¹ At least one of `MCP_OIDC_PRESET` or `MCP_OIDC_DISCOVERY_URL` must be set when `MCP_TRANSPORT=http`. For tenant-bound presets (`entra`, `okta`, `auth0`, `keycloak`), both must be set — the preset names the provider, `MCP_OIDC_DISCOVERY_URL` supplies the tenant-specific discovery endpoint. For `google`, the preset alone is sufficient (discovery URL is hardcoded). Setting only `MCP_OIDC_DISCOVERY_URL` (no preset) works for any OIDC-compliant IdP.
 ² At least one of `MCP_ALLOWED_EMAILS` or `MCP_ALLOWED_SUBS` must be non-empty when `MCP_TRANSPORT=http`.
 ³ Code-level default from presets; keycloak preset defaults to `RS256, ES256`. Set this only to override the preset's default.
+
+⁴ Recognized downstream redirect **origins** (`scheme://host:port`) for the confused-deputy consent gate. A `/authorize` request whose redirect origin is on this list goes straight to the upstream IdP; any other origin shows a consent screen the user must approve before the request proceeds. **An empty list (the default) means every `/authorize` is gated** — safe, but you'll see the consent screen on every login until you seed it. Entries are exact origins, https only (with an `http://localhost` / `127.0.0.1` / `[::1]` exemption), validated at startup. No subdomain wildcards; loopback is matched including the port. Typical value for a Claude deployment: `https://claude.ai` (likely add `https://claude.com` as Anthropic migrates domains; Claude mobile/desktop may surface additional origins as one-time prompts until you list them).
 
 ### Logging
 
@@ -250,6 +253,22 @@ for direct internet exposure without a proxy).
 Register exactly `https://<your-public-url>/oauth/callback` as the authorized redirect URI
 on your IdP client. Trailing slashes in `MCP_PUBLIC_URL` are stripped at parse time to
 ensure exact matching.
+
+### Redirect-origin consent gate
+
+The server accepts open Dynamic Client Registration, so any client can register and start an
+authorization. `MCP_OAUTH_REDIRECT_ALLOWLIST` is the trust boundary that decides which of those
+clients can complete a login without an explicit prompt: a `/authorize` request whose
+`redirect_uri` origin is on the list goes straight to your IdP, and any unrecognized origin
+shows a consent screen the user must approve first. This closes a confused-deputy gap where a
+malicious registered client could otherwise ride an allowlisted user's live IdP session to
+obtain a token bound to that user's identity.
+
+Set it to the origins of the clients you actually use — for a Claude deployment, typically
+`https://claude.ai`. Leaving it empty is safe (every login is gated), just noisier: you'll
+approve the screen each time. Origins are matched exactly, https only (with a localhost
+exemption for local development), and validated at startup, so a malformed entry fails the
+server fast rather than silently allowing nothing.
 
 ## Logging
 
