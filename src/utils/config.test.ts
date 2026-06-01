@@ -344,6 +344,7 @@ describe("Configuration loading", () => {
       "MCP_OIDC_CLIENT_SECRET",
       "MCP_ALLOWED_EMAILS",
       "MCP_ALLOWED_SUBS",
+      "MCP_OAUTH_REDIRECT_ALLOWLIST",
     ] as const;
 
     let tempDir: string;
@@ -418,6 +419,41 @@ describe("Configuration loading", () => {
           (error) => {
             expect.fail(`Expected Ok but got Err: ${error.reason}`);
           },
+        );
+      });
+    });
+
+    describe("redirect-origin allowlist (#147)", () => {
+      it("defaults redirectAllowlist to [] when MCP_OAUTH_REDIRECT_ALLOWLIST is unset", () => {
+        process.env["PAPRIKA_EMAIL"] = "user@test.com";
+        process.env["PAPRIKA_PASSWORD"] = "secret";
+        process.env["MCP_TRANSPORT"] = "http";
+        process.env["MCP_PUBLIC_URL"] = "https://m.example.com";
+        process.env["MCP_OIDC_PRESET"] = "google";
+        process.env["MCP_OIDC_CLIENT_ID"] = "client123";
+        process.env["MCP_OIDC_CLIENT_SECRET"] = "secret456";
+        process.env["MCP_ALLOWED_EMAILS"] = "alice@example.com";
+
+        loadConfig(tempDir).match(
+          (config) => expect(config.oauth?.redirectAllowlist).toEqual([]),
+          (error) => expect.fail(`Expected Ok but got Err: ${error.reason}`),
+        );
+      });
+
+      it("parses MCP_OAUTH_REDIRECT_ALLOWLIST as a trimmed comma-separated list", () => {
+        process.env["PAPRIKA_EMAIL"] = "user@test.com";
+        process.env["PAPRIKA_PASSWORD"] = "secret";
+        process.env["MCP_TRANSPORT"] = "http";
+        process.env["MCP_PUBLIC_URL"] = "https://m.example.com";
+        process.env["MCP_OIDC_PRESET"] = "google";
+        process.env["MCP_OIDC_CLIENT_ID"] = "client123";
+        process.env["MCP_OIDC_CLIENT_SECRET"] = "secret456";
+        process.env["MCP_ALLOWED_EMAILS"] = "alice@example.com";
+        process.env["MCP_OAUTH_REDIRECT_ALLOWLIST"] = "https://claude.ai, https://claude.com";
+
+        loadConfig(tempDir).match(
+          (config) => expect(config.oauth?.redirectAllowlist).toEqual(["https://claude.ai", "https://claude.com"]),
+          (error) => expect.fail(`Expected Ok but got Err: ${error.reason}`),
         );
       });
     });

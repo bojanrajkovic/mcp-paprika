@@ -1,6 +1,6 @@
 # Cross-Cutting Utilities
 
-Last verified: 2026-05-31
+Last verified: 2026-06-01
 
 ## Purpose
 
@@ -292,10 +292,14 @@ oauth: {
     emails:              string[]       // Comma-separated emails (listField, default [])
     subs:                string[]       // Comma-separated subject IDs (listField, default [])
   }
+  redirectAllowlist:     string[]       // Recognized redirect origins for the consent gate (#147);
+                                         // listField, default []. Raw strings here — normalized to
+                                         // canonical origins and fail-fast-validated in buildAuthContext
+                                         // (config.ts must not depend on src/auth/).
 }
 ```
 
-**`listField` helper** — module-internal Zod field that accepts either an array of strings or a comma-separated string (e.g., from an env var) and normalizes to a trimmed, non-empty `string[]`. Used for `oauth.scopes`, `oauth.allowedAlgs`, `oauth.allowlist.emails`, and `oauth.allowlist.subs`.
+**`listField` helper** — module-internal Zod field that accepts either an array of strings or a comma-separated string (e.g., from an env var) and normalizes to a trimmed, non-empty `string[]`. Used for `oauth.scopes`, `oauth.allowedAlgs`, `oauth.allowlist.emails`, `oauth.allowlist.subs`, and `oauth.redirectAllowlist`.
 
 **`publicUrl` normalization** — the `oauth.publicUrl` schema strips trailing slashes via `.transform(v => v.replace(/\/+$/, ""))` at parse time. Downstream code can concatenate `${publicUrl}/oauth/callback`, `${publicUrl}/register/<id>`, etc. without producing `//` — required for exact upstream IdP redirect-URI matching.
 
@@ -330,6 +334,7 @@ oauth: {
 | `MCP_TRUST_PROXY`                | `oauth.trustProxy`          |
 | `MCP_ALLOWED_EMAILS`             | `oauth.allowlist.emails`    |
 | `MCP_ALLOWED_SUBS`               | `oauth.allowlist.subs`      |
+| `MCP_OAUTH_REDIRECT_ALLOWLIST`   | `oauth.redirectAllowlist`   |
 
 | Class         | Extends | Fields                                                                        |
 | ------------- | ------- | ----------------------------------------------------------------------------- |

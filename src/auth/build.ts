@@ -21,9 +21,11 @@ import { DiskClientRegistrationStore } from "./client-registration.js";
 import { TokenStore } from "./token-store.js";
 import { AuthRequestStore } from "./auth-request-store.js";
 import { AuthCodeStore } from "./auth-code-store.js";
+import { PendingAuthorizationStore } from "./pending-authorization-store.js";
 import { MintingOAuthServerProvider } from "./provider.js";
 import { AuthCleanup } from "./cleanup.js";
 import { MAX_REGISTERED_CLIENTS } from "./routes.js";
+import { normalizeOrigin } from "./redirect-allowlist.js";
 import type { AuthContext, ResolvedOAuthConfig } from "./types.js";
 
 export async function buildAuthContext(
@@ -77,6 +79,19 @@ export async function buildAuthContext(
     throw new Error("invariant: oauth.clientSecret must be set when transport=http");
   }
 
+  // Normalize the raw redirect-allowlist strings to canonical origins, failing
+  // fast at startup on any malformed/non-permitted entry (#147). config.ts
+  // keeps the strings raw so it has no dependency on src/auth/; the auth layer
+  // owns origin validation.
+  const redirectAllowlist = config.oauth.redirectAllowlist.map((entry) =>
+    normalizeOrigin(entry).match(
+      (origin) => origin,
+      (e) => {
+        throw e; // fail-fast at startup
+      },
+    ),
+  );
+
   const resolved: ResolvedOAuthConfig = {
     ...presetResult,
     publicUrl: config.oauth.publicUrl,
@@ -84,6 +99,7 @@ export async function buildAuthContext(
     clientSecret: config.oauth.clientSecret,
     trustProxy: config.oauth.trustProxy,
     allowlist: config.oauth.allowlist,
+    redirectAllowlist,
   };
 
   const authLog = parentLog.child({ component: "auth" });
@@ -97,19 +113,21 @@ export async function buildAuthContext(
   const tokenStore = new TokenStore(cache);
   const requestStore = new AuthRequestStore();
   const codeStore = new AuthCodeStore();
+  const pendingStore = new PendingAuthorizationStore();
 
   const provider = new MintingOAuthServerProvider(
     clientStore,
     tokenStore,
     requestStore,
     codeStore,
+    pendingStore,
     discovery,
     resolved,
     resolved.publicUrl,
     authLog,
   );
 
-  const cleanup = new AuthCleanup(clientStore, tokenStore, cache, requestStore, codeStore, authLog);
+  const cleanup = new AuthCleanup(clientStore, tokenStore, cache, requestStore, codeStore, pendingStore, authLog);
 
   return {
     provider,
@@ -118,6 +136,7 @@ export async function buildAuthContext(
     jwks,
     authRequests: requestStore,
     authCodes: codeStore,
+    pendingAuthorizations: pendingStore,
     tokenStore,
     clientStore,
     cleanup,

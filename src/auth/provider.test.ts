@@ -8,6 +8,7 @@ import { DiskClientRegistrationStore } from "./client-registration.js";
 import { TokenStore } from "./token-store.js";
 import { AuthRequestStore } from "./auth-request-store.js";
 import { AuthCodeStore } from "./auth-code-store.js";
+import { PendingAuthorizationStore } from "./pending-authorization-store.js";
 import { DiskCacheRoot } from "../cache/disk/index.js";
 import { makeDefaultOidcStub, makeDiscoveryDoc } from "./__fixtures__/oidc-stub.js";
 import { makeAuthCodeState, makeVerifiedIdentity } from "./__fixtures__/oauth-state.js";
@@ -50,6 +51,7 @@ describe("MintingOAuthServerProvider", () => {
   let tokenStore: TokenStore;
   let authRequests: AuthRequestStore;
   let authCodes: AuthCodeStore;
+  let pendingAuthorizations: PendingAuthorizationStore;
   let provider: MintingOAuthServerProvider;
   let mockClient: OAuthClientInformationFull;
 
@@ -69,6 +71,7 @@ describe("MintingOAuthServerProvider", () => {
     tokenStore = new TokenStore(cache);
     authRequests = new AuthRequestStore();
     authCodes = new AuthCodeStore();
+    pendingAuthorizations = new PendingAuthorizationStore();
 
     // Initialize provider
     const discovery = makeDiscoveryDoc(oidcStub.issuer);
@@ -78,6 +81,7 @@ describe("MintingOAuthServerProvider", () => {
       tokenStore,
       authRequests,
       authCodes,
+      pendingAuthorizations,
       discovery,
       {
         discoveryUrl: `${oidcStub.issuer}/.well-known/openid-configuration`,
@@ -90,6 +94,10 @@ describe("MintingOAuthServerProvider", () => {
         trustProxy: false,
         allowlist: { emails: ["user@example.com"], subs: [] },
         allowedAlgs: ["RS256"],
+        // Recognize claude.ai so the existing authorize tests exercise the
+        // straight-to-upstream (recognized) path; the consent branch is covered
+        // by its own tests below.
+        redirectAllowlist: ["https://claude.ai"],
       },
       "https://mcp.example.com",
       SILENT_LOG,
@@ -180,6 +188,74 @@ describe("MintingOAuthServerProvider", () => {
       expect(stored?.codeChallenge).toBe("challenge123456789");
       expect(stored?.redirectUri).toBe("https://claude.ai/callback");
       expect(stored?.claudeState).toBe("claude-state-123");
+    });
+  });
+
+  describe("authorize — confused-deputy consent gate (#147)", () => {
+    it("an unrecognized redirect origin renders the consent screen and holds a pending authorization", async () => {
+      const stored = await clientStore.registerClient({
+        client_name: "Sneaky",
+        redirect_uris: ["https://paprika-sync.app/cb"],
+      });
+      const unknownClient = {
+        client_id: stored.client_id,
+        client_name: "Sneaky",
+        redirect_uris: ["https://paprika-sync.app/cb"],
+      } as OAuthClientInformationFull;
+
+      const ctx = {
+        html: vi.fn(
+          (body: string, status: number, headers: Record<string, string>) => new Response(body, { status, headers }),
+        ),
+        redirect: vi.fn(),
+      };
+
+      await provider.authorize(
+        unknownClient,
+        {
+          state: "claude-state-123",
+          scopes: ["openid", "email"],
+          redirectUri: "https://paprika-sync.app/cb",
+          codeChallenge: "challenge123456789",
+        },
+        ctx as any,
+      );
+
+      // No upstream redirect, and nothing minted into AuthRequestStore yet.
+      expect(ctx.redirect).not.toHaveBeenCalled();
+      expect(ctx.html).toHaveBeenCalledOnce();
+
+      const [body, status, headers] = ctx.html.mock.calls[0]!;
+      expect(status).toBe(200);
+      expect(body).toContain("paprika-sync.app");
+      expect(body).toContain("Sneaky");
+      expect(headers["X-Frame-Options"]).toBe("DENY");
+      expect(headers["Content-Security-Policy"]).toContain("frame-ancestors 'none'");
+
+      // The downstream request is held under a ticket, awaiting consent.
+      expect(pendingAuthorizations.size).toBe(1);
+    });
+
+    it("a recognized redirect origin bypasses consent and goes straight upstream", async () => {
+      const ctx = {
+        html: vi.fn(),
+        redirect: vi.fn((url: string, status: number) => new Response(null, { status, headers: { Location: url } })),
+      };
+
+      await provider.authorize(
+        mockClient,
+        {
+          state: "claude-state-123",
+          scopes: ["openid", "email"],
+          redirectUri: "https://claude.ai/callback",
+          codeChallenge: "challenge123456789",
+        },
+        ctx as any,
+      );
+
+      expect(ctx.html).not.toHaveBeenCalled();
+      expect(ctx.redirect).toHaveBeenCalled();
+      expect(pendingAuthorizations.size).toBe(0);
     });
   });
 
@@ -477,6 +553,7 @@ describe("MintingOAuthServerProvider", () => {
         tokenStore,
         authRequests,
         authCodes,
+        pendingAuthorizations,
         discovery,
         {
           discoveryUrl: `${oidcStub.issuer}/.well-known/openid-configuration`,
@@ -489,6 +566,7 @@ describe("MintingOAuthServerProvider", () => {
           trustProxy: false,
           allowlist: { emails: ["user@example.com"], subs: [] },
           allowedAlgs: ["RS256"],
+          redirectAllowlist: ["https://claude.ai"],
         },
         "https://mcp.example.com",
         captureLog,

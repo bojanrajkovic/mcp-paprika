@@ -68,6 +68,10 @@ function makeE2eConfig(overrides: Partial<PaprikaConfig> = {}): PaprikaConfig {
       clientSecret: "test-upstream-secret",
       trustProxy: true,
       allowlist: { emails: [ALLOWED_EMAIL], subs: [] },
+      // Recognize the connector's redirect origin so these end-to-end flow
+      // tests exercise the straight-to-upstream path (#147); the consent gate
+      // has its own coverage.
+      redirectAllowlist: ["https://claude.ai"],
     },
     ...overrides,
   });

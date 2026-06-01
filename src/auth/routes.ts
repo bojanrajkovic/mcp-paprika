@@ -6,6 +6,7 @@ import type { DiskClientRegistrationStore } from "./client-registration.js";
 import type { TokenStore } from "./token-store.js";
 import type { AuthRequestStore } from "./auth-request-store.js";
 import type { AuthCodeStore } from "./auth-code-store.js";
+import type { PendingAuthorizationStore } from "./pending-authorization-store.js";
 import type { ResolvedOAuthConfig } from "./types.js";
 import type { DiscoveryDoc } from "./oidc-client.js";
 import type { JWTVerifyGetKey } from "jose";
@@ -15,12 +16,15 @@ import { verifyIdToken } from "./oidc-client.js";
 import type { IdTokenPayload } from "./types.js";
 import { verifyIdentity } from "./allowlist.js";
 import { OAuthClientNotFoundError, OAuthMetadataValidationError } from "./errors.js";
+import { renderDeniedPage, renderExpiredPage, consentSecurityHeaders } from "./consent-page.js";
+import { redirectUpstream, makeUpstreamRedirectDeps } from "./upstream-redirect.js";
 
 export interface AuthRoutesDeps {
   readonly clientStore: DiskClientRegistrationStore;
   readonly tokenStore: TokenStore;
   readonly authRequests: AuthRequestStore;
   readonly authCodes: AuthCodeStore;
+  readonly pendingAuthorizations: PendingAuthorizationStore;
   readonly oidcConfig: ResolvedOAuthConfig;
   readonly discovery: DiscoveryDoc;
   readonly jwks: JWTVerifyGetKey;
@@ -183,6 +187,47 @@ export function buildAuthRoutes(deps: AuthRoutesDeps): Hono {
         });
       },
     );
+  });
+
+  // POST /oauth/consent — confused-deputy consent decision (#147).
+  // Reached only for an unrecognized redirect origin (provider.authorize held
+  // the request and rendered the consent screen). The single-use ticket is the
+  // CSRF token. On allow we forward upstream via the shared redirect helper; on
+  // deny (or anything else) we render a terminal page on our own origin and
+  // NEVER redirect to the untrusted redirect_uri.
+  app.post("/oauth/consent", async (c) => {
+    const form = await c.req.parseBody();
+    const ticket = typeof form["ticket"] === "string" ? form["ticket"] : "";
+    const decision = form["decision"];
+
+    const pending = deps.pendingAuthorizations.consume(ticket);
+    if (pending === null) {
+      const { html, nonce } = renderExpiredPage();
+      return c.html(html, 400, consentSecurityHeaders(nonce));
+    }
+
+    const redirectOrigin = new URL(pending.redirectUri).origin;
+
+    if (decision !== "allow") {
+      // Record the actual submitted value (capped) rather than a hardcoded
+      // "deny", so a malformed/probing POST is distinguishable in the audit log
+      // from a genuine deny-click; the cap bounds attacker-controlled log size.
+      const submitted = typeof decision === "string" ? decision.slice(0, 32) : "(non-string)";
+      deps.log.auth.warn({ clientId: pending.clientId, redirectOrigin, decision: submitted }, "consent denied");
+      const { html, nonce } = renderDeniedPage();
+      return c.html(html, 200, consentSecurityHeaders(nonce));
+    }
+
+    deps.log.auth.info({ clientId: pending.clientId, redirectOrigin, decision: "allow" }, "consent granted");
+    redirectUpstream(c, makeUpstreamRedirectDeps(deps.authRequests, deps.discovery, deps.oidcConfig, deps.publicUrl), {
+      clientId: pending.clientId,
+      codeChallenge: pending.codeChallenge,
+      redirectUri: pending.redirectUri,
+      resource: pending.resource,
+      claudeState: pending.claudeState,
+      scope: pending.scope,
+    });
+    return c.res;
   });
 
   // PUT /register/{client_id} — RFC 7592 update

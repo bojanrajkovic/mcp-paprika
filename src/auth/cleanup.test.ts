@@ -7,6 +7,7 @@ import { join } from "node:path";
 import { DiskCacheRoot } from "../cache/disk/index.js";
 import { AuthRequestStore } from "./auth-request-store.js";
 import { AuthCodeStore } from "./auth-code-store.js";
+import { PendingAuthorizationStore } from "./pending-authorization-store.js";
 import { DiskClientRegistrationStore } from "./client-registration.js";
 import { TokenStore } from "./token-store.js";
 import { AuthCleanup } from "./cleanup.js";
@@ -57,7 +58,16 @@ describe("sweepOnce", () => {
 
     const authRequests = new AuthRequestStore();
     const authCodes = new AuthCodeStore();
-    const cleanup = new AuthCleanup(clientStore, tokenStore, cache, authRequests, authCodes, SILENT_LOG, () => clock.v);
+    const cleanup = new AuthCleanup(
+      clientStore,
+      tokenStore,
+      cache,
+      authRequests,
+      authCodes,
+      new PendingAuthorizationStore(),
+      SILENT_LOG,
+      () => clock.v,
+    );
     const result = await cleanup.sweepOnce();
 
     expect(result.clientsRemoved).toBe(1);
@@ -91,7 +101,16 @@ describe("sweepOnce", () => {
 
     const authRequests = new AuthRequestStore();
     const authCodes = new AuthCodeStore();
-    const cleanup = new AuthCleanup(clientStore, tokenStore, cache, authRequests, authCodes, SILENT_LOG, () => clock.v);
+    const cleanup = new AuthCleanup(
+      clientStore,
+      tokenStore,
+      cache,
+      authRequests,
+      authCodes,
+      new PendingAuthorizationStore(),
+      SILENT_LOG,
+      () => clock.v,
+    );
     const result = await cleanup.sweepOnce();
 
     expect(result.clientsRemoved).toBe(1);
@@ -116,7 +135,16 @@ describe("sweepOnce", () => {
 
     const authRequests = new AuthRequestStore();
     const authCodes = new AuthCodeStore();
-    const cleanup = new AuthCleanup(clientStore, tokenStore, cache, authRequests, authCodes, SILENT_LOG, () => clock.v);
+    const cleanup = new AuthCleanup(
+      clientStore,
+      tokenStore,
+      cache,
+      authRequests,
+      authCodes,
+      new PendingAuthorizationStore(),
+      SILENT_LOG,
+      () => clock.v,
+    );
 
     const first = await cleanup.sweepOnce();
     expect(first.clientsRemoved).toBe(1);
@@ -136,7 +164,16 @@ describe("sweepOnce", () => {
     authRequests.put("state-1", makeAuthRequestState({ createdAt: clock.v - 10 * 60 })); // > 5min old
     authCodes.put("code-1", makeAuthCodeState({ createdAt: clock.v - 120 })); // > 60s old
 
-    const cleanup = new AuthCleanup(clientStore, tokenStore, cache, authRequests, authCodes, SILENT_LOG, () => clock.v);
+    const cleanup = new AuthCleanup(
+      clientStore,
+      tokenStore,
+      cache,
+      authRequests,
+      authCodes,
+      new PendingAuthorizationStore(),
+      SILENT_LOG,
+      () => clock.v,
+    );
     const result = await cleanup.sweepOnce();
 
     expect(result.authRequestsRemoved).toBe(1);
@@ -153,7 +190,16 @@ describe("sweepOnce", () => {
 
     const authRequests = new AuthRequestStore();
     const authCodes = new AuthCodeStore();
-    const cleanup = new AuthCleanup(clientStore, tokenStore, cache, authRequests, authCodes, SILENT_LOG, () => clock.v);
+    const cleanup = new AuthCleanup(
+      clientStore,
+      tokenStore,
+      cache,
+      authRequests,
+      authCodes,
+      new PendingAuthorizationStore(),
+      SILENT_LOG,
+      () => clock.v,
+    );
     const result = await cleanup.sweepOnce();
 
     expect(result.clientsRemoved).toBe(0);
@@ -199,7 +245,16 @@ describe("sweepOnce", () => {
 
     const authRequests = new AuthRequestStore();
     const authCodes = new AuthCodeStore();
-    const cleanup = new AuthCleanup(clientStore, tokenStore, cache, authRequests, authCodes, SILENT_LOG, () => clock.v);
+    const cleanup = new AuthCleanup(
+      clientStore,
+      tokenStore,
+      cache,
+      authRequests,
+      authCodes,
+      new PendingAuthorizationStore(),
+      SILENT_LOG,
+      () => clock.v,
+    );
     const result = await cleanup.sweepOnce();
 
     expect(result.expiredTokensRemoved).toBe(1);
@@ -207,6 +262,39 @@ describe("sweepOnce", () => {
     expect(await cache.oauthTokens.get(expiredAccess.tokenHash)).toBeNull();
     expect(await cache.oauthTokens.get(liveAccess.tokenHash)).not.toBeNull();
     expect(await cache.oauthTokens.get(liveRefresh.tokenHash)).not.toBeNull();
+  });
+
+  it("sweeps expired pending-authorization (consent) entries (#147)", async () => {
+    const clock = { v: 1_700_000_000 };
+    const authRequests = new AuthRequestStore();
+    const authCodes = new AuthCodeStore();
+    // 10-min TTL store on the same injected clock.
+    const pending = new PendingAuthorizationStore({ ttlMs: 600_000, now: () => clock.v * 1000 });
+    pending.put("stale-ticket", {
+      clientId: "00000000-0000-0000-0000-000000000050",
+      codeChallenge: "c",
+      codeChallengeMethod: "S256",
+      redirectUri: "https://paprika-sync.app/cb",
+      resource: "",
+      claudeState: "s",
+      scope: "openid",
+      createdAt: clock.v - 1000, // created well over 10 min ago
+    });
+
+    const cleanup = new AuthCleanup(
+      clientStore,
+      tokenStore,
+      cache,
+      authRequests,
+      authCodes,
+      pending,
+      SILENT_LOG,
+      () => clock.v,
+    );
+    const result = await cleanup.sweepOnce();
+
+    expect(result.pendingAuthorizationsRemoved).toBe(1);
+    expect(pending.size).toBe(0);
   });
 
   it("expired tokens belonging to a stale client are counted in the cascade, not double-counted", async () => {
@@ -229,7 +317,16 @@ describe("sweepOnce", () => {
 
     const authRequests = new AuthRequestStore();
     const authCodes = new AuthCodeStore();
-    const cleanup = new AuthCleanup(clientStore, tokenStore, cache, authRequests, authCodes, SILENT_LOG, () => clock.v);
+    const cleanup = new AuthCleanup(
+      clientStore,
+      tokenStore,
+      cache,
+      authRequests,
+      authCodes,
+      new PendingAuthorizationStore(),
+      SILENT_LOG,
+      () => clock.v,
+    );
     const result = await cleanup.sweepOnce();
 
     expect(result.clientsRemoved).toBe(1);
@@ -253,6 +350,7 @@ describe("lifecycle", () => {
       cache,
       authRequests,
       authCodes,
+      new PendingAuthorizationStore(),
       SILENT_LOG,
       () => nowSeconds(),
       24 * 60 * 60 * 1000,
@@ -275,6 +373,7 @@ describe("lifecycle", () => {
       cache,
       authRequests,
       authCodes,
+      new PendingAuthorizationStore(),
       SILENT_LOG,
       () => nowSeconds(),
       24 * 60 * 60 * 1000,
@@ -299,6 +398,7 @@ describe("lifecycle", () => {
       cache,
       authRequests,
       authCodes,
+      new PendingAuthorizationStore(),
       SILENT_LOG,
       () => nowSeconds(),
       50,

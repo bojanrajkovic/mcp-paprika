@@ -10,6 +10,7 @@ import { DiskClientRegistrationStore } from "./client-registration.js";
 import { TokenStore } from "./token-store.js";
 import { AuthRequestStore } from "./auth-request-store.js";
 import { AuthCodeStore } from "./auth-code-store.js";
+import { PendingAuthorizationStore } from "./pending-authorization-store.js";
 import { DiskCacheRoot } from "../cache/disk/index.js";
 
 describe("OAuth Metadata Customization", () => {
@@ -32,6 +33,7 @@ describe("OAuth Metadata Customization", () => {
       tokenStore,
       authRequests,
       authCodes,
+      new PendingAuthorizationStore(),
       {
         issuer: "https://idp.stub.example.com",
         authorization_endpoint: "https://idp.stub.example.com/authorize",
@@ -50,6 +52,7 @@ describe("OAuth Metadata Customization", () => {
         trustProxy: false,
         allowlist: { emails: [], subs: [] },
         allowedAlgs: ["RS256"],
+        redirectAllowlist: [],
       },
       "https://mcp.example.com",
       SILENT_LOG,

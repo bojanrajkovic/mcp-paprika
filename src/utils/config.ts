@@ -43,6 +43,7 @@ const ENV_VAR_HINTS: Readonly<Record<string, string>> = {
   "oauth.trustProxy": "MCP_TRUST_PROXY",
   "oauth.allowlist.emails": "MCP_ALLOWED_EMAILS",
   "oauth.allowlist.subs": "MCP_ALLOWED_SUBS",
+  "oauth.redirectAllowlist": "MCP_OAUTH_REDIRECT_ALLOWLIST",
 };
 
 export class ConfigError extends Error {
@@ -246,6 +247,13 @@ export const paprikaConfigSchema = z
             subs: listField.default([]),
           })
           .default({}),
+        // Redirect-origin allowlist for the confused-deputy consent gate (#147).
+        // Raw operator-supplied strings (origins or full redirect URLs); they are
+        // normalized to canonical origins and fail-fast-validated in
+        // `buildAuthContext` — config.ts must not import from src/auth/. Empty
+        // (the default) means every /authorize is routed through the consent
+        // screen (fail-closed). See src/auth/redirect-allowlist.ts.
+        redirectAllowlist: listField.default([]),
       })
       .optional(),
     logging: loggingSchema,
@@ -482,6 +490,8 @@ export function buildEnvOverrides(env: NodeJS.ProcessEnv): Record<string, unknow
   if (env["MCP_OIDC_CLIENT_ID"] !== undefined) oauth["clientId"] = env["MCP_OIDC_CLIENT_ID"];
   if (env["MCP_OIDC_CLIENT_SECRET"] !== undefined) oauth["clientSecret"] = env["MCP_OIDC_CLIENT_SECRET"];
   if (env["MCP_TRUST_PROXY"] !== undefined) oauth["trustProxy"] = env["MCP_TRUST_PROXY"];
+  if (env["MCP_OAUTH_REDIRECT_ALLOWLIST"] !== undefined)
+    oauth["redirectAllowlist"] = env["MCP_OAUTH_REDIRECT_ALLOWLIST"];
 
   if (env["MCP_ALLOWED_EMAILS"] !== undefined) allowlist["emails"] = env["MCP_ALLOWED_EMAILS"];
   if (env["MCP_ALLOWED_SUBS"] !== undefined) allowlist["subs"] = env["MCP_ALLOWED_SUBS"];

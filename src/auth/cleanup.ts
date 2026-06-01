@@ -6,7 +6,8 @@
  *
  * Responsibilities (run every CLEANUP_INTERVAL_MS = 6h):
  * 1. Remove stale DCR clients (lastTokenActivityAt > 90 days old) + cascade their tokens.
- * 2. Sweep expired in-memory AuthRequestStore and AuthCodeStore entries.
+ * 2. Sweep expired in-memory AuthRequestStore, AuthCodeStore, and
+ *    PendingAuthorizationStore (consent-ticket) entries.
  * 3. Sweep expired OAuth tokens (expiresAt < now). `rotateRefresh` deletes the
  *    previous refresh token but not the previous access token — every refresh
  *    leaves a soon-to-expire access record behind. Without this sweep,
@@ -21,6 +22,7 @@ import type { Logger } from "pino";
 import type { DiskCacheRoot } from "../cache/disk/index.js";
 import type { AuthRequestStore } from "./auth-request-store.js";
 import type { AuthCodeStore } from "./auth-code-store.js";
+import type { PendingAuthorizationStore } from "./pending-authorization-store.js";
 import type { DiskClientRegistrationStore } from "./client-registration.js";
 import type { TokenStore } from "./token-store.js";
 import { DCR_CLIENT_STALE_DAYS, nowSeconds } from "./tokens.js";
@@ -36,6 +38,7 @@ export class AuthCleanup {
     private readonly _cache: DiskCacheRoot,
     private readonly _authRequests: AuthRequestStore,
     private readonly _authCodes: AuthCodeStore,
+    private readonly _pendingAuthorizations: PendingAuthorizationStore,
     private readonly log: Logger,
     private readonly _now: () => number = () => nowSeconds(),
     private readonly _intervalMs: number = CLEANUP_INTERVAL_MS,
@@ -72,6 +75,7 @@ export class AuthCleanup {
     expiredTokensRemoved: number;
     authRequestsRemoved: number;
     authCodesRemoved: number;
+    pendingAuthorizationsRemoved: number;
   }> {
     const now = this._now();
 
@@ -100,6 +104,7 @@ export class AuthCleanup {
     // (2) In-memory store sweeps — bound memory under sustained /authorize traffic
     const authRequestsRemoved = this._authRequests.sweepExpired();
     const authCodesRemoved = this._authCodes.sweepExpired();
+    const pendingAuthorizationsRemoved = this._pendingAuthorizations.sweepExpired();
 
     // (3) Expired-token sweep — remove tokens past `expiresAt` whose owning
     //     client is still active (stale-client cascade already covers the
@@ -120,6 +125,7 @@ export class AuthCleanup {
       expiredTokensRemoved,
       authRequestsRemoved,
       authCodesRemoved,
+      pendingAuthorizationsRemoved,
     };
   }
 

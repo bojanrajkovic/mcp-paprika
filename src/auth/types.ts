@@ -19,6 +19,7 @@ import type { JWTVerifyGetKey } from "jose";
 import type { DiscoveryDoc } from "./oidc-client.js";
 import type { AuthRequestStore } from "./auth-request-store.js";
 import type { AuthCodeStore } from "./auth-code-store.js";
+import type { PendingAuthorizationStore } from "./pending-authorization-store.js";
 import type { TokenStore } from "./token-store.js";
 import type { DiskClientRegistrationStore } from "./client-registration.js";
 import type { AuthCleanup } from "./cleanup.js";
@@ -72,6 +73,14 @@ export const ResolvedOAuthConfigSchema = z.object({
     emails: z.array(z.string().email()).readonly(),
     subs: z.array(z.string()).readonly(),
   }),
+  /**
+   * Recognized downstream redirect origins (#147). Normalized canonical
+   * origins (`scheme://host:port`); a request whose redirect origin is a member
+   * passes straight to the upstream IdP, otherwise it is routed through the
+   * consent screen. Empty means every /authorize is gated (fail-closed).
+   * Normalized + fail-fast-validated in `buildAuthContext`.
+   */
+  redirectAllowlist: z.array(z.string()).readonly(),
 });
 
 export type ResolvedOAuthConfig = z.infer<typeof ResolvedOAuthConfigSchema>;
@@ -215,6 +224,22 @@ export const AuthRequestStateSchema = AuthFlowStateBaseSchema.extend({
 export type AuthRequestState = z.infer<typeof AuthRequestStateSchema>;
 
 // ============================================================================
+// In-Memory: PendingAuthorization (#147)
+// ============================================================================
+// Keyed by an opaque consent ticket; ~10-minute TTL. Holds the downstream
+// /authorize request while the user decides on the consent screen, BEFORE any
+// upstream redirect or ourState/ourNonce minting. On "allow", the consent
+// route mints those and constructs an AuthRequestState from this; on "deny" or
+// expiry it is simply dropped. `clientName` is the DCR-supplied (untrusted,
+// optional) display name shown on the screen.
+export const PendingAuthorizationSchema = AuthFlowStateBaseSchema.extend({
+  claudeState: z.string(),
+  clientName: z.string().optional(),
+});
+
+export type PendingAuthorization = z.infer<typeof PendingAuthorizationSchema>;
+
+// ============================================================================
 // In-Memory: AuthCodeState
 // ============================================================================
 // Keyed by our_auth_code; 60-second TTL
@@ -266,6 +291,7 @@ export interface AuthContext {
   readonly jwks: JWTVerifyGetKey;
   readonly authRequests: AuthRequestStore;
   readonly authCodes: AuthCodeStore;
+  readonly pendingAuthorizations: PendingAuthorizationStore;
   readonly tokenStore: TokenStore;
   readonly clientStore: DiskClientRegistrationStore;
   readonly cleanup: AuthCleanup;

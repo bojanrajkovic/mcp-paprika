@@ -15,11 +15,15 @@ import type { DiskClientRegistrationStore } from "./client-registration.js";
 import type { TokenStore } from "./token-store.js";
 import type { AuthRequestStore } from "./auth-request-store.js";
 import type { AuthCodeStore } from "./auth-code-store.js";
+import type { PendingAuthorizationStore } from "./pending-authorization-store.js";
 import type { Logger } from "pino";
 import { generateOpaqueToken, ACCESS_TOKEN_TTL_SECONDS, nowSeconds, hashTokenForStorage } from "./tokens.js";
 import type { Context } from "hono";
 import type { DiscoveryDoc } from "./oidc-client.js";
 import type { ResolvedOAuthConfig } from "./types.js";
+import { isRecognizedOrigin } from "./redirect-allowlist.js";
+import { renderConsentPage, consentSecurityHeaders } from "./consent-page.js";
+import { redirectUpstream, makeUpstreamRedirectDeps, type ApprovedAuthorization } from "./upstream-redirect.js";
 
 /**
  * Minting OAuth 2.1 server provider implementing OAuthServerProvider.
@@ -39,11 +43,19 @@ export class MintingOAuthServerProvider implements OAuthServerProvider {
     private readonly _tokenStore: TokenStore,
     private readonly _authRequests: AuthRequestStore,
     private readonly _authCodes: AuthCodeStore,
+    private readonly _pendingAuthorizations: PendingAuthorizationStore,
     private readonly _discovery: DiscoveryDoc,
     private readonly _oidcConfig: ResolvedOAuthConfig,
     private readonly _publicUrl: string,
     private readonly log: Logger,
-  ) {}
+  ) {
+    // The redirect-origin allowlist is immutable after startup; build the
+    // membership Set once rather than per authorize() call (#147).
+    this._recognizedOrigins = new Set(_oidcConfig.redirectAllowlist);
+  }
+
+  /** Recognized redirect origins (#147), snapshotted from config at construction. */
+  private readonly _recognizedOrigins: ReadonlySet<string>;
 
   get clientsStore(): OAuthRegisteredClientsStore {
     // Type mismatch: SDK's OAuthRegisteredClientsStore interface requires mutable arrays
@@ -57,36 +69,57 @@ export class MintingOAuthServerProvider implements OAuthServerProvider {
     params: AuthorizationParams,
     res: Context | unknown,
   ): Promise<void> {
-    // Library has already validated code_challenge + code_challenge_method=S256 (AC2.9).
-    const ourState = generateOpaqueToken("mcp_state_");
-    const ourNonce = generateOpaqueToken("mcp_nonce_");
+    // @hono/mcp passes a Hono Context as the third parameter (SDK types declare
+    // Response); it reads c.res after this returns. The library has already
+    // validated code_challenge + S256 (AC2.9) and that params.redirectUri is one
+    // of the client's registered redirect_uris.
+    const c = res as unknown as Context;
 
-    this._authRequests.put(ourState, {
-      clientId: client.client_id,
-      codeChallenge: params.codeChallenge,
+    // Confused-deputy gate (#147): a recognized redirect origin goes straight
+    // upstream; an unrecognized one is held and the user is shown a consent
+    // screen before we spend their upstream IdP session on a downstream client
+    // they may not have initiated. Empty allowlist ⇒ nothing recognized ⇒ every
+    // request is gated (fail-closed).
+    if (isRecognizedOrigin(params.redirectUri, this._recognizedOrigins)) {
+      redirectUpstream(c, this._upstreamRedirectDeps(), this._approved(client.client_id, params));
+      return;
+    }
+
+    // `client_name` is optional (DCR clients may omit it); under
+    // exactOptionalPropertyTypes we must omit the key rather than pass undefined.
+    const clientNameProp = client.client_name !== undefined ? { clientName: client.client_name } : {};
+
+    const ticket = generateOpaqueToken("mcp_consent_");
+    this._pendingAuthorizations.put(ticket, {
+      ...this._approved(client.client_id, params),
+      ...clientNameProp,
       codeChallengeMethod: "S256",
+      createdAt: nowSeconds(),
+    });
+
+    const { html, nonce } = renderConsentPage({
+      ticket,
+      ...clientNameProp,
+      redirectHost: new URL(params.redirectUri).origin,
+    });
+    c.res = c.html(html, 200, consentSecurityHeaders(nonce));
+  }
+
+  /** Narrow deps bundle for the shared `redirectUpstream` helper. */
+  private _upstreamRedirectDeps() {
+    return makeUpstreamRedirectDeps(this._authRequests, this._discovery, this._oidcConfig, this._publicUrl);
+  }
+
+  /** Normalize the SDK AuthorizationParams to our ApprovedAuthorization wire shape. */
+  private _approved(clientId: string, params: AuthorizationParams): ApprovedAuthorization {
+    return {
+      clientId,
+      codeChallenge: params.codeChallenge,
       redirectUri: params.redirectUri,
       resource: params.resource?.toString() ?? "",
       claudeState: params.state ?? "",
       scope: params.scopes?.join(" ") ?? "",
-      ourNonce,
-      createdAt: nowSeconds(),
-    });
-
-    // Build upstream redirect. PKCE is NOT chained — see design notes.
-    const upstreamUrl = new URL(this._discovery.authorization_endpoint);
-    upstreamUrl.searchParams.set("response_type", "code");
-    upstreamUrl.searchParams.set("client_id", this._oidcConfig.clientId);
-    upstreamUrl.searchParams.set("redirect_uri", `${this._publicUrl}/oauth/callback`);
-    upstreamUrl.searchParams.set("scope", this._oidcConfig.scopes.join(" "));
-    upstreamUrl.searchParams.set("state", ourState);
-    upstreamUrl.searchParams.set("nonce", ourNonce);
-
-    // @hono/mcp library passes Hono Context as the third parameter, not express Response.
-    // The library reads c.res after calling this, so we set it via redirect.
-    // Cast for SDK type compatibility (SDK declares Response, library passes Context).
-    const c = res as unknown as Context;
-    c.res = c.redirect(upstreamUrl.toString(), 302);
+    };
   }
 
   async challengeForAuthorizationCode(_client: OAuthClientInformationFull, authorizationCode: string): Promise<string> {
