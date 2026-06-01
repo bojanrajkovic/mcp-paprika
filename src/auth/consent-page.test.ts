@@ -102,6 +102,10 @@ describe("consentSecurityHeaders", () => {
     expect(headers["X-Frame-Options"]).toBe("DENY");
   });
 
+  it("forbids MIME sniffing on the consent response", () => {
+    expect(headers["X-Content-Type-Options"]).toBe("nosniff");
+  });
+
   it("forbids caching of the consent response", () => {
     expect(headers["Cache-Control"]).toBe("no-store");
   });

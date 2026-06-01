@@ -200,6 +200,7 @@ export function consentSecurityHeaders(nonce: string): Record<string, string> {
       "frame-ancestors 'none'",
     ].join("; "),
     "X-Frame-Options": "DENY",
+    "X-Content-Type-Options": "nosniff",
     "Cache-Control": "no-store",
   };
 }

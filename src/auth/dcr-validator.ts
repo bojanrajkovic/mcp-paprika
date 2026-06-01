@@ -15,6 +15,7 @@ import { ok, err } from "neverthrow";
 import type { Result } from "neverthrow";
 import type { Logger } from "pino";
 import { OAuthMetadataValidationError } from "./errors.js";
+import { hasPermittedScheme } from "./redirect-allowlist.js";
 
 // ============================================================================
 // Validated Output Types
@@ -44,26 +45,13 @@ export interface ValidatedClientMetadataPatch {
 // Validation Logic
 // ============================================================================
 
-// Helper: validate redirect URI scheme and hostname
+// Helper: validate redirect URI scheme and hostname.
+// Scheme/loopback rules are shared with the #147 consent gate via
+// `hasPermittedScheme` so a URI that passes DCR is judged by the same standard
+// the redirect-origin allowlist uses (and the two can't drift apart).
 function isValidRedirectUri(uri: string, log?: Logger): boolean {
   try {
-    const url = new URL(uri);
-
-    // https is always OK
-    if (url.protocol === "https:") {
-      return true;
-    }
-
-    // http only OK for localhost / 127.0.0.1 / [::1].
-    // Node's WHATWG URL parser preserves brackets around IPv6 hostnames
-    // (e.g. `new URL("http://[::1]/").hostname === "[::1]"`), so compare against
-    // the bracketed form rather than the bare address.
-    if (url.protocol === "http:") {
-      const hostname = url.hostname;
-      return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "[::1]";
-    }
-
-    return false;
+    return hasPermittedScheme(new URL(uri));
   } catch (err) {
     log?.debug({ err, uri }, "invalid redirect_uri rejected by parser");
     return false;

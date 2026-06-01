@@ -23,7 +23,7 @@ import type { DiscoveryDoc } from "./oidc-client.js";
 import type { ResolvedOAuthConfig } from "./types.js";
 import { isRecognizedOrigin } from "./redirect-allowlist.js";
 import { renderConsentPage, consentSecurityHeaders } from "./consent-page.js";
-import { redirectUpstream, type ApprovedAuthorization } from "./upstream-redirect.js";
+import { redirectUpstream, makeUpstreamRedirectDeps, type ApprovedAuthorization } from "./upstream-redirect.js";
 
 /**
  * Minting OAuth 2.1 server provider implementing OAuthServerProvider.
@@ -48,7 +48,14 @@ export class MintingOAuthServerProvider implements OAuthServerProvider {
     private readonly _oidcConfig: ResolvedOAuthConfig,
     private readonly _publicUrl: string,
     private readonly log: Logger,
-  ) {}
+  ) {
+    // The redirect-origin allowlist is immutable after startup; build the
+    // membership Set once rather than per authorize() call (#147).
+    this._recognizedOrigins = new Set(_oidcConfig.redirectAllowlist);
+  }
+
+  /** Recognized redirect origins (#147), snapshotted from config at construction. */
+  private readonly _recognizedOrigins: ReadonlySet<string>;
 
   get clientsStore(): OAuthRegisteredClientsStore {
     // Type mismatch: SDK's OAuthRegisteredClientsStore interface requires mutable arrays
@@ -73,22 +80,26 @@ export class MintingOAuthServerProvider implements OAuthServerProvider {
     // screen before we spend their upstream IdP session on a downstream client
     // they may not have initiated. Empty allowlist ⇒ nothing recognized ⇒ every
     // request is gated (fail-closed).
-    if (isRecognizedOrigin(params.redirectUri, new Set(this._oidcConfig.redirectAllowlist))) {
+    if (isRecognizedOrigin(params.redirectUri, this._recognizedOrigins)) {
       redirectUpstream(c, this._upstreamRedirectDeps(), this._approved(client.client_id, params));
       return;
     }
 
+    // `client_name` is optional (DCR clients may omit it); under
+    // exactOptionalPropertyTypes we must omit the key rather than pass undefined.
+    const clientNameProp = client.client_name !== undefined ? { clientName: client.client_name } : {};
+
     const ticket = generateOpaqueToken("mcp_consent_");
     this._pendingAuthorizations.put(ticket, {
       ...this._approved(client.client_id, params),
-      ...(client.client_name !== undefined ? { clientName: client.client_name } : {}),
+      ...clientNameProp,
       codeChallengeMethod: "S256",
       createdAt: nowSeconds(),
     });
 
     const { html, nonce } = renderConsentPage({
       ticket,
-      ...(client.client_name !== undefined ? { clientName: client.client_name } : {}),
+      ...clientNameProp,
       redirectHost: new URL(params.redirectUri).origin,
     });
     c.res = c.html(html, 200, consentSecurityHeaders(nonce));
@@ -96,13 +107,7 @@ export class MintingOAuthServerProvider implements OAuthServerProvider {
 
   /** Narrow deps bundle for the shared `redirectUpstream` helper. */
   private _upstreamRedirectDeps() {
-    return {
-      authRequests: this._authRequests,
-      authorizationEndpoint: this._discovery.authorization_endpoint,
-      upstreamClientId: this._oidcConfig.clientId,
-      upstreamScopes: this._oidcConfig.scopes,
-      publicUrl: this._publicUrl,
-    };
+    return makeUpstreamRedirectDeps(this._authRequests, this._discovery, this._oidcConfig, this._publicUrl);
   }
 
   /** Normalize the SDK AuthorizationParams to our ApprovedAuthorization wire shape. */

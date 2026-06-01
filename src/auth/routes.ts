@@ -17,7 +17,7 @@ import type { IdTokenPayload } from "./types.js";
 import { verifyIdentity } from "./allowlist.js";
 import { OAuthClientNotFoundError, OAuthMetadataValidationError } from "./errors.js";
 import { renderDeniedPage, renderExpiredPage, consentSecurityHeaders } from "./consent-page.js";
-import { redirectUpstream } from "./upstream-redirect.js";
+import { redirectUpstream, makeUpstreamRedirectDeps } from "./upstream-redirect.js";
 
 export interface AuthRoutesDeps {
   readonly clientStore: DiskClientRegistrationStore;
@@ -209,30 +209,24 @@ export function buildAuthRoutes(deps: AuthRoutesDeps): Hono {
     const redirectOrigin = new URL(pending.redirectUri).origin;
 
     if (decision !== "allow") {
-      deps.log.auth.warn({ clientId: pending.clientId, redirectOrigin, decision: "deny" }, "consent denied");
+      // Record the actual submitted value (capped) rather than a hardcoded
+      // "deny", so a malformed/probing POST is distinguishable in the audit log
+      // from a genuine deny-click; the cap bounds attacker-controlled log size.
+      const submitted = typeof decision === "string" ? decision.slice(0, 32) : "(non-string)";
+      deps.log.auth.warn({ clientId: pending.clientId, redirectOrigin, decision: submitted }, "consent denied");
       const { html, nonce } = renderDeniedPage();
       return c.html(html, 200, consentSecurityHeaders(nonce));
     }
 
     deps.log.auth.info({ clientId: pending.clientId, redirectOrigin, decision: "allow" }, "consent granted");
-    redirectUpstream(
-      c,
-      {
-        authRequests: deps.authRequests,
-        authorizationEndpoint: deps.discovery.authorization_endpoint,
-        upstreamClientId: deps.oidcConfig.clientId,
-        upstreamScopes: deps.oidcConfig.scopes,
-        publicUrl: deps.publicUrl,
-      },
-      {
-        clientId: pending.clientId,
-        codeChallenge: pending.codeChallenge,
-        redirectUri: pending.redirectUri,
-        resource: pending.resource,
-        claudeState: pending.claudeState,
-        scope: pending.scope,
-      },
-    );
+    redirectUpstream(c, makeUpstreamRedirectDeps(deps.authRequests, deps.discovery, deps.oidcConfig, deps.publicUrl), {
+      clientId: pending.clientId,
+      codeChallenge: pending.codeChallenge,
+      redirectUri: pending.redirectUri,
+      resource: pending.resource,
+      claudeState: pending.claudeState,
+      scope: pending.scope,
+    });
     return c.res;
   });
 

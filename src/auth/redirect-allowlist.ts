@@ -31,7 +31,7 @@ import { OAuthConfigError } from "./errors.js";
  * same standard here. Node's WHATWG parser keeps the brackets on IPv6 hosts,
  * so `[::1]` is compared in bracketed form.
  */
-function hasPermittedScheme(url: URL): boolean {
+export function hasPermittedScheme(url: URL): boolean {
   if (url.protocol === "https:") return true;
   if (url.protocol === "http:") {
     const host = url.hostname;

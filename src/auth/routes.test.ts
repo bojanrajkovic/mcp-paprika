@@ -912,6 +912,30 @@ describe("Auth Routes", () => {
       // tickets must never be logged
       expect(JSON.stringify(records)).not.toContain("mcp_consent_log_");
     });
+
+    it("logs the actual submitted decision (not a hardcoded 'deny') for a non-allow value", async () => {
+      const { log: captureLog, records } = makePinoCapture();
+      const deps = {
+        ...makeRoutesConfig({
+          clientStore,
+          tokenStore,
+          authRequests,
+          authCodes,
+          pendingAuthorizations,
+          oidcStubIssuer: oidcStub.issuer,
+        }),
+        log: { auth: captureLog, oidcClient: SILENT_LOG },
+      };
+      const localApp = new Hono();
+      localApp.route("/", buildAuthRoutes(deps));
+
+      seedPending("mcp_consent_cancel");
+      const res = await postConsent(localApp, "mcp_consent_cancel", "cancel");
+
+      expect(res.status).toBe(200); // any non-allow value denies
+      const denied = records.find((r) => r["msg"] === "consent denied");
+      expect(denied?.["decision"]).toBe("cancel");
+    });
   });
 
   describe("pickTokenAuthMethod (RFC 8414 token_endpoint_auth_methods_supported)", () => {

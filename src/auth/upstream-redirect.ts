@@ -25,6 +25,28 @@ export interface UpstreamRedirectDeps {
 }
 
 /**
+ * Build `UpstreamRedirectDeps` from the auth runtime pieces. Single source of
+ * the `discovery`/`oidcConfig` → deps field mapping, shared by
+ * `provider.authorize()`'s recognized branch and the `/oauth/consent` allow
+ * handler so the two can't drift. Structural param types keep this decoupled
+ * from `DiscoveryDoc` / `ResolvedOAuthConfig`.
+ */
+export function makeUpstreamRedirectDeps(
+  authRequests: AuthRequestStore,
+  discovery: { readonly authorization_endpoint: string },
+  oidcConfig: { readonly clientId: string; readonly scopes: ReadonlyArray<string> },
+  publicUrl: string,
+): UpstreamRedirectDeps {
+  return {
+    authRequests,
+    authorizationEndpoint: discovery.authorization_endpoint,
+    upstreamClientId: oidcConfig.clientId,
+    upstreamScopes: oidcConfig.scopes,
+    publicUrl,
+  };
+}
+
+/**
  * An authorization the server has decided to forward upstream — either because
  * its redirect origin was recognized, or because the user consented. All fields
  * are already normalized to the wire shapes `AuthRequestState` stores.
