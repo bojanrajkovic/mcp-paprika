@@ -49,7 +49,7 @@ Self-describing signed tokens (a JWT carrying identity and scope claims, verifie
 
 ### Consent-gate design for #193 (consent screen vs. closing open registration vs. no gate)
 
-_Not recorded at decision time — needs owner input._
+Three shapes were on the table. **No gate at all** — forwarding every dynamically-registered client straight upstream — was rejected outright: that is the confused-deputy vulnerability itself. **Closing open dynamic client registration** (admin-register clients only) was rejected because MCP clients self-register with no out-of-band relationship to this server, so requiring pre-registration would break the connect flow for exactly the clients this is meant to serve. **A trust-on-first-use scheme or an admin management interface** for approving redirect origins were considered and set aside: a single-operator deployment has no admin UI and no persistent consent grant to build TOFU on, and a first-seen-origin trust decision is itself poisonable by whoever arrives first. The redirect-origin allowlist plus per-login consent is the fail-closed middle — it keeps DCR open while structurally blocking the attack, and degrades to consent-on-every-login until the operator seeds the allowlist.
 
 ## Consequences
 

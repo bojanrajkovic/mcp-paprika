@@ -45,11 +45,11 @@ flowchart TB
 
 ### A single transport (stdio-only, or HTTP-only)
 
-_Not recorded at decision time — needs owner input._
+Rejected because the two client worlds genuinely need different transports, and the more important one needs HTTP. The intended audience is broad — mobile, web, desktop, Claude Code, cowork — and those reach the server over HTTP, so HTTP is the transport that serves most potential users. stdio is retained as the local, single-machine / low-trust surface (and a convenient testable one), where the OS process boundary already establishes trust and no auth is needed. An HTTP-only build would have dropped the zero-ceremony local path; a stdio-only build would have abandoned the primary remote audience.
 
 ### A dependency-injection container instead of hand-wired contexts
 
-_Not recorded at decision time — needs owner input._
+Not deliberately weighed — hand-wiring was the default, not a considered rejection of a container. Recorded honestly rather than back-filled with a rationale: the deferred-getter bootstrap cycle (above) has since grown complex enough that a DI/container or a more structured builder may be the better shape. Evaluating that is tracked in [#197](https://github.com/bojanrajkovic/mcp-paprika/issues/197) rather than asserted as a closed decision here.
 
 ## Consequences
 

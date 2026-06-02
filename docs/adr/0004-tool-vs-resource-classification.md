@@ -46,9 +46,9 @@ Rejected on cost-without-benefit grounds. These records are too granular for a u
 
 Rejected because these entities exist only to let the model resolve a display name to a UID when authoring or filtering other entities. A single list tool satisfies that. There is no document to read on its own and (in the case of meal types) no content the model authors — creating a meal type is a one-time configuration act performed by preference in the Paprika app, not model-authored content. Categories do carry write tools, but as a deliberate exception for an organizational structure the model legitimately curates; they still get no individual read and no resource, since category data is resolved on demand when rendering the recipes that reference it.
 
-### Other weighed alternatives
+### Everything as a tool, no resource surface at all
 
-_Not recorded at decision time — needs owner input._
+Rejected because it would deny the user the ability to attach an entity — a whole recipe, grocery list, or menu — into a conversation as context. The resource surface serves a consumer the tools cannot reach: the user, via an `@`-attach. Collapsing everything into tools would erase that user-driven path and leave only the model-driven one.
 
 ## Consequences
 
