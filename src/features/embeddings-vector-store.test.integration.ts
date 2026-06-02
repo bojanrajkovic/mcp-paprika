@@ -17,7 +17,7 @@ import { EmbeddingClient } from "./embeddings.js";
 import { VectorStore } from "./vector-store.js";
 import { makeRecipe } from "../cache/__fixtures__/recipes.js";
 import type { EmbeddingConfig } from "../utils/config.js";
-import type { RecipeUid, CategoryUid } from "../paprika/types.js";
+import type { RecipeUid, CategoryUid } from "../ids.js";
 
 const OLLAMA_BASE_URL = "http://localhost:11434/v1";
 const OLLAMA_MODEL = "nomic-embed-text";

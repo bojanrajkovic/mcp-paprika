@@ -5,21 +5,25 @@ import { fixture as refFixture } from "./reference.js";
 import { fixture as writeFixture } from "./writes.js";
 import { useMswServer } from "../msw.js";
 import { PaprikaClient } from "../../paprika/client.js";
+import { CategorySchema } from "../../category/types.js";
+import { GroceryIngredientSchema } from "../../grocery-ingredient/types.js";
+import { GroceryItemSchema } from "../../grocery-item/types.js";
+import { GroceryListSchema } from "../../grocery-list/types.js";
 import {
-  RecipeSchema,
-  PantryItemSchema,
   PantryItemUidSchema,
-  GroceryListSchema,
   GroceryListUidSchema,
-  GroceryItemSchema,
   GroceryItemUidSchema,
-  GroceryIngredientSchema,
   GroceryIngredientUidSchema,
-  MealSchema,
-  MealTypeSchema,
-  CategorySchema,
-} from "../../paprika/types.js";
-import type { Recipe, PantryItem, GroceryList, GroceryItem, GroceryIngredient } from "../../paprika/types.js";
+} from "../../ids.js";
+import { MealTypeSchema } from "../../meal-type/types.js";
+import { MealSchema } from "../../meal/types.js";
+import { PantryItemSchema } from "../../pantry/types.js";
+import { RecipeSchema } from "../../recipe/types.js";
+import type { GroceryIngredient } from "../../grocery-ingredient/types.js";
+import type { GroceryItem } from "../../grocery-item/types.js";
+import type { GroceryList } from "../../grocery-list/types.js";
+import type { PantryItem } from "../../pantry/types.js";
+import type { Recipe } from "../../recipe/types.js";
 import { makeSnakeCaseRecipe } from "../../cache/__fixtures__/recipes.js";
 import { makeSnakeCasePantryItem } from "../../cache/__fixtures__/pantry.js";
 import { makeSnakeCaseMeal, makeSnakeCaseMealType } from "../../cache/__fixtures__/meals.js";

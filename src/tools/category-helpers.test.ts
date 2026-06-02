@@ -11,7 +11,7 @@ import {
   wouldCreateCycle,
 } from "./category-helpers.js";
 import { seed } from "./tool-test-utils.js";
-import type { CategoryUid } from "../paprika/types.js";
+import type { CategoryUid } from "../ids.js";
 import type { ServerContext } from "../types/server-context.js";
 
 function makeCtx(overrides?: {

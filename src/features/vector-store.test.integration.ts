@@ -7,7 +7,7 @@ import { join } from "node:path";
 import { VectorStore } from "./vector-store.js";
 import { makeRecipe } from "../cache/__fixtures__/recipes.js";
 import type { EmbeddingClient } from "./embeddings.js";
-import type { RecipeUid } from "../paprika/types.js";
+import type { RecipeUid } from "../ids.js";
 
 /**
  * Deterministic embedding function for integration tests.

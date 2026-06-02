@@ -6,7 +6,7 @@ import { makePantryItem } from "../cache/__fixtures__/pantry.js";
 import { makeAisle } from "../cache/__fixtures__/aisles.js";
 import { registerAddPantryItemsTool } from "./pantry-batch-add.js";
 import { makeTestServer, makeCtx, getText, makePinoCapture, seed } from "./tool-test-utils.js";
-import type { PantryItemUid, AisleUid } from "../paprika/types.js";
+import type { PantryItemUid, AisleUid } from "../ids.js";
 import { PaprikaAPIError } from "../paprika/errors.js";
 
 describe("add_pantry_items tool", () => {

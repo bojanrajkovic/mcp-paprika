@@ -59,7 +59,8 @@ import type { EmbeddingClient } from "./embeddings.js";
 import { recipeToEmbeddingText } from "./embeddings.js";
 import { VectorStoreError } from "./vector-store-errors.js";
 import type { Logger } from "pino";
-import type { Recipe, CategoryUid } from "../paprika/types.js";
+import type { CategoryUid } from "../ids.js";
+import type { Recipe } from "../recipe/types.js";
 import { SILENT_LOG } from "../utils/log.js";
 import { isNodeError } from "../utils/errors.js";
 

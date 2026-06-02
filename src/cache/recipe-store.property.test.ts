@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import fc from "fast-check";
 import { RecipeStore } from "./recipe-store.js";
 import { makeRecipe } from "./__fixtures__/recipes.js";
-import type { RecipeUid } from "../paprika/types.js";
+import type { RecipeUid } from "../ids.js";
 
 describe("RecipeStore property-based tests", () => {
   describe("recipe-query-store.AC3.5 & AC3.8: Search result ordering invariant and trashed recipes", () => {

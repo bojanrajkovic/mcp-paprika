@@ -1,7 +1,7 @@
 import { toMessage } from "../utils/log.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { PantryItemUidSchema } from "../paprika/types.js";
+import { PantryItemUidSchema } from "../ids.js";
 import { textResult } from "./helpers.js";
 import { commitPantryItem, pantryStartGuard } from "./pantry-helpers.js";
 import type { ServerContext } from "../types/server-context.js";

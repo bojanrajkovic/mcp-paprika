@@ -14,7 +14,8 @@ import {
 import { mealToMarkdown } from "./meal-helpers.js";
 import { makeTestServer, makeCtx, getText, seed } from "./tool-test-utils.js";
 import type { SeedData } from "./tool-test-utils.js";
-import type { MealTypeUid, RecipeUid, MealUid, Meal } from "../paprika/types.js";
+import type { MealTypeUid, RecipeUid, MealUid } from "../ids.js";
+import type { Meal } from "../meal/types.js";
 
 // Stable UIDs used across both describe blocks so tests don't depend on
 // the module-level counters in the fixture factories.

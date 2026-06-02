@@ -1,18 +1,16 @@
 import type { AppContext } from "../server/app-context.js";
-import type {
-  Aisle,
-  Category,
-  GroceryIngredient,
-  GroceryItem,
-  GroceryList,
-  Meal,
-  MealType,
-  Menu,
-  MenuItem,
-  PantryItem,
-  Photo,
-  Recipe,
-} from "../paprika/types.js";
+import type { Aisle } from "../aisle/types.js";
+import type { Category } from "../category/types.js";
+import type { GroceryIngredient } from "../grocery-ingredient/types.js";
+import type { GroceryItem } from "../grocery-item/types.js";
+import type { GroceryList } from "../grocery-list/types.js";
+import type { MealType } from "../meal-type/types.js";
+import type { Meal } from "../meal/types.js";
+import type { MenuItem } from "../menu-item/types.js";
+import type { Menu } from "../menu/types.js";
+import type { PantryItem } from "../pantry/types.js";
+import type { Photo } from "../photo/types.js";
+import type { Recipe } from "../recipe/types.js";
 
 /**
  * Declarative seed payload for a test {@link AppContext}. Each key maps to one

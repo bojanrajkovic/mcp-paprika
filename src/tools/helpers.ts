@@ -1,7 +1,9 @@
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { err, ok, type Result } from "neverthrow";
 import { z } from "zod";
-import type { Category, CategoryUid, Recipe } from "../paprika/types.js";
+import type { Category } from "../category/types.js";
+import type { CategoryUid } from "../ids.js";
+import type { Recipe } from "../recipe/types.js";
 import type { ServerContext } from "../types/server-context.js";
 
 export function textResult(text: string): { content: [{ type: "text"; text: string }] } {

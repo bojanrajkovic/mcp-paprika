@@ -3,7 +3,7 @@ import { mkdtemp, readFile, readdir, stat, rm, writeFile } from "node:fs/promise
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
-import type { RecipeUid, PantryItemUid } from "../../paprika/types.js";
+import type { RecipeUid, PantryItemUid } from "../../ids.js";
 import { DiskCacheRoot } from "./index.js";
 import { makeRecipe, makeCategory } from "../__fixtures__/recipes.js";
 import { makePantryItem } from "../__fixtures__/pantry.js";

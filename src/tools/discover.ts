@@ -4,7 +4,8 @@ import { z } from "zod";
 import { coldStartGuard, recipeMetadataLines, textResult } from "./helpers.js";
 import type { ServerContext } from "../types/server-context.js";
 import type { VectorStore, SemanticResult } from "../features/vector-store.js";
-import type { Recipe, RecipeUid } from "../paprika/types.js";
+import type { RecipeUid } from "../ids.js";
+import type { Recipe } from "../recipe/types.js";
 
 export function registerDiscoverTool(server: McpServer, ctx: ServerContext, vectorStore: VectorStore): void {
   const log = ctx.log.child({ component: "discover_recipes" });

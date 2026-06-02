@@ -3,8 +3,9 @@ import { join } from "node:path";
 import type { Logger } from "pino";
 import { z } from "zod";
 
-import { RecipeStoredSchema } from "../../paprika/types.js";
-import type { DiffResult, Recipe, RecipeEntry } from "../../paprika/types.js";
+import { RecipeStoredSchema } from "../../recipe/types.js";
+import type { DiffResult } from "../../paprika/sync-types.js";
+import type { Recipe, RecipeEntry } from "../../recipe/types.js";
 import { isNodeError } from "../../utils/errors.js";
 
 import { DiskCache } from "./base.js";

@@ -1,6 +1,8 @@
 import { createHash, randomUUID } from "node:crypto";
 
-import { PhotoUidSchema, type Photo, type Recipe } from "../paprika/types.js";
+import { PhotoUidSchema } from "../ids.js";
+import type { Photo } from "../photo/types.js";
+import type { Recipe } from "../recipe/types.js";
 import type { ServerContext } from "../types/server-context.js";
 
 /** Longest edge (px) of the recipe thumbnail Paprika stores in `recipe.photo`. */

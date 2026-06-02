@@ -1,4 +1,5 @@
-import type { GroceryItem, GroceryItemUid } from "../../paprika/types.js";
+import type { GroceryItem } from "../../grocery-item/types.js";
+import type { GroceryItemUid } from "../../ids.js";
 
 let groceryItemCounter = 0;
 

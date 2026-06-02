@@ -6,7 +6,7 @@ import { makeGroceryItem } from "../cache/__fixtures__/grocery-items.js";
 import { registerClearPurchasedTool, registerClearAllTool } from "./grocery-clear.js";
 import { makeTestServer, makeCtx, getText, makeStubNotifier, seed } from "./tool-test-utils.js";
 import type { SeedData } from "./tool-test-utils.js";
-import type { GroceryListUid, GroceryItemUid } from "../paprika/types.js";
+import type { GroceryListUid, GroceryItemUid } from "../ids.js";
 
 const WEEKLY_LIST = makeGroceryList({ uid: "LIST-1" as GroceryListUid, name: "Weekly" });
 

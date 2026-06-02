@@ -2,13 +2,8 @@ import { toMessage } from "../utils/log.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import {
-  GroceryItemUidSchema,
-  GroceryListUidSchema,
-  GroceryIngredientUidSchema,
-  AisleUidSchema,
-} from "../paprika/types.js";
-import type { GroceryItem } from "../paprika/types.js";
+import { GroceryItemUidSchema, GroceryListUidSchema, GroceryIngredientUidSchema, AisleUidSchema } from "../ids.js";
+import type { GroceryItem } from "../grocery-item/types.js";
 import { textResult } from "./helpers.js";
 import { ensureAisle } from "./aisle-helpers.js";
 import {

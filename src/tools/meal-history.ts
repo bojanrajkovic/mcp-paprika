@@ -5,9 +5,10 @@ import { z } from "zod";
 import { mealStartGuard, mealTypeSpecSchema, resolveMealTypeSpec } from "./meal-helpers.js";
 import { textResult } from "./helpers.js";
 import { parseInstant } from "../utils/dates.js";
-import { RecipeUidSchema } from "../paprika/types.js";
+import { RecipeUidSchema } from "../ids.js";
 import type { ServerContext } from "../types/server-context.js";
-import type { Meal, MealTypeUid } from "../paprika/types.js";
+import type { MealTypeUid } from "../ids.js";
+import type { Meal } from "../meal/types.js";
 
 function formatMealLine(
   meal: Meal,

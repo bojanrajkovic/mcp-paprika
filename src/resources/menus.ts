@@ -1,6 +1,6 @@
 import { ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { MenuUid } from "../paprika/types.js";
+import type { MenuUid } from "../ids.js";
 import type { ServerContext } from "../types/server-context.js";
 import { menuToMarkdown } from "../tools/menu-helpers.js";
 

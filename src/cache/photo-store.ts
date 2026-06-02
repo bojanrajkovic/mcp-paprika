@@ -1,5 +1,6 @@
 import { TombstoneEntityStore } from "../entity/index.js";
-import type { Photo, PhotoUid, RecipeUid } from "../paprika/types.js";
+import type { PhotoUid, RecipeUid } from "../ids.js";
+import type { Photo } from "../photo/types.js";
 
 /**
  * In-memory query layer for recipe photos, hydrated by the sync engine. Extends

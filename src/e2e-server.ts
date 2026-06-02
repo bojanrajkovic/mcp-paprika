@@ -30,15 +30,10 @@ import type { AppContext } from "./server/app-context.js";
 import { createServerRef, singleServerNotifier } from "./server/notifier.js";
 import { getCacheDir } from "./utils/xdg.js";
 import { createLogger, toMessage } from "./utils/log.js";
-import type {
-  Category,
-  Recipe,
-  RecipeEntry,
-  RecipeUid,
-  CategoryUid,
-  PantryItem,
-  PantryItemUid,
-} from "./paprika/types.js";
+import type { Category } from "./category/types.js";
+import type { RecipeUid, CategoryUid, PantryItemUid } from "./ids.js";
+import type { PantryItem } from "./pantry/types.js";
+import type { Recipe, RecipeEntry } from "./recipe/types.js";
 
 interface IMockPaprikaClient {
   authenticate(): Promise<void>;

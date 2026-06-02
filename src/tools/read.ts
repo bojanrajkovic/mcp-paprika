@@ -1,6 +1,6 @@
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { RecipeUidSchema } from "../paprika/types.js";
+import { RecipeUidSchema } from "../ids.js";
 import {
   coldStartGuard,
   formatLookupOutcome,

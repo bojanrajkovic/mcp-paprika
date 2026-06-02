@@ -4,7 +4,7 @@ import { RecipeStore } from "../cache/recipe-store.js";
 import { makePantryItem } from "../cache/__fixtures__/pantry.js";
 import { registerDeletePantryItemTool } from "./pantry-delete.js";
 import { makeTestServer, makeCtx, getText, seed } from "./tool-test-utils.js";
-import type { PantryItemUid } from "../paprika/types.js";
+import type { PantryItemUid } from "../ids.js";
 import { PaprikaAPIError } from "../paprika/errors.js";
 
 describe("pantry-mutations.AC6: delete_pantry_item tool", () => {

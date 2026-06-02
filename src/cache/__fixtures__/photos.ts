@@ -1,5 +1,5 @@
-import type { Photo } from "../../paprika/types.js";
-import type { PhotoUid } from "../../paprika/types.js";
+import type { Photo } from "../../photo/types.js";
+import type { PhotoUid } from "../../ids.js";
 
 let photoCounter = 0;
 
