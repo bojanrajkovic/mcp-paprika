@@ -54,4 +54,5 @@ For per-directory detail, read that directory's `CLAUDE.md`. For current counts 
 - **neverthrow in the core** — `Result` with `.match()` / `.andThen()`; never `.isOk()` / `.isErr()`; never throw in core logic. Exceptions live only at infra boundaries.
 - **No `console`** — stdout is the MCP wire in stdio mode; use `ctx.log`. The `no-console` oxlint rule enforces it. Two documented `process.stderr.write` exceptions: `src/index.ts` and `src/transport/stdio.ts`.
 - **Slim directory `CLAUDE.md`** — each one points at its canonical doc plus reactively-accreted Sharp edges; it is not a mini architecture doc. See `docs/documentation-system.md`.
+- **`AGENTS.md` symlinks** — every `CLAUDE.md` has a sibling `AGENTS.md` symlink, so agents that look for `AGENTS.md` get the same guidance; the symlink keeps the two identical.
 - **Reference content is read from source, never enumerated in prose** — counts, store lists, field tables, and env dumps live in the registry, the Zod schemas, and `package.json`, not here. See `docs/documentation-system.md`.
