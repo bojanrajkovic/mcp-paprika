@@ -10,7 +10,7 @@ import type { IRetryContext } from "cockatiel";
 import type { Logger } from "pino";
 import { SILENT_LOG } from "../utils/log.js";
 import { z } from "zod";
-import type { Recipe } from "../paprika/types.js";
+import type { Recipe } from "../recipe/types.js";
 import type { EmbeddingConfig } from "../utils/config.js";
 import {
   createResilientExecutor,

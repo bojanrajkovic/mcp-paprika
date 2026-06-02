@@ -1,5 +1,6 @@
 import { EntityStore } from "../entity/index.js";
-import type { Aisle, AisleUid } from "../paprika/types.js";
+import type { Aisle } from "../aisle/types.js";
+import type { AisleUid } from "../ids.js";
 
 export class AisleStore extends EntityStore<Aisle, AisleUid> {
   constructor(opts?: { readonly pendingWriteTtlMs?: number }) {

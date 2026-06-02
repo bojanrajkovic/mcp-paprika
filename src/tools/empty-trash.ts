@@ -1,7 +1,8 @@
 import { toMessage } from "../utils/log.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { RecipeUidSchema, type Recipe } from "../paprika/types.js";
+import { RecipeUidSchema } from "../ids.js";
+import type { Recipe } from "../recipe/types.js";
 import { PaprikaAPIError } from "../paprika/errors.js";
 import { coldStartGuard, commitRecipeHardDelete, textResult } from "./helpers.js";
 import type { ServerContext } from "../types/server-context.js";

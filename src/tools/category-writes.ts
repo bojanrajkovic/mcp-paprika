@@ -2,8 +2,9 @@ import { toMessage } from "../utils/log.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { CategoryUidSchema } from "../paprika/types.js";
-import type { Category, CategoryUid } from "../paprika/types.js";
+import { CategoryUidSchema } from "../ids.js";
+import type { Category } from "../category/types.js";
+import type { CategoryUid } from "../ids.js";
 import { textResult } from "./helpers.js";
 import {
   categoryStartGuard,

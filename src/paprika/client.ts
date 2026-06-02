@@ -16,42 +16,32 @@ import {
 import type { Logger } from "pino";
 import { z } from "zod";
 import type { ZodType, ZodTypeDef } from "zod";
-import type {
-  Aisle,
-  Category,
-  GroceryIngredient,
-  GroceryItem,
-  GroceryList,
-  Meal,
-  MealType,
-  Menu,
-  MenuItem,
-  PantryItem,
-  Photo,
-  Recipe,
-  RecipeEntry,
-  RecipeUid,
-} from "./types.js";
-import {
-  AisleSchema,
-  AuthResponseSchema,
-  CategorySchema,
-  GroceryIngredientSchema,
-  GroceryItemSchema,
-  GroceryListSchema,
-  MealSchema,
-  MealTypeSchema,
-  mealToApiPayload,
-  MenuItemSchema,
-  menuItemToApiPayload,
-  MenuSchema,
-  menuToApiPayload,
-  PantryItemSchema,
-  PhotoSchema,
-  photoToApiPayload,
-  RecipeEntrySchema,
-  RecipeSchema,
-} from "./types.js";
+import type { Aisle } from "../aisle/types.js";
+import type { Category } from "../category/types.js";
+import type { GroceryIngredient } from "../grocery-ingredient/types.js";
+import type { GroceryItem } from "../grocery-item/types.js";
+import type { GroceryList } from "../grocery-list/types.js";
+import type { RecipeUid } from "../ids.js";
+import type { MealType } from "../meal-type/types.js";
+import type { Meal } from "../meal/types.js";
+import type { MenuItem } from "../menu-item/types.js";
+import type { Menu } from "../menu/types.js";
+import type { PantryItem } from "../pantry/types.js";
+import type { Photo } from "../photo/types.js";
+import type { Recipe, RecipeEntry } from "../recipe/types.js";
+import { AisleSchema } from "../aisle/types.js";
+import { CategorySchema } from "../category/types.js";
+import { GroceryIngredientSchema } from "../grocery-ingredient/types.js";
+import { GroceryItemSchema } from "../grocery-item/types.js";
+import { GroceryListSchema } from "../grocery-list/types.js";
+import { MealTypeSchema } from "../meal-type/types.js";
+import { MealSchema, mealToApiPayload } from "../meal/types.js";
+import { MenuItemSchema, menuItemToApiPayload } from "../menu-item/types.js";
+import { MenuSchema, menuToApiPayload } from "../menu/types.js";
+import { PantryItemSchema } from "../pantry/types.js";
+import { AuthResponseSchema } from "./auth-response.js";
+import { PhotoSchema, photoToApiPayload } from "../photo/types.js";
+import { RecipeEntrySchema, RecipeSchema } from "../recipe/types.js";
 import { computeRecipeHash } from "./recipe-hash.js";
 import { PaprikaAuthError, PaprikaAPIError } from "./errors.js";
 import { CircuitOpenError } from "../utils/errors.js";

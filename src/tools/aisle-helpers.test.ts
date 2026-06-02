@@ -6,7 +6,7 @@ import { aisleStartGuard, commitAisle, ensureAisle } from "./aisle-helpers.js";
 import { makeTestServer, makeCtx, seed } from "./tool-test-utils.js";
 import { RecipeStore } from "../cache/recipe-store.js";
 import type { ServerContext } from "../types/server-context.js";
-import type { Aisle } from "../paprika/types.js";
+import type { Aisle } from "../aisle/types.js";
 
 function makeAisleCtx(
   aisleStore: AisleStore,

@@ -1,5 +1,6 @@
-import type { Recipe, Category } from "../../paprika/types.js";
-import type { RecipeUid, CategoryUid } from "../../paprika/types.js";
+import type { Category } from "../../category/types.js";
+import type { Recipe } from "../../recipe/types.js";
+import type { RecipeUid, CategoryUid } from "../../ids.js";
 
 let recipeCounter = 0;
 let categoryCounter = 0;

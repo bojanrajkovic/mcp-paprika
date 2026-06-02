@@ -4,7 +4,8 @@ import sharp from "sharp";
 
 import { RecipeStore } from "../cache/recipe-store.js";
 import { makeRecipe } from "../cache/__fixtures__/recipes.js";
-import { RecipeUidSchema, type Recipe } from "../paprika/types.js";
+import { RecipeUidSchema } from "../ids.js";
+import type { Recipe } from "../recipe/types.js";
 import { makeCtx, makeTestServer, getText, seed } from "./tool-test-utils.js";
 import { registerGeneratePhotoTool } from "./photo-generate.js";
 import type { PhotographyClient, GeneratedPhoto, GeneratePhotoOptions } from "../features/photography.js";

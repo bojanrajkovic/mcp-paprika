@@ -1,5 +1,6 @@
 import { TombstoneEntityStore } from "../entity/index.js";
-import type { Category, CategoryUid } from "../paprika/types.js";
+import type { Category } from "../category/types.js";
+import type { CategoryUid } from "../ids.js";
 
 /**
  * In-memory query layer for recipe categories, hydrated by the sync engine.

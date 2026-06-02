@@ -4,7 +4,7 @@ import { MealStore } from "../cache/meal-store.js";
 import { RecipeStore } from "../cache/recipe-store.js";
 import { makeMeal, makeMealType } from "../cache/__fixtures__/meals.js";
 import { makeRecipe } from "../cache/__fixtures__/recipes.js";
-import type { MealTypeUid, RecipeUid } from "../paprika/types.js";
+import type { MealTypeUid, RecipeUid } from "../ids.js";
 import {
   commitMeal,
   commitMealsBatch,

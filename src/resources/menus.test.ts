@@ -4,7 +4,7 @@ import { makeMenu, makeMenuItem } from "../cache/__fixtures__/menus.js";
 import { makeMealType } from "../cache/__fixtures__/meals.js";
 import { makeTestServer, makeCtx, seed } from "../tools/tool-test-utils.js";
 import { registerMenuResources } from "./menus.js";
-import type { MealTypeUid, MenuItemUid, MenuUid } from "../paprika/types.js";
+import type { MealTypeUid, MenuItemUid, MenuUid } from "../ids.js";
 
 describe("menu MCP resource", () => {
   describe("list callback", () => {

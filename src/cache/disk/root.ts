@@ -5,32 +5,28 @@ import { z } from "zod";
 
 import { OAuthTokenSchema } from "../../auth/types.js";
 import type { OAuthToken } from "../../auth/types.js";
-import {
-  AisleStoredSchema,
-  CategoryStoredSchema,
-  GroceryIngredientStoredSchema,
-  GroceryItemStoredSchema,
-  GroceryListStoredSchema,
-  MealStoredSchema,
-  MealTypeStoredSchema,
-  MenuItemStoredSchema,
-  MenuStoredSchema,
-  PantryItemStoredSchema,
-  PhotoStoredSchema,
-} from "../../paprika/types.js";
-import type {
-  Aisle,
-  Category,
-  GroceryIngredient,
-  GroceryItem,
-  GroceryList,
-  Meal,
-  MealType,
-  Menu,
-  MenuItem,
-  PantryItem,
-  Photo,
-} from "../../paprika/types.js";
+import { AisleStoredSchema } from "../../aisle/types.js";
+import { CategoryStoredSchema } from "../../category/types.js";
+import { GroceryIngredientStoredSchema } from "../../grocery-ingredient/types.js";
+import { GroceryItemStoredSchema } from "../../grocery-item/types.js";
+import { GroceryListStoredSchema } from "../../grocery-list/types.js";
+import { MealTypeStoredSchema } from "../../meal-type/types.js";
+import { MealStoredSchema } from "../../meal/types.js";
+import { MenuItemStoredSchema } from "../../menu-item/types.js";
+import { MenuStoredSchema } from "../../menu/types.js";
+import { PantryItemStoredSchema } from "../../pantry/types.js";
+import { PhotoStoredSchema } from "../../photo/types.js";
+import type { Aisle } from "../../aisle/types.js";
+import type { Category } from "../../category/types.js";
+import type { GroceryIngredient } from "../../grocery-ingredient/types.js";
+import type { GroceryItem } from "../../grocery-item/types.js";
+import type { GroceryList } from "../../grocery-list/types.js";
+import type { MealType } from "../../meal-type/types.js";
+import type { Meal } from "../../meal/types.js";
+import type { MenuItem } from "../../menu-item/types.js";
+import type { Menu } from "../../menu/types.js";
+import type { PantryItem } from "../../pantry/types.js";
+import type { Photo } from "../../photo/types.js";
 import { isNodeError } from "../../utils/errors.js";
 import { SILENT_LOG } from "../../utils/log.js";
 

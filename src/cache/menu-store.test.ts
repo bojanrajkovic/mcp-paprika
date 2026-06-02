@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { MenuStore } from "./menu-store.js";
 import { makeMenu } from "./__fixtures__/menus.js";
-import type { MenuUid } from "../paprika/types.js";
+import type { MenuUid } from "../ids.js";
 
 describe("MenuStore", () => {
   let store: MenuStore;

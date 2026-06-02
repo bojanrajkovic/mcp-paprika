@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import fc from "fast-check";
 import { recipeToMarkdown } from "./helpers.js";
-import type { RecipeUid, CategoryUid } from "../paprika/types.js";
+import type { RecipeUid, CategoryUid } from "../ids.js";
 
 const arbitraryRecipe = fc.record({
   uid: fc.string().map((s) => s as RecipeUid),

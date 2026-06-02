@@ -1,4 +1,5 @@
-import type { Recipe, RecipeUid } from "../paprika/types.js";
+import type { RecipeUid } from "../ids.js";
+import type { Recipe } from "../recipe/types.js";
 import { EntityStore } from "../entity/index.js";
 import { parseDuration } from "../utils/duration.js";
 

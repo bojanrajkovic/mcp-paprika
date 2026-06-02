@@ -1,7 +1,8 @@
 import { err, ok, type Result } from "neverthrow";
 import { Mutex } from "async-mutex";
-import type { Aisle, AisleUid } from "../paprika/types.js";
-import { AisleUidSchema } from "../paprika/types.js";
+import type { Aisle } from "../aisle/types.js";
+import type { AisleUid } from "../ids.js";
+import { AisleUidSchema } from "../ids.js";
 import type { ServerContext } from "../types/server-context.js";
 import { textResult } from "./helpers.js";
 

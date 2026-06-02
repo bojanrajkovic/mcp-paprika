@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import type { Recipe } from "./types.js";
+import type { Recipe } from "../recipe/types.js";
 
 /**
  * Computes Paprika's client-owned recipe content hash locally, so writes can send

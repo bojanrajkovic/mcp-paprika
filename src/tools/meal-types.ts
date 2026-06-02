@@ -1,5 +1,5 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { MealType } from "../paprika/types.js";
+import type { MealType } from "../meal-type/types.js";
 import type { ServerContext } from "../types/server-context.js";
 import { textResult } from "./helpers.js";
 import { mealTypeStartGuard } from "./meal-helpers.js";

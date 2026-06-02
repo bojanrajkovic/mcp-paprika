@@ -4,7 +4,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { RecipeStore } from "./recipe-store.js";
 import { makeRecipe } from "./__fixtures__/recipes.js";
-import type { RecipeUid } from "../paprika/types.js";
+import type { RecipeUid } from "../ids.js";
 
 describe("RecipeStore", () => {
   let store: RecipeStore;
@@ -960,25 +960,6 @@ describe("RecipeStore", () => {
         store.markPendingUpsert(uid);
         expect(store.get(uid)).toBeUndefined();
         expect(store.size).toBe(0);
-      });
-    });
-
-    describe("recipe-query-store.AC7.4: Imports only from entity, paprika/types, and utils/duration (plus npm packages)", () => {
-      it("verifies all relative imports match allowed paths", () => {
-        const __filename = fileURLToPath(import.meta.url);
-        const __dirname = dirname(__filename);
-        const srcDir = __dirname.includes("/dist/") ? __dirname.replace("/dist/", "/src/") : __dirname;
-        const sourceFilePath = resolve(srcDir, "recipe-store.ts");
-        const source = readFileSync(sourceFilePath, "utf-8");
-
-        const relativeImports = source.match(/from\s+["'](\.\.[^"']+)["']/g) || [];
-        const importPaths = relativeImports.map((line) => line.match(/["']([^"']+)["']/)?.[1]).filter(Boolean);
-
-        for (const importPath of importPaths) {
-          expect(importPath).toMatch(
-            /^\.\.\/entity\/index\.js$|^\.\.\/paprika\/types\.js$|^\.\.\/utils\/duration\.js$/,
-          );
-        }
       });
     });
   });

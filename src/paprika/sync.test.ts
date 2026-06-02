@@ -11,20 +11,19 @@ import type { DiskCacheRoot } from "../cache/disk/index.js";
 import type { DiskCache } from "../cache/disk/base.js";
 import type { PantryStore } from "../cache/pantry-store.js";
 import type { AisleStore } from "../cache/aisle-store.js";
+import type { Category } from "../category/types.js";
 import type {
-  AnySyncResult,
-  Category,
   CategoryUid,
-  EntityChanges,
   GroceryIngredientUid,
   GroceryItemUid,
   GroceryListUid,
   MenuItemUid,
   MenuUid,
   PantryItemUid,
-  RecipeEntry,
   RecipeUid,
-} from "./types.js";
+} from "../ids.js";
+import type { AnySyncResult, EntityChanges } from "./sync-types.js";
+import type { RecipeEntry } from "../recipe/types.js";
 import { makeRecipe, makeCategory } from "../cache/__fixtures__/recipes.js";
 import { makePantryItem } from "../cache/__fixtures__/pantry.js";
 import { makeAisle } from "../cache/__fixtures__/aisles.js";

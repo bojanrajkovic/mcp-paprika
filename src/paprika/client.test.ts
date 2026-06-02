@@ -12,20 +12,17 @@ import { PaprikaClient } from "./client.js";
 import { PaprikaAPIError, PaprikaAuthError } from "./errors.js";
 import { CircuitOpenError } from "../utils/errors.js";
 import { toMessage, REDACT_PATHS } from "../utils/log.js";
-import type {
-  PantryItem,
-  Recipe,
-  Aisle,
-  Category,
-  GroceryList,
-  GroceryItem,
-  GroceryIngredient,
-  Meal,
-  Menu,
-  MenuItem,
-} from "./types.js";
+import type { Aisle } from "../aisle/types.js";
+import type { Category } from "../category/types.js";
+import type { GroceryIngredient } from "../grocery-ingredient/types.js";
+import type { GroceryItem } from "../grocery-item/types.js";
+import type { GroceryList } from "../grocery-list/types.js";
+import type { Meal } from "../meal/types.js";
+import type { MenuItem } from "../menu-item/types.js";
+import type { Menu } from "../menu/types.js";
+import type { PantryItem } from "../pantry/types.js";
+import type { Recipe } from "../recipe/types.js";
 import {
-  RecipeSchema,
   RecipeUidSchema,
   CategoryUidSchema,
   PantryItemUidSchema,
@@ -34,12 +31,13 @@ import {
   GroceryItemUidSchema,
   GroceryIngredientUidSchema,
   MealUidSchema,
-  mealToApiPayload,
   MenuUidSchema,
   MenuItemUidSchema,
-  menuToApiPayload,
-  menuItemToApiPayload,
-} from "./types.js";
+} from "../ids.js";
+import { mealToApiPayload } from "../meal/types.js";
+import { menuItemToApiPayload } from "../menu-item/types.js";
+import { menuToApiPayload } from "../menu/types.js";
+import { RecipeSchema } from "../recipe/types.js";
 import { makeSnakeCaseRecipe } from "../cache/__fixtures__/recipes.js";
 import { computeRecipeHash } from "./recipe-hash.js";
 import { makeSnakeCasePantryItem } from "../cache/__fixtures__/pantry.js";

@@ -1,0 +1,44 @@
+import type { GroceryItem } from "../grocery-item/types.js";
+import type { GroceryList } from "../grocery-list/types.js";
+import type { Menu } from "../menu/types.js";
+import type { MenuItem } from "../menu-item/types.js";
+import type { PantryItem } from "../pantry/types.js";
+import type { Recipe } from "../recipe/types.js";
+
+export type EntityChanges<T> = {
+  readonly added: ReadonlyArray<T>;
+  readonly updated: ReadonlyArray<T>;
+  readonly removedUids: ReadonlyArray<string>;
+};
+
+// Closed set of entity types sync can produce. Adding a new entity type here
+// requires extending this union deliberately.
+export type SyncEntityType = "recipes" | "pantry" | "grocery-lists" | "grocery-items" | "menus" | "menu-items";
+
+// K is locked to SyncEntityType; T is the entity item type.
+export type SyncResult<K extends SyncEntityType, T extends object> = {
+  readonly changeType: K;
+  readonly changes: EntityChanges<T>;
+};
+
+export type RecipeSyncResult = SyncResult<"recipes", Recipe>;
+export type PantrySyncResult = SyncResult<"pantry", PantryItem>;
+export type GroceryListSyncResult = SyncResult<"grocery-lists", GroceryList>;
+export type GroceryItemSyncResult = SyncResult<"grocery-items", GroceryItem>;
+export type MenuSyncResult = SyncResult<"menus", Menu>;
+export type MenuItemSyncResult = SyncResult<"menu-items", MenuItem>;
+
+// Union used as the sync:complete event payload.
+export type AnySyncResult =
+  | RecipeSyncResult
+  | PantrySyncResult
+  | GroceryListSyncResult
+  | GroceryItemSyncResult
+  | MenuSyncResult
+  | MenuItemSyncResult;
+
+export type DiffResult = {
+  readonly added: ReadonlyArray<string>;
+  readonly changed: ReadonlyArray<string>;
+  readonly removed: ReadonlyArray<string>;
+};

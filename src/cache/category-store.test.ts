@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { CategoryStore } from "./category-store.js";
 import { makeCategory } from "./__fixtures__/recipes.js";
-import type { CategoryUid } from "../paprika/types.js";
+import type { CategoryUid } from "../ids.js";
 
 describe("CategoryStore", () => {
   let store: CategoryStore;

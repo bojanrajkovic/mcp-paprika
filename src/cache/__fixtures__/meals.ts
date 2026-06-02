@@ -1,5 +1,6 @@
-import type { Meal, MealType } from "../../paprika/types.js";
-import type { MealUid, MealTypeUid } from "../../paprika/types.js";
+import type { MealType } from "../../meal-type/types.js";
+import type { Meal } from "../../meal/types.js";
+import type { MealUid, MealTypeUid } from "../../ids.js";
 
 let mealCounter = 0;
 let mealTypeCounter = 0;

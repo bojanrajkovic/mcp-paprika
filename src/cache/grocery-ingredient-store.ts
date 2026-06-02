@@ -1,4 +1,4 @@
-import type { GroceryIngredient } from "../paprika/types.js";
+import type { GroceryIngredient } from "../grocery-ingredient/types.js";
 
 /**
  * In-memory store for grocery ingredients, keyed by lowercase name for

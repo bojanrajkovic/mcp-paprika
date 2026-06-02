@@ -7,7 +7,7 @@ import { makeMenu, makeMenuItem } from "../cache/__fixtures__/menus.js";
 import { makeMealType } from "../cache/__fixtures__/meals.js";
 import { commitMenu, commitMenuItem, commitMenuItemsBatch, menuStartGuard, menuToMarkdown } from "./menu-helpers.js";
 import { makeCtx, makeStubNotifier, makeTestServer, getText, seed } from "./tool-test-utils.js";
-import type { MealTypeUid, MenuItemUid, MenuUid } from "../paprika/types.js";
+import type { MealTypeUid, MenuItemUid, MenuUid } from "../ids.js";
 
 const breakfast = makeMealType({
   uid: "breakfast-uid" as MealTypeUid,

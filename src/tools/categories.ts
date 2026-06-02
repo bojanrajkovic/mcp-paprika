@@ -1,6 +1,6 @@
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { Category } from "../paprika/types.js";
+import type { Category } from "../category/types.js";
 import { textResult } from "./helpers.js";
 import { categoryStartGuard } from "./category-helpers.js";
 import type { ServerContext } from "../types/server-context.js";

@@ -8,7 +8,7 @@ import {
   registerDeleteCategoryTool,
 } from "./category-writes.js";
 import { makeTestServer, makeCtx, getText, seed } from "./tool-test-utils.js";
-import type { CategoryUid, RecipeUid } from "../paprika/types.js";
+import type { CategoryUid, RecipeUid } from "../ids.js";
 import type { ServerContext } from "../types/server-context.js";
 
 /** A ctx wired with synced recipe + category stores and mock client/cache for write tools. */

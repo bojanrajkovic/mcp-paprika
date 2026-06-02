@@ -11,8 +11,8 @@ import { randomUUID } from "node:crypto";
 
 import { PaprikaClient } from "../src/paprika/client.js";
 import { todayWire } from "../src/utils/dates.js";
-import { PantryItemUidSchema } from "../src/paprika/types.js";
-import type { PantryItem } from "../src/paprika/types.js";
+import { PantryItemUidSchema } from "../src/ids.js";
+import type { PantryItem } from "../src/pantry/types.js";
 
 import { loadConfig } from "../src/utils/config.js";
 

@@ -23,8 +23,8 @@ import { makeRecipe } from "../cache/__fixtures__/recipes.js";
 import { makeTestServer, makeCtx, getText, DEFAULT_LOGGING_CONFIG } from "../tools/tool-test-utils.js";
 import { registerDiscoverTool } from "../tools/discover.js";
 import type { EmbeddingConfig } from "../utils/config.js";
-import type { AnySyncResult, RecipeSyncResult } from "../paprika/types.js";
-import type { RecipeUid } from "../paprika/types.js";
+import type { AnySyncResult, RecipeSyncResult } from "../paprika/sync-types.js";
+import type { RecipeUid } from "../ids.js";
 
 // mitt's package shape (flat-conditioned `exports`, .d.ts using `export default`) confuses
 // TS strict resolution under @tsconfig/strictest + nodenext into typing the default import

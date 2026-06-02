@@ -3,8 +3,8 @@ import { toMessage } from "../utils/log.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { MealUidSchema, RecipeUidSchema } from "../paprika/types.js";
-import type { Meal } from "../paprika/types.js";
+import { MealUidSchema, RecipeUidSchema } from "../ids.js";
+import type { Meal } from "../meal/types.js";
 import { textResult } from "./helpers.js";
 import {
   commitMeal,

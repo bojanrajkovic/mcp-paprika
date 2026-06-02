@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { PhotoStore } from "./photo-store.js";
 import { makePhoto } from "./__fixtures__/photos.js";
-import type { PhotoUid, RecipeUid } from "../paprika/types.js";
+import type { PhotoUid, RecipeUid } from "../ids.js";
 
 describe("PhotoStore", () => {
   let store: PhotoStore;

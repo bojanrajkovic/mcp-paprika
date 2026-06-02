@@ -1,4 +1,5 @@
-import type { PantryItem, PantryItemUid } from "../../paprika/types.js";
+import type { PantryItemUid } from "../../ids.js";
+import type { PantryItem } from "../../pantry/types.js";
 
 let pantryItemCounter = 0;
 

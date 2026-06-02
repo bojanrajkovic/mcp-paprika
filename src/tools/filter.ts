@@ -2,7 +2,7 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { ok, type Result } from "neverthrow";
-import type { Recipe } from "../paprika/types.js";
+import type { Recipe } from "../recipe/types.js";
 import { parseDuration } from "../utils/duration.js";
 import { coldStartGuard, recipeMetadataLines, textResult } from "./helpers.js";
 import type { ServerContext } from "../types/server-context.js";

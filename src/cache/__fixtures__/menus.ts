@@ -1,4 +1,6 @@
-import type { Menu, MenuUid, MenuItem, MenuItemUid } from "../../paprika/types.js";
+import type { MenuUid, MenuItemUid } from "../../ids.js";
+import type { MenuItem } from "../../menu-item/types.js";
+import type { Menu } from "../../menu/types.js";
 
 let menuCounter = 0;
 let menuItemCounter = 0;
