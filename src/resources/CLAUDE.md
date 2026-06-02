@@ -15,7 +15,7 @@ Defines MCP resources that AI assistants can read. Resources expose data (e.g., 
 Registers the `paprika://recipe/{uid}` resource template with list and read callbacks:
 
 - **List callback:** Returns all non-trashed recipes with `uri: "paprika://recipe/{uid}"`, `name: recipe.name`, and `mimeType: "text/markdown"` for each. Returns `{ resources: [] }` when store is empty.
-- **Read callback:** Returns a recipe as markdown with a metadata header prepended: `**URI:**` (always), `**Last synced:**` (when store has been synced), and `**Photo:**` (when recipe has an image URL). The UID is NOT in the header — `recipeToMarkdown` renders it in the body (shared with `read_recipe`), so the header would duplicate it. Category UIDs are resolved to display names. Throws an error if the UID does not exist.
+- **Read callback:** Returns a recipe as markdown with a metadata header prepended: `**URI:**` (always), `**Last synced:**` (when store has been synced), and `**Photo:**` (when recipe has an image URL). The UID is NOT in the header: `recipeToMarkdown` renders it in the body (shared with `read_recipe`), so the header would duplicate it. Category UIDs are resolved to display names. Throws an error if the UID does not exist.
 
 ### Grocery List Resources
 
@@ -33,7 +33,7 @@ Registers the `paprika://grocery-list/{uid}` resource template with list and rea
 Registers the `paprika://menu/{uid}` resource template with list and read callbacks:
 
 - **List callback:** Returns all menus from `ctx.menuStore.getAll()` mapped to `uri: "paprika://menu/{uid}"`, `name: menu.name`, and `mimeType: "text/markdown"` for each.
-- **Read callback:** Takes the `uid` variable from the URI pattern. Looks up the menu in `ctx.menuStore`. If not found, throws `Error("Menu not found: ${uid}")`. Otherwise builds a metadata header with `**UID:**` and `**URI:**` (always) plus `**Last synced:**` (when `ctx.menuStore.lastSyncedAt` is not null), fetches items via `ctx.menuItemStore.getByMenuUid(uid)`, and renders the full body via `menuToMarkdown(menu, items, ctx.mealTypeStore.getAll(), { includeItemUids: false })` — clean recipe-name lines without child UIDs, matching the grocery-list resource convention. Returns `{ contents: [{ uri, mimeType: "text/markdown", text }] }`.
+- **Read callback:** Takes the `uid` variable from the URI pattern. Looks up the menu in `ctx.menuStore`. If not found, throws `Error("Menu not found: ${uid}")`. Otherwise builds a metadata header with `**UID:**` and `**URI:**` (always) plus `**Last synced:**` (when `ctx.menuStore.lastSyncedAt` is not null), fetches items via `ctx.menuItemStore.getByMenuUid(uid)`, and renders the full body via `menuToMarkdown(menu, items, ctx.mealTypeStore.getAll(), { includeItemUids: false })` (clean recipe-name lines without child UIDs, matching the grocery-list resource convention). Returns `{ contents: [{ uri, mimeType: "text/markdown", text }] }`.
 
 ## Dependencies
 

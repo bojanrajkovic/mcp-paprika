@@ -39,7 +39,7 @@ The human-developer workflow for mcp-paprika. Agent-facing guidance and the proj
 
 ## Commits and pull requests
 
-- **Conventional Commits**, validated by the `commit-msg` hook against [`@commitlint/config-conventional`](https://github.com/conventional-changelog/commitlint) — the standard type enum, free-form scopes. The enum is owned by the preset and is not re-listed here. Wrap body lines at 100 characters.
+- **Conventional Commits**, validated by the `commit-msg` hook against [`@commitlint/config-conventional`](https://github.com/conventional-changelog/commitlint): the standard type enum, free-form scopes. The enum is owned by the preset and is not re-listed here. Wrap body lines at 100 characters.
 - **Atomic commits** — one logical change each, describable in a sentence without "and".
 - **Hooks (lefthook):** pre-commit runs oxfmt (auto-restages) and oxlint on staged `.ts`; commit-msg runs commitlint; pre-push runs `pnpm typecheck` and `pnpm test`. Do not bypass them.
 - **Squash-merge** — the PR body becomes the commit body, so write it as "what shipped": a one- or two-sentence lead (no `## Summary`) then detail. Transient verification (test plans, screenshots) goes in a PR comment, not the body.
@@ -56,6 +56,6 @@ GitHub Actions gate every PR and push to `main`: `ci.yml` (format check, lint, t
 
 ## Boundaries
 
-- `dist/` and `node_modules/` are gitignored — never edit them.
-- `.env` files hold secrets — never commit them.
-- `pnpm-lock.yaml` is generated — do not hand-edit it.
+- `dist/` and `node_modules/` are gitignored; never edit them.
+- `.env` files hold secrets; never commit them.
+- `pnpm-lock.yaml` is generated; do not hand-edit it.

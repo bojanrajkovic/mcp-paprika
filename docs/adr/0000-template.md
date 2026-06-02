@@ -1,6 +1,6 @@
 # ADR-NNNN: <short imperative title of the decision>
 
-> Record an ADR only for a **decision with weighed alternatives** — a fork where a different reasonable engineer could have chosen otherwise, and the choice has lasting architectural consequences. Do **not** write an ADR for an implementation detail, a forced necessity (something the platform or a hard dependency left no choice about), or a workaround. Those belong in code comments, the relevant design or implementation plan under `docs/`, or `docs/architecture.md`.
+> Record an ADR only for a **decision with weighed alternatives**: a fork where a different reasonable engineer could have chosen otherwise, and the choice has lasting architectural consequences. Do **not** write an ADR for an implementation detail, a forced necessity (something the platform or a hard dependency left no choice about), or a workaround. Those belong in code comments or `docs/architecture.md`.
 
 **Status:** Proposed | Accepted (YYYY-MM-DD) | Superseded by ADR-NNNN | Deprecated
 **Last verified:** YYYY-MM-DD
@@ -14,7 +14,7 @@ prompts as you go. Keep prose conceptual: describe shape and reasoning, not code
 ## Context
 
 <!--
-WHAT GOES HERE: the situation and constraints that were true at decision time —
+WHAT GOES HERE: the situation and constraints that were true at decision time:
 the forces in tension (correctness, latency, the Paprika API's shape, MCP wire
 constraints, operational limits) and what made a choice necessary. Write it so a
 reader a year from now understands the pressure without reading the diff.
@@ -36,7 +36,7 @@ boundary via zod"). One paragraph on the choice, one on why it beat the field.
 
 RATIONALIZATION TO RESIST: "the reader will want to see exactly how it works, so
 I'll paste the type / function signature / config struct here." You will be
-tempted to make the ADR authoritative by reproducing source. Don't — source
+tempted to make the ADR authoritative by reproducing source. Don't. Source
 drifts and the ADR becomes a lie. An ADR captures the *decision*, not the API.
 
 WRONG CONTENT GOES INSTEAD: signatures, struct/type dumps, schemas, env-var
@@ -50,12 +50,12 @@ the component; do not transcribe it.
 <!--
 WHAT GOES HERE: one subsection per option that was genuinely on the table, each
 ending with the single trade-off that decided against it. The trade-off is the
-load-bearing part — "rejected because it would have X" — not a vibe.
+load-bearing part: a concrete "rejected because it would have X," not a vibe.
 
 RATIONALIZATION TO RESIST: inventing plausible-sounding alternatives to make the
 ADR look thorough. If the plan or source did not record what was actually
 weighed, you do NOT know it, and a fabricated alternative is worse than an
-absent one — it manufactures false history. NEVER invent alternatives.
+absent one: it manufactures false history. NEVER invent alternatives.
 
 IF NOTHING WAS RECORDED: write this section's body as EXACTLY the following line,
 verbatim, and add the item to notesForOwner so the owner can backfill it:
@@ -63,11 +63,11 @@ verbatim, and add the item to notesForOwner so the owner can backfill it:
 _Not recorded at decision time — needs owner input._
 -->
 
-### <Alternative A — named by its approach>
+### <Alternative A: named by its approach>
 
 Rejected because <the one deciding trade-off>.
 
-### <Alternative B — named by its approach>
+### <Alternative B: named by its approach>
 
 Rejected because <the one deciding trade-off>.
 
