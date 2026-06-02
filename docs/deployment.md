@@ -34,7 +34,7 @@ substitute `mcp-paprika:dev` for the image reference.
 
 The image is signed with [sigstore/cosign](https://github.com/sigstore/cosign) keyless
 OIDC and ships SLSA build provenance plus an SPDX SBOM as OCI attestations. Verify both
-before running in untrusted environments; [releasing.md](releasing.md#verifying-a-published-image)
+before running in untrusted environments; [releasing.md](https://github.com/bojanrajkovic/mcp-paprika/blob/main/docs/releasing.md#verifying-a-published-image)
 has the exact `gh attestation verify` and `cosign verify` commands, along with the
 cosign 2.5+ version requirement.
 
@@ -126,5 +126,5 @@ volumes:
   mcp-paprika-data:
 ```
 
-For Kubernetes, the [`k8s/`](../k8s/) kustomization is a ready-made manifest set; its
+For Kubernetes, the [`k8s/`](https://github.com/bojanrajkovic/mcp-paprika/tree/main/k8s) kustomization is a ready-made manifest set; its
 README covers the secret, PVC, and ingress wiring.

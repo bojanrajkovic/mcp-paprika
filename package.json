@@ -13,7 +13,13 @@
   "files": [
     "dist",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "docs/configuration.md",
+    "docs/http-transport.md",
+    "docs/oauth-configuration.md",
+    "docs/quick-start-http.md",
+    "docs/deployment.md",
+    "docs/embedding-providers.md"
   ],
   "type": "module",
   "publishConfig": {

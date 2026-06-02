@@ -40,6 +40,14 @@ Every `CLAUDE.md`, every architecture-class doc, and every ADR carries a **`Last
 
 There is deliberately **no automated doc-staleness gate** mapping code paths or symbols to docs. Such a gate would false-positive constantly, flagging every "former-X" annotation and every intentionally-frozen historical note as drift, which trains people to ignore it. That violates the principle of preferring language and human audit over mechanical gates. Mechanical gates are reserved for unambiguous, near-zero-false-positive checks: commitlint, and the format, lint, typecheck, and test gates that run in CI and the git hooks. Doc freshness is a judgment call, so it stays one, backed by the verification stamp.
 
+## 5. Operator docs ship in the npm package; repo docs link to GitHub
+
+The npm tarball carries the README plus the operator-facing setup docs it links to: `configuration.md`, `http-transport.md`, `oauth-configuration.md`, `quick-start-http.md`, `deployment.md`, and `embedding-providers.md`, listed explicitly in `package.json`'s `files`. Someone reading the installed package, or the README on npmjs.com, gets the setup path version-matched to what they installed.
+
+The contributor-facing docs (architecture, the ADRs, the wire-format reference and its captures, releasing, the generated tool reference) stay GitHub-only; shipping them would bloat the tarball with content an installer never needs.
+
+That split sets the link rule: **a relative link points within the shipped set; an absolute `https://github.com/...` link points at a repo-only doc.** When you add an operator doc, add it to `files` and link it relatively. When a shipped doc references a repo-only one (an ADR, `releasing.md`, `k8s/`), link it absolutely so it still resolves from an unpacked tarball.
+
 ## References
 
 - `docs/architecture.md` — the current-shape doc this rubric governs

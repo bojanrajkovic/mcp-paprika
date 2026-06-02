@@ -3,7 +3,7 @@
 When `MCP_TRANSPORT=http`, the server runs a full OAuth 2.1 authorization server
 with PKCE and Dynamic Client Registration (RFC 7591). It delegates identity to an
 upstream OIDC provider and issues its own opaque access tokens to MCP clients.
-[ADR-0002](adr/0002-oauth21-oidc-delegation.md) records why the server delegates
+[ADR-0002](https://github.com/bojanrajkovic/mcp-paprika/blob/main/docs/adr/0002-oauth21-oidc-delegation.md) records why the server delegates
 rather than authenticating directly; [quick-start-http.md](quick-start-http.md)
 walks an IdP through to a working Claude connector. This page is the configuration
 reference.
