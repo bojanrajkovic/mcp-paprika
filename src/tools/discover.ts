@@ -4,7 +4,6 @@ import { z } from "zod";
 import { coldStartGuard, recipeMetadataLines, textResult } from "./helpers.js";
 import type { ServerContext } from "../types/server-context.js";
 import type { VectorStore, SemanticResult } from "../features/vector-store.js";
-import type { RecipeUid } from "../ids.js";
 import type { Recipe } from "../recipe/types.js";
 
 export function registerDiscoverTool(server: McpServer, ctx: ServerContext, vectorStore: VectorStore): void {
@@ -50,7 +49,7 @@ export function registerDiscoverTool(server: McpServer, ctx: ServerContext, vect
           // from the index.
           const enriched: Array<{ result: SemanticResult; recipe: Recipe }> = [];
           for (const result of results) {
-            const recipe = ctx.store.get(result.uid as RecipeUid);
+            const recipe = ctx.store.get(result.uid);
             if (recipe && !recipe.inTrash) {
               enriched.push({ result, recipe });
             }

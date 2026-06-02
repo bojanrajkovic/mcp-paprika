@@ -16,7 +16,7 @@ import { createHash } from "node:crypto";
  * Includes the recipe UID, similarity score (0-1), and recipe name for display.
  */
 export type SemanticResult = {
-  readonly uid: string;
+  readonly uid: RecipeUid;
   readonly score: number;
   readonly recipeName: string;
 };
@@ -59,7 +59,7 @@ import type { EmbeddingClient } from "./embeddings.js";
 import { recipeToEmbeddingText } from "./embeddings.js";
 import { VectorStoreError } from "./vector-store-errors.js";
 import type { Logger } from "pino";
-import type { CategoryUid } from "../ids.js";
+import type { CategoryUid, RecipeUid } from "../ids.js";
 import type { Recipe } from "../recipe/types.js";
 import { SILENT_LOG } from "../utils/log.js";
 import { isNodeError } from "../utils/errors.js";
@@ -358,8 +358,11 @@ export class VectorStore {
   async search(query: string, topK: number = 10, minScore?: number): Promise<ReadonlyArray<SemanticResult>> {
     const vector = await this._embedder.embed(query);
     const results = await this._index.queryItems(vector, topK, minScore);
+    // The vector index is generic over string ids; every id here was written from
+    // `recipe.uid` (see `upsertItem`), so minting `RecipeUid` at this boundary is
+    // sound and lets `SemanticResult` carry the brand to callers.
     return results.map((r) => ({
-      uid: r.item.id,
+      uid: r.item.id as RecipeUid,
       score: r.score,
       recipeName: (r.item.metadata?.["recipeName"] as string) ?? "",
     }));

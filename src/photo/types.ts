@@ -1,15 +1,15 @@
 import { z } from "zod";
 
-import { PhotoUidSchema } from "../ids.js";
+import { PhotoUidSchema, RecipeUidRefSchema } from "../ids.js";
 
 // PhotoStoredSchema — validates camelCase JSON read back from disk. No transform.
-// `recipeUid` is the foreign key to the owning recipe (plain `z.string()`, like
-// `meal.recipeUid` / `menuItem.recipeUid` — the wire format does not brand FKs).
+// `recipeUid` is the foreign key to the owning recipe, branded `RecipeUid` via
+// the no-min `RecipeUidRefSchema` (an FK reference, not a primary key — see ids.ts).
 // Invariant: `name === String(orderFlag + 1)` (1-indexed gallery label vs the
 // 0-indexed `orderFlag`); maintained by the writer (#169), not enforced here.
 export const PhotoStoredSchema = z.object({
   uid: PhotoUidSchema,
-  recipeUid: z.string(),
+  recipeUid: RecipeUidRefSchema,
   filename: z.string(),
   name: z.string(),
   orderFlag: z.number().int().nonnegative(),
@@ -27,7 +27,7 @@ export type Photo = z.infer<typeof PhotoStoredSchema>;
 export const PhotoSchema = z
   .object({
     uid: PhotoUidSchema,
-    recipe_uid: z.string(),
+    recipe_uid: RecipeUidRefSchema,
     filename: z.string(),
     name: z.string(),
     order_flag: z.number().int().nonnegative(),

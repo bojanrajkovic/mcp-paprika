@@ -1,16 +1,18 @@
 import type { GroceryIngredient } from "../../grocery-ingredient/types.js";
-import type { GroceryIngredientUid } from "../../ids.js";
+import type { GroceryIngredientUid, AisleUid } from "../../ids.js";
 
 let groceryIngredientCounter = 0;
 
-export function makeGroceryIngredient(overrides?: Partial<GroceryIngredient>): GroceryIngredient {
+type GroceryIngredientOverrides = Partial<Omit<GroceryIngredient, "aisleUid">> & { readonly aisleUid?: string };
+
+export function makeGroceryIngredient(overrides?: GroceryIngredientOverrides): GroceryIngredient {
   groceryIngredientCounter += 1;
-  const uid = `grocery-ingredient-${groceryIngredientCounter.toString()}` as GroceryIngredientUid;
+  const { aisleUid, ...rest } = overrides ?? {};
   return {
-    uid,
+    uid: `grocery-ingredient-${groceryIngredientCounter.toString()}` as GroceryIngredientUid,
     name: `Test Ingredient ${groceryIngredientCounter.toString()}`,
-    aisleUid: "aisle-1",
+    aisleUid: (aisleUid ?? "aisle-1") as AisleUid,
     deleted: false,
-    ...overrides,
+    ...rest,
   };
 }

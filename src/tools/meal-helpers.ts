@@ -1,7 +1,7 @@
 // pattern: Imperative Shell
 import { err, ok, type Result } from "neverthrow";
 import { z } from "zod";
-import type { MealUid, RecipeUid } from "../ids.js";
+import type { MealUid } from "../ids.js";
 import type { MealType } from "../meal-type/types.js";
 import type { Meal } from "../meal/types.js";
 import { MealTypeUidSchema } from "../ids.js";
@@ -271,8 +271,6 @@ export function renderMealCard(ctx: ServerContext, meal: Readonly<Meal>): string
     meal.typeUid !== null
       ? (typeNameByUid.get(meal.typeUid) ?? `Type ${meal.type.toString()}`)
       : `Type ${meal.type.toString()}`;
-  // meal.recipeUid is `string | null` per MealStoredSchema (intentionally unbranded);
-  // the cast for the store lookup mirrors the convention in src/tools/discover.ts:40.
-  const recipeName = meal.recipeUid !== null ? (ctx.store.get(meal.recipeUid as RecipeUid)?.name ?? null) : null;
+  const recipeName = meal.recipeUid !== null ? (ctx.store.get(meal.recipeUid)?.name ?? null) : null;
   return mealToMarkdown(meal, typeName, recipeName);
 }

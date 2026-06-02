@@ -5,6 +5,7 @@ import { z } from "zod";
 
 import { RecipeStoredSchema } from "./types.js";
 import type { DiffResult } from "../paprika/sync-types.js";
+import type { RecipeUid } from "../ids.js";
 import type { Recipe, RecipeEntry } from "./types.js";
 import { isNodeError } from "../utils/errors.js";
 
@@ -91,8 +92,12 @@ export class RecipeDiskCache extends DiskCache<Recipe> {
    */
   diff(entries: ReadonlyArray<RecipeEntry>): DiffResult {
     this._assertInitialized("diff");
-    const added: Array<string> = [];
-    const changed: Array<string> = [];
+    // `entry.uid` is already a `RecipeUid` (from `RecipeEntry`), so added/changed
+    // brand for free. `_hashes` is an internal string-keyed map; its keys were
+    // written from `recipe.uid`, so minting `RecipeUid` for `removed` at this
+    // boundary is the one sanctioned cast (the brand flows out via `DiffResult`).
+    const added: Array<RecipeUid> = [];
+    const changed: Array<RecipeUid> = [];
     const remoteUids = new Set<string>();
 
     for (const entry of entries) {
@@ -105,9 +110,9 @@ export class RecipeDiskCache extends DiskCache<Recipe> {
       }
     }
 
-    const removed: Array<string> = [];
+    const removed: Array<RecipeUid> = [];
     for (const uid of this._hashes.keys()) {
-      if (!remoteUids.has(uid)) removed.push(uid);
+      if (!remoteUids.has(uid)) removed.push(uid as RecipeUid);
     }
 
     return { added, changed, removed };

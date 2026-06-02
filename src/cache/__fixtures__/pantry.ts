@@ -1,4 +1,4 @@
-import type { PantryItemUid } from "../../ids.js";
+import type { PantryItemUid, AisleUid } from "../../ids.js";
 import type { PantryItem } from "../../pantry/types.js";
 
 let pantryItemCounter = 0;
@@ -25,21 +25,23 @@ export function makeSnakeCasePantryItem(uid: string, overrides?: Partial<Record<
   };
 }
 
-export function makePantryItem(overrides?: Partial<PantryItem>): PantryItem {
+type PantryItemOverrides = Partial<Omit<PantryItem, "aisleUid">> & { readonly aisleUid?: string };
+
+export function makePantryItem(overrides?: PantryItemOverrides): PantryItem {
   pantryItemCounter += 1;
-  const uid = `pantry-${pantryItemCounter.toString()}` as PantryItemUid;
+  const { aisleUid, ...rest } = overrides ?? {};
   return {
-    uid,
+    uid: `pantry-${pantryItemCounter.toString()}` as PantryItemUid,
     ingredient: `Test Ingredient ${pantryItemCounter.toString()}`,
     quantity: "1",
     aisle: "Produce",
-    aisleUid: "aisle-1",
+    aisleUid: (aisleUid ?? "aisle-1") as AisleUid,
     expirationDate: null,
     hasExpiration: false,
     inStock: true,
     purchaseDate: "2026-01-01 00:00:00",
     notes: null,
     deleted: false,
-    ...overrides,
+    ...rest,
   };
 }

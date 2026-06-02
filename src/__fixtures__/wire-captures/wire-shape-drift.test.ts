@@ -14,6 +14,7 @@ import {
   GroceryListUidSchema,
   GroceryItemUidSchema,
   GroceryIngredientUidSchema,
+  AisleUidSchema,
 } from "../../ids.js";
 import { MealTypeSchema } from "../../meal-type/types.js";
 import { MealSchema } from "../../meal/types.js";
@@ -236,7 +237,7 @@ describe("wire-shape drift detection", () => {
         ingredient: "Test",
         quantity: "1",
         aisle: "",
-        aisleUid: "",
+        aisleUid: AisleUidSchema.parse(""),
         expirationDate: null,
         hasExpiration: false,
         inStock: true,
@@ -272,8 +273,8 @@ describe("wire-shape drift detection", () => {
         name: "Test",
         ingredient: "Test",
         aisle: "",
-        aisleUid: "",
-        listUid: "GL-1",
+        aisleUid: AisleUidSchema.parse(""),
+        listUid: GroceryListUidSchema.parse("GL-1"),
         purchased: false,
         deleted: false,
         orderFlag: 0,
@@ -292,7 +293,7 @@ describe("wire-shape drift detection", () => {
       const ingredient: GroceryIngredient = {
         uid: GroceryIngredientUidSchema.parse("GN-TEST-1"),
         name: "Test",
-        aisleUid: "",
+        aisleUid: AisleUidSchema.parse(""),
         deleted: false,
       };
 

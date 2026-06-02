@@ -886,7 +886,7 @@ describe("pantry-read.AC1: PantryItem types", () => {
         ingredient: "Flour",
         quantity: "2 cups",
         aisle: "Produce",
-        aisleUid: "aisle-1",
+        aisleUid: AisleUidSchema.parse("aisle-1"),
         expirationDate: null,
         hasExpiration: false,
         inStock: true,

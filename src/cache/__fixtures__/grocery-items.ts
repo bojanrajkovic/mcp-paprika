@@ -1,18 +1,23 @@
 import type { GroceryItem } from "../../grocery-item/types.js";
-import type { GroceryItemUid } from "../../ids.js";
+import type { GroceryItemUid, AisleUid, GroceryListUid } from "../../ids.js";
 
 let groceryItemCounter = 0;
 
-export function makeGroceryItem(overrides?: Partial<GroceryItem>): GroceryItem {
+type GroceryItemOverrides = Partial<Omit<GroceryItem, "aisleUid" | "listUid">> & {
+  readonly aisleUid?: string;
+  readonly listUid?: string;
+};
+
+export function makeGroceryItem(overrides?: GroceryItemOverrides): GroceryItem {
   groceryItemCounter += 1;
-  const uid = `grocery-item-${groceryItemCounter.toString()}` as GroceryItemUid;
+  const { aisleUid, listUid, ...rest } = overrides ?? {};
   return {
-    uid,
+    uid: `grocery-item-${groceryItemCounter.toString()}` as GroceryItemUid,
     name: `Test Ingredient ${groceryItemCounter.toString()}`,
     ingredient: `Test Ingredient ${groceryItemCounter.toString()}`,
     aisle: "Produce",
-    aisleUid: "aisle-1",
-    listUid: "list-1",
+    aisleUid: (aisleUid ?? "aisle-1") as AisleUid,
+    listUid: (listUid ?? "list-1") as GroceryListUid,
     purchased: false,
     deleted: false,
     orderFlag: 0,
@@ -20,6 +25,6 @@ export function makeGroceryItem(overrides?: Partial<GroceryItem>): GroceryItem {
     instruction: "",
     recipe: null,
     separate: false,
-    ...overrides,
+    ...rest,
   };
 }

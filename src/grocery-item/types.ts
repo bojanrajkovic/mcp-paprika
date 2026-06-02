@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { GroceryItemUidSchema } from "../ids.js";
+import { GroceryItemUidSchema, AisleUidSchema, GroceryListUidRefSchema, NO_AISLE_UID } from "../ids.js";
 
 // GroceryItemStoredSchema — validates camelCase JSON read back from disk. No transform.
 export const GroceryItemStoredSchema = z.object({
@@ -8,8 +8,8 @@ export const GroceryItemStoredSchema = z.object({
   name: z.string(),
   ingredient: z.string(),
   aisle: z.string(),
-  aisleUid: z.string(),
-  listUid: z.string(),
+  aisleUid: AisleUidSchema,
+  listUid: GroceryListUidRefSchema,
   purchased: z.boolean(),
   deleted: z.boolean().optional().default(false),
   orderFlag: z.number().int(),
@@ -28,8 +28,8 @@ export const GroceryItemSchema = z
     name: z.string(),
     ingredient: z.string(),
     aisle: z.string(),
-    aisle_uid: z.string().nullable(),
-    list_uid: z.string(),
+    aisle_uid: AisleUidSchema.nullable(),
+    list_uid: GroceryListUidRefSchema,
     purchased: z.boolean(),
     deleted: z.boolean().optional().default(false),
     order_flag: z.number().int(),
@@ -41,7 +41,7 @@ export const GroceryItemSchema = z
   .transform(
     ({ aisle_uid, list_uid, order_flag, ...rest }): GroceryItem => ({
       ...rest,
-      aisleUid: aisle_uid ?? "",
+      aisleUid: aisle_uid ?? NO_AISLE_UID,
       listUid: list_uid,
       orderFlag: order_flag,
     }),

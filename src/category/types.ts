@@ -7,7 +7,7 @@ export const CategoryStoredSchema = z.object({
   uid: CategoryUidSchema,
   name: z.string(),
   orderFlag: z.number().int(),
-  parentUid: z.string().nullable(),
+  parentUid: CategoryUidSchema.nullable(),
 });
 
 // Category type derived from CategoryStoredSchema.
@@ -19,7 +19,7 @@ export const CategorySchema = z
     uid: CategoryUidSchema,
     name: z.string(),
     order_flag: z.number().int(),
-    parent_uid: z.string().nullable(),
+    parent_uid: CategoryUidSchema.nullable(),
   })
   .transform(
     ({ order_flag, parent_uid, ...rest }): Category => ({

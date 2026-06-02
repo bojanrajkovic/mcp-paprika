@@ -1,17 +1,17 @@
 import { z } from "zod";
 
-import { MealUidSchema } from "../ids.js";
+import { MealUidSchema, MealTypeUidSchema, RecipeUidRefSchema } from "../ids.js";
 
 // MealStoredSchema — validates camelCase JSON read back from disk. No transform.
 // `typeUid` is nullable because legacy meals (created before Paprika's mealtypes
 // feature) carry `null` for this field; new meals always carry a real UID.
 export const MealStoredSchema = z.object({
   uid: MealUidSchema,
-  recipeUid: z.string().nullable(),
+  recipeUid: RecipeUidRefSchema.nullable(),
   name: z.string(),
   date: z.string(),
   type: z.number().int().nonnegative(),
-  typeUid: z.string().nullable(),
+  typeUid: MealTypeUidSchema.nullable(),
   orderFlag: z.number().int(),
   isIngredient: z.boolean(),
   scale: z.string().nullable(),
@@ -24,11 +24,11 @@ export type Meal = z.infer<typeof MealStoredSchema>;
 export const MealSchema = z
   .object({
     uid: MealUidSchema,
-    recipe_uid: z.string().nullable(),
+    recipe_uid: RecipeUidRefSchema.nullable(),
     name: z.string(),
     date: z.string(),
     type: z.number().int().nonnegative(),
-    type_uid: z.string().nullable(),
+    type_uid: MealTypeUidSchema.nullable(),
     order_flag: z.number().int(),
     is_ingredient: z.boolean(),
     scale: z.string().nullable(),

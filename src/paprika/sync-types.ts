@@ -4,6 +4,7 @@ import type { Menu } from "../menu/types.js";
 import type { MenuItem } from "../menu-item/types.js";
 import type { PantryItem } from "../pantry/types.js";
 import type { Recipe } from "../recipe/types.js";
+import type { RecipeUid } from "../ids.js";
 
 export type EntityChanges<T> = {
   readonly added: ReadonlyArray<T>;
@@ -37,8 +38,10 @@ export type AnySyncResult =
   | MenuSyncResult
   | MenuItemSyncResult;
 
+// Recipe diff classification — recipes are the only diff-and-fetch entity, so
+// the UIDs are `RecipeUid`. Produced by `RecipeDiskCache.diff()`.
 export type DiffResult = {
-  readonly added: ReadonlyArray<string>;
-  readonly changed: ReadonlyArray<string>;
-  readonly removed: ReadonlyArray<string>;
+  readonly added: ReadonlyArray<RecipeUid>;
+  readonly changed: ReadonlyArray<RecipeUid>;
+  readonly removed: ReadonlyArray<RecipeUid>;
 };
