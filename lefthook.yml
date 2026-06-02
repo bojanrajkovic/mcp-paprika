@@ -2,7 +2,10 @@ pre-commit:
   parallel: true
   commands:
     oxfmt:
-      glob: "**/*.{ts,json,md}"
+      # "{,**/}" matches both root-level files and any nested path; a bare
+      # "**/*" skips the repo root (CLAUDE.md, CONTRIBUTING.md, README.md),
+      # which then drift out of format until CI's whole-tree oxfmt --check.
+      glob: "{,**/}*.{ts,json,md}"
       stage_fixed: true
       run: pnpm exec oxfmt --write {staged_files}
     oxlint:
