@@ -8,7 +8,7 @@ This is the rubric every other doc in this repo points at: where each kind of kn
 
 Every fact has exactly one home. Non-duplication is the credibility test: the moment a fact lives in two places, a reader can't tell which copy is current, and both lose authority. When two docs would describe the same thing, one links to the other instead of repeating it.
 
-Concretely: the startup sequence, the dual-layer cache, the sync engine, and the resilience policy live in `docs/architecture.md` and nowhere else. Configuration shape lives in `docs/configuration.md`. A module's contracts and boundaries live in that module's `CLAUDE.md`. If you catch yourself copying a paragraph from one of those into another doc, stop and link instead.
+Concretely: the startup sequence, the dual-layer cache, the sync engine, and the resilience policy live in `docs/architecture.md` and nowhere else. Configuration shape lives in `docs/configuration.md` (with `docs/http-transport.md` and `docs/oauth-configuration.md` for the HTTP and OAuth specifics). A module's contracts and boundaries live in that module's `CLAUDE.md`. If you catch yourself copying a paragraph from one of those into another doc, stop and link instead.
 
 ## 2. Genre boundaries
 

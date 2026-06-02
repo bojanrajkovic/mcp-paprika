@@ -1,13 +1,21 @@
 # Configuration
 
-mcp-paprika loads configuration from three sources, merged in this priority order:
+mcp-paprika resolves each setting from the first place it's defined, in priority
+order:
 
 1. **Environment variables** (highest priority)
 2. **`.env` file** in the config directory
 3. **`config.json`** in the config directory
-4. **Schema defaults** (lowest priority)
+4. **Schema defaults** (the fallback when nothing above sets a value)
 
-Environment variables always win. If you set `PAPRIKA_EMAIL` as an env var and also have it in `config.json`, the env var is used.
+Environment variables always win. If you set `PAPRIKA_EMAIL` as an env var and also
+list it in `config.json`, the env var is used.
+
+The HTTP transport and its OAuth layer have their own config references:
+[http-transport.md](http-transport.md) for binding, host/origin allowlists, and
+graceful shutdown; [oauth-configuration.md](oauth-configuration.md) for OIDC
+providers, the user allowlist, and the consent gate. This page covers everything
+common to both transports.
 
 ## Environment variables
 
@@ -23,38 +31,9 @@ Environment variables always win. If you set `PAPRIKA_EMAIL` as an env var and a
 | `PAPRIKA_SYNC_RECIPE_CONCURRENCY` | `sync.recipeFetchConcurrency` | No       | `5`       | Concurrent recipe fetches during sync (see note below)                |
 | `MCP_TRANSPORT`                   | `transport`                   | No       | `"stdio"` | Transport mode: `"stdio"` (CLI clients) or `"http"` (Streamable HTTP) |
 
-### HTTP transport
-
-| Variable                     | Config path            | Required | Default     | Description                                                                                                                                                                                                                                                                                     |
-| ---------------------------- | ---------------------- | -------- | ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `MCP_HTTP_PORT`              | `http.port`            | No       | `3000`      | Port to bind when `MCP_TRANSPORT=http` (1–65535)                                                                                                                                                                                                                                                |
-| `MCP_HTTP_HOST`              | `http.host`            | No       | `"0.0.0.0"` | Host to bind when `MCP_TRANSPORT=http`                                                                                                                                                                                                                                                          |
-| `MCP_ALLOWED_HOSTS`          | `http.allowedHosts`    | No       | `[]`        | Host-header allowlist (DNS rebinding protection)                                                                                                                                                                                                                                                |
-| `MCP_ALLOWED_ORIGINS`        | `http.allowedOrigins`  | No       | `[]`        | Origin-header allowlist (browser-only; locks out CLI clients)                                                                                                                                                                                                                                   |
-| `MCP_HTTP_SHUTDOWN_DRAIN_MS` | `http.shutdownDrainMs` | No       | `"5s"`      | Readiness-drain delay on SIGTERM: `/healthz` reports not-ready and the server keeps serving for this long before closing connections, so Kubernetes de-routes the pod before drain. Accepts a duration (`"5s"`) or milliseconds. Keep well under `terminationGracePeriodSeconds`; `0` disables. |
-
-### OAuth 2.1 (required when `MCP_TRANSPORT=http`)
-
-| Variable                         | Config path                 | Required     | Default   | Description                                                                   |
-| -------------------------------- | --------------------------- | ------------ | --------- | ----------------------------------------------------------------------------- |
-| `MCP_PUBLIC_URL`                 | `oauth.publicUrl`           | Yes (http)   | —         | Publicly reachable `https://` URL for this server — no trailing slash         |
-| `MCP_OIDC_PRESET`                | `oauth.preset`              | Yes (http) ¹ | —         | OIDC provider preset: `google`, `entra`, `okta`, `auth0`, `keycloak`          |
-| `MCP_OIDC_DISCOVERY_URL`         | `oauth.discoveryUrl`        | Yes (http) ¹ | —         | OIDC discovery URL — alternative to `MCP_OIDC_PRESET` for any OIDC IdP        |
-| `MCP_OIDC_CLIENT_ID`             | `oauth.clientId`            | Yes (http)   | —         | OAuth client ID issued by the IdP                                             |
-| `MCP_OIDC_CLIENT_SECRET`         | `oauth.clientSecret`        | Yes (http)   | —         | OAuth client secret issued by the IdP                                         |
-| `MCP_ALLOWED_EMAILS`             | `oauth.allowlist.emails`    | Yes (http) ² | `[]`      | Comma-separated email addresses allowed to use the server                     |
-| `MCP_ALLOWED_SUBS`               | `oauth.allowlist.subs`      | Yes (http) ² | `[]`      | Comma-separated OIDC subject identifiers allowed to use the server            |
-| `MCP_TRUST_PROXY`                | `oauth.trustProxy`          | No           | `false`   | Trust `X-Forwarded-For` for DCR rate limiting (set behind a sanitizing proxy) |
-| `MCP_OAUTH_REDIRECT_ALLOWLIST`   | `oauth.redirectAllowlist`   | No           | `[]`      | Comma-separated recognized redirect origins (consent gate) — see below ⁴      |
-| `MCP_OIDC_SCOPES`                | `oauth.scopes`              | No           | —         | Extra OAuth scopes to request (comma-separated)                               |
-| `MCP_OIDC_EMAIL_VERIFIED_POLICY` | `oauth.emailVerifiedPolicy` | No           | —         | Email verification policy: `strict`, `skip`, or `if-present`                  |
-| `MCP_OIDC_ALLOWED_ALGS`          | `oauth.allowedAlgs`         | No           | `RS256` ³ | Allowed JWT signing algorithms (comma-separated)                              |
-
-¹ At least one of `MCP_OIDC_PRESET` or `MCP_OIDC_DISCOVERY_URL` must be set when `MCP_TRANSPORT=http`. For tenant-bound presets (`entra`, `okta`, `auth0`, `keycloak`), both must be set — the preset names the provider, `MCP_OIDC_DISCOVERY_URL` supplies the tenant-specific discovery endpoint. For `google`, the preset alone is sufficient (discovery URL is hardcoded). Setting only `MCP_OIDC_DISCOVERY_URL` (no preset) works for any OIDC-compliant IdP.
-² At least one of `MCP_ALLOWED_EMAILS` or `MCP_ALLOWED_SUBS` must be non-empty when `MCP_TRANSPORT=http`.
-³ Code-level default from presets; keycloak preset defaults to `RS256, ES256`. Set this only to override the preset's default.
-
-⁴ Recognized downstream redirect **origins** (`scheme://host:port`) for the confused-deputy consent gate. A `/authorize` request whose redirect origin is on this list goes straight to the upstream IdP; any other origin shows a consent screen the user must approve before the request proceeds. **An empty list (the default) means every `/authorize` is gated** — safe, but you'll see the consent screen on every login until you seed it. Entries are exact origins, https only (with an `http://localhost` / `127.0.0.1` / `[::1]` exemption), validated at startup. No subdomain wildcards; loopback is matched including the port. Typical value for a Claude deployment: `https://claude.ai` (likely add `https://claude.com` as Anthropic migrates domains; Claude mobile/desktop may surface additional origins as one-time prompts until you list them).
+When `MCP_TRANSPORT=http`, see [http-transport.md](http-transport.md) and
+[oauth-configuration.md](oauth-configuration.md) for the `MCP_HTTP_*`, `MCP_OIDC_*`,
+`MCP_ALLOWED_*`, and `MCP_OAUTH_*` variables.
 
 ### Logging
 
@@ -73,7 +52,10 @@ Environment variables always win. If you set `PAPRIKA_EMAIL` as an env var and a
 | `OPENAI_BASE_URL` | `features.embeddings.baseUrl` | No       | —       | Embedding provider base URL |
 | `EMBEDDING_MODEL` | `features.embeddings.model`   | No       | —       | Embedding model identifier  |
 
-All three embedding variables must be set together to enable semantic search. If any are missing, the `discover_recipes` tool won't be registered and the server logs `Semantic search: disabled` on startup.
+Set all three together to enable semantic search. If any are missing, the
+`discover_recipes` tool isn't registered and the server logs
+`Semantic search: disabled` on startup. [embedding-providers.md](embedding-providers.md)
+covers provider choices (Ollama, OpenAI, OpenRouter) with worked examples.
 
 ### Recipe photo generation (optional)
 
@@ -83,16 +65,23 @@ All three embedding variables must be set together to enable semantic search. If
 | `IMAGE_GEN_BASE_URL`               | `features.imageGen.baseUrl`              | No       | `https://openrouter.ai/api/v1` | OpenRouter base URL (only used with a dedicated key)          |
 | `IMAGE_GEN_REUSE_EMBEDDINGS_CREDS` | `features.imageGen.reuseEmbeddingsCreds` | No       | `false`                        | Reuse the embedding (`OPENAI_*`) credentials instead of a key |
 
-Image generation powers the `generate_photo` tool (OpenRouter chat-completions image models). Enable it **one** of two ways:
+Image generation powers the `generate_photo` tool (OpenRouter chat-completions image
+models). Enable it **one** of two ways:
 
-- Set `IMAGE_GEN_API_KEY` (and optionally `IMAGE_GEN_BASE_URL`) — a **dedicated** key, which gives you an isolated OpenRouter billing line for photo generation; or
-- Set `IMAGE_GEN_REUSE_EMBEDDINGS_CREDS=true` to **reuse** your embedding provider's credentials (only valid when `features.embeddings` is configured and points at OpenRouter).
+- Set `IMAGE_GEN_API_KEY` (and optionally `IMAGE_GEN_BASE_URL`) for a **dedicated**
+  key, which gives you an isolated OpenRouter billing line for photo generation; or
+- Set `IMAGE_GEN_REUSE_EMBEDDINGS_CREDS=true` to **reuse** your embedding provider's
+  credentials (valid only when `features.embeddings` is configured and points at
+  OpenRouter).
 
-Setting both, or setting neither while the block exists, is a configuration error. The **model is chosen per `generate_photo` call**, not in config. If image generation isn't enabled, `generate_photo` isn't registered.
+Setting both, or setting neither while the block exists, is a configuration error. The
+**model is chosen per `generate_photo` call**, not in config. If image generation isn't
+enabled, `generate_photo` isn't registered.
 
 ### Sync interval format
 
-`PAPRIKA_SYNC_INTERVAL` and `PAPRIKA_SYNC_PENDING_WRITE_TTL` accept human-readable durations:
+`PAPRIKA_SYNC_INTERVAL` and `PAPRIKA_SYNC_PENDING_WRITE_TTL` accept human-readable
+durations:
 
 - `"15m"`, `"30 minutes"`, `"1 hour"`
 - `"1h30m"`, `"1 hr 30 min"`
@@ -105,170 +94,14 @@ Setting both, or setting neither while the block exists, is a configuration erro
 
 ### Recipe fetch concurrency
 
-The first sync after a cold start fetches each recipe individually (`listRecipes`, then one
-`getRecipe` per recipe), throttled by a concurrency bulkhead. `PAPRIKA_SYNC_RECIPE_CONCURRENCY`
-(default `5`) sets that limit. For most libraries the default is plenty — a few hundred recipes
-reconcile in a second or two. If you have a very large library and want a faster cold start, raise
-it; **reliability is the tradeoff** — high concurrency against a single origin makes rate-limiting
-(HTTP 429) and circuit-breaker trips more likely. Values above `20` are allowed but log a startup
-warning. The retry + circuit-breaker stack still protects you, but tune conservatively.
-
-## HTTP transport
-
-`MCP_TRANSPORT=http` switches the server from stdio to a Streamable HTTP endpoint that
-serves the MCP protocol at `POST /mcp` and a liveness probe at `GET /healthz`. Stdio
-remains the default so existing CLI clients (Claude Code, Claude Desktop, Cursor,
-mcp-cli) are unaffected.
-
-`MCP_HTTP_PORT` accepts a number string or bare number and is coerced to an integer
-in the range `1`–`65535`. `MCP_HTTP_HOST` accepts any non-empty string; default is
-`0.0.0.0` (all interfaces).
-
-HTTP transport requires OAuth 2.1 configuration — `MCP_PUBLIC_URL`,
-`MCP_OIDC_CLIENT_ID`, `MCP_OIDC_CLIENT_SECRET`, at least one of
-`MCP_ALLOWED_EMAILS`/`MCP_ALLOWED_SUBS`, and either `MCP_OIDC_PRESET` or
-`MCP_OIDC_DISCOVERY_URL` must all be set. The server exits with a validation error
-if any required field is missing.
-
-### DNS rebinding protection
-
-When the server is exposed directly to the public internet (no Cloudflare
-Access, Tailscale Serve, or other proxy validating hosts in front), set
-`MCP_ALLOWED_HOSTS` to a comma-separated list of permitted `Host` header
-values:
-
-```bash
-MCP_ALLOWED_HOSTS=mcp.example.com,mcp.example.com:443
-```
-
-Requests to `POST /mcp` whose `Host` header isn't on the list get rejected
-with HTTP 403. The default is empty (no restriction), which is correct when a
-reverse proxy in front already validates the host.
-
-`MCP_ALLOWED_HOSTS` alone is the right knob for almost every deployment.
-Every HTTP client sends a `Host` header — HTTP/1.1 requires it — so the
-check covers browser clients (Claude Mobile, claude.ai) and CLI clients
-(Claude Code over HTTP, mcp-cli) the same way. It's also the header that DNS
-rebinding can't forge: the attacker controls DNS resolution, but the victim's
-browser still sends `Host: attacker.example` — which won't be on your list.
-
-#### Origin allowlist (browser-only deployments)
-
-`MCP_ALLOWED_ORIGINS` is a separate `Origin` header allowlist. **Setting it
-locks out CLI clients.** Once the list is non-empty, the MCP transport also
-rejects `POST /mcp` requests that arrive without an `Origin` header, and CLI
-MCP clients don't send one. Use it only when the server is intended for
-browser clients exclusively and you want to constrain which origins can call
-it:
-
-```bash
-MCP_ALLOWED_ORIGINS=https://claude.ai
-```
-
-This is belt-and-suspenders on top of `MCP_ALLOWED_HOSTS`, not a replacement
-for it.
-
-#### Scope and matching rules
-
-- Only `POST /mcp` is gated. The check fires inside the MCP transport, so
-  `/healthz`, OAuth endpoints (`/.well-known/*`, `/register`, `/authorize`,
-  `/token`, `/revoke`), and `/oauth/callback` aren't affected. That matches
-  the threat model — DNS rebinding targets the application protocol endpoint
-  — but "DNS rebinding protection" here doesn't mean "every route is locked
-  down."
-- Host and Origin values are matched exactly against the incoming header.
-  Include the port if your clients send one (e.g. `mcp.example.com:443`).
-- Either list automatically enables enforcement. There's no separate toggle.
-
-### Graceful shutdown (Kubernetes)
-
-On `SIGTERM` the server shuts down in two phases:
-
-1. **Readiness drain** — `/healthz` immediately starts returning `503` (so
-   Kubernetes marks the pod not-ready and removes it from the Service
-   endpoints), and the server keeps serving for `MCP_HTTP_SHUTDOWN_DRAIN_MS`
-   (default `5s`). This window lets endpoint removal and kube-proxy / ingress
-   routing propagate so a request routed just before the pod was deleted still
-   reaches a working server instead of a refused connection.
-2. **Drain** — the sync engine stops, open SSE streams are aborted, the HTTP
-   server stops accepting new connections, in-flight requests are allowed to
-   finish, and idle keep-alive sockets are closed immediately
-   (`closeIdleConnections`). A hard `10s` timeout force-closes anything still
-   open (`closeAllConnections`) so the process exits within the grace period.
-
-Budget the timing so the **total** stays under `terminationGracePeriodSeconds`:
-the drain delay plus the `10s` drain timeout (default `5 + 10 = 15s`) must be
-less than the grace period (the chart/manifest default is `30s`). Set
-`MCP_HTTP_SHUTDOWN_DRAIN_MS=0` to disable the drain delay (appropriate when not
-running under an orchestrator, or for a single-replica `Recreate` rollout where
-there is no other replica to route to).
-
-The container runs `node` as PID 1 (distroless exec-form entrypoint), so SIGTERM
-reaches the process directly — no shell wrapper to swallow it.
-
-## OAuth 2.1
-
-When `MCP_TRANSPORT=http`, the server runs a full OAuth 2.1 authorization server
-with PKCE and Dynamic Client Registration (RFC 7591). It delegates identity to an
-upstream OIDC provider and issues its own opaque access tokens to MCP clients.
-
-### Choosing an OIDC provider
-
-For `google`, set only `MCP_OIDC_PRESET=google` — the discovery URL is hardcoded.
-For tenant-bound presets (`entra`, `okta`, `auth0`, `keycloak`), set **both**
-`MCP_OIDC_PRESET` and `MCP_OIDC_DISCOVERY_URL` — the preset names the provider and
-the discovery URL supplies the tenant-specific endpoint; omitting either causes the
-server to exit at startup. For any other OIDC-compliant IdP, set only
-`MCP_OIDC_DISCOVERY_URL` (no preset).
-
-**Built-in presets** (`MCP_OIDC_PRESET`):
-
-| Preset     | Provider           |
-| ---------- | ------------------ |
-| `google`   | Google accounts    |
-| `entra`    | Microsoft Entra ID |
-| `okta`     | Okta               |
-| `auth0`    | Auth0              |
-| `keycloak` | Keycloak           |
-
-**Custom IdP** (`MCP_OIDC_DISCOVERY_URL`): set to the `/.well-known/openid-configuration`
-endpoint of your IdP (e.g. `https://accounts.example.com/.well-known/openid-configuration`).
-
-### Allowlist
-
-At least one of `MCP_ALLOWED_EMAILS` or `MCP_ALLOWED_SUBS` must be non-empty. Both
-accept comma-separated values and can be combined. A user is allowed if their email
-appears in `MCP_ALLOWED_EMAILS` **or** their OIDC `sub` claim appears in
-`MCP_ALLOWED_SUBS`.
-
-### Trust proxy
-
-`MCP_TRUST_PROXY=true` makes the DCR rate limiter key off `X-Forwarded-For` instead of
-the direct peer address. Set it when a trusted reverse proxy (nginx, Tailscale Funnel,
-Cloudflare) sanitizes that header before reaching the server. Default is `false` (safe
-for direct internet exposure without a proxy).
-
-### OAuth redirect URI
-
-Register exactly `https://<your-public-url>/oauth/callback` as the authorized redirect URI
-on your IdP client. Trailing slashes in `MCP_PUBLIC_URL` are stripped at parse time to
-ensure exact matching.
-
-### Redirect-origin consent gate
-
-The server accepts open Dynamic Client Registration, so any client can register and start an
-authorization. `MCP_OAUTH_REDIRECT_ALLOWLIST` is the trust boundary that decides which of those
-clients can complete a login without an explicit prompt: a `/authorize` request whose
-`redirect_uri` origin is on the list goes straight to your IdP, and any unrecognized origin
-shows a consent screen the user must approve first. This closes a confused-deputy gap where a
-malicious registered client could otherwise ride an allowlisted user's live IdP session to
-obtain a token bound to that user's identity.
-
-Set it to the origins of the clients you actually use — for a Claude deployment, typically
-`https://claude.ai`. Leaving it empty is safe (every login is gated), just noisier: you'll
-approve the screen each time. Origins are matched exactly, https only (with a localhost
-exemption for local development), and validated at startup, so a malformed entry fails the
-server fast rather than silently allowing nothing.
+The first sync after a cold start fetches each recipe individually (`listRecipes`, then
+one `getRecipe` per recipe), throttled by a concurrency bulkhead.
+`PAPRIKA_SYNC_RECIPE_CONCURRENCY` (default `5`) sets that limit. For most libraries the
+default is plenty; a few hundred recipes reconcile in a second or two. If you have a
+very large library and want a faster cold start, raise it, but **reliability is the
+tradeoff**: high concurrency against a single origin makes rate-limiting (HTTP 429) and
+circuit-breaker trips more likely. Values above `20` are allowed but log a startup
+warning. The retry and circuit-breaker stack still protects you; tune conservatively.
 
 ## Logging
 
@@ -276,17 +109,18 @@ The server uses structured [pino](https://getpino.io/) logging. In stdio mode, l
 to stderr (TTY) or a file (non-TTY) to keep stdout clean for the MCP wire format. In
 HTTP mode, logs go to stdout as raw JSON.
 
-`MCP_LOG_PRETTY=auto` (the default) uses pino-pretty for all stdio output — both TTY
-(to stderr) and non-TTY (to the log file). HTTP transport always emits raw JSON to
-stdout regardless of this setting. `MCP_LOG_FILE` overrides the default file path used in stdio non-TTY mode;
-the default is `<log-dir>/mcp-paprika.log`.
+`MCP_LOG_PRETTY=auto` (the default) uses pino-pretty for all stdio output, both TTY (to
+stderr) and non-TTY (to the log file). HTTP transport always emits raw JSON to stdout
+regardless of this setting. `MCP_LOG_FILE` overrides the default file path used in
+stdio non-TTY mode; the default is `<log-dir>/mcp-paprika.log`.
 
-Records at or above `MCP_LOG_NOTIFY_LEVEL` (default `warn`) are automatically forwarded
-to connected MCP clients as logging messages.
+Records at or above `MCP_LOG_NOTIFY_LEVEL` (default `warn`) are forwarded to connected
+MCP clients as logging messages.
 
 ## Config file
 
-Place a `config.json` in the config directory. All fields are optional — you can mix config file and env vars.
+Place a `config.json` in the config directory. All fields are optional, and you can mix
+config file and env vars.
 
 ```json
 {
@@ -331,9 +165,7 @@ Place a `config.json` in the config directory. All fields are optional — you c
 
 ## `.env` file
 
-You can also place a `.env` file in the config directory.
-
-Stdio (local CLI clients):
+You can also place a `.env` file in the config directory. A stdio (local CLI) setup:
 
 ```bash
 PAPRIKA_EMAIL=you@example.com
@@ -352,25 +184,13 @@ IMAGE_GEN_API_KEY=sk-or-...
 # IMAGE_GEN_REUSE_EMBEDDINGS_CREDS=true
 ```
 
-HTTP with OAuth (remote MCP clients, claude.ai):
-
-```bash
-PAPRIKA_EMAIL=you@example.com
-PAPRIKA_PASSWORD=your-password
-
-MCP_TRANSPORT=http
-MCP_PUBLIC_URL=https://mcp.example.com
-
-MCP_OIDC_PRESET=google
-MCP_OIDC_CLIENT_ID=...apps.googleusercontent.com
-MCP_OIDC_CLIENT_SECRET=GOCSPX-...
-
-MCP_ALLOWED_EMAILS=you@example.com
-```
+The same variables work for HTTP; [quick-start-http.md](quick-start-http.md) shows the
+full HTTP + OAuth set.
 
 ## Config directory location
 
-The config directory is determined by [env-paths](https://github.com/sindresorhus/env-paths) with the app name `mcp-paprika`:
+[env-paths](https://github.com/sindresorhus/env-paths) determines the config directory
+from the app name `mcp-paprika`:
 
 | Platform | Path                                                              |
 | -------- | ----------------------------------------------------------------- |
@@ -380,7 +200,8 @@ The config directory is determined by [env-paths](https://github.com/sindresorhu
 
 ## Cache directory
 
-The disk cache (synced recipes and vector index) lives in a separate cache directory:
+The disk cache (synced recipes and the vector index) lives in a separate cache
+directory:
 
 | Platform | Path                                                            |
 | -------- | --------------------------------------------------------------- |

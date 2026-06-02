@@ -39,6 +39,8 @@ For per-directory detail, read that directory's `CLAUDE.md`. For current counts 
 | Decisions, and why                      | `docs/adr/`                    |
 | Reverse-engineered Paprika wire formats | `docs/wire-format.md`          |
 | Configuration (env vars, paths)         | `docs/configuration.md`        |
+| HTTP transport config                   | `docs/http-transport.md`       |
+| OAuth 2.1 / OIDC config                 | `docs/oauth-configuration.md`  |
 | Tools reference                         | `docs/tools/`                  |
 | Embedding providers                     | `docs/embedding-providers.md`  |
 | Releasing                               | `docs/releasing.md`            |

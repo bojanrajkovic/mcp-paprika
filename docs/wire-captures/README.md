@@ -3,7 +3,9 @@
 Sanitized HAR 1.2 recordings of Paprika Cloud Sync API traffic, captured via
 mitmproxy against the macOS desktop client. Each HAR entry has a descriptive
 `comment` field naming the operation (e.g., "add recipe meal: (Not) Butter
-Chicken as Breakfast on 2026-05-26").
+Chicken as Breakfast on 2026-05-26"). These captures are the literal
+request/response corpus; [`../wire-format.md`](../wire-format.md) explains why the
+formats are shaped the way they are and how the reconstruction stays honest.
 
 ## Files
 
@@ -28,7 +30,7 @@ Chicken as Breakfast on 2026-05-26").
 
 The codegen (`pnpm generate:fixtures`) produces typed modules in
 `src/__fixtures__/wire-captures/`. Each module exports a `fixture()` function
-keyed by the HAR comment string — accessing a nonexistent key is a compile
+keyed by the HAR comment string, so accessing a nonexistent key is a compile
 error:
 
 ```typescript
@@ -46,7 +48,7 @@ f.responseBody; // parsed JSON ({result: true})
 
 ### MSW handler replay
 
-Each module also exports `handlers` — an array of MSW `HttpHandler` objects
+Each module also exports `handlers`, an array of MSW `HttpHandler` objects
 generated from the HAR via `@msw/source/traffic`. Use with the project's
 `useMswServer()` helper:
 
@@ -64,9 +66,9 @@ describe("meal planner tools", () => {
 });
 ```
 
-The handlers replay responses in order — first request to a matching URL gets
-the first recorded response, second gets the second, etc. After exhausting
-recorded responses, the last one repeats.
+The handlers replay responses in order: the first request to a matching URL gets
+the first recorded response, the second gets the second, and so on. After
+exhausting recorded responses, the last one repeats.
 
 ### Extracting wire shapes for schema design
 
@@ -89,47 +91,10 @@ const meal = body[0]!;
 // in src/paprika/types.ts.
 ```
 
-## Refactoring Opportunities
+## Choosing fixtures vs. hand-rolled factories
 
-### Existing tests to consider
-
-**`src/paprika/client.test.ts`** and **`src/sync-tool-pipeline.test.integration.ts`**
-both define duplicate `makeSnakeCaseRecipe()` factories (nearly identical,
-differing only in whether they accept overrides). These factories hand-roll the
-28-field recipe wire shape. The `reference.har.json` capture now has real
-startup sync GET responses showing the actual wire shapes for groceries, aisles,
-and pantry.
-
-Potential refactors (not urgent — the existing tests work fine):
-
-1. **Deduplicate `makeSnakeCaseRecipe`** — extract to a shared fixture factory
-   in `src/cache/__fixtures__/` (this is independent of HAR captures)
-
-2. **Wire-shape validation tests** — add tests that verify hand-rolled fixture
-   factories produce shapes matching real captures. This catches drift if
-   Paprika changes field names or adds fields:
-
-   ```typescript
-   import { fixture } from "../__fixtures__/wire-captures/reference.js";
-
-   it("hand-rolled pantry fixture matches real wire shape", () => {
-     const real = fixture("GET pantry items (startup sync)");
-     const body = real.responseBody as { result: Array<Record<string, unknown>> };
-     const realKeys = Object.keys(body.result[0]!).sort();
-
-     const handRolled = makePantryItemSnakeCase("test-uid");
-     const handRolledKeys = Object.keys(handRolled).sort();
-
-     expect(handRolledKeys).toEqual(realKeys);
-   });
-   ```
-
-3. **New entity tests (meals, menus, mealtypes)** — when implementing #61/#62/#81,
-   use HAR fixtures as the primary test data rather than hand-rolling factories.
-   The `mealHandlers` and `menuHandlers` provide realistic API responses for
-   integration tests from day one.
-
-### When to use HAR fixtures vs. hand-rolled factories
+Both the HAR fixtures and hand-rolled factories have their place. Pick by what the
+test needs:
 
 | Scenario                                         | Use                                             |
 | ------------------------------------------------ | ----------------------------------------------- |
@@ -162,7 +127,7 @@ Or manually:
 1. Capture traffic with `scripts/capture-api.sh`
 2. Survey flows: `mitmdump -nr <file> -s scripts/decode-to-har.py`
 3. Write a `<capture>.comments.json` sidecar mapping each flow index to a descriptive comment string (or `"skip"` to drop noise like `/sync/status/`)
-4. Emit the sanitized HAR: `mitmdump -nr <file> -s scripts/decode-to-har.py --set comments=<json> --set out=docs/wire-captures/<entity>.har.json` — the script handles decompression, credential redaction, host normalization, and (critically) preserves native JSON value types byte-equivalently
+4. Emit the sanitized HAR: `mitmdump -nr <file> -s scripts/decode-to-har.py --set comments=<json> --set out=docs/wire-captures/<entity>.har.json`. The script handles decompression, credential redaction, host normalization, and (critically) preserves native JSON value types byte-equivalently
 5. Run `pnpm generate:fixtures`
 
-`scripts/decode-capture.py` still exists for ad-hoc inspection (prints decoded JSON to stdout per flow). Don't use it as the basis for hand-constructing HAR entries — that's the workflow that produced the export_time / original_type wire-format bugs surfaced in commits a32e660 and 8d37480. Use `decode-to-har.py` instead.
+`scripts/decode-capture.py` still exists for ad-hoc inspection (it prints decoded JSON to stdout per flow). Don't use it as the basis for hand-constructing HAR entries; that path produced the `export_time` / `original_type` wire-format bugs that `decode-to-har.py` exists to prevent.

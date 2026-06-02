@@ -7,11 +7,24 @@ The project ships two artifacts from each release tag:
 
 Both workflows fire on `release: published`, so npm and the container always ship from the same git tag.
 
-Prereleases are first-class: tagging a release as prerelease publishes the npm package under a derived dist-tag (`@beta`, `@rc`, `@next`, …) and the container under the matching version tag, without ever updating the `latest` / `:latest` pointers. The published artifacts are permanent — npm versions and GHCR images stay as part of the historical record.
+Prereleases are first-class: tagging a release as prerelease publishes the npm package under a derived dist-tag (`@beta`, `@rc`, `@next`, …) and the container under the matching version tag, without ever updating the `latest` / `:latest` pointers. The published artifacts are permanent: npm versions and GHCR images stay part of the historical record.
 
 ## Release model
 
 Trunk-based, release-please-driven, with optional prerelease tags for pre-merge validation of the container and npm package together.
+
+```mermaid
+flowchart TB
+  C["commits land on main<br/>(conventional commits)"] --> RP["release-please opens/updates<br/>the release PR: version bump + CHANGELOG"]
+  RP -->|"merge the release PR"| TAG["GitHub Release cut at vX.Y.Z"]
+  TAG -->|"workflows fire on release: published"| STABLE["npm @latest · ghcr :X.Y.Z + :latest<br/>latest pointers roll"]
+
+  RP -.->|"optional pre-merge check"| PRE["gh release create --prerelease<br/>vX.Y.Z-beta.0 against main"]
+  PRE -.->|"same two workflows fire"| CAND["npm @beta · ghcr :X.Y.Z-beta.0<br/>latest pointers untouched"]
+  CAND -.-> Q{"candidate<br/>good?"}
+  Q -.->|"no: fix forward, tag -beta.1"| PRE
+  Q -.->|yes| TAG
+```
 
 ### Stable releases
 
@@ -20,7 +33,7 @@ Trunk-based, release-please-driven, with optional prerelease tags for pre-merge 
 3. Merging that release PR cuts the GitHub Release at the new tag.
 4. `publish.yml` and `publish-container.yml` fire on the published release, building and shipping npm + container with full attestations.
 
-The `latest` pointers — GHCR's `:latest` tag and npm's `latest` dist-tag — update only for non-prerelease releases, so consumers without a pinned version always land on a stable release.
+The `latest` pointers (GHCR's `:latest` tag and npm's `latest` dist-tag) update only for non-prerelease releases, so consumers without a pinned version always land on a stable release.
 
 ### Validating a release candidate before merging
 
@@ -40,14 +53,14 @@ Both workflows run for prereleases, so a real candidate image and npm package ca
 4. If it passes: merge the release-please PR. release-please cuts `v1.2.0`, the workflows produce a stable image at `:1.2.0` and the npm `latest` dist-tag rolls to `1.2.0`.
 5. If it fails: abandon the candidate, fix forward, tag a new prerelease (`v1.2.0-beta.1`, etc.). The failed candidate stays in the registry as historical record.
 
-Freeze `main` only between "candidate validated" and "release PR merged" — typically minutes.
+Freeze `main` only between "candidate validated" and "release PR merged" (typically minutes).
 
 ### release-please coordination
 
 release-please uses `.release-please-manifest.json` as the source of truth for the current version. Manual prerelease tags created via `gh release create`:
 
 - Do not update `.release-please-manifest.json` (no `package.json` bump in main, no CHANGELOG entry). `publish.yml` does an in-workflow `npm version` so the published artifact's version matches the release tag, but that bump never commits back.
-- Do not affect release-please's commit range — it looks at commits since the manifest version's tag, not at every release tag in the repo.
+- Do not affect release-please's commit range: it looks at commits since the manifest version's tag, not at every release tag in the repo.
 - Do appear in the GitHub Releases list as prereleases. They're kept as historical record.
 
 `chore`/`docs` conventional-commit types are hidden from `CHANGELOG.md` via the `changelog-sections` config in `release-please-config.json`. Workflow tweaks, test-only changes, and other internal commits should use those types.
@@ -95,7 +108,7 @@ cosign verify ghcr.io/bojanrajkovic/mcp-paprika:$TAG \
 
 ## Deleting a published version (rare)
 
-Published versions are intentionally permanent — both registries persist them as historical record. If you need to delete one anyway (accidental publish, leaked secret in a build), here is the procedure:
+Published versions are intentionally permanent: both registries persist them as historical record. If you need to delete one anyway (accidental publish, leaked secret in a build), here is the procedure:
 
 ```sh
 TAG=v1.2.0-beta.0
@@ -113,4 +126,4 @@ gh api /user/packages/container/mcp-paprika/versions \
 npm unpublish "@bojanrajkovic/mcp-paprika@${TAG#v}"
 ```
 
-The cosign signature in the public Rekor transparency log persists regardless — Rekor is append-only by design.
+The cosign signature in the public Rekor transparency log persists regardless; Rekor is append-only by design.
