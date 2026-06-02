@@ -55,7 +55,6 @@ The prior vector-store design plan also weighed a hosted/server-backed vector da
 
 ## References
 
-- Design plan: `docs/design-plans/2026-03-19-p3-u04-vector-store.md` (records the original Vectra-over-alternatives decision this ADR supersedes)
 - Module-level rationale: header comment in `src/features/json-vector-index.ts`
 - Component contracts: `src/features/CLAUDE.md` (`json-vector-index.ts`, `vector-store.ts`)
 - Shipped in PR #189 (vendor a minimal vector index, dropping the Vectra stack)

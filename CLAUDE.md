@@ -44,7 +44,6 @@ For per-directory detail, read that directory's `CLAUDE.md`. For current counts 
 | Releasing | `docs/releasing.md` |
 | Doc-system governance | `docs/documentation-system.md` |
 | Human dev workflow | `CONTRIBUTING.md` |
-| Design plans (point-in-time journey) | `docs/design-plans/` |
 
 ## Invariants
 

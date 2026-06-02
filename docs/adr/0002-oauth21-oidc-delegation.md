@@ -71,7 +71,6 @@ Three shapes were on the table. **No gate at all** — forwarding every dynamica
 
 ## References
 
-- Design plan: `docs/design-plans/2026-05-17-oauth21-http.md`
 - Module contract and invariants: `src/auth/CLAUDE.md`
 - Related: ADR-0001 (two MCP transports over one composition root)
 - Issues: #147 (confused-deputy gap), #193 (redirect-origin allowlist + consent screen), #194 (bounded in-memory auth stores)

@@ -68,8 +68,5 @@ Not deliberately weighed — hand-wiring was the default, not a considered rejec
 
 ## References
 
-- Design plan: `docs/design-plans/2026-03-18-p2-u12-entry-point.md` (entry-point wiring, ordered startup, shutdown contract)
-- Design plan: `docs/design-plans/2026-05-17-oauth21-http.md` (OAuth 2.1 + OIDC delegation surface mounted on the HTTP transport)
-- Design plan: `docs/design-plans/2026-05-22-structured-logging.md` (logger on `AppContext`, fan-out through the `Notifier`, deferred-getter bootstrap step)
 - Module contract: `src/server/CLAUDE.md` (AppContext/SessionContext split, Notifier, deferred-getter bootstrap order, invariants)
 - MCP transport specifications: stdio and Streamable HTTP

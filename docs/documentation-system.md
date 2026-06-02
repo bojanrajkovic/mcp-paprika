@@ -18,13 +18,13 @@ Each doc genre answers one question. Mixing genres is how docs rot.
 
 - **`docs/architecture.md` — current shape (what / why).** Describes the system as it is _today_: components, how they fit, why the structure is what it is. Maintained. No history, no "we used to," no journey. If the code changes, this changes with it.
 
-- **`docs/design-plans/` — point-in-time journey.** Each file is a snapshot of how one feature was reasoned about _at the time it was designed_ (these are tracked in git as a record of intent). They are **allowed to go stale and are not maintained.** A design plan is correct as of its date and never updated afterward — the code and `architecture.md` are the present tense; the design plan is the past tense. Do not "fix" an old design plan to match current code; that destroys its value as a record of what was actually decided then.
-
-- **`docs/adr/` — durable decisions.** One decision per file, with the alternatives that were weighed and the deciding trade-off. ADRs are backfilled and maintained for accuracy of the _decision record_: status, context, what was chosen, what was rejected and why. An ADR exists because a choice had real alternatives someone might later question. If there were no alternatives, it is not an ADR — it is just architecture.
+- **`docs/adr/` — durable decisions.** One decision per file, with the alternatives that were weighed and the deciding trade-off. ADRs are maintained for accuracy of the _decision record_: status, context, what was chosen, what was rejected and why. An ADR exists because a choice had real alternatives someone might later question. If there were no alternatives, it is not an ADR — it is just architecture.
 
 - **`CONTRIBUTING.md` — human dev workflow.** How a _person_ sets up, builds, tests, and ships: the commands, the hook behavior, the commit/PR conventions, version sync, and boundaries. This is workflow, not system shape.
 
 - **Directory `CLAUDE.md` — thin pointer + sharp edges.** A module `CLAUDE.md` is a _thin pointer_ to the canonical doc for that area plus a reactively-accreted list of **sharp edges**: the non-obvious gotcha that bit someone, the invariant that is easy to violate, the wire-format quirk that must be preserved. It is **not** a mini architecture doc. It does not re-derive the design; it warns. Sharp edges are added when something actually bites, not speculatively.
+
+Pre-implementation planning is not a tracked doc genre. Decisions worth keeping graduate into an ADR (or `architecture.md`); the working notes that produced them are local scratch (see §5).
 
 ## 3. Reference content is read from source, never enumerated in prose
 
@@ -40,22 +40,21 @@ This rule exists because its absence produced a real failure: the tool count dri
 
 Every `CLAUDE.md`, every architecture-class doc, and every ADR carries a **`Last verified: <date>`** stamp. That date _is_ the audit mechanism: it tells a reader how recently a human confirmed the doc against reality, and it tells a maintainer which docs are overdue for a re-check. Bump it when you verify; do not bump it for a typo fix.
 
-There is intentionally **no automated doc-staleness gate** mapping code paths or symbols to docs. Such a gate would false-positive constantly: it would flag every journey design-plan (correctly stale by design) and every "former-X" / historical annotation as a drift error, training people to ignore it. That violates the principle of preferring language and human audit over mechanical gates. Mechanical gates are reserved for unambiguous, near-zero-false-positive checks — commitlint, and the format / lint / typecheck / test gates run in CI and the git hooks. Doc freshness is a judgment call, so it stays a judgment call backed by the verification stamp.
+There is intentionally **no automated doc-staleness gate** mapping code paths or symbols to docs. Such a gate would false-positive constantly: it would flag every "former-X" annotation and every intentionally-frozen historical note as a drift error, training people to ignore it. That violates the principle of preferring language and human audit over mechanical gates. Mechanical gates are reserved for unambiguous, near-zero-false-positive checks — commitlint, and the format / lint / typecheck / test gates run in CI and the git hooks. Doc freshness is a judgment call, so it stays a judgment call backed by the verification stamp.
 
 ## 5. Tracked docs vs. local scratch
 
 Not everything under `docs/` (or in the repo tree) is part of the tracked documentation system. These locations are **local-only scratch, gitignored, and outside this rubric**:
 
-- `.ed3d/` — design-plan guidance and brainstorming scratch
+- `.ed3d/` — local planning and brainstorming scratch
 - `docs/implementation-plans/` — per-feature implementation scratch
 - `docs/test-plans/` — per-feature test scratch
 
-Treat them as a working surface, not as published docs. Anything that should survive and be maintained must graduate into a tracked genre above (architecture, an ADR, a CLAUDE.md sharp edge, or a tracked design-plan snapshot). Do not link to scratch paths from tracked docs — the link is a silent failure on any fresh clone.
+Treat them as a working surface, not as published docs. Anything that should survive and be maintained must graduate into a tracked genre above (architecture, an ADR, or a `CLAUDE.md` sharp edge). Do not link to scratch paths from tracked docs — the link is a silent failure on any fresh clone.
 
 ## References
 
 - `.ed3d/design-plan-guidance.md` — the non-duplication and CLAUDE.md-discipline principles this rubric extends (local scratch)
 - `docs/architecture.md` — the current-shape doc this rubric governs
-- `docs/design-plans/` — the journey snapshots this rubric marks allowed-to-stale
 - `src/server/build.ts` — canonical tool registry (read, never enumerate)
 - Root `CLAUDE.md` — project conventions and the dev/PR workflow

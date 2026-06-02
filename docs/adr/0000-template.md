@@ -22,8 +22,8 @@ reader a year from now understands the pressure without reading the diff.
 RATIONALIZATION TO RESIST: turning this into a changelog ("first we tried X, then
 we switched to Y"). State what was *true*, not the journey to it.
 
-WRONG CONTENT GOES INSTEAD: narrative of the work and the exploration belongs in
-the design/implementation plan under docs/design-plans/ or docs/implementation-plans/.
+WRONG CONTENT GOES INSTEAD: narrative of the work and the exploration belongs with
+the implementation and its tests, not the ADR.
 -->
 
 ## Decision
@@ -94,8 +94,7 @@ something; name the cost.
 ## References
 
 <!--
-WHAT GOES HERE: the design or implementation plan this decision came from (path
-under docs/), related ADRs BY NUMBER (e.g. "Supersedes ADR-0003"), issue/PR
+WHAT GOES HERE: related ADRs BY NUMBER (e.g. "Supersedes ADR-0003"), issue/PR
 numbers, and external specs (RFCs, the MCP spec, library docs).
 
 RATIONALIZATION TO RESIST: pointing at "the code" with a file:line citation to
@@ -104,7 +103,6 @@ citation that no longer resolves is worse than none. Cite a file PATH at most,
 and only when the path itself is the reference; never cite line numbers.
 -->
 
-- Design plan: `docs/design-plans/<file>.md`
 - Related: ADR-NNNN
 - Issue/PR: #NNN
 - External: <spec or library doc URL>
