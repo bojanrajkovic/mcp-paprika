@@ -33,17 +33,17 @@ For per-directory detail, read that directory's `CLAUDE.md`. For current counts 
 
 ## Documentation map
 
-| Topic | Home |
-| --- | --- |
-| How it works (current architecture) | `docs/architecture.md` |
-| Decisions, and why | `docs/adr/` |
-| Reverse-engineered Paprika wire formats | `docs/wire-format.md` |
-| Configuration (env vars, paths) | `docs/configuration.md` |
-| Tools reference | `docs/tools/` |
-| Embedding providers | `docs/embedding-providers.md` |
-| Releasing | `docs/releasing.md` |
-| Doc-system governance | `docs/documentation-system.md` |
-| Human dev workflow | `CONTRIBUTING.md` |
+| Topic                                   | Home                           |
+| --------------------------------------- | ------------------------------ |
+| How it works (current architecture)     | `docs/architecture.md`         |
+| Decisions, and why                      | `docs/adr/`                    |
+| Reverse-engineered Paprika wire formats | `docs/wire-format.md`          |
+| Configuration (env vars, paths)         | `docs/configuration.md`        |
+| Tools reference                         | `docs/tools/`                  |
+| Embedding providers                     | `docs/embedding-providers.md`  |
+| Releasing                               | `docs/releasing.md`            |
+| Doc-system governance                   | `docs/documentation-system.md` |
+| Human dev workflow                      | `CONTRIBUTING.md`              |
 
 ## Invariants
 

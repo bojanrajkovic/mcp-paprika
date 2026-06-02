@@ -12,15 +12,15 @@ The human-developer workflow for mcp-paprika. Agent-facing guidance and the proj
 
 ## Commands
 
-| Command | Description |
-| --- | --- |
-| `pnpm dev` | Run the dev server via tsx |
-| `pnpm build` | Compile TypeScript to `dist/` |
-| `pnpm test` / `pnpm test:watch` | Run the vitest suite (once / in watch mode) |
-| `pnpm typecheck` | Type-check source (`tsc --noEmit`) and the test project (`tsconfig.test.json`) |
-| `pnpm lint` / `pnpm lint:fix` | oxlint (`--deny-warnings`) over `src/` |
-| `pnpm format` / `pnpm format:check` | oxfmt over the tree |
-| `pnpm generate:fixtures` | Regenerate typed fixtures from the HAR captures in `docs/wire-captures/` |
+| Command                             | Description                                                                    |
+| ----------------------------------- | ------------------------------------------------------------------------------ |
+| `pnpm dev`                          | Run the dev server via tsx                                                     |
+| `pnpm build`                        | Compile TypeScript to `dist/`                                                  |
+| `pnpm test` / `pnpm test:watch`     | Run the vitest suite (once / in watch mode)                                    |
+| `pnpm typecheck`                    | Type-check source (`tsc --noEmit`) and the test project (`tsconfig.test.json`) |
+| `pnpm lint` / `pnpm lint:fix`       | oxlint (`--deny-warnings`) over `src/`                                         |
+| `pnpm format` / `pnpm format:check` | oxfmt over the tree                                                            |
+| `pnpm generate:fixtures`            | Regenerate typed fixtures from the HAR captures in `docs/wire-captures/`       |
 
 `tsconfig.json` excludes tests and fixtures; `tsconfig.test.json` extends it to type-check everything with `noEmit`, so build output is unaffected.
 
@@ -29,7 +29,7 @@ The human-developer workflow for mcp-paprika. Agent-facing guidance and the proj
 - **ESM only** — `import`/`export`, never CommonJS. Always use `.js` extensions in relative imports (`import { foo } from "./bar.js"`).
 - **Strict TypeScript** via `@tsconfig/strictest` — no `any`, no implicit returns, no unused variables. `interface` for extensible object shapes, `type` for unions and intersections, `readonly` where mutation is not needed.
 - **Error handling** — neverthrow `Result<T, E>` in the functional core (never throw there); idiomatic `.match()` / `.andThen()` / `.map()` / `.mapErr()`, never `.isOk()` / `.isErr()`. Validate inputs with Zod at boundaries. Infrastructure that wraps exception-throwing libraries (cockatiel, the file-backed vector index) catches at the boundary; see `docs/architecture.md`.
-- **No `console`** — banned by the `no-console` oxlint rule. In stdio mode stdout *is* the MCP wire, so stray output corrupts the protocol; use the structured logger (`ctx.log.child({ component })`). The two documented `process.stderr.write` exceptions are the signal handler in `src/index.ts` and the pre-context misconfiguration warning in `src/transport/stdio.ts`.
+- **No `console`** — banned by the `no-console` oxlint rule. In stdio mode stdout _is_ the MCP wire, so stray output corrupts the protocol; use the structured logger (`ctx.log.child({ component })`). The two documented `process.stderr.write` exceptions are the signal handler in `src/index.ts` and the pre-context misconfiguration warning in `src/transport/stdio.ts`.
 
 ## Testing
 
