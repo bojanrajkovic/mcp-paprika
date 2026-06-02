@@ -95,35 +95,68 @@ Orientation:
 - generate_photo (present only when image generation is configured) attaches the image and returns its photo UID by default. With attach:false it returns a preview plus a single-use token instead; pass that token to upload_photo to attach it later.
 - Data is served from a local cache kept fresh by background sync, so it can briefly lag changes made directly in the Paprika apps.`;
 
+// ── Phase-typed bootstrap builder ────────────────────────────────────────────
+//
+// buildAppContext runs a fixed sequence of phases whose order is load-bearing
+// (see src/server/CLAUDE.md "buildAppContext construction order"). Each phase
+// consumes the previous phase's result type and returns the next, so the order
+// is a compile-time guarantee, not a convention: `buildFeatures` requires an
+// `Indexed`, which only `runInitialSync` produces, so the vector store can never
+// be built before the first sync has populated the stores.
+//
+// The shared 15-field `SyncDeps` slice (`core`) is assembled once in `hydrate`
+// and reused for both the `SyncEngine` and the final `AppContext`, so no field
+// is written twice. Handle field types are `AppContext["…"]` indexed-access, so
+// they cannot drift from the canonical context type.
+
+interface Authenticated {
+  readonly config: PaprikaConfig;
+  readonly log: AppContext["log"];
+  readonly client: AppContext["client"];
+  readonly notifier: AppContext["notifier"];
+}
+
+// Does NOT extend Authenticated: `client` and `log` would otherwise live both
+// top-level and inside `core`. Past hydration they live only in `core` (the
+// SyncDeps slice), so downstream phases read `core.log` — one canonical path,
+// with no second copy that could drift from the one the SyncEngine and the
+// final AppContext use.
+interface Hydrated {
+  readonly config: PaprikaConfig;
+  readonly notifier: AppContext["notifier"];
+  /** The slice SyncEngine consumes; also spread into the final AppContext. */
+  readonly core: SyncDeps;
+  readonly generatedImageStore: AppContext["generatedImageStore"];
+}
+
+interface Wired extends Hydrated {
+  readonly auth: AppContext["auth"];
+}
+
+interface Synced extends Wired {
+  readonly sync: SyncEngine;
+}
+
+interface Indexed extends Synced {
+  // Phase discriminant. `runInitialSync` mutates the stores in place and adds no
+  // field, so without this marker `Indexed` would be structurally identical to
+  // `Synced` and `buildFeatures` could run before the initial sync. The literal
+  // type makes the post-sync gate a compile-time requirement.
+  readonly phase: "indexed";
+}
+
+interface Ready extends Indexed {
+  readonly vectorStore: AppContext["vectorStore"];
+  readonly photographyClient: AppContext["photographyClient"];
+}
+
 /**
- * Build the process-wide AppContext and SyncEngine.
- *
- * Ordering (load-bearing):
- *
- * 1. Authenticate the Paprika client (this is the real fast-fail for bad
- *    credentials — `authenticate()` throws; `syncOnce()` swallows everything).
- * 2. Hydrate `DiskCache`, `RecipeStore`, `CategoryStore`, and `PantryStore`
- *    (and the rest) from disk.
- * 3. Construct `SyncEngine` from a narrow `SyncDeps` slice (the client, disk
- *    cache, entity stores, and logger — never `vectorStore`), so it can be built
- *    before the vector store exists.
- * 4. **Run the initial `sync.syncOnce()`** before building discover components.
- *    On a cold start (empty cache) the `CategoryStore` is empty until the first
- *    sync populates it, so cold-start vector indexing must run AFTER the first
- *    sync — otherwise embeddings get computed with empty category names and stay
- *    that way until a recipe mutation forces a re-embed (warm-restart +
- *    unchanged-hashes case). `syncOnce()` is documented to never throw, so this
- *    can't block startup.
- * 5. Build discover components (subscribes the vector store to `sync.events`
- *    for incremental re-indexing on subsequent cycles).
- *
- * Returns the fully-assembled `AppContext` and the `SyncEngine`. The caller
- * decides whether to call `sync.start()` to enable the background loop.
+ * Authenticate the Paprika client — the real fast-fail for bad credentials
+ * (`client.authenticate()` throws here, whereas `syncOnce()` swallows
+ * everything). Also builds the logger first, so startup records flow through
+ * structured logging from the first line.
  */
-export async function buildAppContext(
-  config: PaprikaConfig,
-  notifier: Notifier,
-): Promise<{ app: AppContext; sync: SyncEngine }> {
+async function authenticate(config: PaprikaConfig, notifier: Notifier): Promise<Authenticated> {
   const log = createLogger({
     transport: config.transport,
     notifier,
@@ -144,20 +177,20 @@ export async function buildAppContext(
   await client.authenticate();
   log.info("authenticated with paprika");
 
+  return { config, log, client, notifier };
+}
+
+/**
+ * Open the disk cache and hydrate every in-memory store from it, then assemble
+ * the `core` SyncDeps slice. Content/Data/Reference stores hydrate from disk on
+ * a warm restart and start empty on a true cold start.
+ */
+async function hydrate(prev: Authenticated): Promise<Hydrated> {
+  const { config, log, client, notifier } = prev;
+
   log.info("initializing disk cache");
   const cache = new DiskCacheRoot(getCacheDir(), log.child({ component: "disk-cache" }));
   await cache.init();
-
-  const auth = await buildAuthContext(config, cache, log);
-  if (auth !== null) {
-    log.info(
-      {
-        issuer: auth.config.publicUrl,
-        allowlistSize: auth.config.allowlist.emails.length + auth.config.allowlist.subs.length,
-      },
-      "oauth configured",
-    );
-  }
 
   // When background sync is disabled, syncOnce() never runs after startup, so
   // pending-write marks would never be swept. Pass TTL=0 to disable the
@@ -255,12 +288,7 @@ export async function buildAppContext(
   // previews awaiting attach-by-token (#photo-preview-attach).
   const generatedImageStore = new GeneratedImageStore();
 
-  // SyncEngine depends on a narrow SyncDeps slice — the client, disk cache, the
-  // twelve entity stores, and the logger. It never reads vectorStore,
-  // photographyClient, generatedImageStore, notifier, or auth (resource-list
-  // notification is wired below as a sync:complete subscriber, not inside the
-  // engine), so we hand it exactly that slice rather than a full AppContext.
-  const syncDeps: SyncDeps = {
+  const core: SyncDeps = {
     client,
     cache,
     store,
@@ -277,11 +305,42 @@ export async function buildAppContext(
     photoStore,
     log,
   };
-  const sync = new SyncEngine(syncDeps, config.sync.interval);
 
-  // Translate sync:complete events into MCP resource-list notifications.
-  // Wired here (not inside SyncEngine) so the engine stays decoupled from the
-  // notifier decision — subscribers pick what to do with each entity's changes.
+  return { config, notifier, core, generatedImageStore };
+}
+
+/**
+ * Build the OAuth runtime: `null` for stdio; for HTTP it fetches the OIDC
+ * discovery document and assembles the OAuth stores/provider, throwing on
+ * failure (no value in serving a public endpoint with broken auth).
+ */
+async function buildAuth(prev: Hydrated): Promise<Wired> {
+  const { config, core } = prev;
+  const { cache, log } = core;
+  const auth = await buildAuthContext(config, cache, log);
+  if (auth !== null) {
+    log.info(
+      {
+        issuer: auth.config.publicUrl,
+        allowlistSize: auth.config.allowlist.emails.length + auth.config.allowlist.subs.length,
+      },
+      "oauth configured",
+    );
+  }
+  return { ...prev, auth };
+}
+
+/**
+ * Construct the SyncEngine from the `core` slice and wire the sync:complete →
+ * resourceListChanged subscriber. The subscriber lives here, not inside the
+ * engine, so the engine stays decoupled from the notifier decision; it fires
+ * only for changeTypes with an MCP resource surface and only when the change set
+ * is non-empty (pantry is excluded — it has no resource surface).
+ */
+function wireSync(prev: Wired): Synced {
+  const { config, core, notifier } = prev;
+  const sync = new SyncEngine(core, config.sync.interval);
+
   sync.events.on("sync:complete", (result) => {
     if (
       result.changeType !== "recipes" &&
@@ -298,26 +357,23 @@ export async function buildAppContext(
     }
   });
 
-  // Run the initial sync BEFORE building discover components.
-  //
-  // Cold-start indexing in `buildDiscoverComponents` calls
-  // `categoryStore.resolveNames(uids)` per recipe to construct the embedding
-  // text. On a true cold start the `CategoryStore` is hydrated from an empty
-  // cache, so it stays empty until the first `syncOnce()` populates it — if
-  // indexing ran first, embeddings would be computed with empty category names
-  // and stay that way until a recipe mutation (Codex #75 review). On a warm
-  // restart with unchanged remote hashes the post-build sync emits nothing, so
-  // the sync:complete subscription never gets a chance to fix it.
-  //
-  // `syncOnce()` is documented to never throw (any failure is logged + emitted
-  // as `sync:error`), so this is safe to await unconditionally — same fail-soft
-  // semantics as the pre-Phase-1 entry point.
+  return { ...prev, sync };
+}
+
+/**
+ * Run the initial sync, BEFORE building discover components. On a cold start the
+ * CategoryStore is empty until the first sync populates it; if vector indexing
+ * ran first, embeddings would bake in empty category names and stay stale until
+ * a recipe mutation (Codex #75). `syncOnce()` never throws (it emits sync:error
+ * instead), so we subscribe to capture the outcome for the startup log rather
+ * than always claiming success (#76).
+ */
+async function runInitialSync(prev: Synced): Promise<Indexed> {
+  const { core, sync } = prev;
+  const { log } = core;
   log.info("running initial sync");
-  // `syncOnce()` never throws — instead it emits `sync:complete` on success or
-  // `sync:error` on failure. Subscribe so the startup log reflects the actual
-  // outcome rather than always claiming success (#76). Wrap the capture in an
-  // object because TS narrows locals mutated only via closure to their initial
-  // type, which would force a cast on every read.
+  // Wrap the capture in an object because TS narrows locals mutated only via
+  // closure to their initial type, which would force a cast on every read.
   const errorBox: { value: Error | null } = { value: null };
   const onError = (err: Error): void => {
     errorBox.value = err;
@@ -330,40 +386,61 @@ export async function buildAppContext(
   } else {
     log.warn({ err: errorBox.value }, "initial sync failed; background sync will retry");
   }
+  return { ...prev, phase: "indexed" };
+}
 
-  const vectorStore = await buildDiscoverComponents(config, store, categoryStore, sync.events, log);
+/**
+ * Build the optional discover (vector) and photo-generation features. Requires
+ * an `Indexed`, so it cannot run before the initial sync. The vector store
+ * subscribes to sync.events for incremental re-indexing on later cycles; the
+ * photography client is built only when imageGen credentials resolve.
+ */
+async function buildFeatures(prev: Indexed): Promise<Ready> {
+  const { config, core, sync } = prev;
+  const { log } = core;
+  const vectorStore = await buildDiscoverComponents(config, core.store, core.categoryStore, sync.events, log);
 
-  // Image generation (generate_photo) is opt-in: build the client only when the
-  // imageGen credentials resolve (dedicated key or reuse-embeddings). Null
-  // otherwise, which leaves the tool unregistered (mirrors vectorStore/discover).
   const resolvedImageGen = resolveImageGenConfig(config);
   const photographyClient =
     resolvedImageGen !== null ? new PhotographyClient(resolvedImageGen, log.child({ component: "photography" })) : null;
 
+  return { ...prev, vectorStore, photographyClient };
+}
+
+/**
+ * Assemble the one AppContext. The `core` slice is spread in, so the 15 shared
+ * fields written once in `hydrate` are reused rather than re-listed.
+ */
+function assemble(prev: Ready): { app: AppContext; sync: SyncEngine } {
+  const { core, generatedImageStore, vectorStore, photographyClient, notifier, auth, sync } = prev;
   const app: AppContext = {
-    client,
-    cache,
-    store,
-    categoryStore,
-    pantryStore,
-    aisleStore,
-    groceryListStore,
-    groceryItemStore,
-    groceryIngredientStore,
-    mealStore,
-    mealTypeStore,
-    menuStore,
-    menuItemStore,
-    photoStore,
+    ...core,
     generatedImageStore,
     vectorStore,
     photographyClient,
     notifier,
     auth, // null for stdio, populated for HTTP
-    log,
   };
-
   return { app, sync };
+}
+
+/**
+ * Build the process-wide AppContext and SyncEngine by running the bootstrap
+ * phases in their one legal order (each phase's type gates the next; see the
+ * section note above and src/server/CLAUDE.md). Returns the assembled AppContext
+ * and SyncEngine; the caller decides whether to `sync.start()` the background loop.
+ */
+export async function buildAppContext(
+  config: PaprikaConfig,
+  notifier: Notifier,
+): Promise<{ app: AppContext; sync: SyncEngine }> {
+  const authenticated = await authenticate(config, notifier);
+  const hydrated = await hydrate(authenticated);
+  const wired = await buildAuth(hydrated);
+  const synced = wireSync(wired);
+  const indexed = await runInitialSync(synced);
+  const ready = await buildFeatures(indexed);
+  return assemble(ready);
 }
 
 /**
