@@ -4,233 +4,31 @@ Last verified: 2026-06-01
 
 ## Purpose
 
-Orchestrates business logic by composing the Paprika API client and caching layer. Provides high-level operations that tools and resources consume.
+Process-wide feature wiring composed once in `buildAppContext`: the optional semantic-search stack (`EmbeddingClient` → `VectorStore` → vendored `JsonVectorIndex`) and the optional photo-generation stack (`PhotographyClient` + SSRF-hardened image fetch). Both are opt-in on config and gate their tools (`discover_recipes`, `generate_photo`) on a non-null component.
 
-## Contracts
+## Key References
 
-### photography-errors.ts — Error hierarchy for photo-generation operations
+- [ADR-0003: Vendored JSON vector index](../../docs/adr/0003-vendored-json-vector-index.md) — why the index is vendored (footprint + correctness), and the norm/boundary/ordering commitments.
+- [docs/architecture.md](../../docs/architecture.md) — Semantic Discovery and Photos sections (the directions/nutrition exclusion, the re-index chokepoint, the SSRF hardening, all at a glance).
+- Module-level header comments in `json-vector-index.ts`, `photography.ts`, and `tools/photo-fetch.ts` carry the per-decision rationale.
+- Method signatures, error classes, config fields, and resilience tuning numbers live in the `.ts` source and Zod schemas — not duplicated here.
 
-Two-class hierarchy mirroring `embedding-errors.ts`, with ES2024 `ErrorOptions` cause chaining support. Local breaker-open events surface as `CircuitOpenError` from `../utils/errors.js` (shared with `PaprikaClient` and `EmbeddingClient`); import from there.
+## Sharp edges
 
-| Class                 | Extends            | Fields                                                  |
-| --------------------- | ------------------ | ------------------------------------------------------- |
-| `PhotographyError`    | `Error`            | (base class; also thrown on 200-with-no-image response) |
-| `PhotographyAPIError` | `PhotographyError` | `readonly status: number`, `readonly endpoint: string`  |
+**Norm is a cache, never trusted (`JsonVectorIndex`).** The per-item norm is recomputed from the vector on every upsert and on every load; the persisted value is discarded. A changed vector can never leave a stale norm behind — this directly closes a ranking-corruption bug in the `vectra` package's upsert path that the vendored index replaces. The on-disk format is a `vectra` subset purely so existing indexes load with no re-embed migration; the legacy norm field rides along but is always recomputed. (ADR-0003.)
 
-### embedding-errors.ts — Error hierarchy for embedding operations
+**Corruption routes to recovery, not to `NaN` scores.** Vectors must be non-empty, all-finite, and share one dimension; zero-norm vectors are rejected on insert AND on load. Violations throw (treated as corruption / programmer error) and surface to `VectorStore`'s recovery path (backup `.bak` + recreate), rather than silently producing `NaN` cosine scores. Because stored items are guaranteed positive-norm, the only non-finite score comes from a zero-norm query — guarded once up front, not per item.
 
-Two-class hierarchy with ES2024 `ErrorOptions` cause chaining support. Local breaker-open events surface as `CircuitOpenError` from `../utils/errors.js` (shared with `PaprikaClient`); import from there rather than from `embedding-errors.ts`.
+**Total ordering, ties broken by id.** Query results sort by descending score with ties broken deterministically by id ascending — never the `NaN`-tolerant sort `vectra` performed. Don't "optimize" the comparator into a partial order; the determinism is the point (also recorded in ADR-0003).
 
-| Class               | Extends          | Fields                                                 |
-| ------------------- | ---------------- | ------------------------------------------------------ |
-| `EmbeddingError`    | `Error`          | (base class for all embedding errors)                  |
-| `EmbeddingAPIError` | `EmbeddingError` | `readonly status: number`, `readonly endpoint: string` |
+**Embeddings deliberately EXCLUDE directions and nutrition.** `recipeToEmbeddingText` covers name, description, categories, ingredients, and notes only. Editing cooking steps or nutrition facts must not churn the index. If you change the text format (add/remove a field, restructure), you MUST bump `EMBEDDING_SCHEMA_VERSION` so deployed users get a full re-index on next startup — otherwise old vectors silently coexist with the new format.
 
-### embeddings.ts — Embedding client and recipe-to-text conversion
+**`maintainRecipeIndex` is the re-index chokepoint — it covers what sync can't (#177).** Every local tool write (`commitRecipe` / `commitRecipeHardDelete` in `tools/helpers.ts`) AND every category rename (`commitCategoryUpsert` → `reindexRecipesForCategoryChange`) funnels through a re-embed at commit time. This is NOT redundant with sync-driven indexing: a tool-written recipe's UID is pending, so the sync recipe-diff filters it out — without the chokepoint a tool-created recipe is never embedded and a tool-edited one keeps its stale vector. A category's display name is baked into its recipes' embedding text, yet an app-side or tool-side rename changes no recipe hash, so the recipe sync never re-fetches them; the rename path re-embeds explicitly. It runs BEFORE `notifySync` so a notify rejection can't strand the index update, and is best-effort (logged at `warn`, never thrown) because the Paprika write already succeeded.
 
-`EmbeddingClient` is an HTTP client for OpenAI-compatible `/v1/embeddings` endpoints. Uses
-`createResilientExecutor` from `../utils/resilience.js` (service `"embeddings"`) for resilience:
-exponential-backoff retry (3 attempts, 500ms-10s) on transient HTTP errors (429, 500, 502, 503)
-and a circuit breaker (opens after 5 consecutive failures, half-open after 30s). Validates
-responses with Zod at the boundary. Per-instance resilience stack (no shared state between instances).
+**Cold-start bakes empty category names if it runs before the first sync.** `buildDiscoverComponents`'s startup reconcile resolves category names via `categoryStore.resolveNames(uids)`. If the category store hasn't synced yet, those resolve to nothing and the empty names get baked into the recipes' embedding text. Because a category rename changes no recipe hash, the stale text persists until the recipe itself is mutated and re-embedded — it does not self-heal on a later category sync. The startup reconcile also exists specifically to repair changes that happened while the server was down (notably renames the live `sync:complete` / `sync:category-change` handlers missed, since they subscribe after the initial `syncOnce()` already fired its events).
 
-| Export                     | Signature / Description                                                                                               |
-| -------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| `EmbeddingClient`          | `constructor(config: Readonly<EmbeddingConfig>, log?: pino.Logger)` — resilient HTTP client; `log` defaults to silent |
-| `.embed(text)`             | `Promise<Array<number>>` — embed a single text                                                                        |
-| `.embedBatch(texts)`       | `Promise<Array<Array<number>>>` — embed multiple texts in one call                                                    |
-| `.dimensions`              | `number` getter — throws `EmbeddingError` if no call made yet                                                         |
-| `EMBEDDING_SCHEMA_VERSION` | `number` constant — bump when `recipeToEmbeddingText` format changes                                                  |
-| `recipeToEmbeddingText`    | `(recipe, categoryNames) => string` — pure function, no I/O                                                           |
+**Photo egress is SSRF-hardened — deliberately not an ADR, but a real threat-model decision (`tools/photo-fetch.ts`).** Any server-side image fetch (the `upload_photo` `url` source AND `generate_photo`'s restyle path that fetches a recipe's `photoUrl`) goes through `fetchImageBytes`, never a raw `fetch`. The guard is layered: an `ipaddr.js` unicast-only check rejects any IP literal that isn't public (loopback / private / link-local / CGNAT / IPv4-mapped-IPv6, etc.), AND a DNS-rebinding-safe undici `Agent` whose connector resolves through `ssrfLookup`, so the SAME resolved address is validated and connected — closing the TOCTOU gap a separate pre-check-then-fetch would leave open. Redirects are blocked (`redirect: "error"`) because a redirect-to-private is a bypass. Two non-obvious constraints: it must import `fetch` from **undici**, not Node's global `fetch` — the dispatcher is an `Agent` from this undici copy, and the global fetch's bundled undici has an incompatible handler interface (`UND_ERR_INVALID_ARG`); and `upload_photo` deliberately exposes **no `file_path`** source — a server-side path read would be an LFI/SSRF vector and is meaningless for the remote HTTP transport. Photos come only from a vetted URL, a generated-image token, or inline normalized bytes.
 
-**Invariants:**
+**Generated-photo previews evict-oldest, not reject-on-full (`GeneratedImageStore`).** Unlike the auth TTL stores — where evicting an in-flight entry is an attack vector — dropping a stale throwaway preview is harmless, so the ring buffer overwrites the oldest when full. Single-use and race-safe: `upload_photo` `consume`s the token (synchronous delete before any `await`, so two concurrent calls can't both attach the same preview), then `restore`s it ONLY on a pure-validation failure (wrong `recipe_uid`, before any write). It must NOT restore after `attachPhotoToRecipe`, which uploads to Paprika before the local commit — restoring there could let a retry duplicate an already-uploaded photo. A validated-but-failed attach loses the preview (regenerate); that's the duplicate-safe trade.
 
-- `EmbeddingClient` throws (does not return `Result`) because it wraps cockatiel which uses exceptions for control flow
-- `recipeToEmbeddingText` includes name, description, categories, ingredients, notes; excludes directions and nutritional info
-- **IMPORTANT:** When changing `recipeToEmbeddingText` (adding/removing fields, restructuring format), bump `EMBEDDING_SCHEMA_VERSION` so existing users get a full re-index on next startup
-- `BrokenCircuitError` from cockatiel is caught and re-thrown as `CircuitOpenError("embeddings", endpoint, { cause })` — no fabricated HTTP status; see `src/utils/errors.ts`
-
-### generated-image-store.ts — Ephemeral cache of generated-photo previews
-
-`GeneratedImageStore` is a process-wide, in-memory ring buffer that lets a user attach an AI-generated photo they previewed without regenerating it (image models are non-deterministic) or round-tripping multi-MB base64 through the model. `generate_photo` (preview mode, `attach:false`) stashes the full generated bytes under an opaque single-use `gen_` token and returns that token; `upload_photo`'s `generation_token` source consumes it back to those exact bytes. In-memory only — lost on restart (previews are throwaway).
-
-| Export                        | Signature / Description                                                                                                                                                                             |
-| ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GeneratedImageStore`         | `constructor(opts?: { ttlMs?, maxEntries?, now? })` — bounded TTL store; defaults from the constants below                                                                                          |
-| `.put(entry)`                 | `(Omit<GeneratedImageEntry, "createdAt">) => string` — stash + return a fresh `gen_` token; **evicts the oldest** entry when at capacity                                                            |
-| `.restore(token, entry)`      | `(string, GeneratedImageEntry) => void` — re-insert a consumed entry under its ORIGINAL token (preserves `createdAt`); used to give a token back after a pure-validation failure (before any write) |
-| `.consume(token)`             | `(string) => GeneratedImageEntry \| null` — single-use retrieve; null if unknown or expired                                                                                                         |
-| `.size`                       | `number` getter                                                                                                                                                                                     |
-| `GeneratedImageEntry`         | `interface { bytes, mimeType, recipeUid, model, createdAt }`                                                                                                                                        |
-| `GENERATED_IMAGE_TTL_SECONDS` | `3600` (1h)                                                                                                                                                                                         |
-| `MAX_GENERATED_IMAGES`        | `8`                                                                                                                                                                                                 |
-
-**Invariants:**
-
-- **Evict-oldest, not reject-on-full** — unlike the auth TTL stores (where evicting an in-flight entry is an attack vector), dropping a stale preview is harmless, so the ring buffer overwrites the oldest when full.
-- Single-use, race-safe: `consume` deletes before returning. `upload_photo` `consume`s the token atomically up front (the synchronous delete runs before any `await`, so two concurrent calls can't both attach the same preview), then `restore`s it ONLY on a pure-validation failure (wrong `recipe_uid` — before any remote/local write). It does NOT restore after `attachPhotoToRecipe`, which uploads to Paprika before the local commit: restoring there could let a retry duplicate a photo that already exists remotely. A failed/mistargeted-but-validated attach loses the preview (regenerate) — the duplicate-safe trade.
-- `put` mints the token internally (`gen_` + 128-bit base64url) — callers don't supply keys.
-
-### photography.ts — Photo-generation client and prompt builder
-
-`PhotographyClient` is an HTTP client for OpenRouter's chat-completions image-output API (`POST /chat/completions`). Uses `createResilientExecutor` from `../utils/resilience.js` (service `"photography"`) — the same retry + circuit-breaker stack as `EmbeddingClient`. The model is chosen per call (not at construction); only credentials are construction-time inputs.
-
-| Export                 | Signature / Description                                                                                                                                                               |
-| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `PhotographyClient`    | `constructor(config: Readonly<ResolvedImageGenConfig>, log?: pino.Logger)` — resilient image-generation client; `log` defaults to silent                                              |
-| `.generate(opts)`      | `Promise<GeneratedPhoto>` — generate an image; throws `PhotographyAPIError` on permanent HTTP error, `PhotographyError` on 200-with-no-image, `CircuitOpenError` when breaker is open |
-| `PHOTO_MODELS`         | `readonly tuple` — curated model aliases: `["seedream", "nano-banana", "nano-banana-2", "gpt-image"]`; seeds the tool's `z.enum`                                                      |
-| `PhotoModel`           | `type` — `(typeof PHOTO_MODELS)[number]`                                                                                                                                              |
-| `DEFAULT_PHOTO_MODEL`  | `"seedream"` — default for `generate_photo`                                                                                                                                           |
-| `PHOTO_ASPECT_RATIOS`  | `readonly tuple` — `["1:1", "4:3", "3:2", "16:9"]`                                                                                                                                    |
-| `PhotoAspectRatio`     | `type` — `(typeof PHOTO_ASPECT_RATIOS)[number]`                                                                                                                                       |
-| `ReferenceImage`       | `interface { data: Buffer, mimeType: string }` — reference image for image-to-image generation                                                                                        |
-| `GeneratePhotoOptions` | `interface { prompt, model, aspectRatio?, referenceImage? }` — call options                                                                                                           |
-| `GeneratedPhoto`       | `interface { bytes: Buffer, mimeType: string, costUsd: number \| null, servedModel: string }` — generation result                                                                     |
-| `recipeToPhotoPrompt`  | `(recipe, categoryNames, style?) => string` — pure function; builds a photo prompt from name, description, categories, and optional style hint; excludes ingredients                  |
-
-**Invariants:**
-
-- `PhotographyClient` throws (does not return `Result`) — it wraps cockatiel which uses exceptions for control flow
-- Image-only models (`seedream`) require `modalities: ["image"]`; other models require `["image", "text"]` — sending the wrong value yields a 404 from OpenRouter
-- `image_size` is deliberately NOT sent — output size is model-inconsistent; `normalizePhoto({ maxFullEdge: 2048 })` normalizes downstream
-- Response parsing expects `choices[].message.images[].image_url.url` as a base64 data-URI
-- `recipeToPhotoPrompt` includes name, description, categories, and optional style; excludes ingredients (they produce ingredient-infographic output, not food photography)
-- Logs `usage.cost` from the response at `info` level for cost tracking
-
-### vector-store-errors.ts — Error hierarchy for vector store operations
-
-Single error class with ES2024 `ErrorOptions` cause chaining support.
-
-| Class              | Extends | Fields                         |
-| ------------------ | ------- | ------------------------------ |
-| `VectorStoreError` | `Error` | (base class for vector errors) |
-
-### json-vector-index.ts — Vendored local vector index
-
-`JsonVectorIndex` is the file-backed vector store behind `VectorStore`, replacing the
-`vectra` package (whose barrel eagerly loaded ~70 MB of unused embedding/tokenizer/NLP
-deps — gpt-tokenizer, openai, grpc, wink, cheerio, turndown). On-disk format is a subset
-of vectra's `index.json` (`{ version, items: [{ id, vector, norm, metadata }] }`), so an
-existing vectra index loads without a re-embed migration.
-
-| Export                                            | Signature / Description                                                                   |
-| ------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| `JsonVectorIndex`                                 | `constructor(folderPath)` — index over `<folderPath>/index.json`                          |
-| `.isIndexCreated()`                               | `Promise<boolean>` — whether the index file exists (no content validation)                |
-| `.createIndex(config?)`                           | `Promise<void>` — create empty index; throws if exists unless `{ deleteIfExists: true }`  |
-| `.loadIndexData()`                                | `Promise<void>` — load+validate; recomputes norms; throws on corruption (drives recovery) |
-| `.beginUpdate()`/`.endUpdate()`/`.cancelUpdate()` | transaction: snapshot / persist-then-swap / discard                                       |
-| `.upsertItem({id,vector,metadata?})`              | `Promise<void>` — insert/replace by id; recomputes norm                                   |
-| `.deleteItem(id)`                                 | `Promise<void>` — remove by id (no-op if absent)                                          |
-| `.queryItems(vector, topK, minScore?)`            | `Promise<Array<QueryResult>>` — cosine top-K; `minScore` drops sub-cutoff hits pre-slice  |
-| `vectorNorm` / `dotProduct` / `cosineScore`       | pure cosine primitives (exported for tests)                                               |
-
-**Invariants:**
-
-- **Norm is a cache, never trusted.** Recomputed on every upsert and on load — a changed
-  vector can never leave a stale norm (a real bug in vectra's upsert that corrupts ranking).
-- **Boundary validation.** Vectors must be non-empty, all-finite, and share one dimension;
-  violations throw (treated as corruption / programmer error) rather than yield `NaN` scores.
-- **Total comparator.** Stored items are guaranteed positive-norm, so the only non-finite
-  score comes from a zero-norm query — guarded once (`queryNorm === 0 → []`) rather than per
-  item. Ties break deterministically by id ascending.
-- **Crash-safe persistence.** Write-temp + `fsync(file)` + rename + best-effort `fsync(dir)`
-  (a dir-fsync failure is swallowed so it can't undo the already-renamed write), versus
-  vectra's plain truncating `writeFile`. `endUpdate` persists before swapping live state.
-- **Transaction snapshot is shallow.** `beginUpdate` copies the items _array_ (pointers), not
-  the vectors — valid because items are immutable (`_addToUpdate`/`_removeFromUpdate` replace
-  or remove slots, never mutate in place), so the big vectors aren't deep-cloned per write.
-- **Zero-norm vectors are rejected on insert and on load** (an all-zero embedding is
-  pathological; a persisted one is treated as corruption).
-- On-disk `index.json` is vectra-format-compatible; extra top-level keys (`metadata_config`)
-  are ignored on load.
-
-### vector-store.ts — Vector store with semantic search and change detection
-
-`VectorStore` wraps the vendored `JsonVectorIndex` for local vector storage. Provides recipe
-indexing with SHA-256 content-hash change detection (persisted to `hash-index.json`), batch
-embedding via `EmbeddingClient`, semantic search, and corruption recovery (backs up and
-recreates on a corrupt vector index or hash-index.json). Item metadata stores only
-`recipeName` — the field `search()` surfaces. A recipe whose embedding comes back zero-norm or
-non-finite is skipped (warn) so one degenerate vector can't abort the whole batch; it records
-no hash, so a transient bad embedding self-heals on the next sync.
-
-| Export            | Signature / Description                                                                                                                                                                                                             |
-| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `contentHash`     | `(text: string) => string` — SHA-256 hex digest for change detection                                                                                                                                                                |
-| `SemanticResult`  | `type { uid, score, recipeName }` — single search result                                                                                                                                                                            |
-| `IndexingResult`  | `type { indexed, skipped, total }` — batch indexing summary                                                                                                                                                                         |
-| `VectorStore`     | `constructor(cacheDir, embedder, modelId, schemaVersion, log?)` — vector store instance; `log` is an optional pino `Logger`, defaults to silent. Pass `appLog.child({ component: "vector-store" })` from `buildDiscoverComponents`. |
-| `.init()`         | `Promise<void>` — creates directory, vector index, loads hash map; recovers from corruption                                                                                                                                         |
-| `.indexRecipes()` | `Promise<IndexingResult>` — batch index with change detection, batches of 500                                                                                                                                                       |
-| `.indexRecipe()`  | `Promise<IndexingResult>` — convenience single-recipe wrapper                                                                                                                                                                       |
-| `.search()`       | `(query, topK=10, minScore?)` → `Promise<ReadonlyArray<SemanticResult>>` — semantic search; `minScore` gates results by cosine similarity                                                                                           |
-| `.removeRecipe()` | `Promise<void>` — remove recipe from index and hash map                                                                                                                                                                             |
-| `.clearHashes()`  | `void` — reset in-memory hash index to force full re-embedding                                                                                                                                                                      |
-| `.size`           | `number` getter — count of indexed recipes (via hash map)                                                                                                                                                                           |
-
-**Invariants:**
-
-- `VectorStore` throws (does not return `Result`) because it wraps the vector index and `EmbeddingClient` which use exceptions
-- **Writes are serialized via a per-instance `async-mutex`** (`indexRecipes` and `removeRecipe` run exclusively). The store is a process-wide singleton with concurrent writers — the sync engine fires the `sync:complete` recipe handler and the `sync:category-change` handler from one `syncOnce()` without awaiting them. The index's `beginUpdate()`/`endUpdate()` is a single transaction (a second `beginUpdate` while one is open throws), and the hash map + its persisted file are shared mutable state, so overlapping writes would corrupt or drop updates (#177)
-- Content hash uses SHA-256 of `recipeToEmbeddingText()` output; unchanged recipes are skipped during indexing
-- Hash map persisted via atomic write (write-to-tmp + rename) — same pattern `RecipeDiskCache` uses for `recipes/index.json` (see `../cache/disk/CLAUDE.md`)
-- Corruption recovery: a corrupt vector index is backed up to `.bak` dir and recreated; corrupt `hash-index.json` is renamed to `.bak` and reset
-- Model ID and schema version are tracked in `vector-meta.json`; a mismatch on startup clears the hash index **and recreates the index** (`createIndex({deleteIfExists})`) to force re-embedding. Recreating — not just clearing hashes — is required because a new model may change the vector dimension, and the index pins its dimension from the still-present old vectors; otherwise every re-embed upsert and every search would throw a dimension mismatch and deadlock re-indexing
-- Batch size is 500 texts per embedding API call
-
-### discover-feature.ts — Process-wide wiring for semantic search
-
-`buildDiscoverComponents` is a process-wide wiring function called once from
-`buildAppContext` in `src/server/build.ts`. It instantiates the `EmbeddingClient` and
-`VectorStore`, performs cold-start re-indexing when needed, and subscribes to
-`syncEvents.on("sync:complete", …)` for incremental index updates. It returns the
-`VectorStore` instance (or `null`), which `buildAppContext` then stashes onto
-`AppContext.vectorStore`. **Tool registration is not wired here** —
-`registerDiscoverTool(server, sessionCtx, vectorStore)` is called from `buildMcpServer`
-once per server instance when `app.vectorStore !== null`.
-
-A local `SyncEventsView` interface decouples this module from `SyncEngine`; it accepts
-anything that exposes a typed `on`/`off` for `sync:complete`, `sync:error`, and
-`sync:category-change`.
-
-| Export                            | Signature / Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `buildDiscoverComponents`         | `(config, store, categoryStore, syncEvents, log?) => Promise<VectorStore \| null>` — builds + wires the semantic-search components; `categoryStore` (3rd param) is used for cold-start + sync re-index category name resolution via `categoryStore.resolveNames(uids)`; optional `log` is threaded as `log?.child({ component: "vector-store" })` into `VectorStore`                                                                                                                                                       |
-| `reindexRecipesForCategoryChange` | `(vectorStore, store, categoryStore, changedUids: ReadonlyArray<string>) => Promise<void>` — re-embed every live recipe referencing any changed category UID. The shared operation behind both category-rename paths (`update_category` tool hook and the `sync:category-change` subscriber). Precise without filtering: `indexRecipes` skips recipes whose embedding text is unchanged, so re-parents/reorders cost a hash recompute and no embedding call. No-op for empty `changedUids` or when nothing references them |
-| `SyncEventsView`                  | `interface` describing the subset of `SyncEngine.events` (`on`/`off` for `sync:complete`, `sync:error`, and `sync:category-change`) used                                                                                                                                                                                                                                                                                                                                                                                   |
-
-**Invariants:**
-
-- Returns `null` when `config.features.embeddings` is absent (semantic search disabled; `buildMcpServer` then skips `discover_recipes` registration)
-- Cold-start re-index runs when vector store size is below 90% of recipe store size (catches stale/orphaned data)
-- Vector index is invalidated when the embedding model or `EMBEDDING_SCHEMA_VERSION` changes between runs
-- `sync:complete` handler indexes added/updated recipes and removes deleted ones
-- `sync:category-change` handler re-embeds recipes referencing any `updated` or `removed` category UID — a category's display name is baked into its recipes' embedding text, and an app-side rename/delete changes no recipe hash, so the recipe sync never re-fetches them. Tool-side renames are handled directly by the `update_category` hook (#177)
-- Errors during sync-triggered indexing are caught and logged via a structured pino error record (never crash the server)
-- Runs exactly once per process (during `buildAppContext`), not per session — the returned `VectorStore` is shared across all sessions via `AppContext.vectorStore`
-
-## Logger integration
-
-### VectorStore
-
-Per-instance `log` child logger. Constructor takes optional `log?: Logger` (default: silent). Corruption recovery emits `warn` for a corrupt vector index and corrupt `hash-index.json`. ENOENT and parse-failure paths in read operations emit `debug` or stay silent per the per-site classification in source comments.
-
-### EmbeddingClient
-
-Constructor takes optional `log?: Logger`. Per-attempt request lifecycle emits `debug` on start and success, `error` on non-retryable failure. Retry/breaker log events are wired inside `createResilientExecutor` (shared with `PhotographyClient`): `onRetry` → `warn`, `onGiveUp` → `error`, breaker open/reset/half-open → `warn`/`info`/`info`.
-
-**Resilience (via `createResilientExecutor`):** `wrap(breakerPolicy, retryPolicy)` — breaker outer, retry inner. The breaker sees one execution per `embedBatch` call regardless of how many retries that call exhausted internally; `maxAttempts: 3` means 3 retries, so each failing call makes 4 total network attempts. Breaker opens after 5 consecutive failing calls (`ConsecutiveBreaker(5)`), half-opens after 30 s.
-
-**Circuit open:** throws `CircuitOpenError("embeddings", endpoint, { cause: brokenCircuitError })` (imported from `../utils/errors.js`; shared with `PaprikaClient` and `PhotographyClient`) — no fabricated HTTP status. The error carries `service`, `endpoint`, and `cause: BrokenCircuitError` for structured access.
-
-### buildDiscoverComponents
-
-Takes optional `log?: Logger` from `buildAppContext`. Derives child loggers for `discover`, `vector-store`, and `embeddings` components. The `sync:complete` handler's error catch emits a structured pino `error` record `"vector index error during sync-driven re-index"` without propagating — preserving the sync loop's never-throws contract. The `sync:category-change` handler does the same with `"vector index error during category-change re-index"`.
-
-## Dependencies
-
-- **Uses:** `paprika/` (types — `SyncResult`, `Recipe`), `cache/recipe-store.ts` (type-only), `cache/category-store.ts` (type-only), `utils/` (config types, `resolveImageGenConfig`, `createResilientExecutor`, xdg), `cockatiel`, `zod`
-- **Used by:** `src/server/build.ts` (`buildAppContext` calls `buildDiscoverComponents` and constructs `PhotographyClient`; `buildMcpServer` imports `VectorStore`/`PhotographyClient` types and `registerDiscoverTool`/`registerGeneratePhotoTool` separately), `tools/discover.ts` (consumes `VectorStore`, `SemanticResult` types), `tools/photo-generate.ts` (consumes `PhotographyClient`, `recipeToPhotoPrompt`, `PHOTO_MODELS`, etc.)
-- **Boundary:** Must not import from `tools/` or `resources/` at runtime. Tool registration moved to `src/server/build.ts` in Phase 1 — `discover-feature.ts` no longer imports `registerDiscoverTool` (test files in this directory may still import from `tools/tool-test-utils.ts`; that is allowed because test code is outside the runtime boundary).
+**The resilient clients throw — they don't return `Result`.** `EmbeddingClient`, `VectorStore`, and `PhotographyClient` wrap cockatiel, which uses exceptions for control flow, so they break the codebase's neverthrow convention by design. A breaker-open surfaces as `CircuitOpenError` (from `utils/errors.js`, shared with `PaprikaClient`) — no fabricated HTTP status. `VectorStore` writes are serialized via a per-instance `async-mutex`: it's a process-wide singleton with concurrent writers (the sync engine fires the recipe and category-change handlers without awaiting them), and the index's begin/end transaction plus the shared hash map can't tolerate overlapping writes (#177).
