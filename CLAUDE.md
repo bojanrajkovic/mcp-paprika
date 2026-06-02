@@ -55,3 +55,16 @@ For per-directory detail, read that directory's `CLAUDE.md`. For current counts 
 - **Slim directory `CLAUDE.md`** — each one points at its canonical doc plus reactively-accreted Sharp edges; it is not a mini architecture doc. See `docs/documentation-system.md`.
 - **`AGENTS.md` symlinks** — every `CLAUDE.md` has a sibling `AGENTS.md` symlink, so agents that look for `AGENTS.md` get the same guidance; the symlink keeps the two identical.
 - **Reference content is read from source, never enumerated in prose** — counts, store lists, field tables, and env dumps live in the registry, the Zod schemas, and `package.json`, not here. See `docs/documentation-system.md`.
+
+## Planning and design
+
+When planning or designing a change here:
+
+1. **Ground yourself in the docs and code, and verify before you assert.** Read the relevant directory `CLAUDE.md`, `docs/architecture.md`, the ADRs, and the actual source before proposing. A section heading, your memory, or a subagent's framing is not evidence — grep or read to confirm a claim before you build on it.
+2. **Gather the task's context up front.** Pull what is already true in the codebase, the constraints, and the prior decisions into the planning context early, instead of rediscovering them mid-build.
+3. **Ask clarifying questions freely, and name your assumptions out loud.** When scope, direction, or a preference is even slightly unclear, ask — a thorough `AskUserQuestion` pass beats a confident wrong guess. When you do have to assume, say so.
+4. **Pin "done" and "out of scope" before designing.** Name the deliverable, the success criteria, and what you are explicitly _not_ doing. This is the line between a plan and a brainstorm, and the thing that keeps a change from sprawling.
+5. **Brainstorm two or three alternatives — don't ship the first idea**, each with its hazards and its fit to what already exists. Hold two forces in tension: prefer the smallest change that fits the existing patterns (don't build a framework for a future that may never arrive), _and_ invest in the right abstraction when the repetition is real or clearly coming. The discriminator is demonstrated-vs-speculative: `EntityStore` / `TombstoneEntityStore` and the per-entity disk caches were _extracted as refactors_ — consolidating plumbing already duplicated across stores, and shaped so the next entity is nearly free — which is why categories later just `extends TombstoneEntityStore`. When you do extract, design it to generalize cleanly; when you lack the evidence, copy first and abstract on the third.
+6. **Be adversarial — attack your own proposal.** Hunt the failure mode, the edge case, the thing that breaks under concurrency, a hostile input, or a partial sync. A design no one tried to break is untested.
+7. **Record decisions with real alternatives as ADRs, at decision time.** If a choice had alternatives someone might later question, write the ADR while the reasoning is fresh — backfilling it later costs more and loses detail. See `docs/documentation-system.md` for which decisions are ADR-worthy.
+8. **Update the docs as part of the change, not after.** The affected `docs/architecture.md`, the directory `CLAUDE.md` sharp edges, and any ADRs are part of "done" — a change whose docs still describe the old world isn't finished.
