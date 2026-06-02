@@ -90,8 +90,9 @@ safe for direct internet exposure without a proxy.
 
 ## OAuth redirect URI
 
-Register exactly `https://<your-public-url>/oauth/callback` as the authorized redirect
-URI on your IdP client. Trailing slashes in `MCP_PUBLIC_URL` are stripped at parse time
+Register exactly `<MCP_PUBLIC_URL>/oauth/callback` (e.g. `https://mcp.example.com/oauth/callback`)
+as the authorized redirect URI on your IdP client; `MCP_PUBLIC_URL` already carries the
+`https://` scheme, so don't prepend a second one. Trailing slashes in `MCP_PUBLIC_URL` are stripped at parse time
 so the match stays exact.
 
 ## Redirect-origin consent gate

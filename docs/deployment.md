@@ -42,8 +42,11 @@ cosign 2.5+ version requirement.
 
 The HTTP-mode image binds on `0.0.0.0:3000` and persists the disk cache and vector
 index under `/data`, the documented mount point. Both `/data` sub-directories
-(`config/`, `cache/`) are pre-created with `nonroot` (UID 65532) ownership in the image,
-so writes work the first time even on a fresh bind-mount.
+(`config/`, `cache/`) are pre-created with `nonroot` (UID 65532) ownership in the image.
+A named volume inherits that ownership when Docker first populates it, so writes work out
+of the box. A bind mount is different: the host directory is layered over `/data` and
+hides the image-created dirs, so a host directory owned by root (or by your user) stays
+unwritable by UID 65532 until you chown it.
 
 If you bind-mount a host directory you created as root, pre-chown it:
 

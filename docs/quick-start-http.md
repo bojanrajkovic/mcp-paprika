@@ -26,7 +26,7 @@ In your IdP's developer console (e.g. Google Cloud Console → APIs & Services �
 Credentials → OAuth 2.0 Client IDs), create a **single** OAuth 2.0 client:
 
 - **Application type:** Web application
-- **Redirect URI:** `https://<your-MCP_PUBLIC_URL>/oauth/callback`
+- **Redirect URI:** `<MCP_PUBLIC_URL>/oauth/callback` (e.g. `https://mcp.example.com/oauth/callback`; `MCP_PUBLIC_URL` already includes the `https://` scheme)
 
 Copy the resulting client ID and secret into `MCP_OIDC_CLIENT_ID` and
 `MCP_OIDC_CLIENT_SECRET`.
