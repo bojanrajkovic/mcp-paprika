@@ -69,15 +69,15 @@ their per-preset defaults.
 
 1. Open [claude.ai](https://claude.ai) → Settings → Connectors.
 2. Click "Add custom connector."
-3. Enter your server URL: `https://<MCP_PUBLIC_URL>/mcp`.
+3. Enter your server URL: `<MCP_PUBLIC_URL>/mcp` (e.g. `https://mcp.example.com/mcp`).
 4. Claude redirects your browser to the upstream IdP for authentication.
 5. After sign-in you're redirected back, and the connector is authorized.
 
 ## Verify the OAuth metadata
 
 ```bash
-curl -sf https://<MCP_PUBLIC_URL>/.well-known/oauth-authorization-server | jq .issuer
-# → "https://<MCP_PUBLIC_URL>"
+curl -sf https://mcp.example.com/.well-known/oauth-authorization-server | jq .issuer
+# → "https://mcp.example.com"
 ```
 
 The server also exposes:
