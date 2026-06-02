@@ -64,21 +64,21 @@ Reorganize from technical layers to per-entity data modules over a shared core. 
 ```
 src/
 ├── recipe/                 data module — self-contained
-│   ├── types.ts            Recipe schemas    (imports ids/: UID brands only)
+│   ├── types.ts            Recipe schemas    (imports ids.ts: UID brands only)
 │   ├── store.ts            RecipeStore       (imports entity/: base class)
-│   └── disk.ts             RecipeDiskCache   (imports cache-core: DiskCache<T>)
+│   └── disk.ts             RecipeDiskCache   (imports cache: DiskCache<T>)
 ├── category/ meal/ menu/ grocery/ pantry/ aisle/ photo/   ← same shape
 │
-├── ids/                    shared leaf: every branded UID schema
+├── ids.ts                  shared leaf: every branded UID schema
 ├── entity/                 shared core: EntityStore / TombstoneEntityStore
-├── cache-core/
+├── cache/
 │   ├── base.ts             generic DiskCache<T>, writeFileAtomic
 │   └── root.ts             coordinator: imports each domain's disk descriptor, owns init()/flush()
 ├── server/                 composition root: phased builder, SyncEngine wiring, tool registry
 └── tools/  resources/      cross-cutting: resolve FKs across stores at runtime
 ```
 
-The data layer supports this cleanly: stores are independent, disk descriptors reference only their own schema, and types have a single cross-edge (recipe → category, which becomes recipe → `ids` once brands are hoisted). The shared core (`entity/` base classes, `ids/` brands, `cache-core/`'s `DiskCache<T>`) and the cross-cutting coordinators (`DiskCacheRoot`'s flush, `SyncEngine`, the composition root, tools, resources) stay central, because their jobs are inherently cross-domain.
+The data layer supports this cleanly: stores are independent, disk descriptors reference only their own schema, and types have a single cross-edge (recipe → category, which becomes recipe → `ids` once brands are hoisted). The shared core (`entity/` base classes, `src/ids.ts` brands, `cache/`'s `DiskCache<T>`) and the cross-cutting coordinators (`DiskCacheRoot`'s flush, `SyncEngine`, the composition root, tools, resources) stay central, because their jobs are inherently cross-domain.
 
 Reject the fuller reshape in which domains own their tools. Seven tools span three or four stores (`meal-add-menu`, `grocery-item`), reference catalogs like `aisle` are shared across pantry and grocery, and `SyncEngine` is irreducibly global. Tools and sync are cross-cutting by nature; forcing them into domain folders would yield modules that import each other and still feed one global sync.
 
@@ -98,12 +98,12 @@ flowchart TB
 ```
 
 - **Branding is compile-time kind-safety.** The underlying strings are random UUIDs, so the brand carries no runtime signal today; it is informational at runtime and enforced only by the compiler. It still eliminates the `as <Entity>Uid` casts at resolution sites and prevents passing a `MenuUid` where a `RecipeUid` is wanted, which is the only safety the current design can offer.
-- **Hoisting to a leaf is what keeps branding from re-coupling the data modules.** The brands are pure leaves (zod-only). Placing them in `ids/` means `meal/types.ts` imports `RecipeUidSchema` from `ids/`, not from `recipe/types.ts`, so every data module depends on the shared `ids` leaf and never on each other.
+- **Hoisting to a leaf is what keeps branding from re-coupling the data modules.** The brands are pure leaves (zod-only). Placing them in `src/ids.ts` means `meal/types.ts` imports `RecipeUidSchema` from `src/ids.ts`, not from `recipe/types.ts`, so every data module depends on the shared `ids` leaf and never on each other.
 - **This is kind-safety, not referential integrity.** Branding does not assert the referenced entity exists; `store.get` still returns `undefined` for a dangling-but-well-typed UID, which is correct for a cache of an eventually-consistent source. Enforced foreign keys are deliberately not modeled, because the upstream cannot honor them.
 - **No-regrets enabler.** Uniform branding now is the prerequisite for two futures and pays off whichever way each lands: a runtime-_enforced_ brand if Paprika round-trips non-UUID-shaped, brand-carrying identifiers (explored in [#202](https://github.com/bojanrajkovic/mcp-paprika/issues/202)), and, eventually, owning truly branded and FK-able stores once the data is no longer bound to Paprika's identifier scheme.
 - **Standardize the brand definitions during the hoist.** Seven of twelve currently carry `.min(1)`; five do not. Pick one rule.
 
-This folds into decision 2: the entity types are touched once, splitting `src/paprika/types.ts` into per-entity modules and extracting the brands to `ids/` in the same pass.
+This folds into decision 2: the entity types are touched once, splitting `src/paprika/types.ts` into per-entity modules and extracting the brands to `src/ids.ts` in the same pass.
 
 ## Rejected alternatives
 
@@ -128,15 +128,14 @@ This ADR also corrects two stale records: `src/server/CLAUDE.md` described the D
 
 - A sizable mechanical diff: splitting `src/paprika/types.ts`, repointing imports across the tree, and touching the ~600 test call sites that reference moved modules. It is mechanical and the test suite catches breakage, but it is not small.
 - The phase-typed builder is roughly six small phase types to define and maintain; that is the price of compile-checked ordering.
-- `ids/` is a new shared dependency every data module imports. It is a leaf, so the coupling is shallow, but it is one more piece of the shared core.
+- `src/ids.ts` is a new shared dependency every data module imports. It is a leaf, so the coupling is shallow, but it is one more piece of the shared core.
 - Branding gives kind-safety, not existence-safety; resolution sites still handle `undefined`. None of this work is visible to the end user; its entire payoff is engine maintainability and future optionality.
 
-**Revisit trigger for the deferred container.** Adopt `typed-inject` only when one of these becomes true, and record the crossing:
+**Revisit trigger for the deferred container.** The triggers are deliberately structural, not a field count: a flat field total is a poor proxy for wiring complexity, so `AppContext` could grow well past today's 20 fields without a container helping. Adopt `typed-inject` only when one of these becomes true, and record the crossing:
 
 1. The project splits into multiple packages or workspaces, where cross-package wiring starts to pay off.
-2. `AppContext` roughly doubles past ~40 fields, where hand-wiring a flat record stops scaling.
-3. The construction graph deepens (features depending on other features), giving a container a real graph to resolve.
-4. A third transport or a per-request plugin surface appears, creating a scoping problem the current two-tier split does not cover.
+2. The construction graph deepens (features depending on other features), giving a container a real graph to resolve.
+3. A third transport or a per-request plugin surface appears, creating a scoping problem the current two-tier split does not cover.
 
 Until then, the phased builder is the lighter, single-file, ordering-aware shape.
 
