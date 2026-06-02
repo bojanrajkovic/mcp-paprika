@@ -30,6 +30,17 @@ The `Notifier` is the piece that lets mutation code stay transport-blind. Instea
 
 The structured pino logger lives on `AppContext` too, and its `warn+` records fan out to connected MCP clients through that same `Notifier` abstraction — so the logger and the notification path share the one transport-agnostic seam rather than each re-discovering "the server."
 
+The bootstrap order that resolves the `AppContext` ↔ server cycle — a deferred getter that returns `undefined` until the server is assigned — is the load-bearing sequence:
+
+```mermaid
+flowchart TB
+  N["1. build Notifier<br/>around a deferred getter → undefined"] --> L["2. build logger<br/>(startup records have a sink)"]
+  L --> A["3. buildAppContext<br/>(SyncEngine captures the notifier)"]
+  A --> S["4. buildMcpServer<br/>assign into the getter closure"]
+  S --> C["5. server.connect / listen"]
+  S -.->|"getter now resolves to a real server"| N
+```
+
 ## Rejected alternatives
 
 ### A single transport (stdio-only, or HTTP-only)
