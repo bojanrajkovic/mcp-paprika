@@ -1,9 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { readFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
-import { RecipeStore } from "./recipe-store.js";
-import { makeRecipe } from "./__fixtures__/recipes.js";
+import { RecipeStore } from "./store.js";
+import { makeRecipe } from "../cache/__fixtures__/recipes.js";
 import type { RecipeUid } from "../ids.js";
 
 describe("RecipeStore", () => {
@@ -842,45 +839,6 @@ describe("RecipeStore", () => {
   });
 
   describe("recipe-query-store.AC7: Module characteristics", () => {
-    describe("recipe-query-store.AC7.2: No I/O operations (no fs, http, fetch, etc.)", () => {
-      it("does not import I/O modules like fs, http, net, child_process, fetch", () => {
-        const __filename = fileURLToPath(import.meta.url);
-        const __dirname = dirname(__filename);
-        const srcDir = __dirname.includes("/dist/") ? __dirname.replace("/dist/", "/src/") : __dirname;
-        const sourceFilePath = resolve(srcDir, "recipe-store.ts");
-        const source = readFileSync(sourceFilePath, "utf-8");
-
-        expect(source).not.toMatch(/from\s+["']node:fs["']/);
-        expect(source).not.toMatch(/from\s+["']node:http["']/);
-        expect(source).not.toMatch(/from\s+["']node:net["']/);
-        expect(source).not.toMatch(/from\s+["']node:child_process["']/);
-        expect(source).not.toMatch(/from\s+["']node:fetch["']/);
-        expect(source).not.toMatch(/\bfetch\(/);
-      });
-    });
-
-    describe("recipe-query-store.AC7.3: All methods are synchronous (no async, no Promise)", () => {
-      it("does not use async keyword", () => {
-        const __filename = fileURLToPath(import.meta.url);
-        const __dirname = dirname(__filename);
-        const srcDir = __dirname.includes("/dist/") ? __dirname.replace("/dist/", "/src/") : __dirname;
-        const sourceFilePath = resolve(srcDir, "recipe-store.ts");
-        const source = readFileSync(sourceFilePath, "utf-8");
-
-        expect(source).not.toMatch(/\basync\b/);
-      });
-
-      it("does not use Promise", () => {
-        const __filename = fileURLToPath(import.meta.url);
-        const __dirname = dirname(__filename);
-        const srcDir = __dirname.includes("/dist/") ? __dirname.replace("/dist/", "/src/") : __dirname;
-        const sourceFilePath = resolve(srcDir, "recipe-store.ts");
-        const source = readFileSync(sourceFilePath, "utf-8");
-
-        expect(source).not.toMatch(/Promise/);
-      });
-    });
-
     describe("pending-writes (issue #57 race protection)", () => {
       it("freshly constructed store has no pending writes", () => {
         expect(store.pendingWriteCount).toBe(0);

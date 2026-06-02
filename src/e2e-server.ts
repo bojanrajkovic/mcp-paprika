@@ -11,20 +11,20 @@
  */
 
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { AisleStore } from "./cache/aisle-store.js";
-import { CategoryStore } from "./cache/category-store.js";
+import { AisleStore } from "./aisle/store.js";
+import { CategoryStore } from "./category/store.js";
 import { DiskCacheRoot } from "./cache/disk/index.js";
-import { GroceryIngredientStore } from "./cache/grocery-ingredient-store.js";
-import { GroceryItemStore } from "./cache/grocery-item-store.js";
-import { GroceryListStore } from "./cache/grocery-list-store.js";
-import { MealStore } from "./cache/meal-store.js";
-import { MealTypeStore } from "./cache/meal-type-store.js";
-import { MenuStore } from "./cache/menu-store.js";
-import { MenuItemStore } from "./cache/menu-item-store.js";
-import { PhotoStore } from "./cache/photo-store.js";
+import { GroceryIngredientStore } from "./grocery-ingredient/store.js";
+import { GroceryItemStore } from "./grocery-item/store.js";
+import { GroceryListStore } from "./grocery-list/store.js";
+import { MealStore } from "./meal/store.js";
+import { MealTypeStore } from "./meal-type/store.js";
+import { MenuStore } from "./menu/store.js";
+import { MenuItemStore } from "./menu-item/store.js";
+import { PhotoStore } from "./photo/store.js";
 import { GeneratedImageStore } from "./features/generated-image-store.js";
-import { RecipeStore } from "./cache/recipe-store.js";
-import { PantryStore } from "./cache/pantry-store.js";
+import { RecipeStore } from "./recipe/store.js";
+import { PantryStore } from "./pantry/store.js";
 import { buildMcpServer } from "./server/build.js";
 import type { AppContext } from "./server/app-context.js";
 import { createServerRef, singleServerNotifier } from "./server/notifier.js";

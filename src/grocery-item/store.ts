@@ -1,5 +1,5 @@
 import { TombstoneEntityStore } from "../entity/index.js";
-import type { GroceryItem } from "../grocery-item/types.js";
+import type { GroceryItem } from "./types.js";
 import type { GroceryItemUid, GroceryListUid } from "../ids.js";
 
 export class GroceryItemStore extends TombstoneEntityStore<GroceryItem, GroceryItemUid> {

@@ -1,6 +1,6 @@
 import { TombstoneEntityStore } from "../entity/index.js";
 import type { MenuItemUid, MenuUid } from "../ids.js";
-import type { MenuItem } from "../menu-item/types.js";
+import type { MenuItem } from "./types.js";
 
 export class MenuItemStore extends TombstoneEntityStore<MenuItem, MenuItemUid> {
   constructor(opts?: { readonly pendingWriteTtlMs?: number }) {

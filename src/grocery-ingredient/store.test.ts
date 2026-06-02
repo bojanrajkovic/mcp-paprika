@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { GroceryIngredientStore } from "./grocery-ingredient-store.js";
-import { makeGroceryIngredient } from "./__fixtures__/grocery-ingredients.js";
+import { GroceryIngredientStore } from "./store.js";
+import { makeGroceryIngredient } from "../cache/__fixtures__/grocery-ingredients.js";
 
 describe("GroceryIngredientStore", () => {
   let store: GroceryIngredientStore;

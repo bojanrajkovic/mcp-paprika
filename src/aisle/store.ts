@@ -1,5 +1,5 @@
 import { EntityStore } from "../entity/index.js";
-import type { Aisle } from "../aisle/types.js";
+import type { Aisle } from "./types.js";
 import type { AisleUid } from "../ids.js";
 
 export class AisleStore extends EntityStore<Aisle, AisleUid> {

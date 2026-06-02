@@ -1,6 +1,6 @@
 import { fromAny } from "@total-typescript/shoehorn";
 import { describe, it, expect, vi } from "vitest";
-import { RecipeStore } from "../cache/recipe-store.js";
+import { RecipeStore } from "../recipe/store.js";
 import { makeRecipe } from "../cache/__fixtures__/recipes.js";
 import { PaprikaAPIError } from "../paprika/errors.js";
 import { registerEmptyTrashTool } from "./empty-trash.js";

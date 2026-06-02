@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { fromAny } from "@total-typescript/shoehorn";
-import { PantryStore } from "../cache/pantry-store.js";
-import { RecipeStore } from "../cache/recipe-store.js";
+import { PantryStore } from "../pantry/store.js";
+import { RecipeStore } from "../recipe/store.js";
 import { makePantryItem } from "../cache/__fixtures__/pantry.js";
 import { commitPantryItem, commitPantryItemsBatch } from "./pantry-helpers.js";
 import { makeTestServer, makeCtx, makeStubNotifier, seed } from "./tool-test-utils.js";

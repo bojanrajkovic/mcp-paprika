@@ -7,7 +7,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 
 import { makeAppContext } from "../__fixtures__/app-context.js";
-import type { RecipeStore } from "../cache/recipe-store.js";
+import type { RecipeStore } from "../recipe/store.js";
 import type { Notifier } from "../server/notifier.js";
 import type { ServerContext } from "../types/server-context.js";
 

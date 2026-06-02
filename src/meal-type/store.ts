@@ -1,6 +1,6 @@
 import { EntityStore } from "../entity/index.js";
 import type { MealTypeUid } from "../ids.js";
-import type { MealType } from "../meal-type/types.js";
+import type { MealType } from "./types.js";
 
 export class MealTypeStore extends EntityStore<MealType, MealTypeUid> {
   constructor(opts?: { readonly pendingWriteTtlMs?: number }) {

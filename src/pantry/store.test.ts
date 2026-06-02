@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { PantryStore } from "./pantry-store.js";
-import { makePantryItem } from "./__fixtures__/pantry.js";
+import { PantryStore } from "./store.js";
+import { makePantryItem } from "../cache/__fixtures__/pantry.js";
 import type { PantryItemUid } from "../ids.js";
 
 describe("PantryStore", () => {
