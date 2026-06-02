@@ -10,7 +10,6 @@
  * subset semantics asserted by `e2e.test.integration.ts`).
  */
 
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { AisleStore } from "./cache/aisle-store.js";
 import { CategoryStore } from "./cache/category-store.js";
@@ -28,7 +27,7 @@ import { RecipeStore } from "./cache/recipe-store.js";
 import { PantryStore } from "./cache/pantry-store.js";
 import { buildMcpServer } from "./server/build.js";
 import type { AppContext } from "./server/app-context.js";
-import { singleServerNotifier } from "./server/notifier.js";
+import { createServerRef, singleServerNotifier } from "./server/notifier.js";
 import { getCacheDir } from "./utils/xdg.js";
 import { createLogger, toMessage } from "./utils/log.js";
 import type {
@@ -157,11 +156,10 @@ class MockPaprikaClient implements IMockPaprikaClient {
 }
 
 async function main(): Promise<void> {
-  // Deferred-getter notifier (see src/index.ts for the rationale).
-  // Hoisted to top of main() so log can reference notifier and log calls
-  // below do not hit the TDZ.
-  let server: McpServer | undefined;
-  const notifier = singleServerNotifier(() => server);
+  // A ServerRef breaks the AppContext/McpServer cycle (see src/server/notifier.ts).
+  // Created at the top of main() so log/notifier exist before any log call.
+  const serverRef = createServerRef();
+  const notifier = singleServerNotifier(serverRef.get);
 
   const log = createLogger({
     transport: "stdio",
@@ -235,7 +233,8 @@ async function main(): Promise<void> {
     log,
   };
 
-  server = buildMcpServer(app);
+  const server = buildMcpServer(app);
+  serverRef.set(server);
   log.info("registered tools and resources via buildMcpServer");
   log.info("sync engine disabled for E2E testing");
 

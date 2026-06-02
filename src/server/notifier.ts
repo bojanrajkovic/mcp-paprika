@@ -20,6 +20,31 @@ export interface Notifier {
 }
 
 /**
+ * A mutable holder for the one McpServer, assigned once after it is built.
+ *
+ * Breaks the stdio bootstrap cycle without a closure-over-a-`let`: the
+ * AppContext needs a notifier, the notifier needs the server, and the server is
+ * built from the AppContext. A `ServerRef` is created first, its `get` handed to
+ * {@link singleServerNotifier}, and `set` called once the server exists. Until
+ * then `get()` returns `undefined` and notifications no-op — safe because
+ * nothing notifies before the server connects.
+ */
+export interface ServerRef {
+  get(): McpServer | undefined;
+  set(server: McpServer): void;
+}
+
+export function createServerRef(): ServerRef {
+  let server: McpServer | undefined;
+  return {
+    get: () => server,
+    set: (s) => {
+      server = s;
+    },
+  };
+}
+
+/**
  * Notifier backed by a single McpServer (stdio mode).
  *
  * Accepts either an `McpServer` directly, or a getter that returns one. The
