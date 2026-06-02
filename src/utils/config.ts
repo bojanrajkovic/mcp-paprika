@@ -186,7 +186,7 @@ export const paprikaConfigSchema = z
     // Transport selection. `stdio` (default) keeps the current behavior for all
     // existing CLI clients (Claude Code, Claude Desktop, Cursor, mcp-cli). `http`
     // exposes Streamable HTTP for Claude Mobile and other HTTP-based MCP
-    // clients. See docs/configuration.md for the security implications.
+    // clients. See docs/http-transport.md for the security implications.
     transport: z.enum(["stdio", "http"]).default("stdio"),
     http: z
       .object({
@@ -197,7 +197,7 @@ export const paprikaConfigSchema = z
         // Origin header on /mcp. Both default to empty (no restriction) to
         // preserve the reverse-proxy-friendly default the HTTP transport
         // assumes — operators putting the server on the public internet
-        // without a proxy should set these. See docs/configuration.md.
+        // without a proxy should set these. See docs/http-transport.md.
         allowedHosts: listField.default([]),
         allowedOrigins: listField.default([]),
         // Pre-drain delay on SIGTERM: after shutdown begins, /healthz reports

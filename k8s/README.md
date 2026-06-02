@@ -22,8 +22,8 @@ Replace all `<placeholder>` values before applying:
 `auth0`, `keycloak`) also require `MCP_OIDC_DISCOVERY_URL` in the Secret —
 omitting it causes the server to exit at startup. Alternatively, drop
 `MCP_OIDC_PRESET` entirely and set only `MCP_OIDC_DISCOVERY_URL` for any
-OIDC-compliant IdP. See [docs/configuration.md](../docs/configuration.md) for
-the full OAuth reference.
+OIDC-compliant IdP. See [docs/oauth-configuration.md](../docs/oauth-configuration.md)
+for the full OAuth reference.
 
 **No storage class?** Two changes required:
 

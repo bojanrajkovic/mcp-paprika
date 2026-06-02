@@ -8,7 +8,7 @@ Shared leaf-ish utilities used across every `src/` module: config loading, the p
 
 ## Key References
 
-- **Config schema + every env-var mapping** — `docs/configuration.md` (operator-facing) and `src/utils/config.ts` (the Zod schema is the source of truth). The schema's `.superRefine`s carry their own rationale comments (OAuth-required-when-http, image-gen exactly-one-credential-path).
+- **Config schema + every env-var mapping** — `docs/configuration.md` (core/sync/logging), `docs/http-transport.md` and `docs/oauth-configuration.md` (the HTTP + OAuth specifics), all operator-facing, plus `src/utils/config.ts` (the Zod schema is the source of truth). The schema's `.superRefine`s carry their own rationale comments (OAuth-required-when-http, image-gen exactly-one-credential-path).
 - **Resilience / logging as cross-cutting concerns** — `docs/architecture.md` ("Cross-cutting concerns"); tuning numbers are config, not prose; see `docs/configuration.md` + `src/utils/resilience.ts`.
 - **Logger bootstrap ordering** (notifier built first around a deferred getter) — `src/server/CLAUDE.md`.
 - **Wire-date format origin** — `docs/wire-format.md`; meal-at-midnight storage confirmed by `docs/wire-captures/meals.har.json`.
