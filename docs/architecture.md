@@ -1,6 +1,6 @@
 # Architecture
 
-Last verified: 2026-06-01
+Last verified: 2026-06-02
 
 mcp-paprika bridges the Paprika recipe manager's cloud API to MCP clients. It keeps a local cache of the user's library, syncs it in the background, and exposes recipes, the pantry, grocery lists, meal planning, menus, and optional semantic search and AI photo generation as MCP tools and resources.
 
@@ -31,6 +31,8 @@ flowchart TB
 ## Caching and sync
 
 Every Paprika entity family lives in two layers: an in-memory store that is the session's source of truth, backed by an atomic-write per-entity disk cache. Tools never touch the filesystem; they query the store, which is hydrated from disk at startup and kept fresh by background sync. That split keeps disk I/O off the hot path and tool code trivially testable, and the disk layer makes the server usable the instant it restarts: the cache is warm before the first sync returns, so a redeploy never leaves the user staring at a cold, empty library. See `src/cache/CLAUDE.md` and `src/cache/disk/CLAUDE.md`.
+
+The in-memory stores share a base rather than reimplementing the same bookkeeping a dozen times over. Each extends `EntityStore`, which carries the pending-writes map and the `hasSynced` flag so the sync engine can skip reconciling a UID whose just-written local state hasn't yet round-tripped through Paprika; families that soft-delete extend `TombstoneEntityStore`, which adds tombstone tracking that keeps a redundant delete idempotent across a sync race. The plumbing was consolidated out of stores that once duplicated it, so a new entity family inherits it and adds only its own load side effects; the lone holdout is the grocery-ingredient store, keyed by name instead of UID, which needs none of it. The invariants that keep pending-writes and tombstones correct under concurrent sync live in `src/entity/CLAUDE.md`.
 
 Sync (`src/paprika/`) runs once on startup and then optionally polls. It is **never-throws**: a failed cycle is logged and the loop continues. Two patterns coexist by entity:
 
