@@ -10,7 +10,7 @@ Last verified: 2026-06-01
 
 ## Tech stack
 
-TypeScript 5.9 (ESM, `@tsconfig/strictest`) on Node.js 24 (mise-managed), pnpm via corepack. MCP via `@modelcontextprotocol/sdk`; HTTP via hono; validation via zod; errors via neverthrow; resilience via cockatiel; logging via pino; image normalization via sharp. The full dependency set lives in `package.json` and is not re-listed here. Ships as a distroless container (3-stage Dockerfile).
+TypeScript 6 (ESM, `@tsconfig/strictest`) on Node.js 24 (mise-managed), pnpm via corepack. MCP via `@modelcontextprotocol/sdk`; HTTP via hono; validation via zod; errors via neverthrow; resilience via cockatiel; logging via pino; image normalization via sharp. The full dependency set lives in `package.json` and is not re-listed here. Ships as a distroless container (3-stage Dockerfile).
 
 ## Commands
 
