@@ -1,6 +1,6 @@
 import { fromAny } from "@total-typescript/shoehorn";
 import { describe, it, expect, vi } from "vitest";
-import { RecipeStore } from "../cache/recipe-store.js";
+import { RecipeStore } from "../recipe/store.js";
 import { makeMenu, makeMenuItem } from "../cache/__fixtures__/menus.js";
 import { makeMealType } from "../cache/__fixtures__/meals.js";
 import { makeRecipe } from "../cache/__fixtures__/recipes.js";

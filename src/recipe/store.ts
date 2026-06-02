@@ -1,5 +1,5 @@
 import type { RecipeUid } from "../ids.js";
-import type { Recipe } from "../recipe/types.js";
+import type { Recipe } from "./types.js";
 import { EntityStore } from "../entity/index.js";
 import { parseDuration } from "../utils/duration.js";
 

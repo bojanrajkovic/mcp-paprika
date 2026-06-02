@@ -1,7 +1,7 @@
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import type { ScoredResult } from "../cache/recipe-store.js";
+import type { ScoredResult } from "../recipe/store.js";
 import { coldStartGuard, recipeMetadataLines, textResult } from "./helpers.js";
 import type { ServerContext } from "../types/server-context.js";
 

@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { makeGroceryList } from "../cache/__fixtures__/grocery-lists.js";
 import { makeGroceryItem } from "../cache/__fixtures__/grocery-items.js";
-import { RecipeStore } from "../cache/recipe-store.js";
+import { RecipeStore } from "../recipe/store.js";
 import { makeTestServer, makeCtx, seed } from "../tools/tool-test-utils.js";
 import { registerGroceryListResources } from "./grocery-lists.js";
 import type { GroceryListUid, GroceryItemUid } from "../ids.js";

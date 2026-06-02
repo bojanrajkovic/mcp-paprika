@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { RecipeStore } from "../cache/recipe-store.js";
+import { RecipeStore } from "../recipe/store.js";
 import { makeRecipe } from "../cache/__fixtures__/recipes.js";
 import { registerFilterTools } from "./filter.js";
 import { makeTestServer, makeCtx, getText, seed } from "./tool-test-utils.js";

@@ -1,8 +1,8 @@
 import { describe, it, expect, vi } from "vitest";
 import { fromAny } from "@total-typescript/shoehorn";
-import { GroceryItemStore } from "../cache/grocery-item-store.js";
-import { GroceryListStore } from "../cache/grocery-list-store.js";
-import { RecipeStore } from "../cache/recipe-store.js";
+import { GroceryItemStore } from "../grocery-item/store.js";
+import { GroceryListStore } from "../grocery-list/store.js";
+import { RecipeStore } from "../recipe/store.js";
 import { makeGroceryItem } from "../cache/__fixtures__/grocery-items.js";
 import { makeGroceryList } from "../cache/__fixtures__/grocery-lists.js";
 import { commitGroceryItem, commitGroceryItemsBatch, commitGroceryList, groceryStartGuard } from "./grocery-helpers.js";

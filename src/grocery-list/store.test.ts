@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { GroceryListStore } from "./grocery-list-store.js";
-import { makeGroceryList } from "./__fixtures__/grocery-lists.js";
+import { GroceryListStore } from "./store.js";
+import { makeGroceryList } from "../cache/__fixtures__/grocery-lists.js";
 import type { GroceryListUid } from "../ids.js";
 
 describe("GroceryListStore", () => {

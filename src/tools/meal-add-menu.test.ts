@@ -1,7 +1,7 @@
 // pattern: Imperative Shell tests
 import { fromAny } from "@total-typescript/shoehorn";
 import { describe, it, expect, vi } from "vitest";
-import { RecipeStore } from "../cache/recipe-store.js";
+import { RecipeStore } from "../recipe/store.js";
 import { makeMeal, makeMealType } from "../cache/__fixtures__/meals.js";
 import { makeMenu, makeMenuItem } from "../cache/__fixtures__/menus.js";
 import { makeRecipe } from "../cache/__fixtures__/recipes.js";

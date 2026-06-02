@@ -1,10 +1,10 @@
 import { fromAny } from "@total-typescript/shoehorn";
 import { describe, it, expect, vi } from "vitest";
-import { AisleStore } from "../cache/aisle-store.js";
+import { AisleStore } from "../aisle/store.js";
 import { makeAisle } from "../cache/__fixtures__/aisles.js";
 import { aisleStartGuard, commitAisle, ensureAisle } from "./aisle-helpers.js";
 import { makeTestServer, makeCtx, seed } from "./tool-test-utils.js";
-import { RecipeStore } from "../cache/recipe-store.js";
+import { RecipeStore } from "../recipe/store.js";
 import type { ServerContext } from "../types/server-context.js";
 import type { Aisle } from "../aisle/types.js";
 

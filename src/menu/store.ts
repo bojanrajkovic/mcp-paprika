@@ -1,6 +1,6 @@
 import { TombstoneEntityStore } from "../entity/index.js";
 import type { MenuUid } from "../ids.js";
-import type { Menu } from "../menu/types.js";
+import type { Menu } from "./types.js";
 
 export class MenuStore extends TombstoneEntityStore<Menu, MenuUid> {
   private _lastSyncedAt: Date | null = null;

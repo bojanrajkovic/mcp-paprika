@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterEach, vi } from "vitest";
 import { fromAny } from "@total-typescript/shoehorn";
 import sharp from "sharp";
 
-import { RecipeStore } from "../cache/recipe-store.js";
+import { RecipeStore } from "../recipe/store.js";
 import { makeRecipe } from "../cache/__fixtures__/recipes.js";
 import { RecipeUidSchema } from "../ids.js";
 import type { Recipe } from "../recipe/types.js";

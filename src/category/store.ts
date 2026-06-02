@@ -1,5 +1,5 @@
 import { TombstoneEntityStore } from "../entity/index.js";
-import type { Category } from "../category/types.js";
+import type { Category } from "./types.js";
 import type { CategoryUid } from "../ids.js";
 
 /**
