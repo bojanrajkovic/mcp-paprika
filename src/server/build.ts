@@ -17,7 +17,7 @@ import { buildDiscoverComponents } from "../features/discover-feature.js";
 import { PhotographyClient } from "../features/photography.js";
 import { GeneratedImageStore } from "../features/generated-image-store.js";
 import { PaprikaClient } from "../paprika/client.js";
-import { SyncEngine } from "../paprika/sync.js";
+import { SyncEngine, type SyncDeps } from "../paprika/sync.js";
 import { registerCategoryTools } from "../tools/categories.js";
 import {
   registerCreateCategoryTool,
@@ -104,8 +104,9 @@ Orientation:
  *    credentials — `authenticate()` throws; `syncOnce()` swallows everything).
  * 2. Hydrate `DiskCache`, `RecipeStore`, `CategoryStore`, and `PantryStore`
  *    (and the rest) from disk.
- * 3. Construct `SyncEngine` against a placeholder `AppContext` (`vectorStore: null`).
- *    `SyncEngine` never reads `vectorStore`, so this is safe.
+ * 3. Construct `SyncEngine` from a narrow `SyncDeps` slice (the client, disk
+ *    cache, entity stores, and logger — never `vectorStore`), so it can be built
+ *    before the vector store exists.
  * 4. **Run the initial `sync.syncOnce()`** before building discover components.
  *    On a cold start (empty cache) the `CategoryStore` is empty until the first
  *    sync populates it, so cold-start vector indexing must run AFTER the first
@@ -254,11 +255,12 @@ export async function buildAppContext(
   // previews awaiting attach-by-token (#photo-preview-attach).
   const generatedImageStore = new GeneratedImageStore();
 
-  // SyncEngine only reads client/cache/store/pantryStore/notifier — never
-  // vectorStore — so it is safe to construct with a placeholder appContext
-  // whose vectorStore is null. The vector store is then built with
-  // sync.events so it can subscribe to "sync:complete" notifications.
-  const syncCtx: AppContext = {
+  // SyncEngine depends on a narrow SyncDeps slice — the client, disk cache, the
+  // twelve entity stores, and the logger. It never reads vectorStore,
+  // photographyClient, generatedImageStore, notifier, or auth (resource-list
+  // notification is wired below as a sync:complete subscriber, not inside the
+  // engine), so we hand it exactly that slice rather than a full AppContext.
+  const syncDeps: SyncDeps = {
     client,
     cache,
     store,
@@ -273,14 +275,9 @@ export async function buildAppContext(
     menuStore,
     menuItemStore,
     photoStore,
-    generatedImageStore,
-    vectorStore: null,
-    photographyClient: null,
-    notifier,
-    auth, // null for stdio, populated for HTTP
     log,
   };
-  const sync = new SyncEngine(syncCtx, config.sync.interval);
+  const sync = new SyncEngine(syncDeps, config.sync.interval);
 
   // Translate sync:complete events into MCP resource-list notifications.
   // Wired here (not inside SyncEngine) so the engine stays decoupled from the
