@@ -25,7 +25,7 @@ jobs:
   publish:
     name: Build, scan, sign & publish
     runs-on: ubuntu-latest
-    # Headroom for the Trivy DB pull + multi-arch buildx + GHCR push.
+    # Headroom for the vulnerability-DB pull + multi-arch buildx + GHCR push.
     timeout-minutes: 15
 
     steps:
@@ -65,7 +65,7 @@ jobs:
       # --- Build → scan → push, in that order ---
       #
       # First build loads an amd64 image into the local Docker daemon (no
-      # registry push). Trivy scans it. Only on scan pass does a second
+      # registry push). Grype scans it. Only on scan pass does a second
       # build push to GHCR. Vulnerable images never reach the registry, so
       # cosign and the attestations only ever certify scan-passed digests.
       #
@@ -73,12 +73,6 @@ jobs:
       # only in the distroless base image, which the upstream project
       # patches across arches in lockstep. If a dep ever gains arch-specific
       # native bindings, split this into two single-platform scans.
-      #
-      # (We tried scanning a multi-arch OCI archive directly — Trivy 0.70
-      # only understands Docker-save tarballs or OCI *directory* layouts,
-      # not the OCI tarball that `docker/build-push-action` emits with
-      # `type=oci`. `load: true` produces a daemon-loaded image, which
-      # Trivy scans natively.)
       #
       # No external cache (cache-from / cache-to) — GitHub Actions cache is
       # cross-workflow writable, so a poisoned cache from any workflow on

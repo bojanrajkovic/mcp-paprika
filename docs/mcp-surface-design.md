@@ -1,94 +1,12 @@
 # MCP Surface Design: Tools vs Resources
 
-Decision matrix and heuristic for determining whether each Paprika entity type
-is exposed as an MCP tool, an MCP resource, or both.
+> **Superseded by [ADR-0004](adr/0004-tool-vs-resource-classification.md) (2026-06-01).**
 
-## Heuristic
+The Content / Data / Reference classification heuristic that decides whether each Paprika entity is exposed as a tool, a resource, or both, plus the reasoning behind it (notably why a `read_X` tool is not redundant with the `paprika://X/{uid}` resource), now lives in ADR-0004, which is canonical.
 
-**Would a user attach this entity into a conversation to discuss it?**
+The decision matrix and surface-audit tables this note used to carry are intentionally **not** preserved: they enumerated tool names, which drift (this note had already gone stale against the registry). The authoritative sources are:
 
-- **Yes** → **Content** class. Resource surface (list + URI template) with rich
-  rendering. Plus tools for model-driven read, query, and mutation.
-- **No, but the model needs to query/mutate individual records** → **Data**
-  class. Tools only (list, get, write ops). No resource surface.
-- **No, it's organizational lookup data** → **Reference** class. Single list
-  tool. No individual read, no CRUD, no resource.
+- **Registered tools** — `src/server/build.ts`; the generated per-tool reference is `docs/tools/README.md`.
+- **Resource rendering** — `src/resources/` (the metadata header and the child-inlining for container entities); summarized conceptually in ADR-0004.
 
-**Tiebreaker for ambiguous entities:** if the entity is a container (has
-children) or a standalone document (rich enough to read on its own), it's
-Content. If it's a row in a table (meaningful only in aggregate or as part of
-a container), it's Data.
-
-### Why this heuristic
-
-MCP resources and tools serve different invocation paths. Resources require user
-action — attaching via `@` in Claude Code or the attach UI in Claude Desktop.
-The model cannot autonomously access resources; it uses tools for that. So a
-`read_recipe` tool is not redundant with `paprika://recipe/{uid}` — the tool
-handles model-driven retrieval, the resource handles user-driven context
-injection.
-
-Data-class entities (pantry items, grocery items, meal entries) are too granular
-for a user to attach individually. The model accesses them via list/get tools,
-which is sufficient. Exposing them as resources adds maintenance cost and
-duplicates the tool output with no consumer benefit.
-
-Reference-class entities (categories, aisles, meal types) exist so the model can
-resolve display names to UIDs when creating or filtering other entities. They
-need no individual read, no CRUD, and no resource surface. Note the split within
-the meal-planning domain: a meal _entry_ (a scheduled recipe on a date) is Data,
-but a meal _type_ (Breakfast, Dinner, a custom Brunch) is Reference — the catalog
-the model resolves a meal entry's type against. Creating a meal type is a
-configuration act (set once, by preference, in the Paprika app), not content the
-model authors, so it gets a list tool only.
-
-## Decision Matrix
-
-| Entity       | Class     | Resource                       | Tool Surface                                                                                                                                                     |
-| ------------ | --------- | ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Recipe       | Content   | `paprika://recipe/{uid}`       | `list_recipes`, `read_recipe`, `search_recipes`, `filter_by_ingredient`, `filter_by_time`, `discover_recipes`, `create_recipe`, `update_recipe`, `delete_recipe` |
-| Category     | Reference | —                              | `list_categories`                                                                                                                                                |
-| Pantry item  | Data      | —                              | `list_pantry`, `get_pantry_item`, `add_pantry_items`, `update_pantry_item`, `delete_pantry_item`                                                                 |
-| Grocery list | Content   | `paprika://grocery-list/{uid}` | `list_grocery_lists`, `read_grocery_list`, `create_grocery_list`, `delete_grocery_list`                                                                          |
-| Grocery item | Data      | —                              | `list_grocery_items`, `add_grocery_item`, `update_grocery_item`, `delete_grocery_item`, `check_grocery_item`                                                     |
-| Aisle        | Reference | —                              | `list_aisles`                                                                                                                                                    |
-| Menu         | Content   | `paprika://menu/{uid}`         | `list_menus`, `read_menu`, `create_menu`, `update_menu`, `delete_menu`                                                                                           |
-| Menu item    | Data      | —                              | `add_menu_items`, `update_menu_item`, `delete_menu_item`                                                                                                         |
-| Meal entry   | Data      | —                              | `list_meal_history` (with date/recipe filters), `add_meals`, `update_meal`, `delete_meal`, `add_menu_to_planner`                                                 |
-| Meal type    | Reference | —                              | `list_meal_types`                                                                                                                                                |
-
-## Resource Rendering Contract
-
-Resources are richer than tool output. The two paths serve different consumers:
-
-**Tool output** returns clean, action-oriented markdown — the recipe text, the
-list items, the menu contents. The model already has the UID in its call chain
-and doesn't need it echoed back.
-
-**Resource output** prepends a metadata header:
-
-```
-**UID:** `<uid>`
-**URI:** `paprika://<entity>/<uid>`
-**Last synced:** <timestamp>
-```
-
-For container Content entities (grocery lists, menus), the resource inlines all
-child items so a single resource read gives the user complete context to discuss.
-
-## Audit of Existing Surface
-
-| Entity       | Current Surface        | Matrix                | Status                                                                                                                                                                                                                                                          |
-| ------------ | ---------------------- | --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Recipe       | Tools + resource       | Content → both        | Conforming. Resource metadata header includes UID, URI, Last synced, and Photo.                                                                                                                                                                                 |
-| Category     | `list_categories` tool | Reference → list tool | Conforming. No change.                                                                                                                                                                                                                                          |
-| Aisle        | `list_aisles` tool     | Reference → list tool | Conforming. No change.                                                                                                                                                                                                                                          |
-| Pantry item  | Tools only             | Data → tools only     | Conforming. `paprika://pantry/{uid}` resource retired (#104).                                                                                                                                                                                                   |
-| Grocery list | Tools + resource       | Content → both        | Conforming. Tools cover list/read/create/rename/delete; `paprika://grocery-list/{uid}` resource inlines items.                                                                                                                                                  |
-| Grocery item | Tools only             | Data → tools only     | Conforming. Tools cover add/update/delete plus cross-entity `move_to_pantry`, `clear_purchased`, `clear_all`.                                                                                                                                                   |
-| Meal entry   | Tools only             | Data → tools only     | Conforming. Tools cover `list_meal_history`, `add_meals`, `update_meal`, `delete_meal`, plus cross-entity `add_menu_to_planner` (materializes a menu's items as dated planner meals; lives in the meal family because it produces meals).                       |
-| Meal type    | `list_meal_types` tool | Reference → list tool | Conforming. Created/edited in the Paprika app; MCP exposes a read-only list so agents resolve names→UIDs (#135).                                                                                                                                                |
-| Menu         | Tools + resource       | Content → both        | Conforming. Tools cover list/read/create/update/delete; `paprika://menu/{uid}` resource inlines items. `update_menu` partial-merges name/days/notes with a days-shrink guard; `delete_menu` cascades a tombstone to every menuitem before tombstoning the menu. |
-| Menu item    | Tools only             | Data → tools only     | Conforming. Read surface inlined in the menu resource and `read_menu`; write tools cover `add_menu_items` (batch, with day auto-expand), `update_menu_item`, and `delete_menu_item`.                                                                            |
-
-`add_menu_to_planner` instantiates a saved menu's items as dated meal-planner entries (Day N → `start_date + (N − 1)` days), posting them in one batch. It is a one-way copy, not a link — the planner meals carry no `menu_uid` back-reference — and is intentionally non-idempotent (re-running adds another copy, matching Paprika.app's own Add Menu action). It lives in the meal family (`src/tools/meal-add-menu.ts`) because it produces meals, mirroring how `move_to_pantry` lives with grocery.
+This file is retained only so older links to it don't break; ADR-0004 is canonical.

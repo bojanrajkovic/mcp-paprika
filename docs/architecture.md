@@ -1,158 +1,84 @@
 # Architecture
 
-mcp-paprika is an MCP server that bridges the Paprika recipe manager cloud API with local caching, background sync, and optional semantic search. It communicates with MCP clients over stdio.
+Last verified: 2026-06-02
 
-## Startup sequence
+mcp-paprika bridges the Paprika recipe manager's cloud API to MCP clients. It keeps a local cache of the user's library, syncs it in the background, and exposes recipes, the pantry, grocery lists, meal planning, menus, and optional semantic search and AI photo generation as MCP tools and resources.
 
-The server boots in a fixed order. Each step depends on the previous one completing:
+This covers the shape and the _why_. Current inventories (which tools exist, which stores, which config keys, the on-disk layout) are read from source and the per-directory `CLAUDE.md` files, not transcribed here; see the documentation map in the root `CLAUDE.md`. Decisions with weighed alternatives live in `docs/adr/`.
 
-1. **Load config** — merges env vars, `.env`, and `config.json` (see [configuration](configuration.md))
-2. **Authenticate** — `PaprikaClient` POSTs email/password to Paprika's v1 login endpoint, stores the JWT
-3. **Initialize disk cache** — `DiskCacheRoot` creates per-entity directories, loads `recipes/index.json` (recipe UID → content hash map), and runs the one-shot legacy-index migration if a unified `index.json` from a pre-#89 install is present
-4. **Hydrate recipe store** — reads all cached recipes from disk into the in-memory `RecipeStore`
-5. **Create MCP server** — constructs the `McpServer` instance
-6. **Register tools** — 9 core tools (search, filter, CRUD, categories, list)
-7. **Register resources** — recipe resources at `paprika://recipe/{uid}`
-8. **Initial sync** — `SyncEngine.syncOnce()` fetches changes from Paprika cloud
-9. **Start background sync** — polling loop at the configured interval (if enabled)
-10. **Wire semantic search** — `setupDiscoverFeature()` conditionally initializes embeddings, vector store, and the `discover_recipes` tool
-11. **Connect transport** — `StdioServerTransport` starts accepting MCP messages
+## One composition root, two transports
 
-Steps 1-9 happen before the server accepts any client messages. The semantic search wiring (step 10) happens after the initial sync so the vector store can detect whether it needs to do a cold-start index.
+The business logic (every tool and resource, plus the sync engine) is written once and is transport-agnostic. What differs between a local CLI client and a remote network client is only the framing, the number of concurrent sessions, and whether identity must be proven. That separation is enforced by the composition root in `src/server/` (see `src/server/CLAUDE.md`):
 
-## Dual-layer cache
+- **`AppContext`** is process-wide, heavyweight state, built once: the Paprika client, the disk cache, every in-memory store, the optional vector and photography clients, the logger, the optional auth runtime, and the `Notifier`. It has **no `server` field**: nothing process-wide can reach "the server," which is what keeps process-wide state independent of how many sessions exist.
+- **`SessionContext`** is `AppContext` plus the one `McpServer` for a session. It is what every handler receives: one for the whole process under stdio, one per active session under HTTP.
+- The **`Notifier`** is the seam that lets mutation code stay transport-blind: callers push resource-list-changed and logging notifications through `ctx.notifier` rather than reaching a server, and the implementation (single-server vs. broadcast) is chosen by transport.
 
-Recipes are cached in two layers:
+The two transports (`src/transport/`) are selected at startup by `MCP_TRANSPORT`. **stdio** is the default: a local, unauthenticated pipe where stdout _is_ the protocol, so stray output corrupts the wire. **Streamable HTTP** is a long-lived network service with per-session state, an OAuth surface, a readiness/liveness probe, and a Kubernetes-aware graceful drain. Both run the one composition root unchanged. See [ADR-0001](adr/0001-two-transports-and-composition-root.md).
 
-### In-memory: RecipeStore
-
-`RecipeStore` is a `Map<RecipeUid, Recipe>` with query methods bolted on. It's the source of truth for all tool operations during a session.
-
-- **Search** — tiered scoring: exact match > starts-with > substring
-- **Filter by ingredient** — `"all"` (AND) or `"any"` (OR) mode
-- **Filter by time** — parses duration strings, sorts by total time
-- **Category resolution** — `Map<CategoryUid, Category>` for UID → display name lookups
-- **Exclusions** — trashed recipes are excluded from all query methods (direct UID lookup still works)
-
-### On-disk: DiskCacheRoot
-
-`DiskCacheRoot` (`src/cache/disk/`) persists every cached entity as individual JSON files under a per-entity subdirectory. It handles the startup cold-start case: if the server restarts, recipes are loaded from disk into the `RecipeStore` before the first sync, so tools are immediately usable.
-
-Structure:
-
-```
-~/.cache/mcp-paprika/
-├── recipes/
-│   ├── index.json          # uid → content hash map (only index file)
-│   ├── {uid}.json          # Individual recipe files
-│   └── ...
-├── categories/{uid}.json
-├── pantry/{uid}.json
-├── oauthClients/{clientId}.json
-└── oauthTokens/{tokenHash}.json
+```mermaid
+flowchart TB
+  T{{"MCP_TRANSPORT"}} -->|stdio| ST["stdio transport<br/>one local session"]
+  T -->|http| HT["HTTP transport<br/>N network sessions, OAuth-gated"]
+  ST --> APP
+  HT --> APP
+  APP["AppContext (process-wide)<br/>client, disk cache, stores,<br/>logger, notifier — no server field"]
+  APP -->|"buildMcpServer, per session"| SES["SessionContext<br/>AppContext + McpServer"]
+  MUT["tools, resources, sync engine"] -->|"ctx.notifier"| N["Notifier"]
+  N -.->|"stdio: singleServer / http: broadcast"| SES
 ```
 
-Writes are buffered in memory per subcache and flushed atomically: each data file is fsynced individually, and the recipes index is temp-then-rename'd inside the recipes subcache's own mutex. The recipes index tracks content hashes so the sync engine can detect what changed remotely without re-downloading everything. Other entities derive their key set from the directory listing (no index file needed).
+## Caching and sync
 
-**Corruption recovery:** if `recipes/index.json` or any data file has invalid JSON, the cache logs a warning and resets to empty for that namespace. The next sync repopulates everything.
+Every Paprika entity family lives in two layers: an in-memory store that is the session's source of truth, backed by an atomic-write per-entity disk cache. Tools never touch the filesystem; they query the store, which is hydrated from disk at startup and kept fresh by background sync. That split keeps disk I/O off the hot path and tool code trivially testable, and the disk layer makes the server usable the instant it restarts: the cache is warm before the first sync returns, so a redeploy never leaves the user staring at a cold, empty library. See `src/cache/CLAUDE.md` and `src/cache/disk/CLAUDE.md`.
 
-**Legacy migration:** installs from before issue #89 carried a unified `<cacheDir>/index.json`; `DiskCacheRoot.init()` detects it on first boot, extracts the recipes namespace to `recipes/index.json`, and deletes the legacy file. The migration is idempotent and crash-safe (write new file first, then delete old).
+The in-memory stores share a base rather than reimplementing the same bookkeeping a dozen times over. Each extends `EntityStore`, which carries the pending-writes map and the `hasSynced` flag so the sync engine can skip reconciling a UID whose just-written local state hasn't yet round-tripped through Paprika; families that soft-delete extend `TombstoneEntityStore`, which adds tombstone tracking that keeps a redundant delete idempotent across a sync race. The plumbing was consolidated out of stores that once duplicated it, so a new entity family inherits it and adds only its own load side effects; the lone holdout is the grocery-ingredient store, keyed by name instead of UID, which needs none of it. The invariants that keep pending-writes and tombstones correct under concurrent sync live in `src/entity/CLAUDE.md`.
 
-## Sync engine
+Sync (`src/paprika/`) runs once on startup and then optionally polls. It is **never-throws**: a failed cycle is logged and the loop continues. Two patterns coexist by entity:
 
-`SyncEngine` keeps the local cache in sync with Paprika's cloud. It runs an initial sync on startup, then optionally polls in the background.
+- **Diff-and-fetch** (recipes). Paprika's sync endpoint returns only `{uid, hash}` pairs. The cache diffs those content hashes against what it holds and fetches full data only for what changed. An incremental sync of a 500-recipe library touches only the few recipes that actually moved: one list call plus a bounded number of detail fetches. This depends on the locally-computed recipe content hash being stamped on every write so cross-client edits are detectable; that algorithm is reverse-engineered and documented in [`docs/wire-format.md`](wire-format.md).
+- **Replace-all** (categories and the other reference/collection families). Small enough to refetch wholesale.
 
-### Sync cycle
+After a cycle that changed an entity with a resource surface, sync fans a resource-list-changed notification through the `Notifier`; families with no resource surface (e.g. pantry) emit none.
 
-Each cycle does two things:
-
-**Recipe sync (diff-and-fetch):**
-
-1. Fetch the lightweight recipe entry list from Paprika (UIDs + content hashes only)
-2. Diff against the local `index.json` to find added, changed, and removed recipes
-3. Fetch full recipe data only for added/changed recipes
-4. Write to disk cache and update the in-memory store
-5. Remove deleted recipes from both layers
-
-**Category sync (replace-all):**
-
-1. Fetch all categories from Paprika
-2. Replace the store's category map and write to disk
-
-After both complete, the cache is flushed and an MCP `resourceListChanged` notification is sent so clients know to refresh.
-
-### Events
-
-The sync engine emits two events via a [mitt](https://github.com/developit/mitt) emitter:
-
-- `sync:complete` — fired after every successful cycle with a `SyncResult` containing added, updated, and removed recipe lists
-- `sync:error` — fired when a cycle fails (the error is logged but never thrown)
-
-The semantic search feature subscribes to `sync:complete` to incrementally update the vector index.
+```mermaid
+flowchart LR
+  L["list recipes<br/>(uid + hash only)"] --> D{"diff vs<br/>local hashes"}
+  D -->|added or changed| F["fetch full recipe"]
+  D -->|removed| X["drop from cache + store"]
+  D -->|unchanged| S["skip — no fetch"]
+  F --> W["write disk + in-memory store"]
+```
 
 ## Semantic search
 
-Semantic search is an optional feature that adds the `discover_recipes` tool. It's enabled when all three embedding config values are set (see [configuration](configuration.md)).
+Semantic discovery is optional: it registers the `discover_recipes` tool only when embedding config is present. An OpenAI-compatible embedding client turns each recipe into a vector over its name, description, categories, ingredients, and notes (**directions and nutrition are deliberately excluded**, so editing cooking steps doesn't churn the index) and stores it in a vendored, file-backed cosine index. Re-indexing is hash-tracked and funneled through one chokepoint, so every local write and category rename re-embeds only what changed; an unchanged sync typically makes zero embedding calls. See `src/features/CLAUDE.md` and [ADR-0003](adr/0003-vendored-json-vector-index.md).
 
-### Components
+## Photos
 
-**EmbeddingClient** — HTTP client for any OpenAI-compatible `/v1/embeddings` endpoint. Supports single and batch embedding. See [embedding providers](embedding-providers.md) for setup.
+The server reads and syncs recipe photos and can generate new ones. AI generation (`generate_photo`) is opt-in (registered only when an image-generation client is configured) and produces a styled photo through an OpenRouter image model, normalized with sharp. Any server-side image fetch is SSRF-hardened (unicast-only address guard plus a DNS-rebinding-safe dispatcher), because the URL can be model- or user-influenced. See `src/features/CLAUDE.md`.
 
-**VectorStore** — wraps the vendored `JsonVectorIndex` (a minimal file-backed cosine index) for local vector storage. Recipes are converted to embedding text (name, description, categories, ingredients, notes — excluding directions and nutritional info), embedded, and stored with SHA-256 content hashes for change detection.
+## Authentication
 
-**Feature wiring** — `setupDiscoverFeature()` ties everything together:
+Under stdio there is no auth surface: the OS process boundary is the trust boundary. Under HTTP the server is a full OAuth 2.1 authorization server toward MCP clients while delegating identity to one operator-configured upstream OIDC provider, minting its own opaque tokens and admitting only an allowlisted set of users. The entire `src/auth/` surface loads only when the transport is HTTP. See [ADR-0002](adr/0002-oauth21-oidc-delegation.md) and `src/auth/CLAUDE.md`.
 
-1. Creates the `EmbeddingClient` and `VectorStore`
-2. Registers the `discover_recipes` tool
-3. Handles cold-start indexing (if the vector index is empty but the recipe store has data)
-4. Subscribes to `sync:complete` to index new/updated recipes and remove deleted ones
+## Cross-cutting concerns
 
-### Change detection
+**Logging.** One process-wide pino logger lives on `AppContext`; components take children scoped by name. A credential-redaction policy strips secrets, and records at or above the notify level fan out to connected MCP clients through the same `Notifier` seam. The bootstrap is order-sensitive (the notifier is built first around a deferred getter so startup records have somewhere to go before the server exists); `src/server/CLAUDE.md` and `src/utils/CLAUDE.md` carry the details.
 
-The vector store maintains a hash map (recipe UID → SHA-256 of embedding text). During indexing, unchanged recipes are skipped. This means re-syncing 500 recipes where only 3 changed results in only 3 embedding API calls.
+**Resilience.** The Paprika client and the embedding/photography clients share one cockatiel executor: exponential-backoff retry on transient HTTP failures plus a consecutive-failure circuit breaker. Recipe detail fetches run under a bounded, configurable concurrency so sync stays courteous to the API. Startup authentication is retried but deliberately not circuit-broken (a one-shot path where a real credential rejection should fail fast). The tuning values are config, not prose; see `docs/configuration.md` and `src/utils/resilience.ts`.
 
-### Error isolation
+**Error handling.** The functional core uses neverthrow `Result<T, E>` and never throws; infrastructure that wraps exception-throwing libraries (cockatiel, the file-backed index) throws and is caught at system boundaries (the never-throws sync loop, the discover feature's isolation handler, the tool handlers). This two-strategy split is deliberate: pure logic stays composable and total, while the messy edges are contained where they happen.
 
-Embedding and vector store errors in the sync handler are caught and logged to stderr. They never propagate to the sync engine or crash the server. If Ollama goes down mid-sync, you'll see a log message but the server keeps running, and the next sync cycle will retry.
+## Key decisions
 
-## Resilience
+The decisions with weighed alternatives are recorded as ADRs: two transports over one composition root ([0001](adr/0001-two-transports-and-composition-root.md)), OAuth 2.1 with OIDC delegation ([0002](adr/0002-oauth21-oidc-delegation.md)), the vendored vector index ([0003](adr/0003-vendored-json-vector-index.md)), and the tool-vs-resource classification ([0004](adr/0004-tool-vs-resource-classification.md)).
 
-Both the Paprika API client and the embedding client use [cockatiel](https://github.com/connor4312/cockatiel) for resilience:
+A few smaller choices shape the code without rising to an ADR:
 
-### Retry
+- **In-memory stores over a disk cache** keep disk I/O off the hot path and tools testable; the stable store API leaves SQLite as a future escape hatch if the in-memory working set ever stops fitting.[^sqlite]
+- **neverthrow in the core, exceptions at the boundary** (above): a convention enforced by review, not the type system.
+- **A single shared resilience executor** rather than per-client retry/breaker logic, so the policy is defined once.
+- **One pino root threaded through `AppContext`**, so every component logs through the same redaction and fan-out path rather than each re-discovering "the server."
 
-Exponential backoff with jitter: 500ms initial delay, 10s max delay, 3 attempts. Triggered by transient HTTP errors: 429 (rate limit), 500, 502, 503.
-
-### Circuit breaker
-
-Opens after 5 consecutive failures. Half-open after 30 seconds (allows one probe request). If the probe succeeds, the circuit closes. If it fails, the circuit stays open for another 30 seconds.
-
-### Bulkhead
-
-Recipe fetches during sync are limited to 5 concurrent requests to avoid overwhelming the Paprika API.
-
-### Auth retry
-
-If a Paprika API call returns 401 (expired token), the client re-authenticates once and retries. If the retry also fails, the error propagates.
-
-## Error handling
-
-The codebase uses two error strategies depending on context:
-
-**Core business logic** uses [neverthrow](https://github.com/supermacro/neverthrow) `Result<T, E>` types. Config loading, duration parsing, and other pure operations return `Result` and are composed with `.andThen()`, `.map()`, and `.match()`. No exceptions.
-
-**Infrastructure code** (Paprika client, embedding client, vector store) throws exceptions because it wraps libraries (cockatiel) and a file-backed index that use exceptions for control flow. These are caught at system boundaries — the sync engine's try/catch, the discover feature's error isolation handler, and the tool handlers.
-
-## Project structure
-
-```
-src/
-├── index.ts           # Entry point: config → auth → cache → server → sync → transport
-├── paprika/           # Paprika API client and sync engine
-├── cache/             # RecipeStore + PantryStore (in-memory); cache/disk/ has DiskCacheRoot (persistent)
-├── tools/             # MCP tool definitions (one file per tool or tool group)
-├── resources/         # MCP resource definitions
-├── features/          # Feature implementations (embeddings, vector store, discover wiring)
-├── types/             # Shared type definitions
-└── utils/             # Cross-cutting utilities (config, XDG paths, duration parsing)
-```
+[^sqlite]: It hasn't stopped fitting, and it won't soon: a few thousand recipes is a rounding error in RAM. The escape hatch is insurance, not a plan.

@@ -4,140 +4,63 @@ Last verified: 2026-06-01
 
 ## Purpose
 
-Process-wide composition root. Owns the authoritative context types (`AppContext`, `SessionContext`), the `Notifier` abstraction that decouples mutation code from "the server," and the `buildAppContext` / `buildMcpServer` builders that draw the line between process-wide and per-session state.
+Process-wide composition root. Owns the authoritative context types (`AppContext`, `SessionContext`), the `Notifier` abstraction that decouples mutation code from "the server," and the `buildAppContext` / `buildMcpServer` builders that draw the line between process-wide and per-session state. This split lets the same tools, resources, and sync engine run unchanged under stdio (one server per process) and HTTP (N concurrent sessions per process).
 
-This split exists so the same business logic (tools, resources, sync engine) can run unchanged under stdio (one server per process) and HTTP (N concurrent sessions per process).
+## Key References
 
-## Files
+- `docs/adr/0001-two-transports-and-composition-root.md` — the AppContext/SessionContext split, the Notifier seam, the bootstrap-order cycle, and the rejected single-transport / DI-container alternatives.
+- `src/server/app-context.ts` — the exhaustive, canonical field list for `AppContext` and `SessionContext`. Treat that file as the source of truth; do not re-enumerate fields here.
+- `src/server/notifier.ts` — `Notifier`, `singleServerNotifier`, `broadcastNotifier`.
+- `../cache/disk/CLAUDE.md` — the disk subcaches that `AppContext.cache` exposes.
+- ADR-0004 (entity store roles) — the Content / Data / Reference taxonomy referenced below.
 
-- `app-context.ts` — `AppContext` and `SessionContext` interfaces
-- `notifier.ts` — `Notifier` interface, `singleServerNotifier`, `broadcastNotifier`, `LoggingMessageParams`, `SessionSnapshot`
-- `build.ts` — `buildAppContext`, `buildMcpServer`
+## Context shape (conceptual)
 
-## Contracts
+`AppContext` is the heavyweight process-wide state, built once. It holds the Paprika client, the disk cache, the optional `vectorStore`/`photographyClient`, the ephemeral `generatedImageStore`, the logger, the optional `auth` runtime, and the `Notifier`. Its in-memory query stores group by their ADR-0004 role:
 
-### AppContext
+- **Content stores** (parent entities with their own resource surface) — recipe, grocery-list, menu.
+- **Data stores** (child entities owned by a Content parent) — grocery-item, menu-item, meal, photo. Meals and photos are recipe-children with no standalone resource.
+- **Reference stores** (case-insensitive lookup catalogs) — category, aisle, meal-type, grocery-ingredient.
 
-Process-wide, heavyweight, shared state. Built once per process by `buildAppContext`.
+`SessionContext` is `AppContext` plus the one session's `McpServer`: it is the only thing handlers receive. `src/types/server-context.ts` re-exports it as `ServerContext` for backward compatibility.
 
-| Field                    | Type                        | Description                                                                                                                                                                                                                                |
-| ------------------------ | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `client`                 | `PaprikaClient`             | Authenticated Paprika HTTP client                                                                                                                                                                                                          |
-| `cache`                  | `DiskCacheRoot`             | On-disk persistence layer (per-entity subcaches under `cache.recipes`, `cache.pantry`, `cache.aisles`, `cache.groceryLists`, `cache.groceryItems`, `cache.groceryIngredients`, `cache.oauthClients`, etc.). See `../cache/disk/CLAUDE.md`. |
-| `store`                  | `RecipeStore`               | In-memory recipe query layer                                                                                                                                                                                                               |
-| `categoryStore`          | `CategoryStore`             | In-memory category query layer (TombstoneEntityStore subclass; `resolveNames`, `resolveByName`, `getChildren`; single source of truth for category data — `RecipeStore` holds only UID foreign keys)                                       |
-| `pantryStore`            | `PantryStore`               | In-memory pantry query layer                                                                                                                                                                                                               |
-| `aisleStore`             | `AisleStore`                | In-memory aisle query layer; `hasSynced` after first sync; used by `ensureAisle` in pantry write tools for aisle resolution and auto-creation                                                                                              |
-| `groceryListStore`       | `GroceryListStore`          | In-memory grocery list query layer; EntityStore subclass with tombstones, `findByName`, `lastSyncedAt`                                                                                                                                     |
-| `groceryItemStore`       | `GroceryItemStore`          | In-memory grocery item query layer; EntityStore subclass with tombstones, `getByListUid`, `getPurchasedByList`                                                                                                                             |
-| `groceryIngredientStore` | `GroceryIngredientStore`    | In-memory grocery ingredient lookup (plain class, not EntityStore; keyed by lowercase name; no pending-writes)                                                                                                                             |
-| `mealStore`              | `MealStore`                 | In-memory meal query layer (TombstoneEntityStore subclass; `getByRecipeUid`, `lastCookedAt`, `getInDateRange`; `isIngredient` entries excluded from queries)                                                                               |
-| `mealTypeStore`          | `MealTypeStore`             | In-memory meal type query layer (EntityStore subclass; `resolveByName` for case-insensitive lookup, reference catalog like AisleStore)                                                                                                     |
-| `menuStore`              | `MenuStore`                 | In-memory menu query layer (TombstoneEntityStore subclass with tombstones, `findByName`, `lastSyncedAt`; parent/Content store, like GroceryListStore)                                                                                      |
-| `menuItemStore`          | `MenuItemStore`             | In-memory menu item query layer (TombstoneEntityStore subclass with tombstones, `getByMenuUid`; child/Data store, like GroceryItemStore)                                                                                                   |
-| `photoStore`             | `PhotoStore`                | In-memory recipe-photo query layer (TombstoneEntityStore subclass with tombstones, `getByRecipeUid` sorted by `orderFlag`; recipe-child entity like MealStore — no standalone MCP resource surface)                                        |
-| `generatedImageStore`    | `GeneratedImageStore`       | Ephemeral, in-memory ring buffer (cap 8, ~1h TTL) of AI-generated photo previews keyed by `gen_` token; `generate_photo` stashes, `upload_photo`'s `generation_token` source consumes. No disk hydration; lost on restart                  |
-| `vectorStore`            | `VectorStore \| null`       | Semantic-search index; `null` when embeddings are not configured                                                                                                                                                                           |
-| `photographyClient`      | `PhotographyClient \| null` | OpenRouter image-generation client; `null` when `features.imageGen` is not configured (mirrors `vectorStore`)                                                                                                                              |
-| `notifier`               | `Notifier`                  | Notification surface — decouples callers from any one `McpServer` instance                                                                                                                                                                 |
-| `auth`                   | `AuthContext \| null`       | OAuth 2.1 runtime state; `null` in stdio mode (no auth required)                                                                                                                                                                           |
-| `log`                    | `Logger`                    | Process-wide pino root from `src/utils/log.ts`. Children created via `parent.child({component: "..."})` flow to component-scoped sites. `warn+` records fan out to MCP clients automatically.                                              |
+## Sharp edges
 
-All fields are `readonly`. Notably **no `server`** — `AppContext` is intentionally agnostic to how many MCP sessions exist.
+### `AppContext` has no `server` field — by design
 
-### SessionContext
+This is the load-bearing invariant that makes process-wide state independent of session count. Under HTTP there is no single "the server" (there are N, or zero during bootstrap), so nothing process-wide is allowed to reach one. Anything that needs to push a notification goes through `ctx.notifier`. Do not add a `server` field to `AppContext` to "simplify" a call site: that reintroduces the stdio one-server assumption HTTP cannot honor.
 
-```typescript
-interface SessionContext extends AppContext {
-  readonly server: McpServer;
-}
-```
+### Notifier methods never throw
 
-Per-session view. `SessionContext` is what every tool and resource handler receives. For stdio there is exactly one `SessionContext` for the process lifetime; for HTTP there is one per active session.
+Both implementations swallow transport failures: `singleServerNotifier` silently (stdio), `broadcastNotifier` per-server (HTTP). This is required because `SyncEngine.syncOnce()` is contractually never-throws; a notification failure must not turn a successful sync into a reported failure. `broadcastNotifier` materializes the session snapshot into an array before iterating so adding/removing a session mid-broadcast (especially during the async `loggingMessage` fan-out) cannot invalidate the iterator, and wraps each `sendLoggingMessage` in an async IIFE so a _synchronous_ throw becomes a rejected promise that `Promise.allSettled` can absorb rather than escaping into `syncOnce()`.
 
-`src/types/server-context.ts` re-exports `SessionContext` as `ServerContext` for backward compatibility with existing handler signatures.
+### Deferred-getter bootstrap order is a real cycle — do not collapse it
 
-### Notifier
+`AppContext` needs the notifier; in stdio mode the notifier needs the server; the server is built _from_ the `AppContext`. The cycle is broken by constructing the notifier first around a getter closure (`() => server`) that returns `undefined` until the server is assigned. The pinned order is: (1) build notifier with the getter; (2) build the logger (so startup records flow through structured logging, not a shim); (3) `buildAppContext` (constructs `SyncEngine`, which captures the notifier and never reads `app.server` because there is none); (4) `buildMcpServer` and assign into the closure; (5) `connect`/`listen`. Pre-server notifier/log calls fan out to a getter returning `undefined` and silently no-op; this is safe _only_ because the order holds. Trying to build the server before the context makes the cycle unresolvable.
 
-```typescript
-interface Notifier {
-  resourceListChanged(): void;
-  loggingMessage(params: LoggingMessageParams): Promise<void>;
-}
-```
+### `buildAppContext` construction order is load-bearing
 
-Abstraction over MCP server notifications. Every code path that historically called `server.sendResourceListChanged()` or `server.sendLoggingMessage()` now goes through `ctx.notifier.*` instead, so the same call site works whether there is one underlying server (stdio) or many (HTTP).
+1. **Authenticate first:** this is the real fast-fail for bad credentials (`authenticate()` throws; `syncOnce()` swallows everything, so a credential error would otherwise be invisible).
+2. Hydrate the disk cache and every store. Reference/Content/Data stores hydrate from disk on warm restart but start empty on a true cold start.
+3. **`buildAuthContext`** returns `null` for stdio; for HTTP it fetches the OIDC discovery document and assembles the OAuth stores/provider, throwing on failure. There is no value in running a public HTTP endpoint with broken auth.
+4. Construct `SyncEngine` against a placeholder `AppContext` whose `vectorStore: null` (safe because `SyncEngine` never reads `vectorStore`).
+5. **Wire the `sync:complete` → `resourceListChanged` subscriber immediately after `new SyncEngine()`**, not inside the engine (keeps the engine decoupled from the notifier decision). It fires only for `changeType` in {recipes, grocery-lists, grocery-items, menus, menu-items} when any of added/updated/removedUids is non-empty. Pantry is deliberately excluded: pantry items have no MCP resource surface. Both menu events fire because menu items are inlined into the `paprika://menu/{uid}` resource.
+6. **Run the initial `sync.syncOnce()` BEFORE building discover components.** Cold-start vector indexing calls `categoryStore.resolveNames(uids)` per recipe; if it ran before the first sync populated the (cold-start-empty) `CategoryStore`, embeddings would be computed with empty category names and stay stale until a recipe mutation forces a re-embed. On a warm restart with unchanged remote hashes the post-build sync emits nothing, so the `sync:complete` subscriber never gets a chance to fix it. `syncOnce()` never throws, so awaiting it cannot block startup.
 
-**Two implementations:**
+### Startup logging is level-gated
 
-- `singleServerNotifier(serverOrGetter)` — stdio mode. Accepts either an `McpServer` directly OR a `() => McpServer | undefined` getter (see "Deferred-getter pattern" below). Swallows transport errors silently so a notification failure cannot break the sync loop or violate `SyncEngine.syncOnce()`'s never-throws contract.
-- `broadcastNotifier(snapshot)` — HTTP mode. Takes a `SessionSnapshot = () => Iterable<McpServer>` and materializes a snapshot before each broadcast. `resourceListChanged()` iterates synchronously, catching per-server failures so one bad session cannot stop the broadcast. `loggingMessage()` fans out with `Promise.allSettled`.
+`buildAppContext`'s first act is `log.info({transport}, "mcp-paprika starting")`. At the default `info` level it lands in pod logs/stderr/file; setting `MCP_LOG_LEVEL=warn` or higher silently suppresses it. Operators who need a startup signal must keep `info` or rely on the process supervisor.
 
-**Invariants:**
+### SIGINT/SIGTERM handler writes directly to stderr
 
-- Notifier methods never throw. Transport failures are swallowed (stdio) or contained per-server (HTTP).
-- `broadcastNotifier` materializes the snapshot into an array before iteration so that adding or removing a session mid-broadcast (especially during the async `loggingMessage` path) cannot cause iterator invalidation.
+The signal handler in `src/index.ts` bypasses the structured logger because at signal time the logger may not be built yet (early startup failure) or may already be torn down. This is one of the few sanctioned exceptions to the "no direct `process.stderr.write`" rule, which exists because stdout carries the stdio wire format.
 
-### Deferred-getter pattern and bootstrap order
+### Feature-gated tool registration
 
-The transport entry points construct components in this order:
+`buildMcpServer` registers the unconditional tool/resource families on a fresh `McpServer` for every session. Registration is pure: each `register*` only closes over the per-session `SessionContext`; there is no module-level mutable state, so registering the same tool name on N independent servers is safe. Two tools are conditional and share the same opt-in pattern: the discover tool registers **iff `app.vectorStore !== null`**, and `generate_photo` registers **iff `app.photographyClient !== null`**.
 
-1. **Build the notifier** with a getter closure: `let server; const notifier = singleServerNotifier(() => server)`. The getter returns `undefined` at this point — that is fine; notifier methods are only called at runtime, well after step 3.
-2. **Build the logger** via `createLogger({transport, notifier, ...config.logging})`. The logger is constructed before `AppContext` so that startup records emitted inside `buildAppContext` ("mcp-paprika starting", authentication, cache hydration) flow through the structured logger rather than the legacy shim. Pre-McpServer log calls that fan out through the notifier silently no-op because the notifier's getter still returns `undefined` — this is safe by design.
-3. **Build the `AppContext`** with that notifier and logger: `const { app, sync } = await buildAppContext(config, notifier)`. `SyncEngine` is constructed inside here and captures the notifier — it never reads `app.server` because there isn't one yet (and `AppContext` has no `server` field by design).
-4. **Build the `McpServer`** (stdio) or session map (HTTP) from the `AppContext` and assign into the closure: `server = buildMcpServer(app)`. From this point forward, notifier method calls resolve to a real server.
-5. **`server.connect` / `app.listen`** — begin accepting protocol traffic.
+### Invariants
 
-If anyone restructures `src/index.ts` or `src/transport/`, preserve this ordering — collapsing it (e.g. trying to construct the server before the `AppContext`) makes the cycle unresolvable.
-
-### Logging behavior at startup
-
-**Startup info record is level-gated.** `buildAppContext` emits `log.info({transport}, "mcp-paprika starting")` as its first act. With the default `MCP_LOG_LEVEL=info`, this record appears in pod logs, stderr, and any configured log file. If an operator sets `MCP_LOG_LEVEL=warn` (or higher), the record is silently suppressed — this is the intentional behavior change vs. the legacy unconditional stderr shim. Operators who need a startup signal at warn+ should keep `MCP_LOG_LEVEL=info` (the default) or rely on process-supervisor logs.
-
-**SIGINT/SIGTERM handler uses `process.stderr.write` directly.** The signal handler in `src/index.ts` does not use the structured logger because the logger may be torn down or never built at signal time (e.g., early startup failure before `createLogger` returns). This is the one intentional production-code exception to the "no `process.stderr.write`" rule.
-
-### buildAppContext
-
-```typescript
-buildAppContext(config: PaprikaConfig, notifier: Notifier): Promise<{ app: AppContext; sync: SyncEngine }>
-```
-
-Process-wide builder. Authenticates the Paprika client, hydrates `DiskCache`, `RecipeStore`, `CategoryStore`, `PantryStore`, `AisleStore`, `GroceryListStore`, `GroceryItemStore`, and `GroceryIngredientStore` from disk, constructs `SyncEngine`, **wires the `sync:complete` → `resourceListChanged` subscriber**, **runs the initial `sync.syncOnce()`**, then calls `buildDiscoverComponents` (which subscribes the vector store to `sync.events` for incremental re-indexing). Returns the assembled `AppContext` plus the `SyncEngine`; the caller starts the background loop with `sync.start()` if `config.sync.enabled`.
-
-Reads `config.sync.pendingWriteTtl` and threads it as `pendingWriteTtlMs` into `RecipeStore`, `CategoryStore`, `PantryStore`, `AisleStore`, `GroceryListStore`, and `GroceryItemStore`. `GroceryIngredientStore` takes no options (no pending-writes). When `config.sync.enabled === false`, `pendingWriteTtlMs = 0` is passed to disable the feature entirely.
-
-**Construction order is load-bearing:**
-
-1. Authenticate (this is where bad credentials fast-fail — `syncOnce()` swallows everything).
-2. Hydrate caches and stores from disk: recipes (RecipeStore), categories (CategoryStore, from `cache.categories.getAll()`), pantry (PantryStore), aisles (AisleStore, filtered `!deleted`), grocery lists (GroceryListStore), grocery items (GroceryItemStore), grocery ingredients (GroceryIngredientStore, filtered `!deleted`), meals (MealStore, filtered `!deleted`), meal types (MealTypeStore). CategoryStore starts empty and `hasSynced = false` on a true cold start (empty disk cache); on warm restart it is pre-populated from disk before the first `syncOnce()`.
-   2.5. **`await buildAuthContext(config, cache)`** — returns `null` for stdio; for HTTP, fetches the OIDC discovery document and assembles all OAuth stores and the provider. Throws on discovery failure (fail-fast: no value running HTTP mode if auth is broken).
-3. Construct `SyncEngine` against a placeholder `AppContext` whose `vectorStore: null`. Safe because `SyncEngine` never reads `vectorStore`. The `auth` value from step 2.5 is passed here.
-   3.5. **Wire the `sync:complete` → `resourceListChanged` subscriber** immediately after `new SyncEngine()`. This subscriber is permanent (never `off()`'d) and calls `notifier.resourceListChanged()` when `changeType` is `"recipes"`, `"grocery-lists"`, `"grocery-items"`, `"menus"`, or `"menu-items"` AND any of `changes.added`, `changes.updated`, or `changes.removedUids` is non-empty. Pantry (`"pantry"`) is excluded — pantry items have no MCP resource surface. Both menu events fire the notification because menuitems are inlined in the `paprika://menu/{uid}` resource. The subscriber narrows by `changeType`.
-4. **`await sync.syncOnce()`.** `CategoryStore` is hydrated from disk on warm restarts but stays empty on cold starts until `syncOnce()` calls `syncReplaceAllEntity` for categories. Cold-start vector indexing in `buildDiscoverComponents` calls `categoryStore.resolveNames(uids)` per recipe; running it before the first sync produces embeddings with empty category names that persist until a recipe mutation forces a re-embed. On warm restarts with unchanged remote hashes the post-build sync emits nothing, so the `sync:complete` subscription never gets the chance to fix it. `syncOnce()` never throws.
-5. Build discover components against the now-hydrated store (`buildDiscoverComponents`), populating `vectorStore`.
-6. Resolve image-gen credentials via `resolveImageGenConfig(config)` and construct `PhotographyClient` (or `null`) — stored as `app.photographyClient`. The "real" `AppContext` with the populated `vectorStore`, `photographyClient`, and `auth` is what the caller receives.
-
-### buildMcpServer
-
-```typescript
-buildMcpServer(app: AppContext): McpServer
-```
-
-Per-session builder. Constructs a fresh `McpServer`, wraps `app` into a `SessionContext` by adding the server reference, and registers all 46 unconditional tools plus the recipe, grocery-list, and menu resource families. The 3 category CRUD tools (`registerCreateCategoryTool`, `registerUpdateCategoryTool`, `registerDeleteCategoryTool`) are always registered. `registerDiscoverTool` is registered only when `app.vectorStore !== null` (semantic search is opt-in via config). `registerGeneratePhotoTool` is registered only when `app.photographyClient !== null` (image generation is opt-in via config).
-
-**Called once for stdio; called once per session for HTTP** (Phase 3). Tool registration is pure — each `registerXxxTool` only closes over the per-session `SessionContext` and calls `server.registerTool(...)`. There is no module-level mutable state, so registering the same tool name on N independent server instances is safe.
-
-## Invariants
-
-- `AppContext` has no `server` field — anything that needs to send a notification goes through `ctx.notifier` instead. This is the load-bearing invariant that makes process-wide state independent of session count.
-- Notifier methods never throw.
-- `buildAppContext` is called exactly once per process; `buildMcpServer` is called once per session.
-- The discover tool is registered iff `app.vectorStore !== null`.
-- The generate_photo tool is registered iff `app.photographyClient !== null` (same opt-in pattern as `vectorStore`/`discover`).
-- `app.auth !== null` iff `config.transport === "http"`. Use-sites check `app.auth === null` to detect stdio mode (mirrors the `vectorStore` optional-feature pattern).
-
-## Dependencies
-
-- **Uses:** `@modelcontextprotocol/sdk` (`McpServer`, `LoggingMessageNotification`), `../paprika/` (`PaprikaClient`, `SyncEngine`), `../cache/` (`RecipeStore`, `CategoryStore`, `PantryStore`, `AisleStore`, `GroceryListStore`, `GroceryItemStore`, `GroceryIngredientStore`, `MealStore`, `MealTypeStore`, `MenuStore`, `MenuItemStore`) and `../cache/disk/` (`DiskCacheRoot`), `../features/` (`VectorStore`, `buildDiscoverComponents`, `PhotographyClient`), `../tools/` (all `register*Tool` functions), `../resources/` (`registerRecipeResources`, `registerGroceryListResources`, `registerMenuResources`), `../utils/` (`PaprikaConfig`, `getCacheDir`, `resolveImageGenConfig`), `../auth/` (`buildAuthContext`)
-- **Used by:** `src/index.ts` (stdio entry point); `src/transport/http.ts` calls `buildAppContext` once and `buildMcpServer` per session
-- **Boundary:** This is the composition root — it is allowed to import from every other src directory. Other src directories must not import from `src/server/` back into themselves except via `import type` (e.g., `src/types/server-context.ts` and `src/paprika/sync.ts` import `AppContext`/`SessionContext` types from here).
+- `app.auth !== null` **iff** `config.transport === "http"`. Use-sites check `app.auth === null` to detect stdio mode (mirrors the `vectorStore` optional-feature pattern).
+- `buildAppContext` runs exactly once per process; `buildMcpServer` runs once per session.
+- This directory is the composition root: it may import from every other `src/` directory. Other directories must not import from `src/server/` except via `import type` (e.g., `src/types/server-context.ts` and `src/paprika/sync.ts` pull the context types).

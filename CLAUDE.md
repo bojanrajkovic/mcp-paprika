@@ -1,132 +1,70 @@
-# mcp-paprika
+# CLAUDE.md — AI Agent Index
 
-Last verified: 2026-05-31
+Last verified: 2026-06-01
 
-MCP server for the Paprika recipe manager. Two transports: **stdio** (default; unauthenticated local pipe used by Claude Desktop, Claude Code, Cursor, mcp-cli) and **Streamable HTTP** (used by Claude Mobile and other remote MCP clients; ships with OAuth 2.1 + OIDC delegation). Selected via `MCP_TRANSPORT=stdio|http`.
+> **Keep this file lean.** It is the project-wide pointer index for agents. Detailed docs live under `docs/`; the human dev workflow lives in `CONTRIBUTING.md`; the rules that govern the doc system live in `docs/documentation-system.md`. When you change a feature, update its architecture doc or the relevant directory `CLAUDE.md`, not this index.
 
-**Logging:** The process-wide pino logger lives at `app.log` (constructed inside `buildAppContext`). Components create children via `app.log.child({ component: "<flat-name>" })`. Records at or above `MCP_LOG_NOTIFY_LEVEL` (default `warn`) fan out to connected MCP clients automatically. See `src/utils/CLAUDE.md` for the full logger contract.
+## Project
 
-**Stdio note:** when running in stdio mode, `console.log` writes to stdout which is the MCP wire format. Any stray console output corrupts the protocol. Component code must use the structured logger (`ctx.log` / child loggers); the `no-console` oxlint rule enforces this. Direct `process.stderr.write` is reserved for two documented exceptions: the SIGINT/SIGTERM handler in `src/index.ts` (logger may be torn down) and the `MCP_HTTP_*` misconfiguration warning in `src/transport/stdio.ts` (emitted before `buildAppContext` runs).
+**mcp-paprika** — an MCP server for the Paprika recipe manager. Two transports, selected by `MCP_TRANSPORT`: **stdio** (default; unauthenticated local pipe for Claude Desktop/Code, Cursor, mcp-cli) and **Streamable HTTP** (remote clients; OAuth 2.1 + OIDC delegation). See `docs/architecture.md` for the shape and `docs/adr/` for the decisions behind it.
 
-## Tech Stack
+## Tech stack
 
-- **Runtime:** Node.js 24 (managed via mise)
-- **Language:** TypeScript 5.9 (extends `@tsconfig/strictest` + `@tsconfig/node24`)
-- **Module system:** ESM (`"type": "module"`)
-- **Package manager:** pnpm 11.1.2 (corepack-managed)
-- **Key dependencies:** @modelcontextprotocol/sdk (MCP protocol), hono + @hono/mcp + @hono/node-server (HTTP transport), zod (validation), luxon (dates), dotenv (env config), parse-duration (duration parsing), env-paths (XDG directories), neverthrow (error handling), cockatiel (resilience/retry), mitt (event emitter), jose (OIDC/JWT), hono-rate-limiter (OAuth DCR rate limiting), async-mutex (per-subcache write serialization), pino + pino-pretty (structured logging), sharp (image normalization for photo uploads)
-- **Container:** distroless `gcr.io/distroless/nodejs24-debian13:nonroot` runtime; 3-stage Dockerfile (builder → prod-deps prune → distroless)
+TypeScript 6 (ESM, `@tsconfig/strictest`) on Node.js 24 (mise-managed), pnpm via corepack. MCP via `@modelcontextprotocol/sdk`; HTTP via hono; validation via zod; errors via neverthrow; resilience via cockatiel; logging via pino; image normalization via sharp. The full dependency set lives in `package.json` and is not re-listed here. Ships as a distroless container (3-stage Dockerfile).
 
 ## Commands
 
-| Command                  | Description                                                                                                                                                                                                                                                                                                        |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `pnpm build`             | Compile TypeScript to `dist/`                                                                                                                                                                                                                                                                                      |
-| `pnpm dev`               | Run dev server via tsx                                                                                                                                                                                                                                                                                             |
-| `pnpm test`              | Run vitest test suite                                                                                                                                                                                                                                                                                              |
-| `pnpm test:watch`        | Run vitest in watch mode                                                                                                                                                                                                                                                                                           |
-| `pnpm typecheck`         | Type-check source (`tsc --noEmit`) and test files + fixtures (`tsc --noEmit -p tsconfig.test.json`). `tsconfig.json` excludes `*.test.ts`, `__tests__/`, `__fixtures__/`, and `*test-utils*`; `tsconfig.test.json` extends it but includes everything, with `noEmit`/no-declaration so build output is unaffected. |
-| `pnpm lint`              | Run oxlint with `--deny-warnings` on `src/`                                                                                                                                                                                                                                                                        |
-| `pnpm lint:fix`          | Run oxlint with `--fix` on `src/`                                                                                                                                                                                                                                                                                  |
-| `pnpm format`            | Format all files with oxfmt                                                                                                                                                                                                                                                                                        |
-| `pnpm format:check`      | Check formatting without writing changes                                                                                                                                                                                                                                                                           |
-| `pnpm prepare`           | Install lefthook git hooks (runs automatically after `pnpm install`)                                                                                                                                                                                                                                               |
-| `pnpm generate:fixtures` | Regenerate typed TypeScript fixture modules from HAR wire captures in `docs/wire-captures/`. Run after editing or adding `.har.json` files.                                                                                                                                                                        |
+`pnpm dev` · `pnpm build` · `pnpm test` · `pnpm typecheck` · `pnpm lint` · `pnpm format`. Full reference and dev setup: `CONTRIBUTING.md`.
 
-## Project Structure
+## Project structure
 
-- `src/index.ts` — Transport dispatcher: loads config, dispatches to `startStdio` or `startHttp` based on `config.transport`, wires SIGINT/SIGTERM to the returned handle's `shutdown()`
-- `src/transport/` — Transport-specific entry points: `stdio.ts` (deferred-getter notifier, sync, then `server.connect(new StdioServerTransport())`) and `http.ts` (Hono app with `GET /healthz` + `ALL /mcp`, session map, graceful shutdown that aborts SSE streams before closing the HTTP server). `startHttp` returns an `HttpTransportHandle` with the bound port (useful for tests passing `port: 0`)
-- `src/server/` — Process-wide composition root: `AppContext`/`SessionContext` types, `Notifier` abstraction (`singleServerNotifier`, `broadcastNotifier`), `buildAppContext` (heavyweight shared state; constructs the pino root logger and threads it through `AppContext.log`, `AuthContext.log`, and `PaprikaClient`; AppContext includes `categoryStore` and three grocery store fields: `groceryListStore`, `groceryItemStore`, `groceryIngredientStore`; constructs `PhotographyClient` via `resolveImageGenConfig`) and `buildMcpServer` (per-session tool/resource registration; 46 unconditional tools; discover tool gated on `vectorStore !== null`; generate_photo tool gated on `photographyClient !== null`)
-- `src/paprika/` — Paprika API client with pantry, grocery, category, and recipe read and write support (`listPantry()`, `savePantryItems()`, `listGroceryLists()`, `listGroceryItems()`, `listGroceryIngredients()`, `saveGroceryList()`, `saveGroceryItems()`, `saveGroceryIngredient()`, `saveCategory()`, `deleteCategory()` methods)
-- `src/cache/` — In-memory stores (`RecipeStore`, `CategoryStore`, `PantryStore`, `AisleStore`, `GroceryListStore`, `GroceryItemStore`, `GroceryIngredientStore`) plus the persistence layer at `src/cache/disk/` (`DiskCacheRoot` and per-entity subcaches, including `groceryLists`, `groceryItems`, `groceryIngredients`)
-- `src/tools/` — MCP tool definitions including category write tools (`create_category`, `update_category`, `delete_category`) in `category-writes.ts` with commit helpers in `category-helpers.ts`; read tools (`list_pantry`, `get_pantry_item`) and write tools (`add_pantry_items`, `update_pantry_item`, `delete_pantry_item`) for pantry access; grocery list tools (`list_grocery_lists`, `read_grocery_list`, `create_grocery_list`, `rename_grocery_list`, `delete_grocery_list`) in `grocery-list.ts`; grocery item tools (`add_grocery_items`, `update_grocery_item`, `delete_grocery_item`) in `grocery-item.ts`; cross-entity tools (`move_to_pantry`) in `grocery-move.ts` and (`clear_purchased`, `clear_all`) in `grocery-clear.ts`; meal write tools (`add_meals`, `update_meal`, `delete_meal`) in `meal-writes.ts`; meal commit helpers, shared schema, and markdown in `meal-helpers.ts`; recipe photo write tools (`upload_photo`, `delete_photo`) in `photo-writes.ts` with `sharp`-based image normalization and commit helpers in `photo-helpers.ts`; AI-generated photo tool (`generate_photo`) in `photo-generate.ts` (gated on `photographyClient !== null`)
-- `src/resources/` — MCP resource definitions including `paprika://recipe/{uid}` resource template and `paprika://grocery-list/{uid}` resource template
-- `src/features/` — Feature implementations (semantic search wiring via `EmbeddingClient`/`VectorStore`/`buildDiscoverComponents`; photo generation via `PhotographyClient`/`recipeToPhotoPrompt`/`photography-errors.ts`; tool registration happens in `src/server/build.ts`)
-- `src/types/` — Shared type definitions including `PantryItem` and branded `PantryItemUid`; `ServerContext` is a backward-compat alias re-exporting `SessionContext` from `src/server/`
-- `src/utils/` — Cross-cutting utilities: `config.ts` (with `transport`/`http`/`oauth`/`logging`/`features.imageGen` schema blocks and `resolveImageGenConfig`), `log.ts` (pino root logger factory with credential-redact policy and notifier fan-out stream), `resilience.ts` (shared cockatiel retry+circuit-breaker executor used by `EmbeddingClient` and `PhotographyClient`), `xdg.ts`, `duration.ts`, `dates.ts`
-- `src/auth/` — OAuth 2.1 authorization-server surface (DCR, authorize, token, revoke), OIDC upstream client, opaque-token minting + persistence, and identity allowlist. Loaded only when `MCP_TRANSPORT=http`.
-- `scripts/` — Build and verification scripts (run via `npx tsx`), plus `healthcheck.mjs` (zero-dep Node script used by the Dockerfile HEALTHCHECK), `generate-har-fixtures.ts` (HAR → typed fixture codegen), `decode-capture.py` (mitmproxy addon: decodes captures to JSON for inspection), and `decode-to-har.py` (mitmproxy addon: emits sanitized HAR 1.2 directly from a `.mitm` file given a JSON comments sidecar)
-- `docs/wire-captures/` — Sanitized HAR 1.2 recordings of Paprika Cloud Sync API traffic captured via mitmproxy. Named entries cover menus, meals, reference GET shapes for all entity types, and write/POST operations for all entity types (`writes.har.json`). See `docs/wire-captures/README.md`
-- `Dockerfile` + `.dockerignore` — 3-stage container build targeting `gcr.io/distroless/nodejs24-debian13:nonroot`; pre-creates `/data/{config,cache}` with nonroot ownership so the disk cache writes work on first run
-- `.github/workflows/` — CI and PR validation workflows
+- `src/index.ts`, `src/transport/` — transport dispatch and the stdio / Streamable-HTTP entry points.
+- `src/server/` — the composition root: `AppContext`/`SessionContext`, the `Notifier` abstraction, and the `buildAppContext`/`buildMcpServer` builders. See `src/server/CLAUDE.md`.
+- `src/paprika/` — the Paprika cloud-sync HTTP client and the background sync engine. Wire formats: `docs/wire-format.md`.
+- `src/cache/` — in-memory entity stores over the `src/cache/disk/` per-entity disk cache.
+- `src/tools/` — the MCP tool surface (registered in `src/server/build.ts`). Tool-vs-resource rationale: `docs/adr/0004-tool-vs-resource-classification.md`.
+- `src/resources/` — MCP resource templates (`paprika://recipe/{uid}`, grocery-list, menu).
+- `src/features/` — semantic search (embeddings + the vendored vector index) and AI photo generation.
+- `src/auth/` — the OAuth 2.1 authorization-server surface; loaded only under the HTTP transport.
+- `src/utils/` — config (Zod schema), logging, resilience, dates, XDG paths.
+- `scripts/`, `docs/wire-captures/`, `Dockerfile`, `.github/workflows/` — tooling, sanitized wire captures, container build, CI.
 
-## Code Conventions
+For per-directory detail, read that directory's `CLAUDE.md`. For current counts and inventories (tools, stores, fields, env vars), read the source (the registry in `src/server/build.ts`, the Zod schemas, `package.json`); this index does not enumerate them.
 
-### Imports and Modules
+## Documentation map
 
-- ESM-only: use `import`/`export`, never CommonJS
-- Always use `.js` extensions in relative imports (e.g., `import { foo } from "./bar.js"`)
-- Prefer named exports over default exports
+| Topic                                   | Home                           |
+| --------------------------------------- | ------------------------------ |
+| How it works (current architecture)     | `docs/architecture.md`         |
+| Decisions, and why                      | `docs/adr/`                    |
+| Reverse-engineered Paprika wire formats | `docs/wire-format.md`          |
+| Configuration (env vars, paths)         | `docs/configuration.md`        |
+| Tools reference                         | `docs/tools/`                  |
+| Embedding providers                     | `docs/embedding-providers.md`  |
+| Releasing                               | `docs/releasing.md`            |
+| Doc-system governance                   | `docs/documentation-system.md` |
+| Human dev workflow                      | `CONTRIBUTING.md`              |
 
-### TypeScript Style
+## Invariants
 
-- Strict mode via `@tsconfig/strictest` — no `any`, no implicit returns, no unused variables
-- Use `interface` for object shapes that may be extended, `type` for unions and intersections
-- Prefer `readonly` properties where mutation is not needed
+- **Conventional Commits**, enforced by the `commit-msg` hook (`@commitlint/config-conventional`); atomic commits. See `CONTRIBUTING.md`.
+- **Three-tier hooks** — pre-commit (oxfmt + oxlint), commit-msg (commitlint), pre-push (typecheck + test); CI re-runs them. Don't bypass.
+- **ESM with `.js` import extensions**, strict TypeScript, `readonly` by default.
+- **neverthrow in the core** — `Result` with `.match()` / `.andThen()`; never `.isOk()` / `.isErr()`; never throw in core logic. Exceptions live only at infra boundaries.
+- **No `console`** — stdout is the MCP wire in stdio mode; use `ctx.log`. The `no-console` oxlint rule enforces it. Two documented `process.stderr.write` exceptions: `src/index.ts` and `src/transport/stdio.ts`.
+- **Slim directory `CLAUDE.md`** — each one points at its canonical doc plus reactively-accreted Sharp edges; it is not a mini architecture doc. See `docs/documentation-system.md`.
+- **`AGENTS.md` symlinks** — every `CLAUDE.md` has a sibling `AGENTS.md` symlink, so agents that look for `AGENTS.md` get the same guidance; the symlink keeps the two identical.
+- **Reference content is read from source, never enumerated in prose** — counts, store lists, field tables, and env dumps live in the registry, the Zod schemas, and `package.json`, not here. See `docs/documentation-system.md`.
 
-### Error Handling
+## Planning and design
 
-- Use neverthrow `Result<T, E>` for operations that can fail in the functional core
-- Never throw exceptions in core business logic — return `Result.err()` instead
-- Define specific error classes (e.g., `RecipeNotFoundError`) with static factory methods
-- Validate inputs with Zod schemas at system boundaries
-- **Always use idiomatic neverthrow patterns** — `.match()`, `.andThen()`, `.map()`, `.mapErr()`. Never use `.isOk()` / `.isErr()` imperative checks; treat `Result` as an opaque monad.
+When planning or designing a change here:
 
-### No Console
-
-`console.log` is banned via the `no-console` oxlint rule. In stdio transport, stdout carries the MCP wire format and any stray output corrupts the protocol. Use the structured logger (`ctx.log.child({ component: "..." })`) for diagnostics; the logger routes around stdout automatically.
-
-## Testing
-
-- **Runner:** vitest
-- **Test location:** Colocated with source as `src/**/*.test.ts`
-- **Property-based tests:** `*.property.test.ts` (using fast-check)
-- **Integration tests:** `*.test.integration.ts`
-- **HTTP mocking:** msw (Mock Service Worker) for intercepting fetch in tests
-- **Coverage target:** ≥ 70% for new code
-
-## Git Conventions
-
-### Commit Format
-
-Conventional commits: `<type>(<scope>): <description>`
-
-Types: `feat`, `fix`, `perf`, `refactor`, `docs`, `test`, `ci`, `build`, `chore`, `revert`, `style`
-
-Breaking changes: use `!` after type (e.g., `feat!: change API`) or `BREAKING CHANGE:` footer.
-
-### Hooks
-
-Git hooks managed by lefthook, activated via `pnpm install` (the `prepare` script).
-
-- **pre-commit:** oxfmt formats staged files (auto-restages), oxlint checks staged `.ts` files
-- **commit-msg:** commitlint validates conventional commit format
-- **pre-push:** runs `pnpm typecheck` and `pnpm test` before push
-
-Hooks must not be bypassed. Fix issues before committing. If you commit before running `pnpm install`, hooks will not fire.
-
-### Pull Requests
-
-This project squash merges PRs, so the PR body becomes the merge commit description. Write it as "what shipped in this commit" — readable months later in `git log`. Open with a one-or-two-sentence lead (no `## Summary` header — the title is the summary), then bulleted or paragraph detail. Transient content (test plans, verification checklists, screenshots) goes in a PR comment posted after the PR is created, not in the body.
-
-### CI
-
-GitHub Actions run on every PR and push to `main`:
-
-- **CI workflow** (`ci.yml`): format check, lint, security audit, build, test
-- **PR title workflow** (`pr-title.yml`): validates PR titles match conventional commit format
-
-PRs must pass all checks before merge.
-
-## Version Sync
-
-- `packageManager` field in `package.json` must match the pnpm version managed by corepack
-- `engines.node` must match the Node.js version in `mise.toml`
-- `node-version` in `.github/workflows/ci.yml` must match the Node.js version in `mise.toml`
-
-## Boundaries
-
-- `dist/` and `node_modules/` are gitignored — never edit
-- `.env` files contain secrets — never commit
-- `pnpm-lock.yaml` is auto-generated — do not hand-edit
+1. **Ground yourself in the docs and code, and verify before you assert.** Read the relevant directory `CLAUDE.md`, `docs/architecture.md`, the ADRs, and the actual source before proposing. A section heading, your memory, or a subagent's framing is not evidence; grep or read to confirm a claim before you build on it.
+2. **Gather the task's context up front.** Pull what is already true in the codebase, the constraints, and the prior decisions into the planning context early, instead of rediscovering them mid-build.
+3. **Ask clarifying questions freely, and name your assumptions out loud.** When scope, direction, or a preference is even slightly unclear, ask: a thorough `AskUserQuestion` pass beats a confident wrong guess. When you do have to assume, say so.
+4. **Pin "done" and "out of scope" before designing.** Name the deliverable, the success criteria, and what you are explicitly _not_ doing. This is the line between a plan and a brainstorm, and the thing that keeps a change from sprawling.
+5. **Brainstorm two or three alternatives: don't ship the first idea**, each with its hazards and its fit to what already exists. Hold two forces in tension: prefer the smallest change that fits the existing patterns (don't build a framework for a future that may never arrive), _and_ invest in the right abstraction when the repetition is real or clearly coming. The discriminator is demonstrated-vs-speculative: `EntityStore` / `TombstoneEntityStore` and the per-entity disk caches were _extracted as refactors_ (consolidating plumbing already duplicated across stores, and shaped so the next entity is nearly free), which is why categories later just `extends TombstoneEntityStore`. When you do extract, design it to generalize cleanly; when you lack the evidence, copy first and abstract on the third.
+6. **Be adversarial: attack your own proposal.** Hunt the failure mode, the edge case, the thing that breaks under concurrency, a hostile input, or a partial sync. A design no one tried to break is untested.
+7. **Record decisions with real alternatives as ADRs, at decision time.** If a choice had alternatives someone might later question, write the ADR while the reasoning is fresh; backfilling it later costs more and loses detail. See `docs/documentation-system.md` for which decisions are ADR-worthy.
+8. **Update the docs as part of the change, not after.** The affected `docs/architecture.md`, the directory `CLAUDE.md` sharp edges, and any ADRs are part of "done": a change whose docs still describe the old world isn't finished.

@@ -4,7 +4,7 @@ An [MCP](https://modelcontextprotocol.io/) server for [Paprika](https://www.papr
 
 ## Features
 
-- **40 tools** for recipe, pantry, grocery, meal-planner, and menu management — search, filter, CRUD, categories, pagination, pantry inventory, aisles, grocery lists and items, meal planning (history, meal types, dated planner entries), and menus (recipe collections, their items, and one-shot add-to-planner)
+- **Full tool coverage** for recipe, pantry, grocery, meal-planner, and menu management — search, filter, CRUD, categories, pagination, pantry inventory, aisles, grocery lists and items, meal planning (history, meal types, dated planner entries), and menus (recipe collections, their items, and one-shot add-to-planner)
 - **Semantic search** via `discover_recipes` — find recipes by natural language description using any OpenAI-compatible embedding provider
 - **AI recipe photos** via `generate_photo` — generate a styled food photo for a recipe (or restyle its existing one) using OpenRouter image models, and attach it automatically
 - **Background sync** — keeps your local cache in sync with Paprika's cloud
