@@ -92,7 +92,7 @@ Orientation:
 - Lookup: use search_recipes for name / ingredient / description matching; use discover_recipes (present only when semantic search is configured) for natural-language queries.
 - Only recipe deletes are reversible: a deleted recipe moves to the trash, and empty_trash then permanently removes one already there. Deleting anything else (grocery items, pantry items, menu items, lists) is immediate and permanent.
 - When scheduling a meal or adding a menu item, link an existing recipe by its UID OR give a freeform name, never both; they are mutually exclusive. Grocery items take no recipe link; add_grocery_items wants an ingredient, quantity, and aisle.
-- generate_photo attaches the image and returns its photo UID by default. With attach:false it returns a preview plus a single-use token instead; pass that token to upload_photo to attach it later.
+- generate_photo (present only when image generation is configured) attaches the image and returns its photo UID by default. With attach:false it returns a preview plus a single-use token instead; pass that token to upload_photo to attach it later.
 - Data is served from a local cache kept fresh by background sync, so it can briefly lag changes made directly in the Paprika apps.`;
 
 /**
