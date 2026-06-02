@@ -3,42 +3,52 @@ import { join } from "node:path";
 import type { Logger } from "pino";
 import { z } from "zod";
 
-import { OAuthTokenSchema } from "../../auth/types.js";
-import type { OAuthToken } from "../../auth/types.js";
-import { AisleStoredSchema } from "../../aisle/types.js";
-import { CategoryStoredSchema } from "../../category/types.js";
-import { GroceryIngredientStoredSchema } from "../../grocery-ingredient/types.js";
-import { GroceryItemStoredSchema } from "../../grocery-item/types.js";
-import { GroceryListStoredSchema } from "../../grocery-list/types.js";
-import { MealTypeStoredSchema } from "../../meal-type/types.js";
-import { MealStoredSchema } from "../../meal/types.js";
-import { MenuItemStoredSchema } from "../../menu-item/types.js";
-import { MenuStoredSchema } from "../../menu/types.js";
-import { PantryItemStoredSchema } from "../../pantry/types.js";
-import { PhotoStoredSchema } from "../../photo/types.js";
-import type { Aisle } from "../../aisle/types.js";
-import type { Category } from "../../category/types.js";
-import type { GroceryIngredient } from "../../grocery-ingredient/types.js";
-import type { GroceryItem } from "../../grocery-item/types.js";
-import type { GroceryList } from "../../grocery-list/types.js";
-import type { MealType } from "../../meal-type/types.js";
-import type { Meal } from "../../meal/types.js";
-import type { MenuItem } from "../../menu-item/types.js";
-import type { Menu } from "../../menu/types.js";
-import type { PantryItem } from "../../pantry/types.js";
-import type { Photo } from "../../photo/types.js";
-import { isNodeError } from "../../utils/errors.js";
-import { SILENT_LOG } from "../../utils/log.js";
+import { aisleDiskDescriptor } from "../aisle/disk.js";
+import { categoryDiskDescriptor } from "../category/disk.js";
+import { groceryIngredientDiskDescriptor } from "../grocery-ingredient/disk.js";
+import { groceryItemDiskDescriptor } from "../grocery-item/disk.js";
+import { groceryListDiskDescriptor } from "../grocery-list/disk.js";
+import { mealDiskDescriptor } from "../meal/disk.js";
+import { mealTypeDiskDescriptor } from "../meal-type/disk.js";
+import { menuDiskDescriptor } from "../menu/disk.js";
+import { menuItemDiskDescriptor } from "../menu-item/disk.js";
+import { pantryDiskDescriptor } from "../pantry/disk.js";
+import { photoDiskDescriptor } from "../photo/disk.js";
+import { RecipeDiskCache } from "../recipe/disk.js";
+import { OAuthTokenSchema } from "../auth/types.js";
+import type { OAuthToken } from "../auth/types.js";
+import type { Aisle } from "../aisle/types.js";
+import type { Category } from "../category/types.js";
+import type { GroceryIngredient } from "../grocery-ingredient/types.js";
+import type { GroceryItem } from "../grocery-item/types.js";
+import type { GroceryList } from "../grocery-list/types.js";
+import type { MealType } from "../meal-type/types.js";
+import type { Meal } from "../meal/types.js";
+import type { MenuItem } from "../menu-item/types.js";
+import type { Menu } from "../menu/types.js";
+import type { PantryItem } from "../pantry/types.js";
+import type { Photo } from "../photo/types.js";
+import { isNodeError } from "../utils/errors.js";
+import { SILENT_LOG } from "../utils/log.js";
 
-import { DiskCache, writeFileAtomic } from "./base.js";
-import { OAuthClientDiskCache } from "./oauth-clients.js";
-import { RecipeDiskCache } from "./recipes.js";
+import { DiskCache, writeFileAtomic } from "./disk-cache.js";
+import type { DiskCacheDescriptor } from "./disk-cache.js";
+import { OAuthClientDiskCache } from "./oauth-client-disk-cache.js";
 
 // Schema for the recipes namespace inside the legacy unified index.json.
 // Only this namespace is migrated — other namespaces stored empty-string
 // placeholders equivalent to a directory listing, which the new per-entity
 // init() rebuilds from `readdir` anyway.
 const LegacyRecipeIndexSchema = z.record(z.string(), z.string());
+
+// oauthTokens has no Paprika-entity home: it's an auth-layer concern the
+// persistence root tracks alongside the entities, so its descriptor lives
+// here rather than in a `<entity>/disk.ts`.
+const oauthTokensDiskDescriptor: DiskCacheDescriptor<OAuthToken> = {
+  subdir: "oauthTokens",
+  parse: (raw) => OAuthTokenSchema.parse(raw),
+  getKey: (t) => t.tokenHash,
+};
 
 interface InitFlushable {
   init(): Promise<void>;
@@ -80,80 +90,31 @@ export class DiskCacheRoot {
     this.log = log ?? SILENT_LOG;
 
     const logOpts = log !== undefined ? { log } : {};
+    const make = <T>(descriptor: DiskCacheDescriptor<T>): DiskCache<T> =>
+      new DiskCache<T>({
+        subdir: join(cacheDir, descriptor.subdir),
+        parse: descriptor.parse,
+        getKey: descriptor.getKey,
+        ...logOpts,
+      });
+
+    // recipes and oauthClients carry behavior beyond a descriptor (a hash
+    // index for diffing; an atomic client-cap), so they subclass DiskCache
+    // and are constructed directly; every other subcache is `make(descriptor)`.
     this.recipes = new RecipeDiskCache({ subdir: join(cacheDir, "recipes"), ...logOpts });
-    this.categories = new DiskCache<Category>({
-      subdir: join(cacheDir, "categories"),
-      parse: (raw) => CategoryStoredSchema.parse(raw),
-      getKey: (c) => c.uid,
-      ...logOpts,
-    });
-    this.pantry = new DiskCache<PantryItem>({
-      subdir: join(cacheDir, "pantry"),
-      parse: (raw) => PantryItemStoredSchema.parse(raw),
-      getKey: (i) => i.uid,
-      ...logOpts,
-    });
-    this.aisles = new DiskCache<Aisle>({
-      subdir: join(cacheDir, "aisles"),
-      parse: (raw) => AisleStoredSchema.parse(raw),
-      getKey: (a) => a.uid,
-      ...logOpts,
-    });
+    this.categories = make(categoryDiskDescriptor);
+    this.pantry = make(pantryDiskDescriptor);
+    this.aisles = make(aisleDiskDescriptor);
     this.oauthClients = new OAuthClientDiskCache({ subdir: join(cacheDir, "oauthClients"), ...logOpts });
-    this.oauthTokens = new DiskCache<OAuthToken>({
-      subdir: join(cacheDir, "oauthTokens"),
-      parse: (raw) => OAuthTokenSchema.parse(raw),
-      getKey: (t) => t.tokenHash,
-      ...logOpts,
-    });
-    this.groceryLists = new DiskCache<GroceryList>({
-      subdir: join(cacheDir, "grocerylists"),
-      parse: (raw) => GroceryListStoredSchema.parse(raw),
-      getKey: (l) => l.uid,
-      ...logOpts,
-    });
-    this.groceryItems = new DiskCache<GroceryItem>({
-      subdir: join(cacheDir, "groceryitems"),
-      parse: (raw) => GroceryItemStoredSchema.parse(raw),
-      getKey: (i) => i.uid,
-      ...logOpts,
-    });
-    this.groceryIngredients = new DiskCache<GroceryIngredient>({
-      subdir: join(cacheDir, "groceryingredients"),
-      parse: (raw) => GroceryIngredientStoredSchema.parse(raw),
-      getKey: (i) => i.uid,
-      ...logOpts,
-    });
-    this.meals = new DiskCache<Meal>({
-      subdir: join(cacheDir, "meals"),
-      parse: (raw) => MealStoredSchema.parse(raw),
-      getKey: (m) => m.uid,
-      ...logOpts,
-    });
-    this.mealTypes = new DiskCache<MealType>({
-      subdir: join(cacheDir, "mealtypes"),
-      parse: (raw) => MealTypeStoredSchema.parse(raw),
-      getKey: (mt) => mt.uid,
-      ...logOpts,
-    });
-    this.menus = new DiskCache<Menu>({
-      subdir: join(cacheDir, "menus"),
-      parse: (raw) => MenuStoredSchema.parse(raw),
-      getKey: (m) => m.uid,
-      ...logOpts,
-    });
-    this.menuItems = new DiskCache<MenuItem>({
-      subdir: join(cacheDir, "menuitems"),
-      parse: (raw) => MenuItemStoredSchema.parse(raw),
-      getKey: (mi) => mi.uid,
-      ...logOpts,
-    });
-    this.photos = new DiskCache<Photo>({
-      subdir: join(cacheDir, "photos"),
-      parse: (raw) => PhotoStoredSchema.parse(raw),
-      getKey: (p) => p.uid,
-      ...logOpts,
-    });
+    this.oauthTokens = make(oauthTokensDiskDescriptor);
+    this.groceryLists = make(groceryListDiskDescriptor);
+    this.groceryItems = make(groceryItemDiskDescriptor);
+    this.groceryIngredients = make(groceryIngredientDiskDescriptor);
+    this.meals = make(mealDiskDescriptor);
+    this.mealTypes = make(mealTypeDiskDescriptor);
+    this.menus = make(menuDiskDescriptor);
+    this.menuItems = make(menuItemDiskDescriptor);
+    this.photos = make(photoDiskDescriptor);
 
     this._subcaches = [
       this.recipes,

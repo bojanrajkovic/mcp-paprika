@@ -19,7 +19,7 @@ config({ path: "/Users/brajkovic/Library/Preferences/mcp-paprika/.env", quiet: t
 
 const projectRoot = "/Users/brajkovic/Projects/mcp-paprika";
 const { PaprikaClient } = await import(resolvePath(projectRoot, "dist/paprika/client.js"));
-const { DiskCacheRoot } = await import(resolvePath(projectRoot, "dist/cache/disk/index.js"));
+const { DiskCacheRoot } = await import(resolvePath(projectRoot, "dist/cache/disk-cache-root.js"));
 const { RecipeStore } = await import(resolvePath(projectRoot, "dist/recipe/store.js"));
 const { MealStore } = await import(resolvePath(projectRoot, "dist/meal/store.js"));
 const { MealTypeStore } = await import(resolvePath(projectRoot, "dist/meal-type/store.js"));

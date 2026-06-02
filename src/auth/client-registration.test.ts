@@ -10,7 +10,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 
-import { DiskCacheRoot } from "../cache/disk/index.js";
+import { DiskCacheRoot } from "../cache/disk-cache-root.js";
 import { hashTokenForStorage } from "./tokens.js";
 import { OAuthMetadataValidationError, OAuthClientNotFoundError } from "./errors.js";
 import { DiskClientRegistrationStore } from "./client-registration.js";

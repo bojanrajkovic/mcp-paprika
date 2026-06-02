@@ -3,15 +3,15 @@ import { mkdtemp, readFile, readdir, stat, rm, writeFile } from "node:fs/promise
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
-import type { RecipeUid, PantryItemUid } from "../../ids.js";
-import { DiskCacheRoot } from "./index.js";
-import { makeRecipe, makeCategory } from "../__fixtures__/recipes.js";
-import { makePantryItem } from "../__fixtures__/pantry.js";
-import { makeOAuthClient, makeOAuthToken } from "../__fixtures__/oauth.js";
-import { makeGroceryList } from "../__fixtures__/grocery-lists.js";
-import { makeGroceryItem } from "../__fixtures__/grocery-items.js";
-import { makeGroceryIngredient } from "../__fixtures__/grocery-ingredients.js";
-import { makePinoCapture } from "../../tools/tool-test-utils.js";
+import type { RecipeUid, PantryItemUid } from "../ids.js";
+import { DiskCacheRoot } from "./disk-cache-root.js";
+import { makeRecipe, makeCategory } from "./__fixtures__/recipes.js";
+import { makePantryItem } from "./__fixtures__/pantry.js";
+import { makeOAuthClient, makeOAuthToken } from "./__fixtures__/oauth.js";
+import { makeGroceryList } from "./__fixtures__/grocery-lists.js";
+import { makeGroceryItem } from "./__fixtures__/grocery-items.js";
+import { makeGroceryIngredient } from "./__fixtures__/grocery-ingredients.js";
+import { makePinoCapture } from "../tools/tool-test-utils.js";
 
 // Mock fs/promises so the rename used by the recipes index temp-then-rename
 // can be made to fail on demand. The factory imports the real module and

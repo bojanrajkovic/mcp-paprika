@@ -17,7 +17,7 @@ import { generateOpaqueToken, hashTokenForStorage, nowSeconds } from "./tokens.j
 import { validateRegistration, validateUpdate } from "./dcr-validator.js";
 import { OAuthClientNotFoundError } from "./errors.js";
 import type { OAuthClient } from "./types.js";
-import type { DiskCacheRoot } from "../cache/disk/index.js";
+import type { DiskCacheRoot } from "../cache/disk-cache-root.js";
 
 // ============================================================================
 // Wire Format Conversion

@@ -1,0 +1,9 @@
+import type { DiskCacheDescriptor } from "../cache/disk-cache.js";
+import { MenuItemStoredSchema } from "./types.js";
+import type { MenuItem } from "./types.js";
+
+export const menuItemDiskDescriptor: DiskCacheDescriptor<MenuItem> = {
+  subdir: "menuitems",
+  parse: (raw) => MenuItemStoredSchema.parse(raw),
+  getKey: (mi) => mi.uid,
+};

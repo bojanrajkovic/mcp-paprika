@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { PaprikaClient } from "./paprika/client.js";
 import { AisleStore } from "./aisle/store.js";
-import { DiskCacheRoot } from "./cache/disk/index.js";
+import { DiskCacheRoot } from "./cache/disk-cache-root.js";
 import { makeAppContext } from "./__fixtures__/app-context.js";
 import { RecipeStore } from "./recipe/store.js";
 import { PantryStore } from "./pantry/store.js";

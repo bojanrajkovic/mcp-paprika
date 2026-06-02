@@ -3,7 +3,7 @@ import { createRequire } from "node:module";
 
 import type { Logger } from "pino";
 
-import type { DiskCache } from "../cache/disk/base.js";
+import type { DiskCache } from "../cache/disk-cache.js";
 import type { TombstoneEntityStore } from "../entity/tombstone-store.js";
 import type { AppContext } from "../server/app-context.js";
 import type { Category } from "../category/types.js";
