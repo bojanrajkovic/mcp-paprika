@@ -107,7 +107,7 @@ All use ES2022+ `ErrorOptions` for `cause` chaining. `this.name` matches class n
 
 Investigation found no existing type definitions or Zod schemas in the codebase — `src/paprika/` contains only `.gitkeep` and `CLAUDE.md`. This design introduces the first domain types.
 
-The project's design guidance (`.ed3d/design-plan-guidance.md`) specifies:
+The project's design guidance (`docs/documentation-system.md`) specifies:
 
 - **Schema-first validation** with Zod as source of truth — this design follows that
 - **Branded types** via type-fest — this design uses Zod's `z.brand()` instead (simpler, no type-fest needed for branding), but adds type-fest for `SetRequired` on `RecipeInput`

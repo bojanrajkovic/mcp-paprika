@@ -428,7 +428,7 @@ The design follows several established patterns in the codebase:
 
 ## Additional Considerations
 
-**Documents to Update** (per `.ed3d/design-plan-guidance.md` #2):
+**Documents to Update** (per `docs/documentation-system.md`):
 
 The root `CLAUDE.md` "Dependency Policy" deletion has already landed on this branch in commit `6d5dcc0` and is not listed below.
 

@@ -394,7 +394,7 @@ Five phases. Phase 1 produces the leaves (no dependencies on each other); Phases
 
 ## Documents to Update
 
-Project guidance (`.ed3d/design-plan-guidance.md`) requires every design plan to enumerate the documentation that must change alongside the implementation. No new module-level `CLAUDE.md` files are created (project guidance: only for directories that already have them).
+Project guidance (`docs/documentation-system.md`) requires every design plan to enumerate the documentation that must change alongside the implementation. No new module-level `CLAUDE.md` files are created (project guidance: only for directories that already have them).
 
 | Document                     | Change                                                                                                                                                                                                                                                                                                                              |
 | ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
