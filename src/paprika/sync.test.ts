@@ -566,14 +566,18 @@ describe("syncOnce", () => {
     };
   }
 
-  function makeSyncEngine(
+  // Build the engine together with the AppContext it was constructed from, so a
+  // test can spy on the exact store/cache instances the engine holds without
+  // reflecting into its private fields. Most tests only need the engine and use
+  // the makeSyncEngine wrapper below.
+  function buildSyncEngine(
     clientOverrides?: Partial<PaprikaClient>,
     cacheOverrides?: CacheMockOverrides,
     storeOverrides?: Partial<RecipeStore>,
     notifierOverrides?: Partial<Notifier>,
     pantryStoreOverrides?: Partial<PantryStore>,
     aisleStoreOverrides?: Partial<AisleStore>,
-  ): SyncEngine {
+  ): { engine: SyncEngine; context: AppContext } {
     const context: AppContext = makeAppContext({
       client: { ...makeMockClientDefault(), ...clientOverrides } as PaprikaClient,
       cache: makeMockCacheDefault(cacheOverrides),
@@ -582,7 +586,13 @@ describe("syncOnce", () => {
       aisleStore: { ...makeMockAisleStore(), ...aisleStoreOverrides } as AisleStore,
       notifier: { ...makeMockNotifierDefault(), ...notifierOverrides } as Notifier,
     });
-    return new SyncEngine(context, 10);
+    return { engine: new SyncEngine(context, 10), context };
+  }
+
+  // Thin wrapper for the many tests that need only the engine. Rest-args derive
+  // from buildSyncEngine, so the two signatures can never drift apart.
+  function makeSyncEngine(...args: Parameters<typeof buildSyncEngine>): SyncEngine {
+    return buildSyncEngine(...args).engine;
   }
 
   afterEach(() => {
@@ -2020,9 +2030,8 @@ describe("syncOnce", () => {
     });
 
     it("menuStore.setLastSyncedAt is invoked during menu sync (afterLoad hook)", async () => {
-      const engine = makeSyncEngine();
-      const ctx = (engine as unknown as { _context: AppContext })._context;
-      const spy = vi.spyOn(ctx.menuStore, "setLastSyncedAt");
+      const { engine, context } = buildSyncEngine();
+      const spy = vi.spyOn(context.menuStore, "setLastSyncedAt");
 
       await engine.syncOnce();
 
@@ -2051,10 +2060,9 @@ describe("syncOnce", () => {
     });
 
     it("sweepPending is called for both menu store and menu item store during finalization", async () => {
-      const engine = makeSyncEngine();
-      const ctx = (engine as unknown as { _context: AppContext })._context;
-      const sweepMenuSpy = vi.spyOn(ctx.menuStore, "sweepPending");
-      const sweepMenuItemSpy = vi.spyOn(ctx.menuItemStore, "sweepPending");
+      const { engine, context } = buildSyncEngine();
+      const sweepMenuSpy = vi.spyOn(context.menuStore, "sweepPending");
+      const sweepMenuItemSpy = vi.spyOn(context.menuItemStore, "sweepPending");
 
       await engine.syncOnce();
 
@@ -2627,14 +2635,13 @@ describe("syncOnce", () => {
         deleted: true,
       };
 
-      const load = vi.fn();
-      const engine = makeSyncEngine({ listMealTypes: vi.fn().mockResolvedValue([liveMt, deletedMt]) });
-      // Replace mealTypeStore.load via context spy
-      // Cannot easily intercept; instead assert via cache.put (only live one written)
-      const putMealType = vi.fn();
-      const ctxAny = (engine as unknown as { _context: AppContext })._context;
-      (ctxAny.cache.mealTypes as unknown as { put: typeof putMealType }).put = putMealType;
-      (ctxAny.cache.mealTypes as unknown as { getAll: typeof load }).getAll = vi.fn().mockResolvedValue([]);
+      const { engine, context } = buildSyncEngine({
+        listMealTypes: vi.fn().mockResolvedValue([liveMt, deletedMt]),
+      });
+      // Assert via cache.put on the instance the engine holds: only the live
+      // mealtype is persisted, the deleted one is filtered before cache.put.
+      // (The default mock's getAll already resolves to [].)
+      const putMealType = vi.spyOn(context.cache.mealTypes, "put");
 
       await engine.syncOnce();
 
