@@ -16,6 +16,18 @@ The business logic — every tool and resource, the sync engine — is written o
 
 The two transports (`src/transport/`) are selected at startup by `MCP_TRANSPORT`. **stdio** is the default: a local, unauthenticated pipe where stdout _is_ the protocol, so stray output corrupts the wire. **Streamable HTTP** is a long-lived network service with per-session state, an OAuth surface, a readiness/liveness probe, and a Kubernetes-aware graceful drain. Both run the one composition root unchanged. See [ADR-0001](adr/0001-two-transports-and-composition-root.md).
 
+```mermaid
+flowchart TB
+  T{{"MCP_TRANSPORT"}} -->|stdio| ST["stdio transport<br/>one local session"]
+  T -->|http| HT["HTTP transport<br/>N network sessions, OAuth-gated"]
+  ST --> APP
+  HT --> APP
+  APP["AppContext (process-wide)<br/>client, disk cache, stores,<br/>logger, notifier — no server field"]
+  APP -->|"buildMcpServer, per session"| SES["SessionContext<br/>AppContext + McpServer"]
+  MUT["tools, resources, sync engine"] -->|"ctx.notifier"| N["Notifier"]
+  N -.->|"stdio: singleServer / http: broadcast"| SES
+```
+
 ## Caching and sync
 
 Every Paprika entity family lives in two layers: an in-memory store that is the session's source of truth, backed by an atomic-write per-entity disk cache. Tools never touch the filesystem — they query the store, which is hydrated from disk at startup and kept fresh by background sync. That split keeps disk I/O off the hot path and keeps tool code trivially testable, and the disk layer makes the server immediately usable on restart (the cache is warm before the first sync returns). See `src/cache/CLAUDE.md` and `src/cache/disk/CLAUDE.md`.
@@ -26,6 +38,15 @@ Sync (`src/paprika/`) runs once on startup and then optionally polls. It is **ne
 - **Replace-all** (categories and the other reference/collection families). Small enough to refetch wholesale.
 
 After a cycle that changed an entity with a resource surface, sync fans a resource-list-changed notification through the `Notifier`; families with no resource surface (e.g. pantry) emit none.
+
+```mermaid
+flowchart LR
+  L["list recipes<br/>(uid + hash only)"] --> D{"diff vs<br/>local hashes"}
+  D -->|added or changed| F["fetch full recipe"]
+  D -->|removed| X["drop from cache + store"]
+  D -->|unchanged| S["skip — no fetch"]
+  F --> W["write disk + in-memory store"]
+```
 
 ## Semantic search
 
