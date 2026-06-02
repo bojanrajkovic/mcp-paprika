@@ -4,6 +4,7 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { MealUidSchema, RecipeUidSchema } from "../ids.js";
+import type { RecipeUid, MealTypeUid } from "../ids.js";
 import type { Meal } from "../meal/types.js";
 import { textResult } from "./helpers.js";
 import {
@@ -105,10 +106,10 @@ export function registerAddMealsTool(server: McpServer, ctx: ServerContext): voi
             readonly index: number;
             readonly normalizedDate: string;
             readonly typeName: string;
-            readonly typeUid: string | null;
+            readonly typeUid: MealTypeUid | null;
             readonly typeInteger: number;
             readonly resolvedName: string;
-            readonly recipeUid: string | null;
+            readonly recipeUid: RecipeUid | null;
             readonly scale: string | null;
           };
 
@@ -158,7 +159,7 @@ export function registerAddMealsTool(server: McpServer, ctx: ServerContext): voi
             // dispatches display off recipe_uid; a stored custom name would be
             // invisible). Freeform: caller-provided name is used verbatim.
             let resolvedName: string;
-            let recipeUid: string | null;
+            let recipeUid: RecipeUid | null;
             if ("recipe_uid" in item) {
               const recipe = ctx.store.get(item.recipe_uid);
               if (recipe === undefined) {
@@ -339,7 +340,7 @@ export function registerUpdateMealTool(server: McpServer, ctx: ServerContext): v
           // Resolve type if supplied via the file-private helper (introduced in Phase 2).
           // All three variants of `op` carry `type` as an optional shared field.
           let typeInteger: number | undefined;
-          let typeUid: string | null | undefined;
+          let typeUid: MealTypeUid | null | undefined;
           if (op.type !== undefined) {
             const result = resolveMealTypeSpec(ctx, op.type);
             if (!result.ok) {
@@ -380,7 +381,7 @@ export function registerUpdateMealTool(server: McpServer, ctx: ServerContext): v
           // Resolve recipe_uid and name interaction. The structural union ensures we
           // never see (recipe_uid: <UID>, name: <X>) together — that combination
           // matches no variant and is rejected at parse time.
-          let newRecipeUid: string | null = existing.recipeUid;
+          let newRecipeUid: RecipeUid | null = existing.recipeUid;
           let newName: string = existing.name;
 
           if ("recipe_uid" in op) {

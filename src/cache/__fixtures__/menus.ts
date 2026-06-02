@@ -1,4 +1,4 @@
-import type { MenuUid, MenuItemUid } from "../../ids.js";
+import type { MenuUid, MenuItemUid, RecipeUid, MealTypeUid } from "../../ids.js";
 import type { MenuItem } from "../../menu-item/types.js";
 import type { Menu } from "../../menu/types.js";
 
@@ -19,19 +19,28 @@ export function makeMenu(overrides?: Partial<Menu>): Menu {
   };
 }
 
-export function makeMenuItem(overrides?: Partial<MenuItem>): MenuItem {
+// FK overrides are loosened to plain strings and branded here (see meals.ts).
+// The nullable FKs (menuUid, recipeUid) use `=== undefined` to preserve an
+// explicit `null` override; `typeUid` is non-nullable, so `??` is correct.
+type MenuItemOverrides = Partial<Omit<MenuItem, "menuUid" | "recipeUid" | "typeUid">> & {
+  readonly menuUid?: string | null;
+  readonly recipeUid?: string | null;
+  readonly typeUid?: string;
+};
+
+export function makeMenuItem(overrides?: MenuItemOverrides): MenuItem {
   menuItemCounter += 1;
-  const uid = (overrides?.uid ?? `menu-item-${menuItemCounter.toString()}`) as MenuItemUid;
+  const { menuUid, recipeUid, typeUid, ...rest } = overrides ?? {};
   return {
-    uid,
-    menuUid: "menu-1",
-    recipeUid: "recipe-1",
+    uid: `menu-item-${menuItemCounter.toString()}` as MenuItemUid,
+    menuUid: (menuUid === undefined ? "menu-1" : menuUid) as MenuUid | null,
+    recipeUid: (recipeUid === undefined ? "recipe-1" : recipeUid) as RecipeUid | null,
     name: `Test Item ${menuItemCounter.toString()}`,
     day: 1,
-    typeUid: "dinner-uid",
+    typeUid: (typeUid ?? "dinner-uid") as MealTypeUid,
     orderFlag: menuItemCounter - 1,
     deleted: false,
-    ...overrides,
+    ...rest,
   };
 }
 

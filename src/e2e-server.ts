@@ -31,7 +31,7 @@ import { createServerRef, singleServerNotifier } from "./server/notifier.js";
 import { getCacheDir } from "./utils/xdg.js";
 import { createLogger, toMessage } from "./utils/log.js";
 import type { Category } from "./category/types.js";
-import type { RecipeUid, CategoryUid, PantryItemUid } from "./ids.js";
+import type { RecipeUid, CategoryUid, PantryItemUid, AisleUid } from "./ids.js";
 import type { PantryItem } from "./pantry/types.js";
 import type { Recipe, RecipeEntry } from "./recipe/types.js";
 
@@ -92,7 +92,7 @@ class MockPaprikaClient implements IMockPaprikaClient {
     ingredient: "Flour",
     quantity: "2 lbs",
     aisle: "Baking",
-    aisleUid: "aisle-1",
+    aisleUid: "aisle-1" as AisleUid,
     expirationDate: null,
     hasExpiration: false,
     inStock: true,

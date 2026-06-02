@@ -9,7 +9,6 @@ import type { AppContext } from "../server/app-context.js";
 import type { Category } from "../category/types.js";
 import type { GroceryItem } from "../grocery-item/types.js";
 import type { GroceryList } from "../grocery-list/types.js";
-import type { RecipeUid } from "../ids.js";
 import type { Meal } from "../meal/types.js";
 import type { MenuItem } from "../menu-item/types.js";
 import type { Menu } from "../menu/types.js";
@@ -296,14 +295,12 @@ export class SyncEngine {
       // doesn't resurrect our just-deleted recipe. We leave diff.removed
       // alone for pending-deletes: if the server actually no longer lists
       // the UID, honoring the removal is correct.
-      const filteredRemoved = diff.removed.filter((uid) => !this._deps.store.isPendingUpsert(uid as RecipeUid));
+      const filteredRemoved = diff.removed.filter((uid) => !this._deps.store.isPendingUpsert(uid));
       const filteredAdded = diff.added.filter(
-        (uid) =>
-          !this._deps.store.isPendingUpsert(uid as RecipeUid) && !this._deps.store.isPendingDelete(uid as RecipeUid),
+        (uid) => !this._deps.store.isPendingUpsert(uid) && !this._deps.store.isPendingDelete(uid),
       );
       const filteredChanged = diff.changed.filter(
-        (uid) =>
-          !this._deps.store.isPendingUpsert(uid as RecipeUid) && !this._deps.store.isPendingDelete(uid as RecipeUid),
+        (uid) => !this._deps.store.isPendingUpsert(uid) && !this._deps.store.isPendingDelete(uid),
       );
 
       // Compute UIDs to fetch
@@ -326,7 +323,7 @@ export class SyncEngine {
       // Remove deleted recipes (async, use Promise.all for concurrency)
       await Promise.all(filteredRemoved.map((uid) => this._deps.cache.recipes.remove(uid)));
       for (const uid of filteredRemoved) {
-        this._deps.store.delete(uid as RecipeUid);
+        this._deps.store.delete(uid);
       }
 
       // Observation-based clearing for recipe pending-upserts: clear only when

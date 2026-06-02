@@ -57,7 +57,7 @@ function makeCamelCasePantryItem(uid: string, overrides?: Partial<PantryItem>): 
     ingredient: "Butter",
     quantity: "1 lb",
     aisle: "Dairy",
-    aisleUid: "aisle-1",
+    aisleUid: AisleUidSchema.parse("aisle-1"),
     expirationDate: null,
     hasExpiration: false,
     inStock: true,
@@ -1863,7 +1863,11 @@ describe("PaprikaClient", () => {
       );
 
       const client = new PaprikaClient("test@example.com", "password");
-      const input = makeTestCategory({ name: "Curries", orderFlag: 2, parentUid: "PARENT-UID" });
+      const input = makeTestCategory({
+        name: "Curries",
+        orderFlag: 2,
+        parentUid: CategoryUidSchema.parse("PARENT-UID"),
+      });
       const result = await client.saveCategory(input);
 
       expect(capturedUrl).toBe(`${API_BASE}/categories/`);
@@ -2143,7 +2147,7 @@ describe("PaprikaClient", () => {
       );
 
       const client = new PaprikaClient("test@example.com", "password");
-      const input = makeTestGroceryIngredient({ name: "Butter", aisleUid: "AI-DAIRY" });
+      const input = makeTestGroceryIngredient({ name: "Butter", aisleUid: AisleUidSchema.parse("AI-DAIRY") });
       const result = await client.saveGroceryIngredient(input);
 
       expect(result.uid).toBe(input.uid);

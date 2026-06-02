@@ -143,7 +143,7 @@ describe("category-helpers", () => {
           makeCategory({ uid: "c" as CategoryUid, parentUid: "b" }),
         ],
       });
-      expect(wouldCreateCycle(ctx, "a" as CategoryUid, "c")).toBe(true);
+      expect(wouldCreateCycle(ctx, "a" as CategoryUid, "c" as CategoryUid)).toBe(true);
     });
 
     it("is false for a legal re-parent that does not close a loop", () => {
@@ -153,7 +153,7 @@ describe("category-helpers", () => {
           makeCategory({ uid: "b" as CategoryUid, parentUid: null }),
         ],
       });
-      expect(wouldCreateCycle(ctx, "a" as CategoryUid, "b")).toBe(false);
+      expect(wouldCreateCycle(ctx, "a" as CategoryUid, "b" as CategoryUid)).toBe(false);
     });
 
     it("terminates on a pre-corrupt parent chain", () => {
@@ -164,7 +164,7 @@ describe("category-helpers", () => {
           makeCategory({ uid: "y" as CategoryUid, parentUid: "x" }),
         ],
       });
-      expect(wouldCreateCycle(ctx, "z" as CategoryUid, "x")).toBe(false);
+      expect(wouldCreateCycle(ctx, "z" as CategoryUid, "x" as CategoryUid)).toBe(false);
     });
   });
 });

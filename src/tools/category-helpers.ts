@@ -105,14 +105,14 @@ export function recipesReferencing(ctx: ServerContext, uid: CategoryUid): Array<
  * parent sits below the category, so the link would close a loop. The `seen`
  * set guards against an already-corrupt chain looping forever.
  */
-export function wouldCreateCycle(ctx: ServerContext, categoryUid: CategoryUid, newParentUid: string): boolean {
-  let cursor: string | null = newParentUid;
-  const seen = new Set<string>();
+export function wouldCreateCycle(ctx: ServerContext, categoryUid: CategoryUid, newParentUid: CategoryUid): boolean {
+  let cursor: CategoryUid | null = newParentUid;
+  const seen = new Set<CategoryUid>();
   while (cursor !== null) {
     if (cursor === categoryUid) return true;
     if (seen.has(cursor)) break;
     seen.add(cursor);
-    const parent = ctx.categoryStore.get(cursor as CategoryUid);
+    const parent = ctx.categoryStore.get(cursor);
     cursor = parent ? parent.parentUid : null;
   }
   return false;

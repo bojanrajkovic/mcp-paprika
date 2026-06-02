@@ -4,7 +4,7 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { MenuItemUidSchema, MenuUidSchema, RecipeUidSchema } from "../ids.js";
-import type { MenuUid } from "../ids.js";
+import type { MealTypeUid, RecipeUid } from "../ids.js";
 import type { MenuItem } from "../menu-item/types.js";
 import type { Menu } from "../menu/types.js";
 import { resolveLookup, textResult, uidOrTextLookupSchema } from "./helpers.js";
@@ -106,9 +106,9 @@ export function registerAddMenuItemsTool(server: McpServer, ctx: ServerContext):
           // ----- Stage 1: per-index validation (collect ALL errors, not first-only) -----
           type ResolvedItem = {
             readonly day: number;
-            readonly typeUid: string;
+            readonly typeUid: MealTypeUid;
             readonly resolvedName: string;
-            readonly recipeUid: string | null;
+            readonly recipeUid: RecipeUid | null;
           };
 
           const errors: Array<string> = [];
@@ -121,7 +121,7 @@ export function registerAddMenuItemsTool(server: McpServer, ctx: ServerContext):
             // one shape. Recipe items denormalize the display name from the local
             // store (matching add_meals' recipe-link contract); freeform items keep
             // the supplied name and store recipeUid: null.
-            let recipeUid: string | null;
+            let recipeUid: RecipeUid | null;
             let resolvedName: string;
             if ("recipe_uid" in item) {
               const recipe = ctx.store.get(item.recipe_uid);
@@ -292,7 +292,7 @@ export function registerUpdateMenuItemTool(server: McpServer, ctx: ServerContext
           }
 
           // Resolve type if supplied via the shared helper.
-          let newTypeUid: string | undefined;
+          let newTypeUid: MealTypeUid | undefined;
           if (args.type !== undefined) {
             const result = resolveMealTypeSpec(ctx, args.type);
             if (!result.ok) {
@@ -315,7 +315,7 @@ export function registerUpdateMenuItemTool(server: McpServer, ctx: ServerContext
           }
 
           // Resolve recipe link + refreshed display name if a new recipe is supplied.
-          let newRecipeUid: string = existing.recipeUid ?? "";
+          let newRecipeUid: RecipeUid | null = existing.recipeUid;
           let newName: string = existing.name;
           if (args.recipe_uid !== undefined) {
             const recipe = ctx.store.get(args.recipe_uid);
@@ -339,7 +339,7 @@ export function registerUpdateMenuItemTool(server: McpServer, ctx: ServerContext
           // (menuUid null) or a menu not known locally.
           let extendedTo: number | null = null;
           if (args.day !== undefined && existing.menuUid !== null) {
-            const parent = ctx.menuStore.get(existing.menuUid as MenuUid);
+            const parent = ctx.menuStore.get(existing.menuUid);
             if (parent !== undefined && newDay > parent.days) {
               const expanded: Menu = { ...parent, days: newDay };
               try {
@@ -363,9 +363,7 @@ export function registerUpdateMenuItemTool(server: McpServer, ctx: ServerContext
           // of add_menu_items), so this keeps it unique and places the move last.
           let newOrderFlag = existing.orderFlag;
           if (dayChanged && existing.menuUid !== null) {
-            const others = ctx.menuItemStore
-              .getByMenuUid(existing.menuUid as MenuUid)
-              .filter((it) => it.uid !== existing.uid);
+            const others = ctx.menuItemStore.getByMenuUid(existing.menuUid).filter((it) => it.uid !== existing.uid);
             newOrderFlag = others.reduce((max, it) => Math.max(max, it.orderFlag), -1) + 1;
           }
 
