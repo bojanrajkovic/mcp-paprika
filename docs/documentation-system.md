@@ -20,9 +20,9 @@ Each genre answers one question. Mixing genres is how docs rot.
 
 **`CONTRIBUTING.md`** is the human dev workflow: how a person sets up, builds, tests, and ships, plus the hook behavior, the commit and PR conventions, version sync, and boundaries. Workflow, not system shape.
 
-**Directory `CLAUDE.md`** is a thin pointer to the canonical doc for that area, plus a reactively-accreted list of sharp edges: the gotcha that bit someone, the invariant that's easy to violate, the wire-format quirk you have to preserve. It is not a mini architecture doc. It doesn't re-derive the design; it warns. Sharp edges get added when something actually bites, never speculatively.
+**Directory `CLAUDE.md`** is a thin pointer to the canonical doc for that area, plus a reactively-accreted list of sharp edges: the gotcha that bit someone, the invariant that's easy to violate, the wire-format quirk you have to preserve. It is not a mini architecture doc. It doesn't re-derive the design; it warns. Sharp edges get added when something actually bites, never speculatively, and the same restraint applies to the files themselves: a directory earns a `CLAUDE.md` when it has a canonical doc to point at or edges worth recording, not reflexively for every new folder.
 
-Pre-implementation planning is not a tracked genre. Decisions worth keeping graduate into an ADR (or `architecture.md`); the working notes that produced them are local scratch (§5).
+Pre-implementation planning is not a tracked genre. Decisions worth keeping graduate into an ADR (or `architecture.md`); the working notes that produced them stay local, gitignored scratch, outside this rubric. Don't link to those scratch paths from a tracked doc: the link is a silent failure on a fresh clone.
 
 ## 3. Reference content is read from source, never enumerated in prose
 
@@ -40,19 +40,8 @@ Every `CLAUDE.md`, every architecture-class doc, and every ADR carries a **`Last
 
 There is deliberately **no automated doc-staleness gate** mapping code paths or symbols to docs. Such a gate would false-positive constantly, flagging every "former-X" annotation and every intentionally-frozen historical note as drift, which trains people to ignore it. That violates the principle of preferring language and human audit over mechanical gates. Mechanical gates are reserved for unambiguous, near-zero-false-positive checks: commitlint, and the format, lint, typecheck, and test gates that run in CI and the git hooks. Doc freshness is a judgment call, so it stays one, backed by the verification stamp.
 
-## 5. Tracked docs vs. local scratch
-
-Not everything under `docs/` (or in the repo tree) belongs to the tracked documentation system. These locations are **local-only scratch, gitignored, and outside this rubric**:
-
-- `.ed3d/` — local planning and brainstorming scratch
-- `docs/implementation-plans/` — per-feature implementation scratch
-- `docs/test-plans/` — per-feature test scratch
-
-Treat them as a working surface, not published docs. Anything that should survive and stay maintained has to graduate into a tracked genre above: architecture, an ADR, or a `CLAUDE.md` sharp edge. Don't link to scratch paths from tracked docs; the link is a silent failure on any fresh clone.
-
 ## References
 
-- `.ed3d/design-plan-guidance.md` — the non-duplication and CLAUDE.md-discipline principles this rubric extends (local scratch)
 - `docs/architecture.md` — the current-shape doc this rubric governs
 - `src/server/build.ts` — canonical tool registry (read, never enumerate)
 - Root `CLAUDE.md` — project conventions and the dev/PR workflow
