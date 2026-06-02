@@ -1,7 +1,7 @@
 # ADR-0001: Two MCP transports over one composition root
 
 **Status:** Accepted (2026-06-01, backfilled)
-**Last verified:** 2026-06-01
+**Last verified:** 2026-06-02
 
 ## Context
 
@@ -49,7 +49,7 @@ Rejected because the two client worlds genuinely need different transports, and 
 
 ### A dependency-injection container instead of hand-wired contexts
 
-Not deliberately weighed: hand-wiring was the default, not a considered rejection of a container. Recorded honestly rather than back-filled with a rationale: the deferred-getter bootstrap cycle (above) has since grown complex enough that a DI/container or a more structured builder may be the better shape. Evaluating that is tracked in [#197](https://github.com/bojanrajkovic/mcp-paprika/issues/197) rather than asserted as a closed decision here.
+Not deliberately weighed: hand-wiring was the default, not a considered rejection of a container. Recorded honestly rather than back-filled with a rationale: the deferred-getter bootstrap cycle (above) has since grown complex enough that a DI/container or a more structured builder may be the better shape. That evaluation is now [ADR-0005](0005-composition-modules-and-identifiers.md): the bootstrap was refactored into a phase-typed builder, and a DI container was _deferred_ behind a written trigger rather than rejected. This alternative is filed here only because hand-wiring was the original default — it was never a considered rejection.
 
 ## Consequences
 
