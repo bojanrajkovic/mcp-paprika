@@ -1,52 +1,31 @@
 # Shared Type Definitions
 
-Last verified: 2026-05-15
+Last verified: 2026-06-01
 
 ## Purpose
 
-Defines TypeScript interfaces and types shared across modules. Historically this directory was the home of `ServerContext` — the dependency-injection record passed into every tool and resource. As of Phase 1 of the HTTP-transport work, the authoritative context types live in `src/server/app-context.ts` (`AppContext`, `SessionContext`) and `ServerContext` is retained here as a thin backward-compat alias.
+Defines TypeScript types shared across modules. Historically this directory was the home of `ServerContext` — the dependency-injection record passed into every tool and resource. The authoritative context types now live in `src/server/app-context.ts` (`AppContext`, `SessionContext`); `ServerContext` is retained here only as a thin backward-compat alias.
 
 ## Contracts
 
-### ServerContext (alias for SessionContext)
+### ServerContext
 
 ```typescript
 export type ServerContext = SessionContext;
 ```
 
-`ServerContext` re-exports `SessionContext` from `../server/app-context.js`. All existing tool/resource handlers that took `ServerContext` continue to work unchanged, and now also have `ctx.notifier` and `ctx.vectorStore` available on `ctx`.
+`ServerContext` re-exports `SessionContext` from `../server/app-context.js`, so existing handlers typed against `ServerContext` keep working unchanged. The field set is defined in `../server/app-context.ts` and documented in `../server/CLAUDE.md` — this file does not re-list it, to avoid the drift that left the prior field table a stale 7-field subset.
 
-| Field         | Type                  | Description                                                                           |
-| ------------- | --------------------- | ------------------------------------------------------------------------------------- |
-| `client`      | `PaprikaClient`       | HTTP client for the Paprika cloud API                                                 |
-| `cache`       | `DiskCacheRoot`       | Local on-disk persistence layer (per-entity subcaches; see `../cache/disk/CLAUDE.md`) |
-| `store`       | `RecipeStore`         | Higher-level recipe query abstraction over `DiskCacheRoot.recipes`                    |
-| `pantryStore` | `PantryStore`         | In-memory pantry query layer                                                          |
-| `vectorStore` | `VectorStore \| null` | Semantic-search index; `null` when embeddings are not configured                      |
-| `notifier`    | `Notifier`            | Abstraction for MCP notifications (resource-list-changed, logging)                    |
-| `server`      | `McpServer`           | Per-session MCP wire protocol handler                                                 |
-
-All fields are `readonly`.
-
-**Authoritative types** (prefer these in new code):
-
-- `AppContext` — process-wide shared state (everything except `server`). Built once per process by `buildAppContext`.
-- `SessionContext` — `AppContext` plus the per-session `server: McpServer`. Built per session by `buildMcpServer` (once for stdio, once per HTTP session in Phase 3).
-
-See `src/server/CLAUDE.md` for the AppContext/SessionContext split, the Notifier contract, and the deferred-getter pattern that resolves the stdio chicken-and-egg between notifier construction and server construction.
-
-**Correct imports:**
+**Prefer the authoritative types in new code:**
 
 ```typescript
-// New code — preferred:
 import type { AppContext, SessionContext } from "../server/app-context.js";
-
-// Existing handlers — still valid:
-import type { ServerContext } from "../types/server-context.js";
 ```
+
+`AppContext` is process-wide shared state (built once by `buildAppContext`); `SessionContext` is `AppContext` plus the per-session `server: McpServer`. See `../server/CLAUDE.md` for the split and the deferred-getter bootstrap pattern.
 
 ## Dependencies
 
 - **Uses:** `../server/app-context.js` (re-exports `SessionContext` as `ServerContext`)
-- **Used by:** All existing tool and resource modules
-- **Boundary:** All imports in this module use `import type` — no runtime value imports
+- **Used by:** existing tool and resource modules that import `ServerContext`
+- **Boundary:** all imports use `import type` — no runtime value imports
