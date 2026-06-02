@@ -9,7 +9,7 @@ MCP tools the model invokes on its own (read, query, mutate) across every Paprik
 ## Key References
 
 - **Registry (canonical):** `src/server/build.ts` — `buildMcpServer` lists every `register*Tool` call. That file, not this one, is the source of truth for _what is registered_ and the two feature gates (`discover_recipes` iff `vectorStore !== null`, `generate_photo` iff `photographyClient !== null`).
-- **Per-tool reference:** `docs/tools/README.md` + `docs/tools/<tool>.md` own each tool's parameters, behavior, and examples. The Zod `inputSchema` in each tool file is the authoritative param contract.
+- **Per-tool reference:** `docs/tools/README.md` covers every tool's parameters, behavior, and examples (generated from source by `scripts/generate-tool-reference.ts`). The Zod `inputSchema` in each tool file is the authoritative param contract.
 - **Surface classification:** `docs/adr/0004-tool-vs-resource-classification.md` — the Content/Data/Reference rule that decides whether an entity gets tools, a resource, or both, and _why a `read_X` tool is not redundant with the `paprika://X/{uid}` resource_ (different invocation paths: model vs. user attach).
 - **Store / sync / cache model:** `docs/architecture.md`; per-store Content/Data/Reference roles in `src/server/CLAUDE.md`; the pending-writes ordering contract in `src/cache/CLAUDE.md`.
 
