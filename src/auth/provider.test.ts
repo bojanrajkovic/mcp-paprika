@@ -9,7 +9,7 @@ import { TokenStore } from "./token-store.js";
 import { AuthRequestStore } from "./auth-request-store.js";
 import { AuthCodeStore } from "./auth-code-store.js";
 import { PendingAuthorizationStore } from "./pending-authorization-store.js";
-import { DiskCacheRoot } from "../cache/disk/index.js";
+import { DiskCacheRoot } from "../cache/disk-cache-root.js";
 import { makeDefaultOidcStub, makeDiscoveryDoc } from "./__fixtures__/oidc-stub.js";
 import { makeAuthCodeState, makeVerifiedIdentity } from "./__fixtures__/oauth-state.js";
 import { ACCESS_TOKEN_TTL_SECONDS, hashTokenForStorage, nowSeconds, MAX_INMEMORY_AUTH_ENTRIES } from "./tokens.js";

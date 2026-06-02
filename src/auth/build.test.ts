@@ -15,7 +15,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { buildAuthContext } from "./build.js";
 import { createOidcStub } from "./__fixtures__/oidc-stub.js";
 import type { PaprikaConfig } from "../utils/config.js";
-import { DiskCacheRoot } from "../cache/disk/index.js";
+import { DiskCacheRoot } from "../cache/disk-cache-root.js";
 import { useXdgIsolation } from "../__fixtures__/xdg-isolation.js";
 import { useMswServer } from "../__fixtures__/msw.js";
 import { SILENT_LOG } from "../utils/log.js";

@@ -10,7 +10,7 @@ import type { PendingAuthorizationStore } from "./pending-authorization-store.js
 import type { ResolvedOAuthConfig } from "./types.js";
 import type { DiscoveryDoc } from "./oidc-client.js";
 import type { JWTVerifyGetKey } from "jose";
-import type { DiskCacheRoot } from "../cache/disk/index.js";
+import type { DiskCacheRoot } from "../cache/disk-cache-root.js";
 import { generateOpaqueToken, nowSeconds } from "./tokens.js";
 import { verifyIdToken } from "./oidc-client.js";
 import type { IdTokenPayload } from "./types.js";

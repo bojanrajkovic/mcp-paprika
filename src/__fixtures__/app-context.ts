@@ -14,7 +14,7 @@ import { PhotoStore } from "../photo/store.js";
 import { RecipeStore } from "../recipe/store.js";
 import { GeneratedImageStore } from "../features/generated-image-store.js";
 import type { AppContext, SessionContext } from "../server/app-context.js";
-import type { DiskCacheRoot } from "../cache/disk/index.js";
+import type { DiskCacheRoot } from "../cache/disk-cache-root.js";
 import type { PaprikaClient } from "../paprika/client.js";
 import { SILENT_LOG } from "../utils/log.js";
 

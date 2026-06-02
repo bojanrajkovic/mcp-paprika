@@ -13,7 +13,7 @@
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { AisleStore } from "./aisle/store.js";
 import { CategoryStore } from "./category/store.js";
-import { DiskCacheRoot } from "./cache/disk/index.js";
+import { DiskCacheRoot } from "./cache/disk-cache-root.js";
 import { GroceryIngredientStore } from "./grocery-ingredient/store.js";
 import { GroceryItemStore } from "./grocery-item/store.js";
 import { GroceryListStore } from "./grocery-list/store.js";

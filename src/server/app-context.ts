@@ -3,7 +3,7 @@ import type { Logger } from "pino";
 
 import type { AisleStore } from "../aisle/store.js";
 import type { CategoryStore } from "../category/store.js";
-import type { DiskCacheRoot } from "../cache/disk/index.js";
+import type { DiskCacheRoot } from "../cache/disk-cache-root.js";
 import type { GroceryIngredientStore } from "../grocery-ingredient/store.js";
 import type { GroceryItemStore } from "../grocery-item/store.js";
 import type { GroceryListStore } from "../grocery-list/store.js";

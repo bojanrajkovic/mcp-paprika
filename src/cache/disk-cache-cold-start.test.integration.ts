@@ -3,7 +3,7 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { RecipeUid, CategoryUid } from "../ids.js";
-import { DiskCacheRoot } from "./disk/index.js";
+import { DiskCacheRoot } from "./disk-cache-root.js";
 import { RecipeStore } from "../recipe/store.js";
 import { makeRecipe, makeCategory } from "./__fixtures__/recipes.js";
 import { makeTestServer, makeCtx, getText } from "../tools/tool-test-utils.js";

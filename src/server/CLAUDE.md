@@ -11,7 +11,7 @@ Process-wide composition root. Owns the authoritative context types (`AppContext
 - `docs/adr/0001-two-transports-and-composition-root.md` — the AppContext/SessionContext split, the Notifier seam, the bootstrap-order cycle, and the rejected single-transport / DI-container alternatives.
 - `src/server/app-context.ts` — the exhaustive, canonical field list for `AppContext` and `SessionContext`. Treat that file as the source of truth; do not re-enumerate fields here.
 - `src/server/notifier.ts` — `Notifier`, `singleServerNotifier`, `broadcastNotifier`.
-- `../cache/disk/CLAUDE.md` — the disk subcaches that `AppContext.cache` exposes.
+- `../cache/CLAUDE.md` (Persistence section) — the disk subcaches that `AppContext.cache` exposes.
 - ADR-0004 (entity store roles) — the Content / Data / Reference taxonomy referenced below.
 
 ## Context shape (conceptual)

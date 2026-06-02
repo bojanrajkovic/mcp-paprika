@@ -3,8 +3,8 @@ import { join } from "node:path";
 import { Mutex } from "async-mutex";
 import type { Logger } from "pino";
 
-import { isNodeError } from "../../utils/errors.js";
-import { SILENT_LOG } from "../../utils/log.js";
+import { isNodeError } from "../utils/errors.js";
+import { SILENT_LOG } from "../utils/log.js";
 
 // I/O error handling convention throughout this module:
 // We use try/catch and check error.code rather than existsSync()-then-read.
@@ -35,6 +35,22 @@ export interface DiskCacheOptions<T> {
   readonly parse: (raw: unknown) => T;
   readonly getKey: (item: T) => string;
   readonly log?: Logger;
+}
+
+/**
+ * The entity-specific half of {@link DiskCacheOptions}: the subdir name
+ * (relative to the cache root), the `parse` function, and the key extractor —
+ * everything needed to build a plain `DiskCache<T>` except the cache root and
+ * the logger, which the `DiskCacheRoot` coordinator supplies. Each Paprika
+ * entity co-locates its descriptor in `<entity>/disk.ts`; entities whose disk
+ * cache needs extra behavior (recipes' hash index, OAuth clients' atomic cap)
+ * subclass `DiskCache` directly instead of describing it.
+ */
+export interface DiskCacheDescriptor<T> {
+  /** Subdirectory name under the cache root — not a full path. */
+  readonly subdir: string;
+  readonly parse: (raw: unknown) => T;
+  readonly getKey: (item: T) => string;
 }
 
 export class DiskCache<T> {
