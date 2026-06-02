@@ -90,9 +90,9 @@ const SERVER_INSTRUCTIONS = `mcp-paprika bridges your Paprika recipe library: re
 Orientation:
 - Recipes, grocery lists, and menus are exposed both as tools (which you call) and as paprika://… resources the user can attach. The read_* tools let you fetch one by UID on your own, without waiting for the user to attach it.
 - Lookup: use search_recipes for name / ingredient / description matching; use discover_recipes (present only when semantic search is configured) for natural-language queries.
-- Deletes are reversible soft-deletes (move to trash). empty_trash is the only permanent delete, and it acts only on a recipe already in the trash.
-- When scheduling a meal or adding a menu/grocery item, link an existing recipe by its UID OR give a freeform name — never both; they are mutually exclusive.
-- generate_photo returns a single-use preview token; pass that token to upload_photo to attach the image.
+- Only recipe deletes are reversible: a deleted recipe moves to the trash, and empty_trash then permanently removes one already there. Deleting anything else (grocery items, pantry items, menu items, lists) is immediate and permanent.
+- When scheduling a meal or adding a menu item, link an existing recipe by its UID OR give a freeform name, never both; they are mutually exclusive. Grocery items take no recipe link; add_grocery_items wants an ingredient, quantity, and aisle.
+- generate_photo attaches the image and returns its photo UID by default. With attach:false it returns a preview plus a single-use token instead; pass that token to upload_photo to attach it later.
 - Data is served from a local cache kept fresh by background sync, so it can briefly lag changes made directly in the Paprika apps.`;
 
 /**
