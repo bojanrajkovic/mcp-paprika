@@ -1,16 +1,22 @@
 pre-commit:
-  parallel: true
+  # oxlint --fix and oxfmt --write both rewrite staged files, so they cannot run
+  # in parallel without racing on the same paths. Run them sequentially via
+  # priority (lower runs first): oxlint sorts the named imports, then oxfmt sorts
+  # and formats the statements, so oxfmt has the final say on layout.
   commands:
+    oxlint:
+      priority: 1
+      glob: "**/*.ts"
+      stage_fixed: true
+      run: pnpm exec oxlint --fix --deny-warnings {staged_files}
     oxfmt:
+      priority: 2
       # "{,**/}" matches both root-level files and any nested path; a bare
       # "**/*" skips the repo root (CLAUDE.md, CONTRIBUTING.md, README.md),
       # which then drift out of format until CI's whole-tree oxfmt --check.
       glob: "{,**/}*.{ts,json,md}"
       stage_fixed: true
       run: pnpm exec oxfmt --write {staged_files}
-    oxlint:
-      glob: "**/*.ts"
-      run: pnpm exec oxlint --deny-warnings {staged_files}
 
 commit-msg:
   commands:
