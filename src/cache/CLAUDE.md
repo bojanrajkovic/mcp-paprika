@@ -4,28 +4,28 @@ Last verified: 2026-06-02
 
 ## Purpose
 
-The in-memory query/CRUD stores that are each session's source of truth for one Paprika entity family. Tools and resources read these; the sync engine hydrates them. The stores never touch the filesystem; the durable **persistence layer** that backs them now lives flat in this directory (it moved up from `disk/`) — see [Persistence](#persistence).
+The in-memory query/CRUD stores that are each session's source of truth for one Paprika entity family. Tools and resources read these; the sync engine hydrates them; they never touch the filesystem. The store implementations live in their per-entity modules (`../<entity>/store.ts`) — this doc catalogs their shared behavior — while the durable **persistence layer** that backs them lives flat in this directory (it moved up from `disk/`). See [Persistence](#persistence).
 
 ## Key References
 
 - `../entity/CLAUDE.md` — the shared `EntityStore` / `TombstoneEntityStore` base classes and the canonical pending-write (#57) and tombstone invariants. Every store below inherits those unless noted; this file documents only what each store adds on top.
 - [Persistence](#persistence) (below) — the on-disk layer (`DiskCacheRoot`, per-entity `DiskCache<T>` + the `DiskCacheDescriptor<T>` contract, on-disk layout, migration, mutex model, recipe `diff()`, DCR `tryPut`); each entity's descriptor is co-located in `../<entity>/disk.ts`.
 - `docs/architecture.md` — the two-layer cache+sync model and the diff-and-fetch vs. replace-all split.
-- Source: the `*-store.ts` files own method signatures and field shapes. The `Recipe`/`Category`/`Meal`/… types live in `../paprika/types.ts`.
+- Source: each entity's `../<entity>/store.ts` owns its method signatures and field shapes, and its `../<entity>/types.ts` owns the schema. (Both moved out of this directory in the #197 per-entity co-location; their behavior is cataloged below regardless of where the files sit.)
 
 ## Stores at a glance
 
-Each entry below names the base class and the store-specific behavior only.
+The store implementations now live in their entity modules (`../<entity>/store.ts`, beside `types.ts` and `disk.ts`); this catalog names each one's base class and store-specific behavior only.
 
-- `recipe-store.ts` — `EntityStore`. Diff-and-fetch sync. FK-only for categories (see Sharp edges).
-- `category-store.ts` — `TombstoneEntityStore`. Single source of truth for category data; `resolveByName`/`resolveNames`/`getChildren`.
-- `pantry-store.ts` — `TombstoneEntityStore`. `findByIngredient` tiered lookup.
-- `aisle-store.ts` / `meal-type-store.ts` — `EntityStore`, read-only reference catalogs (`resolveByName`, no delete/tombstone path).
-- `grocery-list-store.ts` / `menu-store.ts` — `TombstoneEntityStore` parent stores (`findByName`, `lastSyncedAt`).
-- `grocery-item-store.ts` / `menu-item-store.ts` — `TombstoneEntityStore` child stores keyed to a parent FK (`getByListUid` / `getByMenuUid`).
-- `grocery-ingredient-store.ts` — **plain class, NOT an EntityStore** (see Sharp edges).
-- `meal-store.ts` — `TombstoneEntityStore`. `getMaxOrderFlagOn` carries a reverse-engineered wire quirk (see Sharp edges).
-- `photo-store.ts` — `TombstoneEntityStore`, recipe-child entity with no standalone resource surface; `getByRecipeUid` gallery-sorted.
+- `../recipe/store.ts` — `EntityStore`. Diff-and-fetch sync. FK-only for categories (see Sharp edges).
+- `../category/store.ts` — `TombstoneEntityStore`. Single source of truth for category data; `resolveByName`/`resolveNames`/`getChildren`.
+- `../pantry/store.ts` — `TombstoneEntityStore`. `findByIngredient` tiered lookup.
+- `../aisle/store.ts` / `../meal-type/store.ts` — `EntityStore`, read-only reference catalogs (`resolveByName`, no delete/tombstone path).
+- `../grocery-list/store.ts` / `../menu/store.ts` — `TombstoneEntityStore` parent stores (`findByName`, `lastSyncedAt`).
+- `../grocery-item/store.ts` / `../menu-item/store.ts` — `TombstoneEntityStore` child stores keyed to a parent FK (`getByListUid` / `getByMenuUid`).
+- `../grocery-ingredient/store.ts` — **plain class, NOT an EntityStore** (see Sharp edges).
+- `../meal/store.ts` — `TombstoneEntityStore`. `getMaxOrderFlagOn` carries a reverse-engineered wire quirk (see Sharp edges).
+- `../photo/store.ts` — `TombstoneEntityStore`, recipe-child entity with no standalone resource surface; `getByRecipeUid` gallery-sorted.
 - Persistence (`disk-cache.ts`, `disk-cache-root.ts`, `oauth-client-disk-cache.ts`, and each entity's `../<entity>/disk.ts` descriptor) — see [Persistence](#persistence) below.
 
 ## Sharp edges
@@ -68,4 +68,4 @@ On-disk persistence for every cached entity: one `DiskCache<T>` per entity behin
 
 ## Boundary
 
-Must not import from `tools/`, `resources/`, or `features/`. Depends on `../entity/` (base classes), `../paprika/types`, and `../utils/duration`. The persistence layer additionally reaches into each `../<entity>/` for its disk descriptor and types, `../recipe/disk.js` for `RecipeDiskCache`, and `../auth/types.js` for the OAuth shapes — `DiskCacheRoot` is a composition root, so this cross-domain fan-in is expected.
+Must not import from `tools/`, `resources/`, or `features/`. The persistence layer reaches into each `../<entity>/` for its disk descriptor and `Stored` schema (the `parse` each `DiskCache` runs), `../recipe/disk.js` for the bespoke `RecipeDiskCache`, and `../auth/types.js` for the OAuth client/token shapes, with `../utils/log.js` and `../utils/errors.js` for logging and error helpers. `DiskCacheRoot` is a composition root, so this cross-domain fan-in is expected.

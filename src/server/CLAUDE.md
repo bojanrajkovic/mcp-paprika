@@ -1,6 +1,6 @@
 # Server Composition Root
 
-Last verified: 2026-06-01
+Last verified: 2026-06-02
 
 ## Purpose
 
@@ -8,7 +8,8 @@ Process-wide composition root. Owns the authoritative context types (`AppContext
 
 ## Key References
 
-- `docs/adr/0001-two-transports-and-composition-root.md` — the AppContext/SessionContext split, the Notifier seam, the bootstrap-order cycle, and the rejected single-transport / DI-container alternatives.
+- `docs/adr/0001-two-transports-and-composition-root.md` — the AppContext/SessionContext split, the Notifier seam, the bootstrap-order cycle, and the rejected single-transport alternative.
+- `docs/adr/0005-composition-modules-and-identifiers.md` — the composition-root shape (phase-typed builder; a DI container _deferred_ behind a written trigger, not rejected), the per-entity module structure, and foreign-key branding via `src/ids.ts`.
 - `src/server/app-context.ts` — the exhaustive, canonical field list for `AppContext` and `SessionContext`. Treat that file as the source of truth; do not re-enumerate fields here.
 - `src/server/notifier.ts` — `Notifier`, `singleServerNotifier`, `broadcastNotifier`.
 - `../cache/CLAUDE.md` (Persistence section) — the disk subcaches that `AppContext.cache` exposes.

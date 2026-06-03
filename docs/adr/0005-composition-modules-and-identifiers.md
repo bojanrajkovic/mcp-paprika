@@ -1,6 +1,6 @@
 # ADR-0005: Composition-root shape, module structure, and identifier branding
 
-**Status:** Proposed (2026-06-02)
+**Status:** Accepted (2026-06-02)
 **Last verified:** 2026-06-02
 
 ## Context
@@ -10,7 +10,7 @@ ADR-0001 shipped two transports over one composition root and recorded, honestly
 The shape of the code today, verified against source:
 
 - **The composition root is small.** `buildAppContext` + `buildMcpServer` total 445 lines in `src/server/build.ts`. `AppContext` is a flat 20-field record (`src/server/app-context.ts`); `buildMcpServer` makes 50 `register*` calls.
-- **The construction-time dependency graph is wide and shallow.** All 12 in-memory stores take a single `pendingWriteTtlMs` scalar and depend on nothing else. The only fan-in nodes are `SyncEngine` (reads 11 stores plus client, cache, and notifier; `src/paprika/sync.ts:218` takes the whole `AppContext`), the vector store (recipe + category stores plus `sync.events`), and the auth context (the disk cache). Every cross-store relationship is a runtime lookup through the context, not a constructor dependency.
+- **The construction-time dependency graph is wide and shallow.** All 12 in-memory stores take a single `pendingWriteTtlMs` scalar and depend on nothing else. The only fan-in nodes are `SyncEngine` (reads the stores plus client and cache; `src/paprika/sync.ts` takes the whole `AppContext`), the vector store (recipe + category stores plus `sync.events`), and the auth context (the disk cache). Every cross-store relationship is a runtime lookup through the context, not a constructor dependency.
 - **The bootstrap has one genuine cycle.** `AppContext` needs a `Notifier`; in stdio the `Notifier` needs the `McpServer`; the server is built from the `AppContext`. It is broken today with a closure over a mutable `let server` (`src/transport/stdio.ts`, `src/server/notifier.ts:35`).
 - **The 20-field `AppContext` literal is written twice.** `build.ts:261` builds a placeholder with `vectorStore: null`, and `:346` rebuilds the full object; 18 of 20 fields are duplicated verbatim. Adding a store means editing both or it silently drops from one.
 - **The data layer is almost completely decoupled across entities.** Branded UID schemas are used for each entity's own `uid`; foreign keys are stored as bare `z.string()` and resolved at runtime in the tool layer. There is exactly one exception: `recipe.categories` is a `CategoryUid[]`. No entity's type, store, or disk descriptor imports another entity's, save that single edge.
@@ -52,8 +52,7 @@ Keep hand-wiring, refactored into a phase-typed builder. Defer a DI container be
   ```
 
 - **Assemble `AppContext` exactly once** in the final phase, retiring the duplicated literal.
-- **Narrow `SyncEngine` to a `SyncDeps` interface** that names only the stores, client, cache, and notifier it reads, instead of the whole `AppContext`. This is the one decoupling worth doing regardless of everything else, and it is the prerequisite for any later modularization.
-- **Replace the 50 sequential `register*` calls with a `TOOL_REGISTRARS` array**, optional features expressed as a gate predicate, so a forgotten registration is a missing array entry rather than a silent omission.
+- **Narrow `SyncEngine` to a `SyncDeps` interface** that names only the stores, client, cache, and logger it reads, instead of the whole `AppContext`. This is the one decoupling worth doing regardless of everything else, and it is the prerequisite for any later modularization.
 
 A DI container is deferred, not rejected forever. The construction graph is a wide, shallow star, so there is no dependency tangle for a container to resolve; it would relabel the same explicit arguments as injection tokens without reducing them. More decisively, the hardest bootstrap constraint is not a dependency edge at all: the initial `syncOnce()` must run and mutate the category store _before_ the vector store indexes against it. That is a temporal side-effect ordering, which a container does not model and a phase-typed builder does. If a container is ever warranted (see the trigger in Consequences), the choice is `typed-inject`: fully compile-time typed, no decorators or `reflect-metadata`, the best fit for `@tsconfig/strictest`. awilix is rejected: its typed cradle is either a hand-written interface identical to `AppContext` or an inference blob that fights strict mode, and its scope and lazy-resolution features do not fit an eager-async, single-`AppContext` bootstrap.
 
@@ -72,8 +71,8 @@ src/
 ├── ids.ts                  shared leaf: every branded UID schema
 ├── entity/                 shared core: EntityStore / TombstoneEntityStore
 ├── cache/
-│   ├── base.ts             generic DiskCache<T>, writeFileAtomic
-│   └── root.ts             coordinator: imports each domain's disk descriptor, owns init()/flush()
+│   ├── disk-cache.ts       generic DiskCache<T>, writeFileAtomic
+│   └── disk-cache-root.ts  coordinator: imports each domain's disk descriptor, owns init()/flush()
 ├── server/                 composition root: phased builder, SyncEngine wiring, tool registry
 └── tools/  resources/      cross-cutting: resolve FKs across stores at runtime
 ```
@@ -101,7 +100,8 @@ flowchart TB
 - **Hoisting to a leaf is what keeps branding from re-coupling the data modules.** The brands are pure leaves (zod-only). Placing them in `src/ids.ts` means `meal/types.ts` imports `RecipeUidSchema` from `src/ids.ts`, not from `recipe/types.ts`, so every data module depends on the shared `ids` leaf and never on each other.
 - **This is kind-safety, not referential integrity.** Branding does not assert the referenced entity exists; `store.get` still returns `undefined` for a dangling-but-well-typed UID, which is correct for a cache of an eventually-consistent source. Enforced foreign keys are deliberately not modeled, because the upstream cannot honor them.
 - **No-regrets enabler.** Uniform branding now is the prerequisite for two futures and pays off whichever way each lands: a runtime-_enforced_ brand if Paprika round-trips non-UUID-shaped, brand-carrying identifiers (explored in [#202](https://github.com/bojanrajkovic/mcp-paprika/issues/202)), and, eventually, owning truly branded and FK-able stores once the data is no longer bound to Paprika's identifier scheme.
-- **Standardize the brand definitions during the hoist.** Seven of twelve currently carry `.min(1)`; five do not. Pick one rule.
+- **Brand a foreign key without inheriting a primary key's `.min(1)`.** Seven of twelve UID schemas carry `.min(1)`, a primary-key non-empty invariant; five do not. A foreign-key reference is not a primary key — it may be absent (`null`) or the `""` no-reference sentinel (an item with no aisle, [#76](https://github.com/bojanrajkovic/mcp-paprika/issues/76)). So an FK reuses its target's schema directly where that schema has no `.min(1)` (Category, Aisle, MealType); where the target's PK carries `.min(1)` (Recipe, Menu, GroceryList), a same-brand `*RefSchema` without the constraint brands the FK without tightening what it accepts. The `""` no-aisle value is named `NO_AISLE_UID`, and the string→brand mint is centralized at each data-origin boundary (the disk diff, the vector index) rather than repeated at every consumer.
+- **Standardizing `.min(1)` across all brands is deferred to [#202](https://github.com/bojanrajkovic/mcp-paprika/issues/202).** It is a runtime change — `.min(1)` would reject the `""` sentinel — and collapsing the PK/`*RefSchema` pair into a single schema per brand is part of that same runtime-enforcement work. Until then the split keeps branding a pure compile-time no-op.
 
 This folds into decision 2: the entity types are touched once, splitting `src/paprika/types.ts` into per-entity modules and extracting the brands to `src/ids.ts` in the same pass.
 
@@ -119,7 +119,7 @@ This ADR also corrects two stale records: `src/server/CLAUDE.md` described the D
 
 **Positive.**
 
-- The load-bearing bootstrap order becomes a compile-time guarantee, not a comment; the duplicated `AppContext` literal disappears; a forgotten tool registration becomes a missing array entry.
+- The load-bearing bootstrap order becomes a compile-time guarantee, not a comment, and the duplicated `AppContext` literal disappears.
 - The data layer is organized by what changes together (an entity's type, store, and persistence) while the cross-domain coordinators stay where cross-domain logic belongs.
 - Foreign keys are kind-safe and cast-free at every resolution site, restoring the only safety the random-UUID identifiers can carry today.
 - All three decisions keep future options open and cheap: the per-domain folders are the shape autoload wants, `SyncDeps` is the seam any modularization needs, and branded IDs are ready for both [#202](https://github.com/bojanrajkovic/mcp-paprika/issues/202) and an eventual owned backend.
@@ -144,5 +144,5 @@ Until then, the phased builder is the lighter, single-file, ordering-aware shape
 - [ADR-0001](0001-two-transports-and-composition-root.md) — the two-transport composition root and the deferred DI question this ADR resolves.
 - [#197](https://github.com/bojanrajkovic/mcp-paprika/issues/197) — the evaluation mandate.
 - [#202](https://github.com/bojanrajkovic/mcp-paprika/issues/202) — runtime-enforced UID branding follow-up.
-- `src/server/build.ts`, `src/server/app-context.ts`, `src/server/notifier.ts`, `src/paprika/sync.ts`, `src/paprika/types.ts` — the surfaces this ADR changes.
-- `src/server/CLAUDE.md` — to be corrected (the "rejected … DI-container" phrasing).
+- `src/server/build.ts`, `src/server/app-context.ts`, `src/server/notifier.ts`, `src/paprika/sync.ts`, the per-entity `src/<entity>/` data modules, and `src/ids.ts` — the surfaces this ADR changes.
+- `src/server/CLAUDE.md` — the composition-root module contract; its DI-container phrasing is reconciled by this ADR.
