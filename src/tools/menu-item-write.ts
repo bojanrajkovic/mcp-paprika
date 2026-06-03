@@ -67,6 +67,7 @@ export function registerAddMenuItemsTool(server: McpServer, ctx: ServerContext):
   server.registerTool(
     "add_menu_items",
     {
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
       description:
         "Add one or more menuitems to a menu (saved meal plan). Look the menu up by UID or name (tiered " +
         "fuzzy match). Each item is EITHER recipe-linked (supply recipe_uid; display name auto-resolves " +
@@ -268,6 +269,7 @@ export function registerUpdateMenuItemTool(server: McpServer, ctx: ServerContext
   server.registerTool(
     "update_menu_item",
     {
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
       description:
         "Update an existing menuitem's meal type or recipe link by UID. Provide at least one of type or " +
         "recipe_uid; omitted fields keep their current values. Changing recipe_uid re-resolves the display " +
@@ -367,6 +369,7 @@ export function registerDeleteMenuItemTool(server: McpServer, ctx: ServerContext
   server.registerTool(
     "delete_menu_item",
     {
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
       description:
         "Soft-delete a menuitem (a planned recipe) from a menu by UID. Idempotent: a second delete on the " +
         "same UID returns a friendly 'already deleted' message without re-POSTing. Requires an exact UID.",

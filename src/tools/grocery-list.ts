@@ -15,6 +15,7 @@ export function registerListGroceryListsTool(server: McpServer, ctx: ServerConte
   server.registerTool(
     "list_grocery_lists",
     {
+      annotations: { readOnlyHint: true, idempotentHint: true },
       description: "List all grocery lists sorted alphabetically by name, with UID and item count per list.",
       inputSchema: {},
     },
@@ -48,6 +49,7 @@ export function registerReadGroceryListTool(server: McpServer, ctx: ServerContex
   server.registerTool(
     "read_grocery_list",
     {
+      annotations: { readOnlyHint: true, idempotentHint: true },
       description:
         "Get a grocery list by UID or name. Name lookup is tiered (exact → starts-with → contains) " +
         "and case-insensitive, with a disambiguation list when multiple lists match the same tier. " +
@@ -87,6 +89,7 @@ export function registerCreateGroceryListTool(server: McpServer, ctx: ServerCont
   server.registerTool(
     "create_grocery_list",
     {
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
       description:
         "Create a new grocery list with the given name. Rejects duplicate names (case-insensitive exact match); " +
         "if a duplicate is found, the response includes the existing UID.",
@@ -140,6 +143,7 @@ export function registerRenameGroceryListTool(server: McpServer, ctx: ServerCont
   server.registerTool(
     "rename_grocery_list",
     {
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
       description: "Rename a grocery list. Rejects if the new name conflicts with a different existing list.",
       inputSchema: {
         uid: GroceryListUidSchema.describe("Grocery list UID to rename"),
@@ -197,6 +201,7 @@ export function registerDeleteGroceryListTool(server: McpServer, ctx: ServerCont
   server.registerTool(
     "delete_grocery_list",
     {
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
       description: "Delete a grocery list by UID.",
       inputSchema: {
         uid: GroceryListUidSchema.describe("Grocery list UID to delete"),

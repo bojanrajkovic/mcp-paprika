@@ -12,6 +12,7 @@ export function registerGetPantryItemTool(server: McpServer, ctx: ServerContext)
   server.registerTool(
     "read_pantry_item",
     {
+      annotations: { readOnlyHint: true, idempotentHint: true },
       description:
         "Get a pantry item by UID or ingredient name. Ingredient lookup is fuzzy " +
         "(exact → starts-with → contains) and case-insensitive, with a disambiguation list " +

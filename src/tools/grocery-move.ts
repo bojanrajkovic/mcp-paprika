@@ -18,6 +18,7 @@ export function registerMoveToPantryTool(server: McpServer, ctx: ServerContext):
   server.registerTool(
     "move_grocery_items_to_pantry",
     {
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
       description:
         "Move one or more grocery items to the pantry. Creates pantry items (with today's purchase date), then deletes the grocery items.",
       inputSchema: {

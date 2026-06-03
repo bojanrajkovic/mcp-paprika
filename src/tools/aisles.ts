@@ -10,6 +10,7 @@ export function registerAislesTool(server: McpServer, ctx: ServerContext): void 
   server.registerTool(
     "list_aisles",
     {
+      annotations: { readOnlyHint: true, idempotentHint: true },
       description:
         "List all known aisles, sorted by order then name. " +
         "Includes the aisle UID needed for pantry and grocery item writes.",

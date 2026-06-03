@@ -28,6 +28,7 @@ export function registerRestoreRecipeTool(server: McpServer, ctx: ServerContext)
   server.registerTool(
     "restore_recipe",
     {
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
       description:
         "Restore a trashed recipe by UID, moving it out of the trash back into the active library. " +
         "The inverse of trash_recipe; use purge_recipe to permanently delete a trashed recipe instead.",

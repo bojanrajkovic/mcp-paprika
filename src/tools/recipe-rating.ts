@@ -20,6 +20,7 @@ export function registerRateRecipeTool(server: McpServer, ctx: ServerContext): v
   server.registerTool(
     "rate_recipe",
     {
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
       description: "Rate a recipe 0–5 stars by UID. Sets the recipe's star rating; pass 0 to clear it.",
       inputSchema: rateRecipeInputSchema,
     },
