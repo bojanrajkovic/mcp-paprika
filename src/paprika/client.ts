@@ -1,21 +1,23 @@
 import { gzipSync } from "node:zlib";
+
 import {
-  ExponentialBackoff,
-  ConsecutiveBreaker,
-  bulkhead,
-  retry,
-  circuitBreaker,
-  handleType,
-  wrap,
   BrokenCircuitError,
-  type RetryPolicy,
+  bulkhead,
+  circuitBreaker,
   type CircuitBreakerPolicy,
+  ConsecutiveBreaker,
+  ExponentialBackoff,
+  handleType,
   type IPolicy,
   type IRetryContext,
+  retry,
+  type RetryPolicy,
+  wrap,
 } from "cockatiel";
 import type { Logger } from "pino";
 import { z } from "zod";
 import type { ZodType, ZodTypeDef } from "zod";
+
 import type { Aisle } from "../aisle/types.js";
 import type { Category } from "../category/types.js";
 import type { GroceryIngredient } from "../grocery-ingredient/types.js";
@@ -29,6 +31,7 @@ import type { Menu } from "../menu/types.js";
 import type { PantryItem } from "../pantry/types.js";
 import type { Photo } from "../photo/types.js";
 import type { Recipe, RecipeEntry } from "../recipe/types.js";
+
 import { AisleSchema } from "../aisle/types.js";
 import { CategorySchema } from "../category/types.js";
 import { GroceryIngredientSchema } from "../grocery-ingredient/types.js";
@@ -39,13 +42,13 @@ import { MealSchema, mealToApiPayload } from "../meal/types.js";
 import { MenuItemSchema, menuItemToApiPayload } from "../menu-item/types.js";
 import { MenuSchema, menuToApiPayload } from "../menu/types.js";
 import { PantryItemSchema } from "../pantry/types.js";
-import { AuthResponseSchema } from "./auth-response.js";
 import { PhotoSchema, photoToApiPayload } from "../photo/types.js";
 import { RecipeEntrySchema, RecipeSchema } from "../recipe/types.js";
-import { computeRecipeHash } from "./recipe-hash.js";
-import { PaprikaAuthError, PaprikaAPIError } from "./errors.js";
 import { CircuitOpenError } from "../utils/errors.js";
 import { SILENT_LOG } from "../utils/log.js";
+import { AuthResponseSchema } from "./auth-response.js";
+import { PaprikaAPIError, PaprikaAuthError } from "./errors.js";
+import { computeRecipeHash } from "./recipe-hash.js";
 
 const AUTH_URL = "https://paprikaapp.com/api/v1/account/login/";
 const API_BASE = "https://paprikaapp.com/api/v2/sync";

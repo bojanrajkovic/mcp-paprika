@@ -1,6 +1,7 @@
 import type { DiskCacheDescriptor } from "../cache/disk-cache.js";
-import { MealStoredSchema } from "./types.js";
 import type { Meal } from "./types.js";
+
+import { MealStoredSchema } from "./types.js";
 
 export const mealDiskDescriptor: DiskCacheDescriptor<Meal> = {
   subdir: "meals",

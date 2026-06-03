@@ -2,20 +2,21 @@ import { randomUUID } from "node:crypto";
 import type { Server as NodeHttpServer } from "node:http";
 
 import { StreamableHTTPTransport } from "@hono/mcp";
+import { bearerAuth, mcpAuthRouter } from "@hono/mcp";
 import { serve, type ServerType } from "@hono/node-server";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
 import { Hono } from "hono";
 import type { Context, Next } from "hono";
+import type { Logger } from "pino";
 
-import { mcpAuthRouter, bearerAuth } from "@hono/mcp";
-import { buildAppContext, buildMcpServer } from "../server/build.js";
-import { broadcastNotifier } from "../server/notifier.js";
 import type { PaprikaConfig } from "../utils/config.js";
 import type { TransportHandle } from "./stdio.js";
+
 import { buildAuthMetadataRouter } from "../auth/metadata.js";
-import { buildAuthRoutes, buildDcrRateLimit, buildClientCap, MAX_REGISTERED_CLIENTS } from "../auth/routes.js";
-import type { Logger } from "pino";
+import { buildAuthRoutes, buildClientCap, buildDcrRateLimit, MAX_REGISTERED_CLIENTS } from "../auth/routes.js";
+import { buildAppContext, buildMcpServer } from "../server/build.js";
+import { broadcastNotifier } from "../server/notifier.js";
 
 const SHUTDOWN_TIMEOUT_MS = 10_000;
 const MCP_SESSION_HEADER = "mcp-session-id";

@@ -1,30 +1,30 @@
-import { scheduler } from "node:timers/promises";
 import { createRequire } from "node:module";
+import { scheduler } from "node:timers/promises";
 
 import type { Logger } from "pino";
 
 import type { DiskCache } from "../cache/disk-cache.js";
-import type { TombstoneEntityStore } from "../entity/tombstone-store.js";
-import type { AppContext } from "../server/app-context.js";
 import type { Category } from "../category/types.js";
+import type { TombstoneEntityStore } from "../entity/tombstone-store.js";
 import type { GroceryItem } from "../grocery-item/types.js";
 import type { GroceryList } from "../grocery-list/types.js";
 import type { Meal } from "../meal/types.js";
 import type { MenuItem } from "../menu-item/types.js";
 import type { Menu } from "../menu/types.js";
 import type { PantryItem } from "../pantry/types.js";
+import type { Photo } from "../photo/types.js";
+import type { Recipe } from "../recipe/types.js";
+import type { AppContext } from "../server/app-context.js";
 import type {
   AnySyncResult,
   EntityChanges,
   GroceryItemSyncResult,
   GroceryListSyncResult,
-  MenuSyncResult,
   MenuItemSyncResult,
-  RecipeSyncResult,
+  MenuSyncResult,
   PantrySyncResult,
+  RecipeSyncResult,
 } from "./sync-types.js";
-import type { Photo } from "../photo/types.js";
-import type { Recipe } from "../recipe/types.js";
 
 function categoriesEqual(a: Category, b: Category): boolean {
   return a.uid === b.uid && a.name === b.name && a.orderFlag === b.orderFlag && a.parentUid === b.parentUid;

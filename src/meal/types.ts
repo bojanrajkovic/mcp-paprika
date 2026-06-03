@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { MealUidSchema, MealTypeUidSchema, RecipeUidRefSchema } from "../ids.js";
+import { MealTypeUidSchema, MealUidSchema, RecipeUidRefSchema } from "../ids.js";
 
 // MealStoredSchema — validates camelCase JSON read back from disk. No transform.
 // `typeUid` is nullable because legacy meals (created before Paprika's mealtypes

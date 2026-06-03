@@ -1,9 +1,10 @@
-import { describe, it, expect } from "vitest";
-import { RecipeStore } from "../recipe/store.js";
-import { makeRecipe } from "../cache/__fixtures__/recipes.js";
+import { describe, expect, it } from "vitest";
+
 import { makeMeal } from "../cache/__fixtures__/meals.js";
+import { makeRecipe } from "../cache/__fixtures__/recipes.js";
+import { RecipeStore } from "../recipe/store.js";
 import { registerListTool } from "./list.js";
-import { makeTestServer, makeCtx, getText, seed } from "./tool-test-utils.js";
+import { getText, makeCtx, makeTestServer, seed } from "./tool-test-utils.js";
 
 describe("p2-discovery-tools: list_recipes tool", () => {
   describe("p2-discovery-tools.AC2: list_recipes", () => {

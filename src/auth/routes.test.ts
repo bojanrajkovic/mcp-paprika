@@ -1,31 +1,33 @@
-import { fromAny } from "@total-typescript/shoehorn";
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { SILENT_LOG } from "../utils/log.js";
-import { nowSeconds } from "./tokens.js";
-import { makePinoCapture } from "../tools/tool-test-utils.js";
+
+import { fromAny } from "@total-typescript/shoehorn";
 import { Hono } from "hono";
-import {
-  buildAuthRoutes,
-  buildDcrRateLimit,
-  buildClientCap,
-  pickTokenAuthMethod,
-  type AuthRoutesDeps,
-} from "./routes.js";
-import { DiskClientRegistrationStore } from "./client-registration.js";
-import { TokenStore } from "./token-store.js";
-import { AuthRequestStore } from "./auth-request-store.js";
-import { AuthCodeStore } from "./auth-code-store.js";
-import { PendingAuthorizationStore } from "./pending-authorization-store.js";
-import { DiskCacheRoot } from "../cache/disk-cache-root.js";
-import { makeDefaultOidcStub, makeDiscoveryDoc } from "./__fixtures__/oidc-stub.js";
-import { OAuthClientNotFoundError } from "./errors.js";
-import { makeVerifiedIdentity } from "./__fixtures__/oauth-state.js";
-import { createJwksFor } from "./oidc-client.js";
 import type { JWTVerifyGetKey } from "jose";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
 import { useMswServer } from "../__fixtures__/msw.js";
+import { DiskCacheRoot } from "../cache/disk-cache-root.js";
+import { makePinoCapture } from "../tools/tool-test-utils.js";
+import { SILENT_LOG } from "../utils/log.js";
+import { makeVerifiedIdentity } from "./__fixtures__/oauth-state.js";
+import { makeDefaultOidcStub, makeDiscoveryDoc } from "./__fixtures__/oidc-stub.js";
+import { AuthCodeStore } from "./auth-code-store.js";
+import { AuthRequestStore } from "./auth-request-store.js";
+import { DiskClientRegistrationStore } from "./client-registration.js";
+import { OAuthClientNotFoundError } from "./errors.js";
+import { createJwksFor } from "./oidc-client.js";
+import { PendingAuthorizationStore } from "./pending-authorization-store.js";
+import {
+  type AuthRoutesDeps,
+  buildAuthRoutes,
+  buildClientCap,
+  buildDcrRateLimit,
+  pickTokenAuthMethod,
+} from "./routes.js";
+import { TokenStore } from "./token-store.js";
+import { nowSeconds } from "./tokens.js";
 
 // Pino numeric log levels for use in assertions (see pino docs: info=30, warn=40, error=50)
 const warnLevel = 40;

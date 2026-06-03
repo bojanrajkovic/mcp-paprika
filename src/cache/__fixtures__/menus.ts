@@ -1,4 +1,4 @@
-import type { MenuUid, MenuItemUid, RecipeUid, MealTypeUid } from "../../ids.js";
+import type { MealTypeUid, MenuItemUid, MenuUid, RecipeUid } from "../../ids.js";
 import type { MenuItem } from "../../menu-item/types.js";
 import type { Menu } from "../../menu/types.js";
 

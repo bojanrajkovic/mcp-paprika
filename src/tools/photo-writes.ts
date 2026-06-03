@@ -2,13 +2,14 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 
-import { PhotoUidSchema, RecipeUidSchema } from "../ids.js";
 import type { Photo } from "../photo/types.js";
 import type { ServerContext } from "../types/server-context.js";
+
+import { PhotoUidSchema, RecipeUidSchema } from "../ids.js";
 import { toMessage } from "../utils/log.js";
 import { coldStartGuard, textResult } from "./helpers.js";
-import { attachPhotoToRecipe, commitPhotoDelete, normalizePhoto, GENERATED_MAX_FULL_EDGE } from "./photo-helpers.js";
 import { fetchImageBytes, MAX_IMAGE_BYTES } from "./photo-fetch.js";
+import { attachPhotoToRecipe, commitPhotoDelete, GENERATED_MAX_FULL_EDGE, normalizePhoto } from "./photo-helpers.js";
 
 /**
  * Image source for `upload_photo`: exactly one of `url`, `generation_token`, or

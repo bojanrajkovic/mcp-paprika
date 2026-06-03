@@ -1,13 +1,16 @@
-import { fromAny } from "@total-typescript/shoehorn";
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { createHash } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { VectorStore } from "./vector-store.js";
-import { makeRecipe } from "../cache/__fixtures__/recipes.js";
-import type { EmbeddingClient } from "./embeddings.js";
+
+import { fromAny } from "@total-typescript/shoehorn";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
 import type { RecipeUid } from "../ids.js";
+import type { EmbeddingClient } from "./embeddings.js";
+
+import { makeRecipe } from "../cache/__fixtures__/recipes.js";
+import { VectorStore } from "./vector-store.js";
 
 /**
  * Deterministic embedding function for integration tests.

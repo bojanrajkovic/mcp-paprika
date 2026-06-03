@@ -1,12 +1,14 @@
 import { fromAny } from "@total-typescript/shoehorn";
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { RecipeStore } from "../recipe/store.js";
-import { makeGroceryList } from "../cache/__fixtures__/grocery-lists.js";
-import { makeGroceryItem } from "../cache/__fixtures__/grocery-items.js";
-import { registerClearPurchasedTool, registerClearAllTool } from "./grocery-clear.js";
-import { makeTestServer, makeCtx, getText, makeStubNotifier, seed } from "./tool-test-utils.js";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+import type { GroceryItemUid, GroceryListUid } from "../ids.js";
 import type { SeedData } from "./tool-test-utils.js";
-import type { GroceryListUid, GroceryItemUid } from "../ids.js";
+
+import { makeGroceryItem } from "../cache/__fixtures__/grocery-items.js";
+import { makeGroceryList } from "../cache/__fixtures__/grocery-lists.js";
+import { RecipeStore } from "../recipe/store.js";
+import { registerClearAllTool, registerClearPurchasedTool } from "./grocery-clear.js";
+import { getText, makeCtx, makeStubNotifier, makeTestServer, seed } from "./tool-test-utils.js";
 
 const WEEKLY_LIST = makeGroceryList({ uid: "LIST-1" as GroceryListUid, name: "Weekly" });
 

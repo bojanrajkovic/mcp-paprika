@@ -1,16 +1,19 @@
-import { fromAny } from "@total-typescript/shoehorn";
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import type { Mocked } from "vitest";
-import { contentHash, VectorStore } from "./vector-store.js";
-import { VectorStoreError } from "./vector-store-errors.js";
-import { recipeToEmbeddingText } from "./embeddings.js";
-import { makeRecipe } from "../cache/__fixtures__/recipes.js";
-import type { RecipeUid } from "../ids.js";
-import { mkdtemp, rm, writeFile, readFile, mkdir } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+
+import { fromAny } from "@total-typescript/shoehorn";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { Mocked } from "vitest";
+
+import type { RecipeUid } from "../ids.js";
 import type { EmbeddingClient } from "./embeddings.js";
+
+import { makeRecipe } from "../cache/__fixtures__/recipes.js";
 import { makePinoCapture } from "../tools/tool-test-utils.js";
+import { recipeToEmbeddingText } from "./embeddings.js";
+import { VectorStoreError } from "./vector-store-errors.js";
+import { contentHash, VectorStore } from "./vector-store.js";
 
 describe("VectorStore contentHash", () => {
   describe("AC5.1: SHA-256 stability", () => {

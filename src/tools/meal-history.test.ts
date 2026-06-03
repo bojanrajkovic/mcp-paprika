@@ -1,10 +1,12 @@
-import { describe, it, expect, beforeEach } from "vitest";
-import { RecipeStore } from "../recipe/store.js";
-import { makeMeal, makeMealType } from "../cache/__fixtures__/meals.js";
-import { registerMealHistoryTool } from "./meal-history.js";
-import { makeTestServer, makeCtx, getText, seed } from "./tool-test-utils.js";
-import type { ServerContext } from "../types/server-context.js";
+import { beforeEach, describe, expect, it } from "vitest";
+
 import type { MealTypeUid } from "../ids.js";
+import type { ServerContext } from "../types/server-context.js";
+
+import { makeMeal, makeMealType } from "../cache/__fixtures__/meals.js";
+import { RecipeStore } from "../recipe/store.js";
+import { registerMealHistoryTool } from "./meal-history.js";
+import { getText, makeCtx, makeTestServer, seed } from "./tool-test-utils.js";
 
 describe("list_meal_history tool", () => {
   let ctx: ServerContext;

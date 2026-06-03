@@ -6,7 +6,7 @@
  * suitable for mocking JWKS endpoints.
  */
 
-import { generateKeyPair, generateSecret, exportJWK, SignJWT, type JWK, type JWTPayload } from "jose";
+import { exportJWK, generateKeyPair, generateSecret, type JWK, type JWTPayload, SignJWT } from "jose";
 
 /**
  * Generates an RSA or ECDSA JWT with specified claims.

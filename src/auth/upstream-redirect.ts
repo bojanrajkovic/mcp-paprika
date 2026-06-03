@@ -13,8 +13,10 @@
  */
 
 import type { Context } from "hono";
-import { generateOpaqueToken, nowSeconds } from "./tokens.js";
+
 import type { AuthRequestStore } from "./auth-request-store.js";
+
+import { generateOpaqueToken, nowSeconds } from "./tokens.js";
 
 export interface UpstreamRedirectDeps {
   readonly authRequests: AuthRequestStore;

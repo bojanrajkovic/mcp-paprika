@@ -1,18 +1,20 @@
 import { fromAny } from "@total-typescript/shoehorn";
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { RecipeStore } from "../recipe/store.js";
-import { makeGroceryList } from "../cache/__fixtures__/grocery-lists.js";
-import { makeGroceryItem } from "../cache/__fixtures__/grocery-items.js";
-import { makeGroceryIngredient } from "../cache/__fixtures__/grocery-ingredients.js";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+import type { AisleUid, GroceryItemUid, GroceryListUid } from "../ids.js";
+import type { SeedData } from "./tool-test-utils.js";
+
 import { makeAisle } from "../cache/__fixtures__/aisles.js";
+import { makeGroceryIngredient } from "../cache/__fixtures__/grocery-ingredients.js";
+import { makeGroceryItem } from "../cache/__fixtures__/grocery-items.js";
+import { makeGroceryList } from "../cache/__fixtures__/grocery-lists.js";
+import { RecipeStore } from "../recipe/store.js";
 import {
   registerAddGroceryItemsTool,
-  registerUpdateGroceryItemTool,
   registerDeleteGroceryItemTool,
+  registerUpdateGroceryItemTool,
 } from "./grocery-item.js";
-import { makeTestServer, makeCtx, getText, makeStubNotifier, seed } from "./tool-test-utils.js";
-import type { SeedData } from "./tool-test-utils.js";
-import type { GroceryListUid, GroceryItemUid, AisleUid } from "../ids.js";
+import { getText, makeCtx, makeStubNotifier, makeTestServer, seed } from "./tool-test-utils.js";
 
 const WEEKLY_LIST = makeGroceryList({ uid: "LIST-1" as GroceryListUid, name: "Weekly" });
 const PRODUCE_AISLE = makeAisle({ uid: "AISLE-1" as AisleUid, name: "Produce" });

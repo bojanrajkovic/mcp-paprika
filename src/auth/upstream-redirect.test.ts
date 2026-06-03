@@ -1,7 +1,8 @@
-import { describe, it, expect, vi } from "vitest";
 import type { Context } from "hono";
-import { redirectUpstream } from "./upstream-redirect.js";
+import { describe, expect, it, vi } from "vitest";
+
 import { AuthRequestStore } from "./auth-request-store.js";
+import { redirectUpstream } from "./upstream-redirect.js";
 
 function makeDeps(authRequests: AuthRequestStore) {
   return {

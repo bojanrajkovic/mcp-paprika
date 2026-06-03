@@ -7,14 +7,14 @@
 // Usage: npx tsx scripts/verify-sdk.ts
 // Output goes to stderr (stdout is reserved for MCP wire protocol).
 
+import { StreamableHTTPTransport } from "@hono/mcp";
 // Verified import paths (subpath exports, not barrel imports).
 // See docs/verified-api.md for the authoritative SDK API surface.
 import { McpServer, ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { isInitializeRequest, type CallToolResult } from "@modelcontextprotocol/sdk/types.js";
-import { StreamableHTTPTransport } from "@hono/mcp";
+import { type CallToolResult, isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
 
 function log(message: string): void {
   process.stderr.write(`${message}\n`);

@@ -1,4 +1,3 @@
-import type { AppContext } from "../server/app-context.js";
 import type { Aisle } from "../aisle/types.js";
 import type { Category } from "../category/types.js";
 import type { GroceryIngredient } from "../grocery-ingredient/types.js";
@@ -11,6 +10,7 @@ import type { Menu } from "../menu/types.js";
 import type { PantryItem } from "../pantry/types.js";
 import type { Photo } from "../photo/types.js";
 import type { Recipe } from "../recipe/types.js";
+import type { AppContext } from "../server/app-context.js";
 
 /**
  * Declarative seed payload for a test {@link AppContext}. Each key maps to one

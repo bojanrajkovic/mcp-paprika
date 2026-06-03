@@ -1,15 +1,16 @@
 import { readFile, rename } from "node:fs/promises";
 import { join } from "node:path";
+
 import type { Logger } from "pino";
 import { z } from "zod";
 
-import { RecipeStoredSchema } from "./types.js";
-import type { DiffResult } from "../paprika/sync-types.js";
 import type { RecipeUid } from "../ids.js";
+import type { DiffResult } from "../paprika/sync-types.js";
 import type { Recipe, RecipeEntry } from "./types.js";
-import { isNodeError } from "../utils/errors.js";
 
 import { DiskCache } from "../cache/disk-cache.js";
+import { isNodeError } from "../utils/errors.js";
+import { RecipeStoredSchema } from "./types.js";
 
 // Local schema for recipes/index.json. The unified index.json schema lived
 // in the old DiskCache; in the new layout only recipes carry real hashes,

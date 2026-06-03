@@ -11,13 +11,16 @@
  */
 
 import { randomUUID, timingSafeEqual } from "node:crypto";
+
 import { InvalidRequestError } from "@modelcontextprotocol/sdk/server/auth/errors.js";
 import type { Logger } from "pino";
-import { generateOpaqueToken, hashTokenForStorage, nowSeconds } from "./tokens.js";
+
+import type { DiskCacheRoot } from "../cache/disk-cache-root.js";
+import type { OAuthClient } from "./types.js";
+
 import { validateRegistration, validateUpdate } from "./dcr-validator.js";
 import { OAuthClientNotFoundError } from "./errors.js";
-import type { OAuthClient } from "./types.js";
-import type { DiskCacheRoot } from "../cache/disk-cache-root.js";
+import { generateOpaqueToken, hashTokenForStorage, nowSeconds } from "./tokens.js";
 
 // ============================================================================
 // Wire Format Conversion

@@ -14,7 +14,8 @@
  */
 
 import type { PendingAuthorization } from "./types.js";
-import { PENDING_AUTHORIZATION_TTL_SECONDS, MAX_INMEMORY_AUTH_ENTRIES } from "./tokens.js";
+
+import { MAX_INMEMORY_AUTH_ENTRIES, PENDING_AUTHORIZATION_TTL_SECONDS } from "./tokens.js";
 import { TtlStore } from "./ttl-store.js";
 
 export class PendingAuthorizationStore extends TtlStore<PendingAuthorization> {

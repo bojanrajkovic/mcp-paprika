@@ -1,6 +1,7 @@
 import { createOAuthMetadata, wellKnownRouter } from "@hono/mcp/auth";
 import type { OAuthMetadata } from "@modelcontextprotocol/sdk/shared/auth.js";
 import type { Hono } from "hono";
+
 import type { MintingOAuthServerProvider } from "./provider.js";
 
 /**

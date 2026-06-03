@@ -1,6 +1,7 @@
-import { TombstoneEntityStore } from "../entity/index.js";
-import type { GroceryItem } from "./types.js";
 import type { GroceryItemUid, GroceryListUid } from "../ids.js";
+import type { GroceryItem } from "./types.js";
+
+import { TombstoneEntityStore } from "../entity/index.js";
 
 export class GroceryItemStore extends TombstoneEntityStore<GroceryItem, GroceryItemUid> {
   constructor(opts?: { readonly pendingWriteTtlMs?: number }) {

@@ -11,8 +11,8 @@
  *   npx tsx scripts/generate-har-fixtures.ts
  */
 
-import { readFileSync, writeFileSync, readdirSync } from "node:fs";
-import { join, basename } from "node:path";
+import { readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { basename, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));

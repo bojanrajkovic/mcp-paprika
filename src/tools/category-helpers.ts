@@ -1,10 +1,12 @@
-import { ok, err, type Result } from "neverthrow";
+import { err, ok, type Result } from "neverthrow";
+
 import type { Category } from "../category/types.js";
 import type { CategoryUid } from "../ids.js";
 import type { Recipe } from "../recipe/types.js";
 import type { ServerContext } from "../types/server-context.js";
-import { coldStartGuard, textResult } from "./helpers.js";
+
 import { reindexRecipesForCategoryChange } from "../features/discover-feature.js";
+import { coldStartGuard, textResult } from "./helpers.js";
 
 /**
  * Readiness gate for every category tool. Composes `coldStartGuard` (recipe

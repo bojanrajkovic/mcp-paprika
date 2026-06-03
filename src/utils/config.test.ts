@@ -1,17 +1,19 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { z } from "zod";
-import {
-  ConfigError,
-  paprikaConfigSchema,
-  type EmbeddingConfig,
-  loadConfig,
-  buildEnvOverrides,
-  deepMerge,
-  resolveImageGenConfig,
-} from "./config.js";
-import { mkdtempSync, writeFileSync, rmSync, chmodSync } from "node:fs";
+import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { z } from "zod";
+
+import {
+  buildEnvOverrides,
+  ConfigError,
+  deepMerge,
+  type EmbeddingConfig,
+  loadConfig,
+  paprikaConfigSchema,
+  resolveImageGenConfig,
+} from "./config.js";
 
 describe("Configuration loading", () => {
   describe("config-loader.AC7.3: ConfigError class", () => {

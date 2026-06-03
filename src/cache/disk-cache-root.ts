@@ -1,23 +1,11 @@
 import { mkdir, readFile, rename, unlink } from "node:fs/promises";
 import { join } from "node:path";
+
 import type { Logger } from "pino";
 import { z } from "zod";
 
-import { aisleDiskDescriptor } from "../aisle/disk.js";
-import { categoryDiskDescriptor } from "../category/disk.js";
-import { groceryIngredientDiskDescriptor } from "../grocery-ingredient/disk.js";
-import { groceryItemDiskDescriptor } from "../grocery-item/disk.js";
-import { groceryListDiskDescriptor } from "../grocery-list/disk.js";
-import { mealDiskDescriptor } from "../meal/disk.js";
-import { mealTypeDiskDescriptor } from "../meal-type/disk.js";
-import { menuDiskDescriptor } from "../menu/disk.js";
-import { menuItemDiskDescriptor } from "../menu-item/disk.js";
-import { pantryDiskDescriptor } from "../pantry/disk.js";
-import { photoDiskDescriptor } from "../photo/disk.js";
-import { RecipeDiskCache } from "../recipe/disk.js";
-import { OAuthTokenSchema } from "../auth/types.js";
-import type { OAuthToken } from "../auth/types.js";
 import type { Aisle } from "../aisle/types.js";
+import type { OAuthToken } from "../auth/types.js";
 import type { Category } from "../category/types.js";
 import type { GroceryIngredient } from "../grocery-ingredient/types.js";
 import type { GroceryItem } from "../grocery-item/types.js";
@@ -28,11 +16,24 @@ import type { MenuItem } from "../menu-item/types.js";
 import type { Menu } from "../menu/types.js";
 import type { PantryItem } from "../pantry/types.js";
 import type { Photo } from "../photo/types.js";
+import type { DiskCacheDescriptor } from "./disk-cache.js";
+
+import { aisleDiskDescriptor } from "../aisle/disk.js";
+import { OAuthTokenSchema } from "../auth/types.js";
+import { categoryDiskDescriptor } from "../category/disk.js";
+import { groceryIngredientDiskDescriptor } from "../grocery-ingredient/disk.js";
+import { groceryItemDiskDescriptor } from "../grocery-item/disk.js";
+import { groceryListDiskDescriptor } from "../grocery-list/disk.js";
+import { mealTypeDiskDescriptor } from "../meal-type/disk.js";
+import { mealDiskDescriptor } from "../meal/disk.js";
+import { menuItemDiskDescriptor } from "../menu-item/disk.js";
+import { menuDiskDescriptor } from "../menu/disk.js";
+import { pantryDiskDescriptor } from "../pantry/disk.js";
+import { photoDiskDescriptor } from "../photo/disk.js";
+import { RecipeDiskCache } from "../recipe/disk.js";
 import { isNodeError } from "../utils/errors.js";
 import { SILENT_LOG } from "../utils/log.js";
-
 import { DiskCache, writeFileAtomic } from "./disk-cache.js";
-import type { DiskCacheDescriptor } from "./disk-cache.js";
 import { OAuthClientDiskCache } from "./oauth-client-disk-cache.js";
 
 // Schema for the recipes namespace inside the legacy unified index.json.

@@ -1,9 +1,11 @@
-import { toMessage } from "../utils/log.js";
-import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { RecipeUidSchema } from "../ids.js";
-import { coldStartGuard, commitRecipe, textResult } from "./helpers.js";
+import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+
 import type { ServerContext } from "../types/server-context.js";
+
+import { RecipeUidSchema } from "../ids.js";
+import { toMessage } from "../utils/log.js";
+import { coldStartGuard, commitRecipe, textResult } from "./helpers.js";
 
 export function registerDeleteTool(server: McpServer, ctx: ServerContext): void {
   const log = ctx.log.child({ component: "delete_recipe" });

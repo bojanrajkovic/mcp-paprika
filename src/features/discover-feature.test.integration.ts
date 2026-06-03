@@ -13,18 +13,9 @@
  * Run specifically with: pnpm test src/features/discover-feature.test.integration.ts
  */
 
-import { describe, it, expect, afterEach, vi, beforeEach } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { RecipeStore } from "../recipe/store.js";
-import { CategoryStore } from "../category/store.js";
-import { makeRecipe } from "../cache/__fixtures__/recipes.js";
-import { makeTestServer, makeCtx, getText, DEFAULT_LOGGING_CONFIG } from "../tools/tool-test-utils.js";
-import { registerDiscoverTool } from "../tools/discover.js";
-import type { EmbeddingConfig } from "../utils/config.js";
-import type { AnySyncResult, RecipeSyncResult } from "../paprika/sync-types.js";
-import type { RecipeUid } from "../ids.js";
 
 // mitt's package shape (flat-conditioned `exports`, .d.ts using `export default`) confuses
 // TS strict resolution under @tsconfig/strictest + nodenext into typing the default import
@@ -33,6 +24,17 @@ import type { RecipeUid } from "../ids.js";
 // (esModuleInterop unwraps the default at the JS layer).
 import { fromAny } from "@total-typescript/shoehorn";
 import _mitt from "mitt";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import type { RecipeUid } from "../ids.js";
+import type { AnySyncResult, RecipeSyncResult } from "../paprika/sync-types.js";
+import type { EmbeddingConfig } from "../utils/config.js";
+
+import { makeRecipe } from "../cache/__fixtures__/recipes.js";
+import { CategoryStore } from "../category/store.js";
+import { RecipeStore } from "../recipe/store.js";
+import { registerDiscoverTool } from "../tools/discover.js";
+import { DEFAULT_LOGGING_CONFIG, getText, makeCtx, makeTestServer } from "../tools/tool-test-utils.js";
 const mitt: typeof _mitt.default = fromAny(_mitt);
 
 // Module-level tempDir variable used by the mock below.

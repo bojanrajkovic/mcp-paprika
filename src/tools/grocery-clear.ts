@@ -1,10 +1,12 @@
-import { toMessage } from "../utils/log.js";
-import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { GroceryListUidSchema } from "../ids.js";
-import { textResult } from "./helpers.js";
-import { commitGroceryItemsBatch, groceryStartGuard } from "./grocery-helpers.js";
+import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+
 import type { ServerContext } from "../types/server-context.js";
+
+import { GroceryListUidSchema } from "../ids.js";
+import { toMessage } from "../utils/log.js";
+import { commitGroceryItemsBatch, groceryStartGuard } from "./grocery-helpers.js";
+import { textResult } from "./helpers.js";
 
 export function registerClearPurchasedTool(server: McpServer, ctx: ServerContext): void {
   const log = ctx.log.child({ component: "clear_purchased" });

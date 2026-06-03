@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { computeRecipeHash } from "./recipe-hash.js";
-import { RecipeStoredSchema } from "../recipe/types.js";
+
 import type { Recipe } from "../recipe/types.js";
+
+import { RecipeStoredSchema } from "../recipe/types.js";
 import { RECIPE_HASH_FIXTURES } from "./__fixtures__/recipe-hashes.js";
+import { computeRecipeHash } from "./recipe-hash.js";
 
 const parse = (raw: Record<string, unknown>): Recipe => RecipeStoredSchema.parse(raw);
 

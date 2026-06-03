@@ -14,18 +14,19 @@
  * into this abstraction. It keeps its own bespoke stack.
  */
 import {
-  ExponentialBackoff,
-  ConsecutiveBreaker,
-  retry,
-  circuitBreaker,
-  handleType,
-  wrap,
   BrokenCircuitError,
+  circuitBreaker,
+  ConsecutiveBreaker,
+  ExponentialBackoff,
+  handleType,
   type IRetryContext,
+  retry,
+  wrap,
 } from "cockatiel";
 import type { Logger } from "pino";
-import { SILENT_LOG } from "./log.js";
+
 import { CircuitOpenError, type CircuitService } from "./errors.js";
+import { SILENT_LOG } from "./log.js";
 
 /**
  * Internal marker for transient HTTP failures (429/5xx) that the resilience

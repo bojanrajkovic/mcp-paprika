@@ -1,23 +1,26 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { URL } from "node:url";
-import { MintingOAuthServerProvider } from "./provider.js";
-import { DiskClientRegistrationStore } from "./client-registration.js";
-import { TokenStore } from "./token-store.js";
-import { AuthRequestStore } from "./auth-request-store.js";
-import { AuthCodeStore } from "./auth-code-store.js";
-import { PendingAuthorizationStore } from "./pending-authorization-store.js";
+
+import type { OAuthClientInformationFull } from "@modelcontextprotocol/sdk/shared/auth.js";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import type { AuthCodeState } from "./types.js";
+
+import { useMswServer } from "../__fixtures__/msw.js";
 import { DiskCacheRoot } from "../cache/disk-cache-root.js";
-import { makeDefaultOidcStub, makeDiscoveryDoc } from "./__fixtures__/oidc-stub.js";
-import { makeAuthCodeState, makeVerifiedIdentity } from "./__fixtures__/oauth-state.js";
-import { ACCESS_TOKEN_TTL_SECONDS, hashTokenForStorage, nowSeconds, MAX_INMEMORY_AUTH_ENTRIES } from "./tokens.js";
 import { makePinoCapture } from "../tools/tool-test-utils.js";
 import { SILENT_LOG } from "../utils/log.js";
-import type { OAuthClientInformationFull } from "@modelcontextprotocol/sdk/shared/auth.js";
-import type { AuthCodeState } from "./types.js";
-import { useMswServer } from "../__fixtures__/msw.js";
+import { makeAuthCodeState, makeVerifiedIdentity } from "./__fixtures__/oauth-state.js";
+import { makeDefaultOidcStub, makeDiscoveryDoc } from "./__fixtures__/oidc-stub.js";
+import { AuthCodeStore } from "./auth-code-store.js";
+import { AuthRequestStore } from "./auth-request-store.js";
+import { DiskClientRegistrationStore } from "./client-registration.js";
+import { PendingAuthorizationStore } from "./pending-authorization-store.js";
+import { MintingOAuthServerProvider } from "./provider.js";
+import { TokenStore } from "./token-store.js";
+import { ACCESS_TOKEN_TTL_SECONDS, hashTokenForStorage, MAX_INMEMORY_AUTH_ENTRIES, nowSeconds } from "./tokens.js";
 
 /**
  * Local helper that wraps makeAuthCodeState with this test file's defaults

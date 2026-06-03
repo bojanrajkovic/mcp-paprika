@@ -1,7 +1,9 @@
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
+
 import type { PendingAuthorization } from "./types.js";
+
 import { PendingAuthorizationStore } from "./pending-authorization-store.js";
-import { nowSeconds, MAX_INMEMORY_AUTH_ENTRIES } from "./tokens.js";
+import { MAX_INMEMORY_AUTH_ENTRIES, nowSeconds } from "./tokens.js";
 
 /**
  * Minimal PendingAuthorization for testing. `clientName` is optional (DCR

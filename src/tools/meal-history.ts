@@ -1,14 +1,16 @@
-import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { DateTime } from "luxon";
 import { z } from "zod";
-import { mealStartGuard, mealTypeSpecSchema, resolveMealTypeSpec } from "./meal-helpers.js";
-import { textResult } from "./helpers.js";
-import { parseInstant } from "../utils/dates.js";
-import { RecipeUidSchema } from "../ids.js";
-import type { ServerContext } from "../types/server-context.js";
+
 import type { MealTypeUid } from "../ids.js";
 import type { Meal } from "../meal/types.js";
+import type { ServerContext } from "../types/server-context.js";
+
+import { RecipeUidSchema } from "../ids.js";
+import { parseInstant } from "../utils/dates.js";
+import { textResult } from "./helpers.js";
+import { mealStartGuard, mealTypeSpecSchema, resolveMealTypeSpec } from "./meal-helpers.js";
 
 function formatMealLine(
   meal: Meal,

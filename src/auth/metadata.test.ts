@@ -1,17 +1,19 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { SILENT_LOG } from "../utils/log.js";
+
 import { Hono } from "hono";
-import { buildCustomizedAuthorizationServerMetadata, buildAuthMetadataRouter } from "./metadata.js";
-import { MintingOAuthServerProvider } from "./provider.js";
-import { DiskClientRegistrationStore } from "./client-registration.js";
-import { TokenStore } from "./token-store.js";
-import { AuthRequestStore } from "./auth-request-store.js";
-import { AuthCodeStore } from "./auth-code-store.js";
-import { PendingAuthorizationStore } from "./pending-authorization-store.js";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+
 import { DiskCacheRoot } from "../cache/disk-cache-root.js";
+import { SILENT_LOG } from "../utils/log.js";
+import { AuthCodeStore } from "./auth-code-store.js";
+import { AuthRequestStore } from "./auth-request-store.js";
+import { DiskClientRegistrationStore } from "./client-registration.js";
+import { buildAuthMetadataRouter, buildCustomizedAuthorizationServerMetadata } from "./metadata.js";
+import { PendingAuthorizationStore } from "./pending-authorization-store.js";
+import { MintingOAuthServerProvider } from "./provider.js";
+import { TokenStore } from "./token-store.js";
 
 describe("OAuth Metadata Customization", () => {
   let cacheDir: string;

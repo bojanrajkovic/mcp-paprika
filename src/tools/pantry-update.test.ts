@@ -1,12 +1,14 @@
 import { fromAny } from "@total-typescript/shoehorn";
-import { describe, it, expect, vi } from "vitest";
-import { RecipeStore } from "../recipe/store.js";
-import { makePantryItem } from "../cache/__fixtures__/pantry.js";
-import { makeAisle } from "../cache/__fixtures__/aisles.js";
-import { registerUpdatePantryItemTool } from "./pantry-update.js";
-import { makeTestServer, makeCtx, getText, seed } from "./tool-test-utils.js";
+import { describe, expect, it, vi } from "vitest";
+
 import type { PantryItemUid } from "../ids.js";
+
+import { makeAisle } from "../cache/__fixtures__/aisles.js";
+import { makePantryItem } from "../cache/__fixtures__/pantry.js";
 import { PaprikaAPIError } from "../paprika/errors.js";
+import { RecipeStore } from "../recipe/store.js";
+import { registerUpdatePantryItemTool } from "./pantry-update.js";
+import { getText, makeCtx, makeTestServer, seed } from "./tool-test-utils.js";
 
 describe("pantry-mutations.AC5: update_pantry_item tool", () => {
   it("pantry-mutations.AC5.1: partial merge — only provided fields change", async () => {

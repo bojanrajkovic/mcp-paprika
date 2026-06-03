@@ -1,5 +1,6 @@
-import { describe, it, expect } from "vitest";
 import fc from "fast-check";
+import { describe, expect, it } from "vitest";
+
 import { contentHash } from "./vector-store.js";
 
 describe("contentHash property-based tests", () => {

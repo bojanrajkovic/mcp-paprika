@@ -10,10 +10,10 @@
 
 import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
-import envPaths from "env-paths";
 
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
+import envPaths from "env-paths";
 
 const TEST_PREFIX = "[mcp-e2e]";
 

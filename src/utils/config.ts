@@ -1,12 +1,14 @@
-import { toMessage } from "./log.js";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { z } from "zod";
+
 import dotenv from "dotenv";
-import { ok, err, type Result } from "neverthrow";
+import { err, ok, type Result } from "neverthrow";
+import { z } from "zod";
+
 import { parseDuration } from "./duration.js";
-import { getConfigDir } from "./xdg.js";
 import { isNodeError } from "./errors.js";
+import { toMessage } from "./log.js";
+import { getConfigDir } from "./xdg.js";
 
 const ENV_VAR_HINTS: Readonly<Record<string, string>> = {
   "paprika.email": "PAPRIKA_EMAIL",

@@ -1,7 +1,8 @@
 // pattern: Functional Core
 
-import envPaths from "env-paths";
 import { join } from "node:path";
+
+import envPaths from "env-paths";
 
 const PROGRAM_NAME = "mcp-paprika";
 

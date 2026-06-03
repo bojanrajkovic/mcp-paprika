@@ -1,17 +1,19 @@
 import { fromAny } from "@total-typescript/shoehorn";
-import { describe, it, expect, vi } from "vitest";
-import { RecipeStore } from "../recipe/store.js";
-import { makeGroceryList } from "../cache/__fixtures__/grocery-lists.js";
-import { makeGroceryItem } from "../cache/__fixtures__/grocery-items.js";
-import { makeTestServer, makeCtx, getText, makeStubNotifier, seed } from "./tool-test-utils.js";
+import { describe, expect, it, vi } from "vitest";
+
 import type { SeedData } from "./tool-test-utils.js";
+
+import { makeGroceryItem } from "../cache/__fixtures__/grocery-items.js";
+import { makeGroceryList } from "../cache/__fixtures__/grocery-lists.js";
+import { RecipeStore } from "../recipe/store.js";
 import {
+  registerCreateGroceryListTool,
+  registerDeleteGroceryListTool,
   registerListGroceryListsTool,
   registerReadGroceryListTool,
-  registerCreateGroceryListTool,
   registerRenameGroceryListTool,
-  registerDeleteGroceryListTool,
 } from "./grocery-list.js";
+import { getText, makeCtx, makeStubNotifier, makeTestServer, seed } from "./tool-test-utils.js";
 
 describe("list_grocery_lists tool", () => {
   it("grocery-surface.AC1.9: returns sync-not-ready message when stores not loaded", async () => {

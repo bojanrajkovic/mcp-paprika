@@ -8,17 +8,19 @@
 
 import type { IRetryContext } from "cockatiel";
 import type { Logger } from "pino";
-import { SILENT_LOG } from "../utils/log.js";
 import { z } from "zod";
+
 import type { Recipe } from "../recipe/types.js";
 import type { EmbeddingConfig } from "../utils/config.js";
+
+import { SILENT_LOG } from "../utils/log.js";
 import {
   createResilientExecutor,
-  TransientHTTPError,
-  RETRYABLE_STATUSES,
   type ResilientExecutor,
+  RETRYABLE_STATUSES,
+  TransientHTTPError,
 } from "../utils/resilience.js";
-import { EmbeddingError, EmbeddingAPIError } from "./embedding-errors.js";
+import { EmbeddingAPIError, EmbeddingError } from "./embedding-errors.js";
 
 /**
  * Zod schema for validating embedding API responses.

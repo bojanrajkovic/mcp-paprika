@@ -1,7 +1,9 @@
 import { err, ok, type Result } from "neverthrow";
+
 import type { PantryItemUid } from "../ids.js";
 import type { PantryItem } from "../pantry/types.js";
 import type { ServerContext } from "../types/server-context.js";
+
 import { textResult } from "./helpers.js";
 
 export function pantryStartGuard(ctx: ServerContext): Result<void, ReturnType<typeof textResult>> {

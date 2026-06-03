@@ -1,6 +1,8 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { aisleStartGuard } from "./aisle-helpers.js";
+
 import type { ServerContext } from "../types/server-context.js";
+
+import { aisleStartGuard } from "./aisle-helpers.js";
 import { textResult } from "./helpers.js";
 
 export function registerAislesTool(server: McpServer, ctx: ServerContext): void {

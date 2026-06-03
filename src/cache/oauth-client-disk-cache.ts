@@ -1,8 +1,8 @@
 import type { Logger } from "pino";
 
-import { OAuthClientSchema } from "../auth/types.js";
 import type { OAuthClient } from "../auth/types.js";
 
+import { OAuthClientSchema } from "../auth/types.js";
 import { DiskCache } from "./disk-cache.js";
 
 export class OAuthClientDiskCache extends DiskCache<OAuthClient> {

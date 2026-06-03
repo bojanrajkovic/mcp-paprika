@@ -15,9 +15,11 @@
  * - if-present: deny only if email_verified === false; undefined (missing) is OK
  */
 
-import { ok, err, type Result } from "neverthrow";
+import { err, ok, type Result } from "neverthrow";
+
+import type { EmailVerifiedPolicy, IdTokenPayload } from "./types.js";
+
 import { OAuthAllowlistDenialError } from "./errors.js";
-import type { IdTokenPayload, EmailVerifiedPolicy } from "./types.js";
 
 export interface AllowlistInput {
   readonly emails: ReadonlySet<string>;

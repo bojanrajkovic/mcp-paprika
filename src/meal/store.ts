@@ -1,7 +1,9 @@
 import { DateTime } from "luxon";
-import { TombstoneEntityStore } from "../entity/index.js";
-import type { MealUid, RecipeUid, MealTypeUid } from "../ids.js";
+
+import type { MealTypeUid, MealUid, RecipeUid } from "../ids.js";
 import type { Meal } from "./types.js";
+
+import { TombstoneEntityStore } from "../entity/index.js";
 
 export interface MealDateRangeOpts {
   readonly since?: DateTime | undefined;

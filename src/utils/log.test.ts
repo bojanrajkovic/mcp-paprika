@@ -1,13 +1,16 @@
-import { fromAny } from "@total-typescript/shoehorn";
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import fc from "fast-check";
-import type { Level as PinoLevel } from "pino";
-import { mkdtempSync, rmSync, existsSync, readFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { pinoLevelToMcp, notifierStream, resolvePrimaryDestination, createLogger, toMessage } from "./log.js";
-import type { LoggerOptions } from "./log.js";
+
+import { fromAny } from "@total-typescript/shoehorn";
+import fc from "fast-check";
+import type { Level as PinoLevel } from "pino";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
 import type { Notifier } from "../server/notifier.js";
+import type { LoggerOptions } from "./log.js";
+
+import { createLogger, notifierStream, pinoLevelToMcp, resolvePrimaryDestination, toMessage } from "./log.js";
 
 // ---------------------------------------------------------------------------
 // Helpers

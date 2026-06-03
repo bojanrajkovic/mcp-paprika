@@ -1,17 +1,17 @@
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import {
-  RecipeUidSchema,
-  RecipeUidRefSchema,
-  MenuUidSchema,
-  MenuUidRefSchema,
-  GroceryListUidSchema,
-  GroceryListUidRefSchema,
   AisleUidSchema,
+  type GroceryListUid,
+  GroceryListUidRefSchema,
+  GroceryListUidSchema,
+  type MenuUid,
+  MenuUidRefSchema,
+  MenuUidSchema,
   NO_AISLE_UID,
   type RecipeUid,
-  type MenuUid,
-  type GroceryListUid,
+  RecipeUidRefSchema,
+  RecipeUidSchema,
 } from "./ids.js";
 
 // The FK-reference schemas (`*RefSchema`) carry the SAME brand as their

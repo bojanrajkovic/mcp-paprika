@@ -11,6 +11,7 @@
  */
 
 import type { AuthRequestState } from "./types.js";
+
 import { AUTH_REQUEST_TTL_SECONDS, MAX_INMEMORY_AUTH_ENTRIES } from "./tokens.js";
 import { TtlStore } from "./ttl-store.js";
 

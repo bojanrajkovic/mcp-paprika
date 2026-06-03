@@ -1,8 +1,10 @@
-import { describe, it, expect } from "vitest";
-import { verifyIdentity } from "./allowlist.js";
-import { nowSeconds } from "./tokens.js";
-import { OAuthAllowlistDenialError } from "./errors.js";
+import { describe, expect, it } from "vitest";
+
 import type { IdTokenPayload } from "./types.js";
+
+import { verifyIdentity } from "./allowlist.js";
+import { OAuthAllowlistDenialError } from "./errors.js";
+import { nowSeconds } from "./tokens.js";
 
 // Test helper to create minimal id_token payloads
 function createPayload(overrides: Partial<IdTokenPayload> = {}): IdTokenPayload {

@@ -1,6 +1,7 @@
 import type { DiskCacheDescriptor } from "../cache/disk-cache.js";
-import { PhotoStoredSchema } from "./types.js";
 import type { Photo } from "./types.js";
+
+import { PhotoStoredSchema } from "./types.js";
 
 export const photoDiskDescriptor: DiskCacheDescriptor<Photo> = {
   subdir: "photos",

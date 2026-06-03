@@ -1,9 +1,11 @@
-import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { PantryItemUidSchema } from "../ids.js";
-import { pantryStartGuard, pantryItemToMarkdown } from "./pantry-helpers.js";
-import { formatLookupOutcome, resolveLookup, uidOrTextLookupSchema } from "./helpers.js";
+import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+
 import type { ServerContext } from "../types/server-context.js";
+
+import { PantryItemUidSchema } from "../ids.js";
+import { formatLookupOutcome, resolveLookup, uidOrTextLookupSchema } from "./helpers.js";
+import { pantryItemToMarkdown, pantryStartGuard } from "./pantry-helpers.js";
 
 export function registerGetPantryItemTool(server: McpServer, ctx: ServerContext): void {
   const log = ctx.log.child({ component: "get_pantry_item" });

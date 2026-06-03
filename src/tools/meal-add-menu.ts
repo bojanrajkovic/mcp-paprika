@@ -1,18 +1,20 @@
-// pattern: Imperative Shell
-import { toMessage } from "../utils/log.js";
-import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { DateTime } from "luxon";
 import { z } from "zod";
-import { MealUidSchema, MenuUidSchema } from "../ids.js";
+
 import type { MealTypeUid, RecipeUid } from "../ids.js";
 import type { MealType } from "../meal-type/types.js";
 import type { Meal } from "../meal/types.js";
+import type { ServerContext } from "../types/server-context.js";
+
+import { MealUidSchema, MenuUidSchema } from "../ids.js";
+import { formatCalendarDayWire, parseCalendarDay } from "../utils/dates.js";
+// pattern: Imperative Shell
+import { toMessage } from "../utils/log.js";
 import { coldStartGuard, resolveLookup, textResult, uidOrTextLookupSchema } from "./helpers.js";
 import { commitMealsBatch, makeMealOrderFlagAssigner } from "./meal-helpers.js";
 import { menuStartGuard } from "./menu-helpers.js";
-import { parseCalendarDay, formatCalendarDayWire } from "../utils/dates.js";
-import type { ServerContext } from "../types/server-context.js";
 
 // A menu item materialized into a planner meal: the menu's 1-indexed `day`, the
 // computed wire `date`, the resolved meal-type name (for the response) + its

@@ -10,10 +10,11 @@
  * - scope preserved but non-empty
  */
 
-import { z } from "zod";
-import { ok, err } from "neverthrow";
+import { err, ok } from "neverthrow";
 import type { Result } from "neverthrow";
 import type { Logger } from "pino";
+import { z } from "zod";
+
 import { OAuthMetadataValidationError } from "./errors.js";
 import { hasPermittedScheme } from "./redirect-allowlist.js";
 

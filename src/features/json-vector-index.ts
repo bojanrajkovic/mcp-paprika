@@ -25,8 +25,9 @@
  *   fsync(dir), versus Vectra's plain truncating `writeFile`.
  */
 
-import { mkdir, readFile, rename, open, access, rm } from "node:fs/promises";
+import { access, mkdir, open, readFile, rename, rm } from "node:fs/promises";
 import { dirname, join } from "node:path";
+
 import { z } from "zod";
 
 /**

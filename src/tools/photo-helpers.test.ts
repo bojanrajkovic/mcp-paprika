@@ -1,11 +1,11 @@
-import { describe, it, expect, vi } from "vitest";
 import { fromAny } from "@total-typescript/shoehorn";
 import sharp from "sharp";
+import { describe, expect, it, vi } from "vitest";
 
 import { makeServerContext } from "../__fixtures__/app-context.js";
-import { makeRecipe } from "../cache/__fixtures__/recipes.js";
 import { makePhoto } from "../cache/__fixtures__/photos.js";
-import { normalizePhoto, makeThumbnail, sha256Hex, commitPhotoUpload, commitPhotoDelete } from "./photo-helpers.js";
+import { makeRecipe } from "../cache/__fixtures__/recipes.js";
+import { commitPhotoDelete, commitPhotoUpload, makeThumbnail, normalizePhoto, sha256Hex } from "./photo-helpers.js";
 
 const isJpeg = (b: Buffer): boolean => b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff;
 

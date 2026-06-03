@@ -1,6 +1,7 @@
-import { describe, it, expect } from "vitest";
 import fc from "fast-check";
-import { parseDuration, formatDuration } from "./duration.js";
+import { describe, expect, it } from "vitest";
+
+import { formatDuration, parseDuration } from "./duration.js";
 
 describe("Duration property-based tests", () => {
   describe("duration-helper.AC7.4: Roundtrip stability", () => {

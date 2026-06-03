@@ -1,9 +1,11 @@
-import { describe, it, expect } from "vitest";
 import fc from "fast-check";
+import { describe, expect, it } from "vitest";
+
+import type { GroceryIngredientUid, GroceryItemUid, GroceryListUid, MenuItemUid, MenuUid } from "../ids.js";
+
 import { GroceryIngredientStoredSchema } from "../grocery-ingredient/types.js";
 import { GroceryItemStoredSchema } from "../grocery-item/types.js";
 import { GroceryListStoredSchema } from "../grocery-list/types.js";
-import type { GroceryListUid, GroceryItemUid, GroceryIngredientUid, MenuUid, MenuItemUid } from "../ids.js";
 import { MenuItemStoredSchema } from "../menu-item/types.js";
 import { MenuStoredSchema } from "../menu/types.js";
 

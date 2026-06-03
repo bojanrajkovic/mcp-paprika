@@ -1,13 +1,16 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { RecipeUid, CategoryUid } from "../ids.js";
-import { DiskCacheRoot } from "./disk-cache-root.js";
+
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+
+import type { CategoryUid, RecipeUid } from "../ids.js";
+
 import { RecipeStore } from "../recipe/store.js";
-import { makeRecipe, makeCategory } from "./__fixtures__/recipes.js";
-import { makeTestServer, makeCtx, getText } from "../tools/tool-test-utils.js";
 import { registerSearchTool } from "../tools/search.js";
+import { getText, makeCtx, makeTestServer } from "../tools/tool-test-utils.js";
+import { makeCategory, makeRecipe } from "./__fixtures__/recipes.js";
+import { DiskCacheRoot } from "./disk-cache-root.js";
 
 describe("DiskCacheRoot cold-start persistence integration", () => {
   let tempDir: string;

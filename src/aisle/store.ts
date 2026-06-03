@@ -1,6 +1,7 @@
-import { EntityStore } from "../entity/index.js";
-import type { Aisle } from "./types.js";
 import type { AisleUid } from "../ids.js";
+import type { Aisle } from "./types.js";
+
+import { EntityStore } from "../entity/index.js";
 
 export class AisleStore extends EntityStore<Aisle, AisleUid> {
   constructor(opts?: { readonly pendingWriteTtlMs?: number }) {

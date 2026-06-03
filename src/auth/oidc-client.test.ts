@@ -4,17 +4,18 @@
  */
 
 import { fromAny } from "@total-typescript/shoehorn";
-import { describe, it, expect } from "vitest";
-import { nowSeconds } from "./tokens.js";
-import { http, HttpResponse } from "msw";
-import { OAuthMetadataValidationError } from "./errors.js";
-import { loadDiscovery, createJwksFor, verifyIdToken } from "./oidc-client.js";
-import { makeRsaJwt, makeEs256Jwt, makeHs256Jwt } from "./__fixtures__/jose-keys.js";
 import type { JWK } from "jose";
 import type { JWTVerifyGetKey } from "jose";
+import { http, HttpResponse } from "msw";
+import { describe, expect, it } from "vitest";
+
 import { useMswServer } from "../__fixtures__/msw.js";
 import { makePinoCapture } from "../tools/tool-test-utils.js";
 import { REDACT_PATHS } from "../utils/log.js";
+import { makeEs256Jwt, makeHs256Jwt, makeRsaJwt } from "./__fixtures__/jose-keys.js";
+import { OAuthMetadataValidationError } from "./errors.js";
+import { createJwksFor, loadDiscovery, verifyIdToken } from "./oidc-client.js";
+import { nowSeconds } from "./tokens.js";
 
 const server = useMswServer();
 

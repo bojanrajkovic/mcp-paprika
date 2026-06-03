@@ -1,5 +1,6 @@
-import { describe, it } from "vitest";
 import fc from "fast-check";
+import { describe, it } from "vitest";
+
 import { validateRegistration, validateUpdate } from "./dcr-validator.js";
 
 describe("auth/dcr-validator: property-based tests", () => {

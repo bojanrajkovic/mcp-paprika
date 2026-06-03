@@ -1,21 +1,23 @@
 // pattern: Imperative Shell tests
 import { fromAny } from "@total-typescript/shoehorn";
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { RecipeStore } from "../recipe/store.js";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+import type { MealTypeUid, MealUid, RecipeUid } from "../ids.js";
+import type { Meal } from "../meal/types.js";
+import type { SeedData } from "./tool-test-utils.js";
+
 import { makeMeal, makeMealType } from "../cache/__fixtures__/meals.js";
 import { makeRecipe } from "../cache/__fixtures__/recipes.js";
-import {
-  registerAddMealsTool,
-  addMealsInputSchema,
-  updateMealInputSchema,
-  registerUpdateMealTool,
-  registerDeleteMealTool,
-} from "./meal-writes.js";
+import { RecipeStore } from "../recipe/store.js";
 import { mealToMarkdown } from "./meal-helpers.js";
-import { makeTestServer, makeCtx, getText, seed } from "./tool-test-utils.js";
-import type { SeedData } from "./tool-test-utils.js";
-import type { MealTypeUid, RecipeUid, MealUid } from "../ids.js";
-import type { Meal } from "../meal/types.js";
+import {
+  addMealsInputSchema,
+  registerAddMealsTool,
+  registerDeleteMealTool,
+  registerUpdateMealTool,
+  updateMealInputSchema,
+} from "./meal-writes.js";
+import { getText, makeCtx, makeTestServer, seed } from "./tool-test-utils.js";
 
 // Stable UIDs used across both describe blocks so tests don't depend on
 // the module-level counters in the fixture factories.

@@ -3,18 +3,19 @@
  * Covers RFC 7591/7592 client registration, update, deletion, and RAT verification.
  */
 
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { SILENT_LOG } from "../utils/log.js";
+import { randomUUID } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { randomUUID } from "node:crypto";
+
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { DiskCacheRoot } from "../cache/disk-cache-root.js";
-import { hashTokenForStorage } from "./tokens.js";
-import { OAuthMetadataValidationError, OAuthClientNotFoundError } from "./errors.js";
-import { DiskClientRegistrationStore } from "./client-registration.js";
 import { makePinoCapture } from "../tools/tool-test-utils.js";
+import { SILENT_LOG } from "../utils/log.js";
+import { DiskClientRegistrationStore } from "./client-registration.js";
+import { OAuthClientNotFoundError, OAuthMetadataValidationError } from "./errors.js";
+import { hashTokenForStorage } from "./tokens.js";
 
 // ============================================================================
 // Test Fixtures

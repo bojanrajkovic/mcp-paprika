@@ -52,17 +52,20 @@ export function contentHash(text: string): string {
 
 import { mkdir, readFile, rename, cp, open } from "node:fs/promises";
 import { join } from "node:path";
+
 import { Mutex } from "async-mutex";
-import { z } from "zod";
-import { JsonVectorIndex } from "./json-vector-index.js";
-import type { EmbeddingClient } from "./embeddings.js";
-import { recipeToEmbeddingText } from "./embeddings.js";
-import { VectorStoreError } from "./vector-store-errors.js";
 import type { Logger } from "pino";
+import { z } from "zod";
+
 import type { CategoryUid, RecipeUid } from "../ids.js";
 import type { Recipe } from "../recipe/types.js";
-import { SILENT_LOG } from "../utils/log.js";
+import type { EmbeddingClient } from "./embeddings.js";
+
 import { isNodeError } from "../utils/errors.js";
+import { SILENT_LOG } from "../utils/log.js";
+import { recipeToEmbeddingText } from "./embeddings.js";
+import { JsonVectorIndex } from "./json-vector-index.js";
+import { VectorStoreError } from "./vector-store-errors.js";
 
 const HashIndexSchema = z.record(z.string(), z.string());
 

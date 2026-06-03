@@ -1,16 +1,18 @@
-import { describe, it, expect, beforeAll, afterAll, afterEach, vi } from "vitest";
-import { setupServer } from "msw/node";
-import { http, HttpResponse } from "msw";
-import { ZodError } from "zod";
 import { BrokenCircuitError } from "cockatiel";
-import { EmbeddingClient } from "./embeddings.js";
-import { EmbeddingError, EmbeddingAPIError } from "./embedding-errors.js";
-import { recipeToEmbeddingText } from "./embeddings.js";
-import { makeRecipe } from "../cache/__fixtures__/recipes.js";
+import { http, HttpResponse } from "msw";
+import { setupServer } from "msw/node";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { ZodError } from "zod";
+
 import type { EmbeddingConfig } from "../utils/config.js";
+
+import { makeRecipe } from "../cache/__fixtures__/recipes.js";
 import { makePinoCapture, tripBreaker } from "../tools/tool-test-utils.js";
 import { CircuitOpenError } from "../utils/errors.js";
 import { toMessage } from "../utils/log.js";
+import { EmbeddingAPIError, EmbeddingError } from "./embedding-errors.js";
+import { EmbeddingClient } from "./embeddings.js";
+import { recipeToEmbeddingText } from "./embeddings.js";
 
 const BASE_URL = "https://api.example.com/v1";
 const API_KEY = "test-api-key";

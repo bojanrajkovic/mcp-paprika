@@ -22,9 +22,9 @@
  *   const server = useMswServer({ onUnhandledRequest: "bypass" });
  */
 
-import { beforeAll, afterEach, afterAll } from "vitest";
-import { setupServer } from "msw/node";
 import type { HttpHandler } from "msw";
+import { setupServer } from "msw/node";
+import { afterAll, afterEach, beforeAll } from "vitest";
 
 export type UseMswServerOptions = {
   /**

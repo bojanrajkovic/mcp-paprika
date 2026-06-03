@@ -1,4 +1,5 @@
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
+
 import { validateRegistration, validateUpdate } from "./dcr-validator.js";
 
 describe("auth/dcr-validator: RFC 7591/7592 metadata validation", () => {

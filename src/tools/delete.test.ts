@@ -1,9 +1,10 @@
 import { fromAny } from "@total-typescript/shoehorn";
-import { describe, it, expect, vi } from "vitest";
-import { RecipeStore } from "../recipe/store.js";
+import { describe, expect, it, vi } from "vitest";
+
 import { makeRecipe } from "../cache/__fixtures__/recipes.js";
+import { RecipeStore } from "../recipe/store.js";
 import { registerDeleteTool } from "./delete.js";
-import { makeTestServer, makeCtx, getText, seed } from "./tool-test-utils.js";
+import { getText, makeCtx, makeTestServer, seed } from "./tool-test-utils.js";
 
 describe("p2-recipe-crud: delete_recipe tool", () => {
   describe("p2-recipe-crud.AC4: delete_recipe soft-deletes by UID", () => {

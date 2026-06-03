@@ -1,12 +1,14 @@
-import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { z } from "zod";
+import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { ok, type Result } from "neverthrow";
+import { z } from "zod";
+
+import type { TimeConstraints } from "../recipe/store.js";
 import type { Recipe } from "../recipe/types.js";
+import type { ServerContext } from "../types/server-context.js";
+
 import { parseDuration } from "../utils/duration.js";
 import { coldStartGuard, recipeMetadataLines, textResult } from "./helpers.js";
-import type { ServerContext } from "../types/server-context.js";
-import type { TimeConstraints } from "../recipe/store.js";
 
 export function registerFilterTools(server: McpServer, ctx: ServerContext): void {
   const logIngredient = ctx.log.child({ component: "filter_by_ingredient" });

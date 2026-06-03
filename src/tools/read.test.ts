@@ -1,9 +1,10 @@
-import { describe, it, expect } from "vitest";
-import { RecipeStore } from "../recipe/store.js";
-import { makeRecipe, makeCategory } from "../cache/__fixtures__/recipes.js";
+import { describe, expect, it } from "vitest";
+
 import { makeMeal } from "../cache/__fixtures__/meals.js";
+import { makeCategory, makeRecipe } from "../cache/__fixtures__/recipes.js";
+import { RecipeStore } from "../recipe/store.js";
 import { registerReadTool } from "./read.js";
-import { makeTestServer, makeCtx, getText, seed } from "./tool-test-utils.js";
+import { getText, makeCtx, makeTestServer, seed } from "./tool-test-utils.js";
 
 describe("p2-recipe-crud: read_recipe tool", () => {
   describe("p2-recipe-crud.AC1: read_recipe", () => {
