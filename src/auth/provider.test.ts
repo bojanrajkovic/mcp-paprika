@@ -234,6 +234,10 @@ describe("MintingOAuthServerProvider", () => {
       expect(body).toContain("Sneaky");
       expect(headers["X-Frame-Options"]).toBe("DENY");
       expect(headers["Content-Security-Policy"]).toContain("frame-ancestors 'none'");
+      // form-action must allow the upstream IdP origin: the Allow form posts to
+      // /oauth/consent, which 302s to the IdP, and form-action is enforced across
+      // that redirect — 'self' alone would block the approve navigation.
+      expect(headers["Content-Security-Policy"]).toContain("form-action 'self' https://idp.stub.example.com");
 
       // The downstream request is held under a ticket, awaiting consent.
       expect(pendingAuthorizations.size).toBe(1);

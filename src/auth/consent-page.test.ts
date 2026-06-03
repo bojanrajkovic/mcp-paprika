@@ -29,6 +29,12 @@ describe("renderConsentPage", () => {
     expect(html).toContain("Claude");
   });
 
+  it("identifies the authorization server as 'Paprika MCP Connector' (not the raw package name)", () => {
+    const { html } = renderConsentPage(base);
+    expect(html).toContain("Paprika MCP Connector");
+    expect(html).not.toContain("mcp-paprika");
+  });
+
   it("falls back to 'Unnamed client' when clientName is absent", () => {
     const { html } = renderConsentPage({ ticket: base.ticket, redirectHost: base.redirectHost });
     expect(html).toContain("Unnamed client");
@@ -96,6 +102,16 @@ describe("consentSecurityHeaders", () => {
     expect(csp).toContain("style-src 'nonce-NONCE123'");
     expect(csp).toContain("form-action 'self'");
     expect(csp).toContain("base-uri 'none'");
+  });
+
+  it("keeps form-action 'self'-only when no upstream origin is given (terminal pages have no form)", () => {
+    const csp = consentSecurityHeaders("N")["Content-Security-Policy"];
+    expect(csp).toContain("form-action 'self';");
+  });
+
+  it("allows the upstream IdP origin in form-action when given (the consent form 302s there)", () => {
+    const csp = consentSecurityHeaders("N", "https://accounts.google.com")["Content-Security-Policy"];
+    expect(csp).toContain("form-action 'self' https://accounts.google.com");
   });
 
   it("forbids framing via CSP frame-ancestors and X-Frame-Options (anti-clickjacking)", () => {
