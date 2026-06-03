@@ -306,7 +306,7 @@ export function registerUpdateMealTool(server: McpServer, ctx: ServerContext): v
   server.registerTool(
     "update_meal",
     {
-      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
       description:
         "Update an existing meal by UID. The `update` payload is a discriminated union: pick exactly one " +
         "of {recipe_uid?, ...other} | {name, ...other} | {recipe_uid: null, name?, ...other}. Recipe link " +

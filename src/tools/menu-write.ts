@@ -79,7 +79,7 @@ export function registerUpdateMenuTool(server: McpServer, ctx: ServerContext): v
   server.registerTool(
     "update_menu",
     {
-      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
       description:
         "Update a menu's name, day span, and/or notes. Look it up by UID or name (tiered fuzzy match, " +
         "case-insensitive). Provide at least one of name, days, or notes. Renaming to a name already used " +

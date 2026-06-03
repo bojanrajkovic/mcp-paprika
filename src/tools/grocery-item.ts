@@ -183,7 +183,7 @@ export function registerUpdateGroceryItemTool(server: McpServer, ctx: ServerCont
   server.registerTool(
     "update_grocery_item",
     {
-      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
       description:
         "Update a grocery item's quantity, aisle, or notes by UID. Only provided fields are changed; " +
         "omitted fields retain their current values. To check an item off, use mark_grocery_item_purchased.",

@@ -75,7 +75,7 @@ export function registerUpdateCategoryTool(server: McpServer, ctx: ServerContext
   server.registerTool(
     "update_category",
     {
-      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
       description:
         "Rename and/or re-parent an existing category. Pass `name` to rename, `parentUid` to move it under " +
         "another category, or `null` for `parentUid` to make it top-level. Re-parenting builds the hierarchy " +

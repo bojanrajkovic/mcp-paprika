@@ -269,7 +269,7 @@ export function registerUpdateMenuItemTool(server: McpServer, ctx: ServerContext
   server.registerTool(
     "update_menu_item",
     {
-      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
       description:
         "Update an existing menuitem's meal type or recipe link by UID. Provide at least one of type or " +
         "recipe_uid; omitted fields keep their current values. Changing recipe_uid re-resolves the display " +
