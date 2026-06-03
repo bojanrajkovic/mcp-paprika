@@ -1,6 +1,8 @@
 import { fromAny } from "@total-typescript/shoehorn";
 import { describe, expect, it, vi } from "vitest";
 
+import type { RecipeUid } from "../ids.js";
+
 import { makeRecipe } from "../../test/cache/__fixtures__/recipes.js";
 import { getText, makeCtx, makeStubNotifier, makeTestServer, seed } from "../../test/support/tool-test-utils.js";
 import { PaprikaAPIError } from "../paprika/errors.js";
@@ -138,7 +140,7 @@ describe("recipe-hard-delete: purge_recipe tool (#125)", () => {
           client: fromAny({ getRecipe: mockGetRecipe, saveRecipe: mockSaveRecipe, notifySync: mockNotifySync }),
           cache: fromAny({ recipes: { remove: mockRemove }, flush: mockFlush }),
         }),
-        { recipes: [makeRecipe({ name: "Keeper" })] }, // flips hasSynced; content irrelevant to lookup
+        { recipes: [live] }, // store already agrees it's live → the read-path reconcile is a clean no-op
       );
       registerEmptyTrashTool(server, ctx);
 
@@ -269,6 +271,80 @@ describe("recipe-hard-delete: purge_recipe tool (#125)", () => {
 
       expect(text.toLowerCase()).toContain("not yet synced");
       expect(mockGetRecipe).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("empty-trash.AC5: read-path reconcile to authoritative state (canonical pull)", () => {
+    it("empty-trash.AC5.1: not-in-trash heals a stale local copy still marked trashed", async () => {
+      // The store lags: it holds the recipe as inTrash:true, but Paprika says it's live
+      // (restored in the app). purge refuses (it's not trashed) AND aligns local to the
+      // authoritative truth — same hash, only inTrash differs — without a Paprika write.
+      const uid = "recipe-stale-purge" as RecipeUid;
+      const staleTrashed = makeRecipe({ uid, name: "Live Again", inTrash: true });
+      const authoritative = { ...staleTrashed, inTrash: false };
+
+      const mockGetRecipe = vi.fn().mockResolvedValue(authoritative);
+      const mockSaveRecipe = vi.fn();
+      const mockNotifySync = vi.fn().mockResolvedValue(undefined);
+      const mockPut = vi.fn().mockResolvedValue(undefined);
+      const mockRemove = vi.fn().mockResolvedValue(undefined);
+      const mockFlush = vi.fn().mockResolvedValue(undefined);
+      const { notifier, resourceListChanged } = makeStubNotifier();
+
+      const { server, callTool } = makeTestServer();
+      const store = new RecipeStore();
+      const ctx = seed(
+        makeCtx(store, server, {
+          client: fromAny({ getRecipe: mockGetRecipe, saveRecipe: mockSaveRecipe, notifySync: mockNotifySync }),
+          cache: fromAny({ recipes: { put: mockPut, remove: mockRemove }, flush: mockFlush }),
+          notifier,
+        }),
+        { recipes: [staleTrashed] },
+      );
+      registerEmptyTrashTool(server, ctx);
+
+      const text = getText(await callTool("purge_recipe", { uid }));
+
+      expect(text.toLowerCase()).toContain("not in the trash");
+      expect(mockSaveRecipe).not.toHaveBeenCalled(); // a reconcile, not a Paprika write
+      expect(mockPut).toHaveBeenCalledWith(expect.objectContaining({ uid, inTrash: false }));
+      expect(store.get(uid)?.inTrash).toBe(false); // local store healed to authoritative truth
+      expect(resourceListChanged).toHaveBeenCalledOnce();
+    });
+
+    it("empty-trash.AC5.2: 404 drops a stale local phantom the store still held", async () => {
+      // Purged elsewhere (or never synced as deleted): the store still lists it, but
+      // getRecipe 404s. Reconcile removes it so a later read/search can't serve a phantom.
+      const uid = "recipe-phantom-purge" as RecipeUid;
+      const phantom = makeRecipe({ uid, name: "Ghost" });
+
+      const mockGetRecipe = vi.fn().mockRejectedValue(notFound(uid));
+      const mockSaveRecipe = vi.fn();
+      const mockNotifySync = vi.fn().mockResolvedValue(undefined);
+      const mockPut = vi.fn().mockResolvedValue(undefined);
+      const mockRemove = vi.fn().mockResolvedValue(undefined);
+      const mockFlush = vi.fn().mockResolvedValue(undefined);
+      const { notifier, resourceListChanged } = makeStubNotifier();
+
+      const { server, callTool } = makeTestServer();
+      const store = new RecipeStore();
+      const ctx = seed(
+        makeCtx(store, server, {
+          client: fromAny({ getRecipe: mockGetRecipe, saveRecipe: mockSaveRecipe, notifySync: mockNotifySync }),
+          cache: fromAny({ recipes: { put: mockPut, remove: mockRemove }, flush: mockFlush }),
+          notifier,
+        }),
+        { recipes: [phantom] },
+      );
+      registerEmptyTrashTool(server, ctx);
+
+      const text = getText(await callTool("purge_recipe", { uid }));
+
+      expect(text.toLowerCase()).toContain("no recipe found");
+      expect(mockRemove).toHaveBeenCalledWith(uid);
+      expect(store.get(uid)).toBeUndefined(); // phantom dropped locally
+      expect(resourceListChanged).toHaveBeenCalledOnce();
+      expect(mockSaveRecipe).not.toHaveBeenCalled();
     });
   });
 });

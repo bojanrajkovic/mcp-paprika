@@ -3,7 +3,7 @@ import { err, ok, type Result } from "neverthrow";
 import { z } from "zod";
 
 import type { Category } from "../category/types.js";
-import type { CategoryUid } from "../ids.js";
+import type { CategoryUid, RecipeUid } from "../ids.js";
 import type { Recipe } from "../recipe/types.js";
 import type { ServerContext } from "../types/server-context.js";
 
@@ -302,18 +302,35 @@ export async function commitRecipe(ctx: ServerContext, saved: Recipe): Promise<v
  * already committed and notified, still reports success.
  */
 async function maintainRecipeIndex(ctx: ServerContext, saved: Recipe): Promise<void> {
+  if (saved.inTrash) {
+    await removeRecipeFromIndex(ctx, saved.uid);
+    return;
+  }
   if (ctx.vectorStore === null) return;
   try {
-    if (saved.inTrash) {
-      await ctx.vectorStore.removeRecipe(saved.uid);
-    } else {
-      await ctx.vectorStore.indexRecipe(saved, ctx.categoryStore.resolveNames(saved.categories));
-    }
+    await ctx.vectorStore.indexRecipe(saved, ctx.categoryStore.resolveNames(saved.categories));
   } catch (err) {
     ctx.log.warn(
       { err, uid: saved.uid },
       "vector index maintenance failed after recipe write; embedding may be stale until the next full re-index",
     );
+  }
+}
+
+/**
+ * Drop a recipe from the semantic-search index, best-effort. No-op when search is
+ * disabled (`vectorStore === null`). Shared by the trash branch of
+ * `maintainRecipeIndex`, by `commitRecipeHardDelete` via that branch, and by
+ * `reconcileLocalRecipeAbsent` (which has only a UID, not a full `Recipe`). A failure
+ * is logged, never thrown — the caller's Paprika write or local reconcile already
+ * succeeded and must still report success.
+ */
+async function removeRecipeFromIndex(ctx: ServerContext, uid: RecipeUid): Promise<void> {
+  if (ctx.vectorStore === null) return;
+  try {
+    await ctx.vectorStore.removeRecipe(uid);
+  } catch (err) {
+    ctx.log.warn({ err, uid }, "vector index removal failed; the embedding may linger until the next full re-index");
   }
 }
 
@@ -344,6 +361,73 @@ export async function commitRecipeHardDelete(ctx: ServerContext, saved: Recipe):
   await maintainRecipeIndex(ctx, saved);
 
   await ctx.client.notifySync(); // async — signals Paprika cloud to propagate
+}
+
+// Reconcile the local cache + store to authoritative state that a READ-path
+// `getRecipe` revealed, WITHOUT a Paprika write. restore_recipe and purge_recipe
+// trust getRecipe over the local store for their *decision* (the store lags app-side
+// trash actions by a sync cycle); when they then DECLINE to act — the recipe is
+// already active, not in the trash, or gone — these leave the store agreeing with
+// that same truth instead of serving a stale row (a wrong inTrash flag, or a phantom)
+// until the next sync cycle heals it.
+//
+// This is a canonical PULL, not a local-origin write, so unlike commitRecipe it does
+// NOT touch the pending-write marks — there is no in-flight POST of ours to protect
+// from rollback; aligning toward canonical is exactly what sync itself does — and does
+// NOT call notifySync (nothing changed server-side). Best-effort: a cache failure is
+// logged and the decision still stands (sync remains the durable backstop), so a
+// hiccup can't turn a correct "already active" into an error. resourceListChanged
+// fires only when local state actually moved.
+
+/**
+ * Align the local copy of `authoritative` (a recipe `getRecipe` just returned) to it.
+ * No-op when the store already holds the same content (`hash`) and trash state.
+ *
+ * @returns true if it mutated local state, false if the store already agreed (or the
+ *   local write failed and was left for sync).
+ */
+export async function reconcileLocalRecipe(ctx: ServerContext, authoritative: Recipe): Promise<boolean> {
+  const local = ctx.store.get(authoritative.uid);
+  if (local !== undefined && local.hash === authoritative.hash && local.inTrash === authoritative.inTrash) {
+    return false;
+  }
+  try {
+    await ctx.cache.recipes.put(authoritative);
+    await ctx.cache.flush();
+  } catch (err) {
+    ctx.log.warn({ err, uid: authoritative.uid }, "local recipe reconcile failed; sync will heal it next cycle");
+    return false;
+  }
+  ctx.store.set(authoritative);
+  ctx.notifier.resourceListChanged();
+  await maintainRecipeIndex(ctx, authoritative);
+  return true;
+}
+
+/**
+ * Companion to {@link reconcileLocalRecipe} for a 404: Paprika no longer has the
+ * recipe (never existed, or already purged — possibly by another client), so drop any
+ * stale local copy a later read/search would otherwise serve as a phantom. No-op when
+ * the store already lacks it.
+ *
+ * @returns true if it removed a local row, false if the store already lacked it (or
+ *   the local removal failed and was left for sync).
+ */
+export async function reconcileLocalRecipeAbsent(ctx: ServerContext, uid: RecipeUid): Promise<boolean> {
+  if (ctx.store.get(uid) === undefined) {
+    return false;
+  }
+  try {
+    await ctx.cache.recipes.remove(uid);
+    await ctx.cache.flush();
+  } catch (err) {
+    ctx.log.warn({ err, uid }, "local recipe reconcile (removal) failed; sync will heal it next cycle");
+    return false;
+  }
+  ctx.store.delete(uid);
+  ctx.notifier.resourceListChanged();
+  await removeRecipeFromIndex(ctx, uid);
+  return true;
 }
 
 /**

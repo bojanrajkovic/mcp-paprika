@@ -7,7 +7,13 @@ import type { ServerContext } from "../types/server-context.js";
 import { RecipeUidSchema } from "../ids.js";
 import { PaprikaAPIError } from "../paprika/errors.js";
 import { toMessage } from "../utils/log.js";
-import { coldStartGuard, commitRecipeHardDelete, textResult } from "./helpers.js";
+import {
+  coldStartGuard,
+  commitRecipeHardDelete,
+  reconcileLocalRecipe,
+  reconcileLocalRecipeAbsent,
+  textResult,
+} from "./helpers.js";
 
 export function registerEmptyTrashTool(server: McpServer, ctx: ServerContext): void {
   const log = ctx.log.child({ component: "purge_recipe" });
@@ -40,8 +46,10 @@ export function registerEmptyTrashTool(server: McpServer, ctx: ServerContext): v
             recipe = await ctx.client.getRecipe(args.uid);
           } catch (error) {
             if (error instanceof PaprikaAPIError && error.status === 404) {
-              // Never existed, or already permanently deleted (trash emptied).
+              // Never existed, or already permanently deleted (trash emptied). Drop a
+              // stale local phantom so a later read/search can't serve it.
               log.info({ uid: args.uid }, "purge_recipe: recipe not found (404)");
+              await reconcileLocalRecipeAbsent(ctx, args.uid);
               return textResult(
                 `No recipe found with UID "${args.uid}". It may have already been permanently deleted.`,
               );
@@ -53,6 +61,9 @@ export function registerEmptyTrashTool(server: McpServer, ctx: ServerContext): v
           }
 
           if (!recipe.inTrash) {
+            // Authoritative truth: it's live. Heal a stale local copy that still shows
+            // it trashed so reads/search agree before the next sync cycle.
+            await reconcileLocalRecipe(ctx, recipe);
             return textResult(
               `Recipe "${recipe.name}" is not in the trash, so it can't be permanently deleted. ` +
                 `Move it to the trash first with trash_recipe (reversible), then call purge_recipe.`,
