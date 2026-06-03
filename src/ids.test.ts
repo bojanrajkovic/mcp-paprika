@@ -1,46 +1,86 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  type AisleUid,
+  AisleUidRef,
   AisleUidSchema,
-  type GroceryListUid,
-  GroceryListUidRefSchema,
+  CategoryUidSchema,
+  GroceryIngredientUidSchema,
+  GroceryItemUidSchema,
   GroceryListUidSchema,
-  type MenuUid,
-  MenuUidRefSchema,
+  MealTypeUidSchema,
+  MealUidSchema,
+  MenuItemUidSchema,
   MenuUidSchema,
   NO_AISLE_UID,
-  type RecipeUid,
-  RecipeUidRefSchema,
+  NoAisleRef,
+  PantryItemUidSchema,
+  PhotoUidSchema,
   RecipeUidSchema,
 } from "./ids.js";
 
-// The FK-reference schemas (`*RefSchema`) carry the SAME brand as their
-// primary-key schema (so an FK field stays assignment-compatible with a
-// PK-typed value) but drop the PK's `.min(1)` (so an empty / "no reference"
-// foreign key still parses). That pairing is otherwise only a convention in
-// ids.ts; these tests lock it, so a future #202 tightening that forgets a ref —
-// or a brand-string drift — fails here rather than as distant type errors.
-describe("ids: FK reference schemas vs primary-key schemas", () => {
-  it("ref schemas accept the empty foreign-key sentinel; PK schemas reject it", () => {
-    for (const ref of [RecipeUidRefSchema, MenuUidRefSchema, GroceryListUidRefSchema]) {
-      expect(ref.parse("")).toBe("");
-    }
-    for (const pk of [RecipeUidSchema, MenuUidSchema, GroceryListUidSchema]) {
-      expect(() => pk.parse("")).toThrow();
-    }
-  });
+// Branding is compile-time only (ADR-0007); the one runtime invariant every
+// brand carries is non-emptiness. Absence is spelled explicitly: a nullable FK
+// uses `.nullable()`, and the grocery "no aisle" reference is the named
+// `AisleUidRef` / `NoAisleRef` empty-string sentinel — never a min-less twin of
+// the brand. These tests lock that contract, so a regression (a dropped `.min(1)`,
+// or an `aisle_uid` field that forgets the sentinel) fails here rather than as a
+// distant parse error during sync.
+describe("ids: every primary-key brand rejects the empty string", () => {
+  const PK_SCHEMAS = {
+    RecipeUidSchema,
+    CategoryUidSchema,
+    AisleUidSchema,
+    PantryItemUidSchema,
+    GroceryListUidSchema,
+    GroceryItemUidSchema,
+    GroceryIngredientUidSchema,
+    MealUidSchema,
+    MealTypeUidSchema,
+    MenuUidSchema,
+    MenuItemUidSchema,
+    PhotoUidSchema,
+  };
 
-  it("a ref schema's output is assignable to its PK brand (same brand)", () => {
-    // Compile-time guard: if the paired brand strings ever drift, these
-    // assignments stop type-checking and the build fails.
-    const recipe: RecipeUid = RecipeUidRefSchema.parse("R-1");
-    const menu: MenuUid = MenuUidRefSchema.parse("M-1");
-    const list: GroceryListUid = GroceryListUidRefSchema.parse("L-1");
-    expect([recipe, menu, list]).toEqual(["R-1", "M-1", "L-1"]);
-  });
+  for (const [name, schema] of Object.entries(PK_SCHEMAS)) {
+    it(`${name} rejects "" and accepts a non-empty UID`, () => {
+      expect(() => schema.parse("")).toThrow();
+      expect(schema.parse("A1")).toBe("A1");
+    });
+  }
+});
 
-  it("NO_AISLE_UID is the empty AisleUid sentinel and round-trips through AisleUidSchema", () => {
+describe("ids: the no-aisle foreign-key sentinel", () => {
+  it("NO_AISLE_UID is the empty string; it parses through AisleUidRef but NOT the PK schema", () => {
     expect(NO_AISLE_UID).toBe("");
-    expect(AisleUidSchema.parse(NO_AISLE_UID)).toBe("");
+    expect(AisleUidRef.parse(NO_AISLE_UID)).toBe("");
+    expect(() => AisleUidSchema.parse(NO_AISLE_UID)).toThrow();
+  });
+
+  it("AisleUidRef accepts both a real aisle UID and the empty sentinel", () => {
+    expect(AisleUidRef.parse("AISLE-1")).toBe("AISLE-1");
+    expect(AisleUidRef.parse("")).toBe("");
+  });
+
+  it("NoAisleRef accepts only the empty string", () => {
+    expect(NoAisleRef.parse("")).toBe("");
+    expect(() => NoAisleRef.parse("AISLE-1")).toThrow();
+  });
+
+  it("an AisleUidRef value is assignable to the AisleUid brand (same brand)", () => {
+    // Compile-time guard: if NoAisleRef / AisleUidRef ever drift off the AisleUid
+    // brand, these assignments stop type-checking and the build fails.
+    const sentinel: AisleUid = AisleUidRef.parse("");
+    const real: AisleUid = AisleUidRef.parse("AISLE-1");
+    expect([sentinel, real]).toEqual(["", "AISLE-1"]);
+  });
+});
+
+describe("ids: a nullable foreign key spells absence as null", () => {
+  it("accepts null and a non-empty UID, but still rejects the empty string", () => {
+    const schema = RecipeUidSchema.nullable();
+    expect(schema.parse(null)).toBeNull();
+    expect(schema.parse("R-1")).toBe("R-1");
+    expect(() => schema.parse("")).toThrow();
   });
 });
