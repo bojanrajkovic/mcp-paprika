@@ -67,4 +67,3 @@ The signal handler in `src/index.ts` bypasses the structured logger because at s
 
 - `app.auth !== null` **iff** `config.transport === "http"`. Use-sites check `app.auth === null` to detect stdio mode (mirrors the `vectorStore` optional-feature pattern).
 - `buildAppContext` runs exactly once per process; `buildMcpServer` runs once per session.
-- This directory is the composition root: it may import from every other `src/` directory. Other directories must not import from `src/server/` except via `import type` (e.g., `src/types/server-context.ts` and `src/paprika/sync.ts` pull the context types).

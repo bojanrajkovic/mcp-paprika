@@ -1,6 +1,6 @@
 # OAuth 2.1 Authorization Layer
 
-Last verified: 2026-06-01
+Last verified: 2026-06-02
 
 ## Purpose
 
@@ -67,6 +67,6 @@ A `/oauth/callback` allowlist denial redirects back with a generic `error_descri
 
 `buildAuthContext` refuses to start on a discovery-fetch failure, an empty algorithm intersection, or invalid config; the server never runs in a degraded auth state. Consequence: a transient egress blip to the upstream IdP at startup can block the whole HTTP transport from coming up (existing unexpired tokens keep working; new logins can't be obtained while the IdP is unreachable). Check egress before blaming the image on a failed rollout.
 
-### Boundaries
+### `redirectAllowlist` is normalized in `buildAuthContext`, not `config.ts`
 
-`src/auth/` may import `src/cache/` (`DiskCacheRoot` from `disk-cache-root.ts` only), `src/utils/config.ts` + `src/utils/xdg.ts`, and the external deps (`@modelcontextprotocol/sdk`, `jose`, `hono-rate-limiter`, `zod`, `neverthrow`, `node:crypto`). It must NOT import from `src/tools/`, `src/resources/`, `src/features/`, `src/paprika/`, `src/server/`, or `src/transport/`. Only `src/server/build.ts` and `src/transport/http.ts` may import from here. (`config.ts` keeps the raw `redirectAllowlist` strings unnormalized precisely so it has no dependency back into `src/auth/`; `buildAuthContext` normalizes them via `normalizeOrigin`.)
+`config.ts` keeps the raw `redirectAllowlist` strings unnormalized so it carries no dependency back into `src/auth/`; `buildAuthContext` normalizes them via `normalizeOrigin`. Normalizing them in `config.ts` would create a `config` → `auth` cycle.

@@ -8,25 +8,17 @@ The in-memory query/CRUD stores that are each session's source of truth for one 
 
 ## Key References
 
-- `../entity/CLAUDE.md` — the shared `EntityStore` / `TombstoneEntityStore` base classes and the canonical pending-write (#57) and tombstone invariants. Every store below inherits those unless noted; this file documents only what each store adds on top.
+- `../entity/CLAUDE.md` — the shared `EntityStore` / `TombstoneEntityStore` base classes and the canonical pending-write (#57) and tombstone invariants. Every store inherits those unless noted in Sharp edges; this file documents only what each store adds on top.
 - [Persistence](#persistence) (below) — the on-disk layer (`DiskCacheRoot`, per-entity `DiskCache<T>` + the `DiskCacheDescriptor<T>` contract, on-disk layout, migration, mutex model, recipe `diff()`, DCR `tryPut`); each entity's descriptor is co-located in `../<entity>/disk.ts`.
 - `docs/architecture.md` — the two-layer cache+sync model and the diff-and-fetch vs. replace-all split.
 - Source: each entity's `../<entity>/store.ts` owns its method signatures and field shapes, and its `../<entity>/types.ts` owns the schema.
 
 ## Stores at a glance
 
-The store implementations now live in their entity modules (`../<entity>/store.ts`, beside `types.ts` and `disk.ts`); this catalog names each one's base class and store-specific behavior only.
+Most stores extend `TombstoneEntityStore`. The exceptions:
 
-- `../recipe/store.ts` — `EntityStore`. Diff-and-fetch sync. FK-only for categories (see Sharp edges).
-- `../category/store.ts` — `TombstoneEntityStore`. Single source of truth for category data; `resolveByName`/`resolveNames`/`getChildren`.
-- `../pantry/store.ts` — `TombstoneEntityStore`. `findByIngredient` tiered lookup.
-- `../aisle/store.ts` / `../meal-type/store.ts` — `EntityStore`, read-only reference catalogs (`resolveByName`, no delete/tombstone path).
-- `../grocery-list/store.ts` / `../menu/store.ts` — `TombstoneEntityStore` parent stores (`findByName`, `lastSyncedAt`).
-- `../grocery-item/store.ts` / `../menu-item/store.ts` — `TombstoneEntityStore` child stores keyed to a parent FK (`getByListUid` / `getByMenuUid`).
-- `../grocery-ingredient/store.ts` — **plain class, NOT an EntityStore** (see Sharp edges).
-- `../meal/store.ts` — `TombstoneEntityStore`. `getMaxOrderFlagOn` carries a reverse-engineered wire quirk (see Sharp edges).
-- `../photo/store.ts` — `TombstoneEntityStore`, recipe-child entity with no standalone resource surface; `getByRecipeUid` gallery-sorted.
-- Persistence (`disk-cache.ts`, `disk-cache-root.ts`, `oauth-client-disk-cache.ts`, and each entity's `../<entity>/disk.ts` descriptor) — see [Persistence](#persistence) below.
+- `aisle` / `meal-type` extend `EntityStore` — read-only reference catalogs, no delete/tombstone path.
+- `grocery-ingredient` is a plain name-keyed class, not an `EntityStore` (see Sharp edges).
 
 ## Sharp edges
 
@@ -65,7 +57,3 @@ On-disk persistence for every cached entity: one `DiskCache<T>` per entity behin
 **Legacy-index migration writes the new file before deleting the old one.** `_maybeMigrateLegacyIndex` (one-shot, first boot) writes `recipes/index.json` atomically, _then_ unlinks the legacy unified `index.json`. A crash between leaves the legacy file in place; the next boot re-runs and overwrites the recipes index with identical content (idempotent), then retries the delete. Only the `recipes` namespace carried real hashes; every other legacy namespace stored placeholders equivalent to a directory listing, which each subcache rebuilds from `readdir` at init.
 
 **`getAll()` reads the directory live; `_knownKeys` is only a hint.** `has()`/`size`/`tryPut`'s count check use the in-memory `_knownKeys` mirror, but `getAll()` does a fresh `readdir` so externally-seeded files (test fixtures, or another writer in the DCR-cap path) are visible immediately. Cross-instance count drift is inherent to "two writers, one directory" and is a non-issue in production (one `DiskCacheRoot` per process). I/O uses try/catch on `error.code`, never `existsSync`-then-read, to avoid a TOCTOU window.
-
-## Boundary
-
-Must not import from `tools/`, `resources/`, or `features/`. The persistence layer reaches into each `../<entity>/` for its disk descriptor and `Stored` schema (the `parse` each `DiskCache` runs), `../recipe/disk.js` for the bespoke `RecipeDiskCache`, and `../auth/types.js` for the OAuth client/token shapes. `DiskCacheRoot` is a composition root, so this cross-domain fan-in is expected.
