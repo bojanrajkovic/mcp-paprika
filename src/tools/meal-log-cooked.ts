@@ -13,6 +13,7 @@ import { toMessage } from "../utils/log.js";
 import { textResult } from "./helpers.js";
 import {
   commitMealsBatch,
+  formatMealTypeResolveError,
   makeMealOrderFlagAssigner,
   mealStartGuard,
   mealTypeSpecSchema,
@@ -55,20 +56,7 @@ export function registerLogCookedMealTool(server: McpServer, ctx: ServerContext)
           const typeSpec: z.infer<typeof mealTypeSpecSchema> = args.type ?? { builtin: 2 };
           const typeResult = resolveMealTypeSpec(ctx, typeSpec);
           if (!typeResult.ok) {
-            if (typeResult.reason === "unknown_uid") {
-              return textResult(`Unknown meal type UID "${typeResult.uid}".`);
-            }
-            if (typeResult.reason === "unknown_name") {
-              const knownList = typeResult.knownNames.join(", ");
-              return textResult(
-                `Unknown meal type "${typeResult.name}". Known types: ${knownList}. ` +
-                  `Use the {uid} or {builtin} discriminator to reference a custom meal type.`,
-              );
-            }
-            return textResult(
-              `No built-in meal type found with index ${typeResult.index.toString()} ` +
-                `(expected 0=Breakfast, 1=Lunch, 2=Dinner, 3=Snacks).`,
-            );
+            return textResult(formatMealTypeResolveError(typeResult));
           }
           // Custom mealtypes carry originalType: null; Meal.type is vestigial when
           // type_uid is set (see plan_meals for the full rationale).

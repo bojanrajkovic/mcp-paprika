@@ -9,6 +9,13 @@ export interface MealDateRangeOpts {
   readonly since?: DateTime | undefined;
   readonly until?: DateTime | undefined;
   readonly recipeUid?: RecipeUid | undefined;
+  /**
+   * Restrict to meals whose recipe is in this set (recipe-linked only). Used by
+   * search_meal_history to filter by a specific recipe and/or a category's recipe
+   * set; a freeform meal (recipeUid null) never matches. Composes (AND) with the
+   * other filters.
+   */
+  readonly recipeUids?: ReadonlySet<RecipeUid> | undefined;
   readonly typeUid?: MealTypeUid | undefined;
   /**
    * When `typeUid` resolves to a built-in mealtype (Breakfast/Lunch/Dinner/
@@ -97,6 +104,7 @@ export class MealStore extends TombstoneEntityStore<Meal, MealUid> {
       if (isHidden(meal)) continue;
 
       if (opts?.recipeUid !== undefined && meal.recipeUid !== opts.recipeUid) continue;
+      if (opts?.recipeUids !== undefined && (meal.recipeUid === null || !opts.recipeUids.has(meal.recipeUid))) continue;
       if (opts !== undefined && !matchesTypeFilter(meal, opts)) continue;
 
       const dt = parseMealDate(meal.date);

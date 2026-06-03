@@ -331,7 +331,7 @@ Read the upcoming meal plan: meals scheduled from today forward, grouped by day 
 
 **Parameters**
 
-- `days` _(optional)_ — How many days ahead to include, starting today (default 7, max 31).
+- `days` _(optional)_ — How many days of the plan to show, counting today (default 7, max 31).
 
 ## `read_menu`
 
@@ -403,12 +403,17 @@ Instantiate a saved menu's recipes as meal-planner entries. Look the menu up by 
 
 ## `search_meal_history`
 
-Search PAST meals (recall), by a specific recipe and/or by recipe category ("class"). Answers "when did we last have tacos" (recipe_uid) or "how often do we eat Italian" (class); supplying both ANDs them (that recipe, only if it is in that class). Future planner entries are excluded. Returns the matching meals grouped by date (newest first), the total count, and when it was last made. For the upcoming plan, use read_meal_plan.
+Search PAST meals (recall/browse), by a specific recipe, a recipe category ("class"), a meal type, and/or a date window — any combination, ANDed. Answers "when did we last have tacos", "how often do we eat Italian", "show the dinners we had in March", or "what have we eaten lately". With no filters it returns the last 30 days. Future planner entries are excluded (use read_meal_plan for upcoming meals). Results group by date (newest first), with a count, the last-made date, and pagination.
 
 **Parameters**
 
 - `recipe_uid` _(optional)_ — Recall past meals of this specific recipe, by UID.
-- `class` _(optional)_ — Recall past meals whose recipe is in this category — a category name (case-insensitive) or UID, e.g. "Italian".
+- `class` _(optional)_ — Recall meals whose recipe is in this category — a name (case-insensitive) or UID, e.g. "Italian".
+- `type` _(optional)_ — Filter by meal type. Pick one shape: {"name":"Dinner"} | {"uid":"<MealType UID>"} | {"builtin":2}.
+- `since` _(optional)_ — Start of the window, inclusive (ISO 8601 or yyyy-MM-dd). Defaults to 30 days ago when no recipe/class/type filter is given, else all time.
+- `until` _(optional)_ — End of the window, inclusive (ISO 8601 or yyyy-MM-dd). Defaults to today; future planner entries are excluded.
+- `offset` _(optional)_ — Pagination offset (default 0).
+- `limit` _(optional)_ — Maximum meals to return (default 50, max 200).
 
 ## `search_recipes`
 
@@ -416,8 +421,13 @@ Search and filter recipes. Use any combination of: free-text query (matches name
 
 **Parameters**
 
-- `_def`
-- `~standard`
+- `query` _(optional)_ — Free-text search across name, ingredients, and description
+- `ingredients` _(optional)_ — Ingredient terms to filter by
+- `match` _(optional)_ — Ingredient match mode: "all" (default) requires every term; "any" matches at least one
+- `maxPrep` _(optional)_ — Maximum prep time (e.g., "30 minutes", "1 hr")
+- `maxCook` _(optional)_ — Maximum cook time (e.g., "45 min", "1 hour")
+- `maxTotal` _(optional)_ — Maximum total time (e.g., "1 hour 30 minutes", "2 hrs")
+- `limit` _(optional)_ — Maximum number of results to return (default: 20, max: 50)
 
 ## `trash_recipe`
 

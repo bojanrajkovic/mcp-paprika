@@ -16,7 +16,7 @@ export const readMealPlanInputSchema = z
       .positive()
       .max(31)
       .optional()
-      .describe("How many days ahead to include, starting today (default 7, max 31)."),
+      .describe("How many days of the plan to show, counting today (default 7, max 31)."),
   })
   .strict();
 
@@ -38,10 +38,11 @@ export function registerReadMealPlanTool(server: McpServer, ctx: ServerContext):
           // production, but the unit-test harness invokes the handler with raw args,
           // so a schema default wouldn't fire there.
           const days = args.days ?? 7;
-          // Window: start of today (UTC) through the end of today + `days`. Meals
-          // are day-granular and store at midnight, so start-of-day includes today's.
+          // Window: `days` calendar days starting today, inclusive — days=7 is today
+          // through today+6. Meals are day-granular and store at midnight, so
+          // start-of-day includes today's.
           const since = DateTime.utc().startOf("day");
-          const until = since.plus({ days }).endOf("day");
+          const until = since.plus({ days: days - 1 }).endOf("day");
 
           // High limit: a week or two of meals is small, and the plan view wants the
           // whole window (no pagination). getInDateRange caps internally regardless.

@@ -13,6 +13,7 @@ import { toMessage } from "../utils/log.js";
 import { textResult } from "./helpers.js";
 import {
   commitMealsBatch,
+  formatMealTypeResolveError,
   makeMealOrderFlagAssigner,
   mealStartGuard,
   mealTypeSpecSchema,
@@ -74,20 +75,7 @@ export function registerRescheduleMealTool(server: McpServer, ctx: ServerContext
           if (args.type !== undefined) {
             const result = resolveMealTypeSpec(ctx, args.type);
             if (!result.ok) {
-              if (result.reason === "unknown_uid") {
-                return textResult(`Unknown meal type UID "${result.uid}".`);
-              }
-              if (result.reason === "unknown_name") {
-                const knownList = result.knownNames.join(", ");
-                return textResult(
-                  `Unknown meal type "${result.name}". Known types: ${knownList}. ` +
-                    `Use the {uid} or {builtin} discriminator to reference a custom meal type.`,
-                );
-              }
-              return textResult(
-                `No built-in meal type found with index ${result.index.toString()} ` +
-                  `(expected 0=Breakfast, 1=Lunch, 2=Dinner, 3=Snacks).`,
-              );
+              return textResult(formatMealTypeResolveError(result));
             }
             // Custom mealtypes carry originalType: null; Meal.type is vestigial when
             // type_uid is set (see plan_meals for the full rationale).

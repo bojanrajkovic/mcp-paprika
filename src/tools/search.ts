@@ -30,18 +30,12 @@ export const searchRecipesInputSchema = z
       .default(20)
       .describe("Maximum number of results to return (default: 20, max: 50)"),
   })
-  .strict()
-  .superRefine((val, ctx) => {
-    const hasQuery = val.query !== undefined && val.query.length > 0;
-    const hasIngredients = val.ingredients !== undefined && val.ingredients.length > 0;
-    const hasTime = val.maxPrep !== undefined || val.maxCook !== undefined || val.maxTotal !== undefined;
-    if (!hasQuery && !hasIngredients && !hasTime) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "Provide at least one of: query, ingredients, or a max time.",
-      });
-    }
-  });
+  // Plain `.strict()` — NOT `.superRefine`/`.refine`. A refined schema is a
+  // ZodEffects, which the MCP SDK serializes to an EMPTY published inputSchema
+  // (it reads `.shape`, which only a plain object has), so the model would see
+  // search_recipes as taking no arguments. The "at least one criterion" rule is
+  // therefore enforced at runtime in the handler, not on the schema.
+  .strict();
 
 export function registerSearchTool(server: McpServer, ctx: ServerContext): void {
   const log = ctx.log.child({ component: "search_recipes" });
@@ -83,6 +77,13 @@ export function registerSearchTool(server: McpServer, ctx: ServerContext): void 
                 constraints.maxCookTime !== undefined ||
                 constraints.maxTotalTime !== undefined;
 
+              // The ">=1 criterion" rule lives here (not on the schema — see the
+              // searchRecipesInputSchema comment): reject an all-empty call so search
+              // never silently returns the whole library.
+              if (!hasQuery && !hasIngredients && !hasTime) {
+                return textResult("Provide at least one of: query, ingredients, or a max prep/cook/total time.");
+              }
+
               // Build candidate set from the search/getAll path.
               let queryResults: Array<{ recipe: Recipe; score?: number }>;
               if (hasQuery) {
@@ -101,19 +102,19 @@ export function registerSearchTool(server: McpServer, ctx: ServerContext): void 
                 queryResults = queryResults.filter((r) => ingredientSet.has(r.recipe.uid));
               }
 
-              // Intersect with time filter.
-              if (hasTime) {
-                const timeSet = new Set(ctx.store.filterByTime(constraints).map((r) => r.uid));
+              // Time filter: filterByTime returns recipes already sorted ascending by
+              // total time. Compute it ONCE and reuse for both the intersection set and
+              // the order map (it was previously scanned twice per request).
+              const timeOrdered = hasTime ? ctx.store.filterByTime(constraints) : null;
+              if (timeOrdered !== null) {
+                const timeSet = new Set(timeOrdered.map((r) => r.uid));
                 queryResults = queryResults.filter((r) => timeSet.has(r.recipe.uid));
               }
 
               // Sort: scored search order when query present; ascending total-time
               // order when only time active; name order otherwise.
               if (!hasQuery) {
-                if (hasTime) {
-                  // filterByTime returns sorted ascending by total time — reconstruct that
-                  // order for our intersected subset.
-                  const timeOrdered = ctx.store.filterByTime(constraints);
+                if (timeOrdered !== null) {
                   const timeOrderMap = new Map(timeOrdered.map((r, i) => [r.uid, i]));
                   queryResults.sort((a, b) => {
                     const ai = timeOrderMap.get(a.recipe.uid) ?? Number.MAX_SAFE_INTEGER;

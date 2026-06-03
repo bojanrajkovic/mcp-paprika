@@ -660,30 +660,39 @@ describe("p2-discovery-tools: search_recipes tool", () => {
   // D7: at-least-one-criterion rule
   // ---------------------------------------------------------------------------
 
-  describe("D7: at-least-one-criterion validation", () => {
-    it("D7.validation.1: all-empty input is rejected by schema safeParse", () => {
-      const result = searchRecipesInputSchema.safeParse({});
-      expect(result.success).toBe(false);
+  describe("D7: at-least-one-criterion rule", () => {
+    // The rule is enforced in the HANDLER (not on the schema): a refined schema
+    // is a ZodEffects, which the MCP SDK publishes with zero properties — the
+    // model would see no params. So an all-empty call is rejected at runtime.
+    it("D7.validation.1: an all-empty call is rejected by the handler", async () => {
+      const { server, callTool } = makeTestServer();
+      registerSearchTool(server, seed(makeCtx(new RecipeStore(), server), { recipes: [makeRecipe({ name: "X" })] }));
+      expect(getText(await callTool("search_recipes", {}))).toContain("Provide at least one");
     });
 
-    it("D7.validation.2: empty query + no other criteria is rejected by schema safeParse", () => {
-      const result = searchRecipesInputSchema.safeParse({ query: "" });
-      expect(result.success).toBe(false);
+    it("D7.validation.2: empty query + no other criteria is rejected by the handler", async () => {
+      const { server, callTool } = makeTestServer();
+      registerSearchTool(server, seed(makeCtx(new RecipeStore(), server), { recipes: [makeRecipe({ name: "X" })] }));
+      expect(getText(await callTool("search_recipes", { query: "" }))).toContain("Provide at least one");
     });
 
     it("D7.validation.3: query alone (non-empty) passes schema validation", () => {
-      const result = searchRecipesInputSchema.safeParse({ query: "chicken" });
-      expect(result.success).toBe(true);
+      expect(searchRecipesInputSchema.safeParse({ query: "chicken" }).success).toBe(true);
     });
 
     it("D7.validation.4: ingredients alone passes schema validation", () => {
-      const result = searchRecipesInputSchema.safeParse({ ingredients: ["tomato"] });
-      expect(result.success).toBe(true);
+      expect(searchRecipesInputSchema.safeParse({ ingredients: ["tomato"] }).success).toBe(true);
     });
 
     it("D7.validation.5: maxTotal alone passes schema validation", () => {
-      const result = searchRecipesInputSchema.safeParse({ maxTotal: "30 minutes" });
-      expect(result.success).toBe(true);
+      expect(searchRecipesInputSchema.safeParse({ maxTotal: "30 minutes" }).success).toBe(true);
+    });
+
+    it("D7.validation.6: schema is a plain object so the SDK can publish its params", () => {
+      // Regression guard for the ZodEffects empty-published-schema bug: a refined
+      // schema has no .shape and the SDK serializes zero properties.
+      expect(searchRecipesInputSchema.shape).toBeDefined();
+      expect(Object.keys(searchRecipesInputSchema.shape)).toContain("query");
     });
   });
 });

@@ -99,6 +99,28 @@ export function resolveMealTypeSpec(
 }
 
 /**
+ * Render a failed `resolveMealTypeSpec` result as a single user-facing error
+ * string. The one place that owns the three error-reason → message mapping;
+ * shared by update_meal, reschedule_meal, log_cooked_meal, and search_meal_history.
+ * (plan_meals formats its own per-index-prefixed variant in its batch loop.)
+ */
+export function formatMealTypeResolveError(result: Extract<MealTypeResolveResult, { ok: false }>): string {
+  if (result.reason === "unknown_uid") {
+    return `Unknown meal type UID "${result.uid}".`;
+  }
+  if (result.reason === "unknown_name") {
+    return (
+      `Unknown meal type "${result.name}". Known types: ${result.knownNames.join(", ")}. ` +
+      `Use the {uid} or {builtin} discriminator to reference a custom meal type.`
+    );
+  }
+  return (
+    `No built-in meal type found with index ${result.index.toString()} ` +
+    `(expected 0=Breakfast, 1=Lunch, 2=Dinner, 3=Snacks).`
+  );
+}
+
+/**
  * Builds a stateful, per-date `order_flag` assigner for a batch of new meals.
  *
  * `order_flag` sequences PER CALENDAR DATE — all meal types on a given day share

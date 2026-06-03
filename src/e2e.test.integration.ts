@@ -102,6 +102,15 @@ describe("MCP Server end-to-end round-trip", () => {
       expect(tool.description).toBeDefined();
       expect(typeof tool.description).toBe("string");
     });
+
+    // Every tool must publish a non-empty parameter schema. Regression guard for the
+    // ZodEffects bug: a `.refine()`/`.superRefine()` inputSchema serializes to zero
+    // properties, so the model would see the tool as taking no arguments. search_recipes
+    // (which takes query/ingredients/match/maxPrep/maxCook/maxTotal/limit) is the canary.
+    const search = result.tools.find((t) => t.name === "search_recipes");
+    expect(search).toBeDefined();
+    const searchSchema = search!.inputSchema as { properties?: Record<string, unknown> };
+    expect(Object.keys(searchSchema.properties ?? {})).toContain("query");
   });
 
   it("rejects a promoted field on update_recipe with a loud SDK input-validation error", async () => {
