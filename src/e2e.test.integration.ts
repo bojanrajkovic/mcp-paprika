@@ -81,6 +81,17 @@ describe("MCP Server end-to-end round-trip", () => {
     expect(toolNames).toContain("list_categories");
     expect(toolNames).toContain("list_pantry_items");
     expect(toolNames).toContain("read_pantry_item");
+    // Intent verbs promoted off the generic update_* tools (command-language refactor).
+    expect(toolNames).toContain("restore_recipe");
+    expect(toolNames).toContain("rate_recipe");
+    expect(toolNames).toContain("favorite_recipe");
+    expect(toolNames).toContain("unfavorite_recipe");
+    expect(toolNames).toContain("categorize_recipe");
+    expect(toolNames).toContain("mark_grocery_item_purchased");
+    expect(toolNames).toContain("mark_pantry_item_out_of_stock");
+    expect(toolNames).toContain("restock_pantry_item");
+    expect(toolNames).toContain("move_menu_item");
+    expect(toolNames).toContain("reschedule_meal");
 
     // Verify tools have descriptions
     result.tools.forEach((tool) => {

@@ -34,6 +34,16 @@ Add one or more items to the pantry. Skips items that duplicate an existing ingr
 
 - `items` — Array of items to add (1 or more)
 
+## `categorize_recipe`
+
+Add, replace, or remove a recipe's categories by UID. Pass category names or UIDs and a mode: add (union with current — the default), replace (set exactly these), or remove (drop these). Unknown category names are skipped with a warning. To edit other recipe fields, use update_recipe.
+
+**Parameters**
+
+- `uid` — Recipe UID to categorize
+- `categories` — Category references — each is a category UID (from list_categories) or a display name (case-insensitive). Unknown names are skipped with a warning.
+- `mode` _(optional)_ — How to apply: "add" (default) unions these with the recipe's current categories; "replace" sets the recipe's categories to exactly these; "remove" drops these from the recipe.
+
 ## `clear_grocery_list`
 
 Clear all items from a grocery list.
@@ -173,6 +183,14 @@ Discover recipes using semantic search. Finds recipes matching a natural languag
 - `topK` _(optional)_ — Maximum number of results to return (default: 5, max: 20)
 - `minScore` _(optional)_ — Optional minimum similarity (cosine, 0-1). Results below it are dropped before the top-K cut, so a query with few genuine matches returns only those instead of padding with weak ones. Omit for no filtering. Use a modest value (e.g. ~0.3) to gate on relevance.
 
+## `favorite_recipe`
+
+Mark a recipe as a favorite by UID (adds it to the Favorites list).
+
+**Parameters**
+
+- `uid` — Recipe UID
+
 ## `filter_by_ingredient`
 
 Filter recipes by ingredient. Use mode="all" (default) to require all ingredients, or mode="any" to match any.
@@ -265,6 +283,22 @@ List all recipes with pagination. Returns recipe summaries sorted alphabetically
 - `offset` _(optional)_ — Number of recipes to skip (default: 0)
 - `limit` _(optional)_ — Maximum number of recipes to return (default: 25, max: 50)
 
+## `mark_grocery_item_purchased`
+
+Mark a grocery item as purchased (checked off) by UID.
+
+**Parameters**
+
+- `uid` — UID of the grocery item to mark purchased
+
+## `mark_pantry_item_out_of_stock`
+
+Mark a pantry item as out of stock by UID (e.g. you've run out of it).
+
+**Parameters**
+
+- `uid` — UID of the pantry item to mark out of stock
+
 ## `move_grocery_items_to_pantry`
 
 Move one or more grocery items to the pantry. Creates pantry items (with today's purchase date), then deletes the grocery items.
@@ -272,6 +306,15 @@ Move one or more grocery items to the pantry. Creates pantry items (with today's
 **Parameters**
 
 - `uids` — Grocery item UIDs to move to pantry
+
+## `move_menu_item`
+
+Move a menu item to a different day within its menu, by UID. A day beyond the menu's current span auto-extends the menu so the item stays visible, and the item is re-sequenced to the end of the menu's order. To change a menu item's meal type or recipe link instead, use update_menu_item.
+
+**Parameters**
+
+- `uid` — UID of the menuitem to move
+- `day` — Destination 1-indexed day. Days beyond the menu's current span auto-extend the menu.
 
 ## `plan_meals`
 
@@ -288,6 +331,15 @@ Permanently delete a recipe that is already in the Paprika trash. This is IRREVE
 **Parameters**
 
 - `uid` — UID of a trashed recipe to permanently delete
+
+## `rate_recipe`
+
+Rate a recipe 0–5 stars by UID. Sets the recipe's star rating; pass 0 to clear it.
+
+**Parameters**
+
+- `uid` — Recipe UID to rate
+- `rating` — Star rating 0–5; 0 clears the rating
 
 ## `read_grocery_list`
 
@@ -330,6 +382,32 @@ Rename a grocery list. Rejects if the new name conflicts with a different existi
 - `uid` — Grocery list UID to rename
 - `newName` — New name for the grocery list
 
+## `reschedule_meal`
+
+Reschedule a planned meal to a different date by UID, optionally also changing its meal type. Moving the date re-sequences the meal to the end of the destination day's order. To change a meal's recipe link, freeform name, or scale instead, use update_meal.
+
+**Parameters**
+
+- `uid`
+- `date` — New meal date (ISO 8601 date or datetime). Time-of-day is dropped — meals are day-granular and store at midnight UTC.
+- `type` _(optional)_ — Optionally also change the meal type while rescheduling (same DU as plan_meals).
+
+## `restock_pantry_item`
+
+Mark a pantry item as back in stock by UID (e.g. you've restocked it).
+
+**Parameters**
+
+- `uid` — UID of the pantry item to restock
+
+## `restore_recipe`
+
+Restore a trashed recipe by UID, moving it out of the trash back into the active library. The inverse of trash_recipe; use purge_recipe to permanently delete a trashed recipe instead.
+
+**Parameters**
+
+- `uid` — Recipe UID to restore from trash
+
 ## `schedule_menu`
 
 Instantiate a saved menu's recipes as meal-planner entries. Look the menu up by UID or name (tiered fuzzy match), then materialize each of its items into a meal dated start_date + (day − 1) days, posting them all in one batch. This is a one-way COPY, not a link: the planner meals carry no back-reference to the menu, so editing the menu later does not change them — and it is NOT idempotent, so re-running adds a second copy (same as Paprika.app's own Add Menu action). Recipe display names re-resolve from the local recipe store; if ANY recipe-linked item references an unknown recipe the whole batch is rejected with a per-item enumeration (freeform items keep their stored name). To remove a meal afterward, find it via list_meal_history and call delete_meal.
@@ -356,6 +434,14 @@ Soft-delete a recipe by UID, moving it to the Paprika trash. This operation is r
 
 - `uid` — Recipe UID to delete
 
+## `unfavorite_recipe`
+
+Remove a recipe from the Favorites list by UID.
+
+**Parameters**
+
+- `uid` — Recipe UID
+
 ## `update_category`
 
 Rename and/or re-parent an existing category. Pass `name` to rename, `parentUid` to move it under another category, or `null` for `parentUid` to make it top-level. Re-parenting builds the hierarchy that `list_categories` renders.
@@ -368,7 +454,7 @@ Rename and/or re-parent an existing category. Pass `name` to rename, `parentUid`
 
 ## `update_grocery_item`
 
-Update an existing grocery item. Only provided fields are changed; omitted fields retain their current values.
+Update a grocery item's quantity, aisle, or notes by UID. Only provided fields are changed; omitted fields retain their current values. To check an item off, use mark_grocery_item_purchased.
 
 **Parameters**
 
@@ -376,16 +462,15 @@ Update an existing grocery item. Only provided fields are changed; omitted field
 - `quantity` _(optional)_ — New quantity; set to empty string to clear
 - `aisle` _(optional)_ — New aisle display name
 - `instruction` _(optional)_ — New free-form notes
-- `purchased` _(optional)_ — Whether the item has been purchased
 
 ## `update_meal`
 
-Update an existing meal by UID. The `update` payload is a discriminated union: pick exactly one of {recipe_uid?, ...other} | {name, ...other} | {recipe_uid: null, name?, ...other}. Recipe link and display name are structurally exclusive: name auto-resolves from the recipe for linked meals, and Paprika.app would never render a stored custom name on a recipe-linked meal. To set a custom label, use a freeform meal (no recipe_uid) or demote first via recipe_uid: null + name. Partial merge: omitted fields are preserved. To clear scale, pass scale: null. The is_ingredient and deleted fields are not updatable via this tool.
+Update an existing meal by UID. The `update` payload is a discriminated union: pick exactly one of {recipe_uid?, ...other} | {name, ...other} | {recipe_uid: null, name?, ...other}. Recipe link and display name are structurally exclusive: name auto-resolves from the recipe for linked meals, and Paprika.app would never render a stored custom name on a recipe-linked meal. To set a custom label, use a freeform meal (no recipe_uid) or demote first via recipe_uid: null + name. Partial merge: omitted fields are preserved. To clear scale, pass scale: null. To change the meal's date, use reschedule_meal. The is_ingredient and deleted fields are not updatable via this tool.
 
 **Parameters**
 
 - `uid`
-- `update` — Update payload. Pick exactly one shape: {recipe_uid?, date?, type?, scale?} | {name, date?, type?, scale?} | {recipe_uid: null, name?, date?, type?, scale?}. Supplying both recipe_uid (a UID) and name is rejected — Paprika.app dispatches display off recipe_uid, so a stored custom name on a recipe-linked meal would never render. Use a freeform meal if you need a custom label.
+- `update` — Update payload. Pick exactly one shape: {recipe_uid?, type?, scale?} | {name, type?, scale?} | {recipe_uid: null, name?, type?, scale?}. Supplying both recipe_uid (a UID) and name is rejected — Paprika.app dispatches display off recipe_uid, so a stored custom name on a recipe-linked meal would never render. Use a freeform meal if you need a custom label. To change a meal's date, use reschedule_meal.
 
 ## `update_menu`
 
@@ -400,18 +485,17 @@ Update a menu's name, day span, and/or notes. Look it up by UID or name (tiered 
 
 ## `update_menu_item`
 
-Update an existing menuitem by UID. Provide at least one of day, type, or recipe_uid; omitted fields keep their current values. Changing recipe_uid re-resolves the display name from the new recipe. Moving an item to a later day auto-extends the menu's span if needed (so it stays visible) and re-sequences its order within the destination day. The menu link (menu_uid) is not editable via this tool — delete and re-add to move an item between menus.
+Update an existing menuitem's meal type or recipe link by UID. Provide at least one of type or recipe_uid; omitted fields keep their current values. Changing recipe_uid re-resolves the display name from the new recipe. To move an item to a different day, use move_menu_item. The menu link (menu_uid) is not editable via this tool — delete and re-add to move an item between menus.
 
 **Parameters**
 
 - `uid` — UID of the menuitem to update
-- `day` _(optional)_ — New 1-indexed day
 - `type` _(optional)_ — New meal type (same DU as add_menu_items)
 - `recipe_uid` _(optional)_ — New recipe UID. Display name re-resolves from the new recipe.
 
 ## `update_pantry_item`
 
-Update an existing pantry item by UID. Only provided fields are changed; omitted fields retain their existing values. Setting expirationDate also updates hasExpiration accordingly.
+Update a pantry item's ingredient, quantity, aisle, or dates by UID. Only provided fields are changed; omitted fields retain their existing values. Setting expirationDate also updates hasExpiration accordingly. To change stock status, use mark_pantry_item_out_of_stock / restock_pantry_item.
 
 **Parameters**
 
@@ -421,11 +505,10 @@ Update an existing pantry item by UID. Only provided fields are changed; omitted
 - `aisle` _(optional)_ — New aisle display name; call list_aisles first to pick an existing name. Unknown names auto-create a new aisle.
 - `expirationDate` _(optional)_ — Set expiration date; pass null to clear. hasExpiration is derived from this.
 - `purchaseDate` _(optional)_ — Set purchase date; pass null to clear
-- `inStock` _(optional)_ — Set in-stock status
 
 ## `update_recipe`
 
-Update an existing recipe by UID. Only provided fields are changed; omitted fields retain their existing values. If categories is provided, it replaces the existing category list entirely; omitting categories leaves the existing list unchanged. Pass inTrash: true to move to trash (soft-delete, reversible) or inTrash: false to restore. Use trash_recipe for a dedicated trash workflow.
+Update a recipe's content fields by UID (name, ingredients, directions, description, notes, servings, prep/cook/total time, source, difficulty, nutritional info). Only provided fields change; omitted fields keep their values. This tool does NOT edit rating, categories, favorite status, or trash state — use rate_recipe, categorize_recipe, favorite_recipe / unfavorite_recipe, and trash_recipe / restore_recipe for those.
 
 **Parameters**
 
@@ -439,12 +522,9 @@ Update an existing recipe by UID. Only provided fields are changed; omitted fiel
 - `prepTime` _(optional)_ — New prep time
 - `cookTime` _(optional)_ — New cook time
 - `totalTime` _(optional)_ — New total time
-- `categories` _(optional)_ — Categories to assign — replaces the existing list when provided. Each entry is either a category UID (from `list_categories`) or a display name (case-insensitive). Unknown names are skipped with a warning.
 - `source` _(optional)_ — New source name
 - `sourceUrl` _(optional)_ — New source URL
 - `difficulty` _(optional)_ — New difficulty level
-- `rating` _(optional)_ — New rating 0–5
-- `inTrash` _(optional)_ — true = move to trash, false = restore from trash
 - `nutritionalInfo` _(optional)_ — New nutritional information
 
 ## `upload_recipe_photo`

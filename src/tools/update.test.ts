@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import { makeCategory, makeRecipe } from "../../test/cache/__fixtures__/recipes.js";
 import { getText, makeCtx, makeTestServer, seed } from "../../test/support/tool-test-utils.js";
 import { RecipeStore } from "../recipe/store.js";
-import { registerUpdateTool } from "./update.js";
+import { registerUpdateTool, updateRecipeInputSchema } from "./update.js";
 
 describe("p2-recipe-crud: update_recipe tool", () => {
   describe("p2-recipe-crud.AC3: update_recipe applies partial updates", () => {
@@ -36,37 +36,7 @@ describe("p2-recipe-crud: update_recipe tool", () => {
       expect(callArgs?.servings).toBe("2"); // unchanged from existing
     });
 
-    it("p2-recipe-crud.AC3.2: providing categories replaces existing list entirely", async () => {
-      const catA = makeCategory({ name: "Category A" });
-      const catB = makeCategory({ name: "Category B" });
-      const recipe = makeRecipe({ categories: [catA.uid] });
-
-      const mockSaveRecipe = vi.fn();
-      const mockNotifySync = vi.fn().mockResolvedValue(undefined);
-      const mockPutRecipe = vi.fn();
-      const mockFlush = vi.fn().mockResolvedValue(undefined);
-
-      const updated = makeRecipe({ categories: [catB.uid] });
-      mockSaveRecipe.mockResolvedValue(updated);
-
-      const { server, callTool } = makeTestServer();
-      const ctx = seed(
-        makeCtx(new RecipeStore(), server, {
-          client: fromAny({ saveRecipe: mockSaveRecipe, notifySync: mockNotifySync }),
-          cache: fromAny({ recipes: { put: mockPutRecipe }, flush: mockFlush }),
-        }),
-        { recipes: [recipe], categories: [catA, catB] },
-      );
-      registerUpdateTool(server, ctx);
-
-      await callTool("update_recipe", { uid: recipe.uid, categories: ["Category B"] });
-
-      const callArgs = mockSaveRecipe.mock.calls[0]?.[0];
-      expect(callArgs?.categories).toEqual([catB.uid]);
-      expect(callArgs?.categories).not.toContain(catA.uid);
-    });
-
-    it("p2-recipe-crud.AC3.3: omitting categories leaves existing categories unchanged", async () => {
+    it("p2-recipe-crud.AC3.3: update_recipe preserves the recipe's existing categories untouched", async () => {
       const catA = makeCategory({ name: "Category A" });
       const recipe = makeRecipe({ categories: [catA.uid] });
 
@@ -91,7 +61,7 @@ describe("p2-recipe-crud: update_recipe tool", () => {
       await callTool("update_recipe", { uid: recipe.uid, name: "New Name" });
 
       const callArgs = mockSaveRecipe.mock.calls[0]?.[0];
-      expect(callArgs?.categories).toEqual([catA.uid]); // unchanged
+      expect(callArgs?.categories).toEqual([catA.uid]); // categories are not touched by update_recipe
     });
 
     it("p2-recipe-crud.AC3.4: saveRecipe and notifySync called exactly once with merged recipe", async () => {
@@ -199,33 +169,6 @@ describe("p2-recipe-crud: update_recipe tool", () => {
       expect(mockSaveRecipe).not.toHaveBeenCalled();
     });
 
-    it("p2-recipe-crud.AC3.8: rating provided — saveRecipe called with that rating", async () => {
-      const recipe = makeRecipe({ rating: 0 });
-
-      const mockSaveRecipe = vi.fn();
-      const mockNotifySync = vi.fn().mockResolvedValue(undefined);
-      const mockPutRecipe = vi.fn();
-      const mockFlush = vi.fn().mockResolvedValue(undefined);
-
-      const updated = makeRecipe({ rating: 3 });
-      mockSaveRecipe.mockResolvedValue(updated);
-
-      const { server, callTool } = makeTestServer();
-      const ctx = seed(
-        makeCtx(new RecipeStore(), server, {
-          client: fromAny({ saveRecipe: mockSaveRecipe, notifySync: mockNotifySync }),
-          cache: fromAny({ recipes: { put: mockPutRecipe }, flush: mockFlush }),
-        }),
-        { recipes: [recipe] },
-      );
-      registerUpdateTool(server, ctx);
-
-      await callTool("update_recipe", { uid: recipe.uid, rating: 3 });
-
-      const callArgs = mockSaveRecipe.mock.calls[0]?.[0];
-      expect(callArgs?.rating).toBe(3);
-    });
-
     it("p2-recipe-crud.AC3.9: notes provided — saveRecipe called with that value", async () => {
       const recipe = makeRecipe({ notes: null });
 
@@ -252,87 +195,27 @@ describe("p2-recipe-crud: update_recipe tool", () => {
       const callArgs = mockSaveRecipe.mock.calls[0]?.[0];
       expect(callArgs?.notes).toBe("test note");
     });
+  });
 
-    it("p2-recipe-crud.AC3.10: inTrash: true — saveRecipe called with inTrash: true", async () => {
-      const recipe = makeRecipe({ inTrash: false });
-
-      const mockSaveRecipe = vi.fn();
-      const mockNotifySync = vi.fn().mockResolvedValue(undefined);
-      const mockPutRecipe = vi.fn();
-      const mockFlush = vi.fn().mockResolvedValue(undefined);
-
-      const updated = makeRecipe({ inTrash: true });
-      mockSaveRecipe.mockResolvedValue(updated);
-
-      const { server, callTool } = makeTestServer();
-      const ctx = seed(
-        makeCtx(new RecipeStore(), server, {
-          client: fromAny({ saveRecipe: mockSaveRecipe, notifySync: mockNotifySync }),
-          cache: fromAny({ recipes: { put: mockPutRecipe }, flush: mockFlush }),
-        }),
-        { recipes: [recipe] },
-      );
-      registerUpdateTool(server, ctx);
-
-      await callTool("update_recipe", { uid: recipe.uid, inTrash: true });
-
-      const callArgs = mockSaveRecipe.mock.calls[0]?.[0];
-      expect(callArgs?.inTrash).toBe(true);
+  // The promoted state fields left update_recipe for their own intent verbs. The
+  // schema is `.strict()`, so passing one is a hard rejection (the SDK surfaces it
+  // as an isError) rather than a silently dropped key — the model can't "win" by
+  // patching the field on the generic editor.
+  describe("update_recipe input schema rejects promoted fields", () => {
+    it("rejects rating (promoted to rate_recipe)", () => {
+      expect(updateRecipeInputSchema.safeParse({ uid: "recipe-1", rating: 5 }).success).toBe(false);
     });
 
-    it("p2-recipe-crud.AC3.11: inTrash: false — saveRecipe called with inTrash: false (restore)", async () => {
-      const recipe = makeRecipe({ inTrash: true });
-
-      const mockSaveRecipe = vi.fn();
-      const mockNotifySync = vi.fn().mockResolvedValue(undefined);
-      const mockPutRecipe = vi.fn();
-      const mockFlush = vi.fn().mockResolvedValue(undefined);
-
-      const updated = makeRecipe({ inTrash: false });
-      mockSaveRecipe.mockResolvedValue(updated);
-
-      const { server, callTool } = makeTestServer();
-      const ctx = seed(
-        makeCtx(new RecipeStore(), server, {
-          client: fromAny({ saveRecipe: mockSaveRecipe, notifySync: mockNotifySync }),
-          cache: fromAny({ recipes: { put: mockPutRecipe }, flush: mockFlush }),
-        }),
-        { recipes: [recipe] },
-      );
-      registerUpdateTool(server, ctx);
-
-      await callTool("update_recipe", { uid: recipe.uid, inTrash: false });
-
-      const callArgs = mockSaveRecipe.mock.calls[0]?.[0];
-      expect(callArgs?.inTrash).toBe(false);
+    it("rejects categories (promoted to categorize_recipe)", () => {
+      expect(updateRecipeInputSchema.safeParse({ uid: "recipe-1", categories: ["Dinner"] }).success).toBe(false);
     });
 
-    it("p2-recipe-crud.AC3.X (edge case): empty categories array replaces with empty list", async () => {
-      const catA = makeCategory({ name: "Category A" });
-      const recipe = makeRecipe({ categories: [catA.uid] });
+    it("rejects inTrash (promoted to trash_recipe / restore_recipe)", () => {
+      expect(updateRecipeInputSchema.safeParse({ uid: "recipe-1", inTrash: true }).success).toBe(false);
+    });
 
-      const mockSaveRecipe = vi.fn();
-      const mockNotifySync = vi.fn().mockResolvedValue(undefined);
-      const mockPutRecipe = vi.fn();
-      const mockFlush = vi.fn().mockResolvedValue(undefined);
-
-      const updated = makeRecipe({ categories: [] });
-      mockSaveRecipe.mockResolvedValue(updated);
-
-      const { server, callTool } = makeTestServer();
-      const ctx = seed(
-        makeCtx(new RecipeStore(), server, {
-          client: fromAny({ saveRecipe: mockSaveRecipe, notifySync: mockNotifySync }),
-          cache: fromAny({ recipes: { put: mockPutRecipe }, flush: mockFlush }),
-        }),
-        { recipes: [recipe] },
-      );
-      registerUpdateTool(server, ctx);
-
-      await callTool("update_recipe", { uid: recipe.uid, categories: [] });
-
-      const callArgs = mockSaveRecipe.mock.calls[0]?.[0];
-      expect(callArgs?.categories).toEqual([]); // empty array correctly replaces
+    it("accepts a content-only update", () => {
+      expect(updateRecipeInputSchema.safeParse({ uid: "recipe-1", name: "New", notes: "n" }).success).toBe(true);
     });
   });
 });

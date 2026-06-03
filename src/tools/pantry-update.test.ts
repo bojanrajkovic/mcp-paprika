@@ -8,7 +8,7 @@ import { makePantryItem } from "../../test/cache/__fixtures__/pantry.js";
 import { getText, makeCtx, makeTestServer, seed } from "../../test/support/tool-test-utils.js";
 import { PaprikaAPIError } from "../paprika/errors.js";
 import { RecipeStore } from "../recipe/store.js";
-import { registerUpdatePantryItemTool } from "./pantry-update.js";
+import { registerUpdatePantryItemTool, updatePantryItemInputSchema } from "./pantry-update.js";
 
 describe("pantry-mutations.AC5: update_pantry_item tool", () => {
   it("pantry-mutations.AC5.1: partial merge — only provided fields change", async () => {
@@ -57,40 +57,11 @@ describe("pantry-mutations.AC5: update_pantry_item tool", () => {
     expect(callArgs?.uid).toBe("uid-1");
   });
 
-  it("pantry-mutations.AC5.2: setting inStock=false persists correctly", async () => {
-    const item = makePantryItem({
-      uid: "uid-1" as PantryItemUid,
-      ingredient: "Milk",
-      inStock: true,
-    });
-
-    const mockSavePantryItems = vi.fn();
-    const mockNotifySync = vi.fn().mockResolvedValue(undefined);
-    const mockPutPantryItem = vi.fn();
-    const mockFlush = vi.fn().mockResolvedValue(undefined);
-
-    mockSavePantryItems.mockImplementation(async (items) => items);
-
-    const { server, callTool } = makeTestServer();
-    const ctx = seed(
-      makeCtx(new RecipeStore(), server, {
-        client: fromAny({ savePantryItems: mockSavePantryItems, notifySync: mockNotifySync }),
-        cache: fromAny({ pantry: { put: mockPutPantryItem }, flush: mockFlush }),
-      }),
-      { pantry: [item] },
-    );
-    registerUpdatePantryItemTool(server, ctx);
-
-    const result = await callTool("update_pantry_item", {
-      uid: "uid-1",
-      inStock: false,
-    });
-    const text = getText(result);
-
-    expect(text).toContain("**In stock:** No");
-
-    const [callArgs] = mockSavePantryItems.mock.calls[0]?.[0] ?? [];
-    expect(callArgs?.inStock).toBe(false);
+  it("pantry-mutations.AC5.2: inStock is rejected — promoted to mark_pantry_item_out_of_stock / restock_pantry_item", () => {
+    // The stock transition left update_pantry_item for its own intent verbs. The
+    // strict schema rejects a stray `inStock` key (the SDK surfaces it as an
+    // isError) rather than silently dropping it.
+    expect(updatePantryItemInputSchema.safeParse({ uid: "uid-1", inStock: false }).success).toBe(false);
   });
 
   it("pantry-mutations.AC5.3a: expirationDate provided as string derives hasExpiration=true", async () => {

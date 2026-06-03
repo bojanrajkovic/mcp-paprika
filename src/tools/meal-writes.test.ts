@@ -536,28 +536,11 @@ describe("update_meal — success paths (AC3.1-3.6)", () => {
     return { callTool, ctx };
   }
 
-  it("AC3.1: date-only update → date field updated, non-bucket fields preserved", async () => {
-    // Seed a dinner meal with all fields set; only date will change.
-    const original = makeMeal({
-      uid: TEST_MEAL_UID,
-      typeUid: DINNER_UID,
-      type: 2,
-      name: "Original Name",
-      date: "2026-01-01 00:00:00",
-      scale: "1.5",
-      recipeUid: null,
-      orderFlag: 3,
-    });
-    const { callTool, ctx } = makeUpdateCtx({ meals: [original] });
-
-    await callTool("update_meal", { uid: TEST_MEAL_UID, update: { date: "2026-06-15" } });
-
-    const stored = ctx.mealStore.get(TEST_MEAL_UID);
-    expect(stored?.date).toBe("2026-06-15 00:00:00");
-    // Date change moves the meal to the destination date's order sequence, so
-    // orderFlag is reassigned (max+1 in the destination, which is empty here = 0).
-    // All other non-date-derived fields are preserved.
-    expect(stored).toEqual({ ...original, date: "2026-06-15 00:00:00", orderFlag: 0 });
+  it("AC3.1: date is rejected on the update payload — rescheduling is promoted to reschedule_meal", () => {
+    // `date` left update_meal for reschedule_meal (a date move re-sequences the
+    // destination day's order_flag). The strict update variants reject a stray
+    // `date` key (the SDK surfaces it as an isError).
+    expect(updateMealInputSchema.safeParse({ uid: TEST_MEAL_UID, update: { date: "2026-06-15" } }).success).toBe(false);
   });
 
   it("AC3.2: type update → typeUid becomes LUNCH_UID and type integer becomes 1", async () => {
@@ -645,42 +628,6 @@ describe("update_meal — success paths (AC3.1-3.6)", () => {
     const payload = mockSaveMeals.mock.calls[0]?.[0] as ReadonlyArray<Meal>;
     expect(payload[0]?.typeUid).toBe(BRUNCH_UID);
     expect(payload[0]?.type).toBe(0);
-  });
-
-  it("moving a meal to a different date → orderFlag becomes max+1 in the destination date", async () => {
-    // Codex regression (PR #143): the spread-merge previously preserved the
-    // source orderFlag when moving a meal, which could collide with an existing
-    // meal at the same flag on the destination date. plan_meals avoids this via
-    // getMaxOrderFlagOn + 1; update_meal must do the same when `date` changes.
-    // (order_flag sequences per DATE — see makeMealOrderFlagAssigner.)
-    const moving = makeMeal({
-      uid: TEST_MEAL_UID,
-      typeUid: LUNCH_UID,
-      type: 1,
-      date: "2026-06-10 00:00:00",
-      orderFlag: 0, // would collide with the destination date's existing flag-0 meal
-    });
-    const destDateExisting = makeMeal({
-      uid: "existing-dinner-uid" as MealUid,
-      typeUid: DINNER_UID,
-      type: 2,
-      date: "2026-06-15 00:00:00",
-      orderFlag: 0,
-    });
-    const { callTool, ctx } = makeUpdateCtx({ meals: [moving, destDateExisting] });
-
-    await callTool("update_meal", {
-      uid: TEST_MEAL_UID,
-      update: { date: "2026-06-15", type: { name: "Dinner" } },
-    });
-
-    const stored = ctx.mealStore.get(TEST_MEAL_UID);
-    expect(stored?.date).toBe("2026-06-15 00:00:00");
-    expect(stored?.typeUid).toBe(DINNER_UID);
-    expect(stored?.orderFlag).toBe(1); // max+1 on the destination date, not preserved 0
-
-    const payload = mockSaveMeals.mock.calls[0]?.[0] as ReadonlyArray<Meal>;
-    expect(payload[0]?.orderFlag).toBe(1);
   });
 
   it("changing ONLY the meal type (same date) → orderFlag preserved (per-date, not per-type)", async () => {

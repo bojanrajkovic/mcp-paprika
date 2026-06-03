@@ -40,6 +40,7 @@ import { registerDiscoverTool } from "../tools/discover.js";
 import { registerEmptyTrashTool } from "../tools/empty-trash.js";
 import { registerFilterTools } from "../tools/filter.js";
 import { registerClearAllTool, registerClearPurchasedTool } from "../tools/grocery-clear.js";
+import { registerMarkGroceryItemPurchasedTool } from "../tools/grocery-item-purchase.js";
 import {
   registerAddGroceryItemsTool,
   registerDeleteGroceryItemTool,
@@ -56,8 +57,10 @@ import { registerMoveToPantryTool } from "../tools/grocery-move.js";
 import { registerListTool } from "../tools/list.js";
 import { registerAddMenuToPlannerTool } from "../tools/meal-add-menu.js";
 import { registerMealHistoryTool } from "../tools/meal-history.js";
+import { registerRescheduleMealTool } from "../tools/meal-reschedule.js";
 import { registerMealTypesTool } from "../tools/meal-types.js";
 import { registerAddMealsTool, registerDeleteMealTool, registerUpdateMealTool } from "../tools/meal-writes.js";
+import { registerMoveMenuItemTool } from "../tools/menu-item-move.js";
 import {
   registerAddMenuItemsTool,
   registerDeleteMenuItemTool,
@@ -69,10 +72,15 @@ import { registerAddPantryItemsTool } from "../tools/pantry-batch-add.js";
 import { registerDeletePantryItemTool } from "../tools/pantry-delete.js";
 import { registerGetPantryItemTool } from "../tools/pantry-get.js";
 import { registerListPantryTool } from "../tools/pantry-list.js";
+import { registerMarkPantryItemOutOfStockTool, registerRestockPantryItemTool } from "../tools/pantry-stock.js";
 import { registerUpdatePantryItemTool } from "../tools/pantry-update.js";
 import { registerGeneratePhotoTool } from "../tools/photo-generate.js";
 import { registerDeletePhotoTool, registerUploadPhotoTool } from "../tools/photo-writes.js";
 import { registerReadTool } from "../tools/read.js";
+import { registerCategorizeRecipeTool } from "../tools/recipe-categorize.js";
+import { registerFavoriteRecipeTool, registerUnfavoriteRecipeTool } from "../tools/recipe-favorite.js";
+import { registerRateRecipeTool } from "../tools/recipe-rating.js";
+import { registerRestoreRecipeTool } from "../tools/recipe-restore.js";
 import { registerSearchTool } from "../tools/search.js";
 import { registerUpdateTool } from "../tools/update.js";
 import { type PaprikaConfig, resolveImageGenConfig } from "../utils/config.js";
@@ -472,12 +480,19 @@ export function buildMcpServer(app: AppContext): McpServer {
   registerUpdateTool(server, sessionCtx);
   registerDeleteTool(server, sessionCtx);
   registerEmptyTrashTool(server, sessionCtx);
+  registerRestoreRecipeTool(server, sessionCtx);
+  registerRateRecipeTool(server, sessionCtx);
+  registerFavoriteRecipeTool(server, sessionCtx);
+  registerUnfavoriteRecipeTool(server, sessionCtx);
+  registerCategorizeRecipeTool(server, sessionCtx);
   registerUploadPhotoTool(server, sessionCtx);
   registerDeletePhotoTool(server, sessionCtx);
   registerListPantryTool(server, sessionCtx);
   registerGetPantryItemTool(server, sessionCtx);
   registerAddPantryItemsTool(server, sessionCtx);
   registerUpdatePantryItemTool(server, sessionCtx);
+  registerMarkPantryItemOutOfStockTool(server, sessionCtx);
+  registerRestockPantryItemTool(server, sessionCtx);
   registerDeletePantryItemTool(server, sessionCtx);
   registerAislesTool(server, sessionCtx);
   registerMealTypesTool(server, sessionCtx);
@@ -488,6 +503,7 @@ export function buildMcpServer(app: AppContext): McpServer {
   registerDeleteGroceryListTool(server, sessionCtx);
   registerAddGroceryItemsTool(server, sessionCtx);
   registerUpdateGroceryItemTool(server, sessionCtx);
+  registerMarkGroceryItemPurchasedTool(server, sessionCtx);
   registerDeleteGroceryItemTool(server, sessionCtx);
   registerMoveToPantryTool(server, sessionCtx);
   registerClearPurchasedTool(server, sessionCtx);
@@ -495,6 +511,7 @@ export function buildMcpServer(app: AppContext): McpServer {
   registerMealHistoryTool(server, sessionCtx);
   registerAddMealsTool(server, sessionCtx);
   registerUpdateMealTool(server, sessionCtx);
+  registerRescheduleMealTool(server, sessionCtx);
   registerDeleteMealTool(server, sessionCtx);
   registerAddMenuToPlannerTool(server, sessionCtx);
   registerListMenusTool(server, sessionCtx);
@@ -504,6 +521,7 @@ export function buildMcpServer(app: AppContext): McpServer {
   registerDeleteMenuTool(server, sessionCtx);
   registerAddMenuItemsTool(server, sessionCtx);
   registerUpdateMenuItemTool(server, sessionCtx);
+  registerMoveMenuItemTool(server, sessionCtx);
   registerDeleteMenuItemTool(server, sessionCtx);
 
   if (app.vectorStore !== null) {
