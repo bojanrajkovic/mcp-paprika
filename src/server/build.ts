@@ -96,13 +96,14 @@ const SERVER_VERSION = _pkg.version;
 // Cross-tool orientation sent to clients at connect time (the MCP `instructions`
 // field). This is the one channel that reaches the model with guidance the
 // per-tool Zod descriptions cannot carry; keep it short and behavioral.
-const SERVER_INSTRUCTIONS = `mcp-paprika bridges your Paprika recipe library: recipes, the pantry, grocery lists, meal planning, and menus.
+const SERVER_INSTRUCTIONS = `mcp-paprika bridges your Paprika recipe library: recipes, the pantry, grocery lists, meal planning, and menus. Tools read as plain commands in verb_entity order (read_recipe, list_pantry_items, update_grocery_item), so most acts are guessable from the name.
 
 Orientation:
-- Recipes, grocery lists, and menus are exposed both as tools (which you call) and as paprika://… resources the user can attach. The read_* tools let you fetch one by UID on your own, without waiting for the user to attach it.
-- Lookup: use search_recipes for name / ingredient / description matching; use discover_recipes (present only when semantic search is configured) for natural-language queries.
-- Only recipe deletes are reversible: a deleted recipe moves to the trash, and purge_recipe then permanently removes one already there. Deleting anything else (grocery items, pantry items, menu items, lists) is immediate and permanent.
-- When scheduling a meal or adding a menu item, link an existing recipe by its UID OR give a freeform name, never both; they are mutually exclusive. Grocery items take no recipe link; add_grocery_items wants an ingredient, quantity, and aisle.
+- Recipes, grocery lists, and menus are exposed both as tools (which you call) and as paprika://… resources the user can attach. The read_* tools fetch one by UID on your own, without waiting for an attach.
+- Finding recipes: search_recipes matches by name / ingredient / description and also filters by an ingredient list and by max prep / cook / total time — pass any one of those. discover_recipes (present only when semantic search is configured) handles natural-language queries.
+- Open-ended edits vs. named acts: the update_* tools change free-form content fields only. The acts a user names have their own verbs — rate_recipe, favorite_recipe / unfavorite_recipe, categorize_recipe, mark_grocery_item_purchased, mark_pantry_item_out_of_stock / restock_pantry_item, reschedule_meal, move_menu_item. Trying to set one of those through update_* is rejected; reach for the verb.
+- Recipe trash is the one reversible delete, spoken in steps: trash_recipe moves a recipe to the trash, restore_recipe brings it back, and purge_recipe permanently removes one already trashed. Deleting anything else (grocery items, pantry items, menu items, lists) is immediate and permanent.
+- Meals: read_meal_plan shows what is coming up (today forward); search_meal_history recalls what you have already cooked (by recipe or by category); plan_meals schedules meals and log_cooked_meal records one you just made. When scheduling a meal or adding a menu item, link an existing recipe by its UID OR give a freeform name, never both. Grocery items take no recipe link; add_grocery_items wants an ingredient, quantity, and aisle.
 - generate_recipe_photo (present only when image generation is configured) attaches the image and returns its photo UID by default. With attach:false it returns a preview plus a single-use token instead; pass that token to upload_recipe_photo to attach it later.
 - Data is served from a local cache kept fresh by background sync, so it can briefly lag changes made directly in the Paprika apps.`;
 

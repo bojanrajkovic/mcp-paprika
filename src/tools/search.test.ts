@@ -235,7 +235,7 @@ describe("p2-discovery-tools: search_recipes tool", () => {
   });
 
   // ---------------------------------------------------------------------------
-  // D7: ingredient-filter (folded from filter_by_ingredient)
+  // D7: ingredient filtering on search_recipes
   // ---------------------------------------------------------------------------
 
   describe("D7: ingredient filtering via search_recipes", () => {
@@ -356,7 +356,7 @@ describe("p2-discovery-tools: search_recipes tool", () => {
   });
 
   // ---------------------------------------------------------------------------
-  // D7: time-filter (folded from filter_by_time)
+  // D7: time filtering on search_recipes
   // ---------------------------------------------------------------------------
 
   describe("D7: time filtering via search_recipes", () => {

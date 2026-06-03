@@ -48,7 +48,7 @@ export const addMenuToPlannerInputSchema = z.object({
 /**
  * Renders the compact, day-grouped success response. No per-meal UIDs — scales
  * to a 21-meal week; an agent that needs a meal UID afterward calls
- * `list_meal_history`. `items` arrives pre-sorted in menu-layout order (day →
+ * `read_meal_plan` or `search_meal_history`. `items` arrives pre-sorted in menu-layout order (day →
  * meal-type order → menu item order — the same order the `order_flag`s were
  * assigned in), so grouping by day preserves that order and the rendered
  * sequence matches the persisted planner sequence.

@@ -122,7 +122,7 @@ export function registerAddMealsTool(server: McpServer, ctx: ServerContext): voi
             const item = args.items[i]!;
 
             // Date. The meal planner is day-granular (Paprika.app stores meals at
-            // midnight per docs/wire-captures/meals.har.json, and list_meal_history
+            // midnight per docs/wire-captures/meals.har.json, and read_meal_plan
             // groups by date.slice(0, 10)); `parseCalendarDayWire` extracts the user's
             // intended calendar day in the input's own zone — so "2026-06-15T22:00:00-08:00"
             // stays on June 15 rather than UTC-shifting to June 16.

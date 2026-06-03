@@ -192,7 +192,7 @@ describe("plan_meals tool — success paths", () => {
     // with `"2026-06-15"` and `"2026-06-15T18:30:00Z"` would land as distinct date
     // strings ("...00:00:00" vs "...18:30:00") and form separate per-date sequences
     // in `getMaxOrderFlagOn`, so both would get order_flag: 0 — but Paprika.app stores
-    // meals at midnight (per docs/wire-captures/meals.har.json) and list_meal_history
+    // meals at midnight (per docs/wire-captures/meals.har.json) and read_meal_plan
     // groups by `date.slice(0, 10)`. Drop time-of-day so the wire and the planner stay
     // in sync.
     const { callTool } = makeAddCtx();

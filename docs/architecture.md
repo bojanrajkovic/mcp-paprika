@@ -1,6 +1,6 @@
 # Architecture
 
-Last verified: 2026-06-02
+Last verified: 2026-06-03
 
 mcp-paprika bridges the Paprika recipe manager's cloud API to MCP clients. It keeps a local cache of the user's library, syncs it in the background, and exposes recipes, the pantry, grocery lists, meal planning, menus, and optional semantic search and AI photo generation as MCP tools and resources.
 
@@ -56,7 +56,7 @@ Semantic discovery is optional: it registers the `discover_recipes` tool only wh
 
 ## Photos
 
-The server reads and syncs recipe photos and can generate new ones. AI generation (`generate_photo`) is opt-in (registered only when an image-generation client is configured) and produces a styled photo through an OpenRouter image model, normalized with sharp. Any server-side image fetch is SSRF-hardened (unicast-only address guard plus a DNS-rebinding-safe dispatcher), because the URL can be model- or user-influenced. See `src/features/CLAUDE.md`.
+The server reads and syncs recipe photos and can generate new ones. AI generation (`generate_recipe_photo`) is opt-in (registered only when an image-generation client is configured) and produces a styled photo through an OpenRouter image model, normalized with sharp. Any server-side image fetch is SSRF-hardened (unicast-only address guard plus a DNS-rebinding-safe dispatcher), because the URL can be model- or user-influenced. See `src/features/CLAUDE.md`.
 
 ## Authentication
 
@@ -72,7 +72,7 @@ Under stdio there is no auth surface: the OS process boundary is the trust bound
 
 ## Key decisions
 
-The decisions with weighed alternatives are recorded as ADRs: two transports over one composition root ([0001](adr/0001-two-transports-and-composition-root.md)), OAuth 2.1 with OIDC delegation ([0002](adr/0002-oauth21-oidc-delegation.md)), the vendored vector index ([0003](adr/0003-vendored-json-vector-index.md)), the tool-vs-resource classification ([0004](adr/0004-tool-vs-resource-classification.md)), and the composition-root shape, per-entity module structure, and identifier branding ([0005](adr/0005-composition-modules-and-identifiers.md)).
+The decisions with weighed alternatives are recorded as ADRs: two transports over one composition root ([0001](adr/0001-two-transports-and-composition-root.md)), OAuth 2.1 with OIDC delegation ([0002](adr/0002-oauth21-oidc-delegation.md)), the vendored vector index ([0003](adr/0003-vendored-json-vector-index.md)), the tool-vs-resource classification ([0004](adr/0004-tool-vs-resource-classification.md)), the composition-root shape, per-entity module structure, and identifier branding ([0005](adr/0005-composition-modules-and-identifiers.md)), test fixtures out of `src` ([0006](adr/0006-test-fixtures-out-of-src.md)), compile-time-only UID branding ([0007](adr/0007-uid-branding-compile-time-only.md)), and the tool surface as a forward-intent command language ([0008](adr/0008-tool-surface-command-language.md)).
 
 A few smaller choices shape the code without rising to an ADR:
 

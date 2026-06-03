@@ -43,8 +43,8 @@ export const mealTypeSpecSchema = z.union([
  * Structured result of resolving a `mealTypeSpecSchema` union variant against
  * `mealTypeStore`. The resolver never formats user-facing text — it returns the
  * resolved `MealType` on a hit, or one of three error reasons callers map to
- * their own message style (terse for `update_meal`, per-index-prefixed for
- * `plan_meals`, single-filter for `list_meal_history`). `unknown_name` carries
+ * their own message style (terse for `update_meal` / `reschedule_meal`,
+ * per-index-prefixed for `plan_meals`). `unknown_name` carries
  * `knownNames` so callers can list the available types as a remediation hint.
  */
 export type MealTypeResolveResult =
@@ -299,8 +299,7 @@ function formatMealLine(
  * chronology (read_meal_plan sorts ascending; recall views may sort however) —
  * then one `- **Type** · entry, entry` bullet per meal type on that day, with
  * freeform (non-recipe) meals annotated. Returns just the grouped body; callers
- * prepend their own summary header. Shared by read_meal_plan and
- * search_meal_history (extracted from the former list_meal_history renderer).
+ * prepend their own summary header. Shared by read_meal_plan and search_meal_history.
  */
 export function renderMealsGroupedByDate(ctx: ServerContext, meals: ReadonlyArray<Readonly<Meal>>): string {
   const typeNames = new Map<string, string>();

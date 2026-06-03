@@ -61,7 +61,7 @@ The signal handler in `src/index.ts` bypasses the structured logger because at s
 
 ### Feature-gated tool registration
 
-`buildMcpServer` registers the unconditional tool/resource families on a fresh `McpServer` for every session. Registration is pure: each `register*` only closes over the per-session `SessionContext`; there is no module-level mutable state, so registering the same tool name on N independent servers is safe. Two tools are conditional and share the same opt-in pattern: the discover tool registers **iff `app.vectorStore !== null`**, and `generate_photo` registers **iff `app.photographyClient !== null`**.
+`buildMcpServer` registers the unconditional tool/resource families on a fresh `McpServer` for every session. Registration is pure: each `register*` only closes over the per-session `SessionContext`; there is no module-level mutable state, so registering the same tool name on N independent servers is safe. Two tools are conditional and share the same opt-in pattern: the discover tool registers **iff `app.vectorStore !== null`**, and `generate_recipe_photo` registers **iff `app.photographyClient !== null`**.
 
 ### Invariants
 
