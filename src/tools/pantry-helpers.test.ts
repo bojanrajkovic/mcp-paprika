@@ -1,11 +1,11 @@
 import { fromAny } from "@total-typescript/shoehorn";
 import { describe, expect, it, vi } from "vitest";
 
-import { makePantryItem } from "../cache/__fixtures__/pantry.js";
+import { makePantryItem } from "../../test/cache/__fixtures__/pantry.js";
+import { makeCtx, makeStubNotifier, makeTestServer, seed } from "../../test/support/tool-test-utils.js";
 import { PantryStore } from "../pantry/store.js";
 import { RecipeStore } from "../recipe/store.js";
 import { commitPantryItem, commitPantryItemsBatch } from "./pantry-helpers.js";
-import { makeCtx, makeStubNotifier, makeTestServer, seed } from "./tool-test-utils.js";
 
 describe("pantry-mutations.AC3: commitPantryItem helper", () => {
   describe("AC3.1: upsert branch (deleted: false)", () => {

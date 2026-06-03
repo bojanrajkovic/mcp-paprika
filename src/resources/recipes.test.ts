@@ -2,9 +2,9 @@ import { describe, expect, it } from "vitest";
 
 import type { CategoryUid, RecipeUid } from "../ids.js";
 
-import { makeCategory, makeRecipe } from "../cache/__fixtures__/recipes.js";
+import { makeCategory, makeRecipe } from "../../test/cache/__fixtures__/recipes.js";
+import { makeCtx, makeTestServer, seed } from "../../test/support/tool-test-utils.js";
 import { RecipeStore } from "../recipe/store.js";
-import { makeCtx, makeTestServer, seed } from "../tools/tool-test-utils.js";
 import { registerRecipeResources } from "./recipes.js";
 
 describe("p2-u10-resource-reg: MCP Recipe Resources", () => {

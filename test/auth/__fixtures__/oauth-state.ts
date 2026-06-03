@@ -1,8 +1,8 @@
-import type { VerifiedIdentity } from "../allowlist.js";
-import type { AuthCodeState, AuthRequestState } from "../types.js";
+import type { VerifiedIdentity } from "../../../src/auth/allowlist.js";
+import type { AuthCodeState, AuthRequestState } from "../../../src/auth/types.js";
 
-import { nowSeconds } from "../tokens.js";
-import { AuthCodeStateSchema, AuthRequestStateSchema } from "../types.js";
+import { nowSeconds } from "../../../src/auth/tokens.js";
+import { AuthCodeStateSchema, AuthRequestStateSchema } from "../../../src/auth/types.js";
 
 /**
  * Factory for creating test VerifiedIdentity objects (the post-allowlist

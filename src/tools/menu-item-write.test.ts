@@ -1,14 +1,15 @@
 import { fromAny } from "@total-typescript/shoehorn";
 import { describe, expect, it, vi } from "vitest";
 
+import type { SeedData } from "../../test/support/tool-test-utils.js";
 import type { MealTypeUid, MenuItemUid, MenuUid, RecipeUid } from "../ids.js";
 import type { MenuItem } from "../menu-item/types.js";
 import type { Menu } from "../menu/types.js";
-import type { SeedData } from "./tool-test-utils.js";
 
-import { makeMealType } from "../cache/__fixtures__/meals.js";
-import { makeMenu, makeMenuItem } from "../cache/__fixtures__/menus.js";
-import { makeRecipe } from "../cache/__fixtures__/recipes.js";
+import { makeMealType } from "../../test/cache/__fixtures__/meals.js";
+import { makeMenu, makeMenuItem } from "../../test/cache/__fixtures__/menus.js";
+import { makeRecipe } from "../../test/cache/__fixtures__/recipes.js";
+import { getText, makeCtx, makeStubNotifier, makeTestServer, seed } from "../../test/support/tool-test-utils.js";
 import { RecipeStore } from "../recipe/store.js";
 import {
   addMenuItemsInputSchema,
@@ -16,7 +17,6 @@ import {
   registerDeleteMenuItemTool,
   registerUpdateMenuItemTool,
 } from "./menu-item-write.js";
-import { getText, makeCtx, makeStubNotifier, makeTestServer, seed } from "./tool-test-utils.js";
 
 const TACOS_UID = "recipe-tacos" as RecipeUid;
 const SOUP_UID = "recipe-soup" as RecipeUid;

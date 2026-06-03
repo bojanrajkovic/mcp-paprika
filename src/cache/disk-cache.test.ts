@@ -7,13 +7,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { PantryItemUid, RecipeUid } from "../ids.js";
 
-import { makePinoCapture } from "../tools/tool-test-utils.js";
-import { makeGroceryIngredient } from "./__fixtures__/grocery-ingredients.js";
-import { makeGroceryItem } from "./__fixtures__/grocery-items.js";
-import { makeGroceryList } from "./__fixtures__/grocery-lists.js";
-import { makeOAuthClient, makeOAuthToken } from "./__fixtures__/oauth.js";
-import { makePantryItem } from "./__fixtures__/pantry.js";
-import { makeCategory, makeRecipe } from "./__fixtures__/recipes.js";
+import { makeGroceryIngredient } from "../../test/cache/__fixtures__/grocery-ingredients.js";
+import { makeGroceryItem } from "../../test/cache/__fixtures__/grocery-items.js";
+import { makeGroceryList } from "../../test/cache/__fixtures__/grocery-lists.js";
+import { makeOAuthClient, makeOAuthToken } from "../../test/cache/__fixtures__/oauth.js";
+import { makePantryItem } from "../../test/cache/__fixtures__/pantry.js";
+import { makeCategory, makeRecipe } from "../../test/cache/__fixtures__/recipes.js";
+import { makePinoCapture } from "../../test/support/tool-test-utils.js";
 import { DiskCacheRoot } from "./disk-cache-root.js";
 
 // Mock fs/promises so the rename used by the recipes index temp-then-rename

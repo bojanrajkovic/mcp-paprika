@@ -1,10 +1,10 @@
 import { fromAny } from "@total-typescript/shoehorn";
 import { describe, expect, it, vi } from "vitest";
 
-import { makeCategory, makeRecipe } from "../cache/__fixtures__/recipes.js";
+import { makeCategory, makeRecipe } from "../../test/cache/__fixtures__/recipes.js";
+import { getText, makeCtx, makeTestServer, seed } from "../../test/support/tool-test-utils.js";
 import { RecipeStore } from "../recipe/store.js";
 import { registerCreateTool } from "./create.js";
-import { getText, makeCtx, makeTestServer, seed } from "./tool-test-utils.js";
 
 describe("p2-recipe-crud: create_recipe tool", () => {
   describe("p2-recipe-crud.AC2: create_recipe creates and persists a new recipe", () => {

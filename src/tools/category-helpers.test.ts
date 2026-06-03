@@ -4,8 +4,9 @@ import { describe, expect, it, vi } from "vitest";
 import type { CategoryUid } from "../ids.js";
 import type { ServerContext } from "../types/server-context.js";
 
-import { makeServerContext } from "../__fixtures__/app-context.js";
-import { makeCategory, makeRecipe } from "../cache/__fixtures__/recipes.js";
+import { makeCategory, makeRecipe } from "../../test/cache/__fixtures__/recipes.js";
+import { makeServerContext } from "../../test/support/app-context.js";
+import { seed } from "../../test/support/tool-test-utils.js";
 import { RecipeStore } from "../recipe/store.js";
 import {
   commitCategoryDelete,
@@ -14,7 +15,6 @@ import {
   recipesReferencing,
   wouldCreateCycle,
 } from "./category-helpers.js";
-import { seed } from "./tool-test-utils.js";
 
 function makeCtx(overrides?: {
   recipes?: Parameters<RecipeStore["load"]>[0];

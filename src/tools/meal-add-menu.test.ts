@@ -7,12 +7,12 @@ import type { Meal } from "../meal/types.js";
 import type { MenuItem } from "../menu-item/types.js";
 import type { Menu } from "../menu/types.js";
 
-import { makeMeal, makeMealType } from "../cache/__fixtures__/meals.js";
-import { makeMenu, makeMenuItem } from "../cache/__fixtures__/menus.js";
-import { makeRecipe } from "../cache/__fixtures__/recipes.js";
+import { makeMeal, makeMealType } from "../../test/cache/__fixtures__/meals.js";
+import { makeMenu, makeMenuItem } from "../../test/cache/__fixtures__/menus.js";
+import { makeRecipe } from "../../test/cache/__fixtures__/recipes.js";
+import { getText, makeCtx, makeTestServer, seed } from "../../test/support/tool-test-utils.js";
 import { RecipeStore } from "../recipe/store.js";
 import { registerAddMenuToPlannerTool } from "./meal-add-menu.js";
-import { getText, makeCtx, makeTestServer, seed } from "./tool-test-utils.js";
 
 const BREAKFAST_UID = "breakfast-uid" as MealTypeUid;
 const LUNCH_UID = "lunch-uid" as MealTypeUid;

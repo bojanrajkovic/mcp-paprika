@@ -30,11 +30,11 @@ import type { RecipeUid } from "../ids.js";
 import type { AnySyncResult, RecipeSyncResult } from "../paprika/sync-types.js";
 import type { EmbeddingConfig } from "../utils/config.js";
 
-import { makeRecipe } from "../cache/__fixtures__/recipes.js";
+import { makeRecipe } from "../../test/cache/__fixtures__/recipes.js";
+import { DEFAULT_LOGGING_CONFIG, getText, makeCtx, makeTestServer } from "../../test/support/tool-test-utils.js";
 import { CategoryStore } from "../category/store.js";
 import { RecipeStore } from "../recipe/store.js";
 import { registerDiscoverTool } from "../tools/discover.js";
-import { DEFAULT_LOGGING_CONFIG, getText, makeCtx, makeTestServer } from "../tools/tool-test-utils.js";
 const mitt: typeof _mitt.default = fromAny(_mitt);
 
 // Module-level tempDir variable used by the mock below.

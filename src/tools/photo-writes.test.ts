@@ -5,13 +5,13 @@ import { beforeAll, describe, expect, it, vi } from "vitest";
 import type { Photo } from "../photo/types.js";
 import type { Recipe } from "../recipe/types.js";
 
-import { makePhoto } from "../cache/__fixtures__/photos.js";
-import { makeRecipe } from "../cache/__fixtures__/recipes.js";
+import { makePhoto } from "../../test/cache/__fixtures__/photos.js";
+import { makeRecipe } from "../../test/cache/__fixtures__/recipes.js";
+import { getText, makeCtx, makeTestServer, seed } from "../../test/support/tool-test-utils.js";
 import { PhotoUidSchema, RecipeUidSchema } from "../ids.js";
 import { RecipeStore } from "../recipe/store.js";
 import { fetchImageBytes, isBlockedIp, ssrfLookup } from "./photo-fetch.js";
 import { registerDeletePhotoTool, registerUploadPhotoTool, uploadPhotoInputSchema } from "./photo-writes.js";
-import { getText, makeCtx, makeTestServer, seed } from "./tool-test-utils.js";
 
 // The URL download is exercised end-to-end (real undici fetch + dispatcher) in
 // photo-fetch.test.ts. Here we stub fetchImageBytes to test upload_photo's

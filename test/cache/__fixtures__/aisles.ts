@@ -1,5 +1,5 @@
-import type { Aisle } from "../../aisle/types.js";
-import type { AisleUid } from "../../ids.js";
+import type { Aisle } from "../../../src/aisle/types.js";
+import type { AisleUid } from "../../../src/ids.js";
 
 let aisleCounter = 0;
 

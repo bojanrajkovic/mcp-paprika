@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { makeMeal } from "../cache/__fixtures__/meals.js";
-import { makeCategory, makeRecipe } from "../cache/__fixtures__/recipes.js";
+import { makeMeal } from "../../test/cache/__fixtures__/meals.js";
+import { makeCategory, makeRecipe } from "../../test/cache/__fixtures__/recipes.js";
+import { getText, makeCtx, makePinoCapture, makeTestServer, seed } from "../../test/support/tool-test-utils.js";
 import { RecipeStore } from "../recipe/store.js";
 import { registerSearchTool } from "./search.js";
-import { getText, makeCtx, makePinoCapture, makeTestServer, seed } from "./tool-test-utils.js";
 
 describe("p2-discovery-tools: search_recipes tool", () => {
   describe("p2-discovery-tools.AC1: search_recipes", () => {

@@ -7,13 +7,13 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from
 
 import type { PaprikaConfig } from "../utils/config.js";
 
-import { useMswServer } from "../__fixtures__/msw.js";
-import { failLoudOnUpstream, PAPRIKA_API_BASE, paprikaSyncMockHandlers } from "../__fixtures__/paprika-msw.js";
-import { useXdgIsolation } from "../__fixtures__/xdg-isolation.js";
-import { createOidcStub } from "../auth/__fixtures__/oidc-stub.js";
-import { makeOAuthClient } from "../cache/__fixtures__/oauth.js";
+import { createOidcStub } from "../../test/auth/__fixtures__/oidc-stub.js";
+import { makeOAuthClient } from "../../test/cache/__fixtures__/oauth.js";
+import { useMswServer } from "../../test/support/msw.js";
+import { failLoudOnUpstream, PAPRIKA_API_BASE, paprikaSyncMockHandlers } from "../../test/support/paprika-msw.js";
+import { makePinoCapture, SILENT_LOGGING_CONFIG } from "../../test/support/tool-test-utils.js";
+import { useXdgIsolation } from "../../test/support/xdg-isolation.js";
 import { DiskCacheRoot } from "../cache/disk-cache-root.js";
-import { makePinoCapture, SILENT_LOGGING_CONFIG } from "../tools/tool-test-utils.js";
 import { accessLog, type HttpTransportHandle, startHttp, type StartHttpOptions } from "./http.js";
 
 /**
@@ -101,7 +101,7 @@ function paprikaMockHandlers() {
       }),
     ),
     // Auth + every sync entity (empty), so the startup sync never escapes to the
-    // real paprikaapp.com. See src/__fixtures__/paprika-msw.ts.
+    // real paprikaapp.com. See test/support/paprika-msw.ts.
     ...paprikaSyncMockHandlers(),
   ];
 }

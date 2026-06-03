@@ -9,10 +9,11 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from
 import type { PantryItemUid, RecipeUid } from "./ids.js";
 import type { PantryItem } from "./pantry/types.js";
 
-import { makeAppContext } from "./__fixtures__/app-context.js";
+import { makePantryItem, makeSnakeCasePantryItem } from "../test/cache/__fixtures__/pantry.js";
+import { makeCategory, makeRecipe, makeSnakeCaseRecipe } from "../test/cache/__fixtures__/recipes.js";
+import { makeAppContext } from "../test/support/app-context.js";
+import { getText, makeCtx, makeTestServer } from "../test/support/tool-test-utils.js";
 import { AisleStore } from "./aisle/store.js";
-import { makePantryItem, makeSnakeCasePantryItem } from "./cache/__fixtures__/pantry.js";
-import { makeCategory, makeRecipe, makeSnakeCaseRecipe } from "./cache/__fixtures__/recipes.js";
 import { DiskCacheRoot } from "./cache/disk-cache-root.js";
 import { PantryStore } from "./pantry/store.js";
 import { PaprikaClient } from "./paprika/client.js";
@@ -23,7 +24,6 @@ import { registerFilterTools } from "./tools/filter.js";
 import { registerListTool } from "./tools/list.js";
 import { registerReadTool } from "./tools/read.js";
 import { registerSearchTool } from "./tools/search.js";
-import { getText, makeCtx, makeTestServer } from "./tools/tool-test-utils.js";
 
 const API_BASE = "https://paprikaapp.com/api/v2/sync";
 

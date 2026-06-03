@@ -8,12 +8,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { AuthCodeState } from "./types.js";
 
-import { useMswServer } from "../__fixtures__/msw.js";
+import { makeAuthCodeState, makeVerifiedIdentity } from "../../test/auth/__fixtures__/oauth-state.js";
+import { makeDefaultOidcStub, makeDiscoveryDoc } from "../../test/auth/__fixtures__/oidc-stub.js";
+import { useMswServer } from "../../test/support/msw.js";
+import { makePinoCapture } from "../../test/support/tool-test-utils.js";
 import { DiskCacheRoot } from "../cache/disk-cache-root.js";
-import { makePinoCapture } from "../tools/tool-test-utils.js";
 import { SILENT_LOG } from "../utils/log.js";
-import { makeAuthCodeState, makeVerifiedIdentity } from "./__fixtures__/oauth-state.js";
-import { makeDefaultOidcStub, makeDiscoveryDoc } from "./__fixtures__/oidc-stub.js";
 import { AuthCodeStore } from "./auth-code-store.js";
 import { AuthRequestStore } from "./auth-request-store.js";
 import { DiskClientRegistrationStore } from "./client-registration.js";

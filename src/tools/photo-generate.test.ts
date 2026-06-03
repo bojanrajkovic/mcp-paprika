@@ -5,14 +5,14 @@ import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import type { GeneratedPhoto, GeneratePhotoOptions, PhotographyClient } from "../features/photography.js";
 import type { Recipe } from "../recipe/types.js";
 
-import { makeRecipe } from "../cache/__fixtures__/recipes.js";
+import { makeRecipe } from "../../test/cache/__fixtures__/recipes.js";
+import { getText, makeCtx, makeTestServer, seed } from "../../test/support/tool-test-utils.js";
 import { PhotographyAPIError, PhotographyError } from "../features/photography-errors.js";
 import { RecipeUidSchema } from "../ids.js";
 import { RecipeStore } from "../recipe/store.js";
 import { CircuitOpenError } from "../utils/errors.js";
 import { fetchImageBytes } from "./photo-fetch.js";
 import { registerGeneratePhotoTool } from "./photo-generate.js";
-import { getText, makeCtx, makeTestServer, seed } from "./tool-test-utils.js";
 
 // restyle's image download is exercised end-to-end in photo-fetch.test.ts; here
 // we stub it to test generate_photo's restyle wiring.

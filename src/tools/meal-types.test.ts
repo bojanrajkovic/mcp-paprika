@@ -2,10 +2,10 @@ import { describe, expect, it } from "vitest";
 
 import type { MealType } from "../meal-type/types.js";
 
-import { makeMealType } from "../cache/__fixtures__/meals.js";
+import { makeMealType } from "../../test/cache/__fixtures__/meals.js";
+import { getText, makeCtx, makeTestServer, seed } from "../../test/support/tool-test-utils.js";
 import { RecipeStore } from "../recipe/store.js";
 import { registerMealTypesTool } from "./meal-types.js";
-import { getText, makeCtx, makeTestServer, seed } from "./tool-test-utils.js";
 
 function makeMealTypeTestCtx(mealTypes: ReadonlyArray<MealType>) {
   const { server, callTool } = makeTestServer();

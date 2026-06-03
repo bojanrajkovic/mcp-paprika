@@ -5,7 +5,7 @@ import {
   arbitraryAllowlist,
   arbitraryIdTokenPayload,
   arbitraryIdTokenPayloadWithEmail,
-} from "./__tests__/test-utils.js";
+} from "../../test/auth/test-utils.js";
 import { verifyIdentity } from "./allowlist.js";
 
 describe("allowlist: property-based tests", () => {

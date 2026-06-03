@@ -9,7 +9,7 @@ import { makeMenu, makeMenuItem } from "../cache/__fixtures__/menus.js";
 import { makePantryItem } from "../cache/__fixtures__/pantry.js";
 import { makePhoto } from "../cache/__fixtures__/photos.js";
 import { makeCategory, makeRecipe } from "../cache/__fixtures__/recipes.js";
-import { makeAppContext } from "./app-context.js";
+import { makeAppContext } from "../support/app-context.js";
 import { seed } from "./seed.js";
 
 describe("seed", () => {

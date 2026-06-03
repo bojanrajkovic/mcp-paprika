@@ -1,13 +1,13 @@
 import { fromAny } from "@total-typescript/shoehorn";
 import { describe, expect, it, vi } from "vitest";
 
-import { makeGroceryItem } from "../cache/__fixtures__/grocery-items.js";
-import { makeGroceryList } from "../cache/__fixtures__/grocery-lists.js";
+import { makeGroceryItem } from "../../test/cache/__fixtures__/grocery-items.js";
+import { makeGroceryList } from "../../test/cache/__fixtures__/grocery-lists.js";
+import { getText, makeCtx, makeStubNotifier, makeTestServer, seed } from "../../test/support/tool-test-utils.js";
 import { GroceryItemStore } from "../grocery-item/store.js";
 import { GroceryListStore } from "../grocery-list/store.js";
 import { RecipeStore } from "../recipe/store.js";
 import { commitGroceryItem, commitGroceryItemsBatch, commitGroceryList, groceryStartGuard } from "./grocery-helpers.js";
-import { getText, makeCtx, makeStubNotifier, makeTestServer, seed } from "./tool-test-utils.js";
 
 describe("groceryStartGuard", () => {
   it("returns Err when neither store is synced", () => {

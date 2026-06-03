@@ -1,6 +1,6 @@
 /**
  * Reads HAR 1.2 files from docs/wire-captures/ and generates TypeScript
- * fixture modules in src/__fixtures__/wire-captures/.
+ * fixture modules in test/fixtures/wire-captures/.
  *
  * Each generated module exports:
  *   - A `fixtures` object keyed by HAR entry `comment` with `as const`
@@ -18,7 +18,7 @@ import { fileURLToPath } from "node:url";
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 const PROJECT_ROOT = join(__dirname, "..");
 const HAR_DIR = join(PROJECT_ROOT, "docs", "wire-captures");
-const OUT_DIR = join(PROJECT_ROOT, "src", "__fixtures__", "wire-captures");
+const OUT_DIR = join(PROJECT_ROOT, "test", "fixtures", "wire-captures");
 
 interface HarEntry {
   comment?: string;

@@ -2,12 +2,13 @@
 import { fromAny } from "@total-typescript/shoehorn";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import type { SeedData } from "../../test/support/tool-test-utils.js";
 import type { MealTypeUid, MealUid, RecipeUid } from "../ids.js";
 import type { Meal } from "../meal/types.js";
-import type { SeedData } from "./tool-test-utils.js";
 
-import { makeMeal, makeMealType } from "../cache/__fixtures__/meals.js";
-import { makeRecipe } from "../cache/__fixtures__/recipes.js";
+import { makeMeal, makeMealType } from "../../test/cache/__fixtures__/meals.js";
+import { makeRecipe } from "../../test/cache/__fixtures__/recipes.js";
+import { getText, makeCtx, makeTestServer, seed } from "../../test/support/tool-test-utils.js";
 import { RecipeStore } from "../recipe/store.js";
 import { mealToMarkdown } from "./meal-helpers.js";
 import {
@@ -17,7 +18,6 @@ import {
   registerUpdateMealTool,
   updateMealInputSchema,
 } from "./meal-writes.js";
-import { getText, makeCtx, makeTestServer, seed } from "./tool-test-utils.js";
 
 // Stable UIDs used across both describe blocks so tests don't depend on
 // the module-level counters in the fixture factories.

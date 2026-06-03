@@ -3,12 +3,12 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { PantryItemUid } from "../ids.js";
 
-import { makeAisle } from "../cache/__fixtures__/aisles.js";
-import { makePantryItem } from "../cache/__fixtures__/pantry.js";
+import { makeAisle } from "../../test/cache/__fixtures__/aisles.js";
+import { makePantryItem } from "../../test/cache/__fixtures__/pantry.js";
+import { getText, makeCtx, makeTestServer, seed } from "../../test/support/tool-test-utils.js";
 import { PaprikaAPIError } from "../paprika/errors.js";
 import { RecipeStore } from "../recipe/store.js";
 import { registerUpdatePantryItemTool } from "./pantry-update.js";
-import { getText, makeCtx, makeTestServer, seed } from "./tool-test-utils.js";
 
 describe("pantry-mutations.AC5: update_pantry_item tool", () => {
   it("pantry-mutations.AC5.1: partial merge — only provided fields change", async () => {

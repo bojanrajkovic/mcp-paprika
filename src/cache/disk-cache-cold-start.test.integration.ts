@@ -6,10 +6,10 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import type { CategoryUid, RecipeUid } from "../ids.js";
 
+import { makeCategory, makeRecipe } from "../../test/cache/__fixtures__/recipes.js";
+import { getText, makeCtx, makeTestServer } from "../../test/support/tool-test-utils.js";
 import { RecipeStore } from "../recipe/store.js";
 import { registerSearchTool } from "../tools/search.js";
-import { getText, makeCtx, makeTestServer } from "../tools/tool-test-utils.js";
-import { makeCategory, makeRecipe } from "./__fixtures__/recipes.js";
 import { DiskCacheRoot } from "./disk-cache-root.js";
 
 describe("DiskCacheRoot cold-start persistence integration", () => {

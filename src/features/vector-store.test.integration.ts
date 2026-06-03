@@ -9,7 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { RecipeUid } from "../ids.js";
 import type { EmbeddingClient } from "./embeddings.js";
 
-import { makeRecipe } from "../cache/__fixtures__/recipes.js";
+import { makeRecipe } from "../../test/cache/__fixtures__/recipes.js";
 import { VectorStore } from "./vector-store.js";
 
 /**

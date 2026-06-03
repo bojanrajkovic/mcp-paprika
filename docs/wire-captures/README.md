@@ -29,12 +29,12 @@ formats are shaped the way they are and how the reconstruction stays honest.
 ### Typed fixture access
 
 The codegen (`pnpm generate:fixtures`) produces typed modules in
-`src/__fixtures__/wire-captures/`. Each module exports a `fixture()` function
+`test/fixtures/wire-captures/`. Each module exports a `fixture()` function
 keyed by the HAR comment string, so accessing a nonexistent key is a compile
 error:
 
 ```typescript
-import { fixture } from "../__fixtures__/wire-captures/meals.js";
+import { fixture } from "../../test/fixtures/wire-captures/meals.js";
 
 // Compile-time safe — "typo" would be a type error
 const f = fixture("add recipe meal: (Not) Butter Chicken as Breakfast on 2026-05-26");
@@ -53,8 +53,8 @@ generated from the HAR via `@msw/source/traffic`. Use with the project's
 `useMswServer()` helper:
 
 ```typescript
-import { handlers as mealHandlers } from "../__fixtures__/wire-captures/meals.js";
-import { useMswServer } from "../__fixtures__/msw.js";
+import { handlers as mealHandlers } from "../../test/fixtures/wire-captures/meals.js";
+import { useMswServer } from "../../test/support/msw.js";
 
 describe("meal planner tools", () => {
   const server = useMswServer([...mealHandlers]);
@@ -77,7 +77,7 @@ entity type, use the captures as ground truth for field names, types, and
 formats:
 
 ```typescript
-import { fixture } from "../__fixtures__/wire-captures/meals.js";
+import { fixture } from "../../test/fixtures/wire-captures/meals.js";
 
 const f = fixture("add recipe meal: (Not) Butter Chicken as Breakfast on 2026-05-26");
 const body = f.requestBody as Array<Record<string, unknown>>;
@@ -113,7 +113,7 @@ pnpm generate:fixtures
 ```
 
 This reads all `docs/wire-captures/*.har.json` and regenerates TypeScript
-modules in `src/__fixtures__/wire-captures/`. The generated files should be
+modules in `test/fixtures/wire-captures/`. The generated files should be
 committed (they're what tests import).
 
 ## Adding New Captures

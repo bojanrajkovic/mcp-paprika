@@ -34,7 +34,8 @@ The human-developer workflow for mcp-paprika. Agent-facing guidance and the proj
 
 ## Testing
 
-- Runner: **vitest**. Tests are colocated as `src/**/*.test.ts`; property tests are `*.property.test.ts` (fast-check); integration tests are `*.test.integration.ts`.
+- Runner: **vitest**. Tests are colocated as `src/**/*.test.ts`, next to the code they exercise; property tests are `*.property.test.ts` (fast-check); integration tests are `*.test.integration.ts`.
+- Fixtures, generated wire-captures, and test helpers live in a top-level `test/` tree that mirrors `src/`: `test/support/` (cross-cutting helpers), `test/fixtures/` (shared data + `wire-captures/`), and `test/<entity>/__fixtures__/` (per-entity data). Tests stay in `src/`; only the support code lives under `test/`. Imports are plain relative (no path aliases). See `docs/adr/0006-test-fixtures-out-of-src.md` and `test/CLAUDE.md`.
 - HTTP is mocked with **msw**.
 - Coverage target: ≥ 70% for new code.
 

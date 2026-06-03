@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { makeRecipe } from "../cache/__fixtures__/recipes.js";
+import { makeRecipe } from "../../test/cache/__fixtures__/recipes.js";
+import { getText, makeCtx, makeTestServer, seed } from "../../test/support/tool-test-utils.js";
 import { RecipeStore } from "../recipe/store.js";
 import { registerFilterTools } from "./filter.js";
-import { getText, makeCtx, makeTestServer, seed } from "./tool-test-utils.js";
 
 describe("p2-discovery-tools: filter_by_ingredient tool", () => {
   describe("p2-discovery-tools.AC2: filter_by_ingredient", () => {

@@ -9,10 +9,10 @@ import type { JWTVerifyGetKey } from "jose";
 import { http, HttpResponse } from "msw";
 import { describe, expect, it } from "vitest";
 
-import { useMswServer } from "../__fixtures__/msw.js";
-import { makePinoCapture } from "../tools/tool-test-utils.js";
+import { makeEs256Jwt, makeHs256Jwt, makeRsaJwt } from "../../test/auth/__fixtures__/jose-keys.js";
+import { useMswServer } from "../../test/support/msw.js";
+import { makePinoCapture } from "../../test/support/tool-test-utils.js";
 import { REDACT_PATHS } from "../utils/log.js";
-import { makeEs256Jwt, makeHs256Jwt, makeRsaJwt } from "./__fixtures__/jose-keys.js";
 import { OAuthMetadataValidationError } from "./errors.js";
 import { createJwksFor, loadDiscovery, verifyIdToken } from "./oidc-client.js";
 import { nowSeconds } from "./tokens.js";
