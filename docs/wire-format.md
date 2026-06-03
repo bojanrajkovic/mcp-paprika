@@ -1,6 +1,6 @@
 # Paprika Cloud Sync — Reverse-Engineered Wire Format
 
-**Last verified:** 2026-06-01
+**Last verified:** 2026-06-03
 
 Paprika's Cloud Sync API has no public documentation. Everything here was
 reconstructed by watching the macOS desktop client on the wire and reading the
@@ -113,6 +113,45 @@ One field bucks "send everything": the macOS client omits the pantry item's
 `notes` field from its POST bodies, so the write path matches that omission
 rather than the entity's full read shape. That kind of asymmetry is exactly what
 the capture corpus exists to pin down.
+
+## UID shapes: what the server mints and what it accepts
+
+The UID namespace is Paprika's, not ours, and the two halves of that — what the
+server will _accept_ from a client and what it _mints_ itself — do not match.
+This is hard-won knowledge, verified directly against the live API, and it is
+why identifier branding stays compile-time only (see
+[`docs/adr/0007-uid-branding-compile-time-only.md`](adr/0007-uid-branding-compile-time-only.md)).
+
+**On write, the server validates the _shape_ of a client-minted UID.** A new UID
+in a POST body (collection upsert) or a recipe path is accepted only if it is a
+canonical `8-4-4-4-12` hex UUID — case-insensitive, hex in every position. A
+prefix (`recipe_…`), a trailing suffix, hyphen-free hex, or any length-36 string
+that is not that exact structure is refused. The refusal is easy to miss: it
+comes back as **HTTP 200 with an error body** (`{"error":{"message":"Invalid uid."}}`),
+not a 4xx, so a `200` is not on its own a success — the client maps a non-`{"result":…}`
+200 to a `PaprikaAPIError`. The validator is a regex, not full UUID semantics: a
+structurally-valid string with an invalid version/variant nibble is still accepted.
+
+**The server itself mints UIDs in shapes a client could not POST.** Built-in
+aisles, meal types, and the default grocery list carry **64-hex hyphen-free**
+identifiers (the long aisle UID noted under the no-aisle sentinel above is one of
+these); a large share of recipes and categories carry **compound
+`<uuid>-<decimal>-<hex>`** identifiers from import/share flows. Neither shape
+passes the client-write validator, so these entities are effectively
+system-owned: they cannot be re-created under the same UID, and the reference
+catalogs are re-seeded by the app if deleted.
+
+**Updating an _existing_ server-known UID is accepted regardless of its shape.**
+The shape validator gates the minting of a _new_ UID, not a write that addresses
+a UID the server already stores. A recipe with a compound UID round-trips and is
+editable through the normal save path (the UID is folded into the recipe content
+hash, and that hash matches on re-save). So the heterogeneous corpus is fully
+writable even though most of it could never be _created_ by this client.
+
+The practical consequence: this server mints plain canonical UUIDs (uppercased,
+matching the desktop client's own format) and treats every UID as an opaque,
+kind-agnostic string at runtime. It cannot enforce a UID's kind from its shape,
+because the shapes the server issues do not encode kind and are not ours to choose.
 
 ## Deletion: two tiers, two shapes
 
