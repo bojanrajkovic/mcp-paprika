@@ -75,6 +75,7 @@ import { registerDeletePhotoTool, registerUploadPhotoTool } from "../tools/photo
 import { registerReadTool } from "../tools/read.js";
 import { registerSearchTool } from "../tools/search.js";
 import { registerUpdateTool } from "../tools/update.js";
+import { BRANDING, iconSvgDataUri } from "../utils/branding.js";
 import { type PaprikaConfig, resolveImageGenConfig } from "../utils/config.js";
 import { createLogger } from "../utils/log.js";
 import { getCacheDir } from "../utils/xdg.js";
@@ -457,7 +458,19 @@ export async function buildAppContext(
  * registered as well.
  */
 export function buildMcpServer(app: AppContext): McpServer {
-  const server = new McpServer({ name: SERVER_NAME, version: SERVER_VERSION }, { instructions: SERVER_INSTRUCTIONS });
+  const server = new McpServer(
+    {
+      name: SERVER_NAME,
+      title: BRANDING.title,
+      version: SERVER_VERSION,
+      websiteUrl: BRANDING.websiteUrl,
+      // SVG data URI: spec-native (SEP-973) but not rendered by every host yet
+      // (see src/utils/branding.ts). The HTTP transport's pre-auth surfaces
+      // (/favicon.png + the AS metadata logo_uri) are what a connector card reads today.
+      icons: [{ src: iconSvgDataUri(), mimeType: "image/svg+xml", sizes: ["any"] }],
+    },
+    { instructions: SERVER_INSTRUCTIONS },
+  );
   const sessionCtx: SessionContext = { ...app, server };
 
   registerSearchTool(server, sessionCtx);
