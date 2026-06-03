@@ -1,6 +1,6 @@
 import { fromAny } from "@total-typescript/shoehorn";
 import { describe, it, expect, vi } from "vitest";
-import { RecipeStore } from "../cache/recipe-store.js";
+import { RecipeStore } from "../recipe/store.js";
 import { makeMenu, makeMenuItem } from "../cache/__fixtures__/menus.js";
 import { makeMealType } from "../cache/__fixtures__/meals.js";
 import { makeRecipe } from "../cache/__fixtures__/recipes.js";
@@ -12,7 +12,9 @@ import {
   registerDeleteMenuItemTool,
   addMenuItemsInputSchema,
 } from "./menu-item-write.js";
-import type { MealTypeUid, Menu, MenuItem, MenuItemUid, MenuUid, RecipeUid } from "../paprika/types.js";
+import type { MealTypeUid, MenuItemUid, MenuUid, RecipeUid } from "../ids.js";
+import type { MenuItem } from "../menu-item/types.js";
+import type { Menu } from "../menu/types.js";
 
 const TACOS_UID = "recipe-tacos" as RecipeUid;
 const SOUP_UID = "recipe-soup" as RecipeUid;

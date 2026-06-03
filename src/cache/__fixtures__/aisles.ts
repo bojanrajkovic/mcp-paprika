@@ -1,4 +1,5 @@
-import type { Aisle, AisleUid } from "../../paprika/types.js";
+import type { Aisle } from "../../aisle/types.js";
+import type { AisleUid } from "../../ids.js";
 
 let aisleCounter = 0;
 

@@ -1,9 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { RecipeStore } from "../cache/recipe-store.js";
+import { RecipeStore } from "../recipe/store.js";
 import { makeTestServer, makeCtx, seed } from "../tools/tool-test-utils.js";
 import { makeRecipe, makeCategory } from "../cache/__fixtures__/recipes.js";
 import { registerRecipeResources } from "./recipes.js";
-import type { RecipeUid, CategoryUid } from "../paprika/types.js";
+import type { RecipeUid, CategoryUid } from "../ids.js";
 
 describe("p2-u10-resource-reg: MCP Recipe Resources", () => {
   describe("p2-u10-resource-reg.AC1: Recipe list is accessible as MCP resources", () => {

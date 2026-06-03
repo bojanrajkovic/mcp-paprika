@@ -5,7 +5,7 @@ import { contentHash, VectorStore } from "./vector-store.js";
 import { VectorStoreError } from "./vector-store-errors.js";
 import { recipeToEmbeddingText } from "./embeddings.js";
 import { makeRecipe } from "../cache/__fixtures__/recipes.js";
-import type { RecipeUid } from "../paprika/types.js";
+import type { RecipeUid } from "../ids.js";
 import { mkdtemp, rm, writeFile, readFile, mkdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";

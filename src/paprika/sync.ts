@@ -3,29 +3,28 @@ import { createRequire } from "node:module";
 
 import type { Logger } from "pino";
 
-import type { DiskCache } from "../cache/disk/base.js";
+import type { DiskCache } from "../cache/disk-cache.js";
 import type { TombstoneEntityStore } from "../entity/tombstone-store.js";
 import type { AppContext } from "../server/app-context.js";
+import type { Category } from "../category/types.js";
+import type { GroceryItem } from "../grocery-item/types.js";
+import type { GroceryList } from "../grocery-list/types.js";
+import type { Meal } from "../meal/types.js";
+import type { MenuItem } from "../menu-item/types.js";
+import type { Menu } from "../menu/types.js";
+import type { PantryItem } from "../pantry/types.js";
 import type {
   AnySyncResult,
-  Category,
   EntityChanges,
-  GroceryItem,
   GroceryItemSyncResult,
-  GroceryList,
   GroceryListSyncResult,
-  Meal,
-  Menu,
-  MenuItem,
   MenuSyncResult,
   MenuItemSyncResult,
-  PantryItem,
-  Photo,
-  Recipe,
-  RecipeUid,
   RecipeSyncResult,
   PantrySyncResult,
-} from "./types.js";
+} from "./sync-types.js";
+import type { Photo } from "../photo/types.js";
+import type { Recipe } from "../recipe/types.js";
 
 function categoriesEqual(a: Category, b: Category): boolean {
   return a.uid === b.uid && a.name === b.name && a.orderFlag === b.orderFlag && a.parentUid === b.parentUid;
@@ -207,18 +206,47 @@ type SyncEventEmitter = {
   all: Map<keyof SyncEvents, Array<(data: SyncEvents[keyof SyncEvents]) => void>>;
 };
 
+/**
+ * The narrow slice of {@link AppContext} that {@link SyncEngine} actually reads:
+ * the Paprika client, the disk cache, every entity store, and the logger.
+ *
+ * It deliberately excludes `vectorStore`, `photographyClient`,
+ * `generatedImageStore`, `notifier`, and `auth`: the engine touches none of them
+ * (resource-list notification is wired as a `sync:complete` subscriber in
+ * `buildAppContext`, never inside the engine). Derived with `Pick` so it can
+ * never drift from the field types declared on {@link AppContext}.
+ */
+export type SyncDeps = Pick<
+  AppContext,
+  | "client"
+  | "cache"
+  | "store"
+  | "categoryStore"
+  | "pantryStore"
+  | "aisleStore"
+  | "groceryListStore"
+  | "groceryItemStore"
+  | "groceryIngredientStore"
+  | "mealStore"
+  | "mealTypeStore"
+  | "menuStore"
+  | "menuItemStore"
+  | "photoStore"
+  | "log"
+>;
+
 export class SyncEngine {
-  private readonly _context: AppContext;
+  private readonly _deps: SyncDeps;
   private readonly _intervalMs: number;
   private readonly _events: SyncEventEmitter;
   private readonly _eventsView: Pick<SyncEventEmitter, "on" | "off">;
   private readonly log: Logger;
   private _ac: AbortController | null = null;
 
-  constructor(context: AppContext, intervalMs: number) {
-    this._context = context;
+  constructor(deps: SyncDeps, intervalMs: number) {
+    this._deps = deps;
     this._intervalMs = intervalMs;
-    this.log = context.log.child({ component: "sync" });
+    this.log = deps.log.child({ component: "sync" });
     // CJS require returns unknown; mitt's default export is a factory function that returns the emitter
     this._events = (mittFactory as CallableFunction)() as SyncEventEmitter;
     this._eventsView = {
@@ -251,9 +279,9 @@ export class SyncEngine {
     try {
       // 1. Recipe sync path
       this.log.debug("fetching recipe list");
-      const entries = await this._context.client.listRecipes();
+      const entries = await this._deps.client.listRecipes();
       this.log.debug({ count: entries.length }, "fetched recipe list");
-      const diff = this._context.cache.recipes.diff(entries);
+      const diff = this._deps.cache.recipes.diff(entries);
       this.log.debug(
         { added: diff.added.length, changed: diff.changed.length, removed: diff.removed.length },
         "recipe diff computed",
@@ -267,16 +295,12 @@ export class SyncEngine {
       // doesn't resurrect our just-deleted recipe. We leave diff.removed
       // alone for pending-deletes: if the server actually no longer lists
       // the UID, honoring the removal is correct.
-      const filteredRemoved = diff.removed.filter((uid) => !this._context.store.isPendingUpsert(uid as RecipeUid));
+      const filteredRemoved = diff.removed.filter((uid) => !this._deps.store.isPendingUpsert(uid));
       const filteredAdded = diff.added.filter(
-        (uid) =>
-          !this._context.store.isPendingUpsert(uid as RecipeUid) &&
-          !this._context.store.isPendingDelete(uid as RecipeUid),
+        (uid) => !this._deps.store.isPendingUpsert(uid) && !this._deps.store.isPendingDelete(uid),
       );
       const filteredChanged = diff.changed.filter(
-        (uid) =>
-          !this._context.store.isPendingUpsert(uid as RecipeUid) &&
-          !this._context.store.isPendingDelete(uid as RecipeUid),
+        (uid) => !this._deps.store.isPendingUpsert(uid) && !this._deps.store.isPendingDelete(uid),
       );
 
       // Compute UIDs to fetch
@@ -286,20 +310,20 @@ export class SyncEngine {
       let fetchedRecipes: Array<Recipe> = [];
       if (uidsToFetch.length > 0) {
         this.log.debug({ count: uidsToFetch.length }, "fetching recipes");
-        fetchedRecipes = await this._context.client.getRecipes(uidsToFetch);
+        fetchedRecipes = await this._deps.client.getRecipes(uidsToFetch);
         this.log.debug({ count: fetchedRecipes.length }, "fetched recipes");
       }
 
       // Write fetched recipes to cache and store
       for (const recipe of fetchedRecipes) {
-        await this._context.cache.recipes.put(recipe);
-        this._context.store.set(recipe);
+        await this._deps.cache.recipes.put(recipe);
+        this._deps.store.set(recipe);
       }
 
       // Remove deleted recipes (async, use Promise.all for concurrency)
-      await Promise.all(filteredRemoved.map((uid) => this._context.cache.recipes.remove(uid)));
+      await Promise.all(filteredRemoved.map((uid) => this._deps.cache.recipes.remove(uid)));
       for (const uid of filteredRemoved) {
-        this._context.store.delete(uid as RecipeUid);
+        this._deps.store.delete(uid);
       }
 
       // Observation-based clearing for recipe pending-upserts: clear only when
@@ -309,17 +333,17 @@ export class SyncEngine {
       // presence would drop protection on the first sync cycle and let the
       // next cycle re-fetch and overwrite our edit (codex P1, PR #92).
       for (const entry of entries) {
-        if (!this._context.store.isPendingUpsert(entry.uid)) continue;
-        const local = this._context.store.get(entry.uid);
+        if (!this._deps.store.isPendingUpsert(entry.uid)) continue;
+        const local = this._deps.store.get(entry.uid);
         if (local !== undefined && local.hash === entry.hash) {
-          this._context.store.clearPending(entry.uid);
+          this._deps.store.clearPending(entry.uid);
         }
       }
 
       // Recipe sync is complete; mark the store as synced now so recipe tools
       // remain available even if category or pantry sync subsequently fails.
-      this._context.store.markSynced();
-      this._context.store.setLastSyncedAt();
+      this._deps.store.markSynced();
+      this._deps.store.setLastSyncedAt();
 
       // 2. Category sync (replace-all with pending-write filtering)
       // Categories gained create/update/delete write tools (#108), so they need
@@ -328,9 +352,9 @@ export class SyncEngine {
       // sync:complete event: categories are a reference entity with no MCP
       // resource surface (recipe rendering resolves category names on read).
       const categoryChanges = await syncReplaceAllEntity({
-        fetch: () => this._context.client.listCategories(),
-        cache: this._context.cache.categories,
-        store: this._context.categoryStore,
+        fetch: () => this._deps.client.listCategories(),
+        cache: this._deps.cache.categories,
+        store: this._deps.categoryStore,
         equals: categoriesEqual,
         label: "categories",
         log: this.log,
@@ -350,39 +374,37 @@ export class SyncEngine {
       // Aisles sync before pantry so aisle data is available for resolution
       // when ensureAisle is called from pantry write tools.
       this.log.debug("fetching aisles");
-      const aisles = await this._context.client.listAisles();
+      const aisles = await this._deps.client.listAisles();
       this.log.debug({ count: aisles.length }, "fetched aisles");
-      const cachedAisles = await this._context.cache.aisles.getAll();
+      const cachedAisles = await this._deps.cache.aisles.getAll();
 
-      const incomingAislesFiltered = aisles.filter(
-        (a) => !a.deleted && !this._context.aisleStore.isPendingUpsert(a.uid),
-      );
-      const pendingUpsertedAisles = cachedAisles.filter((a) => this._context.aisleStore.isPendingUpsert(a.uid));
+      const incomingAislesFiltered = aisles.filter((a) => !a.deleted && !this._deps.aisleStore.isPendingUpsert(a.uid));
+      const pendingUpsertedAisles = cachedAisles.filter((a) => this._deps.aisleStore.isPendingUpsert(a.uid));
       const effectiveAisles = [...incomingAislesFiltered, ...pendingUpsertedAisles];
 
       const cachedAisleUids = new Set(cachedAisles.map((a) => a.uid));
       const effectiveAisleUids = new Set(effectiveAisles.map((a) => a.uid));
       const orphanAisleUids = [...cachedAisleUids].filter((uid) => !effectiveAisleUids.has(uid));
-      await Promise.all(orphanAisleUids.map((uid) => this._context.cache.aisles.remove(uid)));
+      await Promise.all(orphanAisleUids.map((uid) => this._deps.cache.aisles.remove(uid)));
 
-      this._context.aisleStore.load(effectiveAisles);
-      await Promise.all(effectiveAisles.map((a) => this._context.cache.aisles.put(a)));
+      this._deps.aisleStore.load(effectiveAisles);
+      await Promise.all(effectiveAisles.map((a) => this._deps.cache.aisles.put(a)));
 
       // Observation-based clearing: if a pending-upsert UID appears in the
       // canonical list, the server confirmed the write — clear immediately
       // rather than waiting for TTL, so subsequent syncs pick up server changes.
       for (const aisle of aisles) {
-        if (this._context.aisleStore.isPendingUpsert(aisle.uid)) {
-          this._context.aisleStore.clearPending(aisle.uid);
+        if (this._deps.aisleStore.isPendingUpsert(aisle.uid)) {
+          this._deps.aisleStore.clearPending(aisle.uid);
         }
       }
 
       // 3. Pantry sync (replace-all with orphan cleanup)
       this.log.debug("fetching pantry");
       const pantryChanges = await syncReplaceAllEntity({
-        fetch: () => this._context.client.listPantry(),
-        cache: this._context.cache.pantry,
-        store: this._context.pantryStore,
+        fetch: () => this._deps.client.listPantry(),
+        cache: this._deps.cache.pantry,
+        store: this._deps.pantryStore,
         equals: pantryItemsEqual,
         label: "pantry items",
         log: this.log,
@@ -391,21 +413,21 @@ export class SyncEngine {
       // 4. Grocery list sync (replace-all with orphan cleanup)
       this.log.debug("fetching grocery lists");
       const groceryListChanges = await syncReplaceAllEntity({
-        fetch: () => this._context.client.listGroceryLists(),
-        cache: this._context.cache.groceryLists,
-        store: this._context.groceryListStore,
+        fetch: () => this._deps.client.listGroceryLists(),
+        cache: this._deps.cache.groceryLists,
+        store: this._deps.groceryListStore,
         equals: groceryListsEqual,
         label: "grocery lists",
         log: this.log,
-        afterLoad: () => this._context.groceryListStore.setLastSyncedAt(),
+        afterLoad: () => this._deps.groceryListStore.setLastSyncedAt(),
       });
 
       // 5. Grocery item sync (replace-all with orphan cleanup)
       this.log.debug("fetching grocery items");
       const groceryItemChanges = await syncReplaceAllEntity({
-        fetch: () => this._context.client.listGroceryItems(),
-        cache: this._context.cache.groceryItems,
-        store: this._context.groceryItemStore,
+        fetch: () => this._deps.client.listGroceryItems(),
+        cache: this._deps.cache.groceryItems,
+        store: this._deps.groceryItemStore,
         equals: groceryItemsEqual,
         label: "grocery items",
         log: this.log,
@@ -413,7 +435,7 @@ export class SyncEngine {
 
       // 6. Ingredient catalog sync (replace-all, no pending-writes)
       this.log.debug("fetching grocery ingredients");
-      const groceryIngredients = await this._context.client.listGroceryIngredients();
+      const groceryIngredients = await this._deps.client.listGroceryIngredients();
       this.log.debug({ count: groceryIngredients.length }, "fetched grocery ingredients");
 
       // Drop deleted entries AND entries with no aisle. Paprika returns
@@ -431,14 +453,14 @@ export class SyncEngine {
         this.log.warn({ count: droppedNoAisle }, "dropped grocery ingredients with no aisle");
       }
 
-      const cachedIngredients = await this._context.cache.groceryIngredients.getAll();
+      const cachedIngredients = await this._deps.cache.groceryIngredients.getAll();
       const cachedIngredientUids = new Set(cachedIngredients.map((i) => i.uid));
       const filteredIngredientUids = new Set(filteredIngredients.map((i) => i.uid));
       const orphanIngredientUids = [...cachedIngredientUids].filter((uid) => !filteredIngredientUids.has(uid));
 
-      await Promise.all(orphanIngredientUids.map((uid) => this._context.cache.groceryIngredients.remove(uid)));
-      this._context.groceryIngredientStore.load(filteredIngredients);
-      await Promise.all(filteredIngredients.map((i) => this._context.cache.groceryIngredients.put(i)));
+      await Promise.all(orphanIngredientUids.map((uid) => this._deps.cache.groceryIngredients.remove(uid)));
+      this._deps.groceryIngredientStore.load(filteredIngredients);
+      await Promise.all(filteredIngredients.map((i) => this._deps.cache.groceryIngredients.put(i)));
 
       if (orphanIngredientUids.length > 0) {
         this.log.debug({ count: orphanIngredientUids.length }, "removed orphan grocery ingredients");
@@ -457,21 +479,21 @@ export class SyncEngine {
         // mealtypes.har.json) so the field is on the schema, and any tombstone
         // that does reach the wire must not be loaded as an active mealtype.
         this.log.debug("fetching meal types");
-        const mealTypesRaw = await this._context.client.listMealTypes();
+        const mealTypesRaw = await this._deps.client.listMealTypes();
         const mealTypes = mealTypesRaw.filter((mt) => !mt.deleted);
         this.log.debug(
           { count: mealTypes.length, filtered: mealTypesRaw.length - mealTypes.length },
           "fetched meal types",
         );
 
-        const cachedMealTypes = await this._context.cache.mealTypes.getAll();
+        const cachedMealTypes = await this._deps.cache.mealTypes.getAll();
         const cachedMealTypeUids = new Set(cachedMealTypes.map((mt) => mt.uid));
         const incomingMealTypeUids = new Set(mealTypes.map((mt) => mt.uid));
         const orphanMealTypeUids = [...cachedMealTypeUids].filter((uid) => !incomingMealTypeUids.has(uid));
-        await Promise.all(orphanMealTypeUids.map((uid) => this._context.cache.mealTypes.remove(uid)));
+        await Promise.all(orphanMealTypeUids.map((uid) => this._deps.cache.mealTypes.remove(uid)));
 
-        this._context.mealTypeStore.load(mealTypes);
-        await Promise.all(mealTypes.map((mt) => this._context.cache.mealTypes.put(mt)));
+        this._deps.mealTypeStore.load(mealTypes);
+        await Promise.all(mealTypes.map((mt) => this._deps.cache.mealTypes.put(mt)));
 
         if (orphanMealTypeUids.length > 0) {
           this.log.debug({ count: orphanMealTypeUids.length }, "removed orphan meal types");
@@ -480,9 +502,9 @@ export class SyncEngine {
         // 8. Meal sync (replace-all with orphan cleanup, pending-writes filtered)
         this.log.debug("fetching meals");
         await syncReplaceAllEntity({
-          fetch: () => this._context.client.listMeals(),
-          cache: this._context.cache.meals,
-          store: this._context.mealStore,
+          fetch: () => this._deps.client.listMeals(),
+          cache: this._deps.cache.meals,
+          store: this._deps.mealStore,
           equals: mealsEqual,
           label: "meals",
           log: this.log,
@@ -504,21 +526,21 @@ export class SyncEngine {
         // 9. Menu sync (replace-all with orphan cleanup, pending-writes filtered)
         this.log.debug("fetching menus");
         menuChanges = await syncReplaceAllEntity({
-          fetch: () => this._context.client.listMenus(),
-          cache: this._context.cache.menus,
-          store: this._context.menuStore,
+          fetch: () => this._deps.client.listMenus(),
+          cache: this._deps.cache.menus,
+          store: this._deps.menuStore,
           equals: menusEqual,
           label: "menus",
           log: this.log,
-          afterLoad: () => this._context.menuStore.setLastSyncedAt(),
+          afterLoad: () => this._deps.menuStore.setLastSyncedAt(),
         });
 
         // 10. Menu-item sync (replace-all with orphan cleanup, pending-writes filtered)
         this.log.debug("fetching menu items");
         menuItemChanges = await syncReplaceAllEntity({
-          fetch: () => this._context.client.listMenuItems(),
-          cache: this._context.cache.menuItems,
-          store: this._context.menuItemStore,
+          fetch: () => this._deps.client.listMenuItems(),
+          cache: this._deps.cache.menuItems,
+          store: this._deps.menuItemStore,
           equals: menuItemsEqual,
           label: "menu items",
           log: this.log,
@@ -537,9 +559,9 @@ export class SyncEngine {
       try {
         this.log.debug("fetching photos");
         await syncReplaceAllEntity({
-          fetch: () => this._context.client.listPhotos(),
-          cache: this._context.cache.photos,
-          store: this._context.photoStore,
+          fetch: () => this._deps.client.listPhotos(),
+          cache: this._deps.cache.photos,
+          store: this._deps.photoStore,
           equals: photosEqual,
           label: "photos",
           log: this.log,
@@ -551,22 +573,22 @@ export class SyncEngine {
 
       // 11. Finalization
       this.log.debug("flushing cache to disk");
-      await this._context.cache.flush();
+      await this._deps.cache.flush();
 
       // Sweep expired pending-writes (issue #57 TTL fallback). Pending-deletes
       // rely on this for clearing since Paprika gives no observable signal
       // that our soft-delete propagated.
-      const sweptStore = this._context.store.sweepPending();
-      const sweptCategories = this._context.categoryStore.sweepPending();
-      const sweptPantry = this._context.pantryStore.sweepPending();
-      const sweptAisles = this._context.aisleStore.sweepPending();
-      const sweptGroceryLists = this._context.groceryListStore.sweepPending();
-      const sweptGroceryItems = this._context.groceryItemStore.sweepPending();
-      const sweptMeals = this._context.mealStore.sweepPending();
-      const sweptMealTypes = this._context.mealTypeStore.sweepPending();
-      const sweptMenus = this._context.menuStore.sweepPending();
-      const sweptMenuItems = this._context.menuItemStore.sweepPending();
-      const sweptPhotos = this._context.photoStore.sweepPending();
+      const sweptStore = this._deps.store.sweepPending();
+      const sweptCategories = this._deps.categoryStore.sweepPending();
+      const sweptPantry = this._deps.pantryStore.sweepPending();
+      const sweptAisles = this._deps.aisleStore.sweepPending();
+      const sweptGroceryLists = this._deps.groceryListStore.sweepPending();
+      const sweptGroceryItems = this._deps.groceryItemStore.sweepPending();
+      const sweptMeals = this._deps.mealStore.sweepPending();
+      const sweptMealTypes = this._deps.mealTypeStore.sweepPending();
+      const sweptMenus = this._deps.menuStore.sweepPending();
+      const sweptMenuItems = this._deps.menuItemStore.sweepPending();
+      const sweptPhotos = this._deps.photoStore.sweepPending();
       if (
         sweptStore > 0 ||
         sweptCategories > 0 ||

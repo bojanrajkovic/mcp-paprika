@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { RecipeStore } from "../cache/recipe-store.js";
+import { RecipeStore } from "../recipe/store.js";
 import { makeMealType } from "../cache/__fixtures__/meals.js";
-import type { MealType } from "../paprika/types.js";
+import type { MealType } from "../meal-type/types.js";
 import { registerMealTypesTool } from "./meal-types.js";
 import { makeTestServer, makeCtx, getText, seed } from "./tool-test-utils.js";
 

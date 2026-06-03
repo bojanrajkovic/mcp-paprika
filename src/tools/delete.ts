@@ -1,7 +1,7 @@
 import { toMessage } from "../utils/log.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { RecipeUidSchema } from "../paprika/types.js";
+import { RecipeUidSchema } from "../ids.js";
 import { coldStartGuard, commitRecipe, textResult } from "./helpers.js";
 import type { ServerContext } from "../types/server-context.js";
 

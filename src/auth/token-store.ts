@@ -13,7 +13,7 @@ import { err, ok, type Result } from "neverthrow";
 import { Mutex } from "async-mutex";
 import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
 import type { OAuthError } from "@modelcontextprotocol/sdk/server/auth/errors.js";
-import type { DiskCacheRoot } from "../cache/disk/index.js";
+import type { DiskCacheRoot } from "../cache/disk-cache-root.js";
 import {
   generateOpaqueToken,
   hashTokenForStorage,

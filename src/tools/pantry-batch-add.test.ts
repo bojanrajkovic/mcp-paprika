@@ -1,12 +1,12 @@
 import { fromAny } from "@total-typescript/shoehorn";
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { RecipeStore } from "../cache/recipe-store.js";
-import { AisleStore } from "../cache/aisle-store.js";
+import { RecipeStore } from "../recipe/store.js";
+import { AisleStore } from "../aisle/store.js";
 import { makePantryItem } from "../cache/__fixtures__/pantry.js";
 import { makeAisle } from "../cache/__fixtures__/aisles.js";
 import { registerAddPantryItemsTool } from "./pantry-batch-add.js";
 import { makeTestServer, makeCtx, getText, makePinoCapture, seed } from "./tool-test-utils.js";
-import type { PantryItemUid, AisleUid } from "../paprika/types.js";
+import type { PantryItemUid, AisleUid } from "../ids.js";
 import { PaprikaAPIError } from "../paprika/errors.js";
 
 describe("add_pantry_items tool", () => {

@@ -2,10 +2,12 @@ import { describe, it, expect, beforeAll, vi } from "vitest";
 import { fromAny } from "@total-typescript/shoehorn";
 import sharp from "sharp";
 
-import { RecipeStore } from "../cache/recipe-store.js";
+import { RecipeStore } from "../recipe/store.js";
 import { makeRecipe } from "../cache/__fixtures__/recipes.js";
 import { makePhoto } from "../cache/__fixtures__/photos.js";
-import { PhotoUidSchema, RecipeUidSchema, type Photo, type Recipe } from "../paprika/types.js";
+import { PhotoUidSchema, RecipeUidSchema } from "../ids.js";
+import type { Photo } from "../photo/types.js";
+import type { Recipe } from "../recipe/types.js";
 import { makeCtx, makeTestServer, getText, seed } from "./tool-test-utils.js";
 import { registerUploadPhotoTool, registerDeletePhotoTool, uploadPhotoInputSchema } from "./photo-writes.js";
 import { fetchImageBytes, isBlockedIp, ssrfLookup } from "./photo-fetch.js";

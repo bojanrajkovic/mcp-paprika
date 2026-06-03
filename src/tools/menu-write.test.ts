@@ -1,12 +1,14 @@
 import { fromAny } from "@total-typescript/shoehorn";
 import { describe, it, expect, vi } from "vitest";
-import { RecipeStore } from "../cache/recipe-store.js";
+import { RecipeStore } from "../recipe/store.js";
 import { makeMenu, makeMenuItem } from "../cache/__fixtures__/menus.js";
 import { makeMealType } from "../cache/__fixtures__/meals.js";
 import { makeTestServer, makeCtx, getText, makeStubNotifier, seed } from "./tool-test-utils.js";
 import type { SeedData } from "./tool-test-utils.js";
 import { registerCreateMenuTool, registerUpdateMenuTool, registerDeleteMenuTool } from "./menu-write.js";
-import type { MealTypeUid, Menu, MenuItem, MenuItemUid, MenuUid } from "../paprika/types.js";
+import type { MealTypeUid, MenuItemUid, MenuUid } from "../ids.js";
+import type { MenuItem } from "../menu-item/types.js";
+import type { Menu } from "../menu/types.js";
 
 const DINNER_TYPE = makeMealType({ uid: "dinner-uid" as MealTypeUid, name: "Dinner", orderFlag: 2, originalType: 2 });
 

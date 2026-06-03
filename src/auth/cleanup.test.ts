@@ -4,7 +4,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { nowSeconds } from "./tokens.js";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { DiskCacheRoot } from "../cache/disk/index.js";
+import { DiskCacheRoot } from "../cache/disk-cache-root.js";
 import { AuthRequestStore } from "./auth-request-store.js";
 import { AuthCodeStore } from "./auth-code-store.js";
 import { PendingAuthorizationStore } from "./pending-authorization-store.js";

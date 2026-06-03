@@ -1,5 +1,7 @@
 import { ok, err, type Result } from "neverthrow";
-import type { Category, CategoryUid, Recipe } from "../paprika/types.js";
+import type { Category } from "../category/types.js";
+import type { CategoryUid } from "../ids.js";
+import type { Recipe } from "../recipe/types.js";
 import type { ServerContext } from "../types/server-context.js";
 import { coldStartGuard, textResult } from "./helpers.js";
 import { reindexRecipesForCategoryChange } from "../features/discover-feature.js";
@@ -103,14 +105,14 @@ export function recipesReferencing(ctx: ServerContext, uid: CategoryUid): Array<
  * parent sits below the category, so the link would close a loop. The `seen`
  * set guards against an already-corrupt chain looping forever.
  */
-export function wouldCreateCycle(ctx: ServerContext, categoryUid: CategoryUid, newParentUid: string): boolean {
-  let cursor: string | null = newParentUid;
-  const seen = new Set<string>();
+export function wouldCreateCycle(ctx: ServerContext, categoryUid: CategoryUid, newParentUid: CategoryUid): boolean {
+  let cursor: CategoryUid | null = newParentUid;
+  const seen = new Set<CategoryUid>();
   while (cursor !== null) {
     if (cursor === categoryUid) return true;
     if (seen.has(cursor)) break;
     seen.add(cursor);
-    const parent = ctx.categoryStore.get(cursor as CategoryUid);
+    const parent = ctx.categoryStore.get(cursor);
     cursor = parent ? parent.parentUid : null;
   }
   return false;

@@ -1,8 +1,7 @@
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 
 import { buildAppContext, buildMcpServer } from "../server/build.js";
-import { singleServerNotifier } from "../server/notifier.js";
+import { createServerRef, singleServerNotifier } from "../server/notifier.js";
 import type { PaprikaConfig } from "../utils/config.js";
 
 export interface TransportHandle {
@@ -35,17 +34,19 @@ function warnIfUnusedHttpConfig(env: NodeJS.ProcessEnv): void {
 export async function startStdio(config: PaprikaConfig): Promise<TransportHandle> {
   warnIfUnusedHttpConfig(process.env);
 
-  // Deferred-getter notifier resolves the chicken-and-egg between AppContext
-  // (needs notifier) and McpServer (built from AppContext, then bound to
-  // notifier). See src/server/notifier.ts for the rationale.
-  let server: McpServer | undefined;
-  const notifier = singleServerNotifier(() => server);
+  // A ServerRef breaks the chicken-and-egg between AppContext (needs the
+  // notifier) and McpServer (built from AppContext, then bound to the notifier):
+  // the ref is created first, its getter handed to the notifier, and set once
+  // the server exists. See src/server/notifier.ts for the rationale.
+  const serverRef = createServerRef();
+  const notifier = singleServerNotifier(serverRef.get);
 
   // buildAppContext runs the initial sync internally so cold-start vector
   // indexing happens against a fully-populated RecipeStore (categories
   // included). See src/server/build.ts for the ordering rationale.
   const { app, sync } = await buildAppContext(config, notifier);
-  server = buildMcpServer(app);
+  const server = buildMcpServer(app);
+  serverRef.set(server);
 
   const log = app.log.child({ component: "transport-stdio" });
 

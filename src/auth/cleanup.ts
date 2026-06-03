@@ -19,7 +19,7 @@
 
 import { setTimeout as wait } from "node:timers/promises";
 import type { Logger } from "pino";
-import type { DiskCacheRoot } from "../cache/disk/index.js";
+import type { DiskCacheRoot } from "../cache/disk-cache-root.js";
 import type { AuthRequestStore } from "./auth-request-store.js";
 import type { AuthCodeStore } from "./auth-code-store.js";
 import type { PendingAuthorizationStore } from "./pending-authorization-store.js";

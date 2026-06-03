@@ -2,13 +2,9 @@ import { toMessage } from "../utils/log.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import {
-  GroceryItemUidSchema,
-  GroceryListUidSchema,
-  GroceryIngredientUidSchema,
-  AisleUidSchema,
-} from "../paprika/types.js";
-import type { GroceryItem } from "../paprika/types.js";
+import { GroceryItemUidSchema, GroceryListUidSchema, GroceryIngredientUidSchema, NO_AISLE_UID } from "../ids.js";
+import type { AisleUid } from "../ids.js";
+import type { GroceryItem } from "../grocery-item/types.js";
 import { textResult } from "./helpers.js";
 import { ensureAisle } from "./aisle-helpers.js";
 import {
@@ -63,7 +59,7 @@ export function registerAddGroceryItemsTool(server: McpServer, ctx: ServerContex
 
           // Build all GroceryItem objects, resolving aisles first
           const builtItems: Array<GroceryItem> = [];
-          const batchAisleCache = new Map<string, { aisle: string; aisleUid: string }>();
+          const batchAisleCache = new Map<string, { aisle: string; aisleUid: AisleUid }>();
           const catalogUpdated = new Set<string>();
           try {
             for (const item of args.items) {
@@ -75,7 +71,7 @@ export function registerAddGroceryItemsTool(server: McpServer, ctx: ServerContex
               const name = quantity !== "" ? `${quantity} ${ingredient}` : ingredient;
 
               let aisle: string;
-              let aisleUid: string;
+              let aisleUid: AisleUid;
 
               if (item.aisle !== undefined) {
                 const resolved = await ensureAisle(ctx, item.aisle);
@@ -111,9 +107,7 @@ export function registerAddGroceryItemsTool(server: McpServer, ctx: ServerContex
                 } else {
                   const catalogEntry = ctx.groceryIngredientStore.lookupByName(ingredient);
                   const resolvedAisle =
-                    catalogEntry !== undefined
-                      ? ctx.aisleStore.get(AisleUidSchema.parse(catalogEntry.aisleUid))
-                      : undefined;
+                    catalogEntry !== undefined ? ctx.aisleStore.get(catalogEntry.aisleUid) : undefined;
                   // No catalog memory (or it points at a now-missing aisle): place the
                   // item in the built-in "Miscellaneous" aisle, matching Paprika.app,
                   // which never leaves an item aisle-less. Fall back to "" only when the
@@ -121,7 +115,7 @@ export function registerAddGroceryItemsTool(server: McpServer, ctx: ServerContex
                   // catalog) — never auto-create it; it's a Paprika built-in.
                   const placement = resolvedAisle ?? ctx.aisleStore.resolveByName("Miscellaneous");
                   aisle = placement?.name ?? "";
-                  aisleUid = placement?.uid ?? "";
+                  aisleUid = placement?.uid ?? NO_AISLE_UID;
                 }
               }
 

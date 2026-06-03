@@ -1,7 +1,8 @@
 import { err, ok, type Result } from "neverthrow";
 import { Mutex } from "async-mutex";
-import type { Aisle, AisleUid } from "../paprika/types.js";
-import { AisleUidSchema } from "../paprika/types.js";
+import type { Aisle } from "../aisle/types.js";
+import type { AisleUid } from "../ids.js";
+import { AisleUidSchema, NO_AISLE_UID } from "../ids.js";
 import type { ServerContext } from "../types/server-context.js";
 import { textResult } from "./helpers.js";
 
@@ -37,10 +38,10 @@ export async function commitAisle(ctx: ServerContext, aisle: Readonly<Aisle>): P
  * Paprika.app emits for user-created aisles (built-in defaults use 64-char
  * uppercase hex strings — both formats are accepted by the server).
  */
-export async function ensureAisle(ctx: ServerContext, name: string): Promise<{ aisle: string; aisleUid: string }> {
+export async function ensureAisle(ctx: ServerContext, name: string): Promise<{ aisle: string; aisleUid: AisleUid }> {
   const trimmedName = name.trim();
   if (trimmedName === "") {
-    return { aisle: "", aisleUid: "" };
+    return { aisle: "", aisleUid: NO_AISLE_UID };
   }
 
   const match = ctx.aisleStore.resolveByName(trimmedName);

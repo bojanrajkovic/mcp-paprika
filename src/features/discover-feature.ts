@@ -1,9 +1,10 @@
 import { EmbeddingClient, EMBEDDING_SCHEMA_VERSION } from "./embeddings.js";
 import { VectorStore } from "./vector-store.js";
 import { getCacheDir } from "../utils/xdg.js";
-import type { CategoryStore } from "../cache/category-store.js";
-import type { RecipeStore } from "../cache/recipe-store.js";
-import type { AnySyncResult, Category, EntityChanges } from "../paprika/types.js";
+import type { CategoryStore } from "../category/store.js";
+import type { RecipeStore } from "../recipe/store.js";
+import type { Category } from "../category/types.js";
+import type { AnySyncResult, EntityChanges } from "../paprika/sync-types.js";
 import type { PaprikaConfig } from "../utils/config.js";
 import type { Logger } from "pino";
 

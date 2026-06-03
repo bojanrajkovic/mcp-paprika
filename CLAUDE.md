@@ -1,6 +1,6 @@
 # CLAUDE.md — AI Agent Index
 
-Last verified: 2026-06-01
+Last verified: 2026-06-02
 
 > **Keep this file lean.** It is the project-wide pointer index for agents. Detailed docs live under `docs/`; the human dev workflow lives in `CONTRIBUTING.md`; the rules that govern the doc system live in `docs/documentation-system.md`. When you change a feature, update its architecture doc or the relevant directory `CLAUDE.md`, not this index.
 
@@ -21,7 +21,10 @@ TypeScript 6 (ESM, `@tsconfig/strictest`) on Node.js 24 (mise-managed), pnpm via
 - `src/index.ts`, `src/transport/` — transport dispatch and the stdio / Streamable-HTTP entry points.
 - `src/server/` — the composition root: `AppContext`/`SessionContext`, the `Notifier` abstraction, and the `buildAppContext`/`buildMcpServer` builders. See `src/server/CLAUDE.md`.
 - `src/paprika/` — the Paprika cloud-sync HTTP client and the background sync engine. Wire formats: `docs/wire-format.md`.
-- `src/cache/` — in-memory entity stores over the `src/cache/disk/` per-entity disk cache.
+- `src/<entity>/` — per-entity data modules: one directory per Paprika entity family, each co-locating its `types.ts`, `store.ts`, and `disk.ts`. Shape and rationale: `docs/adr/0005-composition-modules-and-identifiers.md`.
+- `src/ids.ts` — the shared branded-UID leaf every data module imports for kind-safe foreign keys; its header explains the FK-reference vs primary-key schema split.
+- `src/entity/` — the shared `EntityStore` / `TombstoneEntityStore` base classes. See `src/entity/CLAUDE.md`.
+- `src/cache/` — the persistence layer: per-entity disk caches behind `DiskCacheRoot`, keeping the in-memory stores warm across restarts. See `src/cache/CLAUDE.md`.
 - `src/tools/` — the MCP tool surface (registered in `src/server/build.ts`). Tool-vs-resource rationale: `docs/adr/0004-tool-vs-resource-classification.md`.
 - `src/resources/` — MCP resource templates (`paprika://recipe/{uid}`, grocery-list, menu).
 - `src/features/` — semantic search (embeddings + the vendored vector index) and AI photo generation.

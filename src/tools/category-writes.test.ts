@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { fromAny } from "@total-typescript/shoehorn";
-import { RecipeStore } from "../cache/recipe-store.js";
+import { RecipeStore } from "../recipe/store.js";
 import { makeRecipe, makeCategory } from "../cache/__fixtures__/recipes.js";
 import {
   registerCreateCategoryTool,
@@ -8,7 +8,7 @@ import {
   registerDeleteCategoryTool,
 } from "./category-writes.js";
 import { makeTestServer, makeCtx, getText, seed } from "./tool-test-utils.js";
-import type { CategoryUid, RecipeUid } from "../paprika/types.js";
+import type { CategoryUid, RecipeUid } from "../ids.js";
 import type { ServerContext } from "../types/server-context.js";
 
 /** A ctx wired with synced recipe + category stores and mock client/cache for write tools. */

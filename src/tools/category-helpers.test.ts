@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { fromAny } from "@total-typescript/shoehorn";
-import { RecipeStore } from "../cache/recipe-store.js";
+import { RecipeStore } from "../recipe/store.js";
 import { makeRecipe, makeCategory } from "../cache/__fixtures__/recipes.js";
 import { makeServerContext } from "../__fixtures__/app-context.js";
 import {
@@ -11,7 +11,7 @@ import {
   wouldCreateCycle,
 } from "./category-helpers.js";
 import { seed } from "./tool-test-utils.js";
-import type { CategoryUid } from "../paprika/types.js";
+import type { CategoryUid } from "../ids.js";
 import type { ServerContext } from "../types/server-context.js";
 
 function makeCtx(overrides?: {
@@ -143,7 +143,7 @@ describe("category-helpers", () => {
           makeCategory({ uid: "c" as CategoryUid, parentUid: "b" }),
         ],
       });
-      expect(wouldCreateCycle(ctx, "a" as CategoryUid, "c")).toBe(true);
+      expect(wouldCreateCycle(ctx, "a" as CategoryUid, "c" as CategoryUid)).toBe(true);
     });
 
     it("is false for a legal re-parent that does not close a loop", () => {
@@ -153,7 +153,7 @@ describe("category-helpers", () => {
           makeCategory({ uid: "b" as CategoryUid, parentUid: null }),
         ],
       });
-      expect(wouldCreateCycle(ctx, "a" as CategoryUid, "b")).toBe(false);
+      expect(wouldCreateCycle(ctx, "a" as CategoryUid, "b" as CategoryUid)).toBe(false);
     });
 
     it("terminates on a pre-corrupt parent chain", () => {
@@ -164,7 +164,7 @@ describe("category-helpers", () => {
           makeCategory({ uid: "y" as CategoryUid, parentUid: "x" }),
         ],
       });
-      expect(wouldCreateCycle(ctx, "z" as CategoryUid, "x")).toBe(false);
+      expect(wouldCreateCycle(ctx, "z" as CategoryUid, "x" as CategoryUid)).toBe(false);
     });
   });
 });

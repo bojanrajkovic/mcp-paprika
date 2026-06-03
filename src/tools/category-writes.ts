@@ -2,8 +2,8 @@ import { toMessage } from "../utils/log.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { CategoryUidSchema } from "../paprika/types.js";
-import type { Category, CategoryUid } from "../paprika/types.js";
+import { CategoryUidSchema } from "../ids.js";
+import type { Category } from "../category/types.js";
 import { textResult } from "./helpers.js";
 import {
   categoryStartGuard,
@@ -16,7 +16,7 @@ import {
 import type { ServerContext } from "../types/server-context.js";
 
 function categorySummary(ctx: ServerContext, category: Category): string {
-  const parent = category.parentUid ? ctx.categoryStore.get(category.parentUid as CategoryUid) : undefined;
+  const parent = category.parentUid ? ctx.categoryStore.get(category.parentUid) : undefined;
   const parentLine = parent ? ` (under **${parent.name}**)` : " (top-level)";
   return `**${category.name}**${parentLine} — uid: \`${category.uid}\``;
 }
@@ -32,14 +32,16 @@ export function registerCreateCategoryTool(server: McpServer, ctx: ServerContext
         "to find parent UIDs. To put recipes in the new category, follow up with `update_recipe`.",
       inputSchema: {
         name: z.string().min(1).describe("Category display name"),
-        parentUid: z.string().optional().describe("UID of the parent category to nest under (omit for top-level)"),
+        parentUid: CategoryUidSchema.optional().describe(
+          "UID of the parent category to nest under (omit for top-level)",
+        ),
       },
     },
     async (args) => {
       log.info({ tool: "create_category", name: args.name }, "tool invoked");
       return categoryStartGuard(ctx).match(
         async (): Promise<CallToolResult> => {
-          if (args.parentUid !== undefined && ctx.categoryStore.get(args.parentUid as CategoryUid) === undefined) {
+          if (args.parentUid !== undefined && ctx.categoryStore.get(args.parentUid) === undefined) {
             return textResult(`No category found with UID "${args.parentUid}" to use as a parent.`);
           }
 
@@ -77,9 +79,7 @@ export function registerUpdateCategoryTool(server: McpServer, ctx: ServerContext
       inputSchema: {
         uid: CategoryUidSchema.describe("UID of the category to update"),
         name: z.string().min(1).optional().describe("New display name (omit to leave unchanged)"),
-        parentUid: z
-          .string()
-          .nullable()
+        parentUid: CategoryUidSchema.nullable()
           .optional()
           .describe("New parent UID, or null for top-level (omit to leave the parent unchanged)"),
       },
@@ -99,7 +99,7 @@ export function registerUpdateCategoryTool(server: McpServer, ctx: ServerContext
             if (args.parentUid === args.uid) {
               return textResult("A category cannot be its own parent.");
             }
-            if (ctx.categoryStore.get(args.parentUid as CategoryUid) === undefined) {
+            if (ctx.categoryStore.get(args.parentUid) === undefined) {
               return textResult(`No category found with UID "${args.parentUid}" to use as a parent.`);
             }
             if (wouldCreateCycle(ctx, args.uid, args.parentUid)) {

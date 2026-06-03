@@ -4,8 +4,10 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { DateTime } from "luxon";
 import { z } from "zod";
-import { MealUidSchema, MenuUidSchema } from "../paprika/types.js";
-import type { Meal, MealType, RecipeUid } from "../paprika/types.js";
+import { MealUidSchema, MenuUidSchema } from "../ids.js";
+import type { MealTypeUid, RecipeUid } from "../ids.js";
+import type { MealType } from "../meal-type/types.js";
+import type { Meal } from "../meal/types.js";
 import { coldStartGuard, resolveLookup, textResult, uidOrTextLookupSchema } from "./helpers.js";
 import { commitMealsBatch, makeMealOrderFlagAssigner } from "./meal-helpers.js";
 import { menuStartGuard } from "./menu-helpers.js";
@@ -19,10 +21,10 @@ type MaterializedMeal = {
   readonly day: number;
   readonly date: string;
   readonly typeName: string;
-  readonly typeUid: string;
+  readonly typeUid: MealTypeUid;
   readonly type: number;
   readonly name: string;
-  readonly recipeUid: string | null;
+  readonly recipeUid: RecipeUid | null;
 };
 
 export const addMenuToPlannerInputSchema = z.object({
@@ -175,7 +177,7 @@ export function registerAddMenuToPlannerTool(server: McpServer, ctx: ServerConte
               // Freeform items (recipeUid: null) materialize from their stored name.
               let name: string;
               if (item.recipeUid !== null) {
-                const recipe = ctx.store.get(item.recipeUid as RecipeUid);
+                const recipe = ctx.store.get(item.recipeUid);
                 if (recipe === undefined) {
                   errors.push(
                     `Item ${i.toString()}: recipe_uid "${item.recipeUid}" is not known to the local recipe store; ` +

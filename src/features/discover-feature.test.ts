@@ -1,8 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import type { AnySyncResult, Category, EntityChanges, RecipeSyncResult } from "../paprika/types.js";
-import type { CategoryUid, RecipeUid } from "../paprika/types.js";
-import { RecipeStore } from "../cache/recipe-store.js";
-import { CategoryStore } from "../cache/category-store.js";
+import type { Category } from "../category/types.js";
+import type { AnySyncResult, EntityChanges, RecipeSyncResult } from "../paprika/sync-types.js";
+import type { CategoryUid, RecipeUid } from "../ids.js";
+import { RecipeStore } from "../recipe/store.js";
+import { CategoryStore } from "../category/store.js";
 import { makeRecipe, makeCategory } from "../cache/__fixtures__/recipes.js";
 import { makePantryItem } from "../cache/__fixtures__/pantry.js";
 import { makePinoCapture, DEFAULT_LOGGING_CONFIG } from "../tools/tool-test-utils.js";

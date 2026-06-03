@@ -1,6 +1,6 @@
 import { fromAny } from "@total-typescript/shoehorn";
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { RecipeStore } from "../cache/recipe-store.js";
+import { RecipeStore } from "../recipe/store.js";
 import { makeGroceryList } from "../cache/__fixtures__/grocery-lists.js";
 import { makeGroceryItem } from "../cache/__fixtures__/grocery-items.js";
 import { makeGroceryIngredient } from "../cache/__fixtures__/grocery-ingredients.js";
@@ -12,7 +12,7 @@ import {
 } from "./grocery-item.js";
 import { makeTestServer, makeCtx, getText, makeStubNotifier, seed } from "./tool-test-utils.js";
 import type { SeedData } from "./tool-test-utils.js";
-import type { GroceryListUid, GroceryItemUid, AisleUid } from "../paprika/types.js";
+import type { GroceryListUid, GroceryItemUid, AisleUid } from "../ids.js";
 
 const WEEKLY_LIST = makeGroceryList({ uid: "LIST-1" as GroceryListUid, name: "Weekly" });
 const PRODUCE_AISLE = makeAisle({ uid: "AISLE-1" as AisleUid, name: "Produce" });

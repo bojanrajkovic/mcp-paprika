@@ -11,7 +11,7 @@ import { TokenStore } from "./token-store.js";
 import { AuthRequestStore } from "./auth-request-store.js";
 import { AuthCodeStore } from "./auth-code-store.js";
 import { PendingAuthorizationStore } from "./pending-authorization-store.js";
-import { DiskCacheRoot } from "../cache/disk/index.js";
+import { DiskCacheRoot } from "../cache/disk-cache-root.js";
 
 describe("OAuth Metadata Customization", () => {
   let cacheDir: string;

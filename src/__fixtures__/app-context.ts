@@ -1,20 +1,20 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
-import { AisleStore } from "../cache/aisle-store.js";
-import { CategoryStore } from "../cache/category-store.js";
-import { GroceryIngredientStore } from "../cache/grocery-ingredient-store.js";
-import { GroceryItemStore } from "../cache/grocery-item-store.js";
-import { GroceryListStore } from "../cache/grocery-list-store.js";
-import { MealStore } from "../cache/meal-store.js";
-import { MealTypeStore } from "../cache/meal-type-store.js";
-import { MenuStore } from "../cache/menu-store.js";
-import { MenuItemStore } from "../cache/menu-item-store.js";
-import { PantryStore } from "../cache/pantry-store.js";
-import { PhotoStore } from "../cache/photo-store.js";
-import { RecipeStore } from "../cache/recipe-store.js";
+import { AisleStore } from "../aisle/store.js";
+import { CategoryStore } from "../category/store.js";
+import { GroceryIngredientStore } from "../grocery-ingredient/store.js";
+import { GroceryItemStore } from "../grocery-item/store.js";
+import { GroceryListStore } from "../grocery-list/store.js";
+import { MealStore } from "../meal/store.js";
+import { MealTypeStore } from "../meal-type/store.js";
+import { MenuStore } from "../menu/store.js";
+import { MenuItemStore } from "../menu-item/store.js";
+import { PantryStore } from "../pantry/store.js";
+import { PhotoStore } from "../photo/store.js";
+import { RecipeStore } from "../recipe/store.js";
 import { GeneratedImageStore } from "../features/generated-image-store.js";
 import type { AppContext, SessionContext } from "../server/app-context.js";
-import type { DiskCacheRoot } from "../cache/disk/index.js";
+import type { DiskCacheRoot } from "../cache/disk-cache-root.js";
 import type { PaprikaClient } from "../paprika/client.js";
 import { SILENT_LOG } from "../utils/log.js";
 

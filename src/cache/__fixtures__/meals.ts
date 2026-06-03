@@ -1,24 +1,34 @@
-import type { Meal, MealType } from "../../paprika/types.js";
-import type { MealUid, MealTypeUid } from "../../paprika/types.js";
+import type { MealType } from "../../meal-type/types.js";
+import type { Meal } from "../../meal/types.js";
+import type { MealUid, MealTypeUid, RecipeUid } from "../../ids.js";
 
 let mealCounter = 0;
 let mealTypeCounter = 0;
 
-export function makeMeal(overrides?: Partial<Meal>): Meal {
+// FK fields are loosened to plain strings so tests can pass literal UIDs; the
+// fixture brands them (the mint is centralized here, not at every call site).
+// Nullable FKs with a non-null default use `=== undefined` (not `??`) so an
+// explicit `null` override is preserved rather than collapsed back to the default.
+type MealOverrides = Partial<Omit<Meal, "recipeUid" | "typeUid">> & {
+  readonly recipeUid?: string | null;
+  readonly typeUid?: string | null;
+};
+
+export function makeMeal(overrides?: MealOverrides): Meal {
   mealCounter++;
-  const uid = (overrides?.uid ?? `meal-${String(mealCounter)}`) as MealUid;
+  const { recipeUid, typeUid, ...rest } = overrides ?? {};
   return {
-    uid,
-    recipeUid: null,
+    uid: `meal-${String(mealCounter)}` as MealUid,
+    recipeUid: (recipeUid ?? null) as RecipeUid | null,
     name: `Meal ${String(mealCounter)}`,
     date: "2026-01-01 00:00:00",
     type: 2,
-    typeUid: "dinner-uid",
+    typeUid: (typeUid === undefined ? "dinner-uid" : typeUid) as MealTypeUid | null,
     orderFlag: 0,
     isIngredient: false,
     scale: null,
     deleted: false,
-    ...overrides,
+    ...rest,
   };
 }
 

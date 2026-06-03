@@ -14,7 +14,7 @@ import {
   formatLookupOutcome,
   type LookupOutcome,
 } from "./helpers.js";
-import { RecipeUidSchema } from "../paprika/types.js";
+import { RecipeUidSchema } from "../ids.js";
 import { getText } from "./tool-test-utils.js";
 import type { ServerContext } from "../types/server-context.js";
 import { makeServerContext } from "../__fixtures__/app-context.js";

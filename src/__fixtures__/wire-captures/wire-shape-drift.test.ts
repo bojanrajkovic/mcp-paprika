@@ -5,21 +5,26 @@ import { fixture as refFixture } from "./reference.js";
 import { fixture as writeFixture } from "./writes.js";
 import { useMswServer } from "../msw.js";
 import { PaprikaClient } from "../../paprika/client.js";
+import { CategorySchema } from "../../category/types.js";
+import { GroceryIngredientSchema } from "../../grocery-ingredient/types.js";
+import { GroceryItemSchema } from "../../grocery-item/types.js";
+import { GroceryListSchema } from "../../grocery-list/types.js";
 import {
-  RecipeSchema,
-  PantryItemSchema,
   PantryItemUidSchema,
-  GroceryListSchema,
   GroceryListUidSchema,
-  GroceryItemSchema,
   GroceryItemUidSchema,
-  GroceryIngredientSchema,
   GroceryIngredientUidSchema,
-  MealSchema,
-  MealTypeSchema,
-  CategorySchema,
-} from "../../paprika/types.js";
-import type { Recipe, PantryItem, GroceryList, GroceryItem, GroceryIngredient } from "../../paprika/types.js";
+  AisleUidSchema,
+} from "../../ids.js";
+import { MealTypeSchema } from "../../meal-type/types.js";
+import { MealSchema } from "../../meal/types.js";
+import { PantryItemSchema } from "../../pantry/types.js";
+import { RecipeSchema } from "../../recipe/types.js";
+import type { GroceryIngredient } from "../../grocery-ingredient/types.js";
+import type { GroceryItem } from "../../grocery-item/types.js";
+import type { GroceryList } from "../../grocery-list/types.js";
+import type { PantryItem } from "../../pantry/types.js";
+import type { Recipe } from "../../recipe/types.js";
 import { makeSnakeCaseRecipe } from "../../cache/__fixtures__/recipes.js";
 import { makeSnakeCasePantryItem } from "../../cache/__fixtures__/pantry.js";
 import { makeSnakeCaseMeal, makeSnakeCaseMealType } from "../../cache/__fixtures__/meals.js";
@@ -232,7 +237,7 @@ describe("wire-shape drift detection", () => {
         ingredient: "Test",
         quantity: "1",
         aisle: "",
-        aisleUid: "",
+        aisleUid: AisleUidSchema.parse(""),
         expirationDate: null,
         hasExpiration: false,
         inStock: true,
@@ -268,8 +273,8 @@ describe("wire-shape drift detection", () => {
         name: "Test",
         ingredient: "Test",
         aisle: "",
-        aisleUid: "",
-        listUid: "GL-1",
+        aisleUid: AisleUidSchema.parse(""),
+        listUid: GroceryListUidSchema.parse("GL-1"),
         purchased: false,
         deleted: false,
         orderFlag: 0,
@@ -288,7 +293,7 @@ describe("wire-shape drift detection", () => {
       const ingredient: GroceryIngredient = {
         uid: GroceryIngredientUidSchema.parse("GN-TEST-1"),
         name: "Test",
-        aisleUid: "",
+        aisleUid: AisleUidSchema.parse(""),
         deleted: false,
       };
 

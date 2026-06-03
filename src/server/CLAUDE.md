@@ -1,6 +1,6 @@
 # Server Composition Root
 
-Last verified: 2026-06-01
+Last verified: 2026-06-02
 
 ## Purpose
 
@@ -8,10 +8,11 @@ Process-wide composition root. Owns the authoritative context types (`AppContext
 
 ## Key References
 
-- `docs/adr/0001-two-transports-and-composition-root.md` — the AppContext/SessionContext split, the Notifier seam, the bootstrap-order cycle, and the rejected single-transport / DI-container alternatives.
+- `docs/adr/0001-two-transports-and-composition-root.md` — the AppContext/SessionContext split, the Notifier seam, the bootstrap-order cycle, and the rejected single-transport alternative.
+- `docs/adr/0005-composition-modules-and-identifiers.md` — the composition-root shape (phase-typed builder; a DI container _deferred_ behind a written trigger, not rejected), the per-entity module structure, and foreign-key branding via `src/ids.ts`.
 - `src/server/app-context.ts` — the exhaustive, canonical field list for `AppContext` and `SessionContext`. Treat that file as the source of truth; do not re-enumerate fields here.
 - `src/server/notifier.ts` — `Notifier`, `singleServerNotifier`, `broadcastNotifier`.
-- `../cache/disk/CLAUDE.md` — the disk subcaches that `AppContext.cache` exposes.
+- `../cache/CLAUDE.md` (Persistence section) — the disk subcaches that `AppContext.cache` exposes.
 - ADR-0004 (entity store roles) — the Content / Data / Reference taxonomy referenced below.
 
 ## Context shape (conceptual)
@@ -34,18 +35,21 @@ This is the load-bearing invariant that makes process-wide state independent of 
 
 Both implementations swallow transport failures: `singleServerNotifier` silently (stdio), `broadcastNotifier` per-server (HTTP). This is required because `SyncEngine.syncOnce()` is contractually never-throws; a notification failure must not turn a successful sync into a reported failure. `broadcastNotifier` materializes the session snapshot into an array before iterating so adding/removing a session mid-broadcast (especially during the async `loggingMessage` fan-out) cannot invalidate the iterator, and wraps each `sendLoggingMessage` in an async IIFE so a _synchronous_ throw becomes a rejected promise that `Promise.allSettled` can absorb rather than escaping into `syncOnce()`.
 
-### Deferred-getter bootstrap order is a real cycle — do not collapse it
+### `ServerRef` breaks the notifier/server bootstrap cycle
 
-`AppContext` needs the notifier; in stdio mode the notifier needs the server; the server is built _from_ the `AppContext`. The cycle is broken by constructing the notifier first around a getter closure (`() => server`) that returns `undefined` until the server is assigned. The pinned order is: (1) build notifier with the getter; (2) build the logger (so startup records flow through structured logging, not a shim); (3) `buildAppContext` (constructs `SyncEngine`, which captures the notifier and never reads `app.server` because there is none); (4) `buildMcpServer` and assign into the closure; (5) `connect`/`listen`. Pre-server notifier/log calls fan out to a getter returning `undefined` and silently no-op; this is safe _only_ because the order holds. Trying to build the server before the context makes the cycle unresolvable.
+The stdio bootstrap order is pinned: `createServerRef()` → `singleServerNotifier(ref.get)` → `buildAppContext` → `buildMcpServer` + `ref.set(server)` → `connect`. `ServerRef` is a `{ get, set }` holder whose `get()` returns `undefined` until `set()` runs after the server is built, so any notifier call during construction (e.g. the initial sync's `resourceListChanged`) silently no-ops — safe _only_ because that order holds. HTTP has no single server, so it uses `broadcastNotifier` over a live sessions snapshot instead. The cycle this resolves — and why a `ServerRef` rather than a `server` field on `AppContext` — is ADR-0001 and ADR-0005.
 
 ### `buildAppContext` construction order is load-bearing
 
-1. **Authenticate first:** this is the real fast-fail for bad credentials (`authenticate()` throws; `syncOnce()` swallows everything, so a credential error would otherwise be invisible).
-2. Hydrate the disk cache and every store. Reference/Content/Data stores hydrate from disk on warm restart but start empty on a true cold start.
-3. **`buildAuthContext`** returns `null` for stdio; for HTTP it fetches the OIDC discovery document and assembles the OAuth stores/provider, throwing on failure. There is no value in running a public HTTP endpoint with broken auth.
-4. Construct `SyncEngine` against a placeholder `AppContext` whose `vectorStore: null` (safe because `SyncEngine` never reads `vectorStore`).
-5. **Wire the `sync:complete` → `resourceListChanged` subscriber immediately after `new SyncEngine()`**, not inside the engine (keeps the engine decoupled from the notifier decision). It fires only for `changeType` in {recipes, grocery-lists, grocery-items, menus, menu-items} when any of added/updated/removedUids is non-empty. Pantry is deliberately excluded: pantry items have no MCP resource surface. Both menu events fire because menu items are inlined into the `paprika://menu/{uid}` resource.
-6. **Run the initial `sync.syncOnce()` BEFORE building discover components.** Cold-start vector indexing calls `categoryStore.resolveNames(uids)` per recipe; if it ran before the first sync populated the (cold-start-empty) `CategoryStore`, embeddings would be computed with empty category names and stay stale until a recipe mutation forces a re-embed. On a warm restart with unchanged remote hashes the post-build sync emits nothing, so the `sync:complete` subscriber never gets a chance to fix it. `syncOnce()` never throws, so awaiting it cannot block startup.
+It runs as seven typed phases (`build.ts`), each consuming the previous phase's result type so the order is a compile-time guarantee, not a convention — e.g. `buildFeatures` requires the `Indexed` that only `runInitialSync` produces:
+
+1. **`authenticate`** — build the logger, then authenticate the Paprika client. The real fast-fail for bad credentials (`client.authenticate()` throws; `syncOnce()` swallows everything, so a credential error would otherwise be invisible).
+2. **`hydrate`** — open the disk cache and hydrate every store (Reference/Content/Data stores hydrate from disk on warm restart, start empty on cold start), then assemble the `core` `SyncDeps` slice (client, cache, the 12 stores, log) — built **once** and reused for both the `SyncEngine` and the final `AppContext`.
+3. **`buildAuth`** — `null` for stdio; for HTTP it fetches the OIDC discovery document and assembles the OAuth stores/provider, throwing on failure (no value in serving a public endpoint with broken auth). Runs after hydration; it reads only `config`/`cache`/`log`, none of which hydration mutates.
+4. **`wireSync`** — `new SyncEngine(core, …)` (the engine takes the narrow `SyncDeps` slice, never an `AppContext`), then wire the `sync:complete` → `resourceListChanged` subscriber here, not inside the engine (keeps the engine decoupled from the notifier decision). It fires only for `changeType` in {recipes, grocery-lists, grocery-items, menus, menu-items} when any of added/updated/removedUids is non-empty. Pantry is excluded (no MCP resource surface); both menu events fire because menu items inline into the `paprika://menu/{uid}` resource.
+5. **`runInitialSync`** — run the initial `sync.syncOnce()` **before** building discover components. Cold-start vector indexing calls `categoryStore.resolveNames(uids)` per recipe; if it ran before the first sync populated the (cold-start-empty) `CategoryStore`, embeddings would bake in empty category names and stay stale until a recipe mutation. On a warm restart with unchanged remote hashes the post-build sync emits nothing, so the subscriber never gets a chance to fix it. `syncOnce()` never throws, so awaiting it cannot block startup.
+6. **`buildFeatures`** — build the optional vector store (discover) and photography client; gated behind the `Indexed` result so it cannot precede the initial sync.
+7. **`assemble`** — spread `core` plus `generatedImageStore`/`vectorStore`/`photographyClient`/`notifier`/`auth` into the one `AppContext`.
 
 ### Startup logging is level-gated
 
@@ -63,4 +67,3 @@ The signal handler in `src/index.ts` bypasses the structured logger because at s
 
 - `app.auth !== null` **iff** `config.transport === "http"`. Use-sites check `app.auth === null` to detect stdio mode (mirrors the `vectorStore` optional-feature pattern).
 - `buildAppContext` runs exactly once per process; `buildMcpServer` runs once per session.
-- This directory is the composition root: it may import from every other `src/` directory. Other directories must not import from `src/server/` except via `import type` (e.g., `src/types/server-context.ts` and `src/paprika/sync.ts` pull the context types).

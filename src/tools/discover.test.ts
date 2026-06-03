@@ -1,15 +1,17 @@
 import { fromAny } from "@total-typescript/shoehorn";
 import { describe, it, expect, vi } from "vitest";
 import type { SemanticResult } from "../features/vector-store.js";
-import { RecipeStore } from "../cache/recipe-store.js";
+import { RecipeStore } from "../recipe/store.js";
 import { makeRecipe, makeCategory } from "../cache/__fixtures__/recipes.js";
-import type { RecipeUid } from "../paprika/types.js";
+import type { RecipeUid } from "../ids.js";
 import { registerDiscoverTool } from "./discover.js";
 import { makeTestServer, makeCtx, getText, seed } from "./tool-test-utils.js";
 
-function makeMockVectorStore(results: ReadonlyArray<SemanticResult> = []) {
+// `uid` is loosened to a plain string so tests pass literal UIDs; branded here.
+function makeMockVectorStore(results: ReadonlyArray<{ uid: string; score: number; recipeName: string }> = []) {
+  const branded: ReadonlyArray<SemanticResult> = results.map((r) => ({ ...r, uid: r.uid as RecipeUid }));
   return {
-    search: vi.fn<(query: string, topK: number) => Promise<ReadonlyArray<SemanticResult>>>().mockResolvedValue(results),
+    search: vi.fn<(query: string, topK: number) => Promise<ReadonlyArray<SemanticResult>>>().mockResolvedValue(branded),
   };
 }
 

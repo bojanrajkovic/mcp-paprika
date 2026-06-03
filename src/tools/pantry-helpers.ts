@@ -1,5 +1,6 @@
 import { err, ok, type Result } from "neverthrow";
-import type { PantryItem, PantryItemUid } from "../paprika/types.js";
+import type { PantryItemUid } from "../ids.js";
+import type { PantryItem } from "../pantry/types.js";
 import type { ServerContext } from "../types/server-context.js";
 import { textResult } from "./helpers.js";
 

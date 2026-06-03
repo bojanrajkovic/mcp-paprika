@@ -1,5 +1,8 @@
 import { err, ok, type Result } from "neverthrow";
-import type { MealType, Menu, MenuItem, MenuItemUid, MenuUid } from "../paprika/types.js";
+import type { MenuItemUid, MenuUid } from "../ids.js";
+import type { MealType } from "../meal-type/types.js";
+import type { MenuItem } from "../menu-item/types.js";
+import type { Menu } from "../menu/types.js";
 import type { ServerContext } from "../types/server-context.js";
 import { textResult } from "./helpers.js";
 

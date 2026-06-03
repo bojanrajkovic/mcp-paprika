@@ -1,17 +1,21 @@
-import type { Recipe, Category } from "../../paprika/types.js";
-import type { RecipeUid, CategoryUid } from "../../paprika/types.js";
+import type { Category } from "../../category/types.js";
+import type { Recipe } from "../../recipe/types.js";
+import type { RecipeUid, CategoryUid } from "../../ids.js";
 
 let recipeCounter = 0;
 let categoryCounter = 0;
 
-export function makeRecipe(overrides?: Partial<Recipe>): Recipe {
+type RecipeOverrides = Partial<Omit<Recipe, "categories">> & { readonly categories?: ReadonlyArray<string> };
+
+export function makeRecipe(overrides?: RecipeOverrides): Recipe {
   recipeCounter++;
-  const uid = (overrides?.uid ?? `recipe-${String(recipeCounter)}`) as RecipeUid;
+  const { categories, ...rest } = overrides ?? {};
+  const uid = (rest.uid ?? `recipe-${String(recipeCounter)}`) as RecipeUid;
   return {
     uid,
     hash: `hash-${uid}`,
     name: `Recipe ${String(recipeCounter)}`,
-    categories: [] as Array<CategoryUid>,
+    categories: [...(categories ?? [])] as Array<CategoryUid>,
     ingredients: "",
     directions: "",
     description: null,
@@ -37,19 +41,22 @@ export function makeRecipe(overrides?: Partial<Recipe>): Recipe {
     scale: null,
     nutritionalInfo: null,
     deleted: false,
-    ...overrides,
+    ...rest,
   };
 }
 
-export function makeCategory(overrides?: Partial<Category>): Category {
+type CategoryOverrides = Partial<Omit<Category, "parentUid">> & { readonly parentUid?: string | null };
+
+export function makeCategory(overrides?: CategoryOverrides): Category {
   categoryCounter++;
-  const uid = (overrides?.uid ?? `category-${String(categoryCounter)}`) as CategoryUid;
+  const { parentUid, ...rest } = overrides ?? {};
+  const uid = (rest.uid ?? `category-${String(categoryCounter)}`) as CategoryUid;
   return {
     uid,
     name: `Category ${String(categoryCounter)}`,
     orderFlag: categoryCounter,
-    parentUid: null,
-    ...overrides,
+    parentUid: (parentUid ?? null) as CategoryUid | null,
+    ...rest,
   };
 }
 

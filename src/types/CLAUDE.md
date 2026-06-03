@@ -1,6 +1,6 @@
 # Shared Type Definitions
 
-Last verified: 2026-06-01
+Last verified: 2026-06-02
 
 ## Purpose
 
@@ -23,9 +23,3 @@ import type { AppContext, SessionContext } from "../server/app-context.js";
 ```
 
 `AppContext` is process-wide shared state (built once by `buildAppContext`); `SessionContext` is `AppContext` plus the per-session `server: McpServer`. See `../server/CLAUDE.md` for the split and the deferred-getter bootstrap pattern.
-
-## Dependencies
-
-- **Uses:** `../server/app-context.js` (re-exports `SessionContext` as `ServerContext`)
-- **Used by:** existing tool and resource modules that import `ServerContext`
-- **Boundary:** all imports use `import type`, no runtime value imports

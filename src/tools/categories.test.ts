@@ -1,9 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { RecipeStore } from "../cache/recipe-store.js";
+import { RecipeStore } from "../recipe/store.js";
 import { makeRecipe, makeCategory } from "../cache/__fixtures__/recipes.js";
 import { registerCategoryTools } from "./categories.js";
 import { makeTestServer, makeCtx, getText, seed } from "./tool-test-utils.js";
-import type { CategoryUid } from "../paprika/types.js";
+import type { CategoryUid } from "../ids.js";
 
 describe("p2-discovery-tools: list_categories tool", () => {
   describe("p2-discovery-tools.AC4: list_categories", () => {

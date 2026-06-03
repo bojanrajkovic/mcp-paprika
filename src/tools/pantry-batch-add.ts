@@ -3,8 +3,9 @@ import { toMessage } from "../utils/log.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { PantryItemUidSchema } from "../paprika/types.js";
-import type { PantryItem } from "../paprika/types.js";
+import { PantryItemUidSchema, NO_AISLE_UID } from "../ids.js";
+import type { AisleUid } from "../ids.js";
+import type { PantryItem } from "../pantry/types.js";
 import { normalizeWire, todayWire } from "../utils/dates.js";
 import { textResult } from "./helpers.js";
 import { ensureAisle } from "./aisle-helpers.js";
@@ -112,18 +113,18 @@ export function registerAddPantryItemsTool(server: McpServer, ctx: ServerContext
 
           // Phase 3: Build PantryItem objects with aisle resolution
           const builtItems: Array<PantryItem> = [];
-          const batchAisleCache = new Map<string, { aisle: string; aisleUid: string }>();
+          const batchAisleCache = new Map<string, { aisle: string; aisleUid: AisleUid }>();
           try {
             for (const { item, dates } of toAdd) {
               const uid = PantryItemUidSchema.parse(crypto.randomUUID().toUpperCase());
 
               let aisle: string;
-              let aisleUid: string;
+              let aisleUid: AisleUid;
 
               const aisleInput = item.aisle ?? "";
               if (aisleInput === "") {
                 aisle = "";
-                aisleUid = "";
+                aisleUid = NO_AISLE_UID;
               } else {
                 const aisleKey = aisleInput.toLowerCase();
                 const cached = batchAisleCache.get(aisleKey);

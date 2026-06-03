@@ -1,6 +1,6 @@
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { PantryItemUidSchema } from "../paprika/types.js";
+import { PantryItemUidSchema } from "../ids.js";
 import { pantryStartGuard, pantryItemToMarkdown } from "./pantry-helpers.js";
 import { formatLookupOutcome, resolveLookup, uidOrTextLookupSchema } from "./helpers.js";
 import type { ServerContext } from "../types/server-context.js";
