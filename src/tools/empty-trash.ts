@@ -10,15 +10,15 @@ import { toMessage } from "../utils/log.js";
 import { coldStartGuard, commitRecipeHardDelete, textResult } from "./helpers.js";
 
 export function registerEmptyTrashTool(server: McpServer, ctx: ServerContext): void {
-  const log = ctx.log.child({ component: "empty_trash" });
+  const log = ctx.log.child({ component: "purge_recipe" });
   server.registerTool(
-    "empty_trash",
+    "purge_recipe",
     {
       description:
         "Permanently delete a recipe that is already in the Paprika trash. " +
         "This is IRREVERSIBLE — once emptied from the trash the recipe cannot be recovered. " +
-        "The recipe must first be moved to the trash with delete_recipe (a reversible soft-delete); " +
-        "empty_trash refuses to permanently delete a recipe that is not already trashed, so an " +
+        "The recipe must first be moved to the trash with trash_recipe (a reversible soft-delete); " +
+        "purge_recipe refuses to permanently delete a recipe that is not already trashed, so an " +
         "accidental call can never destroy a live recipe in one step. " +
         "Requires an exact UID; fuzzy title matching is not supported, to prevent accidental loss.",
       inputSchema: {
@@ -26,7 +26,7 @@ export function registerEmptyTrashTool(server: McpServer, ctx: ServerContext): v
       },
     },
     async (args) => {
-      log.info({ tool: "empty_trash", uid: args.uid }, "tool invoked");
+      log.info({ tool: "purge_recipe", uid: args.uid }, "tool invoked");
       return coldStartGuard(ctx).match(
         async (): Promise<CallToolResult> => {
           // Fetch authoritative state from Paprika rather than the local store. A
@@ -41,21 +41,21 @@ export function registerEmptyTrashTool(server: McpServer, ctx: ServerContext): v
           } catch (error) {
             if (error instanceof PaprikaAPIError && error.status === 404) {
               // Never existed, or already permanently deleted (trash emptied).
-              log.info({ uid: args.uid }, "empty_trash: recipe not found (404)");
+              log.info({ uid: args.uid }, "purge_recipe: recipe not found (404)");
               return textResult(
                 `No recipe found with UID "${args.uid}". It may have already been permanently deleted.`,
               );
             }
             // Transient/upstream failure — don't masquerade as "already deleted".
             const message = toMessage(error);
-            log.error({ err: error, uid: args.uid }, "empty_trash lookup failed");
+            log.error({ err: error, uid: args.uid }, "purge_recipe lookup failed");
             return textResult(`Failed to look up recipe "${args.uid}": ${message}`);
           }
 
           if (!recipe.inTrash) {
             return textResult(
               `Recipe "${recipe.name}" is not in the trash, so it can't be permanently deleted. ` +
-                `Move it to the trash first with delete_recipe (reversible), then call empty_trash.`,
+                `Move it to the trash first with trash_recipe (reversible), then call purge_recipe.`,
             );
           }
 

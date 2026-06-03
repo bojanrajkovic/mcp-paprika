@@ -12,7 +12,7 @@ import { registerMoveToPantryTool } from "./grocery-move.js";
 
 const WEEKLY_LIST = makeGroceryList({ uid: "LIST-1" as GroceryListUid, name: "Weekly" });
 
-describe("move_to_pantry tool", () => {
+describe("move_grocery_items_to_pantry tool", () => {
   let mockSavePantryItems: ReturnType<typeof vi.fn>;
   let mockSaveGroceryItems: ReturnType<typeof vi.fn>;
   let mockNotifySync: ReturnType<typeof vi.fn>;
@@ -29,7 +29,7 @@ describe("move_to_pantry tool", () => {
     mockFlush = vi.fn().mockResolvedValue(undefined);
   });
 
-  // Builds a move_to_pantry ctx with mocked client + cache. `seedOverrides` merges
+  // Builds a move_grocery_items_to_pantry ctx with mocked client + cache. `seedOverrides` merges
   // over the synced baseline (pantry empty, the Weekly grocery list, no items);
   // pass `{ groceryItems: [...] }` to stage items, or override a key with an
   // omission-by-bespoke-test for the cold-store guard cases below.
@@ -64,7 +64,7 @@ describe("move_to_pantry tool", () => {
     });
     const { callTool } = makeMoveCtx({ groceryItems: [item] });
 
-    const result = await callTool("move_to_pantry", { uids: ["ITEM-1"] });
+    const result = await callTool("move_grocery_items_to_pantry", { uids: ["ITEM-1"] });
     const text = getText(result);
 
     // Response mentions ingredient
@@ -131,7 +131,7 @@ describe("move_to_pantry tool", () => {
     ];
     const { callTool } = makeMoveCtx({ groceryItems: items });
 
-    const result = await callTool("move_to_pantry", {
+    const result = await callTool("move_grocery_items_to_pantry", {
       uids: ["BATCH-1", "BATCH-2", "BATCH-3"],
     });
     const text = getText(result);
@@ -173,7 +173,7 @@ describe("move_to_pantry tool", () => {
     // Create tombstone by deleting after seeding
     ctx.groceryItemStore.delete("TOMB-1" as GroceryItemUid);
 
-    const result = await callTool("move_to_pantry", { uids: ["TOMB-1"] });
+    const result = await callTool("move_grocery_items_to_pantry", { uids: ["TOMB-1"] });
     const text = getText(result);
 
     expect(text.toLowerCase()).toContain("already deleted");
@@ -192,7 +192,7 @@ describe("move_to_pantry tool", () => {
 
     const { callTool } = makeMoveCtx({ groceryItems: [item] });
 
-    const result = await callTool("move_to_pantry", { uids: ["PFAIL-1"] });
+    const result = await callTool("move_grocery_items_to_pantry", { uids: ["PFAIL-1"] });
     const text = getText(result);
 
     // Response mentions partial failure
@@ -237,7 +237,7 @@ describe("move_to_pantry tool", () => {
     seed(ctx, { groceryLists: [WEEKLY_LIST], groceryItems: [] }); // pantry omitted → cold
     registerMoveToPantryTool(server, ctx);
 
-    const result = await callTool("move_to_pantry", { uids: ["ITEM-1"] });
+    const result = await callTool("move_grocery_items_to_pantry", { uids: ["ITEM-1"] });
     const text = getText(result);
 
     expect(text.toLowerCase()).toContain("pantry is not yet synced");
@@ -266,7 +266,7 @@ describe("move_to_pantry tool", () => {
     seed(ctx, { pantry: [] }); // groceryLists/groceryItems omitted → cold
     registerMoveToPantryTool(server, ctx);
 
-    const result = await callTool("move_to_pantry", { uids: ["ITEM-1"] });
+    const result = await callTool("move_grocery_items_to_pantry", { uids: ["ITEM-1"] });
     const text = getText(result);
 
     expect(text.toLowerCase()).toContain("grocery data is not yet synced");
@@ -277,7 +277,7 @@ describe("move_to_pantry tool", () => {
   it("unknown UID returns not-found message without touching saves", async () => {
     const { callTool } = makeMoveCtx();
 
-    const result = await callTool("move_to_pantry", { uids: ["NEVER-EXISTED"] });
+    const result = await callTool("move_grocery_items_to_pantry", { uids: ["NEVER-EXISTED"] });
     const text = getText(result);
 
     expect(text.toLowerCase()).toContain("no grocery item found");
@@ -293,7 +293,7 @@ describe("move_to_pantry tool", () => {
     });
     const { callTool } = makeMoveCtx({ groceryItems: [item] });
 
-    const result = await callTool("move_to_pantry", { uids: ["DUP-1", "DUP-1", "DUP-1"] });
+    const result = await callTool("move_grocery_items_to_pantry", { uids: ["DUP-1", "DUP-1", "DUP-1"] });
     const text = getText(result);
 
     expect(text.toLowerCase()).toContain("moved");
@@ -315,7 +315,7 @@ describe("move_to_pantry tool", () => {
 
     const { callTool } = makeMoveCtx({ groceryItems: [item] });
 
-    const result = await callTool("move_to_pantry", { uids: ["PFAIL-3"] });
+    const result = await callTool("move_grocery_items_to_pantry", { uids: ["PFAIL-3"] });
     const text = getText(result);
 
     expect(text.toLowerCase()).toContain("failed to create pantry items");
@@ -352,7 +352,7 @@ describe("move_to_pantry tool", () => {
 
     const { callTool } = makeMoveCtx({ groceryItems: [item] });
 
-    const result = await callTool("move_to_pantry", { uids: ["CFAIL-1"] });
+    const result = await callTool("move_grocery_items_to_pantry", { uids: ["CFAIL-1"] });
     const text = getText(result);
 
     expect(text).toContain("PANTRY-COMMIT-FAIL");
@@ -389,7 +389,7 @@ describe("move_to_pantry tool", () => {
 
     const { callTool } = makeMoveCtx({ groceryItems: [item] });
 
-    const result = await callTool("move_to_pantry", { uids: ["PFAIL-2"] });
+    const result = await callTool("move_grocery_items_to_pantry", { uids: ["PFAIL-2"] });
     const text = getText(result);
 
     expect(text).toContain("PANTRY-UID-KNOWN");

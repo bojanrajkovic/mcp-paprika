@@ -97,7 +97,7 @@ async function readCapped(res: UndiciResponse, maxBytes: number): Promise<{ byte
  * safe), blocks redirects (a redirect-to-private bypass), bounds the request
  * with a timeout, and streams the body with a hard size cap.
  *
- * Used by BOTH `upload_photo` (user/LLM-supplied URL) and `generate_photo`'s
+ * Used by BOTH `upload_recipe_photo` (user/LLM-supplied URL) and `generate_recipe_photo`'s
  * restyle path (recipe `photoUrl` from synced data) — neither should be able to
  * make the server reach a private/internal address.
  */

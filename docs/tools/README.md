@@ -6,7 +6,7 @@
 A generated reference for every tool the server registers. The authoritative contracts are the
 Zod `inputSchema` in each `src/tools/*.ts` and the registration list in `src/server/build.ts`;
 this page is derived from them. Two tools are opt-in and only appear to a client when configured:
-`discover_recipes` (semantic search) and `generate_photo` (AI photos).
+`discover_recipes` (semantic search) and `generate_recipe_photo` (AI photos).
 
 ## `add_grocery_items`
 
@@ -17,31 +17,14 @@ Add one or more items to a grocery list. Check read_grocery_list first to avoid 
 - `listUid` — UID of the grocery list to add items to
 - `items` — Array of items to add (1 or more)
 
-## `add_meals`
-
-Add one or more meals to the meal planner. Each item is EITHER recipe-linked (supply recipe_uid; display name auto-resolves from the recipe) OR freeform (supply name; no recipe). The two shapes are mutually exclusive — Paprika.app's UI dispatches display off recipe_uid for linked meals, so a stored custom name on a recipe-linked meal would never render. Use a freeform meal (no recipe_uid) when you want a custom label. Date is normalized to Paprika's wire format. Meal type accepts name, UID, or built-in index (0=Breakfast, 1=Lunch, 2=Dinner, 3=Snacks). All items validate up-front; if ANY item is invalid the entire batch is rejected with a per-index error enumeration so callers can fix all problems in one pass.
-
-**Parameters**
-
-- `items` — Array of meals to add (1 or more).
-
 ## `add_menu_items`
 
-Add one or more menuitems to a menu (saved meal plan). Look the menu up by UID or name (tiered fuzzy match). Each item is EITHER recipe-linked (supply recipe_uid; display name auto-resolves from the recipe) OR freeform (supply name; no recipe) — the two are mutually exclusive, matching add_meals. Each item also carries a 1-indexed day and a meal type (name, UID, or built-in index 0=Breakfast, 1=Lunch, 2=Dinner, 3=Snacks). If any day falls beyond the menu's current span the menu is automatically extended to fit before the items are added. All items validate up-front; if ANY item is invalid the entire batch is rejected with a per-index error enumeration so callers can fix every problem in one pass.
+Add one or more menuitems to a menu (saved meal plan). Look the menu up by UID or name (tiered fuzzy match). Each item is EITHER recipe-linked (supply recipe_uid; display name auto-resolves from the recipe) OR freeform (supply name; no recipe) — the two are mutually exclusive, matching plan_meals. Each item also carries a 1-indexed day and a meal type (name, UID, or built-in index 0=Breakfast, 1=Lunch, 2=Dinner, 3=Snacks). If any day falls beyond the menu's current span the menu is automatically extended to fit before the items are added. All items validate up-front; if ANY item is invalid the entire batch is rejected with a per-index error enumeration so callers can fix every problem in one pass.
 
 **Parameters**
 
 - `menu` — Pick exactly one shape: {"uid": "..."} or {"name": "..."}.
 - `items` — Array of menuitems to add (1 or more); each is recipe-linked OR freeform.
-
-## `add_menu_to_planner`
-
-Instantiate a saved menu's recipes as meal-planner entries. Look the menu up by UID or name (tiered fuzzy match), then materialize each of its items into a meal dated start_date + (day − 1) days, posting them all in one batch. This is a one-way COPY, not a link: the planner meals carry no back-reference to the menu, so editing the menu later does not change them — and it is NOT idempotent, so re-running adds a second copy (same as Paprika.app's own Add Menu action). Recipe display names re-resolve from the local recipe store; if ANY recipe-linked item references an unknown recipe the whole batch is rejected with a per-item enumeration (freeform items keep their stored name). To remove a meal afterward, find it via list_meal_history and call delete_meal.
-
-**Parameters**
-
-- `menu` — Pick exactly one shape: {"uid": "..."} or {"name": "..."}.
-- `start_date` — Calendar day for the menu's day-1 items (ISO 8601 / yyyy-MM-dd; time-of-day dropped). Day-N items land on start_date + (N−1) days.
 
 ## `add_pantry_items`
 
@@ -51,7 +34,7 @@ Add one or more items to the pantry. Skips items that duplicate an existing ingr
 
 - `items` — Array of items to add (1 or more)
 
-## `clear_all`
+## `clear_grocery_list`
 
 Clear all items from a grocery list.
 
@@ -59,7 +42,7 @@ Clear all items from a grocery list.
 
 - `listUid` — Grocery list UID to clear all items from
 
-## `clear_purchased`
+## `clear_purchased_grocery_items`
 
 Clear all purchased items from a grocery list.
 
@@ -96,7 +79,7 @@ Create a new menu (saved meal plan) with the given name. Rejects duplicate names
 
 ## `create_recipe`
 
-Create a new recipe in the Paprika account. If you built this recipe from a web page, follow up with `upload_photo` and the page's main/hero (og:image) image URL to attach its photo.
+Create a new recipe in the Paprika account. If you built this recipe from a web page, follow up with `upload_recipe_photo` and the page's main/hero (og:image) image URL to attach its photo.
 
 **Parameters**
 
@@ -172,21 +155,13 @@ Soft-delete a pantry item by UID. Idempotent: a second delete on the same UID re
 
 - `uid` — Pantry item UID to delete
 
-## `delete_photo`
+## `delete_recipe_photo`
 
 Delete a photo from a recipe by UID. Idempotent: a second delete on the same UID returns a friendly 'already deleted' message without re-POSTing. Requires an exact photo UID.
 
 **Parameters**
 
 - `photo_uid` — UID of the photo to delete.
-
-## `delete_recipe`
-
-Soft-delete a recipe by UID, moving it to the Paprika trash. This operation is reversible — trashed recipes can be recovered in the Paprika app. Requires an exact UID; fuzzy title matching is not supported to prevent accidental deletion.
-
-**Parameters**
-
-- `uid` — Recipe UID to delete
 
 ## `discover_recipes`
 
@@ -197,14 +172,6 @@ Discover recipes using semantic search. Finds recipes matching a natural languag
 - `query` — Natural language description of what you're looking for
 - `topK` _(optional)_ — Maximum number of results to return (default: 5, max: 20)
 - `minScore` _(optional)_ — Optional minimum similarity (cosine, 0-1). Results below it are dropped before the top-K cut, so a query with few genuine matches returns only those instead of padding with weak ones. Omit for no filtering. Use a modest value (e.g. ~0.3) to gate on relevance.
-
-## `empty_trash`
-
-Permanently delete a recipe that is already in the Paprika trash. This is IRREVERSIBLE — once emptied from the trash the recipe cannot be recovered. The recipe must first be moved to the trash with delete_recipe (a reversible soft-delete); empty_trash refuses to permanently delete a recipe that is not already trashed, so an accidental call can never destroy a live recipe in one step. Requires an exact UID; fuzzy title matching is not supported, to prevent accidental loss.
-
-**Parameters**
-
-- `uid` — UID of a trashed recipe to permanently delete
 
 ## `filter_by_ingredient`
 
@@ -227,7 +194,7 @@ Filter recipes by prep, cook, or total time. All constraints are optional; resul
 - `maxTotalTime` _(optional)_ — Maximum total time (e.g., "1 hour 30 minutes", "2 hrs")
 - `limit` _(optional)_ — Maximum number of results to return (default: 20, max: 50)
 
-## `generate_photo`
+## `generate_recipe_photo`
 
 Generate a styled food photo for a recipe with an AI image model and (by default) attach it to the recipe. The prompt is built from the recipe's name, description, and categories — so well-described, categorized recipes produce the best results; pass `style` to guide plating or describe an obscure dish. Set restyle_existing:true to re-style the recipe's current photo instead of generating from scratch. Set attach:false to preview without saving.
 
@@ -239,14 +206,6 @@ Generate a styled food photo for a recipe with an AI image model and (by default
 - `aspect_ratio` _(optional)_ — Output aspect ratio (default 1:1, a square thumbnail). Options: 1:1, 4:3, 3:2, 16:9.
 - `restyle_existing` _(optional)_ — When true, restyle the recipe's CURRENT photo (image-to-image) instead of generating from scratch — useful to re-light or re-plate an existing shot. Errors if the recipe has no photo.
 - `attach` _(optional)_ — When true (default), attach the generated image to the recipe. When false, return a preview only.
-
-## `get_pantry_item`
-
-Get a pantry item by UID or ingredient name. Ingredient lookup is fuzzy (exact → starts-with → contains) and case-insensitive, with a disambiguation list when multiple items match the same tier. Pass exactly one shape: {"uid": "..."} or {"ingredient": "..."}.
-
-**Parameters**
-
-- `lookup` — Pick exactly one shape: {"uid": "..."} or {"ingredient": "..."}.
 
 ## `list_aisles`
 
@@ -281,7 +240,7 @@ Browse the meal planner history. Returns a calendar-style view of planned meals 
 
 ## `list_meal_types`
 
-List all meal types — the built-in Breakfast/Lunch/Dinner/Snacks plus any custom types — sorted by order then name. Each entry shows whether it is built-in or custom, its calendar-export schedule (all-day or a clock time), and its UID. Reference a type by name, or pass its UID to add_meals / update_meal via the `type: { uid }` spec. Meal types are created and edited in the Paprika app, not through this server.
+List all meal types — the built-in Breakfast/Lunch/Dinner/Snacks plus any custom types — sorted by order then name. Each entry shows whether it is built-in or custom, its calendar-export schedule (all-day or a clock time), and its UID. Reference a type by name, or pass its UID to plan_meals / update_meal via the `type: { uid }` spec. Meal types are created and edited in the Paprika app, not through this server.
 
 _No parameters._
 
@@ -291,9 +250,9 @@ List all menus (saved meal plans) in Paprika order, with item count and day span
 
 _No parameters._
 
-## `list_pantry`
+## `list_pantry_items`
 
-List all pantry items sorted alphabetically by ingredient name. Returns the ingredient, quantity, and aisle for each item. Use get_pantry_item with the UID for full details.
+List all pantry items sorted alphabetically by ingredient name. Returns the ingredient, quantity, and aisle for each item. Use read_pantry_item with the UID for full details.
 
 _No parameters._
 
@@ -306,13 +265,29 @@ List all recipes with pagination. Returns recipe summaries sorted alphabetically
 - `offset` _(optional)_ — Number of recipes to skip (default: 0)
 - `limit` _(optional)_ — Maximum number of recipes to return (default: 25, max: 50)
 
-## `move_to_pantry`
+## `move_grocery_items_to_pantry`
 
 Move one or more grocery items to the pantry. Creates pantry items (with today's purchase date), then deletes the grocery items.
 
 **Parameters**
 
 - `uids` — Grocery item UIDs to move to pantry
+
+## `plan_meals`
+
+Add one or more meals to the meal planner. Each item is EITHER recipe-linked (supply recipe_uid; display name auto-resolves from the recipe) OR freeform (supply name; no recipe). The two shapes are mutually exclusive — Paprika.app's UI dispatches display off recipe_uid for linked meals, so a stored custom name on a recipe-linked meal would never render. Use a freeform meal (no recipe_uid) when you want a custom label. Date is normalized to Paprika's wire format. Meal type accepts name, UID, or built-in index (0=Breakfast, 1=Lunch, 2=Dinner, 3=Snacks). All items validate up-front; if ANY item is invalid the entire batch is rejected with a per-index error enumeration so callers can fix all problems in one pass.
+
+**Parameters**
+
+- `items` — Array of meals to add (1 or more).
+
+## `purge_recipe`
+
+Permanently delete a recipe that is already in the Paprika trash. This is IRREVERSIBLE — once emptied from the trash the recipe cannot be recovered. The recipe must first be moved to the trash with trash_recipe (a reversible soft-delete); purge_recipe refuses to permanently delete a recipe that is not already trashed, so an accidental call can never destroy a live recipe in one step. Requires an exact UID; fuzzy title matching is not supported, to prevent accidental loss.
+
+**Parameters**
+
+- `uid` — UID of a trashed recipe to permanently delete
 
 ## `read_grocery_list`
 
@@ -329,6 +304,14 @@ Get a menu by UID or name, rendered day by day with each day's planned recipes. 
 **Parameters**
 
 - `lookup` — Pick exactly one shape: {"uid": "..."} or {"name": "..."}.
+
+## `read_pantry_item`
+
+Get a pantry item by UID or ingredient name. Ingredient lookup is fuzzy (exact → starts-with → contains) and case-insensitive, with a disambiguation list when multiple items match the same tier. Pass exactly one shape: {"uid": "..."} or {"ingredient": "..."}.
+
+**Parameters**
+
+- `lookup` — Pick exactly one shape: {"uid": "..."} or {"ingredient": "..."}.
 
 ## `read_recipe`
 
@@ -347,6 +330,15 @@ Rename a grocery list. Rejects if the new name conflicts with a different existi
 - `uid` — Grocery list UID to rename
 - `newName` — New name for the grocery list
 
+## `schedule_menu`
+
+Instantiate a saved menu's recipes as meal-planner entries. Look the menu up by UID or name (tiered fuzzy match), then materialize each of its items into a meal dated start_date + (day − 1) days, posting them all in one batch. This is a one-way COPY, not a link: the planner meals carry no back-reference to the menu, so editing the menu later does not change them — and it is NOT idempotent, so re-running adds a second copy (same as Paprika.app's own Add Menu action). Recipe display names re-resolve from the local recipe store; if ANY recipe-linked item references an unknown recipe the whole batch is rejected with a per-item enumeration (freeform items keep their stored name). To remove a meal afterward, find it via list_meal_history and call delete_meal.
+
+**Parameters**
+
+- `menu` — Pick exactly one shape: {"uid": "..."} or {"name": "..."}.
+- `start_date` — Calendar day for the menu's day-1 items (ISO 8601 / yyyy-MM-dd; time-of-day dropped). Day-N items land on start_date + (N−1) days.
+
 ## `search_recipes`
 
 Search for recipes by name, ingredients, or description. Returns a ranked list of matching recipes.
@@ -355,6 +347,14 @@ Search for recipes by name, ingredients, or description. Returns a ranked list o
 
 - `query` — Search query text
 - `limit` _(optional)_ — Maximum number of results to return (default: 20, max: 50)
+
+## `trash_recipe`
+
+Soft-delete a recipe by UID, moving it to the Paprika trash. This operation is reversible — trashed recipes can be recovered in the Paprika app. Requires an exact UID; fuzzy title matching is not supported to prevent accidental deletion.
+
+**Parameters**
+
+- `uid` — Recipe UID to delete
 
 ## `update_category`
 
@@ -425,7 +425,7 @@ Update an existing pantry item by UID. Only provided fields are changed; omitted
 
 ## `update_recipe`
 
-Update an existing recipe by UID. Only provided fields are changed; omitted fields retain their existing values. If categories is provided, it replaces the existing category list entirely; omitting categories leaves the existing list unchanged. Pass inTrash: true to move to trash (soft-delete, reversible) or inTrash: false to restore. Use delete_recipe for a dedicated trash workflow.
+Update an existing recipe by UID. Only provided fields are changed; omitted fields retain their existing values. If categories is provided, it replaces the existing category list entirely; omitting categories leaves the existing list unchanged. Pass inTrash: true to move to trash (soft-delete, reversible) or inTrash: false to restore. Use trash_recipe for a dedicated trash workflow.
 
 **Parameters**
 
@@ -447,9 +447,9 @@ Update an existing recipe by UID. Only provided fields are changed; omitted fiel
 - `inTrash` _(optional)_ — true = move to trash, false = restore from trash
 - `nutritionalInfo` _(optional)_ — New nutritional information
 
-## `upload_photo`
+## `upload_recipe_photo`
 
-Attach a photo to a recipe from exactly one `source`: a `url` (PREFERRED for web images — the server downloads it), a `generation_token` (to save an image you previewed with generate_photo, attach:false — no need to regenerate), or, for programmatic callers, inline `image_base64`. If you built the recipe from a web page, pass that page's main/hero (og:image) URL. The server normalizes any format (JPEG/PNG/WEBP/GIF) to JPEG and generates the thumbnail automatically. There is NO file-path option — the server cannot read your local filesystem. Photos are appended to the recipe's gallery in order.
+Attach a photo to a recipe from exactly one `source`: a `url` (PREFERRED for web images — the server downloads it), a `generation_token` (to save an image you previewed with generate_recipe_photo, attach:false — no need to regenerate), or, for programmatic callers, inline `image_base64`. If you built the recipe from a web page, pass that page's main/hero (og:image) URL. The server normalizes any format (JPEG/PNG/WEBP/GIF) to JPEG and generates the thumbnail automatically. There is NO file-path option — the server cannot read your local filesystem. Photos are appended to the recipe's gallery in order.
 
 **Parameters**
 

@@ -421,7 +421,7 @@ describe("PaprikaClient", () => {
       // {error:{code,message}} body (NOT a 404, NOT a {result} envelope). The
       // client must surface that as a 404 PaprikaAPIError, not a confusing
       // ZodError from parsing it as a result. This is the #165 idempotency bug:
-      // empty_trash's "already deleted" branch keys on status === 404.
+      // purge_recipe's "already deleted" branch keys on status === 404.
       server.use(
         http.get(`${API_BASE}/recipe/gone-uid/`, () =>
           HttpResponse.json({ error: { code: 0, message: "Recipe not found." } }, { status: 200 }),

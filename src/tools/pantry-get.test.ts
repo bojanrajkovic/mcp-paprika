@@ -13,7 +13,7 @@ describe("pantry-get tool", () => {
     const ctx = seed(makeCtx(new RecipeStore(), server), { pantry: [item] });
     registerGetPantryItemTool(server, ctx);
 
-    const result = await callTool("get_pantry_item", { lookup: { uid: item.uid } });
+    const result = await callTool("read_pantry_item", { lookup: { uid: item.uid } });
     const text = getText(result);
 
     // Should contain the markdown heading with ingredient name
@@ -29,7 +29,7 @@ describe("pantry-get tool", () => {
     });
     registerGetPantryItemTool(server, ctx);
 
-    const result = await callTool("get_pantry_item", { lookup: { ingredient: "Brown" } });
+    const result = await callTool("read_pantry_item", { lookup: { ingredient: "Brown" } });
     const text = getText(result);
 
     // Single match should return full markdown details
@@ -46,7 +46,7 @@ describe("pantry-get tool", () => {
     const ctx = seed(makeCtx(new RecipeStore(), server), { pantry: items });
     registerGetPantryItemTool(server, ctx);
 
-    const result = await callTool("get_pantry_item", { lookup: { ingredient: "Apple" } });
+    const result = await callTool("read_pantry_item", { lookup: { ingredient: "Apple" } });
     const text = getText(result);
 
     // All three ingredient names must be present
@@ -70,7 +70,7 @@ describe("pantry-get tool", () => {
     const ctx = seed(makeCtx(new RecipeStore(), server), { pantry: [item] });
     registerGetPantryItemTool(server, ctx);
 
-    const result = await callTool("get_pantry_item", { lookup: { uid: "does-not-exist" } });
+    const result = await callTool("read_pantry_item", { lookup: { uid: "does-not-exist" } });
     const text = getText(result);
 
     expect(text.toLowerCase()).toContain("no pantry item found");
@@ -82,7 +82,7 @@ describe("pantry-get tool", () => {
     const ctx = seed(makeCtx(new RecipeStore(), server), { pantry: [item] });
     registerGetPantryItemTool(server, ctx);
 
-    const result = await callTool("get_pantry_item", { lookup: { ingredient: "Caviar" } });
+    const result = await callTool("read_pantry_item", { lookup: { ingredient: "Caviar" } });
     const text = getText(result);
 
     expect(text.toLowerCase()).toContain("no pantry items found matching");
@@ -93,7 +93,7 @@ describe("pantry-get tool", () => {
     const { server, callTool } = makeTestServer();
     registerGetPantryItemTool(server, makeCtx(new RecipeStore(), server));
 
-    const result = await callTool("get_pantry_item", { lookup: { uid: "anything" } });
+    const result = await callTool("read_pantry_item", { lookup: { uid: "anything" } });
     const text = getText(result);
 
     expect(text.toLowerCase()).toContain("not yet synced");

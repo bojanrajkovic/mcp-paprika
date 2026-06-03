@@ -8,9 +8,9 @@ import { formatLookupOutcome, resolveLookup, uidOrTextLookupSchema } from "./hel
 import { pantryItemToMarkdown, pantryStartGuard } from "./pantry-helpers.js";
 
 export function registerGetPantryItemTool(server: McpServer, ctx: ServerContext): void {
-  const log = ctx.log.child({ component: "get_pantry_item" });
+  const log = ctx.log.child({ component: "read_pantry_item" });
   server.registerTool(
-    "get_pantry_item",
+    "read_pantry_item",
     {
       description:
         "Get a pantry item by UID or ingredient name. Ingredient lookup is fuzzy " +
@@ -29,7 +29,7 @@ export function registerGetPantryItemTool(server: McpServer, ctx: ServerContext)
       },
     },
     async (args) => {
-      log.info({ tool: "get_pantry_item", ...args.lookup }, "tool invoked");
+      log.info({ tool: "read_pantry_item", ...args.lookup }, "tool invoked");
       return pantryStartGuard(ctx).match(
         async (): Promise<CallToolResult> => {
           const query = "uid" in args.lookup ? { uid: args.lookup.uid } : { text: args.lookup.ingredient };

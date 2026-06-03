@@ -107,56 +107,46 @@ function multiDayMenu(): { menus: Menu[]; items: MenuItem[] } {
   };
 }
 
-describe("add_menu_to_planner — guards", () => {
+describe("schedule_menu — guards", () => {
   it("recipe store cold → recipe-sync message", async () => {
     const { callTool, mockSaveMeals } = setup({ recipeSynced: false });
-    const text = getText(
-      await callTool("add_menu_to_planner", { menu: { name: "Multi-Day" }, start_date: "2026-05-27" }),
-    );
+    const text = getText(await callTool("schedule_menu", { menu: { name: "Multi-Day" }, start_date: "2026-05-27" }));
     expect(text).toContain("Recipe store is not yet synced");
     expect(mockSaveMeals).not.toHaveBeenCalled();
   });
 
   it("menu store cold → menu-sync message", async () => {
     const { callTool } = setup({ menuSynced: false });
-    const text = getText(
-      await callTool("add_menu_to_planner", { menu: { name: "Multi-Day" }, start_date: "2026-05-27" }),
-    );
+    const text = getText(await callTool("schedule_menu", { menu: { name: "Multi-Day" }, start_date: "2026-05-27" }));
     expect(text).toContain("Menu data is not yet synced");
   });
 
   it("meal-type store cold → menu-sync message (menuStartGuard gates mealTypeStore)", async () => {
     const { callTool } = setup({ mealTypeSynced: false });
-    const text = getText(
-      await callTool("add_menu_to_planner", { menu: { name: "Multi-Day" }, start_date: "2026-05-27" }),
-    );
+    const text = getText(await callTool("schedule_menu", { menu: { name: "Multi-Day" }, start_date: "2026-05-27" }));
     expect(text).toContain("Menu data is not yet synced");
   });
 
   it("meal store cold → planner-sync message", async () => {
     const { callTool, mockSaveMeals } = setup({ mealSynced: false });
-    const text = getText(
-      await callTool("add_menu_to_planner", { menu: { name: "Multi-Day" }, start_date: "2026-05-27" }),
-    );
+    const text = getText(await callTool("schedule_menu", { menu: { name: "Multi-Day" }, start_date: "2026-05-27" }));
     expect(text).toContain("Meal planner is not yet synced");
     expect(mockSaveMeals).not.toHaveBeenCalled();
   });
 });
 
-describe("add_menu_to_planner — menu resolution", () => {
+describe("schedule_menu — menu resolution", () => {
   it("uid_miss → no menu found", async () => {
     const { callTool } = setup();
     const text = getText(
-      await callTool("add_menu_to_planner", { menu: { uid: "nope" as MenuUid }, start_date: "2026-05-27" }),
+      await callTool("schedule_menu", { menu: { uid: "nope" as MenuUid }, start_date: "2026-05-27" }),
     );
     expect(text).toBe('No menu found with UID "nope".');
   });
 
   it("text_none → no menus matching", async () => {
     const { callTool } = setup();
-    const text = getText(
-      await callTool("add_menu_to_planner", { menu: { name: "Ghost Menu" }, start_date: "2026-05-27" }),
-    );
+    const text = getText(await callTool("schedule_menu", { menu: { name: "Ghost Menu" }, start_date: "2026-05-27" }));
     expect(text).toBe('No menus found matching "Ghost Menu".');
   });
 
@@ -168,9 +158,7 @@ describe("add_menu_to_planner — menu resolution", () => {
       ],
     });
     // "Week Plan" is a contains-match for both.
-    const text = getText(
-      await callTool("add_menu_to_planner", { menu: { name: "Week Plan" }, start_date: "2026-05-27" }),
-    );
+    const text = getText(await callTool("schedule_menu", { menu: { name: "Week Plan" }, start_date: "2026-05-27" }));
     expect(text).toContain('Multiple menus match "Week Plan"');
     expect(text).toContain("`m-a`");
     expect(text).toContain("`m-b`");
@@ -181,19 +169,17 @@ describe("add_menu_to_planner — menu resolution", () => {
       menus: [makeMenu({ uid: MENU_UID, name: "Multi-Day", days: 3 })],
       items: [],
     });
-    const text = getText(
-      await callTool("add_menu_to_planner", { menu: { name: "Multi-Day" }, start_date: "2026-05-27" }),
-    );
+    const text = getText(await callTool("schedule_menu", { menu: { name: "Multi-Day" }, start_date: "2026-05-27" }));
     expect(text).toBe('Menu "Multi-Day" has no items to add to the planner.');
     expect(mockSaveMeals).not.toHaveBeenCalled();
   });
 });
 
-describe("add_menu_to_planner — materialization", () => {
+describe("schedule_menu — materialization", () => {
   it("wire-capture scenario: day-1 and day-3 Dinners → start and start+2, both order_flag 0", async () => {
     const { callTool, mockSaveMeals } = setup(multiDayMenu());
 
-    const result = await callTool("add_menu_to_planner", { menu: { name: "Multi-Day" }, start_date: "2026-05-27" });
+    const result = await callTool("schedule_menu", { menu: { name: "Multi-Day" }, start_date: "2026-05-27" });
     const payload = mockSaveMeals.mock.calls[0]?.[0] as ReadonlyArray<Meal>;
 
     expect(payload).toHaveLength(2);
@@ -241,7 +227,7 @@ describe("add_menu_to_planner — materialization", () => {
       ],
     });
 
-    await callTool("add_menu_to_planner", { menu: { name: "Multi-Day" }, start_date: "2026-05-27" });
+    await callTool("schedule_menu", { menu: { name: "Multi-Day" }, start_date: "2026-05-27" });
     const payload = mockSaveMeals.mock.calls[0]?.[0] as ReadonlyArray<Meal>;
 
     expect(payload).toHaveLength(2);
@@ -277,7 +263,7 @@ describe("add_menu_to_planner — materialization", () => {
       ],
     });
 
-    await callTool("add_menu_to_planner", { menu: { name: "Multi-Day" }, start_date: "2026-05-27" });
+    await callTool("schedule_menu", { menu: { name: "Multi-Day" }, start_date: "2026-05-27" });
     const payload = mockSaveMeals.mock.calls[0]?.[0] as ReadonlyArray<Meal>;
 
     const lunch = payload.find((m) => m.typeUid === LUNCH_UID);
@@ -303,7 +289,7 @@ describe("add_menu_to_planner — materialization", () => {
       existingMeals: [makeMeal({ date: "2026-05-27 00:00:00", typeUid: BREAKFAST_UID, orderFlag: 3 })],
     });
 
-    await callTool("add_menu_to_planner", { menu: { name: "Multi-Day" }, start_date: "2026-05-27" });
+    await callTool("schedule_menu", { menu: { name: "Multi-Day" }, start_date: "2026-05-27" });
     const payload = mockSaveMeals.mock.calls[0]?.[0] as ReadonlyArray<Meal>;
     // Existing max on the date is 3 (a Breakfast); the new Dinner seeds at 4 — per
     // date, not per type.
@@ -325,7 +311,7 @@ describe("add_menu_to_planner — materialization", () => {
       ],
     });
 
-    const result = await callTool("add_menu_to_planner", { menu: { name: "Multi-Day" }, start_date: "2026-05-27" });
+    const result = await callTool("schedule_menu", { menu: { name: "Multi-Day" }, start_date: "2026-05-27" });
     const payload = mockSaveMeals.mock.calls[0]?.[0] as ReadonlyArray<Meal>;
     expect(payload[0]?.recipeUid).toBeNull();
     expect(payload[0]?.name).toBe("Leftovers Night");
@@ -346,7 +332,7 @@ describe("add_menu_to_planner — materialization", () => {
       ],
     });
 
-    const result = await callTool("add_menu_to_planner", { menu: { name: "Multi-Day" }, start_date: "2026-05-27" });
+    const result = await callTool("schedule_menu", { menu: { name: "Multi-Day" }, start_date: "2026-05-27" });
     const payload = mockSaveMeals.mock.calls[0]?.[0] as ReadonlyArray<Meal>;
     expect(payload[0]?.typeUid).toBe("custom-unsynced-type");
     expect(payload[0]?.type).toBe(0);
@@ -355,7 +341,7 @@ describe("add_menu_to_planner — materialization", () => {
   });
 });
 
-describe("add_menu_to_planner — rejection paths", () => {
+describe("schedule_menu — rejection paths", () => {
   it("unknown recipe → whole batch rejected, zero POST", async () => {
     const { callTool, mockSaveMeals } = setup({
       menus: [makeMenu({ uid: MENU_UID, name: "Multi-Day", days: 3 })],
@@ -377,9 +363,7 @@ describe("add_menu_to_planner — rejection paths", () => {
       ],
     });
 
-    const text = getText(
-      await callTool("add_menu_to_planner", { menu: { name: "Multi-Day" }, start_date: "2026-05-27" }),
-    );
+    const text = getText(await callTool("schedule_menu", { menu: { name: "Multi-Day" }, start_date: "2026-05-27" }));
     expect(text).toContain("Could not add menu to planner");
     expect(text).toContain('recipe_uid "recipe-ghost" is not known to the local recipe store');
     expect(mockSaveMeals).not.toHaveBeenCalled();
@@ -387,9 +371,7 @@ describe("add_menu_to_planner — rejection paths", () => {
 
   it("unparseable start_date → error, zero POST", async () => {
     const { callTool, mockSaveMeals } = setup(multiDayMenu());
-    const text = getText(
-      await callTool("add_menu_to_planner", { menu: { name: "Multi-Day" }, start_date: "not a date" }),
-    );
+    const text = getText(await callTool("schedule_menu", { menu: { name: "Multi-Day" }, start_date: "not a date" }));
     expect(text).toContain('Could not parse start_date "not a date"');
     expect(mockSaveMeals).not.toHaveBeenCalled();
   });
@@ -402,9 +384,7 @@ describe("add_menu_to_planner — rejection paths", () => {
       },
     });
 
-    const text = getText(
-      await callTool("add_menu_to_planner", { menu: { name: "Multi-Day" }, start_date: "2026-05-27" }),
-    );
+    const text = getText(await callTool("schedule_menu", { menu: { name: "Multi-Day" }, start_date: "2026-05-27" }));
     expect(text).toContain("Failed to add menu to planner: network down");
     // Nothing landed in the local store.
     expect(ctx.mealStore.getInDateRange().total).toBe(0);

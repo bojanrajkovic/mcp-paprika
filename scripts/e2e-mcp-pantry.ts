@@ -175,52 +175,52 @@ if (savedUid !== null) {
   }
 }
 
-// Step 5.1: get_pantry_item by UID returns the updated item (cross-tool: store reflects update)
+// Step 5.1: read_pantry_item by UID returns the updated item (cross-tool: store reflects update)
 if (savedUid !== null) {
   try {
-    const text = await callTool("get_pantry_item", { lookup: { uid: savedUid } });
+    const text = await callTool("read_pantry_item", { lookup: { uid: savedUid } });
     if (/\*\*Quantity:\*\*\s*2 cups/.test(text)) {
       steps.push({
-        name: "5.1 get_pantry_item reflects update",
+        name: "5.1 read_pantry_item reflects update",
         status: "pass",
         detail: `In-memory store shows Quantity: 2 cups (not just cache)`,
       });
     } else {
       steps.push({
-        name: "5.1 get_pantry_item reflects update",
+        name: "5.1 read_pantry_item reflects update",
         status: "fail",
-        detail: `get_pantry_item missing updated quantity: ${text.slice(0, 200)}`,
+        detail: `read_pantry_item missing updated quantity: ${text.slice(0, 200)}`,
       });
     }
   } catch (error) {
     steps.push({
-      name: "5.1 get_pantry_item reflects update",
+      name: "5.1 read_pantry_item reflects update",
       status: "fail",
       detail: error instanceof Error ? error.message : String(error),
     });
   }
 }
 
-// Step 5.2: list_pantry includes the item
+// Step 5.2: list_pantry_items includes the item
 if (savedUid !== null) {
   try {
-    const text = await callTool("list_pantry", {});
+    const text = await callTool("list_pantry_items", {});
     if (text.includes(savedUid) && text.includes("2 cups")) {
       steps.push({
-        name: "5.2 list_pantry includes updated item",
+        name: "5.2 list_pantry_items includes updated item",
         status: "pass",
         detail: `Item appears in list with updated quantity`,
       });
     } else {
       steps.push({
-        name: "5.2 list_pantry includes updated item",
+        name: "5.2 list_pantry_items includes updated item",
         status: "fail",
-        detail: `Item missing or stale in list_pantry response (length ${text.length.toString()})`,
+        detail: `Item missing or stale in list_pantry_items response (length ${text.length.toString()})`,
       });
     }
   } catch (error) {
     steps.push({
-      name: "5.2 list_pantry includes updated item",
+      name: "5.2 list_pantry_items includes updated item",
       status: "fail",
       detail: error instanceof Error ? error.message : String(error),
     });
@@ -301,26 +301,26 @@ if (savedUid !== null) {
   }
 }
 
-// Step 4.8: list_pantry no longer contains the item
+// Step 4.8: list_pantry_items no longer contains the item
 if (savedUid !== null) {
   try {
-    const text = await callTool("list_pantry", {});
+    const text = await callTool("list_pantry_items", {});
     if (!text.includes(savedUid)) {
       steps.push({
-        name: "4.8 list_pantry no longer contains item",
+        name: "4.8 list_pantry_items no longer contains item",
         status: "pass",
         detail: `Deleted UID absent from list (length ${text.length.toString()})`,
       });
     } else {
       steps.push({
-        name: "4.8 list_pantry no longer contains item",
+        name: "4.8 list_pantry_items no longer contains item",
         status: "fail",
         detail: `Deleted UID still in list: ${savedUid}`,
       });
     }
   } catch (error) {
     steps.push({
-      name: "4.8 list_pantry no longer contains item",
+      name: "4.8 list_pantry_items no longer contains item",
       status: "fail",
       detail: error instanceof Error ? error.message : String(error),
     });

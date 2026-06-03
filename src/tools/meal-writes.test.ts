@@ -50,7 +50,7 @@ function makeBuiltins() {
 // Success paths
 // ---------------------------------------------------------------------------
 
-describe("add_meals tool — success paths", () => {
+describe("plan_meals tool — success paths", () => {
   let mockSaveMeals: ReturnType<typeof vi.fn>;
   let mockNotifySync: ReturnType<typeof vi.fn>;
   let mockPut: ReturnType<typeof vi.fn>;
@@ -63,7 +63,7 @@ describe("add_meals tool — success paths", () => {
     mockFlush = vi.fn().mockResolvedValue(undefined);
   });
 
-  // Builds an add_meals ctx with mocked client + cache. `seedOverrides` merges
+  // Builds an plan_meals ctx with mocked client + cache. `seedOverrides` merges
   // over the synced baseline (empty meals, builtin meal types, Tacos recipe).
   function makeAddCtx(seedOverrides?: SeedData) {
     const { server, callTool } = makeTestServer();
@@ -84,7 +84,7 @@ describe("add_meals tool — success paths", () => {
   it("AC1.1: recipe_uid + date + type → auto-resolved recipe name in markdown and MealStore", async () => {
     const { callTool, ctx } = makeAddCtx();
 
-    const result = await callTool("add_meals", {
+    const result = await callTool("plan_meals", {
       items: [{ recipe_uid: TACOS_UID, date: "2026-06-15", type: { name: "Dinner" } }],
     });
     const text = getText(result);
@@ -112,7 +112,7 @@ describe("add_meals tool — success paths", () => {
   it("AC1.2: name only (no recipe_uid) → freeform meal with recipeUid: null", async () => {
     const { callTool, ctx } = makeAddCtx();
 
-    const result = await callTool("add_meals", {
+    const result = await callTool("plan_meals", {
       items: [{ name: "Avocado Toast", date: "2026-06-15", type: { builtin: 0 } }],
     });
     const text = getText(result);
@@ -132,7 +132,7 @@ describe("add_meals tool — success paths", () => {
   it("AC1.3: 5-item batch → single saveMeals call, single flush, 5 cards", async () => {
     const { callTool } = makeAddCtx();
 
-    const result = await callTool("add_meals", {
+    const result = await callTool("plan_meals", {
       items: [
         { name: "Sunday Dinner", date: "2026-06-15", type: { builtin: 2 } },
         { name: "Monday Dinner", date: "2026-06-16", type: { builtin: 2 } },
@@ -176,7 +176,7 @@ describe("add_meals tool — success paths", () => {
   it("AC1.5: scale flows through to wire payload and MealStore", async () => {
     const { callTool, ctx } = makeAddCtx();
 
-    await callTool("add_meals", {
+    await callTool("plan_meals", {
       items: [{ name: "Big Batch Soup", date: "2026-06-15", type: { builtin: 1 }, scale: "2" }],
     });
 
@@ -197,7 +197,7 @@ describe("add_meals tool — success paths", () => {
     // in sync.
     const { callTool } = makeAddCtx();
 
-    await callTool("add_meals", {
+    await callTool("plan_meals", {
       items: [
         { name: "Day-only Dinner", date: "2026-06-15", type: { builtin: 2 } },
         { name: "Datetime Dinner", date: "2026-06-15T18:30:00Z", type: { builtin: 2 } },
@@ -221,7 +221,7 @@ describe("add_meals tool — success paths", () => {
     // day matches the user's intent.
     const { callTool } = makeAddCtx();
 
-    await callTool("add_meals", {
+    await callTool("plan_meals", {
       items: [{ name: "US-Pacific Late Dinner", date: "2026-06-15T22:00:00-08:00", type: { builtin: 2 } }],
     });
 
@@ -233,7 +233,7 @@ describe("add_meals tool — success paths", () => {
     // Empty date sequence: no existing meals on this date.
     const { callTool } = makeAddCtx();
 
-    await callTool("add_meals", {
+    await callTool("plan_meals", {
       items: [
         { name: "First Dinner", date: "2026-06-15", type: { builtin: 2 } },
         { name: "Second Dinner", date: "2026-06-15", type: { builtin: 2 } },
@@ -253,7 +253,7 @@ describe("add_meals tool — success paths", () => {
     // 0 and 1). A per-(date, type) bucket would give each type its own 0.
     const { callTool } = makeAddCtx();
 
-    await callTool("add_meals", {
+    await callTool("plan_meals", {
       items: [
         { name: "Morning Oats", date: "2026-05-26", type: { builtin: 0 } },
         { name: "Lunch Sandwich", date: "2026-05-26", type: { builtin: 1 } },
@@ -271,7 +271,7 @@ describe("add_meals tool — success paths", () => {
   it("AC1.7: adding to an empty date → orderFlag: 0", async () => {
     const { callTool } = makeAddCtx();
 
-    await callTool("add_meals", {
+    await callTool("plan_meals", {
       items: [{ name: "Solo Breakfast", date: "2026-07-01", type: { builtin: 0 } }],
     });
 
@@ -285,13 +285,13 @@ describe("add_meals tool — success paths", () => {
 
     const { callTool } = makeAddCtx();
 
-    await callTool("add_meals", {
+    await callTool("plan_meals", {
       items: [{ name: "Dinner by Name", date: "2026-06-20", type: { name: "Dinner" } }],
     });
-    await callTool("add_meals", {
+    await callTool("plan_meals", {
       items: [{ name: "Dinner by UID", date: "2026-06-20", type: { uid: DINNER_UID } }],
     });
-    await callTool("add_meals", {
+    await callTool("plan_meals", {
       items: [{ name: "Dinner by Builtin", date: "2026-06-20", type: { builtin: 2 } }],
     });
 
@@ -327,7 +327,7 @@ describe("add_meals tool — success paths", () => {
       ],
     });
 
-    await callTool("add_meals", {
+    await callTool("plan_meals", {
       items: [{ name: "Late Addition", date: "2026-06-25", type: { builtin: 2 } }],
     });
 
@@ -349,7 +349,7 @@ describe("add_meals tool — success paths", () => {
       ],
     });
 
-    await callTool("add_meals", {
+    await callTool("plan_meals", {
       items: [{ name: "Sunday Brunch", date: "2026-07-04", type: { uid: BRUNCH_UID } }],
     });
 
@@ -363,7 +363,7 @@ describe("add_meals tool — success paths", () => {
 // Failure paths
 // ---------------------------------------------------------------------------
 
-describe("add_meals tool — failure paths", () => {
+describe("plan_meals tool — failure paths", () => {
   let mockSaveMeals: ReturnType<typeof vi.fn>;
   let mockNotifySync: ReturnType<typeof vi.fn>;
   let mockPut: ReturnType<typeof vi.fn>;
@@ -376,7 +376,7 @@ describe("add_meals tool — failure paths", () => {
     mockFlush = vi.fn().mockResolvedValue(undefined);
   });
 
-  // Builds a failure-paths add_meals ctx. Baseline: empty meals, builtin meal
+  // Builds a failure-paths plan_meals ctx. Baseline: empty meals, builtin meal
   // types, empty recipe store (no TACOS_UID). Pass `seedOverrides` to adjust.
   function makeFailCtx(seedOverrides?: SeedData) {
     const { server, callTool } = makeTestServer();
@@ -398,7 +398,7 @@ describe("add_meals tool — failure paths", () => {
     const { callTool, ctx } = makeFailCtx();
     const initialSize = ctx.mealStore.size;
 
-    const result = await callTool("add_meals", {
+    const result = await callTool("plan_meals", {
       items: [{ recipe_uid: TACOS_UID, date: "not-a-date", type: { builtin: 2 } }],
     });
     const text = getText(result);
@@ -412,7 +412,7 @@ describe("add_meals tool — failure paths", () => {
     const { callTool, ctx } = makeFailCtx();
     const initialSize = ctx.mealStore.size;
 
-    const result = await callTool("add_meals", {
+    const result = await callTool("plan_meals", {
       items: [{ name: "Weekend Brunch", date: "2026-06-15", type: { name: "Brunch" } }],
     });
     const text = getText(result);
@@ -443,7 +443,7 @@ describe("add_meals tool — failure paths", () => {
     const { callTool, ctx } = makeFailCtx();
     const initialSize = ctx.mealStore.size;
 
-    const result = await callTool("add_meals", {
+    const result = await callTool("plan_meals", {
       items: [{ recipe_uid: TACOS_UID, date: "2026-06-15", type: { builtin: 2 } }],
     });
     const text = getText(result);
@@ -458,7 +458,7 @@ describe("add_meals tool — failure paths", () => {
     const { callTool, ctx } = makeFailCtx();
     const initialSize = ctx.mealStore.size;
 
-    const result = await callTool("add_meals", {
+    const result = await callTool("plan_meals", {
       items: [
         // Item 0: bad date (no type needed — date parse fails first)
         { name: "Bad Date Item", date: "bad", type: { builtin: 2 } },
@@ -623,7 +623,7 @@ describe("update_meal — success paths (AC3.1-3.6)", () => {
   });
 
   it("update_meal to a custom meal type → wire payload sets type_uid + sends vestigial type:0", async () => {
-    // Mirrors the add_meals custom-type test: when the new type is custom
+    // Mirrors the plan_meals custom-type test: when the new type is custom
     // (`originalType: null`), the update path sets `type_uid` and sends the
     // vestigial `type: 0` integer. Paprika.app's UI dispatches off `type_uid`;
     // the server preserves the integer verbatim.
@@ -650,7 +650,7 @@ describe("update_meal — success paths (AC3.1-3.6)", () => {
   it("moving a meal to a different date → orderFlag becomes max+1 in the destination date", async () => {
     // Codex regression (PR #143): the spread-merge previously preserved the
     // source orderFlag when moving a meal, which could collide with an existing
-    // meal at the same flag on the destination date. add_meals avoids this via
+    // meal at the same flag on the destination date. plan_meals avoids this via
     // getMaxOrderFlagOn + 1; update_meal must do the same when `date` changes.
     // (order_flag sequences per DATE — see makeMealOrderFlagAssigner.)
     const moving = makeMeal({

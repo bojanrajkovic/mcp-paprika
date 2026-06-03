@@ -7,16 +7,16 @@ import { textResult } from "./helpers.js";
 import { pantryStartGuard } from "./pantry-helpers.js";
 
 export function registerListPantryTool(server: McpServer, ctx: ServerContext): void {
-  const log = ctx.log.child({ component: "list_pantry" });
+  const log = ctx.log.child({ component: "list_pantry_items" });
   server.registerTool(
-    "list_pantry",
+    "list_pantry_items",
     {
       description:
-        "List all pantry items sorted alphabetically by ingredient name. Returns the ingredient, quantity, and aisle for each item. Use get_pantry_item with the UID for full details.",
+        "List all pantry items sorted alphabetically by ingredient name. Returns the ingredient, quantity, and aisle for each item. Use read_pantry_item with the UID for full details.",
       inputSchema: {},
     },
     async () => {
-      log.info({ tool: "list_pantry" }, "tool invoked");
+      log.info({ tool: "list_pantry_items" }, "tool invoked");
       return pantryStartGuard(ctx).match(
         async (): Promise<CallToolResult> => {
           const all = ctx.pantryStore.getAll().sort((a, b) => a.ingredient.localeCompare(b.ingredient));

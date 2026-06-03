@@ -17,7 +17,7 @@ describe("pantry-list tool", () => {
     });
     registerListPantryTool(server, ctx);
 
-    const result = await callTool("list_pantry", {});
+    const result = await callTool("list_pantry_items", {});
     const text = getText(result);
 
     // Assert header mentions 3 items
@@ -46,7 +46,7 @@ describe("pantry-list tool", () => {
     const ctx = seed(makeCtx(new RecipeStore(), server), { pantry: [] });
     registerListPantryTool(server, ctx);
 
-    const result = await callTool("list_pantry", {});
+    const result = await callTool("list_pantry_items", {});
     const text = getText(result);
 
     expect(text).toBe("Your pantry is empty.");
@@ -57,7 +57,7 @@ describe("pantry-list tool", () => {
     const { server, callTool } = makeTestServer();
     registerListPantryTool(server, makeCtx(new RecipeStore(), server));
 
-    const result = await callTool("list_pantry", {});
+    const result = await callTool("list_pantry_items", {});
     const text = getText(result);
 
     // Case-insensitive substring match for guard message

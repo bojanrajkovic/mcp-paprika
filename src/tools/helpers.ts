@@ -20,7 +20,7 @@ export function coldStartGuard(ctx: ServerContext): Result<void, ReturnType<type
 
 /**
  * Builds the "look up an entity by exact UID OR by a fuzzy text field" input
- * schema shared by read_recipe, read_grocery_list, and get_pantry_item. A
+ * schema shared by read_recipe, read_grocery_list, and read_pantry_item. A
  * `z.union` of two `.strict()` objects dispatched by property presence — the
  * same shape (and the same rationale) as `mealTypeSpecSchema` in meal-helpers.
  *
@@ -339,7 +339,7 @@ export async function commitRecipeHardDelete(ctx: ServerContext, saved: Recipe):
   // Purge from the semantic-search index too — a hard-deleted recipe must not
   // linger as a searchable vector. Best-effort (see `maintainRecipeIndex`); a
   // trashed recipe was already removed at soft-delete, so this is typically a
-  // no-op, but empty_trash can also run on app-trashed recipes never seen here.
+  // no-op, but purge_recipe can also run on app-trashed recipes never seen here.
   // Runs BEFORE notifySync so a notify failure can't skip the purge.
   await maintainRecipeIndex(ctx, saved);
 

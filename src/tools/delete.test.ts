@@ -6,8 +6,8 @@ import { getText, makeCtx, makeTestServer, seed } from "../../test/support/tool-
 import { RecipeStore } from "../recipe/store.js";
 import { registerDeleteTool } from "./delete.js";
 
-describe("p2-recipe-crud: delete_recipe tool", () => {
-  describe("p2-recipe-crud.AC4: delete_recipe soft-deletes by UID", () => {
+describe("p2-recipe-crud: trash_recipe tool", () => {
+  describe("p2-recipe-crud.AC4: trash_recipe soft-deletes by UID", () => {
     it("p2-recipe-crud.AC4.1: recipe soft-deleted (inTrash: true) and confirmation returned", async () => {
       const recipe = makeRecipe({ name: "Pasta Carbonara" });
 
@@ -29,7 +29,7 @@ describe("p2-recipe-crud: delete_recipe tool", () => {
       );
       registerDeleteTool(server, ctx);
 
-      const result = await callTool("delete_recipe", { uid: recipe.uid });
+      const result = await callTool("trash_recipe", { uid: recipe.uid });
       const text = getText(result);
 
       expect(text).toContain("Pasta Carbonara");
@@ -58,7 +58,7 @@ describe("p2-recipe-crud: delete_recipe tool", () => {
       );
       registerDeleteTool(server, ctx);
 
-      await callTool("delete_recipe", { uid: recipe.uid });
+      await callTool("trash_recipe", { uid: recipe.uid });
 
       expect(mockSaveRecipe.mock.calls[0]?.[0]).toMatchObject({ inTrash: true });
       expect(mockNotifySync).toHaveBeenCalledOnce();
@@ -85,7 +85,7 @@ describe("p2-recipe-crud: delete_recipe tool", () => {
       );
       registerDeleteTool(server, ctx);
 
-      await callTool("delete_recipe", { uid: recipe.uid });
+      await callTool("trash_recipe", { uid: recipe.uid });
 
       expect(mockPutRecipe).toHaveBeenCalledWith(trashed);
       expect(mockFlush).toHaveBeenCalledOnce();
@@ -110,7 +110,7 @@ describe("p2-recipe-crud: delete_recipe tool", () => {
       );
       registerDeleteTool(server, ctx);
 
-      const result = await callTool("delete_recipe", { uid: "nonexistent-uid" });
+      const result = await callTool("trash_recipe", { uid: "nonexistent-uid" });
       const text = getText(result);
 
       expect(text.toLowerCase()).toContain("no recipe found");
@@ -137,7 +137,7 @@ describe("p2-recipe-crud: delete_recipe tool", () => {
       );
       registerDeleteTool(server, ctx);
 
-      const result = await callTool("delete_recipe", { uid: trashedRecipe.uid });
+      const result = await callTool("trash_recipe", { uid: trashedRecipe.uid });
       const text = getText(result);
 
       expect(text.toLowerCase()).toContain("already in the trash");
@@ -164,7 +164,7 @@ describe("p2-recipe-crud: delete_recipe tool", () => {
       );
       registerDeleteTool(server, ctx);
 
-      const result = await callTool("delete_recipe", { uid: recipe.uid });
+      const result = await callTool("trash_recipe", { uid: recipe.uid });
       const text = getText(result);
 
       expect(text).toContain("Failed to delete");
@@ -187,7 +187,7 @@ describe("p2-recipe-crud: delete_recipe tool", () => {
       });
       registerDeleteTool(server, ctx);
 
-      const result = await callTool("delete_recipe", { uid: "any-uid" });
+      const result = await callTool("trash_recipe", { uid: "any-uid" });
       const text = getText(result);
 
       expect(text.toLowerCase()).toContain("try again");

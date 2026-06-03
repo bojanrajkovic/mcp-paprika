@@ -132,7 +132,7 @@ const embeddingConfigSchema = z.object({
 
 // Image generation (OpenRouter chat-completions) feature config. Unlike
 // embeddings, the model is NOT configured here — it is selected per
-// `generate_photo` tool call. Credentials come from one of two mutually
+// `generate_recipe_photo` tool call. Credentials come from one of two mutually
 // exclusive paths, enforced by `.superRefine` below:
 //   - a dedicated key (`apiKey`, optional `baseUrl`) → isolated OpenRouter
 //     cost tracking for image generation, OR
@@ -145,7 +145,7 @@ const imageGenConfigSchema = z.object({
 });
 
 // Default base URL for the dedicated-key path. OpenRouter is the only provider
-// that serves the image-generation models behind the `generate_photo` tool via
+// that serves the image-generation models behind the `generate_recipe_photo` tool via
 // chat-completions image output.
 const DEFAULT_IMAGE_GEN_BASE_URL = "https://openrouter.ai/api/v1";
 
@@ -365,7 +365,7 @@ export type ImageGenConfig = z.infer<typeof imageGenConfigSchema>;
 /**
  * Effective image-generation credentials after resolving the dedicated-key vs
  * reuse-embeddings paths. `model` is intentionally absent — it is a
- * `generate_photo` tool-call parameter, not server config.
+ * `generate_recipe_photo` tool-call parameter, not server config.
  */
 export interface ResolvedImageGenConfig {
   readonly apiKey: string;

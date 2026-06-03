@@ -666,7 +666,7 @@ export class PaprikaClient {
       // `200 {"error":{"code":0,"message":"Recipe not found."}}`). Surface it as a
       // PaprikaAPIError rather than letting the result-envelope parse below throw
       // an opaque ZodError. A "not found" message is normalized to a real 404 so
-      // callers keying on status (empty_trash's idempotency branch) behave as they
+      // callers keying on status (purge_recipe's idempotency branch) behave as they
       // would for a genuine 404; other error envelopes keep the wire status.
       const errorEnvelope = ERROR_ENVELOPE_SCHEMA.safeParse(json);
       if (errorEnvelope.success) {

@@ -43,7 +43,7 @@ export const mealTypeSpecSchema = z.union([
  * `mealTypeStore`. The resolver never formats user-facing text — it returns the
  * resolved `MealType` on a hit, or one of three error reasons callers map to
  * their own message style (terse for `update_meal`, per-index-prefixed for
- * `add_meals`, single-filter for `list_meal_history`). `unknown_name` carries
+ * `plan_meals`, single-filter for `list_meal_history`). `unknown_name` carries
  * `knownNames` so callers can list the available types as a remediation hint.
  */
 export type MealTypeResolveResult =
@@ -111,7 +111,7 @@ export function resolveMealTypeSpec(
  * built meals are not yet in the store — without it, two same-date items in one
  * batch would both read the same seed and collide.
  *
- * Shared by `add_meals` (Stage 2) and `add_menu_to_planner` so the per-date
+ * Shared by `plan_meals` (Stage 2) and `schedule_menu` so the per-date
  * sequencing lives in exactly one tested place.
  */
 export function makeMealOrderFlagAssigner(ctx: ServerContext): (date: string) => number {

@@ -92,9 +92,9 @@ const SERVER_INSTRUCTIONS = `mcp-paprika bridges your Paprika recipe library: re
 Orientation:
 - Recipes, grocery lists, and menus are exposed both as tools (which you call) and as paprika://… resources the user can attach. The read_* tools let you fetch one by UID on your own, without waiting for the user to attach it.
 - Lookup: use search_recipes for name / ingredient / description matching; use discover_recipes (present only when semantic search is configured) for natural-language queries.
-- Only recipe deletes are reversible: a deleted recipe moves to the trash, and empty_trash then permanently removes one already there. Deleting anything else (grocery items, pantry items, menu items, lists) is immediate and permanent.
+- Only recipe deletes are reversible: a deleted recipe moves to the trash, and purge_recipe then permanently removes one already there. Deleting anything else (grocery items, pantry items, menu items, lists) is immediate and permanent.
 - When scheduling a meal or adding a menu item, link an existing recipe by its UID OR give a freeform name, never both; they are mutually exclusive. Grocery items take no recipe link; add_grocery_items wants an ingredient, quantity, and aisle.
-- generate_photo (present only when image generation is configured) attaches the image and returns its photo UID by default. With attach:false it returns a preview plus a single-use token instead; pass that token to upload_photo to attach it later.
+- generate_recipe_photo (present only when image generation is configured) attaches the image and returns its photo UID by default. With attach:false it returns a preview plus a single-use token instead; pass that token to upload_recipe_photo to attach it later.
 - Data is served from a local cache kept fresh by background sync, so it can briefly lag changes made directly in the Paprika apps.`;
 
 // ── Phase-typed bootstrap builder ────────────────────────────────────────────
@@ -448,7 +448,7 @@ export async function buildAppContext(
 /**
  * Build a fully-registered McpServer for the given AppContext.
  *
- * Registers all 46 tools and the recipe, grocery-list, and menu resource families. Called once for
+ * Registers the full tool surface and the recipe, grocery-list, and menu resource families. Called once for
  * stdio, once per session for HTTP. Tool registration is pure (closures over the
  * session context), so registering the same tool name on N independent
  * server instances is safe — there is no module-level mutable state.

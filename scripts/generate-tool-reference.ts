@@ -73,7 +73,7 @@ function main(): void {
     "A generated reference for every tool the server registers. The authoritative contracts are the",
     "Zod `inputSchema` in each `src/tools/*.ts` and the registration list in `src/server/build.ts`;",
     "this page is derived from them. Two tools are opt-in and only appear to a client when configured:",
-    "`discover_recipes` (semantic search) and `generate_photo` (AI photos).",
+    "`discover_recipes` (semantic search) and `generate_recipe_photo` (AI photos).",
     "",
   ];
 

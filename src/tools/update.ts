@@ -20,7 +20,7 @@ export function registerUpdateTool(server: McpServer, ctx: ServerContext): void 
         "it replaces the existing category list entirely; omitting categories " +
         "leaves the existing list unchanged. " +
         "Pass inTrash: true to move to trash (soft-delete, reversible) or inTrash: false to restore. " +
-        "Use delete_recipe for a dedicated trash workflow.",
+        "Use trash_recipe for a dedicated trash workflow.",
       inputSchema: {
         uid: RecipeUidSchema.describe("Recipe UID to update"),
         name: z.string().optional().describe("New recipe name"),

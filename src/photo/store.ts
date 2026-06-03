@@ -10,7 +10,7 @@ import { TombstoneEntityStore } from "../entity/index.js";
  *
  * Photos are a recipe-child entity (like meals and menu items): the owning
  * recipe is referenced by the plain-string `recipeUid` foreign key. This store
- * is the read/sync foundation; the write tools (`upload_photo` / `delete_photo`)
+ * is the read/sync foundation; the write tools (`upload_recipe_photo` / `delete_recipe_photo`)
  * land in #169 and the gallery `order_flag`/`name` assignment is derived from
  * `getByRecipeUid`.
  */

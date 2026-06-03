@@ -121,7 +121,7 @@ export function formatCalendarDayWire(dt: DateTime): string {
  * calendar day as a Paprika wire string at midnight ("yyyy-MM-dd 00:00:00").
  * Thin composition of {@link parseCalendarDay} + {@link formatCalendarDayWire} —
  * the single source of truth for "user date input → stored meal `date`". Used by
- * `add_meals` / `update_meal`; `list_meal_history` instead uses
+ * `plan_meals` / `update_meal`; `list_meal_history` instead uses
  * {@link parseInstant} for its UTC-anchored since/until comparisons.
  *
  * Returns `null` when the input doesn't parse as any supported format.

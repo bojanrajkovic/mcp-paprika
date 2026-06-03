@@ -83,9 +83,9 @@ export const addMealsInputSchema = z.object({
 });
 
 export function registerAddMealsTool(server: McpServer, ctx: ServerContext): void {
-  const log = ctx.log.child({ component: "add_meals" });
+  const log = ctx.log.child({ component: "plan_meals" });
   server.registerTool(
-    "add_meals",
+    "plan_meals",
     {
       description:
         "Add one or more meals to the meal planner. Each item is EITHER recipe-linked (supply " +
@@ -100,7 +100,7 @@ export function registerAddMealsTool(server: McpServer, ctx: ServerContext): voi
       inputSchema: addMealsInputSchema.shape,
     },
     async (args) => {
-      log.info({ tool: "add_meals", count: args.items.length }, "tool invoked");
+      log.info({ tool: "plan_meals", count: args.items.length }, "tool invoked");
       return mealStartGuard(ctx).match(
         async (): Promise<CallToolResult> => {
           // ----- Stage 1: per-index validation pass (collect ALL errors, not first-only) -----
@@ -267,7 +267,7 @@ const updateMealCommonFields = {
       "Update date (ISO 8601 date or datetime). Time-of-day component is dropped — meals " +
         "are day-granular and store at midnight UTC.",
     ),
-  type: mealTypeSpecSchema.optional().describe("Update meal type (same DU as add_meals)."),
+  type: mealTypeSpecSchema.optional().describe("Update meal type (same DU as plan_meals)."),
   scale: z.string().min(1).nullable().optional().describe("Update scale. Pass null to clear."),
 } as const;
 
@@ -362,12 +362,12 @@ export function registerUpdateMealTool(server: McpServer, ctx: ServerContext): v
               );
             }
             // Custom mealtypes carry `originalType: null`; `Meal.type` is vestigial when
-            // `type_uid` is set (see add_meals comment for the full rationale).
+            // `type_uid` is set (see plan_meals comment for the full rationale).
             typeInteger = result.resolved.originalType ?? 0;
             typeUid = result.resolved.uid;
           }
 
-          // Resolve date if supplied. Same calendar-day normalization as add_meals —
+          // Resolve date if supplied. Same calendar-day normalization as plan_meals —
           // see the comment there for why we extract the input's own-zone day.
           let normalizedDate: string | undefined;
           if (op.date !== undefined) {

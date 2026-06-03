@@ -16,7 +16,7 @@ import { commitMenu, commitMenuItem, commitMenuItemsBatch, menuStartGuard, menuT
 
 // One menuitem to add. Structurally EITHER recipe-linked (recipe_uid; display
 // name auto-resolves from the recipe) OR freeform (name; no recipe), mirroring
-// add_meals — Paprika.app dispatches a menuitem's display off recipe_uid, so a
+// plan_meals — Paprika.app dispatches a menuitem's display off recipe_uid, so a
 // stored custom name on a recipe-linked item would never render. The z.union of
 // two `.strict()` objects rejects extra keys (including supplying BOTH recipe_uid
 // and name) at the Zod boundary, surfacing the constraint structurally.
@@ -71,7 +71,7 @@ export function registerAddMenuItemsTool(server: McpServer, ctx: ServerContext):
         "Add one or more menuitems to a menu (saved meal plan). Look the menu up by UID or name (tiered " +
         "fuzzy match). Each item is EITHER recipe-linked (supply recipe_uid; display name auto-resolves " +
         "from the recipe) OR freeform (supply name; no recipe) — the two are mutually exclusive, matching " +
-        "add_meals. Each item also carries a 1-indexed day and a meal type (name, UID, or built-in index " +
+        "plan_meals. Each item also carries a 1-indexed day and a meal type (name, UID, or built-in index " +
         "0=Breakfast, 1=Lunch, 2=Dinner, 3=Snacks). If any day falls beyond the menu's current span the " +
         "menu is automatically extended to fit before the items are added. All items validate up-front; " +
         "if ANY item is invalid the entire batch is rejected with a per-index error enumeration so callers " +
@@ -121,7 +121,7 @@ export function registerAddMenuItemsTool(server: McpServer, ctx: ServerContext):
 
             // Recipe-linked XOR freeform — the structural union guarantees exactly
             // one shape. Recipe items denormalize the display name from the local
-            // store (matching add_meals' recipe-link contract); freeform items keep
+            // store (matching plan_meals' recipe-link contract); freeform items keep
             // the supplied name and store recipeUid: null.
             let recipeUid: RecipeUid | null;
             let resolvedName: string;
@@ -141,7 +141,7 @@ export function registerAddMenuItemsTool(server: McpServer, ctx: ServerContext):
               resolvedName = item.name;
             }
 
-            // Meal type resolution via the shared helper (same DU as add_meals).
+            // Meal type resolution via the shared helper (same DU as plan_meals).
             const typeResult = resolveMealTypeSpec(ctx, item.type);
             if (!typeResult.ok) {
               if (typeResult.reason === "unknown_uid") {

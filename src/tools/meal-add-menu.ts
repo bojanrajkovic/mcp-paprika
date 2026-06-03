@@ -82,9 +82,9 @@ function renderPlannerAdds(menuName: string, startDay: DateTime, items: Readonly
 }
 
 export function registerAddMenuToPlannerTool(server: McpServer, ctx: ServerContext): void {
-  const log = ctx.log.child({ component: "add_menu_to_planner" });
+  const log = ctx.log.child({ component: "schedule_menu" });
   server.registerTool(
-    "add_menu_to_planner",
+    "schedule_menu",
     {
       description:
         "Instantiate a saved menu's recipes as meal-planner entries. Look the menu up by UID or name " +
@@ -98,10 +98,10 @@ export function registerAddMenuToPlannerTool(server: McpServer, ctx: ServerConte
       inputSchema: addMenuToPlannerInputSchema.shape,
     },
     async (args) => {
-      log.info({ tool: "add_menu_to_planner", ...args.menu }, "tool invoked");
+      log.info({ tool: "schedule_menu", ...args.menu }, "tool invoked");
       // Compose both families' guards: recipe store (we re-resolve names), then
       // menu + menuitem + mealType (menuStartGuard), then an explicit meal-store
-      // check (we POST meals). Mirrors move_to_pantry's grocery-guard + explicit
+      // check (we POST meals). Mirrors move_grocery_items_to_pantry's grocery-guard + explicit
       // pantry check.
       return coldStartGuard(ctx)
         .andThen(() => menuStartGuard(ctx))
@@ -175,7 +175,7 @@ export function registerAddMenuToPlannerTool(server: McpServer, ctx: ServerConte
 
               // Re-resolve the display name from the recipe store (don't trust the
               // menu item's denormalized name). Recipe-linked items with an unknown
-              // recipe reject the whole batch — strict, like add_meals / add_menu_items.
+              // recipe reject the whole batch — strict, like plan_meals / add_menu_items.
               // Freeform items (recipeUid: null) materialize from their stored name.
               let name: string;
               if (item.recipeUid !== null) {

@@ -77,10 +77,10 @@ describe("MCP Server end-to-end round-trip", () => {
     expect(toolNames).toContain("read_recipe");
     expect(toolNames).toContain("create_recipe");
     expect(toolNames).toContain("update_recipe");
-    expect(toolNames).toContain("delete_recipe");
+    expect(toolNames).toContain("trash_recipe");
     expect(toolNames).toContain("list_categories");
-    expect(toolNames).toContain("list_pantry");
-    expect(toolNames).toContain("get_pantry_item");
+    expect(toolNames).toContain("list_pantry_items");
+    expect(toolNames).toContain("read_pantry_item");
 
     // Verify tools have descriptions
     result.tools.forEach((tool) => {
@@ -163,9 +163,9 @@ describe("MCP Server end-to-end round-trip", () => {
   });
 
   it("calls pantry tools and receives results", async () => {
-    // Test list_pantry tool
+    // Test list_pantry_items tool
     const listResult = await client.callTool({
-      name: "list_pantry",
+      name: "list_pantry_items",
       arguments: {},
     });
 
@@ -182,9 +182,9 @@ describe("MCP Server end-to-end round-trip", () => {
     expect(typeof listText).toBe("string");
     expect(listText.toLowerCase()).toContain("pantry"); // Should mention pantry
 
-    // Test get_pantry_item by ingredient
+    // Test read_pantry_item by ingredient
     const getResult = await client.callTool({
-      name: "get_pantry_item",
+      name: "read_pantry_item",
       arguments: { ingredient: "Flour" },
     });
 
