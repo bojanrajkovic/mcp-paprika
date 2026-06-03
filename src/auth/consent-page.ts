@@ -44,12 +44,20 @@ function generateNonce(): string {
   return randomBytes(16).toString("base64");
 }
 
+/**
+ * The authorization server's display name in the consent brandbar and page
+ * titles. This is the OAuth-surface identity (distinct from the host-facing
+ * connector card name in `src/utils/branding.ts`); a connecting user reads it as
+ * "the Paprika MCP Connector wants to connect."
+ */
+const DISPLAY_NAME = "Paprika MCP Connector";
+
 const STYLES = `
   :root {
     --paper: oklch(0.985 0.006 75); --card: oklch(0.995 0.004 75);
     --ink: oklch(0.26 0.012 70); --muted: oklch(0.53 0.012 70); --faint: oklch(0.66 0.010 70);
     --line: oklch(0.90 0.008 70); --line-2: oklch(0.83 0.010 70);
-    --clay: oklch(0.55 0.12 45); --clay-ink: oklch(0.99 0.01 75); --dest-bg: oklch(0.965 0.012 70);
+    --clay: oklch(0.543 0.174 30); --clay-ink: oklch(0.99 0.01 75); --dest-bg: oklch(0.965 0.012 70); /* --clay = #C0392B, the connector icon color */
     --mono: ui-monospace, "SF Mono", Menlo, monospace;
     --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   }
@@ -79,14 +87,14 @@ const STYLES = `
   .grants .lbl { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em;
     color: var(--faint); margin-bottom: 4px; }
   .grants p { margin: 0; font-size: 0.9rem; color: var(--muted); }
-  .denyline { font-size: 0.82rem; color: var(--muted); padding: 14px 22px 0; }
+  .denyline { font-size: 0.82rem; color: var(--muted); padding: 14px 0 0; }
   .denyline b { color: var(--ink); }
-  .actions { display: flex; gap: 10px; padding: 14px 22px 20px; }
+  .actions { display: flex; gap: 10px; padding: 14px 0 20px; }
   .btn { flex: 1; text-align: center; padding: 11px 14px; border-radius: 9px; font: inherit;
     font-size: 0.92rem; font-weight: 600; border: 1px solid transparent; cursor: pointer; }
   .btn-ghost { background: transparent; color: var(--ink); border-color: var(--line-2); }
   .btn-fill { background: var(--clay); color: var(--clay-ink); }
-  .foot { padding: 0 22px 18px; font-size: 0.78rem; color: var(--faint); }
+  .foot { padding: 0 0 18px; font-size: 0.78rem; color: var(--faint); }
   .terminal { padding: 28px 24px; text-align: center; }
   .terminal h1 { font-size: 1.2rem; font-weight: 650; margin: 0 0 8px; }
   .terminal p { margin: 0; color: var(--muted); font-size: 0.9rem; }
@@ -127,7 +135,7 @@ export function renderConsentPage(params: ConsentPageParams): RenderedPage {
   const initial = escapeHtml(name.charAt(0).toUpperCase() || "?");
 
   const body = `<main class="screen">
-  <div class="brandbar"><span class="dot"></span> mcp-paprika</div>
+  <div class="brandbar"><span class="dot"></span> ${DISPLAY_NAME}</div>
   <form class="body" method="post" action="/oauth/consent">
     <input type="hidden" name="ticket" value="${safeTicket}">
     <div class="head">
@@ -154,33 +162,33 @@ export function renderConsentPage(params: ConsentPageParams): RenderedPage {
   </form>
 </main>`;
 
-  return { html: shell(nonce, "Authorize access — mcp-paprika", body), nonce };
+  return { html: shell(nonce, `Authorize access — ${DISPLAY_NAME}`, body), nonce };
 }
 
 /** Terminal page shown on Deny. Stays on our origin; never redirects to the redirect_uri. */
 export function renderDeniedPage(): RenderedPage {
   const nonce = generateNonce();
   const body = `<main class="screen">
-  <div class="brandbar"><span class="dot"></span> mcp-paprika</div>
+  <div class="brandbar"><span class="dot"></span> ${DISPLAY_NAME}</div>
   <div class="terminal">
     <h1>Access denied</h1>
     <p>No connection was authorized. You can close this tab.</p>
   </div>
 </main>`;
-  return { html: shell(nonce, "Access denied — mcp-paprika", body), nonce };
+  return { html: shell(nonce, `Access denied — ${DISPLAY_NAME}`, body), nonce };
 }
 
 /** Terminal page shown when a consent ticket is unknown or expired. */
 export function renderExpiredPage(): RenderedPage {
   const nonce = generateNonce();
   const body = `<main class="screen">
-  <div class="brandbar"><span class="dot"></span> mcp-paprika</div>
+  <div class="brandbar"><span class="dot"></span> ${DISPLAY_NAME}</div>
   <div class="terminal">
     <h1>Request expired</h1>
     <p>This authorization request is no longer valid. Start the connection again from your app.</p>
   </div>
 </main>`;
-  return { html: shell(nonce, "Request expired — mcp-paprika", body), nonce };
+  return { html: shell(nonce, `Request expired — ${DISPLAY_NAME}`, body), nonce };
 }
 
 /**

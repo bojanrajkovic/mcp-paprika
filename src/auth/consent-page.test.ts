@@ -29,6 +29,12 @@ describe("renderConsentPage", () => {
     expect(html).toContain("Claude");
   });
 
+  it("identifies the authorization server as 'Paprika MCP Connector' (not the raw package name)", () => {
+    const { html } = renderConsentPage(base);
+    expect(html).toContain("Paprika MCP Connector");
+    expect(html).not.toContain("mcp-paprika");
+  });
+
   it("falls back to 'Unnamed client' when clientName is absent", () => {
     const { html } = renderConsentPage({ ticket: base.ticket, redirectHost: base.redirectHost });
     expect(html).toContain("Unnamed client");
