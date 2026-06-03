@@ -17,6 +17,7 @@ import { buildAuthMetadataRouter } from "../auth/metadata.js";
 import { buildAuthRoutes, buildClientCap, buildDcrRateLimit, MAX_REGISTERED_CLIENTS } from "../auth/routes.js";
 import { buildAppContext, buildMcpServer } from "../server/build.js";
 import { broadcastNotifier } from "../server/notifier.js";
+import { buildFaviconRouter } from "./favicon.js";
 
 const SHUTDOWN_TIMEOUT_MS = 10_000;
 const MCP_SESSION_HEADER = "mcp-session-id";
@@ -158,6 +159,11 @@ export async function startHttp(config: PaprikaConfig, opts: StartHttpOptions = 
     }
     return c.json({ ok: true, sessions: sessions.size });
   });
+
+  // Connector icon, unauthenticated. Mounted before the /mcp bearer guard (and
+  // outside the auth block) so a host's connector flow can fetch it pre-auth —
+  // the OAuth AS metadata logo_uri points at this path. See src/utils/branding.ts.
+  hono.route("/", buildFaviconRouter());
 
   if (app.auth !== null) {
     // Capture auth to avoid null-checks inside callbacks (mirrors SyncEngine pattern)
