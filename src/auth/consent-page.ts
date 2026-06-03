@@ -193,17 +193,24 @@ export function renderExpiredPage(): RenderedPage {
 
 /**
  * Security headers for every consent-flow response. The CSP pins inline styles
- * to `nonce`, denies all other resource loads, restricts form submission to
- * our own origin, and forbids framing; `X-Frame-Options` backs frame-ancestors
- * for older browsers; `Cache-Control` keeps the page (and its ticket) out of
- * shared caches.
+ * to `nonce`, denies all other resource loads, restricts form submission, and
+ * forbids framing; `X-Frame-Options` backs frame-ancestors for older browsers;
+ * `Cache-Control` keeps the page (and its ticket) out of shared caches.
+ *
+ * `form-action` is enforced across redirects: the Allow form posts same-origin to
+ * `/oauth/consent`, which 302-redirects to the upstream IdP authorize endpoint,
+ * so `'self'` alone blocks the approve navigation. Callers rendering the consent
+ * *form* must pass `formActionOrigin` (the IdP authorize-endpoint origin) so that
+ * redirect is allowed; terminal pages (denied/expired) carry no form and omit it,
+ * keeping `form-action 'self'`.
  */
-export function consentSecurityHeaders(nonce: string): Record<string, string> {
+export function consentSecurityHeaders(nonce: string, formActionOrigin?: string): Record<string, string> {
+  const formAction = formActionOrigin ? `form-action 'self' ${formActionOrigin}` : "form-action 'self'";
   return {
     "Content-Security-Policy": [
       "default-src 'none'",
       `style-src 'nonce-${nonce}'`,
-      "form-action 'self'",
+      formAction,
       "base-uri 'none'",
       "frame-ancestors 'none'",
     ].join("; "),

@@ -104,6 +104,16 @@ describe("consentSecurityHeaders", () => {
     expect(csp).toContain("base-uri 'none'");
   });
 
+  it("keeps form-action 'self'-only when no upstream origin is given (terminal pages have no form)", () => {
+    const csp = consentSecurityHeaders("N")["Content-Security-Policy"];
+    expect(csp).toContain("form-action 'self';");
+  });
+
+  it("allows the upstream IdP origin in form-action when given (the consent form 302s there)", () => {
+    const csp = consentSecurityHeaders("N", "https://accounts.google.com")["Content-Security-Policy"];
+    expect(csp).toContain("form-action 'self' https://accounts.google.com");
+  });
+
   it("forbids framing via CSP frame-ancestors and X-Frame-Options (anti-clickjacking)", () => {
     expect(headers["Content-Security-Policy"]).toContain("frame-ancestors 'none'");
     expect(headers["X-Frame-Options"]).toBe("DENY");

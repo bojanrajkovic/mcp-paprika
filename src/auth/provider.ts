@@ -111,7 +111,11 @@ export class MintingOAuthServerProvider implements OAuthServerProvider {
       ...clientNameProp,
       redirectHost: new URL(params.redirectUri).origin,
     });
-    c.res = c.html(html, 200, consentSecurityHeaders(nonce));
+    // The Allow form posts to /oauth/consent, which 302s to the upstream IdP.
+    // form-action is enforced across that redirect, so the IdP origin must be
+    // allowed or the browser blocks the approve navigation (consuming the ticket).
+    const idpOrigin = new URL(this._discovery.authorization_endpoint).origin;
+    c.res = c.html(html, 200, consentSecurityHeaders(nonce, idpOrigin));
   }
 
   /** Narrow deps bundle for the shared `redirectUpstream` helper. */
