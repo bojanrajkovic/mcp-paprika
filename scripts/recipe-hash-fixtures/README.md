@@ -5,7 +5,7 @@ client-owned recipe content hash in TypeScript so writes are hash-consistent and
 the next sync stops re-fetching them (#167). The algorithm was reverse-engineered
 from the shipped macOS app's `Paprika.framework`.
 
-This tool regenerates the parity fixtures (`src/paprika/__fixtures__/recipe-hashes.ts`)
+This tool regenerates the parity fixtures (`test/paprika/__fixtures__/recipe-hashes.ts`)
 by calling the framework's **real** `Recipe.hashValues` getter over synthetic
 recipes, so the TS port is pinned to authoritative output rather than a transcribed
 spec.
@@ -30,7 +30,7 @@ this on a Mac with Paprika installed and see whether the committed fixtures chan
 
 ```bash
 bash scripts/recipe-hash-fixtures/run.sh
-git diff --stat src/paprika/__fixtures__/recipe-hashes.ts
+git diff --stat test/paprika/__fixtures__/recipe-hashes.ts
 pnpm vitest run src/paprika/recipe-hash.test.ts
 ```
 

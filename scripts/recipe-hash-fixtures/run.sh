@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Regenerates src/paprika/__fixtures__/recipe-hashes.ts by driving the shipped
+# Regenerates test/paprika/__fixtures__/recipe-hashes.ts by driving the shipped
 # Paprika.framework's real Recipe.hashValues getter over synthetic recipes.
 #
 # Prerequisites (macOS only):
@@ -15,7 +15,7 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 repo_root="$(cd ../.. && pwd)"
-out="$repo_root/src/paprika/__fixtures__/recipe-hashes.ts"
+out="$repo_root/test/paprika/__fixtures__/recipe-hashes.ts"
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 
