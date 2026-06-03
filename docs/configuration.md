@@ -65,7 +65,7 @@ covers provider choices (Ollama, OpenAI, OpenRouter) with worked examples.
 | `IMAGE_GEN_BASE_URL`               | `features.imageGen.baseUrl`              | No       | `https://openrouter.ai/api/v1` | OpenRouter base URL (only used with a dedicated key)          |
 | `IMAGE_GEN_REUSE_EMBEDDINGS_CREDS` | `features.imageGen.reuseEmbeddingsCreds` | No       | `false`                        | Reuse the embedding (`OPENAI_*`) credentials instead of a key |
 
-Image generation powers the `generate_photo` tool (OpenRouter chat-completions image
+Image generation powers the `generate_recipe_photo` tool (OpenRouter chat-completions image
 models). Enable it **one** of two ways:
 
 - Set `IMAGE_GEN_API_KEY` (and optionally `IMAGE_GEN_BASE_URL`) for a **dedicated**
@@ -75,8 +75,8 @@ models). Enable it **one** of two ways:
   OpenRouter).
 
 Setting both, or setting neither while the block exists, is a configuration error. The
-**model is chosen per `generate_photo` call**, not in config. If image generation isn't
-enabled, `generate_photo` isn't registered.
+**model is chosen per `generate_recipe_photo` call**, not in config. If image generation isn't
+enabled, `generate_recipe_photo` isn't registered.
 
 ### Sync interval format
 
@@ -177,7 +177,7 @@ OPENAI_BASE_URL=http://localhost:11434/v1
 OPENAI_API_KEY=ollama
 EMBEDDING_MODEL=nomic-embed-text
 
-# Optional: enable AI recipe-photo generation (generate_photo).
+# Optional: enable AI recipe-photo generation (generate_recipe_photo).
 # Either a dedicated OpenRouter key:
 IMAGE_GEN_API_KEY=sk-or-...
 # ...or reuse the embedding creds above (when they point at OpenRouter):

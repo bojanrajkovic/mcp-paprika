@@ -6,7 +6,7 @@
 A generated reference for every tool the server registers. The authoritative contracts are the
 Zod `inputSchema` in each `src/tools/*.ts` and the registration list in `src/server/build.ts`;
 this page is derived from them. Two tools are opt-in and only appear to a client when configured:
-`discover_recipes` (semantic search) and `generate_photo` (AI photos).
+`discover_recipes` (semantic search) and `generate_recipe_photo` (AI photos).
 
 ## `add_grocery_items`
 
@@ -17,31 +17,14 @@ Add one or more items to a grocery list. Check read_grocery_list first to avoid 
 - `listUid` — UID of the grocery list to add items to
 - `items` — Array of items to add (1 or more)
 
-## `add_meals`
-
-Add one or more meals to the meal planner. Each item is EITHER recipe-linked (supply recipe_uid; display name auto-resolves from the recipe) OR freeform (supply name; no recipe). The two shapes are mutually exclusive — Paprika.app's UI dispatches display off recipe_uid for linked meals, so a stored custom name on a recipe-linked meal would never render. Use a freeform meal (no recipe_uid) when you want a custom label. Date is normalized to Paprika's wire format. Meal type accepts name, UID, or built-in index (0=Breakfast, 1=Lunch, 2=Dinner, 3=Snacks). All items validate up-front; if ANY item is invalid the entire batch is rejected with a per-index error enumeration so callers can fix all problems in one pass.
-
-**Parameters**
-
-- `items` — Array of meals to add (1 or more).
-
 ## `add_menu_items`
 
-Add one or more menuitems to a menu (saved meal plan). Look the menu up by UID or name (tiered fuzzy match). Each item is EITHER recipe-linked (supply recipe_uid; display name auto-resolves from the recipe) OR freeform (supply name; no recipe) — the two are mutually exclusive, matching add_meals. Each item also carries a 1-indexed day and a meal type (name, UID, or built-in index 0=Breakfast, 1=Lunch, 2=Dinner, 3=Snacks). If any day falls beyond the menu's current span the menu is automatically extended to fit before the items are added. All items validate up-front; if ANY item is invalid the entire batch is rejected with a per-index error enumeration so callers can fix every problem in one pass.
+Add one or more menuitems to a menu (saved meal plan). Look the menu up by UID or name (tiered fuzzy match). Each item is EITHER recipe-linked (supply recipe_uid; display name auto-resolves from the recipe) OR freeform (supply name; no recipe) — the two are mutually exclusive, matching plan_meals. Each item also carries a 1-indexed day and a meal type (name, UID, or built-in index 0=Breakfast, 1=Lunch, 2=Dinner, 3=Snacks). If any day falls beyond the menu's current span the menu is automatically extended to fit before the items are added. All items validate up-front; if ANY item is invalid the entire batch is rejected with a per-index error enumeration so callers can fix every problem in one pass.
 
 **Parameters**
 
 - `menu` — Pick exactly one shape: {"uid": "..."} or {"name": "..."}.
 - `items` — Array of menuitems to add (1 or more); each is recipe-linked OR freeform.
-
-## `add_menu_to_planner`
-
-Instantiate a saved menu's recipes as meal-planner entries. Look the menu up by UID or name (tiered fuzzy match), then materialize each of its items into a meal dated start_date + (day − 1) days, posting them all in one batch. This is a one-way COPY, not a link: the planner meals carry no back-reference to the menu, so editing the menu later does not change them — and it is NOT idempotent, so re-running adds a second copy (same as Paprika.app's own Add Menu action). Recipe display names re-resolve from the local recipe store; if ANY recipe-linked item references an unknown recipe the whole batch is rejected with a per-item enumeration (freeform items keep their stored name). To remove a meal afterward, find it via list_meal_history and call delete_meal.
-
-**Parameters**
-
-- `menu` — Pick exactly one shape: {"uid": "..."} or {"name": "..."}.
-- `start_date` — Calendar day for the menu's day-1 items (ISO 8601 / yyyy-MM-dd; time-of-day dropped). Day-N items land on start_date + (N−1) days.
 
 ## `add_pantry_items`
 
@@ -51,7 +34,17 @@ Add one or more items to the pantry. Skips items that duplicate an existing ingr
 
 - `items` — Array of items to add (1 or more)
 
-## `clear_all`
+## `categorize_recipe`
+
+Add, replace, or remove a recipe's categories by UID. Pass category names or UIDs and a mode: add (union with current — the default), replace (set exactly these), or remove (drop these). Unknown category names are skipped with a warning. To edit other recipe fields, use update_recipe.
+
+**Parameters**
+
+- `uid` — Recipe UID to categorize
+- `categories` — Category references — each is a category UID (from list_categories) or a display name (case-insensitive). Unknown names are skipped with a warning.
+- `mode` _(optional)_ — How to apply: "add" (default) unions these with the recipe's current categories; "replace" sets the recipe's categories to exactly these; "remove" drops these from the recipe.
+
+## `clear_grocery_list`
 
 Clear all items from a grocery list.
 
@@ -59,7 +52,7 @@ Clear all items from a grocery list.
 
 - `listUid` — Grocery list UID to clear all items from
 
-## `clear_purchased`
+## `clear_purchased_grocery_items`
 
 Clear all purchased items from a grocery list.
 
@@ -96,7 +89,7 @@ Create a new menu (saved meal plan) with the given name. Rejects duplicate names
 
 ## `create_recipe`
 
-Create a new recipe in the Paprika account. If you built this recipe from a web page, follow up with `upload_photo` and the page's main/hero (og:image) image URL to attach its photo.
+Create a new recipe in the Paprika account. If you built this recipe from a web page, follow up with `upload_recipe_photo` and the page's main/hero (og:image) image URL to attach its photo.
 
 **Parameters**
 
@@ -172,21 +165,13 @@ Soft-delete a pantry item by UID. Idempotent: a second delete on the same UID re
 
 - `uid` — Pantry item UID to delete
 
-## `delete_photo`
+## `delete_recipe_photo`
 
 Delete a photo from a recipe by UID. Idempotent: a second delete on the same UID returns a friendly 'already deleted' message without re-POSTing. Requires an exact photo UID.
 
 **Parameters**
 
 - `photo_uid` — UID of the photo to delete.
-
-## `delete_recipe`
-
-Soft-delete a recipe by UID, moving it to the Paprika trash. This operation is reversible — trashed recipes can be recovered in the Paprika app. Requires an exact UID; fuzzy title matching is not supported to prevent accidental deletion.
-
-**Parameters**
-
-- `uid` — Recipe UID to delete
 
 ## `discover_recipes`
 
@@ -198,36 +183,15 @@ Discover recipes using semantic search. Finds recipes matching a natural languag
 - `topK` _(optional)_ — Maximum number of results to return (default: 5, max: 20)
 - `minScore` _(optional)_ — Optional minimum similarity (cosine, 0-1). Results below it are dropped before the top-K cut, so a query with few genuine matches returns only those instead of padding with weak ones. Omit for no filtering. Use a modest value (e.g. ~0.3) to gate on relevance.
 
-## `empty_trash`
+## `favorite_recipe`
 
-Permanently delete a recipe that is already in the Paprika trash. This is IRREVERSIBLE — once emptied from the trash the recipe cannot be recovered. The recipe must first be moved to the trash with delete_recipe (a reversible soft-delete); empty_trash refuses to permanently delete a recipe that is not already trashed, so an accidental call can never destroy a live recipe in one step. Requires an exact UID; fuzzy title matching is not supported, to prevent accidental loss.
-
-**Parameters**
-
-- `uid` — UID of a trashed recipe to permanently delete
-
-## `filter_by_ingredient`
-
-Filter recipes by ingredient. Use mode="all" (default) to require all ingredients, or mode="any" to match any.
+Mark a recipe as a favorite by UID (adds it to the Favorites list).
 
 **Parameters**
 
-- `ingredients` — One or more ingredient terms to filter by
-- `mode` _(optional)_ — Match mode: "all" (default) requires every ingredient; "any" matches at least one
-- `limit` _(optional)_ — Maximum number of results to return (default: 20, max: 50)
+- `uid` — Recipe UID
 
-## `filter_by_time`
-
-Filter recipes by prep, cook, or total time. All constraints are optional; results are sorted by total time ascending. ADVISORY: a recipe whose relevant time can't be parsed (free-text like "5+ hours" or "overnight") is NOT hidden — it is included and flagged "Time unverified" so quick recipes with odd time strings aren't silently dropped. For any flagged result, check the displayed time yourself rather than trusting the filter for that one.
-
-**Parameters**
-
-- `maxPrepTime` _(optional)_ — Maximum prep time (e.g., "30 minutes", "1 hr")
-- `maxCookTime` _(optional)_ — Maximum cook time (e.g., "45 min", "1 hour")
-- `maxTotalTime` _(optional)_ — Maximum total time (e.g., "1 hour 30 minutes", "2 hrs")
-- `limit` _(optional)_ — Maximum number of results to return (default: 20, max: 50)
-
-## `generate_photo`
+## `generate_recipe_photo`
 
 Generate a styled food photo for a recipe with an AI image model and (by default) attach it to the recipe. The prompt is built from the recipe's name, description, and categories — so well-described, categorized recipes produce the best results; pass `style` to guide plating or describe an obscure dish. Set restyle_existing:true to re-style the recipe's current photo instead of generating from scratch. Set attach:false to preview without saving.
 
@@ -239,14 +203,6 @@ Generate a styled food photo for a recipe with an AI image model and (by default
 - `aspect_ratio` _(optional)_ — Output aspect ratio (default 1:1, a square thumbnail). Options: 1:1, 4:3, 3:2, 16:9.
 - `restyle_existing` _(optional)_ — When true, restyle the recipe's CURRENT photo (image-to-image) instead of generating from scratch — useful to re-light or re-plate an existing shot. Errors if the recipe has no photo.
 - `attach` _(optional)_ — When true (default), attach the generated image to the recipe. When false, return a preview only.
-
-## `get_pantry_item`
-
-Get a pantry item by UID or ingredient name. Ingredient lookup is fuzzy (exact → starts-with → contains) and case-insensitive, with a disambiguation list when multiple items match the same tier. Pass exactly one shape: {"uid": "..."} or {"ingredient": "..."}.
-
-**Parameters**
-
-- `lookup` — Pick exactly one shape: {"uid": "..."} or {"ingredient": "..."}.
 
 ## `list_aisles`
 
@@ -266,22 +222,9 @@ List all grocery lists sorted alphabetically by name, with UID and item count pe
 
 _No parameters._
 
-## `list_meal_history`
-
-Browse the meal planner history. Returns a calendar-style view of planned meals grouped by date, showing what was cooked and when. Each day lists meals sorted by type (Breakfast → Lunch → Dinner → custom types). Freeform meals (not linked to a recipe) are annotated. By default, returns the last 30 days of meal history. When a recipe_uid or type filter is provided, searches all time instead. Use since/until for custom date ranges. Use this tool to answer questions like 'what did we eat last week', 'when did we last have tacos', 'show me dinner plans for this month', or 'what's on the meal planner'. For recipe details (ingredients, directions), use read_recipe instead.
-
-**Parameters**
-
-- `recipe_uid` _(optional)_ — Filter to meals for a specific recipe UID. Searches all time when set.
-- `since` _(optional)_ — Start date (inclusive). Accepts ISO 8601 or yyyy-MM-dd. Overrides the 30-day default.
-- `until` _(optional)_ — End date (inclusive). Accepts ISO 8601 or yyyy-MM-dd. Overrides the 30-day default.
-- `type` _(optional)_ — Meal type filter. Searches all time when set. Pick exactly one shape: {"name": "Dinner"} | {"uid": "<mealtype UID>"} | {"builtin": 2}.
-- `offset` _(optional)_ — Pagination offset (default: 0)
-- `limit` _(optional)_ — Maximum meals to return (default: 50, max: 200)
-
 ## `list_meal_types`
 
-List all meal types — the built-in Breakfast/Lunch/Dinner/Snacks plus any custom types — sorted by order then name. Each entry shows whether it is built-in or custom, its calendar-export schedule (all-day or a clock time), and its UID. Reference a type by name, or pass its UID to add_meals / update_meal via the `type: { uid }` spec. Meal types are created and edited in the Paprika app, not through this server.
+List all meal types — the built-in Breakfast/Lunch/Dinner/Snacks plus any custom types — sorted by order then name. Each entry shows whether it is built-in or custom, its calendar-export schedule (all-day or a clock time), and its UID. Reference a type by name, or pass its UID to plan_meals / update_meal via the `type: { uid }` spec. Meal types are created and edited in the Paprika app, not through this server.
 
 _No parameters._
 
@@ -291,9 +234,9 @@ List all menus (saved meal plans) in Paprika order, with item count and day span
 
 _No parameters._
 
-## `list_pantry`
+## `list_pantry_items`
 
-List all pantry items sorted alphabetically by ingredient name. Returns the ingredient, quantity, and aisle for each item. Use get_pantry_item with the UID for full details.
+List all pantry items sorted alphabetically by ingredient name. Returns the ingredient, quantity, and aisle for each item. Use read_pantry_item with the UID for full details.
 
 _No parameters._
 
@@ -306,13 +249,73 @@ List all recipes with pagination. Returns recipe summaries sorted alphabetically
 - `offset` _(optional)_ — Number of recipes to skip (default: 0)
 - `limit` _(optional)_ — Maximum number of recipes to return (default: 25, max: 50)
 
-## `move_to_pantry`
+## `log_cooked_meal`
+
+Log a meal you cooked: records the given recipe on the planner, defaulting to today and the Dinner meal type — a quick way to keep your cooking history current. Pass `date` to log a different day or `type` for a non-dinner meal. To log a freeform (non-recipe) meal or to plan ahead in bulk, use plan_meals.
+
+**Parameters**
+
+- `recipe_uid` — UID of the recipe you cooked.
+- `type` _(optional)_ — Meal type (defaults to Dinner). Pick one shape: {"name":"Dinner"} | {"uid":"<MealType UID>"} | {"builtin":2}.
+- `date` _(optional)_ — When it was cooked (ISO 8601 date or datetime). Defaults to today. Time-of-day is dropped.
+
+## `mark_grocery_item_purchased`
+
+Mark a grocery item as purchased (checked off) by UID.
+
+**Parameters**
+
+- `uid` — UID of the grocery item to mark purchased
+
+## `mark_pantry_item_out_of_stock`
+
+Mark a pantry item as out of stock by UID (e.g. you've run out of it).
+
+**Parameters**
+
+- `uid` — UID of the pantry item to mark out of stock
+
+## `move_grocery_items_to_pantry`
 
 Move one or more grocery items to the pantry. Creates pantry items (with today's purchase date), then deletes the grocery items.
 
 **Parameters**
 
 - `uids` — Grocery item UIDs to move to pantry
+
+## `move_menu_item`
+
+Move a menu item to a different day within its menu, by UID. A day beyond the menu's current span auto-extends the menu so the item stays visible, and the item is re-sequenced to the end of the menu's order. To change a menu item's meal type or recipe link instead, use update_menu_item.
+
+**Parameters**
+
+- `uid` — UID of the menuitem to move
+- `day` — Destination 1-indexed day. Days beyond the menu's current span auto-extend the menu.
+
+## `plan_meals`
+
+Add one or more meals to the meal planner. Each item is EITHER recipe-linked (supply recipe_uid; display name auto-resolves from the recipe) OR freeform (supply name; no recipe). The two shapes are mutually exclusive — Paprika.app's UI dispatches display off recipe_uid for linked meals, so a stored custom name on a recipe-linked meal would never render. Use a freeform meal (no recipe_uid) when you want a custom label. Date is normalized to Paprika's wire format. Meal type accepts name, UID, or built-in index (0=Breakfast, 1=Lunch, 2=Dinner, 3=Snacks). All items validate up-front; if ANY item is invalid the entire batch is rejected with a per-index error enumeration so callers can fix all problems in one pass.
+
+**Parameters**
+
+- `items` — Array of meals to add (1 or more).
+
+## `purge_recipe`
+
+Permanently delete a recipe that is already in the Paprika trash. This is IRREVERSIBLE — once emptied from the trash the recipe cannot be recovered. The recipe must first be moved to the trash with trash_recipe (a reversible soft-delete); purge_recipe refuses to permanently delete a recipe that is not already trashed, so an accidental call can never destroy a live recipe in one step. Requires an exact UID; fuzzy title matching is not supported, to prevent accidental loss.
+
+**Parameters**
+
+- `uid` — UID of a trashed recipe to permanently delete
+
+## `rate_recipe`
+
+Rate a recipe 0–5 stars by UID. Sets the recipe's star rating; pass 0 to clear it.
+
+**Parameters**
+
+- `uid` — Recipe UID to rate
+- `rating` — Star rating 0–5; 0 clears the rating
 
 ## `read_grocery_list`
 
@@ -322,6 +325,14 @@ Get a grocery list by UID or name. Name lookup is tiered (exact → starts-with 
 
 - `lookup` — Pick exactly one shape: {"uid": "..."} or {"name": "..."}.
 
+## `read_meal_plan`
+
+Read the upcoming meal plan: meals scheduled from today forward, grouped by day in ascending date order (today first). Defaults to the next 7 days; pass `days` to widen the window. For past meals or recall ("when did we last have X"), use search_meal_history.
+
+**Parameters**
+
+- `days` _(optional)_ — How many days of the plan to show, counting today (default 7, max 31).
+
 ## `read_menu`
 
 Get a menu by UID or name, rendered day by day with each day's planned recipes. Name lookup is tiered (exact → starts-with → contains) and case-insensitive, with a disambiguation list when multiple menus match the same tier. Each recipe line carries its menuitem and recipe UIDs so you can drive update_menu_item / delete_menu_item. Pass exactly one shape: {"uid": "..."} or {"name": "..."}.
@@ -329,6 +340,14 @@ Get a menu by UID or name, rendered day by day with each day's planned recipes. 
 **Parameters**
 
 - `lookup` — Pick exactly one shape: {"uid": "..."} or {"name": "..."}.
+
+## `read_pantry_item`
+
+Get a pantry item by UID or ingredient name. Ingredient lookup is fuzzy (exact → starts-with → contains) and case-insensitive, with a disambiguation list when multiple items match the same tier. Pass exactly one shape: {"uid": "..."} or {"ingredient": "..."}.
+
+**Parameters**
+
+- `lookup` — Pick exactly one shape: {"uid": "..."} or {"ingredient": "..."}.
 
 ## `read_recipe`
 
@@ -347,14 +366,84 @@ Rename a grocery list. Rejects if the new name conflicts with a different existi
 - `uid` — Grocery list UID to rename
 - `newName` — New name for the grocery list
 
-## `search_recipes`
+## `reschedule_meal`
 
-Search for recipes by name, ingredients, or description. Returns a ranked list of matching recipes.
+Reschedule a planned meal to a different date by UID, optionally also changing its meal type. Moving the date re-sequences the meal to the end of the destination day's order. To change a meal's recipe link, freeform name, or scale instead, use update_meal.
 
 **Parameters**
 
-- `query` — Search query text
+- `uid`
+- `date` — New meal date (ISO 8601 date or datetime). Time-of-day is dropped — meals are day-granular and store at midnight UTC.
+- `type` _(optional)_ — Optionally also change the meal type while rescheduling (same DU as plan_meals).
+
+## `restock_pantry_item`
+
+Mark a pantry item as back in stock by UID (e.g. you've restocked it).
+
+**Parameters**
+
+- `uid` — UID of the pantry item to restock
+
+## `restore_recipe`
+
+Restore a trashed recipe by UID, moving it out of the trash back into the active library. The inverse of trash_recipe; use purge_recipe to permanently delete a trashed recipe instead.
+
+**Parameters**
+
+- `uid` — Recipe UID to restore from trash
+
+## `schedule_menu`
+
+Instantiate a saved menu's recipes as meal-planner entries. Look the menu up by UID or name (tiered fuzzy match), then materialize each of its items into a meal dated start_date + (day − 1) days, posting them all in one batch. This is a one-way COPY, not a link: the planner meals carry no back-reference to the menu, so editing the menu later does not change them — and it is NOT idempotent, so re-running adds a second copy (same as Paprika.app's own Add Menu action). Recipe display names re-resolve from the local recipe store; if ANY recipe-linked item references an unknown recipe the whole batch is rejected with a per-item enumeration (freeform items keep their stored name). To remove a meal afterward, find it via read_meal_plan or search_meal_history and call delete_meal.
+
+**Parameters**
+
+- `menu` — Pick exactly one shape: {"uid": "..."} or {"name": "..."}.
+- `start_date` — Calendar day for the menu's day-1 items (ISO 8601 / yyyy-MM-dd; time-of-day dropped). Day-N items land on start_date + (N−1) days.
+
+## `search_meal_history`
+
+Search PAST meals (recall/browse), by a specific recipe, a recipe category ("class"), a meal type, and/or a date window — any combination, ANDed. Answers "when did we last have tacos", "how often do we eat Italian", "show the dinners we had in March", or "what have we eaten lately". With no filters it returns the last 30 days. Future planner entries are excluded (use read_meal_plan for upcoming meals). Results group by date (newest first), with a count, the last-made date, and pagination.
+
+**Parameters**
+
+- `recipe_uid` _(optional)_ — Recall past meals of this specific recipe, by UID.
+- `class` _(optional)_ — Recall meals whose recipe is in this category — a name (case-insensitive) or UID, e.g. "Italian".
+- `type` _(optional)_ — Filter by meal type. Pick one shape: {"name":"Dinner"} | {"uid":"<MealType UID>"} | {"builtin":2}.
+- `since` _(optional)_ — Start of the window, inclusive (ISO 8601 or yyyy-MM-dd). Defaults to 30 days ago when no recipe/class/type filter is given, else all time.
+- `until` _(optional)_ — End of the window, inclusive (ISO 8601 or yyyy-MM-dd). Defaults to today; future planner entries are excluded.
+- `offset` _(optional)_ — Pagination offset (default 0).
+- `limit` _(optional)_ — Maximum meals to return (default 50, max 200).
+
+## `search_recipes`
+
+Search and filter recipes. Use any combination of: free-text query (matches name, ingredients, description), an ingredient list with all/any match mode, and/or max prep/cook/total time constraints. At least one criterion is required. Results are ranked by query relevance when a query is present, or by ascending total time when only time constraints are given.
+
+**Parameters**
+
+- `query` _(optional)_ — Free-text search across name, ingredients, and description
+- `ingredients` _(optional)_ — Ingredient terms to filter by
+- `match` _(optional)_ — Ingredient match mode: "all" (default) requires every term; "any" matches at least one
+- `maxPrep` _(optional)_ — Maximum prep time (e.g., "30 minutes", "1 hr")
+- `maxCook` _(optional)_ — Maximum cook time (e.g., "45 min", "1 hour")
+- `maxTotal` _(optional)_ — Maximum total time (e.g., "1 hour 30 minutes", "2 hrs")
 - `limit` _(optional)_ — Maximum number of results to return (default: 20, max: 50)
+
+## `trash_recipe`
+
+Soft-delete a recipe by UID, moving it to the Paprika trash. This operation is reversible — trashed recipes can be recovered in the Paprika app. Requires an exact UID; fuzzy title matching is not supported to prevent accidental deletion.
+
+**Parameters**
+
+- `uid` — Recipe UID to delete
+
+## `unfavorite_recipe`
+
+Remove a recipe from the Favorites list by UID.
+
+**Parameters**
+
+- `uid` — Recipe UID
 
 ## `update_category`
 
@@ -368,7 +457,7 @@ Rename and/or re-parent an existing category. Pass `name` to rename, `parentUid`
 
 ## `update_grocery_item`
 
-Update an existing grocery item. Only provided fields are changed; omitted fields retain their current values.
+Update a grocery item's quantity, aisle, or notes by UID. Only provided fields are changed; omitted fields retain their current values. To check an item off, use mark_grocery_item_purchased.
 
 **Parameters**
 
@@ -376,16 +465,15 @@ Update an existing grocery item. Only provided fields are changed; omitted field
 - `quantity` _(optional)_ — New quantity; set to empty string to clear
 - `aisle` _(optional)_ — New aisle display name
 - `instruction` _(optional)_ — New free-form notes
-- `purchased` _(optional)_ — Whether the item has been purchased
 
 ## `update_meal`
 
-Update an existing meal by UID. The `update` payload is a discriminated union: pick exactly one of {recipe_uid?, ...other} | {name, ...other} | {recipe_uid: null, name?, ...other}. Recipe link and display name are structurally exclusive: name auto-resolves from the recipe for linked meals, and Paprika.app would never render a stored custom name on a recipe-linked meal. To set a custom label, use a freeform meal (no recipe_uid) or demote first via recipe_uid: null + name. Partial merge: omitted fields are preserved. To clear scale, pass scale: null. The is_ingredient and deleted fields are not updatable via this tool.
+Update an existing meal by UID. The `update` payload is a discriminated union: pick exactly one of {recipe_uid?, ...other} | {name, ...other} | {recipe_uid: null, name?, ...other}. Recipe link and display name are structurally exclusive: name auto-resolves from the recipe for linked meals, and Paprika.app would never render a stored custom name on a recipe-linked meal. To set a custom label, use a freeform meal (no recipe_uid) or demote first via recipe_uid: null + name. Partial merge: omitted fields are preserved. To clear scale, pass scale: null. To change the meal's date, use reschedule_meal. The is_ingredient and deleted fields are not updatable via this tool.
 
 **Parameters**
 
 - `uid`
-- `update` — Update payload. Pick exactly one shape: {recipe_uid?, date?, type?, scale?} | {name, date?, type?, scale?} | {recipe_uid: null, name?, date?, type?, scale?}. Supplying both recipe_uid (a UID) and name is rejected — Paprika.app dispatches display off recipe_uid, so a stored custom name on a recipe-linked meal would never render. Use a freeform meal if you need a custom label.
+- `update` — Update payload. Pick exactly one shape: {recipe_uid?, type?, scale?} | {name, type?, scale?} | {recipe_uid: null, name?, type?, scale?}. Supplying both recipe_uid (a UID) and name is rejected — Paprika.app dispatches display off recipe_uid, so a stored custom name on a recipe-linked meal would never render. Use a freeform meal if you need a custom label. To change a meal's date, use reschedule_meal.
 
 ## `update_menu`
 
@@ -400,18 +488,17 @@ Update a menu's name, day span, and/or notes. Look it up by UID or name (tiered 
 
 ## `update_menu_item`
 
-Update an existing menuitem by UID. Provide at least one of day, type, or recipe_uid; omitted fields keep their current values. Changing recipe_uid re-resolves the display name from the new recipe. Moving an item to a later day auto-extends the menu's span if needed (so it stays visible) and re-sequences its order within the destination day. The menu link (menu_uid) is not editable via this tool — delete and re-add to move an item between menus.
+Update an existing menuitem's meal type or recipe link by UID. Provide at least one of type or recipe_uid; omitted fields keep their current values. Changing recipe_uid re-resolves the display name from the new recipe. To move an item to a different day, use move_menu_item. The menu link (menu_uid) is not editable via this tool — delete and re-add to move an item between menus.
 
 **Parameters**
 
 - `uid` — UID of the menuitem to update
-- `day` _(optional)_ — New 1-indexed day
 - `type` _(optional)_ — New meal type (same DU as add_menu_items)
 - `recipe_uid` _(optional)_ — New recipe UID. Display name re-resolves from the new recipe.
 
 ## `update_pantry_item`
 
-Update an existing pantry item by UID. Only provided fields are changed; omitted fields retain their existing values. Setting expirationDate also updates hasExpiration accordingly.
+Update a pantry item's ingredient, quantity, aisle, or dates by UID. Only provided fields are changed; omitted fields retain their existing values. Setting expirationDate also updates hasExpiration accordingly. To change stock status, use mark_pantry_item_out_of_stock / restock_pantry_item.
 
 **Parameters**
 
@@ -421,11 +508,10 @@ Update an existing pantry item by UID. Only provided fields are changed; omitted
 - `aisle` _(optional)_ — New aisle display name; call list_aisles first to pick an existing name. Unknown names auto-create a new aisle.
 - `expirationDate` _(optional)_ — Set expiration date; pass null to clear. hasExpiration is derived from this.
 - `purchaseDate` _(optional)_ — Set purchase date; pass null to clear
-- `inStock` _(optional)_ — Set in-stock status
 
 ## `update_recipe`
 
-Update an existing recipe by UID. Only provided fields are changed; omitted fields retain their existing values. If categories is provided, it replaces the existing category list entirely; omitting categories leaves the existing list unchanged. Pass inTrash: true to move to trash (soft-delete, reversible) or inTrash: false to restore. Use delete_recipe for a dedicated trash workflow.
+Update a recipe's content fields by UID (name, ingredients, directions, description, notes, servings, prep/cook/total time, source, difficulty, nutritional info). Only provided fields change; omitted fields keep their values. This tool does NOT edit rating, categories, favorite status, or trash state — use rate_recipe, categorize_recipe, favorite_recipe / unfavorite_recipe, and trash_recipe / restore_recipe for those.
 
 **Parameters**
 
@@ -439,17 +525,14 @@ Update an existing recipe by UID. Only provided fields are changed; omitted fiel
 - `prepTime` _(optional)_ — New prep time
 - `cookTime` _(optional)_ — New cook time
 - `totalTime` _(optional)_ — New total time
-- `categories` _(optional)_ — Categories to assign — replaces the existing list when provided. Each entry is either a category UID (from `list_categories`) or a display name (case-insensitive). Unknown names are skipped with a warning.
 - `source` _(optional)_ — New source name
 - `sourceUrl` _(optional)_ — New source URL
 - `difficulty` _(optional)_ — New difficulty level
-- `rating` _(optional)_ — New rating 0–5
-- `inTrash` _(optional)_ — true = move to trash, false = restore from trash
 - `nutritionalInfo` _(optional)_ — New nutritional information
 
-## `upload_photo`
+## `upload_recipe_photo`
 
-Attach a photo to a recipe from exactly one `source`: a `url` (PREFERRED for web images — the server downloads it), a `generation_token` (to save an image you previewed with generate_photo, attach:false — no need to regenerate), or, for programmatic callers, inline `image_base64`. If you built the recipe from a web page, pass that page's main/hero (og:image) URL. The server normalizes any format (JPEG/PNG/WEBP/GIF) to JPEG and generates the thumbnail automatically. There is NO file-path option — the server cannot read your local filesystem. Photos are appended to the recipe's gallery in order.
+Attach a photo to a recipe from exactly one `source`: a `url` (PREFERRED for web images — the server downloads it), a `generation_token` (to save an image you previewed with generate_recipe_photo, attach:false — no need to regenerate), or, for programmatic callers, inline `image_base64`. If you built the recipe from a web page, pass that page's main/hero (og:image) URL. The server normalizes any format (JPEG/PNG/WEBP/GIF) to JPEG and generates the thumbnail automatically. There is NO file-path option — the server cannot read your local filesystem. Photos are appended to the recipe's gallery in order.
 
 **Parameters**
 

@@ -24,7 +24,7 @@ function formatSeconds(seconds: number): string {
  * `originalType` is the built-in/custom marker (an integer for the four defaults,
  * `null` for user-created types). The schedule is "all-day" when `exportAllDay`,
  * otherwise the export clock time. The UID is included so callers can reference a
- * type by stable id via `add_meals` / `update_meal`'s `type: { uid }` spec.
+ * type by stable id via `plan_meals` / `update_meal`'s `type: { uid }` spec.
  */
 function mealTypeLine(mt: Readonly<MealType>): string {
   const kind = mt.originalType !== null ? "built-in" : "custom";
@@ -49,7 +49,7 @@ export function registerMealTypesTool(server: McpServer, ctx: ServerContext): vo
         "List all meal types — the built-in Breakfast/Lunch/Dinner/Snacks plus any custom " +
         "types — sorted by order then name. Each entry shows whether it is built-in or custom, " +
         "its calendar-export schedule (all-day or a clock time), and its UID. Reference a type " +
-        "by name, or pass its UID to add_meals / update_meal via the `type: { uid }` spec. " +
+        "by name, or pass its UID to plan_meals / update_meal via the `type: { uid }` spec. " +
         "Meal types are created and edited in the Paprika app, not through this server.",
       inputSchema: {},
     },

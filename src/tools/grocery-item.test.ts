@@ -14,6 +14,7 @@ import {
   registerAddGroceryItemsTool,
   registerDeleteGroceryItemTool,
   registerUpdateGroceryItemTool,
+  updateGroceryItemInputSchema,
 } from "./grocery-item.js";
 
 const WEEKLY_LIST = makeGroceryList({ uid: "LIST-1" as GroceryListUid, name: "Weekly" });
@@ -487,21 +488,11 @@ describe("update_grocery_item tool", () => {
     expect(saved?.instruction).toBe("get the green ones");
   });
 
-  it("grocery-surface.AC2.6: updating purchased toggles status to true", async () => {
-    const existingItem = makeGroceryItem({
-      uid: "ITEM-2" as GroceryItemUid,
-      ingredient: "Milk",
-      purchased: false,
-    });
-    const { callTool } = makeUpdateCtx({ groceryItems: [existingItem] });
-
-    await callTool("update_grocery_item", {
-      uid: "ITEM-2",
-      purchased: true,
-    });
-
-    const savedItems = mockSaveGroceryItems.mock.calls[0]?.[0] as Array<{ purchased: boolean }>;
-    expect(savedItems[0]?.purchased).toBe(true);
+  it("grocery-surface.AC2.6: purchased is rejected — promoted to mark_grocery_item_purchased", () => {
+    // The `purchased` transition left update_grocery_item for its own intent verb.
+    // The strict schema rejects a stray `purchased` key (the SDK surfaces it as an
+    // isError) rather than silently dropping it.
+    expect(updateGroceryItemInputSchema.safeParse({ uid: "ITEM-2", purchased: true }).success).toBe(false);
   });
 
   it("grocery-surface.AC2.7: name recalculated when quantity changes from empty to non-empty", async () => {

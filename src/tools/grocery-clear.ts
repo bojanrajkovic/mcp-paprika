@@ -9,9 +9,9 @@ import { commitGroceryItemsBatch, groceryStartGuard } from "./grocery-helpers.js
 import { textResult } from "./helpers.js";
 
 export function registerClearPurchasedTool(server: McpServer, ctx: ServerContext): void {
-  const log = ctx.log.child({ component: "clear_purchased" });
+  const log = ctx.log.child({ component: "clear_purchased_grocery_items" });
   server.registerTool(
-    "clear_purchased",
+    "clear_purchased_grocery_items",
     {
       description: "Clear all purchased items from a grocery list.",
       inputSchema: {
@@ -19,7 +19,7 @@ export function registerClearPurchasedTool(server: McpServer, ctx: ServerContext
       },
     },
     async (args) => {
-      log.info({ tool: "clear_purchased", listUid: args.listUid }, "tool invoked");
+      log.info({ tool: "clear_purchased_grocery_items", listUid: args.listUid }, "tool invoked");
       return groceryStartGuard(ctx).match(
         async (): Promise<CallToolResult> => {
           const list = ctx.groceryListStore.get(args.listUid);
@@ -38,7 +38,7 @@ export function registerClearPurchasedTool(server: McpServer, ctx: ServerContext
             await commitGroceryItemsBatch(ctx, saved);
           } catch (error) {
             const message = toMessage(error);
-            log.error({ err: error, listUid: args.listUid }, "saveGroceryItems (clear_purchased) failed");
+            log.error({ err: error, listUid: args.listUid }, "saveGroceryItems (clear_purchased_grocery_items) failed");
             return textResult(`Failed to clear purchased items from "${list.name}": ${message}`);
           }
 
@@ -51,9 +51,9 @@ export function registerClearPurchasedTool(server: McpServer, ctx: ServerContext
 }
 
 export function registerClearAllTool(server: McpServer, ctx: ServerContext): void {
-  const log = ctx.log.child({ component: "clear_all" });
+  const log = ctx.log.child({ component: "clear_grocery_list" });
   server.registerTool(
-    "clear_all",
+    "clear_grocery_list",
     {
       description: "Clear all items from a grocery list.",
       inputSchema: {
@@ -61,7 +61,7 @@ export function registerClearAllTool(server: McpServer, ctx: ServerContext): voi
       },
     },
     async (args) => {
-      log.info({ tool: "clear_all", listUid: args.listUid }, "tool invoked");
+      log.info({ tool: "clear_grocery_list", listUid: args.listUid }, "tool invoked");
       return groceryStartGuard(ctx).match(
         async (): Promise<CallToolResult> => {
           const list = ctx.groceryListStore.get(args.listUid);
@@ -80,7 +80,7 @@ export function registerClearAllTool(server: McpServer, ctx: ServerContext): voi
             await commitGroceryItemsBatch(ctx, saved);
           } catch (error) {
             const message = toMessage(error);
-            log.error({ err: error, listUid: args.listUid }, "saveGroceryItems (clear_all) failed");
+            log.error({ err: error, listUid: args.listUid }, "saveGroceryItems (clear_grocery_list) failed");
             return textResult(`Failed to clear items from "${list.name}": ${message}`);
           }
 

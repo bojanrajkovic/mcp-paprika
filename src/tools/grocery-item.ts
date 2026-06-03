@@ -165,20 +165,27 @@ export function registerAddGroceryItemsTool(server: McpServer, ctx: ServerContex
   );
 }
 
+// Strict (exported for direct Zod-validation tests). `purchased` was promoted to
+// its own intent verb (mark_grocery_item_purchased), so a stray `purchased` key
+// here is a loud rejection rather than a silently dropped field.
+export const updateGroceryItemInputSchema = z
+  .object({
+    uid: GroceryItemUidSchema.describe("UID of the grocery item to update"),
+    quantity: z.string().optional().describe("New quantity; set to empty string to clear"),
+    aisle: z.string().optional().describe("New aisle display name"),
+    instruction: z.string().optional().describe("New free-form notes"),
+  })
+  .strict();
+
 export function registerUpdateGroceryItemTool(server: McpServer, ctx: ServerContext): void {
   const log = ctx.log.child({ component: "update_grocery_item" });
   server.registerTool(
     "update_grocery_item",
     {
       description:
-        "Update an existing grocery item. Only provided fields are changed; omitted fields retain their current values.",
-      inputSchema: {
-        uid: GroceryItemUidSchema.describe("UID of the grocery item to update"),
-        quantity: z.string().optional().describe("New quantity; set to empty string to clear"),
-        aisle: z.string().optional().describe("New aisle display name"),
-        instruction: z.string().optional().describe("New free-form notes"),
-        purchased: z.boolean().optional().describe("Whether the item has been purchased"),
-      },
+        "Update a grocery item's quantity, aisle, or notes by UID. Only provided fields are changed; " +
+        "omitted fields retain their current values. To check an item off, use mark_grocery_item_purchased.",
+      inputSchema: updateGroceryItemInputSchema,
     },
     async (args) => {
       log.info({ tool: "update_grocery_item", uid: args.uid }, "tool invoked");
@@ -202,7 +209,6 @@ export function registerUpdateGroceryItemTool(server: McpServer, ctx: ServerCont
               ...(args.quantity !== undefined && { quantity: args.quantity }),
               ...(aisleUpdate !== undefined && { aisle: aisleUpdate.aisle, aisleUid: aisleUpdate.aisleUid }),
               ...(args.instruction !== undefined && { instruction: args.instruction }),
-              ...(args.purchased !== undefined && { purchased: args.purchased }),
               name: newName,
             };
 

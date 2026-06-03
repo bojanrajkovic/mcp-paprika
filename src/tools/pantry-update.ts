@@ -12,33 +12,39 @@ import { ensureAisle } from "./aisle-helpers.js";
 import { textResult } from "./helpers.js";
 import { commitPantryItem, pantryItemToMarkdown, pantryStartGuard } from "./pantry-helpers.js";
 
+// Strict (exported for direct Zod-validation tests). `inStock` was promoted to
+// the mark_pantry_item_out_of_stock / restock_pantry_item intent verbs, so a
+// stray `inStock` key here is a loud rejection, not a silently dropped field.
+export const updatePantryItemInputSchema = z
+  .object({
+    uid: PantryItemUidSchema.describe("Pantry item UID to update"),
+    ingredient: z.string().optional().describe("New ingredient name"),
+    quantity: z.string().optional().describe("New quantity"),
+    aisle: z
+      .string()
+      .optional()
+      .describe(
+        "New aisle display name; call list_aisles first to pick an existing name. Unknown names auto-create a new aisle.",
+      ),
+    expirationDate: z
+      .string()
+      .nullable()
+      .optional()
+      .describe("Set expiration date; pass null to clear. hasExpiration is derived from this."),
+    purchaseDate: z.string().nullable().optional().describe("Set purchase date; pass null to clear"),
+  })
+  .strict();
+
 export function registerUpdatePantryItemTool(server: McpServer, ctx: ServerContext): void {
   const log = ctx.log.child({ component: "update_pantry_item" });
   server.registerTool(
     "update_pantry_item",
     {
       description:
-        "Update an existing pantry item by UID. Only provided fields are changed; " +
-        "omitted fields retain their existing values. Setting expirationDate also " +
-        "updates hasExpiration accordingly.",
-      inputSchema: {
-        uid: PantryItemUidSchema.describe("Pantry item UID to update"),
-        ingredient: z.string().optional().describe("New ingredient name"),
-        quantity: z.string().optional().describe("New quantity"),
-        aisle: z
-          .string()
-          .optional()
-          .describe(
-            "New aisle display name; call list_aisles first to pick an existing name. Unknown names auto-create a new aisle.",
-          ),
-        expirationDate: z
-          .string()
-          .nullable()
-          .optional()
-          .describe("Set expiration date; pass null to clear. hasExpiration is derived from this."),
-        purchaseDate: z.string().nullable().optional().describe("Set purchase date; pass null to clear"),
-        inStock: z.boolean().optional().describe("Set in-stock status"),
-      },
+        "Update a pantry item's ingredient, quantity, aisle, or dates by UID. Only provided fields are " +
+        "changed; omitted fields retain their existing values. Setting expirationDate also updates " +
+        "hasExpiration accordingly. To change stock status, use mark_pantry_item_out_of_stock / restock_pantry_item.",
+      inputSchema: updatePantryItemInputSchema,
     },
     async (args) => {
       log.info({ tool: "update_pantry_item", uid: args.uid }, "tool invoked");
@@ -98,7 +104,6 @@ export function registerUpdatePantryItemTool(server: McpServer, ctx: ServerConte
               ...(args.ingredient !== undefined && { ingredient: args.ingredient }),
               ...(args.quantity !== undefined && { quantity: args.quantity }),
               ...(aisleUpdate !== undefined && { aisle: aisleUpdate.aisle, aisleUid: aisleUpdate.aisleUid }),
-              ...(args.inStock !== undefined && { inStock: args.inStock }),
               expirationDate: newExpirationDate,
               hasExpiration: newHasExpiration,
               purchaseDate: newPurchaseDate,

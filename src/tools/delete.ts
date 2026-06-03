@@ -8,9 +8,9 @@ import { toMessage } from "../utils/log.js";
 import { coldStartGuard, commitRecipe, textResult } from "./helpers.js";
 
 export function registerDeleteTool(server: McpServer, ctx: ServerContext): void {
-  const log = ctx.log.child({ component: "delete_recipe" });
+  const log = ctx.log.child({ component: "trash_recipe" });
   server.registerTool(
-    "delete_recipe",
+    "trash_recipe",
     {
       description:
         "Soft-delete a recipe by UID, moving it to the Paprika trash. " +
@@ -21,7 +21,7 @@ export function registerDeleteTool(server: McpServer, ctx: ServerContext): void 
       },
     },
     async (args) => {
-      log.info({ tool: "delete_recipe", uid: args.uid }, "tool invoked");
+      log.info({ tool: "trash_recipe", uid: args.uid }, "tool invoked");
       return coldStartGuard(ctx).match(
         async (): Promise<CallToolResult> => {
           const recipe = ctx.store.get(args.uid);

@@ -72,21 +72,59 @@ describe("MCP Server end-to-end round-trip", () => {
     // Verify all expected tools are registered
     const toolNames = result.tools.map((t) => t.name);
     expect(toolNames).toContain("search_recipes");
-    expect(toolNames).toContain("filter_by_ingredient");
-    expect(toolNames).toContain("filter_by_time");
     expect(toolNames).toContain("read_recipe");
     expect(toolNames).toContain("create_recipe");
     expect(toolNames).toContain("update_recipe");
-    expect(toolNames).toContain("delete_recipe");
+    expect(toolNames).toContain("trash_recipe");
     expect(toolNames).toContain("list_categories");
-    expect(toolNames).toContain("list_pantry");
-    expect(toolNames).toContain("get_pantry_item");
+    expect(toolNames).toContain("list_pantry_items");
+    expect(toolNames).toContain("read_pantry_item");
+    // Intent verbs promoted off the generic update_* tools (command-language refactor).
+    expect(toolNames).toContain("restore_recipe");
+    expect(toolNames).toContain("rate_recipe");
+    expect(toolNames).toContain("favorite_recipe");
+    expect(toolNames).toContain("unfavorite_recipe");
+    expect(toolNames).toContain("categorize_recipe");
+    expect(toolNames).toContain("mark_grocery_item_purchased");
+    expect(toolNames).toContain("mark_pantry_item_out_of_stock");
+    expect(toolNames).toContain("restock_pantry_item");
+    expect(toolNames).toContain("move_menu_item");
+    expect(toolNames).toContain("reschedule_meal");
+    // New behavioral reads + log; list_meal_history split into the forward plan + recall views.
+    expect(toolNames).toContain("read_meal_plan");
+    expect(toolNames).toContain("search_meal_history");
+    expect(toolNames).toContain("log_cooked_meal");
+    expect(toolNames).not.toContain("list_meal_history");
+    expect(toolNames).not.toContain("filter_by_ingredient");
 
     // Verify tools have descriptions
     result.tools.forEach((tool) => {
       expect(tool.description).toBeDefined();
       expect(typeof tool.description).toBe("string");
     });
+
+    // Every tool must publish a non-empty parameter schema. Regression guard for the
+    // ZodEffects bug: a `.refine()`/`.superRefine()` inputSchema serializes to zero
+    // properties, so the model would see the tool as taking no arguments. search_recipes
+    // (which takes query/ingredients/match/maxPrep/maxCook/maxTotal/limit) is the canary.
+    const search = result.tools.find((t) => t.name === "search_recipes");
+    expect(search).toBeDefined();
+    const searchSchema = search!.inputSchema as { properties?: Record<string, unknown> };
+    expect(Object.keys(searchSchema.properties ?? {})).toContain("query");
+  });
+
+  it("rejects a promoted field on update_recipe with a loud SDK input-validation error", async () => {
+    // ADR-0008 D1: rating left update_recipe for rate_recipe, and the update_recipe
+    // schema is .strict(), so a stray `rating` key is a hard SDK rejection (isError)
+    // rather than a silently dropped key — the model can't set the field this way.
+    const result = await client.callTool({
+      name: "update_recipe",
+      arguments: { uid: "any-uid", rating: 5 },
+    });
+
+    expect(result.isError).toBe(true);
+    const text = (result.content as Array<{ type: string; text?: string }>).map((c) => c.text ?? "").join(" ");
+    expect(text).toContain("rating");
   });
 
   it("calls a tool and receives a result", async () => {
@@ -163,9 +201,9 @@ describe("MCP Server end-to-end round-trip", () => {
   });
 
   it("calls pantry tools and receives results", async () => {
-    // Test list_pantry tool
+    // Test list_pantry_items tool
     const listResult = await client.callTool({
-      name: "list_pantry",
+      name: "list_pantry_items",
       arguments: {},
     });
 
@@ -182,9 +220,9 @@ describe("MCP Server end-to-end round-trip", () => {
     expect(typeof listText).toBe("string");
     expect(listText.toLowerCase()).toContain("pantry"); // Should mention pantry
 
-    // Test get_pantry_item by ingredient
+    // Test read_pantry_item by ingredient
     const getResult = await client.callTool({
-      name: "get_pantry_item",
+      name: "read_pantry_item",
       arguments: { ingredient: "Flour" },
     });
 

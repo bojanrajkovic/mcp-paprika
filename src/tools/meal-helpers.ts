@@ -1,4 +1,5 @@
 // pattern: Imperative Shell
+import { DateTime } from "luxon";
 import { err, ok, type Result } from "neverthrow";
 import { z } from "zod";
 
@@ -42,8 +43,8 @@ export const mealTypeSpecSchema = z.union([
  * Structured result of resolving a `mealTypeSpecSchema` union variant against
  * `mealTypeStore`. The resolver never formats user-facing text — it returns the
  * resolved `MealType` on a hit, or one of three error reasons callers map to
- * their own message style (terse for `update_meal`, per-index-prefixed for
- * `add_meals`, single-filter for `list_meal_history`). `unknown_name` carries
+ * their own message style (terse for `update_meal` / `reschedule_meal`,
+ * per-index-prefixed for `plan_meals`). `unknown_name` carries
  * `knownNames` so callers can list the available types as a remediation hint.
  */
 export type MealTypeResolveResult =
@@ -98,6 +99,28 @@ export function resolveMealTypeSpec(
 }
 
 /**
+ * Render a failed `resolveMealTypeSpec` result as a single user-facing error
+ * string. The one place that owns the three error-reason → message mapping;
+ * shared by update_meal, reschedule_meal, log_cooked_meal, and search_meal_history.
+ * (plan_meals formats its own per-index-prefixed variant in its batch loop.)
+ */
+export function formatMealTypeResolveError(result: Extract<MealTypeResolveResult, { ok: false }>): string {
+  if (result.reason === "unknown_uid") {
+    return `Unknown meal type UID "${result.uid}".`;
+  }
+  if (result.reason === "unknown_name") {
+    return (
+      `Unknown meal type "${result.name}". Known types: ${result.knownNames.join(", ")}. ` +
+      `Use the {uid} or {builtin} discriminator to reference a custom meal type.`
+    );
+  }
+  return (
+    `No built-in meal type found with index ${result.index.toString()} ` +
+    `(expected 0=Breakfast, 1=Lunch, 2=Dinner, 3=Snacks).`
+  );
+}
+
+/**
  * Builds a stateful, per-date `order_flag` assigner for a batch of new meals.
  *
  * `order_flag` sequences PER CALENDAR DATE — all meal types on a given day share
@@ -111,7 +134,7 @@ export function resolveMealTypeSpec(
  * built meals are not yet in the store — without it, two same-date items in one
  * batch would both read the same seed and collide.
  *
- * Shared by `add_meals` (Stage 2) and `add_menu_to_planner` so the per-date
+ * Shared by `plan_meals` (Stage 2) and `schedule_menu` so the per-date
  * sequencing lives in exactly one tested place.
  */
 export function makeMealOrderFlagAssigner(ctx: ServerContext): (date: string) => number {
@@ -275,4 +298,73 @@ export function renderMealCard(ctx: ServerContext, meal: Readonly<Meal>): string
       : `Type ${meal.type.toString()}`;
   const recipeName = meal.recipeUid !== null ? (ctx.store.get(meal.recipeUid)?.name ?? null) : null;
   return mealToMarkdown(meal, typeName, recipeName);
+}
+
+function formatMealLine(
+  meal: Readonly<Meal>,
+  typeNames: Map<string, string>,
+  typeByOriginalType: Map<number, string>,
+): { typeName: string; entry: string } {
+  // typeUid is the primary lookup, but older meals (predating Paprika's
+  // mealtypes catalog) carry typeUid: null and rely on the `type` integer
+  // (which corresponds to MealType.originalType in the catalog).
+  const lookup = meal.typeUid !== null ? typeNames.get(meal.typeUid) : typeByOriginalType.get(meal.type);
+  const typeName = lookup ?? `Type ${meal.type.toString()}`;
+  const isFreeform = meal.recipeUid === null || meal.recipeUid === "";
+  const entry = isFreeform ? `${meal.name} *(freeform)*` : meal.name;
+  return { typeName, entry };
+}
+
+/**
+ * Render meals as a date-grouped calendar section: one `### EEE dd` heading per
+ * calendar day — in the order the meals are supplied, so the CALLER controls
+ * chronology (read_meal_plan sorts ascending; recall views may sort however) —
+ * then one `- **Type** · entry, entry` bullet per meal type on that day, with
+ * freeform (non-recipe) meals annotated. Returns just the grouped body; callers
+ * prepend their own summary header. Shared by read_meal_plan and search_meal_history.
+ */
+export function renderMealsGroupedByDate(ctx: ServerContext, meals: ReadonlyArray<Readonly<Meal>>): string {
+  const typeNames = new Map<string, string>();
+  const typeByOriginalType = new Map<number, string>();
+  for (const mt of ctx.mealTypeStore.getAll()) {
+    typeNames.set(mt.uid, mt.name);
+    // Only built-in types have a non-null originalType; custom types are
+    // looked up by typeUid alone.
+    if (mt.originalType !== null) {
+      typeByOriginalType.set(mt.originalType, mt.name);
+    }
+  }
+
+  const grouped = new Map<string, Array<{ typeName: string; entry: string }>>();
+  for (const meal of meals) {
+    const dateKey = meal.date.slice(0, 10);
+    let entries = grouped.get(dateKey);
+    if (entries === undefined) {
+      entries = [];
+      grouped.set(dateKey, entries);
+    }
+    entries.push(formatMealLine(meal, typeNames, typeByOriginalType));
+  }
+
+  const lines: Array<string> = [];
+  for (const [dateKey, entries] of grouped) {
+    const dt = DateTime.fromISO(dateKey, { zone: "utc" });
+    const dayLabel = dt.isValid ? dt.toFormat("EEE dd") : dateKey;
+    lines.push("");
+    lines.push(`### ${dayLabel}`);
+
+    const byType = new Map<string, Array<string>>();
+    for (const { typeName, entry } of entries) {
+      let typeEntries = byType.get(typeName);
+      if (typeEntries === undefined) {
+        typeEntries = [];
+        byType.set(typeName, typeEntries);
+      }
+      typeEntries.push(entry);
+    }
+    for (const [typeName, typeEntries] of byType) {
+      lines.push(`- **${typeName}** · ${typeEntries.join(", ")}`);
+    }
+  }
+  return lines.join("\n");
 }

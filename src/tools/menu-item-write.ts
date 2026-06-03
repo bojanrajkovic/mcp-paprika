@@ -16,7 +16,7 @@ import { commitMenu, commitMenuItem, commitMenuItemsBatch, menuStartGuard, menuT
 
 // One menuitem to add. Structurally EITHER recipe-linked (recipe_uid; display
 // name auto-resolves from the recipe) OR freeform (name; no recipe), mirroring
-// add_meals — Paprika.app dispatches a menuitem's display off recipe_uid, so a
+// plan_meals — Paprika.app dispatches a menuitem's display off recipe_uid, so a
 // stored custom name on a recipe-linked item would never render. The z.union of
 // two `.strict()` objects rejects extra keys (including supplying BOTH recipe_uid
 // and name) at the Zod boundary, surfacing the constraint structurally.
@@ -71,7 +71,7 @@ export function registerAddMenuItemsTool(server: McpServer, ctx: ServerContext):
         "Add one or more menuitems to a menu (saved meal plan). Look the menu up by UID or name (tiered " +
         "fuzzy match). Each item is EITHER recipe-linked (supply recipe_uid; display name auto-resolves " +
         "from the recipe) OR freeform (supply name; no recipe) — the two are mutually exclusive, matching " +
-        "add_meals. Each item also carries a 1-indexed day and a meal type (name, UID, or built-in index " +
+        "plan_meals. Each item also carries a 1-indexed day and a meal type (name, UID, or built-in index " +
         "0=Breakfast, 1=Lunch, 2=Dinner, 3=Snacks). If any day falls beyond the menu's current span the " +
         "menu is automatically extended to fit before the items are added. All items validate up-front; " +
         "if ANY item is invalid the entire batch is rejected with a per-index error enumeration so callers " +
@@ -121,7 +121,7 @@ export function registerAddMenuItemsTool(server: McpServer, ctx: ServerContext):
 
             // Recipe-linked XOR freeform — the structural union guarantees exactly
             // one shape. Recipe items denormalize the display name from the local
-            // store (matching add_meals' recipe-link contract); freeform items keep
+            // store (matching plan_meals' recipe-link contract); freeform items keep
             // the supplied name and store recipeUid: null.
             let recipeUid: RecipeUid | null;
             let resolvedName: string;
@@ -141,7 +141,7 @@ export function registerAddMenuItemsTool(server: McpServer, ctx: ServerContext):
               resolvedName = item.name;
             }
 
-            // Meal type resolution via the shared helper (same DU as add_meals).
+            // Meal type resolution via the shared helper (same DU as plan_meals).
             const typeResult = resolveMealTypeSpec(ctx, item.type);
             if (!typeResult.ok) {
               if (typeResult.reason === "unknown_uid") {
@@ -252,12 +252,16 @@ export function registerAddMenuItemsTool(server: McpServer, ctx: ServerContext):
   );
 }
 
-export const updateMenuItemInputSchema = z.object({
-  uid: MenuItemUidSchema.describe("UID of the menuitem to update"),
-  day: z.number().int().positive().optional().describe("New 1-indexed day"),
-  type: mealTypeSpecSchema.optional().describe("New meal type (same DU as add_menu_items)"),
-  recipe_uid: RecipeUidSchema.optional().describe("New recipe UID. Display name re-resolves from the new recipe."),
-});
+// `.strict()` — `day` was promoted to move_menu_item (a day-move carries
+// parent-menu auto-expand and menu-wide order_flag resequencing that a plain
+// field edit would not), so a stray `day` key here is a hard rejection.
+export const updateMenuItemInputSchema = z
+  .object({
+    uid: MenuItemUidSchema.describe("UID of the menuitem to update"),
+    type: mealTypeSpecSchema.optional().describe("New meal type (same DU as add_menu_items)"),
+    recipe_uid: RecipeUidSchema.optional().describe("New recipe UID. Display name re-resolves from the new recipe."),
+  })
+  .strict();
 
 export function registerUpdateMenuItemTool(server: McpServer, ctx: ServerContext): void {
   const log = ctx.log.child({ component: "update_menu_item" });
@@ -265,19 +269,18 @@ export function registerUpdateMenuItemTool(server: McpServer, ctx: ServerContext
     "update_menu_item",
     {
       description:
-        "Update an existing menuitem by UID. Provide at least one of day, type, or recipe_uid; omitted " +
-        "fields keep their current values. Changing recipe_uid re-resolves the display name from the new " +
-        "recipe. Moving an item to a later day auto-extends the menu's span if needed (so it stays visible) " +
-        "and re-sequences its order within the destination day. The menu link (menu_uid) is not editable " +
-        "via this tool — delete and re-add to move an item between menus.",
-      inputSchema: updateMenuItemInputSchema.shape,
+        "Update an existing menuitem's meal type or recipe link by UID. Provide at least one of type or " +
+        "recipe_uid; omitted fields keep their current values. Changing recipe_uid re-resolves the display " +
+        "name from the new recipe. To move an item to a different day, use move_menu_item. The menu link " +
+        "(menu_uid) is not editable via this tool — delete and re-add to move an item between menus.",
+      inputSchema: updateMenuItemInputSchema,
     },
     async (args) => {
       log.info({ tool: "update_menu_item", uid: args.uid }, "tool invoked");
       return menuStartGuard(ctx).match(
         async (): Promise<CallToolResult> => {
-          if (args.day === undefined && args.type === undefined && args.recipe_uid === undefined) {
-            return textResult("Nothing to update. Provide at least one of day, type, or recipe_uid.");
+          if (args.type === undefined && args.recipe_uid === undefined) {
+            return textResult("Nothing to update. Provide at least one of type or recipe_uid.");
           }
 
           const uid = args.uid;
@@ -331,50 +334,10 @@ export function registerUpdateMenuItemTool(server: McpServer, ctx: ServerContext
             newName = recipe.name;
           }
 
-          // Destination day + whether the move changes the (menuUid, day) ordering bucket.
-          const newDay = args.day ?? existing.day;
-          const dayChanged = args.day !== undefined && args.day !== existing.day;
-
-          // (A) Auto-expand the parent menu when a day-move pushes the item past the
-          // menu's current span — otherwise menuToMarkdown (Day 1..menu.days) silently
-          // hides it. Mirrors add_menu_items' auto-expand. Skipped for an orphaned item
-          // (menuUid null) or a menu not known locally.
-          let extendedTo: number | null = null;
-          if (args.day !== undefined && existing.menuUid !== null) {
-            const parent = ctx.menuStore.get(existing.menuUid);
-            if (parent !== undefined && newDay > parent.days) {
-              const expanded: Menu = { ...parent, days: newDay };
-              try {
-                const savedMenu = (await ctx.client.saveMenus([expanded]))[0] ?? expanded;
-                await commitMenu(ctx, savedMenu);
-                extendedTo = newDay;
-              } catch (error) {
-                const message = toMessage(error);
-                log.error({ err: error, uid }, "saveMenus (update_menu_item auto-expand) failed");
-                return textResult(
-                  `Failed to extend the menu to ${newDay.toString()} day(s) for the move: ${message}. ` +
-                    `The item was not moved.`,
-                );
-              }
-            }
-          }
-
-          // (B) When the day changes, re-sequence the moved item to the END of the
-          // menu's order_flag run (menu-wide max + 1, excluding the item itself).
-          // order_flag is menu-wide — not per-day — per the wire capture (see Stage 3
-          // of add_menu_items), so this keeps it unique and places the move last.
-          let newOrderFlag = existing.orderFlag;
-          if (dayChanged && existing.menuUid !== null) {
-            const others = ctx.menuItemStore.getByMenuUid(existing.menuUid).filter((it) => it.uid !== existing.uid);
-            newOrderFlag = others.reduce((max, it) => Math.max(max, it.orderFlag), -1) + 1;
-          }
-
           const merged: MenuItem = {
             ...existing,
-            ...(args.day !== undefined && { day: args.day }),
             ...(newTypeUid !== undefined && { typeUid: newTypeUid }),
             ...(args.recipe_uid !== undefined && { recipeUid: newRecipeUid, name: newName }),
-            orderFlag: newOrderFlag,
           };
 
           let saved: MenuItem;
@@ -387,8 +350,7 @@ export function registerUpdateMenuItemTool(server: McpServer, ctx: ServerContext
             return textResult(`Failed to update menu item: ${message}`);
           }
 
-          const extendNote = extendedTo !== null ? `Extended the menu to ${extendedTo.toString()} day(s). ` : "";
-          return textResult(`${extendNote}Menu item "${saved.name}" updated (day ${saved.day.toString()}).`);
+          return textResult(`Menu item "${saved.name}" updated.`);
         },
         (guard) => guard,
       );

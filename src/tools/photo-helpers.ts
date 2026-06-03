@@ -11,7 +11,7 @@ const THUMBNAIL_PX = 280;
 
 /**
  * Longest edge (px) AI-generated `full` images are capped to before upload.
- * Shared by `generate_photo` (attach path) and `upload_photo` (generation_token
+ * Shared by `generate_recipe_photo` (attach path) and `upload_recipe_photo` (generation_token
  * source) so a previewed-then-saved image gets the same cap as a directly
  * generated-and-attached one — see `NormalizePhotoOptions.maxFullEdge`.
  */
@@ -22,9 +22,9 @@ export interface NormalizePhotoOptions {
   /**
    * Cap the `full` image's longest edge to this many pixels (preserving aspect,
    * no enlargement). Omit to keep the source resolution (the original
-   * `upload_photo` behavior — a user-supplied image is left at native size).
+   * `upload_recipe_photo` behavior — a user-supplied image is left at native size).
    *
-   * `generate_photo` sets this because image-generation models emit wildly
+   * `generate_recipe_photo` sets this because image-generation models emit wildly
    * different native sizes (1024²–4096², and Seedream's "1K" is already 2048²);
    * a fixed cap keeps uploads "fairly small" regardless of which model the
    * caller picked, deterministically, rather than trusting each model's
@@ -74,7 +74,7 @@ export async function normalizePhoto(
 }
 
 /**
- * Produce just the ~280px thumbnail JPEG. Used by `generate_photo`'s preview
+ * Produce just the ~280px thumbnail JPEG. Used by `generate_recipe_photo`'s preview
  * (attach:false) path, which only needs the thumbnail — calling this avoids the
  * wasted full-resolution encode that {@link normalizePhoto} would also produce.
  */
@@ -103,9 +103,9 @@ export function sha256Hex(bytes: Buffer): string {
  * Returns the created Photo.
  *
  * `order_flag`/`name` are auto-assigned from the synced gallery (max + 1), never
- * caller-supplied — the same convention `add_meals` uses for `order_flag`. Two
+ * caller-supplied — the same convention `plan_meals` uses for `order_flag`. Two
  * UIDs are generated: a thumbnail UID (→ `recipe.photo`) and the Photo entity
- * UID (→ `recipe.photo_large`). Shared by `upload_photo` and `generate_photo`.
+ * UID (→ `recipe.photo_large`). Shared by `upload_recipe_photo` and `generate_recipe_photo`.
  *
  * Callers MUST gate on `ctx.photoStore.hasSynced` first — the order_flag derives
  * from the gallery, so attaching before the photo catalog syncs could collide.

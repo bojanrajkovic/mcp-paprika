@@ -12,7 +12,7 @@ import { fetchImageBytes, MAX_IMAGE_BYTES } from "./photo-fetch.js";
 import { attachPhotoToRecipe, commitPhotoDelete, GENERATED_MAX_FULL_EDGE, normalizePhoto } from "./photo-helpers.js";
 
 /**
- * Image source for `upload_photo`: exactly one of `url`, `generation_token`, or
+ * Image source for `upload_recipe_photo`: exactly one of `url`, `generation_token`, or
  * `image_base64`. A `z.union` of `.strict()` single-key objects (presence
  * dispatch, like `mealTypeSpecSchema`) so the "exactly one" rule is enforced at
  * the Zod boundary rather than a runtime check.
@@ -35,7 +35,7 @@ export const uploadPhotoSourceSchema = z
         generation_token: z
           .string()
           .describe(
-            "A `gen_` token returned by a generate_photo preview (attach:false). Attaches THAT exact previewed " +
+            "A `gen_` token returned by a generate_recipe_photo preview (attach:false). Attaches THAT exact previewed " +
               "image — no need to regenerate (which would produce a different image) or resend bytes. This is the " +
               "way to save a generated photo you previewed.",
           ),
@@ -93,20 +93,21 @@ async function resolveSourceBytes(
 ): Promise<ResolvedSource> {
   if ("url" in source) {
     // SSRF-safe fetch (scheme + IP-literal guard, rebinding-safe dispatcher,
-    // redirect block, streaming size cap) — shared with generate_photo's restyle.
+    // redirect block, streaming size cap) — shared with generate_recipe_photo's restyle.
     const fetched = await fetchImageBytes(source.url);
     return "error" in fetched ? fetched : { bytes: fetched.bytes, generated: false };
   }
 
   if ("generation_token" in source) {
     // CONSUME atomically up front so the token is single-use even if two
-    // upload_photo calls race (the synchronous delete runs before any await, so
+    // upload_recipe_photo calls race (the synchronous delete runs before any await, so
     // the second consume returns null).
     const token = source.generation_token;
     const entry = ctx.generatedImageStore.consume(token);
     if (entry === null) {
       return {
-        error: "That generated preview has expired or was already attached. Generate a fresh one with generate_photo.",
+        error:
+          "That generated preview has expired or was already attached. Generate a fresh one with generate_recipe_photo.",
       };
     }
     if (entry.recipeUid !== recipeUid) {
@@ -127,13 +128,13 @@ async function resolveSourceBytes(
 }
 
 export function registerUploadPhotoTool(server: McpServer, ctx: ServerContext): void {
-  const log = ctx.log.child({ component: "upload_photo" });
+  const log = ctx.log.child({ component: "upload_recipe_photo" });
   server.registerTool(
-    "upload_photo",
+    "upload_recipe_photo",
     {
       description:
         "Attach a photo to a recipe from exactly one `source`: a `url` (PREFERRED for web images — the server " +
-        "downloads it), a `generation_token` (to save an image you previewed with generate_photo, attach:false — " +
+        "downloads it), a `generation_token` (to save an image you previewed with generate_recipe_photo, attach:false — " +
         "no need to regenerate), or, for programmatic callers, inline `image_base64`. If you built the recipe " +
         "from a web page, pass that page's main/hero (og:image) URL. The server normalizes any format " +
         "(JPEG/PNG/WEBP/GIF) to JPEG and generates the thumbnail automatically. There is NO file-path option — the " +
@@ -143,7 +144,7 @@ export function registerUploadPhotoTool(server: McpServer, ctx: ServerContext): 
     async (args) => {
       const sourceKind =
         "url" in args.source ? "url" : "generation_token" in args.source ? "generation_token" : "base64";
-      log.info({ tool: "upload_photo", recipe_uid: args.recipe_uid, source: sourceKind }, "tool invoked");
+      log.info({ tool: "upload_recipe_photo", recipe_uid: args.recipe_uid, source: sourceKind }, "tool invoked");
       return coldStartGuard(ctx).match(
         async (): Promise<CallToolResult> => {
           // Gate on the photo catalog being synced — order_flag/name are derived from the
@@ -163,7 +164,7 @@ export function registerUploadPhotoTool(server: McpServer, ctx: ServerContext): 
           let thumbnail: Buffer;
           let full: Buffer;
           try {
-            // Cap generated-image output the same way generate_photo's attach
+            // Cap generated-image output the same way generate_recipe_photo's attach
             // path does, so preview-then-save and generate-and-attach store the
             // same size. User-supplied url/base64 keep their native resolution.
             ({ thumbnail, full } = await normalizePhoto(
@@ -201,9 +202,9 @@ export function registerUploadPhotoTool(server: McpServer, ctx: ServerContext): 
 }
 
 export function registerDeletePhotoTool(server: McpServer, ctx: ServerContext): void {
-  const log = ctx.log.child({ component: "delete_photo" });
+  const log = ctx.log.child({ component: "delete_recipe_photo" });
   server.registerTool(
-    "delete_photo",
+    "delete_recipe_photo",
     {
       description:
         "Delete a photo from a recipe by UID. Idempotent: a second delete on the same UID returns a friendly " +
@@ -211,7 +212,7 @@ export function registerDeletePhotoTool(server: McpServer, ctx: ServerContext): 
       inputSchema: deletePhotoInputSchema.shape,
     },
     async (args) => {
-      log.info({ tool: "delete_photo", photo_uid: args.photo_uid }, "tool invoked");
+      log.info({ tool: "delete_recipe_photo", photo_uid: args.photo_uid }, "tool invoked");
       return coldStartGuard(ctx).match(
         async (): Promise<CallToolResult> => {
           // Gate on the photo catalog being synced, else a not-yet-synced photo reads as

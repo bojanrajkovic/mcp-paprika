@@ -7,7 +7,32 @@ import type { ServerContext } from "../types/server-context.js";
 
 import { RecipeUidSchema } from "../ids.js";
 import { toMessage } from "../utils/log.js";
-import { coldStartGuard, commitRecipe, recipeToMarkdown, resolveCategoryRefs, textResult } from "./helpers.js";
+import { coldStartGuard, commitRecipe, recipeToMarkdown, textResult } from "./helpers.js";
+
+// Strict schema (exported for direct Zod-validation tests). `.strict()` is
+// load-bearing: rating, categories, favorite status, and trash state were
+// promoted to their own intent verbs (rate_recipe, categorize_recipe,
+// favorite_recipe/unfavorite_recipe, trash_recipe/restore_recipe), so passing
+// one of those keys here must be a loud rejection — not a silently dropped key
+// that lets the model think it set the field. update_recipe edits content only.
+export const updateRecipeInputSchema = z
+  .object({
+    uid: RecipeUidSchema.describe("Recipe UID to update"),
+    name: z.string().optional().describe("New recipe name"),
+    ingredients: z.string().optional().describe("New ingredients list"),
+    directions: z.string().optional().describe("New cooking directions"),
+    description: z.string().optional().describe("New description"),
+    notes: z.string().optional().describe("New notes"),
+    servings: z.string().optional().describe("New servings"),
+    prepTime: z.string().optional().describe("New prep time"),
+    cookTime: z.string().optional().describe("New cook time"),
+    totalTime: z.string().optional().describe("New total time"),
+    source: z.string().optional().describe("New source name"),
+    sourceUrl: z.string().optional().describe("New source URL"),
+    difficulty: z.string().optional().describe("New difficulty level"),
+    nutritionalInfo: z.string().optional().describe("New nutritional information"),
+  })
+  .strict();
 
 export function registerUpdateTool(server: McpServer, ctx: ServerContext): void {
   const log = ctx.log.child({ component: "update_recipe" });
@@ -15,38 +40,12 @@ export function registerUpdateTool(server: McpServer, ctx: ServerContext): void 
     "update_recipe",
     {
       description:
-        "Update an existing recipe by UID. Only provided fields are changed; " +
-        "omitted fields retain their existing values. If categories is provided, " +
-        "it replaces the existing category list entirely; omitting categories " +
-        "leaves the existing list unchanged. " +
-        "Pass inTrash: true to move to trash (soft-delete, reversible) or inTrash: false to restore. " +
-        "Use delete_recipe for a dedicated trash workflow.",
-      inputSchema: {
-        uid: RecipeUidSchema.describe("Recipe UID to update"),
-        name: z.string().optional().describe("New recipe name"),
-        ingredients: z.string().optional().describe("New ingredients list"),
-        directions: z.string().optional().describe("New cooking directions"),
-        description: z.string().optional().describe("New description"),
-        notes: z.string().optional().describe("New notes"),
-        servings: z.string().optional().describe("New servings"),
-        prepTime: z.string().optional().describe("New prep time"),
-        cookTime: z.string().optional().describe("New cook time"),
-        totalTime: z.string().optional().describe("New total time"),
-        categories: z
-          .array(z.string())
-          .optional()
-          .describe(
-            "Categories to assign — replaces the existing list when provided. Each entry is either a category " +
-              "UID (from `list_categories`) or a display name (case-insensitive). Unknown names are skipped " +
-              "with a warning.",
-          ),
-        source: z.string().optional().describe("New source name"),
-        sourceUrl: z.string().optional().describe("New source URL"),
-        difficulty: z.string().optional().describe("New difficulty level"),
-        rating: z.number().int().min(0).max(5).optional().describe("New rating 0–5"),
-        inTrash: z.boolean().optional().describe("true = move to trash, false = restore from trash"),
-        nutritionalInfo: z.string().optional().describe("New nutritional information"),
-      },
+        "Update a recipe's content fields by UID (name, ingredients, directions, description, notes, " +
+        "servings, prep/cook/total time, source, difficulty, nutritional info). Only provided fields " +
+        "change; omitted fields keep their values. This tool does NOT edit rating, categories, favorite " +
+        "status, or trash state — use rate_recipe, categorize_recipe, favorite_recipe / unfavorite_recipe, " +
+        "and trash_recipe / restore_recipe for those.",
+      inputSchema: updateRecipeInputSchema,
     },
     async (args) => {
       log.info({ tool: "update_recipe", uid: args.uid }, "tool invoked");
@@ -58,16 +57,9 @@ export function registerUpdateTool(server: McpServer, ctx: ServerContext): void 
             return textResult(`No recipe found with UID "${args.uid}".`);
           }
 
-          // Resolve category refs (UID or name) if provided — replaces list entirely (AC3.2)
-          // Check !== undefined so empty array [] correctly removes all categories (AC3.3)
-          const { uids: resolvedCategories, unknown: unknownCategories } =
-            args.categories !== undefined
-              ? resolveCategoryRefs(ctx.categoryStore.getAll(), args.categories)
-              : { uids: existing.categories, unknown: [] as Array<string> };
-
-          const warnings = unknownCategories.map((ref) => `Warning: category "${ref}" not found and was skipped.`);
-
-          // Partial merge: conditional spread omits keys when value is undefined (AC3.1)
+          // Partial merge: conditional spread omits keys when value is undefined.
+          // Promoted fields (rating/categories/onFavorites/inTrash) are intentionally
+          // absent here — they leave the open-ended editor for their intent verbs.
           const updated: Recipe = {
             ...existing,
             ...(args.name !== undefined && { name: args.name }),
@@ -82,16 +74,13 @@ export function registerUpdateTool(server: McpServer, ctx: ServerContext): void 
             ...(args.source !== undefined && { source: args.source }),
             ...(args.sourceUrl !== undefined && { sourceUrl: args.sourceUrl }),
             ...(args.difficulty !== undefined && { difficulty: args.difficulty }),
-            ...(args.rating !== undefined && { rating: args.rating }),
-            ...(args.inTrash !== undefined && { inTrash: args.inTrash }),
             ...(args.nutritionalInfo !== undefined && { nutritionalInfo: args.nutritionalInfo }),
-            categories: resolvedCategories, // always set — either resolved or existing
           };
 
           let saved: Recipe;
           try {
-            saved = await ctx.client.saveRecipe(updated); // AC3.4
-            await commitRecipe(ctx, saved); // AC3.4
+            saved = await ctx.client.saveRecipe(updated);
+            await commitRecipe(ctx, saved);
           } catch (error) {
             const message = toMessage(error);
             log.error({ err: error, uid: args.uid }, "saveRecipe failed");
@@ -99,9 +88,7 @@ export function registerUpdateTool(server: McpServer, ctx: ServerContext): void 
           }
 
           const categoryNames = ctx.categoryStore.resolveNames(saved.categories);
-          const markdown = recipeToMarkdown(saved, categoryNames);
-          const prefix = warnings.length > 0 ? warnings.join("\n") + "\n\n" : "";
-          return textResult(prefix + markdown);
+          return textResult(recipeToMarkdown(saved, categoryNames));
         },
         (guard) => guard,
       );

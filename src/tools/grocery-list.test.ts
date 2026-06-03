@@ -199,7 +199,7 @@ describe("read_grocery_list tool", () => {
     const text = getText(result);
 
     // #142: the no-match wording is normalized to the plural form shared by
-    // read_recipe / get_pantry_item via the consolidated formatLookupOutcome.
+    // read_recipe / read_pantry_item via the consolidated formatLookupOutcome.
     expect(text.toLowerCase()).toContain("no grocery lists found matching");
   });
 

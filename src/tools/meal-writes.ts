@@ -14,6 +14,7 @@ import { textResult } from "./helpers.js";
 import {
   commitMeal,
   commitMealsBatch,
+  formatMealTypeResolveError,
   makeMealOrderFlagAssigner,
   mealStartGuard,
   mealTypeSpecSchema,
@@ -83,9 +84,9 @@ export const addMealsInputSchema = z.object({
 });
 
 export function registerAddMealsTool(server: McpServer, ctx: ServerContext): void {
-  const log = ctx.log.child({ component: "add_meals" });
+  const log = ctx.log.child({ component: "plan_meals" });
   server.registerTool(
-    "add_meals",
+    "plan_meals",
     {
       description:
         "Add one or more meals to the meal planner. Each item is EITHER recipe-linked (supply " +
@@ -100,7 +101,7 @@ export function registerAddMealsTool(server: McpServer, ctx: ServerContext): voi
       inputSchema: addMealsInputSchema.shape,
     },
     async (args) => {
-      log.info({ tool: "add_meals", count: args.items.length }, "tool invoked");
+      log.info({ tool: "plan_meals", count: args.items.length }, "tool invoked");
       return mealStartGuard(ctx).match(
         async (): Promise<CallToolResult> => {
           // ----- Stage 1: per-index validation pass (collect ALL errors, not first-only) -----
@@ -122,7 +123,7 @@ export function registerAddMealsTool(server: McpServer, ctx: ServerContext): voi
             const item = args.items[i]!;
 
             // Date. The meal planner is day-granular (Paprika.app stores meals at
-            // midnight per docs/wire-captures/meals.har.json, and list_meal_history
+            // midnight per docs/wire-captures/meals.har.json, and read_meal_plan
             // groups by date.slice(0, 10)); `parseCalendarDayWire` extracts the user's
             // intended calendar day in the input's own zone — so "2026-06-15T22:00:00-08:00"
             // stays on June 15 rather than UTC-shifting to June 16.
@@ -258,16 +259,11 @@ export function registerAddMealsTool(server: McpServer, ctx: ServerContext): voi
 //   demoteVariant       — recipe_uid: null (demotion). Optional name — required
 //                         at runtime if the meal is currently recipe-linked,
 //                         omitted is a no-op for already-freeform meals.
+// `date` is intentionally absent — rescheduling a meal is its own act
+// (reschedule_meal), because moving a meal's date re-sequences the destination
+// day's order_flag. update_meal changes the recipe link, freeform name, type, or scale.
 const updateMealCommonFields = {
-  date: z
-    .string()
-    .min(1)
-    .optional()
-    .describe(
-      "Update date (ISO 8601 date or datetime). Time-of-day component is dropped — meals " +
-        "are day-granular and store at midnight UTC.",
-    ),
-  type: mealTypeSpecSchema.optional().describe("Update meal type (same DU as add_meals)."),
+  type: mealTypeSpecSchema.optional().describe("Update meal type (same DU as plan_meals)."),
   scale: z.string().min(1).nullable().optional().describe("Update scale. Pass null to clear."),
 } as const;
 
@@ -300,7 +296,7 @@ export const updateMealInputSchema = z.object({
   update: z
     .union([recipeUpdateVariant, nameUpdateVariant, demoteVariant])
     .describe(
-      "Update payload. Pick exactly one shape: {recipe_uid?, date?, type?, scale?} | {name, date?, type?, scale?} | {recipe_uid: null, name?, date?, type?, scale?}. Supplying both recipe_uid (a UID) and name is rejected — Paprika.app dispatches display off recipe_uid, so a stored custom name on a recipe-linked meal would never render. Use a freeform meal if you need a custom label.",
+      "Update payload. Pick exactly one shape: {recipe_uid?, type?, scale?} | {name, type?, scale?} | {recipe_uid: null, name?, type?, scale?}. Supplying both recipe_uid (a UID) and name is rejected — Paprika.app dispatches display off recipe_uid, so a stored custom name on a recipe-linked meal would never render. Use a freeform meal if you need a custom label. To change a meal's date, use reschedule_meal.",
     ),
 });
 
@@ -315,8 +311,8 @@ export function registerUpdateMealTool(server: McpServer, ctx: ServerContext): v
         "and display name are structurally exclusive: name auto-resolves from the recipe for linked meals, " +
         "and Paprika.app would never render a stored custom name on a recipe-linked meal. To set a custom " +
         "label, use a freeform meal (no recipe_uid) or demote first via recipe_uid: null + name. Partial " +
-        "merge: omitted fields are preserved. To clear scale, pass scale: null. The is_ingredient and " +
-        "deleted fields are not updatable via this tool.",
+        "merge: omitted fields are preserved. To clear scale, pass scale: null. To change the meal's date, " +
+        "use reschedule_meal. The is_ingredient and deleted fields are not updatable via this tool.",
       inputSchema: updateMealInputSchema.shape,
     },
     async (args) => {
@@ -346,38 +342,12 @@ export function registerUpdateMealTool(server: McpServer, ctx: ServerContext): v
           if (op.type !== undefined) {
             const result = resolveMealTypeSpec(ctx, op.type);
             if (!result.ok) {
-              if (result.reason === "unknown_uid") {
-                return textResult(`Unknown meal type UID "${result.uid}".`);
-              }
-              if (result.reason === "unknown_name") {
-                const knownList = result.knownNames.join(", ");
-                return textResult(
-                  `Unknown meal type "${result.name}". Known types: ${knownList}. ` +
-                    `Use the {uid} or {builtin} discriminator to reference a custom meal type.`,
-                );
-              }
-              return textResult(
-                `No built-in meal type found with index ${result.index.toString()} ` +
-                  `(expected 0=Breakfast, 1=Lunch, 2=Dinner, 3=Snacks).`,
-              );
+              return textResult(formatMealTypeResolveError(result));
             }
             // Custom mealtypes carry `originalType: null`; `Meal.type` is vestigial when
-            // `type_uid` is set (see add_meals comment for the full rationale).
+            // `type_uid` is set (see plan_meals comment for the full rationale).
             typeInteger = result.resolved.originalType ?? 0;
             typeUid = result.resolved.uid;
-          }
-
-          // Resolve date if supplied. Same calendar-day normalization as add_meals —
-          // see the comment there for why we extract the input's own-zone day.
-          let normalizedDate: string | undefined;
-          if (op.date !== undefined) {
-            const parsed = parseCalendarDayWire(op.date);
-            if (parsed === null) {
-              return textResult(
-                `Could not parse date "${op.date}". Use ISO 8601 (e.g., "2026-06-15") or "yyyy-MM-dd HH:mm:ss".`,
-              );
-            }
-            normalizedDate = parsed;
           }
 
           // Resolve recipe_uid and name interaction. The structural union ensures we
@@ -393,7 +363,6 @@ export function registerUpdateMealTool(server: McpServer, ctx: ServerContext): v
               if (
                 existing.recipeUid === null &&
                 demoteOp.name === undefined &&
-                demoteOp.date === undefined &&
                 demoteOp.type === undefined &&
                 demoteOp.scale === undefined
               ) {
@@ -448,25 +417,14 @@ export function registerUpdateMealTool(server: McpServer, ctx: ServerContext): v
             newName = nameOp.name;
           }
 
-          // order_flag sequences per calendar DATE (all meal types on a day share
-          // one sequence — see makeMealOrderFlagAssigner). When `date` changes, the
-          // meal moves to the destination date's sequence; reassign to that date's
-          // max+1 so it doesn't collide with a meal already holding the old flag
-          // there. A type change WITHOUT a date change stays in the same date
-          // sequence, so the flag is preserved — keep-the-position semantics.
-          const destDate = normalizedDate ?? existing.date;
-          const dateChanged = destDate !== existing.date;
-          const newOrderFlag = dateChanged ? (ctx.mealStore.getMaxOrderFlagOn(destDate) ?? -1) + 1 : existing.orderFlag;
-
-          // Spread-merge — mirrors pantry-update.ts lines 95-104
+          // Spread-merge. update_meal never changes the date (that's reschedule_meal),
+          // so order_flag — which sequences per calendar date — is preserved as-is.
           const updated: Meal = {
             ...existing,
             recipeUid: newRecipeUid,
             name: newName,
-            ...(normalizedDate !== undefined && { date: normalizedDate }),
             ...(typeInteger !== undefined && { type: typeInteger }),
             ...(typeUid !== undefined && { typeUid }),
-            orderFlag: newOrderFlag,
             // scale: undefined keeps existing; explicit null clears.
             ...(op.scale !== undefined && { scale: op.scale }),
           };
@@ -480,10 +438,8 @@ export function registerUpdateMealTool(server: McpServer, ctx: ServerContext): v
           if (
             updated.recipeUid === existing.recipeUid &&
             updated.name === existing.name &&
-            updated.date === existing.date &&
             updated.type === existing.type &&
             updated.typeUid === existing.typeUid &&
-            updated.orderFlag === existing.orderFlag &&
             updated.scale === existing.scale
           ) {
             return textResult(renderMealCard(ctx, existing));

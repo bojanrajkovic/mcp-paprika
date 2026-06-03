@@ -1,6 +1,6 @@
 # Cross-Cutting Utilities
 
-Last verified: 2026-06-01
+Last verified: 2026-06-03
 
 ## Purpose
 
@@ -16,7 +16,7 @@ Shared leaf-ish utilities used across every `src/` module: config loading, the p
 
 ## Sharp edges
 
-**`dates.ts` two-axis naming, and why calendar days survive a UTC boundary.** A helper's name answers two questions: its _return type_ (`parse*` → `DateTime | null` for comparison/arithmetic; `format*`/`today*`/`normalize*` → a wire `string`) and its _semantics_ (`*Instant*` models a UTC moment; `*CalendarDay*` models a day on the user's calendar). The calendar-day variants honor an embedded ISO offset and render in the input's _own_ zone, so a US-Pacific "June 15, 10 PM" stays June 15 instead of rolling to June 16 when naively converted to UTC. That is the entire reason meal-date helpers (`add_meals`/`update_meal`) route through `parseCalendarDayWire`, while `list_meal_history` since/until comparisons use `parseInstant` (where UTC ordering is what you want). `normalizeWire` is the one branch that preserves time-of-day (already-wire input returned verbatim), so a round-tripped pantry timestamp is unchanged. This module absorbed the former `src/paprika/dates.ts` so exactly one place owns "produce a Paprika wire date string."
+**`dates.ts` two-axis naming, and why calendar days survive a UTC boundary.** A helper's name answers two questions: its _return type_ (`parse*` → `DateTime | null` for comparison/arithmetic; `format*`/`today*`/`normalize*` → a wire `string`) and its _semantics_ (`*Instant*` models a UTC moment; `*CalendarDay*` models a day on the user's calendar). The calendar-day variants honor an embedded ISO offset and render in the input's _own_ zone, so a US-Pacific "June 15, 10 PM" stays June 15 instead of rolling to June 16 when naively converted to UTC. That is the entire reason meal-date helpers (`plan_meals`/`update_meal`) route through `parseCalendarDayWire`, while `parseInstant` (the `*Instant*` axis) handles UTC-anchored window/ordering comparisons (where UTC ordering is what you want). `normalizeWire` is the one branch that preserves time-of-day (already-wire input returned verbatim), so a round-tripped pantry timestamp is unchanged. This module absorbed the former `src/paprika/dates.ts` so exactly one place owns "produce a Paprika wire date string."
 
 **`xdg.ts` re-implements the XDG override on every platform (including macOS) on purpose.** `env-paths`' macOS branch hard-codes `~/Library/{Preferences,Caches,…}` and ignores `XDG_*` entirely. Re-reading `XDG_CONFIG_HOME` / `XDG_CACHE_HOME` / `XDG_DATA_HOME` / `XDG_STATE_HOME` here means tests that set those vars actually redirect on macOS, not just Linux. Consequence: these functions read `process.env` on every call, so they are _not_ pure leaf functions. `getTempDir()` deliberately does **not** honor an override; temp paths come from the OS regardless.
 

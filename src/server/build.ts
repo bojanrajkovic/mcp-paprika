@@ -38,8 +38,8 @@ import { registerCreateTool } from "../tools/create.js";
 import { registerDeleteTool } from "../tools/delete.js";
 import { registerDiscoverTool } from "../tools/discover.js";
 import { registerEmptyTrashTool } from "../tools/empty-trash.js";
-import { registerFilterTools } from "../tools/filter.js";
 import { registerClearAllTool, registerClearPurchasedTool } from "../tools/grocery-clear.js";
+import { registerMarkGroceryItemPurchasedTool } from "../tools/grocery-item-purchase.js";
 import {
   registerAddGroceryItemsTool,
   registerDeleteGroceryItemTool,
@@ -55,9 +55,13 @@ import {
 import { registerMoveToPantryTool } from "../tools/grocery-move.js";
 import { registerListTool } from "../tools/list.js";
 import { registerAddMenuToPlannerTool } from "../tools/meal-add-menu.js";
-import { registerMealHistoryTool } from "../tools/meal-history.js";
+import { registerSearchMealHistoryTool } from "../tools/meal-history-search.js";
+import { registerLogCookedMealTool } from "../tools/meal-log-cooked.js";
+import { registerReadMealPlanTool } from "../tools/meal-plan-read.js";
+import { registerRescheduleMealTool } from "../tools/meal-reschedule.js";
 import { registerMealTypesTool } from "../tools/meal-types.js";
 import { registerAddMealsTool, registerDeleteMealTool, registerUpdateMealTool } from "../tools/meal-writes.js";
+import { registerMoveMenuItemTool } from "../tools/menu-item-move.js";
 import {
   registerAddMenuItemsTool,
   registerDeleteMenuItemTool,
@@ -69,10 +73,15 @@ import { registerAddPantryItemsTool } from "../tools/pantry-batch-add.js";
 import { registerDeletePantryItemTool } from "../tools/pantry-delete.js";
 import { registerGetPantryItemTool } from "../tools/pantry-get.js";
 import { registerListPantryTool } from "../tools/pantry-list.js";
+import { registerMarkPantryItemOutOfStockTool, registerRestockPantryItemTool } from "../tools/pantry-stock.js";
 import { registerUpdatePantryItemTool } from "../tools/pantry-update.js";
 import { registerGeneratePhotoTool } from "../tools/photo-generate.js";
 import { registerDeletePhotoTool, registerUploadPhotoTool } from "../tools/photo-writes.js";
 import { registerReadTool } from "../tools/read.js";
+import { registerCategorizeRecipeTool } from "../tools/recipe-categorize.js";
+import { registerFavoriteRecipeTool, registerUnfavoriteRecipeTool } from "../tools/recipe-favorite.js";
+import { registerRateRecipeTool } from "../tools/recipe-rating.js";
+import { registerRestoreRecipeTool } from "../tools/recipe-restore.js";
 import { registerSearchTool } from "../tools/search.js";
 import { registerUpdateTool } from "../tools/update.js";
 import { type PaprikaConfig, resolveImageGenConfig } from "../utils/config.js";
@@ -87,14 +96,15 @@ const SERVER_VERSION = _pkg.version;
 // Cross-tool orientation sent to clients at connect time (the MCP `instructions`
 // field). This is the one channel that reaches the model with guidance the
 // per-tool Zod descriptions cannot carry; keep it short and behavioral.
-const SERVER_INSTRUCTIONS = `mcp-paprika bridges your Paprika recipe library: recipes, the pantry, grocery lists, meal planning, and menus.
+const SERVER_INSTRUCTIONS = `mcp-paprika bridges your Paprika recipe library: recipes, the pantry, grocery lists, meal planning, and menus. Tools read as plain commands in verb_entity order (read_recipe, list_pantry_items, update_grocery_item), so most acts are guessable from the name.
 
 Orientation:
-- Recipes, grocery lists, and menus are exposed both as tools (which you call) and as paprika://… resources the user can attach. The read_* tools let you fetch one by UID on your own, without waiting for the user to attach it.
-- Lookup: use search_recipes for name / ingredient / description matching; use discover_recipes (present only when semantic search is configured) for natural-language queries.
-- Only recipe deletes are reversible: a deleted recipe moves to the trash, and empty_trash then permanently removes one already there. Deleting anything else (grocery items, pantry items, menu items, lists) is immediate and permanent.
-- When scheduling a meal or adding a menu item, link an existing recipe by its UID OR give a freeform name, never both; they are mutually exclusive. Grocery items take no recipe link; add_grocery_items wants an ingredient, quantity, and aisle.
-- generate_photo (present only when image generation is configured) attaches the image and returns its photo UID by default. With attach:false it returns a preview plus a single-use token instead; pass that token to upload_photo to attach it later.
+- Recipes, grocery lists, and menus are exposed both as tools (which you call) and as paprika://… resources the user can attach. The read_* tools fetch one by UID on your own, without waiting for an attach.
+- Finding recipes: search_recipes matches by name / ingredient / description and also filters by an ingredient list and by max prep / cook / total time — pass any one of those. discover_recipes (present only when semantic search is configured) handles natural-language queries.
+- Open-ended edits vs. named acts: the update_* tools change free-form content fields only. The acts a user names have their own verbs — rate_recipe, favorite_recipe / unfavorite_recipe, categorize_recipe, mark_grocery_item_purchased, mark_pantry_item_out_of_stock / restock_pantry_item, reschedule_meal, move_menu_item. Trying to set one of those through update_* is rejected; reach for the verb.
+- Recipe trash is the one reversible delete, spoken in steps: trash_recipe moves a recipe to the trash, restore_recipe brings it back, and purge_recipe permanently removes one already trashed. Deleting anything else (grocery items, pantry items, menu items, lists) is immediate and permanent.
+- Meals: read_meal_plan shows what is coming up (today forward); search_meal_history recalls what you have already cooked (by recipe or by category); plan_meals schedules meals and log_cooked_meal records one you just made. When scheduling a meal or adding a menu item, link an existing recipe by its UID OR give a freeform name, never both. Grocery items take no recipe link; add_grocery_items wants an ingredient, quantity, and aisle.
+- generate_recipe_photo (present only when image generation is configured) attaches the image and returns its photo UID by default. With attach:false it returns a preview plus a single-use token instead; pass that token to upload_recipe_photo to attach it later.
 - Data is served from a local cache kept fresh by background sync, so it can briefly lag changes made directly in the Paprika apps.`;
 
 // ── Phase-typed bootstrap builder ────────────────────────────────────────────
@@ -448,7 +458,7 @@ export async function buildAppContext(
 /**
  * Build a fully-registered McpServer for the given AppContext.
  *
- * Registers all 46 tools and the recipe, grocery-list, and menu resource families. Called once for
+ * Registers the full tool surface and the recipe, grocery-list, and menu resource families. Called once for
  * stdio, once per session for HTTP. Tool registration is pure (closures over the
  * session context), so registering the same tool name on N independent
  * server instances is safe — there is no module-level mutable state.
@@ -461,7 +471,6 @@ export function buildMcpServer(app: AppContext): McpServer {
   const sessionCtx: SessionContext = { ...app, server };
 
   registerSearchTool(server, sessionCtx);
-  registerFilterTools(server, sessionCtx);
   registerCategoryTools(server, sessionCtx);
   registerCreateCategoryTool(server, sessionCtx);
   registerUpdateCategoryTool(server, sessionCtx);
@@ -472,12 +481,19 @@ export function buildMcpServer(app: AppContext): McpServer {
   registerUpdateTool(server, sessionCtx);
   registerDeleteTool(server, sessionCtx);
   registerEmptyTrashTool(server, sessionCtx);
+  registerRestoreRecipeTool(server, sessionCtx);
+  registerRateRecipeTool(server, sessionCtx);
+  registerFavoriteRecipeTool(server, sessionCtx);
+  registerUnfavoriteRecipeTool(server, sessionCtx);
+  registerCategorizeRecipeTool(server, sessionCtx);
   registerUploadPhotoTool(server, sessionCtx);
   registerDeletePhotoTool(server, sessionCtx);
   registerListPantryTool(server, sessionCtx);
   registerGetPantryItemTool(server, sessionCtx);
   registerAddPantryItemsTool(server, sessionCtx);
   registerUpdatePantryItemTool(server, sessionCtx);
+  registerMarkPantryItemOutOfStockTool(server, sessionCtx);
+  registerRestockPantryItemTool(server, sessionCtx);
   registerDeletePantryItemTool(server, sessionCtx);
   registerAislesTool(server, sessionCtx);
   registerMealTypesTool(server, sessionCtx);
@@ -488,13 +504,17 @@ export function buildMcpServer(app: AppContext): McpServer {
   registerDeleteGroceryListTool(server, sessionCtx);
   registerAddGroceryItemsTool(server, sessionCtx);
   registerUpdateGroceryItemTool(server, sessionCtx);
+  registerMarkGroceryItemPurchasedTool(server, sessionCtx);
   registerDeleteGroceryItemTool(server, sessionCtx);
   registerMoveToPantryTool(server, sessionCtx);
   registerClearPurchasedTool(server, sessionCtx);
   registerClearAllTool(server, sessionCtx);
-  registerMealHistoryTool(server, sessionCtx);
+  registerReadMealPlanTool(server, sessionCtx);
+  registerSearchMealHistoryTool(server, sessionCtx);
+  registerLogCookedMealTool(server, sessionCtx);
   registerAddMealsTool(server, sessionCtx);
   registerUpdateMealTool(server, sessionCtx);
+  registerRescheduleMealTool(server, sessionCtx);
   registerDeleteMealTool(server, sessionCtx);
   registerAddMenuToPlannerTool(server, sessionCtx);
   registerListMenusTool(server, sessionCtx);
@@ -504,6 +524,7 @@ export function buildMcpServer(app: AppContext): McpServer {
   registerDeleteMenuTool(server, sessionCtx);
   registerAddMenuItemsTool(server, sessionCtx);
   registerUpdateMenuItemTool(server, sessionCtx);
+  registerMoveMenuItemTool(server, sessionCtx);
   registerDeleteMenuItemTool(server, sessionCtx);
 
   if (app.vectorStore !== null) {

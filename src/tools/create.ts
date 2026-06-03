@@ -18,7 +18,7 @@ export function registerCreateTool(server: McpServer, ctx: ServerContext): void 
     {
       description:
         "Create a new recipe in the Paprika account. If you built this recipe from a web page, " +
-        "follow up with `upload_photo` and the page's main/hero (og:image) image URL to attach its photo.",
+        "follow up with `upload_recipe_photo` and the page's main/hero (og:image) image URL to attach its photo.",
       inputSchema: {
         name: z.string().describe("Recipe name"),
         ingredients: z.string().describe("Ingredients list"),
@@ -112,7 +112,7 @@ export function registerCreateTool(server: McpServer, ctx: ServerContext): void 
           const markdown = recipeToMarkdown(saved, categoryNames);
           const prefix = warnings.length > 0 ? warnings.join("\n") + "\n\n" : "";
           // The UID is rendered by recipeToMarkdown, so the caller can chain
-          // upload_photo / update_recipe without re-looking-up the new recipe.
+          // upload_recipe_photo / update_recipe without re-looking-up the new recipe.
           return textResult(prefix + markdown);
         },
         (guard) => guard,

@@ -1,13 +1,15 @@
 import { fromAny } from "@total-typescript/shoehorn";
 import { describe, expect, it, vi } from "vitest";
 
+import type { RecipeUid } from "../ids.js";
+
 import { makeRecipe } from "../../test/cache/__fixtures__/recipes.js";
 import { getText, makeCtx, makeStubNotifier, makeTestServer, seed } from "../../test/support/tool-test-utils.js";
 import { PaprikaAPIError } from "../paprika/errors.js";
 import { RecipeStore } from "../recipe/store.js";
 import { registerEmptyTrashTool } from "./empty-trash.js";
 
-// empty_trash fetches authoritative state via ctx.client.getRecipe (NOT the local
+// purge_recipe fetches authoritative state via ctx.client.getRecipe (NOT the local
 // store, which can lag app-side trash actions). The store only needs hasSynced so the
 // cold-start guard passes; the commit path uses cache.recipes.remove (not put).
 
@@ -22,7 +24,7 @@ function makeMocks(getRecipeImpl: ReturnType<typeof vi.fn>, savedOverride?: unkn
 
 const notFound = (uid: string): PaprikaAPIError => new PaprikaAPIError("Not found", 404, `/api/v2/sync/recipe/${uid}/`);
 
-describe("recipe-hard-delete: empty_trash tool (#125)", () => {
+describe("recipe-hard-delete: purge_recipe tool (#125)", () => {
   describe("empty-trash.AC1: permanently deletes a trashed recipe (authoritative lookup)", () => {
     it("empty-trash.AC1.1: trashed recipe hard-deleted with confirmation", async () => {
       const trashed = makeRecipe({ name: "Old Soup", inTrash: true });
@@ -42,7 +44,7 @@ describe("recipe-hard-delete: empty_trash tool (#125)", () => {
       );
       registerEmptyTrashTool(server, ctx);
 
-      const result = await callTool("empty_trash", { uid: trashed.uid });
+      const result = await callTool("purge_recipe", { uid: trashed.uid });
       const text = getText(result);
 
       expect(mockGetRecipe).toHaveBeenCalledWith(trashed.uid);
@@ -67,7 +69,7 @@ describe("recipe-hard-delete: empty_trash tool (#125)", () => {
       );
       registerEmptyTrashTool(server, ctx);
 
-      await callTool("empty_trash", { uid: trashed.uid });
+      await callTool("purge_recipe", { uid: trashed.uid });
 
       expect(mockSaveRecipe.mock.calls[0]?.[0]).toMatchObject({ inTrash: true, deleted: true });
       expect(mockNotifySync).toHaveBeenCalledOnce();
@@ -92,7 +94,7 @@ describe("recipe-hard-delete: empty_trash tool (#125)", () => {
       );
       registerEmptyTrashTool(server, ctx);
 
-      await callTool("empty_trash", { uid: trashed.uid });
+      await callTool("purge_recipe", { uid: trashed.uid });
 
       expect(mockRemove).toHaveBeenCalledWith(trashed.uid);
       expect(mockFlush).toHaveBeenCalledOnce();
@@ -118,7 +120,7 @@ describe("recipe-hard-delete: empty_trash tool (#125)", () => {
       );
       registerEmptyTrashTool(server, ctx);
 
-      const result = await callTool("empty_trash", { uid: appTrashed.uid });
+      const result = await callTool("purge_recipe", { uid: appTrashed.uid });
 
       expect(getText(result).toLowerCase()).toContain("permanently deleted");
       expect(mockSaveRecipe).toHaveBeenCalledOnce();
@@ -126,7 +128,7 @@ describe("recipe-hard-delete: empty_trash tool (#125)", () => {
   });
 
   describe("empty-trash.AC2: guards against destroying live recipes", () => {
-    it("empty-trash.AC2.1: a live (non-trashed) recipe is refused with a delete_recipe-first hint", async () => {
+    it("empty-trash.AC2.1: a live (non-trashed) recipe is refused with a trash_recipe-first hint", async () => {
       const live = makeRecipe({ name: "Dinner Tonight", inTrash: false });
       const { mockGetRecipe, mockSaveRecipe, mockNotifySync, mockRemove, mockFlush } = makeMocks(
         vi.fn().mockResolvedValue(live),
@@ -138,15 +140,15 @@ describe("recipe-hard-delete: empty_trash tool (#125)", () => {
           client: fromAny({ getRecipe: mockGetRecipe, saveRecipe: mockSaveRecipe, notifySync: mockNotifySync }),
           cache: fromAny({ recipes: { remove: mockRemove }, flush: mockFlush }),
         }),
-        { recipes: [makeRecipe({ name: "Keeper" })] }, // flips hasSynced; content irrelevant to lookup
+        { recipes: [live] }, // store already agrees it's live → the read-path reconcile is a clean no-op
       );
       registerEmptyTrashTool(server, ctx);
 
-      const result = await callTool("empty_trash", { uid: live.uid });
+      const result = await callTool("purge_recipe", { uid: live.uid });
       const text = getText(result);
 
       expect(text.toLowerCase()).toContain("not in the trash");
-      expect(text).toContain("delete_recipe");
+      expect(text).toContain("trash_recipe");
       expect(mockSaveRecipe).not.toHaveBeenCalled();
     });
 
@@ -165,14 +167,14 @@ describe("recipe-hard-delete: empty_trash tool (#125)", () => {
       );
       registerEmptyTrashTool(server, ctx);
 
-      const result = await callTool("empty_trash", { uid: "nonexistent-uid" });
+      const result = await callTool("purge_recipe", { uid: "nonexistent-uid" });
       const text = getText(result);
 
       expect(text.toLowerCase()).toContain("no recipe found");
       expect(mockSaveRecipe).not.toHaveBeenCalled();
     });
 
-    it("empty-trash.AC2.3: idempotent — a second empty_trash on the same UID reports already-deleted", async () => {
+    it("empty-trash.AC2.3: idempotent — a second purge_recipe on the same UID reports already-deleted", async () => {
       const trashed = makeRecipe({ name: "Old Soup", inTrash: true });
       // First lookup returns the trashed recipe; after it's purged, the second lookup 404s.
       const mockGetRecipe = vi.fn().mockResolvedValueOnce(trashed).mockRejectedValueOnce(notFound(trashed.uid));
@@ -192,8 +194,8 @@ describe("recipe-hard-delete: empty_trash tool (#125)", () => {
       );
       registerEmptyTrashTool(server, ctx);
 
-      await callTool("empty_trash", { uid: trashed.uid }); // first: purges
-      const second = await callTool("empty_trash", { uid: trashed.uid }); // second: already gone
+      await callTool("purge_recipe", { uid: trashed.uid }); // first: purges
+      const second = await callTool("purge_recipe", { uid: trashed.uid }); // second: already gone
 
       expect(getText(second).toLowerCase()).toContain("no recipe found");
       expect(mockSaveRecipe).toHaveBeenCalledOnce(); // not POSTed again
@@ -219,7 +221,7 @@ describe("recipe-hard-delete: empty_trash tool (#125)", () => {
       );
       registerEmptyTrashTool(server, ctx);
 
-      const result = await callTool("empty_trash", { uid: trashed.uid });
+      const result = await callTool("purge_recipe", { uid: trashed.uid });
       const text = getText(result);
 
       expect(text.toLowerCase()).toContain("failed to permanently delete");
@@ -243,7 +245,7 @@ describe("recipe-hard-delete: empty_trash tool (#125)", () => {
       );
       registerEmptyTrashTool(server, ctx);
 
-      const result = await callTool("empty_trash", { uid: "some-uid" });
+      const result = await callTool("purge_recipe", { uid: "some-uid" });
       const text = getText(result);
 
       expect(text.toLowerCase()).toContain("failed to look up");
@@ -264,11 +266,85 @@ describe("recipe-hard-delete: empty_trash tool (#125)", () => {
       });
       registerEmptyTrashTool(server, ctx);
 
-      const result = await callTool("empty_trash", { uid: "any-uid" });
+      const result = await callTool("purge_recipe", { uid: "any-uid" });
       const text = getText(result);
 
       expect(text.toLowerCase()).toContain("not yet synced");
       expect(mockGetRecipe).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("empty-trash.AC5: read-path reconcile to authoritative state (canonical pull)", () => {
+    it("empty-trash.AC5.1: not-in-trash heals a stale local copy still marked trashed", async () => {
+      // The store lags: it holds the recipe as inTrash:true, but Paprika says it's live
+      // (restored in the app). purge refuses (it's not trashed) AND aligns local to the
+      // authoritative truth — same hash, only inTrash differs — without a Paprika write.
+      const uid = "recipe-stale-purge" as RecipeUid;
+      const staleTrashed = makeRecipe({ uid, name: "Live Again", inTrash: true });
+      const authoritative = { ...staleTrashed, inTrash: false };
+
+      const mockGetRecipe = vi.fn().mockResolvedValue(authoritative);
+      const mockSaveRecipe = vi.fn();
+      const mockNotifySync = vi.fn().mockResolvedValue(undefined);
+      const mockPut = vi.fn().mockResolvedValue(undefined);
+      const mockRemove = vi.fn().mockResolvedValue(undefined);
+      const mockFlush = vi.fn().mockResolvedValue(undefined);
+      const { notifier, resourceListChanged } = makeStubNotifier();
+
+      const { server, callTool } = makeTestServer();
+      const store = new RecipeStore();
+      const ctx = seed(
+        makeCtx(store, server, {
+          client: fromAny({ getRecipe: mockGetRecipe, saveRecipe: mockSaveRecipe, notifySync: mockNotifySync }),
+          cache: fromAny({ recipes: { put: mockPut, remove: mockRemove }, flush: mockFlush }),
+          notifier,
+        }),
+        { recipes: [staleTrashed] },
+      );
+      registerEmptyTrashTool(server, ctx);
+
+      const text = getText(await callTool("purge_recipe", { uid }));
+
+      expect(text.toLowerCase()).toContain("not in the trash");
+      expect(mockSaveRecipe).not.toHaveBeenCalled(); // a reconcile, not a Paprika write
+      expect(mockPut).toHaveBeenCalledWith(expect.objectContaining({ uid, inTrash: false }));
+      expect(store.get(uid)?.inTrash).toBe(false); // local store healed to authoritative truth
+      expect(resourceListChanged).toHaveBeenCalledOnce();
+    });
+
+    it("empty-trash.AC5.2: 404 drops a stale local phantom the store still held", async () => {
+      // Purged elsewhere (or never synced as deleted): the store still lists it, but
+      // getRecipe 404s. Reconcile removes it so a later read/search can't serve a phantom.
+      const uid = "recipe-phantom-purge" as RecipeUid;
+      const phantom = makeRecipe({ uid, name: "Ghost" });
+
+      const mockGetRecipe = vi.fn().mockRejectedValue(notFound(uid));
+      const mockSaveRecipe = vi.fn();
+      const mockNotifySync = vi.fn().mockResolvedValue(undefined);
+      const mockPut = vi.fn().mockResolvedValue(undefined);
+      const mockRemove = vi.fn().mockResolvedValue(undefined);
+      const mockFlush = vi.fn().mockResolvedValue(undefined);
+      const { notifier, resourceListChanged } = makeStubNotifier();
+
+      const { server, callTool } = makeTestServer();
+      const store = new RecipeStore();
+      const ctx = seed(
+        makeCtx(store, server, {
+          client: fromAny({ getRecipe: mockGetRecipe, saveRecipe: mockSaveRecipe, notifySync: mockNotifySync }),
+          cache: fromAny({ recipes: { put: mockPut, remove: mockRemove }, flush: mockFlush }),
+          notifier,
+        }),
+        { recipes: [phantom] },
+      );
+      registerEmptyTrashTool(server, ctx);
+
+      const text = getText(await callTool("purge_recipe", { uid }));
+
+      expect(text.toLowerCase()).toContain("no recipe found");
+      expect(mockRemove).toHaveBeenCalledWith(uid);
+      expect(store.get(uid)).toBeUndefined(); // phantom dropped locally
+      expect(resourceListChanged).toHaveBeenCalledOnce();
+      expect(mockSaveRecipe).not.toHaveBeenCalled();
     });
   });
 });

@@ -14,9 +14,9 @@ import { textResult } from "./helpers.js";
 import { commitPantryItemsBatch } from "./pantry-helpers.js";
 
 export function registerMoveToPantryTool(server: McpServer, ctx: ServerContext): void {
-  const log = ctx.log.child({ component: "move_to_pantry" });
+  const log = ctx.log.child({ component: "move_grocery_items_to_pantry" });
   server.registerTool(
-    "move_to_pantry",
+    "move_grocery_items_to_pantry",
     {
       description:
         "Move one or more grocery items to the pantry. Creates pantry items (with today's purchase date), then deletes the grocery items.",
@@ -25,7 +25,7 @@ export function registerMoveToPantryTool(server: McpServer, ctx: ServerContext):
       },
     },
     async (args) => {
-      log.info({ tool: "move_to_pantry", count: args.uids.length }, "tool invoked");
+      log.info({ tool: "move_grocery_items_to_pantry", count: args.uids.length }, "tool invoked");
       return groceryStartGuard(ctx).match(
         async (): Promise<CallToolResult> => {
           if (!ctx.pantryStore.hasSynced) {
