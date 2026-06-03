@@ -200,7 +200,7 @@ export function registerDeleteMenuTool(server: McpServer, ctx: ServerContext): v
   server.registerTool(
     "delete_menu",
     {
-      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false },
       description:
         "Delete a menu and all of its planned recipes (menuitems). Look it up by UID or name (tiered fuzzy " +
         "match, case-insensitive). The menuitems are tombstoned first, then the menu itself. " +
