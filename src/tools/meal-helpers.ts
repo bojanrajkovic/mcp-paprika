@@ -1,4 +1,5 @@
 // pattern: Imperative Shell
+import { DateTime } from "luxon";
 import { err, ok, type Result } from "neverthrow";
 import { z } from "zod";
 
@@ -275,4 +276,74 @@ export function renderMealCard(ctx: ServerContext, meal: Readonly<Meal>): string
       : `Type ${meal.type.toString()}`;
   const recipeName = meal.recipeUid !== null ? (ctx.store.get(meal.recipeUid)?.name ?? null) : null;
   return mealToMarkdown(meal, typeName, recipeName);
+}
+
+function formatMealLine(
+  meal: Readonly<Meal>,
+  typeNames: Map<string, string>,
+  typeByOriginalType: Map<number, string>,
+): { typeName: string; entry: string } {
+  // typeUid is the primary lookup, but older meals (predating Paprika's
+  // mealtypes catalog) carry typeUid: null and rely on the `type` integer
+  // (which corresponds to MealType.originalType in the catalog).
+  const lookup = meal.typeUid !== null ? typeNames.get(meal.typeUid) : typeByOriginalType.get(meal.type);
+  const typeName = lookup ?? `Type ${meal.type.toString()}`;
+  const isFreeform = meal.recipeUid === null || meal.recipeUid === "";
+  const entry = isFreeform ? `${meal.name} *(freeform)*` : meal.name;
+  return { typeName, entry };
+}
+
+/**
+ * Render meals as a date-grouped calendar section: one `### EEE dd` heading per
+ * calendar day — in the order the meals are supplied, so the CALLER controls
+ * chronology (read_meal_plan sorts ascending; recall views may sort however) —
+ * then one `- **Type** · entry, entry` bullet per meal type on that day, with
+ * freeform (non-recipe) meals annotated. Returns just the grouped body; callers
+ * prepend their own summary header. Shared by read_meal_plan and
+ * search_meal_history (extracted from the former list_meal_history renderer).
+ */
+export function renderMealsGroupedByDate(ctx: ServerContext, meals: ReadonlyArray<Readonly<Meal>>): string {
+  const typeNames = new Map<string, string>();
+  const typeByOriginalType = new Map<number, string>();
+  for (const mt of ctx.mealTypeStore.getAll()) {
+    typeNames.set(mt.uid, mt.name);
+    // Only built-in types have a non-null originalType; custom types are
+    // looked up by typeUid alone.
+    if (mt.originalType !== null) {
+      typeByOriginalType.set(mt.originalType, mt.name);
+    }
+  }
+
+  const grouped = new Map<string, Array<{ typeName: string; entry: string }>>();
+  for (const meal of meals) {
+    const dateKey = meal.date.slice(0, 10);
+    let entries = grouped.get(dateKey);
+    if (entries === undefined) {
+      entries = [];
+      grouped.set(dateKey, entries);
+    }
+    entries.push(formatMealLine(meal, typeNames, typeByOriginalType));
+  }
+
+  const lines: Array<string> = [];
+  for (const [dateKey, entries] of grouped) {
+    const dt = DateTime.fromISO(dateKey, { zone: "utc" });
+    const dayLabel = dt.isValid ? dt.toFormat("EEE dd") : dateKey;
+    lines.push("");
+    lines.push(`### ${dayLabel}`);
+
+    const byType = new Map<string, Array<string>>();
+    for (const { typeName, entry } of entries) {
+      let typeEntries = byType.get(typeName);
+      if (typeEntries === undefined) {
+        typeEntries = [];
+        byType.set(typeName, typeEntries);
+      }
+      typeEntries.push(entry);
+    }
+    for (const [typeName, typeEntries] of byType) {
+      lines.push(`- **${typeName}** · ${typeEntries.join(", ")}`);
+    }
+  }
+  return lines.join("\n");
 }

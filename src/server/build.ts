@@ -38,7 +38,6 @@ import { registerCreateTool } from "../tools/create.js";
 import { registerDeleteTool } from "../tools/delete.js";
 import { registerDiscoverTool } from "../tools/discover.js";
 import { registerEmptyTrashTool } from "../tools/empty-trash.js";
-import { registerFilterTools } from "../tools/filter.js";
 import { registerClearAllTool, registerClearPurchasedTool } from "../tools/grocery-clear.js";
 import { registerMarkGroceryItemPurchasedTool } from "../tools/grocery-item-purchase.js";
 import {
@@ -56,7 +55,9 @@ import {
 import { registerMoveToPantryTool } from "../tools/grocery-move.js";
 import { registerListTool } from "../tools/list.js";
 import { registerAddMenuToPlannerTool } from "../tools/meal-add-menu.js";
-import { registerMealHistoryTool } from "../tools/meal-history.js";
+import { registerSearchMealHistoryTool } from "../tools/meal-history-search.js";
+import { registerLogCookedMealTool } from "../tools/meal-log-cooked.js";
+import { registerReadMealPlanTool } from "../tools/meal-plan-read.js";
 import { registerRescheduleMealTool } from "../tools/meal-reschedule.js";
 import { registerMealTypesTool } from "../tools/meal-types.js";
 import { registerAddMealsTool, registerDeleteMealTool, registerUpdateMealTool } from "../tools/meal-writes.js";
@@ -469,7 +470,6 @@ export function buildMcpServer(app: AppContext): McpServer {
   const sessionCtx: SessionContext = { ...app, server };
 
   registerSearchTool(server, sessionCtx);
-  registerFilterTools(server, sessionCtx);
   registerCategoryTools(server, sessionCtx);
   registerCreateCategoryTool(server, sessionCtx);
   registerUpdateCategoryTool(server, sessionCtx);
@@ -508,7 +508,9 @@ export function buildMcpServer(app: AppContext): McpServer {
   registerMoveToPantryTool(server, sessionCtx);
   registerClearPurchasedTool(server, sessionCtx);
   registerClearAllTool(server, sessionCtx);
-  registerMealHistoryTool(server, sessionCtx);
+  registerReadMealPlanTool(server, sessionCtx);
+  registerSearchMealHistoryTool(server, sessionCtx);
+  registerLogCookedMealTool(server, sessionCtx);
   registerAddMealsTool(server, sessionCtx);
   registerUpdateMealTool(server, sessionCtx);
   registerRescheduleMealTool(server, sessionCtx);

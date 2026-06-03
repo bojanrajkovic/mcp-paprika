@@ -233,7 +233,7 @@ describe("HTTP transport (Streamable HTTP)", () => {
     });
   });
 
-  describe("HT.2: tools/list returns all 13 stdio-mode tools (discover gated on vector store)", () => {
+  describe("HT.2: tools/list includes the expected stdio-mode tools (discover gated on vector store)", () => {
     it("contains every expected tool name", async () => {
       const handle = await startHttp(makeConfig());
       try {
@@ -244,8 +244,6 @@ describe("HTTP transport (Streamable HTTP)", () => {
         const names = payload.result.tools.map((t) => t.name);
         for (const expected of [
           "search_recipes",
-          "filter_by_ingredient",
-          "filter_by_time",
           "list_categories",
           "read_recipe",
           "create_recipe",

@@ -20,7 +20,6 @@ import { PaprikaClient } from "./paprika/client.js";
 import { SyncEngine } from "./paprika/sync.js";
 import { RecipeStore } from "./recipe/store.js";
 import { registerCategoryTools } from "./tools/categories.js";
-import { registerFilterTools } from "./tools/filter.js";
 import { registerListTool } from "./tools/list.js";
 import { registerReadTool } from "./tools/read.js";
 import { registerSearchTool } from "./tools/search.js";
@@ -376,7 +375,6 @@ describe("Sync → Tool Pipeline Integration", () => {
       registerSearchTool(testServer.server, makeCtx(store, testServer.server, toolOverrides));
       registerReadTool(testServer.server, makeCtx(store, testServer.server, toolOverrides));
       registerListTool(testServer.server, makeCtx(store, testServer.server, toolOverrides));
-      registerFilterTools(testServer.server, makeCtx(store, testServer.server, toolOverrides));
       registerCategoryTools(testServer.server, makeCtx(store, testServer.server, toolOverrides));
 
       // Test search_recipes
@@ -399,10 +397,10 @@ describe("Sync → Tool Pipeline Integration", () => {
       expect(listText).toContain("Breakfast");
       expect(listText).toContain("2"); // 2 recipes in category
 
-      // Test filter_by_ingredient
-      const filterResult = await testServer.callTool("filter_by_ingredient", {
+      // Test the ingredient filter folded into search_recipes
+      const filterResult = await testServer.callTool("search_recipes", {
         ingredients: ["eggs"],
-        mode: "any",
+        match: "any",
         limit: 20,
       });
       const filterText = getText(filterResult);

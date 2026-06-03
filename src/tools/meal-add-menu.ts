@@ -94,7 +94,7 @@ export function registerAddMenuToPlannerTool(server: McpServer, ctx: ServerConte
         "so re-running adds a second copy (same as Paprika.app's own Add Menu action). Recipe display names " +
         "re-resolve from the local recipe store; if ANY recipe-linked item references an unknown recipe the " +
         "whole batch is rejected with a per-item enumeration (freeform items keep their stored name). To remove " +
-        "a meal afterward, find it via list_meal_history and call delete_meal.",
+        "a meal afterward, find it via read_meal_plan or search_meal_history and call delete_meal.",
       inputSchema: addMenuToPlannerInputSchema.shape,
     },
     async (args) => {

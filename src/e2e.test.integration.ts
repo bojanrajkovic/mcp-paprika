@@ -72,8 +72,6 @@ describe("MCP Server end-to-end round-trip", () => {
     // Verify all expected tools are registered
     const toolNames = result.tools.map((t) => t.name);
     expect(toolNames).toContain("search_recipes");
-    expect(toolNames).toContain("filter_by_ingredient");
-    expect(toolNames).toContain("filter_by_time");
     expect(toolNames).toContain("read_recipe");
     expect(toolNames).toContain("create_recipe");
     expect(toolNames).toContain("update_recipe");
@@ -92,6 +90,12 @@ describe("MCP Server end-to-end round-trip", () => {
     expect(toolNames).toContain("restock_pantry_item");
     expect(toolNames).toContain("move_menu_item");
     expect(toolNames).toContain("reschedule_meal");
+    // New behavioral reads + log; list_meal_history split into the forward plan + recall views.
+    expect(toolNames).toContain("read_meal_plan");
+    expect(toolNames).toContain("search_meal_history");
+    expect(toolNames).toContain("log_cooked_meal");
+    expect(toolNames).not.toContain("list_meal_history");
+    expect(toolNames).not.toContain("filter_by_ingredient");
 
     // Verify tools have descriptions
     result.tools.forEach((tool) => {

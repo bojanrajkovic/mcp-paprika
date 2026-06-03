@@ -191,27 +191,6 @@ Mark a recipe as a favorite by UID (adds it to the Favorites list).
 
 - `uid` — Recipe UID
 
-## `filter_by_ingredient`
-
-Filter recipes by ingredient. Use mode="all" (default) to require all ingredients, or mode="any" to match any.
-
-**Parameters**
-
-- `ingredients` — One or more ingredient terms to filter by
-- `mode` _(optional)_ — Match mode: "all" (default) requires every ingredient; "any" matches at least one
-- `limit` _(optional)_ — Maximum number of results to return (default: 20, max: 50)
-
-## `filter_by_time`
-
-Filter recipes by prep, cook, or total time. All constraints are optional; results are sorted by total time ascending. ADVISORY: a recipe whose relevant time can't be parsed (free-text like "5+ hours" or "overnight") is NOT hidden — it is included and flagged "Time unverified" so quick recipes with odd time strings aren't silently dropped. For any flagged result, check the displayed time yourself rather than trusting the filter for that one.
-
-**Parameters**
-
-- `maxPrepTime` _(optional)_ — Maximum prep time (e.g., "30 minutes", "1 hr")
-- `maxCookTime` _(optional)_ — Maximum cook time (e.g., "45 min", "1 hour")
-- `maxTotalTime` _(optional)_ — Maximum total time (e.g., "1 hour 30 minutes", "2 hrs")
-- `limit` _(optional)_ — Maximum number of results to return (default: 20, max: 50)
-
 ## `generate_recipe_photo`
 
 Generate a styled food photo for a recipe with an AI image model and (by default) attach it to the recipe. The prompt is built from the recipe's name, description, and categories — so well-described, categorized recipes produce the best results; pass `style` to guide plating or describe an obscure dish. Set restyle_existing:true to re-style the recipe's current photo instead of generating from scratch. Set attach:false to preview without saving.
@@ -243,19 +222,6 @@ List all grocery lists sorted alphabetically by name, with UID and item count pe
 
 _No parameters._
 
-## `list_meal_history`
-
-Browse the meal planner history. Returns a calendar-style view of planned meals grouped by date, showing what was cooked and when. Each day lists meals sorted by type (Breakfast → Lunch → Dinner → custom types). Freeform meals (not linked to a recipe) are annotated. By default, returns the last 30 days of meal history. When a recipe_uid or type filter is provided, searches all time instead. Use since/until for custom date ranges. Use this tool to answer questions like 'what did we eat last week', 'when did we last have tacos', 'show me dinner plans for this month', or 'what's on the meal planner'. For recipe details (ingredients, directions), use read_recipe instead.
-
-**Parameters**
-
-- `recipe_uid` _(optional)_ — Filter to meals for a specific recipe UID. Searches all time when set.
-- `since` _(optional)_ — Start date (inclusive). Accepts ISO 8601 or yyyy-MM-dd. Overrides the 30-day default.
-- `until` _(optional)_ — End date (inclusive). Accepts ISO 8601 or yyyy-MM-dd. Overrides the 30-day default.
-- `type` _(optional)_ — Meal type filter. Searches all time when set. Pick exactly one shape: {"name": "Dinner"} | {"uid": "<mealtype UID>"} | {"builtin": 2}.
-- `offset` _(optional)_ — Pagination offset (default: 0)
-- `limit` _(optional)_ — Maximum meals to return (default: 50, max: 200)
-
 ## `list_meal_types`
 
 List all meal types — the built-in Breakfast/Lunch/Dinner/Snacks plus any custom types — sorted by order then name. Each entry shows whether it is built-in or custom, its calendar-export schedule (all-day or a clock time), and its UID. Reference a type by name, or pass its UID to plan_meals / update_meal via the `type: { uid }` spec. Meal types are created and edited in the Paprika app, not through this server.
@@ -282,6 +248,16 @@ List all recipes with pagination. Returns recipe summaries sorted alphabetically
 
 - `offset` _(optional)_ — Number of recipes to skip (default: 0)
 - `limit` _(optional)_ — Maximum number of recipes to return (default: 25, max: 50)
+
+## `log_cooked_meal`
+
+Log a meal you cooked: records the given recipe on the planner, defaulting to today and the Dinner meal type — a quick way to keep your cooking history current. Pass `date` to log a different day or `type` for a non-dinner meal. To log a freeform (non-recipe) meal or to plan ahead in bulk, use plan_meals.
+
+**Parameters**
+
+- `recipe_uid` — UID of the recipe you cooked.
+- `type` _(optional)_ — Meal type (defaults to Dinner). Pick one shape: {"name":"Dinner"} | {"uid":"<MealType UID>"} | {"builtin":2}.
+- `date` _(optional)_ — When it was cooked (ISO 8601 date or datetime). Defaults to today. Time-of-day is dropped.
 
 ## `mark_grocery_item_purchased`
 
@@ -349,6 +325,14 @@ Get a grocery list by UID or name. Name lookup is tiered (exact → starts-with 
 
 - `lookup` — Pick exactly one shape: {"uid": "..."} or {"name": "..."}.
 
+## `read_meal_plan`
+
+Read the upcoming meal plan: meals scheduled from today forward, grouped by day in ascending date order (today first). Defaults to the next 7 days; pass `days` to widen the window. For past meals or recall ("when did we last have X"), use search_meal_history.
+
+**Parameters**
+
+- `days` _(optional)_ — How many days ahead to include, starting today (default 7, max 31).
+
 ## `read_menu`
 
 Get a menu by UID or name, rendered day by day with each day's planned recipes. Name lookup is tiered (exact → starts-with → contains) and case-insensitive, with a disambiguation list when multiple menus match the same tier. Each recipe line carries its menuitem and recipe UIDs so you can drive update_menu_item / delete_menu_item. Pass exactly one shape: {"uid": "..."} or {"name": "..."}.
@@ -410,21 +394,30 @@ Restore a trashed recipe by UID, moving it out of the trash back into the active
 
 ## `schedule_menu`
 
-Instantiate a saved menu's recipes as meal-planner entries. Look the menu up by UID or name (tiered fuzzy match), then materialize each of its items into a meal dated start_date + (day − 1) days, posting them all in one batch. This is a one-way COPY, not a link: the planner meals carry no back-reference to the menu, so editing the menu later does not change them — and it is NOT idempotent, so re-running adds a second copy (same as Paprika.app's own Add Menu action). Recipe display names re-resolve from the local recipe store; if ANY recipe-linked item references an unknown recipe the whole batch is rejected with a per-item enumeration (freeform items keep their stored name). To remove a meal afterward, find it via list_meal_history and call delete_meal.
+Instantiate a saved menu's recipes as meal-planner entries. Look the menu up by UID or name (tiered fuzzy match), then materialize each of its items into a meal dated start_date + (day − 1) days, posting them all in one batch. This is a one-way COPY, not a link: the planner meals carry no back-reference to the menu, so editing the menu later does not change them — and it is NOT idempotent, so re-running adds a second copy (same as Paprika.app's own Add Menu action). Recipe display names re-resolve from the local recipe store; if ANY recipe-linked item references an unknown recipe the whole batch is rejected with a per-item enumeration (freeform items keep their stored name). To remove a meal afterward, find it via read_meal_plan or search_meal_history and call delete_meal.
 
 **Parameters**
 
 - `menu` — Pick exactly one shape: {"uid": "..."} or {"name": "..."}.
 - `start_date` — Calendar day for the menu's day-1 items (ISO 8601 / yyyy-MM-dd; time-of-day dropped). Day-N items land on start_date + (N−1) days.
 
-## `search_recipes`
+## `search_meal_history`
 
-Search for recipes by name, ingredients, or description. Returns a ranked list of matching recipes.
+Search PAST meals (recall), by a specific recipe and/or by recipe category ("class"). Answers "when did we last have tacos" (recipe_uid) or "how often do we eat Italian" (class); supplying both ANDs them (that recipe, only if it is in that class). Future planner entries are excluded. Returns the matching meals grouped by date (newest first), the total count, and when it was last made. For the upcoming plan, use read_meal_plan.
 
 **Parameters**
 
-- `query` — Search query text
-- `limit` _(optional)_ — Maximum number of results to return (default: 20, max: 50)
+- `recipe_uid` _(optional)_ — Recall past meals of this specific recipe, by UID.
+- `class` _(optional)_ — Recall past meals whose recipe is in this category — a category name (case-insensitive) or UID, e.g. "Italian".
+
+## `search_recipes`
+
+Search and filter recipes. Use any combination of: free-text query (matches name, ingredients, description), an ingredient list with all/any match mode, and/or max prep/cook/total time constraints. At least one criterion is required. Results are ranked by query relevance when a query is present, or by ascending total time when only time constraints are given.
+
+**Parameters**
+
+- `_def`
+- `~standard`
 
 ## `trash_recipe`
 
