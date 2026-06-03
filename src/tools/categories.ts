@@ -12,6 +12,7 @@ export function registerCategoryTools(server: McpServer, ctx: ServerContext): vo
   server.registerTool(
     "list_categories",
     {
+      title: "List recipe categories",
       annotations: { readOnlyHint: true, idempotentHint: true },
       description:
         "List all recipe categories with the number of recipes in each. Categories are sorted alphabetically.",

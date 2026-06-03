@@ -25,6 +25,7 @@ export function registerFavoriteRecipeTool(server: McpServer, ctx: ServerContext
   server.registerTool(
     "favorite_recipe",
     {
+      title: "Mark a recipe as a favorite",
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
       description: "Mark a recipe as a favorite by UID (adds it to the Favorites list).",
       inputSchema: favoriteRecipeInputSchema,
@@ -65,6 +66,7 @@ export function registerUnfavoriteRecipeTool(server: McpServer, ctx: ServerConte
   server.registerTool(
     "unfavorite_recipe",
     {
+      title: "Remove a recipe from favorites",
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
       description: "Remove a recipe from the Favorites list by UID.",
       inputSchema: unfavoriteRecipeInputSchema,

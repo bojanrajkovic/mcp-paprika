@@ -67,6 +67,7 @@ export function registerAddMenuItemsTool(server: McpServer, ctx: ServerContext):
   server.registerTool(
     "add_menu_items",
     {
+      title: "Add items to a menu",
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
       description:
         "Add one or more menuitems to a menu (saved meal plan). Look the menu up by UID or name (tiered " +
@@ -269,6 +270,7 @@ export function registerUpdateMenuItemTool(server: McpServer, ctx: ServerContext
   server.registerTool(
     "update_menu_item",
     {
+      title: "Edit a menu item",
       annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
       description:
         "Update an existing menuitem's meal type or recipe link by UID. Provide at least one of type or " +
@@ -369,6 +371,7 @@ export function registerDeleteMenuItemTool(server: McpServer, ctx: ServerContext
   server.registerTool(
     "delete_menu_item",
     {
+      title: "Delete a menu item",
       annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
       description:
         "Soft-delete a menuitem (a planned recipe) from a menu by UID. Idempotent: a second delete on the " +

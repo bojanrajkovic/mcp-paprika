@@ -13,6 +13,7 @@ export function registerClearPurchasedTool(server: McpServer, ctx: ServerContext
   server.registerTool(
     "clear_purchased_grocery_items",
     {
+      title: "Remove purchased items from a grocery list",
       annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
       description: "Clear all purchased items from a grocery list.",
       inputSchema: {
@@ -56,6 +57,7 @@ export function registerClearAllTool(server: McpServer, ctx: ServerContext): voi
   server.registerTool(
     "clear_grocery_list",
     {
+      title: "Remove all items from a grocery list",
       annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
       description: "Clear all items from a grocery list.",
       inputSchema: {

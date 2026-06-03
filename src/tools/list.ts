@@ -11,6 +11,7 @@ export function registerListTool(server: McpServer, ctx: ServerContext): void {
   server.registerTool(
     "list_recipes",
     {
+      title: "List your saved recipes",
       annotations: { readOnlyHint: true, idempotentHint: true },
       description:
         "List all recipes with pagination. Returns recipe summaries sorted alphabetically. Use offset/limit to paginate through the full library. Response includes total recipe count.",

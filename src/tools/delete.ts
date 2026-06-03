@@ -12,6 +12,7 @@ export function registerDeleteTool(server: McpServer, ctx: ServerContext): void 
   server.registerTool(
     "trash_recipe",
     {
+      title: "Move a recipe to the trash",
       annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false },
       description:
         "Soft-delete a recipe by UID, moving it to the Paprika trash. " +

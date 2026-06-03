@@ -17,6 +17,7 @@ export function registerReadTool(server: McpServer, ctx: ServerContext): void {
   server.registerTool(
     "read_recipe",
     {
+      title: "Read a recipe by UID or title",
       annotations: { readOnlyHint: true, idempotentHint: true },
       description:
         "Read a recipe by UID or title. Title lookup is fuzzy (exact → starts-with → contains) " +
