@@ -12,9 +12,10 @@ import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import type { AppContext } from "../src/server/app-context.js";
+
 import { buildMcpServer } from "../src/server/build.js";
 import { SILENT_LOG } from "../src/utils/log.js";
-import type { AppContext } from "../src/server/app-context.js";
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 const OUT = join(__dirname, "..", "docs", "tools", "README.md");

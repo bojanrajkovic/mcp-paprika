@@ -1,29 +1,31 @@
-import type { OAuthServerProvider, AuthorizationParams } from "@modelcontextprotocol/sdk/server/auth/provider.js";
 import type { OAuthRegisteredClientsStore } from "@modelcontextprotocol/sdk/server/auth/clients.js";
-import type {
-  OAuthClientInformationFull,
-  OAuthTokens,
-  OAuthTokenRevocationRequest,
-} from "@modelcontextprotocol/sdk/shared/auth.js";
-import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
 import {
   InvalidGrantError,
-  InvalidTokenError,
   InvalidTargetError,
+  InvalidTokenError,
 } from "@modelcontextprotocol/sdk/server/auth/errors.js";
-import type { DiskClientRegistrationStore } from "./client-registration.js";
-import type { TokenStore } from "./token-store.js";
-import type { AuthRequestStore } from "./auth-request-store.js";
-import type { AuthCodeStore } from "./auth-code-store.js";
-import type { PendingAuthorizationStore } from "./pending-authorization-store.js";
-import type { Logger } from "pino";
-import { generateOpaqueToken, ACCESS_TOKEN_TTL_SECONDS, nowSeconds, hashTokenForStorage } from "./tokens.js";
+import type { AuthorizationParams, OAuthServerProvider } from "@modelcontextprotocol/sdk/server/auth/provider.js";
+import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
+import type {
+  OAuthClientInformationFull,
+  OAuthTokenRevocationRequest,
+  OAuthTokens,
+} from "@modelcontextprotocol/sdk/shared/auth.js";
 import type { Context } from "hono";
+import type { Logger } from "pino";
+
+import type { AuthCodeStore } from "./auth-code-store.js";
+import type { AuthRequestStore } from "./auth-request-store.js";
+import type { DiskClientRegistrationStore } from "./client-registration.js";
 import type { DiscoveryDoc } from "./oidc-client.js";
+import type { PendingAuthorizationStore } from "./pending-authorization-store.js";
+import type { TokenStore } from "./token-store.js";
 import type { ResolvedOAuthConfig } from "./types.js";
+
+import { consentSecurityHeaders, renderConsentPage } from "./consent-page.js";
 import { isRecognizedOrigin } from "./redirect-allowlist.js";
-import { renderConsentPage, consentSecurityHeaders } from "./consent-page.js";
-import { redirectUpstream, makeUpstreamRedirectDeps, type ApprovedAuthorization } from "./upstream-redirect.js";
+import { ACCESS_TOKEN_TTL_SECONDS, generateOpaqueToken, hashTokenForStorage, nowSeconds } from "./tokens.js";
+import { type ApprovedAuthorization, makeUpstreamRedirectDeps, redirectUpstream } from "./upstream-redirect.js";
 
 /**
  * Minting OAuth 2.1 server provider implementing OAuthServerProvider.

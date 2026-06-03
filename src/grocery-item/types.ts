@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { GroceryItemUidSchema, AisleUidSchema, GroceryListUidRefSchema, NO_AISLE_UID } from "../ids.js";
+import { AisleUidSchema, GroceryItemUidSchema, GroceryListUidRefSchema, NO_AISLE_UID } from "../ids.js";
 
 // GroceryItemStoredSchema — validates camelCase JSON read back from disk. No transform.
 export const GroceryItemStoredSchema = z.object({

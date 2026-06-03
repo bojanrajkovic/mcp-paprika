@@ -1,7 +1,9 @@
-import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { MenuUidSchema } from "../ids.js";
+import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+
 import type { ServerContext } from "../types/server-context.js";
+
+import { MenuUidSchema } from "../ids.js";
 import { formatLookupOutcome, resolveLookup, textResult, uidOrTextLookupSchema } from "./helpers.js";
 import { menuStartGuard, menuToMarkdown } from "./menu-helpers.js";
 

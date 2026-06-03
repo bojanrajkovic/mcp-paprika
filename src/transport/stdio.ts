@@ -1,8 +1,9 @@
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 
+import type { PaprikaConfig } from "../utils/config.js";
+
 import { buildAppContext, buildMcpServer } from "../server/build.js";
 import { createServerRef, singleServerNotifier } from "../server/notifier.js";
-import type { PaprikaConfig } from "../utils/config.js";
 
 export interface TransportHandle {
   shutdown(): Promise<void>;

@@ -2,7 +2,8 @@
  * Tests for OAuthError subclasses and OAuthTokenError factory methods
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
+
 import { OAuthTokenError } from "./errors.js";
 
 describe("OAuthTokenError", () => {

@@ -14,16 +14,18 @@
 import type { IRetryContext } from "cockatiel";
 import type { Logger } from "pino";
 import { z } from "zod";
-import { SILENT_LOG } from "../utils/log.js";
+
 import type { Recipe } from "../recipe/types.js";
 import type { ResolvedImageGenConfig } from "../utils/config.js";
+
+import { SILENT_LOG } from "../utils/log.js";
 import {
   createResilientExecutor,
-  TransientHTTPError,
-  RETRYABLE_STATUSES,
   type ResilientExecutor,
+  RETRYABLE_STATUSES,
+  TransientHTTPError,
 } from "../utils/resilience.js";
-import { PhotographyError, PhotographyAPIError } from "./photography-errors.js";
+import { PhotographyAPIError, PhotographyError } from "./photography-errors.js";
 
 /** Ordered curated model aliases — a tuple so it can seed the tool's `z.enum`. */
 export const PHOTO_MODELS = ["seedream", "nano-banana", "nano-banana-2", "gpt-image"] as const;

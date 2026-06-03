@@ -1,15 +1,16 @@
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
+
 import {
-  generateOpaqueToken,
-  hashTokenForStorage,
   ACCESS_TOKEN_TTL_SECONDS,
-  REFRESH_TOKEN_TTL_SECONDS,
   AUTH_CODE_TTL_SECONDS,
   AUTH_REQUEST_TTL_SECONDS,
-  JWKS_CACHE_TTL_MS,
-  DISCOVERY_CACHE_TTL_MS,
   DCR_CLIENT_STALE_DAYS,
+  DISCOVERY_CACHE_TTL_MS,
+  generateOpaqueToken,
+  hashTokenForStorage,
+  JWKS_CACHE_TTL_MS,
   PENDING_AUTHORIZATION_TTL_SECONDS,
+  REFRESH_TOKEN_TTL_SECONDS,
 } from "./tokens.js";
 
 describe("auth/tokens: opaque token generation and hashing", () => {

@@ -1,8 +1,9 @@
-import { describe, it, expect } from "vitest";
-import { RecipeStore } from "../recipe/store.js";
+import { describe, expect, it } from "vitest";
+
 import { makeAisle } from "../cache/__fixtures__/aisles.js";
+import { RecipeStore } from "../recipe/store.js";
 import { registerAislesTool } from "./aisles.js";
-import { makeTestServer, makeCtx, getText, seed } from "./tool-test-utils.js";
+import { getText, makeCtx, makeTestServer, seed } from "./tool-test-utils.js";
 
 function makeAisleTestCtx() {
   const { server, callTool } = makeTestServer();

@@ -2,9 +2,11 @@
  * Tests for OIDC preset table and resolver
  */
 
-import { describe, it, expect } from "vitest";
-import { resolvePreset, OIDC_PRESETS } from "./presets.js";
+import { describe, expect, it } from "vitest";
+
 import type { OIDCPreset, ResolvedOAuthConfig } from "./types.js";
+
+import { OIDC_PRESETS, resolvePreset } from "./presets.js";
 
 describe("OIDC Presets", () => {
   describe("OIDC_PRESETS table", () => {

@@ -1,16 +1,18 @@
-// pattern: Imperative Shell
-import { toMessage } from "../utils/log.js";
-import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
-import { MenuItemUidSchema, MenuUidSchema, RecipeUidSchema } from "../ids.js";
+
 import type { MealTypeUid, RecipeUid } from "../ids.js";
 import type { MenuItem } from "../menu-item/types.js";
 import type { Menu } from "../menu/types.js";
+import type { ServerContext } from "../types/server-context.js";
+
+import { MenuItemUidSchema, MenuUidSchema, RecipeUidSchema } from "../ids.js";
+// pattern: Imperative Shell
+import { toMessage } from "../utils/log.js";
 import { resolveLookup, textResult, uidOrTextLookupSchema } from "./helpers.js";
 import { mealTypeSpecSchema, resolveMealTypeSpec } from "./meal-helpers.js";
 import { commitMenu, commitMenuItem, commitMenuItemsBatch, menuStartGuard, menuToMarkdown } from "./menu-helpers.js";
-import type { ServerContext } from "../types/server-context.js";
 
 // One menuitem to add. Structurally EITHER recipe-linked (recipe_uid; display
 // name auto-resolves from the recipe) OR freeform (name; no recipe), mirroring

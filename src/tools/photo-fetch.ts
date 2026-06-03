@@ -1,14 +1,14 @@
 import { lookup as dnsLookup } from "node:dns";
 import { isIP, type LookupFunction } from "node:net";
 
+import ipaddr from "ipaddr.js";
 // IMPORTANT: import `fetch` from undici (NOT the global fetch). The `ssrfAgent`
 // dispatcher below is an undici `Agent` from THIS undici copy; passing it to
 // Node's built-in global `fetch` (a different bundled undici) fails with
 // `UND_ERR_INVALID_ARG: invalid onRequestStart method` because the two undici
 // versions have incompatible handler interfaces. Using undici's own `fetch`
 // keeps the dispatcher and the fetch on the same copy.
-import { Agent, fetch as undiciFetch, type Dispatcher, type Response as UndiciResponse } from "undici";
-import ipaddr from "ipaddr.js";
+import { Agent, type Dispatcher, fetch as undiciFetch, type Response as UndiciResponse } from "undici";
 
 import { toMessage } from "../utils/log.js";
 

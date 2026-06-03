@@ -1,8 +1,10 @@
-import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { pantryStartGuard } from "./pantry-helpers.js";
-import { textResult } from "./helpers.js";
+import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+
 import type { ServerContext } from "../types/server-context.js";
+
+import { textResult } from "./helpers.js";
+import { pantryStartGuard } from "./pantry-helpers.js";
 
 export function registerListPantryTool(server: McpServer, ctx: ServerContext): void {
   const log = ctx.log.child({ component: "list_pantry" });

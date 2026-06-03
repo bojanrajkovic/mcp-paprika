@@ -9,21 +9,23 @@
  * - IssuedPair: Result shape from issuance/rotation
  */
 
-import { err, ok, type Result } from "neverthrow";
-import { Mutex } from "async-mutex";
-import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
 import type { OAuthError } from "@modelcontextprotocol/sdk/server/auth/errors.js";
+import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
+import { Mutex } from "async-mutex";
+import { err, ok, type Result } from "neverthrow";
+
 import type { DiskCacheRoot } from "../cache/disk-cache-root.js";
+import type { VerifiedIdentity } from "./allowlist.js";
+import type { OAuthToken } from "./types.js";
+
+import { OAuthTokenError } from "./errors.js";
 import {
+  ACCESS_TOKEN_TTL_SECONDS,
   generateOpaqueToken,
   hashTokenForStorage,
-  ACCESS_TOKEN_TTL_SECONDS,
-  REFRESH_TOKEN_TTL_SECONDS,
   nowSeconds,
+  REFRESH_TOKEN_TTL_SECONDS,
 } from "./tokens.js";
-import { OAuthTokenError } from "./errors.js";
-import type { OAuthToken } from "./types.js";
-import type { VerifiedIdentity } from "./allowlist.js";
 
 // ============================================================================
 // Exports

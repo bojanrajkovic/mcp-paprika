@@ -1,11 +1,13 @@
 import { fromAny } from "@total-typescript/shoehorn";
-import { describe, it, expect, vi } from "vitest";
-import { RecipeStore } from "../recipe/store.js";
-import { makePantryItem } from "../cache/__fixtures__/pantry.js";
-import { registerDeletePantryItemTool } from "./pantry-delete.js";
-import { makeTestServer, makeCtx, getText, seed } from "./tool-test-utils.js";
+import { describe, expect, it, vi } from "vitest";
+
 import type { PantryItemUid } from "../ids.js";
+
+import { makePantryItem } from "../cache/__fixtures__/pantry.js";
 import { PaprikaAPIError } from "../paprika/errors.js";
+import { RecipeStore } from "../recipe/store.js";
+import { registerDeletePantryItemTool } from "./pantry-delete.js";
+import { getText, makeCtx, makeTestServer, seed } from "./tool-test-utils.js";
 
 describe("pantry-mutations.AC6: delete_pantry_item tool", () => {
   it("pantry-mutations.AC6.1: happy path — sets deleted=true and commits", async () => {

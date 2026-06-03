@@ -27,6 +27,7 @@ The human-developer workflow for mcp-paprika. Agent-facing guidance and the proj
 ## Code conventions
 
 - **ESM only** — `import`/`export`, never CommonJS. Always use `.js` extensions in relative imports (`import { foo } from "./bar.js"`).
+- **Imports are organized by the tools, not by hand** — oxfmt's `sortImports` sorts and groups import _statements_ (builtin → external → your own modules, with `import type` ahead of value imports inside the local block), and the oxlint `sort-imports` rule alphabetizes the named members inside `{ }`. Both auto-fix on commit and are gated in CI; the `sortImports` block in `.oxfmtrc.json` and the `sort-imports` rule in `.oxlintrc.json` are the source of truth. Don't hand-order imports — let the tools do it. (One known wrinkle: member sorting alphabetizes semantic groupings like `Create, Update, Delete`; disable it on a specific line with `// oxlint-disable-next-line sort-imports` if that ordering matters.)
 - **Strict TypeScript** via `@tsconfig/strictest` — no `any`, no implicit returns, no unused variables. `interface` for extensible object shapes, `type` for unions and intersections, `readonly` where mutation is not needed.
 - **Error handling** — neverthrow `Result<T, E>` in the functional core (never throw there); idiomatic `.match()` / `.andThen()` / `.map()` / `.mapErr()`, never `.isOk()` / `.isErr()`. Validate inputs with Zod at boundaries. Infrastructure that wraps exception-throwing libraries (cockatiel, the file-backed vector index) catches at the boundary; see `docs/architecture.md`.
 - **No `console`** — banned by the `no-console` oxlint rule. In stdio mode stdout _is_ the MCP wire, so stray output corrupts the protocol; use the structured logger (`ctx.log.child({ component })`). The two documented `process.stderr.write` exceptions are the signal handler in `src/index.ts` and the pre-context misconfiguration warning in `src/transport/stdio.ts`.
@@ -41,7 +42,7 @@ The human-developer workflow for mcp-paprika. Agent-facing guidance and the proj
 
 - **Conventional Commits**, validated by the `commit-msg` hook against [`@commitlint/config-conventional`](https://github.com/conventional-changelog/commitlint): the standard type enum, free-form scopes. The enum is owned by the preset and is not re-listed here. Wrap body lines at 100 characters.
 - **Atomic commits** — one logical change each, describable in a sentence without "and".
-- **Hooks (lefthook):** pre-commit runs oxfmt (auto-restages) and oxlint on staged `.ts`; commit-msg runs commitlint; pre-push runs `pnpm typecheck` and `pnpm test`. Do not bypass them.
+- **Hooks (lefthook):** pre-commit runs oxlint `--fix` then oxfmt over staged files — sequentially (both rewrite files, so they can't race) and both auto-restaging; commit-msg runs commitlint; pre-push runs `pnpm typecheck` and `pnpm test`. Do not bypass them.
 - **Squash-merge** — the PR body becomes the commit body, so write it as "what shipped": a one- or two-sentence lead (no `## Summary`) then detail. Transient verification (test plans, screenshots) goes in a PR comment, not the body.
 - **Dependencies** — add with `pnpm add` (latest stable); do not hand-pin. Renovate keeps existing pins current.
 

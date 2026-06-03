@@ -1,7 +1,9 @@
 import { randomUUID } from "node:crypto";
+
+import type { OAuthClient, OAuthToken } from "../../auth/types.js";
+
 import { hashTokenForStorage, nowSeconds } from "../../auth/tokens.js";
 import { OAuthClientSchema, OAuthTokenSchema } from "../../auth/types.js";
-import type { OAuthClient, OAuthToken } from "../../auth/types.js";
 
 /**
  * Factory for creating test OAuthClient objects.

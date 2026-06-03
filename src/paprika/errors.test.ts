@@ -1,7 +1,8 @@
-import { describe, it, expect } from "vitest";
 import { BrokenCircuitError } from "cockatiel";
-import { PaprikaError, PaprikaAuthError, PaprikaAPIError } from "./errors.js";
+import { describe, expect, it } from "vitest";
+
 import { CircuitOpenError } from "../utils/errors.js";
+import { PaprikaAPIError, PaprikaAuthError, PaprikaError } from "./errors.js";
 
 describe("Error class hierarchy", () => {
   describe("paprika-types.AC4.1: Inheritance chain", () => {

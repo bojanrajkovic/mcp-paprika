@@ -9,12 +9,12 @@
 
 import { randomUUID } from "node:crypto";
 
-import { PaprikaClient } from "../src/paprika/client.js";
-import { todayWire } from "../src/utils/dates.js";
-import { PantryItemUidSchema } from "../src/ids.js";
 import type { PantryItem } from "../src/pantry/types.js";
 
+import { PantryItemUidSchema } from "../src/ids.js";
+import { PaprikaClient } from "../src/paprika/client.js";
 import { loadConfig } from "../src/utils/config.js";
+import { todayWire } from "../src/utils/dates.js";
 
 const SMOKE_PREFIX = "[mcp-smoke]";
 

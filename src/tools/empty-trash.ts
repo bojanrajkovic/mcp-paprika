@@ -1,11 +1,13 @@
-import { toMessage } from "../utils/log.js";
-import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { RecipeUidSchema } from "../ids.js";
+import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+
 import type { Recipe } from "../recipe/types.js";
-import { PaprikaAPIError } from "../paprika/errors.js";
-import { coldStartGuard, commitRecipeHardDelete, textResult } from "./helpers.js";
 import type { ServerContext } from "../types/server-context.js";
+
+import { RecipeUidSchema } from "../ids.js";
+import { PaprikaAPIError } from "../paprika/errors.js";
+import { toMessage } from "../utils/log.js";
+import { coldStartGuard, commitRecipeHardDelete, textResult } from "./helpers.js";
 
 export function registerEmptyTrashTool(server: McpServer, ctx: ServerContext): void {
   const log = ctx.log.child({ component: "empty_trash" });

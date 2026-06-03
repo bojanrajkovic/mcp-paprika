@@ -1,13 +1,16 @@
 // pattern: Imperative Shell
 // (Pure pinoLevelToMcp lives inside but the file constructs streams and calls fs I/O.)
 
-import type { Notifier } from "../server/notifier.js";
-import type { Level as PinoLevel, LevelWithSilent } from "pino";
-import { Writable } from "node:stream";
-import { mkdirSync, openSync, closeSync } from "node:fs";
+import { closeSync, mkdirSync, openSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { Writable } from "node:stream";
+
+import type { LevelWithSilent, Level as PinoLevel } from "pino";
 import pino from "pino";
 import pretty from "pino-pretty";
+
+import type { Notifier } from "../server/notifier.js";
+
 import { getLogDir } from "./xdg.js";
 
 /**

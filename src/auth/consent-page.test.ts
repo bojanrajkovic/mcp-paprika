@@ -1,5 +1,6 @@
-import { describe, it, expect } from "vitest";
-import { renderConsentPage, renderDeniedPage, renderExpiredPage, consentSecurityHeaders } from "./consent-page.js";
+import { describe, expect, it } from "vitest";
+
+import { consentSecurityHeaders, renderConsentPage, renderDeniedPage, renderExpiredPage } from "./consent-page.js";
 
 describe("renderConsentPage", () => {
   const base = { ticket: "mcp_consent_abc123", clientName: "Claude", redirectHost: "https://claude.ai" };

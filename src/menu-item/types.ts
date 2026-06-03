@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { MenuItemUidSchema, MenuUidRefSchema, RecipeUidRefSchema, MealTypeUidSchema } from "../ids.js";
+import { MealTypeUidSchema, MenuItemUidSchema, MenuUidRefSchema, RecipeUidRefSchema } from "../ids.js";
 
 // MenuItemStoredSchema — validates camelCase JSON read back from disk. No transform.
 // `menuUid` is nullable: a cascade-deleted menuitem has `menu_uid: null` on the wire

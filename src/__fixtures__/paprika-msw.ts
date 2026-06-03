@@ -6,7 +6,7 @@
 // is exactly how the menus/meals/grocery sync endpoints rotted undetected as
 // they were added. Keep this list complete as new sync entities land, and use
 // `failLoudOnUpstream` so a future gap fails loudly instead of hanging.
-import { http, HttpResponse, type HttpHandler } from "msw";
+import { http, type HttpHandler, HttpResponse } from "msw";
 
 export const PAPRIKA_AUTH_URL = "https://paprikaapp.com/api/v1/account/login/";
 export const PAPRIKA_API_BASE = "https://paprikaapp.com/api/v2/sync";

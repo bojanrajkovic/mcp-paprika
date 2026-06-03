@@ -1,6 +1,7 @@
-import { describe, it, expect } from "vitest";
 import fc from "fast-check";
-import { normalizeOrigin, isRecognizedOrigin } from "./redirect-allowlist.js";
+import { describe, expect, it } from "vitest";
+
+import { isRecognizedOrigin, normalizeOrigin } from "./redirect-allowlist.js";
 
 describe("redirect-allowlist: property-based tests", () => {
   it("Property 1: normalizeOrigin is idempotent on valid https origins", () => {

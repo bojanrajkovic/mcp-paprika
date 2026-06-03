@@ -1,11 +1,13 @@
 import { fromAny } from "@total-typescript/shoehorn";
-import { describe, it, expect, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
 import type { SemanticResult } from "../features/vector-store.js";
-import { RecipeStore } from "../recipe/store.js";
-import { makeRecipe, makeCategory } from "../cache/__fixtures__/recipes.js";
 import type { RecipeUid } from "../ids.js";
+
+import { makeCategory, makeRecipe } from "../cache/__fixtures__/recipes.js";
+import { RecipeStore } from "../recipe/store.js";
 import { registerDiscoverTool } from "./discover.js";
-import { makeTestServer, makeCtx, getText, seed } from "./tool-test-utils.js";
+import { getText, makeCtx, makeTestServer, seed } from "./tool-test-utils.js";
 
 // `uid` is loosened to a plain string so tests pass literal UIDs; branded here.
 function makeMockVectorStore(results: ReadonlyArray<{ uid: string; score: number; recipeName: string }> = []) {

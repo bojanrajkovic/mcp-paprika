@@ -1,7 +1,5 @@
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 
-import { makeAppContext } from "./app-context.js";
-import { seed } from "./seed.js";
 import { makeAisle } from "../cache/__fixtures__/aisles.js";
 import { makeGroceryIngredient } from "../cache/__fixtures__/grocery-ingredients.js";
 import { makeGroceryItem } from "../cache/__fixtures__/grocery-items.js";
@@ -10,7 +8,9 @@ import { makeMeal, makeMealType } from "../cache/__fixtures__/meals.js";
 import { makeMenu, makeMenuItem } from "../cache/__fixtures__/menus.js";
 import { makePantryItem } from "../cache/__fixtures__/pantry.js";
 import { makePhoto } from "../cache/__fixtures__/photos.js";
-import { makeRecipe, makeCategory } from "../cache/__fixtures__/recipes.js";
+import { makeCategory, makeRecipe } from "../cache/__fixtures__/recipes.js";
+import { makeAppContext } from "./app-context.js";
+import { seed } from "./seed.js";
 
 describe("seed", () => {
   it("routes every collection to its store", () => {

@@ -1,16 +1,18 @@
-// pattern: Imperative Shell
-import { toMessage } from "../utils/log.js";
-import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
-import { PantryItemUidSchema, NO_AISLE_UID } from "../ids.js";
+
 import type { AisleUid } from "../ids.js";
 import type { PantryItem } from "../pantry/types.js";
-import { normalizeWire, todayWire } from "../utils/dates.js";
-import { textResult } from "./helpers.js";
-import { ensureAisle } from "./aisle-helpers.js";
-import { commitPantryItemsBatch, pantryItemToMarkdown, pantryStartGuard } from "./pantry-helpers.js";
 import type { ServerContext } from "../types/server-context.js";
+
+import { NO_AISLE_UID, PantryItemUidSchema } from "../ids.js";
+import { normalizeWire, todayWire } from "../utils/dates.js";
+// pattern: Imperative Shell
+import { toMessage } from "../utils/log.js";
+import { ensureAisle } from "./aisle-helpers.js";
+import { textResult } from "./helpers.js";
+import { commitPantryItemsBatch, pantryItemToMarkdown, pantryStartGuard } from "./pantry-helpers.js";
 
 const itemInputSchema = z.object({
   ingredient: z.string().min(1).describe("Ingredient name (required)"),

@@ -1,5 +1,4 @@
-import { toMessage } from "../utils/log.js";
-
+import { createRemoteJWKSet, jwtVerify, type JWTVerifyGetKey } from "jose";
 /**
  * OIDC upstream client: discovery loading and id_token verification.
  *
@@ -10,13 +9,13 @@ import { toMessage } from "../utils/log.js";
  * Uses `jose@^6.2.3` for JWT verification and JWKS management.
  * `loadDiscovery` is one-shot (no caching); `verifyIdToken` uses jose's built-in JWKS cache.
  */
-
-import { z } from "zod";
 import type { Logger } from "pino";
-import { createRemoteJWKSet, jwtVerify, type JWTVerifyGetKey } from "jose";
+import { z } from "zod";
+
+import { toMessage } from "../utils/log.js";
 import { OAuthMetadataValidationError } from "./errors.js";
-import { IdTokenPayloadSchema, type IdTokenPayload } from "./types.js";
 import { JWKS_CACHE_TTL_MS } from "./tokens.js";
+import { type IdTokenPayload, IdTokenPayloadSchema } from "./types.js";
 
 // ============================================================================
 // Discovery Document Schema (RFC 8414 + OpenID Connect Discovery)

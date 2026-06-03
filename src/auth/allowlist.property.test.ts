@@ -1,11 +1,12 @@
-import { describe, it, expect } from "vitest";
 import fc from "fast-check";
-import { verifyIdentity } from "./allowlist.js";
+import { describe, expect, it } from "vitest";
+
 import {
+  arbitraryAllowlist,
   arbitraryIdTokenPayload,
   arbitraryIdTokenPayloadWithEmail,
-  arbitraryAllowlist,
 } from "./__tests__/test-utils.js";
+import { verifyIdentity } from "./allowlist.js";
 
 describe("allowlist: property-based tests", () => {
   describe("Policy semantics", () => {

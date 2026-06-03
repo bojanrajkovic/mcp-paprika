@@ -1,14 +1,16 @@
-import { toMessage } from "../utils/log.js";
-import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
-import { PantryItemUidSchema } from "../ids.js";
+
 import type { PantryItem } from "../pantry/types.js";
-import { normalizeWire } from "../utils/dates.js";
-import { textResult } from "./helpers.js";
-import { ensureAisle } from "./aisle-helpers.js";
-import { commitPantryItem, pantryItemToMarkdown, pantryStartGuard } from "./pantry-helpers.js";
 import type { ServerContext } from "../types/server-context.js";
+
+import { PantryItemUidSchema } from "../ids.js";
+import { normalizeWire } from "../utils/dates.js";
+import { toMessage } from "../utils/log.js";
+import { ensureAisle } from "./aisle-helpers.js";
+import { textResult } from "./helpers.js";
+import { commitPantryItem, pantryItemToMarkdown, pantryStartGuard } from "./pantry-helpers.js";
 
 export function registerUpdatePantryItemTool(server: McpServer, ctx: ServerContext): void {
   const log = ctx.log.child({ component: "update_pantry_item" });

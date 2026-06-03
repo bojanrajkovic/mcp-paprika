@@ -1,11 +1,15 @@
+import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import { z } from "zod";
+
+import type { MealTypeUid, RecipeUid } from "../ids.js";
+import type { Meal } from "../meal/types.js";
+import type { ServerContext } from "../types/server-context.js";
+
+import { MealUidSchema, RecipeUidSchema } from "../ids.js";
+import { parseCalendarDayWire } from "../utils/dates.js";
 // pattern: Imperative Shell
 import { toMessage } from "../utils/log.js";
-import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { z } from "zod";
-import { MealUidSchema, RecipeUidSchema } from "../ids.js";
-import type { RecipeUid, MealTypeUid } from "../ids.js";
-import type { Meal } from "../meal/types.js";
 import { textResult } from "./helpers.js";
 import {
   commitMeal,
@@ -16,8 +20,6 @@ import {
   renderMealCard,
   resolveMealTypeSpec,
 } from "./meal-helpers.js";
-import { parseCalendarDayWire } from "../utils/dates.js";
-import type { ServerContext } from "../types/server-context.js";
 
 // Each meal item is structurally either recipe-linked OR freeform — never both.
 // Custom `name` on a recipe-linked meal is dead data: Paprika.app dispatches the

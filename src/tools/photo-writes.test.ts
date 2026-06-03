@@ -1,16 +1,17 @@
-import { describe, it, expect, beforeAll, vi } from "vitest";
 import { fromAny } from "@total-typescript/shoehorn";
 import sharp from "sharp";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 
-import { RecipeStore } from "../recipe/store.js";
-import { makeRecipe } from "../cache/__fixtures__/recipes.js";
-import { makePhoto } from "../cache/__fixtures__/photos.js";
-import { PhotoUidSchema, RecipeUidSchema } from "../ids.js";
 import type { Photo } from "../photo/types.js";
 import type { Recipe } from "../recipe/types.js";
-import { makeCtx, makeTestServer, getText, seed } from "./tool-test-utils.js";
-import { registerUploadPhotoTool, registerDeletePhotoTool, uploadPhotoInputSchema } from "./photo-writes.js";
+
+import { makePhoto } from "../cache/__fixtures__/photos.js";
+import { makeRecipe } from "../cache/__fixtures__/recipes.js";
+import { PhotoUidSchema, RecipeUidSchema } from "../ids.js";
+import { RecipeStore } from "../recipe/store.js";
 import { fetchImageBytes, isBlockedIp, ssrfLookup } from "./photo-fetch.js";
+import { registerDeletePhotoTool, registerUploadPhotoTool, uploadPhotoInputSchema } from "./photo-writes.js";
+import { getText, makeCtx, makeTestServer, seed } from "./tool-test-utils.js";
 
 // The URL download is exercised end-to-end (real undici fetch + dispatcher) in
 // photo-fetch.test.ts. Here we stub fetchImageBytes to test upload_photo's

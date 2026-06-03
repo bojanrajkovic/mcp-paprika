@@ -14,7 +14,7 @@
  * Future: Consider HMAC-SHA256(plaintext, pepper) as documented in design line 378.
  */
 
-import { randomBytes, createHash } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 
 // ============================================================================
 // Token Type Identifiers

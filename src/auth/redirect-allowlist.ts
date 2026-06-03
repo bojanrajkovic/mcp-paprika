@@ -21,7 +21,8 @@
  *   loopback client with a random port prompts unless its exact origin is listed.
  */
 
-import { ok, err, type Result } from "neverthrow";
+import { err, ok, type Result } from "neverthrow";
+
 import { OAuthConfigError } from "./errors.js";
 
 /**

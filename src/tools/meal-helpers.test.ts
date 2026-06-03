@@ -1,10 +1,12 @@
-import { describe, it, expect, vi } from "vitest";
 import { fromAny } from "@total-typescript/shoehorn";
-import { MealStore } from "../meal/store.js";
-import { RecipeStore } from "../recipe/store.js";
+import { describe, expect, it, vi } from "vitest";
+
+import type { MealTypeUid, RecipeUid } from "../ids.js";
+
 import { makeMeal, makeMealType } from "../cache/__fixtures__/meals.js";
 import { makeRecipe } from "../cache/__fixtures__/recipes.js";
-import type { MealTypeUid, RecipeUid } from "../ids.js";
+import { MealStore } from "../meal/store.js";
+import { RecipeStore } from "../recipe/store.js";
 import {
   commitMeal,
   commitMealsBatch,
@@ -15,7 +17,7 @@ import {
   renderMealCard,
   resolveMealTypeSpec,
 } from "./meal-helpers.js";
-import { makeTestServer, makeCtx, makeStubNotifier, seed } from "./tool-test-utils.js";
+import { makeCtx, makeStubNotifier, makeTestServer, seed } from "./tool-test-utils.js";
 
 // ---------------------------------------------------------------------------
 // AC6.1: mealTypeSpecSchema is exported and correct

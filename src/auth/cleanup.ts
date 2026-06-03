@@ -18,13 +18,16 @@
  */
 
 import { setTimeout as wait } from "node:timers/promises";
+
 import type { Logger } from "pino";
+
 import type { DiskCacheRoot } from "../cache/disk-cache-root.js";
-import type { AuthRequestStore } from "./auth-request-store.js";
 import type { AuthCodeStore } from "./auth-code-store.js";
-import type { PendingAuthorizationStore } from "./pending-authorization-store.js";
+import type { AuthRequestStore } from "./auth-request-store.js";
 import type { DiskClientRegistrationStore } from "./client-registration.js";
+import type { PendingAuthorizationStore } from "./pending-authorization-store.js";
 import type { TokenStore } from "./token-store.js";
+
 import { DCR_CLIENT_STALE_DAYS, nowSeconds } from "./tokens.js";
 
 const CLEANUP_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 hours

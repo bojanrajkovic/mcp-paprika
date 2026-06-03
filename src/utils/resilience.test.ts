@@ -1,6 +1,7 @@
-import { describe, it, expect } from "vitest";
-import { createResilientExecutor, TransientHTTPError, RETRYABLE_STATUSES } from "./resilience.js";
+import { describe, expect, it } from "vitest";
+
 import { CircuitOpenError } from "./errors.js";
+import { createResilientExecutor, RETRYABLE_STATUSES, TransientHTTPError } from "./resilience.js";
 
 const fast = {
   service: "embeddings" as const,

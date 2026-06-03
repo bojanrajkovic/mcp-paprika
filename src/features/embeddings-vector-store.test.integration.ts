@@ -9,15 +9,18 @@
  * Run specifically with: pnpm test src/features/embeddings-vector-store.test.integration.ts
  */
 
-import { describe, it, expect, vi, afterEach } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+import type { CategoryUid, RecipeUid } from "../ids.js";
+import type { EmbeddingConfig } from "../utils/config.js";
+
+import { makeRecipe } from "../cache/__fixtures__/recipes.js";
 import { EmbeddingClient } from "./embeddings.js";
 import { VectorStore } from "./vector-store.js";
-import { makeRecipe } from "../cache/__fixtures__/recipes.js";
-import type { EmbeddingConfig } from "../utils/config.js";
-import type { RecipeUid, CategoryUid } from "../ids.js";
 
 const OLLAMA_BASE_URL = "http://localhost:11434/v1";
 const OLLAMA_MODEL = "nomic-embed-text";

@@ -1,9 +1,11 @@
-import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
 import * as path from "node:path";
-import { getConfigDir, getCacheDir, getDataDir, getLogDir, getTempDir } from "./xdg.js";
+import { fileURLToPath } from "node:url";
+
+import { describe, expect, it } from "vitest";
+
+import { getCacheDir, getConfigDir, getDataDir, getLogDir, getTempDir } from "./xdg.js";
 
 describe("XDG path utilities", () => {
   describe("xdg-paths.AC1: Module exports 5 path functions", () => {

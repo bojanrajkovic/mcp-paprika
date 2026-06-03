@@ -1,8 +1,10 @@
-import { describe, it, expect } from "vitest";
 import fc from "fast-check";
-import { RecipeStore } from "./store.js";
-import { makeRecipe } from "../cache/__fixtures__/recipes.js";
+import { describe, expect, it } from "vitest";
+
 import type { RecipeUid } from "../ids.js";
+
+import { makeRecipe } from "../cache/__fixtures__/recipes.js";
+import { RecipeStore } from "./store.js";
 
 describe("RecipeStore property-based tests", () => {
   describe("recipe-query-store.AC3.5 & AC3.8: Search result ordering invariant and trashed recipes", () => {

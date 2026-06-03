@@ -11,20 +11,22 @@
  * - POST /token
  */
 
-import { http, HttpResponse, type HttpHandler } from "msw";
 import {
-  generateKeyPair,
   exportJWK,
+  generateKeyPair,
+  type GenerateKeyPairResult,
   generateSecret,
-  SignJWT,
-  UnsecuredJWT,
   type JWK,
   type JWTPayload,
-  type GenerateKeyPairResult,
+  SignJWT,
+  UnsecuredJWT,
 } from "jose";
-import { makeEs256Jwt } from "./jose-keys.js";
-import { nowSeconds } from "../tokens.js";
+import { http, type HttpHandler, HttpResponse } from "msw";
+
 import type { DiscoveryDoc } from "../oidc-client.js";
+
+import { nowSeconds } from "../tokens.js";
+import { makeEs256Jwt } from "./jose-keys.js";
 
 // ============================================================================
 // OidcStub types (forward-declared so helpers below can reference them)

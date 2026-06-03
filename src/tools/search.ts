@@ -1,9 +1,11 @@
-import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
+
 import type { ScoredResult } from "../recipe/store.js";
-import { coldStartGuard, recipeMetadataLines, textResult } from "./helpers.js";
 import type { ServerContext } from "../types/server-context.js";
+
+import { coldStartGuard, recipeMetadataLines, textResult } from "./helpers.js";
 
 export function registerSearchTool(server: McpServer, ctx: ServerContext): void {
   const log = ctx.log.child({ component: "search_recipes" });

@@ -1,4 +1,5 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
+
 import { TombstoneEntityStore } from "./tombstone-store.js";
 
 type TestUid = string & { readonly __brand: "TestUid" };

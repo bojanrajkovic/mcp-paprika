@@ -1,16 +1,9 @@
-import { vi, describe, it, expect, afterEach, beforeEach, expectTypeOf } from "vitest";
 import { fromAny } from "@total-typescript/shoehorn";
+import { afterEach, beforeEach, describe, expect, expectTypeOf, it, vi } from "vitest";
 
-import { SyncEngine, syncReplaceAllEntity } from "./sync.js";
-import { createLogger, SILENT_LOG } from "../utils/log.js";
-import type { AppContext } from "../server/app-context.js";
-import type { Notifier } from "../server/notifier.js";
-import type { RecipeStore } from "../recipe/store.js";
-import type { PaprikaClient } from "./client.js";
+import type { AisleStore } from "../aisle/store.js";
 import type { DiskCacheRoot } from "../cache/disk-cache-root.js";
 import type { DiskCache } from "../cache/disk-cache.js";
-import type { PantryStore } from "../pantry/store.js";
-import type { AisleStore } from "../aisle/store.js";
 import type { Category } from "../category/types.js";
 import type {
   CategoryUid,
@@ -22,23 +15,31 @@ import type {
   PantryItemUid,
   RecipeUid,
 } from "../ids.js";
-import type { AnySyncResult, EntityChanges } from "./sync-types.js";
+import type { PantryStore } from "../pantry/store.js";
+import type { RecipeStore } from "../recipe/store.js";
 import type { RecipeEntry } from "../recipe/types.js";
-import { makeRecipe, makeCategory } from "../cache/__fixtures__/recipes.js";
-import { makePantryItem } from "../cache/__fixtures__/pantry.js";
-import { makeAisle } from "../cache/__fixtures__/aisles.js";
-import { PantryStore as RealPantryStore } from "../pantry/store.js";
+import type { AppContext } from "../server/app-context.js";
+import type { Notifier } from "../server/notifier.js";
+import type { PaprikaClient } from "./client.js";
+import type { AnySyncResult, EntityChanges } from "./sync-types.js";
+
+import { makeAppContext } from "../__fixtures__/app-context.js";
 import { AisleStore as RealAisleStore } from "../aisle/store.js";
+import { makeAisle } from "../cache/__fixtures__/aisles.js";
+import { makeGroceryIngredient } from "../cache/__fixtures__/grocery-ingredients.js";
+import { makeGroceryItem } from "../cache/__fixtures__/grocery-items.js";
+import { makeGroceryList } from "../cache/__fixtures__/grocery-lists.js";
+import { makeMenu, makeMenuItem } from "../cache/__fixtures__/menus.js";
+import { makePantryItem } from "../cache/__fixtures__/pantry.js";
+import { makePhoto } from "../cache/__fixtures__/photos.js";
+import { makeCategory, makeRecipe } from "../cache/__fixtures__/recipes.js";
 import { CategoryStore as RealCategoryStore } from "../category/store.js";
 import { GroceryIngredientStore } from "../grocery-ingredient/store.js";
 import { GroceryItemStore } from "../grocery-item/store.js";
 import { GroceryListStore } from "../grocery-list/store.js";
-import { makeAppContext } from "../__fixtures__/app-context.js";
-import { makeGroceryList } from "../cache/__fixtures__/grocery-lists.js";
-import { makeGroceryItem } from "../cache/__fixtures__/grocery-items.js";
-import { makeGroceryIngredient } from "../cache/__fixtures__/grocery-ingredients.js";
-import { makeMenu, makeMenuItem } from "../cache/__fixtures__/menus.js";
-import { makePhoto } from "../cache/__fixtures__/photos.js";
+import { PantryStore as RealPantryStore } from "../pantry/store.js";
+import { createLogger, SILENT_LOG } from "../utils/log.js";
+import { SyncEngine, syncReplaceAllEntity } from "./sync.js";
 
 function makeMockNotifier(): Notifier {
   return {

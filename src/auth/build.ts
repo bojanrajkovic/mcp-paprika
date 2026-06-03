@@ -13,20 +13,22 @@
 // pattern: Imperative Shell
 
 import type { Logger } from "pino";
+
 import type { DiskCacheRoot } from "../cache/disk-cache-root.js";
 import type { PaprikaConfig } from "../utils/config.js";
-import { resolvePreset } from "./presets.js";
-import { loadDiscovery, createJwksFor } from "./oidc-client.js";
-import { DiskClientRegistrationStore } from "./client-registration.js";
-import { TokenStore } from "./token-store.js";
-import { AuthRequestStore } from "./auth-request-store.js";
-import { AuthCodeStore } from "./auth-code-store.js";
-import { PendingAuthorizationStore } from "./pending-authorization-store.js";
-import { MintingOAuthServerProvider } from "./provider.js";
-import { AuthCleanup } from "./cleanup.js";
-import { MAX_REGISTERED_CLIENTS } from "./routes.js";
-import { normalizeOrigin } from "./redirect-allowlist.js";
 import type { AuthContext, ResolvedOAuthConfig } from "./types.js";
+
+import { AuthCodeStore } from "./auth-code-store.js";
+import { AuthRequestStore } from "./auth-request-store.js";
+import { AuthCleanup } from "./cleanup.js";
+import { DiskClientRegistrationStore } from "./client-registration.js";
+import { createJwksFor, loadDiscovery } from "./oidc-client.js";
+import { PendingAuthorizationStore } from "./pending-authorization-store.js";
+import { resolvePreset } from "./presets.js";
+import { MintingOAuthServerProvider } from "./provider.js";
+import { normalizeOrigin } from "./redirect-allowlist.js";
+import { MAX_REGISTERED_CLIENTS } from "./routes.js";
+import { TokenStore } from "./token-store.js";
 
 export async function buildAuthContext(
   config: PaprikaConfig,

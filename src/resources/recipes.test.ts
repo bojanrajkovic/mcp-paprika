@@ -1,9 +1,11 @@
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
+
+import type { CategoryUid, RecipeUid } from "../ids.js";
+
+import { makeCategory, makeRecipe } from "../cache/__fixtures__/recipes.js";
 import { RecipeStore } from "../recipe/store.js";
-import { makeTestServer, makeCtx, seed } from "../tools/tool-test-utils.js";
-import { makeRecipe, makeCategory } from "../cache/__fixtures__/recipes.js";
+import { makeCtx, makeTestServer, seed } from "../tools/tool-test-utils.js";
 import { registerRecipeResources } from "./recipes.js";
-import type { RecipeUid, CategoryUid } from "../ids.js";
 
 describe("p2-u10-resource-reg: MCP Recipe Resources", () => {
   describe("p2-u10-resource-reg.AC1: Recipe list is accessible as MCP resources", () => {

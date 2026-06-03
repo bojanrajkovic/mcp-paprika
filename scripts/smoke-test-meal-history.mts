@@ -8,11 +8,12 @@
  *  3. read_recipe against any recipe that has meal-planner history (lastCookedAt should appear)
  */
 
-import { config } from "dotenv";
-import { resolve as resolvePath } from "node:path";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
+import { resolve as resolvePath } from "node:path";
 import { join } from "node:path";
+
+import { config } from "dotenv";
 import pino from "pino";
 
 config({ path: "/Users/brajkovic/Library/Preferences/mcp-paprika/.env", quiet: true });

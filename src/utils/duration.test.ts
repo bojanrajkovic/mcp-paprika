@@ -1,9 +1,11 @@
-import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+
 import { Duration } from "luxon";
-import { parseDuration, formatDuration, DurationParseError } from "./duration.js";
+import { describe, expect, it } from "vitest";
+
+import { DurationParseError, formatDuration, parseDuration } from "./duration.js";
 
 describe("Duration parsing and formatting", () => {
   describe("duration-helper.AC1: parseDuration handles human-readable strings", () => {

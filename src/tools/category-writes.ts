@@ -1,10 +1,12 @@
-import { toMessage } from "../utils/log.js";
-import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
-import { CategoryUidSchema } from "../ids.js";
+
 import type { Category } from "../category/types.js";
-import { textResult } from "./helpers.js";
+import type { ServerContext } from "../types/server-context.js";
+
+import { CategoryUidSchema } from "../ids.js";
+import { toMessage } from "../utils/log.js";
 import {
   categoryStartGuard,
   commitCategoryDelete,
@@ -13,7 +15,7 @@ import {
   recipesReferencing,
   wouldCreateCycle,
 } from "./category-helpers.js";
-import type { ServerContext } from "../types/server-context.js";
+import { textResult } from "./helpers.js";
 
 function categorySummary(ctx: ServerContext, category: Category): string {
   const parent = category.parentUid ? ctx.categoryStore.get(category.parentUid) : undefined;

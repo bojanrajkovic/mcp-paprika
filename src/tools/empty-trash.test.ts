@@ -1,10 +1,11 @@
 import { fromAny } from "@total-typescript/shoehorn";
-import { describe, it, expect, vi } from "vitest";
-import { RecipeStore } from "../recipe/store.js";
+import { describe, expect, it, vi } from "vitest";
+
 import { makeRecipe } from "../cache/__fixtures__/recipes.js";
 import { PaprikaAPIError } from "../paprika/errors.js";
+import { RecipeStore } from "../recipe/store.js";
 import { registerEmptyTrashTool } from "./empty-trash.js";
-import { makeTestServer, makeCtx, makeStubNotifier, getText, seed } from "./tool-test-utils.js";
+import { getText, makeCtx, makeStubNotifier, makeTestServer, seed } from "./tool-test-utils.js";
 
 // empty_trash fetches authoritative state via ctx.client.getRecipe (NOT the local
 // store, which can lag app-side trash actions). The store only needs hasSynced so the

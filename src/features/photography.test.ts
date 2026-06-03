@@ -1,20 +1,22 @@
-import { describe, it, expect, beforeAll, afterAll, afterEach, vi } from "vitest";
-import { setupServer } from "msw/node";
 import { http, HttpResponse } from "msw";
+import { setupServer } from "msw/node";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { ZodError } from "zod";
+
+import type { ResolvedImageGenConfig } from "../utils/config.js";
+
+import { makeRecipe } from "../cache/__fixtures__/recipes.js";
+import { tripBreaker } from "../tools/tool-test-utils.js";
+import { CircuitOpenError } from "../utils/errors.js";
+import { PhotographyAPIError, PhotographyError } from "./photography-errors.js";
 import {
-  PhotographyClient,
-  PHOTO_MODELS,
   DEFAULT_PHOTO_MODEL,
   PHOTO_ASPECT_RATIOS,
-  recipeToPhotoPrompt,
+  PHOTO_MODELS,
+  PhotographyClient,
   type PhotoModel,
+  recipeToPhotoPrompt,
 } from "./photography.js";
-import { PhotographyError, PhotographyAPIError } from "./photography-errors.js";
-import type { ResolvedImageGenConfig } from "../utils/config.js";
-import { CircuitOpenError } from "../utils/errors.js";
-import { tripBreaker } from "../tools/tool-test-utils.js";
-import { makeRecipe } from "../cache/__fixtures__/recipes.js";
 
 const BASE_URL = "https://openrouter.ai/api/v1";
 const API_KEY = "test-img-key";

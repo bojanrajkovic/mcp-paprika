@@ -1,5 +1,7 @@
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
+
 import type { AuthCodeState } from "./types.js";
+
 import { AuthCodeStore } from "./auth-code-store.js";
 import { nowSeconds } from "./tokens.js";
 

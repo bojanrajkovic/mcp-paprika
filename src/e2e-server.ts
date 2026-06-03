@@ -11,29 +11,31 @@
  */
 
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+
+import type { Category } from "./category/types.js";
+import type { AisleUid, CategoryUid, PantryItemUid, RecipeUid } from "./ids.js";
+import type { PantryItem } from "./pantry/types.js";
+import type { Recipe, RecipeEntry } from "./recipe/types.js";
+import type { AppContext } from "./server/app-context.js";
+
 import { AisleStore } from "./aisle/store.js";
-import { CategoryStore } from "./category/store.js";
 import { DiskCacheRoot } from "./cache/disk-cache-root.js";
+import { CategoryStore } from "./category/store.js";
+import { GeneratedImageStore } from "./features/generated-image-store.js";
 import { GroceryIngredientStore } from "./grocery-ingredient/store.js";
 import { GroceryItemStore } from "./grocery-item/store.js";
 import { GroceryListStore } from "./grocery-list/store.js";
-import { MealStore } from "./meal/store.js";
 import { MealTypeStore } from "./meal-type/store.js";
-import { MenuStore } from "./menu/store.js";
+import { MealStore } from "./meal/store.js";
 import { MenuItemStore } from "./menu-item/store.js";
-import { PhotoStore } from "./photo/store.js";
-import { GeneratedImageStore } from "./features/generated-image-store.js";
-import { RecipeStore } from "./recipe/store.js";
+import { MenuStore } from "./menu/store.js";
 import { PantryStore } from "./pantry/store.js";
+import { PhotoStore } from "./photo/store.js";
+import { RecipeStore } from "./recipe/store.js";
 import { buildMcpServer } from "./server/build.js";
-import type { AppContext } from "./server/app-context.js";
 import { createServerRef, singleServerNotifier } from "./server/notifier.js";
-import { getCacheDir } from "./utils/xdg.js";
 import { createLogger, toMessage } from "./utils/log.js";
-import type { Category } from "./category/types.js";
-import type { RecipeUid, CategoryUid, PantryItemUid, AisleUid } from "./ids.js";
-import type { PantryItem } from "./pantry/types.js";
-import type { Recipe, RecipeEntry } from "./recipe/types.js";
+import { getCacheDir } from "./utils/xdg.js";
 
 interface IMockPaprikaClient {
   authenticate(): Promise<void>;

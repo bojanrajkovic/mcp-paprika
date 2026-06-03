@@ -16,20 +16,23 @@
  * AC7.7 (phase_05.md:32): old refresh invalidated immediately after successful rotation
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { SILENT_LOG } from "../utils/log.js";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
 import type { DiskCacheRoot as DiskCache } from "../cache/disk-cache-root.js";
-import { DiskCacheRoot as DiskCacheImpl } from "../cache/disk-cache-root.js";
 import type { DiskClientRegistrationStore } from "./client-registration.js";
+
+import { DiskCacheRoot as DiskCacheImpl } from "../cache/disk-cache-root.js";
+import { SILENT_LOG } from "../utils/log.js";
+import { makeVerifiedIdentity } from "./__fixtures__/oauth-state.js";
+import { AuthCodeStore } from "./auth-code-store.js";
+import { AuthRequestStore } from "./auth-request-store.js";
 import { DiskClientRegistrationStore as DiskClientRegistrationStoreImpl } from "./client-registration.js";
 import { TokenStore } from "./token-store.js";
-import { hashTokenForStorage, ACCESS_TOKEN_TTL_SECONDS, REFRESH_TOKEN_TTL_SECONDS, nowSeconds } from "./tokens.js";
-import { AuthRequestStore } from "./auth-request-store.js";
-import { AuthCodeStore } from "./auth-code-store.js";
-import { makeVerifiedIdentity } from "./__fixtures__/oauth-state.js";
+import { ACCESS_TOKEN_TTL_SECONDS, hashTokenForStorage, nowSeconds, REFRESH_TOKEN_TTL_SECONDS } from "./tokens.js";
 
 function makeTokenStoreInput(overrides?: Partial<Parameters<TokenStore["issueAccessRefreshPair"]>[0]>) {
   return {

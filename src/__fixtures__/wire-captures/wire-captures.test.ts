@@ -1,5 +1,6 @@
-import { describe, it, expect } from "vitest";
 import { setupServer } from "msw/node";
+import { describe, expect, it } from "vitest";
+
 import { fixture as mealFixture, handlers as mealHandlers } from "./meals.js";
 import { fixture as menuFixture, handlers as menuHandlers } from "./menus.js";
 

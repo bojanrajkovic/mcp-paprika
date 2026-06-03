@@ -5,9 +5,11 @@
  * and a resolver function that merges preset defaults with operator-supplied overrides.
  */
 
-import { Result, ok, err } from "neverthrow";
+import { err, ok, Result } from "neverthrow";
+
+import type { EmailVerifiedPolicy, OIDCPreset, ResolvedOAuthConfig } from "./types.js";
+
 import { OAuthConfigError } from "./errors.js";
-import type { OIDCPreset, ResolvedOAuthConfig, EmailVerifiedPolicy } from "./types.js";
 
 // ============================================================================
 // OIDC Presets Table

@@ -2,23 +2,24 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 
-import { RecipeUidSchema } from "../ids.js";
 import type { Photo } from "../photo/types.js";
 import type { ServerContext } from "../types/server-context.js";
-import { toMessage } from "../utils/log.js";
-import { CircuitOpenError } from "../utils/errors.js";
+
+import { PhotographyAPIError, PhotographyError } from "../features/photography-errors.js";
 import {
-  type PhotographyClient,
-  type ReferenceImage,
-  recipeToPhotoPrompt,
-  PHOTO_MODELS,
-  PHOTO_ASPECT_RATIOS,
   DEFAULT_PHOTO_MODEL,
+  PHOTO_ASPECT_RATIOS,
+  PHOTO_MODELS,
+  type PhotographyClient,
+  recipeToPhotoPrompt,
+  type ReferenceImage,
 } from "../features/photography.js";
-import { PhotographyError, PhotographyAPIError } from "../features/photography-errors.js";
+import { RecipeUidSchema } from "../ids.js";
+import { CircuitOpenError } from "../utils/errors.js";
+import { toMessage } from "../utils/log.js";
 import { coldStartGuard, textResult } from "./helpers.js";
-import { attachPhotoToRecipe, normalizePhoto, makeThumbnail, GENERATED_MAX_FULL_EDGE } from "./photo-helpers.js";
 import { fetchImageBytes } from "./photo-fetch.js";
+import { attachPhotoToRecipe, GENERATED_MAX_FULL_EDGE, makeThumbnail, normalizePhoto } from "./photo-helpers.js";
 
 export const generatePhotoInputSchema = z.object({
   recipe_uid: RecipeUidSchema.describe("UID of the recipe to generate a photo for."),

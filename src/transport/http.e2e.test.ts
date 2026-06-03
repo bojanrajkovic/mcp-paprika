@@ -15,18 +15,19 @@
  *   AC4.4 — auth codes do NOT survive server restart
  */
 
-import { randomBytes, createHash } from "node:crypto";
-
-import { failLoudOnUpstream, paprikaSyncMockHandlers } from "../__fixtures__/paprika-msw.js";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { createHash, randomBytes } from "node:crypto";
 
 import { fromAny } from "@total-typescript/shoehorn";
-import { startHttp, type HttpTransportHandle } from "./http.js";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
 import type { PaprikaConfig } from "../utils/config.js";
-import { createOidcStub } from "../auth/__fixtures__/oidc-stub.js";
-import { useXdgIsolation } from "../__fixtures__/xdg-isolation.js";
+
 import { useMswServer } from "../__fixtures__/msw.js";
+import { failLoudOnUpstream, paprikaSyncMockHandlers } from "../__fixtures__/paprika-msw.js";
+import { useXdgIsolation } from "../__fixtures__/xdg-isolation.js";
+import { createOidcStub } from "../auth/__fixtures__/oidc-stub.js";
 import { SILENT_LOGGING_CONFIG } from "../tools/tool-test-utils.js";
+import { type HttpTransportHandle, startHttp } from "./http.js";
 
 // ============================================================================
 // Constants

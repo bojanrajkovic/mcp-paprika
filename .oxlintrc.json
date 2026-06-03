@@ -3,6 +3,7 @@
   "rules": {
     "eqeqeq": "error",
     "no-console": "error",
+    "sort-imports": ["error", { "ignoreDeclarationSort": true, "ignoreCase": true }],
     "unicorn/no-empty-file": "off"
   }
 }

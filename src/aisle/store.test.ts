@@ -1,6 +1,7 @@
-import { describe, it, expect } from "vitest";
-import { AisleStore } from "./store.js";
+import { describe, expect, it } from "vitest";
+
 import { makeAisle } from "../cache/__fixtures__/aisles.js";
+import { AisleStore } from "./store.js";
 
 describe("aisle-store: AisleStore", () => {
   it("aisle-store.AC1.1: hasSynced is false before load()", () => {

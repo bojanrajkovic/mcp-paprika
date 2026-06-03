@@ -2,23 +2,23 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { Logger } from "pino";
 
 import type { AisleStore } from "../aisle/store.js";
-import type { CategoryStore } from "../category/store.js";
+import type { AuthContext } from "../auth/types.js";
 import type { DiskCacheRoot } from "../cache/disk-cache-root.js";
+import type { CategoryStore } from "../category/store.js";
+import type { GeneratedImageStore } from "../features/generated-image-store.js";
+import type { PhotographyClient } from "../features/photography.js";
+import type { VectorStore } from "../features/vector-store.js";
 import type { GroceryIngredientStore } from "../grocery-ingredient/store.js";
 import type { GroceryItemStore } from "../grocery-item/store.js";
 import type { GroceryListStore } from "../grocery-list/store.js";
-import type { MealStore } from "../meal/store.js";
 import type { MealTypeStore } from "../meal-type/store.js";
-import type { MenuStore } from "../menu/store.js";
+import type { MealStore } from "../meal/store.js";
 import type { MenuItemStore } from "../menu-item/store.js";
+import type { MenuStore } from "../menu/store.js";
 import type { PantryStore } from "../pantry/store.js";
+import type { PaprikaClient } from "../paprika/client.js";
 import type { PhotoStore } from "../photo/store.js";
 import type { RecipeStore } from "../recipe/store.js";
-import type { VectorStore } from "../features/vector-store.js";
-import type { PhotographyClient } from "../features/photography.js";
-import type { GeneratedImageStore } from "../features/generated-image-store.js";
-import type { PaprikaClient } from "../paprika/client.js";
-import type { AuthContext } from "../auth/types.js";
 import type { Notifier } from "./notifier.js";
 
 /**

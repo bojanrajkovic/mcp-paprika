@@ -1,6 +1,7 @@
-import { describe, it, expect } from "vitest";
 import fc from "fast-check";
 import { DateTime } from "luxon";
+import { describe, expect, it } from "vitest";
+
 import { parseCalendarDayWire, parseInstant } from "./dates.js";
 
 // The wire format a UTC DateTime renders to. parseInstant consumes this shape;

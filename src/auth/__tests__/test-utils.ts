@@ -4,7 +4,9 @@
  */
 
 import fc from "fast-check";
+
 import type { IdTokenPayload } from "../types.js";
+
 import { nowSeconds } from "../tokens.js";
 
 /**

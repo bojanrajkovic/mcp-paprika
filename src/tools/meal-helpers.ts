@@ -1,11 +1,13 @@
 // pattern: Imperative Shell
 import { err, ok, type Result } from "neverthrow";
 import { z } from "zod";
+
 import type { MealUid } from "../ids.js";
 import type { MealType } from "../meal-type/types.js";
 import type { Meal } from "../meal/types.js";
-import { MealTypeUidSchema } from "../ids.js";
 import type { ServerContext } from "../types/server-context.js";
+
+import { MealTypeUidSchema } from "../ids.js";
 import { textResult } from "./helpers.js";
 
 /**

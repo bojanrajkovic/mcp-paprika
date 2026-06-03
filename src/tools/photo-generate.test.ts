@@ -1,17 +1,18 @@
-import { describe, it, expect, beforeAll, afterEach, vi } from "vitest";
 import { fromAny } from "@total-typescript/shoehorn";
 import sharp from "sharp";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
-import { RecipeStore } from "../recipe/store.js";
-import { makeRecipe } from "../cache/__fixtures__/recipes.js";
-import { RecipeUidSchema } from "../ids.js";
+import type { GeneratedPhoto, GeneratePhotoOptions, PhotographyClient } from "../features/photography.js";
 import type { Recipe } from "../recipe/types.js";
-import { makeCtx, makeTestServer, getText, seed } from "./tool-test-utils.js";
-import { registerGeneratePhotoTool } from "./photo-generate.js";
-import type { PhotographyClient, GeneratedPhoto, GeneratePhotoOptions } from "../features/photography.js";
+
+import { makeRecipe } from "../cache/__fixtures__/recipes.js";
+import { PhotographyAPIError, PhotographyError } from "../features/photography-errors.js";
+import { RecipeUidSchema } from "../ids.js";
+import { RecipeStore } from "../recipe/store.js";
 import { CircuitOpenError } from "../utils/errors.js";
-import { PhotographyError, PhotographyAPIError } from "../features/photography-errors.js";
 import { fetchImageBytes } from "./photo-fetch.js";
+import { registerGeneratePhotoTool } from "./photo-generate.js";
+import { getText, makeCtx, makeTestServer, seed } from "./tool-test-utils.js";
 
 // restyle's image download is exercised end-to-end in photo-fetch.test.ts; here
 // we stub it to test generate_photo's restyle wiring.

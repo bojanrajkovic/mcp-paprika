@@ -1,5 +1,5 @@
 import { Duration } from "luxon";
-import { ok, err, type Result } from "neverthrow";
+import { err, ok, type Result } from "neverthrow";
 import parseDurationLib from "parse-duration";
 
 export class DurationParseError extends Error {

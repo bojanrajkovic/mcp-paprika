@@ -1,23 +1,25 @@
 import { fromAny } from "@total-typescript/shoehorn";
-import { describe, it, expect, vi } from "vitest";
-import { makeRecipe, makeCategory } from "../cache/__fixtures__/recipes.js";
+import { describe, expect, it, vi } from "vitest";
+
+import type { ServerContext } from "../types/server-context.js";
+
+import { makeServerContext } from "../__fixtures__/app-context.js";
+import { makeCategory, makeRecipe } from "../cache/__fixtures__/recipes.js";
+import { RecipeUidSchema } from "../ids.js";
 import {
   coldStartGuard,
-  textResult,
-  recipeToMarkdown,
-  recipeMetadataLines,
   commitRecipe,
   commitRecipeHardDelete,
-  resolveCategoryRefs,
-  uidOrTextLookupSchema,
-  resolveLookup,
   formatLookupOutcome,
   type LookupOutcome,
+  recipeMetadataLines,
+  recipeToMarkdown,
+  resolveCategoryRefs,
+  resolveLookup,
+  textResult,
+  uidOrTextLookupSchema,
 } from "./helpers.js";
-import { RecipeUidSchema } from "../ids.js";
 import { getText } from "./tool-test-utils.js";
-import type { ServerContext } from "../types/server-context.js";
-import { makeServerContext } from "../__fixtures__/app-context.js";
 
 // Minimal ServerContext stub — only `store.hasSynced` matters for coldStartGuard
 const makeCtx = (size: number) =>

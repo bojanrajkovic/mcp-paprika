@@ -1,18 +1,20 @@
-import { describe, it, expect, vi } from "vitest";
 import { fromAny } from "@total-typescript/shoehorn";
-import { RecipeStore } from "../recipe/store.js";
-import { makeRecipe, makeCategory } from "../cache/__fixtures__/recipes.js";
+import { describe, expect, it, vi } from "vitest";
+
+import type { CategoryUid } from "../ids.js";
+import type { ServerContext } from "../types/server-context.js";
+
 import { makeServerContext } from "../__fixtures__/app-context.js";
+import { makeCategory, makeRecipe } from "../cache/__fixtures__/recipes.js";
+import { RecipeStore } from "../recipe/store.js";
 import {
-  commitCategoryUpsert,
   commitCategoryDelete,
+  commitCategoryUpsert,
   maxCategoryOrderFlag,
   recipesReferencing,
   wouldCreateCycle,
 } from "./category-helpers.js";
 import { seed } from "./tool-test-utils.js";
-import type { CategoryUid } from "../ids.js";
-import type { ServerContext } from "../types/server-context.js";
 
 function makeCtx(overrides?: {
   recipes?: Parameters<RecipeStore["load"]>[0];

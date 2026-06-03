@@ -1,21 +1,22 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
+import type { DiskCacheRoot } from "../cache/disk-cache-root.js";
+import type { PaprikaClient } from "../paprika/client.js";
+import type { AppContext, SessionContext } from "../server/app-context.js";
+
 import { AisleStore } from "../aisle/store.js";
 import { CategoryStore } from "../category/store.js";
+import { GeneratedImageStore } from "../features/generated-image-store.js";
 import { GroceryIngredientStore } from "../grocery-ingredient/store.js";
 import { GroceryItemStore } from "../grocery-item/store.js";
 import { GroceryListStore } from "../grocery-list/store.js";
-import { MealStore } from "../meal/store.js";
 import { MealTypeStore } from "../meal-type/store.js";
-import { MenuStore } from "../menu/store.js";
+import { MealStore } from "../meal/store.js";
 import { MenuItemStore } from "../menu-item/store.js";
+import { MenuStore } from "../menu/store.js";
 import { PantryStore } from "../pantry/store.js";
 import { PhotoStore } from "../photo/store.js";
 import { RecipeStore } from "../recipe/store.js";
-import { GeneratedImageStore } from "../features/generated-image-store.js";
-import type { AppContext, SessionContext } from "../server/app-context.js";
-import type { DiskCacheRoot } from "../cache/disk-cache-root.js";
-import type { PaprikaClient } from "../paprika/client.js";
 import { SILENT_LOG } from "../utils/log.js";
 
 /**

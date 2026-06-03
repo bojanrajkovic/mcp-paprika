@@ -1,6 +1,7 @@
-import { describe, it, expect } from "vitest";
 import fc from "fast-check";
-import { paprikaConfigSchema, deepMerge } from "./config.js";
+import { describe, expect, it } from "vitest";
+
+import { deepMerge, paprikaConfigSchema } from "./config.js";
 
 describe("Config property-based tests", () => {
   describe("config-loader.AC8: Boolean field idempotence", () => {

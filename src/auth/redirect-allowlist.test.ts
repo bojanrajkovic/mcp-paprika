@@ -1,5 +1,6 @@
-import { describe, it, expect } from "vitest";
-import { normalizeOrigin, isRecognizedOrigin } from "./redirect-allowlist.js";
+import { describe, expect, it } from "vitest";
+
+import { isRecognizedOrigin, normalizeOrigin } from "./redirect-allowlist.js";
 
 describe("normalizeOrigin", () => {
   it("returns the origin for a bare https origin", () => {

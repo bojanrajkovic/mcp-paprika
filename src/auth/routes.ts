@@ -1,23 +1,25 @@
-import { Hono, type Context, type MiddlewareHandler } from "hono";
+import { type Context, Hono, type MiddlewareHandler } from "hono";
 import { rateLimiter } from "hono-rate-limiter";
-import { z } from "zod";
-import type { Logger } from "pino";
-import type { DiskClientRegistrationStore } from "./client-registration.js";
-import type { TokenStore } from "./token-store.js";
-import type { AuthRequestStore } from "./auth-request-store.js";
-import type { AuthCodeStore } from "./auth-code-store.js";
-import type { PendingAuthorizationStore } from "./pending-authorization-store.js";
-import type { ResolvedOAuthConfig } from "./types.js";
-import type { DiscoveryDoc } from "./oidc-client.js";
 import type { JWTVerifyGetKey } from "jose";
+import type { Logger } from "pino";
+import { z } from "zod";
+
 import type { DiskCacheRoot } from "../cache/disk-cache-root.js";
-import { generateOpaqueToken, nowSeconds } from "./tokens.js";
-import { verifyIdToken } from "./oidc-client.js";
+import type { AuthCodeStore } from "./auth-code-store.js";
+import type { AuthRequestStore } from "./auth-request-store.js";
+import type { DiskClientRegistrationStore } from "./client-registration.js";
+import type { DiscoveryDoc } from "./oidc-client.js";
+import type { PendingAuthorizationStore } from "./pending-authorization-store.js";
+import type { TokenStore } from "./token-store.js";
+import type { ResolvedOAuthConfig } from "./types.js";
 import type { IdTokenPayload } from "./types.js";
+
 import { verifyIdentity } from "./allowlist.js";
+import { consentSecurityHeaders, renderDeniedPage, renderExpiredPage } from "./consent-page.js";
 import { OAuthClientNotFoundError, OAuthMetadataValidationError } from "./errors.js";
-import { renderDeniedPage, renderExpiredPage, consentSecurityHeaders } from "./consent-page.js";
-import { redirectUpstream, makeUpstreamRedirectDeps } from "./upstream-redirect.js";
+import { verifyIdToken } from "./oidc-client.js";
+import { generateOpaqueToken, nowSeconds } from "./tokens.js";
+import { makeUpstreamRedirectDeps, redirectUpstream } from "./upstream-redirect.js";
 
 export interface AuthRoutesDeps {
   readonly clientStore: DiskClientRegistrationStore;

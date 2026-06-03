@@ -1,18 +1,20 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { SILENT_LOG } from "../utils/log.js";
 import { mkdtemp, rm } from "node:fs/promises";
-import { nowSeconds } from "./tokens.js";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { DiskCacheRoot } from "../cache/disk-cache-root.js";
-import { AuthRequestStore } from "./auth-request-store.js";
-import { AuthCodeStore } from "./auth-code-store.js";
-import { PendingAuthorizationStore } from "./pending-authorization-store.js";
-import { DiskClientRegistrationStore } from "./client-registration.js";
-import { TokenStore } from "./token-store.js";
-import { AuthCleanup } from "./cleanup.js";
+
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
 import { makeOAuthClient, makeOAuthToken } from "../cache/__fixtures__/oauth.js";
-import { makeAuthRequestState, makeAuthCodeState } from "./__fixtures__/oauth-state.js";
+import { DiskCacheRoot } from "../cache/disk-cache-root.js";
+import { SILENT_LOG } from "../utils/log.js";
+import { makeAuthCodeState, makeAuthRequestState } from "./__fixtures__/oauth-state.js";
+import { AuthCodeStore } from "./auth-code-store.js";
+import { AuthRequestStore } from "./auth-request-store.js";
+import { AuthCleanup } from "./cleanup.js";
+import { DiskClientRegistrationStore } from "./client-registration.js";
+import { PendingAuthorizationStore } from "./pending-authorization-store.js";
+import { TokenStore } from "./token-store.js";
+import { nowSeconds } from "./tokens.js";
 
 // ---------------------------------------------------------------------------
 // Test fixture setup

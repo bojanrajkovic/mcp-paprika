@@ -14,8 +14,8 @@
 import {
   InvalidGrantError,
   InvalidScopeError,
-  InvalidTokenError,
   InvalidTargetError,
+  InvalidTokenError,
   type OAuthError,
 } from "@modelcontextprotocol/sdk/server/auth/errors.js";
 

@@ -1,5 +1,6 @@
-import { describe, it, expect } from "vitest";
 import { MockAgent } from "undici";
+import { describe, expect, it } from "vitest";
+
 import { fetchImageBytes } from "./photo-fetch.js";
 
 // These tests drive the REAL undici fetch + dispatcher path (via a MockAgent),

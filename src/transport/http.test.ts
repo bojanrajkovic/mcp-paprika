@@ -1,19 +1,20 @@
 import { join } from "node:path";
 
 import { fromAny } from "@total-typescript/shoehorn";
+import { Hono } from "hono";
 import { http, HttpResponse } from "msw";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
-import { Hono } from "hono";
-import { startHttp, accessLog, type HttpTransportHandle, type StartHttpOptions } from "./http.js";
 import type { PaprikaConfig } from "../utils/config.js";
-import { createOidcStub } from "../auth/__fixtures__/oidc-stub.js";
-import { DiskCacheRoot } from "../cache/disk-cache-root.js";
-import { makeOAuthClient } from "../cache/__fixtures__/oauth.js";
-import { useXdgIsolation } from "../__fixtures__/xdg-isolation.js";
+
 import { useMswServer } from "../__fixtures__/msw.js";
-import { failLoudOnUpstream, paprikaSyncMockHandlers, PAPRIKA_API_BASE } from "../__fixtures__/paprika-msw.js";
+import { failLoudOnUpstream, PAPRIKA_API_BASE, paprikaSyncMockHandlers } from "../__fixtures__/paprika-msw.js";
+import { useXdgIsolation } from "../__fixtures__/xdg-isolation.js";
+import { createOidcStub } from "../auth/__fixtures__/oidc-stub.js";
+import { makeOAuthClient } from "../cache/__fixtures__/oauth.js";
+import { DiskCacheRoot } from "../cache/disk-cache-root.js";
 import { makePinoCapture, SILENT_LOGGING_CONFIG } from "../tools/tool-test-utils.js";
+import { accessLog, type HttpTransportHandle, startHttp, type StartHttpOptions } from "./http.js";
 
 /**
  * These tests drive the HTTP transport with raw `fetch`, not the MCP SDK

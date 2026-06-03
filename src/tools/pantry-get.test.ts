@@ -1,8 +1,9 @@
-import { describe, it, expect } from "vitest";
-import { RecipeStore } from "../recipe/store.js";
+import { describe, expect, it } from "vitest";
+
 import { makePantryItem } from "../cache/__fixtures__/pantry.js";
-import { makeTestServer, makeCtx, getText, seed } from "./tool-test-utils.js";
+import { RecipeStore } from "../recipe/store.js";
 import { registerGetPantryItemTool } from "./pantry-get.js";
+import { getText, makeCtx, makeTestServer, seed } from "./tool-test-utils.js";
 
 describe("pantry-get tool", () => {
   it("pantry-read.AC5.3: UID lookup returns full item details as markdown", async () => {
