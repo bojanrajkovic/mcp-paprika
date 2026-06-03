@@ -51,7 +51,7 @@ describe("Grocery schema property-based tests", () => {
             ingredient: fc.string(),
             aisle: fc.string(),
             aisleUid: fc.string(),
-            listUid: fc.string(),
+            listUid: fc.string({ minLength: 1 }),
             purchased: fc.boolean(),
             deleted: fc.boolean(),
             orderFlag: fc.integer({ min: 0, max: 100 }),
@@ -136,11 +136,11 @@ describe("Grocery schema property-based tests", () => {
         fc.property(
           fc.record({
             uid: fc.string({ minLength: 1 }).map((s) => s as MenuItemUid),
-            menuUid: fc.oneof(fc.constant(null), fc.string()),
-            recipeUid: fc.oneof(fc.constant(null), fc.string()),
+            menuUid: fc.oneof(fc.constant(null), fc.string({ minLength: 1 })),
+            recipeUid: fc.oneof(fc.constant(null), fc.string({ minLength: 1 })),
             name: fc.string(),
             day: fc.integer({ min: 0, max: 60 }),
-            typeUid: fc.string(),
+            typeUid: fc.string({ minLength: 1 }),
             orderFlag: fc.integer({ min: 0, max: 100 }),
             deleted: fc.boolean(),
           }),

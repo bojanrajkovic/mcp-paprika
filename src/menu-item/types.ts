@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { MealTypeUidSchema, MenuItemUidSchema, MenuUidRefSchema, RecipeUidRefSchema } from "../ids.js";
+import { MealTypeUidSchema, MenuItemUidSchema, MenuUidSchema, RecipeUidSchema } from "../ids.js";
 
 // MenuItemStoredSchema — validates camelCase JSON read back from disk. No transform.
 // `menuUid` is nullable: a cascade-deleted menuitem has `menu_uid: null` on the wire
@@ -8,8 +8,8 @@ import { MealTypeUidSchema, MenuItemUidSchema, MenuUidRefSchema, RecipeUidRefSch
 // defensive read — the wire format does not guarantee a recipe link exists.
 export const MenuItemStoredSchema = z.object({
   uid: MenuItemUidSchema,
-  menuUid: MenuUidRefSchema.nullable(),
-  recipeUid: RecipeUidRefSchema.nullable(),
+  menuUid: MenuUidSchema.nullable(),
+  recipeUid: RecipeUidSchema.nullable(),
   name: z.string(),
   day: z.number().int().nonnegative(),
   typeUid: MealTypeUidSchema,
@@ -23,8 +23,8 @@ export type MenuItem = z.infer<typeof MenuItemStoredSchema>;
 export const MenuItemSchema = z
   .object({
     uid: MenuItemUidSchema,
-    menu_uid: MenuUidRefSchema.nullable(),
-    recipe_uid: RecipeUidRefSchema.nullable(),
+    menu_uid: MenuUidSchema.nullable(),
+    recipe_uid: RecipeUidSchema.nullable(),
     name: z.string(),
     day: z.number().int().nonnegative(),
     type_uid: MealTypeUidSchema,

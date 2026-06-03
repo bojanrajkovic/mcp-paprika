@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { AisleUidSchema, NO_AISLE_UID, PantryItemUidSchema } from "../ids.js";
+import { AisleUidRef, NO_AISLE_UID, PantryItemUidSchema } from "../ids.js";
 
 // PantryItemStoredSchema — validates camelCase JSON read back from disk. No transform.
 export const PantryItemStoredSchema = z.object({
@@ -8,7 +8,7 @@ export const PantryItemStoredSchema = z.object({
   ingredient: z.string(),
   quantity: z.string(),
   aisle: z.string(),
-  aisleUid: AisleUidSchema,
+  aisleUid: AisleUidRef,
   expirationDate: z.string().nullable(),
   hasExpiration: z.boolean(),
   inStock: z.boolean(),
@@ -29,7 +29,7 @@ export const PantryItemSchema = z
     ingredient: z.string(),
     quantity: z.string(),
     aisle: z.string(),
-    aisle_uid: AisleUidSchema.nullable(),
+    aisle_uid: AisleUidRef.nullable(),
     expiration_date: z.string().nullable(),
     has_expiration: z.boolean(),
     in_stock: z.boolean(),
