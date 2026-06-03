@@ -4,14 +4,14 @@ Last verified: 2026-06-02
 
 ## Purpose
 
-The in-memory query/CRUD stores that are each session's source of truth for one Paprika entity family. Tools and resources read these; the sync engine hydrates them; they never touch the filesystem. The store implementations live in their per-entity modules (`../<entity>/store.ts`) — this doc catalogs their shared behavior — while the durable **persistence layer** that backs them lives flat in this directory (it moved up from `disk/`). See [Persistence](#persistence).
+The in-memory query/CRUD stores that are each session's source of truth for one Paprika entity family. Tools and resources read these; the sync engine hydrates them; they never touch the filesystem. The store implementations live in their per-entity modules (`../<entity>/store.ts`) — this doc catalogs their shared behavior — while the durable **persistence layer** that backs them lives flat in this directory. See [Persistence](#persistence).
 
 ## Key References
 
 - `../entity/CLAUDE.md` — the shared `EntityStore` / `TombstoneEntityStore` base classes and the canonical pending-write (#57) and tombstone invariants. Every store below inherits those unless noted; this file documents only what each store adds on top.
 - [Persistence](#persistence) (below) — the on-disk layer (`DiskCacheRoot`, per-entity `DiskCache<T>` + the `DiskCacheDescriptor<T>` contract, on-disk layout, migration, mutex model, recipe `diff()`, DCR `tryPut`); each entity's descriptor is co-located in `../<entity>/disk.ts`.
 - `docs/architecture.md` — the two-layer cache+sync model and the diff-and-fetch vs. replace-all split.
-- Source: each entity's `../<entity>/store.ts` owns its method signatures and field shapes, and its `../<entity>/types.ts` owns the schema. (Both moved out of this directory in the #197 per-entity co-location; their behavior is cataloged below regardless of where the files sit.)
+- Source: each entity's `../<entity>/store.ts` owns its method signatures and field shapes, and its `../<entity>/types.ts` owns the schema.
 
 ## Stores at a glance
 
@@ -68,4 +68,4 @@ On-disk persistence for every cached entity: one `DiskCache<T>` per entity behin
 
 ## Boundary
 
-Must not import from `tools/`, `resources/`, or `features/`. The persistence layer reaches into each `../<entity>/` for its disk descriptor and `Stored` schema (the `parse` each `DiskCache` runs), `../recipe/disk.js` for the bespoke `RecipeDiskCache`, and `../auth/types.js` for the OAuth client/token shapes, with `../utils/log.js` and `../utils/errors.js` for logging and error helpers. `DiskCacheRoot` is a composition root, so this cross-domain fan-in is expected.
+Must not import from `tools/`, `resources/`, or `features/`. The persistence layer reaches into each `../<entity>/` for its disk descriptor and `Stored` schema (the `parse` each `DiskCache` runs), `../recipe/disk.js` for the bespoke `RecipeDiskCache`, and `../auth/types.js` for the OAuth client/token shapes. `DiskCacheRoot` is a composition root, so this cross-domain fan-in is expected.
