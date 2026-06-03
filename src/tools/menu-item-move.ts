@@ -31,6 +31,7 @@ export function registerMoveMenuItemTool(server: McpServer, ctx: ServerContext):
   server.registerTool(
     "move_menu_item",
     {
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
       description:
         "Move a menu item to a different day within its menu, by UID. A day beyond the menu's current span " +
         "auto-extends the menu so the item stays visible, and the item is re-sequenced to the end of the " +

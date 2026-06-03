@@ -33,6 +33,7 @@ export function registerAddPantryItemsTool(server: McpServer, ctx: ServerContext
   server.registerTool(
     "add_pantry_items",
     {
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
       description:
         "Add one or more items to the pantry. Skips items that duplicate an existing ingredient (case-insensitive) " +
         "and reports them with the existing UID and a suggestion to use update_pantry_item. " +

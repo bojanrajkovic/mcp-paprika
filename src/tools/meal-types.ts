@@ -45,6 +45,7 @@ export function registerMealTypesTool(server: McpServer, ctx: ServerContext): vo
   server.registerTool(
     "list_meal_types",
     {
+      annotations: { readOnlyHint: true, idempotentHint: true },
       description:
         "List all meal types — the built-in Breakfast/Lunch/Dinner/Snacks plus any custom " +
         "types — sorted by order then name. Each entry shows whether it is built-in or custom, " +

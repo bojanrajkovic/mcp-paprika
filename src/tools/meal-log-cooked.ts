@@ -42,6 +42,7 @@ export function registerLogCookedMealTool(server: McpServer, ctx: ServerContext)
   server.registerTool(
     "log_cooked_meal",
     {
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
       description:
         "Log a meal you cooked: records the given recipe on the planner, defaulting to today and the Dinner " +
         "meal type — a quick way to keep your cooking history current. Pass `date` to log a different day or " +

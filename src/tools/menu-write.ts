@@ -15,6 +15,7 @@ export function registerCreateMenuTool(server: McpServer, ctx: ServerContext): v
   server.registerTool(
     "create_menu",
     {
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
       description:
         "Create a new menu (saved meal plan) with the given name. Rejects duplicate names " +
         "(case-insensitive exact match); if a duplicate is found, the response includes the existing UID. " +
@@ -78,6 +79,7 @@ export function registerUpdateMenuTool(server: McpServer, ctx: ServerContext): v
   server.registerTool(
     "update_menu",
     {
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
       description:
         "Update a menu's name, day span, and/or notes. Look it up by UID or name (tiered fuzzy match, " +
         "case-insensitive). Provide at least one of name, days, or notes. Renaming to a name already used " +
@@ -198,6 +200,7 @@ export function registerDeleteMenuTool(server: McpServer, ctx: ServerContext): v
   server.registerTool(
     "delete_menu",
     {
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false },
       description:
         "Delete a menu and all of its planned recipes (menuitems). Look it up by UID or name (tiered fuzzy " +
         "match, case-insensitive). The menuitems are tombstoned first, then the menu itself. " +

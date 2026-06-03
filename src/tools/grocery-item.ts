@@ -35,6 +35,7 @@ export function registerAddGroceryItemsTool(server: McpServer, ctx: ServerContex
   server.registerTool(
     "add_grocery_items",
     {
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
       description:
         "Add one or more items to a grocery list. Check read_grocery_list first to avoid duplicate ingredients — no server-side duplicate guard.",
       inputSchema: {
@@ -182,6 +183,7 @@ export function registerUpdateGroceryItemTool(server: McpServer, ctx: ServerCont
   server.registerTool(
     "update_grocery_item",
     {
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
       description:
         "Update a grocery item's quantity, aisle, or notes by UID. Only provided fields are changed; " +
         "omitted fields retain their current values. To check an item off, use mark_grocery_item_purchased.",
@@ -233,6 +235,7 @@ export function registerDeleteGroceryItemTool(server: McpServer, ctx: ServerCont
   server.registerTool(
     "delete_grocery_item",
     {
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
       description: "Delete a grocery item by UID.",
       inputSchema: {
         uid: GroceryItemUidSchema.describe("Grocery item UID to delete"),

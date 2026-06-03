@@ -86,6 +86,7 @@ export function registerAddMenuToPlannerTool(server: McpServer, ctx: ServerConte
   server.registerTool(
     "schedule_menu",
     {
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
       description:
         "Instantiate a saved menu's recipes as meal-planner entries. Look the menu up by UID or name " +
         "(tiered fuzzy match), then materialize each of its items into a meal dated start_date + (day − 1) " +

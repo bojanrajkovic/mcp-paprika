@@ -42,6 +42,7 @@ export function registerSearchTool(server: McpServer, ctx: ServerContext): void 
   server.registerTool(
     "search_recipes",
     {
+      annotations: { readOnlyHint: true, idempotentHint: true },
       description:
         "Search and filter recipes. Use any combination of: free-text query (matches name, " +
         "ingredients, description), an ingredient list with all/any match mode, and/or max " +

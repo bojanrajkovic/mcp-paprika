@@ -68,6 +68,7 @@ export function registerGeneratePhotoTool(
   server.registerTool(
     "generate_recipe_photo",
     {
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
       description:
         "Generate a styled food photo for a recipe with an AI image model and (by default) attach it to the " +
         "recipe. The prompt is built from the recipe's name, description, and categories — so well-described, " +

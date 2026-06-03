@@ -16,6 +16,7 @@ export function registerCreateTool(server: McpServer, ctx: ServerContext): void 
   server.registerTool(
     "create_recipe",
     {
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
       description:
         "Create a new recipe in the Paprika account. If you built this recipe from a web page, " +
         "follow up with `upload_recipe_photo` and the page's main/hero (og:image) image URL to attach its photo.",

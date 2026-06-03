@@ -40,6 +40,7 @@ export function registerUpdatePantryItemTool(server: McpServer, ctx: ServerConte
   server.registerTool(
     "update_pantry_item",
     {
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
       description:
         "Update a pantry item's ingredient, quantity, aisle, or dates by UID. Only provided fields are " +
         "changed; omitted fields retain their existing values. Setting expirationDate also updates " +

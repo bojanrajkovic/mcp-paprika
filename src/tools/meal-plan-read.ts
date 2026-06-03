@@ -25,6 +25,7 @@ export function registerReadMealPlanTool(server: McpServer, ctx: ServerContext):
   server.registerTool(
     "read_meal_plan",
     {
+      annotations: { readOnlyHint: true, idempotentHint: true },
       description:
         "Read the upcoming meal plan: meals scheduled from today forward, grouped by day in ascending date " +
         'order (today first). Defaults to the next 7 days; pass `days` to widen the window. For past meals or recall ("when did we last have X"), use search_meal_history.',

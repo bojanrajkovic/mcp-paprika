@@ -39,6 +39,7 @@ export function registerCategorizeRecipeTool(server: McpServer, ctx: ServerConte
   server.registerTool(
     "categorize_recipe",
     {
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
       description:
         "Add, replace, or remove a recipe's categories by UID. Pass category names or UIDs and a mode: " +
         "add (union with current — the default), replace (set exactly these), or remove (drop these). " +

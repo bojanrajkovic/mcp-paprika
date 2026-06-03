@@ -132,6 +132,7 @@ export function registerUploadPhotoTool(server: McpServer, ctx: ServerContext): 
   server.registerTool(
     "upload_recipe_photo",
     {
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
       description:
         "Attach a photo to a recipe from exactly one `source`: a `url` (PREFERRED for web images — the server " +
         "downloads it), a `generation_token` (to save an image you previewed with generate_recipe_photo, attach:false — " +
@@ -206,6 +207,7 @@ export function registerDeletePhotoTool(server: McpServer, ctx: ServerContext): 
   server.registerTool(
     "delete_recipe_photo",
     {
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
       description:
         "Delete a photo from a recipe by UID. Idempotent: a second delete on the same UID returns a friendly " +
         "'already deleted' message without re-POSTing. Requires an exact photo UID.",

@@ -27,6 +27,7 @@ export function registerMarkPantryItemOutOfStockTool(server: McpServer, ctx: Ser
   server.registerTool(
     "mark_pantry_item_out_of_stock",
     {
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
       description: "Mark a pantry item as out of stock by UID (e.g. you've run out of it).",
       inputSchema: markPantryItemOutOfStockInputSchema,
     },
@@ -64,6 +65,7 @@ export function registerRestockPantryItemTool(server: McpServer, ctx: ServerCont
   server.registerTool(
     "restock_pantry_item",
     {
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
       description: "Mark a pantry item as back in stock by UID (e.g. you've restocked it).",
       inputSchema: restockPantryItemInputSchema,
     },

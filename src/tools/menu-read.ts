@@ -12,6 +12,7 @@ export function registerListMenusTool(server: McpServer, ctx: ServerContext): vo
   server.registerTool(
     "list_menus",
     {
+      annotations: { readOnlyHint: true, idempotentHint: true },
       description:
         "List all menus (saved meal plans) in Paprika order, with item count and day span per menu. " +
         "Use read_menu to see a menu's full day-by-day breakdown.",
@@ -46,6 +47,7 @@ export function registerReadMenuTool(server: McpServer, ctx: ServerContext): voi
   server.registerTool(
     "read_menu",
     {
+      annotations: { readOnlyHint: true, idempotentHint: true },
       description:
         "Get a menu by UID or name, rendered day by day with each day's planned recipes. " +
         "Name lookup is tiered (exact → starts-with → contains) and case-insensitive, with a " +

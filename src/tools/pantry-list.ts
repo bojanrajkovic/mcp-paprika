@@ -11,6 +11,7 @@ export function registerListPantryTool(server: McpServer, ctx: ServerContext): v
   server.registerTool(
     "list_pantry_items",
     {
+      annotations: { readOnlyHint: true, idempotentHint: true },
       description:
         "List all pantry items sorted alphabetically by ingredient name. Returns the ingredient, quantity, and aisle for each item. Use read_pantry_item with the UID for full details.",
       inputSchema: {},

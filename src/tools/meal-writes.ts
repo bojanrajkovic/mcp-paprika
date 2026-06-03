@@ -88,6 +88,7 @@ export function registerAddMealsTool(server: McpServer, ctx: ServerContext): voi
   server.registerTool(
     "plan_meals",
     {
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
       description:
         "Add one or more meals to the meal planner. Each item is EITHER recipe-linked (supply " +
         "recipe_uid; display name auto-resolves from the recipe) OR freeform (supply name; no " +
@@ -305,6 +306,7 @@ export function registerUpdateMealTool(server: McpServer, ctx: ServerContext): v
   server.registerTool(
     "update_meal",
     {
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
       description:
         "Update an existing meal by UID. The `update` payload is a discriminated union: pick exactly one " +
         "of {recipe_uid?, ...other} | {name, ...other} | {recipe_uid: null, name?, ...other}. Recipe link " +
@@ -472,6 +474,7 @@ export function registerDeleteMealTool(server: McpServer, ctx: ServerContext): v
   server.registerTool(
     "delete_meal",
     {
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
       description:
         "Soft-delete a meal from the planner by UID. Idempotent: a second delete on the same UID " +
         "returns a friendly 'already deleted' message without re-POSTing. Requires an exact UID.",

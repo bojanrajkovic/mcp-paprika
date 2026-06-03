@@ -45,6 +45,7 @@ export function registerRescheduleMealTool(server: McpServer, ctx: ServerContext
   server.registerTool(
     "reschedule_meal",
     {
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
       description:
         "Reschedule a planned meal to a different date by UID, optionally also changing its meal type. " +
         "Moving the date re-sequences the meal to the end of the destination day's order. To change a " +
