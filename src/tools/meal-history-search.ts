@@ -50,6 +50,7 @@ export function registerSearchMealHistoryTool(server: McpServer, ctx: ServerCont
   server.registerTool(
     "search_meal_history",
     {
+      title: "Search past cooked meals by recipe or category",
       annotations: { readOnlyHint: true, idempotentHint: true },
       description:
         'Search PAST meals (recall/browse), by a specific recipe, a recipe category ("class"), a meal type, ' +

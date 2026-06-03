@@ -86,6 +86,7 @@ export function registerAddMenuToPlannerTool(server: McpServer, ctx: ServerConte
   server.registerTool(
     "schedule_menu",
     {
+      title: "Add a saved menu's recipes to the meal planner",
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
       description:
         "Instantiate a saved menu's recipes as meal-planner entries. Look the menu up by UID or name " +

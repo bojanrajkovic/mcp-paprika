@@ -15,6 +15,7 @@ export function registerCreateMenuTool(server: McpServer, ctx: ServerContext): v
   server.registerTool(
     "create_menu",
     {
+      title: "Create a menu",
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
       description:
         "Create a new menu (saved meal plan) with the given name. Rejects duplicate names " +
@@ -79,6 +80,7 @@ export function registerUpdateMenuTool(server: McpServer, ctx: ServerContext): v
   server.registerTool(
     "update_menu",
     {
+      title: "Edit a menu",
       annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
       description:
         "Update a menu's name, day span, and/or notes. Look it up by UID or name (tiered fuzzy match, " +
@@ -200,6 +202,7 @@ export function registerDeleteMenuTool(server: McpServer, ctx: ServerContext): v
   server.registerTool(
     "delete_menu",
     {
+      title: "Delete a menu",
       annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false },
       description:
         "Delete a menu and all of its planned recipes (menuitems). Look it up by UID or name (tiered fuzzy " +

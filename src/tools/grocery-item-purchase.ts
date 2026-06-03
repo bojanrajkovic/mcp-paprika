@@ -21,6 +21,7 @@ export function registerMarkGroceryItemPurchasedTool(server: McpServer, ctx: Ser
   server.registerTool(
     "mark_grocery_item_purchased",
     {
+      title: "Mark a grocery item purchased",
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
       description: "Mark a grocery item as purchased (checked off) by UID.",
       inputSchema: markGroceryItemPurchasedInputSchema,

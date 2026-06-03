@@ -16,6 +16,7 @@ export function registerCreateTool(server: McpServer, ctx: ServerContext): void 
   server.registerTool(
     "create_recipe",
     {
+      title: "Create a new recipe",
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
       description:
         "Create a new recipe in the Paprika account. If you built this recipe from a web page, " +

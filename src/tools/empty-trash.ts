@@ -20,6 +20,7 @@ export function registerEmptyTrashTool(server: McpServer, ctx: ServerContext): v
   server.registerTool(
     "purge_recipe",
     {
+      title: "Permanently delete a trashed recipe",
       annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false },
       description:
         "Permanently delete a recipe that is already in the Paprika trash. " +

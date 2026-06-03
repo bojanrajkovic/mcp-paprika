@@ -28,6 +28,7 @@ export function registerCreateCategoryTool(server: McpServer, ctx: ServerContext
   server.registerTool(
     "create_category",
     {
+      title: "Create a recipe category",
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
       description:
         "Create a new recipe category. Optionally nest it under an existing category by passing that " +
@@ -75,6 +76,7 @@ export function registerUpdateCategoryTool(server: McpServer, ctx: ServerContext
   server.registerTool(
     "update_category",
     {
+      title: "Rename or re-parent a recipe category",
       annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
       description:
         "Rename and/or re-parent an existing category. Pass `name` to rename, `parentUid` to move it under " +
@@ -141,6 +143,7 @@ export function registerDeleteCategoryTool(server: McpServer, ctx: ServerContext
   server.registerTool(
     "delete_category",
     {
+      title: "Delete a recipe category",
       annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
       description:
         "Delete a category. Refuses if the category still has child categories or is assigned to any recipe — " +

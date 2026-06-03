@@ -13,6 +13,7 @@ export function registerDeletePantryItemTool(server: McpServer, ctx: ServerConte
   server.registerTool(
     "delete_pantry_item",
     {
+      title: "Delete a pantry item",
       annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
       description:
         "Soft-delete a pantry item by UID. Idempotent: a second delete on the same UID " +

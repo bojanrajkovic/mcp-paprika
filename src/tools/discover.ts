@@ -13,6 +13,7 @@ export function registerDiscoverTool(server: McpServer, ctx: ServerContext, vect
   server.registerTool(
     "discover_recipes",
     {
+      title: "Discover recipes by natural-language search",
       annotations: { readOnlyHint: true, idempotentHint: true },
       description:
         "Discover recipes using semantic search. Finds recipes matching a natural language description of what you're looking for.",

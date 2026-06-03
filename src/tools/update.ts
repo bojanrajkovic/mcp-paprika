@@ -39,6 +39,7 @@ export function registerUpdateTool(server: McpServer, ctx: ServerContext): void 
   server.registerTool(
     "update_recipe",
     {
+      title: "Edit a recipe's details",
       annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
       description:
         "Update a recipe's content fields by UID (name, ingredients, directions, description, notes, " +
