@@ -42,6 +42,31 @@ describe("p2-recipe-crud: create_recipe tool", () => {
       expect(text).toContain(savedRecipe.uid);
     });
 
+    it("p2-recipe-crud.AC2.9: minted recipe UID is an uppercase canonical UUID (Paprika's native format)", async () => {
+      const mockSaveRecipe = vi.fn();
+      const mockNotifySync = vi.fn().mockResolvedValue(undefined);
+      const mockPutRecipe = vi.fn();
+      const mockFlush = vi.fn().mockResolvedValue(undefined);
+      mockSaveRecipe.mockResolvedValue(makeRecipe());
+
+      const { server, callTool } = makeTestServer();
+      const ctx = seed(
+        makeCtx(new RecipeStore(), server, {
+          client: fromAny({ saveRecipe: mockSaveRecipe, notifySync: mockNotifySync }),
+          cache: fromAny({ recipes: { put: mockPutRecipe }, flush: mockFlush }),
+        }),
+        { recipes: [makeRecipe()] },
+      );
+      registerCreateTool(server, ctx);
+
+      await callTool("create_recipe", { name: "Soup", ingredients: "water", directions: "boil" });
+
+      // create.ts mints crypto.randomUUID().toUpperCase(); the recipe handed to
+      // saveRecipe carries that minted UID. A lowercase mint fails this match.
+      const callArgs = mockSaveRecipe.mock.calls[0]?.[0];
+      expect(callArgs?.uid).toMatch(/^[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}$/);
+    });
+
     it("p2-recipe-crud.AC2.2: optional fields are reflected in returned recipe", async () => {
       const mockSaveRecipe = vi.fn();
       const mockNotifySync = vi.fn().mockResolvedValue(undefined);

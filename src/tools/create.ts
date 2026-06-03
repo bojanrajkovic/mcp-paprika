@@ -61,7 +61,10 @@ export function registerCreateTool(server: McpServer, ctx: ServerContext): void 
           // content hash at the network boundary (stampContentHash, #167) and returns
           // the hashed recipe, so the POST and the local commit are hash-consistent
           // and the next sync won't re-fetch this recipe.
-          const uid = RecipeUidSchema.parse(crypto.randomUUID());
+          // Uppercase to match Paprika's native UUID format — the desktop client
+          // mints uppercase, and every other tool here already does (the server
+          // accepts either case but is case-preserving). See ADR-0007.
+          const uid = RecipeUidSchema.parse(crypto.randomUUID().toUpperCase());
           const newRecipe: Recipe = {
             uid,
             hash: "",
