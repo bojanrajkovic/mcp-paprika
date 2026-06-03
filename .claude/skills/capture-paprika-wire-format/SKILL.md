@@ -293,7 +293,7 @@ grep -iE "(eyJ[A-Za-z0-9_-]{10,}|bearer |brajkov|coderinserepeat|password)" docs
 pnpm generate:fixtures
 ```
 
-This reads all `docs/wire-captures/*.har.json` and generates TypeScript modules in `src/__fixtures__/wire-captures/` with:
+This reads all `docs/wire-captures/*.har.json` and generates TypeScript modules in `test/fixtures/wire-captures/` with:
 
 - `FixtureKey` — literal union type of all comments (compile-time safe access)
 - `fixture(key)` — returns parsed request/response body by comment name
@@ -352,16 +352,16 @@ curl -sf -H "Authorization: Bearer $(curl -sf -X POST \
 
 ## Quick Reference
 
-| Phase    | Key Command                                                                                                          | Output                                     |
-| -------- | -------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
-| Setup    | `networksetup -setautoproxystate "$NETWORK_SERVICE" on`                                                              | PAC proxy active                           |
-| Capture  | computer-use MCP driving Paprika UI                                                                                  | `.mitm` file                               |
-| Inspect  | `mitmdump -nr <file> -s scripts/decode-capture.py`                                                                   | Decoded JSON to stdout (optional)          |
-| Survey   | `mitmdump -nr <file> -s scripts/decode-to-har.py`                                                                    | Flow → URL mapping to stderr               |
-| Comments | Write `<capture>.comments.json` mapping flow indices → comment names (or `"skip"`)                                   | JSON sidecar                               |
-| HAR      | `mitmdump -nr <file> -s scripts/decode-to-har.py --set comments=<json> --set out=docs/wire-captures/<name>.har.json` | `docs/wire-captures/<name>.har.json`       |
-| Generate | `pnpm generate:fixtures`                                                                                             | `src/__fixtures__/wire-captures/<name>.ts` |
-| Validate | `pnpm typecheck && pnpm lint && pnpm test`                                                                           | All green                                  |
+| Phase    | Key Command                                                                                                          | Output                                  |
+| -------- | -------------------------------------------------------------------------------------------------------------------- | --------------------------------------- |
+| Setup    | `networksetup -setautoproxystate "$NETWORK_SERVICE" on`                                                              | PAC proxy active                        |
+| Capture  | computer-use MCP driving Paprika UI                                                                                  | `.mitm` file                            |
+| Inspect  | `mitmdump -nr <file> -s scripts/decode-capture.py`                                                                   | Decoded JSON to stdout (optional)       |
+| Survey   | `mitmdump -nr <file> -s scripts/decode-to-har.py`                                                                    | Flow → URL mapping to stderr            |
+| Comments | Write `<capture>.comments.json` mapping flow indices → comment names (or `"skip"`)                                   | JSON sidecar                            |
+| HAR      | `mitmdump -nr <file> -s scripts/decode-to-har.py --set comments=<json> --set out=docs/wire-captures/<name>.har.json` | `docs/wire-captures/<name>.har.json`    |
+| Generate | `pnpm generate:fixtures`                                                                                             | `test/fixtures/wire-captures/<name>.ts` |
+| Validate | `pnpm typecheck && pnpm lint && pnpm test`                                                                           | All green                               |
 
 ## Common Mistakes
 
