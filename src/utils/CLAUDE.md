@@ -4,7 +4,7 @@ Last verified: 2026-06-01
 
 ## Purpose
 
-Shared leaf-ish utilities used across every `src/` module: config loading, the process-wide logger, Paprika wire-date helpers, the shared resilience executor, XDG path resolution, duration parsing, and cross-domain error classes.
+Shared leaf-ish utilities used across every `src/` module: config loading, the process-wide logger, Paprika wire-date helpers, the shared resilience executor, XDG path resolution, duration parsing, cross-domain error classes, and connector branding (the icon/title/site identity presented to MCP hosts).
 
 ## Key References
 
@@ -12,7 +12,7 @@ Shared leaf-ish utilities used across every `src/` module: config loading, the p
 - **Resilience / logging as cross-cutting concerns** — `docs/architecture.md` ("Cross-cutting concerns"); tuning numbers are config, not prose; see `docs/configuration.md` + `src/utils/resilience.ts`.
 - **Logger bootstrap ordering** (notifier built first around a deferred getter) — `src/server/CLAUDE.md`.
 - **Wire-date format origin** — `docs/wire-format.md`; meal-at-midnight storage confirmed by `docs/wire-captures/meals.har.json`.
-- Source: `config.ts`, `log.ts`, `dates.ts`, `resilience.ts`, `xdg.ts`, `duration.ts`, `errors.ts`.
+- Source: `config.ts`, `log.ts`, `dates.ts`, `resilience.ts`, `xdg.ts`, `duration.ts`, `errors.ts`, `branding.ts`.
 
 ## Sharp edges
 
