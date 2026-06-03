@@ -97,3 +97,24 @@ appropriate when you're not running under an orchestrator, or for a single-repli
 
 The container runs `node` as PID 1 (distroless exec-form entrypoint), so `SIGTERM`
 reaches the process directly, with no shell wrapper to swallow it.
+
+## Connector appearance
+
+A host that adds this server as a connector can show a name, an icon, and a
+project link instead of the bare URL. The metadata is exposed on three surfaces,
+all derived from one source (`src/utils/branding.ts`):
+
+- **`serverInfo`** — `title`, `websiteUrl`, and an `icons` data URI ride in the
+  MCP `Implementation` (icons are spec-native, SEP-973). A host reads this only
+  _after_ the client connects, and under this transport `serverInfo` sits behind
+  OAuth, so a pre-auth connector card cannot use it.
+- **`GET /favicon.png`** — the icon as a 128×128 PNG, served unauthenticated.
+- **`logo_uri`** in the authorization-server metadata
+  (`/.well-known/oauth-authorization-server`) points at `${MCP_PUBLIC_URL}/favicon.png`;
+  `service_documentation` points at the project repository.
+
+The unauthenticated `/favicon.png` and the `logo_uri` that references it are the
+only surfaces a host can read _before_ the user authenticates — which is when a
+connector card is rendered. Host support for connector icons is uneven and
+evolving, so a host may still show a generic icon regardless; everything here is
+served per spec and costs nothing when a host ignores it.

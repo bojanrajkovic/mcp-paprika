@@ -4,6 +4,8 @@ import type { Hono } from "hono";
 
 import type { MintingOAuthServerProvider } from "./provider.js";
 
+import { BRANDING, FAVICON_PATH } from "../utils/branding.js";
+
 /**
  * Builds customized RFC 8414 OAuth authorization server metadata with overrides.
  *
@@ -12,6 +14,7 @@ import type { MintingOAuthServerProvider } from "./provider.js";
  * - Removes `revocation_endpoint_auth_methods_supported` (public clients need no credentials)
  * - `authorization_response_iss_parameter_supported` = `true` (RFC 9207)
  * - Removes `id_token_signing_alg_values_supported` (we don't sign id_tokens)
+ * - Adds `service_documentation` + `logo_uri` (connector branding; see `src/utils/branding.ts`)
  */
 export function buildCustomizedAuthorizationServerMetadata(opts: {
   readonly issuerUrl: string; // STRING, never URL
@@ -35,6 +38,14 @@ export function buildCustomizedAuthorizationServerMetadata(opts: {
   // AC2.13: we don't sign id_tokens, so don't advertise any signing alg
   delete base["id_token_signing_alg_values_supported"];
   // code_challenge_methods_supported is already ["S256"] from createOAuthMetadata.
+
+  // Connector branding, read by hosts during the pre-auth connector flow.
+  // `service_documentation` is a standard RFC 8414 field; `logo_uri` is not (it
+  // rides on the $loose schema, like the iss param above), but is the field some
+  // hosts read for a connector icon. Both resolve to our own origin — logo_uri to
+  // the /favicon.png route served on this same server. See `src/utils/branding.ts`.
+  base.service_documentation = BRANDING.websiteUrl;
+  base["logo_uri"] = `${opts.issuerUrl}${FAVICON_PATH}`;
 
   return base;
 }

@@ -6,6 +6,7 @@ import { Hono } from "hono";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { DiskCacheRoot } from "../cache/disk-cache-root.js";
+import { BRANDING, FAVICON_PATH } from "../utils/branding.js";
 import { SILENT_LOG } from "../utils/log.js";
 import { AuthCodeStore } from "./auth-code-store.js";
 import { AuthRequestStore } from "./auth-request-store.js";
@@ -156,6 +157,15 @@ describe("OAuth Metadata Customization", () => {
       // scan in integration tests sees exactly one "none" (token_endpoint_auth_methods_supported).
       expect(meta.revocation_endpoint_auth_methods_supported).toBeUndefined();
     });
+
+    it("adds connector branding: service_documentation + logo_uri at the issuer favicon", () => {
+      const meta = buildCustomizedAuthorizationServerMetadata({
+        issuerUrl: "https://m.example.com",
+        provider,
+      });
+      expect(meta.service_documentation).toBe(BRANDING.websiteUrl);
+      expect(meta["logo_uri"]).toBe(`https://m.example.com${FAVICON_PATH}`);
+    });
   });
 
   describe("buildAuthMetadataRouter (wire-level test)", () => {
@@ -177,6 +187,7 @@ describe("OAuth Metadata Customization", () => {
       expect(body["token_endpoint_auth_methods_supported"]).toEqual(["none"]);
       expect(body["authorization_response_iss_parameter_supported"]).toBe(true);
       expect(body).not.toHaveProperty("id_token_signing_alg_values_supported");
+      expect(body["logo_uri"]).toBe(`https://m.example.com${FAVICON_PATH}`);
     });
 
     it("AC2.2: GET /.well-known/oauth-protected-resource returns resource = issuer; authorization_servers includes issuer", async () => {
