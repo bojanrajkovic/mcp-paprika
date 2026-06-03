@@ -25,9 +25,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { DiskCacheRoot as DiskCache } from "../cache/disk-cache-root.js";
 import type { DiskClientRegistrationStore } from "./client-registration.js";
 
+import { makeVerifiedIdentity } from "../../test/auth/__fixtures__/oauth-state.js";
 import { DiskCacheRoot as DiskCacheImpl } from "../cache/disk-cache-root.js";
 import { SILENT_LOG } from "../utils/log.js";
-import { makeVerifiedIdentity } from "./__fixtures__/oauth-state.js";
 import { AuthCodeStore } from "./auth-code-store.js";
 import { AuthRequestStore } from "./auth-request-store.js";
 import { DiskClientRegistrationStore as DiskClientRegistrationStoreImpl } from "./client-registration.js";

@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import type { MealTypeUid, MealUid, RecipeUid } from "../ids.js";
 
-import { makeMeal } from "../cache/__fixtures__/meals.js";
+import { makeMeal } from "../../test/cache/__fixtures__/meals.js";
 import { MealStore } from "./store.js";
 
 describe("MealStore", () => {

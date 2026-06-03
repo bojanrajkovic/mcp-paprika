@@ -6,8 +6,8 @@ import { ZodError } from "zod";
 
 import type { EmbeddingConfig } from "../utils/config.js";
 
-import { makeRecipe } from "../cache/__fixtures__/recipes.js";
-import { makePinoCapture, tripBreaker } from "../tools/tool-test-utils.js";
+import { makeRecipe } from "../../test/cache/__fixtures__/recipes.js";
+import { makePinoCapture, tripBreaker } from "../../test/support/tool-test-utils.js";
 import { CircuitOpenError } from "../utils/errors.js";
 import { toMessage } from "../utils/log.js";
 import { EmbeddingAPIError, EmbeddingError } from "./embedding-errors.js";

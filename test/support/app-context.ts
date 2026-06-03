@@ -1,23 +1,23 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
-import type { DiskCacheRoot } from "../cache/disk-cache-root.js";
-import type { PaprikaClient } from "../paprika/client.js";
-import type { AppContext, SessionContext } from "../server/app-context.js";
+import type { DiskCacheRoot } from "../../src/cache/disk-cache-root.js";
+import type { PaprikaClient } from "../../src/paprika/client.js";
+import type { AppContext, SessionContext } from "../../src/server/app-context.js";
 
-import { AisleStore } from "../aisle/store.js";
-import { CategoryStore } from "../category/store.js";
-import { GeneratedImageStore } from "../features/generated-image-store.js";
-import { GroceryIngredientStore } from "../grocery-ingredient/store.js";
-import { GroceryItemStore } from "../grocery-item/store.js";
-import { GroceryListStore } from "../grocery-list/store.js";
-import { MealTypeStore } from "../meal-type/store.js";
-import { MealStore } from "../meal/store.js";
-import { MenuItemStore } from "../menu-item/store.js";
-import { MenuStore } from "../menu/store.js";
-import { PantryStore } from "../pantry/store.js";
-import { PhotoStore } from "../photo/store.js";
-import { RecipeStore } from "../recipe/store.js";
-import { SILENT_LOG } from "../utils/log.js";
+import { AisleStore } from "../../src/aisle/store.js";
+import { CategoryStore } from "../../src/category/store.js";
+import { GeneratedImageStore } from "../../src/features/generated-image-store.js";
+import { GroceryIngredientStore } from "../../src/grocery-ingredient/store.js";
+import { GroceryItemStore } from "../../src/grocery-item/store.js";
+import { GroceryListStore } from "../../src/grocery-list/store.js";
+import { MealTypeStore } from "../../src/meal-type/store.js";
+import { MealStore } from "../../src/meal/store.js";
+import { MenuItemStore } from "../../src/menu-item/store.js";
+import { MenuStore } from "../../src/menu/store.js";
+import { PantryStore } from "../../src/pantry/store.js";
+import { PhotoStore } from "../../src/photo/store.js";
+import { RecipeStore } from "../../src/recipe/store.js";
+import { SILENT_LOG } from "../../src/utils/log.js";
 
 /**
  * Single source of truth for a test {@link AppContext}. Every field is given a

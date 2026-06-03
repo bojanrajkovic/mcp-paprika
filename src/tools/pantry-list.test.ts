@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { makePantryItem } from "../cache/__fixtures__/pantry.js";
+import { makePantryItem } from "../../test/cache/__fixtures__/pantry.js";
+import { getText, makeCtx, makeTestServer, seed } from "../../test/support/tool-test-utils.js";
 import { RecipeStore } from "../recipe/store.js";
 import { registerListPantryTool } from "./pantry-list.js";
-import { getText, makeCtx, makeTestServer, seed } from "./tool-test-utils.js";
 
 describe("pantry-list tool", () => {
   it("pantry-read.AC5.1: returns sorted listing with ingredient names and UIDs", async () => {

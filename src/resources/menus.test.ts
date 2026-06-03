@@ -2,10 +2,10 @@ import { describe, expect, it } from "vitest";
 
 import type { MealTypeUid, MenuItemUid, MenuUid } from "../ids.js";
 
-import { makeMealType } from "../cache/__fixtures__/meals.js";
-import { makeMenu, makeMenuItem } from "../cache/__fixtures__/menus.js";
+import { makeMealType } from "../../test/cache/__fixtures__/meals.js";
+import { makeMenu, makeMenuItem } from "../../test/cache/__fixtures__/menus.js";
+import { makeCtx, makeTestServer, seed } from "../../test/support/tool-test-utils.js";
 import { RecipeStore } from "../recipe/store.js";
-import { makeCtx, makeTestServer, seed } from "../tools/tool-test-utils.js";
 import { registerMenuResources } from "./menus.js";
 
 describe("menu MCP resource", () => {

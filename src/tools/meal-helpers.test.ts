@@ -3,8 +3,9 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { MealTypeUid, RecipeUid } from "../ids.js";
 
-import { makeMeal, makeMealType } from "../cache/__fixtures__/meals.js";
-import { makeRecipe } from "../cache/__fixtures__/recipes.js";
+import { makeMeal, makeMealType } from "../../test/cache/__fixtures__/meals.js";
+import { makeRecipe } from "../../test/cache/__fixtures__/recipes.js";
+import { makeCtx, makeStubNotifier, makeTestServer, seed } from "../../test/support/tool-test-utils.js";
 import { MealStore } from "../meal/store.js";
 import { RecipeStore } from "../recipe/store.js";
 import {
@@ -17,7 +18,6 @@ import {
   renderMealCard,
   resolveMealTypeSpec,
 } from "./meal-helpers.js";
-import { makeCtx, makeStubNotifier, makeTestServer, seed } from "./tool-test-utils.js";
 
 // ---------------------------------------------------------------------------
 // AC6.1: mealTypeSpecSchema is exported and correct

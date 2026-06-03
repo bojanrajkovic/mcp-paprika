@@ -5,9 +5,9 @@
 
 import fc from "fast-check";
 
-import type { IdTokenPayload } from "../types.js";
+import type { IdTokenPayload } from "../../src/auth/types.js";
 
-import { nowSeconds } from "../tokens.js";
+import { nowSeconds } from "../../src/auth/tokens.js";
 
 /**
  * Arbitrary factory for IdTokenPayload — generates valid id_token payloads for property testing.

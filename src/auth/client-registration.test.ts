@@ -10,8 +10,8 @@ import { join } from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import { makePinoCapture } from "../../test/support/tool-test-utils.js";
 import { DiskCacheRoot } from "../cache/disk-cache-root.js";
-import { makePinoCapture } from "../tools/tool-test-utils.js";
 import { SILENT_LOG } from "../utils/log.js";
 import { DiskClientRegistrationStore } from "./client-registration.js";
 import { OAuthClientNotFoundError, OAuthMetadataValidationError } from "./errors.js";

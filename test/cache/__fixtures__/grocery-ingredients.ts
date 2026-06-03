@@ -1,5 +1,5 @@
-import type { GroceryIngredient } from "../../grocery-ingredient/types.js";
-import type { AisleUid, GroceryIngredientUid } from "../../ids.js";
+import type { GroceryIngredient } from "../../../src/grocery-ingredient/types.js";
+import type { AisleUid, GroceryIngredientUid } from "../../../src/ids.js";
 
 let groceryIngredientCounter = 0;
 

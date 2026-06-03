@@ -3,13 +3,13 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { MealTypeUid, MenuItemUid, MenuUid } from "../ids.js";
 
-import { makeMealType } from "../cache/__fixtures__/meals.js";
-import { makeMenu, makeMenuItem } from "../cache/__fixtures__/menus.js";
+import { makeMealType } from "../../test/cache/__fixtures__/meals.js";
+import { makeMenu, makeMenuItem } from "../../test/cache/__fixtures__/menus.js";
+import { getText, makeCtx, makeStubNotifier, makeTestServer, seed } from "../../test/support/tool-test-utils.js";
 import { MenuItemStore } from "../menu-item/store.js";
 import { MenuStore } from "../menu/store.js";
 import { RecipeStore } from "../recipe/store.js";
 import { commitMenu, commitMenuItem, commitMenuItemsBatch, menuStartGuard, menuToMarkdown } from "./menu-helpers.js";
-import { getText, makeCtx, makeStubNotifier, makeTestServer, seed } from "./tool-test-utils.js";
 
 const breakfast = makeMealType({
   uid: "breakfast-uid" as MealTypeUid,

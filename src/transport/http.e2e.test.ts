@@ -22,11 +22,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { PaprikaConfig } from "../utils/config.js";
 
-import { useMswServer } from "../__fixtures__/msw.js";
-import { failLoudOnUpstream, paprikaSyncMockHandlers } from "../__fixtures__/paprika-msw.js";
-import { useXdgIsolation } from "../__fixtures__/xdg-isolation.js";
-import { createOidcStub } from "../auth/__fixtures__/oidc-stub.js";
-import { SILENT_LOGGING_CONFIG } from "../tools/tool-test-utils.js";
+import { createOidcStub } from "../../test/auth/__fixtures__/oidc-stub.js";
+import { useMswServer } from "../../test/support/msw.js";
+import { failLoudOnUpstream, paprikaSyncMockHandlers } from "../../test/support/paprika-msw.js";
+import { SILENT_LOGGING_CONFIG } from "../../test/support/tool-test-utils.js";
+import { useXdgIsolation } from "../../test/support/xdg-isolation.js";
 import { type HttpTransportHandle, startHttp } from "./http.js";
 
 // ============================================================================

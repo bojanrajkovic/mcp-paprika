@@ -20,10 +20,16 @@ import type { Menu } from "../menu/types.js";
 import type { PantryItem } from "../pantry/types.js";
 import type { Recipe } from "../recipe/types.js";
 
-import { makeMeal } from "../cache/__fixtures__/meals.js";
-import { makeMenu, makeMenuItem, makeSnakeCaseMenu, makeSnakeCaseMenuItem } from "../cache/__fixtures__/menus.js";
-import { makeSnakeCasePantryItem } from "../cache/__fixtures__/pantry.js";
-import { makeSnakeCaseRecipe } from "../cache/__fixtures__/recipes.js";
+import { makeMeal } from "../../test/cache/__fixtures__/meals.js";
+import {
+  makeMenu,
+  makeMenuItem,
+  makeSnakeCaseMenu,
+  makeSnakeCaseMenuItem,
+} from "../../test/cache/__fixtures__/menus.js";
+import { makeSnakeCasePantryItem } from "../../test/cache/__fixtures__/pantry.js";
+import { makeSnakeCaseRecipe } from "../../test/cache/__fixtures__/recipes.js";
+import { makePinoCapture, tripBreaker } from "../../test/support/tool-test-utils.js";
 import {
   AisleUidSchema,
   CategoryUidSchema,
@@ -40,7 +46,6 @@ import { mealToApiPayload } from "../meal/types.js";
 import { menuItemToApiPayload } from "../menu-item/types.js";
 import { menuToApiPayload } from "../menu/types.js";
 import { RecipeSchema } from "../recipe/types.js";
-import { makePinoCapture, tripBreaker } from "../tools/tool-test-utils.js";
 import { CircuitOpenError } from "../utils/errors.js";
 import { REDACT_PATHS, toMessage } from "../utils/log.js";
 import { PaprikaClient } from "./client.js";

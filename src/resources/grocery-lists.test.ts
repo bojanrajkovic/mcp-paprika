@@ -2,10 +2,10 @@ import { describe, expect, it } from "vitest";
 
 import type { GroceryItemUid, GroceryListUid } from "../ids.js";
 
-import { makeGroceryItem } from "../cache/__fixtures__/grocery-items.js";
-import { makeGroceryList } from "../cache/__fixtures__/grocery-lists.js";
+import { makeGroceryItem } from "../../test/cache/__fixtures__/grocery-items.js";
+import { makeGroceryList } from "../../test/cache/__fixtures__/grocery-lists.js";
+import { makeCtx, makeTestServer, seed } from "../../test/support/tool-test-utils.js";
 import { RecipeStore } from "../recipe/store.js";
-import { makeCtx, makeTestServer, seed } from "../tools/tool-test-utils.js";
 import { registerGroceryListResources } from "./grocery-lists.js";
 
 describe("grocery-surface.AC4: Grocery list MCP resource", () => {

@@ -23,9 +23,9 @@ import {
 } from "jose";
 import { http, type HttpHandler, HttpResponse } from "msw";
 
-import type { DiscoveryDoc } from "../oidc-client.js";
+import type { DiscoveryDoc } from "../../../src/auth/oidc-client.js";
 
-import { nowSeconds } from "../tokens.js";
+import { nowSeconds } from "../../../src/auth/tokens.js";
 import { makeEs256Jwt } from "./jose-keys.js";
 
 // ============================================================================

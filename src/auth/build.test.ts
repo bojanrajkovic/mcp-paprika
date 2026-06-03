@@ -14,11 +14,11 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import type { PaprikaConfig } from "../utils/config.js";
 
-import { useMswServer } from "../__fixtures__/msw.js";
-import { useXdgIsolation } from "../__fixtures__/xdg-isolation.js";
+import { createOidcStub } from "../../test/auth/__fixtures__/oidc-stub.js";
+import { useMswServer } from "../../test/support/msw.js";
+import { useXdgIsolation } from "../../test/support/xdg-isolation.js";
 import { DiskCacheRoot } from "../cache/disk-cache-root.js";
 import { SILENT_LOG } from "../utils/log.js";
-import { createOidcStub } from "./__fixtures__/oidc-stub.js";
 import { buildAuthContext } from "./build.js";
 
 const msw = useMswServer([], { onUnhandledRequest: "bypass" });

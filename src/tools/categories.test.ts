@@ -2,10 +2,10 @@ import { describe, expect, it } from "vitest";
 
 import type { CategoryUid } from "../ids.js";
 
-import { makeCategory, makeRecipe } from "../cache/__fixtures__/recipes.js";
+import { makeCategory, makeRecipe } from "../../test/cache/__fixtures__/recipes.js";
+import { getText, makeCtx, makeTestServer, seed } from "../../test/support/tool-test-utils.js";
 import { RecipeStore } from "../recipe/store.js";
 import { registerCategoryTools } from "./categories.js";
-import { getText, makeCtx, makeTestServer, seed } from "./tool-test-utils.js";
 
 describe("p2-discovery-tools: list_categories tool", () => {
   describe("p2-discovery-tools.AC4: list_categories", () => {

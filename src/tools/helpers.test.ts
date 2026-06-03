@@ -3,8 +3,9 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { ServerContext } from "../types/server-context.js";
 
-import { makeServerContext } from "../__fixtures__/app-context.js";
-import { makeCategory, makeRecipe } from "../cache/__fixtures__/recipes.js";
+import { makeCategory, makeRecipe } from "../../test/cache/__fixtures__/recipes.js";
+import { makeServerContext } from "../../test/support/app-context.js";
+import { getText } from "../../test/support/tool-test-utils.js";
 import { RecipeUidSchema } from "../ids.js";
 import {
   coldStartGuard,
@@ -19,7 +20,6 @@ import {
   textResult,
   uidOrTextLookupSchema,
 } from "./helpers.js";
-import { getText } from "./tool-test-utils.js";
 
 // Minimal ServerContext stub — only `store.hasSynced` matters for coldStartGuard
 const makeCtx = (size: number) =>
