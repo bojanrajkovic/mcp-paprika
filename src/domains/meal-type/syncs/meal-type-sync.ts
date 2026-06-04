@@ -1,6 +1,8 @@
 import type { SyncContribution } from "../../../kernel/registry.js";
 import type { MealTypeSelf } from "../module.js";
 
+import { pruneOrphanCache } from "../../../paprika/sync.js";
+
 /**
  * Meal-type sync — replace-all via DIRECT `store.load` (NOT `syncReplaceAllEntity`):
  * meal-types are a plain `EntityStore` reference catalog (no pending-upsert
@@ -22,18 +24,12 @@ export function mealTypeSync(self: MealTypeSelf): SyncContribution<MealTypeSelf,
       const { store, cache } = ctx.self;
       const mealTypes = await ctx.infra.client.listMealTypes();
 
-      const cachedMealTypes = await cache.getAll();
-      const cachedMealTypeUids = new Set(cachedMealTypes.map((mt) => mt.uid));
+      const cachedMealTypeUids = new Set((await cache.getAll()).map((mt) => mt.uid));
       const incomingMealTypeUids = new Set(mealTypes.map((mt) => mt.uid));
-      const orphanMealTypeUids = [...cachedMealTypeUids].filter((uid) => !incomingMealTypeUids.has(uid));
-      await Promise.all(orphanMealTypeUids.map((uid) => cache.remove(uid)));
+      await pruneOrphanCache(cache, cachedMealTypeUids, incomingMealTypeUids, ctx.infra.log, "meal types");
 
       store.load(mealTypes);
       await Promise.all(mealTypes.map((mt) => cache.put(mt)));
-
-      if (orphanMealTypeUids.length > 0) {
-        ctx.infra.log.debug({ count: orphanMealTypeUids.length }, "removed orphan meal types");
-      }
     },
     sweep: () => self.store.sweepPending(),
   };

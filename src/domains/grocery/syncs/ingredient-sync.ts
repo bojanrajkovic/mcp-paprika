@@ -1,6 +1,8 @@
 import type { SyncContribution } from "../../../kernel/registry.js";
 import type { GrocerySelf } from "../module.js";
 
+import { pruneOrphanCache } from "../../../paprika/sync.js";
+
 /**
  * Grocery-ingredient sync — the bespoke replace-all reconcile. NOT
  * `syncReplaceAllEntity`: the ingredient catalog is a plain name-keyed store with no
@@ -48,18 +50,12 @@ export function groceryIngredientsSync(): SyncContribution<GrocerySelf, "aisle" 
         log.warn({ count: droppedNoAisle }, "dropped grocery ingredients with no aisle");
       }
 
-      const cachedIngredients = await cache.getAll();
-      const cachedIngredientUids = new Set(cachedIngredients.map((i) => i.uid));
+      const cachedIngredientUids = new Set((await cache.getAll()).map((i) => i.uid));
       const filteredIngredientUids = new Set(filteredIngredients.map((i) => i.uid));
-      const orphanIngredientUids = [...cachedIngredientUids].filter((uid) => !filteredIngredientUids.has(uid));
+      await pruneOrphanCache(cache, cachedIngredientUids, filteredIngredientUids, log, "grocery ingredients");
 
-      await Promise.all(orphanIngredientUids.map((uid) => cache.remove(uid)));
       store.load(filteredIngredients);
       await Promise.all(filteredIngredients.map((i) => cache.put(i)));
-
-      if (orphanIngredientUids.length > 0) {
-        log.debug({ count: orphanIngredientUids.length }, "removed orphan grocery ingredients");
-      }
     },
   };
 }

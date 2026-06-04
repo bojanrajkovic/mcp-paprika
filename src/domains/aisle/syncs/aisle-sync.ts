@@ -1,6 +1,8 @@
 import type { SyncContribution } from "../../../kernel/registry.js";
 import type { AisleSelf } from "../module.js";
 
+import { pruneOrphanCache } from "../../../paprika/sync.js";
+
 /**
  * Aisle sync — replace-all WITH pending-write filtering. This is NOT the
  * `syncReplaceAllEntity` helper: it filters pending-upsert rows,
@@ -24,8 +26,7 @@ export function aisleSync(self: AisleSelf): SyncContribution<AisleSelf, never> {
 
       const cachedAisleUids = new Set(cachedAisles.map((a) => a.uid));
       const effectiveAisleUids = new Set(effectiveAisles.map((a) => a.uid));
-      const orphanAisleUids = [...cachedAisleUids].filter((uid) => !effectiveAisleUids.has(uid));
-      await Promise.all(orphanAisleUids.map((uid) => cache.remove(uid)));
+      await pruneOrphanCache(cache, cachedAisleUids, effectiveAisleUids, ctx.infra.log, "aisles");
 
       store.load(effectiveAisles);
       await Promise.all(effectiveAisles.map((a) => cache.put(a)));

@@ -15,6 +15,30 @@ type ReplaceAllEntityOptions<T extends { uid: UID }, UID extends string> = {
 };
 
 /**
+ * Evict cache entries whose UID is no longer in the live snapshot, returning the
+ * removed UIDs. The shared orphan-eviction step of every replace-all reconcile —
+ * `syncReplaceAllEntity` and the bespoke reference-catalog syncs (aisle, meal-type,
+ * grocery-ingredient) that can't use it. An entity dropped from Paprika's canonical
+ * list must leave the disk cache too, or a warm restart would rehydrate a ghost.
+ * `liveUids` is the set present AFTER pending-write filtering; anything
+ * cached-but-not-live is an orphan.
+ */
+export async function pruneOrphanCache<UID extends string>(
+  cache: { remove: (key: string) => Promise<void> },
+  cachedUids: Iterable<UID>,
+  liveUids: ReadonlySet<UID>,
+  log: Logger,
+  label: string,
+): Promise<ReadonlyArray<UID>> {
+  const orphanUids = [...cachedUids].filter((uid) => !liveUids.has(uid));
+  await Promise.all(orphanUids.map((uid) => cache.remove(uid)));
+  if (orphanUids.length > 0) {
+    log.debug({ count: orphanUids.length }, `removed orphan ${label}`);
+  }
+  return orphanUids;
+}
+
+/**
  * Replace-all reconcile for every entity except recipes (recipes use the bespoke
  * diff-and-fetch in `src/domains/recipe/syncs/recipe-sync.ts`). Each domain's sync
  * contribution calls this with its own `fetch`/`equals`/`store`/`cache`. It filters
@@ -38,7 +62,6 @@ export async function syncReplaceAllEntity<T extends { uid: UID }, UID extends s
   const effective = [...incomingFiltered, ...pendingUpserted];
   const effectiveUids = new Set<UID>(effective.map((item) => item.uid));
 
-  const orphanUids = [...cachedUids].filter((uid) => !effectiveUids.has(uid));
   const newUids = new Set<UID>([...effectiveUids].filter((uid) => !cachedUids.has(uid)));
 
   const updated = effective.filter((incoming) => {
@@ -47,7 +70,7 @@ export async function syncReplaceAllEntity<T extends { uid: UID }, UID extends s
   });
   const added = effective.filter((item) => newUids.has(item.uid));
 
-  await Promise.all(orphanUids.map((uid) => opts.cache.remove(uid)));
+  const removedUids = await pruneOrphanCache(opts.cache, cachedUids, effectiveUids, opts.log, opts.label);
   opts.store.load(effective);
   opts.afterLoad?.();
   await Promise.all(effective.map((item) => opts.cache.put(item)));
@@ -62,9 +85,5 @@ export async function syncReplaceAllEntity<T extends { uid: UID }, UID extends s
     }
   }
 
-  if (orphanUids.length > 0) {
-    opts.log.debug({ count: orphanUids.length }, `removed orphan ${opts.label}`);
-  }
-
-  return { added, updated, removedUids: orphanUids };
+  return { added, updated, removedUids };
 }
