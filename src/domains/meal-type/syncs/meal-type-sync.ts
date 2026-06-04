@@ -24,6 +24,9 @@ export function mealTypeSync(self: MealTypeSelf): SyncContribution<MealTypeSelf,
       const { store, cache } = ctx.self;
       const mealTypes = await ctx.infra.client.listMealTypes();
 
+      // Intentionally NOT filtered by `deleted`: meal types hard-delete, so `listMealTypes()`
+      // never returns a `deleted:true` row (only recipes soft-delete, via `inTrash`) — a
+      // deleted-row filter would guard a state that cannot occur. See docs/architecture.md (Caching and sync).
       const cachedMealTypeUids = new Set((await cache.getAll()).map((mt) => mt.uid));
       const incomingMealTypeUids = new Set(mealTypes.map((mt) => mt.uid));
       await pruneOrphanCache(cache, cachedMealTypeUids, incomingMealTypeUids, ctx.infra.log, "meal types");
