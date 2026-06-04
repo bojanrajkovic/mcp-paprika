@@ -85,7 +85,7 @@ import { registerRestoreRecipeTool } from "../tools/recipe-restore.js";
 import { registerSearchTool } from "../tools/search.js";
 import { registerUpdateTool } from "../tools/update.js";
 import { BRANDING, iconSvgDataUri } from "../utils/branding.js";
-import { type PaprikaConfig, resolveImageGenConfig } from "../utils/config.js";
+import { type PaprikaConfig, resolveImageGenConfig, resolvePendingWriteTtl } from "../utils/config.js";
 import { createLogger } from "../utils/log.js";
 import { getCacheDir } from "../utils/xdg.js";
 
@@ -164,12 +164,18 @@ interface Ready extends Indexed {
 }
 
 /**
- * Authenticate the Paprika client — the real fast-fail for bad credentials
- * (`client.authenticate()` throws here, whereas `syncOnce()` swallows
- * everything). Also builds the logger first, so startup records flow through
- * structured logging from the first line.
+ * The pre-kernel bootstrap shared by both transports: build the logger, emit the
+ * startup record, authenticate the Paprika client, and resolve the cache dir. This
+ * is the real fast-fail for bad credentials (`client.authenticate()` throws here,
+ * whereas `syncOnce()` swallows everything), so it stays OUTSIDE the kernel (#158).
+ * The transports assemble the full kernel `Infra` from this base plus `notifier`,
+ * `config`, and `indexEvents`; the legacy `authenticate` phase below also delegates
+ * here so there is one copy of the logger/auth bootstrap.
  */
-async function authenticate(config: PaprikaConfig, notifier: Notifier): Promise<Authenticated> {
+export async function buildInfraBase(
+  config: PaprikaConfig,
+  notifier: Notifier,
+): Promise<{ log: AppContext["log"]; client: AppContext["client"]; cacheDir: string }> {
   const log = createLogger({
     transport: config.transport,
     notifier,
@@ -190,6 +196,18 @@ async function authenticate(config: PaprikaConfig, notifier: Notifier): Promise<
   await client.authenticate();
   log.info("authenticated with paprika");
 
+  return { log, client, cacheDir: getCacheDir() };
+}
+
+/**
+ * The legacy `authenticate` phase — now a thin pass-through over
+ * {@link buildInfraBase} (which owns the logger + client + fast-fail), re-shaping
+ * its result into the phase's `Authenticated` and threading `config`/`notifier`
+ * forward. `hydrate` resolves its own `getCacheDir()`, so the base's `cacheDir` is
+ * unused on this path.
+ */
+async function authenticate(config: PaprikaConfig, notifier: Notifier): Promise<Authenticated> {
+  const { log, client } = await buildInfraBase(config, notifier);
   return { config, log, client, notifier };
 }
 
@@ -205,11 +223,9 @@ async function hydrate(prev: Authenticated): Promise<Hydrated> {
   const cache = new DiskCacheRoot(getCacheDir(), log.child({ component: "disk-cache" }));
   await cache.init();
 
-  // When background sync is disabled, syncOnce() never runs after startup, so
-  // pending-write marks would never be swept. Pass TTL=0 to disable the
-  // feature entirely in that mode (markPending* becomes a no-op). See
-  // src/cache/CLAUDE.md "Pending-writes (issue #57)" and codex P2 on PR #92.
-  const pendingWriteTtlMs = config.sync.enabled ? config.sync.pendingWriteTtl : 0;
+  // Disable pending-writes when sync is off (nothing would sweep the marks), else the
+  // configured TTL — see resolvePendingWriteTtl + src/cache/CLAUDE.md / codex P2 on PR #92.
+  const pendingWriteTtlMs = resolvePendingWriteTtl(config);
   const store = new RecipeStore({ pendingWriteTtlMs });
   const cachedRecipes = await cache.recipes.getAll();
   for (const recipe of cachedRecipes) {
@@ -467,8 +483,15 @@ export async function buildAppContext(
  * If `vectorStore` is present on the AppContext, the discover tool is
  * registered as well.
  */
-export function buildMcpServer(app: AppContext): McpServer {
-  const server = new McpServer(
+/**
+ * Construct a branded, unregistered {@link McpServer} — the `name`/`title`/`version`/
+ * `websiteUrl`/`icons` identity + the `instructions`, with no tools or resources on
+ * it yet. The kernel's `registerAll` registers onto this; the legacy `buildMcpServer`
+ * also starts from it. Branding (`SERVER_NAME`/`SERVER_VERSION`/`SERVER_INSTRUCTIONS`/
+ * `BRANDING`/`iconSvgDataUri`) lives here as its single home.
+ */
+export function buildBrandedServer(): McpServer {
+  return new McpServer(
     {
       name: SERVER_NAME,
       title: BRANDING.title,
@@ -481,6 +504,10 @@ export function buildMcpServer(app: AppContext): McpServer {
     },
     { instructions: SERVER_INSTRUCTIONS },
   );
+}
+
+export function buildMcpServer(app: AppContext): McpServer {
+  const server = buildBrandedServer();
   const sessionCtx: SessionContext = { ...app, server };
 
   registerSearchTool(server, sessionCtx);

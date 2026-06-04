@@ -5,6 +5,7 @@ import type { MealType } from "./types.js";
 
 import { DiskCache } from "../cache/disk-cache.js";
 import { defineModule, register } from "../kernel/registry.js";
+import { resolvePendingWriteTtl } from "../utils/config.js";
 import { mealTypeDiskDescriptor } from "./disk.js";
 import { MealTypeStore } from "./store.js";
 import { mealTypeSync } from "./syncs/meal-type-sync.js";
@@ -30,7 +31,7 @@ export interface MealTypeSelf {
 register(
   defineModule("meal-type", [])
     .self<MealTypeSelf>(async (infra) => {
-      const store = new MealTypeStore();
+      const store = new MealTypeStore({ pendingWriteTtlMs: resolvePendingWriteTtl(infra.config) });
       // Reuse-in-place: point at the SAME flat path the legacy DiskCacheRoot uses
       // (`<cacheDir>/mealtypes`). The `<domain>/<entity>` disk reshape + move-migration
       // is deferred to the flip (ADR-0009).
@@ -40,6 +41,10 @@ register(
         log: infra.log,
       });
       await cache.init();
+      // Warm the store from cache (legacy hydrate) so tools work on a warm restart
+      // before the first sync; drop tombstones, like legacy's `!deleted` filter.
+      const cachedMealTypes = (await cache.getAll()).filter((mt) => !mt.deleted);
+      if (cachedMealTypes.length > 0) store.load(cachedMealTypes);
 
       return { store, cache };
     })

@@ -8,6 +8,7 @@ import type { Aisle } from "./types.js";
 import { DiskCache } from "../cache/disk-cache.js";
 import { AisleUidSchema, NO_AISLE_UID } from "../ids.js";
 import { defineModule, register } from "../kernel/registry.js";
+import { resolvePendingWriteTtl } from "../utils/config.js";
 import { aisleDiskDescriptor } from "./disk.js";
 import { AisleStore } from "./store.js";
 import { aisleSync } from "./syncs/aisle-sync.js";
@@ -33,7 +34,7 @@ export interface AisleSelf {
 register(
   defineModule("aisle", [])
     .self<AisleSelf>(async (infra) => {
-      const store = new AisleStore();
+      const store = new AisleStore({ pendingWriteTtlMs: resolvePendingWriteTtl(infra.config) });
       // Reuse-in-place: point at the SAME flat path the legacy DiskCacheRoot uses
       // (`<cacheDir>/aisles`). The `<domain>/<entity>` disk reshape + move-migration
       // is deferred to the flip (ADR-0009).
@@ -43,6 +44,10 @@ register(
         log: infra.log,
       });
       await cache.init();
+      // Warm the store from cache (legacy hydrate) so tools work on a warm restart
+      // before the first sync; drop tombstones, like legacy's `!deleted` filter.
+      const cachedAisles = (await cache.getAll()).filter((a) => !a.deleted);
+      if (cachedAisles.length > 0) store.load(cachedAisles);
 
       // ensureAisle is the write path (auto-create + persist), so it closes over
       // infra.client. Lifted verbatim from src/tools/aisle-helpers.ts, reaching this

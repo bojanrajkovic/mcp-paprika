@@ -1,9 +1,12 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { Logger } from "pino";
 
+import type { GeneratedImageStore } from "../features/generated-image-store.js";
 import type { PaprikaClient } from "../paprika/client.js";
 import type { AnySyncResult } from "../paprika/sync-types.js";
+import type { IndexEventEmitter } from "../server/index-events.js";
 import type { Notifier } from "../server/notifier.js";
+import type { PaprikaConfig } from "../utils/config.js";
 
 /**
  * The domain-isolation composition kernel.
@@ -49,6 +52,23 @@ export interface Infra {
   readonly cacheDir: string;
   readonly notifier: Notifier;
   readonly log: Logger;
+  /** The root's single parsed config — modules read it instead of re-`loadConfig()`-ing. */
+  readonly config: PaprikaConfig;
+  /**
+   * The recipe/category → discover re-index seam: recipe writes and the category
+   * reconcile emit here, and discover's `index` boot hook subscribes. Carried on
+   * `infra` because there is no dependency edge into discover (its contract is
+   * empty by design). See {@link IndexEventEmitter}.
+   */
+  readonly indexEvents: IndexEventEmitter;
+  /**
+   * The ephemeral AI-photo preview ring buffer (`gen_…` token → bytes). photo-gen's
+   * `generate_recipe_photo` (attach:false) stashes here and recipe's
+   * `upload_recipe_photo` (generation_token) consumes — a recipe↔photo-gen handoff
+   * that would otherwise be a dependency cycle, so it rides `infra` like a shared
+   * seam rather than either module's `self`.
+   */
+  readonly generatedImageStore: GeneratedImageStore;
 }
 
 /**
@@ -254,16 +274,20 @@ export interface Kernel {
   /** Flush every module that owns a cache — only if a snapshot is wanted. */
   flushAll(): Promise<void>;
   /**
-   * Run ONE sync cycle: each module's reconcile (core in dependency order, then
-   * additive best-effort), then flush + sweep. Never throws. Returns the results
-   * a production wiring emits as `sync:complete` (feeding the notifier
-   * subscriber). The initial cycle already ran at build time (gating the
-   * post-sync hooks); a `SyncEngine` calls this on its interval loop.
+   * Run ONE sync cycle: recipe first, then the remaining core reconciles in
+   * dependency order, then additive best-effort, then flush + sweep. Never throws.
+   * Returns the results a production wiring emits as `sync:complete` (feeding the
+   * notifier subscriber) — but ONLY for a cycle that completed through flush; an
+   * aborted cycle (a core throw or a flush rejection) returns `[]`, so a partial,
+   * un-flushed cycle fans out no resource notification (mirroring legacy's
+   * sync:error-only path). The initial cycle already ran at build time (gating the
+   * post-sync hooks); the interval driver calls this on its loop.
    */
   syncOnce(): Promise<ReadonlyArray<AnySyncResult>>;
 }
 
 interface Built {
+  readonly id: string;
   readonly dependsOn: ReadonlyArray<string>;
   readonly self: unknown;
   readonly tools: ReadonlyArray<(ctx: ErasedCtx) => void>;
@@ -301,6 +325,7 @@ export async function buildKernel(
     apis.set(m.id, b.api);
     if (b.flush !== undefined) flushers.push(b.flush);
     built.push({
+      id: m.id,
       dependsOn: m.dependsOn,
       self: b.self,
       tools: b.tools,
@@ -318,12 +343,20 @@ export async function buildKernel(
   // dumb sequencer — each entity's reconcile lives in its module, reached through
   // the BootCtx (its own store/cache + declared deps + the client). Core reconciles
   // run first in dependency order (a failure aborts the cycle); additive ones each
-  // run best-effort; then flush + sweep. The whole cycle never throws. Collected
-  // once, in topo order.
+  // run best-effort; then flush + sweep. The whole cycle never throws.
+  //
+  // Recipe's core reconciles must LEAD: the legacy engine syncs recipe first and
+  // marks its store synced before category/aisle/pantry run, so a later core failure
+  // can't gate recipe tools for the interval. Recipe is dep-free, so the topo-sort
+  // (which orders aisle→pantry→grocery via their dependency edges) can't hoist it —
+  // a stable sort keyed on id "recipe" does. This is the one ordering the dependency
+  // DAG can't express; if a second priority case ever appears, promote it to a
+  // declared `SyncContribution` ordinal (copy first, abstract on the third).
+  const syncOrder = [...built].sort((a, z) => (a.id === "recipe" ? -1 : 0) - (z.id === "recipe" ? -1 : 0));
   const coreSyncs: Array<() => Promise<AnySyncResult | void>> = [];
   const additiveSyncs: Array<() => Promise<AnySyncResult | void>> = [];
   const sweepers: Array<() => number> = [];
-  for (const b of built) {
+  for (const b of syncOrder) {
     if (b.syncs === undefined) continue;
     for (const sync of b.syncs) {
       const run = (): Promise<AnySyncResult | void> => sync.reconcile(bootCtxOf(b));
@@ -351,15 +384,29 @@ export async function buildKernel(
       let swept = 0;
       for (const sweep of sweepers) swept += sweep();
       if (swept > 0) infra.log.debug({ swept }, "swept pending writes past TTL");
+      // Only a cycle that reached flush reports results: the legacy engine builds
+      // its result objects after finalization, so a core-reconcile throw (or a flush
+      // rejection) emits sync:error and NO sync:complete. Returning the partially
+      // accumulated `results` here would fan out a resource notification for an
+      // aborted, un-flushed cycle — which legacy never did.
+      return results;
     } catch (err) {
       infra.log.error({ err }, "sync failed");
+      return [];
     }
-    return results;
   };
 
   // Boot: construct → run the INITIAL sync cycle → run post-sync hooks. The initial
   // cycle gates the hooks, so e.g. the vector `index` builds against already-synced
-  // stores. The interval loop a `SyncEngine` owns just calls `syncOnce` repeatedly.
+  // stores. The interval loop just calls `syncOnce` repeatedly. The startup breadcrumb
+  // (#158) brackets the cycle: a failure logs `sync failed` (error) from the catch above.
+  infra.log.info("running initial sync");
+  // The initial cycle's results are intentionally discarded: at this point no server /
+  // session exists (stdio's ServerRef is unset; HTTP has zero sessions), so a resource
+  // notification would no-op — exactly as the legacy initial sync did. The interval
+  // driver's immediate first iteration re-syncs and DOES call notifyFromResults once a
+  // session can receive it. If the bootstrap order ever changes so a server exists here,
+  // wire notifyFromResults onto this call too.
   await syncOnce();
   for (const phase of BOOT_PHASES) {
     for (const b of built) {

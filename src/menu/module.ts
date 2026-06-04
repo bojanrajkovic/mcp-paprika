@@ -13,6 +13,7 @@ import { DiskCache as DiskCacheImpl } from "../cache/disk-cache.js";
 import { defineModule, register } from "../kernel/registry.js";
 import { menuItemDiskDescriptor } from "../menu-item/disk.js";
 import { MenuItemStore } from "../menu-item/store.js";
+import { resolvePendingWriteTtl } from "../utils/config.js";
 import { menuDiskDescriptor } from "./disk.js";
 import { menuResource } from "./resources/menu-resource.js";
 import { MenuStore } from "./store.js";
@@ -77,21 +78,28 @@ register(
       // path the legacy DiskCacheRoot uses (`<cacheDir>/menus` | `/menuitems`). The
       // `<domain>/<entity>` disk reshape + move-migration is deferred to the flip
       // (ADR-0009).
-      const menuStore = new MenuStore();
+      const pendingWriteTtlMs = resolvePendingWriteTtl(infra.config);
+      const menuStore = new MenuStore({ pendingWriteTtlMs });
       const menuCache = new DiskCacheImpl<Menu>({
         ...menuDiskDescriptor,
         subdir: join(infra.cacheDir, menuDiskDescriptor.subdir),
         log,
       });
       await menuCache.init();
+      // Warm both stores from cache (legacy hydrate) so tools work on a warm restart
+      // before the first sync; drop tombstones, like legacy's `!deleted` filter.
+      const cachedMenus = (await menuCache.getAll()).filter((m) => !m.deleted);
+      if (cachedMenus.length > 0) menuStore.load(cachedMenus);
 
-      const menuItemStore = new MenuItemStore();
+      const menuItemStore = new MenuItemStore({ pendingWriteTtlMs });
       const menuItemCache = new DiskCacheImpl<MenuItem>({
         ...menuItemDiskDescriptor,
         subdir: join(infra.cacheDir, menuItemDiskDescriptor.subdir),
         log,
       });
       await menuItemCache.init();
+      const cachedMenuItems = (await menuItemCache.getAll()).filter((mi) => !mi.deleted);
+      if (cachedMenuItems.length > 0) menuItemStore.load(cachedMenuItems);
 
       // ---- Menu write chokepoints (lifted verbatim from src/tools/menu-helpers.ts) ----
       // Order: markPending* (FIRST, before any cache I/O) → cache put/remove → flush →

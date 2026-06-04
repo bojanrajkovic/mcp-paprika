@@ -1,6 +1,8 @@
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 
+import type { GeneratedImageStore } from "../../features/generated-image-store.js";
+import type { RecipeUid } from "../../ids.js";
 import type { DomainCtx } from "../../kernel/registry.js";
 import type { Photo } from "../../photo/types.js";
 import type { RecipeSelf } from "../module.js";
@@ -78,16 +80,17 @@ function sniffImage(bytes: Buffer): boolean {
 type ResolvedSource = { bytes: Buffer; generated: boolean } | { error: string };
 
 /**
- * Resolves the image bytes from the chosen source, or returns an error message.
- *
- * FLIP: the `generation_token` source reads the photo-gen-owned `generatedImageStore`
- * (an ephemeral `gen_` token → preview-bytes ring buffer). Recipe is `dependsOn []`,
- * so the inert wrapper cannot reach photo-gen's `self`. The flip resolves the
- * preview-then-save hand-off (a shared ephemeral store on `Infra`, or a photo-gen
- * api the recipe upload tool consumes). Until then the token branch returns a clear
- * error; `url` and `image_base64` are unaffected.
+ * Resolves the image bytes from the chosen source, or returns an error message. The
+ * `generation_token` source consumes the shared `infra.generatedImageStore` preview ring
+ * buffer — the recipe↔photo-gen handoff a dependency edge can't carry, so it rides
+ * `infra` (`generate_recipe_photo` attach:false stashes; this consumes), validating the
+ * token was minted for THIS recipe. `url` is SSRF-safe-fetched; `image_base64` is decoded.
  */
-async function resolveSourceBytes(source: UploadPhotoSource): Promise<ResolvedSource> {
+async function resolveSource(
+  source: UploadPhotoSource,
+  recipeUid: RecipeUid,
+  generatedImageStore: GeneratedImageStore,
+): Promise<ResolvedSource> {
   if ("url" in source) {
     // SSRF-safe fetch (scheme + IP-literal guard, rebinding-safe dispatcher,
     // redirect block, streaming size cap) — shared with generate_recipe_photo's restyle.
@@ -96,11 +99,28 @@ async function resolveSourceBytes(source: UploadPhotoSource): Promise<ResolvedSo
   }
 
   if ("generation_token" in source) {
-    return {
-      error:
-        "Attaching a generated preview by token is not available on this server build. " +
-        "Generate-and-attach directly with generate_recipe_photo (attach:true), or pass a `url`.",
-    };
+    // consume() is atomic + synchronous (no await precedes it on this branch), so two
+    // racing uploads can't both spend one token. A token minted for a DIFFERENT recipe is
+    // restored and rejected before any write; a consumed token whose attach later fails is
+    // deliberately NOT restored (duplicate-safe — regenerate instead). This is the legacy
+    // consume/restore choreography (see src/features/CLAUDE.md "Generated-photo previews").
+    const entry = generatedImageStore.consume(source.generation_token);
+    if (entry === null) {
+      return {
+        error:
+          "That generation_token is unknown or expired (previews last about an hour). " +
+          "Generate a new one with generate_recipe_photo (attach:false).",
+      };
+    }
+    if (entry.recipeUid !== recipeUid) {
+      generatedImageStore.restore(source.generation_token, entry);
+      return {
+        error:
+          "That generation_token was created for a different recipe. " +
+          "Generate a preview for THIS recipe and use its token.",
+      };
+    }
+    return { bytes: entry.bytes, generated: true };
   }
 
   const buf = Buffer.from(source.image_base64, "base64");
@@ -114,8 +134,8 @@ async function resolveSourceBytes(source: UploadPhotoSource): Promise<ResolvedSo
 /**
  * Registers `upload_recipe_photo`, kernel-shaped — recipe owns photo, so the recipe
  * read, photo-gallery read, and the attach write all go through `ctx.self` (the bound
- * `attachPhotoToRecipe` chokepoint). The `generation_token` source is a FLIP item
- * (it needs photo-gen's ephemeral store — see `resolveSourceBytes`).
+ * `attachPhotoToRecipe` chokepoint). The `generation_token` source consumes the shared
+ * `infra.generatedImageStore` preview buffer (see `resolveSource`).
  */
 export function uploadPhotoTool(ctx: DomainCtx<RecipeSelf, never>): void {
   const log = ctx.infra.log.child({ component: "upload_recipe_photo" });
@@ -147,7 +167,7 @@ export function uploadPhotoTool(ctx: DomainCtx<RecipeSelf, never>): void {
           const recipe = ctx.self.recipe.store.get(args.recipe_uid);
           if (recipe === undefined) return textResult(`No recipe found with UID "${args.recipe_uid}".`);
 
-          const resolved = await resolveSourceBytes(args.source);
+          const resolved = await resolveSource(args.source, args.recipe_uid, ctx.infra.generatedImageStore);
           if ("error" in resolved) return textResult(resolved.error);
           if (!sniffImage(resolved.bytes)) {
             return textResult("Unsupported image format. Provide a JPEG, PNG, WEBP, or GIF image.");

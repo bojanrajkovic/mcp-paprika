@@ -8,6 +8,7 @@ import type { Meal } from "./types.js";
 
 import { DiskCache as DiskCacheImpl } from "../cache/disk-cache.js";
 import { defineModule, register } from "../kernel/registry.js";
+import { resolvePendingWriteTtl } from "../utils/config.js";
 import { toMessage } from "../utils/log.js";
 import { mealDiskDescriptor } from "./disk.js";
 import { MealStore } from "./store.js";
@@ -56,7 +57,7 @@ register(
     .self<MealSelf>(async (infra) => {
       const { client, log } = infra;
 
-      const store = new MealStore();
+      const store = new MealStore({ pendingWriteTtlMs: resolvePendingWriteTtl(infra.config) });
       // Reuse-in-place: point at the SAME flat path the legacy DiskCacheRoot uses
       // (`<cacheDir>/meals`). The `<domain>/<entity>` disk reshape + move-migration
       // is deferred to the flip (ADR-0009).
@@ -66,6 +67,10 @@ register(
         log,
       });
       await cache.init();
+      // Warm the store from cache (legacy hydrate) so tools work on a warm restart
+      // before the first sync; drop tombstones, like legacy's `!deleted` filter.
+      const cachedMeals = (await cache.getAll()).filter((m) => !m.deleted);
+      if (cachedMeals.length > 0) store.load(cachedMeals);
 
       // ---- Meal write chokepoints (lifted verbatim from src/tools/meal-helpers.ts) ----
       // Order: markPending* (FIRST, before any cache I/O) → cache put/remove → flush

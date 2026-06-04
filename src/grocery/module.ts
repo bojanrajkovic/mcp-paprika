@@ -19,6 +19,7 @@ import { GroceryItemStore } from "../grocery-item/store.js";
 import { groceryListDiskDescriptor } from "../grocery-list/disk.js";
 import { GroceryListStore } from "../grocery-list/store.js";
 import { defineModule, register } from "../kernel/registry.js";
+import { resolvePendingWriteTtl } from "../utils/config.js";
 import { groceryListResource } from "./resources/grocery-list-resource.js";
 import { groceryIngredientsSync } from "./syncs/ingredient-sync.js";
 import { groceryItemsSync } from "./syncs/item-sync.js";
@@ -93,22 +94,31 @@ register(
       // flat path the legacy DiskCacheRoot uses (`<cacheDir>/grocerylists` |
       // `/groceryitems` | `/groceryingredients`). The `<domain>/<entity>` disk
       // reshape + move-migration is deferred to the flip (ADR-0009).
-      const listStore = new GroceryListStore();
+      const pendingWriteTtlMs = resolvePendingWriteTtl(infra.config);
+      const listStore = new GroceryListStore({ pendingWriteTtlMs });
       const listCache = new DiskCacheImpl<GroceryList>({
         ...groceryListDiskDescriptor,
         subdir: join(infra.cacheDir, groceryListDiskDescriptor.subdir),
         log,
       });
       await listCache.init();
+      // Warm each store from cache (legacy hydrate) so tools work on a warm restart
+      // before the first sync completes.
+      const cachedGroceryLists = await listCache.getAll();
+      if (cachedGroceryLists.length > 0) listStore.load(cachedGroceryLists);
 
-      const itemStore = new GroceryItemStore();
+      const itemStore = new GroceryItemStore({ pendingWriteTtlMs });
       const itemCache = new DiskCacheImpl<GroceryItem>({
         ...groceryItemDiskDescriptor,
         subdir: join(infra.cacheDir, groceryItemDiskDescriptor.subdir),
         log,
       });
       await itemCache.init();
+      const cachedGroceryItems = await itemCache.getAll();
+      if (cachedGroceryItems.length > 0) itemStore.load(cachedGroceryItems);
 
+      // The ingredient catalog is a plain name-keyed store (no pending-write TTL); drop
+      // tombstones on hydrate, like legacy's `!deleted` filter.
       const ingredientStore = new GroceryIngredientStore();
       const ingredientCache = new DiskCacheImpl<GroceryIngredient>({
         ...groceryIngredientDiskDescriptor,
@@ -116,6 +126,8 @@ register(
         log,
       });
       await ingredientCache.init();
+      const cachedGroceryIngredients = (await ingredientCache.getAll()).filter((i) => !i.deleted);
+      if (cachedGroceryIngredients.length > 0) ingredientStore.load(cachedGroceryIngredients);
 
       // ---- Grocery write chokepoints (lifted verbatim from src/tools/grocery-helpers.ts) ----
       // Order: markPending* (FIRST, before any cache I/O) → cache put/remove → flush →

@@ -14,7 +14,7 @@ import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
 import { Mutex } from "async-mutex";
 import { err, ok, type Result } from "neverthrow";
 
-import type { DiskCacheRoot } from "../cache/disk-cache-root.js";
+import type { AuthCache } from "../cache/auth-cache.js";
 import type { VerifiedIdentity } from "./allowlist.js";
 import type { OAuthToken } from "./types.js";
 
@@ -58,7 +58,7 @@ export class TokenStore {
   private readonly _rotateLock = new Mutex();
 
   constructor(
-    private readonly _cache: DiskCacheRoot,
+    private readonly _cache: AuthCache,
     private readonly _now: () => number = () => nowSeconds(),
   ) {}
 

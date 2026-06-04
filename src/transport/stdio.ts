@@ -2,8 +2,15 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 
 import type { PaprikaConfig } from "../utils/config.js";
 
-import { buildAppContext, buildMcpServer } from "../server/build.js";
+import { GeneratedImageStore } from "../features/generated-image-store.js";
+import { buildKernel } from "../kernel/registry.js";
+import { buildBrandedServer, buildInfraBase } from "../server/build.js";
+import { createIndexEvents } from "../server/index-events.js";
 import { createServerRef, singleServerNotifier } from "../server/notifier.js";
+import { notifyFromResults, runSyncLoop } from "../server/sync-loop.js";
+// Side-effect: every domain/feature module self-registers on import, so the kernel's
+// `registeredModules()` is populated before `buildKernel` reads it.
+import "../kernel/modules.generated.js";
 
 export interface TransportHandle {
   shutdown(): Promise<void>;
@@ -35,36 +42,50 @@ function warnIfUnusedHttpConfig(env: NodeJS.ProcessEnv): void {
 export async function startStdio(config: PaprikaConfig): Promise<TransportHandle> {
   warnIfUnusedHttpConfig(process.env);
 
-  // A ServerRef breaks the chicken-and-egg between AppContext (needs the
-  // notifier) and McpServer (built from AppContext, then bound to the notifier):
-  // the ref is created first, its getter handed to the notifier, and set once
-  // the server exists. See src/server/notifier.ts for the rationale.
+  // A ServerRef breaks the chicken-and-egg between the kernel's process-wide state
+  // (built with the notifier) and the McpServer (built after, then bound to the
+  // notifier via the ref): the ref is created first, its getter handed to the
+  // notifier, and set once the server exists. See src/server/notifier.ts.
   const serverRef = createServerRef();
   const notifier = singleServerNotifier(serverRef.get);
 
-  // buildAppContext runs the initial sync internally so cold-start vector
-  // indexing happens against a fully-populated RecipeStore (categories
-  // included). See src/server/build.ts for the ordering rationale.
-  const { app, sync } = await buildAppContext(config, notifier);
-  const server = buildMcpServer(app);
+  // buildInfraBase authenticates the client (the #158 fast-fail) and resolves the
+  // logger + cache dir; buildKernel then constructs every module and runs the initial
+  // sync internally, so cold-start vector indexing happens against a populated recipe
+  // store. The initial cycle's notifications no-op (serverRef is unset until below).
+  const { log, client, cacheDir } = await buildInfraBase(config, notifier);
+  const indexEvents = createIndexEvents(log);
+  const generatedImageStore = new GeneratedImageStore();
+  const kernel = await buildKernel({ client, cacheDir, notifier, log, config, indexEvents, generatedImageStore });
+
+  const server = buildBrandedServer();
+  kernel.registerAll(server);
   serverRef.set(server);
 
-  const log = app.log.child({ component: "transport-stdio" });
+  const tlog = log.child({ component: "transport-stdio" });
 
-  if (config.sync.enabled) {
-    sync.start();
-    log.info({ intervalMs: config.sync.interval }, "sync engine started");
+  // The interval loop runs its first cycle immediately (then waits), so — combined
+  // with buildKernel's initial cycle — startup syncs twice, exactly as the legacy
+  // runInitialSync + sync.start() did. notifyFromResults applies the legacy
+  // sync:complete → resourceListChanged filter to each cycle's returned results.
+  const loop = config.sync.enabled
+    ? runSyncLoop(async () => {
+        notifyFromResults(await kernel.syncOnce(), notifier);
+      }, config.sync.interval)
+    : null;
+  if (loop !== null) {
+    tlog.info({ intervalMs: config.sync.interval }, "sync engine started");
   } else {
-    log.info("background sync disabled");
+    tlog.info("background sync disabled");
   }
 
-  log.info("connecting stdio transport");
+  tlog.info("connecting stdio transport");
   await server.connect(new StdioServerTransport());
-  log.info("server ready");
+  tlog.info("server ready");
 
   return {
     async shutdown() {
-      sync.stop();
+      loop?.stop();
     },
   };
 }

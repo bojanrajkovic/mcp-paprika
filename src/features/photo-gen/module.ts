@@ -1,8 +1,7 @@
 import type { PhotoGenApi } from "./api.js";
 
 import { defineModule, register } from "../../kernel/registry.js";
-import { loadConfig, resolveImageGenConfig } from "../../utils/config.js";
-import { GeneratedImageStore } from "../generated-image-store.js";
+import { resolveImageGenConfig } from "../../utils/config.js";
 import { PhotographyClient } from "../photography.js";
 import { generatePhotoTool } from "./tools/generate.js";
 
@@ -21,11 +20,11 @@ declare module "../../kernel/registry.js" {
  * The photo-gen module's internals. A FEATURE module: it owns no Paprika entity,
  * so it has no store/cache pair and contributes no `syncs[]`.
  *
- * `generatedImageStore` is the ONE piece of state photo-gen genuinely owns: the
- * ephemeral `gen_…` preview ring buffer (`generate_recipe_photo` attach:false stashes
- * the full bytes here; recipe's `upload_recipe_photo` later `consume`s the token). It
- * is in-memory, bounded + short-TTL, with NO `DiskCache` and NO `init()` — built once
- * at kernel construction (once per process), never per session.
+ * The ephemeral `gen_…` preview ring buffer is NOT a `self` field: it's a
+ * recipe↔photo-gen handoff (`generate_recipe_photo` attach:false stashes; recipe's
+ * `upload_recipe_photo` generation_token consumes), so it rides `infra` as a shared
+ * seam (`Infra.generatedImageStore`) rather than either module's `self` — the same
+ * reason a recipe→photo-gen dependency edge would be a cycle.
  *
  * `photographyClient` is the OpenRouter image-generation HTTP client, carried as a
  * NULLABLE field: `null` when image generation is unconfigured, exactly mirroring the
@@ -35,41 +34,31 @@ declare module "../../kernel/registry.js" {
  * when `photographyClient === null` rather than being conditionally registered.
  */
 export interface PhotoGenSelf {
-  readonly generatedImageStore: GeneratedImageStore;
   readonly photographyClient: PhotographyClient | null;
 }
 
 register(
   defineModule("photo-gen", ["recipe"])
     .self<PhotoGenSelf>(async (infra) => {
-      // Owned, in-memory, no disk, no init() — the ephemeral preview ring buffer.
-      const generatedImageStore = new GeneratedImageStore();
-
       // Build the photography client EXACTLY as legacy `buildFeatures` does:
-      //   resolveImageGenConfig(config) !== null
-      //     ? new PhotographyClient(resolved, log.child({ component: "photography" }))
-      //     : null
-      // `Infra` carries no `config`, so read it the same way the discover module
-      // does (`loadConfig` is a pure env+file read). On a config error, treat photo
-      // generation as disabled (null client) rather than aborting the whole kernel
-      // build — the legacy root reaches `buildFeatures` only after config has already
-      // parsed, so a parse failure here means a degraded environment; a null client
-      // keeps the rest of the server up and the tool degrades to its gate message.
-      const resolvedImageGen = loadConfig().match(
-        (config) => resolveImageGenConfig(config),
-        () => null,
-      );
+      // `resolveImageGenConfig(config) !== null ? new PhotographyClient(...) : null`,
+      // reading the root's single parsed config off `infra`. The legacy root reaches
+      // `buildFeatures` only after config has parsed, so `infra.config` is that same
+      // value — no second, divergent parse whose error arm would silently disable the
+      // feature; `null` (image generation unconfigured) degrades the tool to its gate.
+      const resolvedImageGen = resolveImageGenConfig(infra.config);
       const photographyClient =
         resolvedImageGen !== null
           ? new PhotographyClient(resolvedImageGen, infra.log.child({ component: "photography" }))
           : null;
 
-      return { generatedImageStore, photographyClient };
+      return { photographyClient };
     })
     .build(() => ({
       api: {},
       // ctx is INFERRED: DomainCtx<PhotoGenSelf, "recipe">. The tool reaches recipe via
-      // `ctx.deps.recipe` (read contract only) and its OWN ring buffer via `ctx.self`.
+      // `ctx.deps.recipe` (the read contract + attachGeneratedPhoto), the shared preview
+      // ring buffer via `ctx.infra.generatedImageStore`, and its client via `ctx.self`.
       tools: [generatePhotoTool],
       // Owns no Paprika entity → contributes NO sync reconciles (the generated-image
       // store is in-memory and never syncs). No resource (feature, not Content).

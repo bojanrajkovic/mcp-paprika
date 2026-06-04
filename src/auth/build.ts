@@ -14,7 +14,7 @@
 
 import type { Logger } from "pino";
 
-import type { DiskCacheRoot } from "../cache/disk-cache-root.js";
+import type { AuthCache } from "../cache/auth-cache.js";
 import type { PaprikaConfig } from "../utils/config.js";
 import type { AuthContext, ResolvedOAuthConfig } from "./types.js";
 
@@ -32,7 +32,7 @@ import { TokenStore } from "./token-store.js";
 
 export async function buildAuthContext(
   config: PaprikaConfig,
-  cache: DiskCacheRoot,
+  cache: AuthCache,
   parentLog: Logger,
 ): Promise<AuthContext | null> {
   if (config.transport !== "http") return null;

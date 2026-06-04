@@ -15,7 +15,7 @@ import { randomUUID, timingSafeEqual } from "node:crypto";
 import { InvalidRequestError } from "@modelcontextprotocol/sdk/server/auth/errors.js";
 import type { Logger } from "pino";
 
-import type { DiskCacheRoot } from "../cache/disk-cache-root.js";
+import type { AuthCache } from "../cache/auth-cache.js";
 import type { OAuthClient } from "./types.js";
 
 import { validateRegistration, validateUpdate } from "./dcr-validator.js";
@@ -78,7 +78,7 @@ function storedToWire(
 
 export class DiskClientRegistrationStore {
   constructor(
-    private readonly _cache: DiskCacheRoot,
+    private readonly _cache: AuthCache,
     private readonly _publicUrl: string,
     private readonly log: Logger,
     /**

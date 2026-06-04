@@ -14,7 +14,9 @@ import type { Recipe } from "../types.js";
  *
  * `core` tier — runs first and in dependency order; `markSynced()` mid-cycle keeps
  * recipe tools available even if a later core reconcile (category) fails. Returns a
- * `RecipeSyncResult` to be emitted as `sync:complete`.
+ * `RecipeSyncResult` for the `sync:complete` notifier path AND emits `recipe-changed`/
+ * `recipe-removed` on the kernel re-index seam for discover (the two consumers are
+ * independent — see the emit comment).
  */
 export function recipesSync(self: RecipeSelf): SyncContribution<RecipeSelf, never> {
   return {
@@ -91,6 +93,18 @@ export function recipesSync(self: RecipeSelf): SyncContribution<RecipeSelf, neve
       const addedSet = new Set(filteredAdded);
       const addedRecipes = fetchedRecipes.filter((r) => addedSet.has(r.uid));
       const updatedRecipes = fetchedRecipes.filter((r) => !addedSet.has(r.uid));
+
+      // Drive the discover re-index seam (legacy channel 2). `recipe-changed` fires
+      // EVERY cycle — even with no changes — because discover's handler runs its
+      // startup-reconcile retry off this signal, so a recovered embeddings backend
+      // self-heals without a recipe edit or restart (#177); the handler skips the
+      // empty case. A tool-written recipe is pending here, so it's filtered out of this
+      // diff and re-embedded via its own commit emit instead — no double-index.
+      ctx.infra.indexEvents.emit({ type: "recipe-changed", recipes: [...addedRecipes, ...updatedRecipes] });
+      if (filteredRemoved.length > 0) {
+        ctx.infra.indexEvents.emit({ type: "recipe-removed", uids: filteredRemoved });
+      }
+
       return {
         changeType: "recipes",
         changes: { added: addedRecipes, updated: updatedRecipes, removedUids: filteredRemoved },

@@ -8,6 +8,7 @@ import type { PantryItem } from "./types.js";
 
 import { DiskCache } from "../cache/disk-cache.js";
 import { defineModule, register } from "../kernel/registry.js";
+import { resolvePendingWriteTtl } from "../utils/config.js";
 import { toMessage } from "../utils/log.js";
 import { pantryDiskDescriptor } from "./disk.js";
 import { PantryStore } from "./store.js";
@@ -59,7 +60,7 @@ export interface PantrySelf {
 register(
   defineModule("pantry", ["aisle"])
     .self<PantrySelf>(async (infra) => {
-      const store = new PantryStore();
+      const store = new PantryStore({ pendingWriteTtlMs: resolvePendingWriteTtl(infra.config) });
       // Reuse-in-place: point at the SAME flat path the legacy DiskCacheRoot uses
       // (`<cacheDir>/pantry`). The `<domain>/<entity>` disk reshape + move-migration
       // is deferred to the flip (ADR-0009).
@@ -69,6 +70,10 @@ register(
         log: infra.log,
       });
       await cache.init();
+      // Warm the store from cache (legacy hydrate) so tools work on a warm restart
+      // before the first sync completes.
+      const cachedPantryItems = await cache.getAll();
+      if (cachedPantryItems.length > 0) store.load(cachedPantryItems);
 
       // ---- Pantry write chokepoints (lifted verbatim from src/tools/pantry-helpers.ts) ----
 

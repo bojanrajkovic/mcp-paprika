@@ -1,5 +1,5 @@
-import { readFile, rename } from "node:fs/promises";
-import { join } from "node:path";
+import { mkdir, readFile, rename, unlink } from "node:fs/promises";
+import { dirname, join } from "node:path";
 
 import type { Logger } from "pino";
 import { z } from "zod";
@@ -30,6 +30,7 @@ export class RecipeDiskCache extends DiskCache<Recipe> {
   }
 
   override async init(): Promise<void> {
+    await this._maybeMigrateLegacyIndex();
     await super.init();
     let raw: string;
     try {
@@ -61,6 +62,67 @@ export class RecipeDiskCache extends DiskCache<Recipe> {
     }
     for (const [uid, hash] of Object.entries(result.data)) {
       this._hashes.set(uid, hash);
+    }
+  }
+
+  /**
+   * Idempotent, crash-safe one-shot upgrade from the legacy unified index
+   * (`<cacheDir>/index.json`, a `{ recipes: {uid→hash}, … }` map) to this cache's
+   * per-entity `recipes/index.json`. Only the `recipes` namespace carried real
+   * hashes; the other namespaces were directory-listing placeholders the per-entity
+   * caches rebuild from `readdir`, so only `recipes` is extracted. Writes the new
+   * file FIRST (temp-then-rename), then unlinks the legacy one; a crash between
+   * re-runs idempotently. Lives HERE, not on a composition root, so it runs wherever
+   * a RecipeDiskCache is built — both transports — independent of how the rest of the
+   * cache (or auth) is assembled. The legacy file sits one level above this subdir.
+   */
+  private async _maybeMigrateLegacyIndex(): Promise<void> {
+    const legacyPath = join(dirname(this._subdir), "index.json");
+    let raw: string;
+    try {
+      raw = await readFile(legacyPath, "utf-8");
+    } catch (error: unknown) {
+      if (isNodeError(error) && error.code === "ENOENT") return; // fresh install or already migrated
+      throw error;
+    }
+
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(raw);
+    } catch (err) {
+      this.log.warn(
+        { err, path: legacyPath },
+        "corrupt legacy index.json — discarding; recipes will be re-hashed on next sync",
+      );
+      await this._safeUnlink(legacyPath);
+      return;
+    }
+
+    const recipesParsed = RecipeIndexSchema.safeParse((parsed as { recipes?: unknown })?.recipes);
+    if (recipesParsed.success && Object.keys(recipesParsed.data).length > 0) {
+      await mkdir(this._subdir, { recursive: true });
+      const tmpPath = join(this._subdir, `.index-${Date.now().toString()}.tmp`);
+      await this._writeFileAtomic(tmpPath, JSON.stringify(recipesParsed.data, null, 2));
+      await rename(tmpPath, join(this._subdir, "index.json"));
+      this.log.info(
+        { count: Object.keys(recipesParsed.data).length },
+        "migrated legacy unified index.json to recipes/index.json",
+      );
+    } else if (!recipesParsed.success) {
+      this.log.warn(
+        { path: legacyPath },
+        "legacy index.json present but recipes namespace is missing or malformed — discarding",
+      );
+    }
+
+    await this._safeUnlink(legacyPath);
+  }
+
+  private async _safeUnlink(path: string): Promise<void> {
+    try {
+      await unlink(path);
+    } catch (error: unknown) {
+      if (!isNodeError(error) || error.code !== "ENOENT") throw error;
     }
   }
 

@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 
+import { err, ok, type Result } from "neverthrow";
 import type { Logger } from "pino";
 
 import type { DiskCache } from "../cache/disk-cache.js";
@@ -20,7 +21,9 @@ import { defineModule, register } from "../kernel/registry.js";
 import { photoDiskDescriptor } from "../photo/disk.js";
 import { PhotoStore } from "../photo/store.js";
 import { resolveCategoryRefs } from "../tools/helpers.js";
-import { sha256Hex } from "../tools/photo-helpers.js";
+import { GENERATED_MAX_FULL_EDGE, normalizePhoto, sha256Hex } from "../tools/photo-helpers.js";
+import { resolvePendingWriteTtl } from "../utils/config.js";
+import { toMessage } from "../utils/log.js";
 import { RecipeDiskCache } from "./disk.js";
 import { recipeResource } from "./resources/recipe-resource.js";
 import { RecipeStore } from "./store.js";
@@ -73,11 +76,12 @@ export interface RecipeEntitySlice<Store, Cache> {
  * `.build`. Lifted verbatim from `src/tools/{helpers,category-helpers,photo-helpers}.ts`,
  * reaching this module's own stores/caches instead of the god-object context.
  *
- * Vector-index maintenance is DROPPED in the additive phase: `maintainRecipeIndex`/
- * `reindexRecipesForCategoryChange` write the discover-owned `vectorStore`, which the
- * inert module does not carry. The flip wires re-indexing through a discover write-hook
- * (see the `// FLIP:` markers). The `resourceListChanged()` rule is PRESERVED: recipe is
- * a Content entity (fires); category and photo are not (silent).
+ * Vector-index maintenance (the legacy `maintainRecipeIndex`/`reindexRecipesForCategoryChange`,
+ * #177) writes the discover-owned `vectorStore`, which recipe cannot reach (no dependency
+ * edge into discover by design). So each write chokepoint EMITS on `infra.indexEvents` —
+ * the kernel-level re-index seam discover's `index` boot hook subscribes to — instead of
+ * reaching across the boundary. The `resourceListChanged()` rule is PRESERVED: recipe is a
+ * Content entity (fires); category and photo are not (silent).
  */
 export interface RecipeSelf {
   readonly recipe: RecipeEntitySlice<RecipeStore, RecipeDiskCache>;
@@ -98,6 +102,8 @@ export interface RecipeSelf {
   commitCategoryDelete(category: Category): Promise<void>;
   /** Build the Photo + photo-bearing recipe, run the 3-request upload, commit both locally. */
   attachPhotoToRecipe(recipe: Readonly<Recipe>, thumbnail: Buffer, full: Buffer): Promise<Photo>;
+  /** Recipe-domain write exposed on `RecipeApi` for photo-gen: normalize + attach AI bytes. */
+  attachGeneratedPhoto(recipeUid: RecipeUid, full: Buffer): Promise<Result<Photo, { readonly message: string }>>;
   /** Persist a photo soft-delete locally. */
   commitPhotoDelete(savedPhoto: Photo): Promise<void>;
 }
@@ -108,31 +114,46 @@ register(
       const client: PaprikaClient = infra.client;
       const notifier: Notifier = infra.notifier;
       const log: Logger = infra.log;
+      const pendingWriteTtlMs = resolvePendingWriteTtl(infra.config);
 
       // Three stores + three caches. Recipes use the bespoke RecipeDiskCache
       // (carries the uid→hash diff index); categories + photos use plain DiskCache.
       // Reuse-in-place: point each at the SAME flat path the legacy DiskCacheRoot
       // uses (`<cacheDir>/recipes` | `/categories` | `/photos`). The <domain>/<entity>
       // disk reshape + move-migration is deferred to the flip (ADR-0009).
-      const recipeStore = new RecipeStore();
+      //
+      // Each store is hydrated from its cache (legacy hydrate) so tools work on a warm
+      // restart before the first sync completes. Recipe is the load-bearing one: it
+      // syncs by DIFF, so an unchanged warm cache fetches nothing — without hydrating
+      // here the recipe store would stay empty until a recipe changed remotely. It
+      // hydrates via per-item `set` + `markSynced` (gating recipe tools on); categories
+      // and photos `load` (photos drop tombstones, like legacy's `!deleted` filter).
+      const recipeStore = new RecipeStore({ pendingWriteTtlMs });
       const recipeCache = new RecipeDiskCache({ subdir: join(infra.cacheDir, "recipes"), log });
       await recipeCache.init();
+      const cachedRecipes = await recipeCache.getAll();
+      for (const recipe of cachedRecipes) recipeStore.set(recipe);
+      if (cachedRecipes.length > 0) recipeStore.markSynced();
 
-      const categoryStore = new CategoryStore();
+      const categoryStore = new CategoryStore({ pendingWriteTtlMs });
       const categoryCache = new DiskCacheImpl<Category>({
         ...categoryDiskDescriptor,
         subdir: join(infra.cacheDir, categoryDiskDescriptor.subdir),
         log,
       });
       await categoryCache.init();
+      const cachedCategories = await categoryCache.getAll();
+      if (cachedCategories.length > 0) categoryStore.load(cachedCategories);
 
-      const photoStore = new PhotoStore();
+      const photoStore = new PhotoStore({ pendingWriteTtlMs });
       const photoCache = new DiskCacheImpl<Photo>({
         ...photoDiskDescriptor,
         subdir: join(infra.cacheDir, photoDiskDescriptor.subdir),
         log,
       });
       await photoCache.init();
+      const cachedPhotos = (await photoCache.getAll()).filter((p) => !p.deleted);
+      if (cachedPhotos.length > 0) photoStore.load(cachedPhotos);
 
       // ---- Recipe write chokepoints (lifted verbatim from src/tools/helpers.ts) ----
 
@@ -155,8 +176,17 @@ register(
         }
         recipeStore.set(saved);
         notifier.resourceListChanged();
-        // FLIP: re-index via the discover write-hook — `maintainRecipeIndex` wrote
-        // the discover-owned vectorStore, which the inert recipe module does not carry.
+        // Re-index at commit time, before notifySync: a tool-written recipe's UID is
+        // pending, so the sync recipe-diff filters it out and never re-embeds it (#177).
+        // A trashed recipe is REMOVED from the index, else re-embedded — mirroring legacy
+        // maintainRecipeIndex's `if (inTrash) removeRecipe; else indexRecipe` branch
+        // (this commit's markPending block above branches on inTrash the same way).
+        // discover's index hook subscribes to this channel; the emit never throws.
+        if (saved.inTrash) {
+          infra.indexEvents.emit({ type: "recipe-removed", uids: [saved.uid] });
+        } else {
+          infra.indexEvents.emit({ type: "recipe-changed", recipes: [saved] });
+        }
         await client.notifySync();
       };
 
@@ -171,7 +201,7 @@ register(
         }
         recipeStore.delete(saved.uid);
         notifier.resourceListChanged();
-        // FLIP: purge from the discover index via the discover write-hook.
+        infra.indexEvents.emit({ type: "recipe-removed", uids: [saved.uid] });
         await client.notifySync();
       };
 
@@ -192,7 +222,14 @@ register(
         }
         recipeStore.set(authoritative);
         notifier.resourceListChanged();
-        // FLIP: re-index via the discover write-hook.
+        // Same inTrash branch as commitRecipe: a canonical pull that lands a trashed
+        // recipe must REMOVE it from the index, not re-embed it (legacy reconcileLocalRecipe
+        // routed through maintainRecipeIndex, which branches on inTrash).
+        if (authoritative.inTrash) {
+          infra.indexEvents.emit({ type: "recipe-removed", uids: [authoritative.uid] });
+        } else {
+          infra.indexEvents.emit({ type: "recipe-changed", recipes: [authoritative] });
+        }
         return true;
       };
 
@@ -209,7 +246,7 @@ register(
         }
         recipeStore.delete(uid);
         notifier.resourceListChanged();
-        // FLIP: purge from the discover index via the discover write-hook.
+        infra.indexEvents.emit({ type: "recipe-removed", uids: [uid] });
         return true;
       };
 
@@ -227,8 +264,10 @@ register(
           throw e;
         }
         categoryStore.set(category);
-        // FLIP: re-embed the category's recipes via the discover write-hook (a rename
-        // changes the display name baked into their embedding text).
+        // A category rename changes the display name baked into its recipes' embedding
+        // text, yet no recipe hash, so the recipe diff never re-fetches them. discover's
+        // index hook re-embeds the category's recipes on this signal (best-effort).
+        infra.indexEvents.emit({ type: "category-changed", uids: [category.uid] });
         await client.notifySync();
       };
 
@@ -296,6 +335,34 @@ register(
         return photo;
       };
 
+      // The recipe-domain write photo-gen's generate_recipe_photo(attach:true) calls
+      // through `ctx.deps.recipe` — recipe owns the photo entity, so the normalize +
+      // hasSynced guard + the verified upload all live here (the same chokepoint
+      // upload_recipe_photo's generated path uses). Returns a Result so the caller in
+      // the photo-gen module can render success/failure without a thrown boundary.
+      const attachGeneratedPhoto: RecipeSelf["attachGeneratedPhoto"] = async (recipeUid, full) => {
+        const recipe = recipeStore.get(recipeUid);
+        if (recipe === undefined) return err({ message: `No recipe found with UID "${recipeUid}".` });
+        // Gate on the photo catalog being synced — order_flag/name derive from the existing
+        // gallery, so attaching before photos sync could assign a colliding index.
+        if (!photoStore.hasSynced) {
+          return err({ message: "The photo catalog is still syncing; try again in a moment." });
+        }
+        let normalized: { readonly thumbnail: Buffer; readonly full: Buffer };
+        try {
+          // Cap the long edge like upload_recipe_photo's generated path, so generate-and-attach
+          // and preview-then-save store the same size.
+          normalized = await normalizePhoto(full, { maxFullEdge: GENERATED_MAX_FULL_EDGE });
+        } catch (e) {
+          return err({ message: `Failed to process the generated image: ${toMessage(e)}` });
+        }
+        try {
+          return ok(await attachPhotoToRecipe(recipe, normalized.thumbnail, normalized.full));
+        } catch (e) {
+          return err({ message: `Failed to attach the generated photo: ${toMessage(e)}` });
+        }
+      };
+
       const commitPhotoDelete: RecipeSelf["commitPhotoDelete"] = async (savedPhoto) => {
         photoStore.markPendingDelete(savedPhoto.uid);
         try {
@@ -320,6 +387,7 @@ register(
         commitCategoryUpsert,
         commitCategoryDelete,
         attachPhotoToRecipe,
+        attachGeneratedPhoto,
         commitPhotoDelete,
       };
     })
@@ -334,6 +402,9 @@ register(
             .filter((r) => r.categories.includes(categoryUid))
             .map((r) => r.uid),
         hasSynced: () => self.recipe.store.hasSynced,
+        getAll: () => self.recipe.store.getAll(),
+        size: () => self.recipe.store.size,
+        attachGeneratedPhoto: self.attachGeneratedPhoto,
       },
       tools: [
         listRecipesTool,

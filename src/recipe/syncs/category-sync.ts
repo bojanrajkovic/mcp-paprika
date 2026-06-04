@@ -21,16 +21,17 @@ function categoriesEqual(a: Category, b: Category): boolean {
  * must reconcile alongside recipes. Category is a reference entity with no MCP
  * resource surface, so it emits NO `sync:complete` (returns `void`).
  *
- * FLIP: a category rename/removal must re-embed referencing recipes
- * (`sync:category-change` → discover). The kernel's `reconcile` return type has no
- * channel for that signal yet; the flip resolves it (an emitter on `Infra`, or a
- * widened return union). The inert module doesn't need it to compile.
+ * A rename/removal must re-embed referencing recipes (the display name is baked into
+ * their embedding text, but no recipe hash changes, so the recipe diff never re-fetches
+ * them). The reconcile emits `category-changed` on the kernel re-index seam, which
+ * discover's `index` boot hook subscribes to — the faithful port of the legacy
+ * `sync:category-change` event (sync.ts:369-371).
  */
 export function categoriesSync(self: RecipeSelf): SyncContribution<RecipeSelf, never> {
   return {
     tier: "core",
     reconcile: async (ctx) => {
-      await syncReplaceAllEntity({
+      const changes = await syncReplaceAllEntity({
         fetch: () => ctx.infra.client.listCategories(),
         cache: ctx.self.category.cache,
         store: ctx.self.category.store,
@@ -38,6 +39,17 @@ export function categoriesSync(self: RecipeSelf): SyncContribution<RecipeSelf, n
         label: "categories",
         log: ctx.infra.log,
       });
+      // `added` is excluded: a brand-new category has no referencing recipes yet — those
+      // arrive via update_recipe, which re-embeds through recipe sync. `updated` may also
+      // carry re-parents/order changes, but discover relies on the vector store's
+      // content-hash skip to make those a no-op (verbatim legacy gate + UID set,
+      // discover-feature.ts:163).
+      if (changes.updated.length > 0 || changes.removedUids.length > 0) {
+        ctx.infra.indexEvents.emit({
+          type: "category-changed",
+          uids: [...changes.updated.map((c) => c.uid), ...changes.removedUids],
+        });
+      }
     },
     sweep: () => self.category.store.sweepPending(),
   };

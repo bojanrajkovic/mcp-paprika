@@ -1,4 +1,7 @@
+import type { Result } from "neverthrow";
+
 import type { CategoryUid, RecipeUid } from "../ids.js";
+import type { Photo } from "../photo/types.js";
 import type { Recipe } from "./types.js";
 
 /**
@@ -41,4 +44,22 @@ export interface RecipeApi {
   recipesInCategory(categoryUid: CategoryUid): ReadonlyArray<RecipeUid>;
   /** Whether the recipe store has completed its first sync — the meal-planner cold-start gate. */
   hasSynced(): boolean;
+  /**
+   * Every non-trashed recipe. The bulk enumeration discover's cold-start index
+   * rebuild walks; recipe owns recipes, so it exposes this read rather than handing
+   * out the store. Mirrors `store.getAll()` (excludes trashed).
+   */
+  getAll(): ReadonlyArray<Recipe>;
+  /** The non-trashed recipe count — discover's `index.size < recipes.size * 0.9` rebuild guard. */
+  size(): number;
+  /**
+   * Attach an AI-generated image (raw full-resolution bytes) to a recipe — the
+   * recipe-domain write `generate_recipe_photo` (attach:true) calls, since recipe
+   * owns the photo entity and photo-gen reaches it only through this contract. Looks
+   * up the recipe, gates on the photo catalog being synced, normalizes the bytes
+   * (sharp; generated-image edge cap), then runs the verified upload through the same
+   * `attachPhotoToRecipe` chokepoint `upload_recipe_photo` uses. Returns the saved
+   * `Photo`, or `{ message }` to surface to the caller.
+   */
+  attachGeneratedPhoto(recipeUid: RecipeUid, full: Buffer): Promise<Result<Photo, { readonly message: string }>>;
 }
