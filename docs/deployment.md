@@ -131,3 +131,20 @@ volumes:
 
 For Kubernetes, the [`k8s/`](https://github.com/bojanrajkovic/mcp-paprika/tree/main/k8s) kustomization is a ready-made manifest set; its
 README covers the secret, PVC, and ingress wiring.
+
+## Kubernetes operational notes
+
+Two non-obvious constraints when running the HTTP image in Kubernetes:
+
+- **`Recreate`, not `RollingUpdate`.** The disk cache and vector index live on a single
+  `ReadWriteOnce` `/data` PVC, which two pods cannot co-mount, so the Deployment must use
+  `strategy: Recreate` — the old pod is torn down before the new one starts. There is no
+  rolling overlap and no canary: a bad or un-startable image is a **full outage**, not a
+  degraded-but-up service. Roll a new image with
+  `kubectl -n <namespace> set image deployment/mcp-paprika mcp-paprika=<image>` and watch the
+  single pod come up before assuming success.
+- **Startup authentication fails fast.** The server authenticates to the Paprika API once at
+  startup and treats a failure as fatal (it does not retry forever). A _transient_ egress
+  blip to the Paprika API during a rollout can therefore wedge the new pod in
+  `CrashLoopBackOff` even when the image is fine. Before blaming the image, confirm egress to
+  the Paprika API is healthy, then force a fresh pod during a good window.
