@@ -7,7 +7,7 @@ import type { GroceryItem } from "../grocery-item/types.js";
 import type { GrocerySelf } from "../module.js";
 
 import { GroceryItemUidSchema, PantryItemUidSchema } from "../../../ids.js";
-import { textResult } from "../../../tools/helpers.js";
+import { textResult } from "../../../shared/tools.js";
 import { todayWire } from "../../../utils/dates.js";
 import { toMessage } from "../../../utils/log.js";
 import { groceryStartGuard } from "./guards.js";

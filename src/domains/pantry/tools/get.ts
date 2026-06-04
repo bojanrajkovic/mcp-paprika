@@ -4,8 +4,8 @@ import type { DomainCtx } from "../../../kernel/registry.js";
 import type { PantrySelf } from "../module.js";
 
 import { PantryItemUidSchema } from "../../../ids.js";
-import { formatLookupOutcome, resolveLookup, uidOrTextLookupSchema } from "../../../tools/helpers.js";
-import { pantryItemToMarkdown } from "../../../tools/pantry-helpers.js";
+import { formatLookupOutcome, resolveLookup, uidOrTextLookupSchema } from "../../../shared/tools.js";
+import { pantryItemToMarkdown } from "../pantry-helpers.js";
 import { pantryStartGuard } from "./guards.js";
 
 /**

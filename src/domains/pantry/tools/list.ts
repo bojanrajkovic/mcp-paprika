@@ -3,7 +3,7 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { DomainCtx } from "../../../kernel/registry.js";
 import type { PantrySelf } from "../module.js";
 
-import { textResult } from "../../../tools/helpers.js";
+import { textResult } from "../../../shared/tools.js";
 import { pantryStartGuard } from "./guards.js";
 
 /**

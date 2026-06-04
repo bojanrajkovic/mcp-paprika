@@ -7,9 +7,9 @@ import type { GroceryItem } from "../grocery-item/types.js";
 import type { GrocerySelf } from "../module.js";
 
 import { GroceryIngredientUidSchema, GroceryItemUidSchema, GroceryListUidSchema, NO_AISLE_UID } from "../../../ids.js";
-import { groceryItemToMarkdown } from "../../../tools/grocery-helpers.js";
-import { textResult } from "../../../tools/helpers.js";
+import { textResult } from "../../../shared/tools.js";
 import { toMessage } from "../../../utils/log.js";
+import { groceryItemToMarkdown } from "../grocery-helpers.js";
 import { groceryStartGuard } from "./guards.js";
 
 const itemInputSchema = z.object({

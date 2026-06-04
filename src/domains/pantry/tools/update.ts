@@ -6,10 +6,10 @@ import type { PantrySelf } from "../module.js";
 import type { PantryItem } from "../types.js";
 
 import { PantryItemUidSchema } from "../../../ids.js";
-import { textResult } from "../../../tools/helpers.js";
-import { pantryItemToMarkdown } from "../../../tools/pantry-helpers.js";
+import { textResult } from "../../../shared/tools.js";
 import { normalizeWire } from "../../../utils/dates.js";
 import { toMessage } from "../../../utils/log.js";
+import { pantryItemToMarkdown } from "../pantry-helpers.js";
 import { pantryStartGuard } from "./guards.js";
 
 // Strict (exported for direct Zod-validation tests). `inStock` was promoted to

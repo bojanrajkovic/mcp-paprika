@@ -6,8 +6,9 @@ import type { RecipeSelf } from "../module.js";
 import type { Recipe } from "../types.js";
 
 import { RecipeUidSchema } from "../../../ids.js";
-import { recipeToMarkdown, textResult } from "../../../tools/helpers.js";
+import { textResult } from "../../../shared/tools.js";
 import { toMessage } from "../../../utils/log.js";
+import { recipeToMarkdown } from "../recipe-markdown.js";
 import { recipeColdStartGuard } from "./guards.js";
 
 // Strict schema (exported for direct Zod-validation tests). `.strict()` is

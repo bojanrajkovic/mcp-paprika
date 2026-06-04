@@ -4,7 +4,7 @@ import type { MenuUid } from "../../../ids.js";
 import type { DomainCtx } from "../../../kernel/registry.js";
 import type { MenuSelf } from "../module.js";
 
-import { menuToMarkdown } from "../../../tools/menu-helpers.js";
+import { menuToMarkdown } from "../menu-helpers.js";
 
 /**
  * Registers `paprika://menu/{uid}`, kernel-shaped — reads this module's own menu +

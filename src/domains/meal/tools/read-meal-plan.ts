@@ -5,7 +5,7 @@ import { z } from "zod";
 import type { DomainCtx } from "../../../kernel/registry.js";
 import type { MealSelf } from "../module.js";
 
-import { textResult } from "../../../tools/helpers.js";
+import { textResult } from "../../../shared/tools.js";
 import { mealStartGuard, renderMealsGroupedByDate } from "./helpers.js";
 
 export const readMealPlanInputSchema = z

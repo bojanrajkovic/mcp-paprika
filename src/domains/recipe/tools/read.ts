@@ -4,7 +4,8 @@ import type { DomainCtx } from "../../../kernel/registry.js";
 import type { RecipeSelf } from "../module.js";
 
 import { RecipeUidSchema } from "../../../ids.js";
-import { formatLookupOutcome, recipeToMarkdown, resolveLookup, uidOrTextLookupSchema } from "../../../tools/helpers.js";
+import { formatLookupOutcome, resolveLookup, uidOrTextLookupSchema } from "../../../shared/tools.js";
+import { recipeToMarkdown } from "../recipe-markdown.js";
 import { recipeColdStartGuard } from "./guards.js";
 
 /**

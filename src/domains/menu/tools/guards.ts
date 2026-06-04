@@ -4,7 +4,7 @@ import { err, ok, type Result } from "neverthrow";
 import type { DomainCtx } from "../../../kernel/registry.js";
 import type { MenuSelf } from "../module.js";
 
-import { textResult } from "../../../tools/helpers.js";
+import { textResult } from "../../../shared/tools.js";
 
 /**
  * Kernel-shaped readiness gate. The legacy `menuStartGuard`

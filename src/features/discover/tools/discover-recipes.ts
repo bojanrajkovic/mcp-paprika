@@ -6,7 +6,8 @@ import type { DomainCtx } from "../../../kernel/registry.js";
 import type { SemanticResult } from "../../vector-store.js";
 import type { DiscoverSelf } from "../module.js";
 
-import { recipeMetadataLines, textResult } from "../../../tools/helpers.js";
+import { recipeMetadataLines } from "../../../domains/recipe/recipe-markdown.js";
+import { textResult } from "../../../shared/tools.js";
 
 export const discoverRecipesInputSchema = {
   query: z.string().describe("Natural language description of what you're looking for"),

@@ -8,7 +8,7 @@ import type { MealType } from "../../meal-type/types.js";
 import type { Meal } from "../../meal/types.js";
 
 import { MealUidSchema, MenuUidSchema } from "../../../ids.js";
-import { resolveLookup, textResult, uidOrTextLookupSchema } from "../../../tools/helpers.js";
+import { resolveLookup, textResult, uidOrTextLookupSchema } from "../../../shared/tools.js";
 import { formatCalendarDayWire, parseCalendarDay } from "../../../utils/dates.js";
 
 /**

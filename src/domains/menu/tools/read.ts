@@ -4,8 +4,8 @@ import type { DomainCtx } from "../../../kernel/registry.js";
 import type { MenuSelf } from "../module.js";
 
 import { MenuUidSchema } from "../../../ids.js";
-import { formatLookupOutcome, resolveLookup, uidOrTextLookupSchema } from "../../../tools/helpers.js";
-import { menuToMarkdown } from "../../../tools/menu-helpers.js";
+import { formatLookupOutcome, resolveLookup, uidOrTextLookupSchema } from "../../../shared/tools.js";
+import { menuToMarkdown } from "../menu-helpers.js";
 import { menuStartGuard } from "./guards.js";
 
 /**

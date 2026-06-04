@@ -6,9 +6,9 @@ import type { MenuSelf } from "../module.js";
 import type { Menu } from "../types.js";
 
 import { MenuUidSchema } from "../../../ids.js";
-import { resolveLookup, textResult, uidOrTextLookupSchema } from "../../../tools/helpers.js";
-import { menuToMarkdown } from "../../../tools/menu-helpers.js";
+import { resolveLookup, textResult, uidOrTextLookupSchema } from "../../../shared/tools.js";
 import { toMessage } from "../../../utils/log.js";
+import { menuToMarkdown } from "../menu-helpers.js";
 import { menuStartGuard } from "./guards.js";
 
 /**

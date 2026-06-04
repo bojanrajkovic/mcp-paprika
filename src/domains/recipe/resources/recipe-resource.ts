@@ -4,7 +4,7 @@ import type { RecipeUid } from "../../../ids.js";
 import type { DomainCtx } from "../../../kernel/registry.js";
 import type { RecipeSelf } from "../module.js";
 
-import { recipeToMarkdown } from "../../../tools/helpers.js";
+import { recipeToMarkdown } from "../recipe-markdown.js";
 
 /**
  * Registers `paprika://recipe/{uid}`, kernel-shaped — reads this module's own

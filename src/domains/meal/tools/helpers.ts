@@ -7,8 +7,8 @@ import type { RecipeApi } from "../../recipe/api.js";
 import type { MealSelf } from "../module.js";
 import type { Meal } from "../types.js";
 
-import { textResult } from "../../../tools/helpers.js";
-import { mealToMarkdown } from "../../../tools/meal-helpers.js";
+import { textResult } from "../../../shared/tools.js";
+import { mealToMarkdown } from "../meal-helpers.js";
 
 /**
  * Kernel-shaped meal helpers. The legacy `mealStartGuard`/`makeMealOrderFlagAssigner`/

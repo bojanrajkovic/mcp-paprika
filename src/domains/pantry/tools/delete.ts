@@ -4,7 +4,7 @@ import type { DomainCtx } from "../../../kernel/registry.js";
 import type { PantrySelf } from "../module.js";
 
 import { PantryItemUidSchema } from "../../../ids.js";
-import { textResult } from "../../../tools/helpers.js";
+import { textResult } from "../../../shared/tools.js";
 import { toMessage } from "../../../utils/log.js";
 import { pantryStartGuard } from "./guards.js";
 

@@ -5,10 +5,10 @@ import type { DomainCtx } from "../../../kernel/registry.js";
 import type { ReferenceImage } from "../../photography.js";
 import type { PhotoGenSelf } from "../module.js";
 
+import { makeThumbnail } from "../../../domains/recipe/photo-helpers.js";
 import { RecipeUidSchema } from "../../../ids.js";
-import { textResult } from "../../../tools/helpers.js";
-import { fetchImageBytes } from "../../../tools/photo-fetch.js";
-import { makeThumbnail } from "../../../tools/photo-helpers.js";
+import { fetchImageBytes } from "../../../shared/photo-fetch.js";
+import { textResult } from "../../../shared/tools.js";
 import { CircuitOpenError } from "../../../utils/errors.js";
 import { toMessage } from "../../../utils/log.js";
 import { PhotographyAPIError, PhotographyError } from "../../photography-errors.js";

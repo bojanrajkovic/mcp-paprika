@@ -7,9 +7,9 @@ import type { DomainCtx } from "../../../kernel/registry.js";
 import type { MealSelf } from "../module.js";
 
 import { RecipeUidSchema } from "../../../ids.js";
-import { textResult } from "../../../tools/helpers.js";
-import { formatMealTypeResolveError, mealTypeSpecSchema } from "../../../tools/meal-helpers.js";
+import { textResult } from "../../../shared/tools.js";
 import { parseInstant } from "../../../utils/dates.js";
+import { formatMealTypeResolveError, mealTypeSpecSchema } from "../../meal-type/meal-type-helpers.js";
 import { mealStartGuard, renderMealsGroupedByDate } from "./helpers.js";
 
 export const searchMealHistoryInputSchema = z

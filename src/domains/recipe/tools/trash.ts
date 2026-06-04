@@ -4,7 +4,7 @@ import type { DomainCtx } from "../../../kernel/registry.js";
 import type { RecipeSelf } from "../module.js";
 
 import { RecipeUidSchema } from "../../../ids.js";
-import { textResult } from "../../../tools/helpers.js";
+import { textResult } from "../../../shared/tools.js";
 import { toMessage } from "../../../utils/log.js";
 import { recipeColdStartGuard } from "./guards.js";
 

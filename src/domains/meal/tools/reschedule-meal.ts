@@ -7,10 +7,10 @@ import type { MealSelf } from "../module.js";
 import type { Meal } from "../types.js";
 
 import { MealUidSchema } from "../../../ids.js";
-import { textResult } from "../../../tools/helpers.js";
-import { formatMealTypeResolveError, mealTypeSpecSchema } from "../../../tools/meal-helpers.js";
+import { textResult } from "../../../shared/tools.js";
 import { parseCalendarDayWire } from "../../../utils/dates.js";
 import { toMessage } from "../../../utils/log.js";
+import { formatMealTypeResolveError, mealTypeSpecSchema } from "../../meal-type/meal-type-helpers.js";
 import { makeMealOrderFlagAssigner, mealStartGuard, renderMealCard } from "./helpers.js";
 
 // `.strict()`. Rescheduling is its own act because moving a meal's date moves it

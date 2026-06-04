@@ -7,8 +7,9 @@ import type { RecipeSelf } from "../module.js";
 import type { TimeConstraints } from "../store.js";
 import type { Recipe } from "../types.js";
 
-import { recipeMetadataLines, textResult } from "../../../tools/helpers.js";
+import { textResult } from "../../../shared/tools.js";
 import { parseDuration } from "../../../utils/duration.js";
+import { recipeMetadataLines } from "../recipe-markdown.js";
 import { recipeColdStartGuard } from "./guards.js";
 
 export const searchRecipesInputSchema = z

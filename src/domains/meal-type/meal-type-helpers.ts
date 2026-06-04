@@ -1,10 +1,8 @@
-// pattern: Imperative Shell
 import { z } from "zod";
 
-import type { MealType } from "../domains/meal-type/types.js";
-import type { Meal } from "../domains/meal/types.js";
+import type { MealType } from "./types.js";
 
-import { MealTypeUidSchema } from "../ids.js";
+import { MealTypeUidSchema } from "../../ids.js";
 
 /**
  * Union for selecting a meal type by name, UID, or built-in index. Three
@@ -73,27 +71,4 @@ export function formatMealTypeResolveError(result: Extract<MealTypeResolveResult
     `No built-in meal type found with index ${result.index.toString()} ` +
     `(expected 0=Breakfast, 1=Lunch, 2=Dinner, 3=Snacks).`
   );
-}
-
-/**
- * Renders a single meal as a markdown card suitable for inclusion in tool
- * responses. Callers are responsible for resolving `typeName` and `recipeName`
- * from the contexts they hold.
- */
-export function mealToMarkdown(meal: Readonly<Meal>, typeName: string, recipeName: string | null): string {
-  const lines: Array<string> = [];
-  lines.push(`# ${meal.name}`);
-  lines.push("");
-  lines.push(`**UID:** \`${meal.uid}\``);
-  lines.push(`**Date:** ${meal.date}`);
-  lines.push(`**Type:** ${typeName}`);
-  if (meal.recipeUid !== null && recipeName !== null) {
-    lines.push(`**Recipe:** ${recipeName} (\`${meal.recipeUid}\`)`);
-  } else if (meal.recipeUid === null) {
-    lines.push(`**Recipe:** _(freeform)_`);
-  }
-  if (meal.scale !== null && meal.scale !== "") {
-    lines.push(`**Scale:** ${meal.scale}`);
-  }
-  return lines.join("\n");
 }

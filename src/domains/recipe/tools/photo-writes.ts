@@ -8,10 +8,10 @@ import type { RecipeSelf } from "../module.js";
 import type { Photo } from "../photo/types.js";
 
 import { PhotoUidSchema, RecipeUidSchema } from "../../../ids.js";
-import { textResult } from "../../../tools/helpers.js";
-import { fetchImageBytes, MAX_IMAGE_BYTES } from "../../../tools/photo-fetch.js";
-import { GENERATED_MAX_FULL_EDGE, normalizePhoto } from "../../../tools/photo-helpers.js";
+import { fetchImageBytes, MAX_IMAGE_BYTES } from "../../../shared/photo-fetch.js";
+import { textResult } from "../../../shared/tools.js";
 import { toMessage } from "../../../utils/log.js";
+import { GENERATED_MAX_FULL_EDGE, normalizePhoto } from "../photo-helpers.js";
 import { recipeColdStartGuard } from "./guards.js";
 
 /**

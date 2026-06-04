@@ -4,7 +4,7 @@ import type { DomainCtx } from "../../../kernel/registry.js";
 import type { Category } from "../category/types.js";
 import type { RecipeSelf } from "../module.js";
 
-import { textResult } from "../../../tools/helpers.js";
+import { textResult } from "../../../shared/tools.js";
 import { categoryStartGuard } from "./guards.js";
 
 /**

@@ -7,9 +7,9 @@ import type { MenuItem } from "../menu-item/types.js";
 import type { MenuSelf } from "../module.js";
 
 import { MenuItemUidSchema, RecipeUidSchema } from "../../../ids.js";
-import { textResult } from "../../../tools/helpers.js";
-import { mealTypeSpecSchema } from "../../../tools/meal-helpers.js";
+import { textResult } from "../../../shared/tools.js";
 import { toMessage } from "../../../utils/log.js";
+import { mealTypeSpecSchema } from "../../meal-type/meal-type-helpers.js";
 import { menuStartGuard } from "./guards.js";
 
 // `.strict()` — `day` was promoted to move_menu_item (a day-move carries

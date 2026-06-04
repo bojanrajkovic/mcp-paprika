@@ -6,9 +6,9 @@ import type { GroceryList } from "../grocery-list/types.js";
 import type { GrocerySelf } from "../module.js";
 
 import { GroceryListUidSchema } from "../../../ids.js";
-import { groceryListToMarkdown } from "../../../tools/grocery-helpers.js";
-import { formatLookupOutcome, resolveLookup, textResult, uidOrTextLookupSchema } from "../../../tools/helpers.js";
+import { formatLookupOutcome, resolveLookup, textResult, uidOrTextLookupSchema } from "../../../shared/tools.js";
 import { toMessage } from "../../../utils/log.js";
+import { groceryListToMarkdown } from "../grocery-helpers.js";
 import { groceryStartGuard } from "./guards.js";
 
 /**

@@ -2,7 +2,7 @@ import type { DomainCtx } from "../../../kernel/registry.js";
 import type { MealTypeSelf } from "../module.js";
 import type { MealType } from "../types.js";
 
-import { textResult } from "../../../tools/helpers.js";
+import { textResult } from "../../../shared/tools.js";
 
 /**
  * Format seconds-since-midnight as zero-padded `HH:MM` (e.g. 64800 → "18:00").

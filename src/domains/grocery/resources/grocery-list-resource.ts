@@ -4,7 +4,7 @@ import type { GroceryListUid } from "../../../ids.js";
 import type { DomainCtx } from "../../../kernel/registry.js";
 import type { GrocerySelf } from "../module.js";
 
-import { groceryListToMarkdown } from "../../../tools/grocery-helpers.js";
+import { groceryListToMarkdown } from "../grocery-helpers.js";
 
 /**
  * Registers `paprika://grocery-list/{uid}`, kernel-shaped — reads this module's own

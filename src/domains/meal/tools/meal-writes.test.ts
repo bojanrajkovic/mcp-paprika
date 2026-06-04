@@ -7,7 +7,7 @@ import { makeMeal, makeMealType } from "../../../../test/cache/__fixtures__/meal
 import { makeRecipe } from "../../../../test/cache/__fixtures__/recipes.js";
 import { useKernelHarness } from "../../../../test/support/kernel-harness.js";
 import { getText } from "../../../../test/support/tool-test-utils.js";
-import { mealToMarkdown } from "../../../tools/meal-helpers.js";
+import { mealToMarkdown } from "../meal-helpers.js";
 import { addMealsInputSchema, updateMealInputSchema } from "./meal-writes.js";
 
 // Stable UIDs used across all describe blocks so tests don't depend on

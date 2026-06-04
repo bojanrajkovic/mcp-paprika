@@ -4,7 +4,7 @@ import type { DomainCtx } from "../../../kernel/registry.js";
 import type { GrocerySelf } from "../module.js";
 
 import { GroceryListUidSchema } from "../../../ids.js";
-import { textResult } from "../../../tools/helpers.js";
+import { textResult } from "../../../shared/tools.js";
 import { toMessage } from "../../../utils/log.js";
 import { groceryStartGuard } from "./guards.js";
 

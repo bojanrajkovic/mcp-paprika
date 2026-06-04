@@ -7,7 +7,7 @@ import type { MenuSelf } from "../module.js";
 import type { Menu } from "../types.js";
 
 import { MenuItemUidSchema } from "../../../ids.js";
-import { textResult } from "../../../tools/helpers.js";
+import { textResult } from "../../../shared/tools.js";
 import { toMessage } from "../../../utils/log.js";
 import { menuStartGuard } from "./guards.js";
 

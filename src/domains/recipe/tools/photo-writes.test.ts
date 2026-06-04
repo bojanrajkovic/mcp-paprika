@@ -10,14 +10,14 @@ import { makeRecipe } from "../../../../test/cache/__fixtures__/recipes.js";
 import { useKernelHarness } from "../../../../test/support/kernel-harness.js";
 import { getText } from "../../../../test/support/tool-test-utils.js";
 import { PhotoUidSchema, RecipeUidSchema } from "../../../ids.js";
-import { fetchImageBytes, isBlockedIp, ssrfLookup } from "../../../tools/photo-fetch.js";
+import { fetchImageBytes, isBlockedIp, ssrfLookup } from "../../../shared/photo-fetch.js";
 import { uploadPhotoInputSchema } from "./photo-writes.js";
 
 // The URL download is exercised end-to-end (real undici fetch + dispatcher) in
 // photo-fetch.test.ts. Here we stub fetchImageBytes to test upload_recipe_photo's
 // handling of its results; isBlockedIp/ssrfLookup stay real for the unit tests.
-vi.mock("../../../tools/photo-fetch.js", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../../../tools/photo-fetch.js")>();
+vi.mock("../../../shared/photo-fetch.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../../shared/photo-fetch.js")>();
   return { ...actual, fetchImageBytes: vi.fn() };
 });
 

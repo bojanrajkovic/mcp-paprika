@@ -1,7 +1,7 @@
 import type { z } from "zod";
 
 import type { MealTypeUid } from "../../ids.js";
-import type { MealTypeResolveResult, mealTypeSpecSchema } from "../../tools/meal-helpers.js";
+import type { MealTypeResolveResult, mealTypeSpecSchema } from "./meal-type-helpers.js";
 import type { MealType } from "./types.js";
 
 /** A meal-type selection spec (`{name} | {uid} | {builtin}`) — the inferred type

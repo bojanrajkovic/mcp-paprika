@@ -1,7 +1,7 @@
 import type { DomainCtx } from "../../../kernel/registry.js";
 import type { AisleSelf } from "../module.js";
 
-import { textResult } from "../../../tools/helpers.js";
+import { textResult } from "../../../shared/tools.js";
 
 /**
  * Registers `list_aisles`, kernel-shaped — reads this module's own store via

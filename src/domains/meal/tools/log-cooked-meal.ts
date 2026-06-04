@@ -7,10 +7,10 @@ import type { MealSelf } from "../module.js";
 import type { Meal } from "../types.js";
 
 import { MealUidSchema, RecipeUidSchema } from "../../../ids.js";
-import { textResult } from "../../../tools/helpers.js";
-import { formatMealTypeResolveError, mealTypeSpecSchema } from "../../../tools/meal-helpers.js";
+import { textResult } from "../../../shared/tools.js";
 import { parseCalendarDayWire, todayWire } from "../../../utils/dates.js";
 import { toMessage } from "../../../utils/log.js";
+import { formatMealTypeResolveError, mealTypeSpecSchema } from "../../meal-type/meal-type-helpers.js";
 import { makeMealOrderFlagAssigner, mealStartGuard, renderMealCard } from "./helpers.js";
 
 export const logCookedMealInputSchema = z

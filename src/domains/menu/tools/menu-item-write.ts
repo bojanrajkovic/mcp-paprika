@@ -8,10 +8,10 @@ import type { MenuSelf } from "../module.js";
 import type { Menu } from "../types.js";
 
 import { MenuItemUidSchema, MenuUidSchema, RecipeUidSchema } from "../../../ids.js";
-import { resolveLookup, textResult, uidOrTextLookupSchema } from "../../../tools/helpers.js";
-import { mealTypeSpecSchema } from "../../../tools/meal-helpers.js";
-import { menuToMarkdown } from "../../../tools/menu-helpers.js";
+import { resolveLookup, textResult, uidOrTextLookupSchema } from "../../../shared/tools.js";
 import { toMessage } from "../../../utils/log.js";
+import { mealTypeSpecSchema } from "../../meal-type/meal-type-helpers.js";
+import { menuToMarkdown } from "../menu-helpers.js";
 import { menuStartGuard } from "./guards.js";
 
 // One menuitem to add. Structurally EITHER recipe-linked (recipe_uid; display

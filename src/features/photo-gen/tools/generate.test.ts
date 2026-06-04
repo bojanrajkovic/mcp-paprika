@@ -8,14 +8,14 @@ import { makeRecipe } from "../../../../test/cache/__fixtures__/recipes.js";
 import { useKernelHarness } from "../../../../test/support/kernel-harness.js";
 import { getText } from "../../../../test/support/tool-test-utils.js";
 import { RecipeUidSchema } from "../../../ids.js";
-import { fetchImageBytes } from "../../../tools/photo-fetch.js";
+import { fetchImageBytes } from "../../../shared/photo-fetch.js";
 import { CircuitOpenError } from "../../../utils/errors.js";
 import { PhotographyAPIError, PhotographyError } from "../../photography-errors.js";
 
 // restyle's image download is exercised end-to-end in photo-fetch.test.ts; here
 // we stub it to test generate_recipe_photo's restyle wiring.
-vi.mock("../../../tools/photo-fetch.js", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../../../tools/photo-fetch.js")>();
+vi.mock("../../../shared/photo-fetch.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../../shared/photo-fetch.js")>();
   return { ...actual, fetchImageBytes: vi.fn() };
 });
 
