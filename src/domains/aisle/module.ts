@@ -6,6 +6,7 @@ import type { AisleApi } from "./api.js";
 import type { Aisle } from "./types.js";
 
 import { DiskCache } from "../../cache/disk-cache.js";
+import { hydrateStore } from "../../cache/hydrate.js";
 import { AisleUidSchema, NO_AISLE_UID } from "../../ids.js";
 import { defineModule, register } from "../../kernel/registry.js";
 import { resolvePendingWriteTtl } from "../../utils/config.js";
@@ -45,8 +46,7 @@ register(
       await cache.init();
       // Warm the store from cache so tools work on a warm restart before the first sync;
       // drop tombstones (deleted aisles must not re-appear before a sync clears them).
-      const cachedAisles = (await cache.getAll()).filter((a) => !a.deleted);
-      if (cachedAisles.length > 0) store.load(cachedAisles);
+      await hydrateStore(cache, store, (a) => !a.deleted);
 
       // ensureAisle is the write path (auto-create + persist), so it closes over
       // infra.client and reaches this module's own store/cache.

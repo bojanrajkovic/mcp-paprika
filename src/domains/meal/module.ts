@@ -7,6 +7,7 @@ import type { MealApi } from "./api.js";
 import type { Meal } from "./types.js";
 
 import { DiskCache as DiskCacheImpl } from "../../cache/disk-cache.js";
+import { hydrateStore } from "../../cache/hydrate.js";
 import { defineModule, register } from "../../kernel/registry.js";
 import { resolvePendingWriteTtl } from "../../utils/config.js";
 import { toMessage } from "../../utils/log.js";
@@ -62,10 +63,9 @@ register(
         log,
       });
       await cache.init();
-      // Warm the store from cache (legacy hydrate) so tools work on a warm restart
-      // before the first sync; drop tombstones, like legacy's `!deleted` filter.
-      const cachedMeals = (await cache.getAll()).filter((m) => !m.deleted);
-      if (cachedMeals.length > 0) store.load(cachedMeals);
+      // Warm the store from cache so tools work on a warm restart before the first
+      // sync; drop tombstones on hydrate (the `!deleted` filter).
+      await hydrateStore(cache, store, (m) => !m.deleted);
 
       // ---- Meal write chokepoints ----
       // Order: markPending* (FIRST, before any cache I/O) → cache put/remove → flush

@@ -12,6 +12,7 @@ import type { GroceryItem } from "./grocery-item/types.js";
 import type { GroceryList } from "./grocery-list/types.js";
 
 import { DiskCache as DiskCacheImpl } from "../../cache/disk-cache.js";
+import { hydrateStore } from "../../cache/hydrate.js";
 import { defineModule, register } from "../../kernel/registry.js";
 import { resolvePendingWriteTtl } from "../../utils/config.js";
 import { groceryIngredientDiskDescriptor } from "./grocery-ingredient/disk.js";
@@ -102,10 +103,9 @@ register(
         log,
       });
       await listCache.init();
-      // Warm each store from cache (legacy hydrate) so tools work on a warm restart
-      // before the first sync completes.
-      const cachedGroceryLists = await listCache.getAll();
-      if (cachedGroceryLists.length > 0) listStore.load(cachedGroceryLists);
+      // Warm each store from cache so tools work on a warm restart before the first
+      // sync completes.
+      await hydrateStore(listCache, listStore);
 
       const itemStore = new GroceryItemStore({ pendingWriteTtlMs });
       const itemCache = new DiskCacheImpl<GroceryItem>({
@@ -114,11 +114,10 @@ register(
         log,
       });
       await itemCache.init();
-      const cachedGroceryItems = await itemCache.getAll();
-      if (cachedGroceryItems.length > 0) itemStore.load(cachedGroceryItems);
+      await hydrateStore(itemCache, itemStore);
 
       // The ingredient catalog is a plain name-keyed store (no pending-write TTL); drop
-      // tombstones on hydrate, like legacy's `!deleted` filter.
+      // tombstones on hydrate (no tombstone-aware reads, so a deleted row must not resurface).
       const ingredientStore = new GroceryIngredientStore();
       const ingredientCache = new DiskCacheImpl<GroceryIngredient>({
         ...groceryIngredientDiskDescriptor,
@@ -126,8 +125,7 @@ register(
         log,
       });
       await ingredientCache.init();
-      const cachedGroceryIngredients = (await ingredientCache.getAll()).filter((i) => !i.deleted);
-      if (cachedGroceryIngredients.length > 0) ingredientStore.load(cachedGroceryIngredients);
+      await hydrateStore(ingredientCache, ingredientStore, (i) => !i.deleted);
 
       // ---- Grocery write chokepoints ----
       // Order: markPending* (FIRST, before any cache I/O) → cache put/remove → flush →

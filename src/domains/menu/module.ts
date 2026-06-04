@@ -10,6 +10,7 @@ import type { MenuItem } from "./menu-item/types.js";
 import type { Menu } from "./types.js";
 
 import { DiskCache as DiskCacheImpl } from "../../cache/disk-cache.js";
+import { hydrateStore } from "../../cache/hydrate.js";
 import { defineModule, register } from "../../kernel/registry.js";
 import { resolvePendingWriteTtl } from "../../utils/config.js";
 import { menuDiskDescriptor } from "./disk.js";
@@ -85,8 +86,7 @@ register(
       await menuCache.init();
       // Warm both stores from cache so tools work on a warm restart before the
       // first sync; drop tombstones on load (`!deleted` filter).
-      const cachedMenus = (await menuCache.getAll()).filter((m) => !m.deleted);
-      if (cachedMenus.length > 0) menuStore.load(cachedMenus);
+      await hydrateStore(menuCache, menuStore, (m) => !m.deleted);
 
       const menuItemStore = new MenuItemStore({ pendingWriteTtlMs });
       const menuItemCache = new DiskCacheImpl<MenuItem>({
@@ -95,8 +95,7 @@ register(
         log,
       });
       await menuItemCache.init();
-      const cachedMenuItems = (await menuItemCache.getAll()).filter((mi) => !mi.deleted);
-      if (cachedMenuItems.length > 0) menuItemStore.load(cachedMenuItems);
+      await hydrateStore(menuItemCache, menuItemStore, (mi) => !mi.deleted);
 
       // ---- Menu write chokepoints ----
       // Order: markPending* (FIRST, before any cache I/O) → cache put/remove → flush →

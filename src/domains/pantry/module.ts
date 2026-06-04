@@ -7,6 +7,7 @@ import type { PantryApi } from "./api.js";
 import type { PantryItem } from "./types.js";
 
 import { DiskCache } from "../../cache/disk-cache.js";
+import { hydrateStore } from "../../cache/hydrate.js";
 import { defineModule, register } from "../../kernel/registry.js";
 import { resolvePendingWriteTtl } from "../../utils/config.js";
 import { toMessage } from "../../utils/log.js";
@@ -69,8 +70,7 @@ register(
       });
       await cache.init();
       // Warm the store from cache so tools work on a warm restart before the first sync.
-      const cachedPantryItems = await cache.getAll();
-      if (cachedPantryItems.length > 0) store.load(cachedPantryItems);
+      await hydrateStore(cache, store);
 
       // ---- Pantry write chokepoints ----
 

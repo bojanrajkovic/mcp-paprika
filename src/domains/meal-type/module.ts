@@ -4,6 +4,7 @@ import type { MealTypeApi } from "./api.js";
 import type { MealType } from "./types.js";
 
 import { DiskCache } from "../../cache/disk-cache.js";
+import { hydrateStore } from "../../cache/hydrate.js";
 import { defineModule, register } from "../../kernel/registry.js";
 import { resolvePendingWriteTtl } from "../../utils/config.js";
 import { mealTypeDiskDescriptor } from "./disk.js";
@@ -40,10 +41,10 @@ register(
         log: infra.log,
       });
       await cache.init();
-      // Warm the store from cache (legacy hydrate) so tools work on a warm restart
-      // before the first sync; drop tombstones, like legacy's `!deleted` filter.
-      const cachedMealTypes = (await cache.getAll()).filter((mt) => !mt.deleted);
-      if (cachedMealTypes.length > 0) store.load(cachedMealTypes);
+      // Warm the store from cache so tools work on a warm restart before the first
+      // sync; drop tombstones (meal-type has no tombstone-aware reads, so a deleted
+      // row must not resurface as live).
+      await hydrateStore(cache, store, (mt) => !mt.deleted);
 
       return { store, cache };
     })

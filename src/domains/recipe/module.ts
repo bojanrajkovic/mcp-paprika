@@ -14,6 +14,7 @@ import type { Photo } from "./photo/types.js";
 import type { Recipe } from "./types.js";
 
 import { DiskCache as DiskCacheImpl } from "../../cache/disk-cache.js";
+import { hydrateStore } from "../../cache/hydrate.js";
 import { PhotoUidSchema } from "../../ids.js";
 import { defineModule, register } from "../../kernel/registry.js";
 import { resolvePendingWriteTtl } from "../../utils/config.js";
@@ -120,12 +121,13 @@ register(
       // `/photos` (reuse-in-place — ADR-0009 keeps the cache un-namespaced, so there
       // is no migration).
       //
-      // Each store is hydrated from its cache (legacy hydrate) so tools work on a warm
-      // restart before the first sync completes. Recipe is the load-bearing one: it
-      // syncs by DIFF, so an unchanged warm cache fetches nothing — without hydrating
-      // here the recipe store would stay empty until a recipe changed remotely. It
-      // hydrates via per-item `set` + `markSynced` (gating recipe tools on); categories
-      // and photos `load` (photos drop tombstones, like legacy's `!deleted` filter).
+      // Each store is hydrated from its cache so tools work on a warm restart before
+      // the first sync completes. Recipe is the load-bearing one: it syncs by DIFF, so
+      // an unchanged warm cache fetches nothing — without hydrating here the recipe
+      // store would stay empty until a recipe changed remotely. Recipe hydrates via
+      // per-item `set` + the separate `markSynced()` (gating recipe tools); categories
+      // and photos use the shared `hydrateStore` (photos drop tombstones via the
+      // `!deleted` filter).
       const recipeStore = new RecipeStore({ pendingWriteTtlMs });
       const recipeCache = new RecipeDiskCache({ subdir: join(infra.cacheDir, "recipes"), log });
       await recipeCache.init();
@@ -140,8 +142,7 @@ register(
         log,
       });
       await categoryCache.init();
-      const cachedCategories = await categoryCache.getAll();
-      if (cachedCategories.length > 0) categoryStore.load(cachedCategories);
+      await hydrateStore(categoryCache, categoryStore);
 
       const photoStore = new PhotoStore({ pendingWriteTtlMs });
       const photoCache = new DiskCacheImpl<Photo>({
@@ -150,8 +151,7 @@ register(
         log,
       });
       await photoCache.init();
-      const cachedPhotos = (await photoCache.getAll()).filter((p) => !p.deleted);
-      if (cachedPhotos.length > 0) photoStore.load(cachedPhotos);
+      await hydrateStore(photoCache, photoStore, (p) => !p.deleted);
 
       // ---- Recipe write chokepoints ----
 
