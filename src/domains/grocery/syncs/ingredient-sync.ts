@@ -37,6 +37,9 @@ export function groceryIngredientsSync(): SyncContribution<GrocerySelf, "aisle" 
       const groceryIngredients = await client.listGroceryIngredients();
       log.debug({ count: groceryIngredients.length }, "fetched grocery ingredients");
 
+      // Intentionally NOT filtered by `deleted`: grocery ingredients hard-delete, so
+      // `listGroceryIngredients()` never returns a `deleted:true` row (only recipes soft-delete) —
+      // the only drop below is the no-aisle one. See docs/architecture.md (Caching and sync).
       // Drop entries with no aisle. Paprika returns aisle_uid: null for an ingredient
       // that was never filed into an aisle (GroceryIngredientSchema coerces that to "").
       // Such a row carries no aisle memory — add_grocery_items resolves it to "" and the

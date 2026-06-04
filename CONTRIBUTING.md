@@ -9,6 +9,7 @@ The human-developer workflow for mcp-paprika. Agent-facing guidance and the proj
 - **Runtime:** Node.js 24, managed via mise (`mise install`).
 - **Package manager:** pnpm via corepack (`corepack enable`).
 - `pnpm install` pulls dependencies and runs `pnpm prepare`, which installs the lefthook git hooks. If you install dependencies another way, run `pnpm prepare` once so the hooks fire.
+- **In a fresh git worktree, run `pnpm install --ignore-scripts` once before anything else.** pnpm runs a deps-state check before each `run`/`exec`; an unrecorded state in a new worktree triggers an implicit `pnpm install` whose `prepare` step (`lefthook install`) fails because `core.hooksPath` already points at the main checkout's hooks — and that failure takes down the whole command, including every `git commit`/`git push` (the hooks shell out to `pnpm exec`). `--ignore-scripts` records the deps-state without re-running `prepare`. Don't touch `core.hooksPath` (it's shared with the main checkout).
 
 ## Commands
 
@@ -38,6 +39,7 @@ The human-developer workflow for mcp-paprika. Agent-facing guidance and the proj
 - Fixtures, generated wire-captures, and test helpers live in a top-level `test/` tree that mirrors `src/`: `test/support/` (cross-cutting helpers), `test/fixtures/` (shared data + `wire-captures/`), and `test/<entity>/__fixtures__/` (per-entity data). Tests stay in `src/`; only the support code lives under `test/`. Imports are plain relative (no path aliases). See `docs/adr/0006-test-fixtures-out-of-src.md` and `test/CLAUDE.md`.
 - HTTP is mocked with **msw**.
 - Coverage target: ≥ 70% for new code.
+- **The unit test harness bypasses Zod.** `test/support`'s `makeTestServer().callTool(name, args)` invokes the tool handler with the **raw args object** — it does not run the tool's Zod `inputSchema` the way the real MCP SDK does. Two consequences: (1) don't rely on a schema `.default()` for a value the handler reads — it's `undefined` under `callTool`, so apply the fallback in the handler; (2) don't assert a `.strict()` rejection through `callTool` (the stale key reaches the handler unparsed) — test it on the exported schema directly (`schema.safeParse(…).success === false`). The end-to-end SDK rejection is guarded once in the e2e integration test, not per tool.
 
 ## Commits and pull requests
 
@@ -46,6 +48,7 @@ The human-developer workflow for mcp-paprika. Agent-facing guidance and the proj
 - **Hooks (lefthook):** pre-commit runs oxlint `--fix` then oxfmt over staged files — sequentially (both rewrite files, so they can't race) and both auto-restaging; commit-msg runs commitlint; pre-push runs `pnpm typecheck` and `pnpm test`. Do not bypass them.
 - **Squash-merge** — the PR body becomes the commit body, so write it as "what shipped": a one- or two-sentence lead (no `## Summary`) then detail. Transient verification (test plans, screenshots) goes in a PR comment, not the body.
 - **Dependencies** — add with `pnpm add` (latest stable); do not hand-pin. Renovate keeps existing pins current.
+- **Held upgrade:** the Zod 4 major (`renovate/zod-4.x`) is intentionally **not** merged until `@modelcontextprotocol/sdk` 2.0 ships — the SDK peer-depends on Zod 3 internals, so upgrading first would break the dependency chain. Renovate keeps rebasing that branch; the churn is expected, not a signal to land it.
 
 ## CI
 
