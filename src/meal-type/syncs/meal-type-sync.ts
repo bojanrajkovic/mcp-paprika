@@ -11,7 +11,11 @@ import type { MealTypeSelf } from "../module.js";
  * `additive` tier — preserving live behavior: the legacy engine runs meal-type
  * sync INSIDE the additive meals try-block, so a meal-type fetch failure degrades
  * best-effort rather than aborting the cycle. Topo order still sequences meal-type
- * before meal/menu within the additive phase, so consumers see it in time.
+ * before meal/menu within the additive phase, so consumers see it in time. (One
+ * non-verbatim nuance: the kernel driver runs EACH additive reconcile in its own
+ * try/catch, so a meal-type fetch failure no longer skips the meal reconcile the way
+ * the legacy shared try-block did — behavior-neutral here since meal reads no
+ * meal-type data, but a deliberate failure-isolation change.)
  * (Promoting it to `core` for reference-catalog consistency with aisle/category was
  * considered, but that is a deliberate failure-semantics change deferred as a
  * post-migration improvement, not folded into this behavior-preserving migration.)

@@ -128,18 +128,12 @@ export function scheduleMenuTool(ctx: DomainCtx<Record<never, never>, "menu" | "
       // meal-store check (we POST meals). Mirrors move_grocery_items_to_pantry's
       // grocery-guard + explicit pantry check.
       //
-      // CONTRACT GAP — recipe.hasSynced(): the live coldStartGuard reads
-      // `ctx.store.hasSynced` (recipe). RecipeApi (src/recipe/api.ts) exposes no
-      // readiness signal; the integrator must add `hasSynced(): boolean`.
+      // recipe.hasSynced() — the live coldStartGuard's `ctx.store.hasSynced` (recipe).
       if (!ctx.deps.recipe.hasSynced()) {
         return textResult("Recipe store is not yet synced. Try again in a few seconds.");
       }
-      // CONTRACT GAP — menu.hasSynced(): the live menuStartGuard reads
-      // `menuStore.hasSynced && menuItemStore.hasSynced` (both menu-owned). MenuApi
-      // (src/menu/api.ts) exposes no readiness signal; the integrator must add
-      // `hasSynced(): boolean` covering BOTH owned stores (menus + menu-items). The
-      // third leg of menuStartGuard (mealTypeStore.hasSynced) is already on the
-      // meal-type contract and is checked here.
+      // menu.hasSynced() covers BOTH menu-owned stores (menus + menu-items); the
+      // meal-type leg is the third leg of the live menuStartGuard.
       if (!ctx.deps.menu.hasSynced() || !ctx.deps["meal-type"].hasSynced()) {
         return textResult("Menu data is not yet synced. Try again in a few seconds.");
       }

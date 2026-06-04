@@ -95,15 +95,9 @@ export function searchMealHistoryTool(ctx: DomainCtx<MealSelf, "recipe" | "meal-
             }
             const catUid = uids[0]!;
             classLabel = ctx.deps.recipe.resolveCategoryNames([catUid])[0] ?? args.class;
-            // CONTRADICTION (recipe contract gap): the live tool builds this set via
-            // `ctx.store.getAll().filter(r => r.categories.includes(catUid)).map(r => r.uid)`
-            // (meal-history-search.ts:94-99). Recipe's store is NOT reachable under
-            // isolation, so this must go THROUGH the recipe api — but recipe's shipped
-            // `RecipeApi` (src/recipe/api.ts) exposes only `get`/`resolveCategoryRefs`/
-            // `resolveCategoryNames`, NOT a recipe-by-category query, despite recipe-spec
-            // §6 mandating one. This call assumes `recipesInCategory(catUid): readonly
-            // RecipeUid[]` (the behavior-preserving, spec-correct shape); recipe's api
-            // must add it for this module to type-check. See the return notes.
+            // recipe owns categories, so the category→recipe-UIDs membership query lives
+            // on the recipe contract (recipesInCategory) rather than reaching its store —
+            // mirroring the live `getAll().filter(r => r.categories.includes(catUid))`.
             classRecipeUids = new Set(ctx.deps.recipe.recipesInCategory(catUid));
           }
 

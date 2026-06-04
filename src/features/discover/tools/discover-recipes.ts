@@ -42,10 +42,10 @@ export const discoverRecipesInputSchema = {
  * the tool early-returns a clear "not configured" result instead of registering
  * conditionally. The tool is always present; it just declines to act.
  *
- * The legacy `coldStartGuard(ctx)` (recipe store synced) is DROPPED: the kernel
- * `RecipeApi` exposes no `hasSynced`, and the path degrades gracefully without it —
- * an empty index returns no hits, and `deps.recipe.get` returns `undefined` for a
- * not-yet-synced UID, which the enrichment filter already discards.
+ * The legacy `coldStartGuard(ctx)` (recipe store synced) is preserved via
+ * `ctx.deps.recipe.hasSynced()`: a warm-from-disk index can return hits whose UIDs
+ * the not-yet-synced recipe store still lacks, which the enrichment filter would
+ * drop and report as a misleading "no matches" rather than the legacy retry hint.
  */
 export function discoverRecipesTool(ctx: DomainCtx<DiscoverSelf, "recipe">): void {
   const log = ctx.infra.log.child({ component: "discover_recipes" });
@@ -70,6 +70,13 @@ export function discoverRecipesTool(ctx: DomainCtx<DiscoverSelf, "recipe">): voi
           "Semantic search is not configured on this server, so `discover_recipes` is unavailable. " +
             "Use `search_recipes` for keyword, ingredient, and time filtering instead.",
         );
+      }
+
+      // Cold-start guard (legacy coldStartGuard): a warm-from-disk index can return
+      // hits whose UIDs the not-yet-synced recipe store lacks, which the enrichment
+      // filter would drop and report as "no matches" — return the retry hint instead.
+      if (!ctx.deps.recipe.hasSynced()) {
+        return textResult("Recipe store is not yet synced. Try again in a few seconds.");
       }
 
       const results = await vectorStore.search(args.query, args.topK, args.minScore);
