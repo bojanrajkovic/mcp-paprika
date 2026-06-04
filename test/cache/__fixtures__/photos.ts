@@ -1,5 +1,5 @@
+import type { Photo } from "../../../src/domains/recipe/photo/types.js";
 import type { PhotoUid, RecipeUid } from "../../../src/ids.js";
-import type { Photo } from "../../../src/photo/types.js";
 
 let photoCounter = 0;
 

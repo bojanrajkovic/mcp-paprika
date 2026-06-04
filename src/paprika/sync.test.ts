@@ -1,10 +1,13 @@
 import { fromAny } from "@total-typescript/shoehorn";
 import { afterEach, beforeEach, describe, expect, expectTypeOf, it, vi } from "vitest";
 
-import type { AisleStore } from "../aisle/store.js";
 import type { DiskCacheRoot } from "../cache/disk-cache-root.js";
 import type { DiskCache } from "../cache/disk-cache.js";
-import type { Category } from "../category/types.js";
+import type { AisleStore } from "../domains/aisle/store.js";
+import type { PantryStore } from "../domains/pantry/store.js";
+import type { Category } from "../domains/recipe/category/types.js";
+import type { RecipeStore } from "../domains/recipe/store.js";
+import type { RecipeEntry } from "../domains/recipe/types.js";
 import type {
   CategoryUid,
   GroceryIngredientUid,
@@ -15,9 +18,6 @@ import type {
   PantryItemUid,
   RecipeUid,
 } from "../ids.js";
-import type { PantryStore } from "../pantry/store.js";
-import type { RecipeStore } from "../recipe/store.js";
-import type { RecipeEntry } from "../recipe/types.js";
 import type { AppContext } from "../server/app-context.js";
 import type { Notifier } from "../server/notifier.js";
 import type { PaprikaClient } from "./client.js";
@@ -32,12 +32,12 @@ import { makePantryItem } from "../../test/cache/__fixtures__/pantry.js";
 import { makePhoto } from "../../test/cache/__fixtures__/photos.js";
 import { makeCategory, makeRecipe } from "../../test/cache/__fixtures__/recipes.js";
 import { makeAppContext } from "../../test/support/app-context.js";
-import { AisleStore as RealAisleStore } from "../aisle/store.js";
-import { CategoryStore as RealCategoryStore } from "../category/store.js";
-import { GroceryIngredientStore } from "../grocery-ingredient/store.js";
-import { GroceryItemStore } from "../grocery-item/store.js";
-import { GroceryListStore } from "../grocery-list/store.js";
-import { PantryStore as RealPantryStore } from "../pantry/store.js";
+import { AisleStore as RealAisleStore } from "../domains/aisle/store.js";
+import { GroceryIngredientStore } from "../domains/grocery/grocery-ingredient/store.js";
+import { GroceryItemStore } from "../domains/grocery/grocery-item/store.js";
+import { GroceryListStore } from "../domains/grocery/grocery-list/store.js";
+import { PantryStore as RealPantryStore } from "../domains/pantry/store.js";
+import { CategoryStore as RealCategoryStore } from "../domains/recipe/category/store.js";
 import { createLogger, SILENT_LOG } from "../utils/log.js";
 import { SyncEngine, syncReplaceAllEntity } from "./sync.js";
 

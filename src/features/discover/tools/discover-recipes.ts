@@ -1,8 +1,8 @@
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 
+import type { Recipe } from "../../../domains/recipe/types.js";
 import type { DomainCtx } from "../../../kernel/registry.js";
-import type { Recipe } from "../../../recipe/types.js";
 import type { SemanticResult } from "../../vector-store.js";
 import type { DiscoverSelf } from "../module.js";
 

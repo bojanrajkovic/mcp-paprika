@@ -2,11 +2,11 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { vi } from "vitest";
 
-import type { GrocerySelf } from "../../src/grocery/module.js";
+import type { GrocerySelf } from "../../src/domains/grocery/module.js";
+import type { MenuSelf } from "../../src/domains/menu/module.js";
+import type { RecipeSelf } from "../../src/domains/recipe/module.js";
 import type { DomainId, ErasedModule, Infra } from "../../src/kernel/registry.js";
-import type { MenuSelf } from "../../src/menu/module.js";
 import type { PaprikaClient } from "../../src/paprika/client.js";
-import type { RecipeSelf } from "../../src/recipe/module.js";
 import type { Notifier } from "../../src/server/notifier.js";
 import type { PaprikaConfig } from "../../src/utils/config.js";
 import type { SeedData } from "../fixtures/seed.js";

@@ -1,15 +1,15 @@
-import type { Aisle } from "../../src/aisle/types.js";
-import type { Category } from "../../src/category/types.js";
-import type { GroceryIngredient } from "../../src/grocery-ingredient/types.js";
-import type { GroceryItem } from "../../src/grocery-item/types.js";
-import type { GroceryList } from "../../src/grocery-list/types.js";
-import type { MealType } from "../../src/meal-type/types.js";
-import type { Meal } from "../../src/meal/types.js";
-import type { MenuItem } from "../../src/menu-item/types.js";
-import type { Menu } from "../../src/menu/types.js";
-import type { PantryItem } from "../../src/pantry/types.js";
-import type { Photo } from "../../src/photo/types.js";
-import type { Recipe } from "../../src/recipe/types.js";
+import type { Aisle } from "../../src/domains/aisle/types.js";
+import type { GroceryIngredient } from "../../src/domains/grocery/grocery-ingredient/types.js";
+import type { GroceryItem } from "../../src/domains/grocery/grocery-item/types.js";
+import type { GroceryList } from "../../src/domains/grocery/grocery-list/types.js";
+import type { MealType } from "../../src/domains/meal-type/types.js";
+import type { Meal } from "../../src/domains/meal/types.js";
+import type { MenuItem } from "../../src/domains/menu/menu-item/types.js";
+import type { Menu } from "../../src/domains/menu/types.js";
+import type { PantryItem } from "../../src/domains/pantry/types.js";
+import type { Category } from "../../src/domains/recipe/category/types.js";
+import type { Photo } from "../../src/domains/recipe/photo/types.js";
+import type { Recipe } from "../../src/domains/recipe/types.js";
 
 /**
  * Declarative seed payload routed to a set of in-memory stores. Each key maps to

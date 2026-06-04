@@ -1,8 +1,8 @@
 // pattern: Imperative Shell
 import { z } from "zod";
 
-import type { MealType } from "../meal-type/types.js";
-import type { Meal } from "../meal/types.js";
+import type { MealType } from "../domains/meal-type/types.js";
+import type { Meal } from "../domains/meal/types.js";
 
 import { MealTypeUidSchema } from "../ids.js";
 

@@ -1,9 +1,9 @@
 import type { Logger } from "pino";
 
-import type { CategoryStore } from "../category/store.js";
-import type { Category } from "../category/types.js";
+import type { CategoryStore } from "../domains/recipe/category/store.js";
+import type { Category } from "../domains/recipe/category/types.js";
+import type { RecipeStore } from "../domains/recipe/store.js";
 import type { AnySyncResult, EntityChanges } from "../paprika/sync-types.js";
-import type { RecipeStore } from "../recipe/store.js";
 import type { PaprikaConfig } from "../utils/config.js";
 
 import { getCacheDir } from "../utils/xdg.js";

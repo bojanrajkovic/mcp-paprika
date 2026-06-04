@@ -1,6 +1,6 @@
-import type { MealType } from "../meal-type/types.js";
-import type { MenuItem } from "../menu-item/types.js";
-import type { Menu } from "../menu/types.js";
+import type { MealType } from "../domains/meal-type/types.js";
+import type { MenuItem } from "../domains/menu/menu-item/types.js";
+import type { Menu } from "../domains/menu/types.js";
 
 /**
  * Pure renderer for a single menu and its items. Iterates the menu's full

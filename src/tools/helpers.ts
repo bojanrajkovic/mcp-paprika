@@ -1,9 +1,9 @@
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 
-import type { Category } from "../category/types.js";
+import type { Category } from "../domains/recipe/category/types.js";
+import type { Recipe } from "../domains/recipe/types.js";
 import type { CategoryUid } from "../ids.js";
-import type { Recipe } from "../recipe/types.js";
 
 export function textResult(text: string): { content: [{ type: "text"; text: string }] } {
   return { content: [{ type: "text" as const, text }] } as const satisfies CallToolResult;

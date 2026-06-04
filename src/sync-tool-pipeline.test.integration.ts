@@ -6,23 +6,23 @@ import { http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
+import type { PantryItem } from "./domains/pantry/types.js";
 import type { PantryItemUid, RecipeUid } from "./ids.js";
 import type { Infra, Kernel } from "./kernel/registry.js";
-import type { PantryItem } from "./pantry/types.js";
 import type { PaprikaConfig } from "./utils/config.js";
 
 import { makePantryItem, makeSnakeCasePantryItem } from "../test/cache/__fixtures__/pantry.js";
 import { makeCategory, makeRecipe, makeSnakeCaseRecipe } from "../test/cache/__fixtures__/recipes.js";
 import { makeAppContext } from "../test/support/app-context.js";
 import { getText, makeStubNotifier, makeTestServer } from "../test/support/tool-test-utils.js";
-import { AisleStore } from "./aisle/store.js";
 import { DiskCacheRoot } from "./cache/disk-cache-root.js";
+import { AisleStore } from "./domains/aisle/store.js";
+import { PantryStore } from "./domains/pantry/store.js";
+import { RecipeStore } from "./domains/recipe/store.js";
 import { GeneratedImageStore } from "./features/generated-image-store.js";
 import { buildKernel } from "./kernel/registry.js";
-import { PantryStore } from "./pantry/store.js";
 import { PaprikaClient } from "./paprika/client.js";
 import { SyncEngine } from "./paprika/sync.js";
-import { RecipeStore } from "./recipe/store.js";
 import { createIndexEvents } from "./server/index-events.js";
 import { SILENT_LOG } from "./utils/log.js";
 // Side-effect: register every kernel module so buildKernel's default module list is populated.

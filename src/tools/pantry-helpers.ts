@@ -1,4 +1,4 @@
-import type { PantryItem } from "../pantry/types.js";
+import type { PantryItem } from "../domains/pantry/types.js";
 
 // notes is on PantryItem (the GET wire includes it) but no Paprika client
 // exposes a UI for pantry notes and no captured item has a non-null value.

@@ -1,4 +1,4 @@
-import type { GroceryList } from "../../../src/grocery-list/types.js";
+import type { GroceryList } from "../../../src/domains/grocery/grocery-list/types.js";
 import type { GroceryListUid } from "../../../src/ids.js";
 
 let groceryListCounter = 0;

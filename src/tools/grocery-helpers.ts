@@ -1,5 +1,5 @@
-import type { GroceryItem } from "../grocery-item/types.js";
-import type { GroceryList } from "../grocery-list/types.js";
+import type { GroceryItem } from "../domains/grocery/grocery-item/types.js";
+import type { GroceryList } from "../domains/grocery/grocery-list/types.js";
 
 /**
  * Renders a grocery list as markdown with metadata and a table of items.

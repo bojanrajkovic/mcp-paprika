@@ -2,19 +2,19 @@ import type { DiskCacheRoot } from "../../src/cache/disk-cache-root.js";
 import type { PaprikaClient } from "../../src/paprika/client.js";
 import type { AppContext } from "../../src/server/app-context.js";
 
-import { AisleStore } from "../../src/aisle/store.js";
-import { CategoryStore } from "../../src/category/store.js";
+import { AisleStore } from "../../src/domains/aisle/store.js";
+import { GroceryIngredientStore } from "../../src/domains/grocery/grocery-ingredient/store.js";
+import { GroceryItemStore } from "../../src/domains/grocery/grocery-item/store.js";
+import { GroceryListStore } from "../../src/domains/grocery/grocery-list/store.js";
+import { MealTypeStore } from "../../src/domains/meal-type/store.js";
+import { MealStore } from "../../src/domains/meal/store.js";
+import { MenuItemStore } from "../../src/domains/menu/menu-item/store.js";
+import { MenuStore } from "../../src/domains/menu/store.js";
+import { PantryStore } from "../../src/domains/pantry/store.js";
+import { CategoryStore } from "../../src/domains/recipe/category/store.js";
+import { PhotoStore } from "../../src/domains/recipe/photo/store.js";
+import { RecipeStore } from "../../src/domains/recipe/store.js";
 import { GeneratedImageStore } from "../../src/features/generated-image-store.js";
-import { GroceryIngredientStore } from "../../src/grocery-ingredient/store.js";
-import { GroceryItemStore } from "../../src/grocery-item/store.js";
-import { GroceryListStore } from "../../src/grocery-list/store.js";
-import { MealTypeStore } from "../../src/meal-type/store.js";
-import { MealStore } from "../../src/meal/store.js";
-import { MenuItemStore } from "../../src/menu-item/store.js";
-import { MenuStore } from "../../src/menu/store.js";
-import { PantryStore } from "../../src/pantry/store.js";
-import { PhotoStore } from "../../src/photo/store.js";
-import { RecipeStore } from "../../src/recipe/store.js";
 import { SILENT_LOG } from "../../src/utils/log.js";
 
 /**

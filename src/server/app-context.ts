@@ -1,24 +1,24 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { Logger } from "pino";
 
-import type { AisleStore } from "../aisle/store.js";
 import type { AuthContext } from "../auth/types.js";
 import type { DiskCacheRoot } from "../cache/disk-cache-root.js";
-import type { CategoryStore } from "../category/store.js";
+import type { AisleStore } from "../domains/aisle/store.js";
+import type { GroceryIngredientStore } from "../domains/grocery/grocery-ingredient/store.js";
+import type { GroceryItemStore } from "../domains/grocery/grocery-item/store.js";
+import type { GroceryListStore } from "../domains/grocery/grocery-list/store.js";
+import type { MealTypeStore } from "../domains/meal-type/store.js";
+import type { MealStore } from "../domains/meal/store.js";
+import type { MenuItemStore } from "../domains/menu/menu-item/store.js";
+import type { MenuStore } from "../domains/menu/store.js";
+import type { PantryStore } from "../domains/pantry/store.js";
+import type { CategoryStore } from "../domains/recipe/category/store.js";
+import type { PhotoStore } from "../domains/recipe/photo/store.js";
+import type { RecipeStore } from "../domains/recipe/store.js";
 import type { GeneratedImageStore } from "../features/generated-image-store.js";
 import type { PhotographyClient } from "../features/photography.js";
 import type { VectorStore } from "../features/vector-store.js";
-import type { GroceryIngredientStore } from "../grocery-ingredient/store.js";
-import type { GroceryItemStore } from "../grocery-item/store.js";
-import type { GroceryListStore } from "../grocery-list/store.js";
-import type { MealTypeStore } from "../meal-type/store.js";
-import type { MealStore } from "../meal/store.js";
-import type { MenuItemStore } from "../menu-item/store.js";
-import type { MenuStore } from "../menu/store.js";
-import type { PantryStore } from "../pantry/store.js";
 import type { PaprikaClient } from "../paprika/client.js";
-import type { PhotoStore } from "../photo/store.js";
-import type { RecipeStore } from "../recipe/store.js";
 import type { Notifier } from "./notifier.js";
 
 /**

@@ -17,20 +17,20 @@
 
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 
-import type { Aisle } from "./aisle/types.js";
-import type { Category } from "./category/types.js";
-import type { GroceryIngredient } from "./grocery-ingredient/types.js";
-import type { GroceryItem } from "./grocery-item/types.js";
-import type { GroceryList } from "./grocery-list/types.js";
+import type { Aisle } from "./domains/aisle/types.js";
+import type { GroceryIngredient } from "./domains/grocery/grocery-ingredient/types.js";
+import type { GroceryItem } from "./domains/grocery/grocery-item/types.js";
+import type { GroceryList } from "./domains/grocery/grocery-list/types.js";
+import type { MealType } from "./domains/meal-type/types.js";
+import type { Meal } from "./domains/meal/types.js";
+import type { MenuItem } from "./domains/menu/menu-item/types.js";
+import type { Menu } from "./domains/menu/types.js";
+import type { PantryItem } from "./domains/pantry/types.js";
+import type { Category } from "./domains/recipe/category/types.js";
+import type { Photo } from "./domains/recipe/photo/types.js";
+import type { Recipe, RecipeEntry } from "./domains/recipe/types.js";
 import type { AisleUid, CategoryUid, PantryItemUid, RecipeUid } from "./ids.js";
-import type { MealType } from "./meal-type/types.js";
-import type { Meal } from "./meal/types.js";
-import type { MenuItem } from "./menu-item/types.js";
-import type { Menu } from "./menu/types.js";
-import type { PantryItem } from "./pantry/types.js";
 import type { PaprikaClient } from "./paprika/client.js";
-import type { Photo } from "./photo/types.js";
-import type { Recipe, RecipeEntry } from "./recipe/types.js";
 
 import { GeneratedImageStore } from "./features/generated-image-store.js";
 import { buildKernel } from "./kernel/registry.js";

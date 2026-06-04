@@ -1,10 +1,10 @@
-import type { GroceryItem } from "../grocery-item/types.js";
-import type { GroceryList } from "../grocery-list/types.js";
+import type { GroceryItem } from "../domains/grocery/grocery-item/types.js";
+import type { GroceryList } from "../domains/grocery/grocery-list/types.js";
+import type { MenuItem } from "../domains/menu/menu-item/types.js";
+import type { Menu } from "../domains/menu/types.js";
+import type { PantryItem } from "../domains/pantry/types.js";
+import type { Recipe } from "../domains/recipe/types.js";
 import type { RecipeUid } from "../ids.js";
-import type { MenuItem } from "../menu-item/types.js";
-import type { Menu } from "../menu/types.js";
-import type { PantryItem } from "../pantry/types.js";
-import type { Recipe } from "../recipe/types.js";
 
 export type EntityChanges<T> = {
   readonly added: ReadonlyArray<T>;

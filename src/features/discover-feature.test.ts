@@ -7,15 +7,15 @@ import { fromAny } from "@total-typescript/shoehorn";
 import _mitt from "mitt";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { Category } from "../category/types.js";
+import type { Category } from "../domains/recipe/category/types.js";
 import type { CategoryUid, RecipeUid } from "../ids.js";
 import type { AnySyncResult, EntityChanges, RecipeSyncResult } from "../paprika/sync-types.js";
 
 import { makePantryItem } from "../../test/cache/__fixtures__/pantry.js";
 import { makeCategory, makeRecipe } from "../../test/cache/__fixtures__/recipes.js";
 import { DEFAULT_LOGGING_CONFIG, makePinoCapture } from "../../test/support/tool-test-utils.js";
-import { CategoryStore } from "../category/store.js";
-import { RecipeStore } from "../recipe/store.js";
+import { CategoryStore } from "../domains/recipe/category/store.js";
+import { RecipeStore } from "../domains/recipe/store.js";
 const mitt: typeof _mitt.default = fromAny(_mitt);
 
 // Mock all the feature dependencies

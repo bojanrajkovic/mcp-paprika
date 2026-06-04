@@ -4,16 +4,16 @@ import { scheduler } from "node:timers/promises";
 import type { Logger } from "pino";
 
 import type { DiskCache } from "../cache/disk-cache.js";
-import type { Category } from "../category/types.js";
+import type { GroceryItem } from "../domains/grocery/grocery-item/types.js";
+import type { GroceryList } from "../domains/grocery/grocery-list/types.js";
+import type { Meal } from "../domains/meal/types.js";
+import type { MenuItem } from "../domains/menu/menu-item/types.js";
+import type { Menu } from "../domains/menu/types.js";
+import type { PantryItem } from "../domains/pantry/types.js";
+import type { Category } from "../domains/recipe/category/types.js";
+import type { Photo } from "../domains/recipe/photo/types.js";
+import type { Recipe } from "../domains/recipe/types.js";
 import type { TombstoneEntityStore } from "../entity/tombstone-store.js";
-import type { GroceryItem } from "../grocery-item/types.js";
-import type { GroceryList } from "../grocery-list/types.js";
-import type { Meal } from "../meal/types.js";
-import type { MenuItem } from "../menu-item/types.js";
-import type { Menu } from "../menu/types.js";
-import type { PantryItem } from "../pantry/types.js";
-import type { Photo } from "../photo/types.js";
-import type { Recipe } from "../recipe/types.js";
 import type { AppContext } from "../server/app-context.js";
 import type {
   AnySyncResult,
