@@ -26,7 +26,7 @@ export const restockPantryItemInputSchema = z
 /**
  * Registers `mark_pantry_item_out_of_stock`, kernel-shaped — `inStock` is an intent
  * verb (ADR-0008), so it lives here, not on `update_pantry_item`. Writes through
- * `ctx.self.commitPantryItem`. Body lifted verbatim from `src/tools/pantry-stock.ts`.
+ * `ctx.self.commitPantryItem`.
  */
 export function markPantryItemOutOfStockTool(ctx: DomainCtx<PantrySelf, "aisle">): void {
   const log = ctx.infra.log.child({ component: "mark_pantry_item_out_of_stock" });
@@ -69,8 +69,7 @@ export function markPantryItemOutOfStockTool(ctx: DomainCtx<PantrySelf, "aisle">
 
 /**
  * Registers `restock_pantry_item`, kernel-shaped — the in-stock intent verb's
- * mirror. Writes through `ctx.self.commitPantryItem`. Body lifted verbatim from
- * `src/tools/pantry-stock.ts`.
+ * mirror. Writes through `ctx.self.commitPantryItem`.
  */
 export function restockPantryItemTool(ctx: DomainCtx<PantrySelf, "aisle">): void {
   const log = ctx.infra.log.child({ component: "restock_pantry_item" });

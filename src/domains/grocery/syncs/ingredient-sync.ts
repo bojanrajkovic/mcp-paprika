@@ -6,9 +6,8 @@ import type { GrocerySelf } from "../module.js";
  * `syncReplaceAllEntity`: the ingredient catalog is a plain name-keyed store with no
  * tombstones and no pending-writes, so it does a direct `listGroceryIngredients`,
  * a two-stage filter (drop `deleted`, then drop the no-aisle rows), manual
- * orphan-cache cleanup, then `store.load` + re-`put`. Lifted VERBATIM from the legacy
- * `SyncEngine` (`src/paprika/sync.ts:436-467`), adapting only the references
- * (`this._deps.*` → `ctx.self.ingredients.*` / `ctx.infra.*`).
+ * orphan-cache cleanup, then `store.load` + re-`put`. Reaches the domain's own
+ * ingredient store and cache via `ctx.self.ingredients.*`.
  *
  * The no-aisle drop preserves the documented failure semantics: Paprika returns
  * `aisle_uid: null` for an ingredient never filed into an aisle (the schema coerces
@@ -17,8 +16,8 @@ import type { GrocerySelf } from "../module.js";
  * `warn`-level count so the drop is observable. (Historically the un-nullable schema
  * also threw on these rows, aborting the whole cycle before meals/menus could sync.)
  *
- * `core` tier — step 6 of the legacy in-order core sequence, inside the outer try
- * that aborts the cycle on failure. Returns `void` — the ingredient catalog has no
+ * `core` tier — inside the outer try that aborts the cycle on failure. Returns `void`
+ * — the ingredient catalog has no
  * MCP resource surface and emits no `sync:complete`. NO `sweep` — the plain store
  * tracks no pending writes, so there is nothing to sweep; and so (unlike the
  * list/item sync factories) this one takes no `self` — its own store/cache are

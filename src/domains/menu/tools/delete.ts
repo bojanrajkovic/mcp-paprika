@@ -12,7 +12,7 @@ import { menuStartGuard } from "./guards.js";
 /**
  * Registers `delete_menu`, kernel-shaped — reads/writes this module's own menu +
  * menu-item stores via `ctx.self`, cascading through `ctx.self.commitMenuItemsBatch`
- * + `ctx.self.commitMenu`. Lifted verbatim from `src/tools/menu-write.ts`.
+ * + `ctx.self.commitMenu`.
  */
 export function deleteMenuTool(ctx: DomainCtx<MenuSelf, "recipe" | "meal-type">): void {
   const log = ctx.infra.log.child({ component: "delete_menu" });

@@ -32,7 +32,7 @@ import type { PaprikaConfig } from "../utils/config.js";
  * construction topo-sort cannot express. The sync seam follows the same shape:
  * each module contributes a `reconcile` per owned entity, reached through the same
  * {@link BootCtx}, and the kernel drives them — so a central sync needs no
- * god-slice over the modules' hidden stores. See {@link SyncContribution} and
+ * global slice over the modules' hidden stores. See {@link SyncContribution} and
  * {@link buildKernel}.
  */
 
@@ -44,8 +44,8 @@ export interface DomainRegistry {}
 export type DomainId = keyof DomainRegistry;
 
 /**
- * The universal seam every domain receives. `cacheDir` replaces a central disk
- * root — each module builds its own `DiskCache` under it.
+ * The universal seam every domain receives. `cacheDir` is a bare directory path, not
+ * a shared cache root — each module builds its own `DiskCache` under it.
  */
 export interface Infra {
   readonly client: PaprikaClient;
@@ -107,10 +107,10 @@ export type SyncTier = "core" | "additive";
 
 /**
  * One entity's contribution to the sync cycle — the seam between a central sync
- * and module-owned (hidden) stores. A collapsed domain supplies one per owned
+ * and module-owned (hidden) stores. A multi-entity domain supplies one per owned
  * entity via `syncs`. `reconcile` receives the SAME {@link BootCtx} the boot hooks
  * do: its own store/cache via `self`, its declared deps' contracts via `deps`, the
- * Paprika client via `infra.client`. So no central god-slice is needed. It returns
+ * Paprika client via `infra.client`. So no central all-stores context is needed. It returns
  * an `AnySyncResult` to be emitted as `sync:complete` (recipes/grocery/menus), or
  * `void` for reference/soft entities that emit nothing. `sweep` is the per-store
  * pending-write TTL sweep the driver runs once at end-of-cycle.
@@ -279,8 +279,8 @@ export interface Kernel {
    * Returns the results a production wiring emits as `sync:complete` (feeding the
    * notifier subscriber) — but ONLY for a cycle that completed through flush; an
    * aborted cycle (a core throw or a flush rejection) returns `[]`, so a partial,
-   * un-flushed cycle fans out no resource notification (mirroring legacy's
-   * sync:error-only path). The initial cycle already ran at build time (gating the
+   * un-flushed cycle fans out no resource notification. The initial cycle already
+   * ran at build time (gating the
    * post-sync hooks); the interval driver calls this on its loop.
    */
   syncOnce(): Promise<ReadonlyArray<AnySyncResult>>;
@@ -345,13 +345,13 @@ export async function buildKernel(
   // run first in dependency order (a failure aborts the cycle); additive ones each
   // run best-effort; then flush + sweep. The whole cycle never throws.
   //
-  // Recipe's core reconciles must LEAD: the legacy engine syncs recipe first and
-  // marks its store synced before category/aisle/pantry run, so a later core failure
-  // can't gate recipe tools for the interval. Recipe is dep-free, so the topo-sort
-  // (which orders aisle→pantry→grocery via their dependency edges) can't hoist it —
-  // a stable sort keyed on id "recipe" does. This is the one ordering the dependency
-  // DAG can't express; if a second priority case ever appears, promote it to a
-  // declared `SyncContribution` ordinal (copy first, abstract on the third).
+  // Recipe's core reconciles must LEAD: recipe must be marked synced before
+  // category/aisle/pantry run, so a later core failure can't gate recipe tools
+  // for the interval. Recipe is dep-free, so the topo-sort (which orders
+  // aisle→pantry→grocery via their dependency edges) can't hoist it — a stable
+  // sort keyed on id "recipe" does. This is the one ordering the dependency DAG
+  // can't express; if a second priority case ever appears, promote it to a declared
+  // `SyncContribution` ordinal (copy first, abstract on the third).
   const syncOrder = [...built].sort((a, z) => (a.id === "recipe" ? -1 : 0) - (z.id === "recipe" ? -1 : 0));
   const coreSyncs: Array<() => Promise<AnySyncResult | void>> = [];
   const additiveSyncs: Array<() => Promise<AnySyncResult | void>> = [];
@@ -384,11 +384,10 @@ export async function buildKernel(
       let swept = 0;
       for (const sweep of sweepers) swept += sweep();
       if (swept > 0) infra.log.debug({ swept }, "swept pending writes past TTL");
-      // Only a cycle that reached flush reports results: the legacy engine builds
-      // its result objects after finalization, so a core-reconcile throw (or a flush
-      // rejection) emits sync:error and NO sync:complete. Returning the partially
-      // accumulated `results` here would fan out a resource notification for an
-      // aborted, un-flushed cycle — which legacy never did.
+      // Only a cycle that reached flush reports results: a core-reconcile throw (or
+      // a flush rejection) aborts the cycle. Returning the partially accumulated
+      // `results` here would fan out a resource notification for an aborted,
+      // un-flushed cycle — return `[]` instead so a partial cycle fans out nothing.
       return results;
     } catch (err) {
       infra.log.error({ err }, "sync failed");
@@ -403,7 +402,7 @@ export async function buildKernel(
   infra.log.info("running initial sync");
   // The initial cycle's results are intentionally discarded: at this point no server /
   // session exists (stdio's ServerRef is unset; HTTP has zero sessions), so a resource
-  // notification would no-op — exactly as the legacy initial sync did. The interval
+  // notification would no-op. The interval
   // driver's immediate first iteration re-syncs and DOES call notifyFromResults once a
   // session can receive it. If the bootstrap order ever changes so a server exists here,
   // wire notifyFromResults onto this call too.

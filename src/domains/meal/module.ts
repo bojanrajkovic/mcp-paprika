@@ -27,18 +27,14 @@ declare module "../../kernel/registry.js" {
 
 /**
  * The meal module's internals. Owns ONLY meals (meal-types are a separate
- * standalone module, NOT folded in here — the spike's meals+types fold was an
- * illustration of "why `syncs` is a list", not a directive). One store + plain
- * `DiskCache` pair.
+ * standalone module). One store + plain `DiskCache` pair.
  *
  * The write-capable methods (`commitMeal`, `commitMealsBatch`, and the api's
  * `createMeals`) are bound HERE in `.self`, not in `.build`, because they WRITE —
  * they close over `infra.client`, which the factory has and `.build` does not
  * (mirrors aisle's `ensureAisle`). The read-only contract methods (`hasSynced`,
- * `orderFlagAssigner`) are assembled from the store in `.build`. Lifted verbatim
- * from `src/tools/meal-helpers.ts`, reaching this module's own store/cache instead
- * of the god-object context. No `resourceListChanged()` — meals have no MCP
- * resource surface.
+ * `orderFlagAssigner`) are assembled from the store in `.build`. No
+ * `resourceListChanged()` — meals have no MCP resource surface.
  */
 export interface MealSelf {
   readonly store: MealStore;
@@ -58,9 +54,8 @@ register(
       const { client, log } = infra;
 
       const store = new MealStore({ pendingWriteTtlMs: resolvePendingWriteTtl(infra.config) });
-      // Reuse-in-place: point at the SAME flat path the legacy DiskCacheRoot uses
-      // (`<cacheDir>/meals`). The `<domain>/<entity>` disk reshape + move-migration
-      // is deferred to the flip (ADR-0009).
+      // Disk is flat: the cache's subdir is the original `<cacheDir>/meals`
+      // (reuse-in-place — ADR-0009 keeps the cache un-namespaced, so there is no migration).
       const cache = new DiskCacheImpl<Meal>({
         ...mealDiskDescriptor,
         subdir: join(infra.cacheDir, mealDiskDescriptor.subdir),
@@ -72,7 +67,7 @@ register(
       const cachedMeals = (await cache.getAll()).filter((m) => !m.deleted);
       if (cachedMeals.length > 0) store.load(cachedMeals);
 
-      // ---- Meal write chokepoints (lifted verbatim from src/tools/meal-helpers.ts) ----
+      // ---- Meal write chokepoints ----
       // Order: markPending* (FIRST, before any cache I/O) → cache put/remove → flush
       // → store set/delete → notifySync. The pending mark shields this UID from
       // sync-cycle reconciliation during the propagation race. No resourceListChanged()

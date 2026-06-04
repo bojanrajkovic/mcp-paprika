@@ -8,7 +8,7 @@ import { menuStartGuard } from "./guards.js";
 
 /**
  * Registers `list_menus`, kernel-shaped — reads this module's own menu + menu-item
- * stores via `ctx.self`. Lifted verbatim from `src/tools/menu-read.ts`.
+ * stores via `ctx.self`.
  */
 export function listMenusTool(ctx: DomainCtx<MenuSelf, "recipe" | "meal-type">): void {
   const log = ctx.infra.log.child({ component: "list_menus" });

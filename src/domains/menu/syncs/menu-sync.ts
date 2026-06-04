@@ -5,8 +5,6 @@ import type { Menu } from "../types.js";
 
 import { syncReplaceAllEntity } from "../../../paprika/sync.js";
 
-// Field-wise comparator copied verbatim from `src/paprika/sync.ts:75-84` alongside
-// the reconcile it serves (the production comparator moves into the owning domain).
 function menusEqual(a: Menu, b: Menu): boolean {
   return (
     a.uid === b.uid &&
@@ -19,14 +17,12 @@ function menusEqual(a: Menu, b: Menu): boolean {
 }
 
 /**
- * Menu sync — replace-all with pending-write filtering, over the SAME proven
- * `syncReplaceAllEntity` helper the monolith used (`src/paprika/sync.ts:528-536`).
+ * Menu sync — replace-all with pending-write filtering via `syncReplaceAllEntity`.
  * Carries `afterLoad: () => store.setLastSyncedAt()` — the menu-specific side-effect
  * that backs the `paprika://menu/{uid}` resource's "Last synced" header line.
  *
- * `additive` tier — the legacy engine runs menu sync inside its best-effort
- * try-block ("the menu read/write surface is strictly additive — degrading it to
- * stale data for one cycle is preferable to regressing core sync"). Menus have an
+ * `additive` tier — the menu read/write surface must not abort core sync; degrading
+ * to stale data for one cycle is preferable to regressing core sync. Menus have an
  * MCP resource surface, so this returns a `MenuSyncResult` to be emitted as
  * `sync:complete`.
  */

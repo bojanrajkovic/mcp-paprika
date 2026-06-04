@@ -14,7 +14,7 @@ import { categoryStartGuard } from "./guards.js";
  * Recipes that reference the given category UID — INCLUDING trashed ones. The
  * `delete_category` guard blocks on these so deleting a category can't leave a
  * dangling UID on a recipe the user later restores from the trash. Within the
- * collapsed recipe domain the recipe store is `self` (no cross-domain reach).
+ * recipe domain the recipe store is `self` (no cross-domain reach).
  */
 function recipesReferencing(self: RecipeSelf, uid: CategoryUid): Array<Recipe> {
   return self.recipe.store.getAllIncludingTrashed().filter((recipe) => recipe.categories.includes(uid));

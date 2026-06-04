@@ -11,19 +11,10 @@ import { textResult } from "../../../shared/tools.js";
 import { mealToMarkdown } from "../meal-helpers.js";
 
 /**
- * Kernel-shaped meal helpers. The legacy `mealStartGuard`/`makeMealOrderFlagAssigner`/
- * `renderMealCard`/`renderMealsGroupedByDate` (`src/tools/meal-helpers.ts`) take the
- * god-object `ServerContext` and reach `ctx.mealStore`, `ctx.mealTypeStore`, and
- * `ctx.store` (recipe) directly. They are re-bound here to read this module's own
- * meal store via `self` and its declared deps' contracts (`ctx.deps.recipe`,
- * `ctx.deps["meal-type"]`). The meal-type spec resolution that lived in
- * `resolveMealTypeSpec(ctx, spec)` is now `deps["meal-type"].resolveSpec(spec)`
- * (the meal-type module owns that resolver and publishes it on its api), so it is
- * not re-implemented here. Logic is lifted verbatim; only the data sources change.
- *
- * The pure helpers (`mealToMarkdown`, `formatMealTypeResolveError`,
- * `mealTypeSpecSchema`) take no `ServerContext`, so the tool files import those
- * unchanged from `../../tools/meal-helpers.js`.
+ * Kernel-shaped meal helpers. Each reads this module's own meal store via `self`
+ * and its declared deps' contracts (`ctx.deps.recipe`, `ctx.deps["meal-type"]`).
+ * Meal-type spec resolution is `deps["meal-type"].resolveSpec(spec)` — the
+ * meal-type module owns that resolver and publishes it on its api.
  */
 
 /**
@@ -32,7 +23,6 @@ import { mealToMarkdown } from "../meal-helpers.js";
  * it, every "Dinner" / "Lunch" lookup returns undefined and the user sees "Unknown
  * meal type" errors that look like input mistakes but are actually a cold-cache
  * state. Guarding both up front turns that into a clear "still syncing" message.
- * Lifted verbatim from `mealStartGuard`; meal store is `self`, meal-type is `deps`.
  */
 export function mealStartGuard(self: MealSelf, mealType: MealTypeApi): Result<void, CallToolResult> {
   if (!self.store.hasSynced || !mealType.hasSynced()) {
@@ -47,8 +37,7 @@ export function mealStartGuard(self: MealSelf, mealType: MealTypeApi): Result<vo
  * one sequence, NOT a separate sequence per (date, type). `getMaxOrderFlagOn(date)`
  * seeds each date from the persisted store state; the returned closure then hands
  * out an increasing counter per date so multiple meals in ONE batch that share a
- * date get sequential flags. Lifted verbatim from `makeMealOrderFlagAssigner`;
- * reads `self.store`.
+ * date get sequential flags.
  */
 export function makeMealOrderFlagAssigner(self: MealSelf): (date: string) => number {
   const next = new Map<string, number>();
@@ -65,8 +54,7 @@ export function makeMealOrderFlagAssigner(self: MealSelf): (date: string) => num
  * repeats: typeName from the meal-type catalog (`Type N` fallback for unknown or
  * legacy types), and recipeName from the recipe store. Meals with `typeUid: null`
  * (legacy) fall through to the integer-labelled fallback; `recipeUid: null` renders
- * freeform. Lifted verbatim from `renderMealCard`; meal-type via
- * `deps["meal-type"].getAll()`, recipe via `deps.recipe.get`.
+ * freeform.
  */
 export function renderMealCard(meal: Readonly<Meal>, recipe: RecipeApi, mealType: MealTypeApi): string {
   const typeNameByUid = new Map<string, string>();
@@ -98,8 +86,7 @@ function formatMealLine(
  * Render meals as a date-grouped calendar section: one `### EEE dd` heading per
  * calendar day — in the order the meals are supplied, so the CALLER controls
  * chronology — then one `- **Type** · entry, entry` bullet per meal type on that
- * day, with freeform meals annotated. Returns just the grouped body. Lifted
- * verbatim from `renderMealsGroupedByDate`; meal-type via `deps["meal-type"].getAll()`.
+ * day, with freeform meals annotated. Returns just the grouped body.
  */
 export function renderMealsGroupedByDate(meals: ReadonlyArray<Readonly<Meal>>, mealType: MealTypeApi): string {
   const typeNames = new Map<string, string>();

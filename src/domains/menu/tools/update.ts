@@ -14,8 +14,7 @@ import { menuStartGuard } from "./guards.js";
 /**
  * Registers `update_menu`, kernel-shaped — reads/writes this module's own menu +
  * menu-item stores via `ctx.self`, commits through `ctx.self.commitMenu`, and renders
- * with the meal-type catalog from `ctx.deps["meal-type"]`. Lifted verbatim from
- * `src/tools/menu-write.ts`.
+ * with the meal-type catalog from `ctx.deps["meal-type"]`.
  */
 export function updateMenuTool(ctx: DomainCtx<MenuSelf, "recipe" | "meal-type">): void {
   const log = ctx.infra.log.child({ component: "update_menu" });

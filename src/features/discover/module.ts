@@ -17,9 +17,8 @@ declare module "../../kernel/registry.js" {
  * `syncs[]` — the index is rebuilt from the recipe store on the post-sync `index`
  * boot phase and kept warm by the kernel re-index seam (`infra.indexEvents`).
  *
- * `vectorStore` is NULLABLE: it is `null` when embeddings are unconfigured, exactly
- * mirroring the legacy `buildDiscoverComponents`, which returns `null` and logs
- * "semantic search disabled" in that case. The kernel registers the
+ * `vectorStore` is NULLABLE: it is `null` when embeddings are unconfigured
+ * ("semantic search disabled"). The kernel registers the
  * `discover_recipes` tool unconditionally, so the feature gate lives INSIDE the tool
  * (and inside the boot hook): both no-op cleanly when `vectorStore === null` rather
  * than being conditionally registered (ADR-0009 §5#9). The `embedder` rides along
@@ -34,10 +33,9 @@ register(
   defineModule("discover", ["recipe"])
     .self<DiscoverSelf>(async (infra) => {
       // Read embeddings config off the root's single parsed config (carried on infra).
-      // The legacy root reaches `buildDiscoverComponents` only after config has parsed,
-      // so this is the same value — no second, divergent parse whose error arm would
-      // silently disable the feature. Unconfigured → a null vectorStore, and both the
-      // tool and the index hook below no-op cleanly.
+      // Using `infra.config` ensures there is no second, divergent parse whose error
+      // arm would silently disable the feature. Unconfigured → a null vectorStore,
+      // and both the tool and the index hook below no-op cleanly.
       const embeddingsConfig = infra.config.features?.embeddings;
 
       if (embeddingsConfig === undefined) {
@@ -45,11 +43,9 @@ register(
         return { vectorStore: null, embedder: null };
       }
 
-      // Build the embedding client + vector store EXACTLY as legacy buildFeatures
-      // does. `infra.cacheDir` is the same base the legacy `VectorStore` received
-      // (`getCacheDir()`); the store appends its own `vectors/` subdir, so this is the
-      // reuse-in-place path — no `<domain>/<entity>` reshape this phase. `init()` runs
-      // the corruption-recovery + model/schema-invalidation handshake (vector-store.ts).
+      // Build the embedding client + vector store. `infra.cacheDir` is the base the
+      // `VectorStore` receives; the store appends its own `vectors/` subdir. `init()`
+      // runs the corruption-recovery + model/schema-invalidation handshake (vector-store.ts).
       const embedder = new EmbeddingClient(embeddingsConfig, infra.log.child({ component: "embeddings" }));
       const vectorStore = new VectorStore(
         infra.cacheDir,
@@ -69,10 +65,9 @@ register(
       // from recipes and (re)built on the post-sync `index` boot phase below, not
       // reconciled in the sync cycle.
       onReady: {
-        // Post-sync indexing — the cold-start reconcile + the live re-index subscription
-        // the legacy `buildDiscoverComponents` ran (discover-feature.ts:96-168), now driven
-        // off the kernel re-index seam. The boot pipeline guarantees this runs AFTER the
-        // initial `syncOnce()`, so the recipe store is warm. All recipe reads go through
+        // Post-sync indexing — the cold-start reconcile + the live re-index subscription,
+        // driven off the kernel re-index seam. The boot pipeline guarantees this runs AFTER
+        // the initial `syncOnce()`, so the recipe store is warm. All recipe reads go through
         // the recipe contract (`ctx.deps.recipe`), never a store reach-around.
         index: async (ctx) => {
           const { vectorStore } = ctx.self;
@@ -85,7 +80,7 @@ register(
           // only recipes whose embedding text drifted (skipping the rest by content hash,
           // so this is cheap when nothing changed), and clears hashes first when the index
           // is short relative to the store to force a full rebuild. Used at startup and as
-          // the retry below. Lifted from discover-feature.ts:96-102.
+          // the retry below.
           const reconcile = async (): Promise<void> => {
             if (ctx.deps.recipe.size() === 0) return;
             if (vectorStore.size < ctx.deps.recipe.size() * 0.9) vectorStore.clearHashes();
@@ -108,9 +103,8 @@ register(
             );
           }
 
-          // The single re-index channel: it replaces the legacy `sync:complete` +
-          // `sync:category-change` subscribers AND the per-write `maintainRecipeIndex`
-          // chokepoints. Recipe writes and the recipe/category reconciles emit; discover
+          // The single re-index channel: recipe writes and the recipe/category reconciles
+          // emit here; discover
           // re-embeds. Handlers are fire-and-forget (the VectorStore serializes its writes
           // via an async-mutex, so overlapping emits are safe) and each swallows its own
           // errors — a re-index failure must not break a sync cycle or a tool write.
@@ -139,9 +133,8 @@ register(
                 } else {
                   // category-changed: re-embed every live recipe referencing a changed
                   // category — its display name is baked into their embedding text, but no
-                  // recipe hash changed, so the recipe diff never re-fetched them. The
-                  // verbatim `reindexRecipesForCategoryChange` body (discover-feature.ts:46-50),
-                  // reading recipes through the contract.
+                  // recipe hash changed, so the recipe diff never re-fetched them. Read
+                  // recipes through the contract.
                   const changed = new Set<string>(event.uids);
                   const affected = ctx.deps.recipe.getAll().filter((r) => r.categories.some((uid) => changed.has(uid)));
                   if (affected.length > 0) await vectorStore.indexRecipes(affected, resolveNames);

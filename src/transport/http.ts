@@ -176,8 +176,9 @@ export async function startHttp(config: PaprikaConfig, opts: StartHttpOptions = 
   const log = opts._testLog ?? rootLog.child({ component: "transport-http" });
 
   // The interval loop runs its first cycle immediately (then waits), so — with
-  // buildKernel's initial cycle — startup syncs twice, exactly as legacy did.
-  // notifyFromResults applies the legacy sync:complete → resourceListChanged filter.
+  // buildKernel's initial cycle — startup syncs twice. notifyFromResults turns each
+  // cycle's returned results into resourceListChanged notifications, filtered to the
+  // change types with a resource surface.
   const loop = config.sync.enabled
     ? runSyncLoop(async () => {
         notifyFromResults(await kernel.syncOnce(), notifier);

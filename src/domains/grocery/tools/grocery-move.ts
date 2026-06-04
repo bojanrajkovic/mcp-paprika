@@ -17,7 +17,7 @@ import { groceryStartGuard } from "./guards.js";
  * despite the name: its input is grocery-item UIDs, its primary store is grocery's
  * own item store, and the pantry side goes THROUGH the declared `pantry` dependency
  * contract (`ctx.deps.pantry.hasSynced` / `createItems`), never reaching pantry's
- * store. Body lifted verbatim from `src/tools/grocery-move.ts`.
+ * store.
  *
  * The live create-first/delete-second ordering is preserved: pantry items are created
  * first (so a pantry failure leaves the grocery items intact), then the grocery items

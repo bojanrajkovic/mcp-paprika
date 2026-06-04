@@ -19,8 +19,7 @@ export const markGroceryItemPurchasedInputSchema = z
 
 /**
  * Registers `mark_grocery_item_purchased`, kernel-shaped — the purchased intent verb,
- * writing through this module's bound `ctx.self.commitGroceryItem`. Body lifted
- * verbatim from `src/tools/grocery-item-purchase.ts`.
+ * writing through this module's bound `ctx.self.commitGroceryItem`.
  */
 export function markGroceryItemPurchasedTool(ctx: DomainCtx<GrocerySelf, "aisle" | "pantry">): void {
   const log = ctx.infra.log.child({ component: "mark_grocery_item_purchased" });

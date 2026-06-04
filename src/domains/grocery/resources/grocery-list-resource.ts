@@ -12,11 +12,10 @@ import { groceryListToMarkdown } from "../grocery-helpers.js";
  * by grocery, so they resolve through `ctx.self.items.store`, not a dep). Grocery
  * list is one of the three Content-class entities with a resource surface (ADR-0004);
  * a child grocery-item change fires `resourceListChanged()` because items are inlined
- * here. Lifted verbatim from `src/resources/grocery-lists.ts`.
+ * here.
  *
  * Unlike the recipe resource, the header leads with `**UID:**` — `groceryListToMarkdown`
- * does not render the UID in its body, so there is no duplication (the asymmetry is
- * deliberate per `src/resources/CLAUDE.md`).
+ * does not render the UID in its body, so there is no duplication.
  */
 export function groceryListResource(ctx: DomainCtx<GrocerySelf, "aisle" | "pantry">): void {
   const template = new ResourceTemplate("paprika://grocery-list/{uid}", {

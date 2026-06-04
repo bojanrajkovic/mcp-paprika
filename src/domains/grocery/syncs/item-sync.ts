@@ -5,8 +5,6 @@ import type { GrocerySelf } from "../module.js";
 
 import { syncReplaceAllEntity } from "../../../paprika/sync.js";
 
-// Field-wise comparator copied verbatim from `src/paprika/sync.ts:111-127` alongside
-// the reconcile it serves (the production comparator moves into the owning domain).
 function groceryItemsEqual(a: GroceryItem, b: GroceryItem): boolean {
   return (
     a.uid === b.uid &&
@@ -26,13 +24,12 @@ function groceryItemsEqual(a: GroceryItem, b: GroceryItem): boolean {
 }
 
 /**
- * Grocery-item sync — replace-all with pending-write filtering, over the SAME proven
- * `syncReplaceAllEntity` helper the monolith used (`src/paprika/sync.ts:427-434`).
- * No `afterLoad` (unlike grocery lists): only the parent grocery-list store carries
- * `lastSyncedAt`.
+ * Grocery-item sync — replace-all with pending-write filtering via
+ * `syncReplaceAllEntity`. No `afterLoad` (unlike grocery lists): only the parent
+ * grocery-list store carries `lastSyncedAt`.
  *
- * `core` tier — runs after grocery lists (children reference parent), inside the same
- * core surface whose failure aborts the cycle. Grocery items are inlined in the
+ * `core` tier — runs after grocery lists (children reference parent), inside the
+ * outer try that aborts the cycle on failure. Grocery items are inlined in the
  * `paprika://grocery-list/{uid}` resource, so this returns a `GroceryItemSyncResult`
  * to be emitted as `sync:complete` (a child-item change invalidates the parent
  * resource).

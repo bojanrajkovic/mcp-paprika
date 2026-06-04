@@ -13,8 +13,7 @@ import { recipeColdStartGuard } from "./guards.js";
 /**
  * Registers `purge_recipe` (the empty-trash hard delete), kernel-shaped — fetches
  * authoritative state via `ctx.infra.client.getRecipe`, then hard-deletes/reconciles
- * through the bound `ctx.self` write helpers. (Tool/file named "purge"; the live file
- * was `empty-trash.ts`.)
+ * through the bound `ctx.self` write helpers.
  */
 export function purgeRecipeTool(ctx: DomainCtx<RecipeSelf, never>): void {
   const log = ctx.infra.log.child({ component: "purge_recipe" });

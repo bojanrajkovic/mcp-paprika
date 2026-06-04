@@ -23,8 +23,8 @@ export const oauthTokensDiskDescriptor: DiskCacheDescriptor<OAuthToken> = {
 
 /**
  * The narrow cache surface the OAuth layer needs — its two own subcaches plus a
- * flush over them. Both the full {@link DiskCacheRoot} (the legacy composition root,
- * still used by the test harness) and {@link buildAuthCaches} (the kernel's HTTP
+ * flush over them. Both the full {@link DiskCacheRoot} (the all-entity composition
+ * root, built only by the test harness) and {@link buildAuthCaches} (the kernel's HTTP
  * bootstrap) satisfy it. Auth touches nothing else on the cache — every `_cache.*`
  * access in `src/auth/` is `oauthClients` / `oauthTokens` / `flush` — so the HTTP
  * transport builds ONLY these two, not a 14-subcache root whose duplicate

@@ -6,11 +6,11 @@
  * that lives in its `self`, not in this contract.
  *
  * The reverse edge — recipe's `upload_recipe_photo` CONSUMING a `gen_` token to
- * attach a previewed image — is a recipe→photo-gen back-edge with NO seam yet (the
+ * attach a previewed image — is a recipe→photo-gen back-edge with no seam (the
  * generated-image store is photo-gen-owned, and recipe does not declare photo-gen
- * as a dependency). It is a known flip-phase wiring item; see the `// FLIP:` markers
- * in `module.ts` and `tools/generate.ts`. Adding a method here is NOT the fix —
- * that would invert the dependency (recipe depends on nothing here today).
+ * as a dependency). Adding a method here is NOT the fix — that would invert the
+ * dependency (recipe depends on nothing here today); the handoff rides `infra`
+ * (`Infra.generatedImageStore`) instead.
  */
 // oxlint-disable-next-line no-empty-object-type
 export interface PhotoGenApi {}

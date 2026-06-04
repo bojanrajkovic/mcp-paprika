@@ -24,6 +24,6 @@ One directory per cohesive domain — the unit the kernel constructs, isolates, 
 
 ## Sharp edges
 
-- **Disk stays flat; the source layout is namespaced but the cache dir is not.** A child entity nested at `src/domains/recipe/category/` still writes to `<cacheDir>/categories` — its `DiskCacheDescriptor.subdir` is the flat legacy name, reuse-in-place, so the reshape needed no on-disk migration. Don't "align" the subdir to the source path; that would orphan every deployed cache. See ADR-0009 §3.
+- **Disk stays flat; the source layout is namespaced but the cache dir is not.** A child entity nested at `src/domains/recipe/category/` still writes to `<cacheDir>/categories` — its `DiskCacheDescriptor.subdir` is the flat on-disk name, reuse-in-place, so the reshape needed no on-disk migration. Don't "align" the subdir to the source path; that would orphan every deployed cache. See ADR-0009 §3.
 - **Cross-domain access is `ctx.deps.<id>.<contract>` only.** A tool reaches a sibling domain through its declared dependency's `api` — never another domain's store or `self`. Adding a new edge means adding it to the `dependsOn` tuple (the single source of truth for what `deps` carries) AND importing the dependency's brand along that same edge.
 - **A domain that owns a parent + its children fires its own `resourceListChanged()`.** Grocery owns lists + items, menu owns menus + items; a child-item change invalidates the parent resource, so the commit chokepoint in `module.ts`'s `.self` emits it. There is no central change-type table.

@@ -6,10 +6,8 @@ import type { PantrySelf } from "../module.js";
 import { textResult } from "../../../shared/tools.js";
 
 /**
- * Kernel-shaped readiness gate. The legacy `pantryStartGuard`
- * (`src/tools/pantry-helpers.ts`) takes the god-object `ServerContext`; this
- * re-binds it to read this module's own store via `self`. Same
- * `Result<void, CallToolResult>` shape, consumed via `.match()`.
+ * Readiness gate: returns `ok` when the store has synced, `err` with a
+ * user-facing `CallToolResult` otherwise. Consumed via `.match()`.
  */
 export function pantryStartGuard(self: PantrySelf): Result<void, CallToolResult> {
   if (!self.store.hasSynced) {

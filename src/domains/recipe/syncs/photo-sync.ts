@@ -4,8 +4,6 @@ import type { Photo } from "../photo/types.js";
 
 import { syncReplaceAllEntity } from "../../../paprika/sync.js";
 
-// Field-wise comparator copied verbatim from `src/paprika/sync.ts:99` alongside the
-// reconcile it serves (the production comparator moves into the owning domain).
 function photosEqual(a: Photo, b: Photo): boolean {
   return (
     a.uid === b.uid &&
@@ -19,11 +17,11 @@ function photosEqual(a: Photo, b: Photo): boolean {
 }
 
 /**
- * Photo sync — replace-all via `syncReplaceAllEntity` (`src/paprika/sync.ts:559-572`).
- * `additive` tier (best-effort): photos are a recipe-child read/write surface with no
- * standalone resource (the recipe resource inlines photo fields), so — exactly like
- * meals — a photo-side failure must not abort core sync. Emits NO `sync:complete` and
- * adds NO SyncResult variant (returns `void`).
+ * Photo sync — replace-all via `syncReplaceAllEntity`. `additive` tier (best-effort):
+ * photos are a recipe-child read/write surface with no standalone resource (the recipe
+ * resource inlines photo fields), so — exactly like meals — a photo-side failure must
+ * not abort core sync. Emits NO `sync:complete` and adds NO SyncResult variant (returns
+ * `void`).
  */
 export function photosSync(self: RecipeSelf): SyncContribution<RecipeSelf, never> {
   return {

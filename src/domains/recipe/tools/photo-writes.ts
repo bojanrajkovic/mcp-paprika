@@ -102,8 +102,7 @@ async function resolveSource(
     // consume() is atomic + synchronous (no await precedes it on this branch), so two
     // racing uploads can't both spend one token. A token minted for a DIFFERENT recipe is
     // restored and rejected before any write; a consumed token whose attach later fails is
-    // deliberately NOT restored (duplicate-safe — regenerate instead). This is the legacy
-    // consume/restore choreography (see src/features/CLAUDE.md "Generated-photo previews").
+    // deliberately NOT restored (duplicate-safe — regenerate instead).
     const entry = generatedImageStore.consume(source.generation_token);
     if (entry === null) {
       return {

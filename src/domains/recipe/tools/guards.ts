@@ -6,11 +6,9 @@ import type { RecipeSelf } from "../module.js";
 import { textResult } from "../../../shared/tools.js";
 
 /**
- * Kernel-shaped readiness gates. The legacy `coldStartGuard`/`categoryStartGuard`
- * (`src/tools/{helpers,category-helpers}.ts`) take the god-object `ServerContext`
- * and `categoryStartGuard` pulls in the discover feature; both are re-bound here to
- * read this module's own stores via `self`, dropping the discover coupling. Same
- * `Result<void, CallToolResult>` shape, consumed via `.match()`.
+ * Kernel-shaped readiness gates. Read this module's own stores via `self` —
+ * domain-isolated, with no discover coupling. Same `Result<void, CallToolResult>`
+ * shape, consumed via `.match()`.
  */
 export function recipeColdStartGuard(self: RecipeSelf): Result<void, CallToolResult> {
   if (!self.recipe.store.hasSynced) {
@@ -22,7 +20,7 @@ export function recipeColdStartGuard(self: RecipeSelf): Result<void, CallToolRes
 /**
  * Every category tool's gate: recipe store synced (`list_categories` counts recipes
  * per category, `delete_category` scans recipes for references) AND the category
- * catalog synced. Within the collapsed recipe domain both stores are `self`.
+ * catalog synced. Within the recipe domain both stores are `self`.
  */
 export function categoryStartGuard(self: RecipeSelf): Result<void, CallToolResult> {
   return recipeColdStartGuard(self).andThen(() =>

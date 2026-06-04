@@ -8,12 +8,13 @@ import type { RecipeUid } from "../ids.js";
  *
  * The discover module owns the vector index, but recipe and category cannot reach
  * it: there is no dependency edge to discover and its public contract is empty by
- * design. So recipe writes (the `maintainRecipeIndex` chokepoints, #177) and the
- * category-change sync signal emit on this kernel-level channel — carried on
- * `Infra` — and discover's `index` boot hook subscribes. That restores the legacy
- * re-embed paths (a tool-written recipe's UID is pending, so sync's diff filters it
- * out; a category rename changes no recipe hash) without a cross-domain reach-around
- * that the isolation boundary would (correctly) reject.
+ * design. So recipe writes (the commit chokepoints, #177) and the category-change
+ * sync signal emit on this kernel-level channel — carried on `Infra` — and discover's
+ * `index` boot hook subscribes. The emit is load-bearing because the sync diff alone
+ * misses both cases: a tool-written recipe's UID is pending, so the recipe diff filters
+ * it out, and a category rename changes no recipe hash — yet both must re-embed. The
+ * channel covers them without a cross-domain reach-around the isolation boundary would
+ * (correctly) reject.
  *
  * Emit is fire-and-forget and never throws: a handler error must not break a sync
  * cycle or a tool write. The VectorStore serializes its own writes via an internal
@@ -23,8 +24,8 @@ export type IndexEvent =
   | { readonly type: "recipe-changed"; readonly recipes: ReadonlyArray<Recipe> }
   | { readonly type: "recipe-removed"; readonly uids: ReadonlyArray<RecipeUid> }
   // Category UIDs are plain `string` here, matching the source `EntityChanges.removedUids`
-  // (the generic sync helper can't brand `T["uid"]`) and the legacy
-  // `reindexRecipesForCategoryChange(changedUids: ReadonlyArray<string>)` they feed.
+  // (the generic replace-all sync helper can't brand `T["uid"]`); discover's category-changed
+  // handler compares them as plain strings against each recipe's `categories`.
   | { readonly type: "category-changed"; readonly uids: ReadonlyArray<string> };
 
 export interface IndexEventEmitter {

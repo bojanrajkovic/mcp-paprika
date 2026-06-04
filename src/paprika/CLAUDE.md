@@ -4,13 +4,13 @@ Last verified: 2026-06-04
 
 ## Purpose
 
-The Paprika Cloud Sync API client and the background sync engine: authentication, wire-format encode/decode (Zod schemas), resilient HTTP, and the poll-and-reconcile loop that keeps the local cache and in-memory stores fresh.
+The Paprika Cloud Sync API client and the shared reconcile helper: authentication, wire-format encode/decode (Zod schemas), resilient HTTP, and `syncReplaceAllEntity` — the replace-all reconcile each domain's sync contribution drives. (The poll loop and the cycle driver live in the kernel + `src/server/sync-loop.ts`, not here.)
 
 ## Key References
 
 - **Wire format** — [`docs/wire-format.md`](../../docs/wire-format.md) is the canonical narrative for _why_ the wire looks the way it does: the v2 gzipped-multipart envelope, the recipe content-hash algorithm and parity check, the two-tier deletion shapes, the photo-upload choreography, and grocery-ingredient auto-creation. The literal byte corpus lives in [`docs/wire-captures/`](../../docs/wire-captures/).
 - **Caching, sync, resilience** — [`docs/architecture.md`](../../docs/architecture.md): diff-and-fetch (recipes) vs replace-all (everything else), the never-throws sync contract, resource-notification fan-out, and the shared cockatiel retry+breaker executor.
-- **Source of truth for shapes** — `types.ts` owns every branded UID, entity field list, wire/stored Zod schema, and `*ToApiPayload` mapper. `client.ts` owns the `PaprikaClient` method set, the resilience-hook wiring, and attempt numbering. `sync.ts` owns `syncReplaceAllEntity` (the replace-all reconcile helper each domain's sync contribution calls) and the legacy `SyncEngine` class — transitional, kept alive only to back the sync-coverage tests until they are ported to the kernel (#20); the live sync path is the kernel's `syncOnce` driver over per-module reconciles. Don't re-enumerate these here; read the file.
+- **Source of truth for shapes** — `types.ts` owns every branded UID, entity field list, wire/stored Zod schema, and `*ToApiPayload` mapper. `client.ts` owns the `PaprikaClient` method set, the resilience-hook wiring, and attempt numbering. `sync.ts` owns `syncReplaceAllEntity` (the replace-all reconcile helper each domain's sync contribution calls); the cycle driver that sequences those reconciles is the kernel's `syncOnce`. Don't re-enumerate these here; read the file.
 - **Date/time helpers** for the `yyyy-MM-dd HH:mm:ss` wire boundary live in `src/utils/dates.ts` (see `src/utils/CLAUDE.md`).
 - **ADRs** — [`docs/adr/`](../../docs/adr/), notably 0004 (tool-vs-resource classification, which governs which sync changes fan out a resource notification).
 

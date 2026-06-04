@@ -18,9 +18,8 @@ import "../../../kernel/modules.generated.js";
 
 /**
  * Drives the recipe domain's bespoke diff-and-fetch reconcile directly — the live
- * home of the #57 pending-write race + the #92 observation-clearing-by-hash that
- * used to be exercised only through the (now-removed) SyncEngine. Builds the real
- * recipe module (real `RecipeDiskCache` + `RecipeStore`) against a temp cache dir and
+ * home of the #57 pending-write race + the #92 observation-clearing-by-hash. Builds
+ * the real recipe module (real `RecipeDiskCache` + `RecipeStore`) against a temp cache dir and
  * a mock client, seeds the store/cache, then runs `recipesSync(self).reconcile(ctx)`.
  */
 describe("recipe diff-and-fetch reconcile", () => {

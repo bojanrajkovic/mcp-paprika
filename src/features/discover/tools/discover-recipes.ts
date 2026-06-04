@@ -33,20 +33,16 @@ export const discoverRecipesInputSchema = {
  * Registers `discover_recipes`, kernel-shaped — semantic search over the vector
  * index this module owns (`ctx.self.vectorStore`), with recipe enrichment resolved
  * through the recipe contract (`ctx.deps.recipe.get` for the row, `resolveCategoryNames`
- * for its categories). Lifted verbatim from `src/tools/discover.ts`; the only
- * adaptations are reaching `self`/`deps` instead of the god-object `ServerContext`.
+ * for its categories). Tools reach `self`/`deps` — this module's own internals and its declared dependencies, nothing wider.
  *
- * FEATURE GATE (kernel-shaped — ADR-0009 §5#9): the legacy root registered this tool
- * only when `vectorStore !== null` (`src/server/build.ts:543`). The kernel registers
- * every module's tools unconditionally, so the gate moves INSIDE the wrapper: when
- * embeddings are unconfigured the `.self` factory carries a null `vectorStore`, and
- * the tool early-returns a clear "not configured" result instead of registering
- * conditionally. The tool is always present; it just declines to act.
+ * FEATURE GATE (ADR-0009 §5#9): the kernel registers every module's tools
+ * unconditionally. When embeddings are unconfigured the `.self` factory carries a null
+ * `vectorStore`, and the tool early-returns a clear "not configured" result. The tool
+ * is always present; it just declines to act.
  *
- * The legacy `coldStartGuard(ctx)` (recipe store synced) is preserved via
- * `ctx.deps.recipe.hasSynced()`: a warm-from-disk index can return hits whose UIDs
- * the not-yet-synced recipe store still lacks, which the enrichment filter would
- * drop and report as a misleading "no matches" rather than the legacy retry hint.
+ * `ctx.deps.recipe.hasSynced()` guards against a warm-from-disk index returning hits
+ * whose UIDs the not-yet-synced recipe store still lacks — the enrichment filter would
+ * drop them and report a misleading "no matches" rather than the retry hint.
  */
 export function discoverRecipesTool(ctx: DomainCtx<DiscoverSelf, "recipe">): void {
   const log = ctx.infra.log.child({ component: "discover_recipes" });
@@ -62,9 +58,9 @@ export function discoverRecipesTool(ctx: DomainCtx<DiscoverSelf, "recipe">): voi
     async (args): Promise<CallToolResult> => {
       log.info({ tool: "discover_recipes", ...args }, "tool invoked");
 
-      // Feature gate: vectorStore is null when embeddings are unconfigured. The
-      // legacy root skipped registration entirely; here the tool is registered but
-      // declines, so the surface is uniform across deployments.
+      // Feature gate: vectorStore is null when embeddings are unconfigured. The tool
+      // is registered unconditionally and declines here, so the surface is uniform
+      // across deployments (ADR-0009 §5#9).
       const { vectorStore } = ctx.self;
       if (vectorStore === null) {
         return textResult(
@@ -73,9 +69,9 @@ export function discoverRecipesTool(ctx: DomainCtx<DiscoverSelf, "recipe">): voi
         );
       }
 
-      // Cold-start guard (legacy coldStartGuard): a warm-from-disk index can return
-      // hits whose UIDs the not-yet-synced recipe store lacks, which the enrichment
-      // filter would drop and report as "no matches" — return the retry hint instead.
+      // Cold-start guard: a warm-from-disk index can return hits whose UIDs the
+      // not-yet-synced recipe store lacks, which the enrichment filter would drop and
+      // report as "no matches" — return the retry hint instead.
       if (!ctx.deps.recipe.hasSynced()) {
         return textResult("Recipe store is not yet synced. Try again in a few seconds.");
       }

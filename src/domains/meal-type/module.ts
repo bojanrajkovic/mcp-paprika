@@ -32,9 +32,8 @@ register(
   defineModule("meal-type", [])
     .self<MealTypeSelf>(async (infra) => {
       const store = new MealTypeStore({ pendingWriteTtlMs: resolvePendingWriteTtl(infra.config) });
-      // Reuse-in-place: point at the SAME flat path the legacy DiskCacheRoot uses
-      // (`<cacheDir>/mealtypes`). The `<domain>/<entity>` disk reshape + move-migration
-      // is deferred to the flip (ADR-0009).
+      // Disk is flat: the cache's subdir is the original `<cacheDir>/mealtypes`
+      // (reuse-in-place — ADR-0009 keeps the cache un-namespaced, so there is no migration).
       const cache = new DiskCache<MealType>({
         ...mealTypeDiskDescriptor,
         subdir: join(infra.cacheDir, mealTypeDiskDescriptor.subdir),
@@ -63,10 +62,8 @@ register(
           }
           return names;
         },
-        // Reimplements `resolveMealTypeSpec` (src/tools/meal-helpers.ts) against
-        // this module's own store — the live free function takes a whole
-        // ServerContext, which the kernel does not have. The MealTypeResolveResult
-        // shape and the dispatch order are preserved verbatim.
+        // Resolves a `{name}|{uid}|{builtin}` spec against this module's own
+        // store, returning a structured `MealTypeResolveResult`.
         resolveSpec: (spec) => {
           if ("uid" in spec) {
             const resolved = self.store.getAll().find((mt) => mt.uid === spec.uid);

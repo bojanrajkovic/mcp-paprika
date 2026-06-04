@@ -7,10 +7,9 @@ import type { Recipe } from "../types.js";
  * Recipe sync — the bespoke DIFF-AND-FETCH reconcile. NOT `syncReplaceAllEntity`:
  * recipes are the only entity with real content hashes, so `RecipeDiskCache.diff()`
  * classifies the canonical list against the local uid→hash index and only the
- * added/changed UIDs are fetched. Lifted verbatim from the legacy `SyncEngine`
- * (`src/paprika/sync.ts:280-346` + the result partition `:623-634`): pending-write
- * filtering (#57) and observation-clearing-by-hash (#92) come along UNCHANGED. The
- * kernel's driver only sequences it.
+ * added/changed UIDs are fetched. Pending-write filtering (#57) and
+ * observation-clearing-by-hash (#92) protect in-flight writes from being rolled
+ * back by a concurrent sync cycle.
  *
  * `core` tier — runs first and in dependency order; `markSynced()` mid-cycle keeps
  * recipe tools available even if a later core reconcile (category) fails. Returns a
@@ -94,7 +93,7 @@ export function recipesSync(self: RecipeSelf): SyncContribution<RecipeSelf, neve
       const addedRecipes = fetchedRecipes.filter((r) => addedSet.has(r.uid));
       const updatedRecipes = fetchedRecipes.filter((r) => !addedSet.has(r.uid));
 
-      // Drive the discover re-index seam (legacy channel 2). `recipe-changed` fires
+      // Drive the discover re-index seam. `recipe-changed` fires
       // EVERY cycle — even with no changes — because discover's handler runs its
       // startup-reconcile retry off this signal, so a recovered embeddings backend
       // self-heals without a recipe edit or restart (#177); the handler skips the

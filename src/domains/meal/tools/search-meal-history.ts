@@ -45,7 +45,7 @@ export const searchMealHistoryInputSchema = z
  * `ctx.self.store`; meal-type resolution/render via `ctx.deps["meal-type"]`. The
  * class (category) filter resolves the class name/UID to a `CategoryUid` and then
  * the set of recipe UIDs in it through `ctx.deps.recipe` — categories are a
- * recipe-domain concern after the collapse, so meal needs NO `category` dep.
+ * recipe-domain concern, so meal needs NO `category` dep.
  */
 export function searchMealHistoryTool(ctx: DomainCtx<MealSelf, "recipe" | "meal-type">): void {
   const log = ctx.infra.log.child({ component: "search_meal_history" });
@@ -83,8 +83,8 @@ export function searchMealHistoryTool(ctx: DomainCtx<MealSelf, "recipe" | "meal-
           }
 
           // Optional class (category) → the set of recipe UIDs in it. Category
-          // resolution + the recipe-by-category query are recipe-domain concerns
-          // post-collapse, reached through `ctx.deps.recipe`. No category→recipe
+          // resolution + the recipe-by-category query are recipe-domain concerns,
+          // reached through `ctx.deps.recipe`. No category→recipe
           // index exists; recipe's contract does a linear scan internally.
           let classRecipeUids: Set<RecipeUid> | undefined;
           let classLabel: string | undefined;

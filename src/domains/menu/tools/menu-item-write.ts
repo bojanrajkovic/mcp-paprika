@@ -66,8 +66,7 @@ export const addMenuItemsInputSchema = z.object({
  * Registers `add_menu_items`, kernel-shaped — reads/writes this module's own menu +
  * menu-item stores via `ctx.self`, denormalizes the recipe display name via
  * `ctx.deps.recipe.get`, resolves the meal type via `ctx.deps["meal-type"].resolveSpec`,
- * and commits through `ctx.self.commitMenu` / `ctx.self.commitMenuItemsBatch`. Lifted
- * verbatim from `src/tools/menu-item-write.ts`.
+ * and commits through `ctx.self.commitMenu` / `ctx.self.commitMenuItemsBatch`.
  */
 export function addMenuItemsTool(ctx: DomainCtx<MenuSelf, "recipe" | "meal-type">): void {
   const log = ctx.infra.log.child({ component: "add_menu_items" });

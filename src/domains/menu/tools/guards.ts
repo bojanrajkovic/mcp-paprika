@@ -7,18 +7,15 @@ import type { MenuSelf } from "../module.js";
 import { textResult } from "../../../shared/tools.js";
 
 /**
- * Kernel-shaped readiness gate. The legacy `menuStartGuard`
- * (`src/tools/menu-helpers.ts:23`) takes the god-object `ServerContext` and reads
- * `menuStore.hasSynced`, `menuItemStore.hasSynced`, AND `mealTypeStore.hasSynced`.
- * Re-bound here: the first two are `self` (menu + menu-items), the third is the
- * meal-type dependency's readiness signal (`deps["meal-type"].hasSynced()`).
+ * Readiness gate: all three stores (menus, menu-items, meal-types) must have
+ * completed their first sync before any menu tool runs.
  *
- * `mealTypeStore` is required because `read_menu`, the menu write tools, and the
- * `paprika://menu/{uid}` resource render each item's meal-type name and sort within
- * a day by the type's order; meal-type sync is best-effort and can lag independently,
- * so without this check a cold meal-type catalog renders every item with an opaque
- * `typeUid` sorted as unknown. Same `Result<void, CallToolResult>` shape, consumed
- * via `.match()`.
+ * The kernel ctx carries no cross-store access, so each store is checked as a
+ * plain boolean: the two owned stores via `ctx.self`, and the meal-type catalog
+ * via `ctx.deps["meal-type"].hasSynced()`. Meal-type sync is checked separately
+ * because it is additive and can lag independently — a cold catalog would render
+ * every item with an opaque `typeUid` sorted as unknown. Returns
+ * `Result<void, CallToolResult>`, consumed via `.match()`.
  */
 export function menuStartGuard(ctx: DomainCtx<MenuSelf, "recipe" | "meal-type">): Result<void, CallToolResult> {
   if (!ctx.self.menus.store.hasSynced || !ctx.self.items.store.hasSynced || !ctx.deps["meal-type"].hasSynced()) {

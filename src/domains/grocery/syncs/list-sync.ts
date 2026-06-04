@@ -5,8 +5,6 @@ import type { GrocerySelf } from "../module.js";
 
 import { syncReplaceAllEntity } from "../../../paprika/sync.js";
 
-// Field-wise comparator copied verbatim from `src/paprika/sync.ts:49-58` alongside
-// the reconcile it serves (the production comparator moves into the owning domain).
 function groceryListsEqual(a: GroceryList, b: GroceryList): boolean {
   return (
     a.uid === b.uid &&
@@ -19,16 +17,14 @@ function groceryListsEqual(a: GroceryList, b: GroceryList): boolean {
 }
 
 /**
- * Grocery-list sync — replace-all with pending-write filtering, over the SAME proven
- * `syncReplaceAllEntity` helper the monolith used (`src/paprika/sync.ts:415-423`).
- * Carries `afterLoad: () => store.setLastSyncedAt()` — the grocery-list-specific
+ * Grocery-list sync — replace-all with pending-write filtering via
+ * `syncReplaceAllEntity`. Carries `afterLoad: () => store.setLastSyncedAt()` — the
+ * grocery-list-specific
  * side-effect that backs the `paprika://grocery-list/{uid}` resource's "Last synced"
  * header line.
  *
- * `core` tier — grocery is step 4 of the legacy in-order core sequence
- * (recipes → categories → aisles → pantry → grocery lists → grocery items →
- * ingredients), inside the outer try that aborts the cycle on failure; it is NOT one
- * of the additive (meals/menus/photos) best-effort blocks. Grocery lists have an MCP
+ * `core` tier — inside the outer try that aborts the cycle on failure; not one of
+ * the additive (meals/menus/photos) best-effort blocks. Grocery lists have an MCP
  * resource surface, so this returns a `GroceryListSyncResult` to be emitted as
  * `sync:complete`.
  */

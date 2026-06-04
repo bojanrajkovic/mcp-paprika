@@ -5,10 +5,8 @@ import type { MenuSelf } from "../module.js";
 
 import { syncReplaceAllEntity } from "../../../paprika/sync.js";
 
-// Field-wise comparator copied verbatim from `src/paprika/sync.ts:86-97` alongside
-// the reconcile it serves (the production comparator moves into the owning domain).
-// `orderFlag` is menu-wide (not per-day) — preserved by comparing it as one field,
-// exactly as the legacy engine does.
+// `orderFlag` is menu-wide (not per-day) — a single comparable field that covers
+// ordering across all days of the menu.
 function menuItemsEqual(a: MenuItem, b: MenuItem): boolean {
   return (
     a.uid === b.uid &&
@@ -23,14 +21,13 @@ function menuItemsEqual(a: MenuItem, b: MenuItem): boolean {
 }
 
 /**
- * Menu-item sync — replace-all with pending-write filtering, over the SAME proven
- * `syncReplaceAllEntity` helper the monolith used (`src/paprika/sync.ts:540-547`).
+ * Menu-item sync — replace-all with pending-write filtering via `syncReplaceAllEntity`.
  * No `afterLoad` (unlike menus): only the parent menu store carries `lastSyncedAt`.
  *
- * `additive` tier — runs after menus (children reference parent), inside the same
- * best-effort surface. Menuitems are inlined in the `paprika://menu/{uid}` resource,
- * so this returns a `MenuItemSyncResult` to be emitted as `sync:complete` (a
- * child-item change invalidates the parent resource).
+ * `additive` tier — runs after menus (children reference parent). Menuitems are
+ * inlined in the `paprika://menu/{uid}` resource, so this returns a
+ * `MenuItemSyncResult` to be emitted as `sync:complete` (a child-item change
+ * invalidates the parent resource).
  */
 export function menuItemsSync(self: MenuSelf): SyncContribution<MenuSelf, "recipe" | "meal-type"> {
   return {

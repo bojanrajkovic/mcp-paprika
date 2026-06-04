@@ -15,8 +15,7 @@ import { PhotographyAPIError, PhotographyError } from "../../photography-errors.
 import { DEFAULT_PHOTO_MODEL, PHOTO_ASPECT_RATIOS, PHOTO_MODELS, recipeToPhotoPrompt } from "../../photography.js";
 
 /**
- * Input schema lifted verbatim from `src/tools/photo-generate.ts`. Kept exported so
- * the flip-phase tests can `safeParse` the `.strict`-style enums directly (the
+ * Kept exported so tests can `safeParse` the `.strict`-style enums directly (the
  * kernel test harness bypasses Zod, per the test-harness note).
  */
 export const generatePhotoInputSchema = z.object({
@@ -59,23 +58,14 @@ export const generatePhotoInputSchema = z.object({
 
 /**
  * Registers `generate_recipe_photo`, kernel-shaped — `DomainCtx<PhotoGenSelf, "recipe">`.
- * Lifted from `src/tools/photo-generate.ts`, rewired to the module seam:
- *   - the recipe lookup `ctx.store.get` → `ctx.deps.recipe.get` (the read contract);
- *   - `ctx.categoryStore.resolveNames` → `ctx.deps.recipe.resolveCategoryNames`
- *     (categories collapsed into recipe — see recipe's `RecipeApi`);
- *   - the restyle re-fetch `ctx.client.getRecipe` → `ctx.infra.client.getRecipe`;
- *   - the preview ring buffer `ctx.generatedImageStore` → `ctx.infra.generatedImageStore`
- *     (a shared recipe↔photo-gen seam — see `Infra.generatedImageStore`);
- *   - the attach write → `ctx.deps.recipe.attachGeneratedPhoto` (recipe owns the photo entity).
+ * Tool seam: recipe data via `ctx.deps.recipe` (read contract + `attachGeneratedPhoto`);
+ * restyle re-fetch via `ctx.infra.client.getRecipe`; the preview ring buffer via
+ * `ctx.infra.generatedImageStore` (a shared recipe↔photo-gen seam that avoids a dep cycle);
+ * the photography client via `ctx.self`.
  *
- * FEATURE GATE (ADR-0009 §5#9): the legacy registered this tool only when
- * `photographyClient !== null`. The kernel's `registerAll` registers every module's
- * tools unconditionally, so the gate moves INSIDE the wrapper — when
- * `ctx.self.photographyClient === null` the tool early-returns a clear
- * "not configured" message instead of failing. In the inert additive phase
- * `photographyClient` is ALWAYS null (the `.self` factory cannot reach config yet —
- * see module.ts), so this tool is a clean no-op message until the flip wires the
- * client; the gate and the inert state share one branch.
+ * FEATURE GATE (ADR-0009 §5#9): the kernel registers every module's tools
+ * unconditionally. When `ctx.self.photographyClient === null` (image generation
+ * unconfigured) the tool early-returns a clear "not configured" message.
  */
 export function generatePhotoTool(ctx: DomainCtx<PhotoGenSelf, "recipe">): void {
   const log = ctx.infra.log.child({ component: "generate_recipe_photo" });
@@ -98,9 +88,7 @@ export function generatePhotoTool(ctx: DomainCtx<PhotoGenSelf, "recipe">): void 
       const attach = args.attach ?? true;
       log.info({ tool: "generate_recipe_photo", recipe_uid: args.recipe_uid, model, restyle, attach }, "tool invoked");
 
-      // FEATURE GATE — null when image generation is unconfigured (and ALWAYS null
-      // in the inert additive phase, since `.self` cannot reach config yet). Mirrors
-      // the legacy `app.photographyClient !== null` registration gate, moved inside.
+      // FEATURE GATE — null when image generation is unconfigured (ADR-0009 §5#9).
       const photographyClient = ctx.self.photographyClient;
       if (photographyClient === null) {
         return textResult(

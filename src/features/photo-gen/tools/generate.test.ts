@@ -194,8 +194,8 @@ describe("generate_recipe_photo tool", () => {
 
   it("waits when the photo catalog is not yet synced (attach path)", async () => {
     // The kernel tool generates first, then the attach path (via ctx.deps.recipe.attachGeneratedPhoto)
-    // gates on photo catalog sync. The legacy tool gate-checked before generating; the kernel
-    // tool generates first and fails at attach — the message is the same, but generate IS called.
+    // gates on photo catalog sync. So when the catalog isn't synced, generation still runs and the
+    // failure surfaces at attach — generate IS called, even though the result says "still syncing".
     seedAndInject({ synced: false });
     const result = await kh.callTool("generate_recipe_photo", { recipe_uid: RECIPE_UID });
     expect(getText(result).toLowerCase()).toContain("still syncing");

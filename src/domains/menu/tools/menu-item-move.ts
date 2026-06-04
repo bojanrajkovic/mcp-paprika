@@ -28,7 +28,7 @@ export const moveMenuItemInputSchema = z
 /**
  * Registers `move_menu_item`, kernel-shaped — reads/writes this module's own menu +
  * menu-item stores via `ctx.self`, committing through `ctx.self.commitMenu` /
- * `ctx.self.commitMenuItem`. Lifted verbatim from `src/tools/menu-item-move.ts`.
+ * `ctx.self.commitMenuItem`.
  */
 export function moveMenuItemTool(ctx: DomainCtx<MenuSelf, "recipe" | "meal-type">): void {
   const log = ctx.infra.log.child({ component: "move_menu_item" });

@@ -146,10 +146,9 @@ export function updateCategoryTool(ctx: DomainCtx<RecipeSelf, never>): void {
 
           try {
             const saved = await ctx.infra.client.saveCategory(updated);
-            // commitCategoryUpsert persists locally; the category re-embed (a rename
-            // changes the display name baked into recipes' embedding text) is a FLIP
-            // item — see the `// FLIP:` marker in module.ts. App-side renames are
-            // handled by the sync:category-change event (also a FLIP channel).
+            // commitCategoryUpsert persists locally and emits `category-changed` on
+            // the kernel re-index seam so discover re-embeds the category's recipes
+            // (a rename changes the display name baked into their embedding text).
             await ctx.self.commitCategoryUpsert(saved);
             return textResult(`Updated category ${categorySummary(ctx.self, saved)}`);
           } catch (error) {

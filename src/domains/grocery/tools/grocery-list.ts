@@ -14,7 +14,7 @@ import { groceryStartGuard } from "./guards.js";
 /**
  * Registers `list_grocery_lists`, kernel-shaped — reads this module's own list +
  * item stores via `ctx.self` (item counts come from the co-owned item store, NOT a
- * dep). Body lifted verbatim from `src/tools/grocery-list.ts`.
+ * dep).
  */
 export function listGroceryListsTool(ctx: DomainCtx<GrocerySelf, "aisle" | "pantry">): void {
   const log = ctx.infra.log.child({ component: "list_grocery_lists" });
@@ -53,8 +53,7 @@ export function listGroceryListsTool(ctx: DomainCtx<GrocerySelf, "aisle" | "pant
 
 /**
  * Registers `read_grocery_list`, kernel-shaped — resolves a list by UID/name and
- * inlines its items, all from `ctx.self`. Body lifted verbatim from
- * `src/tools/grocery-list.ts`.
+ * inlines its items, all from `ctx.self`.
  */
 export function readGroceryListTool(ctx: DomainCtx<GrocerySelf, "aisle" | "pantry">): void {
   const log = ctx.infra.log.child({ component: "read_grocery_list" });
@@ -99,8 +98,7 @@ export function readGroceryListTool(ctx: DomainCtx<GrocerySelf, "aisle" | "pantr
 
 /**
  * Registers `create_grocery_list`, kernel-shaped — writes through this module's
- * bound `ctx.self.commitGroceryList`. Body lifted verbatim from
- * `src/tools/grocery-list.ts`.
+ * bound `ctx.self.commitGroceryList`.
  */
 export function createGroceryListTool(ctx: DomainCtx<GrocerySelf, "aisle" | "pantry">): void {
   const log = ctx.infra.log.child({ component: "create_grocery_list" });
@@ -159,7 +157,7 @@ export function createGroceryListTool(ctx: DomainCtx<GrocerySelf, "aisle" | "pan
 
 /**
  * Registers `rename_grocery_list`, kernel-shaped — writes through
- * `ctx.self.commitGroceryList`. Body lifted verbatim from `src/tools/grocery-list.ts`.
+ * `ctx.self.commitGroceryList`.
  */
 export function renameGroceryListTool(ctx: DomainCtx<GrocerySelf, "aisle" | "pantry">): void {
   const log = ctx.infra.log.child({ component: "rename_grocery_list" });
@@ -222,8 +220,7 @@ export function renameGroceryListTool(ctx: DomainCtx<GrocerySelf, "aisle" | "pan
 
 /**
  * Registers `delete_grocery_list`, kernel-shaped — soft-delete tombstone, writing
- * through `ctx.self.commitGroceryList`. Body lifted verbatim from
- * `src/tools/grocery-list.ts`.
+ * through `ctx.self.commitGroceryList`.
  */
 export function deleteGroceryListTool(ctx: DomainCtx<GrocerySelf, "aisle" | "pantry">): void {
   const log = ctx.infra.log.child({ component: "delete_grocery_list" });

@@ -27,8 +27,7 @@ export const updateMenuItemInputSchema = z
  * Registers `update_menu_item`, kernel-shaped — reads/writes this module's own
  * menu-item store via `ctx.self`, re-resolves the recipe display name via
  * `ctx.deps.recipe.get`, resolves the meal type via `ctx.deps["meal-type"].resolveSpec`,
- * and commits through `ctx.self.commitMenuItem`. Lifted verbatim from
- * `src/tools/menu-item-write.ts`.
+ * and commits through `ctx.self.commitMenuItem`.
  */
 export function updateMenuItemTool(ctx: DomainCtx<MenuSelf, "recipe" | "meal-type">): void {
   const log = ctx.infra.log.child({ component: "update_menu_item" });

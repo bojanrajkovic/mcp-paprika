@@ -12,9 +12,9 @@ import { DiskCache } from "../../cache/disk-cache.js";
 import { isNodeError } from "../../utils/errors.js";
 import { RecipeStoredSchema } from "./types.js";
 
-// Local schema for recipes/index.json. The unified index.json schema lived
-// in the old DiskCache; in the new layout only recipes carry real hashes,
-// so the index schema is a flat uid → hash map.
+// Local schema for recipes/index.json. Only recipes carry a real content hash —
+// the other entities' on-disk entries are directory-listing placeholders — so this
+// index is a flat uid → hash map.
 const RecipeIndexSchema = z.record(z.string(), z.string());
 
 export class RecipeDiskCache extends DiskCache<Recipe> {
@@ -129,8 +129,8 @@ export class RecipeDiskCache extends DiskCache<Recipe> {
   /**
    * Puts a recipe and records its hash for diffing. The hash is read from
    * `recipe.hash` — every caller passes the recipe's own hash here, and the
-   * type carries it as a non-nullable field, so the dedicated parameter the
-   * old API took (`putRecipe(recipe, hash)`) was vestigial.
+   * type carries it as a non-nullable field, so no separate `hash` parameter
+   * is needed.
    */
   override async put(recipe: Recipe): Promise<void> {
     return this._mutex.runExclusive(() => {

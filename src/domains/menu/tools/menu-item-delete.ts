@@ -17,7 +17,6 @@ export const deleteMenuItemInputSchema = z.object({
 /**
  * Registers `delete_menu_item`, kernel-shaped — reads/writes this module's own
  * menu-item store via `ctx.self`, committing through `ctx.self.commitMenuItem`.
- * Lifted verbatim from `src/tools/menu-item-write.ts`.
  */
 export function deleteMenuItemTool(ctx: DomainCtx<MenuSelf, "recipe" | "meal-type">): void {
   const log = ctx.infra.log.child({ component: "delete_menu_item" });

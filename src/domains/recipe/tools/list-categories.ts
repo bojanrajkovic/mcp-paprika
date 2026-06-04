@@ -10,7 +10,7 @@ import { categoryStartGuard } from "./guards.js";
 /**
  * Registers `list_categories`, kernel-shaped — recipe owns category, so both the
  * category catalog and the recipe-per-category counts read from `ctx.self`
- * (within-domain after the collapse; no deps).
+ * (within-domain — recipe owns category; no deps).
  */
 export function listCategoriesTool(ctx: DomainCtx<RecipeSelf, never>): void {
   const log = ctx.infra.log.child({ component: "list_categories" });

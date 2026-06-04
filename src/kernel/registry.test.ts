@@ -8,9 +8,9 @@ import { buildKernel } from "./registry.js";
 
 /**
  * Drives the kernel's `syncOnce` orchestration in isolation via synthetic modules
- * passed to `buildKernel(infra, modules)`. This covers the dumb-driver contract the
- * (removed) SyncEngine tests used to: recipe-first ordering, core-aborts-the-cycle,
- * additive-is-best-effort, results-only-after-flush, and end-of-cycle sweep.
+ * passed to `buildKernel(infra, modules)`. This covers the dumb-driver contract:
+ * recipe-first ordering, core-aborts-the-cycle, additive-is-best-effort,
+ * results-only-after-flush, and end-of-cycle sweep.
  */
 
 const RESULT = (changeType: AnySyncResult["changeType"]): AnySyncResult =>

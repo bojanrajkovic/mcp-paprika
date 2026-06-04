@@ -51,8 +51,6 @@ export interface MenuEntitySlice<Store, Cache> {
  * `commitMenuItemsBatch`) are bound HERE in `.self`, not in `.build`, because they
  * WRITE — they close over `infra.client` and `infra.notifier`, which the factory has
  * and `.build` does not (mirrors aisle's `ensureAisle` and recipe's `commitRecipe`).
- * Lifted verbatim from `src/tools/menu-helpers.ts`, reaching this module's own
- * stores/caches (`self.menus.*` / `self.items.*`) instead of the god-object context.
  * The read-only contract methods are assembled from the stores in `.build`.
  */
 export interface MenuSelf {
@@ -74,10 +72,9 @@ register(
       const notifier: Notifier = infra.notifier;
       const log: Logger = infra.log;
 
-      // Two stores + two plain caches. Reuse-in-place: point each at the SAME flat
-      // path the legacy DiskCacheRoot uses (`<cacheDir>/menus` | `/menuitems`). The
-      // `<domain>/<entity>` disk reshape + move-migration is deferred to the flip
-      // (ADR-0009).
+      // Two stores + two plain caches. Disk is flat: each cache's subdir is the
+      // original `<cacheDir>/menus` | `/menuitems` (reuse-in-place — ADR-0009 keeps
+      // the cache un-namespaced, so there is no migration).
       const pendingWriteTtlMs = resolvePendingWriteTtl(infra.config);
       const menuStore = new MenuStore({ pendingWriteTtlMs });
       const menuCache = new DiskCacheImpl<Menu>({
@@ -86,8 +83,8 @@ register(
         log,
       });
       await menuCache.init();
-      // Warm both stores from cache (legacy hydrate) so tools work on a warm restart
-      // before the first sync; drop tombstones, like legacy's `!deleted` filter.
+      // Warm both stores from cache so tools work on a warm restart before the
+      // first sync; drop tombstones on load (`!deleted` filter).
       const cachedMenus = (await menuCache.getAll()).filter((m) => !m.deleted);
       if (cachedMenus.length > 0) menuStore.load(cachedMenus);
 
@@ -101,7 +98,7 @@ register(
       const cachedMenuItems = (await menuItemCache.getAll()).filter((mi) => !mi.deleted);
       if (cachedMenuItems.length > 0) menuItemStore.load(cachedMenuItems);
 
-      // ---- Menu write chokepoints (lifted verbatim from src/tools/menu-helpers.ts) ----
+      // ---- Menu write chokepoints ----
       // Order: markPending* (FIRST, before any cache I/O) → cache put/remove → flush →
       // store set/delete → resourceListChanged → notifySync. The pending mark shields
       // this UID from sync-cycle reconciliation during the propagation race. Menus and
@@ -233,7 +230,8 @@ register(
       ],
       resources: [menuResource],
       // Order matters: menu before menu-item (children reference parent). Both
-      // additive — the legacy engine runs both inside one best-effort try-block.
+      // additive — a soft read surface must not abort core sync, so the kernel
+      // runs each in its own best-effort try/catch.
       syncs: [menusSync(self), menuItemsSync(self)],
       flush: async () => {
         await self.menus.cache.flush();

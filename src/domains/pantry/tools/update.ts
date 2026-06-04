@@ -38,8 +38,7 @@ export const updatePantryItemInputSchema = z
 /**
  * Registers `update_pantry_item`, kernel-shaped — writes through this module's
  * bound single-item commit (`ctx.self.commitPantryItem`) and resolves aisles via
- * the declared `aisle` dependency contract (`ctx.deps.aisle.ensureAisle`). Body
- * lifted verbatim from `src/tools/pantry-update.ts`.
+ * the declared `aisle` dependency contract (`ctx.deps.aisle.ensureAisle`).
  */
 export function updatePantryItemTool(ctx: DomainCtx<PantrySelf, "aisle">): void {
   const log = ctx.infra.log.child({ component: "update_pantry_item" });

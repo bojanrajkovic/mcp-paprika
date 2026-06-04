@@ -12,29 +12,17 @@ import { resolveLookup, textResult, uidOrTextLookupSchema } from "../../../share
 import { formatCalendarDayWire, parseCalendarDay } from "../../../utils/dates.js";
 
 /**
- * `schedule_menu`, kernel-shaped — the meal-planner COORDINATOR's only tool. Lifted
- * verbatim from `src/tools/meal-add-menu.ts`; title/annotations/description/inputSchema
- * and all logic are preserved exactly. Only the data sources change: every
- * cross-domain store read/write the god-object version did is re-expressed through a
- * DECLARED dependency's contract —
- *   - `ctx.store.get` (recipe)            → `ctx.deps.recipe.get`
- *   - `ctx.menuStore.get` / `findByName`  → `ctx.deps.menu.get` / `findByName`
- *   - `ctx.menuItemStore.getByMenuUid`    → `ctx.deps.menu.itemsOf`
- *   - `ctx.mealTypeStore.getAll`          → `ctx.deps["meal-type"].getAll`
- *   - `ctx.mealStore.hasSynced`           → `ctx.deps.meal.hasSynced()`
- *   - `makeMealOrderFlagAssigner(ctx)`    → `ctx.deps.meal.orderFlagAssigner()`
- *   - `client.saveMeals` + `commitMealsBatch(ctx, …)` → `ctx.deps.meal.createMeals(…)`
+ * `schedule_menu`, kernel-shaped — the meal-planner COORDINATOR's only tool.
+ * Every cross-domain store read/write is expressed through a DECLARED dependency's
+ * contract — `ctx.deps.recipe`, `ctx.deps.menu`, `ctx.deps["meal-type"]`,
+ * `ctx.deps.meal`. The coordinator owns no store, so it can never reach a dep's
+ * store/cache directly.
  *
- * The coordinator owns no store, so it can never reach a dep's store/cache; it gates
- * and reads/writes solely through the four contracts.
- *
- * The live tool composed three readiness gates (`coldStartGuard(ctx)` for recipe,
- * `menuStartGuard(ctx)` for menu+menu-item+meal-type, then an explicit meal-store
- * check) via neverthrow `.andThen().match()`. Those guards take the god-object
- * `ServerContext`, so they are re-expressed inline as plain boolean checks producing
- * the SAME verbatim messages. The meal-type half of the menu gate maps cleanly to the
- * existing `ctx.deps["meal-type"].hasSynced()`; the recipe and menu halves need
- * readiness methods their contracts do NOT yet expose — see the CONTRACT GAP markers.
+ * Three readiness gates are composed inline as plain boolean checks: recipe
+ * (re-resolve names), menu + meal-type (resolve items and their types), and meal
+ * (POST the batch). Each guard produces the same user-facing "not yet synced"
+ * message appropriate to its domain. `menu.hasSynced()` covers BOTH menu-owned
+ * stores (menus + menu-items); the meal-type check is the third leg of that gate.
  */
 
 // A menu item materialized into a planner meal: the menu's 1-indexed `day`, the
@@ -122,18 +110,13 @@ export function scheduleMenuTool(ctx: DomainCtx<Record<never, never>, "menu" | "
     },
     async (args) => {
       log.info({ tool: "schedule_menu", ...args.menu }, "tool invoked");
-      // Compose both families' guards (live: coldStartGuard → menuStartGuard → an
-      // explicit meal-store check), re-expressed inline against the deps' contracts.
-      // Recipe store (we re-resolve names), then menu + menuitem + mealType, then the
-      // meal-store check (we POST meals). Mirrors move_grocery_items_to_pantry's
-      // grocery-guard + explicit pantry check.
-      //
-      // recipe.hasSynced() — the live coldStartGuard's `ctx.store.hasSynced` (recipe).
+      // Three readiness gates: recipe (we re-resolve display names), menu + meal-type
+      // (resolve items and their types), then meal (we POST the batch).
       if (!ctx.deps.recipe.hasSynced()) {
         return textResult("Recipe store is not yet synced. Try again in a few seconds.");
       }
       // menu.hasSynced() covers BOTH menu-owned stores (menus + menu-items); the
-      // meal-type leg is the third leg of the live menuStartGuard.
+      // meal-type check is the third leg of this gate.
       if (!ctx.deps.menu.hasSynced() || !ctx.deps["meal-type"].hasSynced()) {
         return textResult("Menu data is not yet synced. Try again in a few seconds.");
       }

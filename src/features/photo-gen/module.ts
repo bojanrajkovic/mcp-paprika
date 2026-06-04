@@ -27,9 +27,8 @@ declare module "../../kernel/registry.js" {
  * reason a recipe→photo-gen dependency edge would be a cycle.
  *
  * `photographyClient` is the OpenRouter image-generation HTTP client, carried as a
- * NULLABLE field: `null` when image generation is unconfigured, exactly mirroring the
- * legacy `buildFeatures`, which sets `photographyClient = null` in that case. The
- * kernel registers `generate_recipe_photo` unconditionally, so the feature gate lives
+ * NULLABLE field: `null` when image generation is unconfigured. The kernel registers
+ * `generate_recipe_photo` unconditionally, so the feature gate lives
  * INSIDE the tool (ADR-0009 §5#9): it no-ops with a clear "not configured" message
  * when `photographyClient === null` rather than being conditionally registered.
  */
@@ -40,12 +39,10 @@ export interface PhotoGenSelf {
 register(
   defineModule("photo-gen", ["recipe"])
     .self<PhotoGenSelf>(async (infra) => {
-      // Build the photography client EXACTLY as legacy `buildFeatures` does:
-      // `resolveImageGenConfig(config) !== null ? new PhotographyClient(...) : null`,
-      // reading the root's single parsed config off `infra`. The legacy root reaches
-      // `buildFeatures` only after config has parsed, so `infra.config` is that same
-      // value — no second, divergent parse whose error arm would silently disable the
-      // feature; `null` (image generation unconfigured) degrades the tool to its gate.
+      // Build the photography client from the root's single parsed config on `infra`.
+      // A single config parse means no second, divergent parse whose error arm would
+      // silently disable the feature. `null` (image generation unconfigured) degrades
+      // the tool to its feature gate.
       const resolvedImageGen = resolveImageGenConfig(infra.config);
       const photographyClient =
         resolvedImageGen !== null

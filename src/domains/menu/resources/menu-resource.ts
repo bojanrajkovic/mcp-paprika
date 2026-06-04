@@ -15,7 +15,7 @@ import { menuToMarkdown } from "../menu-helpers.js";
  *
  * Recipe references are NOT read — recipe linkage is denormalized onto
  * `MenuItem.name` at write time, so the resource needs only the meal-type dep of its
- * two declared deps. Lifted verbatim from `src/resources/menus.ts`.
+ * two declared deps.
  */
 export function menuResource(ctx: DomainCtx<MenuSelf, "recipe" | "meal-type">): void {
   const template = new ResourceTemplate("paprika://menu/{uid}", {

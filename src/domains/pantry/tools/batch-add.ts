@@ -32,7 +32,7 @@ const itemInputSchema = z.object({
  * Registers `add_pantry_items`, kernel-shaped — writes through this module's bound
  * batch commit (`ctx.self.commitPantryItemsBatch`) and resolves aisles via the
  * declared `aisle` dependency contract (`ctx.deps.aisle.ensureAisle`), never
- * reaching aisle's store. Body lifted verbatim from `src/tools/pantry-batch-add.ts`.
+ * reaching aisle's store directly.
  */
 export function addPantryItemsTool(ctx: DomainCtx<PantrySelf, "aisle">): void {
   const log = ctx.infra.log.child({ component: "add_pantry_items" });

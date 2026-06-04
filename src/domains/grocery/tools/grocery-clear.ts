@@ -10,8 +10,7 @@ import { groceryStartGuard } from "./guards.js";
 
 /**
  * Registers `clear_purchased_grocery_items`, kernel-shaped — batch soft-delete of a
- * list's purchased items, writing through `ctx.self.commitGroceryItemsBatch`. Body
- * lifted verbatim from `src/tools/grocery-clear.ts`.
+ * list's purchased items, writing through `ctx.self.commitGroceryItemsBatch`.
  */
 export function clearPurchasedTool(ctx: DomainCtx<GrocerySelf, "aisle" | "pantry">): void {
   const log = ctx.infra.log.child({ component: "clear_purchased_grocery_items" });
@@ -59,8 +58,7 @@ export function clearPurchasedTool(ctx: DomainCtx<GrocerySelf, "aisle" | "pantry
 
 /**
  * Registers `clear_grocery_list`, kernel-shaped — batch soft-delete of ALL items in a
- * list, writing through `ctx.self.commitGroceryItemsBatch`. Body lifted verbatim from
- * `src/tools/grocery-clear.ts`.
+ * list, writing through `ctx.self.commitGroceryItemsBatch`.
  */
 export function clearAllTool(ctx: DomainCtx<GrocerySelf, "aisle" | "pantry">): void {
   const log = ctx.infra.log.child({ component: "clear_grocery_list" });

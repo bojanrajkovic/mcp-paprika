@@ -27,17 +27,16 @@ declare module "../../kernel/registry.js" {
 }
 
 /**
- * The pantry module's internals — a single store + cache pair (the only collapse
- * domain with no co-owned siblings). `createItems` is bound HERE in `.self`, not in
+ * The pantry module's internals — a single store + cache pair (a single-entity Data
+ * domain; nothing co-owned). `createItems` is bound HERE in `.self`, not in
  * `.build`, because it WRITES — it needs `infra.client`, which the factory has and
  * `.build` does not (mirrors aisle's `ensureAisle`). The read-only `hasSynced`
  * contract method is assembled from `store` in `.build`.
  *
- * `commitPantryItemsBatch` is lifted verbatim from `src/tools/pantry-helpers.ts`,
- * reaching this module's own store/cache instead of the god-object context. It is
- * exposed on `self` so the batch-add tool can write through the same chokepoint;
- * the single-item `commitPantryItem` is likewise bound for the update/stock/delete
- * tools. No `resourceListChanged()` — pantry is a Data entity with no MCP resource.
+ * `commitPantryItemsBatch` is exposed on `self` so the batch-add tool can write
+ * through the same chokepoint; the single-item `commitPantryItem` is likewise bound
+ * for the update/stock/delete tools. No `resourceListChanged()` — pantry is a Data
+ * entity with no MCP resource.
  */
 export interface PantrySelf {
   readonly store: PantryStore;
@@ -61,21 +60,19 @@ register(
   defineModule("pantry", ["aisle"])
     .self<PantrySelf>(async (infra) => {
       const store = new PantryStore({ pendingWriteTtlMs: resolvePendingWriteTtl(infra.config) });
-      // Reuse-in-place: point at the SAME flat path the legacy DiskCacheRoot uses
-      // (`<cacheDir>/pantry`). The `<domain>/<entity>` disk reshape + move-migration
-      // is deferred to the flip (ADR-0009).
+      // Disk is flat: the cache's subdir is the original `<cacheDir>/pantry`
+      // (reuse-in-place — ADR-0009 keeps the cache un-namespaced, so there is no migration).
       const cache = new DiskCache<PantryItem>({
         ...pantryDiskDescriptor,
         subdir: join(infra.cacheDir, pantryDiskDescriptor.subdir),
         log: infra.log,
       });
       await cache.init();
-      // Warm the store from cache (legacy hydrate) so tools work on a warm restart
-      // before the first sync completes.
+      // Warm the store from cache so tools work on a warm restart before the first sync.
       const cachedPantryItems = await cache.getAll();
       if (cachedPantryItems.length > 0) store.load(cachedPantryItems);
 
-      // ---- Pantry write chokepoints (lifted verbatim from src/tools/pantry-helpers.ts) ----
+      // ---- Pantry write chokepoints ----
 
       // Order: markPending* (FIRST, before any cache I/O) → cache put/remove → flush
       // → store set/delete → notifySync. The pending mark shields this UID from a

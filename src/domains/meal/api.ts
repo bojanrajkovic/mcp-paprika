@@ -8,11 +8,10 @@ import type { Meal } from "./types.js";
  * module). The store and cache stay private; the coordinator reaches only these
  * methods.
  *
- * Designed from the verified live `schedule_menu` (`src/tools/meal-add-menu.ts`)
- * call sites, not the spike's illustrative `count()` (which has no live consumer).
- * `schedule_menu` materializes a menu's items into planner meals: it gates on the
- * meal store being synced, assigns a per-DATE `order_flag` across the batch, then
- * POSTs once and commits — so the contract is exactly those three operations:
+ * The contract is shaped around `schedule_menu`'s needs: it materializes a menu's
+ * items into planner meals by gating on the meal store being synced, assigning a
+ * per-DATE `order_flag` across the batch, then POSTing once and committing — so
+ * the three required operations are:
  *   - `hasSynced` — the coordinator's meal-store start gate;
  *   - `orderFlagAssigner` — the stateful per-date `order_flag` assigner
  *     (`makeMealOrderFlagAssigner`, backed by `MealStore.getMaxOrderFlagOn`);

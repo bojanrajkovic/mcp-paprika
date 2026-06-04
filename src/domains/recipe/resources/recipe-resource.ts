@@ -8,10 +8,9 @@ import { recipeToMarkdown } from "../recipe-markdown.js";
 
 /**
  * Registers `paprika://recipe/{uid}`, kernel-shaped — reads this module's own
- * recipe and category stores via `ctx.self` (categories are INSIDE recipe now, so
+ * recipe and category stores via `ctx.self` (categories are owned by recipe, so
  * names resolve through `ctx.self.category.store`, not a dep). Recipe is one of the
- * three Content-class entities with a resource surface (ADR-0004). Lifted verbatim
- * from `src/resources/recipes.ts`; the `lastCookedAt` enrichment never lived here.
+ * three Content-class entities with a resource surface (ADR-0004).
  */
 export function recipeResource(ctx: DomainCtx<RecipeSelf, never>): void {
   const template = new ResourceTemplate("paprika://recipe/{uid}", {

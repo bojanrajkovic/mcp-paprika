@@ -8,15 +8,11 @@ The non-kernel pieces of the composition path: the transport-blind `Notifier` se
 
 ## Key References
 
-- `../kernel/CLAUDE.md` + `docs/adr/0009-domain-isolated-tool-modules-kernel.md` — the kernel that replaced `buildAppContext`/`buildMcpServer`; the construction/sync/boot ordering moved there.
+- `../kernel/CLAUDE.md` + `docs/adr/0009-domain-isolated-tool-modules-kernel.md` — the kernel; module construction, the sync driver, and boot-phase ordering live there.
 - `docs/adr/0001-two-transports-and-composition-root.md` — the two-transport split, the `Notifier` seam, and the notifier/server bootstrap cycle (`ServerRef`) this still implements.
 - `notifier.ts` — `Notifier`, `singleServerNotifier`, `broadcastNotifier`.
 - `build.ts` — `buildInfraBase` (logger + authenticated client + cache dir) and `buildBrandedServer` (the server identity/instructions the kernel registers onto).
 - `sync-loop.ts` — `runSyncLoop` (the interval driver) + `notifyFromResults`. `index-events.ts` — the `IndexEventEmitter`.
-
-## Transitional (do not build on)
-
-`app-context.ts` (`AppContext`/`SessionContext`) and the legacy `SyncEngine` (`../paprika/sync.ts`) survive ONLY to back the sync-coverage tests until those are ported to the kernel (#20). Production no longer constructs either — `buildInfraBase` reuses the `AppContext["log"]`/`["client"]` indexed types as a convenience, nothing more. New code reaches the kernel's `Infra`/`DomainCtx`, never these.
 
 ## Sharp edges
 
@@ -42,7 +38,7 @@ The notifier needs the server, the server is registered after the kernel is buil
 
 ### The index-event seam (`IndexEventEmitter`) crosses a non-edge
 
-Recipe writes and the recipe/category reconciles emit `recipe-changed`/`recipe-removed`/`category-changed` on `infra.indexEvents`; discover's `index` boot hook subscribes. It rides `infra` rather than a `dependsOn` edge because discover's contract is empty by design — there is no dependency edge into it. This restores the legacy `maintainRecipeIndex` + `sync:category-change` re-index path.
+Recipe writes and the recipe/category reconciles emit `recipe-changed`/`recipe-removed`/`category-changed` on `infra.indexEvents`; discover's `index` boot hook subscribes. It rides `infra` rather than a `dependsOn` edge because discover's contract is empty by design — there is no dependency edge into it.
 
 ### Startup logging is level-gated; SIGINT/SIGTERM writes raw stderr
 
@@ -50,4 +46,4 @@ Recipe writes and the recipe/category reconciles emit `recipe-changed`/`recipe-r
 
 ### Feature tools register unconditionally
 
-Unlike the legacy `buildMcpServer` (which gated `discover_recipes`/`generate_recipe_photo` on a non-null client), the kernel registers both tools always; they no-op when their client is null. The feature gate lives inside the handler, not at registration. See ADR-0009 §5.
+The kernel registers `discover_recipes`/`generate_recipe_photo` unconditionally; they no-op when their client is null. The feature gate lives inside the handler, not at registration. See ADR-0009 §5.

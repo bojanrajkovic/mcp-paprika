@@ -11,7 +11,7 @@ import { menuStartGuard } from "./guards.js";
 /**
  * Registers `read_menu`, kernel-shaped — reads this module's own menu + menu-item
  * stores via `ctx.self`, and the meal-type catalog (for name/order rendering) via
- * `ctx.deps["meal-type"].getAll()`. Lifted verbatim from `src/tools/menu-read.ts`.
+ * `ctx.deps["meal-type"].getAll()`.
  */
 export function readMenuTool(ctx: DomainCtx<MenuSelf, "recipe" | "meal-type">): void {
   const log = ctx.infra.log.child({ component: "read_menu" });

@@ -4,16 +4,13 @@ import type { RecipeSelf } from "../module.js";
 
 import { syncReplaceAllEntity } from "../../../paprika/sync.js";
 
-// Field-wise comparator copied verbatim from `src/paprika/sync.ts:29` alongside the
-// reconcile it serves (the production comparator moves into the owning domain).
 function categoriesEqual(a: Category, b: Category): boolean {
   return a.uid === b.uid && a.name === b.name && a.orderFlag === b.orderFlag && a.parentUid === b.parentUid;
 }
 
 /**
- * Category sync — replace-all with pending-write filtering, over the SAME proven
- * `syncReplaceAllEntity` helper the monolith used (`src/paprika/sync.ts:354-371`).
- * Categories gained create/update/delete write tools (#108), so they need the same
+ * Category sync — replace-all with pending-write filtering via `syncReplaceAllEntity`.
+ * Categories have create/update/delete write tools (#108), so they need the same
  * pending-write protection as pantry/grocery — a just-deleted category must not be
  * resurrected by an in-flight snapshot.
  *
@@ -24,8 +21,7 @@ function categoriesEqual(a: Category, b: Category): boolean {
  * A rename/removal must re-embed referencing recipes (the display name is baked into
  * their embedding text, but no recipe hash changes, so the recipe diff never re-fetches
  * them). The reconcile emits `category-changed` on the kernel re-index seam, which
- * discover's `index` boot hook subscribes to — the faithful port of the legacy
- * `sync:category-change` event (sync.ts:369-371).
+ * discover's `index` boot hook subscribes to.
  */
 export function categoriesSync(self: RecipeSelf): SyncContribution<RecipeSelf, never> {
   return {
@@ -42,8 +38,7 @@ export function categoriesSync(self: RecipeSelf): SyncContribution<RecipeSelf, n
       // `added` is excluded: a brand-new category has no referencing recipes yet — those
       // arrive via update_recipe, which re-embeds through recipe sync. `updated` may also
       // carry re-parents/order changes, but discover relies on the vector store's
-      // content-hash skip to make those a no-op (verbatim legacy gate + UID set,
-      // discover-feature.ts:163).
+      // content-hash skip to make those a no-op.
       if (changes.updated.length > 0 || changes.removedUids.length > 0) {
         ctx.infra.indexEvents.emit({
           type: "category-changed",

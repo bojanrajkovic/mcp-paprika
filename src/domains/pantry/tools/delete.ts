@@ -10,8 +10,7 @@ import { pantryStartGuard } from "./guards.js";
 
 /**
  * Registers `delete_pantry_item`, kernel-shaped — soft-delete tombstone, writing
- * through `ctx.self.commitPantryItem`. Body lifted verbatim from
- * `src/tools/pantry-delete.ts`.
+ * through `ctx.self.commitPantryItem`.
  */
 export function deletePantryItemTool(ctx: DomainCtx<PantrySelf, "aisle">): void {
   const log = ctx.infra.log.child({ component: "delete_pantry_item" });

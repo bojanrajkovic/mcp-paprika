@@ -35,23 +35,21 @@ register(
   defineModule("aisle", [])
     .self<AisleSelf>(async (infra) => {
       const store = new AisleStore({ pendingWriteTtlMs: resolvePendingWriteTtl(infra.config) });
-      // Reuse-in-place: point at the SAME flat path the legacy DiskCacheRoot uses
-      // (`<cacheDir>/aisles`). The `<domain>/<entity>` disk reshape + move-migration
-      // is deferred to the flip (ADR-0009).
+      // Disk is flat: the cache's subdir is the original `<cacheDir>/aisles`
+      // (reuse-in-place — ADR-0009 keeps the cache un-namespaced, so there is no migration).
       const cache = new DiskCache<Aisle>({
         ...aisleDiskDescriptor,
         subdir: join(infra.cacheDir, aisleDiskDescriptor.subdir),
         log: infra.log,
       });
       await cache.init();
-      // Warm the store from cache (legacy hydrate) so tools work on a warm restart
-      // before the first sync; drop tombstones, like legacy's `!deleted` filter.
+      // Warm the store from cache so tools work on a warm restart before the first sync;
+      // drop tombstones (deleted aisles must not re-appear before a sync clears them).
       const cachedAisles = (await cache.getAll()).filter((a) => !a.deleted);
       if (cachedAisles.length > 0) store.load(cachedAisles);
 
       // ensureAisle is the write path (auto-create + persist), so it closes over
-      // infra.client. Lifted verbatim from src/tools/aisle-helpers.ts, reaching this
-      // module's own store/cache instead of the god-object context.
+      // infra.client and reaches this module's own store/cache.
       const ensureAisleMutex = new Mutex();
       const commitAisle = async (aisle: Aisle): Promise<void> => {
         store.markPendingUpsert(aisle.uid);

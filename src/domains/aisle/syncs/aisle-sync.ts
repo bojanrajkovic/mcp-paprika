@@ -5,9 +5,10 @@ import type { AisleSelf } from "../module.js";
  * Aisle sync — replace-all WITH pending-write filtering. This is NOT the
  * `syncReplaceAllEntity` helper: it filters deleted and pending-upsert rows,
  * merges cached pending-upserts back, removes orphans from the cache, then
- * observation-clears confirmed pending-upserts. Lifted verbatim from the legacy
- * SyncEngine. `core` tier — pantry and grocery resolve against aisles, so this
- * must reconcile before them.
+ * observation-clears confirmed pending-upserts (a confirmed pending-upsert UID
+ * present in the canonical list means the server confirmed the write — clear now
+ * rather than at TTL). `core` tier — pantry and grocery resolve against aisles,
+ * so this must reconcile before them.
  */
 export function aisleSync(self: AisleSelf): SyncContribution<AisleSelf, never> {
   return {
@@ -29,8 +30,6 @@ export function aisleSync(self: AisleSelf): SyncContribution<AisleSelf, never> {
       store.load(effectiveAisles);
       await Promise.all(effectiveAisles.map((a) => cache.put(a)));
 
-      // Observation-based clearing: a pending-upsert UID present in the canonical
-      // list means the server confirmed the write — clear now rather than at TTL.
       for (const aisle of aisles) {
         if (store.isPendingUpsert(aisle.uid)) {
           store.clearPending(aisle.uid);

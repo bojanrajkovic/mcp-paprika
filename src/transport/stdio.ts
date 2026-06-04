@@ -65,9 +65,9 @@ export async function startStdio(config: PaprikaConfig): Promise<TransportHandle
   const tlog = log.child({ component: "transport-stdio" });
 
   // The interval loop runs its first cycle immediately (then waits), so — combined
-  // with buildKernel's initial cycle — startup syncs twice, exactly as the legacy
-  // runInitialSync + sync.start() did. notifyFromResults applies the legacy
-  // sync:complete → resourceListChanged filter to each cycle's returned results.
+  // with buildKernel's initial cycle — startup syncs twice. notifyFromResults turns
+  // each cycle's returned results into resourceListChanged notifications, filtered to
+  // the change types with a resource surface.
   const loop = config.sync.enabled
     ? runSyncLoop(async () => {
         notifyFromResults(await kernel.syncOnce(), notifier);

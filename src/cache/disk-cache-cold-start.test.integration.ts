@@ -22,7 +22,7 @@ import "../kernel/modules.generated.js";
  * construction, exactly as on a warm restart — then register its tools on a stub
  * server. Recipe is dependency-free (`defineModule("recipe", [])`), so its closure is
  * just itself. Returns `callTool` so a cold-started `search_recipes` can be exercised
- * end-to-end (the kernel analogue of the legacy `makeCtx(store)` + `registerSearchTool`).
+ * end-to-end.
  */
 async function coldStartRecipeTools(
   cacheDir: string,

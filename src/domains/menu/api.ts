@@ -10,9 +10,8 @@ import type { Menu } from "./types.js";
  * (`Menu`/`MenuItem`), never the stores — analogous to `RecipeApi.get` returning a
  * `Recipe`; the isolation proof forbids `ctx.deps.menu.store`.
  *
- * Designed from the verified live cross-domain call sites in
- * `src/tools/meal-add-menu.ts` (the coordinator tool), not the spike's illustrative
- * placeholders:
+ * Scoped to the verified live cross-domain call sites in the meal-planner coordinator
+ * (`schedule_menu`), nothing speculative:
  *   - `get` / `findByName` — resolve a menu by uid or name (the coordinator's `resolveLookup`);
  *   - `itemsOf` — the menu's items to materialize (wraps `menuItemStore.getByMenuUid`).
  */

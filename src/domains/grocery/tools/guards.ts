@@ -6,12 +6,10 @@ import type { GrocerySelf } from "../module.js";
 import { textResult } from "../../../shared/tools.js";
 
 /**
- * Kernel-shaped readiness gate. The legacy `groceryStartGuard`
- * (`src/tools/grocery-helpers.ts:14`) takes the god-object `ServerContext` and reads
- * `groceryListStore.hasSynced` AND `groceryItemStore.hasSynced`; re-bound here, both
- * are `self` (lists + items live in the same collapsed domain). Both stores must be
- * synced because `read_grocery_list` inlines items. Same `Result<void, CallToolResult>`
- * shape, consumed via `.match()`.
+ * Kernel-shaped readiness gate. Checks `lists.store.hasSynced` AND
+ * `items.store.hasSynced` via `self` (both live in the same domain). Both
+ * stores must be synced because `read_grocery_list` inlines items. Returns
+ * `Result<void, CallToolResult>`, consumed via `.match()`.
  */
 export function groceryStartGuard(self: GrocerySelf): Result<void, CallToolResult> {
   if (!self.lists.store.hasSynced || !self.items.store.hasSynced) {

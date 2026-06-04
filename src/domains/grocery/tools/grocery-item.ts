@@ -31,8 +31,7 @@ const itemInputSchema = z.object({
  * never reaching aisle's store) and writes the grocery-ingredient catalog through
  * this module's OWN ingredient store + cache (`ctx.self.ingredients.*` — ingredient
  * is a co-owned grocery entity, so the catalog write stays in `self`). Items commit
- * through this module's bound `ctx.self.commitGroceryItemsBatch`. Body lifted verbatim
- * from `src/tools/grocery-item.ts`.
+ * through this module's bound `ctx.self.commitGroceryItemsBatch`.
  */
 export function addGroceryItemsTool(ctx: DomainCtx<GrocerySelf, "aisle" | "pantry">): void {
   const log = ctx.infra.log.child({ component: "add_grocery_items" });
@@ -185,8 +184,7 @@ export const updateGroceryItemInputSchema = z
 
 /**
  * Registers `update_grocery_item`, kernel-shaped — resolves the aisle via
- * `ctx.deps.aisle.ensureAisle` and writes through `ctx.self.commitGroceryItem`. Body
- * lifted verbatim from `src/tools/grocery-item.ts`.
+ * `ctx.deps.aisle.ensureAisle` and writes through `ctx.self.commitGroceryItem`.
  */
 export function updateGroceryItemTool(ctx: DomainCtx<GrocerySelf, "aisle" | "pantry">): void {
   const log = ctx.infra.log.child({ component: "update_grocery_item" });
@@ -243,8 +241,7 @@ export function updateGroceryItemTool(ctx: DomainCtx<GrocerySelf, "aisle" | "pan
 
 /**
  * Registers `delete_grocery_item`, kernel-shaped — soft-delete tombstone, writing
- * through `ctx.self.commitGroceryItem`. Body lifted verbatim from
- * `src/tools/grocery-item.ts`.
+ * through `ctx.self.commitGroceryItem`.
  */
 export function deleteGroceryItemTool(ctx: DomainCtx<GrocerySelf, "aisle" | "pantry">): void {
   const log = ctx.infra.log.child({ component: "delete_grocery_item" });

@@ -9,8 +9,8 @@ import type { PantryItem } from "./types.js";
  * the `PantryItem`s grocery-side and persists them THROUGH `createItems` (never
  * reaching pantry's store).
  *
- * Designed from the verified live cross-domain call site (`src/tools/grocery-move.ts`),
- * not the spike's illustrative `count()` (which has no live consumer):
+ * Scoped to the verified live cross-domain call site (grocery's move-to-pantry tool),
+ * nothing speculative:
  *   - `hasSynced` — grocery gates the move on pantry being warm before any write;
  *   - `createItems` — the write the move needs, distinguishing API-create failure
  *     from local-commit failure so grocery can keep its create-first/delete-second

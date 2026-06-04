@@ -4,21 +4,19 @@ import type { AnySyncResult } from "../paprika/sync-types.js";
 import type { Notifier } from "./notifier.js";
 
 /**
- * The background sync interval driver, extracted from the legacy `SyncEngine`'s
- * `start`/`stop`/`_loop` (sync.ts:262-276, 662-683). The kernel exposes only
- * `syncOnce()`; this is the loop that calls it on an interval until stopped.
+ * The background sync interval driver. The kernel exposes only `syncOnce()`; this
+ * is the loop that calls it on an interval until stopped.
  *
  * `onCycle` runs one cycle. The kernel's `syncOnce()` already never throws, but
- * the inner `try/catch` is kept as belt-and-suspenders (matching legacy's
- * defensive catch). The `scheduler.wait` + `AbortController` + `AbortError`-swallow
- * exit is the load-bearing piece preserved verbatim: `stop()` aborts the in-flight
- * wait so the loop exits promptly instead of after the full interval.
+ * the inner `try/catch` is kept as belt-and-suspenders. The `scheduler.wait` +
+ * `AbortController` + `AbortError`-swallow exit is the load-bearing piece:
+ * `stop()` aborts the in-flight wait so the loop exits promptly instead of after
+ * the full interval.
  *
- * Like legacy `_loop`, the loop runs `onCycle()` IMMEDIATELY as its first iteration
- * (then waits). The caller has already run the initial cycle once at build time
- * (the kernel's `buildKernel` does), so the first loop iteration is a second sync —
- * exactly as the legacy `runInitialSync` + `sync.start()` sequence did. The loop is
- * fire-and-forget (not awaited), so it never blocks the transport's `connect()`.
+ * The loop runs `onCycle()` IMMEDIATELY as its first iteration (then waits). The
+ * caller has already run the initial cycle at build time (the kernel's `buildKernel`
+ * does), so the first loop iteration is a second sync. The loop is fire-and-forget
+ * (not awaited), so it never blocks the transport's `connect()`.
  */
 export function runSyncLoop(onCycle: () => Promise<void>, intervalMs: number): { stop(): void } {
   const ac = new AbortController();
@@ -50,15 +48,12 @@ export function runSyncLoop(onCycle: () => Promise<void>, intervalMs: number): {
 }
 
 /**
- * Fan out a resource-list notification for a completed sync cycle's results — the
- * legacy `wireSync` `sync:complete` subscriber (build.ts:357-371), now applied to
- * the array `kernel.syncOnce()` returns rather than per-event. Fires
- * `resourceListChanged()` once per qualifying result: Content entities with an MCP
- * resource surface (recipes, grocery lists + items, menus + items). Pantry is
- * excluded — it has no resource surface. `resourceListChanged()` is idempotent
- * fire-and-forget, so N calls in one cycle collapse client-side exactly as the
- * legacy per-event emits did. The kernel returns `[]` for an aborted/un-flushed
- * cycle, so a failed cycle fans out nothing (mirroring legacy's sync:error-only).
+ * Fan out a resource-list notification for a completed sync cycle's results.
+ * Fires `resourceListChanged()` once per qualifying result: Content entities with
+ * an MCP resource surface (recipes, grocery lists + items, menus + items). Pantry
+ * is excluded — it has no resource surface. `resourceListChanged()` is idempotent
+ * fire-and-forget, so N calls in one cycle collapse client-side. The kernel returns
+ * `[]` for an aborted/un-flushed cycle, so a failed cycle fans out nothing.
  */
 export function notifyFromResults(results: ReadonlyArray<AnySyncResult>, notifier: Notifier): void {
   for (const result of results) {

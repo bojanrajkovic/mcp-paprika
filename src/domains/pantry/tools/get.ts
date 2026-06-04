@@ -10,8 +10,8 @@ import { pantryStartGuard } from "./guards.js";
 
 /**
  * Registers `read_pantry_item`, kernel-shaped — reads this module's own store via
- * `ctx.self`. The shared lookup/format helpers and `pantryItemToMarkdown` are pure
- * renderers reused in place from `src/tools/`.
+ * `ctx.self`. Uses shared lookup/format helpers and `pantryItemToMarkdown` for
+ * fuzzy-match resolution and rendering.
  */
 export function getPantryItemTool(ctx: DomainCtx<PantrySelf, "aisle">): void {
   const log = ctx.infra.log.child({ component: "read_pantry_item" });

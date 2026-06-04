@@ -7,12 +7,11 @@ import type { Recipe } from "./types.js";
 /**
  * Recipe's public contract — the surface meal, menu, meal-planner, discover, and
  * photo-gen consume via `ctx.deps.recipe`. Recipe owns three entities (recipes,
- * categories, photos) after the collapse, so the category resolvers live here too
- * (categories are no longer a separate domain). The stores and caches stay private;
- * siblings reach only these methods.
+ * categories, photos) — there is no separate category or photo domain — so the
+ * category resolvers live here too. The stores and caches stay private; siblings
+ * reach only these methods.
  *
- * Designed from the verified live cross-domain call sites, not the spike's
- * illustrative `count()` (which has no live consumer):
+ * Scoped to exactly the live cross-domain call sites (nothing speculative):
  *   - `get` — the recipe-name/existence read every meal/menu/coordinator write does;
  *   - `resolveCategoryRefs` — meal's `search_meal_history` UID/name → CategoryUid;
  *   - `resolveCategoryNames` — meal label, discover display, photo-gen prompt.

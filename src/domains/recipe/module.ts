@@ -64,8 +64,8 @@ export interface RecipeEntitySlice<Store, Cache> {
 
 /**
  * The recipe module's internals. The largest module: it carries THREE store/cache
- * pairs (recipes + categories + photos), because the collapse folds category and
- * photo in (recipe owns both, with NO separate module and NO dependency on either).
+ * pairs (recipes + categories + photos): recipe owns category and photo directly,
+ * with NO separate module and NO dependency on either.
  *
  * The write-capable methods (`commitRecipe`, `commitRecipeHardDelete`,
  * `reconcileLocalRecipe`/`reconcileLocalRecipeAbsent`, `commitCategoryUpsert`/
@@ -73,15 +73,13 @@ export interface RecipeEntitySlice<Store, Cache> {
  * in `.self`, not in `.build`, because they WRITE — they close over `infra.client`
  * and `infra.notifier`, which the factory has and `.build` does not (mirrors aisle's
  * `ensureAisle`). The read-only contract methods are assembled from the stores in
- * `.build`. Lifted verbatim from `src/tools/{helpers,category-helpers,photo-helpers}.ts`,
- * reaching this module's own stores/caches instead of the god-object context.
+ * `.build`. Reaches this module's own stores/caches via `self` — never a wider shared context.
  *
- * Vector-index maintenance (the legacy `maintainRecipeIndex`/`reindexRecipesForCategoryChange`,
- * #177) writes the discover-owned `vectorStore`, which recipe cannot reach (no dependency
- * edge into discover by design). So each write chokepoint EMITS on `infra.indexEvents` —
- * the kernel-level re-index seam discover's `index` boot hook subscribes to — instead of
- * reaching across the boundary. The `resourceListChanged()` rule is PRESERVED: recipe is a
- * Content entity (fires); category and photo are not (silent).
+ * Vector-index maintenance (#177) writes the discover-owned `vectorStore`, which recipe
+ * cannot reach (no dependency edge into discover by design). So each write chokepoint
+ * EMITS on `infra.indexEvents` — the kernel-level re-index seam discover's `index` boot
+ * hook subscribes to — instead of reaching across the boundary. The `resourceListChanged()`
+ * rule is PRESERVED: recipe is a Content entity (fires); category and photo are not (silent).
  */
 export interface RecipeSelf {
   readonly recipe: RecipeEntitySlice<RecipeStore, RecipeDiskCache>;
@@ -118,9 +116,9 @@ register(
 
       // Three stores + three caches. Recipes use the bespoke RecipeDiskCache
       // (carries the uid→hash diff index); categories + photos use plain DiskCache.
-      // Reuse-in-place: point each at the SAME flat path the legacy DiskCacheRoot
-      // uses (`<cacheDir>/recipes` | `/categories` | `/photos`). The <domain>/<entity>
-      // disk reshape + move-migration is deferred to the flip (ADR-0009).
+      // Disk is flat: each cache's subdir is `<cacheDir>/recipes` | `/categories` |
+      // `/photos` (reuse-in-place — ADR-0009 keeps the cache un-namespaced, so there
+      // is no migration).
       //
       // Each store is hydrated from its cache (legacy hydrate) so tools work on a warm
       // restart before the first sync completes. Recipe is the load-bearing one: it
@@ -155,7 +153,7 @@ register(
       const cachedPhotos = (await photoCache.getAll()).filter((p) => !p.deleted);
       if (cachedPhotos.length > 0) photoStore.load(cachedPhotos);
 
-      // ---- Recipe write chokepoints (lifted verbatim from src/tools/helpers.ts) ----
+      // ---- Recipe write chokepoints ----
 
       // Order: markPending* (FIRST, before any cache I/O) → cache put/remove → flush
       // → store set/delete → resourceListChanged → notifySync. The pending mark
@@ -178,10 +176,9 @@ register(
         notifier.resourceListChanged();
         // Re-index at commit time, before notifySync: a tool-written recipe's UID is
         // pending, so the sync recipe-diff filters it out and never re-embeds it (#177).
-        // A trashed recipe is REMOVED from the index, else re-embedded — mirroring legacy
-        // maintainRecipeIndex's `if (inTrash) removeRecipe; else indexRecipe` branch
-        // (this commit's markPending block above branches on inTrash the same way).
-        // discover's index hook subscribes to this channel; the emit never throws.
+        // A trashed recipe is REMOVED from the index, else re-embedded (mirrors the
+        // markPending branch above). discover's index hook subscribes to this channel;
+        // the emit never throws.
         if (saved.inTrash) {
           infra.indexEvents.emit({ type: "recipe-removed", uids: [saved.uid] });
         } else {
@@ -223,8 +220,7 @@ register(
         recipeStore.set(authoritative);
         notifier.resourceListChanged();
         // Same inTrash branch as commitRecipe: a canonical pull that lands a trashed
-        // recipe must REMOVE it from the index, not re-embed it (legacy reconcileLocalRecipe
-        // routed through maintainRecipeIndex, which branches on inTrash).
+        // recipe must REMOVE it from the index, not re-embed it.
         if (authoritative.inTrash) {
           infra.indexEvents.emit({ type: "recipe-removed", uids: [authoritative.uid] });
         } else {
@@ -250,10 +246,10 @@ register(
         return true;
       };
 
-      // ---- Category write chokepoints (lifted verbatim from src/tools/category-helpers.ts) ----
+      // ---- Category write chokepoints ----
       // Mark-pending-first mirrors commitRecipe. No resourceListChanged() — categories
       // have no MCP resource surface; recipe rendering resolves names through the store
-      // on read. The category re-embed (maintainCategoryRecipeIndex) is DROPPED here.
+      // on read.
       const commitCategoryUpsert: RecipeSelf["commitCategoryUpsert"] = async (category) => {
         categoryStore.markPendingUpsert(category.uid);
         try {
@@ -284,7 +280,7 @@ register(
         await client.notifySync();
       };
 
-      // ---- Photo write chokepoints (lifted verbatim from src/tools/photo-helpers.ts) ----
+      // ---- Photo write chokepoints ----
       // attachPhotoToRecipe builds the Photo + photo-bearing recipe, runs the client's
       // verified 3-request upload, then commits BOTH the recipe and photo stores. No
       // resourceListChanged() — the recipe resource renders photoUrl, not photo/photoLarge.

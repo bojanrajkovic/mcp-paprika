@@ -49,7 +49,7 @@ export interface GroceryEntitySlice<Store, Cache> {
 }
 
 /**
- * The grocery module's internals — the three-entity domain-collapse (like recipe and
+ * The grocery module's internals — the three-entity domain (like recipe and
  * menu): THREE store/cache pairs in one `self`. Grocery lists and items are
  * `TombstoneEntityStore`s (replace-all sync via `syncReplaceAllEntity`); the
  * ingredient catalog is a plain name-keyed store (a direct bespoke reconcile, no
@@ -62,9 +62,9 @@ export interface GroceryEntitySlice<Store, Cache> {
  * `commitGroceryItemsBatch`) are bound HERE in `.self`, not in `.build`, because they
  * WRITE — they close over `infra.client` and `infra.notifier`, which the factory has
  * and `.build` does not (mirrors aisle's `ensureAisle`, recipe's `commitRecipe`, and
- * menu's `commitMenu`). Lifted verbatim from `src/tools/grocery-helpers.ts`, reaching
- * this module's own stores/caches (`self.lists.*` / `self.items.*`) instead of the
- * god-object context. Grocery lists and items both fire `resourceListChanged()` —
+ * menu's `commitMenu`). Reaches this module's own stores/caches (`self.lists.*` /
+ * `self.items.*`) via `ctx.self`. Grocery lists and items
+ * both fire `resourceListChanged()` —
  * lists have an MCP resource surface and items are inlined in it; the ingredient
  * catalog write (in `add_grocery_items`) is silent and stays inline in the tool. The
  * read-only `api` is empty (no live sibling reads grocery — see `api.ts`); it is
@@ -90,10 +90,10 @@ register(
       const notifier: Notifier = infra.notifier;
       const log: Logger = infra.log;
 
-      // Three stores + three plain caches. Reuse-in-place: point each at the SAME
-      // flat path the legacy DiskCacheRoot uses (`<cacheDir>/grocerylists` |
-      // `/groceryitems` | `/groceryingredients`). The `<domain>/<entity>` disk
-      // reshape + move-migration is deferred to the flip (ADR-0009).
+      // Three stores + three plain caches. Disk is flat: each cache's subdir is the
+      // original `<cacheDir>/grocerylists` | `/groceryitems` | `/groceryingredients`
+      // (reuse-in-place — ADR-0009 keeps the cache un-namespaced, so there is no
+      // migration).
       const pendingWriteTtlMs = resolvePendingWriteTtl(infra.config);
       const listStore = new GroceryListStore({ pendingWriteTtlMs });
       const listCache = new DiskCacheImpl<GroceryList>({
@@ -129,7 +129,7 @@ register(
       const cachedGroceryIngredients = (await ingredientCache.getAll()).filter((i) => !i.deleted);
       if (cachedGroceryIngredients.length > 0) ingredientStore.load(cachedGroceryIngredients);
 
-      // ---- Grocery write chokepoints (lifted verbatim from src/tools/grocery-helpers.ts) ----
+      // ---- Grocery write chokepoints ----
       // Order: markPending* (FIRST, before any cache I/O) → cache put/remove → flush →
       // store set/delete → resourceListChanged → notifySync. The pending mark shields
       // this UID from sync-cycle reconciliation during the propagation race. Grocery
@@ -267,8 +267,8 @@ register(
       ],
       resources: [groceryListResource],
       // Order matters: lists before items (children reference parent), then the
-      // ingredient catalog. All three are core (grocery is the legacy in-order core
-      // sequence's step 4–6, inside the outer try that aborts the cycle on failure).
+      // ingredient catalog. All three are core — inside the outer try that aborts the
+      // sync cycle on failure.
       syncs: [groceryListsSync(self), groceryItemsSync(self), groceryIngredientsSync()],
       flush: async () => {
         await self.lists.cache.flush();
