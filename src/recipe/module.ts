@@ -333,6 +333,7 @@ register(
             .getAll()
             .filter((r) => r.categories.includes(categoryUid))
             .map((r) => r.uid),
+        hasSynced: () => self.recipe.store.hasSynced,
       },
       tools: [
         listRecipesTool,

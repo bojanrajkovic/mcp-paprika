@@ -26,4 +26,6 @@ export interface MenuApi {
   findByName(query: string): ReadonlyArray<Menu>;
   /** All non-tombstoned items of a menu, in store order (wraps `getByMenuUid`). */
   itemsOf(menuUid: MenuUid): ReadonlyArray<MenuItem>;
+  /** Whether BOTH owned stores (menus + menu-items) have completed their first sync — the meal-planner readiness gate. */
+  hasSynced(): boolean;
 }

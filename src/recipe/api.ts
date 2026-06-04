@@ -39,4 +39,6 @@ export interface RecipeApi {
    * `store.getAll().filter(r => r.categories.includes(uid)).map(r => r.uid)` set.
    */
   recipesInCategory(categoryUid: CategoryUid): ReadonlyArray<RecipeUid>;
+  /** Whether the recipe store has completed its first sync — the meal-planner cold-start gate. */
+  hasSynced(): boolean;
 }

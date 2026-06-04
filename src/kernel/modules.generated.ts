@@ -5,6 +5,7 @@ import "../aisle/module.js";
 import "../features/discover/module.js";
 import "../features/photo-gen/module.js";
 import "../grocery/module.js";
+import "../meal-planner/module.js";
 import "../meal-type/module.js";
 import "../meal/module.js";
 import "../menu/module.js";

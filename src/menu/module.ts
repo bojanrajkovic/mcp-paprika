@@ -208,6 +208,7 @@ register(
         get: (uid) => self.menus.store.get(uid),
         findByName: (query) => self.menus.store.findByName(query),
         itemsOf: (menuUid) => self.items.store.getByMenuUid(menuUid),
+        hasSynced: () => self.menus.store.hasSynced && self.items.store.hasSynced,
       },
       // ctx is INFERRED — DomainCtx<MenuSelf, "recipe" | "meal-type">. Reaching any
       // other dep, or `ctx.deps.recipe.store` / `.cache`, would not compile.
