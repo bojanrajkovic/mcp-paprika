@@ -42,7 +42,7 @@ export function deleteCategoryTool(ctx: DomainCtx<RecipeSelf, never>): void {
         async (): Promise<CallToolResult> => {
           const existing = ctx.self.category.store.get(args.uid);
           if (existing === undefined) {
-            return textResult(`No category found with UID "${args.uid}" (already deleted?).`);
+            return textResult(`No category found with UID "${args.uid}" (it may not exist or was already deleted).`);
           }
 
           const children = ctx.self.category.store.getChildren(args.uid);

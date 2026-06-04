@@ -204,7 +204,9 @@ export function updateGroceryItemTool(ctx: DomainCtx<GrocerySelf, "aisle" | "pan
         async (): Promise<CallToolResult> => {
           const existing = ctx.self.items.store.get(args.uid);
           if (existing === undefined) {
-            return textResult(`No grocery item found with UID "${args.uid}".`);
+            return textResult(
+              `No grocery item found with UID "${args.uid}" (it may not exist or was already deleted).`,
+            );
           }
 
           let saved: GroceryItem;

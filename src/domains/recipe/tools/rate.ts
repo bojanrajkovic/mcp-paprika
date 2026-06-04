@@ -35,7 +35,7 @@ export function rateRecipeTool(ctx: DomainCtx<RecipeSelf, never>): void {
           const existing = ctx.self.recipe.store.get(args.uid);
 
           if (!existing) {
-            return textResult(`No recipe found with UID "${args.uid}".`);
+            return textResult(`No recipe found with UID "${args.uid}" (it may not exist or was already deleted).`);
           }
 
           const updated = { ...existing, rating: args.rating };

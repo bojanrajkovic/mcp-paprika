@@ -144,7 +144,7 @@ describe("schedule_menu — menu resolution", () => {
     const text = getText(
       await kh.callTool("schedule_menu", { menu: { uid: "nope" as MenuUid }, start_date: "2026-05-27" }),
     );
-    expect(text).toBe('No menu found with UID "nope".');
+    expect(text).toBe('No menu found with UID "nope" (it may not exist or was already deleted).');
   });
 
   it("text_none → no menus matching", async () => {

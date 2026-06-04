@@ -167,7 +167,7 @@ describe("update_menu tool", () => {
     kh.seed({ menus: [], menuItems: [], mealTypes: [DINNER_TYPE] });
 
     const text = getText(await kh.callTool("update_menu", { lookup: { uid: "ghost" }, name: "X" }));
-    expect(text).toContain('No menu found with UID "ghost".');
+    expect(text).toContain('No menu found with UID "ghost" (it may not exist or was already deleted).');
     expect(kh.client().saveMenus).not.toHaveBeenCalled();
   });
 
@@ -277,7 +277,7 @@ describe("delete_menu tool", () => {
     kh.seed({ menus: [], menuItems: [], mealTypes: [DINNER_TYPE] });
 
     const text = getText(await kh.callTool("delete_menu", { lookup: { uid: "ghost" } }));
-    expect(text).toContain('No menu found with UID "ghost".');
+    expect(text).toContain('No menu found with UID "ghost" (it may not exist or was already deleted).');
     expect(kh.client().saveMenus).not.toHaveBeenCalled();
   });
 

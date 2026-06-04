@@ -30,7 +30,9 @@ export function clearPurchasedTool(ctx: DomainCtx<GrocerySelf, "aisle" | "pantry
         async (): Promise<CallToolResult> => {
           const list = ctx.self.lists.store.get(args.listUid);
           if (!list) {
-            return textResult(`No grocery list found with UID "${args.listUid}".`);
+            return textResult(
+              `No grocery list found with UID "${args.listUid}" (it may not exist or was already deleted).`,
+            );
           }
 
           const purchased = ctx.self.items.store.getPurchasedByList(args.listUid);
@@ -78,7 +80,9 @@ export function clearAllTool(ctx: DomainCtx<GrocerySelf, "aisle" | "pantry">): v
         async (): Promise<CallToolResult> => {
           const list = ctx.self.lists.store.get(args.listUid);
           if (!list) {
-            return textResult(`No grocery list found with UID "${args.listUid}".`);
+            return textResult(
+              `No grocery list found with UID "${args.listUid}" (it may not exist or was already deleted).`,
+            );
           }
 
           const items = ctx.self.items.store.getByListUid(args.listUid);

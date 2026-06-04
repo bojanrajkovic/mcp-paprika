@@ -59,7 +59,7 @@ export function updateMenuTool(ctx: DomainCtx<MenuSelf, "recipe" | "meal-type">)
           // Only a single resolved menu can be mutated; misses and disambiguation
           // return the standard wording without touching the network.
           if (outcome.kind === "uid_miss") {
-            return textResult(`No menu found with UID "${outcome.uid}".`);
+            return textResult(`No menu found with UID "${outcome.uid}" (it may not exist or was already deleted).`);
           }
           if (outcome.kind === "text_none") {
             return textResult(`No menus found matching "${outcome.text}".`);

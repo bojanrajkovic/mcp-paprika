@@ -31,7 +31,7 @@ export function trashRecipeTool(ctx: DomainCtx<RecipeSelf, never>): void {
           const recipe = ctx.self.recipe.store.get(args.uid);
 
           if (!recipe) {
-            return textResult(`No recipe found with UID "${args.uid}".`);
+            return textResult(`No recipe found with UID "${args.uid}" (it may not exist or was already deleted).`);
           }
 
           if (recipe.inTrash) {

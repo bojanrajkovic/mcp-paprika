@@ -60,7 +60,7 @@ export function categorizeRecipeTool(ctx: DomainCtx<RecipeSelf, never>): void {
         async (): Promise<CallToolResult> => {
           const existing = ctx.self.recipe.store.get(args.uid);
           if (!existing) {
-            return textResult(`No recipe found with UID "${args.uid}".`);
+            return textResult(`No recipe found with UID "${args.uid}" (it may not exist or was already deleted).`);
           }
 
           const { uids: refUids, unknown } = resolveCategoryRefs(ctx.self.category.store.getAll(), args.categories);

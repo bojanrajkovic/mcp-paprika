@@ -60,7 +60,7 @@ export function updatePantryItemTool(ctx: DomainCtx<PantrySelf, "aisle">): void 
           const existing = ctx.self.store.get(args.uid);
 
           if (!existing) {
-            return textResult(`No pantry item found with UID "${args.uid}".`);
+            return textResult(`No pantry item found with UID "${args.uid}" (it may not exist or was already deleted).`);
           }
 
           // Auto-derive hasExpiration when expirationDate is explicitly provided (AC5.3).

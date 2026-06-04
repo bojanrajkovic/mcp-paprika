@@ -337,7 +337,8 @@ register(
       // the photo-gen module can render success/failure without a thrown boundary.
       const attachGeneratedPhoto: RecipeSelf["attachGeneratedPhoto"] = async (recipeUid, full) => {
         const recipe = recipeStore.get(recipeUid);
-        if (recipe === undefined) return err({ message: `No recipe found with UID "${recipeUid}".` });
+        if (recipe === undefined)
+          return err({ message: `No recipe found with UID "${recipeUid}" (it may not exist or was already deleted).` });
         // Gate on the photo catalog being synced — order_flag/name derive from the existing
         // gallery, so attaching before photos sync could assign a colliding index.
         if (!photoStore.hasSynced) {

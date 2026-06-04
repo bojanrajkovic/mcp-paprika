@@ -45,7 +45,7 @@ export function markPantryItemOutOfStockTool(ctx: DomainCtx<PantrySelf, "aisle">
           const existing = ctx.self.store.get(args.uid);
 
           if (!existing) {
-            return textResult(`No pantry item found with UID "${args.uid}".`);
+            return textResult(`No pantry item found with UID "${args.uid}" (it may not exist or was already deleted).`);
           }
 
           let saved: PantryItem;
@@ -88,7 +88,7 @@ export function restockPantryItemTool(ctx: DomainCtx<PantrySelf, "aisle">): void
           const existing = ctx.self.store.get(args.uid);
 
           if (!existing) {
-            return textResult(`No pantry item found with UID "${args.uid}".`);
+            return textResult(`No pantry item found with UID "${args.uid}" (it may not exist or was already deleted).`);
           }
 
           let saved: PantryItem;

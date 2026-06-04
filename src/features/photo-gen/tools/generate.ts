@@ -98,7 +98,8 @@ export function generatePhotoTool(ctx: DomainCtx<PhotoGenSelf, "recipe">): void 
       }
 
       const recipe = ctx.deps.recipe.get(args.recipe_uid);
-      if (recipe === undefined) return textResult(`No recipe found with UID "${args.recipe_uid}".`);
+      if (recipe === undefined)
+        return textResult(`No recipe found with UID "${args.recipe_uid}" (it may not exist or was already deleted).`);
 
       // Restyle source: the recipe's CURRENT photo (the only image the server can
       // reach — chat-uploaded bytes never arrive at an MCP server).

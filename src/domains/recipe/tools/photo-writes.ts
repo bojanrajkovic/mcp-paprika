@@ -164,7 +164,10 @@ export function uploadPhotoTool(ctx: DomainCtx<RecipeSelf, never>): void {
             return textResult("The photo catalog is still syncing; try again in a moment.");
           }
           const recipe = ctx.self.recipe.store.get(args.recipe_uid);
-          if (recipe === undefined) return textResult(`No recipe found with UID "${args.recipe_uid}".`);
+          if (recipe === undefined)
+            return textResult(
+              `No recipe found with UID "${args.recipe_uid}" (it may not exist or was already deleted).`,
+            );
 
           const resolved = await resolveSource(args.source, args.recipe_uid, ctx.infra.generatedImageStore);
           if ("error" in resolved) return textResult(resolved.error);

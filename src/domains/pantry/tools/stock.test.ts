@@ -32,7 +32,7 @@ describe("mark_pantry_item_out_of_stock tool", () => {
 
     const text = getText(await kh.callTool("mark_pantry_item_out_of_stock", { uid: "missing" }));
 
-    expect(text).toContain('No pantry item found with UID "missing".');
+    expect(text).toContain('No pantry item found with UID "missing" (it may not exist or was already deleted).');
     expect(kh.client().savePantryItems).not.toHaveBeenCalled();
   });
 
@@ -87,7 +87,7 @@ describe("restock_pantry_item tool", () => {
 
     const text = getText(await kh.callTool("restock_pantry_item", { uid: "missing" }));
 
-    expect(text).toContain('No pantry item found with UID "missing".');
+    expect(text).toContain('No pantry item found with UID "missing" (it may not exist or was already deleted).');
     expect(kh.client().savePantryItems).not.toHaveBeenCalled();
   });
 

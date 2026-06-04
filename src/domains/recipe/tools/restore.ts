@@ -54,7 +54,7 @@ export function restoreRecipeTool(ctx: DomainCtx<RecipeSelf, never>): void {
               // stale local phantom so a later read/search can't serve it.
               log.info({ uid: args.uid }, "restore_recipe: recipe not found (404)");
               await ctx.self.reconcileLocalRecipeAbsent(args.uid);
-              return textResult(`No recipe found with UID "${args.uid}".`);
+              return textResult(`No recipe found with UID "${args.uid}" (it may not exist or was already deleted).`);
             }
             // Transient/upstream failure — don't masquerade as "already active".
             const message = toMessage(error);

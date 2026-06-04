@@ -179,7 +179,9 @@ export function renameGroceryListTool(ctx: DomainCtx<GrocerySelf, "aisle" | "pan
           const existing = ctx.self.lists.store.get(args.uid);
 
           if (!existing) {
-            return textResult(`No grocery list found with UID "${args.uid}".`);
+            return textResult(
+              `No grocery list found with UID "${args.uid}" (it may not exist or was already deleted).`,
+            );
           }
 
           // Same-name no-op: case-insensitive check. Return the existing list rendered as markdown.

@@ -30,7 +30,7 @@ describe("rate_recipe tool", () => {
 
     const text = getText(await kh.callTool("rate_recipe", { uid: "nonexistent-uid", rating: 3 }));
 
-    expect(text).toContain('No recipe found with UID "nonexistent-uid".');
+    expect(text).toContain('No recipe found with UID "nonexistent-uid" (it may not exist or was already deleted).');
     expect(kh.client().saveRecipe).not.toHaveBeenCalled();
   });
 

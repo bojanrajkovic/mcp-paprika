@@ -120,7 +120,8 @@ export function updateCategoryTool(ctx: DomainCtx<RecipeSelf, never>): void {
       return categoryStartGuard(ctx.self).match(
         async (): Promise<CallToolResult> => {
           const existing = ctx.self.category.store.get(args.uid);
-          if (existing === undefined) return textResult(`No category found with UID "${args.uid}".`);
+          if (existing === undefined)
+            return textResult(`No category found with UID "${args.uid}" (it may not exist or was already deleted).`);
 
           if (args.name === undefined && args.parentUid === undefined) {
             return textResult("Nothing to update: provide `name`, `parentUid`, or both.");
