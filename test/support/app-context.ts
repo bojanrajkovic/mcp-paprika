@@ -1,8 +1,6 @@
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-
 import type { DiskCacheRoot } from "../../src/cache/disk-cache-root.js";
 import type { PaprikaClient } from "../../src/paprika/client.js";
-import type { AppContext, SessionContext } from "../../src/server/app-context.js";
+import type { AppContext } from "../../src/server/app-context.js";
 
 import { AisleStore } from "../../src/aisle/store.js";
 import { CategoryStore } from "../../src/category/store.js";
@@ -57,17 +55,4 @@ export function makeAppContext(overrides: Partial<AppContext> = {}): AppContext 
     log: SILENT_LOG,
   };
   return { ...base, ...overrides };
-}
-
-/**
- * {@link makeAppContext} plus a `server` (defaulting to an empty stub) for tests
- * that need a full {@link SessionContext}/`ServerContext`. Pass `server` in
- * `overrides` to supply a real or captured `McpServer`.
- */
-export function makeServerContext(overrides: Partial<SessionContext> = {}): SessionContext {
-  const { server, ...appOverrides } = overrides;
-  return {
-    ...makeAppContext(appOverrides),
-    server: server ?? ({} as unknown as McpServer),
-  };
 }

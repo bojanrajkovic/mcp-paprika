@@ -7,16 +7,7 @@ import pino from "pino";
 import type { Logger } from "pino";
 import { vi } from "vitest";
 
-import type { RecipeStore } from "../../src/recipe/store.js";
 import type { Notifier } from "../../src/server/notifier.js";
-import type { ServerContext } from "../../src/types/server-context.js";
-
-import { makeAppContext } from "./app-context.js";
-
-// Re-export the store-hydration helper so call sites pull `seed` from the same
-// module as `makeCtx`/`makeTestServer` (one import line in tool/resource tests).
-export { seed } from "../fixtures/seed.js";
-export type { SeedData } from "../fixtures/seed.js";
 
 /**
  * Shape returned by `makePinoCapture()`. `log` is the capture logger;
@@ -138,50 +129,6 @@ export function makeTestServer(): {
     },
     sendResourceListChanged,
   };
-}
-
-/**
- * Creates a minimal ServerContext for tool unit tests.
- *
- * @param store   — real RecipeStore populated by tests
- * @param server  — stub McpServer from makeTestServer()
- * @param overrides — optional partial overrides for client, cache, pantryStore, vectorStore, and/or notifier.
- *   Write-tool tests inject { saveRecipe: vi.fn(), notifySync: vi.fn() } on client and
- *   { putRecipe: vi.fn(), flush: vi.fn() } on cache. Tests asserting on resource-list
- *   notifications should pass a stub notifier from `makeStubNotifier()`.
- *   Read-tool tests pass no overrides — the existing stubs suffice.
- */
-export function makeCtx(
-  store: RecipeStore,
-  server: McpServer,
-  overrides: Partial<
-    Pick<
-      ServerContext,
-      | "client"
-      | "cache"
-      | "categoryStore"
-      | "pantryStore"
-      | "aisleStore"
-      | "groceryListStore"
-      | "groceryItemStore"
-      | "groceryIngredientStore"
-      | "mealStore"
-      | "mealTypeStore"
-      | "menuStore"
-      | "menuItemStore"
-      | "photoStore"
-      | "vectorStore"
-      | "photographyClient"
-      | "notifier"
-      | "log"
-    >
-  > = {},
-): ServerContext {
-  // Delegate every field default to the shared `makeAppContext` factory (see
-  // `test/support/app-context.ts`) so a new AppContext field is added in one
-  // place. `overrides` is a subset of `Partial<AppContext>`, so it spreads
-  // straight through; `store` and `server` are the two positional params.
-  return { ...makeAppContext({ store, ...overrides }), server } satisfies ServerContext;
 }
 
 /** Extracts the text string from a CallToolResult's first content block. */
