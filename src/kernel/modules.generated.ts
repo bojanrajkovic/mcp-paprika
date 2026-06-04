@@ -2,3 +2,4 @@
 // Run `pnpm generate:modules` after adding or removing a domain module.ts.
 // Side-effect imports so every domain module self-registers on load.
 import "../aisle/module.js";
+import "../meal-type/module.js";
