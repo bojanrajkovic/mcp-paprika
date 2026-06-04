@@ -1,9 +1,9 @@
 import { createRequire } from "node:module";
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { Logger } from "pino";
 
 import type { PaprikaConfig } from "../utils/config.js";
-import type { AppContext } from "./app-context.js";
 import type { Notifier } from "./notifier.js";
 
 import { PaprikaClient } from "../paprika/client.js";
@@ -41,7 +41,7 @@ Orientation:
 export async function buildInfraBase(
   config: PaprikaConfig,
   notifier: Notifier,
-): Promise<{ log: AppContext["log"]; client: AppContext["client"]; cacheDir: string }> {
+): Promise<{ log: Logger; client: PaprikaClient; cacheDir: string }> {
   const log = createLogger({
     transport: config.transport,
     notifier,
