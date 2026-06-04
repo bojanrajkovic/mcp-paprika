@@ -126,8 +126,7 @@ register(
       // an unchanged warm cache fetches nothing — without hydrating here the recipe
       // store would stay empty until a recipe changed remotely. Recipe hydrates via
       // per-item `set` + the separate `markSynced()` (gating recipe tools); categories
-      // and photos use the shared `hydrateStore` (photos drop tombstones via the
-      // `!deleted` filter).
+      // and photos use the shared `hydrateStore`.
       const recipeStore = new RecipeStore({ pendingWriteTtlMs });
       const recipeCache = new RecipeDiskCache({ subdir: join(infra.cacheDir, "recipes"), log });
       await recipeCache.init();
@@ -151,7 +150,7 @@ register(
         log,
       });
       await photoCache.init();
-      await hydrateStore(photoCache, photoStore, (p) => !p.deleted);
+      await hydrateStore(photoCache, photoStore);
 
       // ---- Recipe write chokepoints ----
 

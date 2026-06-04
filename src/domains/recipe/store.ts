@@ -36,10 +36,6 @@ export class RecipeStore extends EntityStore<Recipe, RecipeUid> {
     this._lastSyncedAt = at;
   }
 
-  load(recipes: ReadonlyArray<Recipe>): void {
-    this.baseLoad(recipes);
-  }
-
   override getAll(): Array<Recipe> {
     const results: Array<Recipe> = [];
     for (const recipe of this._items.values()) {

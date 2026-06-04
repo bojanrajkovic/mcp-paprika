@@ -1,9 +1,9 @@
 import type { GroceryListUid } from "../../../ids.js";
 import type { GroceryList } from "./types.js";
 
-import { TombstoneEntityStore } from "../../../entity/index.js";
+import { EntityStore } from "../../../entity/index.js";
 
-export class GroceryListStore extends TombstoneEntityStore<GroceryList, GroceryListUid> {
+export class GroceryListStore extends EntityStore<GroceryList, GroceryListUid> {
   private _lastSyncedAt: Date | null = null;
 
   constructor(opts?: { readonly pendingWriteTtlMs?: number }) {

@@ -50,16 +50,8 @@ export function moveMenuItemTool(ctx: DomainCtx<MenuSelf, "recipe" | "meal-type"
           const uid = args.uid;
           const existing = ctx.self.items.store.get(uid);
           if (existing === undefined) {
-            if (ctx.self.items.store.isTombstone(uid)) {
-              return textResult(`Menu item with UID "${uid}" is already deleted.`);
-            }
-            return textResult(`No menu item found with UID "${uid}".`);
+            return textResult(`No menu item found with UID "${uid}" (it may not exist or was already deleted).`);
           }
-          if (existing.deleted) {
-            // Defense-in-depth
-            return textResult(`Menu item "${existing.name}" is already deleted.`);
-          }
-
           // Idempotent no-op: already on the requested day. Returning early avoids a
           // wasted POST + a pointless menu-wide re-sequence.
           if (args.day === existing.day) {

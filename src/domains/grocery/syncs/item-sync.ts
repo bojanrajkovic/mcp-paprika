@@ -14,7 +14,6 @@ function groceryItemsEqual(a: GroceryItem, b: GroceryItem): boolean {
     a.aisleUid === b.aisleUid &&
     a.listUid === b.listUid &&
     a.purchased === b.purchased &&
-    a.deleted === b.deleted &&
     a.orderFlag === b.orderFlag &&
     a.quantity === b.quantity &&
     a.instruction === b.instruction &&

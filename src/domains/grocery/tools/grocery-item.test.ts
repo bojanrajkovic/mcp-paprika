@@ -562,10 +562,9 @@ describe("delete_grocery_item tool", () => {
     expect(saved?.deleted).toBe(true);
     expect(saved?.uid).toBe("ITEM-DEL-1");
 
-    // Item is tombstoned in the store
+    // Item is removed from the store
     const self = kh.self() as GrocerySelf;
     expect(self.items.store.get("ITEM-DEL-1" as GroceryItemUid)).toBeUndefined();
-    expect(self.items.store.isTombstone("ITEM-DEL-1" as GroceryItemUid)).toBe(true);
   });
 
   it("sync-not-ready blocks delete_grocery_item when stores not loaded", async () => {
@@ -577,7 +576,7 @@ describe("delete_grocery_item tool", () => {
     expect(kh.client().saveGroceryItems).not.toHaveBeenCalled();
   });
 
-  it("delete a tombstoned UID returns already-deleted message", async () => {
+  it("delete an already-deleted UID returns already-deleted message", async () => {
     const existingItem = makeGroceryItem({
       uid: "ITEM-DEL-2" as GroceryItemUid,
       ingredient: "Eggs",
@@ -588,7 +587,7 @@ describe("delete_grocery_item tool", () => {
       aisles: [],
       groceryIngredients: [],
     });
-    // Tombstone the item directly via the store (no API call needed)
+    // Remove the item directly via the store (no API call needed)
     (kh.self() as GrocerySelf).items.store.delete("ITEM-DEL-2" as GroceryItemUid);
 
     const result = await kh.callTool("delete_grocery_item", {

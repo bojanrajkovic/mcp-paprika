@@ -1,13 +1,13 @@
 import type { Logger } from "pino";
 
 import type { DiskCache } from "../cache/disk-cache.js";
-import type { TombstoneEntityStore } from "../entity/tombstone-store.js";
+import type { EntityStore } from "../entity/store.js";
 import type { EntityChanges } from "./sync-types.js";
 
 type ReplaceAllEntityOptions<T extends { uid: UID }, UID extends string> = {
   readonly fetch: () => Promise<ReadonlyArray<T>>;
   readonly cache: Pick<DiskCache<T>, "getAll" | "put" | "remove">;
-  readonly store: TombstoneEntityStore<T, UID>;
+  readonly store: EntityStore<T, UID>;
   readonly equals: (a: T, b: T) => boolean;
   readonly label: string;
   readonly log: Logger;

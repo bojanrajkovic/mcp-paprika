@@ -1,5 +1,5 @@
-// Pending-write bookkeeping (issue #57). Tracks just-written items so the
-// SyncEngine can skip reconciling them against a stale canonical list
+// Pending-write bookkeeping (issue #57). Tracks just-written items so sync
+// can skip reconciling them against a stale canonical list
 // (Paprika omits soft-deleted items, and a sync cycle issued before a write
 // returns a list missing that write's UID). Upserts clear on observation
 // (UID appears in canonical list with matching content); deletes rely on
@@ -54,9 +54,13 @@ export abstract class EntityStore<T extends { uid: UID }, UID extends string> {
     return this._items.size;
   }
 
-  // Subclasses call this from their own load() so they can add entity-specific
-  // side effects (tombstone clearing, category population, etc.) after the base
-  // repopulation.
+  /** Replace all items with `items`, marking the store synced. */
+  load(items: ReadonlyArray<T>): void {
+    this.baseLoad(items);
+  }
+
+  // The public `load()` calls this; a subclass needing extra load-time work
+  // overrides `load()` and calls this for the base repopulation.
   protected baseLoad(items: ReadonlyArray<T>): void {
     this._items.clear();
     for (const item of items) this._items.set(this.getUid(item), item);

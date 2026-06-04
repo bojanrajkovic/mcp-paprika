@@ -8,17 +8,14 @@ The in-memory query/CRUD stores that are each session's source of truth for one 
 
 ## Key References
 
-- `../entity/CLAUDE.md` — the shared `EntityStore` / `TombstoneEntityStore` base classes and the canonical pending-write (#57) and tombstone invariants. Every store inherits those unless noted in Sharp edges; this file documents only what each store adds on top.
+- `../entity/CLAUDE.md` — the shared `EntityStore` base class and the canonical pending-write (#57) invariants. Every store inherits those unless noted in Sharp edges; this file documents only what each store adds on top.
 - [Persistence](#persistence) (below) — the on-disk layer (`DiskCacheRoot`, per-entity `DiskCache<T>` + the `DiskCacheDescriptor<T>` contract, on-disk layout, migration, mutex model, recipe `diff()`, DCR `tryPut`); each entity's descriptor is co-located in `../domains/<domain>/disk.ts`.
 - `docs/architecture.md` — the two-layer cache+sync model and the diff-and-fetch vs. replace-all split.
 - Source: each entity's `../domains/<domain>/store.ts` owns its method signatures and field shapes, and its `../domains/<domain>/types.ts` owns the schema.
 
 ## Stores at a glance
 
-Most stores extend `TombstoneEntityStore`. The exceptions:
-
-- `aisle` / `meal-type` extend `EntityStore` — read-only reference catalogs, no delete/tombstone path.
-- `grocery-ingredient` is a plain name-keyed class, not an `EntityStore` (see Sharp edges).
+Every store extends `EntityStore`, except `grocery-ingredient` — a plain name-keyed class (see Sharp edges). `aisle` / `meal-type` are read-only reference catalogs (no delete tools).
 
 ## Sharp edges
 
@@ -30,9 +27,9 @@ Most stores extend `TombstoneEntityStore`. The exceptions:
 
 **Meal "cooked" queries deliberately drop ingredient and future entries.** `getByRecipeUid` and `lastCookedAt` exclude `isIngredient: true` (prep-work, not a served meal), and `lastCookedAt` also excludes meals dated in the future; "last cooked" means actually eaten, not a planner entry scheduled for next Tuesday.
 
-**`GroceryIngredientStore` is a plain class, not an `EntityStore`.** No pending-writes, no tombstones, no `sweepPending`; sync never calls those for ingredients. It's keyed by lowercase name (case-insensitive lookup) and is replace-all only, so duplicate names differing by case collapse to one entry, last writer wins.
+**`GroceryIngredientStore` is a plain class, not an `EntityStore`.** No pending-writes, no `sweepPending`; sync never calls those for ingredients. It's keyed by lowercase name (case-insensitive lookup) and is replace-all only, so duplicate names differing by case collapse to one entry, last writer wins.
 
-**Pending-writes (#57) is distinct from the tombstone set; clearing is content-equality-based, not UID-presence.** The tombstone set drives the delete tool's idempotent "already deleted" message; the pending-writes map shields the sync loop from rolling back or resurrecting an in-flight write. Upserts clear only on content equality (recipes by hash match against the canonical entry; pantry items field-wise via `pantryItemsEqual`); UID-presence-only clearing was rejected because a UID can appear in Paprika's canonical list with pre-write content while propagation is still in flight. The commit helpers (`commitRecipe` / `commitPantryItem`) wrap cache I/O in `try { … } catch { clearPending(uid); throw }` so a failed local commit doesn't shield the UID for the full TTL. The full invariant set is in `../entity/CLAUDE.md`.
+**Pending-writes (#57) clearing is content-equality-based, not UID-presence.** The pending-writes map shields the sync loop from rolling back or resurrecting an in-flight write. Upserts clear only on content equality (recipes by hash match against the canonical entry; pantry items field-wise via `pantryItemsEqual`); UID-presence-only clearing was rejected because a UID can appear in Paprika's canonical list with pre-write content while propagation is still in flight. The commit helpers (`commitRecipe` / `commitPantryItem`) wrap cache I/O in `try { … } catch { clearPending(uid); throw }` so a failed local commit doesn't shield the UID for the full TTL. The full invariant set is in `../entity/CLAUDE.md`.
 
 ## Persistence
 

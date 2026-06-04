@@ -41,10 +41,8 @@ register(
         log: infra.log,
       });
       await cache.init();
-      // Warm the store from cache so tools work on a warm restart before the first
-      // sync; drop tombstones (meal-type has no tombstone-aware reads, so a deleted
-      // row must not resurface as live).
-      await hydrateStore(cache, store, (mt) => !mt.deleted);
+      // Warm the store from cache so tools work on a warm restart before the first sync.
+      await hydrateStore(cache, store);
 
       return { store, cache };
     })

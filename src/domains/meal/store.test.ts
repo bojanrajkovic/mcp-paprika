@@ -47,16 +47,6 @@ describe("MealStore", () => {
     it("returns empty for unknown recipe", () => {
       expect(store.getByRecipeUid("recipe-99" as RecipeUid)).toHaveLength(0);
     });
-
-    it("excludes deleted meals", () => {
-      store.load([
-        makeMeal({ recipeUid: "recipe-1", name: "Live", date: "2026-01-10 00:00:00" }),
-        makeMeal({ recipeUid: "recipe-1", name: "Tombstone", date: "2026-01-15 00:00:00", deleted: true }),
-      ]);
-      const meals = store.getByRecipeUid("recipe-1" as RecipeUid);
-      expect(meals).toHaveLength(1);
-      expect(meals[0]!.name).toBe("Live");
-    });
   });
 
   describe("lastCookedAt", () => {
@@ -85,15 +75,6 @@ describe("MealStore", () => {
     it("returns null when all entries are isIngredient", () => {
       store.load([makeMeal({ recipeUid: "recipe-1", date: "2026-01-15 00:00:00", isIngredient: true })]);
       expect(store.lastCookedAt("recipe-1" as RecipeUid)).toBeNull();
-    });
-
-    it("excludes deleted meals", () => {
-      store.load([
-        makeMeal({ recipeUid: "recipe-1", date: "2026-01-15 00:00:00" }),
-        // A later deleted entry must NOT shadow the live one as "most recent"
-        makeMeal({ recipeUid: "recipe-1", date: "2026-03-20 00:00:00", deleted: true }),
-      ]);
-      expect(store.lastCookedAt("recipe-1" as RecipeUid)).toBe("2026-01-15 00:00:00");
     });
 
     it("excludes future planner entries", () => {
@@ -182,16 +163,6 @@ describe("MealStore", () => {
       expect(meals[0]!.name).toBe("Custom Type");
     });
 
-    it("excludes deleted meals from all queries", () => {
-      store.load([
-        makeMeal({ recipeUid: "recipe-1", name: "Live Meal", date: "2026-01-10 00:00:00" }),
-        makeMeal({ recipeUid: "recipe-1", name: "Deleted Meal", date: "2026-01-15 00:00:00", deleted: true }),
-      ]);
-      const { meals, total } = store.getInDateRange();
-      expect(total).toBe(1);
-      expect(meals[0]!.name).toBe("Live Meal");
-    });
-
     it("sorts date-descending, then type-ascending within same date", () => {
       const { meals } = store.getInDateRange();
       expect(meals[0]!.name).toBe("Mar Dinner");
@@ -264,16 +235,7 @@ describe("MealStore", () => {
       expect(store.getMaxOrderFlagOn(DATE)).toBeNull();
     });
 
-    it("excludes server-side deleted meals (deleted: true in load)", () => {
-      store.load([
-        makeMeal({ date: DATE, typeUid: TYPE_UID, orderFlag: 0 }),
-        makeMeal({ date: DATE, typeUid: TYPE_UID, orderFlag: 1 }),
-        makeMeal({ date: DATE, typeUid: TYPE_UID, orderFlag: 5, deleted: true }),
-      ]);
-      expect(store.getMaxOrderFlagOn(DATE)).toBe(1);
-    });
-
-    it("excludes in-session deleted meals (tombstoned via store.delete)", () => {
+    it("excludes in-session deleted meals (removed via store.delete)", () => {
       const target = makeMeal({ date: DATE, typeUid: TYPE_UID, orderFlag: 5 });
       store.load([
         makeMeal({ date: DATE, typeUid: TYPE_UID, orderFlag: 0 }),

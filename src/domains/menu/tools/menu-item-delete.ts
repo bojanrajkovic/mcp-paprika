@@ -38,17 +38,8 @@ export function deleteMenuItemTool(ctx: DomainCtx<MenuSelf, "recipe" | "meal-typ
           const existing = ctx.self.items.store.get(uid);
 
           if (existing === undefined) {
-            // Tombstone vs never-existed (mirrors delete_grocery_item / delete_meal).
-            if (ctx.self.items.store.isTombstone(uid)) {
-              return textResult(`Menu item with UID "${uid}" is already deleted.`);
-            }
-            return textResult(`No menu item found with UID "${uid}".`);
+            return textResult(`No menu item found with UID "${uid}" (it may not exist or was already deleted).`);
           }
-          if (existing.deleted) {
-            // Defense-in-depth
-            return textResult(`Menu item "${existing.name}" is already deleted.`);
-          }
-
           const trashed: MenuItem = { ...existing, deleted: true };
           try {
             const saved = (await ctx.infra.client.saveMenuItems([trashed]))[0]!;

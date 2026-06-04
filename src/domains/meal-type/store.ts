@@ -8,10 +8,6 @@ export class MealTypeStore extends EntityStore<MealType, MealTypeUid> {
     super(opts ?? {});
   }
 
-  load(items: ReadonlyArray<MealType>): void {
-    this.baseLoad(items);
-  }
-
   resolveByName(name: string): MealType | undefined {
     const needle = name.toLowerCase();
     for (const mt of this._items.values()) {

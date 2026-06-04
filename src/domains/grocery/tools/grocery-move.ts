@@ -48,7 +48,7 @@ export function moveToPantryTool(ctx: DomainCtx<GrocerySelf, "aisle" | "pantry">
             return textResult("Pantry is not yet synced. Try again in a few seconds.");
           }
 
-          // Step 1: Validate all UIDs exist, are not tombstoned, and deduplicate.
+          // Step 1: Validate all UIDs exist and deduplicate.
           // uids are already brand-typed by the input schema — no per-element parse.
           const seen = new Set<string>();
           const items: Array<GroceryItem> = [];
@@ -57,10 +57,7 @@ export function moveToPantryTool(ctx: DomainCtx<GrocerySelf, "aisle" | "pantry">
             seen.add(uid);
             const item = ctx.self.items.store.get(uid);
             if (!item) {
-              if (ctx.self.items.store.isTombstone(uid)) {
-                return textResult(`Grocery item with UID "${uid}" is already deleted.`);
-              }
-              return textResult(`No grocery item found with UID "${uid}".`);
+              return textResult(`No grocery item found with UID "${uid}" (it may not exist or was already deleted).`);
             }
             items.push(item);
           }

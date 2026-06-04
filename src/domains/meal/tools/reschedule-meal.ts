@@ -58,14 +58,7 @@ export function rescheduleMealTool(ctx: DomainCtx<MealSelf, "recipe" | "meal-typ
           const existing = ctx.self.store.get(uid);
 
           if (existing === undefined) {
-            if (ctx.self.store.isTombstone(uid)) {
-              return textResult(`Meal with UID "${uid}" is already deleted.`);
-            }
-            return textResult(`No meal found with UID "${uid}".`);
-          }
-          if (existing.deleted) {
-            // Defense-in-depth
-            return textResult(`Meal "${existing.name}" is already deleted.`);
+            return textResult(`No meal found with UID "${uid}" (it may not exist or was already deleted).`);
           }
 
           // Resolve the optional type co-change (same DU + error wording as plan_meals / update_meal).

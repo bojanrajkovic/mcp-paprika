@@ -11,8 +11,7 @@ function groceryListsEqual(a: GroceryList, b: GroceryList): boolean {
     a.name === b.name &&
     a.orderFlag === b.orderFlag &&
     a.isDefault === b.isDefault &&
-    a.remindersList === b.remindersList &&
-    a.deleted === b.deleted
+    a.remindersList === b.remindersList
   );
 }
 

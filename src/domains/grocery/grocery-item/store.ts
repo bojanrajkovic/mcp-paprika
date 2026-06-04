@@ -1,15 +1,15 @@
 import type { GroceryItemUid, GroceryListUid } from "../../../ids.js";
 import type { GroceryItem } from "./types.js";
 
-import { TombstoneEntityStore } from "../../../entity/index.js";
+import { EntityStore } from "../../../entity/index.js";
 
-export class GroceryItemStore extends TombstoneEntityStore<GroceryItem, GroceryItemUid> {
+export class GroceryItemStore extends EntityStore<GroceryItem, GroceryItemUid> {
   constructor(opts?: { readonly pendingWriteTtlMs?: number }) {
     super(opts ?? {});
   }
 
   /**
-   * Returns all non-tombstoned items whose listUid matches the given value.
+   * Returns all items whose listUid matches the given value.
    */
   getByListUid(listUid: GroceryListUid): Array<GroceryItem> {
     const result: Array<GroceryItem> = [];
@@ -20,7 +20,7 @@ export class GroceryItemStore extends TombstoneEntityStore<GroceryItem, GroceryI
   }
 
   /**
-   * Returns all non-tombstoned items in the given list that have been
+   * Returns all items in the given list that have been
    * marked as purchased.
    */
   getPurchasedByList(listUid: GroceryListUid): Array<GroceryItem> {

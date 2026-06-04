@@ -640,11 +640,11 @@ describe("update_meal — failure/edge paths", () => {
     const result = await kh.callTool("update_meal", { uid: "UNKNOWN-UID" as MealUid, update: { name: "Anything" } });
     const text = getText(result);
 
-    expect(text).toBe('No meal found with UID "UNKNOWN-UID".');
+    expect(text).toBe('No meal found with UID "UNKNOWN-UID" (it may not exist or was already deleted).');
     expect(kh.client().saveMeals).not.toHaveBeenCalled();
   });
 
-  it("tombstone: deleted via store.delete() → tombstone error string, no POST", async () => {
+  it("miss after store.delete() → widened miss message, no POST", async () => {
     const meal = makeMeal({ uid: TEST_MEAL_UID });
     kh.seed({ meals: [meal], mealTypes: makeBuiltins(), recipes: [] });
     (kh.self() as MealSelf).store.delete(TEST_MEAL_UID);
@@ -652,18 +652,7 @@ describe("update_meal — failure/edge paths", () => {
     const result = await kh.callTool("update_meal", { uid: TEST_MEAL_UID, update: { name: "Anything" } });
     const text = getText(result);
 
-    expect(text).toBe(`Meal with UID "${TEST_MEAL_UID}" is already deleted.`);
-    expect(kh.client().saveMeals).not.toHaveBeenCalled();
-  });
-
-  it("defense-in-depth: meal.deleted === true in store → name-based error string, no POST", async () => {
-    const meal = makeMeal({ uid: TEST_MEAL_UID, name: "Ghost Meal", deleted: true });
-    kh.seed({ meals: [meal], mealTypes: makeBuiltins(), recipes: [] });
-
-    const result = await kh.callTool("update_meal", { uid: TEST_MEAL_UID, update: { name: "Anything" } });
-    const text = getText(result);
-
-    expect(text).toBe(`Meal "Ghost Meal" is already deleted.`);
+    expect(text).toBe(`No meal found with UID "${TEST_MEAL_UID}" (it may not exist or was already deleted).`);
     expect(kh.client().saveMeals).not.toHaveBeenCalled();
   });
 
@@ -720,7 +709,7 @@ describe("delete_meal", () => {
   beforeEach(kh.setup);
   afterEach(kh.teardown);
 
-  it("happy path — wire payload has deleted: true, store tombstones UID, returns success message", async () => {
+  it("happy path — wire payload has deleted: true, store removes UID, returns success message", async () => {
     vi.mocked(kh.client().saveMeals).mockImplementation(async (items) => [...items]);
     const meal = makeMeal({ uid: DELETE_MEAL_UID, name: "Tacos", date: "2026-06-15 18:00:00", deleted: false });
     kh.seed({ meals: [meal], mealTypes: makeBuiltins(), recipes: [] });
@@ -736,10 +725,9 @@ describe("delete_meal", () => {
 
     const store = (kh.self() as MealSelf).store;
     expect(store.get(DELETE_MEAL_UID)).toBeUndefined();
-    expect(store.isTombstone(DELETE_MEAL_UID)).toBe(true);
   });
 
-  it("tombstone retry — second call returns 'already deleted', saveMeals NOT called again", async () => {
+  it("retry after delete returns miss message, saveMeals NOT called again", async () => {
     vi.mocked(kh.client().saveMeals).mockImplementation(async (items) => [...items]);
     const meal = makeMeal({ uid: DELETE_MEAL_UID, name: "Tacos", date: "2026-06-15 18:00:00", deleted: false });
     kh.seed({ meals: [meal], mealTypes: makeBuiltins(), recipes: [] });
@@ -749,7 +737,7 @@ describe("delete_meal", () => {
     const result = await kh.callTool("delete_meal", { uid: DELETE_MEAL_UID });
     const text = getText(result);
 
-    expect(text).toBe(`Meal with UID "${DELETE_MEAL_UID}" is already deleted.`);
+    expect(text).toBe(`No meal found with UID "${DELETE_MEAL_UID}" (it may not exist or was already deleted).`);
     expect(vi.mocked(kh.client().saveMeals).mock.calls.length).toBe(1);
   });
 
@@ -759,20 +747,7 @@ describe("delete_meal", () => {
     const result = await kh.callTool("delete_meal", { uid: "UNKNOWN" as MealUid });
     const text = getText(result);
 
-    expect(text).toBe(`No meal found with UID "UNKNOWN".`);
-    expect(kh.client().saveMeals).not.toHaveBeenCalled();
-  });
-
-  it("defense-in-depth — meal.deleted already true in store, no re-POST", async () => {
-    kh.seed({ meals: [], mealTypes: makeBuiltins(), recipes: [] });
-    const deletedMeal = makeMeal({ uid: DELETE_MEAL_UID, name: "Stale", date: "2026-06-15 00:00:00", deleted: true });
-    // Use set() directly — NOT load() — to seed the defense-in-depth state
-    (kh.self() as MealSelf).store.set(deletedMeal);
-
-    const result = await kh.callTool("delete_meal", { uid: DELETE_MEAL_UID });
-    const text = getText(result);
-
-    expect(text).toBe(`Meal "Stale" is already deleted.`);
+    expect(text).toBe(`No meal found with UID "UNKNOWN" (it may not exist or was already deleted).`);
     expect(kh.client().saveMeals).not.toHaveBeenCalled();
   });
 });

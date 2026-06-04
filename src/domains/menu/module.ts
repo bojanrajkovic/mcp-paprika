@@ -84,9 +84,8 @@ register(
         log,
       });
       await menuCache.init();
-      // Warm both stores from cache so tools work on a warm restart before the
-      // first sync; drop tombstones on load (`!deleted` filter).
-      await hydrateStore(menuCache, menuStore, (m) => !m.deleted);
+      // Warm both stores from cache so tools work on a warm restart before the first sync.
+      await hydrateStore(menuCache, menuStore);
 
       const menuItemStore = new MenuItemStore({ pendingWriteTtlMs });
       const menuItemCache = new DiskCacheImpl<MenuItem>({
@@ -95,7 +94,7 @@ register(
         log,
       });
       await menuItemCache.init();
-      await hydrateStore(menuItemCache, menuItemStore, (mi) => !mi.deleted);
+      await hydrateStore(menuItemCache, menuItemStore);
 
       // ---- Menu write chokepoints ----
       // Order: markPending* (FIRST, before any cache I/O) → cache put/remove → flush →

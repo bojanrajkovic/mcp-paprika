@@ -4,8 +4,8 @@ import type { GrocerySelf } from "../module.js";
 /**
  * Grocery-ingredient sync — the bespoke replace-all reconcile. NOT
  * `syncReplaceAllEntity`: the ingredient catalog is a plain name-keyed store with no
- * tombstones and no pending-writes, so it does a direct `listGroceryIngredients`,
- * a two-stage filter (drop `deleted`, then drop the no-aisle rows), manual
+ * pending-writes, so it does a direct `listGroceryIngredients`,
+ * a no-aisle-row filter, manual
  * orphan-cache cleanup, then `store.load` + re-`put`. Reaches the domain's own
  * ingredient store and cache via `ctx.self.ingredients.*`.
  *
@@ -35,17 +35,15 @@ export function groceryIngredientsSync(): SyncContribution<GrocerySelf, "aisle" 
       const groceryIngredients = await client.listGroceryIngredients();
       log.debug({ count: groceryIngredients.length }, "fetched grocery ingredients");
 
-      // Drop deleted entries AND entries with no aisle. Paprika returns
-      // aisle_uid: null for an ingredient that was never filed into an aisle
-      // (GroceryIngredientSchema coerces that to ""). Such a row carries no aisle
-      // memory — add_grocery_items resolves it to "" and the item then defaults to
-      // "Miscellaneous", identical to having no catalog entry at all — so keeping it
-      // just bloats the catalog. (Historically the null value also aborted the whole
-      // sync cycle before meals/menus could sync.) Warn on the dropped count so the
-      // drop is observable rather than silent.
-      const liveIngredients = groceryIngredients.filter((i) => !i.deleted);
-      const filteredIngredients = liveIngredients.filter((i) => i.aisleUid !== "");
-      const droppedNoAisle = liveIngredients.length - filteredIngredients.length;
+      // Drop entries with no aisle. Paprika returns aisle_uid: null for an ingredient
+      // that was never filed into an aisle (GroceryIngredientSchema coerces that to "").
+      // Such a row carries no aisle memory — add_grocery_items resolves it to "" and the
+      // item then defaults to "Miscellaneous", identical to having no catalog entry at
+      // all — so keeping it just bloats the catalog. (Historically the null value also
+      // aborted the whole sync cycle before meals/menus could sync.) Warn on the dropped
+      // count so the drop is observable rather than silent.
+      const filteredIngredients = groceryIngredients.filter((i) => i.aisleUid !== "");
+      const droppedNoAisle = groceryIngredients.length - filteredIngredients.length;
       if (droppedNoAisle > 0) {
         log.warn({ count: droppedNoAisle }, "dropped grocery ingredients with no aisle");
       }

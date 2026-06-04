@@ -3,9 +3,9 @@ import type { MealTypeSelf } from "../module.js";
 
 /**
  * Meal-type sync — replace-all via DIRECT `store.load` (NOT `syncReplaceAllEntity`):
- * meal-types are a plain `EntityStore` reference catalog (no tombstones, no
- * pending-upsert observation), so they load directly. This is NOT a bare load —
- * it filters `deleted: true` tombstones and removes orphaned cache entries.
+ * meal-types are a plain `EntityStore` reference catalog (no pending-upsert
+ * observation), so they load directly. This is NOT a bare load —
+ * it removes orphaned cache entries.
  *
  * `additive` tier — a meal-type fetch failure should degrade best-effort rather
  * than abort the sync cycle. Topo order sequences meal-type before meal/menu
@@ -20,12 +20,7 @@ export function mealTypeSync(self: MealTypeSelf): SyncContribution<MealTypeSelf,
     tier: "additive",
     reconcile: async (ctx) => {
       const { store, cache } = ctx.self;
-      // Filter `deleted: true` like aisles do: GET responses normally omit
-      // deleted items, but POSTs use `deleted: true` for soft-deletes (see
-      // mealtypes.har.json) so the field is on the schema, and any tombstone
-      // that does reach the wire must not be loaded as an active mealtype.
-      const mealTypesRaw = await ctx.infra.client.listMealTypes();
-      const mealTypes = mealTypesRaw.filter((mt) => !mt.deleted);
+      const mealTypes = await ctx.infra.client.listMealTypes();
 
       const cachedMealTypes = await cache.getAll();
       const cachedMealTypeUids = new Set(cachedMealTypes.map((mt) => mt.uid));

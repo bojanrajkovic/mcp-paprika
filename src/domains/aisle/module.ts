@@ -44,9 +44,8 @@ register(
         log: infra.log,
       });
       await cache.init();
-      // Warm the store from cache so tools work on a warm restart before the first sync;
-      // drop tombstones (deleted aisles must not re-appear before a sync clears them).
-      await hydrateStore(cache, store, (a) => !a.deleted);
+      // Warm the store from cache so tools work on a warm restart before the first sync.
+      await hydrateStore(cache, store);
 
       // ensureAisle is the write path (auto-create + persist), so it closes over
       // infra.client and reaches this module's own store/cache.

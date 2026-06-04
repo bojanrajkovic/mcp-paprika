@@ -20,14 +20,13 @@ function pantryItemsEqual(a: PantryItem, b: PantryItem): boolean {
     a.hasExpiration === b.hasExpiration &&
     a.inStock === b.inStock &&
     a.purchaseDate === b.purchaseDate &&
-    a.notes === b.notes &&
-    a.deleted === b.deleted
+    a.notes === b.notes
   );
 }
 
 /**
  * Pantry sync — replace-all with orphan cleanup via the shared
- * `syncReplaceAllEntity` helper (`PantryStore extends TombstoneEntityStore`).
+ * `syncReplaceAllEntity` helper (`PantryStore extends EntityStore`).
  * Pending-write filtering and observation-clearing are handled inside the helper.
  * The kernel's driver only sequences it.
  *

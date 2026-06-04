@@ -99,7 +99,6 @@ describe("move_grocery_items_to_pantry tool", () => {
 
     // Grocery item removed from the store (committed via commitGroceryItemsBatch)
     expect((kh.self() as GrocerySelf).items.store.get("ITEM-1" as GroceryItemUid)).toBeUndefined();
-    expect((kh.self() as GrocerySelf).items.store.isTombstone("ITEM-1" as GroceryItemUid)).toBe(true);
   });
 
   it("batch of 3 UIDs calls savePantryItems once then saveGroceryItems once (create-first)", async () => {
@@ -153,17 +152,17 @@ describe("move_grocery_items_to_pantry tool", () => {
     const groceryCallOrder = vi.mocked(kh.client().saveGroceryItems).mock.invocationCallOrder[0];
     expect(pantryCallOrder!).toBeLessThan(groceryCallOrder!);
 
-    // All three grocery items tombstoned in the store
+    // All three grocery items removed from the store
     const grocerySelf = kh.self() as GrocerySelf;
-    expect(grocerySelf.items.store.isTombstone("BATCH-1" as GroceryItemUid)).toBe(true);
-    expect(grocerySelf.items.store.isTombstone("BATCH-2" as GroceryItemUid)).toBe(true);
-    expect(grocerySelf.items.store.isTombstone("BATCH-3" as GroceryItemUid)).toBe(true);
+    expect(grocerySelf.items.store.get("BATCH-1" as GroceryItemUid)).toBeUndefined();
+    expect(grocerySelf.items.store.get("BATCH-2" as GroceryItemUid)).toBeUndefined();
+    expect(grocerySelf.items.store.get("BATCH-3" as GroceryItemUid)).toBeUndefined();
   });
 
-  it("tombstoned UID returns already-deleted without calling saves", async () => {
+  it("already-deleted UID returns already-deleted without calling saves", async () => {
     const item = makeGroceryItem({ uid: "TOMB-1" as GroceryItemUid, ingredient: "Milk" });
     kh.seed({ pantry: [], groceryLists: [WEEKLY_LIST], groceryItems: [item] });
-    // Create tombstone by deleting after seeding
+    // Remove the item from the store after seeding
     (kh.self() as GrocerySelf).items.store.delete("TOMB-1" as GroceryItemUid);
 
     const result = await kh.callTool("move_grocery_items_to_pantry", { uids: ["TOMB-1"] });
@@ -217,7 +216,7 @@ describe("move_grocery_items_to_pantry tool", () => {
     expect(kh.client().savePantryItems).toHaveBeenCalledOnce();
     // Grocery save was called and failed
     expect(kh.client().saveGroceryItems).toHaveBeenCalledOnce();
-    // Grocery item NOT tombstoned (failed grocery delete)
+    // Grocery item still in the store (failed grocery delete)
     expect((kh.self() as GrocerySelf).items.store.get("PFAIL-1" as GroceryItemUid)).toBeDefined();
   });
 

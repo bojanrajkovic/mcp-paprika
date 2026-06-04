@@ -3,7 +3,7 @@ import type { AisleSelf } from "../module.js";
 
 /**
  * Aisle sync — replace-all WITH pending-write filtering. This is NOT the
- * `syncReplaceAllEntity` helper: it filters deleted and pending-upsert rows,
+ * `syncReplaceAllEntity` helper: it filters pending-upsert rows,
  * merges cached pending-upserts back, removes orphans from the cache, then
  * observation-clears confirmed pending-upserts (a confirmed pending-upsert UID
  * present in the canonical list means the server confirmed the write — clear now
@@ -18,7 +18,7 @@ export function aisleSync(self: AisleSelf): SyncContribution<AisleSelf, never> {
       const aisles = await ctx.infra.client.listAisles();
       const cachedAisles = await cache.getAll();
 
-      const incomingAislesFiltered = aisles.filter((a) => !a.deleted && !store.isPendingUpsert(a.uid));
+      const incomingAislesFiltered = aisles.filter((a) => !store.isPendingUpsert(a.uid));
       const pendingUpsertedAisles = cachedAisles.filter((a) => store.isPendingUpsert(a.uid));
       const effectiveAisles = [...incomingAislesFiltered, ...pendingUpsertedAisles];
 

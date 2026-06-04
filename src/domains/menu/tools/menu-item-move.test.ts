@@ -151,7 +151,7 @@ describe("move_menu_item tool", () => {
     });
 
     const text = getText(await kh.callTool("move_menu_item", { uid: "ghost", day: 2 }));
-    expect(text).toContain('No menu item found with UID "ghost".');
+    expect(text).toContain('No menu item found with UID "ghost" (it may not exist or was already deleted).');
     expect(kh.client().saveMenuItems).not.toHaveBeenCalled();
   });
 

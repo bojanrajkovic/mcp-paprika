@@ -54,16 +54,8 @@ export function updateMenuItemTool(ctx: DomainCtx<MenuSelf, "recipe" | "meal-typ
           const uid = args.uid;
           const existing = ctx.self.items.store.get(uid);
           if (existing === undefined) {
-            if (ctx.self.items.store.isTombstone(uid)) {
-              return textResult(`Menu item with UID "${uid}" is already deleted.`);
-            }
-            return textResult(`No menu item found with UID "${uid}".`);
+            return textResult(`No menu item found with UID "${uid}" (it may not exist or was already deleted).`);
           }
-          if (existing.deleted) {
-            // Defense-in-depth
-            return textResult(`Menu item "${existing.name}" is already deleted.`);
-          }
-
           // Resolve type if supplied via the shared meal-type contract.
           let newTypeUid: MealTypeUid | undefined;
           if (args.type !== undefined) {

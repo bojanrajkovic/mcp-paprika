@@ -83,18 +83,16 @@ describe("CategoryStore", () => {
     });
   });
 
-  describe("tombstone semantics", () => {
-    it("delete() tombstones the UID; set() resurrects it", () => {
+  describe("delete and set semantics", () => {
+    it("delete() removes the UID; set() makes it visible again", () => {
       const a = makeCategory({ uid: "a" as CategoryUid });
       store.load([a]);
 
       store.delete("a" as CategoryUid);
       expect(store.get("a" as CategoryUid)).toBeUndefined();
-      expect(store.isTombstone("a" as CategoryUid)).toBe(true);
 
       store.set(a);
       expect(store.get("a" as CategoryUid)).toBe(a);
-      expect(store.isTombstone("a" as CategoryUid)).toBe(false);
     });
   });
 

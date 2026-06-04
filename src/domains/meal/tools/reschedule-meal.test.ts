@@ -147,7 +147,7 @@ describe("reschedule_meal tool", () => {
 
     const result = await kh.callTool("reschedule_meal", { uid: "ghost" as MealUid, date: "2026-06-15" });
 
-    expect(getText(result)).toContain('No meal found with UID "ghost".');
+    expect(getText(result)).toContain('No meal found with UID "ghost" (it may not exist or was already deleted).');
     expect(kh.client().saveMeals).not.toHaveBeenCalled();
   });
 

@@ -37,7 +37,7 @@ describe("MenuItemStore", () => {
       expect(results).toHaveLength(0);
     });
 
-    it("does not return tombstoned items", () => {
+    it("does not return deleted items", () => {
       const item = makeMenuItem({ uid: "uid-1" as MenuItemUid, menuUid: "menu-A" });
       store.load([item]);
       store.delete("uid-1" as MenuItemUid);
@@ -59,7 +59,7 @@ describe("MenuItemStore", () => {
     });
   });
 
-  describe("CRUD and tombstone basics", () => {
+  describe("CRUD basics", () => {
     it("load() populates store and sets hasSynced to true", () => {
       const item1 = makeMenuItem();
       const item2 = makeMenuItem();

@@ -18,7 +18,7 @@ One directory per cohesive domain — the unit the kernel constructs, isolates, 
 ## Key References
 
 - `../kernel/CLAUDE.md` — the kernel these register on (the `self`/`deps`/`infra` narrowing, the sync driver, boot phases).
-- `../entity/CLAUDE.md` — the `EntityStore`/`TombstoneEntityStore` base and the pending-write/tombstone invariants every store inherits.
+- `../entity/CLAUDE.md` — the `EntityStore` base and the pending-write (#57) invariants every store inherits.
 - `../cache/CLAUDE.md` — the per-entity `DiskCache` each `disk.ts` describes.
 - ADR-0004 (tool-vs-resource) — resources are Content-domain-only (recipe, grocery-list, menu).
 

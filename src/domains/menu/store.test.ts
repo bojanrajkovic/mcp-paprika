@@ -72,7 +72,7 @@ describe("MenuStore", () => {
       expect(results).toHaveLength(0);
     });
 
-    it("excludes deleted (tombstoned) menus", () => {
+    it("excludes deleted menus", () => {
       const menu = makeMenu({ uid: "uid-1" as MenuUid, name: "Thanksgiving Dinner" });
       store.load([menu]);
       store.delete("uid-1" as MenuUid);
@@ -83,7 +83,7 @@ describe("MenuStore", () => {
     });
   });
 
-  describe("CRUD and tombstone basics", () => {
+  describe("CRUD basics", () => {
     it("load() populates store and sets hasSynced to true", () => {
       const menu1 = makeMenu();
       const menu2 = makeMenu();

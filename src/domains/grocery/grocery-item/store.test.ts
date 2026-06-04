@@ -37,7 +37,7 @@ describe("GroceryItemStore", () => {
       expect(results).toHaveLength(0);
     });
 
-    it("grocery-infra.AC1.5: getByListUid does not return tombstoned items", () => {
+    it("grocery-infra.AC1.5: getByListUid does not return deleted items", () => {
       const item = makeGroceryItem({ uid: "uid-1" as GroceryItemUid, listUid: "list-A" });
       store.load([item]);
       store.delete("uid-1" as GroceryItemUid);
@@ -90,7 +90,7 @@ describe("GroceryItemStore", () => {
     });
   });
 
-  describe("CRUD and tombstone basics", () => {
+  describe("CRUD basics", () => {
     it("load() populates store and sets hasSynced to true", () => {
       const item1 = makeGroceryItem();
       const item2 = makeGroceryItem();

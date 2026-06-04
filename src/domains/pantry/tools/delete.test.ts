@@ -31,23 +31,6 @@ describe("delete_pantry_item tool", () => {
     expect(after).toBeUndefined();
   });
 
-  it("idempotent already-deleted (deleted flag set) — returns message, no re-save", async () => {
-    const item = makePantryItem({ uid: "uid-1" as PantryItemUid, ingredient: "Butter", deleted: true });
-    kh.seed({ pantry: [item] });
-
-    const text = getText(await kh.callTool("delete_pantry_item", { uid: "uid-1" }));
-
-    expect(text).toContain("already deleted");
-    expect(text).toContain("Butter");
-    expect(kh.client().savePantryItems).not.toHaveBeenCalled();
-
-    // Store state unchanged.
-    expect((kh.self() as PantrySelf).store.size).toBe(1);
-    const after = (kh.self() as PantrySelf).store.get("uid-1" as PantryItemUid);
-    expect(after).toBeDefined();
-    expect(after?.deleted).toBe(true);
-  });
-
   it("unknown UID returns no-item-found, store not mutated", async () => {
     kh.seed({ pantry: [] });
 
@@ -82,14 +65,14 @@ describe("delete_pantry_item tool", () => {
     expect(after?.deleted).toBe(false);
   });
 
-  it("retry path after successful delete returns 'already deleted' (tombstone-aware)", async () => {
-    // After a successful delete the item is removed from the live items map;
-    // the tombstone set ensures a retried call returns the idempotent signal
-    // instead of the confusable "No pantry item found".
+  it("retry path after successful delete returns the widened 'already deleted' miss message", async () => {
+    // After a successful delete the item is gone from the store; a retried call
+    // returns the widened miss message (which names "already deleted") instead
+    // of failing.
     kh.seed({
       pantry: [makePantryItem({ uid: "uid-retry" as PantryItemUid, ingredient: "Butter", deleted: false })],
     });
-    // Simulate the post-commit state: delete() removes from items AND records a tombstone.
+    // Simulate the post-commit state: delete() removes the item from the store.
     (kh.self() as PantrySelf).store.delete("uid-retry" as PantryItemUid);
 
     const text = getText(await kh.callTool("delete_pantry_item", { uid: "uid-retry" }));

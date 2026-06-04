@@ -12,7 +12,7 @@ import { MealTypeUidSchema } from "../../ids.js";
 // the soft-delete wire format POSTs it as `true` (see mealtypes.har.json
 // "delete mealtype" capture).
 // None of these fields are used by the read-only history feature; preserved
-// for fidelity and so the sync layer can filter tombstones.
+// for fidelity.
 export const MealTypeStoredSchema = z.object({
   uid: MealTypeUidSchema,
   name: z.string(),

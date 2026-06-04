@@ -221,7 +221,7 @@ describe("delete_menu tool", () => {
     expect(text.toLowerCase()).toContain("not yet synced");
   });
 
-  it("deletes an empty menu (no menuitems) and tombstones only the menu", async () => {
+  it("deletes an empty menu (no menuitems) and removes the menu from the store", async () => {
     const menu = makeMenu({ uid: "m-1" as MenuUid, name: "Empty" });
     kh.seed({ menus: [menu], menuItems: [], mealTypes: [DINNER_TYPE] });
     vi.mocked(kh.client().saveMenus).mockResolvedValue([{ ...menu, deleted: true }]);
@@ -234,7 +234,6 @@ describe("delete_menu tool", () => {
     const savedArgs = vi.mocked(kh.client().saveMenus).mock.calls[0]?.[0];
     expect(savedArgs?.[0]?.deleted).toBe(true);
     expect((kh.self() as MenuSelf).menus.store.get("m-1" as MenuUid)).toBeUndefined();
-    expect((kh.self() as MenuSelf).menus.store.isTombstone("m-1" as MenuUid)).toBe(true);
     expect(kh.resourceListChanged()).toHaveBeenCalled();
   });
 

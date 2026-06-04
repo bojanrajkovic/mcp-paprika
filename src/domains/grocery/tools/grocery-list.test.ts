@@ -284,7 +284,7 @@ describe("delete_grocery_list tool", () => {
     expect(text.toLowerCase()).toContain("not yet synced");
   });
 
-  it("returns not-found for unknown UID (not tombstoned)", async () => {
+  it("returns not-found for unknown UID", async () => {
     kh.seed({ groceryLists: [], groceryItems: [] });
 
     const text = getText(await kh.callTool("delete_grocery_list", { uid: "nonexistent-uid" }));
@@ -308,22 +308,12 @@ describe("delete_grocery_list tool", () => {
     expect(kh.resourceListChanged()).toHaveBeenCalledOnce();
   });
 
-  it("list becomes tombstoned after deletion", async () => {
+  it("already-deleted UID returns idempotent message", async () => {
     const list = makeGroceryList({ name: "Weekly Shopping" });
     vi.mocked(kh.client().saveGroceryList).mockImplementation(async (l) => l);
     kh.seed({ groceryLists: [list], groceryItems: [] });
 
-    await kh.callTool("delete_grocery_list", { uid: list.uid });
-
-    expect((kh.self() as GrocerySelf).lists.store.isTombstone(list.uid)).toBe(true);
-  });
-
-  it("tombstoned (already-deleted) UID returns idempotent message", async () => {
-    const list = makeGroceryList({ name: "Weekly Shopping" });
-    vi.mocked(kh.client().saveGroceryList).mockImplementation(async (l) => l);
-    kh.seed({ groceryLists: [list], groceryItems: [] });
-
-    // First delete — tombstones the UID
+    // First delete — removes the list from the store
     await kh.callTool("delete_grocery_list", { uid: list.uid });
     vi.mocked(kh.client().saveGroceryList).mockClear();
 

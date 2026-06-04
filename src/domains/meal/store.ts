@@ -3,7 +3,7 @@ import { DateTime } from "luxon";
 import type { MealTypeUid, MealUid, RecipeUid } from "../../ids.js";
 import type { Meal } from "./types.js";
 
-import { TombstoneEntityStore } from "../../entity/index.js";
+import { EntityStore } from "../../entity/index.js";
 
 export interface MealDateRangeOpts {
   readonly since?: DateTime | undefined;
@@ -39,13 +39,10 @@ function parseMealDate(date: string): DateTime {
   return DateTime.fromFormat(date, "yyyy-MM-dd HH:mm:ss", { zone: "utc" });
 }
 
-// Should the meal be hidden from all history queries?
-// `deleted: true` items can land in the in-memory store via syncReplaceAllEntity
-// (the sync engine loads every wire item; tombstone filtering is the query
-// layer's job). `isIngredient: true` items are prep-work entries, not served
-// meals — see lastCookedAt comment for the rationale.
+// Should the meal be hidden from all history queries? `isIngredient: true` items
+// are prep-work entries, not served meals — see lastCookedAt comment for the rationale.
 function isHidden(meal: Meal): boolean {
-  return meal.deleted || meal.isIngredient;
+  return meal.isIngredient;
 }
 
 function matchesTypeFilter(meal: Meal, opts: MealDateRangeOpts): boolean {
@@ -59,7 +56,7 @@ function matchesTypeFilter(meal: Meal, opts: MealDateRangeOpts): boolean {
   return false;
 }
 
-export class MealStore extends TombstoneEntityStore<Meal, MealUid> {
+export class MealStore extends EntityStore<Meal, MealUid> {
   constructor(opts?: { readonly pendingWriteTtlMs?: number }) {
     super(opts ?? {});
   }

@@ -340,8 +340,8 @@ describe("delete_recipe_photo", () => {
 
     await kh.callTool("delete_recipe_photo", { photo_uid: "p-1" });
     vi.mocked(kh.client().deletePhoto).mockClear();
-    // The store now tombstones p-1; a second delete should short-circuit.
-    expect((kh.self() as RecipeSelf).photo.store.isTombstone(PhotoUidSchema.parse("p-1"))).toBe(true);
+    // After the first delete the photo is gone from the store; a second delete short-circuits.
+    expect((kh.self() as RecipeSelf).photo.store.get(PhotoUidSchema.parse("p-1"))).toBeUndefined();
     const result = await kh.callTool("delete_recipe_photo", { photo_uid: "p-1" });
 
     expect(getText(result)).toContain("already deleted");

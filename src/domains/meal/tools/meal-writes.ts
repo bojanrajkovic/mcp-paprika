@@ -328,18 +328,9 @@ export function updateMealTool(ctx: DomainCtx<MealSelf, "recipe" | "meal-type">)
           const op = args.update;
           const existing = ctx.self.store.get(uid);
 
-          // Three-tier miss detection (mirrors pantry-delete.ts)
           if (existing === undefined) {
-            if (ctx.self.store.isTombstone(uid)) {
-              return textResult(`Meal with UID "${uid}" is already deleted.`);
-            }
-            return textResult(`No meal found with UID "${uid}".`);
+            return textResult(`No meal found with UID "${uid}" (it may not exist or was already deleted).`);
           }
-          if (existing.deleted) {
-            // Defense-in-depth
-            return textResult(`Meal "${existing.name}" is already deleted.`);
-          }
-
           // Resolve type if supplied via the meal-type dep contract.
           // All three variants of `op` carry `type` as an optional shared field.
           let typeInteger: number | undefined;
@@ -495,17 +486,8 @@ export function deleteMealTool(ctx: DomainCtx<MealSelf, "recipe" | "meal-type">)
           const existing = ctx.self.store.get(uid);
 
           if (existing === undefined) {
-            // Tombstone vs never-existed
-            if (ctx.self.store.isTombstone(uid)) {
-              return textResult(`Meal with UID "${uid}" is already deleted.`);
-            }
-            return textResult(`No meal found with UID "${uid}".`);
+            return textResult(`No meal found with UID "${uid}" (it may not exist or was already deleted).`);
           }
-          if (existing.deleted) {
-            // Defense-in-depth
-            return textResult(`Meal "${existing.name}" is already deleted.`);
-          }
-
           const trashed: Meal = { ...existing, deleted: true };
           try {
             const saved = (await ctx.infra.client.saveMeals([trashed]))[0]!;

@@ -4,7 +4,7 @@ import type { GroceryIngredient } from "./types.js";
  * In-memory store for grocery ingredients, keyed by lowercase name for
  * case-insensitive lookup. Unlike GroceryListStore and GroceryItemStore,
  * this is a plain class — not an EntityStore subclass — because ingredients
- * have no pending-writes, no tombstones, and no sweepPending. Internal
+ * have no pending-writes and no sweepPending. Internal
  * storage is a Map<string, GroceryIngredient> keyed by lowercase name.
  */
 export class GroceryIngredientStore {

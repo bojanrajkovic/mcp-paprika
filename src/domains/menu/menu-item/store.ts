@@ -1,15 +1,15 @@
 import type { MenuItemUid, MenuUid } from "../../../ids.js";
 import type { MenuItem } from "./types.js";
 
-import { TombstoneEntityStore } from "../../../entity/index.js";
+import { EntityStore } from "../../../entity/index.js";
 
-export class MenuItemStore extends TombstoneEntityStore<MenuItem, MenuItemUid> {
+export class MenuItemStore extends EntityStore<MenuItem, MenuItemUid> {
   constructor(opts?: { readonly pendingWriteTtlMs?: number }) {
     super(opts ?? {});
   }
 
   /**
-   * Returns all non-tombstoned items whose menuUid matches the given value.
+   * Returns all items whose menuUid matches the given value.
    */
   getByMenuUid(menuUid: MenuUid): Array<MenuItem> {
     const result: Array<MenuItem> = [];

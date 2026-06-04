@@ -1,9 +1,9 @@
 import type { MenuUid } from "../../ids.js";
 import type { Menu } from "./types.js";
 
-import { TombstoneEntityStore } from "../../entity/index.js";
+import { EntityStore } from "../../entity/index.js";
 
-export class MenuStore extends TombstoneEntityStore<Menu, MenuUid> {
+export class MenuStore extends EntityStore<Menu, MenuUid> {
   private _lastSyncedAt: Date | null = null;
 
   constructor(opts?: { readonly pendingWriteTtlMs?: number }) {

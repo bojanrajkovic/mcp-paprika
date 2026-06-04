@@ -330,7 +330,7 @@ describe("update_menu_item tool", () => {
     seedBase(kh, {});
 
     const text = getText(await kh.callTool("update_menu_item", { uid: "ghost", type: { name: "Dinner" } }));
-    expect(text).toContain('No menu item found with UID "ghost".');
+    expect(text).toContain('No menu item found with UID "ghost" (it may not exist or was already deleted).');
     expect(kh.client().saveMenuItems).not.toHaveBeenCalled();
   });
 
@@ -344,7 +344,7 @@ describe("delete_menu_item tool", () => {
   beforeEach(kh.setup);
   afterEach(kh.teardown);
 
-  it("tombstones the item and reports deletion", async () => {
+  it("removes the item from the store and reports deletion", async () => {
     const item = makeMenuItem({ uid: "mi-1" as MenuItemUid, menuUid: "m-1", name: "Turkey" });
     kh.seed({ menus: [], menuItems: [item], mealTypes: [] });
     vi.mocked(kh.client().saveMenuItems).mockImplementation(async (items: ReadonlyArray<MenuItem>) => [...items]);
@@ -355,7 +355,6 @@ describe("delete_menu_item tool", () => {
     const saved = (vi.mocked(kh.client().saveMenuItems).mock.calls[0]![0] as MenuItem[])[0]!;
     expect(saved.deleted).toBe(true);
     expect((kh.self() as MenuSelf).items.store.get("mi-1" as MenuItemUid)).toBeUndefined();
-    expect((kh.self() as MenuSelf).items.store.isTombstone("mi-1" as MenuItemUid)).toBe(true);
     expect(kh.resourceListChanged()).toHaveBeenCalled();
   });
 
@@ -368,7 +367,7 @@ describe("delete_menu_item tool", () => {
     expect(kh.client().saveMenuItems).toHaveBeenCalledOnce();
 
     const text = getText(await kh.callTool("delete_menu_item", { uid: "mi-1" }));
-    expect(text).toContain('Menu item with UID "mi-1" is already deleted.');
+    expect(text).toContain('No menu item found with UID "mi-1" (it may not exist or was already deleted).');
     expect(kh.client().saveMenuItems).toHaveBeenCalledOnce(); // not called a second time
   });
 
@@ -376,7 +375,7 @@ describe("delete_menu_item tool", () => {
     kh.seed({ menus: [], menuItems: [], mealTypes: [] });
 
     const text = getText(await kh.callTool("delete_menu_item", { uid: "ghost" }));
-    expect(text).toContain('No menu item found with UID "ghost".');
+    expect(text).toContain('No menu item found with UID "ghost" (it may not exist or was already deleted).');
     expect(kh.client().saveMenuItems).not.toHaveBeenCalled();
   });
 });

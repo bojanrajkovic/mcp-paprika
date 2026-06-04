@@ -220,17 +220,14 @@ export function deletePhotoTool(ctx: DomainCtx<RecipeSelf, never>): void {
       log.info({ tool: "delete_recipe_photo", photo_uid: args.photo_uid }, "tool invoked");
       return recipeColdStartGuard(ctx.self).match(
         async (): Promise<CallToolResult> => {
-          // Gate on the photo catalog being synced, else a not-yet-synced photo reads as
-          // "not found" and the idempotent tombstone signal would be wrong.
+          // Gate on the photo catalog being synced, else a not-yet-synced photo would
+          // read as "not found" before its first sync.
           if (!ctx.self.photo.store.hasSynced) {
             return textResult("The photo catalog is still syncing; try again in a moment.");
           }
           const existing = ctx.self.photo.store.get(args.photo_uid);
           if (existing === undefined) {
-            if (ctx.self.photo.store.isTombstone(args.photo_uid)) {
-              return textResult(`Photo with UID "${args.photo_uid}" is already deleted.`);
-            }
-            return textResult(`No photo found with UID "${args.photo_uid}".`);
+            return textResult(`No photo found with UID "${args.photo_uid}" (it may not exist or was already deleted).`);
           }
 
           try {

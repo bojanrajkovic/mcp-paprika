@@ -8,10 +8,6 @@ export class AisleStore extends EntityStore<Aisle, AisleUid> {
     super(opts ?? {});
   }
 
-  load(items: ReadonlyArray<Aisle>): void {
-    this.baseLoad(items);
-  }
-
   resolveByName(name: string): Aisle | undefined {
     const needle = name.toLowerCase();
     for (const aisle of this._items.values()) {

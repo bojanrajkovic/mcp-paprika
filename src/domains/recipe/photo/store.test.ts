@@ -48,17 +48,6 @@ describe("PhotoStore", () => {
       expect(results.map((p) => p.name)).toEqual(["1", "2", "3"]);
     });
 
-    it("excludes photos carrying deleted: true", () => {
-      const live = makePhoto({ recipeUid: "recipe-A", orderFlag: 0 });
-      const tombstoned = makePhoto({ recipeUid: "recipe-A", orderFlag: 1, deleted: true });
-      store.load([live, tombstoned]);
-
-      const results = store.getByRecipeUid("recipe-A" as RecipeUid);
-
-      expect(results).toHaveLength(1);
-      expect(results[0]?.uid).toBe(live.uid);
-    });
-
     it("excludes photos soft-deleted via delete() since the last load()", () => {
       const photo = makePhoto({ uid: "p-1" as PhotoUid, recipeUid: "recipe-A" });
       store.load([photo]);
@@ -68,22 +57,15 @@ describe("PhotoStore", () => {
     });
   });
 
-  describe("CRUD and tombstone basics (inherited from TombstoneEntityStore)", () => {
-    it("set() upserts and clears any tombstone for the UID", () => {
+  describe("CRUD basics", () => {
+    it("set() upserts and makes the photo visible again after delete()", () => {
       const photo = makePhoto({ uid: "p-1" as PhotoUid, recipeUid: "recipe-A" });
       store.load([photo]);
       store.delete("p-1" as PhotoUid);
-      expect(store.isTombstone("p-1" as PhotoUid)).toBe(true);
 
       store.set(makePhoto({ uid: "p-1" as PhotoUid, recipeUid: "recipe-A" }));
 
-      expect(store.isTombstone("p-1" as PhotoUid)).toBe(false);
       expect(store.getByRecipeUid("recipe-A" as RecipeUid)).toHaveLength(1);
-    });
-
-    it("delete() tombstones unconditionally, even for an absent UID", () => {
-      store.delete("never-loaded" as PhotoUid);
-      expect(store.isTombstone("never-loaded" as PhotoUid)).toBe(true);
     });
 
     it("load([]) flips hasSynced to true (an empty gallery is a valid synced state)", () => {
@@ -92,15 +74,15 @@ describe("PhotoStore", () => {
       expect(store.hasSynced).toBe(true);
     });
 
-    it("load() resurrects a previously tombstoned UID that reappears in the snapshot", () => {
+    it("load() makes a previously deleted UID visible again when it reappears in the snapshot", () => {
       const photo = makePhoto({ uid: "p-1" as PhotoUid, recipeUid: "recipe-A" });
       store.load([photo]);
       store.delete("p-1" as PhotoUid);
-      expect(store.isTombstone("p-1" as PhotoUid)).toBe(true);
+      expect(store.get("p-1" as PhotoUid)).toBeUndefined();
 
       store.load([makePhoto({ uid: "p-1" as PhotoUid, recipeUid: "recipe-A" })]);
 
-      expect(store.isTombstone("p-1" as PhotoUid)).toBe(false);
+      expect(store.get("p-1" as PhotoUid)).toBeDefined();
     });
   });
 });

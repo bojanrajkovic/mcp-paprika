@@ -16,14 +16,14 @@ import type { Menu } from "./types.js";
  *   - `itemsOf` — the menu's items to materialize (wraps `menuItemStore.getByMenuUid`).
  */
 export interface MenuApi {
-  /** UID lookup; `undefined` for an unknown or tombstoned menu UID. */
+  /** UID lookup; `undefined` for an unknown menu UID. */
   get(uid: MenuUid): Menu | undefined;
   /**
    * Tiered case-insensitive name lookup (exact → starts-with → contains), returning
    * the matches from at most one tier. Backs the coordinator's name-or-uid resolve.
    */
   findByName(query: string): ReadonlyArray<Menu>;
-  /** All non-tombstoned items of a menu, in store order (wraps `getByMenuUid`). */
+  /** All items of a menu, in store order (wraps `getByMenuUid`). */
   itemsOf(menuUid: MenuUid): ReadonlyArray<MenuItem>;
   /** Whether BOTH owned stores (menus + menu-items) have completed their first sync — the meal-planner readiness gate. */
   hasSynced(): boolean;

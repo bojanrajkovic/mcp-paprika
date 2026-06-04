@@ -11,8 +11,7 @@ function photosEqual(a: Photo, b: Photo): boolean {
     a.filename === b.filename &&
     a.name === b.name &&
     a.orderFlag === b.orderFlag &&
-    a.hash === b.hash &&
-    a.deleted === b.deleted
+    a.hash === b.hash
   );
 }
 

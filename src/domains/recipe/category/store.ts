@@ -1,21 +1,20 @@
 import type { CategoryUid } from "../../../ids.js";
 import type { Category } from "./types.js";
 
-import { TombstoneEntityStore } from "../../../entity/index.js";
+import { EntityStore } from "../../../entity/index.js";
 
 /**
- * In-memory query layer for recipe categories, hydrated by the sync engine.
- * Extends `TombstoneEntityStore<Category, CategoryUid>` (see
- * `../entity/CLAUDE.md`) — unlike the read-only `AisleStore`/`MealTypeStore`
- * reference catalogs, categories gain create/update/delete write tools, so the
- * delete path needs pending-delete + tombstone protection against a concurrent
- * sync resurrecting a just-deleted category.
+ * In-memory query layer for recipe categories, hydrated from the disk cache.
+ * Extends `EntityStore<Category, CategoryUid>` (see `../entity/CLAUDE.md`).
+ * Categories gain create/update/delete write tools, so the delete path needs
+ * pending-delete protection (#57) against a concurrent sync resurrecting a
+ * just-deleted category.
  *
  * This store is the single source of truth for category data. `RecipeStore`
  * holds only the recipe→category UID foreign keys; name resolution for
  * rendering goes through `resolveNames()` here.
  */
-export class CategoryStore extends TombstoneEntityStore<Category, CategoryUid> {
+export class CategoryStore extends EntityStore<Category, CategoryUid> {
   constructor(opts?: { readonly pendingWriteTtlMs?: number }) {
     super(opts ?? {});
   }
@@ -43,7 +42,7 @@ export class CategoryStore extends TombstoneEntityStore<Category, CategoryUid> {
     return names;
   }
 
-  /** Direct (non-tombstoned) children of the given category. */
+  /** Direct children of the given category. */
   getChildren(parentUid: CategoryUid): Array<Category> {
     const children: Array<Category> = [];
     for (const category of this._items.values()) {

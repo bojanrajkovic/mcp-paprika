@@ -15,8 +15,7 @@ function menuItemsEqual(a: MenuItem, b: MenuItem): boolean {
     a.name === b.name &&
     a.day === b.day &&
     a.typeUid === b.typeUid &&
-    a.orderFlag === b.orderFlag &&
-    a.deleted === b.deleted
+    a.orderFlag === b.orderFlag
   );
 }
 

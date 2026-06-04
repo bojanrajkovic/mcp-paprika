@@ -218,12 +218,11 @@ describe("PantryStore", () => {
       expect(disabledStore.isPendingDelete("uid-2" as PantryItemUid)).toBe(false);
     });
 
-    it("pending writes are independent of items, tombstones, and hasSynced", () => {
-      // Marking a pending write must not touch items, tombstone state, or sync status.
+    it("pending writes are independent of items and hasSynced", () => {
+      // Marking a pending write must not touch items or sync status.
       const uid = "uid-1" as PantryItemUid;
       store.markPendingUpsert(uid);
       expect(store.get(uid)).toBeUndefined();
-      expect(store.isTombstone(uid)).toBe(false);
       expect(store.hasSynced).toBe(false);
     });
   });

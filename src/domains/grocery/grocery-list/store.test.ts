@@ -88,7 +88,7 @@ describe("GroceryListStore", () => {
     });
   });
 
-  describe("CRUD and tombstone basics", () => {
+  describe("CRUD basics", () => {
     it("load() populates store and sets hasSynced to true", () => {
       const list1 = makeGroceryList();
       const list2 = makeGroceryList();
@@ -108,7 +108,7 @@ describe("GroceryListStore", () => {
       expect(result).toBeUndefined();
     });
 
-    it("findByName excludes deleted (tombstoned) lists", () => {
+    it("findByName excludes deleted lists", () => {
       const list = makeGroceryList({ uid: "uid-1" as GroceryListUid, name: "Weekly Groceries" });
       store.load([list]);
       store.delete("uid-1" as GroceryListUid);

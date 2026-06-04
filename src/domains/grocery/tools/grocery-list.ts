@@ -241,17 +241,9 @@ export function deleteGroceryListTool(ctx: DomainCtx<GrocerySelf, "aisle" | "pan
           const existing = ctx.self.lists.store.get(args.uid);
 
           if (!existing) {
-            // Distinguish "deleted in this session" (tombstone) from "never existed".
-            if (ctx.self.lists.store.isTombstone(args.uid)) {
-              return textResult(`Grocery list with UID "${args.uid}" is already deleted.`);
-            }
-            return textResult(`No grocery list found with UID "${args.uid}".`);
-          }
-
-          if (existing.deleted) {
-            // Defense-in-depth: if a tombstone lands in the items map (e.g. from a
-            // future sync that returns deleted lists), still report already-deleted.
-            return textResult(`Grocery list "${existing.name}" is already deleted.`);
+            return textResult(
+              `No grocery list found with UID "${args.uid}" (it may not exist or was already deleted).`,
+            );
           }
 
           const trashed: GroceryList = { ...existing, deleted: true };

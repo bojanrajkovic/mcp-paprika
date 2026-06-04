@@ -63,9 +63,8 @@ register(
         log,
       });
       await cache.init();
-      // Warm the store from cache so tools work on a warm restart before the first
-      // sync; drop tombstones on hydrate (the `!deleted` filter).
-      await hydrateStore(cache, store, (m) => !m.deleted);
+      // Warm the store from cache so tools work on a warm restart before the first sync.
+      await hydrateStore(cache, store);
 
       // ---- Meal write chokepoints ----
       // Order: markPending* (FIRST, before any cache I/O) → cache put/remove → flush

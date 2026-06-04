@@ -52,7 +52,7 @@ export interface GroceryEntitySlice<Store, Cache> {
 /**
  * The grocery module's internals — the three-entity domain (like recipe and
  * menu): THREE store/cache pairs in one `self`. Grocery lists and items are
- * `TombstoneEntityStore`s (replace-all sync via `syncReplaceAllEntity`); the
+ * `EntityStore`s (replace-all sync via `syncReplaceAllEntity`); the
  * ingredient catalog is a plain name-keyed store (a direct bespoke reconcile, no
  * pending-write sweep). Foreign keys point OUT to declared deps: items + ingredients
  * file into aisles (`dependsOn: aisle`), and `move_grocery_items_to_pantry` writes
@@ -116,8 +116,7 @@ register(
       await itemCache.init();
       await hydrateStore(itemCache, itemStore);
 
-      // The ingredient catalog is a plain name-keyed store (no pending-write TTL); drop
-      // tombstones on hydrate (no tombstone-aware reads, so a deleted row must not resurface).
+      // The ingredient catalog is a plain name-keyed store (no pending-write TTL).
       const ingredientStore = new GroceryIngredientStore();
       const ingredientCache = new DiskCacheImpl<GroceryIngredient>({
         ...groceryIngredientDiskDescriptor,
@@ -125,7 +124,7 @@ register(
         log,
       });
       await ingredientCache.init();
-      await hydrateStore(ingredientCache, ingredientStore, (i) => !i.deleted);
+      await hydrateStore(ingredientCache, ingredientStore);
 
       // ---- Grocery write chokepoints ----
       // Order: markPending* (FIRST, before any cache I/O) → cache put/remove → flush →
