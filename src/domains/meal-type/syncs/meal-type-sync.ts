@@ -9,17 +9,16 @@ import { pruneOrphanCache } from "../../../paprika/sync.js";
  * observation), so they load directly. This is NOT a bare load —
  * it removes orphaned cache entries.
  *
- * `additive` tier — a meal-type fetch failure should degrade best-effort rather
- * than abort the sync cycle. Topo order sequences meal-type before meal/menu
- * within the additive phase, so consumers see an up-to-date catalog in time. The
- * kernel driver runs EACH additive reconcile in its own try/catch, so a meal-type
- * failure does not skip the subsequent meal/menu reconciles (deliberate
- * failure-isolation). Promoting to `core` for reference-catalog consistency with
- * aisle/category was considered but deferred as a post-migration improvement.
+ * `reference` tier — meal-types are a lookup catalog meal and menu resolve names
+ * against at read time, alongside aisle and category. Runs best-effort ahead of core,
+ * so a transient meal-type fetch failure degrades to the last-good catalog (consumers
+ * gate on `hasSynced`, which latches) rather than aborting the primary data sync.
+ * `core` was rejected: meal-type's consumers (meal, menu) are themselves best-effort,
+ * so promotion would buy no ordering and only widen the abort blast-radius (ADR-0010).
  */
 export function mealTypeSync(self: MealTypeSelf): SyncContribution<MealTypeSelf, never> {
   return {
-    tier: "additive",
+    tier: "reference",
     reconcile: async (ctx) => {
       const { store, cache } = ctx.self;
       const mealTypes = await ctx.infra.client.listMealTypes();

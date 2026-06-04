@@ -9,12 +9,14 @@ import { pruneOrphanCache } from "../../../paprika/sync.js";
  * merges cached pending-upserts back, removes orphans from the cache, then
  * observation-clears confirmed pending-upserts (a confirmed pending-upsert UID
  * present in the canonical list means the server confirmed the write — clear now
- * rather than at TTL). `core` tier — pantry and grocery resolve against aisles,
- * so this must reconcile before them.
+ * rather than at TTL). `reference` tier — a lookup catalog pantry and grocery resolve
+ * aisle names against at read time; runs best-effort ahead of core, so a transient
+ * aisle-fetch failure degrades to the last-good catalog instead of aborting the
+ * primary data sync (ADR-0010).
  */
 export function aisleSync(self: AisleSelf): SyncContribution<AisleSelf, never> {
   return {
-    tier: "core",
+    tier: "reference",
     reconcile: async (ctx) => {
       const { store, cache } = ctx.self;
       const aisles = await ctx.infra.client.listAisles();

@@ -9,8 +9,9 @@ import { buildKernel } from "./registry.js";
 /**
  * Drives the kernel's `syncOnce` orchestration in isolation via synthetic modules
  * passed to `buildKernel(infra, modules)`. This covers the dumb-driver contract:
- * recipe-first ordering, core-aborts-the-cycle, additive-is-best-effort,
- * results-only-after-flush, and end-of-cycle sweep.
+ * reference-before-core ordering, recipe-first within core, reference- and
+ * additive-are-best-effort, core-aborts-the-cycle, results-only-after-flush, and
+ * end-of-cycle sweep.
  */
 
 const RESULT = (changeType: AnySyncResult["changeType"]): AnySyncResult =>
@@ -89,6 +90,41 @@ describe("buildKernel sync driver", () => {
           tier: "additive",
           reconcile: async () => {
             throw new Error("additive boom");
+          },
+        },
+      ]),
+    ]);
+    const results = await kernel.syncOnce();
+    expect(results.map((r) => r.changeType)).toEqual(["recipes"]);
+  });
+
+  it("runs reference reconciles before core, then additive", async () => {
+    const order: string[] = [];
+    const spec = (id: string, tier: SyncTier): SyncSpec => ({
+      tier,
+      reconcile: async () => {
+        order.push(id);
+      },
+    });
+    // Registration order puts the reference catalog LAST; the tier must still run it first.
+    const kernel = await buildKernel(infra(), [
+      fakeModule("recipe", [spec("recipe", "core")]),
+      fakeModule("meals", [spec("meals", "additive")]),
+      fakeModule("aisle", [spec("aisle", "reference")]),
+    ]);
+    order.length = 0;
+    await kernel.syncOnce();
+    expect(order).toEqual(["aisle", "recipe", "meals"]);
+  });
+
+  it("keeps a reference reconcile best-effort: a throw is swallowed, core results survive", async () => {
+    const kernel = await buildKernel(infra(), [
+      fakeModule("recipe", [{ tier: "core", reconcile: async () => RESULT("recipes") }]),
+      fakeModule("aisle", [
+        {
+          tier: "reference",
+          reconcile: async () => {
+            throw new Error("reference boom");
           },
         },
       ]),
