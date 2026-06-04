@@ -1,7 +1,7 @@
 # ADR-0009: Domain-isolated tool modules via a typed composition kernel
 
 **Status:** Accepted (2026-06-03)
-**Last verified:** 2026-06-03
+**Last verified:** 2026-06-04
 **Supersedes:** [ADR-0005](0005-composition-modules-and-identifiers.md) §1 (the phase-typed builder), and §2's rejection of domain-owned tools
 **Reshapes:** [ADR-0001](0001-two-transports-and-composition-root.md)'s `SessionContext`
 **Resolves:** [#212](https://github.com/bojanrajkovic/mcp-paprika/issues/212), [#215](https://github.com/bojanrajkovic/mcp-paprika/issues/215)
@@ -60,7 +60,11 @@ flowchart LR
   photogen --> recipe
 ```
 
-Edges are `dependsOn`; `auth` (HTTP-only) is a standalone module with no data edges. `aisle` and `meal-type` stay standalone because each is referenced by two domains (aisle by grocery and pantry; meal-type by meal and menu). Disk is module-namespaced (`<cacheDir>/<domain>/<entity>/`) so a domain resets as a unit, and the source tree mirrors it (`src/<domain>/<entity>/{types,store,disk,tools,resource,sync}.ts` plus a domain `module.ts` and `api.ts`), dissolving `src/tools/` and `src/resources/` into their domains with tests co-located. Tools **and** resources register from the module by the identical mechanism — resources for Content domains only (recipe, grocery-list, menu — ADR-0004). Branded UID schemas follow ownership: each domain owns its entities' brands and imports a dependency's brand along the same `dependsOn` edge the kernel already requires, dissolving the shared `ids` leaf — the brands are plain inlined `z.string().min(1).brand()` schemas (ADR-0007), with no generic factory to keep central.
+Edges are `dependsOn`; `auth` (HTTP-only) is a standalone module with no data edges. `aisle` and `meal-type` stay standalone because each is referenced by two domains (aisle by grocery and pantry; meal-type by meal and menu).
+
+The source tree mirrors the graph: each domain lives at `src/domains/<domain>/` with a `module.ts` and `api.ts`, its defining entity's `{types,store,disk}.ts` at the domain root, and any additional owned entity in an `<entity>/` subdir (`src/domains/recipe/category/`, `src/domains/grocery/grocery-item/`, …). Tools, resources, and syncs are co-located subdirectories (`tools/`, `resources/`, `syncs/`) with their tests beside them — `src/tools/` and `src/resources/` are dissolved. Features stay at `src/features/<feature>/`; the kernel, composition root, cache, paprika client, and other infra stay at the `src/` root. The few genuinely cross-cutting tool helpers — the MCP `textResult` envelope, the uid-or-text lookup abstraction, and the SSRF-guarded image fetch — live at `src/shared/`, not in any one domain. Tools **and** resources register from the module by the identical mechanism — resources for Content domains only (recipe, grocery-list, menu — ADR-0004). Branded UID schemas follow ownership: each domain owns its entities' brands and imports a dependency's brand along the same `dependsOn` edge the kernel already requires (the brands are plain inlined `z.string().min(1).brand()` schemas — ADR-0007); a single shared `ids.ts` leaf is retained for now (#202) rather than scattering the brands per domain.
+
+**Disk stays flat, reuse-in-place.** Each entity's `DiskCacheDescriptor` keeps its original flat `<cacheDir>/<entity>` subdir; the source move carries no on-disk change and therefore needs no data migration on deployed instances. This is a deliberate divergence from a `<cacheDir>/<domain>/<entity>/` namespacing: the only motivation for namespaced disk was "reset a domain as a unit," which no current operation needs, and the migration risk on a live cache is not worth buying a capability nothing uses. Revisit if a domain-granular reset ever becomes a real requirement.
 
 ## Rejected alternatives
 
@@ -99,7 +103,7 @@ Retain one module per entity. Rejected because the cross-domain tools and the sh
 - The kept `as unknown as` cast is sound but real: it is the one place the kernel trusts the author, accepted because eliminating it would require a source-parsing code generator that gives up "export nothing."
 - `dependsOn` exhaustiveness is author-maintained: the dependency tuple and the contract it implies are both hand-written, and nothing forces a brand import to correspond to a declared edge without a boundary lint.
 - Boot ordering moves from ADR-0005's phase types into the kernel's explicit boot phases; the temporal sync-before-index constraint becomes the driver's responsibility.
-- The migration is a single long-lived branch (additive → flip → delete), with the risk concentrated in one flip commit (sync-to-notify wiring, boot ordering, the crash-safe disk move-migration); the generated barrel must be regenerated when a domain is added, or that domain silently fails to register at runtime.
+- The migration is a single long-lived branch (additive → flip → delete → reshape), with the risk concentrated in the flip commit (sync-to-notify wiring, boot ordering, and per-module store hydration — disk reuse-in-place means there is no on-disk migration to get wrong); the generated barrel must be regenerated when a domain is added, or that domain silently fails to register at runtime.
 
 This **supersedes ADR-0005 §1**: the phase-typed builder is replaced by the kernel's dependency-ordered construction and boot phases. It **reshapes ADR-0001's `SessionContext`** — the per-handler god-object becomes the narrowed `DomainCtx` — while preserving ADR-0001's load-bearing core unchanged: two transports over one composition root, the transport-blind `Notifier` seam (now part of `infra`), and the invariant that process-wide context carries no server (the kernel's boot context has none; only the per-session context adds it). It resolves **#212** and **#215**.
 

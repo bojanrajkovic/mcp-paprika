@@ -1,17 +1,17 @@
 # Caching Layer
 
-Last verified: 2026-06-02
+Last verified: 2026-06-04
 
 ## Purpose
 
-The in-memory query/CRUD stores that are each session's source of truth for one Paprika entity family. Tools and resources read these; the sync engine hydrates them; they never touch the filesystem. The store implementations live in their per-entity modules (`../<entity>/store.ts`) — this doc catalogs their shared behavior — while the durable **persistence layer** that backs them lives flat in this directory. See [Persistence](#persistence).
+The in-memory query/CRUD stores that are each session's source of truth for one Paprika entity family. Tools and resources read these; each module hydrates its own stores from the disk cache on construction; they never touch the filesystem. The store implementations live in their per-entity modules (`../domains/<domain>/store.ts`) — this doc catalogs their shared behavior — while the durable **persistence layer** that backs them lives flat in this directory. See [Persistence](#persistence).
 
 ## Key References
 
 - `../entity/CLAUDE.md` — the shared `EntityStore` / `TombstoneEntityStore` base classes and the canonical pending-write (#57) and tombstone invariants. Every store inherits those unless noted in Sharp edges; this file documents only what each store adds on top.
-- [Persistence](#persistence) (below) — the on-disk layer (`DiskCacheRoot`, per-entity `DiskCache<T>` + the `DiskCacheDescriptor<T>` contract, on-disk layout, migration, mutex model, recipe `diff()`, DCR `tryPut`); each entity's descriptor is co-located in `../<entity>/disk.ts`.
+- [Persistence](#persistence) (below) — the on-disk layer (`DiskCacheRoot`, per-entity `DiskCache<T>` + the `DiskCacheDescriptor<T>` contract, on-disk layout, migration, mutex model, recipe `diff()`, DCR `tryPut`); each entity's descriptor is co-located in `../domains/<domain>/disk.ts`.
 - `docs/architecture.md` — the two-layer cache+sync model and the diff-and-fetch vs. replace-all split.
-- Source: each entity's `../<entity>/store.ts` owns its method signatures and field shapes, and its `../<entity>/types.ts` owns the schema.
+- Source: each entity's `../domains/<domain>/store.ts` owns its method signatures and field shapes, and its `../domains/<domain>/types.ts` owns the schema.
 
 ## Stores at a glance
 
@@ -30,17 +30,17 @@ Most stores extend `TombstoneEntityStore`. The exceptions:
 
 **Meal "cooked" queries deliberately drop ingredient and future entries.** `getByRecipeUid` and `lastCookedAt` exclude `isIngredient: true` (prep-work, not a served meal), and `lastCookedAt` also excludes meals dated in the future; "last cooked" means actually eaten, not a planner entry scheduled for next Tuesday.
 
-**`GroceryIngredientStore` is a plain class, not an `EntityStore`.** No pending-writes, no tombstones, no `sweepPending`; the sync engine never calls those for ingredients. It's keyed by lowercase name (case-insensitive lookup) and is replace-all only, so duplicate names differing by case collapse to one entry, last writer wins.
+**`GroceryIngredientStore` is a plain class, not an `EntityStore`.** No pending-writes, no tombstones, no `sweepPending`; sync never calls those for ingredients. It's keyed by lowercase name (case-insensitive lookup) and is replace-all only, so duplicate names differing by case collapse to one entry, last writer wins.
 
 **Pending-writes (#57) is distinct from the tombstone set; clearing is content-equality-based, not UID-presence.** The tombstone set drives the delete tool's idempotent "already deleted" message; the pending-writes map shields the sync loop from rolling back or resurrecting an in-flight write. Upserts clear only on content equality (recipes by hash match against the canonical entry; pantry items field-wise via `pantryItemsEqual`); UID-presence-only clearing was rejected because a UID can appear in Paprika's canonical list with pre-write content while propagation is still in flight. The commit helpers (`commitRecipe` / `commitPantryItem`) wrap cache I/O in `try { … } catch { clearPending(uid); throw }` so a failed local commit doesn't shield the UID for the full TTL. The full invariant set is in `../entity/CLAUDE.md`.
 
 ## Persistence
 
-On-disk persistence for every cached entity: one `DiskCache<T>` per entity behind a `DiskCacheRoot` composition root — the durable backing store that makes the server warm on restart, while the in-memory stores remain the session's source of truth. Tools never touch this layer.
+On-disk persistence for every cached entity: one `DiskCache<T>` per entity — the durable backing store that makes the server warm on restart, while the in-memory stores remain the session's source of truth. Each domain module builds its own subcaches in its `.self` factory, pointing each at its flat `<cacheDir>/<entity>` subdir. `DiskCacheRoot`, which composes all subcaches under one root, is no longer the production composition path — it survives only behind the transitional `SyncEngine` and the HTTP auth caches. Tools never touch this layer.
 
-**Files.** `disk-cache.ts` (generic `DiskCache<T>` + `writeFileAtomic` + the `DiskCacheDescriptor<T>` contract); `disk-cache-root.ts` (`DiskCacheRoot`: builds one subcache per entity, runs the legacy-index migration, fans `init`/`flush` out); `oauth-client-disk-cache.ts` (`OAuthClientDiskCache`, the atomic DCR cap — OAuth clients aren't a Paprika entity, so this stays here). The recipe subcache (`RecipeDiskCache`, hash index + `diff()`) lives with its entity at `../recipe/disk.ts`.
+**Files.** `disk-cache.ts` (generic `DiskCache<T>` + `writeFileAtomic` + the `DiskCacheDescriptor<T>` contract); `disk-cache-root.ts` (`DiskCacheRoot`: composes one subcache per entity and fans `init`/`flush` out — the legacy/transitional root); `auth-cache.ts` (`buildAuthCaches` + the `oauthTokens` descriptor — the narrow OAuth-only caches the HTTP transport builds, so an auth-only process never stands up a duplicate recipe cache); `oauth-client-disk-cache.ts` (`OAuthClientDiskCache`, the atomic DCR cap — OAuth clients aren't a Paprika entity, so this stays here). The recipe subcache (`RecipeDiskCache`, hash index + `diff()` + the one-shot legacy-index migration) lives with its entity at `../domains/recipe/disk.ts`.
 
-**Descriptors.** Each Paprika entity co-locates its persistence config — subdir name, `parse`, key extractor — as a `DiskCacheDescriptor<T>` in `../<entity>/disk.ts`; `DiskCacheRoot` joins the subdir against the cache dir and supplies the logger to turn each descriptor into a live `DiskCache`. Entities whose cache carries extra behavior (recipes' hash index, OAuth clients' atomic cap) subclass `DiskCache` instead of describing it. `oauthTokens` has no entity home, so its descriptor is module-local in `disk-cache-root.ts`. See `docs/architecture.md` ("Caching and sync") for the two-layer model and `docs/wire-format.md` for the recipe content-hash the `recipes` namespace diffs against.
+**Descriptors.** Each Paprika entity co-locates its persistence config — subdir name, `parse`, key extractor — as a `DiskCacheDescriptor<T>` in `../domains/<domain>/disk.ts`; the owning module's `.self` joins the subdir against `infra.cacheDir` and supplies the logger to turn each descriptor into a live `DiskCache`. Entities whose cache carries extra behavior (recipes' hash index, OAuth clients' atomic cap) subclass `DiskCache` instead of describing it. `oauthTokens` has no entity home, so its descriptor lives in `auth-cache.ts` alongside `buildAuthCaches`. See `docs/architecture.md` ("Caching and sync") for the two-layer model and `docs/wire-format.md` for the recipe content-hash the `recipes` namespace diffs against.
 
 ### Persistence sharp edges
 

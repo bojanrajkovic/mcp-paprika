@@ -1,69 +1,53 @@
-# Server Composition Root
+# Server Bootstrap & Transport Seams
 
-Last verified: 2026-06-02
+Last verified: 2026-06-04
 
 ## Purpose
 
-Process-wide composition root. Owns the authoritative context types (`AppContext`, `SessionContext`), the `Notifier` abstraction that decouples mutation code from "the server," and the `buildAppContext` / `buildMcpServer` builders that draw the line between process-wide and per-session state. This split lets the same tools, resources, and sync engine run unchanged under stdio (one server per process) and HTTP (N concurrent sessions per process).
+The non-kernel pieces of the composition path: the transport-blind `Notifier` seam, the pre-kernel bootstrap (`buildInfraBase` + `buildBrandedServer`), the background sync loop, and the cross-entity index-event seam. Module construction, the sync driver, and boot-phase ordering now live in the **kernel** (`../kernel/CLAUDE.md`); this directory is what wraps it for the two transports.
 
 ## Key References
 
-- `docs/adr/0001-two-transports-and-composition-root.md` — the AppContext/SessionContext split, the Notifier seam, the bootstrap-order cycle, and the rejected single-transport alternative.
-- `docs/adr/0005-composition-modules-and-identifiers.md` — the composition-root shape (phase-typed builder; a DI container _deferred_ behind a written trigger, not rejected), the per-entity module structure, and foreign-key branding via `src/ids.ts`.
-- `src/server/app-context.ts` — the exhaustive, canonical field list for `AppContext` and `SessionContext`. Treat that file as the source of truth; do not re-enumerate fields here.
-- `src/server/notifier.ts` — `Notifier`, `singleServerNotifier`, `broadcastNotifier`.
-- `../cache/CLAUDE.md` (Persistence section) — the disk subcaches that `AppContext.cache` exposes.
-- ADR-0004 (entity store roles) — the Content / Data / Reference taxonomy referenced below.
+- `../kernel/CLAUDE.md` + `docs/adr/0009-domain-isolated-tool-modules-kernel.md` — the kernel that replaced `buildAppContext`/`buildMcpServer`; the construction/sync/boot ordering moved there.
+- `docs/adr/0001-two-transports-and-composition-root.md` — the two-transport split, the `Notifier` seam, and the notifier/server bootstrap cycle (`ServerRef`) this still implements.
+- `notifier.ts` — `Notifier`, `singleServerNotifier`, `broadcastNotifier`.
+- `build.ts` — `buildInfraBase` (logger + authenticated client + cache dir) and `buildBrandedServer` (the server identity/instructions the kernel registers onto).
+- `sync-loop.ts` — `runSyncLoop` (the interval driver) + `notifyFromResults`. `index-events.ts` — the `IndexEventEmitter`.
 
-## Context shape (conceptual)
+## Transitional (do not build on)
 
-`AppContext` is the heavyweight process-wide state, built once. It holds the Paprika client, the disk cache, the optional `vectorStore`/`photographyClient`, the ephemeral `generatedImageStore`, the logger, the optional `auth` runtime, and the `Notifier`. Its in-memory query stores group by their ADR-0004 role:
-
-- **Content stores** (parent entities with their own resource surface) — recipe, grocery-list, menu.
-- **Data stores** (child entities owned by a Content parent) — grocery-item, menu-item, meal, photo. Meals and photos are recipe-children with no standalone resource.
-- **Reference stores** (case-insensitive lookup catalogs) — category, aisle, meal-type, grocery-ingredient.
-
-`SessionContext` is `AppContext` plus the one session's `McpServer`: it is the only thing handlers receive. `src/types/server-context.ts` re-exports it as `ServerContext` for backward compatibility.
+`app-context.ts` (`AppContext`/`SessionContext`) and the legacy `SyncEngine` (`../paprika/sync.ts`) survive ONLY to back the sync-coverage tests until those are ported to the kernel (#20). Production no longer constructs either — `buildInfraBase` reuses the `AppContext["log"]`/`["client"]` indexed types as a convenience, nothing more. New code reaches the kernel's `Infra`/`DomainCtx`, never these.
 
 ## Sharp edges
 
-### `AppContext` has no `server` field — by design
+### Nothing process-wide carries a server
 
-This is the load-bearing invariant that makes process-wide state independent of session count. Under HTTP there is no single "the server" (there are N, or zero during bootstrap), so nothing process-wide is allowed to reach one. Anything that needs to push a notification goes through `ctx.notifier`. Do not add a `server` field to `AppContext` to "simplify" a call site: that reintroduces the stdio one-server assumption HTTP cannot honor.
+The load-bearing invariant that makes process-wide state independent of session count: under HTTP there is no single "the server" (there are N, or zero during bootstrap). The kernel's `Infra`/`BootCtx` therefore have **no `server`** — only the per-session `DomainCtx` adds one. Anything that pushes a notification goes through `infra.notifier`. Don't reintroduce a server field on a process-wide type; it bakes in the stdio one-server assumption HTTP can't honor.
 
 ### Notifier methods never throw
 
-Both implementations swallow transport failures: `singleServerNotifier` silently (stdio), `broadcastNotifier` per-server (HTTP). This is required because `SyncEngine.syncOnce()` is contractually never-throws; a notification failure must not turn a successful sync into a reported failure. `broadcastNotifier` materializes the session snapshot into an array before iterating so adding/removing a session mid-broadcast (especially during the async `loggingMessage` fan-out) cannot invalidate the iterator, and wraps each `sendLoggingMessage` in an async IIFE so a _synchronous_ throw becomes a rejected promise that `Promise.allSettled` can absorb rather than escaping into `syncOnce()`.
+Both implementations swallow transport failures: `singleServerNotifier` silently (stdio), `broadcastNotifier` per-server (HTTP). Required because the kernel's `syncOnce` is contractually never-throws — a notification failure must not turn a successful sync into a reported failure. `broadcastNotifier` snapshots the session set into an array before iterating (so adding/removing a session mid-broadcast can't invalidate the iterator) and wraps each `sendLoggingMessage` in an async IIFE so a synchronous throw becomes a rejected promise `Promise.allSettled` absorbs.
 
-### `ServerRef` breaks the notifier/server bootstrap cycle
+### `ServerRef` breaks the notifier/server bootstrap cycle (stdio)
 
-The stdio bootstrap order is pinned: `createServerRef()` → `singleServerNotifier(ref.get)` → `buildAppContext` → `buildMcpServer` + `ref.set(server)` → `connect`. `ServerRef` is a `{ get, set }` holder whose `get()` returns `undefined` until `set()` runs after the server is built, so any notifier call during construction (e.g. the initial sync's `resourceListChanged`) silently no-ops — safe _only_ because that order holds. HTTP has no single server, so it uses `broadcastNotifier` over a live sessions snapshot instead. The cycle this resolves — and why a `ServerRef` rather than a `server` field on `AppContext` — is ADR-0001 and ADR-0005.
+The notifier needs the server, the server is registered after the kernel is built, and the kernel's initial sync may fire `resourceListChanged` before any server exists. stdio resolves this with a `{ get, set }` `ServerRef` whose `get()` returns `undefined` until `set()` runs post-build, so an early notify silently no-ops. HTTP has no single server and uses `broadcastNotifier` over a live sessions snapshot instead. See ADR-0001.
 
-### `buildAppContext` construction order is load-bearing
+### `buildInfraBase` is the credential fast-fail, outside the kernel
 
-It runs as seven typed phases (`build.ts`), each consuming the previous phase's result type so the order is a compile-time guarantee, not a convention — e.g. `buildFeatures` requires the `Indexed` that only `runInitialSync` produces:
+`client.authenticate()` throws here on bad credentials; the kernel's `syncOnce` swallows everything, so a credential error would otherwise be invisible (#158). Keep authentication in `buildInfraBase`, not in a module. The transports assemble the full `Infra` from this base plus `notifier`/`config`/`indexEvents`/`generatedImageStore`, then call `buildKernel`.
 
-1. **`authenticate`** — build the logger, then authenticate the Paprika client. The real fast-fail for bad credentials (`client.authenticate()` throws; `syncOnce()` swallows everything, so a credential error would otherwise be invisible).
-2. **`hydrate`** — open the disk cache and hydrate every store (Reference/Content/Data stores hydrate from disk on warm restart, start empty on cold start), then assemble the `core` `SyncDeps` slice (client, cache, the 12 stores, log) — built **once** and reused for both the `SyncEngine` and the final `AppContext`.
-3. **`buildAuth`** — `null` for stdio; for HTTP it fetches the OIDC discovery document and assembles the OAuth stores/provider, throwing on failure (no value in serving a public endpoint with broken auth). Runs after hydration; it reads only `config`/`cache`/`log`, none of which hydration mutates.
-4. **`wireSync`** — `new SyncEngine(core, …)` (the engine takes the narrow `SyncDeps` slice, never an `AppContext`), then wire the `sync:complete` → `resourceListChanged` subscriber here, not inside the engine (keeps the engine decoupled from the notifier decision). It fires only for `changeType` in {recipes, grocery-lists, grocery-items, menus, menu-items} when any of added/updated/removedUids is non-empty. Pantry is excluded (no MCP resource surface); both menu events fire because menu items inline into the `paprika://menu/{uid}` resource.
-5. **`runInitialSync`** — run the initial `sync.syncOnce()` **before** building discover components. Cold-start vector indexing calls `categoryStore.resolveNames(uids)` per recipe; if it ran before the first sync populated the (cold-start-empty) `CategoryStore`, embeddings would bake in empty category names and stay stale until a recipe mutation. On a warm restart with unchanged remote hashes the post-build sync emits nothing, so the subscriber never gets a chance to fix it. `syncOnce()` never throws, so awaiting it cannot block startup.
-6. **`buildFeatures`** — build the optional vector store (discover) and photography client; gated behind the `Indexed` result so it cannot precede the initial sync.
-7. **`assemble`** — spread `core` plus `generatedImageStore`/`vectorStore`/`photographyClient`/`notifier`/`auth` into the one `AppContext`.
+### `notifyFromResults` fans out resource notifications from the loop, not the engine
 
-### Startup logging is level-gated
+`buildKernel`'s `syncOnce` returns the `AnySyncResult[]` of a completed cycle; the interval loop passes them to `notifyFromResults`, which fires `resourceListChanged` only for change types with a resource surface (recipes, grocery-lists, grocery-items, menus, menu-items) and only when the change set is non-empty. The initial sync at build time discards its results (no session exists yet); the loop's immediate first cycle re-syncs and notifies.
 
-`buildAppContext`'s first act is `log.info({transport}, "mcp-paprika starting")`. At the default `info` level it lands in pod logs/stderr/file; setting `MCP_LOG_LEVEL=warn` or higher silently suppresses it. Operators who need a startup signal must keep `info` or rely on the process supervisor.
+### The index-event seam (`IndexEventEmitter`) crosses a non-edge
 
-### SIGINT/SIGTERM handler writes directly to stderr
+Recipe writes and the recipe/category reconciles emit `recipe-changed`/`recipe-removed`/`category-changed` on `infra.indexEvents`; discover's `index` boot hook subscribes. It rides `infra` rather than a `dependsOn` edge because discover's contract is empty by design — there is no dependency edge into it. This restores the legacy `maintainRecipeIndex` + `sync:category-change` re-index path.
 
-The signal handler in `src/index.ts` bypasses the structured logger because at signal time the logger may not be built yet (early startup failure) or may already be torn down. This is one of the few sanctioned exceptions to the "no direct `process.stderr.write`" rule, which exists because stdout carries the stdio wire format.
+### Startup logging is level-gated; SIGINT/SIGTERM writes raw stderr
 
-### Feature-gated tool registration
+`buildInfraBase` logs `mcp-paprika starting` and `buildKernel` logs `running initial sync` at `info`; `MCP_LOG_LEVEL=warn`+ silently suppresses them. The signal handler in `src/index.ts` bypasses the structured logger (it may not be built yet, or already torn down) — one of the two sanctioned `process.stderr.write` exceptions, because stdout carries the stdio wire.
 
-`buildMcpServer` registers the unconditional tool/resource families on a fresh `McpServer` for every session. Registration is pure: each `register*` only closes over the per-session `SessionContext`; there is no module-level mutable state, so registering the same tool name on N independent servers is safe. Two tools are conditional and share the same opt-in pattern: the discover tool registers **iff `app.vectorStore !== null`**, and `generate_recipe_photo` registers **iff `app.photographyClient !== null`**.
+### Feature tools register unconditionally
 
-### Invariants
-
-- `app.auth !== null` **iff** `config.transport === "http"`. Use-sites check `app.auth === null` to detect stdio mode (mirrors the `vectorStore` optional-feature pattern).
-- `buildAppContext` runs exactly once per process; `buildMcpServer` runs once per session.
+Unlike the legacy `buildMcpServer` (which gated `discover_recipes`/`generate_recipe_photo` on a non-null client), the kernel registers both tools always; they no-op when their client is null. The feature gate lives inside the handler, not at registration. See ADR-0009 §5.

@@ -1,35 +1,46 @@
 /**
  * Generates docs/tools/README.md (a single, source-of-truth reference for
- * every MCP tool the server registers) by building the server with a stub
- * context and introspecting the live tool registry. The Zod input schemas in
- * src/tools/ and the registration in src/server/build.ts remain canonical; this
- * file derives from them so it can never drift.
+ * every MCP tool the server registers) by building the composition kernel with a
+ * stub Infra and introspecting the live tool registry. The Zod input schemas in
+ * each domain's `tools/` and the module registrations under `src/domains/` remain
+ * canonical; this file derives from them so it can never drift.
  *
  * Run: npx tsx scripts/generate-tool-reference.ts  (or: pnpm generate:tool-reference)
  */
 
-import { writeFileSync } from "node:fs";
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import type { AppContext } from "../src/server/app-context.js";
+import type { Infra } from "../src/kernel/registry.js";
+import type { PaprikaClient } from "../src/paprika/client.js";
+import type { PaprikaConfig } from "../src/utils/config.js";
 
-import { buildMcpServer } from "../src/server/build.js";
+import { GeneratedImageStore } from "../src/features/generated-image-store.js";
+import { buildKernel } from "../src/kernel/registry.js";
+import { buildBrandedServer } from "../src/server/build.js";
+import { createIndexEvents } from "../src/server/index-events.js";
 import { SILENT_LOG } from "../src/utils/log.js";
+// Side-effect: every domain/feature module self-registers, so buildKernel's default
+// module list is populated.
+import "../src/kernel/modules.generated.js";
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 const OUT = join(__dirname, "..", "docs", "tools", "README.md");
 
-// `buildMcpServer` only reads `ctx.log` at registration time (each register*
-// calls `ctx.log.child(...)` before `server.registerTool(...)`); the tool
-// handlers (which use the rest of the context) are closures that are never
-// invoked here. The two opt-in tools gate on `vectorStore` / `photographyClient`
-// being non-null, so non-null them to register the full surface.
-const stub = {
-  log: SILENT_LOG,
-  vectorStore: {},
-  photographyClient: {},
-} as unknown as AppContext;
+// A minimal Infra. Module `.self` factories don't call the client (they hydrate from
+// the cache dir and bind closures), so an auto-stub client suffices; the initial
+// `syncOnce` that buildKernel runs DOES call it, but syncOnce never throws — its
+// reconciles fail and are swallowed, which is harmless here since we only introspect
+// the registered tools afterward. The two feature tools (discover_recipes,
+// generate_recipe_photo) register UNCONDITIONALLY (they no-op when their client is
+// null — ADR-0009 §5), so a features-off config still yields the full surface.
+const stubClient = new Proxy({}, { get: () => () => undefined }) as unknown as PaprikaClient;
+const config = {
+  transport: "stdio",
+  sync: { enabled: false, pendingWriteTtl: 0, interval: 0, recipeFetchConcurrency: 1 },
+} as unknown as PaprikaConfig;
 
 interface ZodLike {
   readonly description?: string;
@@ -58,8 +69,20 @@ function paramRows(inputSchema: ZodLike | undefined): string[] {
   return rows;
 }
 
-function main(): void {
-  const server = buildMcpServer(stub);
+async function main(): Promise<void> {
+  const infra: Infra = {
+    client: stubClient,
+    cacheDir: mkdtempSync(join(tmpdir(), "paprika-tool-reference-")),
+    notifier: { resourceListChanged: () => {}, loggingMessage: async () => {} },
+    log: SILENT_LOG,
+    config,
+    indexEvents: createIndexEvents(SILENT_LOG),
+    generatedImageStore: new GeneratedImageStore(),
+  };
+
+  const kernel = await buildKernel(infra);
+  const server = buildBrandedServer();
+  kernel.registerAll(server);
   const registry = (server as unknown as { _registeredTools: Record<string, RegisteredTool> })._registeredTools;
 
   const names = Object.keys(registry).sort((a, b) => a.localeCompare(b));
@@ -71,8 +94,8 @@ function main(): void {
     "# Paprika MCP tools",
     "",
     "A generated reference for every tool the server registers. The authoritative contracts are the",
-    "Zod `inputSchema` in each `src/tools/*.ts` and the registration list in `src/server/build.ts`;",
-    "this page is derived from them. Two tools are opt-in and only appear to a client when configured:",
+    "Zod `inputSchema` in each domain's `tools/*.ts` and the module registrations under `src/domains/`;",
+    "this page is derived from them. Two tools are opt-in and only behave when configured:",
     "`discover_recipes` (semantic search) and `generate_recipe_photo` (AI photos).",
     "",
   ];
@@ -94,4 +117,4 @@ function main(): void {
   process.stdout.write(`Wrote ${OUT} (${names.length} tools)\n`);
 }
 
-main();
+await main();

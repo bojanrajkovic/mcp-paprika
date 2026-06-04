@@ -1,6 +1,6 @@
 # CLAUDE.md — AI Agent Index
 
-Last verified: 2026-06-02
+Last verified: 2026-06-04
 
 > **Keep this file lean.** It is the project-wide pointer index for agents. Detailed docs live under `docs/`; the human dev workflow lives in `CONTRIBUTING.md`; the rules that govern the doc system live in `docs/documentation-system.md`. When you change a feature, update its architecture doc or the relevant directory `CLAUDE.md`, not this index.
 
@@ -16,23 +16,23 @@ TypeScript 6 (ESM, `@tsconfig/strictest`) on Node.js 24 (mise-managed), pnpm via
 
 `pnpm dev` · `pnpm build` · `pnpm test` · `pnpm typecheck` · `pnpm lint` · `pnpm format`. Full reference and dev setup: `CONTRIBUTING.md`.
 
-## Project structure
+The source tree is a typed composition kernel over self-registering domain modules (ADR-0009).
 
-- `src/index.ts`, `src/transport/` — transport dispatch and the stdio / Streamable-HTTP entry points.
-- `src/server/` — the composition root: `AppContext`/`SessionContext`, the `Notifier` abstraction, and the `buildAppContext`/`buildMcpServer` builders. See `src/server/CLAUDE.md`.
-- `src/paprika/` — the Paprika cloud-sync HTTP client and the background sync engine. Wire formats: `docs/wire-format.md`.
-- `src/<entity>/` — per-entity data modules: one directory per Paprika entity family, each co-locating its `types.ts`, `store.ts`, and `disk.ts`. Shape and rationale: `docs/adr/0005-composition-modules-and-identifiers.md`.
-- `src/ids.ts` — the shared branded-UID leaf every data module imports for kind-safe foreign keys; its header explains the FK-reference vs primary-key schema split.
+- `src/index.ts`, `src/transport/` — transport dispatch and the stdio / Streamable-HTTP entry points; each transport assembles the kernel `Infra` and calls `buildKernel`.
+- `src/kernel/` — the composition substrate: `defineModule`/`register`, the declaration-merged `DomainRegistry`, `buildKernel` (dependency-ordered construction, the sync driver, boot phases), and the generated module barrel. See `src/kernel/CLAUDE.md` and `docs/adr/0009-domain-isolated-tool-modules-kernel.md`.
+- `src/domains/<domain>/` — one directory per cohesive domain (recipe, grocery, menu, meal, meal-type, pantry, aisle, meal-planner): its `module.ts` + `api.ts`, its defining entity's `types.ts`/`store.ts`/`disk.ts` at the root, any additional owned entity in an `<entity>/` subdir, and co-located `tools/`, `resources/`, `syncs/` with tests beside them. See `src/domains/CLAUDE.md`.
+- `src/features/<feature>/` — kernel modules that are optional features, not data domains: semantic search (discover) and AI photo generation (photo-gen). See `src/features/CLAUDE.md`.
+- `src/shared/` — the few genuinely cross-cutting tool helpers: the MCP `textResult` envelope + the uid-or-text lookup abstraction (`tools.ts`), and the SSRF-guarded image fetch (`photo-fetch.ts`). See `src/shared/CLAUDE.md`.
+- `src/server/` — the composition root's remaining pieces: the `Notifier` abstraction, `buildInfraBase` + `buildBrandedServer`, the background sync loop, and the cross-entity index-event seam. (`AppContext` + the legacy `SyncEngine` survive here transitionally to back the sync-coverage tests.) See `src/server/CLAUDE.md`.
+- `src/paprika/` — the Paprika cloud-sync HTTP client and `syncReplaceAllEntity` (the shared per-module reconcile helper). Wire formats: `docs/wire-format.md`.
+- `src/ids.ts` — the shared branded-UID leaf every domain imports for kind-safe foreign keys; its header explains the FK-reference vs primary-key schema split.
 - `src/entity/` — the shared `EntityStore` / `TombstoneEntityStore` base classes. See `src/entity/CLAUDE.md`.
-- `src/cache/` — the persistence layer: per-entity disk caches behind `DiskCacheRoot`, keeping the in-memory stores warm across restarts. See `src/cache/CLAUDE.md`.
-- `src/tools/` — the MCP tool surface (registered in `src/server/build.ts`). Tool-vs-resource rationale: `docs/adr/0004-tool-vs-resource-classification.md`.
-- `src/resources/` — MCP resource templates (`paprika://recipe/{uid}`, grocery-list, menu).
-- `src/features/` — semantic search (embeddings + the vendored vector index) and AI photo generation.
+- `src/cache/` — the persistence layer: per-entity `DiskCache`s (plus `DiskCacheRoot` and the auth-only `buildAuthCaches`), keeping the in-memory stores warm across restarts. See `src/cache/CLAUDE.md`.
 - `src/auth/` — the OAuth 2.1 authorization-server surface; loaded only under the HTTP transport.
 - `src/utils/` — config (Zod schema), logging, resilience, dates, XDG paths.
 - `scripts/`, `docs/wire-captures/`, `Dockerfile`, `.github/workflows/` — tooling, sanitized wire captures, container build, CI.
 
-For per-directory detail, read that directory's `CLAUDE.md`. For current counts and inventories (tools, stores, fields, env vars), read the source (the registry in `src/server/build.ts`, the Zod schemas, `package.json`); this index does not enumerate them.
+For per-directory detail, read that directory's `CLAUDE.md`. For current counts and inventories (tools, stores, fields, env vars), read the source (the `module.ts` registrations under `src/domains/` + `src/features/`, the Zod schemas, `package.json`); this index does not enumerate them.
 
 ## Documentation map
 

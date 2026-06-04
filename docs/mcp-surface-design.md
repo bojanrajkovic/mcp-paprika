@@ -7,6 +7,6 @@ The Content / Data / Reference classification heuristic that decides whether eac
 The decision matrix and surface-audit tables this note used to carry are intentionally **not** preserved: they enumerated tool names, which drift (this note had already gone stale against the registry). The authoritative sources are:
 
 - **Registered tools** — `src/server/build.ts`; the generated per-tool reference is `docs/tools/README.md`.
-- **Resource rendering** — `src/resources/` (the metadata header and the child-inlining for container entities); summarized conceptually in ADR-0004.
+- **Resource rendering** — each Content domain's `resources/` (under `src/domains/`) (the metadata header and the child-inlining for container entities); summarized conceptually in ADR-0004.
 
 This file is retained only so older links to it don't break; ADR-0004 is canonical.

@@ -1,10 +1,10 @@
 # Feature Implementations
 
-Last verified: 2026-06-01
+Last verified: 2026-06-04
 
 ## Purpose
 
-Process-wide feature wiring composed once in `buildAppContext`: the optional semantic-search stack (`EmbeddingClient` → `VectorStore` → vendored `JsonVectorIndex`) and the optional photo-generation stack (`PhotographyClient` + SSRF-hardened image fetch). Both are opt-in on config and gate their tools (`discover_recipes`, `generate_recipe_photo`) on a non-null component.
+Two optional feature modules on the kernel (`discover/`, `photo-gen/`), each composed in its own `.self` factory: the semantic-search stack (`EmbeddingClient` → `VectorStore` → vendored `JsonVectorIndex`) and the photo-generation stack (`PhotographyClient` + SSRF-hardened image fetch). Both are opt-in on config — an unconfigured feature builds a `null` component. Unlike the legacy root, the kernel registers their tools (`discover_recipes`, `generate_recipe_photo`) **unconditionally**; the feature gate lives inside the handler, which no-ops when its component is `null` (ADR-0009 §5).
 
 ## Key References
 
@@ -31,4 +31,4 @@ Process-wide feature wiring composed once in `buildAppContext`: the optional sem
 
 **Generated-photo previews evict-oldest, not reject-on-full (`GeneratedImageStore`).** Unlike the auth TTL stores (where evicting an in-flight entry is an attack vector), dropping a stale throwaway preview is harmless, so the ring buffer overwrites the oldest when full. Single-use and race-safe: `upload_recipe_photo` `consume`s the token (synchronous delete before any `await`, so two concurrent calls can't both attach the same preview), then `restore`s it ONLY on a pure-validation failure (wrong `recipe_uid`, before any write). It must NOT restore after `attachPhotoToRecipe`, which uploads to Paprika before the local commit; restoring there could let a retry duplicate an already-uploaded photo. A validated-but-failed attach loses the preview (regenerate); that's the duplicate-safe trade.
 
-**The resilient clients throw; they don't return `Result`.** `EmbeddingClient`, `VectorStore`, and `PhotographyClient` wrap cockatiel, which uses exceptions for control flow, so they break the codebase's neverthrow convention by design. A breaker-open surfaces as `CircuitOpenError` (from `utils/errors.js`, shared with `PaprikaClient`), not a fabricated HTTP status. `VectorStore` writes are serialized via a per-instance `async-mutex`: it is a process-wide singleton with concurrent writers (the sync engine fires the recipe and category-change handlers without awaiting them), and the index's begin/end transaction plus the shared hash map can't tolerate overlapping writes (#177).
+**The resilient clients throw; they don't return `Result`.** `EmbeddingClient`, `VectorStore`, and `PhotographyClient` wrap cockatiel, which uses exceptions for control flow, so they break the codebase's neverthrow convention by design. A breaker-open surfaces as `CircuitOpenError` (from `utils/errors.js`, shared with `PaprikaClient`), not a fabricated HTTP status. `VectorStore` writes are serialized via a per-instance `async-mutex`: it is a process-wide singleton with concurrent writers (the index-event seam on `infra` fires the recipe and category-change handlers without awaiting them), and the index's begin/end transaction plus the shared hash map can't tolerate overlapping writes (#177).
