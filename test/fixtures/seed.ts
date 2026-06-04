@@ -1,21 +1,22 @@
-import type { Aisle } from "../../src/aisle/types.js";
-import type { Category } from "../../src/category/types.js";
-import type { GroceryIngredient } from "../../src/grocery-ingredient/types.js";
-import type { GroceryItem } from "../../src/grocery-item/types.js";
-import type { GroceryList } from "../../src/grocery-list/types.js";
-import type { MealType } from "../../src/meal-type/types.js";
-import type { Meal } from "../../src/meal/types.js";
-import type { MenuItem } from "../../src/menu-item/types.js";
-import type { Menu } from "../../src/menu/types.js";
-import type { PantryItem } from "../../src/pantry/types.js";
-import type { Photo } from "../../src/photo/types.js";
-import type { Recipe } from "../../src/recipe/types.js";
-import type { AppContext } from "../../src/server/app-context.js";
+import type { Aisle } from "../../src/domains/aisle/types.js";
+import type { GroceryIngredient } from "../../src/domains/grocery/grocery-ingredient/types.js";
+import type { GroceryItem } from "../../src/domains/grocery/grocery-item/types.js";
+import type { GroceryList } from "../../src/domains/grocery/grocery-list/types.js";
+import type { MealType } from "../../src/domains/meal-type/types.js";
+import type { Meal } from "../../src/domains/meal/types.js";
+import type { MenuItem } from "../../src/domains/menu/menu-item/types.js";
+import type { Menu } from "../../src/domains/menu/types.js";
+import type { PantryItem } from "../../src/domains/pantry/types.js";
+import type { Category } from "../../src/domains/recipe/category/types.js";
+import type { Photo } from "../../src/domains/recipe/photo/types.js";
+import type { Recipe } from "../../src/domains/recipe/types.js";
 
 /**
- * Declarative seed payload for a test {@link AppContext}. Each key maps to one
- * hydratable in-memory store; supplying it routes the array through that store's
- * `load(items)`, which is the same entry point the sync layer uses.
+ * Declarative seed payload routed to a set of in-memory stores. Each key maps to
+ * one hydratable store; supplying it routes the array through that store's
+ * `load(items)`, which is the same entry point the sync layer uses. Consumed by
+ * the kernel test harness's `seed()` (see `test/support/kernel-harness.ts`), which
+ * dispatches each key to the matching module's private store.
  *
  * **Omitted vs. empty is meaningful.** A key left out leaves its store untouched
  * — `hasSynced` stays `false`, so cold-start guards (`coldStartGuard`,
@@ -36,40 +37,4 @@ export interface SeedData {
   readonly menus?: ReadonlyArray<Menu>;
   readonly menuItems?: ReadonlyArray<MenuItem>;
   readonly photos?: ReadonlyArray<Photo>;
-}
-
-/**
- * Hydrates the stores on a test {@link AppContext} from a single declarative
- * payload, routing each collection to the correct store. This is the ONE place
- * a store's hydration signature is referenced from test setup, so a future
- * entity or signature change touches this helper instead of every call site —
- * the same insulation {@link makeAppContext} gives AppContext construction.
- *
- * Returns the same `ctx` for chaining. Generic over the context type so a
- * `ServerContext`/`SessionContext` (which carries `server`) flows straight
- * through `seed(makeCtx(...))` without narrowing to a bare `AppContext`:
- *
- * ```ts
- * const ctx = seed(makeCtx(new RecipeStore(), server), {
- *   recipes: [makeRecipe()],
- *   categories: [makeCategory()],
- * });
- * ```
- *
- * @see SeedData for the omitted-vs-empty-array semantics.
- */
-export function seed<T extends AppContext>(ctx: T, data: SeedData): T {
-  if (data.recipes) ctx.store.load(data.recipes);
-  if (data.categories) ctx.categoryStore.load(data.categories);
-  if (data.pantry) ctx.pantryStore.load(data.pantry);
-  if (data.aisles) ctx.aisleStore.load(data.aisles);
-  if (data.groceryLists) ctx.groceryListStore.load(data.groceryLists);
-  if (data.groceryItems) ctx.groceryItemStore.load(data.groceryItems);
-  if (data.groceryIngredients) ctx.groceryIngredientStore.load(data.groceryIngredients);
-  if (data.meals) ctx.mealStore.load(data.meals);
-  if (data.mealTypes) ctx.mealTypeStore.load(data.mealTypes);
-  if (data.menus) ctx.menuStore.load(data.menus);
-  if (data.menuItems) ctx.menuItemStore.load(data.menuItems);
-  if (data.photos) ctx.photoStore.load(data.photos);
-  return ctx;
 }

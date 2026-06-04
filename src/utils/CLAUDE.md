@@ -1,6 +1,6 @@
 # Cross-Cutting Utilities
 
-Last verified: 2026-06-03
+Last verified: 2026-06-04
 
 ## Purpose
 
@@ -20,7 +20,7 @@ Shared leaf-ish utilities used across every `src/` module: config loading, the p
 
 **`xdg.ts` re-implements the XDG override on every platform (including macOS) on purpose.** `env-paths`' macOS branch hard-codes `~/Library/{Preferences,Caches,…}` and ignores `XDG_*` entirely. Re-reading `XDG_CONFIG_HOME` / `XDG_CACHE_HOME` / `XDG_DATA_HOME` / `XDG_STATE_HOME` here means tests that set those vars actually redirect on macOS, not just Linux. Consequence: these functions read `process.env` on every call, so they are _not_ pure leaf functions. `getTempDir()` deliberately does **not** honor an override; temp paths come from the OS regardless.
 
-**The logger contract.** `createLogger` is called _exactly once_ per process (by `buildAppContext`); components get children via `parent.child({ component: "<flat-name>" })`. Two things are baked in at construction and apply to both output streams: credential redaction (the `REDACT_PATHS` list; import that constant in tests rather than maintaining a parallel one) and a notifier fan-out where records at or above `notifyLevel` (default `warn`) are forwarded to connected MCP clients via `notifier.loggingMessage(...)`, fire-and-forget. **In stdio mode stdout _is_ the MCP wire format**, so nothing may log to stdout; the logger routes to stderr (TTY) or a file (non-TTY); HTTP mode emits raw JSON to stdout. The `no-console` oxlint rule enforces the stdout ban. The Zod schema deliberately excludes `"silent"` from the operator-facing level enums so production logging can't be disabled via env var (the `"silent"` level is reachable only by constructing `LoggerOptions` directly, which the e2e harness does).
+**The logger contract.** `createLogger` is called _exactly once_ per process (by `buildInfraBase`); components get children via `parent.child({ component: "<flat-name>" })`. Two things are baked in at construction and apply to both output streams: credential redaction (the `REDACT_PATHS` list; import that constant in tests rather than maintaining a parallel one) and a notifier fan-out where records at or above `notifyLevel` (default `warn`) are forwarded to connected MCP clients via `notifier.loggingMessage(...)`, fire-and-forget. **In stdio mode stdout _is_ the MCP wire format**, so nothing may log to stdout; the logger routes to stderr (TTY) or a file (non-TTY); HTTP mode emits raw JSON to stdout. The `no-console` oxlint rule enforces the stdout ban. The Zod schema deliberately excludes `"silent"` from the operator-facing level enums so production logging can't be disabled via env var (the `"silent"` level is reachable only by constructing `LoggerOptions` directly, which the e2e harness does).
 
 **`SILENT_LOG` is the canonical optional-logger default.** Use it as the fallback for any optional `log?: Logger` parameter rather than scattering `pino({ level: "silent" })` calls. Pino's silent level short-circuits every method to a no-op, so the single shared instance is safe across modules (production callers fall back to it when no logger is threaded; tests import it).
 

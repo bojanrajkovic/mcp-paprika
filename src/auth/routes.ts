@@ -4,7 +4,7 @@ import type { JWTVerifyGetKey } from "jose";
 import type { Logger } from "pino";
 import { z } from "zod";
 
-import type { DiskCacheRoot } from "../cache/disk-cache-root.js";
+import type { AuthCache } from "../cache/auth-cache.js";
 import type { AuthCodeStore } from "./auth-code-store.js";
 import type { AuthRequestStore } from "./auth-request-store.js";
 import type { DiskClientRegistrationStore } from "./client-registration.js";
@@ -425,7 +425,7 @@ function getRemoteAddress(c: Context): string | null {
  * case where the cap is obviously hit; the atomic store check closes the
  * race window for the rest.
  */
-export function buildClientCap(cache: DiskCacheRoot, max: number): MiddlewareHandler {
+export function buildClientCap(cache: AuthCache, max: number): MiddlewareHandler {
   return async (c, next) => {
     if (c.req.path !== "/register" || c.req.method !== "POST") return next();
 

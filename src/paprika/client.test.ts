@@ -9,16 +9,16 @@ import type { Logger } from "pino";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { ZodError } from "zod";
 
-import type { Aisle } from "../aisle/types.js";
-import type { Category } from "../category/types.js";
-import type { GroceryIngredient } from "../grocery-ingredient/types.js";
-import type { GroceryItem } from "../grocery-item/types.js";
-import type { GroceryList } from "../grocery-list/types.js";
-import type { Meal } from "../meal/types.js";
-import type { MenuItem } from "../menu-item/types.js";
-import type { Menu } from "../menu/types.js";
-import type { PantryItem } from "../pantry/types.js";
-import type { Recipe } from "../recipe/types.js";
+import type { Aisle } from "../domains/aisle/types.js";
+import type { GroceryIngredient } from "../domains/grocery/grocery-ingredient/types.js";
+import type { GroceryItem } from "../domains/grocery/grocery-item/types.js";
+import type { GroceryList } from "../domains/grocery/grocery-list/types.js";
+import type { Meal } from "../domains/meal/types.js";
+import type { MenuItem } from "../domains/menu/menu-item/types.js";
+import type { Menu } from "../domains/menu/types.js";
+import type { PantryItem } from "../domains/pantry/types.js";
+import type { Category } from "../domains/recipe/category/types.js";
+import type { Recipe } from "../domains/recipe/types.js";
 
 import { makeMeal } from "../../test/cache/__fixtures__/meals.js";
 import {
@@ -30,6 +30,10 @@ import {
 import { makeSnakeCasePantryItem } from "../../test/cache/__fixtures__/pantry.js";
 import { makeSnakeCaseRecipe } from "../../test/cache/__fixtures__/recipes.js";
 import { makePinoCapture, tripBreaker } from "../../test/support/tool-test-utils.js";
+import { mealToApiPayload } from "../domains/meal/types.js";
+import { menuItemToApiPayload } from "../domains/menu/menu-item/types.js";
+import { menuToApiPayload } from "../domains/menu/types.js";
+import { RecipeSchema } from "../domains/recipe/types.js";
 import {
   AisleUidSchema,
   CategoryUidSchema,
@@ -42,10 +46,6 @@ import {
   PantryItemUidSchema,
   RecipeUidSchema,
 } from "../ids.js";
-import { mealToApiPayload } from "../meal/types.js";
-import { menuItemToApiPayload } from "../menu-item/types.js";
-import { menuToApiPayload } from "../menu/types.js";
-import { RecipeSchema } from "../recipe/types.js";
 import { CircuitOpenError } from "../utils/errors.js";
 import { REDACT_PATHS, toMessage } from "../utils/log.js";
 import { PaprikaClient } from "./client.js";

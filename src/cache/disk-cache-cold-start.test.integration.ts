@@ -2,15 +2,40 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import type { CategoryUid, RecipeUid } from "../ids.js";
 
 import { makeCategory, makeRecipe } from "../../test/cache/__fixtures__/recipes.js";
-import { getText, makeCtx, makeTestServer } from "../../test/support/tool-test-utils.js";
-import { RecipeStore } from "../recipe/store.js";
-import { registerSearchTool } from "../tools/search.js";
+import { makeKernelInfra } from "../../test/support/kernel-harness.js";
+import { getText, makeTestServer } from "../../test/support/tool-test-utils.js";
+import { RecipeStore } from "../domains/recipe/store.js";
+import { registeredModules } from "../kernel/registry.js";
 import { DiskCacheRoot } from "./disk-cache-root.js";
+// Side-effect: populate the kernel module registry so `registeredModules()` finds recipe.
+import "../kernel/modules.generated.js";
+
+/**
+ * Build the recipe module against a (pre-seeded) cache dir WITHOUT running a sync
+ * cycle — the recipe `.self` factory hydrates its store from `<cacheDir>/recipes` at
+ * construction, exactly as on a warm restart — then register its tools on a stub
+ * server. Recipe is dependency-free (`defineModule("recipe", [])`), so its closure is
+ * just itself. Returns `callTool` so a cold-started `search_recipes` can be exercised
+ * end-to-end.
+ */
+async function coldStartRecipeTools(
+  cacheDir: string,
+): Promise<(name: string, args: Record<string, unknown>) => Promise<CallToolResult>> {
+  const infra = makeKernelInfra({ cacheDir });
+  const recipeModule = registeredModules().find((m) => m.id === "recipe");
+  if (recipeModule === undefined) throw new Error("recipe module not registered");
+  const built = await recipeModule.build(infra);
+  const { server, callTool } = makeTestServer();
+  const ctx = { self: built.self, deps: {}, infra, server };
+  for (const tool of built.tools) tool(ctx);
+  return callTool;
+}
 
 describe("DiskCacheRoot cold-start persistence integration", () => {
   let tempDir: string;
@@ -170,7 +195,7 @@ describe("DiskCacheRoot cold-start persistence integration", () => {
   });
 
   describe("AC4: Tools work against hydrated store", () => {
-    it("AC4.1: search_recipes works after cold-start hydration", async () => {
+    it("AC4.1: search_recipes works after cold-start hydration through the kernel recipe module", async () => {
       const cache1 = new DiskCacheRoot(tempDir);
       await cache1.init();
 
@@ -189,17 +214,9 @@ describe("DiskCacheRoot cold-start persistence integration", () => {
       await cache1.recipes.put(recipe2);
       await cache1.flush();
 
-      const cache2 = new DiskCacheRoot(tempDir);
-      await cache2.init();
-      const store = new RecipeStore();
-      for (const recipe of await cache2.recipes.getAll()) {
-        store.set(recipe);
-      }
-      store.markSynced();
-
-      const { server, callTool } = makeTestServer();
-      const ctx = makeCtx(store, server);
-      registerSearchTool(server, ctx);
+      // Rebuild the recipe module against the persisted cache dir: its `.self` hydrates
+      // the store from disk, exactly as on a warm restart, before any sync runs.
+      const callTool = await coldStartRecipeTools(tempDir);
 
       const result = await callTool("search_recipes", { query: "carbonara", limit: 10 });
       const text = getText(result);
@@ -226,17 +243,7 @@ describe("DiskCacheRoot cold-start persistence integration", () => {
       await cache1.recipes.put(recipe2);
       await cache1.flush();
 
-      const cache2 = new DiskCacheRoot(tempDir);
-      await cache2.init();
-      const store = new RecipeStore();
-      for (const recipe of await cache2.recipes.getAll()) {
-        store.set(recipe);
-      }
-      store.markSynced();
-
-      const { server, callTool } = makeTestServer();
-      const ctx = makeCtx(store, server);
-      registerSearchTool(server, ctx);
+      const callTool = await coldStartRecipeTools(tempDir);
 
       const result = await callTool("search_recipes", { query: "mozzarella", limit: 10 });
       const text = getText(result);

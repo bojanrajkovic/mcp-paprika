@@ -1,16 +1,16 @@
 # Paprika API Client
 
-Last verified: 2026-06-01
+Last verified: 2026-06-04
 
 ## Purpose
 
-The Paprika Cloud Sync API client and the background sync engine: authentication, wire-format encode/decode (Zod schemas), resilient HTTP, and the poll-and-reconcile loop that keeps the local cache and in-memory stores fresh.
+The Paprika Cloud Sync API client and the shared reconcile helper: authentication, wire-format encode/decode (Zod schemas), resilient HTTP, and `syncReplaceAllEntity` — the replace-all reconcile each domain's sync contribution drives. (The poll loop and the cycle driver live in the kernel + `src/server/sync-loop.ts`, not here.)
 
 ## Key References
 
 - **Wire format** — [`docs/wire-format.md`](../../docs/wire-format.md) is the canonical narrative for _why_ the wire looks the way it does: the v2 gzipped-multipart envelope, the recipe content-hash algorithm and parity check, the two-tier deletion shapes, the photo-upload choreography, and grocery-ingredient auto-creation. The literal byte corpus lives in [`docs/wire-captures/`](../../docs/wire-captures/).
 - **Caching, sync, resilience** — [`docs/architecture.md`](../../docs/architecture.md): diff-and-fetch (recipes) vs replace-all (everything else), the never-throws sync contract, resource-notification fan-out, and the shared cockatiel retry+breaker executor.
-- **Source of truth for shapes** — `types.ts` owns every branded UID, entity field list, wire/stored Zod schema, and `*ToApiPayload` mapper. `client.ts` owns the `PaprikaClient` method set, the resilience-hook wiring, and attempt numbering. `sync.ts` owns `SyncEngine` and the `syncReplaceAllEntity` helper. Don't re-enumerate these here; read the file.
+- **Source of truth for shapes** — `types.ts` owns every branded UID, entity field list, wire/stored Zod schema, and `*ToApiPayload` mapper. `client.ts` owns the `PaprikaClient` method set, the resilience-hook wiring, and attempt numbering. `sync.ts` owns `syncReplaceAllEntity` (the replace-all reconcile helper each domain's sync contribution calls); the cycle driver that sequences those reconciles is the kernel's `syncOnce`. Don't re-enumerate these here; read the file.
 - **Date/time helpers** for the `yyyy-MM-dd HH:mm:ss` wire boundary live in `src/utils/dates.ts` (see `src/utils/CLAUDE.md`).
 - **ADRs** — [`docs/adr/`](../../docs/adr/), notably 0004 (tool-vs-resource classification, which governs which sync changes fan out a resource notification).
 
@@ -22,7 +22,7 @@ The Paprika Cloud Sync API client and the background sync engine: authentication
 
 - **Sync filters the recipe diff through pending-writes, and upserts vs deletes clear differently (#57).** A just-written UID's canonical entry still reflects pre-write state, so applying it would roll back or resurrect a local change. Therefore: `removed` drops pending-**upsert** UIDs (deleting would undo our write) but lets pending-**delete** UIDs through (if the server truly no longer lists it, honoring the removal is correct); `added`/`changed` drop both. Pending-**upserts clear on observation**: only once the canonical entry's hash (recipes) or full content (`equals`, other entities) matches our cache, never on UID presence alone, because the UID appears with the stale hash while propagation is in flight. Pending-**deletes clear only on TTL sweep**, because absence is ambiguous: Paprika gives no positive signal that a soft-delete propagated.
 
-- **`syncOnce()` never throws and never calls the notifier directly.** Every error is caught, logged, and emitted as `sync:error`; the loop continues. Resource-list notification is the job of a `sync:complete` subscriber wired in `buildAppContext`, not the engine. This is why `SyncEngine` takes `AppContext` (process-wide) and the meal/menu/photo blocks are each isolated in their own best-effort `try/catch` so an additive read surface can't abort core sync.
+- **Sync is never-throws and never calls the notifier directly.** The kernel's `syncOnce` driver catches every error and continues; resource-list notification is the interval loop's job — `notifyFromResults` (`src/server/sync-loop.ts`) fires off the `AnySyncResult[]` a completed cycle returns, not the reconcile. Each domain's reconcile (`syncReplaceAllEntity` for replace-all entities, the bespoke diff-and-fetch for recipes) propagates its errors to the driver, which runs `core` reconciles first (a throw aborts the cycle) and isolates `additive` ones (meals/menus/photos) in their own best-effort handling so an additive read surface can't abort core sync. (`syncReplaceAllEntity` itself throws on a fetch/cache failure — it's the driver that swallows.)
 
 - **No-aisle grocery ingredients are dropped on sync.** Paprika returns `aisle_uid: null` for an ingredient never filed into an aisle (the schema coerces null → `""`). Such a row carries no aisle memory; resolving it yields the same Miscellaneous default as no catalog entry at all, so the sync layer drops it (with a single `warn`-level count). Historically the un-nullable schema also _threw_ on these rows, aborting the whole cycle before meals/menus could sync.
 

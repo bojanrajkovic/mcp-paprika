@@ -392,6 +392,17 @@ export function resolveImageGenConfig(config: PaprikaConfig): ResolvedImageGenCo
   return null;
 }
 
+/**
+ * The pending-write TTL each entity store is constructed with. When background sync
+ * is disabled there is no cycle to sweep pending marks, so the feature is turned off
+ * entirely (TTL 0 makes `markPending*` a no-op — see `src/cache/CLAUDE.md` and codex
+ * P2 on PR #92); otherwise the configured TTL applies. Centralized here so the policy
+ * has one definition rather than one per store-owning module.
+ */
+export function resolvePendingWriteTtl(config: PaprikaConfig): number {
+  return config.sync.enabled ? config.sync.pendingWriteTtl : 0;
+}
+
 // Reads config.json from configDir. ENOENT returns ok({}). Invalid JSON and permission errors return err.
 function readConfigFile(configDir: string): Result<Record<string, unknown>, ConfigError> {
   const filePath = join(configDir, "config.json");

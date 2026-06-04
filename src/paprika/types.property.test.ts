@@ -3,11 +3,11 @@ import { describe, expect, it } from "vitest";
 
 import type { GroceryIngredientUid, GroceryItemUid, GroceryListUid, MenuItemUid, MenuUid } from "../ids.js";
 
-import { GroceryIngredientStoredSchema } from "../grocery-ingredient/types.js";
-import { GroceryItemStoredSchema } from "../grocery-item/types.js";
-import { GroceryListStoredSchema } from "../grocery-list/types.js";
-import { MenuItemStoredSchema } from "../menu-item/types.js";
-import { MenuStoredSchema } from "../menu/types.js";
+import { GroceryIngredientStoredSchema } from "../domains/grocery/grocery-ingredient/types.js";
+import { GroceryItemStoredSchema } from "../domains/grocery/grocery-item/types.js";
+import { GroceryListStoredSchema } from "../domains/grocery/grocery-list/types.js";
+import { MenuItemStoredSchema } from "../domains/menu/menu-item/types.js";
+import { MenuStoredSchema } from "../domains/menu/types.js";
 
 describe("Grocery schema property-based tests", () => {
   describe("grocery-infra.AC1.1: GroceryList stored schema idempotent round-trip", () => {

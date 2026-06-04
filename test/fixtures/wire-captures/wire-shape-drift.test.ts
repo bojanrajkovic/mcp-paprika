@@ -3,16 +3,20 @@ import { gunzipSync } from "node:zlib";
 import { http, HttpResponse } from "msw";
 import { describe, expect, it } from "vitest";
 
-import type { GroceryIngredient } from "../../../src/grocery-ingredient/types.js";
-import type { GroceryItem } from "../../../src/grocery-item/types.js";
-import type { GroceryList } from "../../../src/grocery-list/types.js";
-import type { PantryItem } from "../../../src/pantry/types.js";
-import type { Recipe } from "../../../src/recipe/types.js";
+import type { GroceryIngredient } from "../../../src/domains/grocery/grocery-ingredient/types.js";
+import type { GroceryItem } from "../../../src/domains/grocery/grocery-item/types.js";
+import type { GroceryList } from "../../../src/domains/grocery/grocery-list/types.js";
+import type { PantryItem } from "../../../src/domains/pantry/types.js";
+import type { Recipe } from "../../../src/domains/recipe/types.js";
 
-import { CategorySchema } from "../../../src/category/types.js";
-import { GroceryIngredientSchema } from "../../../src/grocery-ingredient/types.js";
-import { GroceryItemSchema } from "../../../src/grocery-item/types.js";
-import { GroceryListSchema } from "../../../src/grocery-list/types.js";
+import { GroceryIngredientSchema } from "../../../src/domains/grocery/grocery-ingredient/types.js";
+import { GroceryItemSchema } from "../../../src/domains/grocery/grocery-item/types.js";
+import { GroceryListSchema } from "../../../src/domains/grocery/grocery-list/types.js";
+import { MealTypeSchema } from "../../../src/domains/meal-type/types.js";
+import { MealSchema } from "../../../src/domains/meal/types.js";
+import { PantryItemSchema } from "../../../src/domains/pantry/types.js";
+import { CategorySchema } from "../../../src/domains/recipe/category/types.js";
+import { RecipeSchema } from "../../../src/domains/recipe/types.js";
 import {
   GroceryIngredientUidSchema,
   GroceryItemUidSchema,
@@ -20,11 +24,7 @@ import {
   NO_AISLE_UID,
   PantryItemUidSchema,
 } from "../../../src/ids.js";
-import { MealTypeSchema } from "../../../src/meal-type/types.js";
-import { MealSchema } from "../../../src/meal/types.js";
-import { PantryItemSchema } from "../../../src/pantry/types.js";
 import { PaprikaClient } from "../../../src/paprika/client.js";
-import { RecipeSchema } from "../../../src/recipe/types.js";
 import { makeSnakeCaseMeal, makeSnakeCaseMealType } from "../../cache/__fixtures__/meals.js";
 import { makeSnakeCasePantryItem } from "../../cache/__fixtures__/pantry.js";
 import { makeSnakeCaseRecipe } from "../../cache/__fixtures__/recipes.js";

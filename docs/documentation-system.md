@@ -1,6 +1,6 @@
 # Documentation system
 
-**Last verified:** 2026-06-01
+**Last verified:** 2026-06-04
 
 This is the rubric every other doc in this repo points at: where each kind of knowledge lives, which genres may go stale, and what stays deliberately un-automated. When you're unsure where something goes, the answer is here.
 
@@ -29,7 +29,7 @@ Pre-implementation planning is not a tracked genre. Decisions worth keeping grad
 Counts and lists drift the instant code changes, so prose never enumerates them. The canonical sources:
 
 - **The tool registry.** `src/server/build.ts` (the `register*` calls) is the authority on which tools exist and how each is gated. No doc states a tool count.
-- **The Zod schemas.** The schemas in `src/tools/` and `src/utils/config.ts` are the authority on tool inputs, field shapes, and config keys. No doc reproduces a field or env-var table.
+- **The Zod schemas.** The schemas in each domain's `tools/` (under `src/domains/`) and `src/utils/config.ts` are the authority on tool inputs, field shapes, and config keys. No doc reproduces a field or env-var table.
 - **`--help`.** The authority on the runtime CLI surface.
 
 This rule exists because its absence already bit us: the tool count drifted four ways across docs, none agreeing with the registry, with no single source to reconcile against. The fix isn't to update all four. It's to delete the count from prose and point at the registry. When you need to know how many tools there are, read `build.ts`; don't ask a doc.

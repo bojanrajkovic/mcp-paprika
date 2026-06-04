@@ -12,11 +12,29 @@ import type {
   RecipeSyncResult,
 } from "./sync-types.js";
 
-import { type Aisle, AisleSchema, AisleStoredSchema } from "../aisle/types.js";
-import { type Category, CategorySchema } from "../category/types.js";
-import { GroceryIngredientSchema, GroceryIngredientStoredSchema } from "../grocery-ingredient/types.js";
-import { GroceryItemSchema, GroceryItemStoredSchema } from "../grocery-item/types.js";
-import { GroceryListSchema, GroceryListStoredSchema } from "../grocery-list/types.js";
+import { type Aisle, AisleSchema, AisleStoredSchema } from "../domains/aisle/types.js";
+import { GroceryIngredientSchema, GroceryIngredientStoredSchema } from "../domains/grocery/grocery-ingredient/types.js";
+import { GroceryItemSchema, GroceryItemStoredSchema } from "../domains/grocery/grocery-item/types.js";
+import { GroceryListSchema, GroceryListStoredSchema } from "../domains/grocery/grocery-list/types.js";
+import { type Meal, MealSchema, mealToApiPayload } from "../domains/meal/types.js";
+import {
+  type MenuItem,
+  MenuItemSchema,
+  MenuItemStoredSchema,
+  menuItemToApiPayload,
+} from "../domains/menu/menu-item/types.js";
+import { type Menu, MenuSchema, MenuStoredSchema, menuToApiPayload } from "../domains/menu/types.js";
+import { type PantryItem, PantryItemSchema, PantryItemStoredSchema } from "../domains/pantry/types.js";
+import { type Category, CategorySchema } from "../domains/recipe/category/types.js";
+import { type Photo, PhotoSchema, PhotoStoredSchema, photoToApiPayload } from "../domains/recipe/photo/types.js";
+import {
+  type Recipe,
+  type RecipeEntry,
+  RecipeEntrySchema,
+  type RecipeInput,
+  RecipeSchema,
+  RecipeStoredSchema,
+} from "../domains/recipe/types.js";
 import {
   type AisleUid,
   AisleUidSchema,
@@ -27,19 +45,6 @@ import {
   type RecipeUid,
   RecipeUidSchema,
 } from "../ids.js";
-import { type Meal, MealSchema, mealToApiPayload } from "../meal/types.js";
-import { type MenuItem, MenuItemSchema, MenuItemStoredSchema, menuItemToApiPayload } from "../menu-item/types.js";
-import { type Menu, MenuSchema, MenuStoredSchema, menuToApiPayload } from "../menu/types.js";
-import { type PantryItem, PantryItemSchema, PantryItemStoredSchema } from "../pantry/types.js";
-import { type Photo, PhotoSchema, PhotoStoredSchema, photoToApiPayload } from "../photo/types.js";
-import {
-  type Recipe,
-  type RecipeEntry,
-  RecipeEntrySchema,
-  type RecipeInput,
-  RecipeSchema,
-  RecipeStoredSchema,
-} from "../recipe/types.js";
 import { type AuthResponse, AuthResponseSchema } from "./auth-response.js";
 
 describe("Branded UID Schemas and Entry Schemas", () => {

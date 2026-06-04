@@ -1,0 +1,50 @@
+import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+
+import type { DomainCtx } from "../../../kernel/registry.js";
+import type { PantrySelf } from "../module.js";
+
+import { textResult } from "../../../shared/tools.js";
+import { pantryStartGuard } from "./guards.js";
+
+/**
+ * Registers `list_pantry_items`, kernel-shaped — reads this module's own store via
+ * `ctx.self`. Pantry is a Data-class entity: no resource (ADR-0004), no deps.
+ */
+export function listPantryItemsTool(ctx: DomainCtx<PantrySelf, "aisle">): void {
+  const log = ctx.infra.log.child({ component: "list_pantry_items" });
+  ctx.server.registerTool(
+    "list_pantry_items",
+    {
+      title: "List your pantry items",
+      annotations: { readOnlyHint: true, idempotentHint: true },
+      description:
+        "List all pantry items sorted alphabetically by ingredient name. Returns the ingredient, quantity, and aisle for each item. Use read_pantry_item with the UID for full details.",
+      inputSchema: {},
+    },
+    async () => {
+      log.info({ tool: "list_pantry_items" }, "tool invoked");
+      return pantryStartGuard(ctx.self).match(
+        async (): Promise<CallToolResult> => {
+          const all = ctx.self.store.getAll().sort((a, b) => a.ingredient.localeCompare(b.ingredient));
+          const total = all.length;
+
+          if (total === 0) {
+            return textResult("Your pantry is empty.");
+          }
+
+          const header = `You have ${total.toString()} pantry item${total === 1 ? "" : "s"}:\n`;
+          const lines = all.map((item) => {
+            const qty = item.quantity !== "" ? ` (${item.quantity})` : "";
+            const aisle = item.aisle !== "" ? ` — ${item.aisle}` : "";
+            const status = item.inStock ? "" : " · **out of stock**";
+            const expires = item.expirationDate !== null ? ` · expires ${item.expirationDate}` : "";
+            return `- **${item.ingredient}**${qty}${aisle}${status}${expires} (uid: \`${item.uid}\`)`;
+          });
+
+          return textResult(header + "\n" + lines.join("\n"));
+        },
+        (guard) => guard,
+      );
+    },
+  );
+}

@@ -2,40 +2,46 @@
 /**
  * Test-specific server entry point that mocks PaprikaClient for E2E testing.
  *
- * This is spawned by e2e.test.integration.ts to test the MCP server
- * without needing real Paprika credentials. Reuses `buildMcpServer` for
- * tool/resource registration so production and e2e paths share the same
- * wiring. Sync is intentionally disabled; vectorStore is `null` (the
- * discover tool is gated on its presence, matching the prior 10-tool
- * subset semantics asserted by `e2e.test.integration.ts`).
+ * Spawned by e2e.test.integration.ts to test the MCP server without real Paprika
+ * credentials. It builds the REAL kernel (`buildKernel` + `registerAll`) so the e2e
+ * path exercises the same composition as production stdio/http — only the Paprika
+ * client is a mock and the background sync INTERVAL loop is not started. `buildKernel`
+ * still runs ONE initial sync against the mock, and that is what populates the stores.
+ *
+ * The mock implements every list/get method the initial sync calls; recipes, the one
+ * category, and the one pantry item come back as data and everything else empty, so
+ * after the initial sync the stores hold exactly that (matching the prior direct-seed).
+ * `features` is forced off (so discover_recipes + generate_recipe_photo register but
+ * decline — the kernel gates them inside the tool — and nothing touches the network).
  */
 
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 
-import type { Category } from "./category/types.js";
+import type { Aisle } from "./domains/aisle/types.js";
+import type { GroceryIngredient } from "./domains/grocery/grocery-ingredient/types.js";
+import type { GroceryItem } from "./domains/grocery/grocery-item/types.js";
+import type { GroceryList } from "./domains/grocery/grocery-list/types.js";
+import type { MealType } from "./domains/meal-type/types.js";
+import type { Meal } from "./domains/meal/types.js";
+import type { MenuItem } from "./domains/menu/menu-item/types.js";
+import type { Menu } from "./domains/menu/types.js";
+import type { PantryItem } from "./domains/pantry/types.js";
+import type { Category } from "./domains/recipe/category/types.js";
+import type { Photo } from "./domains/recipe/photo/types.js";
+import type { Recipe, RecipeEntry } from "./domains/recipe/types.js";
 import type { AisleUid, CategoryUid, PantryItemUid, RecipeUid } from "./ids.js";
-import type { PantryItem } from "./pantry/types.js";
-import type { Recipe, RecipeEntry } from "./recipe/types.js";
-import type { AppContext } from "./server/app-context.js";
+import type { PaprikaClient } from "./paprika/client.js";
 
-import { AisleStore } from "./aisle/store.js";
-import { DiskCacheRoot } from "./cache/disk-cache-root.js";
-import { CategoryStore } from "./category/store.js";
 import { GeneratedImageStore } from "./features/generated-image-store.js";
-import { GroceryIngredientStore } from "./grocery-ingredient/store.js";
-import { GroceryItemStore } from "./grocery-item/store.js";
-import { GroceryListStore } from "./grocery-list/store.js";
-import { MealTypeStore } from "./meal-type/store.js";
-import { MealStore } from "./meal/store.js";
-import { MenuItemStore } from "./menu-item/store.js";
-import { MenuStore } from "./menu/store.js";
-import { PantryStore } from "./pantry/store.js";
-import { PhotoStore } from "./photo/store.js";
-import { RecipeStore } from "./recipe/store.js";
-import { buildMcpServer } from "./server/build.js";
+import { buildKernel } from "./kernel/registry.js";
+import { buildBrandedServer } from "./server/build.js";
+import { createIndexEvents } from "./server/index-events.js";
 import { createServerRef, singleServerNotifier } from "./server/notifier.js";
+import { loadConfig } from "./utils/config.js";
 import { createLogger, toMessage } from "./utils/log.js";
 import { getCacheDir } from "./utils/xdg.js";
+// Side-effect: every domain/feature module self-registers on import.
+import "./kernel/modules.generated.js";
 
 interface IMockPaprikaClient {
   authenticate(): Promise<void>;
@@ -43,7 +49,16 @@ interface IMockPaprikaClient {
   getRecipe(uid: string): Promise<Recipe>;
   getRecipes(uids: ReadonlyArray<string>): Promise<Array<Recipe>>;
   listCategories(): Promise<Array<Category>>;
+  listAisles(): Promise<Array<Aisle>>;
   listPantry(): Promise<Array<PantryItem>>;
+  listGroceryLists(): Promise<Array<GroceryList>>;
+  listGroceryItems(): Promise<Array<GroceryItem>>;
+  listGroceryIngredients(): Promise<Array<GroceryIngredient>>;
+  listMealTypes(): Promise<Array<MealType>>;
+  listMeals(): Promise<Array<Meal>>;
+  listMenus(): Promise<Array<Menu>>;
+  listMenuItems(): Promise<Array<MenuItem>>;
+  listPhotos(): Promise<Array<Photo>>;
   saveRecipe(recipe: Readonly<Recipe>): Promise<Recipe>;
   deleteRecipe(uid: RecipeUid): Promise<void>;
   notifySync(): Promise<void>;
@@ -103,18 +118,6 @@ class MockPaprikaClient implements IMockPaprikaClient {
     deleted: false,
   };
 
-  getMockRecipe(): Recipe {
-    return this.mockRecipe;
-  }
-
-  getMockCategory(): Category {
-    return this.mockCategory;
-  }
-
-  getMockPantryItem(): PantryItem {
-    return this.mockPantryItem;
-  }
-
   async authenticate(): Promise<void> {
     // no-op
   }
@@ -139,6 +142,44 @@ class MockPaprikaClient implements IMockPaprikaClient {
     return [this.mockPantryItem];
   }
 
+  // Everything else the initial sync reconciles returns empty — after the sync the
+  // stores hold only the seeded recipe, category, and pantry item.
+  async listAisles(): Promise<Array<Aisle>> {
+    return [];
+  }
+
+  async listGroceryLists(): Promise<Array<GroceryList>> {
+    return [];
+  }
+
+  async listGroceryItems(): Promise<Array<GroceryItem>> {
+    return [];
+  }
+
+  async listGroceryIngredients(): Promise<Array<GroceryIngredient>> {
+    return [];
+  }
+
+  async listMealTypes(): Promise<Array<MealType>> {
+    return [];
+  }
+
+  async listMeals(): Promise<Array<Meal>> {
+    return [];
+  }
+
+  async listMenus(): Promise<Array<Menu>> {
+    return [];
+  }
+
+  async listMenuItems(): Promise<Array<MenuItem>> {
+    return [];
+  }
+
+  async listPhotos(): Promise<Array<Photo>> {
+    return [];
+  }
+
   async saveRecipe(recipe: Readonly<Recipe>): Promise<Recipe> {
     return recipe as Recipe;
   }
@@ -153,7 +194,7 @@ class MockPaprikaClient implements IMockPaprikaClient {
 }
 
 async function main(): Promise<void> {
-  // A ServerRef breaks the AppContext/McpServer cycle (see src/server/notifier.ts).
+  // A ServerRef breaks the notifier/server cycle (see src/server/notifier.ts).
   // Created at the top of main() so log/notifier exist before any log call.
   const serverRef = createServerRef();
   const notifier = singleServerNotifier(serverRef.get);
@@ -166,74 +207,43 @@ async function main(): Promise<void> {
     pretty: true,
   }).child({ component: "e2e" });
 
+  // Force features OFF regardless of ambient env: OPENAI_API_KEY / IMAGE_GEN_API_KEY
+  // would otherwise enable embeddings/image-gen and make discover + generate_recipe_photo
+  // try to hit the network. Dropping the `features` key (it is optional) leaves
+  // `config.features?.…` undefined, so both feature modules build null components and
+  // their tools register-but-decline. The test isolates XDG_CONFIG_HOME so no real
+  // config.json bleeds in; env still supplies the (mock-satisfied) Paprika credentials.
+  const { features: _features, ...config } = loadConfig().match(
+    (c) => c,
+    (err) => {
+      throw new Error(`e2e config load failed: ${toMessage(err)}`);
+    },
+  );
+
   log.info("using mock Paprika client for testing");
   const client = new MockPaprikaClient();
   await client.authenticate();
   log.info("mock authentication complete");
 
-  log.info("initializing disk cache");
-  const cache = new DiskCacheRoot(getCacheDir(), log.child({ component: "disk-cache" }));
-  await cache.init();
-
-  const store = new RecipeStore();
-  const cachedRecipes = await cache.recipes.getAll();
-  for (const recipe of cachedRecipes) {
-    store.set(recipe);
-  }
-  store.set(client.getMockRecipe());
-  log.info({ count: store.size }, "hydrated recipe store");
-
-  const categoryStore = new CategoryStore();
-  categoryStore.load([client.getMockCategory()]);
-
-  const pantryStore = new PantryStore();
-  pantryStore.load([client.getMockPantryItem()]);
-  log.info("hydrated pantry store with mock data");
-
-  const aisleStore = new AisleStore();
-  aisleStore.load([]);
-
-  const groceryListStore = new GroceryListStore();
-  groceryListStore.load([]);
-  const groceryItemStore = new GroceryItemStore();
-  groceryItemStore.load([]);
-  const groceryIngredientStore = new GroceryIngredientStore();
-  groceryIngredientStore.load([]);
-
-  const menuStore = new MenuStore();
-  menuStore.load([]);
-  const menuItemStore = new MenuItemStore();
-  menuItemStore.load([]);
-  const photoStore = new PhotoStore();
-  photoStore.load([]);
-
-  const app: AppContext = {
-    client: client as unknown as AppContext["client"],
-    cache,
-    store,
-    categoryStore,
-    pantryStore,
-    aisleStore,
-    groceryListStore,
-    groceryItemStore,
-    groceryIngredientStore,
-    mealStore: new MealStore(),
-    mealTypeStore: new MealTypeStore(),
-    menuStore,
-    menuItemStore,
-    photoStore,
-    generatedImageStore: new GeneratedImageStore(),
-    vectorStore: null, // discover tool intentionally not registered (no embeddings in e2e)
-    photographyClient: null, // generate_recipe_photo intentionally not registered (no imageGen in e2e)
+  // Build the real kernel against the mock client. buildKernel runs ONE initial sync
+  // internally (populating the stores from the mock); the interval loop is intentionally
+  // NOT started for the e2e round-trip.
+  const indexEvents = createIndexEvents(log);
+  const kernel = await buildKernel({
+    client: client as unknown as PaprikaClient,
+    cacheDir: getCacheDir(),
     notifier,
-    auth: null,
     log,
-  };
+    config,
+    indexEvents,
+    generatedImageStore: new GeneratedImageStore(),
+  });
 
-  const server = buildMcpServer(app);
+  const server = buildBrandedServer();
+  kernel.registerAll(server);
   serverRef.set(server);
-  log.info("registered tools and resources via buildMcpServer");
-  log.info("sync engine disabled for E2E testing");
+  log.info("registered tools and resources via the kernel");
+  log.info("background sync loop disabled for E2E testing (initial sync ran once)");
 
   process.on("SIGINT", () => {
     log.info("SIGINT received, shutting down");

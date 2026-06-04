@@ -21,7 +21,7 @@ import { setTimeout as wait } from "node:timers/promises";
 
 import type { Logger } from "pino";
 
-import type { DiskCacheRoot } from "../cache/disk-cache-root.js";
+import type { AuthCache } from "../cache/auth-cache.js";
 import type { AuthCodeStore } from "./auth-code-store.js";
 import type { AuthRequestStore } from "./auth-request-store.js";
 import type { DiskClientRegistrationStore } from "./client-registration.js";
@@ -38,7 +38,7 @@ export class AuthCleanup {
   constructor(
     private readonly _clientStore: DiskClientRegistrationStore,
     private readonly _tokenStore: TokenStore,
-    private readonly _cache: DiskCacheRoot,
+    private readonly _cache: AuthCache,
     private readonly _authRequests: AuthRequestStore,
     private readonly _authCodes: AuthCodeStore,
     private readonly _pendingAuthorizations: PendingAuthorizationStore,

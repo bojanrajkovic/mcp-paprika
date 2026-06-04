@@ -13,11 +13,19 @@ import type { Logger } from "pino";
 import type { PaprikaConfig } from "../utils/config.js";
 import type { TransportHandle } from "./stdio.js";
 
+import { buildAuthContext } from "../auth/build.js";
 import { buildAuthMetadataRouter } from "../auth/metadata.js";
 import { buildAuthRoutes, buildClientCap, buildDcrRateLimit, MAX_REGISTERED_CLIENTS } from "../auth/routes.js";
-import { buildAppContext, buildMcpServer } from "../server/build.js";
+import { buildAuthCaches } from "../cache/auth-cache.js";
+import { GeneratedImageStore } from "../features/generated-image-store.js";
+import { buildKernel } from "../kernel/registry.js";
+import { buildBrandedServer, buildInfraBase } from "../server/build.js";
+import { createIndexEvents } from "../server/index-events.js";
 import { broadcastNotifier } from "../server/notifier.js";
+import { notifyFromResults, runSyncLoop } from "../server/sync-loop.js";
 import { buildFaviconRouter } from "./favicon.js";
+// Side-effect: every domain/feature module self-registers on import.
+import "../kernel/modules.generated.js";
 
 const SHUTDOWN_TIMEOUT_MS = 10_000;
 const MCP_SESSION_HEADER = "mcp-session-id";
@@ -95,10 +103,11 @@ export type StartHttpOptions = {
  * HTTP server, and stops the sync engine — all under a hard timeout.
  *
  * Session model: one `McpServer` + `StreamableHTTPTransport` pair per
- * client, kept in a `Map<sessionId, Session>`. Shared `AppContext` (auth,
- * caches, stores, vector index) is built once at startup; the `notifier` is
- * a `broadcastNotifier` that fans every notification across all live
- * sessions so a mutation made by client A propagates to clients B and C.
+ * client, kept in a `Map<sessionId, Session>`. The kernel's process-wide state
+ * (per-module stores/caches, the vector index) is built once at startup, with
+ * auth built alongside it; each session server is built by `kernel.registerAll`.
+ * The `notifier` is a `broadcastNotifier` that fans every notification across all
+ * live sessions so a mutation made by client A propagates to clients B and C.
  *
  * Routes:
  * - `GET /healthz` — liveness probe; returns `{ ok: true, sessions: N }`.
@@ -129,15 +138,53 @@ export async function startHttp(config: PaprikaConfig, opts: StartHttpOptions = 
   // before we close connections. See the pre-drain delay in shutdown().
   let draining = false;
 
-  // buildAppContext runs the initial sync internally so cold-start vector
-  // indexing happens against a fully-populated RecipeStore (categories
-  // included). See src/server/build.ts for the ordering rationale.
-  const { app, sync } = await buildAppContext(config, notifier);
+  // buildInfraBase authenticates the client (the #158 fast-fail) and resolves the
+  // logger + cache dir. buildKernel then constructs every module and runs the initial
+  // sync internally, so cold-start vector indexing happens against a populated recipe
+  // store. See src/server/build.ts / src/kernel/registry.ts for the ordering rationale.
+  const { log: rootLog, client, cacheDir } = await buildInfraBase(config, notifier);
 
-  const log = opts._testLog ?? app.log.child({ component: "transport-http" });
+  // Auth needs only its own OAuth client/token subcaches. buildAuthCaches builds JUST
+  // those — no entity subcaches, so no duplicate RecipeDiskCache for AuthCleanup's flush
+  // loop to clobber, and no second writer over <cacheDir>/<entity>. HTTP-only (stdio has
+  // no auth). The legacy-index migration now lives on RecipeDiskCache.init(), so it runs
+  // for both transports independent of this.
+  const authCache = await buildAuthCaches(cacheDir, rootLog.child({ component: "auth-cache" }));
+  const authContext = await buildAuthContext(config, authCache, rootLog);
+  if (authContext !== null) {
+    rootLog.info(
+      {
+        issuer: authContext.config.publicUrl,
+        allowlistSize: authContext.config.allowlist.emails.length + authContext.config.allowlist.subs.length,
+      },
+      "oauth configured",
+    );
+  }
 
-  if (config.sync.enabled) {
-    sync.start();
+  const indexEvents = createIndexEvents(rootLog);
+  const generatedImageStore = new GeneratedImageStore();
+  const kernel = await buildKernel({
+    client,
+    cacheDir,
+    notifier,
+    log: rootLog,
+    config,
+    indexEvents,
+    generatedImageStore,
+  });
+
+  const log = opts._testLog ?? rootLog.child({ component: "transport-http" });
+
+  // The interval loop runs its first cycle immediately (then waits), so — with
+  // buildKernel's initial cycle — startup syncs twice. notifyFromResults turns each
+  // cycle's returned results into resourceListChanged notifications, filtered to the
+  // change types with a resource surface.
+  const loop = config.sync.enabled
+    ? runSyncLoop(async () => {
+        notifyFromResults(await kernel.syncOnce(), notifier);
+      }, config.sync.interval)
+    : null;
+  if (loop !== null) {
     log.info({ intervalMs: config.sync.interval }, "sync engine started");
   } else {
     log.info("background sync disabled");
@@ -165,9 +212,9 @@ export async function startHttp(config: PaprikaConfig, opts: StartHttpOptions = 
   // the OAuth AS metadata logo_uri points at this path. See src/utils/branding.ts.
   hono.route("/", buildFaviconRouter());
 
-  if (app.auth !== null) {
+  if (authContext !== null) {
     // Capture auth to avoid null-checks inside callbacks (mirrors SyncEngine pattern)
-    const auth = app.auth;
+    const auth = authContext;
     // issuerUrl stays a string at every @hono/mcp boundary — passing a URL would trigger
     // the library's .href call and force a trailing slash, breaking exact-match against MCP_PUBLIC_URL.
     const resourceServerUrl = new URL(auth.config.publicUrl);
@@ -189,7 +236,7 @@ export async function startHttp(config: PaprikaConfig, opts: StartHttpOptions = 
     //    The middleware-level cap is a fast-path 429; the authoritative atomic enforcement
     //    lives inside DiskClientRegistrationStore.registerClient (same MAX_REGISTERED_CLIENTS).
     hono.use("/register", buildDcrRateLimit({ trustProxy: auth.config.trustProxy }));
-    hono.use("/register", buildClientCap(app.cache, MAX_REGISTERED_CLIENTS));
+    hono.use("/register", buildClientCap(authCache, MAX_REGISTERED_CLIENTS));
 
     // 3. mcpAuthRouter mounts DCR + authorize + token + revoke.
     //    Well-known routes are shadowed by step 1 (first-match-wins).
@@ -280,7 +327,12 @@ export async function startHttp(config: PaprikaConfig, opts: StartHttpOptions = 
       );
     }
 
-    const server = buildMcpServer(app);
+    // Per session: a fresh branded server with every module's tools/resources
+    // registered onto it. registerAll is pure (closures over the per-session server;
+    // the module self/deps/infra are process-wide and shared), so registering the same
+    // tools on N session servers is safe — exactly as buildMcpServer(app) was.
+    const server = buildBrandedServer();
+    kernel.registerAll(server);
     const transport = new StreamableHTTPTransport({
       sessionIdGenerator: () => randomUUID(),
       onsessioninitialized: (id) => {
@@ -313,17 +365,17 @@ export async function startHttp(config: PaprikaConfig, opts: StartHttpOptions = 
   });
 
   log.info({ url: `http://${config.http.host}:${boundPort.toString()}/mcp` }, "HTTP transport listening");
-  if (app.auth !== null) {
-    log.info({ issuer: app.auth.config.publicUrl }, "OAuth issuer");
-    log.info({ upstream: app.auth.discovery.issuer, scopes: app.auth.config.scopes.join(" ") }, "OAuth upstream");
+  if (authContext !== null) {
+    log.info({ issuer: authContext.config.publicUrl }, "OAuth issuer");
+    log.info({ upstream: authContext.discovery.issuer, scopes: authContext.config.scopes.join(" ") }, "OAuth upstream");
     log.info(
       {
-        emails: app.auth.config.allowlist.emails.length,
-        subs: app.auth.config.allowlist.subs.length,
+        emails: authContext.config.allowlist.emails.length,
+        subs: authContext.config.allowlist.subs.length,
       },
       "identity allowlist",
     );
-    app.auth.cleanup.start();
+    authContext.cleanup.start();
   }
   // In production startHttp is only dispatched when MCP_TRANSPORT=http, which
   // makes buildAuthContext return a non-null AuthContext (or fail-fast). The
@@ -363,8 +415,8 @@ export async function startHttp(config: PaprikaConfig, opts: StartHttpOptions = 
       // sequence is wrapped in a hard timeout so a stuck in-flight request
       // can't hold shutdown past the k8s grace period.
       const drain = async (): Promise<void> => {
-        sync.stop();
-        app.auth?.cleanup.stop();
+        loop?.stop();
+        authContext?.cleanup.stop();
 
         const sessionSnapshot = [...sessions.values()];
         await Promise.allSettled(sessionSnapshot.map((s) => s.transport.close()));

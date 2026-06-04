@@ -39,8 +39,13 @@ describe("MCP Server end-to-end round-trip", () => {
         ...process.env,
         PAPRIKA_EMAIL: "test@example.com",
         PAPRIKA_PASSWORD: "testpass",
-        // Disable embedding feature to avoid Ollama dependency
-        PAPRIKA_EMBEDDINGS_API_KEY: "",
+        // Isolate cache + config under the per-test temp dir. The kernel runs an initial
+        // sync that RECONCILES the on-disk cache (replace-all + recipe diff), so it must
+        // neither read stale data from nor clobber the developer's real XDG dirs; a cold,
+        // isolated cache also makes the run deterministic. The e2e-server forces the
+        // embeddings/image-gen features off itself, so no API-key env var is needed here.
+        XDG_CACHE_HOME: tempDir,
+        XDG_CONFIG_HOME: tempDir,
       },
     });
 

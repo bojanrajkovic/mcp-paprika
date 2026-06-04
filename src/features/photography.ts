@@ -15,7 +15,7 @@ import type { IRetryContext } from "cockatiel";
 import type { Logger } from "pino";
 import { z } from "zod";
 
-import type { Recipe } from "../recipe/types.js";
+import type { Recipe } from "../domains/recipe/types.js";
 import type { ResolvedImageGenConfig } from "../utils/config.js";
 
 import { SILENT_LOG } from "../utils/log.js";
