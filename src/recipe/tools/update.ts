@@ -1,0 +1,104 @@
+import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import { z } from "zod";
+
+import type { DomainCtx } from "../../kernel/registry.js";
+import type { RecipeSelf } from "../module.js";
+import type { Recipe } from "../types.js";
+
+import { RecipeUidSchema } from "../../ids.js";
+import { recipeToMarkdown, textResult } from "../../tools/helpers.js";
+import { toMessage } from "../../utils/log.js";
+import { recipeColdStartGuard } from "./guards.js";
+
+// Strict schema (exported for direct Zod-validation tests). `.strict()` is
+// load-bearing: rating, categories, favorite status, and trash state were
+// promoted to their own intent verbs (rate_recipe, categorize_recipe,
+// favorite_recipe/unfavorite_recipe, trash_recipe/restore_recipe), so passing
+// one of those keys here must be a loud rejection — not a silently dropped key
+// that lets the model think it set the field. update_recipe edits content only.
+export const updateRecipeInputSchema = z
+  .object({
+    uid: RecipeUidSchema.describe("Recipe UID to update"),
+    name: z.string().optional().describe("New recipe name"),
+    ingredients: z.string().optional().describe("New ingredients list"),
+    directions: z.string().optional().describe("New cooking directions"),
+    description: z.string().optional().describe("New description"),
+    notes: z.string().optional().describe("New notes"),
+    servings: z.string().optional().describe("New servings"),
+    prepTime: z.string().optional().describe("New prep time"),
+    cookTime: z.string().optional().describe("New cook time"),
+    totalTime: z.string().optional().describe("New total time"),
+    source: z.string().optional().describe("New source name"),
+    sourceUrl: z.string().optional().describe("New source URL"),
+    difficulty: z.string().optional().describe("New difficulty level"),
+    nutritionalInfo: z.string().optional().describe("New nutritional information"),
+  })
+  .strict();
+
+/**
+ * Registers `update_recipe`, kernel-shaped — content-only edit through this
+ * module's own recipe store + the bound `ctx.self.commitRecipe` chokepoint.
+ */
+export function updateRecipeTool(ctx: DomainCtx<RecipeSelf, never>): void {
+  const log = ctx.infra.log.child({ component: "update_recipe" });
+  ctx.server.registerTool(
+    "update_recipe",
+    {
+      title: "Edit a recipe's details",
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
+      description:
+        "Update a recipe's content fields by UID (name, ingredients, directions, description, notes, " +
+        "servings, prep/cook/total time, source, difficulty, nutritional info). Only provided fields " +
+        "change; omitted fields keep their values. This tool does NOT edit rating, categories, favorite " +
+        "status, or trash state — use rate_recipe, categorize_recipe, favorite_recipe / unfavorite_recipe, " +
+        "and trash_recipe / restore_recipe for those.",
+      inputSchema: updateRecipeInputSchema,
+    },
+    async (args) => {
+      log.info({ tool: "update_recipe", uid: args.uid }, "tool invoked");
+      return recipeColdStartGuard(ctx.self).match(
+        async (): Promise<CallToolResult> => {
+          const existing = ctx.self.recipe.store.get(args.uid);
+
+          if (!existing) {
+            return textResult(`No recipe found with UID "${args.uid}".`);
+          }
+
+          // Partial merge: conditional spread omits keys when value is undefined.
+          // Promoted fields (rating/categories/onFavorites/inTrash) are intentionally
+          // absent here — they leave the open-ended editor for their intent verbs.
+          const updated: Recipe = {
+            ...existing,
+            ...(args.name !== undefined && { name: args.name }),
+            ...(args.ingredients !== undefined && { ingredients: args.ingredients }),
+            ...(args.directions !== undefined && { directions: args.directions }),
+            ...(args.description !== undefined && { description: args.description }),
+            ...(args.notes !== undefined && { notes: args.notes }),
+            ...(args.servings !== undefined && { servings: args.servings }),
+            ...(args.prepTime !== undefined && { prepTime: args.prepTime }),
+            ...(args.cookTime !== undefined && { cookTime: args.cookTime }),
+            ...(args.totalTime !== undefined && { totalTime: args.totalTime }),
+            ...(args.source !== undefined && { source: args.source }),
+            ...(args.sourceUrl !== undefined && { sourceUrl: args.sourceUrl }),
+            ...(args.difficulty !== undefined && { difficulty: args.difficulty }),
+            ...(args.nutritionalInfo !== undefined && { nutritionalInfo: args.nutritionalInfo }),
+          };
+
+          let saved: Recipe;
+          try {
+            saved = await ctx.infra.client.saveRecipe(updated);
+            await ctx.self.commitRecipe(saved);
+          } catch (error) {
+            const message = toMessage(error);
+            log.error({ err: error, uid: args.uid }, "saveRecipe failed");
+            return textResult(`Failed to update recipe: ${message}`);
+          }
+
+          const categoryNames = ctx.self.category.store.resolveNames(saved.categories);
+          return textResult(recipeToMarkdown(saved, categoryNames));
+        },
+        (guard) => guard,
+      );
+    },
+  );
+}

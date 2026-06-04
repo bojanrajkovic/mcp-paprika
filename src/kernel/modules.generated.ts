@@ -3,3 +3,4 @@
 // Side-effect imports so every domain module self-registers on load.
 import "../aisle/module.js";
 import "../meal-type/module.js";
+import "../recipe/module.js";
