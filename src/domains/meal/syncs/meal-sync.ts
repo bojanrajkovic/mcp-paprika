@@ -4,7 +4,7 @@ import type { Meal } from "../types.js";
 
 import { syncReplaceAllEntity } from "../../../paprika/sync.js";
 
-// Field-wise comparator — all ten fields; `recipeUid`/`typeUid` are both
+// Field-wise comparator — all nine fields; `recipeUid`/`typeUid` are both
 // nullable, `scale` is string|null.
 function mealsEqual(a: Meal, b: Meal): boolean {
   return (
@@ -16,8 +16,7 @@ function mealsEqual(a: Meal, b: Meal): boolean {
     a.typeUid === b.typeUid &&
     a.orderFlag === b.orderFlag &&
     a.isIngredient === b.isIngredient &&
-    a.scale === b.scale &&
-    a.deleted === b.deleted
+    a.scale === b.scale
   );
 }
 
