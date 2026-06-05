@@ -21,8 +21,10 @@
 #   --pac-port PORT     PAC file server port (default: 8889)
 #   --service NAME      macOS network service name (default: Wi-Fi)
 #
-# After capturing, decode with:
-#   mitmdump -nr <capture.mitm> -s scripts/decode-capture.py
+# After capturing, survey the flows with:
+#   mitmdump -nr <capture.mitm> -s scripts/decode-to-har.py
+# then follow docs/wire-captures/README.md to emit a sanitized HAR.
+# (scripts/decode-capture.py dumps decoded JSON to stdout for ad-hoc inspection.)
 
 set -euo pipefail
 
@@ -92,8 +94,9 @@ cleanup() {
   rm -rf "$TMPDIR_PAC"
   echo "→ Proxy disabled. Capture saved to: $OUT_FILE"
   echo ""
-  echo "Decode with:"
-  echo "  mitmdump -nr $OUT_FILE -s scripts/decode-capture.py"
+  echo "Survey flows with:"
+  echo "  mitmdump -nr $OUT_FILE -s scripts/decode-to-har.py"
+  echo "then follow docs/wire-captures/README.md to emit a sanitized HAR."
 }
 trap cleanup EXIT
 
