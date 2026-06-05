@@ -294,6 +294,24 @@ describe("add_menu_items tool", () => {
     expect(kh.client().saveMealType).not.toHaveBeenCalled();
     expect(kh.client().saveMenuItems).not.toHaveBeenCalled();
   });
+
+  it("a failed menu auto-expand creates NO meal type (expand runs before create)", async () => {
+    const menu = makeMenu({ uid: "m-1" as MenuUid, name: "Plan", days: 1 });
+    seedBase(kh, { menus: [menu] });
+    vi.mocked(kh.client().saveMealType).mockImplementation(async (mt) => mt);
+    vi.mocked(kh.client().saveMenus).mockRejectedValue(new Error("network"));
+
+    const text = getText(
+      await kh.callTool("add_menu_items", {
+        menu: { uid: "m-1" },
+        items: [{ recipe_uid: TACOS_UID, day: 3, type: { name: "Brunch" } }], // day 3 > 1 → triggers expand
+      }),
+    );
+
+    expect(text).toContain("Failed to extend menu");
+    expect(kh.client().saveMealType).not.toHaveBeenCalled(); // expand failed before any create
+    expect(kh.client().saveMenuItems).not.toHaveBeenCalled();
+  });
 });
 
 describe("update_menu_item tool", () => {

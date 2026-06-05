@@ -190,27 +190,11 @@ export function addMenuItemsTool(ctx: DomainCtx<MenuSelf, "recipe" | "meal-type"
             return textResult(`${header}\n\n${errors.join("\n")}`);
           }
 
-          // ----- Stage 2: auto-create any deferred {name} meal types (pantry-style) -----
-          // Validation passed, so creating now leaves no orphan type on a rejected batch.
-          // Cache by lowercase name so a name repeated across items is created once.
-          const createdTypesByName = new Map<string, MealType>();
-          for (const r of resolved) {
-            if (r.pendingTypeName === null) continue;
-            const key = r.pendingTypeName.toLowerCase();
-            if (createdTypesByName.has(key)) continue;
-            try {
-              createdTypesByName.set(key, await ctx.deps["meal-type"].ensureMealType(r.pendingTypeName));
-            } catch (error) {
-              const message = toMessage(error);
-              log.error({ err: error, name: r.pendingTypeName }, "ensureMealType failed");
-              return textResult(`Failed to create meal type "${r.pendingTypeName}": ${message}`);
-            }
-          }
-
-          // ----- Stage 3: auto-expand the menu span when an item overflows it -----
+          // ----- Stage 2: auto-expand the menu span when an item overflows it -----
           // Compute the batch's highest day; if it exceeds the menu's current span,
           // grow the menu (days = maxDay) and persist that FIRST so the new items
-          // never reference days outside a saved menu.
+          // never reference days outside a saved menu. This runs BEFORE meal-type
+          // auto-create below, so a failed expand can't leave an orphan type behind.
           const maxDay = resolved.reduce((max, r) => Math.max(max, r.day), 0);
           let menuForRender: Menu = menu;
           let extendedTo: number | null = null;
@@ -229,6 +213,24 @@ export function addMenuItemsTool(ctx: DomainCtx<MenuSelf, "recipe" | "meal-type"
                 `Failed to extend menu "${menu.name}" to ${maxDay.toString()} day(s): ${message}. ` +
                   `No items were added.`,
               );
+            }
+          }
+
+          // ----- Stage 3: auto-create any deferred {name} meal types (pantry-style) -----
+          // Everything above (validation + the menu expand) has succeeded, so creating now
+          // leaves no orphan type on a rejected batch. Cache by lowercase name so a name
+          // repeated across items is created once.
+          const createdTypesByName = new Map<string, MealType>();
+          for (const r of resolved) {
+            if (r.pendingTypeName === null) continue;
+            const key = r.pendingTypeName.toLowerCase();
+            if (createdTypesByName.has(key)) continue;
+            try {
+              createdTypesByName.set(key, await ctx.deps["meal-type"].ensureMealType(r.pendingTypeName));
+            } catch (error) {
+              const message = toMessage(error);
+              log.error({ err: error, name: r.pendingTypeName }, "ensureMealType failed");
+              return textResult(`Failed to create meal type "${r.pendingTypeName}": ${message}`);
             }
           }
 
