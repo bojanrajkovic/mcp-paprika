@@ -9,9 +9,8 @@ import { textResult } from "../../../shared/tools.js";
 import { categoryStartGuard } from "./guards.js";
 
 /**
- * Registers `list_categories`, kernel-shaped — recipe owns category, so both the
- * category catalog and the recipe-per-category counts read from `ctx.state`
- * (within-domain — recipe owns category; no deps).
+ * `list_categories` — list categories with per-category recipe counts. Recipe owns
+ * category, so both reads are within-domain (no deps).
  */
 export const listCategoriesTool = defineTool(
   {

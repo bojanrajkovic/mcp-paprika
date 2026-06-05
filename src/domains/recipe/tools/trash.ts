@@ -1,7 +1,7 @@
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 
 import type { DomainCtx } from "../../../kernel/registry.js";
-import type { RecipeState } from "../module.js";
+import type { RecipeState, RecipeWrites } from "../module.js";
 
 import { RecipeUidSchema } from "../../../ids.js";
 import { defineTool } from "../../../kernel/tool.js";
@@ -9,7 +9,10 @@ import { textResult } from "../../../shared/tools.js";
 import { toMessage } from "../../../utils/log.js";
 import { recipeColdStartGuard } from "./guards.js";
 
-/** Registers `trash_recipe`, kernel-shaped — soft-delete through `ctx.state.commitRecipe`. */
+/**
+ * `trash_recipe` — move a recipe to the trash (a reversible soft-delete;
+ * `restore_recipe` brings it back).
+ */
 export const trashRecipeTool = defineTool(
   {
     name: "trash_recipe",
@@ -23,7 +26,7 @@ export const trashRecipeTool = defineTool(
       uid: RecipeUidSchema.describe("Recipe UID to delete"),
     },
   },
-  (ctx: DomainCtx<RecipeState, never>) => {
+  (ctx: DomainCtx<RecipeState, never, RecipeWrites>) => {
     const log = ctx.infra.log.child({ component: "trash_recipe" });
     return async (args) => {
       log.info({ tool: "trash_recipe", uid: args.uid }, "tool invoked");
@@ -43,7 +46,7 @@ export const trashRecipeTool = defineTool(
 
           try {
             const saved = await ctx.infra.client.saveRecipe(trashed);
-            await ctx.state.commitRecipe(saved);
+            await ctx.writes.commitRecipe(saved);
           } catch (error) {
             const message = toMessage(error);
             log.error({ err: error, uid: args.uid }, "saveRecipe failed");

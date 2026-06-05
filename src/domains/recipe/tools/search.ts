@@ -41,10 +41,10 @@ export const searchRecipesInputSchema = z
   .strict();
 
 /**
- * Registers `search_recipes`, kernel-shaped — reads this module's own recipe +
- * category stores via `ctx.state`. The `lastCookedAt` enrichment is DROPPED (recipe
- * is `dependsOn []`, no meal dependency); "last cooked" stays meal-side, surfaced by
- * the meal domain's `read_recipe_history` tool.
+ * `search_recipes` — search recipes by name / ingredient / description / time. The
+ * `lastCookedAt` enrichment is DROPPED — recipe is `dependsOn []` (no meal
+ * dependency); "last cooked" stays meal-side, surfaced by the meal domain's
+ * `read_recipe_history` tool.
  */
 export const searchRecipesTool = defineTool(
   {

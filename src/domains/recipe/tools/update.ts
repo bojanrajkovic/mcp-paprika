@@ -2,7 +2,7 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 
 import type { DomainCtx } from "../../../kernel/registry.js";
-import type { RecipeState } from "../module.js";
+import type { RecipeState, RecipeWrites } from "../module.js";
 import type { Recipe } from "../types.js";
 
 import { RecipeUidSchema } from "../../../ids.js";
@@ -38,8 +38,7 @@ export const updateRecipeInputSchema = z
   .strict();
 
 /**
- * Registers `update_recipe`, kernel-shaped — content-only edit through this
- * module's own recipe store + the bound `ctx.state.commitRecipe` chokepoint.
+ * `update_recipe` — content-only edit of a recipe's free-form fields.
  */
 export const updateRecipeTool = defineTool(
   {
@@ -54,7 +53,7 @@ export const updateRecipeTool = defineTool(
       "and trash_recipe / restore_recipe for those.",
     inputSchema: updateRecipeInputSchema,
   },
-  (ctx: DomainCtx<RecipeState, never>) => {
+  (ctx: DomainCtx<RecipeState, never, RecipeWrites>) => {
     const log = ctx.infra.log.child({ component: "update_recipe" });
     return async (args) => {
       log.info({ tool: "update_recipe", uid: args.uid }, "tool invoked");
@@ -89,7 +88,7 @@ export const updateRecipeTool = defineTool(
           let saved: Recipe;
           try {
             saved = await ctx.infra.client.saveRecipe(updated);
-            await ctx.state.commitRecipe(saved);
+            await ctx.writes.commitRecipe(saved);
           } catch (error) {
             const message = toMessage(error);
             log.error({ err: error, uid: args.uid }, "saveRecipe failed");

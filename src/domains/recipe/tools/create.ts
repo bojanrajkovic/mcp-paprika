@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import type { CategoryUid } from "../../../ids.js";
 import type { DomainCtx } from "../../../kernel/registry.js";
-import type { RecipeState } from "../module.js";
+import type { RecipeState, RecipeWrites } from "../module.js";
 import type { Recipe } from "../types.js";
 
 import { RecipeUidSchema } from "../../../ids.js";
@@ -15,9 +15,8 @@ import { recipeToMarkdown, resolveCategoryRefs } from "../recipe-markdown.js";
 import { recipeColdStartGuard } from "./guards.js";
 
 /**
- * Registers `create_recipe`, kernel-shaped — resolves category refs against this
- * module's own category store, writes through `ctx.state.commitRecipe` (the bound
- * write chokepoint), and reads names via `ctx.state.category.store`.
+ * `create_recipe` — create a recipe. Resolves category refs against this module's own
+ * category store (recipe owns category, so it is intra-domain; no deps).
  */
 export const createRecipeTool = defineTool(
   {
@@ -52,7 +51,7 @@ export const createRecipeTool = defineTool(
       nutritionalInfo: z.string().optional().describe("Nutritional information"),
     },
   },
-  (ctx: DomainCtx<RecipeState, never>) => {
+  (ctx: DomainCtx<RecipeState, never, RecipeWrites>) => {
     const log = ctx.infra.log.child({ component: "create_recipe" });
     return async (args) => {
       log.info({ tool: "create_recipe", name: args.name }, "tool invoked");
@@ -110,7 +109,7 @@ export const createRecipeTool = defineTool(
           let saved: Recipe;
           try {
             saved = await ctx.infra.client.saveRecipe(newRecipe); // AC2.5
-            await ctx.state.commitRecipe(saved); // AC2.5, AC2.6
+            await ctx.writes.commitRecipe(saved); // AC2.5, AC2.6
           } catch (error) {
             // AC2.8: store/cache not updated — commitRecipe not reached
             const message = toMessage(error);

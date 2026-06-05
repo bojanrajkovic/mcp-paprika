@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import type { CategoryUid } from "../../../ids.js";
 import type { DomainCtx } from "../../../kernel/registry.js";
-import type { RecipeState } from "../module.js";
+import type { RecipeState, RecipeWrites } from "../module.js";
 import type { Recipe } from "../types.js";
 
 import { RecipeUidSchema } from "../../../ids.js";
@@ -38,9 +38,8 @@ export const categorizeRecipeInputSchema = z
   .strict();
 
 /**
- * Registers `categorize_recipe`, kernel-shaped — recipe owns category, so the ref
- * resolution and name lookup are intra-domain (no deps). Writes through the bound
- * `ctx.state.commitRecipe` chokepoint.
+ * `categorize_recipe` — set a recipe's categories. Recipe owns category, so the ref
+ * resolution and name lookup are intra-domain (no deps).
  */
 export const categorizeRecipeTool = defineTool(
   {
@@ -53,7 +52,7 @@ export const categorizeRecipeTool = defineTool(
       "Unknown category names are skipped with a warning. To edit other recipe fields, use update_recipe.",
     inputSchema: categorizeRecipeInputSchema,
   },
-  (ctx: DomainCtx<RecipeState, never>) => {
+  (ctx: DomainCtx<RecipeState, never, RecipeWrites>) => {
     const log = ctx.infra.log.child({ component: "categorize_recipe" });
     return async (args) => {
       log.info({ tool: "categorize_recipe", uid: args.uid, mode: args.mode }, "tool invoked");
@@ -91,7 +90,7 @@ export const categorizeRecipeTool = defineTool(
           let saved: Recipe;
           try {
             saved = await ctx.infra.client.saveRecipe(updated);
-            await ctx.state.commitRecipe(saved);
+            await ctx.writes.commitRecipe(saved);
           } catch (error) {
             const message = toMessage(error);
             log.error({ err: error, uid: args.uid }, "saveRecipe failed");

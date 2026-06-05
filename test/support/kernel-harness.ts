@@ -152,6 +152,7 @@ interface LiveHarness {
   readonly callResource: (name: string, uid: string, uri?: string) => Promise<unknown>;
   readonly built: ReadonlyMap<string, Built>;
   readonly rootState: unknown;
+  readonly rootWrites: unknown;
   readonly infra: Infra;
   readonly notifier: Notifier;
   readonly resourceListChanged: ReturnType<typeof vi.fn>;
@@ -197,6 +198,8 @@ export interface KernelHarness {
   readonly state: () => unknown;
   /** Any built module's `state`, keyed by id (root + transitive deps). */
   readonly stateOf: (id: string) => unknown;
+  /** The root module's write chokepoints (`ctx.writes`) — cast at the call site, e.g. `kh.writes() as RecipeWrites`. */
+  readonly writes: () => unknown;
   readonly infra: () => Infra;
   readonly notifier: () => Notifier;
   /** The resource-list-changed spy on the stub notifier. */
@@ -245,6 +248,7 @@ export function useKernelHarness(rootId: DomainId, opts: UseKernelHarnessOptions
         callResource,
         built,
         rootState: root.state,
+        rootWrites: root.writes ?? {},
         infra,
         notifier: stub.notifier,
         resourceListChanged: stub.resourceListChanged,
@@ -262,6 +266,7 @@ export function useKernelHarness(rootId: DomainId, opts: UseKernelHarnessOptions
     },
     state: () => live().rootState,
     stateOf: (id) => live().built.get(id)?.state,
+    writes: () => live().rootWrites,
     infra: () => live().infra,
     notifier: () => live().notifier,
     resourceListChanged: () => live().resourceListChanged,

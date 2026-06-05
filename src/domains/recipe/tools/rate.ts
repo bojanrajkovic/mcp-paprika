@@ -2,7 +2,7 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 
 import type { DomainCtx } from "../../../kernel/registry.js";
-import type { RecipeState } from "../module.js";
+import type { RecipeState, RecipeWrites } from "../module.js";
 
 import { RecipeUidSchema } from "../../../ids.js";
 import { defineTool } from "../../../kernel/tool.js";
@@ -18,7 +18,7 @@ export const rateRecipeInputSchema = z
   })
   .strict();
 
-/** Registers `rate_recipe`, kernel-shaped — writes through `ctx.state.commitRecipe`. */
+/** `rate_recipe` — set a recipe's star rating. */
 export const rateRecipeTool = defineTool(
   {
     name: "rate_recipe",
@@ -27,7 +27,7 @@ export const rateRecipeTool = defineTool(
     description: "Rate a recipe 0–5 stars by UID. Sets the recipe's star rating; pass 0 to clear it.",
     inputSchema: rateRecipeInputSchema,
   },
-  (ctx: DomainCtx<RecipeState, never>) => {
+  (ctx: DomainCtx<RecipeState, never, RecipeWrites>) => {
     const log = ctx.infra.log.child({ component: "rate_recipe" });
     return async (args) => {
       log.info({ tool: "rate_recipe", uid: args.uid }, "tool invoked");
@@ -44,7 +44,7 @@ export const rateRecipeTool = defineTool(
           let saved: typeof existing;
           try {
             saved = await ctx.infra.client.saveRecipe(updated);
-            await ctx.state.commitRecipe(saved);
+            await ctx.writes.commitRecipe(saved);
           } catch (error) {
             const message = toMessage(error);
             log.error({ err: error, uid: args.uid }, "saveRecipe failed");

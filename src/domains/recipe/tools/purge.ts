@@ -1,7 +1,7 @@
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 
 import type { DomainCtx } from "../../../kernel/registry.js";
-import type { RecipeState } from "../module.js";
+import type { RecipeState, RecipeWrites } from "../module.js";
 import type { Recipe } from "../types.js";
 
 import { RecipeUidSchema } from "../../../ids.js";
@@ -12,9 +12,9 @@ import { toMessage } from "../../../utils/log.js";
 import { recipeColdStartGuard } from "./guards.js";
 
 /**
- * Registers `purge_recipe` (the empty-trash hard delete), kernel-shaped — fetches
- * authoritative state via `ctx.infra.client.getRecipe`, then hard-deletes/reconciles
- * through the bound `ctx.state` write helpers.
+ * `purge_recipe` — empty-trash hard delete. Fetches authoritative state via
+ * `ctx.infra.client.getRecipe`, then hard-deletes or reconciles the local copy
+ * accordingly.
  */
 export const purgeRecipeTool = defineTool(
   {
@@ -32,7 +32,7 @@ export const purgeRecipeTool = defineTool(
       uid: RecipeUidSchema.describe("UID of a trashed recipe to permanently delete"),
     },
   },
-  (ctx: DomainCtx<RecipeState, never>) => {
+  (ctx: DomainCtx<RecipeState, never, RecipeWrites>) => {
     const log = ctx.infra.log.child({ component: "purge_recipe" });
     return async (args) => {
       log.info({ tool: "purge_recipe", uid: args.uid }, "tool invoked");
@@ -52,7 +52,7 @@ export const purgeRecipeTool = defineTool(
               // Never existed, or already permanently deleted (trash emptied). Drop a
               // stale local phantom so a later read/search can't serve it.
               log.info({ uid: args.uid }, "purge_recipe: recipe not found (404)");
-              await ctx.state.reconcileLocalRecipeAbsent(args.uid);
+              await ctx.writes.reconcileLocalRecipeAbsent(args.uid);
               return textResult(
                 `No recipe found with UID "${args.uid}". It may have already been permanently deleted.`,
               );
@@ -66,7 +66,7 @@ export const purgeRecipeTool = defineTool(
           if (!recipe.inTrash) {
             // Authoritative truth: it's live. Heal a stale local copy that still shows
             // it trashed so reads/search agree before the next sync cycle.
-            await ctx.state.reconcileLocalRecipe(recipe);
+            await ctx.writes.reconcileLocalRecipe(recipe);
             return textResult(
               `Recipe "${recipe.name}" is not in the trash, so it can't be permanently deleted. ` +
                 `Move it to the trash first with trash_recipe (reversible), then call purge_recipe.`,
@@ -80,7 +80,7 @@ export const purgeRecipeTool = defineTool(
 
           try {
             const saved = await ctx.infra.client.saveRecipe(tombstone);
-            await ctx.state.commitRecipeHardDelete(saved);
+            await ctx.writes.commitRecipeHardDelete(saved);
           } catch (error) {
             const message = toMessage(error);
             log.error({ err: error, uid: args.uid }, "hard-delete saveRecipe failed");

@@ -4,7 +4,7 @@ import { z } from "zod";
 import type { CategoryUid } from "../../../ids.js";
 import type { DomainCtx } from "../../../kernel/registry.js";
 import type { Category } from "../category/types.js";
-import type { RecipeState } from "../module.js";
+import type { RecipeState, RecipeWrites } from "../module.js";
 
 import { CategoryUidSchema } from "../../../ids.js";
 import { defineTool } from "../../../kernel/tool.js";
@@ -47,7 +47,7 @@ function wouldCreateCycle(self: RecipeState, categoryUid: CategoryUid, newParent
   return false;
 }
 
-/** Registers `create_category`, kernel-shaped — writes through `ctx.state.commitCategoryUpsert`. */
+/** `create_category` — create a recipe category. */
 export const createCategoryTool = defineTool(
   {
     name: "create_category",
@@ -62,7 +62,7 @@ export const createCategoryTool = defineTool(
       parentUid: CategoryUidSchema.optional().describe("UID of the parent category to nest under (omit for top-level)"),
     },
   },
-  (ctx: DomainCtx<RecipeState, never>) => {
+  (ctx: DomainCtx<RecipeState, never, RecipeWrites>) => {
     const log = ctx.infra.log.child({ component: "create_category" });
     return async (args) => {
       log.info({ tool: "create_category", name: args.name }, "tool invoked");
@@ -81,7 +81,7 @@ export const createCategoryTool = defineTool(
 
           try {
             const saved = await ctx.infra.client.saveCategory(category);
-            await ctx.state.commitCategoryUpsert(saved);
+            await ctx.writes.commitCategoryUpsert(saved);
             return textResult(`Created category ${categorySummary(ctx.state, saved)}`);
           } catch (error) {
             log.error({ err: error, name: args.name }, "saveCategory failed");
@@ -94,7 +94,7 @@ export const createCategoryTool = defineTool(
   },
 );
 
-/** Registers `update_category`, kernel-shaped — rename/re-parent through `ctx.state.commitCategoryUpsert`. */
+/** `update_category` — rename or re-parent a category. */
 export const updateCategoryTool = defineTool(
   {
     name: "update_category",
@@ -112,7 +112,7 @@ export const updateCategoryTool = defineTool(
         .describe("New parent UID, or null for top-level (omit to leave the parent unchanged)"),
     },
   },
-  (ctx: DomainCtx<RecipeState, never>) => {
+  (ctx: DomainCtx<RecipeState, never, RecipeWrites>) => {
     const log = ctx.infra.log.child({ component: "update_category" });
     return async (args) => {
       log.info({ tool: "update_category", uid: args.uid }, "tool invoked");
@@ -149,7 +149,7 @@ export const updateCategoryTool = defineTool(
             // commitCategoryUpsert persists locally and emits `category-changed` on
             // the kernel re-index seam so discover re-embeds the category's recipes
             // (a rename changes the display name baked into their embedding text).
-            await ctx.state.commitCategoryUpsert(saved);
+            await ctx.writes.commitCategoryUpsert(saved);
             return textResult(`Updated category ${categorySummary(ctx.state, saved)}`);
           } catch (error) {
             log.error({ err: error, uid: args.uid }, "saveCategory failed");

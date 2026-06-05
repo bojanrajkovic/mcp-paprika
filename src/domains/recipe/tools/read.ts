@@ -10,10 +10,10 @@ import { recipeToMarkdown } from "../recipe-markdown.js";
 import { recipeColdStartGuard } from "./guards.js";
 
 /**
- * Registers `read_recipe`, kernel-shaped — reads this module's own recipe + category
- * stores via `ctx.state`. The `lastCookedAt` argument to `recipeToMarkdown` is DROPPED
- * (recipe is `dependsOn []`, no meal dependency); "last cooked" stays meal-side,
- * surfaced by the meal domain's `read_recipe_history` tool.
+ * `read_recipe` — read one recipe (with category names). The `lastCookedAt` argument
+ * to `recipeToMarkdown` is DROPPED — recipe is `dependsOn []` (no meal dependency);
+ * "last cooked" stays meal-side, surfaced by the meal domain's `read_recipe_history`
+ * tool.
  */
 export const readRecipeTool = defineTool(
   {

@@ -2,7 +2,7 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 
 import type { DomainCtx } from "../../../kernel/registry.js";
-import type { RecipeState } from "../module.js";
+import type { RecipeState, RecipeWrites } from "../module.js";
 
 import { RecipeUidSchema } from "../../../ids.js";
 import { defineTool } from "../../../kernel/tool.js";
@@ -23,7 +23,7 @@ export const unfavoriteRecipeInputSchema = z
   })
   .strict();
 
-/** Registers `favorite_recipe`, kernel-shaped — writes through `ctx.state.commitRecipe`. */
+/** `favorite_recipe` — mark a recipe as a favorite. */
 export const favoriteRecipeTool = defineTool(
   {
     name: "favorite_recipe",
@@ -32,7 +32,7 @@ export const favoriteRecipeTool = defineTool(
     description: "Mark a recipe as a favorite by UID (adds it to the Favorites list).",
     inputSchema: favoriteRecipeInputSchema,
   },
-  (ctx: DomainCtx<RecipeState, never>) => {
+  (ctx: DomainCtx<RecipeState, never, RecipeWrites>) => {
     const log = ctx.infra.log.child({ component: "favorite_recipe" });
     return async (args) => {
       log.info({ tool: "favorite_recipe", uid: args.uid }, "tool invoked");
@@ -49,7 +49,7 @@ export const favoriteRecipeTool = defineTool(
           let saved: typeof existing;
           try {
             saved = await ctx.infra.client.saveRecipe(updated);
-            await ctx.state.commitRecipe(saved);
+            await ctx.writes.commitRecipe(saved);
           } catch (error) {
             const message = toMessage(error);
             log.error({ err: error, uid: args.uid }, "saveRecipe failed");
@@ -65,7 +65,7 @@ export const favoriteRecipeTool = defineTool(
   },
 );
 
-/** Registers `unfavorite_recipe`, kernel-shaped — writes through `ctx.state.commitRecipe`. */
+/** `unfavorite_recipe` — remove a recipe from favorites. */
 export const unfavoriteRecipeTool = defineTool(
   {
     name: "unfavorite_recipe",
@@ -74,7 +74,7 @@ export const unfavoriteRecipeTool = defineTool(
     description: "Remove a recipe from the Favorites list by UID.",
     inputSchema: unfavoriteRecipeInputSchema,
   },
-  (ctx: DomainCtx<RecipeState, never>) => {
+  (ctx: DomainCtx<RecipeState, never, RecipeWrites>) => {
     const log = ctx.infra.log.child({ component: "unfavorite_recipe" });
     return async (args) => {
       log.info({ tool: "unfavorite_recipe", uid: args.uid }, "tool invoked");
@@ -91,7 +91,7 @@ export const unfavoriteRecipeTool = defineTool(
           let saved: typeof existing;
           try {
             saved = await ctx.infra.client.saveRecipe(updated);
-            await ctx.state.commitRecipe(saved);
+            await ctx.writes.commitRecipe(saved);
           } catch (error) {
             const message = toMessage(error);
             log.error({ err: error, uid: args.uid }, "saveRecipe failed");

@@ -7,10 +7,9 @@ import type { RecipeState } from "../module.js";
 import { recipeToMarkdown } from "../recipe-markdown.js";
 
 /**
- * Registers `paprika://recipe/{uid}`, kernel-shaped — reads this module's own
- * recipe and category stores via `ctx.state` (categories are owned by recipe, so
- * names resolve through `ctx.state.category.store`, not a dep). Recipe is one of the
- * three Content-class entities with a resource surface (ADR-0004).
+ * `paprika://recipe/{uid}` — render a recipe as markdown. Categories are owned by
+ * recipe, so names resolve through `ctx.state.category.store`, not a dep. Recipe is
+ * one of the three Content-class entities with a resource surface (ADR-0004).
  */
 export function recipeResource(ctx: DomainCtx<RecipeState, never>): void {
   const template = new ResourceTemplate("paprika://recipe/{uid}", {

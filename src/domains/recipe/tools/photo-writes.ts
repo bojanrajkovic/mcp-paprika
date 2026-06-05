@@ -4,7 +4,7 @@ import { z } from "zod";
 import type { GeneratedImageStore } from "../../../features/generated-image-store.js";
 import type { RecipeUid } from "../../../ids.js";
 import type { DomainCtx } from "../../../kernel/registry.js";
-import type { RecipeState } from "../module.js";
+import type { RecipeState, RecipeWrites } from "../module.js";
 import type { Photo } from "../photo/types.js";
 
 import { PhotoUidSchema, RecipeUidSchema } from "../../../ids.js";
@@ -132,9 +132,8 @@ async function resolveSource(
 }
 
 /**
- * Registers `upload_recipe_photo`, kernel-shaped — recipe owns photo, so the recipe
- * read, photo-gallery read, and the attach write all go through `ctx.state` (the bound
- * `attachPhotoToRecipe` chokepoint). The `generation_token` source consumes the shared
+ * `upload_recipe_photo` — attach a photo to a recipe (recipe owns photo, so the attach
+ * is intra-domain). The `generation_token` source consumes the shared
  * `infra.generatedImageStore` preview buffer (see `resolveSource`).
  */
 export const uploadPhotoTool = defineTool(
@@ -151,7 +150,7 @@ export const uploadPhotoTool = defineTool(
       "server cannot read your local filesystem. Photos are appended to the recipe's gallery in order.",
     inputSchema: uploadPhotoInputSchema.shape,
   },
-  (ctx: DomainCtx<RecipeState, never>) => {
+  (ctx: DomainCtx<RecipeState, never, RecipeWrites>) => {
     const log = ctx.infra.log.child({ component: "upload_recipe_photo" });
     return async (args) => {
       const sourceKind =
@@ -193,7 +192,7 @@ export const uploadPhotoTool = defineTool(
 
           let photo: Photo;
           try {
-            photo = await ctx.state.attachPhotoToRecipe(recipe, thumbnail, full);
+            photo = await ctx.writes.attachPhotoToRecipe(recipe, thumbnail, full);
           } catch (error) {
             log.error({ err: error, recipe_uid: args.recipe_uid }, "uploadPhoto failed");
             return textResult(`Failed to upload photo: ${toMessage(error)}`);
@@ -207,7 +206,7 @@ export const uploadPhotoTool = defineTool(
   },
 );
 
-/** Registers `delete_recipe_photo`, kernel-shaped — soft-delete through `ctx.state.commitPhotoDelete`. */
+/** `delete_recipe_photo` — remove a recipe photo (soft-delete). */
 export const deletePhotoTool = defineTool(
   {
     name: "delete_recipe_photo",
@@ -218,7 +217,7 @@ export const deletePhotoTool = defineTool(
       "'already deleted' message without re-POSTing. Requires an exact photo UID.",
     inputSchema: deletePhotoInputSchema.shape,
   },
-  (ctx: DomainCtx<RecipeState, never>) => {
+  (ctx: DomainCtx<RecipeState, never, RecipeWrites>) => {
     const log = ctx.infra.log.child({ component: "delete_recipe_photo" });
     return async (args) => {
       log.info({ tool: "delete_recipe_photo", photo_uid: args.photo_uid }, "tool invoked");
@@ -236,7 +235,7 @@ export const deletePhotoTool = defineTool(
 
           try {
             await ctx.infra.client.deletePhoto(existing);
-            await ctx.state.commitPhotoDelete({ ...existing, deleted: true });
+            await ctx.writes.commitPhotoDelete({ ...existing, deleted: true });
           } catch (error) {
             log.error({ err: error, photo_uid: args.photo_uid }, "deletePhoto failed");
             return textResult(`Failed to delete photo: ${toMessage(error)}`);
