@@ -10,7 +10,7 @@ import { MealUidSchema } from "../../../ids.js";
 import { textResult } from "../../../shared/tools.js";
 import { parseCalendarDayWire } from "../../../utils/dates.js";
 import { toMessage } from "../../../utils/log.js";
-import { formatMealTypeResolveError, mealTypeSpecSchema } from "../../meal-type/meal-type-helpers.js";
+import { mealTypeSpecSchema, resolveOrCreateMealType } from "../../meal-type/meal-type-helpers.js";
 import { makeMealOrderFlagAssigner, mealStartGuard, renderMealCard } from "./helpers.js";
 
 // `.strict()`. Rescheduling is its own act because moving a meal's date moves it
@@ -35,7 +35,7 @@ export const rescheduleMealInputSchema = z
 /**
  * Registers `reschedule_meal`, kernel-shaped — writes through
  * `ctx.self.commitMealsBatch`, resolves the optional type co-change via
- * `ctx.deps["meal-type"].resolveSpec`.
+ * `resolveOrCreateMealType` (an unknown `{name}` auto-creates a custom type).
  */
 export function rescheduleMealTool(ctx: DomainCtx<MealSelf, "recipe" | "meal-type">): void {
   const log = ctx.infra.log.child({ component: "reschedule_meal" });
@@ -61,20 +61,6 @@ export function rescheduleMealTool(ctx: DomainCtx<MealSelf, "recipe" | "meal-typ
             return textResult(`No meal found with UID "${uid}" (it may not exist or was already deleted).`);
           }
 
-          // Resolve the optional type co-change (same DU + error wording as plan_meals / update_meal).
-          let typeInteger: number | undefined;
-          let typeUid: MealTypeUid | null | undefined;
-          if (args.type !== undefined) {
-            const result = ctx.deps["meal-type"].resolveSpec(args.type);
-            if (!result.ok) {
-              return textResult(formatMealTypeResolveError(result));
-            }
-            // Custom mealtypes carry originalType: null; Meal.type is vestigial when
-            // type_uid is set (see plan_meals for the full rationale).
-            typeInteger = result.resolved.originalType ?? 0;
-            typeUid = result.resolved.uid;
-          }
-
           // Normalize the destination date in its own calendar zone (see plan_meals).
           const normalizedDate = parseCalendarDayWire(args.date);
           if (normalizedDate === null) {
@@ -88,6 +74,22 @@ export function rescheduleMealTool(ctx: DomainCtx<MealSelf, "recipe" | "meal-typ
           // Nothing to do: same date and no type co-change. Avoid a wasted POST + notifySync.
           if (!dateChanged && args.type === undefined) {
             return textResult(renderMealCard(existing, ctx.deps.recipe, ctx.deps["meal-type"]));
+          }
+
+          // Resolve the optional type co-change LAST — after the date validation above. An
+          // unknown {name} auto-creates a type, so creating only once the date is known-good
+          // avoids leaving an orphan type behind on a rejected call.
+          let typeInteger: number | undefined;
+          let typeUid: MealTypeUid | null | undefined;
+          if (args.type !== undefined) {
+            const result = await resolveOrCreateMealType(ctx.deps["meal-type"], args.type);
+            if (!result.ok) {
+              return textResult(result.message);
+            }
+            // Custom mealtypes carry originalType: null; Meal.type is vestigial when
+            // type_uid is set (see plan_meals for the full rationale).
+            typeInteger = result.resolved.originalType ?? 0;
+            typeUid = result.resolved.uid;
           }
 
           // When the date changes, the meal joins the destination date's order_flag

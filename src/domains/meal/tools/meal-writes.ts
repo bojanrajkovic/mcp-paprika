@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import type { MealTypeUid, RecipeUid } from "../../../ids.js";
 import type { DomainCtx } from "../../../kernel/registry.js";
+import type { MealType } from "../../meal-type/types.js";
 import type { MealSelf } from "../module.js";
 import type { Meal } from "../types.js";
 
@@ -10,7 +11,7 @@ import { MealUidSchema, RecipeUidSchema } from "../../../ids.js";
 import { textResult } from "../../../shared/tools.js";
 import { parseCalendarDayWire } from "../../../utils/dates.js";
 import { toMessage } from "../../../utils/log.js";
-import { formatMealTypeResolveError, mealTypeSpecSchema } from "../../meal-type/meal-type-helpers.js";
+import { mealTypeSpecSchema, resolveOrCreateMealType } from "../../meal-type/meal-type-helpers.js";
 import { makeMealOrderFlagAssigner, mealStartGuard, renderMealCard } from "./helpers.js";
 
 // Each meal item is structurally either recipe-linked OR freeform — never both.
@@ -106,9 +107,11 @@ export function planMealsTool(ctx: DomainCtx<MealSelf, "recipe" | "meal-type">):
           type ResolvedItem = {
             readonly index: number;
             readonly normalizedDate: string;
-            readonly typeName: string;
-            readonly typeUid: MealTypeUid | null;
-            readonly typeInteger: number;
+            // Exactly one of these is set: the type resolved during validation, or a
+            // {name} to auto-create in the build pass below (deferred so a batch rejected
+            // in validation creates no orphan type — pantry-style).
+            readonly resolvedType: MealType | null;
+            readonly pendingTypeName: string | null;
             readonly resolvedName: string;
             readonly recipeUid: RecipeUid | null;
             readonly scale: string | null;
@@ -134,26 +137,26 @@ export function planMealsTool(ctx: DomainCtx<MealSelf, "recipe" | "meal-type">):
               continue;
             }
 
-            // Meal type resolution via the meal-type dep contract.
+            // Meal type resolution via the meal-type dep contract. An unknown {name} is
+            // NOT an error — it's deferred and auto-created in the build pass below, so a
+            // batch rejected during validation never creates an orphan type (pantry-style).
             const typeResult = ctx.deps["meal-type"].resolveSpec(item.type);
-            if (!typeResult.ok) {
-              if (typeResult.reason === "unknown_uid") {
-                errors.push(`Item ${i.toString()}: unknown meal type UID "${typeResult.uid}".`);
-              } else if (typeResult.reason === "unknown_name") {
-                const knownList = typeResult.knownNames.join(", ");
-                errors.push(
-                  `Item ${i.toString()} (type {name: "${typeResult.name}"}): unknown meal type "${typeResult.name}". ` +
-                    `Known types: ${knownList}. Use the {uid} or {builtin} discriminator to reference a custom meal type.`,
-                );
-              } else {
-                errors.push(
-                  `Item ${i.toString()}: no built-in meal type found with index ${typeResult.index.toString()} ` +
-                    `(expected 0=Breakfast, 1=Lunch, 2=Dinner, 3=Snacks).`,
-                );
-              }
+            let resolvedType: MealType | null = null;
+            let pendingTypeName: string | null = null;
+            if (typeResult.ok) {
+              resolvedType = typeResult.resolved;
+            } else if (typeResult.reason === "unknown_name") {
+              pendingTypeName = typeResult.name;
+            } else if (typeResult.reason === "unknown_uid") {
+              errors.push(`Item ${i.toString()}: unknown meal type UID "${typeResult.uid}".`);
+              continue;
+            } else {
+              errors.push(
+                `Item ${i.toString()}: no built-in meal type found with index ${typeResult.index.toString()} ` +
+                  `(expected 0=Breakfast, 1=Lunch, 2=Dinner, 3=Snacks).`,
+              );
               continue;
             }
-            const resolvedType = typeResult.resolved;
 
             // Structural union guarantees exactly one of {recipe_uid, name} is set.
             // Recipe-linked: name always auto-resolves from the recipe store (Paprika.app
@@ -180,14 +183,8 @@ export function planMealsTool(ctx: DomainCtx<MealSelf, "recipe" | "meal-type">):
             resolved.push({
               index: i,
               normalizedDate,
-              typeName: resolvedType.name,
-              typeUid: resolvedType.uid,
-              // Custom (user-created) meal types carry `originalType: null`. When `typeUid` is
-              // set, `Meal.type` is vestigial — Paprika.app's UI dispatches off `type_uid`, and
-              // the server preserves whatever integer we POST verbatim, so `0` round-trips
-              // through `mealsEqual` cleanly. (Verified via direct API experiment + UI eyeball,
-              // 2026-05-29.)
-              typeInteger: resolvedType.originalType ?? 0,
+              resolvedType,
+              pendingTypeName,
               resolvedName,
               recipeUid,
               scale: item.scale ?? null,
@@ -200,27 +197,52 @@ export function planMealsTool(ctx: DomainCtx<MealSelf, "recipe" | "meal-type">):
             return textResult(`${header}\n\n${errors.join("\n")}`);
           }
 
-          // ----- Stage 2: assign order_flag per calendar DATE -----
+          // ----- Stage 2: auto-create any deferred {name} meal types (pantry-style) -----
+          // Validation passed, so creating now leaves no orphan type on a rejected batch.
+          // Cache by lowercase name so a name repeated across items is created once.
+          const createdTypesByName = new Map<string, MealType>();
+          for (const r of resolved) {
+            if (r.pendingTypeName === null) continue;
+            const key = r.pendingTypeName.toLowerCase();
+            if (createdTypesByName.has(key)) continue;
+            try {
+              createdTypesByName.set(key, await ctx.deps["meal-type"].ensureMealType(r.pendingTypeName));
+            } catch (error) {
+              const message = toMessage(error);
+              log.error({ err: error, name: r.pendingTypeName }, "ensureMealType failed");
+              return textResult(`Failed to create meal type "${r.pendingTypeName}": ${message}`);
+            }
+          }
+
+          // ----- Stage 3: assign order_flag per calendar DATE -----
           // order_flag sequences per date across ALL meal types, not per
           // (date, type) — see makeMealOrderFlagAssigner for the wire-capture
           // rationale. The assigner seeds each date from the store and increments
           // within the batch so same-date items get sequential flags.
           const assignFlag = makeMealOrderFlagAssigner(ctx.self);
 
-          const builtItems: Array<Meal> = resolved.map((r) => ({
-            uid: MealUidSchema.parse(crypto.randomUUID().toUpperCase()),
-            recipeUid: r.recipeUid,
-            name: r.resolvedName,
-            date: r.normalizedDate,
-            type: r.typeInteger,
-            typeUid: r.typeUid,
-            orderFlag: assignFlag(r.normalizedDate),
-            isIngredient: false,
-            scale: r.scale,
-            deleted: false,
-          }));
+          const builtItems: Array<Meal> = resolved.map((r) => {
+            // Either the type resolved during validation, or the one just auto-created.
+            const mealType = r.resolvedType ?? createdTypesByName.get(r.pendingTypeName!.toLowerCase())!;
+            return {
+              uid: MealUidSchema.parse(crypto.randomUUID().toUpperCase()),
+              recipeUid: r.recipeUid,
+              name: r.resolvedName,
+              date: r.normalizedDate,
+              // Custom (user-created) meal types carry `originalType: null`. When `typeUid` is
+              // set, `Meal.type` is vestigial — Paprika.app dispatches off `type_uid` and the
+              // server preserves the integer we POST verbatim, so `0` round-trips through
+              // `mealsEqual` cleanly. (Verified via direct API experiment + UI eyeball, 2026-05-29.)
+              type: mealType.originalType ?? 0,
+              typeUid: mealType.uid,
+              orderFlag: assignFlag(r.normalizedDate),
+              isIngredient: false,
+              scale: r.scale,
+              deleted: false,
+            };
+          });
 
-          // ----- Stage 3: single batch POST -----
+          // ----- Stage 4: single batch POST -----
           let savedItems: ReadonlyArray<Meal>;
           try {
             savedItems = await ctx.infra.client.saveMeals(builtItems);
@@ -231,7 +253,7 @@ export function planMealsTool(ctx: DomainCtx<MealSelf, "recipe" | "meal-type">):
             return textResult(`Failed to add meals: ${message}`);
           }
 
-          // ----- Stage 4: render response -----
+          // ----- Stage 5: render response -----
           const cards = savedItems.map((meal) => renderMealCard(meal, ctx.deps.recipe, ctx.deps["meal-type"]));
 
           const header = `Added ${savedItems.length.toString()} meal(s) to the planner.`;
@@ -331,21 +353,6 @@ export function updateMealTool(ctx: DomainCtx<MealSelf, "recipe" | "meal-type">)
           if (existing === undefined) {
             return textResult(`No meal found with UID "${uid}" (it may not exist or was already deleted).`);
           }
-          // Resolve type if supplied via the meal-type dep contract.
-          // All three variants of `op` carry `type` as an optional shared field.
-          let typeInteger: number | undefined;
-          let typeUid: MealTypeUid | null | undefined;
-          if (op.type !== undefined) {
-            const result = ctx.deps["meal-type"].resolveSpec(op.type);
-            if (!result.ok) {
-              return textResult(formatMealTypeResolveError(result));
-            }
-            // Custom mealtypes carry `originalType: null`; `Meal.type` is vestigial when
-            // `type_uid` is set (see plan_meals comment for the full rationale).
-            typeInteger = result.resolved.originalType ?? 0;
-            typeUid = result.resolved.uid;
-          }
-
           // Resolve recipe_uid and name interaction. The structural union ensures we
           // never see (recipe_uid: <UID>, name: <X>) together — that combination
           // matches no variant and is rejected at parse time.
@@ -411,6 +418,23 @@ export function updateMealTool(ctx: DomainCtx<MealSelf, "recipe" | "meal-type">)
               );
             }
             newName = nameOp.name;
+          }
+
+          // Resolve the meal type LAST — after the recipe/name validation above. An unknown
+          // {name} auto-creates a type, so creating only once the rest of the update is
+          // known-good avoids leaving an orphan type behind on a rejected call. All three
+          // variants of `op` carry `type` as an optional shared field.
+          let typeInteger: number | undefined;
+          let typeUid: MealTypeUid | null | undefined;
+          if (op.type !== undefined) {
+            const result = await resolveOrCreateMealType(ctx.deps["meal-type"], op.type);
+            if (!result.ok) {
+              return textResult(result.message);
+            }
+            // Custom mealtypes carry `originalType: null`; `Meal.type` is vestigial when
+            // `type_uid` is set (see plan_meals comment for the full rationale).
+            typeInteger = result.resolved.originalType ?? 0;
+            typeUid = result.resolved.uid;
           }
 
           // Spread-merge. update_meal never changes the date (that's reschedule_meal),

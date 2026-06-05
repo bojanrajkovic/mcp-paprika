@@ -9,7 +9,7 @@ import type { MenuSelf } from "../module.js";
 import { MenuItemUidSchema, RecipeUidSchema } from "../../../ids.js";
 import { textResult } from "../../../shared/tools.js";
 import { toMessage } from "../../../utils/log.js";
-import { mealTypeSpecSchema } from "../../meal-type/meal-type-helpers.js";
+import { mealTypeSpecSchema, resolveOrCreateMealType } from "../../meal-type/meal-type-helpers.js";
 import { menuStartGuard } from "./guards.js";
 
 // `.strict()` — `day` was promoted to move_menu_item (a day-move carries
@@ -26,8 +26,8 @@ export const updateMenuItemInputSchema = z
 /**
  * Registers `update_menu_item`, kernel-shaped — reads/writes this module's own
  * menu-item store via `ctx.self`, re-resolves the recipe display name via
- * `ctx.deps.recipe.get`, resolves the meal type via `ctx.deps["meal-type"].resolveSpec`,
- * and commits through `ctx.self.commitMenuItem`.
+ * `ctx.deps.recipe.get`, resolves the meal type via `resolveOrCreateMealType` (an
+ * unknown `{name}` auto-creates a custom type), and commits through `ctx.self.commitMenuItem`.
  */
 export function updateMenuItemTool(ctx: DomainCtx<MenuSelf, "recipe" | "meal-type">): void {
   const log = ctx.infra.log.child({ component: "update_menu_item" });
@@ -56,29 +56,6 @@ export function updateMenuItemTool(ctx: DomainCtx<MenuSelf, "recipe" | "meal-typ
           if (existing === undefined) {
             return textResult(`No menu item found with UID "${uid}" (it may not exist or was already deleted).`);
           }
-          // Resolve type if supplied via the shared meal-type contract.
-          let newTypeUid: MealTypeUid | undefined;
-          if (args.type !== undefined) {
-            const result = ctx.deps["meal-type"].resolveSpec(args.type);
-            if (!result.ok) {
-              if (result.reason === "unknown_uid") {
-                return textResult(`Unknown meal type UID "${result.uid}".`);
-              }
-              if (result.reason === "unknown_name") {
-                const knownList = result.knownNames.join(", ");
-                return textResult(
-                  `Unknown meal type "${result.name}". Known types: ${knownList}. ` +
-                    `Use the {uid} or {builtin} discriminator to reference a custom meal type.`,
-                );
-              }
-              return textResult(
-                `No built-in meal type found with index ${result.index.toString()} ` +
-                  `(expected 0=Breakfast, 1=Lunch, 2=Dinner, 3=Snacks).`,
-              );
-            }
-            newTypeUid = result.resolved.uid;
-          }
-
           // Resolve recipe link + refreshed display name if a new recipe is supplied.
           let newRecipeUid: RecipeUid | null = existing.recipeUid;
           let newName: string = existing.name;
@@ -92,6 +69,18 @@ export function updateMenuItemTool(ctx: DomainCtx<MenuSelf, "recipe" | "meal-typ
             }
             newRecipeUid = args.recipe_uid;
             newName = recipe.name;
+          }
+
+          // Resolve the meal type LAST — after the recipe validation above. An unknown
+          // {name} auto-creates a type, so creating only once the rest of the input is
+          // known-good avoids leaving an orphan type behind on a rejected call.
+          let newTypeUid: MealTypeUid | undefined;
+          if (args.type !== undefined) {
+            const result = await resolveOrCreateMealType(ctx.deps["meal-type"], args.type);
+            if (!result.ok) {
+              return textResult(result.message);
+            }
+            newTypeUid = result.resolved.uid;
           }
 
           const merged: MenuItem = {

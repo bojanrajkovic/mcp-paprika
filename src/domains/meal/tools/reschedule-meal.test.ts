@@ -176,3 +176,31 @@ describe("reschedule_meal tool", () => {
     });
   });
 });
+
+describe("reschedule_meal — meal-type auto-create no-orphan", () => {
+  const kh = useKernelHarness("meal");
+  beforeEach(kh.setup);
+  afterEach(kh.teardown);
+
+  it("a rejected reschedule (bad date) with a new type {name} creates NO type", async () => {
+    vi.mocked(kh.client().saveMeals).mockImplementation(async (items) => [...items]);
+    vi.mocked(kh.client().saveMealType).mockImplementation(async (mt) => mt);
+    kh.seed({
+      meals: [makeMeal({ uid: TEST_MEAL_UID, typeUid: DINNER_UID, type: 2 })],
+      mealTypes: makeBuiltins(),
+      recipes: [],
+    });
+
+    const result = await kh.callTool("reschedule_meal", {
+      uid: TEST_MEAL_UID,
+      date: "not-a-date",
+      type: { name: "Brunch" },
+    });
+    const text = getText(result);
+
+    // The date is validated before the type is created → no orphan type.
+    expect(text).toContain("Could not parse date");
+    expect(kh.client().saveMealType).not.toHaveBeenCalled();
+    expect(kh.client().saveMeals).not.toHaveBeenCalled();
+  });
+});
