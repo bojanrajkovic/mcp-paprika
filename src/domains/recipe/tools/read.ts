@@ -11,7 +11,8 @@ import { recipeColdStartGuard } from "./guards.js";
 /**
  * Registers `read_recipe`, kernel-shaped — reads this module's own recipe + category
  * stores via `ctx.self`. The `lastCookedAt` argument to `recipeToMarkdown` is DROPPED
- * (recipe is `dependsOn []`, no meal dependency); "last cooked" stays meal-side.
+ * (recipe is `dependsOn []`, no meal dependency); "last cooked" stays meal-side,
+ * surfaced by the meal domain's `read_recipe_history` tool.
  */
 export function readRecipeTool(ctx: DomainCtx<RecipeSelf, never>): void {
   const log = ctx.infra.log.child({ component: "read_recipe" });

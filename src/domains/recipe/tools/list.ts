@@ -10,7 +10,8 @@ import { recipeColdStartGuard } from "./guards.js";
 /**
  * Registers `list_recipes`, kernel-shaped — reads this module's own recipe + category
  * stores via `ctx.self`. The `lastCookedAt` enrichment is DROPPED (recipe is
- * `dependsOn []`, no meal dependency); "last cooked" stays meal-side (ADR-0009).
+ * `dependsOn []`, no meal dependency); "last cooked" stays meal-side (ADR-0009),
+ * surfaced by the meal domain's `read_recipe_history` tool.
  */
 export function listRecipesTool(ctx: DomainCtx<RecipeSelf, never>): void {
   const log = ctx.infra.log.child({ component: "list_recipes" });
