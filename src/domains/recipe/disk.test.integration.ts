@@ -33,7 +33,7 @@ async function coldStartRecipeTools(
   const built = await recipeModule.build(infra);
   const { server, callTool } = makeTestServer();
   const ctx = { self: built.self, deps: {}, infra, server };
-  for (const tool of built.tools) tool(ctx);
+  for (const tool of built.tools) tool.register(ctx);
   return callTool;
 }
 

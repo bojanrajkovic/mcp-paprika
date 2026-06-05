@@ -7,6 +7,7 @@ import type { MenuSelf } from "../module.js";
 import type { Menu } from "../types.js";
 
 import { MenuItemUidSchema } from "../../../ids.js";
+import { defineTool } from "../../../kernel/tool.js";
 import { textResult } from "../../../shared/tools.js";
 import { toMessage } from "../../../utils/log.js";
 import { menuStartGuard } from "./guards.js";
@@ -30,20 +31,20 @@ export const moveMenuItemInputSchema = z
  * menu-item stores via `ctx.self`, committing through `ctx.self.commitMenu` /
  * `ctx.self.commitMenuItem`.
  */
-export function moveMenuItemTool(ctx: DomainCtx<MenuSelf, "recipe" | "meal-type">): void {
-  const log = ctx.infra.log.child({ component: "move_menu_item" });
-  ctx.server.registerTool(
-    "move_menu_item",
-    {
-      title: "Move a menu item to a different day",
-      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
-      description:
-        "Move a menu item to a different day within its menu, by UID. A day beyond the menu's current span " +
-        "auto-extends the menu so the item stays visible, and the item is re-sequenced to the end of the " +
-        "menu's order. To change a menu item's meal type or recipe link instead, use update_menu_item.",
-      inputSchema: moveMenuItemInputSchema,
-    },
-    async (args) => {
+export const moveMenuItemTool = defineTool(
+  {
+    name: "move_menu_item",
+    title: "Move a menu item to a different day",
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
+    description:
+      "Move a menu item to a different day within its menu, by UID. A day beyond the menu's current span " +
+      "auto-extends the menu so the item stays visible, and the item is re-sequenced to the end of the " +
+      "menu's order. To change a menu item's meal type or recipe link instead, use update_menu_item.",
+    inputSchema: moveMenuItemInputSchema,
+  },
+  (ctx: DomainCtx<MenuSelf, "recipe" | "meal-type">) => {
+    const log = ctx.infra.log.child({ component: "move_menu_item" });
+    return async (args) => {
       log.info({ tool: "move_menu_item", uid: args.uid, day: args.day }, "tool invoked");
       return menuStartGuard(ctx).match(
         async (): Promise<CallToolResult> => {
@@ -111,6 +112,6 @@ export function moveMenuItemTool(ctx: DomainCtx<MenuSelf, "recipe" | "meal-type"
         },
         (guard) => guard,
       );
-    },
-  );
-}
+    };
+  },
+);

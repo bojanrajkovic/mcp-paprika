@@ -6,6 +6,7 @@ import type { RecipeSelf } from "../module.js";
 import type { Recipe } from "../types.js";
 
 import { CategoryUidSchema } from "../../../ids.js";
+import { defineTool } from "../../../kernel/tool.js";
 import { textResult } from "../../../shared/tools.js";
 import { toMessage } from "../../../utils/log.js";
 import { categoryStartGuard } from "./guards.js";
@@ -21,22 +22,22 @@ function recipesReferencing(self: RecipeSelf, uid: CategoryUid): Array<Recipe> {
 }
 
 /** Registers `delete_category`, kernel-shaped — guards on within-domain recipe/child refs, deletes through `ctx.self.commitCategoryDelete`. */
-export function deleteCategoryTool(ctx: DomainCtx<RecipeSelf, never>): void {
-  const log = ctx.infra.log.child({ component: "delete_category" });
-  ctx.server.registerTool(
-    "delete_category",
-    {
-      title: "Delete a recipe category",
-      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
-      description:
-        "Delete a category. Refuses if the category still has child categories or is assigned to any recipe — " +
-        "reassign or delete those first (move recipes with `update_recipe`, re-parent children with " +
-        "`update_category`). This keeps the hierarchy and recipe links consistent.",
-      inputSchema: {
-        uid: CategoryUidSchema.describe("UID of the category to delete"),
-      },
+export const deleteCategoryTool = defineTool(
+  {
+    name: "delete_category",
+    title: "Delete a recipe category",
+    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
+    description:
+      "Delete a category. Refuses if the category still has child categories or is assigned to any recipe — " +
+      "reassign or delete those first (move recipes with `update_recipe`, re-parent children with " +
+      "`update_category`). This keeps the hierarchy and recipe links consistent.",
+    inputSchema: {
+      uid: CategoryUidSchema.describe("UID of the category to delete"),
     },
-    async (args) => {
+  },
+  (ctx: DomainCtx<RecipeSelf, never>) => {
+    const log = ctx.infra.log.child({ component: "delete_category" });
+    return async (args) => {
       log.info({ tool: "delete_category", uid: args.uid }, "tool invoked");
       return categoryStartGuard(ctx.self).match(
         async (): Promise<CallToolResult> => {
@@ -76,6 +77,6 @@ export function deleteCategoryTool(ctx: DomainCtx<RecipeSelf, never>): void {
         },
         (guard) => guard,
       );
-    },
-  );
-}
+    };
+  },
+);

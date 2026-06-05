@@ -7,6 +7,7 @@ import type { RecipeSelf } from "../module.js";
 import type { TimeConstraints } from "../store.js";
 import type { Recipe } from "../types.js";
 
+import { defineTool } from "../../../kernel/tool.js";
 import { textResult } from "../../../shared/tools.js";
 import { parseDuration } from "../../../utils/duration.js";
 import { recipeMetadataLines } from "../recipe-markdown.js";
@@ -45,22 +46,22 @@ export const searchRecipesInputSchema = z
  * is `dependsOn []`, no meal dependency); "last cooked" stays meal-side, surfaced by
  * the meal domain's `read_recipe_history` tool.
  */
-export function searchRecipesTool(ctx: DomainCtx<RecipeSelf, never>): void {
-  const log = ctx.infra.log.child({ component: "search_recipes" });
-  ctx.server.registerTool(
-    "search_recipes",
-    {
-      title: "Search recipes by name, ingredient, or time",
-      annotations: { readOnlyHint: true, idempotentHint: true },
-      description:
-        "Search and filter recipes. Use any combination of: free-text query (matches name, " +
-        "ingredients, description), an ingredient list with all/any match mode, and/or max " +
-        "prep/cook/total time constraints. At least one criterion is required. Results are " +
-        "ranked by query relevance when a query is present, or by ascending total time when " +
-        "only time constraints are given.",
-      inputSchema: searchRecipesInputSchema,
-    },
-    async (args) => {
+export const searchRecipesTool = defineTool(
+  {
+    name: "search_recipes",
+    title: "Search recipes by name, ingredient, or time",
+    annotations: { readOnlyHint: true, idempotentHint: true },
+    description:
+      "Search and filter recipes. Use any combination of: free-text query (matches name, " +
+      "ingredients, description), an ingredient list with all/any match mode, and/or max " +
+      "prep/cook/total time constraints. At least one criterion is required. Results are " +
+      "ranked by query relevance when a query is present, or by ascending total time when " +
+      "only time constraints are given.",
+    inputSchema: searchRecipesInputSchema,
+  },
+  (ctx: DomainCtx<RecipeSelf, never>) => {
+    const log = ctx.infra.log.child({ component: "search_recipes" });
+    return async (args) => {
       log.info({ tool: "search_recipes", ...args }, "tool invoked");
       return recipeColdStartGuard(ctx.self).match(
         async (): Promise<CallToolResult> => {
@@ -168,9 +169,9 @@ export function searchRecipesTool(ctx: DomainCtx<RecipeSelf, never>): void {
         },
         (guard) => guard,
       );
-    },
-  );
-}
+    };
+  },
+);
 
 // ---------------------------------------------------------------------------
 // Private helpers (moved from filter.ts)

@@ -4,6 +4,7 @@ import type { DomainCtx } from "../../../kernel/registry.js";
 import type { Category } from "../category/types.js";
 import type { RecipeSelf } from "../module.js";
 
+import { defineTool } from "../../../kernel/tool.js";
 import { textResult } from "../../../shared/tools.js";
 import { categoryStartGuard } from "./guards.js";
 
@@ -12,18 +13,17 @@ import { categoryStartGuard } from "./guards.js";
  * category catalog and the recipe-per-category counts read from `ctx.self`
  * (within-domain — recipe owns category; no deps).
  */
-export function listCategoriesTool(ctx: DomainCtx<RecipeSelf, never>): void {
-  const log = ctx.infra.log.child({ component: "list_categories" });
-  ctx.server.registerTool(
-    "list_categories",
-    {
-      title: "List recipe categories",
-      annotations: { readOnlyHint: true, idempotentHint: true },
-      description:
-        "List all recipe categories with the number of recipes in each. Categories are sorted alphabetically.",
-      inputSchema: {},
-    },
-    async (_args) => {
+export const listCategoriesTool = defineTool(
+  {
+    name: "list_categories",
+    title: "List recipe categories",
+    annotations: { readOnlyHint: true, idempotentHint: true },
+    description: "List all recipe categories with the number of recipes in each. Categories are sorted alphabetically.",
+    inputSchema: {},
+  },
+  (ctx: DomainCtx<RecipeSelf, never>) => {
+    const log = ctx.infra.log.child({ component: "list_categories" });
+    return async (_args) => {
       log.info({ tool: "list_categories" }, "tool invoked");
       return categoryStartGuard(ctx.self).match(
         async (): Promise<CallToolResult> => {
@@ -56,9 +56,9 @@ export function listCategoriesTool(ctx: DomainCtx<RecipeSelf, never>): void {
         },
         (guard) => guard,
       );
-    },
-  );
-}
+    };
+  },
+);
 
 function formatCategoryList(categories: Array<Category>, countMap: Map<string, number>): string {
   // A category whose parentUid points at a UID not in the catalog is an

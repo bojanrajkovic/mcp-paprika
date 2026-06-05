@@ -6,6 +6,7 @@ import type { MenuSelf } from "../module.js";
 import type { Menu } from "../types.js";
 
 import { MenuUidSchema } from "../../../ids.js";
+import { defineTool } from "../../../kernel/tool.js";
 import { textResult } from "../../../shared/tools.js";
 import { toMessage } from "../../../utils/log.js";
 import { menuToMarkdown } from "../menu-helpers.js";
@@ -16,24 +17,24 @@ import { menuStartGuard } from "./guards.js";
  * via `ctx.self`, commits through `ctx.self.commitMenu`, and renders with the
  * meal-type catalog from `ctx.deps["meal-type"]`.
  */
-export function createMenuTool(ctx: DomainCtx<MenuSelf, "recipe" | "meal-type">): void {
-  const log = ctx.infra.log.child({ component: "create_menu" });
-  ctx.server.registerTool(
-    "create_menu",
-    {
-      title: "Create a menu",
-      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
-      description:
-        "Create a new menu (saved meal plan) with the given name. Rejects duplicate names " +
-        "(case-insensitive exact match); if a duplicate is found, the response includes the existing UID. " +
-        "Optionally set the day span (default 1) and free-text notes.",
-      inputSchema: {
-        name: z.string().min(1).describe("Menu name (required)"),
-        days: z.number().int().positive().optional().default(1).describe("Day span of the menu (>= 1, default 1)"),
-        notes: z.string().optional().default("").describe("Optional free-text notes for the menu"),
-      },
+export const createMenuTool = defineTool(
+  {
+    name: "create_menu",
+    title: "Create a menu",
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
+    description:
+      "Create a new menu (saved meal plan) with the given name. Rejects duplicate names " +
+      "(case-insensitive exact match); if a duplicate is found, the response includes the existing UID. " +
+      "Optionally set the day span (default 1) and free-text notes.",
+    inputSchema: {
+      name: z.string().min(1).describe("Menu name (required)"),
+      days: z.number().int().positive().optional().default(1).describe("Day span of the menu (>= 1, default 1)"),
+      notes: z.string().optional().default("").describe("Optional free-text notes for the menu"),
     },
-    async (args) => {
+  },
+  (ctx: DomainCtx<MenuSelf, "recipe" | "meal-type">) => {
+    const log = ctx.infra.log.child({ component: "create_menu" });
+    return async (args) => {
       // `.default()` is applied by the MCP SDK's Zod parse; fall back here so the
       // handler is robust to direct invocation (tests) that bypasses the schema.
       const days = args.days ?? 1;
@@ -77,6 +78,6 @@ export function createMenuTool(ctx: DomainCtx<MenuSelf, "recipe" | "meal-type">)
         },
         (guard) => guard,
       );
-    },
-  );
-}
+    };
+  },
+);

@@ -6,6 +6,7 @@ import type { MenuItem } from "../menu-item/types.js";
 import type { MenuSelf } from "../module.js";
 
 import { MenuItemUidSchema } from "../../../ids.js";
+import { defineTool } from "../../../kernel/tool.js";
 import { textResult } from "../../../shared/tools.js";
 import { toMessage } from "../../../utils/log.js";
 import { menuStartGuard } from "./guards.js";
@@ -18,19 +19,19 @@ export const deleteMenuItemInputSchema = z.object({
  * Registers `delete_menu_item`, kernel-shaped — reads/writes this module's own
  * menu-item store via `ctx.self`, committing through `ctx.self.commitMenuItem`.
  */
-export function deleteMenuItemTool(ctx: DomainCtx<MenuSelf, "recipe" | "meal-type">): void {
-  const log = ctx.infra.log.child({ component: "delete_menu_item" });
-  ctx.server.registerTool(
-    "delete_menu_item",
-    {
-      title: "Delete a menu item",
-      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
-      description:
-        "Soft-delete a menuitem (a planned recipe) from a menu by UID. Idempotent: a second delete on the " +
-        "same UID returns a friendly 'already deleted' message without re-POSTing. Requires an exact UID.",
-      inputSchema: deleteMenuItemInputSchema.shape,
-    },
-    async (args) => {
+export const deleteMenuItemTool = defineTool(
+  {
+    name: "delete_menu_item",
+    title: "Delete a menu item",
+    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
+    description:
+      "Soft-delete a menuitem (a planned recipe) from a menu by UID. Idempotent: a second delete on the " +
+      "same UID returns a friendly 'already deleted' message without re-POSTing. Requires an exact UID.",
+    inputSchema: deleteMenuItemInputSchema.shape,
+  },
+  (ctx: DomainCtx<MenuSelf, "recipe" | "meal-type">) => {
+    const log = ctx.infra.log.child({ component: "delete_menu_item" });
+    return async (args) => {
       log.info({ tool: "delete_menu_item", uid: args.uid }, "tool invoked");
       return menuStartGuard(ctx).match(
         async (): Promise<CallToolResult> => {
@@ -54,6 +55,6 @@ export function deleteMenuItemTool(ctx: DomainCtx<MenuSelf, "recipe" | "meal-typ
         },
         (guard) => guard,
       );
-    },
-  );
-}
+    };
+  },
+);

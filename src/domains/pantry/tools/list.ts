@@ -3,6 +3,7 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { DomainCtx } from "../../../kernel/registry.js";
 import type { PantrySelf } from "../module.js";
 
+import { defineTool } from "../../../kernel/tool.js";
 import { textResult } from "../../../shared/tools.js";
 import { pantryStartGuard } from "./guards.js";
 
@@ -10,18 +11,18 @@ import { pantryStartGuard } from "./guards.js";
  * Registers `list_pantry_items`, kernel-shaped — reads this module's own store via
  * `ctx.self`. Pantry is a Data-class entity: no resource (ADR-0004), no deps.
  */
-export function listPantryItemsTool(ctx: DomainCtx<PantrySelf, "aisle">): void {
-  const log = ctx.infra.log.child({ component: "list_pantry_items" });
-  ctx.server.registerTool(
-    "list_pantry_items",
-    {
-      title: "List your pantry items",
-      annotations: { readOnlyHint: true, idempotentHint: true },
-      description:
-        "List all pantry items sorted alphabetically by ingredient name. Returns the ingredient, quantity, and aisle for each item. Use read_pantry_item with the UID for full details.",
-      inputSchema: {},
-    },
-    async () => {
+export const listPantryItemsTool = defineTool(
+  {
+    name: "list_pantry_items",
+    title: "List your pantry items",
+    annotations: { readOnlyHint: true, idempotentHint: true },
+    description:
+      "List all pantry items sorted alphabetically by ingredient name. Returns the ingredient, quantity, and aisle for each item. Use read_pantry_item with the UID for full details.",
+    inputSchema: {},
+  },
+  (ctx: DomainCtx<PantrySelf, "aisle">) => {
+    const log = ctx.infra.log.child({ component: "list_pantry_items" });
+    return async () => {
       log.info({ tool: "list_pantry_items" }, "tool invoked");
       return pantryStartGuard(ctx.self).match(
         async (): Promise<CallToolResult> => {
@@ -45,6 +46,6 @@ export function listPantryItemsTool(ctx: DomainCtx<PantrySelf, "aisle">): void {
         },
         (guard) => guard,
       );
-    },
-  );
-}
+    };
+  },
+);

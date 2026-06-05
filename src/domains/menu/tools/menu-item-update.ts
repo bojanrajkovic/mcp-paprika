@@ -7,6 +7,7 @@ import type { MenuItem } from "../menu-item/types.js";
 import type { MenuSelf } from "../module.js";
 
 import { MenuItemUidSchema, RecipeUidSchema } from "../../../ids.js";
+import { defineTool } from "../../../kernel/tool.js";
 import { textResult } from "../../../shared/tools.js";
 import { toMessage } from "../../../utils/log.js";
 import { mealTypeSpecSchema, resolveOrCreateMealType } from "../../meal-type/meal-type-helpers.js";
@@ -29,21 +30,21 @@ export const updateMenuItemInputSchema = z
  * `ctx.deps.recipe.get`, resolves the meal type via `resolveOrCreateMealType` (an
  * unknown `{name}` auto-creates a custom type), and commits through `ctx.self.commitMenuItem`.
  */
-export function updateMenuItemTool(ctx: DomainCtx<MenuSelf, "recipe" | "meal-type">): void {
-  const log = ctx.infra.log.child({ component: "update_menu_item" });
-  ctx.server.registerTool(
-    "update_menu_item",
-    {
-      title: "Edit a menu item",
-      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
-      description:
-        "Update an existing menuitem's meal type or recipe link by UID. Provide at least one of type or " +
-        "recipe_uid; omitted fields keep their current values. Changing recipe_uid re-resolves the display " +
-        "name from the new recipe. To move an item to a different day, use move_menu_item. The menu link " +
-        "(menu_uid) is not editable via this tool — delete and re-add to move an item between menus.",
-      inputSchema: updateMenuItemInputSchema,
-    },
-    async (args) => {
+export const updateMenuItemTool = defineTool(
+  {
+    name: "update_menu_item",
+    title: "Edit a menu item",
+    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
+    description:
+      "Update an existing menuitem's meal type or recipe link by UID. Provide at least one of type or " +
+      "recipe_uid; omitted fields keep their current values. Changing recipe_uid re-resolves the display " +
+      "name from the new recipe. To move an item to a different day, use move_menu_item. The menu link " +
+      "(menu_uid) is not editable via this tool — delete and re-add to move an item between menus.",
+    inputSchema: updateMenuItemInputSchema,
+  },
+  (ctx: DomainCtx<MenuSelf, "recipe" | "meal-type">) => {
+    const log = ctx.infra.log.child({ component: "update_menu_item" });
+    return async (args) => {
       log.info({ tool: "update_menu_item", uid: args.uid }, "tool invoked");
       return menuStartGuard(ctx).match(
         async (): Promise<CallToolResult> => {
@@ -103,6 +104,6 @@ export function updateMenuItemTool(ctx: DomainCtx<MenuSelf, "recipe" | "meal-typ
         },
         (guard) => guard,
       );
-    },
-  );
-}
+    };
+  },
+);

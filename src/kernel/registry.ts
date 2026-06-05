@@ -7,6 +7,7 @@ import type { AnySyncResult } from "../paprika/sync-types.js";
 import type { IndexEventEmitter } from "../server/index-events.js";
 import type { Notifier } from "../server/notifier.js";
 import type { PaprikaConfig } from "../utils/config.js";
+import type { ToolDef, ToolSpec } from "./tool.js";
 
 /**
  * The domain-isolation composition kernel.
@@ -149,7 +150,7 @@ interface ErasedSync {
  */
 export interface ModuleParts<Id extends DomainId, Deps extends DomainId, Self> {
   readonly api: DomainRegistry[Id];
-  readonly tools: ReadonlyArray<(ctx: DomainCtx<Self, Deps>) => void>;
+  readonly tools: ReadonlyArray<ToolDef<Self, Deps>>;
   readonly resources?: ReadonlyArray<(ctx: DomainCtx<Self, Deps>) => void>;
   readonly syncs?: ReadonlyArray<SyncContribution<Self, Deps>>;
   readonly onReady?: BootHooks<Self, Deps>;
@@ -166,10 +167,16 @@ interface ErasedCtx extends ErasedBootCtx {
   readonly server: McpServer;
 }
 
+/** Kernel-facing erased tool def (the `Self`/`Deps` generics gone). */
+interface ErasedToolDef {
+  readonly spec: ToolSpec;
+  register(ctx: ErasedCtx): void;
+}
+
 interface ErasedBuild {
   readonly self: unknown;
   readonly api: unknown;
-  readonly tools: ReadonlyArray<(ctx: ErasedCtx) => void>;
+  readonly tools: ReadonlyArray<ErasedToolDef>;
   readonly resources?: ReadonlyArray<(ctx: ErasedCtx) => void>;
   readonly syncs?: ReadonlyArray<ErasedSync>;
   readonly onReady?: Partial<Record<BootPhase, (ctx: ErasedBootCtx) => Promise<void>>>;
@@ -299,7 +306,7 @@ interface Built {
   readonly id: string;
   readonly dependsOn: ReadonlyArray<string>;
   readonly self: unknown;
-  readonly tools: ReadonlyArray<(ctx: ErasedCtx) => void>;
+  readonly tools: ReadonlyArray<ErasedToolDef>;
   readonly resources: ReadonlyArray<(ctx: ErasedCtx) => void> | undefined;
   readonly syncs: ReadonlyArray<ErasedSync> | undefined;
   readonly onReady: Partial<Record<BootPhase, (ctx: ErasedBootCtx) => Promise<void>>> | undefined;
@@ -442,7 +449,7 @@ export async function buildKernel(
     registerAll(server: McpServer): void {
       for (const b of built) {
         const ctx: ErasedCtx = { ...bootCtxOf(b), server };
-        for (const tool of b.tools) tool(ctx);
+        for (const tool of b.tools) tool.register(ctx);
         if (b.resources !== undefined) for (const resource of b.resources) resource(ctx);
       }
     },

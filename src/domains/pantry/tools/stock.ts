@@ -6,6 +6,7 @@ import type { PantrySelf } from "../module.js";
 import type { PantryItem } from "../types.js";
 
 import { PantryItemUidSchema } from "../../../ids.js";
+import { defineTool } from "../../../kernel/tool.js";
 import { textResult } from "../../../shared/tools.js";
 import { toMessage } from "../../../utils/log.js";
 import { pantryItemToMarkdown } from "../pantry-helpers.js";
@@ -28,17 +29,17 @@ export const restockPantryItemInputSchema = z
  * verb (ADR-0008), so it lives here, not on `update_pantry_item`. Writes through
  * `ctx.self.commitPantryItem`.
  */
-export function markPantryItemOutOfStockTool(ctx: DomainCtx<PantrySelf, "aisle">): void {
-  const log = ctx.infra.log.child({ component: "mark_pantry_item_out_of_stock" });
-  ctx.server.registerTool(
-    "mark_pantry_item_out_of_stock",
-    {
-      title: "Mark a pantry item out of stock",
-      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
-      description: "Mark a pantry item as out of stock by UID (e.g. you've run out of it).",
-      inputSchema: markPantryItemOutOfStockInputSchema,
-    },
-    async (args) => {
+export const markPantryItemOutOfStockTool = defineTool(
+  {
+    name: "mark_pantry_item_out_of_stock",
+    title: "Mark a pantry item out of stock",
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
+    description: "Mark a pantry item as out of stock by UID (e.g. you've run out of it).",
+    inputSchema: markPantryItemOutOfStockInputSchema,
+  },
+  (ctx: DomainCtx<PantrySelf, "aisle">) => {
+    const log = ctx.infra.log.child({ component: "mark_pantry_item_out_of_stock" });
+    return async (args) => {
       log.info({ tool: "mark_pantry_item_out_of_stock", uid: args.uid }, "tool invoked");
       return pantryStartGuard(ctx.self).match(
         async (): Promise<CallToolResult> => {
@@ -63,25 +64,25 @@ export function markPantryItemOutOfStockTool(ctx: DomainCtx<PantrySelf, "aisle">
         },
         (guard) => guard,
       );
-    },
-  );
-}
+    };
+  },
+);
 
 /**
  * Registers `restock_pantry_item`, kernel-shaped — the in-stock intent verb's
  * mirror. Writes through `ctx.self.commitPantryItem`.
  */
-export function restockPantryItemTool(ctx: DomainCtx<PantrySelf, "aisle">): void {
-  const log = ctx.infra.log.child({ component: "restock_pantry_item" });
-  ctx.server.registerTool(
-    "restock_pantry_item",
-    {
-      title: "Mark a pantry item back in stock",
-      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
-      description: "Mark a pantry item as back in stock by UID (e.g. you've restocked it).",
-      inputSchema: restockPantryItemInputSchema,
-    },
-    async (args) => {
+export const restockPantryItemTool = defineTool(
+  {
+    name: "restock_pantry_item",
+    title: "Mark a pantry item back in stock",
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
+    description: "Mark a pantry item as back in stock by UID (e.g. you've restocked it).",
+    inputSchema: restockPantryItemInputSchema,
+  },
+  (ctx: DomainCtx<PantrySelf, "aisle">) => {
+    const log = ctx.infra.log.child({ component: "restock_pantry_item" });
+    return async (args) => {
       log.info({ tool: "restock_pantry_item", uid: args.uid }, "tool invoked");
       return pantryStartGuard(ctx.self).match(
         async (): Promise<CallToolResult> => {
@@ -106,9 +107,9 @@ export function restockPantryItemTool(ctx: DomainCtx<PantrySelf, "aisle">): void
         },
         (guard) => guard,
       );
-    },
-  );
-}
+    };
+  },
+);
 
 /** Both in/out-of-stock intent verbs, spread into the module's `tools` array. */
 export const pantryStockTools = [markPantryItemOutOfStockTool, restockPantryItemTool];

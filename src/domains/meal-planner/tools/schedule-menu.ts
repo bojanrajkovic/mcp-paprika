@@ -8,6 +8,7 @@ import type { MealType } from "../../meal-type/types.js";
 import type { Meal } from "../../meal/types.js";
 
 import { MealUidSchema, MenuUidSchema } from "../../../ids.js";
+import { defineTool } from "../../../kernel/tool.js";
 import { resolveLookup, textResult, uidOrTextLookupSchema } from "../../../shared/tools.js";
 import { formatCalendarDayWire, parseCalendarDay } from "../../../utils/dates.js";
 
@@ -90,25 +91,25 @@ function renderPlannerAdds(menuName: string, startDay: DateTime, items: Readonly
   return lines.join("\n");
 }
 
-export function scheduleMenuTool(ctx: DomainCtx<Record<never, never>, "menu" | "meal" | "recipe" | "meal-type">): void {
-  const log = ctx.infra.log.child({ component: "schedule_menu" });
-  ctx.server.registerTool(
-    "schedule_menu",
-    {
-      title: "Add a saved menu's recipes to the meal planner",
-      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
-      description:
-        "Instantiate a saved menu's recipes as meal-planner entries. Look the menu up by UID or name " +
-        "(tiered fuzzy match), then materialize each of its items into a meal dated start_date + (day − 1) " +
-        "days, posting them all in one batch. This is a one-way COPY, not a link: the planner meals carry no " +
-        "back-reference to the menu, so editing the menu later does not change them — and it is NOT idempotent, " +
-        "so re-running adds a second copy (same as Paprika.app's own Add Menu action). Recipe display names " +
-        "re-resolve from the local recipe store; if ANY recipe-linked item references an unknown recipe the " +
-        "whole batch is rejected with a per-item enumeration (freeform items keep their stored name). To remove " +
-        "a meal afterward, find it via read_meal_plan or search_meal_history and call delete_meal.",
-      inputSchema: scheduleMenuInputSchema.shape,
-    },
-    async (args) => {
+export const scheduleMenuTool = defineTool(
+  {
+    name: "schedule_menu",
+    title: "Add a saved menu's recipes to the meal planner",
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
+    description:
+      "Instantiate a saved menu's recipes as meal-planner entries. Look the menu up by UID or name " +
+      "(tiered fuzzy match), then materialize each of its items into a meal dated start_date + (day − 1) " +
+      "days, posting them all in one batch. This is a one-way COPY, not a link: the planner meals carry no " +
+      "back-reference to the menu, so editing the menu later does not change them — and it is NOT idempotent, " +
+      "so re-running adds a second copy (same as Paprika.app's own Add Menu action). Recipe display names " +
+      "re-resolve from the local recipe store; if ANY recipe-linked item references an unknown recipe the " +
+      "whole batch is rejected with a per-item enumeration (freeform items keep their stored name). To remove " +
+      "a meal afterward, find it via read_meal_plan or search_meal_history and call delete_meal.",
+    inputSchema: scheduleMenuInputSchema.shape,
+  },
+  (ctx: DomainCtx<Record<never, never>, "menu" | "meal" | "recipe" | "meal-type">) => {
+    const log = ctx.infra.log.child({ component: "schedule_menu" });
+    return async (args) => {
       log.info({ tool: "schedule_menu", ...args.menu }, "tool invoked");
       // Three readiness gates: recipe (we re-resolve display names), menu + meal-type
       // (resolve items and their types), then meal (we POST the batch).
@@ -259,6 +260,6 @@ export function scheduleMenuTool(ctx: DomainCtx<Record<never, never>, "menu" | "
           return textResult(`Failed to add menu to planner: ${message}`);
         },
       );
-    },
-  );
-}
+    };
+  },
+);

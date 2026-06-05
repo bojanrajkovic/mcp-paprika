@@ -6,6 +6,7 @@ import type { RecipeSelf } from "../module.js";
 import type { Recipe } from "../types.js";
 
 import { RecipeUidSchema } from "../../../ids.js";
+import { defineTool } from "../../../kernel/tool.js";
 import { textResult } from "../../../shared/tools.js";
 import { toMessage } from "../../../utils/log.js";
 import { recipeToMarkdown } from "../recipe-markdown.js";
@@ -40,22 +41,22 @@ export const updateRecipeInputSchema = z
  * Registers `update_recipe`, kernel-shaped — content-only edit through this
  * module's own recipe store + the bound `ctx.self.commitRecipe` chokepoint.
  */
-export function updateRecipeTool(ctx: DomainCtx<RecipeSelf, never>): void {
-  const log = ctx.infra.log.child({ component: "update_recipe" });
-  ctx.server.registerTool(
-    "update_recipe",
-    {
-      title: "Edit a recipe's details",
-      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
-      description:
-        "Update a recipe's content fields by UID (name, ingredients, directions, description, notes, " +
-        "servings, prep/cook/total time, source, difficulty, nutritional info). Only provided fields " +
-        "change; omitted fields keep their values. This tool does NOT edit rating, categories, favorite " +
-        "status, or trash state — use rate_recipe, categorize_recipe, favorite_recipe / unfavorite_recipe, " +
-        "and trash_recipe / restore_recipe for those.",
-      inputSchema: updateRecipeInputSchema,
-    },
-    async (args) => {
+export const updateRecipeTool = defineTool(
+  {
+    name: "update_recipe",
+    title: "Edit a recipe's details",
+    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
+    description:
+      "Update a recipe's content fields by UID (name, ingredients, directions, description, notes, " +
+      "servings, prep/cook/total time, source, difficulty, nutritional info). Only provided fields " +
+      "change; omitted fields keep their values. This tool does NOT edit rating, categories, favorite " +
+      "status, or trash state — use rate_recipe, categorize_recipe, favorite_recipe / unfavorite_recipe, " +
+      "and trash_recipe / restore_recipe for those.",
+    inputSchema: updateRecipeInputSchema,
+  },
+  (ctx: DomainCtx<RecipeSelf, never>) => {
+    const log = ctx.infra.log.child({ component: "update_recipe" });
+    return async (args) => {
       log.info({ tool: "update_recipe", uid: args.uid }, "tool invoked");
       return recipeColdStartGuard(ctx.self).match(
         async (): Promise<CallToolResult> => {
@@ -100,6 +101,6 @@ export function updateRecipeTool(ctx: DomainCtx<RecipeSelf, never>): void {
         },
         (guard) => guard,
       );
-    },
-  );
-}
+    };
+  },
+);

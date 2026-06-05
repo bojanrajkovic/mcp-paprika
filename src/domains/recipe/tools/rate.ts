@@ -5,6 +5,7 @@ import type { DomainCtx } from "../../../kernel/registry.js";
 import type { RecipeSelf } from "../module.js";
 
 import { RecipeUidSchema } from "../../../ids.js";
+import { defineTool } from "../../../kernel/tool.js";
 import { textResult } from "../../../shared/tools.js";
 import { toMessage } from "../../../utils/log.js";
 import { recipeToMarkdown } from "../recipe-markdown.js";
@@ -18,17 +19,17 @@ export const rateRecipeInputSchema = z
   .strict();
 
 /** Registers `rate_recipe`, kernel-shaped — writes through `ctx.self.commitRecipe`. */
-export function rateRecipeTool(ctx: DomainCtx<RecipeSelf, never>): void {
-  const log = ctx.infra.log.child({ component: "rate_recipe" });
-  ctx.server.registerTool(
-    "rate_recipe",
-    {
-      title: "Rate a recipe",
-      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
-      description: "Rate a recipe 0–5 stars by UID. Sets the recipe's star rating; pass 0 to clear it.",
-      inputSchema: rateRecipeInputSchema,
-    },
-    async (args) => {
+export const rateRecipeTool = defineTool(
+  {
+    name: "rate_recipe",
+    title: "Rate a recipe",
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
+    description: "Rate a recipe 0–5 stars by UID. Sets the recipe's star rating; pass 0 to clear it.",
+    inputSchema: rateRecipeInputSchema,
+  },
+  (ctx: DomainCtx<RecipeSelf, never>) => {
+    const log = ctx.infra.log.child({ component: "rate_recipe" });
+    return async (args) => {
       log.info({ tool: "rate_recipe", uid: args.uid }, "tool invoked");
       return recipeColdStartGuard(ctx.self).match(
         async (): Promise<CallToolResult> => {
@@ -55,6 +56,6 @@ export function rateRecipeTool(ctx: DomainCtx<RecipeSelf, never>): void {
         },
         (guard) => guard,
       );
-    },
-  );
-}
+    };
+  },
+);

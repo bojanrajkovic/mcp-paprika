@@ -7,6 +7,7 @@ import type { SemanticResult } from "../../vector-store.js";
 import type { DiscoverSelf } from "../module.js";
 
 import { recipeMetadataLines } from "../../../domains/recipe/recipe-markdown.js";
+import { defineTool } from "../../../kernel/tool.js";
 import { textResult } from "../../../shared/tools.js";
 
 export const discoverRecipesInputSchema = {
@@ -44,18 +45,18 @@ export const discoverRecipesInputSchema = {
  * whose UIDs the not-yet-synced recipe store still lacks — the enrichment filter would
  * drop them and report a misleading "no matches" rather than the retry hint.
  */
-export function discoverRecipesTool(ctx: DomainCtx<DiscoverSelf, "recipe">): void {
-  const log = ctx.infra.log.child({ component: "discover_recipes" });
-  ctx.server.registerTool(
-    "discover_recipes",
-    {
-      title: "Discover recipes by natural-language search",
-      annotations: { readOnlyHint: true, idempotentHint: true },
-      description:
-        "Discover recipes using semantic search. Finds recipes matching a natural language description of what you're looking for.",
-      inputSchema: discoverRecipesInputSchema,
-    },
-    async (args): Promise<CallToolResult> => {
+export const discoverRecipesTool = defineTool(
+  {
+    name: "discover_recipes",
+    title: "Discover recipes by natural-language search",
+    annotations: { readOnlyHint: true, idempotentHint: true },
+    description:
+      "Discover recipes using semantic search. Finds recipes matching a natural language description of what you're looking for.",
+    inputSchema: discoverRecipesInputSchema,
+  },
+  (ctx: DomainCtx<DiscoverSelf, "recipe">) => {
+    const log = ctx.infra.log.child({ component: "discover_recipes" });
+    return async (args): Promise<CallToolResult> => {
       log.info({ tool: "discover_recipes", ...args }, "tool invoked");
 
       // Feature gate: vectorStore is null when embeddings are unconfigured. The tool
@@ -105,9 +106,9 @@ export function discoverRecipesTool(ctx: DomainCtx<DiscoverSelf, "recipe">): voi
       });
 
       return textResult(lines.join("\n\n"));
-    },
-  );
-}
+    };
+  },
+);
 
 function formatDiscoverHit(index: number, recipe: Recipe, score: number, categoryNames: Array<string>): string {
   const percentage = Math.round(score * 100);

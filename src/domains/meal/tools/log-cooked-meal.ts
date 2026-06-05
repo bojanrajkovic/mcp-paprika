@@ -7,6 +7,7 @@ import type { MealSelf } from "../module.js";
 import type { Meal } from "../types.js";
 
 import { MealUidSchema, RecipeUidSchema } from "../../../ids.js";
+import { defineTool } from "../../../kernel/tool.js";
 import { textResult } from "../../../shared/tools.js";
 import { parseCalendarDayWire, todayWire } from "../../../utils/dates.js";
 import { toMessage } from "../../../utils/log.js";
@@ -34,20 +35,20 @@ export const logCookedMealInputSchema = z
  * `ctx.self.commitMealsBatch`, resolves the recipe via `ctx.deps.recipe.get` and
  * the meal type via `resolveOrCreateMealType` (an unknown `{name}` auto-creates a custom type).
  */
-export function logCookedMealTool(ctx: DomainCtx<MealSelf, "recipe" | "meal-type">): void {
-  const log = ctx.infra.log.child({ component: "log_cooked_meal" });
-  ctx.server.registerTool(
-    "log_cooked_meal",
-    {
-      title: "Log a meal you cooked",
-      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
-      description:
-        "Log a meal you cooked: records the given recipe on the planner, defaulting to today and the Dinner " +
-        "meal type — a quick way to keep your cooking history current. Pass `date` to log a different day or " +
-        "`type` for a non-dinner meal. To log a freeform (non-recipe) meal or to plan ahead in bulk, use plan_meals.",
-      inputSchema: logCookedMealInputSchema,
-    },
-    async (args) => {
+export const logCookedMealTool = defineTool(
+  {
+    name: "log_cooked_meal",
+    title: "Log a meal you cooked",
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
+    description:
+      "Log a meal you cooked: records the given recipe on the planner, defaulting to today and the Dinner " +
+      "meal type — a quick way to keep your cooking history current. Pass `date` to log a different day or " +
+      "`type` for a non-dinner meal. To log a freeform (non-recipe) meal or to plan ahead in bulk, use plan_meals.",
+    inputSchema: logCookedMealInputSchema,
+  },
+  (ctx: DomainCtx<MealSelf, "recipe" | "meal-type">) => {
+    const log = ctx.infra.log.child({ component: "log_cooked_meal" });
+    return async (args) => {
       log.info({ tool: "log_cooked_meal", recipe_uid: args.recipe_uid }, "tool invoked");
       return mealStartGuard(ctx.self, ctx.deps["meal-type"]).match(
         async (): Promise<CallToolResult> => {
@@ -116,6 +117,6 @@ export function logCookedMealTool(ctx: DomainCtx<MealSelf, "recipe" | "meal-type
         },
         (guard) => guard,
       );
-    },
-  );
-}
+    };
+  },
+);

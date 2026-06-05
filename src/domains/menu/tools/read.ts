@@ -4,6 +4,7 @@ import type { DomainCtx } from "../../../kernel/registry.js";
 import type { MenuSelf } from "../module.js";
 
 import { MenuUidSchema } from "../../../ids.js";
+import { defineTool } from "../../../kernel/tool.js";
 import { formatLookupOutcome, resolveLookup, uidOrTextLookupSchema } from "../../../shared/tools.js";
 import { menuToMarkdown } from "../menu-helpers.js";
 import { menuStartGuard } from "./guards.js";
@@ -13,29 +14,29 @@ import { menuStartGuard } from "./guards.js";
  * stores via `ctx.self`, and the meal-type catalog (for name/order rendering) via
  * `ctx.deps["meal-type"].getAll()`.
  */
-export function readMenuTool(ctx: DomainCtx<MenuSelf, "recipe" | "meal-type">): void {
-  const log = ctx.infra.log.child({ component: "read_menu" });
-  ctx.server.registerTool(
-    "read_menu",
-    {
-      title: "Read a menu and its items",
-      annotations: { readOnlyHint: true, idempotentHint: true },
-      description:
-        "Get a menu by UID or name, rendered day by day with each day's planned recipes. " +
-        "Name lookup is tiered (exact → starts-with → contains) and case-insensitive, with a " +
-        "disambiguation list when multiple menus match the same tier. Each recipe line carries " +
-        "its menuitem and recipe UIDs so you can drive update_menu_item / delete_menu_item. " +
-        'Pass exactly one shape: {"uid": "..."} or {"name": "..."}.',
-      inputSchema: {
-        lookup: uidOrTextLookupSchema({
-          uidSchema: MenuUidSchema,
-          textKey: "name",
-          entityLabel: "menu",
-          textExample: "Thanksgiving Dinner",
-        }),
-      },
+export const readMenuTool = defineTool(
+  {
+    name: "read_menu",
+    title: "Read a menu and its items",
+    annotations: { readOnlyHint: true, idempotentHint: true },
+    description:
+      "Get a menu by UID or name, rendered day by day with each day's planned recipes. " +
+      "Name lookup is tiered (exact → starts-with → contains) and case-insensitive, with a " +
+      "disambiguation list when multiple menus match the same tier. Each recipe line carries " +
+      "its menuitem and recipe UIDs so you can drive update_menu_item / delete_menu_item. " +
+      'Pass exactly one shape: {"uid": "..."} or {"name": "..."}.',
+    inputSchema: {
+      lookup: uidOrTextLookupSchema({
+        uidSchema: MenuUidSchema,
+        textKey: "name",
+        entityLabel: "menu",
+        textExample: "Thanksgiving Dinner",
+      }),
     },
-    async (args) => {
+  },
+  (ctx: DomainCtx<MenuSelf, "recipe" | "meal-type">) => {
+    const log = ctx.infra.log.child({ component: "read_menu" });
+    return async (args) => {
       log.info({ tool: "read_menu", ...args.lookup }, "tool invoked");
       return menuStartGuard(ctx).match(
         (): CallToolResult => {
@@ -55,6 +56,6 @@ export function readMenuTool(ctx: DomainCtx<MenuSelf, "recipe" | "meal-type">): 
         },
         (guard) => guard,
       );
-    },
-  );
-}
+    };
+  },
+);

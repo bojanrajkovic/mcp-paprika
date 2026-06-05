@@ -7,6 +7,7 @@ import type { DomainCtx } from "../../../kernel/registry.js";
 import type { MealSelf } from "../module.js";
 
 import { RecipeUidSchema } from "../../../ids.js";
+import { defineTool } from "../../../kernel/tool.js";
 import { textResult } from "../../../shared/tools.js";
 import { parseInstant } from "../../../utils/dates.js";
 import { formatMealTypeResolveError, mealTypeSpecSchema } from "../../meal-type/meal-type-helpers.js";
@@ -47,22 +48,22 @@ export const searchMealHistoryInputSchema = z
  * the set of recipe UIDs in it through `ctx.deps.recipe` — categories are a
  * recipe-domain concern, so meal needs NO `category` dep.
  */
-export function searchMealHistoryTool(ctx: DomainCtx<MealSelf, "recipe" | "meal-type">): void {
-  const log = ctx.infra.log.child({ component: "search_meal_history" });
-  ctx.server.registerTool(
-    "search_meal_history",
-    {
-      title: "Search past cooked meals by recipe or category",
-      annotations: { readOnlyHint: true, idempotentHint: true },
-      description:
-        'Search PAST meals (recall/browse), by a specific recipe, a recipe category ("class"), a meal type, ' +
-        'and/or a date window — any combination, ANDed. Answers "when did we last have tacos", "how often do ' +
-        'we eat Italian", "show the dinners we had in March", or "what have we eaten lately". With no filters ' +
-        "it returns the last 30 days. Future planner entries are excluded (use read_meal_plan for upcoming " +
-        "meals). Results group by date (newest first), with a count, the last-made date, and pagination.",
-      inputSchema: searchMealHistoryInputSchema,
-    },
-    async (args) => {
+export const searchMealHistoryTool = defineTool(
+  {
+    name: "search_meal_history",
+    title: "Search past cooked meals by recipe or category",
+    annotations: { readOnlyHint: true, idempotentHint: true },
+    description:
+      'Search PAST meals (recall/browse), by a specific recipe, a recipe category ("class"), a meal type, ' +
+      'and/or a date window — any combination, ANDed. Answers "when did we last have tacos", "how often do ' +
+      'we eat Italian", "show the dinners we had in March", or "what have we eaten lately". With no filters ' +
+      "it returns the last 30 days. Future planner entries are excluded (use read_meal_plan for upcoming " +
+      "meals). Results group by date (newest first), with a count, the last-made date, and pagination.",
+    inputSchema: searchMealHistoryInputSchema,
+  },
+  (ctx: DomainCtx<MealSelf, "recipe" | "meal-type">) => {
+    const log = ctx.infra.log.child({ component: "search_meal_history" });
+    return async (args) => {
       log.info({ tool: "search_meal_history", ...args }, "tool invoked");
       return mealStartGuard(ctx.self, ctx.deps["meal-type"]).match(
         async (): Promise<CallToolResult> => {
@@ -186,6 +187,6 @@ export function searchMealHistoryTool(ctx: DomainCtx<MealSelf, "recipe" | "meal-
         },
         (guard) => guard,
       );
-    },
-  );
-}
+    };
+  },
+);

@@ -6,6 +6,7 @@ import type { RecipeSelf } from "../module.js";
 import type { Recipe } from "../types.js";
 
 import { RecipeUidSchema } from "../../../ids.js";
+import { defineTool } from "../../../kernel/tool.js";
 import { PaprikaAPIError } from "../../../paprika/errors.js";
 import { textResult } from "../../../shared/tools.js";
 import { toMessage } from "../../../utils/log.js";
@@ -23,19 +24,19 @@ export const restoreRecipeInputSchema = z
  * `ctx.infra.client.getRecipe`, then commits/reconciles through the bound `ctx.self`
  * write helpers.
  */
-export function restoreRecipeTool(ctx: DomainCtx<RecipeSelf, never>): void {
-  const log = ctx.infra.log.child({ component: "restore_recipe" });
-  ctx.server.registerTool(
-    "restore_recipe",
-    {
-      title: "Restore a recipe from the trash",
-      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
-      description:
-        "Restore a trashed recipe by UID, moving it out of the trash back into the active library. " +
-        "The inverse of trash_recipe; use purge_recipe to permanently delete a trashed recipe instead.",
-      inputSchema: restoreRecipeInputSchema,
-    },
-    async (args) => {
+export const restoreRecipeTool = defineTool(
+  {
+    name: "restore_recipe",
+    title: "Restore a recipe from the trash",
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
+    description:
+      "Restore a trashed recipe by UID, moving it out of the trash back into the active library. " +
+      "The inverse of trash_recipe; use purge_recipe to permanently delete a trashed recipe instead.",
+    inputSchema: restoreRecipeInputSchema,
+  },
+  (ctx: DomainCtx<RecipeSelf, never>) => {
+    const log = ctx.infra.log.child({ component: "restore_recipe" });
+    return async (args) => {
       log.info({ tool: "restore_recipe", uid: args.uid }, "tool invoked");
       return recipeColdStartGuard(ctx.self).match(
         async (): Promise<CallToolResult> => {
@@ -88,6 +89,6 @@ export function restoreRecipeTool(ctx: DomainCtx<RecipeSelf, never>): void {
         },
         (guard) => guard,
       );
-    },
-  );
-}
+    };
+  },
+);

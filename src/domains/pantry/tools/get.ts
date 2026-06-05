@@ -4,6 +4,7 @@ import type { DomainCtx } from "../../../kernel/registry.js";
 import type { PantrySelf } from "../module.js";
 
 import { PantryItemUidSchema } from "../../../ids.js";
+import { defineTool } from "../../../kernel/tool.js";
 import { formatLookupOutcome, resolveLookup, uidOrTextLookupSchema } from "../../../shared/tools.js";
 import { pantryItemToMarkdown } from "../pantry-helpers.js";
 import { pantryStartGuard } from "./guards.js";
@@ -13,30 +14,30 @@ import { pantryStartGuard } from "./guards.js";
  * `ctx.self`. Uses shared lookup/format helpers and `pantryItemToMarkdown` for
  * fuzzy-match resolution and rendering.
  */
-export function getPantryItemTool(ctx: DomainCtx<PantrySelf, "aisle">): void {
-  const log = ctx.infra.log.child({ component: "read_pantry_item" });
-  ctx.server.registerTool(
-    "read_pantry_item",
-    {
-      title: "Read a pantry item",
-      annotations: { readOnlyHint: true, idempotentHint: true },
-      description:
-        "Get a pantry item by UID or ingredient name. Ingredient lookup is fuzzy " +
-        "(exact → starts-with → contains) and case-insensitive, with a disambiguation list " +
-        "when multiple items match the same tier. " +
-        'Pass exactly one shape: {"uid": "..."} or {"ingredient": "..."}.',
-      inputSchema: {
-        lookup: uidOrTextLookupSchema({
-          uidSchema: PantryItemUidSchema,
-          textKey: "ingredient",
-          entityLabel: "pantry item",
-          // Override the template — "Pantry item ingredient fuzzy match" reads
-          // awkwardly; the natural phrasing matches the pre-#142 describe text.
-          textDescribe: 'Ingredient name fuzzy match, e.g. {"ingredient": "Olive Oil"}.',
-        }),
-      },
+export const getPantryItemTool = defineTool(
+  {
+    name: "read_pantry_item",
+    title: "Read a pantry item",
+    annotations: { readOnlyHint: true, idempotentHint: true },
+    description:
+      "Get a pantry item by UID or ingredient name. Ingredient lookup is fuzzy " +
+      "(exact → starts-with → contains) and case-insensitive, with a disambiguation list " +
+      "when multiple items match the same tier. " +
+      'Pass exactly one shape: {"uid": "..."} or {"ingredient": "..."}.',
+    inputSchema: {
+      lookup: uidOrTextLookupSchema({
+        uidSchema: PantryItemUidSchema,
+        textKey: "ingredient",
+        entityLabel: "pantry item",
+        // Override the template — "Pantry item ingredient fuzzy match" reads
+        // awkwardly; the natural phrasing matches the pre-#142 describe text.
+        textDescribe: 'Ingredient name fuzzy match, e.g. {"ingredient": "Olive Oil"}.',
+      }),
     },
-    async (args) => {
+  },
+  (ctx: DomainCtx<PantrySelf, "aisle">) => {
+    const log = ctx.infra.log.child({ component: "read_pantry_item" });
+    return async (args) => {
       log.info({ tool: "read_pantry_item", ...args.lookup }, "tool invoked");
       return pantryStartGuard(ctx.self).match(
         async (): Promise<CallToolResult> => {
@@ -53,6 +54,6 @@ export function getPantryItemTool(ctx: DomainCtx<PantrySelf, "aisle">): void {
         },
         (guard) => guard,
       );
-    },
-  );
-}
+    };
+  },
+);

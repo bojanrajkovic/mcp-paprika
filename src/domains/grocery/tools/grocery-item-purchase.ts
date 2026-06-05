@@ -6,6 +6,7 @@ import type { GroceryItem } from "../grocery-item/types.js";
 import type { GrocerySelf } from "../module.js";
 
 import { GroceryItemUidSchema } from "../../../ids.js";
+import { defineTool } from "../../../kernel/tool.js";
 import { textResult } from "../../../shared/tools.js";
 import { toMessage } from "../../../utils/log.js";
 import { groceryItemToMarkdown } from "../grocery-helpers.js";
@@ -21,17 +22,17 @@ export const markGroceryItemPurchasedInputSchema = z
  * Registers `mark_grocery_item_purchased`, kernel-shaped — the purchased intent verb,
  * writing through this module's bound `ctx.self.commitGroceryItem`.
  */
-export function markGroceryItemPurchasedTool(ctx: DomainCtx<GrocerySelf, "aisle" | "pantry">): void {
-  const log = ctx.infra.log.child({ component: "mark_grocery_item_purchased" });
-  ctx.server.registerTool(
-    "mark_grocery_item_purchased",
-    {
-      title: "Mark a grocery item purchased",
-      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
-      description: "Mark a grocery item as purchased (checked off) by UID.",
-      inputSchema: markGroceryItemPurchasedInputSchema,
-    },
-    async (args) => {
+export const markGroceryItemPurchasedTool = defineTool(
+  {
+    name: "mark_grocery_item_purchased",
+    title: "Mark a grocery item purchased",
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
+    description: "Mark a grocery item as purchased (checked off) by UID.",
+    inputSchema: markGroceryItemPurchasedInputSchema,
+  },
+  (ctx: DomainCtx<GrocerySelf, "aisle" | "pantry">) => {
+    const log = ctx.infra.log.child({ component: "mark_grocery_item_purchased" });
+    return async (args) => {
       log.info({ tool: "mark_grocery_item_purchased", uid: args.uid }, "tool invoked");
       return groceryStartGuard(ctx.self).match(
         async (): Promise<CallToolResult> => {
@@ -57,6 +58,6 @@ export function markGroceryItemPurchasedTool(ctx: DomainCtx<GrocerySelf, "aisle"
         },
         (guard) => guard,
       );
-    },
-  );
-}
+    };
+  },
+);

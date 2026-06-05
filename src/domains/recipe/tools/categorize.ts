@@ -7,6 +7,7 @@ import type { RecipeSelf } from "../module.js";
 import type { Recipe } from "../types.js";
 
 import { RecipeUidSchema } from "../../../ids.js";
+import { defineTool } from "../../../kernel/tool.js";
 import { textResult } from "../../../shared/tools.js";
 import { toMessage } from "../../../utils/log.js";
 import { recipeToMarkdown, resolveCategoryRefs } from "../recipe-markdown.js";
@@ -41,20 +42,20 @@ export const categorizeRecipeInputSchema = z
  * resolution and name lookup are intra-domain (no deps). Writes through the bound
  * `ctx.self.commitRecipe` chokepoint.
  */
-export function categorizeRecipeTool(ctx: DomainCtx<RecipeSelf, never>): void {
-  const log = ctx.infra.log.child({ component: "categorize_recipe" });
-  ctx.server.registerTool(
-    "categorize_recipe",
-    {
-      title: "Add, replace, or remove a recipe's categories",
-      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
-      description:
-        "Add, replace, or remove a recipe's categories by UID. Pass category names or UIDs and a mode: " +
-        "add (union with current — the default), replace (set exactly these), or remove (drop these). " +
-        "Unknown category names are skipped with a warning. To edit other recipe fields, use update_recipe.",
-      inputSchema: categorizeRecipeInputSchema,
-    },
-    async (args) => {
+export const categorizeRecipeTool = defineTool(
+  {
+    name: "categorize_recipe",
+    title: "Add, replace, or remove a recipe's categories",
+    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
+    description:
+      "Add, replace, or remove a recipe's categories by UID. Pass category names or UIDs and a mode: " +
+      "add (union with current — the default), replace (set exactly these), or remove (drop these). " +
+      "Unknown category names are skipped with a warning. To edit other recipe fields, use update_recipe.",
+    inputSchema: categorizeRecipeInputSchema,
+  },
+  (ctx: DomainCtx<RecipeSelf, never>) => {
+    const log = ctx.infra.log.child({ component: "categorize_recipe" });
+    return async (args) => {
       log.info({ tool: "categorize_recipe", uid: args.uid, mode: args.mode }, "tool invoked");
       return recipeColdStartGuard(ctx.self).match(
         async (): Promise<CallToolResult> => {
@@ -104,6 +105,6 @@ export function categorizeRecipeTool(ctx: DomainCtx<RecipeSelf, never>): void {
         },
         (guard) => guard,
       );
-    },
-  );
-}
+    };
+  },
+);
