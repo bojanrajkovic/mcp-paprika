@@ -149,9 +149,9 @@ describe("DiskCache<T> — generic contract", () => {
   describe("per-subcache mutex serialization + independence", () => {
     it("interleaved puts + flushes on two independent subcaches all land", async () => {
       // Two caches over the same cache dir, different subdirs — the post-kernel
-      // production shape (each module owns one subcache; the old DiskCacheRoot
-      // coordinator is gone). Each owns its own mutex, so concurrent flushes
-      // across them never block one another and every write lands.
+      // production shape: each module owns one subcache, with no central
+      // coordinator. Each owns its own mutex, so concurrent flushes across them
+      // never block one another and every write lands.
       const alpha = makeCache(tmp.dir(), { ...widgetDescriptor, subdir: "alpha" });
       const beta = makeCache(tmp.dir(), { ...widgetDescriptor, subdir: "beta" });
       await Promise.all([alpha.init(), beta.init()]);
