@@ -2,7 +2,7 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 
 import type { DomainCtx } from "../../../kernel/registry.js";
-import type { RecipeSelf } from "../module.js";
+import type { RecipeState } from "../module.js";
 import type { Recipe } from "../types.js";
 
 import { RecipeUidSchema } from "../../../ids.js";
@@ -21,7 +21,7 @@ export const restoreRecipeInputSchema = z
 
 /**
  * Registers `restore_recipe`, kernel-shaped — fetches authoritative trash state via
- * `ctx.infra.client.getRecipe`, then commits/reconciles through the bound `ctx.self`
+ * `ctx.infra.client.getRecipe`, then commits/reconciles through the bound `ctx.state`
  * write helpers.
  */
 export const restoreRecipeTool = defineTool(
@@ -34,11 +34,11 @@ export const restoreRecipeTool = defineTool(
       "The inverse of trash_recipe; use purge_recipe to permanently delete a trashed recipe instead.",
     inputSchema: restoreRecipeInputSchema,
   },
-  (ctx: DomainCtx<RecipeSelf, never>) => {
+  (ctx: DomainCtx<RecipeState, never>) => {
     const log = ctx.infra.log.child({ component: "restore_recipe" });
     return async (args) => {
       log.info({ tool: "restore_recipe", uid: args.uid }, "tool invoked");
-      return recipeColdStartGuard(ctx.self).match(
+      return recipeColdStartGuard(ctx.state).match(
         async (): Promise<CallToolResult> => {
           // Fetch authoritative trash state from Paprika rather than the local store,
           // mirroring purge_recipe. A recipe trashed in the Paprika app reaches this
@@ -54,7 +54,7 @@ export const restoreRecipeTool = defineTool(
               // Never existed, or already permanently purged from the trash. Drop a
               // stale local phantom so a later read/search can't serve it.
               log.info({ uid: args.uid }, "restore_recipe: recipe not found (404)");
-              await ctx.self.reconcileLocalRecipeAbsent(args.uid);
+              await ctx.state.reconcileLocalRecipeAbsent(args.uid);
               return textResult(`No recipe found with UID "${args.uid}" (it may not exist or was already deleted).`);
             }
             // Transient/upstream failure — don't masquerade as "already active".
@@ -66,7 +66,7 @@ export const restoreRecipeTool = defineTool(
           if (!recipe.inTrash) {
             // Authoritative truth: it's live. Heal a stale local copy that still shows
             // it trashed (or is missing) so reads/search agree before the next sync.
-            await ctx.self.reconcileLocalRecipe(recipe);
+            await ctx.state.reconcileLocalRecipe(recipe);
             return textResult(`Recipe "${recipe.name}" is already in your active library.`);
           }
 
@@ -77,14 +77,14 @@ export const restoreRecipeTool = defineTool(
           let saved: Recipe;
           try {
             saved = await ctx.infra.client.saveRecipe(updated);
-            await ctx.self.commitRecipe(saved);
+            await ctx.state.commitRecipe(saved);
           } catch (error) {
             const message = toMessage(error);
             log.error({ err: error, uid: args.uid }, "saveRecipe failed");
             return textResult(`Failed to restore recipe: ${message}`);
           }
 
-          const categoryNames = ctx.self.category.store.resolveNames(saved.categories);
+          const categoryNames = ctx.state.category.store.resolveNames(saved.categories);
           return textResult(recipeToMarkdown(saved, categoryNames));
         },
         (guard) => guard,

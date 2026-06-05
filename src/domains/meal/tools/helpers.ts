@@ -4,7 +4,7 @@ import { err, ok, type Result } from "neverthrow";
 
 import type { MealTypeApi } from "../../meal-type/api.js";
 import type { RecipeApi } from "../../recipe/api.js";
-import type { MealSelf } from "../module.js";
+import type { MealState } from "../module.js";
 import type { Meal } from "../types.js";
 
 import { textResult } from "../../../shared/tools.js";
@@ -24,7 +24,7 @@ import { mealToMarkdown } from "../meal-helpers.js";
  * meal type" errors that look like input mistakes but are actually a cold-cache
  * state. Guarding both up front turns that into a clear "still syncing" message.
  */
-export function mealStartGuard(self: MealSelf, mealType: MealTypeApi): Result<void, CallToolResult> {
+export function mealStartGuard(self: MealState, mealType: MealTypeApi): Result<void, CallToolResult> {
   if (!self.store.hasSynced || !mealType.hasSynced()) {
     return err(textResult("Meal data is not yet synced. Try again in a few seconds."));
   }
@@ -39,7 +39,7 @@ export function mealStartGuard(self: MealSelf, mealType: MealTypeApi): Result<vo
  * out an increasing counter per date so multiple meals in ONE batch that share a
  * date get sequential flags.
  */
-export function makeMealOrderFlagAssigner(self: MealSelf): (date: string) => number {
+export function makeMealOrderFlagAssigner(self: MealState): (date: string) => number {
   const next = new Map<string, number>();
   return (date) => {
     const flag = next.get(date) ?? (self.store.getMaxOrderFlagOn(date) ?? -1) + 1;

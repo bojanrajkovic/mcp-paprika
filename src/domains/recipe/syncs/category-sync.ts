@@ -1,6 +1,6 @@
 import type { SyncContribution } from "../../../kernel/registry.js";
 import type { Category } from "../category/types.js";
-import type { RecipeSelf } from "../module.js";
+import type { RecipeState } from "../module.js";
 
 import { syncReplaceAllEntity } from "../../../paprika/sync.js";
 
@@ -25,14 +25,14 @@ function categoriesEqual(a: Category, b: Category): boolean {
  * them). The reconcile emits `category-changed` on the kernel re-index seam, which
  * discover's `index` boot hook subscribes to.
  */
-export function categoriesSync(self: RecipeSelf): SyncContribution<RecipeSelf, never> {
+export function categoriesSync(state: RecipeState): SyncContribution<RecipeState, never> {
   return {
     tier: "reference",
     reconcile: async (ctx) => {
       const changes = await syncReplaceAllEntity({
         fetch: () => ctx.infra.client.listCategories(),
-        cache: ctx.self.category.cache,
-        store: ctx.self.category.store,
+        cache: ctx.state.category.cache,
+        store: ctx.state.category.store,
         equals: categoriesEqual,
         label: "categories",
         log: ctx.infra.log,
@@ -48,6 +48,6 @@ export function categoriesSync(self: RecipeSelf): SyncContribution<RecipeSelf, n
         });
       }
     },
-    sweep: () => self.category.store.sweepPending(),
+    sweep: () => state.category.store.sweepPending(),
   };
 }

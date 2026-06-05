@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import type { DomainCtx } from "../../../kernel/registry.js";
 import type { MenuItem } from "../menu-item/types.js";
-import type { MenuSelf } from "../module.js";
+import type { MenuState } from "../module.js";
 
 import { MenuItemUidSchema } from "../../../ids.js";
 import { defineTool } from "../../../kernel/tool.js";
@@ -17,7 +17,7 @@ export const deleteMenuItemInputSchema = z.object({
 
 /**
  * Registers `delete_menu_item`, kernel-shaped — reads/writes this module's own
- * menu-item store via `ctx.self`, committing through `ctx.self.commitMenuItem`.
+ * menu-item store via `ctx.state`, committing through `ctx.state.commitMenuItem`.
  */
 export const deleteMenuItemTool = defineTool(
   {
@@ -29,14 +29,14 @@ export const deleteMenuItemTool = defineTool(
       "same UID returns a friendly 'already deleted' message without re-POSTing. Requires an exact UID.",
     inputSchema: deleteMenuItemInputSchema.shape,
   },
-  (ctx: DomainCtx<MenuSelf, "recipe" | "meal-type">) => {
+  (ctx: DomainCtx<MenuState, "recipe" | "meal-type">) => {
     const log = ctx.infra.log.child({ component: "delete_menu_item" });
     return async (args) => {
       log.info({ tool: "delete_menu_item", uid: args.uid }, "tool invoked");
       return menuStartGuard(ctx).match(
         async (): Promise<CallToolResult> => {
           const uid = args.uid;
-          const existing = ctx.self.items.store.get(uid);
+          const existing = ctx.state.items.store.get(uid);
 
           if (existing === undefined) {
             return textResult(`No menu item found with UID "${uid}" (it may not exist or was already deleted).`);
@@ -44,7 +44,7 @@ export const deleteMenuItemTool = defineTool(
           const trashed: MenuItem = { ...existing, deleted: true };
           try {
             const saved = (await ctx.infra.client.saveMenuItems([trashed]))[0]!;
-            await ctx.self.commitMenuItem(saved);
+            await ctx.state.commitMenuItem(saved);
           } catch (error) {
             const message = toMessage(error);
             log.error({ err: error, uid }, "saveMenuItems (delete_menu_item) failed");

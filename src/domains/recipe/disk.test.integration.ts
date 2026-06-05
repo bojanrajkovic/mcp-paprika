@@ -18,7 +18,7 @@ import "../../kernel/modules.generated.js";
 
 /**
  * Build the recipe module against a (pre-seeded) cache dir WITHOUT running a sync
- * cycle — the recipe `.self` factory hydrates its store from `<cacheDir>/recipes` at
+ * cycle — the recipe `.state` factory hydrates its store from `<cacheDir>/recipes` at
  * construction, exactly as on a warm restart — then register its tools on a stub
  * server. Recipe is dependency-free (`defineModule("recipe", [])`), so its closure is
  * just itself. Returns `callTool` so a cold-started `search_recipes` can be exercised
@@ -32,7 +32,7 @@ async function coldStartRecipeTools(
   if (recipeModule === undefined) throw new Error("recipe module not registered");
   const built = await recipeModule.build(infra);
   const { server, callTool } = makeTestServer();
-  const ctx = { self: built.self, deps: {}, infra, server };
+  const ctx = { state: built.state, deps: {}, infra, server };
   for (const tool of built.tools) tool.register(ctx);
   return callTool;
 }
@@ -212,7 +212,7 @@ describe("RecipeDiskCache cold-start persistence integration", () => {
       await cache1.put(recipe2);
       await cache1.flush();
 
-      // Rebuild the recipe module against the persisted cache dir: its `.self` hydrates
+      // Rebuild the recipe module against the persisted cache dir: its `.state` hydrates
       // the store from disk, exactly as on a warm restart, before any sync runs.
       const callTool = await coldStartRecipeTools(tmp.dir());
 

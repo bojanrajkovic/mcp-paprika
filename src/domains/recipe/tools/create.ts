@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import type { CategoryUid } from "../../../ids.js";
 import type { DomainCtx } from "../../../kernel/registry.js";
-import type { RecipeSelf } from "../module.js";
+import type { RecipeState } from "../module.js";
 import type { Recipe } from "../types.js";
 
 import { RecipeUidSchema } from "../../../ids.js";
@@ -16,8 +16,8 @@ import { recipeColdStartGuard } from "./guards.js";
 
 /**
  * Registers `create_recipe`, kernel-shaped — resolves category refs against this
- * module's own category store, writes through `ctx.self.commitRecipe` (the bound
- * write chokepoint), and reads names via `ctx.self.category.store`.
+ * module's own category store, writes through `ctx.state.commitRecipe` (the bound
+ * write chokepoint), and reads names via `ctx.state.category.store`.
  */
 export const createRecipeTool = defineTool(
   {
@@ -52,16 +52,16 @@ export const createRecipeTool = defineTool(
       nutritionalInfo: z.string().optional().describe("Nutritional information"),
     },
   },
-  (ctx: DomainCtx<RecipeSelf, never>) => {
+  (ctx: DomainCtx<RecipeState, never>) => {
     const log = ctx.infra.log.child({ component: "create_recipe" });
     return async (args) => {
       log.info({ tool: "create_recipe", name: args.name }, "tool invoked");
-      return recipeColdStartGuard(ctx.self).match(
+      return recipeColdStartGuard(ctx.state).match(
         async (): Promise<CallToolResult> => {
           // Resolve category refs (UID or name) → UIDs (AC2.4, AC2.7)
           const { uids: categories, unknown: unknownCategories } =
             args.categories && args.categories.length > 0
-              ? resolveCategoryRefs(ctx.self.category.store.getAll(), args.categories)
+              ? resolveCategoryRefs(ctx.state.category.store.getAll(), args.categories)
               : { uids: [] as Array<CategoryUid>, unknown: [] as Array<string> };
 
           const warnings = unknownCategories.map((ref) => `Warning: category "${ref}" not found and was skipped.`);
@@ -110,7 +110,7 @@ export const createRecipeTool = defineTool(
           let saved: Recipe;
           try {
             saved = await ctx.infra.client.saveRecipe(newRecipe); // AC2.5
-            await ctx.self.commitRecipe(saved); // AC2.5, AC2.6
+            await ctx.state.commitRecipe(saved); // AC2.5, AC2.6
           } catch (error) {
             // AC2.8: store/cache not updated — commitRecipe not reached
             const message = toMessage(error);
@@ -118,7 +118,7 @@ export const createRecipeTool = defineTool(
             return textResult(`Failed to create recipe: ${message}`);
           }
 
-          const categoryNames = ctx.self.category.store.resolveNames(saved.categories);
+          const categoryNames = ctx.state.category.store.resolveNames(saved.categories);
           const markdown = recipeToMarkdown(saved, categoryNames);
           const prefix = warnings.length > 0 ? warnings.join("\n") + "\n\n" : "";
           // The UID is rendered by recipeToMarkdown, so the caller can chain

@@ -1,5 +1,5 @@
 import type { SyncContribution } from "../../../kernel/registry.js";
-import type { MealSelf } from "../module.js";
+import type { MealState } from "../module.js";
 import type { Meal } from "../types.js";
 
 import { syncReplaceAllEntity } from "../../../paprika/sync.js";
@@ -30,19 +30,19 @@ function mealsEqual(a: Meal, b: Meal): boolean {
  * fetch failure does not abort the rest of the additive phase. Meals have no MCP
  * resource surface, so this emits NO `sync:complete` (returns `void`).
  */
-export function mealSync(self: MealSelf): SyncContribution<MealSelf, never> {
+export function mealSync(state: MealState): SyncContribution<MealState, never> {
   return {
     tier: "additive",
     reconcile: async (ctx) => {
       await syncReplaceAllEntity({
         fetch: () => ctx.infra.client.listMeals(),
-        cache: ctx.self.cache,
-        store: ctx.self.store,
+        cache: ctx.state.cache,
+        store: ctx.state.store,
         equals: mealsEqual,
         label: "meals",
         log: ctx.infra.log,
       });
     },
-    sweep: () => self.store.sweepPending(),
+    sweep: () => state.store.sweepPending(),
   };
 }

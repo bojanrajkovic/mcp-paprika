@@ -20,14 +20,14 @@ function makeMockVectorStore(results: ReadonlyArray<{ uid: string; score: number
   };
 }
 
-// Inject a mock vector store into the discover module's self after setup.
-// `DiscoverSelf.vectorStore` is TypeScript-readonly but a plain JS object at runtime,
+// Inject a mock vector store into the discover module's state after setup.
+// `DiscoverState.vectorStore` is TypeScript-readonly but a plain JS object at runtime,
 // so the cast lets us replace the null default with a spy.
 function injectVectorStore(
   kh: ReturnType<typeof useKernelHarness>,
   mockVs: ReturnType<typeof makeMockVectorStore>,
 ): void {
-  (kh.self() as { vectorStore: VectorStore | null }).vectorStore = fromAny(mockVs);
+  (kh.state() as { vectorStore: VectorStore | null }).vectorStore = fromAny(mockVs);
 }
 
 describe("discover_recipes tool", () => {

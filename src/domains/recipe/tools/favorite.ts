@@ -2,7 +2,7 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 
 import type { DomainCtx } from "../../../kernel/registry.js";
-import type { RecipeSelf } from "../module.js";
+import type { RecipeState } from "../module.js";
 
 import { RecipeUidSchema } from "../../../ids.js";
 import { defineTool } from "../../../kernel/tool.js";
@@ -23,7 +23,7 @@ export const unfavoriteRecipeInputSchema = z
   })
   .strict();
 
-/** Registers `favorite_recipe`, kernel-shaped — writes through `ctx.self.commitRecipe`. */
+/** Registers `favorite_recipe`, kernel-shaped — writes through `ctx.state.commitRecipe`. */
 export const favoriteRecipeTool = defineTool(
   {
     name: "favorite_recipe",
@@ -32,13 +32,13 @@ export const favoriteRecipeTool = defineTool(
     description: "Mark a recipe as a favorite by UID (adds it to the Favorites list).",
     inputSchema: favoriteRecipeInputSchema,
   },
-  (ctx: DomainCtx<RecipeSelf, never>) => {
+  (ctx: DomainCtx<RecipeState, never>) => {
     const log = ctx.infra.log.child({ component: "favorite_recipe" });
     return async (args) => {
       log.info({ tool: "favorite_recipe", uid: args.uid }, "tool invoked");
-      return recipeColdStartGuard(ctx.self).match(
+      return recipeColdStartGuard(ctx.state).match(
         async (): Promise<CallToolResult> => {
-          const existing = ctx.self.recipe.store.get(args.uid);
+          const existing = ctx.state.recipe.store.get(args.uid);
 
           if (!existing) {
             return textResult(`No recipe found with UID "${args.uid}" (it may not exist or was already deleted).`);
@@ -49,14 +49,14 @@ export const favoriteRecipeTool = defineTool(
           let saved: typeof existing;
           try {
             saved = await ctx.infra.client.saveRecipe(updated);
-            await ctx.self.commitRecipe(saved);
+            await ctx.state.commitRecipe(saved);
           } catch (error) {
             const message = toMessage(error);
             log.error({ err: error, uid: args.uid }, "saveRecipe failed");
             return textResult(`Failed to favorite recipe: ${message}`);
           }
 
-          const categoryNames = ctx.self.category.store.resolveNames(saved.categories);
+          const categoryNames = ctx.state.category.store.resolveNames(saved.categories);
           return textResult(recipeToMarkdown(saved, categoryNames));
         },
         (guard) => guard,
@@ -65,7 +65,7 @@ export const favoriteRecipeTool = defineTool(
   },
 );
 
-/** Registers `unfavorite_recipe`, kernel-shaped — writes through `ctx.self.commitRecipe`. */
+/** Registers `unfavorite_recipe`, kernel-shaped — writes through `ctx.state.commitRecipe`. */
 export const unfavoriteRecipeTool = defineTool(
   {
     name: "unfavorite_recipe",
@@ -74,13 +74,13 @@ export const unfavoriteRecipeTool = defineTool(
     description: "Remove a recipe from the Favorites list by UID.",
     inputSchema: unfavoriteRecipeInputSchema,
   },
-  (ctx: DomainCtx<RecipeSelf, never>) => {
+  (ctx: DomainCtx<RecipeState, never>) => {
     const log = ctx.infra.log.child({ component: "unfavorite_recipe" });
     return async (args) => {
       log.info({ tool: "unfavorite_recipe", uid: args.uid }, "tool invoked");
-      return recipeColdStartGuard(ctx.self).match(
+      return recipeColdStartGuard(ctx.state).match(
         async (): Promise<CallToolResult> => {
-          const existing = ctx.self.recipe.store.get(args.uid);
+          const existing = ctx.state.recipe.store.get(args.uid);
 
           if (!existing) {
             return textResult(`No recipe found with UID "${args.uid}" (it may not exist or was already deleted).`);
@@ -91,14 +91,14 @@ export const unfavoriteRecipeTool = defineTool(
           let saved: typeof existing;
           try {
             saved = await ctx.infra.client.saveRecipe(updated);
-            await ctx.self.commitRecipe(saved);
+            await ctx.state.commitRecipe(saved);
           } catch (error) {
             const message = toMessage(error);
             log.error({ err: error, uid: args.uid }, "saveRecipe failed");
             return textResult(`Failed to unfavorite recipe: ${message}`);
           }
 
-          const categoryNames = ctx.self.category.store.resolveNames(saved.categories);
+          const categoryNames = ctx.state.category.store.resolveNames(saved.categories);
           return textResult(recipeToMarkdown(saved, categoryNames));
         },
         (guard) => guard,

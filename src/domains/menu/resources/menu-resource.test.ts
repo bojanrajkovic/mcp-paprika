@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import type { MealTypeUid, MenuItemUid, MenuUid } from "../../../ids.js";
-import type { MenuSelf } from "../module.js";
+import type { MenuState } from "../module.js";
 
 import { makeMealType } from "../../../../test/cache/__fixtures__/meals.js";
 import { makeMenu, makeMenuItem } from "../../../../test/cache/__fixtures__/menus.js";
@@ -60,7 +60,7 @@ describe("menu MCP resource", () => {
         menuItems: [],
         mealTypes: [makeMealType({ uid: "dinner-uid" as MealTypeUid, name: "Dinner", orderFlag: 2, originalType: 2 })],
       });
-      (kh.self() as MenuSelf).menus.store.setLastSyncedAt(new Date("2026-05-30T12:00:00Z"));
+      (kh.state() as MenuState).menus.store.setLastSyncedAt(new Date("2026-05-30T12:00:00Z"));
 
       const result = (await kh.callResource("menus", "m-sync", "paprika://menu/m-sync")) as {
         contents: Array<{ text: string }>;

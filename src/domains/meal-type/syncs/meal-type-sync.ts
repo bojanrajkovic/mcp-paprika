@@ -1,5 +1,5 @@
 import type { SyncContribution } from "../../../kernel/registry.js";
-import type { MealTypeSelf } from "../module.js";
+import type { MealTypeState } from "../module.js";
 
 import { pruneOrphanCache } from "../../../paprika/sync.js";
 
@@ -18,11 +18,11 @@ import { pruneOrphanCache } from "../../../paprika/sync.js";
  * `core` was rejected: meal-type's consumers (meal, menu) are themselves best-effort,
  * so promotion would buy no ordering and only widen the abort blast-radius (ADR-0010).
  */
-export function mealTypeSync(self: MealTypeSelf): SyncContribution<MealTypeSelf, never> {
+export function mealTypeSync(state: MealTypeState): SyncContribution<MealTypeState, never> {
   return {
     tier: "reference",
     reconcile: async (ctx) => {
-      const { store, cache } = ctx.self;
+      const { store, cache } = ctx.state;
       const mealTypes = await ctx.infra.client.listMealTypes();
       const cachedMealTypes = await cache.getAll();
 
@@ -50,6 +50,6 @@ export function mealTypeSync(self: MealTypeSelf): SyncContribution<MealTypeSelf,
         }
       }
     },
-    sweep: () => self.store.sweepPending(),
+    sweep: () => state.store.sweepPending(),
   };
 }

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { CategoryUid } from "../../../ids.js";
-import type { RecipeSelf } from "../module.js";
+import type { RecipeState } from "../module.js";
 
 import { makeCategory, makeRecipe } from "../../../../test/cache/__fixtures__/recipes.js";
 import { useKernelHarness } from "../../../../test/support/kernel-harness.js";
@@ -25,7 +25,7 @@ describe("category write tools", () => {
       expect(posted?.parentUid).toBeNull();
       expect(getText(result)).toContain("Created category");
       // Category is committed to the real store.
-      expect((kh.self() as RecipeSelf).category.store.resolveByName("Thai")).toBeDefined();
+      expect((kh.state() as RecipeState).category.store.resolveByName("Thai")).toBeDefined();
     });
 
     it("nests under an existing parent and assigns orderFlag = max+1", async () => {
@@ -137,7 +137,7 @@ describe("category write tools", () => {
 
       expect(kh.client().deleteCategory).toHaveBeenCalledTimes(1);
       expect(getText(result)).toContain('Deleted category "Stale"');
-      expect((kh.self() as RecipeSelf).category.store.get("c" as CategoryUid)).toBeUndefined();
+      expect((kh.state() as RecipeState).category.store.get("c" as CategoryUid)).toBeUndefined();
     });
 
     it("refuses to delete a category that has child categories", async () => {

@@ -1,7 +1,7 @@
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 
 import type { DomainCtx } from "../../../kernel/registry.js";
-import type { MenuSelf } from "../module.js";
+import type { MenuState } from "../module.js";
 
 import { MenuUidSchema } from "../../../ids.js";
 import { defineTool } from "../../../kernel/tool.js";
@@ -11,7 +11,7 @@ import { menuStartGuard } from "./guards.js";
 
 /**
  * Registers `read_menu`, kernel-shaped — reads this module's own menu + menu-item
- * stores via `ctx.self`, and the meal-type catalog (for name/order rendering) via
+ * stores via `ctx.state`, and the meal-type catalog (for name/order rendering) via
  * `ctx.deps["meal-type"].getAll()`.
  */
 export const readMenuTool = defineTool(
@@ -34,7 +34,7 @@ export const readMenuTool = defineTool(
       }),
     },
   },
-  (ctx: DomainCtx<MenuSelf, "recipe" | "meal-type">) => {
+  (ctx: DomainCtx<MenuState, "recipe" | "meal-type">) => {
     const log = ctx.infra.log.child({ component: "read_menu" });
     return async (args) => {
       log.info({ tool: "read_menu", ...args.lookup }, "tool invoked");
@@ -42,13 +42,13 @@ export const readMenuTool = defineTool(
         (): CallToolResult => {
           const query = "uid" in args.lookup ? { uid: args.lookup.uid } : { text: args.lookup.name };
           const outcome = resolveLookup(query, {
-            get: (uid) => ctx.self.menus.store.get(uid),
-            findByText: (text) => ctx.self.menus.store.findByName(text),
+            get: (uid) => ctx.state.menus.store.get(uid),
+            findByText: (text) => ctx.state.menus.store.findByName(text),
           });
           return formatLookupOutcome(outcome, {
             entityNoun: "menu",
             renderOne: (menu) =>
-              menuToMarkdown(menu, ctx.self.items.store.getByMenuUid(menu.uid), ctx.deps["meal-type"].getAll(), {
+              menuToMarkdown(menu, ctx.state.items.store.getByMenuUid(menu.uid), ctx.deps["meal-type"].getAll(), {
                 includeItemUids: true,
               }),
             disambiguationLine: (menu) => `- **${menu.name}** (uid: \`${menu.uid}\`)`,

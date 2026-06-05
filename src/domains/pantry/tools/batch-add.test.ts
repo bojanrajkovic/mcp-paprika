@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { AisleSelf } from "../../aisle/module.js";
-import type { PantrySelf } from "../module.js";
+import type { AisleState } from "../../aisle/module.js";
+import type { PantryState } from "../module.js";
 
 import { makeAisle } from "../../../../test/cache/__fixtures__/aisles.js";
 import { makePantryItem } from "../../../../test/cache/__fixtures__/pantry.js";
@@ -42,7 +42,7 @@ describe("add_pantry_items tool", () => {
     expect(savedItem?.purchaseDate).toMatch(paprikaDateRegex);
 
     // The item is committed to the store.
-    expect((kh.self() as PantrySelf).store.get(savedItem?.uid as PantryItemUid)).toBeDefined();
+    expect((kh.state() as PantryState).store.get(savedItem?.uid as PantryItemUid)).toBeDefined();
   });
 
   it("batch of 3 distinct items calls savePantryItems once with all 3", async () => {
@@ -202,7 +202,7 @@ describe("add_pantry_items tool", () => {
 
     expect(text).toContain("Failed to add pantry items");
     expect(text).toContain("Server error");
-    expect((kh.self() as PantrySelf).store.size).toBe(0);
+    expect((kh.state() as PantryState).store.size).toBe(0);
   });
 
   it("optional fields flow through correctly", async () => {
@@ -269,6 +269,6 @@ describe("add_pantry_items tool", () => {
     expect(savedItem?.aisle).toBe("Exotic");
     expect(savedItem?.aisleUid).toBe("AISLE-EX");
     // The new aisle is persisted to the aisle store via ensureAisle.
-    expect((kh.selfOf("aisle") as AisleSelf).store.resolveByName("Exotic")).toBeDefined();
+    expect((kh.stateOf("aisle") as AisleState).store.resolveByName("Exotic")).toBeDefined();
   });
 });

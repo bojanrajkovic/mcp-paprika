@@ -1,6 +1,6 @@
 import type { SyncContribution } from "../../../kernel/registry.js";
 import type { PantrySyncResult } from "../../../paprika/sync-types.js";
-import type { PantrySelf } from "../module.js";
+import type { PantryState } from "../module.js";
 import type { PantryItem } from "../types.js";
 
 import { syncReplaceAllEntity } from "../../../paprika/sync.js";
@@ -37,11 +37,11 @@ function pantryItemsEqual(a: PantryItem, b: PantryItem): boolean {
  * `sync:complete` (the subscriber is a no-op for pantry — it has no resource
  * surface — but returning the changes faithfully preserves the emission contract).
  */
-export function pantrySync(self: PantrySelf): SyncContribution<PantrySelf, "aisle"> {
+export function pantrySync(state: PantryState): SyncContribution<PantryState, "aisle"> {
   return {
     tier: "core",
     reconcile: async (ctx): Promise<PantrySyncResult> => {
-      const { store, cache } = ctx.self;
+      const { store, cache } = ctx.state;
       const changes = await syncReplaceAllEntity({
         fetch: () => ctx.infra.client.listPantry(),
         cache,
@@ -52,6 +52,6 @@ export function pantrySync(self: PantrySelf): SyncContribution<PantrySelf, "aisl
       });
       return { changeType: "pantry", changes };
     },
-    sweep: () => self.store.sweepPending(),
+    sweep: () => state.store.sweepPending(),
   };
 }

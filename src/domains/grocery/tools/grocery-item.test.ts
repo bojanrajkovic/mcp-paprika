@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { AisleUid, GroceryItemUid, GroceryListUid } from "../../../ids.js";
-import type { GrocerySelf } from "../module.js";
+import type { GroceryState } from "../module.js";
 
 import { makeAisle } from "../../../../test/cache/__fixtures__/aisles.js";
 import { makeGroceryIngredient } from "../../../../test/cache/__fixtures__/grocery-ingredients.js";
@@ -103,8 +103,8 @@ describe("add_grocery_items tool", () => {
     expect(savedItems).toHaveLength(3);
 
     // All 3 items committed to the store
-    const self = kh.self() as GrocerySelf;
-    expect(self.items.store.getByListUid("LIST-1" as GroceryListUid)).toHaveLength(3);
+    const state = kh.state() as GroceryState;
+    expect(state.items.store.getByListUid("LIST-1" as GroceryListUid)).toHaveLength(3);
   });
 
   it("auto-resolves aisle from ingredient catalog when aisle omitted", async () => {
@@ -563,8 +563,8 @@ describe("delete_grocery_item tool", () => {
     expect(saved?.uid).toBe("ITEM-DEL-1");
 
     // Item is removed from the store
-    const self = kh.self() as GrocerySelf;
-    expect(self.items.store.get("ITEM-DEL-1" as GroceryItemUid)).toBeUndefined();
+    const state = kh.state() as GroceryState;
+    expect(state.items.store.get("ITEM-DEL-1" as GroceryItemUid)).toBeUndefined();
   });
 
   it("sync-not-ready blocks delete_grocery_item when stores not loaded", async () => {
@@ -588,7 +588,7 @@ describe("delete_grocery_item tool", () => {
       groceryIngredients: [],
     });
     // Remove the item directly via the store (no API call needed)
-    (kh.self() as GrocerySelf).items.store.delete("ITEM-DEL-2" as GroceryItemUid);
+    (kh.state() as GroceryState).items.store.delete("ITEM-DEL-2" as GroceryItemUid);
 
     const result = await kh.callTool("delete_grocery_item", {
       uid: "ITEM-DEL-2",

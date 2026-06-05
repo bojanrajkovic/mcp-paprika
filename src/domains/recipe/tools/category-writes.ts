@@ -4,7 +4,7 @@ import { z } from "zod";
 import type { CategoryUid } from "../../../ids.js";
 import type { DomainCtx } from "../../../kernel/registry.js";
 import type { Category } from "../category/types.js";
-import type { RecipeSelf } from "../module.js";
+import type { RecipeState } from "../module.js";
 
 import { CategoryUidSchema } from "../../../ids.js";
 import { defineTool } from "../../../kernel/tool.js";
@@ -12,14 +12,14 @@ import { textResult } from "../../../shared/tools.js";
 import { toMessage } from "../../../utils/log.js";
 import { categoryStartGuard } from "./guards.js";
 
-function categorySummary(self: RecipeSelf, category: Category): string {
+function categorySummary(self: RecipeState, category: Category): string {
   const parent = category.parentUid ? self.category.store.get(category.parentUid) : undefined;
   const parentLine = parent ? ` (under **${parent.name}**)` : " (top-level)";
   return `**${category.name}**${parentLine} — uid: \`${category.uid}\``;
 }
 
 /** Highest `orderFlag` across all known categories, or -1 when none exist. */
-function maxCategoryOrderFlag(self: RecipeSelf): number {
+function maxCategoryOrderFlag(self: RecipeState): number {
   let max = -1;
   for (const category of self.category.store.getAll()) {
     if (category.orderFlag > max) max = category.orderFlag;
@@ -34,7 +34,7 @@ function maxCategoryOrderFlag(self: RecipeSelf): number {
  * sits below the category, so the link would close a loop. The `seen` set guards
  * against an already-corrupt chain looping forever.
  */
-function wouldCreateCycle(self: RecipeSelf, categoryUid: CategoryUid, newParentUid: CategoryUid): boolean {
+function wouldCreateCycle(self: RecipeState, categoryUid: CategoryUid, newParentUid: CategoryUid): boolean {
   let cursor: CategoryUid | null = newParentUid;
   const seen = new Set<CategoryUid>();
   while (cursor !== null) {
@@ -47,7 +47,7 @@ function wouldCreateCycle(self: RecipeSelf, categoryUid: CategoryUid, newParentU
   return false;
 }
 
-/** Registers `create_category`, kernel-shaped — writes through `ctx.self.commitCategoryUpsert`. */
+/** Registers `create_category`, kernel-shaped — writes through `ctx.state.commitCategoryUpsert`. */
 export const createCategoryTool = defineTool(
   {
     name: "create_category",
@@ -62,27 +62,27 @@ export const createCategoryTool = defineTool(
       parentUid: CategoryUidSchema.optional().describe("UID of the parent category to nest under (omit for top-level)"),
     },
   },
-  (ctx: DomainCtx<RecipeSelf, never>) => {
+  (ctx: DomainCtx<RecipeState, never>) => {
     const log = ctx.infra.log.child({ component: "create_category" });
     return async (args) => {
       log.info({ tool: "create_category", name: args.name }, "tool invoked");
-      return categoryStartGuard(ctx.self).match(
+      return categoryStartGuard(ctx.state).match(
         async (): Promise<CallToolResult> => {
-          if (args.parentUid !== undefined && ctx.self.category.store.get(args.parentUid) === undefined) {
+          if (args.parentUid !== undefined && ctx.state.category.store.get(args.parentUid) === undefined) {
             return textResult(`No category found with UID "${args.parentUid}" to use as a parent.`);
           }
 
           const category: Category = {
             uid: CategoryUidSchema.parse(crypto.randomUUID().toUpperCase()),
             name: args.name,
-            orderFlag: maxCategoryOrderFlag(ctx.self) + 1,
+            orderFlag: maxCategoryOrderFlag(ctx.state) + 1,
             parentUid: args.parentUid ?? null,
           };
 
           try {
             const saved = await ctx.infra.client.saveCategory(category);
-            await ctx.self.commitCategoryUpsert(saved);
-            return textResult(`Created category ${categorySummary(ctx.self, saved)}`);
+            await ctx.state.commitCategoryUpsert(saved);
+            return textResult(`Created category ${categorySummary(ctx.state, saved)}`);
           } catch (error) {
             log.error({ err: error, name: args.name }, "saveCategory failed");
             return textResult(`Failed to create category: ${toMessage(error)}`);
@@ -94,7 +94,7 @@ export const createCategoryTool = defineTool(
   },
 );
 
-/** Registers `update_category`, kernel-shaped — rename/re-parent through `ctx.self.commitCategoryUpsert`. */
+/** Registers `update_category`, kernel-shaped — rename/re-parent through `ctx.state.commitCategoryUpsert`. */
 export const updateCategoryTool = defineTool(
   {
     name: "update_category",
@@ -112,13 +112,13 @@ export const updateCategoryTool = defineTool(
         .describe("New parent UID, or null for top-level (omit to leave the parent unchanged)"),
     },
   },
-  (ctx: DomainCtx<RecipeSelf, never>) => {
+  (ctx: DomainCtx<RecipeState, never>) => {
     const log = ctx.infra.log.child({ component: "update_category" });
     return async (args) => {
       log.info({ tool: "update_category", uid: args.uid }, "tool invoked");
-      return categoryStartGuard(ctx.self).match(
+      return categoryStartGuard(ctx.state).match(
         async (): Promise<CallToolResult> => {
-          const existing = ctx.self.category.store.get(args.uid);
+          const existing = ctx.state.category.store.get(args.uid);
           if (existing === undefined)
             return textResult(`No category found with UID "${args.uid}" (it may not exist or was already deleted).`);
 
@@ -130,10 +130,10 @@ export const updateCategoryTool = defineTool(
             if (args.parentUid === args.uid) {
               return textResult("A category cannot be its own parent.");
             }
-            if (ctx.self.category.store.get(args.parentUid) === undefined) {
+            if (ctx.state.category.store.get(args.parentUid) === undefined) {
               return textResult(`No category found with UID "${args.parentUid}" to use as a parent.`);
             }
-            if (wouldCreateCycle(ctx.self, args.uid, args.parentUid)) {
+            if (wouldCreateCycle(ctx.state, args.uid, args.parentUid)) {
               return textResult("That move would create a cycle: the chosen parent is a descendant of this category.");
             }
           }
@@ -149,8 +149,8 @@ export const updateCategoryTool = defineTool(
             // commitCategoryUpsert persists locally and emits `category-changed` on
             // the kernel re-index seam so discover re-embeds the category's recipes
             // (a rename changes the display name baked into their embedding text).
-            await ctx.self.commitCategoryUpsert(saved);
-            return textResult(`Updated category ${categorySummary(ctx.self, saved)}`);
+            await ctx.state.commitCategoryUpsert(saved);
+            return textResult(`Updated category ${categorySummary(ctx.state, saved)}`);
           } catch (error) {
             log.error({ err: error, uid: args.uid }, "saveCategory failed");
             return textResult(`Failed to update category: ${toMessage(error)}`);

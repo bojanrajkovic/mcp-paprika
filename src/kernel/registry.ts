@@ -14,14 +14,14 @@ import type { ToolDef, ToolSpec } from "./tool.js";
  *
  * Each domain is a self-registering module that declares its dependencies and
  * exposes a public contract. Its tools, resources, and sync/boot hooks receive a
- * context narrowed to the module's own internals (`self`) plus exactly its
+ * context narrowed to the module's own internals (`state`) plus exactly its
  * declared dependencies' contracts (`deps`); reaching anything else is a compile
  * error. A module AUGMENTS {@link DomainRegistry} from its own file and
  * self-registers on import, so dependency contracts are typed from the registry,
  * there is no central module list, and a module exports nothing across boundaries.
  *
- * Authoring is a curried builder: `defineModule(id, dependsOn).self(factory)
- * .build(self => parts)`. Fixing `Self` via `.self(...)` BEFORE the tools are
+ * Authoring is a curried builder: `defineModule(id, dependsOn).state(factory)
+ * .build(state => parts)`. Fixing `State` via `.state(...)` BEFORE the tools are
  * written is what lets each tool/hook INFER its narrowed ctx with no per-module
  * ctx alias. The single `as unknown as` cast in {@link defineModule} is deliberate:
  * the kernel is a type-agnostic transport that only shuttles values by string id,
@@ -67,24 +67,24 @@ export interface Infra {
    * `generate_recipe_photo` (attach:false) stashes here and recipe's
    * `upload_recipe_photo` (generation_token) consumes — a recipe↔photo-gen handoff
    * that would otherwise be a dependency cycle, so it rides `infra` like a shared
-   * seam rather than either module's `self`.
+   * seam rather than either module's `state`.
    */
   readonly generatedImageStore: GeneratedImageStore;
 }
 
 /**
  * The process-wide context a boot hook receives: the module's own internals
- * (`self`), exactly its declared dependencies' contracts (`deps`), and `infra`.
+ * (`state`), exactly its declared dependencies' contracts (`deps`), and `infra`.
  * No `server` — boot phases run once per process, before any session exists.
  */
-export interface BootCtx<Self, Deps extends DomainId> {
-  readonly self: Self;
+export interface BootCtx<State, Deps extends DomainId> {
+  readonly state: State;
   readonly deps: { readonly [K in Deps]: DomainRegistry[K] };
   readonly infra: Infra;
 }
 
 /** The per-session context a tool or resource receives: a `BootCtx` plus the session server. */
-export interface DomainCtx<Self, Deps extends DomainId> extends BootCtx<Self, Deps> {
+export interface DomainCtx<State, Deps extends DomainId> extends BootCtx<State, Deps> {
   readonly server: McpServer;
 }
 
@@ -95,7 +95,7 @@ export interface DomainCtx<Self, Deps extends DomainId> extends BootCtx<Self, De
 // shape for future phases.
 export type BootPhase = "index";
 const BOOT_PHASES: ReadonlyArray<BootPhase> = ["index"];
-type BootHooks<Self, Deps extends DomainId> = Partial<Record<BootPhase, (ctx: BootCtx<Self, Deps>) => Promise<void>>>;
+type BootHooks<State, Deps extends DomainId> = Partial<Record<BootPhase, (ctx: BootCtx<State, Deps>) => Promise<void>>>;
 
 /**
  * Sync tier — three buckets the driver runs in order each cycle: reference → core →
@@ -118,19 +118,19 @@ export type SyncTier = "reference" | "core" | "additive";
  * One entity's contribution to the sync cycle — the seam between a central sync
  * and module-owned (hidden) stores. A multi-entity domain supplies one per owned
  * entity via `syncs`. `reconcile` receives the SAME {@link BootCtx} the boot hooks
- * do: its own store/cache via `self`, its declared deps' contracts via `deps`, the
+ * do: its own store/cache via `state`, its declared deps' contracts via `deps`, the
  * Paprika client via `infra.client`. So no central all-stores context is needed. It returns
  * an `AnySyncResult` to be emitted as `sync:complete` (recipes/grocery/menus), or
  * `void` for reference/soft entities that emit nothing. `sweep` is the per-store
  * pending-write TTL sweep the driver runs once at end-of-cycle.
  */
-export interface SyncContribution<Self, Deps extends DomainId> {
+export interface SyncContribution<State, Deps extends DomainId> {
   readonly tier: SyncTier;
-  reconcile(ctx: BootCtx<Self, Deps>): Promise<AnySyncResult | void>;
+  reconcile(ctx: BootCtx<State, Deps>): Promise<AnySyncResult | void>;
   sweep?(): number;
 }
 
-/** Kernel-facing erased sync contribution (the `Self`/`Deps` generics gone). */
+/** Kernel-facing erased sync contribution (the `State`/`Deps` generics gone). */
 interface ErasedSync {
   readonly tier: SyncTier;
   reconcile(ctx: ErasedBootCtx): Promise<AnySyncResult | void>;
@@ -138,28 +138,28 @@ interface ErasedSync {
 }
 
 /**
- * What a module's `.build(self => …)` callback returns. `api` must satisfy the
+ * What a module's `.build(state => …)` callback returns. `api` must satisfy the
  * contract the module registered for its own id; `tools`/`resources`/`onReady` get
- * a ctx narrowed to `Self` + the `dependsOn` tuple — INFERRED, so the author writes
+ * a ctx narrowed to `State` + the `dependsOn` tuple — INFERRED, so the author writes
  * no per-module ctx alias; `flush` is optional.
  *
  * `resources` is parallel to `tools`: each entry registers an MCP resource template
- * via `ctx.server.registerResource(...)`, reading its own data via `ctx.self` and
+ * via `ctx.server.registerResource(...)`, reading its own data via `ctx.state` and
  * any shared data via `ctx.deps.<id>` contracts. Resources are Content-domain-only
  * (recipe, grocery-list, menu — see ADR-0004), so most modules supply none.
  */
-export interface ModuleParts<Id extends DomainId, Deps extends DomainId, Self> {
+export interface ModuleParts<Id extends DomainId, Deps extends DomainId, State> {
   readonly api: DomainRegistry[Id];
-  readonly tools: ReadonlyArray<ToolDef<Self, Deps>>;
-  readonly resources?: ReadonlyArray<(ctx: DomainCtx<Self, Deps>) => void>;
-  readonly syncs?: ReadonlyArray<SyncContribution<Self, Deps>>;
-  readonly onReady?: BootHooks<Self, Deps>;
+  readonly tools: ReadonlyArray<ToolDef<State, Deps>>;
+  readonly resources?: ReadonlyArray<(ctx: DomainCtx<State, Deps>) => void>;
+  readonly syncs?: ReadonlyArray<SyncContribution<State, Deps>>;
+  readonly onReady?: BootHooks<State, Deps>;
   readonly flush?: () => Promise<void>;
 }
 
 /** Kernel-facing erased contexts (the `DomainCtx`/`BootCtx` generics gone). */
 interface ErasedBootCtx {
-  readonly self: unknown;
+  readonly state: unknown;
   readonly deps: Record<string, unknown>;
   readonly infra: Infra;
 }
@@ -167,14 +167,14 @@ interface ErasedCtx extends ErasedBootCtx {
   readonly server: McpServer;
 }
 
-/** Kernel-facing erased tool def (the `Self`/`Deps` generics gone). */
+/** Kernel-facing erased tool def (the `State`/`Deps` generics gone). */
 interface ErasedToolDef {
   readonly spec: ToolSpec;
   register(ctx: ErasedCtx): void;
 }
 
 interface ErasedBuild {
-  readonly self: unknown;
+  readonly state: unknown;
   readonly api: unknown;
   readonly tools: ReadonlyArray<ErasedToolDef>;
   readonly resources?: ReadonlyArray<(ctx: ErasedCtx) => void>;
@@ -191,29 +191,29 @@ export interface ErasedModule {
 }
 
 /** The `.build(...)` step: supply the assemble callback (it receives the built
- * `self`) and get an {@link ErasedModule}. Tools/hooks infer their ctx from `Self`
+ * `state`) and get an {@link ErasedModule}. Tools/hooks infer their ctx from `State`
  * + the dependency tuple — no per-module ctx alias to declare. */
-export interface ModuleBuildStep<Id extends DomainId, DepList extends ReadonlyArray<DomainId>, Self> {
-  build(assemble: (self: Self) => ModuleParts<Id, DepList[number], Self>): ErasedModule;
+export interface ModuleBuildStep<Id extends DomainId, DepList extends ReadonlyArray<DomainId>, State> {
+  build(assemble: (state: State) => ModuleParts<Id, DepList[number], State>): ErasedModule;
 }
 
-/** The `.self(...)` step: a factory that builds (and hydrates) the module's
- * internals — `Self` is inferred from its return. A module with no internals can
- * skip straight to `.build(...)` (its `self` is `{}`). */
-export interface ModuleSelfStep<Id extends DomainId, DepList extends ReadonlyArray<DomainId>> extends ModuleBuildStep<
+/** The `.state(...)` step: a factory that builds (and hydrates) the module's
+ * internals — `State` is inferred from its return. A module with no internals can
+ * skip straight to `.build(...)` (its `state` is `{}`). */
+export interface ModuleStateStep<Id extends DomainId, DepList extends ReadonlyArray<DomainId>> extends ModuleBuildStep<
   Id,
   DepList,
   Record<never, never>
 > {
-  self<Self>(factory: (infra: Infra) => Self | Promise<Self>): ModuleBuildStep<Id, DepList, Self>;
+  state<State>(factory: (infra: Infra) => State | Promise<State>): ModuleBuildStep<Id, DepList, State>;
 }
 
 /**
- * Author a module: `defineModule(id, dependsOn).self(factory).build(self => parts)`.
+ * Author a module: `defineModule(id, dependsOn).state(factory).build(state => parts)`.
  *
  * `id` fixes which registry contract `api` must satisfy; the `const` dependency
  * tuple is the single source of truth (its element union is the tools'/hooks'
- * `deps`); `.self(...)` fixes `Self` BEFORE the tools are written, which is what
+ * `deps`); `.state(...)` fixes `State` BEFORE the tools are written, which is what
  * lets each tool/hook INFER its narrowed ctx with no per-module alias. The kept
  * cast erases the generics for uniform iteration — the kernel never reads these
  * types, only shuttles values by string id.
@@ -221,17 +221,19 @@ export interface ModuleSelfStep<Id extends DomainId, DepList extends ReadonlyArr
 export function defineModule<Id extends DomainId, const DepList extends ReadonlyArray<DomainId>>(
   id: Id,
   dependsOn: DepList,
-): ModuleSelfStep<Id, DepList> {
-  const withSelf = <Self>(factory: (infra: Infra) => Self | Promise<Self>): ModuleBuildStep<Id, DepList, Self> => ({
+): ModuleStateStep<Id, DepList> {
+  const withState = <State>(
+    factory: (infra: Infra) => State | Promise<State>,
+  ): ModuleBuildStep<Id, DepList, State> => ({
     build(assemble): ErasedModule {
       return {
         id,
         dependsOn,
         build: async (infra: Infra) => {
-          const self = await factory(infra);
-          const parts = assemble(self);
+          const state = await factory(infra);
+          const parts = assemble(state);
           return {
-            self,
+            state,
             api: parts.api,
             tools: parts.tools,
             resources: parts.resources,
@@ -244,8 +246,8 @@ export function defineModule<Id extends DomainId, const DepList extends Readonly
     },
   });
   return {
-    self: withSelf,
-    build: withSelf<Record<never, never>>(() => ({})).build,
+    state: withState,
+    build: withState<Record<never, never>>(() => ({})).build,
   };
 }
 
@@ -305,7 +307,7 @@ export interface Kernel {
 interface Built {
   readonly id: string;
   readonly dependsOn: ReadonlyArray<string>;
-  readonly self: unknown;
+  readonly state: unknown;
   readonly tools: ReadonlyArray<ErasedToolDef>;
   readonly resources: ReadonlyArray<(ctx: ErasedCtx) => void> | undefined;
   readonly syncs: ReadonlyArray<ErasedSync> | undefined;
@@ -313,7 +315,7 @@ interface Built {
 }
 
 /**
- * Build the kernel: (0) construct every module in dependency order — each `.self`
+ * Build the kernel: (0) construct every module in dependency order — each `.state`
  * factory hydrates its own cache, so "all built" ⇒ "all caches warm"; then (1) run
  * the initial sync cycle; then (2) run the boot phases in order, each to completion
  * before the next. Returns a per-session registrar. Defaults to the self-registered
@@ -333,7 +335,7 @@ export async function buildKernel(
     for (const id of ids) deps[id] = apis.get(id);
     return deps;
   };
-  const bootCtxOf = (b: Built): ErasedBootCtx => ({ self: b.self, deps: depsOf(b.dependsOn), infra });
+  const bootCtxOf = (b: Built): ErasedBootCtx => ({ state: b.state, deps: depsOf(b.dependsOn), infra });
 
   // Phase 0 — construction (+ per-module cache hydration).
   for (const m of order) {
@@ -343,7 +345,7 @@ export async function buildKernel(
     built.push({
       id: m.id,
       dependsOn: m.dependsOn,
-      self: b.self,
+      state: b.state,
       tools: b.tools,
       resources: b.resources,
       syncs: b.syncs,

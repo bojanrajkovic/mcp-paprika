@@ -26,7 +26,7 @@ declare module "../../kernel/registry.js" {
  * because it WRITES — it needs `infra.client`, which the factory has and `.build`
  * does not; the read-only contract methods are assembled from `store` in `.build`.
  */
-export interface AisleSelf {
+export interface AisleState {
   readonly store: AisleStore;
   readonly cache: DiskCache<Aisle>;
   readonly ensureAisle: AisleApi["ensureAisle"];
@@ -34,7 +34,7 @@ export interface AisleSelf {
 
 register(
   defineModule("aisle", [])
-    .self<AisleSelf>(async (infra) => {
+    .state<AisleState>(async (infra) => {
       const store = new AisleStore({ pendingWriteTtlMs: resolvePendingWriteTtl(infra.config) });
       // Disk is flat: the cache's subdir is the original `<cacheDir>/aisles`
       // (reuse-in-place — ADR-0009 keeps the cache un-namespaced, so there is no migration).
@@ -93,14 +93,14 @@ register(
 
       return { store, cache, ensureAisle };
     })
-    .build((self) => ({
+    .build((state) => ({
       api: {
-        ensureAisle: self.ensureAisle,
-        resolveByName: (name) => self.store.resolveByName(name),
-        get: (uid) => self.store.get(uid),
+        ensureAisle: state.ensureAisle,
+        resolveByName: (name) => state.store.resolveByName(name),
+        get: (uid) => state.store.get(uid),
       },
       tools: [listAislesTool],
-      syncs: [aisleSync(self)],
-      flush: () => self.cache.flush(),
+      syncs: [aisleSync(state)],
+      flush: () => state.cache.flush(),
     })),
 );

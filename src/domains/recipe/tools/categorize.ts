@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import type { CategoryUid } from "../../../ids.js";
 import type { DomainCtx } from "../../../kernel/registry.js";
-import type { RecipeSelf } from "../module.js";
+import type { RecipeState } from "../module.js";
 import type { Recipe } from "../types.js";
 
 import { RecipeUidSchema } from "../../../ids.js";
@@ -40,7 +40,7 @@ export const categorizeRecipeInputSchema = z
 /**
  * Registers `categorize_recipe`, kernel-shaped — recipe owns category, so the ref
  * resolution and name lookup are intra-domain (no deps). Writes through the bound
- * `ctx.self.commitRecipe` chokepoint.
+ * `ctx.state.commitRecipe` chokepoint.
  */
 export const categorizeRecipeTool = defineTool(
   {
@@ -53,18 +53,18 @@ export const categorizeRecipeTool = defineTool(
       "Unknown category names are skipped with a warning. To edit other recipe fields, use update_recipe.",
     inputSchema: categorizeRecipeInputSchema,
   },
-  (ctx: DomainCtx<RecipeSelf, never>) => {
+  (ctx: DomainCtx<RecipeState, never>) => {
     const log = ctx.infra.log.child({ component: "categorize_recipe" });
     return async (args) => {
       log.info({ tool: "categorize_recipe", uid: args.uid, mode: args.mode }, "tool invoked");
-      return recipeColdStartGuard(ctx.self).match(
+      return recipeColdStartGuard(ctx.state).match(
         async (): Promise<CallToolResult> => {
-          const existing = ctx.self.recipe.store.get(args.uid);
+          const existing = ctx.state.recipe.store.get(args.uid);
           if (!existing) {
             return textResult(`No recipe found with UID "${args.uid}" (it may not exist or was already deleted).`);
           }
 
-          const { uids: refUids, unknown } = resolveCategoryRefs(ctx.self.category.store.getAll(), args.categories);
+          const { uids: refUids, unknown } = resolveCategoryRefs(ctx.state.category.store.getAll(), args.categories);
           const warnings = unknown.map((ref) => `Warning: category "${ref}" not found and was skipped.`);
 
           // Nothing resolved (every ref was unknown). Short-circuit rather than
@@ -91,14 +91,14 @@ export const categorizeRecipeTool = defineTool(
           let saved: Recipe;
           try {
             saved = await ctx.infra.client.saveRecipe(updated);
-            await ctx.self.commitRecipe(saved);
+            await ctx.state.commitRecipe(saved);
           } catch (error) {
             const message = toMessage(error);
             log.error({ err: error, uid: args.uid }, "saveRecipe failed");
             return textResult(`Failed to categorize recipe: ${message}`);
           }
 
-          const categoryNames = ctx.self.category.store.resolveNames(saved.categories);
+          const categoryNames = ctx.state.category.store.resolveNames(saved.categories);
           const markdown = recipeToMarkdown(saved, categoryNames);
           const prefix = warnings.length > 0 ? warnings.join("\n") + "\n\n" : "";
           return textResult(prefix + markdown);

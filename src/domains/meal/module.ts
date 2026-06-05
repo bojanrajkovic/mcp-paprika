@@ -32,13 +32,13 @@ declare module "../../kernel/registry.js" {
  * standalone module). One store + plain `DiskCache` pair.
  *
  * The write-capable methods (`commitMeal`, `commitMealsBatch`, and the api's
- * `createMeals`) are bound HERE in `.self`, not in `.build`, because they WRITE —
+ * `createMeals`) are bound HERE in `.state`, not in `.build`, because they WRITE —
  * they close over `infra.client`, which the factory has and `.build` does not
  * (mirrors aisle's `ensureAisle`). The read-only contract methods (`hasSynced`,
  * `orderFlagAssigner`) are assembled from the store in `.build`. No
  * `resourceListChanged()` — meals have no MCP resource surface.
  */
-export interface MealSelf {
+export interface MealState {
   readonly store: MealStore;
   readonly cache: DiskCache<Meal>;
 
@@ -52,7 +52,7 @@ export interface MealSelf {
 
 register(
   defineModule("meal", ["recipe", "meal-type"])
-    .self<MealSelf>(async (infra) => {
+    .state<MealState>(async (infra) => {
       const { client, log } = infra;
 
       const store = new MealStore({ pendingWriteTtlMs: resolvePendingWriteTtl(infra.config) });
@@ -72,7 +72,7 @@ register(
       // → store set/delete → notifySync. The pending mark shields this UID from
       // sync-cycle reconciliation during the propagation race. No resourceListChanged()
       // — meals have no resource surface.
-      const commitMeal: MealSelf["commitMeal"] = async (saved) => {
+      const commitMeal: MealState["commitMeal"] = async (saved) => {
         if (saved.deleted) {
           const uid = saved.uid;
           store.markPendingDelete(uid);
@@ -103,7 +103,7 @@ register(
       // notifySync(). Marks all pending writes before any cache I/O; on cache
       // failure, clears ALL marked UIDs before re-throwing so no UID is left
       // shielded until TTL. No resourceListChanged().
-      const commitMealsBatch: MealSelf["commitMealsBatch"] = async (items) => {
+      const commitMealsBatch: MealState["commitMealsBatch"] = async (items) => {
         if (items.length === 0) return;
         const markedUids: Array<Meal["uid"]> = [];
         for (const item of items) {
@@ -160,21 +160,21 @@ register(
 
       return { store, cache, commitMeal, commitMealsBatch, createMeals };
     })
-    .build((self) => ({
+    .build((state) => ({
       api: {
-        hasSynced: () => self.store.hasSynced,
+        hasSynced: () => state.store.hasSynced,
         // A fresh per-DATE order_flag assigner per call (stateful within one batch).
         orderFlagAssigner: () => {
           const next = new Map<string, number>();
           return (date: string) => {
-            const flag = next.get(date) ?? (self.store.getMaxOrderFlagOn(date) ?? -1) + 1;
+            const flag = next.get(date) ?? (state.store.getMaxOrderFlagOn(date) ?? -1) + 1;
             next.set(date, flag + 1);
             return flag;
           };
         },
-        // Bound in `.self` (it needs `infra.client`); exposed via `self` like aisle's
+        // Bound in `.state` (it needs `infra.client`); exposed via `state` like aisle's
         // `ensureAisle`.
-        createMeals: self.createMeals,
+        createMeals: state.createMeals,
       },
       tools: [
         planMealsTool,
@@ -186,7 +186,7 @@ register(
         readRecipeHistoryTool,
         readMealPlanTool,
       ],
-      syncs: [mealSync(self)],
-      flush: () => self.cache.flush(),
+      syncs: [mealSync(state)],
+      flush: () => state.cache.flush(),
     })),
 );

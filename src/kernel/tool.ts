@@ -36,9 +36,9 @@ export interface ToolSpec<I extends ZodRawShape | ZodTypeAny = ZodRawShape | Zod
  * — the data/behavior split means the SAME `spec` object drives both registration
  * and documentation, so the two cannot drift in content (ADR-0011).
  */
-export interface ToolDef<Self, Deps extends DomainId> {
+export interface ToolDef<State, Deps extends DomainId> {
   readonly spec: ToolSpec;
-  register(ctx: DomainCtx<Self, Deps>): void;
+  register(ctx: DomainCtx<State, Deps>): void;
 }
 
 /**
@@ -49,17 +49,17 @@ export interface ToolDef<Self, Deps extends DomainId> {
  * callback is the old handler.
  *
  * `I` is inferred from `spec.inputSchema` (so `handler`'s `args` is typed from the
- * schema); `Self`/`Deps` are inferred from the `ctx` parameter's annotation
- * (`ctx: DomainCtx<FooSelf, "dep">`), which doubles as the tool's dependency
+ * schema); `State`/`Deps` are inferred from the `ctx` parameter's annotation
+ * (`ctx: DomainCtx<FooState, "dep">`), which doubles as the tool's dependency
  * declaration exactly as the old function signature did. Registration is delegated
  * straight to `server.registerTool(name, spec, cb)`: `spec` carries an extra `name`
  * the SDK config ignores, which is fine — it is passed as a value, not an object
  * literal, so no excess-property error.
  */
-export function defineTool<I extends ZodRawShape | ZodTypeAny, Self, Deps extends DomainId>(
+export function defineTool<I extends ZodRawShape | ZodTypeAny, State, Deps extends DomainId>(
   spec: ToolSpec<I>,
-  handler: (ctx: DomainCtx<Self, Deps>) => ToolCallback<I>,
-): ToolDef<Self, Deps> {
+  handler: (ctx: DomainCtx<State, Deps>) => ToolCallback<I>,
+): ToolDef<State, Deps> {
   return {
     spec,
     register(ctx) {

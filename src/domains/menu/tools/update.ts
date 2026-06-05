@@ -2,7 +2,7 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 
 import type { DomainCtx } from "../../../kernel/registry.js";
-import type { MenuSelf } from "../module.js";
+import type { MenuState } from "../module.js";
 import type { Menu } from "../types.js";
 
 import { MenuUidSchema } from "../../../ids.js";
@@ -14,7 +14,7 @@ import { menuStartGuard } from "./guards.js";
 
 /**
  * Registers `update_menu`, kernel-shaped — reads/writes this module's own menu +
- * menu-item stores via `ctx.self`, commits through `ctx.self.commitMenu`, and renders
+ * menu-item stores via `ctx.state`, commits through `ctx.state.commitMenu`, and renders
  * with the meal-type catalog from `ctx.deps["meal-type"]`.
  */
 export const updateMenuTool = defineTool(
@@ -41,7 +41,7 @@ export const updateMenuTool = defineTool(
       notes: z.string().optional().describe("New free-text notes"),
     },
   },
-  (ctx: DomainCtx<MenuSelf, "recipe" | "meal-type">) => {
+  (ctx: DomainCtx<MenuState, "recipe" | "meal-type">) => {
     const log = ctx.infra.log.child({ component: "update_menu" });
     return async (args) => {
       log.info({ tool: "update_menu", ...args.lookup }, "tool invoked");
@@ -53,8 +53,8 @@ export const updateMenuTool = defineTool(
 
           const query = "uid" in args.lookup ? { uid: args.lookup.uid } : { text: args.lookup.name };
           const outcome = resolveLookup(query, {
-            get: (uid) => ctx.self.menus.store.get(uid),
-            findByText: (text) => ctx.self.menus.store.findByName(text),
+            get: (uid) => ctx.state.menus.store.get(uid),
+            findByText: (text) => ctx.state.menus.store.findByName(text),
           });
 
           // Only a single resolved menu can be mutated; misses and disambiguation
@@ -80,7 +80,7 @@ export const updateMenuTool = defineTool(
           if (args.name !== undefined) {
             const newName = args.name;
             if (newName.toLowerCase() !== existing.name.toLowerCase()) {
-              const conflict = ctx.self.menus.store
+              const conflict = ctx.state.menus.store
                 .findByName(newName)
                 .find((m) => m.name.toLowerCase() === newName.toLowerCase() && m.uid !== existing.uid);
               if (conflict !== undefined) {
@@ -95,7 +95,7 @@ export const updateMenuTool = defineTool(
           // new span. maxDay is the highest day among live items; conflicts are the
           // items whose day exceeds the requested span.
           if (args.days !== undefined) {
-            const liveItems = ctx.self.items.store.getByMenuUid(existing.uid);
+            const liveItems = ctx.state.items.store.getByMenuUid(existing.uid);
             const conflicts = liveItems.filter((item) => item.day > args.days!);
             if (conflicts.length > 0) {
               const maxDay = liveItems.reduce((max, item) => Math.max(max, item.day), 0);
@@ -123,11 +123,11 @@ export const updateMenuTool = defineTool(
           try {
             const saved = await ctx.infra.client.saveMenus([merged]);
             const persisted = saved[0] ?? merged;
-            await ctx.self.commitMenu(persisted);
+            await ctx.state.commitMenu(persisted);
             return textResult(
               menuToMarkdown(
                 persisted,
-                ctx.self.items.store.getByMenuUid(persisted.uid),
+                ctx.state.items.store.getByMenuUid(persisted.uid),
                 ctx.deps["meal-type"].getAll(),
               ),
             );

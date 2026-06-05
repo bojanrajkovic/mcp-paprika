@@ -29,17 +29,17 @@ declare module "../../kernel/registry.js" {
 
 /**
  * The pantry module's internals — a single store + cache pair (a single-entity Data
- * domain; nothing co-owned). `createItems` is bound HERE in `.self`, not in
+ * domain; nothing co-owned). `createItems` is bound HERE in `.state`, not in
  * `.build`, because it WRITES — it needs `infra.client`, which the factory has and
  * `.build` does not (mirrors aisle's `ensureAisle`). The read-only `hasSynced`
  * contract method is assembled from `store` in `.build`.
  *
- * `commitPantryItemsBatch` is exposed on `self` so the batch-add tool can write
+ * `commitPantryItemsBatch` is exposed on `state` so the batch-add tool can write
  * through the same chokepoint; the single-item `commitPantryItem` is likewise bound
  * for the update/stock/delete tools. No `resourceListChanged()` — pantry is a Data
  * entity with no MCP resource.
  */
-export interface PantrySelf {
+export interface PantryState {
   readonly store: PantryStore;
   readonly cache: DiskCache<PantryItem>;
   /**
@@ -59,7 +59,7 @@ export interface PantrySelf {
 
 register(
   defineModule("pantry", ["aisle"])
-    .self<PantrySelf>(async (infra) => {
+    .state<PantryState>(async (infra) => {
       const store = new PantryStore({ pendingWriteTtlMs: resolvePendingWriteTtl(infra.config) });
       // Disk is flat: the cache's subdir is the original `<cacheDir>/pantry`
       // (reuse-in-place — ADR-0009 keeps the cache un-namespaced, so there is no migration).
@@ -79,7 +79,7 @@ register(
       // sync cycle that observes the cache mid-commit; cache I/O is wrapped so a
       // failure clears the mark instead of shielding the UID until TTL. No
       // resourceListChanged() — pantry has no MCP resource surface.
-      const commitPantryItem: PantrySelf["commitPantryItem"] = async (saved) => {
+      const commitPantryItem: PantryState["commitPantryItem"] = async (saved) => {
         if (saved.deleted) {
           const uid: PantryItemUid = saved.uid;
           store.markPendingDelete(uid);
@@ -106,7 +106,7 @@ register(
         }
       };
 
-      const commitPantryItemsBatch: PantrySelf["commitPantryItemsBatch"] = async (items) => {
+      const commitPantryItemsBatch: PantryState["commitPantryItemsBatch"] = async (items) => {
         if (items.length === 0) return;
         const markedUids: Array<PantryItemUid> = [];
         for (const item of items) {
@@ -172,10 +172,10 @@ register(
 
       return { store, cache, commitPantryItem, commitPantryItemsBatch, createItems };
     })
-    .build((self) => ({
+    .build((state) => ({
       api: {
-        hasSynced: () => self.store.hasSynced,
-        createItems: self.createItems,
+        hasSynced: () => state.store.hasSynced,
+        createItems: state.createItems,
       },
       tools: [
         listPantryItemsTool,
@@ -185,7 +185,7 @@ register(
         ...pantryStockTools,
         deletePantryItemTool,
       ],
-      syncs: [pantrySync(self)],
-      flush: () => self.cache.flush(),
+      syncs: [pantrySync(state)],
+      flush: () => state.cache.flush(),
     })),
 );

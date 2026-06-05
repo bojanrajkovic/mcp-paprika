@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import type { PantrySelf } from "../module.js";
+import type { PantryState } from "../module.js";
 
 import { makePantryItem } from "../../../../test/cache/__fixtures__/pantry.js";
 import { useKernelHarness } from "../../../../test/support/kernel-harness.js";
@@ -36,7 +36,7 @@ describe("list_pantry_items tool", () => {
     expect(milkIdx).toBeLessThan(sugarIdx);
 
     // UIDs are present so the caller can chain follow-up operations.
-    const items = (kh.self() as PantrySelf).store.getAll();
+    const items = (kh.state() as PantryState).store.getAll();
     for (const item of items) {
       expect(text).toContain(item.uid);
     }

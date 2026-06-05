@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import type { MealTypeUid } from "../../../ids.js";
 import type { DomainCtx } from "../../../kernel/registry.js";
-import type { MealSelf } from "../module.js";
+import type { MealState } from "../module.js";
 import type { Meal } from "../types.js";
 
 import { MealUidSchema, RecipeUidSchema } from "../../../ids.js";
@@ -32,7 +32,7 @@ export const logCookedMealInputSchema = z
 
 /**
  * Registers `log_cooked_meal`, kernel-shaped — writes through
- * `ctx.self.commitMealsBatch`, resolves the recipe via `ctx.deps.recipe.get` and
+ * `ctx.state.commitMealsBatch`, resolves the recipe via `ctx.deps.recipe.get` and
  * the meal type via `resolveOrCreateMealType` (an unknown `{name}` auto-creates a custom type).
  */
 export const logCookedMealTool = defineTool(
@@ -46,11 +46,11 @@ export const logCookedMealTool = defineTool(
       "`type` for a non-dinner meal. To log a freeform (non-recipe) meal or to plan ahead in bulk, use plan_meals.",
     inputSchema: logCookedMealInputSchema,
   },
-  (ctx: DomainCtx<MealSelf, "recipe" | "meal-type">) => {
+  (ctx: DomainCtx<MealState, "recipe" | "meal-type">) => {
     const log = ctx.infra.log.child({ component: "log_cooked_meal" });
     return async (args) => {
       log.info({ tool: "log_cooked_meal", recipe_uid: args.recipe_uid }, "tool invoked");
-      return mealStartGuard(ctx.self, ctx.deps["meal-type"]).match(
+      return mealStartGuard(ctx.state, ctx.deps["meal-type"]).match(
         async (): Promise<CallToolResult> => {
           // Date defaults to today; a supplied date snaps to its own-zone calendar
           // day (same normalization as plan_meals).
@@ -96,7 +96,7 @@ export const logCookedMealTool = defineTool(
             date,
             type: typeInteger,
             typeUid,
-            orderFlag: makeMealOrderFlagAssigner(ctx.self)(date),
+            orderFlag: makeMealOrderFlagAssigner(ctx.state)(date),
             isIngredient: false,
             scale: null,
             deleted: false,
@@ -105,7 +105,7 @@ export const logCookedMealTool = defineTool(
           let saved: Meal;
           try {
             const savedItems = await ctx.infra.client.saveMeals([meal]);
-            await ctx.self.commitMealsBatch(savedItems);
+            await ctx.state.commitMealsBatch(savedItems);
             saved = savedItems[0]!;
           } catch (error) {
             const message = toMessage(error);

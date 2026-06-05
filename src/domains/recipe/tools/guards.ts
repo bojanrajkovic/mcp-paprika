@@ -1,7 +1,7 @@
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { err, ok, type Result } from "neverthrow";
 
-import type { RecipeSelf } from "../module.js";
+import type { RecipeState } from "../module.js";
 
 import { textResult } from "../../../shared/tools.js";
 
@@ -10,7 +10,7 @@ import { textResult } from "../../../shared/tools.js";
  * domain-isolated, with no discover coupling. Same `Result<void, CallToolResult>`
  * shape, consumed via `.match()`.
  */
-export function recipeColdStartGuard(self: RecipeSelf): Result<void, CallToolResult> {
+export function recipeColdStartGuard(self: RecipeState): Result<void, CallToolResult> {
   if (!self.recipe.store.hasSynced) {
     return err(textResult("Recipe store is not yet synced. Try again in a few seconds."));
   }
@@ -22,7 +22,7 @@ export function recipeColdStartGuard(self: RecipeSelf): Result<void, CallToolRes
  * per category, `delete_category` scans recipes for references) AND the category
  * catalog synced. Within the recipe domain both stores are `self`.
  */
-export function categoryStartGuard(self: RecipeSelf): Result<void, CallToolResult> {
+export function categoryStartGuard(self: RecipeState): Result<void, CallToolResult> {
   return recipeColdStartGuard(self).andThen(() =>
     self.category.store.hasSynced
       ? ok(undefined)

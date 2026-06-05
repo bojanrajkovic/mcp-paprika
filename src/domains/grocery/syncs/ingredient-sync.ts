@@ -1,5 +1,5 @@
 import type { SyncContribution } from "../../../kernel/registry.js";
-import type { GrocerySelf } from "../module.js";
+import type { GroceryState } from "../module.js";
 
 import { pruneOrphanCache } from "../../../paprika/sync.js";
 
@@ -9,7 +9,7 @@ import { pruneOrphanCache } from "../../../paprika/sync.js";
  * pending-writes, so it does a direct `listGroceryIngredients`,
  * a no-aisle-row filter, manual
  * orphan-cache cleanup, then `store.load` + re-`put`. Reaches the domain's own
- * ingredient store and cache via `ctx.self.ingredients.*`.
+ * ingredient store and cache via `ctx.state.ingredients.*`.
  *
  * The no-aisle drop preserves the documented failure semantics: Paprika returns
  * `aisle_uid: null` for an ingredient never filed into an aisle (the schema coerces
@@ -22,14 +22,14 @@ import { pruneOrphanCache } from "../../../paprika/sync.js";
  * — the ingredient catalog has no
  * MCP resource surface and emits no `sync:complete`. NO `sweep` — the plain store
  * tracks no pending writes, so there is nothing to sweep; and so (unlike the
- * list/item sync factories) this one takes no `self` — its own store/cache are
+ * list/item sync factories) this one takes no `state` — its own store/cache are
  * reached through the `BootCtx` the kernel passes to `reconcile`.
  */
-export function groceryIngredientsSync(): SyncContribution<GrocerySelf, "aisle" | "pantry"> {
+export function groceryIngredientsSync(): SyncContribution<GroceryState, "aisle" | "pantry"> {
   return {
     tier: "core",
     reconcile: async (ctx): Promise<void> => {
-      const { store, cache } = ctx.self.ingredients;
+      const { store, cache } = ctx.state.ingredients;
       const { client, log } = ctx.infra;
 
       // 6. Ingredient catalog sync (replace-all, no pending-writes)

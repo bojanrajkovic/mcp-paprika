@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import type { AisleUid } from "../../../ids.js";
 import type { DomainCtx } from "../../../kernel/registry.js";
-import type { PantrySelf } from "../module.js";
+import type { PantryState } from "../module.js";
 import type { PantryItem } from "../types.js";
 
 import { NO_AISLE_UID, PantryItemUidSchema } from "../../../ids.js";
@@ -31,7 +31,7 @@ const itemInputSchema = z.object({
 
 /**
  * Registers `add_pantry_items`, kernel-shaped — writes through this module's bound
- * batch commit (`ctx.self.commitPantryItemsBatch`) and resolves aisles via the
+ * batch commit (`ctx.state.commitPantryItemsBatch`) and resolves aisles via the
  * declared `aisle` dependency contract (`ctx.deps.aisle.ensureAisle`), never
  * reaching aisle's store directly.
  */
@@ -48,11 +48,11 @@ export const addPantryItemsTool = defineTool(
       items: z.array(itemInputSchema).min(1).describe("Array of items to add (1 or more)"),
     },
   },
-  (ctx: DomainCtx<PantrySelf, "aisle">) => {
+  (ctx: DomainCtx<PantryState, "aisle">) => {
     const log = ctx.infra.log.child({ component: "add_pantry_items" });
     return async (args) => {
       log.info({ tool: "add_pantry_items", count: args.items.length }, "tool invoked");
-      return pantryStartGuard(ctx.self).match(
+      return pantryStartGuard(ctx.state).match(
         async (): Promise<CallToolResult> => {
           // Phase 1: All-or-nothing date validation
           type NormalizedDates = { expirationDate: string | null; purchaseDate: string };
@@ -103,7 +103,7 @@ export const addPantryItemsTool = defineTool(
               continue;
             }
 
-            const existingMatches = ctx.self.store.findByIngredient(item.ingredient);
+            const existingMatches = ctx.state.store.findByIngredient(item.ingredient);
             const existing = existingMatches[0];
             if (existing !== undefined && existing.ingredient.toLowerCase() === key) {
               skipMessages.push(
@@ -174,7 +174,7 @@ export const addPantryItemsTool = defineTool(
           let savedItems: ReadonlyArray<PantryItem>;
           try {
             savedItems = await ctx.infra.client.savePantryItems(builtItems);
-            await ctx.self.commitPantryItemsBatch(savedItems);
+            await ctx.state.commitPantryItemsBatch(savedItems);
           } catch (error) {
             const message = toMessage(error);
             log.error({ err: error }, "savePantryItems failed");

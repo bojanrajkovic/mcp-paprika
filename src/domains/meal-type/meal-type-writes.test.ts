@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Infra } from "../../kernel/registry.js";
-import type { MealTypeSelf } from "./module.js";
+import type { MealTypeState } from "./module.js";
 import type { MealType } from "./types.js";
 
 import { makeMealType } from "../../../test/cache/__fixtures__/meals.js";
@@ -30,7 +30,7 @@ const builtins = (): MealType[] => [
 describe("meal-type ensureMealType + pending-write reconcile", () => {
   let tempDir: string;
   let infra: Infra;
-  let self: MealTypeSelf;
+  let state: MealTypeState;
   const listMealTypes = vi.fn();
   const saveMealType = vi.fn();
   const notifySync = vi.fn();
@@ -43,7 +43,7 @@ describe("meal-type ensureMealType + pending-write reconcile", () => {
     infra = makeKernelInfra({ cacheDir: tempDir, client: { listMealTypes, saveMealType, notifySync } });
     const mod = registeredModules().find((m) => m.id === "meal-type");
     if (mod === undefined) throw new Error("meal-type module not registered");
-    self = (await mod.build(infra)).self as MealTypeSelf;
+    state = (await mod.build(infra)).state as MealTypeState;
   });
 
   afterEach(async () => {
@@ -51,9 +51,9 @@ describe("meal-type ensureMealType + pending-write reconcile", () => {
   });
 
   it("creates a custom type on a name miss (order_flag = max+1, originalType null), marks it pending", async () => {
-    self.store.load(builtins()); // marks the store synced
+    state.store.load(builtins()); // marks the store synced
 
-    const created = await self.ensureMealType("Brunch");
+    const created = await state.ensureMealType("Brunch");
 
     expect(created.name).toBe("Brunch");
     expect(created.originalType).toBeNull();
@@ -62,45 +62,45 @@ describe("meal-type ensureMealType + pending-write reconcile", () => {
     expect(saveMealType).toHaveBeenCalledOnce();
     expect(notifySync).toHaveBeenCalledOnce();
     // Committed to the store and shielded as pending-upsert until a sync confirms it.
-    expect(self.store.resolveByName("Brunch")?.uid).toBe(created.uid);
-    expect(self.store.isPendingUpsert(created.uid)).toBe(true);
+    expect(state.store.resolveByName("Brunch")?.uid).toBe(created.uid);
+    expect(state.store.isPendingUpsert(created.uid)).toBe(true);
   });
 
   it("returns the existing type on a case-insensitive name hit, without a POST", async () => {
-    self.store.load(builtins());
+    state.store.load(builtins());
 
-    const got = await self.ensureMealType("dinner");
+    const got = await state.ensureMealType("dinner");
 
     expect(got.uid).toBe("dinner-uid");
     expect(saveMealType).not.toHaveBeenCalled();
   });
 
   it("throws before the catalog has synced (can't distinguish missing from not-loaded)", async () => {
-    await expect(self.ensureMealType("Brunch")).rejects.toThrow(/not yet synced/);
+    await expect(state.ensureMealType("Brunch")).rejects.toThrow(/not yet synced/);
     expect(saveMealType).not.toHaveBeenCalled();
   });
 
   it("rejects an empty/whitespace name", async () => {
-    self.store.load(builtins());
-    await expect(self.ensureMealType("   ")).rejects.toThrow(/cannot be empty/);
+    state.store.load(builtins());
+    await expect(state.ensureMealType("   ")).rejects.toThrow(/cannot be empty/);
     expect(saveMealType).not.toHaveBeenCalled();
   });
 
   it("reconcile keeps a pending-upsert type absent from a stale list, then observation-clears", async () => {
-    self.store.load(builtins());
-    const created = await self.ensureMealType("Brunch");
-    expect(self.store.isPendingUpsert(created.uid)).toBe(true);
+    state.store.load(builtins());
+    const created = await state.ensureMealType("Brunch");
+    expect(state.store.isPendingUpsert(created.uid)).toBe(true);
 
     // A sync whose canonical list predates the create (Brunch absent) must NOT drop it.
     listMealTypes.mockResolvedValue(builtins());
-    await mealTypeSync(self).reconcile({ self, deps: {}, infra });
-    expect(self.store.resolveByName("Brunch")?.uid).toBe(created.uid); // merged back from cache
-    expect(self.store.isPendingUpsert(created.uid)).toBe(true); // not yet observed → still shielded
+    await mealTypeSync(state).reconcile({ state, deps: {}, infra });
+    expect(state.store.resolveByName("Brunch")?.uid).toBe(created.uid); // merged back from cache
+    expect(state.store.isPendingUpsert(created.uid)).toBe(true); // not yet observed → still shielded
 
     // Once the canonical list includes it, the pending mark clears on observation.
     listMealTypes.mockResolvedValue([...builtins(), created]);
-    await mealTypeSync(self).reconcile({ self, deps: {}, infra });
-    expect(self.store.resolveByName("Brunch")?.uid).toBe(created.uid);
-    expect(self.store.isPendingUpsert(created.uid)).toBe(false); // cleared
+    await mealTypeSync(state).reconcile({ state, deps: {}, infra });
+    expect(state.store.resolveByName("Brunch")?.uid).toBe(created.uid);
+    expect(state.store.isPendingUpsert(created.uid)).toBe(false); // cleared
   });
 });

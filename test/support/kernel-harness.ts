@@ -2,9 +2,9 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { vi } from "vitest";
 
-import type { GrocerySelf } from "../../src/domains/grocery/module.js";
-import type { MenuSelf } from "../../src/domains/menu/module.js";
-import type { RecipeSelf } from "../../src/domains/recipe/module.js";
+import type { GroceryState } from "../../src/domains/grocery/module.js";
+import type { MenuState } from "../../src/domains/menu/module.js";
+import type { RecipeState } from "../../src/domains/recipe/module.js";
 import type { DomainId, ErasedModule, Infra } from "../../src/kernel/registry.js";
 import type { PaprikaClient } from "../../src/paprika/client.js";
 import type { Notifier } from "../../src/server/notifier.js";
@@ -26,7 +26,7 @@ import "../../src/kernel/modules.generated.js";
 // ported test's `kh.seed({ recipes: [...] })` payload is unchanged.
 export type { SeedData } from "../fixtures/seed.js";
 
-/** A built module: the kernel's own erased build result (self/api/tools/resources/...). */
+/** A built module: the kernel's own erased build result (state/api/tools/resources/...). */
 type Built = Awaited<ReturnType<ErasedModule["build"]>>;
 
 function makeTestConfig(): PaprikaConfig {
@@ -117,14 +117,14 @@ interface StoreLike {
 function seedBuilt(built: ReadonlyMap<string, Built>, data: SeedData): void {
   const recipe = built.get("recipe");
   if (recipe !== undefined) {
-    const self = recipe.self as RecipeSelf;
-    if (data.recipes) self.recipe.store.load(data.recipes);
-    if (data.categories) self.category.store.load(data.categories);
-    if (data.photos) self.photo.store.load(data.photos);
+    const state = recipe.state as RecipeState;
+    if (data.recipes) state.recipe.store.load(data.recipes);
+    if (data.categories) state.category.store.load(data.categories);
+    if (data.photos) state.photo.store.load(data.photos);
   }
   const single = (id: string, items: ReadonlyArray<never> | undefined): void => {
     const b = built.get(id);
-    if (b !== undefined && items) (b.self as { store: StoreLike }).store.load(items);
+    if (b !== undefined && items) (b.state as { store: StoreLike }).store.load(items);
   };
   single("pantry", data.pantry as ReadonlyArray<never> | undefined);
   single("aisle", data.aisles as ReadonlyArray<never> | undefined);
@@ -132,16 +132,16 @@ function seedBuilt(built: ReadonlyMap<string, Built>, data: SeedData): void {
   single("meal-type", data.mealTypes as ReadonlyArray<never> | undefined);
   const grocery = built.get("grocery");
   if (grocery !== undefined) {
-    const self = grocery.self as GrocerySelf;
-    if (data.groceryLists) self.lists.store.load(data.groceryLists);
-    if (data.groceryItems) self.items.store.load(data.groceryItems);
-    if (data.groceryIngredients) self.ingredients.store.load(data.groceryIngredients);
+    const state = grocery.state as GroceryState;
+    if (data.groceryLists) state.lists.store.load(data.groceryLists);
+    if (data.groceryItems) state.items.store.load(data.groceryItems);
+    if (data.groceryIngredients) state.ingredients.store.load(data.groceryIngredients);
   }
   const menu = built.get("menu");
   if (menu !== undefined) {
-    const self = menu.self as MenuSelf;
-    if (data.menus) self.menus.store.load(data.menus);
-    if (data.menuItems) self.items.store.load(data.menuItems);
+    const state = menu.state as MenuState;
+    if (data.menus) state.menus.store.load(data.menus);
+    if (data.menuItems) state.items.store.load(data.menuItems);
   }
 }
 
@@ -151,7 +151,7 @@ interface LiveHarness {
   readonly callResourceList: (name: string) => Promise<unknown>;
   readonly callResource: (name: string, uid: string, uri?: string) => Promise<unknown>;
   readonly built: ReadonlyMap<string, Built>;
-  readonly rootSelf: unknown;
+  readonly rootState: unknown;
   readonly infra: Infra;
   readonly notifier: Notifier;
   readonly resourceListChanged: ReturnType<typeof vi.fn>;
@@ -193,10 +193,10 @@ export interface KernelHarness {
   readonly callResourceList: (name: string) => Promise<unknown>;
   readonly callResource: (name: string, uid: string, uri?: string) => Promise<unknown>;
   readonly seed: (data: SeedData) => void;
-  /** The root module's `self` — cast at the call site, e.g. `kh.self() as RecipeSelf`. */
-  readonly self: () => unknown;
-  /** Any built module's `self`, keyed by id (root + transitive deps). */
-  readonly selfOf: (id: string) => unknown;
+  /** The root module's `state` — cast at the call site, e.g. `kh.state() as RecipeState`. */
+  readonly state: () => unknown;
+  /** Any built module's `state`, keyed by id (root + transitive deps). */
+  readonly stateOf: (id: string) => unknown;
   readonly infra: () => Infra;
   readonly notifier: () => Notifier;
   /** The resource-list-changed spy on the stub notifier. */
@@ -234,7 +234,7 @@ export function useKernelHarness(rootId: DomainId, opts: UseKernelHarnessOptions
       for (const depId of rootModule.dependsOn) deps[depId] = built.get(depId)!.api;
 
       const { server, callTool, callResourceList, callResource } = makeTestServer();
-      const ctx = { self: root.self, deps, infra, server };
+      const ctx = { state: root.state, deps, infra, server };
       for (const tool of root.tools) tool.register(ctx);
       for (const resource of root.resources ?? []) resource(ctx);
 
@@ -244,7 +244,7 @@ export function useKernelHarness(rootId: DomainId, opts: UseKernelHarnessOptions
         callResourceList,
         callResource,
         built,
-        rootSelf: root.self,
+        rootState: root.state,
         infra,
         notifier: stub.notifier,
         resourceListChanged: stub.resourceListChanged,
@@ -260,8 +260,8 @@ export function useKernelHarness(rootId: DomainId, opts: UseKernelHarnessOptions
     seed: (data) => {
       seedBuilt(live().built, data);
     },
-    self: () => live().rootSelf,
-    selfOf: (id) => live().built.get(id)?.self,
+    state: () => live().rootState,
+    stateOf: (id) => live().built.get(id)?.state,
     infra: () => live().infra,
     notifier: () => live().notifier,
     resourceListChanged: () => live().resourceListChanged,

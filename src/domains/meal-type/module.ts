@@ -27,7 +27,7 @@ declare module "../../kernel/registry.js" {
  * `.build` does not; the read-only contract methods are assembled from `store` in
  * `.build`. This mirrors the aisle module's `ensureAisle`.
  */
-export interface MealTypeSelf {
+export interface MealTypeState {
   readonly store: MealTypeStore;
   readonly cache: DiskCache<MealType>;
   readonly ensureMealType: MealTypeApi["ensureMealType"];
@@ -35,7 +35,7 @@ export interface MealTypeSelf {
 
 register(
   defineModule("meal-type", [])
-    .self<MealTypeSelf>(async (infra) => {
+    .state<MealTypeState>(async (infra) => {
       const store = new MealTypeStore({ pendingWriteTtlMs: resolvePendingWriteTtl(infra.config) });
       // Disk is flat: the cache's subdir is the original `<cacheDir>/mealtypes`
       // (reuse-in-place — ADR-0009 keeps the cache un-namespaced, so there is no migration).
@@ -107,14 +107,14 @@ register(
 
       return { store, cache, ensureMealType };
     })
-    .build((self) => ({
+    .build((state) => ({
       api: {
         // Build the uid→name map from the catalog and resolve in order, skipping
         // unknown/dangling UIDs (the same projection the meal/menu renderers build
         // inline today). `MealTypeStore` has no `resolveNames` of its own.
         resolveNames: (uids) => {
           const nameByUid = new Map<string, string>();
-          for (const mt of self.store.getAll()) nameByUid.set(mt.uid, mt.name);
+          for (const mt of state.store.getAll()) nameByUid.set(mt.uid, mt.name);
           const names: Array<string> = [];
           for (const uid of uids) {
             const name = nameByUid.get(uid);
@@ -126,37 +126,37 @@ register(
         // store, returning a structured `MealTypeResolveResult`.
         resolveSpec: (spec) => {
           if ("uid" in spec) {
-            const resolved = self.store.getAll().find((mt) => mt.uid === spec.uid);
+            const resolved = state.store.getAll().find((mt) => mt.uid === spec.uid);
             if (resolved === undefined) {
               return { ok: false, reason: "unknown_uid", uid: spec.uid };
             }
             return { ok: true, resolved };
           }
           if ("name" in spec) {
-            const resolved = self.store.resolveByName(spec.name);
+            const resolved = state.store.resolveByName(spec.name);
             if (resolved === undefined) {
               return {
                 ok: false,
                 reason: "unknown_name",
                 name: spec.name,
-                knownNames: self.store.getAll().map((mt) => mt.name),
+                knownNames: state.store.getAll().map((mt) => mt.name),
               };
             }
             return { ok: true, resolved };
           }
           const builtinInt = spec.builtin;
-          const resolved = self.store.getAll().find((mt) => mt.originalType === builtinInt);
+          const resolved = state.store.getAll().find((mt) => mt.originalType === builtinInt);
           if (resolved === undefined) {
             return { ok: false, reason: "unknown_builtin", index: builtinInt };
           }
           return { ok: true, resolved };
         },
-        getAll: () => self.store.getAll(),
-        hasSynced: () => self.store.hasSynced,
-        ensureMealType: self.ensureMealType,
+        getAll: () => state.store.getAll(),
+        hasSynced: () => state.store.hasSynced,
+        ensureMealType: state.ensureMealType,
       },
       tools: [listMealTypesTool],
-      syncs: [mealTypeSync(self)],
-      flush: () => self.cache.flush(),
+      syncs: [mealTypeSync(state)],
+      flush: () => state.cache.flush(),
     })),
 );

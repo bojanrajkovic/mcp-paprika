@@ -4,7 +4,7 @@ import { z } from "zod";
 import type { MealTypeUid, RecipeUid } from "../../../ids.js";
 import type { DomainCtx } from "../../../kernel/registry.js";
 import type { MealType } from "../../meal-type/types.js";
-import type { MealSelf } from "../module.js";
+import type { MealState } from "../module.js";
 import type { Meal } from "../types.js";
 
 import { MealUidSchema, RecipeUidSchema } from "../../../ids.js";
@@ -77,7 +77,7 @@ export const addMealsInputSchema = z.object({
 });
 
 /**
- * Registers `plan_meals`, kernel-shaped — writes through `ctx.self.commitMealsBatch`
+ * Registers `plan_meals`, kernel-shaped — writes through `ctx.state.commitMealsBatch`
  * (the bound write chokepoint), resolves recipe links via `ctx.deps.recipe.get` and
  * meal types via `ctx.deps["meal-type"].resolveSpec`.
  */
@@ -98,11 +98,11 @@ export const planMealsTool = defineTool(
       "can fix all problems in one pass.",
     inputSchema: addMealsInputSchema.shape,
   },
-  (ctx: DomainCtx<MealSelf, "recipe" | "meal-type">) => {
+  (ctx: DomainCtx<MealState, "recipe" | "meal-type">) => {
     const log = ctx.infra.log.child({ component: "plan_meals" });
     return async (args) => {
       log.info({ tool: "plan_meals", count: args.items.length }, "tool invoked");
-      return mealStartGuard(ctx.self, ctx.deps["meal-type"]).match(
+      return mealStartGuard(ctx.state, ctx.deps["meal-type"]).match(
         async (): Promise<CallToolResult> => {
           // ----- Stage 1: per-index validation pass (collect ALL errors, not first-only) -----
           type ResolvedItem = {
@@ -220,7 +220,7 @@ export const planMealsTool = defineTool(
           // (date, type) — see makeMealOrderFlagAssigner for the wire-capture
           // rationale. The assigner seeds each date from the store and increments
           // within the batch so same-date items get sequential flags.
-          const assignFlag = makeMealOrderFlagAssigner(ctx.self);
+          const assignFlag = makeMealOrderFlagAssigner(ctx.state);
 
           const builtItems: Array<Meal> = resolved.map((r) => {
             // Either the type resolved during validation, or the one just auto-created.
@@ -247,7 +247,7 @@ export const planMealsTool = defineTool(
           let savedItems: ReadonlyArray<Meal>;
           try {
             savedItems = await ctx.infra.client.saveMeals(builtItems);
-            await ctx.self.commitMealsBatch(savedItems);
+            await ctx.state.commitMealsBatch(savedItems);
           } catch (error) {
             const message = toMessage(error);
             log.error({ err: error, count: builtItems.length }, "saveMeals failed");
@@ -322,7 +322,7 @@ export const updateMealInputSchema = z.object({
 });
 
 /**
- * Registers `update_meal`, kernel-shaped — writes through `ctx.self.commitMeal`,
+ * Registers `update_meal`, kernel-shaped — writes through `ctx.state.commitMeal`,
  * re-resolves recipe links via `ctx.deps.recipe.get`, meal types via
  * `ctx.deps["meal-type"].resolveSpec`.
  */
@@ -341,15 +341,15 @@ export const updateMealTool = defineTool(
       "use reschedule_meal. The is_ingredient and deleted fields are not updatable via this tool.",
     inputSchema: updateMealInputSchema.shape,
   },
-  (ctx: DomainCtx<MealSelf, "recipe" | "meal-type">) => {
+  (ctx: DomainCtx<MealState, "recipe" | "meal-type">) => {
     const log = ctx.infra.log.child({ component: "update_meal" });
     return async (args) => {
       log.info({ tool: "update_meal", uid: args.uid }, "tool invoked");
-      return mealStartGuard(ctx.self, ctx.deps["meal-type"]).match(
+      return mealStartGuard(ctx.state, ctx.deps["meal-type"]).match(
         async (): Promise<CallToolResult> => {
           const uid = args.uid;
           const op = args.update;
-          const existing = ctx.self.store.get(uid);
+          const existing = ctx.state.store.get(uid);
 
           if (existing === undefined) {
             return textResult(`No meal found with UID "${uid}" (it may not exist or was already deleted).`);
@@ -469,7 +469,7 @@ export const updateMealTool = defineTool(
           let saved: Meal;
           try {
             saved = (await ctx.infra.client.saveMeals([updated]))[0]!;
-            await ctx.self.commitMeal(saved);
+            await ctx.state.commitMeal(saved);
           } catch (error) {
             const message = toMessage(error);
             log.error({ err: error, uid }, "saveMeals failed");
@@ -489,7 +489,7 @@ const deleteMealInputSchema = z.object({
 });
 
 /**
- * Registers `delete_meal`, kernel-shaped — soft-deletes through `ctx.self.commitMeal`.
+ * Registers `delete_meal`, kernel-shaped — soft-deletes through `ctx.state.commitMeal`.
  */
 export const deleteMealTool = defineTool(
   {
@@ -501,14 +501,14 @@ export const deleteMealTool = defineTool(
       "returns a friendly 'already deleted' message without re-POSTing. Requires an exact UID.",
     inputSchema: deleteMealInputSchema.shape,
   },
-  (ctx: DomainCtx<MealSelf, "recipe" | "meal-type">) => {
+  (ctx: DomainCtx<MealState, "recipe" | "meal-type">) => {
     const log = ctx.infra.log.child({ component: "delete_meal" });
     return async (args) => {
       log.info({ tool: "delete_meal", uid: args.uid }, "tool invoked");
-      return mealStartGuard(ctx.self, ctx.deps["meal-type"]).match(
+      return mealStartGuard(ctx.state, ctx.deps["meal-type"]).match(
         async (): Promise<CallToolResult> => {
           const uid = args.uid;
-          const existing = ctx.self.store.get(uid);
+          const existing = ctx.state.store.get(uid);
 
           if (existing === undefined) {
             return textResult(`No meal found with UID "${uid}" (it may not exist or was already deleted).`);
@@ -516,7 +516,7 @@ export const deleteMealTool = defineTool(
           const trashed: Meal = { ...existing, deleted: true };
           try {
             const saved = (await ctx.infra.client.saveMeals([trashed]))[0]!;
-            await ctx.self.commitMeal(saved);
+            await ctx.state.commitMeal(saved);
           } catch (error) {
             const message = toMessage(error);
             log.error({ err: error, uid }, "saveMeals failed");

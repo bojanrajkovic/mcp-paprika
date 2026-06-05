@@ -4,7 +4,7 @@ import { z } from "zod";
 import type { DomainCtx } from "../../../kernel/registry.js";
 import type { PantryItem } from "../../pantry/types.js";
 import type { GroceryItem } from "../grocery-item/types.js";
-import type { GrocerySelf } from "../module.js";
+import type { GroceryState } from "../module.js";
 
 import { GroceryItemUidSchema, PantryItemUidSchema } from "../../../ids.js";
 import { defineTool } from "../../../kernel/tool.js";
@@ -39,11 +39,11 @@ export const moveToPantryTool = defineTool(
       uids: z.array(GroceryItemUidSchema).min(1).describe("Grocery item UIDs to move to pantry"),
     },
   },
-  (ctx: DomainCtx<GrocerySelf, "aisle" | "pantry">) => {
+  (ctx: DomainCtx<GroceryState, "aisle" | "pantry">) => {
     const log = ctx.infra.log.child({ component: "move_grocery_items_to_pantry" });
     return async (args) => {
       log.info({ tool: "move_grocery_items_to_pantry", count: args.uids.length }, "tool invoked");
-      return groceryStartGuard(ctx.self).match(
+      return groceryStartGuard(ctx.state).match(
         async (): Promise<CallToolResult> => {
           if (!ctx.deps.pantry.hasSynced()) {
             return textResult("Pantry is not yet synced. Try again in a few seconds.");
@@ -56,7 +56,7 @@ export const moveToPantryTool = defineTool(
           for (const uid of args.uids) {
             if (seen.has(uid)) continue;
             seen.add(uid);
-            const item = ctx.self.items.store.get(uid);
+            const item = ctx.state.items.store.get(uid);
             if (!item) {
               return textResult(`No grocery item found with UID "${uid}" (it may not exist or was already deleted).`);
             }
@@ -90,7 +90,7 @@ export const moveToPantryTool = defineTool(
               const trashedGrocery = items.map((gi) => ({ ...gi, deleted: true }));
               try {
                 const savedGrocery = await ctx.infra.client.saveGroceryItems(trashedGrocery);
-                await ctx.self.commitGroceryItemsBatch(savedGrocery);
+                await ctx.state.commitGroceryItemsBatch(savedGrocery);
               } catch (error) {
                 // Partial failure: pantry items created but grocery delete failed.
                 // Return structured message so user knows the state.

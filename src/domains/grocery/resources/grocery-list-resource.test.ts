@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import type { GroceryItemUid, GroceryListUid } from "../../../ids.js";
-import type { GrocerySelf } from "../module.js";
+import type { GroceryState } from "../module.js";
 
 import { makeGroceryItem } from "../../../../test/cache/__fixtures__/grocery-items.js";
 import { makeGroceryList } from "../../../../test/cache/__fixtures__/grocery-lists.js";
@@ -66,7 +66,7 @@ describe("grocery-list MCP resource", () => {
         groceryLists: [makeGroceryList({ uid: "gl-sync-1" as GroceryListUid, name: "Weekly" })],
         groceryItems: [],
       });
-      (kh.self() as GrocerySelf).lists.store.setLastSyncedAt(new Date("2026-05-24T12:00:00Z"));
+      (kh.state() as GroceryState).lists.store.setLastSyncedAt(new Date("2026-05-24T12:00:00Z"));
 
       const result = (await kh.callResource("grocery-lists", "gl-sync-1", "paprika://grocery-list/gl-sync-1")) as {
         contents: Array<{ text: string }>;

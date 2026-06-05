@@ -51,7 +51,7 @@ export interface GroceryEntitySlice<Store, Cache> {
 
 /**
  * The grocery module's internals — the three-entity domain (like recipe and
- * menu): THREE store/cache pairs in one `self`. Grocery lists and items are
+ * menu): THREE store/cache pairs in one `state`. Grocery lists and items are
  * `EntityStore`s (replace-all sync via `syncReplaceAllEntity`); the
  * ingredient catalog is a plain name-keyed store (a direct bespoke reconcile, no
  * pending-write sweep). Foreign keys point OUT to declared deps: items + ingredients
@@ -60,18 +60,18 @@ export interface GroceryEntitySlice<Store, Cache> {
  * store.
  *
  * The write-capable commit chokepoints (`commitGroceryList`, `commitGroceryItem`,
- * `commitGroceryItemsBatch`) are bound HERE in `.self`, not in `.build`, because they
+ * `commitGroceryItemsBatch`) are bound HERE in `.state`, not in `.build`, because they
  * WRITE — they close over `infra.client` and `infra.notifier`, which the factory has
  * and `.build` does not (mirrors aisle's `ensureAisle`, recipe's `commitRecipe`, and
- * menu's `commitMenu`). Reaches this module's own stores/caches (`self.lists.*` /
- * `self.items.*`) via `ctx.self`. Grocery lists and items
+ * menu's `commitMenu`). Reaches this module's own stores/caches (`state.lists.*` /
+ * `state.items.*`) via `ctx.state`. Grocery lists and items
  * both fire `resourceListChanged()` —
  * lists have an MCP resource surface and items are inlined in it; the ingredient
  * catalog write (in `add_grocery_items`) is silent and stays inline in the tool. The
  * read-only `api` is empty (no live sibling reads grocery — see `api.ts`); it is
  * assembled in `.build`.
  */
-export interface GrocerySelf {
+export interface GroceryState {
   readonly lists: GroceryEntitySlice<GroceryListStore, DiskCache<GroceryList>>;
   readonly items: GroceryEntitySlice<GroceryItemStore, DiskCache<GroceryItem>>;
   readonly ingredients: GroceryEntitySlice<GroceryIngredientStore, DiskCache<GroceryIngredient>>;
@@ -86,7 +86,7 @@ export interface GrocerySelf {
 
 register(
   defineModule("grocery", ["aisle", "pantry"])
-    .self<GrocerySelf>(async (infra) => {
+    .state<GroceryState>(async (infra) => {
       const client: PaprikaClient = infra.client;
       const notifier: Notifier = infra.notifier;
       const log: Logger = infra.log;
@@ -133,7 +133,7 @@ register(
       // lists AND items both fire resourceListChanged() — lists have an MCP resource
       // surface and items are inlined in it.
 
-      const commitGroceryList: GrocerySelf["commitGroceryList"] = async (saved) => {
+      const commitGroceryList: GroceryState["commitGroceryList"] = async (saved) => {
         if (saved.deleted) {
           const uid: GroceryListUid = saved.uid;
           listStore.markPendingDelete(uid);
@@ -160,7 +160,7 @@ register(
         await client.notifySync();
       };
 
-      const commitGroceryItem: GrocerySelf["commitGroceryItem"] = async (saved) => {
+      const commitGroceryItem: GroceryState["commitGroceryItem"] = async (saved) => {
         if (saved.deleted) {
           const uid: GroceryItemUid = saved.uid;
           itemStore.markPendingDelete(uid);
@@ -187,7 +187,7 @@ register(
         await client.notifySync();
       };
 
-      const commitGroceryItemsBatch: GrocerySelf["commitGroceryItemsBatch"] = async (items) => {
+      const commitGroceryItemsBatch: GroceryState["commitGroceryItemsBatch"] = async (items) => {
         if (items.length === 0) return;
         const markedUids: Array<GroceryItemUid> = [];
         for (const item of items) {
@@ -243,10 +243,10 @@ register(
         commitGroceryItemsBatch,
       };
     })
-    .build((self) => ({
+    .build((state) => ({
       // Empty contract — no live sibling reads grocery state (see api.ts).
       api: {},
-      // ctx is INFERRED — DomainCtx<GrocerySelf, "aisle" | "pantry">. Reaching any
+      // ctx is INFERRED — DomainCtx<GroceryState, "aisle" | "pantry">. Reaching any
       // other dep, or `ctx.deps.aisle.store` / `ctx.deps.pantry.store`, would not compile.
       tools: [
         listGroceryListsTool,
@@ -266,11 +266,11 @@ register(
       // Order matters: lists before items (children reference parent), then the
       // ingredient catalog. All three are core — inside the outer try that aborts the
       // sync cycle on failure.
-      syncs: [groceryListsSync(self), groceryItemsSync(self), groceryIngredientsSync()],
+      syncs: [groceryListsSync(state), groceryItemsSync(state), groceryIngredientsSync()],
       flush: async () => {
-        await self.lists.cache.flush();
-        await self.items.cache.flush();
-        await self.ingredients.cache.flush();
+        await state.lists.cache.flush();
+        await state.items.cache.flush();
+        await state.ingredients.cache.flush();
       },
     })),
 );

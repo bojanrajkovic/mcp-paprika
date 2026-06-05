@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { RecipeSelf } from "../module.js";
+import type { RecipeState } from "../module.js";
 
 import { makeRecipe } from "../../../../test/cache/__fixtures__/recipes.js";
 import { useKernelHarness } from "../../../../test/support/kernel-harness.js";
@@ -44,7 +44,7 @@ describe("favorite_recipe tool", () => {
 
     await kh.callTool("favorite_recipe", { uid: recipe.uid });
 
-    expect((kh.self() as RecipeSelf).recipe.store.get(recipe.uid)?.onFavorites).toBe(true);
+    expect((kh.state() as RecipeState).recipe.store.get(recipe.uid)?.onFavorites).toBe(true);
     expect(kh.resourceListChanged()).toHaveBeenCalled();
   });
 
@@ -119,7 +119,7 @@ describe("unfavorite_recipe tool", () => {
 
     await kh.callTool("unfavorite_recipe", { uid: recipe.uid });
 
-    expect((kh.self() as RecipeSelf).recipe.store.get(recipe.uid)?.onFavorites).toBe(false);
+    expect((kh.state() as RecipeState).recipe.store.get(recipe.uid)?.onFavorites).toBe(false);
     expect(kh.resourceListChanged()).toHaveBeenCalled();
   });
 

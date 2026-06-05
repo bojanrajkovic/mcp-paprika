@@ -28,7 +28,7 @@ function fakeModule(id: string, syncs: ReadonlyArray<SyncSpec>, flush?: () => Pr
   return {
     id,
     dependsOn: [],
-    build: async () => ({ self: {}, api: {}, tools: [], resources: undefined, syncs, onReady: undefined, flush }),
+    build: async () => ({ state: {}, api: {}, tools: [], resources: undefined, syncs, onReady: undefined, flush }),
   } as unknown as ErasedModule;
 }
 

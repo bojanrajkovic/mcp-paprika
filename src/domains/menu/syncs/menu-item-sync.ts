@@ -1,7 +1,7 @@
 import type { SyncContribution } from "../../../kernel/registry.js";
 import type { MenuItemSyncResult } from "../../../paprika/sync-types.js";
 import type { MenuItem } from "../menu-item/types.js";
-import type { MenuSelf } from "../module.js";
+import type { MenuState } from "../module.js";
 
 import { syncReplaceAllEntity } from "../../../paprika/sync.js";
 
@@ -28,21 +28,21 @@ function menuItemsEqual(a: MenuItem, b: MenuItem): boolean {
  * `MenuItemSyncResult` to be emitted as `sync:complete` (a child-item change
  * invalidates the parent resource).
  */
-export function menuItemsSync(self: MenuSelf): SyncContribution<MenuSelf, "recipe" | "meal-type"> {
+export function menuItemsSync(state: MenuState): SyncContribution<MenuState, "recipe" | "meal-type"> {
   return {
     tier: "additive",
     reconcile: async (ctx): Promise<MenuItemSyncResult> => {
       ctx.infra.log.debug("fetching menu items");
       const changes = await syncReplaceAllEntity({
         fetch: () => ctx.infra.client.listMenuItems(),
-        cache: ctx.self.items.cache,
-        store: ctx.self.items.store,
+        cache: ctx.state.items.cache,
+        store: ctx.state.items.store,
         equals: menuItemsEqual,
         label: "menu items",
         log: ctx.infra.log,
       });
       return { changeType: "menu-items", changes };
     },
-    sweep: () => self.items.store.sweepPending(),
+    sweep: () => state.items.store.sweepPending(),
   };
 }

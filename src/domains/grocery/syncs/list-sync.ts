@@ -1,7 +1,7 @@
 import type { SyncContribution } from "../../../kernel/registry.js";
 import type { GroceryListSyncResult } from "../../../paprika/sync-types.js";
 import type { GroceryList } from "../grocery-list/types.js";
-import type { GrocerySelf } from "../module.js";
+import type { GroceryState } from "../module.js";
 
 import { syncReplaceAllEntity } from "../../../paprika/sync.js";
 
@@ -27,22 +27,22 @@ function groceryListsEqual(a: GroceryList, b: GroceryList): boolean {
  * resource surface, so this returns a `GroceryListSyncResult` to be emitted as
  * `sync:complete`.
  */
-export function groceryListsSync(self: GrocerySelf): SyncContribution<GrocerySelf, "aisle" | "pantry"> {
+export function groceryListsSync(state: GroceryState): SyncContribution<GroceryState, "aisle" | "pantry"> {
   return {
     tier: "core",
     reconcile: async (ctx): Promise<GroceryListSyncResult> => {
       ctx.infra.log.debug("fetching grocery lists");
       const changes = await syncReplaceAllEntity({
         fetch: () => ctx.infra.client.listGroceryLists(),
-        cache: ctx.self.lists.cache,
-        store: ctx.self.lists.store,
+        cache: ctx.state.lists.cache,
+        store: ctx.state.lists.store,
         equals: groceryListsEqual,
         label: "grocery lists",
         log: ctx.infra.log,
-        afterLoad: () => ctx.self.lists.store.setLastSyncedAt(),
+        afterLoad: () => ctx.state.lists.store.setLastSyncedAt(),
       });
       return { changeType: "grocery-lists", changes };
     },
-    sweep: () => self.lists.store.sweepPending(),
+    sweep: () => state.lists.store.sweepPending(),
   };
 }

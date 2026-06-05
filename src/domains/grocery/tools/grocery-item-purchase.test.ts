@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { GroceryItemUid, GroceryListUid } from "../../../ids.js";
-import type { GrocerySelf } from "../module.js";
+import type { GroceryState } from "../module.js";
 
 import { makeGroceryItem } from "../../../../test/cache/__fixtures__/grocery-items.js";
 import { makeGroceryList } from "../../../../test/cache/__fixtures__/grocery-lists.js";
@@ -59,8 +59,8 @@ describe("mark_grocery_item_purchased tool", () => {
 
     await kh.callTool("mark_grocery_item_purchased", { uid: "ITEM-2" });
 
-    const self = kh.self() as GrocerySelf;
-    expect(self.items.store.get("ITEM-2" as GroceryItemUid)).toEqual(expect.objectContaining({ purchased: true }));
+    const state = kh.state() as GroceryState;
+    expect(state.items.store.get("ITEM-2" as GroceryItemUid)).toEqual(expect.objectContaining({ purchased: true }));
     expect(kh.resourceListChanged()).toHaveBeenCalled();
   });
 

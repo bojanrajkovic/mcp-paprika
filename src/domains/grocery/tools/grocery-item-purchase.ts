@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import type { DomainCtx } from "../../../kernel/registry.js";
 import type { GroceryItem } from "../grocery-item/types.js";
-import type { GrocerySelf } from "../module.js";
+import type { GroceryState } from "../module.js";
 
 import { GroceryItemUidSchema } from "../../../ids.js";
 import { defineTool } from "../../../kernel/tool.js";
@@ -20,7 +20,7 @@ export const markGroceryItemPurchasedInputSchema = z
 
 /**
  * Registers `mark_grocery_item_purchased`, kernel-shaped — the purchased intent verb,
- * writing through this module's bound `ctx.self.commitGroceryItem`.
+ * writing through this module's bound `ctx.state.commitGroceryItem`.
  */
 export const markGroceryItemPurchasedTool = defineTool(
   {
@@ -30,13 +30,13 @@ export const markGroceryItemPurchasedTool = defineTool(
     description: "Mark a grocery item as purchased (checked off) by UID.",
     inputSchema: markGroceryItemPurchasedInputSchema,
   },
-  (ctx: DomainCtx<GrocerySelf, "aisle" | "pantry">) => {
+  (ctx: DomainCtx<GroceryState, "aisle" | "pantry">) => {
     const log = ctx.infra.log.child({ component: "mark_grocery_item_purchased" });
     return async (args) => {
       log.info({ tool: "mark_grocery_item_purchased", uid: args.uid }, "tool invoked");
-      return groceryStartGuard(ctx.self).match(
+      return groceryStartGuard(ctx.state).match(
         async (): Promise<CallToolResult> => {
-          const existing = ctx.self.items.store.get(args.uid);
+          const existing = ctx.state.items.store.get(args.uid);
           if (existing === undefined) {
             return textResult(
               `No grocery item found with UID "${args.uid}" (it may not exist or was already deleted).`,
@@ -47,7 +47,7 @@ export const markGroceryItemPurchasedTool = defineTool(
           try {
             const updated: GroceryItem = { ...existing, purchased: true };
             saved = (await ctx.infra.client.saveGroceryItems([updated]))[0]!;
-            await ctx.self.commitGroceryItem(saved);
+            await ctx.state.commitGroceryItem(saved);
           } catch (error) {
             const message = toMessage(error);
             log.error({ err: error, uid: args.uid }, "saveGroceryItems failed");

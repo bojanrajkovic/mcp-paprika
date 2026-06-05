@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import type { CategoryUid, RecipeUid } from "../../../ids.js";
-import type { RecipeSelf } from "../module.js";
+import type { RecipeState } from "../module.js";
 
 import { makeCategory, makeRecipe } from "../../../../test/cache/__fixtures__/recipes.js";
 import { useKernelHarness } from "../../../../test/support/kernel-harness.js";
@@ -79,7 +79,7 @@ describe("recipe MCP resource", () => {
 
     it("includes Last synced when the store has been synced", async () => {
       kh.seed({ recipes: [makeRecipe({ uid: "test-recipe" as RecipeUid, name: "Test" })] });
-      (kh.self() as RecipeSelf).recipe.store.setLastSyncedAt(new Date("2026-05-24T12:00:00Z"));
+      (kh.state() as RecipeState).recipe.store.setLastSyncedAt(new Date("2026-05-24T12:00:00Z"));
 
       const result = (await kh.callResource("recipes", "test-recipe")) as { contents: Array<{ text: string }> };
       expect(result.contents[0]?.text).toContain("**Last synced:** 2026-05-24T12:00:00.000Z");

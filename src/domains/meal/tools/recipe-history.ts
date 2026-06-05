@@ -2,7 +2,7 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 
 import type { DomainCtx } from "../../../kernel/registry.js";
 import type { MealTypeApi } from "../../meal-type/api.js";
-import type { MealSelf } from "../module.js";
+import type { MealState } from "../module.js";
 import type { Meal } from "../types.js";
 
 import { RecipeUidSchema } from "../../../ids.js";
@@ -41,7 +41,7 @@ function makeTypeLabeler(mealType: MealTypeApi): (meal: Readonly<Meal>) => strin
  * meal-owned (`MealStore.cookedHistory`); recipe is dependency-free and meal
  * already `dependsOn` recipe, so a recipe→meal edge would be a build-time
  * dependency cycle — "last cooked" stays meal-side (ADR-0009). Reads meal data via
- * `ctx.self.store`; resolves the recipe name via `ctx.deps.recipe` and meal-type
+ * `ctx.state.store`; resolves the recipe name via `ctx.deps.recipe` and meal-type
  * labels via `ctx.deps["meal-type"]`.
  */
 export const readRecipeHistoryTool = defineTool(
@@ -63,11 +63,11 @@ export const readRecipeHistoryTool = defineTool(
       ),
     },
   },
-  (ctx: DomainCtx<MealSelf, "recipe" | "meal-type">) => {
+  (ctx: DomainCtx<MealState, "recipe" | "meal-type">) => {
     const log = ctx.infra.log.child({ component: "read_recipe_history" });
     return async (args) => {
       log.info({ tool: "read_recipe_history", recipe_uid: args.recipe_uid }, "tool invoked");
-      return mealStartGuard(ctx.self, ctx.deps["meal-type"]).match(
+      return mealStartGuard(ctx.state, ctx.deps["meal-type"]).match(
         async (): Promise<CallToolResult> => {
           const recipe = ctx.deps.recipe.get(args.recipe_uid);
           if (recipe === undefined) {
@@ -79,7 +79,7 @@ export const readRecipeHistoryTool = defineTool(
 
           // Headline date from `lastCookedAt` (null ⇒ never cooked); the count + recent
           // list from `cookedHistory` (the same past-cook rule lastCookedAt heads).
-          const lastCooked = ctx.self.store.lastCookedAt(args.recipe_uid);
+          const lastCooked = ctx.state.store.lastCookedAt(args.recipe_uid);
           if (lastCooked === null) {
             return textResult(
               `**${recipe.name}** has no cooking history yet. ` +
@@ -87,7 +87,7 @@ export const readRecipeHistoryTool = defineTool(
             );
           }
 
-          const history = ctx.self.store.cookedHistory(args.recipe_uid);
+          const history = ctx.state.store.cookedHistory(args.recipe_uid);
           const labelType = makeTypeLabeler(ctx.deps["meal-type"]);
           const count = history.length;
 

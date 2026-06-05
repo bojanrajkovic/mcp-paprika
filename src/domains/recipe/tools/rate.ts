@@ -2,7 +2,7 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 
 import type { DomainCtx } from "../../../kernel/registry.js";
-import type { RecipeSelf } from "../module.js";
+import type { RecipeState } from "../module.js";
 
 import { RecipeUidSchema } from "../../../ids.js";
 import { defineTool } from "../../../kernel/tool.js";
@@ -18,7 +18,7 @@ export const rateRecipeInputSchema = z
   })
   .strict();
 
-/** Registers `rate_recipe`, kernel-shaped — writes through `ctx.self.commitRecipe`. */
+/** Registers `rate_recipe`, kernel-shaped — writes through `ctx.state.commitRecipe`. */
 export const rateRecipeTool = defineTool(
   {
     name: "rate_recipe",
@@ -27,13 +27,13 @@ export const rateRecipeTool = defineTool(
     description: "Rate a recipe 0–5 stars by UID. Sets the recipe's star rating; pass 0 to clear it.",
     inputSchema: rateRecipeInputSchema,
   },
-  (ctx: DomainCtx<RecipeSelf, never>) => {
+  (ctx: DomainCtx<RecipeState, never>) => {
     const log = ctx.infra.log.child({ component: "rate_recipe" });
     return async (args) => {
       log.info({ tool: "rate_recipe", uid: args.uid }, "tool invoked");
-      return recipeColdStartGuard(ctx.self).match(
+      return recipeColdStartGuard(ctx.state).match(
         async (): Promise<CallToolResult> => {
-          const existing = ctx.self.recipe.store.get(args.uid);
+          const existing = ctx.state.recipe.store.get(args.uid);
 
           if (!existing) {
             return textResult(`No recipe found with UID "${args.uid}" (it may not exist or was already deleted).`);
@@ -44,14 +44,14 @@ export const rateRecipeTool = defineTool(
           let saved: typeof existing;
           try {
             saved = await ctx.infra.client.saveRecipe(updated);
-            await ctx.self.commitRecipe(saved);
+            await ctx.state.commitRecipe(saved);
           } catch (error) {
             const message = toMessage(error);
             log.error({ err: error, uid: args.uid }, "saveRecipe failed");
             return textResult(`Failed to rate recipe: ${message}`);
           }
 
-          const categoryNames = ctx.self.category.store.resolveNames(saved.categories);
+          const categoryNames = ctx.state.category.store.resolveNames(saved.categories);
           return textResult(recipeToMarkdown(saved, categoryNames));
         },
         (guard) => guard,

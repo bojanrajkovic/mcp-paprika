@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { MealTypeUid, MenuItemUid, MenuUid } from "../../../ids.js";
-import type { MenuSelf } from "../module.js";
+import type { MenuState } from "../module.js";
 
 import { makeMealType } from "../../../../test/cache/__fixtures__/meals.js";
 import { makeMenu, makeMenuItem } from "../../../../test/cache/__fixtures__/menus.js";
@@ -40,7 +40,7 @@ describe("create_menu tool", () => {
     expect(savedArg?.deleted).toBe(false);
     expect(savedArg?.uid).toMatch(/^[0-9A-F-]{36}$/);
     expect(kh.resourceListChanged()).toHaveBeenCalled();
-    expect((kh.self() as MenuSelf).menus.store.getAll()).toHaveLength(1);
+    expect((kh.state() as MenuState).menus.store.getAll()).toHaveLength(1);
   });
 
   it("honors explicit days and notes", async () => {
@@ -233,7 +233,7 @@ describe("delete_menu tool", () => {
     expect(kh.client().saveMenus).toHaveBeenCalledOnce();
     const savedArgs = vi.mocked(kh.client().saveMenus).mock.calls[0]?.[0];
     expect(savedArgs?.[0]?.deleted).toBe(true);
-    expect((kh.self() as MenuSelf).menus.store.get("m-1" as MenuUid)).toBeUndefined();
+    expect((kh.state() as MenuState).menus.store.get("m-1" as MenuUid)).toBeUndefined();
     expect(kh.resourceListChanged()).toHaveBeenCalled();
   });
 
@@ -269,8 +269,8 @@ describe("delete_menu tool", () => {
     expect(itemsOrder).toBeLessThan(menusOrder);
 
     // stores reflect the cascade
-    expect((kh.self() as MenuSelf).items.store.getByMenuUid("m-1" as MenuUid)).toHaveLength(0);
-    expect((kh.self() as MenuSelf).menus.store.get("m-1" as MenuUid)).toBeUndefined();
+    expect((kh.state() as MenuState).items.store.getByMenuUid("m-1" as MenuUid)).toHaveLength(0);
+    expect((kh.state() as MenuState).menus.store.get("m-1" as MenuUid)).toBeUndefined();
   });
 
   it("reports a UID miss without saving", async () => {

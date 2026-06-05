@@ -1,7 +1,7 @@
 import sharp from "sharp";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { RecipeSelf } from "../module.js";
+import type { RecipeState } from "../module.js";
 import type { Photo } from "../photo/types.js";
 import type { Recipe } from "../types.js";
 
@@ -341,7 +341,7 @@ describe("delete_recipe_photo", () => {
     await kh.callTool("delete_recipe_photo", { photo_uid: "p-1" });
     vi.mocked(kh.client().deletePhoto).mockClear();
     // After the first delete the photo is gone from the store; a second delete short-circuits.
-    expect((kh.self() as RecipeSelf).photo.store.get(PhotoUidSchema.parse("p-1"))).toBeUndefined();
+    expect((kh.state() as RecipeState).photo.store.get(PhotoUidSchema.parse("p-1"))).toBeUndefined();
     const result = await kh.callTool("delete_recipe_photo", { photo_uid: "p-1" });
 
     expect(getText(result)).toContain("already deleted");

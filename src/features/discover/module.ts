@@ -24,14 +24,14 @@ declare module "../../kernel/registry.js" {
  * than being conditionally registered (ADR-0009 §5#9). The `embedder` rides along
  * for symmetry / future per-cycle re-indexing and is `null` on the same condition.
  */
-export interface DiscoverSelf {
+export interface DiscoverState {
   readonly vectorStore: VectorStore | null;
   readonly embedder: EmbeddingClient | null;
 }
 
 register(
   defineModule("discover", ["recipe"])
-    .self<DiscoverSelf>(async (infra) => {
+    .state<DiscoverState>(async (infra) => {
       // Read embeddings config off the root's single parsed config (carried on infra).
       // Using `infra.config` ensures there is no second, divergent parse whose error
       // arm would silently disable the feature. Unconfigured → a null vectorStore,
@@ -70,7 +70,7 @@ register(
         // the initial `syncOnce()`, so the recipe store is warm. All recipe reads go through
         // the recipe contract (`ctx.deps.recipe`), never a store reach-around.
         index: async (ctx) => {
-          const { vectorStore } = ctx.self;
+          const { vectorStore } = ctx.state;
           if (vectorStore === null) return; // feature disabled — nothing to index
 
           const discoverLog = ctx.infra.log.child({ component: "discover" });

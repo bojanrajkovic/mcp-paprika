@@ -49,12 +49,12 @@ export interface MenuEntitySlice<Store, Cache> {
  * `resourceListChanged()`.
  *
  * The write-capable commit chokepoints (`commitMenu`, `commitMenuItem`,
- * `commitMenuItemsBatch`) are bound HERE in `.self`, not in `.build`, because they
+ * `commitMenuItemsBatch`) are bound HERE in `.state`, not in `.build`, because they
  * WRITE — they close over `infra.client` and `infra.notifier`, which the factory has
  * and `.build` does not (mirrors aisle's `ensureAisle` and recipe's `commitRecipe`).
  * The read-only contract methods are assembled from the stores in `.build`.
  */
-export interface MenuSelf {
+export interface MenuState {
   readonly menus: MenuEntitySlice<MenuStore, DiskCache<Menu>>;
   readonly items: MenuEntitySlice<MenuItemStore, DiskCache<MenuItem>>;
 
@@ -68,7 +68,7 @@ export interface MenuSelf {
 
 register(
   defineModule("menu", ["recipe", "meal-type"])
-    .self<MenuSelf>(async (infra) => {
+    .state<MenuState>(async (infra) => {
       const client: PaprikaClient = infra.client;
       const notifier: Notifier = infra.notifier;
       const log: Logger = infra.log;
@@ -103,7 +103,7 @@ register(
       // menuitems both fire resourceListChanged() — menus have an MCP resource surface
       // and menuitems are inlined in it.
 
-      const commitMenu: MenuSelf["commitMenu"] = async (saved) => {
+      const commitMenu: MenuState["commitMenu"] = async (saved) => {
         if (saved.deleted) {
           const uid = saved.uid;
           menuStore.markPendingDelete(uid);
@@ -130,7 +130,7 @@ register(
         await client.notifySync();
       };
 
-      const commitMenuItem: MenuSelf["commitMenuItem"] = async (saved) => {
+      const commitMenuItem: MenuState["commitMenuItem"] = async (saved) => {
         if (saved.deleted) {
           const uid = saved.uid;
           menuItemStore.markPendingDelete(uid);
@@ -157,7 +157,7 @@ register(
         await client.notifySync();
       };
 
-      const commitMenuItemsBatch: MenuSelf["commitMenuItemsBatch"] = async (items) => {
+      const commitMenuItemsBatch: MenuState["commitMenuItemsBatch"] = async (items) => {
         if (items.length === 0) return;
         const markedUids: Array<MenuItem["uid"]> = [];
         for (const item of items) {
@@ -206,14 +206,14 @@ register(
         commitMenuItemsBatch,
       };
     })
-    .build((self) => ({
+    .build((state) => ({
       api: {
-        get: (uid) => self.menus.store.get(uid),
-        findByName: (query) => self.menus.store.findByName(query),
-        itemsOf: (menuUid) => self.items.store.getByMenuUid(menuUid),
-        hasSynced: () => self.menus.store.hasSynced && self.items.store.hasSynced,
+        get: (uid) => state.menus.store.get(uid),
+        findByName: (query) => state.menus.store.findByName(query),
+        itemsOf: (menuUid) => state.items.store.getByMenuUid(menuUid),
+        hasSynced: () => state.menus.store.hasSynced && state.items.store.hasSynced,
       },
-      // ctx is INFERRED — DomainCtx<MenuSelf, "recipe" | "meal-type">. Reaching any
+      // ctx is INFERRED — DomainCtx<MenuState, "recipe" | "meal-type">. Reaching any
       // other dep, or `ctx.deps.recipe.store` / `.cache`, would not compile.
       tools: [
         listMenusTool,
@@ -230,10 +230,10 @@ register(
       // Order matters: menu before menu-item (children reference parent). Both
       // additive — a soft read surface must not abort core sync, so the kernel
       // runs each in its own best-effort try/catch.
-      syncs: [menusSync(self), menuItemsSync(self)],
+      syncs: [menusSync(state), menuItemsSync(state)],
       flush: async () => {
-        await self.menus.cache.flush();
-        await self.items.cache.flush();
+        await state.menus.cache.flush();
+        await state.items.cache.flush();
       },
     })),
 );

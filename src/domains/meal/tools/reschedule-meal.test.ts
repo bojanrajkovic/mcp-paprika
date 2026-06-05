@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { MealTypeUid, MealUid, RecipeUid } from "../../../ids.js";
-import type { MealSelf } from "../module.js";
+import type { MealState } from "../module.js";
 import type { Meal } from "../types.js";
 
 import { makeMeal, makeMealType } from "../../../../test/cache/__fixtures__/meals.js";
@@ -51,7 +51,7 @@ describe("reschedule_meal tool", () => {
 
     await kh.callTool("reschedule_meal", { uid: TEST_MEAL_UID, date: "2026-06-15" });
 
-    const stored = (kh.self() as MealSelf).store.get(TEST_MEAL_UID);
+    const stored = (kh.state() as MealState).store.get(TEST_MEAL_UID);
     expect(stored?.date).toBe("2026-06-15 00:00:00");
     // Destination date is empty → first in its order_flag sequence (0). All other
     // non-date-derived fields are preserved.
@@ -84,7 +84,7 @@ describe("reschedule_meal tool", () => {
 
     await kh.callTool("reschedule_meal", { uid: TEST_MEAL_UID, date: "2026-06-15", type: { name: "Dinner" } });
 
-    const stored = (kh.self() as MealSelf).store.get(TEST_MEAL_UID);
+    const stored = (kh.state() as MealState).store.get(TEST_MEAL_UID);
     expect(stored?.date).toBe("2026-06-15 00:00:00");
     expect(stored?.typeUid).toBe(DINNER_UID); // type co-change applied
     expect(stored?.orderFlag).toBe(1); // destination max (0) + 1, not the preserved 0
@@ -110,7 +110,7 @@ describe("reschedule_meal tool", () => {
 
     await kh.callTool("reschedule_meal", { uid: TEST_MEAL_UID, date: "2026-06-15", type: { name: "Dinner" } });
 
-    const stored = (kh.self() as MealSelf).store.get(TEST_MEAL_UID);
+    const stored = (kh.state() as MealState).store.get(TEST_MEAL_UID);
     expect(stored?.typeUid).toBe(DINNER_UID);
     expect(stored?.orderFlag).toBe(5); // same date → position preserved
     expect(kh.client().saveMeals).toHaveBeenCalledOnce();

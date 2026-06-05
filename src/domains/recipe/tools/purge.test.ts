@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { RecipeUid } from "../../../ids.js";
-import type { RecipeSelf } from "../module.js";
+import type { RecipeState } from "../module.js";
 
 import { makeRecipe } from "../../../../test/cache/__fixtures__/recipes.js";
 import { useKernelHarness } from "../../../../test/support/kernel-harness.js";
@@ -56,7 +56,7 @@ describe("purge_recipe tool", () => {
       await kh.callTool("purge_recipe", { uid: trashed.uid });
 
       // Real store assertion — recipe hard-deleted from the kernel store.
-      expect((kh.self() as RecipeSelf).recipe.store.get(trashed.uid)).toBeUndefined();
+      expect((kh.state() as RecipeState).recipe.store.get(trashed.uid)).toBeUndefined();
       expect(kh.resourceListChanged()).toHaveBeenCalled();
     });
 
@@ -175,7 +175,7 @@ describe("purge_recipe tool", () => {
       expect(text.toLowerCase()).toContain("not in the trash");
       expect(kh.client().saveRecipe).not.toHaveBeenCalled(); // a reconcile, not a Paprika write
       // Local store healed to authoritative truth.
-      expect((kh.self() as RecipeSelf).recipe.store.get(uid)?.inTrash).toBe(false);
+      expect((kh.state() as RecipeState).recipe.store.get(uid)?.inTrash).toBe(false);
       expect(kh.resourceListChanged()).toHaveBeenCalled();
     });
 
@@ -191,7 +191,7 @@ describe("purge_recipe tool", () => {
       const text = getText(await kh.callTool("purge_recipe", { uid }));
 
       expect(text.toLowerCase()).toContain("no recipe found");
-      expect((kh.self() as RecipeSelf).recipe.store.get(uid)).toBeUndefined(); // phantom dropped locally
+      expect((kh.state() as RecipeState).recipe.store.get(uid)).toBeUndefined(); // phantom dropped locally
       expect(kh.resourceListChanged()).toHaveBeenCalled();
       expect(kh.client().saveRecipe).not.toHaveBeenCalled();
     });

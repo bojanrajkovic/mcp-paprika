@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { RecipeSelf } from "../module.js";
+import type { RecipeState } from "../module.js";
 
 import { makeRecipe } from "../../../../test/cache/__fixtures__/recipes.js";
 import { useKernelHarness } from "../../../../test/support/kernel-harness.js";
@@ -21,7 +21,7 @@ describe("trash_recipe tool", () => {
 
     expect(text).toContain("Pasta Carbonara");
     expect(text.toLowerCase()).toContain("trash");
-    expect((kh.self() as RecipeSelf).recipe.store.get(recipe.uid)?.inTrash).toBe(true);
+    expect((kh.state() as RecipeState).recipe.store.get(recipe.uid)?.inTrash).toBe(true);
   });
 
   it("calls saveRecipe with inTrash: true and notifySync exactly once", async () => {
@@ -44,7 +44,7 @@ describe("trash_recipe tool", () => {
 
     await kh.callTool("trash_recipe", { uid: recipe.uid });
 
-    expect((kh.self() as RecipeSelf).recipe.store.get(recipe.uid)?.inTrash).toBe(true);
+    expect((kh.state() as RecipeState).recipe.store.get(recipe.uid)?.inTrash).toBe(true);
   });
 
   it("UID not found returns a not-found message and skips the API call", async () => {
