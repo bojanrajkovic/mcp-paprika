@@ -16,47 +16,47 @@ import {
 } from "./config.js";
 
 describe("Configuration loading", () => {
-  describe("config-loader.AC7.3: ConfigError class", () => {
-    it("config-loader.AC7.3.1: ConfigError is an instance of Error", () => {
+  describe("ConfigError", () => {
+    it("is an instance of Error", () => {
       const error = ConfigError.invalidJson("/path/config.json", new Error("test"));
       expect(error).toBeInstanceOf(Error);
     });
 
-    it("config-loader.AC7.3.2: ConfigError has readonly reason field", () => {
+    it("has a readonly reason field", () => {
       const error = ConfigError.invalidJson("/path/config.json", new Error("test"));
       expect(error.reason).toBeDefined();
       expect(typeof error.reason).toBe("string");
     });
 
-    it("config-loader.AC7.3.3: ConfigError has readonly kind field", () => {
+    it("has a readonly kind field", () => {
       const error = ConfigError.invalidJson("/path/config.json", new Error("test"));
       expect(error.kind).toBeDefined();
       expect(["invalid_json", "file_read_error", "validation"]).toContain(error.kind);
     });
 
-    it("config-loader.AC7.3.4: ConfigError.invalidJson() creates error with kind 'invalid_json'", () => {
+    it("ConfigError.invalidJson() creates error with kind 'invalid_json'", () => {
       const error = ConfigError.invalidJson("/path/config.json", new Error("unexpected token"));
       expect(error.kind).toBe("invalid_json");
       expect(error.reason).toContain("/path/config.json");
       expect(error.reason).toContain("unexpected token");
     });
 
-    it("config-loader.AC7.3.5: ConfigError.fileReadError() creates error with kind 'file_read_error'", () => {
+    it("ConfigError.fileReadError() creates error with kind 'file_read_error'", () => {
       const error = ConfigError.fileReadError("/path/config.json", new Error("EACCES"));
       expect(error.kind).toBe("file_read_error");
       expect(error.reason).toContain("/path/config.json");
       expect(error.reason).toContain("EACCES");
     });
 
-    it("config-loader.AC7.3.6: ConfigError.validation() creates error with kind 'validation'", () => {
+    it("ConfigError.validation() creates error with kind 'validation'", () => {
       const issues: z.ZodIssue[] = [];
       const error = ConfigError.validation(issues);
       expect(error.kind).toBe("validation");
     });
   });
 
-  describe("config-loader.AC6.4: Validation error formatting", () => {
-    it("config-loader.AC6.4.1: ConfigError.validation() produces human-readable formatted output", () => {
+  describe("Validation error formatting", () => {
+    it("ConfigError.validation() produces human-readable formatted output", () => {
       const mockIssues: z.ZodIssue[] = [
         {
           code: z.ZodIssueCode.invalid_type,
@@ -75,7 +75,7 @@ describe("Configuration loading", () => {
       expect(error.reason).toMatch(/^\s*-\s+paprika\.email/m);
     });
 
-    it("config-loader.AC6.4.2: ConfigError.validation() formats multiple issues", () => {
+    it("ConfigError.validation() formats multiple issues", () => {
       const mockIssues: z.ZodIssue[] = [
         {
           code: z.ZodIssueCode.invalid_type,
@@ -100,7 +100,7 @@ describe("Configuration loading", () => {
       expect(error.reason).toContain("PAPRIKA_PASSWORD");
     });
 
-    it("config-loader.AC6.4.3: ConfigError.validation() handles unknown paths without env var hints", () => {
+    it("ConfigError.validation() handles unknown paths without env var hints", () => {
       const mockIssues: z.ZodIssue[] = [
         {
           code: z.ZodIssueCode.custom,
@@ -116,10 +116,10 @@ describe("Configuration loading", () => {
     });
   });
 
-  describe("config-loader.AC3: Duration field", () => {
+  describe("Duration field", () => {
     const validBase = { paprika: { email: "user@test.com", password: "secret" } };
 
-    it("config-loader.AC3.1: accepts '15m' string and resolves to 900000 ms", () => {
+    it("accepts '15m' string and resolves to 900000 ms", () => {
       const input = { ...validBase, sync: { interval: "15m" } };
       const result = paprikaConfigSchema.safeParse(input);
       expect(result.success).toBe(true);
@@ -128,7 +128,7 @@ describe("Configuration loading", () => {
       }
     });
 
-    it("config-loader.AC3.2: accepts 'PT15M' ISO 8601 and resolves to 900000 ms", () => {
+    it("accepts 'PT15M' ISO 8601 and resolves to 900000 ms", () => {
       const input = { ...validBase, sync: { interval: "PT15M" } };
       const result = paprikaConfigSchema.safeParse(input);
       expect(result.success).toBe(true);
@@ -137,7 +137,7 @@ describe("Configuration loading", () => {
       }
     });
 
-    it("config-loader.AC3.3: accepts 15 (number, minutes) and resolves to 900000 ms", () => {
+    it("accepts 15 (number, minutes) and resolves to 900000 ms", () => {
       const input = { ...validBase, sync: { interval: 15 } };
       const result = paprikaConfigSchema.safeParse(input);
       expect(result.success).toBe(true);
@@ -146,13 +146,13 @@ describe("Configuration loading", () => {
       }
     });
 
-    it("config-loader.AC3.4: rejects 'abc' with validation error", () => {
+    it("rejects 'abc' with validation error", () => {
       const input = { ...validBase, sync: { interval: "abc" } };
       const result = paprikaConfigSchema.safeParse(input);
       expect(result.success).toBe(false);
     });
 
-    it("config-loader.AC3.5: accepts '60s' for pendingWriteTtl and resolves to 60000 ms", () => {
+    it("accepts '60s' for pendingWriteTtl and resolves to 60000 ms", () => {
       const input = { ...validBase, sync: { pendingWriteTtl: "60s" } };
       const result = paprikaConfigSchema.safeParse(input);
       expect(result.success).toBe(true);
@@ -161,7 +161,7 @@ describe("Configuration loading", () => {
       }
     });
 
-    it("config-loader.AC3.6: default pendingWriteTtl is 60000 ms when no sync block provided", () => {
+    it("default pendingWriteTtl is 60000 ms when no sync block provided", () => {
       const result = paprikaConfigSchema.safeParse(validBase);
       expect(result.success).toBe(true);
       if (result.success) {
@@ -188,10 +188,10 @@ describe("Configuration loading", () => {
     });
   });
 
-  describe("config-loader.AC4: Boolean field (PAPRIKA_SYNC_ENABLED)", () => {
+  describe("Boolean field (PAPRIKA_SYNC_ENABLED)", () => {
     const validBase = { paprika: { email: "user@test.com", password: "secret" } };
 
-    it("config-loader.AC4.1: 'true' string sets sync.enabled to true", () => {
+    it("'true' string sets sync.enabled to true", () => {
       const input = { ...validBase, sync: { enabled: "true" } };
       const result = paprikaConfigSchema.safeParse(input);
       expect(result.success).toBe(true);
@@ -200,7 +200,7 @@ describe("Configuration loading", () => {
       }
     });
 
-    it("config-loader.AC4.2: 'false' string sets sync.enabled to false", () => {
+    it("'false' string sets sync.enabled to false", () => {
       const input = { ...validBase, sync: { enabled: "false" } };
       const result = paprikaConfigSchema.safeParse(input);
       expect(result.success).toBe(true);
@@ -209,7 +209,7 @@ describe("Configuration loading", () => {
       }
     });
 
-    it("config-loader.AC4.3: '1' string sets sync.enabled to true", () => {
+    it("'1' string sets sync.enabled to true", () => {
       const input = { ...validBase, sync: { enabled: "1" } };
       const result = paprikaConfigSchema.safeParse(input);
       expect(result.success).toBe(true);
@@ -218,7 +218,7 @@ describe("Configuration loading", () => {
       }
     });
 
-    it("config-loader.AC4.4: '0' string sets sync.enabled to false", () => {
+    it("'0' string sets sync.enabled to false", () => {
       const input = { ...validBase, sync: { enabled: "0" } };
       const result = paprikaConfigSchema.safeParse(input);
       expect(result.success).toBe(true);
@@ -227,17 +227,17 @@ describe("Configuration loading", () => {
       }
     });
 
-    it("config-loader.AC4.5: 'yes' string produces validation error", () => {
+    it("'yes' string produces validation error", () => {
       const input = { ...validBase, sync: { enabled: "yes" } };
       const result = paprikaConfigSchema.safeParse(input);
       expect(result.success).toBe(false);
     });
   });
 
-  describe("config-loader.AC1: Defaults", () => {
+  describe("Defaults", () => {
     const validBase = { paprika: { email: "user@test.com", password: "secret" } };
 
-    it("config-loader.AC1.3: default sync.enabled is true when no sync block provided", () => {
+    it("default sync.enabled is true when no sync block provided", () => {
       const result = paprikaConfigSchema.safeParse(validBase);
       expect(result.success).toBe(true);
       if (result.success) {
@@ -245,7 +245,7 @@ describe("Configuration loading", () => {
       }
     });
 
-    it("config-loader.AC1.4: default sync.interval is 900000 ms when no sync block provided", () => {
+    it("default sync.interval is 900000 ms when no sync block provided", () => {
       const result = paprikaConfigSchema.safeParse(validBase);
       expect(result.success).toBe(true);
       if (result.success) {
@@ -253,7 +253,7 @@ describe("Configuration loading", () => {
       }
     });
 
-    it("config-loader.AC1.5: features is undefined when no features block provided", () => {
+    it("features is undefined when no features block provided", () => {
       const result = paprikaConfigSchema.safeParse(validBase);
       expect(result.success).toBe(true);
       if (result.success) {
@@ -262,8 +262,8 @@ describe("Configuration loading", () => {
     });
   });
 
-  describe("config-loader.AC6: Validation errors", () => {
-    it("config-loader.AC6.1: missing email produces validation error with PAPRIKA_EMAIL hint", () => {
+  describe("Validation errors", () => {
+    it("missing email produces validation error with PAPRIKA_EMAIL hint", () => {
       const result = paprikaConfigSchema.safeParse({ paprika: {} });
       expect(result.success).toBe(false);
       if (!result.success) {
@@ -272,7 +272,7 @@ describe("Configuration loading", () => {
       }
     });
 
-    it("config-loader.AC6.1b: entirely absent paprika produces env var hints", () => {
+    it("entirely absent paprika produces env var hints", () => {
       const result = paprikaConfigSchema.safeParse({});
       expect(result.success).toBe(false);
       if (!result.success) {
@@ -282,7 +282,7 @@ describe("Configuration loading", () => {
       }
     });
 
-    it("config-loader.AC6.2: missing password produces validation error with PAPRIKA_PASSWORD hint", () => {
+    it("missing password produces validation error with PAPRIKA_PASSWORD hint", () => {
       const result = paprikaConfigSchema.safeParse({ paprika: {} });
       expect(result.success).toBe(false);
       if (!result.success) {
@@ -291,7 +291,7 @@ describe("Configuration loading", () => {
       }
     });
 
-    it("config-loader.AC6.3: empty string email fails validation", () => {
+    it("empty string email fails validation", () => {
       const input = {
         paprika: { email: "", password: "secret" },
       };
@@ -300,10 +300,10 @@ describe("Configuration loading", () => {
     });
   });
 
-  describe("config-loader.AC7: Type exports", () => {
+  describe("Type exports", () => {
     const validBase = { paprika: { email: "user@test.com", password: "secret" } };
 
-    it("config-loader.AC7.1: PaprikaConfig has paprika, sync, and optional features fields", () => {
+    it("PaprikaConfig has paprika, sync, and optional features fields", () => {
       const result = paprikaConfigSchema.safeParse(validBase);
       expect(result.success).toBe(true);
       if (result.success) {
@@ -320,7 +320,7 @@ describe("Configuration loading", () => {
       }
     });
 
-    it("config-loader.AC7.2: EmbeddingConfig has required apiKey, baseUrl, model string fields", () => {
+    it("EmbeddingConfig has required apiKey, baseUrl, model string fields", () => {
       // Compile-time verification: this const can only be assigned if it has the required fields
       const embeddingConfig: EmbeddingConfig = {
         apiKey: "test-key",
@@ -333,7 +333,6 @@ describe("Configuration loading", () => {
     });
   });
 
-  // OAuth config validation tests (AC3.9, AC6.2, AC6.3)
   describe("OAuth config", () => {
     const OAUTH_ENV_VARS = [
       "MCP_PUBLIC_URL",
@@ -378,7 +377,7 @@ describe("Configuration loading", () => {
       rmSync(tempDir, { recursive: true, force: true });
     });
 
-    describe("oauth21-http.AC3.9: Allowlist validation", () => {
+    describe("Allowlist validation", () => {
       it("rejects HTTP transport with both MCP_ALLOWED_EMAILS and MCP_ALLOWED_SUBS empty", () => {
         process.env["PAPRIKA_EMAIL"] = "user@test.com";
         process.env["PAPRIKA_PASSWORD"] = "secret";
@@ -460,7 +459,7 @@ describe("Configuration loading", () => {
       });
     });
 
-    describe("oauth21-http.AC6.2: Public URL requirement", () => {
+    describe("Public URL requirement", () => {
       it("rejects HTTP transport without MCP_PUBLIC_URL", () => {
         process.env["PAPRIKA_EMAIL"] = "user@test.com";
         process.env["PAPRIKA_PASSWORD"] = "secret";
@@ -483,7 +482,7 @@ describe("Configuration loading", () => {
       });
     });
 
-    describe("oauth21-http.AC6.3: HTTPS requirement", () => {
+    describe("HTTPS requirement", () => {
       it("rejects HTTP transport with http:// URL", () => {
         process.env["PAPRIKA_EMAIL"] = "user@test.com";
         process.env["PAPRIKA_PASSWORD"] = "secret";
@@ -816,8 +815,7 @@ describe("Configuration loading", () => {
     });
   });
 
-  // Phase 2: loadConfig integration tests
-  describe("Phase 2: loadConfig integration", () => {
+  describe("loadConfig integration", () => {
     // Shared test infrastructure
     const CONFIG_ENV_VARS = [
       "PAPRIKA_EMAIL",
@@ -877,8 +875,8 @@ describe("Configuration loading", () => {
       writeFileSync(join(dir, ".env"), content);
     }
 
-    describe("config-loader.AC1: loadConfig returns valid PaprikaConfig", () => {
-      it("config-loader.AC1.1: loadConfig returns ok with PaprikaConfig when env vars are set", () => {
+    describe("loadConfig returns valid PaprikaConfig", () => {
+      it("loadConfig returns ok with PaprikaConfig when env vars are set", () => {
         process.env["PAPRIKA_EMAIL"] = "user@test.com";
         process.env["PAPRIKA_PASSWORD"] = "secret";
 
@@ -893,7 +891,7 @@ describe("Configuration loading", () => {
         );
       });
 
-      it("config-loader.AC1.2: loadConfig returns ok with PaprikaConfig when config.json provides credentials", () => {
+      it("loadConfig returns ok with PaprikaConfig when config.json provides credentials", () => {
         writeFileSync(
           join(tempDir, "config.json"),
           JSON.stringify({ paprika: { email: "user@test.com", password: "secret" } }),
@@ -911,8 +909,8 @@ describe("Configuration loading", () => {
       });
     });
 
-    describe("config-loader.AC2: Source priority chain", () => {
-      it("config-loader.AC2.1: Env var PAPRIKA_EMAIL overrides config.json", () => {
+    describe("Source priority chain", () => {
+      it("env var PAPRIKA_EMAIL overrides config.json", () => {
         writeConfig(tempDir, {
           paprika: { email: "file@test.com", password: "filepw" },
         });
@@ -929,7 +927,7 @@ describe("Configuration loading", () => {
         );
       });
 
-      it("config-loader.AC2.2: Real env vars override .env file values", () => {
+      it("real env vars override .env file values", () => {
         writeDotEnv(tempDir, {
           PAPRIKA_EMAIL: "dotenv@test.com",
           PAPRIKA_PASSWORD: "dotenvpw",
@@ -947,7 +945,7 @@ describe("Configuration loading", () => {
         );
       });
 
-      it("config-loader.AC2.3: .env file values override config.json values", () => {
+      it(".env file values override config.json values", () => {
         writeConfig(tempDir, {
           paprika: { email: "file@test.com", password: "filepw" },
         });
@@ -964,7 +962,7 @@ describe("Configuration loading", () => {
         );
       });
 
-      it("config-loader.AC2.4: Zod defaults apply when no source provides a value", () => {
+      it("Zod defaults apply when no source provides a value", () => {
         process.env["PAPRIKA_EMAIL"] = "user@test.com";
         process.env["PAPRIKA_PASSWORD"] = "secret";
 
@@ -980,8 +978,8 @@ describe("Configuration loading", () => {
       });
     });
 
-    describe("config-loader.AC5: File handling", () => {
-      it("config-loader.AC5.1: Missing config.json (ENOENT) does not cause an error", () => {
+    describe("File handling", () => {
+      it("missing config.json (ENOENT) does not cause an error", () => {
         process.env["PAPRIKA_EMAIL"] = "user@test.com";
         process.env["PAPRIKA_PASSWORD"] = "secret";
 
@@ -993,7 +991,7 @@ describe("Configuration loading", () => {
         );
       });
 
-      it("config-loader.AC5.2: Missing .env file does not cause an error", () => {
+      it("missing .env file does not cause an error", () => {
         writeConfig(tempDir, {
           paprika: { email: "user@test.com", password: "secret" },
         });
@@ -1006,7 +1004,7 @@ describe("Configuration loading", () => {
         );
       });
 
-      it("config-loader.AC5.3: Invalid JSON in config.json produces ConfigError with kind 'invalid_json'", () => {
+      it("invalid JSON in config.json produces ConfigError with kind 'invalid_json'", () => {
         writeFileSync(join(tempDir, "config.json"), "not valid json {");
 
         process.env["PAPRIKA_EMAIL"] = "user@test.com";
@@ -1023,7 +1021,7 @@ describe("Configuration loading", () => {
       });
 
       it.runIf(process.getuid?.() !== 0)(
-        "config-loader.AC5.4: Permission error on config.json produces ConfigError with kind 'file_read_error'",
+        "permission error on config.json produces ConfigError with kind 'file_read_error'",
         () => {
           writeConfig(tempDir, {
             paprika: { email: "user@test.com", password: "secret" },
@@ -1045,8 +1043,8 @@ describe("Configuration loading", () => {
       );
     });
 
-    describe("config-loader.AC9: transport + HTTP config", () => {
-      it("config-loader.AC9.1: defaults — transport is 'stdio', http.port is 3000, http.host is '0.0.0.0'", () => {
+    describe("transport + HTTP config", () => {
+      it("defaults — transport is 'stdio', http.port is 3000, http.host is '0.0.0.0'", () => {
         process.env["PAPRIKA_EMAIL"] = "user@test.com";
         process.env["PAPRIKA_PASSWORD"] = "secret";
 
@@ -1062,7 +1060,7 @@ describe("Configuration loading", () => {
         );
       });
 
-      it("config-loader.AC9.2: MCP_TRANSPORT=http sets transport", () => {
+      it("MCP_TRANSPORT=http sets transport", () => {
         process.env["PAPRIKA_EMAIL"] = "user@test.com";
         process.env["PAPRIKA_PASSWORD"] = "secret";
         process.env["MCP_TRANSPORT"] = "http";
@@ -1082,7 +1080,7 @@ describe("Configuration loading", () => {
         );
       });
 
-      it("config-loader.AC9.3: MCP_TRANSPORT=foo is rejected by validation", () => {
+      it("MCP_TRANSPORT=foo is rejected by validation", () => {
         process.env["PAPRIKA_EMAIL"] = "user@test.com";
         process.env["PAPRIKA_PASSWORD"] = "secret";
         process.env["MCP_TRANSPORT"] = "foo";
@@ -1098,7 +1096,7 @@ describe("Configuration loading", () => {
         );
       });
 
-      it("config-loader.AC9.4: MCP_HTTP_PORT='8080' string is coerced to number", () => {
+      it("MCP_HTTP_PORT='8080' string is coerced to number", () => {
         process.env["PAPRIKA_EMAIL"] = "user@test.com";
         process.env["PAPRIKA_PASSWORD"] = "secret";
         process.env["MCP_HTTP_PORT"] = "8080";
@@ -1113,7 +1111,7 @@ describe("Configuration loading", () => {
         );
       });
 
-      it("config-loader.AC9.5: MCP_HTTP_PORT='0' is rejected (below min 1)", () => {
+      it("MCP_HTTP_PORT='0' is rejected (below min 1)", () => {
         process.env["PAPRIKA_EMAIL"] = "user@test.com";
         process.env["PAPRIKA_PASSWORD"] = "secret";
         process.env["MCP_HTTP_PORT"] = "0";
@@ -1129,7 +1127,7 @@ describe("Configuration loading", () => {
         );
       });
 
-      it("config-loader.AC9.6: MCP_HTTP_PORT='70000' is rejected (above max 65535)", () => {
+      it("MCP_HTTP_PORT='70000' is rejected (above max 65535)", () => {
         process.env["PAPRIKA_EMAIL"] = "user@test.com";
         process.env["PAPRIKA_PASSWORD"] = "secret";
         process.env["MCP_HTTP_PORT"] = "70000";
@@ -1145,7 +1143,7 @@ describe("Configuration loading", () => {
         );
       });
 
-      it("config-loader.AC9.7: MCP_HTTP_HOST='127.0.0.1' is accepted", () => {
+      it("MCP_HTTP_HOST='127.0.0.1' is accepted", () => {
         process.env["PAPRIKA_EMAIL"] = "user@test.com";
         process.env["PAPRIKA_PASSWORD"] = "secret";
         process.env["MCP_HTTP_HOST"] = "127.0.0.1";
@@ -1160,7 +1158,7 @@ describe("Configuration loading", () => {
         );
       });
 
-      it("config-loader.AC9.8: http.allowedHosts and http.allowedOrigins default to empty arrays", () => {
+      it("http.allowedHosts and http.allowedOrigins default to empty arrays", () => {
         process.env["PAPRIKA_EMAIL"] = "user@test.com";
         process.env["PAPRIKA_PASSWORD"] = "secret";
 
@@ -1175,7 +1173,7 @@ describe("Configuration loading", () => {
         );
       });
 
-      it("config-loader.AC9.9: MCP_ALLOWED_HOSTS splits and trims comma-separated values", () => {
+      it("MCP_ALLOWED_HOSTS splits and trims comma-separated values", () => {
         process.env["PAPRIKA_EMAIL"] = "user@test.com";
         process.env["PAPRIKA_PASSWORD"] = "secret";
         process.env["MCP_ALLOWED_HOSTS"] = "mcp.example.com, mcp.internal:3000 ,localhost";
@@ -1190,7 +1188,7 @@ describe("Configuration loading", () => {
         );
       });
 
-      it("config-loader.AC9.10: MCP_ALLOWED_ORIGINS splits and trims comma-separated values", () => {
+      it("MCP_ALLOWED_ORIGINS splits and trims comma-separated values", () => {
         process.env["PAPRIKA_EMAIL"] = "user@test.com";
         process.env["PAPRIKA_PASSWORD"] = "secret";
         process.env["MCP_ALLOWED_ORIGINS"] = "https://app.example.com,https://other.example.com";
@@ -1206,13 +1204,13 @@ describe("Configuration loading", () => {
       });
     });
 
-    describe("config-loader.AC8: stdio transport hygiene (issue #49)", () => {
+    describe("stdio transport hygiene (issue #49)", () => {
       // MCP servers communicate over stdio; any stray write to stdout (or any
       // stream that flushes through it, like console.log) corrupts the
       // JSON-RPC frame and crashes the client. dotenv 17+ prints an "◇
       // injected env" banner via console.log when it loads a .env file unless
       // told otherwise, so loadConfig must pass quiet: true.
-      it("config-loader.AC8.1: loadConfig writes nothing to stdout when a .env file is present", () => {
+      it("loadConfig writes nothing to stdout when a .env file is present", () => {
         writeDotEnv(tempDir, {
           PAPRIKA_EMAIL: "user@test.com",
           PAPRIKA_PASSWORD: "secret",
@@ -1235,7 +1233,7 @@ describe("Configuration loading", () => {
         }
       });
 
-      it("config-loader.AC8.2: loadConfig writes nothing to stdout when no .env file is present", () => {
+      it("loadConfig writes nothing to stdout when no .env file is present", () => {
         process.env["PAPRIKA_EMAIL"] = "user@test.com";
         process.env["PAPRIKA_PASSWORD"] = "secret";
 
@@ -1258,12 +1256,10 @@ describe("Configuration loading", () => {
     });
   });
 
-  // structured-logging.AC10: Logger config knobs route through PaprikaConfig
-  describe("structured-logging.AC10: logging block schema and env var routing", () => {
+  describe("logging block schema and env var routing", () => {
     const validBase = { paprika: { email: "user@test.com", password: "secret" } };
 
-    // Task 2: Schema tests
-    describe("structured-logging.AC10.1: schema rejects invalid logging.level", () => {
+    describe("schema rejects invalid logging.level", () => {
       it("rejects logging.level='info-ish' with a validation error", () => {
         const input = { ...validBase, logging: { level: "info-ish" } };
         const result = paprikaConfigSchema.safeParse(input);
@@ -1283,7 +1279,7 @@ describe("Configuration loading", () => {
       });
     });
 
-    describe("structured-logging.AC10.3: logging block defaults", () => {
+    describe("logging block defaults", () => {
       it("defaults level to 'info' when no logging block provided", () => {
         const result = paprikaConfigSchema.safeParse(validBase);
         expect(result.success).toBe(true);
@@ -1343,8 +1339,7 @@ describe("Configuration loading", () => {
       });
     });
 
-    // Task 3: Env var routing tests (using synthetic env via exported buildEnvOverrides)
-    describe("structured-logging.AC10.2: MCP_LOG_* env var routing", () => {
+    describe("MCP_LOG_* env var routing", () => {
       it("MCP_LOG_LEVEL=debug routes to logging.level", () => {
         const overrides = buildEnvOverrides({ MCP_LOG_LEVEL: "debug" });
         const merged = deepMerge(validBase, overrides);

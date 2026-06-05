@@ -219,7 +219,7 @@ async function fetchHealth(handle: HttpTransportHandle): Promise<{ ok: boolean; 
 }
 
 describe("HTTP transport (Streamable HTTP)", () => {
-  describe("HT.1: POST /mcp initialize returns a session id and grows the session map", () => {
+  describe("POST /mcp initialize returns a session id and grows the session map", () => {
     it("creates a new session and reports it in /healthz", async () => {
       const handle = await startHttp(makeConfig());
       try {
@@ -233,7 +233,7 @@ describe("HTTP transport (Streamable HTTP)", () => {
     });
   });
 
-  describe("HT.2: tools/list includes the expected stdio-mode tools (discover gated on vector store)", () => {
+  describe("tools/list includes the expected stdio-mode tools (discover gated on vector store)", () => {
     it("contains every expected tool name", async () => {
       const handle = await startHttp(makeConfig());
       try {
@@ -263,7 +263,7 @@ describe("HTTP transport (Streamable HTTP)", () => {
     });
   });
 
-  describe("HT.3: tools/call list_categories returns mocked data", () => {
+  describe("tools/call list_categories returns mocked data", () => {
     it("response text contains both mocked category names", async () => {
       const handle = await startHttp(makeConfig());
       try {
@@ -286,7 +286,7 @@ describe("HTTP transport (Streamable HTTP)", () => {
     });
   });
 
-  describe("HT.4: two clients get independent session ids", () => {
+  describe("two clients get independent session ids", () => {
     it("/healthz reports sessions === 2 after both initialize", async () => {
       const handle = await startHttp(makeConfig());
       try {
@@ -301,7 +301,7 @@ describe("HTTP transport (Streamable HTTP)", () => {
     });
   });
 
-  describe("HT.5: DELETE /mcp evicts the session", () => {
+  describe("DELETE /mcp evicts the session", () => {
     it("session count drops to 0 after a DELETE with the session id", async () => {
       const handle = await startHttp(makeConfig());
       try {
@@ -326,7 +326,7 @@ describe("HTTP transport (Streamable HTTP)", () => {
     });
   });
 
-  describe("HT.6: stale session id returns 404", () => {
+  describe("stale session id returns 404", () => {
     it("returns 404 for a request with an unknown mcp-session-id", async () => {
       const handle = await startHttp(makeConfig());
       try {
@@ -346,7 +346,7 @@ describe("HTTP transport (Streamable HTTP)", () => {
     });
   });
 
-  describe("HT.7: non-initialize request without session id returns 400", () => {
+  describe("non-initialize request without session id returns 400", () => {
     it("rejects a tools/list call that lacks both session id and initialize body", async () => {
       const handle = await startHttp(makeConfig());
       try {
@@ -365,7 +365,7 @@ describe("HTTP transport (Streamable HTTP)", () => {
     });
   });
 
-  describe("HT.8: GET /healthz returns ok with session count", () => {
+  describe("GET /healthz returns ok with session count", () => {
     it("returns { ok: true, sessions: 0 } before any client connects", async () => {
       const handle = await startHttp(makeConfig());
       try {
@@ -380,7 +380,7 @@ describe("HTTP transport (Streamable HTTP)", () => {
     });
   });
 
-  describe("HT.10: DNS rebinding protection toggles", () => {
+  describe("DNS rebinding protection toggles", () => {
     // @hono/mcp's StreamableHTTPTransport implements its own DNS rebinding
     // validation that is stricter than the upstream SDK's: when
     // allowedOrigins is non-empty, requests MUST carry an Origin header that
@@ -504,7 +504,7 @@ describe("HTTP transport (Streamable HTTP)", () => {
     });
   });
 
-  describe("HT.9: graceful shutdown aborts open SSE streams within the timeout", () => {
+  describe("graceful shutdown aborts open SSE streams within the timeout", () => {
     it("returns from shutdown() promptly and refuses further connections", async () => {
       const handle = await startHttp(makeConfig());
       const sessionId = await initializeSession(handle);
@@ -603,7 +603,7 @@ function makeOAuthConfig(): PaprikaConfig {
       clientSecret: "test-upstream-secret",
       // Tests drive different x-forwarded-for values to exercise the per-IP
       // rate-limit window; with trustProxy=false the limiter would collapse
-      // everyone into one bucket and AC5.1 / AC5.2 would interfere.
+      // everyone into one bucket and the rate-limit tests would interfere.
       trustProxy: true,
       allowlist: { emails: ["user@example.com"], subs: [] },
       redirectAllowlist: ["https://claude.ai"],
@@ -653,25 +653,25 @@ describe("HTTP transport — OAuth mounted", () => {
     await oauthXdg.teardown();
   });
 
-  describe("OA.1/AC2.1+AC6.1: OAuth authorization server metadata", () => {
-    it("AC2.1/AC6.1: GET /.well-known/oauth-authorization-server returns customized metadata with exact issuer", async () => {
-      // PLAN says (phase_07.md:513-521): issuer must be exact PUBLIC_URL (no trailing slash);
+  describe("OAuth authorization server metadata", () => {
+    it("GET /.well-known/oauth-authorization-server returns customized metadata with exact issuer", async () => {
+      // issuer must be exact PUBLIC_URL (no trailing slash);
       // token_endpoint_auth_methods_supported must be ["none"]; code_challenge_methods_supported
       // must be ["S256"]; id_token_signing_alg_values_supported must NOT be present.
       const res = await fetch(`http://127.0.0.1:${oauthPort.toString()}/.well-known/oauth-authorization-server`);
       expect(res.status).toBe(200);
       const body = (await res.json()) as Record<string, unknown>;
-      expect(body["issuer"]).toBe(PUBLIC_URL); // AC6.1: exact issuer, no trailing slash
-      expect(body["token_endpoint_auth_methods_supported"]).toEqual(["none"]); // AC2.1: public client
+      expect(body["issuer"]).toBe(PUBLIC_URL); // exact issuer, no trailing slash
+      expect(body["token_endpoint_auth_methods_supported"]).toEqual(["none"]); // public client
       expect(body["code_challenge_methods_supported"]).toEqual(["S256"]);
       expect(body["authorization_response_iss_parameter_supported"]).toBe(true);
-      expect(body).not.toHaveProperty("id_token_signing_alg_values_supported"); // AC2.13
+      expect(body).not.toHaveProperty("id_token_signing_alg_values_supported");
     });
   });
 
-  describe("OA.2/AC2.2: Protected resource metadata", () => {
-    it("AC2.2: GET /.well-known/oauth-protected-resource returns RFC 9728 doc", async () => {
-      // PLAN says (phase_07.md:524): protected-resource doc advertises resource = issuer
+  describe("Protected resource metadata", () => {
+    it("GET /.well-known/oauth-protected-resource returns RFC 9728 doc", async () => {
+      // protected-resource doc advertises resource = issuer
       const res = await fetch(`http://127.0.0.1:${oauthPort.toString()}/.well-known/oauth-protected-resource`);
       expect(res.status).toBe(200);
       const body = (await res.json()) as Record<string, unknown>;
@@ -680,9 +680,9 @@ describe("HTTP transport — OAuth mounted", () => {
     });
   });
 
-  describe("OA.3/AC2.13: No forbidden metadata values", () => {
-    it("AC2.13: scan all published metadata for forbidden 'none' or non-S256 PKCE", async () => {
-      // PLAN says (phase_07.md:527-537): no 'none' alg, only S256 PKCE method
+  describe("No forbidden metadata values", () => {
+    it("scan all published metadata for forbidden 'none' or non-S256 PKCE", async () => {
+      // no 'none' alg, only S256 PKCE method
       const authMeta = (await fetch(
         `http://127.0.0.1:${oauthPort.toString()}/.well-known/oauth-authorization-server`,
       ).then((r) => r.json())) as Record<string, unknown>;
@@ -713,9 +713,9 @@ describe("HTTP transport — OAuth mounted", () => {
     });
   });
 
-  describe("OA.4/AC1.1+AC2.6: Dynamic client registration", () => {
-    it("AC1.1/AC2.6: POST /register returns 201 with client_id + registration_access_token; no client_secret", async () => {
-      // PLAN says (phase_07.md:540-551): DCR creates a public client without client_secret
+  describe("Dynamic client registration", () => {
+    it("POST /register returns 201 with client_id + registration_access_token; no client_secret", async () => {
+      // DCR creates a public client without client_secret
       const body = makeClaudeAiRegistration();
       const res = await fetch(`http://127.0.0.1:${oauthPort.toString()}/register`, {
         method: "POST",
@@ -732,9 +732,9 @@ describe("HTTP transport — OAuth mounted", () => {
     });
   });
 
-  describe("OA.5/AC1.5: Missing Authorization header → 401", () => {
-    it("AC1.5: POST /mcp without Authorization header returns 401 with WWW-Authenticate Bearer header", async () => {
-      // PLAN says (phase_07.md:554-562): bearerAuth middleware rejects unauthenticated /mcp requests
+  describe("Missing Authorization header → 401", () => {
+    it("POST /mcp without Authorization header returns 401 with WWW-Authenticate Bearer header", async () => {
+      // bearerAuth middleware rejects unauthenticated /mcp requests
       const res = await fetch(`http://127.0.0.1:${oauthPort.toString()}/mcp`, {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -743,7 +743,7 @@ describe("HTTP transport — OAuth mounted", () => {
       expect(res.status).toBe(401);
       const wwwAuth = res.headers.get("www-authenticate") ?? "";
       expect(wwwAuth).toContain("Bearer");
-      // PLAN says (phase_07.md:554-562): WWW-Authenticate header must contain resource_metadata
+      // WWW-Authenticate header must contain resource_metadata
       // per RFC 9110 / RFC 9728 so clients can discover the protected-resource document.
       expect(wwwAuth).toContain("resource_metadata=");
       // The resource_metadata URL must point at the well-known protected-resource endpoint.
@@ -751,9 +751,9 @@ describe("HTTP transport — OAuth mounted", () => {
     });
   });
 
-  describe("OA.6/AC1.6: Malformed token → 401", () => {
-    it("AC1.6: POST /mcp with unknown token returns 401; body does not echo the token", async () => {
-      // PLAN says (phase_07.md:565-573): invalid tokens are rejected without leaking token value
+  describe("Malformed token → 401", () => {
+    it("POST /mcp with unknown token returns 401; body does not echo the token", async () => {
+      // invalid tokens are rejected without leaking token value
       const fakeToken = "mcp_at_invalidtokenxxxxx";
       const res = await fetch(`http://127.0.0.1:${oauthPort.toString()}/mcp`, {
         method: "POST",
@@ -769,9 +769,9 @@ describe("HTTP transport — OAuth mounted", () => {
     });
   });
 
-  describe("AC5.1: DCR rate-limit mounted on startHttp server", () => {
-    it("AC5.1: 10x POST /register from same IP succeeds; 11th returns 429", async () => {
-      // PLAN says (phase_07.md:584): wire-level smoke that buildDcrRateLimit() is mounted.
+  describe("DCR rate-limit mounted on startHttp server", () => {
+    it("10x POST /register from same IP succeeds; 11th returns 429", async () => {
+      // Wire-level smoke that buildDcrRateLimit() is mounted.
       // Uses a fresh IP (203.0.113.7) distinct from other OAuth tests to start with a clean bucket.
       const registrationBody = makeClaudeAiRegistration();
       const headers: Record<string, string> = {
@@ -796,9 +796,9 @@ describe("HTTP transport — OAuth mounted", () => {
     });
   });
 
-  describe("AC5.2: Client cap mounted on startHttp server", () => {
-    it("AC5.2: with 50 registered clients in cache, POST /register returns 429 with cap error", async () => {
-      // PLAN says (phase_07.md:584): wire-level smoke that buildClientCap is mounted.
+  describe("Client cap mounted on startHttp server", () => {
+    it("with 50 registered clients in cache, POST /register returns 429 with cap error", async () => {
+      // Wire-level smoke that buildClientCap is mounted.
       // Seed the cache directly via DiskCache (bypassing HTTP rate-limit) so the cap
       // check sees >= 50 existing clients.  buildClientCap reads cache.getAllOAuthClients()
       // on every POST /register — fresh disk files are visible on the very next call.
@@ -816,7 +816,7 @@ describe("HTTP transport — OAuth mounted", () => {
       // Now the server sees >= 50 clients; the next registration must be capped.
       const res = await fetch(`http://127.0.0.1:${oauthPort.toString()}/register`, {
         method: "POST",
-        // Use a fresh IP to avoid the rate-limit bucket from AC5.1.
+        // Use a fresh IP to avoid the rate-limit bucket from earlier registrations.
         headers: { "content-type": "application/json", "x-forwarded-for": "203.0.113.99" },
         body: JSON.stringify(makeClaudeAiRegistration()),
       });
@@ -829,13 +829,13 @@ describe("HTTP transport — OAuth mounted", () => {
 });
 
 // ---------------------------------------------------------------------------
-// accessLog middleware unit tests (structured-logging.AC9.5)
+// accessLog middleware unit tests
 // Unit tests exercise the accessLog factory in isolation using stub Hono
-// Context objects. Integration tests below (AC9.5-integration) boot the real
-// startHttp app and verify the router-placement contract.
+// Context objects. Integration tests below boot the real startHttp app and
+// verify the router-placement contract.
 // ---------------------------------------------------------------------------
 
-describe("accessLog middleware (AC9.5)", () => {
+describe("accessLog middleware", () => {
   function makeStubContext(method: string, path: string, status: number): import("hono").Context {
     return fromAny({
       req: { method, path },
@@ -847,7 +847,7 @@ describe("accessLog middleware (AC9.5)", () => {
     return async (): Promise<void> => {};
   }
 
-  it("AC9.5: emits one info record for a 200 response", async () => {
+  it("emits one info record for a 200 response", async () => {
     const { log, records } = makePinoCapture();
     const middleware = accessLog(log);
     const ctx = makeStubContext("GET", "/mcp", 200);
@@ -865,7 +865,7 @@ describe("accessLog middleware (AC9.5)", () => {
     expect(record?.["msg"]).toBe("http request");
   });
 
-  it("AC9.5: does not emit a record for GET /healthz (health probe excluded from access log)", async () => {
+  it("does not emit a record for GET /healthz (health probe excluded from access log)", async () => {
     const { log, records } = makePinoCapture();
     const middleware = accessLog(log);
     const ctx = makeStubContext("GET", "/healthz", 200);
@@ -875,7 +875,7 @@ describe("accessLog middleware (AC9.5)", () => {
     expect(records).toHaveLength(0);
   });
 
-  it("AC9.5: emits one error record for a 500 response", async () => {
+  it("emits one error record for a 500 response", async () => {
     const { log, records } = makePinoCapture();
     const middleware = accessLog(log);
     const ctx = makeStubContext("POST", "/mcp", 500);
@@ -891,7 +891,7 @@ describe("accessLog middleware (AC9.5)", () => {
     expect(record?.["msg"]).toBe("http request 5xx");
   });
 
-  it("AC9.5: emits one info record (not error) for a 401 response", async () => {
+  it("emits one info record (not error) for a 401 response", async () => {
     const { log, records } = makePinoCapture();
     const middleware = accessLog(log);
     const ctx = makeStubContext("POST", "/mcp", 401);
@@ -905,7 +905,7 @@ describe("accessLog middleware (AC9.5)", () => {
     expect(record?.["msg"]).toBe("http request");
   });
 
-  it("AC9.5: concurrent requests each emit exactly one record without duplication", async () => {
+  it("concurrent requests each emit exactly one record without duplication", async () => {
     const { log, records } = makePinoCapture();
     const middleware = accessLog(log);
 
@@ -921,7 +921,7 @@ describe("accessLog middleware (AC9.5)", () => {
     expect(paths).toContain("/mcp");
   });
 
-  it("AC9.5: emits a record and re-propagates when next() itself throws", async () => {
+  it("emits a record and re-propagates when next() itself throws", async () => {
     // Defense-in-depth: even if a downstream middleware re-throws past Hono's
     // onError (bypassing Hono's normal error-to-500 conversion), accessLog
     // must still emit a record via its finally branch. The thrown error
@@ -944,7 +944,7 @@ describe("accessLog middleware (AC9.5)", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Integration tests: accessLog placement via real startHttp router (AC9.5-integration)
+// Integration tests: accessLog placement via real startHttp router
 //
 // These boot the real app with an injected test logger to verify that the
 // accessLog middleware is mounted BEFORE /healthz in Hono's route chain, but
@@ -953,8 +953,8 @@ describe("accessLog middleware (AC9.5)", () => {
 // and cannot catch middleware placement bugs.
 // ---------------------------------------------------------------------------
 
-describe("accessLog middleware placement — integration (AC9.5-integration)", () => {
-  it("AC9.5-int-1: GET /healthz is served correctly but does not emit an access-log record", async () => {
+describe("accessLog middleware placement — integration", () => {
+  it("GET /healthz is served correctly but does not emit an access-log record", async () => {
     const { log, records } = makePinoCapture();
     // _testLog injects the capture logger as the transport-level logger used by accessLog.
     const opts: StartHttpOptions = { _testLog: log };
@@ -971,7 +971,7 @@ describe("accessLog middleware placement — integration (AC9.5-integration)", (
     }
   });
 
-  it("AC9.5-int-2: POST /mcp without session id emits an access-log record for /mcp", async () => {
+  it("POST /mcp without session id emits an access-log record for /mcp", async () => {
     // Confirms accessLog also runs for /mcp (not just /healthz). A POST /mcp
     // with no session id and a non-initialize body returns 400 — info level.
     // The 5xx fan-out path (error level → notifier multistream) is covered
@@ -1000,15 +1000,15 @@ describe("accessLog middleware placement — integration (AC9.5-integration)", (
     }
   });
 
-  it("AC9.5-int-3: 5xx response through real Hono router emits error-level access-log record", async () => {
+  it("5xx response through real Hono router emits error-level access-log record", async () => {
     // Drives a real 5xx through Hono's router (not a stub Context) by mounting
     // accessLog on a fresh Hono app, then registering a route that throws.
     // Hono's default error handler converts the throw into a 500 response;
     // accessLog observes c.res.status === 500 after next() returns and emits
     // an error-level record. This proves the placement-via-router contract
-    // for the 5xx path that AC9.5 calls out (fan-out condition: error level
-    // >= default notifyLevel "warn", structurally guaranteed by the multistream
-    // that app.log carries in production).
+    // for the 5xx path (fan-out condition: error level >= default notifyLevel
+    // "warn", structurally guaranteed by the multistream that app.log carries
+    // in production).
     const { log, records } = makePinoCapture();
     const app = new Hono();
     app.use("*", accessLog(log));

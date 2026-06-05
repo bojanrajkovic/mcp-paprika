@@ -181,9 +181,9 @@ describe("DiskClientRegistrationStore", () => {
     });
   });
 
-  describe("AC4.1: persistence across restart", () => {
+  describe("persistence across restart", () => {
     it("registerClient → flush → fresh DiskCache+store → getClient returns same record; registrationAccessTokenHash preserved", async () => {
-      // PLAN says (phase_05.md:26): A DCR'd client persists across process restart; registration_access_token_hash is preserved
+      // A DCR'd client persists across process restart; registration_access_token_hash is preserved
       // Register in first instance
       const metaIn = makeWireRegistration();
       const original = await store.registerClient(metaIn);
@@ -208,8 +208,8 @@ describe("DiskClientRegistrationStore", () => {
   });
 
   describe("updateClient", () => {
-    it("AC2.7: updateClient preserves RAT hash; updates metadata fields; bumps updatedAt", async () => {
-      // PLAN says (phase_05.md:20): PUT /register/{client_id} updates the client's metadata; response includes registration_access_token + registration_client_uri (RFC 7592 §2.2)
+    it("updateClient preserves RAT hash; updates metadata fields; bumps updatedAt", async () => {
+      // PUT /register/{client_id} updates the client's metadata; response includes registration_access_token + registration_client_uri (RFC 7592 §2.2)
       const metaIn = makeWireRegistration();
       const registered = await store.registerClient(metaIn);
 
@@ -251,9 +251,9 @@ describe("DiskClientRegistrationStore", () => {
     });
   });
 
-  describe("AC2.12: verifyRegistrationAccessToken", () => {
+  describe("verifyRegistrationAccessToken", () => {
     it("rejects wrong token", async () => {
-      // PLAN says (phase_05.md:23): PUT/DELETE /register/{client_id} without or with wrong registration_access_token returns 401
+      // PUT/DELETE /register/{client_id} without or with wrong registration_access_token returns 401
       const metaIn = makeWireRegistration();
       const registered = await store.registerClient(metaIn);
 
@@ -263,7 +263,7 @@ describe("DiskClientRegistrationStore", () => {
     });
 
     it("accepts correct token (constant-time-equivalent — same hash)", async () => {
-      // PLAN says (phase_05.md:23): PUT/DELETE /register/{client_id} with correct registration_access_token succeeds
+      // PUT/DELETE /register/{client_id} with correct registration_access_token succeeds
       const metaIn = makeWireRegistration();
       const registered = await store.registerClient(metaIn);
 
@@ -300,8 +300,8 @@ describe("DiskClientRegistrationStore", () => {
     });
   });
 
-  describe("logging (AC9.6)", () => {
-    it("AC9.6: emits info record with clientId + redirectUriCount after registerClient succeeds", async () => {
+  describe("logging", () => {
+    it("emits info record with clientId + redirectUriCount after registerClient succeeds", async () => {
       const { log: captureLog, records } = makePinoCapture();
       const logStore = new DiskClientRegistrationStore(cache, "https://m.example.com", captureLog);
       const metaIn = makeWireRegistration();

@@ -65,7 +65,7 @@ function makeHttpConfig(oauthIssuer: string, redirectAllowlist: ReadonlyArray<st
 describe("buildAuthContext", () => {
   describe("BA.1: returns null for stdio transport", () => {
     it("returns null when config.transport is 'stdio'", async () => {
-      // PLAN says (phase_07.md:305-306): if config.transport !== "http" return null
+      // if config.transport !== "http" return null
       const cache = await buildAuthCaches(xdg.dir());
 
       const config = makeStdioConfig();
@@ -77,7 +77,7 @@ describe("buildAuthContext", () => {
 
   describe("BA.2: throws for http + no oauth config (defensive guard)", () => {
     it("throws Error when transport is http but oauth config is undefined", async () => {
-      // PLAN says (phase_07.md:307-310): defensive guard for http without oauth block
+      // defensive guard for http without oauth block
       const cache = await buildAuthCaches(xdg.dir());
 
       const config: PaprikaConfig = fromAny({
@@ -96,7 +96,7 @@ describe("buildAuthContext", () => {
 
   describe("BA.3: happy path — builds full AuthContext with OIDC stub", () => {
     it("returns a fully-populated AuthContext with all required fields", async () => {
-      // PLAN says (phase_07.md:330-362): builds stores, provider, cleanup, and returns AuthContext
+      // builds stores, provider, cleanup, and returns AuthContext
       const oidcStub = createOidcStub({
         issuer: "https://accounts.example.test",
         clientId: "test-client-id",
@@ -168,7 +168,7 @@ describe("buildAuthContext", () => {
 
   describe("BA.4: throws when discovery returns 500", () => {
     it("rejects when the OIDC discovery endpoint returns a non-2xx status", async () => {
-      // PLAN says (phase_07.md:329): fail-fast startup operation — loadDiscovery throws on non-ok
+      // fail-fast startup operation — loadDiscovery throws on non-ok
       msw.use(
         http.get("https://accounts.example.test/.well-known/openid-configuration", () =>
           HttpResponse.json({ error: "server_error" }, { status: 500 }),

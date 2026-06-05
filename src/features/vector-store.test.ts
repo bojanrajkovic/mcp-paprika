@@ -16,7 +16,7 @@ import { VectorStoreError } from "./vector-store-errors.js";
 import { contentHash, VectorStore } from "./vector-store.js";
 
 describe("VectorStore contentHash", () => {
-  describe("AC5.1: SHA-256 stability", () => {
+  describe("SHA-256 stability", () => {
     it("produces a stable SHA-256 hex digest for the same input text", () => {
       const input = "hello";
       const hash1 = contentHash(input);
@@ -38,7 +38,7 @@ describe("VectorStore contentHash", () => {
     });
   });
 
-  describe("AC5.2: Changing directions does not change hash", () => {
+  describe("Changing directions does not change hash", () => {
     it("recipes with different directions produce the same hash", () => {
       const recipe1 = makeRecipe({ directions: "Step 1: Mix" });
       const recipe2 = makeRecipe({ ...recipe1, directions: "Step 1: Mix\nStep 2: Bake" });
@@ -53,7 +53,7 @@ describe("VectorStore contentHash", () => {
     });
   });
 
-  describe("AC5.3: Changing ingredients changes hash", () => {
+  describe("Changing ingredients changes hash", () => {
     it("recipes with different ingredients produce different hashes", () => {
       const recipe1 = makeRecipe({ ingredients: "flour" });
       const recipe2 = makeRecipe({ ...recipe1, ingredients: "sugar" });
@@ -132,7 +132,7 @@ describe("VectorStore init", () => {
     vi.clearAllMocks();
   });
 
-  describe("AC1.1: First run - creates index and empty hash map", () => {
+  describe("First run - creates index and empty hash map", () => {
     it("creates the vector index when none exists", async () => {
       const { JsonVectorIndex } = await import("./json-vector-index.js");
       const mockIsIndexCreated = vi.spyOn((JsonVectorIndex as any).prototype, "isIndexCreated");
@@ -151,7 +151,7 @@ describe("VectorStore init", () => {
     });
   });
 
-  describe("AC1.2: Subsequent run - loads existing hash map and opens index", () => {
+  describe("Subsequent run - loads existing hash map and opens index", () => {
     it("loads valid hash-index.json and does not recreate index", async () => {
       const { JsonVectorIndex } = await import("./json-vector-index.js");
 
@@ -180,7 +180,7 @@ describe("VectorStore init", () => {
     });
   });
 
-  describe("AC1.3: Corruption recovery - invalid JSON", () => {
+  describe("Corruption recovery - invalid JSON", () => {
     it("recovers from corrupted hash-index.json (invalid JSON) and emits warn log", async () => {
       const { JsonVectorIndex } = await import("./json-vector-index.js");
 
@@ -242,7 +242,7 @@ describe("VectorStore init", () => {
     });
   });
 
-  describe("AC1.4: Corruption recovery - corrupted vector index", () => {
+  describe("Corruption recovery - corrupted vector index", () => {
     it("recovers from a corrupted vector index by recreating and emits warn log", async () => {
       const { JsonVectorIndex } = await import("./json-vector-index.js");
 
@@ -437,7 +437,7 @@ describe("VectorStore init", () => {
     });
   });
 
-  describe("AC9.2: Logger injection and cold-start silence", () => {
+  describe("Logger injection and cold-start silence", () => {
     it("backward-compat: VectorStore(cacheDir, embedder, modelId, schemaVersion) without log still works", async () => {
       const { JsonVectorIndex } = await import("./json-vector-index.js");
       const mockIsIndexCreated = vi.spyOn((JsonVectorIndex as any).prototype, "isIndexCreated");
@@ -487,7 +487,7 @@ describe("VectorStore indexRecipes", () => {
     vi.clearAllMocks();
   });
 
-  describe("AC2.1: Embeds and upserts recipes with changed content hash", () => {
+  describe("Embeds and upserts recipes with changed content hash", () => {
     it("calls embedBatch and upserts items for new recipes", async () => {
       const { JsonVectorIndex } = await import("./json-vector-index.js");
 
@@ -570,7 +570,7 @@ describe("VectorStore indexRecipes", () => {
     });
   });
 
-  describe("AC2.2: Skips recipes with unchanged content hash", () => {
+  describe("Skips recipes with unchanged content hash", () => {
     it("skips recipes with matching content hash", async () => {
       const { JsonVectorIndex } = await import("./json-vector-index.js");
 
@@ -609,7 +609,7 @@ describe("VectorStore indexRecipes", () => {
     });
   });
 
-  describe("AC2.3: Returns correct IndexingResult with counts", () => {
+  describe("Returns correct IndexingResult with counts", () => {
     it("returns correct indexed, skipped, total counts", async () => {
       const { JsonVectorIndex } = await import("./json-vector-index.js");
 
@@ -655,7 +655,7 @@ describe("VectorStore indexRecipes", () => {
     });
   });
 
-  describe("AC2.4: Persists hash map after indexing", () => {
+  describe("Persists hash map after indexing", () => {
     it("writes updated hash-index.json after indexing", async () => {
       const { JsonVectorIndex } = await import("./json-vector-index.js");
 
@@ -688,7 +688,7 @@ describe("VectorStore indexRecipes", () => {
     });
   });
 
-  describe("AC2.5: Empty recipe list returns zero counts", () => {
+  describe("Empty recipe list returns zero counts", () => {
     it("returns { indexed: 0, skipped: 0, total: 0 } and does not call embedBatch", async () => {
       const { JsonVectorIndex } = await import("./json-vector-index.js");
 
@@ -708,7 +708,7 @@ describe("VectorStore indexRecipes", () => {
     });
   });
 
-  describe("AC2.6: Hash map persists across VectorStore restarts", () => {
+  describe("Hash map persists across VectorStore restarts", () => {
     it("loads previously saved hashes and skips unchanged recipes on restart", async () => {
       const { JsonVectorIndex } = await import("./json-vector-index.js");
 
@@ -766,7 +766,7 @@ describe("VectorStore search", () => {
     vi.clearAllMocks();
   });
 
-  describe("AC3.1: Embeds query and returns SemanticResult array", () => {
+  describe("Embeds query and returns SemanticResult array", () => {
     it("returns results with uid, score, and recipeName", async () => {
       const { JsonVectorIndex } = await import("./json-vector-index.js");
 
@@ -802,7 +802,7 @@ describe("VectorStore search", () => {
     });
   });
 
-  describe("AC3.2: Results are ordered by descending similarity score", () => {
+  describe("Results are ordered by descending similarity score", () => {
     it("returns results sorted by score descending", async () => {
       const { JsonVectorIndex } = await import("./json-vector-index.js");
 
@@ -839,7 +839,7 @@ describe("VectorStore search", () => {
     });
   });
 
-  describe("AC3.3: Empty index returns empty array", () => {
+  describe("Empty index returns empty array", () => {
     it("returns empty array when no results found", async () => {
       const { JsonVectorIndex } = await import("./json-vector-index.js");
 
@@ -875,7 +875,7 @@ describe("VectorStore removeRecipe", () => {
     vi.clearAllMocks();
   });
 
-  describe("AC4.1: Deletes item from the vector index and removes from hash map", () => {
+  describe("Deletes item from the vector index and removes from hash map", () => {
     it("removes recipe from both the vector index and hash map", async () => {
       const { JsonVectorIndex } = await import("./json-vector-index.js");
 
@@ -916,7 +916,7 @@ describe("VectorStore removeRecipe", () => {
     });
   });
 
-  describe("AC4.2: Persists hash map after removal", () => {
+  describe("Persists hash map after removal", () => {
     it("writes updated hash-index.json after removal", async () => {
       const { JsonVectorIndex } = await import("./json-vector-index.js");
 
@@ -953,7 +953,7 @@ describe("VectorStore removeRecipe", () => {
     });
   });
 
-  describe("AC4.3: Removing non-existent recipe does not throw", () => {
+  describe("Removing non-existent recipe does not throw", () => {
     it("silently succeeds when removing non-existent uid", async () => {
       const { JsonVectorIndex } = await import("./json-vector-index.js");
 

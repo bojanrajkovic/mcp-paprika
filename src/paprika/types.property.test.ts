@@ -10,7 +10,7 @@ import { MenuItemStoredSchema } from "../domains/menu/menu-item/types.js";
 import { MenuStoredSchema } from "../domains/menu/types.js";
 
 describe("Grocery schema property-based tests", () => {
-  describe("grocery-infra.AC1.1: GroceryList stored schema idempotent round-trip", () => {
+  describe("GroceryList stored schema idempotent round-trip", () => {
     it("Property: parsing a valid GroceryList through GroceryListStoredSchema is idempotent", () => {
       fc.assert(
         fc.property(
@@ -38,7 +38,7 @@ describe("Grocery schema property-based tests", () => {
     });
   });
 
-  describe("grocery-infra.AC1.2: GroceryItem stored schema idempotent round-trip", () => {
+  describe("GroceryItem stored schema idempotent round-trip", () => {
     it("Property: parsing a valid GroceryItem through GroceryItemStoredSchema is idempotent", () => {
       fc.assert(
         fc.property(
@@ -76,7 +76,7 @@ describe("Grocery schema property-based tests", () => {
     });
   });
 
-  describe("grocery-infra.AC1.3: GroceryIngredient stored schema idempotent round-trip", () => {
+  describe("GroceryIngredient stored schema idempotent round-trip", () => {
     it("Property: parsing a valid GroceryIngredient through GroceryIngredientStoredSchema is idempotent", () => {
       fc.assert(
         fc.property(
@@ -102,7 +102,7 @@ describe("Grocery schema property-based tests", () => {
     });
   });
 
-  describe("menu-infra: Menu stored schema idempotent round-trip", () => {
+  describe("Menu stored schema idempotent round-trip", () => {
     it("Property: parsing a valid Menu through MenuStoredSchema is idempotent", () => {
       fc.assert(
         fc.property(
@@ -130,7 +130,7 @@ describe("Grocery schema property-based tests", () => {
     });
   });
 
-  describe("menu-infra: MenuItem stored schema idempotent round-trip", () => {
+  describe("MenuItem stored schema idempotent round-trip", () => {
     it("Property: parsing a valid MenuItem through MenuItemStoredSchema is idempotent (nullable menuUid/recipeUid)", () => {
       fc.assert(
         fc.property(

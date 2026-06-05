@@ -4,14 +4,14 @@ import { getText } from "../../test/support/tool-test-utils.js";
 import { RecipeUidSchema } from "../ids.js";
 import { formatLookupOutcome, type LookupOutcome, resolveLookup, textResult, uidOrTextLookupSchema } from "./tools.js";
 
-describe("p2-u02-shared-helpers: shared helper functions", () => {
-  describe("p2-u02-shared-helpers.AC1: textResult wraps a string in the MCP wire envelope", () => {
-    it("p2-u02-shared-helpers.AC1.1: textResult('hello') returns { content: [{ type: 'text', text: 'hello' }] }", () => {
+describe("shared helper functions", () => {
+  describe("textResult wraps a string in the MCP wire envelope", () => {
+    it("textResult('hello') returns { content: [{ type: 'text', text: 'hello' }] }", () => {
       const result = textResult("hello");
       expect(result).toEqual({ content: [{ type: "text", text: "hello" }] });
     });
 
-    it("p2-u02-shared-helpers.AC1.2: textResult('') returns { content: [{ type: 'text', text: '' }] } (empty string is valid)", () => {
+    it("textResult('') returns { content: [{ type: 'text', text: '' }] } (empty string is valid)", () => {
       const result = textResult("");
       expect(result).toEqual({ content: [{ type: "text", text: "" }] });
     });

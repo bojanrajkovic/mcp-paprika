@@ -131,8 +131,8 @@ describe("Auth Routes", () => {
   });
 
   describe("GET /oauth/callback", () => {
-    it("AC2.14: error redirect includes iss on upstream error", async () => {
-      // PLAN says (phase_06.md:668-672): `app.request("/oauth/callback?error=access_denied&state=<ourState>")`. Status=302, `iss` in location query, `error=access_denied`.
+    it("error redirect includes iss on upstream error", async () => {
+      // app.request("/oauth/callback?error=access_denied&state=<ourState>"). Status=302, `iss` in location query, `error=access_denied`.
       const ourState = "mcp_state_error_test";
       const claudeState = "claude_state_error";
       authRequests.put(ourState, {
@@ -161,8 +161,8 @@ describe("Auth Routes", () => {
       expect(redirectUrl.searchParams.get("state")).toBe(claudeState);
     });
 
-    it("AC2.14: success redirect includes iss=<MCP_PUBLIC_URL>", async () => {
-      // PLAN says (phase_06.md:662-667): successful upstream code exchange → allowlist OK → mints mcp_ac_ → redirects with code+state+iss
+    it("success redirect includes iss=<MCP_PUBLIC_URL>", async () => {
+      // successful upstream code exchange → allowlist OK → mints mcp_ac_ → redirects with code+state+iss
       // Build a local app with realJwks so verifyIdToken can fetch the key from the MSW stub's /jwks endpoint.
       // The outer beforeEach app uses `jwks: async () => ({ keys: [] })` which would fail sig verification.
       const realJwks = createJwksFor(makeDiscoveryDoc(oidcStub.issuer));
@@ -369,8 +369,8 @@ describe("Auth Routes", () => {
       expect(decodeURIComponent(p!)).toBe("stub-client-secret");
     });
 
-    it("AC3.4: does NOT log id_token, only identity claims, on denial", async () => {
-      // PLAN says (phase_06.md:680-686): allowlist denial logs identity claims (email, sub) but never id_token.
+    it("does NOT log id_token, only identity claims, on denial", async () => {
+      // allowlist denial logs identity claims (email, sub) but never id_token.
       // Build a local app with realJwks so verifyIdToken passes, then hit allowlist denial.
       // Only user@example.com is on the allowlist — unknown@example.com will be denied.
       const realJwks = createJwksFor(makeDiscoveryDoc(oidcStub.issuer));
@@ -445,10 +445,10 @@ describe("Auth Routes", () => {
       expect(description).not.toContain("unknown@example.com");
       expect(description).not.toContain("unknown-sub-999");
 
-      // AC3.4: id_token must NOT appear in captured log records (JWTs start with "eyJ")
+      // id_token must NOT appear in captured log records (JWTs start with "eyJ")
       expect(JSON.stringify(records)).not.toMatch(/eyJ/);
 
-      // AC3.4: identity claims MUST appear in the denial log record as structured fields,
+      // identity claims MUST appear in the denial log record as structured fields,
       // and the record must carry component: "auth" (mirrors src/auth/build.ts child logger).
       expect(records).toContainEqual(
         expect.objectContaining({
@@ -461,7 +461,7 @@ describe("Auth Routes", () => {
       );
     });
 
-    it("AC9.6: emits info record on allowlist hit", async () => {
+    it("emits info record on allowlist hit", async () => {
       // Build a local app wired to a capture logger so we can assert on the
       // "allowlist accepted identity" record emitted in the success branch.
       const realJwks = createJwksFor(makeDiscoveryDoc(oidcStub.issuer));
@@ -524,7 +524,7 @@ describe("Auth Routes", () => {
       expect(loc.searchParams.get("error")).toBeNull();
       expect(loc.searchParams.get("iss")).toBe("https://mcp.example.com");
 
-      // AC9.6: info record must be emitted for the accepted identity, and must carry
+      // info record must be emitted for the accepted identity, and must carry
       // component: "auth" (mirrors src/auth/build.ts child logger contract).
       expect(records).toContainEqual(
         expect.objectContaining({
@@ -545,8 +545,8 @@ describe("Auth Routes", () => {
   });
 
   describe("RFC 7592 PUT /register/{clientId}", () => {
-    it("AC2.7: correct RAT updates metadata; 200 with full doc + registration_client_uri", async () => {
-      // PLAN says (phase_06.md:674): Register a client via `clientStore.registerClient(...)` to get the RAT (registration_access_token). Call PUT `/register/<clientId>` with `Authorization: Bearer <RAT>` header and a JSON body containing updated metadata (`client_name`). Assert status=200, JSON body has new client_name + registration_client_uri.
+    it("correct RAT updates metadata; 200 with full doc + registration_client_uri", async () => {
+      // Register a client via `clientStore.registerClient(...)` to get the RAT (registration_access_token). Call PUT `/register/<clientId>` with `Authorization: Bearer <RAT>` header and a JSON body containing updated metadata (`client_name`). Assert status=200, JSON body has new client_name + registration_client_uri.
       const registered = await clientStore.registerClient({
         client_name: "Original Name",
         redirect_uris: ["https://claude.ai/callback"],
@@ -570,7 +570,7 @@ describe("Auth Routes", () => {
       expect(json["registration_client_uri"]).toBe(`https://mcp.example.com/register/${clientId}`);
     });
 
-    it("AC2.12: missing Authorization → 401", async () => {
+    it("missing Authorization → 401", async () => {
       const res = await app.request("/register/test-client-id", {
         method: "PUT",
         headers: { "content-type": "application/json" },
@@ -632,8 +632,8 @@ describe("Auth Routes", () => {
   });
 
   describe("RFC 7592 DELETE /register/{clientId}", () => {
-    it("AC2.8: correct RAT removes client and cascades tokens; 204 No Content", async () => {
-      // PLAN says (phase_06.md:681): Register a client; issue a token pair for that client via `tokenStore.issueAccessRefreshPair(...)`. Call DELETE `/register/<clientId>` with valid RAT. Assert status=204. Then call `tokenStore.lookupAccessToken(pair.access.plaintext)` — must return null (cascade removed it). Then `clientStore.getClient(clientId)` returns undefined.
+    it("correct RAT removes client and cascades tokens; 204 No Content", async () => {
+      // Register a client; issue a token pair for that client via `tokenStore.issueAccessRefreshPair(...)`. Call DELETE `/register/<clientId>` with valid RAT. Assert status=204. Then call `tokenStore.lookupAccessToken(pair.access.plaintext)` — must return null (cascade removed it). Then `clientStore.getClient(clientId)` returns undefined.
       const registered = await clientStore.registerClient({
         client_name: "To Delete",
         redirect_uris: ["https://claude.ai/callback"],
@@ -669,7 +669,7 @@ describe("Auth Routes", () => {
       expect(client).toBeUndefined();
     });
 
-    it("AC2.12: missing/wrong RAT → 401", async () => {
+    it("missing/wrong RAT → 401", async () => {
       const res = await app.request("/register/test-client-id", {
         method: "DELETE",
       });
@@ -677,7 +677,7 @@ describe("Auth Routes", () => {
     });
   });
 
-  describe("DCR rate-limit middleware (AC5.1)", () => {
+  describe("DCR rate-limit middleware", () => {
     it("RFC 7592 PUT/DELETE /register/:id do NOT consume the DCR rate-limit bucket", async () => {
       // The middleware is mounted on the `/register` prefix, which Hono also
       // matches against /register/:id. Without the method+path gate inside
@@ -725,8 +725,8 @@ describe("Auth Routes", () => {
       expect(blocked.status).toBe(429);
     });
 
-    it("AC5.1: buildDcrRateLimit middleware enforces 10 req/hour limit", async () => {
-      // PLAN says (phase_06.md:702-718): The `buildDcrRateLimit()` middleware limits POST /register to 10 requests per hour per IP.
+    it("buildDcrRateLimit middleware enforces 10 req/hour limit", async () => {
+      // The `buildDcrRateLimit()` middleware limits POST /register to 10 requests per hour per IP.
       // Test: 10 requests from same IP succeed (201), 11th is rejected (429).
       const testApp = new Hono();
       testApp.use("/register", buildDcrRateLimit({ trustProxy: true }));
@@ -760,7 +760,7 @@ describe("Auth Routes", () => {
     });
 
     it("different IPs have separate rate-limit windows", async () => {
-      // PLAN says (phase_06.md:719): After 10 requests from one IP, a request from a different IP should not be rate-limited.
+      // After 10 requests from one IP, a request from a different IP should not be rate-limited.
       const testApp = new Hono();
       testApp.use("/register", buildDcrRateLimit({ trustProxy: true }));
       testApp.post("/register", (c) => c.json({ ok: true }, 201));
@@ -829,9 +829,9 @@ describe("Auth Routes", () => {
     });
   });
 
-  describe("DCR client cap middleware (AC5.2)", () => {
-    it("AC5.2: buildClientCap middleware enforces client count limit", async () => {
-      // PLAN says (phase_06.md:723): The `buildClientCap(cache, max)` middleware prevents DCR registration
+  describe("DCR client cap middleware", () => {
+    it("buildClientCap middleware enforces client count limit", async () => {
+      // The `buildClientCap(cache, max)` middleware prevents DCR registration
       // when the server has reached the max registered clients.
       // Test: Pre-populate cache with 50 clients, then 51st POST /register returns 429 with cap error_description.
       const capDir = await mkdtemp(join(tmpdir(), "paprika-cap-"));

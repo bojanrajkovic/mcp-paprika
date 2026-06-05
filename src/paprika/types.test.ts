@@ -48,7 +48,7 @@ import {
 import { type AuthResponse, AuthResponseSchema } from "./auth-response.js";
 
 describe("Branded UID Schemas and Entry Schemas", () => {
-  describe("paprika-types.AC1.1: RecipeEntrySchema parses valid entry", () => {
+  describe("RecipeEntrySchema parses valid entry", () => {
     it("should parse {uid: 'abc', hash: 'def'} successfully", () => {
       const result = RecipeEntrySchema.safeParse({
         uid: "abc",
@@ -64,7 +64,7 @@ describe("Branded UID Schemas and Entry Schemas", () => {
     });
   });
 
-  describe("paprika-types.AC1.8: RecipeEntrySchema rejects non-string uid", () => {
+  describe("RecipeEntrySchema rejects non-string uid", () => {
     it("should throw ZodError when uid is a number (123)", () => {
       const result = RecipeEntrySchema.safeParse({
         uid: 123,
@@ -78,7 +78,7 @@ describe("Branded UID Schemas and Entry Schemas", () => {
     });
   });
 
-  describe("paprika-types.AC2.1: RecipeUid assignable to RecipeUid variable", () => {
+  describe("RecipeUid assignable to RecipeUid variable", () => {
     it("should allow a parsed RecipeUid to be assigned to RecipeUid-typed variable", () => {
       const parsed = RecipeUidSchema.parse("test-uid");
       const variable: RecipeUid = parsed;
@@ -86,7 +86,7 @@ describe("Branded UID Schemas and Entry Schemas", () => {
     });
   });
 
-  describe("paprika-types.AC2.2: RecipeUid not assignable to CategoryUid", () => {
+  describe("RecipeUid not assignable to CategoryUid", () => {
     it("should not allow assigning RecipeUid to CategoryUid-typed variable", () => {
       const recipeUid: RecipeUid = RecipeUidSchema.parse("recipe-123");
       // @ts-expect-error RecipeUid should not be assignable to CategoryUid
@@ -95,7 +95,7 @@ describe("Branded UID Schemas and Entry Schemas", () => {
     });
   });
 
-  describe("paprika-types.AC2.3: Plain string not assignable to RecipeUid", () => {
+  describe("Plain string not assignable to RecipeUid", () => {
     it("should not allow assigning plain string to RecipeUid-typed variable", () => {
       const plainString = "just-a-string";
       // @ts-expect-error plain string should not be assignable to RecipeUid
@@ -114,7 +114,7 @@ describe("Branded UID Schemas and Entry Schemas", () => {
 });
 
 describe("Full Object Schemas", () => {
-  describe("paprika-types.AC1.2: RecipeSchema parses full snake_case response", () => {
+  describe("RecipeSchema parses full snake_case response", () => {
     it("should parse a complete recipe with all 28 fields and output camelCase", () => {
       const snakeCaseRecipe = {
         uid: "recipe-123",
@@ -222,7 +222,7 @@ describe("Full Object Schemas", () => {
     });
   });
 
-  describe("paprika-types.AC1.3: Recipe.imageUrl is non-optional string", () => {
+  describe("Recipe.imageUrl is non-optional string", () => {
     it("should have imageUrl as string (not optional or nullable)", () => {
       const snakeCaseRecipe = {
         uid: "recipe-123",
@@ -270,7 +270,7 @@ describe("Full Object Schemas", () => {
     });
   });
 
-  describe("paprika-types.AC1.4: Recipe.categories is branded CategoryUid[]", () => {
+  describe("Recipe.categories is branded CategoryUid[]", () => {
     it("should parse categories as CategoryUid array", () => {
       const snakeCaseRecipe = {
         uid: "recipe-123",
@@ -321,7 +321,7 @@ describe("Full Object Schemas", () => {
     });
   });
 
-  describe("paprika-types.AC1.5: CategorySchema parses with camelCase output", () => {
+  describe("CategorySchema parses with camelCase output", () => {
     it("should parse snake_case category and output camelCase", () => {
       const snakeCaseCategory = {
         uid: "cat-1",
@@ -361,7 +361,7 @@ describe("Full Object Schemas", () => {
     });
   });
 
-  describe("paprika-types.AC1.6: AuthResponseSchema parses nested token", () => {
+  describe("AuthResponseSchema parses nested token", () => {
     it("should parse {result: {token: '...'}} successfully", () => {
       const authResponse = {
         result: {
@@ -378,7 +378,7 @@ describe("Full Object Schemas", () => {
     });
   });
 
-  describe("paprika-types.AC1.9: RecipeSchema coerces null ingredients/directions to empty string", () => {
+  describe("RecipeSchema coerces null ingredients/directions to empty string", () => {
     // Paprika's API returns `null` for `ingredients` and `directions` when a
     // recipe has them empty (e.g. stub recipes imported from a photo). A
     // single null-bearing recipe would otherwise abort initial sync via Zod
@@ -430,7 +430,7 @@ describe("Full Object Schemas", () => {
     });
   });
 
-  describe("paprika-types.AC1.10: RecipeStoredSchema coerces null ingredients/directions to empty string", () => {
+  describe("RecipeStoredSchema coerces null ingredients/directions to empty string", () => {
     // Disk format mirrors the wire-format coercion so that a recipe with
     // null ingredients/directions written by an older client still parses
     // cleanly on read-back.
@@ -476,7 +476,7 @@ describe("Full Object Schemas", () => {
     });
   });
 
-  describe("paprika-types.AC1.7: RecipeSchema rejects missing required fields", () => {
+  describe("RecipeSchema rejects missing required fields", () => {
     it("should reject recipe missing name and ingredients", () => {
       const incompleteRecipe = {
         uid: "recipe-123",
@@ -529,7 +529,7 @@ describe("Full Object Schemas", () => {
 });
 
 describe("Domain Types", () => {
-  describe("paprika-types.AC3.1: RecipeInput requires name, ingredients, directions", () => {
+  describe("RecipeInput requires name, ingredients, directions", () => {
     it("should allow object with only required fields", () => {
       const minimalInput: RecipeInput = {
         name: "Simple Recipe",
@@ -568,7 +568,7 @@ describe("Domain Types", () => {
     });
   });
 
-  describe("paprika-types.AC3.2: RecipeInput excludes uid, hash, created", () => {
+  describe("RecipeInput excludes uid, hash, created", () => {
     it("should not have uid key", () => {
       type AssertNoUid = "uid" extends keyof RecipeInput ? never : true;
       const _checkNoUid: AssertNoUid = true;
@@ -588,7 +588,7 @@ describe("Domain Types", () => {
     });
   });
 
-  describe("paprika-types.AC3.3: SyncResult structure", () => {
+  describe("SyncResult structure", () => {
     it("should allow empty RecipeSyncResult", () => {
       const emptyRecipeResult: RecipeSyncResult = {
         changeType: "recipes",
@@ -636,7 +636,7 @@ describe("Domain Types", () => {
     });
   });
 
-  describe("paprika-types.AC3.4: DiffResult structure", () => {
+  describe("DiffResult structure", () => {
     it("should allow empty DiffResult", () => {
       const emptyDiffResult: DiffResult = {
         added: [],
@@ -666,7 +666,7 @@ describe("Domain Types", () => {
 });
 
 describe("Type Exports Verification", () => {
-  describe("paprika-types.AC5.3: Type-only exports accessible", () => {
+  describe("Type-only exports accessible", () => {
     it("should have exported RecipeEntry type", () => {
       // Compile-time verification that RecipeEntry type is accessible
       type CheckRecipeEntry = RecipeEntry;
@@ -736,8 +736,8 @@ describe("Type Exports Verification", () => {
   });
 });
 
-describe("pantry-read.AC1: PantryItem types", () => {
-  describe("pantry-read.AC1.1: PantryItemSchema transforms snake_case to camelCase", () => {
+describe("PantryItem types", () => {
+  describe("PantryItemSchema transforms snake_case to camelCase", () => {
     it("should parse snake_case wire JSON and transform to camelCase", () => {
       const snakeCasePantryItem = {
         uid: "pantry-123",
@@ -771,7 +771,7 @@ describe("pantry-read.AC1: PantryItem types", () => {
     });
   });
 
-  describe("pantry-read.AC1.2: PantryItemStoredSchema validates camelCase with no transform", () => {
+  describe("PantryItemStoredSchema validates camelCase with no transform", () => {
     it("should parse camelCase stored JSON without transformation", () => {
       const camelCasePantryItem = {
         uid: "pantry-123",
@@ -795,7 +795,7 @@ describe("pantry-read.AC1: PantryItem types", () => {
     });
   });
 
-  describe("pantry-read.AC1.3: PantryItemUidSchema produces branded type", () => {
+  describe("PantryItemUidSchema produces branded type", () => {
     it("should parse UID string and produce branded PantryItemUid", () => {
       const parsed = PantryItemUidSchema.parse("pantry-uid-123");
       const variable: PantryItemUid = parsed;
@@ -810,7 +810,7 @@ describe("pantry-read.AC1: PantryItem types", () => {
     });
   });
 
-  describe("pantry-read.AC1.4: null expirationDate/purchaseDate/notes accepted", () => {
+  describe("null expirationDate/purchaseDate/notes accepted", () => {
     it("should accept wire JSON with expiration_date: null", () => {
       const wireItem = {
         uid: "pantry-123",
@@ -860,7 +860,7 @@ describe("pantry-read.AC1: PantryItem types", () => {
     });
   });
 
-  describe("pantry-read.AC1.7: Malformed wire JSON rejected (missing required fields)", () => {
+  describe("Malformed wire JSON rejected (missing required fields)", () => {
     it("should reject wire JSON missing required ingredient field", () => {
       const malformedItem = {
         uid: "pantry-123",
@@ -906,8 +906,8 @@ describe("pantry-read.AC1: PantryItem types", () => {
   });
 });
 
-describe("aisle-types: Aisle schemas and branded UID", () => {
-  describe("aisle-types.AC1: AisleUidSchema accepts both UID formats", () => {
+describe("Aisle schemas and branded UID", () => {
+  describe("AisleUidSchema accepts both UID formats", () => {
     it("accepts 64-char uppercase hex (default/built-in aisle format)", () => {
       const hexUid = "A".repeat(64);
       const parsed = AisleUidSchema.parse(hexUid);
@@ -930,7 +930,7 @@ describe("aisle-types: Aisle schemas and branded UID", () => {
     });
   });
 
-  describe("aisle-types.AC2: AisleSchema transforms wire snake_case to camelCase", () => {
+  describe("AisleSchema transforms wire snake_case to camelCase", () => {
     it("transforms order_flag to orderFlag", () => {
       const wire = { uid: "AABBCC", name: "Produce", order_flag: 3 };
       const result = AisleSchema.safeParse(wire);
@@ -961,7 +961,7 @@ describe("aisle-types: Aisle schemas and branded UID", () => {
     });
   });
 
-  describe("aisle-types.AC3: AisleStoredSchema validates camelCase with no transform", () => {
+  describe("AisleStoredSchema validates camelCase with no transform", () => {
     it("parses camelCase stored JSON without transformation", () => {
       const stored = { uid: "AABBCC", name: "Produce", orderFlag: 3, deleted: false };
       const result = AisleStoredSchema.safeParse(stored);
@@ -981,7 +981,7 @@ describe("aisle-types: Aisle schemas and branded UID", () => {
     });
   });
 
-  describe("aisle-types.AC4: Aisle type export", () => {
+  describe("Aisle type export", () => {
     it("exported Aisle type is accessible and structurally correct", () => {
       type CheckAisle = Aisle;
       const _test: CheckAisle = {
@@ -995,8 +995,8 @@ describe("aisle-types: Aisle schemas and branded UID", () => {
   });
 });
 
-describe("pantry-mutations.AC1: Schema and payload converter", () => {
-  describe("pantry-mutations.AC1.1: deleted field round-trips through PantryItemSchema", () => {
+describe("PantryItem schema and payload converter", () => {
+  describe("deleted field round-trips through PantryItemSchema", () => {
     it("should parse wire JSON with deleted: false and round-trip through stored schema", () => {
       const wireItem = {
         uid: "pantry-123",
@@ -1030,7 +1030,7 @@ describe("pantry-mutations.AC1: Schema and payload converter", () => {
     });
   });
 
-  describe("pantry-mutations.AC1.2: Wire JSON without deleted key yields deleted: false default", () => {
+  describe("Wire JSON without deleted key yields deleted: false default", () => {
     it("should parse wire JSON omitting deleted key and apply default false", () => {
       const wireItem = {
         uid: "pantry-123",
@@ -1054,7 +1054,7 @@ describe("pantry-mutations.AC1: Schema and payload converter", () => {
     });
   });
 
-  describe("pantry-mutations.AC1.3: Stored JSON without deleted key yields deleted: false default", () => {
+  describe("Stored JSON without deleted key yields deleted: false default", () => {
     it("should parse stored JSON omitting deleted key and apply default false", () => {
       const storedItem = {
         uid: "pantry-123",
@@ -1078,7 +1078,7 @@ describe("pantry-mutations.AC1: Schema and payload converter", () => {
     });
   });
 
-  describe("pantry-mutations.AC1.6: null values for optional fields survive round-trip", () => {
+  describe("null values for optional fields survive round-trip", () => {
     it("should preserve null values through wire→stored round-trip", () => {
       const wireItem = {
         uid: "pantry-123",
@@ -1116,7 +1116,7 @@ describe("pantry-mutations.AC1: Schema and payload converter", () => {
     });
   });
 
-  describe("pantry-mutations.AC1.7: Wire JSON with non-boolean deleted is rejected", () => {
+  describe("Wire JSON with non-boolean deleted is rejected", () => {
     it("should reject wire JSON with deleted as string instead of boolean", () => {
       const wireItem = {
         uid: "pantry-123",
@@ -1144,7 +1144,7 @@ describe("pantry-mutations.AC1: Schema and payload converter", () => {
 });
 
 describe("Grocery Schema Round-Trips", () => {
-  describe("grocery-infra.AC1.1: GroceryList wire and stored round-trip", () => {
+  describe("GroceryList wire and stored round-trip", () => {
     const wireList = {
       uid: "034E15F1-B26F-4665-B19D-C89F0F046AFB",
       name: "My List Name",
@@ -1181,7 +1181,7 @@ describe("Grocery Schema Round-Trips", () => {
     });
   });
 
-  describe("grocery-infra.AC1.2: GroceryItem wire and stored round-trip", () => {
+  describe("GroceryItem wire and stored round-trip", () => {
     const wireItem = {
       uid: "12D1EE66-2DC3-4B65-BF4E-71CB050ECD95",
       name: "2 lbs Butter",
@@ -1232,7 +1232,7 @@ describe("Grocery Schema Round-Trips", () => {
     });
   });
 
-  describe("grocery-infra.AC1.3: GroceryIngredient wire and stored round-trip", () => {
+  describe("GroceryIngredient wire and stored round-trip", () => {
     const wireIngredient = {
       uid: "E72FC5C6-61B3-40D9-B3B8-84437FB6F73B",
       name: "mcp-cap item-1",
@@ -1265,7 +1265,7 @@ describe("Grocery Schema Round-Trips", () => {
     });
   });
 
-  describe("grocery-infra.AC1.4: Wire JSON with deleted omitted defaults to false", () => {
+  describe("Wire JSON with deleted omitted defaults to false", () => {
     it("should default deleted to false when omitted from GroceryList wire JSON", () => {
       const wireList = {
         uid: "034E15F1-B26F-4665-B19D-C89F0F046AFB",
@@ -1458,7 +1458,7 @@ describe("meal-payload: mealToApiPayload round-trip via MealSchema", () => {
   });
 });
 
-describe("menu-infra: Menu schema round-trips", () => {
+describe("Menu schema round-trips", () => {
   const wireMenu = {
     uid: "13A42BA9-4C06-4FDC-A5DB-AE9191DF5251",
     name: "[mcp-cap] Test Menu 1",
@@ -1522,7 +1522,7 @@ describe("menu-infra: Menu schema round-trips", () => {
   });
 });
 
-describe("menu-infra: MenuItem schema round-trips", () => {
+describe("MenuItem schema round-trips", () => {
   const wireItem = {
     uid: "D7911C7C-0F3C-4A47-ACA3-2964D831EA69",
     menu_uid: "13A42BA9-4C06-4FDC-A5DB-AE9191DF5251",

@@ -51,7 +51,7 @@ describe("VectorStore integration tests with the real vector index", () => {
     await rm(tempDir, { recursive: true, force: true });
   });
 
-  describe("AC1.1: First-run initialization creates index structure", () => {
+  describe("First-run initialization creates index structure", () => {
     it("creates vectors/ directory and index.json on first run", async () => {
       const { statSync, existsSync } = await import("node:fs");
 
@@ -67,7 +67,7 @@ describe("VectorStore integration tests with the real vector index", () => {
     });
   });
 
-  describe("AC2.1 & AC2.2: Full indexing pipeline with dedup", () => {
+  describe("Full indexing pipeline with dedup", () => {
     it("indexes new recipes and skips unchanged ones", async () => {
       const embedder = makeDeterministicEmbedder();
       const store = new VectorStore(tempDir, embedder, "test-model", 1);
@@ -87,7 +87,7 @@ describe("VectorStore integration tests with the real vector index", () => {
     });
   });
 
-  describe("AC2.6: Hash persistence across VectorStore restarts", () => {
+  describe("Hash persistence across VectorStore restarts", () => {
     it("loads persisted hashes from disk and skips unchanged recipes", async () => {
       // First store instance
       const embedder1 = makeDeterministicEmbedder();
@@ -114,7 +114,7 @@ describe("VectorStore integration tests with the real vector index", () => {
     });
   });
 
-  describe("AC3.1 & AC3.2: Search with ordering by similarity", () => {
+  describe("Search with ordering by similarity", () => {
     it("returns search results ordered by descending similarity score", async () => {
       const embedder = makeDeterministicEmbedder();
       const store = new VectorStore(tempDir, embedder, "test-model", 1);
@@ -162,7 +162,7 @@ describe("VectorStore integration tests with the real vector index", () => {
     });
   });
 
-  describe("AC3.3: Empty index search returns empty array", () => {
+  describe("Empty index search returns empty array", () => {
     it("returns empty array when searching empty index", async () => {
       const embedder = makeDeterministicEmbedder();
       const store = new VectorStore(tempDir, embedder, "test-model", 1);
@@ -174,7 +174,7 @@ describe("VectorStore integration tests with the real vector index", () => {
     });
   });
 
-  describe("AC4.1: Removal removes from search results", () => {
+  describe("Removal removes from search results", () => {
     it("removes recipe from vector index and it no longer appears in search", async () => {
       const embedder = makeDeterministicEmbedder();
       const store = new VectorStore(tempDir, embedder, "test-model", 1);

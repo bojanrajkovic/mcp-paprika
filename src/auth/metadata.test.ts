@@ -63,7 +63,7 @@ describe("OAuth Metadata Customization", () => {
   });
 
   describe("buildCustomizedAuthorizationServerMetadata", () => {
-    it("AC2.1: issuer field equals input string verbatim (no trailing slash)", () => {
+    it("issuer field equals input string verbatim (no trailing slash)", () => {
       const meta = buildCustomizedAuthorizationServerMetadata({
         issuerUrl: "https://m.example.com",
         provider,
@@ -71,7 +71,7 @@ describe("OAuth Metadata Customization", () => {
       expect(meta.issuer).toBe("https://m.example.com");
     });
 
-    it("AC2.1: token_endpoint_auth_methods_supported is exactly ['none'] (overridden from library default)", () => {
+    it("token_endpoint_auth_methods_supported is exactly ['none'] (overridden from library default)", () => {
       const meta = buildCustomizedAuthorizationServerMetadata({
         issuerUrl: "https://m.example.com",
         provider,
@@ -79,7 +79,7 @@ describe("OAuth Metadata Customization", () => {
       expect(meta.token_endpoint_auth_methods_supported).toEqual(["none"]);
     });
 
-    it("AC2.1: code_challenge_methods_supported is exactly ['S256'] (library default, unchanged)", () => {
+    it("code_challenge_methods_supported is exactly ['S256'] (library default, unchanged)", () => {
       const meta = buildCustomizedAuthorizationServerMetadata({
         issuerUrl: "https://m.example.com",
         provider,
@@ -87,7 +87,7 @@ describe("OAuth Metadata Customization", () => {
       expect(meta.code_challenge_methods_supported).toEqual(["S256"]);
     });
 
-    it("AC2.1: authorization_response_iss_parameter_supported is true (added — not in library default)", () => {
+    it("authorization_response_iss_parameter_supported is true (added — not in library default)", () => {
       const meta = buildCustomizedAuthorizationServerMetadata({
         issuerUrl: "https://m.example.com",
         provider,
@@ -95,7 +95,7 @@ describe("OAuth Metadata Customization", () => {
       expect(meta["authorization_response_iss_parameter_supported"]).toBe(true);
     });
 
-    it("AC2.1/2.13: id_token_signing_alg_values_supported field is NOT present", () => {
+    it("id_token_signing_alg_values_supported field is NOT present", () => {
       const meta = buildCustomizedAuthorizationServerMetadata({
         issuerUrl: "https://m.example.com",
         provider,
@@ -103,7 +103,7 @@ describe("OAuth Metadata Customization", () => {
       expect(meta).not.toHaveProperty("id_token_signing_alg_values_supported");
     });
 
-    it("AC2.13: no metadata field anywhere has value 'none' except auth_methods (which is intentional public-client config)", () => {
+    it("no metadata field anywhere has value 'none' except auth_methods (which is intentional public-client config)", () => {
       const meta = buildCustomizedAuthorizationServerMetadata({
         issuerUrl: "https://m.example.com",
         provider,
@@ -143,13 +143,13 @@ describe("OAuth Metadata Customization", () => {
       expect(noneViolations).toEqual([]);
     });
 
-    it("AC2.2: revocation_endpoint_auth_methods_supported removed (public clients need no credentials)", () => {
+    it("revocation_endpoint_auth_methods_supported removed (public clients need no credentials)", () => {
       const meta = buildCustomizedAuthorizationServerMetadata({
         issuerUrl: "https://m.example.com",
         provider,
       });
 
-      // AC2.13: public-client setup — we delete the field entirely so the flat-value
+      // public-client setup — we delete the field entirely so the flat-value
       // scan in integration tests sees exactly one "none" (token_endpoint_auth_methods_supported).
       expect(meta.revocation_endpoint_auth_methods_supported).toBeUndefined();
     });
@@ -186,7 +186,7 @@ describe("OAuth Metadata Customization", () => {
       expect(body["logo_uri"]).toBe(`https://m.example.com${FAVICON_PATH}`);
     });
 
-    it("AC2.2: GET /.well-known/oauth-protected-resource returns resource = issuer; authorization_servers includes issuer", async () => {
+    it("GET /.well-known/oauth-protected-resource returns resource = issuer; authorization_servers includes issuer", async () => {
       const app = new Hono();
       const resourceUrl = new URL("https://m.example.com");
       app.route(

@@ -12,8 +12,8 @@ describe("GroceryListStore", () => {
     store = new GroceryListStore();
   });
 
-  describe("grocery-infra.AC1.8: findByName tiered priority", () => {
-    it("grocery-infra.AC1.8: findByName returns exact match only, not starts-with or contains", () => {
+  describe("findByName tiered priority", () => {
+    it("findByName returns exact match only, not starts-with or contains", () => {
       const exact = makeGroceryList({ name: "Weekly Groceries" });
       const prefix = makeGroceryList({ name: "Weekly Groceries Extended" });
       const contains = makeGroceryList({ name: "My Weekly Groceries List" });
@@ -25,7 +25,7 @@ describe("GroceryListStore", () => {
       expect(results[0]?.name).toBe("Weekly Groceries");
     });
 
-    it("grocery-infra.AC1.8: findByName is case-insensitive for exact match", () => {
+    it("findByName is case-insensitive for exact match", () => {
       const list = makeGroceryList({ name: "Weekly Groceries" });
       store.load([list]);
 
@@ -35,7 +35,7 @@ describe("GroceryListStore", () => {
       expect(results[0]?.name).toBe("Weekly Groceries");
     });
 
-    it("grocery-infra.AC1.8: findByName returns starts-with tier when no exact match", () => {
+    it("findByName returns starts-with tier when no exact match", () => {
       const prefix1 = makeGroceryList({ name: "Weekly Groceries" });
       const prefix2 = makeGroceryList({ name: "Weekly Staples" });
       const contains = makeGroceryList({ name: "My Weekly List" });
@@ -50,7 +50,7 @@ describe("GroceryListStore", () => {
       expect(names).not.toContain("My Weekly List");
     });
 
-    it("grocery-infra.AC1.8: findByName returns contains tier when no exact or starts-with match", () => {
+    it("findByName returns contains tier when no exact or starts-with match", () => {
       const contains1 = makeGroceryList({ name: "My Groceries" });
       const contains2 = makeGroceryList({ name: "All Groceries Here" });
       store.load([contains1, contains2]);
@@ -63,7 +63,7 @@ describe("GroceryListStore", () => {
       expect(names).toContain("All Groceries Here");
     });
 
-    it("grocery-infra.AC1.8: findByName returns empty array when no match", () => {
+    it("findByName returns empty array when no match", () => {
       const list = makeGroceryList({ name: "Weekly Groceries" });
       store.load([list]);
 
@@ -72,7 +72,7 @@ describe("GroceryListStore", () => {
       expect(results).toHaveLength(0);
     });
 
-    it("grocery-infra.AC1.8: findByName priority — starts-with wins over contains", () => {
+    it("findByName priority — starts-with wins over contains", () => {
       const startsWithList1 = makeGroceryList({ name: "Weekly Groceries" });
       const startsWithList2 = makeGroceryList({ name: "Weekly Staples" });
       const containsList = makeGroceryList({ name: "My Weekly List" });

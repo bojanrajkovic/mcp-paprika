@@ -12,9 +12,9 @@ describe("RecipeStore", () => {
     store = new RecipeStore();
   });
 
-  describe("recipe-query-store.AC1: CRUD operations", () => {
-    describe("recipe-query-store.AC1.1: load() populates the recipe Map correctly", () => {
-      it("recipe-query-store.AC1.1: load() populates the recipe Map correctly", () => {
+  describe("CRUD operations", () => {
+    describe("load() populates the recipe Map correctly", () => {
+      it("load() populates the recipe Map correctly", () => {
         const recipes = [makeRecipe(), makeRecipe()];
 
         store.load(recipes);
@@ -24,8 +24,8 @@ describe("RecipeStore", () => {
       });
     });
 
-    describe("recipe-query-store.AC1.2: get() returns recipe with matching UID", () => {
-      it("recipe-query-store.AC1.2: get() returns recipe with matching UID", () => {
+    describe("get() returns recipe with matching UID", () => {
+      it("get() returns recipe with matching UID", () => {
         const recipe = makeRecipe();
         store.load([recipe]);
 
@@ -35,8 +35,8 @@ describe("RecipeStore", () => {
       });
     });
 
-    describe("recipe-query-store.AC1.3: get() returns undefined for nonexistent UID", () => {
-      it("recipe-query-store.AC1.3: get('nonexistent') returns undefined", () => {
+    describe("get() returns undefined for nonexistent UID", () => {
+      it("get('nonexistent') returns undefined", () => {
         store.load([]);
 
         const result = store.get("nonexistent" as RecipeUid);
@@ -45,8 +45,8 @@ describe("RecipeStore", () => {
       });
     });
 
-    describe("recipe-query-store.AC1.4 & AC1.5: getAll() returns only non-trashed recipes", () => {
-      it("recipe-query-store.AC1.4: getAll() returns all recipes where inTrash === false", () => {
+    describe("getAll() returns only non-trashed recipes", () => {
+      it("getAll() returns all recipes where inTrash === false", () => {
         const nonTrashed1 = makeRecipe();
         const nonTrashed2 = makeRecipe();
         const trashed = makeRecipe({ inTrash: true });
@@ -60,7 +60,7 @@ describe("RecipeStore", () => {
         expect(results).toContain(nonTrashed2);
       });
 
-      it("recipe-query-store.AC1.5: getAll() excludes recipes where inTrash === true", () => {
+      it("getAll() excludes recipes where inTrash === true", () => {
         const nonTrashed = makeRecipe();
         const trashed = makeRecipe({ inTrash: true });
 
@@ -72,8 +72,8 @@ describe("RecipeStore", () => {
       });
     });
 
-    describe("recipe-query-store.AC1.6: set() adds a new recipe", () => {
-      it("recipe-query-store.AC1.6: set(recipe) adds a new recipe; get(recipe.uid) retrieves it", () => {
+    describe("set() adds a new recipe", () => {
+      it("set(recipe) adds a new recipe; get(recipe.uid) retrieves it", () => {
         const recipe = makeRecipe();
 
         store.set(recipe);
@@ -83,8 +83,8 @@ describe("RecipeStore", () => {
       });
     });
 
-    describe("recipe-query-store.AC1.7: set() overwrites existing recipe with same UID", () => {
-      it("recipe-query-store.AC1.7: set(recipe) overwrites an existing recipe with the same UID", () => {
+    describe("set() overwrites existing recipe with same UID", () => {
+      it("set(recipe) overwrites an existing recipe with the same UID", () => {
         const uid = "recipe-test" as RecipeUid;
         const original = makeRecipe({ uid, name: "Original" });
         const updated = makeRecipe({ uid, name: "Updated" });
@@ -98,8 +98,8 @@ describe("RecipeStore", () => {
       });
     });
 
-    describe("recipe-query-store.AC1.8: delete() removes the recipe", () => {
-      it("recipe-query-store.AC1.8: delete(uid) removes the recipe; subsequent get(uid) returns undefined", () => {
+    describe("delete() removes the recipe", () => {
+      it("delete(uid) removes the recipe; subsequent get(uid) returns undefined", () => {
         const recipe = makeRecipe();
 
         store.set(recipe);
@@ -110,22 +110,22 @@ describe("RecipeStore", () => {
       });
     });
 
-    describe("recipe-query-store.AC1.9: delete() does not throw on nonexistent UID", () => {
-      it("recipe-query-store.AC1.9: delete('nonexistent') does not throw", () => {
+    describe("delete() does not throw on nonexistent UID", () => {
+      it("delete('nonexistent') does not throw", () => {
         expect(() => {
           store.delete("nonexistent" as RecipeUid);
         }).not.toThrow();
       });
     });
 
-    describe("recipe-query-store.AC1.10: size is 0 on fresh store", () => {
-      it("recipe-query-store.AC1.10: size returns 0 on a fresh store", () => {
+    describe("size is 0 on fresh store", () => {
+      it("size returns 0 on a fresh store", () => {
         expect(store.size).toBe(0);
       });
     });
 
-    describe("recipe-query-store.AC1.11: size counts only non-trashed recipes", () => {
-      it("recipe-query-store.AC1.11: size returns count of non-trashed recipes only", () => {
+    describe("size counts only non-trashed recipes", () => {
+      it("size returns count of non-trashed recipes only", () => {
         const nonTrashed1 = makeRecipe();
         const nonTrashed2 = makeRecipe();
         const trashed = makeRecipe({ inTrash: true });
@@ -136,8 +136,8 @@ describe("RecipeStore", () => {
       });
     });
 
-    describe("recipe-query-store.AC1.12: size reflects loaded recipes", () => {
-      it("recipe-query-store.AC1.12: After load(), size reflects the number of non-trashed recipes in the input", () => {
+    describe("size reflects loaded recipes", () => {
+      it("After load(), size reflects the number of non-trashed recipes in the input", () => {
         const recipes = [makeRecipe(), makeRecipe({ inTrash: true }), makeRecipe()];
 
         store.load(recipes);
@@ -149,8 +149,8 @@ describe("RecipeStore", () => {
 
   // Category operations moved to CategoryStore (#108) — see category-store.test.ts.
 
-  describe("recipe-query-store.AC3: Search method", () => {
-    describe("recipe-query-store.AC3.1: Case-insensitive substring match finds recipes by name", () => {
+  describe("Search method", () => {
+    describe("Case-insensitive substring match finds recipes by name", () => {
       it("finds recipes with substring match in name", () => {
         const recipe1 = makeRecipe({ uid: "r1" as RecipeUid, name: "Chocolate Cake" });
         const recipe2 = makeRecipe({ uid: "r2" as RecipeUid, name: "Carrot Cake" });
@@ -165,7 +165,7 @@ describe("RecipeStore", () => {
       });
     });
 
-    describe("recipe-query-store.AC3.2: With fields 'all', searches all fields", () => {
+    describe("With fields 'all', searches all fields", () => {
       it("finds recipes by description when fields='all'", () => {
         const recipe = makeRecipe({
           uid: "r1" as RecipeUid,
@@ -209,7 +209,7 @@ describe("RecipeStore", () => {
       });
     });
 
-    describe("recipe-query-store.AC3.3: Field scoping limits search to specified field", () => {
+    describe("Field scoping limits search to specified field", () => {
       it("finds recipes only in ingredients when fields='ingredients'", () => {
         const recipe1 = makeRecipe({
           uid: "r1" as RecipeUid,
@@ -249,7 +249,7 @@ describe("RecipeStore", () => {
       });
     });
 
-    describe("recipe-query-store.AC3.4: Scoring (exact=3, starts-with=2, contains=1, other-field=0)", () => {
+    describe("Scoring (exact=3, starts-with=2, contains=1, other-field=0)", () => {
       it("scores exact name match as 3, starts-with as 2, contains as 1, other-field as 0", () => {
         const exact = makeRecipe({
           uid: "exact" as RecipeUid,
@@ -297,7 +297,7 @@ describe("RecipeStore", () => {
       });
     });
 
-    describe("recipe-query-store.AC3.5: Results sorted by score descending, then name ascending", () => {
+    describe("Results sorted by score descending, then name ascending", () => {
       it("sorts by score descending, then name ascending within same score", () => {
         const score3 = makeRecipe({
           uid: "s3" as RecipeUid,
@@ -355,7 +355,7 @@ describe("RecipeStore", () => {
       });
     });
 
-    describe("recipe-query-store.AC3.6: Pagination with offset and limit", () => {
+    describe("Pagination with offset and limit", () => {
       it("applies offset and limit correctly", () => {
         const recipes = [
           makeRecipe({ uid: "r1" as RecipeUid, name: "Cake A" }),
@@ -386,7 +386,7 @@ describe("RecipeStore", () => {
       });
     });
 
-    describe("recipe-query-store.AC3.7: Empty query returns all non-trashed recipes with score 0", () => {
+    describe("Empty query returns all non-trashed recipes with score 0", () => {
       it("returns all non-trashed recipes with score 0 when query is empty", () => {
         const recipe1 = makeRecipe({ uid: "r1" as RecipeUid, name: "Recipe One" });
         const recipe2 = makeRecipe({ uid: "r2" as RecipeUid, name: "Recipe Two" });
@@ -399,7 +399,7 @@ describe("RecipeStore", () => {
       });
     });
 
-    describe("recipe-query-store.AC3.8: Trashed recipes never appear in search results", () => {
+    describe("Trashed recipes never appear in search results", () => {
       it("excludes trashed recipes from search results", () => {
         const normal = makeRecipe({
           uid: "normal" as RecipeUid,
@@ -420,8 +420,8 @@ describe("RecipeStore", () => {
     });
   });
 
-  describe("recipe-query-store.AC4: Ingredient filtering", () => {
-    describe("recipe-query-store.AC4.1: 'all' mode returns only recipes containing every search term", () => {
+  describe("Ingredient filtering", () => {
+    describe("'all' mode returns only recipes containing every search term", () => {
       it("returns recipes with all search terms in 'all' mode", () => {
         const recipe = makeRecipe({
           uid: "r1" as RecipeUid,
@@ -452,7 +452,7 @@ describe("RecipeStore", () => {
       });
     });
 
-    describe("recipe-query-store.AC4.2: 'any' mode returns recipes containing at least one search term", () => {
+    describe("'any' mode returns recipes containing at least one search term", () => {
       it("returns recipes with any search term in 'any' mode", () => {
         const recipe1 = makeRecipe({
           uid: "r1" as RecipeUid,
@@ -470,7 +470,7 @@ describe("RecipeStore", () => {
       });
     });
 
-    describe("recipe-query-store.AC4.3: Matching is case-insensitive", () => {
+    describe("Matching is case-insensitive", () => {
       it("matches ingredients case-insensitively", () => {
         const recipe = makeRecipe({
           uid: "r1" as RecipeUid,
@@ -485,7 +485,7 @@ describe("RecipeStore", () => {
       });
     });
 
-    describe("recipe-query-store.AC4.4: limit parameter caps the number of results", () => {
+    describe("limit parameter caps the number of results", () => {
       it("returns only limit recipes when specified", () => {
         const recipes = [
           makeRecipe({ uid: "r1" as RecipeUid, ingredients: "flour" }),
@@ -500,7 +500,7 @@ describe("RecipeStore", () => {
       });
     });
 
-    describe("recipe-query-store.AC4.5: Empty terms array returns all non-trashed recipes", () => {
+    describe("Empty terms array returns all non-trashed recipes", () => {
       it("returns all non-trashed recipes when terms array is empty", () => {
         const recipe1 = makeRecipe({ uid: "r1" as RecipeUid });
         const recipe2 = makeRecipe({ uid: "r2" as RecipeUid });
@@ -512,7 +512,7 @@ describe("RecipeStore", () => {
       });
     });
 
-    describe("recipe-query-store.AC4.6: Trashed recipes never appear in filtered results", () => {
+    describe("Trashed recipes never appear in filtered results", () => {
       it("excludes trashed recipes from filtered results", () => {
         const normal = makeRecipe({
           uid: "normal" as RecipeUid,
@@ -533,8 +533,8 @@ describe("RecipeStore", () => {
     });
   });
 
-  describe("recipe-query-store.AC5: Time filtering", () => {
-    describe("recipe-query-store.AC5.1: Filters recipes by maxPrepTime constraint", () => {
+  describe("Time filtering", () => {
+    describe("Filters recipes by maxPrepTime constraint", () => {
       it("excludes recipes where prepTime exceeds maxPrepTime", () => {
         const included = makeRecipe({
           uid: "r1" as RecipeUid,
@@ -569,7 +569,7 @@ describe("RecipeStore", () => {
       });
     });
 
-    describe("recipe-query-store.AC5.2: Filters recipes by maxCookTime constraint", () => {
+    describe("Filters recipes by maxCookTime constraint", () => {
       it("excludes recipes where cookTime exceeds maxCookTime", () => {
         const included = makeRecipe({
           uid: "r1" as RecipeUid,
@@ -590,7 +590,7 @@ describe("RecipeStore", () => {
       });
     });
 
-    describe("recipe-query-store.AC5.3: Filters recipes by maxTotalTime constraint", () => {
+    describe("Filters recipes by maxTotalTime constraint", () => {
       it("excludes recipes where totalTime exceeds maxTotalTime", () => {
         const included = makeRecipe({
           uid: "r1" as RecipeUid,
@@ -609,7 +609,7 @@ describe("RecipeStore", () => {
       });
     });
 
-    describe("recipe-query-store.AC5.4: Multiple constraints applied simultaneously (all must pass)", () => {
+    describe("Multiple constraints applied simultaneously (all must pass)", () => {
       it("excludes recipes that fail any constraint", () => {
         const passAll = makeRecipe({
           uid: "r1" as RecipeUid,
@@ -636,7 +636,7 @@ describe("RecipeStore", () => {
       });
     });
 
-    describe("recipe-query-store.AC5.5: Recipes with unparseable time strings are kept", () => {
+    describe("Recipes with unparseable time strings are kept", () => {
       it("includes recipes with unparseable totalTime", () => {
         const normal = makeRecipe({
           uid: "r1" as RecipeUid,
@@ -655,7 +655,7 @@ describe("RecipeStore", () => {
       });
     });
 
-    describe("recipe-query-store.AC5.6: Results sorted by totalTime ascending", () => {
+    describe("Results sorted by totalTime ascending", () => {
       it("sorts recipes by totalTime in ascending order", () => {
         const r60 = makeRecipe({
           uid: "r1" as RecipeUid,
@@ -683,7 +683,7 @@ describe("RecipeStore", () => {
       });
     });
 
-    describe("recipe-query-store.AC5.7: Unparseable and null totalTime sort last", () => {
+    describe("Unparseable and null totalTime sort last", () => {
       it("sorts unparseable and null totalTime values after parseable ones", () => {
         const parseable = makeRecipe({
           uid: "r1" as RecipeUid,
@@ -707,7 +707,7 @@ describe("RecipeStore", () => {
       });
     });
 
-    describe("recipe-query-store.AC5.8: No constraints returns all non-trashed recipes", () => {
+    describe("No constraints returns all non-trashed recipes", () => {
       it("returns all non-trashed recipes when no constraints set", () => {
         const recipe1 = makeRecipe({ uid: "r1" as RecipeUid, totalTime: "30 min" });
         const recipe2 = makeRecipe({ uid: "r2" as RecipeUid, totalTime: "60 min" });
@@ -719,7 +719,7 @@ describe("RecipeStore", () => {
       });
     });
 
-    describe("recipe-query-store.AC5.9: Time parsing delegates to parseDuration", () => {
+    describe("Time parsing delegates to parseDuration", () => {
       it("parses colon format correctly (H:MM)", () => {
         const recipe = makeRecipe({
           uid: "r1" as RecipeUid,
@@ -734,8 +734,8 @@ describe("RecipeStore", () => {
     });
   });
 
-  describe("recipe-query-store.AC6: Name lookup", () => {
-    describe("recipe-query-store.AC6.1: Exact case-insensitive match returns the matching recipe", () => {
+  describe("Name lookup", () => {
+    describe("Exact case-insensitive match returns the matching recipe", () => {
       it("returns the recipe with exact name match (case-insensitive)", () => {
         const recipe = makeRecipe({
           uid: "r1" as RecipeUid,
@@ -750,7 +750,7 @@ describe("RecipeStore", () => {
       });
     });
 
-    describe("recipe-query-store.AC6.2: Starts-with match used when no exact match exists", () => {
+    describe("Starts-with match used when no exact match exists", () => {
       it("returns recipes with starts-with match when no exact match", () => {
         const cake = makeRecipe({
           uid: "r1" as RecipeUid,
@@ -770,7 +770,7 @@ describe("RecipeStore", () => {
       });
     });
 
-    describe("recipe-query-store.AC6.3: Contains match used when no starts-with match exists", () => {
+    describe("Contains match used when no starts-with match exists", () => {
       it("returns recipes with contains match when no exact/starts-with match", () => {
         const recipe = makeRecipe({
           uid: "r1" as RecipeUid,
@@ -785,7 +785,7 @@ describe("RecipeStore", () => {
       });
     });
 
-    describe("recipe-query-store.AC6.4: Returns all matches at the first successful tier", () => {
+    describe("Returns all matches at the first successful tier", () => {
       it("returns all start-with matches when multiple exist", () => {
         const pie = makeRecipe({
           uid: "r1" as RecipeUid,
@@ -805,7 +805,7 @@ describe("RecipeStore", () => {
       });
     });
 
-    describe("recipe-query-store.AC6.5: No matches at any tier returns empty array", () => {
+    describe("No matches at any tier returns empty array", () => {
       it("returns empty array when no matches found", () => {
         const recipe = makeRecipe({
           uid: "r1" as RecipeUid,
@@ -819,7 +819,7 @@ describe("RecipeStore", () => {
       });
     });
 
-    describe("recipe-query-store.AC6.6: Only searches non-trashed recipes", () => {
+    describe("Only searches non-trashed recipes", () => {
       it("does not return trashed recipes", () => {
         const normal = makeRecipe({
           uid: "normal" as RecipeUid,
@@ -840,7 +840,7 @@ describe("RecipeStore", () => {
     });
   });
 
-  describe("recipe-query-store.AC7: Module characteristics", () => {
+  describe("Module characteristics", () => {
     describe("pending-writes (issue #57 race protection)", () => {
       it("freshly constructed store has no pending writes", () => {
         expect(store.pendingWriteCount).toBe(0);

@@ -133,19 +133,19 @@ afterAll(() => {
 });
 
 describe("PaprikaClient", () => {
-  describe("p1-u05-client-auth.AC5: Construction and module structure", () => {
-    it("p1-u05-client-auth.AC5.1 - new PaprikaClient(email, password) does not throw", () => {
+  describe("Construction and module structure", () => {
+    it("new PaprikaClient(email, password) does not throw", () => {
       expect(() => new PaprikaClient("test@example.com", "password")).not.toThrow();
     });
 
-    it("p1-u05-client-auth.AC5.2 - PaprikaClient is exported from src/paprika/client.ts", () => {
+    it("PaprikaClient is exported from src/paprika/client.ts", () => {
       const client = new PaprikaClient("test@example.com", "password");
       expect(client).toBeInstanceOf(PaprikaClient);
     });
   });
 
-  describe("p1-u05-client-auth.AC1: Authentication works correctly", () => {
-    it("p1-u05-client-auth.AC1.1 - authenticate() POSTs form-encoded email and password to AUTH_URL", async () => {
+  describe("Authentication works correctly", () => {
+    it("authenticate() POSTs form-encoded email and password to AUTH_URL", async () => {
       const email = "test@example.com";
       const password = "mypassword";
 
@@ -171,7 +171,7 @@ describe("PaprikaClient", () => {
       expect(params.get("password")).toBe(password);
     });
 
-    it("p1-u05-client-auth.AC1.2 - after successful auth, token is stored (verified by calling authenticate() twice)", async () => {
+    it("after successful auth, token is stored (verified by calling authenticate() twice)", async () => {
       const email = "test@example.com";
       const password = "mypassword";
       let callCount = 0;
@@ -194,7 +194,7 @@ describe("PaprikaClient", () => {
       expect(callCount).toBe(2);
     });
 
-    it("p1-u05-client-auth.AC1.3 - response is validated with Zod (successful path implicitly tests this)", async () => {
+    it("response is validated with Zod (successful path implicitly tests this)", async () => {
       server.use(
         http.post(AUTH_URL, () => {
           return HttpResponse.json({ result: { token: "valid-jwt-token" } });
@@ -207,7 +207,7 @@ describe("PaprikaClient", () => {
       await expect(client.authenticate()).resolves.toBeUndefined();
     });
 
-    it("p1-u05-client-auth.AC1.4 - non-2xx response (403) throws PaprikaAuthError with status in message", async () => {
+    it("non-2xx response (403) throws PaprikaAuthError with status in message", async () => {
       server.use(
         http.post(AUTH_URL, () => {
           return HttpResponse.json({}, { status: 403 });
@@ -225,7 +225,7 @@ describe("PaprikaClient", () => {
       }
     });
 
-    it("p1-u05-client-auth.AC1.4 - non-2xx response (401) throws PaprikaAuthError with status in message", async () => {
+    it("non-2xx response (401) throws PaprikaAuthError with status in message", async () => {
       server.use(
         http.post(AUTH_URL, () => {
           return HttpResponse.json({}, { status: 401 });
@@ -243,7 +243,7 @@ describe("PaprikaClient", () => {
       }
     });
 
-    it("p1-u05-client-auth.AC1.5 - malformed response (missing result.token) throws ZodError", async () => {
+    it("malformed response (missing result.token) throws ZodError", async () => {
       server.use(
         http.post(AUTH_URL, () => {
           return HttpResponse.json({ wrong: "shape" });
@@ -255,7 +255,7 @@ describe("PaprikaClient", () => {
       await expect(client.authenticate()).rejects.toThrow(ZodError);
     });
 
-    it("p1-u05-client-auth.AC1.5 - malformed response (missing result) throws ZodError", async () => {
+    it("malformed response (missing result) throws ZodError", async () => {
       server.use(
         http.post(AUTH_URL, () => {
           return HttpResponse.json({ token: "orphaned-token" });
@@ -267,7 +267,7 @@ describe("PaprikaClient", () => {
       await expect(client.authenticate()).rejects.toThrow(ZodError);
     });
 
-    it("auth-retry.1 - transient network failure during auth retries then succeeds (#158)", async () => {
+    it("transient network failure during auth retries then succeeds (#158)", async () => {
       let calls = 0;
       server.use(
         http.post(AUTH_URL, () => {
@@ -289,7 +289,7 @@ describe("PaprikaClient", () => {
       }
     });
 
-    it("auth-retry.2 - transient 503 during auth retries then succeeds (#158)", async () => {
+    it("transient 503 during auth retries then succeeds (#158)", async () => {
       let calls = 0;
       server.use(
         http.post(AUTH_URL, () => {
@@ -311,7 +311,7 @@ describe("PaprikaClient", () => {
       }
     });
 
-    it("auth-retry.3 - bad credentials (401) fail fast without retrying (#158)", async () => {
+    it("bad credentials (401) fail fast without retrying (#158)", async () => {
       let calls = 0;
       server.use(
         http.post(AUTH_URL, () => {
@@ -325,7 +325,7 @@ describe("PaprikaClient", () => {
       expect(calls).toBe(1); // no retry on a real auth rejection
     });
 
-    it("auth-retry.4 - persistent network failure gives up (bounded) with PaprikaAuthError (#158)", async () => {
+    it("persistent network failure gives up (bounded) with PaprikaAuthError (#158)", async () => {
       let calls = 0;
       server.use(
         http.post(AUTH_URL, () => {
@@ -349,7 +349,7 @@ describe("PaprikaClient", () => {
       }
     });
 
-    it("p1-u05-client-auth.AC1.5 - malformed response (result.token missing) throws ZodError", async () => {
+    it("malformed response (result.token missing) throws ZodError", async () => {
       server.use(
         http.post(AUTH_URL, () => {
           return HttpResponse.json({ result: { other: "field" } });
@@ -362,8 +362,8 @@ describe("PaprikaClient", () => {
     });
   });
 
-  describe("p1-u06-client-reads.AC1: listRecipes() returns a recipe entry list", () => {
-    it("p1-u06-client-reads.AC1.1 - returns RecipeEntry[] with uid and hash from /api/v2/sync/recipes/", async () => {
+  describe("listRecipes() returns a recipe entry list", () => {
+    it("returns RecipeEntry[] with uid and hash from /api/v2/sync/recipes/", async () => {
       server.use(
         http.get(`${API_BASE}/recipes/`, () => {
           return HttpResponse.json({
@@ -385,7 +385,7 @@ describe("PaprikaClient", () => {
       expect(recipes[1]!.hash).toBe("h2");
     });
 
-    it("p1-u06-client-reads.AC1.2 - returns empty array when API returns empty result", async () => {
+    it("returns empty array when API returns empty result", async () => {
       server.use(
         http.get(`${API_BASE}/recipes/`, () => {
           return HttpResponse.json({ result: [] });
@@ -399,8 +399,8 @@ describe("PaprikaClient", () => {
     });
   });
 
-  describe("p1-u06-client-reads.AC2: getRecipe() returns a full recipe by UID", () => {
-    it("p1-u06-client-reads.AC2.1 - returns Recipe object with camelCase fields", async () => {
+  describe("getRecipe() returns a full recipe by UID", () => {
+    it("returns Recipe object with camelCase fields", async () => {
       server.use(
         http.get(`${API_BASE}/recipe/test-uid/`, () => {
           return HttpResponse.json({ result: makeSnakeCaseRecipe("test-uid") });
@@ -416,7 +416,7 @@ describe("PaprikaClient", () => {
       expect(recipe.imageUrl).toBe("");
     });
 
-    it("p1-u06-client-reads.AC2.3 - a 200 {error: 'not found'} envelope is normalized to a 404 PaprikaAPIError", async () => {
+    it("a 200 {error: 'not found'} envelope is normalized to a 404 PaprikaAPIError", async () => {
       // Paprika signals a missing/hard-deleted recipe with HTTP 200 and an
       // {error:{code,message}} body (NOT a 404, NOT a {result} envelope). The
       // client must surface that as a 404 PaprikaAPIError, not a confusing
@@ -440,7 +440,7 @@ describe("PaprikaClient", () => {
       }
     });
 
-    it("p1-u06-client-reads.AC2.2 - non-2xx response throws PaprikaAPIError", async () => {
+    it("non-2xx response throws PaprikaAPIError", async () => {
       server.use(
         http.get(`${API_BASE}/recipe/not-found/`, () => {
           return HttpResponse.json({}, { status: 404 });
@@ -458,34 +458,34 @@ describe("PaprikaClient", () => {
     });
   });
 
-  describe.todo("p1-u05-client-auth.AC2: Request helper adds auth and unwraps envelope", () => {
-    // Tests deferred to P1-U06 when public methods exist that call request<T>().
+  describe.todo("Request helper adds auth and unwraps envelope", () => {
+    // Tests deferred when public methods exist that call request<T>().
     // request<T>() is private and cannot be tested directly.
     //
-    // AC2.1: request<T>() includes Authorization: Bearer {token} header
-    // AC2.2: Response envelope { result: T } is unwrapped and validated
-    // AC2.3: request<T>() is private (structural — verified by TypeScript compiler)
-    // AC2.4: Non-401 error status throws PaprikaAPIError
+    // request<T>() includes Authorization: Bearer {token} header
+    // Response envelope { result: T } is unwrapped and validated
+    // request<T>() is private (structural — verified by TypeScript compiler)
+    // Non-401 error status throws PaprikaAPIError
   });
 
-  describe.todo("p1-u05-client-auth.AC3: 401 re-auth retry", () => {
-    // Tests deferred to P1-U06 when public methods exist that call request<T>().
+  describe.todo("401 re-auth retry", () => {
+    // Tests deferred when public methods exist that call request<T>().
     //
-    // AC3.1: On 401 with existing token, authenticate() refreshes, then retries
-    // AC3.2: If retry also returns 401, PaprikaAuthError is thrown
-    // AC3.3: No retry when this.token is null
+    // On 401 with existing token, authenticate() refreshes, then retries
+    // If retry also returns 401, PaprikaAuthError is thrown
+    // No retry when this.token is null
   });
 
-  describe.todo("p1-u05-client-auth.AC4: Cockatiel resilience for transient failures", () => {
-    // Tests deferred to P1-U06 when public methods exist that call request<T>().
+  describe.todo("Cockatiel resilience for transient failures", () => {
+    // Tests deferred when public methods exist that call request<T>().
     //
-    // AC4.1: Status codes 429, 500, 502, 503 retried with exponential backoff
-    // AC4.2: Circuit breaker opens after 5 consecutive failures
-    // AC4.3: Non-retryable statuses (400, 403, 404) not retried
+    // Status codes 429, 500, 502, 503 retried with exponential backoff
+    // Circuit breaker opens after 5 consecutive failures
+    // Non-retryable statuses (400, 403, 404) not retried
   });
 
-  describe("p1-u06-client-reads.AC3: getRecipes() fetches multiple recipes with concurrency limiting", () => {
-    it("p1-u06-client-reads.AC3.1 - returns Recipe[] with one entry per provided UID, in same order", async () => {
+  describe("getRecipes() fetches multiple recipes with concurrency limiting", () => {
+    it("returns Recipe[] with one entry per provided UID, in same order", async () => {
       server.use(
         http.get(`${API_BASE}/recipe/:uid/`, ({ params }) => {
           return HttpResponse.json({ result: makeSnakeCaseRecipe(params["uid"] as string) });
@@ -501,7 +501,7 @@ describe("PaprikaClient", () => {
       expect(recipes[2]!.name).toBe("Recipe uid-3");
     });
 
-    it("p1-u06-client-reads.AC3.2 - getRecipes([]) returns [] with zero HTTP requests", async () => {
+    it("getRecipes([]) returns [] with zero HTTP requests", async () => {
       // Deliberately NOT registering any handler — if a request is made, MSW returns 500
       const client = new PaprikaClient("test@example.com", "password");
       const recipes = await client.getRecipes([]);
@@ -509,7 +509,7 @@ describe("PaprikaClient", () => {
       expect(recipes).toStrictEqual([]);
     });
 
-    it("p1-u06-client-reads.AC3.3 - at most 5 getRecipe() calls execute simultaneously", async () => {
+    it("at most 5 getRecipe() calls execute simultaneously", async () => {
       let inFlight = 0;
       let peakInFlight = 0;
 
@@ -530,7 +530,7 @@ describe("PaprikaClient", () => {
       expect(peakInFlight).toBeLessThanOrEqual(5);
     });
 
-    it("p1-u06-client-reads.AC3.4 - a single recipe fetch error causes entire getRecipes() to reject", async () => {
+    it("a single recipe fetch error causes entire getRecipes() to reject", async () => {
       server.use(
         http.get(`${API_BASE}/recipe/good-uid/`, () => {
           return HttpResponse.json({ result: makeSnakeCaseRecipe("good-uid") });
@@ -551,8 +551,8 @@ describe("PaprikaClient", () => {
     });
   });
 
-  describe("p1-u06-client-reads.AC4: listCategories() returns Category objects", () => {
-    it("p1-u06-client-reads.AC4.1 - returns Category[] with camelCase fields from /categories/ endpoint", async () => {
+  describe("listCategories() returns Category objects", () => {
+    it("returns Category[] with camelCase fields from /categories/ endpoint", async () => {
       server.use(
         http.get(`${API_BASE}/categories/`, () => {
           return HttpResponse.json({
@@ -573,7 +573,7 @@ describe("PaprikaClient", () => {
       expect(categories[0]!.parentUid).toBe(null);
     });
 
-    it("p1-u06-client-reads.AC4.2 - makes exactly one /categories/ request (no per-category hydration)", async () => {
+    it("makes exactly one /categories/ request (no per-category hydration)", async () => {
       let listCount = 0;
 
       server.use(
@@ -594,7 +594,7 @@ describe("PaprikaClient", () => {
       expect(listCount).toBe(1);
     });
 
-    it("p1-u06-client-reads.AC4.3 - returns [] when /categories/ returns empty list", async () => {
+    it("returns [] when /categories/ returns empty list", async () => {
       server.use(
         http.get(`${API_BASE}/categories/`, () => {
           return HttpResponse.json({ result: [] });
@@ -608,8 +608,8 @@ describe("PaprikaClient", () => {
     });
   });
 
-  describe("p1-u07-client-writes.AC1: saveRecipe encodes and POSTs correctly", () => {
-    it("p1-u07-client-writes.AC1.1 - POST sent to correct URL", async () => {
+  describe("saveRecipe encodes and POSTs correctly", () => {
+    it("POST sent to correct URL", async () => {
       const uid = "test-uid";
       let capturedUrl = "";
 
@@ -626,7 +626,7 @@ describe("PaprikaClient", () => {
       expect(capturedUrl).toBe(`${API_BASE}/recipe/${uid}/`);
     });
 
-    it("p1-u07-client-writes.AC1.2 and AC1.3 - FormData encodes correctly with snake_case keys and all 28 fields", async () => {
+    it("FormData encodes correctly with snake_case keys and all 28 fields", async () => {
       const uid = "test-uid";
       let payload: Record<string, unknown> | null = null;
 
@@ -645,7 +645,7 @@ describe("PaprikaClient", () => {
       await client.saveRecipe(makeCamelCaseRecipe(uid));
 
       expect(payload).toBeDefined();
-      // AC1.2: Assert specific snake_case keys exist
+      // Assert specific snake_case keys exist
       expect(payload).toHaveProperty("prep_time");
       expect(payload).toHaveProperty("cook_time");
       expect(payload).toHaveProperty("total_time");
@@ -655,16 +655,16 @@ describe("PaprikaClient", () => {
       expect(payload).toHaveProperty("is_pinned");
       expect(payload).toHaveProperty("nutritional_info");
 
-      // AC1.2: Assert camelCase equivalents do NOT exist
+      // Assert camelCase equivalents do NOT exist
       expect(payload).not.toHaveProperty("prepTime");
       expect(payload).not.toHaveProperty("imageUrl");
       expect(payload).not.toHaveProperty("onFavorites");
 
-      // AC1.2: Assert server-computed read-only fields are NOT present (#127)
+      // Assert server-computed read-only fields are NOT present (#127)
       expect(payload).not.toHaveProperty("on_grocery_list");
       expect(payload).not.toHaveProperty("photo_url");
 
-      // AC1.3: Assert exactly 27 fields — 26 plus `deleted`, which the payload now
+      // Assert exactly 27 fields — 26 plus `deleted`, which the payload now
       // carries on every recipe POST (false on create/update, true on empty-trash) (#125).
       expect(payload).toHaveProperty("deleted");
       expect(Object.keys(payload!).length).toBe(27);
@@ -676,7 +676,7 @@ describe("PaprikaClient", () => {
       expect(payload!["hash"]).not.toBe(`hash-${uid}`);
     });
 
-    it("p1-u07-client-writes.AC1.4 - saveRecipe returns the recipe with the stamped content hash (#167)", async () => {
+    it("saveRecipe returns the recipe with the stamped content hash (#167)", async () => {
       const uid = "test-uid";
 
       server.use(
@@ -753,7 +753,7 @@ describe("PaprikaClient", () => {
       expect(result.hash).toBe(tombstone.hash);
     });
 
-    it("p1-u07-client-writes.AC1.5 - Non-2xx response throws PaprikaAPIError", async () => {
+    it("non-2xx response throws PaprikaAPIError", async () => {
       const uid = "test-uid";
 
       server.use(
@@ -773,8 +773,8 @@ describe("PaprikaClient", () => {
     });
   });
 
-  describe("p1-u07-client-writes.AC3: notifySync propagates changes", () => {
-    it("p1-u07-client-writes.AC3.1 - POSTs to /api/v2/sync/notify/", async () => {
+  describe("notifySync propagates changes", () => {
+    it("POSTs to /api/v2/sync/notify/", async () => {
       let notifyReached = false;
 
       server.use(
@@ -790,7 +790,7 @@ describe("PaprikaClient", () => {
       expect(notifyReached).toBe(true);
     });
 
-    it("p1-u07-client-writes.AC3.2 - Returns void (Promise resolves with undefined)", async () => {
+    it("returns void (Promise resolves with undefined)", async () => {
       server.use(
         http.post(`${API_BASE}/notify/`, () => {
           return HttpResponse.json({ result: {} });
@@ -804,8 +804,8 @@ describe("PaprikaClient", () => {
     });
   });
 
-  describe("p1-u07-client-writes.AC2: deleteRecipe soft-deletes via trash flag", () => {
-    it("p1-u07-client-writes.AC2.1 and AC2.2 - GETs recipe, POSTs with in_trash: true, then calls notifySync", async () => {
+  describe("deleteRecipe soft-deletes via trash flag", () => {
+    it("GETs recipe, POSTs with in_trash: true, then calls notifySync", async () => {
       const uid = "test-uid";
       let capturedPayload: Record<string, unknown> | null = null;
       let notifyReached = false;
@@ -831,15 +831,15 @@ describe("PaprikaClient", () => {
       const client = new PaprikaClient("test@example.com", "password");
       await client.deleteRecipe(RecipeUidSchema.parse(uid));
 
-      // AC2.1: Assert in_trash is true in payload
+      // Assert in_trash is true in payload
       expect(capturedPayload).toBeDefined();
       expect(capturedPayload!["in_trash"]).toBe(true);
 
-      // AC2.2: Assert notifySync was called
+      // Assert notifySync was called
       expect(notifyReached).toBe(true);
     });
 
-    it("p1-u07-client-writes.AC2.3 - 404 from getRecipe throws error and never calls saveRecipe or notifySync", async () => {
+    it("404 from getRecipe throws error and never calls saveRecipe or notifySync", async () => {
       const uid = "not-found";
       let notifyReached = false;
 
@@ -869,7 +869,7 @@ describe("PaprikaClient", () => {
     });
   });
 
-  describe("recipe-hard-delete.AC: hardDeleteRecipe empties trash (#125)", () => {
+  describe("hardDeleteRecipe empties trash (#125)", () => {
     it("GETs recipe, POSTs with both in_trash and deleted true, then calls notifySync", async () => {
       const uid = "test-uid";
       let capturedPayload: Record<string, unknown> | null = null;
@@ -959,8 +959,8 @@ describe("PaprikaClient", () => {
     });
   });
 
-  describe("pantry-read.AC1: listPantry", () => {
-    it("pantry-read.AC1.5 - returns PantryItem[] with camelCase fields from /api/v2/sync/pantry/", async () => {
+  describe("listPantry", () => {
+    it("returns PantryItem[] with camelCase fields from /api/v2/sync/pantry/", async () => {
       server.use(
         http.get(`${API_BASE}/pantry/`, () => {
           return HttpResponse.json({
@@ -991,7 +991,7 @@ describe("PaprikaClient", () => {
       expect(pantryItems[1]!.ingredient).toBe("Another Item");
     });
 
-    it("pantry-read.AC1.6 - returns [] when /api/v2/sync/pantry/ returns empty result", async () => {
+    it("returns [] when /api/v2/sync/pantry/ returns empty result", async () => {
       server.use(
         http.get(`${API_BASE}/pantry/`, () => {
           return HttpResponse.json({ result: [] });
@@ -1005,8 +1005,8 @@ describe("PaprikaClient", () => {
     });
   });
 
-  describe("pantry-mutations.AC1: pantryItemToApiPayload (via savePantryItems wire body)", () => {
-    it("pantry-mutations.AC1.4 - payload has exactly 12 snake_case keys, no camelCase", async () => {
+  describe("pantryItemToApiPayload (via savePantryItems wire body)", () => {
+    it("payload has exactly 12 snake_case keys, no camelCase", async () => {
       const uid = "pantry-test-1";
       let body: Array<Record<string, unknown>> | null = null;
 
@@ -1046,7 +1046,7 @@ describe("PaprikaClient", () => {
       expect(payload).not.toHaveProperty("purchaseDate");
     });
 
-    it("pantry-mutations.AC1.5 - deleted flag is included and emitted correctly", async () => {
+    it("deleted flag is included and emitted correctly", async () => {
       const uid = "pantry-test-2";
       const bodies: Array<Array<Record<string, unknown>>> = [];
 
@@ -1070,7 +1070,7 @@ describe("PaprikaClient", () => {
       expect(bodies[1]![0]!["deleted"]).toBe(true);
     });
 
-    it("pantry-mutations.AC1.6 - null values survive the conversion", async () => {
+    it("null values survive the conversion", async () => {
       const uid = "pantry-test-3";
       let body: Array<Record<string, unknown>> | null = null;
 
@@ -1102,8 +1102,8 @@ describe("PaprikaClient", () => {
     });
   });
 
-  describe("pantry-mutations.AC2: savePantryItems", () => {
-    it("pantry-mutations.AC2.1 - savePantryItems POSTs to collection URL and returns input items", async () => {
+  describe("savePantryItems", () => {
+    it("savePantryItems POSTs to collection URL and returns input items", async () => {
       const uid = "pantry-test-4";
       let capturedUrl = "";
 
@@ -1124,7 +1124,7 @@ describe("PaprikaClient", () => {
       expect(result?.deleted).toBe(input.deleted);
     });
 
-    it("pantry-mutations.AC2.2 - HTTP 401 triggers re-auth retry", async () => {
+    it("HTTP 401 triggers re-auth retry", async () => {
       const uid = "pantry-test-5";
       let authCallCount = 0;
       let pantryCallCount = 0;
@@ -1153,7 +1153,7 @@ describe("PaprikaClient", () => {
     });
 
     it.each([429, 500, 502, 503])(
-      "pantry-mutations.AC2.3 - retryable HTTP status %i triggers cockatiel retry",
+      "retryable HTTP status %i triggers cockatiel retry",
       async (status: number) => {
         const uid = `pantry-test-6-${status}`;
         let pantryCallCount = 0;
@@ -1177,7 +1177,7 @@ describe("PaprikaClient", () => {
       5000,
     );
 
-    it("network-retry.1 - transient network-level fetch failure on a write triggers cockatiel retry", async () => {
+    it("transient network-level fetch failure on a write triggers cockatiel retry", async () => {
       const uid = "pantry-test-network-retry";
       let pantryCallCount = 0;
 
@@ -1198,7 +1198,7 @@ describe("PaprikaClient", () => {
       expect(pantryCallCount).toBe(2);
     });
 
-    it("network-retry.2 - exhausted network retries surface the original undici fetch error", async () => {
+    it("exhausted network retries surface the original undici fetch error", async () => {
       const uid = "pantry-test-network-exhausted";
       let pantryCallCount = 0;
 
@@ -1228,7 +1228,7 @@ describe("PaprikaClient", () => {
       expect(pantryCallCount).toBeGreaterThan(1);
     });
 
-    it("pantry-mutations.AC2.4 - non-retryable HTTP error throws PaprikaAPIError", async () => {
+    it("non-retryable HTTP error throws PaprikaAPIError", async () => {
       const uid = "pantry-test-7";
 
       server.use(
@@ -1251,7 +1251,7 @@ describe("PaprikaClient", () => {
       }
     });
 
-    it("pantry-mutations.AC2.5 - invalid Zod envelope (result is string not boolean) throws ZodError", async () => {
+    it("invalid Zod envelope (result is string not boolean) throws ZodError", async () => {
       const uid = "pantry-test-8";
 
       server.use(
@@ -1272,15 +1272,15 @@ describe("PaprikaClient", () => {
   });
 
   // ---------------------------------------------------------------------------
-  // Lifecycle hook logging tests — Task 3 (AC3.3, AC3.4, AC6.1, AC6.2, AC6.3)
+  // Lifecycle hook logging tests
   // ---------------------------------------------------------------------------
 
-  describe("structured-logging.AC3.3: onRetry hook emits warn records", () => {
+  describe("onRetry hook emits warn records", () => {
     afterEach(() => {
       vi.useRealTimers();
     });
 
-    it("AC3.3 - emits warn with attempt+1 and nextBackoffMs on first retry, another warn on second retry, no warn after success", async () => {
+    it("emits warn with attempt+1 and nextBackoffMs on first retry, another warn on second retry, no warn after success", async () => {
       const { log: testLog, records } = makePinoCapture();
       let callCount = 0;
       server.use(
@@ -1328,12 +1328,12 @@ describe("PaprikaClient", () => {
     }, 15000);
   });
 
-  describe("structured-logging.AC3.4: onGiveUp hook emits error record when retries exhausted", () => {
+  describe("onGiveUp hook emits error record when retries exhausted", () => {
     afterEach(() => {
       vi.useRealTimers();
     });
 
-    it("AC3.4 - emits error 'paprika retries exhausted' after all 3 attempts fail", async () => {
+    it("emits error 'paprika retries exhausted' after all 3 attempts fail", async () => {
       const { log: testLog, records } = makePinoCapture();
       server.use(
         http.get(`${API_BASE}/recipes/`, () => {
@@ -1354,12 +1354,12 @@ describe("PaprikaClient", () => {
     }, 15000);
   });
 
-  describe("structured-logging.AC6: Breaker lifecycle hooks emit log records", () => {
+  describe("Breaker lifecycle hooks emit log records", () => {
     afterEach(() => {
       vi.useRealTimers();
     });
 
-    it("AC6.1 - onBreak emits exactly one warn 'paprika circuit breaker opened' after 5 distinct failing tool calls", async () => {
+    it("onBreak emits exactly one warn 'paprika circuit breaker opened' after 5 distinct failing tool calls", async () => {
       const { log: testLog, records } = makePinoCapture();
       // Fail every request — 5 tool calls × 4 attempts each (1 initial + 3 retries) = 20 fetches before breaker opens
       server.use(
@@ -1384,7 +1384,7 @@ describe("PaprikaClient", () => {
       expect(breakRecords).toHaveLength(1);
     }, 60000);
 
-    it("AC6.3 - onHalfOpen emits info record when a probe starts after halfOpenAfter elapses", async () => {
+    it("onHalfOpen emits info record when a probe starts after halfOpenAfter elapses", async () => {
       const { log: testLog, records } = makePinoCapture();
       // All fetches succeed after the breaker is tripped
       let fetchCount = 0;
@@ -1425,7 +1425,7 @@ describe("PaprikaClient", () => {
       expect(halfOpenRecords).toHaveLength(1);
     }, 60000);
 
-    it("AC6.2 - onReset emits info record after successful half-open probe", async () => {
+    it("onReset emits info record after successful half-open probe", async () => {
       const { log: testLog, records } = makePinoCapture();
       let fetchCount = 0;
       server.use(
@@ -1465,15 +1465,15 @@ describe("PaprikaClient", () => {
   });
 
   // ---------------------------------------------------------------------------
-  // CircuitOpenError surface — Task 4 (AC4.2, AC4.3, AC5.5)
+  // CircuitOpenError surface
   // ---------------------------------------------------------------------------
 
-  describe("structured-logging.AC4+AC5: CircuitOpenError replaces synthetic 503", () => {
+  describe("CircuitOpenError replaces synthetic 503", () => {
     afterEach(() => {
       vi.useRealTimers();
     });
 
-    it("AC4.2 - 5th distinct failing call trips breaker (onBreak fires once) and fetch count is 5×4=20", async () => {
+    it("5th distinct failing call trips breaker (onBreak fires once) and fetch count is 5×4=20", async () => {
       const { log: testLog, records } = makePinoCapture();
       let fetchCount = 0;
       server.use(
@@ -1494,7 +1494,7 @@ describe("PaprikaClient", () => {
       expect(fetchCount).toBe(20);
     }, 60000);
 
-    it("AC4.3 - 6th call with open breaker throws CircuitOpenError without additional fetches", async () => {
+    it("6th call with open breaker throws CircuitOpenError without additional fetches", async () => {
       let fetchCount = 0;
       server.use(
         http.get(`${API_BASE}/recipes/`, () => {
@@ -1527,7 +1527,7 @@ describe("PaprikaClient", () => {
       }
     }, 60000);
 
-    it("AC5.5 - toMessage on CircuitOpenError never contains 'HTTP 503'", async () => {
+    it("toMessage on CircuitOpenError never contains 'HTTP 503'", async () => {
       server.use(
         http.get(`${API_BASE}/recipes/`, () => {
           return HttpResponse.json({ result: [] }, { status: 503 });
@@ -1554,11 +1554,11 @@ describe("PaprikaClient", () => {
   });
 
   // ---------------------------------------------------------------------------
-  // Per-attempt response-path logging — Task 5 (AC3.1, AC3.2, AC3.5, AC3.6, AC3.7)
+  // Per-attempt response-path logging
   // ---------------------------------------------------------------------------
 
-  describe("structured-logging.AC3.1+3.2: request start and request ok debug records", () => {
-    it("AC3.1 - emits debug 'paprika request start' with method, url, attempt:1 on first call", async () => {
+  describe("request start and request ok debug records", () => {
+    it("emits debug 'paprika request start' with method, url, attempt:1 on first call", async () => {
       const { log: testLog, records } = makePinoCapture();
       server.use(
         http.get(`${API_BASE}/recipes/`, () => {
@@ -1576,7 +1576,7 @@ describe("PaprikaClient", () => {
       expect(startRecords[0]!["attempt"]).toBe(1);
     });
 
-    it("AC3.2 - emits exactly one debug 'paprika request ok' with status:200, attempt:1, attemptDurationMs>=0", async () => {
+    it("emits exactly one debug 'paprika request ok' with status:200, attempt:1, attemptDurationMs>=0", async () => {
       const { log: testLog, records } = makePinoCapture();
       server.use(
         http.get(`${API_BASE}/recipes/`, () => {
@@ -1596,8 +1596,8 @@ describe("PaprikaClient", () => {
     });
   });
 
-  describe("structured-logging.AC3.5: non-retryable failure emits error record, no retry warn", () => {
-    it("AC3.5 - emits error 'paprika request failed (non-retryable)' on 400, no retry warn fires", async () => {
+  describe("non-retryable failure emits error record, no retry warn", () => {
+    it("emits error 'paprika request failed (non-retryable)' on 400, no retry warn fires", async () => {
       const { log: testLog, records } = makePinoCapture();
       server.use(
         http.get(`${API_BASE}/recipes/`, () => {
@@ -1621,8 +1621,8 @@ describe("PaprikaClient", () => {
     });
   });
 
-  describe("structured-logging.AC3.6: 401 re-auth signal emits info record", () => {
-    it("AC3.6 - emits info 'paprika 401, re-authenticating' with status:401 and attempt:1 on first attempt", async () => {
+  describe("401 re-auth signal emits info record", () => {
+    it("emits info 'paprika 401, re-authenticating' with status:401 and attempt:1 on first attempt", async () => {
       const { log: testLog, records } = makePinoCapture();
       let authCallCount = 0;
       let apiCallCount = 0;
@@ -1654,8 +1654,8 @@ describe("PaprikaClient", () => {
     });
   });
 
-  describe("structured-logging.AC3.7: no token leaks in captured log records", () => {
-    it("AC3.7 - captured records from a failing request contain no bearer token values", async () => {
+  describe("no token leaks in captured log records", () => {
+    it("captured records from a failing request contain no bearer token values", async () => {
       const secretToken = "supersecret-bearer-token-xyz-unique";
       const records: Array<Record<string, unknown>> = [];
       const captureStream = new Writable({
@@ -1696,7 +1696,7 @@ describe("PaprikaClient", () => {
       expect(allRecordsAsJson).not.toContain(secretToken);
     });
 
-    it("AC3.7 belt-and-suspenders - pino redact censors authorization header when logged directly", () => {
+    it("pino redact censors authorization header when logged directly", () => {
       const records: Array<Record<string, unknown>> = [];
       const captureStream = new Writable({
         write(chunk: Buffer, _enc: BufferEncoding, cb: () => void) {
@@ -1726,7 +1726,7 @@ describe("PaprikaClient", () => {
     });
   });
 
-  describe("aisle-client.AC1: listAisles()", () => {
+  describe("listAisles()", () => {
     function makeWireAisle(overrides?: Partial<Record<string, unknown>>): Record<string, unknown> {
       return {
         uid: "AABBCCDDEEFF00112233445566778899AABBCCDDEEFF00112233445566778899",
@@ -1737,7 +1737,7 @@ describe("PaprikaClient", () => {
       };
     }
 
-    it("aisle-client.AC1.1 - GETs from /groceryaisles/ and returns Aisle[] with camelCase fields", async () => {
+    it("GETs from /groceryaisles/ and returns Aisle[] with camelCase fields", async () => {
       server.use(
         http.get(`${API_BASE}/groceryaisles/`, () => {
           return HttpResponse.json({
@@ -1760,7 +1760,7 @@ describe("PaprikaClient", () => {
       expect(aisles[1]!.uid).toBe("CUSTOM-UID");
     });
 
-    it("aisle-client.AC1.2 - returns [] when /groceryaisles/ returns empty result", async () => {
+    it("returns [] when /groceryaisles/ returns empty result", async () => {
       server.use(http.get(`${API_BASE}/groceryaisles/`, () => HttpResponse.json({ result: [] })));
 
       const client = new PaprikaClient("test@example.com", "password");
@@ -1769,7 +1769,7 @@ describe("PaprikaClient", () => {
       expect(aisles).toStrictEqual([]);
     });
 
-    it("aisle-client.AC1.3 - defaults deleted to false when missing from wire payload", async () => {
+    it("defaults deleted to false when missing from wire payload", async () => {
       server.use(
         http.get(`${API_BASE}/groceryaisles/`, () => {
           return HttpResponse.json({
@@ -1785,7 +1785,7 @@ describe("PaprikaClient", () => {
     });
   });
 
-  describe("aisle-client.AC2: saveAisle()", () => {
+  describe("saveAisle()", () => {
     function makeTestAisle(overrides?: Partial<Aisle>): Aisle {
       return {
         uid: AisleUidSchema.parse("A1B2C3D4-E5F6-7890-ABCD-EF1234567890"),
@@ -1796,7 +1796,7 @@ describe("PaprikaClient", () => {
       } as Aisle;
     }
 
-    it("aisle-client.AC2.1 - POSTs to /groceryaisles/ and returns input aisle", async () => {
+    it("POSTs to /groceryaisles/ and returns input aisle", async () => {
       let capturedUrl = "";
 
       server.use(
@@ -1815,7 +1815,7 @@ describe("PaprikaClient", () => {
       expect(result.name).toBe(input.name);
     });
 
-    it("aisle-client.AC2.2 - body is gzipped JSON array with 4 snake_case keys", async () => {
+    it("body is gzipped JSON array with 4 snake_case keys", async () => {
       let body: Array<Record<string, unknown>> | null = null;
 
       server.use(
@@ -1912,7 +1912,7 @@ describe("PaprikaClient", () => {
     });
   });
 
-  describe("grocery-infra.AC2.1: listGroceryLists()", () => {
+  describe("listGroceryLists()", () => {
     function makeWireGroceryList(overrides?: Partial<Record<string, unknown>>): Record<string, unknown> {
       return {
         uid: "GL000000-0000-0000-0000-000000000001",
@@ -1925,7 +1925,7 @@ describe("PaprikaClient", () => {
       };
     }
 
-    it("grocery-infra.AC2.1 - GETs from /grocerylists/ and returns GroceryList[] with camelCase fields", async () => {
+    it("GETs from /grocerylists/ and returns GroceryList[] with camelCase fields", async () => {
       server.use(
         http.get(`${API_BASE}/grocerylists/`, () => {
           return HttpResponse.json({
@@ -1956,7 +1956,7 @@ describe("PaprikaClient", () => {
     });
   });
 
-  describe("grocery-infra.AC2.2: listGroceryItems()", () => {
+  describe("listGroceryItems()", () => {
     function makeWireGroceryItem(overrides?: Partial<Record<string, unknown>>): Record<string, unknown> {
       return {
         uid: "GI000000-0000-0000-0000-000000000001",
@@ -1976,7 +1976,7 @@ describe("PaprikaClient", () => {
       };
     }
 
-    it("grocery-infra.AC2.2 - GETs from /groceries/ and returns GroceryItem[] with camelCase fields", async () => {
+    it("GETs from /groceries/ and returns GroceryItem[] with camelCase fields", async () => {
       server.use(
         http.get(`${API_BASE}/groceries/`, () => {
           return HttpResponse.json({
@@ -2009,7 +2009,7 @@ describe("PaprikaClient", () => {
     });
   });
 
-  describe("grocery-infra.AC2.3: listGroceryIngredients()", () => {
+  describe("listGroceryIngredients()", () => {
     function makeWireGroceryIngredient(overrides?: Partial<Record<string, unknown>>): Record<string, unknown> {
       return {
         uid: "GN000000-0000-0000-0000-000000000001",
@@ -2020,7 +2020,7 @@ describe("PaprikaClient", () => {
       };
     }
 
-    it("grocery-infra.AC2.3 - GETs from /groceryingredients/ and returns GroceryIngredient[] with aisleUid", async () => {
+    it("GETs from /groceryingredients/ and returns GroceryIngredient[] with aisleUid", async () => {
       server.use(
         http.get(`${API_BASE}/groceryingredients/`, () => {
           return HttpResponse.json({
@@ -2048,8 +2048,8 @@ describe("PaprikaClient", () => {
     });
   });
 
-  describe("grocery-infra.AC2.4: saveGroceryList()", () => {
-    it("grocery-infra.AC2.4 - POSTs to /grocerylists/ with 6 snake_case keys and returns input list", async () => {
+  describe("saveGroceryList()", () => {
+    it("POSTs to /grocerylists/ with 6 snake_case keys and returns input list", async () => {
       let body: Array<Record<string, unknown>> | null = null;
 
       server.use(
@@ -2087,8 +2087,8 @@ describe("PaprikaClient", () => {
     });
   });
 
-  describe("grocery-infra.AC2.5: saveGroceryItems()", () => {
-    it("grocery-infra.AC2.5 - POSTs to /groceries/ with 13 snake_case keys per item and returns input items", async () => {
+  describe("saveGroceryItems()", () => {
+    it("POSTs to /groceries/ with 13 snake_case keys per item and returns input items", async () => {
       let body: Array<Record<string, unknown>> | null = null;
 
       server.use(
@@ -2139,8 +2139,8 @@ describe("PaprikaClient", () => {
     });
   });
 
-  describe("grocery-infra.AC2.6: saveGroceryIngredient()", () => {
-    it("grocery-infra.AC2.6 - POSTs to /groceryingredients/ with 4 snake_case keys and returns input ingredient", async () => {
+  describe("saveGroceryIngredient()", () => {
+    it("POSTs to /groceryingredients/ with 4 snake_case keys and returns input ingredient", async () => {
       let body: Array<Record<string, unknown>> | null = null;
 
       server.use(
@@ -2175,8 +2175,8 @@ describe("PaprikaClient", () => {
     });
   });
 
-  describe("grocery-infra.AC2.7: savePantryItems() batch", () => {
-    it("grocery-infra.AC2.7 - savePantryItems() sends all N items in a single POST", async () => {
+  describe("savePantryItems() batch", () => {
+    it("savePantryItems() sends all N items in a single POST", async () => {
       let body: Array<Record<string, unknown>> | null = null;
 
       server.use(
@@ -2205,8 +2205,8 @@ describe("PaprikaClient", () => {
     });
   });
 
-  describe("grocery-infra.AC2.8: listGroceryLists() non-retryable error", () => {
-    it("grocery-infra.AC2.8 - 400 from /grocerylists/ throws PaprikaAPIError with status 400 and grocerylists endpoint", async () => {
+  describe("listGroceryLists() non-retryable error", () => {
+    it("400 from /grocerylists/ throws PaprikaAPIError with status 400 and grocerylists endpoint", async () => {
       server.use(
         http.get(`${API_BASE}/grocerylists/`, () => {
           return HttpResponse.json({ error: "bad request" }, { status: 400 });
@@ -2226,8 +2226,8 @@ describe("PaprikaClient", () => {
     });
   });
 
-  describe("grocery-infra.AC2.9: listGroceryItems() retry on 503", () => {
-    it("grocery-infra.AC2.9 - 503 twice then 200 from /groceries/ results in successful return", async () => {
+  describe("listGroceryItems() retry on 503", () => {
+    it("503 twice then 200 from /groceries/ results in successful return", async () => {
       let callCount = 0;
 
       server.use(
@@ -2248,8 +2248,8 @@ describe("PaprikaClient", () => {
     });
   });
 
-  describe("meal-infra.AC1: saveMeals()", () => {
-    it("meal-infra.AC1.1 - saveMeals() POSTs to /meals/ with 10 snake_case keys per item and returns input items", async () => {
+  describe("saveMeals()", () => {
+    it("saveMeals() POSTs to /meals/ with 10 snake_case keys per item and returns input items", async () => {
       let body: Array<Record<string, unknown>> | null = null;
 
       server.use(
@@ -2294,7 +2294,7 @@ describe("PaprikaClient", () => {
       expect(payload).not.toHaveProperty("isIngredient");
     });
 
-    it("meal-infra.AC1.2 - saveMeals() body matches items.map(mealToApiPayload)", async () => {
+    it("saveMeals() body matches items.map(mealToApiPayload)", async () => {
       let body: Array<Record<string, unknown>> | null = null;
 
       server.use(
@@ -2316,7 +2316,7 @@ describe("PaprikaClient", () => {
       expect(body).toStrictEqual([meal].map(mealToApiPayload));
     });
 
-    it("meal-infra.AC1.3 - saveMeals() 400 from /meals/ throws PaprikaAPIError with status 400 and meals endpoint", async () => {
+    it("saveMeals() 400 from /meals/ throws PaprikaAPIError with status 400 and meals endpoint", async () => {
       server.use(
         http.post(`${API_BASE}/meals/`, () => {
           return HttpResponse.json({ error: "bad request" }, { status: 400 });
@@ -2336,7 +2336,7 @@ describe("PaprikaClient", () => {
     });
   });
 
-  describe("menu-infra: listMenus()", () => {
+  describe("listMenus()", () => {
     it("GETs from /menus/ and returns Menu[] with camelCase fields", async () => {
       server.use(
         http.get(`${API_BASE}/menus/`, () => {
@@ -2362,7 +2362,7 @@ describe("PaprikaClient", () => {
     });
   });
 
-  describe("menu-infra: listMenuItems()", () => {
+  describe("listMenuItems()", () => {
     it("GETs from /menuitems/ and returns MenuItem[] with camelCase fields", async () => {
       server.use(
         http.get(`${API_BASE}/menuitems/`, () => {
@@ -2390,7 +2390,7 @@ describe("PaprikaClient", () => {
     });
   });
 
-  describe("menu-infra: saveMenus()", () => {
+  describe("saveMenus()", () => {
     it("POSTs to /menus/ with 6 snake_case keys per item and identity-returns input", async () => {
       let body: Array<Record<string, unknown>> | null = null;
 
@@ -2448,7 +2448,7 @@ describe("PaprikaClient", () => {
     });
   });
 
-  describe("menu-infra: saveMenuItems()", () => {
+  describe("saveMenuItems()", () => {
     it("POSTs to /menuitems/ with 8 snake_case keys per item and identity-returns input", async () => {
       let body: Array<Record<string, unknown>> | null = null;
 

@@ -10,8 +10,8 @@ describe("GroceryIngredientStore", () => {
     store = new GroceryIngredientStore();
   });
 
-  describe("grocery-infra.AC1.7: lookupByName resolves case-insensitively", () => {
-    it("grocery-infra.AC1.7: lookupByName('butter') finds ingredient named 'Butter'", () => {
+  describe("lookupByName resolves case-insensitively", () => {
+    it("lookupByName('butter') finds ingredient named 'Butter'", () => {
       const ingredient = makeGroceryIngredient({
         name: "Butter",
         aisleUid: "aisle-dairy",
@@ -25,7 +25,7 @@ describe("GroceryIngredientStore", () => {
       expect(result?.name).toBe("Butter");
     });
 
-    it("grocery-infra.AC1.7: lookupByName('BUTTER') finds ingredient named 'Butter'", () => {
+    it("lookupByName('BUTTER') finds ingredient named 'Butter'", () => {
       const ingredient = makeGroceryIngredient({ name: "Butter" });
       store.load([ingredient]);
 
@@ -35,7 +35,7 @@ describe("GroceryIngredientStore", () => {
       expect(result?.name).toBe("Butter");
     });
 
-    it("grocery-infra.AC1.7: lookupByName('Butter') (exact case) finds ingredient named 'Butter'", () => {
+    it("lookupByName('Butter') (exact case) finds ingredient named 'Butter'", () => {
       const ingredient = makeGroceryIngredient({ name: "Butter" });
       store.load([ingredient]);
 
@@ -46,8 +46,8 @@ describe("GroceryIngredientStore", () => {
     });
   });
 
-  describe("grocery-infra.AC1.10: lookupByName returns undefined for unknown names", () => {
-    it("grocery-infra.AC1.10: lookupByName returns undefined for unknown ingredient after load", () => {
+  describe("lookupByName returns undefined for unknown names", () => {
+    it("lookupByName returns undefined for unknown ingredient after load", () => {
       const ingredient = makeGroceryIngredient({ name: "Butter" });
       store.load([ingredient]);
 
@@ -56,7 +56,7 @@ describe("GroceryIngredientStore", () => {
       expect(result).toBeUndefined();
     });
 
-    it("grocery-infra.AC1.10: lookupByName returns undefined on empty (unsynced) store", () => {
+    it("lookupByName returns undefined on empty (unsynced) store", () => {
       const result = store.lookupByName("anything");
 
       expect(result).toBeUndefined();

@@ -6,13 +6,13 @@
  * upstream callback → token → /mcp — without shortcuts.
  *
  * Verifies:
- *   AC1.1 — DCR returns client_id + registration_access_token
- *   AC1.2 — /token returns mcp_at_ + mcp_rt_ + expires_in=86400
- *   AC1.3 — /mcp with Bearer accepts initialize, returns serverInfo
- *   AC1.4 — refresh-token rotation: new pair returned, old refresh invalid_grant
- *   AC2.14 — iss on both success and error callback redirects
- *   AC3.4 — denied identity → error redirect; no id_token plaintext in stderr
- *   AC4.4 — auth codes do NOT survive server restart
+ *   DCR returns client_id + registration_access_token
+ *   /token returns mcp_at_ + mcp_rt_ + expires_in=86400
+ *   /mcp with Bearer accepts initialize, returns serverInfo
+ *   refresh-token rotation: new pair returned, old refresh invalid_grant
+ *   iss on both success and error callback redirects
+ *   denied identity → error redirect; no id_token plaintext in stderr
+ *   auth codes do NOT survive server restart
  */
 
 import { createHash, randomBytes } from "node:crypto";
@@ -143,7 +143,7 @@ interface FullFlowResult {
  * We then follow that to /oauth/callback.
  */
 async function driveFullFlow(port: number): Promise<FullFlowResult> {
-  // Step 1: DCR — AC1.1
+  // Step 1: DCR
   const registration = (await fetch(`http://127.0.0.1:${port.toString()}/register`, {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -236,11 +236,11 @@ describe("HTTP e2e: full claude.ai connector flow", () => {
   });
 
   // --------------------------------------------------------------------------
-  // AC1.1 + AC1.2 + AC1.3: Full DCR → authorize → callback → token → /mcp
+  // Full DCR → authorize → callback → token → /mcp
   // --------------------------------------------------------------------------
 
-  it("AC1.1+1.2+1.3: full DCR → authorize → callback → token → /mcp flow", async () => {
-    // Step 1: DCR — AC1.1 (PLAN says phase_07.md:669-678)
+  it("full DCR → authorize → callback → token → /mcp flow", async () => {
+    // Step 1: DCR
     const registrationRes = await fetch(`http://127.0.0.1:${port.toString()}/register`, {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -248,14 +248,14 @@ describe("HTTP e2e: full claude.ai connector flow", () => {
     });
     expect(registrationRes.status).toBe(201);
     const registration = (await registrationRes.json()) as Record<string, unknown>;
-    // AC1.1: client_id + registration_access_token are returned, no client_secret
+    // client_id + registration_access_token are returned, no client_secret
     expect(typeof registration["client_id"]).toBe("string");
     expect((registration["client_id"] as string).length).toBeGreaterThan(0);
     expect(registration["registration_access_token"]).toMatch(/^mcp_rat_/);
     expect(registration).not.toHaveProperty("client_secret");
     const clientId = registration["client_id"] as string;
 
-    // Step 2: GET /authorize — PKCE (PLAN says phase_07.md:680-693)
+    // Step 2: GET /authorize — PKCE
     const { codeVerifier, codeChallenge } = generatePkce();
     const claudeState = "claude-state-e2e-test";
     const authRes = await fetch(buildAuthorizeUrl(port, clientId, codeChallenge, claudeState), { redirect: "manual" });
@@ -282,12 +282,12 @@ describe("HTTP e2e: full claude.ai connector flow", () => {
     const claudeRedirect = new URL(claudeRedirectUrl);
     expect(claudeRedirect.origin).toBe("https://claude.ai");
     expect(claudeRedirect.searchParams.get("state")).toBe(claudeState);
-    // AC2.14: iss on success redirect (PLAN says phase_07.md:709)
+    // iss on success redirect
     expect(claudeRedirect.searchParams.get("iss")).toBe(PUBLIC_URL);
     const ourCode = claudeRedirect.searchParams.get("code") ?? "";
     expect(ourCode).toMatch(/^mcp_ac_/);
 
-    // Step 5: POST /token — AC1.2 (PLAN says phase_07.md:714-731)
+    // Step 5: POST /token
     const tokenRes = await fetch(`http://127.0.0.1:${port.toString()}/token`, {
       method: "POST",
       headers: { "content-type": "application/x-www-form-urlencoded" },
@@ -302,13 +302,13 @@ describe("HTTP e2e: full claude.ai connector flow", () => {
     });
     expect(tokenRes.status).toBe(200);
     const tokens = (await tokenRes.json()) as Record<string, unknown>;
-    // AC1.2: access_token (mcp_at_), refresh_token (mcp_rt_), expires_in=86400
+    // access_token (mcp_at_), refresh_token (mcp_rt_), expires_in=86400
     expect(tokens["access_token"]).toMatch(/^mcp_at_/);
     expect(tokens["refresh_token"]).toMatch(/^mcp_rt_/);
     expect(tokens["expires_in"]).toBe(86400);
     expect(tokens["token_type"]).toBe("Bearer");
 
-    // Step 6: POST /mcp initialize with Bearer — AC1.3 (PLAN says phase_07.md:733-743)
+    // Step 6: POST /mcp initialize with Bearer
     const initBody = {
       jsonrpc: "2.0",
       id: 1,
@@ -329,7 +329,7 @@ describe("HTTP e2e: full claude.ai connector flow", () => {
       body: JSON.stringify(initBody),
     });
     expect(initRes.status).toBe(200);
-    // AC1.3: session id header present, serverInfo.name = "mcp-paprika"
+    // session id header present, serverInfo.name = "mcp-paprika"
     expect(initRes.headers.get("mcp-session-id")).toBeTruthy();
     // Parse response — may be SSE or JSON
     const contentType = initRes.headers.get("content-type") ?? "";
@@ -346,11 +346,10 @@ describe("HTTP e2e: full claude.ai connector flow", () => {
   });
 
   // --------------------------------------------------------------------------
-  // AC1.4: Refresh-token rotation
+  // Refresh-token rotation
   // --------------------------------------------------------------------------
 
-  it("AC1.4: refresh_token rotates: new pair works, old refresh returns invalid_grant", async () => {
-    // PLAN says phase_07.md:747-771
+  it("refresh_token rotates: new pair works, old refresh returns invalid_grant", async () => {
     const { clientId, accessToken, refreshToken } = await driveFullFlow(port);
     // Guard: ensure driveFullFlow actually issued tokens (vacuous-pass prevention)
     expect(accessToken).toMatch(/^mcp_at_/);
@@ -390,11 +389,10 @@ describe("HTTP e2e: full claude.ai connector flow", () => {
   });
 
   // --------------------------------------------------------------------------
-  // AC3.4: Denied identity flows back as error redirect; no id_token in stderr
+  // Denied identity flows back as error redirect; no id_token in stderr
   // --------------------------------------------------------------------------
 
-  it("AC3.4: denied identity flows back as error redirect; no token issued; id_token not in stderr", async () => {
-    // PLAN says phase_07.md:773-781
+  it("denied identity flows back as error redirect; no token issued; id_token not in stderr", async () => {
     // Spy on stderr to assert the id_token is not leaked as plaintext
     const stderrWrites: string[] = [];
     const stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation((msg: unknown) => {
@@ -434,12 +432,12 @@ describe("HTTP e2e: full claude.ai connector flow", () => {
       const callbackRes = await fetch(localCallbackUrl, { redirect: "manual" });
       expect(callbackRes.status).toBe(302);
       const loc = new URL(callbackRes.headers.get("location") ?? "");
-      // AC3.4: error=access_denied in the redirect
+      // error=access_denied in the redirect
       expect(loc.searchParams.get("error")).toBe("access_denied");
-      // AC2.14: iss on error redirect (PLAN says phase_07.md:780)
+      // iss on error redirect
       expect(loc.searchParams.get("iss")).toBe(PUBLIC_URL);
 
-      // AC3.4: stderr must not contain id_token plaintext (no JWT eyJ... header)
+      // stderr must not contain id_token plaintext (no JWT eyJ... header)
       // JWTs always start with base64url("{"alg":...}) = eyJ
       const stderrOutput = stderrWrites.join("");
       expect(stderrOutput).not.toMatch(/eyJ[A-Za-z0-9_-]{10,}/);
@@ -449,11 +447,10 @@ describe("HTTP e2e: full claude.ai connector flow", () => {
   });
 
   // --------------------------------------------------------------------------
-  // AC4.4: Auth codes do not survive server restart
+  // Auth codes do not survive server restart
   // --------------------------------------------------------------------------
 
-  it("AC4.4: auth codes are in-memory and do not survive server restart", async () => {
-    // PLAN says phase_07.md:784-787
+  it("auth codes are in-memory and do not survive server restart", async () => {
     // Drive the flow up to step 4 — obtain an mcp_ac_ code but do NOT exchange it.
     const registrationRes = await fetch(`http://127.0.0.1:${port.toString()}/register`, {
       method: "POST",

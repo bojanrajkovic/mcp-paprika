@@ -64,11 +64,11 @@ const LEVEL_ERROR = 50;
 const LEVEL_FATAL = 60;
 
 // ---------------------------------------------------------------------------
-// Task 4 — internal types, level mapper, and redact-path constants
+// internal types, level mapper, and redact-path constants
 // ---------------------------------------------------------------------------
 
 describe("pinoLevelToMcp", () => {
-  describe("structured-logging.AC2.4: level mapping", () => {
+  describe("level mapping", () => {
     it("maps trace to debug", () => {
       expect(pinoLevelToMcp("trace")).toBe("debug");
     });
@@ -107,12 +107,12 @@ describe("pinoLevelToMcp", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Task 5 — notifier fan-out Writable
+// notifier fan-out Writable
 // Tests use hand-crafted pino-shaped JSON lines (no createLogger needed).
 // ---------------------------------------------------------------------------
 
 describe("notifierStream", () => {
-  describe("structured-logging.AC2.1: warn fans out with correct MCP level and curated payload", () => {
+  describe("warn fans out with correct MCP level and curated payload", () => {
     it("writing a warn-level record invokes loggingMessage exactly once with level 'warning'", async () => {
       const { notifier, spy } = makeStubNotifier();
       const stream = notifierStream(notifier);
@@ -129,11 +129,11 @@ describe("notifierStream", () => {
     });
   });
 
-  describe("notifierStream itself always processes — multistream owns thresholding (AC2.2 is verified via integration in Task 7)", () => {
+  describe("notifierStream itself always processes — multistream owns thresholding", () => {
     it("notifierStream itself always passes records — threshold filtering is pino multistream's job", async () => {
       // The Writable itself has no threshold filter; filtering happens at the multistream level.
       // This test verifies the stream processes records regardless of level.
-      // AC2.2 is fully verified in the createLogger integration tests (Task 7).
+      // Threshold filtering is fully verified in the createLogger integration tests.
       const { notifier, spy } = makeStubNotifier();
       const stream = notifierStream(notifier);
 
@@ -146,7 +146,7 @@ describe("notifierStream", () => {
     });
   });
 
-  describe("structured-logging.AC2.5: curated payload excludes pino internals", () => {
+  describe("curated payload excludes pino internals", () => {
     it("loggingMessage data excludes level, time, hostname, pid, v — and contains msg and caller fields", async () => {
       const { notifier, spy } = makeStubNotifier();
       const stream = notifierStream(notifier);
@@ -199,7 +199,7 @@ describe("notifierStream", () => {
     });
   });
 
-  describe("structured-logging.AC2.6: rejected notifier promise does not propagate", () => {
+  describe("rejected notifier promise does not propagate", () => {
     it("write callback completes synchronously even when notifier rejects", async () => {
       const { notifier } = makeStubNotifier("reject");
       const stream = notifierStream(notifier);
@@ -278,7 +278,7 @@ describe("notifierStream", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Task 6 — primary destination resolution
+// primary destination resolution
 // ---------------------------------------------------------------------------
 
 /** Minimal LoggerOptions for resolvePrimaryDestination tests. */
@@ -332,7 +332,7 @@ describe("resolvePrimaryDestination", () => {
     }
   });
 
-  describe("structured-logging.AC1.1: HTTP → stdout (raw JSON)", () => {
+  describe("HTTP → stdout (raw JSON)", () => {
     it("returns process.stdout for HTTP transport regardless of isTTY", () => {
       Object.defineProperty(process.stderr, "isTTY", { configurable: true, value: false });
       const dest = resolvePrimaryDestination(makeOpts({ transport: "http" }));
@@ -346,7 +346,7 @@ describe("resolvePrimaryDestination", () => {
     });
   });
 
-  describe("structured-logging.AC1.2: stdio + TTY → stderr", () => {
+  describe("stdio + TTY → stderr", () => {
     it("returns process.stderr when isTTY is true and pretty is false", () => {
       Object.defineProperty(process.stderr, "isTTY", { configurable: true, value: true });
       const dest = resolvePrimaryDestination(makeOpts({ transport: "stdio", pretty: false }));
@@ -369,7 +369,7 @@ describe("resolvePrimaryDestination", () => {
     });
   });
 
-  describe("structured-logging.AC1.3: stdio + non-TTY → file at default path", () => {
+  describe("stdio + non-TTY → file at default path", () => {
     it("writes to the default log file when isTTY is false and no MCP_LOG_FILE override", () => {
       Object.defineProperty(process.stderr, "isTTY", { configurable: true, value: false });
       tmpDir = mkdtempSync(join(tmpdir(), "mcp-paprika-test-"));
@@ -383,7 +383,7 @@ describe("resolvePrimaryDestination", () => {
     });
   });
 
-  describe("structured-logging.AC1.4: MCP_LOG_FILE override", () => {
+  describe("MCP_LOG_FILE override", () => {
     it("uses the custom file path when file option is set", () => {
       Object.defineProperty(process.stderr, "isTTY", { configurable: true, value: false });
       tmpDir = mkdtempSync(join(tmpdir(), "mcp-paprika-test-"));
@@ -396,7 +396,7 @@ describe("resolvePrimaryDestination", () => {
     });
   });
 
-  describe("structured-logging.AC10.4: pretty auto-detection per transport", () => {
+  describe("pretty auto-detection per transport", () => {
     it("auto + HTTP → the stream is stdout (not pretty)", () => {
       Object.defineProperty(process.stderr, "isTTY", { configurable: true, value: false });
       const dest = resolvePrimaryDestination(makeOpts({ transport: "http", pretty: "auto" }));
@@ -415,7 +415,7 @@ describe("resolvePrimaryDestination", () => {
     });
   });
 
-  describe("structured-logging.AC11.1: mkdir-p at construction", () => {
+  describe("mkdir-p at construction", () => {
     it("creates nested directories when the log file path is deeply nested", () => {
       Object.defineProperty(process.stderr, "isTTY", { configurable: true, value: false });
       tmpDir = mkdtempSync(join(tmpdir(), "mcp-paprika-test-"));
@@ -427,7 +427,7 @@ describe("resolvePrimaryDestination", () => {
     });
   });
 
-  describe("structured-logging.AC11.2: fail-fast on unwritable path", () => {
+  describe("fail-fast on unwritable path", () => {
     it("throws synchronously when the log file cannot be created", () => {
       Object.defineProperty(process.stderr, "isTTY", { configurable: true, value: false });
       // /dev/null is a file, not a directory — trying to create a file inside it fails
@@ -454,7 +454,7 @@ describe("resolvePrimaryDestination", () => {
     });
   });
 
-  describe("AC1.3 file content is written (integration with pino sync destination)", () => {
+  describe("file content is written (integration with pino sync destination)", () => {
     it("pino writes a log record to the resolved file destination", () => {
       Object.defineProperty(process.stderr, "isTTY", { configurable: true, value: false });
       tmpDir = mkdtempSync(join(tmpdir(), "mcp-paprika-test-"));
@@ -471,7 +471,7 @@ describe("resolvePrimaryDestination", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Task 7 — createLogger composition: redact, defaults, multistream constraint
+// createLogger composition: redact, defaults, multistream constraint
 // ---------------------------------------------------------------------------
 
 describe("createLogger (composition)", () => {
@@ -528,7 +528,7 @@ describe("createLogger (composition)", () => {
       .map((l) => JSON.parse(l) as Record<string, unknown>);
   }
 
-  describe("structured-logging.AC2.7: credential redaction in primary stream", () => {
+  describe("credential redaction in primary stream", () => {
     const sensitiveFields = [
       "authorization",
       "password",
@@ -555,7 +555,7 @@ describe("createLogger (composition)", () => {
     }
   });
 
-  describe("structured-logging.AC2.7: credential redaction in fan-out payload", () => {
+  describe("credential redaction in fan-out payload", () => {
     it("fan-out data contains redacted values, not originals", async () => {
       const { notifier, spy } = makeStubNotifier();
       const { opts, logFile: _ } = makeFileOpts({ notifier, level: "warn", notifyLevel: "warn" });
@@ -574,7 +574,7 @@ describe("createLogger (composition)", () => {
     });
   });
 
-  describe("structured-logging.AC2.2: info does NOT fan out with default notifyLevel: warn", () => {
+  describe("info does NOT fan out with default notifyLevel: warn", () => {
     it("log.info does not call loggingMessage when notifyLevel is warn", async () => {
       const { notifier, spy } = makeStubNotifier();
       const { opts } = makeFileOpts({
@@ -591,7 +591,7 @@ describe("createLogger (composition)", () => {
     });
   });
 
-  describe("structured-logging.AC2.3: configurable notifyLevel threshold", () => {
+  describe("configurable notifyLevel threshold", () => {
     it("log.info fans out when notifyLevel is info", async () => {
       const { notifier, spy } = makeStubNotifier();
       const { opts } = makeFileOpts({
@@ -624,7 +624,7 @@ describe("createLogger (composition)", () => {
     });
   });
 
-  describe("structured-logging.AC10.3: defaults composition", () => {
+  describe("defaults composition", () => {
     it("logger .level getter returns 'info' when level=info and notifyLevel=warn", () => {
       const { opts } = makeFileOpts({ level: "info", notifyLevel: "warn" });
       const logger = createLogger(opts);
@@ -675,7 +675,7 @@ describe("createLogger (composition)", () => {
     });
   });
 
-  describe("AC2.1: full integration — warn fans out with curated payload", () => {
+  describe("full integration — warn fans out with curated payload", () => {
     it("log.warn produces loggingMessage with correct MCP level and payload via full createLogger", async () => {
       const { notifier, spy } = makeStubNotifier();
       const { opts } = makeFileOpts({
@@ -700,7 +700,7 @@ describe("createLogger (composition)", () => {
     });
   });
 
-  describe("AC2.7 — redacts credentials at top-level, one deep, and two deep", () => {
+  describe("redacts credentials at top-level, one deep, and two deep", () => {
     // REDACT_PATHS covers top-level, *.field (1-deep), and *.*.field (2-deep) for each
     // credential field name. This ensures credentials are redacted regardless of nesting depth
     // up to two levels (the common pattern for HTTP headers and nested auth objects).
