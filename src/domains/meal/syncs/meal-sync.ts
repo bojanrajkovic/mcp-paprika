@@ -1,24 +1,8 @@
 import type { SyncContribution } from "../../../kernel/registry.js";
 import type { MealState } from "../module.js";
-import type { Meal } from "../types.js";
 
 import { syncReplaceAllEntity } from "../../../paprika/sync.js";
-
-// Field-wise comparator — all nine fields; `recipeUid`/`typeUid` are both
-// nullable, `scale` is string|null.
-function mealsEqual(a: Meal, b: Meal): boolean {
-  return (
-    a.uid === b.uid &&
-    a.recipeUid === b.recipeUid &&
-    a.name === b.name &&
-    a.date === b.date &&
-    a.type === b.type &&
-    a.typeUid === b.typeUid &&
-    a.orderFlag === b.orderFlag &&
-    a.isIngredient === b.isIngredient &&
-    a.scale === b.scale
-  );
-}
+import { mealsEqual } from "../types.js";
 
 /**
  * Meal sync — replace-all with orphan cleanup and pending-write filtering via

@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { makeSchemaEquals } from "../../../entity/index.js";
 import { CategoryUidSchema } from "../../../ids.js";
 
 // StoredSchema — validates camelCase JSON read back from disk. No transform.
@@ -12,6 +13,9 @@ export const CategoryStoredSchema = z.object({
 
 // Category type derived from CategoryStoredSchema.
 export type Category = z.infer<typeof CategoryStoredSchema>;
+
+// Schema-derived content equality (all four stored fields; no `deleted` to exclude).
+export const categoriesEqual = makeSchemaEquals(CategoryStoredSchema);
 
 // CategorySchema — accepts snake_case wire format, transforms to camelCase Category.
 export const CategorySchema = z

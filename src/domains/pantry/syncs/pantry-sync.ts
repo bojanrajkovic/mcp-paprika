@@ -1,28 +1,9 @@
 import type { SyncContribution } from "../../../kernel/registry.js";
 import type { PantrySyncResult } from "../../../paprika/sync-types.js";
 import type { PantryState } from "../module.js";
-import type { PantryItem } from "../types.js";
 
 import { syncReplaceAllEntity } from "../../../paprika/sync.js";
-
-/**
- * Field-wise equality for pantry items — all 11 fields, so a no-op canonical
- * snapshot doesn't churn the cache or clear a pending-upsert prematurely.
- */
-function pantryItemsEqual(a: PantryItem, b: PantryItem): boolean {
-  return (
-    a.uid === b.uid &&
-    a.ingredient === b.ingredient &&
-    a.quantity === b.quantity &&
-    a.aisle === b.aisle &&
-    a.aisleUid === b.aisleUid &&
-    a.expirationDate === b.expirationDate &&
-    a.hasExpiration === b.hasExpiration &&
-    a.inStock === b.inStock &&
-    a.purchaseDate === b.purchaseDate &&
-    a.notes === b.notes
-  );
-}
+import { pantryItemsEqual } from "../types.js";
 
 /**
  * Pantry sync — replace-all with orphan cleanup via the shared

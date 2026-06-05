@@ -1,19 +1,9 @@
 import type { SyncContribution } from "../../../kernel/registry.js";
 import type { GroceryListSyncResult } from "../../../paprika/sync-types.js";
-import type { GroceryList } from "../grocery-list/types.js";
 import type { GroceryState } from "../module.js";
 
 import { syncReplaceAllEntity } from "../../../paprika/sync.js";
-
-function groceryListsEqual(a: GroceryList, b: GroceryList): boolean {
-  return (
-    a.uid === b.uid &&
-    a.name === b.name &&
-    a.orderFlag === b.orderFlag &&
-    a.isDefault === b.isDefault &&
-    a.remindersList === b.remindersList
-  );
-}
+import { groceryListsEqual } from "../grocery-list/types.js";
 
 /**
  * Grocery-list sync — replace-all with pending-write filtering via

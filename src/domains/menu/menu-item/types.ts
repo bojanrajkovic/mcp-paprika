@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { makeSchemaEquals } from "../../../entity/index.js";
 import { MealTypeUidSchema, MenuItemUidSchema, MenuUidSchema, RecipeUidSchema } from "../../../ids.js";
 
 // MenuItemStoredSchema — validates camelCase JSON read back from disk. No transform.
@@ -13,11 +14,15 @@ export const MenuItemStoredSchema = z.object({
   name: z.string(),
   day: z.number().int().nonnegative(),
   typeUid: MealTypeUidSchema,
+  // `orderFlag` is menu-wide (not per-day) — one field covers ordering across all days.
   orderFlag: z.number().int(),
   deleted: z.boolean().optional().default(false),
 });
 
 export type MenuItem = z.infer<typeof MenuItemStoredSchema>;
+
+// Schema-derived content equality (all stored fields but the inert `deleted`).
+export const menuItemsEqual = makeSchemaEquals(MenuItemStoredSchema);
 
 // MenuItemSchema — accepts snake_case wire format, transforms to camelCase MenuItem.
 export const MenuItemSchema = z

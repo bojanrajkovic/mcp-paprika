@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { makeSchemaEquals } from "../../entity/index.js";
 import { MealTypeUidSchema, MealUidSchema, RecipeUidSchema } from "../../ids.js";
 
 // MealStoredSchema — validates camelCase JSON read back from disk. No transform.
@@ -19,6 +20,9 @@ export const MealStoredSchema = z.object({
 });
 
 export type Meal = z.infer<typeof MealStoredSchema>;
+
+// Schema-derived content equality (all stored fields but the inert `deleted`).
+export const mealsEqual = makeSchemaEquals(MealStoredSchema);
 
 // MealSchema — accepts snake_case wire format, transforms to camelCase Meal.
 export const MealSchema = z
