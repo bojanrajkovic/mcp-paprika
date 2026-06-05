@@ -17,6 +17,7 @@ import { mealSync } from "./syncs/meal-sync.js";
 import { logCookedMealTool } from "./tools/log-cooked-meal.js";
 import { deleteMealTool, planMealsTool, updateMealTool } from "./tools/meal-writes.js";
 import { readMealPlanTool } from "./tools/read-meal-plan.js";
+import { readRecipeHistoryTool } from "./tools/recipe-history.js";
 import { rescheduleMealTool } from "./tools/reschedule-meal.js";
 import { searchMealHistoryTool } from "./tools/search-meal-history.js";
 
@@ -182,6 +183,7 @@ register(
         rescheduleMealTool,
         logCookedMealTool,
         searchMealHistoryTool,
+        readRecipeHistoryTool,
         readMealPlanTool,
       ],
       syncs: [mealSync(self)],

@@ -357,6 +357,14 @@ Read a recipe by UID or title. Title lookup is fuzzy (exact → starts-with → 
 
 - `lookup` — Pick exactly one shape: {"uid": "..."} or {"title": "..."}.
 
+## `read_recipe_history`
+
+Summarize ONE recipe's cooking history: when it was last cooked, how many times total, and its most recent cooking dates (with meal type). Answers "when did I last make this", "have we cooked this before", "how often do we make it". Look the recipe up by UID (from list_recipes, search_recipes, or read_recipe). Only PAST cooks count — future planner entries are excluded (use read_meal_plan for what's scheduled). For the full meal-by-meal list, or to filter cooking history by category, meal type, or date window, use search_meal_history.
+
+**Parameters**
+
+- `recipe_uid` — The recipe to summarize, by UID (from list_recipes, search_recipes, or read_recipe).
+
 ## `rename_grocery_list`
 
 Rename a grocery list. Rejects if the new name conflicts with a different existing list.
