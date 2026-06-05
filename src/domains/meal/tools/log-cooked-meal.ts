@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import type { MealTypeUid } from "../../../ids.js";
 import type { DomainCtx } from "../../../kernel/registry.js";
+import type { MealTypeSpec } from "../../meal-type/meal-type-helpers.js";
 import type { MealState, MealWrites } from "../module.js";
 import type { Meal } from "../types.js";
 
@@ -79,7 +80,7 @@ export const logCookedMealTool = defineTool(
           // unknown {name} auto-creates a type, so creating only once the rest of the input
           // is known-good avoids leaving an orphan type behind on a rejected call.
           // Type defaults to Dinner (the common case for a cooked meal).
-          const typeSpec: z.infer<typeof mealTypeSpecSchema> = args.type ?? { builtin: 2 };
+          const typeSpec: MealTypeSpec = args.type ?? { builtin: 2 };
           const typeResult = await resolveOrCreateMealType(ctx.deps["meal-type"], typeSpec);
           if (!typeResult.ok) {
             return textResult(typeResult.message);

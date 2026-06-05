@@ -1,5 +1,6 @@
 import type { Result } from "neverthrow";
 
+import type { HasSynced } from "../../kernel/registry.js";
 import type { Meal } from "./types.js";
 
 /**
@@ -10,7 +11,7 @@ import type { Meal } from "./types.js";
  * meals by gating on the meal store being synced, assigning a per-DATE `order_flag`
  * across the batch, then POSTing once and committing — so the three required
  * operations are:
- *   - `hasSynced` — the coordinator's meal-store start gate;
+ *   - `hasSynced` (inherited from {@link HasSynced}) — the coordinator's meal-store start gate;
  *   - `orderFlagAssigner` — the stateful per-date `order_flag` assigner
  *     (`makeMealOrderFlagAssigner`, backed by `MealStore.getMaxOrderFlagOn`);
  *   - `createMeals` — the batch write (`client.saveMeals` + `commitMealsBatch`).
@@ -18,9 +19,7 @@ import type { Meal } from "./types.js";
  * `read_meal_plan` and `search_meal_history` read meal data directly inside the meal
  * module via `ctx.state`, so they don't drive the public `api`.
  */
-export interface MealApi {
-  /** Whether the meal store has completed its first sync (start-guard gate). */
-  hasSynced(): boolean;
+export interface MealApi extends HasSynced {
   /**
    * Build a fresh stateful per-DATE `order_flag` assigner for one batch. Each
    * returned closure seeds each date from the persisted store

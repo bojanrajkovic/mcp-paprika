@@ -1,4 +1,5 @@
 import type { MenuUid } from "../../ids.js";
+import type { HasSynced } from "../../kernel/registry.js";
 import type { MenuItem } from "./menu-item/types.js";
 import type { Menu } from "./types.js";
 
@@ -12,8 +13,11 @@ import type { Menu } from "./types.js";
  * (`schedule_menu`), nothing speculative:
  *   - `get` / `findByName` — resolve a menu by uid or name (the coordinator's `resolveLookup`);
  *   - `itemsOf` — the menu's items to materialize (wraps `menuItemStore.getByMenuUid`).
+ *
+ * The inherited `hasSynced` is the meal-planner readiness gate; menu's implementation
+ * (in `module.ts`) AND-s BOTH owned stores (menus + menu-items) being synced.
  */
-export interface MenuApi {
+export interface MenuApi extends HasSynced {
   /** UID lookup; `undefined` for an unknown menu UID. */
   get(uid: MenuUid): Menu | undefined;
   /**
@@ -23,6 +27,4 @@ export interface MenuApi {
   findByName(query: string): ReadonlyArray<Menu>;
   /** All items of a menu, in store order (wraps `getByMenuUid`). */
   itemsOf(menuUid: MenuUid): ReadonlyArray<MenuItem>;
-  /** Whether BOTH owned stores (menus + menu-items) have completed their first sync — the meal-planner readiness gate. */
-  hasSynced(): boolean;
 }

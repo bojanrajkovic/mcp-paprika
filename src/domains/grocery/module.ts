@@ -44,7 +44,7 @@ declare module "../../kernel/registry.js" {
 }
 
 /** One store + cache pair for one of grocery's three owned entities. */
-export interface GroceryEntitySlice<Store, Cache> {
+interface GroceryEntitySlice<Store, Cache> {
   readonly store: Store;
   readonly cache: Cache;
 }

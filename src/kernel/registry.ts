@@ -37,12 +37,48 @@ import type { ToolDef, ToolSpec } from "./tool.js";
  * {@link buildKernel}.
  */
 
-/** The typed boundary. Empty here; every module augments it from its own file. */
+/**
+ * The typed boundary. Empty here; every module augments it from its own file.
+ *
+ * This one MUST stay an empty `interface` with the lint suppression — it is the
+ * `declare module` merge target, and only an interface can be merged into. It
+ * cannot use {@link EmptyApi} (a `type` alias is not a mergeable declaration), so
+ * the suppression here is structural, not an oversight. The leaf contracts that
+ * expose nothing DO use {@link EmptyApi} instead.
+ */
 // oxlint-disable-next-line no-empty-object-type
 export interface DomainRegistry {}
 
 /** The union of all registered domain ids. `never` until a module augments. */
 export type DomainId = keyof DomainRegistry;
+
+/**
+ * The contract of a module that exposes nothing to siblings — a pure consumer
+ * (grocery, meal-planner) or a feature (discover, photo-gen). `{}` satisfies it,
+ * but unlike `interface X {}` it does not trip `no-empty-object-type`, so an empty
+ * contract needs no lint suppression. The same `Record<never, never>` the kernel
+ * uses for an empty `writes` seam (see {@link DomainCtx}).
+ */
+export type EmptyApi = Record<never, never>;
+
+/**
+ * The cross-domain sync gate: whether a domain's backing store(s) have completed a
+ * first sync. Mixed into a contract via `extends` (recipe, meal, menu, meal-type,
+ * pantry) so the method is declared once, not re-typed per `api.ts`.
+ *
+ * Exposure is demand-driven, NOT universal. A contract carries `hasSynced()` ONLY
+ * where a SIBLING gates a cross-domain call on it. Every store already HAS a
+ * `hasSynced` (the `EntityStore` base property) for INTERNAL self-gating — grocery
+ * (`groceryStartGuard`) and aisle gate their own tools via `state.store.hasSynced`
+ * and expose nothing — so the {@link EmptyApi} contracts stay empty, and aisle (read
+ * cross-domain, but whose consumers resolve against the last-good catalog and never
+ * need a sync gate — ADR-0010) does not expose it either. Each domain's header
+ * records what its gate guards.
+ */
+export interface HasSynced {
+  /** Whether this domain's backing store(s) have completed their first sync. */
+  hasSynced(): boolean;
+}
 
 /**
  * The universal seam every domain receives. `cacheDir` is a bare directory path, not

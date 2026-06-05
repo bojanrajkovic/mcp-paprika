@@ -13,6 +13,11 @@ The typed composition kernel: the substrate every domain module registers on. It
 - `tool.ts` — `ToolSpec`/`ToolDef`/`defineTool`: a tool is `{ spec, register }` data (ADR-0011), authored `defineTool(spec, ctx => handler)`. The source is the API; this file does not restate it.
 - `modules.generated.ts` — the side-effect-import barrel produced by `scripts/generate-kernel-modules.ts`.
 
+## Contract conventions
+
+- **A module that exposes nothing types its contract `EmptyApi`, not `{}`.** `EmptyApi` (`registry.ts`) is `Record<never, never>` — `{}` satisfies it, but it does not trip `no-empty-object-type`, so the four consumer/feature contracts (grocery, meal-planner, discover, photo-gen) need no lint suppression. It is the same `Record<never, never>` the kernel uses for an empty `writes` seam. `DomainRegistry` itself is the lone exception that keeps the suppression: it is the `declare module` merge target, and only an `interface` can be merged into, so it cannot be an `EmptyApi` alias.
+- **The sync start-gate is declared once (`HasSynced`) and exposed selectively.** A contract that a sibling gates on a first sync `extends HasSynced` (`registry.ts`) instead of re-declaring `hasSynced(): boolean`. Exposure is demand-driven — see the domains `CLAUDE.md` sharp edge for the two-layer rule (every store HAS `hasSynced`; only a sibling-gated contract exposes it).
+
 ## Sharp edges
 
 - **The barrel is generated; regenerate it when you add or remove a `module.ts`.** `buildKernel` defaults to `registeredModules()`, which is populated only by importing `modules.generated.ts`. A new domain that isn't in the barrel self-registers nowhere and silently fails to exist at runtime — with no type error. Run `pnpm generate:modules` (a filesystem glob over `src/**/module.ts`; no compiler API).

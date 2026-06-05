@@ -58,7 +58,7 @@ declare module "../../kernel/registry.js" {
  * the bespoke `RecipeDiskCache` (the uid→hash index that powers diff-and-fetch);
  * categories and photos use the plain `DiskCache`.
  */
-export interface RecipeEntitySlice<Store, Cache> {
+interface RecipeEntitySlice<Store, Cache> {
   readonly store: Store;
   readonly cache: Cache;
 }

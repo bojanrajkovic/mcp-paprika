@@ -1,6 +1,7 @@
 import type { Result } from "neverthrow";
 
 import type { CategoryUid, RecipeUid } from "../../ids.js";
+import type { HasSynced } from "../../kernel/registry.js";
 import type { Photo } from "./photo/types.js";
 import type { Recipe } from "./types.js";
 
@@ -14,8 +15,11 @@ import type { Recipe } from "./types.js";
  *   - `get` — the recipe-name/existence read every meal/menu/coordinator write does;
  *   - `resolveCategoryRefs` — meal's `search_meal_history` UID/name → CategoryUid;
  *   - `resolveCategoryNames` — meal label, discover display, photo-gen prompt.
+ *
+ * The inherited `hasSynced` is the meal-planner cold-start gate — the recipe store
+ * must be warm before the coordinator resolves recipe names.
  */
-export interface RecipeApi {
+export interface RecipeApi extends HasSynced {
   /** UID lookup; `undefined` for an unknown or trashed-and-pruned UID. */
   get(uid: RecipeUid): Recipe | undefined;
   /**
@@ -40,8 +44,6 @@ export interface RecipeApi {
    * `store.getAll().filter(r => r.categories.includes(uid)).map(r => r.uid)` set.
    */
   recipesInCategory(categoryUid: CategoryUid): ReadonlyArray<RecipeUid>;
-  /** Whether the recipe store has completed its first sync — the meal-planner cold-start gate. */
-  hasSynced(): boolean;
   /**
    * Every non-trashed recipe. The bulk enumeration discover's cold-start index
    * rebuild walks; recipe owns recipes, so it exposes this read rather than handing

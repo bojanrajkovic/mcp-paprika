@@ -37,7 +37,7 @@ declare module "../../kernel/registry.js" {
 }
 
 /** One store + cache pair for one of menu's two owned entities — both plain `DiskCache`. */
-export interface MenuEntitySlice<Store, Cache> {
+interface MenuEntitySlice<Store, Cache> {
   readonly store: Store;
   readonly cache: Cache;
 }

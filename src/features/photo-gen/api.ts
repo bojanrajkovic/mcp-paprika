@@ -1,3 +1,5 @@
+import type { EmptyApi } from "../../kernel/registry.js";
+
 /**
  * Photo-gen's public contract — EMPTY. Photo-gen is a FEATURE module (the AI
  * recipe-photo generation surface): no sibling reaches into it via `ctx.deps`, so
@@ -12,5 +14,4 @@
  * dependency (recipe depends on nothing here today); the handoff rides `infra`
  * (`Infra.generatedImageStore`) instead.
  */
-// oxlint-disable-next-line no-empty-object-type
-export interface PhotoGenApi {}
+export type PhotoGenApi = EmptyApi;
