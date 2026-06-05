@@ -94,6 +94,43 @@ describe("MealStore", () => {
     });
   });
 
+  describe("cookedHistory", () => {
+    it("returns past cooks newest-first", () => {
+      const now = DateTime.fromISO("2026-06-01T00:00:00", { zone: "utc" });
+      store.load([
+        makeMeal({ recipeUid: "recipe-1", name: "Jan", date: "2026-01-15 00:00:00" }),
+        makeMeal({ recipeUid: "recipe-1", name: "Mar", date: "2026-03-20 00:00:00" }),
+        makeMeal({ recipeUid: "recipe-1", name: "Feb", date: "2026-02-10 00:00:00" }),
+      ]);
+      expect(store.cookedHistory("recipe-1" as RecipeUid, now).map((m) => m.name)).toEqual(["Mar", "Feb", "Jan"]);
+    });
+
+    it("excludes future planner entries", () => {
+      const now = DateTime.fromISO("2026-03-01T00:00:00", { zone: "utc" });
+      store.load([
+        makeMeal({ recipeUid: "recipe-1", name: "Past", date: "2026-01-15 00:00:00" }),
+        makeMeal({ recipeUid: "recipe-1", name: "Future", date: "2026-04-20 00:00:00" }),
+      ]);
+      expect(store.cookedHistory("recipe-1" as RecipeUid, now).map((m) => m.name)).toEqual(["Past"]);
+    });
+
+    it("excludes isIngredient entries", () => {
+      const now = DateTime.fromISO("2026-06-01T00:00:00", { zone: "utc" });
+      store.load([
+        makeMeal({ recipeUid: "recipe-1", name: "Real", date: "2026-01-15 00:00:00" }),
+        makeMeal({ recipeUid: "recipe-1", name: "Prep", date: "2026-02-10 00:00:00", isIngredient: true }),
+      ]);
+      expect(store.cookedHistory("recipe-1" as RecipeUid, now).map((m) => m.name)).toEqual(["Real"]);
+    });
+
+    it("returns empty for a recipe with no past cooks", () => {
+      const now = DateTime.fromISO("2026-03-01T00:00:00", { zone: "utc" });
+      store.load([makeMeal({ recipeUid: "recipe-1", date: "2026-04-20 00:00:00" })]);
+      expect(store.cookedHistory("recipe-1" as RecipeUid, now)).toHaveLength(0);
+      expect(store.cookedHistory("recipe-99" as RecipeUid, now)).toHaveLength(0);
+    });
+  });
+
   describe("getInDateRange", () => {
     beforeEach(() => {
       store.load([
