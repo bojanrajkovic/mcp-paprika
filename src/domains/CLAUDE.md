@@ -8,7 +8,7 @@ One directory per cohesive domain — the unit the kernel constructs, isolates, 
 
 ## Layout (per domain)
 
-- `module.ts` — `defineModule(id, dependsOn).self(factory).build(self => parts)`: the factory hydrates the domain's stores/caches and binds its write chokepoints; `build` returns `api` + `tools` + optional `resources`/`syncs`/`onReady`/`flush`. It augments `DomainRegistry` with the domain's contract type.
+- `module.ts` — `defineModule(id, dependsOn).state(factory).build((state, infra) => parts)`: the `.state` factory hydrates the domain's stores/caches (pure state); `.build` (which receives `infra`) assembles the `api` contract and the `writes` chokepoints, and returns `tools` + optional `resources`/`syncs`/`onReady`/`flush`. It augments `DomainRegistry` with the domain's contract type. The state/writes split — pure `*State`, infra-dependent writes in `.build` reached via `ctx.writes` — is [ADR-0012](../../docs/adr/0012-pure-state-and-writes-seam.md).
 - `api.ts` — the read contract siblings depend on (kept narrow; this is the only surface another domain sees).
 - The defining entity's `types.ts` / `store.ts` / `disk.ts` at the domain root; each **additional** owned entity in an `<entity>/` subdir (e.g. `recipe/category/`, `recipe/photo/`, `grocery/grocery-item/`, `menu/menu-item/`).
 - `tools/`, `resources/`, `syncs/` — co-located, tests beside them. Domain-specific markdown formatters live here too (e.g. `recipe-markdown.ts`, `grocery-helpers.ts`); genuinely cross-cutting helpers live in `src/shared/`.
@@ -17,13 +17,21 @@ One directory per cohesive domain — the unit the kernel constructs, isolates, 
 
 ## Key References
 
-- `../kernel/CLAUDE.md` — the kernel these register on (the `self`/`deps`/`infra` narrowing, the sync driver, boot phases).
+- `../kernel/CLAUDE.md` — the kernel these register on (the `state`/`writes`/`deps`/`infra` narrowing, the sync driver, boot phases).
 - `../entity/CLAUDE.md` — the `EntityStore` base and the pending-write (#57) invariants every store inherits.
 - `../cache/CLAUDE.md` — the per-entity `DiskCache` each `disk.ts` describes.
 - ADR-0004 (tool-vs-resource) — resources are Content-domain-only (recipe, grocery-list, menu).
 
+## Doc & naming conventions
+
+These govern the **developer-facing** docs and names in a domain — NOT the agent-facing `description` strings passed to `defineTool` / `registerResource`, which are the forward-intent command language of [ADR-0008](../../docs/adr/0008-tool-surface-command-language.md) and stay as written.
+
+- **Registrar docs lead with purpose, not mechanism.** A tool/resource registrar's JSDoc opens with what it does (`` `create_recipe` — create a recipe. ``), then keeps only genuinely non-obvious WHY: the ADR-0004 entity class (Reference / Data / Content), a cross-domain dependency rationale, an ADR-0008 intent-verb pairing, a placement note (e.g. "this IS a grocery tool"), or a guard rationale. Do NOT recite the kernel wiring (`ctx.state` / `ctx.writes` / `ctx.deps` plumbing) — it is true of every registrar.
+- **Registrar names are nouns that name the tool.** A tool is `export const <camel>Tool = defineTool(...)` — a `ToolDef` value, so the noun reads correctly (the export IS the tool, not a register-function). Keep the `*Tool` / `*Resource` suffix; pick a name that maps to its id, fixing vague ones (e.g. `clearGroceryListTool`, not `clearAllTool`).
+- **Contract (`api.ts`) and interface (`*State` / `*Writes`) docs describe the contract + real per-domain WHY.** Drop domain-location/graph justification (it lives once here and in ADR-0009) and rote kernel-mechanism recital ("the store/cache stay private", "siblings reach via `ctx.deps`", "assembled from the store in `.build`"). Keep the per-method contract docs and any genuinely non-obvious per-domain WHY (a binding gotcha, an ownership note, a dependency-cycle seam).
+
 ## Sharp edges
 
 - **Disk stays flat; the source layout is namespaced but the cache dir is not.** A child entity nested at `src/domains/recipe/category/` still writes to `<cacheDir>/categories` — its `DiskCacheDescriptor.subdir` is the flat on-disk name, reuse-in-place, so the reshape needed no on-disk migration. Don't "align" the subdir to the source path; that would orphan every deployed cache. See ADR-0009 §3.
-- **Cross-domain access is `ctx.deps.<id>.<contract>` only.** A tool reaches a sibling domain through its declared dependency's `api` — never another domain's store or `self`. Adding a new edge means adding it to the `dependsOn` tuple (the single source of truth for what `deps` carries) AND importing the dependency's brand along that same edge.
-- **A domain that owns a parent + its children fires its own `resourceListChanged()`.** Grocery owns lists + items, menu owns menus + items; a child-item change invalidates the parent resource, so the commit chokepoint in `module.ts`'s `.self` emits it. There is no central change-type table.
+- **Cross-domain access is `ctx.deps.<id>.<contract>` only.** A tool reaches a sibling domain through its declared dependency's `api` — never another domain's store or `state`. Adding a new edge means adding it to the `dependsOn` tuple (the single source of truth for what `deps` carries) AND importing the dependency's brand along that same edge.
+- **A domain that owns a parent + its children fires its own `resourceListChanged()`.** Grocery owns lists + items, menu owns menus + items; a child-item change invalidates the parent resource, so the commit chokepoint (assembled in `module.ts`'s `.build`, reached by the domain's own tools via `ctx.writes`) emits it. There is no central change-type table.
