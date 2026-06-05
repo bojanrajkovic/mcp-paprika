@@ -35,14 +35,13 @@ function makeTypeLabeler(mealType: MealTypeApi): (meal: Readonly<Meal>) => strin
 }
 
 /**
- * Registers `read_recipe_history`, kernel-shaped — the per-recipe cooking SUMMARY
- * (last cooked, times cooked, recent dates), distinct from `search_meal_history`'s
- * paged browse list. It lives in the meal domain because the cook data is
- * meal-owned (`MealStore.cookedHistory`); recipe is dependency-free and meal
- * already `dependsOn` recipe, so a recipe→meal edge would be a build-time
- * dependency cycle — "last cooked" stays meal-side (ADR-0009). Reads meal data via
- * `ctx.state.store`; resolves the recipe name via `ctx.deps.recipe` and meal-type
- * labels via `ctx.deps["meal-type"]`.
+ * `read_recipe_history` — the per-recipe cooking SUMMARY (last cooked, times cooked,
+ * recent dates), distinct from `search_meal_history`'s paged browse list. It lives in
+ * the meal domain because the cook data is meal-owned (`MealStore.cookedHistory`):
+ * recipe is dependency-free and meal already `dependsOn` recipe, so a recipe→meal edge
+ * would be a build-time dependency cycle — "last cooked" stays meal-side (ADR-0009).
+ * Resolves the recipe name via `ctx.deps.recipe` and meal-type labels via
+ * `ctx.deps["meal-type"]`.
  */
 export const readRecipeHistoryTool = defineTool(
   {

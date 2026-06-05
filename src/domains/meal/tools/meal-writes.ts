@@ -4,7 +4,7 @@ import { z } from "zod";
 import type { MealTypeUid, RecipeUid } from "../../../ids.js";
 import type { DomainCtx } from "../../../kernel/registry.js";
 import type { MealType } from "../../meal-type/types.js";
-import type { MealState } from "../module.js";
+import type { MealState, MealWrites } from "../module.js";
 import type { Meal } from "../types.js";
 
 import { MealUidSchema, RecipeUidSchema } from "../../../ids.js";
@@ -77,9 +77,9 @@ export const addMealsInputSchema = z.object({
 });
 
 /**
- * Registers `plan_meals`, kernel-shaped — writes through `ctx.state.commitMealsBatch`
- * (the bound write chokepoint), resolves recipe links via `ctx.deps.recipe.get` and
- * meal types via `ctx.deps["meal-type"].resolveSpec`.
+ * `plan_meals` — schedule meals (recipe-linked or freeform) onto dates. Resolves
+ * recipe links via `ctx.deps.recipe.get` and meal types via
+ * `ctx.deps["meal-type"].resolveSpec`.
  */
 export const planMealsTool = defineTool(
   {
@@ -98,7 +98,7 @@ export const planMealsTool = defineTool(
       "can fix all problems in one pass.",
     inputSchema: addMealsInputSchema.shape,
   },
-  (ctx: DomainCtx<MealState, "recipe" | "meal-type">) => {
+  (ctx: DomainCtx<MealState, "recipe" | "meal-type", MealWrites>) => {
     const log = ctx.infra.log.child({ component: "plan_meals" });
     return async (args) => {
       log.info({ tool: "plan_meals", count: args.items.length }, "tool invoked");
@@ -247,7 +247,7 @@ export const planMealsTool = defineTool(
           let savedItems: ReadonlyArray<Meal>;
           try {
             savedItems = await ctx.infra.client.saveMeals(builtItems);
-            await ctx.state.commitMealsBatch(savedItems);
+            await ctx.writes.commitMealsBatch(savedItems);
           } catch (error) {
             const message = toMessage(error);
             log.error({ err: error, count: builtItems.length }, "saveMeals failed");
@@ -322,9 +322,8 @@ export const updateMealInputSchema = z.object({
 });
 
 /**
- * Registers `update_meal`, kernel-shaped — writes through `ctx.state.commitMeal`,
- * re-resolves recipe links via `ctx.deps.recipe.get`, meal types via
- * `ctx.deps["meal-type"].resolveSpec`.
+ * `update_meal` — edit a scheduled meal's free-form fields. Re-resolves recipe links
+ * via `ctx.deps.recipe.get` and meal types via `ctx.deps["meal-type"].resolveSpec`.
  */
 export const updateMealTool = defineTool(
   {
@@ -341,7 +340,7 @@ export const updateMealTool = defineTool(
       "use reschedule_meal. The is_ingredient and deleted fields are not updatable via this tool.",
     inputSchema: updateMealInputSchema.shape,
   },
-  (ctx: DomainCtx<MealState, "recipe" | "meal-type">) => {
+  (ctx: DomainCtx<MealState, "recipe" | "meal-type", MealWrites>) => {
     const log = ctx.infra.log.child({ component: "update_meal" });
     return async (args) => {
       log.info({ tool: "update_meal", uid: args.uid }, "tool invoked");
@@ -469,7 +468,7 @@ export const updateMealTool = defineTool(
           let saved: Meal;
           try {
             saved = (await ctx.infra.client.saveMeals([updated]))[0]!;
-            await ctx.state.commitMeal(saved);
+            await ctx.writes.commitMeal(saved);
           } catch (error) {
             const message = toMessage(error);
             log.error({ err: error, uid }, "saveMeals failed");
@@ -489,7 +488,7 @@ const deleteMealInputSchema = z.object({
 });
 
 /**
- * Registers `delete_meal`, kernel-shaped — soft-deletes through `ctx.state.commitMeal`.
+ * `delete_meal` — remove a scheduled meal (soft-delete).
  */
 export const deleteMealTool = defineTool(
   {
@@ -501,7 +500,7 @@ export const deleteMealTool = defineTool(
       "returns a friendly 'already deleted' message without re-POSTing. Requires an exact UID.",
     inputSchema: deleteMealInputSchema.shape,
   },
-  (ctx: DomainCtx<MealState, "recipe" | "meal-type">) => {
+  (ctx: DomainCtx<MealState, "recipe" | "meal-type", MealWrites>) => {
     const log = ctx.infra.log.child({ component: "delete_meal" });
     return async (args) => {
       log.info({ tool: "delete_meal", uid: args.uid }, "tool invoked");
@@ -516,7 +515,7 @@ export const deleteMealTool = defineTool(
           const trashed: Meal = { ...existing, deleted: true };
           try {
             const saved = (await ctx.infra.client.saveMeals([trashed]))[0]!;
-            await ctx.state.commitMeal(saved);
+            await ctx.writes.commitMeal(saved);
           } catch (error) {
             const message = toMessage(error);
             log.error({ err: error, uid }, "saveMeals failed");

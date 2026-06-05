@@ -22,8 +22,8 @@ export const readMealPlanInputSchema = z
   .strict();
 
 /**
- * Registers `read_meal_plan`, kernel-shaped — reads this module's own meal store
- * via `ctx.state`; meal-type names for rendering come from `ctx.deps["meal-type"]`.
+ * `read_meal_plan` — show upcoming scheduled meals. Meal-type names for rendering
+ * come from `ctx.deps["meal-type"]`.
  */
 export const readMealPlanTool = defineTool(
   {

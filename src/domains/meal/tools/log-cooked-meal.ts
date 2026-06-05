@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import type { MealTypeUid } from "../../../ids.js";
 import type { DomainCtx } from "../../../kernel/registry.js";
-import type { MealState } from "../module.js";
+import type { MealState, MealWrites } from "../module.js";
 import type { Meal } from "../types.js";
 
 import { MealUidSchema, RecipeUidSchema } from "../../../ids.js";
@@ -31,9 +31,9 @@ export const logCookedMealInputSchema = z
   .strict();
 
 /**
- * Registers `log_cooked_meal`, kernel-shaped — writes through
- * `ctx.state.commitMealsBatch`, resolves the recipe via `ctx.deps.recipe.get` and
- * the meal type via `resolveOrCreateMealType` (an unknown `{name}` auto-creates a custom type).
+ * `log_cooked_meal` — record a meal just cooked. Resolves the recipe via
+ * `ctx.deps.recipe.get` and the meal type via `resolveOrCreateMealType` (an unknown
+ * `{name}` auto-creates a custom type).
  */
 export const logCookedMealTool = defineTool(
   {
@@ -46,7 +46,7 @@ export const logCookedMealTool = defineTool(
       "`type` for a non-dinner meal. To log a freeform (non-recipe) meal or to plan ahead in bulk, use plan_meals.",
     inputSchema: logCookedMealInputSchema,
   },
-  (ctx: DomainCtx<MealState, "recipe" | "meal-type">) => {
+  (ctx: DomainCtx<MealState, "recipe" | "meal-type", MealWrites>) => {
     const log = ctx.infra.log.child({ component: "log_cooked_meal" });
     return async (args) => {
       log.info({ tool: "log_cooked_meal", recipe_uid: args.recipe_uid }, "tool invoked");
@@ -105,7 +105,7 @@ export const logCookedMealTool = defineTool(
           let saved: Meal;
           try {
             const savedItems = await ctx.infra.client.saveMeals([meal]);
-            await ctx.state.commitMealsBatch(savedItems);
+            await ctx.writes.commitMealsBatch(savedItems);
             saved = savedItems[0]!;
           } catch (error) {
             const message = toMessage(error);

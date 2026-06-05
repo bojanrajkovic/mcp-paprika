@@ -42,11 +42,11 @@ export const searchMealHistoryInputSchema = z
   .strict();
 
 /**
- * Registers `search_meal_history`, kernel-shaped. Meal data is read from
- * `ctx.state.store`; meal-type resolution/render via `ctx.deps["meal-type"]`. The
- * class (category) filter resolves the class name/UID to a `CategoryUid` and then
- * the set of recipe UIDs in it through `ctx.deps.recipe` — categories are a
- * recipe-domain concern, so meal needs NO `category` dep.
+ * `search_meal_history` — paged browse of cooked-meal history, optionally filtered by
+ * recipe class. The class (category) filter resolves the class name/UID to a
+ * `CategoryUid` and then the set of recipe UIDs in it through `ctx.deps.recipe` —
+ * categories are a recipe-domain concern, so meal needs NO `category` dep. Meal-type
+ * resolution/render via `ctx.deps["meal-type"]`.
  */
 export const searchMealHistoryTool = defineTool(
   {

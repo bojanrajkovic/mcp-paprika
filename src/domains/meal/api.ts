@@ -4,22 +4,19 @@ import type { Meal } from "./types.js";
 
 /**
  * Meal's public contract — the surface the meal-planner coordinator consumes via
- * `ctx.deps.meal`. Meal owns only meals (meal-types are a separate standalone
- * module). The store and cache stay private; the coordinator reaches only these
- * methods.
+ * `ctx.deps.meal` (meal owns only meals; meal-types are a separate module).
  *
- * The contract is shaped around `schedule_menu`'s needs: it materializes a menu's
- * items into planner meals by gating on the meal store being synced, assigning a
- * per-DATE `order_flag` across the batch, then POSTing once and committing — so
- * the three required operations are:
+ * Shaped around `schedule_menu`'s needs: it materializes a menu's items into planner
+ * meals by gating on the meal store being synced, assigning a per-DATE `order_flag`
+ * across the batch, then POSTing once and committing — so the three required
+ * operations are:
  *   - `hasSynced` — the coordinator's meal-store start gate;
  *   - `orderFlagAssigner` — the stateful per-date `order_flag` assigner
  *     (`makeMealOrderFlagAssigner`, backed by `MealStore.getMaxOrderFlagOn`);
- *   - `createMeals` — the batch write (`client.saveMeals` + `commitMealsBatch`),
- *     bound in the `.self` factory because it needs `infra.client`.
+ *   - `createMeals` — the batch write (`client.saveMeals` + `commitMealsBatch`).
  *
- * `read_meal_plan` and `search_meal_history` read meal data directly inside the
- * meal module via `self`, so they don't drive the public `api`.
+ * `read_meal_plan` and `search_meal_history` read meal data directly inside the meal
+ * module via `ctx.state`, so they don't drive the public `api`.
  */
 export interface MealApi {
   /** Whether the meal store has completed its first sync (start-guard gate). */

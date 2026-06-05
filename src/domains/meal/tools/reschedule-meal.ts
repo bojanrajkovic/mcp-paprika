@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import type { MealTypeUid } from "../../../ids.js";
 import type { DomainCtx } from "../../../kernel/registry.js";
-import type { MealState } from "../module.js";
+import type { MealState, MealWrites } from "../module.js";
 import type { Meal } from "../types.js";
 
 import { MealUidSchema } from "../../../ids.js";
@@ -34,9 +34,8 @@ export const rescheduleMealInputSchema = z
   .strict();
 
 /**
- * Registers `reschedule_meal`, kernel-shaped — writes through
- * `ctx.state.commitMealsBatch`, resolves the optional type co-change via
- * `resolveOrCreateMealType` (an unknown `{name}` auto-creates a custom type).
+ * `reschedule_meal` — move a scheduled meal to a new date. Resolves the optional type
+ * co-change via `resolveOrCreateMealType` (an unknown `{name}` auto-creates a custom type).
  */
 export const rescheduleMealTool = defineTool(
   {
@@ -49,7 +48,7 @@ export const rescheduleMealTool = defineTool(
       "meal's recipe link, freeform name, or scale instead, use update_meal.",
     inputSchema: rescheduleMealInputSchema,
   },
-  (ctx: DomainCtx<MealState, "recipe" | "meal-type">) => {
+  (ctx: DomainCtx<MealState, "recipe" | "meal-type", MealWrites>) => {
     const log = ctx.infra.log.child({ component: "reschedule_meal" });
     return async (args) => {
       log.info({ tool: "reschedule_meal", uid: args.uid, date: args.date }, "tool invoked");
@@ -111,7 +110,7 @@ export const rescheduleMealTool = defineTool(
           let saved: Meal;
           try {
             const savedItems = await ctx.infra.client.saveMeals([updated]);
-            await ctx.state.commitMealsBatch(savedItems);
+            await ctx.writes.commitMealsBatch(savedItems);
             saved = savedItems[0]!;
           } catch (error) {
             const message = toMessage(error);
