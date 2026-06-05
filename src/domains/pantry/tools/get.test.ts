@@ -1,8 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { makePantryItem } from "../../../../test/cache/__fixtures__/pantry.js";
+import { makePantryItem } from "../../../../test/domains/pantry/__fixtures__/pantry.js";
 import { useKernelHarness } from "../../../../test/support/kernel-harness.js";
-import { getText } from "../../../../test/support/tool-test-utils.js";
 
 describe("read_pantry_item tool", () => {
   const kh = useKernelHarness("pantry");
@@ -13,7 +12,7 @@ describe("read_pantry_item tool", () => {
     const item = makePantryItem({ ingredient: "Olive Oil" });
     kh.seed({ pantry: [item] });
 
-    const text = getText(await kh.callTool("read_pantry_item", { lookup: { uid: item.uid } }));
+    const text = await kh.callToolText("read_pantry_item", { lookup: { uid: item.uid } });
 
     expect(text).toContain(`# ${item.ingredient}`);
     expect(text).toContain(item.uid);
@@ -24,7 +23,7 @@ describe("read_pantry_item tool", () => {
       pantry: [makePantryItem({ ingredient: "Brown Sugar" }), makePantryItem({ ingredient: "Flour" })],
     });
 
-    const text = getText(await kh.callTool("read_pantry_item", { lookup: { ingredient: "Brown" } }));
+    const text = await kh.callToolText("read_pantry_item", { lookup: { ingredient: "Brown" } });
 
     expect(text).toContain("# Brown Sugar");
   });
@@ -37,7 +36,7 @@ describe("read_pantry_item tool", () => {
     ];
     kh.seed({ pantry: items });
 
-    const text = getText(await kh.callTool("read_pantry_item", { lookup: { ingredient: "Apple" } }));
+    const text = await kh.callToolText("read_pantry_item", { lookup: { ingredient: "Apple" } });
 
     expect(text).toContain("Apple Pie Filling");
     expect(text).toContain("Apple Cider");
@@ -53,7 +52,7 @@ describe("read_pantry_item tool", () => {
     const item = makePantryItem();
     kh.seed({ pantry: [item] });
 
-    const text = getText(await kh.callTool("read_pantry_item", { lookup: { uid: "does-not-exist" } }));
+    const text = await kh.callToolText("read_pantry_item", { lookup: { uid: "does-not-exist" } });
 
     expect(text.toLowerCase()).toContain("no pantry item found");
   });
@@ -62,14 +61,14 @@ describe("read_pantry_item tool", () => {
     const item = makePantryItem();
     kh.seed({ pantry: [item] });
 
-    const text = getText(await kh.callTool("read_pantry_item", { lookup: { ingredient: "Caviar" } }));
+    const text = await kh.callToolText("read_pantry_item", { lookup: { ingredient: "Caviar" } });
 
     expect(text.toLowerCase()).toContain("no pantry items found matching");
   });
 
   it("cold-start (hasSynced false) returns the not-yet-synced guard error", async () => {
     // store never seeded — hasSynced remains false
-    const text = getText(await kh.callTool("read_pantry_item", { lookup: { uid: "anything" } }));
+    const text = await kh.callToolText("read_pantry_item", { lookup: { uid: "anything" } });
 
     expect(text.toLowerCase()).toContain("not yet synced");
   });

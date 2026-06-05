@@ -2,13 +2,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { RecipeState } from "../module.js";
 
-import { makeCategory, makeRecipe } from "../../../../test/cache/__fixtures__/recipes.js";
+import { makeCategory, makeRecipe } from "../../../../test/domains/recipe/__fixtures__/recipes.js";
 import { useKernelHarness } from "../../../../test/support/kernel-harness.js";
 import { getText } from "../../../../test/support/tool-test-utils.js";
 import { categorizeRecipeInputSchema } from "./categorize.js";
 
 describe("categorize_recipe tool", () => {
-  const kh = useKernelHarness("recipe");
+  const kh = useKernelHarness<RecipeState>("recipe");
   beforeEach(kh.setup);
   afterEach(kh.teardown);
 
@@ -97,7 +97,7 @@ describe("categorize_recipe tool", () => {
 
     await kh.callTool("categorize_recipe", { uid: recipe.uid, categories: ["Quick"], mode: "add" });
 
-    const stored = (kh.state() as RecipeState).recipe.store.get(recipe.uid);
+    const stored = kh.state().recipe.store.get(recipe.uid);
     expect(stored?.categories).toEqual([catA.uid, catB.uid]);
     expect(kh.resourceListChanged()).toHaveBeenCalled();
   });
@@ -120,19 +120,17 @@ describe("categorize_recipe tool", () => {
     kh.seed({ recipes: [recipe], categories: [catA] });
     vi.mocked(kh.client().saveRecipe).mockRejectedValue(new Error("Network error"));
 
-    const text = getText(
-      await kh.callTool("categorize_recipe", { uid: recipe.uid, categories: ["Dinner"], mode: "add" }),
-    );
+    const text = await kh.callToolText("categorize_recipe", { uid: recipe.uid, categories: ["Dinner"], mode: "add" });
 
     expect(text).toContain("Failed to categorize recipe");
     expect(text).toContain("Network error");
     // Store is unchanged — categories still empty.
-    expect((kh.state() as RecipeState).recipe.store.get(recipe.uid)?.categories).toEqual([]);
+    expect(kh.state().recipe.store.get(recipe.uid)?.categories).toEqual([]);
   });
 
   it("fires the cold-start guard before any API call", async () => {
     // store never seeded — hasSynced is false
-    const text = getText(await kh.callTool("categorize_recipe", { uid: "any-uid", categories: ["Dinner"] }));
+    const text = await kh.callToolText("categorize_recipe", { uid: "any-uid", categories: ["Dinner"] });
 
     expect(text.toLowerCase()).toContain("try again");
     expect(kh.client().saveRecipe).not.toHaveBeenCalled();

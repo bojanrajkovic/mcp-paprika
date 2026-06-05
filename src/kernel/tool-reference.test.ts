@@ -1,11 +1,10 @@
-import { mkdtemp, readFile, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { collectToolSpecs, renderToolReference } from "../../scripts/tool-specs.js";
+import { useTempDir } from "../../test/support/disk-caches.js";
 import { makeKernelInfra } from "../../test/support/kernel-harness.js";
 import { registeredModules } from "./registry.js";
 // Side-effect: every domain/feature module self-registers, so `registeredModules()`
@@ -15,18 +14,18 @@ import "./modules.generated.js";
 const README = fileURLToPath(new URL("../../docs/tools/README.md", import.meta.url));
 
 describe("tool reference (docs/tools/README.md)", () => {
-  let cacheDir: string;
+  const tmp = useTempDir("paprika-tool-ref-");
   beforeEach(async () => {
-    cacheDir = await mkdtemp(join(tmpdir(), "paprika-tool-ref-"));
+    await tmp.setup();
   });
   afterEach(async () => {
-    await rm(cacheDir, { recursive: true, force: true });
+    await tmp.teardown();
   });
 
   it("documents EXACTLY the tools the kernel registers (no drift)", async () => {
     // What the kernel registers: every module's built `tools`, which carry the same
     // `spec` the generator reads — built without a sync cycle (construction only).
-    const infra = makeKernelInfra({ cacheDir });
+    const infra = makeKernelInfra({ cacheDir: tmp.dir() });
     const registered = new Set<string>();
     for (const m of registeredModules()) {
       const built = await m.build(infra);

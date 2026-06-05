@@ -3,8 +3,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { MealTypeUid, MealUid, RecipeUid } from "../../../ids.js";
 import type { MealState } from "../module.js";
 
-import { makeMeal, makeMealType } from "../../../../test/cache/__fixtures__/meals.js";
-import { makeRecipe } from "../../../../test/cache/__fixtures__/recipes.js";
+import { makeMealType } from "../../../../test/domains/meal-type/__fixtures__/meal-types.js";
+import { makeMeal } from "../../../../test/domains/meal/__fixtures__/meals.js";
+import { makeRecipe } from "../../../../test/domains/recipe/__fixtures__/recipes.js";
 import { useKernelHarness } from "../../../../test/support/kernel-harness.js";
 import { getText } from "../../../../test/support/tool-test-utils.js";
 import { todayWire } from "../../../utils/dates.js";
@@ -26,7 +27,7 @@ function makeBuiltins() {
 }
 
 describe("log_cooked_meal tool", () => {
-  const kh = useKernelHarness("meal");
+  const kh = useKernelHarness<MealState>("meal");
   beforeEach(kh.setup);
   afterEach(kh.teardown);
 
@@ -137,7 +138,7 @@ describe("log_cooked_meal tool", () => {
 
     await kh.callTool("log_cooked_meal", { recipe_uid: TACOS_UID });
 
-    const store = (kh.state() as MealState).store;
+    const store = kh.state().store;
     expect(store.size).toBe(1);
   });
 

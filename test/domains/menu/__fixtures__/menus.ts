@@ -1,6 +1,6 @@
-import type { MenuItem } from "../../../src/domains/menu/menu-item/types.js";
-import type { Menu } from "../../../src/domains/menu/types.js";
-import type { MealTypeUid, MenuItemUid, MenuUid, RecipeUid } from "../../../src/ids.js";
+import type { MenuItem } from "../../../../src/domains/menu/menu-item/types.js";
+import type { Menu } from "../../../../src/domains/menu/types.js";
+import type { MealTypeUid, MenuItemUid, MenuUid, RecipeUid } from "../../../../src/ids.js";
 
 let menuCounter = 0;
 let menuItemCounter = 0;

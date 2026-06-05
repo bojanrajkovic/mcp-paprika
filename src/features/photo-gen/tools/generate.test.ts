@@ -4,7 +4,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite
 
 import type { GeneratedPhoto, GeneratePhotoOptions, PhotographyClient } from "../../photography.js";
 
-import { makeRecipe } from "../../../../test/cache/__fixtures__/recipes.js";
+import { makeRecipe } from "../../../../test/domains/recipe/__fixtures__/recipes.js";
 import { useKernelHarness } from "../../../../test/support/kernel-harness.js";
 import { getText } from "../../../../test/support/tool-test-utils.js";
 import { RecipeUidSchema } from "../../../ids.js";

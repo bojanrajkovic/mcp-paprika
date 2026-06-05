@@ -20,8 +20,8 @@ function createPayload(overrides: Partial<IdTokenPayload> = {}): IdTokenPayload 
 }
 
 describe("auth/allowlist: identity verification against email/sub lists", () => {
-  describe("Email-verified policy tests (AC3.1-3.8)", () => {
-    it("AC3.1: allowlisted email + email_verified=true admits with source=email", () => {
+  describe("Email-verified policy tests", () => {
+    it("allowlisted email + email_verified=true admits with source=email", () => {
       const payload = createPayload({
         email: "user@example.com",
         email_verified: true,
@@ -45,7 +45,7 @@ describe("auth/allowlist: identity verification against email/sub lists", () => 
       );
     });
 
-    it("AC3.2: allowlisted sub admits with source=sub regardless of email_verified=false", () => {
+    it("allowlisted sub admits with source=sub regardless of email_verified=false", () => {
       const payload = createPayload({
         email: "user@example.com",
         email_verified: false,
@@ -69,7 +69,7 @@ describe("auth/allowlist: identity verification against email/sub lists", () => 
       );
     });
 
-    it("AC3.3: both lists match → admitted with source=email (email-precedence)", () => {
+    it("both lists match → admitted with source=email (email-precedence)", () => {
       const payload = createPayload({
         email: "user@example.com",
         email_verified: true,
@@ -89,7 +89,7 @@ describe("auth/allowlist: identity verification against email/sub lists", () => 
       );
     });
 
-    it("AC3.4: neither list matches → err notAllowlisted", () => {
+    it("neither list matches → err notAllowlisted", () => {
       const payload = createPayload({
         email: "unknown@example.com",
         email_verified: true,
@@ -110,7 +110,7 @@ describe("auth/allowlist: identity verification against email/sub lists", () => 
       );
     });
 
-    it("AC3.5: allowlisted email + email_verified=false + strict → err emailNotVerified", () => {
+    it("allowlisted email + email_verified=false + strict → err emailNotVerified", () => {
       const payload = createPayload({
         email: "user@example.com",
         email_verified: false,
@@ -130,7 +130,7 @@ describe("auth/allowlist: identity verification against email/sub lists", () => 
       );
     });
 
-    it("AC3.6: allowlisted email + email_verified=false + skip → admitted", () => {
+    it("allowlisted email + email_verified=false + skip → admitted", () => {
       const payload = createPayload({
         email: "user@example.com",
         email_verified: false,
@@ -154,7 +154,7 @@ describe("auth/allowlist: identity verification against email/sub lists", () => 
       );
     });
 
-    it("AC3.7: allowlisted email + email_verified claim absent + strict → err", () => {
+    it("allowlisted email + email_verified claim absent + strict → err", () => {
       const payload = createPayload({
         email: "user@example.com",
         email_verified: undefined,
@@ -174,7 +174,7 @@ describe("auth/allowlist: identity verification against email/sub lists", () => 
       );
     });
 
-    it("AC3.8: allowlisted email + email_verified claim absent + if-present → admitted", () => {
+    it("allowlisted email + email_verified claim absent + if-present → admitted", () => {
       const payload = createPayload({
         email: "user@example.com",
         email_verified: undefined,

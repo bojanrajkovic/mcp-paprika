@@ -1,9 +1,9 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import { useTempDir } from "../../test/support/disk-caches.js";
 import { cosineScore, dotProduct, JsonVectorIndex, vectorNorm } from "./json-vector-index.js";
 
 describe("cosine primitives", () => {
@@ -31,24 +31,20 @@ describe("cosine primitives", () => {
 });
 
 describe("JsonVectorIndex", () => {
-  let dir: string;
+  const tmp = useTempDir("json-vector-index-");
 
-  beforeEach(async () => {
-    dir = await mkdtemp(join(tmpdir(), "json-vector-index-"));
-  });
-  afterEach(async () => {
-    await rm(dir, { recursive: true, force: true });
-  });
+  beforeEach(tmp.setup);
+  afterEach(tmp.teardown);
 
   async function freshIndex(): Promise<JsonVectorIndex> {
-    const idx = new JsonVectorIndex(dir);
+    const idx = new JsonVectorIndex(tmp.dir());
     await idx.createIndex();
     return idx;
   }
 
   describe("lifecycle", () => {
     it("isIndexCreated reflects whether the file exists", async () => {
-      const idx = new JsonVectorIndex(dir);
+      const idx = new JsonVectorIndex(tmp.dir());
       expect(await idx.isIndexCreated()).toBe(false);
       await idx.createIndex();
       expect(await idx.isIndexCreated()).toBe(true);
@@ -62,7 +58,7 @@ describe("JsonVectorIndex", () => {
     it("createIndex({ deleteIfExists }) replaces an existing index", async () => {
       const idx = await freshIndex();
       await idx.upsertItem({ id: "a", vector: [1, 0] });
-      const reset = new JsonVectorIndex(dir);
+      const reset = new JsonVectorIndex(tmp.dir());
       await reset.createIndex({ deleteIfExists: true });
       expect(await reset.queryItems([1, 0], 10)).toHaveLength(0);
     });
@@ -132,10 +128,10 @@ describe("JsonVectorIndex", () => {
     it("ignores a wrong persisted norm and recomputes on load", async () => {
       // Hand-write an index whose stored norm is deliberately wrong.
       await writeFile(
-        join(dir, "index.json"),
+        join(tmp.dir(), "index.json"),
         JSON.stringify({ version: 1, items: [{ id: "x", vector: [3, 4], norm: 999, metadata: {} }] }),
       );
-      const idx = new JsonVectorIndex(dir);
+      const idx = new JsonVectorIndex(tmp.dir());
       const res = await idx.queryItems([3, 4], 10);
       // With the correct norm (5), self-cosine is 1; the bogus 999 would crush it.
       expect(res[0]!.score).toBeCloseTo(1, 12);
@@ -168,19 +164,19 @@ describe("JsonVectorIndex", () => {
 
     it("throws on load when the persisted file contains a non-finite vector", async () => {
       await writeFile(
-        join(dir, "index.json"),
+        join(tmp.dir(), "index.json"),
         JSON.stringify({ version: 1, items: [{ id: "x", vector: [1, null], metadata: {} }] }),
       );
-      const idx = new JsonVectorIndex(dir);
+      const idx = new JsonVectorIndex(tmp.dir());
       await expect(idx.loadIndexData()).rejects.toThrow();
     });
 
     it("throws on load when the persisted file contains a zero-norm vector", async () => {
       await writeFile(
-        join(dir, "index.json"),
+        join(tmp.dir(), "index.json"),
         JSON.stringify({ version: 1, items: [{ id: "x", vector: [0, 0], metadata: {} }] }),
       );
-      const idx = new JsonVectorIndex(dir);
+      const idx = new JsonVectorIndex(tmp.dir());
       await expect(idx.loadIndexData()).rejects.toThrow(/zero-norm/i);
     });
   });
@@ -193,7 +189,7 @@ describe("JsonVectorIndex", () => {
       await idx.upsertItem({ id: "b", vector: [0, 1] });
       idx.cancelUpdate();
       // 'b' was only in the cancelled transaction; a fresh load must not see it.
-      const reloaded = new JsonVectorIndex(dir);
+      const reloaded = new JsonVectorIndex(tmp.dir());
       expect(await reloaded.queryItems([0, 1], 10).then((r) => r.map((x) => x.item.id))).toEqual(["a"]);
     });
 
@@ -226,7 +222,7 @@ describe("JsonVectorIndex", () => {
       await idx.upsertItem({ id: "a", vector: [1, 0] });
       await idx.upsertItem({ id: "b", vector: [0, 1] });
       await idx.endUpdate();
-      const reloaded = new JsonVectorIndex(dir);
+      const reloaded = new JsonVectorIndex(tmp.dir());
       const res = await reloaded.queryItems([1, 0], 10);
       expect(res.map((r) => r.item.id).sort()).toEqual(["a", "b"]);
     });
@@ -248,14 +244,14 @@ describe("JsonVectorIndex", () => {
     it("round-trips items across instances", async () => {
       const idx = await freshIndex();
       await idx.upsertItem({ id: "a", vector: [2, 0], metadata: { recipeName: "A", text: "alpha" } });
-      const reloaded = new JsonVectorIndex(dir);
+      const reloaded = new JsonVectorIndex(tmp.dir());
       const res = await reloaded.queryItems([1, 0], 10);
       expect(res[0]!.item.metadata).toEqual({ recipeName: "A", text: "alpha" });
     });
 
     it("loads a vectra-shaped index.json (extra metadata_config ignored)", async () => {
       await writeFile(
-        join(dir, "index.json"),
+        join(tmp.dir(), "index.json"),
         JSON.stringify({
           version: 1,
           metadata_config: { indexed: ["recipeName"] },
@@ -265,7 +261,7 @@ describe("JsonVectorIndex", () => {
           ],
         }),
       );
-      const idx = new JsonVectorIndex(dir);
+      const idx = new JsonVectorIndex(tmp.dir());
       const res = await idx.queryItems([1, 0], 10);
       expect(res[0]!.item.id).toBe("a");
       expect(res[0]!.item.metadata).toEqual({ recipeName: "Vectra A" });
@@ -274,10 +270,10 @@ describe("JsonVectorIndex", () => {
     it("writes durably via a temp file then rename (no leftover temp files)", async () => {
       const idx = await freshIndex();
       await idx.upsertItem({ id: "a", vector: [1, 0] });
-      const entries = await readFile(join(dir, "index.json"), "utf-8");
+      const entries = await readFile(join(tmp.dir(), "index.json"), "utf-8");
       expect(JSON.parse(entries).items).toHaveLength(1);
       const { readdir } = await import("node:fs/promises");
-      const files = await readdir(dir);
+      const files = await readdir(tmp.dir());
       expect(files.filter((f) => f.endsWith(".tmp"))).toHaveLength(0);
     });
   });
@@ -286,18 +282,14 @@ describe("JsonVectorIndex", () => {
 // Guard for the corruption-recovery path the VectorStore relies on: a structurally
 // broken file must surface as a thrown error so init() can back up and rebuild.
 describe("JsonVectorIndex corruption surfaces to caller", () => {
-  let dir: string;
-  beforeEach(async () => {
-    dir = await mkdtemp(join(tmpdir(), "json-vector-index-corrupt-"));
-  });
-  afterEach(async () => {
-    await rm(dir, { recursive: true, force: true });
-  });
+  const tmp = useTempDir("json-vector-index-corrupt-");
+  beforeEach(tmp.setup);
+  afterEach(tmp.teardown);
 
   it("throws on unparseable JSON", async () => {
-    await mkdir(dir, { recursive: true });
-    await writeFile(join(dir, "index.json"), "{ not valid json");
-    const idx = new JsonVectorIndex(dir);
+    await mkdir(tmp.dir(), { recursive: true });
+    await writeFile(join(tmp.dir(), "index.json"), "{ not valid json");
+    const idx = new JsonVectorIndex(tmp.dir());
     await expect(idx.loadIndexData()).rejects.toThrow();
   });
 });

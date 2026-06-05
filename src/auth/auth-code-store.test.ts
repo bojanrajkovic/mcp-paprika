@@ -98,9 +98,8 @@ describe("AuthCodeStore", () => {
     expect(result).toBeNull();
   });
 
-  it("AC2.11: consumed auth code returns null on second consume", () => {
-    // PLAN says (phase_05.md:22): POST /token with already-consumed auth code returns invalid_grant (single-use).
-    // Phase 5 enforces single-use at the store layer via consume's atomic delete.
+  it("consumed auth code returns null on second consume", () => {
+    // Single-use is enforced at the store layer via consume's atomic delete.
     const now = nowSeconds();
     const store = new AuthCodeStore({ now: () => now * 1000 });
     store.put("mcp_ac_xyz", makeAuthCodeState({ createdAt: now }));

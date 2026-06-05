@@ -1,11 +1,8 @@
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { makeAuthCodeState, makeAuthRequestState } from "../../test/auth/__fixtures__/oauth-state.js";
-import { makeOAuthClient, makeOAuthToken } from "../../test/cache/__fixtures__/oauth.js";
+import { makeOAuthClient, makeOAuthToken } from "../../test/auth/__fixtures__/oauth.js";
+import { useTempDir } from "../../test/support/disk-caches.js";
 import { SILENT_LOG } from "../utils/log.js";
 import { AuthCodeStore } from "./auth-code-store.js";
 import { AuthRequestStore } from "./auth-request-store.js";
@@ -20,30 +17,29 @@ import { nowSeconds } from "./tokens.js";
 // Test fixture setup
 // ---------------------------------------------------------------------------
 
-let tmpDir: string;
+const tmp = useTempDir("mcp-paprika-cleanup-test-");
 let cache: AuthCache;
 let clientStore: DiskClientRegistrationStore;
 let tokenStore: TokenStore;
 
 beforeEach(async () => {
-  tmpDir = await mkdtemp(join(tmpdir(), "mcp-paprika-cleanup-test-"));
-  cache = await buildAuthCaches(tmpDir);
+  await tmp.setup();
+  cache = await buildAuthCaches(tmp.dir());
   clientStore = new DiskClientRegistrationStore(cache, "https://example.com", SILENT_LOG);
   tokenStore = new TokenStore(cache);
 });
 
 afterEach(async () => {
-  await rm(tmpDir, { recursive: true, force: true });
+  await tmp.teardown();
   vi.restoreAllMocks();
 });
 
 // ---------------------------------------------------------------------------
-// AC5.3: stale-client sweep
+// stale-client sweep
 // ---------------------------------------------------------------------------
 
 describe("sweepOnce", () => {
-  it(// PLAN says (phase_07.md:210): AC5.3 — sweepOnce removes client with lastTokenActivityAt older than 90 days
-  "AC5.3: sweepOnce removes a client with lastTokenActivityAt older than 90 days", async () => {
+  it("sweepOnce removes a client with lastTokenActivityAt older than 90 days", async () => {
     const clock = { v: 1_700_000_000 };
     const staleClient = makeOAuthClient({
       clientId: "00000000-0000-0000-0000-000000000001",
@@ -76,8 +72,7 @@ describe("sweepOnce", () => {
     expect(await cache.oauthClients.get("00000000-0000-0000-0000-000000000002")).not.toBeNull();
   });
 
-  it(// PLAN says (phase_07.md:228): AC5.4 — stale-client deletion cascades: all tokens with matching clientId removed
-  "AC5.4: stale-client deletion cascades — all tokens with matching clientId removed", async () => {
+  it("stale-client deletion cascades — all tokens with matching clientId removed", async () => {
     const clock = { v: 1_700_000_000 };
     const staleClientId = "00000000-0000-0000-0000-000000000010";
     const freshClientId = "00000000-0000-0000-0000-000000000011";
@@ -124,8 +119,7 @@ describe("sweepOnce", () => {
     expect(await cache.oauthTokens.get(freshToken.tokenHash)).not.toBeNull();
   });
 
-  it(// PLAN says (phase_07.md:233): AC5.5 — sweepOnce is idempotent: second run on same state is a no-op
-  "AC5.5: sweepOnce is idempotent — second run on the same state is a no-op", async () => {
+  it("sweepOnce is idempotent — second run on the same state is a no-op", async () => {
     const clock = { v: 1_700_000_000 };
     const staleClient = makeOAuthClient({
       clientId: "00000000-0000-0000-0000-000000000020",

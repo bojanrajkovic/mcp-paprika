@@ -3,9 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { RecipeUid } from "../../../ids.js";
 import type { RecipeState } from "../module.js";
 
-import { makeRecipe } from "../../../../test/cache/__fixtures__/recipes.js";
+import { makeRecipe } from "../../../../test/domains/recipe/__fixtures__/recipes.js";
 import { useKernelHarness } from "../../../../test/support/kernel-harness.js";
-import { getText } from "../../../../test/support/tool-test-utils.js";
 import { PaprikaAPIError } from "../../../paprika/errors.js";
 import { restoreRecipeInputSchema } from "./restore.js";
 
@@ -18,7 +17,7 @@ import { restoreRecipeInputSchema } from "./restore.js";
 const notFound = (uid: string): PaprikaAPIError => new PaprikaAPIError("Not found", 404, `/api/v2/sync/recipe/${uid}/`);
 
 describe("restore_recipe tool", () => {
-  const kh = useKernelHarness("recipe");
+  const kh = useKernelHarness<RecipeState>("recipe");
   beforeEach(kh.setup);
   afterEach(kh.teardown);
 
@@ -28,7 +27,7 @@ describe("restore_recipe tool", () => {
     vi.mocked(kh.client().saveRecipe).mockResolvedValue({ ...trashed, inTrash: false });
     kh.seed({ recipes: [makeRecipe({ name: "Keeper" })] }); // flips hasSynced
 
-    const text = getText(await kh.callTool("restore_recipe", { uid: trashed.uid }));
+    const text = await kh.callToolText("restore_recipe", { uid: trashed.uid });
 
     expect(kh.client().getRecipe).toHaveBeenCalledWith(trashed.uid);
     expect(text).toContain("Old Soup");
@@ -43,7 +42,7 @@ describe("restore_recipe tool", () => {
     vi.mocked(kh.client().saveRecipe).mockResolvedValue({ ...appTrashed, inTrash: false });
     kh.seed({ recipes: [makeRecipe({ name: "Keeper" })] }); // flips hasSynced; appTrashed NOT in store
 
-    const text = getText(await kh.callTool("restore_recipe", { uid: appTrashed.uid }));
+    const text = await kh.callToolText("restore_recipe", { uid: appTrashed.uid });
 
     expect(text).toContain("Trashed In App");
     expect(kh.client().saveRecipe).toHaveBeenCalledOnce();
@@ -54,7 +53,7 @@ describe("restore_recipe tool", () => {
     vi.mocked(kh.client().getRecipe).mockResolvedValue(live);
     kh.seed({ recipes: [live] }); // store holds it as active — exact match, reconcile is a no-op
 
-    const text = getText(await kh.callTool("restore_recipe", { uid: live.uid }));
+    const text = await kh.callToolText("restore_recipe", { uid: live.uid });
 
     expect(text).toContain("already in your active library");
     expect(kh.client().saveRecipe).not.toHaveBeenCalled();
@@ -71,12 +70,12 @@ describe("restore_recipe tool", () => {
     vi.mocked(kh.client().getRecipe).mockResolvedValue(authoritative);
     kh.seed({ recipes: [staleTrashed] }); // seed the stale copy
 
-    const text = getText(await kh.callTool("restore_recipe", { uid }));
+    const text = await kh.callToolText("restore_recipe", { uid });
 
     expect(text).toContain("already in your active library");
     expect(kh.client().saveRecipe).not.toHaveBeenCalled(); // a reconcile, not a Paprika write
     // Local store healed to authoritative truth.
-    expect((kh.state() as RecipeState).recipe.store.get(uid)?.inTrash).toBe(false);
+    expect(kh.state().recipe.store.get(uid)?.inTrash).toBe(false);
     expect(kh.resourceListChanged()).toHaveBeenCalledOnce();
   });
 
@@ -84,7 +83,7 @@ describe("restore_recipe tool", () => {
     vi.mocked(kh.client().getRecipe).mockRejectedValue(notFound("nonexistent-uid"));
     kh.seed({ recipes: [makeRecipe({ name: "Keeper" })] }); // flips hasSynced
 
-    const text = getText(await kh.callTool("restore_recipe", { uid: "nonexistent-uid" }));
+    const text = await kh.callToolText("restore_recipe", { uid: "nonexistent-uid" });
 
     expect(text).toContain('No recipe found with UID "nonexistent-uid" (it may not exist or was already deleted).');
     expect(kh.client().saveRecipe).not.toHaveBeenCalled();
@@ -98,10 +97,10 @@ describe("restore_recipe tool", () => {
     vi.mocked(kh.client().getRecipe).mockRejectedValue(notFound(uid));
     kh.seed({ recipes: [phantom] }); // seed the phantom
 
-    const text = getText(await kh.callTool("restore_recipe", { uid }));
+    const text = await kh.callToolText("restore_recipe", { uid });
 
     expect(text).toContain("No recipe found");
-    expect((kh.state() as RecipeState).recipe.store.get(uid)).toBeUndefined(); // phantom dropped
+    expect(kh.state().recipe.store.get(uid)).toBeUndefined(); // phantom dropped
     expect(kh.resourceListChanged()).toHaveBeenCalledOnce();
     expect(kh.client().saveRecipe).not.toHaveBeenCalled();
   });
@@ -112,7 +111,7 @@ describe("restore_recipe tool", () => {
     );
     kh.seed({ recipes: [makeRecipe({ name: "Keeper" })] }); // flips hasSynced
 
-    const text = getText(await kh.callTool("restore_recipe", { uid: "some-uid" }));
+    const text = await kh.callToolText("restore_recipe", { uid: "some-uid" });
 
     expect(text.toLowerCase()).toContain("failed to look up");
     expect(text).not.toContain("already in your active library");
@@ -123,7 +122,7 @@ describe("restore_recipe tool", () => {
 
   it("cold-start guard: an unsynced store returns the cold-start message without fetching", async () => {
     // store never seeded — hasSynced false
-    const text = getText(await kh.callTool("restore_recipe", { uid: "any-uid" }));
+    const text = await kh.callToolText("restore_recipe", { uid: "any-uid" });
 
     expect(text.toLowerCase()).toContain("not yet synced");
     expect(kh.client().getRecipe).not.toHaveBeenCalled();

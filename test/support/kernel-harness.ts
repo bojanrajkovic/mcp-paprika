@@ -16,7 +16,7 @@ import { registeredModules } from "../../src/kernel/registry.js";
 import { createIndexEvents } from "../../src/server/index-events.js";
 import { SILENT_LOG } from "../../src/utils/log.js";
 import { getCacheDir } from "../../src/utils/xdg.js";
-import { makeStubNotifier, makeTestServer } from "./tool-test-utils.js";
+import { getText, makeStubNotifier, makeTestServer } from "./tool-test-utils.js";
 import { useXdgIsolation } from "./xdg-isolation.js";
 // Side-effect: every domain/feature module self-registers, so `registeredModules()`
 // is populated and the harness can resolve any module + its deps by id.
@@ -180,26 +180,28 @@ export interface UseKernelHarnessOptions {
  * afterEach(kh.teardown);
  * it("reads a recipe", async () => {
  *   kh.seed({ recipes: [makeRecipe({ name: "Soup" })] });
- *   expect(getText(await kh.callTool("read_recipe", { lookup: { title: "Soup" } }))).toContain("# Soup");
+ *   expect(await kh.callToolText("read_recipe", { lookup: { title: "Soup" } })).toContain("# Soup");
  * });
  * ```
  *
  * Tests run sequentially per file, so the process-wide XDG mutation is safe — do NOT use
  * `it.concurrent` with this harness.
  */
-export interface KernelHarness {
+export interface KernelHarness<State = unknown, Writes = unknown> {
   readonly setup: () => Promise<void>;
   readonly teardown: () => Promise<void>;
   readonly callTool: (name: string, args: Record<string, unknown>) => Promise<CallToolResult>;
+  /** `callTool` then the text of the first content block — the common read-assertion shorthand. */
+  readonly callToolText: (name: string, args: Record<string, unknown>) => Promise<string>;
   readonly callResourceList: (name: string) => Promise<unknown>;
   readonly callResource: (name: string, uid: string, uri?: string) => Promise<unknown>;
   readonly seed: (data: SeedData) => void;
-  /** The root module's `state` — cast at the call site, e.g. `kh.state() as RecipeState`. */
-  readonly state: () => unknown;
-  /** Any built module's `state`, keyed by id (root + transitive deps). */
+  /** The root module's `state`, typed via the `State` generic (e.g. `useKernelHarness<RecipeState>("recipe")`). */
+  readonly state: () => State;
+  /** Any built module's `state`, keyed by id (root + transitive deps); cast at the call site (cross-module). */
   readonly stateOf: (id: string) => unknown;
-  /** The root module's write chokepoints (`ctx.writes`) — cast at the call site, e.g. `kh.writes() as RecipeWrites`. */
-  readonly writes: () => unknown;
+  /** The root module's write chokepoints (`ctx.writes`), typed via the `Writes` generic. */
+  readonly writes: () => Writes;
   readonly infra: () => Infra;
   readonly notifier: () => Notifier;
   /** The resource-list-changed spy on the stub notifier. */
@@ -207,7 +209,10 @@ export interface KernelHarness {
   readonly client: () => PaprikaClient;
 }
 
-export function useKernelHarness(rootId: DomainId, opts: UseKernelHarnessOptions = {}): KernelHarness {
+export function useKernelHarness<State = unknown, Writes = unknown>(
+  rootId: DomainId,
+  opts: UseKernelHarnessOptions = {},
+): KernelHarness<State, Writes> {
   const xdg = useXdgIsolation("mcp-paprika-kernel");
   let state: LiveHarness | null = null;
   const live = (): LiveHarness => {
@@ -259,14 +264,15 @@ export function useKernelHarness(rootId: DomainId, opts: UseKernelHarnessOptions
       await xdg.teardown();
     },
     callTool: (name, args) => live().callTool(name, args),
+    callToolText: async (name, args) => getText(await live().callTool(name, args)),
     callResourceList: (name) => live().callResourceList(name),
     callResource: (name, uid, uri) => live().callResource(name, uid, uri),
     seed: (data) => {
       seedBuilt(live().built, data);
     },
-    state: () => live().rootState,
+    state: () => live().rootState as State,
     stateOf: (id) => live().built.get(id)?.state,
-    writes: () => live().rootWrites,
+    writes: () => live().rootWrites as Writes,
     infra: () => live().infra,
     notifier: () => live().notifier,
     resourceListChanged: () => live().resourceListChanged,

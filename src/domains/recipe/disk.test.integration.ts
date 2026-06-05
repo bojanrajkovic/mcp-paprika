@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import type { CategoryUid, RecipeUid } from "../../ids.js";
 
-import { makeCategory, makeRecipe } from "../../../test/cache/__fixtures__/recipes.js";
+import { makeCategory, makeRecipe } from "../../../test/domains/recipe/__fixtures__/recipes.js";
 import { makeCache, makeRecipeCache, useTempDir } from "../../../test/support/disk-caches.js";
 import { makeKernelInfra } from "../../../test/support/kernel-harness.js";
 import { getText, makeTestServer } from "../../../test/support/tool-test-utils.js";
@@ -46,8 +46,8 @@ afterEach(async () => {
 });
 
 describe("RecipeDiskCache cold-start persistence integration", () => {
-  describe("AC1: Write-Flush-Restart-Hydrate round-trip", () => {
-    it("AC1.1: persists recipes to disk and reloads them from a cold-start cache instance", async () => {
+  describe("Write-Flush-Restart-Hydrate round-trip", () => {
+    it("persists recipes to disk and reloads them from a cold-start cache instance", async () => {
       const cache1 = makeRecipeCache(tmp.dir());
       await cache1.init();
 
@@ -90,7 +90,7 @@ describe("RecipeDiskCache cold-start persistence integration", () => {
       expect(allRecipes).toContainEqual(recipe2);
     });
 
-    it("AC1.2: hydrates a RecipeStore from the cold-start cache using the production pattern", async () => {
+    it("hydrates a RecipeStore from the cold-start cache using the production pattern", async () => {
       const cache1 = makeRecipeCache(tmp.dir());
       await cache1.init();
 
@@ -117,8 +117,8 @@ describe("RecipeDiskCache cold-start persistence integration", () => {
     });
   });
 
-  describe("AC2: Category persistence", () => {
-    it("AC2.1: persists category files to disk and reloads across cache instances", async () => {
+  describe("Category persistence", () => {
+    it("persists category files to disk and reloads across cache instances", async () => {
       const cache1 = makeCache(tmp.dir(), categoryDiskDescriptor);
       await cache1.init();
 
@@ -141,8 +141,8 @@ describe("RecipeDiskCache cold-start persistence integration", () => {
     });
   });
 
-  describe("AC3: Diff detection after cold start", () => {
-    it("AC3.1: reports no changes when data is unchanged after cold start", async () => {
+  describe("Diff detection after cold start", () => {
+    it("reports no changes when data is unchanged after cold start", async () => {
       const cache1 = makeRecipeCache(tmp.dir());
       await cache1.init();
       const recipe1 = makeRecipe({ uid: "recipe-1" as RecipeUid, name: "Recipe 1" });
@@ -158,7 +158,7 @@ describe("RecipeDiskCache cold-start persistence integration", () => {
       expect(diff.removed).toEqual([]);
     });
 
-    it("AC3.2: detects changed recipes after cold start", async () => {
+    it("detects changed recipes after cold start", async () => {
       const cache1 = makeRecipeCache(tmp.dir());
       await cache1.init();
       // Hash gets captured from recipe.hash at put time
@@ -175,7 +175,7 @@ describe("RecipeDiskCache cold-start persistence integration", () => {
       expect(diff.removed).toEqual([]);
     });
 
-    it("AC3.3: detects removed recipes after cold start", async () => {
+    it("detects removed recipes after cold start", async () => {
       const cache1 = makeRecipeCache(tmp.dir());
       await cache1.init();
       const recipe1 = makeRecipe({ uid: "recipe-1" as RecipeUid, name: "Recipe 1" });
@@ -192,8 +192,8 @@ describe("RecipeDiskCache cold-start persistence integration", () => {
     });
   });
 
-  describe("AC4: Tools work against hydrated store", () => {
-    it("AC4.1: search_recipes works after cold-start hydration through the kernel recipe module", async () => {
+  describe("Tools work against hydrated store", () => {
+    it("search_recipes works after cold-start hydration through the kernel recipe module", async () => {
       const cache1 = makeRecipeCache(tmp.dir());
       await cache1.init();
 
@@ -222,7 +222,7 @@ describe("RecipeDiskCache cold-start persistence integration", () => {
       expect(text).not.toContain("Alfredo");
     });
 
-    it("AC4.2: search_recipes finds recipes by ingredient after cold start", async () => {
+    it("search_recipes finds recipes by ingredient after cold start", async () => {
       const cache1 = makeRecipeCache(tmp.dir());
       await cache1.init();
 
@@ -250,8 +250,8 @@ describe("RecipeDiskCache cold-start persistence integration", () => {
     });
   });
 
-  describe("AC5: Corruption recovery", () => {
-    it("AC5.1: recovers gracefully when the recipes index is corrupted", async () => {
+  describe("Corruption recovery", () => {
+    it("recovers gracefully when the recipes index is corrupted", async () => {
       // Initialize once so the recipes/ subdir exists, then corrupt its index.
       const seed = makeRecipeCache(tmp.dir());
       await seed.init();
@@ -267,7 +267,7 @@ describe("RecipeDiskCache cold-start persistence integration", () => {
       expect(await cache.get(recipe.uid)).toEqual(recipe);
     });
 
-    it("AC5.2: handles a missing recipes index gracefully (first run)", async () => {
+    it("handles a missing recipes index gracefully (first run)", async () => {
       const cache = makeRecipeCache(tmp.dir());
       await cache.init();
 
@@ -279,8 +279,8 @@ describe("RecipeDiskCache cold-start persistence integration", () => {
     });
   });
 
-  describe("AC6: Full end-to-end persistence scenario", () => {
-    it("AC6.1: handles a complete write-flush-restart-modify cycle", async () => {
+  describe("Full end-to-end persistence scenario", () => {
+    it("handles a complete write-flush-restart-modify cycle", async () => {
       const cache1 = makeRecipeCache(tmp.dir());
       await cache1.init();
       const recipe1 = makeRecipe({
@@ -309,7 +309,7 @@ describe("RecipeDiskCache cold-start persistence integration", () => {
       expect(final?.ingredients).toBe("updated ingredients");
     });
 
-    it("AC6.2: preserves all recipe data fields after round-trip", async () => {
+    it("preserves all recipe data fields after round-trip", async () => {
       const cache1 = makeRecipeCache(tmp.dir());
       await cache1.init();
       const originalRecipe = makeRecipe({

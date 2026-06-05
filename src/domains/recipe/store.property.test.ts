@@ -3,11 +3,11 @@ import { describe, expect, it } from "vitest";
 
 import type { RecipeUid } from "../../ids.js";
 
-import { makeRecipe } from "../../../test/cache/__fixtures__/recipes.js";
+import { makeRecipe } from "../../../test/domains/recipe/__fixtures__/recipes.js";
 import { RecipeStore } from "./store.js";
 
 describe("RecipeStore property-based tests", () => {
-  describe("recipe-query-store.AC3.5 & AC3.8: Search result ordering invariant and trashed recipes", () => {
+  describe("Search result ordering invariant and trashed recipe exclusion", () => {
     it("Property 1: Search results are always sorted by score descending, then name ascending", () => {
       fc.assert(
         fc.property(fc.string({ minLength: 1, maxLength: 20 }), (query) => {
@@ -55,7 +55,7 @@ describe("RecipeStore property-based tests", () => {
     });
   });
 
-  describe("recipe-query-store.AC4.6: Trashed recipes never appear in filterByIngredients", () => {
+  describe("Trashed recipes never appear in filterByIngredients", () => {
     it("Property 3: filterByIngredients never returns trashed recipes", () => {
       fc.assert(
         fc.property(fc.string({ minLength: 1, maxLength: 20 }), (term) => {
@@ -84,7 +84,7 @@ describe("RecipeStore property-based tests", () => {
     });
   });
 
-  describe("recipe-query-store.AC5.5: filterByTime keeps unparseable recipes", () => {
+  describe("filterByTime keeps unparseable recipes", () => {
     it("Property 4: Recipes with unparseable time strings are kept in results", () => {
       fc.assert(
         fc.property(fc.integer({ min: 1, max: 1000 }), (maxMinutes) => {
@@ -111,7 +111,7 @@ describe("RecipeStore property-based tests", () => {
     });
   });
 
-  describe("recipe-query-store.AC6.6: findByName never returns trashed recipes", () => {
+  describe("findByName never returns trashed recipes", () => {
     it("Property 5: findByName never returns trashed recipes", () => {
       fc.assert(
         fc.property(fc.string({ minLength: 1, maxLength: 20 }), (title) => {

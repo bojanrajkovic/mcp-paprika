@@ -1,7 +1,3 @@
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Infra } from "../../kernel/registry.js";
@@ -9,7 +5,8 @@ import type { MealTypeApi } from "./api.js";
 import type { MealTypeState } from "./module.js";
 import type { MealType } from "./types.js";
 
-import { makeMealType } from "../../../test/cache/__fixtures__/meals.js";
+import { makeMealType } from "../../../test/domains/meal-type/__fixtures__/meal-types.js";
+import { useTempDir } from "../../../test/support/disk-caches.js";
 import { makeKernelInfra } from "../../../test/support/kernel-harness.js";
 import { type MealTypeUid } from "../../ids.js";
 import { registeredModules } from "../../kernel/registry.js";
@@ -29,7 +26,7 @@ const builtins = (): MealType[] => [
 ];
 
 describe("meal-type ensureMealType + pending-write reconcile", () => {
-  let tempDir: string;
+  const tmp = useTempDir("paprika-mealtype-");
   let infra: Infra;
   let state: MealTypeState;
   let api: MealTypeApi;
@@ -38,11 +35,11 @@ describe("meal-type ensureMealType + pending-write reconcile", () => {
   const notifySync = vi.fn();
 
   beforeEach(async () => {
-    tempDir = await mkdtemp(join(tmpdir(), "paprika-mealtype-"));
+    await tmp.setup();
     listMealTypes.mockReset().mockResolvedValue([]);
     saveMealType.mockReset().mockImplementation(async (mt: MealType) => mt);
     notifySync.mockReset().mockResolvedValue(undefined);
-    infra = makeKernelInfra({ cacheDir: tempDir, client: { listMealTypes, saveMealType, notifySync } });
+    infra = makeKernelInfra({ cacheDir: tmp.dir(), client: { listMealTypes, saveMealType, notifySync } });
     const mod = registeredModules().find((m) => m.id === "meal-type");
     if (mod === undefined) throw new Error("meal-type module not registered");
     const built = await mod.build(infra);
@@ -51,7 +48,7 @@ describe("meal-type ensureMealType + pending-write reconcile", () => {
   });
 
   afterEach(async () => {
-    await rm(tempDir, { recursive: true, force: true });
+    await tmp.teardown();
   });
 
   it("creates a custom type on a name miss (order_flag = max+1, originalType null), marks it pending", async () => {

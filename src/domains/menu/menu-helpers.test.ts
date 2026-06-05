@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import type { MealTypeUid, MenuItemUid, MenuUid } from "../../ids.js";
 
-import { makeMealType } from "../../../test/cache/__fixtures__/meals.js";
-import { makeMenu, makeMenuItem } from "../../../test/cache/__fixtures__/menus.js";
+import { makeMealType } from "../../../test/domains/meal-type/__fixtures__/meal-types.js";
+import { makeMenu, makeMenuItem } from "../../../test/domains/menu/__fixtures__/menus.js";
 import { menuToMarkdown } from "./menu-helpers.js";
 
 const breakfast = makeMealType({

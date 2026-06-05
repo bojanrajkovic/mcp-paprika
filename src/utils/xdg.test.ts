@@ -8,36 +8,36 @@ import { describe, expect, it } from "vitest";
 import { getCacheDir, getConfigDir, getDataDir, getLogDir, getTempDir } from "./xdg.js";
 
 describe("XDG path utilities", () => {
-  describe("xdg-paths.AC1: Module exports 5 path functions", () => {
-    it("xdg-paths.AC1.1: getConfigDir() returns an absolute path ending with mcp-paprika", () => {
+  describe("Module exports 5 path functions", () => {
+    it("getConfigDir() returns an absolute path ending with mcp-paprika", () => {
       const configDir = getConfigDir();
 
       expect(path.isAbsolute(configDir)).toBe(true);
       expect(path.basename(configDir)).toBe("mcp-paprika");
     });
 
-    it("xdg-paths.AC1.2: getCacheDir() returns an absolute path ending with mcp-paprika", () => {
+    it("getCacheDir() returns an absolute path ending with mcp-paprika", () => {
       const cacheDir = getCacheDir();
 
       expect(path.isAbsolute(cacheDir)).toBe(true);
       expect(path.basename(cacheDir)).toBe("mcp-paprika");
     });
 
-    it("xdg-paths.AC1.3: getDataDir() returns an absolute path ending with mcp-paprika", () => {
+    it("getDataDir() returns an absolute path ending with mcp-paprika", () => {
       const dataDir = getDataDir();
 
       expect(path.isAbsolute(dataDir)).toBe(true);
       expect(path.basename(dataDir)).toBe("mcp-paprika");
     });
 
-    it("xdg-paths.AC1.4: getLogDir() returns an absolute path ending with mcp-paprika", () => {
+    it("getLogDir() returns an absolute path ending with mcp-paprika", () => {
       const logDir = getLogDir();
 
       expect(path.isAbsolute(logDir)).toBe(true);
       expect(path.basename(logDir)).toBe("mcp-paprika");
     });
 
-    it("xdg-paths.AC1.5: getTempDir() returns an absolute path ending with mcp-paprika", () => {
+    it("getTempDir() returns an absolute path ending with mcp-paprika", () => {
       const tempDir = getTempDir();
 
       expect(path.isAbsolute(tempDir)).toBe(true);
@@ -45,8 +45,8 @@ describe("XDG path utilities", () => {
     });
   });
 
-  describe("xdg-paths.AC2: Module characteristics", () => {
-    it("xdg-paths.AC2.1: All 5 functions are synchronous and perform no filesystem I/O", () => {
+  describe("Module characteristics", () => {
+    it("all 5 functions are synchronous and perform no filesystem I/O", () => {
       const configDir = getConfigDir();
       const cacheDir = getCacheDir();
       const dataDir = getDataDir();
@@ -66,7 +66,7 @@ describe("XDG path utilities", () => {
       expect(tempDir).not.toBeInstanceOf(Promise);
     });
 
-    it("xdg-paths.AC2.2: env-paths is listed as a runtime dependency in package.json", () => {
+    it("env-paths is listed as a runtime dependency in package.json", () => {
       const __filename = fileURLToPath(import.meta.url);
       const __dirname = dirname(__filename);
       // Both src/utils/ and dist/utils/ need to go up two levels to reach project root
@@ -81,8 +81,8 @@ describe("XDG path utilities", () => {
     });
   });
 
-  describe("xdg-paths.AC3: Leaf dependency contract", () => {
-    it("xdg-paths.AC3.1: src/utils/xdg.ts imports only from env-paths", () => {
+  describe("Leaf dependency contract", () => {
+    it("src/utils/xdg.ts imports only from env-paths", () => {
       const __filename = fileURLToPath(import.meta.url);
       const __dirname = dirname(__filename);
       // Handle both src and compiled dist directories

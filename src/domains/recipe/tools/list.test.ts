@@ -1,8 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { makeRecipe } from "../../../../test/cache/__fixtures__/recipes.js";
+import { makeRecipe } from "../../../../test/domains/recipe/__fixtures__/recipes.js";
 import { useKernelHarness } from "../../../../test/support/kernel-harness.js";
-import { getText } from "../../../../test/support/tool-test-utils.js";
 
 describe("list_recipes tool", () => {
   const kh = useKernelHarness("recipe");
@@ -12,7 +11,7 @@ describe("list_recipes tool", () => {
   it("returns recipe names sorted alphabetically", async () => {
     kh.seed({ recipes: [makeRecipe({ name: "Zucchini Soup" }), makeRecipe({ name: "Apple Crumble" })] });
 
-    const text = getText(await kh.callTool("list_recipes", { offset: 0, limit: 25 }));
+    const text = await kh.callToolText("list_recipes", { offset: 0, limit: 25 });
 
     const applePos = text.indexOf("Apple Crumble");
     const zucchiniPos = text.indexOf("Zucchini Soup");
@@ -22,7 +21,7 @@ describe("list_recipes tool", () => {
   it("created date appears in each list entry", async () => {
     kh.seed({ recipes: [makeRecipe({ name: "Pasta", created: "2025-06-01T00:00:00Z" })] });
 
-    const text = getText(await kh.callTool("list_recipes", { offset: 0, limit: 25 }));
+    const text = await kh.callToolText("list_recipes", { offset: 0, limit: 25 });
 
     expect(text).toContain("2025-06-01");
   });
@@ -30,7 +29,7 @@ describe("list_recipes tool", () => {
   it("rating appears in list entry when greater than zero", async () => {
     kh.seed({ recipes: [makeRecipe({ name: "Pasta", rating: 3 })] });
 
-    const text = getText(await kh.callTool("list_recipes", { offset: 0, limit: 25 }));
+    const text = await kh.callToolText("list_recipes", { offset: 0, limit: 25 });
 
     expect(text).toContain("3/5");
   });
@@ -38,7 +37,7 @@ describe("list_recipes tool", () => {
   it("rating omitted from list entry when zero", async () => {
     kh.seed({ recipes: [makeRecipe({ name: "Pasta", rating: 0 })] });
 
-    const text = getText(await kh.callTool("list_recipes", { offset: 0, limit: 25 }));
+    const text = await kh.callToolText("list_recipes", { offset: 0, limit: 25 });
 
     expect(text).not.toContain("/5");
   });
@@ -46,30 +45,30 @@ describe("list_recipes tool", () => {
   it("pinned marker appears when isPinned is true", async () => {
     kh.seed({ recipes: [makeRecipe({ name: "Pasta", isPinned: true })] });
 
-    expect(getText(await kh.callTool("list_recipes", { offset: 0, limit: 25 }))).toContain("pinned");
+    expect(await kh.callToolText("list_recipes", { offset: 0, limit: 25 })).toContain("pinned");
   });
 
   it("pinned marker absent when isPinned is false", async () => {
     kh.seed({ recipes: [makeRecipe({ name: "Pasta", isPinned: false })] });
 
-    expect(getText(await kh.callTool("list_recipes", { offset: 0, limit: 25 }))).not.toContain("pinned");
+    expect(await kh.callToolText("list_recipes", { offset: 0, limit: 25 })).not.toContain("pinned");
   });
 
   it("on-grocery-list marker appears when onGroceryList is true", async () => {
     kh.seed({ recipes: [makeRecipe({ name: "Pasta", onGroceryList: true })] });
 
-    expect(getText(await kh.callTool("list_recipes", { offset: 0, limit: 25 }))).toContain("grocery list");
+    expect(await kh.callToolText("list_recipes", { offset: 0, limit: 25 })).toContain("grocery list");
   });
 
   it("on-grocery-list marker absent when onGroceryList is false", async () => {
     kh.seed({ recipes: [makeRecipe({ name: "Pasta", onGroceryList: false })] });
 
-    expect(getText(await kh.callTool("list_recipes", { offset: 0, limit: 25 }))).not.toContain("grocery list");
+    expect(await kh.callToolText("list_recipes", { offset: 0, limit: 25 })).not.toContain("grocery list");
   });
 
   it("empty store returns cold-start message", async () => {
     // store never seeded — size === 0, hasSynced false
-    const text = getText(await kh.callTool("list_recipes", { offset: 0, limit: 25 }));
+    const text = await kh.callToolText("list_recipes", { offset: 0, limit: 25 });
 
     expect(text.toLowerCase()).toContain("try again");
   });
@@ -79,7 +78,7 @@ describe("list_recipes tool", () => {
       recipes: Array.from({ length: 10 }, (_, i) => makeRecipe({ name: `Recipe ${String(i + 1).padStart(2, "0")}` })),
     });
 
-    const text = getText(await kh.callTool("list_recipes", { offset: 5, limit: 3 }));
+    const text = await kh.callToolText("list_recipes", { offset: 5, limit: 3 });
 
     expect(text).toContain("Showing 3 of 10");
   });

@@ -25,9 +25,10 @@ import {
   PantryItemUidSchema,
 } from "../../../src/ids.js";
 import { PaprikaClient } from "../../../src/paprika/client.js";
-import { makeSnakeCaseMeal, makeSnakeCaseMealType } from "../../cache/__fixtures__/meals.js";
-import { makeSnakeCasePantryItem } from "../../cache/__fixtures__/pantry.js";
-import { makeSnakeCaseRecipe } from "../../cache/__fixtures__/recipes.js";
+import { makeSnakeCaseMealType } from "../../domains/meal-type/__fixtures__/meal-types.js";
+import { makeSnakeCaseMeal } from "../../domains/meal/__fixtures__/meals.js";
+import { makeSnakeCasePantryItem } from "../../domains/pantry/__fixtures__/pantry.js";
+import { makeSnakeCaseRecipe } from "../../domains/recipe/__fixtures__/recipes.js";
 import { useMswServer } from "../../support/msw.js";
 import { fixture as mealtypeFixture } from "./mealtypes.js";
 import { fixture as refFixture } from "./reference.js";

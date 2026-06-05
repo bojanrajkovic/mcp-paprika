@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import type { PantryItemUid } from "../../ids.js";
 
-import { makePantryItem } from "../../../test/cache/__fixtures__/pantry.js";
+import { makePantryItem } from "../../../test/domains/pantry/__fixtures__/pantry.js";
 import { PantryStore } from "./store.js";
 
 describe("PantryStore", () => {
@@ -12,8 +12,8 @@ describe("PantryStore", () => {
     store = new PantryStore();
   });
 
-  describe("pantry-read.AC2.1: load() populates store and sets hasSynced", () => {
-    it("pantry-read.AC2.1: load() populates store and sets hasSynced to true", () => {
+  describe("load() populates store and sets hasSynced", () => {
+    it("sets hasSynced to true after loading items", () => {
       const item1 = makePantryItem();
       const item2 = makePantryItem();
 
@@ -24,8 +24,8 @@ describe("PantryStore", () => {
     });
   });
 
-  describe("pantry-read.AC2.2: load() with empty array sets hasSynced", () => {
-    it("pantry-read.AC2.2: load([]) sets hasSynced to true with empty pantry", () => {
+  describe("load() with empty array sets hasSynced", () => {
+    it("load([]) sets hasSynced to true with empty pantry", () => {
       store.load([]);
 
       expect(store.hasSynced).toBe(true);
@@ -33,8 +33,8 @@ describe("PantryStore", () => {
     });
   });
 
-  describe("pantry-read.AC2.3: get() returns item or undefined", () => {
-    it("pantry-read.AC2.3: get(uid) returns the item for known UID", () => {
+  describe("get() returns item or undefined", () => {
+    it("get(uid) returns the item for known UID", () => {
       const item = makePantryItem();
       store.load([item]);
 
@@ -43,7 +43,7 @@ describe("PantryStore", () => {
       expect(result).toBe(item);
     });
 
-    it("pantry-read.AC2.3: get(uid) returns undefined for unknown UID", () => {
+    it("get(uid) returns undefined for unknown UID", () => {
       store.load([]);
 
       const result = store.get("does-not-exist" as PantryItemUid);
@@ -52,8 +52,8 @@ describe("PantryStore", () => {
     });
   });
 
-  describe("pantry-read.AC2.4: getAll() returns all items", () => {
-    it("pantry-read.AC2.4: getAll() returns all loaded items", () => {
+  describe("getAll() returns all items", () => {
+    it("getAll() returns all loaded items", () => {
       const item1 = makePantryItem();
       const item2 = makePantryItem();
       const item3 = makePantryItem();
@@ -66,8 +66,8 @@ describe("PantryStore", () => {
     });
   });
 
-  describe("pantry-read.AC2.5: set() upserts and delete() removes", () => {
-    it("pantry-read.AC2.5: set() upserts and delete() removes items", () => {
+  describe("set() upserts and delete() removes", () => {
+    it("set() upserts and delete() removes items", () => {
       const item = makePantryItem();
       store.load([item]);
 
@@ -84,8 +84,8 @@ describe("PantryStore", () => {
     });
   });
 
-  describe("pantry-read.AC2.6: findByIngredient exact match priority", () => {
-    it("pantry-read.AC2.6: findByIngredient returns only exact match, not prefix match", () => {
+  describe("findByIngredient exact match priority", () => {
+    it("findByIngredient returns only exact match, not prefix match", () => {
       const exact = makePantryItem({ ingredient: "Apple" });
       const prefix = makePantryItem({ ingredient: "Apple Pie Filling" });
       store.load([exact, prefix]);
@@ -97,8 +97,8 @@ describe("PantryStore", () => {
     });
   });
 
-  describe("pantry-read.AC2.7: findByIngredient prefix match priority", () => {
-    it("pantry-read.AC2.7: findByIngredient returns prefix match, not substring match", () => {
+  describe("findByIngredient prefix match priority", () => {
+    it("findByIngredient returns prefix match, not substring match", () => {
       const prefix = makePantryItem({ ingredient: "Apple" });
       const substring = makePantryItem({ ingredient: "Pineapple" });
       store.load([prefix, substring]);
@@ -110,8 +110,8 @@ describe("PantryStore", () => {
     });
   });
 
-  describe("pantry-read.AC2.8: findByIngredient is case-insensitive", () => {
-    it("pantry-read.AC2.8: findByIngredient is case-insensitive", () => {
+  describe("findByIngredient is case-insensitive", () => {
+    it("findByIngredient matches regardless of case", () => {
       const item = makePantryItem({ ingredient: "Apple" });
       store.load([item]);
 
@@ -121,8 +121,8 @@ describe("PantryStore", () => {
     });
   });
 
-  describe("pantry-read.AC2.9: findByIngredient returns empty array on no match", () => {
-    it("pantry-read.AC2.9: findByIngredient returns empty array when no match", () => {
+  describe("findByIngredient returns empty array on no match", () => {
+    it("findByIngredient returns empty array when no match", () => {
       const item = makePantryItem({ ingredient: "Apple" });
       store.load([item]);
 
@@ -132,8 +132,8 @@ describe("PantryStore", () => {
     });
   });
 
-  describe("pantry-read.AC2.10: hasSynced starts false", () => {
-    it("pantry-read.AC2.10: hasSynced is false before load()", () => {
+  describe("hasSynced starts false", () => {
+    it("hasSynced is false before load()", () => {
       expect(store.hasSynced).toBe(false);
     });
   });

@@ -3,16 +3,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { GroceryItemUid, GroceryListUid } from "../../../ids.js";
 import type { GroceryState } from "../module.js";
 
-import { makeGroceryItem } from "../../../../test/cache/__fixtures__/grocery-items.js";
-import { makeGroceryList } from "../../../../test/cache/__fixtures__/grocery-lists.js";
+import { makeGroceryItem } from "../../../../test/domains/grocery/__fixtures__/grocery-items.js";
+import { makeGroceryList } from "../../../../test/domains/grocery/__fixtures__/grocery-lists.js";
 import { useKernelHarness } from "../../../../test/support/kernel-harness.js";
-import { getText } from "../../../../test/support/tool-test-utils.js";
 import { markGroceryItemPurchasedInputSchema } from "./grocery-item-purchase.js";
 
 const WEEKLY_LIST = makeGroceryList({ uid: "LIST-1" as GroceryListUid, name: "Weekly" });
 
 describe("mark_grocery_item_purchased tool", () => {
-  const kh = useKernelHarness("grocery");
+  const kh = useKernelHarness<GroceryState>("grocery");
   beforeEach(kh.setup);
   afterEach(kh.teardown);
 
@@ -26,7 +25,7 @@ describe("mark_grocery_item_purchased tool", () => {
     vi.mocked(kh.client().saveGroceryItems).mockResolvedValue([{ ...item, purchased: true }]);
     kh.seed({ groceryLists: [WEEKLY_LIST], groceryItems: [item] });
 
-    const text = getText(await kh.callTool("mark_grocery_item_purchased", { uid: "ITEM-1" }));
+    const text = await kh.callToolText("mark_grocery_item_purchased", { uid: "ITEM-1" });
 
     expect(text).toContain("Milk");
     expect(text).toContain("Yes"); // Purchased: Yes
@@ -36,7 +35,7 @@ describe("mark_grocery_item_purchased tool", () => {
   it("unknown uid returns not-found error without calling the client", async () => {
     kh.seed({ groceryLists: [WEEKLY_LIST], groceryItems: [] });
 
-    const text = getText(await kh.callTool("mark_grocery_item_purchased", { uid: "UNKNOWN-UID" }));
+    const text = await kh.callToolText("mark_grocery_item_purchased", { uid: "UNKNOWN-UID" });
 
     expect(text).toContain("No grocery item found with UID");
     expect(kh.client().saveGroceryItems).not.toHaveBeenCalled();
@@ -59,14 +58,14 @@ describe("mark_grocery_item_purchased tool", () => {
 
     await kh.callTool("mark_grocery_item_purchased", { uid: "ITEM-2" });
 
-    const state = kh.state() as GroceryState;
+    const state = kh.state();
     expect(state.items.store.get("ITEM-2" as GroceryItemUid)).toEqual(expect.objectContaining({ purchased: true }));
     expect(kh.resourceListChanged()).toHaveBeenCalled();
   });
 
   it("cold-start guard fires when stores have not synced", async () => {
     // stores never seeded — hasSynced false
-    const text = getText(await kh.callTool("mark_grocery_item_purchased", { uid: "ITEM-1" }));
+    const text = await kh.callToolText("mark_grocery_item_purchased", { uid: "ITEM-1" });
 
     expect(text.toLowerCase()).toContain("try again");
     expect(kh.client().saveGroceryItems).not.toHaveBeenCalled();
@@ -82,7 +81,7 @@ describe("mark_grocery_item_purchased tool", () => {
     vi.mocked(kh.client().saveGroceryItems).mockRejectedValue(new Error("Network error"));
     kh.seed({ groceryLists: [WEEKLY_LIST], groceryItems: [item] });
 
-    const text = getText(await kh.callTool("mark_grocery_item_purchased", { uid: "ITEM-3" }));
+    const text = await kh.callToolText("mark_grocery_item_purchased", { uid: "ITEM-3" });
 
     expect(text).toContain("Failed to mark grocery item purchased");
     expect(text).toContain("Network error");

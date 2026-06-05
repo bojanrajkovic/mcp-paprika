@@ -1,5 +1,4 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 import { fromAny } from "@total-typescript/shoehorn";
@@ -9,14 +8,15 @@ import type { Mocked } from "vitest";
 import type { RecipeUid } from "../ids.js";
 import type { EmbeddingClient } from "./embeddings.js";
 
-import { makeRecipe } from "../../test/cache/__fixtures__/recipes.js";
+import { makeRecipe } from "../../test/domains/recipe/__fixtures__/recipes.js";
+import { useTempDir } from "../../test/support/disk-caches.js";
 import { makePinoCapture } from "../../test/support/tool-test-utils.js";
 import { recipeToEmbeddingText } from "./embeddings.js";
 import { VectorStoreError } from "./vector-store-errors.js";
 import { contentHash, VectorStore } from "./vector-store.js";
 
 describe("VectorStore contentHash", () => {
-  describe("AC5.1: SHA-256 stability", () => {
+  describe("SHA-256 stability", () => {
     it("produces a stable SHA-256 hex digest for the same input text", () => {
       const input = "hello";
       const hash1 = contentHash(input);
@@ -38,7 +38,7 @@ describe("VectorStore contentHash", () => {
     });
   });
 
-  describe("AC5.2: Changing directions does not change hash", () => {
+  describe("Changing directions does not change hash", () => {
     it("recipes with different directions produce the same hash", () => {
       const recipe1 = makeRecipe({ directions: "Step 1: Mix" });
       const recipe2 = makeRecipe({ ...recipe1, directions: "Step 1: Mix\nStep 2: Bake" });
@@ -53,7 +53,7 @@ describe("VectorStore contentHash", () => {
     });
   });
 
-  describe("AC5.3: Changing ingredients changes hash", () => {
+  describe("Changing ingredients changes hash", () => {
     it("recipes with different ingredients produce different hashes", () => {
       const recipe1 = makeRecipe({ ingredients: "flour" });
       const recipe2 = makeRecipe({ ...recipe1, ingredients: "sugar" });
@@ -120,19 +120,19 @@ function makeMockEmbedder(): Mocked<EmbeddingClient> {
 }
 
 describe("VectorStore init", () => {
-  let tempDir: string;
+  const tmp = useTempDir("paprika-vector-store-");
 
   beforeEach(async () => {
-    tempDir = await mkdtemp(join(tmpdir(), "paprika-vector-store-"));
+    await tmp.setup();
     vi.clearAllMocks();
   });
 
   afterEach(async () => {
-    await rm(tempDir, { recursive: true, force: true });
+    await tmp.teardown();
     vi.clearAllMocks();
   });
 
-  describe("AC1.1: First run - creates index and empty hash map", () => {
+  describe("First run - creates index and empty hash map", () => {
     it("creates the vector index when none exists", async () => {
       const { JsonVectorIndex } = await import("./json-vector-index.js");
       const mockIsIndexCreated = vi.spyOn((JsonVectorIndex as any).prototype, "isIndexCreated");
@@ -142,7 +142,7 @@ describe("VectorStore init", () => {
       mockCreateIndex.mockResolvedValue(undefined);
 
       const embedder = makeMockEmbedder();
-      const store = new VectorStore(tempDir, embedder, "test-model", 1);
+      const store = new VectorStore(tmp.dir(), embedder, "test-model", 1);
       await store.init();
 
       expect(mockIsIndexCreated).toHaveBeenCalled();
@@ -151,7 +151,7 @@ describe("VectorStore init", () => {
     });
   });
 
-  describe("AC1.2: Subsequent run - loads existing hash map and opens index", () => {
+  describe("Subsequent run - loads existing hash map and opens index", () => {
     it("loads valid hash-index.json and does not recreate index", async () => {
       const { JsonVectorIndex } = await import("./json-vector-index.js");
 
@@ -159,7 +159,7 @@ describe("VectorStore init", () => {
       const mockCreateIndex = vi.spyOn((JsonVectorIndex as any).prototype, "createIndex");
 
       // Write valid hash-index.json before init
-      const vectorsDir = join(tempDir, "vectors");
+      const vectorsDir = join(tmp.dir(), "vectors");
       await mkdir(vectorsDir, { recursive: true });
       const hashIndexPath = join(vectorsDir, "hash-index.json");
       const validIndex = { "recipe-1": "hash-abc", "recipe-2": "hash-def" };
@@ -169,7 +169,7 @@ describe("VectorStore init", () => {
       mockCreateIndex.mockResolvedValue(undefined);
 
       const embedder = makeMockEmbedder();
-      const store = new VectorStore(tempDir, embedder, "test-model", 1);
+      const store = new VectorStore(tmp.dir(), embedder, "test-model", 1);
       await store.init();
 
       // Verify index was already created so createIndex not called
@@ -180,14 +180,14 @@ describe("VectorStore init", () => {
     });
   });
 
-  describe("AC1.3: Corruption recovery - invalid JSON", () => {
+  describe("Corruption recovery - invalid JSON", () => {
     it("recovers from corrupted hash-index.json (invalid JSON) and emits warn log", async () => {
       const { JsonVectorIndex } = await import("./json-vector-index.js");
 
       const mockIsIndexCreated = vi.spyOn((JsonVectorIndex as any).prototype, "isIndexCreated");
 
       // Write invalid JSON to hash-index.json
-      const vectorsDir = join(tempDir, "vectors");
+      const vectorsDir = join(tmp.dir(), "vectors");
       await mkdir(vectorsDir, { recursive: true });
       const hashIndexPath = join(vectorsDir, "hash-index.json");
       await writeFile(hashIndexPath, "{invalid json");
@@ -196,7 +196,7 @@ describe("VectorStore init", () => {
 
       const embedder = makeMockEmbedder();
       const { log, records } = makePinoCapture();
-      const store = new VectorStore(tempDir, embedder, "test-model", 1, log);
+      const store = new VectorStore(tmp.dir(), embedder, "test-model", 1, log);
       await store.init();
 
       // Verify warn record (pino level 40) was emitted with corruption message
@@ -220,7 +220,7 @@ describe("VectorStore init", () => {
       const mockIsIndexCreated = vi.spyOn((JsonVectorIndex as any).prototype, "isIndexCreated");
 
       // Write valid JSON but invalid schema (not a record, but an array)
-      const vectorsDir = join(tempDir, "vectors");
+      const vectorsDir = join(tmp.dir(), "vectors");
       await mkdir(vectorsDir, { recursive: true });
       const hashIndexPath = join(vectorsDir, "hash-index.json");
       await writeFile(hashIndexPath, JSON.stringify(["not", "a", "record"]));
@@ -229,7 +229,7 @@ describe("VectorStore init", () => {
 
       const embedder = makeMockEmbedder();
       const { log, records } = makePinoCapture();
-      const store = new VectorStore(tempDir, embedder, "test-model", 1, log);
+      const store = new VectorStore(tmp.dir(), embedder, "test-model", 1, log);
       await store.init();
 
       // Verify warn record (pino level 40) was emitted with schema-mismatch message
@@ -242,7 +242,7 @@ describe("VectorStore init", () => {
     });
   });
 
-  describe("AC1.4: Corruption recovery - corrupted vector index", () => {
+  describe("Corruption recovery - corrupted vector index", () => {
     it("recovers from a corrupted vector index by recreating and emits warn log", async () => {
       const { JsonVectorIndex } = await import("./json-vector-index.js");
 
@@ -255,7 +255,7 @@ describe("VectorStore init", () => {
 
       const embedder = makeMockEmbedder();
       const { log, records } = makePinoCapture();
-      const store = new VectorStore(tempDir, embedder, "test-model", 1, log);
+      const store = new VectorStore(tmp.dir(), embedder, "test-model", 1, log);
       await store.init();
 
       // Verify warn record (pino level 40) was emitted with corruption message
@@ -282,14 +282,14 @@ describe("VectorStore init", () => {
       // A stale hash-index.json from before the corruption. Recovery must clear
       // it on disk too, or a restart would reload these hashes against the now-
       // empty index and skip every "unchanged" recipe forever.
-      const vectorsDir = join(tempDir, "vectors");
+      const vectorsDir = join(tmp.dir(), "vectors");
       await mkdir(vectorsDir, { recursive: true });
       const hashIndexPath = join(vectorsDir, "hash-index.json");
       await writeFile(hashIndexPath, JSON.stringify({ "recipe-1": "hash-abc", "recipe-2": "hash-def" }));
 
       const embedder = makeMockEmbedder();
       const { log, records } = makePinoCapture();
-      const store = new VectorStore(tempDir, embedder, "test-model", 1, log);
+      const store = new VectorStore(tmp.dir(), embedder, "test-model", 1, log);
       await store.init();
 
       const warnRecords = records.filter((r) => r["level"] === 40);
@@ -319,7 +319,7 @@ describe("VectorStore init", () => {
       embedder.embedBatch.mockResolvedValue([[1, 0, 0]]);
 
       // First run with model-a: index a recipe (no capture needed for first run)
-      const store1 = new VectorStore(tempDir, embedder, "model-a", 1);
+      const store1 = new VectorStore(tmp.dir(), embedder, "model-a", 1);
       await store1.init();
       const recipe = makeRecipe({ uid: "recipe-1" as RecipeUid });
       await store1.indexRecipes([recipe], () => []);
@@ -329,7 +329,7 @@ describe("VectorStore init", () => {
       vi.clearAllMocks();
       mockIsIndexCreated.mockResolvedValue(true);
       const { log, records } = makePinoCapture();
-      const store2 = new VectorStore(tempDir, embedder, "model-b", 1, log);
+      const store2 = new VectorStore(tmp.dir(), embedder, "model-b", 1, log);
       await store2.init();
 
       expect(store2.size).toBe(0);
@@ -353,7 +353,7 @@ describe("VectorStore init", () => {
       embedder.embedBatch.mockResolvedValue([[1, 0, 0]]);
 
       // First run establishes vector-meta.json with model-a.
-      const store1 = new VectorStore(tempDir, embedder, "model-a", 1);
+      const store1 = new VectorStore(tmp.dir(), embedder, "model-a", 1);
       await store1.init();
       await store1.indexRecipes([makeRecipe({ uid: "recipe-1" as RecipeUid })], () => []);
 
@@ -361,7 +361,7 @@ describe("VectorStore init", () => {
       // to drop the stale-dimension vectors and un-pin the index dimension.
       vi.clearAllMocks();
       mockIsIndexCreated.mockResolvedValue(true);
-      const store2 = new VectorStore(tempDir, embedder, "model-b", 1);
+      const store2 = new VectorStore(tmp.dir(), embedder, "model-b", 1);
       await store2.init();
 
       expect(mockCreateIndex).toHaveBeenCalledWith({ version: 1, deleteIfExists: true });
@@ -384,7 +384,7 @@ describe("VectorStore init", () => {
       embedder.embedBatch.mockResolvedValue([[1, 0, 0]]);
 
       // First run with schema version 1 (no capture for first run)
-      const store1 = new VectorStore(tempDir, embedder, "same-model", 1);
+      const store1 = new VectorStore(tmp.dir(), embedder, "same-model", 1);
       await store1.init();
       const recipe = makeRecipe({ uid: "recipe-1" as RecipeUid });
       await store1.indexRecipes([recipe], () => []);
@@ -394,7 +394,7 @@ describe("VectorStore init", () => {
       vi.clearAllMocks();
       mockIsIndexCreated.mockResolvedValue(true);
       const { log, records } = makePinoCapture();
-      const store2 = new VectorStore(tempDir, embedder, "same-model", 2, log);
+      const store2 = new VectorStore(tmp.dir(), embedder, "same-model", 2, log);
       await store2.init();
 
       expect(store2.size).toBe(0);
@@ -422,7 +422,7 @@ describe("VectorStore init", () => {
       embedder.embedBatch.mockResolvedValue([[1, 0, 0]]);
 
       // First run
-      const store1 = new VectorStore(tempDir, embedder, "same-model", 1);
+      const store1 = new VectorStore(tmp.dir(), embedder, "same-model", 1);
       await store1.init();
       const recipe = makeRecipe({ uid: "recipe-1" as RecipeUid });
       await store1.indexRecipes([recipe], () => []);
@@ -430,14 +430,14 @@ describe("VectorStore init", () => {
       // Second run with same model
       vi.clearAllMocks();
       mockIsIndexCreated.mockResolvedValue(true);
-      const store2 = new VectorStore(tempDir, embedder, "same-model", 1);
+      const store2 = new VectorStore(tmp.dir(), embedder, "same-model", 1);
       await store2.init();
 
       expect(store2.size).toBe(1);
     });
   });
 
-  describe("AC9.2: Logger injection and cold-start silence", () => {
+  describe("Logger injection and cold-start silence", () => {
     it("backward-compat: VectorStore(cacheDir, embedder, modelId, schemaVersion) without log still works", async () => {
       const { JsonVectorIndex } = await import("./json-vector-index.js");
       const mockIsIndexCreated = vi.spyOn((JsonVectorIndex as any).prototype, "isIndexCreated");
@@ -448,7 +448,7 @@ describe("VectorStore init", () => {
 
       const embedder = makeMockEmbedder();
       // No log argument — defaults to silent logger
-      const store = new VectorStore(tempDir, embedder, "test-model", 1);
+      const store = new VectorStore(tmp.dir(), embedder, "test-model", 1);
       await store.init();
 
       expect(store.size).toBe(0);
@@ -464,7 +464,7 @@ describe("VectorStore init", () => {
 
       const embedder = makeMockEmbedder();
       const { log, records } = makePinoCapture();
-      const store = new VectorStore(tempDir, embedder, "test-model", 1, log);
+      const store = new VectorStore(tmp.dir(), embedder, "test-model", 1, log);
       await store.init();
 
       // ENOENT on hash-index.json is silent by design (cold-start)
@@ -475,19 +475,19 @@ describe("VectorStore init", () => {
 });
 
 describe("VectorStore indexRecipes", () => {
-  let tempDir: string;
+  const tmp = useTempDir("paprika-vector-store-");
 
   beforeEach(async () => {
-    tempDir = await mkdtemp(join(tmpdir(), "paprika-vector-store-"));
+    await tmp.setup();
     vi.clearAllMocks();
   });
 
   afterEach(async () => {
-    await rm(tempDir, { recursive: true, force: true });
+    await tmp.teardown();
     vi.clearAllMocks();
   });
 
-  describe("AC2.1: Embeds and upserts recipes with changed content hash", () => {
+  describe("Embeds and upserts recipes with changed content hash", () => {
     it("calls embedBatch and upserts items for new recipes", async () => {
       const { JsonVectorIndex } = await import("./json-vector-index.js");
 
@@ -507,7 +507,7 @@ describe("VectorStore indexRecipes", () => {
         [0, 1, 0],
       ]);
 
-      const store = new VectorStore(tempDir, embedder, "test-model", 1);
+      const store = new VectorStore(tmp.dir(), embedder, "test-model", 1);
       await store.init();
 
       const recipe1 = makeRecipe({ uid: "recipe-1" as RecipeUid });
@@ -548,7 +548,7 @@ describe("VectorStore indexRecipes", () => {
       ]);
 
       const { log, records } = makePinoCapture();
-      const store = new VectorStore(tempDir, embedder, "test-model", 1, log);
+      const store = new VectorStore(tmp.dir(), embedder, "test-model", 1, log);
       await store.init();
 
       const good = makeRecipe({ uid: "recipe-good" as RecipeUid });
@@ -570,7 +570,7 @@ describe("VectorStore indexRecipes", () => {
     });
   });
 
-  describe("AC2.2: Skips recipes with unchanged content hash", () => {
+  describe("Skips recipes with unchanged content hash", () => {
     it("skips recipes with matching content hash", async () => {
       const { JsonVectorIndex } = await import("./json-vector-index.js");
 
@@ -587,7 +587,7 @@ describe("VectorStore indexRecipes", () => {
       const embedder = makeMockEmbedder();
       embedder.embedBatch.mockResolvedValue([[1, 0, 0]]);
 
-      const store = new VectorStore(tempDir, embedder, "test-model", 1);
+      const store = new VectorStore(tmp.dir(), embedder, "test-model", 1);
       await store.init();
 
       const recipe = makeRecipe({ uid: "recipe-1" as RecipeUid });
@@ -609,7 +609,7 @@ describe("VectorStore indexRecipes", () => {
     });
   });
 
-  describe("AC2.3: Returns correct IndexingResult with counts", () => {
+  describe("Returns correct IndexingResult with counts", () => {
     it("returns correct indexed, skipped, total counts", async () => {
       const { JsonVectorIndex } = await import("./json-vector-index.js");
 
@@ -626,7 +626,7 @@ describe("VectorStore indexRecipes", () => {
       const embedder = makeMockEmbedder();
       embedder.embedBatch.mockResolvedValue([[1, 0, 0]]);
 
-      const store = new VectorStore(tempDir, embedder, "test-model", 1);
+      const store = new VectorStore(tmp.dir(), embedder, "test-model", 1);
       await store.init();
 
       const recipe1 = makeRecipe({ uid: "recipe-1" as RecipeUid });
@@ -655,7 +655,7 @@ describe("VectorStore indexRecipes", () => {
     });
   });
 
-  describe("AC2.4: Persists hash map after indexing", () => {
+  describe("Persists hash map after indexing", () => {
     it("writes updated hash-index.json after indexing", async () => {
       const { JsonVectorIndex } = await import("./json-vector-index.js");
 
@@ -672,14 +672,14 @@ describe("VectorStore indexRecipes", () => {
       const embedder = makeMockEmbedder();
       embedder.embedBatch.mockResolvedValue([[1, 0, 0]]);
 
-      const store = new VectorStore(tempDir, embedder, "test-model", 1);
+      const store = new VectorStore(tmp.dir(), embedder, "test-model", 1);
       await store.init();
 
       const recipe = makeRecipe({ uid: "recipe-1" as RecipeUid });
       await store.indexRecipes([recipe], () => []);
 
       // Read the persisted hash-index.json
-      const hashIndexPath = join(tempDir, "vectors", "hash-index.json");
+      const hashIndexPath = join(tmp.dir(), "vectors", "hash-index.json");
       const content = await readFile(hashIndexPath, "utf-8");
       const hashes = JSON.parse(content);
 
@@ -688,7 +688,7 @@ describe("VectorStore indexRecipes", () => {
     });
   });
 
-  describe("AC2.5: Empty recipe list returns zero counts", () => {
+  describe("Empty recipe list returns zero counts", () => {
     it("returns { indexed: 0, skipped: 0, total: 0 } and does not call embedBatch", async () => {
       const { JsonVectorIndex } = await import("./json-vector-index.js");
 
@@ -698,7 +698,7 @@ describe("VectorStore indexRecipes", () => {
 
       const embedder = makeMockEmbedder();
 
-      const store = new VectorStore(tempDir, embedder, "test-model", 1);
+      const store = new VectorStore(tmp.dir(), embedder, "test-model", 1);
       await store.init();
 
       const result = await store.indexRecipes([], () => []);
@@ -708,7 +708,7 @@ describe("VectorStore indexRecipes", () => {
     });
   });
 
-  describe("AC2.6: Hash map persists across VectorStore restarts", () => {
+  describe("Hash map persists across VectorStore restarts", () => {
     it("loads previously saved hashes and skips unchanged recipes on restart", async () => {
       const { JsonVectorIndex } = await import("./json-vector-index.js");
 
@@ -726,7 +726,7 @@ describe("VectorStore indexRecipes", () => {
       embedder.embedBatch.mockResolvedValue([[1, 0, 0]]);
 
       // First store instance
-      const store1 = new VectorStore(tempDir, embedder, "test-model", 1);
+      const store1 = new VectorStore(tmp.dir(), embedder, "test-model", 1);
       await store1.init();
       const recipe = makeRecipe({ uid: "recipe-1" as RecipeUid });
       await store1.indexRecipes([recipe], () => []);
@@ -739,8 +739,8 @@ describe("VectorStore indexRecipes", () => {
       mockUpsertItem.mockResolvedValue(undefined);
       mockEndUpdate.mockResolvedValue(undefined);
 
-      // Create new store instance pointing to same tempDir
-      const store2 = new VectorStore(tempDir, embedder, "test-model", 1);
+      // Create new store instance pointing to the same directory
+      const store2 = new VectorStore(tmp.dir(), embedder, "test-model", 1);
       await store2.init();
 
       // Index the same recipe again
@@ -754,19 +754,19 @@ describe("VectorStore indexRecipes", () => {
 });
 
 describe("VectorStore search", () => {
-  let tempDir: string;
+  const tmp = useTempDir("paprika-vector-store-");
 
   beforeEach(async () => {
-    tempDir = await mkdtemp(join(tmpdir(), "paprika-vector-store-"));
+    await tmp.setup();
     vi.clearAllMocks();
   });
 
   afterEach(async () => {
-    await rm(tempDir, { recursive: true, force: true });
+    await tmp.teardown();
     vi.clearAllMocks();
   });
 
-  describe("AC3.1: Embeds query and returns SemanticResult array", () => {
+  describe("Embeds query and returns SemanticResult array", () => {
     it("returns results with uid, score, and recipeName", async () => {
       const { JsonVectorIndex } = await import("./json-vector-index.js");
 
@@ -788,7 +788,7 @@ describe("VectorStore search", () => {
       const embedder = makeMockEmbedder();
       embedder.embed.mockResolvedValue([1, 0, 0]);
 
-      const store = new VectorStore(tempDir, embedder, "test-model", 1);
+      const store = new VectorStore(tmp.dir(), embedder, "test-model", 1);
       await store.init();
 
       const results = await store.search("pasta recipe", 10);
@@ -802,7 +802,7 @@ describe("VectorStore search", () => {
     });
   });
 
-  describe("AC3.2: Results are ordered by descending similarity score", () => {
+  describe("Results are ordered by descending similarity score", () => {
     it("returns results sorted by score descending", async () => {
       const { JsonVectorIndex } = await import("./json-vector-index.js");
 
@@ -828,7 +828,7 @@ describe("VectorStore search", () => {
       const embedder = makeMockEmbedder();
       embedder.embed.mockResolvedValue([1, 0, 0]);
 
-      const store = new VectorStore(tempDir, embedder, "test-model", 1);
+      const store = new VectorStore(tmp.dir(), embedder, "test-model", 1);
       await store.init();
 
       const results = await store.search("query", 10);
@@ -839,7 +839,7 @@ describe("VectorStore search", () => {
     });
   });
 
-  describe("AC3.3: Empty index returns empty array", () => {
+  describe("Empty index returns empty array", () => {
     it("returns empty array when no results found", async () => {
       const { JsonVectorIndex } = await import("./json-vector-index.js");
 
@@ -852,7 +852,7 @@ describe("VectorStore search", () => {
       const embedder = makeMockEmbedder();
       embedder.embed.mockResolvedValue([1, 0, 0]);
 
-      const store = new VectorStore(tempDir, embedder, "test-model", 1);
+      const store = new VectorStore(tmp.dir(), embedder, "test-model", 1);
       await store.init();
 
       const results = await store.search("query", 10);
@@ -863,19 +863,19 @@ describe("VectorStore search", () => {
 });
 
 describe("VectorStore removeRecipe", () => {
-  let tempDir: string;
+  const tmp = useTempDir("paprika-vector-store-");
 
   beforeEach(async () => {
-    tempDir = await mkdtemp(join(tmpdir(), "paprika-vector-store-"));
+    await tmp.setup();
     vi.clearAllMocks();
   });
 
   afterEach(async () => {
-    await rm(tempDir, { recursive: true, force: true });
+    await tmp.teardown();
     vi.clearAllMocks();
   });
 
-  describe("AC4.1: Deletes item from the vector index and removes from hash map", () => {
+  describe("Deletes item from the vector index and removes from hash map", () => {
     it("removes recipe from both the vector index and hash map", async () => {
       const { JsonVectorIndex } = await import("./json-vector-index.js");
 
@@ -894,7 +894,7 @@ describe("VectorStore removeRecipe", () => {
       const embedder = makeMockEmbedder();
       embedder.embedBatch.mockResolvedValue([[1, 0, 0]]);
 
-      const store = new VectorStore(tempDir, embedder, "test-model", 1);
+      const store = new VectorStore(tmp.dir(), embedder, "test-model", 1);
       await store.init();
 
       const recipe = makeRecipe({ uid: "recipe-1" as RecipeUid });
@@ -916,7 +916,7 @@ describe("VectorStore removeRecipe", () => {
     });
   });
 
-  describe("AC4.2: Persists hash map after removal", () => {
+  describe("Persists hash map after removal", () => {
     it("writes updated hash-index.json after removal", async () => {
       const { JsonVectorIndex } = await import("./json-vector-index.js");
 
@@ -935,7 +935,7 @@ describe("VectorStore removeRecipe", () => {
       const embedder = makeMockEmbedder();
       embedder.embedBatch.mockResolvedValue([[1, 0, 0]]);
 
-      const store = new VectorStore(tempDir, embedder, "test-model", 1);
+      const store = new VectorStore(tmp.dir(), embedder, "test-model", 1);
       await store.init();
 
       const recipe = makeRecipe({ uid: "recipe-1" as RecipeUid });
@@ -944,7 +944,7 @@ describe("VectorStore removeRecipe", () => {
       await store.removeRecipe("recipe-1");
 
       // Read the persisted hash-index.json
-      const hashIndexPath = join(tempDir, "vectors", "hash-index.json");
+      const hashIndexPath = join(tmp.dir(), "vectors", "hash-index.json");
       const content = await readFile(hashIndexPath, "utf-8");
       const hashes = JSON.parse(content);
 
@@ -953,7 +953,7 @@ describe("VectorStore removeRecipe", () => {
     });
   });
 
-  describe("AC4.3: Removing non-existent recipe does not throw", () => {
+  describe("Removing non-existent recipe does not throw", () => {
     it("silently succeeds when removing non-existent uid", async () => {
       const { JsonVectorIndex } = await import("./json-vector-index.js");
 
@@ -965,7 +965,7 @@ describe("VectorStore removeRecipe", () => {
 
       const embedder = makeMockEmbedder();
 
-      const store = new VectorStore(tempDir, embedder, "test-model", 1);
+      const store = new VectorStore(tmp.dir(), embedder, "test-model", 1);
       await store.init();
 
       // Should not throw
@@ -977,15 +977,15 @@ describe("VectorStore removeRecipe", () => {
 });
 
 describe("VectorStore write serialization (#177)", () => {
-  let tempDir: string;
+  const tmp = useTempDir("paprika-vector-store-");
 
   beforeEach(async () => {
-    tempDir = await mkdtemp(join(tmpdir(), "paprika-vector-store-"));
+    await tmp.setup();
     vi.clearAllMocks();
   });
 
   afterEach(async () => {
-    await rm(tempDir, { recursive: true, force: true });
+    await tmp.teardown();
     vi.clearAllMocks();
   });
 
@@ -1017,7 +1017,7 @@ describe("VectorStore write serialization (#177)", () => {
       return texts.map(() => [1, 0, 0]);
     });
 
-    const store = new VectorStore(tempDir, embedder, "test-model", 1);
+    const store = new VectorStore(tmp.dir(), embedder, "test-model", 1);
     await store.init();
 
     const r1 = makeRecipe({ uid: "r1" as RecipeUid });

@@ -5,7 +5,7 @@ import { CircuitOpenError } from "../utils/errors.js";
 import { PaprikaAPIError, PaprikaAuthError, PaprikaError } from "./errors.js";
 
 describe("Error class hierarchy", () => {
-  describe("paprika-types.AC4.1: Inheritance chain", () => {
+  describe("Inheritance chain", () => {
     it("should verify PaprikaError instanceof Error", () => {
       const error = new PaprikaError("test error");
       expect(error instanceof PaprikaError).toBe(true);
@@ -27,7 +27,7 @@ describe("Error class hierarchy", () => {
     });
   });
 
-  describe("paprika-types.AC4.2: PaprikaAPIError status and endpoint fields", () => {
+  describe("PaprikaAPIError status and endpoint fields", () => {
     it("should expose status and endpoint as readonly properties", () => {
       const error = new PaprikaAPIError("Not found", 404, "/api/v2/sync/recipe/abc/");
 
@@ -52,7 +52,7 @@ describe("Error class hierarchy", () => {
     });
   });
 
-  describe("paprika-types.AC4.3: Error message formatting for PaprikaAPIError", () => {
+  describe("Error message formatting for PaprikaAPIError", () => {
     it("should format message as 'message (HTTP status from endpoint)'", () => {
       const error = new PaprikaAPIError("Not found", 404, "/api/v2/sync/recipe/abc/");
 
@@ -68,7 +68,7 @@ describe("Error class hierarchy", () => {
     });
   });
 
-  describe("paprika-types.AC4.4: ErrorOptions cause chaining", () => {
+  describe("ErrorOptions cause chaining", () => {
     it("should accept cause in PaprikaError", () => {
       const originalError = new Error("original cause");
       const error = new PaprikaError("wrapper error", {
@@ -133,7 +133,7 @@ describe("Error class hierarchy", () => {
     });
   });
 
-  describe("paprika-types.AC4.5: Error name property", () => {
+  describe("Error name property", () => {
     it("should set name to 'PaprikaError' for PaprikaError instances", () => {
       const error = new PaprikaError("test");
       expect(error.name).toBe("PaprikaError");
@@ -155,34 +155,30 @@ describe("Error class hierarchy", () => {
     });
   });
 
-  describe("structured-logging.AC5: CircuitOpenError", () => {
+  describe("CircuitOpenError", () => {
     const SERVICE = "paprika";
     const ENDPOINT = "https://www.paprikaapp.com/api/v2/sync/recipes/";
 
-    // AC5.1: error instanceof CircuitOpenError === true
-    it("AC5.1: is an instance of CircuitOpenError and Error", () => {
+    it("is an instance of CircuitOpenError and Error", () => {
       const err = new CircuitOpenError(SERVICE, ENDPOINT);
       expect(err instanceof CircuitOpenError).toBe(true);
       expect(err instanceof Error).toBe(true);
     });
 
-    // AC5.2: no .status property; not instanceof PaprikaAPIError
-    it("AC5.2: does not have a status property and is not instanceof PaprikaAPIError", () => {
+    it("does not have a status property and is not instanceof PaprikaAPIError", () => {
       const err = new CircuitOpenError(SERVICE, ENDPOINT);
       expect("status" in err).toBe(false);
       expect(err instanceof PaprikaAPIError).toBe(false);
     });
 
-    // AC5.3: message contains endpoint URL; does NOT contain "503" or "HTTP 503"
-    it("AC5.3: message contains the endpoint URL and no fabricated HTTP status", () => {
+    it("message contains the endpoint URL and no fabricated HTTP status", () => {
       const err = new CircuitOpenError(SERVICE, ENDPOINT);
       expect(err.message).toContain(ENDPOINT);
       expect(err.message).not.toContain("503");
       expect(err.message).not.toContain("HTTP 503");
     });
 
-    // AC5.4: cause is BrokenCircuitError (real instance from cockatiel)
-    it("AC5.4: cause is instanceof BrokenCircuitError when provided", () => {
+    it("cause is instanceof BrokenCircuitError when provided", () => {
       const brokenCircuit = new BrokenCircuitError();
       const err = new CircuitOpenError(SERVICE, ENDPOINT, { cause: brokenCircuit });
       expect(err.cause instanceof BrokenCircuitError).toBe(true);

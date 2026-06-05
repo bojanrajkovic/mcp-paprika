@@ -38,6 +38,10 @@
     "prepare": "lefthook install",
     "test": "vitest run --passWithNoTests",
     "test:watch": "vitest",
+    "test:unit": "vitest run --project unit",
+    "test:integration": "vitest run --project integration",
+    "test:e2e": "vitest run --project e2e",
+    "test:external": "vitest run --project external",
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.test.json"
   },
   "dependencies": {

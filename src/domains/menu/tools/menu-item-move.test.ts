@@ -4,11 +4,10 @@ import type { MealTypeUid, MenuItemUid, MenuUid, RecipeUid } from "../../../ids.
 import type { MenuItem } from "../menu-item/types.js";
 import type { Menu } from "../types.js";
 
-import { makeMealType } from "../../../../test/cache/__fixtures__/meals.js";
-import { makeMenu, makeMenuItem } from "../../../../test/cache/__fixtures__/menus.js";
-import { makeRecipe } from "../../../../test/cache/__fixtures__/recipes.js";
+import { makeMealType } from "../../../../test/domains/meal-type/__fixtures__/meal-types.js";
+import { makeMenu, makeMenuItem } from "../../../../test/domains/menu/__fixtures__/menus.js";
+import { makeRecipe } from "../../../../test/domains/recipe/__fixtures__/recipes.js";
 import { useKernelHarness } from "../../../../test/support/kernel-harness.js";
-import { getText } from "../../../../test/support/tool-test-utils.js";
 import { moveMenuItemInputSchema } from "./menu-item-move.js";
 
 const TACOS_UID = "recipe-tacos" as RecipeUid;
@@ -21,7 +20,7 @@ describe("move_menu_item tool", () => {
 
   it("returns sync-not-ready message when stores not loaded", async () => {
     // stores never seeded — hasSynced false
-    const text = getText(await kh.callTool("move_menu_item", { uid: "mi-1", day: 2 }));
+    const text = await kh.callToolText("move_menu_item", { uid: "mi-1", day: 2 });
     expect(text.toLowerCase()).toContain("not yet synced");
   });
 
@@ -45,7 +44,7 @@ describe("move_menu_item tool", () => {
     vi.mocked(kh.client().saveMenus).mockImplementation(async (items: ReadonlyArray<Menu>) => [...items]);
     vi.mocked(kh.client().saveMenuItems).mockImplementation(async (items: ReadonlyArray<MenuItem>) => [...items]);
 
-    const text = getText(await kh.callTool("move_menu_item", { uid: "mi-1", day: 5 }));
+    const text = await kh.callToolText("move_menu_item", { uid: "mi-1", day: 5 });
 
     expect(kh.client().saveMenus).toHaveBeenCalledOnce();
     expect((vi.mocked(kh.client().saveMenus).mock.calls[0]![0] as Menu[])[0]!.days).toBe(5);
@@ -136,7 +135,7 @@ describe("move_menu_item tool", () => {
       mealTypes: [makeMealType({ uid: "dinner-uid" as MealTypeUid, name: "Dinner", orderFlag: 2, originalType: 2 })],
     });
 
-    const text = getText(await kh.callTool("move_menu_item", { uid: "mi-1", day: 2 }));
+    const text = await kh.callToolText("move_menu_item", { uid: "mi-1", day: 2 });
 
     expect(text).toContain("already on day 2");
     expect(kh.client().saveMenuItems).not.toHaveBeenCalled();
@@ -150,7 +149,7 @@ describe("move_menu_item tool", () => {
       mealTypes: [makeMealType({ uid: "dinner-uid" as MealTypeUid, name: "Dinner", orderFlag: 2, originalType: 2 })],
     });
 
-    const text = getText(await kh.callTool("move_menu_item", { uid: "ghost", day: 2 }));
+    const text = await kh.callToolText("move_menu_item", { uid: "ghost", day: 2 });
     expect(text).toContain('No menu item found with UID "ghost" (it may not exist or was already deleted).');
     expect(kh.client().saveMenuItems).not.toHaveBeenCalled();
   });

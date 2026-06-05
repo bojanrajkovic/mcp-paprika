@@ -6,7 +6,7 @@ import { ZodError } from "zod";
 
 import type { EmbeddingConfig } from "../utils/config.js";
 
-import { makeRecipe } from "../../test/cache/__fixtures__/recipes.js";
+import { makeRecipe } from "../../test/domains/recipe/__fixtures__/recipes.js";
 import { makePinoCapture, tripBreaker } from "../../test/support/tool-test-utils.js";
 import { CircuitOpenError } from "../utils/errors.js";
 import { toMessage } from "../utils/log.js";
@@ -46,8 +46,8 @@ afterAll(() => {
 });
 
 describe("EmbeddingClient", () => {
-  describe("p3-u03-embeddings.AC1: EmbeddingClient sends correct requests", () => {
-    it("p3-u03-embeddings.AC1.1 - embedBatch sends POST with correct body and headers", async () => {
+  describe("EmbeddingClient sends correct requests", () => {
+    it("embedBatch sends POST with correct body and headers", async () => {
       let capturedBody: unknown = null;
       let capturedHeaders: Record<string, string> = {};
       let capturedMethod: string | null = null;
@@ -76,7 +76,7 @@ describe("EmbeddingClient", () => {
       });
     });
 
-    it("p3-u03-embeddings.AC1.2 - embed returns single number array", async () => {
+    it("embed returns single number array", async () => {
       server.use(
         http.post(`${BASE_URL}/embeddings`, () => {
           return HttpResponse.json(makeEmbeddingResponse([[0.1, 0.2, 0.3]]));
@@ -91,7 +91,7 @@ describe("EmbeddingClient", () => {
       expect(embedding).toEqual([0.1, 0.2, 0.3]);
     });
 
-    it("p3-u03-embeddings.AC1.3 - strips trailing slash from baseUrl", async () => {
+    it("strips trailing slash from baseUrl", async () => {
       let capturedUrl: string | null = null;
 
       server.use(
@@ -113,7 +113,7 @@ describe("EmbeddingClient", () => {
       expect(capturedUrl).not.toContain("//embeddings");
     });
 
-    it("p3-u03-embeddings.AC1.4 - validates response with Zod schema", async () => {
+    it("validates response with Zod schema", async () => {
       server.use(
         http.post(`${BASE_URL}/embeddings`, () => {
           return HttpResponse.json(makeEmbeddingResponse([[0.1, 0.2, 0.3]]));
@@ -128,8 +128,8 @@ describe("EmbeddingClient", () => {
     });
   });
 
-  describe("p3-u03-embeddings.AC2: Resilience handles transient failures", () => {
-    it("p3-u03-embeddings.AC2.1 - 429 response retries and succeeds", async () => {
+  describe("Resilience handles transient failures", () => {
+    it("429 response retries and succeeds", async () => {
       let callCount = 0;
 
       server.use(
@@ -149,7 +149,7 @@ describe("EmbeddingClient", () => {
       expect(callCount).toBe(2);
     });
 
-    it("p3-u03-embeddings.AC2.2 - 500/502/503 responses retry and succeed", async () => {
+    it("500/502/503 responses retry and succeed", async () => {
       for (const status of [500, 502, 503]) {
         let callCount = 0;
 
@@ -173,15 +173,15 @@ describe("EmbeddingClient", () => {
       }
     });
 
-    // AC2.3 (circuit breaker behavior) is fully verified by the
-    // structured-logging.AC4+AC5 suite at the bottom of this file, which uses
+    // Circuit breaker behavior is fully verified by the
+    // structured-logging suite at the bottom of this file, which uses
     // fake timers to drive cockatiel's backoff and asserts the new
     // CircuitOpenError surface, the breaker-counts-calls semantics (5 calls ×
     // 4 attempts = 20 fetches), and the 6th-call short-circuit.
   });
 
-  describe("p3-u03-embeddings.AC3: Error handling for permanent failures", () => {
-    it("p3-u03-embeddings.AC3.1 - 400 throws EmbeddingAPIError without retry", async () => {
+  describe("Error handling for permanent failures", () => {
+    it("400 throws EmbeddingAPIError without retry", async () => {
       let callCount = 0;
 
       server.use(
@@ -207,7 +207,7 @@ describe("EmbeddingClient", () => {
       expect(callCount).toBe(1);
     });
 
-    it("p3-u03-embeddings.AC3.2 - 401 throws EmbeddingAPIError without retry", async () => {
+    it("401 throws EmbeddingAPIError without retry", async () => {
       let callCount = 0;
 
       server.use(
@@ -232,7 +232,7 @@ describe("EmbeddingClient", () => {
       expect(callCount).toBe(1);
     });
 
-    it("p3-u03-embeddings.AC3.3 - malformed response throws ZodError", async () => {
+    it("malformed response throws ZodError", async () => {
       server.use(
         http.post(`${BASE_URL}/embeddings`, () => {
           // Missing 'data' field
@@ -254,8 +254,8 @@ describe("EmbeddingClient", () => {
     });
   });
 
-  describe("p3-u03-embeddings.AC4: Dimensions getter", () => {
-    it("p3-u03-embeddings.AC4.1 - dimensions returns correct vector length after embed", async () => {
+  describe("Dimensions getter", () => {
+    it("dimensions returns correct vector length after embed", async () => {
       server.use(
         http.post(`${BASE_URL}/embeddings`, () => {
           return HttpResponse.json(makeEmbeddingResponse([[0.1, 0.2, 0.3, 0.4]]));
@@ -268,7 +268,7 @@ describe("EmbeddingClient", () => {
       expect(client.dimensions).toBe(4);
     });
 
-    it("p3-u03-embeddings.AC4.2 - dimensions throws EmbeddingError before any embed call", async () => {
+    it("dimensions throws EmbeddingError before any embed call", async () => {
       const client = new EmbeddingClient(makeEmbeddingConfig());
 
       try {
@@ -282,8 +282,8 @@ describe("EmbeddingClient", () => {
   });
 });
 
-describe("p3-u03-embeddings.AC5: recipeToEmbeddingText", () => {
-  it("p3-u03-embeddings.AC5.1 - includes name, description, categories, ingredients, notes", () => {
+describe("recipeToEmbeddingText", () => {
+  it("includes name, description, categories, ingredients, notes", () => {
     const recipe = makeRecipe({
       name: "Pasta Carbonara",
       description: "Classic Italian pasta",
@@ -301,7 +301,7 @@ describe("p3-u03-embeddings.AC5: recipeToEmbeddingText", () => {
     expect(text).toContain("Notes: Use fresh eggs");
   });
 
-  it("p3-u03-embeddings.AC5.2 - excludes directions", () => {
+  it("excludes directions", () => {
     const recipe = makeRecipe({
       name: "Test Recipe",
       directions: "Boil water, cook pasta",
@@ -313,7 +313,7 @@ describe("p3-u03-embeddings.AC5: recipeToEmbeddingText", () => {
     expect(text).not.toContain("Boil water");
   });
 
-  it("p3-u03-embeddings.AC5.3 - omits null/empty fields", () => {
+  it("omits null/empty fields", () => {
     const recipe = makeRecipe({
       name: "Simple Recipe",
       description: null,
@@ -329,7 +329,7 @@ describe("p3-u03-embeddings.AC5: recipeToEmbeddingText", () => {
     expect(text).not.toContain("Notes:");
   });
 
-  it("p3-u03-embeddings.AC5.4 - empty category array produces no Categories line", () => {
+  it("empty category array produces no Categories line", () => {
     const recipe = makeRecipe({
       name: "Test",
       ingredients: "flour",
@@ -341,8 +341,8 @@ describe("p3-u03-embeddings.AC5: recipeToEmbeddingText", () => {
   });
 });
 
-describe("structured-logging.AC9.3: Per-attempt logging in EmbeddingClient.embedBatch", () => {
-  it("AC9.3.1 - retry path: emits debug start×2, warn retry×1, debug ok×1 on 500-then-success", async () => {
+describe("Per-attempt logging in EmbeddingClient.embedBatch", () => {
+  it("retry path: emits debug start×2, warn retry×1, debug ok×1 on 500-then-success", async () => {
     let callCount = 0;
     server.use(
       http.post(`${BASE_URL}/embeddings`, () => {
@@ -367,14 +367,14 @@ describe("structured-logging.AC9.3: Per-attempt logging in EmbeddingClient.embed
     expect(typeof retryRecords[0]!["nextBackoffMs"]).toBe("number");
 
     // Cross-assert: the second start debug record also reports attempt 2 — inline
-    // and onRetry-hook attempt fields must agree (mirrors AC3.3 from Phase 3).
+    // and onRetry-hook attempt fields must agree.
     expect(startRecords[1]!["attempt"]).toBe(2);
 
     const okRecords = records.filter((r) => r["msg"] === "embedding request ok");
     expect(okRecords).toHaveLength(1);
   });
 
-  it("AC9.3.2 - non-retryable path: emits error with status:400 attempt:1, no retry warn", async () => {
+  it("non-retryable path: emits error with status:400 attempt:1, no retry warn", async () => {
     server.use(
       http.post(`${BASE_URL}/embeddings`, () => {
         return HttpResponse.json({}, { status: 400 });
@@ -399,12 +399,12 @@ describe("structured-logging.AC9.3: Per-attempt logging in EmbeddingClient.embed
   });
 });
 
-describe("structured-logging.AC4+AC5: CircuitOpenError surface and breaker-counts-calls semantics", () => {
+describe("CircuitOpenError surface and breaker-counts-calls semantics", () => {
   afterEach(() => {
     vi.useRealTimers();
   });
 
-  it("AC4-mirror: 5 failing embed calls trip the breaker and produce exactly 20 fetches (5 × 4)", async () => {
+  it("5 failing embed calls trip the breaker and produce exactly 20 fetches (5 × 4)", async () => {
     let fetchCount = 0;
     server.use(
       http.post(`${BASE_URL}/embeddings`, () => {
@@ -423,7 +423,7 @@ describe("structured-logging.AC4+AC5: CircuitOpenError surface and breaker-count
     expect(fetchCount).toBe(20);
   }, 60000);
 
-  it("AC4.3-mirror: 6th call with open breaker throws CircuitOpenError without additional fetches", async () => {
+  it("6th call with open breaker throws CircuitOpenError without additional fetches", async () => {
     let fetchCount = 0;
     server.use(
       http.post(`${BASE_URL}/embeddings`, () => {
@@ -455,7 +455,7 @@ describe("structured-logging.AC4+AC5: CircuitOpenError surface and breaker-count
     }
   }, 60000);
 
-  it("AC5-mirror: CircuitOpenError surface has no fabricated HTTP 503", async () => {
+  it("CircuitOpenError surface has no fabricated HTTP 503", async () => {
     server.use(
       http.post(`${BASE_URL}/embeddings`, () => {
         return HttpResponse.json({}, { status: 503 });

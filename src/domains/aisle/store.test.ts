@@ -1,21 +1,21 @@
 import { describe, expect, it } from "vitest";
 
-import { makeAisle } from "../../../test/cache/__fixtures__/aisles.js";
+import { makeAisle } from "../../../test/domains/aisle/__fixtures__/aisles.js";
 import { AisleStore } from "./store.js";
 
-describe("aisle-store: AisleStore", () => {
-  it("aisle-store.AC1.1: hasSynced is false before load()", () => {
+describe("AisleStore", () => {
+  it("hasSynced is false before load()", () => {
     const store = new AisleStore();
     expect(store.hasSynced).toBe(false);
   });
 
-  it("aisle-store.AC1.2: load([]) sets hasSynced = true", () => {
+  it("load([]) sets hasSynced = true", () => {
     const store = new AisleStore();
     store.load([]);
     expect(store.hasSynced).toBe(true);
   });
 
-  it("aisle-store.AC1.3: load(items) populates store and sets hasSynced", () => {
+  it("load(items) populates store and sets hasSynced", () => {
     const store = new AisleStore();
     const a1 = makeAisle({ name: "Produce" });
     const a2 = makeAisle({ name: "Dairy" });
@@ -25,7 +25,7 @@ describe("aisle-store: AisleStore", () => {
     expect(store.getAll()).toHaveLength(2);
   });
 
-  it("aisle-store.AC1.4: load() replaces previous contents", () => {
+  it("load() replaces previous contents", () => {
     const store = new AisleStore();
     const a1 = makeAisle({ name: "Old Aisle" });
     store.load([a1]);
@@ -36,7 +36,7 @@ describe("aisle-store: AisleStore", () => {
   });
 
   describe("resolveByName", () => {
-    it("aisle-store.AC2.1: finds exact match", () => {
+    it("finds exact match", () => {
       const store = new AisleStore();
       const aisle = makeAisle({ name: "Produce" });
       store.load([aisle]);
@@ -45,7 +45,7 @@ describe("aisle-store: AisleStore", () => {
       expect(found?.uid).toBe(aisle.uid);
     });
 
-    it("aisle-store.AC2.2: match is case-insensitive", () => {
+    it("match is case-insensitive", () => {
       const store = new AisleStore();
       const aisle = makeAisle({ name: "Dairy" });
       store.load([aisle]);
@@ -54,13 +54,13 @@ describe("aisle-store: AisleStore", () => {
       expect(store.resolveByName("DaIrY")).toBeDefined();
     });
 
-    it("aisle-store.AC2.3: returns undefined when not found", () => {
+    it("returns undefined when not found", () => {
       const store = new AisleStore();
       store.load([makeAisle({ name: "Produce" })]);
       expect(store.resolveByName("Frozen")).toBeUndefined();
     });
 
-    it("aisle-store.AC2.4: returns undefined on empty store", () => {
+    it("returns undefined on empty store", () => {
       const store = new AisleStore();
       store.load([]);
       expect(store.resolveByName("Anything")).toBeUndefined();
@@ -68,7 +68,7 @@ describe("aisle-store: AisleStore", () => {
   });
 
   describe("pending-writes", () => {
-    it("aisle-store.AC3.1: markPendingUpsert/isPendingUpsert round-trips", () => {
+    it("markPendingUpsert/isPendingUpsert round-trips", () => {
       const store = new AisleStore();
       const aisle = makeAisle();
       store.load([aisle]);
@@ -77,7 +77,7 @@ describe("aisle-store: AisleStore", () => {
       expect(store.isPendingUpsert(aisle.uid)).toBe(true);
     });
 
-    it("aisle-store.AC3.2: clearPending removes the pending flag", () => {
+    it("clearPending removes the pending flag", () => {
       const store = new AisleStore();
       const aisle = makeAisle();
       store.load([aisle]);
@@ -86,7 +86,7 @@ describe("aisle-store: AisleStore", () => {
       expect(store.isPendingUpsert(aisle.uid)).toBe(false);
     });
 
-    it("aisle-store.AC3.3: sweepPending evicts expired entries", () => {
+    it("sweepPending evicts expired entries", () => {
       const store = new AisleStore({ pendingWriteTtlMs: 100 });
       const aisle = makeAisle();
       store.load([aisle]);
@@ -96,7 +96,7 @@ describe("aisle-store: AisleStore", () => {
       expect(store.isPendingUpsert(aisle.uid)).toBe(false);
     });
 
-    it("aisle-store.AC3.4: sweepPending leaves non-expired entries", () => {
+    it("sweepPending leaves non-expired entries", () => {
       const store = new AisleStore({ pendingWriteTtlMs: 60_000 });
       const aisle = makeAisle();
       store.load([aisle]);
@@ -106,7 +106,7 @@ describe("aisle-store: AisleStore", () => {
       expect(store.isPendingUpsert(aisle.uid)).toBe(true);
     });
 
-    it("aisle-store.AC3.5: set() after markPendingUpsert keeps the item", () => {
+    it("set() after markPendingUpsert keeps the item", () => {
       const store = new AisleStore();
       const aisle = makeAisle({ name: "Bakery" });
       store.load([]);
@@ -117,7 +117,7 @@ describe("aisle-store: AisleStore", () => {
     });
   });
 
-  it("aisle-store.AC4.1: pendingWriteCount getter", () => {
+  it("pendingWriteCount getter", () => {
     const store = new AisleStore();
     const a1 = makeAisle();
     const a2 = makeAisle();

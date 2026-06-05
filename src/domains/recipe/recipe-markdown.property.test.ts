@@ -39,7 +39,7 @@ const arbitraryRecipe = fc.record({
 
 const arbitraryCategoryNames = fc.array(fc.string());
 
-describe("p2-u02-shared-helpers.AC3.7: recipeToMarkdown structural invariants", () => {
+describe("recipeToMarkdown structural invariants", () => {
   it("Property 1: output always starts with # {recipe.name}", () => {
     fc.assert(
       fc.property(arbitraryRecipe, arbitraryCategoryNames, (recipe, categoryNames) => {

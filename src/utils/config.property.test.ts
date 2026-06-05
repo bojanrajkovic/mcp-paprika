@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { deepMerge, paprikaConfigSchema } from "./config.js";
 
 describe("Config property-based tests", () => {
-  describe("config-loader.AC8: Boolean field idempotence", () => {
+  describe("Boolean field idempotence", () => {
     it("Property 1: Parsing an already-parsed boolean through booleanField returns the same value", () => {
       fc.assert(
         fc.property(fc.constantFrom(true, false), (bool) => {
@@ -48,7 +48,7 @@ describe("Config property-based tests", () => {
     });
   });
 
-  describe("config-loader.AC9: Merge behavior properties", () => {
+  describe("Merge behavior properties", () => {
     it("Property 3: deepMerge identity - merging base with empty overrides returns deep-equal base", () => {
       fc.assert(
         fc.property(fc.object(), (base) => {

@@ -5,20 +5,16 @@
  * - issueAccessRefreshPair: mint distinct tokens, persist, return plaintexts once
  * - lookupAccessToken: find by hash, return AuthInfo with identity, handle expiry/kind/missing
  * - lookupRefreshToken: find by hash, return OAuthToken, handle expiry/kind/missing
- * - rotateRefresh: exchange old for new pair, invalidate old immediately (AC7.7)
+ * - rotateRefresh: exchange old for new pair, invalidate old immediately
  * - revoke: remove token idempotently
  * - removeAllForClient: cascade delete
  *
- * AC2.10 (phase_05.md:21): resource mismatch → invalid_target
- * AC4.2 (phase_05.md:27): access token persists across restart
- * AC4.3 (phase_05.md:28): refresh token persists + rotation works post-restart
- * AC4.4 (phase_05.md:29): auth stores (request, code) do NOT persist (in-memory only)
- * AC7.7 (phase_05.md:32): old refresh invalidated immediately after successful rotation
+ * resource mismatch → invalid_target
+ * access token persists across restart
+ * refresh token persists + rotation works post-restart
+ * auth stores (request, code) do NOT persist (in-memory only)
+ * old refresh invalidated immediately after successful rotation
  */
-
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -26,6 +22,7 @@ import type { DiskClientRegistrationStore } from "./client-registration.js";
 import type { AuthCache } from "./disk.js";
 
 import { makeVerifiedIdentity } from "../../test/auth/__fixtures__/oauth-state.js";
+import { useTempDir } from "../../test/support/disk-caches.js";
 import { SILENT_LOG } from "../utils/log.js";
 import { AuthCodeStore } from "./auth-code-store.js";
 import { AuthRequestStore } from "./auth-request-store.js";
@@ -52,15 +49,15 @@ function makeWireRegistration(overrides?: Partial<Record<string, unknown>>) {
 }
 
 describe("TokenStore", () => {
-  let tempDir: string;
+  const tmp = useTempDir("paprika-token-store-");
   let cache: AuthCache;
   let clientStore: DiskClientRegistrationStore;
   let store: TokenStore;
   let now: number;
 
   beforeEach(async () => {
-    tempDir = await mkdtemp(join(tmpdir(), "paprika-token-store-"));
-    cache = await buildAuthCaches(tempDir);
+    await tmp.setup();
+    cache = await buildAuthCaches(tmp.dir());
     clientStore = new DiskClientRegistrationStoreImpl(cache, "https://m.example.com", SILENT_LOG);
 
     now = nowSeconds();
@@ -74,7 +71,7 @@ describe("TokenStore", () => {
 
   afterEach(async () => {
     vi.clearAllMocks();
-    await rm(tempDir, { recursive: true, force: true });
+    await tmp.teardown();
   });
 
   describe("issueAccessRefreshPair", () => {
@@ -217,7 +214,7 @@ describe("TokenStore", () => {
   });
 
   describe("rotateRefresh", () => {
-    it("returns new pair; old refresh is invalidated immediately (AC7.7)", async () => {
+    it("returns new pair; old refresh is invalidated immediately", async () => {
       const input = makeTokenStoreInput();
       const { refresh: r1 } = await store.issueAccessRefreshPair(input);
 
@@ -233,7 +230,7 @@ describe("TokenStore", () => {
         () => expect.fail("expected ok"),
       );
 
-      // PLAN says (phase_05.md:32): old refresh now invalid
+      // old refresh now invalid
       const second = await store.rotateRefresh(r1.plaintext, input.clientId);
       const errorCode = second.match(
         () => null,
@@ -242,11 +239,11 @@ describe("TokenStore", () => {
       expect(errorCode).toBe("invalid_grant");
     });
 
-    it("AC2.10: rotateRefresh with mismatched resource → invalid_target", async () => {
+    it("rotateRefresh with mismatched resource → invalid_target", async () => {
       const input = makeTokenStoreInput({ resource: "https://m.example.com" });
       const { refresh } = await store.issueAccessRefreshPair(input);
 
-      // PLAN says (phase_05.md:21): requested resource does not match → invalid_target
+      // requested resource does not match → invalid_target
       const result = await store.rotateRefresh(
         refresh.plaintext,
         input.clientId,
@@ -261,7 +258,7 @@ describe("TokenStore", () => {
       expect(errorCode).toBe("invalid_target");
     });
 
-    it("AC2.10: rotateRefresh with matching resource succeeds", async () => {
+    it("rotateRefresh with matching resource succeeds", async () => {
       const input = makeTokenStoreInput({ resource: "https://m.example.com" });
       const { refresh } = await store.issueAccessRefreshPair(input);
 
@@ -493,32 +490,32 @@ describe("TokenStore", () => {
     });
   });
 
-  describe("AC4.2: access token persists across DiskCache restart", () => {
+  describe("access token persists across DiskCache restart", () => {
     it("access token persists across restart", async () => {
       const input = makeTokenStoreInput();
       const { access } = await store.issueAccessRefreshPair(input);
 
       // Simulate restart with fresh DiskCache and TokenStore on the same directory
-      const cache2 = await buildAuthCaches(tempDir);
+      const cache2 = await buildAuthCaches(tmp.dir());
       const store2 = new TokenStore(cache2);
 
-      // PLAN says (phase_05.md:27): token should persist and lookup should work
+      // token should persist and lookup should work
       const result = await store2.lookupAccessToken(access.plaintext);
       expect(result).not.toBeNull();
       expect(result?.clientId).toBe(input.clientId);
     });
   });
 
-  describe("AC4.3: refresh token persists across restart; rotation works", () => {
+  describe("refresh token persists across restart; rotation works", () => {
     it("refresh token persists across restart; rotation works post-restart", async () => {
       const input = makeTokenStoreInput();
       const { refresh: r1 } = await store.issueAccessRefreshPair(input);
 
       // Simulate restart with fresh DiskCache and TokenStore on the same directory
-      const cache2 = await buildAuthCaches(tempDir);
+      const cache2 = await buildAuthCaches(tmp.dir());
       const store2 = new TokenStore(cache2);
 
-      // PLAN says (phase_05.md:28): refresh token should persist
+      // refresh token should persist
       const found = await store2.lookupRefreshToken(r1.plaintext);
       expect(found).not.toBeNull();
 
@@ -533,7 +530,7 @@ describe("TokenStore", () => {
     });
   });
 
-  describe("AC4.4: auth stores do NOT persist (in-memory only)", () => {
+  describe("auth stores do NOT persist (in-memory only)", () => {
     it("auth-request-store entries do NOT persist (new instance is empty)", () => {
       const store1 = new AuthRequestStore();
       store1.put("state-1", {
@@ -549,7 +546,7 @@ describe("TokenStore", () => {
       });
 
       const store2 = new AuthRequestStore();
-      // PLAN says (phase_05.md:29): entries should NOT persist
+      // entries should NOT persist
       expect(store2.consume("state-1")).toBeNull();
     });
 
@@ -567,7 +564,7 @@ describe("TokenStore", () => {
       });
 
       const store2 = new AuthCodeStore();
-      // PLAN says (phase_05.md:29): entries should NOT persist
+      // entries should NOT persist
       expect(store2.consume("code-1")).toBeNull();
     });
   });

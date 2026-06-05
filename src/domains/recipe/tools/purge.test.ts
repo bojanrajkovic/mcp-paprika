@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { RecipeUid } from "../../../ids.js";
 import type { RecipeState } from "../module.js";
 
-import { makeRecipe } from "../../../../test/cache/__fixtures__/recipes.js";
+import { makeRecipe } from "../../../../test/domains/recipe/__fixtures__/recipes.js";
 import { useKernelHarness } from "../../../../test/support/kernel-harness.js";
 import { getText } from "../../../../test/support/tool-test-utils.js";
 import { PaprikaAPIError } from "../../../paprika/errors.js";
@@ -15,7 +15,7 @@ import { PaprikaAPIError } from "../../../paprika/errors.js";
 const notFound = (uid: string): PaprikaAPIError => new PaprikaAPIError("Not found", 404, `/api/v2/sync/recipe/${uid}/`);
 
 describe("purge_recipe tool", () => {
-  const kh = useKernelHarness("recipe");
+  const kh = useKernelHarness<RecipeState>("recipe");
   beforeEach(kh.setup);
   afterEach(kh.teardown);
 
@@ -56,7 +56,7 @@ describe("purge_recipe tool", () => {
       await kh.callTool("purge_recipe", { uid: trashed.uid });
 
       // Real store assertion — recipe hard-deleted from the kernel store.
-      expect((kh.state() as RecipeState).recipe.store.get(trashed.uid)).toBeUndefined();
+      expect(kh.state().recipe.store.get(trashed.uid)).toBeUndefined();
       expect(kh.resourceListChanged()).toHaveBeenCalled();
     });
 
@@ -170,12 +170,12 @@ describe("purge_recipe tool", () => {
       vi.mocked(kh.client().getRecipe).mockResolvedValue(authoritative);
       kh.seed({ recipes: [staleTrashed] }); // seed the stale trashed copy
 
-      const text = getText(await kh.callTool("purge_recipe", { uid }));
+      const text = await kh.callToolText("purge_recipe", { uid });
 
       expect(text.toLowerCase()).toContain("not in the trash");
       expect(kh.client().saveRecipe).not.toHaveBeenCalled(); // a reconcile, not a Paprika write
       // Local store healed to authoritative truth.
-      expect((kh.state() as RecipeState).recipe.store.get(uid)?.inTrash).toBe(false);
+      expect(kh.state().recipe.store.get(uid)?.inTrash).toBe(false);
       expect(kh.resourceListChanged()).toHaveBeenCalled();
     });
 
@@ -188,10 +188,10 @@ describe("purge_recipe tool", () => {
       vi.mocked(kh.client().getRecipe).mockRejectedValue(notFound(uid));
       kh.seed({ recipes: [phantom] }); // seed the phantom
 
-      const text = getText(await kh.callTool("purge_recipe", { uid }));
+      const text = await kh.callToolText("purge_recipe", { uid });
 
       expect(text.toLowerCase()).toContain("no recipe found");
-      expect((kh.state() as RecipeState).recipe.store.get(uid)).toBeUndefined(); // phantom dropped locally
+      expect(kh.state().recipe.store.get(uid)).toBeUndefined(); // phantom dropped locally
       expect(kh.resourceListChanged()).toHaveBeenCalled();
       expect(kh.client().saveRecipe).not.toHaveBeenCalled();
     });

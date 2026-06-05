@@ -3,9 +3,9 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import type { MealTypeUid, MealUid } from "../../../ids.js";
 
-import { makeMeal, makeMealType } from "../../../../test/cache/__fixtures__/meals.js";
+import { makeMealType } from "../../../../test/domains/meal-type/__fixtures__/meal-types.js";
+import { makeMeal } from "../../../../test/domains/meal/__fixtures__/meals.js";
 import { useKernelHarness } from "../../../../test/support/kernel-harness.js";
-import { getText } from "../../../../test/support/tool-test-utils.js";
 
 const BREAKFAST_UID = "breakfast-uid" as MealTypeUid;
 const DINNER_UID = "dinner-uid" as MealTypeUid;
@@ -35,7 +35,7 @@ describe("read_meal_plan tool", () => {
       ],
     });
 
-    const text = getText(await kh.callTool("read_meal_plan", {}));
+    const text = await kh.callToolText("read_meal_plan", {});
 
     expect(text).toContain("TodayMeal");
     expect(text).toContain("DayPlus1");
@@ -54,7 +54,7 @@ describe("read_meal_plan tool", () => {
       ],
     });
 
-    const text = getText(await kh.callTool("read_meal_plan", {}));
+    const text = await kh.callToolText("read_meal_plan", {});
 
     expect(text).toContain("SoonMeal");
     expect(text).not.toContain("PastMeal");
@@ -67,8 +67,8 @@ describe("read_meal_plan tool", () => {
       meals: [makeMeal({ uid: "far" as MealUid, name: "DayPlus10", date: wireDay(10), typeUid: DINNER_UID, type: 2 })],
     });
 
-    expect(getText(await kh.callTool("read_meal_plan", { days: 14 }))).toContain("DayPlus10");
-    expect(getText(await kh.callTool("read_meal_plan", { days: 7 }))).not.toContain("DayPlus10");
+    expect(await kh.callToolText("read_meal_plan", { days: 14 })).toContain("DayPlus10");
+    expect(await kh.callToolText("read_meal_plan", { days: 7 })).not.toContain("DayPlus10");
   });
 
   it("reports an empty plan", async () => {
@@ -76,6 +76,6 @@ describe("read_meal_plan tool", () => {
       mealTypes: [makeMealType({ uid: DINNER_UID, name: "Dinner", originalType: 2, orderFlag: 2 })],
       meals: [],
     });
-    expect(getText(await kh.callTool("read_meal_plan", {}))).toContain("No meals planned");
+    expect(await kh.callToolText("read_meal_plan", {})).toContain("No meals planned");
   });
 });

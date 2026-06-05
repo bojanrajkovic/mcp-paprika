@@ -2,12 +2,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { RecipeState } from "../module.js";
 
-import { makeCategory, makeRecipe } from "../../../../test/cache/__fixtures__/recipes.js";
+import { makeCategory, makeRecipe } from "../../../../test/domains/recipe/__fixtures__/recipes.js";
 import { useKernelHarness } from "../../../../test/support/kernel-harness.js";
-import { getText } from "../../../../test/support/tool-test-utils.js";
 
 describe("create_recipe tool", () => {
-  const kh = useKernelHarness("recipe");
+  const kh = useKernelHarness<RecipeState>("recipe");
   beforeEach(kh.setup);
   afterEach(kh.teardown);
 
@@ -16,13 +15,11 @@ describe("create_recipe tool", () => {
     vi.mocked(kh.client().saveRecipe).mockResolvedValue(savedRecipe);
     kh.seed({ recipes: [makeRecipe()] });
 
-    const text = getText(
-      await kh.callTool("create_recipe", {
-        name: "Soup",
-        ingredients: "water, salt",
-        directions: "boil water, add salt",
-      }),
-    );
+    const text = await kh.callToolText("create_recipe", {
+      name: "Soup",
+      ingredients: "water, salt",
+      directions: "boil water, add salt",
+    });
 
     expect(text).toContain("# Soup");
     expect(text).toContain("## Ingredients");
@@ -47,16 +44,14 @@ describe("create_recipe tool", () => {
     );
     kh.seed({ recipes: [makeRecipe()] });
 
-    const text = getText(
-      await kh.callTool("create_recipe", {
-        name: "Pasta",
-        ingredients: "pasta, sauce",
-        directions: "boil and combine",
-        description: "Tasty pasta",
-        servings: "4",
-        prepTime: "10 min",
-      }),
-    );
+    const text = await kh.callToolText("create_recipe", {
+      name: "Pasta",
+      ingredients: "pasta, sauce",
+      directions: "boil and combine",
+      description: "Tasty pasta",
+      servings: "4",
+      prepTime: "10 min",
+    });
 
     expect(text).toContain("Tasty pasta");
     expect(text).toContain("**Servings:** 4");
@@ -128,7 +123,7 @@ describe("create_recipe tool", () => {
     await kh.callTool("create_recipe", { name: "Saved Recipe", ingredients: "ingredients", directions: "directions" });
 
     // The recipe is committed to the (real) store, and the Content resource-list fires.
-    expect((kh.state() as RecipeState).recipe.store.get(savedRecipe.uid)).toEqual(savedRecipe);
+    expect(kh.state().recipe.store.get(savedRecipe.uid)).toEqual(savedRecipe);
     expect(kh.resourceListChanged()).toHaveBeenCalled();
   });
 
@@ -137,14 +132,12 @@ describe("create_recipe tool", () => {
     vi.mocked(kh.client().saveRecipe).mockResolvedValue(makeRecipe({ categories: [category.uid] }));
     kh.seed({ recipes: [makeRecipe()], categories: [category] });
 
-    const text = getText(
-      await kh.callTool("create_recipe", {
-        name: "Recipe",
-        ingredients: "ingredients",
-        directions: "directions",
-        categories: ["Desserts", "UnknownCat"],
-      }),
-    );
+    const text = await kh.callToolText("create_recipe", {
+      name: "Recipe",
+      ingredients: "ingredients",
+      directions: "directions",
+      categories: ["Desserts", "UnknownCat"],
+    });
 
     expect(text).toContain('Warning: category "UnknownCat" not found');
     const callArgs = vi.mocked(kh.client().saveRecipe).mock.calls[0]?.[0];
@@ -155,23 +148,27 @@ describe("create_recipe tool", () => {
   it("returns an error and leaves the store untouched when saveRecipe throws", async () => {
     vi.mocked(kh.client().saveRecipe).mockRejectedValue(new Error("Network error"));
     kh.seed({ recipes: [makeRecipe()] });
-    const before = (kh.state() as RecipeState).recipe.store.size;
+    const before = kh.state().recipe.store.size;
 
-    const text = getText(
-      await kh.callTool("create_recipe", { name: "Recipe", ingredients: "ingredients", directions: "directions" }),
-    );
+    const text = await kh.callToolText("create_recipe", {
+      name: "Recipe",
+      ingredients: "ingredients",
+      directions: "directions",
+    });
 
     expect(text).toContain("Failed to create");
     expect(text).toContain("Network error");
     // No commit happened — store size unchanged.
-    expect((kh.state() as RecipeState).recipe.store.size).toBe(before);
+    expect(kh.state().recipe.store.size).toBe(before);
   });
 
   it("fires the cold-start guard before any API call", async () => {
     // store never seeded — size === 0
-    const text = getText(
-      await kh.callTool("create_recipe", { name: "Recipe", ingredients: "ingredients", directions: "directions" }),
-    );
+    const text = await kh.callToolText("create_recipe", {
+      name: "Recipe",
+      ingredients: "ingredients",
+      directions: "directions",
+    });
 
     expect(text.toLowerCase()).toContain("try again");
     expect(kh.client().saveRecipe).not.toHaveBeenCalled();

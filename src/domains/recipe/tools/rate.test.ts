@@ -2,13 +2,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { RecipeState } from "../module.js";
 
-import { makeRecipe } from "../../../../test/cache/__fixtures__/recipes.js";
+import { makeRecipe } from "../../../../test/domains/recipe/__fixtures__/recipes.js";
 import { useKernelHarness } from "../../../../test/support/kernel-harness.js";
-import { getText } from "../../../../test/support/tool-test-utils.js";
 import { rateRecipeInputSchema } from "./rate.js";
 
 describe("rate_recipe tool", () => {
-  const kh = useKernelHarness("recipe");
+  const kh = useKernelHarness<RecipeState>("recipe");
   beforeEach(kh.setup);
   afterEach(kh.teardown);
 
@@ -18,7 +17,7 @@ describe("rate_recipe tool", () => {
     vi.mocked(kh.client().saveRecipe).mockResolvedValue(updated);
     kh.seed({ recipes: [recipe] });
 
-    const text = getText(await kh.callTool("rate_recipe", { uid: recipe.uid, rating: 4 }));
+    const text = await kh.callToolText("rate_recipe", { uid: recipe.uid, rating: 4 });
 
     expect(text).toContain("**Rating:** 4/5");
     expect(kh.client().saveRecipe).toHaveBeenCalledWith(expect.objectContaining({ rating: 4 }));
@@ -28,7 +27,7 @@ describe("rate_recipe tool", () => {
     const recipe = makeRecipe();
     kh.seed({ recipes: [recipe] });
 
-    const text = getText(await kh.callTool("rate_recipe", { uid: "nonexistent-uid", rating: 3 }));
+    const text = await kh.callToolText("rate_recipe", { uid: "nonexistent-uid", rating: 3 });
 
     expect(text).toContain('No recipe found with UID "nonexistent-uid" (it may not exist or was already deleted).');
     expect(kh.client().saveRecipe).not.toHaveBeenCalled();
@@ -42,7 +41,7 @@ describe("rate_recipe tool", () => {
 
     await kh.callTool("rate_recipe", { uid: recipe.uid, rating: 5 });
 
-    expect((kh.state() as RecipeState).recipe.store.get(recipe.uid)?.rating).toBe(5);
+    expect(kh.state().recipe.store.get(recipe.uid)?.rating).toBe(5);
     expect(kh.resourceListChanged()).toHaveBeenCalled();
   });
 
@@ -61,18 +60,18 @@ describe("rate_recipe tool", () => {
     const recipe = makeRecipe({ rating: 0 });
     vi.mocked(kh.client().saveRecipe).mockRejectedValue(new Error("Network error"));
     kh.seed({ recipes: [recipe] });
-    const before = (kh.state() as RecipeState).recipe.store.get(recipe.uid)?.rating;
+    const before = kh.state().recipe.store.get(recipe.uid)?.rating;
 
-    const text = getText(await kh.callTool("rate_recipe", { uid: recipe.uid, rating: 3 }));
+    const text = await kh.callToolText("rate_recipe", { uid: recipe.uid, rating: 3 });
 
     expect(text).toContain("Failed to rate recipe");
     expect(text).toContain("Network error");
-    expect((kh.state() as RecipeState).recipe.store.get(recipe.uid)?.rating).toBe(before);
+    expect(kh.state().recipe.store.get(recipe.uid)?.rating).toBe(before);
   });
 
   it("fires the cold-start guard before any API call (empty store)", async () => {
     // store never seeded — size === 0, hasSynced false
-    const text = getText(await kh.callTool("rate_recipe", { uid: "any-uid", rating: 3 }));
+    const text = await kh.callToolText("rate_recipe", { uid: "any-uid", rating: 3 });
 
     expect(text.toLowerCase()).toContain("try again");
     expect(kh.client().saveRecipe).not.toHaveBeenCalled();

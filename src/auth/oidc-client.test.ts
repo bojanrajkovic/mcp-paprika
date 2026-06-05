@@ -47,8 +47,8 @@ describe("loadDiscovery", () => {
     expect(doc.id_token_signing_alg_values_supported).toContain("ES256");
   });
 
-  describe("AC7.5: All endpoint URLs must be https://", () => {
-    it("AC7.5: rejects discovery with http:// authorization_endpoint", async () => {
+  describe("All endpoint URLs must be https://", () => {
+    it("rejects discovery with http:// authorization_endpoint", async () => {
       server.use(
         http.get("https://idp.example.com/.well-known/openid-configuration", () =>
           HttpResponse.json({
@@ -61,13 +61,13 @@ describe("loadDiscovery", () => {
         ),
       );
 
-      // PLAN says (phase_04.md:26): AC7.5 requires all endpoint URLs to be https://
+      // all endpoint URLs must be https://
       await expect(
         loadDiscovery("https://idp.example.com/.well-known/openid-configuration", ["RS256"]),
       ).rejects.toThrow(OAuthMetadataValidationError);
     });
 
-    it("AC7.5: rejects discovery with http:// token_endpoint", async () => {
+    it("rejects discovery with http:// token_endpoint", async () => {
       server.use(
         http.get("https://idp.example.com/.well-known/openid-configuration", () =>
           HttpResponse.json({
@@ -80,13 +80,13 @@ describe("loadDiscovery", () => {
         ),
       );
 
-      // PLAN says (phase_04.md:26): AC7.5 requires all endpoint URLs to be https://
+      // all endpoint URLs must be https://
       await expect(
         loadDiscovery("https://idp.example.com/.well-known/openid-configuration", ["RS256"]),
       ).rejects.toThrow(OAuthMetadataValidationError);
     });
 
-    it("AC7.5: rejects discovery with http:// jwks_uri", async () => {
+    it("rejects discovery with http:// jwks_uri", async () => {
       server.use(
         http.get("https://idp.example.com/.well-known/openid-configuration", () =>
           HttpResponse.json({
@@ -99,13 +99,13 @@ describe("loadDiscovery", () => {
         ),
       );
 
-      // PLAN says (phase_04.md:26): AC7.5 requires all endpoint URLs to be https://
+      // all endpoint URLs must be https://
       await expect(
         loadDiscovery("https://idp.example.com/.well-known/openid-configuration", ["RS256"]),
       ).rejects.toThrow(OAuthMetadataValidationError);
     });
 
-    it("AC7.5: rejects discovery with http:// userinfo_endpoint (when present)", async () => {
+    it("rejects discovery with http:// userinfo_endpoint (when present)", async () => {
       server.use(
         http.get("https://idp.example.com/.well-known/openid-configuration", () =>
           HttpResponse.json({
@@ -119,13 +119,13 @@ describe("loadDiscovery", () => {
         ),
       );
 
-      // PLAN says (phase_04.md:26): AC7.5 requires all endpoint URLs to be https://
+      // all endpoint URLs must be https://
       await expect(
         loadDiscovery("https://idp.example.com/.well-known/openid-configuration", ["RS256"]),
       ).rejects.toThrow(OAuthMetadataValidationError);
     });
 
-    it("AC7.5: rejects discovery with http:// issuer", async () => {
+    it("rejects discovery with http:// issuer", async () => {
       server.use(
         http.get("https://idp.example.com/.well-known/openid-configuration", () =>
           HttpResponse.json({
@@ -138,14 +138,14 @@ describe("loadDiscovery", () => {
         ),
       );
 
-      // PLAN says (phase_04.md:26): AC7.5 requires all endpoint URLs to be https://
+      // all endpoint URLs must be https://
       await expect(
         loadDiscovery("https://idp.example.com/.well-known/openid-configuration", ["RS256"]),
       ).rejects.toThrow(OAuthMetadataValidationError);
     });
 
-    it("AC7.5: rejects discoveryUrl itself when http://", async () => {
-      // PLAN says (phase_04.md:26): AC7.5 requires discoveryUrl itself to be https://
+    it("rejects discoveryUrl itself when http://", async () => {
+      // discoveryUrl itself must be https://
       await expect(loadDiscovery("http://idp.example.com/.well-known/openid-configuration", ["RS256"])).rejects.toThrow(
         OAuthMetadataValidationError,
       );
@@ -284,7 +284,7 @@ describe("loadDiscovery", () => {
       expect(errorRecord?.["err"]).toBeDefined();
     });
 
-    it("AC3.7: no token-like values appear in any oidc-client log record", async () => {
+    it("no token-like values appear in any oidc-client log record", async () => {
       server.use(
         http.get(discoveryUrl, () =>
           HttpResponse.json({
@@ -346,9 +346,8 @@ describe("verifyIdToken", () => {
     return createJwksFor(discovery);
   }
 
-  // AC7.1 - RS256 signature verification
-  it("AC7.1: RS256-signed id_token verifies and returns payload", async () => {
-    // PLAN says (phase_04.md:22): upstream id_token signed with RS256 verifies (default allowlist)
+  it("RS256-signed id_token verifies and returns payload", async () => {
+    // upstream id_token signed with RS256 verifies (default allowlist)
     const nonce = "n-1";
     const now = nowSeconds();
 
@@ -377,9 +376,8 @@ describe("verifyIdToken", () => {
     expect(payload.email_verified).toBe(true);
   });
 
-  // AC7.2 - ES256 signature verification
-  it("AC7.2: ES256-signed id_token verifies", async () => {
-    // PLAN says (phase_04.md:23): upstream id_token signed with ES256 verifies (default allowlist)
+  it("ES256-signed id_token verifies", async () => {
+    // upstream id_token signed with ES256 verifies (default allowlist)
     const nonce = "n-2";
     const now = nowSeconds();
 
@@ -407,9 +405,8 @@ describe("verifyIdToken", () => {
     expect(payload.email).toBe("user2@x.com");
   });
 
-  // AC7.3 - alg=none rejection
-  it("AC7.3: id_token with alg=none is rejected", async () => {
-    // PLAN says (phase_04.md:24): id_token with alg='none' rejected by verifyIdToken
+  it("id_token with alg=none is rejected", async () => {
+    // id_token with alg='none' rejected by verifyIdToken
     const nonce = "n-3";
     const now = nowSeconds();
 
@@ -447,9 +444,8 @@ describe("verifyIdToken", () => {
     ).rejects.toThrow(OAuthMetadataValidationError);
   });
 
-  // AC7.4 - HS256 rejection
-  it("AC7.4: id_token signed with HS256 is rejected", async () => {
-    // PLAN says (phase_04.md:25): id_token signed with HS256 rejected by verifyIdToken.
+  it("id_token signed with HS256 is rejected", async () => {
+    // id_token signed with HS256 rejected by verifyIdToken.
     // Tests defense against the JWS algorithm-confusion attack — jose's algorithms
     // allowlist must reject HS256 tokens even if (especially if) the JWKS happens to
     // contain matching key material.
@@ -558,9 +554,8 @@ describe("verifyIdToken", () => {
     ).rejects.toThrow(OAuthMetadataValidationError);
   });
 
-  // AC7.8 - nonce mismatch
-  it("AC7.8: id_token with mismatched nonce is rejected after signature verification", async () => {
-    // PLAN says (phase_04.md:27): mismatched nonce AND missing nonce are rejected
+  it("id_token with mismatched nonce is rejected after signature verification", async () => {
+    // mismatched nonce AND missing nonce are rejected
     const expectedNonce = "n-expected";
     const wrongNonce = "n-wrong";
     const now = nowSeconds();
@@ -586,9 +581,8 @@ describe("verifyIdToken", () => {
     ).rejects.toThrow(OAuthMetadataValidationError);
   });
 
-  // AC7.8 - nonce required
-  it("AC7.8: id_token with no nonce claim is rejected (nonce required)", async () => {
-    // PLAN says (phase_04.md:27): mismatched nonce AND missing nonce are rejected
+  it("id_token with no nonce claim is rejected (nonce required)", async () => {
+    // mismatched nonce AND missing nonce are rejected
     const nonce = "n-required";
     const now = nowSeconds();
 
@@ -614,7 +608,7 @@ describe("verifyIdToken", () => {
   });
 
   it("accepts array-valued aud claim (Microsoft Entra compatibility)", async () => {
-    // PLAN deferred from Phase 1: Entra emits array `aud`. Schema must accept both.
+    // Entra emits array `aud`. Schema must accept both.
     const nonce = "n-aud-array";
     const now = nowSeconds();
 
@@ -642,7 +636,7 @@ describe("verifyIdToken", () => {
   });
 
   it("coerces string email_verified to boolean (older Entra/Keycloak compatibility)", async () => {
-    // PLAN deferred from Phase 1: older Entra tenants emit "true"/"false" as strings.
+    // Older Entra tenants emit "true"/"false" as strings.
     const nonce = "n-email-verified-string";
     const now = nowSeconds();
 

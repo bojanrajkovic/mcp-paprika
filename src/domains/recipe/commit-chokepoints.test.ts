@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { CategoryUid, RecipeUid } from "../../ids.js";
 import type { RecipeState, RecipeWrites } from "./module.js";
 
-import { makeCategory, makeRecipe } from "../../../test/cache/__fixtures__/recipes.js";
+import { makeCategory, makeRecipe } from "../../../test/domains/recipe/__fixtures__/recipes.js";
 import { useKernelHarness } from "../../../test/support/kernel-harness.js";
 
 /**
@@ -13,15 +13,15 @@ import { useKernelHarness } from "../../../test/support/kernel-harness.js";
  * store, propagate the error) and the re-index seam emits (#177) that drive discover.
  */
 describe("recipe commit chokepoints", () => {
-  const kh = useKernelHarness("recipe");
+  const kh = useKernelHarness<RecipeState, RecipeWrites>("recipe");
   beforeEach(kh.setup);
   afterEach(kh.teardown);
 
   describe("cache-flush failure", () => {
     it("clears the pending mark, leaves the store untouched, and propagates the error", async () => {
       kh.seed({ recipes: [] });
-      const state = kh.state() as RecipeState;
-      const writes = kh.writes() as RecipeWrites;
+      const state = kh.state();
+      const writes = kh.writes();
       const saved = makeRecipe({ uid: "r-fail" as RecipeUid, name: "Doomed", hash: "h" });
       vi.spyOn(state.recipe.cache, "flush").mockRejectedValue(new Error("disk full"));
 
@@ -37,7 +37,7 @@ describe("recipe commit chokepoints", () => {
   describe("re-index seam emits (#177)", () => {
     it("commitRecipe emits recipe-changed for a live recipe", async () => {
       kh.seed({ recipes: [] });
-      const writes = kh.writes() as RecipeWrites;
+      const writes = kh.writes();
       const emit = vi.spyOn(kh.infra().indexEvents, "emit");
       const saved = makeRecipe({ uid: "r-live" as RecipeUid, name: "Live", hash: "h" });
 
@@ -48,7 +48,7 @@ describe("recipe commit chokepoints", () => {
 
     it("commitRecipe emits recipe-removed for a trashed recipe", async () => {
       kh.seed({ recipes: [] });
-      const writes = kh.writes() as RecipeWrites;
+      const writes = kh.writes();
       const emit = vi.spyOn(kh.infra().indexEvents, "emit");
       const trashed = makeRecipe({ uid: "r-trash" as RecipeUid, name: "Trashed", hash: "h", inTrash: true });
 
@@ -59,7 +59,7 @@ describe("recipe commit chokepoints", () => {
 
     it("commitCategoryUpsert emits category-changed (the rename re-embed path)", async () => {
       kh.seed({ categories: [] });
-      const writes = kh.writes() as RecipeWrites;
+      const writes = kh.writes();
       const emit = vi.spyOn(kh.infra().indexEvents, "emit");
       const category = makeCategory({ uid: "c-rename" as CategoryUid, name: "Renamed" });
 

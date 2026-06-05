@@ -4,12 +4,10 @@
  */
 
 import { randomUUID } from "node:crypto";
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import { useTempDir } from "../../test/support/disk-caches.js";
 import { makePinoCapture } from "../../test/support/tool-test-utils.js";
 import { SILENT_LOG } from "../utils/log.js";
 import { DiskClientRegistrationStore } from "./client-registration.js";
@@ -40,18 +38,18 @@ function makeWireRegistration(): Record<string, unknown> {
 // ============================================================================
 
 describe("DiskClientRegistrationStore", () => {
-  let tempDir: string;
+  const tmp = useTempDir("paprika-client-reg-");
   let cache: AuthCache;
   let store: DiskClientRegistrationStore;
 
   beforeEach(async () => {
-    tempDir = await mkdtemp(join(tmpdir(), "paprika-client-reg-"));
-    cache = await buildAuthCaches(tempDir);
+    await tmp.setup();
+    cache = await buildAuthCaches(tmp.dir());
     store = new DiskClientRegistrationStore(cache, "https://m.example.com", SILENT_LOG);
   });
 
   afterEach(async () => {
-    await rm(tempDir, { recursive: true, force: true });
+    await tmp.teardown();
   });
 
   describe("registerClient", () => {
@@ -183,15 +181,15 @@ describe("DiskClientRegistrationStore", () => {
     });
   });
 
-  describe("AC4.1: persistence across restart", () => {
+  describe("persistence across restart", () => {
     it("registerClient → flush → fresh DiskCache+store → getClient returns same record; registrationAccessTokenHash preserved", async () => {
-      // PLAN says (phase_05.md:26): A DCR'd client persists across process restart; registration_access_token_hash is preserved
+      // A DCR'd client persists across process restart; registration_access_token_hash is preserved
       // Register in first instance
       const metaIn = makeWireRegistration();
       const original = await store.registerClient(metaIn);
 
-      // Simulate restart: create fresh DiskCache instance pointing to same tempDir
-      const cache2 = await buildAuthCaches(tempDir);
+      // Simulate restart: create fresh DiskCache instance pointing to the same directory
+      const cache2 = await buildAuthCaches(tmp.dir());
       const store2 = new DiskClientRegistrationStore(cache2, "https://m.example.com", SILENT_LOG);
 
       // Read from fresh instance
@@ -210,8 +208,8 @@ describe("DiskClientRegistrationStore", () => {
   });
 
   describe("updateClient", () => {
-    it("AC2.7: updateClient preserves RAT hash; updates metadata fields; bumps updatedAt", async () => {
-      // PLAN says (phase_05.md:20): PUT /register/{client_id} updates the client's metadata; response includes registration_access_token + registration_client_uri (RFC 7592 §2.2)
+    it("updateClient preserves RAT hash; updates metadata fields; bumps updatedAt", async () => {
+      // PUT /register/{client_id} updates the client's metadata; response includes registration_access_token + registration_client_uri (RFC 7592 §2.2)
       const metaIn = makeWireRegistration();
       const registered = await store.registerClient(metaIn);
 
@@ -253,9 +251,9 @@ describe("DiskClientRegistrationStore", () => {
     });
   });
 
-  describe("AC2.12: verifyRegistrationAccessToken", () => {
+  describe("verifyRegistrationAccessToken", () => {
     it("rejects wrong token", async () => {
-      // PLAN says (phase_05.md:23): PUT/DELETE /register/{client_id} without or with wrong registration_access_token returns 401
+      // PUT/DELETE /register/{client_id} without or with wrong registration_access_token returns 401
       const metaIn = makeWireRegistration();
       const registered = await store.registerClient(metaIn);
 
@@ -265,7 +263,7 @@ describe("DiskClientRegistrationStore", () => {
     });
 
     it("accepts correct token (constant-time-equivalent — same hash)", async () => {
-      // PLAN says (phase_05.md:23): PUT/DELETE /register/{client_id} with correct registration_access_token succeeds
+      // PUT/DELETE /register/{client_id} with correct registration_access_token succeeds
       const metaIn = makeWireRegistration();
       const registered = await store.registerClient(metaIn);
 
@@ -295,15 +293,15 @@ describe("DiskClientRegistrationStore", () => {
       expect(retrieved).toBeUndefined();
 
       // Verify it's gone after restart (persisted)
-      const cache2 = await buildAuthCaches(tempDir);
+      const cache2 = await buildAuthCaches(tmp.dir());
       const store2 = new DiskClientRegistrationStore(cache2, "https://m.example.com", SILENT_LOG);
       retrieved = await store2.getClient(registered.client_id);
       expect(retrieved).toBeUndefined();
     });
   });
 
-  describe("logging (AC9.6)", () => {
-    it("AC9.6: emits info record with clientId + redirectUriCount after registerClient succeeds", async () => {
+  describe("logging", () => {
+    it("emits info record with clientId + redirectUriCount after registerClient succeeds", async () => {
       const { log: captureLog, records } = makePinoCapture();
       const logStore = new DiskClientRegistrationStore(cache, "https://m.example.com", captureLog);
       const metaIn = makeWireRegistration();

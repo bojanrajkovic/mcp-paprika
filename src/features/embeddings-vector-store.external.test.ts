@@ -6,7 +6,7 @@
  * the nomic-embed-text model pulled. They are automatically skipped when Ollama
  * is not available, so CI is unaffected.
  *
- * Run specifically with: pnpm test src/features/embeddings-vector-store.test.integration.ts
+ * Run specifically with: pnpm test:external (or pnpm test src/features/embeddings-vector-store.external.test.ts)
  */
 
 import { mkdtemp, rm } from "node:fs/promises";
@@ -18,7 +18,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { CategoryUid, RecipeUid } from "../ids.js";
 import type { EmbeddingConfig } from "../utils/config.js";
 
-import { makeRecipe } from "../../test/cache/__fixtures__/recipes.js";
+import { makeRecipe } from "../../test/domains/recipe/__fixtures__/recipes.js";
 import { EmbeddingClient } from "./embeddings.js";
 import { VectorStore } from "./vector-store.js";
 

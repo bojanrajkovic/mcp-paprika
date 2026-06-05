@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { contentHash } from "./vector-store.js";
 
 describe("contentHash property-based tests", () => {
-  describe("AC5.1: Determinism and format properties", () => {
+  describe("Determinism and format properties", () => {
     it("Property 1: For any string input, contentHash(s) === contentHash(s) (determinism)", () => {
       fc.assert(
         fc.property(fc.string(), (input) => {

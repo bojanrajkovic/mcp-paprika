@@ -2,12 +2,11 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import type { PantryState } from "../module.js";
 
-import { makePantryItem } from "../../../../test/cache/__fixtures__/pantry.js";
+import { makePantryItem } from "../../../../test/domains/pantry/__fixtures__/pantry.js";
 import { useKernelHarness } from "../../../../test/support/kernel-harness.js";
-import { getText } from "../../../../test/support/tool-test-utils.js";
 
 describe("list_pantry_items tool", () => {
-  const kh = useKernelHarness("pantry");
+  const kh = useKernelHarness<PantryState>("pantry");
   beforeEach(kh.setup);
   afterEach(kh.teardown);
 
@@ -20,7 +19,7 @@ describe("list_pantry_items tool", () => {
       ],
     });
 
-    const text = getText(await kh.callTool("list_pantry_items", {}));
+    const text = await kh.callToolText("list_pantry_items", {});
 
     expect(text).toContain("You have 3 pantry items");
 
@@ -36,7 +35,7 @@ describe("list_pantry_items tool", () => {
     expect(milkIdx).toBeLessThan(sugarIdx);
 
     // UIDs are present so the caller can chain follow-up operations.
-    const items = (kh.state() as PantryState).store.getAll();
+    const items = kh.state().store.getAll();
     for (const item of items) {
       expect(text).toContain(item.uid);
     }
@@ -45,14 +44,14 @@ describe("list_pantry_items tool", () => {
   it("returns friendly message for empty pantry", async () => {
     kh.seed({ pantry: [] });
 
-    const text = getText(await kh.callTool("list_pantry_items", {}));
+    const text = await kh.callToolText("list_pantry_items", {});
 
     expect(text).toBe("Your pantry is empty.");
   });
 
   it("cold-start (hasSynced false) returns guard error", async () => {
     // Store never seeded — hasSynced remains false.
-    const text = getText(await kh.callTool("list_pantry_items", {}));
+    const text = await kh.callToolText("list_pantry_items", {});
 
     expect(text.toLowerCase()).toContain("not yet synced");
   });

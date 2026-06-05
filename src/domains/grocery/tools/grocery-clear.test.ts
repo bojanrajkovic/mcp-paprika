@@ -3,15 +3,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { GroceryItemUid, GroceryListUid } from "../../../ids.js";
 import type { GroceryState } from "../module.js";
 
-import { makeGroceryItem } from "../../../../test/cache/__fixtures__/grocery-items.js";
-import { makeGroceryList } from "../../../../test/cache/__fixtures__/grocery-lists.js";
+import { makeGroceryItem } from "../../../../test/domains/grocery/__fixtures__/grocery-items.js";
+import { makeGroceryList } from "../../../../test/domains/grocery/__fixtures__/grocery-lists.js";
 import { useKernelHarness } from "../../../../test/support/kernel-harness.js";
 import { getText } from "../../../../test/support/tool-test-utils.js";
 
 const WEEKLY_LIST = makeGroceryList({ uid: "LIST-1" as GroceryListUid, name: "Weekly" });
 
 describe("clear_purchased_grocery_items tool", () => {
-  const kh = useKernelHarness("grocery");
+  const kh = useKernelHarness<GroceryState>("grocery");
   beforeEach(kh.setup);
   afterEach(kh.teardown);
 
@@ -59,7 +59,7 @@ describe("clear_purchased_grocery_items tool", () => {
     }
 
     // Purchased items removed from the store; unpurchased item remains
-    const state = kh.state() as GroceryState;
+    const state = kh.state();
     expect(state.items.store.get("ITEM-P1" as GroceryItemUid)).toBeUndefined();
     expect(state.items.store.get("ITEM-P2" as GroceryItemUid)).toBeUndefined();
     expect(state.items.store.get("ITEM-U1" as GroceryItemUid)).toBeDefined();
@@ -103,7 +103,7 @@ describe("clear_purchased_grocery_items tool", () => {
 });
 
 describe("clear_grocery_list tool", () => {
-  const kh = useKernelHarness("grocery");
+  const kh = useKernelHarness<GroceryState>("grocery");
   beforeEach(kh.setup);
   afterEach(kh.teardown);
 
@@ -151,7 +151,7 @@ describe("clear_grocery_list tool", () => {
     }
 
     // All items removed from the store
-    const state = kh.state() as GroceryState;
+    const state = kh.state();
     expect(state.items.store.getByListUid("LIST-1" as GroceryListUid)).toHaveLength(0);
   });
 

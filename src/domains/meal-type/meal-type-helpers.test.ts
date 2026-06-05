@@ -4,16 +4,7 @@ import type { MealTypeUid } from "../../ids.js";
 
 import { mealTypeSpecSchema } from "./meal-type-helpers.js";
 
-// ---------------------------------------------------------------------------
-// AC6.1: mealTypeSpecSchema is exported and correct
-// ---------------------------------------------------------------------------
-
-describe("meal-planner-writes.AC6.1: mealTypeSpecSchema is exported and parseable", () => {
-  it("is a Zod schema (ZodTypeAny-duck)", () => {
-    expect(typeof mealTypeSpecSchema.parse).toBe("function");
-    expect(typeof mealTypeSpecSchema.safeParse).toBe("function");
-  });
-
+describe("mealTypeSpecSchema", () => {
   it("parses {name} variant and trims whitespace", () => {
     expect(mealTypeSpecSchema.parse({ name: "  Dinner  " })).toEqual({ name: "Dinner" });
     expect(mealTypeSpecSchema.parse({ name: "Breakfast" })).toEqual({ name: "Breakfast" });

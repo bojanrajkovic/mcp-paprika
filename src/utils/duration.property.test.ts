@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { formatDuration, parseDuration } from "./duration.js";
 
 describe("Duration property-based tests", () => {
-  describe("duration-helper.AC7.4: Roundtrip stability", () => {
+  describe("Roundtrip stability", () => {
     it("Property 1: For any valid duration (positive integer minutes), parsing and formatting should produce a non-empty string", () => {
       fc.assert(
         fc.property(fc.integer({ min: 1, max: 10000 }), (minutes) => {

@@ -1,7 +1,3 @@
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-
 import { http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
@@ -10,7 +6,8 @@ import type { RecipeUid } from "./ids.js";
 import type { Infra, Kernel } from "./kernel/registry.js";
 import type { PaprikaConfig } from "./utils/config.js";
 
-import { makeCategory, makeSnakeCaseRecipe } from "../test/cache/__fixtures__/recipes.js";
+import { makeCategory, makeSnakeCaseRecipe } from "../test/domains/recipe/__fixtures__/recipes.js";
+import { useTempDir } from "../test/support/disk-caches.js";
 import { getText, makeStubNotifier, makeTestServer } from "../test/support/tool-test-utils.js";
 import { GeneratedImageStore } from "./features/generated-image-store.js";
 import { buildKernel } from "./kernel/registry.js";
@@ -23,7 +20,7 @@ import "./kernel/modules.generated.js";
 const API_BASE = "https://paprikaapp.com/api/v2/sync";
 
 const server = setupServer();
-let tempDir: string;
+const tmp = useTempDir("paprika-sync-tool-");
 
 beforeAll(() => {
   server.listen();
@@ -34,8 +31,7 @@ afterAll(() => {
 });
 
 beforeEach(async () => {
-  // Create a unique temp directory for each test
-  tempDir = await mkdtemp(join(tmpdir(), "paprika-sync-tool-"));
+  await tmp.setup();
   server.resetHandlers();
   // Baseline handlers: always-empty endpoints every test needs. Individual tests
   // override only what they care about via server.use() (last-registered wins in MSW).
@@ -56,14 +52,13 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
-  // Clean up temp directory
-  await rm(tempDir, { recursive: true, force: true });
+  await tmp.teardown();
 });
 
 // A kernel Infra over the MSW-backed real PaprikaClient: features off, a stub notifier,
 // silent logs, the per-test temp cache dir. `buildKernel(infra)` constructs every module
 // (each hydrates its own cache), runs the INITIAL sync cycle against MSW, and returns a
-// per-session registrar — the production composition path the transports use. AC1–AC4
+// per-session registrar — the production composition path the transports use. These tests
 // exercise that path end-to-end (sync populating the stores → registered tools reading
 // them). The per-module #57 reconcile coverage lives in the focused kernel sync tests
 // (recipe-sync.test.ts + the syncReplaceAllEntity tests in paprika/sync.test.ts).
@@ -78,7 +73,7 @@ async function buildKernelHarness(): Promise<{
 }> {
   const infra: Infra = {
     client: new PaprikaClient("test@example.com", "password"),
-    cacheDir: tempDir,
+    cacheDir: tmp.dir(),
     notifier: makeStubNotifier().notifier,
     log: SILENT_LOG,
     config: KERNEL_TEST_CONFIG,
@@ -92,8 +87,8 @@ async function buildKernelHarness(): Promise<{
 }
 
 describe("Sync → Tool Pipeline Integration", () => {
-  describe("AC1: Basic sync and query flow", () => {
-    it("AC1.1: the initial sync populates the stores, then tools query the synced data", async () => {
+  describe("Basic sync and query flow", () => {
+    it("the initial sync populates the stores, then tools query the synced data", async () => {
       server.use(
         http.get(`${API_BASE}/recipes/`, () =>
           HttpResponse.json({
@@ -129,8 +124,8 @@ describe("Sync → Tool Pipeline Integration", () => {
     // an initial sync, so an un-synced store is not reachable through this path.
   });
 
-  describe("AC2: Multiple sync cycles with data changes", () => {
-    it("AC2.1: a second sync cycle adds a new recipe; tools reflect the change", async () => {
+  describe("Multiple sync cycles with data changes", () => {
+    it("a second sync cycle adds a new recipe; tools reflect the change", async () => {
       let syncCount = 0;
       server.use(
         http.get(`${API_BASE}/recipes/`, () => {
@@ -165,7 +160,7 @@ describe("Sync → Tool Pipeline Integration", () => {
       expect(getText(await callTool("search_recipes", { query: "salad", limit: 20 }))).toContain("Salad");
     });
 
-    it("AC2.2: a second sync cycle removes a recipe; tools no longer return it", async () => {
+    it("a second sync cycle removes a recipe; tools no longer return it", async () => {
       let syncCount = 0;
       server.use(
         http.get(`${API_BASE}/recipes/`, () => {
@@ -199,8 +194,8 @@ describe("Sync → Tool Pipeline Integration", () => {
     });
   });
 
-  describe("AC3: Tool variety after sync", () => {
-    it("AC3.1: multiple tools work with synced recipes (search, read, list_categories, ingredient filter)", async () => {
+  describe("Tool variety after sync", () => {
+    it("multiple tools work with synced recipes (search, read, list_categories, ingredient filter)", async () => {
       const category = makeCategory({ name: "Breakfast" });
       server.use(
         http.get(`${API_BASE}/recipes/`, () =>
@@ -253,8 +248,8 @@ describe("Sync → Tool Pipeline Integration", () => {
     });
   });
 
-  describe("AC4: Recipe mutation and sync", () => {
-    it("AC4.1: a recipe change pulled by a later sync is reflected in tools", async () => {
+  describe("Recipe mutation and sync", () => {
+    it("a recipe change pulled by a later sync is reflected in tools", async () => {
       // A mutable name + hash: the diff re-fetches only when the hash changes.
       let recipeName = "Original Name";
       let recipesHash = "hash-original";

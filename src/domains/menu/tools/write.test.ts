@@ -3,21 +3,20 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { MealTypeUid, MenuItemUid, MenuUid } from "../../../ids.js";
 import type { MenuState } from "../module.js";
 
-import { makeMealType } from "../../../../test/cache/__fixtures__/meals.js";
-import { makeMenu, makeMenuItem } from "../../../../test/cache/__fixtures__/menus.js";
+import { makeMealType } from "../../../../test/domains/meal-type/__fixtures__/meal-types.js";
+import { makeMenu, makeMenuItem } from "../../../../test/domains/menu/__fixtures__/menus.js";
 import { useKernelHarness } from "../../../../test/support/kernel-harness.js";
-import { getText } from "../../../../test/support/tool-test-utils.js";
 
 const DINNER_TYPE = makeMealType({ uid: "dinner-uid" as MealTypeUid, name: "Dinner", orderFlag: 2, originalType: 2 });
 
 describe("create_menu tool", () => {
-  const kh = useKernelHarness("menu");
+  const kh = useKernelHarness<MenuState>("menu");
   beforeEach(kh.setup);
   afterEach(kh.teardown);
 
   it("returns sync-not-ready message when stores not loaded", async () => {
     // DO NOT seed menus/menuItems/mealTypes — stores stay cold
-    const text = getText(await kh.callTool("create_menu", { name: "Holiday" }));
+    const text = await kh.callToolText("create_menu", { name: "Holiday" });
     expect(text.toLowerCase()).toContain("not yet synced");
   });
 
@@ -27,7 +26,7 @@ describe("create_menu tool", () => {
       makeMenu({ name: "Holiday", days: 1, notes: "", deleted: false }),
     ]);
 
-    const text = getText(await kh.callTool("create_menu", { name: "Holiday" }));
+    const text = await kh.callToolText("create_menu", { name: "Holiday" });
 
     expect(text).toContain("# Holiday");
     expect(text).toContain("**Days:** 1");
@@ -40,14 +39,14 @@ describe("create_menu tool", () => {
     expect(savedArg?.deleted).toBe(false);
     expect(savedArg?.uid).toMatch(/^[0-9A-F-]{36}$/);
     expect(kh.resourceListChanged()).toHaveBeenCalled();
-    expect((kh.state() as MenuState).menus.store.getAll()).toHaveLength(1);
+    expect(kh.state().menus.store.getAll()).toHaveLength(1);
   });
 
   it("honors explicit days and notes", async () => {
     kh.seed({ menus: [], menuItems: [], mealTypes: [DINNER_TYPE] });
     vi.mocked(kh.client().saveMenus).mockResolvedValue([makeMenu({ name: "Week", days: 7, notes: "low carb" })]);
 
-    const text = getText(await kh.callTool("create_menu", { name: "Week", days: 7, notes: "low carb" }));
+    const text = await kh.callToolText("create_menu", { name: "Week", days: 7, notes: "low carb" });
 
     const savedArgs = vi.mocked(kh.client().saveMenus).mock.calls[0]?.[0];
     const savedArg = savedArgs?.[0];
@@ -72,7 +71,7 @@ describe("create_menu tool", () => {
     const existing = makeMenu({ uid: "m-dup" as MenuUid, name: "Thanksgiving" });
     kh.seed({ menus: [existing], menuItems: [], mealTypes: [DINNER_TYPE] });
 
-    const text = getText(await kh.callTool("create_menu", { name: "thanksgiving" }));
+    const text = await kh.callToolText("create_menu", { name: "thanksgiving" });
 
     expect(text).toContain("already exists");
     expect(text).toContain("m-dup");
@@ -90,13 +89,13 @@ describe("create_menu tool", () => {
 });
 
 describe("update_menu tool", () => {
-  const kh = useKernelHarness("menu");
+  const kh = useKernelHarness<MenuState>("menu");
   beforeEach(kh.setup);
   afterEach(kh.teardown);
 
   it("returns sync-not-ready message when stores not loaded", async () => {
     // DO NOT seed menus/menuItems/mealTypes — stores stay cold
-    const text = getText(await kh.callTool("update_menu", { lookup: { uid: "m-1" }, name: "X" }));
+    const text = await kh.callToolText("update_menu", { lookup: { uid: "m-1" }, name: "X" });
     expect(text.toLowerCase()).toContain("not yet synced");
   });
 
@@ -104,7 +103,7 @@ describe("update_menu tool", () => {
     const menu = makeMenu({ uid: "m-1" as MenuUid, name: "Plan" });
     kh.seed({ menus: [menu], menuItems: [], mealTypes: [DINNER_TYPE] });
 
-    const text = getText(await kh.callTool("update_menu", { lookup: { uid: "m-1" } }));
+    const text = await kh.callToolText("update_menu", { lookup: { uid: "m-1" } });
     expect(text).toContain("Nothing to update");
     expect(kh.client().saveMenus).not.toHaveBeenCalled();
   });
@@ -116,7 +115,7 @@ describe("update_menu tool", () => {
       makeMenu({ uid: "m-1" as MenuUid, name: "New", days: 4, notes: "old notes" }),
     ]);
 
-    const text = getText(await kh.callTool("update_menu", { lookup: { uid: "m-1" }, name: "New", days: 4 }));
+    const text = await kh.callToolText("update_menu", { lookup: { uid: "m-1" }, name: "New", days: 4 });
 
     const savedArgs = vi.mocked(kh.client().saveMenus).mock.calls[0]?.[0];
     const savedArg = savedArgs?.[0];
@@ -132,7 +131,7 @@ describe("update_menu tool", () => {
     const b = makeMenu({ uid: "m-2" as MenuUid, name: "Holiday" });
     kh.seed({ menus: [a, b], menuItems: [], mealTypes: [DINNER_TYPE] });
 
-    const text = getText(await kh.callTool("update_menu", { lookup: { uid: "m-1" }, name: "Holiday" }));
+    const text = await kh.callToolText("update_menu", { lookup: { uid: "m-1" }, name: "Holiday" });
     expect(text).toContain('A menu named "Holiday" already exists (UID: m-2).');
     expect(kh.client().saveMenus).not.toHaveBeenCalled();
   });
@@ -166,7 +165,7 @@ describe("update_menu tool", () => {
   it("reports a UID miss without saving", async () => {
     kh.seed({ menus: [], menuItems: [], mealTypes: [DINNER_TYPE] });
 
-    const text = getText(await kh.callTool("update_menu", { lookup: { uid: "ghost" }, name: "X" }));
+    const text = await kh.callToolText("update_menu", { lookup: { uid: "ghost" }, name: "X" });
     expect(text).toContain('No menu found with UID "ghost" (it may not exist or was already deleted).');
     expect(kh.client().saveMenus).not.toHaveBeenCalled();
   });
@@ -176,7 +175,7 @@ describe("update_menu tool", () => {
     const b = makeMenu({ uid: "m-b" as MenuUid, name: "Summer Plan B" });
     kh.seed({ menus: [a, b], menuItems: [], mealTypes: [DINNER_TYPE] });
 
-    const text = getText(await kh.callTool("update_menu", { lookup: { name: "summer" }, days: 3 }));
+    const text = await kh.callToolText("update_menu", { lookup: { name: "summer" }, days: 3 });
     expect(text).toContain('Multiple menus match "summer"');
     expect(text).toContain("`m-a`");
     expect(text).toContain("`m-b`");
@@ -189,7 +188,7 @@ describe("update_menu tool", () => {
     const day5 = makeMenuItem({ uid: "mi-5" as MenuItemUid, menuUid: "m-1", day: 5, name: "Steak" });
     kh.seed({ menus: [menu], menuItems: [day3, day5], mealTypes: [DINNER_TYPE] });
 
-    const text = getText(await kh.callTool("update_menu", { lookup: { uid: "m-1" }, days: 2 }));
+    const text = await kh.callToolText("update_menu", { lookup: { uid: "m-1" }, days: 2 });
 
     expect(text).toContain("Cannot shrink");
     expect(text).toContain('"Soup" on day 3');
@@ -211,13 +210,13 @@ describe("update_menu tool", () => {
 });
 
 describe("delete_menu tool", () => {
-  const kh = useKernelHarness("menu");
+  const kh = useKernelHarness<MenuState>("menu");
   beforeEach(kh.setup);
   afterEach(kh.teardown);
 
   it("returns sync-not-ready message when stores not loaded", async () => {
     // DO NOT seed menus/menuItems/mealTypes — stores stay cold
-    const text = getText(await kh.callTool("delete_menu", { lookup: { uid: "m-1" } }));
+    const text = await kh.callToolText("delete_menu", { lookup: { uid: "m-1" } });
     expect(text.toLowerCase()).toContain("not yet synced");
   });
 
@@ -226,14 +225,14 @@ describe("delete_menu tool", () => {
     kh.seed({ menus: [menu], menuItems: [], mealTypes: [DINNER_TYPE] });
     vi.mocked(kh.client().saveMenus).mockResolvedValue([{ ...menu, deleted: true }]);
 
-    const text = getText(await kh.callTool("delete_menu", { lookup: { uid: "m-1" } }));
+    const text = await kh.callToolText("delete_menu", { lookup: { uid: "m-1" } });
 
     expect(text).toContain('Menu "Empty" has been deleted.');
     expect(kh.client().saveMenuItems).not.toHaveBeenCalled();
     expect(kh.client().saveMenus).toHaveBeenCalledOnce();
     const savedArgs = vi.mocked(kh.client().saveMenus).mock.calls[0]?.[0];
     expect(savedArgs?.[0]?.deleted).toBe(true);
-    expect((kh.state() as MenuState).menus.store.get("m-1" as MenuUid)).toBeUndefined();
+    expect(kh.state().menus.store.get("m-1" as MenuUid)).toBeUndefined();
     expect(kh.resourceListChanged()).toHaveBeenCalled();
   });
 
@@ -247,7 +246,7 @@ describe("delete_menu tool", () => {
     );
     vi.mocked(kh.client().saveMenus).mockResolvedValue([{ ...menu, deleted: true }]);
 
-    const text = getText(await kh.callTool("delete_menu", { lookup: { uid: "m-1" } }));
+    const text = await kh.callToolText("delete_menu", { lookup: { uid: "m-1" } });
 
     expect(text).toContain('Menu "Holiday" and its 2 planned recipe(s) has been deleted.');
 
@@ -269,14 +268,14 @@ describe("delete_menu tool", () => {
     expect(itemsOrder).toBeLessThan(menusOrder);
 
     // stores reflect the cascade
-    expect((kh.state() as MenuState).items.store.getByMenuUid("m-1" as MenuUid)).toHaveLength(0);
-    expect((kh.state() as MenuState).menus.store.get("m-1" as MenuUid)).toBeUndefined();
+    expect(kh.state().items.store.getByMenuUid("m-1" as MenuUid)).toHaveLength(0);
+    expect(kh.state().menus.store.get("m-1" as MenuUid)).toBeUndefined();
   });
 
   it("reports a UID miss without saving", async () => {
     kh.seed({ menus: [], menuItems: [], mealTypes: [DINNER_TYPE] });
 
-    const text = getText(await kh.callTool("delete_menu", { lookup: { uid: "ghost" } }));
+    const text = await kh.callToolText("delete_menu", { lookup: { uid: "ghost" } });
     expect(text).toContain('No menu found with UID "ghost" (it may not exist or was already deleted).');
     expect(kh.client().saveMenus).not.toHaveBeenCalled();
   });
@@ -286,7 +285,7 @@ describe("delete_menu tool", () => {
     const b = makeMenu({ uid: "m-b" as MenuUid, name: "Weekly Plan B" });
     kh.seed({ menus: [a, b], menuItems: [], mealTypes: [DINNER_TYPE] });
 
-    const text = getText(await kh.callTool("delete_menu", { lookup: { name: "weekly" } }));
+    const text = await kh.callToolText("delete_menu", { lookup: { name: "weekly" } });
     expect(text).toContain('Multiple menus match "weekly"');
     expect(kh.client().saveMenus).not.toHaveBeenCalled();
   });
@@ -297,7 +296,7 @@ describe("delete_menu tool", () => {
     kh.seed({ menus: [menu], menuItems: [item], mealTypes: [DINNER_TYPE] });
     vi.mocked(kh.client().saveMenuItems).mockRejectedValueOnce(new Error("network down"));
 
-    const text = getText(await kh.callTool("delete_menu", { lookup: { uid: "m-1" } }));
+    const text = await kh.callToolText("delete_menu", { lookup: { uid: "m-1" } });
 
     expect(text).toContain("Failed to delete the recipes");
     expect(text).toContain("The menu was NOT deleted");

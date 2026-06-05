@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import type { GroceryItemUid, GroceryListUid } from "../../../ids.js";
 
-import { makeGroceryItem } from "../../../../test/cache/__fixtures__/grocery-items.js";
+import { makeGroceryItem } from "../../../../test/domains/grocery/__fixtures__/grocery-items.js";
 import { GroceryItemStore } from "./store.js";
 
 describe("GroceryItemStore", () => {
@@ -12,8 +12,8 @@ describe("GroceryItemStore", () => {
     store = new GroceryItemStore();
   });
 
-  describe("grocery-infra.AC1.5: getByListUid returns only items matching listUid", () => {
-    it("grocery-infra.AC1.5: getByListUid returns all items matching the given listUid", () => {
+  describe("getByListUid returns only items matching listUid", () => {
+    it("getByListUid returns all items matching the given listUid", () => {
       const itemA1 = makeGroceryItem({ listUid: "list-A" });
       const itemA2 = makeGroceryItem({ listUid: "list-A" });
       const itemB1 = makeGroceryItem({ listUid: "list-B" });
@@ -28,7 +28,7 @@ describe("GroceryItemStore", () => {
       expect(uids).not.toContain(itemB1.uid);
     });
 
-    it("grocery-infra.AC1.5: getByListUid returns empty array when no items match", () => {
+    it("getByListUid returns empty array when no items match", () => {
       const item = makeGroceryItem({ listUid: "list-A" });
       store.load([item]);
 
@@ -37,7 +37,7 @@ describe("GroceryItemStore", () => {
       expect(results).toHaveLength(0);
     });
 
-    it("grocery-infra.AC1.5: getByListUid does not return deleted items", () => {
+    it("getByListUid does not return deleted items", () => {
       const item = makeGroceryItem({ uid: "uid-1" as GroceryItemUid, listUid: "list-A" });
       store.load([item]);
       store.delete("uid-1" as GroceryItemUid);
@@ -48,8 +48,8 @@ describe("GroceryItemStore", () => {
     });
   });
 
-  describe("grocery-infra.AC1.6: getPurchasedByList returns only purchased items for the given list", () => {
-    it("grocery-infra.AC1.6: getPurchasedByList returns only purchased items for the given list", () => {
+  describe("getPurchasedByList returns only purchased items for the given list", () => {
+    it("getPurchasedByList returns only purchased items for the given list", () => {
       const purchased = makeGroceryItem({ listUid: "list-A", purchased: true });
       const notPurchased = makeGroceryItem({ listUid: "list-A", purchased: false });
       store.load([purchased, notPurchased]);
@@ -60,7 +60,7 @@ describe("GroceryItemStore", () => {
       expect(results[0]?.uid).toBe(purchased.uid);
     });
 
-    it("grocery-infra.AC1.6: getPurchasedByList does not return purchased items from other lists", () => {
+    it("getPurchasedByList does not return purchased items from other lists", () => {
       const purchasedA = makeGroceryItem({ listUid: "list-A", purchased: true });
       const purchasedB = makeGroceryItem({ listUid: "list-B", purchased: true });
       store.load([purchasedA, purchasedB]);
@@ -71,7 +71,7 @@ describe("GroceryItemStore", () => {
       expect(results[0]?.uid).toBe(purchasedA.uid);
     });
 
-    it("grocery-infra.AC1.6: getPurchasedByList returns empty array when no purchased items", () => {
+    it("getPurchasedByList returns empty array when no purchased items", () => {
       const item = makeGroceryItem({ listUid: "list-A", purchased: false });
       store.load([item]);
 
@@ -80,7 +80,7 @@ describe("GroceryItemStore", () => {
       expect(results).toHaveLength(0);
     });
 
-    it("grocery-infra.AC1.6: getPurchasedByList returns empty when list has no items at all", () => {
+    it("getPurchasedByList returns empty when list has no items at all", () => {
       const item = makeGroceryItem({ listUid: "list-B", purchased: true });
       store.load([item]);
 
