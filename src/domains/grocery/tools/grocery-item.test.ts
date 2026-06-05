@@ -16,7 +16,7 @@ const PRODUCE_AISLE = makeAisle({ uid: "AISLE-1" as AisleUid, name: "Produce" })
 const BUTTER_INGREDIENT = makeGroceryIngredient({ name: "Butter", aisleUid: "AISLE-1" });
 
 describe("add_grocery_items tool", () => {
-  const kh = useKernelHarness("grocery");
+  const kh = useKernelHarness<GroceryState>("grocery");
   beforeEach(kh.setup);
   afterEach(kh.teardown);
 
@@ -103,7 +103,7 @@ describe("add_grocery_items tool", () => {
     expect(savedItems).toHaveLength(3);
 
     // All 3 items committed to the store
-    const state = kh.state() as GroceryState;
+    const state = kh.state();
     expect(state.items.store.getByListUid("LIST-1" as GroceryListUid)).toHaveLength(3);
   });
 
@@ -375,7 +375,7 @@ describe("add_grocery_items tool", () => {
 });
 
 describe("update_grocery_item tool", () => {
-  const kh = useKernelHarness("grocery");
+  const kh = useKernelHarness<GroceryState>("grocery");
   beforeEach(kh.setup);
   afterEach(kh.teardown);
 
@@ -523,7 +523,7 @@ describe("update_grocery_item tool", () => {
 });
 
 describe("delete_grocery_item tool", () => {
-  const kh = useKernelHarness("grocery");
+  const kh = useKernelHarness<GroceryState>("grocery");
   beforeEach(kh.setup);
   afterEach(kh.teardown);
 
@@ -563,7 +563,7 @@ describe("delete_grocery_item tool", () => {
     expect(saved?.uid).toBe("ITEM-DEL-1");
 
     // Item is removed from the store
-    const state = kh.state() as GroceryState;
+    const state = kh.state();
     expect(state.items.store.get("ITEM-DEL-1" as GroceryItemUid)).toBeUndefined();
   });
 
@@ -588,7 +588,7 @@ describe("delete_grocery_item tool", () => {
       groceryIngredients: [],
     });
     // Remove the item directly via the store (no API call needed)
-    (kh.state() as GroceryState).items.store.delete("ITEM-DEL-2" as GroceryItemUid);
+    kh.state().items.store.delete("ITEM-DEL-2" as GroceryItemUid);
 
     const result = await kh.callTool("delete_grocery_item", {
       uid: "ITEM-DEL-2",

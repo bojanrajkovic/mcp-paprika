@@ -8,7 +8,7 @@ import { makeMenu, makeMenuItem } from "../../../../test/domains/menu/__fixtures
 import { useKernelHarness } from "../../../../test/support/kernel-harness.js";
 
 describe("menu MCP resource", () => {
-  const kh = useKernelHarness("menu");
+  const kh = useKernelHarness<MenuState>("menu");
   beforeEach(kh.setup);
   afterEach(kh.teardown);
 
@@ -60,7 +60,7 @@ describe("menu MCP resource", () => {
         menuItems: [],
         mealTypes: [makeMealType({ uid: "dinner-uid" as MealTypeUid, name: "Dinner", orderFlag: 2, originalType: 2 })],
       });
-      (kh.state() as MenuState).menus.store.setLastSyncedAt(new Date("2026-05-30T12:00:00Z"));
+      kh.state().menus.store.setLastSyncedAt(new Date("2026-05-30T12:00:00Z"));
 
       const result = (await kh.callResource("menus", "m-sync", "paprika://menu/m-sync")) as {
         contents: Array<{ text: string }>;

@@ -7,7 +7,7 @@ import { makeGroceryList } from "../../../../test/domains/grocery/__fixtures__/g
 import { useKernelHarness } from "../../../../test/support/kernel-harness.js";
 
 describe("list_grocery_lists tool", () => {
-  const kh = useKernelHarness("grocery");
+  const kh = useKernelHarness<GroceryState>("grocery");
   beforeEach(kh.setup);
   afterEach(kh.teardown);
 
@@ -63,7 +63,7 @@ describe("list_grocery_lists tool", () => {
 });
 
 describe("read_grocery_list tool", () => {
-  const kh = useKernelHarness("grocery");
+  const kh = useKernelHarness<GroceryState>("grocery");
   beforeEach(kh.setup);
   afterEach(kh.teardown);
 
@@ -145,7 +145,7 @@ describe("read_grocery_list tool", () => {
 });
 
 describe("create_grocery_list tool", () => {
-  const kh = useKernelHarness("grocery");
+  const kh = useKernelHarness<GroceryState>("grocery");
   beforeEach(kh.setup);
   afterEach(kh.teardown);
 
@@ -179,7 +179,7 @@ describe("create_grocery_list tool", () => {
 
     await kh.callTool("create_grocery_list", { name: "Weekly Shopping" });
 
-    const all = (kh.state() as GroceryState).lists.store.getAll();
+    const all = kh.state().lists.store.getAll();
     expect(all).toHaveLength(1);
     expect(all[0]!.name).toBe("Weekly Shopping");
   });
@@ -209,7 +209,7 @@ describe("create_grocery_list tool", () => {
 });
 
 describe("rename_grocery_list tool", () => {
-  const kh = useKernelHarness("grocery");
+  const kh = useKernelHarness<GroceryState>("grocery");
   beforeEach(kh.setup);
   afterEach(kh.teardown);
 
@@ -274,7 +274,7 @@ describe("rename_grocery_list tool", () => {
 });
 
 describe("delete_grocery_list tool", () => {
-  const kh = useKernelHarness("grocery");
+  const kh = useKernelHarness<GroceryState>("grocery");
   beforeEach(kh.setup);
   afterEach(kh.teardown);
 

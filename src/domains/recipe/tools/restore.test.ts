@@ -17,7 +17,7 @@ import { restoreRecipeInputSchema } from "./restore.js";
 const notFound = (uid: string): PaprikaAPIError => new PaprikaAPIError("Not found", 404, `/api/v2/sync/recipe/${uid}/`);
 
 describe("restore_recipe tool", () => {
-  const kh = useKernelHarness("recipe");
+  const kh = useKernelHarness<RecipeState>("recipe");
   beforeEach(kh.setup);
   afterEach(kh.teardown);
 
@@ -75,7 +75,7 @@ describe("restore_recipe tool", () => {
     expect(text).toContain("already in your active library");
     expect(kh.client().saveRecipe).not.toHaveBeenCalled(); // a reconcile, not a Paprika write
     // Local store healed to authoritative truth.
-    expect((kh.state() as RecipeState).recipe.store.get(uid)?.inTrash).toBe(false);
+    expect(kh.state().recipe.store.get(uid)?.inTrash).toBe(false);
     expect(kh.resourceListChanged()).toHaveBeenCalledOnce();
   });
 
@@ -100,7 +100,7 @@ describe("restore_recipe tool", () => {
     const text = await kh.callToolText("restore_recipe", { uid });
 
     expect(text).toContain("No recipe found");
-    expect((kh.state() as RecipeState).recipe.store.get(uid)).toBeUndefined(); // phantom dropped
+    expect(kh.state().recipe.store.get(uid)).toBeUndefined(); // phantom dropped
     expect(kh.resourceListChanged()).toHaveBeenCalledOnce();
     expect(kh.client().saveRecipe).not.toHaveBeenCalled();
   });

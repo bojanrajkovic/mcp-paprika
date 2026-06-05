@@ -15,7 +15,7 @@ import { PaprikaAPIError } from "../../../paprika/errors.js";
 const notFound = (uid: string): PaprikaAPIError => new PaprikaAPIError("Not found", 404, `/api/v2/sync/recipe/${uid}/`);
 
 describe("purge_recipe tool", () => {
-  const kh = useKernelHarness("recipe");
+  const kh = useKernelHarness<RecipeState>("recipe");
   beforeEach(kh.setup);
   afterEach(kh.teardown);
 
@@ -56,7 +56,7 @@ describe("purge_recipe tool", () => {
       await kh.callTool("purge_recipe", { uid: trashed.uid });
 
       // Real store assertion — recipe hard-deleted from the kernel store.
-      expect((kh.state() as RecipeState).recipe.store.get(trashed.uid)).toBeUndefined();
+      expect(kh.state().recipe.store.get(trashed.uid)).toBeUndefined();
       expect(kh.resourceListChanged()).toHaveBeenCalled();
     });
 
@@ -175,7 +175,7 @@ describe("purge_recipe tool", () => {
       expect(text.toLowerCase()).toContain("not in the trash");
       expect(kh.client().saveRecipe).not.toHaveBeenCalled(); // a reconcile, not a Paprika write
       // Local store healed to authoritative truth.
-      expect((kh.state() as RecipeState).recipe.store.get(uid)?.inTrash).toBe(false);
+      expect(kh.state().recipe.store.get(uid)?.inTrash).toBe(false);
       expect(kh.resourceListChanged()).toHaveBeenCalled();
     });
 
@@ -191,7 +191,7 @@ describe("purge_recipe tool", () => {
       const text = await kh.callToolText("purge_recipe", { uid });
 
       expect(text.toLowerCase()).toContain("no recipe found");
-      expect((kh.state() as RecipeState).recipe.store.get(uid)).toBeUndefined(); // phantom dropped locally
+      expect(kh.state().recipe.store.get(uid)).toBeUndefined(); // phantom dropped locally
       expect(kh.resourceListChanged()).toHaveBeenCalled();
       expect(kh.client().saveRecipe).not.toHaveBeenCalled();
     });

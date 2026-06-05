@@ -7,7 +7,7 @@ import { useKernelHarness } from "../../../../test/support/kernel-harness.js";
 import { rateRecipeInputSchema } from "./rate.js";
 
 describe("rate_recipe tool", () => {
-  const kh = useKernelHarness("recipe");
+  const kh = useKernelHarness<RecipeState>("recipe");
   beforeEach(kh.setup);
   afterEach(kh.teardown);
 
@@ -41,7 +41,7 @@ describe("rate_recipe tool", () => {
 
     await kh.callTool("rate_recipe", { uid: recipe.uid, rating: 5 });
 
-    expect((kh.state() as RecipeState).recipe.store.get(recipe.uid)?.rating).toBe(5);
+    expect(kh.state().recipe.store.get(recipe.uid)?.rating).toBe(5);
     expect(kh.resourceListChanged()).toHaveBeenCalled();
   });
 
@@ -60,13 +60,13 @@ describe("rate_recipe tool", () => {
     const recipe = makeRecipe({ rating: 0 });
     vi.mocked(kh.client().saveRecipe).mockRejectedValue(new Error("Network error"));
     kh.seed({ recipes: [recipe] });
-    const before = (kh.state() as RecipeState).recipe.store.get(recipe.uid)?.rating;
+    const before = kh.state().recipe.store.get(recipe.uid)?.rating;
 
     const text = await kh.callToolText("rate_recipe", { uid: recipe.uid, rating: 3 });
 
     expect(text).toContain("Failed to rate recipe");
     expect(text).toContain("Network error");
-    expect((kh.state() as RecipeState).recipe.store.get(recipe.uid)?.rating).toBe(before);
+    expect(kh.state().recipe.store.get(recipe.uid)?.rating).toBe(before);
   });
 
   it("fires the cold-start guard before any API call (empty store)", async () => {

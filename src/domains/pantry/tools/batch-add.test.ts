@@ -10,7 +10,7 @@ import { getText } from "../../../../test/support/tool-test-utils.js";
 import { type AisleUid, type PantryItemUid } from "../../../ids.js";
 
 describe("add_pantry_items tool", () => {
-  const kh = useKernelHarness("pantry");
+  const kh = useKernelHarness<PantryState>("pantry");
   beforeEach(kh.setup);
   afterEach(kh.teardown);
 
@@ -42,7 +42,7 @@ describe("add_pantry_items tool", () => {
     expect(savedItem?.purchaseDate).toMatch(paprikaDateRegex);
 
     // The item is committed to the store.
-    expect((kh.state() as PantryState).store.get(savedItem?.uid as PantryItemUid)).toBeDefined();
+    expect(kh.state().store.get(savedItem?.uid as PantryItemUid)).toBeDefined();
   });
 
   it("batch of 3 distinct items calls savePantryItems once with all 3", async () => {
@@ -202,7 +202,7 @@ describe("add_pantry_items tool", () => {
 
     expect(text).toContain("Failed to add pantry items");
     expect(text).toContain("Server error");
-    expect((kh.state() as PantryState).store.size).toBe(0);
+    expect(kh.state().store.size).toBe(0);
   });
 
   it("optional fields flow through correctly", async () => {

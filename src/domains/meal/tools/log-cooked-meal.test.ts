@@ -27,7 +27,7 @@ function makeBuiltins() {
 }
 
 describe("log_cooked_meal tool", () => {
-  const kh = useKernelHarness("meal");
+  const kh = useKernelHarness<MealState>("meal");
   beforeEach(kh.setup);
   afterEach(kh.teardown);
 
@@ -138,7 +138,7 @@ describe("log_cooked_meal tool", () => {
 
     await kh.callTool("log_cooked_meal", { recipe_uid: TACOS_UID });
 
-    const store = (kh.state() as MealState).store;
+    const store = kh.state().store;
     expect(store.size).toBe(1);
   });
 

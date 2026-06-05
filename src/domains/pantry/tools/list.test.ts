@@ -6,7 +6,7 @@ import { makePantryItem } from "../../../../test/domains/pantry/__fixtures__/pan
 import { useKernelHarness } from "../../../../test/support/kernel-harness.js";
 
 describe("list_pantry_items tool", () => {
-  const kh = useKernelHarness("pantry");
+  const kh = useKernelHarness<PantryState>("pantry");
   beforeEach(kh.setup);
   afterEach(kh.teardown);
 
@@ -35,7 +35,7 @@ describe("list_pantry_items tool", () => {
     expect(milkIdx).toBeLessThan(sugarIdx);
 
     // UIDs are present so the caller can chain follow-up operations.
-    const items = (kh.state() as PantryState).store.getAll();
+    const items = kh.state().store.getAll();
     for (const item of items) {
       expect(text).toContain(item.uid);
     }

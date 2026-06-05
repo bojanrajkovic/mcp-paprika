@@ -32,7 +32,7 @@ beforeAll(async () => {
 });
 
 describe("upload_recipe_photo", () => {
-  const kh = useKernelHarness("recipe");
+  const kh = useKernelHarness<RecipeState>("recipe");
   beforeEach(kh.setup);
   afterEach(kh.teardown);
 
@@ -320,7 +320,7 @@ describe("upload_recipe_photo", () => {
 });
 
 describe("delete_recipe_photo", () => {
-  const kh = useKernelHarness("recipe");
+  const kh = useKernelHarness<RecipeState>("recipe");
   beforeEach(kh.setup);
   afterEach(kh.teardown);
 
@@ -341,7 +341,7 @@ describe("delete_recipe_photo", () => {
     await kh.callTool("delete_recipe_photo", { photo_uid: "p-1" });
     vi.mocked(kh.client().deletePhoto).mockClear();
     // After the first delete the photo is gone from the store; a second delete short-circuits.
-    expect((kh.state() as RecipeState).photo.store.get(PhotoUidSchema.parse("p-1"))).toBeUndefined();
+    expect(kh.state().photo.store.get(PhotoUidSchema.parse("p-1"))).toBeUndefined();
     const result = await kh.callTool("delete_recipe_photo", { photo_uid: "p-1" });
 
     expect(getText(result)).toContain("already deleted");

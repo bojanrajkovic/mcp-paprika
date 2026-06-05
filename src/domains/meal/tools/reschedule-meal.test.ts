@@ -28,7 +28,7 @@ function makeBuiltins() {
 }
 
 describe("reschedule_meal tool", () => {
-  const kh = useKernelHarness("meal");
+  const kh = useKernelHarness<MealState>("meal");
   beforeEach(kh.setup);
   afterEach(kh.teardown);
 
@@ -52,7 +52,7 @@ describe("reschedule_meal tool", () => {
 
     await kh.callTool("reschedule_meal", { uid: TEST_MEAL_UID, date: "2026-06-15" });
 
-    const stored = (kh.state() as MealState).store.get(TEST_MEAL_UID);
+    const stored = kh.state().store.get(TEST_MEAL_UID);
     expect(stored?.date).toBe("2026-06-15 00:00:00");
     // Destination date is empty → first in its order_flag sequence (0). All other
     // non-date-derived fields are preserved.
@@ -85,7 +85,7 @@ describe("reschedule_meal tool", () => {
 
     await kh.callTool("reschedule_meal", { uid: TEST_MEAL_UID, date: "2026-06-15", type: { name: "Dinner" } });
 
-    const stored = (kh.state() as MealState).store.get(TEST_MEAL_UID);
+    const stored = kh.state().store.get(TEST_MEAL_UID);
     expect(stored?.date).toBe("2026-06-15 00:00:00");
     expect(stored?.typeUid).toBe(DINNER_UID); // type co-change applied
     expect(stored?.orderFlag).toBe(1); // destination max (0) + 1, not the preserved 0
@@ -111,7 +111,7 @@ describe("reschedule_meal tool", () => {
 
     await kh.callTool("reschedule_meal", { uid: TEST_MEAL_UID, date: "2026-06-15", type: { name: "Dinner" } });
 
-    const stored = (kh.state() as MealState).store.get(TEST_MEAL_UID);
+    const stored = kh.state().store.get(TEST_MEAL_UID);
     expect(stored?.typeUid).toBe(DINNER_UID);
     expect(stored?.orderFlag).toBe(5); // same date → position preserved
     expect(kh.client().saveMeals).toHaveBeenCalledOnce();
@@ -179,7 +179,7 @@ describe("reschedule_meal tool", () => {
 });
 
 describe("reschedule_meal — meal-type auto-create no-orphan", () => {
-  const kh = useKernelHarness("meal");
+  const kh = useKernelHarness<MealState>("meal");
   beforeEach(kh.setup);
   afterEach(kh.teardown);
 

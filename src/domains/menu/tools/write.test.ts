@@ -10,7 +10,7 @@ import { useKernelHarness } from "../../../../test/support/kernel-harness.js";
 const DINNER_TYPE = makeMealType({ uid: "dinner-uid" as MealTypeUid, name: "Dinner", orderFlag: 2, originalType: 2 });
 
 describe("create_menu tool", () => {
-  const kh = useKernelHarness("menu");
+  const kh = useKernelHarness<MenuState>("menu");
   beforeEach(kh.setup);
   afterEach(kh.teardown);
 
@@ -39,7 +39,7 @@ describe("create_menu tool", () => {
     expect(savedArg?.deleted).toBe(false);
     expect(savedArg?.uid).toMatch(/^[0-9A-F-]{36}$/);
     expect(kh.resourceListChanged()).toHaveBeenCalled();
-    expect((kh.state() as MenuState).menus.store.getAll()).toHaveLength(1);
+    expect(kh.state().menus.store.getAll()).toHaveLength(1);
   });
 
   it("honors explicit days and notes", async () => {
@@ -89,7 +89,7 @@ describe("create_menu tool", () => {
 });
 
 describe("update_menu tool", () => {
-  const kh = useKernelHarness("menu");
+  const kh = useKernelHarness<MenuState>("menu");
   beforeEach(kh.setup);
   afterEach(kh.teardown);
 
@@ -210,7 +210,7 @@ describe("update_menu tool", () => {
 });
 
 describe("delete_menu tool", () => {
-  const kh = useKernelHarness("menu");
+  const kh = useKernelHarness<MenuState>("menu");
   beforeEach(kh.setup);
   afterEach(kh.teardown);
 
@@ -232,7 +232,7 @@ describe("delete_menu tool", () => {
     expect(kh.client().saveMenus).toHaveBeenCalledOnce();
     const savedArgs = vi.mocked(kh.client().saveMenus).mock.calls[0]?.[0];
     expect(savedArgs?.[0]?.deleted).toBe(true);
-    expect((kh.state() as MenuState).menus.store.get("m-1" as MenuUid)).toBeUndefined();
+    expect(kh.state().menus.store.get("m-1" as MenuUid)).toBeUndefined();
     expect(kh.resourceListChanged()).toHaveBeenCalled();
   });
 
@@ -268,8 +268,8 @@ describe("delete_menu tool", () => {
     expect(itemsOrder).toBeLessThan(menusOrder);
 
     // stores reflect the cascade
-    expect((kh.state() as MenuState).items.store.getByMenuUid("m-1" as MenuUid)).toHaveLength(0);
-    expect((kh.state() as MenuState).menus.store.get("m-1" as MenuUid)).toBeUndefined();
+    expect(kh.state().items.store.getByMenuUid("m-1" as MenuUid)).toHaveLength(0);
+    expect(kh.state().menus.store.get("m-1" as MenuUid)).toBeUndefined();
   });
 
   it("reports a UID miss without saving", async () => {

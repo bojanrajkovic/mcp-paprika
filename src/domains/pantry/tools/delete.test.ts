@@ -7,7 +7,7 @@ import { makePantryItem } from "../../../../test/domains/pantry/__fixtures__/pan
 import { useKernelHarness } from "../../../../test/support/kernel-harness.js";
 
 describe("delete_pantry_item tool", () => {
-  const kh = useKernelHarness("pantry");
+  const kh = useKernelHarness<PantryState>("pantry");
   beforeEach(kh.setup);
   afterEach(kh.teardown);
 
@@ -26,7 +26,7 @@ describe("delete_pantry_item tool", () => {
     expect(callArgs?.ingredient).toBe("Butter");
 
     // Item is removed from the store after a successful commit.
-    const after = (kh.state() as PantryState).store.get("uid-1" as PantryItemUid);
+    const after = kh.state().store.get("uid-1" as PantryItemUid);
     expect(after).toBeUndefined();
   });
 
@@ -37,7 +37,7 @@ describe("delete_pantry_item tool", () => {
 
     expect(text).toContain("No pantry item found");
     expect(kh.client().savePantryItems).not.toHaveBeenCalled();
-    expect((kh.state() as PantryState).store.size).toBe(0);
+    expect(kh.state().store.size).toBe(0);
   });
 
   it("cold-start guard blocks call before pantry synced", async () => {
@@ -59,7 +59,7 @@ describe("delete_pantry_item tool", () => {
     expect(text).toContain("server timeout");
 
     // Store still has the original non-deleted item.
-    const after = (kh.state() as PantryState).store.get("uid-1" as PantryItemUid);
+    const after = kh.state().store.get("uid-1" as PantryItemUid);
     expect(after).toBeDefined();
     expect(after?.deleted).toBe(false);
   });
@@ -72,7 +72,7 @@ describe("delete_pantry_item tool", () => {
       pantry: [makePantryItem({ uid: "uid-retry" as PantryItemUid, ingredient: "Butter", deleted: false })],
     });
     // Simulate the post-commit state: delete() removes the item from the store.
-    (kh.state() as PantryState).store.delete("uid-retry" as PantryItemUid);
+    kh.state().store.delete("uid-retry" as PantryItemUid);
 
     const text = await kh.callToolText("delete_pantry_item", { uid: "uid-retry" });
 

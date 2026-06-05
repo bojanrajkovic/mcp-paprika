@@ -8,7 +8,7 @@ import { useKernelHarness } from "../../../../test/support/kernel-harness.js";
 import { markPantryItemOutOfStockInputSchema, restockPantryItemInputSchema } from "./stock.js";
 
 describe("mark_pantry_item_out_of_stock tool", () => {
-  const kh = useKernelHarness("pantry");
+  const kh = useKernelHarness<PantryState>("pantry");
   beforeEach(kh.setup);
   afterEach(kh.teardown);
 
@@ -49,7 +49,7 @@ describe("mark_pantry_item_out_of_stock tool", () => {
     expect(text).toContain("Failed to update pantry item");
     expect(text).toContain("server timeout");
     // Store retains original in-stock state.
-    const after = (kh.state() as PantryState).store.get("uid-1" as PantryItemUid);
+    const after = kh.state().store.get("uid-1" as PantryItemUid);
     expect(after?.inStock).toBe(true);
   });
 
@@ -63,7 +63,7 @@ describe("mark_pantry_item_out_of_stock tool", () => {
 });
 
 describe("restock_pantry_item tool", () => {
-  const kh = useKernelHarness("pantry");
+  const kh = useKernelHarness<PantryState>("pantry");
   beforeEach(kh.setup);
   afterEach(kh.teardown);
 
@@ -104,7 +104,7 @@ describe("restock_pantry_item tool", () => {
     expect(text).toContain("Failed to update pantry item");
     expect(text).toContain("server timeout");
     // Store retains original out-of-stock state.
-    const after = (kh.state() as PantryState).store.get("uid-2" as PantryItemUid);
+    const after = kh.state().store.get("uid-2" as PantryItemUid);
     expect(after?.inStock).toBe(false);
   });
 

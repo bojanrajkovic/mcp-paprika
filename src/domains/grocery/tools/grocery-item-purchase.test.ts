@@ -11,7 +11,7 @@ import { markGroceryItemPurchasedInputSchema } from "./grocery-item-purchase.js"
 const WEEKLY_LIST = makeGroceryList({ uid: "LIST-1" as GroceryListUid, name: "Weekly" });
 
 describe("mark_grocery_item_purchased tool", () => {
-  const kh = useKernelHarness("grocery");
+  const kh = useKernelHarness<GroceryState>("grocery");
   beforeEach(kh.setup);
   afterEach(kh.teardown);
 
@@ -58,7 +58,7 @@ describe("mark_grocery_item_purchased tool", () => {
 
     await kh.callTool("mark_grocery_item_purchased", { uid: "ITEM-2" });
 
-    const state = kh.state() as GroceryState;
+    const state = kh.state();
     expect(state.items.store.get("ITEM-2" as GroceryItemUid)).toEqual(expect.objectContaining({ purchased: true }));
     expect(kh.resourceListChanged()).toHaveBeenCalled();
   });

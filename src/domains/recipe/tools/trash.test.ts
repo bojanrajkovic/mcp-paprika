@@ -6,7 +6,7 @@ import { makeRecipe } from "../../../../test/domains/recipe/__fixtures__/recipes
 import { useKernelHarness } from "../../../../test/support/kernel-harness.js";
 
 describe("trash_recipe tool", () => {
-  const kh = useKernelHarness("recipe");
+  const kh = useKernelHarness<RecipeState>("recipe");
   beforeEach(kh.setup);
   afterEach(kh.teardown);
 
@@ -20,7 +20,7 @@ describe("trash_recipe tool", () => {
 
     expect(text).toContain("Pasta Carbonara");
     expect(text.toLowerCase()).toContain("trash");
-    expect((kh.state() as RecipeState).recipe.store.get(recipe.uid)?.inTrash).toBe(true);
+    expect(kh.state().recipe.store.get(recipe.uid)?.inTrash).toBe(true);
   });
 
   it("calls saveRecipe with inTrash: true and notifySync exactly once", async () => {
@@ -43,7 +43,7 @@ describe("trash_recipe tool", () => {
 
     await kh.callTool("trash_recipe", { uid: recipe.uid });
 
-    expect((kh.state() as RecipeState).recipe.store.get(recipe.uid)?.inTrash).toBe(true);
+    expect(kh.state().recipe.store.get(recipe.uid)?.inTrash).toBe(true);
   });
 
   it("UID not found returns a not-found message and skips the API call", async () => {

@@ -35,7 +35,7 @@ function seedBase(kh: ReturnType<typeof useKernelHarness>, opts?: { menus?: Menu
 }
 
 describe("add_menu_items tool", () => {
-  const kh = useKernelHarness("menu");
+  const kh = useKernelHarness<MenuState>("menu");
   beforeEach(kh.setup);
   afterEach(kh.teardown);
 
@@ -76,7 +76,7 @@ describe("add_menu_items tool", () => {
     expect(saved.every((i) => !i.deleted)).toBe(true);
     expect(text).toContain('Added 2 item(s) to menu "Holiday"');
     expect(kh.resourceListChanged()).toHaveBeenCalled();
-    expect((kh.state() as MenuState).items.store.getByMenuUid("m-1" as MenuUid)).toHaveLength(2);
+    expect(kh.state().items.store.getByMenuUid("m-1" as MenuUid)).toHaveLength(2);
   });
 
   it("adds a freeform menuitem (name, no recipe_uid) materializing recipeUid null", async () => {
@@ -195,7 +195,7 @@ describe("add_menu_items tool", () => {
       vi.mocked(kh.client().saveMenuItems).mock.invocationCallOrder[0]!,
     );
     expect(text).toContain('Extended menu "Holiday" to 3 day(s).');
-    expect((kh.state() as MenuState).menus.store.get("m-1" as MenuUid)!.days).toBe(3);
+    expect(kh.state().menus.store.get("m-1" as MenuUid)!.days).toBe(3);
   });
 
   it("does NOT expand the menu when all days are in range", async () => {
@@ -298,7 +298,7 @@ describe("add_menu_items tool", () => {
 });
 
 describe("update_menu_item tool", () => {
-  const kh = useKernelHarness("menu");
+  const kh = useKernelHarness<MenuState>("menu");
   beforeEach(kh.setup);
   afterEach(kh.teardown);
 
@@ -396,7 +396,7 @@ describe("update_menu_item tool", () => {
 });
 
 describe("delete_menu_item tool", () => {
-  const kh = useKernelHarness("menu");
+  const kh = useKernelHarness<MenuState>("menu");
   beforeEach(kh.setup);
   afterEach(kh.teardown);
 
@@ -410,7 +410,7 @@ describe("delete_menu_item tool", () => {
     expect(text).toContain('Menu item "Turkey" has been deleted.');
     const saved = (vi.mocked(kh.client().saveMenuItems).mock.calls[0]![0] as MenuItem[])[0]!;
     expect(saved.deleted).toBe(true);
-    expect((kh.state() as MenuState).items.store.get("mi-1" as MenuItemUid)).toBeUndefined();
+    expect(kh.state().items.store.get("mi-1" as MenuItemUid)).toBeUndefined();
     expect(kh.resourceListChanged()).toHaveBeenCalled();
   });
 

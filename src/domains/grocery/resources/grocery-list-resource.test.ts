@@ -8,7 +8,7 @@ import { makeGroceryList } from "../../../../test/domains/grocery/__fixtures__/g
 import { useKernelHarness } from "../../../../test/support/kernel-harness.js";
 
 describe("grocery-list MCP resource", () => {
-  const kh = useKernelHarness("grocery");
+  const kh = useKernelHarness<GroceryState>("grocery");
   beforeEach(kh.setup);
   afterEach(kh.teardown);
 
@@ -66,7 +66,7 @@ describe("grocery-list MCP resource", () => {
         groceryLists: [makeGroceryList({ uid: "gl-sync-1" as GroceryListUid, name: "Weekly" })],
         groceryItems: [],
       });
-      (kh.state() as GroceryState).lists.store.setLastSyncedAt(new Date("2026-05-24T12:00:00Z"));
+      kh.state().lists.store.setLastSyncedAt(new Date("2026-05-24T12:00:00Z"));
 
       const result = (await kh.callResource("grocery-lists", "gl-sync-1", "paprika://grocery-list/gl-sync-1")) as {
         contents: Array<{ text: string }>;

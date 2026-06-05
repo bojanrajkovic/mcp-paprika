@@ -7,7 +7,7 @@ import { useKernelHarness } from "../../../../test/support/kernel-harness.js";
 import { favoriteRecipeInputSchema, unfavoriteRecipeInputSchema } from "./favorite.js";
 
 describe("favorite_recipe tool", () => {
-  const kh = useKernelHarness("recipe");
+  const kh = useKernelHarness<RecipeState>("recipe");
   beforeEach(kh.setup);
   afterEach(kh.teardown);
 
@@ -43,7 +43,7 @@ describe("favorite_recipe tool", () => {
 
     await kh.callTool("favorite_recipe", { uid: recipe.uid });
 
-    expect((kh.state() as RecipeState).recipe.store.get(recipe.uid)?.onFavorites).toBe(true);
+    expect(kh.state().recipe.store.get(recipe.uid)?.onFavorites).toBe(true);
     expect(kh.resourceListChanged()).toHaveBeenCalled();
   });
 
@@ -82,7 +82,7 @@ describe("favorite_recipe tool", () => {
 });
 
 describe("unfavorite_recipe tool", () => {
-  const kh = useKernelHarness("recipe");
+  const kh = useKernelHarness<RecipeState>("recipe");
   beforeEach(kh.setup);
   afterEach(kh.teardown);
 
@@ -118,7 +118,7 @@ describe("unfavorite_recipe tool", () => {
 
     await kh.callTool("unfavorite_recipe", { uid: recipe.uid });
 
-    expect((kh.state() as RecipeState).recipe.store.get(recipe.uid)?.onFavorites).toBe(false);
+    expect(kh.state().recipe.store.get(recipe.uid)?.onFavorites).toBe(false);
     expect(kh.resourceListChanged()).toHaveBeenCalled();
   });
 

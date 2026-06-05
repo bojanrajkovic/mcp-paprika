@@ -8,7 +8,7 @@ import { getText } from "../../../../test/support/tool-test-utils.js";
 import { categorizeRecipeInputSchema } from "./categorize.js";
 
 describe("categorize_recipe tool", () => {
-  const kh = useKernelHarness("recipe");
+  const kh = useKernelHarness<RecipeState>("recipe");
   beforeEach(kh.setup);
   afterEach(kh.teardown);
 
@@ -97,7 +97,7 @@ describe("categorize_recipe tool", () => {
 
     await kh.callTool("categorize_recipe", { uid: recipe.uid, categories: ["Quick"], mode: "add" });
 
-    const stored = (kh.state() as RecipeState).recipe.store.get(recipe.uid);
+    const stored = kh.state().recipe.store.get(recipe.uid);
     expect(stored?.categories).toEqual([catA.uid, catB.uid]);
     expect(kh.resourceListChanged()).toHaveBeenCalled();
   });
@@ -125,7 +125,7 @@ describe("categorize_recipe tool", () => {
     expect(text).toContain("Failed to categorize recipe");
     expect(text).toContain("Network error");
     // Store is unchanged — categories still empty.
-    expect((kh.state() as RecipeState).recipe.store.get(recipe.uid)?.categories).toEqual([]);
+    expect(kh.state().recipe.store.get(recipe.uid)?.categories).toEqual([]);
   });
 
   it("fires the cold-start guard before any API call", async () => {
