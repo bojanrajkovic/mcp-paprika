@@ -58,11 +58,10 @@ export const generatePhotoInputSchema = z.object({
 });
 
 /**
- * Registers `generate_recipe_photo`, kernel-shaped — `DomainCtx<PhotoGenState, "recipe">`.
- * Tool seam: recipe data via `ctx.deps.recipe` (read contract + `attachGeneratedPhoto`);
- * restyle re-fetch via `ctx.infra.client.getRecipe`; the preview ring buffer via
- * `ctx.infra.generatedImageStore` (a shared recipe↔photo-gen seam that avoids a dep cycle);
- * the photography client via `ctx.state`.
+ * `generate_recipe_photo` — generate (or restyle) an AI photo for a recipe. Reaches
+ * recipe via `ctx.deps.recipe` (the read contract + `attachGeneratedPhoto`) and the
+ * ephemeral preview ring buffer via `ctx.infra.generatedImageStore` — a shared
+ * recipe↔photo-gen seam that avoids a dependency cycle.
  *
  * FEATURE GATE (ADR-0009 §5#9): the kernel registers every module's tools
  * unconditionally. When `ctx.state.photographyClient === null` (image generation

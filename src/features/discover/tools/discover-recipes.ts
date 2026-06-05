@@ -31,13 +31,13 @@ export const discoverRecipesInputSchema = {
 };
 
 /**
- * Registers `discover_recipes`, kernel-shaped — semantic search over the vector
- * index this module owns (`ctx.state.vectorStore`), with recipe enrichment resolved
- * through the recipe contract (`ctx.deps.recipe.get` for the row, `resolveCategoryNames`
- * for its categories). Tools reach `self`/`deps` — this module's own internals and its declared dependencies, nothing wider.
+ * `discover_recipes` — semantic search over the vector index this module owns
+ * (`ctx.state.vectorStore`), with recipe enrichment resolved through the recipe
+ * contract (`ctx.deps.recipe.get` for the row, `resolveCategoryNames` for its
+ * categories).
  *
  * FEATURE GATE (ADR-0009 §5#9): the kernel registers every module's tools
- * unconditionally. When embeddings are unconfigured the `.self` factory carries a null
+ * unconditionally. When embeddings are unconfigured the `.state` factory carries a null
  * `vectorStore`, and the tool early-returns a clear "not configured" result. The tool
  * is always present; it just declines to act.
  *
