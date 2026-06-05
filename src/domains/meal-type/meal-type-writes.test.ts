@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Infra } from "../../kernel/registry.js";
+import type { MealTypeApi } from "./api.js";
 import type { MealTypeState } from "./module.js";
 import type { MealType } from "./types.js";
 
@@ -31,6 +32,7 @@ describe("meal-type ensureMealType + pending-write reconcile", () => {
   let tempDir: string;
   let infra: Infra;
   let state: MealTypeState;
+  let api: MealTypeApi;
   const listMealTypes = vi.fn();
   const saveMealType = vi.fn();
   const notifySync = vi.fn();
@@ -43,7 +45,9 @@ describe("meal-type ensureMealType + pending-write reconcile", () => {
     infra = makeKernelInfra({ cacheDir: tempDir, client: { listMealTypes, saveMealType, notifySync } });
     const mod = registeredModules().find((m) => m.id === "meal-type");
     if (mod === undefined) throw new Error("meal-type module not registered");
-    state = (await mod.build(infra)).state as MealTypeState;
+    const built = await mod.build(infra);
+    state = built.state as MealTypeState;
+    api = built.api as MealTypeApi;
   });
 
   afterEach(async () => {
@@ -53,7 +57,7 @@ describe("meal-type ensureMealType + pending-write reconcile", () => {
   it("creates a custom type on a name miss (order_flag = max+1, originalType null), marks it pending", async () => {
     state.store.load(builtins()); // marks the store synced
 
-    const created = await state.ensureMealType("Brunch");
+    const created = await api.ensureMealType("Brunch");
 
     expect(created.name).toBe("Brunch");
     expect(created.originalType).toBeNull();
@@ -69,26 +73,26 @@ describe("meal-type ensureMealType + pending-write reconcile", () => {
   it("returns the existing type on a case-insensitive name hit, without a POST", async () => {
     state.store.load(builtins());
 
-    const got = await state.ensureMealType("dinner");
+    const got = await api.ensureMealType("dinner");
 
     expect(got.uid).toBe("dinner-uid");
     expect(saveMealType).not.toHaveBeenCalled();
   });
 
   it("throws before the catalog has synced (can't distinguish missing from not-loaded)", async () => {
-    await expect(state.ensureMealType("Brunch")).rejects.toThrow(/not yet synced/);
+    await expect(api.ensureMealType("Brunch")).rejects.toThrow(/not yet synced/);
     expect(saveMealType).not.toHaveBeenCalled();
   });
 
   it("rejects an empty/whitespace name", async () => {
     state.store.load(builtins());
-    await expect(state.ensureMealType("   ")).rejects.toThrow(/cannot be empty/);
+    await expect(api.ensureMealType("   ")).rejects.toThrow(/cannot be empty/);
     expect(saveMealType).not.toHaveBeenCalled();
   });
 
   it("reconcile keeps a pending-upsert type absent from a stale list, then observation-clears", async () => {
     state.store.load(builtins());
-    const created = await state.ensureMealType("Brunch");
+    const created = await api.ensureMealType("Brunch");
     expect(state.store.isPendingUpsert(created.uid)).toBe(true);
 
     // A sync whose canonical list predates the create (Brunch absent) must NOT drop it.

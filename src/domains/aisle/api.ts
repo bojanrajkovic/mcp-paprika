@@ -2,9 +2,9 @@ import type { AisleUid } from "../../ids.js";
 import type { Aisle } from "./types.js";
 
 /**
- * Aisle's public contract — a shared reference catalog both grocery and pantry
- * resolve against (which is why it stays standalone, not folded into either).
- * Siblings reach these via `ctx.deps.aisle`; the store and cache stay private.
+ * Aisle's public contract — the shared aisle catalog grocery and pantry resolve
+ * their item/ingredient aisles against. Read lookups, plus one write path:
+ * `ensureAisle` auto-creates an aisle on first reference.
  */
 export interface AisleApi {
   /**

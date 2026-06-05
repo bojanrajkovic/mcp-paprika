@@ -21,15 +21,10 @@ declare module "../../kernel/registry.js" {
   }
 }
 
-/**
- * The aisle module's internals. `ensureAisle` is bound here (not in `.build`)
- * because it WRITES — it needs `infra.client`, which the factory has and `.build`
- * does not; the read-only contract methods are assembled from `store` in `.build`.
- */
+/** The aisle module's state — the aisle catalog's store and disk cache. */
 export interface AisleState {
   readonly store: AisleStore;
   readonly cache: DiskCache<Aisle>;
-  readonly ensureAisle: AisleApi["ensureAisle"];
 }
 
 register(
@@ -46,41 +41,46 @@ register(
       await cache.init();
       // Warm the store from cache so tools work on a warm restart before the first sync.
       await hydrateStore(cache, store);
-
-      // ensureAisle is the write path (auto-create + persist), so it closes over
-      // infra.client and reaches this module's own store/cache.
+      return { store, cache };
+    })
+    .build((state, infra) => {
+      // ensureAisle is the auto-create write path (resolve-or-create + persist). It
+      // closes over `infra.client`, so it is assembled here in `.build` (which has
+      // infra) rather than `.state`, keeping AisleState pure (ADR-0012). It is a
+      // CONTRACT write — grocery and pantry reach it via `ctx.deps.aisle` — so it
+      // lands in `api`, not `ctx.writes`.
       const ensureAisleMutex = new Mutex();
       const commitAisle = async (aisle: Aisle): Promise<void> => {
-        store.markPendingUpsert(aisle.uid);
+        state.store.markPendingUpsert(aisle.uid);
         try {
-          await cache.put(aisle);
-          await cache.flush();
+          await state.cache.put(aisle);
+          await state.cache.flush();
         } catch (e) {
-          store.clearPending(aisle.uid);
+          state.store.clearPending(aisle.uid);
           throw e;
         }
-        store.set(aisle);
+        state.store.set(aisle);
         await infra.client.notifySync();
       };
       const ensureAisle: AisleApi["ensureAisle"] = async (name) => {
         const trimmedName = name.trim();
         if (trimmedName === "") return { aisle: "", aisleUid: NO_AISLE_UID };
 
-        const match = store.resolveByName(trimmedName);
+        const match = state.store.resolveByName(trimmedName);
         if (match !== undefined) return { aisle: match.name, aisleUid: match.uid };
 
         // Can't distinguish "doesn't exist" from "not loaded yet" before sync.
-        if (!store.hasSynced) {
+        if (!state.store.hasSynced) {
           throw new Error("Aisle list is not yet synced. Try again in a few seconds.");
         }
 
         // Serialize the create path so concurrent writes for the same new name
         // don't both miss resolveByName and create duplicate aisles.
         return ensureAisleMutex.runExclusive(async () => {
-          const recheck = store.resolveByName(trimmedName);
+          const recheck = state.store.resolveByName(trimmedName);
           if (recheck !== undefined) return { aisle: recheck.name, aisleUid: recheck.uid };
 
-          const existing = store.getAll();
+          const existing = state.store.getAll();
           const maxOrder = existing.length === 0 ? 0 : Math.max(...existing.map((a) => a.orderFlag)) + 1;
           const uid = AisleUidSchema.parse(crypto.randomUUID().toUpperCase());
           const newAisle: Aisle = { uid, name: trimmedName, orderFlag: maxOrder, deleted: false };
@@ -91,16 +91,15 @@ register(
         });
       };
 
-      return { store, cache, ensureAisle };
-    })
-    .build((state) => ({
-      api: {
-        ensureAisle: state.ensureAisle,
-        resolveByName: (name) => state.store.resolveByName(name),
-        get: (uid) => state.store.get(uid),
-      },
-      tools: [listAislesTool],
-      syncs: [aisleSync(state)],
-      flush: () => state.cache.flush(),
-    })),
+      return {
+        api: {
+          ensureAisle,
+          resolveByName: (name) => state.store.resolveByName(name),
+          get: (uid) => state.store.get(uid),
+        },
+        tools: [listAislesTool],
+        syncs: [aisleSync(state)],
+        flush: () => state.cache.flush(),
+      };
+    }),
 );

@@ -5,8 +5,8 @@ import { defineTool } from "../../../kernel/tool.js";
 import { textResult } from "../../../shared/tools.js";
 
 /**
- * Registers `list_aisles`, kernel-shaped — reads this module's own store via
- * `ctx.state`. Aisle is a Reference-class entity: read-only, no resource (ADR-0004).
+ * `list_aisles` — list the aisle catalog. Aisle is a Reference-class entity:
+ * read-only, no resource surface (ADR-0004).
  */
 export const listAislesTool = defineTool(
   {

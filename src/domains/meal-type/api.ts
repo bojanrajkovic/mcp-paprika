@@ -9,10 +9,8 @@ import type { MealType } from "./types.js";
 export type MealTypeSpec = z.infer<typeof mealTypeSpecSchema>;
 
 /**
- * Meal-type's public contract — a shared reference catalog the meal and menu
- * domains (and the menu resource) resolve against, which is why it stays
- * standalone rather than folded into either. Siblings reach these via
- * `ctx.deps["meal-type"]`; the store and cache stay private. Read, plus one write
+ * Meal-type's public contract — the shared meal-type catalog the meal and menu
+ * domains (and the menu resource) resolve against. Read lookups, plus one write
  * path: `ensureMealType` auto-creates a custom type on first reference (mirroring
  * aisle's `ensureAisle`). Explicit edit/delete of meal types is not exposed — that
  * stays a follow-up (#244).

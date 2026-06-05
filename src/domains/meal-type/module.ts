@@ -21,16 +21,10 @@ declare module "../../kernel/registry.js" {
   }
 }
 
-/**
- * The meal-type module's internals. `ensureMealType` is bound here (not in
- * `.build`) because it WRITES — it needs `infra.client`, which the factory has and
- * `.build` does not; the read-only contract methods are assembled from `store` in
- * `.build`. This mirrors the aisle module's `ensureAisle`.
- */
+/** The meal-type module's state — the meal-type catalog's store and disk cache. */
 export interface MealTypeState {
   readonly store: MealTypeStore;
   readonly cache: DiskCache<MealType>;
-  readonly ensureMealType: MealTypeApi["ensureMealType"];
 }
 
 register(
@@ -47,20 +41,25 @@ register(
       await cache.init();
       // Warm the store from cache so tools work on a warm restart before the first sync.
       await hydrateStore(cache, store);
-
-      // ensureMealType is the write path (auto-create + persist), so it closes over
-      // infra.client and reaches this module's own store/cache. Mirrors aisle's ensureAisle.
+      return { store, cache };
+    })
+    .build((state, infra) => {
+      // ensureMealType is the auto-create write path (resolve-or-create + persist),
+      // mirroring aisle's ensureAisle. It closes over `infra.client`, so it is
+      // assembled here in `.build` rather than `.state`, keeping MealTypeState pure
+      // (ADR-0012). It is a CONTRACT write — meal and menu reach it via
+      // `ctx.deps["meal-type"]` — so it goes in `api`, not `ctx.writes`.
       const ensureMealTypeMutex = new Mutex();
       const commitMealType = async (mealType: MealType): Promise<void> => {
-        store.markPendingUpsert(mealType.uid);
+        state.store.markPendingUpsert(mealType.uid);
         try {
-          await cache.put(mealType);
-          await cache.flush();
+          await state.cache.put(mealType);
+          await state.cache.flush();
         } catch (e) {
-          store.clearPending(mealType.uid);
+          state.store.clearPending(mealType.uid);
           throw e;
         }
-        store.set(mealType);
+        state.store.set(mealType);
         await infra.client.notifySync();
       };
       const ensureMealType: MealTypeApi["ensureMealType"] = async (name) => {
@@ -69,21 +68,21 @@ register(
           throw new Error("Meal type name cannot be empty.");
         }
 
-        const match = store.resolveByName(trimmedName);
+        const match = state.store.resolveByName(trimmedName);
         if (match !== undefined) return match;
 
         // Can't distinguish "doesn't exist" from "not loaded yet" before sync.
-        if (!store.hasSynced) {
+        if (!state.store.hasSynced) {
           throw new Error("Meal type list is not yet synced. Try again in a few seconds.");
         }
 
         // Serialize the create path so concurrent writes for the same new name
         // don't both miss resolveByName and create duplicate meal types.
         return ensureMealTypeMutex.runExclusive(async () => {
-          const recheck = store.resolveByName(trimmedName);
+          const recheck = state.store.resolveByName(trimmedName);
           if (recheck !== undefined) return recheck;
 
-          const existing = store.getAll();
+          const existing = state.store.getAll();
           const maxOrder = existing.length === 0 ? 0 : Math.max(...existing.map((mt) => mt.orderFlag)) + 1;
           const uid = MealTypeUidSchema.parse(crypto.randomUUID().toUpperCase());
           // A user-authored type is custom (originalType null) with default color/export
@@ -105,58 +104,57 @@ register(
         });
       };
 
-      return { store, cache, ensureMealType };
-    })
-    .build((state) => ({
-      api: {
-        // Build the uid→name map from the catalog and resolve in order, skipping
-        // unknown/dangling UIDs (the same projection the meal/menu renderers build
-        // inline today). `MealTypeStore` has no `resolveNames` of its own.
-        resolveNames: (uids) => {
-          const nameByUid = new Map<string, string>();
-          for (const mt of state.store.getAll()) nameByUid.set(mt.uid, mt.name);
-          const names: Array<string> = [];
-          for (const uid of uids) {
-            const name = nameByUid.get(uid);
-            if (name !== undefined) names.push(name);
-          }
-          return names;
-        },
-        // Resolves a `{name}|{uid}|{builtin}` spec against this module's own
-        // store, returning a structured `MealTypeResolveResult`.
-        resolveSpec: (spec) => {
-          if ("uid" in spec) {
-            const resolved = state.store.getAll().find((mt) => mt.uid === spec.uid);
+      return {
+        api: {
+          // Build the uid→name map from the catalog and resolve in order, skipping
+          // unknown/dangling UIDs (the same projection the meal/menu renderers build
+          // inline today). `MealTypeStore` has no `resolveNames` of its own.
+          resolveNames: (uids) => {
+            const nameByUid = new Map<string, string>();
+            for (const mt of state.store.getAll()) nameByUid.set(mt.uid, mt.name);
+            const names: Array<string> = [];
+            for (const uid of uids) {
+              const name = nameByUid.get(uid);
+              if (name !== undefined) names.push(name);
+            }
+            return names;
+          },
+          // Resolves a `{name}|{uid}|{builtin}` spec against this module's own
+          // store, returning a structured `MealTypeResolveResult`.
+          resolveSpec: (spec) => {
+            if ("uid" in spec) {
+              const resolved = state.store.getAll().find((mt) => mt.uid === spec.uid);
+              if (resolved === undefined) {
+                return { ok: false, reason: "unknown_uid", uid: spec.uid };
+              }
+              return { ok: true, resolved };
+            }
+            if ("name" in spec) {
+              const resolved = state.store.resolveByName(spec.name);
+              if (resolved === undefined) {
+                return {
+                  ok: false,
+                  reason: "unknown_name",
+                  name: spec.name,
+                  knownNames: state.store.getAll().map((mt) => mt.name),
+                };
+              }
+              return { ok: true, resolved };
+            }
+            const builtinInt = spec.builtin;
+            const resolved = state.store.getAll().find((mt) => mt.originalType === builtinInt);
             if (resolved === undefined) {
-              return { ok: false, reason: "unknown_uid", uid: spec.uid };
+              return { ok: false, reason: "unknown_builtin", index: builtinInt };
             }
             return { ok: true, resolved };
-          }
-          if ("name" in spec) {
-            const resolved = state.store.resolveByName(spec.name);
-            if (resolved === undefined) {
-              return {
-                ok: false,
-                reason: "unknown_name",
-                name: spec.name,
-                knownNames: state.store.getAll().map((mt) => mt.name),
-              };
-            }
-            return { ok: true, resolved };
-          }
-          const builtinInt = spec.builtin;
-          const resolved = state.store.getAll().find((mt) => mt.originalType === builtinInt);
-          if (resolved === undefined) {
-            return { ok: false, reason: "unknown_builtin", index: builtinInt };
-          }
-          return { ok: true, resolved };
+          },
+          getAll: () => state.store.getAll(),
+          hasSynced: () => state.store.hasSynced,
+          ensureMealType,
         },
-        getAll: () => state.store.getAll(),
-        hasSynced: () => state.store.hasSynced,
-        ensureMealType: state.ensureMealType,
-      },
-      tools: [listMealTypesTool],
-      syncs: [mealTypeSync(state)],
-      flush: () => state.cache.flush(),
-    })),
+        tools: [listMealTypesTool],
+        syncs: [mealTypeSync(state)],
+        flush: () => state.cache.flush(),
+      };
+    }),
 );
