@@ -21,10 +21,10 @@ import { setTimeout as wait } from "node:timers/promises";
 
 import type { Logger } from "pino";
 
-import type { AuthCache } from "../cache/auth-cache.js";
 import type { AuthCodeStore } from "./auth-code-store.js";
 import type { AuthRequestStore } from "./auth-request-store.js";
 import type { DiskClientRegistrationStore } from "./client-registration.js";
+import type { AuthCache } from "./disk.js";
 import type { PendingAuthorizationStore } from "./pending-authorization-store.js";
 import type { TokenStore } from "./token-store.js";
 

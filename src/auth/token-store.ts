@@ -14,8 +14,8 @@ import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
 import { Mutex } from "async-mutex";
 import { err, ok, type Result } from "neverthrow";
 
-import type { AuthCache } from "../cache/auth-cache.js";
 import type { VerifiedIdentity } from "./allowlist.js";
+import type { AuthCache } from "./disk.js";
 import type { OAuthToken } from "./types.js";
 
 import { OAuthTokenError } from "./errors.js";

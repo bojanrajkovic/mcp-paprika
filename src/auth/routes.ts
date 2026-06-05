@@ -4,10 +4,10 @@ import type { JWTVerifyGetKey } from "jose";
 import type { Logger } from "pino";
 import { z } from "zod";
 
-import type { AuthCache } from "../cache/auth-cache.js";
 import type { AuthCodeStore } from "./auth-code-store.js";
 import type { AuthRequestStore } from "./auth-request-store.js";
 import type { DiskClientRegistrationStore } from "./client-registration.js";
+import type { AuthCache } from "./disk.js";
 import type { DiscoveryDoc } from "./oidc-client.js";
 import type { PendingAuthorizationStore } from "./pending-authorization-store.js";
 import type { TokenStore } from "./token-store.js";

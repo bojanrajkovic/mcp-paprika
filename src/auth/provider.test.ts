@@ -12,11 +12,11 @@ import { makeAuthCodeState, makeVerifiedIdentity } from "../../test/auth/__fixtu
 import { makeDefaultOidcStub, makeDiscoveryDoc } from "../../test/auth/__fixtures__/oidc-stub.js";
 import { useMswServer } from "../../test/support/msw.js";
 import { makePinoCapture } from "../../test/support/tool-test-utils.js";
-import { DiskCacheRoot } from "../cache/disk-cache-root.js";
 import { SILENT_LOG } from "../utils/log.js";
 import { AuthCodeStore } from "./auth-code-store.js";
 import { AuthRequestStore } from "./auth-request-store.js";
 import { DiskClientRegistrationStore } from "./client-registration.js";
+import { type AuthCache, buildAuthCaches } from "./disk.js";
 import { PendingAuthorizationStore } from "./pending-authorization-store.js";
 import { MintingOAuthServerProvider } from "./provider.js";
 import { TokenStore } from "./token-store.js";
@@ -49,7 +49,7 @@ const oidcStub = makeDefaultOidcStub();
 
 describe("MintingOAuthServerProvider", () => {
   let cacheDir: string;
-  let cache: DiskCacheRoot;
+  let cache: AuthCache;
   let clientStore: DiskClientRegistrationStore;
   let tokenStore: TokenStore;
   let authRequests: AuthRequestStore;
@@ -67,8 +67,7 @@ describe("MintingOAuthServerProvider", () => {
     cacheDir = await mkdtemp(join(tmpdir(), "paprika-provider-"));
 
     // Initialize cache and stores
-    cache = new DiskCacheRoot(cacheDir);
-    await cache.init();
+    cache = await buildAuthCaches(cacheDir);
 
     clientStore = new DiskClientRegistrationStore(cache, "https://mcp.example.com", SILENT_LOG);
     tokenStore = new TokenStore(cache);

@@ -6,12 +6,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { makeAuthCodeState, makeAuthRequestState } from "../../test/auth/__fixtures__/oauth-state.js";
 import { makeOAuthClient, makeOAuthToken } from "../../test/cache/__fixtures__/oauth.js";
-import { DiskCacheRoot } from "../cache/disk-cache-root.js";
 import { SILENT_LOG } from "../utils/log.js";
 import { AuthCodeStore } from "./auth-code-store.js";
 import { AuthRequestStore } from "./auth-request-store.js";
 import { AuthCleanup } from "./cleanup.js";
 import { DiskClientRegistrationStore } from "./client-registration.js";
+import { type AuthCache, buildAuthCaches } from "./disk.js";
 import { PendingAuthorizationStore } from "./pending-authorization-store.js";
 import { TokenStore } from "./token-store.js";
 import { nowSeconds } from "./tokens.js";
@@ -21,14 +21,13 @@ import { nowSeconds } from "./tokens.js";
 // ---------------------------------------------------------------------------
 
 let tmpDir: string;
-let cache: DiskCacheRoot;
+let cache: AuthCache;
 let clientStore: DiskClientRegistrationStore;
 let tokenStore: TokenStore;
 
 beforeEach(async () => {
   tmpDir = await mkdtemp(join(tmpdir(), "mcp-paprika-cleanup-test-"));
-  cache = new DiskCacheRoot(tmpDir);
-  await cache.init();
+  cache = await buildAuthCaches(tmpDir);
   clientStore = new DiskClientRegistrationStore(cache, "https://example.com", SILENT_LOG);
   tokenStore = new TokenStore(cache);
 });

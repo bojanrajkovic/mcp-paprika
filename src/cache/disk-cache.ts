@@ -42,7 +42,7 @@ export interface DiskCacheOptions<T> {
  * The entity-specific half of {@link DiskCacheOptions}: the subdir name
  * (relative to the cache root), the `parse` function, and the key extractor —
  * everything needed to build a plain `DiskCache<T>` except the cache root and
- * the logger, which the `DiskCacheRoot` coordinator supplies. Each Paprika
+ * the logger, which the owning module's `.self` factory supplies. Each Paprika
  * entity co-locates its descriptor in `<entity>/disk.ts`; entities whose disk
  * cache needs extra behavior (recipes' hash index, OAuth clients' atomic cap)
  * subclass `DiskCache` directly instead of describing it.

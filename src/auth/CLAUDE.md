@@ -1,6 +1,6 @@
 # OAuth 2.1 Authorization Layer
 
-Last verified: 2026-06-02
+Last verified: 2026-06-04
 
 ## Purpose
 
@@ -70,3 +70,7 @@ A `/oauth/callback` allowlist denial redirects back with a generic `error_descri
 ### `redirectAllowlist` is normalized in `buildAuthContext`, not `config.ts`
 
 `config.ts` keeps the raw `redirectAllowlist` strings unnormalized so it carries no dependency back into `src/auth/`; `buildAuthContext` normalizes them via `normalizeOrigin`. Normalizing them in `config.ts` would create a `config` → `auth` cycle.
+
+### Auth owns its persistence; `cache/` must not depend on `auth/`
+
+`disk.ts` holds the auth cache layer — `OAuthClientDiskCache` (the atomic DCR registration cap), the `oauthTokens` descriptor, and `buildAuthCaches` (the narrow `AuthCache` the HTTP transport stands up). They subclass/compose the generic `DiskCache` from `../cache/`, co-located here because auth is their sole owner — the same rule that keeps `RecipeDiskCache` in `domains/recipe/disk.ts`. The dependency runs one way (`auth/` → `cache/`), so `cache/` stays a generic primitive importing nothing from `auth/`. Don't move these back into `cache/` or import an OAuth schema there: it reintroduces the `auth ⇄ cache` cycle this split removed.
