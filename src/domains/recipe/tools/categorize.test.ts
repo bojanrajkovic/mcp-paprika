@@ -120,9 +120,7 @@ describe("categorize_recipe tool", () => {
     kh.seed({ recipes: [recipe], categories: [catA] });
     vi.mocked(kh.client().saveRecipe).mockRejectedValue(new Error("Network error"));
 
-    const text = getText(
-      await kh.callTool("categorize_recipe", { uid: recipe.uid, categories: ["Dinner"], mode: "add" }),
-    );
+    const text = await kh.callToolText("categorize_recipe", { uid: recipe.uid, categories: ["Dinner"], mode: "add" });
 
     expect(text).toContain("Failed to categorize recipe");
     expect(text).toContain("Network error");
@@ -132,7 +130,7 @@ describe("categorize_recipe tool", () => {
 
   it("fires the cold-start guard before any API call", async () => {
     // store never seeded — hasSynced is false
-    const text = getText(await kh.callTool("categorize_recipe", { uid: "any-uid", categories: ["Dinner"] }));
+    const text = await kh.callToolText("categorize_recipe", { uid: "any-uid", categories: ["Dinner"] });
 
     expect(text.toLowerCase()).toContain("try again");
     expect(kh.client().saveRecipe).not.toHaveBeenCalled();

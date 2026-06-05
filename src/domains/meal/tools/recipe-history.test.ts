@@ -8,7 +8,6 @@ import { makeMealType } from "../../../../test/domains/meal-type/__fixtures__/me
 import { makeMeal } from "../../../../test/domains/meal/__fixtures__/meals.js";
 import { makeRecipe } from "../../../../test/domains/recipe/__fixtures__/recipes.js";
 import { useKernelHarness } from "../../../../test/support/kernel-harness.js";
-import { getText } from "../../../../test/support/tool-test-utils.js";
 
 const DINNER_UID = "dinner-uid" as MealTypeUid;
 const LUNCH_UID = "lunch-uid" as MealTypeUid;
@@ -45,7 +44,7 @@ describe("read_recipe_history tool", () => {
       makeMeal({ recipeUid: CAKE_UID, name: "Cake", date: wireDay(-10), typeUid: DINNER_UID, type: 2 }),
       makeMeal({ recipeUid: CAKE_UID, name: "Cake", date: wireDay(-20), typeUid: LUNCH_UID, type: 1 }),
     ]);
-    const text = getText(await kh.callTool("read_recipe_history", { recipe_uid: CAKE_UID }));
+    const text = await kh.callToolText("read_recipe_history", { recipe_uid: CAKE_UID });
     expect(text).toContain("**Chocolate Cake** — cooking history");
     expect(text).toContain(`Last cooked: ${ymd(-3)} · cooked 3 times`);
     expect(text).toContain(`- ${ymd(-3)} · Dinner`);
@@ -57,26 +56,26 @@ describe("read_recipe_history tool", () => {
       makeMeal({ recipeUid: CAKE_UID, name: "Cake", date: wireDay(-2), typeUid: DINNER_UID, type: 2 }),
       makeMeal({ recipeUid: CAKE_UID, name: "Cake", date: wireDay(7), typeUid: DINNER_UID, type: 2 }),
     ]);
-    const text = getText(await kh.callTool("read_recipe_history", { recipe_uid: CAKE_UID }));
+    const text = await kh.callToolText("read_recipe_history", { recipe_uid: CAKE_UID });
     expect(text).toContain(`Last cooked: ${ymd(-2)} · cooked 1 time`);
     expect(text).not.toContain(ymd(7));
   });
 
   it("reports no history for a future-only recipe", async () => {
     seed([makeMeal({ recipeUid: CAKE_UID, date: wireDay(5), typeUid: DINNER_UID, type: 2 })]);
-    const text = getText(await kh.callTool("read_recipe_history", { recipe_uid: CAKE_UID }));
+    const text = await kh.callToolText("read_recipe_history", { recipe_uid: CAKE_UID });
     expect(text).toContain("**Chocolate Cake** has no cooking history yet");
   });
 
   it("reports no history when the recipe was never cooked", async () => {
     seed([makeMeal({ recipeUid: SOUP_UID, date: wireDay(-1), typeUid: DINNER_UID, type: 2 })]);
-    const text = getText(await kh.callTool("read_recipe_history", { recipe_uid: CAKE_UID }));
+    const text = await kh.callToolText("read_recipe_history", { recipe_uid: CAKE_UID });
     expect(text).toContain("**Chocolate Cake** has no cooking history yet");
   });
 
   it("reports an unknown recipe UID", async () => {
     seed([]);
-    const text = getText(await kh.callTool("read_recipe_history", { recipe_uid: "recipe-missing" as RecipeUid }));
+    const text = await kh.callToolText("read_recipe_history", { recipe_uid: "recipe-missing" as RecipeUid });
     expect(text).toContain('No recipe found with UID "recipe-missing"');
   });
 
@@ -85,14 +84,14 @@ describe("read_recipe_history tool", () => {
       makeMeal({ recipeUid: CAKE_UID, date: wireDay(-2), typeUid: DINNER_UID, type: 2 }),
       makeMeal({ recipeUid: CAKE_UID, date: wireDay(-1), typeUid: DINNER_UID, type: 2, isIngredient: true }),
     ]);
-    const text = getText(await kh.callTool("read_recipe_history", { recipe_uid: CAKE_UID }));
+    const text = await kh.callToolText("read_recipe_history", { recipe_uid: CAKE_UID });
     expect(text).toContain(`Last cooked: ${ymd(-2)} · cooked 1 time`);
     expect(text).not.toContain(ymd(-1));
   });
 
   it("resolves legacy meals (typeUid: null) by integer type", async () => {
     seed([makeMeal({ recipeUid: CAKE_UID, date: wireDay(-2), typeUid: null, type: 2 })]);
-    const text = getText(await kh.callTool("read_recipe_history", { recipe_uid: CAKE_UID }));
+    const text = await kh.callToolText("read_recipe_history", { recipe_uid: CAKE_UID });
     expect(text).toContain(`- ${ymd(-2)} · Dinner`);
   });
 
@@ -101,7 +100,7 @@ describe("read_recipe_history tool", () => {
       makeMeal({ recipeUid: CAKE_UID, date: wireDay(-(i + 1)), typeUid: DINNER_UID, type: 2 }),
     );
     seed(meals);
-    const text = getText(await kh.callTool("read_recipe_history", { recipe_uid: CAKE_UID }));
+    const text = await kh.callToolText("read_recipe_history", { recipe_uid: CAKE_UID });
     expect(text).toContain("cooked 12 times");
     expect(text).toContain("_Showing 10 most recent of 12._");
     const bulletCount = text.split("\n").filter((l) => l.startsWith("- ")).length;
@@ -110,7 +109,7 @@ describe("read_recipe_history tool", () => {
 
   it("guards when meal data is not synced", async () => {
     kh.seed({ recipes: [makeRecipe({ uid: CAKE_UID, name: "Chocolate Cake" })] });
-    const text = getText(await kh.callTool("read_recipe_history", { recipe_uid: CAKE_UID }));
+    const text = await kh.callToolText("read_recipe_history", { recipe_uid: CAKE_UID });
     expect(text).toContain("not yet synced");
   });
 });

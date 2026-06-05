@@ -12,13 +12,13 @@ describe("search_recipes tool", () => {
 
   it("non-empty store with matching query returns formatted results", async () => {
     kh.seed({ recipes: [makeRecipe({ name: "Chocolate Cake" })] });
-    const text = getText(await kh.callTool("search_recipes", { query: "chocolate", limit: 20 }));
+    const text = await kh.callToolText("search_recipes", { query: "chocolate", limit: 20 });
     expect(text).toContain("Chocolate Cake");
   });
 
   it("time fields are rendered when populated", async () => {
     kh.seed({ recipes: [makeRecipe({ name: "Pasta Carbonara", prepTime: "10 min", totalTime: "25 min" })] });
-    const text = getText(await kh.callTool("search_recipes", { query: "pasta", limit: 20 }));
+    const text = await kh.callToolText("search_recipes", { query: "pasta", limit: 20 });
     expect(text).toContain("Prep: 10 min");
     expect(text).toContain("Total: 25 min");
   });
@@ -29,7 +29,7 @@ describe("search_recipes tool", () => {
     });
     // Pass limit: 20 explicitly (mirrors what the SDK provides when caller omits limit,
     // since z.default(20) ensures the handler always receives 20 for omitted limit).
-    const text = getText(await kh.callTool("search_recipes", { query: "recipe", limit: 20 }));
+    const text = await kh.callToolText("search_recipes", { query: "recipe", limit: 20 });
     // Count "---" separators: N results produce N-1 separators
     const separators = (text.match(/^---$/gm) ?? []).length;
     expect(separators).toBe(19); // 20 results = 19 separators
@@ -39,7 +39,7 @@ describe("search_recipes tool", () => {
     kh.seed({
       recipes: Array.from({ length: 10 }, (_, i) => makeRecipe({ name: `Recipe ${String(i + 1)}` })),
     });
-    const text = getText(await kh.callTool("search_recipes", { query: "recipe", limit: 3 }));
+    const text = await kh.callToolText("search_recipes", { query: "recipe", limit: 3 });
     const separators = (text.match(/^---$/gm) ?? []).length;
     expect(separators).toBe(2); // 3 results = 2 separators
   });
@@ -47,13 +47,13 @@ describe("search_recipes tool", () => {
   it("category names appear in formatted results", async () => {
     const category = makeCategory({ name: "Dessert" });
     kh.seed({ recipes: [makeRecipe({ name: "Cake", categories: [category.uid] })], categories: [category] });
-    const text = getText(await kh.callTool("search_recipes", { query: "cake", limit: 20 }));
+    const text = await kh.callToolText("search_recipes", { query: "cake", limit: 20 });
     expect(text).toContain("Dessert");
   });
 
   it("empty store returns cold-start guard message", async () => {
     // store never seeded — size === 0, hasSynced false
-    const text = getText(await kh.callTool("search_recipes", { query: "anything", limit: 20 }));
+    const text = await kh.callToolText("search_recipes", { query: "anything", limit: 20 });
     expect(text.toLowerCase()).toContain("try again");
   });
 
@@ -66,37 +66,37 @@ describe("search_recipes tool", () => {
 
   it("rating appears in search hit when greater than 0", async () => {
     kh.seed({ recipes: [makeRecipe({ name: "Chocolate Cake", rating: 5 })] });
-    const text = getText(await kh.callTool("search_recipes", { query: "chocolate", limit: 20 }));
+    const text = await kh.callToolText("search_recipes", { query: "chocolate", limit: 20 });
     expect(text).toContain("5/5");
   });
 
   it("rating is absent from search hit when 0", async () => {
     kh.seed({ recipes: [makeRecipe({ name: "Chocolate Cake", rating: 0 })] });
-    const text = getText(await kh.callTool("search_recipes", { query: "chocolate", limit: 20 }));
+    const text = await kh.callToolText("search_recipes", { query: "chocolate", limit: 20 });
     expect(text).not.toContain("/5");
   });
 
   it("pinned marker appears in search hit when isPinned is true", async () => {
     kh.seed({ recipes: [makeRecipe({ name: "Chocolate Cake", isPinned: true })] });
-    const text = getText(await kh.callTool("search_recipes", { query: "chocolate", limit: 20 }));
+    const text = await kh.callToolText("search_recipes", { query: "chocolate", limit: 20 });
     expect(text).toContain("Pinned");
   });
 
   it("pinned marker is absent from search hit when isPinned is false", async () => {
     kh.seed({ recipes: [makeRecipe({ name: "Chocolate Cake", isPinned: false })] });
-    const text = getText(await kh.callTool("search_recipes", { query: "chocolate", limit: 20 }));
+    const text = await kh.callToolText("search_recipes", { query: "chocolate", limit: 20 });
     expect(text).not.toContain("Pinned");
   });
 
   it("on-grocery-list marker appears in search hit when onGroceryList is true", async () => {
     kh.seed({ recipes: [makeRecipe({ name: "Chocolate Cake", onGroceryList: true })] });
-    const text = getText(await kh.callTool("search_recipes", { query: "chocolate", limit: 20 }));
+    const text = await kh.callToolText("search_recipes", { query: "chocolate", limit: 20 });
     expect(text).toContain("Grocery List");
   });
 
   it("on-grocery-list marker is absent from search hit when onGroceryList is false", async () => {
     kh.seed({ recipes: [makeRecipe({ name: "Chocolate Cake", onGroceryList: false })] });
-    const text = getText(await kh.callTool("search_recipes", { query: "chocolate", limit: 20 }));
+    const text = await kh.callToolText("search_recipes", { query: "chocolate", limit: 20 });
     expect(text).not.toContain("Grocery List");
   });
 
@@ -113,9 +113,11 @@ describe("search_recipes tool", () => {
           makeRecipe({ name: "Garlic Bread", ingredients: "bread, garlic, butter" }),
         ],
       });
-      const text = getText(
-        await kh.callTool("search_recipes", { ingredients: ["tomato", "garlic"], match: "all", limit: 20 }),
-      );
+      const text = await kh.callToolText("search_recipes", {
+        ingredients: ["tomato", "garlic"],
+        match: "all",
+        limit: 20,
+      });
       expect(text).toContain("Pasta");
       expect(text).not.toContain("Salad");
       expect(text).not.toContain("Garlic Bread");
@@ -129,9 +131,11 @@ describe("search_recipes tool", () => {
           makeRecipe({ name: "Rice", ingredients: "rice, water" }),
         ],
       });
-      const text = getText(
-        await kh.callTool("search_recipes", { ingredients: ["tomato", "garlic"], match: "any", limit: 20 }),
-      );
+      const text = await kh.callToolText("search_recipes", {
+        ingredients: ["tomato", "garlic"],
+        match: "any",
+        limit: 20,
+      });
       expect(text).toContain("Pasta");
       expect(text).toContain("Salad");
       expect(text).not.toContain("Rice");
@@ -144,9 +148,11 @@ describe("search_recipes tool", () => {
           makeRecipe({ name: "HasOne", ingredients: "tomato, onion" }),
         ],
       });
-      const text = getText(
-        await kh.callTool("search_recipes", { ingredients: ["tomato", "garlic"], match: "all", limit: 20 }),
-      );
+      const text = await kh.callToolText("search_recipes", {
+        ingredients: ["tomato", "garlic"],
+        match: "all",
+        limit: 20,
+      });
       expect(text).toContain("HasBoth");
       expect(text).not.toContain("HasOne");
     });
@@ -164,7 +170,7 @@ describe("search_recipes tool", () => {
           makeRecipe({ name: `Recipe ${String(i + 1)}`, ingredients: "tomato" }),
         ),
       });
-      const text = getText(await kh.callTool("search_recipes", { ingredients: ["tomato"], match: "all", limit: 20 }));
+      const text = await kh.callToolText("search_recipes", { ingredients: ["tomato"], match: "all", limit: 20 });
       const separators = (text.match(/^---$/gm) ?? []).length;
       expect(separators).toBe(19); // 20 results = 19 separators
     });
@@ -183,7 +189,7 @@ describe("search_recipes tool", () => {
           makeRecipe({ name: "Slow", totalTime: "2 hours" }),
         ],
       });
-      const text = getText(await kh.callTool("search_recipes", { maxTotal: "30 minutes", limit: 20 }));
+      const text = await kh.callToolText("search_recipes", { maxTotal: "30 minutes", limit: 20 });
       expect(text).toContain("Quick");
       expect(text).not.toContain("Medium");
       expect(text).not.toContain("Slow");
@@ -196,7 +202,7 @@ describe("search_recipes tool", () => {
           makeRecipe({ name: "LongPrep", prepTime: "1 hour" }),
         ],
       });
-      const text = getText(await kh.callTool("search_recipes", { maxPrep: "15 minutes", limit: 20 }));
+      const text = await kh.callToolText("search_recipes", { maxPrep: "15 minutes", limit: 20 });
       expect(text).toContain("QuickPrep");
       expect(text).not.toContain("LongPrep");
     });
@@ -208,7 +214,7 @@ describe("search_recipes tool", () => {
           makeRecipe({ name: "SlowCook", cookTime: "3 hours" }),
         ],
       });
-      const text = getText(await kh.callTool("search_recipes", { maxCook: "30 min", limit: 20 }));
+      const text = await kh.callToolText("search_recipes", { maxCook: "30 min", limit: 20 });
       expect(text).toContain("QuickCook");
       expect(text).not.toContain("SlowCook");
     });
@@ -221,7 +227,7 @@ describe("search_recipes tool", () => {
           makeRecipe({ name: "Medium", totalTime: "30 min" }),
         ],
       });
-      const text = getText(await kh.callTool("search_recipes", { maxTotal: "2 hours", limit: 20 }));
+      const text = await kh.callToolText("search_recipes", { maxTotal: "2 hours", limit: 20 });
       expect(text.indexOf("Fast")).toBeLessThan(text.indexOf("Medium"));
       expect(text.indexOf("Medium")).toBeLessThan(text.indexOf("Slow"));
     });
@@ -232,7 +238,7 @@ describe("search_recipes tool", () => {
           makeRecipe({ name: `Recipe ${String(i + 1)}`, totalTime: "20 min" }),
         ),
       });
-      const text = getText(await kh.callTool("search_recipes", { maxTotal: "1 hour", limit: 3 }));
+      const text = await kh.callToolText("search_recipes", { maxTotal: "1 hour", limit: 3 });
       const separators = (text.match(/^---$/gm) ?? []).length;
       expect(separators).toBe(2); // 3 results = 2 separators
     });
@@ -258,7 +264,7 @@ describe("search_recipes tool", () => {
           makeRecipe({ name: "VagueRecipe", totalTime: "overnight" }),
         ],
       });
-      const text = getText(await kh.callTool("search_recipes", { maxTotal: "30 minutes", limit: 20 }));
+      const text = await kh.callToolText("search_recipes", { maxTotal: "30 minutes", limit: 20 });
       // Lenient inclusion: both are returned, the unparseable one not hidden.
       expect(text).toContain("CleanRecipe");
       expect(text).toContain("VagueRecipe");
@@ -270,7 +276,7 @@ describe("search_recipes tool", () => {
 
     it("recipes whose times all parse carry no advisory flag", async () => {
       kh.seed({ recipes: [makeRecipe({ name: "AllClean", totalTime: "20 min" })] });
-      const text = getText(await kh.callTool("search_recipes", { maxTotal: "30 minutes", limit: 20 }));
+      const text = await kh.callToolText("search_recipes", { maxTotal: "30 minutes", limit: 20 });
       expect(text).toContain("AllClean");
       expect(text).not.toContain("Time unverified");
     });
@@ -282,7 +288,7 @@ describe("search_recipes tool", () => {
           makeRecipe({ name: "LongPlus", totalTime: "5+ hours" }),
         ],
       });
-      const text = getText(await kh.callTool("search_recipes", { maxTotal: "30 minutes", limit: 20 }));
+      const text = await kh.callToolText("search_recipes", { maxTotal: "30 minutes", limit: 20 });
       expect(text).toContain("QuickReal");
       expect(text).not.toContain("LongPlus");
       expect(text).not.toContain("Time unverified");
@@ -302,9 +308,12 @@ describe("search_recipes tool", () => {
           makeRecipe({ name: "Garlic Bread", ingredients: "bread, garlic, butter" }),
         ],
       });
-      const text = getText(
-        await kh.callTool("search_recipes", { query: "pasta", ingredients: ["garlic"], match: "all", limit: 20 }),
-      );
+      const text = await kh.callToolText("search_recipes", {
+        query: "pasta",
+        ingredients: ["garlic"],
+        match: "all",
+        limit: 20,
+      });
       expect(text).toContain("Pasta Aglio");
       expect(text).not.toContain("Pasta Marinara");
       expect(text).not.toContain("Garlic Bread");
@@ -317,7 +326,7 @@ describe("search_recipes tool", () => {
           makeRecipe({ name: "Slow Soup", totalTime: "3 hours" }),
         ],
       });
-      const text = getText(await kh.callTool("search_recipes", { query: "soup", maxTotal: "30 minutes", limit: 20 }));
+      const text = await kh.callToolText("search_recipes", { query: "soup", maxTotal: "30 minutes", limit: 20 });
       expect(text).toContain("Quick Soup");
       expect(text).not.toContain("Slow Soup");
     });
@@ -333,14 +342,12 @@ describe("search_recipes tool", () => {
           makeRecipe({ name: "Quick Pasta", ingredients: "pasta, tomato", totalTime: "15 min" }),
         ],
       });
-      const text = getText(
-        await kh.callTool("search_recipes", {
-          ingredients: ["chicken"],
-          match: "all",
-          maxTotal: "30 minutes",
-          limit: 20,
-        }),
-      );
+      const text = await kh.callToolText("search_recipes", {
+        ingredients: ["chicken"],
+        match: "all",
+        maxTotal: "30 minutes",
+        limit: 20,
+      });
       expect(text).toContain("Quick Chicken");
       expect(text).not.toContain("Slow Chicken");
       expect(text).not.toContain("Quick Pasta");
@@ -356,13 +363,13 @@ describe("search_recipes tool", () => {
     // would be a ZodEffects, which the MCP SDK publishes with zero properties.
     it("an all-empty call is rejected by the handler", async () => {
       kh.seed({ recipes: [makeRecipe({ name: "X" })] });
-      const text = getText(await kh.callTool("search_recipes", {}));
+      const text = await kh.callToolText("search_recipes", {});
       expect(text).toContain("Provide at least one");
     });
 
     it("empty query with no other criteria is rejected by the handler", async () => {
       kh.seed({ recipes: [makeRecipe({ name: "X" })] });
-      const text = getText(await kh.callTool("search_recipes", { query: "" }));
+      const text = await kh.callToolText("search_recipes", { query: "" });
       expect(text).toContain("Provide at least one");
     });
 

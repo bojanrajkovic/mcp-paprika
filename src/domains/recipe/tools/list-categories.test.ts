@@ -25,7 +25,7 @@ describe("list_categories tool", () => {
       categories: [catA, catB],
     });
 
-    const text = getText(await kh.callTool("list_categories", {}));
+    const text = await kh.callToolText("list_categories", {});
 
     // Desserts has 2 non-trashed recipes (trashed one excluded)
     expect(text).toContain("Desserts");
@@ -45,7 +45,7 @@ describe("list_categories tool", () => {
       categories: [catZ, catA, catM],
     });
 
-    const text = getText(await kh.callTool("list_categories", {}));
+    const text = await kh.callToolText("list_categories", {});
 
     const posA = text.indexOf("Appetizers");
     const posM = text.indexOf("Main Courses");
@@ -63,7 +63,7 @@ describe("list_categories tool", () => {
       categories: [catEmpty, catFull],
     });
 
-    const text = getText(await kh.callTool("list_categories", {}));
+    const text = await kh.callToolText("list_categories", {});
 
     expect(text).toContain("Empty Category");
     expect(text).toContain("0 recipes");
@@ -73,7 +73,7 @@ describe("list_categories tool", () => {
 
   it("empty recipe store returns cold-start error", async () => {
     // Recipe store not seeded — size === 0
-    const text = getText(await kh.callTool("list_categories", {}));
+    const text = await kh.callToolText("list_categories", {});
     expect(text.toLowerCase()).toContain("try again");
   });
 
@@ -84,7 +84,7 @@ describe("list_categories tool", () => {
       categories: [cat],
     });
 
-    const text = getText(await kh.callTool("list_categories", {}));
+    const text = await kh.callToolText("list_categories", {});
     expect(text).toContain("uid: `cat-uid-1`");
   });
 
@@ -96,7 +96,7 @@ describe("list_categories tool", () => {
       categories: [parent, child],
     });
 
-    const text = getText(await kh.callTool("list_categories", {}));
+    const text = await kh.callToolText("list_categories", {});
 
     expect(text).toContain("- **Baking**");
     expect(text).toContain("  - **Cakes**");
@@ -110,7 +110,7 @@ describe("list_categories tool", () => {
       categories: [orphan, root],
     });
 
-    const text = getText(await kh.callTool("list_categories", {}));
+    const text = await kh.callToolText("list_categories", {});
 
     // Orphan is NOT silently hidden, renders at top level (no indent), flagged.
     expect(text).toContain("- **Curries**");
@@ -142,7 +142,7 @@ describe("list_categories tool", () => {
       // categories omitted — store has hasSynced === false
     });
 
-    const text = getText(await kh.callTool("list_categories", {}));
+    const text = await kh.callToolText("list_categories", {});
     expect(text.toLowerCase()).toContain("still syncing");
   });
 });

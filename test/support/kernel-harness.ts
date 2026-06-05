@@ -16,7 +16,7 @@ import { registeredModules } from "../../src/kernel/registry.js";
 import { createIndexEvents } from "../../src/server/index-events.js";
 import { SILENT_LOG } from "../../src/utils/log.js";
 import { getCacheDir } from "../../src/utils/xdg.js";
-import { makeStubNotifier, makeTestServer } from "./tool-test-utils.js";
+import { getText, makeStubNotifier, makeTestServer } from "./tool-test-utils.js";
 import { useXdgIsolation } from "./xdg-isolation.js";
 // Side-effect: every domain/feature module self-registers, so `registeredModules()`
 // is populated and the harness can resolve any module + its deps by id.
@@ -191,6 +191,8 @@ export interface KernelHarness {
   readonly setup: () => Promise<void>;
   readonly teardown: () => Promise<void>;
   readonly callTool: (name: string, args: Record<string, unknown>) => Promise<CallToolResult>;
+  /** `callTool` then the text of the first content block — the common read-assertion shorthand. */
+  readonly callToolText: (name: string, args: Record<string, unknown>) => Promise<string>;
   readonly callResourceList: (name: string) => Promise<unknown>;
   readonly callResource: (name: string, uid: string, uri?: string) => Promise<unknown>;
   readonly seed: (data: SeedData) => void;
@@ -259,6 +261,7 @@ export function useKernelHarness(rootId: DomainId, opts: UseKernelHarnessOptions
       await xdg.teardown();
     },
     callTool: (name, args) => live().callTool(name, args),
+    callToolText: async (name, args) => getText(await live().callTool(name, args)),
     callResourceList: (name) => live().callResourceList(name),
     callResource: (name, uid, uri) => live().callResource(name, uid, uri),
     seed: (data) => {

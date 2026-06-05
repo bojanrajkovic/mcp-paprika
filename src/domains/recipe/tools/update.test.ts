@@ -4,7 +4,6 @@ import type { RecipeState } from "../module.js";
 
 import { makeCategory, makeRecipe } from "../../../../test/domains/recipe/__fixtures__/recipes.js";
 import { useKernelHarness } from "../../../../test/support/kernel-harness.js";
-import { getText } from "../../../../test/support/tool-test-utils.js";
 import { updateRecipeInputSchema } from "./update.js";
 
 describe("update_recipe tool", () => {
@@ -57,7 +56,7 @@ describe("update_recipe tool", () => {
     const recipe = makeRecipe();
     kh.seed({ recipes: [recipe] });
 
-    const text = getText(await kh.callTool("update_recipe", { uid: "nonexistent-uid", name: "New" }));
+    const text = await kh.callToolText("update_recipe", { uid: "nonexistent-uid", name: "New" });
 
     expect(text.toLowerCase()).toContain("no recipe found");
     expect(kh.client().saveRecipe).not.toHaveBeenCalled();
@@ -69,7 +68,7 @@ describe("update_recipe tool", () => {
     kh.seed({ recipes: [recipe] });
     const before = (kh.state() as RecipeState).recipe.store.size;
 
-    const text = getText(await kh.callTool("update_recipe", { uid: recipe.uid, name: "New" }));
+    const text = await kh.callToolText("update_recipe", { uid: recipe.uid, name: "New" });
 
     expect(text).toContain("Failed to update");
     expect(text).toContain("Conflict");
@@ -79,7 +78,7 @@ describe("update_recipe tool", () => {
 
   it("cold-start guard fires before any store lookup", async () => {
     // store never seeded — hasSynced is false
-    const text = getText(await kh.callTool("update_recipe", { uid: "any-uid", name: "New" }));
+    const text = await kh.callToolText("update_recipe", { uid: "any-uid", name: "New" });
 
     expect(text.toLowerCase()).toContain("try again");
     expect(kh.client().saveRecipe).not.toHaveBeenCalled();

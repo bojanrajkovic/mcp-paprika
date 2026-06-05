@@ -6,7 +6,6 @@ import type { SemanticResult, VectorStore } from "../../vector-store.js";
 
 import { makeCategory, makeRecipe } from "../../../../test/domains/recipe/__fixtures__/recipes.js";
 import { useKernelHarness } from "../../../../test/support/kernel-harness.js";
-import { getText } from "../../../../test/support/tool-test-utils.js";
 
 // Build a minimal mock vector store whose `search` spy returns pre-supplied results.
 // `uid` is loosened to a plain string so tests pass literal UIDs; branded here.
@@ -96,7 +95,7 @@ describe("discover_recipes tool", () => {
         recipes: [makeRecipe({ uid: "recipe-1" as RecipeUid, name: "Chocolate Cake" })],
       });
 
-      const text = getText(await kh.callTool("discover_recipes", { query: "chocolate" }));
+      const text = await kh.callToolText("discover_recipes", { query: "chocolate" });
 
       expect(text).toContain("Chocolate Cake");
       expect(text).toContain("92% match");
@@ -111,7 +110,7 @@ describe("discover_recipes tool", () => {
         categories: [category],
       });
 
-      const text = getText(await kh.callTool("discover_recipes", { query: "dessert" }));
+      const text = await kh.callToolText("discover_recipes", { query: "dessert" });
 
       expect(text).toContain("Dessert");
     });
@@ -123,7 +122,7 @@ describe("discover_recipes tool", () => {
         recipes: [makeRecipe({ uid: "recipe-1" as RecipeUid, name: "Bread", categories: [] })],
       });
 
-      const text = getText(await kh.callTool("discover_recipes", { query: "bread" }));
+      const text = await kh.callToolText("discover_recipes", { query: "bread" });
 
       expect(text).not.toContain("**Categories:**");
     });
@@ -135,7 +134,7 @@ describe("discover_recipes tool", () => {
         recipes: [makeRecipe({ uid: "recipe-1" as RecipeUid, name: "Pasta", prepTime: "10 min", cookTime: "30 min" })],
       });
 
-      const text = getText(await kh.callTool("discover_recipes", { query: "pasta" }));
+      const text = await kh.callToolText("discover_recipes", { query: "pasta" });
 
       expect(text).toContain("Prep: 10 min");
       expect(text).toContain("Cook: 30 min");
@@ -148,7 +147,7 @@ describe("discover_recipes tool", () => {
         recipes: [makeRecipe({ uid: "recipe-1" as RecipeUid, name: "Soup", prepTime: null, cookTime: null })],
       });
 
-      const text = getText(await kh.callTool("discover_recipes", { query: "soup" }));
+      const text = await kh.callToolText("discover_recipes", { query: "soup" });
 
       expect(text).not.toContain("Prep:");
       expect(text).not.toContain("Cook:");
@@ -161,7 +160,7 @@ describe("discover_recipes tool", () => {
         recipes: [makeRecipe({ uid: "abc-def-123" as RecipeUid, name: "Test Recipe" })],
       });
 
-      const text = getText(await kh.callTool("discover_recipes", { query: "test" }));
+      const text = await kh.callToolText("discover_recipes", { query: "test" });
 
       expect(text).toContain("UID: `abc-def-123`");
     });
@@ -173,7 +172,7 @@ describe("discover_recipes tool", () => {
       injectVectorStore(kh, mockVs);
       kh.seed({ recipes: [makeRecipe()] });
 
-      const text = getText(await kh.callTool("discover_recipes", { query: "nonexistent" }));
+      const text = await kh.callToolText("discover_recipes", { query: "nonexistent" });
 
       expect(text).toBe("No recipes found matching that description.");
     });
@@ -186,7 +185,7 @@ describe("discover_recipes tool", () => {
       injectVectorStore(kh, mockVs);
       kh.seed({ recipes: [makeRecipe({ uid: "existing" as RecipeUid })] });
 
-      const text = getText(await kh.callTool("discover_recipes", { query: "deleted" }));
+      const text = await kh.callToolText("discover_recipes", { query: "deleted" });
 
       expect(text).toBe("No recipes found matching that description.");
     });
@@ -207,7 +206,7 @@ describe("discover_recipes tool", () => {
         ],
       });
 
-      const text = getText(await kh.callTool("discover_recipes", { query: "test" }));
+      const text = await kh.callToolText("discover_recipes", { query: "test" });
 
       expect(text).toContain("Existing 1");
       expect(text).toContain("Existing 2");
@@ -228,7 +227,7 @@ describe("discover_recipes tool", () => {
         ],
       });
 
-      const text = getText(await kh.callTool("discover_recipes", { query: "test" }));
+      const text = await kh.callToolText("discover_recipes", { query: "test" });
 
       expect(text).toContain("1. **First**");
       expect(text).toContain("2. **Third**");
@@ -249,7 +248,7 @@ describe("discover_recipes tool", () => {
         ],
       });
 
-      const text = getText(await kh.callTool("discover_recipes", { query: "test" }));
+      const text = await kh.callToolText("discover_recipes", { query: "test" });
 
       expect(text).toContain("Live One");
       expect(text).not.toContain("Trashed One");
@@ -264,7 +263,7 @@ describe("discover_recipes tool", () => {
       injectVectorStore(kh, mockVs);
       // store never seeded — hasSynced() is false
 
-      const text = getText(await kh.callTool("discover_recipes", { query: "anything" }));
+      const text = await kh.callToolText("discover_recipes", { query: "anything" });
 
       expect(text.toLowerCase()).toContain("try again");
       expect(mockVs.search).not.toHaveBeenCalled();

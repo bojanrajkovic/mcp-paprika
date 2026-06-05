@@ -9,7 +9,6 @@ import { makeMealType } from "../../../../test/domains/meal-type/__fixtures__/me
 import { makeMenu, makeMenuItem } from "../../../../test/domains/menu/__fixtures__/menus.js";
 import { makeRecipe } from "../../../../test/domains/recipe/__fixtures__/recipes.js";
 import { useKernelHarness } from "../../../../test/support/kernel-harness.js";
-import { getText } from "../../../../test/support/tool-test-utils.js";
 import { updateMenuItemInputSchema } from "./menu-item-update.js";
 import { addMenuItemsInputSchema } from "./menu-item-write.js";
 
@@ -43,12 +42,10 @@ describe("add_menu_items tool", () => {
   it("returns sync-not-ready message when stores not loaded", async () => {
     // Omit opts entirely → menus/menuItems stores stay cold
     seedBase(kh);
-    const text = getText(
-      await kh.callTool("add_menu_items", {
-        menu: { uid: "m-1" },
-        items: [{ recipe_uid: TACOS_UID, day: 1, type: { name: "Dinner" } }],
-      }),
-    );
+    const text = await kh.callToolText("add_menu_items", {
+      menu: { uid: "m-1" },
+      items: [{ recipe_uid: TACOS_UID, day: 1, type: { name: "Dinner" } }],
+    });
     expect(text.toLowerCase()).toContain("not yet synced");
   });
 
@@ -57,15 +54,13 @@ describe("add_menu_items tool", () => {
     seedBase(kh, { menus: [menu] });
     vi.mocked(kh.client().saveMenuItems).mockImplementation(async (items: ReadonlyArray<MenuItem>) => [...items]);
 
-    const text = getText(
-      await kh.callTool("add_menu_items", {
-        menu: { uid: "m-1" },
-        items: [
-          { recipe_uid: TACOS_UID, day: 1, type: { name: "Dinner" } },
-          { recipe_uid: SOUP_UID, day: 2, type: { builtin: 0 } },
-        ],
-      }),
-    );
+    const text = await kh.callToolText("add_menu_items", {
+      menu: { uid: "m-1" },
+      items: [
+        { recipe_uid: TACOS_UID, day: 1, type: { name: "Dinner" } },
+        { recipe_uid: SOUP_UID, day: 2, type: { builtin: 0 } },
+      ],
+    });
 
     expect(kh.client().saveMenus).not.toHaveBeenCalled(); // no auto-expand needed (days=2)
     expect(kh.client().saveMenuItems).toHaveBeenCalledOnce();
@@ -89,12 +84,10 @@ describe("add_menu_items tool", () => {
     seedBase(kh, { menus: [menu] });
     vi.mocked(kh.client().saveMenuItems).mockImplementation(async (items: ReadonlyArray<MenuItem>) => [...items]);
 
-    const text = getText(
-      await kh.callTool("add_menu_items", {
-        menu: { uid: "m-1" },
-        items: [{ name: "Leftover Surprise", day: 1, type: { name: "Dinner" } }],
-      }),
-    );
+    const text = await kh.callToolText("add_menu_items", {
+      menu: { uid: "m-1" },
+      items: [{ name: "Leftover Surprise", day: 1, type: { name: "Dinner" } }],
+    });
 
     expect(kh.client().saveMenuItems).toHaveBeenCalledOnce();
     const saved = vi.mocked(kh.client().saveMenuItems).mock.calls[0]![0] as MenuItem[];
@@ -188,12 +181,10 @@ describe("add_menu_items tool", () => {
     vi.mocked(kh.client().saveMenus).mockImplementation(async (items: ReadonlyArray<Menu>) => [...items]);
     vi.mocked(kh.client().saveMenuItems).mockImplementation(async (items: ReadonlyArray<MenuItem>) => [...items]);
 
-    const text = getText(
-      await kh.callTool("add_menu_items", {
-        menu: { uid: "m-1" },
-        items: [{ recipe_uid: TACOS_UID, day: 3, type: { name: "Dinner" } }],
-      }),
-    );
+    const text = await kh.callToolText("add_menu_items", {
+      menu: { uid: "m-1" },
+      items: [{ recipe_uid: TACOS_UID, day: 3, type: { name: "Dinner" } }],
+    });
 
     // Menu extended to 3 days and saved BEFORE the items.
     expect(kh.client().saveMenus).toHaveBeenCalledOnce();
@@ -224,15 +215,13 @@ describe("add_menu_items tool", () => {
     const menu = makeMenu({ uid: "m-1" as MenuUid, name: "Plan", days: 3 });
     seedBase(kh, { menus: [menu] });
 
-    const text = getText(
-      await kh.callTool("add_menu_items", {
-        menu: { uid: "m-1" },
-        items: [
-          { recipe_uid: "recipe-ghost" as RecipeUid, day: 1, type: { name: "Dinner" } },
-          { recipe_uid: TACOS_UID, day: 2, type: { uid: "NOPE" as MealTypeUid } },
-        ],
-      }),
-    );
+    const text = await kh.callToolText("add_menu_items", {
+      menu: { uid: "m-1" },
+      items: [
+        { recipe_uid: "recipe-ghost" as RecipeUid, day: 1, type: { name: "Dinner" } },
+        { recipe_uid: TACOS_UID, day: 2, type: { uid: "NOPE" as MealTypeUid } },
+      ],
+    });
 
     expect(text).toContain("Could not add 2 menu items:");
     expect(text).toContain('Item 0: recipe_uid "recipe-ghost" is not known');
@@ -244,12 +233,10 @@ describe("add_menu_items tool", () => {
   it("reports a menu UID miss without saving", async () => {
     seedBase(kh, {});
 
-    const text = getText(
-      await kh.callTool("add_menu_items", {
-        menu: { uid: "ghost" },
-        items: [{ recipe_uid: TACOS_UID, day: 1, type: { name: "Dinner" } }],
-      }),
-    );
+    const text = await kh.callToolText("add_menu_items", {
+      menu: { uid: "ghost" },
+      items: [{ recipe_uid: TACOS_UID, day: 1, type: { name: "Dinner" } }],
+    });
     expect(text).toContain('No menu found with UID "ghost" (it may not exist or was already deleted).');
     expect(kh.client().saveMenuItems).not.toHaveBeenCalled();
   });
@@ -280,15 +267,13 @@ describe("add_menu_items tool", () => {
     vi.mocked(kh.client().saveMenuItems).mockImplementation(async (items: ReadonlyArray<MenuItem>) => [...items]);
     vi.mocked(kh.client().saveMealType).mockImplementation(async (mt) => mt);
 
-    const text = getText(
-      await kh.callTool("add_menu_items", {
-        menu: { uid: "m-1" },
-        items: [
-          { recipe_uid: TACOS_UID, day: 1, type: { name: "Brunch" } },
-          { recipe_uid: "recipe-ghost" as RecipeUid, day: 2, type: { builtin: 2 } },
-        ],
-      }),
-    );
+    const text = await kh.callToolText("add_menu_items", {
+      menu: { uid: "m-1" },
+      items: [
+        { recipe_uid: TACOS_UID, day: 1, type: { name: "Brunch" } },
+        { recipe_uid: "recipe-ghost" as RecipeUid, day: 2, type: { builtin: 2 } },
+      ],
+    });
 
     expect(text).toContain("Could not add");
     expect(kh.client().saveMealType).not.toHaveBeenCalled();
@@ -301,12 +286,10 @@ describe("add_menu_items tool", () => {
     vi.mocked(kh.client().saveMealType).mockImplementation(async (mt) => mt);
     vi.mocked(kh.client().saveMenus).mockRejectedValue(new Error("network"));
 
-    const text = getText(
-      await kh.callTool("add_menu_items", {
-        menu: { uid: "m-1" },
-        items: [{ recipe_uid: TACOS_UID, day: 3, type: { name: "Brunch" } }], // day 3 > 1 → triggers expand
-      }),
-    );
+    const text = await kh.callToolText("add_menu_items", {
+      menu: { uid: "m-1" },
+      items: [{ recipe_uid: TACOS_UID, day: 3, type: { name: "Brunch" } }], // day 3 > 1 → triggers expand
+    });
 
     expect(text).toContain("Failed to extend menu");
     expect(kh.client().saveMealType).not.toHaveBeenCalled(); // expand failed before any create
@@ -322,7 +305,7 @@ describe("update_menu_item tool", () => {
   it("returns sync-not-ready message when stores not loaded", async () => {
     // Omit opts entirely → menus/menuItems stores stay cold
     seedBase(kh);
-    const text = getText(await kh.callTool("update_menu_item", { uid: "mi-1", type: { name: "Dinner" } }));
+    const text = await kh.callToolText("update_menu_item", { uid: "mi-1", type: { name: "Dinner" } });
     expect(text.toLowerCase()).toContain("not yet synced");
   });
 
@@ -330,7 +313,7 @@ describe("update_menu_item tool", () => {
     const item = makeMenuItem({ uid: "mi-1" as MenuItemUid, menuUid: "m-1" });
     seedBase(kh, { menuItems: [item] });
 
-    const text = getText(await kh.callTool("update_menu_item", { uid: "mi-1" }));
+    const text = await kh.callToolText("update_menu_item", { uid: "mi-1" });
     expect(text).toContain("Nothing to update");
     expect(kh.client().saveMenuItems).not.toHaveBeenCalled();
   });
@@ -378,9 +361,7 @@ describe("update_menu_item tool", () => {
     const item = makeMenuItem({ uid: "mi-1" as MenuItemUid, menuUid: "m-1" });
     seedBase(kh, { menuItems: [item] });
 
-    const text = getText(
-      await kh.callTool("update_menu_item", { uid: "mi-1", recipe_uid: "recipe-ghost" as RecipeUid }),
-    );
+    const text = await kh.callToolText("update_menu_item", { uid: "mi-1", recipe_uid: "recipe-ghost" as RecipeUid });
     expect(text).toContain("is not known to the local recipe store");
     expect(kh.client().saveMenuItems).not.toHaveBeenCalled();
   });
@@ -390,13 +371,11 @@ describe("update_menu_item tool", () => {
     seedBase(kh, { menuItems: [item] });
     vi.mocked(kh.client().saveMealType).mockImplementation(async (mt) => mt);
 
-    const text = getText(
-      await kh.callTool("update_menu_item", {
-        uid: "mi-1",
-        recipe_uid: "recipe-ghost" as RecipeUid,
-        type: { name: "Brunch" },
-      }),
-    );
+    const text = await kh.callToolText("update_menu_item", {
+      uid: "mi-1",
+      recipe_uid: "recipe-ghost" as RecipeUid,
+      type: { name: "Brunch" },
+    });
     // The recipe is validated before the type is created → no orphan type.
     expect(text).toContain("is not known to the local recipe store");
     expect(kh.client().saveMealType).not.toHaveBeenCalled();
@@ -406,7 +385,7 @@ describe("update_menu_item tool", () => {
   it("reports a UID miss without saving", async () => {
     seedBase(kh, {});
 
-    const text = getText(await kh.callTool("update_menu_item", { uid: "ghost", type: { name: "Dinner" } }));
+    const text = await kh.callToolText("update_menu_item", { uid: "ghost", type: { name: "Dinner" } });
     expect(text).toContain('No menu item found with UID "ghost" (it may not exist or was already deleted).');
     expect(kh.client().saveMenuItems).not.toHaveBeenCalled();
   });
@@ -426,7 +405,7 @@ describe("delete_menu_item tool", () => {
     kh.seed({ menus: [], menuItems: [item], mealTypes: [] });
     vi.mocked(kh.client().saveMenuItems).mockImplementation(async (items: ReadonlyArray<MenuItem>) => [...items]);
 
-    const text = getText(await kh.callTool("delete_menu_item", { uid: "mi-1" }));
+    const text = await kh.callToolText("delete_menu_item", { uid: "mi-1" });
 
     expect(text).toContain('Menu item "Turkey" has been deleted.');
     const saved = (vi.mocked(kh.client().saveMenuItems).mock.calls[0]![0] as MenuItem[])[0]!;
@@ -443,7 +422,7 @@ describe("delete_menu_item tool", () => {
     await kh.callTool("delete_menu_item", { uid: "mi-1" });
     expect(kh.client().saveMenuItems).toHaveBeenCalledOnce();
 
-    const text = getText(await kh.callTool("delete_menu_item", { uid: "mi-1" }));
+    const text = await kh.callToolText("delete_menu_item", { uid: "mi-1" });
     expect(text).toContain('No menu item found with UID "mi-1" (it may not exist or was already deleted).');
     expect(kh.client().saveMenuItems).toHaveBeenCalledOnce(); // not called a second time
   });
@@ -451,7 +430,7 @@ describe("delete_menu_item tool", () => {
   it("reports a UID miss (never existed) without saving", async () => {
     kh.seed({ menus: [], menuItems: [], mealTypes: [] });
 
-    const text = getText(await kh.callTool("delete_menu_item", { uid: "ghost" }));
+    const text = await kh.callToolText("delete_menu_item", { uid: "ghost" });
     expect(text).toContain('No menu item found with UID "ghost" (it may not exist or was already deleted).');
     expect(kh.client().saveMenuItems).not.toHaveBeenCalled();
   });

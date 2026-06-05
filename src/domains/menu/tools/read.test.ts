@@ -5,7 +5,6 @@ import type { MealTypeUid, MenuItemUid, MenuUid } from "../../../ids.js";
 import { makeMealType } from "../../../../test/domains/meal-type/__fixtures__/meal-types.js";
 import { makeMenu, makeMenuItem } from "../../../../test/domains/menu/__fixtures__/menus.js";
 import { useKernelHarness } from "../../../../test/support/kernel-harness.js";
-import { getText } from "../../../../test/support/tool-test-utils.js";
 
 const BREAKFAST = makeMealType({
   uid: "breakfast-uid" as MealTypeUid,
@@ -22,13 +21,13 @@ describe("list_menus tool", () => {
 
   it("blocks when stores are not synced", async () => {
     // stores never seeded — hasSynced stays false
-    const text = getText(await kh.callTool("list_menus", {}));
+    const text = await kh.callToolText("list_menus", {});
     expect(text.toLowerCase()).toContain("not yet synced");
   });
 
   it("returns an empty message when no menus exist", async () => {
     kh.seed({ menus: [], menuItems: [], mealTypes: [BREAKFAST, DINNER] });
-    const text = getText(await kh.callTool("list_menus", {}));
+    const text = await kh.callToolText("list_menus", {});
     expect(text).toBe("No menus found.");
   });
 
@@ -36,14 +35,14 @@ describe("list_menus tool", () => {
     const menu = makeMenu({ uid: "m-1" as MenuUid, name: "Holiday", days: 3 });
     const items = [makeMenuItem({ menuUid: "m-1", day: 1 }), makeMenuItem({ menuUid: "m-1", day: 2 })];
     kh.seed({ menus: [menu], menuItems: items, mealTypes: [BREAKFAST, DINNER] });
-    const text = getText(await kh.callTool("list_menus", {}));
+    const text = await kh.callToolText("list_menus", {});
     expect(text).toContain("- **Holiday** (2 items, 3 days) — `m-1`");
   });
 
   it("uses singular 'day' for a one-day menu", async () => {
     const menu = makeMenu({ uid: "m-2" as MenuUid, name: "Single", days: 1 });
     kh.seed({ menus: [menu], menuItems: [], mealTypes: [BREAKFAST, DINNER] });
-    const text = getText(await kh.callTool("list_menus", {}));
+    const text = await kh.callToolText("list_menus", {});
     expect(text).toContain("(0 items, 1 day)");
   });
 
@@ -51,7 +50,7 @@ describe("list_menus tool", () => {
     const later = makeMenu({ uid: "m-z" as MenuUid, name: "Aardvark", orderFlag: 5 });
     const earlier = makeMenu({ uid: "m-a" as MenuUid, name: "Zucchini", orderFlag: 1 });
     kh.seed({ menus: [later, earlier], menuItems: [], mealTypes: [BREAKFAST, DINNER] });
-    const text = getText(await kh.callTool("list_menus", {}));
+    const text = await kh.callToolText("list_menus", {});
     expect(text.indexOf("Zucchini")).toBeLessThan(text.indexOf("Aardvark"));
   });
 
@@ -59,7 +58,7 @@ describe("list_menus tool", () => {
     const b = makeMenu({ uid: "m-b" as MenuUid, name: "Bravo", orderFlag: 0 });
     const a = makeMenu({ uid: "m-c" as MenuUid, name: "Alpha", orderFlag: 0 });
     kh.seed({ menus: [b, a], menuItems: [], mealTypes: [BREAKFAST, DINNER] });
-    const text = getText(await kh.callTool("list_menus", {}));
+    const text = await kh.callToolText("list_menus", {});
     expect(text.indexOf("Alpha")).toBeLessThan(text.indexOf("Bravo"));
   });
 });
@@ -71,7 +70,7 @@ describe("read_menu tool", () => {
 
   it("blocks when stores are not synced", async () => {
     // stores never seeded — hasSynced stays false
-    const text = getText(await kh.callTool("read_menu", { lookup: { uid: "whatever" } }));
+    const text = await kh.callToolText("read_menu", { lookup: { uid: "whatever" } });
     expect(text.toLowerCase()).toContain("not yet synced");
   });
 
@@ -86,7 +85,7 @@ describe("read_menu tool", () => {
       recipeUid: "recipe-77",
     });
     kh.seed({ menus: [menu], menuItems: [item], mealTypes: [BREAKFAST, DINNER] });
-    const text = getText(await kh.callTool("read_menu", { lookup: { uid: "m-10" } }));
+    const text = await kh.callToolText("read_menu", { lookup: { uid: "m-10" } });
     expect(text).toContain("# Dinner Week");
     expect(text).toContain("**Days:** 2");
     expect(text).toContain("- **Dinner:** Roast Chicken · item `mi-10` · recipe `recipe-77`");
@@ -97,21 +96,21 @@ describe("read_menu tool", () => {
   it("resolves a menu by name (case-insensitive)", async () => {
     const menu = makeMenu({ uid: "m-11" as MenuUid, name: "Thanksgiving Dinner" });
     kh.seed({ menus: [menu], menuItems: [], mealTypes: [BREAKFAST, DINNER] });
-    const text = getText(await kh.callTool("read_menu", { lookup: { name: "thanksgiving" } }));
+    const text = await kh.callToolText("read_menu", { lookup: { name: "thanksgiving" } });
     expect(text).toContain("# Thanksgiving Dinner");
   });
 
   it("reports no match for an unknown UID", async () => {
     const menu = makeMenu({ uid: "m-12" as MenuUid, name: "Present" });
     kh.seed({ menus: [menu], menuItems: [], mealTypes: [BREAKFAST, DINNER] });
-    const text = getText(await kh.callTool("read_menu", { lookup: { uid: "missing" } }));
+    const text = await kh.callToolText("read_menu", { lookup: { uid: "missing" } });
     expect(text).toContain('No menu found with UID "missing".');
   });
 
   it("reports no match for a name with no hits", async () => {
     const menu = makeMenu({ uid: "m-13" as MenuUid, name: "Present" });
     kh.seed({ menus: [menu], menuItems: [], mealTypes: [BREAKFAST, DINNER] });
-    const text = getText(await kh.callTool("read_menu", { lookup: { name: "nonexistent" } }));
+    const text = await kh.callToolText("read_menu", { lookup: { name: "nonexistent" } });
     expect(text).toContain('No menus found matching "nonexistent".');
   });
 
@@ -119,7 +118,7 @@ describe("read_menu tool", () => {
     const a = makeMenu({ uid: "m-14" as MenuUid, name: "Summer Plan A" });
     const b = makeMenu({ uid: "m-15" as MenuUid, name: "Summer Plan B" });
     kh.seed({ menus: [a, b], menuItems: [], mealTypes: [BREAKFAST, DINNER] });
-    const text = getText(await kh.callTool("read_menu", { lookup: { name: "summer" } }));
+    const text = await kh.callToolText("read_menu", { lookup: { name: "summer" } });
     expect(text).toContain('Multiple menus match "summer"');
     expect(text).toContain("`m-14`");
     expect(text).toContain("`m-15`");

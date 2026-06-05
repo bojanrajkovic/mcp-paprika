@@ -5,7 +5,6 @@ import type { GroceryState } from "../module.js";
 import { makeGroceryItem } from "../../../../test/domains/grocery/__fixtures__/grocery-items.js";
 import { makeGroceryList } from "../../../../test/domains/grocery/__fixtures__/grocery-lists.js";
 import { useKernelHarness } from "../../../../test/support/kernel-harness.js";
-import { getText } from "../../../../test/support/tool-test-utils.js";
 
 describe("list_grocery_lists tool", () => {
   const kh = useKernelHarness("grocery");
@@ -14,13 +13,13 @@ describe("list_grocery_lists tool", () => {
 
   it("returns sync-not-ready message when stores not loaded", async () => {
     // DO NOT seed — stores are empty, hasSynced is false
-    const text = getText(await kh.callTool("list_grocery_lists", {}));
+    const text = await kh.callToolText("list_grocery_lists", {});
     expect(text.toLowerCase()).toContain("not yet synced");
   });
 
   it("returns empty message when no lists exist", async () => {
     kh.seed({ groceryLists: [], groceryItems: [] });
-    const text = getText(await kh.callTool("list_grocery_lists", {}));
+    const text = await kh.callToolText("list_grocery_lists", {});
     expect(text).toBe("No grocery lists found.");
   });
 
@@ -32,7 +31,7 @@ describe("list_grocery_lists tool", () => {
     const item3 = makeGroceryItem({ listUid: listB.uid });
     kh.seed({ groceryLists: [listA, listB], groceryItems: [item1, item2, item3] });
 
-    const text = getText(await kh.callTool("list_grocery_lists", {}));
+    const text = await kh.callToolText("list_grocery_lists", {});
 
     expect(text).toContain("You have 2 grocery list(s)");
     expect(text).toContain("Weekly Shopping");
@@ -49,7 +48,7 @@ describe("list_grocery_lists tool", () => {
     const listM = makeGroceryList({ name: "Monthly Stock" });
     kh.seed({ groceryLists: [listZ, listA, listM], groceryItems: [] });
 
-    const text = getText(await kh.callTool("list_grocery_lists", {}));
+    const text = await kh.callToolText("list_grocery_lists", {});
 
     const aldiIdx = text.indexOf("Aldi Trip");
     const monthlyIdx = text.indexOf("Monthly Stock");
@@ -69,13 +68,13 @@ describe("read_grocery_list tool", () => {
   afterEach(kh.teardown);
 
   it("returns sync-not-ready message when stores not loaded", async () => {
-    const text = getText(await kh.callTool("read_grocery_list", { lookup: { uid: "some-uid" } }));
+    const text = await kh.callToolText("read_grocery_list", { lookup: { uid: "some-uid" } });
     expect(text.toLowerCase()).toContain("not yet synced");
   });
 
   it("returns not-found when UID does not match any list", async () => {
     kh.seed({ groceryLists: [], groceryItems: [] });
-    const text = getText(await kh.callTool("read_grocery_list", { lookup: { uid: "nonexistent-uid" } }));
+    const text = await kh.callToolText("read_grocery_list", { lookup: { uid: "nonexistent-uid" } });
     expect(text.toLowerCase()).toContain("no grocery list found");
   });
 
@@ -85,7 +84,7 @@ describe("read_grocery_list tool", () => {
     const item2 = makeGroceryItem({ listUid: list.uid, ingredient: "Milk" });
     kh.seed({ groceryLists: [list], groceryItems: [item1, item2] });
 
-    const text = getText(await kh.callTool("read_grocery_list", { lookup: { uid: list.uid } }));
+    const text = await kh.callToolText("read_grocery_list", { lookup: { uid: list.uid } });
 
     expect(text).toContain("Weekly Shopping");
     expect(text).toContain(list.uid);
@@ -97,7 +96,7 @@ describe("read_grocery_list tool", () => {
     const list = makeGroceryList({ name: "Weekly Shopping" });
     kh.seed({ groceryLists: [list], groceryItems: [] });
 
-    const text = getText(await kh.callTool("read_grocery_list", { lookup: { name: "Weekly Shopping" } }));
+    const text = await kh.callToolText("read_grocery_list", { lookup: { name: "Weekly Shopping" } });
 
     expect(text).toContain("Weekly Shopping");
     expect(text).toContain(list.uid);
@@ -107,7 +106,7 @@ describe("read_grocery_list tool", () => {
     const list = makeGroceryList({ name: "Weekly Shopping" });
     kh.seed({ groceryLists: [list], groceryItems: [] });
 
-    const text = getText(await kh.callTool("read_grocery_list", { lookup: { name: "Weekly" } }));
+    const text = await kh.callToolText("read_grocery_list", { lookup: { name: "Weekly" } });
 
     expect(text).toContain("Weekly Shopping");
     expect(text).toContain(list.uid);
@@ -117,7 +116,7 @@ describe("read_grocery_list tool", () => {
     const list = makeGroceryList({ name: "Weekly Shopping" });
     kh.seed({ groceryLists: [list], groceryItems: [] });
 
-    const text = getText(await kh.callTool("read_grocery_list", { lookup: { name: "Shopping" } }));
+    const text = await kh.callToolText("read_grocery_list", { lookup: { name: "Shopping" } });
 
     expect(text).toContain("Weekly Shopping");
     expect(text).toContain(list.uid);
@@ -126,7 +125,7 @@ describe("read_grocery_list tool", () => {
   it("returns not-found when name does not match any list", async () => {
     kh.seed({ groceryLists: [makeGroceryList({ name: "Weekly Shopping" })], groceryItems: [] });
 
-    const text = getText(await kh.callTool("read_grocery_list", { lookup: { name: "Completely Different" } }));
+    const text = await kh.callToolText("read_grocery_list", { lookup: { name: "Completely Different" } });
 
     expect(text.toLowerCase()).toContain("no grocery lists found matching");
   });
@@ -136,7 +135,7 @@ describe("read_grocery_list tool", () => {
     const listB = makeGroceryList({ name: "Weekly Costco" });
     kh.seed({ groceryLists: [listA, listB], groceryItems: [] });
 
-    const text = getText(await kh.callTool("read_grocery_list", { lookup: { name: "Weekly" } }));
+    const text = await kh.callToolText("read_grocery_list", { lookup: { name: "Weekly" } });
 
     expect(text).toContain("Multiple grocery lists match");
     expect(text).toContain(listA.uid);
@@ -151,7 +150,7 @@ describe("create_grocery_list tool", () => {
   afterEach(kh.teardown);
 
   it("returns sync-not-ready message when stores not loaded", async () => {
-    const text = getText(await kh.callTool("create_grocery_list", { name: "Weekly Shopping" }));
+    const text = await kh.callToolText("create_grocery_list", { name: "Weekly Shopping" });
     expect(text.toLowerCase()).toContain("not yet synced");
   });
 
@@ -159,7 +158,7 @@ describe("create_grocery_list tool", () => {
     vi.mocked(kh.client().saveGroceryList).mockImplementation(async (list) => list);
     kh.seed({ groceryLists: [], groceryItems: [] });
 
-    const text = getText(await kh.callTool("create_grocery_list", { name: "Weekly Shopping" }));
+    const text = await kh.callToolText("create_grocery_list", { name: "Weekly Shopping" });
 
     expect(text).toContain("Weekly Shopping");
     expect(kh.client().saveGroceryList).toHaveBeenCalledOnce();
@@ -189,7 +188,7 @@ describe("create_grocery_list tool", () => {
     const existing = makeGroceryList({ name: "Weekly Shopping" });
     kh.seed({ groceryLists: [existing], groceryItems: [] });
 
-    const text = getText(await kh.callTool("create_grocery_list", { name: "weekly shopping" }));
+    const text = await kh.callToolText("create_grocery_list", { name: "weekly shopping" });
 
     expect(text).toContain("already exists");
     expect(text).toContain(existing.uid);
@@ -202,7 +201,7 @@ describe("create_grocery_list tool", () => {
     kh.seed({ groceryLists: [existing], groceryItems: [] });
 
     // "Weekly Shopping" is a prefix of "Weekly Shopping Costco" but not an exact match
-    const text = getText(await kh.callTool("create_grocery_list", { name: "Weekly Shopping" }));
+    const text = await kh.callToolText("create_grocery_list", { name: "Weekly Shopping" });
 
     expect(kh.client().saveGroceryList).toHaveBeenCalledOnce();
     expect(text).toContain("Weekly Shopping");
@@ -215,13 +214,13 @@ describe("rename_grocery_list tool", () => {
   afterEach(kh.teardown);
 
   it("returns sync-not-ready message when stores not loaded", async () => {
-    const text = getText(await kh.callTool("rename_grocery_list", { uid: "some-uid", newName: "New Name" }));
+    const text = await kh.callToolText("rename_grocery_list", { uid: "some-uid", newName: "New Name" });
     expect(text.toLowerCase()).toContain("not yet synced");
   });
 
   it("returns not-found when UID does not match any list", async () => {
     kh.seed({ groceryLists: [], groceryItems: [] });
-    const text = getText(await kh.callTool("rename_grocery_list", { uid: "nonexistent-uid", newName: "New Name" }));
+    const text = await kh.callToolText("rename_grocery_list", { uid: "nonexistent-uid", newName: "New Name" });
     expect(text.toLowerCase()).toContain("no grocery list found");
   });
 
@@ -230,7 +229,7 @@ describe("rename_grocery_list tool", () => {
     vi.mocked(kh.client().saveGroceryList).mockImplementation(async (l) => l);
     kh.seed({ groceryLists: [list], groceryItems: [] });
 
-    const text = getText(await kh.callTool("rename_grocery_list", { uid: list.uid, newName: "Costco Run" }));
+    const text = await kh.callToolText("rename_grocery_list", { uid: list.uid, newName: "Costco Run" });
 
     expect(text).toContain("Costco Run");
     expect(kh.client().saveGroceryList).toHaveBeenCalledOnce();
@@ -244,7 +243,7 @@ describe("rename_grocery_list tool", () => {
     const list = makeGroceryList({ name: "Weekly Shopping" });
     kh.seed({ groceryLists: [list], groceryItems: [] });
 
-    const text = getText(await kh.callTool("rename_grocery_list", { uid: list.uid, newName: "Weekly Shopping" }));
+    const text = await kh.callToolText("rename_grocery_list", { uid: list.uid, newName: "Weekly Shopping" });
 
     expect(text).toContain("Weekly Shopping");
     expect(text).toContain(list.uid);
@@ -255,7 +254,7 @@ describe("rename_grocery_list tool", () => {
     const list = makeGroceryList({ name: "Weekly Shopping" });
     kh.seed({ groceryLists: [list], groceryItems: [] });
 
-    const text = getText(await kh.callTool("rename_grocery_list", { uid: list.uid, newName: "weekly shopping" }));
+    const text = await kh.callToolText("rename_grocery_list", { uid: list.uid, newName: "weekly shopping" });
 
     expect(kh.client().saveGroceryList).not.toHaveBeenCalled();
     expect(text).toContain("Weekly Shopping");
@@ -266,7 +265,7 @@ describe("rename_grocery_list tool", () => {
     const listB = makeGroceryList({ name: "Costco Run" });
     kh.seed({ groceryLists: [listA, listB], groceryItems: [] });
 
-    const text = getText(await kh.callTool("rename_grocery_list", { uid: listA.uid, newName: "Costco Run" }));
+    const text = await kh.callToolText("rename_grocery_list", { uid: listA.uid, newName: "Costco Run" });
 
     expect(text).toContain("already exists");
     expect(text).toContain(listB.uid);
@@ -280,14 +279,14 @@ describe("delete_grocery_list tool", () => {
   afterEach(kh.teardown);
 
   it("returns sync-not-ready message when stores not loaded", async () => {
-    const text = getText(await kh.callTool("delete_grocery_list", { uid: "some-uid" }));
+    const text = await kh.callToolText("delete_grocery_list", { uid: "some-uid" });
     expect(text.toLowerCase()).toContain("not yet synced");
   });
 
   it("returns not-found for unknown UID", async () => {
     kh.seed({ groceryLists: [], groceryItems: [] });
 
-    const text = getText(await kh.callTool("delete_grocery_list", { uid: "nonexistent-uid" }));
+    const text = await kh.callToolText("delete_grocery_list", { uid: "nonexistent-uid" });
 
     expect(text.toLowerCase()).toContain("no grocery list found");
     expect(kh.client().saveGroceryList).not.toHaveBeenCalled();
@@ -298,7 +297,7 @@ describe("delete_grocery_list tool", () => {
     vi.mocked(kh.client().saveGroceryList).mockImplementation(async (l) => l);
     kh.seed({ groceryLists: [list], groceryItems: [] });
 
-    const text = getText(await kh.callTool("delete_grocery_list", { uid: list.uid }));
+    const text = await kh.callToolText("delete_grocery_list", { uid: list.uid });
 
     expect(text).toContain("deleted");
     expect(kh.client().saveGroceryList).toHaveBeenCalledOnce();
@@ -318,7 +317,7 @@ describe("delete_grocery_list tool", () => {
     vi.mocked(kh.client().saveGroceryList).mockClear();
 
     // Second delete — should return idempotent message, NOT call save again
-    const text = getText(await kh.callTool("delete_grocery_list", { uid: list.uid }));
+    const text = await kh.callToolText("delete_grocery_list", { uid: list.uid });
 
     expect(text.toLowerCase()).toContain("already deleted");
     expect(kh.client().saveGroceryList).not.toHaveBeenCalled();

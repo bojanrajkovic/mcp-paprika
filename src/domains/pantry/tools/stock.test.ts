@@ -5,7 +5,6 @@ import type { PantryState } from "../module.js";
 
 import { makePantryItem } from "../../../../test/domains/pantry/__fixtures__/pantry.js";
 import { useKernelHarness } from "../../../../test/support/kernel-harness.js";
-import { getText } from "../../../../test/support/tool-test-utils.js";
 import { markPantryItemOutOfStockInputSchema, restockPantryItemInputSchema } from "./stock.js";
 
 describe("mark_pantry_item_out_of_stock tool", () => {
@@ -20,7 +19,7 @@ describe("mark_pantry_item_out_of_stock tool", () => {
     );
     kh.seed({ pantry: [item] });
 
-    const text = getText(await kh.callTool("mark_pantry_item_out_of_stock", { uid: "uid-1" }));
+    const text = await kh.callToolText("mark_pantry_item_out_of_stock", { uid: "uid-1" });
 
     expect(text).toContain("Milk");
     expect(text).toContain("**In stock:** No");
@@ -30,7 +29,7 @@ describe("mark_pantry_item_out_of_stock tool", () => {
   it("unknown UID returns no-item-found message, client not called", async () => {
     kh.seed({ pantry: [] });
 
-    const text = getText(await kh.callTool("mark_pantry_item_out_of_stock", { uid: "missing" }));
+    const text = await kh.callToolText("mark_pantry_item_out_of_stock", { uid: "missing" });
 
     expect(text).toContain('No pantry item found with UID "missing" (it may not exist or was already deleted).');
     expect(kh.client().savePantryItems).not.toHaveBeenCalled();
@@ -45,7 +44,7 @@ describe("mark_pantry_item_out_of_stock tool", () => {
     vi.mocked(kh.client().savePantryItems).mockRejectedValue(new Error("server timeout"));
     kh.seed({ pantry: [item] });
 
-    const text = getText(await kh.callTool("mark_pantry_item_out_of_stock", { uid: "uid-1" }));
+    const text = await kh.callToolText("mark_pantry_item_out_of_stock", { uid: "uid-1" });
 
     expect(text).toContain("Failed to update pantry item");
     expect(text).toContain("server timeout");
@@ -56,7 +55,7 @@ describe("mark_pantry_item_out_of_stock tool", () => {
 
   it("cold-start guard blocks call before pantry synced", async () => {
     // store never seeded → hasSynced === false
-    const text = getText(await kh.callTool("mark_pantry_item_out_of_stock", { uid: "uid-1" }));
+    const text = await kh.callToolText("mark_pantry_item_out_of_stock", { uid: "uid-1" });
 
     expect(text.toLowerCase()).toContain("not yet synced");
     expect(kh.client().savePantryItems).not.toHaveBeenCalled();
@@ -75,7 +74,7 @@ describe("restock_pantry_item tool", () => {
     );
     kh.seed({ pantry: [item] });
 
-    const text = getText(await kh.callTool("restock_pantry_item", { uid: "uid-2" }));
+    const text = await kh.callToolText("restock_pantry_item", { uid: "uid-2" });
 
     expect(text).toContain("Butter");
     expect(text).toContain("**In stock:** Yes");
@@ -85,7 +84,7 @@ describe("restock_pantry_item tool", () => {
   it("unknown UID returns no-item-found message, client not called", async () => {
     kh.seed({ pantry: [] });
 
-    const text = getText(await kh.callTool("restock_pantry_item", { uid: "missing" }));
+    const text = await kh.callToolText("restock_pantry_item", { uid: "missing" });
 
     expect(text).toContain('No pantry item found with UID "missing" (it may not exist or was already deleted).');
     expect(kh.client().savePantryItems).not.toHaveBeenCalled();
@@ -100,7 +99,7 @@ describe("restock_pantry_item tool", () => {
     vi.mocked(kh.client().savePantryItems).mockRejectedValue(new Error("server timeout"));
     kh.seed({ pantry: [item] });
 
-    const text = getText(await kh.callTool("restock_pantry_item", { uid: "uid-2" }));
+    const text = await kh.callToolText("restock_pantry_item", { uid: "uid-2" });
 
     expect(text).toContain("Failed to update pantry item");
     expect(text).toContain("server timeout");
@@ -111,7 +110,7 @@ describe("restock_pantry_item tool", () => {
 
   it("cold-start guard blocks call before pantry synced", async () => {
     // store never seeded → hasSynced === false
-    const text = getText(await kh.callTool("restock_pantry_item", { uid: "uid-2" }));
+    const text = await kh.callToolText("restock_pantry_item", { uid: "uid-2" });
 
     expect(text.toLowerCase()).toContain("not yet synced");
     expect(kh.client().savePantryItems).not.toHaveBeenCalled();

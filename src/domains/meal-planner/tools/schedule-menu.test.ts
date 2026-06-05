@@ -71,7 +71,7 @@ describe("schedule_menu — guards", () => {
       mealTypes: makeBuiltins(),
       meals: [],
     });
-    const text = getText(await kh.callTool("schedule_menu", { menu: { name: "Multi-Day" }, start_date: "2026-05-27" }));
+    const text = await kh.callToolText("schedule_menu", { menu: { name: "Multi-Day" }, start_date: "2026-05-27" });
     expect(text).toContain("Recipe store is not yet synced");
     expect(kh.client().saveMeals).not.toHaveBeenCalled();
   });
@@ -86,7 +86,7 @@ describe("schedule_menu — guards", () => {
       mealTypes: makeBuiltins(),
       meals: [],
     });
-    const text = getText(await kh.callTool("schedule_menu", { menu: { name: "Multi-Day" }, start_date: "2026-05-27" }));
+    const text = await kh.callToolText("schedule_menu", { menu: { name: "Multi-Day" }, start_date: "2026-05-27" });
     expect(text).toContain("Menu data is not yet synced");
   });
 
@@ -101,7 +101,7 @@ describe("schedule_menu — guards", () => {
       menuItems: [],
       meals: [],
     });
-    const text = getText(await kh.callTool("schedule_menu", { menu: { name: "Multi-Day" }, start_date: "2026-05-27" }));
+    const text = await kh.callToolText("schedule_menu", { menu: { name: "Multi-Day" }, start_date: "2026-05-27" });
     expect(text).toContain("Menu data is not yet synced");
   });
 
@@ -116,7 +116,7 @@ describe("schedule_menu — guards", () => {
       menuItems: [],
       mealTypes: makeBuiltins(),
     });
-    const text = getText(await kh.callTool("schedule_menu", { menu: { name: "Multi-Day" }, start_date: "2026-05-27" }));
+    const text = await kh.callToolText("schedule_menu", { menu: { name: "Multi-Day" }, start_date: "2026-05-27" });
     expect(text).toContain("Meal planner is not yet synced");
     expect(kh.client().saveMeals).not.toHaveBeenCalled();
   });
@@ -142,17 +142,13 @@ describe("schedule_menu — menu resolution", () => {
 
   it("uid_miss → no menu found", async () => {
     seedAll();
-    const text = getText(
-      await kh.callTool("schedule_menu", { menu: { uid: "nope" as MenuUid }, start_date: "2026-05-27" }),
-    );
+    const text = await kh.callToolText("schedule_menu", { menu: { uid: "nope" as MenuUid }, start_date: "2026-05-27" });
     expect(text).toBe('No menu found with UID "nope" (it may not exist or was already deleted).');
   });
 
   it("text_none → no menus matching", async () => {
     seedAll();
-    const text = getText(
-      await kh.callTool("schedule_menu", { menu: { name: "Ghost Menu" }, start_date: "2026-05-27" }),
-    );
+    const text = await kh.callToolText("schedule_menu", { menu: { name: "Ghost Menu" }, start_date: "2026-05-27" });
     expect(text).toBe('No menus found matching "Ghost Menu".');
   });
 
@@ -164,7 +160,7 @@ describe("schedule_menu — menu resolution", () => {
       ],
     });
     // "Week Plan" is a contains-match for both.
-    const text = getText(await kh.callTool("schedule_menu", { menu: { name: "Week Plan" }, start_date: "2026-05-27" }));
+    const text = await kh.callToolText("schedule_menu", { menu: { name: "Week Plan" }, start_date: "2026-05-27" });
     expect(text).toContain('Multiple menus match "Week Plan"');
     expect(text).toContain("`m-a`");
     expect(text).toContain("`m-b`");
@@ -175,7 +171,7 @@ describe("schedule_menu — menu resolution", () => {
       menus: [makeMenu({ uid: MENU_UID, name: "Multi-Day", days: 3 })],
       menuItems: [],
     });
-    const text = getText(await kh.callTool("schedule_menu", { menu: { name: "Multi-Day" }, start_date: "2026-05-27" }));
+    const text = await kh.callToolText("schedule_menu", { menu: { name: "Multi-Day" }, start_date: "2026-05-27" });
     expect(text).toBe('Menu "Multi-Day" has no items to add to the planner.');
     expect(kh.client().saveMeals).not.toHaveBeenCalled();
   });
@@ -419,7 +415,7 @@ describe("schedule_menu — rejection paths", () => {
       meals: [],
     });
 
-    const text = getText(await kh.callTool("schedule_menu", { menu: { name: "Multi-Day" }, start_date: "2026-05-27" }));
+    const text = await kh.callToolText("schedule_menu", { menu: { name: "Multi-Day" }, start_date: "2026-05-27" });
     expect(text).toContain("Could not add menu to planner");
     expect(text).toContain('recipe_uid "recipe-ghost" is not known to the local recipe store');
     expect(kh.client().saveMeals).not.toHaveBeenCalled();
@@ -435,7 +431,7 @@ describe("schedule_menu — rejection paths", () => {
       mealTypes: makeBuiltins(),
       meals: [],
     });
-    const text = getText(await kh.callTool("schedule_menu", { menu: { name: "Multi-Day" }, start_date: "not a date" }));
+    const text = await kh.callToolText("schedule_menu", { menu: { name: "Multi-Day" }, start_date: "not a date" });
     expect(text).toContain('Could not parse start_date "not a date"');
     expect(kh.client().saveMeals).not.toHaveBeenCalled();
   });
@@ -453,7 +449,7 @@ describe("schedule_menu — rejection paths", () => {
 
     vi.mocked(kh.client().saveMeals).mockRejectedValue(new Error("network down"));
 
-    const text = getText(await kh.callTool("schedule_menu", { menu: { name: "Multi-Day" }, start_date: "2026-05-27" }));
+    const text = await kh.callToolText("schedule_menu", { menu: { name: "Multi-Day" }, start_date: "2026-05-27" });
     expect(text).toContain("Failed to add menu to planner: network down");
     // Nothing landed in the local store.
     const mealSelf = kh.stateOf("meal") as MealState;

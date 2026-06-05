@@ -7,7 +7,6 @@ import { makeMealType } from "../../../../test/domains/meal-type/__fixtures__/me
 import { makeMeal } from "../../../../test/domains/meal/__fixtures__/meals.js";
 import { makeCategory, makeRecipe } from "../../../../test/domains/recipe/__fixtures__/recipes.js";
 import { useKernelHarness } from "../../../../test/support/kernel-harness.js";
-import { getText } from "../../../../test/support/tool-test-utils.js";
 import { searchMealHistoryInputSchema } from "./search-meal-history.js";
 
 const DINNER_UID = "dinner-uid" as MealTypeUid;
@@ -94,14 +93,14 @@ describe("search_meal_history tool", () => {
 
   it("by recipe_uid: only past meals, future excluded, with last-made", async () => {
     seedAll();
-    const text = getText(await kh.callTool("search_meal_history", { recipe_uid: PASTA_UID }));
+    const text = await kh.callToolText("search_meal_history", { recipe_uid: PASTA_UID });
     expect(text).toContain("2 past meals"); // p-old + p-recent; p-future excluded
     expect(text).toContain(`last made ${ymd(-3)}`);
   });
 
   it("by class: matches only meals whose recipe is in the category", async () => {
     seedAll();
-    const text = getText(await kh.callTool("search_meal_history", { class: "Italian" }));
+    const text = await kh.callToolText("search_meal_history", { class: "Italian" });
     expect(text).toContain("2 past meals");
     expect(text).toContain('"Italian"');
     expect(text).toContain("Pasta");
@@ -110,19 +109,19 @@ describe("search_meal_history tool", () => {
 
   it("recipe_uid AND class match when the recipe is in the class", async () => {
     seedAll();
-    const text = getText(await kh.callTool("search_meal_history", { recipe_uid: PASTA_UID, class: "Italian" }));
+    const text = await kh.callToolText("search_meal_history", { recipe_uid: PASTA_UID, class: "Italian" });
     expect(text).toContain("2 past meals");
   });
 
   it("recipe_uid AND class yields nothing when the recipe is not in the class", async () => {
     seedAll();
-    const text = getText(await kh.callTool("search_meal_history", { recipe_uid: BURGER_UID, class: "Italian" }));
+    const text = await kh.callToolText("search_meal_history", { recipe_uid: BURGER_UID, class: "Italian" });
     expect(text).toContain("No past meals found");
   });
 
   it("by meal type: returns only meals of that type including freeform", async () => {
     seedAll();
-    const text = getText(await kh.callTool("search_meal_history", { type: { name: "Lunch" } }));
+    const text = await kh.callToolText("search_meal_history", { type: { name: "Lunch" } });
     expect(text).toContain("1 past meal");
     expect(text).toContain("Sandwich");
     expect(text).toContain('type "Lunch"');
@@ -131,41 +130,41 @@ describe("search_meal_history tool", () => {
 
   it("explicit since/until restricts to the window", async () => {
     seedAll();
-    const text = getText(await kh.callTool("search_meal_history", { since: ymd(-4), until: ymd(-1) }));
+    const text = await kh.callToolText("search_meal_history", { since: ymd(-4), until: ymd(-1) });
     expect(text).toContain("3 past meals"); // p-recent(-3), lunch-1(-2), b-1(-1); p-old(-10) and old(-60) out
   });
 
   it("no filters returns last 30 days with older and future meals excluded", async () => {
     seedAll();
-    const text = getText(await kh.callTool("search_meal_history", {}));
+    const text = await kh.callToolText("search_meal_history", {});
     expect(text).toContain("4 past meals"); // p-old(-10), p-recent(-3), lunch-1(-2), b-1(-1); old(-60) & future out
   });
 
   it("paginates with limit and offset", async () => {
     seedAll();
-    const page1 = getText(await kh.callTool("search_meal_history", { recipe_uid: PASTA_UID, limit: 1 }));
+    const page1 = await kh.callToolText("search_meal_history", { recipe_uid: PASTA_UID, limit: 1 });
     expect(page1).toContain("Showing 1–1 of 2 past meals");
-    const page2 = getText(await kh.callTool("search_meal_history", { recipe_uid: PASTA_UID, limit: 1, offset: 1 }));
+    const page2 = await kh.callToolText("search_meal_history", { recipe_uid: PASTA_UID, limit: 1, offset: 1 });
     expect(page2).toContain("Showing 2–2 of 2 past meals");
   });
 
   it("reports an unknown class", async () => {
     seedAll();
-    expect(getText(await kh.callTool("search_meal_history", { class: "Klingon" }))).toContain(
+    expect(await kh.callToolText("search_meal_history", { class: "Klingon" })).toContain(
       'No category found matching "Klingon"',
     );
   });
 
   it("reports an unknown meal type", async () => {
     seedAll();
-    expect(getText(await kh.callTool("search_meal_history", { type: { name: "Brunch" } }))).toContain(
+    expect(await kh.callToolText("search_meal_history", { type: { name: "Brunch" } })).toContain(
       'Unknown meal type "Brunch"',
     );
   });
 
   it("reports no matches for a recipe never cooked", async () => {
     seedAll();
-    expect(getText(await kh.callTool("search_meal_history", { recipe_uid: "recipe-ghost" as RecipeUid }))).toContain(
+    expect(await kh.callToolText("search_meal_history", { recipe_uid: "recipe-ghost" as RecipeUid })).toContain(
       "No past meals found",
     );
   });

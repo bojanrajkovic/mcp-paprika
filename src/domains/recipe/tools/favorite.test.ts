@@ -4,7 +4,6 @@ import type { RecipeState } from "../module.js";
 
 import { makeRecipe } from "../../../../test/domains/recipe/__fixtures__/recipes.js";
 import { useKernelHarness } from "../../../../test/support/kernel-harness.js";
-import { getText } from "../../../../test/support/tool-test-utils.js";
 import { favoriteRecipeInputSchema, unfavoriteRecipeInputSchema } from "./favorite.js";
 
 describe("favorite_recipe tool", () => {
@@ -18,7 +17,7 @@ describe("favorite_recipe tool", () => {
     vi.mocked(kh.client().saveRecipe).mockResolvedValue(updated);
     kh.seed({ recipes: [recipe] });
 
-    const text = getText(await kh.callTool("favorite_recipe", { uid: recipe.uid }));
+    const text = await kh.callToolText("favorite_recipe", { uid: recipe.uid });
 
     expect(text).toContain("**On Favorites:** Yes");
     expect(vi.mocked(kh.client().saveRecipe).mock.calls[0]?.[0]).toMatchObject({ onFavorites: true });
@@ -52,7 +51,7 @@ describe("favorite_recipe tool", () => {
     const recipe = makeRecipe();
     kh.seed({ recipes: [recipe] });
 
-    const text = getText(await kh.callTool("favorite_recipe", { uid: "nonexistent-uid" }));
+    const text = await kh.callToolText("favorite_recipe", { uid: "nonexistent-uid" });
 
     expect(text).toContain('No recipe found with UID "nonexistent-uid" (it may not exist or was already deleted).');
     expect(kh.client().saveRecipe).not.toHaveBeenCalled();
@@ -63,7 +62,7 @@ describe("favorite_recipe tool", () => {
     vi.mocked(kh.client().saveRecipe).mockRejectedValue(new Error("Network error"));
     kh.seed({ recipes: [recipe] });
 
-    const text = getText(await kh.callTool("favorite_recipe", { uid: recipe.uid }));
+    const text = await kh.callToolText("favorite_recipe", { uid: recipe.uid });
 
     expect(text).toContain("Failed to favorite recipe");
     expect(text).toContain("Network error");
@@ -71,7 +70,7 @@ describe("favorite_recipe tool", () => {
 
   it("cold-start guard fires before any store lookup", async () => {
     // store never seeded — hasSynced is false
-    const text = getText(await kh.callTool("favorite_recipe", { uid: "any-uid" }));
+    const text = await kh.callToolText("favorite_recipe", { uid: "any-uid" });
 
     expect(text.toLowerCase()).toContain("try again");
     expect(kh.client().saveRecipe).not.toHaveBeenCalled();
@@ -93,7 +92,7 @@ describe("unfavorite_recipe tool", () => {
     vi.mocked(kh.client().saveRecipe).mockResolvedValue(updated);
     kh.seed({ recipes: [recipe] });
 
-    const text = getText(await kh.callTool("unfavorite_recipe", { uid: recipe.uid }));
+    const text = await kh.callToolText("unfavorite_recipe", { uid: recipe.uid });
 
     expect(text).not.toContain("**On Favorites:** Yes");
     expect(vi.mocked(kh.client().saveRecipe).mock.calls[0]?.[0]).toMatchObject({ onFavorites: false });
@@ -127,7 +126,7 @@ describe("unfavorite_recipe tool", () => {
     const recipe = makeRecipe();
     kh.seed({ recipes: [recipe] });
 
-    const text = getText(await kh.callTool("unfavorite_recipe", { uid: "nonexistent-uid" }));
+    const text = await kh.callToolText("unfavorite_recipe", { uid: "nonexistent-uid" });
 
     expect(text).toContain('No recipe found with UID "nonexistent-uid" (it may not exist or was already deleted).');
     expect(kh.client().saveRecipe).not.toHaveBeenCalled();
@@ -138,7 +137,7 @@ describe("unfavorite_recipe tool", () => {
     vi.mocked(kh.client().saveRecipe).mockRejectedValue(new Error("Network error"));
     kh.seed({ recipes: [recipe] });
 
-    const text = getText(await kh.callTool("unfavorite_recipe", { uid: recipe.uid }));
+    const text = await kh.callToolText("unfavorite_recipe", { uid: recipe.uid });
 
     expect(text).toContain("Failed to unfavorite recipe");
     expect(text).toContain("Network error");
@@ -146,7 +145,7 @@ describe("unfavorite_recipe tool", () => {
 
   it("cold-start guard fires before any store lookup", async () => {
     // store never seeded — hasSynced is false
-    const text = getText(await kh.callTool("unfavorite_recipe", { uid: "any-uid" }));
+    const text = await kh.callToolText("unfavorite_recipe", { uid: "any-uid" });
 
     expect(text.toLowerCase()).toContain("try again");
     expect(kh.client().saveRecipe).not.toHaveBeenCalled();

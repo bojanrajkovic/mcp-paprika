@@ -170,7 +170,7 @@ describe("purge_recipe tool", () => {
       vi.mocked(kh.client().getRecipe).mockResolvedValue(authoritative);
       kh.seed({ recipes: [staleTrashed] }); // seed the stale trashed copy
 
-      const text = getText(await kh.callTool("purge_recipe", { uid }));
+      const text = await kh.callToolText("purge_recipe", { uid });
 
       expect(text.toLowerCase()).toContain("not in the trash");
       expect(kh.client().saveRecipe).not.toHaveBeenCalled(); // a reconcile, not a Paprika write
@@ -188,7 +188,7 @@ describe("purge_recipe tool", () => {
       vi.mocked(kh.client().getRecipe).mockRejectedValue(notFound(uid));
       kh.seed({ recipes: [phantom] }); // seed the phantom
 
-      const text = getText(await kh.callTool("purge_recipe", { uid }));
+      const text = await kh.callToolText("purge_recipe", { uid });
 
       expect(text.toLowerCase()).toContain("no recipe found");
       expect((kh.state() as RecipeState).recipe.store.get(uid)).toBeUndefined(); // phantom dropped locally

@@ -4,7 +4,6 @@ import type { RecipeState } from "../module.js";
 
 import { makeRecipe } from "../../../../test/domains/recipe/__fixtures__/recipes.js";
 import { useKernelHarness } from "../../../../test/support/kernel-harness.js";
-import { getText } from "../../../../test/support/tool-test-utils.js";
 
 describe("trash_recipe tool", () => {
   const kh = useKernelHarness("recipe");
@@ -17,7 +16,7 @@ describe("trash_recipe tool", () => {
     vi.mocked(kh.client().saveRecipe).mockResolvedValue(trashed);
     kh.seed({ recipes: [recipe] });
 
-    const text = getText(await kh.callTool("trash_recipe", { uid: recipe.uid }));
+    const text = await kh.callToolText("trash_recipe", { uid: recipe.uid });
 
     expect(text).toContain("Pasta Carbonara");
     expect(text.toLowerCase()).toContain("trash");
@@ -51,7 +50,7 @@ describe("trash_recipe tool", () => {
     const recipe = makeRecipe();
     kh.seed({ recipes: [recipe] });
 
-    const text = getText(await kh.callTool("trash_recipe", { uid: "nonexistent-uid" }));
+    const text = await kh.callToolText("trash_recipe", { uid: "nonexistent-uid" });
 
     expect(text.toLowerCase()).toContain("no recipe found");
     expect(kh.client().saveRecipe).not.toHaveBeenCalled();
@@ -62,7 +61,7 @@ describe("trash_recipe tool", () => {
     const trashedRecipe = makeRecipe({ name: "Trashed Recipe", inTrash: true });
     kh.seed({ recipes: [nonTrashedRecipe, trashedRecipe] });
 
-    const text = getText(await kh.callTool("trash_recipe", { uid: trashedRecipe.uid }));
+    const text = await kh.callToolText("trash_recipe", { uid: trashedRecipe.uid });
 
     expect(text.toLowerCase()).toContain("already in the trash");
     expect(kh.client().saveRecipe).not.toHaveBeenCalled();
@@ -73,7 +72,7 @@ describe("trash_recipe tool", () => {
     vi.mocked(kh.client().saveRecipe).mockRejectedValue(new Error("API timeout"));
     kh.seed({ recipes: [recipe] });
 
-    const text = getText(await kh.callTool("trash_recipe", { uid: recipe.uid }));
+    const text = await kh.callToolText("trash_recipe", { uid: recipe.uid });
 
     expect(text).toContain("Failed to delete");
     expect(text).toContain("API timeout");
@@ -81,7 +80,7 @@ describe("trash_recipe tool", () => {
 
   it("cold-start guard fires before any store lookup", async () => {
     // store never seeded — hasSynced is false
-    const text = getText(await kh.callTool("trash_recipe", { uid: "any-uid" }));
+    const text = await kh.callToolText("trash_recipe", { uid: "any-uid" });
 
     expect(text.toLowerCase()).toContain("try again");
   });

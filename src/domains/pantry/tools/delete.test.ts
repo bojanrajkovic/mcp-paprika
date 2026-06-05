@@ -5,7 +5,6 @@ import type { PantryState } from "../module.js";
 
 import { makePantryItem } from "../../../../test/domains/pantry/__fixtures__/pantry.js";
 import { useKernelHarness } from "../../../../test/support/kernel-harness.js";
-import { getText } from "../../../../test/support/tool-test-utils.js";
 
 describe("delete_pantry_item tool", () => {
   const kh = useKernelHarness("pantry");
@@ -17,7 +16,7 @@ describe("delete_pantry_item tool", () => {
     vi.mocked(kh.client().savePantryItems).mockImplementation(async (items) => items);
     kh.seed({ pantry: [item] });
 
-    const text = getText(await kh.callTool("delete_pantry_item", { uid: "uid-1" }));
+    const text = await kh.callToolText("delete_pantry_item", { uid: "uid-1" });
 
     expect(text).toContain('Pantry item "Butter" has been deleted.');
     expect(kh.client().savePantryItems).toHaveBeenCalledOnce();
@@ -34,7 +33,7 @@ describe("delete_pantry_item tool", () => {
   it("unknown UID returns no-item-found, store not mutated", async () => {
     kh.seed({ pantry: [] });
 
-    const text = getText(await kh.callTool("delete_pantry_item", { uid: "missing" }));
+    const text = await kh.callToolText("delete_pantry_item", { uid: "missing" });
 
     expect(text).toContain("No pantry item found");
     expect(kh.client().savePantryItems).not.toHaveBeenCalled();
@@ -43,7 +42,7 @@ describe("delete_pantry_item tool", () => {
 
   it("cold-start guard blocks call before pantry synced", async () => {
     // store never seeded → hasSynced === false
-    const text = getText(await kh.callTool("delete_pantry_item", { uid: "uid-1" }));
+    const text = await kh.callToolText("delete_pantry_item", { uid: "uid-1" });
 
     expect(text.toLowerCase()).toContain("not yet synced");
     expect(kh.client().savePantryItems).not.toHaveBeenCalled();
@@ -54,7 +53,7 @@ describe("delete_pantry_item tool", () => {
     vi.mocked(kh.client().savePantryItems).mockRejectedValue(new Error("server timeout"));
     kh.seed({ pantry: [item] });
 
-    const text = getText(await kh.callTool("delete_pantry_item", { uid: "uid-1" }));
+    const text = await kh.callToolText("delete_pantry_item", { uid: "uid-1" });
 
     expect(text).toContain("Failed to delete pantry item");
     expect(text).toContain("server timeout");
@@ -75,7 +74,7 @@ describe("delete_pantry_item tool", () => {
     // Simulate the post-commit state: delete() removes the item from the store.
     (kh.state() as PantryState).store.delete("uid-retry" as PantryItemUid);
 
-    const text = getText(await kh.callTool("delete_pantry_item", { uid: "uid-retry" }));
+    const text = await kh.callToolText("delete_pantry_item", { uid: "uid-retry" });
 
     expect(text).toContain("already deleted");
     expect(text).toContain("uid-retry");
