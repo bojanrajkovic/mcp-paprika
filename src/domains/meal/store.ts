@@ -72,26 +72,29 @@ export class MealStore extends EntityStore<Meal, MealUid> {
     return result;
   }
 
+  /**
+   * One recipe's cooking history — its PAST, non-hidden cooks, newest first. The
+   * canonical "have we cooked this, and when" list, and the sequence
+   * `lastCookedAt` reports the head of. Built on `getByRecipeUid` so the
+   * non-ingredient + recipe-link rule lives in one place, then drops future
+   * planner entries ("last cooked" means actually eaten, not scheduled — a meal
+   * dated next Tuesday is not something we've cooked) and unparseable dates, and
+   * sorts date-descending.
+   */
+  cookedHistory(recipeUid: RecipeUid, nowUtc: DateTime = DateTime.utc()): Array<Meal> {
+    return this.getByRecipeUid(recipeUid)
+      .map((meal) => ({ meal, dt: parseMealDate(meal.date) }))
+      .filter(({ dt }) => dt.isValid && dt <= nowUtc)
+      .sort((a, b) => b.dt.toMillis() - a.dt.toMillis())
+      .map(({ meal }) => meal);
+  }
+
+  /**
+   * The most recent PAST cooking date for a recipe (wire-format string), or null
+   * if it has never been cooked — the head of `cookedHistory`.
+   */
   lastCookedAt(recipeUid: RecipeUid, nowUtc: DateTime = DateTime.utc()): string | null {
-    let latest: string | null = null;
-    let latestDt: DateTime | null = null;
-
-    for (const meal of this._items.values()) {
-      if (isHidden(meal)) continue;
-      if (meal.recipeUid !== recipeUid) continue;
-      const dt = parseMealDate(meal.date);
-      if (!dt.isValid) continue;
-      // Exclude future planner entries — "last cooked" means actually eaten,
-      // not scheduled. A planner entry dated next Tuesday shouldn't surface
-      // as a recipe's most-recent cooking date.
-      if (dt > nowUtc) continue;
-      if (latestDt === null || dt > latestDt) {
-        latestDt = dt;
-        latest = meal.date;
-      }
-    }
-
-    return latest;
+    return this.cookedHistory(recipeUid, nowUtc)[0]?.date ?? null;
   }
 
   getInDateRange(opts?: MealDateRangeOpts): MealDateRangeResult {

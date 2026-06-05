@@ -42,7 +42,8 @@ export const searchRecipesInputSchema = z
 /**
  * Registers `search_recipes`, kernel-shaped — reads this module's own recipe +
  * category stores via `ctx.self`. The `lastCookedAt` enrichment is DROPPED (recipe
- * is `dependsOn []`, no meal dependency); "last cooked" stays meal-side.
+ * is `dependsOn []`, no meal dependency); "last cooked" stays meal-side, surfaced by
+ * the meal domain's `read_recipe_history` tool.
  */
 export function searchRecipesTool(ctx: DomainCtx<RecipeSelf, never>): void {
   const log = ctx.infra.log.child({ component: "search_recipes" });
