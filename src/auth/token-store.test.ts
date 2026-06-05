@@ -22,15 +22,15 @@ import { join } from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { DiskCacheRoot as DiskCache } from "../cache/disk-cache-root.js";
 import type { DiskClientRegistrationStore } from "./client-registration.js";
+import type { AuthCache } from "./disk.js";
 
 import { makeVerifiedIdentity } from "../../test/auth/__fixtures__/oauth-state.js";
-import { DiskCacheRoot as DiskCacheImpl } from "../cache/disk-cache-root.js";
 import { SILENT_LOG } from "../utils/log.js";
 import { AuthCodeStore } from "./auth-code-store.js";
 import { AuthRequestStore } from "./auth-request-store.js";
 import { DiskClientRegistrationStore as DiskClientRegistrationStoreImpl } from "./client-registration.js";
+import { buildAuthCaches } from "./disk.js";
 import { TokenStore } from "./token-store.js";
 import { ACCESS_TOKEN_TTL_SECONDS, hashTokenForStorage, nowSeconds, REFRESH_TOKEN_TTL_SECONDS } from "./tokens.js";
 
@@ -53,15 +53,14 @@ function makeWireRegistration(overrides?: Partial<Record<string, unknown>>) {
 
 describe("TokenStore", () => {
   let tempDir: string;
-  let cache: DiskCache;
+  let cache: AuthCache;
   let clientStore: DiskClientRegistrationStore;
   let store: TokenStore;
   let now: number;
 
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), "paprika-token-store-"));
-    cache = new DiskCacheImpl(tempDir);
-    await cache.init();
+    cache = await buildAuthCaches(tempDir);
     clientStore = new DiskClientRegistrationStoreImpl(cache, "https://m.example.com", SILENT_LOG);
 
     now = nowSeconds();
@@ -500,8 +499,7 @@ describe("TokenStore", () => {
       const { access } = await store.issueAccessRefreshPair(input);
 
       // Simulate restart with fresh DiskCache and TokenStore on the same directory
-      const cache2 = new DiskCacheImpl(tempDir);
-      await cache2.init();
+      const cache2 = await buildAuthCaches(tempDir);
       const store2 = new TokenStore(cache2);
 
       // PLAN says (phase_05.md:27): token should persist and lookup should work
@@ -517,8 +515,7 @@ describe("TokenStore", () => {
       const { refresh: r1 } = await store.issueAccessRefreshPair(input);
 
       // Simulate restart with fresh DiskCache and TokenStore on the same directory
-      const cache2 = new DiskCacheImpl(tempDir);
-      await cache2.init();
+      const cache2 = await buildAuthCaches(tempDir);
       const store2 = new TokenStore(cache2);
 
       // PLAN says (phase_05.md:28): refresh token should persist

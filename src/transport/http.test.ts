@@ -13,7 +13,7 @@ import { useMswServer } from "../../test/support/msw.js";
 import { failLoudOnUpstream, PAPRIKA_API_BASE, paprikaSyncMockHandlers } from "../../test/support/paprika-msw.js";
 import { makePinoCapture, SILENT_LOGGING_CONFIG } from "../../test/support/tool-test-utils.js";
 import { useXdgIsolation } from "../../test/support/xdg-isolation.js";
-import { DiskCacheRoot } from "../cache/disk-cache-root.js";
+import { buildAuthCaches } from "../auth/disk.js";
 import { accessLog, type HttpTransportHandle, startHttp, type StartHttpOptions } from "./http.js";
 
 /**
@@ -803,8 +803,7 @@ describe("HTTP transport — OAuth mounted", () => {
       // check sees >= 50 existing clients.  buildClientCap reads cache.getAllOAuthClients()
       // on every POST /register — fresh disk files are visible on the very next call.
       const cacheDir = join(oauthXdg.dir(), "mcp-paprika");
-      const seedCache = new DiskCacheRoot(cacheDir);
-      await seedCache.init();
+      const seedCache = await buildAuthCaches(cacheDir);
 
       // Count existing clients (from other tests in this suite).
       const existing = await seedCache.oauthClients.getAll();

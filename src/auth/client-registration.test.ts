@@ -11,9 +11,9 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { makePinoCapture } from "../../test/support/tool-test-utils.js";
-import { DiskCacheRoot } from "../cache/disk-cache-root.js";
 import { SILENT_LOG } from "../utils/log.js";
 import { DiskClientRegistrationStore } from "./client-registration.js";
+import { type AuthCache, buildAuthCaches } from "./disk.js";
 import { OAuthClientNotFoundError, OAuthMetadataValidationError } from "./errors.js";
 import { hashTokenForStorage } from "./tokens.js";
 
@@ -41,13 +41,12 @@ function makeWireRegistration(): Record<string, unknown> {
 
 describe("DiskClientRegistrationStore", () => {
   let tempDir: string;
-  let cache: DiskCacheRoot;
+  let cache: AuthCache;
   let store: DiskClientRegistrationStore;
 
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), "paprika-client-reg-"));
-    cache = new DiskCacheRoot(tempDir);
-    await cache.init();
+    cache = await buildAuthCaches(tempDir);
     store = new DiskClientRegistrationStore(cache, "https://m.example.com", SILENT_LOG);
   });
 
@@ -192,8 +191,7 @@ describe("DiskClientRegistrationStore", () => {
       const original = await store.registerClient(metaIn);
 
       // Simulate restart: create fresh DiskCache instance pointing to same tempDir
-      const cache2 = new DiskCacheRoot(tempDir);
-      await cache2.init();
+      const cache2 = await buildAuthCaches(tempDir);
       const store2 = new DiskClientRegistrationStore(cache2, "https://m.example.com", SILENT_LOG);
 
       // Read from fresh instance
@@ -297,8 +295,7 @@ describe("DiskClientRegistrationStore", () => {
       expect(retrieved).toBeUndefined();
 
       // Verify it's gone after restart (persisted)
-      const cache2 = new DiskCacheRoot(tempDir);
-      await cache2.init();
+      const cache2 = await buildAuthCaches(tempDir);
       const store2 = new DiskClientRegistrationStore(cache2, "https://m.example.com", SILENT_LOG);
       retrieved = await store2.getClient(registered.client_id);
       expect(retrieved).toBeUndefined();

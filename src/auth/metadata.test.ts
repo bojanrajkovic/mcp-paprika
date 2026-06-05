@@ -5,12 +5,12 @@ import { join } from "node:path";
 import { Hono } from "hono";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { DiskCacheRoot } from "../cache/disk-cache-root.js";
 import { BRANDING, FAVICON_PATH } from "../utils/branding.js";
 import { SILENT_LOG } from "../utils/log.js";
 import { AuthCodeStore } from "./auth-code-store.js";
 import { AuthRequestStore } from "./auth-request-store.js";
 import { DiskClientRegistrationStore } from "./client-registration.js";
+import { type AuthCache, buildAuthCaches } from "./disk.js";
 import { buildAuthMetadataRouter, buildCustomizedAuthorizationServerMetadata } from "./metadata.js";
 import { PendingAuthorizationStore } from "./pending-authorization-store.js";
 import { MintingOAuthServerProvider } from "./provider.js";
@@ -18,13 +18,12 @@ import { TokenStore } from "./token-store.js";
 
 describe("OAuth Metadata Customization", () => {
   let cacheDir: string;
-  let cache: DiskCacheRoot;
+  let cache: AuthCache;
   let provider: MintingOAuthServerProvider;
 
   beforeEach(async () => {
     cacheDir = await mkdtemp(join(tmpdir(), "paprika-metadata-"));
-    cache = new DiskCacheRoot(cacheDir);
-    await cache.init();
+    cache = await buildAuthCaches(cacheDir);
 
     const clientStore = new DiskClientRegistrationStore(cache, "https://mcp.example.com", SILENT_LOG);
     const tokenStore = new TokenStore(cache);

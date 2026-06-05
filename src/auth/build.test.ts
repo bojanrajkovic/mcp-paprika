@@ -17,9 +17,9 @@ import type { PaprikaConfig } from "../utils/config.js";
 import { createOidcStub } from "../../test/auth/__fixtures__/oidc-stub.js";
 import { useMswServer } from "../../test/support/msw.js";
 import { useXdgIsolation } from "../../test/support/xdg-isolation.js";
-import { DiskCacheRoot } from "../cache/disk-cache-root.js";
 import { SILENT_LOG } from "../utils/log.js";
 import { buildAuthContext } from "./build.js";
+import { buildAuthCaches } from "./disk.js";
 
 const msw = useMswServer([], { onUnhandledRequest: "bypass" });
 const xdg = useXdgIsolation("mcp-paprika-build-auth");
@@ -66,8 +66,7 @@ describe("buildAuthContext", () => {
   describe("BA.1: returns null for stdio transport", () => {
     it("returns null when config.transport is 'stdio'", async () => {
       // PLAN says (phase_07.md:305-306): if config.transport !== "http" return null
-      const cache = new DiskCacheRoot(xdg.dir());
-      await cache.init();
+      const cache = await buildAuthCaches(xdg.dir());
 
       const config = makeStdioConfig();
       const result = await buildAuthContext(config, cache, SILENT_LOG);
@@ -79,8 +78,7 @@ describe("buildAuthContext", () => {
   describe("BA.2: throws for http + no oauth config (defensive guard)", () => {
     it("throws Error when transport is http but oauth config is undefined", async () => {
       // PLAN says (phase_07.md:307-310): defensive guard for http without oauth block
-      const cache = new DiskCacheRoot(xdg.dir());
-      await cache.init();
+      const cache = await buildAuthCaches(xdg.dir());
 
       const config: PaprikaConfig = fromAny({
         paprika: { email: "test@example.com", password: "secret" },
@@ -107,8 +105,7 @@ describe("buildAuthContext", () => {
       });
       msw.use(...oidcStub.handlers);
 
-      const cache = new DiskCacheRoot(xdg.dir());
-      await cache.init();
+      const cache = await buildAuthCaches(xdg.dir());
 
       const config = makeHttpConfig("https://accounts.example.test");
       const result = await buildAuthContext(config, cache, SILENT_LOG);
@@ -139,8 +136,7 @@ describe("buildAuthContext", () => {
       });
       msw.use(...oidcStub.handlers);
 
-      const cache = new DiskCacheRoot(xdg.dir());
-      await cache.init();
+      const cache = await buildAuthCaches(xdg.dir());
 
       // Path + default port should collapse to the bare origin.
       const config = makeHttpConfig("https://accounts.example.test", [
@@ -161,8 +157,7 @@ describe("buildAuthContext", () => {
       });
       msw.use(...oidcStub.handlers);
 
-      const cache = new DiskCacheRoot(xdg.dir());
-      await cache.init();
+      const cache = await buildAuthCaches(xdg.dir());
 
       // http for a non-loopback host is not a permitted redirect origin.
       const config = makeHttpConfig("https://accounts.example.test", ["http://evil.example.com"]);
@@ -180,8 +175,7 @@ describe("buildAuthContext", () => {
         ),
       );
 
-      const cache = new DiskCacheRoot(xdg.dir());
-      await cache.init();
+      const cache = await buildAuthCaches(xdg.dir());
 
       const config = makeHttpConfig("https://accounts.example.test");
       await expect(buildAuthContext(config, cache, SILENT_LOG)).rejects.toThrow();

@@ -11,11 +11,11 @@ import { makeVerifiedIdentity } from "../../test/auth/__fixtures__/oauth-state.j
 import { makeDefaultOidcStub, makeDiscoveryDoc } from "../../test/auth/__fixtures__/oidc-stub.js";
 import { useMswServer } from "../../test/support/msw.js";
 import { makePinoCapture } from "../../test/support/tool-test-utils.js";
-import { DiskCacheRoot } from "../cache/disk-cache-root.js";
 import { SILENT_LOG } from "../utils/log.js";
 import { AuthCodeStore } from "./auth-code-store.js";
 import { AuthRequestStore } from "./auth-request-store.js";
 import { DiskClientRegistrationStore } from "./client-registration.js";
+import { type AuthCache, buildAuthCaches } from "./disk.js";
 import { OAuthClientNotFoundError } from "./errors.js";
 import { createJwksFor } from "./oidc-client.js";
 import { PendingAuthorizationStore } from "./pending-authorization-store.js";
@@ -85,7 +85,7 @@ const oidcStub = makeDefaultOidcStub();
 
 describe("Auth Routes", () => {
   let cacheDir: string;
-  let cache: DiskCacheRoot;
+  let cache: AuthCache;
   let app: Hono;
   let authRequests: AuthRequestStore;
   let authCodes: AuthCodeStore;
@@ -99,8 +99,7 @@ describe("Auth Routes", () => {
 
   beforeEach(async () => {
     cacheDir = await mkdtemp(join(tmpdir(), "paprika-routes-"));
-    cache = new DiskCacheRoot(cacheDir);
-    await cache.init();
+    cache = await buildAuthCaches(cacheDir);
 
     clientStore = new DiskClientRegistrationStore(cache, "https://mcp.example.com", SILENT_LOG);
     tokenStore = new TokenStore(cache);
@@ -835,8 +834,7 @@ describe("Auth Routes", () => {
       // when the server has reached the max registered clients.
       // Test: Pre-populate cache with 50 clients, then 51st POST /register returns 429 with cap error_description.
       const capDir = await mkdtemp(join(tmpdir(), "paprika-cap-"));
-      const testCache = new DiskCacheRoot(capDir);
-      await testCache.init();
+      const testCache = await buildAuthCaches(capDir);
 
       const testClientStore = new DiskClientRegistrationStore(testCache, "https://mcp.example.com", SILENT_LOG);
       const testApp = new Hono();
