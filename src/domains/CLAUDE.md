@@ -21,7 +21,7 @@ The rule across the per-domain concerns: **co-locate at the lightest granularity
 
 - **A trivial disk-cache descriptor lives in the entity's `types.ts`**, beside the schema its `parse` calls; a dedicated `disk.ts` is reserved for a cache that carries behavior (`recipe/disk.ts`'s `RecipeDiskCache`). The auth caches aren't Paprika entities — their descriptor + subclass sit in `../auth/disk.ts`.
 - **A single, untested reconcile is a flat `sync.ts` at the domain root**; `syncs/` is for a domain with more than one sync or a co-located sync test (`recipe/`, `grocery/`, `menu/`). A second sync or a `sync.test.ts` promotes a domain to the directory.
-- **A tool readiness gate lives in `tools/guards.ts`**, consumed via `xStartGuard(ctx.state).match(...)`. The auto-create api paths (`ensureAisle` / `ensureMealType`) guard the same precondition inline — they sit mid-write-flow, not in a tool.
+- **A tool readiness gate lives in `tools/guards.ts`**, consumed via `xStartGuard(ctx.state).match(...)` (a `ctx`-taking guard when the gate spans dependencies — `menuStartGuard`, `scheduleMenuStartGuard`). A tool that needs an extra readiness leg beyond its primary gate composes it inline inside the `.match()` — grocery's move tool also checks `pantry.hasSynced()`, recipe's photo upload also checks the photo catalog. The auto-create api paths (`ensureAisle` / `ensureMealType`) guard the same precondition inline because they sit mid-write-flow, not in a tool.
 
 ## Key References
 
