@@ -16,6 +16,7 @@ The typed composition kernel: the substrate every domain module registers on. It
 ## Contract conventions
 
 - **A module that exposes nothing types its contract `EmptyApi`, not `{}`.** `EmptyApi` (`registry.ts`) is `Record<never, never>` — `{}` satisfies it, but it does not trip `no-empty-object-type`, so the four consumer/feature contracts (grocery, meal-planner, discover, photo-gen) need no lint suppression. It is the same `Record<never, never>` the kernel uses for an empty `writes` seam. `DomainRegistry` itself is the lone exception that keeps the suppression: it is the `declare module` merge target, and only an `interface` can be merged into, so it cannot be an `EmptyApi` alias.
+- **The sync start-gate is declared once (`HasSynced`) and exposed selectively.** A contract that a sibling gates on a first sync `extends HasSynced` (`registry.ts`) instead of re-declaring `hasSynced(): boolean`. Exposure is demand-driven — see the domains `CLAUDE.md` sharp edge for the two-layer rule (every store HAS `hasSynced`; only a sibling-gated contract exposes it).
 
 ## Sharp edges
 

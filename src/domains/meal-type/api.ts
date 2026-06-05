@@ -1,6 +1,7 @@
 import type { z } from "zod";
 
 import type { MealTypeUid } from "../../ids.js";
+import type { HasSynced } from "../../kernel/registry.js";
 import type { MealTypeResolveResult, mealTypeSpecSchema } from "./meal-type-helpers.js";
 import type { MealType } from "./types.js";
 
@@ -14,8 +15,11 @@ export type MealTypeSpec = z.infer<typeof mealTypeSpecSchema>;
  * path: `ensureMealType` auto-creates a custom type on first reference (mirroring
  * aisle's `ensureAisle`). Explicit edit/delete of meal types is not exposed — that
  * stays a follow-up (#244).
+ *
+ * The inherited `hasSynced` is the catalog start-gate the meal/menu write tools
+ * check before resolving or auto-creating a type.
  */
-export interface MealTypeApi {
+export interface MealTypeApi extends HasSynced {
   /**
    * Resolve a list of meal-type UIDs to their display names, in order, skipping
    * unknown/dangling UIDs. Backs the menu resource and the meal/menu renderers.
@@ -29,8 +33,6 @@ export interface MealTypeApi {
   resolveSpec(spec: MealTypeSpec): MealTypeResolveResult;
   /** The whole catalog (unsorted) — callers sort/render as needed. */
   getAll(): ReadonlyArray<MealType>;
-  /** Whether the catalog has completed its first sync (start-guard gate). */
-  hasSynced(): boolean;
   /**
    * Resolve-or-create a meal type by name (case-insensitive), mirroring aisle's
    * `ensureAisle`. Returns the existing type on a name hit; otherwise creates a

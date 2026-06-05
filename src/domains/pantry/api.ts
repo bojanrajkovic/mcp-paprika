@@ -1,19 +1,19 @@
 import type { Result } from "neverthrow";
 
+import type { HasSynced } from "../../kernel/registry.js";
 import type { PantryItem } from "./types.js";
 
 /**
  * Pantry's public contract — the surface grocery's `move_grocery_items_to_pantry`
  * consumes via `ctx.deps.pantry`. Scoped to exactly that one cross-domain call site,
  * nothing speculative:
- *   - `hasSynced` — grocery gates the move on pantry being warm before any write;
+ *   - `hasSynced` (inherited from {@link HasSynced}) — grocery gates the move on
+ *     pantry being warm before any write;
  *   - `createItems` — the write the move needs, distinguishing API-create failure
  *     from local-commit failure so grocery can keep its create-first/delete-second
  *     ordering and partial-failure messaging.
  */
-export interface PantryApi {
-  /** Whether the pantry store has completed at least one sync (the move-tool guard). */
-  hasSynced(): boolean;
+export interface PantryApi extends HasSynced {
   /**
    * Persist a batch of pantry items: POST to Paprika, then commit to the local
    * cache + store (the full `markPending → cache → flush → store → notifySync`
