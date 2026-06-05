@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { makeAuthCodeState, makeAuthRequestState } from "../../test/auth/__fixtures__/oauth-state.js";
-import { makeOAuthClient, makeOAuthToken } from "../../test/cache/__fixtures__/oauth.js";
+import { makeOAuthClient, makeOAuthToken } from "../../test/auth/__fixtures__/oauth.js";
 import { SILENT_LOG } from "../utils/log.js";
 import { AuthCodeStore } from "./auth-code-store.js";
 import { AuthRequestStore } from "./auth-request-store.js";

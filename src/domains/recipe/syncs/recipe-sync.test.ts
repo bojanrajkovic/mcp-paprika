@@ -9,7 +9,7 @@ import type { Infra } from "../../../kernel/registry.js";
 import type { RecipeSyncResult } from "../../../paprika/sync-types.js";
 import type { RecipeState } from "../module.js";
 
-import { makeRecipe } from "../../../../test/cache/__fixtures__/recipes.js";
+import { makeRecipe } from "../../../../test/domains/recipe/__fixtures__/recipes.js";
 import { makeKernelInfra } from "../../../../test/support/kernel-harness.js";
 import { registeredModules } from "../../../kernel/registry.js";
 import { recipesSync } from "./recipe-sync.js";

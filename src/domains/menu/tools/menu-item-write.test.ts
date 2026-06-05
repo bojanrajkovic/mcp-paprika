@@ -5,9 +5,9 @@ import type { MenuItem } from "../menu-item/types.js";
 import type { MenuState } from "../module.js";
 import type { Menu } from "../types.js";
 
-import { makeMealType } from "../../../../test/cache/__fixtures__/meals.js";
-import { makeMenu, makeMenuItem } from "../../../../test/cache/__fixtures__/menus.js";
-import { makeRecipe } from "../../../../test/cache/__fixtures__/recipes.js";
+import { makeMealType } from "../../../../test/domains/meal-type/__fixtures__/meal-types.js";
+import { makeMenu, makeMenuItem } from "../../../../test/domains/menu/__fixtures__/menus.js";
+import { makeRecipe } from "../../../../test/domains/recipe/__fixtures__/recipes.js";
 import { useKernelHarness } from "../../../../test/support/kernel-harness.js";
 import { getText } from "../../../../test/support/tool-test-utils.js";
 import { updateMenuItemInputSchema } from "./menu-item-update.js";

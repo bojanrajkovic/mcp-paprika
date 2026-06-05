@@ -5,7 +5,7 @@ import { ZodError } from "zod";
 
 import type { ResolvedImageGenConfig } from "../utils/config.js";
 
-import { makeRecipe } from "../../test/cache/__fixtures__/recipes.js";
+import { makeRecipe } from "../../test/domains/recipe/__fixtures__/recipes.js";
 import { tripBreaker } from "../../test/support/tool-test-utils.js";
 import { CircuitOpenError } from "../utils/errors.js";
 import { PhotographyAPIError, PhotographyError } from "./photography-errors.js";

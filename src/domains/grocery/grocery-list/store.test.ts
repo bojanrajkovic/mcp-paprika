@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import type { GroceryListUid } from "../../../ids.js";
 
-import { makeGroceryList } from "../../../../test/cache/__fixtures__/grocery-lists.js";
+import { makeGroceryList } from "../../../../test/domains/grocery/__fixtures__/grocery-lists.js";
 import { GroceryListStore } from "./store.js";
 
 describe("GroceryListStore", () => {

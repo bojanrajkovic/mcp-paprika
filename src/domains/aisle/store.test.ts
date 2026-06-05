@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { makeAisle } from "../../../test/cache/__fixtures__/aisles.js";
+import { makeAisle } from "../../../test/domains/aisle/__fixtures__/aisles.js";
 import { AisleStore } from "./store.js";
 
 describe("aisle-store: AisleStore", () => {

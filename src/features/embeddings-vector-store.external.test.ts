@@ -18,7 +18,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { CategoryUid, RecipeUid } from "../ids.js";
 import type { EmbeddingConfig } from "../utils/config.js";
 
-import { makeRecipe } from "../../test/cache/__fixtures__/recipes.js";
+import { makeRecipe } from "../../test/domains/recipe/__fixtures__/recipes.js";
 import { EmbeddingClient } from "./embeddings.js";
 import { VectorStore } from "./vector-store.js";
 

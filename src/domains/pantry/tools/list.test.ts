@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import type { PantryState } from "../module.js";
 
-import { makePantryItem } from "../../../../test/cache/__fixtures__/pantry.js";
+import { makePantryItem } from "../../../../test/domains/pantry/__fixtures__/pantry.js";
 import { useKernelHarness } from "../../../../test/support/kernel-harness.js";
 import { getText } from "../../../../test/support/tool-test-utils.js";
 

@@ -20,15 +20,15 @@ import type { PantryItem } from "../domains/pantry/types.js";
 import type { Category } from "../domains/recipe/category/types.js";
 import type { Recipe } from "../domains/recipe/types.js";
 
-import { makeMeal } from "../../test/cache/__fixtures__/meals.js";
+import { makeMeal } from "../../test/domains/meal/__fixtures__/meals.js";
 import {
   makeMenu,
   makeMenuItem,
   makeSnakeCaseMenu,
   makeSnakeCaseMenuItem,
-} from "../../test/cache/__fixtures__/menus.js";
-import { makeSnakeCasePantryItem } from "../../test/cache/__fixtures__/pantry.js";
-import { makeSnakeCaseRecipe } from "../../test/cache/__fixtures__/recipes.js";
+} from "../../test/domains/menu/__fixtures__/menus.js";
+import { makeSnakeCasePantryItem } from "../../test/domains/pantry/__fixtures__/pantry.js";
+import { makeSnakeCaseRecipe } from "../../test/domains/recipe/__fixtures__/recipes.js";
 import { makePinoCapture, tripBreaker } from "../../test/support/tool-test-utils.js";
 import { mealToApiPayload } from "../domains/meal/types.js";
 import { menuItemToApiPayload } from "../domains/menu/menu-item/types.js";

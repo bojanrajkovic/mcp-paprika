@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { DiskCache } from "../cache/disk-cache.js";
 
-import { makeGroceryList } from "../../test/cache/__fixtures__/grocery-lists.js";
+import { makeGroceryList } from "../../test/domains/grocery/__fixtures__/grocery-lists.js";
 import { GroceryListStore } from "../domains/grocery/grocery-list/store.js";
 import { SILENT_LOG } from "../utils/log.js";
 import { syncReplaceAllEntity } from "./sync.js";

@@ -6,7 +6,7 @@ import type { CategoryUid, RecipeUid } from "../../ids.js";
 import type { Infra } from "../../kernel/registry.js";
 import type { VectorStore } from "../vector-store.js";
 
-import { makeRecipe } from "../../../test/cache/__fixtures__/recipes.js";
+import { makeRecipe } from "../../../test/domains/recipe/__fixtures__/recipes.js";
 import { makeKernelInfra } from "../../../test/support/kernel-harness.js";
 import { makePinoCapture } from "../../../test/support/tool-test-utils.js";
 import { registeredModules } from "../../kernel/registry.js";

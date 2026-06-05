@@ -1,5 +1,5 @@
-import type { PantryItem } from "../../../src/domains/pantry/types.js";
-import type { AisleUid, PantryItemUid } from "../../../src/ids.js";
+import type { PantryItem } from "../../../../src/domains/pantry/types.js";
+import type { AisleUid, PantryItemUid } from "../../../../src/ids.js";
 
 let pantryItemCounter = 0;
 

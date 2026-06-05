@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { makeCategory, makeRecipe } from "../../../test/cache/__fixtures__/recipes.js";
+import { makeCategory, makeRecipe } from "../../../test/domains/recipe/__fixtures__/recipes.js";
 import { recipeMetadataLines, recipeToMarkdown, resolveCategoryRefs } from "./recipe-markdown.js";
 
 describe("p2-u02-shared-helpers: shared helper functions", () => {

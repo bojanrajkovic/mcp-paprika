@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { makeMeal } from "../../../test/cache/__fixtures__/meals.js";
+import { makeMeal } from "../../../test/domains/meal/__fixtures__/meals.js";
 import { mealToMarkdown } from "./meal-helpers.js";
 
 // ---------------------------------------------------------------------------

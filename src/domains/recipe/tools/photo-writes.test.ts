@@ -5,8 +5,8 @@ import type { RecipeState } from "../module.js";
 import type { Photo } from "../photo/types.js";
 import type { Recipe } from "../types.js";
 
-import { makePhoto } from "../../../../test/cache/__fixtures__/photos.js";
-import { makeRecipe } from "../../../../test/cache/__fixtures__/recipes.js";
+import { makePhoto } from "../../../../test/domains/recipe/__fixtures__/photos.js";
+import { makeRecipe } from "../../../../test/domains/recipe/__fixtures__/recipes.js";
 import { useKernelHarness } from "../../../../test/support/kernel-harness.js";
 import { getText } from "../../../../test/support/tool-test-utils.js";
 import { PhotoUidSchema, RecipeUidSchema } from "../../../ids.js";

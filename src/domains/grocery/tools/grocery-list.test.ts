@@ -2,8 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { GroceryState } from "../module.js";
 
-import { makeGroceryItem } from "../../../../test/cache/__fixtures__/grocery-items.js";
-import { makeGroceryList } from "../../../../test/cache/__fixtures__/grocery-lists.js";
+import { makeGroceryItem } from "../../../../test/domains/grocery/__fixtures__/grocery-items.js";
+import { makeGroceryList } from "../../../../test/domains/grocery/__fixtures__/grocery-lists.js";
 import { useKernelHarness } from "../../../../test/support/kernel-harness.js";
 import { getText } from "../../../../test/support/tool-test-utils.js";
 

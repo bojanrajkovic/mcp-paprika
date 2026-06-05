@@ -5,11 +5,11 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import type { DiskCacheDescriptor } from "./disk-cache.js";
 
-import { makeGroceryIngredient } from "../../test/cache/__fixtures__/grocery-ingredients.js";
-import { makeGroceryItem } from "../../test/cache/__fixtures__/grocery-items.js";
-import { makeGroceryList } from "../../test/cache/__fixtures__/grocery-lists.js";
-import { makePantryItem } from "../../test/cache/__fixtures__/pantry.js";
-import { makeCategory } from "../../test/cache/__fixtures__/recipes.js";
+import { makeGroceryIngredient } from "../../test/domains/grocery/__fixtures__/grocery-ingredients.js";
+import { makeGroceryItem } from "../../test/domains/grocery/__fixtures__/grocery-items.js";
+import { makeGroceryList } from "../../test/domains/grocery/__fixtures__/grocery-lists.js";
+import { makePantryItem } from "../../test/domains/pantry/__fixtures__/pantry.js";
+import { makeCategory } from "../../test/domains/recipe/__fixtures__/recipes.js";
 import { makeCache, useTempDir } from "../../test/support/disk-caches.js";
 import { groceryIngredientDiskDescriptor } from "../domains/grocery/grocery-ingredient/types.js";
 import { groceryItemDiskDescriptor } from "../domains/grocery/grocery-item/types.js";

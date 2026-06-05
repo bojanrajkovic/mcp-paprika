@@ -10,7 +10,7 @@ import type { RecipeUid } from "./ids.js";
 import type { Infra, Kernel } from "./kernel/registry.js";
 import type { PaprikaConfig } from "./utils/config.js";
 
-import { makeCategory, makeSnakeCaseRecipe } from "../test/cache/__fixtures__/recipes.js";
+import { makeCategory, makeSnakeCaseRecipe } from "../test/domains/recipe/__fixtures__/recipes.js";
 import { getText, makeStubNotifier, makeTestServer } from "../test/support/tool-test-utils.js";
 import { GeneratedImageStore } from "./features/generated-image-store.js";
 import { buildKernel } from "./kernel/registry.js";

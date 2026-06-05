@@ -9,7 +9,7 @@ import type { Mocked } from "vitest";
 import type { RecipeUid } from "../ids.js";
 import type { EmbeddingClient } from "./embeddings.js";
 
-import { makeRecipe } from "../../test/cache/__fixtures__/recipes.js";
+import { makeRecipe } from "../../test/domains/recipe/__fixtures__/recipes.js";
 import { makePinoCapture } from "../../test/support/tool-test-utils.js";
 import { recipeToEmbeddingText } from "./embeddings.js";
 import { VectorStoreError } from "./vector-store-errors.js";

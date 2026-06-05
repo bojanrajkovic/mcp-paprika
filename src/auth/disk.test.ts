@@ -4,7 +4,7 @@ import { join } from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { makeOAuthClient, makeOAuthToken } from "../../test/cache/__fixtures__/oauth.js";
+import { makeOAuthClient, makeOAuthToken } from "../../test/auth/__fixtures__/oauth.js";
 import { makeCache, makeOAuthClientCache, useTempDir } from "../../test/support/disk-caches.js";
 import { buildAuthCaches, oauthTokensDiskDescriptor } from "./disk.js";
 

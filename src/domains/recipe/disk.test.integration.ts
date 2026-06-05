@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import type { CategoryUid, RecipeUid } from "../../ids.js";
 
-import { makeCategory, makeRecipe } from "../../../test/cache/__fixtures__/recipes.js";
+import { makeCategory, makeRecipe } from "../../../test/domains/recipe/__fixtures__/recipes.js";
 import { makeCache, makeRecipeCache, useTempDir } from "../../../test/support/disk-caches.js";
 import { makeKernelInfra } from "../../../test/support/kernel-harness.js";
 import { getText, makeTestServer } from "../../../test/support/tool-test-utils.js";

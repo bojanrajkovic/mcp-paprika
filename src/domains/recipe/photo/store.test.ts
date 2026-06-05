@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import type { PhotoUid, RecipeUid } from "../../../ids.js";
 
-import { makePhoto } from "../../../../test/cache/__fixtures__/photos.js";
+import { makePhoto } from "../../../../test/domains/recipe/__fixtures__/photos.js";
 import { PhotoStore } from "./store.js";
 
 describe("PhotoStore", () => {

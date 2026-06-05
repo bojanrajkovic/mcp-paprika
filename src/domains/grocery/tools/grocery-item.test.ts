@@ -3,10 +3,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AisleUid, GroceryItemUid, GroceryListUid } from "../../../ids.js";
 import type { GroceryState } from "../module.js";
 
-import { makeAisle } from "../../../../test/cache/__fixtures__/aisles.js";
-import { makeGroceryIngredient } from "../../../../test/cache/__fixtures__/grocery-ingredients.js";
-import { makeGroceryItem } from "../../../../test/cache/__fixtures__/grocery-items.js";
-import { makeGroceryList } from "../../../../test/cache/__fixtures__/grocery-lists.js";
+import { makeAisle } from "../../../../test/domains/aisle/__fixtures__/aisles.js";
+import { makeGroceryIngredient } from "../../../../test/domains/grocery/__fixtures__/grocery-ingredients.js";
+import { makeGroceryItem } from "../../../../test/domains/grocery/__fixtures__/grocery-items.js";
+import { makeGroceryList } from "../../../../test/domains/grocery/__fixtures__/grocery-lists.js";
 import { useKernelHarness } from "../../../../test/support/kernel-harness.js";
 import { getText } from "../../../../test/support/tool-test-utils.js";
 import { updateGroceryItemInputSchema } from "./grocery-item.js";

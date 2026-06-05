@@ -7,8 +7,8 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from
 
 import type { PaprikaConfig } from "../utils/config.js";
 
+import { makeOAuthClient } from "../../test/auth/__fixtures__/oauth.js";
 import { createOidcStub } from "../../test/auth/__fixtures__/oidc-stub.js";
-import { makeOAuthClient } from "../../test/cache/__fixtures__/oauth.js";
 import { useMswServer } from "../../test/support/msw.js";
 import { failLoudOnUpstream, PAPRIKA_API_BASE, paprikaSyncMockHandlers } from "../../test/support/paprika-msw.js";
 import { makePinoCapture, SILENT_LOGGING_CONFIG } from "../../test/support/tool-test-utils.js";

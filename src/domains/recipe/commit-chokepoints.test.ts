@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { CategoryUid, RecipeUid } from "../../ids.js";
 import type { RecipeState, RecipeWrites } from "./module.js";
 
-import { makeCategory, makeRecipe } from "../../../test/cache/__fixtures__/recipes.js";
+import { makeCategory, makeRecipe } from "../../../test/domains/recipe/__fixtures__/recipes.js";
 import { useKernelHarness } from "../../../test/support/kernel-harness.js";
 
 /**

@@ -4,8 +4,9 @@ import type { MealTypeUid, MealUid, RecipeUid } from "../../../ids.js";
 import type { MealState } from "../module.js";
 import type { Meal } from "../types.js";
 
-import { makeMeal, makeMealType } from "../../../../test/cache/__fixtures__/meals.js";
-import { makeRecipe } from "../../../../test/cache/__fixtures__/recipes.js";
+import { makeMealType } from "../../../../test/domains/meal-type/__fixtures__/meal-types.js";
+import { makeMeal } from "../../../../test/domains/meal/__fixtures__/meals.js";
+import { makeRecipe } from "../../../../test/domains/recipe/__fixtures__/recipes.js";
 import { useKernelHarness } from "../../../../test/support/kernel-harness.js";
 import { getText } from "../../../../test/support/tool-test-utils.js";
 import { rescheduleMealInputSchema } from "./reschedule-meal.js";

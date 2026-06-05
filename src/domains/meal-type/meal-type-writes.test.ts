@@ -9,7 +9,7 @@ import type { MealTypeApi } from "./api.js";
 import type { MealTypeState } from "./module.js";
 import type { MealType } from "./types.js";
 
-import { makeMealType } from "../../../test/cache/__fixtures__/meals.js";
+import { makeMealType } from "../../../test/domains/meal-type/__fixtures__/meal-types.js";
 import { makeKernelInfra } from "../../../test/support/kernel-harness.js";
 import { type MealTypeUid } from "../../ids.js";
 import { registeredModules } from "../../kernel/registry.js";

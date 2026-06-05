@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { makeAisle } from "../../../../test/cache/__fixtures__/aisles.js";
+import { makeAisle } from "../../../../test/domains/aisle/__fixtures__/aisles.js";
 import { useKernelHarness } from "../../../../test/support/kernel-harness.js";
 import { getText } from "../../../../test/support/tool-test-utils.js";
 

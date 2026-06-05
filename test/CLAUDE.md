@@ -8,7 +8,7 @@ Fixtures, generated wire-captures, and test helpers — the test-only code that 
 
 - `support/` — cross-cutting helpers used across many tests: `kernel-harness` (`useKernelHarness` — the composable harness most tool/resource tests run through: it builds a module plus its dependency closure against a test `Infra`, registers the root module's tools/resources on a stub server, and seeds the built modules' private stores), `tool-test-utils` (`makeTestServer` / `getText` / `makeStubNotifier` / `makePinoCapture`), `msw` / `paprika-msw` (MSW server + Paprika handlers), `xdg-isolation`.
 - `fixtures/` — shared data: the `SeedData` type (the declarative payload `useKernelHarness().seed()` consumes), and `wire-captures/` (generated HAR replay modules + their drift tests).
-- `<entity>/__fixtures__/` — per-entity data factories (`make<Entity>`), mirroring `src/domains/<domain>/`. `<entity>/test-utils.ts` for entity-scoped helpers (e.g. `auth/`).
+- `domains/<domain>/__fixtures__/` — per-entity data factories (`make<Entity>`), mirroring `src/domains/<domain>/` (e.g. `domains/recipe/__fixtures__/recipes.ts`, `domains/meal-type/__fixtures__/meal-types.ts`). Non-domain support areas keep their own `<area>/__fixtures__/` and `<area>/test-utils.ts` (e.g. `auth/`, `paprika/`).
 
 ## Test tiers
 
