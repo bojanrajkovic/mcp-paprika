@@ -13,7 +13,8 @@ import { textResult } from "../../../shared/tools.js";
 import { parseCalendarDayWire, todayWire } from "../../../utils/dates.js";
 import { toMessage } from "../../../utils/log.js";
 import { mealTypeSpecSchema, resolveOrCreateMealType } from "../../meal-type/meal-type-helpers.js";
-import { makeMealOrderFlagAssigner, mealStartGuard, renderMealCard } from "./helpers.js";
+import { mealStartGuard } from "./guards.js";
+import { makeMealOrderFlagAssigner, renderMealCard } from "./helpers.js";
 
 export const logCookedMealInputSchema = z
   .object({

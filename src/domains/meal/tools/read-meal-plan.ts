@@ -7,7 +7,8 @@ import type { MealState } from "../module.js";
 
 import { defineTool } from "../../../kernel/tool.js";
 import { textResult } from "../../../shared/tools.js";
-import { mealStartGuard, renderMealsGroupedByDate } from "./helpers.js";
+import { mealStartGuard } from "./guards.js";
+import { renderMealsGroupedByDate } from "./helpers.js";
 
 export const readMealPlanInputSchema = z
   .object({

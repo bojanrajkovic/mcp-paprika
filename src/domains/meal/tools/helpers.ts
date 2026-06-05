@@ -1,34 +1,18 @@
-import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { DateTime } from "luxon";
-import { err, ok, type Result } from "neverthrow";
 
 import type { MealTypeApi } from "../../meal-type/api.js";
 import type { RecipeApi } from "../../recipe/api.js";
 import type { MealState } from "../module.js";
 import type { Meal } from "../types.js";
 
-import { textResult } from "../../../shared/tools.js";
 import { mealToMarkdown } from "../meal-helpers.js";
 
 /**
- * Meal-domain tool helpers — the readiness gates and the per-date `order_flag`
- * assigner. Meal-type spec resolution goes through `deps["meal-type"].resolveSpec(spec)`:
- * the meal-type module owns that resolver and publishes it on its api.
+ * Meal-domain tool helpers — the per-date `order_flag` assigner and the meal-card
+ * renderers. Readiness gating lives in `guards.ts`; meal-type spec resolution goes
+ * through `deps["meal-type"].resolveSpec(spec)` (the meal-type module owns that
+ * resolver and publishes it on its api).
  */
-
-/**
- * Both stores must be synced. The mealtype store is required by the type resolver
- * (`deps["meal-type"].resolveSpec`, used by both the write and read tools); without
- * it, every "Dinner" / "Lunch" lookup returns undefined and the user sees "Unknown
- * meal type" errors that look like input mistakes but are actually a cold-cache
- * state. Guarding both up front turns that into a clear "still syncing" message.
- */
-export function mealStartGuard(state: MealState, mealType: MealTypeApi): Result<void, CallToolResult> {
-  if (!state.store.hasSynced || !mealType.hasSynced()) {
-    return err(textResult("Meal data is not yet synced. Try again in a few seconds."));
-  }
-  return ok(undefined);
-}
 
 /**
  * Builds a stateful, per-DATE `order_flag` assigner for a batch of new meals.

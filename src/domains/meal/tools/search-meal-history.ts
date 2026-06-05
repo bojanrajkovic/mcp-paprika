@@ -11,7 +11,8 @@ import { defineTool } from "../../../kernel/tool.js";
 import { textResult } from "../../../shared/tools.js";
 import { parseInstant } from "../../../utils/dates.js";
 import { formatMealTypeResolveError, mealTypeSpecSchema } from "../../meal-type/meal-type-helpers.js";
-import { mealStartGuard, renderMealsGroupedByDate } from "./helpers.js";
+import { mealStartGuard } from "./guards.js";
+import { renderMealsGroupedByDate } from "./helpers.js";
 
 export const searchMealHistoryInputSchema = z
   .object({
