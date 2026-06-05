@@ -8,12 +8,12 @@ One directory per cohesive domain — the unit the kernel constructs, isolates, 
 
 ## Layout (per domain)
 
-- `module.ts` — `defineModule(id, dependsOn).state(factory).build((state, infra) => parts)`: the `.state` factory hydrates the domain's stores/caches (pure state); `.build` (which receives `infra`) assembles the `api` contract and the `writes` chokepoints, and returns `tools` + optional `resources`/`syncs`/`onReady`/`flush`. It augments `DomainRegistry` with the domain's contract type. The state/writes split — pure `*State`, infra-dependent writes in `.build` reached via `ctx.writes` — is [ADR-0012](../../docs/adr/0012-pure-state-and-writes-seam.md).
+- `module.ts` — the domain's kernel registration (`defineModule(…).state(…).build(…)`), augmenting `DomainRegistry` with its contract type. The builder shape and the pure-`*State` / `ctx.writes` split live in `../kernel/CLAUDE.md` and [ADR-0012](../../docs/adr/0012-pure-state-and-writes-seam.md), not here.
 - `api.ts` — the read contract siblings depend on (kept narrow; this is the only surface another domain sees).
 - The defining entity's `types.ts` / `store.ts` / `disk.ts` at the domain root; each **additional** owned entity in an `<entity>/` subdir (e.g. `recipe/category/`, `recipe/photo/`, `grocery/grocery-item/`, `menu/menu-item/`).
 - `tools/`, `resources/`, `syncs/` — co-located, tests beside them. Domain-specific markdown formatters live here too (e.g. `recipe-markdown.ts`, `grocery-helpers.ts`); genuinely cross-cutting helpers live in `src/shared/`.
 
-`aisle` and `meal-type` stay standalone single-entity domains because each is referenced by two domains. `meal-planner` is a coordinator (no owned entity). The ownership rule and the domain graph: `docs/adr/0009-domain-isolated-tool-modules-kernel.md` §3.
+The domain graph (who `dependsOn` whom) and the ownership rule are in [ADR-0009 §3](../../docs/adr/0009-domain-isolated-tool-modules-kernel.md), drawn there as a diagram.
 
 ## Key References
 
@@ -21,14 +21,7 @@ One directory per cohesive domain — the unit the kernel constructs, isolates, 
 - `../entity/CLAUDE.md` — the `EntityStore` base and the pending-write (#57) invariants every store inherits.
 - `../cache/CLAUDE.md` — the per-entity `DiskCache` each `disk.ts` describes.
 - ADR-0004 (tool-vs-resource) — resources are Content-domain-only (recipe, grocery-list, menu).
-
-## Doc & naming conventions
-
-These govern the **developer-facing** docs and names in a domain — NOT the agent-facing `description` strings passed to `defineTool` / `registerResource`, which are the forward-intent command language of [ADR-0008](../../docs/adr/0008-tool-surface-command-language.md) and stay as written.
-
-- **Registrar docs lead with purpose, not mechanism.** A tool/resource registrar's JSDoc opens with what it does (`` `create_recipe` — create a recipe. ``), then keeps only genuinely non-obvious WHY: the ADR-0004 entity class (Reference / Data / Content), a cross-domain dependency rationale, an ADR-0008 intent-verb pairing, a placement note (e.g. "this IS a grocery tool"), or a guard rationale. Do NOT recite the kernel wiring (`ctx.state` / `ctx.writes` / `ctx.deps` plumbing) — it is true of every registrar.
-- **Registrar names are nouns that name the tool.** A tool is `export const <camel>Tool = defineTool(...)` — a `ToolDef` value, so the noun reads correctly (the export IS the tool, not a register-function). Keep the `*Tool` / `*Resource` suffix; pick a name that maps to its id, fixing vague ones (e.g. `clearGroceryListTool`, not `clearAllTool`).
-- **Contract (`api.ts`) and interface (`*State` / `*Writes`) docs describe the contract + real per-domain WHY.** Drop domain-location/graph justification (it lives once here and in ADR-0009) and rote kernel-mechanism recital ("the store/cache stay private", "siblings reach via `ctx.deps`", "assembled from the store in `.build`"). Keep the per-method contract docs and any genuinely non-obvious per-domain WHY (a binding gotcha, an ownership note, a dependency-cycle seam).
+- `../../docs/documentation-system.md` §4 — how a registrar / contract / `*State` / `*Writes` doc-comment is written (lead with purpose, keep only real WHY, no kernel-mechanism recital; names are nouns that name the tool).
 
 ## Sharp edges
 

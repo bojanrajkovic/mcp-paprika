@@ -34,7 +34,15 @@ Counts and lists drift the instant code changes, so prose never enumerates them.
 
 This rule exists because its absence already bit us: the tool count drifted four ways across docs, none agreeing with the registry, with no single source to reconcile against. The fix isn't to update all four. It's to delete the count from prose and point at the registry. When you need to know how many tools there are, read `build.ts`; don't ask a doc.
 
-## 4. "Last verified:" is the audit cadence, and there is deliberately no staleness gate
+## 4. Source doc-comments lead with purpose, and keep only real WHY
+
+The JSDoc on a tool/resource registrar and on a domain's contract (`api.ts`) and internal interfaces (`*State` / `*Writes`) is source — it travels with the code and is the canonical home for _per-symbol_ rationale. (Per-tool WHY belongs here, never collected into `architecture.md`: that would be §3's enumerate-in-prose anti-pattern, and it would rot when the tool moves.) It is governed, not free-form:
+
+- **Registrar docs open with what the tool does**, then keep only genuinely non-obvious WHY: the ADR-0004 entity class (Reference / Data / Content), a cross-domain dependency rationale, an ADR-0008 intent-verb pairing, a placement note (e.g. "this IS a grocery tool"), a guard. They do NOT recite the kernel wiring (`ctx.state` / `ctx.writes` / `ctx.deps` plumbing) — it is true of every registrar — and they do NOT restate a system invariant that already has a canonical home (the "a tool reaches deps, never a sibling's store" rule lives once in `src/domains/CLAUDE.md`; don't re-explain it per tool). They never duplicate the agent-facing `description` string, which is the forward-intent command language of [ADR-0008](adr/0008-tool-surface-command-language.md).
+- **Registrar names are nouns that name the tool** — `export const <camel>Tool = defineTool(...)` is a `ToolDef` value, so the export IS the tool, not a register-function. Keep the `*Tool` / `*Resource` suffix; name it for its id, fixing vague ones (`clearGroceryListTool`, not `clearAllTool`).
+- **Contract and interface docs describe the contract + real per-domain WHY** — the per-method contract, a binding gotcha, an ownership note, a dependency-cycle seam. Drop domain-location/graph justification (it lives once in ADR-0009 §3) and rote mechanism recital ("the store/cache stay private", "siblings reach via `ctx.deps`").
+
+## 5. "Last verified:" is the audit cadence, and there is deliberately no staleness gate
 
 Every `CLAUDE.md`, every architecture-class doc, and every ADR carries a **`Last verified: <date>`** stamp. That date is the audit mechanism: it tells a reader how recently a human checked the doc against reality, and it tells a maintainer which docs are overdue. Bump it when you verify; leave it alone for a typo fix.
 
