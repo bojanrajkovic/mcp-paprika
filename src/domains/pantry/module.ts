@@ -12,7 +12,7 @@ import { defineModule, register } from "../../kernel/registry.js";
 import { resolvePendingWriteTtl } from "../../utils/config.js";
 import { toMessage } from "../../utils/log.js";
 import { PantryStore } from "./store.js";
-import { pantrySync } from "./syncs/pantry-sync.js";
+import { pantrySync } from "./sync.js";
 import { addPantryItemsTool } from "./tools/batch-add.js";
 import { deletePantryItemTool } from "./tools/delete.js";
 import { getPantryItemTool } from "./tools/get.js";

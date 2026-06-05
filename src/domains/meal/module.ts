@@ -12,7 +12,7 @@ import { defineModule, register } from "../../kernel/registry.js";
 import { resolvePendingWriteTtl } from "../../utils/config.js";
 import { toMessage } from "../../utils/log.js";
 import { MealStore } from "./store.js";
-import { mealSync } from "./syncs/meal-sync.js";
+import { mealSync } from "./sync.js";
 import { logCookedMealTool } from "./tools/log-cooked-meal.js";
 import { deleteMealTool, planMealsTool, updateMealTool } from "./tools/meal-writes.js";
 import { readMealPlanTool } from "./tools/read-meal-plan.js";

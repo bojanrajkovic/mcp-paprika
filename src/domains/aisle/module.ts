@@ -11,7 +11,7 @@ import { AisleUidSchema, NO_AISLE_UID } from "../../ids.js";
 import { defineModule, register } from "../../kernel/registry.js";
 import { resolvePendingWriteTtl } from "../../utils/config.js";
 import { AisleStore } from "./store.js";
-import { aisleSync } from "./syncs/aisle-sync.js";
+import { aisleSync } from "./sync.js";
 import { listAislesTool } from "./tools/list-aisles.js";
 import { aisleDiskDescriptor } from "./types.js";
 

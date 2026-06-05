@@ -1,8 +1,8 @@
-import type { SyncContribution } from "../../../kernel/registry.js";
-import type { MealState } from "../module.js";
+import type { SyncContribution } from "../../kernel/registry.js";
+import type { MealState } from "./module.js";
 
-import { syncReplaceAllEntity } from "../../../paprika/sync.js";
-import { mealsEqual } from "../types.js";
+import { syncReplaceAllEntity } from "../../paprika/sync.js";
+import { mealsEqual } from "./types.js";
 
 /**
  * Meal sync — replace-all with orphan cleanup and pending-write filtering via
