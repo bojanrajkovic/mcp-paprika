@@ -16,6 +16,8 @@ TypeScript 6 (ESM, `@tsconfig/strictest`) on Node.js 24 (mise-managed), pnpm via
 
 `pnpm dev` · `pnpm build` · `pnpm test` · `pnpm typecheck` · `pnpm lint` · `pnpm format`. Full reference and dev setup: `CONTRIBUTING.md`.
 
+**Fresh git worktree:** run `pnpm install --ignore-scripts` once before anything else, or lefthook's `prepare` step (`lefthook install`) makes every `pnpm` / `git commit` / `git push` fail (mechanism in `CONTRIBUTING.md`).
+
 The source tree is a typed composition kernel over self-registering domain modules (ADR-0009).
 
 - `src/index.ts`, `src/transport/` — transport dispatch and the stdio / Streamable-HTTP entry points; each transport assembles the kernel `Infra` and calls `buildKernel`.
