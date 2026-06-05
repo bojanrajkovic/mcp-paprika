@@ -27,21 +27,18 @@ declare module "../../kernel/registry.js" {
   }
 }
 
-/**
- * The pantry module's internals — a single store + cache pair (a single-entity Data
- * domain; nothing co-owned). `createItems` is bound HERE in `.state`, not in
- * `.build`, because it WRITES — it needs `infra.client`, which the factory has and
- * `.build` does not (mirrors aisle's `ensureAisle`). The read-only `hasSynced`
- * contract method is assembled from `store` in `.build`.
- *
- * `commitPantryItemsBatch` is exposed on `state` so the batch-add tool can write
- * through the same chokepoint; the single-item `commitPantryItem` is likewise bound
- * for the update/stock/delete tools. No `resourceListChanged()` — pantry is a Data
- * entity with no MCP resource.
- */
+/** The pantry module's state — a single store + cache pair (single-entity Data domain). */
 export interface PantryState {
   readonly store: PantryStore;
   readonly cache: DiskCache<PantryItem>;
+}
+
+/**
+ * Pantry's write chokepoints (`ctx.writes`), invoked by its own update / stock /
+ * delete / batch-add tools. No `resourceListChanged()` — pantry is a Data entity
+ * with no MCP resource surface.
+ */
+export interface PantryWrites {
   /**
    * Persist a saved pantry item to cache + store, then nudge cloud sync. Branches
    * on `saved.deleted` (upsert vs remove). Used by the update/stock/delete tools.
@@ -50,11 +47,9 @@ export interface PantryState {
   /**
    * Batch variant of `commitPantryItem`: one cache flush, one `notifySync`. Marks
    * all pending writes before any cache I/O; clears them on cache failure. Used by
-   * the batch-add tool AND, via `createItems`, by grocery's move tool.
+   * the batch-add tool AND, via the api's `createItems`, by grocery's move tool.
    */
   commitPantryItemsBatch(items: ReadonlyArray<Readonly<PantryItem>>): Promise<void>;
-  /** The public write the grocery move consumes (binds `client.savePantryItems` + commit). */
-  createItems: PantryApi["createItems"];
 }
 
 register(
@@ -71,54 +66,60 @@ register(
       await cache.init();
       // Warm the store from cache so tools work on a warm restart before the first sync.
       await hydrateStore(cache, store);
-
+      return { store, cache };
+    })
+    .build((state, infra) => {
       // ---- Pantry write chokepoints ----
-
+      // Assembled here (not in `.state`) because they close over `infra.client`,
+      // keeping PantryState pure (ADR-0012). The commit chokepoints are internal —
+      // pantry's own tools reach them via `ctx.writes` — while `createItems` is the
+      // sibling-facing contract write grocery's move consumes via `ctx.deps.pantry`.
+      //
       // Order: markPending* (FIRST, before any cache I/O) → cache put/remove → flush
       // → store set/delete → notifySync. The pending mark shields this UID from a
       // sync cycle that observes the cache mid-commit; cache I/O is wrapped so a
       // failure clears the mark instead of shielding the UID until TTL. No
       // resourceListChanged() — pantry has no MCP resource surface.
-      const commitPantryItem: PantryState["commitPantryItem"] = async (saved) => {
+      const commitPantryItem: PantryWrites["commitPantryItem"] = async (saved) => {
         if (saved.deleted) {
           const uid: PantryItemUid = saved.uid;
-          store.markPendingDelete(uid);
+          state.store.markPendingDelete(uid);
           try {
-            await cache.remove(uid);
-            await cache.flush();
+            await state.cache.remove(uid);
+            await state.cache.flush();
           } catch (e) {
-            store.clearPending(uid);
+            state.store.clearPending(uid);
             throw e;
           }
-          store.delete(uid);
+          state.store.delete(uid);
           await infra.client.notifySync();
         } else {
-          store.markPendingUpsert(saved.uid);
+          state.store.markPendingUpsert(saved.uid);
           try {
-            await cache.put(saved);
-            await cache.flush();
+            await state.cache.put(saved);
+            await state.cache.flush();
           } catch (e) {
-            store.clearPending(saved.uid);
+            state.store.clearPending(saved.uid);
             throw e;
           }
-          store.set(saved);
+          state.store.set(saved);
           await infra.client.notifySync();
         }
       };
 
-      const commitPantryItemsBatch: PantryState["commitPantryItemsBatch"] = async (items) => {
+      const commitPantryItemsBatch: PantryWrites["commitPantryItemsBatch"] = async (items) => {
         if (items.length === 0) return;
         const markedUids: Array<PantryItemUid> = [];
         for (const item of items) {
           if (item.deleted) {
-            store.markPendingDelete(item.uid);
+            state.store.markPendingDelete(item.uid);
           } else {
-            store.markPendingUpsert(item.uid);
+            state.store.markPendingUpsert(item.uid);
           }
           markedUids.push(item.uid);
         }
         const clearPending = (): void => {
-          for (const uid of markedUids) store.clearPending(uid);
+          for (const uid of markedUids) state.store.clearPending(uid);
         };
         // allSettled (not Promise.all): fail-fast would let in-flight ops race the
         // clearPending call in the catch block. We wait for every op to settle first.
@@ -128,7 +129,7 @@ register(
         // reconciled by the next sync. Clearing all pending marks on failure avoids
         // suppressing sync reconciliation until TTL.
         const opsResults = await Promise.allSettled(
-          items.map((item) => (item.deleted ? cache.remove(item.uid) : cache.put(item))),
+          items.map((item) => (item.deleted ? state.cache.remove(item.uid) : state.cache.put(item))),
         );
         const opsFailure = opsResults.find((r): r is PromiseRejectedResult => r.status === "rejected");
         if (opsFailure !== undefined) {
@@ -136,16 +137,16 @@ register(
           throw opsFailure.reason;
         }
         try {
-          await cache.flush();
+          await state.cache.flush();
         } catch (e) {
           clearPending();
           throw e;
         }
         for (const item of items) {
           if (item.deleted) {
-            store.delete(item.uid);
+            state.store.delete(item.uid);
           } else {
-            store.set(item);
+            state.store.set(item);
           }
         }
         await infra.client.notifySync();
@@ -170,22 +171,22 @@ register(
         return ok(saved);
       };
 
-      return { store, cache, commitPantryItem, commitPantryItemsBatch, createItems };
-    })
-    .build((state) => ({
-      api: {
-        hasSynced: () => state.store.hasSynced,
-        createItems: state.createItems,
-      },
-      tools: [
-        listPantryItemsTool,
-        getPantryItemTool,
-        addPantryItemsTool,
-        updatePantryItemTool,
-        ...pantryStockTools,
-        deletePantryItemTool,
-      ],
-      syncs: [pantrySync(state)],
-      flush: () => state.cache.flush(),
-    })),
+      return {
+        api: {
+          hasSynced: () => state.store.hasSynced,
+          createItems,
+        },
+        writes: { commitPantryItem, commitPantryItemsBatch },
+        tools: [
+          listPantryItemsTool,
+          getPantryItemTool,
+          addPantryItemsTool,
+          updatePantryItemTool,
+          ...pantryStockTools,
+          deletePantryItemTool,
+        ],
+        syncs: [pantrySync(state)],
+        flush: () => state.cache.flush(),
+      };
+    }),
 );

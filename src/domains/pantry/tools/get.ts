@@ -10,9 +10,8 @@ import { pantryItemToMarkdown } from "../pantry-helpers.js";
 import { pantryStartGuard } from "./guards.js";
 
 /**
- * Registers `read_pantry_item`, kernel-shaped — reads this module's own store via
- * `ctx.state`. Uses shared lookup/format helpers and `pantryItemToMarkdown` for
- * fuzzy-match resolution and rendering.
+ * `read_pantry_item` — read one pantry item by UID or fuzzy name match, via the
+ * shared lookup/format helpers and `pantryItemToMarkdown`.
  */
 export const getPantryItemTool = defineTool(
   {

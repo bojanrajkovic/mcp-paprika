@@ -2,7 +2,7 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 
 import type { DomainCtx } from "../../../kernel/registry.js";
-import type { PantryState } from "../module.js";
+import type { PantryState, PantryWrites } from "../module.js";
 import type { PantryItem } from "../types.js";
 
 import { PantryItemUidSchema } from "../../../ids.js";
@@ -37,9 +37,8 @@ export const updatePantryItemInputSchema = z
   .strict();
 
 /**
- * Registers `update_pantry_item`, kernel-shaped — writes through this module's
- * bound single-item commit (`ctx.state.commitPantryItem`) and resolves aisles via
- * the declared `aisle` dependency contract (`ctx.deps.aisle.ensureAisle`).
+ * `update_pantry_item` — edit a pantry item's free-form fields. Resolves a changed
+ * aisle through the declared `aisle` dependency contract (`ctx.deps.aisle.ensureAisle`).
  */
 export const updatePantryItemTool = defineTool(
   {
@@ -52,7 +51,7 @@ export const updatePantryItemTool = defineTool(
       "hasExpiration accordingly. To change stock status, use mark_pantry_item_out_of_stock / restock_pantry_item.",
     inputSchema: updatePantryItemInputSchema,
   },
-  (ctx: DomainCtx<PantryState, "aisle">) => {
+  (ctx: DomainCtx<PantryState, "aisle", PantryWrites>) => {
     const log = ctx.infra.log.child({ component: "update_pantry_item" });
     return async (args) => {
       log.info({ tool: "update_pantry_item", uid: args.uid }, "tool invoked");
@@ -117,7 +116,7 @@ export const updatePantryItemTool = defineTool(
               purchaseDate: newPurchaseDate,
             };
             saved = (await ctx.infra.client.savePantryItems([updated]))[0]!;
-            await ctx.state.commitPantryItem(saved);
+            await ctx.writes.commitPantryItem(saved);
           } catch (error) {
             const message = toMessage(error);
             log.error({ err: error, uid: args.uid }, "savePantryItems failed");

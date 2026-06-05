@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import type { AisleUid } from "../../../ids.js";
 import type { DomainCtx } from "../../../kernel/registry.js";
-import type { PantryState } from "../module.js";
+import type { PantryState, PantryWrites } from "../module.js";
 import type { PantryItem } from "../types.js";
 
 import { NO_AISLE_UID, PantryItemUidSchema } from "../../../ids.js";
@@ -30,9 +30,8 @@ const itemInputSchema = z.object({
 });
 
 /**
- * Registers `add_pantry_items`, kernel-shaped — writes through this module's bound
- * batch commit (`ctx.state.commitPantryItemsBatch`) and resolves aisles via the
- * declared `aisle` dependency contract (`ctx.deps.aisle.ensureAisle`), never
+ * `add_pantry_items` — batch-add pantry items. Resolves each item's aisle through
+ * the declared `aisle` dependency contract (`ctx.deps.aisle.ensureAisle`), never
  * reaching aisle's store directly.
  */
 export const addPantryItemsTool = defineTool(
@@ -48,7 +47,7 @@ export const addPantryItemsTool = defineTool(
       items: z.array(itemInputSchema).min(1).describe("Array of items to add (1 or more)"),
     },
   },
-  (ctx: DomainCtx<PantryState, "aisle">) => {
+  (ctx: DomainCtx<PantryState, "aisle", PantryWrites>) => {
     const log = ctx.infra.log.child({ component: "add_pantry_items" });
     return async (args) => {
       log.info({ tool: "add_pantry_items", count: args.items.length }, "tool invoked");
@@ -174,7 +173,7 @@ export const addPantryItemsTool = defineTool(
           let savedItems: ReadonlyArray<PantryItem>;
           try {
             savedItems = await ctx.infra.client.savePantryItems(builtItems);
-            await ctx.state.commitPantryItemsBatch(savedItems);
+            await ctx.writes.commitPantryItemsBatch(savedItems);
           } catch (error) {
             const message = toMessage(error);
             log.error({ err: error }, "savePantryItems failed");

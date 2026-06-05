@@ -8,8 +8,8 @@ import { textResult } from "../../../shared/tools.js";
 import { pantryStartGuard } from "./guards.js";
 
 /**
- * Registers `list_pantry_items`, kernel-shaped — reads this module's own store via
- * `ctx.state`. Pantry is a Data-class entity: no resource (ADR-0004), no deps.
+ * `list_pantry_items` — list all pantry items. Pantry is a Data-class entity: no
+ * resource surface (ADR-0004).
  */
 export const listPantryItemsTool = defineTool(
   {
