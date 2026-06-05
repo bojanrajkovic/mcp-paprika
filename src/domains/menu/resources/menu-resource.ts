@@ -4,6 +4,7 @@ import type { MenuUid } from "../../../ids.js";
 import type { DomainCtx } from "../../../kernel/registry.js";
 import type { MenuState } from "../module.js";
 
+import { resourceNotFound } from "../../../shared/resources.js";
 import { menuToMarkdown } from "../menu-helpers.js";
 
 /**
@@ -37,7 +38,7 @@ export function menuResource(ctx: DomainCtx<MenuState, "recipe" | "meal-type">):
       const uid = variables["uid"] as MenuUid;
       const menu = ctx.state.menus.store.get(uid);
       if (!menu) {
-        throw new Error(`Menu not found: ${uid}`);
+        resourceNotFound(`Menu not found: ${uid}`);
       }
 
       const items = ctx.state.items.store.getByMenuUid(uid);

@@ -4,6 +4,7 @@ import type { GroceryListUid } from "../../../ids.js";
 import type { DomainCtx } from "../../../kernel/registry.js";
 import type { GroceryState } from "../module.js";
 
+import { resourceNotFound } from "../../../shared/resources.js";
 import { groceryListToMarkdown } from "../grocery-helpers.js";
 
 /**
@@ -38,7 +39,7 @@ export function groceryListResource(ctx: DomainCtx<GroceryState, "aisle" | "pant
       const uid = variables["uid"] as GroceryListUid;
       const list = ctx.state.lists.store.get(uid);
       if (!list) {
-        throw new Error(`Grocery list not found: ${uid}`);
+        resourceNotFound(`Grocery list not found: ${uid}`);
       }
 
       const items = ctx.state.items.store.getByListUid(uid);

@@ -4,6 +4,7 @@ import type { RecipeUid } from "../../../ids.js";
 import type { DomainCtx } from "../../../kernel/registry.js";
 import type { RecipeState } from "../module.js";
 
+import { resourceNotFound } from "../../../shared/resources.js";
 import { recipeToMarkdown } from "../recipe-markdown.js";
 
 /**
@@ -33,7 +34,7 @@ export function recipeResource(ctx: DomainCtx<RecipeState, never>): void {
       const uid = variables["uid"] as RecipeUid;
       const recipe = ctx.state.recipe.store.get(uid);
       if (!recipe) {
-        throw new Error(`Recipe not found: ${uid}`);
+        resourceNotFound(`Recipe not found: ${uid}`);
       }
       const categoryNames = ctx.state.category.store.resolveNames(recipe.categories);
 
