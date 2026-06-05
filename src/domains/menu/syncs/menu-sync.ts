@@ -1,15 +1,9 @@
 import type { SyncContribution } from "../../../kernel/registry.js";
 import type { MenuSyncResult } from "../../../paprika/sync-types.js";
 import type { MenuState } from "../module.js";
-import type { Menu } from "../types.js";
 
 import { syncReplaceAllEntity } from "../../../paprika/sync.js";
-
-function menusEqual(a: Menu, b: Menu): boolean {
-  return (
-    a.uid === b.uid && a.name === b.name && a.days === b.days && a.orderFlag === b.orderFlag && a.notes === b.notes
-  );
-}
+import { menusEqual } from "../types.js";
 
 /**
  * Menu sync — replace-all with pending-write filtering via `syncReplaceAllEntity`.

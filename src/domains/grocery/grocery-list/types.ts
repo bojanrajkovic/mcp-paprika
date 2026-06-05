@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { makeSchemaEquals } from "../../../entity/index.js";
 import { GroceryListUidSchema } from "../../../ids.js";
 
 // GroceryListStoredSchema — validates camelCase JSON read back from disk. No transform.
@@ -13,6 +14,9 @@ export const GroceryListStoredSchema = z.object({
 });
 
 export type GroceryList = z.infer<typeof GroceryListStoredSchema>;
+
+// Schema-derived content equality (all stored fields but the inert `deleted`).
+export const groceryListsEqual = makeSchemaEquals(GroceryListStoredSchema);
 
 // GroceryListSchema — accepts snake_case wire format, transforms to camelCase GroceryList.
 export const GroceryListSchema = z

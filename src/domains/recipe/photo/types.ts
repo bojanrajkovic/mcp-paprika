@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { makeSchemaEquals } from "../../../entity/index.js";
 import { PhotoUidSchema, RecipeUidSchema } from "../../../ids.js";
 
 // PhotoStoredSchema — validates camelCase JSON read back from disk. No transform.
@@ -19,6 +20,9 @@ export const PhotoStoredSchema = z.object({
 });
 
 export type Photo = z.infer<typeof PhotoStoredSchema>;
+
+// Schema-derived content equality (all stored fields but the inert `deleted`).
+export const photosEqual = makeSchemaEquals(PhotoStoredSchema);
 
 // PhotoSchema — accepts snake_case wire format, transforms to camelCase Photo.
 // The GET /sync/photos/ catalog row carries six fields (no `deleted`); `deleted`

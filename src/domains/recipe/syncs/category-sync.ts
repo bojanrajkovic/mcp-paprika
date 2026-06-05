@@ -1,12 +1,8 @@
 import type { SyncContribution } from "../../../kernel/registry.js";
-import type { Category } from "../category/types.js";
 import type { RecipeState } from "../module.js";
 
 import { syncReplaceAllEntity } from "../../../paprika/sync.js";
-
-function categoriesEqual(a: Category, b: Category): boolean {
-  return a.uid === b.uid && a.name === b.name && a.orderFlag === b.orderFlag && a.parentUid === b.parentUid;
-}
+import { categoriesEqual } from "../category/types.js";
 
 /**
  * Category sync — replace-all with pending-write filtering via `syncReplaceAllEntity`.

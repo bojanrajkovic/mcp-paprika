@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { makeSchemaEquals } from "../../entity/index.js";
 import { MenuUidSchema } from "../../ids.js";
 
 // MenuStoredSchema — validates camelCase JSON read back from disk. No transform.
@@ -13,6 +14,9 @@ export const MenuStoredSchema = z.object({
 });
 
 export type Menu = z.infer<typeof MenuStoredSchema>;
+
+// Schema-derived content equality (all stored fields but the inert `deleted`).
+export const menusEqual = makeSchemaEquals(MenuStoredSchema);
 
 // MenuSchema — accepts snake_case wire format, transforms to camelCase Menu.
 export const MenuSchema = z

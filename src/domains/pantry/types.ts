@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { makeSchemaEquals } from "../../entity/index.js";
 import { AisleUidRef, NO_AISLE_UID, PantryItemUidSchema } from "../../ids.js";
 
 // PantryItemStoredSchema — validates camelCase JSON read back from disk. No transform.
@@ -19,6 +20,9 @@ export const PantryItemStoredSchema = z.object({
 
 // PantryItem type derived from PantryItemStoredSchema.
 export type PantryItem = z.infer<typeof PantryItemStoredSchema>;
+
+// Schema-derived content equality (every stored field but the inert `deleted`).
+export const pantryItemsEqual = makeSchemaEquals(PantryItemStoredSchema);
 
 // PantryItemSchema — accepts snake_case wire format, transforms to camelCase PantryItem.
 // The `: PantryItem` annotation on the transform return ensures the compiler enforces

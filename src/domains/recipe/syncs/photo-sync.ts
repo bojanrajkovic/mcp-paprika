@@ -1,19 +1,8 @@
 import type { SyncContribution } from "../../../kernel/registry.js";
 import type { RecipeState } from "../module.js";
-import type { Photo } from "../photo/types.js";
 
 import { syncReplaceAllEntity } from "../../../paprika/sync.js";
-
-function photosEqual(a: Photo, b: Photo): boolean {
-  return (
-    a.uid === b.uid &&
-    a.recipeUid === b.recipeUid &&
-    a.filename === b.filename &&
-    a.name === b.name &&
-    a.orderFlag === b.orderFlag &&
-    a.hash === b.hash
-  );
-}
+import { photosEqual } from "../photo/types.js";
 
 /**
  * Photo sync — replace-all via `syncReplaceAllEntity`. `additive` tier (best-effort):
