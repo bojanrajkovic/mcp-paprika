@@ -4,7 +4,7 @@ import { z } from "zod";
 import type { AisleUid } from "../../../ids.js";
 import type { DomainCtx } from "../../../kernel/registry.js";
 import type { GroceryItem } from "../grocery-item/types.js";
-import type { GroceryState } from "../module.js";
+import type { GroceryState, GroceryWrites } from "../module.js";
 
 import { GroceryIngredientUidSchema, GroceryItemUidSchema, GroceryListUidSchema, NO_AISLE_UID } from "../../../ids.js";
 import { defineTool } from "../../../kernel/tool.js";
@@ -27,12 +27,11 @@ const itemInputSchema = z.object({
 });
 
 /**
- * Registers `add_grocery_items`, kernel-shaped — resolves aisles via the declared
+ * `add_grocery_items` — batch-add grocery items. Resolves aisles via the declared
  * `aisle` dependency contract (`ctx.deps.aisle.ensureAisle` / `.get` / `.resolveByName`,
- * never reaching aisle's store) and writes the grocery-ingredient catalog through
- * this module's OWN ingredient store + cache (`ctx.state.ingredients.*` — ingredient
- * is a co-owned grocery entity, so the catalog write stays in `self`). Items commit
- * through this module's bound `ctx.state.commitGroceryItemsBatch`.
+ * never reaching aisle's store) and writes the grocery-ingredient catalog through this
+ * module's OWN ingredient store + cache (`ctx.state.ingredients.*` — ingredient is a
+ * co-owned grocery entity, so the catalog write stays in-module).
  */
 export const addGroceryItemsTool = defineTool(
   {
@@ -46,7 +45,7 @@ export const addGroceryItemsTool = defineTool(
       items: z.array(itemInputSchema).min(1).describe("Array of items to add (1 or more)"),
     },
   },
-  (ctx: DomainCtx<GroceryState, "aisle" | "pantry">) => {
+  (ctx: DomainCtx<GroceryState, "aisle" | "pantry", GroceryWrites>) => {
     const log = ctx.infra.log.child({ component: "add_grocery_items" });
     return async (args) => {
       log.info({ tool: "add_grocery_items", listUid: args.listUid, count: args.items.length }, "tool invoked");
@@ -154,7 +153,7 @@ export const addGroceryItemsTool = defineTool(
           let savedItems: ReadonlyArray<GroceryItem>;
           try {
             savedItems = await ctx.infra.client.saveGroceryItems(builtItems);
-            await ctx.state.commitGroceryItemsBatch(savedItems);
+            await ctx.writes.commitGroceryItemsBatch(savedItems);
           } catch (error) {
             const message = toMessage(error);
             log.error({ err: error, listUid: args.listUid }, "saveGroceryItems failed");
@@ -184,8 +183,8 @@ export const updateGroceryItemInputSchema = z
   .strict();
 
 /**
- * Registers `update_grocery_item`, kernel-shaped — resolves the aisle via
- * `ctx.deps.aisle.ensureAisle` and writes through `ctx.state.commitGroceryItem`.
+ * `update_grocery_item` — edit a grocery item's free-form fields. Resolves a changed
+ * aisle via `ctx.deps.aisle.ensureAisle`.
  */
 export const updateGroceryItemTool = defineTool(
   {
@@ -197,7 +196,7 @@ export const updateGroceryItemTool = defineTool(
       "omitted fields retain their current values. To check an item off, use mark_grocery_item_purchased.",
     inputSchema: updateGroceryItemInputSchema,
   },
-  (ctx: DomainCtx<GroceryState, "aisle" | "pantry">) => {
+  (ctx: DomainCtx<GroceryState, "aisle" | "pantry", GroceryWrites>) => {
     const log = ctx.infra.log.child({ component: "update_grocery_item" });
     return async (args) => {
       log.info({ tool: "update_grocery_item", uid: args.uid }, "tool invoked");
@@ -227,7 +226,7 @@ export const updateGroceryItemTool = defineTool(
             };
 
             saved = (await ctx.infra.client.saveGroceryItems([updated]))[0]!;
-            await ctx.state.commitGroceryItem(saved);
+            await ctx.writes.commitGroceryItem(saved);
           } catch (error) {
             const message = toMessage(error);
             log.error({ err: error, uid: args.uid }, "saveGroceryItems failed");
@@ -243,8 +242,7 @@ export const updateGroceryItemTool = defineTool(
 );
 
 /**
- * Registers `delete_grocery_item`, kernel-shaped — soft-delete tombstone, writing
- * through `ctx.state.commitGroceryItem`.
+ * `delete_grocery_item` — remove a grocery item (soft-delete tombstone).
  */
 export const deleteGroceryItemTool = defineTool(
   {
@@ -256,7 +254,7 @@ export const deleteGroceryItemTool = defineTool(
       uid: GroceryItemUidSchema.describe("Grocery item UID to delete"),
     },
   },
-  (ctx: DomainCtx<GroceryState, "aisle" | "pantry">) => {
+  (ctx: DomainCtx<GroceryState, "aisle" | "pantry", GroceryWrites>) => {
     const log = ctx.infra.log.child({ component: "delete_grocery_item" });
     return async (args) => {
       log.info({ tool: "delete_grocery_item", uid: args.uid }, "tool invoked");
@@ -274,7 +272,7 @@ export const deleteGroceryItemTool = defineTool(
 
           try {
             const saved = (await ctx.infra.client.saveGroceryItems([trashed]))[0]!;
-            await ctx.state.commitGroceryItem(saved);
+            await ctx.writes.commitGroceryItem(saved);
           } catch (error) {
             const message = toMessage(error);
             log.error({ err: error, uid: args.uid }, "saveGroceryItems failed");

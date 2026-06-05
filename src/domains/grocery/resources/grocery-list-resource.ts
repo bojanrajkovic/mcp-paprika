@@ -7,12 +7,11 @@ import type { GroceryState } from "../module.js";
 import { groceryListToMarkdown } from "../grocery-helpers.js";
 
 /**
- * Registers `paprika://grocery-list/{uid}`, kernel-shaped — reads this module's own
- * grocery-list + grocery-item stores via `ctx.state` (items are INLINED and co-owned
- * by grocery, so they resolve through `ctx.state.items.store`, not a dep). Grocery
- * list is one of the three Content-class entities with a resource surface (ADR-0004);
- * a child grocery-item change fires `resourceListChanged()` because items are inlined
- * here.
+ * `paprika://grocery-list/{uid}` — render a grocery list with its items inlined.
+ * Grocery list is one of the three Content-class entities with a resource surface
+ * (ADR-0004); items are INLINED and co-owned by grocery (resolved through
+ * `ctx.state.items.store`, not a dep), so a child grocery-item change fires
+ * `resourceListChanged()`.
  *
  * Unlike the recipe resource, the header leads with `**UID:**` — `groceryListToMarkdown`
  * does not render the UID in its body, so there is no duplication.

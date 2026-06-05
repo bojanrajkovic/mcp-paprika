@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import type { DomainCtx } from "../../../kernel/registry.js";
 import type { GroceryList } from "../grocery-list/types.js";
-import type { GroceryState } from "../module.js";
+import type { GroceryState, GroceryWrites } from "../module.js";
 
 import { GroceryListUidSchema } from "../../../ids.js";
 import { defineTool } from "../../../kernel/tool.js";
@@ -13,9 +13,8 @@ import { groceryListToMarkdown } from "../grocery-helpers.js";
 import { groceryStartGuard } from "./guards.js";
 
 /**
- * Registers `list_grocery_lists`, kernel-shaped — reads this module's own list +
- * item stores via `ctx.state` (item counts come from the co-owned item store, NOT a
- * dep).
+ * `list_grocery_lists` — list all grocery lists with item counts. Counts come from
+ * the co-owned item store, NOT a dep.
  */
 export const listGroceryListsTool = defineTool(
   {
@@ -53,8 +52,7 @@ export const listGroceryListsTool = defineTool(
 );
 
 /**
- * Registers `read_grocery_list`, kernel-shaped — resolves a list by UID/name and
- * inlines its items, all from `ctx.state`.
+ * `read_grocery_list` — resolve a grocery list by UID/name and inline its items.
  */
 export const readGroceryListTool = defineTool(
   {
@@ -98,8 +96,7 @@ export const readGroceryListTool = defineTool(
 );
 
 /**
- * Registers `create_grocery_list`, kernel-shaped — writes through this module's
- * bound `ctx.state.commitGroceryList`.
+ * `create_grocery_list` — create a new grocery list.
  */
 export const createGroceryListTool = defineTool(
   {
@@ -113,7 +110,7 @@ export const createGroceryListTool = defineTool(
       name: z.string().min(1).describe("Grocery list name (required)"),
     },
   },
-  (ctx: DomainCtx<GroceryState, "aisle" | "pantry">) => {
+  (ctx: DomainCtx<GroceryState, "aisle" | "pantry", GroceryWrites>) => {
     const log = ctx.infra.log.child({ component: "create_grocery_list" });
     return async (args) => {
       log.info({ tool: "create_grocery_list", name: args.name }, "tool invoked");
@@ -142,7 +139,7 @@ export const createGroceryListTool = defineTool(
 
           try {
             const saved = await ctx.infra.client.saveGroceryList(newList);
-            await ctx.state.commitGroceryList(saved);
+            await ctx.writes.commitGroceryList(saved);
             return textResult(groceryListToMarkdown(saved, []));
           } catch (error) {
             const message = toMessage(error);
@@ -157,8 +154,7 @@ export const createGroceryListTool = defineTool(
 );
 
 /**
- * Registers `rename_grocery_list`, kernel-shaped — writes through
- * `ctx.state.commitGroceryList`.
+ * `rename_grocery_list` — rename a grocery list.
  */
 export const renameGroceryListTool = defineTool(
   {
@@ -171,7 +167,7 @@ export const renameGroceryListTool = defineTool(
       newName: z.string().min(1).describe("New name for the grocery list"),
     },
   },
-  (ctx: DomainCtx<GroceryState, "aisle" | "pantry">) => {
+  (ctx: DomainCtx<GroceryState, "aisle" | "pantry", GroceryWrites>) => {
     const log = ctx.infra.log.child({ component: "rename_grocery_list" });
     return async (args) => {
       log.info({ tool: "rename_grocery_list", uid: args.uid, newName: args.newName }, "tool invoked");
@@ -206,7 +202,7 @@ export const renameGroceryListTool = defineTool(
 
           try {
             const saved = await ctx.infra.client.saveGroceryList(renamed);
-            await ctx.state.commitGroceryList(saved);
+            await ctx.writes.commitGroceryList(saved);
             const items = ctx.state.items.store.getByListUid(saved.uid);
             return textResult(groceryListToMarkdown(saved, items));
           } catch (error) {
@@ -222,8 +218,7 @@ export const renameGroceryListTool = defineTool(
 );
 
 /**
- * Registers `delete_grocery_list`, kernel-shaped — soft-delete tombstone, writing
- * through `ctx.state.commitGroceryList`.
+ * `delete_grocery_list` — remove a grocery list (soft-delete tombstone).
  */
 export const deleteGroceryListTool = defineTool(
   {
@@ -235,7 +230,7 @@ export const deleteGroceryListTool = defineTool(
       uid: GroceryListUidSchema.describe("Grocery list UID to delete"),
     },
   },
-  (ctx: DomainCtx<GroceryState, "aisle" | "pantry">) => {
+  (ctx: DomainCtx<GroceryState, "aisle" | "pantry", GroceryWrites>) => {
     const log = ctx.infra.log.child({ component: "delete_grocery_list" });
     return async (args) => {
       log.info({ tool: "delete_grocery_list", uid: args.uid }, "tool invoked");
@@ -253,7 +248,7 @@ export const deleteGroceryListTool = defineTool(
 
           try {
             const saved = await ctx.infra.client.saveGroceryList(trashed);
-            await ctx.state.commitGroceryList(saved);
+            await ctx.writes.commitGroceryList(saved);
           } catch (error) {
             const message = toMessage(error);
             log.error({ err: error, uid: args.uid }, "saveGroceryList failed");

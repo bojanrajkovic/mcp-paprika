@@ -4,7 +4,7 @@ import { z } from "zod";
 import type { DomainCtx } from "../../../kernel/registry.js";
 import type { PantryItem } from "../../pantry/types.js";
 import type { GroceryItem } from "../grocery-item/types.js";
-import type { GroceryState } from "../module.js";
+import type { GroceryState, GroceryWrites } from "../module.js";
 
 import { GroceryItemUidSchema, PantryItemUidSchema } from "../../../ids.js";
 import { defineTool } from "../../../kernel/tool.js";
@@ -14,19 +14,18 @@ import { toMessage } from "../../../utils/log.js";
 import { groceryStartGuard } from "./guards.js";
 
 /**
- * Registers `move_grocery_items_to_pantry`, kernel-shaped — this IS a grocery tool
- * despite the name: its input is grocery-item UIDs, its primary store is grocery's
- * own item store, and the pantry side goes THROUGH the declared `pantry` dependency
- * contract (`ctx.deps.pantry.hasSynced` / `createItems`), never reaching pantry's
- * store.
+ * `move_grocery_items_to_pantry` — move grocery items into the pantry. This IS a
+ * grocery tool despite the name: its input is grocery-item UIDs, its primary store is
+ * grocery's own item store, and the pantry side goes THROUGH the declared `pantry`
+ * dependency contract (`ctx.deps.pantry.hasSynced` / `createItems`), never reaching
+ * pantry's store.
  *
- * The live create-first/delete-second ordering is preserved: pantry items are created
- * first (so a pantry failure leaves the grocery items intact), then the grocery items
- * are soft-deleted. `ctx.deps.pantry.createItems` internalizes the live
- * `savePantryItems` + `commitPantryItemsBatch` sequence and distinguishes the two
- * failure phases (`"save"` = nothing created server-side → safe to abort;
- * `"commit"` = created server-side but local commit failed → grocery items must NOT
- * be deleted) so the three partial-failure messages survive the migration unchanged.
+ * Create-first/delete-second ordering matters: pantry items are created first (so a
+ * pantry failure leaves the grocery items intact), then the grocery items are
+ * soft-deleted. `ctx.deps.pantry.createItems` distinguishes the two failure phases
+ * (`"save"` = nothing created server-side → safe to abort; `"commit"` = created
+ * server-side but local commit failed → grocery items must NOT be deleted), so the
+ * three partial-failure messages are exact.
  */
 export const moveToPantryTool = defineTool(
   {
@@ -39,7 +38,7 @@ export const moveToPantryTool = defineTool(
       uids: z.array(GroceryItemUidSchema).min(1).describe("Grocery item UIDs to move to pantry"),
     },
   },
-  (ctx: DomainCtx<GroceryState, "aisle" | "pantry">) => {
+  (ctx: DomainCtx<GroceryState, "aisle" | "pantry", GroceryWrites>) => {
     const log = ctx.infra.log.child({ component: "move_grocery_items_to_pantry" });
     return async (args) => {
       log.info({ tool: "move_grocery_items_to_pantry", count: args.uids.length }, "tool invoked");
@@ -90,7 +89,7 @@ export const moveToPantryTool = defineTool(
               const trashedGrocery = items.map((gi) => ({ ...gi, deleted: true }));
               try {
                 const savedGrocery = await ctx.infra.client.saveGroceryItems(trashedGrocery);
-                await ctx.state.commitGroceryItemsBatch(savedGrocery);
+                await ctx.writes.commitGroceryItemsBatch(savedGrocery);
               } catch (error) {
                 // Partial failure: pantry items created but grocery delete failed.
                 // Return structured message so user knows the state.

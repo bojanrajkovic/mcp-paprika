@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import type { DomainCtx } from "../../../kernel/registry.js";
 import type { GroceryItem } from "../grocery-item/types.js";
-import type { GroceryState } from "../module.js";
+import type { GroceryState, GroceryWrites } from "../module.js";
 
 import { GroceryItemUidSchema } from "../../../ids.js";
 import { defineTool } from "../../../kernel/tool.js";
@@ -19,8 +19,8 @@ export const markGroceryItemPurchasedInputSchema = z
   .strict();
 
 /**
- * Registers `mark_grocery_item_purchased`, kernel-shaped — the purchased intent verb,
- * writing through this module's bound `ctx.state.commitGroceryItem`.
+ * `mark_grocery_item_purchased` — the purchased intent verb (marks a grocery item
+ * bought), distinct from a free-form `update_grocery_item` edit.
  */
 export const markGroceryItemPurchasedTool = defineTool(
   {
@@ -30,7 +30,7 @@ export const markGroceryItemPurchasedTool = defineTool(
     description: "Mark a grocery item as purchased (checked off) by UID.",
     inputSchema: markGroceryItemPurchasedInputSchema,
   },
-  (ctx: DomainCtx<GroceryState, "aisle" | "pantry">) => {
+  (ctx: DomainCtx<GroceryState, "aisle" | "pantry", GroceryWrites>) => {
     const log = ctx.infra.log.child({ component: "mark_grocery_item_purchased" });
     return async (args) => {
       log.info({ tool: "mark_grocery_item_purchased", uid: args.uid }, "tool invoked");
@@ -47,7 +47,7 @@ export const markGroceryItemPurchasedTool = defineTool(
           try {
             const updated: GroceryItem = { ...existing, purchased: true };
             saved = (await ctx.infra.client.saveGroceryItems([updated]))[0]!;
-            await ctx.state.commitGroceryItem(saved);
+            await ctx.writes.commitGroceryItem(saved);
           } catch (error) {
             const message = toMessage(error);
             log.error({ err: error, uid: args.uid }, "saveGroceryItems failed");
