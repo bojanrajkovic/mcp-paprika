@@ -14,9 +14,9 @@ import type { PaprikaConfig } from "../utils/config.js";
 import type { TransportHandle } from "./stdio.js";
 
 import { buildAuthContext } from "../auth/build.js";
+import { buildAuthCaches } from "../auth/disk.js";
 import { buildAuthMetadataRouter } from "../auth/metadata.js";
 import { buildAuthRoutes, buildClientCap, buildDcrRateLimit, MAX_REGISTERED_CLIENTS } from "../auth/routes.js";
-import { buildAuthCaches } from "../cache/auth-cache.js";
 import { GeneratedImageStore } from "../features/generated-image-store.js";
 import { buildKernel } from "../kernel/registry.js";
 import { buildBrandedServer, buildInfraBase } from "../server/build.js";

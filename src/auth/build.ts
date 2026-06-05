@@ -14,8 +14,8 @@
 
 import type { Logger } from "pino";
 
-import type { AuthCache } from "../cache/auth-cache.js";
 import type { PaprikaConfig } from "../utils/config.js";
+import type { AuthCache } from "./disk.js";
 import type { AuthContext, ResolvedOAuthConfig } from "./types.js";
 
 import { AuthCodeStore } from "./auth-code-store.js";

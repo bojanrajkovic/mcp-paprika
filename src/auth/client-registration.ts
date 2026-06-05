@@ -15,7 +15,7 @@ import { randomUUID, timingSafeEqual } from "node:crypto";
 import { InvalidRequestError } from "@modelcontextprotocol/sdk/server/auth/errors.js";
 import type { Logger } from "pino";
 
-import type { AuthCache } from "../cache/auth-cache.js";
+import type { AuthCache } from "./disk.js";
 import type { OAuthClient } from "./types.js";
 
 import { validateRegistration, validateUpdate } from "./dcr-validator.js";

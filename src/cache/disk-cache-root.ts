@@ -16,6 +16,7 @@ import type { Category } from "../domains/recipe/category/types.js";
 import type { Photo } from "../domains/recipe/photo/types.js";
 import type { DiskCacheDescriptor } from "./disk-cache.js";
 
+import { OAuthClientDiskCache, oauthTokensDiskDescriptor } from "../auth/disk.js";
 import { aisleDiskDescriptor } from "../domains/aisle/disk.js";
 import { groceryIngredientDiskDescriptor } from "../domains/grocery/grocery-ingredient/disk.js";
 import { groceryItemDiskDescriptor } from "../domains/grocery/grocery-item/disk.js";
@@ -28,9 +29,7 @@ import { pantryDiskDescriptor } from "../domains/pantry/disk.js";
 import { categoryDiskDescriptor } from "../domains/recipe/category/disk.js";
 import { RecipeDiskCache } from "../domains/recipe/disk.js";
 import { photoDiskDescriptor } from "../domains/recipe/photo/disk.js";
-import { oauthTokensDiskDescriptor } from "./auth-cache.js";
 import { DiskCache } from "./disk-cache.js";
-import { OAuthClientDiskCache } from "./oauth-client-disk-cache.js";
 
 interface InitFlushable {
   init(): Promise<void>;
