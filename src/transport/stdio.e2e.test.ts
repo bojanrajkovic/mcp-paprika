@@ -7,7 +7,7 @@
  * 3. Exercises the MCP protocol: lists tools, calls a tool, lists resources
  * 4. Gracefully shuts down
  *
- * To run: pnpm test src/e2e.test.integration.ts
+ * To run: pnpm test src/transport/stdio.e2e.test.ts
  *
  * Note: The test uses environment variables to configure credentials and disables
  * the embedding feature to avoid external dependencies.
@@ -34,7 +34,7 @@ describe("MCP Server end-to-end round-trip", () => {
     // Spawn server as child process using test entry point
     transport = new StdioClientTransport({
       command: "npx",
-      args: ["tsx", "src/e2e-server.ts"],
+      args: ["tsx", "src/transport/e2e-server.ts"],
       env: {
         ...process.env,
         PAPRIKA_EMAIL: "test@example.com",

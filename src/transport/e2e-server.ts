@@ -2,7 +2,7 @@
 /**
  * Test-specific server entry point that mocks PaprikaClient for E2E testing.
  *
- * Spawned by e2e.test.integration.ts to test the MCP server without real Paprika
+ * Spawned by transport/stdio.e2e.test.ts to test the MCP server without real Paprika
  * credentials. It builds the REAL kernel (`buildKernel` + `registerAll`) so the e2e
  * path exercises the same composition as production stdio/http — only the Paprika
  * client is a mock and the background sync INTERVAL loop is not started. `buildKernel`
@@ -17,31 +17,31 @@
 
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 
-import type { Aisle } from "./domains/aisle/types.js";
-import type { GroceryIngredient } from "./domains/grocery/grocery-ingredient/types.js";
-import type { GroceryItem } from "./domains/grocery/grocery-item/types.js";
-import type { GroceryList } from "./domains/grocery/grocery-list/types.js";
-import type { MealType } from "./domains/meal-type/types.js";
-import type { Meal } from "./domains/meal/types.js";
-import type { MenuItem } from "./domains/menu/menu-item/types.js";
-import type { Menu } from "./domains/menu/types.js";
-import type { PantryItem } from "./domains/pantry/types.js";
-import type { Category } from "./domains/recipe/category/types.js";
-import type { Photo } from "./domains/recipe/photo/types.js";
-import type { Recipe, RecipeEntry } from "./domains/recipe/types.js";
-import type { AisleUid, CategoryUid, PantryItemUid, RecipeUid } from "./ids.js";
-import type { PaprikaClient } from "./paprika/client.js";
+import type { Aisle } from "../domains/aisle/types.js";
+import type { GroceryIngredient } from "../domains/grocery/grocery-ingredient/types.js";
+import type { GroceryItem } from "../domains/grocery/grocery-item/types.js";
+import type { GroceryList } from "../domains/grocery/grocery-list/types.js";
+import type { MealType } from "../domains/meal-type/types.js";
+import type { Meal } from "../domains/meal/types.js";
+import type { MenuItem } from "../domains/menu/menu-item/types.js";
+import type { Menu } from "../domains/menu/types.js";
+import type { PantryItem } from "../domains/pantry/types.js";
+import type { Category } from "../domains/recipe/category/types.js";
+import type { Photo } from "../domains/recipe/photo/types.js";
+import type { Recipe, RecipeEntry } from "../domains/recipe/types.js";
+import type { AisleUid, CategoryUid, PantryItemUid, RecipeUid } from "../ids.js";
+import type { PaprikaClient } from "../paprika/client.js";
 
-import { GeneratedImageStore } from "./features/generated-image-store.js";
-import { buildKernel } from "./kernel/registry.js";
-import { buildBrandedServer } from "./server/build.js";
-import { createIndexEvents } from "./server/index-events.js";
-import { createServerRef, singleServerNotifier } from "./server/notifier.js";
-import { loadConfig } from "./utils/config.js";
-import { createLogger, toMessage } from "./utils/log.js";
-import { getCacheDir } from "./utils/xdg.js";
+import { GeneratedImageStore } from "../features/generated-image-store.js";
+import { buildKernel } from "../kernel/registry.js";
+import { buildBrandedServer } from "../server/build.js";
+import { createIndexEvents } from "../server/index-events.js";
+import { createServerRef, singleServerNotifier } from "../server/notifier.js";
+import { loadConfig } from "../utils/config.js";
+import { createLogger, toMessage } from "../utils/log.js";
+import { getCacheDir } from "../utils/xdg.js";
 // Side-effect: every domain/feature module self-registers on import.
-import "./kernel/modules.generated.js";
+import "../kernel/modules.generated.js";
 
 interface IMockPaprikaClient {
   authenticate(): Promise<void>;
