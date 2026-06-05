@@ -1,7 +1,7 @@
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 
 import type { DomainCtx } from "../../../kernel/registry.js";
-import type { PantrySelf } from "../module.js";
+import type { PantryState, PantryWrites } from "../module.js";
 
 import { PantryItemUidSchema } from "../../../ids.js";
 import { defineTool } from "../../../kernel/tool.js";
@@ -10,8 +10,7 @@ import { toMessage } from "../../../utils/log.js";
 import { pantryStartGuard } from "./guards.js";
 
 /**
- * Registers `delete_pantry_item`, kernel-shaped — soft-delete tombstone, writing
- * through `ctx.self.commitPantryItem`.
+ * `delete_pantry_item` — remove a pantry item (soft-delete tombstone).
  */
 export const deletePantryItemTool = defineTool(
   {
@@ -25,13 +24,13 @@ export const deletePantryItemTool = defineTool(
       uid: PantryItemUidSchema.describe("Pantry item UID to delete"),
     },
   },
-  (ctx: DomainCtx<PantrySelf, "aisle">) => {
+  (ctx: DomainCtx<PantryState, "aisle", PantryWrites>) => {
     const log = ctx.infra.log.child({ component: "delete_pantry_item" });
     return async (args) => {
       log.info({ tool: "delete_pantry_item", uid: args.uid }, "tool invoked");
-      return pantryStartGuard(ctx.self).match(
+      return pantryStartGuard(ctx.state).match(
         async (): Promise<CallToolResult> => {
-          const existing = ctx.self.store.get(args.uid);
+          const existing = ctx.state.store.get(args.uid);
 
           if (!existing) {
             return textResult(`No pantry item found with UID "${args.uid}" (it may not exist or was already deleted).`);
@@ -41,7 +40,7 @@ export const deletePantryItemTool = defineTool(
 
           try {
             const saved = (await ctx.infra.client.savePantryItems([trashed]))[0]!;
-            await ctx.self.commitPantryItem(saved);
+            await ctx.writes.commitPantryItem(saved);
           } catch (error) {
             const message = toMessage(error);
             log.error({ err: error, uid: args.uid }, "savePantryItems failed");

@@ -20,10 +20,10 @@ declare module "../../kernel/registry.js" {
  * The photo-gen module's internals. A FEATURE module: it owns no Paprika entity,
  * so it has no store/cache pair and contributes no `syncs[]`.
  *
- * The ephemeral `gen_…` preview ring buffer is NOT a `self` field: it's a
+ * The ephemeral `gen_…` preview ring buffer is NOT a `state` field: it's a
  * recipe↔photo-gen handoff (`generate_recipe_photo` attach:false stashes; recipe's
  * `upload_recipe_photo` generation_token consumes), so it rides `infra` as a shared
- * seam (`Infra.generatedImageStore`) rather than either module's `self` — the same
+ * seam (`Infra.generatedImageStore`) rather than either module's `state` — the same
  * reason a recipe→photo-gen dependency edge would be a cycle.
  *
  * `photographyClient` is the OpenRouter image-generation HTTP client, carried as a
@@ -32,13 +32,13 @@ declare module "../../kernel/registry.js" {
  * INSIDE the tool (ADR-0009 §5#9): it no-ops with a clear "not configured" message
  * when `photographyClient === null` rather than being conditionally registered.
  */
-export interface PhotoGenSelf {
+export interface PhotoGenState {
   readonly photographyClient: PhotographyClient | null;
 }
 
 register(
   defineModule("photo-gen", ["recipe"])
-    .self<PhotoGenSelf>(async (infra) => {
+    .state<PhotoGenState>(async (infra) => {
       // Build the photography client from the root's single parsed config on `infra`.
       // A single config parse means no second, divergent parse whose error arm would
       // silently disable the feature. `null` (image generation unconfigured) degrades
@@ -53,9 +53,9 @@ register(
     })
     .build(() => ({
       api: {},
-      // ctx is INFERRED: DomainCtx<PhotoGenSelf, "recipe">. The tool reaches recipe via
+      // ctx is INFERRED: DomainCtx<PhotoGenState, "recipe">. The tool reaches recipe via
       // `ctx.deps.recipe` (the read contract + attachGeneratedPhoto), the shared preview
-      // ring buffer via `ctx.infra.generatedImageStore`, and its client via `ctx.self`.
+      // ring buffer via `ctx.infra.generatedImageStore`, and its client via `ctx.state`.
       tools: [generatePhotoTool],
       // Owns no Paprika entity → contributes NO sync reconciles (the generated-image
       // store is in-memory and never syncs). No resource (feature, not Content).

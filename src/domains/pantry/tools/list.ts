@@ -1,15 +1,15 @@
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 
 import type { DomainCtx } from "../../../kernel/registry.js";
-import type { PantrySelf } from "../module.js";
+import type { PantryState } from "../module.js";
 
 import { defineTool } from "../../../kernel/tool.js";
 import { textResult } from "../../../shared/tools.js";
 import { pantryStartGuard } from "./guards.js";
 
 /**
- * Registers `list_pantry_items`, kernel-shaped — reads this module's own store via
- * `ctx.self`. Pantry is a Data-class entity: no resource (ADR-0004), no deps.
+ * `list_pantry_items` — list all pantry items. Pantry is a Data-class entity: no
+ * resource surface (ADR-0004).
  */
 export const listPantryItemsTool = defineTool(
   {
@@ -20,13 +20,13 @@ export const listPantryItemsTool = defineTool(
       "List all pantry items sorted alphabetically by ingredient name. Returns the ingredient, quantity, and aisle for each item. Use read_pantry_item with the UID for full details.",
     inputSchema: {},
   },
-  (ctx: DomainCtx<PantrySelf, "aisle">) => {
+  (ctx: DomainCtx<PantryState, "aisle">) => {
     const log = ctx.infra.log.child({ component: "list_pantry_items" });
     return async () => {
       log.info({ tool: "list_pantry_items" }, "tool invoked");
-      return pantryStartGuard(ctx.self).match(
+      return pantryStartGuard(ctx.state).match(
         async (): Promise<CallToolResult> => {
-          const all = ctx.self.store.getAll().sort((a, b) => a.ingredient.localeCompare(b.ingredient));
+          const all = ctx.state.store.getAll().sort((a, b) => a.ingredient.localeCompare(b.ingredient));
           const total = all.length;
 
           if (total === 0) {

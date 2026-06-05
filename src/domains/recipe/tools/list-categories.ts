@@ -2,16 +2,15 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 
 import type { DomainCtx } from "../../../kernel/registry.js";
 import type { Category } from "../category/types.js";
-import type { RecipeSelf } from "../module.js";
+import type { RecipeState } from "../module.js";
 
 import { defineTool } from "../../../kernel/tool.js";
 import { textResult } from "../../../shared/tools.js";
 import { categoryStartGuard } from "./guards.js";
 
 /**
- * Registers `list_categories`, kernel-shaped — recipe owns category, so both the
- * category catalog and the recipe-per-category counts read from `ctx.self`
- * (within-domain — recipe owns category; no deps).
+ * `list_categories` — list categories with per-category recipe counts. Recipe owns
+ * category, so both reads are within-domain (no deps).
  */
 export const listCategoriesTool = defineTool(
   {
@@ -21,18 +20,18 @@ export const listCategoriesTool = defineTool(
     description: "List all recipe categories with the number of recipes in each. Categories are sorted alphabetically.",
     inputSchema: {},
   },
-  (ctx: DomainCtx<RecipeSelf, never>) => {
+  (ctx: DomainCtx<RecipeState, never>) => {
     const log = ctx.infra.log.child({ component: "list_categories" });
     return async (_args) => {
       log.info({ tool: "list_categories" }, "tool invoked");
-      return categoryStartGuard(ctx.self).match(
+      return categoryStartGuard(ctx.state).match(
         async (): Promise<CallToolResult> => {
-          const categories = ctx.self.category.store.getAll();
+          const categories = ctx.state.category.store.getAll();
           if (categories.length === 0) {
             return textResult("No categories found in your recipe library.");
           }
 
-          const recipes = ctx.self.recipe.store.getAll();
+          const recipes = ctx.state.recipe.store.getAll();
 
           // Initialize every category with count 0 so categories with no recipes
           // still appear in the output (AC4.3).

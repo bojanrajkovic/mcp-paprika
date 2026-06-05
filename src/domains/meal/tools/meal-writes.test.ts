@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { MealTypeUid, MealUid, RecipeUid } from "../../../ids.js";
-import type { MealSelf } from "../module.js";
+import type { MealState } from "../module.js";
 
 import { makeMeal, makeMealType } from "../../../../test/cache/__fixtures__/meals.js";
 import { makeRecipe } from "../../../../test/cache/__fixtures__/recipes.js";
@@ -68,7 +68,7 @@ describe("plan_meals tool — success paths", () => {
     expect(wireMeal.recipeUid).toBe(TACOS_UID);
 
     // Also persisted to local store
-    const store = (kh.self() as MealSelf).store;
+    const store = (kh.state() as MealState).store;
     const storedMeal = store.get(wireMeal.uid as MealUid);
     expect(storedMeal).toBeDefined();
     expect(storedMeal?.name).toBe("Tacos");
@@ -100,7 +100,7 @@ describe("plan_meals tool — success paths", () => {
     expect(wireMeal.recipeUid).toBeNull();
     expect(wireMeal.name).toBe("Avocado Toast");
 
-    const store = (kh.self() as MealSelf).store;
+    const store = (kh.state() as MealState).store;
     const storedMeal = store.get(wireMeal.uid as MealUid);
     expect(storedMeal?.recipeUid).toBeNull();
   });
@@ -154,7 +154,7 @@ describe("plan_meals tool — success paths", () => {
     }>;
     expect(savedPayload[0]?.scale).toBe("2");
 
-    const store = (kh.self() as MealSelf).store;
+    const store = (kh.state() as MealState).store;
     const storedMeal = store.get(savedPayload[0]!.uid as MealUid);
     expect(storedMeal?.scale).toBe("2");
   });
@@ -344,7 +344,7 @@ describe("plan_meals tool — failure paths", () => {
 
   it("unparseable date → error text names index and bad date value", async () => {
     kh.seed({ meals: [], mealTypes: makeBuiltins(), recipes: [] });
-    const storeBefore = (kh.self() as MealSelf).store.size;
+    const storeBefore = (kh.state() as MealState).store.size;
 
     const result = await kh.callTool("plan_meals", {
       items: [{ recipe_uid: TACOS_UID, date: "not-a-date", type: { builtin: 2 } }],
@@ -353,7 +353,7 @@ describe("plan_meals tool — failure paths", () => {
 
     expect(text).toContain('Item 0: could not parse date "not-a-date"');
     expect(kh.client().saveMeals).not.toHaveBeenCalled();
-    expect((kh.self() as MealSelf).store.size).toBe(storeBefore);
+    expect((kh.state() as MealState).store.size).toBe(storeBefore);
   });
 
   it("schema rejects items missing both recipe_uid and name (structural union)", () => {
@@ -363,7 +363,7 @@ describe("plan_meals tool — failure paths", () => {
 
   it("unknown recipe_uid (not in local store) → per-index error, saveMeals NOT called", async () => {
     kh.seed({ meals: [], mealTypes: makeBuiltins(), recipes: [] });
-    const storeBefore = (kh.self() as MealSelf).store.size;
+    const storeBefore = (kh.state() as MealState).store.size;
 
     const result = await kh.callTool("plan_meals", {
       items: [{ recipe_uid: TACOS_UID, date: "2026-06-15", type: { builtin: 2 } }],
@@ -373,12 +373,12 @@ describe("plan_meals tool — failure paths", () => {
     expect(text).toContain("is not known to the local recipe store");
     expect(text).toContain("wait for the next sync and retry");
     expect(kh.client().saveMeals).not.toHaveBeenCalled();
-    expect((kh.self() as MealSelf).store.size).toBe(storeBefore);
+    expect((kh.state() as MealState).store.size).toBe(storeBefore);
   });
 
   it("multiple invalid items → all errors enumerated, header 'Could not add 3 meals:'", async () => {
     kh.seed({ meals: [], mealTypes: makeBuiltins(), recipes: [] });
-    const storeBefore = (kh.self() as MealSelf).store.size;
+    const storeBefore = (kh.state() as MealState).store.size;
 
     const result = await kh.callTool("plan_meals", {
       items: [
@@ -397,7 +397,7 @@ describe("plan_meals tool — failure paths", () => {
     expect(text).toContain("Item 1:");
     expect(text).toContain("Item 2:");
     expect(kh.client().saveMeals).not.toHaveBeenCalled();
-    expect((kh.self() as MealSelf).store.size).toBe(storeBefore);
+    expect((kh.state() as MealState).store.size).toBe(storeBefore);
   });
 
   it("empty items array → Zod .min(1) rejects before the handler runs", () => {
@@ -433,7 +433,7 @@ describe("update_meal — success paths", () => {
 
     await kh.callTool("update_meal", { uid: TEST_MEAL_UID, update: { type: { name: "Lunch" } } });
 
-    const store = (kh.self() as MealSelf).store;
+    const store = (kh.state() as MealState).store;
     const stored = store.get(TEST_MEAL_UID);
     expect(stored?.typeUid).toBe(LUNCH_UID);
     expect(stored?.type).toBe(1);
@@ -446,7 +446,7 @@ describe("update_meal — success paths", () => {
 
     await kh.callTool("update_meal", { uid: TEST_MEAL_UID, update: { recipe_uid: TACOS_UID } });
 
-    const store = (kh.self() as MealSelf).store;
+    const store = (kh.state() as MealState).store;
     const stored = store.get(TEST_MEAL_UID);
     expect(stored?.recipeUid).toBe(TACOS_UID);
     expect(stored?.name).toBe("Tacos");
@@ -467,7 +467,7 @@ describe("update_meal — success paths", () => {
 
     await kh.callTool("update_meal", { uid: TEST_MEAL_UID, update: { recipe_uid: null, name: "Leftover Chili" } });
 
-    const store = (kh.self() as MealSelf).store;
+    const store = (kh.state() as MealState).store;
     const stored = store.get(TEST_MEAL_UID);
     expect(stored?.recipeUid).toBeNull();
     expect(stored?.name).toBe("Leftover Chili");
@@ -480,7 +480,7 @@ describe("update_meal — success paths", () => {
 
     await kh.callTool("update_meal", { uid: TEST_MEAL_UID, update: { scale: null } });
 
-    const store = (kh.self() as MealSelf).store;
+    const store = (kh.state() as MealState).store;
     const stored = store.get(TEST_MEAL_UID);
     expect(stored?.scale).toBeNull();
 
@@ -502,7 +502,7 @@ describe("update_meal — success paths", () => {
 
     await kh.callTool("update_meal", { uid: TEST_MEAL_UID, update: { type: { uid: BRUNCH_UID } } });
 
-    const store = (kh.self() as MealSelf).store;
+    const store = (kh.state() as MealState).store;
     const stored = store.get(TEST_MEAL_UID);
     expect(stored?.typeUid).toBe(BRUNCH_UID);
     expect(stored?.type).toBe(0);
@@ -535,7 +535,7 @@ describe("update_meal — success paths", () => {
 
     await kh.callTool("update_meal", { uid: TEST_MEAL_UID, update: { type: { name: "Dinner" } } });
 
-    const store = (kh.self() as MealSelf).store;
+    const store = (kh.state() as MealState).store;
     const stored = store.get(TEST_MEAL_UID);
     expect(stored?.typeUid).toBe(DINNER_UID);
     expect(stored?.orderFlag).toBe(1); // unchanged — same date, no re-sequence
@@ -555,7 +555,7 @@ describe("update_meal — success paths", () => {
 
     await kh.callTool("update_meal", { uid: TEST_MEAL_UID, update: { scale: "2" } });
 
-    const store = (kh.self() as MealSelf).store;
+    const store = (kh.state() as MealState).store;
     const stored = store.get(TEST_MEAL_UID);
     expect(stored?.orderFlag).toBe(7); // unchanged
     expect(stored?.scale).toBe("2");
@@ -582,7 +582,7 @@ describe("update_meal — success paths", () => {
     expect(text).toContain("Cannot set name on the recipe-linked meal");
     expect(text).toContain("demote first");
     expect(kh.client().saveMeals).not.toHaveBeenCalled();
-    const store = (kh.self() as MealSelf).store;
+    const store = (kh.state() as MealState).store;
     expect(store.get(TEST_MEAL_UID)?.name).toBe("Tacos");
   });
 
@@ -629,7 +629,7 @@ describe("update_meal — failure/edge paths", () => {
   it("miss after store.delete() → widened miss message, no POST", async () => {
     const meal = makeMeal({ uid: TEST_MEAL_UID });
     kh.seed({ meals: [meal], mealTypes: makeBuiltins(), recipes: [] });
-    (kh.self() as MealSelf).store.delete(TEST_MEAL_UID);
+    (kh.state() as MealState).store.delete(TEST_MEAL_UID);
 
     const result = await kh.callTool("update_meal", { uid: TEST_MEAL_UID, update: { name: "Anything" } });
     const text = getText(result);
@@ -673,7 +673,7 @@ describe("update_meal — failure/edge paths", () => {
 
     expect(text).not.toContain("Demoting a recipe meal to freeform requires an explicit name");
     expect(kh.client().saveMeals).toHaveBeenCalledTimes(1);
-    const store = (kh.self() as MealSelf).store;
+    const store = (kh.state() as MealState).store;
     expect(store.get(TEST_MEAL_UID)?.scale).toBe("2");
     expect(store.get(TEST_MEAL_UID)?.recipeUid).toBeNull();
     expect(store.get(TEST_MEAL_UID)?.name).toBe("Cereal");
@@ -705,7 +705,7 @@ describe("delete_meal", () => {
     expect(payload).toHaveLength(1);
     expect(payload[0]?.deleted).toBe(true);
 
-    const store = (kh.self() as MealSelf).store;
+    const store = (kh.state() as MealState).store;
     expect(store.get(DELETE_MEAL_UID)).toBeUndefined();
   });
 

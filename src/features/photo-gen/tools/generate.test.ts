@@ -31,12 +31,12 @@ beforeAll(async () => {
     .toBuffer();
 });
 
-// Inject a mock PhotographyClient into the photo-gen module's self after setup.
-// `PhotoGenSelf.photographyClient` is TypeScript-readonly but a plain JS object at
+// Inject a mock PhotographyClient into the photo-gen module's state after setup.
+// `PhotoGenState.photographyClient` is TypeScript-readonly but a plain JS object at
 // runtime, so the cast lets us swap in a spy — the same pattern discover.test.ts
 // uses to inject its mock vector store.
 function injectPhotographyClient(kh: ReturnType<typeof useKernelHarness>, client: PhotographyClient): void {
-  (kh.self() as { photographyClient: PhotographyClient | null }).photographyClient = client;
+  (kh.state() as { photographyClient: PhotographyClient | null }).photographyClient = client;
 }
 
 function makeGeneratedPhoto(overrides?: Partial<GeneratedPhoto>): GeneratedPhoto {
@@ -64,7 +64,7 @@ describe("generate_recipe_photo tool", () => {
 
   // Helper: seed a recipe and stub the uploadPhoto client method (used by the
   // attach path through ctx.deps.recipe.attachGeneratedPhoto). The mock photography
-  // client is injected into photo-gen's self post-setup.
+  // client is injected into photo-gen's state post-setup.
   function seedAndInject(opts?: {
     recipe?: ReturnType<typeof makeRecipe>;
     synced?: boolean;

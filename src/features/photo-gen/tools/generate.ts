@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import type { DomainCtx } from "../../../kernel/registry.js";
 import type { ReferenceImage } from "../../photography.js";
-import type { PhotoGenSelf } from "../module.js";
+import type { PhotoGenState } from "../module.js";
 
 import { makeThumbnail } from "../../../domains/recipe/photo-helpers.js";
 import { RecipeUidSchema } from "../../../ids.js";
@@ -58,14 +58,13 @@ export const generatePhotoInputSchema = z.object({
 });
 
 /**
- * Registers `generate_recipe_photo`, kernel-shaped — `DomainCtx<PhotoGenSelf, "recipe">`.
- * Tool seam: recipe data via `ctx.deps.recipe` (read contract + `attachGeneratedPhoto`);
- * restyle re-fetch via `ctx.infra.client.getRecipe`; the preview ring buffer via
- * `ctx.infra.generatedImageStore` (a shared recipe↔photo-gen seam that avoids a dep cycle);
- * the photography client via `ctx.self`.
+ * `generate_recipe_photo` — generate (or restyle) an AI photo for a recipe. Reaches
+ * recipe via `ctx.deps.recipe` (the read contract + `attachGeneratedPhoto`) and the
+ * ephemeral preview ring buffer via `ctx.infra.generatedImageStore` — a shared
+ * recipe↔photo-gen seam that avoids a dependency cycle.
  *
  * FEATURE GATE (ADR-0009 §5#9): the kernel registers every module's tools
- * unconditionally. When `ctx.self.photographyClient === null` (image generation
+ * unconditionally. When `ctx.state.photographyClient === null` (image generation
  * unconfigured) the tool early-returns a clear "not configured" message.
  */
 export const generatePhotoTool = defineTool(
@@ -81,7 +80,7 @@ export const generatePhotoTool = defineTool(
       "Set attach:false to preview without saving.",
     inputSchema: generatePhotoInputSchema.shape,
   },
-  (ctx: DomainCtx<PhotoGenSelf, "recipe">) => {
+  (ctx: DomainCtx<PhotoGenState, "recipe">) => {
     const log = ctx.infra.log.child({ component: "generate_recipe_photo" });
     return async (args): Promise<CallToolResult> => {
       const model = args.model ?? DEFAULT_PHOTO_MODEL;
@@ -90,7 +89,7 @@ export const generatePhotoTool = defineTool(
       log.info({ tool: "generate_recipe_photo", recipe_uid: args.recipe_uid, model, restyle, attach }, "tool invoked");
 
       // FEATURE GATE — null when image generation is unconfigured (ADR-0009 §5#9).
-      const photographyClient = ctx.self.photographyClient;
+      const photographyClient = ctx.state.photographyClient;
       if (photographyClient === null) {
         return textResult(
           "AI photo generation is not configured on this server. Set IMAGE_GEN_API_KEY (or reuse the " +

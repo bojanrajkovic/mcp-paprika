@@ -1,6 +1,6 @@
 import type { SyncContribution } from "../../../kernel/registry.js";
 import type { MenuSyncResult } from "../../../paprika/sync-types.js";
-import type { MenuSelf } from "../module.js";
+import type { MenuState } from "../module.js";
 import type { Menu } from "../types.js";
 
 import { syncReplaceAllEntity } from "../../../paprika/sync.js";
@@ -21,22 +21,22 @@ function menusEqual(a: Menu, b: Menu): boolean {
  * MCP resource surface, so this returns a `MenuSyncResult` to be emitted as
  * `sync:complete`.
  */
-export function menusSync(self: MenuSelf): SyncContribution<MenuSelf, "recipe" | "meal-type"> {
+export function menusSync(state: MenuState): SyncContribution<MenuState, "recipe" | "meal-type"> {
   return {
     tier: "additive",
     reconcile: async (ctx): Promise<MenuSyncResult> => {
       ctx.infra.log.debug("fetching menus");
       const changes = await syncReplaceAllEntity({
         fetch: () => ctx.infra.client.listMenus(),
-        cache: ctx.self.menus.cache,
-        store: ctx.self.menus.store,
+        cache: ctx.state.menus.cache,
+        store: ctx.state.menus.store,
         equals: menusEqual,
         label: "menus",
         log: ctx.infra.log,
-        afterLoad: () => ctx.self.menus.store.setLastSyncedAt(),
+        afterLoad: () => ctx.state.menus.store.setLastSyncedAt(),
       });
       return { changeType: "menus", changes };
     },
-    sweep: () => self.menus.store.sweepPending(),
+    sweep: () => state.menus.store.sweepPending(),
   };
 }

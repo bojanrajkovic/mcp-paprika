@@ -3,7 +3,7 @@ import { ok, type Result } from "neverthrow";
 import { z } from "zod";
 
 import type { DomainCtx } from "../../../kernel/registry.js";
-import type { RecipeSelf } from "../module.js";
+import type { RecipeState } from "../module.js";
 import type { TimeConstraints } from "../store.js";
 import type { Recipe } from "../types.js";
 
@@ -41,10 +41,10 @@ export const searchRecipesInputSchema = z
   .strict();
 
 /**
- * Registers `search_recipes`, kernel-shaped — reads this module's own recipe +
- * category stores via `ctx.self`. The `lastCookedAt` enrichment is DROPPED (recipe
- * is `dependsOn []`, no meal dependency); "last cooked" stays meal-side, surfaced by
- * the meal domain's `read_recipe_history` tool.
+ * `search_recipes` — search recipes by name / ingredient / description / time. The
+ * `lastCookedAt` enrichment is DROPPED — recipe is `dependsOn []` (no meal
+ * dependency); "last cooked" stays meal-side, surfaced by the meal domain's
+ * `read_recipe_history` tool.
  */
 export const searchRecipesTool = defineTool(
   {
@@ -59,11 +59,11 @@ export const searchRecipesTool = defineTool(
       "only time constraints are given.",
     inputSchema: searchRecipesInputSchema,
   },
-  (ctx: DomainCtx<RecipeSelf, never>) => {
+  (ctx: DomainCtx<RecipeState, never>) => {
     const log = ctx.infra.log.child({ component: "search_recipes" });
     return async (args) => {
       log.info({ tool: "search_recipes", ...args }, "tool invoked");
-      return recipeColdStartGuard(ctx.self).match(
+      return recipeColdStartGuard(ctx.state).match(
         async (): Promise<CallToolResult> => {
           // Parse time constraints first — an unparseable max is an early error.
           const constraintsResult = parseMaybeMinutes(args.maxPrep).andThen((maxPrepTime) =>
@@ -99,16 +99,16 @@ export const searchRecipesTool = defineTool(
               let queryResults: Array<{ recipe: Recipe; score?: number }>;
               if (hasQuery) {
                 // search() returns scored results, no limit yet — we limit after intersection.
-                queryResults = ctx.self.recipe.store.search(args.query!, {});
+                queryResults = ctx.state.recipe.store.search(args.query!, {});
               } else {
                 // No free-text query: start from all recipes (scored undefined).
-                queryResults = ctx.self.recipe.store.getAll().map((recipe) => ({ recipe }));
+                queryResults = ctx.state.recipe.store.getAll().map((recipe) => ({ recipe }));
               }
 
               // Intersect with ingredient filter.
               if (hasIngredients) {
                 const ingredientSet = new Set(
-                  ctx.self.recipe.store.filterByIngredients(args.ingredients!, args.match).map((r) => r.uid),
+                  ctx.state.recipe.store.filterByIngredients(args.ingredients!, args.match).map((r) => r.uid),
                 );
                 queryResults = queryResults.filter((r) => ingredientSet.has(r.recipe.uid));
               }
@@ -116,7 +116,7 @@ export const searchRecipesTool = defineTool(
               // Time filter: filterByTime returns recipes already sorted ascending by
               // total time. Compute it ONCE and reuse for both the intersection set and
               // the order map (it was previously scanned twice per request).
-              const timeOrdered = hasTime ? ctx.self.recipe.store.filterByTime(constraints) : null;
+              const timeOrdered = hasTime ? ctx.state.recipe.store.filterByTime(constraints) : null;
               if (timeOrdered !== null) {
                 const timeSet = new Set(timeOrdered.map((r) => r.uid));
                 queryResults = queryResults.filter((r) => timeSet.has(r.recipe.uid));
@@ -151,7 +151,7 @@ export const searchRecipesTool = defineTool(
               }
 
               const lines = limited.map((r) => {
-                const categoryNames = ctx.self.category.store.resolveNames(r.recipe.categories);
+                const categoryNames = ctx.state.category.store.resolveNames(r.recipe.categories);
                 const base = formatRecipeItem(r.recipe, categoryNames);
                 if (!hasTime) return base;
                 const unverified = unverifiedTimeFields(r.recipe, constraints);

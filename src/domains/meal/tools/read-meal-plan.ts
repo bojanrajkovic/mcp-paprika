@@ -3,7 +3,7 @@ import { DateTime } from "luxon";
 import { z } from "zod";
 
 import type { DomainCtx } from "../../../kernel/registry.js";
-import type { MealSelf } from "../module.js";
+import type { MealState } from "../module.js";
 
 import { defineTool } from "../../../kernel/tool.js";
 import { textResult } from "../../../shared/tools.js";
@@ -22,8 +22,8 @@ export const readMealPlanInputSchema = z
   .strict();
 
 /**
- * Registers `read_meal_plan`, kernel-shaped — reads this module's own meal store
- * via `ctx.self`; meal-type names for rendering come from `ctx.deps["meal-type"]`.
+ * `read_meal_plan` — show upcoming scheduled meals. Meal-type names for rendering
+ * come from `ctx.deps["meal-type"]`.
  */
 export const readMealPlanTool = defineTool(
   {
@@ -35,11 +35,11 @@ export const readMealPlanTool = defineTool(
       'order (today first). Defaults to the next 7 days; pass `days` to widen the window. For past meals or recall ("when did we last have X"), use search_meal_history.',
     inputSchema: readMealPlanInputSchema,
   },
-  (ctx: DomainCtx<MealSelf, "recipe" | "meal-type">) => {
+  (ctx: DomainCtx<MealState, "recipe" | "meal-type">) => {
     const log = ctx.infra.log.child({ component: "read_meal_plan" });
     return async (args) => {
       log.info({ tool: "read_meal_plan", days: args.days }, "tool invoked");
-      return mealStartGuard(ctx.self, ctx.deps["meal-type"]).match(
+      return mealStartGuard(ctx.state, ctx.deps["meal-type"]).match(
         async (): Promise<CallToolResult> => {
           // Default applied here, not via Zod `.default()`: the SDK parses input in
           // production, but the unit-test harness invokes the handler with raw args,
@@ -53,7 +53,7 @@ export const readMealPlanTool = defineTool(
 
           // High limit: a week or two of meals is small, and the plan view wants the
           // whole window (no pagination). getInDateRange caps internally regardless.
-          const { meals } = ctx.self.store.getInDateRange({ since, until, offset: 0, limit: 500 });
+          const { meals } = ctx.state.store.getInDateRange({ since, until, offset: 0, limit: 500 });
 
           if (meals.length === 0) {
             return textResult(

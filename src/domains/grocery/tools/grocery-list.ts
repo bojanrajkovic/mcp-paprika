@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import type { DomainCtx } from "../../../kernel/registry.js";
 import type { GroceryList } from "../grocery-list/types.js";
-import type { GrocerySelf } from "../module.js";
+import type { GroceryState, GroceryWrites } from "../module.js";
 
 import { GroceryListUidSchema } from "../../../ids.js";
 import { defineTool } from "../../../kernel/tool.js";
@@ -13,9 +13,8 @@ import { groceryListToMarkdown } from "../grocery-helpers.js";
 import { groceryStartGuard } from "./guards.js";
 
 /**
- * Registers `list_grocery_lists`, kernel-shaped — reads this module's own list +
- * item stores via `ctx.self` (item counts come from the co-owned item store, NOT a
- * dep).
+ * `list_grocery_lists` — list all grocery lists with item counts. Counts come from
+ * the co-owned item store, NOT a dep.
  */
 export const listGroceryListsTool = defineTool(
   {
@@ -25,13 +24,13 @@ export const listGroceryListsTool = defineTool(
     description: "List all grocery lists sorted alphabetically by name, with UID and item count per list.",
     inputSchema: {},
   },
-  (ctx: DomainCtx<GrocerySelf, "aisle" | "pantry">) => {
+  (ctx: DomainCtx<GroceryState, "aisle" | "pantry">) => {
     const log = ctx.infra.log.child({ component: "list_grocery_lists" });
     return async () => {
       log.info({ tool: "list_grocery_lists" }, "tool invoked");
-      return groceryStartGuard(ctx.self).match(
+      return groceryStartGuard(ctx.state).match(
         async (): Promise<CallToolResult> => {
-          const all = ctx.self.lists.store.getAll().sort((a, b) => a.name.localeCompare(b.name));
+          const all = ctx.state.lists.store.getAll().sort((a, b) => a.name.localeCompare(b.name));
           const total = all.length;
 
           if (total === 0) {
@@ -40,7 +39,7 @@ export const listGroceryListsTool = defineTool(
 
           const header = `You have ${total.toString()} grocery list(s):`;
           const lines = all.map((list) => {
-            const itemCount = ctx.self.items.store.getByListUid(list.uid).length;
+            const itemCount = ctx.state.items.store.getByListUid(list.uid).length;
             return `- **${list.name}** — ${itemCount.toString()} item(s) (uid: \`${list.uid}\`)`;
           });
 
@@ -53,8 +52,7 @@ export const listGroceryListsTool = defineTool(
 );
 
 /**
- * Registers `read_grocery_list`, kernel-shaped — resolves a list by UID/name and
- * inlines its items, all from `ctx.self`.
+ * `read_grocery_list` — resolve a grocery list by UID/name and inline its items.
  */
 export const readGroceryListTool = defineTool(
   {
@@ -74,20 +72,20 @@ export const readGroceryListTool = defineTool(
       }),
     },
   },
-  (ctx: DomainCtx<GrocerySelf, "aisle" | "pantry">) => {
+  (ctx: DomainCtx<GroceryState, "aisle" | "pantry">) => {
     const log = ctx.infra.log.child({ component: "read_grocery_list" });
     return async (args) => {
       log.info({ tool: "read_grocery_list", ...args.lookup }, "tool invoked");
-      return groceryStartGuard(ctx.self).match(
+      return groceryStartGuard(ctx.state).match(
         async (): Promise<CallToolResult> => {
           const query = "uid" in args.lookup ? { uid: args.lookup.uid } : { text: args.lookup.name };
           const outcome = resolveLookup(query, {
-            get: (uid) => ctx.self.lists.store.get(uid),
-            findByText: (text) => ctx.self.lists.store.findByName(text),
+            get: (uid) => ctx.state.lists.store.get(uid),
+            findByText: (text) => ctx.state.lists.store.findByName(text),
           });
           return formatLookupOutcome(outcome, {
             entityNoun: "grocery list",
-            renderOne: (list) => groceryListToMarkdown(list, ctx.self.items.store.getByListUid(list.uid)),
+            renderOne: (list) => groceryListToMarkdown(list, ctx.state.items.store.getByListUid(list.uid)),
             disambiguationLine: (list) => `- **${list.name}** (uid: \`${list.uid}\`)`,
           });
         },
@@ -98,8 +96,7 @@ export const readGroceryListTool = defineTool(
 );
 
 /**
- * Registers `create_grocery_list`, kernel-shaped — writes through this module's
- * bound `ctx.self.commitGroceryList`.
+ * `create_grocery_list` — create a new grocery list.
  */
 export const createGroceryListTool = defineTool(
   {
@@ -113,15 +110,15 @@ export const createGroceryListTool = defineTool(
       name: z.string().min(1).describe("Grocery list name (required)"),
     },
   },
-  (ctx: DomainCtx<GrocerySelf, "aisle" | "pantry">) => {
+  (ctx: DomainCtx<GroceryState, "aisle" | "pantry", GroceryWrites>) => {
     const log = ctx.infra.log.child({ component: "create_grocery_list" });
     return async (args) => {
       log.info({ tool: "create_grocery_list", name: args.name }, "tool invoked");
-      return groceryStartGuard(ctx.self).match(
+      return groceryStartGuard(ctx.state).match(
         async (): Promise<CallToolResult> => {
           // Duplicate-name guard: only reject on exact case-insensitive match.
           // A starts-with or contains hit from findByName is NOT a duplicate.
-          const matches = ctx.self.lists.store.findByName(args.name);
+          const matches = ctx.state.lists.store.findByName(args.name);
           const exactMatch = matches.find((l) => l.name.toLowerCase() === args.name.toLowerCase());
           if (exactMatch !== undefined) {
             return textResult(
@@ -142,7 +139,7 @@ export const createGroceryListTool = defineTool(
 
           try {
             const saved = await ctx.infra.client.saveGroceryList(newList);
-            await ctx.self.commitGroceryList(saved);
+            await ctx.writes.commitGroceryList(saved);
             return textResult(groceryListToMarkdown(saved, []));
           } catch (error) {
             const message = toMessage(error);
@@ -157,8 +154,7 @@ export const createGroceryListTool = defineTool(
 );
 
 /**
- * Registers `rename_grocery_list`, kernel-shaped — writes through
- * `ctx.self.commitGroceryList`.
+ * `rename_grocery_list` — rename a grocery list.
  */
 export const renameGroceryListTool = defineTool(
   {
@@ -171,13 +167,13 @@ export const renameGroceryListTool = defineTool(
       newName: z.string().min(1).describe("New name for the grocery list"),
     },
   },
-  (ctx: DomainCtx<GrocerySelf, "aisle" | "pantry">) => {
+  (ctx: DomainCtx<GroceryState, "aisle" | "pantry", GroceryWrites>) => {
     const log = ctx.infra.log.child({ component: "rename_grocery_list" });
     return async (args) => {
       log.info({ tool: "rename_grocery_list", uid: args.uid, newName: args.newName }, "tool invoked");
-      return groceryStartGuard(ctx.self).match(
+      return groceryStartGuard(ctx.state).match(
         async (): Promise<CallToolResult> => {
-          const existing = ctx.self.lists.store.get(args.uid);
+          const existing = ctx.state.lists.store.get(args.uid);
 
           if (!existing) {
             return textResult(
@@ -187,12 +183,12 @@ export const renameGroceryListTool = defineTool(
 
           // Same-name no-op: case-insensitive check. Return the existing list rendered as markdown.
           if (existing.name.toLowerCase() === args.newName.toLowerCase()) {
-            const items = ctx.self.items.store.getByListUid(existing.uid);
+            const items = ctx.state.items.store.getByListUid(existing.uid);
             return textResult(groceryListToMarkdown(existing, items));
           }
 
           // Conflict check: reject if another list (different UID) has the exact same name.
-          const conflictMatches = ctx.self.lists.store.findByName(args.newName);
+          const conflictMatches = ctx.state.lists.store.findByName(args.newName);
           const conflict = conflictMatches.find(
             (l) => l.name.toLowerCase() === args.newName.toLowerCase() && l.uid !== args.uid,
           );
@@ -206,8 +202,8 @@ export const renameGroceryListTool = defineTool(
 
           try {
             const saved = await ctx.infra.client.saveGroceryList(renamed);
-            await ctx.self.commitGroceryList(saved);
-            const items = ctx.self.items.store.getByListUid(saved.uid);
+            await ctx.writes.commitGroceryList(saved);
+            const items = ctx.state.items.store.getByListUid(saved.uid);
             return textResult(groceryListToMarkdown(saved, items));
           } catch (error) {
             const message = toMessage(error);
@@ -222,8 +218,7 @@ export const renameGroceryListTool = defineTool(
 );
 
 /**
- * Registers `delete_grocery_list`, kernel-shaped — soft-delete tombstone, writing
- * through `ctx.self.commitGroceryList`.
+ * `delete_grocery_list` — remove a grocery list (soft-delete tombstone).
  */
 export const deleteGroceryListTool = defineTool(
   {
@@ -235,13 +230,13 @@ export const deleteGroceryListTool = defineTool(
       uid: GroceryListUidSchema.describe("Grocery list UID to delete"),
     },
   },
-  (ctx: DomainCtx<GrocerySelf, "aisle" | "pantry">) => {
+  (ctx: DomainCtx<GroceryState, "aisle" | "pantry", GroceryWrites>) => {
     const log = ctx.infra.log.child({ component: "delete_grocery_list" });
     return async (args) => {
       log.info({ tool: "delete_grocery_list", uid: args.uid }, "tool invoked");
-      return groceryStartGuard(ctx.self).match(
+      return groceryStartGuard(ctx.state).match(
         async (): Promise<CallToolResult> => {
-          const existing = ctx.self.lists.store.get(args.uid);
+          const existing = ctx.state.lists.store.get(args.uid);
 
           if (!existing) {
             return textResult(
@@ -253,7 +248,7 @@ export const deleteGroceryListTool = defineTool(
 
           try {
             const saved = await ctx.infra.client.saveGroceryList(trashed);
-            await ctx.self.commitGroceryList(saved);
+            await ctx.writes.commitGroceryList(saved);
           } catch (error) {
             const message = toMessage(error);
             log.error({ err: error, uid: args.uid }, "saveGroceryList failed");

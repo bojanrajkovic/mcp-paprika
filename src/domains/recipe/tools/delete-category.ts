@@ -2,7 +2,7 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 
 import type { CategoryUid } from "../../../ids.js";
 import type { DomainCtx } from "../../../kernel/registry.js";
-import type { RecipeSelf } from "../module.js";
+import type { RecipeState, RecipeWrites } from "../module.js";
 import type { Recipe } from "../types.js";
 
 import { CategoryUidSchema } from "../../../ids.js";
@@ -14,14 +14,16 @@ import { categoryStartGuard } from "./guards.js";
 /**
  * Recipes that reference the given category UID — INCLUDING trashed ones. The
  * `delete_category` guard blocks on these so deleting a category can't leave a
- * dangling UID on a recipe the user later restores from the trash. Within the
- * recipe domain the recipe store is `self` (no cross-domain reach).
+ * dangling UID on a recipe the user later restores from the trash.
  */
-function recipesReferencing(self: RecipeSelf, uid: CategoryUid): Array<Recipe> {
-  return self.recipe.store.getAllIncludingTrashed().filter((recipe) => recipe.categories.includes(uid));
+function recipesReferencing(state: RecipeState, uid: CategoryUid): Array<Recipe> {
+  return state.recipe.store.getAllIncludingTrashed().filter((recipe) => recipe.categories.includes(uid));
 }
 
-/** Registers `delete_category`, kernel-shaped — guards on within-domain recipe/child refs, deletes through `ctx.self.commitCategoryDelete`. */
+/**
+ * `delete_category` — delete a category, guarding on within-domain recipe/child
+ * references first.
+ */
 export const deleteCategoryTool = defineTool(
   {
     name: "delete_category",
@@ -35,18 +37,18 @@ export const deleteCategoryTool = defineTool(
       uid: CategoryUidSchema.describe("UID of the category to delete"),
     },
   },
-  (ctx: DomainCtx<RecipeSelf, never>) => {
+  (ctx: DomainCtx<RecipeState, never, RecipeWrites>) => {
     const log = ctx.infra.log.child({ component: "delete_category" });
     return async (args) => {
       log.info({ tool: "delete_category", uid: args.uid }, "tool invoked");
-      return categoryStartGuard(ctx.self).match(
+      return categoryStartGuard(ctx.state).match(
         async (): Promise<CallToolResult> => {
-          const existing = ctx.self.category.store.get(args.uid);
+          const existing = ctx.state.category.store.get(args.uid);
           if (existing === undefined) {
             return textResult(`No category found with UID "${args.uid}" (it may not exist or was already deleted).`);
           }
 
-          const children = ctx.self.category.store.getChildren(args.uid);
+          const children = ctx.state.category.store.getChildren(args.uid);
           if (children.length > 0) {
             const names = children.map((c) => `"${c.name}"`).join(", ");
             return textResult(
@@ -57,7 +59,7 @@ export const deleteCategoryTool = defineTool(
             );
           }
 
-          const refs = recipesReferencing(ctx.self, args.uid);
+          const refs = recipesReferencing(ctx.state, args.uid);
           if (refs.length > 0) {
             return textResult(
               `Cannot delete "${existing.name}": ${String(refs.length)} recipe${refs.length === 1 ? " is" : "s are"} ` +
@@ -68,7 +70,7 @@ export const deleteCategoryTool = defineTool(
 
           try {
             await ctx.infra.client.deleteCategory(existing);
-            await ctx.self.commitCategoryDelete(existing);
+            await ctx.writes.commitCategoryDelete(existing);
             return textResult(`Deleted category "${existing.name}".`);
           } catch (error) {
             log.error({ err: error, uid: args.uid }, "deleteCategory failed");

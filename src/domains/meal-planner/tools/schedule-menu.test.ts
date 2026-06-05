@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { MealTypeUid, MenuUid, RecipeUid } from "../../../ids.js";
-import type { MealSelf } from "../../meal/module.js";
+import type { MealState } from "../../meal/module.js";
 import type { Meal } from "../../meal/types.js";
 import type { MenuItem } from "../../menu/menu-item/types.js";
 import type { Menu } from "../../menu/types.js";
@@ -455,7 +455,7 @@ describe("schedule_menu — rejection paths", () => {
     const text = getText(await kh.callTool("schedule_menu", { menu: { name: "Multi-Day" }, start_date: "2026-05-27" }));
     expect(text).toContain("Failed to add menu to planner: network down");
     // Nothing landed in the local store.
-    const mealSelf = kh.selfOf("meal") as MealSelf;
+    const mealSelf = kh.stateOf("meal") as MealState;
     expect(mealSelf.store.getInDateRange().total).toBe(0);
   });
 });

@@ -4,7 +4,7 @@ import { z } from "zod";
 import type { GeneratedImageStore } from "../../../features/generated-image-store.js";
 import type { RecipeUid } from "../../../ids.js";
 import type { DomainCtx } from "../../../kernel/registry.js";
-import type { RecipeSelf } from "../module.js";
+import type { RecipeState, RecipeWrites } from "../module.js";
 import type { Photo } from "../photo/types.js";
 
 import { PhotoUidSchema, RecipeUidSchema } from "../../../ids.js";
@@ -132,9 +132,8 @@ async function resolveSource(
 }
 
 /**
- * Registers `upload_recipe_photo`, kernel-shaped — recipe owns photo, so the recipe
- * read, photo-gallery read, and the attach write all go through `ctx.self` (the bound
- * `attachPhotoToRecipe` chokepoint). The `generation_token` source consumes the shared
+ * `upload_recipe_photo` — attach a photo to a recipe (recipe owns photo, so the attach
+ * is intra-domain). The `generation_token` source consumes the shared
  * `infra.generatedImageStore` preview buffer (see `resolveSource`).
  */
 export const uploadPhotoTool = defineTool(
@@ -151,20 +150,20 @@ export const uploadPhotoTool = defineTool(
       "server cannot read your local filesystem. Photos are appended to the recipe's gallery in order.",
     inputSchema: uploadPhotoInputSchema.shape,
   },
-  (ctx: DomainCtx<RecipeSelf, never>) => {
+  (ctx: DomainCtx<RecipeState, never, RecipeWrites>) => {
     const log = ctx.infra.log.child({ component: "upload_recipe_photo" });
     return async (args) => {
       const sourceKind =
         "url" in args.source ? "url" : "generation_token" in args.source ? "generation_token" : "base64";
       log.info({ tool: "upload_recipe_photo", recipe_uid: args.recipe_uid, source: sourceKind }, "tool invoked");
-      return recipeColdStartGuard(ctx.self).match(
+      return recipeColdStartGuard(ctx.state).match(
         async (): Promise<CallToolResult> => {
           // Gate on the photo catalog being synced — order_flag/name are derived from the
           // existing gallery, so uploading before photos sync could assign a colliding index.
-          if (!ctx.self.photo.store.hasSynced) {
+          if (!ctx.state.photo.store.hasSynced) {
             return textResult("The photo catalog is still syncing; try again in a moment.");
           }
-          const recipe = ctx.self.recipe.store.get(args.recipe_uid);
+          const recipe = ctx.state.recipe.store.get(args.recipe_uid);
           if (recipe === undefined)
             return textResult(
               `No recipe found with UID "${args.recipe_uid}" (it may not exist or was already deleted).`,
@@ -193,7 +192,7 @@ export const uploadPhotoTool = defineTool(
 
           let photo: Photo;
           try {
-            photo = await ctx.self.attachPhotoToRecipe(recipe, thumbnail, full);
+            photo = await ctx.writes.attachPhotoToRecipe(recipe, thumbnail, full);
           } catch (error) {
             log.error({ err: error, recipe_uid: args.recipe_uid }, "uploadPhoto failed");
             return textResult(`Failed to upload photo: ${toMessage(error)}`);
@@ -207,7 +206,7 @@ export const uploadPhotoTool = defineTool(
   },
 );
 
-/** Registers `delete_recipe_photo`, kernel-shaped — soft-delete through `ctx.self.commitPhotoDelete`. */
+/** `delete_recipe_photo` — remove a recipe photo (soft-delete). */
 export const deletePhotoTool = defineTool(
   {
     name: "delete_recipe_photo",
@@ -218,25 +217,25 @@ export const deletePhotoTool = defineTool(
       "'already deleted' message without re-POSTing. Requires an exact photo UID.",
     inputSchema: deletePhotoInputSchema.shape,
   },
-  (ctx: DomainCtx<RecipeSelf, never>) => {
+  (ctx: DomainCtx<RecipeState, never, RecipeWrites>) => {
     const log = ctx.infra.log.child({ component: "delete_recipe_photo" });
     return async (args) => {
       log.info({ tool: "delete_recipe_photo", photo_uid: args.photo_uid }, "tool invoked");
-      return recipeColdStartGuard(ctx.self).match(
+      return recipeColdStartGuard(ctx.state).match(
         async (): Promise<CallToolResult> => {
           // Gate on the photo catalog being synced, else a not-yet-synced photo would
           // read as "not found" before its first sync.
-          if (!ctx.self.photo.store.hasSynced) {
+          if (!ctx.state.photo.store.hasSynced) {
             return textResult("The photo catalog is still syncing; try again in a moment.");
           }
-          const existing = ctx.self.photo.store.get(args.photo_uid);
+          const existing = ctx.state.photo.store.get(args.photo_uid);
           if (existing === undefined) {
             return textResult(`No photo found with UID "${args.photo_uid}" (it may not exist or was already deleted).`);
           }
 
           try {
             await ctx.infra.client.deletePhoto(existing);
-            await ctx.self.commitPhotoDelete({ ...existing, deleted: true });
+            await ctx.writes.commitPhotoDelete({ ...existing, deleted: true });
           } catch (error) {
             log.error({ err: error, photo_uid: args.photo_uid }, "deletePhoto failed");
             return textResult(`Failed to delete photo: ${toMessage(error)}`);

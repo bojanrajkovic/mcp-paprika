@@ -1,5 +1,5 @@
 import type { SyncContribution } from "../../../kernel/registry.js";
-import type { RecipeSelf } from "../module.js";
+import type { RecipeState } from "../module.js";
 import type { Photo } from "../photo/types.js";
 
 import { syncReplaceAllEntity } from "../../../paprika/sync.js";
@@ -22,20 +22,20 @@ function photosEqual(a: Photo, b: Photo): boolean {
  * not abort core sync. Emits NO `sync:complete` and adds NO SyncResult variant (returns
  * `void`).
  */
-export function photosSync(self: RecipeSelf): SyncContribution<RecipeSelf, never> {
+export function photosSync(state: RecipeState): SyncContribution<RecipeState, never> {
   return {
     tier: "additive",
     reconcile: async (ctx) => {
       ctx.infra.log.debug("fetching photos");
       await syncReplaceAllEntity({
         fetch: () => ctx.infra.client.listPhotos(),
-        cache: ctx.self.photo.cache,
-        store: ctx.self.photo.store,
+        cache: ctx.state.photo.cache,
+        store: ctx.state.photo.store,
         equals: photosEqual,
         label: "photos",
         log: ctx.infra.log,
       });
     },
-    sweep: () => self.photo.store.sweepPending(),
+    sweep: () => state.photo.store.sweepPending(),
   };
 }

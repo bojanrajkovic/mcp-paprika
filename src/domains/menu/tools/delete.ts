@@ -1,7 +1,7 @@
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 
 import type { DomainCtx } from "../../../kernel/registry.js";
-import type { MenuSelf } from "../module.js";
+import type { MenuState, MenuWrites } from "../module.js";
 import type { Menu } from "../types.js";
 
 import { MenuUidSchema } from "../../../ids.js";
@@ -11,9 +11,7 @@ import { toMessage } from "../../../utils/log.js";
 import { menuStartGuard } from "./guards.js";
 
 /**
- * Registers `delete_menu`, kernel-shaped — reads/writes this module's own menu +
- * menu-item stores via `ctx.self`, cascading through `ctx.self.commitMenuItemsBatch`
- * + `ctx.self.commitMenu`.
+ * `delete_menu` — delete a menu, cascading the soft-delete to its items.
  */
 export const deleteMenuTool = defineTool(
   {
@@ -33,7 +31,7 @@ export const deleteMenuTool = defineTool(
       }),
     },
   },
-  (ctx: DomainCtx<MenuSelf, "recipe" | "meal-type">) => {
+  (ctx: DomainCtx<MenuState, "recipe" | "meal-type", MenuWrites>) => {
     const log = ctx.infra.log.child({ component: "delete_menu" });
     return async (args) => {
       log.info({ tool: "delete_menu", ...args.lookup }, "tool invoked");
@@ -41,8 +39,8 @@ export const deleteMenuTool = defineTool(
         async (): Promise<CallToolResult> => {
           const query = "uid" in args.lookup ? { uid: args.lookup.uid } : { text: args.lookup.name };
           const outcome = resolveLookup(query, {
-            get: (uid) => ctx.self.menus.store.get(uid),
-            findByText: (text) => ctx.self.menus.store.findByName(text),
+            get: (uid) => ctx.state.menus.store.get(uid),
+            findByText: (text) => ctx.state.menus.store.findByName(text),
           });
 
           if (outcome.kind === "uid_miss") {
@@ -59,7 +57,7 @@ export const deleteMenuTool = defineTool(
           }
 
           const existing = outcome.entity;
-          const items = ctx.self.items.store.getByMenuUid(existing.uid);
+          const items = ctx.state.items.store.getByMenuUid(existing.uid);
 
           // Cascade: tombstone the menuitems FIRST (children before parent), so a
           // failure to tombstone the menu leaves orphaned-but-visible items the next
@@ -72,7 +70,7 @@ export const deleteMenuTool = defineTool(
             const trashedItems = items.map((item) => ({ ...item, menuUid: null, deleted: true }));
             try {
               const savedItems = await ctx.infra.client.saveMenuItems(trashedItems);
-              await ctx.self.commitMenuItemsBatch(savedItems);
+              await ctx.writes.commitMenuItemsBatch(savedItems);
             } catch (error) {
               const message = toMessage(error);
               log.error({ err: error, uid: existing.uid }, "saveMenuItems (delete_menu cascade) failed");
@@ -87,7 +85,7 @@ export const deleteMenuTool = defineTool(
           try {
             const saved = await ctx.infra.client.saveMenus([trashedMenu]);
             const persisted = saved[0] ?? trashedMenu;
-            await ctx.self.commitMenu(persisted);
+            await ctx.writes.commitMenu(persisted);
           } catch (error) {
             const message = toMessage(error);
             log.error({ err: error, uid: existing.uid }, "saveMenus (delete_menu) failed");

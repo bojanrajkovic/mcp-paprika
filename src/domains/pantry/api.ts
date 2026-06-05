@@ -3,13 +3,8 @@ import type { Result } from "neverthrow";
 import type { PantryItem } from "./types.js";
 
 /**
- * Pantry's public contract — the surface grocery consumes via `ctx.deps.pantry`.
- * Pantry is a single-entity Data domain; its store and cache stay private and the
- * only inbound dependent is grocery's `move_grocery_items_to_pantry`, which builds
- * the `PantryItem`s grocery-side and persists them THROUGH `createItems` (never
- * reaching pantry's store).
- *
- * Scoped to the verified live cross-domain call site (grocery's move-to-pantry tool),
+ * Pantry's public contract — the surface grocery's `move_grocery_items_to_pantry`
+ * consumes via `ctx.deps.pantry`. Scoped to exactly that one cross-domain call site,
  * nothing speculative:
  *   - `hasSynced` — grocery gates the move on pantry being warm before any write;
  *   - `createItems` — the write the move needs, distinguishing API-create failure

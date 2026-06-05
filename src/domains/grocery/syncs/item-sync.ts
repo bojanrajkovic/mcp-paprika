@@ -1,7 +1,7 @@
 import type { SyncContribution } from "../../../kernel/registry.js";
 import type { GroceryItemSyncResult } from "../../../paprika/sync-types.js";
 import type { GroceryItem } from "../grocery-item/types.js";
-import type { GrocerySelf } from "../module.js";
+import type { GroceryState } from "../module.js";
 
 import { syncReplaceAllEntity } from "../../../paprika/sync.js";
 
@@ -33,21 +33,21 @@ function groceryItemsEqual(a: GroceryItem, b: GroceryItem): boolean {
  * to be emitted as `sync:complete` (a child-item change invalidates the parent
  * resource).
  */
-export function groceryItemsSync(self: GrocerySelf): SyncContribution<GrocerySelf, "aisle" | "pantry"> {
+export function groceryItemsSync(state: GroceryState): SyncContribution<GroceryState, "aisle" | "pantry"> {
   return {
     tier: "core",
     reconcile: async (ctx): Promise<GroceryItemSyncResult> => {
       ctx.infra.log.debug("fetching grocery items");
       const changes = await syncReplaceAllEntity({
         fetch: () => ctx.infra.client.listGroceryItems(),
-        cache: ctx.self.items.cache,
-        store: ctx.self.items.store,
+        cache: ctx.state.items.cache,
+        store: ctx.state.items.store,
         equals: groceryItemsEqual,
         label: "grocery items",
         log: ctx.infra.log,
       });
       return { changeType: "grocery-items", changes };
     },
-    sweep: () => self.items.store.sweepPending(),
+    sweep: () => state.items.store.sweepPending(),
   };
 }

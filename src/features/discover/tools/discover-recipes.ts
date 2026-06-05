@@ -4,7 +4,7 @@ import { z } from "zod";
 import type { Recipe } from "../../../domains/recipe/types.js";
 import type { DomainCtx } from "../../../kernel/registry.js";
 import type { SemanticResult } from "../../vector-store.js";
-import type { DiscoverSelf } from "../module.js";
+import type { DiscoverState } from "../module.js";
 
 import { recipeMetadataLines } from "../../../domains/recipe/recipe-markdown.js";
 import { defineTool } from "../../../kernel/tool.js";
@@ -31,13 +31,13 @@ export const discoverRecipesInputSchema = {
 };
 
 /**
- * Registers `discover_recipes`, kernel-shaped — semantic search over the vector
- * index this module owns (`ctx.self.vectorStore`), with recipe enrichment resolved
- * through the recipe contract (`ctx.deps.recipe.get` for the row, `resolveCategoryNames`
- * for its categories). Tools reach `self`/`deps` — this module's own internals and its declared dependencies, nothing wider.
+ * `discover_recipes` — semantic search over the vector index this module owns
+ * (`ctx.state.vectorStore`), with recipe enrichment resolved through the recipe
+ * contract (`ctx.deps.recipe.get` for the row, `resolveCategoryNames` for its
+ * categories).
  *
  * FEATURE GATE (ADR-0009 §5#9): the kernel registers every module's tools
- * unconditionally. When embeddings are unconfigured the `.self` factory carries a null
+ * unconditionally. When embeddings are unconfigured the `.state` factory carries a null
  * `vectorStore`, and the tool early-returns a clear "not configured" result. The tool
  * is always present; it just declines to act.
  *
@@ -54,7 +54,7 @@ export const discoverRecipesTool = defineTool(
       "Discover recipes using semantic search. Finds recipes matching a natural language description of what you're looking for.",
     inputSchema: discoverRecipesInputSchema,
   },
-  (ctx: DomainCtx<DiscoverSelf, "recipe">) => {
+  (ctx: DomainCtx<DiscoverState, "recipe">) => {
     const log = ctx.infra.log.child({ component: "discover_recipes" });
     return async (args): Promise<CallToolResult> => {
       log.info({ tool: "discover_recipes", ...args }, "tool invoked");
@@ -62,7 +62,7 @@ export const discoverRecipesTool = defineTool(
       // Feature gate: vectorStore is null when embeddings are unconfigured. The tool
       // is registered unconditionally and declines here, so the surface is uniform
       // across deployments (ADR-0009 §5#9).
-      const { vectorStore } = ctx.self;
+      const { vectorStore } = ctx.state;
       if (vectorStore === null) {
         return textResult(
           "Semantic search is not configured on this server, so `discover_recipes` is unavailable. " +

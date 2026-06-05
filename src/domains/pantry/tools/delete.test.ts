@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { PantryItemUid } from "../../../ids.js";
-import type { PantrySelf } from "../module.js";
+import type { PantryState } from "../module.js";
 
 import { makePantryItem } from "../../../../test/cache/__fixtures__/pantry.js";
 import { useKernelHarness } from "../../../../test/support/kernel-harness.js";
@@ -27,7 +27,7 @@ describe("delete_pantry_item tool", () => {
     expect(callArgs?.ingredient).toBe("Butter");
 
     // Item is removed from the store after a successful commit.
-    const after = (kh.self() as PantrySelf).store.get("uid-1" as PantryItemUid);
+    const after = (kh.state() as PantryState).store.get("uid-1" as PantryItemUid);
     expect(after).toBeUndefined();
   });
 
@@ -38,7 +38,7 @@ describe("delete_pantry_item tool", () => {
 
     expect(text).toContain("No pantry item found");
     expect(kh.client().savePantryItems).not.toHaveBeenCalled();
-    expect((kh.self() as PantrySelf).store.size).toBe(0);
+    expect((kh.state() as PantryState).store.size).toBe(0);
   });
 
   it("cold-start guard blocks call before pantry synced", async () => {
@@ -60,7 +60,7 @@ describe("delete_pantry_item tool", () => {
     expect(text).toContain("server timeout");
 
     // Store still has the original non-deleted item.
-    const after = (kh.self() as PantrySelf).store.get("uid-1" as PantryItemUid);
+    const after = (kh.state() as PantryState).store.get("uid-1" as PantryItemUid);
     expect(after).toBeDefined();
     expect(after?.deleted).toBe(false);
   });
@@ -73,7 +73,7 @@ describe("delete_pantry_item tool", () => {
       pantry: [makePantryItem({ uid: "uid-retry" as PantryItemUid, ingredient: "Butter", deleted: false })],
     });
     // Simulate the post-commit state: delete() removes the item from the store.
-    (kh.self() as PantrySelf).store.delete("uid-retry" as PantryItemUid);
+    (kh.state() as PantryState).store.delete("uid-retry" as PantryItemUid);
 
     const text = getText(await kh.callTool("delete_pantry_item", { uid: "uid-retry" }));
 

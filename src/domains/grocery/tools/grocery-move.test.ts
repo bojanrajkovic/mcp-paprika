@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { GroceryItemUid, GroceryListUid, PantryItemUid } from "../../../ids.js";
-import type { GrocerySelf } from "../module.js";
+import type { GroceryState } from "../module.js";
 
 import { makeGroceryItem } from "../../../../test/cache/__fixtures__/grocery-items.js";
 import { makeGroceryList } from "../../../../test/cache/__fixtures__/grocery-lists.js";
@@ -98,7 +98,7 @@ describe("move_grocery_items_to_pantry tool", () => {
     expect(pantryCallOrder!).toBeLessThan(groceryCallOrder!);
 
     // Grocery item removed from the store (committed via commitGroceryItemsBatch)
-    expect((kh.self() as GrocerySelf).items.store.get("ITEM-1" as GroceryItemUid)).toBeUndefined();
+    expect((kh.state() as GroceryState).items.store.get("ITEM-1" as GroceryItemUid)).toBeUndefined();
   });
 
   it("batch of 3 UIDs calls savePantryItems once then saveGroceryItems once (create-first)", async () => {
@@ -153,7 +153,7 @@ describe("move_grocery_items_to_pantry tool", () => {
     expect(pantryCallOrder!).toBeLessThan(groceryCallOrder!);
 
     // All three grocery items removed from the store
-    const grocerySelf = kh.self() as GrocerySelf;
+    const grocerySelf = kh.state() as GroceryState;
     expect(grocerySelf.items.store.get("BATCH-1" as GroceryItemUid)).toBeUndefined();
     expect(grocerySelf.items.store.get("BATCH-2" as GroceryItemUid)).toBeUndefined();
     expect(grocerySelf.items.store.get("BATCH-3" as GroceryItemUid)).toBeUndefined();
@@ -163,7 +163,7 @@ describe("move_grocery_items_to_pantry tool", () => {
     const item = makeGroceryItem({ uid: "TOMB-1" as GroceryItemUid, ingredient: "Milk" });
     kh.seed({ pantry: [], groceryLists: [WEEKLY_LIST], groceryItems: [item] });
     // Remove the item from the store after seeding
-    (kh.self() as GrocerySelf).items.store.delete("TOMB-1" as GroceryItemUid);
+    (kh.state() as GroceryState).items.store.delete("TOMB-1" as GroceryItemUid);
 
     const result = await kh.callTool("move_grocery_items_to_pantry", { uids: ["TOMB-1"] });
     const text = getText(result);
@@ -217,7 +217,7 @@ describe("move_grocery_items_to_pantry tool", () => {
     // Grocery save was called and failed
     expect(kh.client().saveGroceryItems).toHaveBeenCalledOnce();
     // Grocery item still in the store (failed grocery delete)
-    expect((kh.self() as GrocerySelf).items.store.get("PFAIL-1" as GroceryItemUid)).toBeDefined();
+    expect((kh.state() as GroceryState).items.store.get("PFAIL-1" as GroceryItemUid)).toBeDefined();
   });
 
   it("pantry-not-synced guard returns pantry sync message", async () => {
@@ -310,7 +310,7 @@ describe("move_grocery_items_to_pantry tool", () => {
     expect(text.toLowerCase()).toContain("no grocery items were deleted");
     expect(kh.client().saveGroceryItems).not.toHaveBeenCalled();
     // Grocery item still present (not deleted)
-    expect((kh.self() as GrocerySelf).items.store.get("PFAIL-3" as GroceryItemUid)).toBeDefined();
+    expect((kh.state() as GroceryState).items.store.get("PFAIL-3" as GroceryItemUid)).toBeDefined();
   });
 
   it("partial failure message includes the pantry UIDs returned by savePantryItems", async () => {

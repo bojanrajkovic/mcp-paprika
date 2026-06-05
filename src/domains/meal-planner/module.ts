@@ -17,8 +17,8 @@ declare module "../../kernel/registry.js" {
  * legitimately >2-domain span in the surface, so it lives in a coordinator rather
  * than on any single owning module (ADR-0009).
  *
- * Because it has no internals it SKIPS `.self` and goes straight to `.build` (its
- * `self` is `{}`). `dependsOn ["menu","meal","recipe","meal-type"]`: `schedule_menu`
+ * Because it has no internals it SKIPS `.state` and goes straight to `.build` (its
+ * `state` is `{}`). `dependsOn ["menu","meal","recipe","meal-type"]`: `schedule_menu`
  * reads all four domains — menu + menu-items (resolve the menu, fetch its items),
  * recipe (re-resolve each linked item's display name), meal-type (resolve the wire
  * type integer + name), and meal (the batch write + per-date `order_flag`).

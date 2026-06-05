@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { RecipeUid } from "../../../ids.js";
-import type { RecipeSelf } from "../module.js";
+import type { RecipeState } from "../module.js";
 
 import { makeRecipe } from "../../../../test/cache/__fixtures__/recipes.js";
 import { useKernelHarness } from "../../../../test/support/kernel-harness.js";
@@ -76,7 +76,7 @@ describe("restore_recipe tool", () => {
     expect(text).toContain("already in your active library");
     expect(kh.client().saveRecipe).not.toHaveBeenCalled(); // a reconcile, not a Paprika write
     // Local store healed to authoritative truth.
-    expect((kh.self() as RecipeSelf).recipe.store.get(uid)?.inTrash).toBe(false);
+    expect((kh.state() as RecipeState).recipe.store.get(uid)?.inTrash).toBe(false);
     expect(kh.resourceListChanged()).toHaveBeenCalledOnce();
   });
 
@@ -101,7 +101,7 @@ describe("restore_recipe tool", () => {
     const text = getText(await kh.callTool("restore_recipe", { uid }));
 
     expect(text).toContain("No recipe found");
-    expect((kh.self() as RecipeSelf).recipe.store.get(uid)).toBeUndefined(); // phantom dropped
+    expect((kh.state() as RecipeState).recipe.store.get(uid)).toBeUndefined(); // phantom dropped
     expect(kh.resourceListChanged()).toHaveBeenCalledOnce();
     expect(kh.client().saveRecipe).not.toHaveBeenCalled();
   });

@@ -4,7 +4,7 @@
  * `useTempDir` is a temp-dir lifecycle composable mirroring `useXdgIsolation`:
  * the caller wires `setup`/`teardown` into whichever hooks suit. The `make*`
  * factories build a single entity subcache under a cache dir — the exact call
- * each domain `.self` factory (and `buildAuthCaches`) makes in production — and
+ * each domain `.state` factory (and `buildAuthCaches`) makes in production — and
  * return it UN-inited, so multi-instance restart suites and pre-init-throw tests
  * control init timing themselves.
  *

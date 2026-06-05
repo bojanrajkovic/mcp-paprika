@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { PantryItemUid } from "../../../ids.js";
-import type { PantrySelf } from "../module.js";
+import type { PantryState } from "../module.js";
 
 import { makeAisle } from "../../../../test/cache/__fixtures__/aisles.js";
 import { makePantryItem } from "../../../../test/cache/__fixtures__/pantry.js";
@@ -121,7 +121,7 @@ describe("update_pantry_item tool", () => {
 
     expect(text).toContain("No pantry item found");
     expect(kh.client().savePantryItems).not.toHaveBeenCalled();
-    expect((kh.self() as PantrySelf).store.size).toBe(0);
+    expect((kh.state() as PantryState).store.size).toBe(0);
   });
 
   it("cold-start guard blocks call before pantry synced", async () => {
@@ -201,7 +201,7 @@ describe("update_pantry_item tool", () => {
     expect(text).toContain("Failed to update pantry item");
     expect(text).toContain("server timeout");
     // The original item is still in the store.
-    const after = (kh.self() as PantrySelf).store.get("uid-1" as PantryItemUid);
+    const after = (kh.state() as PantryState).store.get("uid-1" as PantryItemUid);
     expect(after).toBeDefined();
     expect(after?.quantity).toBe("1 lb");
   });

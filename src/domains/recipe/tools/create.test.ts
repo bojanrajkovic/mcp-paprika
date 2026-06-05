@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { RecipeSelf } from "../module.js";
+import type { RecipeState } from "../module.js";
 
 import { makeCategory, makeRecipe } from "../../../../test/cache/__fixtures__/recipes.js";
 import { useKernelHarness } from "../../../../test/support/kernel-harness.js";
@@ -128,7 +128,7 @@ describe("create_recipe tool", () => {
     await kh.callTool("create_recipe", { name: "Saved Recipe", ingredients: "ingredients", directions: "directions" });
 
     // The recipe is committed to the (real) store, and the Content resource-list fires.
-    expect((kh.self() as RecipeSelf).recipe.store.get(savedRecipe.uid)).toEqual(savedRecipe);
+    expect((kh.state() as RecipeState).recipe.store.get(savedRecipe.uid)).toEqual(savedRecipe);
     expect(kh.resourceListChanged()).toHaveBeenCalled();
   });
 
@@ -155,7 +155,7 @@ describe("create_recipe tool", () => {
   it("returns an error and leaves the store untouched when saveRecipe throws", async () => {
     vi.mocked(kh.client().saveRecipe).mockRejectedValue(new Error("Network error"));
     kh.seed({ recipes: [makeRecipe()] });
-    const before = (kh.self() as RecipeSelf).recipe.store.size;
+    const before = (kh.state() as RecipeState).recipe.store.size;
 
     const text = getText(
       await kh.callTool("create_recipe", { name: "Recipe", ingredients: "ingredients", directions: "directions" }),
@@ -164,7 +164,7 @@ describe("create_recipe tool", () => {
     expect(text).toContain("Failed to create");
     expect(text).toContain("Network error");
     // No commit happened — store size unchanged.
-    expect((kh.self() as RecipeSelf).recipe.store.size).toBe(before);
+    expect((kh.state() as RecipeState).recipe.store.size).toBe(before);
   });
 
   it("fires the cold-start guard before any API call", async () => {

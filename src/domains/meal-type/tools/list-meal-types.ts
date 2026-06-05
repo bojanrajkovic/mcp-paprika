@@ -1,5 +1,5 @@
 import type { DomainCtx } from "../../../kernel/registry.js";
-import type { MealTypeSelf } from "../module.js";
+import type { MealTypeState } from "../module.js";
 import type { MealType } from "../types.js";
 
 import { defineTool } from "../../../kernel/tool.js";
@@ -32,10 +32,10 @@ function mealTypeLine(mt: Readonly<MealType>): string {
 }
 
 /**
- * Registers `list_meal_types`, kernel-shaped — reads this module's own store via
- * `ctx.self`. Meal-type is a Reference-class entity: read-only, no resource
- * (ADR-0004). Mirrors `list_aisles`: no input, sorted by order then name, one
- * bullet per entry. Meal types are created/edited in the Paprika app, not via MCP.
+ * `list_meal_types` — list the meal-type catalog (sorted by order then name, one
+ * bullet per entry, no input). Meal-type is a Reference-class entity: read-only, no
+ * resource (ADR-0004). Mirrors `list_aisles`. Meal types are created/edited in the
+ * Paprika app, not via MCP.
  */
 export const listMealTypesTool = defineTool(
   {
@@ -50,14 +50,14 @@ export const listMealTypesTool = defineTool(
       "Meal types are created and edited in the Paprika app, not through this server.",
     inputSchema: {},
   },
-  (ctx: DomainCtx<MealTypeSelf, never>) => {
+  (ctx: DomainCtx<MealTypeState, never>) => {
     const log = ctx.infra.log.child({ component: "list_meal_types" });
     return async () => {
       log.info({ tool: "list_meal_types" }, "tool invoked");
-      if (!ctx.self.store.hasSynced) {
+      if (!ctx.state.store.hasSynced) {
         return textResult("Meal types are not yet synced. Try again in a few seconds.");
       }
-      const mealTypes = ctx.self.store.getAll().sort((a, b) => {
+      const mealTypes = ctx.state.store.getAll().sort((a, b) => {
         if (a.orderFlag !== b.orderFlag) return a.orderFlag - b.orderFlag;
         return a.name.localeCompare(b.name);
       });

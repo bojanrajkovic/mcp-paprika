@@ -10,15 +10,15 @@ import { defineTool } from "./tool.js";
 /**
  * Builds a minimal {@link DomainCtx} for exercising a {@link defineTool} result in
  * isolation: a real stub `server` (so `register` → `callTool` round-trips) and a
- * caller-supplied `self`. `infra`/`deps` are unused by these tools, so they are
+ * caller-supplied `state`. `infra`/`deps` are unused by these tools, so they are
  * cast — this is a unit test of the helper's wiring + typing, not of a domain.
  */
-function makeCtx<Self>(self: Self, server: ReturnType<typeof makeTestServer>["server"]): DomainCtx<Self, never> {
-  return { self, deps: {}, infra: {} as unknown as Infra, server };
+function makeCtx<State>(state: State, server: ReturnType<typeof makeTestServer>["server"]): DomainCtx<State, never> {
+  return { state, writes: {}, deps: {}, infra: {} as unknown as Infra, server };
 }
 
 describe("defineTool", () => {
-  it("registers under spec.name and routes args + ctx.self to the handler (raw shape)", async () => {
+  it("registers under spec.name and routes args + ctx.state to the handler (raw shape)", async () => {
     const tool = defineTool(
       {
         name: "echo_raw",
@@ -34,7 +34,7 @@ describe("defineTool", () => {
         (args) => {
           const query: string = args.query;
           const limit: number | undefined = args.limit;
-          return textResult(`${ctx.self.prefix}:${query}:${String(limit)}`);
+          return textResult(`${ctx.state.prefix}:${query}:${String(limit)}`);
         },
     );
 

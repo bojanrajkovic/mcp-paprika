@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import type { DomainCtx } from "../../../kernel/registry.js";
 import type { MenuItem } from "../menu-item/types.js";
-import type { MenuSelf } from "../module.js";
+import type { MenuState, MenuWrites } from "../module.js";
 import type { Menu } from "../types.js";
 
 import { MenuItemUidSchema } from "../../../ids.js";
@@ -27,9 +27,8 @@ export const moveMenuItemInputSchema = z
   .strict();
 
 /**
- * Registers `move_menu_item`, kernel-shaped — reads/writes this module's own menu +
- * menu-item stores via `ctx.self`, committing through `ctx.self.commitMenu` /
- * `ctx.self.commitMenuItem`.
+ * `move_menu_item` — move a menu item to a different position or menu (an intent verb,
+ * not a free-form edit).
  */
 export const moveMenuItemTool = defineTool(
   {
@@ -42,14 +41,14 @@ export const moveMenuItemTool = defineTool(
       "menu's order. To change a menu item's meal type or recipe link instead, use update_menu_item.",
     inputSchema: moveMenuItemInputSchema,
   },
-  (ctx: DomainCtx<MenuSelf, "recipe" | "meal-type">) => {
+  (ctx: DomainCtx<MenuState, "recipe" | "meal-type", MenuWrites>) => {
     const log = ctx.infra.log.child({ component: "move_menu_item" });
     return async (args) => {
       log.info({ tool: "move_menu_item", uid: args.uid, day: args.day }, "tool invoked");
       return menuStartGuard(ctx).match(
         async (): Promise<CallToolResult> => {
           const uid = args.uid;
-          const existing = ctx.self.items.store.get(uid);
+          const existing = ctx.state.items.store.get(uid);
           if (existing === undefined) {
             return textResult(`No menu item found with UID "${uid}" (it may not exist or was already deleted).`);
           }
@@ -67,12 +66,12 @@ export const moveMenuItemTool = defineTool(
           // (menuUid null) or a menu not known locally.
           let extendedTo: number | null = null;
           if (existing.menuUid !== null) {
-            const parent = ctx.self.menus.store.get(existing.menuUid);
+            const parent = ctx.state.menus.store.get(existing.menuUid);
             if (parent !== undefined && newDay > parent.days) {
               const expanded: Menu = { ...parent, days: newDay };
               try {
                 const savedMenu = (await ctx.infra.client.saveMenus([expanded]))[0] ?? expanded;
-                await ctx.self.commitMenu(savedMenu);
+                await ctx.writes.commitMenu(savedMenu);
                 extendedTo = newDay;
               } catch (error) {
                 const message = toMessage(error);
@@ -91,7 +90,7 @@ export const moveMenuItemTool = defineTool(
           // so this keeps it unique and places the move last.
           let newOrderFlag = existing.orderFlag;
           if (existing.menuUid !== null) {
-            const others = ctx.self.items.store.getByMenuUid(existing.menuUid).filter((it) => it.uid !== existing.uid);
+            const others = ctx.state.items.store.getByMenuUid(existing.menuUid).filter((it) => it.uid !== existing.uid);
             newOrderFlag = others.reduce((max, it) => Math.max(max, it.orderFlag), -1) + 1;
           }
 
@@ -100,7 +99,7 @@ export const moveMenuItemTool = defineTool(
           let saved: MenuItem;
           try {
             saved = (await ctx.infra.client.saveMenuItems([moved]))[0]!;
-            await ctx.self.commitMenuItem(saved);
+            await ctx.writes.commitMenuItem(saved);
           } catch (error) {
             const message = toMessage(error);
             log.error({ err: error, uid }, "saveMenuItems (move_menu_item) failed");

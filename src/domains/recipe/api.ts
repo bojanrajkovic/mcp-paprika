@@ -8,8 +8,7 @@ import type { Recipe } from "./types.js";
  * Recipe's public contract — the surface meal, menu, meal-planner, discover, and
  * photo-gen consume via `ctx.deps.recipe`. Recipe owns three entities (recipes,
  * categories, photos) — there is no separate category or photo domain — so the
- * category resolvers live here too. The stores and caches stay private; siblings
- * reach only these methods.
+ * category resolvers live here too.
  *
  * Scoped to exactly the live cross-domain call sites (nothing speculative):
  *   - `get` — the recipe-name/existence read every meal/menu/coordinator write does;

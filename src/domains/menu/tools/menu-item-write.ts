@@ -5,7 +5,7 @@ import type { RecipeUid } from "../../../ids.js";
 import type { DomainCtx } from "../../../kernel/registry.js";
 import type { MealType } from "../../meal-type/types.js";
 import type { MenuItem } from "../menu-item/types.js";
-import type { MenuSelf } from "../module.js";
+import type { MenuState, MenuWrites } from "../module.js";
 import type { Menu } from "../types.js";
 
 import { MenuItemUidSchema, MenuUidSchema, RecipeUidSchema } from "../../../ids.js";
@@ -65,10 +65,9 @@ export const addMenuItemsInputSchema = z.object({
 });
 
 /**
- * Registers `add_menu_items`, kernel-shaped — reads/writes this module's own menu +
- * menu-item stores via `ctx.self`, denormalizes the recipe display name via
- * `ctx.deps.recipe.get`, resolves the meal type via `ctx.deps["meal-type"]` (an unknown
- * `{name}` auto-creates a custom type), and commits through `ctx.self.commitMenu` / `ctx.self.commitMenuItemsBatch`.
+ * `add_menu_items` — add items to a menu. Denormalizes the recipe display name via
+ * `ctx.deps.recipe.get` and resolves the meal type via `ctx.deps["meal-type"]` (an
+ * unknown `{name}` auto-creates a custom type).
  */
 export const addMenuItemsTool = defineTool(
   {
@@ -86,7 +85,7 @@ export const addMenuItemsTool = defineTool(
       "can fix every problem in one pass.",
     inputSchema: addMenuItemsInputSchema.shape,
   },
-  (ctx: DomainCtx<MenuSelf, "recipe" | "meal-type">) => {
+  (ctx: DomainCtx<MenuState, "recipe" | "meal-type", MenuWrites>) => {
     const log = ctx.infra.log.child({ component: "add_menu_items" });
     return async (args) => {
       log.info({ tool: "add_menu_items", ...args.menu, count: args.items.length }, "tool invoked");
@@ -96,8 +95,8 @@ export const addMenuItemsTool = defineTool(
           // with the standard lookup wording, no network touched.
           const query = "uid" in args.menu ? { uid: args.menu.uid } : { text: args.menu.name };
           const outcome = resolveLookup(query, {
-            get: (uid) => ctx.self.menus.store.get(uid),
-            findByText: (text) => ctx.self.menus.store.findByName(text),
+            get: (uid) => ctx.state.menus.store.get(uid),
+            findByText: (text) => ctx.state.menus.store.findByName(text),
           });
 
           if (outcome.kind === "uid_miss") {
@@ -204,7 +203,7 @@ export const addMenuItemsTool = defineTool(
             try {
               const saved = await ctx.infra.client.saveMenus([extended]);
               const persisted = saved[0] ?? extended;
-              await ctx.self.commitMenu(persisted);
+              await ctx.writes.commitMenu(persisted);
               menuForRender = persisted;
               extendedTo = maxDay;
             } catch (error) {
@@ -241,7 +240,7 @@ export const addMenuItemsTool = defineTool(
           // its day-3 item at order_flag 1 (docs/wire-captures/menus.har.json). Seed
           // from the current menu-wide max and hand out a single increasing counter
           // across the batch in submission order, regardless of day.
-          const liveItems = ctx.self.items.store.getByMenuUid(menu.uid);
+          const liveItems = ctx.state.items.store.getByMenuUid(menu.uid);
           const seedFlag = liveItems.reduce((max, item) => Math.max(max, item.orderFlag), -1) + 1;
 
           const builtItems: Array<MenuItem> = resolved.map((r, idx) => ({
@@ -260,7 +259,7 @@ export const addMenuItemsTool = defineTool(
           let savedItems: ReadonlyArray<MenuItem>;
           try {
             savedItems = await ctx.infra.client.saveMenuItems(builtItems);
-            await ctx.self.commitMenuItemsBatch(savedItems);
+            await ctx.writes.commitMenuItemsBatch(savedItems);
           } catch (error) {
             const message = toMessage(error);
             log.error({ err: error, uid: menu.uid, count: builtItems.length }, "saveMenuItems failed");
@@ -272,7 +271,7 @@ export const addMenuItemsTool = defineTool(
           const header = `${extendNote}Added ${savedItems.length.toString()} item(s) to menu "${menu.name}".`;
           const card = menuToMarkdown(
             menuForRender,
-            ctx.self.items.store.getByMenuUid(menu.uid),
+            ctx.state.items.store.getByMenuUid(menu.uid),
             ctx.deps["meal-type"].getAll(),
             {
               includeItemUids: true,

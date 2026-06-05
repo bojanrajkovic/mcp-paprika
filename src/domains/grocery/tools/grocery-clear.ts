@@ -1,7 +1,7 @@
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 
 import type { DomainCtx } from "../../../kernel/registry.js";
-import type { GrocerySelf } from "../module.js";
+import type { GroceryState, GroceryWrites } from "../module.js";
 
 import { GroceryListUidSchema } from "../../../ids.js";
 import { defineTool } from "../../../kernel/tool.js";
@@ -10,8 +10,7 @@ import { toMessage } from "../../../utils/log.js";
 import { groceryStartGuard } from "./guards.js";
 
 /**
- * Registers `clear_purchased_grocery_items`, kernel-shaped — batch soft-delete of a
- * list's purchased items, writing through `ctx.self.commitGroceryItemsBatch`.
+ * `clear_purchased_grocery_items` — batch soft-delete a list's purchased items.
  */
 export const clearPurchasedTool = defineTool(
   {
@@ -23,20 +22,20 @@ export const clearPurchasedTool = defineTool(
       listUid: GroceryListUidSchema.describe("Grocery list UID to clear purchased items from"),
     },
   },
-  (ctx: DomainCtx<GrocerySelf, "aisle" | "pantry">) => {
+  (ctx: DomainCtx<GroceryState, "aisle" | "pantry", GroceryWrites>) => {
     const log = ctx.infra.log.child({ component: "clear_purchased_grocery_items" });
     return async (args) => {
       log.info({ tool: "clear_purchased_grocery_items", listUid: args.listUid }, "tool invoked");
-      return groceryStartGuard(ctx.self).match(
+      return groceryStartGuard(ctx.state).match(
         async (): Promise<CallToolResult> => {
-          const list = ctx.self.lists.store.get(args.listUid);
+          const list = ctx.state.lists.store.get(args.listUid);
           if (!list) {
             return textResult(
               `No grocery list found with UID "${args.listUid}" (it may not exist or was already deleted).`,
             );
           }
 
-          const purchased = ctx.self.items.store.getPurchasedByList(args.listUid);
+          const purchased = ctx.state.items.store.getPurchasedByList(args.listUid);
           if (purchased.length === 0) {
             return textResult(`No purchased items to clear in list "${list.name}".`);
           }
@@ -44,7 +43,7 @@ export const clearPurchasedTool = defineTool(
           const trashed = purchased.map((item) => ({ ...item, deleted: true }));
           try {
             const saved = await ctx.infra.client.saveGroceryItems(trashed);
-            await ctx.self.commitGroceryItemsBatch(saved);
+            await ctx.writes.commitGroceryItemsBatch(saved);
           } catch (error) {
             const message = toMessage(error);
             log.error({ err: error, listUid: args.listUid }, "saveGroceryItems (clear_purchased_grocery_items) failed");
@@ -60,10 +59,9 @@ export const clearPurchasedTool = defineTool(
 );
 
 /**
- * Registers `clear_grocery_list`, kernel-shaped — batch soft-delete of ALL items in a
- * list, writing through `ctx.self.commitGroceryItemsBatch`.
+ * `clear_grocery_list` — batch soft-delete ALL items in a grocery list.
  */
-export const clearAllTool = defineTool(
+export const clearGroceryListTool = defineTool(
   {
     name: "clear_grocery_list",
     title: "Remove all items from a grocery list",
@@ -73,20 +71,20 @@ export const clearAllTool = defineTool(
       listUid: GroceryListUidSchema.describe("Grocery list UID to clear all items from"),
     },
   },
-  (ctx: DomainCtx<GrocerySelf, "aisle" | "pantry">) => {
+  (ctx: DomainCtx<GroceryState, "aisle" | "pantry", GroceryWrites>) => {
     const log = ctx.infra.log.child({ component: "clear_grocery_list" });
     return async (args) => {
       log.info({ tool: "clear_grocery_list", listUid: args.listUid }, "tool invoked");
-      return groceryStartGuard(ctx.self).match(
+      return groceryStartGuard(ctx.state).match(
         async (): Promise<CallToolResult> => {
-          const list = ctx.self.lists.store.get(args.listUid);
+          const list = ctx.state.lists.store.get(args.listUid);
           if (!list) {
             return textResult(
               `No grocery list found with UID "${args.listUid}" (it may not exist or was already deleted).`,
             );
           }
 
-          const items = ctx.self.items.store.getByListUid(args.listUid);
+          const items = ctx.state.items.store.getByListUid(args.listUid);
           if (items.length === 0) {
             return textResult(`No items to clear in list "${list.name}".`);
           }
@@ -94,7 +92,7 @@ export const clearAllTool = defineTool(
           const trashed = items.map((item) => ({ ...item, deleted: true }));
           try {
             const saved = await ctx.infra.client.saveGroceryItems(trashed);
-            await ctx.self.commitGroceryItemsBatch(saved);
+            await ctx.writes.commitGroceryItemsBatch(saved);
           } catch (error) {
             const message = toMessage(error);
             log.error({ err: error, listUid: args.listUid }, "saveGroceryItems (clear_grocery_list) failed");

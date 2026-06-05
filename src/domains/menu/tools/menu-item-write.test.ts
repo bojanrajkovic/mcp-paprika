@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { MealTypeUid, MenuItemUid, MenuUid, RecipeUid } from "../../../ids.js";
 import type { MenuItem } from "../menu-item/types.js";
-import type { MenuSelf } from "../module.js";
+import type { MenuState } from "../module.js";
 import type { Menu } from "../types.js";
 
 import { makeMealType } from "../../../../test/cache/__fixtures__/meals.js";
@@ -81,7 +81,7 @@ describe("add_menu_items tool", () => {
     expect(saved.every((i) => !i.deleted)).toBe(true);
     expect(text).toContain('Added 2 item(s) to menu "Holiday"');
     expect(kh.resourceListChanged()).toHaveBeenCalled();
-    expect((kh.self() as MenuSelf).items.store.getByMenuUid("m-1" as MenuUid)).toHaveLength(2);
+    expect((kh.state() as MenuState).items.store.getByMenuUid("m-1" as MenuUid)).toHaveLength(2);
   });
 
   it("adds a freeform menuitem (name, no recipe_uid) materializing recipeUid null", async () => {
@@ -204,7 +204,7 @@ describe("add_menu_items tool", () => {
       vi.mocked(kh.client().saveMenuItems).mock.invocationCallOrder[0]!,
     );
     expect(text).toContain('Extended menu "Holiday" to 3 day(s).');
-    expect((kh.self() as MenuSelf).menus.store.get("m-1" as MenuUid)!.days).toBe(3);
+    expect((kh.state() as MenuState).menus.store.get("m-1" as MenuUid)!.days).toBe(3);
   });
 
   it("does NOT expand the menu when all days are in range", async () => {
@@ -431,7 +431,7 @@ describe("delete_menu_item tool", () => {
     expect(text).toContain('Menu item "Turkey" has been deleted.');
     const saved = (vi.mocked(kh.client().saveMenuItems).mock.calls[0]![0] as MenuItem[])[0]!;
     expect(saved.deleted).toBe(true);
-    expect((kh.self() as MenuSelf).items.store.get("mi-1" as MenuItemUid)).toBeUndefined();
+    expect((kh.state() as MenuState).items.store.get("mi-1" as MenuItemUid)).toBeUndefined();
     expect(kh.resourceListChanged()).toHaveBeenCalled();
   });
 

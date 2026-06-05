@@ -2,7 +2,7 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 
 import type { DomainCtx } from "../../../kernel/registry.js";
-import type { PantrySelf } from "../module.js";
+import type { PantryState, PantryWrites } from "../module.js";
 import type { PantryItem } from "../types.js";
 
 import { PantryItemUidSchema } from "../../../ids.js";
@@ -25,9 +25,8 @@ export const restockPantryItemInputSchema = z
   .strict();
 
 /**
- * Registers `mark_pantry_item_out_of_stock`, kernel-shaped — `inStock` is an intent
- * verb (ADR-0008), so it lives here, not on `update_pantry_item`. Writes through
- * `ctx.self.commitPantryItem`.
+ * `mark_pantry_item_out_of_stock` — flip a pantry item to out-of-stock. `inStock` is
+ * an intent verb (ADR-0008), so it lives here, not on `update_pantry_item`.
  */
 export const markPantryItemOutOfStockTool = defineTool(
   {
@@ -37,13 +36,13 @@ export const markPantryItemOutOfStockTool = defineTool(
     description: "Mark a pantry item as out of stock by UID (e.g. you've run out of it).",
     inputSchema: markPantryItemOutOfStockInputSchema,
   },
-  (ctx: DomainCtx<PantrySelf, "aisle">) => {
+  (ctx: DomainCtx<PantryState, "aisle", PantryWrites>) => {
     const log = ctx.infra.log.child({ component: "mark_pantry_item_out_of_stock" });
     return async (args) => {
       log.info({ tool: "mark_pantry_item_out_of_stock", uid: args.uid }, "tool invoked");
-      return pantryStartGuard(ctx.self).match(
+      return pantryStartGuard(ctx.state).match(
         async (): Promise<CallToolResult> => {
-          const existing = ctx.self.store.get(args.uid);
+          const existing = ctx.state.store.get(args.uid);
 
           if (!existing) {
             return textResult(`No pantry item found with UID "${args.uid}" (it may not exist or was already deleted).`);
@@ -53,7 +52,7 @@ export const markPantryItemOutOfStockTool = defineTool(
           try {
             const updated: PantryItem = { ...existing, inStock: false };
             saved = (await ctx.infra.client.savePantryItems([updated]))[0]!;
-            await ctx.self.commitPantryItem(saved);
+            await ctx.writes.commitPantryItem(saved);
           } catch (error) {
             const message = toMessage(error);
             log.error({ err: error, uid: args.uid }, "savePantryItems failed");
@@ -69,8 +68,8 @@ export const markPantryItemOutOfStockTool = defineTool(
 );
 
 /**
- * Registers `restock_pantry_item`, kernel-shaped — the in-stock intent verb's
- * mirror. Writes through `ctx.self.commitPantryItem`.
+ * `restock_pantry_item` — the in-stock intent verb, mirror of
+ * `mark_pantry_item_out_of_stock` (ADR-0008).
  */
 export const restockPantryItemTool = defineTool(
   {
@@ -80,13 +79,13 @@ export const restockPantryItemTool = defineTool(
     description: "Mark a pantry item as back in stock by UID (e.g. you've restocked it).",
     inputSchema: restockPantryItemInputSchema,
   },
-  (ctx: DomainCtx<PantrySelf, "aisle">) => {
+  (ctx: DomainCtx<PantryState, "aisle", PantryWrites>) => {
     const log = ctx.infra.log.child({ component: "restock_pantry_item" });
     return async (args) => {
       log.info({ tool: "restock_pantry_item", uid: args.uid }, "tool invoked");
-      return pantryStartGuard(ctx.self).match(
+      return pantryStartGuard(ctx.state).match(
         async (): Promise<CallToolResult> => {
-          const existing = ctx.self.store.get(args.uid);
+          const existing = ctx.state.store.get(args.uid);
 
           if (!existing) {
             return textResult(`No pantry item found with UID "${args.uid}" (it may not exist or was already deleted).`);
@@ -96,7 +95,7 @@ export const restockPantryItemTool = defineTool(
           try {
             const updated: PantryItem = { ...existing, inStock: true };
             saved = (await ctx.infra.client.savePantryItems([updated]))[0]!;
-            await ctx.self.commitPantryItem(saved);
+            await ctx.writes.commitPantryItem(saved);
           } catch (error) {
             const message = toMessage(error);
             log.error({ err: error, uid: args.uid }, "savePantryItems failed");

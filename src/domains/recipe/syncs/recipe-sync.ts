@@ -1,6 +1,6 @@
 import type { SyncContribution } from "../../../kernel/registry.js";
 import type { RecipeSyncResult } from "../../../paprika/sync-types.js";
-import type { RecipeSelf } from "../module.js";
+import type { RecipeState } from "../module.js";
 import type { Recipe } from "../types.js";
 
 /**
@@ -17,12 +17,12 @@ import type { Recipe } from "../types.js";
  * `recipe-removed` on the kernel re-index seam for discover (the two consumers are
  * independent — see the emit comment).
  */
-export function recipesSync(self: RecipeSelf): SyncContribution<RecipeSelf, never> {
+export function recipesSync(state: RecipeState): SyncContribution<RecipeState, never> {
   return {
     tier: "core",
     reconcile: async (ctx): Promise<RecipeSyncResult> => {
       const { client, log } = ctx.infra;
-      const { store, cache } = ctx.self.recipe;
+      const { store, cache } = ctx.state.recipe;
 
       // 1. Recipe sync path
       log.debug("fetching recipe list");
@@ -109,6 +109,6 @@ export function recipesSync(self: RecipeSelf): SyncContribution<RecipeSelf, neve
         changes: { added: addedRecipes, updated: updatedRecipes, removedUids: filteredRemoved },
       };
     },
-    sweep: () => self.recipe.store.sweepPending(),
+    sweep: () => state.recipe.store.sweepPending(),
   };
 }

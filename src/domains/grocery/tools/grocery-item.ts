@@ -4,7 +4,7 @@ import { z } from "zod";
 import type { AisleUid } from "../../../ids.js";
 import type { DomainCtx } from "../../../kernel/registry.js";
 import type { GroceryItem } from "../grocery-item/types.js";
-import type { GrocerySelf } from "../module.js";
+import type { GroceryState, GroceryWrites } from "../module.js";
 
 import { GroceryIngredientUidSchema, GroceryItemUidSchema, GroceryListUidSchema, NO_AISLE_UID } from "../../../ids.js";
 import { defineTool } from "../../../kernel/tool.js";
@@ -27,12 +27,11 @@ const itemInputSchema = z.object({
 });
 
 /**
- * Registers `add_grocery_items`, kernel-shaped — resolves aisles via the declared
- * `aisle` dependency contract (`ctx.deps.aisle.ensureAisle` / `.get` / `.resolveByName`,
- * never reaching aisle's store) and writes the grocery-ingredient catalog through
- * this module's OWN ingredient store + cache (`ctx.self.ingredients.*` — ingredient
- * is a co-owned grocery entity, so the catalog write stays in `self`). Items commit
- * through this module's bound `ctx.self.commitGroceryItemsBatch`.
+ * `add_grocery_items` — batch-add grocery items. Resolves aisles via the declared
+ * `aisle` dependency contract (`ctx.deps.aisle.ensureAisle` / `.get` / `.resolveByName`) and
+ * writes the grocery-ingredient catalog through this
+ * module's OWN ingredient store + cache (`ctx.state.ingredients.*` — ingredient is a
+ * co-owned grocery entity, so the catalog write stays in-module).
  */
 export const addGroceryItemsTool = defineTool(
   {
@@ -46,14 +45,14 @@ export const addGroceryItemsTool = defineTool(
       items: z.array(itemInputSchema).min(1).describe("Array of items to add (1 or more)"),
     },
   },
-  (ctx: DomainCtx<GrocerySelf, "aisle" | "pantry">) => {
+  (ctx: DomainCtx<GroceryState, "aisle" | "pantry", GroceryWrites>) => {
     const log = ctx.infra.log.child({ component: "add_grocery_items" });
     return async (args) => {
       log.info({ tool: "add_grocery_items", listUid: args.listUid, count: args.items.length }, "tool invoked");
-      return groceryStartGuard(ctx.self).match(
+      return groceryStartGuard(ctx.state).match(
         async (): Promise<CallToolResult> => {
           // Validate listUid (already brand-typed by the input schema)
-          const list = ctx.self.lists.store.get(args.listUid);
+          const list = ctx.state.lists.store.get(args.listUid);
           if (list === undefined) {
             return textResult(`Grocery list with UID "${args.listUid}" not found.`);
           }
@@ -89,12 +88,12 @@ export const addGroceryItemsTool = defineTool(
 
                 if (!catalogUpdated.has(ingredientKey)) {
                   catalogUpdated.add(ingredientKey);
-                  const catalogEntry = ctx.self.ingredients.store.lookupByName(ingredient);
+                  const catalogEntry = ctx.state.ingredients.store.lookupByName(ingredient);
                   if (catalogEntry !== undefined) {
                     const updated = { ...catalogEntry, aisleUid };
                     await ctx.infra.client.saveGroceryIngredient(updated);
-                    ctx.self.ingredients.store.set(updated);
-                    await ctx.self.ingredients.cache.put(updated);
+                    ctx.state.ingredients.store.set(updated);
+                    await ctx.state.ingredients.cache.put(updated);
                   } else {
                     const created = {
                       uid: GroceryIngredientUidSchema.parse(crypto.randomUUID().toUpperCase()),
@@ -103,8 +102,8 @@ export const addGroceryItemsTool = defineTool(
                       deleted: false,
                     };
                     await ctx.infra.client.saveGroceryIngredient(created);
-                    ctx.self.ingredients.store.set(created);
-                    await ctx.self.ingredients.cache.put(created);
+                    ctx.state.ingredients.store.set(created);
+                    await ctx.state.ingredients.cache.put(created);
                   }
                 }
               } else {
@@ -113,7 +112,7 @@ export const addGroceryItemsTool = defineTool(
                   aisle = batchHit.aisle;
                   aisleUid = batchHit.aisleUid;
                 } else {
-                  const catalogEntry = ctx.self.ingredients.store.lookupByName(ingredient);
+                  const catalogEntry = ctx.state.ingredients.store.lookupByName(ingredient);
                   const resolvedAisle =
                     catalogEntry !== undefined ? ctx.deps.aisle.get(catalogEntry.aisleUid) : undefined;
                   // No catalog memory (or it points at a now-missing aisle): place the
@@ -154,7 +153,7 @@ export const addGroceryItemsTool = defineTool(
           let savedItems: ReadonlyArray<GroceryItem>;
           try {
             savedItems = await ctx.infra.client.saveGroceryItems(builtItems);
-            await ctx.self.commitGroceryItemsBatch(savedItems);
+            await ctx.writes.commitGroceryItemsBatch(savedItems);
           } catch (error) {
             const message = toMessage(error);
             log.error({ err: error, listUid: args.listUid }, "saveGroceryItems failed");
@@ -184,8 +183,8 @@ export const updateGroceryItemInputSchema = z
   .strict();
 
 /**
- * Registers `update_grocery_item`, kernel-shaped — resolves the aisle via
- * `ctx.deps.aisle.ensureAisle` and writes through `ctx.self.commitGroceryItem`.
+ * `update_grocery_item` — edit a grocery item's free-form fields. Resolves a changed
+ * aisle via `ctx.deps.aisle.ensureAisle`.
  */
 export const updateGroceryItemTool = defineTool(
   {
@@ -197,13 +196,13 @@ export const updateGroceryItemTool = defineTool(
       "omitted fields retain their current values. To check an item off, use mark_grocery_item_purchased.",
     inputSchema: updateGroceryItemInputSchema,
   },
-  (ctx: DomainCtx<GrocerySelf, "aisle" | "pantry">) => {
+  (ctx: DomainCtx<GroceryState, "aisle" | "pantry", GroceryWrites>) => {
     const log = ctx.infra.log.child({ component: "update_grocery_item" });
     return async (args) => {
       log.info({ tool: "update_grocery_item", uid: args.uid }, "tool invoked");
-      return groceryStartGuard(ctx.self).match(
+      return groceryStartGuard(ctx.state).match(
         async (): Promise<CallToolResult> => {
-          const existing = ctx.self.items.store.get(args.uid);
+          const existing = ctx.state.items.store.get(args.uid);
           if (existing === undefined) {
             return textResult(
               `No grocery item found with UID "${args.uid}" (it may not exist or was already deleted).`,
@@ -227,7 +226,7 @@ export const updateGroceryItemTool = defineTool(
             };
 
             saved = (await ctx.infra.client.saveGroceryItems([updated]))[0]!;
-            await ctx.self.commitGroceryItem(saved);
+            await ctx.writes.commitGroceryItem(saved);
           } catch (error) {
             const message = toMessage(error);
             log.error({ err: error, uid: args.uid }, "saveGroceryItems failed");
@@ -243,8 +242,7 @@ export const updateGroceryItemTool = defineTool(
 );
 
 /**
- * Registers `delete_grocery_item`, kernel-shaped — soft-delete tombstone, writing
- * through `ctx.self.commitGroceryItem`.
+ * `delete_grocery_item` — remove a grocery item (soft-delete tombstone).
  */
 export const deleteGroceryItemTool = defineTool(
   {
@@ -256,13 +254,13 @@ export const deleteGroceryItemTool = defineTool(
       uid: GroceryItemUidSchema.describe("Grocery item UID to delete"),
     },
   },
-  (ctx: DomainCtx<GrocerySelf, "aisle" | "pantry">) => {
+  (ctx: DomainCtx<GroceryState, "aisle" | "pantry", GroceryWrites>) => {
     const log = ctx.infra.log.child({ component: "delete_grocery_item" });
     return async (args) => {
       log.info({ tool: "delete_grocery_item", uid: args.uid }, "tool invoked");
-      return groceryStartGuard(ctx.self).match(
+      return groceryStartGuard(ctx.state).match(
         async (): Promise<CallToolResult> => {
-          const existing = ctx.self.items.store.get(args.uid);
+          const existing = ctx.state.items.store.get(args.uid);
 
           if (!existing) {
             return textResult(
@@ -274,7 +272,7 @@ export const deleteGroceryItemTool = defineTool(
 
           try {
             const saved = (await ctx.infra.client.saveGroceryItems([trashed]))[0]!;
-            await ctx.self.commitGroceryItem(saved);
+            await ctx.writes.commitGroceryItem(saved);
           } catch (error) {
             const message = toMessage(error);
             log.error({ err: error, uid: args.uid }, "saveGroceryItems failed");

@@ -10,7 +10,7 @@ Every `EntityStore` subclass inherits a `Map<UID, PendingWrite>`. Sync consults 
 
 - `markPendingUpsert(uid)` and `markPendingDelete(uid)` overwrite any prior mark (last write wins).
 - Upserts clear on content-equality observation; deletes never observation-clear (Paprika omits soft-deleted items, so absence is ambiguous). TTL is the only clearing mechanism for deletes.
-- **TTL ≤ 0 disables tracking entirely:** `markPendingUpsert` and `markPendingDelete` become no-ops. Each module`s `.self`passes`pendingWriteTtlMs: 0`(via`resolvePendingWriteTtl`) when `config.sync.enabled === false`, so a no-sync process never accumulates marks. The default is `DEFAULT_PENDING_WRITE_TTL_MS` (60s), overridable per store via the constructor.
+- **TTL ≤ 0 disables tracking entirely:** `markPendingUpsert` and `markPendingDelete` become no-ops. Each module`s `.state`passes`pendingWriteTtlMs: 0`(via`resolvePendingWriteTtl`) when `config.sync.enabled === false`, so a no-sync process never accumulates marks. The default is `DEFAULT_PENDING_WRITE_TTL_MS` (60s), overridable per store via the constructor.
 - `sweepPending(now?)` is the TTL fallback, called by the kernel`s `syncOnce` driver at the end of every cycle.
 - Commit helpers wrap cache I/O in `try { … } catch { clearPending(uid); throw }`, so a failed local commit doesn't leave a UID shielded for the full TTL window.
 - All pending-writes methods are pure in-memory and never throw.

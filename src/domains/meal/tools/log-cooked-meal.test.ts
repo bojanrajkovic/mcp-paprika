@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { MealTypeUid, MealUid, RecipeUid } from "../../../ids.js";
-import type { MealSelf } from "../module.js";
+import type { MealState } from "../module.js";
 
 import { makeMeal, makeMealType } from "../../../../test/cache/__fixtures__/meals.js";
 import { makeRecipe } from "../../../../test/cache/__fixtures__/recipes.js";
@@ -137,7 +137,7 @@ describe("log_cooked_meal tool", () => {
 
     await kh.callTool("log_cooked_meal", { recipe_uid: TACOS_UID });
 
-    const store = (kh.self() as MealSelf).store;
+    const store = (kh.state() as MealState).store;
     expect(store.size).toBe(1);
   });
 

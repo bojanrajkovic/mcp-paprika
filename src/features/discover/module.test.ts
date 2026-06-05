@@ -18,9 +18,9 @@ import "../../kernel/modules.generated.js";
  * the post-sync startup reconcile and the live `infra.indexEvents` re-index subscription.
  * The `discover_recipes` tool surface is covered separately in `tools/discover-recipes.test.ts`.
  *
- * The hook reads only `self.vectorStore`, three methods off `deps.recipe`, and
+ * The hook reads only `state.vectorStore`, three methods off `deps.recipe`, and
  * `infra.indexEvents`, so each test builds the discover module with embeddings OFF (a `null`
- * vectorStore), injects a mock vectorStore into `self`, stubs `deps.recipe`, and invokes the
+ * vectorStore), injects a mock vectorStore into `state`, stubs `deps.recipe`, and invokes the
  * hook directly — exactly the `BootCtx` the kernel hands it post-sync.
  */
 
@@ -61,8 +61,8 @@ async function runIndexBoot(
   const infra: Infra = { ...makeKernelInfra({ cacheDir: "/discover-index-boot-test-unused" }), log };
   const discoverModule = registeredModules().find((m) => m.id === "discover")!;
   const built = await discoverModule.build(infra);
-  (built.self as { vectorStore: VectorStore | null }).vectorStore = fromAny(mockVs);
-  await built.onReady!.index!({ self: built.self, deps: { recipe: makeRecipeDeps(recipes) }, infra });
+  (built.state as { vectorStore: VectorStore | null }).vectorStore = fromAny(mockVs);
+  await built.onReady!.index!({ state: built.state, deps: { recipe: makeRecipeDeps(recipes) }, infra });
   return { infra, records };
 }
 
@@ -260,11 +260,11 @@ describe("discover module — index boot hook (#177)", () => {
       const discoverModule = registeredModules().find((m) => m.id === "discover")!;
       const built = await discoverModule.build(infra);
 
-      // Features off → the .self factory never builds a vectorStore.
-      expect((built.self as { vectorStore: VectorStore | null }).vectorStore).toBeNull();
+      // Features off → the .state factory never builds a vectorStore.
+      expect((built.state as { vectorStore: VectorStore | null }).vectorStore).toBeNull();
 
       // The hook early-returns; with no subscription, emitting a re-index event must not throw.
-      await built.onReady!.index!({ self: built.self, deps: { recipe: makeRecipeDeps([]) }, infra });
+      await built.onReady!.index!({ state: built.state, deps: { recipe: makeRecipeDeps([]) }, infra });
       expect(() => infra.indexEvents.emit({ type: "recipe-changed", recipes: [] })).not.toThrow();
     });
   });

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { GroceryItemUid, GroceryListUid } from "../../../ids.js";
-import type { GrocerySelf } from "../module.js";
+import type { GroceryState } from "../module.js";
 
 import { makeGroceryItem } from "../../../../test/cache/__fixtures__/grocery-items.js";
 import { makeGroceryList } from "../../../../test/cache/__fixtures__/grocery-lists.js";
@@ -59,10 +59,10 @@ describe("clear_purchased_grocery_items tool", () => {
     }
 
     // Purchased items removed from the store; unpurchased item remains
-    const self = kh.self() as GrocerySelf;
-    expect(self.items.store.get("ITEM-P1" as GroceryItemUid)).toBeUndefined();
-    expect(self.items.store.get("ITEM-P2" as GroceryItemUid)).toBeUndefined();
-    expect(self.items.store.get("ITEM-U1" as GroceryItemUid)).toBeDefined();
+    const state = kh.state() as GroceryState;
+    expect(state.items.store.get("ITEM-P1" as GroceryItemUid)).toBeUndefined();
+    expect(state.items.store.get("ITEM-P2" as GroceryItemUid)).toBeUndefined();
+    expect(state.items.store.get("ITEM-U1" as GroceryItemUid)).toBeDefined();
   });
 
   it("returns informational message when no purchased items, saveGroceryItems NOT called", async () => {
@@ -151,8 +151,8 @@ describe("clear_grocery_list tool", () => {
     }
 
     // All items removed from the store
-    const self = kh.self() as GrocerySelf;
-    expect(self.items.store.getByListUid("LIST-1" as GroceryListUid)).toHaveLength(0);
+    const state = kh.state() as GroceryState;
+    expect(state.items.store.getByListUid("LIST-1" as GroceryListUid)).toHaveLength(0);
   });
 
   it("empty list returns informational message, saveGroceryItems NOT called", async () => {

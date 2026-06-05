@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { RecipeSelf } from "../module.js";
+import type { RecipeState } from "../module.js";
 
 import { makeCategory, makeRecipe } from "../../../../test/cache/__fixtures__/recipes.js";
 import { useKernelHarness } from "../../../../test/support/kernel-harness.js";
@@ -67,14 +67,14 @@ describe("update_recipe tool", () => {
     const recipe = makeRecipe();
     vi.mocked(kh.client().saveRecipe).mockRejectedValue(new Error("Conflict"));
     kh.seed({ recipes: [recipe] });
-    const before = (kh.self() as RecipeSelf).recipe.store.size;
+    const before = (kh.state() as RecipeState).recipe.store.size;
 
     const text = getText(await kh.callTool("update_recipe", { uid: recipe.uid, name: "New" }));
 
     expect(text).toContain("Failed to update");
     expect(text).toContain("Conflict");
     // Store unchanged: no commit happened.
-    expect((kh.self() as RecipeSelf).recipe.store.size).toBe(before);
+    expect((kh.state() as RecipeState).recipe.store.size).toBe(before);
   });
 
   it("cold-start guard fires before any store lookup", async () => {
@@ -105,7 +105,7 @@ describe("update_recipe tool", () => {
 
     await kh.callTool("update_recipe", { uid: recipe.uid, name: "Updated Name" });
 
-    expect((kh.self() as RecipeSelf).recipe.store.get(updated.uid)?.name).toBe("Updated Name");
+    expect((kh.state() as RecipeState).recipe.store.get(updated.uid)?.name).toBe("Updated Name");
     expect(kh.resourceListChanged()).toHaveBeenCalled();
   });
 });

@@ -35,10 +35,14 @@ export interface ToolSpec<I extends ZodRawShape | ZodTypeAny = ZodRawShape | Zod
  * `server.registerTool`. The kernel iterates `tool.register(ctx)` in `registerAll`
  * — the data/behavior split means the SAME `spec` object drives both registration
  * and documentation, so the two cannot drift in content (ADR-0011).
+ *
+ * `Writes` is the module's write-chokepoint surface (`ctx.writes`); it defaults to
+ * empty, so a read-only tool keeps a two-generic `DomainCtx<State, Deps>`. A write
+ * tool annotates the third generic to reach its module's commit chokepoints.
  */
-export interface ToolDef<Self, Deps extends DomainId> {
+export interface ToolDef<State, Deps extends DomainId, Writes = Record<never, never>> {
   readonly spec: ToolSpec;
-  register(ctx: DomainCtx<Self, Deps>): void;
+  register(ctx: DomainCtx<State, Deps, Writes>): void;
 }
 
 /**
@@ -49,17 +53,20 @@ export interface ToolDef<Self, Deps extends DomainId> {
  * callback is the old handler.
  *
  * `I` is inferred from `spec.inputSchema` (so `handler`'s `args` is typed from the
- * schema); `Self`/`Deps` are inferred from the `ctx` parameter's annotation
- * (`ctx: DomainCtx<FooSelf, "dep">`), which doubles as the tool's dependency
- * declaration exactly as the old function signature did. Registration is delegated
+ * schema); `State`/`Deps`/`Writes` are inferred from the `ctx` parameter's annotation
+ * (`ctx: DomainCtx<FooState, "dep", FooWrites>`), which doubles as the tool's
+ * dependency declaration exactly as the old function signature did — a read-only tool
+ * omits the third generic and `Writes` defaults to empty. Registration is delegated
  * straight to `server.registerTool(name, spec, cb)`: `spec` carries an extra `name`
  * the SDK config ignores, which is fine — it is passed as a value, not an object
  * literal, so no excess-property error.
  */
-export function defineTool<I extends ZodRawShape | ZodTypeAny, Self, Deps extends DomainId>(
-  spec: ToolSpec<I>,
-  handler: (ctx: DomainCtx<Self, Deps>) => ToolCallback<I>,
-): ToolDef<Self, Deps> {
+export function defineTool<
+  I extends ZodRawShape | ZodTypeAny,
+  State,
+  Deps extends DomainId,
+  Writes = Record<never, never>,
+>(spec: ToolSpec<I>, handler: (ctx: DomainCtx<State, Deps, Writes>) => ToolCallback<I>): ToolDef<State, Deps, Writes> {
   return {
     spec,
     register(ctx) {

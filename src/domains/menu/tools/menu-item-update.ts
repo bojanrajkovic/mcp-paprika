@@ -4,7 +4,7 @@ import { z } from "zod";
 import type { MealTypeUid, RecipeUid } from "../../../ids.js";
 import type { DomainCtx } from "../../../kernel/registry.js";
 import type { MenuItem } from "../menu-item/types.js";
-import type { MenuSelf } from "../module.js";
+import type { MenuState, MenuWrites } from "../module.js";
 
 import { MenuItemUidSchema, RecipeUidSchema } from "../../../ids.js";
 import { defineTool } from "../../../kernel/tool.js";
@@ -25,10 +25,9 @@ export const updateMenuItemInputSchema = z
   .strict();
 
 /**
- * Registers `update_menu_item`, kernel-shaped — reads/writes this module's own
- * menu-item store via `ctx.self`, re-resolves the recipe display name via
- * `ctx.deps.recipe.get`, resolves the meal type via `resolveOrCreateMealType` (an
- * unknown `{name}` auto-creates a custom type), and commits through `ctx.self.commitMenuItem`.
+ * `update_menu_item` — edit a menu item. Re-resolves the recipe display name via
+ * `ctx.deps.recipe.get` and the meal type via `resolveOrCreateMealType` (an unknown
+ * `{name}` auto-creates a custom type).
  */
 export const updateMenuItemTool = defineTool(
   {
@@ -42,7 +41,7 @@ export const updateMenuItemTool = defineTool(
       "(menu_uid) is not editable via this tool — delete and re-add to move an item between menus.",
     inputSchema: updateMenuItemInputSchema,
   },
-  (ctx: DomainCtx<MenuSelf, "recipe" | "meal-type">) => {
+  (ctx: DomainCtx<MenuState, "recipe" | "meal-type", MenuWrites>) => {
     const log = ctx.infra.log.child({ component: "update_menu_item" });
     return async (args) => {
       log.info({ tool: "update_menu_item", uid: args.uid }, "tool invoked");
@@ -53,7 +52,7 @@ export const updateMenuItemTool = defineTool(
           }
 
           const uid = args.uid;
-          const existing = ctx.self.items.store.get(uid);
+          const existing = ctx.state.items.store.get(uid);
           if (existing === undefined) {
             return textResult(`No menu item found with UID "${uid}" (it may not exist or was already deleted).`);
           }
@@ -93,7 +92,7 @@ export const updateMenuItemTool = defineTool(
           let saved: MenuItem;
           try {
             saved = (await ctx.infra.client.saveMenuItems([merged]))[0]!;
-            await ctx.self.commitMenuItem(saved);
+            await ctx.writes.commitMenuItem(saved);
           } catch (error) {
             const message = toMessage(error);
             log.error({ err: error, uid }, "saveMenuItems (update_menu_item) failed");

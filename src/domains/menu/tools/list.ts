@@ -1,15 +1,14 @@
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 
 import type { DomainCtx } from "../../../kernel/registry.js";
-import type { MenuSelf } from "../module.js";
+import type { MenuState } from "../module.js";
 
 import { defineTool } from "../../../kernel/tool.js";
 import { textResult } from "../../../shared/tools.js";
 import { menuStartGuard } from "./guards.js";
 
 /**
- * Registers `list_menus`, kernel-shaped — reads this module's own menu + menu-item
- * stores via `ctx.self`.
+ * `list_menus` — list all menus.
  */
 export const listMenusTool = defineTool(
   {
@@ -21,13 +20,13 @@ export const listMenusTool = defineTool(
       "Use read_menu to see a menu's full day-by-day breakdown.",
     inputSchema: {},
   },
-  (ctx: DomainCtx<MenuSelf, "recipe" | "meal-type">) => {
+  (ctx: DomainCtx<MenuState, "recipe" | "meal-type">) => {
     const log = ctx.infra.log.child({ component: "list_menus" });
     return async () => {
       log.info({ tool: "list_menus" }, "tool invoked");
       return menuStartGuard(ctx).match(
         (): CallToolResult => {
-          const all = ctx.self.menus.store
+          const all = ctx.state.menus.store
             .getAll()
             .sort((a, b) => a.orderFlag - b.orderFlag || a.name.localeCompare(b.name));
 
@@ -36,7 +35,7 @@ export const listMenusTool = defineTool(
           }
 
           const lines = all.map((menu) => {
-            const itemCount = ctx.self.items.store.getByMenuUid(menu.uid).length;
+            const itemCount = ctx.state.items.store.getByMenuUid(menu.uid).length;
             const dayLabel = menu.days === 1 ? "day" : "days";
             return `- **${menu.name}** (${itemCount.toString()} items, ${menu.days.toString()} ${dayLabel}) — \`${menu.uid}\``;
           });

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { GrocerySelf } from "../module.js";
+import type { GroceryState } from "../module.js";
 
 import { makeGroceryItem } from "../../../../test/cache/__fixtures__/grocery-items.js";
 import { makeGroceryList } from "../../../../test/cache/__fixtures__/grocery-lists.js";
@@ -180,7 +180,7 @@ describe("create_grocery_list tool", () => {
 
     await kh.callTool("create_grocery_list", { name: "Weekly Shopping" });
 
-    const all = (kh.self() as GrocerySelf).lists.store.getAll();
+    const all = (kh.state() as GroceryState).lists.store.getAll();
     expect(all).toHaveLength(1);
     expect(all[0]!.name).toBe("Weekly Shopping");
   });

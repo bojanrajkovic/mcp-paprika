@@ -4,7 +4,7 @@ import { z } from "zod";
 
 import type { MealTypeUid, RecipeUid } from "../../../ids.js";
 import type { DomainCtx } from "../../../kernel/registry.js";
-import type { MealSelf } from "../module.js";
+import type { MealState } from "../module.js";
 
 import { RecipeUidSchema } from "../../../ids.js";
 import { defineTool } from "../../../kernel/tool.js";
@@ -42,11 +42,11 @@ export const searchMealHistoryInputSchema = z
   .strict();
 
 /**
- * Registers `search_meal_history`, kernel-shaped. Meal data is read from
- * `ctx.self.store`; meal-type resolution/render via `ctx.deps["meal-type"]`. The
- * class (category) filter resolves the class name/UID to a `CategoryUid` and then
- * the set of recipe UIDs in it through `ctx.deps.recipe` — categories are a
- * recipe-domain concern, so meal needs NO `category` dep.
+ * `search_meal_history` — paged browse of cooked-meal history, optionally filtered by
+ * recipe class. The class (category) filter resolves the class name/UID to a
+ * `CategoryUid` and then the set of recipe UIDs in it through `ctx.deps.recipe` —
+ * categories are a recipe-domain concern, so meal needs NO `category` dep. Meal-type
+ * resolution/render via `ctx.deps["meal-type"]`.
  */
 export const searchMealHistoryTool = defineTool(
   {
@@ -61,11 +61,11 @@ export const searchMealHistoryTool = defineTool(
       "meals). Results group by date (newest first), with a count, the last-made date, and pagination.",
     inputSchema: searchMealHistoryInputSchema,
   },
-  (ctx: DomainCtx<MealSelf, "recipe" | "meal-type">) => {
+  (ctx: DomainCtx<MealState, "recipe" | "meal-type">) => {
     const log = ctx.infra.log.child({ component: "search_meal_history" });
     return async (args) => {
       log.info({ tool: "search_meal_history", ...args }, "tool invoked");
-      return mealStartGuard(ctx.self, ctx.deps["meal-type"]).match(
+      return mealStartGuard(ctx.state, ctx.deps["meal-type"]).match(
         async (): Promise<CallToolResult> => {
           // Optional meal-type filter (built-ins also surface legacy null-typeUid meals).
           let typeUid: MealTypeUid | undefined;
@@ -142,7 +142,7 @@ export const searchMealHistoryTool = defineTool(
           const offset = args.offset ?? 0;
           const limit = args.limit ?? 50;
 
-          const { meals, total } = ctx.self.store.getInDateRange({
+          const { meals, total } = ctx.state.store.getInDateRange({
             since,
             until,
             ...(recipeUids !== undefined && { recipeUids }),

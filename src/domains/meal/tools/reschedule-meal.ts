@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import type { MealTypeUid } from "../../../ids.js";
 import type { DomainCtx } from "../../../kernel/registry.js";
-import type { MealSelf } from "../module.js";
+import type { MealState, MealWrites } from "../module.js";
 import type { Meal } from "../types.js";
 
 import { MealUidSchema } from "../../../ids.js";
@@ -34,9 +34,8 @@ export const rescheduleMealInputSchema = z
   .strict();
 
 /**
- * Registers `reschedule_meal`, kernel-shaped — writes through
- * `ctx.self.commitMealsBatch`, resolves the optional type co-change via
- * `resolveOrCreateMealType` (an unknown `{name}` auto-creates a custom type).
+ * `reschedule_meal` — move a scheduled meal to a new date. Resolves the optional type
+ * co-change via `resolveOrCreateMealType` (an unknown `{name}` auto-creates a custom type).
  */
 export const rescheduleMealTool = defineTool(
   {
@@ -49,14 +48,14 @@ export const rescheduleMealTool = defineTool(
       "meal's recipe link, freeform name, or scale instead, use update_meal.",
     inputSchema: rescheduleMealInputSchema,
   },
-  (ctx: DomainCtx<MealSelf, "recipe" | "meal-type">) => {
+  (ctx: DomainCtx<MealState, "recipe" | "meal-type", MealWrites>) => {
     const log = ctx.infra.log.child({ component: "reschedule_meal" });
     return async (args) => {
       log.info({ tool: "reschedule_meal", uid: args.uid, date: args.date }, "tool invoked");
-      return mealStartGuard(ctx.self, ctx.deps["meal-type"]).match(
+      return mealStartGuard(ctx.state, ctx.deps["meal-type"]).match(
         async (): Promise<CallToolResult> => {
           const uid = args.uid;
-          const existing = ctx.self.store.get(uid);
+          const existing = ctx.state.store.get(uid);
 
           if (existing === undefined) {
             return textResult(`No meal found with UID "${uid}" (it may not exist or was already deleted).`);
@@ -97,7 +96,7 @@ export const rescheduleMealTool = defineTool(
           // sequence (per-date — see makeMealOrderFlagAssigner) at that date's max+1, so
           // it can't collide with a meal already holding the old flag there. A pure
           // type co-change on the same date keeps the position. Old-date gaps are harmless.
-          const assignFlag = makeMealOrderFlagAssigner(ctx.self);
+          const assignFlag = makeMealOrderFlagAssigner(ctx.state);
           const newOrderFlag = dateChanged ? assignFlag(normalizedDate) : existing.orderFlag;
 
           const updated: Meal = {
@@ -111,7 +110,7 @@ export const rescheduleMealTool = defineTool(
           let saved: Meal;
           try {
             const savedItems = await ctx.infra.client.saveMeals([updated]);
-            await ctx.self.commitMealsBatch(savedItems);
+            await ctx.writes.commitMealsBatch(savedItems);
             saved = savedItems[0]!;
           } catch (error) {
             const message = toMessage(error);

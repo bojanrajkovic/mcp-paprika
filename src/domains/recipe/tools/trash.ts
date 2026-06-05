@@ -1,7 +1,7 @@
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 
 import type { DomainCtx } from "../../../kernel/registry.js";
-import type { RecipeSelf } from "../module.js";
+import type { RecipeState, RecipeWrites } from "../module.js";
 
 import { RecipeUidSchema } from "../../../ids.js";
 import { defineTool } from "../../../kernel/tool.js";
@@ -9,7 +9,10 @@ import { textResult } from "../../../shared/tools.js";
 import { toMessage } from "../../../utils/log.js";
 import { recipeColdStartGuard } from "./guards.js";
 
-/** Registers `trash_recipe`, kernel-shaped — soft-delete through `ctx.self.commitRecipe`. */
+/**
+ * `trash_recipe` — move a recipe to the trash (a reversible soft-delete;
+ * `restore_recipe` brings it back).
+ */
 export const trashRecipeTool = defineTool(
   {
     name: "trash_recipe",
@@ -23,13 +26,13 @@ export const trashRecipeTool = defineTool(
       uid: RecipeUidSchema.describe("Recipe UID to delete"),
     },
   },
-  (ctx: DomainCtx<RecipeSelf, never>) => {
+  (ctx: DomainCtx<RecipeState, never, RecipeWrites>) => {
     const log = ctx.infra.log.child({ component: "trash_recipe" });
     return async (args) => {
       log.info({ tool: "trash_recipe", uid: args.uid }, "tool invoked");
-      return recipeColdStartGuard(ctx.self).match(
+      return recipeColdStartGuard(ctx.state).match(
         async (): Promise<CallToolResult> => {
-          const recipe = ctx.self.recipe.store.get(args.uid);
+          const recipe = ctx.state.recipe.store.get(args.uid);
 
           if (!recipe) {
             return textResult(`No recipe found with UID "${args.uid}" (it may not exist or was already deleted).`);
@@ -43,7 +46,7 @@ export const trashRecipeTool = defineTool(
 
           try {
             const saved = await ctx.infra.client.saveRecipe(trashed);
-            await ctx.self.commitRecipe(saved);
+            await ctx.writes.commitRecipe(saved);
           } catch (error) {
             const message = toMessage(error);
             log.error({ err: error, uid: args.uid }, "saveRecipe failed");

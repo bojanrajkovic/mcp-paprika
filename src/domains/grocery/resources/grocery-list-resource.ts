@@ -2,25 +2,24 @@ import { ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
 
 import type { GroceryListUid } from "../../../ids.js";
 import type { DomainCtx } from "../../../kernel/registry.js";
-import type { GrocerySelf } from "../module.js";
+import type { GroceryState } from "../module.js";
 
 import { groceryListToMarkdown } from "../grocery-helpers.js";
 
 /**
- * Registers `paprika://grocery-list/{uid}`, kernel-shaped — reads this module's own
- * grocery-list + grocery-item stores via `ctx.self` (items are INLINED and co-owned
- * by grocery, so they resolve through `ctx.self.items.store`, not a dep). Grocery
- * list is one of the three Content-class entities with a resource surface (ADR-0004);
- * a child grocery-item change fires `resourceListChanged()` because items are inlined
- * here.
+ * `paprika://grocery-list/{uid}` — render a grocery list with its items inlined.
+ * Grocery list is one of the three Content-class entities with a resource surface
+ * (ADR-0004); items are INLINED and co-owned by grocery (resolved through
+ * `ctx.state.items.store`, not a dep), so a child grocery-item change fires
+ * `resourceListChanged()`.
  *
  * Unlike the recipe resource, the header leads with `**UID:**` — `groceryListToMarkdown`
  * does not render the UID in its body, so there is no duplication.
  */
-export function groceryListResource(ctx: DomainCtx<GrocerySelf, "aisle" | "pantry">): void {
+export function groceryListResource(ctx: DomainCtx<GroceryState, "aisle" | "pantry">): void {
   const template = new ResourceTemplate("paprika://grocery-list/{uid}", {
     list: async () => {
-      const lists = ctx.self.lists.store.getAll();
+      const lists = ctx.state.lists.store.getAll();
       return {
         resources: lists.map((list) => ({
           uri: `paprika://grocery-list/${list.uid}`,
@@ -37,16 +36,16 @@ export function groceryListResource(ctx: DomainCtx<GrocerySelf, "aisle" | "pantr
     { description: "Paprika grocery lists accessible by UID" },
     async (uri, variables) => {
       const uid = variables["uid"] as GroceryListUid;
-      const list = ctx.self.lists.store.get(uid);
+      const list = ctx.state.lists.store.get(uid);
       if (!list) {
         throw new Error(`Grocery list not found: ${uid}`);
       }
 
-      const items = ctx.self.items.store.getByListUid(uid);
+      const items = ctx.state.items.store.getByListUid(uid);
 
       const headerLines = [`**UID:** \`${uid}\``, `**URI:** \`paprika://grocery-list/${uid}\``];
 
-      const lastSynced = ctx.self.lists.store.lastSyncedAt;
+      const lastSynced = ctx.state.lists.store.lastSyncedAt;
       if (lastSynced) {
         headerLines.push(`**Last synced:** ${lastSynced.toISOString()}`);
       }

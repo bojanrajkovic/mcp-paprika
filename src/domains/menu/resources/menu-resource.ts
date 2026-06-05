@@ -2,25 +2,23 @@ import { ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
 
 import type { MenuUid } from "../../../ids.js";
 import type { DomainCtx } from "../../../kernel/registry.js";
-import type { MenuSelf } from "../module.js";
+import type { MenuState } from "../module.js";
 
 import { menuToMarkdown } from "../menu-helpers.js";
 
 /**
- * Registers `paprika://menu/{uid}`, kernel-shaped — reads this module's own menu +
- * menu-item stores via `ctx.self`, and the meal-type catalog (for item name/order
- * rendering) via `ctx.deps["meal-type"].getAll()`. Menu is one of the three
- * Content-class entities with a resource surface (ADR-0004); a child menu-item
- * change fires `resourceListChanged()` because items are inlined here.
+ * `paprika://menu/{uid}` — render a menu with its items inlined. Resolves the
+ * meal-type catalog (for item name/order rendering) via `ctx.deps["meal-type"].getAll()`.
+ * Menu is one of the three Content-class entities with a resource surface (ADR-0004);
+ * a child menu-item change fires `resourceListChanged()` because items are inlined here.
  *
- * Recipe references are NOT read — recipe linkage is denormalized onto
- * `MenuItem.name` at write time, so the resource needs only the meal-type dep of its
- * two declared deps.
+ * Recipe references are NOT read — recipe linkage is denormalized onto `MenuItem.name`
+ * at write time, so the resource needs only the meal-type dep of its two declared deps.
  */
-export function menuResource(ctx: DomainCtx<MenuSelf, "recipe" | "meal-type">): void {
+export function menuResource(ctx: DomainCtx<MenuState, "recipe" | "meal-type">): void {
   const template = new ResourceTemplate("paprika://menu/{uid}", {
     list: async () => {
-      const menus = ctx.self.menus.store.getAll();
+      const menus = ctx.state.menus.store.getAll();
       return {
         resources: menus.map((menu) => ({
           uri: `paprika://menu/${menu.uid}`,
@@ -37,16 +35,16 @@ export function menuResource(ctx: DomainCtx<MenuSelf, "recipe" | "meal-type">): 
     { description: "Paprika menus accessible by UID" },
     async (uri, variables) => {
       const uid = variables["uid"] as MenuUid;
-      const menu = ctx.self.menus.store.get(uid);
+      const menu = ctx.state.menus.store.get(uid);
       if (!menu) {
         throw new Error(`Menu not found: ${uid}`);
       }
 
-      const items = ctx.self.items.store.getByMenuUid(uid);
+      const items = ctx.state.items.store.getByMenuUid(uid);
 
       const headerLines = [`**UID:** \`${uid}\``, `**URI:** \`paprika://menu/${uid}\``];
 
-      const lastSynced = ctx.self.menus.store.lastSyncedAt;
+      const lastSynced = ctx.state.menus.store.lastSyncedAt;
       if (lastSynced) {
         headerLines.push(`**Last synced:** ${lastSynced.toISOString()}`);
       }

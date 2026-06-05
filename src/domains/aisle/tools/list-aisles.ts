@@ -1,12 +1,12 @@
 import type { DomainCtx } from "../../../kernel/registry.js";
-import type { AisleSelf } from "../module.js";
+import type { AisleState } from "../module.js";
 
 import { defineTool } from "../../../kernel/tool.js";
 import { textResult } from "../../../shared/tools.js";
 
 /**
- * Registers `list_aisles`, kernel-shaped — reads this module's own store via
- * `ctx.self`. Aisle is a Reference-class entity: read-only, no resource (ADR-0004).
+ * `list_aisles` — list the aisle catalog. Aisle is a Reference-class entity:
+ * read-only, no resource surface (ADR-0004).
  */
 export const listAislesTool = defineTool(
   {
@@ -18,14 +18,14 @@ export const listAislesTool = defineTool(
       "Includes the aisle UID needed for pantry and grocery item writes.",
     inputSchema: {},
   },
-  (ctx: DomainCtx<AisleSelf, never>) => {
+  (ctx: DomainCtx<AisleState, never>) => {
     const log = ctx.infra.log.child({ component: "list_aisles" });
     return async () => {
       log.info({ tool: "list_aisles" }, "tool invoked");
-      if (!ctx.self.store.hasSynced) {
+      if (!ctx.state.store.hasSynced) {
         return textResult("Aisle list is not yet synced. Try again in a few seconds.");
       }
-      const aisles = ctx.self.store.getAll().sort((a, b) => {
+      const aisles = ctx.state.store.getAll().sort((a, b) => {
         if (a.orderFlag !== b.orderFlag) return a.orderFlag - b.orderFlag;
         return a.name.localeCompare(b.name);
       });

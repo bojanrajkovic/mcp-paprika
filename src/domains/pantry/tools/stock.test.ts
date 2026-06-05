@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { PantryItemUid } from "../../../ids.js";
-import type { PantrySelf } from "../module.js";
+import type { PantryState } from "../module.js";
 
 import { makePantryItem } from "../../../../test/cache/__fixtures__/pantry.js";
 import { useKernelHarness } from "../../../../test/support/kernel-harness.js";
@@ -50,7 +50,7 @@ describe("mark_pantry_item_out_of_stock tool", () => {
     expect(text).toContain("Failed to update pantry item");
     expect(text).toContain("server timeout");
     // Store retains original in-stock state.
-    const after = (kh.self() as PantrySelf).store.get("uid-1" as PantryItemUid);
+    const after = (kh.state() as PantryState).store.get("uid-1" as PantryItemUid);
     expect(after?.inStock).toBe(true);
   });
 
@@ -105,7 +105,7 @@ describe("restock_pantry_item tool", () => {
     expect(text).toContain("Failed to update pantry item");
     expect(text).toContain("server timeout");
     // Store retains original out-of-stock state.
-    const after = (kh.self() as PantrySelf).store.get("uid-2" as PantryItemUid);
+    const after = (kh.state() as PantryState).store.get("uid-2" as PantryItemUid);
     expect(after?.inStock).toBe(false);
   });
 

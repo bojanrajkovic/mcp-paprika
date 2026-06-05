@@ -1,5 +1,5 @@
 import type { SyncContribution } from "../../../kernel/registry.js";
-import type { AisleSelf } from "../module.js";
+import type { AisleState } from "../module.js";
 
 import { pruneOrphanCache } from "../../../paprika/sync.js";
 
@@ -14,11 +14,11 @@ import { pruneOrphanCache } from "../../../paprika/sync.js";
  * aisle-fetch failure degrades to the last-good catalog instead of aborting the
  * primary data sync (ADR-0010).
  */
-export function aisleSync(self: AisleSelf): SyncContribution<AisleSelf, never> {
+export function aisleSync(state: AisleState): SyncContribution<AisleState, never> {
   return {
     tier: "reference",
     reconcile: async (ctx) => {
-      const { store, cache } = ctx.self;
+      const { store, cache } = ctx.state;
       const aisles = await ctx.infra.client.listAisles();
       const cachedAisles = await cache.getAll();
 
@@ -42,6 +42,6 @@ export function aisleSync(self: AisleSelf): SyncContribution<AisleSelf, never> {
         }
       }
     },
-    sweep: () => self.store.sweepPending(),
+    sweep: () => state.store.sweepPending(),
   };
 }
