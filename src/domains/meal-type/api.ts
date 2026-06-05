@@ -1,13 +1,7 @@
-import type { z } from "zod";
-
 import type { MealTypeUid } from "../../ids.js";
 import type { HasSynced } from "../../kernel/registry.js";
-import type { MealTypeResolveResult, mealTypeSpecSchema } from "./meal-type-helpers.js";
+import type { MealTypeResolveResult, MealTypeSpec } from "./meal-type-helpers.js";
 import type { MealType } from "./types.js";
-
-/** A meal-type selection spec (`{name} | {uid} | {builtin}`) — the inferred type
- * of the shared `mealTypeSpecSchema` both the meal and menu write tools parse. */
-export type MealTypeSpec = z.infer<typeof mealTypeSpecSchema>;
 
 /**
  * Meal-type's public contract — the shared meal-type catalog the meal and menu

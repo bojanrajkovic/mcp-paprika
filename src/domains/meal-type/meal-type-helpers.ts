@@ -35,6 +35,14 @@ export const mealTypeSpecSchema = z.union([
 ]);
 
 /**
+ * A meal-type selection spec (`{name} | {uid} | {builtin}`) — the inferred type of
+ * `mealTypeSpecSchema`, the shared selection DSL the meal and menu write tools parse.
+ * Lives here beside its schema (not in `api.ts`) so the one named type is reused
+ * wherever the schema is, instead of each site re-spelling `z.infer<typeof …>`.
+ */
+export type MealTypeSpec = z.infer<typeof mealTypeSpecSchema>;
+
+/**
  * Structured result of resolving a `mealTypeSpecSchema` union variant against
  * `mealTypeStore`. The resolver never formats user-facing text — it returns the
  * resolved `MealType` on a hit, or one of three error reasons callers map to
@@ -86,7 +94,7 @@ export function formatMealTypeResolveError(result: Extract<MealTypeResolveResult
  */
 export async function resolveOrCreateMealType(
   mealType: MealTypeApi,
-  spec: z.infer<typeof mealTypeSpecSchema>,
+  spec: MealTypeSpec,
 ): Promise<{ readonly ok: true; readonly resolved: MealType } | { readonly ok: false; readonly message: string }> {
   const resolved = mealType.resolveSpec(spec);
   if (resolved.ok) return { ok: true, resolved: resolved.resolved };
