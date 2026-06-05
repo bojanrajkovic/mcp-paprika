@@ -13,8 +13,8 @@ import { defineTool } from "./tool.js";
  * caller-supplied `state`. `infra`/`deps` are unused by these tools, so they are
  * cast — this is a unit test of the helper's wiring + typing, not of a domain.
  */
-function makeCtx<Self>(state: Self, server: ReturnType<typeof makeTestServer>["server"]): DomainCtx<Self, never> {
-  return { state, deps: {}, infra: {} as unknown as Infra, server };
+function makeCtx<State>(state: State, server: ReturnType<typeof makeTestServer>["server"]): DomainCtx<State, never> {
+  return { state, writes: {}, deps: {}, infra: {} as unknown as Infra, server };
 }
 
 describe("defineTool", () => {

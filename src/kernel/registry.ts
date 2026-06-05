@@ -83,9 +83,20 @@ export interface BootCtx<State, Deps extends DomainId> {
   readonly infra: Infra;
 }
 
-/** The per-session context a tool or resource receives: a `BootCtx` plus the session server. */
-export interface DomainCtx<State, Deps extends DomainId> extends BootCtx<State, Deps> {
+/**
+ * The per-session context a tool or resource receives: a `BootCtx` plus the session
+ * server and the module's write chokepoints.
+ *
+ * `writes` is the third per-module seam (alongside `state` and `deps`): the
+ * commit/persist closures the module's own tools invoke. They are assembled in
+ * `.build` because they close over `infra` (the Paprika client / notifier), so they
+ * cannot live in the `.state`-typed object — keeping `state` a pure state interface.
+ * `Writes` defaults to empty, so a read-only tool keeps a two-generic ctx and never
+ * mentions it. See ADR-0012.
+ */
+export interface DomainCtx<State, Deps extends DomainId, Writes = Record<never, never>> extends BootCtx<State, Deps> {
   readonly server: McpServer;
+  readonly writes: Writes;
 }
 
 // Post-sync boot hooks. Construction order (topo-sort) handles "built before";
@@ -138,19 +149,27 @@ interface ErasedSync {
 }
 
 /**
- * What a module's `.build(state => …)` callback returns. `api` must satisfy the
- * contract the module registered for its own id; `tools`/`resources`/`onReady` get
- * a ctx narrowed to `State` + the `dependsOn` tuple — INFERRED, so the author writes
- * no per-module ctx alias; `flush` is optional.
+ * What a module's `.build((state, infra) => …)` callback returns. `api` must satisfy
+ * the contract the module registered for its own id; `tools`/`resources`/`onReady`
+ * get a ctx narrowed to `State` + the `dependsOn` tuple — INFERRED, so the author
+ * writes no per-module ctx alias; `flush` is optional.
+ *
+ * `writes` is the module's write-chokepoint surface, surfaced to its own tools as
+ * `ctx.writes`. It is assembled HERE (not in `.state`) because the chokepoints close
+ * over `infra`, which `.build` receives but `.state` does not — keeping `State` a pure
+ * state interface (ADR-0012). `Writes` is inferred from this object; a module with no
+ * tool-invoked chokepoints omits it.
  *
  * `resources` is parallel to `tools`: each entry registers an MCP resource template
  * via `ctx.server.registerResource(...)`, reading its own data via `ctx.state` and
- * any shared data via `ctx.deps.<id>` contracts. Resources are Content-domain-only
- * (recipe, grocery-list, menu — see ADR-0004), so most modules supply none.
+ * any shared data via `ctx.deps.<id>` contracts. Resources are read-only (Content
+ * domains only — recipe, grocery-list, menu, see ADR-0004), so they never touch
+ * `ctx.writes` and most modules supply none.
  */
-export interface ModuleParts<Id extends DomainId, Deps extends DomainId, State> {
+export interface ModuleParts<Id extends DomainId, Deps extends DomainId, State, Writes = Record<never, never>> {
   readonly api: DomainRegistry[Id];
-  readonly tools: ReadonlyArray<ToolDef<State, Deps>>;
+  readonly tools: ReadonlyArray<ToolDef<State, Deps, Writes>>;
+  readonly writes?: Writes;
   readonly resources?: ReadonlyArray<(ctx: DomainCtx<State, Deps>) => void>;
   readonly syncs?: ReadonlyArray<SyncContribution<State, Deps>>;
   readonly onReady?: BootHooks<State, Deps>;
@@ -165,6 +184,7 @@ interface ErasedBootCtx {
 }
 interface ErasedCtx extends ErasedBootCtx {
   readonly server: McpServer;
+  readonly writes: unknown;
 }
 
 /** Kernel-facing erased tool def (the `State`/`Deps` generics gone). */
@@ -175,6 +195,7 @@ interface ErasedToolDef {
 
 interface ErasedBuild {
   readonly state: unknown;
+  readonly writes?: unknown;
   readonly api: unknown;
   readonly tools: ReadonlyArray<ErasedToolDef>;
   readonly resources?: ReadonlyArray<(ctx: ErasedCtx) => void>;
@@ -191,10 +212,14 @@ export interface ErasedModule {
 }
 
 /** The `.build(...)` step: supply the assemble callback (it receives the built
- * `state`) and get an {@link ErasedModule}. Tools/hooks infer their ctx from `State`
- * + the dependency tuple — no per-module ctx alias to declare. */
+ * `state` and `infra`) and get an {@link ErasedModule}. `infra` is what lets the
+ * infra-dependent write chokepoints be assembled here rather than in `.state`. Tools/
+ * hooks infer their ctx from `State`/`Writes` + the dependency tuple — no per-module
+ * ctx alias to declare; `Writes` is inferred from the returned `writes`. */
 export interface ModuleBuildStep<Id extends DomainId, DepList extends ReadonlyArray<DomainId>, State> {
-  build(assemble: (state: State) => ModuleParts<Id, DepList[number], State>): ErasedModule;
+  build<Writes = Record<never, never>>(
+    assemble: (state: State, infra: Infra) => ModuleParts<Id, DepList[number], State, Writes>,
+  ): ErasedModule;
 }
 
 /** The `.state(...)` step: a factory that builds (and hydrates) the module's
@@ -209,7 +234,7 @@ export interface ModuleStateStep<Id extends DomainId, DepList extends ReadonlyAr
 }
 
 /**
- * Author a module: `defineModule(id, dependsOn).state(factory).build(state => parts)`.
+ * Author a module: `defineModule(id, dependsOn).state(factory).build((state, infra) => parts)`.
  *
  * `id` fixes which registry contract `api` must satisfy; the `const` dependency
  * tuple is the single source of truth (its element union is the tools'/hooks'
@@ -231,9 +256,10 @@ export function defineModule<Id extends DomainId, const DepList extends Readonly
         dependsOn,
         build: async (infra: Infra) => {
           const state = await factory(infra);
-          const parts = assemble(state);
+          const parts = assemble(state, infra);
           return {
             state,
+            writes: parts.writes,
             api: parts.api,
             tools: parts.tools,
             resources: parts.resources,
@@ -308,6 +334,7 @@ interface Built {
   readonly id: string;
   readonly dependsOn: ReadonlyArray<string>;
   readonly state: unknown;
+  readonly writes: unknown;
   readonly tools: ReadonlyArray<ErasedToolDef>;
   readonly resources: ReadonlyArray<(ctx: ErasedCtx) => void> | undefined;
   readonly syncs: ReadonlyArray<ErasedSync> | undefined;
@@ -346,6 +373,7 @@ export async function buildKernel(
       id: m.id,
       dependsOn: m.dependsOn,
       state: b.state,
+      writes: b.writes,
       tools: b.tools,
       resources: b.resources,
       syncs: b.syncs,
@@ -450,7 +478,9 @@ export async function buildKernel(
   return {
     registerAll(server: McpServer): void {
       for (const b of built) {
-        const ctx: ErasedCtx = { ...bootCtxOf(b), server };
+        // `writes` rides the per-session ctx (tools), not the boot/sync ctx — only
+        // tools invoke chokepoints. Empty when the module assembled none.
+        const ctx: ErasedCtx = { ...bootCtxOf(b), writes: b.writes ?? {}, server };
         for (const tool of b.tools) tool.register(ctx);
         if (b.resources !== undefined) for (const resource of b.resources) resource(ctx);
       }

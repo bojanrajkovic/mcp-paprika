@@ -234,7 +234,7 @@ export function useKernelHarness(rootId: DomainId, opts: UseKernelHarnessOptions
       for (const depId of rootModule.dependsOn) deps[depId] = built.get(depId)!.api;
 
       const { server, callTool, callResourceList, callResource } = makeTestServer();
-      const ctx = { state: root.state, deps, infra, server };
+      const ctx = { state: root.state, writes: root.writes ?? {}, deps, infra, server };
       for (const tool of root.tools) tool.register(ctx);
       for (const resource of root.resources ?? []) resource(ctx);
 
