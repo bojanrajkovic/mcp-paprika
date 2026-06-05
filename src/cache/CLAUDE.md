@@ -1,6 +1,6 @@
 # Caching Layer
 
-Last verified: 2026-06-04
+Last verified: 2026-06-05
 
 ## Purpose
 
@@ -9,7 +9,7 @@ The in-memory query/CRUD stores that are each session's source of truth for one 
 ## Key References
 
 - `../entity/CLAUDE.md` — the shared `EntityStore` base class and the canonical pending-write (#57) invariants. Every store inherits those unless noted in Sharp edges; this file documents only what each store adds on top.
-- [Persistence](#persistence) (below) — the on-disk layer (per-entity `DiskCache<T>` + the `DiskCacheDescriptor<T>` contract, on-disk layout, migration, mutex model, recipe `diff()`); each entity's descriptor is co-located in `../domains/<domain>/disk.ts`.
+- [Persistence](#persistence) (below) — the on-disk layer (per-entity `DiskCache<T>` + the `DiskCacheDescriptor<T>` contract, on-disk layout, migration, mutex model, recipe `diff()`); each entity's descriptor is co-located in its `../domains/<domain>/types.ts` (a behavior-carrying cache like recipe's keeps a dedicated `disk.ts`).
 - `docs/architecture.md` — the two-layer cache+sync model and the diff-and-fetch vs. replace-all split.
 - Source: each entity's `../domains/<domain>/store.ts` owns its method signatures and field shapes, and its `../domains/<domain>/types.ts` owns the schema.
 
@@ -37,7 +37,7 @@ On-disk persistence for every cached entity: one `DiskCache<T>` per entity — t
 
 **Files.** `disk-cache.ts` (generic `DiskCache<T>` + `writeFileAtomic` + the `DiskCacheDescriptor<T>` contract). Behavior-carrying subcaches live with their owner, not here: the recipe subcache (`RecipeDiskCache`, hash index + `diff()` + the one-shot legacy-index migration) at `../domains/recipe/disk.ts`, and the auth subcaches (`OAuthClientDiskCache` + the `oauthTokens` descriptor + `buildAuthCaches`) at `../auth/disk.ts`.
 
-**Descriptors.** Each Paprika entity co-locates its persistence config — subdir name, `parse`, key extractor — as a `DiskCacheDescriptor<T>` in `../domains/<domain>/disk.ts`; the owning module's `.state` joins the subdir against `infra.cacheDir` and supplies the logger to turn each descriptor into a live `DiskCache`. Entities whose cache carries extra behavior (recipes' hash index, OAuth clients' atomic cap) subclass `DiskCache` instead of describing it. The auth caches aren't Paprika entities, so their `oauthTokens` descriptor and `OAuthClientDiskCache` subclass live with the auth module in `../auth/disk.ts` alongside `buildAuthCaches`. See `docs/architecture.md` ("Caching and sync") for the two-layer model and `docs/wire-format.md` for the recipe content-hash the `recipes` namespace diffs against.
+**Descriptors.** Each Paprika entity co-locates its persistence config — subdir name, `parse`, key extractor — as a `DiskCacheDescriptor<T>` beside the schema its `parse` calls, in `../domains/<domain>/types.ts`; the owning module's `.state` joins the subdir against `infra.cacheDir` and supplies the logger to turn each descriptor into a live `DiskCache`. Entities whose cache carries extra behavior (recipes' hash index, OAuth clients' atomic cap) subclass `DiskCache` in a dedicated `disk.ts` instead of describing it. The auth caches aren't Paprika entities, so their `oauthTokens` descriptor and `OAuthClientDiskCache` subclass live with the auth module in `../auth/disk.ts` alongside `buildAuthCaches`. See `docs/architecture.md` ("Caching and sync") for the two-layer model and `docs/wire-format.md` for the recipe content-hash the `recipes` namespace diffs against.
 
 ### Persistence sharp edges
 
