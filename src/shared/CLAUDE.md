@@ -10,6 +10,7 @@ The few genuinely cross-cutting helpers the tool layer shares across domains —
 
 - `tools.ts` — `textResult` (the MCP text-content wire envelope every tool returns) and the uid-or-text lookup abstraction (`uidOrTextLookupSchema` + `resolveLookup` + `formatLookupOutcome` + the `LookupQuery`/`LookupOutcome` types) shared by the `read_*` tools.
 - `photo-fetch.ts` — `fetchImageBytes` + `MAX_IMAGE_BYTES`: the SSRF-guarded image download used by both recipe photo uploads and AI photo generation.
+- `resources.ts` — `resourceNotFound`: the one sanctioned throw on a resource read path. MCP resources have no in-band error channel, so the SDK's Protocol layer renders the thrown `McpError` as a JSON-RPC error (recognized form #1 in ADR-0014); a resource resolves its entity and crosses to the boundary through here.
 
 ## Sharp edges
 
