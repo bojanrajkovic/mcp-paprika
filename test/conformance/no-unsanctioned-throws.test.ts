@@ -1,0 +1,145 @@
+import { readdirSync, readFileSync } from "node:fs";
+import { sep } from "node:path";
+
+import ts from "typescript";
+import { describe, expect, it } from "vitest";
+
+/**
+ * ADR-0014 conformance — code we own returns `Result` and never throws to signal
+ * a predictable outcome. This walks every `src` source file (AST, so comments
+ * don't count) for `throw` statements and fails any that is neither a recognized
+ * form nor a still-pending entry on the ratcheting allowlist below.
+ *
+ * The allowlist is the neverthrow campaign's visible, shrinking surface (#241):
+ * each entry names the phase issue that handles that module. As a module flips,
+ * its entry must be DELETED — the staleness check fails the build if an
+ * allowlisted file no longer carries an unsanctioned throw, so the ratchet can
+ * only tighten toward "nothing but the recognized forms remain."
+ *
+ * Two of ADR-0014's five recognized forms have no recognizer here yet: the OAuth
+ * error types (#2) and the cockatiel transient marker (#3). Every file that
+ * throws them — the paprika client, the feature wrappers, auth — also still
+ * throws forms its phase converts to `Result`, so those files sit in PENDING for
+ * now. The phase that removes each entry (#264 / #265) adds the #2 / #3
+ * recognizer at the same time, so the file's permanent protocol throws stay
+ * sanctioned once its entry is gone. Until then PENDING means "not yet handled,"
+ * not "will become Result."
+ */
+
+// Recognized forms #1 + #4: the helper bodies whose `throw` IS the sanctioned
+// boundary crossing. Pinned to (file, function) so a same-named helper added
+// elsewhere can't silently sanction its own throws.
+const RECOGNIZED_HELPERS: ReadonlyArray<readonly [file: string, fn: string]> = [
+  ["src/utils/errors.ts", "assertNever"],
+  ["src/shared/resources.ts", "resourceNotFound"],
+];
+
+// Recognized form #5: fail-fast at process entry and kernel construction, off
+// the request path. Pinned to exact files (not a directory prefix) so a throw
+// added to a request-serving sibling — e.g. src/transport/http.ts — is NOT
+// waved through.
+const BOOT_FILES = new Set(["src/index.ts", "src/transport/e2e-server.ts", "src/kernel/registry.ts"]);
+
+// The ratcheting allowlist: owned modules that still throw, each mapped to the
+// campaign phase (#241) that handles it. DELETE an entry the moment its module
+// stops throwing an unsanctioned form — the staleness assertion below enforces it.
+const PENDING: ReadonlyArray<readonly [file: string, convertedBy: string]> = [
+  ["src/cache/disk-cache.ts", "#262"],
+  ["src/domains/recipe/disk.ts", "#262"],
+  ["src/domains/recipe/module.ts", "#262"],
+  ["src/domains/grocery/module.ts", "#262"],
+  ["src/domains/menu/module.ts", "#262"],
+  ["src/domains/meal/module.ts", "#262"],
+  ["src/domains/pantry/module.ts", "#262"],
+  ["src/domains/aisle/module.ts", "#263"],
+  ["src/domains/meal-type/module.ts", "#263"],
+  ["src/paprika/client.ts", "#264"],
+  ["src/utils/resilience.ts", "#264"],
+  ["src/server/sync-loop.ts", "#264"],
+  ["src/features/embeddings.ts", "#265"],
+  ["src/features/photography.ts", "#265"],
+  ["src/features/json-vector-index.ts", "#265"],
+  ["src/features/vector-store.ts", "#265"],
+  ["src/auth/build.ts", "#265"],
+  ["src/auth/client-registration.ts", "#265"],
+  ["src/auth/oidc-client.ts", "#265"],
+  ["src/auth/provider.ts", "#265"],
+  ["src/auth/routes.ts", "#265"],
+];
+
+interface ThrowSite {
+  readonly file: string;
+  readonly line: number;
+  readonly enclosingFn: string;
+}
+
+const TEST_SUFFIXES = [".test.ts", ".test.integration.ts", ".e2e.test.ts", ".external.test.ts", ".property.test.ts"];
+
+// Every non-test `.ts` under src/, as forward-slash paths. Mirrors the
+// `readdirSync(recursive)` walk scripts/tool-specs.ts uses, normalized so the
+// path comparisons below hold regardless of the platform separator.
+function sourceFiles(): Array<string> {
+  return readdirSync("src", { recursive: true })
+    .map((p) => `src/${String(p).split(sep).join("/")}`)
+    .filter((p) => p.endsWith(".ts") && !TEST_SUFFIXES.some((s) => p.endsWith(s)));
+}
+
+function enclosingFnName(node: ts.Node, sf: ts.SourceFile): string {
+  for (let p: ts.Node | undefined = node.parent; p; p = p.parent) {
+    if (ts.isFunctionDeclaration(p) && p.name) return p.name.text;
+    if (ts.isMethodDeclaration(p)) return p.name.getText(sf);
+    if (ts.isArrowFunction(p) || ts.isFunctionExpression(p)) {
+      const par = p.parent;
+      if (ts.isVariableDeclaration(par) && ts.isIdentifier(par.name)) return par.name.text;
+      if (ts.isPropertyAssignment(par)) return par.name.getText(sf);
+    }
+  }
+  return "<top>";
+}
+
+function throwSites(file: string): Array<ThrowSite> {
+  const sf = ts.createSourceFile(file, readFileSync(file, "utf8"), ts.ScriptTarget.Latest, true);
+  const sites: Array<ThrowSite> = [];
+  const visit = (node: ts.Node): void => {
+    if (ts.isThrowStatement(node)) {
+      sites.push({
+        file,
+        line: sf.getLineAndCharacterOfPosition(node.getStart(sf)).line + 1,
+        enclosingFn: enclosingFnName(node, sf),
+      });
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sf);
+  return sites;
+}
+
+const isBoot = (file: string): boolean => BOOT_FILES.has(file);
+const isRecognizedHelper = (s: ThrowSite): boolean =>
+  RECOGNIZED_HELPERS.some(([file, fn]) => s.file === file && s.enclosingFn === fn);
+const isRecognized = (s: ThrowSite): boolean => isRecognizedHelper(s) || isBoot(s.file);
+
+describe("ADR-0014: owned code throws only in recognized forms", () => {
+  const allSites = sourceFiles().flatMap(throwSites);
+  const pendingFiles = new Set(PENDING.map(([file]) => file));
+
+  it("has no unsanctioned throw outside the ratcheting allowlist", () => {
+    const violations = allSites
+      .filter((s) => !isRecognized(s) && !pendingFiles.has(s.file))
+      .map(
+        (s) =>
+          `${s.file}:${s.line} (in ${s.enclosingFn}) — return a Result, use a recognized form ` +
+          `(assertNever / resourceNotFound), or add a tracked allowlist entry (ADR-0014)`,
+      );
+    expect(violations).toEqual([]);
+  });
+
+  it("has no stale allowlist entry — delete an entry once its module stops throwing", () => {
+    const stale = PENDING.filter(([file]) => allSites.filter((s) => s.file === file).every(isRecognized)).map(
+      ([file, convertedBy]) =>
+        `${file} — no longer throws an unsanctioned form (converted, moved, or deleted); ` +
+        `remove or update this allowlist entry (was tracked by ${convertedBy})`,
+    );
+    expect(stale).toEqual([]);
+  });
+});

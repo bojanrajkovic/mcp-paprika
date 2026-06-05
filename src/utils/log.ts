@@ -11,6 +11,7 @@ import pretty from "pino-pretty";
 
 import type { Notifier } from "../server/notifier.js";
 
+import { assertNever } from "./errors.js";
 import { getLogDir } from "./xdg.js";
 
 /**
@@ -124,10 +125,8 @@ export function pinoLevelToMcp(level: PinoLevel): MCPLevel {
       return "error";
     case "fatal":
       return "critical";
-    default: {
-      const _exhaustive: never = level;
-      throw new Error(`unhandled pino level: ${String(_exhaustive)}`);
-    }
+    default:
+      return assertNever(level, `unhandled pino level: ${String(level)}`);
   }
 }
 

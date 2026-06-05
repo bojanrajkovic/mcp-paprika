@@ -13,6 +13,17 @@ export function isNodeError(error: unknown): error is NodeJS.ErrnoException {
 }
 
 /**
+ * Exhaustiveness assertion for a branch the types prove unreachable (a `switch`
+ * `default`, an `else` that cannot happen). The `never` parameter makes adding a
+ * new union variant a compile error here; at runtime it throws — the one
+ * sanctioned "reached the unreachable" throw, recognized form #4 in ADR-0014.
+ * Pass `message` to describe the surprise; the value is included by default.
+ */
+export function assertNever(value: never, message?: string): never {
+  throw new Error(message ?? `Unreachable: unexpected value ${String(value)}`);
+}
+
+/**
  * Short identifier for a client/subsystem that mounts cockatiel resilience.
  * Used as the `service` argument to `CircuitOpenError` and surfaces both in
  * the error message and as a structured field. Aligns with the surrounding
