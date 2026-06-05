@@ -180,7 +180,7 @@ export interface UseKernelHarnessOptions {
  * afterEach(kh.teardown);
  * it("reads a recipe", async () => {
  *   kh.seed({ recipes: [makeRecipe({ name: "Soup" })] });
- *   expect(getText(await kh.callTool("read_recipe", { lookup: { title: "Soup" } }))).toContain("# Soup");
+ *   expect(await kh.callToolText("read_recipe", { lookup: { title: "Soup" } })).toContain("# Soup");
  * });
  * ```
  *
