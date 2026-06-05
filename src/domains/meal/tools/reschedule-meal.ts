@@ -12,7 +12,8 @@ import { textResult } from "../../../shared/tools.js";
 import { parseCalendarDayWire } from "../../../utils/dates.js";
 import { toMessage } from "../../../utils/log.js";
 import { mealTypeSpecSchema, resolveOrCreateMealType } from "../../meal-type/meal-type-helpers.js";
-import { makeMealOrderFlagAssigner, mealStartGuard, renderMealCard } from "./helpers.js";
+import { mealStartGuard } from "./guards.js";
+import { makeMealOrderFlagAssigner, renderMealCard } from "./helpers.js";
 
 // `.strict()`. Rescheduling is its own act because moving a meal's date moves it
 // into the destination day's order_flag sequence (per-date), which a generic

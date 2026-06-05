@@ -1,9 +1,12 @@
+import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+
 import type { DomainCtx } from "../../../kernel/registry.js";
 import type { MealTypeState } from "../module.js";
 import type { MealType } from "../types.js";
 
 import { defineTool } from "../../../kernel/tool.js";
 import { textResult } from "../../../shared/tools.js";
+import { mealTypeStartGuard } from "./guards.js";
 
 /**
  * Format seconds-since-midnight as zero-padded `HH:MM` (e.g. 64800 → "18:00").
@@ -54,20 +57,22 @@ export const listMealTypesTool = defineTool(
     const log = ctx.infra.log.child({ component: "list_meal_types" });
     return async () => {
       log.info({ tool: "list_meal_types" }, "tool invoked");
-      if (!ctx.state.store.hasSynced) {
-        return textResult("Meal types are not yet synced. Try again in a few seconds.");
-      }
-      const mealTypes = ctx.state.store.getAll().sort((a, b) => {
-        if (a.orderFlag !== b.orderFlag) return a.orderFlag - b.orderFlag;
-        return a.name.localeCompare(b.name);
-      });
+      return mealTypeStartGuard(ctx.state).match(
+        async (): Promise<CallToolResult> => {
+          const mealTypes = ctx.state.store.getAll().sort((a, b) => {
+            if (a.orderFlag !== b.orderFlag) return a.orderFlag - b.orderFlag;
+            return a.name.localeCompare(b.name);
+          });
 
-      if (mealTypes.length === 0) {
-        return textResult("No meal types found.");
-      }
+          if (mealTypes.length === 0) {
+            return textResult("No meal types found.");
+          }
 
-      const lines = mealTypes.map(mealTypeLine);
-      return textResult(lines.join("\n"));
+          const lines = mealTypes.map(mealTypeLine);
+          return textResult(lines.join("\n"));
+        },
+        (guard) => guard,
+      );
     };
   },
 );

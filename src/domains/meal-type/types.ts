@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import type { DiskCacheDescriptor } from "../../cache/disk-cache.js";
+
 import { MealTypeUidSchema } from "../../ids.js";
 
 // MealTypeStoredSchema — validates camelCase JSON read back from disk. No transform.
@@ -25,6 +27,13 @@ export const MealTypeStoredSchema = z.object({
 });
 
 export type MealType = z.infer<typeof MealTypeStoredSchema>;
+
+// Disk-cache descriptor — how the per-entity DiskCache persists & re-reads a meal type.
+export const mealTypeDiskDescriptor: DiskCacheDescriptor<MealType> = {
+  subdir: "mealtypes",
+  parse: (raw) => MealTypeStoredSchema.parse(raw),
+  getKey: (mt) => mt.uid,
+};
 
 // MealTypeSchema — accepts snake_case wire format, transforms to camelCase MealType.
 export const MealTypeSchema = z

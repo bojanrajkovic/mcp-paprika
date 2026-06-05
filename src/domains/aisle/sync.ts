@@ -1,7 +1,7 @@
-import type { SyncContribution } from "../../../kernel/registry.js";
-import type { AisleState } from "../module.js";
+import type { SyncContribution } from "../../kernel/registry.js";
+import type { AisleState } from "./module.js";
 
-import { pruneOrphanCache } from "../../../paprika/sync.js";
+import { pruneOrphanCache } from "../../paprika/sync.js";
 
 /**
  * Aisle sync — replace-all WITH pending-write filtering. This is NOT the

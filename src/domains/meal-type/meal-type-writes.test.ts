@@ -15,7 +15,7 @@ import { type MealTypeUid } from "../../ids.js";
 import { registeredModules } from "../../kernel/registry.js";
 // Side-effect: populate the module registry so the meal-type module is resolvable.
 import "../../kernel/modules.generated.js";
-import { mealTypeSync } from "./syncs/meal-type-sync.js";
+import { mealTypeSync } from "./sync.js";
 
 /**
  * Drives the meal-type write path against the real module: `ensureMealType`

@@ -1,9 +1,9 @@
-import type { SyncContribution } from "../../../kernel/registry.js";
-import type { PantrySyncResult } from "../../../paprika/sync-types.js";
-import type { PantryState } from "../module.js";
+import type { SyncContribution } from "../../kernel/registry.js";
+import type { PantrySyncResult } from "../../paprika/sync-types.js";
+import type { PantryState } from "./module.js";
 
-import { syncReplaceAllEntity } from "../../../paprika/sync.js";
-import { pantryItemsEqual } from "../types.js";
+import { syncReplaceAllEntity } from "../../paprika/sync.js";
+import { pantryItemsEqual } from "./types.js";
 
 /**
  * Pantry sync — replace-all with orphan cleanup via the shared

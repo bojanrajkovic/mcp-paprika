@@ -11,15 +11,15 @@ import { hydrateStore } from "../../cache/hydrate.js";
 import { defineModule, register } from "../../kernel/registry.js";
 import { resolvePendingWriteTtl } from "../../utils/config.js";
 import { toMessage } from "../../utils/log.js";
-import { pantryDiskDescriptor } from "./disk.js";
 import { PantryStore } from "./store.js";
-import { pantrySync } from "./syncs/pantry-sync.js";
+import { pantrySync } from "./sync.js";
 import { addPantryItemsTool } from "./tools/batch-add.js";
 import { deletePantryItemTool } from "./tools/delete.js";
 import { getPantryItemTool } from "./tools/get.js";
 import { listPantryItemsTool } from "./tools/list.js";
 import { pantryStockTools } from "./tools/stock.js";
 import { updatePantryItemTool } from "./tools/update.js";
+import { pantryDiskDescriptor } from "./types.js";
 
 declare module "../../kernel/registry.js" {
   interface DomainRegistry {

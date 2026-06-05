@@ -1,6 +1,6 @@
 # Domain Modules
 
-Last verified: 2026-06-04
+Last verified: 2026-06-05
 
 ## Purpose
 
@@ -10,16 +10,24 @@ One directory per cohesive domain — the unit the kernel constructs, isolates, 
 
 - `module.ts` — the domain's kernel registration (`defineModule(…).state(…).build(…)`), augmenting `DomainRegistry` with its contract type. The builder shape and the pure-`*State` / `ctx.writes` split live in `../kernel/CLAUDE.md` and [ADR-0012](../../docs/adr/0012-pure-state-and-writes-seam.md), not here.
 - `api.ts` — the read contract siblings depend on (kept narrow; this is the only surface another domain sees).
-- The defining entity's `types.ts` / `store.ts` / `disk.ts` at the domain root; each **additional** owned entity in an `<entity>/` subdir (e.g. `recipe/category/`, `recipe/photo/`, `grocery/grocery-item/`, `menu/menu-item/`).
-- `tools/`, `resources/`, `syncs/` — co-located, tests beside them. Domain-specific markdown formatters live here too (e.g. `recipe-markdown.ts`, `grocery-helpers.ts`); genuinely cross-cutting helpers live in `src/shared/`.
+- The defining entity's `types.ts` / `store.ts` at the domain root; each **additional** owned entity in an `<entity>/` subdir (e.g. `recipe/category/`, `recipe/photo/`, `grocery/grocery-item/`, `menu/menu-item/`). `types.ts` also holds the entity's `DiskCacheDescriptor` (the cache's `subdir`/`parse`/`getKey`); a dedicated `disk.ts` appears only for a cache that carries behavior beyond a descriptor (`recipe/disk.ts`'s `RecipeDiskCache`).
+- `tools/`, `resources/` — co-located, tests beside them; tool readiness gates live in `tools/guards.ts`. The reconcile is a flat `sync.ts` at the domain root, promoted to a `syncs/` directory only when a domain has more than one sync or a co-located sync test (`recipe/`, `grocery/`, `menu/`). Domain-specific markdown formatters live here too (e.g. `recipe-markdown.ts`, `grocery-helpers.ts`); genuinely cross-cutting helpers live in `src/shared/`.
 
 The domain graph (who `dependsOn` whom) and the ownership rule are in [ADR-0009 §3](../../docs/adr/0009-domain-isolated-tool-modules-kernel.md), drawn there as a diagram.
+
+## File granularity
+
+The rule across the per-domain concerns: **co-locate at the lightest granularity that keeps a thing findable; spend a separate file or directory only when it is substantial, multiple, or separately tested.** The discriminator is demonstrated need — a real second instance, a co-located test, behavior beyond a literal — not anticipated need.
+
+- **A trivial disk-cache descriptor lives in the entity's `types.ts`**, beside the schema its `parse` calls; a dedicated `disk.ts` is reserved for a cache that carries behavior (`recipe/disk.ts`'s `RecipeDiskCache`). The auth caches aren't Paprika entities — their descriptor + subclass sit in `../auth/disk.ts`.
+- **A single, untested reconcile is a flat `sync.ts` at the domain root**; `syncs/` is for a domain with more than one sync or a co-located sync test (`recipe/`, `grocery/`, `menu/`). A second sync or a `sync.test.ts` promotes a domain to the directory.
+- **A tool readiness gate lives in `tools/guards.ts`**, consumed via `xStartGuard(ctx.state).match(...)` (a `ctx`-taking guard when the gate spans dependencies — `menuStartGuard`, `scheduleMenuStartGuard`). A tool that needs an extra readiness leg beyond its primary gate composes it inline inside the `.match()` — grocery's move tool also checks `pantry.hasSynced()`, recipe's photo upload also checks the photo catalog. The auto-create api paths (`ensureAisle` / `ensureMealType`) guard the same precondition inline because they sit mid-write-flow, not in a tool.
 
 ## Key References
 
 - `../kernel/CLAUDE.md` — the kernel these register on (the `state`/`writes`/`deps`/`infra` narrowing, the sync driver, boot phases).
 - `../entity/CLAUDE.md` — the `EntityStore` base and the pending-write (#57) invariants every store inherits.
-- `../cache/CLAUDE.md` — the per-entity `DiskCache` each `disk.ts` describes.
+- `../cache/CLAUDE.md` — the per-entity `DiskCache` each entity's `DiskCacheDescriptor` (in its `types.ts`) describes.
 - ADR-0004 (tool-vs-resource) — resources are Content-domain-only (recipe, grocery-list, menu).
 - `../../docs/documentation-system.md` §4 — how a registrar / contract / `*State` / `*Writes` doc-comment is written (lead with purpose, keep only real WHY, no kernel-mechanism recital; names are nouns that name the tool).
 

@@ -1,8 +1,11 @@
+import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+
 import type { DomainCtx } from "../../../kernel/registry.js";
 import type { AisleState } from "../module.js";
 
 import { defineTool } from "../../../kernel/tool.js";
 import { textResult } from "../../../shared/tools.js";
+import { aisleStartGuard } from "./guards.js";
 
 /**
  * `list_aisles` — list the aisle catalog. Aisle is a Reference-class entity:
@@ -22,20 +25,22 @@ export const listAislesTool = defineTool(
     const log = ctx.infra.log.child({ component: "list_aisles" });
     return async () => {
       log.info({ tool: "list_aisles" }, "tool invoked");
-      if (!ctx.state.store.hasSynced) {
-        return textResult("Aisle list is not yet synced. Try again in a few seconds.");
-      }
-      const aisles = ctx.state.store.getAll().sort((a, b) => {
-        if (a.orderFlag !== b.orderFlag) return a.orderFlag - b.orderFlag;
-        return a.name.localeCompare(b.name);
-      });
-      if (aisles.length === 0) {
-        return textResult(
-          "No aisles found. Aisles are created in the Paprika app or automatically when you add a pantry item with a new aisle name.",
-        );
-      }
-      const lines = aisles.map((a) => `- **${a.name}** — \`${a.uid}\``);
-      return textResult(lines.join("\n"));
+      return aisleStartGuard(ctx.state).match(
+        async (): Promise<CallToolResult> => {
+          const aisles = ctx.state.store.getAll().sort((a, b) => {
+            if (a.orderFlag !== b.orderFlag) return a.orderFlag - b.orderFlag;
+            return a.name.localeCompare(b.name);
+          });
+          if (aisles.length === 0) {
+            return textResult(
+              "No aisles found. Aisles are created in the Paprika app or automatically when you add a pantry item with a new aisle name.",
+            );
+          }
+          const lines = aisles.map((a) => `- **${a.name}** — \`${a.uid}\``);
+          return textResult(lines.join("\n"));
+        },
+        (guard) => guard,
+      );
     };
   },
 );

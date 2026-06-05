@@ -8,7 +8,7 @@ import type { Meal } from "../types.js";
 import { RecipeUidSchema } from "../../../ids.js";
 import { defineTool } from "../../../kernel/tool.js";
 import { textResult } from "../../../shared/tools.js";
-import { mealStartGuard } from "./helpers.js";
+import { mealStartGuard } from "./guards.js";
 
 // How many recent cooks to list. A summary, not a browse surface — "give me more"
 // is search_meal_history's job (it paginates), so this is a fixed cap, not a param.

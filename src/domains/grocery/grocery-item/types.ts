@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import type { DiskCacheDescriptor } from "../../../cache/disk-cache.js";
+
 import { makeSchemaEquals } from "../../../entity/index.js";
 import { AisleUidRef, GroceryItemUidSchema, GroceryListUidSchema, NO_AISLE_UID } from "../../../ids.js";
 
@@ -21,6 +23,13 @@ export const GroceryItemStoredSchema = z.object({
 });
 
 export type GroceryItem = z.infer<typeof GroceryItemStoredSchema>;
+
+// Disk-cache descriptor — how the per-entity DiskCache persists & re-reads a grocery item.
+export const groceryItemDiskDescriptor: DiskCacheDescriptor<GroceryItem> = {
+  subdir: "groceryitems",
+  parse: (raw) => GroceryItemStoredSchema.parse(raw),
+  getKey: (i) => i.uid,
+};
 
 // Schema-derived content equality (all stored fields but the inert `deleted`).
 export const groceryItemsEqual = makeSchemaEquals(GroceryItemStoredSchema);
