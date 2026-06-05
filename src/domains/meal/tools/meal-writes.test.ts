@@ -735,7 +735,7 @@ describe("delete_meal", () => {
 });
 
 // ---------------------------------------------------------------------------
-// meal-type auto-create (#224) — plan_meals (batch) + update_meal (single)
+// meal-type auto-create — plan_meals (batch) + update_meal (single)
 // ---------------------------------------------------------------------------
 
 describe("plan_meals / update_meal — meal-type auto-create", () => {
@@ -827,5 +827,27 @@ describe("plan_meals / update_meal — meal-type auto-create", () => {
 
     expect(kh.client().saveMealType).toHaveBeenCalledOnce();
     expect(vi.mocked(kh.client().saveMealType).mock.calls[0]![0].name).toBe("Brunch");
+  });
+
+  it("update_meal: a rejected update (unknown recipe) with a new type {name} creates NO type", async () => {
+    const mealUid = "meal-reject-orphan" as MealUid;
+    vi.mocked(kh.client().saveMeals).mockImplementation(async (items) => [...items]);
+    vi.mocked(kh.client().saveMealType).mockImplementation(async (mt) => mt);
+    kh.seed({
+      meals: [makeMeal({ uid: mealUid, typeUid: DINNER_UID, type: 2 })],
+      mealTypes: makeBuiltins(),
+      recipes: [],
+    });
+
+    const result = await kh.callTool("update_meal", {
+      uid: mealUid,
+      update: { recipe_uid: "ghost-recipe" as RecipeUid, type: { name: "Brunch" } },
+    });
+    const text = getText(result);
+
+    // Validation rejects before the type is created → no orphan type.
+    expect(text).toContain("is not known to the local recipe store");
+    expect(kh.client().saveMealType).not.toHaveBeenCalled();
+    expect(kh.client().saveMeals).not.toHaveBeenCalled();
   });
 });

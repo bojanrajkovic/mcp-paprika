@@ -353,21 +353,6 @@ export function updateMealTool(ctx: DomainCtx<MealSelf, "recipe" | "meal-type">)
           if (existing === undefined) {
             return textResult(`No meal found with UID "${uid}" (it may not exist or was already deleted).`);
           }
-          // Resolve type if supplied via the meal-type dep contract.
-          // All three variants of `op` carry `type` as an optional shared field.
-          let typeInteger: number | undefined;
-          let typeUid: MealTypeUid | null | undefined;
-          if (op.type !== undefined) {
-            const result = await resolveOrCreateMealType(ctx.deps["meal-type"], op.type);
-            if (!result.ok) {
-              return textResult(result.message);
-            }
-            // Custom mealtypes carry `originalType: null`; `Meal.type` is vestigial when
-            // `type_uid` is set (see plan_meals comment for the full rationale).
-            typeInteger = result.resolved.originalType ?? 0;
-            typeUid = result.resolved.uid;
-          }
-
           // Resolve recipe_uid and name interaction. The structural union ensures we
           // never see (recipe_uid: <UID>, name: <X>) together — that combination
           // matches no variant and is rejected at parse time.
@@ -433,6 +418,23 @@ export function updateMealTool(ctx: DomainCtx<MealSelf, "recipe" | "meal-type">)
               );
             }
             newName = nameOp.name;
+          }
+
+          // Resolve the meal type LAST — after the recipe/name validation above. An unknown
+          // {name} auto-creates a type, so creating only once the rest of the update is
+          // known-good avoids leaving an orphan type behind on a rejected call. All three
+          // variants of `op` carry `type` as an optional shared field.
+          let typeInteger: number | undefined;
+          let typeUid: MealTypeUid | null | undefined;
+          if (op.type !== undefined) {
+            const result = await resolveOrCreateMealType(ctx.deps["meal-type"], op.type);
+            if (!result.ok) {
+              return textResult(result.message);
+            }
+            // Custom mealtypes carry `originalType: null`; `Meal.type` is vestigial when
+            // `type_uid` is set (see plan_meals comment for the full rationale).
+            typeInteger = result.resolved.originalType ?? 0;
+            typeUid = result.resolved.uid;
           }
 
           // Spread-merge. update_meal never changes the date (that's reschedule_meal),

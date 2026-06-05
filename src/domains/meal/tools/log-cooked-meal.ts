@@ -51,17 +51,6 @@ export function logCookedMealTool(ctx: DomainCtx<MealSelf, "recipe" | "meal-type
       log.info({ tool: "log_cooked_meal", recipe_uid: args.recipe_uid }, "tool invoked");
       return mealStartGuard(ctx.self, ctx.deps["meal-type"]).match(
         async (): Promise<CallToolResult> => {
-          // Type defaults to Dinner (the common case for a cooked meal).
-          const typeSpec: z.infer<typeof mealTypeSpecSchema> = args.type ?? { builtin: 2 };
-          const typeResult = await resolveOrCreateMealType(ctx.deps["meal-type"], typeSpec);
-          if (!typeResult.ok) {
-            return textResult(typeResult.message);
-          }
-          // Custom mealtypes carry originalType: null; Meal.type is vestigial when
-          // type_uid is set (see plan_meals for the full rationale).
-          const typeInteger = typeResult.resolved.originalType ?? 0;
-          const typeUid: MealTypeUid = typeResult.resolved.uid;
-
           // Date defaults to today; a supplied date snaps to its own-zone calendar
           // day (same normalization as plan_meals).
           let date: string;
@@ -84,6 +73,20 @@ export function logCookedMealTool(ctx: DomainCtx<MealSelf, "recipe" | "meal-type
                 `wait for the next sync and retry, or log it with plan_meals as a freeform meal.`,
             );
           }
+
+          // Resolve the meal type LAST — after the date and recipe validations above. An
+          // unknown {name} auto-creates a type, so creating only once the rest of the input
+          // is known-good avoids leaving an orphan type behind on a rejected call.
+          // Type defaults to Dinner (the common case for a cooked meal).
+          const typeSpec: z.infer<typeof mealTypeSpecSchema> = args.type ?? { builtin: 2 };
+          const typeResult = await resolveOrCreateMealType(ctx.deps["meal-type"], typeSpec);
+          if (!typeResult.ok) {
+            return textResult(typeResult.message);
+          }
+          // Custom mealtypes carry originalType: null; Meal.type is vestigial when
+          // type_uid is set (see plan_meals for the full rationale).
+          const typeInteger = typeResult.resolved.originalType ?? 0;
+          const typeUid: MealTypeUid = typeResult.resolved.uid;
 
           const meal: Meal = {
             uid: MealUidSchema.parse(crypto.randomUUID().toUpperCase()),

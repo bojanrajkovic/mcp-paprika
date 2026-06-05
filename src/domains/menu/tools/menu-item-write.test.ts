@@ -254,7 +254,7 @@ describe("add_menu_items tool", () => {
     expect(kh.client().saveMenuItems).not.toHaveBeenCalled();
   });
 
-  it("unknown type {name} auto-creates a custom type and adds the item with it (#224)", async () => {
+  it("unknown type {name} auto-creates a custom type and adds the item with it", async () => {
     const menu = makeMenu({ uid: "m-1" as MenuUid, name: "Plan", days: 3 });
     seedBase(kh, { menus: [menu] });
     vi.mocked(kh.client().saveMenuItems).mockImplementation(async (items: ReadonlyArray<MenuItem>) => [...items]);
@@ -364,6 +364,24 @@ describe("update_menu_item tool", () => {
       await kh.callTool("update_menu_item", { uid: "mi-1", recipe_uid: "recipe-ghost" as RecipeUid }),
     );
     expect(text).toContain("is not known to the local recipe store");
+    expect(kh.client().saveMenuItems).not.toHaveBeenCalled();
+  });
+
+  it("a rejected update (unknown recipe) with a new type {name} creates NO type", async () => {
+    const item = makeMenuItem({ uid: "mi-1" as MenuItemUid, menuUid: "m-1" });
+    seedBase(kh, { menuItems: [item] });
+    vi.mocked(kh.client().saveMealType).mockImplementation(async (mt) => mt);
+
+    const text = getText(
+      await kh.callTool("update_menu_item", {
+        uid: "mi-1",
+        recipe_uid: "recipe-ghost" as RecipeUid,
+        type: { name: "Brunch" },
+      }),
+    );
+    // The recipe is validated before the type is created → no orphan type.
+    expect(text).toContain("is not known to the local recipe store");
+    expect(kh.client().saveMealType).not.toHaveBeenCalled();
     expect(kh.client().saveMenuItems).not.toHaveBeenCalled();
   });
 

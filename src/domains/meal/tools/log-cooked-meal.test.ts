@@ -140,4 +140,21 @@ describe("log_cooked_meal tool", () => {
     const store = (kh.self() as MealSelf).store;
     expect(store.size).toBe(1);
   });
+
+  it("a rejected log (unknown recipe) with a new type {name} creates NO type", async () => {
+    vi.mocked(kh.client().saveMeals).mockImplementation(async (items) => [...items]);
+    vi.mocked(kh.client().saveMealType).mockImplementation(async (mt) => mt);
+    kh.seed({ mealTypes: makeBuiltins(), recipes: [], meals: [] });
+
+    const result = await kh.callTool("log_cooked_meal", {
+      recipe_uid: "ghost-recipe" as RecipeUid,
+      type: { name: "Brunch" },
+    });
+    const text = getText(result);
+
+    // The recipe is validated before the type is created → no orphan type.
+    expect(text).toContain("is not known to the local recipe store");
+    expect(kh.client().saveMealType).not.toHaveBeenCalled();
+    expect(kh.client().saveMeals).not.toHaveBeenCalled();
+  });
 });

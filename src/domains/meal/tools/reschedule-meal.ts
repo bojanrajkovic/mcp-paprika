@@ -61,20 +61,6 @@ export function rescheduleMealTool(ctx: DomainCtx<MealSelf, "recipe" | "meal-typ
             return textResult(`No meal found with UID "${uid}" (it may not exist or was already deleted).`);
           }
 
-          // Resolve the optional type co-change (same DU + error wording as plan_meals / update_meal).
-          let typeInteger: number | undefined;
-          let typeUid: MealTypeUid | null | undefined;
-          if (args.type !== undefined) {
-            const result = await resolveOrCreateMealType(ctx.deps["meal-type"], args.type);
-            if (!result.ok) {
-              return textResult(result.message);
-            }
-            // Custom mealtypes carry originalType: null; Meal.type is vestigial when
-            // type_uid is set (see plan_meals for the full rationale).
-            typeInteger = result.resolved.originalType ?? 0;
-            typeUid = result.resolved.uid;
-          }
-
           // Normalize the destination date in its own calendar zone (see plan_meals).
           const normalizedDate = parseCalendarDayWire(args.date);
           if (normalizedDate === null) {
@@ -88,6 +74,22 @@ export function rescheduleMealTool(ctx: DomainCtx<MealSelf, "recipe" | "meal-typ
           // Nothing to do: same date and no type co-change. Avoid a wasted POST + notifySync.
           if (!dateChanged && args.type === undefined) {
             return textResult(renderMealCard(existing, ctx.deps.recipe, ctx.deps["meal-type"]));
+          }
+
+          // Resolve the optional type co-change LAST — after the date validation above. An
+          // unknown {name} auto-creates a type, so creating only once the date is known-good
+          // avoids leaving an orphan type behind on a rejected call.
+          let typeInteger: number | undefined;
+          let typeUid: MealTypeUid | null | undefined;
+          if (args.type !== undefined) {
+            const result = await resolveOrCreateMealType(ctx.deps["meal-type"], args.type);
+            if (!result.ok) {
+              return textResult(result.message);
+            }
+            // Custom mealtypes carry originalType: null; Meal.type is vestigial when
+            // type_uid is set (see plan_meals for the full rationale).
+            typeInteger = result.resolved.originalType ?? 0;
+            typeUid = result.resolved.uid;
           }
 
           // When the date changes, the meal joins the destination date's order_flag

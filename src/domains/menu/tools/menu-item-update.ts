@@ -56,16 +56,6 @@ export function updateMenuItemTool(ctx: DomainCtx<MenuSelf, "recipe" | "meal-typ
           if (existing === undefined) {
             return textResult(`No menu item found with UID "${uid}" (it may not exist or was already deleted).`);
           }
-          // Resolve type if supplied via the shared meal-type contract.
-          let newTypeUid: MealTypeUid | undefined;
-          if (args.type !== undefined) {
-            const result = await resolveOrCreateMealType(ctx.deps["meal-type"], args.type);
-            if (!result.ok) {
-              return textResult(result.message);
-            }
-            newTypeUid = result.resolved.uid;
-          }
-
           // Resolve recipe link + refreshed display name if a new recipe is supplied.
           let newRecipeUid: RecipeUid | null = existing.recipeUid;
           let newName: string = existing.name;
@@ -79,6 +69,18 @@ export function updateMenuItemTool(ctx: DomainCtx<MenuSelf, "recipe" | "meal-typ
             }
             newRecipeUid = args.recipe_uid;
             newName = recipe.name;
+          }
+
+          // Resolve the meal type LAST — after the recipe validation above. An unknown
+          // {name} auto-creates a type, so creating only once the rest of the input is
+          // known-good avoids leaving an orphan type behind on a rejected call.
+          let newTypeUid: MealTypeUid | undefined;
+          if (args.type !== undefined) {
+            const result = await resolveOrCreateMealType(ctx.deps["meal-type"], args.type);
+            if (!result.ok) {
+              return textResult(result.message);
+            }
+            newTypeUid = result.resolved.uid;
           }
 
           const merged: MenuItem = {

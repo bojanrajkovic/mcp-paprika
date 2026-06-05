@@ -17,7 +17,7 @@ import "../../kernel/modules.generated.js";
 import { mealTypeSync } from "./syncs/meal-type-sync.js";
 
 /**
- * Drives the meal-type write path (#224) against the real module: `ensureMealType`
+ * Drives the meal-type write path against the real module: `ensureMealType`
  * (auto-create mirroring aisle's ensureAisle) and the pending-write-aware reconcile.
  * Builds the real module (real DiskCache + MealTypeStore) on a temp cache dir with a
  * mock client, mirroring recipe-sync.test.ts.
@@ -27,7 +27,7 @@ const builtins = (): MealType[] => [
   makeMealType({ uid: "dinner-uid" as MealTypeUid, name: "Dinner", originalType: 2, orderFlag: 3 }),
 ];
 
-describe("meal-type ensureMealType + pending-write reconcile (#224)", () => {
+describe("meal-type ensureMealType + pending-write reconcile", () => {
   let tempDir: string;
   let infra: Infra;
   let self: MealTypeSelf;
