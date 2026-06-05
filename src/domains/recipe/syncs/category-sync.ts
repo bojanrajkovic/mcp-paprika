@@ -14,9 +14,11 @@ function categoriesEqual(a: Category, b: Category): boolean {
  * pending-write protection as pantry/grocery — a just-deleted category must not be
  * resurrected by an in-flight snapshot.
  *
- * `core` tier — recipe rendering resolves category names on read, so the catalog
- * must reconcile alongside recipes. Category is a reference entity with no MCP
- * resource surface, so it emits NO `sync:complete` (returns `void`).
+ * `reference` tier — a lookup catalog recipe rendering resolves category names
+ * against at read time; runs best-effort ahead of core, so a transient
+ * categories-fetch failure degrades to the last-good catalog instead of aborting the
+ * primary data sync (ADR-0010). Category is a reference entity with no MCP resource
+ * surface, so it emits NO `sync:complete` (returns `void`).
  *
  * A rename/removal must re-embed referencing recipes (the display name is baked into
  * their embedding text, but no recipe hash changes, so the recipe diff never re-fetches
@@ -25,7 +27,7 @@ function categoriesEqual(a: Category, b: Category): boolean {
  */
 export function categoriesSync(self: RecipeSelf): SyncContribution<RecipeSelf, never> {
   return {
-    tier: "core",
+    tier: "reference",
     reconcile: async (ctx) => {
       const changes = await syncReplaceAllEntity({
         fetch: () => ctx.infra.client.listCategories(),

@@ -97,13 +97,21 @@ const BOOT_PHASES: ReadonlyArray<BootPhase> = ["index"];
 type BootHooks<Self, Deps extends DomainId> = Partial<Record<BootPhase, (ctx: BootCtx<Self, Deps>) => Promise<void>>>;
 
 /**
- * Sync tier. `core` reconciles (recipe, category, pantry, grocery) run first and
- * in dependency order; a core failure aborts the cycle (the driver's outer catch
- * turns it into a logged no-op, mirroring the sync loop's never-throws contract).
- * `additive` reconciles (meals, menus, photos) each run in their own best-effort
- * try/catch, so a soft read surface can't abort core sync.
+ * Sync tier — three buckets the driver runs in order each cycle: reference → core →
+ * additive. Tiers scope abort-blast-radius, NOT data ordering: nothing reads a sibling
+ * store during reconcile (every catalog name resolves at read time), so a tier only
+ * decides which reconciles a failure may take down. See docs/adr/0010-reference-sync-tier.md.
+ *
+ * - `reference` (the lookup catalogs: aisle, category, meal-type) runs FIRST, each in
+ *   its own best-effort try/catch. A catalog fetch failure degrades to the last-good
+ *   in-memory catalog rather than aborting the primary data sync.
+ * - `core` (recipe, pantry, grocery) runs next, in dependency order; a core failure
+ *   aborts the cycle (the driver's outer catch turns it into a logged no-op, mirroring
+ *   the sync loop's never-throws contract).
+ * - `additive` (meals, menus, photos) runs last, each best-effort, so a soft read
+ *   surface can't abort core sync.
  */
-export type SyncTier = "core" | "additive";
+export type SyncTier = "reference" | "core" | "additive";
 
 /**
  * One entity's contribution to the sync cycle — the seam between a central sync
@@ -274,8 +282,9 @@ export interface Kernel {
   /** Flush every module that owns a cache — only if a snapshot is wanted. */
   flushAll(): Promise<void>;
   /**
-   * Run ONE sync cycle: recipe first, then the remaining core reconciles in
-   * dependency order, then additive best-effort, then flush + sweep. Never throws.
+   * Run ONE sync cycle: reference catalogs first (best-effort), then core (recipe
+   * first, then the rest in dependency order; a core throw aborts), then additive
+   * best-effort, then flush + sweep. Never throws.
    * Returns the results a production wiring emits as `sync:complete` (feeding the
    * notifier subscriber) — but ONLY for a cycle that completed through flush; an
    * aborted cycle (a core throw or a flush rejection) returns `[]`, so a partial,
@@ -341,18 +350,21 @@ export async function buildKernel(
 
   // The sync DRIVER (seam: central sync ↔ module-owned stores). The engine is a
   // dumb sequencer — each entity's reconcile lives in its module, reached through
-  // the BootCtx (its own store/cache + declared deps + the client). Core reconciles
-  // run first in dependency order (a failure aborts the cycle); additive ones each
-  // run best-effort; then flush + sweep. The whole cycle never throws.
+  // the BootCtx (its own store/cache + declared deps + the client). Three tiers run
+  // in order: reference catalogs first (best-effort), then core in dependency order
+  // (a failure aborts the cycle), then additive best-effort; then flush + sweep. The
+  // whole cycle never throws. Tiers scope abort-blast-radius, not data ordering —
+  // nothing reads a sibling store during reconcile (ADR-0010).
   //
-  // Recipe's core reconciles must LEAD: recipe must be marked synced before
-  // category/aisle/pantry run, so a later core failure can't gate recipe tools
-  // for the interval. Recipe is dep-free, so the topo-sort (which orders
-  // aisle→pantry→grocery via their dependency edges) can't hoist it — a stable
-  // sort keyed on id "recipe" does. This is the one ordering the dependency DAG
+  // Recipe's core reconciles must LEAD the core tier: recipe must be marked synced
+  // before the other core reconciles (pantry, grocery) run, so a later core failure
+  // can't gate recipe tools for the interval. Recipe is dep-free, so the topo-sort
+  // (which orders aisle→pantry→grocery via their dependency edges) can't hoist it — a
+  // stable sort keyed on id "recipe" does. This is the one ordering the dependency DAG
   // can't express; if a second priority case ever appears, promote it to a declared
   // `SyncContribution` ordinal (copy first, abstract on the third).
   const syncOrder = [...built].sort((a, z) => (a.id === "recipe" ? -1 : 0) - (z.id === "recipe" ? -1 : 0));
+  const referenceSyncs: Array<() => Promise<AnySyncResult | void>> = [];
   const coreSyncs: Array<() => Promise<AnySyncResult | void>> = [];
   const additiveSyncs: Array<() => Promise<AnySyncResult | void>> = [];
   const sweepers: Array<() => number> = [];
@@ -360,7 +372,8 @@ export async function buildKernel(
     if (b.syncs === undefined) continue;
     for (const sync of b.syncs) {
       const run = (): Promise<AnySyncResult | void> => sync.reconcile(bootCtxOf(b));
-      if (sync.tier === "core") coreSyncs.push(run);
+      if (sync.tier === "reference") referenceSyncs.push(run);
+      else if (sync.tier === "core") coreSyncs.push(run);
       else additiveSyncs.push(run);
       if (sync.sweep !== undefined) sweepers.push(sync.sweep);
     }
@@ -368,6 +381,17 @@ export async function buildKernel(
   const syncOnce = async (): Promise<ReadonlyArray<AnySyncResult>> => {
     const results: Array<AnySyncResult> = [];
     try {
+      // Reference catalogs first, best-effort: a catalog fetch failure degrades to the
+      // last-good in-memory catalog (consumers resolve names at read time and gate on
+      // hasSynced) rather than aborting the primary data sync below.
+      for (const run of referenceSyncs) {
+        try {
+          const r = await run();
+          if (r !== undefined) results.push(r);
+        } catch (err) {
+          infra.log.warn({ err }, "reference sync failed; core sync unaffected");
+        }
+      }
       for (const run of coreSyncs) {
         const r = await run();
         if (r !== undefined) results.push(r);
