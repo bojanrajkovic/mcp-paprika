@@ -8,6 +8,7 @@ import type { RecipeSelf } from "../module.js";
 import type { Photo } from "../photo/types.js";
 
 import { PhotoUidSchema, RecipeUidSchema } from "../../../ids.js";
+import { defineTool } from "../../../kernel/tool.js";
 import { fetchImageBytes, MAX_IMAGE_BYTES } from "../../../shared/photo-fetch.js";
 import { textResult } from "../../../shared/tools.js";
 import { toMessage } from "../../../utils/log.js";
@@ -136,23 +137,23 @@ async function resolveSource(
  * `attachPhotoToRecipe` chokepoint). The `generation_token` source consumes the shared
  * `infra.generatedImageStore` preview buffer (see `resolveSource`).
  */
-export function uploadPhotoTool(ctx: DomainCtx<RecipeSelf, never>): void {
-  const log = ctx.infra.log.child({ component: "upload_recipe_photo" });
-  ctx.server.registerTool(
-    "upload_recipe_photo",
-    {
-      title: "Upload a photo to a recipe",
-      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
-      description:
-        "Attach a photo to a recipe from exactly one `source`: a `url` (PREFERRED for web images — the server " +
-        "downloads it), a `generation_token` (to save an image you previewed with generate_recipe_photo, attach:false — " +
-        "no need to regenerate), or, for programmatic callers, inline `image_base64`. If you built the recipe " +
-        "from a web page, pass that page's main/hero (og:image) URL. The server normalizes any format " +
-        "(JPEG/PNG/WEBP/GIF) to JPEG and generates the thumbnail automatically. There is NO file-path option — the " +
-        "server cannot read your local filesystem. Photos are appended to the recipe's gallery in order.",
-      inputSchema: uploadPhotoInputSchema.shape,
-    },
-    async (args) => {
+export const uploadPhotoTool = defineTool(
+  {
+    name: "upload_recipe_photo",
+    title: "Upload a photo to a recipe",
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
+    description:
+      "Attach a photo to a recipe from exactly one `source`: a `url` (PREFERRED for web images — the server " +
+      "downloads it), a `generation_token` (to save an image you previewed with generate_recipe_photo, attach:false — " +
+      "no need to regenerate), or, for programmatic callers, inline `image_base64`. If you built the recipe " +
+      "from a web page, pass that page's main/hero (og:image) URL. The server normalizes any format " +
+      "(JPEG/PNG/WEBP/GIF) to JPEG and generates the thumbnail automatically. There is NO file-path option — the " +
+      "server cannot read your local filesystem. Photos are appended to the recipe's gallery in order.",
+    inputSchema: uploadPhotoInputSchema.shape,
+  },
+  (ctx: DomainCtx<RecipeSelf, never>) => {
+    const log = ctx.infra.log.child({ component: "upload_recipe_photo" });
+    return async (args) => {
       const sourceKind =
         "url" in args.source ? "url" : "generation_token" in args.source ? "generation_token" : "base64";
       log.info({ tool: "upload_recipe_photo", recipe_uid: args.recipe_uid, source: sourceKind }, "tool invoked");
@@ -202,24 +203,24 @@ export function uploadPhotoTool(ctx: DomainCtx<RecipeSelf, never>): void {
         },
         (guard) => guard,
       );
-    },
-  );
-}
+    };
+  },
+);
 
 /** Registers `delete_recipe_photo`, kernel-shaped — soft-delete through `ctx.self.commitPhotoDelete`. */
-export function deletePhotoTool(ctx: DomainCtx<RecipeSelf, never>): void {
-  const log = ctx.infra.log.child({ component: "delete_recipe_photo" });
-  ctx.server.registerTool(
-    "delete_recipe_photo",
-    {
-      title: "Delete a recipe photo",
-      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
-      description:
-        "Delete a photo from a recipe by UID. Idempotent: a second delete on the same UID returns a friendly " +
-        "'already deleted' message without re-POSTing. Requires an exact photo UID.",
-      inputSchema: deletePhotoInputSchema.shape,
-    },
-    async (args) => {
+export const deletePhotoTool = defineTool(
+  {
+    name: "delete_recipe_photo",
+    title: "Delete a recipe photo",
+    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
+    description:
+      "Delete a photo from a recipe by UID. Idempotent: a second delete on the same UID returns a friendly " +
+      "'already deleted' message without re-POSTing. Requires an exact photo UID.",
+    inputSchema: deletePhotoInputSchema.shape,
+  },
+  (ctx: DomainCtx<RecipeSelf, never>) => {
+    const log = ctx.infra.log.child({ component: "delete_recipe_photo" });
+    return async (args) => {
       log.info({ tool: "delete_recipe_photo", photo_uid: args.photo_uid }, "tool invoked");
       return recipeColdStartGuard(ctx.self).match(
         async (): Promise<CallToolResult> => {
@@ -245,9 +246,9 @@ export function deletePhotoTool(ctx: DomainCtx<RecipeSelf, never>): void {
         },
         (guard) => guard,
       );
-    },
-  );
-}
+    };
+  },
+);
 
 /** Both photo-write registrars, in registration order. */
 export const photoWriteTools = [uploadPhotoTool, deletePhotoTool];

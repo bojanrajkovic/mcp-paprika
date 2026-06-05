@@ -5,6 +5,7 @@ import type { RecipeSelf } from "../module.js";
 import type { Recipe } from "../types.js";
 
 import { RecipeUidSchema } from "../../../ids.js";
+import { defineTool } from "../../../kernel/tool.js";
 import { PaprikaAPIError } from "../../../paprika/errors.js";
 import { textResult } from "../../../shared/tools.js";
 import { toMessage } from "../../../utils/log.js";
@@ -15,25 +16,25 @@ import { recipeColdStartGuard } from "./guards.js";
  * authoritative state via `ctx.infra.client.getRecipe`, then hard-deletes/reconciles
  * through the bound `ctx.self` write helpers.
  */
-export function purgeRecipeTool(ctx: DomainCtx<RecipeSelf, never>): void {
-  const log = ctx.infra.log.child({ component: "purge_recipe" });
-  ctx.server.registerTool(
-    "purge_recipe",
-    {
-      title: "Permanently delete a trashed recipe",
-      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false },
-      description:
-        "Permanently delete a recipe that is already in the Paprika trash. " +
-        "This is IRREVERSIBLE — once emptied from the trash the recipe cannot be recovered. " +
-        "The recipe must first be moved to the trash with trash_recipe (a reversible soft-delete); " +
-        "purge_recipe refuses to permanently delete a recipe that is not already trashed, so an " +
-        "accidental call can never destroy a live recipe in one step. " +
-        "Requires an exact UID; fuzzy title matching is not supported, to prevent accidental loss.",
-      inputSchema: {
-        uid: RecipeUidSchema.describe("UID of a trashed recipe to permanently delete"),
-      },
+export const purgeRecipeTool = defineTool(
+  {
+    name: "purge_recipe",
+    title: "Permanently delete a trashed recipe",
+    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false },
+    description:
+      "Permanently delete a recipe that is already in the Paprika trash. " +
+      "This is IRREVERSIBLE — once emptied from the trash the recipe cannot be recovered. " +
+      "The recipe must first be moved to the trash with trash_recipe (a reversible soft-delete); " +
+      "purge_recipe refuses to permanently delete a recipe that is not already trashed, so an " +
+      "accidental call can never destroy a live recipe in one step. " +
+      "Requires an exact UID; fuzzy title matching is not supported, to prevent accidental loss.",
+    inputSchema: {
+      uid: RecipeUidSchema.describe("UID of a trashed recipe to permanently delete"),
     },
-    async (args) => {
+  },
+  (ctx: DomainCtx<RecipeSelf, never>) => {
+    const log = ctx.infra.log.child({ component: "purge_recipe" });
+    return async (args) => {
       log.info({ tool: "purge_recipe", uid: args.uid }, "tool invoked");
       return recipeColdStartGuard(ctx.self).match(
         async (): Promise<CallToolResult> => {
@@ -90,6 +91,6 @@ export function purgeRecipeTool(ctx: DomainCtx<RecipeSelf, never>): void {
         },
         (guard) => guard,
       );
-    },
-  );
-}
+    };
+  },
+);

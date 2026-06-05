@@ -7,6 +7,7 @@ import type { RecipeSelf } from "../module.js";
 import type { Recipe } from "../types.js";
 
 import { RecipeUidSchema } from "../../../ids.js";
+import { defineTool } from "../../../kernel/tool.js";
 import { textResult } from "../../../shared/tools.js";
 import { formatTimestampWire } from "../../../utils/dates.js";
 import { toMessage } from "../../../utils/log.js";
@@ -18,42 +19,42 @@ import { recipeColdStartGuard } from "./guards.js";
  * module's own category store, writes through `ctx.self.commitRecipe` (the bound
  * write chokepoint), and reads names via `ctx.self.category.store`.
  */
-export function createRecipeTool(ctx: DomainCtx<RecipeSelf, never>): void {
-  const log = ctx.infra.log.child({ component: "create_recipe" });
-  ctx.server.registerTool(
-    "create_recipe",
-    {
-      title: "Create a new recipe",
-      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
-      description:
-        "Create a new recipe in the Paprika account. If you built this recipe from a web page, " +
-        "follow up with `upload_recipe_photo` and the page's main/hero (og:image) image URL to attach its photo.",
-      inputSchema: {
-        name: z.string().describe("Recipe name"),
-        ingredients: z.string().describe("Ingredients list"),
-        directions: z.string().describe("Cooking directions"),
-        description: z.string().optional().describe("Brief description"),
-        notes: z.string().optional().describe("Additional notes"),
-        servings: z.string().optional().describe("Number of servings"),
-        prepTime: z.string().optional().describe("Prep time (e.g. '15 min')"),
-        cookTime: z.string().optional().describe("Cook time (e.g. '30 min')"),
-        totalTime: z.string().optional().describe("Total time (e.g. '45 min')"),
-        categories: z
-          .array(z.string())
-          .optional()
-          .describe(
-            "Categories to assign. Each entry is either a category UID (from `list_categories`) or a display " +
-              "name (case-insensitive). Unknown names are skipped with a warning — create them first with " +
-              "`create_category` if needed.",
-          ),
-        source: z.string().optional().describe("Source name"),
-        sourceUrl: z.string().optional().describe("Source URL"),
-        difficulty: z.string().optional().describe("Difficulty level"),
-        rating: z.number().int().min(0).max(5).optional().describe("Rating 0–5 (default: 0)"),
-        nutritionalInfo: z.string().optional().describe("Nutritional information"),
-      },
+export const createRecipeTool = defineTool(
+  {
+    name: "create_recipe",
+    title: "Create a new recipe",
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
+    description:
+      "Create a new recipe in the Paprika account. If you built this recipe from a web page, " +
+      "follow up with `upload_recipe_photo` and the page's main/hero (og:image) image URL to attach its photo.",
+    inputSchema: {
+      name: z.string().describe("Recipe name"),
+      ingredients: z.string().describe("Ingredients list"),
+      directions: z.string().describe("Cooking directions"),
+      description: z.string().optional().describe("Brief description"),
+      notes: z.string().optional().describe("Additional notes"),
+      servings: z.string().optional().describe("Number of servings"),
+      prepTime: z.string().optional().describe("Prep time (e.g. '15 min')"),
+      cookTime: z.string().optional().describe("Cook time (e.g. '30 min')"),
+      totalTime: z.string().optional().describe("Total time (e.g. '45 min')"),
+      categories: z
+        .array(z.string())
+        .optional()
+        .describe(
+          "Categories to assign. Each entry is either a category UID (from `list_categories`) or a display " +
+            "name (case-insensitive). Unknown names are skipped with a warning — create them first with " +
+            "`create_category` if needed.",
+        ),
+      source: z.string().optional().describe("Source name"),
+      sourceUrl: z.string().optional().describe("Source URL"),
+      difficulty: z.string().optional().describe("Difficulty level"),
+      rating: z.number().int().min(0).max(5).optional().describe("Rating 0–5 (default: 0)"),
+      nutritionalInfo: z.string().optional().describe("Nutritional information"),
     },
-    async (args) => {
+  },
+  (ctx: DomainCtx<RecipeSelf, never>) => {
+    const log = ctx.infra.log.child({ component: "create_recipe" });
+    return async (args) => {
       log.info({ tool: "create_recipe", name: args.name }, "tool invoked");
       return recipeColdStartGuard(ctx.self).match(
         async (): Promise<CallToolResult> => {
@@ -126,6 +127,6 @@ export function createRecipeTool(ctx: DomainCtx<RecipeSelf, never>): void {
         },
         (guard) => guard,
       );
-    },
-  );
-}
+    };
+  },
+);

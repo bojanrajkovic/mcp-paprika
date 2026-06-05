@@ -5,6 +5,7 @@ import type { MenuSelf } from "../module.js";
 import type { Menu } from "../types.js";
 
 import { MenuUidSchema } from "../../../ids.js";
+import { defineTool } from "../../../kernel/tool.js";
 import { resolveLookup, textResult, uidOrTextLookupSchema } from "../../../shared/tools.js";
 import { toMessage } from "../../../utils/log.js";
 import { menuStartGuard } from "./guards.js";
@@ -14,27 +15,27 @@ import { menuStartGuard } from "./guards.js";
  * menu-item stores via `ctx.self`, cascading through `ctx.self.commitMenuItemsBatch`
  * + `ctx.self.commitMenu`.
  */
-export function deleteMenuTool(ctx: DomainCtx<MenuSelf, "recipe" | "meal-type">): void {
-  const log = ctx.infra.log.child({ component: "delete_menu" });
-  ctx.server.registerTool(
-    "delete_menu",
-    {
-      title: "Delete a menu",
-      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false },
-      description:
-        "Delete a menu and all of its planned recipes (menuitems). Look it up by UID or name (tiered fuzzy " +
-        "match, case-insensitive). The menuitems are tombstoned first, then the menu itself. " +
-        'Pass exactly one lookup shape: {"uid": "..."} or {"name": "..."}.',
-      inputSchema: {
-        lookup: uidOrTextLookupSchema({
-          uidSchema: MenuUidSchema,
-          textKey: "name",
-          entityLabel: "menu",
-          textExample: "Thanksgiving Dinner",
-        }),
-      },
+export const deleteMenuTool = defineTool(
+  {
+    name: "delete_menu",
+    title: "Delete a menu",
+    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false },
+    description:
+      "Delete a menu and all of its planned recipes (menuitems). Look it up by UID or name (tiered fuzzy " +
+      "match, case-insensitive). The menuitems are tombstoned first, then the menu itself. " +
+      'Pass exactly one lookup shape: {"uid": "..."} or {"name": "..."}.',
+    inputSchema: {
+      lookup: uidOrTextLookupSchema({
+        uidSchema: MenuUidSchema,
+        textKey: "name",
+        entityLabel: "menu",
+        textExample: "Thanksgiving Dinner",
+      }),
     },
-    async (args) => {
+  },
+  (ctx: DomainCtx<MenuSelf, "recipe" | "meal-type">) => {
+    const log = ctx.infra.log.child({ component: "delete_menu" });
+    return async (args) => {
       log.info({ tool: "delete_menu", ...args.lookup }, "tool invoked");
       return menuStartGuard(ctx).match(
         async (): Promise<CallToolResult> => {
@@ -101,6 +102,6 @@ export function deleteMenuTool(ctx: DomainCtx<MenuSelf, "recipe" | "meal-type">)
         },
         (guard) => guard,
       );
-    },
-  );
-}
+    };
+  },
+);

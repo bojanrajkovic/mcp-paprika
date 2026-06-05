@@ -6,6 +6,7 @@ import type { GroceryList } from "../grocery-list/types.js";
 import type { GrocerySelf } from "../module.js";
 
 import { GroceryListUidSchema } from "../../../ids.js";
+import { defineTool } from "../../../kernel/tool.js";
 import { formatLookupOutcome, resolveLookup, textResult, uidOrTextLookupSchema } from "../../../shared/tools.js";
 import { toMessage } from "../../../utils/log.js";
 import { groceryListToMarkdown } from "../grocery-helpers.js";
@@ -16,17 +17,17 @@ import { groceryStartGuard } from "./guards.js";
  * item stores via `ctx.self` (item counts come from the co-owned item store, NOT a
  * dep).
  */
-export function listGroceryListsTool(ctx: DomainCtx<GrocerySelf, "aisle" | "pantry">): void {
-  const log = ctx.infra.log.child({ component: "list_grocery_lists" });
-  ctx.server.registerTool(
-    "list_grocery_lists",
-    {
-      title: "List your grocery lists",
-      annotations: { readOnlyHint: true, idempotentHint: true },
-      description: "List all grocery lists sorted alphabetically by name, with UID and item count per list.",
-      inputSchema: {},
-    },
-    async () => {
+export const listGroceryListsTool = defineTool(
+  {
+    name: "list_grocery_lists",
+    title: "List your grocery lists",
+    annotations: { readOnlyHint: true, idempotentHint: true },
+    description: "List all grocery lists sorted alphabetically by name, with UID and item count per list.",
+    inputSchema: {},
+  },
+  (ctx: DomainCtx<GrocerySelf, "aisle" | "pantry">) => {
+    const log = ctx.infra.log.child({ component: "list_grocery_lists" });
+    return async () => {
       log.info({ tool: "list_grocery_lists" }, "tool invoked");
       return groceryStartGuard(ctx.self).match(
         async (): Promise<CallToolResult> => {
@@ -47,35 +48,35 @@ export function listGroceryListsTool(ctx: DomainCtx<GrocerySelf, "aisle" | "pant
         },
         (guard) => guard,
       );
-    },
-  );
-}
+    };
+  },
+);
 
 /**
  * Registers `read_grocery_list`, kernel-shaped — resolves a list by UID/name and
  * inlines its items, all from `ctx.self`.
  */
-export function readGroceryListTool(ctx: DomainCtx<GrocerySelf, "aisle" | "pantry">): void {
-  const log = ctx.infra.log.child({ component: "read_grocery_list" });
-  ctx.server.registerTool(
-    "read_grocery_list",
-    {
-      title: "Read a grocery list and its items",
-      annotations: { readOnlyHint: true, idempotentHint: true },
-      description:
-        "Get a grocery list by UID or name. Name lookup is tiered (exact → starts-with → contains) " +
-        "and case-insensitive, with a disambiguation list when multiple lists match the same tier. " +
-        'Pass exactly one shape: {"uid": "..."} or {"name": "..."}.',
-      inputSchema: {
-        lookup: uidOrTextLookupSchema({
-          uidSchema: GroceryListUidSchema,
-          textKey: "name",
-          entityLabel: "grocery list",
-          textExample: "Weekly Shopping",
-        }),
-      },
+export const readGroceryListTool = defineTool(
+  {
+    name: "read_grocery_list",
+    title: "Read a grocery list and its items",
+    annotations: { readOnlyHint: true, idempotentHint: true },
+    description:
+      "Get a grocery list by UID or name. Name lookup is tiered (exact → starts-with → contains) " +
+      "and case-insensitive, with a disambiguation list when multiple lists match the same tier. " +
+      'Pass exactly one shape: {"uid": "..."} or {"name": "..."}.',
+    inputSchema: {
+      lookup: uidOrTextLookupSchema({
+        uidSchema: GroceryListUidSchema,
+        textKey: "name",
+        entityLabel: "grocery list",
+        textExample: "Weekly Shopping",
+      }),
     },
-    async (args) => {
+  },
+  (ctx: DomainCtx<GrocerySelf, "aisle" | "pantry">) => {
+    const log = ctx.infra.log.child({ component: "read_grocery_list" });
+    return async (args) => {
       log.info({ tool: "read_grocery_list", ...args.lookup }, "tool invoked");
       return groceryStartGuard(ctx.self).match(
         async (): Promise<CallToolResult> => {
@@ -92,29 +93,29 @@ export function readGroceryListTool(ctx: DomainCtx<GrocerySelf, "aisle" | "pantr
         },
         (guard) => guard,
       );
-    },
-  );
-}
+    };
+  },
+);
 
 /**
  * Registers `create_grocery_list`, kernel-shaped — writes through this module's
  * bound `ctx.self.commitGroceryList`.
  */
-export function createGroceryListTool(ctx: DomainCtx<GrocerySelf, "aisle" | "pantry">): void {
-  const log = ctx.infra.log.child({ component: "create_grocery_list" });
-  ctx.server.registerTool(
-    "create_grocery_list",
-    {
-      title: "Create a grocery list",
-      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
-      description:
-        "Create a new grocery list with the given name. Rejects duplicate names (case-insensitive exact match); " +
-        "if a duplicate is found, the response includes the existing UID.",
-      inputSchema: {
-        name: z.string().min(1).describe("Grocery list name (required)"),
-      },
+export const createGroceryListTool = defineTool(
+  {
+    name: "create_grocery_list",
+    title: "Create a grocery list",
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
+    description:
+      "Create a new grocery list with the given name. Rejects duplicate names (case-insensitive exact match); " +
+      "if a duplicate is found, the response includes the existing UID.",
+    inputSchema: {
+      name: z.string().min(1).describe("Grocery list name (required)"),
     },
-    async (args) => {
+  },
+  (ctx: DomainCtx<GrocerySelf, "aisle" | "pantry">) => {
+    const log = ctx.infra.log.child({ component: "create_grocery_list" });
+    return async (args) => {
       log.info({ tool: "create_grocery_list", name: args.name }, "tool invoked");
       return groceryStartGuard(ctx.self).match(
         async (): Promise<CallToolResult> => {
@@ -151,28 +152,28 @@ export function createGroceryListTool(ctx: DomainCtx<GrocerySelf, "aisle" | "pan
         },
         (guard) => guard,
       );
-    },
-  );
-}
+    };
+  },
+);
 
 /**
  * Registers `rename_grocery_list`, kernel-shaped — writes through
  * `ctx.self.commitGroceryList`.
  */
-export function renameGroceryListTool(ctx: DomainCtx<GrocerySelf, "aisle" | "pantry">): void {
-  const log = ctx.infra.log.child({ component: "rename_grocery_list" });
-  ctx.server.registerTool(
-    "rename_grocery_list",
-    {
-      title: "Rename a grocery list",
-      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
-      description: "Rename a grocery list. Rejects if the new name conflicts with a different existing list.",
-      inputSchema: {
-        uid: GroceryListUidSchema.describe("Grocery list UID to rename"),
-        newName: z.string().min(1).describe("New name for the grocery list"),
-      },
+export const renameGroceryListTool = defineTool(
+  {
+    name: "rename_grocery_list",
+    title: "Rename a grocery list",
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
+    description: "Rename a grocery list. Rejects if the new name conflicts with a different existing list.",
+    inputSchema: {
+      uid: GroceryListUidSchema.describe("Grocery list UID to rename"),
+      newName: z.string().min(1).describe("New name for the grocery list"),
     },
-    async (args) => {
+  },
+  (ctx: DomainCtx<GrocerySelf, "aisle" | "pantry">) => {
+    const log = ctx.infra.log.child({ component: "rename_grocery_list" });
+    return async (args) => {
       log.info({ tool: "rename_grocery_list", uid: args.uid, newName: args.newName }, "tool invoked");
       return groceryStartGuard(ctx.self).match(
         async (): Promise<CallToolResult> => {
@@ -216,27 +217,27 @@ export function renameGroceryListTool(ctx: DomainCtx<GrocerySelf, "aisle" | "pan
         },
         (guard) => guard,
       );
-    },
-  );
-}
+    };
+  },
+);
 
 /**
  * Registers `delete_grocery_list`, kernel-shaped — soft-delete tombstone, writing
  * through `ctx.self.commitGroceryList`.
  */
-export function deleteGroceryListTool(ctx: DomainCtx<GrocerySelf, "aisle" | "pantry">): void {
-  const log = ctx.infra.log.child({ component: "delete_grocery_list" });
-  ctx.server.registerTool(
-    "delete_grocery_list",
-    {
-      title: "Delete a grocery list",
-      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
-      description: "Delete a grocery list by UID.",
-      inputSchema: {
-        uid: GroceryListUidSchema.describe("Grocery list UID to delete"),
-      },
+export const deleteGroceryListTool = defineTool(
+  {
+    name: "delete_grocery_list",
+    title: "Delete a grocery list",
+    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
+    description: "Delete a grocery list by UID.",
+    inputSchema: {
+      uid: GroceryListUidSchema.describe("Grocery list UID to delete"),
     },
-    async (args) => {
+  },
+  (ctx: DomainCtx<GrocerySelf, "aisle" | "pantry">) => {
+    const log = ctx.infra.log.child({ component: "delete_grocery_list" });
+    return async (args) => {
       log.info({ tool: "delete_grocery_list", uid: args.uid }, "tool invoked");
       return groceryStartGuard(ctx.self).match(
         async (): Promise<CallToolResult> => {
@@ -263,6 +264,6 @@ export function deleteGroceryListTool(ctx: DomainCtx<GrocerySelf, "aisle" | "pan
         },
         (guard) => guard,
       );
-    },
-  );
-}
+    };
+  },
+);

@@ -7,6 +7,7 @@ import type { GroceryItem } from "../grocery-item/types.js";
 import type { GrocerySelf } from "../module.js";
 
 import { GroceryItemUidSchema, PantryItemUidSchema } from "../../../ids.js";
+import { defineTool } from "../../../kernel/tool.js";
 import { textResult } from "../../../shared/tools.js";
 import { todayWire } from "../../../utils/dates.js";
 import { toMessage } from "../../../utils/log.js";
@@ -27,20 +28,20 @@ import { groceryStartGuard } from "./guards.js";
  * `"commit"` = created server-side but local commit failed → grocery items must NOT
  * be deleted) so the three partial-failure messages survive the migration unchanged.
  */
-export function moveToPantryTool(ctx: DomainCtx<GrocerySelf, "aisle" | "pantry">): void {
-  const log = ctx.infra.log.child({ component: "move_grocery_items_to_pantry" });
-  ctx.server.registerTool(
-    "move_grocery_items_to_pantry",
-    {
-      title: "Move grocery items to the pantry",
-      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false },
-      description:
-        "Move one or more grocery items to the pantry. Creates pantry items (with today's purchase date), then deletes the grocery items.",
-      inputSchema: {
-        uids: z.array(GroceryItemUidSchema).min(1).describe("Grocery item UIDs to move to pantry"),
-      },
+export const moveToPantryTool = defineTool(
+  {
+    name: "move_grocery_items_to_pantry",
+    title: "Move grocery items to the pantry",
+    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false },
+    description:
+      "Move one or more grocery items to the pantry. Creates pantry items (with today's purchase date), then deletes the grocery items.",
+    inputSchema: {
+      uids: z.array(GroceryItemUidSchema).min(1).describe("Grocery item UIDs to move to pantry"),
     },
-    async (args) => {
+  },
+  (ctx: DomainCtx<GrocerySelf, "aisle" | "pantry">) => {
+    const log = ctx.infra.log.child({ component: "move_grocery_items_to_pantry" });
+    return async (args) => {
       log.info({ tool: "move_grocery_items_to_pantry", count: args.uids.length }, "tool invoked");
       return groceryStartGuard(ctx.self).match(
         async (): Promise<CallToolResult> => {
@@ -126,6 +127,6 @@ export function moveToPantryTool(ctx: DomainCtx<GrocerySelf, "aisle" | "pantry">
         },
         (guard) => guard,
       );
-    },
-  );
-}
+    };
+  },
+);

@@ -4,6 +4,7 @@ import type { DomainCtx } from "../../../kernel/registry.js";
 import type { RecipeSelf } from "../module.js";
 
 import { RecipeUidSchema } from "../../../ids.js";
+import { defineTool } from "../../../kernel/tool.js";
 import { formatLookupOutcome, resolveLookup, uidOrTextLookupSchema } from "../../../shared/tools.js";
 import { recipeToMarkdown } from "../recipe-markdown.js";
 import { recipeColdStartGuard } from "./guards.js";
@@ -14,27 +15,27 @@ import { recipeColdStartGuard } from "./guards.js";
  * (recipe is `dependsOn []`, no meal dependency); "last cooked" stays meal-side,
  * surfaced by the meal domain's `read_recipe_history` tool.
  */
-export function readRecipeTool(ctx: DomainCtx<RecipeSelf, never>): void {
-  const log = ctx.infra.log.child({ component: "read_recipe" });
-  ctx.server.registerTool(
-    "read_recipe",
-    {
-      title: "Read a recipe by UID or title",
-      annotations: { readOnlyHint: true, idempotentHint: true },
-      description:
-        "Read a recipe by UID or title. Title lookup is fuzzy (exact → starts-with → contains) " +
-        "and returns a disambiguation list when multiple recipes match the same tier. " +
-        'Pass exactly one shape: {"uid": "..."} or {"title": "..."}.',
-      inputSchema: {
-        lookup: uidOrTextLookupSchema({
-          uidSchema: RecipeUidSchema,
-          textKey: "title",
-          entityLabel: "recipe",
-          textExample: "Chocolate Cake",
-        }),
-      },
+export const readRecipeTool = defineTool(
+  {
+    name: "read_recipe",
+    title: "Read a recipe by UID or title",
+    annotations: { readOnlyHint: true, idempotentHint: true },
+    description:
+      "Read a recipe by UID or title. Title lookup is fuzzy (exact → starts-with → contains) " +
+      "and returns a disambiguation list when multiple recipes match the same tier. " +
+      'Pass exactly one shape: {"uid": "..."} or {"title": "..."}.',
+    inputSchema: {
+      lookup: uidOrTextLookupSchema({
+        uidSchema: RecipeUidSchema,
+        textKey: "title",
+        entityLabel: "recipe",
+        textExample: "Chocolate Cake",
+      }),
     },
-    async (args) => {
+  },
+  (ctx: DomainCtx<RecipeSelf, never>) => {
+    const log = ctx.infra.log.child({ component: "read_recipe" });
+    return async (args) => {
       log.info({ tool: "read_recipe", ...args.lookup }, "tool invoked");
       return recipeColdStartGuard(ctx.self).match(
         async (): Promise<CallToolResult> => {
@@ -51,6 +52,6 @@ export function readRecipeTool(ctx: DomainCtx<RecipeSelf, never>): void {
         },
         (guard) => guard,
       );
-    },
-  );
-}
+    };
+  },
+);

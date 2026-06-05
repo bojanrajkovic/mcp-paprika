@@ -7,6 +7,7 @@ import type { Category } from "../category/types.js";
 import type { RecipeSelf } from "../module.js";
 
 import { CategoryUidSchema } from "../../../ids.js";
+import { defineTool } from "../../../kernel/tool.js";
 import { textResult } from "../../../shared/tools.js";
 import { toMessage } from "../../../utils/log.js";
 import { categoryStartGuard } from "./guards.js";
@@ -47,25 +48,23 @@ function wouldCreateCycle(self: RecipeSelf, categoryUid: CategoryUid, newParentU
 }
 
 /** Registers `create_category`, kernel-shaped — writes through `ctx.self.commitCategoryUpsert`. */
-export function createCategoryTool(ctx: DomainCtx<RecipeSelf, never>): void {
-  const log = ctx.infra.log.child({ component: "create_category" });
-  ctx.server.registerTool(
-    "create_category",
-    {
-      title: "Create a recipe category",
-      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
-      description:
-        "Create a new recipe category. Optionally nest it under an existing category by passing that " +
-        "category's UID as `parentUid` to build a hierarchy (e.g. Thai → Curries). Use `list_categories` " +
-        "to find parent UIDs. To put recipes in the new category, follow up with `update_recipe`.",
-      inputSchema: {
-        name: z.string().min(1).describe("Category display name"),
-        parentUid: CategoryUidSchema.optional().describe(
-          "UID of the parent category to nest under (omit for top-level)",
-        ),
-      },
+export const createCategoryTool = defineTool(
+  {
+    name: "create_category",
+    title: "Create a recipe category",
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
+    description:
+      "Create a new recipe category. Optionally nest it under an existing category by passing that " +
+      "category's UID as `parentUid` to build a hierarchy (e.g. Thai → Curries). Use `list_categories` " +
+      "to find parent UIDs. To put recipes in the new category, follow up with `update_recipe`.",
+    inputSchema: {
+      name: z.string().min(1).describe("Category display name"),
+      parentUid: CategoryUidSchema.optional().describe("UID of the parent category to nest under (omit for top-level)"),
     },
-    async (args) => {
+  },
+  (ctx: DomainCtx<RecipeSelf, never>) => {
+    const log = ctx.infra.log.child({ component: "create_category" });
+    return async (args) => {
       log.info({ tool: "create_category", name: args.name }, "tool invoked");
       return categoryStartGuard(ctx.self).match(
         async (): Promise<CallToolResult> => {
@@ -91,31 +90,31 @@ export function createCategoryTool(ctx: DomainCtx<RecipeSelf, never>): void {
         },
         (guard) => guard,
       );
-    },
-  );
-}
+    };
+  },
+);
 
 /** Registers `update_category`, kernel-shaped — rename/re-parent through `ctx.self.commitCategoryUpsert`. */
-export function updateCategoryTool(ctx: DomainCtx<RecipeSelf, never>): void {
-  const log = ctx.infra.log.child({ component: "update_category" });
-  ctx.server.registerTool(
-    "update_category",
-    {
-      title: "Rename or re-parent a recipe category",
-      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
-      description:
-        "Rename and/or re-parent an existing category. Pass `name` to rename, `parentUid` to move it under " +
-        "another category, or `null` for `parentUid` to make it top-level. Re-parenting builds the hierarchy " +
-        "that `list_categories` renders.",
-      inputSchema: {
-        uid: CategoryUidSchema.describe("UID of the category to update"),
-        name: z.string().min(1).optional().describe("New display name (omit to leave unchanged)"),
-        parentUid: CategoryUidSchema.nullable()
-          .optional()
-          .describe("New parent UID, or null for top-level (omit to leave the parent unchanged)"),
-      },
+export const updateCategoryTool = defineTool(
+  {
+    name: "update_category",
+    title: "Rename or re-parent a recipe category",
+    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
+    description:
+      "Rename and/or re-parent an existing category. Pass `name` to rename, `parentUid` to move it under " +
+      "another category, or `null` for `parentUid` to make it top-level. Re-parenting builds the hierarchy " +
+      "that `list_categories` renders.",
+    inputSchema: {
+      uid: CategoryUidSchema.describe("UID of the category to update"),
+      name: z.string().min(1).optional().describe("New display name (omit to leave unchanged)"),
+      parentUid: CategoryUidSchema.nullable()
+        .optional()
+        .describe("New parent UID, or null for top-level (omit to leave the parent unchanged)"),
     },
-    async (args) => {
+  },
+  (ctx: DomainCtx<RecipeSelf, never>) => {
+    const log = ctx.infra.log.child({ component: "update_category" });
+    return async (args) => {
       log.info({ tool: "update_category", uid: args.uid }, "tool invoked");
       return categoryStartGuard(ctx.self).match(
         async (): Promise<CallToolResult> => {
@@ -159,9 +158,9 @@ export function updateCategoryTool(ctx: DomainCtx<RecipeSelf, never>): void {
         },
         (guard) => guard,
       );
-    },
-  );
-}
+    };
+  },
+);
 
 /** The category create/update registrars, in registration order. */
 export const categoryWriteTools = [createCategoryTool, updateCategoryTool];

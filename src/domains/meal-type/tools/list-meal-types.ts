@@ -2,6 +2,7 @@ import type { DomainCtx } from "../../../kernel/registry.js";
 import type { MealTypeSelf } from "../module.js";
 import type { MealType } from "../types.js";
 
+import { defineTool } from "../../../kernel/tool.js";
 import { textResult } from "../../../shared/tools.js";
 
 /**
@@ -36,22 +37,22 @@ function mealTypeLine(mt: Readonly<MealType>): string {
  * (ADR-0004). Mirrors `list_aisles`: no input, sorted by order then name, one
  * bullet per entry. Meal types are created/edited in the Paprika app, not via MCP.
  */
-export function listMealTypesTool(ctx: DomainCtx<MealTypeSelf, never>): void {
-  const log = ctx.infra.log.child({ component: "list_meal_types" });
-  ctx.server.registerTool(
-    "list_meal_types",
-    {
-      title: "List meal types",
-      annotations: { readOnlyHint: true, idempotentHint: true },
-      description:
-        "List all meal types — the built-in Breakfast/Lunch/Dinner/Snacks plus any custom " +
-        "types — sorted by order then name. Each entry shows whether it is built-in or custom, " +
-        "its calendar-export schedule (all-day or a clock time), and its UID. Reference a type " +
-        "by name, or pass its UID to plan_meals / update_meal via the `type: { uid }` spec. " +
-        "Meal types are created and edited in the Paprika app, not through this server.",
-      inputSchema: {},
-    },
-    async () => {
+export const listMealTypesTool = defineTool(
+  {
+    name: "list_meal_types",
+    title: "List meal types",
+    annotations: { readOnlyHint: true, idempotentHint: true },
+    description:
+      "List all meal types — the built-in Breakfast/Lunch/Dinner/Snacks plus any custom " +
+      "types — sorted by order then name. Each entry shows whether it is built-in or custom, " +
+      "its calendar-export schedule (all-day or a clock time), and its UID. Reference a type " +
+      "by name, or pass its UID to plan_meals / update_meal via the `type: { uid }` spec. " +
+      "Meal types are created and edited in the Paprika app, not through this server.",
+    inputSchema: {},
+  },
+  (ctx: DomainCtx<MealTypeSelf, never>) => {
+    const log = ctx.infra.log.child({ component: "list_meal_types" });
+    return async () => {
       log.info({ tool: "list_meal_types" }, "tool invoked");
       if (!ctx.self.store.hasSynced) {
         return textResult("Meal types are not yet synced. Try again in a few seconds.");
@@ -67,6 +68,6 @@ export function listMealTypesTool(ctx: DomainCtx<MealTypeSelf, never>): void {
 
       const lines = mealTypes.map(mealTypeLine);
       return textResult(lines.join("\n"));
-    },
-  );
-}
+    };
+  },
+);

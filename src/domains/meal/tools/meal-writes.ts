@@ -8,6 +8,7 @@ import type { MealSelf } from "../module.js";
 import type { Meal } from "../types.js";
 
 import { MealUidSchema, RecipeUidSchema } from "../../../ids.js";
+import { defineTool } from "../../../kernel/tool.js";
 import { textResult } from "../../../shared/tools.js";
 import { parseCalendarDayWire } from "../../../utils/dates.js";
 import { toMessage } from "../../../utils/log.js";
@@ -80,26 +81,26 @@ export const addMealsInputSchema = z.object({
  * (the bound write chokepoint), resolves recipe links via `ctx.deps.recipe.get` and
  * meal types via `ctx.deps["meal-type"].resolveSpec`.
  */
-export function planMealsTool(ctx: DomainCtx<MealSelf, "recipe" | "meal-type">): void {
-  const log = ctx.infra.log.child({ component: "plan_meals" });
-  ctx.server.registerTool(
-    "plan_meals",
-    {
-      title: "Add meals to the planner",
-      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
-      description:
-        "Add one or more meals to the meal planner. Each item is EITHER recipe-linked (supply " +
-        "recipe_uid; display name auto-resolves from the recipe) OR freeform (supply name; no " +
-        "recipe). The two shapes are mutually exclusive — Paprika.app's UI dispatches display " +
-        "off recipe_uid for linked meals, so a stored custom name on a recipe-linked meal would " +
-        "never render. Use a freeform meal (no recipe_uid) when you want a custom label. Date is " +
-        "normalized to Paprika's wire format. Meal type accepts name, UID, or built-in index " +
-        "(0=Breakfast, 1=Lunch, 2=Dinner, 3=Snacks). All items validate up-front; if ANY item " +
-        "is invalid the entire batch is rejected with a per-index error enumeration so callers " +
-        "can fix all problems in one pass.",
-      inputSchema: addMealsInputSchema.shape,
-    },
-    async (args) => {
+export const planMealsTool = defineTool(
+  {
+    name: "plan_meals",
+    title: "Add meals to the planner",
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
+    description:
+      "Add one or more meals to the meal planner. Each item is EITHER recipe-linked (supply " +
+      "recipe_uid; display name auto-resolves from the recipe) OR freeform (supply name; no " +
+      "recipe). The two shapes are mutually exclusive — Paprika.app's UI dispatches display " +
+      "off recipe_uid for linked meals, so a stored custom name on a recipe-linked meal would " +
+      "never render. Use a freeform meal (no recipe_uid) when you want a custom label. Date is " +
+      "normalized to Paprika's wire format. Meal type accepts name, UID, or built-in index " +
+      "(0=Breakfast, 1=Lunch, 2=Dinner, 3=Snacks). All items validate up-front; if ANY item " +
+      "is invalid the entire batch is rejected with a per-index error enumeration so callers " +
+      "can fix all problems in one pass.",
+    inputSchema: addMealsInputSchema.shape,
+  },
+  (ctx: DomainCtx<MealSelf, "recipe" | "meal-type">) => {
+    const log = ctx.infra.log.child({ component: "plan_meals" });
+    return async (args) => {
       log.info({ tool: "plan_meals", count: args.items.length }, "tool invoked");
       return mealStartGuard(ctx.self, ctx.deps["meal-type"]).match(
         async (): Promise<CallToolResult> => {
@@ -261,9 +262,9 @@ export function planMealsTool(ctx: DomainCtx<MealSelf, "recipe" | "meal-type">):
         },
         (guard) => guard,
       );
-    },
-  );
-}
+    };
+  },
+);
 
 // Structural union over the link/name decision lives one level deep so it can
 // sit inside a flat ZodRawShape (MCP's top-level requirement). Same rationale
@@ -325,24 +326,24 @@ export const updateMealInputSchema = z.object({
  * re-resolves recipe links via `ctx.deps.recipe.get`, meal types via
  * `ctx.deps["meal-type"].resolveSpec`.
  */
-export function updateMealTool(ctx: DomainCtx<MealSelf, "recipe" | "meal-type">): void {
-  const log = ctx.infra.log.child({ component: "update_meal" });
-  ctx.server.registerTool(
-    "update_meal",
-    {
-      title: "Edit a planned meal",
-      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
-      description:
-        "Update an existing meal by UID. The `update` payload is a discriminated union: pick exactly one " +
-        "of {recipe_uid?, ...other} | {name, ...other} | {recipe_uid: null, name?, ...other}. Recipe link " +
-        "and display name are structurally exclusive: name auto-resolves from the recipe for linked meals, " +
-        "and Paprika.app would never render a stored custom name on a recipe-linked meal. To set a custom " +
-        "label, use a freeform meal (no recipe_uid) or demote first via recipe_uid: null + name. Partial " +
-        "merge: omitted fields are preserved. To clear scale, pass scale: null. To change the meal's date, " +
-        "use reschedule_meal. The is_ingredient and deleted fields are not updatable via this tool.",
-      inputSchema: updateMealInputSchema.shape,
-    },
-    async (args) => {
+export const updateMealTool = defineTool(
+  {
+    name: "update_meal",
+    title: "Edit a planned meal",
+    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
+    description:
+      "Update an existing meal by UID. The `update` payload is a discriminated union: pick exactly one " +
+      "of {recipe_uid?, ...other} | {name, ...other} | {recipe_uid: null, name?, ...other}. Recipe link " +
+      "and display name are structurally exclusive: name auto-resolves from the recipe for linked meals, " +
+      "and Paprika.app would never render a stored custom name on a recipe-linked meal. To set a custom " +
+      "label, use a freeform meal (no recipe_uid) or demote first via recipe_uid: null + name. Partial " +
+      "merge: omitted fields are preserved. To clear scale, pass scale: null. To change the meal's date, " +
+      "use reschedule_meal. The is_ingredient and deleted fields are not updatable via this tool.",
+    inputSchema: updateMealInputSchema.shape,
+  },
+  (ctx: DomainCtx<MealSelf, "recipe" | "meal-type">) => {
+    const log = ctx.infra.log.child({ component: "update_meal" });
+    return async (args) => {
       log.info({ tool: "update_meal", uid: args.uid }, "tool invoked");
       return mealStartGuard(ctx.self, ctx.deps["meal-type"]).match(
         async (): Promise<CallToolResult> => {
@@ -479,9 +480,9 @@ export function updateMealTool(ctx: DomainCtx<MealSelf, "recipe" | "meal-type">)
         },
         (guard) => guard,
       );
-    },
-  );
-}
+    };
+  },
+);
 
 const deleteMealInputSchema = z.object({
   uid: MealUidSchema,
@@ -490,19 +491,19 @@ const deleteMealInputSchema = z.object({
 /**
  * Registers `delete_meal`, kernel-shaped — soft-deletes through `ctx.self.commitMeal`.
  */
-export function deleteMealTool(ctx: DomainCtx<MealSelf, "recipe" | "meal-type">): void {
-  const log = ctx.infra.log.child({ component: "delete_meal" });
-  ctx.server.registerTool(
-    "delete_meal",
-    {
-      title: "Delete a planned meal",
-      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
-      description:
-        "Soft-delete a meal from the planner by UID. Idempotent: a second delete on the same UID " +
-        "returns a friendly 'already deleted' message without re-POSTing. Requires an exact UID.",
-      inputSchema: deleteMealInputSchema.shape,
-    },
-    async (args) => {
+export const deleteMealTool = defineTool(
+  {
+    name: "delete_meal",
+    title: "Delete a planned meal",
+    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
+    description:
+      "Soft-delete a meal from the planner by UID. Idempotent: a second delete on the same UID " +
+      "returns a friendly 'already deleted' message without re-POSTing. Requires an exact UID.",
+    inputSchema: deleteMealInputSchema.shape,
+  },
+  (ctx: DomainCtx<MealSelf, "recipe" | "meal-type">) => {
+    const log = ctx.infra.log.child({ component: "delete_meal" });
+    return async (args) => {
       log.info({ tool: "delete_meal", uid: args.uid }, "tool invoked");
       return mealStartGuard(ctx.self, ctx.deps["meal-type"]).match(
         async (): Promise<CallToolResult> => {
@@ -526,6 +527,6 @@ export function deleteMealTool(ctx: DomainCtx<MealSelf, "recipe" | "meal-type">)
         },
         (guard) => guard,
       );
-    },
-  );
-}
+    };
+  },
+);

@@ -7,6 +7,7 @@ import type { PhotoGenSelf } from "../module.js";
 
 import { makeThumbnail } from "../../../domains/recipe/photo-helpers.js";
 import { RecipeUidSchema } from "../../../ids.js";
+import { defineTool } from "../../../kernel/tool.js";
 import { fetchImageBytes } from "../../../shared/photo-fetch.js";
 import { textResult } from "../../../shared/tools.js";
 import { CircuitOpenError } from "../../../utils/errors.js";
@@ -67,22 +68,22 @@ export const generatePhotoInputSchema = z.object({
  * unconditionally. When `ctx.self.photographyClient === null` (image generation
  * unconfigured) the tool early-returns a clear "not configured" message.
  */
-export function generatePhotoTool(ctx: DomainCtx<PhotoGenSelf, "recipe">): void {
-  const log = ctx.infra.log.child({ component: "generate_recipe_photo" });
-  ctx.server.registerTool(
-    "generate_recipe_photo",
-    {
-      title: "Generate a recipe photo with AI",
-      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
-      description:
-        "Generate a styled food photo for a recipe with an AI image model and (by default) attach it to the " +
-        "recipe. The prompt is built from the recipe's name, description, and categories — so well-described, " +
-        "categorized recipes produce the best results; pass `style` to guide plating or describe an obscure dish. " +
-        "Set restyle_existing:true to re-style the recipe's current photo instead of generating from scratch. " +
-        "Set attach:false to preview without saving.",
-      inputSchema: generatePhotoInputSchema.shape,
-    },
-    async (args): Promise<CallToolResult> => {
+export const generatePhotoTool = defineTool(
+  {
+    name: "generate_recipe_photo",
+    title: "Generate a recipe photo with AI",
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
+    description:
+      "Generate a styled food photo for a recipe with an AI image model and (by default) attach it to the " +
+      "recipe. The prompt is built from the recipe's name, description, and categories — so well-described, " +
+      "categorized recipes produce the best results; pass `style` to guide plating or describe an obscure dish. " +
+      "Set restyle_existing:true to re-style the recipe's current photo instead of generating from scratch. " +
+      "Set attach:false to preview without saving.",
+    inputSchema: generatePhotoInputSchema.shape,
+  },
+  (ctx: DomainCtx<PhotoGenSelf, "recipe">) => {
+    const log = ctx.infra.log.child({ component: "generate_recipe_photo" });
+    return async (args): Promise<CallToolResult> => {
       const model = args.model ?? DEFAULT_PHOTO_MODEL;
       const restyle = args.restyle_existing ?? false;
       const attach = args.attach ?? true;
@@ -217,6 +218,6 @@ export function generatePhotoTool(ctx: DomainCtx<PhotoGenSelf, "recipe">): void 
               `Retry, or call generate_recipe_photo with attach:false to get a preview token and upload_recipe_photo it separately.`,
           ),
       );
-    },
-  );
-}
+    };
+  },
+);

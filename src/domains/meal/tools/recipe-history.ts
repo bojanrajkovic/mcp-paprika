@@ -6,6 +6,7 @@ import type { MealSelf } from "../module.js";
 import type { Meal } from "../types.js";
 
 import { RecipeUidSchema } from "../../../ids.js";
+import { defineTool } from "../../../kernel/tool.js";
 import { textResult } from "../../../shared/tools.js";
 import { mealStartGuard } from "./helpers.js";
 
@@ -43,28 +44,28 @@ function makeTypeLabeler(mealType: MealTypeApi): (meal: Readonly<Meal>) => strin
  * `ctx.self.store`; resolves the recipe name via `ctx.deps.recipe` and meal-type
  * labels via `ctx.deps["meal-type"]`.
  */
-export function readRecipeHistoryTool(ctx: DomainCtx<MealSelf, "recipe" | "meal-type">): void {
-  const log = ctx.infra.log.child({ component: "read_recipe_history" });
-  ctx.server.registerTool(
-    "read_recipe_history",
-    {
-      title: "Read a recipe's cooking history",
-      annotations: { readOnlyHint: true, idempotentHint: true },
-      description:
-        "Summarize ONE recipe's cooking history: when it was last cooked, how many times " +
-        'total, and its most recent cooking dates (with meal type). Answers "when did I last ' +
-        'make this", "have we cooked this before", "how often do we make it". Look the recipe ' +
-        "up by UID (from list_recipes, search_recipes, or read_recipe). Only PAST cooks count — " +
-        "future planner entries are excluded (use read_meal_plan for what's scheduled). For the " +
-        "full meal-by-meal list, or to filter cooking history by category, meal type, or date " +
-        "window, use search_meal_history.",
-      inputSchema: {
-        recipe_uid: RecipeUidSchema.describe(
-          "The recipe to summarize, by UID (from list_recipes, search_recipes, or read_recipe).",
-        ),
-      },
+export const readRecipeHistoryTool = defineTool(
+  {
+    name: "read_recipe_history",
+    title: "Read a recipe's cooking history",
+    annotations: { readOnlyHint: true, idempotentHint: true },
+    description:
+      "Summarize ONE recipe's cooking history: when it was last cooked, how many times " +
+      'total, and its most recent cooking dates (with meal type). Answers "when did I last ' +
+      'make this", "have we cooked this before", "how often do we make it". Look the recipe ' +
+      "up by UID (from list_recipes, search_recipes, or read_recipe). Only PAST cooks count — " +
+      "future planner entries are excluded (use read_meal_plan for what's scheduled). For the " +
+      "full meal-by-meal list, or to filter cooking history by category, meal type, or date " +
+      "window, use search_meal_history.",
+    inputSchema: {
+      recipe_uid: RecipeUidSchema.describe(
+        "The recipe to summarize, by UID (from list_recipes, search_recipes, or read_recipe).",
+      ),
     },
-    async (args) => {
+  },
+  (ctx: DomainCtx<MealSelf, "recipe" | "meal-type">) => {
+    const log = ctx.infra.log.child({ component: "read_recipe_history" });
+    return async (args) => {
       log.info({ tool: "read_recipe_history", recipe_uid: args.recipe_uid }, "tool invoked");
       return mealStartGuard(ctx.self, ctx.deps["meal-type"]).match(
         async (): Promise<CallToolResult> => {
@@ -110,6 +111,6 @@ export function readRecipeHistoryTool(ctx: DomainCtx<MealSelf, "recipe" | "meal-
         },
         (guard) => guard,
       );
-    },
-  );
-}
+    };
+  },
+);

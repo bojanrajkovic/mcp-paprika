@@ -4,6 +4,7 @@ import type { DomainCtx } from "../../../kernel/registry.js";
 import type { GrocerySelf } from "../module.js";
 
 import { GroceryListUidSchema } from "../../../ids.js";
+import { defineTool } from "../../../kernel/tool.js";
 import { textResult } from "../../../shared/tools.js";
 import { toMessage } from "../../../utils/log.js";
 import { groceryStartGuard } from "./guards.js";
@@ -12,19 +13,19 @@ import { groceryStartGuard } from "./guards.js";
  * Registers `clear_purchased_grocery_items`, kernel-shaped — batch soft-delete of a
  * list's purchased items, writing through `ctx.self.commitGroceryItemsBatch`.
  */
-export function clearPurchasedTool(ctx: DomainCtx<GrocerySelf, "aisle" | "pantry">): void {
-  const log = ctx.infra.log.child({ component: "clear_purchased_grocery_items" });
-  ctx.server.registerTool(
-    "clear_purchased_grocery_items",
-    {
-      title: "Remove purchased items from a grocery list",
-      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
-      description: "Clear all purchased items from a grocery list.",
-      inputSchema: {
-        listUid: GroceryListUidSchema.describe("Grocery list UID to clear purchased items from"),
-      },
+export const clearPurchasedTool = defineTool(
+  {
+    name: "clear_purchased_grocery_items",
+    title: "Remove purchased items from a grocery list",
+    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
+    description: "Clear all purchased items from a grocery list.",
+    inputSchema: {
+      listUid: GroceryListUidSchema.describe("Grocery list UID to clear purchased items from"),
     },
-    async (args) => {
+  },
+  (ctx: DomainCtx<GrocerySelf, "aisle" | "pantry">) => {
+    const log = ctx.infra.log.child({ component: "clear_purchased_grocery_items" });
+    return async (args) => {
       log.info({ tool: "clear_purchased_grocery_items", listUid: args.listUid }, "tool invoked");
       return groceryStartGuard(ctx.self).match(
         async (): Promise<CallToolResult> => {
@@ -54,27 +55,27 @@ export function clearPurchasedTool(ctx: DomainCtx<GrocerySelf, "aisle" | "pantry
         },
         (guard) => guard,
       );
-    },
-  );
-}
+    };
+  },
+);
 
 /**
  * Registers `clear_grocery_list`, kernel-shaped — batch soft-delete of ALL items in a
  * list, writing through `ctx.self.commitGroceryItemsBatch`.
  */
-export function clearAllTool(ctx: DomainCtx<GrocerySelf, "aisle" | "pantry">): void {
-  const log = ctx.infra.log.child({ component: "clear_grocery_list" });
-  ctx.server.registerTool(
-    "clear_grocery_list",
-    {
-      title: "Remove all items from a grocery list",
-      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
-      description: "Clear all items from a grocery list.",
-      inputSchema: {
-        listUid: GroceryListUidSchema.describe("Grocery list UID to clear all items from"),
-      },
+export const clearAllTool = defineTool(
+  {
+    name: "clear_grocery_list",
+    title: "Remove all items from a grocery list",
+    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
+    description: "Clear all items from a grocery list.",
+    inputSchema: {
+      listUid: GroceryListUidSchema.describe("Grocery list UID to clear all items from"),
     },
-    async (args) => {
+  },
+  (ctx: DomainCtx<GrocerySelf, "aisle" | "pantry">) => {
+    const log = ctx.infra.log.child({ component: "clear_grocery_list" });
+    return async (args) => {
       log.info({ tool: "clear_grocery_list", listUid: args.listUid }, "tool invoked");
       return groceryStartGuard(ctx.self).match(
         async (): Promise<CallToolResult> => {
@@ -104,6 +105,6 @@ export function clearAllTool(ctx: DomainCtx<GrocerySelf, "aisle" | "pantry">): v
         },
         (guard) => guard,
       );
-    },
-  );
-}
+    };
+  },
+);

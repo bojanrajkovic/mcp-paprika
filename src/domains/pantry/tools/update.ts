@@ -6,6 +6,7 @@ import type { PantrySelf } from "../module.js";
 import type { PantryItem } from "../types.js";
 
 import { PantryItemUidSchema } from "../../../ids.js";
+import { defineTool } from "../../../kernel/tool.js";
 import { textResult } from "../../../shared/tools.js";
 import { normalizeWire } from "../../../utils/dates.js";
 import { toMessage } from "../../../utils/log.js";
@@ -40,20 +41,20 @@ export const updatePantryItemInputSchema = z
  * bound single-item commit (`ctx.self.commitPantryItem`) and resolves aisles via
  * the declared `aisle` dependency contract (`ctx.deps.aisle.ensureAisle`).
  */
-export function updatePantryItemTool(ctx: DomainCtx<PantrySelf, "aisle">): void {
-  const log = ctx.infra.log.child({ component: "update_pantry_item" });
-  ctx.server.registerTool(
-    "update_pantry_item",
-    {
-      title: "Edit a pantry item",
-      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
-      description:
-        "Update a pantry item's ingredient, quantity, aisle, or dates by UID. Only provided fields are " +
-        "changed; omitted fields retain their existing values. Setting expirationDate also updates " +
-        "hasExpiration accordingly. To change stock status, use mark_pantry_item_out_of_stock / restock_pantry_item.",
-      inputSchema: updatePantryItemInputSchema,
-    },
-    async (args) => {
+export const updatePantryItemTool = defineTool(
+  {
+    name: "update_pantry_item",
+    title: "Edit a pantry item",
+    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
+    description:
+      "Update a pantry item's ingredient, quantity, aisle, or dates by UID. Only provided fields are " +
+      "changed; omitted fields retain their existing values. Setting expirationDate also updates " +
+      "hasExpiration accordingly. To change stock status, use mark_pantry_item_out_of_stock / restock_pantry_item.",
+    inputSchema: updatePantryItemInputSchema,
+  },
+  (ctx: DomainCtx<PantrySelf, "aisle">) => {
+    const log = ctx.infra.log.child({ component: "update_pantry_item" });
+    return async (args) => {
       log.info({ tool: "update_pantry_item", uid: args.uid }, "tool invoked");
       return pantryStartGuard(ctx.self).match(
         async (): Promise<CallToolResult> => {
@@ -127,6 +128,6 @@ export function updatePantryItemTool(ctx: DomainCtx<PantrySelf, "aisle">): void 
         },
         (guard) => guard,
       );
-    },
-  );
-}
+    };
+  },
+);

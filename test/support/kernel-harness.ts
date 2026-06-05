@@ -235,7 +235,7 @@ export function useKernelHarness(rootId: DomainId, opts: UseKernelHarnessOptions
 
       const { server, callTool, callResourceList, callResource } = makeTestServer();
       const ctx = { self: root.self, deps, infra, server };
-      for (const tool of root.tools) tool(ctx);
+      for (const tool of root.tools) tool.register(ctx);
       for (const resource of root.resources ?? []) resource(ctx);
 
       state = {

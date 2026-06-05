@@ -4,6 +4,7 @@ import { z } from "zod";
 import type { DomainCtx } from "../../../kernel/registry.js";
 import type { RecipeSelf } from "../module.js";
 
+import { defineTool } from "../../../kernel/tool.js";
 import { textResult } from "../../../shared/tools.js";
 import { recipeColdStartGuard } from "./guards.js";
 
@@ -13,28 +14,28 @@ import { recipeColdStartGuard } from "./guards.js";
  * `dependsOn []`, no meal dependency); "last cooked" stays meal-side (ADR-0009),
  * surfaced by the meal domain's `read_recipe_history` tool.
  */
-export function listRecipesTool(ctx: DomainCtx<RecipeSelf, never>): void {
-  const log = ctx.infra.log.child({ component: "list_recipes" });
-  ctx.server.registerTool(
-    "list_recipes",
-    {
-      title: "List your saved recipes",
-      annotations: { readOnlyHint: true, idempotentHint: true },
-      description:
-        "List all recipes with pagination. Returns recipe summaries sorted alphabetically. Use offset/limit to paginate through the full library. Response includes total recipe count.",
-      inputSchema: {
-        offset: z.number().int().nonnegative().optional().default(0).describe("Number of recipes to skip (default: 0)"),
-        limit: z
-          .number()
-          .int()
-          .positive()
-          .max(50)
-          .optional()
-          .default(25)
-          .describe("Maximum number of recipes to return (default: 25, max: 50)"),
-      },
+export const listRecipesTool = defineTool(
+  {
+    name: "list_recipes",
+    title: "List your saved recipes",
+    annotations: { readOnlyHint: true, idempotentHint: true },
+    description:
+      "List all recipes with pagination. Returns recipe summaries sorted alphabetically. Use offset/limit to paginate through the full library. Response includes total recipe count.",
+    inputSchema: {
+      offset: z.number().int().nonnegative().optional().default(0).describe("Number of recipes to skip (default: 0)"),
+      limit: z
+        .number()
+        .int()
+        .positive()
+        .max(50)
+        .optional()
+        .default(25)
+        .describe("Maximum number of recipes to return (default: 25, max: 50)"),
     },
-    async (args) => {
+  },
+  (ctx: DomainCtx<RecipeSelf, never>) => {
+    const log = ctx.infra.log.child({ component: "list_recipes" });
+    return async (args) => {
       log.info({ tool: "list_recipes", ...args }, "tool invoked");
       return recipeColdStartGuard(ctx.self).match(
         async (): Promise<CallToolResult> => {
@@ -64,6 +65,6 @@ export function listRecipesTool(ctx: DomainCtx<RecipeSelf, never>): void {
         },
         (guard) => guard,
       );
-    },
-  );
-}
+    };
+  },
+);

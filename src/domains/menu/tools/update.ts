@@ -6,6 +6,7 @@ import type { MenuSelf } from "../module.js";
 import type { Menu } from "../types.js";
 
 import { MenuUidSchema } from "../../../ids.js";
+import { defineTool } from "../../../kernel/tool.js";
 import { resolveLookup, textResult, uidOrTextLookupSchema } from "../../../shared/tools.js";
 import { toMessage } from "../../../utils/log.js";
 import { menuToMarkdown } from "../menu-helpers.js";
@@ -16,33 +17,33 @@ import { menuStartGuard } from "./guards.js";
  * menu-item stores via `ctx.self`, commits through `ctx.self.commitMenu`, and renders
  * with the meal-type catalog from `ctx.deps["meal-type"]`.
  */
-export function updateMenuTool(ctx: DomainCtx<MenuSelf, "recipe" | "meal-type">): void {
-  const log = ctx.infra.log.child({ component: "update_menu" });
-  ctx.server.registerTool(
-    "update_menu",
-    {
-      title: "Edit a menu",
-      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
-      description:
-        "Update a menu's name, day span, and/or notes. Look it up by UID or name (tiered fuzzy match, " +
-        "case-insensitive). Provide at least one of name, days, or notes. Renaming to a name already used " +
-        "by a different menu is rejected (the existing UID is surfaced). Shrinking days below the highest " +
-        "day that already has a planned recipe is rejected (the conflicting recipes are named) — move or " +
-        "delete those menuitems first. " +
-        'Pass exactly one lookup shape: {"uid": "..."} or {"name": "..."}.',
-      inputSchema: {
-        lookup: uidOrTextLookupSchema({
-          uidSchema: MenuUidSchema,
-          textKey: "name",
-          entityLabel: "menu",
-          textExample: "Thanksgiving Dinner",
-        }),
-        name: z.string().min(1).optional().describe("New menu name"),
-        days: z.number().int().positive().optional().describe("New day span (>= 1)"),
-        notes: z.string().optional().describe("New free-text notes"),
-      },
+export const updateMenuTool = defineTool(
+  {
+    name: "update_menu",
+    title: "Edit a menu",
+    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
+    description:
+      "Update a menu's name, day span, and/or notes. Look it up by UID or name (tiered fuzzy match, " +
+      "case-insensitive). Provide at least one of name, days, or notes. Renaming to a name already used " +
+      "by a different menu is rejected (the existing UID is surfaced). Shrinking days below the highest " +
+      "day that already has a planned recipe is rejected (the conflicting recipes are named) — move or " +
+      "delete those menuitems first. " +
+      'Pass exactly one lookup shape: {"uid": "..."} or {"name": "..."}.',
+    inputSchema: {
+      lookup: uidOrTextLookupSchema({
+        uidSchema: MenuUidSchema,
+        textKey: "name",
+        entityLabel: "menu",
+        textExample: "Thanksgiving Dinner",
+      }),
+      name: z.string().min(1).optional().describe("New menu name"),
+      days: z.number().int().positive().optional().describe("New day span (>= 1)"),
+      notes: z.string().optional().describe("New free-text notes"),
     },
-    async (args) => {
+  },
+  (ctx: DomainCtx<MenuSelf, "recipe" | "meal-type">) => {
+    const log = ctx.infra.log.child({ component: "update_menu" });
+    return async (args) => {
       log.info({ tool: "update_menu", ...args.lookup }, "tool invoked");
       return menuStartGuard(ctx).match(
         async (): Promise<CallToolResult> => {
@@ -138,6 +139,6 @@ export function updateMenuTool(ctx: DomainCtx<MenuSelf, "recipe" | "meal-type">)
         },
         (guard) => guard,
       );
-    },
-  );
-}
+    };
+  },
+);

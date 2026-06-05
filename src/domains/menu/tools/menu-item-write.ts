@@ -9,6 +9,7 @@ import type { MenuSelf } from "../module.js";
 import type { Menu } from "../types.js";
 
 import { MenuItemUidSchema, MenuUidSchema, RecipeUidSchema } from "../../../ids.js";
+import { defineTool } from "../../../kernel/tool.js";
 import { resolveLookup, textResult, uidOrTextLookupSchema } from "../../../shared/tools.js";
 import { toMessage } from "../../../utils/log.js";
 import { mealTypeSpecSchema } from "../../meal-type/meal-type-helpers.js";
@@ -69,25 +70,25 @@ export const addMenuItemsInputSchema = z.object({
  * `ctx.deps.recipe.get`, resolves the meal type via `ctx.deps["meal-type"]` (an unknown
  * `{name}` auto-creates a custom type), and commits through `ctx.self.commitMenu` / `ctx.self.commitMenuItemsBatch`.
  */
-export function addMenuItemsTool(ctx: DomainCtx<MenuSelf, "recipe" | "meal-type">): void {
-  const log = ctx.infra.log.child({ component: "add_menu_items" });
-  ctx.server.registerTool(
-    "add_menu_items",
-    {
-      title: "Add items to a menu",
-      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
-      description:
-        "Add one or more menuitems to a menu (saved meal plan). Look the menu up by UID or name (tiered " +
-        "fuzzy match). Each item is EITHER recipe-linked (supply recipe_uid; display name auto-resolves " +
-        "from the recipe) OR freeform (supply name; no recipe) — the two are mutually exclusive, matching " +
-        "plan_meals. Each item also carries a 1-indexed day and a meal type (name, UID, or built-in index " +
-        "0=Breakfast, 1=Lunch, 2=Dinner, 3=Snacks). If any day falls beyond the menu's current span the " +
-        "menu is automatically extended to fit before the items are added. All items validate up-front; " +
-        "if ANY item is invalid the entire batch is rejected with a per-index error enumeration so callers " +
-        "can fix every problem in one pass.",
-      inputSchema: addMenuItemsInputSchema.shape,
-    },
-    async (args) => {
+export const addMenuItemsTool = defineTool(
+  {
+    name: "add_menu_items",
+    title: "Add items to a menu",
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
+    description:
+      "Add one or more menuitems to a menu (saved meal plan). Look the menu up by UID or name (tiered " +
+      "fuzzy match). Each item is EITHER recipe-linked (supply recipe_uid; display name auto-resolves " +
+      "from the recipe) OR freeform (supply name; no recipe) — the two are mutually exclusive, matching " +
+      "plan_meals. Each item also carries a 1-indexed day and a meal type (name, UID, or built-in index " +
+      "0=Breakfast, 1=Lunch, 2=Dinner, 3=Snacks). If any day falls beyond the menu's current span the " +
+      "menu is automatically extended to fit before the items are added. All items validate up-front; " +
+      "if ANY item is invalid the entire batch is rejected with a per-index error enumeration so callers " +
+      "can fix every problem in one pass.",
+    inputSchema: addMenuItemsInputSchema.shape,
+  },
+  (ctx: DomainCtx<MenuSelf, "recipe" | "meal-type">) => {
+    const log = ctx.infra.log.child({ component: "add_menu_items" });
+    return async (args) => {
       log.info({ tool: "add_menu_items", ...args.menu, count: args.items.length }, "tool invoked");
       return menuStartGuard(ctx).match(
         async (): Promise<CallToolResult> => {
@@ -281,6 +282,6 @@ export function addMenuItemsTool(ctx: DomainCtx<MenuSelf, "recipe" | "meal-type"
         },
         (guard) => guard,
       );
-    },
-  );
-}
+    };
+  },
+);

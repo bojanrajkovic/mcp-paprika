@@ -7,6 +7,7 @@ import type { GroceryItem } from "../grocery-item/types.js";
 import type { GrocerySelf } from "../module.js";
 
 import { GroceryIngredientUidSchema, GroceryItemUidSchema, GroceryListUidSchema, NO_AISLE_UID } from "../../../ids.js";
+import { defineTool } from "../../../kernel/tool.js";
 import { textResult } from "../../../shared/tools.js";
 import { toMessage } from "../../../utils/log.js";
 import { groceryItemToMarkdown } from "../grocery-helpers.js";
@@ -33,21 +34,21 @@ const itemInputSchema = z.object({
  * is a co-owned grocery entity, so the catalog write stays in `self`). Items commit
  * through this module's bound `ctx.self.commitGroceryItemsBatch`.
  */
-export function addGroceryItemsTool(ctx: DomainCtx<GrocerySelf, "aisle" | "pantry">): void {
-  const log = ctx.infra.log.child({ component: "add_grocery_items" });
-  ctx.server.registerTool(
-    "add_grocery_items",
-    {
-      title: "Add items to a grocery list",
-      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
-      description:
-        "Add one or more items to a grocery list. Check read_grocery_list first to avoid duplicate ingredients — no server-side duplicate guard.",
-      inputSchema: {
-        listUid: GroceryListUidSchema.describe("UID of the grocery list to add items to"),
-        items: z.array(itemInputSchema).min(1).describe("Array of items to add (1 or more)"),
-      },
+export const addGroceryItemsTool = defineTool(
+  {
+    name: "add_grocery_items",
+    title: "Add items to a grocery list",
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
+    description:
+      "Add one or more items to a grocery list. Check read_grocery_list first to avoid duplicate ingredients — no server-side duplicate guard.",
+    inputSchema: {
+      listUid: GroceryListUidSchema.describe("UID of the grocery list to add items to"),
+      items: z.array(itemInputSchema).min(1).describe("Array of items to add (1 or more)"),
     },
-    async (args) => {
+  },
+  (ctx: DomainCtx<GrocerySelf, "aisle" | "pantry">) => {
+    const log = ctx.infra.log.child({ component: "add_grocery_items" });
+    return async (args) => {
       log.info({ tool: "add_grocery_items", listUid: args.listUid, count: args.items.length }, "tool invoked");
       return groceryStartGuard(ctx.self).match(
         async (): Promise<CallToolResult> => {
@@ -166,9 +167,9 @@ export function addGroceryItemsTool(ctx: DomainCtx<GrocerySelf, "aisle" | "pantr
         },
         (guard) => guard,
       );
-    },
-  );
-}
+    };
+  },
+);
 
 // Strict (exported for direct Zod-validation tests). `purchased` was promoted to
 // its own intent verb (mark_grocery_item_purchased), so a stray `purchased` key
@@ -186,19 +187,19 @@ export const updateGroceryItemInputSchema = z
  * Registers `update_grocery_item`, kernel-shaped — resolves the aisle via
  * `ctx.deps.aisle.ensureAisle` and writes through `ctx.self.commitGroceryItem`.
  */
-export function updateGroceryItemTool(ctx: DomainCtx<GrocerySelf, "aisle" | "pantry">): void {
-  const log = ctx.infra.log.child({ component: "update_grocery_item" });
-  ctx.server.registerTool(
-    "update_grocery_item",
-    {
-      title: "Edit a grocery item",
-      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
-      description:
-        "Update a grocery item's quantity, aisle, or notes by UID. Only provided fields are changed; " +
-        "omitted fields retain their current values. To check an item off, use mark_grocery_item_purchased.",
-      inputSchema: updateGroceryItemInputSchema,
-    },
-    async (args) => {
+export const updateGroceryItemTool = defineTool(
+  {
+    name: "update_grocery_item",
+    title: "Edit a grocery item",
+    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
+    description:
+      "Update a grocery item's quantity, aisle, or notes by UID. Only provided fields are changed; " +
+      "omitted fields retain their current values. To check an item off, use mark_grocery_item_purchased.",
+    inputSchema: updateGroceryItemInputSchema,
+  },
+  (ctx: DomainCtx<GrocerySelf, "aisle" | "pantry">) => {
+    const log = ctx.infra.log.child({ component: "update_grocery_item" });
+    return async (args) => {
       log.info({ tool: "update_grocery_item", uid: args.uid }, "tool invoked");
       return groceryStartGuard(ctx.self).match(
         async (): Promise<CallToolResult> => {
@@ -237,27 +238,27 @@ export function updateGroceryItemTool(ctx: DomainCtx<GrocerySelf, "aisle" | "pan
         },
         (guard) => guard,
       );
-    },
-  );
-}
+    };
+  },
+);
 
 /**
  * Registers `delete_grocery_item`, kernel-shaped — soft-delete tombstone, writing
  * through `ctx.self.commitGroceryItem`.
  */
-export function deleteGroceryItemTool(ctx: DomainCtx<GrocerySelf, "aisle" | "pantry">): void {
-  const log = ctx.infra.log.child({ component: "delete_grocery_item" });
-  ctx.server.registerTool(
-    "delete_grocery_item",
-    {
-      title: "Delete a grocery item",
-      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
-      description: "Delete a grocery item by UID.",
-      inputSchema: {
-        uid: GroceryItemUidSchema.describe("Grocery item UID to delete"),
-      },
+export const deleteGroceryItemTool = defineTool(
+  {
+    name: "delete_grocery_item",
+    title: "Delete a grocery item",
+    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
+    description: "Delete a grocery item by UID.",
+    inputSchema: {
+      uid: GroceryItemUidSchema.describe("Grocery item UID to delete"),
     },
-    async (args) => {
+  },
+  (ctx: DomainCtx<GrocerySelf, "aisle" | "pantry">) => {
+    const log = ctx.infra.log.child({ component: "delete_grocery_item" });
+    return async (args) => {
       log.info({ tool: "delete_grocery_item", uid: args.uid }, "tool invoked");
       return groceryStartGuard(ctx.self).match(
         async (): Promise<CallToolResult> => {
@@ -284,6 +285,6 @@ export function deleteGroceryItemTool(ctx: DomainCtx<GrocerySelf, "aisle" | "pan
         },
         (guard) => guard,
       );
-    },
-  );
-}
+    };
+  },
+);

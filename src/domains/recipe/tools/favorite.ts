@@ -5,6 +5,7 @@ import type { DomainCtx } from "../../../kernel/registry.js";
 import type { RecipeSelf } from "../module.js";
 
 import { RecipeUidSchema } from "../../../ids.js";
+import { defineTool } from "../../../kernel/tool.js";
 import { textResult } from "../../../shared/tools.js";
 import { toMessage } from "../../../utils/log.js";
 import { recipeToMarkdown } from "../recipe-markdown.js";
@@ -23,17 +24,17 @@ export const unfavoriteRecipeInputSchema = z
   .strict();
 
 /** Registers `favorite_recipe`, kernel-shaped — writes through `ctx.self.commitRecipe`. */
-export function favoriteRecipeTool(ctx: DomainCtx<RecipeSelf, never>): void {
-  const log = ctx.infra.log.child({ component: "favorite_recipe" });
-  ctx.server.registerTool(
-    "favorite_recipe",
-    {
-      title: "Mark a recipe as a favorite",
-      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
-      description: "Mark a recipe as a favorite by UID (adds it to the Favorites list).",
-      inputSchema: favoriteRecipeInputSchema,
-    },
-    async (args) => {
+export const favoriteRecipeTool = defineTool(
+  {
+    name: "favorite_recipe",
+    title: "Mark a recipe as a favorite",
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
+    description: "Mark a recipe as a favorite by UID (adds it to the Favorites list).",
+    inputSchema: favoriteRecipeInputSchema,
+  },
+  (ctx: DomainCtx<RecipeSelf, never>) => {
+    const log = ctx.infra.log.child({ component: "favorite_recipe" });
+    return async (args) => {
       log.info({ tool: "favorite_recipe", uid: args.uid }, "tool invoked");
       return recipeColdStartGuard(ctx.self).match(
         async (): Promise<CallToolResult> => {
@@ -60,22 +61,22 @@ export function favoriteRecipeTool(ctx: DomainCtx<RecipeSelf, never>): void {
         },
         (guard) => guard,
       );
-    },
-  );
-}
+    };
+  },
+);
 
 /** Registers `unfavorite_recipe`, kernel-shaped — writes through `ctx.self.commitRecipe`. */
-export function unfavoriteRecipeTool(ctx: DomainCtx<RecipeSelf, never>): void {
-  const log = ctx.infra.log.child({ component: "unfavorite_recipe" });
-  ctx.server.registerTool(
-    "unfavorite_recipe",
-    {
-      title: "Remove a recipe from favorites",
-      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
-      description: "Remove a recipe from the Favorites list by UID.",
-      inputSchema: unfavoriteRecipeInputSchema,
-    },
-    async (args) => {
+export const unfavoriteRecipeTool = defineTool(
+  {
+    name: "unfavorite_recipe",
+    title: "Remove a recipe from favorites",
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
+    description: "Remove a recipe from the Favorites list by UID.",
+    inputSchema: unfavoriteRecipeInputSchema,
+  },
+  (ctx: DomainCtx<RecipeSelf, never>) => {
+    const log = ctx.infra.log.child({ component: "unfavorite_recipe" });
+    return async (args) => {
       log.info({ tool: "unfavorite_recipe", uid: args.uid }, "tool invoked");
       return recipeColdStartGuard(ctx.self).match(
         async (): Promise<CallToolResult> => {
@@ -102,9 +103,9 @@ export function unfavoriteRecipeTool(ctx: DomainCtx<RecipeSelf, never>): void {
         },
         (guard) => guard,
       );
-    },
-  );
-}
+    };
+  },
+);
 
 /** Both favorite-state registrars, in registration order. */
 export const favoriteRecipeTools = [favoriteRecipeTool, unfavoriteRecipeTool];

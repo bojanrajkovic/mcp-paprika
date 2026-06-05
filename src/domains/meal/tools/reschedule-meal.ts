@@ -7,6 +7,7 @@ import type { MealSelf } from "../module.js";
 import type { Meal } from "../types.js";
 
 import { MealUidSchema } from "../../../ids.js";
+import { defineTool } from "../../../kernel/tool.js";
 import { textResult } from "../../../shared/tools.js";
 import { parseCalendarDayWire } from "../../../utils/dates.js";
 import { toMessage } from "../../../utils/log.js";
@@ -37,20 +38,20 @@ export const rescheduleMealInputSchema = z
  * `ctx.self.commitMealsBatch`, resolves the optional type co-change via
  * `resolveOrCreateMealType` (an unknown `{name}` auto-creates a custom type).
  */
-export function rescheduleMealTool(ctx: DomainCtx<MealSelf, "recipe" | "meal-type">): void {
-  const log = ctx.infra.log.child({ component: "reschedule_meal" });
-  ctx.server.registerTool(
-    "reschedule_meal",
-    {
-      title: "Reschedule a planned meal",
-      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
-      description:
-        "Reschedule a planned meal to a different date by UID, optionally also changing its meal type. " +
-        "Moving the date re-sequences the meal to the end of the destination day's order. To change a " +
-        "meal's recipe link, freeform name, or scale instead, use update_meal.",
-      inputSchema: rescheduleMealInputSchema,
-    },
-    async (args) => {
+export const rescheduleMealTool = defineTool(
+  {
+    name: "reschedule_meal",
+    title: "Reschedule a planned meal",
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
+    description:
+      "Reschedule a planned meal to a different date by UID, optionally also changing its meal type. " +
+      "Moving the date re-sequences the meal to the end of the destination day's order. To change a " +
+      "meal's recipe link, freeform name, or scale instead, use update_meal.",
+    inputSchema: rescheduleMealInputSchema,
+  },
+  (ctx: DomainCtx<MealSelf, "recipe" | "meal-type">) => {
+    const log = ctx.infra.log.child({ component: "reschedule_meal" });
+    return async (args) => {
       log.info({ tool: "reschedule_meal", uid: args.uid, date: args.date }, "tool invoked");
       return mealStartGuard(ctx.self, ctx.deps["meal-type"]).match(
         async (): Promise<CallToolResult> => {
@@ -122,6 +123,6 @@ export function rescheduleMealTool(ctx: DomainCtx<MealSelf, "recipe" | "meal-typ
         },
         (guard) => guard,
       );
-    },
-  );
-}
+    };
+  },
+);

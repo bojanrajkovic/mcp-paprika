@@ -7,6 +7,7 @@ import type { PantrySelf } from "../module.js";
 import type { PantryItem } from "../types.js";
 
 import { NO_AISLE_UID, PantryItemUidSchema } from "../../../ids.js";
+import { defineTool } from "../../../kernel/tool.js";
 import { textResult } from "../../../shared/tools.js";
 import { normalizeWire, todayWire } from "../../../utils/dates.js";
 // pattern: Imperative Shell
@@ -34,22 +35,22 @@ const itemInputSchema = z.object({
  * declared `aisle` dependency contract (`ctx.deps.aisle.ensureAisle`), never
  * reaching aisle's store directly.
  */
-export function addPantryItemsTool(ctx: DomainCtx<PantrySelf, "aisle">): void {
-  const log = ctx.infra.log.child({ component: "add_pantry_items" });
-  ctx.server.registerTool(
-    "add_pantry_items",
-    {
-      title: "Add items to the pantry",
-      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
-      description:
-        "Add one or more items to the pantry. Skips items that duplicate an existing ingredient (case-insensitive) " +
-        "and reports them with the existing UID and a suggestion to use update_pantry_item. " +
-        "All date fields are validated up-front; a single unparseable date rejects the entire batch.",
-      inputSchema: {
-        items: z.array(itemInputSchema).min(1).describe("Array of items to add (1 or more)"),
-      },
+export const addPantryItemsTool = defineTool(
+  {
+    name: "add_pantry_items",
+    title: "Add items to the pantry",
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
+    description:
+      "Add one or more items to the pantry. Skips items that duplicate an existing ingredient (case-insensitive) " +
+      "and reports them with the existing UID and a suggestion to use update_pantry_item. " +
+      "All date fields are validated up-front; a single unparseable date rejects the entire batch.",
+    inputSchema: {
+      items: z.array(itemInputSchema).min(1).describe("Array of items to add (1 or more)"),
     },
-    async (args) => {
+  },
+  (ctx: DomainCtx<PantrySelf, "aisle">) => {
+    const log = ctx.infra.log.child({ component: "add_pantry_items" });
+    return async (args) => {
       log.info({ tool: "add_pantry_items", count: args.items.length }, "tool invoked");
       return pantryStartGuard(ctx.self).match(
         async (): Promise<CallToolResult> => {
@@ -194,6 +195,6 @@ export function addPantryItemsTool(ctx: DomainCtx<PantrySelf, "aisle">): void {
         },
         (guard) => guard,
       );
-    },
-  );
-}
+    };
+  },
+);
