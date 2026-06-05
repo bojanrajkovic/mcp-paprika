@@ -4,7 +4,7 @@ Last verified: 2026-06-04
 
 ## Purpose
 
-Two optional feature modules on the kernel (`discover/`, `photo-gen/`), each composed in its own `.self` factory: the semantic-search stack (`EmbeddingClient` → `VectorStore` → vendored `JsonVectorIndex`) and the photo-generation stack (`PhotographyClient` + SSRF-hardened image fetch). Both are opt-in on config — an unconfigured feature builds a `null` component. The kernel registers their tools (`discover_recipes`, `generate_recipe_photo`) **unconditionally**; the feature gate lives inside the handler, which no-ops when its component is `null` (ADR-0009 §5).
+Two optional feature modules on the kernel (`discover/`, `photo-gen/`), each composed in its own `.state` factory: the semantic-search stack (`EmbeddingClient` → `VectorStore` → vendored `JsonVectorIndex`) and the photo-generation stack (`PhotographyClient` + SSRF-hardened image fetch). Both are opt-in on config — an unconfigured feature builds a `null` component. The kernel registers their tools (`discover_recipes`, `generate_recipe_photo`) **unconditionally**; the feature gate lives inside the handler, which no-ops when its component is `null` (ADR-0009 §5).
 
 ## Key References
 

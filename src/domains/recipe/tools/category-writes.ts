@@ -12,16 +12,16 @@ import { textResult } from "../../../shared/tools.js";
 import { toMessage } from "../../../utils/log.js";
 import { categoryStartGuard } from "./guards.js";
 
-function categorySummary(self: RecipeState, category: Category): string {
-  const parent = category.parentUid ? self.category.store.get(category.parentUid) : undefined;
+function categorySummary(state: RecipeState, category: Category): string {
+  const parent = category.parentUid ? state.category.store.get(category.parentUid) : undefined;
   const parentLine = parent ? ` (under **${parent.name}**)` : " (top-level)";
   return `**${category.name}**${parentLine} — uid: \`${category.uid}\``;
 }
 
 /** Highest `orderFlag` across all known categories, or -1 when none exist. */
-function maxCategoryOrderFlag(self: RecipeState): number {
+function maxCategoryOrderFlag(state: RecipeState): number {
   let max = -1;
-  for (const category of self.category.store.getAll()) {
+  for (const category of state.category.store.getAll()) {
     if (category.orderFlag > max) max = category.orderFlag;
   }
   return max;
@@ -34,14 +34,14 @@ function maxCategoryOrderFlag(self: RecipeState): number {
  * sits below the category, so the link would close a loop. The `seen` set guards
  * against an already-corrupt chain looping forever.
  */
-function wouldCreateCycle(self: RecipeState, categoryUid: CategoryUid, newParentUid: CategoryUid): boolean {
+function wouldCreateCycle(state: RecipeState, categoryUid: CategoryUid, newParentUid: CategoryUid): boolean {
   let cursor: CategoryUid | null = newParentUid;
   const seen = new Set<CategoryUid>();
   while (cursor !== null) {
     if (cursor === categoryUid) return true;
     if (seen.has(cursor)) break;
     seen.add(cursor);
-    const parent = self.category.store.get(cursor);
+    const parent = state.category.store.get(cursor);
     cursor = parent ? parent.parentUid : null;
   }
   return false;

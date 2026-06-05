@@ -11,10 +11,9 @@ import { textResult } from "../../../shared/tools.js";
 import { mealToMarkdown } from "../meal-helpers.js";
 
 /**
- * Kernel-shaped meal helpers. Each reads this module's own meal store via `self`
- * and its declared deps' contracts (`ctx.deps.recipe`, `ctx.deps["meal-type"]`).
- * Meal-type spec resolution is `deps["meal-type"].resolveSpec(spec)` — the
- * meal-type module owns that resolver and publishes it on its api.
+ * Meal-domain tool helpers — the readiness gates and the per-date `order_flag`
+ * assigner. Meal-type spec resolution goes through `deps["meal-type"].resolveSpec(spec)`:
+ * the meal-type module owns that resolver and publishes it on its api.
  */
 
 /**
@@ -24,8 +23,8 @@ import { mealToMarkdown } from "../meal-helpers.js";
  * meal type" errors that look like input mistakes but are actually a cold-cache
  * state. Guarding both up front turns that into a clear "still syncing" message.
  */
-export function mealStartGuard(self: MealState, mealType: MealTypeApi): Result<void, CallToolResult> {
-  if (!self.store.hasSynced || !mealType.hasSynced()) {
+export function mealStartGuard(state: MealState, mealType: MealTypeApi): Result<void, CallToolResult> {
+  if (!state.store.hasSynced || !mealType.hasSynced()) {
     return err(textResult("Meal data is not yet synced. Try again in a few seconds."));
   }
   return ok(undefined);
@@ -39,10 +38,10 @@ export function mealStartGuard(self: MealState, mealType: MealTypeApi): Result<v
  * out an increasing counter per date so multiple meals in ONE batch that share a
  * date get sequential flags.
  */
-export function makeMealOrderFlagAssigner(self: MealState): (date: string) => number {
+export function makeMealOrderFlagAssigner(state: MealState): (date: string) => number {
   const next = new Map<string, number>();
   return (date) => {
-    const flag = next.get(date) ?? (self.store.getMaxOrderFlagOn(date) ?? -1) + 1;
+    const flag = next.get(date) ?? (state.store.getMaxOrderFlagOn(date) ?? -1) + 1;
     next.set(date, flag + 1);
     return flag;
   };

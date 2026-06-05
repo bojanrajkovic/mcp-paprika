@@ -1,7 +1,7 @@
 /**
  * Warm an in-memory store from its disk cache at module construction, so tools
  * answer correctly on a warm restart before the first sync completes. Every
- * domain `.self` factory runs this once per owned store.
+ * domain `.state` factory runs this once per owned store.
  *
  * The empty-snapshot guard is load-bearing: `store.load()` marks the store synced
  * (`EntityStore.baseLoad` sets `hasSynced` unconditionally — an empty array is a

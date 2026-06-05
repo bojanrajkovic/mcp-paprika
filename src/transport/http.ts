@@ -329,7 +329,7 @@ export async function startHttp(config: PaprikaConfig, opts: StartHttpOptions = 
 
     // Per session: a fresh branded server with every module's tools/resources
     // registered onto it. registerAll is pure (closures over the per-session server;
-    // the module self/deps/infra are process-wide and shared), so registering the same
+    // the module state/deps/infra are process-wide and shared), so registering the same
     // tools on N session servers is safe — exactly as buildMcpServer(app) was.
     const server = buildBrandedServer();
     kernel.registerAll(server);
