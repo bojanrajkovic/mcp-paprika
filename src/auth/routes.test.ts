@@ -9,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { makeVerifiedIdentity } from "../../test/auth/__fixtures__/oauth-state.js";
 import { makeDefaultOidcStub, makeDiscoveryDoc } from "../../test/auth/__fixtures__/oidc-stub.js";
+import { useTempDir } from "../../test/support/disk-caches.js";
 import { useMswServer } from "../../test/support/msw.js";
 import { makePinoCapture } from "../../test/support/tool-test-utils.js";
 import { SILENT_LOG } from "../utils/log.js";
@@ -84,7 +85,7 @@ function makeRoutesConfig(ctx: RoutesCtx, overrides: RoutesOverrides = {}): Auth
 const oidcStub = makeDefaultOidcStub();
 
 describe("Auth Routes", () => {
-  let cacheDir: string;
+  const tmp = useTempDir("paprika-routes-");
   let cache: AuthCache;
   let app: Hono;
   let authRequests: AuthRequestStore;
@@ -98,8 +99,8 @@ describe("Auth Routes", () => {
   const msw = useMswServer([...oidcStub.handlers], { onReset: () => oidcStub.resetOverrides() });
 
   beforeEach(async () => {
-    cacheDir = await mkdtemp(join(tmpdir(), "paprika-routes-"));
-    cache = await buildAuthCaches(cacheDir);
+    await tmp.setup();
+    cache = await buildAuthCaches(tmp.dir());
 
     clientStore = new DiskClientRegistrationStore(cache, "https://mcp.example.com", SILENT_LOG);
     tokenStore = new TokenStore(cache);
@@ -126,7 +127,7 @@ describe("Auth Routes", () => {
   });
 
   afterEach(async () => {
-    await rm(cacheDir, { recursive: true, force: true });
+    await tmp.teardown();
   });
 
   describe("GET /oauth/callback", () => {

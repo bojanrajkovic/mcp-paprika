@@ -1,6 +1,3 @@
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { URL } from "node:url";
 
 import type { OAuthClientInformationFull } from "@modelcontextprotocol/sdk/shared/auth.js";
@@ -10,6 +7,7 @@ import type { AuthCodeState } from "./types.js";
 
 import { makeAuthCodeState, makeVerifiedIdentity } from "../../test/auth/__fixtures__/oauth-state.js";
 import { makeDefaultOidcStub, makeDiscoveryDoc } from "../../test/auth/__fixtures__/oidc-stub.js";
+import { useTempDir } from "../../test/support/disk-caches.js";
 import { useMswServer } from "../../test/support/msw.js";
 import { makePinoCapture } from "../../test/support/tool-test-utils.js";
 import { SILENT_LOG } from "../utils/log.js";
@@ -48,7 +46,7 @@ function makeProviderAuthCode(
 const oidcStub = makeDefaultOidcStub();
 
 describe("MintingOAuthServerProvider", () => {
-  let cacheDir: string;
+  const tmp = useTempDir("paprika-provider-");
   let cache: AuthCache;
   let clientStore: DiskClientRegistrationStore;
   let tokenStore: TokenStore;
@@ -63,11 +61,10 @@ describe("MintingOAuthServerProvider", () => {
   useMswServer([...oidcStub.handlers], { onReset: () => oidcStub.resetOverrides() });
 
   beforeEach(async () => {
-    // Setup test directory
-    cacheDir = await mkdtemp(join(tmpdir(), "paprika-provider-"));
+    await tmp.setup();
 
     // Initialize cache and stores
-    cache = await buildAuthCaches(cacheDir);
+    cache = await buildAuthCaches(tmp.dir());
 
     clientStore = new DiskClientRegistrationStore(cache, "https://mcp.example.com", SILENT_LOG);
     tokenStore = new TokenStore(cache);
@@ -119,7 +116,7 @@ describe("MintingOAuthServerProvider", () => {
   });
 
   afterEach(async () => {
-    await rm(cacheDir, { recursive: true, force: true });
+    await tmp.teardown();
   });
 
   describe("authorize", () => {

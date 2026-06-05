@@ -4,12 +4,10 @@
  */
 
 import { randomUUID } from "node:crypto";
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import { useTempDir } from "../../test/support/disk-caches.js";
 import { makePinoCapture } from "../../test/support/tool-test-utils.js";
 import { SILENT_LOG } from "../utils/log.js";
 import { DiskClientRegistrationStore } from "./client-registration.js";
@@ -40,18 +38,18 @@ function makeWireRegistration(): Record<string, unknown> {
 // ============================================================================
 
 describe("DiskClientRegistrationStore", () => {
-  let tempDir: string;
+  const tmp = useTempDir("paprika-client-reg-");
   let cache: AuthCache;
   let store: DiskClientRegistrationStore;
 
   beforeEach(async () => {
-    tempDir = await mkdtemp(join(tmpdir(), "paprika-client-reg-"));
-    cache = await buildAuthCaches(tempDir);
+    await tmp.setup();
+    cache = await buildAuthCaches(tmp.dir());
     store = new DiskClientRegistrationStore(cache, "https://m.example.com", SILENT_LOG);
   });
 
   afterEach(async () => {
-    await rm(tempDir, { recursive: true, force: true });
+    await tmp.teardown();
   });
 
   describe("registerClient", () => {
@@ -190,8 +188,8 @@ describe("DiskClientRegistrationStore", () => {
       const metaIn = makeWireRegistration();
       const original = await store.registerClient(metaIn);
 
-      // Simulate restart: create fresh DiskCache instance pointing to same tempDir
-      const cache2 = await buildAuthCaches(tempDir);
+      // Simulate restart: create fresh DiskCache instance pointing to the same directory
+      const cache2 = await buildAuthCaches(tmp.dir());
       const store2 = new DiskClientRegistrationStore(cache2, "https://m.example.com", SILENT_LOG);
 
       // Read from fresh instance
@@ -295,7 +293,7 @@ describe("DiskClientRegistrationStore", () => {
       expect(retrieved).toBeUndefined();
 
       // Verify it's gone after restart (persisted)
-      const cache2 = await buildAuthCaches(tempDir);
+      const cache2 = await buildAuthCaches(tmp.dir());
       const store2 = new DiskClientRegistrationStore(cache2, "https://m.example.com", SILENT_LOG);
       retrieved = await store2.getClient(registered.client_id);
       expect(retrieved).toBeUndefined();

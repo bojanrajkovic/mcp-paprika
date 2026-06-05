@@ -1,10 +1,7 @@
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-
 import { Hono } from "hono";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import { useTempDir } from "../../test/support/disk-caches.js";
 import { BRANDING, FAVICON_PATH } from "../utils/branding.js";
 import { SILENT_LOG } from "../utils/log.js";
 import { AuthCodeStore } from "./auth-code-store.js";
@@ -17,13 +14,13 @@ import { MintingOAuthServerProvider } from "./provider.js";
 import { TokenStore } from "./token-store.js";
 
 describe("OAuth Metadata Customization", () => {
-  let cacheDir: string;
+  const tmp = useTempDir("paprika-metadata-");
   let cache: AuthCache;
   let provider: MintingOAuthServerProvider;
 
   beforeEach(async () => {
-    cacheDir = await mkdtemp(join(tmpdir(), "paprika-metadata-"));
-    cache = await buildAuthCaches(cacheDir);
+    await tmp.setup();
+    cache = await buildAuthCaches(tmp.dir());
 
     const clientStore = new DiskClientRegistrationStore(cache, "https://mcp.example.com", SILENT_LOG);
     const tokenStore = new TokenStore(cache);
@@ -62,7 +59,7 @@ describe("OAuth Metadata Customization", () => {
   });
 
   afterEach(async () => {
-    await rm(cacheDir, { recursive: true, force: true });
+    await tmp.teardown();
   });
 
   describe("buildCustomizedAuthorizationServerMetadata", () => {

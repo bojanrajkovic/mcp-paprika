@@ -1,11 +1,8 @@
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { makeAuthCodeState, makeAuthRequestState } from "../../test/auth/__fixtures__/oauth-state.js";
 import { makeOAuthClient, makeOAuthToken } from "../../test/auth/__fixtures__/oauth.js";
+import { useTempDir } from "../../test/support/disk-caches.js";
 import { SILENT_LOG } from "../utils/log.js";
 import { AuthCodeStore } from "./auth-code-store.js";
 import { AuthRequestStore } from "./auth-request-store.js";
@@ -20,20 +17,20 @@ import { nowSeconds } from "./tokens.js";
 // Test fixture setup
 // ---------------------------------------------------------------------------
 
-let tmpDir: string;
+const tmp = useTempDir("mcp-paprika-cleanup-test-");
 let cache: AuthCache;
 let clientStore: DiskClientRegistrationStore;
 let tokenStore: TokenStore;
 
 beforeEach(async () => {
-  tmpDir = await mkdtemp(join(tmpdir(), "mcp-paprika-cleanup-test-"));
-  cache = await buildAuthCaches(tmpDir);
+  await tmp.setup();
+  cache = await buildAuthCaches(tmp.dir());
   clientStore = new DiskClientRegistrationStore(cache, "https://example.com", SILENT_LOG);
   tokenStore = new TokenStore(cache);
 });
 
 afterEach(async () => {
-  await rm(tmpDir, { recursive: true, force: true });
+  await tmp.teardown();
   vi.restoreAllMocks();
 });
 

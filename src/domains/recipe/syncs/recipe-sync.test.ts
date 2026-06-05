@@ -1,7 +1,3 @@
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { RecipeUid } from "../../../ids.js";
@@ -10,6 +6,7 @@ import type { RecipeSyncResult } from "../../../paprika/sync-types.js";
 import type { RecipeState } from "../module.js";
 
 import { makeRecipe } from "../../../../test/domains/recipe/__fixtures__/recipes.js";
+import { useTempDir } from "../../../../test/support/disk-caches.js";
 import { makeKernelInfra } from "../../../../test/support/kernel-harness.js";
 import { registeredModules } from "../../../kernel/registry.js";
 import { recipesSync } from "./recipe-sync.js";
@@ -23,24 +20,24 @@ import "../../../kernel/modules.generated.js";
  * a mock client, seeds the store/cache, then runs `recipesSync(state).reconcile(ctx)`.
  */
 describe("recipe diff-and-fetch reconcile", () => {
-  let tempDir: string;
+  const tmp = useTempDir("paprika-recipe-sync-");
   let infra: Infra;
   let state: RecipeState;
   const listRecipes = vi.fn();
   const getRecipes = vi.fn();
 
   beforeEach(async () => {
-    tempDir = await mkdtemp(join(tmpdir(), "paprika-recipe-sync-"));
+    await tmp.setup();
     listRecipes.mockReset();
     getRecipes.mockReset().mockResolvedValue([]);
-    infra = makeKernelInfra({ cacheDir: tempDir, client: { listRecipes, getRecipes } });
+    infra = makeKernelInfra({ cacheDir: tmp.dir(), client: { listRecipes, getRecipes } });
     const recipeModule = registeredModules().find((m) => m.id === "recipe");
     if (recipeModule === undefined) throw new Error("recipe module not registered");
     state = (await recipeModule.build(infra)).state as RecipeState;
   });
 
   afterEach(async () => {
-    await rm(tempDir, { recursive: true, force: true });
+    await tmp.teardown();
   });
 
   // recipesSync's reconcile always returns a RecipeSyncResult; the SyncContribution

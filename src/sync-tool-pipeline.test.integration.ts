@@ -1,7 +1,3 @@
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-
 import { http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
@@ -11,6 +7,7 @@ import type { Infra, Kernel } from "./kernel/registry.js";
 import type { PaprikaConfig } from "./utils/config.js";
 
 import { makeCategory, makeSnakeCaseRecipe } from "../test/domains/recipe/__fixtures__/recipes.js";
+import { useTempDir } from "../test/support/disk-caches.js";
 import { getText, makeStubNotifier, makeTestServer } from "../test/support/tool-test-utils.js";
 import { GeneratedImageStore } from "./features/generated-image-store.js";
 import { buildKernel } from "./kernel/registry.js";
@@ -23,7 +20,7 @@ import "./kernel/modules.generated.js";
 const API_BASE = "https://paprikaapp.com/api/v2/sync";
 
 const server = setupServer();
-let tempDir: string;
+const tmp = useTempDir("paprika-sync-tool-");
 
 beforeAll(() => {
   server.listen();
@@ -34,8 +31,7 @@ afterAll(() => {
 });
 
 beforeEach(async () => {
-  // Create a unique temp directory for each test
-  tempDir = await mkdtemp(join(tmpdir(), "paprika-sync-tool-"));
+  await tmp.setup();
   server.resetHandlers();
   // Baseline handlers: always-empty endpoints every test needs. Individual tests
   // override only what they care about via server.use() (last-registered wins in MSW).
@@ -56,8 +52,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
-  // Clean up temp directory
-  await rm(tempDir, { recursive: true, force: true });
+  await tmp.teardown();
 });
 
 // A kernel Infra over the MSW-backed real PaprikaClient: features off, a stub notifier,
@@ -78,7 +73,7 @@ async function buildKernelHarness(): Promise<{
 }> {
   const infra: Infra = {
     client: new PaprikaClient("test@example.com", "password"),
-    cacheDir: tempDir,
+    cacheDir: tmp.dir(),
     notifier: makeStubNotifier().notifier,
     log: SILENT_LOG,
     config: KERNEL_TEST_CONFIG,
