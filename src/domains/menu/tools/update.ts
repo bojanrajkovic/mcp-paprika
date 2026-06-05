@@ -2,7 +2,7 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 
 import type { DomainCtx } from "../../../kernel/registry.js";
-import type { MenuState } from "../module.js";
+import type { MenuState, MenuWrites } from "../module.js";
 import type { Menu } from "../types.js";
 
 import { MenuUidSchema } from "../../../ids.js";
@@ -13,9 +13,8 @@ import { menuToMarkdown } from "../menu-helpers.js";
 import { menuStartGuard } from "./guards.js";
 
 /**
- * Registers `update_menu`, kernel-shaped — reads/writes this module's own menu +
- * menu-item stores via `ctx.state`, commits through `ctx.state.commitMenu`, and renders
- * with the meal-type catalog from `ctx.deps["meal-type"]`.
+ * `update_menu` — edit a menu's free-form fields. Renders with the meal-type catalog
+ * from `ctx.deps["meal-type"]`.
  */
 export const updateMenuTool = defineTool(
   {
@@ -41,7 +40,7 @@ export const updateMenuTool = defineTool(
       notes: z.string().optional().describe("New free-text notes"),
     },
   },
-  (ctx: DomainCtx<MenuState, "recipe" | "meal-type">) => {
+  (ctx: DomainCtx<MenuState, "recipe" | "meal-type", MenuWrites>) => {
     const log = ctx.infra.log.child({ component: "update_menu" });
     return async (args) => {
       log.info({ tool: "update_menu", ...args.lookup }, "tool invoked");
@@ -123,7 +122,7 @@ export const updateMenuTool = defineTool(
           try {
             const saved = await ctx.infra.client.saveMenus([merged]);
             const persisted = saved[0] ?? merged;
-            await ctx.state.commitMenu(persisted);
+            await ctx.writes.commitMenu(persisted);
             return textResult(
               menuToMarkdown(
                 persisted,

@@ -5,10 +5,8 @@ import type { Menu } from "./types.js";
 /**
  * Menu's public contract — the read surface the meal-planner coordinator consumes
  * via `ctx.deps.menu` to materialize a saved menu as planner meals (`schedule_menu`).
- * Menu owns two entities (menus, menu-items); the stores and caches stay private,
- * and siblings reach only these methods. Returns the domain VALUE objects
- * (`Menu`/`MenuItem`), never the stores — analogous to `RecipeApi.get` returning a
- * `Recipe`; the isolation proof forbids `ctx.deps.menu.store`.
+ * Returns the domain VALUE objects (`Menu`/`MenuItem`), never the stores — analogous
+ * to `RecipeApi.get` returning a `Recipe`.
  *
  * Scoped to the verified live cross-domain call sites in the meal-planner coordinator
  * (`schedule_menu`), nothing speculative:

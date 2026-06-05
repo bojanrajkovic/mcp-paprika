@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import type { DomainCtx } from "../../../kernel/registry.js";
 import type { MenuItem } from "../menu-item/types.js";
-import type { MenuState } from "../module.js";
+import type { MenuState, MenuWrites } from "../module.js";
 
 import { MenuItemUidSchema } from "../../../ids.js";
 import { defineTool } from "../../../kernel/tool.js";
@@ -16,8 +16,7 @@ export const deleteMenuItemInputSchema = z.object({
 });
 
 /**
- * Registers `delete_menu_item`, kernel-shaped — reads/writes this module's own
- * menu-item store via `ctx.state`, committing through `ctx.state.commitMenuItem`.
+ * `delete_menu_item` — remove an item from a menu (soft-delete).
  */
 export const deleteMenuItemTool = defineTool(
   {
@@ -29,7 +28,7 @@ export const deleteMenuItemTool = defineTool(
       "same UID returns a friendly 'already deleted' message without re-POSTing. Requires an exact UID.",
     inputSchema: deleteMenuItemInputSchema.shape,
   },
-  (ctx: DomainCtx<MenuState, "recipe" | "meal-type">) => {
+  (ctx: DomainCtx<MenuState, "recipe" | "meal-type", MenuWrites>) => {
     const log = ctx.infra.log.child({ component: "delete_menu_item" });
     return async (args) => {
       log.info({ tool: "delete_menu_item", uid: args.uid }, "tool invoked");
@@ -44,7 +43,7 @@ export const deleteMenuItemTool = defineTool(
           const trashed: MenuItem = { ...existing, deleted: true };
           try {
             const saved = (await ctx.infra.client.saveMenuItems([trashed]))[0]!;
-            await ctx.state.commitMenuItem(saved);
+            await ctx.writes.commitMenuItem(saved);
           } catch (error) {
             const message = toMessage(error);
             log.error({ err: error, uid }, "saveMenuItems (delete_menu_item) failed");

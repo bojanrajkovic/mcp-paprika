@@ -10,9 +10,8 @@ import { menuToMarkdown } from "../menu-helpers.js";
 import { menuStartGuard } from "./guards.js";
 
 /**
- * Registers `read_menu`, kernel-shaped — reads this module's own menu + menu-item
- * stores via `ctx.state`, and the meal-type catalog (for name/order rendering) via
- * `ctx.deps["meal-type"].getAll()`.
+ * `read_menu` — read a menu with its items inlined. Resolves the meal-type catalog
+ * (for name/order rendering) via `ctx.deps["meal-type"].getAll()`.
  */
 export const readMenuTool = defineTool(
   {

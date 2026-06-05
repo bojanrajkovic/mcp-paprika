@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import type { DomainCtx } from "../../../kernel/registry.js";
 import type { MenuItem } from "../menu-item/types.js";
-import type { MenuState } from "../module.js";
+import type { MenuState, MenuWrites } from "../module.js";
 import type { Menu } from "../types.js";
 
 import { MenuItemUidSchema } from "../../../ids.js";
@@ -27,9 +27,8 @@ export const moveMenuItemInputSchema = z
   .strict();
 
 /**
- * Registers `move_menu_item`, kernel-shaped — reads/writes this module's own menu +
- * menu-item stores via `ctx.state`, committing through `ctx.state.commitMenu` /
- * `ctx.state.commitMenuItem`.
+ * `move_menu_item` — move a menu item to a different position or menu (an intent verb,
+ * not a free-form edit).
  */
 export const moveMenuItemTool = defineTool(
   {
@@ -42,7 +41,7 @@ export const moveMenuItemTool = defineTool(
       "menu's order. To change a menu item's meal type or recipe link instead, use update_menu_item.",
     inputSchema: moveMenuItemInputSchema,
   },
-  (ctx: DomainCtx<MenuState, "recipe" | "meal-type">) => {
+  (ctx: DomainCtx<MenuState, "recipe" | "meal-type", MenuWrites>) => {
     const log = ctx.infra.log.child({ component: "move_menu_item" });
     return async (args) => {
       log.info({ tool: "move_menu_item", uid: args.uid, day: args.day }, "tool invoked");
@@ -72,7 +71,7 @@ export const moveMenuItemTool = defineTool(
               const expanded: Menu = { ...parent, days: newDay };
               try {
                 const savedMenu = (await ctx.infra.client.saveMenus([expanded]))[0] ?? expanded;
-                await ctx.state.commitMenu(savedMenu);
+                await ctx.writes.commitMenu(savedMenu);
                 extendedTo = newDay;
               } catch (error) {
                 const message = toMessage(error);
@@ -100,7 +99,7 @@ export const moveMenuItemTool = defineTool(
           let saved: MenuItem;
           try {
             saved = (await ctx.infra.client.saveMenuItems([moved]))[0]!;
-            await ctx.state.commitMenuItem(saved);
+            await ctx.writes.commitMenuItem(saved);
           } catch (error) {
             const message = toMessage(error);
             log.error({ err: error, uid }, "saveMenuItems (move_menu_item) failed");

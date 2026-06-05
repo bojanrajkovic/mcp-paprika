@@ -5,7 +5,7 @@ import type { RecipeUid } from "../../../ids.js";
 import type { DomainCtx } from "../../../kernel/registry.js";
 import type { MealType } from "../../meal-type/types.js";
 import type { MenuItem } from "../menu-item/types.js";
-import type { MenuState } from "../module.js";
+import type { MenuState, MenuWrites } from "../module.js";
 import type { Menu } from "../types.js";
 
 import { MenuItemUidSchema, MenuUidSchema, RecipeUidSchema } from "../../../ids.js";
@@ -65,10 +65,9 @@ export const addMenuItemsInputSchema = z.object({
 });
 
 /**
- * Registers `add_menu_items`, kernel-shaped — reads/writes this module's own menu +
- * menu-item stores via `ctx.state`, denormalizes the recipe display name via
- * `ctx.deps.recipe.get`, resolves the meal type via `ctx.deps["meal-type"]` (an unknown
- * `{name}` auto-creates a custom type), and commits through `ctx.state.commitMenu` / `ctx.state.commitMenuItemsBatch`.
+ * `add_menu_items` — add items to a menu. Denormalizes the recipe display name via
+ * `ctx.deps.recipe.get` and resolves the meal type via `ctx.deps["meal-type"]` (an
+ * unknown `{name}` auto-creates a custom type).
  */
 export const addMenuItemsTool = defineTool(
   {
@@ -86,7 +85,7 @@ export const addMenuItemsTool = defineTool(
       "can fix every problem in one pass.",
     inputSchema: addMenuItemsInputSchema.shape,
   },
-  (ctx: DomainCtx<MenuState, "recipe" | "meal-type">) => {
+  (ctx: DomainCtx<MenuState, "recipe" | "meal-type", MenuWrites>) => {
     const log = ctx.infra.log.child({ component: "add_menu_items" });
     return async (args) => {
       log.info({ tool: "add_menu_items", ...args.menu, count: args.items.length }, "tool invoked");
@@ -204,7 +203,7 @@ export const addMenuItemsTool = defineTool(
             try {
               const saved = await ctx.infra.client.saveMenus([extended]);
               const persisted = saved[0] ?? extended;
-              await ctx.state.commitMenu(persisted);
+              await ctx.writes.commitMenu(persisted);
               menuForRender = persisted;
               extendedTo = maxDay;
             } catch (error) {
@@ -260,7 +259,7 @@ export const addMenuItemsTool = defineTool(
           let savedItems: ReadonlyArray<MenuItem>;
           try {
             savedItems = await ctx.infra.client.saveMenuItems(builtItems);
-            await ctx.state.commitMenuItemsBatch(savedItems);
+            await ctx.writes.commitMenuItemsBatch(savedItems);
           } catch (error) {
             const message = toMessage(error);
             log.error({ err: error, uid: menu.uid, count: builtItems.length }, "saveMenuItems failed");

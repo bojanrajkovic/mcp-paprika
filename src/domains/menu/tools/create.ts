@@ -2,7 +2,7 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 
 import type { DomainCtx } from "../../../kernel/registry.js";
-import type { MenuState } from "../module.js";
+import type { MenuState, MenuWrites } from "../module.js";
 import type { Menu } from "../types.js";
 
 import { MenuUidSchema } from "../../../ids.js";
@@ -13,9 +13,8 @@ import { menuToMarkdown } from "../menu-helpers.js";
 import { menuStartGuard } from "./guards.js";
 
 /**
- * Registers `create_menu`, kernel-shaped — reads/writes this module's own menu store
- * via `ctx.state`, commits through `ctx.state.commitMenu`, and renders with the
- * meal-type catalog from `ctx.deps["meal-type"]`.
+ * `create_menu` — create a menu. Renders with the meal-type catalog from
+ * `ctx.deps["meal-type"]`.
  */
 export const createMenuTool = defineTool(
   {
@@ -32,7 +31,7 @@ export const createMenuTool = defineTool(
       notes: z.string().optional().default("").describe("Optional free-text notes for the menu"),
     },
   },
-  (ctx: DomainCtx<MenuState, "recipe" | "meal-type">) => {
+  (ctx: DomainCtx<MenuState, "recipe" | "meal-type", MenuWrites>) => {
     const log = ctx.infra.log.child({ component: "create_menu" });
     return async (args) => {
       // `.default()` is applied by the MCP SDK's Zod parse; fall back here so the
@@ -68,7 +67,7 @@ export const createMenuTool = defineTool(
           try {
             const saved = await ctx.infra.client.saveMenus([newMenu]);
             const created = saved[0] ?? newMenu;
-            await ctx.state.commitMenu(created);
+            await ctx.writes.commitMenu(created);
             return textResult(menuToMarkdown(created, [], ctx.deps["meal-type"].getAll()));
           } catch (error) {
             const message = toMessage(error);

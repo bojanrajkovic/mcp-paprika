@@ -7,15 +7,13 @@ import type { MenuState } from "../module.js";
 import { menuToMarkdown } from "../menu-helpers.js";
 
 /**
- * Registers `paprika://menu/{uid}`, kernel-shaped — reads this module's own menu +
- * menu-item stores via `ctx.state`, and the meal-type catalog (for item name/order
- * rendering) via `ctx.deps["meal-type"].getAll()`. Menu is one of the three
- * Content-class entities with a resource surface (ADR-0004); a child menu-item
- * change fires `resourceListChanged()` because items are inlined here.
+ * `paprika://menu/{uid}` — render a menu with its items inlined. Resolves the
+ * meal-type catalog (for item name/order rendering) via `ctx.deps["meal-type"].getAll()`.
+ * Menu is one of the three Content-class entities with a resource surface (ADR-0004);
+ * a child menu-item change fires `resourceListChanged()` because items are inlined here.
  *
- * Recipe references are NOT read — recipe linkage is denormalized onto
- * `MenuItem.name` at write time, so the resource needs only the meal-type dep of its
- * two declared deps.
+ * Recipe references are NOT read — recipe linkage is denormalized onto `MenuItem.name`
+ * at write time, so the resource needs only the meal-type dep of its two declared deps.
  */
 export function menuResource(ctx: DomainCtx<MenuState, "recipe" | "meal-type">): void {
   const template = new ResourceTemplate("paprika://menu/{uid}", {

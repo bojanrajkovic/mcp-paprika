@@ -8,8 +8,7 @@ import { textResult } from "../../../shared/tools.js";
 import { menuStartGuard } from "./guards.js";
 
 /**
- * Registers `list_menus`, kernel-shaped — reads this module's own menu + menu-item
- * stores via `ctx.state`.
+ * `list_menus` — list all menus.
  */
 export const listMenusTool = defineTool(
   {
