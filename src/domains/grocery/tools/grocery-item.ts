@@ -28,8 +28,8 @@ const itemInputSchema = z.object({
 
 /**
  * `add_grocery_items` — batch-add grocery items. Resolves aisles via the declared
- * `aisle` dependency contract (`ctx.deps.aisle.ensureAisle` / `.get` / `.resolveByName`,
- * never reaching aisle's store) and writes the grocery-ingredient catalog through this
+ * `aisle` dependency contract (`ctx.deps.aisle.ensureAisle` / `.get` / `.resolveByName`) and
+ * writes the grocery-ingredient catalog through this
  * module's OWN ingredient store + cache (`ctx.state.ingredients.*` — ingredient is a
  * co-owned grocery entity, so the catalog write stays in-module).
  */

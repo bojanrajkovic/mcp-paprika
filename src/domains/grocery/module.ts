@@ -55,8 +55,7 @@ export interface GroceryEntitySlice<Store, Cache> {
  * sync via `syncReplaceAllEntity`); the ingredient catalog is a plain name-keyed
  * store (a direct bespoke reconcile, no pending-write sweep). Foreign keys point OUT
  * to declared deps: items + ingredients file into aisles (`dependsOn: aisle`), and
- * `move_grocery_items_to_pantry` writes THROUGH the pantry contract (`dependsOn:
- * pantry`); grocery never reaches a sibling's store.
+ * `move_grocery_items_to_pantry` writes THROUGH the pantry contract (`dependsOn: pantry`).
  */
 export interface GroceryState {
   readonly lists: GroceryEntitySlice<GroceryListStore, DiskCache<GroceryList>>;

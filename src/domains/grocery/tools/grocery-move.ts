@@ -17,8 +17,7 @@ import { groceryStartGuard } from "./guards.js";
  * `move_grocery_items_to_pantry` — move grocery items into the pantry. This IS a
  * grocery tool despite the name: its input is grocery-item UIDs, its primary store is
  * grocery's own item store, and the pantry side goes THROUGH the declared `pantry`
- * dependency contract (`ctx.deps.pantry.hasSynced` / `createItems`), never reaching
- * pantry's store.
+ * dependency contract (`ctx.deps.pantry.hasSynced` / `createItems`).
  *
  * Create-first/delete-second ordering matters: pantry items are created first (so a
  * pantry failure leaves the grocery items intact), then the grocery items are

@@ -16,7 +16,7 @@ import { formatCalendarDayWire, parseCalendarDay } from "../../../utils/dates.js
  * `schedule_menu` — the meal-planner COORDINATOR's only tool. Every cross-domain store
  * read/write is expressed through a DECLARED dependency's contract — `ctx.deps.recipe`,
  * `ctx.deps.menu`, `ctx.deps["meal-type"]`, `ctx.deps.meal`. The coordinator owns no
- * store, so it can never reach a dep's store/cache directly.
+ * store of its own.
  *
  * Three readiness gates are composed inline as plain boolean checks: recipe
  * (re-resolve names), menu + meal-type (resolve items and their types), and meal

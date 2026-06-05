@@ -31,8 +31,7 @@ const itemInputSchema = z.object({
 
 /**
  * `add_pantry_items` — batch-add pantry items. Resolves each item's aisle through
- * the declared `aisle` dependency contract (`ctx.deps.aisle.ensureAisle`), never
- * reaching aisle's store directly.
+ * the declared `aisle` dependency contract (`ctx.deps.aisle.ensureAisle`).
  */
 export const addPantryItemsTool = defineTool(
   {
