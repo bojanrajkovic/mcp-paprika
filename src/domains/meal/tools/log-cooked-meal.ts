@@ -10,7 +10,7 @@ import { MealUidSchema, RecipeUidSchema } from "../../../ids.js";
 import { textResult } from "../../../shared/tools.js";
 import { parseCalendarDayWire, todayWire } from "../../../utils/dates.js";
 import { toMessage } from "../../../utils/log.js";
-import { formatMealTypeResolveError, mealTypeSpecSchema } from "../../meal-type/meal-type-helpers.js";
+import { mealTypeSpecSchema, resolveOrCreateMealType } from "../../meal-type/meal-type-helpers.js";
 import { makeMealOrderFlagAssigner, mealStartGuard, renderMealCard } from "./helpers.js";
 
 export const logCookedMealInputSchema = z
@@ -32,7 +32,7 @@ export const logCookedMealInputSchema = z
 /**
  * Registers `log_cooked_meal`, kernel-shaped — writes through
  * `ctx.self.commitMealsBatch`, resolves the recipe via `ctx.deps.recipe.get` and
- * the meal type via `ctx.deps["meal-type"].resolveSpec`.
+ * the meal type via `resolveOrCreateMealType` (an unknown `{name}` auto-creates a custom type).
  */
 export function logCookedMealTool(ctx: DomainCtx<MealSelf, "recipe" | "meal-type">): void {
   const log = ctx.infra.log.child({ component: "log_cooked_meal" });
@@ -53,9 +53,9 @@ export function logCookedMealTool(ctx: DomainCtx<MealSelf, "recipe" | "meal-type
         async (): Promise<CallToolResult> => {
           // Type defaults to Dinner (the common case for a cooked meal).
           const typeSpec: z.infer<typeof mealTypeSpecSchema> = args.type ?? { builtin: 2 };
-          const typeResult = ctx.deps["meal-type"].resolveSpec(typeSpec);
+          const typeResult = await resolveOrCreateMealType(ctx.deps["meal-type"], typeSpec);
           if (!typeResult.ok) {
-            return textResult(formatMealTypeResolveError(typeResult));
+            return textResult(typeResult.message);
           }
           // Custom mealtypes carry originalType: null; Meal.type is vestigial when
           // type_uid is set (see plan_meals for the full rationale).

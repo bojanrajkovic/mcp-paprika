@@ -145,6 +145,22 @@ function aisleToApiPayload(aisle: Readonly<Aisle>): Record<string, unknown> {
   };
 }
 
+// Meal-type create/upsert payload — the camelCase→snake_case wire transform, the
+// inverse of MealTypeSchema. POSTs all eight fields (verified in
+// docs/wire-captures/mealtypes.har.json "create mealtype"); Paprika upserts by `uid`.
+function mealTypeToApiPayload(mealType: Readonly<MealType>): Record<string, unknown> {
+  return {
+    uid: mealType.uid,
+    name: mealType.name,
+    color: mealType.color,
+    order_flag: mealType.orderFlag,
+    original_type: mealType.originalType,
+    export_all_day: mealType.exportAllDay,
+    export_time: mealType.exportTime,
+    deleted: mealType.deleted,
+  };
+}
+
 // The Category type carries no `deleted` field (the read schema omits it), but
 // the write wire format requires it: a create/rename POSTs `deleted: false`, a
 // soft-delete POSTs `deleted: true` (data-only tombstone), verified in
@@ -433,6 +449,14 @@ export class PaprikaClient {
   async saveAisle(aisle: Readonly<Aisle>): Promise<Aisle> {
     await this.postEntities(`${API_BASE}/groceryaisles/`, [aisle], aisleToApiPayload);
     return aisle as Aisle;
+  }
+
+  // Create or rename a meal type. POSTs a single-element gzip array to the
+  // collection URL with `deleted: false`; Paprika upserts by `uid` and returns
+  // `{result: true}`. Mirrors saveAisle — the caller (ensureMealType) commits locally.
+  async saveMealType(mealType: Readonly<MealType>): Promise<MealType> {
+    await this.postEntities(`${API_BASE}/mealtypes/`, [mealType], mealTypeToApiPayload);
+    return mealType as MealType;
   }
 
   // Create or rename/re-parent a category. POSTs a single-element gzip array to

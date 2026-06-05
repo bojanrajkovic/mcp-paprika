@@ -356,24 +356,6 @@ describe("plan_meals tool — failure paths", () => {
     expect((kh.self() as MealSelf).store.size).toBe(storeBefore);
   });
 
-  it("unknown type name 'Brunch' → exact error string with known types list", async () => {
-    kh.seed({ meals: [], mealTypes: makeBuiltins(), recipes: [] });
-    const storeBefore = (kh.self() as MealSelf).store.size;
-
-    const result = await kh.callTool("plan_meals", {
-      items: [{ name: "Weekend Brunch", date: "2026-06-15", type: { name: "Brunch" } }],
-    });
-    const text = getText(result);
-
-    expect(text).toContain(
-      'Item 0 (type {name: "Brunch"}): unknown meal type "Brunch". ' +
-        "Known types: Breakfast, Lunch, Dinner, Snacks. " +
-        "Use the {uid} or {builtin} discriminator to reference a custom meal type.",
-    );
-    expect(kh.client().saveMeals).not.toHaveBeenCalled();
-    expect((kh.self() as MealSelf).store.size).toBe(storeBefore);
-  });
-
   it("schema rejects items missing both recipe_uid and name (structural union)", () => {
     const result = addMealsInputSchema.safeParse({ items: [{ date: "2026-06-15", type: { builtin: 0 } }] });
     expect(result.success).toBe(false);
@@ -401,7 +383,7 @@ describe("plan_meals tool — failure paths", () => {
     const result = await kh.callTool("plan_meals", {
       items: [
         { name: "Bad Date Item", date: "bad", type: { builtin: 2 } },
-        { name: "Good Date Bad Type", date: "2026-06-15", type: { name: "Brunch" } },
+        { name: "Good Date Bad Type", date: "2026-06-15", type: { uid: "NOPE" as MealTypeUid } },
         { name: "Also Bad Date", date: "also-bad", type: { builtin: 0 } },
       ],
     });
@@ -409,10 +391,10 @@ describe("plan_meals tool — failure paths", () => {
 
     expect(text).toContain("Could not add 3 meals:");
     expect(text).toContain('could not parse date "bad"');
-    expect(text).toContain('unknown meal type "Brunch"');
+    expect(text).toContain('unknown meal type UID "NOPE"');
     expect(text).toContain('could not parse date "also-bad"');
     expect(text).toContain("Item 0:");
-    expect(text).toContain("Item 1 (");
+    expect(text).toContain("Item 1:");
     expect(text).toContain("Item 2:");
     expect(kh.client().saveMeals).not.toHaveBeenCalled();
     expect((kh.self() as MealSelf).store.size).toBe(storeBefore);
@@ -749,5 +731,101 @@ describe("delete_meal", () => {
 
     expect(text).toBe(`No meal found with UID "UNKNOWN" (it may not exist or was already deleted).`);
     expect(kh.client().saveMeals).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// meal-type auto-create (#224) — plan_meals (batch) + update_meal (single)
+// ---------------------------------------------------------------------------
+
+describe("plan_meals / update_meal — meal-type auto-create", () => {
+  const kh = useKernelHarness("meal");
+  beforeEach(kh.setup);
+  afterEach(kh.teardown);
+
+  it("plan_meals: unknown type {name} auto-creates a custom type and schedules the meal with it", async () => {
+    vi.mocked(kh.client().saveMeals).mockImplementation(async (items) => [...items]);
+    vi.mocked(kh.client().saveMealType).mockImplementation(async (mt) => mt);
+    kh.seed({ meals: [], mealTypes: makeBuiltins(), recipes: [makeRecipe({ uid: TACOS_UID, name: "Tacos" })] });
+
+    await kh.callTool("plan_meals", {
+      items: [{ recipe_uid: TACOS_UID, date: "2026-06-15", type: { name: "Brunch" } }],
+    });
+
+    // The custom type was POSTed as a custom type (originalType null), defaults applied,
+    // order_flag = max(builtins 0..3) + 1 = 4.
+    expect(kh.client().saveMealType).toHaveBeenCalledOnce();
+    const createdType = vi.mocked(kh.client().saveMealType).mock.calls[0]![0];
+    expect(createdType.name).toBe("Brunch");
+    expect(createdType.originalType).toBeNull();
+    expect(createdType.color).toBe("#000000");
+    expect(createdType.orderFlag).toBe(4);
+
+    // The scheduled meal references the created type's uid.
+    const savedMeal = vi.mocked(kh.client().saveMeals).mock.calls[0]![0][0]!;
+    expect(savedMeal.typeUid).toBe(createdType.uid);
+  });
+
+  it("plan_meals: same new {name} across items (case-insensitive) creates the type once", async () => {
+    vi.mocked(kh.client().saveMeals).mockImplementation(async (items) => [...items]);
+    vi.mocked(kh.client().saveMealType).mockImplementation(async (mt) => mt);
+    kh.seed({ meals: [], mealTypes: makeBuiltins(), recipes: [] });
+
+    await kh.callTool("plan_meals", {
+      items: [
+        { name: "Toast", date: "2026-06-15", type: { name: "Brunch" } },
+        { name: "Eggs", date: "2026-06-16", type: { name: "brunch" } },
+      ],
+    });
+
+    expect(kh.client().saveMealType).toHaveBeenCalledOnce();
+  });
+
+  it("plan_meals: a batch rejected in validation creates NO meal type (pure-validate-first)", async () => {
+    vi.mocked(kh.client().saveMeals).mockImplementation(async (items) => [...items]);
+    vi.mocked(kh.client().saveMealType).mockImplementation(async (mt) => mt);
+    kh.seed({ meals: [], mealTypes: makeBuiltins(), recipes: [] });
+
+    const result = await kh.callTool("plan_meals", {
+      items: [
+        { name: "Toast", date: "2026-06-15", type: { name: "Brunch" } },
+        { name: "Eggs", date: "not-a-date", type: { builtin: 0 } },
+      ],
+    });
+    const text = getText(result);
+
+    // Validation rejects the whole batch BEFORE any create — no orphan type, no meals.
+    expect(text).toContain("Could not add");
+    expect(kh.client().saveMealType).not.toHaveBeenCalled();
+    expect(kh.client().saveMeals).not.toHaveBeenCalled();
+  });
+
+  it("plan_meals: unknown {uid} still errors (auto-create is name-only)", async () => {
+    vi.mocked(kh.client().saveMealType).mockImplementation(async (mt) => mt);
+    kh.seed({ meals: [], mealTypes: makeBuiltins(), recipes: [] });
+
+    const result = await kh.callTool("plan_meals", {
+      items: [{ name: "Toast", date: "2026-06-15", type: { uid: "NOPE" as MealTypeUid } }],
+    });
+    const text = getText(result);
+
+    expect(text).toContain("unknown meal type UID");
+    expect(kh.client().saveMealType).not.toHaveBeenCalled();
+  });
+
+  it("update_meal: unknown type {name} auto-creates it", async () => {
+    const mealUid = "meal-update-brunch" as MealUid;
+    vi.mocked(kh.client().saveMeals).mockImplementation(async (items) => [...items]);
+    vi.mocked(kh.client().saveMealType).mockImplementation(async (mt) => mt);
+    kh.seed({
+      meals: [makeMeal({ uid: mealUid, typeUid: DINNER_UID, type: 2 })],
+      mealTypes: makeBuiltins(),
+      recipes: [],
+    });
+
+    await kh.callTool("update_meal", { uid: mealUid, update: { type: { name: "Brunch" } } });
+
+    expect(kh.client().saveMealType).toHaveBeenCalledOnce();
+    expect(vi.mocked(kh.client().saveMealType).mock.calls[0]![0].name).toBe("Brunch");
   });
 });

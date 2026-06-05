@@ -229,14 +229,14 @@ describe("add_menu_items tool", () => {
         menu: { uid: "m-1" },
         items: [
           { recipe_uid: "recipe-ghost" as RecipeUid, day: 1, type: { name: "Dinner" } },
-          { recipe_uid: TACOS_UID, day: 2, type: { name: "Brunch" } },
+          { recipe_uid: TACOS_UID, day: 2, type: { uid: "NOPE" as MealTypeUid } },
         ],
       }),
     );
 
     expect(text).toContain("Could not add 2 menu items:");
     expect(text).toContain('Item 0: recipe_uid "recipe-ghost" is not known');
-    expect(text).toContain('Item 1 (type {name: "Brunch"}): unknown meal type');
+    expect(text).toContain('Item 1: unknown meal type UID "NOPE"');
     expect(kh.client().saveMenuItems).not.toHaveBeenCalled();
     expect(kh.client().saveMenus).not.toHaveBeenCalled();
   });
@@ -251,6 +251,47 @@ describe("add_menu_items tool", () => {
       }),
     );
     expect(text).toContain('No menu found with UID "ghost" (it may not exist or was already deleted).');
+    expect(kh.client().saveMenuItems).not.toHaveBeenCalled();
+  });
+
+  it("unknown type {name} auto-creates a custom type and adds the item with it (#224)", async () => {
+    const menu = makeMenu({ uid: "m-1" as MenuUid, name: "Plan", days: 3 });
+    seedBase(kh, { menus: [menu] });
+    vi.mocked(kh.client().saveMenuItems).mockImplementation(async (items: ReadonlyArray<MenuItem>) => [...items]);
+    vi.mocked(kh.client().saveMealType).mockImplementation(async (mt) => mt);
+
+    await kh.callTool("add_menu_items", {
+      menu: { uid: "m-1" },
+      items: [{ recipe_uid: TACOS_UID, day: 1, type: { name: "Brunch" } }],
+    });
+
+    expect(kh.client().saveMealType).toHaveBeenCalledOnce();
+    const createdType = vi.mocked(kh.client().saveMealType).mock.calls[0]![0];
+    expect(createdType.name).toBe("Brunch");
+    expect(createdType.originalType).toBeNull();
+
+    const savedItem = vi.mocked(kh.client().saveMenuItems).mock.calls[0]![0][0]!;
+    expect(savedItem.typeUid).toBe(createdType.uid);
+  });
+
+  it("a batch rejected in validation creates NO meal type (pure-validate-first)", async () => {
+    const menu = makeMenu({ uid: "m-1" as MenuUid, name: "Plan", days: 3 });
+    seedBase(kh, { menus: [menu] });
+    vi.mocked(kh.client().saveMenuItems).mockImplementation(async (items: ReadonlyArray<MenuItem>) => [...items]);
+    vi.mocked(kh.client().saveMealType).mockImplementation(async (mt) => mt);
+
+    const text = getText(
+      await kh.callTool("add_menu_items", {
+        menu: { uid: "m-1" },
+        items: [
+          { recipe_uid: TACOS_UID, day: 1, type: { name: "Brunch" } },
+          { recipe_uid: "recipe-ghost" as RecipeUid, day: 2, type: { builtin: 2 } },
+        ],
+      }),
+    );
+
+    expect(text).toContain("Could not add");
+    expect(kh.client().saveMealType).not.toHaveBeenCalled();
     expect(kh.client().saveMenuItems).not.toHaveBeenCalled();
   });
 });

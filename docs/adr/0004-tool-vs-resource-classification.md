@@ -1,7 +1,8 @@
 # ADR-0004: Classify every entity as Content, Data, or Reference to decide its MCP surface
 
 **Status:** Accepted (2026-06-01, backfilled)
-**Last verified:** 2026-06-01
+**Amended:** 2026-06-04 ([#224](https://github.com/bojanrajkovic/mcp-paprika/issues/224)) — meal types gain an auto-create write path; see the amendment under Rejected alternatives.
+**Last verified:** 2026-06-04
 
 ## Context
 
@@ -45,6 +46,8 @@ Rejected on cost-without-benefit grounds. These records are too granular for a u
 ### Give Reference-class entities (categories, aisles, meal types) individual read tools, CRUD, or a resource surface
 
 Rejected because these entities exist only to let the model resolve a display name to a UID when authoring or filtering other entities. A single list tool satisfies that. There is no document to read on its own and (in the case of meal types) no content the model authors: creating a meal type is a one-time configuration act performed by preference in the Paprika app, not model-authored content. Categories do carry write tools, but as a deliberate exception for an organizational structure the model legitimately curates; they still get no individual read and no resource, since category data is resolved on demand when rendering the recipes that reference it.
+
+**Amendment (2026-06-04, [#224](https://github.com/bojanrajkovic/mcp-paprika/issues/224)):** the meal-type half of "no content the model authors" no longer holds. That reasoning rested on the Paprika app remaining a configuration surface; as the server moves toward being the _sole_ surface, "do it in the app" stops being a reason to omit a capability — there would be nowhere to do it. Meal-type therefore gains a **write path via auto-create**: a meal/menu write naming an unknown type `{name}` creates a custom type (mirroring aisle's `ensureAisle`), exercising the pending-write machinery it already inherited. It still gets **no** standalone create/read tool and **no** resource — the create is a side effect of the intent that names the type, not a bespoke verb. Explicit edit/delete stay unexposed for now (follow-up [#244](https://github.com/bojanrajkovic/mcp-paprika/issues/244)); the broader "sole surface ⇒ complete surface" audit is [#245](https://github.com/bojanrajkovic/mcp-paprika/issues/245). Aisle is already this shape (list tool + internal auto-create), so the Reference class is now "list-only, with optional internal auto-create," not "strictly read-only."
 
 ### Everything as a tool, no resource surface at all
 

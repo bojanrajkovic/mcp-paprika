@@ -1,8 +1,10 @@
 import { z } from "zod";
 
+import type { MealTypeApi } from "./api.js";
 import type { MealType } from "./types.js";
 
 import { MealTypeUidSchema } from "../../ids.js";
+import { toMessage } from "../../utils/log.js";
 
 /**
  * Union for selecting a meal type by name, UID, or built-in index. Three
@@ -71,4 +73,28 @@ export function formatMealTypeResolveError(result: Extract<MealTypeResolveResult
     `No built-in meal type found with index ${result.index.toString()} ` +
     `(expected 0=Breakfast, 1=Lunch, 2=Dinner, 3=Snacks).`
   );
+}
+
+/**
+ * Resolve a meal-type spec for a single-item WRITE tool: resolve {uid}/{builtin} as
+ * usual, and resolve-or-CREATE for {name} — an unknown name auto-creates a custom type
+ * via `ensureMealType` (mirroring aisle's ensureAisle) instead of erroring. Returns the
+ * resolved or created MealType, or a ready-to-surface error message for an unknown
+ * uid/builtin (or a failed create). Batch tools don't use this — they resolve in their
+ * validation pass and create in a build pass (pantry-style), so a rejected batch leaves
+ * no orphan type. Read/filter tools use `resolveSpec` directly and never create.
+ */
+export async function resolveOrCreateMealType(
+  mealType: MealTypeApi,
+  spec: z.infer<typeof mealTypeSpecSchema>,
+): Promise<{ readonly ok: true; readonly resolved: MealType } | { readonly ok: false; readonly message: string }> {
+  const resolved = mealType.resolveSpec(spec);
+  if (resolved.ok) return { ok: true, resolved: resolved.resolved };
+  if (resolved.reason !== "unknown_name") return { ok: false, message: formatMealTypeResolveError(resolved) };
+  // Unknown {name} → auto-create the custom type (mirrors aisle's ensureAisle).
+  try {
+    return { ok: true, resolved: await mealType.ensureMealType(resolved.name) };
+  } catch (error) {
+    return { ok: false, message: `Failed to create meal type "${resolved.name}": ${toMessage(error)}` };
+  }
 }

@@ -1,8 +1,9 @@
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 
-import type { MealTypeUid, RecipeUid } from "../../../ids.js";
+import type { RecipeUid } from "../../../ids.js";
 import type { DomainCtx } from "../../../kernel/registry.js";
+import type { MealType } from "../../meal-type/types.js";
 import type { MenuItem } from "../menu-item/types.js";
 import type { MenuSelf } from "../module.js";
 import type { Menu } from "../types.js";
@@ -65,8 +66,8 @@ export const addMenuItemsInputSchema = z.object({
 /**
  * Registers `add_menu_items`, kernel-shaped — reads/writes this module's own menu +
  * menu-item stores via `ctx.self`, denormalizes the recipe display name via
- * `ctx.deps.recipe.get`, resolves the meal type via `ctx.deps["meal-type"].resolveSpec`,
- * and commits through `ctx.self.commitMenu` / `ctx.self.commitMenuItemsBatch`.
+ * `ctx.deps.recipe.get`, resolves the meal type via `ctx.deps["meal-type"]` (an unknown
+ * `{name}` auto-creates a custom type), and commits through `ctx.self.commitMenu` / `ctx.self.commitMenuItemsBatch`.
  */
 export function addMenuItemsTool(ctx: DomainCtx<MenuSelf, "recipe" | "meal-type">): void {
   const log = ctx.infra.log.child({ component: "add_menu_items" });
@@ -116,7 +117,10 @@ export function addMenuItemsTool(ctx: DomainCtx<MenuSelf, "recipe" | "meal-type"
           // ----- Stage 1: per-index validation (collect ALL errors, not first-only) -----
           type ResolvedItem = {
             readonly day: number;
-            readonly typeUid: MealTypeUid;
+            // Exactly one is set: the type resolved in validation, or a {name} to
+            // auto-create in the build pass (deferred so a rejected batch makes no orphan type).
+            readonly resolvedType: MealType | null;
+            readonly pendingTypeName: string | null;
             readonly resolvedName: string;
             readonly recipeUid: RecipeUid | null;
           };
@@ -150,28 +154,29 @@ export function addMenuItemsTool(ctx: DomainCtx<MenuSelf, "recipe" | "meal-type"
             }
 
             // Meal type resolution via the shared meal-type contract (same DU as plan_meals).
+            // An unknown {name} is deferred and auto-created in the build pass below.
             const typeResult = ctx.deps["meal-type"].resolveSpec(item.type);
-            if (!typeResult.ok) {
-              if (typeResult.reason === "unknown_uid") {
-                errors.push(`Item ${i.toString()}: unknown meal type UID "${typeResult.uid}".`);
-              } else if (typeResult.reason === "unknown_name") {
-                const knownList = typeResult.knownNames.join(", ");
-                errors.push(
-                  `Item ${i.toString()} (type {name: "${typeResult.name}"}): unknown meal type "${typeResult.name}". ` +
-                    `Known types: ${knownList}. Use the {uid} or {builtin} discriminator to reference a custom meal type.`,
-                );
-              } else {
-                errors.push(
-                  `Item ${i.toString()}: no built-in meal type found with index ${typeResult.index.toString()} ` +
-                    `(expected 0=Breakfast, 1=Lunch, 2=Dinner, 3=Snacks).`,
-                );
-              }
+            let resolvedType: MealType | null = null;
+            let pendingTypeName: string | null = null;
+            if (typeResult.ok) {
+              resolvedType = typeResult.resolved;
+            } else if (typeResult.reason === "unknown_name") {
+              pendingTypeName = typeResult.name;
+            } else if (typeResult.reason === "unknown_uid") {
+              errors.push(`Item ${i.toString()}: unknown meal type UID "${typeResult.uid}".`);
+              continue;
+            } else {
+              errors.push(
+                `Item ${i.toString()}: no built-in meal type found with index ${typeResult.index.toString()} ` +
+                  `(expected 0=Breakfast, 1=Lunch, 2=Dinner, 3=Snacks).`,
+              );
               continue;
             }
 
             resolved.push({
               day: item.day,
-              typeUid: typeResult.resolved.uid,
+              resolvedType,
+              pendingTypeName,
               resolvedName,
               recipeUid,
             });
@@ -185,7 +190,24 @@ export function addMenuItemsTool(ctx: DomainCtx<MenuSelf, "recipe" | "meal-type"
             return textResult(`${header}\n\n${errors.join("\n")}`);
           }
 
-          // ----- Stage 2: auto-expand the menu span when an item overflows it -----
+          // ----- Stage 2: auto-create any deferred {name} meal types (pantry-style) -----
+          // Validation passed, so creating now leaves no orphan type on a rejected batch.
+          // Cache by lowercase name so a name repeated across items is created once.
+          const createdTypesByName = new Map<string, MealType>();
+          for (const r of resolved) {
+            if (r.pendingTypeName === null) continue;
+            const key = r.pendingTypeName.toLowerCase();
+            if (createdTypesByName.has(key)) continue;
+            try {
+              createdTypesByName.set(key, await ctx.deps["meal-type"].ensureMealType(r.pendingTypeName));
+            } catch (error) {
+              const message = toMessage(error);
+              log.error({ err: error, name: r.pendingTypeName }, "ensureMealType failed");
+              return textResult(`Failed to create meal type "${r.pendingTypeName}": ${message}`);
+            }
+          }
+
+          // ----- Stage 3: auto-expand the menu span when an item overflows it -----
           // Compute the batch's highest day; if it exceeds the menu's current span,
           // grow the menu (days = maxDay) and persist that FIRST so the new items
           // never reference days outside a saved menu.
@@ -210,7 +232,7 @@ export function addMenuItemsTool(ctx: DomainCtx<MenuSelf, "recipe" | "meal-type"
             }
           }
 
-          // ----- Stage 3: assign menu-wide sequential orderFlag -----
+          // ----- Stage 4: assign menu-wide sequential orderFlag -----
           // Paprika numbers menuitem order_flag across the WHOLE menu, not per day:
           // the wire capture shows a multi-day menu's day-1 item at order_flag 0 and
           // its day-3 item at order_flag 1 (docs/wire-captures/menus.har.json). Seed
@@ -225,12 +247,13 @@ export function addMenuItemsTool(ctx: DomainCtx<MenuSelf, "recipe" | "meal-type"
             recipeUid: r.recipeUid,
             name: r.resolvedName,
             day: r.day,
-            typeUid: r.typeUid,
+            // Either the type resolved during validation, or the one just auto-created.
+            typeUid: (r.resolvedType ?? createdTypesByName.get(r.pendingTypeName!.toLowerCase())!).uid,
             orderFlag: seedFlag + idx,
             deleted: false,
           }));
 
-          // ----- Stage 4: single batch POST + commit -----
+          // ----- Stage 5: single batch POST + commit -----
           let savedItems: ReadonlyArray<MenuItem>;
           try {
             savedItems = await ctx.infra.client.saveMenuItems(builtItems);
