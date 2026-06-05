@@ -11,7 +11,6 @@ import { hydrateStore } from "../../cache/hydrate.js";
 import { defineModule, register } from "../../kernel/registry.js";
 import { resolvePendingWriteTtl } from "../../utils/config.js";
 import { toMessage } from "../../utils/log.js";
-import { mealDiskDescriptor } from "./disk.js";
 import { MealStore } from "./store.js";
 import { mealSync } from "./syncs/meal-sync.js";
 import { logCookedMealTool } from "./tools/log-cooked-meal.js";
@@ -20,6 +19,7 @@ import { readMealPlanTool } from "./tools/read-meal-plan.js";
 import { readRecipeHistoryTool } from "./tools/recipe-history.js";
 import { rescheduleMealTool } from "./tools/reschedule-meal.js";
 import { searchMealHistoryTool } from "./tools/search-meal-history.js";
+import { mealDiskDescriptor } from "./types.js";
 
 declare module "../../kernel/registry.js" {
   interface DomainRegistry {

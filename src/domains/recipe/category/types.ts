@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import type { DiskCacheDescriptor } from "../../../cache/disk-cache.js";
+
 import { makeSchemaEquals } from "../../../entity/index.js";
 import { CategoryUidSchema } from "../../../ids.js";
 
@@ -13,6 +15,13 @@ export const CategoryStoredSchema = z.object({
 
 // Category type derived from CategoryStoredSchema.
 export type Category = z.infer<typeof CategoryStoredSchema>;
+
+// Disk-cache descriptor — how the per-entity DiskCache persists & re-reads a category.
+export const categoryDiskDescriptor: DiskCacheDescriptor<Category> = {
+  subdir: "categories",
+  parse: (raw) => CategoryStoredSchema.parse(raw),
+  getKey: (c) => c.uid,
+};
 
 // Schema-derived content equality (all four stored fields; no `deleted` to exclude).
 export const categoriesEqual = makeSchemaEquals(CategoryStoredSchema);

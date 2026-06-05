@@ -11,7 +11,7 @@ import { makeCache, makeRecipeCache, useTempDir } from "../../../test/support/di
 import { makeKernelInfra } from "../../../test/support/kernel-harness.js";
 import { getText, makeTestServer } from "../../../test/support/tool-test-utils.js";
 import { registeredModules } from "../../kernel/registry.js";
-import { categoryDiskDescriptor } from "./category/disk.js";
+import { categoryDiskDescriptor } from "./category/types.js";
 import { RecipeStore } from "./store.js";
 // Side-effect: populate the kernel module registry so `registeredModules()` finds recipe.
 import "../../kernel/modules.generated.js";

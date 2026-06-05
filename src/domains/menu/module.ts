@@ -13,9 +13,8 @@ import { DiskCache as DiskCacheImpl } from "../../cache/disk-cache.js";
 import { hydrateStore } from "../../cache/hydrate.js";
 import { defineModule, register } from "../../kernel/registry.js";
 import { resolvePendingWriteTtl } from "../../utils/config.js";
-import { menuDiskDescriptor } from "./disk.js";
-import { menuItemDiskDescriptor } from "./menu-item/disk.js";
 import { MenuItemStore } from "./menu-item/store.js";
+import { menuItemDiskDescriptor } from "./menu-item/types.js";
 import { menuResource } from "./resources/menu-resource.js";
 import { MenuStore } from "./store.js";
 import { menuItemsSync } from "./syncs/menu-item-sync.js";
@@ -29,6 +28,7 @@ import { updateMenuItemTool } from "./tools/menu-item-update.js";
 import { addMenuItemsTool } from "./tools/menu-item-write.js";
 import { readMenuTool } from "./tools/read.js";
 import { updateMenuTool } from "./tools/update.js";
+import { menuDiskDescriptor } from "./types.js";
 
 declare module "../../kernel/registry.js" {
   interface DomainRegistry {

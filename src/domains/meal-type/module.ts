@@ -10,10 +10,10 @@ import { hydrateStore } from "../../cache/hydrate.js";
 import { MealTypeUidSchema } from "../../ids.js";
 import { defineModule, register } from "../../kernel/registry.js";
 import { resolvePendingWriteTtl } from "../../utils/config.js";
-import { mealTypeDiskDescriptor } from "./disk.js";
 import { MealTypeStore } from "./store.js";
 import { mealTypeSync } from "./syncs/meal-type-sync.js";
 import { listMealTypesTool } from "./tools/list-meal-types.js";
+import { mealTypeDiskDescriptor } from "./types.js";
 
 declare module "../../kernel/registry.js" {
   interface DomainRegistry {

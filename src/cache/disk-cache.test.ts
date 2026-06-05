@@ -11,11 +11,11 @@ import { makeGroceryList } from "../../test/cache/__fixtures__/grocery-lists.js"
 import { makePantryItem } from "../../test/cache/__fixtures__/pantry.js";
 import { makeCategory } from "../../test/cache/__fixtures__/recipes.js";
 import { makeCache, useTempDir } from "../../test/support/disk-caches.js";
-import { groceryIngredientDiskDescriptor } from "../domains/grocery/grocery-ingredient/disk.js";
-import { groceryItemDiskDescriptor } from "../domains/grocery/grocery-item/disk.js";
-import { groceryListDiskDescriptor } from "../domains/grocery/grocery-list/disk.js";
-import { pantryDiskDescriptor } from "../domains/pantry/disk.js";
-import { categoryDiskDescriptor } from "../domains/recipe/category/disk.js";
+import { groceryIngredientDiskDescriptor } from "../domains/grocery/grocery-ingredient/types.js";
+import { groceryItemDiskDescriptor } from "../domains/grocery/grocery-item/types.js";
+import { groceryListDiskDescriptor } from "../domains/grocery/grocery-list/types.js";
+import { pantryDiskDescriptor } from "../domains/pantry/types.js";
+import { categoryDiskDescriptor } from "../domains/recipe/category/types.js";
 
 // A synthetic entity so the generic DiskCache<T> contract is exercised in
 // isolation from any real schema. The real descriptors (category, pantry,

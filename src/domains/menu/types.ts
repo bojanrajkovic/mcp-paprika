@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import type { DiskCacheDescriptor } from "../../cache/disk-cache.js";
+
 import { makeSchemaEquals } from "../../entity/index.js";
 import { MenuUidSchema } from "../../ids.js";
 
@@ -14,6 +16,13 @@ export const MenuStoredSchema = z.object({
 });
 
 export type Menu = z.infer<typeof MenuStoredSchema>;
+
+// Disk-cache descriptor — how the per-entity DiskCache persists & re-reads a menu.
+export const menuDiskDescriptor: DiskCacheDescriptor<Menu> = {
+  subdir: "menus",
+  parse: (raw) => MenuStoredSchema.parse(raw),
+  getKey: (m) => m.uid,
+};
 
 // Schema-derived content equality (all stored fields but the inert `deleted`).
 export const menusEqual = makeSchemaEquals(MenuStoredSchema);

@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import type { DiskCacheDescriptor } from "../../../cache/disk-cache.js";
+
 import { makeSchemaEquals } from "../../../entity/index.js";
 import { PhotoUidSchema, RecipeUidSchema } from "../../../ids.js";
 
@@ -20,6 +22,13 @@ export const PhotoStoredSchema = z.object({
 });
 
 export type Photo = z.infer<typeof PhotoStoredSchema>;
+
+// Disk-cache descriptor — how the per-entity DiskCache persists & re-reads a photo.
+export const photoDiskDescriptor: DiskCacheDescriptor<Photo> = {
+  subdir: "photos",
+  parse: (raw) => PhotoStoredSchema.parse(raw),
+  getKey: (p) => p.uid,
+};
 
 // Schema-derived content equality (all stored fields but the inert `deleted`).
 export const photosEqual = makeSchemaEquals(PhotoStoredSchema);
