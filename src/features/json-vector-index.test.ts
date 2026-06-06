@@ -50,7 +50,7 @@ describe("JsonVectorIndex", () => {
       expect(await idx.isIndexCreated()).toBe(true);
     });
 
-    it("createIndex throws if an index already exists", async () => {
+    it("createIndex errs if an index already exists", async () => {
       const idx = await freshIndex();
       expect((await idx.createIndex())._unsafeUnwrapErr().message).toMatch(/already exists/i);
     });
@@ -166,7 +166,7 @@ describe("JsonVectorIndex", () => {
       expect((await idx.queryItems([1, 0], 10))._unsafeUnwrapErr().message).toMatch(/dimension/i);
     });
 
-    it("throws on load when the persisted file contains a non-finite vector", async () => {
+    it("errs on load when the persisted file contains a non-finite vector", async () => {
       await writeFile(
         join(tmp.dir(), "index.json"),
         JSON.stringify({ version: 1, items: [{ id: "x", vector: [1, null], metadata: {} }] }),
@@ -175,7 +175,7 @@ describe("JsonVectorIndex", () => {
       expect((await idx.loadIndexData())._unsafeUnwrapErr()).toBeInstanceOf(VectorIndexError);
     });
 
-    it("throws on load when the persisted file contains a zero-norm vector", async () => {
+    it("errs on load when the persisted file contains a zero-norm vector", async () => {
       await writeFile(
         join(tmp.dir(), "index.json"),
         JSON.stringify({ version: 1, items: [{ id: "x", vector: [0, 0], metadata: {} }] }),
@@ -197,7 +197,7 @@ describe("JsonVectorIndex", () => {
       expect((await reloaded.queryItems([0, 1], 10))._unsafeUnwrap().map((x) => x.item.id)).toEqual(["a"]);
     });
 
-    it("throws if a second update begins while one is in progress", async () => {
+    it("errs if a second update begins while one is in progress", async () => {
       const idx = await freshIndex();
       (await idx.beginUpdate())._unsafeUnwrap();
       expect((await idx.beginUpdate())._unsafeUnwrapErr().message).toMatch(/in progress/i);
@@ -290,7 +290,7 @@ describe("JsonVectorIndex corruption surfaces to caller", () => {
   beforeEach(tmp.setup);
   afterEach(tmp.teardown);
 
-  it("throws on unparseable JSON", async () => {
+  it("errs on unparseable JSON", async () => {
     await mkdir(tmp.dir(), { recursive: true });
     await writeFile(join(tmp.dir(), "index.json"), "{ not valid json");
     const idx = new JsonVectorIndex(tmp.dir());

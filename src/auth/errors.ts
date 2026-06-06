@@ -23,14 +23,15 @@ import type { Result } from "neverthrow";
 
 /**
  * Recognized form #2 boundary (ADR-0014): unwrap a `Result` whose error is an
- * OAuth error type — an SDK `OAuthError` subclass, or one of this module's
- * OAuth-protocol classes the route handlers render (`OAuthMetadataValidationError`,
- * `OAuthClientNotFoundError`) — throwing it into the SDK's throw-based
- * authorization-server contract (`OAuthServerProvider` / the DCR handler), which
- * serializes it as a spec-compliant response. The auth stores speak `Result`;
- * this is the one sanctioned crossing back onto the SDK's throw rail.
+ * SDK `OAuthError`, throwing it into the SDK's throw-based authorization-server
+ * contract (`OAuthServerProvider` / the DCR handler), which serializes it as a
+ * spec-compliant response. The auth stores speak `Result`; this is the one
+ * sanctioned crossing back onto the SDK's throw rail. The `OAuthError`
+ * constraint is load-bearing: a non-OAuth error thrown at this edge would be
+ * wrapped as a 500 `server_error` instead of its spec response, so callers
+ * must `mapErr` to an OAuth type first — and the compiler holds them to it.
  */
-export function unwrapOAuth<T, E extends Error>(result: Result<T, E>): T {
+export function unwrapOAuth<T, E extends OAuthError>(result: Result<T, E>): T {
   return result.match(
     (value) => value,
     (e) => {

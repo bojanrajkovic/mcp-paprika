@@ -12,12 +12,13 @@
 
 import { randomUUID, timingSafeEqual } from "node:crypto";
 
-import { InvalidRequestError } from "@modelcontextprotocol/sdk/server/auth/errors.js";
+import { InvalidClientMetadataError, InvalidRequestError } from "@modelcontextprotocol/sdk/server/auth/errors.js";
 import { errAsync, type ResultAsync } from "neverthrow";
 import type { Logger } from "pino";
 
 import type { CacheError } from "../cache/disk-cache.js";
 import type { AuthCache } from "./disk.js";
+import type { OAuthMetadataValidationError } from "./errors.js";
 import type { OAuthClient } from "./types.js";
 
 import { validateRegistration, validateUpdate } from "./dcr-validator.js";
@@ -122,13 +123,19 @@ export class DiskClientRegistrationStore {
    * Register a new client.
    * Validates metadata, generates clientId + RAT, persists, returns wire format with plaintext RAT.
    *
-   * SDK contract (the DCR handler): throw-based — every throw is an OAuth error
-   * type (ADR-0014 form #2): `OAuthMetadataValidationError` on invalid metadata,
+   * SDK contract (the DCR handler): throw-based — every throw is an SDK OAuth
+   * error type (ADR-0014 form #2): `InvalidClientMetadataError` (400,
+   * `invalid_client_metadata` per RFC 7591 §3.2.2) on invalid metadata,
    * `InvalidRequestError` on the registration cap, `server_error` on a cache failure.
    */
   async registerClient(metaIn: unknown): Promise<OAuthClientInformationFull> {
-    // Validate via dcr-validator; pass logger for URL-parse debug diagnosability
-    const validated = unwrapOAuth(validateRegistration(metaIn, this.log));
+    // Validate via dcr-validator; pass logger for URL-parse debug diagnosability.
+    // The internal validation error is not an SDK `OAuthError` — thrown raw, the
+    // router would wrap it as a 500 `server_error` — so it maps to the spec's
+    // `invalid_client_metadata` at this edge (RFC 7591 §3.2.2).
+    const validated = unwrapOAuth(
+      validateRegistration(metaIn, this.log).mapErr((e) => new InvalidClientMetadataError(e.message)),
+    );
 
     const clientId = randomUUID();
     const registrationAccessToken = generateOpaqueToken("mcp_rat_");
@@ -185,7 +192,7 @@ export class DiskClientRegistrationStore {
   updateClient(
     clientId: string,
     metaIn: unknown,
-  ): ResultAsync<OAuthClientInformationFull, OAuthClientNotFoundError | Error | CacheError> {
+  ): ResultAsync<OAuthClientInformationFull, OAuthClientNotFoundError | OAuthMetadataValidationError | CacheError> {
     return this._cache.oauthClients.get(clientId).andThen((existing) => {
       if (existing === null) return errAsync(OAuthClientNotFoundError.forId(clientId));
 

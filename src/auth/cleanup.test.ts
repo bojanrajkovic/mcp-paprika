@@ -1,3 +1,4 @@
+import { errAsync } from "neverthrow";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { makeAuthCodeState, makeAuthRequestState } from "../../test/auth/__fixtures__/oauth-state.js";
@@ -9,6 +10,7 @@ import { AuthRequestStore } from "./auth-request-store.js";
 import { AuthCleanup } from "./cleanup.js";
 import { DiskClientRegistrationStore } from "./client-registration.js";
 import { type AuthCache, buildAuthCaches } from "./disk.js";
+import { OAuthTokenError } from "./errors.js";
 import { PendingAuthorizationStore } from "./pending-authorization-store.js";
 import { TokenStore } from "./token-store.js";
 import { nowSeconds } from "./tokens.js";
@@ -327,6 +329,41 @@ describe("sweepOnce", () => {
     expect(result.clientsRemoved).toBe(1);
     expect(result.tokensRemoved).toBe(1);
     expect(result.expiredTokensRemoved).toBe(0); // not double-counted
+  });
+
+  it("a stale-client cascade failure still runs the in-memory sweeps before erring", async () => {
+    // The in-memory sweeps are synchronous and infallible, so they run BEFORE
+    // any disk work: a sick disk errs the sweep out, but must not leave the
+    // bounded /authorize-path stores unswept for another interval.
+    const clock = { v: 1_700_000_000 };
+    await cache.oauthClients.put(
+      makeOAuthClient({ clientId: "00000000-0000-0000-0000-000000000050", lastTokenActivityAt: clock.v - 91 * 86400 }),
+    );
+    await cache.flush();
+
+    const authRequests = new AuthRequestStore({ now: () => clock.v * 1000 });
+    const authCodes = new AuthCodeStore({ now: () => clock.v * 1000 });
+    authRequests.put("state-1", makeAuthRequestState({ createdAt: clock.v - 10 * 60 })); // > 5min old
+    authCodes.put("code-1", makeAuthCodeState({ createdAt: clock.v - 120 })); // > 60s old
+
+    vi.spyOn(tokenStore, "removeAllForClient").mockReturnValue(
+      errAsync(OAuthTokenError.serverError("token store unavailable")),
+    );
+
+    const cleanup = new AuthCleanup(
+      clientStore,
+      tokenStore,
+      cache,
+      authRequests,
+      authCodes,
+      new PendingAuthorizationStore(),
+      SILENT_LOG,
+      () => clock.v,
+    );
+    (await cleanup.sweepOnce())._unsafeUnwrapErr();
+
+    expect(authRequests.size).toBe(0);
+    expect(authCodes.size).toBe(0);
   });
 });
 

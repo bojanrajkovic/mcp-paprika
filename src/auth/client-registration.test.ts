@@ -5,6 +5,7 @@
 
 import { randomUUID } from "node:crypto";
 
+import { InvalidClientMetadataError } from "@modelcontextprotocol/sdk/server/auth/errors.js";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { useTempDir } from "../../test/support/disk-caches.js";
@@ -12,7 +13,7 @@ import { makePinoCapture } from "../../test/support/tool-test-utils.js";
 import { SILENT_LOG } from "../utils/log.js";
 import { DiskClientRegistrationStore } from "./client-registration.js";
 import { type AuthCache, buildAuthCaches } from "./disk.js";
-import { OAuthClientNotFoundError, OAuthMetadataValidationError } from "./errors.js";
+import { OAuthClientNotFoundError } from "./errors.js";
 import { hashTokenForStorage } from "./tokens.js";
 
 // ============================================================================
@@ -85,7 +86,7 @@ describe("DiskClientRegistrationStore", () => {
       expect("client_secret" in response).toBe(false);
     });
 
-    it("rejects bad metadata (token_endpoint_auth_method=basic) throwing OAuthMetadataValidationError", async () => {
+    it("rejects bad metadata (token_endpoint_auth_method=basic) throwing InvalidClientMetadataError", async () => {
       const badMeta = {
         ...makeWireRegistration(),
         token_endpoint_auth_method: "basic", // not allowed
@@ -98,7 +99,10 @@ describe("DiskClientRegistrationStore", () => {
         thrownError = e;
       }
 
-      expect(thrownError).toBeInstanceOf(OAuthMetadataValidationError);
+      // The SDK error type carries the RFC 7591 §3.2.2 errorCode, so the DCR
+      // handler renders a 400 `invalid_client_metadata` rather than a 500.
+      expect(thrownError).toBeInstanceOf(InvalidClientMetadataError);
+      expect((thrownError as InvalidClientMetadataError).errorCode).toBe("invalid_client_metadata");
     });
 
     it("enforces maxClients atomically against concurrent registrations", async () => {

@@ -5,9 +5,9 @@
  * AbortController-gated _loop(), never-throws semantics.
  *
  * Responsibilities (run every CLEANUP_INTERVAL_MS = 6h):
- * 1. Remove stale DCR clients (lastTokenActivityAt > 90 days old) + cascade their tokens.
- * 2. Sweep expired in-memory AuthRequestStore, AuthCodeStore, and
+ * 1. Sweep expired in-memory AuthRequestStore, AuthCodeStore, and
  *    PendingAuthorizationStore (consent-ticket) entries.
+ * 2. Remove stale DCR clients (lastTokenActivityAt > 90 days old) + cascade their tokens.
  * 3. Sweep expired OAuth tokens (expiresAt < now). `rotateRefresh` deletes the
  *    previous refresh token but not the previous access token — every refresh
  *    leaves a soon-to-expire access record behind. Without this sweep,
@@ -96,7 +96,19 @@ export class AuthCleanup {
   > {
     const now = this._now();
 
-    // (1) Stale DCR clients: lastTokenActivityAt older than DCR_CLIENT_STALE_DAYS (90d)
+    // (1) In-memory store sweeps — bound memory under sustained /authorize
+    //     traffic. Synchronous and infallible, so they run BEFORE any disk
+    //     work: a cache failure in the disk steps below errs out of the sweep,
+    //     and these must not sit a full interval behind a persistently sick
+    //     disk.
+    const authRequestsRemoved = this._authRequests.sweepExpired();
+    const authCodesRemoved = this._authCodes.sweepExpired();
+    const pendingAuthorizationsRemoved = this._pendingAuthorizations.sweepExpired();
+
+    // (2) Stale DCR clients: lastTokenActivityAt older than DCR_CLIENT_STALE_DAYS (90d).
+    //     From here on every step talks to the same disk cache, so the first
+    //     failure errs out honestly — the loop logs it and the next interval
+    //     retries the lot.
     const cutoff = now - DCR_CLIENT_STALE_DAYS * 86400;
     let allClients: ReadonlyArray<OAuthClient> = [];
     let allTokens: ReadonlyArray<OAuthToken> = [];
@@ -135,11 +147,6 @@ export class AuthCleanup {
       if (cascadeErr !== undefined) return err(cascadeErr);
       tokensRemoved += tokensByClient.get(c.clientId) ?? 0;
     }
-
-    // (2) In-memory store sweeps — bound memory under sustained /authorize traffic
-    const authRequestsRemoved = this._authRequests.sweepExpired();
-    const authCodesRemoved = this._authCodes.sweepExpired();
-    const pendingAuthorizationsRemoved = this._pendingAuthorizations.sweepExpired();
 
     // (3) Expired-token sweep — remove tokens past `expiresAt` whose owning
     //     client is still active (stale-client cascade already covers the

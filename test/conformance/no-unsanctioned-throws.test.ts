@@ -31,9 +31,13 @@ const RECOGNIZED_HELPERS: ReadonlyArray<readonly [file: string, fn: string]> = [
 // Recognized form #2: the OAuth error types the SDK's authorization-server
 // router serializes into spec-compliant responses, thrown directly where the
 // SDK's throw-based contracts (`OAuthServerProvider`, the DCR handler) are
-// implemented. Matched by THROWN CONSTRUCTOR NAME within `src/auth/` — a
-// non-OAuth throw added to the same methods still fails the gate, and the
-// Result→throw crossings ride the recognized `unwrapOAuth` helper instead.
+// implemented. Matched by THROWN CONSTRUCTOR NAME, pinned to the two files
+// that implement those contracts (the same discipline as the other
+// recognizers — `src/auth/` has request-serving siblings like routes.ts that
+// must NOT inherit the waiver). A non-OAuth throw in the same methods still
+// fails the gate, and the Result→throw crossings ride the recognized
+// `unwrapOAuth` helper instead.
+const OAUTH_PROTOCOL_FILES: ReadonlySet<string> = new Set(["src/auth/provider.ts", "src/auth/client-registration.ts"]);
 const OAUTH_PROTOCOL_TYPES: ReadonlySet<string> = new Set([
   "InvalidGrantError",
   "InvalidTargetError",
@@ -147,7 +151,7 @@ const isCockatielGoverned = (s: ThrowSite): boolean =>
       s.file === file && s.enclosingFn === innerFn && s.enclosingChain.slice(1).includes(outerFn),
   );
 const isOAuthProtocolThrow = (s: ThrowSite): boolean =>
-  s.file.startsWith("src/auth/") && s.thrownType !== null && OAUTH_PROTOCOL_TYPES.has(s.thrownType);
+  OAUTH_PROTOCOL_FILES.has(s.file) && s.thrownType !== null && OAUTH_PROTOCOL_TYPES.has(s.thrownType);
 const isRecognized = (s: ThrowSite): boolean =>
   isRecognizedHelper(s) || isCockatielGoverned(s) || isOAuthProtocolThrow(s) || isBoot(s);
 

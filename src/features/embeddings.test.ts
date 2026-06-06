@@ -365,11 +365,7 @@ describe("Per-attempt logging in EmbeddingClient.embedBatch", () => {
 
     const { log, records } = makePinoCapture();
     const client = new EmbeddingClient(makeEmbeddingConfig(), log);
-    try {
-      (await client.embedBatch(["hello"]))._unsafeUnwrap();
-    } catch {
-      // expected — non-retryable error
-    }
+    (await client.embedBatch(["hello"]))._unsafeUnwrapErr(); // errs — non-retryable
 
     const errorRecords = records.filter((r) => r["msg"] === "embedding request failed (non-retryable)");
     expect(errorRecords).toHaveLength(1);

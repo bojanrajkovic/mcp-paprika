@@ -150,8 +150,6 @@ describe("VectorStore init", () => {
 
   afterEach(async () => {
     await tmp.teardown();
-    vi.clearAllMocks();
-    await stubIndexDefaults();
   });
 
   describe("First run - creates index and empty hash map", () => {
@@ -513,8 +511,6 @@ describe("VectorStore indexRecipes", () => {
 
   afterEach(async () => {
     await tmp.teardown();
-    vi.clearAllMocks();
-    await stubIndexDefaults();
   });
 
   describe("Embeds and upserts recipes with changed content hash", () => {
@@ -805,8 +801,6 @@ describe("VectorStore search", () => {
 
   afterEach(async () => {
     await tmp.teardown();
-    vi.clearAllMocks();
-    await stubIndexDefaults();
   });
 
   describe("Embeds query and returns SemanticResult array", () => {
@@ -920,8 +914,6 @@ describe("VectorStore removeRecipe", () => {
 
   afterEach(async () => {
     await tmp.teardown();
-    vi.clearAllMocks();
-    await stubIndexDefaults();
   });
 
   describe("Deletes item from the vector index and removes from hash map", () => {
@@ -1037,8 +1029,6 @@ describe("VectorStore write serialization (#177)", () => {
 
   afterEach(async () => {
     await tmp.teardown();
-    vi.clearAllMocks();
-    await stubIndexDefaults();
   });
 
   it("serializes overlapping indexRecipes calls so vector-index transactions never overlap", async () => {
