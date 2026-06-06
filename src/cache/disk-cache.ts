@@ -121,7 +121,7 @@ export class DiskCache<T> {
         for (const f of files) {
           // Skip the per-entity index file (only RecipeDiskCache writes one). All
           // other data files are <key>.json; the recipes index is the lone
-          // exception, kept inside the entity's subdir to keep migration simple.
+          // non-per-key file living inside an entity subdir.
           if (f === "index.json") continue;
           if (f.endsWith(".json")) {
             this._knownKeys.add(f.slice(0, -5));

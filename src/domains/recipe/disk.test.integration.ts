@@ -1,4 +1,4 @@
-import { readFile, writeFile } from "node:fs/promises";
+import { readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
@@ -250,6 +250,32 @@ describe("RecipeDiskCache cold-start persistence integration", () => {
     });
   });
 
+  describe("Pre-v1.3.0 cache layout", () => {
+    it("boots cleanly from a cache dir holding a root-level unified index.json: blobs hydrate, the root file is ignored, and the hash index cold-resyncs", async () => {
+      // The shape a cache last written by ≤ v1.2.0 has: recipe blobs in
+      // recipes/<uid>.json, the old unified index at the cache root, and no
+      // recipes/index.json. The unified-index migration is gone; this layout
+      // must take the ordinary missing-index path (empty hash map → the next
+      // diff classifies everything as added) with the root file left inert.
+      const seed = makeRecipeCache(tmp.dir());
+      await seed.init();
+      const recipe = makeRecipe({ uid: "recipe-legacy-1" as RecipeUid, name: "Legacy Era", hash: "hash-1" });
+      await seed.put(recipe);
+      await seed.flush();
+      const rootIndex = JSON.stringify({ recipes: { "recipe-legacy-1": "hash-1" } });
+      await writeFile(join(tmp.dir(), "index.json"), rootIndex);
+      await rm(join(tmp.dir(), "recipes", "index.json"));
+
+      const cache = makeRecipeCache(tmp.dir());
+      (await cache.init())._unsafeUnwrap();
+
+      expect((await cache.get(recipe.uid))._unsafeUnwrap()).toEqual(recipe);
+      const diff = cache.diff([{ uid: recipe.uid, hash: recipe.hash }])._unsafeUnwrap();
+      expect(diff.added).toContain(recipe.uid);
+      expect(await readFile(join(tmp.dir(), "index.json"), "utf-8")).toBe(rootIndex);
+    });
+  });
+
   describe("Corruption recovery", () => {
     it("recovers gracefully when the recipes index is corrupted", async () => {
       // Initialize once so the recipes/ subdir exists, then corrupt its index.
@@ -335,101 +361,6 @@ describe("RecipeDiskCache cold-start persistence integration", () => {
       const retrieved = (await cache2.get(originalRecipe.uid))._unsafeUnwrap();
 
       expect(retrieved).toEqual(originalRecipe);
-    });
-  });
-
-  describe("Legacy-index migration", () => {
-    it("upgrades a legacy unified index.json to recipes/index.json on first init", async () => {
-      const legacyHashes = {
-        "recipe-a": "hash-a",
-        "recipe-b": "hash-b",
-      };
-      const legacyIndex = {
-        recipes: legacyHashes,
-        categories: { "cat-1": "" },
-        pantry: { "pantry-1": "" },
-        oauthClients: {},
-        oauthTokens: {},
-      };
-      await writeFile(join(tmp.dir(), "index.json"), JSON.stringify(legacyIndex, null, 2));
-
-      const cache = makeRecipeCache(tmp.dir());
-      await cache.init();
-
-      // Legacy file is gone; new file is in place with just the recipes map.
-      await expect(readFile(join(tmp.dir(), "index.json"), "utf-8")).rejects.toThrow();
-      const migrated = JSON.parse(await readFile(join(tmp.dir(), "recipes", "index.json"), "utf-8")) as Record<
-        string,
-        string
-      >;
-      expect(migrated).toEqual(legacyHashes);
-    });
-
-    it("discards a legacy index holding JSON null instead of crashing init", async () => {
-      await writeFile(join(tmp.dir(), "index.json"), "null");
-
-      const cache = makeRecipeCache(tmp.dir());
-      (await cache.init())._unsafeUnwrap();
-
-      // The null legacy file is treated as malformed: discarded, no migrated index.
-      await expect(readFile(join(tmp.dir(), "index.json"), "utf-8")).rejects.toThrow();
-      await expect(readFile(join(tmp.dir(), "recipes", "index.json"), "utf-8")).rejects.toThrow();
-    });
-
-    it("deletes the legacy file when recipes namespace is empty (placeholder-only legacy)", async () => {
-      const legacyIndex = {
-        recipes: {},
-        categories: { "cat-1": "" },
-        pantry: { "pantry-1": "" },
-        oauthClients: {},
-        oauthTokens: {},
-      };
-      await writeFile(join(tmp.dir(), "index.json"), JSON.stringify(legacyIndex, null, 2));
-
-      const cache = makeRecipeCache(tmp.dir());
-      await cache.init();
-
-      await expect(readFile(join(tmp.dir(), "index.json"), "utf-8")).rejects.toThrow();
-      await expect(readFile(join(tmp.dir(), "recipes", "index.json"), "utf-8")).rejects.toThrow();
-    });
-
-    it("is idempotent across reruns (legacy + already-migrated both present)", async () => {
-      const legacyHashes = { "recipe-c": "hash-c" };
-      await writeFile(join(tmp.dir(), "index.json"), JSON.stringify({ recipes: legacyHashes }));
-
-      // First init: migrates. Second init: legacy file is gone, so no-op.
-      const c1 = makeRecipeCache(tmp.dir());
-      await c1.init();
-      const c2 = makeRecipeCache(tmp.dir());
-      await c2.init();
-
-      // Simulate a crash mid-migration: legacy file present AND recipes/index.json
-      // present from a prior partial run. Migration should overwrite + delete.
-      await writeFile(join(tmp.dir(), "index.json"), JSON.stringify({ recipes: legacyHashes }));
-      const c3 = makeRecipeCache(tmp.dir());
-      await c3.init();
-
-      await expect(readFile(join(tmp.dir(), "index.json"), "utf-8")).rejects.toThrow();
-      const migrated = JSON.parse(await readFile(join(tmp.dir(), "recipes", "index.json"), "utf-8")) as Record<
-        string,
-        string
-      >;
-      expect(migrated).toEqual(legacyHashes);
-    });
-
-    it("recovers from a corrupt legacy index.json by discarding it and continuing fresh", async () => {
-      await writeFile(join(tmp.dir(), "index.json"), "{ broken json");
-
-      const cache = makeRecipeCache(tmp.dir());
-      await cache.init();
-
-      await expect(readFile(join(tmp.dir(), "index.json"), "utf-8")).rejects.toThrow();
-
-      // Cache is usable and starts with an empty recipes set.
-      const recipe = makeRecipe({ uid: "recipe-after-corrupt" as RecipeUid, name: "Recovered" });
-      await cache.put(recipe);
-      await cache.flush();
-      expect((await cache.get(recipe.uid))._unsafeUnwrap()).toEqual(recipe);
     });
   });
 });
