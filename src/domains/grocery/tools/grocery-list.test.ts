@@ -1,3 +1,4 @@
+import { okAsync } from "neverthrow";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { GroceryState } from "../module.js";
@@ -155,7 +156,7 @@ describe("create_grocery_list tool", () => {
   });
 
   it("creates list with uppercase UUID and correct defaults", async () => {
-    vi.mocked(kh.client().saveGroceryList).mockImplementation(async (list) => list);
+    vi.mocked(kh.client().saveGroceryList).mockImplementation((list) => okAsync(list));
     kh.seed({ groceryLists: [], groceryItems: [] });
 
     const text = await kh.callToolText("create_grocery_list", { name: "Weekly Shopping" });
@@ -174,7 +175,7 @@ describe("create_grocery_list tool", () => {
   });
 
   it("store contains the new list after creation", async () => {
-    vi.mocked(kh.client().saveGroceryList).mockImplementation(async (list) => list);
+    vi.mocked(kh.client().saveGroceryList).mockImplementation((list) => okAsync(list));
     kh.seed({ groceryLists: [], groceryItems: [] });
 
     await kh.callTool("create_grocery_list", { name: "Weekly Shopping" });
@@ -196,7 +197,7 @@ describe("create_grocery_list tool", () => {
   });
 
   it("allows creation when name matches only by starts-with (not exact)", async () => {
-    vi.mocked(kh.client().saveGroceryList).mockImplementation(async (list) => list);
+    vi.mocked(kh.client().saveGroceryList).mockImplementation((list) => okAsync(list));
     const existing = makeGroceryList({ name: "Weekly Shopping Costco" });
     kh.seed({ groceryLists: [existing], groceryItems: [] });
 
@@ -226,7 +227,7 @@ describe("rename_grocery_list tool", () => {
 
   it("renames list and calls save", async () => {
     const list = makeGroceryList({ name: "Weekly Shopping" });
-    vi.mocked(kh.client().saveGroceryList).mockImplementation(async (l) => l);
+    vi.mocked(kh.client().saveGroceryList).mockImplementation((l) => okAsync(l));
     kh.seed({ groceryLists: [list], groceryItems: [] });
 
     const text = await kh.callToolText("rename_grocery_list", { uid: list.uid, newName: "Costco Run" });
@@ -294,7 +295,7 @@ describe("delete_grocery_list tool", () => {
 
   it("soft-deletes list by setting deleted: true", async () => {
     const list = makeGroceryList({ name: "Weekly Shopping" });
-    vi.mocked(kh.client().saveGroceryList).mockImplementation(async (l) => l);
+    vi.mocked(kh.client().saveGroceryList).mockImplementation((l) => okAsync(l));
     kh.seed({ groceryLists: [list], groceryItems: [] });
 
     const text = await kh.callToolText("delete_grocery_list", { uid: list.uid });
@@ -309,7 +310,7 @@ describe("delete_grocery_list tool", () => {
 
   it("already-deleted UID returns idempotent message", async () => {
     const list = makeGroceryList({ name: "Weekly Shopping" });
-    vi.mocked(kh.client().saveGroceryList).mockImplementation(async (l) => l);
+    vi.mocked(kh.client().saveGroceryList).mockImplementation((l) => okAsync(l));
     kh.seed({ groceryLists: [list], groceryItems: [] });
 
     // First delete — removes the list from the store
@@ -326,7 +327,7 @@ describe("delete_grocery_list tool", () => {
   it("does not cascade to items (no saveGroceryItems call)", async () => {
     const list = makeGroceryList({ name: "Weekly Shopping" });
     const item = makeGroceryItem({ listUid: list.uid });
-    vi.mocked(kh.client().saveGroceryList).mockImplementation(async (l) => l);
+    vi.mocked(kh.client().saveGroceryList).mockImplementation((l) => okAsync(l));
     kh.seed({ groceryLists: [list], groceryItems: [item] });
 
     await kh.callTool("delete_grocery_list", { uid: list.uid });

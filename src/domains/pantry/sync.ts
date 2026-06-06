@@ -21,17 +21,16 @@ import { pantryItemsEqual } from "./types.js";
 export function pantrySync(state: PantryState): SyncContribution<PantryState, "aisle"> {
   return {
     tier: "core",
-    reconcile: async (ctx): Promise<PantrySyncResult> => {
+    reconcile: (ctx) => {
       const { store, cache } = ctx.state;
-      const changes = await syncReplaceAllEntity({
+      return syncReplaceAllEntity({
         fetch: () => ctx.infra.client.listPantry(),
         cache,
         store,
         equals: pantryItemsEqual,
         label: "pantry items",
         log: ctx.infra.log,
-      });
-      return { changeType: "pantry", changes };
+      }).map((changes): PantrySyncResult => ({ changeType: "pantry", changes }));
     },
     sweep: () => state.store.sweepPending(),
   };

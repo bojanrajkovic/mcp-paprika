@@ -1,3 +1,4 @@
+import { errAsync, okAsync } from "neverthrow";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { RecipeUid } from "../../../ids.js";
@@ -23,8 +24,8 @@ describe("restore_recipe tool", () => {
 
   it("happy path: restores a trashed recipe and saves inTrash:false", async () => {
     const trashed = makeRecipe({ name: "Old Soup", inTrash: true });
-    vi.mocked(kh.client().getRecipe).mockResolvedValue(trashed);
-    vi.mocked(kh.client().saveRecipe).mockResolvedValue({ ...trashed, inTrash: false });
+    vi.mocked(kh.client().getRecipe).mockReturnValue(okAsync(trashed));
+    vi.mocked(kh.client().saveRecipe).mockReturnValue(okAsync({ ...trashed, inTrash: false }));
     kh.seed({ recipes: [makeRecipe({ name: "Keeper" })] }); // flips hasSynced
 
     const text = await kh.callToolText("restore_recipe", { uid: trashed.uid });
@@ -38,8 +39,8 @@ describe("restore_recipe tool", () => {
     // The local store has NO knowledge of this UID (trashed in the app, not yet synced),
     // but the authoritative getRecipe returns it with inTrash:true — so it still restores.
     const appTrashed = makeRecipe({ name: "Trashed In App", inTrash: true });
-    vi.mocked(kh.client().getRecipe).mockResolvedValue(appTrashed);
-    vi.mocked(kh.client().saveRecipe).mockResolvedValue({ ...appTrashed, inTrash: false });
+    vi.mocked(kh.client().getRecipe).mockReturnValue(okAsync(appTrashed));
+    vi.mocked(kh.client().saveRecipe).mockReturnValue(okAsync({ ...appTrashed, inTrash: false }));
     kh.seed({ recipes: [makeRecipe({ name: "Keeper" })] }); // flips hasSynced; appTrashed NOT in store
 
     const text = await kh.callToolText("restore_recipe", { uid: appTrashed.uid });
@@ -50,7 +51,7 @@ describe("restore_recipe tool", () => {
 
   it("already-active no-op: local store already agrees, no save, no notification", async () => {
     const live = makeRecipe({ name: "Active Recipe", inTrash: false });
-    vi.mocked(kh.client().getRecipe).mockResolvedValue(live);
+    vi.mocked(kh.client().getRecipe).mockReturnValue(okAsync(live));
     kh.seed({ recipes: [live] }); // store holds it as active — exact match, reconcile is a no-op
 
     const text = await kh.callToolText("restore_recipe", { uid: live.uid });
@@ -67,7 +68,7 @@ describe("restore_recipe tool", () => {
     const uid = "recipe-stale" as RecipeUid;
     const staleTrashed = makeRecipe({ uid, name: "Restored Elsewhere", inTrash: true });
     const authoritative = { ...staleTrashed, inTrash: false };
-    vi.mocked(kh.client().getRecipe).mockResolvedValue(authoritative);
+    vi.mocked(kh.client().getRecipe).mockReturnValue(okAsync(authoritative));
     kh.seed({ recipes: [staleTrashed] }); // seed the stale copy
 
     const text = await kh.callToolText("restore_recipe", { uid });
@@ -80,7 +81,7 @@ describe("restore_recipe tool", () => {
   });
 
   it("not-found: a 404 with no local copy returns not-found, no save", async () => {
-    vi.mocked(kh.client().getRecipe).mockRejectedValue(notFound("nonexistent-uid"));
+    vi.mocked(kh.client().getRecipe).mockReturnValue(errAsync(notFound("nonexistent-uid")));
     kh.seed({ recipes: [makeRecipe({ name: "Keeper" })] }); // flips hasSynced
 
     const text = await kh.callToolText("restore_recipe", { uid: "nonexistent-uid" });
@@ -94,7 +95,7 @@ describe("restore_recipe tool", () => {
     // Reconcile removes it so a later read/search can't serve a phantom.
     const uid = "recipe-phantom" as RecipeUid;
     const phantom = makeRecipe({ uid, name: "Ghost" });
-    vi.mocked(kh.client().getRecipe).mockRejectedValue(notFound(uid));
+    vi.mocked(kh.client().getRecipe).mockReturnValue(errAsync(notFound(uid)));
     kh.seed({ recipes: [phantom] }); // seed the phantom
 
     const text = await kh.callToolText("restore_recipe", { uid });
@@ -106,8 +107,8 @@ describe("restore_recipe tool", () => {
   });
 
   it("a transient (non-404) lookup error does NOT masquerade as already-active or reconcile", async () => {
-    vi.mocked(kh.client().getRecipe).mockRejectedValue(
-      new PaprikaAPIError("Server error", 503, "/api/v2/sync/recipe/x/"),
+    vi.mocked(kh.client().getRecipe).mockReturnValue(
+      errAsync(new PaprikaAPIError("Server error", 503, "/api/v2/sync/recipe/x/")),
     );
     kh.seed({ recipes: [makeRecipe({ name: "Keeper" })] }); // flips hasSynced
 

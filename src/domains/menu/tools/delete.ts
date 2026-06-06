@@ -7,7 +7,6 @@ import type { Menu } from "../types.js";
 import { MenuUidSchema } from "../../../ids.js";
 import { defineTool } from "../../../kernel/tool.js";
 import { commitFailure, resolveLookup, textResult, uidOrTextLookupSchema } from "../../../shared/tools.js";
-import { toMessage } from "../../../utils/log.js";
 import { menuStartGuard } from "./guards.js";
 
 /**
@@ -68,34 +67,36 @@ export const deleteMenuTool = defineTool(
             // docs/wire-captures/menus.har.json "cascade delete menuitem after menu
             // deletion"). This is the case MenuItem.menuUid is nullable for.
             const trashedItems = items.map((item) => ({ ...item, menuUid: null, deleted: true }));
-            try {
-              const savedItems = await ctx.infra.client.saveMenuItems(trashedItems);
-              const commitErr = commitFailure("menu", await ctx.writes.commitMenuItemsBatch(savedItems));
-              if (commitErr) return commitErr;
-            } catch (error) {
-              const message = toMessage(error);
-              log.error({ err: error, uid: existing.uid }, "saveMenuItems (delete_menu cascade) failed");
-              return textResult(
-                `Failed to delete the recipes in menu "${existing.name}": ${message}. ` +
-                  `The menu was NOT deleted. Try again.`,
-              );
-            }
+            const savedItems = (await ctx.infra.client.saveMenuItems(trashedItems)).match(
+              (v) => v,
+              (e) => {
+                log.error({ err: e, uid: existing.uid }, "saveMenuItems (delete_menu cascade) failed");
+                return textResult(
+                  `Failed to delete the recipes in menu "${existing.name}": ${e.message}. ` +
+                    `The menu was NOT deleted. Try again.`,
+                );
+              },
+            );
+            if ("content" in savedItems) return savedItems;
+            const commitErr = commitFailure("menu", await ctx.writes.commitMenuItemsBatch(savedItems));
+            if (commitErr) return commitErr;
           }
 
           const trashedMenu: Menu = { ...existing, deleted: true };
-          try {
-            const saved = await ctx.infra.client.saveMenus([trashedMenu]);
-            const persisted = saved[0] ?? trashedMenu;
-            const commitErr = commitFailure("menu", await ctx.writes.commitMenu(persisted));
-            if (commitErr) return commitErr;
-          } catch (error) {
-            const message = toMessage(error);
-            log.error({ err: error, uid: existing.uid }, "saveMenus (delete_menu) failed");
-            return textResult(
-              `Deleted the ${items.length.toString()} recipe(s) in menu "${existing.name}", but failed to ` +
-                `delete the menu itself: ${message}. The next sync should reconcile it; you can also retry.`,
-            );
-          }
+          const savedMenus = (await ctx.infra.client.saveMenus([trashedMenu])).match(
+            (v) => v,
+            (e) => {
+              log.error({ err: e, uid: existing.uid }, "saveMenus (delete_menu) failed");
+              return textResult(
+                `Deleted the ${items.length.toString()} recipe(s) in menu "${existing.name}", but failed to ` +
+                  `delete the menu itself: ${e.message}. The next sync should reconcile it; you can also retry.`,
+              );
+            },
+          );
+          if ("content" in savedMenus) return savedMenus;
+          const persisted = savedMenus[0] ?? trashedMenu;
+          const commitErr = commitFailure("menu", await ctx.writes.commitMenu(persisted));
+          if (commitErr) return commitErr;
 
           const itemNote = items.length > 0 ? ` and its ${items.length.toString()} planned recipe(s)` : "";
           return textResult(`Menu "${existing.name}"${itemNote} has been deleted.`);

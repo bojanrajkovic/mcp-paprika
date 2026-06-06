@@ -3,13 +3,11 @@ import { z } from "zod";
 
 import type { DomainCtx } from "../../../kernel/registry.js";
 import type { RecipeState, RecipeWrites } from "../module.js";
-import type { Recipe } from "../types.js";
 
 import { RecipeUidSchema } from "../../../ids.js";
 import { defineTool } from "../../../kernel/tool.js";
 import { PaprikaAPIError } from "../../../paprika/errors.js";
 import { commitFailure, textResult } from "../../../shared/tools.js";
-import { toMessage } from "../../../utils/log.js";
 import { recipeToMarkdown } from "../recipe-markdown.js";
 import { recipeColdStartGuard } from "./guards.js";
 
@@ -45,22 +43,24 @@ export const restoreRecipeTool = defineTool(
           // return a stale inTrash:false — or nothing at all — and wrongly refuse to
           // restore a recipe that is genuinely sitting in the trash. getRecipe is the
           // source of truth for inTrash.
-          let recipe: Recipe;
-          try {
-            recipe = await ctx.infra.client.getRecipe(args.uid);
-          } catch (error) {
-            if (error instanceof PaprikaAPIError && error.status === 404) {
-              // Never existed, or already permanently purged from the trash. Drop a
-              // stale local phantom so a later read/search can't serve it.
-              log.info({ uid: args.uid }, "restore_recipe: recipe not found (404)");
-              await ctx.writes.reconcileLocalRecipeAbsent(args.uid);
-              return textResult(`No recipe found with UID "${args.uid}" (it may not exist or was already deleted).`);
-            }
-            // Transient/upstream failure — don't masquerade as "already active".
-            const message = toMessage(error);
-            log.error({ err: error, uid: args.uid }, "restore_recipe lookup failed");
-            return textResult(`Failed to look up recipe "${args.uid}": ${message}`);
-          }
+          const recipe = await (
+            await ctx.infra.client.getRecipe(args.uid)
+          ).match(
+            (v) => v,
+            async (e): Promise<CallToolResult> => {
+              if (e instanceof PaprikaAPIError && e.status === 404) {
+                // Never existed, or already permanently purged from the trash. Drop a
+                // stale local phantom so a later read/search can't serve it.
+                log.info({ uid: args.uid }, "restore_recipe: recipe not found (404)");
+                await ctx.writes.reconcileLocalRecipeAbsent(args.uid);
+                return textResult(`No recipe found with UID "${args.uid}" (it may not exist or was already deleted).`);
+              }
+              // Transient/upstream failure — don't masquerade as "already active".
+              log.error({ err: e, uid: args.uid }, "restore_recipe lookup failed");
+              return textResult(`Failed to look up recipe "${args.uid}": ${e.message}`);
+            },
+          );
+          if ("content" in recipe) return recipe;
 
           if (!recipe.inTrash) {
             // Authoritative truth: it's live. Heal a stale local copy that still shows
@@ -73,16 +73,16 @@ export const restoreRecipeTool = defineTool(
           // trash-independent), so the restored recipe round-trips verbatim.
           const updated = { ...recipe, inTrash: false };
 
-          let saved: Recipe;
-          try {
-            saved = await ctx.infra.client.saveRecipe(updated);
-            const commitErr = commitFailure("recipe", await ctx.writes.commitRecipe(saved), { selfHealing: false });
-            if (commitErr) return commitErr;
-          } catch (error) {
-            const message = toMessage(error);
-            log.error({ err: error, uid: args.uid }, "saveRecipe failed");
-            return textResult(`Failed to restore recipe: ${message}`);
-          }
+          const saved = (await ctx.infra.client.saveRecipe(updated)).match(
+            (v) => v,
+            (e) => {
+              log.error({ err: e, uid: args.uid }, "saveRecipe failed");
+              return textResult(`Failed to restore recipe: ${e.message}`);
+            },
+          );
+          if ("content" in saved) return saved;
+          const commitErr = commitFailure("recipe", await ctx.writes.commitRecipe(saved), { selfHealing: false });
+          if (commitErr) return commitErr;
 
           const categoryNames = ctx.state.category.store.resolveNames(saved.categories);
           return textResult(recipeToMarkdown(saved, categoryNames));

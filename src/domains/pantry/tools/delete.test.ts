@@ -1,3 +1,4 @@
+import { errAsync, okAsync } from "neverthrow";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { PantryItemUid } from "../../../ids.js";
@@ -13,7 +14,7 @@ describe("delete_pantry_item tool", () => {
 
   it("happy path — sets deleted=true, saves, and reports success", async () => {
     const item = makePantryItem({ uid: "uid-1" as PantryItemUid, ingredient: "Butter", deleted: false });
-    vi.mocked(kh.client().savePantryItems).mockImplementation(async (items) => items);
+    vi.mocked(kh.client().savePantryItems).mockImplementation((items) => okAsync(items));
     kh.seed({ pantry: [item] });
 
     const text = await kh.callToolText("delete_pantry_item", { uid: "uid-1" });
@@ -50,7 +51,7 @@ describe("delete_pantry_item tool", () => {
 
   it("savePantryItems API error returns error message, store not mutated", async () => {
     const item = makePantryItem({ uid: "uid-1" as PantryItemUid, ingredient: "Butter", deleted: false });
-    vi.mocked(kh.client().savePantryItems).mockRejectedValue(new Error("server timeout"));
+    vi.mocked(kh.client().savePantryItems).mockReturnValue(errAsync(new Error("server timeout")));
     kh.seed({ pantry: [item] });
 
     const text = await kh.callToolText("delete_pantry_item", { uid: "uid-1" });

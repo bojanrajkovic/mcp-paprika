@@ -1,5 +1,5 @@
 import { fromAny } from "@total-typescript/shoehorn";
-import { okAsync } from "neverthrow";
+import { errAsync, okAsync } from "neverthrow";
 import { describe, expect, it, vi } from "vitest";
 
 import type { DiskCache } from "../cache/disk-cache.js";
@@ -7,6 +7,7 @@ import type { DiskCache } from "../cache/disk-cache.js";
 import { makeGroceryList } from "../../test/domains/grocery/__fixtures__/grocery-lists.js";
 import { GroceryListStore } from "../domains/grocery/grocery-list/store.js";
 import { SILENT_LOG } from "../utils/log.js";
+import { PaprikaError } from "./errors.js";
 import { syncReplaceAllEntity } from "./sync.js";
 
 describe("syncReplaceAllEntity", () => {
@@ -27,14 +28,16 @@ describe("syncReplaceAllEntity", () => {
   it("returns empty changes when fetch and cache are both empty", async () => {
     const store = new GroceryListStore();
     const { cache } = makeCache([]);
-    const result = await syncReplaceAllEntity({
-      fetch: async () => [],
-      cache,
-      store,
-      equals: listsEqual,
-      label: "grocery lists",
-      log: SILENT_LOG,
-    });
+    const result = (
+      await syncReplaceAllEntity({
+        fetch: () => okAsync([]),
+        cache,
+        store,
+        equals: listsEqual,
+        label: "grocery lists",
+        log: SILENT_LOG,
+      })
+    )._unsafeUnwrap();
     expect(result.added).toHaveLength(0);
     expect(result.updated).toHaveLength(0);
     expect(result.removedUids).toHaveLength(0);
@@ -44,14 +47,16 @@ describe("syncReplaceAllEntity", () => {
     const list = makeGroceryList();
     const store = new GroceryListStore();
     const { cache } = makeCache([]);
-    const result = await syncReplaceAllEntity({
-      fetch: async () => [list],
-      cache,
-      store,
-      equals: listsEqual,
-      label: "grocery lists",
-      log: SILENT_LOG,
-    });
+    const result = (
+      await syncReplaceAllEntity({
+        fetch: () => okAsync([list]),
+        cache,
+        store,
+        equals: listsEqual,
+        label: "grocery lists",
+        log: SILENT_LOG,
+      })
+    )._unsafeUnwrap();
     expect(result.added).toHaveLength(1);
     expect(result.added[0]?.uid).toBe(list.uid);
     expect(result.updated).toHaveLength(0);
@@ -63,14 +68,16 @@ describe("syncReplaceAllEntity", () => {
     const updated = { ...list, name: "New Name" };
     const store = new GroceryListStore();
     const { cache } = makeCache([list]);
-    const result = await syncReplaceAllEntity({
-      fetch: async () => [updated],
-      cache,
-      store,
-      equals: listsEqual,
-      label: "grocery lists",
-      log: SILENT_LOG,
-    });
+    const result = (
+      await syncReplaceAllEntity({
+        fetch: () => okAsync([updated]),
+        cache,
+        store,
+        equals: listsEqual,
+        label: "grocery lists",
+        log: SILENT_LOG,
+      })
+    )._unsafeUnwrap();
     expect(result.added).toHaveLength(0);
     expect(result.updated).toHaveLength(1);
     expect(result.updated[0]?.name).toBe("New Name");
@@ -81,14 +88,16 @@ describe("syncReplaceAllEntity", () => {
     const list = makeGroceryList();
     const store = new GroceryListStore();
     const { cache, remove } = makeCache([list]);
-    const result = await syncReplaceAllEntity({
-      fetch: async () => [],
-      cache,
-      store,
-      equals: listsEqual,
-      label: "grocery lists",
-      log: SILENT_LOG,
-    });
+    const result = (
+      await syncReplaceAllEntity({
+        fetch: () => okAsync([]),
+        cache,
+        store,
+        equals: listsEqual,
+        label: "grocery lists",
+        log: SILENT_LOG,
+      })
+    )._unsafeUnwrap();
     expect(result.removedUids).toHaveLength(1);
     expect(result.removedUids[0]).toBe(list.uid);
     expect(remove).toHaveBeenCalledWith(list.uid);
@@ -102,14 +111,16 @@ describe("syncReplaceAllEntity", () => {
     const store = new GroceryListStore();
     store.markPendingUpsert(list.uid);
     const { cache } = makeCache([list]);
-    const result = await syncReplaceAllEntity({
-      fetch: async () => [serverVersion],
-      cache,
-      store,
-      equals: listsEqual,
-      label: "grocery lists",
-      log: SILENT_LOG,
-    });
+    const result = (
+      await syncReplaceAllEntity({
+        fetch: () => okAsync([serverVersion]),
+        cache,
+        store,
+        equals: listsEqual,
+        label: "grocery lists",
+        log: SILENT_LOG,
+      })
+    )._unsafeUnwrap();
     // The local pending version must survive
     expect(store.get(list.uid)?.name).toBe("Local (pending)");
     // UID is not in removedUids (spliced back from cache)
@@ -124,14 +135,16 @@ describe("syncReplaceAllEntity", () => {
     store.load([list]);
     store.markPendingDelete(list.uid);
     const { cache } = makeCache([]);
-    const result = await syncReplaceAllEntity({
-      fetch: async () => [list],
-      cache,
-      store,
-      equals: listsEqual,
-      label: "grocery lists",
-      log: SILENT_LOG,
-    });
+    const result = (
+      await syncReplaceAllEntity({
+        fetch: () => okAsync([list]),
+        cache,
+        store,
+        equals: listsEqual,
+        label: "grocery lists",
+        log: SILENT_LOG,
+      })
+    )._unsafeUnwrap();
     // Pending-delete UID was excluded from effective — not re-loaded
     expect(store.get(list.uid)).toBeUndefined();
     expect(result.added.map((l) => l.uid)).not.toContain(list.uid);
@@ -143,7 +156,7 @@ describe("syncReplaceAllEntity", () => {
     store.markPendingUpsert(list.uid);
     const { cache } = makeCache([list]);
     await syncReplaceAllEntity({
-      fetch: async () => [list], // server caught up — same content
+      fetch: () => okAsync([list]), // server caught up — same content
       cache,
       store,
       equals: listsEqual,
@@ -160,7 +173,7 @@ describe("syncReplaceAllEntity", () => {
     store.markPendingUpsert(list.uid);
     const { cache } = makeCache([list]);
     await syncReplaceAllEntity({
-      fetch: async () => [staleServer],
+      fetch: () => okAsync([staleServer]),
       cache,
       store,
       equals: listsEqual,
@@ -188,7 +201,7 @@ describe("syncReplaceAllEntity", () => {
       afterLoadOrder.push("afterLoad");
     });
     await syncReplaceAllEntity({
-      fetch: async () => [list],
+      fetch: () => okAsync([list]),
       cache,
       store,
       equals: listsEqual,
@@ -206,37 +219,33 @@ describe("syncReplaceAllEntity", () => {
   it("propagates errors from fetch", async () => {
     const store = new GroceryListStore();
     const { cache } = makeCache([]);
-    await expect(
-      syncReplaceAllEntity({
-        fetch: async () => {
-          throw new Error("network error");
-        },
-        cache,
-        store,
-        equals: listsEqual,
-        label: "grocery lists",
-        log: SILENT_LOG,
-      }),
-    ).rejects.toThrow("network error");
+    const result = await syncReplaceAllEntity({
+      fetch: () => errAsync(new PaprikaError("network error")),
+      cache,
+      store,
+      equals: listsEqual,
+      label: "grocery lists",
+      log: SILENT_LOG,
+    });
+    expect(result._unsafeUnwrapErr()).toMatchObject({ message: "network error" });
   });
 
   it("propagates errors from cache.getAll", async () => {
     const list = makeGroceryList();
     const store = new GroceryListStore();
     const cache: Pick<DiskCache<GList>, "getAll" | "put" | "remove"> = fromAny({
-      getAll: vi.fn().mockRejectedValue(new Error("disk error")),
+      getAll: vi.fn().mockReturnValue(errAsync({ context: "getAll", message: "disk error", cause: undefined })),
       put: vi.fn(),
       remove: vi.fn(),
     });
-    await expect(
-      syncReplaceAllEntity({
-        fetch: async () => [list],
-        cache,
-        store,
-        equals: listsEqual,
-        label: "grocery lists",
-        log: SILENT_LOG,
-      }),
-    ).rejects.toThrow("disk error");
+    const result = await syncReplaceAllEntity({
+      fetch: () => okAsync([list]),
+      cache,
+      store,
+      equals: listsEqual,
+      label: "grocery lists",
+      log: SILENT_LOG,
+    });
+    expect(result._unsafeUnwrapErr()).toMatchObject({ message: "disk error" });
   });
 });

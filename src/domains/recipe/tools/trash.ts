@@ -6,7 +6,6 @@ import type { RecipeState, RecipeWrites } from "../module.js";
 import { RecipeUidSchema } from "../../../ids.js";
 import { defineTool } from "../../../kernel/tool.js";
 import { commitFailure, textResult } from "../../../shared/tools.js";
-import { toMessage } from "../../../utils/log.js";
 import { recipeColdStartGuard } from "./guards.js";
 
 /**
@@ -44,17 +43,17 @@ export const trashRecipeTool = defineTool(
 
           const trashed = { ...recipe, inTrash: true };
 
-          try {
-            const saved = await ctx.infra.client.saveRecipe(trashed);
-            const commitErr = commitFailure("recipe", await ctx.writes.commitRecipe(saved), { selfHealing: false });
-            if (commitErr) return commitErr;
-          } catch (error) {
-            const message = toMessage(error);
-            log.error({ err: error, uid: args.uid }, "saveRecipe failed");
-            return textResult(`Failed to delete recipe: ${message}`);
-          }
-
-          return textResult(`Recipe "${recipe.name}" has been moved to the trash.`);
+          return (await ctx.infra.client.saveRecipe(trashed)).match(
+            async (saved): Promise<CallToolResult> => {
+              const commitErr = commitFailure("recipe", await ctx.writes.commitRecipe(saved), { selfHealing: false });
+              if (commitErr) return commitErr;
+              return textResult(`Recipe "${recipe.name}" has been moved to the trash.`);
+            },
+            async (e) => {
+              log.error({ err: e, uid: args.uid }, "saveRecipe failed");
+              return textResult(`Failed to delete recipe: ${e.message}`);
+            },
+          );
         },
         (guard) => guard,
       );

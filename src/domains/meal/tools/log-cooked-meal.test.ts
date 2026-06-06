@@ -1,3 +1,4 @@
+import { okAsync } from "neverthrow";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { MealTypeUid, MealUid, RecipeUid } from "../../../ids.js";
@@ -32,7 +33,7 @@ describe("log_cooked_meal tool", () => {
   afterEach(kh.teardown);
 
   it("defaults to today and Dinner, linking the given recipe", async () => {
-    vi.mocked(kh.client().saveMeals).mockImplementation(async (items) => [...items]);
+    vi.mocked(kh.client().saveMeals).mockImplementation((items) => okAsync([...items]));
     kh.seed({
       mealTypes: makeBuiltins(),
       recipes: [makeRecipe({ uid: TACOS_UID, name: "Tacos" })],
@@ -57,7 +58,7 @@ describe("log_cooked_meal tool", () => {
   });
 
   it("honors an explicit date and type", async () => {
-    vi.mocked(kh.client().saveMeals).mockImplementation(async (items) => [...items]);
+    vi.mocked(kh.client().saveMeals).mockImplementation((items) => okAsync([...items]));
     kh.seed({
       mealTypes: makeBuiltins(),
       recipes: [makeRecipe({ uid: TACOS_UID, name: "Tacos" })],
@@ -78,7 +79,7 @@ describe("log_cooked_meal tool", () => {
   });
 
   it("assigns the next per-date order_flag", async () => {
-    vi.mocked(kh.client().saveMeals).mockImplementation(async (items) => [...items]);
+    vi.mocked(kh.client().saveMeals).mockImplementation((items) => okAsync([...items]));
     const existing = makeMeal({
       uid: "ex" as MealUid,
       date: todayWire(),
@@ -129,7 +130,7 @@ describe("log_cooked_meal tool", () => {
   });
 
   it("commits the saved meal to the store", async () => {
-    vi.mocked(kh.client().saveMeals).mockImplementation(async (items) => [...items]);
+    vi.mocked(kh.client().saveMeals).mockImplementation((items) => okAsync([...items]));
     kh.seed({
       mealTypes: makeBuiltins(),
       recipes: [makeRecipe({ uid: TACOS_UID, name: "Tacos" })],
@@ -143,8 +144,8 @@ describe("log_cooked_meal tool", () => {
   });
 
   it("a rejected log (unknown recipe) with a new type {name} creates NO type", async () => {
-    vi.mocked(kh.client().saveMeals).mockImplementation(async (items) => [...items]);
-    vi.mocked(kh.client().saveMealType).mockImplementation(async (mt) => mt);
+    vi.mocked(kh.client().saveMeals).mockImplementation((items) => okAsync([...items]));
+    vi.mocked(kh.client().saveMealType).mockImplementation((mt) => okAsync(mt));
     kh.seed({ mealTypes: makeBuiltins(), recipes: [], meals: [] });
 
     const result = await kh.callTool("log_cooked_meal", {

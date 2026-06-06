@@ -8,7 +8,6 @@ import type { PantryItem } from "../types.js";
 import { PantryItemUidSchema } from "../../../ids.js";
 import { defineTool } from "../../../kernel/tool.js";
 import { commitFailure, textResult } from "../../../shared/tools.js";
-import { toMessage } from "../../../utils/log.js";
 import { pantryItemToMarkdown } from "../pantry-helpers.js";
 import { pantryStartGuard } from "./guards.js";
 
@@ -48,17 +47,17 @@ export const markPantryItemOutOfStockTool = defineTool(
             return textResult(`No pantry item found with UID "${args.uid}" (it may not exist or was already deleted).`);
           }
 
-          let saved: PantryItem;
-          try {
-            const updated: PantryItem = { ...existing, inStock: false };
-            saved = (await ctx.infra.client.savePantryItems([updated]))[0]!;
-            const commitErr = commitFailure("pantry", await ctx.writes.commitPantryItem(saved));
-            if (commitErr) return commitErr;
-          } catch (error) {
-            const message = toMessage(error);
-            log.error({ err: error, uid: args.uid }, "savePantryItems failed");
-            return textResult(`Failed to update pantry item: ${message}`);
-          }
+          const updated: PantryItem = { ...existing, inStock: false };
+          const saved = (await ctx.infra.client.savePantryItems([updated])).match(
+            (items) => items[0]!,
+            (e) => {
+              log.error({ err: e, uid: args.uid }, "savePantryItems failed");
+              return textResult(`Failed to update pantry item: ${e.message}`);
+            },
+          );
+          if ("content" in saved) return saved;
+          const commitErr = commitFailure("pantry", await ctx.writes.commitPantryItem(saved));
+          if (commitErr) return commitErr;
 
           return textResult(pantryItemToMarkdown(saved));
         },
@@ -92,17 +91,17 @@ export const restockPantryItemTool = defineTool(
             return textResult(`No pantry item found with UID "${args.uid}" (it may not exist or was already deleted).`);
           }
 
-          let saved: PantryItem;
-          try {
-            const updated: PantryItem = { ...existing, inStock: true };
-            saved = (await ctx.infra.client.savePantryItems([updated]))[0]!;
-            const commitErr = commitFailure("pantry", await ctx.writes.commitPantryItem(saved));
-            if (commitErr) return commitErr;
-          } catch (error) {
-            const message = toMessage(error);
-            log.error({ err: error, uid: args.uid }, "savePantryItems failed");
-            return textResult(`Failed to update pantry item: ${message}`);
-          }
+          const updated: PantryItem = { ...existing, inStock: true };
+          const saved = (await ctx.infra.client.savePantryItems([updated])).match(
+            (items) => items[0]!,
+            (e) => {
+              log.error({ err: e, uid: args.uid }, "savePantryItems failed");
+              return textResult(`Failed to update pantry item: ${e.message}`);
+            },
+          );
+          if ("content" in saved) return saved;
+          const commitErr = commitFailure("pantry", await ctx.writes.commitPantryItem(saved));
+          if (commitErr) return commitErr;
 
           return textResult(pantryItemToMarkdown(saved));
         },

@@ -1,6 +1,6 @@
 import { join } from "node:path";
 
-import { err, ok, okAsync, ResultAsync } from "neverthrow";
+import { okAsync, ResultAsync } from "neverthrow";
 
 import type { CacheError, DiskCache } from "../../cache/disk-cache.js";
 import type { MealApi } from "./api.js";
@@ -12,7 +12,6 @@ import { defineModule, register } from "../../kernel/registry.js";
 import { notifySyncBestEffort } from "../../paprika/client.js";
 import { resolvePendingWriteTtl } from "../../utils/config.js";
 import { unwrapAtBoot } from "../../utils/errors.js";
-import { toMessage } from "../../utils/log.js";
 import { MealStore } from "./store.js";
 import { mealSync } from "./sync.js";
 import { logCookedMealTool } from "./tools/log-cooked-meal.js";
@@ -146,21 +145,17 @@ register(
 
       // The coordinator's batch write (api): POST then commit through the in-scope
       // chokepoint. Returns the server-saved meals on success, a user-facing error
-      // message on failure (mirrors the live `schedule_menu` `toMessage`). The
-      // `hasSynced` gate is the coordinator's (it guards before calling this),
-      // matching the live ordering.
-      const createMeals: MealApi["createMeals"] = async (meals) => {
-        let saved: ReadonlyArray<Meal>;
-        try {
-          saved = await client.saveMeals(meals);
-        } catch (error) {
-          return err(toMessage(error));
-        }
-        return commitMealsBatch(saved).match(
-          () => ok(saved),
-          (e) => err(e.message),
-        );
-      };
+      // message on failure. The `hasSynced` gate is the coordinator's (it guards
+      // before calling this), matching the live ordering.
+      const createMeals: MealApi["createMeals"] = (meals) =>
+        client
+          .saveMeals(meals)
+          .mapErr((e) => e.message)
+          .andThen((saved) =>
+            commitMealsBatch(saved)
+              .map(() => saved)
+              .mapErr((e) => e.message),
+          );
 
       return {
         api: {

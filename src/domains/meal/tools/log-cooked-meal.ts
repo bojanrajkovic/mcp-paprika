@@ -11,7 +11,6 @@ import { MealUidSchema, RecipeUidSchema } from "../../../ids.js";
 import { defineTool } from "../../../kernel/tool.js";
 import { commitFailure, textResult } from "../../../shared/tools.js";
 import { parseCalendarDayWire, todayWire } from "../../../utils/dates.js";
-import { toMessage } from "../../../utils/log.js";
 import { mealTypeSpecSchema, resolveOrCreateMealType } from "../../meal-type/meal-type-helpers.js";
 import { mealStartGuard } from "./guards.js";
 import { makeMealOrderFlagAssigner, renderMealCard } from "./helpers.js";
@@ -104,17 +103,17 @@ export const logCookedMealTool = defineTool(
             deleted: false,
           };
 
-          let saved: Meal;
-          try {
-            const savedItems = await ctx.infra.client.saveMeals([meal]);
-            const commitErr = commitFailure("meal plan", await ctx.writes.commitMealsBatch(savedItems));
-            if (commitErr) return commitErr;
-            saved = savedItems[0]!;
-          } catch (error) {
-            const message = toMessage(error);
-            log.error({ err: error, recipe_uid: args.recipe_uid }, "saveMeals failed");
-            return textResult(`Failed to log cooked meal: ${message}`);
-          }
+          const savedItems = (await ctx.infra.client.saveMeals([meal])).match(
+            (items) => items,
+            (e) => {
+              log.error({ err: e, recipe_uid: args.recipe_uid }, "saveMeals failed");
+              return textResult(`Failed to log cooked meal: ${e.message}`);
+            },
+          );
+          if ("content" in savedItems) return savedItems;
+          const commitErr = commitFailure("meal plan", await ctx.writes.commitMealsBatch(savedItems));
+          if (commitErr) return commitErr;
+          const saved = savedItems[0]!;
 
           return textResult(`Logged.\n\n${renderMealCard(saved, ctx.deps.recipe, ctx.deps["meal-type"])}`);
         },

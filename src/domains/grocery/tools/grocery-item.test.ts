@@ -1,3 +1,4 @@
+import { okAsync } from "neverthrow";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { AisleUid, GroceryItemUid, GroceryListUid } from "../../../ids.js";
@@ -21,7 +22,7 @@ describe("add_grocery_items tool", () => {
   afterEach(kh.teardown);
 
   it("single item with quantity creates name as 'quantity ingredient'", async () => {
-    vi.mocked(kh.client().saveGroceryItems).mockImplementation(async (items) => items);
+    vi.mocked(kh.client().saveGroceryItems).mockImplementation((items) => okAsync(items));
     kh.seed({
       groceryLists: [WEEKLY_LIST],
       groceryItems: [],
@@ -51,7 +52,7 @@ describe("add_grocery_items tool", () => {
   });
 
   it("single item with empty quantity creates name as just ingredient", async () => {
-    vi.mocked(kh.client().saveGroceryItems).mockImplementation(async (items) => items);
+    vi.mocked(kh.client().saveGroceryItems).mockImplementation((items) => okAsync(items));
     kh.seed({
       groceryLists: [WEEKLY_LIST],
       groceryItems: [],
@@ -75,7 +76,7 @@ describe("add_grocery_items tool", () => {
   });
 
   it("batch of 3 items calls saveGroceryItems once with all 3 and commits them to the store", async () => {
-    vi.mocked(kh.client().saveGroceryItems).mockImplementation(async (items) => items);
+    vi.mocked(kh.client().saveGroceryItems).mockImplementation((items) => okAsync(items));
     kh.seed({
       groceryLists: [WEEKLY_LIST],
       groceryItems: [],
@@ -108,7 +109,7 @@ describe("add_grocery_items tool", () => {
   });
 
   it("auto-resolves aisle from ingredient catalog when aisle omitted", async () => {
-    vi.mocked(kh.client().saveGroceryItems).mockImplementation(async (items) => items);
+    vi.mocked(kh.client().saveGroceryItems).mockImplementation((items) => okAsync(items));
     kh.seed({
       groceryLists: [WEEKLY_LIST],
       groceryItems: [],
@@ -136,7 +137,7 @@ describe("add_grocery_items tool", () => {
   });
 
   it("uses empty aisle strings when ingredient not in catalog and aisle omitted", async () => {
-    vi.mocked(kh.client().saveGroceryItems).mockImplementation(async (items) => items);
+    vi.mocked(kh.client().saveGroceryItems).mockImplementation((items) => okAsync(items));
     kh.seed({
       groceryLists: [WEEKLY_LIST],
       groceryItems: [],
@@ -160,9 +161,9 @@ describe("add_grocery_items tool", () => {
   });
 
   it("explicit aisle uses ensureAisle and updates ingredient catalog", async () => {
-    vi.mocked(kh.client().saveGroceryItems).mockImplementation(async (items) => items);
-    vi.mocked(kh.client().saveGroceryIngredient).mockImplementation(async (ing) => ing);
-    vi.mocked(kh.client().saveAisle).mockImplementation(async (a) => a);
+    vi.mocked(kh.client().saveGroceryItems).mockImplementation((items) => okAsync(items));
+    vi.mocked(kh.client().saveGroceryIngredient).mockImplementation((ing) => okAsync(ing));
+    vi.mocked(kh.client().saveAisle).mockImplementation((a) => okAsync(a));
     kh.seed({
       groceryLists: [WEEKLY_LIST],
       groceryItems: [],
@@ -231,9 +232,9 @@ describe("add_grocery_items tool", () => {
   });
 
   it("in-batch aisle inference: later item without aisle inherits from earlier item with explicit aisle", async () => {
-    vi.mocked(kh.client().saveGroceryItems).mockImplementation(async (items) => items);
-    vi.mocked(kh.client().saveGroceryIngredient).mockImplementation(async (ing) => ing);
-    vi.mocked(kh.client().saveAisle).mockImplementation(async (a) => a);
+    vi.mocked(kh.client().saveGroceryItems).mockImplementation((items) => okAsync(items));
+    vi.mocked(kh.client().saveGroceryIngredient).mockImplementation((ing) => okAsync(ing));
+    vi.mocked(kh.client().saveAisle).mockImplementation((a) => okAsync(a));
     kh.seed({
       groceryLists: [WEEKLY_LIST],
       groceryItems: [],
@@ -256,9 +257,9 @@ describe("add_grocery_items tool", () => {
   });
 
   it("duplicate ingredient with explicit aisle calls saveGroceryIngredient only once per ingredient", async () => {
-    vi.mocked(kh.client().saveGroceryItems).mockImplementation(async (items) => items);
-    vi.mocked(kh.client().saveGroceryIngredient).mockImplementation(async (ing) => ing);
-    vi.mocked(kh.client().saveAisle).mockImplementation(async (a) => a);
+    vi.mocked(kh.client().saveGroceryItems).mockImplementation((items) => okAsync(items));
+    vi.mocked(kh.client().saveGroceryIngredient).mockImplementation((ing) => okAsync(ing));
+    vi.mocked(kh.client().saveAisle).mockImplementation((a) => okAsync(a));
     kh.seed({
       groceryLists: [WEEKLY_LIST],
       groceryItems: [],
@@ -282,9 +283,9 @@ describe("add_grocery_items tool", () => {
   });
 
   it("cross-invocation: explicit aisle in first call is auto-resolved in second call via updated store", async () => {
-    vi.mocked(kh.client().saveGroceryItems).mockImplementation(async (items) => items);
-    vi.mocked(kh.client().saveGroceryIngredient).mockImplementation(async (ing) => ing);
-    vi.mocked(kh.client().saveAisle).mockImplementation(async (a) => a);
+    vi.mocked(kh.client().saveGroceryItems).mockImplementation((items) => okAsync(items));
+    vi.mocked(kh.client().saveGroceryIngredient).mockImplementation((ing) => okAsync(ing));
+    vi.mocked(kh.client().saveAisle).mockImplementation((a) => okAsync(a));
     kh.seed({
       groceryLists: [WEEKLY_LIST],
       groceryItems: [],
@@ -312,7 +313,7 @@ describe("add_grocery_items tool", () => {
   });
 
   it("assigns the Miscellaneous aisle when no aisle is specified and there is no catalog match", async () => {
-    vi.mocked(kh.client().saveGroceryItems).mockImplementation(async (items) => items);
+    vi.mocked(kh.client().saveGroceryItems).mockImplementation((items) => okAsync(items));
     kh.seed({
       groceryLists: [WEEKLY_LIST],
       groceryItems: [],
@@ -337,7 +338,7 @@ describe("add_grocery_items tool", () => {
   });
 
   it("falls back to empty aisle when no aisle, no catalog match, and no Miscellaneous aisle exists", async () => {
-    vi.mocked(kh.client().saveGroceryItems).mockImplementation(async (items) => items);
+    vi.mocked(kh.client().saveGroceryItems).mockImplementation((items) => okAsync(items));
     // Only "Produce" — no Miscellaneous in the catalog.
     kh.seed({
       groceryLists: [WEEKLY_LIST],
@@ -380,7 +381,7 @@ describe("update_grocery_item tool", () => {
   afterEach(kh.teardown);
 
   it("partial merge updates only provided fields", async () => {
-    vi.mocked(kh.client().saveGroceryItems).mockImplementation(async (items) => items);
+    vi.mocked(kh.client().saveGroceryItems).mockImplementation((items) => okAsync(items));
     const existingItem = makeGroceryItem({
       uid: "ITEM-1" as GroceryItemUid,
       ingredient: "Apples",
@@ -432,7 +433,7 @@ describe("update_grocery_item tool", () => {
   });
 
   it("name recalculated when quantity changes from empty to non-empty", async () => {
-    vi.mocked(kh.client().saveGroceryItems).mockImplementation(async (items) => items);
+    vi.mocked(kh.client().saveGroceryItems).mockImplementation((items) => okAsync(items));
     const existingItem = makeGroceryItem({
       uid: "ITEM-3" as GroceryItemUid,
       ingredient: "Chicken",
@@ -461,7 +462,7 @@ describe("update_grocery_item tool", () => {
   });
 
   it("name recalculated when quantity changes from non-empty to empty", async () => {
-    vi.mocked(kh.client().saveGroceryItems).mockImplementation(async (items) => items);
+    vi.mocked(kh.client().saveGroceryItems).mockImplementation((items) => okAsync(items));
     const existingItem = makeGroceryItem({
       uid: "ITEM-4" as GroceryItemUid,
       ingredient: "Chicken",
@@ -528,7 +529,7 @@ describe("delete_grocery_item tool", () => {
   afterEach(kh.teardown);
 
   it("delete existing item sets deleted:true and commits", async () => {
-    vi.mocked(kh.client().saveGroceryItems).mockImplementation(async (items) => items);
+    vi.mocked(kh.client().saveGroceryItems).mockImplementation((items) => okAsync(items));
     const existingItem = makeGroceryItem({
       uid: "ITEM-DEL-1" as GroceryItemUid,
       ingredient: "Milk",

@@ -30,7 +30,7 @@ The notifier needs the server, the server is registered after the kernel is buil
 
 ### `buildInfraBase` is the credential fast-fail, outside the kernel
 
-`client.authenticate()` throws here on bad credentials; the kernel's `syncOnce` swallows everything, so a credential error would otherwise be invisible (#158). Keep authentication in `buildInfraBase`, not in a module. The transports assemble the full `Infra` from this base plus `notifier`/`config`/`indexEvents`/`generatedImageStore`, then call `buildKernel`.
+`client.authenticate()` errs here on bad credentials and `unwrapAtBoot` aborts boot (ADR-0014 form #5); the kernel's `syncOnce` swallows everything, so a credential error would otherwise be invisible (#158). Keep authentication in `buildInfraBase`, not in a module. The transports assemble the full `Infra` from this base plus `notifier`/`config`/`indexEvents`/`generatedImageStore`, then call `buildKernel`.
 
 ### `notifyFromResults` fans out resource notifications from the loop, not the engine
 

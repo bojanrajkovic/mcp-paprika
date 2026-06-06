@@ -108,15 +108,13 @@ export const generatePhotoTool = defineTool(
         // The local store's photoUrl can lag a just-attached photo (the server assigns
         // photo_url, which arrives on the next sync). Re-fetch the authoritative recipe
         // so a generate→restyle chain uses the new photo; fall back to the cached value.
-        let photoUrl = recipe.photoUrl;
-        try {
-          photoUrl = (await ctx.infra.client.getRecipe(args.recipe_uid)).photoUrl;
-        } catch (error) {
-          log.warn(
-            { err: error, recipe_uid: args.recipe_uid },
-            "restyle: recipe re-fetch failed; using cached photoUrl",
-          );
-        }
+        const photoUrl = (await ctx.infra.client.getRecipe(args.recipe_uid)).match(
+          (fresh) => fresh.photoUrl,
+          (e) => {
+            log.warn({ err: e, recipe_uid: args.recipe_uid }, "restyle: recipe re-fetch failed; using cached photoUrl");
+            return recipe.photoUrl;
+          },
+        );
         if (photoUrl === null || photoUrl === "") {
           return textResult(
             `"${recipe.name}" has no photo to restyle. Generate one first (restyle_existing:false), or use upload_recipe_photo.`,

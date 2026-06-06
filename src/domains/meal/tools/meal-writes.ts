@@ -11,7 +11,6 @@ import { MealUidSchema, RecipeUidSchema } from "../../../ids.js";
 import { defineTool } from "../../../kernel/tool.js";
 import { commitFailure, textResult } from "../../../shared/tools.js";
 import { parseCalendarDayWire } from "../../../utils/dates.js";
-import { toMessage } from "../../../utils/log.js";
 import { mealTypeSpecSchema, resolveOrCreateMealType } from "../../meal-type/meal-type-helpers.js";
 import { mealStartGuard } from "./guards.js";
 import { makeMealOrderFlagAssigner, renderMealCard } from "./helpers.js";
@@ -247,16 +246,16 @@ export const planMealsTool = defineTool(
           });
 
           // ----- Stage 4: single batch POST -----
-          let savedItems: ReadonlyArray<Meal>;
-          try {
-            savedItems = await ctx.infra.client.saveMeals(builtItems);
-            const commitErr = commitFailure("meal plan", await ctx.writes.commitMealsBatch(savedItems));
-            if (commitErr) return commitErr;
-          } catch (error) {
-            const message = toMessage(error);
-            log.error({ err: error, count: builtItems.length }, "saveMeals failed");
-            return textResult(`Failed to add meals: ${message}`);
-          }
+          const savedItems = (await ctx.infra.client.saveMeals(builtItems)).match(
+            (items) => items,
+            (e) => {
+              log.error({ err: e, count: builtItems.length }, "saveMeals failed");
+              return textResult(`Failed to add meals: ${e.message}`);
+            },
+          );
+          if ("content" in savedItems) return savedItems;
+          const commitErr = commitFailure("meal plan", await ctx.writes.commitMealsBatch(savedItems));
+          if (commitErr) return commitErr;
 
           // ----- Stage 5: render response -----
           const cards = savedItems.map((meal) => renderMealCard(meal, ctx.deps.recipe, ctx.deps["meal-type"]));
@@ -469,16 +468,16 @@ export const updateMealTool = defineTool(
             return textResult(renderMealCard(existing, ctx.deps.recipe, ctx.deps["meal-type"]));
           }
 
-          let saved: Meal;
-          try {
-            saved = (await ctx.infra.client.saveMeals([updated]))[0]!;
-            const commitErr = commitFailure("meal plan", await ctx.writes.commitMeal(saved));
-            if (commitErr) return commitErr;
-          } catch (error) {
-            const message = toMessage(error);
-            log.error({ err: error, uid }, "saveMeals failed");
-            return textResult(`Failed to update meal: ${message}`);
-          }
+          const saved = (await ctx.infra.client.saveMeals([updated])).match(
+            (items) => items[0]!,
+            (e) => {
+              log.error({ err: e, uid }, "saveMeals failed");
+              return textResult(`Failed to update meal: ${e.message}`);
+            },
+          );
+          if ("content" in saved) return saved;
+          const commitErr = commitFailure("meal plan", await ctx.writes.commitMeal(saved));
+          if (commitErr) return commitErr;
 
           return textResult(renderMealCard(saved, ctx.deps.recipe, ctx.deps["meal-type"]));
         },
@@ -518,17 +517,17 @@ export const deleteMealTool = defineTool(
             return textResult(`No meal found with UID "${uid}" (it may not exist or was already deleted).`);
           }
           const trashed: Meal = { ...existing, deleted: true };
-          try {
-            const saved = (await ctx.infra.client.saveMeals([trashed]))[0]!;
-            const commitErr = commitFailure("meal plan", await ctx.writes.commitMeal(saved));
-            if (commitErr) return commitErr;
-          } catch (error) {
-            const message = toMessage(error);
-            log.error({ err: error, uid }, "saveMeals failed");
-            return textResult(`Failed to delete meal: ${message}`);
-          }
-
-          return textResult(`Meal "${existing.name}" on ${existing.date} deleted.`);
+          return (await ctx.infra.client.saveMeals([trashed])).match(
+            async (items): Promise<CallToolResult> => {
+              const commitErr = commitFailure("meal plan", await ctx.writes.commitMeal(items[0]!));
+              if (commitErr) return commitErr;
+              return textResult(`Meal "${existing.name}" on ${existing.date} deleted.`);
+            },
+            async (e) => {
+              log.error({ err: e, uid }, "saveMeals failed");
+              return textResult(`Failed to delete meal: ${e.message}`);
+            },
+          );
         },
         (guard) => guard,
       );

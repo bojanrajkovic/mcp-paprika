@@ -7,7 +7,6 @@ import type { RecipeState, RecipeWrites } from "../module.js";
 import { RecipeUidSchema } from "../../../ids.js";
 import { defineTool } from "../../../kernel/tool.js";
 import { commitFailure, textResult } from "../../../shared/tools.js";
-import { toMessage } from "../../../utils/log.js";
 import { recipeToMarkdown } from "../recipe-markdown.js";
 import { recipeColdStartGuard } from "./guards.js";
 
@@ -46,16 +45,16 @@ export const favoriteRecipeTool = defineTool(
 
           const updated = { ...existing, onFavorites: true };
 
-          let saved: typeof existing;
-          try {
-            saved = await ctx.infra.client.saveRecipe(updated);
-            const commitErr = commitFailure("recipe", await ctx.writes.commitRecipe(saved), { selfHealing: false });
-            if (commitErr) return commitErr;
-          } catch (error) {
-            const message = toMessage(error);
-            log.error({ err: error, uid: args.uid }, "saveRecipe failed");
-            return textResult(`Failed to favorite recipe: ${message}`);
-          }
+          const saved = (await ctx.infra.client.saveRecipe(updated)).match(
+            (v) => v,
+            (e) => {
+              log.error({ err: e, uid: args.uid }, "saveRecipe failed");
+              return textResult(`Failed to favorite recipe: ${e.message}`);
+            },
+          );
+          if ("content" in saved) return saved;
+          const commitErr = commitFailure("recipe", await ctx.writes.commitRecipe(saved), { selfHealing: false });
+          if (commitErr) return commitErr;
 
           const categoryNames = ctx.state.category.store.resolveNames(saved.categories);
           return textResult(recipeToMarkdown(saved, categoryNames));
@@ -89,16 +88,16 @@ export const unfavoriteRecipeTool = defineTool(
 
           const updated = { ...existing, onFavorites: false };
 
-          let saved: typeof existing;
-          try {
-            saved = await ctx.infra.client.saveRecipe(updated);
-            const commitErr = commitFailure("recipe", await ctx.writes.commitRecipe(saved), { selfHealing: false });
-            if (commitErr) return commitErr;
-          } catch (error) {
-            const message = toMessage(error);
-            log.error({ err: error, uid: args.uid }, "saveRecipe failed");
-            return textResult(`Failed to unfavorite recipe: ${message}`);
-          }
+          const saved = (await ctx.infra.client.saveRecipe(updated)).match(
+            (v) => v,
+            (e) => {
+              log.error({ err: e, uid: args.uid }, "saveRecipe failed");
+              return textResult(`Failed to unfavorite recipe: ${e.message}`);
+            },
+          );
+          if ("content" in saved) return saved;
+          const commitErr = commitFailure("recipe", await ctx.writes.commitRecipe(saved), { selfHealing: false });
+          if (commitErr) return commitErr;
 
           const categoryNames = ctx.state.category.store.resolveNames(saved.categories);
           return textResult(recipeToMarkdown(saved, categoryNames));

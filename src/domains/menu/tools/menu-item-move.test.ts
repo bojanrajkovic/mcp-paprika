@@ -1,3 +1,4 @@
+import { okAsync } from "neverthrow";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { MealTypeUid, MenuItemUid, MenuUid, RecipeUid } from "../../../ids.js";
@@ -41,8 +42,8 @@ describe("move_menu_item tool", () => {
       menuItems: [item],
     });
 
-    vi.mocked(kh.client().saveMenus).mockImplementation(async (items: ReadonlyArray<Menu>) => [...items]);
-    vi.mocked(kh.client().saveMenuItems).mockImplementation(async (items: ReadonlyArray<MenuItem>) => [...items]);
+    vi.mocked(kh.client().saveMenus).mockImplementation((items: ReadonlyArray<Menu>) => okAsync([...items]));
+    vi.mocked(kh.client().saveMenuItems).mockImplementation((items: ReadonlyArray<MenuItem>) => okAsync([...items]));
 
     const text = await kh.callToolText("move_menu_item", { uid: "mi-1", day: 5 });
 
@@ -73,7 +74,7 @@ describe("move_menu_item tool", () => {
       menuItems: [item],
     });
 
-    vi.mocked(kh.client().saveMenuItems).mockImplementation(async (items: ReadonlyArray<MenuItem>) => [...items]);
+    vi.mocked(kh.client().saveMenuItems).mockImplementation((items: ReadonlyArray<MenuItem>) => okAsync([...items]));
 
     await kh.callTool("move_menu_item", { uid: "mi-1", day: 3 });
 
@@ -116,7 +117,7 @@ describe("move_menu_item tool", () => {
       menuItems: [moving, onDay2, onDay3],
     });
 
-    vi.mocked(kh.client().saveMenuItems).mockImplementation(async (items: ReadonlyArray<MenuItem>) => [...items]);
+    vi.mocked(kh.client().saveMenuItems).mockImplementation((items: ReadonlyArray<MenuItem>) => okAsync([...items]));
 
     await kh.callTool("move_menu_item", { uid: "mi-move", day: 2 });
 

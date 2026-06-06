@@ -1,3 +1,4 @@
+import { errAsync, okAsync } from "neverthrow";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { RecipeState } from "../module.js";
@@ -14,7 +15,7 @@ describe("update_recipe tool", () => {
   it("provided fields are updated, omitted fields retain existing values", async () => {
     const recipe = makeRecipe({ name: "Old Name", servings: "2" });
     const updated = makeRecipe({ ...recipe, name: "New Name", servings: "2" });
-    vi.mocked(kh.client().saveRecipe).mockResolvedValue(updated);
+    vi.mocked(kh.client().saveRecipe).mockReturnValue(okAsync(updated));
     kh.seed({ recipes: [recipe] });
 
     await kh.callTool("update_recipe", { uid: recipe.uid, name: "New Name" });
@@ -28,7 +29,7 @@ describe("update_recipe tool", () => {
     const catA = makeCategory({ name: "Category A" });
     const recipe = makeRecipe({ categories: [catA.uid] });
     const updated = makeRecipe({ ...recipe, name: "New Name", categories: [catA.uid] });
-    vi.mocked(kh.client().saveRecipe).mockResolvedValue(updated);
+    vi.mocked(kh.client().saveRecipe).mockReturnValue(okAsync(updated));
     kh.seed({ recipes: [recipe], categories: [catA] });
 
     await kh.callTool("update_recipe", { uid: recipe.uid, name: "New Name" });
@@ -40,7 +41,7 @@ describe("update_recipe tool", () => {
   it("saveRecipe and notifySync are each called exactly once with the merged recipe", async () => {
     const recipe = makeRecipe({ name: "Old", servings: "4" });
     const updated = makeRecipe({ ...recipe, name: "New", servings: "4" });
-    vi.mocked(kh.client().saveRecipe).mockResolvedValue(updated);
+    vi.mocked(kh.client().saveRecipe).mockReturnValue(okAsync(updated));
     kh.seed({ recipes: [recipe] });
 
     await kh.callTool("update_recipe", { uid: recipe.uid, name: "New" });
@@ -64,7 +65,7 @@ describe("update_recipe tool", () => {
 
   it("saveRecipe throws — returns an error message and store is not updated", async () => {
     const recipe = makeRecipe();
-    vi.mocked(kh.client().saveRecipe).mockRejectedValue(new Error("Conflict"));
+    vi.mocked(kh.client().saveRecipe).mockReturnValue(errAsync(new Error("Conflict")));
     kh.seed({ recipes: [recipe] });
     const before = kh.state().recipe.store.size;
 
@@ -87,7 +88,7 @@ describe("update_recipe tool", () => {
   it("notes field is updated when provided", async () => {
     const recipe = makeRecipe({ notes: null });
     const updated = makeRecipe({ ...recipe, notes: "test note" });
-    vi.mocked(kh.client().saveRecipe).mockResolvedValue(updated);
+    vi.mocked(kh.client().saveRecipe).mockReturnValue(okAsync(updated));
     kh.seed({ recipes: [recipe] });
 
     await kh.callTool("update_recipe", { uid: recipe.uid, notes: "test note" });
@@ -99,7 +100,7 @@ describe("update_recipe tool", () => {
   it("commits the saved recipe to the store and fires the Content resource-list notifier", async () => {
     const recipe = makeRecipe({ name: "Old Name" });
     const updated = makeRecipe({ ...recipe, name: "Updated Name" });
-    vi.mocked(kh.client().saveRecipe).mockResolvedValue(updated);
+    vi.mocked(kh.client().saveRecipe).mockReturnValue(okAsync(updated));
     kh.seed({ recipes: [recipe] });
 
     await kh.callTool("update_recipe", { uid: recipe.uid, name: "Updated Name" });

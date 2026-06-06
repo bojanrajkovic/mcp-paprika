@@ -9,7 +9,6 @@ import { PantryItemUidSchema } from "../../../ids.js";
 import { defineTool } from "../../../kernel/tool.js";
 import { commitFailure, textResult } from "../../../shared/tools.js";
 import { normalizeWire } from "../../../utils/dates.js";
-import { toMessage } from "../../../utils/log.js";
 import { pantryItemToMarkdown } from "../pantry-helpers.js";
 import { pantryStartGuard } from "./guards.js";
 
@@ -99,37 +98,37 @@ export const updatePantryItemTool = defineTool(
             newPurchaseDate = normalized;
           }
 
-          let saved: PantryItem;
-          try {
-            // Resolve aisle: when provided, look up or auto-create to get both
-            // the display name and its UID (fixes the stale-UID bug where the
-            // old code updated `aisle` display but left `aisleUid` stale).
-            const aisleUpdate =
-              args.aisle !== undefined
-                ? (await ctx.deps.aisle.ensureAisle(args.aisle)).match(
-                    (v) => v,
-                    (message) => textResult(message),
-                  )
-                : undefined;
-            if (aisleUpdate !== undefined && "content" in aisleUpdate) return aisleUpdate;
+          // Resolve aisle: when provided, look up or auto-create to get both
+          // the display name and its UID (fixes the stale-UID bug where the
+          // old code updated `aisle` display but left `aisleUid` stale).
+          const aisleUpdate =
+            args.aisle !== undefined
+              ? (await ctx.deps.aisle.ensureAisle(args.aisle)).match(
+                  (v) => v,
+                  (message) => textResult(message),
+                )
+              : undefined;
+          if (aisleUpdate !== undefined && "content" in aisleUpdate) return aisleUpdate;
 
-            const updated: PantryItem = {
-              ...existing,
-              ...(args.ingredient !== undefined && { ingredient: args.ingredient }),
-              ...(args.quantity !== undefined && { quantity: args.quantity }),
-              ...(aisleUpdate !== undefined && { aisle: aisleUpdate.aisle, aisleUid: aisleUpdate.aisleUid }),
-              expirationDate: newExpirationDate,
-              hasExpiration: newHasExpiration,
-              purchaseDate: newPurchaseDate,
-            };
-            saved = (await ctx.infra.client.savePantryItems([updated]))[0]!;
-            const commitErr = commitFailure("pantry", await ctx.writes.commitPantryItem(saved));
-            if (commitErr) return commitErr;
-          } catch (error) {
-            const message = toMessage(error);
-            log.error({ err: error, uid: args.uid }, "savePantryItems failed");
-            return textResult(`Failed to update pantry item: ${message}`);
-          }
+          const updated: PantryItem = {
+            ...existing,
+            ...(args.ingredient !== undefined && { ingredient: args.ingredient }),
+            ...(args.quantity !== undefined && { quantity: args.quantity }),
+            ...(aisleUpdate !== undefined && { aisle: aisleUpdate.aisle, aisleUid: aisleUpdate.aisleUid }),
+            expirationDate: newExpirationDate,
+            hasExpiration: newHasExpiration,
+            purchaseDate: newPurchaseDate,
+          };
+          const saved = (await ctx.infra.client.savePantryItems([updated])).match(
+            (items) => items[0]!,
+            (e) => {
+              log.error({ err: e, uid: args.uid }, "savePantryItems failed");
+              return textResult(`Failed to update pantry item: ${e.message}`);
+            },
+          );
+          if ("content" in saved) return saved;
+          const commitErr = commitFailure("pantry", await ctx.writes.commitPantryItem(saved));
+          if (commitErr) return commitErr;
 
           return textResult(pantryItemToMarkdown(saved));
         },

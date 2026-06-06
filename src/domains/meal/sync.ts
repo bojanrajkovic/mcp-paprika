@@ -10,23 +10,22 @@ import { mealsEqual } from "./types.js";
  *
  * `additive` tier — the meal-history read surface is strictly additive; degrading
  * meals to stale data for one sync cycle is preferable to regressing core sync.
- * The kernel driver runs each additive reconcile in its own try/catch, so a meal
- * fetch failure does not abort the rest of the additive phase. Meals have no MCP
- * resource surface, so this emits NO `sync:complete` (returns `void`).
+ * The kernel driver treats each additive reconcile's `err` as best-effort, so a
+ * meal fetch failure does not abort the rest of the additive phase. Meals have no
+ * MCP resource surface, so this emits NO `sync:complete` (returns `void`).
  */
 export function mealSync(state: MealState): SyncContribution<MealState, never> {
   return {
     tier: "additive",
-    reconcile: async (ctx) => {
-      await syncReplaceAllEntity({
+    reconcile: (ctx) =>
+      syncReplaceAllEntity({
         fetch: () => ctx.infra.client.listMeals(),
         cache: ctx.state.cache,
         store: ctx.state.store,
         equals: mealsEqual,
         label: "meals",
         log: ctx.infra.log,
-      });
-    },
+      }).map(() => undefined),
     sweep: () => state.store.sweepPending(),
   };
 }

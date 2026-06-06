@@ -173,16 +173,16 @@ export const addPantryItemsTool = defineTool(
           }
 
           // Phase 4: Single batch POST + commit
-          let savedItems: ReadonlyArray<PantryItem>;
-          try {
-            savedItems = await ctx.infra.client.savePantryItems(builtItems);
-            const commitErr = commitFailure("pantry", await ctx.writes.commitPantryItemsBatch(savedItems));
-            if (commitErr) return commitErr;
-          } catch (error) {
-            const message = toMessage(error);
-            log.error({ err: error }, "savePantryItems failed");
-            return textResult(`Failed to add pantry items: ${message}`);
-          }
+          const savedItems = (await ctx.infra.client.savePantryItems(builtItems)).match(
+            (items) => items,
+            (e) => {
+              log.error({ err: e }, "savePantryItems failed");
+              return textResult(`Failed to add pantry items: ${e.message}`);
+            },
+          );
+          if ("content" in savedItems) return savedItems;
+          const commitErr = commitFailure("pantry", await ctx.writes.commitPantryItemsBatch(savedItems));
+          if (commitErr) return commitErr;
 
           // Phase 5: Build response
           const count = savedItems.length;

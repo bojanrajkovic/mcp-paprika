@@ -1,3 +1,4 @@
+import { errAsync, okAsync } from "neverthrow";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { RecipeState } from "../module.js";
@@ -12,7 +13,7 @@ describe("create_recipe tool", () => {
 
   it("required fields create a recipe returned as markdown", async () => {
     const savedRecipe = makeRecipe({ name: "Soup" });
-    vi.mocked(kh.client().saveRecipe).mockResolvedValue(savedRecipe);
+    vi.mocked(kh.client().saveRecipe).mockReturnValue(okAsync(savedRecipe));
     kh.seed({ recipes: [makeRecipe()] });
 
     const text = await kh.callToolText("create_recipe", {
@@ -29,7 +30,7 @@ describe("create_recipe tool", () => {
   });
 
   it("mints an uppercase canonical UUID (Paprika's native format)", async () => {
-    vi.mocked(kh.client().saveRecipe).mockResolvedValue(makeRecipe());
+    vi.mocked(kh.client().saveRecipe).mockReturnValue(okAsync(makeRecipe()));
     kh.seed({ recipes: [makeRecipe()] });
 
     await kh.callTool("create_recipe", { name: "Soup", ingredients: "water", directions: "boil" });
@@ -39,8 +40,8 @@ describe("create_recipe tool", () => {
   });
 
   it("reflects optional fields in the returned recipe", async () => {
-    vi.mocked(kh.client().saveRecipe).mockResolvedValue(
-      makeRecipe({ name: "Pasta", description: "Tasty pasta", servings: "4", prepTime: "10 min" }),
+    vi.mocked(kh.client().saveRecipe).mockReturnValue(
+      okAsync(makeRecipe({ name: "Pasta", description: "Tasty pasta", servings: "4", prepTime: "10 min" })),
     );
     kh.seed({ recipes: [makeRecipe()] });
 
@@ -59,7 +60,7 @@ describe("create_recipe tool", () => {
   });
 
   it("defaults omitted optional fields to null", async () => {
-    vi.mocked(kh.client().saveRecipe).mockResolvedValue(makeRecipe());
+    vi.mocked(kh.client().saveRecipe).mockReturnValue(okAsync(makeRecipe()));
     kh.seed({ recipes: [makeRecipe()] });
 
     await kh.callTool("create_recipe", { name: "Simple Recipe", ingredients: "one ingredient", directions: "do it" });
@@ -76,7 +77,7 @@ describe("create_recipe tool", () => {
   });
 
   it("emits created in Paprika wire format, not ISO-8601 (regression #159)", async () => {
-    vi.mocked(kh.client().saveRecipe).mockResolvedValue(makeRecipe());
+    vi.mocked(kh.client().saveRecipe).mockReturnValue(okAsync(makeRecipe()));
     kh.seed({ recipes: [makeRecipe()] });
 
     await kh.callTool("create_recipe", { name: "Dated Recipe", ingredients: "one ingredient", directions: "do it" });
@@ -91,7 +92,7 @@ describe("create_recipe tool", () => {
 
   it("resolves category names to UIDs", async () => {
     const category = makeCategory({ name: "Soups" });
-    vi.mocked(kh.client().saveRecipe).mockResolvedValue(makeRecipe({ categories: [category.uid] }));
+    vi.mocked(kh.client().saveRecipe).mockReturnValue(okAsync(makeRecipe({ categories: [category.uid] })));
     kh.seed({ recipes: [makeRecipe()], categories: [category] });
 
     await kh.callTool("create_recipe", {
@@ -106,7 +107,7 @@ describe("create_recipe tool", () => {
   });
 
   it("calls saveRecipe and notifySync exactly once each", async () => {
-    vi.mocked(kh.client().saveRecipe).mockResolvedValue(makeRecipe());
+    vi.mocked(kh.client().saveRecipe).mockReturnValue(okAsync(makeRecipe()));
     kh.seed({ recipes: [makeRecipe()] });
 
     await kh.callTool("create_recipe", { name: "Recipe", ingredients: "ingredients", directions: "directions" });
@@ -117,7 +118,7 @@ describe("create_recipe tool", () => {
 
   it("commits the saved recipe to the store and notifies (Content entity)", async () => {
     const savedRecipe = makeRecipe({ name: "Saved Recipe" });
-    vi.mocked(kh.client().saveRecipe).mockResolvedValue(savedRecipe);
+    vi.mocked(kh.client().saveRecipe).mockReturnValue(okAsync(savedRecipe));
     kh.seed({ recipes: [makeRecipe()] });
 
     await kh.callTool("create_recipe", { name: "Saved Recipe", ingredients: "ingredients", directions: "directions" });
@@ -129,7 +130,7 @@ describe("create_recipe tool", () => {
 
   it("skips an unknown category name with a warning", async () => {
     const category = makeCategory({ name: "Desserts" });
-    vi.mocked(kh.client().saveRecipe).mockResolvedValue(makeRecipe({ categories: [category.uid] }));
+    vi.mocked(kh.client().saveRecipe).mockReturnValue(okAsync(makeRecipe({ categories: [category.uid] })));
     kh.seed({ recipes: [makeRecipe()], categories: [category] });
 
     const text = await kh.callToolText("create_recipe", {
@@ -146,7 +147,7 @@ describe("create_recipe tool", () => {
   });
 
   it("returns an error and leaves the store untouched when saveRecipe throws", async () => {
-    vi.mocked(kh.client().saveRecipe).mockRejectedValue(new Error("Network error"));
+    vi.mocked(kh.client().saveRecipe).mockReturnValue(errAsync(new Error("Network error")));
     kh.seed({ recipes: [makeRecipe()] });
     const before = kh.state().recipe.store.size;
 

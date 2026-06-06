@@ -1,3 +1,4 @@
+import { okAsync } from "neverthrow";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { MealTypeUid, MealUid, RecipeUid } from "../../../ids.js";
@@ -39,7 +40,7 @@ describe("plan_meals tool — success paths", () => {
   afterEach(kh.teardown);
 
   it("recipe_uid + date + type → auto-resolved recipe name in markdown and MealStore", async () => {
-    vi.mocked(kh.client().saveMeals).mockImplementation(async (items) => [...items]);
+    vi.mocked(kh.client().saveMeals).mockImplementation((items) => okAsync([...items]));
     kh.seed({
       meals: [],
       mealTypes: makeBuiltins(),
@@ -77,7 +78,7 @@ describe("plan_meals tool — success paths", () => {
   });
 
   it("name only (no recipe_uid) → freeform meal with recipeUid: null", async () => {
-    vi.mocked(kh.client().saveMeals).mockImplementation(async (items) => [...items]);
+    vi.mocked(kh.client().saveMeals).mockImplementation((items) => okAsync([...items]));
     kh.seed({
       meals: [],
       mealTypes: makeBuiltins(),
@@ -107,7 +108,7 @@ describe("plan_meals tool — success paths", () => {
   });
 
   it("5-item batch → single saveMeals call, 5 cards", async () => {
-    vi.mocked(kh.client().saveMeals).mockImplementation(async (items) => [...items]);
+    vi.mocked(kh.client().saveMeals).mockImplementation((items) => okAsync([...items]));
     kh.seed({ meals: [], mealTypes: makeBuiltins(), recipes: [] });
 
     const result = await kh.callTool("plan_meals", {
@@ -142,7 +143,7 @@ describe("plan_meals tool — success paths", () => {
   });
 
   it("scale flows through to wire payload and MealStore", async () => {
-    vi.mocked(kh.client().saveMeals).mockImplementation(async (items) => [...items]);
+    vi.mocked(kh.client().saveMeals).mockImplementation((items) => okAsync([...items]));
     kh.seed({ meals: [], mealTypes: makeBuiltins(), recipes: [] });
 
     await kh.callTool("plan_meals", {
@@ -161,7 +162,7 @@ describe("plan_meals tool — success paths", () => {
   });
 
   it("date with time-of-day → normalized to midnight; date-only + datetime on same day share a date sequence", async () => {
-    vi.mocked(kh.client().saveMeals).mockImplementation(async (items) => [...items]);
+    vi.mocked(kh.client().saveMeals).mockImplementation((items) => okAsync([...items]));
     kh.seed({ meals: [], mealTypes: makeBuiltins(), recipes: [] });
 
     await kh.callTool("plan_meals", {
@@ -184,7 +185,7 @@ describe("plan_meals tool — success paths", () => {
   });
 
   it("offset-bearing date input → stored at the input's local calendar day, not UTC-shifted", async () => {
-    vi.mocked(kh.client().saveMeals).mockImplementation(async (items) => [...items]);
+    vi.mocked(kh.client().saveMeals).mockImplementation((items) => okAsync([...items]));
     kh.seed({ meals: [], mealTypes: makeBuiltins(), recipes: [] });
 
     await kh.callTool("plan_meals", {
@@ -196,7 +197,7 @@ describe("plan_meals tool — success paths", () => {
   });
 
   it("two items on the same date → orderFlag 0 and 1", async () => {
-    vi.mocked(kh.client().saveMeals).mockImplementation(async (items) => [...items]);
+    vi.mocked(kh.client().saveMeals).mockImplementation((items) => okAsync([...items]));
     kh.seed({ meals: [], mealTypes: makeBuiltins(), recipes: [] });
 
     await kh.callTool("plan_meals", {
@@ -213,7 +214,7 @@ describe("plan_meals tool — success paths", () => {
   });
 
   it("two items on the same date but different meal types → orderFlag 0 and 1 (per-date, not per-type)", async () => {
-    vi.mocked(kh.client().saveMeals).mockImplementation(async (items) => [...items]);
+    vi.mocked(kh.client().saveMeals).mockImplementation((items) => okAsync([...items]));
     kh.seed({ meals: [], mealTypes: makeBuiltins(), recipes: [] });
 
     await kh.callTool("plan_meals", {
@@ -235,7 +236,7 @@ describe("plan_meals tool — success paths", () => {
   });
 
   it("adding to an empty date → orderFlag: 0", async () => {
-    vi.mocked(kh.client().saveMeals).mockImplementation(async (items) => [...items]);
+    vi.mocked(kh.client().saveMeals).mockImplementation((items) => okAsync([...items]));
     kh.seed({ meals: [], mealTypes: makeBuiltins(), recipes: [] });
 
     await kh.callTool("plan_meals", {
@@ -247,7 +248,7 @@ describe("plan_meals tool — success paths", () => {
   });
 
   it("{name: 'Dinner'}, {uid: <Dinner UID>}, {builtin: 2} all produce the same wire type and typeUid", async () => {
-    vi.mocked(kh.client().saveMeals).mockImplementation(async (items) => [...items]);
+    vi.mocked(kh.client().saveMeals).mockImplementation((items) => okAsync([...items]));
     kh.seed({ meals: [], mealTypes: makeBuiltins(), recipes: [] });
 
     await kh.callTool("plan_meals", {
@@ -287,7 +288,7 @@ describe("plan_meals tool — success paths", () => {
   });
 
   it("existing meal with orderFlag 5 in bucket → new meal gets orderFlag 6", async () => {
-    vi.mocked(kh.client().saveMeals).mockImplementation(async (items) => [...items]);
+    vi.mocked(kh.client().saveMeals).mockImplementation((items) => okAsync([...items]));
     kh.seed({
       meals: [
         makeMeal({
@@ -311,7 +312,7 @@ describe("plan_meals tool — success paths", () => {
   });
 
   it("custom meal type → wire payload sets type_uid + sends vestigial type:0", async () => {
-    vi.mocked(kh.client().saveMeals).mockImplementation(async (items) => [...items]);
+    vi.mocked(kh.client().saveMeals).mockImplementation((items) => okAsync([...items]));
     kh.seed({
       meals: [],
       mealTypes: [
@@ -428,7 +429,7 @@ describe("update_meal — success paths", () => {
   });
 
   it("type update → typeUid becomes LUNCH_UID and type integer becomes 1", async () => {
-    vi.mocked(kh.client().saveMeals).mockImplementation(async (items) => [...items]);
+    vi.mocked(kh.client().saveMeals).mockImplementation((items) => okAsync([...items]));
     const original = makeMeal({ uid: TEST_MEAL_UID, typeUid: DINNER_UID, type: 2 });
     kh.seed({ meals: [original], mealTypes: makeBuiltins(), recipes: [makeRecipe({ uid: TACOS_UID, name: "Tacos" })] });
 
@@ -441,7 +442,7 @@ describe("update_meal — success paths", () => {
   });
 
   it("freeform meal + recipe_uid → auto-resolved name from store, recipeUid set", async () => {
-    vi.mocked(kh.client().saveMeals).mockImplementation(async (items) => [...items]);
+    vi.mocked(kh.client().saveMeals).mockImplementation((items) => okAsync([...items]));
     const original = makeMeal({ uid: TEST_MEAL_UID, recipeUid: null, name: "Some Freeform Meal" });
     kh.seed({ meals: [original], mealTypes: makeBuiltins(), recipes: [makeRecipe({ uid: TACOS_UID, name: "Tacos" })] });
 
@@ -462,7 +463,7 @@ describe("update_meal — success paths", () => {
   });
 
   it("recipe meal + recipe_uid: null + name → demoted to freeform, new name set", async () => {
-    vi.mocked(kh.client().saveMeals).mockImplementation(async (items) => [...items]);
+    vi.mocked(kh.client().saveMeals).mockImplementation((items) => okAsync([...items]));
     const original = makeMeal({ uid: TEST_MEAL_UID, recipeUid: TACOS_UID, name: "Tacos" });
     kh.seed({ meals: [original], mealTypes: makeBuiltins(), recipes: [makeRecipe({ uid: TACOS_UID, name: "Tacos" })] });
 
@@ -475,7 +476,7 @@ describe("update_meal — success paths", () => {
   });
 
   it("scale: null → clears scale in MealStore AND on wire payload", async () => {
-    vi.mocked(kh.client().saveMeals).mockImplementation(async (items) => [...items]);
+    vi.mocked(kh.client().saveMeals).mockImplementation((items) => okAsync([...items]));
     const original = makeMeal({ uid: TEST_MEAL_UID, scale: "2", recipeUid: null });
     kh.seed({ meals: [original], mealTypes: makeBuiltins(), recipes: [] });
 
@@ -490,7 +491,7 @@ describe("update_meal — success paths", () => {
   });
 
   it("update to a custom meal type → wire payload sets type_uid + sends vestigial type:0", async () => {
-    vi.mocked(kh.client().saveMeals).mockImplementation(async (items) => [...items]);
+    vi.mocked(kh.client().saveMeals).mockImplementation((items) => okAsync([...items]));
     const original = makeMeal({ uid: TEST_MEAL_UID, typeUid: DINNER_UID, type: 2 });
     kh.seed({
       meals: [original],
@@ -517,7 +518,7 @@ describe("update_meal — success paths", () => {
   });
 
   it("changing only the meal type (same date) → orderFlag preserved (per-date, not per-type)", async () => {
-    vi.mocked(kh.client().saveMeals).mockImplementation(async (items) => [...items]);
+    vi.mocked(kh.client().saveMeals).mockImplementation((items) => okAsync([...items]));
     const sameDateExisting = makeMeal({
       uid: "existing-breakfast-uid" as MealUid,
       typeUid: BREAKFAST_UID,
@@ -543,7 +544,7 @@ describe("update_meal — success paths", () => {
   });
 
   it("update without changing date → orderFlag preserved (keep-the-position)", async () => {
-    vi.mocked(kh.client().saveMeals).mockImplementation(async (items) => [...items]);
+    vi.mocked(kh.client().saveMeals).mockImplementation((items) => okAsync([...items]));
     const original = makeMeal({
       uid: TEST_MEAL_UID,
       typeUid: DINNER_UID,
@@ -665,7 +666,7 @@ describe("update_meal — failure/edge paths", () => {
   });
 
   it("already-freeform meal + recipe_uid: null + scale: '2' → scale updates, no demotion error", async () => {
-    vi.mocked(kh.client().saveMeals).mockImplementation(async (items) => [...items]);
+    vi.mocked(kh.client().saveMeals).mockImplementation((items) => okAsync([...items]));
     const meal = makeMeal({ uid: TEST_MEAL_UID, recipeUid: null, name: "Cereal", scale: null });
     kh.seed({ meals: [meal], mealTypes: makeBuiltins(), recipes: [] });
 
@@ -693,7 +694,7 @@ describe("delete_meal", () => {
   afterEach(kh.teardown);
 
   it("happy path — wire payload has deleted: true, store removes UID, returns success message", async () => {
-    vi.mocked(kh.client().saveMeals).mockImplementation(async (items) => [...items]);
+    vi.mocked(kh.client().saveMeals).mockImplementation((items) => okAsync([...items]));
     const meal = makeMeal({ uid: DELETE_MEAL_UID, name: "Tacos", date: "2026-06-15 18:00:00", deleted: false });
     kh.seed({ meals: [meal], mealTypes: makeBuiltins(), recipes: [] });
 
@@ -711,7 +712,7 @@ describe("delete_meal", () => {
   });
 
   it("retry after delete returns miss message, saveMeals NOT called again", async () => {
-    vi.mocked(kh.client().saveMeals).mockImplementation(async (items) => [...items]);
+    vi.mocked(kh.client().saveMeals).mockImplementation((items) => okAsync([...items]));
     const meal = makeMeal({ uid: DELETE_MEAL_UID, name: "Tacos", date: "2026-06-15 18:00:00", deleted: false });
     kh.seed({ meals: [meal], mealTypes: makeBuiltins(), recipes: [] });
 
@@ -745,8 +746,8 @@ describe("plan_meals / update_meal — meal-type auto-create", () => {
   afterEach(kh.teardown);
 
   it("plan_meals: unknown type {name} auto-creates a custom type and schedules the meal with it", async () => {
-    vi.mocked(kh.client().saveMeals).mockImplementation(async (items) => [...items]);
-    vi.mocked(kh.client().saveMealType).mockImplementation(async (mt) => mt);
+    vi.mocked(kh.client().saveMeals).mockImplementation((items) => okAsync([...items]));
+    vi.mocked(kh.client().saveMealType).mockImplementation((mt) => okAsync(mt));
     kh.seed({ meals: [], mealTypes: makeBuiltins(), recipes: [makeRecipe({ uid: TACOS_UID, name: "Tacos" })] });
 
     await kh.callTool("plan_meals", {
@@ -768,8 +769,8 @@ describe("plan_meals / update_meal — meal-type auto-create", () => {
   });
 
   it("plan_meals: same new {name} across items (case-insensitive) creates the type once", async () => {
-    vi.mocked(kh.client().saveMeals).mockImplementation(async (items) => [...items]);
-    vi.mocked(kh.client().saveMealType).mockImplementation(async (mt) => mt);
+    vi.mocked(kh.client().saveMeals).mockImplementation((items) => okAsync([...items]));
+    vi.mocked(kh.client().saveMealType).mockImplementation((mt) => okAsync(mt));
     kh.seed({ meals: [], mealTypes: makeBuiltins(), recipes: [] });
 
     await kh.callTool("plan_meals", {
@@ -783,8 +784,8 @@ describe("plan_meals / update_meal — meal-type auto-create", () => {
   });
 
   it("plan_meals: a batch rejected in validation creates NO meal type (pure-validate-first)", async () => {
-    vi.mocked(kh.client().saveMeals).mockImplementation(async (items) => [...items]);
-    vi.mocked(kh.client().saveMealType).mockImplementation(async (mt) => mt);
+    vi.mocked(kh.client().saveMeals).mockImplementation((items) => okAsync([...items]));
+    vi.mocked(kh.client().saveMealType).mockImplementation((mt) => okAsync(mt));
     kh.seed({ meals: [], mealTypes: makeBuiltins(), recipes: [] });
 
     const result = await kh.callTool("plan_meals", {
@@ -802,7 +803,7 @@ describe("plan_meals / update_meal — meal-type auto-create", () => {
   });
 
   it("plan_meals: unknown {uid} still errors (auto-create is name-only)", async () => {
-    vi.mocked(kh.client().saveMealType).mockImplementation(async (mt) => mt);
+    vi.mocked(kh.client().saveMealType).mockImplementation((mt) => okAsync(mt));
     kh.seed({ meals: [], mealTypes: makeBuiltins(), recipes: [] });
 
     const result = await kh.callTool("plan_meals", {
@@ -816,8 +817,8 @@ describe("plan_meals / update_meal — meal-type auto-create", () => {
 
   it("update_meal: unknown type {name} auto-creates it", async () => {
     const mealUid = "meal-update-brunch" as MealUid;
-    vi.mocked(kh.client().saveMeals).mockImplementation(async (items) => [...items]);
-    vi.mocked(kh.client().saveMealType).mockImplementation(async (mt) => mt);
+    vi.mocked(kh.client().saveMeals).mockImplementation((items) => okAsync([...items]));
+    vi.mocked(kh.client().saveMealType).mockImplementation((mt) => okAsync(mt));
     kh.seed({
       meals: [makeMeal({ uid: mealUid, typeUid: DINNER_UID, type: 2 })],
       mealTypes: makeBuiltins(),
@@ -832,8 +833,8 @@ describe("plan_meals / update_meal — meal-type auto-create", () => {
 
   it("update_meal: a rejected update (unknown recipe) with a new type {name} creates NO type", async () => {
     const mealUid = "meal-reject-orphan" as MealUid;
-    vi.mocked(kh.client().saveMeals).mockImplementation(async (items) => [...items]);
-    vi.mocked(kh.client().saveMealType).mockImplementation(async (mt) => mt);
+    vi.mocked(kh.client().saveMeals).mockImplementation((items) => okAsync([...items]));
+    vi.mocked(kh.client().saveMealType).mockImplementation((mt) => okAsync(mt));
     kh.seed({
       meals: [makeMeal({ uid: mealUid, typeUid: DINNER_UID, type: 2 })],
       mealTypes: makeBuiltins(),

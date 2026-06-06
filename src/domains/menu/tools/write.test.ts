@@ -1,3 +1,4 @@
+import { errAsync, okAsync } from "neverthrow";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { MealTypeUid, MenuItemUid, MenuUid } from "../../../ids.js";
@@ -22,9 +23,9 @@ describe("create_menu tool", () => {
 
   it("creates a menu with uppercase UUID, default days, and renders markdown", async () => {
     kh.seed({ menus: [], menuItems: [], mealTypes: [DINNER_TYPE] });
-    vi.mocked(kh.client().saveMenus).mockResolvedValue([
-      makeMenu({ name: "Holiday", days: 1, notes: "", deleted: false }),
-    ]);
+    vi.mocked(kh.client().saveMenus).mockReturnValue(
+      okAsync([makeMenu({ name: "Holiday", days: 1, notes: "", deleted: false })]),
+    );
 
     const text = await kh.callToolText("create_menu", { name: "Holiday" });
 
@@ -44,7 +45,7 @@ describe("create_menu tool", () => {
 
   it("honors explicit days and notes", async () => {
     kh.seed({ menus: [], menuItems: [], mealTypes: [DINNER_TYPE] });
-    vi.mocked(kh.client().saveMenus).mockResolvedValue([makeMenu({ name: "Week", days: 7, notes: "low carb" })]);
+    vi.mocked(kh.client().saveMenus).mockReturnValue(okAsync([makeMenu({ name: "Week", days: 7, notes: "low carb" })]));
 
     const text = await kh.callToolText("create_menu", { name: "Week", days: 7, notes: "low carb" });
 
@@ -58,7 +59,7 @@ describe("create_menu tool", () => {
   it("assigns the next free orderFlag", async () => {
     const existing = makeMenu({ uid: "m-1" as MenuUid, name: "First", orderFlag: 4 });
     kh.seed({ menus: [existing], menuItems: [], mealTypes: [DINNER_TYPE] });
-    vi.mocked(kh.client().saveMenus).mockResolvedValue([makeMenu({ name: "Second" })]);
+    vi.mocked(kh.client().saveMenus).mockReturnValue(okAsync([makeMenu({ name: "Second" })]));
 
     await kh.callTool("create_menu", { name: "Second" });
 
@@ -81,7 +82,7 @@ describe("create_menu tool", () => {
   it("allows creation when the name only matches by starts-with, not exact", async () => {
     const existing = makeMenu({ uid: "m-pre" as MenuUid, name: "Thanksgiving Dinner" });
     kh.seed({ menus: [existing], menuItems: [], mealTypes: [DINNER_TYPE] });
-    vi.mocked(kh.client().saveMenus).mockResolvedValue([makeMenu({ name: "Thanksgiving" })]);
+    vi.mocked(kh.client().saveMenus).mockReturnValue(okAsync([makeMenu({ name: "Thanksgiving" })]));
 
     await kh.callTool("create_menu", { name: "Thanksgiving" });
     expect(kh.client().saveMenus).toHaveBeenCalledOnce();
@@ -111,9 +112,9 @@ describe("update_menu tool", () => {
   it("partial-merges name, days, and notes", async () => {
     const menu = makeMenu({ uid: "m-1" as MenuUid, name: "Old", days: 2, notes: "old notes" });
     kh.seed({ menus: [menu], menuItems: [], mealTypes: [DINNER_TYPE] });
-    vi.mocked(kh.client().saveMenus).mockResolvedValue([
-      makeMenu({ uid: "m-1" as MenuUid, name: "New", days: 4, notes: "old notes" }),
-    ]);
+    vi.mocked(kh.client().saveMenus).mockReturnValue(
+      okAsync([makeMenu({ uid: "m-1" as MenuUid, name: "New", days: 4, notes: "old notes" })]),
+    );
 
     const text = await kh.callToolText("update_menu", { lookup: { uid: "m-1" }, name: "New", days: 4 });
 
@@ -139,9 +140,9 @@ describe("update_menu tool", () => {
   it("allows a no-op rename to the menu's own name (case-insensitive) alongside another change", async () => {
     const menu = makeMenu({ uid: "m-1" as MenuUid, name: "Holiday", notes: "old" });
     kh.seed({ menus: [menu], menuItems: [], mealTypes: [DINNER_TYPE] });
-    vi.mocked(kh.client().saveMenus).mockResolvedValue([
-      makeMenu({ uid: "m-1" as MenuUid, name: "Holiday", notes: "new" }),
-    ]);
+    vi.mocked(kh.client().saveMenus).mockReturnValue(
+      okAsync([makeMenu({ uid: "m-1" as MenuUid, name: "Holiday", notes: "new" })]),
+    );
 
     await kh.callTool("update_menu", { lookup: { uid: "m-1" }, name: "holiday", notes: "new" });
     const savedArgs = vi.mocked(kh.client().saveMenus).mock.calls[0]?.[0];
@@ -152,9 +153,9 @@ describe("update_menu tool", () => {
   it("resolves the menu by name", async () => {
     const menu = makeMenu({ uid: "m-named" as MenuUid, name: "Summer Plan" });
     kh.seed({ menus: [menu], menuItems: [], mealTypes: [DINNER_TYPE] });
-    vi.mocked(kh.client().saveMenus).mockResolvedValue([
-      makeMenu({ uid: "m-named" as MenuUid, name: "Summer Plan", notes: "beach" }),
-    ]);
+    vi.mocked(kh.client().saveMenus).mockReturnValue(
+      okAsync([makeMenu({ uid: "m-named" as MenuUid, name: "Summer Plan", notes: "beach" })]),
+    );
 
     await kh.callTool("update_menu", { lookup: { name: "summer" }, notes: "beach" });
     const savedArgs = vi.mocked(kh.client().saveMenus).mock.calls[0]?.[0];
@@ -200,7 +201,9 @@ describe("update_menu tool", () => {
     const menu = makeMenu({ uid: "m-1" as MenuUid, name: "Plan", days: 5 });
     const day2 = makeMenuItem({ uid: "mi-2" as MenuItemUid, menuUid: "m-1", day: 2, name: "Soup" });
     kh.seed({ menus: [menu], menuItems: [day2], mealTypes: [DINNER_TYPE] });
-    vi.mocked(kh.client().saveMenus).mockResolvedValue([makeMenu({ uid: "m-1" as MenuUid, name: "Plan", days: 3 })]);
+    vi.mocked(kh.client().saveMenus).mockReturnValue(
+      okAsync([makeMenu({ uid: "m-1" as MenuUid, name: "Plan", days: 3 })]),
+    );
 
     await kh.callTool("update_menu", { lookup: { uid: "m-1" }, days: 3 });
     const savedArgs = vi.mocked(kh.client().saveMenus).mock.calls[0]?.[0];
@@ -223,7 +226,7 @@ describe("delete_menu tool", () => {
   it("deletes an empty menu (no menuitems) and removes the menu from the store", async () => {
     const menu = makeMenu({ uid: "m-1" as MenuUid, name: "Empty" });
     kh.seed({ menus: [menu], menuItems: [], mealTypes: [DINNER_TYPE] });
-    vi.mocked(kh.client().saveMenus).mockResolvedValue([{ ...menu, deleted: true }]);
+    vi.mocked(kh.client().saveMenus).mockReturnValue(okAsync([{ ...menu, deleted: true }]));
 
     const text = await kh.callToolText("delete_menu", { lookup: { uid: "m-1" } });
 
@@ -241,10 +244,10 @@ describe("delete_menu tool", () => {
     const item1 = makeMenuItem({ uid: "mi-1" as MenuItemUid, menuUid: "m-1", name: "Turkey" });
     const item2 = makeMenuItem({ uid: "mi-2" as MenuItemUid, menuUid: "m-1", name: "Pie" });
     kh.seed({ menus: [menu], menuItems: [item1, item2], mealTypes: [DINNER_TYPE] });
-    vi.mocked(kh.client().saveMenuItems).mockImplementation(async (items) =>
-      items.map((i) => ({ ...i, deleted: true, menuUid: null })),
+    vi.mocked(kh.client().saveMenuItems).mockImplementation((items) =>
+      okAsync(items.map((i) => ({ ...i, deleted: true, menuUid: null }))),
     );
-    vi.mocked(kh.client().saveMenus).mockResolvedValue([{ ...menu, deleted: true }]);
+    vi.mocked(kh.client().saveMenus).mockReturnValue(okAsync([{ ...menu, deleted: true }]));
 
     const text = await kh.callToolText("delete_menu", { lookup: { uid: "m-1" } });
 
@@ -294,7 +297,7 @@ describe("delete_menu tool", () => {
     const menu = makeMenu({ uid: "m-1" as MenuUid, name: "Holiday" });
     const item = makeMenuItem({ uid: "mi-1" as MenuItemUid, menuUid: "m-1", name: "Turkey" });
     kh.seed({ menus: [menu], menuItems: [item], mealTypes: [DINNER_TYPE] });
-    vi.mocked(kh.client().saveMenuItems).mockRejectedValueOnce(new Error("network down"));
+    vi.mocked(kh.client().saveMenuItems).mockReturnValueOnce(errAsync(new Error("network down")));
 
     const text = await kh.callToolText("delete_menu", { lookup: { uid: "m-1" } });
 

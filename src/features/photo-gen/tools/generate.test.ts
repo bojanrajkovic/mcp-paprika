@@ -1,4 +1,5 @@
 import { fromAny } from "@total-typescript/shoehorn";
+import { okAsync } from "neverthrow";
 import sharp from "sharp";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -78,8 +79,8 @@ describe("generate_recipe_photo tool", () => {
     const generate = opts?.generate ?? vi.fn().mockResolvedValue(generated);
 
     // Mirrors the real client: uploadPhoto returns the hash-stamped recipe.
-    vi.mocked(kh.client().uploadPhoto).mockResolvedValue(recipe);
-    vi.mocked(kh.client().getRecipe).mockResolvedValue(recipe);
+    vi.mocked(kh.client().uploadPhoto).mockReturnValue(okAsync(recipe));
+    vi.mocked(kh.client().getRecipe).mockReturnValue(okAsync(recipe));
 
     kh.seed({
       recipes: [recipe],
@@ -229,7 +230,7 @@ describe("generate_recipe_photo tool", () => {
     vi.mocked(fetchImageBytes).mockResolvedValue({ bytes: imageBytes, contentType: "image/png" });
     const { generate } = seedAndInject({ recipe });
     // getRecipe is already mocked to return recipe in seedAndInject; confirm it's used.
-    vi.mocked(kh.client().getRecipe).mockResolvedValue(recipe);
+    vi.mocked(kh.client().getRecipe).mockReturnValue(okAsync(recipe));
 
     await kh.callTool("generate_recipe_photo", {
       recipe_uid: RECIPE_UID,
@@ -255,8 +256,8 @@ describe("generate_recipe_photo tool", () => {
     vi.mocked(fetchImageBytes).mockResolvedValue({ bytes: imageBytes, contentType: "image/jpeg" });
 
     const generate = vi.fn().mockResolvedValue(makeGeneratedPhoto());
-    vi.mocked(kh.client().uploadPhoto).mockResolvedValue(cached);
-    vi.mocked(kh.client().getRecipe).mockResolvedValue(fresh);
+    vi.mocked(kh.client().uploadPhoto).mockReturnValue(okAsync(cached));
+    vi.mocked(kh.client().getRecipe).mockReturnValue(okAsync(fresh));
 
     kh.seed({ recipes: [cached], photos: [] });
     injectPhotographyClient(kh, fromAny({ generate }) as PhotographyClient);

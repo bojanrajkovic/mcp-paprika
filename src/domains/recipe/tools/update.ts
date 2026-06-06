@@ -8,7 +8,6 @@ import type { Recipe } from "../types.js";
 import { RecipeUidSchema } from "../../../ids.js";
 import { defineTool } from "../../../kernel/tool.js";
 import { commitFailure, textResult } from "../../../shared/tools.js";
-import { toMessage } from "../../../utils/log.js";
 import { recipeToMarkdown } from "../recipe-markdown.js";
 import { recipeColdStartGuard } from "./guards.js";
 
@@ -85,16 +84,16 @@ export const updateRecipeTool = defineTool(
             ...(args.nutritionalInfo !== undefined && { nutritionalInfo: args.nutritionalInfo }),
           };
 
-          let saved: Recipe;
-          try {
-            saved = await ctx.infra.client.saveRecipe(updated);
-            const commitErr = commitFailure("recipe", await ctx.writes.commitRecipe(saved), { selfHealing: false });
-            if (commitErr) return commitErr;
-          } catch (error) {
-            const message = toMessage(error);
-            log.error({ err: error, uid: args.uid }, "saveRecipe failed");
-            return textResult(`Failed to update recipe: ${message}`);
-          }
+          const saved = (await ctx.infra.client.saveRecipe(updated)).match(
+            (v) => v,
+            (e) => {
+              log.error({ err: e, uid: args.uid }, "saveRecipe failed");
+              return textResult(`Failed to update recipe: ${e.message}`);
+            },
+          );
+          if ("content" in saved) return saved;
+          const commitErr = commitFailure("recipe", await ctx.writes.commitRecipe(saved), { selfHealing: false });
+          if (commitErr) return commitErr;
 
           const categoryNames = ctx.state.category.store.resolveNames(saved.categories);
           return textResult(recipeToMarkdown(saved, categoryNames));

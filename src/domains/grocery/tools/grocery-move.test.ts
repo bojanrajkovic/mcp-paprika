@@ -1,3 +1,4 @@
+import { errAsync, okAsync } from "neverthrow";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { GroceryItemUid, GroceryListUid, PantryItemUid } from "../../../ids.js";
@@ -27,22 +28,24 @@ describe("move_grocery_items_to_pantry tool", () => {
     kh.seed({ pantry: [], groceryLists: [WEEKLY_LIST], groceryItems: [item] });
 
     // savePantryItems must return items — pantry createItems uses the returned items
-    vi.mocked(kh.client().savePantryItems).mockResolvedValue([
-      {
-        uid: "PANTRY-ITEM-1" as PantryItemUid,
-        ingredient: "Apples",
-        aisle: "Produce",
-        aisleUid: NO_AISLE_UID,
-        quantity: "",
-        expirationDate: null,
-        hasExpiration: false,
-        inStock: true,
-        purchaseDate: "2026-01-01 00:00:00",
-        notes: null,
-        deleted: false,
-      },
-    ]);
-    vi.mocked(kh.client().saveGroceryItems).mockResolvedValue([{ ...item, deleted: true }]);
+    vi.mocked(kh.client().savePantryItems).mockReturnValue(
+      okAsync([
+        {
+          uid: "PANTRY-ITEM-1" as PantryItemUid,
+          ingredient: "Apples",
+          aisle: "Produce",
+          aisleUid: NO_AISLE_UID,
+          quantity: "",
+          expirationDate: null,
+          hasExpiration: false,
+          inStock: true,
+          purchaseDate: "2026-01-01 00:00:00",
+          notes: null,
+          deleted: false,
+        },
+      ]),
+    );
+    vi.mocked(kh.client().saveGroceryItems).mockReturnValue(okAsync([{ ...item, deleted: true }]));
 
     const result = await kh.callTool("move_grocery_items_to_pantry", { uids: ["ITEM-1"] });
     const text = getText(result);
@@ -109,22 +112,24 @@ describe("move_grocery_items_to_pantry tool", () => {
     ];
     kh.seed({ pantry: [], groceryLists: [WEEKLY_LIST], groceryItems: items });
 
-    vi.mocked(kh.client().savePantryItems).mockResolvedValue(
-      items.map((item, i) => ({
-        uid: `PANTRY-BATCH-${(i + 1).toString()}` as PantryItemUid,
-        ingredient: item.ingredient,
-        aisle: "",
-        aisleUid: NO_AISLE_UID,
-        quantity: "",
-        expirationDate: null,
-        hasExpiration: false,
-        inStock: true,
-        purchaseDate: "2026-01-01 00:00:00",
-        notes: null,
-        deleted: false,
-      })),
+    vi.mocked(kh.client().savePantryItems).mockReturnValue(
+      okAsync(
+        items.map((item, i) => ({
+          uid: `PANTRY-BATCH-${(i + 1).toString()}` as PantryItemUid,
+          ingredient: item.ingredient,
+          aisle: "",
+          aisleUid: NO_AISLE_UID,
+          quantity: "",
+          expirationDate: null,
+          hasExpiration: false,
+          inStock: true,
+          purchaseDate: "2026-01-01 00:00:00",
+          notes: null,
+          deleted: false,
+        })),
+      ),
     );
-    vi.mocked(kh.client().saveGroceryItems).mockResolvedValue(items.map((gi) => ({ ...gi, deleted: true })));
+    vi.mocked(kh.client().saveGroceryItems).mockReturnValue(okAsync(items.map((gi) => ({ ...gi, deleted: true }))));
 
     const result = await kh.callTool("move_grocery_items_to_pantry", {
       uids: ["BATCH-1", "BATCH-2", "BATCH-3"],
@@ -182,23 +187,25 @@ describe("move_grocery_items_to_pantry tool", () => {
     kh.seed({ pantry: [], groceryLists: [WEEKLY_LIST], groceryItems: [item] });
 
     // Pantry save succeeds
-    vi.mocked(kh.client().savePantryItems).mockResolvedValue([
-      {
-        uid: "PANTRY-UID-PFAIL" as PantryItemUid,
-        ingredient: "Butter",
-        aisle: "",
-        aisleUid: NO_AISLE_UID,
-        quantity: "",
-        expirationDate: null,
-        hasExpiration: false,
-        inStock: true,
-        purchaseDate: "2026-01-01 00:00:00",
-        notes: null,
-        deleted: false,
-      },
-    ]);
+    vi.mocked(kh.client().savePantryItems).mockReturnValue(
+      okAsync([
+        {
+          uid: "PANTRY-UID-PFAIL" as PantryItemUid,
+          ingredient: "Butter",
+          aisle: "",
+          aisleUid: NO_AISLE_UID,
+          quantity: "",
+          expirationDate: null,
+          hasExpiration: false,
+          inStock: true,
+          purchaseDate: "2026-01-01 00:00:00",
+          notes: null,
+          deleted: false,
+        },
+      ]),
+    );
     // Grocery delete fails
-    vi.mocked(kh.client().saveGroceryItems).mockRejectedValue(new Error("network timeout"));
+    vi.mocked(kh.client().saveGroceryItems).mockReturnValue(errAsync(new Error("network timeout")));
 
     const result = await kh.callTool("move_grocery_items_to_pantry", { uids: ["PFAIL-1"] });
     const text = getText(result);
@@ -263,22 +270,24 @@ describe("move_grocery_items_to_pantry tool", () => {
     });
     kh.seed({ pantry: [], groceryLists: [WEEKLY_LIST], groceryItems: [item] });
 
-    vi.mocked(kh.client().savePantryItems).mockResolvedValue([
-      {
-        uid: "PANTRY-DUP" as PantryItemUid,
-        ingredient: "Butter",
-        aisle: "",
-        aisleUid: NO_AISLE_UID,
-        quantity: "",
-        expirationDate: null,
-        hasExpiration: false,
-        inStock: true,
-        purchaseDate: "2026-01-01 00:00:00",
-        notes: null,
-        deleted: false,
-      },
-    ]);
-    vi.mocked(kh.client().saveGroceryItems).mockResolvedValue([{ ...item, deleted: true }]);
+    vi.mocked(kh.client().savePantryItems).mockReturnValue(
+      okAsync([
+        {
+          uid: "PANTRY-DUP" as PantryItemUid,
+          ingredient: "Butter",
+          aisle: "",
+          aisleUid: NO_AISLE_UID,
+          quantity: "",
+          expirationDate: null,
+          hasExpiration: false,
+          inStock: true,
+          purchaseDate: "2026-01-01 00:00:00",
+          notes: null,
+          deleted: false,
+        },
+      ]),
+    );
+    vi.mocked(kh.client().saveGroceryItems).mockReturnValue(okAsync([{ ...item, deleted: true }]));
 
     const result = await kh.callTool("move_grocery_items_to_pantry", { uids: ["DUP-1", "DUP-1", "DUP-1"] });
     const text = getText(result);
@@ -300,7 +309,7 @@ describe("move_grocery_items_to_pantry tool", () => {
     });
     kh.seed({ pantry: [], groceryLists: [WEEKLY_LIST], groceryItems: [item] });
 
-    vi.mocked(kh.client().savePantryItems).mockRejectedValue(new Error("pantry API down"));
+    vi.mocked(kh.client().savePantryItems).mockReturnValue(errAsync(new Error("pantry API down")));
 
     const result = await kh.callTool("move_grocery_items_to_pantry", { uids: ["PFAIL-3"] });
     const text = getText(result);
@@ -322,22 +331,24 @@ describe("move_grocery_items_to_pantry tool", () => {
     kh.seed({ pantry: [], groceryLists: [WEEKLY_LIST], groceryItems: [item] });
 
     const knownPantryUid = "PANTRY-UID-KNOWN" as PantryItemUid;
-    vi.mocked(kh.client().savePantryItems).mockResolvedValue([
-      {
-        uid: knownPantryUid,
-        ingredient: "Cheese",
-        aisle: "",
-        aisleUid: NO_AISLE_UID,
-        quantity: "",
-        expirationDate: null,
-        hasExpiration: false,
-        inStock: true,
-        purchaseDate: "2026-01-01 00:00:00",
-        notes: null,
-        deleted: false,
-      },
-    ]);
-    vi.mocked(kh.client().saveGroceryItems).mockRejectedValue(new Error("server error"));
+    vi.mocked(kh.client().savePantryItems).mockReturnValue(
+      okAsync([
+        {
+          uid: knownPantryUid,
+          ingredient: "Cheese",
+          aisle: "",
+          aisleUid: NO_AISLE_UID,
+          quantity: "",
+          expirationDate: null,
+          hasExpiration: false,
+          inStock: true,
+          purchaseDate: "2026-01-01 00:00:00",
+          notes: null,
+          deleted: false,
+        },
+      ]),
+    );
+    vi.mocked(kh.client().saveGroceryItems).mockReturnValue(errAsync(new Error("server error")));
 
     const result = await kh.callTool("move_grocery_items_to_pantry", { uids: ["PFAIL-2"] });
     const text = getText(result);

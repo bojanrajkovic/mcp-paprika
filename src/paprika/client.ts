@@ -14,7 +14,7 @@ import {
   type RetryPolicy,
   wrap,
 } from "cockatiel";
-import { okAsync, ResultAsync } from "neverthrow";
+import { errAsync, okAsync, ResultAsync } from "neverthrow";
 import type { Logger } from "pino";
 import { z } from "zod";
 import type { ZodType, ZodTypeDef } from "zod";
@@ -32,6 +32,7 @@ import type { Category } from "../domains/recipe/category/types.js";
 import type { Photo } from "../domains/recipe/photo/types.js";
 import type { Recipe, RecipeEntry } from "../domains/recipe/types.js";
 import type { RecipeUid } from "../ids.js";
+import type { PaprikaClientError } from "./errors.js";
 
 import { AisleSchema } from "../domains/aisle/types.js";
 import { GroceryIngredientSchema } from "../domains/grocery/grocery-ingredient/types.js";
@@ -46,9 +47,9 @@ import { CategorySchema } from "../domains/recipe/category/types.js";
 import { PhotoSchema, photoToApiPayload } from "../domains/recipe/photo/types.js";
 import { RecipeEntrySchema, RecipeSchema } from "../domains/recipe/types.js";
 import { CircuitOpenError } from "../utils/errors.js";
-import { SILENT_LOG } from "../utils/log.js";
+import { SILENT_LOG, toMessage } from "../utils/log.js";
 import { AuthResponseSchema } from "./auth-response.js";
-import { PaprikaAPIError, PaprikaAuthError } from "./errors.js";
+import { PaprikaAPIError, PaprikaAuthError, PaprikaError } from "./errors.js";
 import { computeRecipeHash } from "./recipe-hash.js";
 
 const AUTH_URL = "https://paprikaapp.com/api/v1/account/login/";
@@ -88,6 +89,23 @@ class TokenExpiredError extends Error {
 }
 
 const RETRYABLE_STATUSES = new Set([429, 500, 502, 503]);
+
+/**
+ * Normalize whatever escapes the resilience stack into the public error union
+ * (ADR-0014: the foreign producers' throws stop at this owned edge). Paprika's
+ * own classes pass through untouched (callers key on `PaprikaAPIError.status`);
+ * cockatiel's `BrokenCircuitError` becomes the shared `CircuitOpenError`; the
+ * network-retry marker unwraps to a `PaprikaError` carrying the original undici
+ * `TypeError`'s message and cause (so tools surface the same message the
+ * pre-Result client did); anything else (a `ZodError` on a malformed body, an
+ * unexpected runtime error) wraps as a base `PaprikaError`.
+ */
+function toClientError(error: unknown, url: string): PaprikaClientError {
+  if (error instanceof PaprikaError || error instanceof CircuitOpenError) return error;
+  if (error instanceof BrokenCircuitError) return new CircuitOpenError("paprika", url, { cause: error });
+  if (error instanceof NetworkRetryableError) return new PaprikaError(error.cause.message, { cause: error.cause });
+  return new PaprikaError(toMessage(error), { cause: error });
+}
 
 /**
  * Paprika's v2 sync API sometimes signals an application error with HTTP 200 and
@@ -307,7 +325,7 @@ export class PaprikaClient {
     });
   }
 
-  async authenticate(): Promise<void> {
+  authenticate(): ResultAsync<void, PaprikaClientError> {
     // One authentication attempt. Classifies failures the same way request()
     // does so the shared retry policy can tell transient blips (retry) from a
     // real auth rejection (fail fast).
@@ -344,78 +362,88 @@ export class PaprikaClient {
 
     // Reuse the same bounded retry policy as request() (maxAttempts: 3, exp
     // backoff) so a transient network/5xx failure at startup retries instead of
-    // throwing on the first blip. The circuit breaker is intentionally NOT
+    // failing on the first blip. The circuit breaker is intentionally NOT
     // applied — startup auth is one-shot, not a hot path. Non-retryable errors
     // (PaprikaAuthError on bad creds, ZodError on a malformed body) are not
-    // matched by the policy and propagate immediately.
-    try {
-      await this.retryPolicy.execute(attempt);
-    } catch (error) {
-      // Once the bounded retries are exhausted, surface a clean PaprikaAuthError
-      // (preserving the underlying cause) rather than the internal retry marker.
+    // matched by the policy and escape immediately. Once the bounded retries
+    // are exhausted, the mapper surfaces a clean PaprikaAuthError (preserving
+    // the underlying cause) rather than the internal retry marker.
+    return ResultAsync.fromPromise(this.retryPolicy.execute(attempt), (error) => {
       if (error instanceof NetworkRetryableError) {
-        throw new PaprikaAuthError("Authentication failed (network error)", { cause: error.cause });
+        return new PaprikaAuthError("Authentication failed (network error)", { cause: error.cause });
       }
       if (error instanceof TransientHTTPError) {
-        throw new PaprikaAuthError(`Authentication failed (HTTP ${error.status.toString()})`, { cause: error });
+        return new PaprikaAuthError(`Authentication failed (HTTP ${error.status.toString()})`, { cause: error });
       }
-      throw error;
-    }
+      if (error instanceof PaprikaError) return error;
+      return new PaprikaError(toMessage(error), { cause: error });
+    });
   }
 
-  async listRecipes(): Promise<Array<RecipeEntry>> {
+  listRecipes(): ResultAsync<Array<RecipeEntry>, PaprikaClientError> {
     return this.request("GET", `${API_BASE}/recipes/`, z.array(RecipeEntrySchema));
   }
 
-  async getRecipe(uid: string): Promise<Recipe> {
+  getRecipe(uid: string): ResultAsync<Recipe, PaprikaClientError> {
     return this.request("GET", `${API_BASE}/recipe/${uid}/`, RecipeSchema);
   }
 
-  async getRecipes(uids: ReadonlyArray<string>): Promise<Array<Recipe>> {
-    return Promise.all(uids.map((uid) => this._recipesBulkhead.execute(() => this.getRecipe(uid))));
+  getRecipes(uids: ReadonlyArray<string>): ResultAsync<Array<Recipe>, PaprikaClientError> {
+    // Each fetch is throttled by the bulkhead. Its execute() can only reject
+    // with something foreign (the queue is effectively unbounded), so the
+    // fromPromise + flatten keeps even that on the Result rail — the same
+    // double-Result shape as DiskCache._locked.
+    return ResultAsync.combine(
+      uids.map((uid) =>
+        ResultAsync.fromPromise(
+          this._recipesBulkhead.execute(() => this.getRecipe(uid)),
+          (e) => toClientError(e, `${API_BASE}/recipe/${uid}/`),
+        ).andThen((r) => r),
+      ),
+    );
   }
 
-  async listCategories(): Promise<Array<Category>> {
+  listCategories(): ResultAsync<Array<Category>, PaprikaClientError> {
     return this.request("GET", `${API_BASE}/categories/`, z.array(CategorySchema));
   }
 
-  async listAisles(): Promise<Array<Aisle>> {
+  listAisles(): ResultAsync<Array<Aisle>, PaprikaClientError> {
     return this.request("GET", `${API_BASE}/groceryaisles/`, z.array(AisleSchema));
   }
 
-  async listGroceryLists(): Promise<Array<GroceryList>> {
+  listGroceryLists(): ResultAsync<Array<GroceryList>, PaprikaClientError> {
     return this.request("GET", `${API_BASE}/grocerylists/`, z.array(GroceryListSchema));
   }
 
-  async listGroceryItems(): Promise<Array<GroceryItem>> {
+  listGroceryItems(): ResultAsync<Array<GroceryItem>, PaprikaClientError> {
     return this.request("GET", `${API_BASE}/groceries/`, z.array(GroceryItemSchema));
   }
 
-  async listGroceryIngredients(): Promise<Array<GroceryIngredient>> {
+  listGroceryIngredients(): ResultAsync<Array<GroceryIngredient>, PaprikaClientError> {
     return this.request("GET", `${API_BASE}/groceryingredients/`, z.array(GroceryIngredientSchema));
   }
 
-  async listMeals(): Promise<Array<Meal>> {
+  listMeals(): ResultAsync<Array<Meal>, PaprikaClientError> {
     return this.request("GET", `${API_BASE}/meals/`, z.array(MealSchema));
   }
 
-  async listMealTypes(): Promise<Array<MealType>> {
+  listMealTypes(): ResultAsync<Array<MealType>, PaprikaClientError> {
     return this.request("GET", `${API_BASE}/mealtypes/`, z.array(MealTypeSchema));
   }
 
-  async listMenus(): Promise<Array<Menu>> {
+  listMenus(): ResultAsync<Array<Menu>, PaprikaClientError> {
     return this.request("GET", `${API_BASE}/menus/`, z.array(MenuSchema));
   }
 
-  async listMenuItems(): Promise<Array<MenuItem>> {
+  listMenuItems(): ResultAsync<Array<MenuItem>, PaprikaClientError> {
     return this.request("GET", `${API_BASE}/menuitems/`, z.array(MenuItemSchema));
   }
 
-  async listPhotos(): Promise<Array<Photo>> {
+  listPhotos(): ResultAsync<Array<Photo>, PaprikaClientError> {
     return this.request("GET", `${API_BASE}/photos/`, z.array(PhotoSchema));
   }
 
-  async listPantry(): Promise<Array<PantryItem>> {
+  listPantry(): ResultAsync<Array<PantryItem>, PaprikaClientError> {
     return this.request("GET", `${API_BASE}/pantry/`, z.array(PantryItemSchema));
   }
 
@@ -440,76 +468,77 @@ export class PaprikaClient {
     return recipe.deleted ? (recipe as Recipe) : { ...recipe, hash: computeRecipeHash(recipe) };
   }
 
-  async saveRecipe(recipe: Readonly<Recipe>): Promise<Recipe> {
+  saveRecipe(recipe: Readonly<Recipe>): ResultAsync<Recipe, PaprikaClientError> {
     const hashed = this.stampContentHash(recipe);
     const formData = this.buildEntityFormData(recipeToApiPayload(hashed), "data.gz");
-    await this.request("POST", `${API_BASE}/recipe/${hashed.uid}/`, z.boolean(), formData);
-    return hashed;
+    return this.request("POST", `${API_BASE}/recipe/${hashed.uid}/`, z.boolean(), formData).map(() => hashed);
   }
 
-  async saveAisle(aisle: Readonly<Aisle>): Promise<Aisle> {
-    await this.postEntities(`${API_BASE}/groceryaisles/`, [aisle], aisleToApiPayload);
-    return aisle as Aisle;
+  saveAisle(aisle: Readonly<Aisle>): ResultAsync<Aisle, PaprikaClientError> {
+    return this.postEntities(`${API_BASE}/groceryaisles/`, [aisle], aisleToApiPayload).map(() => aisle as Aisle);
   }
 
   // Create or rename a meal type. POSTs a single-element gzip array to the
   // collection URL with `deleted: false`; Paprika upserts by `uid` and returns
   // `{result: true}`. Mirrors saveAisle — the caller (ensureMealType) commits locally.
-  async saveMealType(mealType: Readonly<MealType>): Promise<MealType> {
-    await this.postEntities(`${API_BASE}/mealtypes/`, [mealType], mealTypeToApiPayload);
-    return mealType as MealType;
+  saveMealType(mealType: Readonly<MealType>): ResultAsync<MealType, PaprikaClientError> {
+    return this.postEntities(`${API_BASE}/mealtypes/`, [mealType], mealTypeToApiPayload).map(
+      () => mealType as MealType,
+    );
   }
 
   // Create or rename/re-parent a category. POSTs a single-element gzip array to
   // the collection URL with `deleted: false`; Paprika upserts by `uid`. Returns
   // the input category on `{result: true}` (caller commits locally).
-  async saveCategory(category: Readonly<Category>): Promise<Category> {
-    await this.postEntities(`${API_BASE}/categories/`, [category], (c) => categoryToApiPayload(c, false));
-    return category as Category;
+  saveCategory(category: Readonly<Category>): ResultAsync<Category, PaprikaClientError> {
+    return this.postEntities(`${API_BASE}/categories/`, [category], (c) => categoryToApiPayload(c, false)).map(
+      () => category as Category,
+    );
   }
 
   // Soft-delete a category via a tombstone POST (`deleted: true`, all fields
   // echoed). Same collection URL as create/rename — the `deleted` flag is the
   // only differentiator, mirroring the pantry/grocery delete pattern.
-  async deleteCategory(category: Readonly<Category>): Promise<void> {
-    await this.postEntities(`${API_BASE}/categories/`, [category], (c) => categoryToApiPayload(c, true));
+  deleteCategory(category: Readonly<Category>): ResultAsync<void, PaprikaClientError> {
+    return this.postEntities(`${API_BASE}/categories/`, [category], (c) => categoryToApiPayload(c, true));
   }
 
-  async savePantryItems(items: ReadonlyArray<Readonly<PantryItem>>): Promise<ReadonlyArray<PantryItem>> {
+  savePantryItems(
+    items: ReadonlyArray<Readonly<PantryItem>>,
+  ): ResultAsync<ReadonlyArray<PantryItem>, PaprikaClientError> {
     // Pantry writes POST to the collection URL; the UID lives in the body, not the URL.
     // Diverges from `saveRecipe` (which uses /sync/recipe/{uid}/). Verified 2026-05-08.
-    await this.postEntities(`${API_BASE}/pantry/`, items, pantryItemToApiPayload);
-    return items;
+    return this.postEntities(`${API_BASE}/pantry/`, items, pantryItemToApiPayload).map(() => items);
   }
 
-  async saveGroceryList(list: Readonly<GroceryList>): Promise<GroceryList> {
-    await this.postEntities(`${API_BASE}/grocerylists/`, [list], groceryListToApiPayload);
-    return list as GroceryList;
+  saveGroceryList(list: Readonly<GroceryList>): ResultAsync<GroceryList, PaprikaClientError> {
+    return this.postEntities(`${API_BASE}/grocerylists/`, [list], groceryListToApiPayload).map(
+      () => list as GroceryList,
+    );
   }
 
-  async saveGroceryItems(items: ReadonlyArray<Readonly<GroceryItem>>): Promise<ReadonlyArray<GroceryItem>> {
-    await this.postEntities(`${API_BASE}/groceries/`, items, groceryItemToApiPayload);
-    return items;
+  saveGroceryItems(
+    items: ReadonlyArray<Readonly<GroceryItem>>,
+  ): ResultAsync<ReadonlyArray<GroceryItem>, PaprikaClientError> {
+    return this.postEntities(`${API_BASE}/groceries/`, items, groceryItemToApiPayload).map(() => items);
   }
 
-  async saveGroceryIngredient(ingredient: Readonly<GroceryIngredient>): Promise<GroceryIngredient> {
-    await this.postEntities(`${API_BASE}/groceryingredients/`, [ingredient], groceryIngredientToApiPayload);
-    return ingredient as GroceryIngredient;
+  saveGroceryIngredient(ingredient: Readonly<GroceryIngredient>): ResultAsync<GroceryIngredient, PaprikaClientError> {
+    return this.postEntities(`${API_BASE}/groceryingredients/`, [ingredient], groceryIngredientToApiPayload).map(
+      () => ingredient as GroceryIngredient,
+    );
   }
 
-  async saveMeals(items: ReadonlyArray<Readonly<Meal>>): Promise<ReadonlyArray<Meal>> {
-    await this.postEntities(`${API_BASE}/meals/`, items, mealToApiPayload);
-    return items;
+  saveMeals(items: ReadonlyArray<Readonly<Meal>>): ResultAsync<ReadonlyArray<Meal>, PaprikaClientError> {
+    return this.postEntities(`${API_BASE}/meals/`, items, mealToApiPayload).map(() => items);
   }
 
-  async saveMenus(items: ReadonlyArray<Readonly<Menu>>): Promise<ReadonlyArray<Menu>> {
-    await this.postEntities(`${API_BASE}/menus/`, items, menuToApiPayload);
-    return items;
+  saveMenus(items: ReadonlyArray<Readonly<Menu>>): ResultAsync<ReadonlyArray<Menu>, PaprikaClientError> {
+    return this.postEntities(`${API_BASE}/menus/`, items, menuToApiPayload).map(() => items);
   }
 
-  async saveMenuItems(items: ReadonlyArray<Readonly<MenuItem>>): Promise<ReadonlyArray<MenuItem>> {
-    await this.postEntities(`${API_BASE}/menuitems/`, items, menuItemToApiPayload);
-    return items;
+  saveMenuItems(items: ReadonlyArray<Readonly<MenuItem>>): ResultAsync<ReadonlyArray<MenuItem>, PaprikaClientError> {
+    return this.postEntities(`${API_BASE}/menuitems/`, items, menuItemToApiPayload).map(() => items);
   }
 
   /**
@@ -529,12 +558,12 @@ export class PaprikaClient {
    * client hashes verbatim, so this stays self-consistent; exact-interop hashing
    * is #167). The caller normalizes both images to JPEG and computes the hashes.
    */
-  async uploadPhoto(
+  uploadPhoto(
     recipeWithPhoto: Readonly<Recipe>,
     photo: Readonly<Photo>,
     thumbnail: Buffer,
     full: Buffer,
-  ): Promise<Recipe> {
+  ): ResultAsync<Recipe, PaprikaClientError> {
     // A photo attach changes photo/photo_large/photo_hash — all hashed fields — so
     // the recipe always gets a freshly stamped content hash (#167). Returned to the
     // caller so the locally-committed recipe matches what we POST.
@@ -544,17 +573,18 @@ export class PaprikaClient {
 
     // 1. Recipe POST carrying the thumbnail.
     const recipeForm = this.buildPhotoFormData(recipePayload, thumbnail, thumbnailFilename, "data.gz");
-    await this.request("POST", `${API_BASE}/recipe/${hashed.uid}/`, z.boolean(), recipeForm);
-
-    // 2. Photo POST carrying the full image.
-    const photoForm = this.buildPhotoFormData(photoToApiPayload(photo), full, photo.filename, "file");
-    await this.request("POST", `${API_BASE}/photo/${photo.uid}/`, z.boolean(), photoForm);
-
-    // 3. Recipe re-POST (confirm), matching the app's captured sequence.
-    const confirmForm = this.buildEntityFormData(recipePayload, "data.gz");
-    await this.request("POST", `${API_BASE}/recipe/${hashed.uid}/`, z.boolean(), confirmForm);
-
-    return hashed;
+    return this.request("POST", `${API_BASE}/recipe/${hashed.uid}/`, z.boolean(), recipeForm)
+      .andThen(() => {
+        // 2. Photo POST carrying the full image.
+        const photoForm = this.buildPhotoFormData(photoToApiPayload(photo), full, photo.filename, "file");
+        return this.request("POST", `${API_BASE}/photo/${photo.uid}/`, z.boolean(), photoForm);
+      })
+      .andThen(() => {
+        // 3. Recipe re-POST (confirm), matching the app's captured sequence.
+        const confirmForm = this.buildEntityFormData(recipePayload, "data.gz");
+        return this.request("POST", `${API_BASE}/recipe/${hashed.uid}/`, z.boolean(), confirmForm);
+      })
+      .map(() => hashed);
   }
 
   /**
@@ -563,19 +593,19 @@ export class PaprikaClient {
    * original create-time `hash`, which Paprika stored verbatim
    * (`docs/wire-captures/writes.har.json`).
    */
-  async deletePhoto(photo: Readonly<Photo>): Promise<void> {
+  deletePhoto(photo: Readonly<Photo>): ResultAsync<void, PaprikaClientError> {
     const form = this.buildEntityFormData(photoToApiPayload({ ...photo, deleted: true }), "file");
-    await this.request("POST", `${API_BASE}/photo/${photo.uid}/`, z.boolean(), form);
+    return this.request("POST", `${API_BASE}/photo/${photo.uid}/`, z.boolean(), form).map(() => undefined);
   }
 
-  async notifySync(): Promise<void> {
-    await this.request("POST", `${API_BASE}/notify/`, z.unknown());
+  notifySync(): ResultAsync<void, PaprikaClientError> {
+    return this.request("POST", `${API_BASE}/notify/`, z.unknown()).map(() => undefined);
   }
 
-  async deleteRecipe(uid: RecipeUid): Promise<void> {
-    const recipe = await this.getRecipe(uid);
-    await this.saveRecipe({ ...recipe, inTrash: true });
-    await this.notifySync();
+  deleteRecipe(uid: RecipeUid): ResultAsync<void, PaprikaClientError> {
+    return this.getRecipe(uid)
+      .andThen((recipe) => this.saveRecipe({ ...recipe, inTrash: true }))
+      .andThen(() => this.notifySync());
   }
 
   // Hard-delete (empty trash): permanently removes the recipe server-side. POSTs
@@ -583,10 +613,10 @@ export class PaprikaClient {
   // existing hash and created verbatim — the exact shape Paprika.app emits when
   // emptying the trash (docs/wire-captures/writes.har.json). Unlike deleteRecipe
   // (soft, reversible), this is irreversible (#125).
-  async hardDeleteRecipe(uid: RecipeUid): Promise<void> {
-    const recipe = await this.getRecipe(uid);
-    await this.saveRecipe({ ...recipe, inTrash: true, deleted: true });
-    await this.notifySync();
+  hardDeleteRecipe(uid: RecipeUid): ResultAsync<void, PaprikaClientError> {
+    return this.getRecipe(uid)
+      .andThen((recipe) => this.saveRecipe({ ...recipe, inTrash: true, deleted: true }))
+      .andThen(() => this.notifySync());
   }
 
   private buildEntityFormData(payload: unknown, filename = "file"): FormData {
@@ -617,21 +647,21 @@ export class PaprikaClient {
     return formData;
   }
 
-  private async postEntities<T>(
+  private postEntities<T>(
     url: string,
     items: ReadonlyArray<Readonly<T>>,
     toPayload: (item: Readonly<T>) => Record<string, unknown>,
-  ): Promise<void> {
+  ): ResultAsync<void, PaprikaClientError> {
     const formData = this.buildEntityFormData(items.map((item) => toPayload(item)));
-    await this.request("POST", url, z.boolean(), formData);
+    return this.request("POST", url, z.boolean(), formData).map(() => undefined);
   }
 
-  private async request<T>(
+  private request<T>(
     method: "GET" | "POST",
     url: string,
     schema: ZodType<T, ZodTypeDef, unknown>,
     body?: FormData | URLSearchParams,
-  ): Promise<T> {
+  ): ResultAsync<T, PaprikaClientError> {
     const execute = async (ctx: IRetryContext): Promise<T> => {
       const attempt = ctx.attempt + 1;
       const t0 = performance.now();
@@ -709,57 +739,38 @@ export class PaprikaClient {
       return envelope.result as T;
     };
 
-    try {
-      return await this.resilience.execute(execute);
-    } catch (error) {
-      if (error instanceof BrokenCircuitError) {
-        throw new CircuitOpenError("paprika", url, { cause: error });
-      }
+    // The throw-based cockatiel protocol ends here: one resilience-governed run,
+    // converted onto the Result rail, with the 401 token-refresh retry expressed
+    // as an orElse re-run instead of a catch + rethrow ladder.
+    const run = (): ResultAsync<T, unknown> => ResultAsync.fromPromise(this.resilience.execute(execute), (e) => e);
 
-      // Unwrap the retry marker so callers see the original undici TypeError —
-      // tools that surface .message stay consistent with the pre-retry shape.
-      if (error instanceof NetworkRetryableError) {
-        throw error.cause;
-      }
-
+    return run().orElse((error) => {
       if (error instanceof TokenExpiredError) {
         if (!this.token) {
-          throw new PaprikaAuthError("Authentication required (HTTP 401)");
+          return errAsync(new PaprikaAuthError("Authentication required (HTTP 401)"));
         }
-
-        await this.authenticate();
-
-        try {
-          return await this.resilience.execute(execute);
-        } catch (retryError) {
-          if (retryError instanceof TokenExpiredError) {
-            throw new PaprikaAuthError("Authentication failed after re-auth (HTTP 401)");
-          }
-          if (retryError instanceof BrokenCircuitError) {
-            throw new CircuitOpenError("paprika", url, { cause: retryError });
-          }
-          if (retryError instanceof NetworkRetryableError) {
-            throw retryError.cause;
-          }
-          throw retryError;
-        }
+        return this.authenticate().andThen(() =>
+          run().mapErr((retryError) =>
+            retryError instanceof TokenExpiredError
+              ? new PaprikaAuthError("Authentication failed after re-auth (HTTP 401)")
+              : toClientError(retryError, url),
+          ),
+        );
       }
-
-      throw error;
-    }
+      return errAsync(toClientError(error, url));
+    });
   }
 }
 
 /**
- * INTERIM (#264): nudge Paprika's cross-client sync after a successful local
- * commit, best-effort. By the time a chokepoint calls this, the write already
- * landed server-side AND committed locally — a failed nudge costs only
- * propagation latency to other clients (the periodic sync re-nudges), so it
- * must not fail the commit or masquerade as a cache failure. Removed when #264
- * makes the client's surface Result-native.
+ * Nudge Paprika's cross-client sync after a successful local commit, best-effort.
+ * By the time a chokepoint calls this, the write already landed server-side AND
+ * committed locally — a failed nudge costs only propagation latency to other
+ * clients (the periodic sync re-nudges), so it must not fail the commit or
+ * masquerade as a cache failure.
  */
 export function notifySyncBestEffort(client: Pick<PaprikaClient, "notifySync">, log: Logger): ResultAsync<void, never> {
-  return ResultAsync.fromPromise(client.notifySync(), (e) => e).orElse((e) => {
+  return client.notifySync().orElse((e) => {
     log.warn({ err: e }, "notifySync failed after a successful local commit; the periodic sync will propagate");
     return okAsync<void, never>(undefined);
   });

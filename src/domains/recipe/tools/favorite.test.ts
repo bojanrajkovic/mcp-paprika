@@ -1,3 +1,4 @@
+import { errAsync, okAsync } from "neverthrow";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { RecipeState } from "../module.js";
@@ -14,7 +15,7 @@ describe("favorite_recipe tool", () => {
   it("sets onFavorites true and renders markdown with On Favorites", async () => {
     const recipe = makeRecipe({ onFavorites: false });
     const updated = makeRecipe({ uid: recipe.uid, onFavorites: true });
-    vi.mocked(kh.client().saveRecipe).mockResolvedValue(updated);
+    vi.mocked(kh.client().saveRecipe).mockReturnValue(okAsync(updated));
     kh.seed({ recipes: [recipe] });
 
     const text = await kh.callToolText("favorite_recipe", { uid: recipe.uid });
@@ -26,7 +27,7 @@ describe("favorite_recipe tool", () => {
   it("calls saveRecipe and notifySync exactly once each", async () => {
     const recipe = makeRecipe({ onFavorites: false });
     const updated = makeRecipe({ uid: recipe.uid, onFavorites: true });
-    vi.mocked(kh.client().saveRecipe).mockResolvedValue(updated);
+    vi.mocked(kh.client().saveRecipe).mockReturnValue(okAsync(updated));
     kh.seed({ recipes: [recipe] });
 
     await kh.callTool("favorite_recipe", { uid: recipe.uid });
@@ -38,7 +39,7 @@ describe("favorite_recipe tool", () => {
   it("commits the updated recipe to the store and notifies (Content entity)", async () => {
     const recipe = makeRecipe({ onFavorites: false });
     const updated = makeRecipe({ uid: recipe.uid, onFavorites: true });
-    vi.mocked(kh.client().saveRecipe).mockResolvedValue(updated);
+    vi.mocked(kh.client().saveRecipe).mockReturnValue(okAsync(updated));
     kh.seed({ recipes: [recipe] });
 
     await kh.callTool("favorite_recipe", { uid: recipe.uid });
@@ -59,7 +60,7 @@ describe("favorite_recipe tool", () => {
 
   it("saveRecipe throws — returns a failure message", async () => {
     const recipe = makeRecipe({ onFavorites: false });
-    vi.mocked(kh.client().saveRecipe).mockRejectedValue(new Error("Network error"));
+    vi.mocked(kh.client().saveRecipe).mockReturnValue(errAsync(new Error("Network error")));
     kh.seed({ recipes: [recipe] });
 
     const text = await kh.callToolText("favorite_recipe", { uid: recipe.uid });
@@ -89,7 +90,7 @@ describe("unfavorite_recipe tool", () => {
   it("sets onFavorites false and renders markdown without On Favorites", async () => {
     const recipe = makeRecipe({ onFavorites: true });
     const updated = makeRecipe({ uid: recipe.uid, onFavorites: false });
-    vi.mocked(kh.client().saveRecipe).mockResolvedValue(updated);
+    vi.mocked(kh.client().saveRecipe).mockReturnValue(okAsync(updated));
     kh.seed({ recipes: [recipe] });
 
     const text = await kh.callToolText("unfavorite_recipe", { uid: recipe.uid });
@@ -101,7 +102,7 @@ describe("unfavorite_recipe tool", () => {
   it("calls saveRecipe and notifySync exactly once each", async () => {
     const recipe = makeRecipe({ onFavorites: true });
     const updated = makeRecipe({ uid: recipe.uid, onFavorites: false });
-    vi.mocked(kh.client().saveRecipe).mockResolvedValue(updated);
+    vi.mocked(kh.client().saveRecipe).mockReturnValue(okAsync(updated));
     kh.seed({ recipes: [recipe] });
 
     await kh.callTool("unfavorite_recipe", { uid: recipe.uid });
@@ -113,7 +114,7 @@ describe("unfavorite_recipe tool", () => {
   it("commits the updated recipe to the store and notifies (Content entity)", async () => {
     const recipe = makeRecipe({ onFavorites: true });
     const updated = makeRecipe({ uid: recipe.uid, onFavorites: false });
-    vi.mocked(kh.client().saveRecipe).mockResolvedValue(updated);
+    vi.mocked(kh.client().saveRecipe).mockReturnValue(okAsync(updated));
     kh.seed({ recipes: [recipe] });
 
     await kh.callTool("unfavorite_recipe", { uid: recipe.uid });
@@ -134,7 +135,7 @@ describe("unfavorite_recipe tool", () => {
 
   it("saveRecipe throws — returns a failure message", async () => {
     const recipe = makeRecipe({ onFavorites: true });
-    vi.mocked(kh.client().saveRecipe).mockRejectedValue(new Error("Network error"));
+    vi.mocked(kh.client().saveRecipe).mockReturnValue(errAsync(new Error("Network error")));
     kh.seed({ recipes: [recipe] });
 
     const text = await kh.callToolText("unfavorite_recipe", { uid: recipe.uid });

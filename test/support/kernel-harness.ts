@@ -1,5 +1,6 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import { okAsync } from "neverthrow";
 import { vi } from "vitest";
 
 import type { GroceryState } from "../../src/domains/grocery/module.js";
@@ -43,12 +44,12 @@ function makeTestConfig(): PaprikaConfig {
 /**
  * A mock {@link PaprikaClient} whose every method is a memoized `vi.fn()`: accessing
  * `client.saveRecipe` lazily creates (and caches) a spy, so a write-tool test configures
- * and asserts the live mock post-setup — `vi.mocked(kh.client().saveRecipe).mockResolvedValue(…)`
+ * and asserts the live mock post-setup — `vi.mocked(kh.client().saveRecipe).mockReturnValue(okAsync(…))`
  * then `expect(kh.client().saveRecipe).toHaveBeenCalledOnce()` — with no per-test injection.
- * Every auto-stub resolves to `undefined` (a real promise — the commit chokepoints
- * feed `notifySync()` through `ResultAsync.fromPromise`, which needs a thenable);
- * methods whose RETURN a tool consumes (e.g. `saveRecipe`) must be given a value by
- * the test. `overrides` win over a stub.
+ * Every auto-stub returns `okAsync(undefined)` (the client surface is Result-native —
+ * ADR-0014 — so consumers chain `.match`/`.andThen`/`.orElse` on the return); methods
+ * whose ok-VALUE a tool consumes (e.g. `saveRecipe`) must be given one by the test.
+ * `overrides` win over a stub.
  */
 function makeMockClient(overrides: Partial<Record<keyof PaprikaClient, unknown>> = {}): PaprikaClient {
   const target: Record<string, unknown> = { ...overrides };
@@ -59,7 +60,7 @@ function makeMockClient(overrides: Partial<Record<keyof PaprikaClient, unknown>>
       if (prop in t) return t[prop];
       let fn = stubs.get(prop);
       if (fn === undefined) {
-        fn = vi.fn().mockResolvedValue(undefined);
+        fn = vi.fn(() => okAsync(undefined));
         stubs.set(prop, fn);
       }
       return fn;

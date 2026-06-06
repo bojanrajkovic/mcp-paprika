@@ -14,16 +14,16 @@ import { photosEqual } from "../photo/types.js";
 export function photosSync(state: RecipeState): SyncContribution<RecipeState, never> {
   return {
     tier: "additive",
-    reconcile: async (ctx) => {
+    reconcile: (ctx) => {
       ctx.infra.log.debug("fetching photos");
-      await syncReplaceAllEntity({
+      return syncReplaceAllEntity({
         fetch: () => ctx.infra.client.listPhotos(),
         cache: ctx.state.photo.cache,
         store: ctx.state.photo.store,
         equals: photosEqual,
         label: "photos",
         log: ctx.infra.log,
-      });
+      }).map(() => undefined);
     },
     sweep: () => state.photo.store.sweepPending(),
   };

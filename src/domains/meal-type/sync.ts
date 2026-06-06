@@ -3,7 +3,7 @@ import { ResultAsync } from "neverthrow";
 import type { SyncContribution } from "../../kernel/registry.js";
 import type { MealTypeState } from "./module.js";
 
-import { pruneOrphanCache, unwrapSyncStep } from "../../paprika/sync.js";
+import { pruneOrphanCache } from "../../paprika/sync.js";
 
 /**
  * Meal-type sync — replace-all WITH pending-write filtering (mirrors aisle-sync, NOT
@@ -23,36 +23,41 @@ import { pruneOrphanCache, unwrapSyncStep } from "../../paprika/sync.js";
 export function mealTypeSync(state: MealTypeState): SyncContribution<MealTypeState, never> {
   return {
     tier: "reference",
-    reconcile: async (ctx) => {
+    reconcile: (ctx) => {
       const { store, cache } = ctx.state;
-      const mealTypes = await ctx.infra.client.listMealTypes();
-      const cachedMealTypes = unwrapSyncStep(await cache.getAll());
+      return ctx.infra.client.listMealTypes().andThen((mealTypes) =>
+        cache.getAll().andThen((cachedMealTypes) => {
+          // Intentionally NOT filtered by `deleted`: meal types hard-delete, so `listMealTypes()`
+          // never returns a `deleted:true` row (only recipes soft-delete, via `inTrash`) — a
+          // deleted-row filter would guard a state that cannot occur. See docs/architecture.md (Caching and sync).
+          // Filter just-created (pending-upsert) types out of the canonical list and merge the
+          // cached copies back, so a snapshot taken before the create propagated can't drop them.
+          const incomingMealTypesFiltered = mealTypes.filter((mt) => !store.isPendingUpsert(mt.uid));
+          const pendingUpsertedMealTypes = cachedMealTypes.filter((mt) => store.isPendingUpsert(mt.uid));
+          const effectiveMealTypes = [...incomingMealTypesFiltered, ...pendingUpsertedMealTypes];
 
-      // Intentionally NOT filtered by `deleted`: meal types hard-delete, so `listMealTypes()`
-      // never returns a `deleted:true` row (only recipes soft-delete, via `inTrash`) — a
-      // deleted-row filter would guard a state that cannot occur. See docs/architecture.md (Caching and sync).
-      // Filter just-created (pending-upsert) types out of the canonical list and merge the
-      // cached copies back, so a snapshot taken before the create propagated can't drop them.
-      const incomingMealTypesFiltered = mealTypes.filter((mt) => !store.isPendingUpsert(mt.uid));
-      const pendingUpsertedMealTypes = cachedMealTypes.filter((mt) => store.isPendingUpsert(mt.uid));
-      const effectiveMealTypes = [...incomingMealTypesFiltered, ...pendingUpsertedMealTypes];
-
-      const cachedMealTypeUids = new Set(cachedMealTypes.map((mt) => mt.uid));
-      const effectiveMealTypeUids = new Set(effectiveMealTypes.map((mt) => mt.uid));
-      unwrapSyncStep(
-        await pruneOrphanCache(cache, cachedMealTypeUids, effectiveMealTypeUids, ctx.infra.log, "meal types"),
+          const cachedMealTypeUids = new Set(cachedMealTypes.map((mt) => mt.uid));
+          const effectiveMealTypeUids = new Set(effectiveMealTypes.map((mt) => mt.uid));
+          return pruneOrphanCache(
+            cache,
+            cachedMealTypeUids,
+            effectiveMealTypeUids,
+            ctx.infra.log,
+            "meal types",
+          ).andThen(() => {
+            store.load(effectiveMealTypes);
+            return ResultAsync.combine(effectiveMealTypes.map((mt) => cache.put(mt))).map(() => {
+              // Observation-clear: a pending-upsert UID present in the canonical list means the
+              // create propagated, so clear now rather than waiting for the TTL sweep.
+              for (const mealType of mealTypes) {
+                if (store.isPendingUpsert(mealType.uid)) {
+                  store.clearPending(mealType.uid);
+                }
+              }
+            });
+          });
+        }),
       );
-
-      store.load(effectiveMealTypes);
-      unwrapSyncStep(await ResultAsync.combine(effectiveMealTypes.map((mt) => cache.put(mt))));
-
-      // Observation-clear: a pending-upsert UID present in the canonical list means the
-      // create propagated, so clear now rather than waiting for the TTL sweep.
-      for (const mealType of mealTypes) {
-        if (store.isPendingUpsert(mealType.uid)) {
-          store.clearPending(mealType.uid);
-        }
-      }
     },
     sweep: () => state.store.sweepPending(),
   };

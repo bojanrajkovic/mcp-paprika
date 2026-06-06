@@ -8,7 +8,6 @@ import type { Menu } from "../types.js";
 import { MenuUidSchema } from "../../../ids.js";
 import { defineTool } from "../../../kernel/tool.js";
 import { commitFailure, resolveLookup, textResult, uidOrTextLookupSchema } from "../../../shared/tools.js";
-import { toMessage } from "../../../utils/log.js";
 import { menuToMarkdown } from "../menu-helpers.js";
 import { menuStartGuard } from "./guards.js";
 
@@ -119,23 +118,24 @@ export const updateMenuTool = defineTool(
             notes: args.notes ?? existing.notes,
           };
 
-          try {
-            const saved = await ctx.infra.client.saveMenus([merged]);
-            const persisted = saved[0] ?? merged;
-            const commitErr = commitFailure("menu", await ctx.writes.commitMenu(persisted));
-            if (commitErr) return commitErr;
-            return textResult(
-              menuToMarkdown(
-                persisted,
-                ctx.state.items.store.getByMenuUid(persisted.uid),
-                ctx.deps["meal-type"].getAll(),
-              ),
-            );
-          } catch (error) {
-            const message = toMessage(error);
-            log.error({ err: error, uid: existing.uid }, "saveMenus (update_menu) failed");
-            return textResult(`Failed to update menu: ${message}`);
-          }
+          return (await ctx.infra.client.saveMenus([merged])).match(
+            async (saved): Promise<CallToolResult> => {
+              const persisted = saved[0] ?? merged;
+              const commitErr = commitFailure("menu", await ctx.writes.commitMenu(persisted));
+              if (commitErr) return commitErr;
+              return textResult(
+                menuToMarkdown(
+                  persisted,
+                  ctx.state.items.store.getByMenuUid(persisted.uid),
+                  ctx.deps["meal-type"].getAll(),
+                ),
+              );
+            },
+            async (e) => {
+              log.error({ err: e, uid: existing.uid }, "saveMenus (update_menu) failed");
+              return textResult(`Failed to update menu: ${e.message}`);
+            },
+          );
         },
         (guard) => guard,
       );

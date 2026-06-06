@@ -19,17 +19,16 @@ import { groceryItemsEqual } from "../grocery-item/types.js";
 export function groceryItemsSync(state: GroceryState): SyncContribution<GroceryState, "aisle" | "pantry"> {
   return {
     tier: "core",
-    reconcile: async (ctx): Promise<GroceryItemSyncResult> => {
+    reconcile: (ctx) => {
       ctx.infra.log.debug("fetching grocery items");
-      const changes = await syncReplaceAllEntity({
+      return syncReplaceAllEntity({
         fetch: () => ctx.infra.client.listGroceryItems(),
         cache: ctx.state.items.cache,
         store: ctx.state.items.store,
         equals: groceryItemsEqual,
         label: "grocery items",
         log: ctx.infra.log,
-      });
-      return { changeType: "grocery-items", changes };
+      }).map((changes): GroceryItemSyncResult => ({ changeType: "grocery-items", changes }));
     },
     sweep: () => state.items.store.sweepPending(),
   };

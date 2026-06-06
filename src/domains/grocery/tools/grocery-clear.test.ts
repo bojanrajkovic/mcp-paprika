@@ -1,3 +1,4 @@
+import { okAsync } from "neverthrow";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { GroceryItemUid, GroceryListUid } from "../../../ids.js";
@@ -35,7 +36,7 @@ describe("clear_purchased_grocery_items tool", () => {
       purchased: false,
     });
     kh.seed({ groceryLists: [WEEKLY_LIST], groceryItems: [purchasedItem1, purchasedItem2, unpurchasedItem] });
-    vi.mocked(kh.client().saveGroceryItems).mockImplementation(async (items) => items);
+    vi.mocked(kh.client().saveGroceryItems).mockImplementation((items) => okAsync(items));
 
     const result = await kh.callTool("clear_purchased_grocery_items", { listUid: "LIST-1" });
     const text = getText(result);
@@ -129,7 +130,7 @@ describe("clear_grocery_list tool", () => {
       }),
     ];
     kh.seed({ groceryLists: [WEEKLY_LIST], groceryItems: items });
-    vi.mocked(kh.client().saveGroceryItems).mockImplementation(async (i) => i);
+    vi.mocked(kh.client().saveGroceryItems).mockImplementation((i) => okAsync(i));
 
     const result = await kh.callTool("clear_grocery_list", { listUid: "LIST-1" });
     const text = getText(result);

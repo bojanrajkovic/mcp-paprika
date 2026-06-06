@@ -6,7 +6,6 @@ import type { PantryState, PantryWrites } from "../module.js";
 import { PantryItemUidSchema } from "../../../ids.js";
 import { defineTool } from "../../../kernel/tool.js";
 import { commitFailure, textResult } from "../../../shared/tools.js";
-import { toMessage } from "../../../utils/log.js";
 import { pantryStartGuard } from "./guards.js";
 
 /**
@@ -38,17 +37,17 @@ export const deletePantryItemTool = defineTool(
 
           const trashed = { ...existing, deleted: true };
 
-          try {
-            const saved = (await ctx.infra.client.savePantryItems([trashed]))[0]!;
-            const commitErr = commitFailure("pantry", await ctx.writes.commitPantryItem(saved));
-            if (commitErr) return commitErr;
-          } catch (error) {
-            const message = toMessage(error);
-            log.error({ err: error, uid: args.uid }, "savePantryItems failed");
-            return textResult(`Failed to delete pantry item: ${message}`);
-          }
-
-          return textResult(`Pantry item "${existing.ingredient}" has been deleted.`);
+          return (await ctx.infra.client.savePantryItems([trashed])).match(
+            async (items): Promise<CallToolResult> => {
+              const commitErr = commitFailure("pantry", await ctx.writes.commitPantryItem(items[0]!));
+              if (commitErr) return commitErr;
+              return textResult(`Pantry item "${existing.ingredient}" has been deleted.`);
+            },
+            async (e) => {
+              log.error({ err: e, uid: args.uid }, "savePantryItems failed");
+              return textResult(`Failed to delete pantry item: ${e.message}`);
+            },
+          );
         },
         (guard) => guard,
       );

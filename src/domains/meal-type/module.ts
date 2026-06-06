@@ -1,7 +1,7 @@
 import { join } from "node:path";
 
 import { Mutex } from "async-mutex";
-import { err, ok, ResultAsync } from "neverthrow";
+import { err, ok, okAsync, ResultAsync } from "neverthrow";
 
 import type { CacheError } from "../../cache/disk-cache.js";
 import type { MealTypeApi } from "./api.js";
@@ -14,7 +14,6 @@ import { defineModule, register } from "../../kernel/registry.js";
 import { notifySyncBestEffort } from "../../paprika/client.js";
 import { resolvePendingWriteTtl } from "../../utils/config.js";
 import { unwrapAtBoot } from "../../utils/errors.js";
-import { toMessage } from "../../utils/log.js";
 import { MealTypeStore } from "./store.js";
 import { mealTypeSync } from "./sync.js";
 import { listMealTypesTool } from "./tools/list-meal-types.js";
@@ -105,32 +104,28 @@ register(
             deleted: false,
           };
 
-          let saved: MealType;
-          try {
-            // INTERIM (#264): the client still throws; convert at this first
-            // owned consumer until its surface is Result-native.
-            saved = await infra.client.saveMealType(newMealType);
-          } catch (error) {
-            return err(`Failed to create meal type "${trimmedName}": ${toMessage(error)}`);
-          }
-          return (await commitMealType(saved)).match(
-            () => ok(saved),
-            (e) => {
-              // The create landed server-side; only the local commit failed. Erring
-              // here would invite a retry that mints a DUPLICATE type (the recheck
-              // misses until the store knows it). Keep the in-memory catalog
-              // authoritative — re-shielded as pending so the next replace-all sync
-              // can't drop it before the canonical list catches up — and let that
-              // sync heal the disk copy.
-              state.store.markPendingUpsert(saved.uid);
-              state.store.set(saved);
-              infra.log.warn(
-                { err: e, name: saved.name },
-                "meal type local commit failed after create; sync will heal",
-              );
-              return ok(saved);
-            },
-          );
+          return await infra.client
+            .saveMealType(newMealType)
+            .mapErr((e) => `Failed to create meal type "${trimmedName}": ${e.message}`)
+            .andThen((saved) =>
+              commitMealType(saved)
+                .map(() => saved)
+                .orElse((e) => {
+                  // The create landed server-side; only the local commit failed. Erring
+                  // here would invite a retry that mints a DUPLICATE type (the recheck
+                  // misses until the store knows it). Keep the in-memory catalog
+                  // authoritative — re-shielded as pending so the next replace-all sync
+                  // can't drop it before the canonical list catches up — and let that
+                  // sync heal the disk copy.
+                  state.store.markPendingUpsert(saved.uid);
+                  state.store.set(saved);
+                  infra.log.warn(
+                    { err: e, name: saved.name },
+                    "meal type local commit failed after create; sync will heal",
+                  );
+                  return okAsync(saved);
+                }),
+            );
         });
       };
 
