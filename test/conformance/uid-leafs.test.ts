@@ -25,14 +25,15 @@ import { describe, expect, it } from "vitest";
 
 const LEAF = /^src\/domains\/[^/]+\/ids\.ts$/;
 
-const TEST_SUFFIXES = [".test.ts", ".test.integration.ts", ".e2e.test.ts", ".external.test.ts", ".property.test.ts"];
-
-// Every non-test `.ts` under src/, as forward-slash paths — the same walk the
-// ADR-0014 gate uses, normalized so path comparisons hold across platforms.
+// Every `.ts` under src/, as forward-slash paths — the ADR-0014 gate's walk,
+// normalized so path comparisons hold across platforms. Unlike that gate, the
+// containment assertion here deliberately KEEPS colocated test files: a test
+// minting its own `.brand()` would duplicate a brand just as silently as
+// production code would (tests forge UIDs with `as XUid` casts instead).
 function sourceFiles(): Array<string> {
   return readdirSync("src", { recursive: true })
     .map((p) => `src/${String(p).split(sep).join("/")}`)
-    .filter((p) => p.endsWith(".ts") && !TEST_SUFFIXES.some((s) => p.endsWith(s)));
+    .filter((p) => p.endsWith(".ts"));
 }
 
 function parse(file: string): ts.SourceFile {
