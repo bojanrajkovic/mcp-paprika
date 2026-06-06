@@ -107,6 +107,7 @@ register(
             };
           },
           createMeals,
+          countByTypeUid: (uid) => state.store.getAll().filter((m) => m.typeUid === uid).length,
         },
         writes: { commitMeal, commitMealsBatch },
         tools: [

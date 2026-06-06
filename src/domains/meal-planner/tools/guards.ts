@@ -27,3 +27,20 @@ export function scheduleMenuStartGuard(
   }
   return ok(undefined);
 }
+
+/**
+ * `delete_meal_type`'s readiness gate: the meal-type catalog (the entity being
+ * deleted) plus meal and menu (the reference counts the warning reports). No
+ * recipe leg — recipe data plays no part in the delete.
+ */
+export function deleteMealTypeStartGuard(
+  ctx: DomainCtx<Record<never, never>, "menu" | "meal" | "recipe" | "meal-type">,
+): Result<void, CallToolResult> {
+  if (!ctx.deps["meal-type"].hasSynced()) {
+    return err(textResult("Meal types are not yet synced. Try again in a few seconds."));
+  }
+  if (!ctx.deps.meal.hasSynced() || !ctx.deps.menu.hasSynced()) {
+    return err(textResult("Meal and menu data is not yet synced. Try again in a few seconds."));
+  }
+  return ok(undefined);
+}

@@ -1,20 +1,22 @@
 import type { ResultAsync } from "neverthrow";
 
 import type { HasSynced } from "../../kernel/registry.js";
+import type { MealTypeUid } from "../meal-type/ids.js";
 import type { Meal } from "./types.js";
 
 /**
  * Meal's public contract — the surface the meal-planner coordinator consumes via
  * `ctx.deps.meal` (meal owns only meals; meal-types are a separate module).
  *
- * Shaped around `schedule_menu`'s needs: it materializes a menu's items into planner
- * meals by gating on the meal store being synced, assigning a per-DATE `order_flag`
- * across the batch, then POSTing once and committing — so the three required
- * operations are:
+ * Shaped around the coordinator's two tools. `schedule_menu` materializes a menu's
+ * items into planner meals by gating on the meal store being synced, assigning a
+ * per-DATE `order_flag` across the batch, then POSTing once and committing:
  *   - `hasSynced` (inherited from {@link HasSynced}) — the coordinator's meal-store start gate;
  *   - `orderFlagAssigner` — the stateful per-date `order_flag` assigner
  *     (`makeMealOrderFlagAssigner`, backed by `MealStore.getMaxOrderFlagOn`);
  *   - `createMeals` — the batch write (`client.saveMeals` + `commitMealsBatch`).
+ * `delete_meal_type` reports how many meals will lose their type label:
+ *   - `countByTypeUid` — the informational reference count (warn-and-proceed).
  *
  * `read_meal_plan` and `search_meal_history` read meal data directly inside the meal
  * module via `ctx.state`, so they don't drive the public `api`.
@@ -37,4 +39,10 @@ export interface MealApi extends HasSynced {
    * never reaches the meal store or cache directly.
    */
   createMeals(meals: ReadonlyArray<Meal>): ResultAsync<ReadonlyArray<Meal>, string>;
+  /**
+   * How many meals (planned or logged) reference a meal type. Informational —
+   * `delete_meal_type` warns-and-proceeds with this count; meal history is
+   * append-only, so references never block a type's deletion.
+   */
+  countByTypeUid(uid: MealTypeUid): number;
 }

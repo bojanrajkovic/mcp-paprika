@@ -132,6 +132,7 @@ register(
           get: (uid) => state.menus.store.get(uid),
           findByName: (query) => state.menus.store.findByName(query),
           itemsOf: (menuUid) => state.items.store.getByMenuUid(menuUid),
+          itemCountByTypeUid: (uid) => state.items.store.getAll().filter((i) => i.typeUid === uid).length,
           hasSynced: () => state.menus.store.hasSynced && state.items.store.hasSynced,
         },
         writes: { commitMenu, commitMenuItem, commitMenuItemsBatch },

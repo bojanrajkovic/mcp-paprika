@@ -7,10 +7,12 @@ import type { MealType } from "./types.js";
 
 /**
  * Meal-type's public contract — the shared meal-type catalog the meal and menu
- * domains (and the menu resource) resolve against. Read lookups, plus one write
- * path: `ensureMealType` auto-creates a custom type on first reference (mirroring
- * aisle's `ensureAisle`). Explicit edit/delete of meal types is not exposed — that
- * stays a follow-up (#244).
+ * domains (and the menu resource) resolve against. Read lookups, plus two write
+ * paths: `ensureMealType` auto-creates a custom type on first reference (mirroring
+ * aisle's `ensureAisle`), and `deleteMealType` backs the meal-planner coordinator's
+ * `delete_meal_type` tool (the reference counts live with the coordinator, which
+ * can see meal and menu; this owns only the catalog write). Explicit edits go
+ * through `update_meal_type`, a meal-type-domain tool that needs no contract.
  *
  * The inherited `hasSynced` is the catalog start-gate the meal/menu write tools
  * check before resolving or auto-creating a type.
@@ -42,4 +44,14 @@ export interface MealTypeApi extends HasSynced {
    * re-create, and the replace-all sync heals the disk copy.
    */
   ensureMealType(name: string): Promise<Result<MealType, string>>;
+  /**
+   * Tombstone-delete a meal type (POST `deleted: true`, then the local delete
+   * commit). Errs with a ready-to-surface message on an unsynced catalog, an
+   * unknown UID, or a failed save; a failed LOCAL commit after a successful save
+   * also errs (the message says retrying is safe — the tombstone POST is
+   * idempotent, and the replace-all sync reconciles either way). Called by the
+   * meal-planner coordinator's `delete_meal_type`, which reports the meal/menu
+   * reference counts (warn-and-proceed) before calling this.
+   */
+  deleteMealType(uid: MealTypeUid): Promise<Result<void, string>>;
 }
