@@ -57,8 +57,6 @@ export const discoverRecipesTool = defineTool(
   (ctx: DomainCtx<DiscoverState, "recipe">) => {
     const log = ctx.infra.log.child({ component: "discover_recipes" });
     return async (args): Promise<CallToolResult> => {
-      log.info({ tool: "discover_recipes", ...args }, "tool invoked");
-
       // Feature gate: vectorStore is null when embeddings are unconfigured. The tool
       // is registered unconditionally and declines here, so the surface is uniform
       // across deployments (ADR-0009 §5#9).

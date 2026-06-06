@@ -1,4 +1,3 @@
-import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 
 import type { DomainCtx } from "../../../kernel/registry.js";
@@ -35,34 +34,29 @@ export const markPantryItemOutOfStockTool = defineTool(
     description: "Mark a pantry item as out of stock by UID (e.g. you've run out of it).",
     inputSchema: markPantryItemOutOfStockInputSchema,
   },
+  [pantryStartGuard],
   (ctx: DomainCtx<PantryState, "aisle", PantryWrites>) => {
     const log = ctx.infra.log.child({ component: "mark_pantry_item_out_of_stock" });
     return async (args) => {
-      log.info({ tool: "mark_pantry_item_out_of_stock", uid: args.uid }, "tool invoked");
-      return pantryStartGuard(ctx.state).match(
-        async (): Promise<CallToolResult> => {
-          const existing = ctx.state.store.get(args.uid);
+      const existing = ctx.state.store.get(args.uid);
 
-          if (!existing) {
-            return textResult(`No pantry item found with UID "${args.uid}" (it may not exist or was already deleted).`);
-          }
+      if (!existing) {
+        return textResult(`No pantry item found with UID "${args.uid}" (it may not exist or was already deleted).`);
+      }
 
-          const updated: PantryItem = { ...existing, inStock: false };
-          const saved = (await ctx.infra.client.savePantryItems([updated])).match(
-            (items) => items[0]!,
-            (e) => {
-              log.error({ err: e, uid: args.uid }, "savePantryItems failed");
-              return textResult(`Failed to update pantry item: ${e.message}`);
-            },
-          );
-          if ("content" in saved) return saved;
-          const commitErr = commitFailure("pantry", await ctx.writes.commitPantryItem(saved));
-          if (commitErr) return commitErr;
-
-          return textResult(pantryItemToMarkdown(saved));
+      const updated: PantryItem = { ...existing, inStock: false };
+      const saved = (await ctx.infra.client.savePantryItems([updated])).match(
+        (items) => items[0]!,
+        (e) => {
+          log.error({ err: e, uid: args.uid }, "savePantryItems failed");
+          return textResult(`Failed to update pantry item: ${e.message}`);
         },
-        (guard) => guard,
       );
+      if ("content" in saved) return saved;
+      const commitErr = commitFailure("pantry", await ctx.writes.commitPantryItem(saved));
+      if (commitErr) return commitErr;
+
+      return textResult(pantryItemToMarkdown(saved));
     };
   },
 );
@@ -79,34 +73,29 @@ export const restockPantryItemTool = defineTool(
     description: "Mark a pantry item as back in stock by UID (e.g. you've restocked it).",
     inputSchema: restockPantryItemInputSchema,
   },
+  [pantryStartGuard],
   (ctx: DomainCtx<PantryState, "aisle", PantryWrites>) => {
     const log = ctx.infra.log.child({ component: "restock_pantry_item" });
     return async (args) => {
-      log.info({ tool: "restock_pantry_item", uid: args.uid }, "tool invoked");
-      return pantryStartGuard(ctx.state).match(
-        async (): Promise<CallToolResult> => {
-          const existing = ctx.state.store.get(args.uid);
+      const existing = ctx.state.store.get(args.uid);
 
-          if (!existing) {
-            return textResult(`No pantry item found with UID "${args.uid}" (it may not exist or was already deleted).`);
-          }
+      if (!existing) {
+        return textResult(`No pantry item found with UID "${args.uid}" (it may not exist or was already deleted).`);
+      }
 
-          const updated: PantryItem = { ...existing, inStock: true };
-          const saved = (await ctx.infra.client.savePantryItems([updated])).match(
-            (items) => items[0]!,
-            (e) => {
-              log.error({ err: e, uid: args.uid }, "savePantryItems failed");
-              return textResult(`Failed to update pantry item: ${e.message}`);
-            },
-          );
-          if ("content" in saved) return saved;
-          const commitErr = commitFailure("pantry", await ctx.writes.commitPantryItem(saved));
-          if (commitErr) return commitErr;
-
-          return textResult(pantryItemToMarkdown(saved));
+      const updated: PantryItem = { ...existing, inStock: true };
+      const saved = (await ctx.infra.client.savePantryItems([updated])).match(
+        (items) => items[0]!,
+        (e) => {
+          log.error({ err: e, uid: args.uid }, "savePantryItems failed");
+          return textResult(`Failed to update pantry item: ${e.message}`);
         },
-        (guard) => guard,
       );
+      if ("content" in saved) return saved;
+      const commitErr = commitFailure("pantry", await ctx.writes.commitPantryItem(saved));
+      if (commitErr) return commitErr;
+
+      return textResult(pantryItemToMarkdown(saved));
     };
   },
 );

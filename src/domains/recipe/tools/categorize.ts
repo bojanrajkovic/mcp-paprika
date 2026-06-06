@@ -1,4 +1,3 @@
-import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 
 import type { CategoryUid } from "../../../ids.js";
@@ -51,59 +50,54 @@ export const categorizeRecipeTool = defineTool(
       "Unknown category names are skipped with a warning. To edit other recipe fields, use update_recipe.",
     inputSchema: categorizeRecipeInputSchema,
   },
+  [recipeColdStartGuard],
   (ctx: DomainCtx<RecipeState, never, RecipeWrites>) => {
     const log = ctx.infra.log.child({ component: "categorize_recipe" });
     return async (args) => {
-      log.info({ tool: "categorize_recipe", uid: args.uid, mode: args.mode }, "tool invoked");
-      return recipeColdStartGuard(ctx.state).match(
-        async (): Promise<CallToolResult> => {
-          const existing = ctx.state.recipe.store.get(args.uid);
-          if (!existing) {
-            return textResult(`No recipe found with UID "${args.uid}" (it may not exist or was already deleted).`);
-          }
+      const existing = ctx.state.recipe.store.get(args.uid);
+      if (!existing) {
+        return textResult(`No recipe found with UID "${args.uid}" (it may not exist or was already deleted).`);
+      }
 
-          const { uids: refUids, unknown } = resolveCategoryRefs(ctx.state.category.store.getAll(), args.categories);
-          const warnings = unknown.map((ref) => `Warning: category "${ref}" not found and was skipped.`);
+      const { uids: refUids, unknown } = resolveCategoryRefs(ctx.state.category.store.getAll(), args.categories);
+      const warnings = unknown.map((ref) => `Warning: category "${ref}" not found and was skipped.`);
 
-          // Nothing resolved (every ref was unknown). Short-circuit rather than
-          // saving a no-op — and, for `replace`, this is the guard that prevents
-          // an all-typos call from silently wiping the recipe's categories.
-          if (refUids.length === 0) {
-            const prefix = warnings.length > 0 ? warnings.join("\n") + "\n\n" : "";
-            return textResult(`${prefix}No known categories matched, so "${existing.name}" was left unchanged.`);
-          }
+      // Nothing resolved (every ref was unknown). Short-circuit rather than
+      // saving a no-op — and, for `replace`, this is the guard that prevents
+      // an all-typos call from silently wiping the recipe's categories.
+      if (refUids.length === 0) {
+        const prefix = warnings.length > 0 ? warnings.join("\n") + "\n\n" : "";
+        return textResult(`${prefix}No known categories matched, so "${existing.name}" was left unchanged.`);
+      }
 
-          // Compute the next category set per mode. Sets dedupe while preserving order.
-          let nextCategories: Array<CategoryUid>;
-          if (args.mode === "replace") {
-            nextCategories = [...new Set(refUids)];
-          } else if (args.mode === "remove") {
-            const drop = new Set<string>(refUids);
-            nextCategories = existing.categories.filter((c) => !drop.has(c));
-          } else {
-            nextCategories = [...new Set<CategoryUid>([...existing.categories, ...refUids])];
-          }
+      // Compute the next category set per mode. Sets dedupe while preserving order.
+      let nextCategories: Array<CategoryUid>;
+      if (args.mode === "replace") {
+        nextCategories = [...new Set(refUids)];
+      } else if (args.mode === "remove") {
+        const drop = new Set<string>(refUids);
+        nextCategories = existing.categories.filter((c) => !drop.has(c));
+      } else {
+        nextCategories = [...new Set<CategoryUid>([...existing.categories, ...refUids])];
+      }
 
-          const updated: Recipe = { ...existing, categories: nextCategories };
+      const updated: Recipe = { ...existing, categories: nextCategories };
 
-          const saved = (await ctx.infra.client.saveRecipe(updated)).match(
-            (v) => v,
-            (e) => {
-              log.error({ err: e, uid: args.uid }, "saveRecipe failed");
-              return textResult(`Failed to categorize recipe: ${e.message}`);
-            },
-          );
-          if ("content" in saved) return saved;
-          const commitErr = commitFailure("recipe", await ctx.writes.commitRecipe(saved), { selfHealing: false });
-          if (commitErr) return commitErr;
-
-          const categoryNames = ctx.state.category.store.resolveNames(saved.categories);
-          const markdown = recipeToMarkdown(saved, categoryNames);
-          const prefix = warnings.length > 0 ? warnings.join("\n") + "\n\n" : "";
-          return textResult(prefix + markdown);
+      const saved = (await ctx.infra.client.saveRecipe(updated)).match(
+        (v) => v,
+        (e) => {
+          log.error({ err: e, uid: args.uid }, "saveRecipe failed");
+          return textResult(`Failed to categorize recipe: ${e.message}`);
         },
-        (guard) => guard,
       );
+      if ("content" in saved) return saved;
+      const commitErr = commitFailure("recipe", await ctx.writes.commitRecipe(saved), { selfHealing: false });
+      if (commitErr) return commitErr;
+
+      const categoryNames = ctx.state.category.store.resolveNames(saved.categories);
+      const markdown = recipeToMarkdown(saved, categoryNames);
+      const prefix = warnings.length > 0 ? warnings.join("\n") + "\n\n" : "";
+      return textResult(prefix + markdown);
     };
   },
 );

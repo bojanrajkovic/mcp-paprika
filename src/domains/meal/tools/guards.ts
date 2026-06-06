@@ -1,7 +1,7 @@
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { err, ok, type Result } from "neverthrow";
 
-import type { MealTypeApi } from "../../meal-type/api.js";
+import type { DomainCtx } from "../../../kernel/registry.js";
 import type { MealState } from "../module.js";
 
 import { textResult } from "../../../shared/tools.js";
@@ -12,9 +12,10 @@ import { textResult } from "../../../shared/tools.js";
  * it, every "Dinner" / "Lunch" lookup returns undefined and the user sees "Unknown
  * meal type" errors that look like input mistakes but are actually a cold-cache
  * state. Guarding both up front turns that into a clear "still syncing" message.
+ * Runs as a kernel precondition (ADR-0015).
  */
-export function mealStartGuard(state: MealState, mealType: MealTypeApi): Result<void, CallToolResult> {
-  if (!state.store.hasSynced || !mealType.hasSynced()) {
+export function mealStartGuard(ctx: DomainCtx<MealState, "meal-type">): Result<void, CallToolResult> {
+  if (!ctx.state.store.hasSynced || !ctx.deps["meal-type"].hasSynced()) {
     return err(textResult("Meal data is not yet synced. Try again in a few seconds."));
   }
   return ok(undefined);

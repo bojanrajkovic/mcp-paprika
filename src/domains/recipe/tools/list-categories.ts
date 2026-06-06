@@ -1,5 +1,3 @@
-import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
-
 import type { DomainCtx } from "../../../kernel/registry.js";
 import type { Category } from "../category/types.js";
 import type { RecipeState } from "../module.js";
@@ -20,41 +18,35 @@ export const listCategoriesTool = defineTool(
     description: "List all recipe categories with the number of recipes in each. Categories are sorted alphabetically.",
     inputSchema: {},
   },
+  [categoryStartGuard],
   (ctx: DomainCtx<RecipeState, never>) => {
-    const log = ctx.infra.log.child({ component: "list_categories" });
     return async (_args) => {
-      log.info({ tool: "list_categories" }, "tool invoked");
-      return categoryStartGuard(ctx.state).match(
-        async (): Promise<CallToolResult> => {
-          const categories = ctx.state.category.store.getAll();
-          if (categories.length === 0) {
-            return textResult("No categories found in your recipe library.");
-          }
+      const categories = ctx.state.category.store.getAll();
+      if (categories.length === 0) {
+        return textResult("No categories found in your recipe library.");
+      }
 
-          const recipes = ctx.state.recipe.store.getAll();
+      const recipes = ctx.state.recipe.store.getAll();
 
-          // Initialize every category with count 0 so categories with no recipes
-          // still appear in the output (AC4.3).
-          const countMap = new Map<string, number>();
-          for (const category of categories) {
-            countMap.set(category.uid, 0);
-          }
+      // Initialize every category with count 0 so categories with no recipes
+      // still appear in the output (AC4.3).
+      const countMap = new Map<string, number>();
+      for (const category of categories) {
+        countMap.set(category.uid, 0);
+      }
 
-          // Increment count for each non-trashed recipe's categories.
-          // getAll() already excludes trashed recipes.
-          for (const recipe of recipes) {
-            for (const uid of recipe.categories) {
-              const current = countMap.get(uid) ?? 0;
-              countMap.set(uid, current + 1);
-            }
-          }
+      // Increment count for each non-trashed recipe's categories.
+      // getAll() already excludes trashed recipes.
+      for (const recipe of recipes) {
+        for (const uid of recipe.categories) {
+          const current = countMap.get(uid) ?? 0;
+          countMap.set(uid, current + 1);
+        }
+      }
 
-          const sorted = categories.toSorted((a, b) => a.name.localeCompare(b.name));
+      const sorted = categories.toSorted((a, b) => a.name.localeCompare(b.name));
 
-          return textResult(formatCategoryList(sorted, countMap));
-        },
-        (guard) => guard,
-      );
+      return textResult(formatCategoryList(sorted, countMap));
     };
   },
 );

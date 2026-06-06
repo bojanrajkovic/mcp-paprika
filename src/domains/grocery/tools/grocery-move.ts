@@ -1,4 +1,3 @@
-import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 
 import type { DomainCtx } from "../../../kernel/registry.js";
@@ -10,13 +9,13 @@ import { GroceryItemUidSchema, PantryItemUidSchema } from "../../../ids.js";
 import { defineTool } from "../../../kernel/tool.js";
 import { commitFailure, textResult } from "../../../shared/tools.js";
 import { todayWire } from "../../../utils/dates.js";
-import { groceryStartGuard } from "./guards.js";
+import { groceryStartGuard, pantrySyncedGuard } from "./guards.js";
 
 /**
  * `move_grocery_items_to_pantry` — move grocery items into the pantry. This IS a
  * grocery tool despite the name: its input is grocery-item UIDs, its primary store is
  * grocery's own item store, and the pantry side goes THROUGH the declared `pantry`
- * dependency contract (`ctx.deps.pantry.hasSynced` / `createItems`).
+ * dependency contract (`createItems`; `hasSynced` runs as `pantrySyncedGuard` precondition).
  *
  * Create-first/delete-second ordering matters: pantry items are created first (so a
  * pantry failure leaves the grocery items intact), then the grocery items are
@@ -36,95 +35,85 @@ export const moveToPantryTool = defineTool(
       uids: z.array(GroceryItemUidSchema).min(1).describe("Grocery item UIDs to move to pantry"),
     },
   },
+  [groceryStartGuard, pantrySyncedGuard],
   (ctx: DomainCtx<GroceryState, "aisle" | "pantry", GroceryWrites>) => {
     const log = ctx.infra.log.child({ component: "move_grocery_items_to_pantry" });
     return async (args) => {
-      log.info({ tool: "move_grocery_items_to_pantry", count: args.uids.length }, "tool invoked");
-      return groceryStartGuard(ctx.state).match(
-        async (): Promise<CallToolResult> => {
-          if (!ctx.deps.pantry.hasSynced()) {
-            return textResult("Pantry is not yet synced. Try again in a few seconds.");
-          }
+      // Step 1: Validate all UIDs exist and deduplicate.
+      // uids are already brand-typed by the input schema — no per-element parse.
+      const seen = new Set<string>();
+      const items: Array<GroceryItem> = [];
+      for (const uid of args.uids) {
+        if (seen.has(uid)) continue;
+        seen.add(uid);
+        const item = ctx.state.items.store.get(uid);
+        if (!item) {
+          return textResult(`No grocery item found with UID "${uid}" (it may not exist or was already deleted).`);
+        }
+        items.push(item);
+      }
 
-          // Step 1: Validate all UIDs exist and deduplicate.
-          // uids are already brand-typed by the input schema — no per-element parse.
-          const seen = new Set<string>();
-          const items: Array<GroceryItem> = [];
-          for (const uid of args.uids) {
-            if (seen.has(uid)) continue;
-            seen.add(uid);
-            const item = ctx.state.items.store.get(uid);
-            if (!item) {
-              return textResult(`No grocery item found with UID "${uid}" (it may not exist or was already deleted).`);
-            }
-            items.push(item);
-          }
+      // Step 2: Build PantryItem objects from GroceryItem fields
+      const pantryItems: Array<PantryItem> = items.map((gi) => ({
+        uid: PantryItemUidSchema.parse(crypto.randomUUID().toUpperCase()),
+        ingredient: gi.ingredient,
+        quantity: "", // Intentionally empty — grocery quantity is purchase amount, not stock
+        aisle: gi.aisle,
+        aisleUid: gi.aisleUid,
+        expirationDate: null,
+        hasExpiration: false,
+        inStock: true,
+        purchaseDate: todayWire(),
+        notes: null,
+        deleted: false,
+      }));
 
-          // Step 2: Build PantryItem objects from GroceryItem fields
-          const pantryItems: Array<PantryItem> = items.map((gi) => ({
-            uid: PantryItemUidSchema.parse(crypto.randomUUID().toUpperCase()),
-            ingredient: gi.ingredient,
-            quantity: "", // Intentionally empty — grocery quantity is purchase amount, not stock
-            aisle: gi.aisle,
-            aisleUid: gi.aisleUid,
-            expirationDate: null,
-            hasExpiration: false,
-            inStock: true,
-            purchaseDate: todayWire(),
-            notes: null,
-            deleted: false,
-          }));
-
-          // Step 3: CREATE FIRST — persist pantry items through the pantry contract.
-          // `createItems` POSTs then commits, returning the failure phase so the two
-          // modes stay distinguishable (matching the live tool's separate messages):
-          // a `save` failure means nothing was created server-side; a `commit` failure
-          // means the items exist server-side and surface after the next sync.
-          const createResult = await ctx.deps.pantry.createItems(pantryItems);
-          const moveResult = await createResult.match(
-            async (savedPantry): Promise<CallToolResult> => {
-              // Step 4: THEN DELETE — soft-delete grocery items
-              const trashedGrocery = items.map((gi) => ({ ...gi, deleted: true }));
-              const savedGrocery = (await ctx.infra.client.saveGroceryItems(trashedGrocery)).match(
-                (v) => v,
-                (e) => {
-                  // Partial failure: pantry items created but grocery delete failed.
-                  // Return structured message so user knows the state.
-                  log.error({ err: e, uids: args.uids }, "saveGroceryItems (delete) failed after pantry create");
-                  const pantryUids = savedPantry.map((p) => p.uid).join(", ");
-                  return textResult(
-                    `Partial failure: ${savedPantry.length.toString()} pantry item(s) were created (UIDs: ${pantryUids}), ` +
-                      `but the grocery item delete failed: ${e.message}. ` +
-                      `The items may exist in both grocery and pantry. You can manually delete the grocery items.`,
-                  );
-                },
-              );
-              if ("content" in savedGrocery) return savedGrocery;
-              const commitErr = commitFailure("grocery list", await ctx.writes.commitGroceryItemsBatch(savedGrocery));
-              if (commitErr) return commitErr;
-
-              // Step 5: Success response
-              const movedNames = items.map((gi) => gi.ingredient).join(", ");
+      // Step 3: CREATE FIRST — persist pantry items through the pantry contract.
+      // `createItems` POSTs then commits, returning the failure phase so the two
+      // modes stay distinguishable (matching the live tool's separate messages):
+      // a `save` failure means nothing was created server-side; a `commit` failure
+      // means the items exist server-side and surface after the next sync.
+      const createResult = await ctx.deps.pantry.createItems(pantryItems);
+      return createResult.match(
+        async (savedPantry) => {
+          // Step 4: THEN DELETE — soft-delete grocery items
+          const trashedGrocery = items.map((gi) => ({ ...gi, deleted: true }));
+          const savedGrocery = (await ctx.infra.client.saveGroceryItems(trashedGrocery)).match(
+            (v) => v,
+            (e) => {
+              // Partial failure: pantry items created but grocery delete failed.
+              // Return structured message so user knows the state.
+              log.error({ err: e, uids: args.uids }, "saveGroceryItems (delete) failed after pantry create");
               const pantryUids = savedPantry.map((p) => p.uid).join(", ");
               return textResult(
-                `Moved ${items.length.toString()} item(s) to pantry: ${movedNames}.\nNew pantry UIDs: ${pantryUids}`,
-              );
-            },
-            async (error): Promise<CallToolResult> => {
-              log.error({ uids: args.uids, phase: error.phase }, `createItems failed (${error.phase})`);
-              if (error.phase === "save") {
-                return textResult(`Failed to create pantry items: ${error.message}. No grocery items were deleted.`);
-              }
-              const pantryUids = error.saved.map((p) => p.uid).join(", ");
-              return textResult(
-                `Pantry items were created on the server (UIDs: ${pantryUids}) but the local cache commit failed: ${error.message}. ` +
-                  `Grocery items were NOT deleted. The pantry items will appear after the next sync cycle.`,
+                `Partial failure: ${savedPantry.length.toString()} pantry item(s) were created (UIDs: ${pantryUids}), ` +
+                  `but the grocery item delete failed: ${e.message}. ` +
+                  `The items may exist in both grocery and pantry. You can manually delete the grocery items.`,
               );
             },
           );
-          return moveResult;
+          if ("content" in savedGrocery) return savedGrocery;
+          const commitErr = commitFailure("grocery list", await ctx.writes.commitGroceryItemsBatch(savedGrocery));
+          if (commitErr) return commitErr;
+
+          // Step 5: Success response
+          const movedNames = items.map((gi) => gi.ingredient).join(", ");
+          const pantryUids = savedPantry.map((p) => p.uid).join(", ");
+          return textResult(
+            `Moved ${items.length.toString()} item(s) to pantry: ${movedNames}.\nNew pantry UIDs: ${pantryUids}`,
+          );
         },
-        (guard) => guard,
+        async (error) => {
+          log.error({ uids: args.uids, phase: error.phase }, `createItems failed (${error.phase})`);
+          if (error.phase === "save") {
+            return textResult(`Failed to create pantry items: ${error.message}. No grocery items were deleted.`);
+          }
+          const pantryUids = error.saved.map((p) => p.uid).join(", ");
+          return textResult(
+            `Pantry items were created on the server (UIDs: ${pantryUids}) but the local cache commit failed: ${error.message}. ` +
+              `Grocery items were NOT deleted. The pantry items will appear after the next sync cycle.`,
+          );
+        },
       );
     };
   },

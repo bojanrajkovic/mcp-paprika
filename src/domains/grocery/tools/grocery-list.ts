@@ -1,4 +1,3 @@
-import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 
 import type { DomainCtx } from "../../../kernel/registry.js";
@@ -29,29 +28,23 @@ export const listGroceryListsTool = defineTool(
     description: "List all grocery lists sorted alphabetically by name, with UID and item count per list.",
     inputSchema: {},
   },
+  [groceryStartGuard],
   (ctx: DomainCtx<GroceryState, "aisle" | "pantry">) => {
-    const log = ctx.infra.log.child({ component: "list_grocery_lists" });
     return async () => {
-      log.info({ tool: "list_grocery_lists" }, "tool invoked");
-      return groceryStartGuard(ctx.state).match(
-        async (): Promise<CallToolResult> => {
-          const all = ctx.state.lists.store.getAll().sort((a, b) => a.name.localeCompare(b.name));
-          const total = all.length;
+      const all = ctx.state.lists.store.getAll().sort((a, b) => a.name.localeCompare(b.name));
+      const total = all.length;
 
-          if (total === 0) {
-            return textResult("No grocery lists found.");
-          }
+      if (total === 0) {
+        return textResult("No grocery lists found.");
+      }
 
-          const header = `You have ${total.toString()} grocery list(s):`;
-          const lines = all.map((list) => {
-            const itemCount = ctx.state.items.store.getByListUid(list.uid).length;
-            return `- **${list.name}** — ${itemCount.toString()} item(s) (uid: \`${list.uid}\`)`;
-          });
+      const header = `You have ${total.toString()} grocery list(s):`;
+      const lines = all.map((list) => {
+        const itemCount = ctx.state.items.store.getByListUid(list.uid).length;
+        return `- **${list.name}** — ${itemCount.toString()} item(s) (uid: \`${list.uid}\`)`;
+      });
 
-          return textResult(header + "\n\n" + lines.join("\n"));
-        },
-        (guard) => guard,
-      );
+      return textResult(header + "\n\n" + lines.join("\n"));
     };
   },
 );
@@ -77,25 +70,19 @@ export const readGroceryListTool = defineTool(
       }),
     },
   },
+  [groceryStartGuard],
   (ctx: DomainCtx<GroceryState, "aisle" | "pantry">) => {
-    const log = ctx.infra.log.child({ component: "read_grocery_list" });
     return async (args) => {
-      log.info({ tool: "read_grocery_list", ...args.lookup }, "tool invoked");
-      return groceryStartGuard(ctx.state).match(
-        async (): Promise<CallToolResult> => {
-          const query = "uid" in args.lookup ? { uid: args.lookup.uid } : { text: args.lookup.name };
-          const outcome = resolveLookup(query, {
-            get: (uid) => ctx.state.lists.store.get(uid),
-            findByText: (text) => ctx.state.lists.store.findByName(text),
-          });
-          return formatLookupOutcome(outcome, {
-            entityNoun: "grocery list",
-            renderOne: (list) => groceryListToMarkdown(list, ctx.state.items.store.getByListUid(list.uid)),
-            disambiguationLine: (list) => `- **${list.name}** (uid: \`${list.uid}\`)`,
-          });
-        },
-        (guard) => guard,
-      );
+      const query = "uid" in args.lookup ? { uid: args.lookup.uid } : { text: args.lookup.name };
+      const outcome = resolveLookup(query, {
+        get: (uid) => ctx.state.lists.store.get(uid),
+        findByText: (text) => ctx.state.lists.store.findByName(text),
+      });
+      return formatLookupOutcome(outcome, {
+        entityNoun: "grocery list",
+        renderOne: (list) => groceryListToMarkdown(list, ctx.state.items.store.getByListUid(list.uid)),
+        disambiguationLine: (list) => `- **${list.name}** (uid: \`${list.uid}\`)`,
+      });
     };
   },
 );
@@ -115,46 +102,41 @@ export const createGroceryListTool = defineTool(
       name: z.string().min(1).describe("Grocery list name (required)"),
     },
   },
+  [groceryStartGuard],
   (ctx: DomainCtx<GroceryState, "aisle" | "pantry", GroceryWrites>) => {
     const log = ctx.infra.log.child({ component: "create_grocery_list" });
     return async (args) => {
-      log.info({ tool: "create_grocery_list", name: args.name }, "tool invoked");
-      return groceryStartGuard(ctx.state).match(
-        async (): Promise<CallToolResult> => {
-          // Duplicate-name guard: only reject on exact case-insensitive match.
-          // A starts-with or contains hit from findByName is NOT a duplicate.
-          const matches = ctx.state.lists.store.findByName(args.name);
-          const exactMatch = matches.find((l) => l.name.toLowerCase() === args.name.toLowerCase());
-          if (exactMatch !== undefined) {
-            return textResult(
-              `A grocery list named "${exactMatch.name}" already exists (UID: ${exactMatch.uid}). ` +
-                `Use rename_grocery_list to change its name.`,
-            );
-          }
+      // Duplicate-name guard: only reject on exact case-insensitive match.
+      // A starts-with or contains hit from findByName is NOT a duplicate.
+      const matches = ctx.state.lists.store.findByName(args.name);
+      const exactMatch = matches.find((l) => l.name.toLowerCase() === args.name.toLowerCase());
+      if (exactMatch !== undefined) {
+        return textResult(
+          `A grocery list named "${exactMatch.name}" already exists (UID: ${exactMatch.uid}). ` +
+            `Use rename_grocery_list to change its name.`,
+        );
+      }
 
-          const uid = GroceryListUidSchema.parse(crypto.randomUUID().toUpperCase());
-          const newList: GroceryList = {
-            uid,
-            name: args.name,
-            isDefault: false,
-            orderFlag: 0,
-            remindersList: "Paprika",
-            deleted: false,
-          };
+      const uid = GroceryListUidSchema.parse(crypto.randomUUID().toUpperCase());
+      const newList: GroceryList = {
+        uid,
+        name: args.name,
+        isDefault: false,
+        orderFlag: 0,
+        remindersList: "Paprika",
+        deleted: false,
+      };
 
-          return (await ctx.infra.client.saveGroceryList(newList)).match(
-            async (saved): Promise<CallToolResult> => {
-              const commitErr = commitFailure("grocery list", await ctx.writes.commitGroceryList(saved));
-              if (commitErr) return commitErr;
-              return textResult(groceryListToMarkdown(saved, []));
-            },
-            async (e) => {
-              log.error({ err: e, name: args.name }, "saveGroceryList failed");
-              return textResult(`Failed to create grocery list: ${e.message}`);
-            },
-          );
+      return (await ctx.infra.client.saveGroceryList(newList)).match(
+        async (saved) => {
+          const commitErr = commitFailure("grocery list", await ctx.writes.commitGroceryList(saved));
+          if (commitErr) return commitErr;
+          return textResult(groceryListToMarkdown(saved, []));
         },
-        (guard) => guard,
+        async (e) => {
+          log.error({ err: e, name: args.name }, "saveGroceryList failed");
+          return textResult(`Failed to create grocery list: ${e.message}`);
+        },
       );
     };
   },
@@ -174,53 +156,46 @@ export const renameGroceryListTool = defineTool(
       newName: z.string().min(1).describe("New name for the grocery list"),
     },
   },
+  [groceryStartGuard],
   (ctx: DomainCtx<GroceryState, "aisle" | "pantry", GroceryWrites>) => {
     const log = ctx.infra.log.child({ component: "rename_grocery_list" });
     return async (args) => {
-      log.info({ tool: "rename_grocery_list", uid: args.uid, newName: args.newName }, "tool invoked");
-      return groceryStartGuard(ctx.state).match(
-        async (): Promise<CallToolResult> => {
-          const existing = ctx.state.lists.store.get(args.uid);
+      const existing = ctx.state.lists.store.get(args.uid);
 
-          if (!existing) {
-            return textResult(
-              `No grocery list found with UID "${args.uid}" (it may not exist or was already deleted).`,
-            );
-          }
+      if (!existing) {
+        return textResult(`No grocery list found with UID "${args.uid}" (it may not exist or was already deleted).`);
+      }
 
-          // Same-name no-op: case-insensitive check. Return the existing list rendered as markdown.
-          if (existing.name.toLowerCase() === args.newName.toLowerCase()) {
-            const items = ctx.state.items.store.getByListUid(existing.uid);
-            return textResult(groceryListToMarkdown(existing, items));
-          }
+      // Same-name no-op: case-insensitive check. Return the existing list rendered as markdown.
+      if (existing.name.toLowerCase() === args.newName.toLowerCase()) {
+        const items = ctx.state.items.store.getByListUid(existing.uid);
+        return textResult(groceryListToMarkdown(existing, items));
+      }
 
-          // Conflict check: reject if another list (different UID) has the exact same name.
-          const conflictMatches = ctx.state.lists.store.findByName(args.newName);
-          const conflict = conflictMatches.find(
-            (l) => l.name.toLowerCase() === args.newName.toLowerCase() && l.uid !== args.uid,
-          );
-          if (conflict !== undefined) {
-            return textResult(
-              `A grocery list named "${conflict.name}" already exists (UID: ${conflict.uid}). Choose a different name.`,
-            );
-          }
+      // Conflict check: reject if another list (different UID) has the exact same name.
+      const conflictMatches = ctx.state.lists.store.findByName(args.newName);
+      const conflict = conflictMatches.find(
+        (l) => l.name.toLowerCase() === args.newName.toLowerCase() && l.uid !== args.uid,
+      );
+      if (conflict !== undefined) {
+        return textResult(
+          `A grocery list named "${conflict.name}" already exists (UID: ${conflict.uid}). Choose a different name.`,
+        );
+      }
 
-          const renamed: GroceryList = { ...existing, name: args.newName };
+      const renamed: GroceryList = { ...existing, name: args.newName };
 
-          return (await ctx.infra.client.saveGroceryList(renamed)).match(
-            async (saved): Promise<CallToolResult> => {
-              const commitErr = commitFailure("grocery list", await ctx.writes.commitGroceryList(saved));
-              if (commitErr) return commitErr;
-              const items = ctx.state.items.store.getByListUid(saved.uid);
-              return textResult(groceryListToMarkdown(saved, items));
-            },
-            async (e) => {
-              log.error({ err: e, uid: args.uid, newName: args.newName }, "saveGroceryList failed");
-              return textResult(`Failed to rename grocery list: ${e.message}`);
-            },
-          );
+      return (await ctx.infra.client.saveGroceryList(renamed)).match(
+        async (saved) => {
+          const commitErr = commitFailure("grocery list", await ctx.writes.commitGroceryList(saved));
+          if (commitErr) return commitErr;
+          const items = ctx.state.items.store.getByListUid(saved.uid);
+          return textResult(groceryListToMarkdown(saved, items));
         },
-        (guard) => guard,
+        async (e) => {
+          log.error({ err: e, uid: args.uid, newName: args.newName }, "saveGroceryList failed");
+          return textResult(`Failed to rename grocery list: ${e.message}`);
+        },
       );
     };
   },
@@ -239,35 +214,28 @@ export const deleteGroceryListTool = defineTool(
       uid: GroceryListUidSchema.describe("Grocery list UID to delete"),
     },
   },
+  [groceryStartGuard],
   (ctx: DomainCtx<GroceryState, "aisle" | "pantry", GroceryWrites>) => {
     const log = ctx.infra.log.child({ component: "delete_grocery_list" });
     return async (args) => {
-      log.info({ tool: "delete_grocery_list", uid: args.uid }, "tool invoked");
-      return groceryStartGuard(ctx.state).match(
-        async (): Promise<CallToolResult> => {
-          const existing = ctx.state.lists.store.get(args.uid);
+      const existing = ctx.state.lists.store.get(args.uid);
 
-          if (!existing) {
-            return textResult(
-              `No grocery list found with UID "${args.uid}" (it may not exist or was already deleted).`,
-            );
-          }
+      if (!existing) {
+        return textResult(`No grocery list found with UID "${args.uid}" (it may not exist or was already deleted).`);
+      }
 
-          const trashed: GroceryList = { ...existing, deleted: true };
+      const trashed: GroceryList = { ...existing, deleted: true };
 
-          return (await ctx.infra.client.saveGroceryList(trashed)).match(
-            async (saved): Promise<CallToolResult> => {
-              const commitErr = commitFailure("grocery list", await ctx.writes.commitGroceryList(saved));
-              if (commitErr) return commitErr;
-              return textResult(`Grocery list "${existing.name}" has been deleted.`);
-            },
-            async (e) => {
-              log.error({ err: e, uid: args.uid }, "saveGroceryList failed");
-              return textResult(`Failed to delete grocery list: ${e.message}`);
-            },
-          );
+      return (await ctx.infra.client.saveGroceryList(trashed)).match(
+        async (saved) => {
+          const commitErr = commitFailure("grocery list", await ctx.writes.commitGroceryList(saved));
+          if (commitErr) return commitErr;
+          return textResult(`Grocery list "${existing.name}" has been deleted.`);
         },
-        (guard) => guard,
+        async (e) => {
+          log.error({ err: e, uid: args.uid }, "saveGroceryList failed");
+          return textResult(`Failed to delete grocery list: ${e.message}`);
+        },
       );
     };
   },

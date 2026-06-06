@@ -1,4 +1,3 @@
-import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { ok, type Result } from "neverthrow";
 import { z } from "zod";
 
@@ -59,115 +58,109 @@ export const searchRecipesTool = defineTool(
       "only time constraints are given.",
     inputSchema: searchRecipesInputSchema,
   },
+  [recipeColdStartGuard],
   (ctx: DomainCtx<RecipeState, never>) => {
-    const log = ctx.infra.log.child({ component: "search_recipes" });
     return async (args) => {
-      log.info({ tool: "search_recipes", ...args }, "tool invoked");
-      return recipeColdStartGuard(ctx.state).match(
-        async (): Promise<CallToolResult> => {
-          // Parse time constraints first — an unparseable max is an early error.
-          const constraintsResult = parseMaybeMinutes(args.maxPrep).andThen((maxPrepTime) =>
-            parseMaybeMinutes(args.maxCook).andThen((maxCookTime) =>
-              parseMaybeMinutes(args.maxTotal).map((maxTotalTime): TimeConstraints => {
-                const base = {} as TimeConstraints;
-                return Object.assign(base, {
-                  ...(maxPrepTime !== undefined && { maxPrepTime }),
-                  ...(maxCookTime !== undefined && { maxCookTime }),
-                  ...(maxTotalTime !== undefined && { maxTotalTime }),
-                });
-              }),
-            ),
-          );
+      // Parse time constraints first — an unparseable max is an early error.
+      const constraintsResult = parseMaybeMinutes(args.maxPrep).andThen((maxPrepTime) =>
+        parseMaybeMinutes(args.maxCook).andThen((maxCookTime) =>
+          parseMaybeMinutes(args.maxTotal).map((maxTotalTime): TimeConstraints => {
+            const base = {} as TimeConstraints;
+            return Object.assign(base, {
+              ...(maxPrepTime !== undefined && { maxPrepTime }),
+              ...(maxCookTime !== undefined && { maxCookTime }),
+              ...(maxTotalTime !== undefined && { maxTotalTime }),
+            });
+          }),
+        ),
+      );
 
-          return constraintsResult.match(
-            (constraints) => {
-              const hasQuery = args.query !== undefined && args.query.length > 0;
-              const hasIngredients = args.ingredients !== undefined && args.ingredients.length > 0;
-              const hasTime =
-                constraints.maxPrepTime !== undefined ||
-                constraints.maxCookTime !== undefined ||
-                constraints.maxTotalTime !== undefined;
+      return constraintsResult.match(
+        (constraints) => {
+          const hasQuery = args.query !== undefined && args.query.length > 0;
+          const hasIngredients = args.ingredients !== undefined && args.ingredients.length > 0;
+          const hasTime =
+            constraints.maxPrepTime !== undefined ||
+            constraints.maxCookTime !== undefined ||
+            constraints.maxTotalTime !== undefined;
 
-              // The ">=1 criterion" rule lives here (not on the schema — see the
-              // searchRecipesInputSchema comment): reject an all-empty call so search
-              // never silently returns the whole library.
-              if (!hasQuery && !hasIngredients && !hasTime) {
-                return textResult("Provide at least one of: query, ingredients, or a max prep/cook/total time.");
-              }
+          // The ">=1 criterion" rule lives here (not on the schema — see the
+          // searchRecipesInputSchema comment): reject an all-empty call so search
+          // never silently returns the whole library.
+          if (!hasQuery && !hasIngredients && !hasTime) {
+            return textResult("Provide at least one of: query, ingredients, or a max prep/cook/total time.");
+          }
 
-              // Build candidate set from the search/getAll path.
-              let queryResults: Array<{ recipe: Recipe; score?: number }>;
-              if (hasQuery) {
-                // search() returns scored results, no limit yet — we limit after intersection.
-                queryResults = ctx.state.recipe.store.search(args.query!, {});
-              } else {
-                // No free-text query: start from all recipes (scored undefined).
-                queryResults = ctx.state.recipe.store.getAll().map((recipe) => ({ recipe }));
-              }
+          // Build candidate set from the search/getAll path.
+          let queryResults: Array<{ recipe: Recipe; score?: number }>;
+          if (hasQuery) {
+            // search() returns scored results, no limit yet — we limit after intersection.
+            queryResults = ctx.state.recipe.store.search(args.query!, {});
+          } else {
+            // No free-text query: start from all recipes (scored undefined).
+            queryResults = ctx.state.recipe.store.getAll().map((recipe) => ({ recipe }));
+          }
 
-              // Intersect with ingredient filter.
-              if (hasIngredients) {
-                const ingredientSet = new Set(
-                  ctx.state.recipe.store.filterByIngredients(args.ingredients!, args.match).map((r) => r.uid),
-                );
-                queryResults = queryResults.filter((r) => ingredientSet.has(r.recipe.uid));
-              }
+          // Intersect with ingredient filter.
+          if (hasIngredients) {
+            const ingredientSet = new Set(
+              ctx.state.recipe.store.filterByIngredients(args.ingredients!, args.match).map((r) => r.uid),
+            );
+            queryResults = queryResults.filter((r) => ingredientSet.has(r.recipe.uid));
+          }
 
-              // Time filter: filterByTime returns recipes already sorted ascending by
-              // total time. Compute it ONCE and reuse for both the intersection set and
-              // the order map (it was previously scanned twice per request).
-              const timeOrdered = hasTime ? ctx.state.recipe.store.filterByTime(constraints) : null;
-              if (timeOrdered !== null) {
-                const timeSet = new Set(timeOrdered.map((r) => r.uid));
-                queryResults = queryResults.filter((r) => timeSet.has(r.recipe.uid));
-              }
+          // Time filter: filterByTime returns recipes already sorted ascending by
+          // total time. Compute it ONCE and reuse for both the intersection set and
+          // the order map (it was previously scanned twice per request).
+          const timeOrdered = hasTime ? ctx.state.recipe.store.filterByTime(constraints) : null;
+          if (timeOrdered !== null) {
+            const timeSet = new Set(timeOrdered.map((r) => r.uid));
+            queryResults = queryResults.filter((r) => timeSet.has(r.recipe.uid));
+          }
 
-              // Sort: scored search order when query present; ascending total-time
-              // order when only time active; name order otherwise.
-              if (!hasQuery) {
-                if (timeOrdered !== null) {
-                  const timeOrderMap = new Map(timeOrdered.map((r, i) => [r.uid, i]));
-                  queryResults.sort((a, b) => {
-                    const ai = timeOrderMap.get(a.recipe.uid) ?? Number.MAX_SAFE_INTEGER;
-                    const bi = timeOrderMap.get(b.recipe.uid) ?? Number.MAX_SAFE_INTEGER;
-                    return ai - bi;
-                  });
-                } else {
-                  queryResults.sort((a, b) => a.recipe.name.localeCompare(b.recipe.name));
-                }
-              }
-
-              // Apply limit post-intersection.
-              const limited = queryResults.slice(0, args.limit);
-
-              if (limited.length === 0) {
-                const criteria: Array<string> = [];
-                if (hasQuery) criteria.push(`query "${args.query!}"`);
-                if (hasIngredients) criteria.push(`ingredients [${args.ingredients!.join(", ")}]`);
-                if (args.maxPrep !== undefined) criteria.push(`maxPrep "${args.maxPrep}"`);
-                if (args.maxCook !== undefined) criteria.push(`maxCook "${args.maxCook}"`);
-                if (args.maxTotal !== undefined) criteria.push(`maxTotal "${args.maxTotal}"`);
-                return textResult(`No recipes found matching ${criteria.join(", ")}.`);
-              }
-
-              const lines = limited.map((r) => {
-                const categoryNames = ctx.state.category.store.resolveNames(r.recipe.categories);
-                const base = formatRecipeItem(r.recipe, categoryNames);
-                if (!hasTime) return base;
-                const unverified = unverifiedTimeFields(r.recipe, constraints);
-                if (unverified.length === 0) return base;
-                return (
-                  `${base}\n> ⚠️ _Time unverified — couldn't parse this recipe's ${unverified.join(" / ")} against your ` +
-                  `limit, so it's shown rather than hidden. Check the displayed time before relying on it._`
-                );
+          // Sort: scored search order when query present; ascending total-time
+          // order when only time active; name order otherwise.
+          if (!hasQuery) {
+            if (timeOrdered !== null) {
+              const timeOrderMap = new Map(timeOrdered.map((r, i) => [r.uid, i]));
+              queryResults.sort((a, b) => {
+                const ai = timeOrderMap.get(a.recipe.uid) ?? Number.MAX_SAFE_INTEGER;
+                const bi = timeOrderMap.get(b.recipe.uid) ?? Number.MAX_SAFE_INTEGER;
+                return ai - bi;
               });
+            } else {
+              queryResults.sort((a, b) => a.recipe.name.localeCompare(b.recipe.name));
+            }
+          }
 
-              return textResult(lines.join("\n\n---\n\n"));
-            },
-            (errorMsg) => textResult(errorMsg),
-          );
+          // Apply limit post-intersection.
+          const limited = queryResults.slice(0, args.limit);
+
+          if (limited.length === 0) {
+            const criteria: Array<string> = [];
+            if (hasQuery) criteria.push(`query "${args.query!}"`);
+            if (hasIngredients) criteria.push(`ingredients [${args.ingredients!.join(", ")}]`);
+            if (args.maxPrep !== undefined) criteria.push(`maxPrep "${args.maxPrep}"`);
+            if (args.maxCook !== undefined) criteria.push(`maxCook "${args.maxCook}"`);
+            if (args.maxTotal !== undefined) criteria.push(`maxTotal "${args.maxTotal}"`);
+            return textResult(`No recipes found matching ${criteria.join(", ")}.`);
+          }
+
+          const lines = limited.map((r) => {
+            const categoryNames = ctx.state.category.store.resolveNames(r.recipe.categories);
+            const base = formatRecipeItem(r.recipe, categoryNames);
+            if (!hasTime) return base;
+            const unverified = unverifiedTimeFields(r.recipe, constraints);
+            if (unverified.length === 0) return base;
+            return (
+              `${base}\n> ⚠️ _Time unverified — couldn't parse this recipe's ${unverified.join(" / ")} against your ` +
+              `limit, so it's shown rather than hidden. Check the displayed time before relying on it._`
+            );
+          });
+
+          return textResult(lines.join("\n\n---\n\n"));
         },
-        (guard) => guard,
+        (errorMsg) => textResult(errorMsg),
       );
     };
   },

@@ -1,4 +1,3 @@
-import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 
 import type { DomainCtx } from "../../../kernel/registry.js";
@@ -32,38 +31,32 @@ export const listRecipesTool = defineTool(
         .describe("Maximum number of recipes to return (default: 25, max: 50)"),
     },
   },
+  [recipeColdStartGuard],
   (ctx: DomainCtx<RecipeState, never>) => {
-    const log = ctx.infra.log.child({ component: "list_recipes" });
     return async (args) => {
-      log.info({ tool: "list_recipes", ...args }, "tool invoked");
-      return recipeColdStartGuard(ctx.state).match(
-        async (): Promise<CallToolResult> => {
-          const all = ctx.state.recipe.store.getAll().sort((a, b) => a.name.localeCompare(b.name));
-          const total = all.length;
-          const page = all.slice(args.offset, args.offset + args.limit);
+      const all = ctx.state.recipe.store.getAll().sort((a, b) => a.name.localeCompare(b.name));
+      const total = all.length;
+      const page = all.slice(args.offset, args.offset + args.limit);
 
-          if (page.length === 0) {
-            return textResult(`No recipes found (total: ${total.toString()}, offset: ${args.offset.toString()}).`);
-          }
+      if (page.length === 0) {
+        return textResult(`No recipes found (total: ${total.toString()}, offset: ${args.offset.toString()}).`);
+      }
 
-          const header = `Showing ${page.length.toString()} of ${total.toString()} recipes (offset: ${args.offset.toString()}):\n`;
-          const lines = page.map((recipe) => {
-            const categoryNames = ctx.state.category.store.resolveNames(recipe.categories);
-            const cats = categoryNames.length > 0 ? ` [${categoryNames.join(", ")}]` : "";
-            const meta: Array<string> = [];
-            const dateOnly = recipe.created.slice(0, 10);
-            meta.push(`created: ${dateOnly}`);
-            if (recipe.rating > 0) meta.push(`rating: ${recipe.rating.toString()}/5`);
-            if (recipe.isPinned) meta.push("pinned");
-            if (recipe.onGroceryList) meta.push("on grocery list");
-            const metaSuffix = ` · ${meta.join(" · ")}`;
-            return `- **${recipe.name}**${cats} (uid: ${recipe.uid})${metaSuffix}`;
-          });
+      const header = `Showing ${page.length.toString()} of ${total.toString()} recipes (offset: ${args.offset.toString()}):\n`;
+      const lines = page.map((recipe) => {
+        const categoryNames = ctx.state.category.store.resolveNames(recipe.categories);
+        const cats = categoryNames.length > 0 ? ` [${categoryNames.join(", ")}]` : "";
+        const meta: Array<string> = [];
+        const dateOnly = recipe.created.slice(0, 10);
+        meta.push(`created: ${dateOnly}`);
+        if (recipe.rating > 0) meta.push(`rating: ${recipe.rating.toString()}/5`);
+        if (recipe.isPinned) meta.push("pinned");
+        if (recipe.onGroceryList) meta.push("on grocery list");
+        const metaSuffix = ` · ${meta.join(" · ")}`;
+        return `- **${recipe.name}**${cats} (uid: ${recipe.uid})${metaSuffix}`;
+      });
 
-          return textResult(header + "\n" + lines.join("\n"));
-        },
-        (guard) => guard,
-      );
+      return textResult(header + "\n" + lines.join("\n"));
     };
   },
 );

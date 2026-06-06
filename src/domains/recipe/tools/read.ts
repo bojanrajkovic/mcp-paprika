@@ -31,7 +31,7 @@ export const readRecipeTool = defineTool(
       }),
     },
   },
-  [(ctx: { readonly state: RecipeState }) => recipeColdStartGuard(ctx.state)],
+  [recipeColdStartGuard],
   (ctx: DomainCtx<RecipeState, never>) => {
     return async (args) => {
       const query = "uid" in args.lookup ? { uid: args.lookup.uid } : { text: args.lookup.title };

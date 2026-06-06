@@ -1,4 +1,3 @@
-import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 
 import type { MealTypeUid } from "../../../ids.js";
@@ -48,81 +47,76 @@ export const rescheduleMealTool = defineTool(
       "meal's recipe link, freeform name, or scale instead, use update_meal.",
     inputSchema: rescheduleMealInputSchema,
   },
+  [mealStartGuard],
   (ctx: DomainCtx<MealState, "recipe" | "meal-type", MealWrites>) => {
     const log = ctx.infra.log.child({ component: "reschedule_meal" });
     return async (args) => {
-      log.info({ tool: "reschedule_meal", uid: args.uid, date: args.date }, "tool invoked");
-      return mealStartGuard(ctx.state, ctx.deps["meal-type"]).match(
-        async (): Promise<CallToolResult> => {
-          const uid = args.uid;
-          const existing = ctx.state.store.get(uid);
+      const uid = args.uid;
+      const existing = ctx.state.store.get(uid);
 
-          if (existing === undefined) {
-            return textResult(`No meal found with UID "${uid}" (it may not exist or was already deleted).`);
-          }
+      if (existing === undefined) {
+        return textResult(`No meal found with UID "${uid}" (it may not exist or was already deleted).`);
+      }
 
-          // Normalize the destination date in its own calendar zone (see plan_meals).
-          const normalizedDate = parseCalendarDayWire(args.date);
-          if (normalizedDate === null) {
-            return textResult(
-              `Could not parse date "${args.date}". Use ISO 8601 (e.g., "2026-06-15") or "yyyy-MM-dd HH:mm:ss".`,
-            );
-          }
+      // Normalize the destination date in its own calendar zone (see plan_meals).
+      const normalizedDate = parseCalendarDayWire(args.date);
+      if (normalizedDate === null) {
+        return textResult(
+          `Could not parse date "${args.date}". Use ISO 8601 (e.g., "2026-06-15") or "yyyy-MM-dd HH:mm:ss".`,
+        );
+      }
 
-          const dateChanged = normalizedDate !== existing.date;
+      const dateChanged = normalizedDate !== existing.date;
 
-          // Nothing to do: same date and no type co-change. Avoid a wasted POST + notifySync.
-          if (!dateChanged && args.type === undefined) {
-            return textResult(renderMealCard(existing, ctx.deps.recipe, ctx.deps["meal-type"]));
-          }
+      // Nothing to do: same date and no type co-change. Avoid a wasted POST + notifySync.
+      if (!dateChanged && args.type === undefined) {
+        return textResult(renderMealCard(existing, ctx.deps.recipe, ctx.deps["meal-type"]));
+      }
 
-          // Resolve the optional type co-change LAST — after the date validation above. An
-          // unknown {name} auto-creates a type, so creating only once the date is known-good
-          // avoids leaving an orphan type behind on a rejected call.
-          let typeInteger: number | undefined;
-          let typeUid: MealTypeUid | null | undefined;
-          if (args.type !== undefined) {
-            const result = await resolveOrCreateMealType(ctx.deps["meal-type"], args.type);
-            if (!result.ok) {
-              return textResult(result.message);
-            }
-            // Custom mealtypes carry originalType: null; Meal.type is vestigial when
-            // type_uid is set (see plan_meals for the full rationale).
-            typeInteger = result.resolved.originalType ?? 0;
-            typeUid = result.resolved.uid;
-          }
+      // Resolve the optional type co-change LAST — after the date validation above. An
+      // unknown {name} auto-creates a type, so creating only once the date is known-good
+      // avoids leaving an orphan type behind on a rejected call.
+      let typeInteger: number | undefined;
+      let typeUid: MealTypeUid | null | undefined;
+      if (args.type !== undefined) {
+        const result = await resolveOrCreateMealType(ctx.deps["meal-type"], args.type);
+        if (!result.ok) {
+          return textResult(result.message);
+        }
+        // Custom mealtypes carry originalType: null; Meal.type is vestigial when
+        // type_uid is set (see plan_meals for the full rationale).
+        typeInteger = result.resolved.originalType ?? 0;
+        typeUid = result.resolved.uid;
+      }
 
-          // When the date changes, the meal joins the destination date's order_flag
-          // sequence (per-date — see makeMealOrderFlagAssigner) at that date's max+1, so
-          // it can't collide with a meal already holding the old flag there. A pure
-          // type co-change on the same date keeps the position. Old-date gaps are harmless.
-          const assignFlag = makeMealOrderFlagAssigner(ctx.state);
-          const newOrderFlag = dateChanged ? assignFlag(normalizedDate) : existing.orderFlag;
+      // When the date changes, the meal joins the destination date's order_flag
+      // sequence (per-date — see makeMealOrderFlagAssigner) at that date's max+1, so
+      // it can't collide with a meal already holding the old flag there. A pure
+      // type co-change on the same date keeps the position. Old-date gaps are harmless.
+      const assignFlag = makeMealOrderFlagAssigner(ctx.state);
+      const newOrderFlag = dateChanged ? assignFlag(normalizedDate) : existing.orderFlag;
 
-          const updated: Meal = {
-            ...existing,
-            date: normalizedDate,
-            ...(typeInteger !== undefined && { type: typeInteger }),
-            ...(typeUid !== undefined && { typeUid }),
-            orderFlag: newOrderFlag,
-          };
+      const updated: Meal = {
+        ...existing,
+        date: normalizedDate,
+        ...(typeInteger !== undefined && { type: typeInteger }),
+        ...(typeUid !== undefined && { typeUid }),
+        orderFlag: newOrderFlag,
+      };
 
-          const savedItems = (await ctx.infra.client.saveMeals([updated])).match(
-            (items) => items,
-            (e) => {
-              log.error({ err: e, uid }, "saveMeals failed");
-              return textResult(`Failed to reschedule meal: ${e.message}`);
-            },
-          );
-          if ("content" in savedItems) return savedItems;
-          const commitErr = commitFailure("meal plan", await ctx.writes.commitMealsBatch(savedItems));
-          if (commitErr) return commitErr;
-          const saved = savedItems[0]!;
-
-          return textResult(renderMealCard(saved, ctx.deps.recipe, ctx.deps["meal-type"]));
+      const savedItems = (await ctx.infra.client.saveMeals([updated])).match(
+        (items) => items,
+        (e) => {
+          log.error({ err: e, uid }, "saveMeals failed");
+          return textResult(`Failed to reschedule meal: ${e.message}`);
         },
-        (guard) => guard,
       );
+      if ("content" in savedItems) return savedItems;
+      const commitErr = commitFailure("meal plan", await ctx.writes.commitMealsBatch(savedItems));
+      if (commitErr) return commitErr;
+      const saved = savedItems[0]!;
+
+      return textResult(renderMealCard(saved, ctx.deps.recipe, ctx.deps["meal-type"]));
     };
   },
 );

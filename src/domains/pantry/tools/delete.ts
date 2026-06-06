@@ -1,5 +1,3 @@
-import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
-
 import type { DomainCtx } from "../../../kernel/registry.js";
 import type { PantryState, PantryWrites } from "../module.js";
 
@@ -23,33 +21,28 @@ export const deletePantryItemTool = defineTool(
       uid: PantryItemUidSchema.describe("Pantry item UID to delete"),
     },
   },
+  [pantryStartGuard],
   (ctx: DomainCtx<PantryState, "aisle", PantryWrites>) => {
     const log = ctx.infra.log.child({ component: "delete_pantry_item" });
     return async (args) => {
-      log.info({ tool: "delete_pantry_item", uid: args.uid }, "tool invoked");
-      return pantryStartGuard(ctx.state).match(
-        async (): Promise<CallToolResult> => {
-          const existing = ctx.state.store.get(args.uid);
+      const existing = ctx.state.store.get(args.uid);
 
-          if (!existing) {
-            return textResult(`No pantry item found with UID "${args.uid}" (it may not exist or was already deleted).`);
-          }
+      if (!existing) {
+        return textResult(`No pantry item found with UID "${args.uid}" (it may not exist or was already deleted).`);
+      }
 
-          const trashed = { ...existing, deleted: true };
+      const trashed = { ...existing, deleted: true };
 
-          return (await ctx.infra.client.savePantryItems([trashed])).match(
-            async (items): Promise<CallToolResult> => {
-              const commitErr = commitFailure("pantry", await ctx.writes.commitPantryItem(items[0]!));
-              if (commitErr) return commitErr;
-              return textResult(`Pantry item "${existing.ingredient}" has been deleted.`);
-            },
-            async (e) => {
-              log.error({ err: e, uid: args.uid }, "savePantryItems failed");
-              return textResult(`Failed to delete pantry item: ${e.message}`);
-            },
-          );
+      return (await ctx.infra.client.savePantryItems([trashed])).match(
+        async (items) => {
+          const commitErr = commitFailure("pantry", await ctx.writes.commitPantryItem(items[0]!));
+          if (commitErr) return commitErr;
+          return textResult(`Pantry item "${existing.ingredient}" has been deleted.`);
         },
-        (guard) => guard,
+        async (e) => {
+          log.error({ err: e, uid: args.uid }, "savePantryItems failed");
+          return textResult(`Failed to delete pantry item: ${e.message}`);
+        },
       );
     };
   },

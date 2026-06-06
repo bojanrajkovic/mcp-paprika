@@ -1,5 +1,3 @@
-import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
-
 import type { DomainCtx } from "../../../kernel/registry.js";
 import type { MealTypeState } from "../module.js";
 import type { MealType } from "../types.js";
@@ -53,26 +51,20 @@ export const listMealTypesTool = defineTool(
       "Meal types are created and edited in the Paprika app, not through this server.",
     inputSchema: {},
   },
+  [mealTypeStartGuard],
   (ctx: DomainCtx<MealTypeState, never>) => {
-    const log = ctx.infra.log.child({ component: "list_meal_types" });
     return async () => {
-      log.info({ tool: "list_meal_types" }, "tool invoked");
-      return mealTypeStartGuard(ctx.state).match(
-        async (): Promise<CallToolResult> => {
-          const mealTypes = ctx.state.store.getAll().sort((a, b) => {
-            if (a.orderFlag !== b.orderFlag) return a.orderFlag - b.orderFlag;
-            return a.name.localeCompare(b.name);
-          });
+      const mealTypes = ctx.state.store.getAll().sort((a, b) => {
+        if (a.orderFlag !== b.orderFlag) return a.orderFlag - b.orderFlag;
+        return a.name.localeCompare(b.name);
+      });
 
-          if (mealTypes.length === 0) {
-            return textResult("No meal types found.");
-          }
+      if (mealTypes.length === 0) {
+        return textResult("No meal types found.");
+      }
 
-          const lines = mealTypes.map(mealTypeLine);
-          return textResult(lines.join("\n"));
-        },
-        (guard) => guard,
-      );
+      const lines = mealTypes.map(mealTypeLine);
+      return textResult(lines.join("\n"));
     };
   },
 );

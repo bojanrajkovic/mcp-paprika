@@ -1,5 +1,3 @@
-import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
-
 import type { DomainCtx } from "../../../kernel/registry.js";
 import type { PantryState } from "../module.js";
 
@@ -20,32 +18,26 @@ export const listPantryItemsTool = defineTool(
       "List all pantry items sorted alphabetically by ingredient name. Returns the ingredient, quantity, and aisle for each item. Use read_pantry_item with the UID for full details.",
     inputSchema: {},
   },
+  [pantryStartGuard],
   (ctx: DomainCtx<PantryState, "aisle">) => {
-    const log = ctx.infra.log.child({ component: "list_pantry_items" });
     return async () => {
-      log.info({ tool: "list_pantry_items" }, "tool invoked");
-      return pantryStartGuard(ctx.state).match(
-        async (): Promise<CallToolResult> => {
-          const all = ctx.state.store.getAll().sort((a, b) => a.ingredient.localeCompare(b.ingredient));
-          const total = all.length;
+      const all = ctx.state.store.getAll().sort((a, b) => a.ingredient.localeCompare(b.ingredient));
+      const total = all.length;
 
-          if (total === 0) {
-            return textResult("Your pantry is empty.");
-          }
+      if (total === 0) {
+        return textResult("Your pantry is empty.");
+      }
 
-          const header = `You have ${total.toString()} pantry item${total === 1 ? "" : "s"}:\n`;
-          const lines = all.map((item) => {
-            const qty = item.quantity !== "" ? ` (${item.quantity})` : "";
-            const aisle = item.aisle !== "" ? ` — ${item.aisle}` : "";
-            const status = item.inStock ? "" : " · **out of stock**";
-            const expires = item.expirationDate !== null ? ` · expires ${item.expirationDate}` : "";
-            return `- **${item.ingredient}**${qty}${aisle}${status}${expires} (uid: \`${item.uid}\`)`;
-          });
+      const header = `You have ${total.toString()} pantry item${total === 1 ? "" : "s"}:\n`;
+      const lines = all.map((item) => {
+        const qty = item.quantity !== "" ? ` (${item.quantity})` : "";
+        const aisle = item.aisle !== "" ? ` — ${item.aisle}` : "";
+        const status = item.inStock ? "" : " · **out of stock**";
+        const expires = item.expirationDate !== null ? ` · expires ${item.expirationDate}` : "";
+        return `- **${item.ingredient}**${qty}${aisle}${status}${expires} (uid: \`${item.uid}\`)`;
+      });
 
-          return textResult(header + "\n" + lines.join("\n"));
-        },
-        (guard) => guard,
-      );
+      return textResult(header + "\n" + lines.join("\n"));
     };
   },
 );

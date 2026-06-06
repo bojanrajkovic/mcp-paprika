@@ -86,7 +86,6 @@ export const generatePhotoTool = defineTool(
       const model = args.model ?? DEFAULT_PHOTO_MODEL;
       const restyle = args.restyle_existing ?? false;
       const attach = args.attach ?? true;
-      log.info({ tool: "generate_recipe_photo", recipe_uid: args.recipe_uid, model, restyle, attach }, "tool invoked");
 
       // FEATURE GATE — null when image generation is unconfigured (ADR-0009 §5#9).
       const photographyClient = ctx.state.photographyClient;

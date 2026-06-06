@@ -61,36 +61,31 @@ export const createCategoryTool = defineTool(
       parentUid: CategoryUidSchema.optional().describe("UID of the parent category to nest under (omit for top-level)"),
     },
   },
+  [categoryStartGuard],
   (ctx: DomainCtx<RecipeState, never, RecipeWrites>) => {
     const log = ctx.infra.log.child({ component: "create_category" });
     return async (args) => {
-      log.info({ tool: "create_category", name: args.name }, "tool invoked");
-      return categoryStartGuard(ctx.state).match(
-        async (): Promise<CallToolResult> => {
-          if (args.parentUid !== undefined && ctx.state.category.store.get(args.parentUid) === undefined) {
-            return textResult(`No category found with UID "${args.parentUid}" to use as a parent.`);
-          }
+      if (args.parentUid !== undefined && ctx.state.category.store.get(args.parentUid) === undefined) {
+        return textResult(`No category found with UID "${args.parentUid}" to use as a parent.`);
+      }
 
-          const category: Category = {
-            uid: CategoryUidSchema.parse(crypto.randomUUID().toUpperCase()),
-            name: args.name,
-            orderFlag: maxCategoryOrderFlag(ctx.state) + 1,
-            parentUid: args.parentUid ?? null,
-          };
+      const category: Category = {
+        uid: CategoryUidSchema.parse(crypto.randomUUID().toUpperCase()),
+        name: args.name,
+        orderFlag: maxCategoryOrderFlag(ctx.state) + 1,
+        parentUid: args.parentUid ?? null,
+      };
 
-          return (await ctx.infra.client.saveCategory(category)).match(
-            async (saved): Promise<CallToolResult> => {
-              const commitErr = commitFailure("category", await ctx.writes.commitCategoryUpsert(saved));
-              if (commitErr) return commitErr;
-              return textResult(`Created category ${categorySummary(ctx.state, saved)}`);
-            },
-            async (e) => {
-              log.error({ err: e, name: args.name }, "saveCategory failed");
-              return textResult(`Failed to create category: ${e.message}`);
-            },
-          );
+      return (await ctx.infra.client.saveCategory(category)).match(
+        async (saved): Promise<CallToolResult> => {
+          const commitErr = commitFailure("category", await ctx.writes.commitCategoryUpsert(saved));
+          if (commitErr) return commitErr;
+          return textResult(`Created category ${categorySummary(ctx.state, saved)}`);
         },
-        (guard) => guard,
+        async (e) => {
+          log.error({ err: e, name: args.name }, "saveCategory failed");
+          return textResult(`Failed to create category: ${e.message}`);
+        },
       );
     };
   },
@@ -114,54 +109,49 @@ export const updateCategoryTool = defineTool(
         .describe("New parent UID, or null for top-level (omit to leave the parent unchanged)"),
     },
   },
+  [categoryStartGuard],
   (ctx: DomainCtx<RecipeState, never, RecipeWrites>) => {
     const log = ctx.infra.log.child({ component: "update_category" });
     return async (args) => {
-      log.info({ tool: "update_category", uid: args.uid }, "tool invoked");
-      return categoryStartGuard(ctx.state).match(
-        async (): Promise<CallToolResult> => {
-          const existing = ctx.state.category.store.get(args.uid);
-          if (existing === undefined)
-            return textResult(`No category found with UID "${args.uid}" (it may not exist or was already deleted).`);
+      const existing = ctx.state.category.store.get(args.uid);
+      if (existing === undefined)
+        return textResult(`No category found with UID "${args.uid}" (it may not exist or was already deleted).`);
 
-          if (args.name === undefined && args.parentUid === undefined) {
-            return textResult("Nothing to update: provide `name`, `parentUid`, or both.");
-          }
+      if (args.name === undefined && args.parentUid === undefined) {
+        return textResult("Nothing to update: provide `name`, `parentUid`, or both.");
+      }
 
-          if (typeof args.parentUid === "string") {
-            if (args.parentUid === args.uid) {
-              return textResult("A category cannot be its own parent.");
-            }
-            if (ctx.state.category.store.get(args.parentUid) === undefined) {
-              return textResult(`No category found with UID "${args.parentUid}" to use as a parent.`);
-            }
-            if (wouldCreateCycle(ctx.state, args.uid, args.parentUid)) {
-              return textResult("That move would create a cycle: the chosen parent is a descendant of this category.");
-            }
-          }
+      if (typeof args.parentUid === "string") {
+        if (args.parentUid === args.uid) {
+          return textResult("A category cannot be its own parent.");
+        }
+        if (ctx.state.category.store.get(args.parentUid) === undefined) {
+          return textResult(`No category found with UID "${args.parentUid}" to use as a parent.`);
+        }
+        if (wouldCreateCycle(ctx.state, args.uid, args.parentUid)) {
+          return textResult("That move would create a cycle: the chosen parent is a descendant of this category.");
+        }
+      }
 
-          const updated: Category = {
-            ...existing,
-            name: args.name ?? existing.name,
-            parentUid: args.parentUid !== undefined ? args.parentUid : existing.parentUid,
-          };
+      const updated: Category = {
+        ...existing,
+        name: args.name ?? existing.name,
+        parentUid: args.parentUid !== undefined ? args.parentUid : existing.parentUid,
+      };
 
-          return (await ctx.infra.client.saveCategory(updated)).match(
-            async (saved): Promise<CallToolResult> => {
-              // commitCategoryUpsert persists locally and emits `category-changed` on
-              // the kernel re-index seam so discover re-embeds the category's recipes
-              // (a rename changes the display name baked into their embedding text).
-              const commitErr = commitFailure("category", await ctx.writes.commitCategoryUpsert(saved));
-              if (commitErr) return commitErr;
-              return textResult(`Updated category ${categorySummary(ctx.state, saved)}`);
-            },
-            async (e) => {
-              log.error({ err: e, uid: args.uid }, "saveCategory failed");
-              return textResult(`Failed to update category: ${e.message}`);
-            },
-          );
+      return (await ctx.infra.client.saveCategory(updated)).match(
+        async (saved): Promise<CallToolResult> => {
+          // commitCategoryUpsert persists locally and emits `category-changed` on
+          // the kernel re-index seam so discover re-embeds the category's recipes
+          // (a rename changes the display name baked into their embedding text).
+          const commitErr = commitFailure("category", await ctx.writes.commitCategoryUpsert(saved));
+          if (commitErr) return commitErr;
+          return textResult(`Updated category ${categorySummary(ctx.state, saved)}`);
         },
-        (guard) => guard,
+        async (e) => {
+          log.error({ err: e, uid: args.uid }, "saveCategory failed");
+          return textResult(`Failed to update category: ${e.message}`);
+        },
       );
     };
   },

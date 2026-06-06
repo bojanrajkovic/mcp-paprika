@@ -1,5 +1,3 @@
-import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
-
 import type { DomainCtx } from "../../../kernel/registry.js";
 import type { MenuState } from "../module.js";
 
@@ -20,30 +18,24 @@ export const listMenusTool = defineTool(
       "Use read_menu to see a menu's full day-by-day breakdown.",
     inputSchema: {},
   },
+  [menuStartGuard],
   (ctx: DomainCtx<MenuState, "recipe" | "meal-type">) => {
-    const log = ctx.infra.log.child({ component: "list_menus" });
-    return async () => {
-      log.info({ tool: "list_menus" }, "tool invoked");
-      return menuStartGuard(ctx).match(
-        (): CallToolResult => {
-          const all = ctx.state.menus.store
-            .getAll()
-            .sort((a, b) => a.orderFlag - b.orderFlag || a.name.localeCompare(b.name));
+    return () => {
+      const all = ctx.state.menus.store
+        .getAll()
+        .sort((a, b) => a.orderFlag - b.orderFlag || a.name.localeCompare(b.name));
 
-          if (all.length === 0) {
-            return textResult("No menus found.");
-          }
+      if (all.length === 0) {
+        return textResult("No menus found.");
+      }
 
-          const lines = all.map((menu) => {
-            const itemCount = ctx.state.items.store.getByMenuUid(menu.uid).length;
-            const dayLabel = menu.days === 1 ? "day" : "days";
-            return `- **${menu.name}** (${itemCount.toString()} items, ${menu.days.toString()} ${dayLabel}) — \`${menu.uid}\``;
-          });
+      const lines = all.map((menu) => {
+        const itemCount = ctx.state.items.store.getByMenuUid(menu.uid).length;
+        const dayLabel = menu.days === 1 ? "day" : "days";
+        return `- **${menu.name}** (${itemCount.toString()} items, ${menu.days.toString()} ${dayLabel}) — \`${menu.uid}\``;
+      });
 
-          return textResult(lines.join("\n"));
-        },
-        (guard) => guard,
-      );
+      return textResult(lines.join("\n"));
     };
   },
 );
