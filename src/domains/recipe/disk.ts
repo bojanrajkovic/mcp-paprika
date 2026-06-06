@@ -96,7 +96,9 @@ export class RecipeDiskCache extends DiskCache<Recipe> {
           return this._safeUnlink(legacyPath);
         }
 
-        const recipesParsed = RecipeIndexSchema.safeParse((parsed as { recipes?: unknown }).recipes);
+        // Optional-chain: a legacy file holding JSON `null` parses fine but has no
+        // properties — it must fall into the malformed-discard branch, not throw.
+        const recipesParsed = RecipeIndexSchema.safeParse((parsed as { recipes?: unknown } | null)?.recipes);
         let migrate: ResultAsync<void, CacheError>;
         if (recipesParsed.success && Object.keys(recipesParsed.data).length > 0) {
           const data = recipesParsed.data;

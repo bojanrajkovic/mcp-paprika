@@ -365,6 +365,17 @@ describe("RecipeDiskCache cold-start persistence integration", () => {
       expect(migrated).toEqual(legacyHashes);
     });
 
+    it("discards a legacy index holding JSON null instead of crashing init", async () => {
+      await writeFile(join(tmp.dir(), "index.json"), "null");
+
+      const cache = makeRecipeCache(tmp.dir());
+      (await cache.init())._unsafeUnwrap();
+
+      // The null legacy file is treated as malformed: discarded, no migrated index.
+      await expect(readFile(join(tmp.dir(), "index.json"), "utf-8")).rejects.toThrow();
+      await expect(readFile(join(tmp.dir(), "recipes", "index.json"), "utf-8")).rejects.toThrow();
+    });
+
     it("deletes the legacy file when recipes namespace is empty (placeholder-only legacy)", async () => {
       const legacyIndex = {
         recipes: {},
