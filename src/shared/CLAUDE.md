@@ -1,6 +1,6 @@
 # Shared Tool Helpers
 
-Last verified: 2026-06-04
+Last verified: 2026-06-06
 
 ## Purpose
 
@@ -11,6 +11,7 @@ The few genuinely cross-cutting helpers the tool layer shares across domains —
 - `tools.ts` — `textResult` (the MCP text-content wire envelope every tool returns) and the uid-or-text lookup abstraction (`uidOrTextLookupSchema` + `resolveLookup` + `formatLookupOutcome` + the `LookupQuery`/`LookupOutcome` types) shared by the `read_*` tools.
 - `photo-fetch.ts` — `fetchImageBytes` + `MAX_IMAGE_BYTES`: the SSRF-guarded image download used by both recipe photo uploads and AI photo generation.
 - `resources.ts` — `resourceNotFound`: the one sanctioned throw on a resource read path. MCP resources have no in-band error channel, so the SDK's Protocol layer renders the thrown `McpError` as a JSON-RPC error (recognized form #1 in ADR-0014); a resource resolves its entity and crosses to the boundary through here.
+- `catalog.ts` — the ordered-reference-catalog machinery shared by aisle and meal-type (ADR-0017): `sortCatalog` / `repositionCatalog` / `renderCatalogOrder` for the list/update tools, and `makeCatalogDelete`, the tombstone-delete contract-write factory behind `AisleApi.deleteAisle` / `MealTypeApi.deleteMealType`.
 
 ## Sharp edges
 
