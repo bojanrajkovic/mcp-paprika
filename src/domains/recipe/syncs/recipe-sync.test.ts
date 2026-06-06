@@ -1,4 +1,4 @@
-import { okAsync } from "neverthrow";
+import { errAsync, okAsync } from "neverthrow";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { RecipeUid } from "../../../ids.js";
@@ -154,5 +154,36 @@ describe("recipe diff-and-fetch reconcile", () => {
     expect(state.recipe.store.hasSynced).toBe(false);
     await reconcile();
     expect(state.recipe.store.hasSynced).toBe(true);
+  });
+
+  describe("partial cache failure", () => {
+    it("mirrors a successfully-put recipe into the store even when a sibling put fails", async () => {
+      // cache.put eagerly advances the uid→hash index, so a recipe whose put
+      // landed but whose store.set was skipped would read as current to the next
+      // diff and never be re-fetched — the store would serve it stale until the
+      // recipe next changes server-side. Each store.set must ride ITS OWN put.
+      const good = makeRecipe({ uid: "r-good" as RecipeUid, name: "Good", hash: "hg" });
+      const bad = makeRecipe({ uid: "r-bad" as RecipeUid, name: "Bad", hash: "hb" });
+      listRecipes.mockReturnValue(
+        okAsync([
+          { uid: good.uid, hash: good.hash },
+          { uid: bad.uid, hash: bad.hash },
+        ]),
+      );
+      getRecipes.mockReturnValue(okAsync([good, bad]));
+      const realPut = state.recipe.cache.put.bind(state.recipe.cache);
+      vi.spyOn(state.recipe.cache, "put").mockImplementation((recipe) =>
+        recipe.uid === bad.uid ? errAsync({ context: "put", message: "disk full", cause: undefined }) : realPut(recipe),
+      );
+
+      const outcome = await recipesSync(state).reconcile({ state, deps: {}, infra });
+
+      // The cycle aborts (core err), but the recipe whose put landed is in the
+      // store — aligned with its already-advanced hash-index entry — and the
+      // failed one is in neither.
+      expect(outcome._unsafeUnwrapErr()).toMatchObject({ message: "disk full" });
+      expect(state.recipe.store.get(good.uid)?.name).toBe("Good");
+      expect(state.recipe.store.get(bad.uid)).toBeUndefined();
+    });
   });
 });

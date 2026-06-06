@@ -69,24 +69,33 @@ export function recipesSync(state: RecipeState): SyncContribution<RecipeState, n
           });
         })
         .andThen((acc) =>
-          // Write fetched recipes to cache and store. The puts run concurrently;
-          // the store mutations apply only once every put landed, so an err
-          // (aborting the cycle) never leaves the store ahead of the cache.
-          ResultAsync.combine(acc.fetchedRecipes.map((recipe) => cache.put(recipe))).map(() => {
-            for (const recipe of acc.fetchedRecipes) {
-              store.set(recipe);
-            }
-            return acc;
-          }),
+          // Write fetched recipes to cache and store, mirroring each recipe into
+          // the store as ITS put lands (the puts run concurrently; a failed put
+          // leaves its recipe out of both, and the cycle aborts). The per-recipe
+          // tie is load-bearing: `cache.put` eagerly advances the uid→hash index,
+          // so a put that succeeded while a SIBLING failed would otherwise leave
+          // the index current but the store stale — and the next cycle's diff,
+          // trusting the index, would never re-fetch it (Codex P1, PR #270).
+          ResultAsync.combine(
+            acc.fetchedRecipes.map((recipe) =>
+              cache.put(recipe).map(() => {
+                store.set(recipe);
+              }),
+            ),
+          ).map(() => acc),
         )
         .andThen((acc) =>
-          // Remove deleted recipes (concurrently; an err aborts the cycle)
-          ResultAsync.combine(acc.filteredRemoved.map((uid) => cache.remove(uid))).map(() => {
-            for (const uid of acc.filteredRemoved) {
-              store.delete(uid);
-            }
-            return acc;
-          }),
+          // Remove deleted recipes, deleting each from the store as ITS cache
+          // remove lands — the same per-UID tie as the puts above: `cache.remove`
+          // drops the uid→hash index entry, so a removed-from-index UID whose
+          // store delete was skipped would never re-enter the diff's removed set.
+          ResultAsync.combine(
+            acc.filteredRemoved.map((uid) =>
+              cache.remove(uid).map(() => {
+                store.delete(uid);
+              }),
+            ),
+          ).map(() => acc),
         )
         .map(({ entries, filteredAdded, filteredRemoved, fetchedRecipes }): RecipeSyncResult => {
           // Observation-based clearing for recipe pending-upserts: clear only when
