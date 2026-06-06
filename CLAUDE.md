@@ -1,6 +1,6 @@
 # CLAUDE.md — AI Agent Index
 
-Last verified: 2026-06-04
+Last verified: 2026-06-06
 
 > **Keep this file lean.** It is the project-wide pointer index for agents. Detailed docs live under `docs/`; the human dev workflow lives in `CONTRIBUTING.md`; the rules that govern the doc system live in `docs/documentation-system.md`. When you change a feature, update its architecture doc or the relevant directory `CLAUDE.md`, not this index.
 
@@ -22,12 +22,11 @@ The source tree is a typed composition kernel over self-registering domain modul
 
 - `src/index.ts`, `src/transport/` — transport dispatch and the stdio / Streamable-HTTP entry points; each transport assembles the kernel `Infra` and calls `buildKernel`.
 - `src/kernel/` — the composition substrate: `defineModule`/`register`, the declaration-merged `DomainRegistry`, `buildKernel` (dependency-ordered construction, the sync driver, boot phases), and the generated module barrel. See `src/kernel/CLAUDE.md` and `docs/adr/0009-domain-isolated-tool-modules-kernel.md`.
-- `src/domains/<domain>/` — one directory per cohesive domain (recipe, grocery, menu, meal, meal-type, pantry, aisle, meal-planner): its `module.ts` + `api.ts`, its defining entity's `types.ts`/`store.ts` at the root (a `disk.ts` only when the cache carries behavior, e.g. recipe's), any additional owned entity in an `<entity>/` subdir, and co-located `tools/`, `resources/`, and the reconcile (`sync.ts`, or a `syncs/` dir when there are several), with tests beside them. See `src/domains/CLAUDE.md`.
+- `src/domains/<domain>/` — one directory per cohesive domain (recipe, grocery, menu, meal, meal-type, pantry, aisle, meal-planner): its `module.ts` + `api.ts`, its `ids.ts` branded-UID leaf (kind-safe FKs; imports nothing but zod, one owning leaf per brand — ADR-0016), its defining entity's `types.ts`/`store.ts` at the root (a `disk.ts` only when the cache carries behavior, e.g. recipe's), any additional owned entity in an `<entity>/` subdir, and co-located `tools/`, `resources/`, and the reconcile (`sync.ts`, or a `syncs/` dir when there are several), with tests beside them. See `src/domains/CLAUDE.md`.
 - `src/features/<feature>/` — kernel modules that are optional features, not data domains: semantic search (discover) and AI photo generation (photo-gen). See `src/features/CLAUDE.md`.
 - `src/shared/` — the few genuinely cross-cutting tool helpers: the MCP `textResult` envelope + the uid-or-text lookup abstraction (`tools.ts`), the SSRF-guarded image fetch (`photo-fetch.ts`), and the `resourceNotFound` boundary helper (`resources.ts`). See `src/shared/CLAUDE.md`.
 - `src/server/` — the composition root's remaining pieces: the `Notifier` abstraction, `buildInfraBase` + `buildBrandedServer`, the background sync loop, and the cross-entity index-event seam. See `src/server/CLAUDE.md`.
 - `src/paprika/` — the Paprika cloud-sync HTTP client and `syncReplaceAllEntity` (the shared per-module reconcile helper). Wire formats: `docs/wire-format.md`.
-- `src/ids.ts` — the shared branded-UID leaf every domain imports for kind-safe foreign keys; its header explains the FK-reference vs primary-key schema split.
 - `src/entity/` — the shared `EntityStore` base class. See `src/entity/CLAUDE.md`.
 - `src/cache/` — the persistence layer: per-entity `DiskCache`s (plus `DiskCacheRoot` and the auth-only `buildAuthCaches`), keeping the in-memory stores warm across restarts. See `src/cache/CLAUDE.md`.
 - `src/auth/` — the OAuth 2.1 authorization-server surface; loaded only under the HTTP transport.
