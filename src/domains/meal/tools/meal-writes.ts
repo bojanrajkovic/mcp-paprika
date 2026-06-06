@@ -207,13 +207,15 @@ export const planMealsTool = defineTool(
             if (r.pendingTypeName === null) continue;
             const key = r.pendingTypeName.toLowerCase();
             if (createdTypesByName.has(key)) continue;
-            try {
-              createdTypesByName.set(key, await ctx.deps["meal-type"].ensureMealType(r.pendingTypeName));
-            } catch (error) {
-              const message = toMessage(error);
-              log.error({ err: error, name: r.pendingTypeName }, "ensureMealType failed");
-              return textResult(`Failed to create meal type "${r.pendingTypeName}": ${message}`);
+            const created = (await ctx.deps["meal-type"].ensureMealType(r.pendingTypeName)).match(
+              (mt) => mt,
+              (message) => message,
+            );
+            if (typeof created === "string") {
+              log.error({ name: r.pendingTypeName, message: created }, "ensureMealType failed");
+              return textResult(created);
             }
+            createdTypesByName.set(key, created);
           }
 
           // ----- Stage 3: assign order_flag per calendar DATE -----

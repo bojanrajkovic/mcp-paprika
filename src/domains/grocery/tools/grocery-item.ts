@@ -81,7 +81,11 @@ export const addGroceryItemsTool = defineTool(
               let aisleUid: AisleUid;
 
               if (item.aisle !== undefined) {
-                const resolved = await ctx.deps.aisle.ensureAisle(item.aisle);
+                const resolved = (await ctx.deps.aisle.ensureAisle(item.aisle)).match(
+                  (v) => v,
+                  (message) => textResult(message),
+                );
+                if ("content" in resolved) return resolved;
                 aisle = resolved.aisle;
                 aisleUid = resolved.aisleUid;
                 batchAisleCache.set(ingredientKey, { aisle, aisleUid });
@@ -219,7 +223,14 @@ export const updateGroceryItemTool = defineTool(
 
           let saved: GroceryItem;
           try {
-            const aisleUpdate = args.aisle !== undefined ? await ctx.deps.aisle.ensureAisle(args.aisle) : undefined;
+            const aisleUpdate =
+              args.aisle !== undefined
+                ? (await ctx.deps.aisle.ensureAisle(args.aisle)).match(
+                    (v) => v,
+                    (message) => textResult(message),
+                  )
+                : undefined;
+            if (aisleUpdate !== undefined && "content" in aisleUpdate) return aisleUpdate;
 
             const newIngredient = existing.ingredient; // ingredient is not updatable
             const newQuantity = args.quantity !== undefined ? args.quantity : existing.quantity;

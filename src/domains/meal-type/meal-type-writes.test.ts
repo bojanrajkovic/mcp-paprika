@@ -1,3 +1,4 @@
+import { errAsync } from "neverthrow";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Infra } from "../../kernel/registry.js";
@@ -54,7 +55,7 @@ describe("meal-type ensureMealType + pending-write reconcile", () => {
   it("creates a custom type on a name miss (order_flag = max+1, originalType null), marks it pending", async () => {
     state.store.load(builtins()); // marks the store synced
 
-    const created = await api.ensureMealType("Brunch");
+    const created = (await api.ensureMealType("Brunch"))._unsafeUnwrap();
 
     expect(created.name).toBe("Brunch");
     expect(created.originalType).toBeNull();
@@ -70,26 +71,41 @@ describe("meal-type ensureMealType + pending-write reconcile", () => {
   it("returns the existing type on a case-insensitive name hit, without a POST", async () => {
     state.store.load(builtins());
 
-    const got = await api.ensureMealType("dinner");
+    const got = (await api.ensureMealType("dinner"))._unsafeUnwrap();
 
     expect(got.uid).toBe("dinner-uid");
     expect(saveMealType).not.toHaveBeenCalled();
   });
 
-  it("throws before the catalog has synced (can't distinguish missing from not-loaded)", async () => {
-    await expect(api.ensureMealType("Brunch")).rejects.toThrow(/not yet synced/);
+  it("errs before the catalog has synced (cannot distinguish missing from not-loaded)", async () => {
+    expect((await api.ensureMealType("Brunch"))._unsafeUnwrapErr()).toMatch(/not yet synced/);
     expect(saveMealType).not.toHaveBeenCalled();
   });
 
   it("rejects an empty/whitespace name", async () => {
     state.store.load(builtins());
-    await expect(api.ensureMealType("   ")).rejects.toThrow(/cannot be empty/);
+    expect((await api.ensureMealType("   "))._unsafeUnwrapErr()).toMatch(/cannot be empty/);
     expect(saveMealType).not.toHaveBeenCalled();
+  });
+
+  it("absorbs a local commit failure after a successful create (sync heals; no duplicate-inviting err)", async () => {
+    state.store.load(builtins());
+    vi.spyOn(state.cache, "flush").mockReturnValue(
+      errAsync({ context: "flush", message: "disk full", cause: undefined }),
+    );
+
+    const created = (await api.ensureMealType("Brunch"))._unsafeUnwrap();
+
+    expect(created.name).toBe("Brunch");
+    expect(saveMealType).toHaveBeenCalledOnce();
+    // The in-memory catalog is authoritative and re-shielded as pending.
+    expect(state.store.resolveByName("Brunch")?.uid).toBe(created.uid);
+    expect(state.store.isPendingUpsert(created.uid)).toBe(true);
   });
 
   it("reconcile keeps a pending-upsert type absent from a stale list, then observation-clears", async () => {
     state.store.load(builtins());
-    const created = await api.ensureMealType("Brunch");
+    const created = (await api.ensureMealType("Brunch"))._unsafeUnwrap();
     expect(state.store.isPendingUpsert(created.uid)).toBe(true);
 
     // A sync whose canonical list predates the create (Brunch absent) must NOT drop it.

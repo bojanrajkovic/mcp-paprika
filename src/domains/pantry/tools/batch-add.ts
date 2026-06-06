@@ -141,7 +141,11 @@ export const addPantryItemsTool = defineTool(
                   aisle = cached.aisle;
                   aisleUid = cached.aisleUid;
                 } else {
-                  const resolved = await ctx.deps.aisle.ensureAisle(aisleInput);
+                  const resolved = (await ctx.deps.aisle.ensureAisle(aisleInput)).match(
+                    (v) => v,
+                    (message) => textResult(message),
+                  );
+                  if ("content" in resolved) return resolved;
                   aisle = resolved.aisle;
                   aisleUid = resolved.aisleUid;
                   batchAisleCache.set(aisleKey, { aisle, aisleUid });

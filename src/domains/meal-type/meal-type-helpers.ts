@@ -4,7 +4,6 @@ import type { MealTypeApi } from "./api.js";
 import type { MealType } from "./types.js";
 
 import { MealTypeUidSchema } from "../../ids.js";
-import { toMessage } from "../../utils/log.js";
 
 /**
  * Union for selecting a meal type by name, UID, or built-in index. Three
@@ -100,9 +99,8 @@ export async function resolveOrCreateMealType(
   if (resolved.ok) return { ok: true, resolved: resolved.resolved };
   if (resolved.reason !== "unknown_name") return { ok: false, message: formatMealTypeResolveError(resolved) };
   // Unknown {name} → auto-create the custom type (mirrors aisle's ensureAisle).
-  try {
-    return { ok: true, resolved: await mealType.ensureMealType(resolved.name) };
-  } catch (error) {
-    return { ok: false, message: `Failed to create meal type "${resolved.name}": ${toMessage(error)}` };
-  }
+  return (await mealType.ensureMealType(resolved.name)).match(
+    (created) => ({ ok: true as const, resolved: created }),
+    (message) => ({ ok: false as const, message }),
+  );
 }
