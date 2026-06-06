@@ -200,8 +200,14 @@ describe("defineTool", () => {
 
       // Invoked is logged even though the gate failed — visibility precedes gating.
       expect(records).toContainEqual(expect.objectContaining({ tool: "gated_tool", msg: "tool invoked" }));
+      // Args ride a separate debug record for per-call correlation.
+      expect(records).toContainEqual(
+        expect.objectContaining({ tool: "gated_tool", args: { q: "x" }, msg: "tool args" }),
+      );
+      // The gate line is debug (level 20) — expected cold-start state, not an incident.
       expect(records).toContainEqual(
         expect.objectContaining({
+          level: 20,
           tool: "gated_tool",
           precondition: "coldStartGate",
           msg: "tool gated by precondition",

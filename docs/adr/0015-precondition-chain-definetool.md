@@ -39,8 +39,8 @@ defineTool(spec, [pre1, pre2], (ctx) => handler);
 
 where each entry is a `ToolPrecondition<Ctx> = (ctx: Ctx) => Result<void, CallToolResult>`. The kernel wraps **every** registered callback (both overloads) once:
 
-1. logs `tool invoked` (uniform `{ tool }` shape) **before** the gate, so a gated call is still visible;
-2. runs the preconditions in order, short-circuiting on the first `err` — that err **is** the tool response, and the failing guard's function name is logged (`tool gated by precondition`);
+1. logs `tool invoked` (uniform `{ tool }` shape, info) **before** the gate, so a gated call is still visible — plus the full `args` on a separate **debug** line, so per-call correlation (which UID, which list) is recoverable by raising the level without putting recipe-sized payloads in info logs;
+2. runs the preconditions in order, short-circuiting on the first `err` — that err **is** the tool response, and the failing guard's function name is logged (`tool gated by precondition`, **debug**: gating is the expected, self-healing cold-start state, and a retrying client would otherwise storm the info log with one gate line per call across the whole surface);
 3. calls the body.
 
 The gate's `.match()` now lives once, in the kernel; tool bodies start flat.
@@ -52,7 +52,7 @@ The gate's `.match()` now lives once, in the kernel; tool bodies start flat.
 - The precondition array is **not** wrapped in `NoInfer`. Contextually typing a context-sensitive array element fixes the generics **before** the handler argument is processed (arguments resolve left-to-right), collapsing `State` to `unknown`. With no `NoInfer`, the annotated handler factory — which is not context-sensitive — contributes its candidates in TS's first inference round, and the array is then checked against the settled ctx.
 - **Precondition entries must be parameter-annotated functions** (named guards from `guards.ts`, or arrows with an annotated parameter). An unannotated inline arrow is context-sensitive and gets its parameter typed before the handler fixes the generics — the same collapse. The sweep's target form, `[namedGuard]`, never hits this; the constraint is documented at `defineTool`.
 
-**Centralized logging is uniform by design.** The per-tool invoke logs' ad-hoc argument fields (`...args.lookup`, `{ count }`) are dropped: the kernel logs the tool name identically for all 44+ tools, and a body that needs domain-relevant fields logs them itself where they matter (as the write paths already do). Uniformity plus the gated-call log — which the per-tool form could silently omit or misplace — is worth more than inconsistent per-tool detail.
+**Centralized logging is uniform by design.** The per-tool invoke logs' ad-hoc argument fields (`...args.lookup`, `{ count }`) leave the info line: the kernel logs the tool name identically for all 44+ tools, the kernel's debug `args` line covers per-call correlation (for the pure read tools, the invoke moment was their only log point), and a body that needs domain-relevant fields on an outcome logs them itself where they matter (as the write paths already do). Uniformity plus the gated-call log — which the per-tool form could silently omit or misplace — is worth more than inconsistent per-tool detail.
 
 ## Rejected alternatives
 
@@ -85,7 +85,7 @@ Rejected: it is the four costs above. The kernel is already the single registrat
 
 - The kernel wrapper needs an erased-callback bridge (`ErasedToolCallback`): `ToolCallback<I>` is a deferred conditional over a generic `I`, so the wrapper flows through `(args, extra) => …` and re-asserts the SDK type at the `registerTool` edge. Same budget and rationale as `defineModule`'s single `ErasedModule` cast (ADR-0009 §1) — the authoring surface stays fully checked.
 - The annotated-entry constraint is a real sharp edge: an unannotated inline arrow in the array fails inference with a confusing `unknown`-typed ctx. Mitigated by the documented constraint and by the target idiom being named guards.
-- Invoke logs lose per-tool argument fields. Bodies that need them log them; the trade is uniformity (and the previously-impossible gated-call visibility) for ad-hoc detail.
+- Info-level invoke logs lose per-tool argument fields. The kernel's debug `args` line recovers per-call correlation when an operator needs it, and bodies that need outcome fields log them; the trade is uniformity (and the previously-impossible gated-call visibility) for always-on ad-hoc detail.
 
 ## References
 

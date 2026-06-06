@@ -79,11 +79,13 @@ type ErasedToolCallback = (args: unknown, extra: unknown) => CallToolResult | Pr
  * tool body.
  *
  * The kernel wraps every registered callback once:
- * - logs `tool invoked` (uniform `{ tool }` shape) BEFORE the gate, so a gated
- *   call is still visible;
+ * - logs `tool invoked` (uniform `{ tool }` shape, info) BEFORE the gate, so a
+ *   gated call is still visible, plus the full `args` at debug for per-call
+ *   correlation;
  * - runs the {@link ToolPrecondition} chain in order, short-circuiting on the
  *   first `err` — that err IS the tool result, and the failing guard's function
- *   name is logged. The gate's `.match()` lives here once, so tool bodies start
+ *   name is logged at debug (gating is expected cold-start state, not an
+ *   incident). The gate's `.match()` lives here once, so tool bodies start
  *   flat instead of inside an ok-arm.
  *
  * `I` is inferred from `spec.inputSchema` (so `handler`'s `args` is typed from the
@@ -133,12 +135,11 @@ export function defineTool<
   // The overloads guarantee the pairing; this narrow just routes the two forms.
   // (The explicit annotation matters: `Array.isArray` narrows a `ReadonlyArray |
   // function` union to `any[]`, which would leak `any` into the gate loop.)
-  const preconditions: ReadonlyArray<ToolPrecondition<DomainCtx<State, Deps, Writes>>> = Array.isArray(
-    preconditionsOrHandler,
-  )
+  const hasPreconditions = Array.isArray(preconditionsOrHandler);
+  const preconditions: ReadonlyArray<ToolPrecondition<DomainCtx<State, Deps, Writes>>> = hasPreconditions
     ? preconditionsOrHandler
     : [];
-  const handler = (Array.isArray(preconditionsOrHandler) ? maybeHandler : preconditionsOrHandler) as (
+  const handler = (hasPreconditions ? maybeHandler : preconditionsOrHandler) as (
     ctx: DomainCtx<State, Deps, Writes>,
   ) => ToolCallback<I>;
 
@@ -149,13 +150,20 @@ export function defineTool<
       const body = handler(ctx) as ErasedToolCallback;
       const gated: ErasedToolCallback = (args, extra) => {
         log.info({ tool: spec.name }, "tool invoked");
+        // Args ride a separate debug line: per-call correlation (which UID, which
+        // list) is recoverable by raising the level, without putting recipe-sized
+        // payloads in info logs. The root logger's redaction still applies.
+        log.debug({ tool: spec.name, args }, "tool args");
         for (const pre of preconditions) {
           const failure = pre(ctx).match(
             () => undefined,
             (result) => result,
           );
           if (failure !== undefined) {
-            log.info({ tool: spec.name, precondition: pre.name || "(inline)" }, "tool gated by precondition");
+            // debug, not info: gating is the expected, self-healing cold-start
+            // state, and a retrying client would otherwise storm the info log
+            // with one gate line per call across the whole surface.
+            log.debug({ tool: spec.name, precondition: pre.name || "(inline)" }, "tool gated by precondition");
             return failure;
           }
         }
