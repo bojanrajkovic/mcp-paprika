@@ -64,7 +64,7 @@ describe("MintingOAuthServerProvider", () => {
     await tmp.setup();
 
     // Initialize cache and stores
-    cache = await buildAuthCaches(tmp.dir());
+    cache = (await buildAuthCaches(tmp.dir()))._unsafeUnwrap();
 
     clientStore = new DiskClientRegistrationStore(cache, "https://mcp.example.com", SILENT_LOG);
     tokenStore = new TokenStore(cache);

@@ -1,12 +1,16 @@
 import { join } from "node:path";
 
+import { okAsync, ResultAsync } from "neverthrow";
 import type { Logger } from "pino";
 
-import type { DiskCacheDescriptor } from "../cache/disk-cache.js";
+import type { CacheError, DiskCacheDescriptor } from "../cache/disk-cache.js";
 import type { OAuthClient, OAuthToken } from "./types.js";
 
 import { DiskCache } from "../cache/disk-cache.js";
 import { OAuthClientSchema, OAuthTokenSchema } from "./types.js";
+
+/** `tryPut`'s outcome: buffered (caller owes a `flush()`), or rejected at the cap. */
+export type TryPutOutcome = { readonly ok: true } | { readonly ok: false; readonly currentCount: number };
 
 /**
  * The OAuth client cache, with an atomic registration cap on top of the generic
@@ -39,19 +43,15 @@ export class OAuthClientDiskCache extends DiskCache<OAuthClient> {
    * Re-puts of an existing `clientId` skip the count check — they replace
    * an entry rather than adding one.
    */
-  async tryPut(
-    client: OAuthClient,
-    maxClients: number,
-  ): Promise<{ readonly ok: true } | { readonly ok: false; readonly currentCount: number }> {
-    return this._mutex.runExclusive(() => {
-      this._assertInitialized("tryPut");
+  tryPut(client: OAuthClient, maxClients: number): ResultAsync<TryPutOutcome, CacheError> {
+    return this._locked<TryPutOutcome>("tryPut", () => {
       const alreadyKnown = this._knownKeys.has(client.clientId);
       const currentCount = this._knownKeys.size;
       if (!alreadyKnown && currentCount >= maxClients) {
-        return { ok: false, currentCount } as const;
+        return okAsync<TryPutOutcome, CacheError>({ ok: false, currentCount });
       }
       this._putInner(client);
-      return { ok: true } as const;
+      return okAsync<TryPutOutcome, CacheError>({ ok: true });
     });
   }
 }
@@ -77,7 +77,7 @@ export const oauthTokensDiskDescriptor: DiskCacheDescriptor<OAuthToken> = {
 export interface AuthCache {
   readonly oauthClients: OAuthClientDiskCache;
   readonly oauthTokens: DiskCache<OAuthToken>;
-  flush(): Promise<void>;
+  flush(): ResultAsync<void, CacheError>;
 }
 
 /**
@@ -86,7 +86,7 @@ export interface AuthCache {
  * index (and every other entity's cache) is owned solely by the kernel modules, with
  * no second writer over `<cacheDir>/<entity>`.
  */
-export async function buildAuthCaches(cacheDir: string, log?: Logger): Promise<AuthCache> {
+export function buildAuthCaches(cacheDir: string, log?: Logger): ResultAsync<AuthCache, CacheError> {
   const logOpts = log !== undefined ? { log } : {};
   const oauthClients = new OAuthClientDiskCache({ subdir: join(cacheDir, "oauthClients"), ...logOpts });
   const oauthTokens = new DiskCache<OAuthToken>({
@@ -95,12 +95,10 @@ export async function buildAuthCaches(cacheDir: string, log?: Logger): Promise<A
     getKey: oauthTokensDiskDescriptor.getKey,
     ...logOpts,
   });
-  await Promise.all([oauthClients.init(), oauthTokens.init()]);
-  return {
+  return ResultAsync.combine([oauthClients.init(), oauthTokens.init()]).map(() => ({
     oauthClients,
     oauthTokens,
-    async flush(): Promise<void> {
-      await Promise.all([oauthClients.flush(), oauthTokens.flush()]);
-    },
-  };
+    flush: (): ResultAsync<void, CacheError> =>
+      ResultAsync.combine([oauthClients.flush(), oauthTokens.flush()]).map(() => undefined),
+  }));
 }

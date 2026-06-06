@@ -23,6 +23,7 @@ import { buildBrandedServer, buildInfraBase } from "../server/build.js";
 import { createIndexEvents } from "../server/index-events.js";
 import { broadcastNotifier } from "../server/notifier.js";
 import { notifyFromResults, runSyncLoop } from "../server/sync-loop.js";
+import { unwrapAtBoot } from "../utils/errors.js";
 import { buildFaviconRouter } from "./favicon.js";
 // Side-effect: every domain/feature module self-registers on import.
 import "../kernel/modules.generated.js";
@@ -149,7 +150,10 @@ export async function startHttp(config: PaprikaConfig, opts: StartHttpOptions = 
   // loop to clobber, and no second writer over <cacheDir>/<entity>. HTTP-only (stdio has
   // no auth). The legacy-index migration now lives on RecipeDiskCache.init(), so it runs
   // for both transports independent of this.
-  const authCache = await buildAuthCaches(cacheDir, rootLog.child({ component: "auth-cache" }));
+  const authCache = unwrapAtBoot(
+    await buildAuthCaches(cacheDir, rootLog.child({ component: "auth-cache" })),
+    "auth caches init",
+  );
   const authContext = await buildAuthContext(config, authCache, rootLog);
   if (authContext !== null) {
     rootLog.info(

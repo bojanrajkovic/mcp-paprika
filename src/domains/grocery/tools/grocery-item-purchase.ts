@@ -7,7 +7,7 @@ import type { GroceryState, GroceryWrites } from "../module.js";
 
 import { GroceryItemUidSchema } from "../../../ids.js";
 import { defineTool } from "../../../kernel/tool.js";
-import { textResult } from "../../../shared/tools.js";
+import { commitFailure, textResult } from "../../../shared/tools.js";
 import { toMessage } from "../../../utils/log.js";
 import { groceryItemToMarkdown } from "../grocery-helpers.js";
 import { groceryStartGuard } from "./guards.js";
@@ -47,7 +47,8 @@ export const markGroceryItemPurchasedTool = defineTool(
           try {
             const updated: GroceryItem = { ...existing, purchased: true };
             saved = (await ctx.infra.client.saveGroceryItems([updated]))[0]!;
-            await ctx.writes.commitGroceryItem(saved);
+            const commitErr = commitFailure("grocery list", await ctx.writes.commitGroceryItem(saved));
+            if (commitErr) return commitErr;
           } catch (error) {
             const message = toMessage(error);
             log.error({ err: error, uid: args.uid }, "saveGroceryItems failed");

@@ -66,7 +66,7 @@ describe("buildAuthContext", () => {
   describe("BA.1: returns null for stdio transport", () => {
     it("returns null when config.transport is 'stdio'", async () => {
       // if config.transport !== "http" return null
-      const cache = await buildAuthCaches(xdg.dir());
+      const cache = (await buildAuthCaches(xdg.dir()))._unsafeUnwrap();
 
       const config = makeStdioConfig();
       const result = await buildAuthContext(config, cache, SILENT_LOG);
@@ -78,7 +78,7 @@ describe("buildAuthContext", () => {
   describe("BA.2: throws for http + no oauth config (defensive guard)", () => {
     it("throws Error when transport is http but oauth config is undefined", async () => {
       // defensive guard for http without oauth block
-      const cache = await buildAuthCaches(xdg.dir());
+      const cache = (await buildAuthCaches(xdg.dir()))._unsafeUnwrap();
 
       const config: PaprikaConfig = fromAny({
         paprika: { email: "test@example.com", password: "secret" },
@@ -105,7 +105,7 @@ describe("buildAuthContext", () => {
       });
       msw.use(...oidcStub.handlers);
 
-      const cache = await buildAuthCaches(xdg.dir());
+      const cache = (await buildAuthCaches(xdg.dir()))._unsafeUnwrap();
 
       const config = makeHttpConfig("https://accounts.example.test");
       const result = await buildAuthContext(config, cache, SILENT_LOG);
@@ -136,7 +136,7 @@ describe("buildAuthContext", () => {
       });
       msw.use(...oidcStub.handlers);
 
-      const cache = await buildAuthCaches(xdg.dir());
+      const cache = (await buildAuthCaches(xdg.dir()))._unsafeUnwrap();
 
       // Path + default port should collapse to the bare origin.
       const config = makeHttpConfig("https://accounts.example.test", [
@@ -157,7 +157,7 @@ describe("buildAuthContext", () => {
       });
       msw.use(...oidcStub.handlers);
 
-      const cache = await buildAuthCaches(xdg.dir());
+      const cache = (await buildAuthCaches(xdg.dir()))._unsafeUnwrap();
 
       // http for a non-loopback host is not a permitted redirect origin.
       const config = makeHttpConfig("https://accounts.example.test", ["http://evil.example.com"]);
@@ -175,7 +175,7 @@ describe("buildAuthContext", () => {
         ),
       );
 
-      const cache = await buildAuthCaches(xdg.dir());
+      const cache = (await buildAuthCaches(xdg.dir()))._unsafeUnwrap();
 
       const config = makeHttpConfig("https://accounts.example.test");
       await expect(buildAuthContext(config, cache, SILENT_LOG)).rejects.toThrow();

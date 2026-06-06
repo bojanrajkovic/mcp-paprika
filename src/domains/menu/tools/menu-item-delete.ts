@@ -7,7 +7,7 @@ import type { MenuState, MenuWrites } from "../module.js";
 
 import { MenuItemUidSchema } from "../../../ids.js";
 import { defineTool } from "../../../kernel/tool.js";
-import { textResult } from "../../../shared/tools.js";
+import { commitFailure, textResult } from "../../../shared/tools.js";
 import { toMessage } from "../../../utils/log.js";
 import { menuStartGuard } from "./guards.js";
 
@@ -43,7 +43,8 @@ export const deleteMenuItemTool = defineTool(
           const trashed: MenuItem = { ...existing, deleted: true };
           try {
             const saved = (await ctx.infra.client.saveMenuItems([trashed]))[0]!;
-            await ctx.writes.commitMenuItem(saved);
+            const commitErr = commitFailure("menu", await ctx.writes.commitMenuItem(saved));
+            if (commitErr) return commitErr;
           } catch (error) {
             const message = toMessage(error);
             log.error({ err: error, uid }, "saveMenuItems (delete_menu_item) failed");

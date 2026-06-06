@@ -31,29 +31,33 @@ import { describe, expect, it } from "vitest";
 // elsewhere can't silently sanction its own throws.
 const RECOGNIZED_HELPERS: ReadonlyArray<readonly [file: string, fn: string]> = [
   ["src/utils/errors.ts", "assertNever"],
+  ["src/utils/errors.ts", "unwrapAtBoot"],
   ["src/shared/resources.ts", "resourceNotFound"],
 ];
 
 // Recognized form #5: fail-fast at process entry and kernel construction, off
 // the request path. Pinned to exact files (not a directory prefix) so a throw
 // added to a request-serving sibling — e.g. src/transport/http.ts — is NOT
-// waved through.
-const BOOT_FILES = new Set(["src/index.ts", "src/transport/e2e-server.ts", "src/kernel/registry.ts"]);
+// waved through; and within registry.ts (which also holds the sync driver) to
+// the construction-time dependency-graph check, so a future throw on the
+// driver path is NOT silently sanctioned.
+const BOOT_SITES: ReadonlyArray<readonly [file: string, fn: string]> = [
+  ["src/index.ts", "*"],
+  ["src/transport/e2e-server.ts", "*"],
+  ["src/kernel/registry.ts", "visit"],
+];
 
 // The ratcheting allowlist: owned modules that still throw, each mapped to the
 // campaign phase (#241) that handles it. DELETE an entry the moment its module
 // stops throwing an unsanctioned form — the staleness assertion below enforces it.
 const PENDING: ReadonlyArray<readonly [file: string, convertedBy: string]> = [
-  ["src/cache/disk-cache.ts", "#262"],
-  ["src/domains/recipe/disk.ts", "#262"],
-  ["src/domains/recipe/module.ts", "#262"],
-  ["src/domains/grocery/module.ts", "#262"],
-  ["src/domains/menu/module.ts", "#262"],
-  ["src/domains/meal/module.ts", "#262"],
-  ["src/domains/pantry/module.ts", "#262"],
   ["src/domains/aisle/module.ts", "#263"],
   ["src/domains/meal-type/module.ts", "#263"],
   ["src/paprika/client.ts", "#264"],
+  // unwrapSyncStep — the one interim bridge from cache Results back onto the
+  // sync driver's throw-abort contract; removed when #264 makes the driver
+  // Result-aware.
+  ["src/paprika/sync.ts", "#264"],
   ["src/utils/resilience.ts", "#264"],
   ["src/server/sync-loop.ts", "#264"],
   ["src/features/embeddings.ts", "#265"],
@@ -65,6 +69,10 @@ const PENDING: ReadonlyArray<readonly [file: string, convertedBy: string]> = [
   ["src/auth/oidc-client.ts", "#265"],
   ["src/auth/provider.ts", "#265"],
   ["src/auth/routes.ts", "#265"],
+  // must() — the interim bridges from cache Results onto the SDK's throw-based
+  // auth contracts; removed when #265 converts the auth runtime end to end.
+  ["src/auth/token-store.ts", "#265"],
+  ["src/auth/cleanup.ts", "#265"],
 ];
 
 interface ThrowSite {
@@ -114,10 +122,11 @@ function throwSites(file: string): Array<ThrowSite> {
   return sites;
 }
 
-const isBoot = (file: string): boolean => BOOT_FILES.has(file);
+const isBoot = (s: ThrowSite): boolean =>
+  BOOT_SITES.some(([file, fn]) => s.file === file && (fn === "*" || s.enclosingFn === fn));
 const isRecognizedHelper = (s: ThrowSite): boolean =>
   RECOGNIZED_HELPERS.some(([file, fn]) => s.file === file && s.enclosingFn === fn);
-const isRecognized = (s: ThrowSite): boolean => isRecognizedHelper(s) || isBoot(s.file);
+const isRecognized = (s: ThrowSite): boolean => isRecognizedHelper(s) || isBoot(s);
 
 describe("ADR-0014: owned code throws only in recognized forms", () => {
   const allSites = sourceFiles().flatMap(throwSites);

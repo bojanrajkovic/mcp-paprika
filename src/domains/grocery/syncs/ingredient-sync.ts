@@ -1,7 +1,9 @@
+import { ResultAsync } from "neverthrow";
+
 import type { SyncContribution } from "../../../kernel/registry.js";
 import type { GroceryState } from "../module.js";
 
-import { pruneOrphanCache } from "../../../paprika/sync.js";
+import { pruneOrphanCache, unwrapSyncStep } from "../../../paprika/sync.js";
 
 /**
  * Grocery-ingredient sync — the bespoke replace-all reconcile. NOT
@@ -53,12 +55,14 @@ export function groceryIngredientsSync(): SyncContribution<GroceryState, "aisle"
         log.warn({ count: droppedNoAisle }, "dropped grocery ingredients with no aisle");
       }
 
-      const cachedIngredientUids = new Set((await cache.getAll()).map((i) => i.uid));
+      const cachedIngredientUids = new Set(unwrapSyncStep(await cache.getAll()).map((i) => i.uid));
       const filteredIngredientUids = new Set(filteredIngredients.map((i) => i.uid));
-      await pruneOrphanCache(cache, cachedIngredientUids, filteredIngredientUids, log, "grocery ingredients");
+      unwrapSyncStep(
+        await pruneOrphanCache(cache, cachedIngredientUids, filteredIngredientUids, log, "grocery ingredients"),
+      );
 
       store.load(filteredIngredients);
-      await Promise.all(filteredIngredients.map((i) => cache.put(i)));
+      unwrapSyncStep(await ResultAsync.combine(filteredIngredients.map((i) => cache.put(i))));
     },
   };
 }

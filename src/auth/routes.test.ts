@@ -100,7 +100,7 @@ describe("Auth Routes", () => {
 
   beforeEach(async () => {
     await tmp.setup();
-    cache = await buildAuthCaches(tmp.dir());
+    cache = (await buildAuthCaches(tmp.dir()))._unsafeUnwrap();
 
     clientStore = new DiskClientRegistrationStore(cache, "https://mcp.example.com", SILENT_LOG);
     tokenStore = new TokenStore(cache);
@@ -835,7 +835,7 @@ describe("Auth Routes", () => {
       // when the server has reached the max registered clients.
       // Test: Pre-populate cache with 50 clients, then 51st POST /register returns 429 with cap error_description.
       const capDir = await mkdtemp(join(tmpdir(), "paprika-cap-"));
-      const testCache = await buildAuthCaches(capDir);
+      const testCache = (await buildAuthCaches(capDir))._unsafeUnwrap();
 
       const testClientStore = new DiskClientRegistrationStore(testCache, "https://mcp.example.com", SILENT_LOG);
       const testApp = new Hono();

@@ -8,7 +8,7 @@ import type { Menu } from "../types.js";
 
 import { MenuItemUidSchema } from "../../../ids.js";
 import { defineTool } from "../../../kernel/tool.js";
-import { textResult } from "../../../shared/tools.js";
+import { commitFailure, textResult } from "../../../shared/tools.js";
 import { toMessage } from "../../../utils/log.js";
 import { menuStartGuard } from "./guards.js";
 
@@ -71,7 +71,8 @@ export const moveMenuItemTool = defineTool(
               const expanded: Menu = { ...parent, days: newDay };
               try {
                 const savedMenu = (await ctx.infra.client.saveMenus([expanded]))[0] ?? expanded;
-                await ctx.writes.commitMenu(savedMenu);
+                const commitErr = commitFailure("menu", await ctx.writes.commitMenu(savedMenu));
+                if (commitErr) return commitErr;
                 extendedTo = newDay;
               } catch (error) {
                 const message = toMessage(error);
@@ -99,7 +100,8 @@ export const moveMenuItemTool = defineTool(
           let saved: MenuItem;
           try {
             saved = (await ctx.infra.client.saveMenuItems([moved]))[0]!;
-            await ctx.writes.commitMenuItem(saved);
+            const commitErr = commitFailure("menu", await ctx.writes.commitMenuItem(saved));
+            if (commitErr) return commitErr;
           } catch (error) {
             const message = toMessage(error);
             log.error({ err: error, uid }, "saveMenuItems (move_menu_item) failed");

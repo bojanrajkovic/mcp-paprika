@@ -1,6 +1,8 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { ResultAsync } from "neverthrow";
 import type { Logger } from "pino";
 
+import type { CacheError } from "../cache/disk-cache.js";
 import type { GeneratedImageStore } from "../features/generated-image-store.js";
 import type { PaprikaClient } from "../paprika/client.js";
 import type { AnySyncResult } from "../paprika/sync-types.js";
@@ -209,7 +211,7 @@ export interface ModuleParts<Id extends DomainId, Deps extends DomainId, State, 
   readonly resources?: ReadonlyArray<(ctx: DomainCtx<State, Deps>) => void>;
   readonly syncs?: ReadonlyArray<SyncContribution<State, Deps>>;
   readonly onReady?: BootHooks<State, Deps>;
-  readonly flush?: () => Promise<void>;
+  readonly flush?: () => ResultAsync<void, CacheError>;
 }
 
 /** Kernel-facing erased contexts (the `DomainCtx`/`BootCtx` generics gone). */
@@ -237,7 +239,7 @@ interface ErasedBuild {
   readonly resources?: ReadonlyArray<(ctx: ErasedCtx) => void>;
   readonly syncs?: ReadonlyArray<ErasedSync>;
   readonly onReady?: Partial<Record<BootPhase, (ctx: ErasedBootCtx) => Promise<void>>>;
-  readonly flush?: () => Promise<void>;
+  readonly flush?: () => ResultAsync<void, CacheError>;
 }
 
 /** Type-erased module the kernel iterates uniformly. */
@@ -351,7 +353,7 @@ export interface Kernel {
   /** Per-session: register every module's tools and resources on the server, each narrowed. */
   registerAll(server: McpServer): void;
   /** Flush every module that owns a cache — only if a snapshot is wanted. */
-  flushAll(): Promise<void>;
+  flushAll(): ResultAsync<void, CacheError>;
   /**
    * Run ONE sync cycle: reference catalogs first (best-effort), then core (recipe
    * first, then the rest in dependency order; a core throw aborts), then additive
@@ -391,7 +393,7 @@ export async function buildKernel(
   const order = topoSort(modules);
   const apis = new Map<string, unknown>();
   const built: Array<Built> = [];
-  const flushers: Array<() => Promise<void>> = [];
+  const flushers: Array<() => ResultAsync<void, CacheError>> = [];
 
   const depsOf = (ids: ReadonlyArray<string>): Record<string, unknown> => {
     const deps: Record<string, unknown> = {};
@@ -417,9 +419,8 @@ export async function buildKernel(
     });
   }
 
-  const flushAll = async (): Promise<void> => {
-    await Promise.all(flushers.map((f) => f()));
-  };
+  const flushAll = (): ResultAsync<void, CacheError> =>
+    ResultAsync.combine(flushers.map((f) => f())).map(() => undefined);
 
   // The sync DRIVER (seam: central sync ↔ module-owned stores). The engine is a
   // dumb sequencer — each entity's reconcile lives in its module, reached through
@@ -477,15 +478,22 @@ export async function buildKernel(
           infra.log.warn({ err }, "additive sync failed; core sync unaffected");
         }
       }
-      await flushAll();
-      let swept = 0;
-      for (const sweep of sweepers) swept += sweep();
-      if (swept > 0) infra.log.debug({ swept }, "swept pending writes past TTL");
       // Only a cycle that reached flush reports results: a core-reconcile throw (or
-      // a flush rejection) aborts the cycle. Returning the partially accumulated
-      // `results` here would fan out a resource notification for an aborted,
-      // un-flushed cycle — return `[]` instead so a partial cycle fans out nothing.
-      return results;
+      // a flush error) aborts the cycle. Returning the partially accumulated
+      // `results` for an aborted, un-flushed cycle would fan out a resource
+      // notification for state that never became durable — return `[]` instead.
+      return (await flushAll()).match(
+        () => {
+          let swept = 0;
+          for (const sweep of sweepers) swept += sweep();
+          if (swept > 0) infra.log.debug({ swept }, "swept pending writes past TTL");
+          return results;
+        },
+        (flushErr) => {
+          infra.log.error({ err: flushErr }, "sync flush failed");
+          return [];
+        },
+      );
     } catch (err) {
       infra.log.error({ err }, "sync failed");
       return [];

@@ -2,27 +2,66 @@ import { mkdir, open, readdir, readFile, unlink } from "node:fs/promises";
 import { join } from "node:path";
 
 import { Mutex } from "async-mutex";
+import { err, errAsync, ok, okAsync, Result, ResultAsync } from "neverthrow";
 import type { Logger } from "pino";
 
 import { isNodeError } from "../utils/errors.js";
 import { SILENT_LOG } from "../utils/log.js";
 
 // I/O error handling convention throughout this module:
-// We use try/catch and check error.code rather than existsSync()-then-read.
-// existsSync() is synchronous (blocks the event loop) and introduces a TOCTOU
-// race; try/catch handles the file's actual state at I/O time with no race
-// window. Non-ENOENT codes (EISDIR, EACCES, …) are rethrown so unexpected
-// errors are never silently swallowed.
+// Every filesystem call is converted to a `Result` at this edge (ADR-0014):
+// `ResultAsync.fromPromise` wraps the foreign promise, and ENOENT-tolerant paths
+// recover via `.orElse` on the error's `cause` code rather than an
+// existsSync()-then-read dance. existsSync() is synchronous (blocks the event
+// loop) and introduces a TOCTOU race; reading the error code reflects the file's
+// actual state at I/O time with no race window. Non-ENOENT codes (EISDIR,
+// EACCES, …) surface as `err` so unexpected failures are never silently
+// swallowed.
+
+/**
+ * A failed cache operation: where it happened (`context`), a human-readable
+ * `message` for tool responses and logs, and the foreign `cause` (usually the
+ * Node fs error) for structured logging.
+ */
+export interface CacheError {
+  readonly context: string;
+  readonly message: string;
+  readonly cause: unknown;
+}
+
+/** Build a `CacheError` mapper for `ResultAsync.fromPromise` at one call site. */
+export function cacheError(context: string): (cause: unknown) => CacheError {
+  return (cause) => ({
+    context,
+    message: cause instanceof Error ? cause.message : String(cause),
+    cause,
+  });
+}
+
+/**
+ * `.orElse` recovery for ENOENT-tolerant paths: a missing file/directory is a
+ * normal cold-start or idempotent-delete case and recovers to `recovery`; any
+ * other code stays an `err`.
+ */
+export const enoentOk =
+  <T>(recovery: T) =>
+  (e: CacheError): ResultAsync<T, CacheError> =>
+    isNodeError(e.cause) && e.cause.code === "ENOENT" ? okAsync(recovery) : errAsync(e);
 
 /** Open + write + fsync + close — one atomic durable write per call. */
-export async function writeFileAtomic(path: string, contents: string): Promise<void> {
-  const fh = await open(path, "w");
-  try {
-    await fh.writeFile(contents);
-    await fh.sync();
-  } finally {
-    await fh.close();
-  }
+export function writeFileAtomic(path: string, contents: string): ResultAsync<void, CacheError> {
+  return ResultAsync.fromPromise(
+    (async (): Promise<void> => {
+      const fh = await open(path, "w");
+      try {
+        await fh.writeFile(contents);
+        await fh.sync();
+      } finally {
+        await fh.close();
+      }
+    })(),
+    cacheError(`write ${path}`),
+  );
 }
 
 export interface DiskCacheOptions<T> {
@@ -75,101 +114,76 @@ export class DiskCache<T> {
     this.log = opts.log ?? SILENT_LOG;
   }
 
-  async init(): Promise<void> {
-    await mkdir(this._subdir, { recursive: true });
-    let files: Array<string>;
-    try {
-      files = await readdir(this._subdir);
-    } catch (error: unknown) {
-      if (isNodeError(error) && error.code === "ENOENT") {
+  init(): ResultAsync<void, CacheError> {
+    return ResultAsync.fromPromise(mkdir(this._subdir, { recursive: true }), cacheError(`init mkdir ${this._subdir}`))
+      .andThen(() => this._readdirOrEmpty("init"))
+      .map((files) => {
+        for (const f of files) {
+          // Skip the per-entity index file (only RecipeDiskCache writes one). All
+          // other data files are <key>.json; the recipes index is the lone
+          // exception, kept inside the entity's subdir to keep migration simple.
+          if (f === "index.json") continue;
+          if (f.endsWith(".json")) {
+            this._knownKeys.add(f.slice(0, -5));
+          }
+        }
         this._initialized = true;
-        return;
-      }
-      throw error;
-    }
-    for (const f of files) {
-      // Skip the per-entity index file (only RecipeDiskCache writes one). All
-      // other data files are <key>.json; the recipes index is the lone
-      // exception, kept inside the entity's subdir to keep migration simple.
-      if (f === "index.json") continue;
-      if (f.endsWith(".json")) {
-        this._knownKeys.add(f.slice(0, -5));
-      }
-    }
-    this._initialized = true;
+      });
   }
 
-  async flush(): Promise<void> {
-    return this._mutex.runExclusive(() => {
-      this._assertInitialized("flush");
-      return this._writePending();
+  flush(): ResultAsync<void, CacheError> {
+    return this._locked("flush", () => this._writePending());
+  }
+
+  get(key: string): ResultAsync<T | null, CacheError> {
+    return this._requireInit("get").asyncAndThen(() => {
+      const hit = this._pending.get(key);
+      if (hit !== undefined) return okAsync<T | null, CacheError>(hit);
+
+      const filePath = join(this._subdir, `${key}.json`);
+      return ResultAsync.fromPromise(readFile(filePath, "utf-8"), cacheError(`get ${filePath}`))
+        .orElse(enoentOk<string | null>(null)) // Cold-start cache miss; silent by design.
+        .andThen((raw): Result<T | null, CacheError> => (raw === null ? ok(null) : this._parseRaw(raw, filePath)));
     });
   }
 
-  async get(key: string): Promise<T | null> {
-    this._assertInitialized("get");
-    const hit = this._pending.get(key);
-    if (hit !== undefined) return hit;
+  getAll(): ResultAsync<Array<T>, CacheError> {
+    return this._requireInit("getAll").asyncAndThen(() => {
+      // Pending entries shadow disk; seed result with the buffer.
+      const result: Map<string, T> = new Map(this._pending);
 
-    const filePath = join(this._subdir, `${key}.json`);
-    let raw: string;
-    try {
-      raw = await readFile(filePath, "utf-8");
-    } catch (error: unknown) {
-      if (isNodeError(error) && error.code === "ENOENT") {
-        // Cold-start cache miss; silent by design.
-        return null;
-      }
-      throw error;
-    }
-    return this._parse(JSON.parse(raw));
+      // Read the directory live, not from `_knownKeys`. A second cache
+      // instance pointing at the same dir can have written new files we
+      // haven't observed yet; tests and operator-side seeding both rely on
+      // this. The DCR cap middleware in particular reads `oauthClients.getAll()`
+      // on every POST /register and must see externally-seeded files.
+      return this._readdirOrEmpty("getAll").andThen((files) => {
+        const reads = files
+          .filter((filename) => filename.endsWith(".json") && filename !== "index.json")
+          .map((filename) => ({ filename, key: filename.slice(0, -5) }))
+          .filter(({ key }) => !result.has(key))
+          .map(({ filename, key }) => {
+            const filePath = join(this._subdir, filename);
+            return ResultAsync.fromPromise(readFile(filePath, "utf-8"), cacheError(`getAll ${filePath}`))
+              .andThen((raw) => this._parseRaw(raw, filePath))
+              .map((item) => {
+                result.set(key, item);
+              });
+          });
+        return ResultAsync.combine(reads).map(() => [...result.values()]);
+      });
+    });
   }
 
-  async getAll(): Promise<Array<T>> {
-    this._assertInitialized("getAll");
-    // Pending entries shadow disk; seed result with the buffer.
-    const result: Map<string, T> = new Map(this._pending);
-
-    // Read the directory live, not from `_knownKeys`. A second cache
-    // instance pointing at the same dir can have written new files we
-    // haven't observed yet; tests and operator-side seeding both rely on
-    // this. The DCR cap middleware in particular reads `oauthClients.getAll()`
-    // on every POST /register and must see externally-seeded files.
-    let files: Array<string>;
-    try {
-      files = await readdir(this._subdir);
-    } catch (error: unknown) {
-      if (isNodeError(error) && error.code === "ENOENT") {
-        return [...result.values()];
-      }
-      throw error;
-    }
-
-    await Promise.all(
-      files.map(async (filename) => {
-        if (!filename.endsWith(".json") || filename === "index.json") return;
-        const key = filename.slice(0, -5);
-        if (result.has(key)) return;
-        const raw = await readFile(join(this._subdir, filename), "utf-8");
-        result.set(key, this._parse(JSON.parse(raw)));
-      }),
-    );
-
-    return [...result.values()];
-  }
-
-  async put(item: T): Promise<void> {
-    return this._mutex.runExclusive(() => {
-      this._assertInitialized("put");
+  put(item: T): ResultAsync<void, CacheError> {
+    return this._locked("put", () => {
       this._putInner(item);
+      return okAsync<void, CacheError>(undefined);
     });
   }
 
-  async remove(key: string): Promise<void> {
-    return this._mutex.runExclusive(async () => {
-      this._assertInitialized("remove");
-      await this._removeInner(key);
-    });
+  remove(key: string): ResultAsync<void, CacheError> {
+    return this._locked("remove", () => this._removeInner(key));
   }
 
   /**
@@ -188,17 +202,14 @@ export class DiskCache<T> {
    * overrides. ENOENT on unlink is idempotent — the file already being
    * gone is the desired end state.
    */
-  protected async _removeInner(key: string): Promise<void> {
+  protected _removeInner(key: string): ResultAsync<void, CacheError> {
     const filePath = join(this._subdir, `${key}.json`);
-    try {
-      await unlink(filePath);
-    } catch (error: unknown) {
-      if (!isNodeError(error) || error.code !== "ENOENT") {
-        throw error;
-      }
-    }
-    this._pending.delete(key);
-    this._knownKeys.delete(key);
+    return ResultAsync.fromPromise(unlink(filePath), cacheError(`remove ${filePath}`))
+      .orElse(enoentOk<void>(undefined))
+      .map(() => {
+        this._pending.delete(key);
+        this._knownKeys.delete(key);
+      });
   }
 
   has(key: string): boolean {
@@ -215,24 +226,52 @@ export class DiskCache<T> {
    * hash index after the data files are durable). Must NOT re-acquire the
    * mutex — the caller (`flush()`) already holds it.
    */
-  protected async _writePending(): Promise<void> {
-    if (this._pending.size === 0) return;
+  protected _writePending(): ResultAsync<void, CacheError> {
+    if (this._pending.size === 0) return okAsync(undefined);
     const entries = [...this._pending.entries()];
-    await Promise.all(
-      entries.map(async ([key, item]) => {
-        await this._writeFileAtomic(join(this._subdir, `${key}.json`), JSON.stringify(item, null, 2));
-      }),
-    );
-    this._pending.clear();
+    return ResultAsync.combine(
+      entries.map(([key, item]) =>
+        this._writeFileAtomic(join(this._subdir, `${key}.json`), JSON.stringify(item, null, 2)),
+      ),
+    ).map(() => {
+      this._pending.clear();
+    });
   }
 
-  protected async _writeFileAtomic(path: string, contents: string): Promise<void> {
+  protected _writeFileAtomic(path: string, contents: string): ResultAsync<void, CacheError> {
     return writeFileAtomic(path, contents);
   }
 
-  protected _assertInitialized(method: string): void {
-    if (!this._initialized) {
-      throw new Error(`DiskCache: ${method}() called before init()`);
-    }
+  /** List the entity subdir, treating a missing directory as empty (cold start). */
+  protected _readdirOrEmpty(context: string): ResultAsync<Array<string>, CacheError> {
+    return ResultAsync.fromPromise(readdir(this._subdir), cacheError(`${context} readdir ${this._subdir}`)).orElse(
+      enoentOk<Array<string>>([]),
+    );
+  }
+
+  /** Validate one raw JSON file body; a corrupt or schema-mismatched file is an `err`, as the throw was before. */
+  protected _parseRaw(raw: string, path: string): Result<T, CacheError> {
+    return Result.fromThrowable(() => this._parse(JSON.parse(raw) as unknown), cacheError(`parse ${path}`))();
+  }
+
+  /** Misuse guard: every operation requires a completed `init()`. */
+  protected _requireInit(method: string): Result<void, CacheError> {
+    if (this._initialized) return ok(undefined);
+    const message = `DiskCache: ${method}() called before init()`;
+    return err({ context: method, message, cause: undefined });
+  }
+
+  /**
+   * Run `body` holding the cache mutex, after the init guard. Foreign rejections
+   * escaping `body` (a bug, not a modeled failure) still surface as `err` via the
+   * outer `fromPromise`, so no caller ever sees a rejection from this class.
+   */
+  protected _locked<R>(method: string, body: () => ResultAsync<R, CacheError>): ResultAsync<R, CacheError> {
+    return ResultAsync.fromPromise(
+      this._mutex.runExclusive(
+        async (): Promise<Result<R, CacheError>> => this._requireInit(method).asyncAndThen(body),
+      ),
+      cacheError(method),
+    ).andThen((r) => r);
   }
 }

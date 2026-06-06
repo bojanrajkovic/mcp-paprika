@@ -10,7 +10,7 @@ import type { Menu } from "../types.js";
 
 import { MenuItemUidSchema, MenuUidSchema, RecipeUidSchema } from "../../../ids.js";
 import { defineTool } from "../../../kernel/tool.js";
-import { resolveLookup, textResult, uidOrTextLookupSchema } from "../../../shared/tools.js";
+import { commitFailure, resolveLookup, textResult, uidOrTextLookupSchema } from "../../../shared/tools.js";
 import { toMessage } from "../../../utils/log.js";
 import { mealTypeSpecSchema } from "../../meal-type/meal-type-helpers.js";
 import { menuToMarkdown } from "../menu-helpers.js";
@@ -203,7 +203,8 @@ export const addMenuItemsTool = defineTool(
             try {
               const saved = await ctx.infra.client.saveMenus([extended]);
               const persisted = saved[0] ?? extended;
-              await ctx.writes.commitMenu(persisted);
+              const commitErr = commitFailure("menu", await ctx.writes.commitMenu(persisted));
+              if (commitErr) return commitErr;
               menuForRender = persisted;
               extendedTo = maxDay;
             } catch (error) {
@@ -259,7 +260,8 @@ export const addMenuItemsTool = defineTool(
           let savedItems: ReadonlyArray<MenuItem>;
           try {
             savedItems = await ctx.infra.client.saveMenuItems(builtItems);
-            await ctx.writes.commitMenuItemsBatch(savedItems);
+            const commitErr = commitFailure("menu", await ctx.writes.commitMenuItemsBatch(savedItems));
+            if (commitErr) return commitErr;
           } catch (error) {
             const message = toMessage(error);
             log.error({ err: error, uid: menu.uid, count: builtItems.length }, "saveMenuItems failed");

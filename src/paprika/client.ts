@@ -14,6 +14,7 @@ import {
   type RetryPolicy,
   wrap,
 } from "cockatiel";
+import { okAsync, ResultAsync } from "neverthrow";
 import type { Logger } from "pino";
 import { z } from "zod";
 import type { ZodType, ZodTypeDef } from "zod";
@@ -747,4 +748,19 @@ export class PaprikaClient {
       throw error;
     }
   }
+}
+
+/**
+ * INTERIM (#264): nudge Paprika's cross-client sync after a successful local
+ * commit, best-effort. By the time a chokepoint calls this, the write already
+ * landed server-side AND committed locally — a failed nudge costs only
+ * propagation latency to other clients (the periodic sync re-nudges), so it
+ * must not fail the commit or masquerade as a cache failure. Removed when #264
+ * makes the client's surface Result-native.
+ */
+export function notifySyncBestEffort(client: Pick<PaprikaClient, "notifySync">, log: Logger): ResultAsync<void, never> {
+  return ResultAsync.fromPromise(client.notifySync(), (e) => e).orElse((e) => {
+    log.warn({ err: e }, "notifySync failed after a successful local commit; the periodic sync will propagate");
+    return okAsync<void, never>(undefined);
+  });
 }

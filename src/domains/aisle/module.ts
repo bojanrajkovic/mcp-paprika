@@ -1,7 +1,9 @@
 import { join } from "node:path";
 
 import { Mutex } from "async-mutex";
+import { ResultAsync } from "neverthrow";
 
+import type { CacheError } from "../../cache/disk-cache.js";
 import type { AisleApi } from "./api.js";
 import type { Aisle } from "./types.js";
 
@@ -9,7 +11,9 @@ import { DiskCache } from "../../cache/disk-cache.js";
 import { hydrateStore } from "../../cache/hydrate.js";
 import { AisleUidSchema, NO_AISLE_UID } from "../../ids.js";
 import { defineModule, register } from "../../kernel/registry.js";
+import { notifySyncBestEffort } from "../../paprika/client.js";
 import { resolvePendingWriteTtl } from "../../utils/config.js";
+import { unwrapAtBoot } from "../../utils/errors.js";
 import { AisleStore } from "./store.js";
 import { aisleSync } from "./sync.js";
 import { listAislesTool } from "./tools/list-aisles.js";
@@ -38,9 +42,9 @@ register(
         subdir: join(infra.cacheDir, aisleDiskDescriptor.subdir),
         log: infra.log,
       });
-      await cache.init();
+      unwrapAtBoot(await cache.init(), "aisle cache init");
       // Warm the store from cache so tools work on a warm restart before the first sync.
-      await hydrateStore(cache, store);
+      unwrapAtBoot(await hydrateStore(cache, store), "aisle cache hydrate");
       return { store, cache };
     })
     .build((state, infra) => {
@@ -50,17 +54,19 @@ register(
       // CONTRACT write — grocery and pantry reach it via `ctx.deps.aisle` — so it
       // lands in `api`, not `ctx.writes`.
       const ensureAisleMutex = new Mutex();
-      const commitAisle = async (aisle: Aisle): Promise<void> => {
+      const commitAisle = (aisle: Aisle): ResultAsync<void, CacheError> => {
         state.store.markPendingUpsert(aisle.uid);
-        try {
-          await state.cache.put(aisle);
-          await state.cache.flush();
-        } catch (e) {
-          state.store.clearPending(aisle.uid);
-          throw e;
-        }
-        state.store.set(aisle);
-        await infra.client.notifySync();
+        return state.cache
+          .put(aisle)
+          .andThen(() => state.cache.flush())
+          .mapErr((e) => {
+            state.store.clearPending(aisle.uid);
+            return e;
+          })
+          .andThen(() => {
+            state.store.set(aisle);
+            return notifySyncBestEffort(infra.client, infra.log);
+          });
       };
       const ensureAisle: AisleApi["ensureAisle"] = async (name) => {
         const trimmedName = name.trim();
@@ -86,8 +92,14 @@ register(
           const newAisle: Aisle = { uid, name: trimmedName, orderFlag: maxOrder, deleted: false };
 
           const saved = await infra.client.saveAisle(newAisle);
-          await commitAisle(saved);
-          return { aisle: saved.name, aisleUid: saved.uid };
+          // INTERIM (#263): ensureAisle's contract still throws; surface a commit
+          // failure on that contract until #263 converts it to a Result.
+          return (await commitAisle(saved)).match(
+            () => ({ aisle: saved.name, aisleUid: saved.uid }),
+            (e) => {
+              throw new Error(`Failed to persist new aisle "${saved.name}": ${e.message}`, { cause: e.cause });
+            },
+          );
         });
       };
 

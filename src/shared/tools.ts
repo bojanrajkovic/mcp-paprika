@@ -1,8 +1,45 @@
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import type { Result } from "neverthrow";
 import { z } from "zod";
 
 export function textResult(text: string): { content: [{ type: "text"; text: string }] } {
   return { content: [{ type: "text" as const, text }] } as const satisfies CallToolResult;
+}
+
+/**
+ * Consume a commit chokepoint's `Result` in a write tool: `undefined` when the
+ * commit landed, or the uniform "persisted to Paprika, local commit failed"
+ * response to return as-is. The two-line guard —
+ * `const commitErr = commitFailure("recipe", await ctx.writes.commitX(saved));
+ * if (commitErr) return commitErr;` — keeps the tool's success tail flat.
+ *
+ * The wording is deliberate: by the time a chokepoint runs, the Paprika POST
+ * already succeeded, so a failure here is LOCAL divergence (cache/store).
+ * Telling the agent the write itself failed would invite a harmful retry (a
+ * duplicate write). HOW the divergence resolves differs by sync strategy:
+ * replace-all entities genuinely reload every cycle (`selfHealing` default),
+ * but recipes sync by diffing the hash index that `RecipeDiskCache.put()`
+ * already advanced before the failed flush — the next diff believes the local
+ * copy is current, so a recipe's tools pass `selfHealing: false` and the
+ * message stops promising a repair the diff cannot deliver.
+ */
+export function commitFailure(
+  entity: string,
+  result: Result<void, { readonly message: string }>,
+  opts: { readonly selfHealing?: boolean } = {},
+): CallToolResult | undefined {
+  const tail =
+    (opts.selfHealing ?? true)
+      ? "the local view will correct itself on the next sync."
+      : "the local copy may remain stale until it next changes on the server or the server restarts — " +
+        "the change itself is already saved, so do not re-submit it.";
+  return result.match(
+    () => undefined,
+    (e) =>
+      textResult(
+        `The change was saved to Paprika, but updating the local ${entity} cache failed (${e.message}); ${tail}`,
+      ),
+  );
 }
 
 /**

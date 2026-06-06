@@ -1,7 +1,9 @@
+import { ResultAsync } from "neverthrow";
+
 import type { SyncContribution } from "../../kernel/registry.js";
 import type { MealTypeState } from "./module.js";
 
-import { pruneOrphanCache } from "../../paprika/sync.js";
+import { pruneOrphanCache, unwrapSyncStep } from "../../paprika/sync.js";
 
 /**
  * Meal-type sync — replace-all WITH pending-write filtering (mirrors aisle-sync, NOT
@@ -24,7 +26,7 @@ export function mealTypeSync(state: MealTypeState): SyncContribution<MealTypeSta
     reconcile: async (ctx) => {
       const { store, cache } = ctx.state;
       const mealTypes = await ctx.infra.client.listMealTypes();
-      const cachedMealTypes = await cache.getAll();
+      const cachedMealTypes = unwrapSyncStep(await cache.getAll());
 
       // Intentionally NOT filtered by `deleted`: meal types hard-delete, so `listMealTypes()`
       // never returns a `deleted:true` row (only recipes soft-delete, via `inTrash`) — a
@@ -37,10 +39,12 @@ export function mealTypeSync(state: MealTypeState): SyncContribution<MealTypeSta
 
       const cachedMealTypeUids = new Set(cachedMealTypes.map((mt) => mt.uid));
       const effectiveMealTypeUids = new Set(effectiveMealTypes.map((mt) => mt.uid));
-      await pruneOrphanCache(cache, cachedMealTypeUids, effectiveMealTypeUids, ctx.infra.log, "meal types");
+      unwrapSyncStep(
+        await pruneOrphanCache(cache, cachedMealTypeUids, effectiveMealTypeUids, ctx.infra.log, "meal types"),
+      );
 
       store.load(effectiveMealTypes);
-      await Promise.all(effectiveMealTypes.map((mt) => cache.put(mt)));
+      unwrapSyncStep(await ResultAsync.combine(effectiveMealTypes.map((mt) => cache.put(mt))));
 
       // Observation-clear: a pending-upsert UID present in the canonical list means the
       // create propagated, so clear now rather than waiting for the TTL sweep.

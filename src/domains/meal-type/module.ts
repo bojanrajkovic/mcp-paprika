@@ -1,7 +1,9 @@
 import { join } from "node:path";
 
 import { Mutex } from "async-mutex";
+import { ResultAsync } from "neverthrow";
 
+import type { CacheError } from "../../cache/disk-cache.js";
 import type { MealTypeApi } from "./api.js";
 import type { MealType } from "./types.js";
 
@@ -9,7 +11,9 @@ import { DiskCache } from "../../cache/disk-cache.js";
 import { hydrateStore } from "../../cache/hydrate.js";
 import { MealTypeUidSchema } from "../../ids.js";
 import { defineModule, register } from "../../kernel/registry.js";
+import { notifySyncBestEffort } from "../../paprika/client.js";
 import { resolvePendingWriteTtl } from "../../utils/config.js";
+import { unwrapAtBoot } from "../../utils/errors.js";
 import { MealTypeStore } from "./store.js";
 import { mealTypeSync } from "./sync.js";
 import { listMealTypesTool } from "./tools/list-meal-types.js";
@@ -38,9 +42,9 @@ register(
         subdir: join(infra.cacheDir, mealTypeDiskDescriptor.subdir),
         log: infra.log,
       });
-      await cache.init();
+      unwrapAtBoot(await cache.init(), "meal-type cache init");
       // Warm the store from cache so tools work on a warm restart before the first sync.
-      await hydrateStore(cache, store);
+      unwrapAtBoot(await hydrateStore(cache, store), "meal-type cache hydrate");
       return { store, cache };
     })
     .build((state, infra) => {
@@ -50,17 +54,19 @@ register(
       // (ADR-0012). It is a CONTRACT write — meal and menu reach it via
       // `ctx.deps["meal-type"]` — so it goes in `api`, not `ctx.writes`.
       const ensureMealTypeMutex = new Mutex();
-      const commitMealType = async (mealType: MealType): Promise<void> => {
+      const commitMealType = (mealType: MealType): ResultAsync<void, CacheError> => {
         state.store.markPendingUpsert(mealType.uid);
-        try {
-          await state.cache.put(mealType);
-          await state.cache.flush();
-        } catch (e) {
-          state.store.clearPending(mealType.uid);
-          throw e;
-        }
-        state.store.set(mealType);
-        await infra.client.notifySync();
+        return state.cache
+          .put(mealType)
+          .andThen(() => state.cache.flush())
+          .mapErr((e) => {
+            state.store.clearPending(mealType.uid);
+            return e;
+          })
+          .andThen(() => {
+            state.store.set(mealType);
+            return notifySyncBestEffort(infra.client, infra.log);
+          });
       };
       const ensureMealType: MealTypeApi["ensureMealType"] = async (name) => {
         const trimmedName = name.trim();
@@ -99,8 +105,14 @@ register(
           };
 
           const saved = await infra.client.saveMealType(newMealType);
-          await commitMealType(saved);
-          return saved;
+          // INTERIM (#263): ensureMealType's contract still throws; surface a commit
+          // failure on that contract until #263 converts it to a Result.
+          return (await commitMealType(saved)).match(
+            () => saved,
+            (e) => {
+              throw new Error(`Failed to persist new meal type "${saved.name}": ${e.message}`, { cause: e.cause });
+            },
+          );
         });
       };
 

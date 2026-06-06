@@ -7,7 +7,7 @@ import type { PantryItem } from "../types.js";
 
 import { PantryItemUidSchema } from "../../../ids.js";
 import { defineTool } from "../../../kernel/tool.js";
-import { textResult } from "../../../shared/tools.js";
+import { commitFailure, textResult } from "../../../shared/tools.js";
 import { normalizeWire } from "../../../utils/dates.js";
 import { toMessage } from "../../../utils/log.js";
 import { pantryItemToMarkdown } from "../pantry-helpers.js";
@@ -116,7 +116,8 @@ export const updatePantryItemTool = defineTool(
               purchaseDate: newPurchaseDate,
             };
             saved = (await ctx.infra.client.savePantryItems([updated]))[0]!;
-            await ctx.writes.commitPantryItem(saved);
+            const commitErr = commitFailure("pantry", await ctx.writes.commitPantryItem(saved));
+            if (commitErr) return commitErr;
           } catch (error) {
             const message = toMessage(error);
             log.error({ err: error, uid: args.uid }, "savePantryItems failed");

@@ -5,12 +5,11 @@ import type { GeneratedImageStore } from "../../../features/generated-image-stor
 import type { RecipeUid } from "../../../ids.js";
 import type { DomainCtx } from "../../../kernel/registry.js";
 import type { RecipeState, RecipeWrites } from "../module.js";
-import type { Photo } from "../photo/types.js";
 
 import { PhotoUidSchema, RecipeUidSchema } from "../../../ids.js";
 import { defineTool } from "../../../kernel/tool.js";
 import { fetchImageBytes, MAX_IMAGE_BYTES } from "../../../shared/photo-fetch.js";
-import { textResult } from "../../../shared/tools.js";
+import { commitFailure, textResult } from "../../../shared/tools.js";
 import { toMessage } from "../../../utils/log.js";
 import { GENERATED_MAX_FULL_EDGE, normalizePhoto } from "../photo-helpers.js";
 import { recipeColdStartGuard } from "./guards.js";
@@ -190,15 +189,13 @@ export const uploadPhotoTool = defineTool(
             return textResult(`Failed to process image: ${toMessage(error)}`);
           }
 
-          let photo: Photo;
-          try {
-            photo = await ctx.writes.attachPhotoToRecipe(recipe, thumbnail, full);
-          } catch (error) {
-            log.error({ err: error, recipe_uid: args.recipe_uid }, "uploadPhoto failed");
-            return textResult(`Failed to upload photo: ${toMessage(error)}`);
-          }
-
-          return textResult(`Attached photo ${photo.name} to "${recipe.name}" (photo UID: ${photo.uid}).`);
+          return (await ctx.writes.attachPhotoToRecipe(recipe, thumbnail, full)).match(
+            (photo) => textResult(`Attached photo ${photo.name} to "${recipe.name}" (photo UID: ${photo.uid}).`),
+            (e) => {
+              log.error({ err: e.cause ?? e, recipe_uid: args.recipe_uid }, "uploadPhoto failed");
+              return textResult(`Failed to upload photo: ${e.message}`);
+            },
+          );
         },
         (guard) => guard,
       );
@@ -235,7 +232,11 @@ export const deletePhotoTool = defineTool(
 
           try {
             await ctx.infra.client.deletePhoto(existing);
-            await ctx.writes.commitPhotoDelete({ ...existing, deleted: true });
+            const commitErr = commitFailure(
+              "photo",
+              await ctx.writes.commitPhotoDelete({ ...existing, deleted: true }),
+            );
+            if (commitErr) return commitErr;
           } catch (error) {
             log.error({ err: error, photo_uid: args.photo_uid }, "deletePhoto failed");
             return textResult(`Failed to delete photo: ${toMessage(error)}`);

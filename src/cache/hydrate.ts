@@ -1,7 +1,13 @@
+import type { ResultAsync } from "neverthrow";
+
+import type { CacheError } from "./disk-cache.js";
+
 /**
  * Warm an in-memory store from its disk cache at module construction, so tools
  * answer correctly on a warm restart before the first sync completes. Every
- * domain `.state` factory runs this once per owned store.
+ * domain `.state` factory runs this once per owned store, unwrapping the result
+ * via `unwrapAtBoot` (a cache that cannot be read at construction is a boot
+ * failure, ADR-0014 form #5).
  *
  * The empty-snapshot guard is load-bearing: `store.load()` marks the store synced
  * (`EntityStore.baseLoad` sets `hasSynced` unconditionally — an empty array is a
@@ -11,10 +17,11 @@
  * sync runs. (Recipe does NOT use this: it hydrates per-item via `set` + the
  * separate `markSynced()` so its diff-sync warm-start invariant holds.)
  */
-export async function hydrateStore<T>(
-  cache: { getAll(): Promise<ReadonlyArray<T>> },
+export function hydrateStore<T>(
+  cache: { getAll(): ResultAsync<Array<T>, CacheError> },
   store: { load(items: ReadonlyArray<T>): void },
-): Promise<void> {
-  const all = await cache.getAll();
-  if (all.length > 0) store.load(all);
+): ResultAsync<void, CacheError> {
+  return cache.getAll().map((all) => {
+    if (all.length > 0) store.load(all);
+  });
 }

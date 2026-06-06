@@ -8,7 +8,7 @@ import type { PantryItem } from "../types.js";
 
 import { NO_AISLE_UID, PantryItemUidSchema } from "../../../ids.js";
 import { defineTool } from "../../../kernel/tool.js";
-import { textResult } from "../../../shared/tools.js";
+import { commitFailure, textResult } from "../../../shared/tools.js";
 import { normalizeWire, todayWire } from "../../../utils/dates.js";
 // pattern: Imperative Shell
 import { toMessage } from "../../../utils/log.js";
@@ -172,7 +172,8 @@ export const addPantryItemsTool = defineTool(
           let savedItems: ReadonlyArray<PantryItem>;
           try {
             savedItems = await ctx.infra.client.savePantryItems(builtItems);
-            await ctx.writes.commitPantryItemsBatch(savedItems);
+            const commitErr = commitFailure("pantry", await ctx.writes.commitPantryItemsBatch(savedItems));
+            if (commitErr) return commitErr;
           } catch (error) {
             const message = toMessage(error);
             log.error({ err: error }, "savePantryItems failed");

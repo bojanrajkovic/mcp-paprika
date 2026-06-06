@@ -8,7 +8,7 @@ import type { GroceryState, GroceryWrites } from "../module.js";
 
 import { GroceryIngredientUidSchema, GroceryItemUidSchema, GroceryListUidSchema, NO_AISLE_UID } from "../../../ids.js";
 import { defineTool } from "../../../kernel/tool.js";
-import { textResult } from "../../../shared/tools.js";
+import { commitFailure, textResult } from "../../../shared/tools.js";
 import { toMessage } from "../../../utils/log.js";
 import { groceryItemToMarkdown } from "../grocery-helpers.js";
 import { groceryStartGuard } from "./guards.js";
@@ -88,12 +88,19 @@ export const addGroceryItemsTool = defineTool(
 
                 if (!catalogUpdated.has(ingredientKey)) {
                   catalogUpdated.add(ingredientKey);
+                  // The ingredient-catalog cache put is BEST-EFFORT: the save above
+                  // already landed the entry server-side, and the catalog is replace-all
+                  // synced, so a failed local put self-heals on the next cycle — warn
+                  // rather than failing an add whose grocery items will still commit.
+                  const warnCatalogPut = (e: { readonly message: string }): void => {
+                    log.warn({ err: e, ingredient }, "ingredient catalog cache put failed; next sync re-syncs it");
+                  };
                   const catalogEntry = ctx.state.ingredients.store.lookupByName(ingredient);
                   if (catalogEntry !== undefined) {
                     const updated = { ...catalogEntry, aisleUid };
                     await ctx.infra.client.saveGroceryIngredient(updated);
                     ctx.state.ingredients.store.set(updated);
-                    await ctx.state.ingredients.cache.put(updated);
+                    (await ctx.state.ingredients.cache.put(updated)).match(() => undefined, warnCatalogPut);
                   } else {
                     const created = {
                       uid: GroceryIngredientUidSchema.parse(crypto.randomUUID().toUpperCase()),
@@ -103,7 +110,7 @@ export const addGroceryItemsTool = defineTool(
                     };
                     await ctx.infra.client.saveGroceryIngredient(created);
                     ctx.state.ingredients.store.set(created);
-                    await ctx.state.ingredients.cache.put(created);
+                    (await ctx.state.ingredients.cache.put(created)).match(() => undefined, warnCatalogPut);
                   }
                 }
               } else {
@@ -153,7 +160,8 @@ export const addGroceryItemsTool = defineTool(
           let savedItems: ReadonlyArray<GroceryItem>;
           try {
             savedItems = await ctx.infra.client.saveGroceryItems(builtItems);
-            await ctx.writes.commitGroceryItemsBatch(savedItems);
+            const commitErr = commitFailure("grocery list", await ctx.writes.commitGroceryItemsBatch(savedItems));
+            if (commitErr) return commitErr;
           } catch (error) {
             const message = toMessage(error);
             log.error({ err: error, listUid: args.listUid }, "saveGroceryItems failed");
@@ -226,7 +234,8 @@ export const updateGroceryItemTool = defineTool(
             };
 
             saved = (await ctx.infra.client.saveGroceryItems([updated]))[0]!;
-            await ctx.writes.commitGroceryItem(saved);
+            const commitErr = commitFailure("grocery list", await ctx.writes.commitGroceryItem(saved));
+            if (commitErr) return commitErr;
           } catch (error) {
             const message = toMessage(error);
             log.error({ err: error, uid: args.uid }, "saveGroceryItems failed");
@@ -272,7 +281,8 @@ export const deleteGroceryItemTool = defineTool(
 
           try {
             const saved = (await ctx.infra.client.saveGroceryItems([trashed]))[0]!;
-            await ctx.writes.commitGroceryItem(saved);
+            const commitErr = commitFailure("grocery list", await ctx.writes.commitGroceryItem(saved));
+            if (commitErr) return commitErr;
           } catch (error) {
             const message = toMessage(error);
             log.error({ err: error, uid: args.uid }, "saveGroceryItems failed");

@@ -1,7 +1,11 @@
+import { ResultAsync } from "neverthrow";
+
 import type { SyncContribution } from "../../../kernel/registry.js";
 import type { RecipeSyncResult } from "../../../paprika/sync-types.js";
 import type { RecipeState } from "../module.js";
 import type { Recipe } from "../types.js";
+
+import { unwrapSyncStep } from "../../../paprika/sync.js";
 
 /**
  * Recipe sync — the bespoke DIFF-AND-FETCH reconcile. NOT `syncReplaceAllEntity`:
@@ -28,7 +32,7 @@ export function recipesSync(state: RecipeState): SyncContribution<RecipeState, n
       log.debug("fetching recipe list");
       const entries = await client.listRecipes();
       log.debug({ count: entries.length }, "fetched recipe list");
-      const diff = cache.diff(entries);
+      const diff = unwrapSyncStep(cache.diff(entries));
       log.debug(
         { added: diff.added.length, changed: diff.changed.length, removed: diff.removed.length },
         "recipe diff computed",
@@ -59,12 +63,12 @@ export function recipesSync(state: RecipeState): SyncContribution<RecipeState, n
 
       // Write fetched recipes to cache and store
       for (const recipe of fetchedRecipes) {
-        await cache.put(recipe);
+        unwrapSyncStep(await cache.put(recipe));
         store.set(recipe);
       }
 
-      // Remove deleted recipes (async, use Promise.all for concurrency)
-      await Promise.all(filteredRemoved.map((uid) => cache.remove(uid)));
+      // Remove deleted recipes (concurrently; first failure aborts the cycle)
+      unwrapSyncStep(await ResultAsync.combine(filteredRemoved.map((uid) => cache.remove(uid))));
       for (const uid of filteredRemoved) {
         store.delete(uid);
       }

@@ -12,8 +12,9 @@
 import type { OAuthError } from "@modelcontextprotocol/sdk/server/auth/errors.js";
 import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
 import { Mutex } from "async-mutex";
-import { err, ok, type Result } from "neverthrow";
+import { err, ok, type Result, ResultAsync } from "neverthrow";
 
+import type { CacheError } from "../cache/disk-cache.js";
 import type { VerifiedIdentity } from "./allowlist.js";
 import type { AuthCache } from "./disk.js";
 import type { OAuthToken } from "./types.js";
@@ -42,6 +43,20 @@ export interface IssuedPair {
    * transitions without a separate disk read.
    */
   readonly identity: VerifiedIdentity;
+}
+
+/**
+ * INTERIM (#265): unwrap a cache result by rethrowing. The token store's
+ * surfaces are still the SDK's throw-based contracts (provider/routes catch
+ * upstream); #265 converts this store to `Result` end to end and removes this.
+ */
+function must<T>(result: Result<T, CacheError>): T {
+  return result.match(
+    (value) => value,
+    (e) => {
+      throw new Error(`token store cache failure: ${e.context}: ${e.message}`, { cause: e.cause });
+    },
+  );
 }
 
 // ============================================================================
@@ -102,10 +117,10 @@ export class TokenStore {
       createdAt: now,
     };
 
-    await this._cache.oauthTokens.put(access);
-    await this._cache.oauthTokens.put(refresh);
+    must(await this._cache.oauthTokens.put(access));
+    must(await this._cache.oauthTokens.put(refresh));
     await this._bumpLastActivity(input.clientId, now);
-    await this._cache.flush();
+    must(await this._cache.flush());
 
     return {
       access: { plaintext: accessPlain, expiresAt: accessExpiresAt },
@@ -126,7 +141,7 @@ export class TokenStore {
    */
   async lookupAccessToken(plaintext: string): Promise<AuthInfo | null> {
     const hash = hashTokenForStorage(plaintext);
-    const record = await this._cache.oauthTokens.get(hash);
+    const record = must(await this._cache.oauthTokens.get(hash));
     if (record === null || record.kind !== "access") return null;
     if (record.expiresAt < this._now()) return null; // lazy eviction
 
@@ -158,7 +173,7 @@ export class TokenStore {
    */
   async lookupRefreshToken(plaintext: string): Promise<OAuthToken | null> {
     const hash = hashTokenForStorage(plaintext);
-    const record = await this._cache.oauthTokens.get(hash);
+    const record = must(await this._cache.oauthTokens.get(hash));
     if (record === null || record.kind !== "refresh") return null;
     if (record.expiresAt < this._now()) return null;
     return record;
@@ -217,8 +232,8 @@ export class TokenStore {
       }
 
       // Invalidate the old refresh token IMMEDIATELY (AC7.7)
-      await this._cache.oauthTokens.remove(existing.tokenHash);
-      await this._cache.flush();
+      must(await this._cache.oauthTokens.remove(existing.tokenHash));
+      must(await this._cache.flush());
 
       // Mint the new pair with rotation linkage
       const accessPlain = generateOpaqueToken("mcp_at_");
@@ -227,29 +242,33 @@ export class TokenStore {
       const accessExpiresAt = now + ACCESS_TOKEN_TTL_SECONDS;
       const refreshExpiresAt = now + REFRESH_TOKEN_TTL_SECONDS;
 
-      await this._cache.oauthTokens.put({
-        tokenHash: hashTokenForStorage(accessPlain),
-        kind: "access",
-        clientId: existing.clientId,
-        scope: newScope,
-        identity: existing.identity,
-        resource: existing.resource,
-        expiresAt: accessExpiresAt,
-        createdAt: now,
-      });
-      await this._cache.oauthTokens.put({
-        tokenHash: hashTokenForStorage(refreshPlain),
-        kind: "refresh",
-        clientId: existing.clientId,
-        scope: newScope,
-        identity: existing.identity,
-        resource: existing.resource,
-        expiresAt: refreshExpiresAt,
-        createdAt: now,
-        rotatedFromHash: existing.tokenHash, // audit linkage
-      });
+      must(
+        await this._cache.oauthTokens.put({
+          tokenHash: hashTokenForStorage(accessPlain),
+          kind: "access",
+          clientId: existing.clientId,
+          scope: newScope,
+          identity: existing.identity,
+          resource: existing.resource,
+          expiresAt: accessExpiresAt,
+          createdAt: now,
+        }),
+      );
+      must(
+        await this._cache.oauthTokens.put({
+          tokenHash: hashTokenForStorage(refreshPlain),
+          kind: "refresh",
+          clientId: existing.clientId,
+          scope: newScope,
+          identity: existing.identity,
+          resource: existing.resource,
+          expiresAt: refreshExpiresAt,
+          createdAt: now,
+          rotatedFromHash: existing.tokenHash, // audit linkage
+        }),
+      );
       await this._bumpLastActivity(existing.clientId, now);
-      await this._cache.flush();
+      must(await this._cache.flush());
 
       return ok({
         access: { plaintext: accessPlain, expiresAt: accessExpiresAt },
@@ -270,7 +289,7 @@ export class TokenStore {
    */
   async getTokenRecord(plaintext: string): Promise<OAuthToken | null> {
     const hash = hashTokenForStorage(plaintext);
-    return this._cache.oauthTokens.get(hash);
+    return must(await this._cache.oauthTokens.get(hash));
   }
 
   /**
@@ -291,8 +310,8 @@ export class TokenStore {
   async revoke(plaintext: string): Promise<void> {
     await this._rotateLock.runExclusive(async () => {
       const hash = hashTokenForStorage(plaintext);
-      await this._cache.oauthTokens.remove(hash);
-      await this._cache.flush();
+      must(await this._cache.oauthTokens.remove(hash));
+      must(await this._cache.flush());
     });
   }
 
@@ -311,10 +330,10 @@ export class TokenStore {
    */
   async removeAllForClient(clientId: string): Promise<void> {
     await this._rotateLock.runExclusive(async () => {
-      const all = await this._cache.oauthTokens.getAll();
+      const all = must(await this._cache.oauthTokens.getAll());
       const matching = all.filter((t) => t.clientId === clientId);
-      await Promise.all(matching.map((t) => this._cache.oauthTokens.remove(t.tokenHash)));
-      await this._cache.flush();
+      must(await ResultAsync.combine(matching.map((t) => this._cache.oauthTokens.remove(t.tokenHash))));
+      must(await this._cache.flush());
     });
   }
 
@@ -325,8 +344,8 @@ export class TokenStore {
    * (race with deletion). Does not flush — caller is responsible.
    */
   private async _bumpLastActivity(clientId: string, now: number): Promise<void> {
-    const client = await this._cache.oauthClients.get(clientId);
+    const client = must(await this._cache.oauthClients.get(clientId));
     if (client === null) return; // race with deletion
-    await this._cache.oauthClients.put({ ...client, lastTokenActivityAt: now });
+    must(await this._cache.oauthClients.put({ ...client, lastTokenActivityAt: now }));
   }
 }

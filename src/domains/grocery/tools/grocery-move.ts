@@ -8,7 +8,7 @@ import type { GroceryState, GroceryWrites } from "../module.js";
 
 import { GroceryItemUidSchema, PantryItemUidSchema } from "../../../ids.js";
 import { defineTool } from "../../../kernel/tool.js";
-import { textResult } from "../../../shared/tools.js";
+import { commitFailure, textResult } from "../../../shared/tools.js";
 import { todayWire } from "../../../utils/dates.js";
 import { toMessage } from "../../../utils/log.js";
 import { groceryStartGuard } from "./guards.js";
@@ -88,7 +88,8 @@ export const moveToPantryTool = defineTool(
               const trashedGrocery = items.map((gi) => ({ ...gi, deleted: true }));
               try {
                 const savedGrocery = await ctx.infra.client.saveGroceryItems(trashedGrocery);
-                await ctx.writes.commitGroceryItemsBatch(savedGrocery);
+                const commitErr = commitFailure("grocery list", await ctx.writes.commitGroceryItemsBatch(savedGrocery));
+                if (commitErr) return commitErr;
               } catch (error) {
                 // Partial failure: pantry items created but grocery delete failed.
                 // Return structured message so user knows the state.

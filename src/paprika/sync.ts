@@ -1,6 +1,8 @@
+import type { Result } from "neverthrow";
+import { ResultAsync } from "neverthrow";
 import type { Logger } from "pino";
 
-import type { DiskCache } from "../cache/disk-cache.js";
+import type { CacheError, DiskCache } from "../cache/disk-cache.js";
 import type { EntityStore } from "../entity/store.js";
 import type { EntityChanges } from "./sync-types.js";
 
@@ -15,6 +17,24 @@ type ReplaceAllEntityOptions<T extends { uid: UID }, UID extends string> = {
 };
 
 /**
+ * INTERIM (#264): unwrap a cache `Result` inside a reconcile by rethrowing its
+ * error. The sync driver's abort contract is still throw-based — a core-tier
+ * reconcile throw aborts the cycle (caught by the never-throws `syncOnce`) — so
+ * until #264 makes the driver `Result`-aware, a cache failure re-enters that
+ * contract here. This is the ONE sanctioned bridge for the whole sync path
+ * (every reconcile that touches a cache funnels through it), allowlisted in the
+ * ADR-0014 conformance test and removed by #264.
+ */
+export function unwrapSyncStep<T>(result: Result<T, CacheError>): T {
+  return result.match(
+    (value) => value,
+    (e) => {
+      throw new Error(`sync step failed: ${e.context}: ${e.message}`, { cause: e.cause });
+    },
+  );
+}
+
+/**
  * Evict cache entries whose UID is no longer in the live snapshot, returning the
  * removed UIDs. The shared orphan-eviction step of every replace-all reconcile —
  * `syncReplaceAllEntity` and the bespoke reference-catalog syncs (aisle, meal-type,
@@ -23,19 +43,20 @@ type ReplaceAllEntityOptions<T extends { uid: UID }, UID extends string> = {
  * `liveUids` is the set present AFTER pending-write filtering; anything
  * cached-but-not-live is an orphan.
  */
-export async function pruneOrphanCache<UID extends string>(
-  cache: { remove: (key: string) => Promise<void> },
+export function pruneOrphanCache<UID extends string>(
+  cache: { remove: (key: string) => ResultAsync<void, CacheError> },
   cachedUids: Iterable<UID>,
   liveUids: ReadonlySet<UID>,
   log: Logger,
   label: string,
-): Promise<ReadonlyArray<UID>> {
+): ResultAsync<ReadonlyArray<UID>, CacheError> {
   const orphanUids = [...cachedUids].filter((uid) => !liveUids.has(uid));
-  await Promise.all(orphanUids.map((uid) => cache.remove(uid)));
-  if (orphanUids.length > 0) {
-    log.debug({ count: orphanUids.length }, `removed orphan ${label}`);
-  }
-  return orphanUids;
+  return ResultAsync.combine(orphanUids.map((uid) => cache.remove(uid))).map(() => {
+    if (orphanUids.length > 0) {
+      log.debug({ count: orphanUids.length }, `removed orphan ${label}`);
+    }
+    return orphanUids;
+  });
 }
 
 /**
@@ -51,7 +72,7 @@ export async function syncReplaceAllEntity<T extends { uid: UID }, UID extends s
   opts: ReplaceAllEntityOptions<T, UID>,
 ): Promise<EntityChanges<T>> {
   const rawIncoming = await opts.fetch();
-  const cached = await opts.cache.getAll();
+  const cached = unwrapSyncStep(await opts.cache.getAll());
   const cachedByUid = new Map<UID, T>(cached.map((item) => [item.uid, item]));
   const cachedUids = new Set<UID>(cached.map((item) => item.uid));
 
@@ -70,10 +91,12 @@ export async function syncReplaceAllEntity<T extends { uid: UID }, UID extends s
   });
   const added = effective.filter((item) => newUids.has(item.uid));
 
-  const removedUids = await pruneOrphanCache(opts.cache, cachedUids, effectiveUids, opts.log, opts.label);
+  const removedUids = unwrapSyncStep(
+    await pruneOrphanCache(opts.cache, cachedUids, effectiveUids, opts.log, opts.label),
+  );
   opts.store.load(effective);
   opts.afterLoad?.();
-  await Promise.all(effective.map((item) => opts.cache.put(item)));
+  unwrapSyncStep(await ResultAsync.combine(effective.map((item) => opts.cache.put(item))));
 
   // Observation-based clearing: walk rawIncoming (not effective) so pending-upsert
   // UIDs that were spliced out still get checked against the snapshot.

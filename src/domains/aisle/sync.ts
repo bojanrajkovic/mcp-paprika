@@ -1,7 +1,9 @@
+import { ResultAsync } from "neverthrow";
+
 import type { SyncContribution } from "../../kernel/registry.js";
 import type { AisleState } from "./module.js";
 
-import { pruneOrphanCache } from "../../paprika/sync.js";
+import { pruneOrphanCache, unwrapSyncStep } from "../../paprika/sync.js";
 
 /**
  * Aisle sync — replace-all WITH pending-write filtering. This is NOT the
@@ -20,7 +22,7 @@ export function aisleSync(state: AisleState): SyncContribution<AisleState, never
     reconcile: async (ctx) => {
       const { store, cache } = ctx.state;
       const aisles = await ctx.infra.client.listAisles();
-      const cachedAisles = await cache.getAll();
+      const cachedAisles = unwrapSyncStep(await cache.getAll());
 
       // Intentionally NOT filtered by `deleted`: aisles hard-delete, so `listAisles()` never
       // returns a `deleted:true` row (only recipes soft-delete, via `inTrash`) — a deleted-row
@@ -31,10 +33,10 @@ export function aisleSync(state: AisleState): SyncContribution<AisleState, never
 
       const cachedAisleUids = new Set(cachedAisles.map((a) => a.uid));
       const effectiveAisleUids = new Set(effectiveAisles.map((a) => a.uid));
-      await pruneOrphanCache(cache, cachedAisleUids, effectiveAisleUids, ctx.infra.log, "aisles");
+      unwrapSyncStep(await pruneOrphanCache(cache, cachedAisleUids, effectiveAisleUids, ctx.infra.log, "aisles"));
 
       store.load(effectiveAisles);
-      await Promise.all(effectiveAisles.map((a) => cache.put(a)));
+      unwrapSyncStep(await ResultAsync.combine(effectiveAisles.map((a) => cache.put(a))));
 
       for (const aisle of aisles) {
         if (store.isPendingUpsert(aisle.uid)) {

@@ -20,7 +20,7 @@ describe("OAuth Metadata Customization", () => {
 
   beforeEach(async () => {
     await tmp.setup();
-    cache = await buildAuthCaches(tmp.dir());
+    cache = (await buildAuthCaches(tmp.dir()))._unsafeUnwrap();
 
     const clientStore = new DiskClientRegistrationStore(cache, "https://mcp.example.com", SILENT_LOG);
     const tokenStore = new TokenStore(cache);

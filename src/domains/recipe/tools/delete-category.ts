@@ -7,7 +7,7 @@ import type { Recipe } from "../types.js";
 
 import { CategoryUidSchema } from "../../../ids.js";
 import { defineTool } from "../../../kernel/tool.js";
-import { textResult } from "../../../shared/tools.js";
+import { commitFailure, textResult } from "../../../shared/tools.js";
 import { toMessage } from "../../../utils/log.js";
 import { categoryStartGuard } from "./guards.js";
 
@@ -70,7 +70,8 @@ export const deleteCategoryTool = defineTool(
 
           try {
             await ctx.infra.client.deleteCategory(existing);
-            await ctx.writes.commitCategoryDelete(existing);
+            const commitErr = commitFailure("category", await ctx.writes.commitCategoryDelete(existing));
+            if (commitErr) return commitErr;
             return textResult(`Deleted category "${existing.name}".`);
           } catch (error) {
             log.error({ err: error, uid: args.uid }, "deleteCategory failed");

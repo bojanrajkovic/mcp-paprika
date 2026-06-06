@@ -7,7 +7,13 @@ import type { GroceryState, GroceryWrites } from "../module.js";
 
 import { GroceryListUidSchema } from "../../../ids.js";
 import { defineTool } from "../../../kernel/tool.js";
-import { formatLookupOutcome, resolveLookup, textResult, uidOrTextLookupSchema } from "../../../shared/tools.js";
+import {
+  commitFailure,
+  formatLookupOutcome,
+  resolveLookup,
+  textResult,
+  uidOrTextLookupSchema,
+} from "../../../shared/tools.js";
 import { toMessage } from "../../../utils/log.js";
 import { groceryListToMarkdown } from "../grocery-helpers.js";
 import { groceryStartGuard } from "./guards.js";
@@ -139,7 +145,8 @@ export const createGroceryListTool = defineTool(
 
           try {
             const saved = await ctx.infra.client.saveGroceryList(newList);
-            await ctx.writes.commitGroceryList(saved);
+            const commitErr = commitFailure("grocery list", await ctx.writes.commitGroceryList(saved));
+            if (commitErr) return commitErr;
             return textResult(groceryListToMarkdown(saved, []));
           } catch (error) {
             const message = toMessage(error);
@@ -202,7 +209,8 @@ export const renameGroceryListTool = defineTool(
 
           try {
             const saved = await ctx.infra.client.saveGroceryList(renamed);
-            await ctx.writes.commitGroceryList(saved);
+            const commitErr = commitFailure("grocery list", await ctx.writes.commitGroceryList(saved));
+            if (commitErr) return commitErr;
             const items = ctx.state.items.store.getByListUid(saved.uid);
             return textResult(groceryListToMarkdown(saved, items));
           } catch (error) {
@@ -248,7 +256,8 @@ export const deleteGroceryListTool = defineTool(
 
           try {
             const saved = await ctx.infra.client.saveGroceryList(trashed);
-            await ctx.writes.commitGroceryList(saved);
+            const commitErr = commitFailure("grocery list", await ctx.writes.commitGroceryList(saved));
+            if (commitErr) return commitErr;
           } catch (error) {
             const message = toMessage(error);
             log.error({ err: error, uid: args.uid }, "saveGroceryList failed");

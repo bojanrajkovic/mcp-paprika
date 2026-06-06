@@ -8,7 +8,7 @@ import type { Recipe } from "../types.js";
 
 import { RecipeUidSchema } from "../../../ids.js";
 import { defineTool } from "../../../kernel/tool.js";
-import { textResult } from "../../../shared/tools.js";
+import { commitFailure, textResult } from "../../../shared/tools.js";
 import { formatTimestampWire } from "../../../utils/dates.js";
 import { toMessage } from "../../../utils/log.js";
 import { recipeToMarkdown, resolveCategoryRefs } from "../recipe-markdown.js";
@@ -109,7 +109,8 @@ export const createRecipeTool = defineTool(
           let saved: Recipe;
           try {
             saved = await ctx.infra.client.saveRecipe(newRecipe); // AC2.5
-            await ctx.writes.commitRecipe(saved); // AC2.5, AC2.6
+            const commitErr = commitFailure("recipe", await ctx.writes.commitRecipe(saved), { selfHealing: false }); // AC2.5, AC2.6
+            if (commitErr) return commitErr;
           } catch (error) {
             // AC2.8: store/cache not updated — commitRecipe not reached
             const message = toMessage(error);
