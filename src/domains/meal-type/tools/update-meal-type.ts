@@ -47,76 +47,81 @@ export const updateMealTypeTool = defineTool(
   [mealTypeStartGuard],
   (ctx: DomainCtx<MealTypeState, never, MealTypeWrites>) => {
     const log = ctx.infra.log.child({ component: "update_meal_type" });
-    return async (args) => {
-      const existing = ctx.state.store.get(args.uid);
-      if (existing === undefined) {
-        return textResult(`No meal type found with UID "${args.uid}" (see list_meal_types for the catalog).`);
-      }
-
-      if (args.name === undefined && args.color === undefined && args.position === undefined) {
-        return textResult("Nothing to update: provide `name`, `color`, `position`, or any combination.");
-      }
-
-      const newName = args.name?.trim();
-      if (newName !== undefined) {
-        if (newName === "") return textResult("Meal type name cannot be empty.");
-        const clash = ctx.state.store.resolveByName(newName);
-        if (clash !== undefined && clash.uid !== existing.uid) {
-          return textResult(`A meal type named "${clash.name}" already exists — meal type names must be unique.`);
+    // The whole lookup → clash-check → save → commit sequence runs under the
+    // catalog write lock (shared with ensureMealType/deleteMealType): without
+    // it, two concurrent renames to one name both pass the clash check before
+    // either commits, breaking name uniqueness.
+    return async (args) =>
+      ctx.writes.withCatalogWriteLock(async () => {
+        const existing = ctx.state.store.get(args.uid);
+        if (existing === undefined) {
+          return textResult(`No meal type found with UID "${args.uid}" (see list_meal_types for the catalog).`);
         }
-      }
 
-      const target: MealType = {
-        ...existing,
-        name: newName ?? existing.name,
-        color: args.color ?? existing.color,
-      };
-      const sorted = sortCatalog(ctx.state.store.getAll());
+        if (args.name === undefined && args.color === undefined && args.position === undefined) {
+          return textResult("Nothing to update: provide `name`, `color`, `position`, or any combination.");
+        }
 
-      // Rename/recolor-only edits don't touch order flags (they may be sparse;
-      // renumbering would rewrite the whole catalog for a one-type edit); a
-      // reposition renumbers contiguously via the shared repositionCatalog.
-      const ordered: Array<MealType> =
-        args.position === undefined
-          ? sorted.map((mt) => (mt.uid === target.uid ? target : mt))
-          : repositionCatalog(sorted, target, args.position);
+        const newName = args.name?.trim();
+        if (newName !== undefined) {
+          if (newName === "") return textResult("Meal type name cannot be empty.");
+          const clash = ctx.state.store.resolveByName(newName);
+          if (clash !== undefined && clash.uid !== existing.uid) {
+            return textResult(`A meal type named "${clash.name}" already exists — meal type names must be unique.`);
+          }
+        }
 
-      const toSave = ordered.filter((mt) => {
-        const prev = ctx.state.store.get(mt.uid);
-        return (
-          prev === undefined || prev.name !== mt.name || prev.color !== mt.color || prev.orderFlag !== mt.orderFlag
+        const target: MealType = {
+          ...existing,
+          name: newName ?? existing.name,
+          color: args.color ?? existing.color,
+        };
+        const sorted = sortCatalog(ctx.state.store.getAll());
+
+        // Rename/recolor-only edits don't touch order flags (they may be sparse;
+        // renumbering would rewrite the whole catalog for a one-type edit); a
+        // reposition renumbers contiguously via the shared repositionCatalog.
+        const ordered: Array<MealType> =
+          args.position === undefined
+            ? sorted.map((mt) => (mt.uid === target.uid ? target : mt))
+            : repositionCatalog(sorted, target, args.position);
+
+        const toSave = ordered.filter((mt) => {
+          const prev = ctx.state.store.get(mt.uid);
+          return (
+            prev === undefined || prev.name !== mt.name || prev.color !== mt.color || prev.orderFlag !== mt.orderFlag
+          );
+        });
+        if (toSave.length === 0) {
+          return textResult(`No changes — "${existing.name}" already has that name/color/position.`);
+        }
+
+        return (await ctx.infra.client.saveMealTypes(toSave)).match(
+          async (): Promise<CallToolResult> => {
+            const commitErr = commitFailure("meal type", await ctx.writes.commitMealTypes(toSave));
+            if (commitErr) return commitErr;
+
+            const did: Array<string> = [];
+            if (newName !== undefined && newName !== existing.name) did.push(`renamed to "${newName}"`);
+            if (args.color !== undefined && args.color !== existing.color) did.push(`recolored to ${args.color}`);
+            // Report where the type actually LANDED — a past-the-end position
+            // clamps to last, so echoing args.position would contradict the
+            // rendered order below.
+            if (args.position !== undefined) {
+              const landed = ordered.findIndex((mt) => mt.uid === target.uid) + 1;
+              did.push(`moved to position ${String(landed)}`);
+            }
+            return textResult(
+              `Updated meal type "${existing.name}": ${did.join(", ")}.\n\nCurrent meal-type order:\n${renderCatalogOrder(
+                sortCatalog(ctx.state.store.getAll()),
+              )}`,
+            );
+          },
+          async (e) => {
+            log.error({ err: e, uid: args.uid }, "saveMealTypes failed");
+            return textResult(`Failed to update meal type: ${e.message}`);
+          },
         );
       });
-      if (toSave.length === 0) {
-        return textResult(`No changes — "${existing.name}" already has that name/color/position.`);
-      }
-
-      return (await ctx.infra.client.saveMealTypes(toSave)).match(
-        async (): Promise<CallToolResult> => {
-          const commitErr = commitFailure("meal type", await ctx.writes.commitMealTypes(toSave));
-          if (commitErr) return commitErr;
-
-          const did: Array<string> = [];
-          if (newName !== undefined && newName !== existing.name) did.push(`renamed to "${newName}"`);
-          if (args.color !== undefined && args.color !== existing.color) did.push(`recolored to ${args.color}`);
-          // Report where the type actually LANDED — a past-the-end position
-          // clamps to last, so echoing args.position would contradict the
-          // rendered order below.
-          if (args.position !== undefined) {
-            const landed = ordered.findIndex((mt) => mt.uid === target.uid) + 1;
-            did.push(`moved to position ${String(landed)}`);
-          }
-          return textResult(
-            `Updated meal type "${existing.name}": ${did.join(", ")}.\n\nCurrent meal-type order:\n${renderCatalogOrder(
-              sortCatalog(ctx.state.store.getAll()),
-            )}`,
-          );
-        },
-        async (e) => {
-          log.error({ err: e, uid: args.uid }, "saveMealTypes failed");
-          return textResult(`Failed to update meal type: ${e.message}`);
-        },
-      );
-    };
   },
 );

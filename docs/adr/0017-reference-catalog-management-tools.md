@@ -16,6 +16,10 @@ Three design forces shaped the tools:
 
 ## Decision
 
+### One catalog write mutex per catalog
+
+Every name-uniqueness-sensitive catalog write serializes on one per-catalog mutex: the auto-create resolve-or-create (`ensureAisle`/`ensureMealType`, which already had it), the update tools' whole clash-check → save → commit sequence (via the `withCatalogWriteLock` writes chokepoint), and the deletes. Without it, two concurrent renames to the same name — or a rename racing an auto-create — both pass the uniqueness check before either commits.
+
 ### Edit tools, in the owning domain
 
 `update_aisle` (rename + reorder) and `update_meal_type` (rename + recolor + reorder) live in their catalog's own domain — pure intra-catalog writes need no cross-domain reads. Reorder is a 1-based `position` on the update tool (the "put Produce first" phrasing), not a separate full-order tool; the server renumbers order flags contiguously and batch-saves only entries that changed. Rename/recolor-only edits leave order flags untouched (they may be sparse; renumbering would rewrite the whole catalog for a one-entry edit). Built-in meal types are editable; `originalType` is never touched, so a renamed built-in keeps resolving for `{builtin}` specs.

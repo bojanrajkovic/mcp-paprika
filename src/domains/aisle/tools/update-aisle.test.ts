@@ -1,4 +1,4 @@
-import { errAsync } from "neverthrow";
+import { errAsync, okAsync, ResultAsync } from "neverthrow";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { AisleState } from "../module.js";
@@ -95,6 +95,30 @@ describe("update_aisle tool", () => {
     const text = await kh.callToolText("update_aisle", { uid: produce.uid, name: "Produce" });
     expect(text).toContain("No changes");
     expect(kh.client().saveAisles).not.toHaveBeenCalled();
+  });
+
+  it("serializes concurrent renames — only one of two same-name renames wins", async () => {
+    const { produce, dairy } = seedCatalog();
+    // Hold the first rename's save open so the second call arrives while the
+    // first is mid-flight. With the catalog write lock, the second waits and
+    // then sees the committed name; without it, both pass the clash check.
+    let releaseSave: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => {
+      releaseSave = resolve;
+    });
+    vi.mocked(kh.client().saveAisles)
+      .mockReturnValueOnce(ResultAsync.fromSafePromise(gate) as never)
+      .mockReturnValue(okAsync(undefined) as never);
+
+    const first = kh.callToolText("update_aisle", { uid: produce.uid, name: "Snacks" });
+    const second = kh.callToolText("update_aisle", { uid: dairy.uid, name: "snacks" });
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    releaseSave();
+    const [text1, text2] = await Promise.all([first, second]);
+
+    expect(text1).toContain('renamed to "Snacks"');
+    expect(text2).toContain('An aisle named "Snacks" already exists');
+    expect(kh.state().store.get(dairy.uid)?.name).toBe("Dairy");
   });
 
   it("surfaces a save failure without touching the store", async () => {

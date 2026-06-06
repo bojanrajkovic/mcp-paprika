@@ -41,69 +41,74 @@ export const updateAisleTool = defineTool(
   [aisleStartGuard],
   (ctx: DomainCtx<AisleState, never, AisleWrites>) => {
     const log = ctx.infra.log.child({ component: "update_aisle" });
-    return async (args) => {
-      const existing = ctx.state.store.get(args.uid);
-      if (existing === undefined) {
-        return textResult(`No aisle found with UID "${args.uid}" (see list_aisles for the catalog).`);
-      }
-
-      if (args.name === undefined && args.position === undefined) {
-        return textResult("Nothing to update: provide `name`, `position`, or both.");
-      }
-
-      const newName = args.name?.trim();
-      if (newName !== undefined) {
-        if (newName === "") return textResult("Aisle name cannot be empty.");
-        const clash = ctx.state.store.resolveByName(newName);
-        if (clash !== undefined && clash.uid !== existing.uid) {
-          return textResult(`An aisle named "${clash.name}" already exists — aisle names must be unique.`);
+    // The whole lookup → clash-check → save → commit sequence runs under the
+    // catalog write lock (shared with ensureAisle/deleteAisle): without it, two
+    // concurrent renames to one name both pass the clash check before either
+    // commits, breaking name uniqueness.
+    return async (args) =>
+      ctx.writes.withCatalogWriteLock(async () => {
+        const existing = ctx.state.store.get(args.uid);
+        if (existing === undefined) {
+          return textResult(`No aisle found with UID "${args.uid}" (see list_aisles for the catalog).`);
         }
-      }
 
-      const target: Aisle = { ...existing, name: newName ?? existing.name };
-      const sorted = sortCatalog(ctx.state.store.getAll());
+        if (args.name === undefined && args.position === undefined) {
+          return textResult("Nothing to update: provide `name`, `position`, or both.");
+        }
 
-      // Rename-only edits don't touch order flags (they may be sparse; renumbering
-      // would rewrite the whole catalog for a one-aisle rename); a reposition
-      // renumbers contiguously via the shared repositionCatalog.
-      const ordered: Array<Aisle> =
-        args.position === undefined
-          ? sorted.map((a) => (a.uid === target.uid ? target : a))
-          : repositionCatalog(sorted, target, args.position);
-
-      const toSave = ordered.filter((a) => {
-        const prev = ctx.state.store.get(a.uid);
-        return prev === undefined || prev.name !== a.name || prev.orderFlag !== a.orderFlag;
-      });
-      if (toSave.length === 0) {
-        return textResult(`No changes — "${existing.name}" already has that name/position.`);
-      }
-
-      return (await ctx.infra.client.saveAisles(toSave)).match(
-        async (): Promise<CallToolResult> => {
-          const commitErr = commitFailure("aisle", await ctx.writes.commitAisles(toSave));
-          if (commitErr) return commitErr;
-
-          const did: Array<string> = [];
-          if (newName !== undefined && newName !== existing.name) did.push(`renamed to "${newName}"`);
-          // Report where the aisle actually LANDED — a past-the-end position
-          // clamps to last, so echoing args.position would contradict the
-          // rendered order below.
-          if (args.position !== undefined) {
-            const landed = ordered.findIndex((a) => a.uid === target.uid) + 1;
-            did.push(`moved to position ${String(landed)}`);
+        const newName = args.name?.trim();
+        if (newName !== undefined) {
+          if (newName === "") return textResult("Aisle name cannot be empty.");
+          const clash = ctx.state.store.resolveByName(newName);
+          if (clash !== undefined && clash.uid !== existing.uid) {
+            return textResult(`An aisle named "${clash.name}" already exists — aisle names must be unique.`);
           }
-          return textResult(
-            `Updated aisle "${existing.name}": ${did.join(", ")}.\n\nCurrent aisle order:\n${renderCatalogOrder(
-              sortCatalog(ctx.state.store.getAll()),
-            )}`,
-          );
-        },
-        async (e) => {
-          log.error({ err: e, uid: args.uid }, "saveAisles failed");
-          return textResult(`Failed to update aisle: ${e.message}`);
-        },
-      );
-    };
+        }
+
+        const target: Aisle = { ...existing, name: newName ?? existing.name };
+        const sorted = sortCatalog(ctx.state.store.getAll());
+
+        // Rename-only edits don't touch order flags (they may be sparse; renumbering
+        // would rewrite the whole catalog for a one-aisle rename); a reposition
+        // renumbers contiguously via the shared repositionCatalog.
+        const ordered: Array<Aisle> =
+          args.position === undefined
+            ? sorted.map((a) => (a.uid === target.uid ? target : a))
+            : repositionCatalog(sorted, target, args.position);
+
+        const toSave = ordered.filter((a) => {
+          const prev = ctx.state.store.get(a.uid);
+          return prev === undefined || prev.name !== a.name || prev.orderFlag !== a.orderFlag;
+        });
+        if (toSave.length === 0) {
+          return textResult(`No changes — "${existing.name}" already has that name/position.`);
+        }
+
+        return (await ctx.infra.client.saveAisles(toSave)).match(
+          async (): Promise<CallToolResult> => {
+            const commitErr = commitFailure("aisle", await ctx.writes.commitAisles(toSave));
+            if (commitErr) return commitErr;
+
+            const did: Array<string> = [];
+            if (newName !== undefined && newName !== existing.name) did.push(`renamed to "${newName}"`);
+            // Report where the aisle actually LANDED — a past-the-end position
+            // clamps to last, so echoing args.position would contradict the
+            // rendered order below.
+            if (args.position !== undefined) {
+              const landed = ordered.findIndex((a) => a.uid === target.uid) + 1;
+              did.push(`moved to position ${String(landed)}`);
+            }
+            return textResult(
+              `Updated aisle "${existing.name}": ${did.join(", ")}.\n\nCurrent aisle order:\n${renderCatalogOrder(
+                sortCatalog(ctx.state.store.getAll()),
+              )}`,
+            );
+          },
+          async (e) => {
+            log.error({ err: e, uid: args.uid }, "saveAisles failed");
+            return textResult(`Failed to update aisle: ${e.message}`);
+          },
+        );
+      });
   },
 );
