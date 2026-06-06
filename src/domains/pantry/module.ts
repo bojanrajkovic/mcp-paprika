@@ -1,14 +1,14 @@
 import { join } from "node:path";
 
-import { okAsync, ResultAsync } from "neverthrow";
+import type { ResultAsync } from "neverthrow";
 
 import type { CacheError } from "../../cache/disk-cache.js";
 import type { PantryApi, PantryCreateError } from "./api.js";
-import type { PantryItemUid } from "./ids.js";
 import type { PantryItem } from "./types.js";
 
 import { DiskCache } from "../../cache/disk-cache.js";
 import { hydrateStore } from "../../cache/hydrate.js";
+import { commitEntities, deletedFlagOp } from "../../entity/commit.js";
 import { defineModule, register } from "../../kernel/registry.js";
 import { notifySyncBestEffort } from "../../paprika/client.js";
 import { resolvePendingWriteTtl } from "../../utils/config.js";
@@ -77,80 +77,14 @@ register(
       // pantry's own tools reach them via `ctx.writes` — while `createItems` is the
       // sibling-facing contract write grocery's move consumes via `ctx.deps.pantry`.
       //
-      // Order: markPending* (FIRST, before any cache I/O) → cache put/remove → flush
-      // → store set/delete → notifySync. The pending mark shields this UID from a
-      // sync cycle that observes the cache mid-commit; cache I/O is wrapped so a
-      // failure clears the mark instead of shielding the UID until TTL. No
+      // The commit protocol (mark-first → cache → flush → clear-on-failure → store
+      // → notify) lives in src/entity/commit.ts; these bind pantry's slice. No
       // resourceListChanged() — pantry has no MCP resource surface.
-      const commitPantryItem: PantryWrites["commitPantryItem"] = (saved) => {
-        if (saved.deleted) {
-          const uid: PantryItemUid = saved.uid;
-          state.store.markPendingDelete(uid);
-          return state.cache
-            .remove(uid)
-            .andThen(() => state.cache.flush())
-            .mapErr((e) => {
-              state.store.clearPending(uid);
-              return e;
-            })
-            .andThen(() => {
-              state.store.delete(uid);
-              return notifySyncBestEffort(infra.client, infra.log);
-            });
-        }
-        state.store.markPendingUpsert(saved.uid);
-        return state.cache
-          .put(saved)
-          .andThen(() => state.cache.flush())
-          .mapErr((e) => {
-            state.store.clearPending(saved.uid);
-            return e;
-          })
-          .andThen(() => {
-            state.store.set(saved);
-            return notifySyncBestEffort(infra.client, infra.log);
-          });
-      };
-
-      const commitPantryItemsBatch: PantryWrites["commitPantryItemsBatch"] = (items) => {
-        if (items.length === 0) return okAsync(undefined);
-        for (const item of items) {
-          if (item.deleted) {
-            state.store.markPendingDelete(item.uid);
-          } else {
-            state.store.markPendingUpsert(item.uid);
-          }
-        }
-        const clearPending = (): void => {
-          for (const item of items) state.store.clearPending(item.uid);
-        };
-        // `ResultAsync.combine` awaits every op (the underlying promises never
-        // reject), so a failure cannot race `clearPending` — the allSettled dance
-        // the throwing version needed is inherent here.
-        //
-        // All-or-nothing store semantics on failure is intentional: savePantryItems()
-        // already succeeded, so any local cache/store divergence is temporary and
-        // reconciled by the next sync. Clearing all pending marks on failure avoids
-        // suppressing sync reconciliation until TTL.
-        return ResultAsync.combine(
-          items.map((item) => (item.deleted ? state.cache.remove(item.uid) : state.cache.put(item))),
-        )
-          .andThen(() => state.cache.flush())
-          .mapErr((e) => {
-            clearPending();
-            return e;
-          })
-          .andThen(() => {
-            for (const item of items) {
-              if (item.deleted) {
-                state.store.delete(item.uid);
-              } else {
-                state.store.set(item);
-              }
-            }
-            return notifySyncBestEffort(infra.client, infra.log);
-          });
-      };
+      const pantryFx = { finish: () => notifySyncBestEffort(infra.client, infra.log) };
+      const commitPantryItem: PantryWrites["commitPantryItem"] = (saved) =>
+        commitEntities(state, [deletedFlagOp(saved)], pantryFx);
+      const commitPantryItemsBatch: PantryWrites["commitPantryItemsBatch"] = (items) =>
+        commitEntities(state, items.map(deletedFlagOp), pantryFx);
 
       // The public write grocery's move consumes. POST first, then local commit,
       // so the two failure modes stay distinguishable (the live move tool reports

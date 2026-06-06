@@ -1,6 +1,6 @@
 import { join } from "node:path";
 
-import { okAsync, ResultAsync } from "neverthrow";
+import { ResultAsync } from "neverthrow";
 import type { Logger } from "pino";
 
 import type { CacheError, DiskCache } from "../../cache/disk-cache.js";
@@ -12,6 +12,7 @@ import type { Menu } from "./types.js";
 
 import { DiskCache as DiskCacheImpl } from "../../cache/disk-cache.js";
 import { hydrateStore } from "../../cache/hydrate.js";
+import { commitEntities, deletedFlagOp } from "../../entity/commit.js";
 import { defineModule, register } from "../../kernel/registry.js";
 import { notifySyncBestEffort } from "../../paprika/client.js";
 import { resolvePendingWriteTtl } from "../../utils/config.js";
@@ -112,108 +113,19 @@ register(
       // menu's own tools reach them via `ctx.writes`; the read `api` is assembled below
       // from the stores.
       //
-      // Order: markPending* (FIRST, before any cache I/O) → cache put/remove → flush →
-      // store set/delete → resourceListChanged → notifySync. The pending mark shields
-      // this UID from sync-cycle reconciliation during the propagation race.
-
-      const commitMenu: MenuWrites["commitMenu"] = (saved) => {
-        if (saved.deleted) {
-          const uid = saved.uid;
-          state.menus.store.markPendingDelete(uid);
-          return state.menus.cache
-            .remove(uid)
-            .andThen(() => state.menus.cache.flush())
-            .mapErr((e) => {
-              state.menus.store.clearPending(uid);
-              return e;
-            })
-            .andThen(() => {
-              state.menus.store.delete(uid);
-              notifier.resourceListChanged();
-              return notifySyncBestEffort(client, infra.log);
-            });
-        }
-        state.menus.store.markPendingUpsert(saved.uid);
-        return state.menus.cache
-          .put(saved)
-          .andThen(() => state.menus.cache.flush())
-          .mapErr((e) => {
-            state.menus.store.clearPending(saved.uid);
-            return e;
-          })
-          .andThen(() => {
-            state.menus.store.set(saved);
-            notifier.resourceListChanged();
-            return notifySyncBestEffort(client, infra.log);
-          });
+      // The commit protocol (mark-first → cache → flush → clear-on-failure → store
+      // → effects → notify) lives in src/entity/commit.ts; these bind menu's slices.
+      // Menus and menu-items both fire resourceListChanged() — Content domain.
+      const menuFx = {
+        onCommitted: () => notifier.resourceListChanged(),
+        finish: () => notifySyncBestEffort(client, infra.log),
       };
-
-      const commitMenuItem: MenuWrites["commitMenuItem"] = (saved) => {
-        if (saved.deleted) {
-          const uid = saved.uid;
-          state.items.store.markPendingDelete(uid);
-          return state.items.cache
-            .remove(uid)
-            .andThen(() => state.items.cache.flush())
-            .mapErr((e) => {
-              state.items.store.clearPending(uid);
-              return e;
-            })
-            .andThen(() => {
-              state.items.store.delete(uid);
-              notifier.resourceListChanged();
-              return notifySyncBestEffort(client, infra.log);
-            });
-        }
-        state.items.store.markPendingUpsert(saved.uid);
-        return state.items.cache
-          .put(saved)
-          .andThen(() => state.items.cache.flush())
-          .mapErr((e) => {
-            state.items.store.clearPending(saved.uid);
-            return e;
-          })
-          .andThen(() => {
-            state.items.store.set(saved);
-            notifier.resourceListChanged();
-            return notifySyncBestEffort(client, infra.log);
-          });
-      };
-
-      const commitMenuItemsBatch: MenuWrites["commitMenuItemsBatch"] = (items) => {
-        if (items.length === 0) return okAsync(undefined);
-        for (const item of items) {
-          if (item.deleted) {
-            state.items.store.markPendingDelete(item.uid);
-          } else {
-            state.items.store.markPendingUpsert(item.uid);
-          }
-        }
-        const clearPending = (): void => {
-          for (const item of items) state.items.store.clearPending(item.uid);
-        };
-        // `ResultAsync.combine` awaits every op (the underlying promises never
-        // reject), so a failure cannot race `clearPending`.
-        return ResultAsync.combine(
-          items.map((item) => (item.deleted ? state.items.cache.remove(item.uid) : state.items.cache.put(item))),
-        )
-          .andThen(() => state.items.cache.flush())
-          .mapErr((e) => {
-            clearPending();
-            return e;
-          })
-          .andThen(() => {
-            for (const item of items) {
-              if (item.deleted) {
-                state.items.store.delete(item.uid);
-              } else {
-                state.items.store.set(item);
-              }
-            }
-            notifier.resourceListChanged();
-            return notifySyncBestEffort(client, infra.log);
-          });
-      };
+      const commitMenu: MenuWrites["commitMenu"] = (saved) =>
+        commitEntities(state.menus, [deletedFlagOp(saved)], menuFx);
+      const commitMenuItem: MenuWrites["commitMenuItem"] = (saved) =>
+        commitEntities(state.items, [deletedFlagOp(saved)], menuFx);
+      const commitMenuItemsBatch: MenuWrites["commitMenuItemsBatch"] = (items) =>
+        commitEntities(state.items, items.map(deletedFlagOp), menuFx);
 
       return {
         api: {

@@ -1,6 +1,6 @@
 import { join } from "node:path";
 
-import { okAsync, ResultAsync } from "neverthrow";
+import type { ResultAsync } from "neverthrow";
 
 import type { CacheError, DiskCache } from "../../cache/disk-cache.js";
 import type { MealApi } from "./api.js";
@@ -8,6 +8,7 @@ import type { Meal } from "./types.js";
 
 import { DiskCache as DiskCacheImpl } from "../../cache/disk-cache.js";
 import { hydrateStore } from "../../cache/hydrate.js";
+import { commitEntities, deletedFlagOp } from "../../entity/commit.js";
 import { defineModule, register } from "../../kernel/registry.js";
 import { notifySyncBestEffort } from "../../paprika/client.js";
 import { resolvePendingWriteTtl } from "../../utils/config.js";
@@ -71,77 +72,13 @@ register(
       // own tools reach them via `ctx.writes` — while `createMeals` is the contract
       // write the meal-planner coordinator consumes via `ctx.deps.meal`.
       //
-      // Order: markPending* (FIRST, before any cache I/O) → cache put/remove → flush
-      // → store set/delete → notifySync. The pending mark shields this UID from
-      // sync-cycle reconciliation during the propagation race. No resourceListChanged()
-      // — meals have no resource surface.
-      const commitMeal: MealWrites["commitMeal"] = (saved) => {
-        if (saved.deleted) {
-          const uid = saved.uid;
-          state.store.markPendingDelete(uid);
-          return state.cache
-            .remove(uid)
-            .andThen(() => state.cache.flush())
-            .mapErr((e) => {
-              state.store.clearPending(uid);
-              return e;
-            })
-            .andThen(() => {
-              state.store.delete(uid);
-              return notifySyncBestEffort(client, infra.log);
-            });
-        }
-        state.store.markPendingUpsert(saved.uid);
-        return state.cache
-          .put(saved)
-          .andThen(() => state.cache.flush())
-          .mapErr((e) => {
-            state.store.clearPending(saved.uid);
-            return e;
-          })
-          .andThen(() => {
-            state.store.set(saved);
-            return notifySyncBestEffort(client, infra.log);
-          });
-      };
-
-      // Batch variant: commits N meals with a single cache.flush() and a single
-      // notifySync(). Marks all pending writes before any cache I/O; on cache
-      // failure, clears ALL marked UIDs before surfacing the error so no UID is
-      // left shielded until TTL. No resourceListChanged().
-      const commitMealsBatch: MealWrites["commitMealsBatch"] = (items) => {
-        if (items.length === 0) return okAsync(undefined);
-        for (const item of items) {
-          if (item.deleted) {
-            state.store.markPendingDelete(item.uid);
-          } else {
-            state.store.markPendingUpsert(item.uid);
-          }
-        }
-        const clearPending = (): void => {
-          for (const item of items) state.store.clearPending(item.uid);
-        };
-        // `ResultAsync.combine` awaits every op (the underlying promises never
-        // reject), so a failure cannot race `clearPending`.
-        return ResultAsync.combine(
-          items.map((item) => (item.deleted ? state.cache.remove(item.uid) : state.cache.put(item))),
-        )
-          .andThen(() => state.cache.flush())
-          .mapErr((e) => {
-            clearPending();
-            return e;
-          })
-          .andThen(() => {
-            for (const item of items) {
-              if (item.deleted) {
-                state.store.delete(item.uid);
-              } else {
-                state.store.set(item);
-              }
-            }
-            return notifySyncBestEffort(client, infra.log);
-          });
-      };
+      // The commit protocol (mark-first → cache → flush → clear-on-failure → store
+      // → notify) lives in src/entity/commit.ts; these bind meal's slice. No
+      // resourceListChanged() — meals have no resource surface.
+      const mealFx = { finish: () => notifySyncBestEffort(client, infra.log) };
+      const commitMeal: MealWrites["commitMeal"] = (saved) => commitEntities(state, [deletedFlagOp(saved)], mealFx);
+      const commitMealsBatch: MealWrites["commitMealsBatch"] = (items) =>
+        commitEntities(state, items.map(deletedFlagOp), mealFx);
 
       // The coordinator's batch write (api): POST then commit through the in-scope
       // chokepoint. Returns the server-saved meals on success, a user-facing error
