@@ -305,7 +305,7 @@ _No parameters._
 
 **List meal types** — read-only, idempotent
 
-List all meal types — the built-in Breakfast/Lunch/Dinner/Snacks plus any custom types — sorted by order then name. Each entry shows whether it is built-in or custom, its calendar-export schedule (all-day or a clock time), and its UID. Reference a type by name, or pass its UID to plan_meals / update_meal via the `type: { uid }` spec. Meal types are created and edited in the Paprika app, not through this server.
+List all meal types — the built-in Breakfast/Lunch/Dinner/Snacks plus any custom types — sorted by order then name. Each entry shows whether it is built-in or custom, its calendar-export schedule (all-day or a clock time), and its UID. Reference a type by name, or pass its UID to plan_meals / update_meal via the `type: { uid }` spec. Planning a meal with a new type name creates it; update_meal_type and delete_meal_type manage the catalog.
 
 _No parameters._
 

@@ -9,9 +9,10 @@ import type { MealType } from "./types.js";
 
 import { DiskCache } from "../../cache/disk-cache.js";
 import { hydrateStore } from "../../cache/hydrate.js";
-import { commitEntities, deleteOp, upsertOp } from "../../entity/commit.js";
+import { commitEntities, upsertOp } from "../../entity/commit.js";
 import { defineModule, register } from "../../kernel/registry.js";
 import { notifySyncBestEffort } from "../../paprika/client.js";
+import { makeCatalogDelete } from "../../shared/catalog.js";
 import { resolvePendingWriteTtl } from "../../utils/config.js";
 import { unwrapAtBoot } from "../../utils/errors.js";
 import { MealTypeUidSchema } from "./ids.js";
@@ -131,30 +132,16 @@ register(
         });
       };
 
-      // Tombstone-delete + local delete commit. The reference counts live with the
-      // meal-planner coordinator's `delete_meal_type` tool (it can see meal and
-      // menu); this owns only the catalog write. Erring after a successful POST is
-      // safe to surface — re-running the delete just re-POSTs the tombstone.
-      const deleteMealType: MealTypeApi["deleteMealType"] = async (uid) => {
-        if (!state.store.hasSynced) {
-          return err("Meal type list is not yet synced. Try again in a few seconds.");
-        }
-        const existing = state.store.get(uid);
-        if (existing === undefined) return err(`No meal type found with UID "${uid}".`);
-        return await infra.client
-          .saveMealTypes([{ ...existing, deleted: true }])
-          .mapErr((e) => `Failed to delete meal type "${existing.name}": ${e.message}`)
-          .andThen(() =>
-            commitEntities(state, [deleteOp(uid)], {
-              finish: () => notifySyncBestEffort(infra.client, infra.log),
-            }).mapErr(
-              (e) =>
-                `Meal type "${existing.name}" was deleted in Paprika, but the local commit failed (${e.message}). ` +
-                "Retrying is safe; the next sync reconciles either way.",
-            ),
-          )
-          .map(() => undefined);
-      };
+      // Tombstone-delete + local delete commit (the shared makeCatalogDelete
+      // shape). The reference counts live with the meal-planner coordinator's
+      // `delete_meal_type` tool (it can see meal and menu); this owns only the
+      // catalog write.
+      const deleteMealType: MealTypeApi["deleteMealType"] = makeCatalogDelete({
+        noun: "Meal type",
+        state,
+        save: (tombstone) => infra.client.saveMealTypes([tombstone]),
+        finish: () => notifySyncBestEffort(infra.client, infra.log),
+      });
 
       return {
         api: {

@@ -6,25 +6,10 @@ import type { AisleState, AisleWrites } from "../module.js";
 import type { Aisle } from "../types.js";
 
 import { defineTool } from "../../../kernel/tool.js";
+import { renderCatalogOrder, repositionCatalog, sortCatalog } from "../../../shared/catalog.js";
 import { commitFailure, textResult } from "../../../shared/tools.js";
 import { AisleUidSchema } from "../ids.js";
 import { aisleStartGuard } from "./guards.js";
-
-/** The catalog in display order — the same sort `list_aisles` renders. */
-function sortedCatalog(state: AisleState): Array<Aisle> {
-  return state.store
-    .getAll()
-    .slice()
-    .sort((a, b) => {
-      if (a.orderFlag !== b.orderFlag) return a.orderFlag - b.orderFlag;
-      return a.name.localeCompare(b.name);
-    });
-}
-
-/** Render the catalog as a numbered order listing for the tool response. */
-function renderOrder(aisles: ReadonlyArray<Aisle>): string {
-  return aisles.map((a, i) => `${String(i + 1)}. **${a.name}** — \`${a.uid}\``).join("\n");
-}
 
 /**
  * `update_aisle` — rename and/or reposition an aisle. Renames do NOT rewrite the
@@ -76,21 +61,15 @@ export const updateAisleTool = defineTool(
       }
 
       const target: Aisle = { ...existing, name: newName ?? existing.name };
-      const sorted = sortedCatalog(ctx.state);
+      const sorted = sortCatalog(ctx.state.store.getAll());
 
-      let ordered: Array<Aisle>;
-      if (args.position === undefined) {
-        // Rename-only: don't touch order flags (they may be sparse; renumbering
-        // here would rewrite the whole catalog for a one-aisle rename).
-        ordered = sorted.map((a) => (a.uid === target.uid ? target : a));
-      } else {
-        // Reposition: remove, insert at the clamped index, renumber contiguously.
-        const without = sorted.filter((a) => a.uid !== target.uid);
-        const idx = Math.min(args.position - 1, without.length);
-        ordered = [...without.slice(0, idx), target, ...without.slice(idx)].map((a, i) =>
-          a.orderFlag === i ? a : { ...a, orderFlag: i },
-        );
-      }
+      // Rename-only edits don't touch order flags (they may be sparse; renumbering
+      // would rewrite the whole catalog for a one-aisle rename); a reposition
+      // renumbers contiguously via the shared repositionCatalog.
+      const ordered: Array<Aisle> =
+        args.position === undefined
+          ? sorted.map((a) => (a.uid === target.uid ? target : a))
+          : repositionCatalog(sorted, target, args.position);
 
       const toSave = ordered.filter((a) => {
         const prev = ctx.state.store.get(a.uid);
@@ -109,8 +88,8 @@ export const updateAisleTool = defineTool(
           if (newName !== undefined && newName !== existing.name) did.push(`renamed to "${newName}"`);
           if (args.position !== undefined) did.push(`moved to position ${String(args.position)}`);
           return textResult(
-            `Updated aisle "${existing.name}": ${did.join(", ")}.\n\nCurrent aisle order:\n${renderOrder(
-              sortedCatalog(ctx.state),
+            `Updated aisle "${existing.name}": ${did.join(", ")}.\n\nCurrent aisle order:\n${renderCatalogOrder(
+              sortCatalog(ctx.state.store.getAll()),
             )}`,
           );
         },

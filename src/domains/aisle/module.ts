@@ -9,9 +9,10 @@ import type { Aisle } from "./types.js";
 
 import { DiskCache } from "../../cache/disk-cache.js";
 import { hydrateStore } from "../../cache/hydrate.js";
-import { commitEntities, deleteOp, upsertOp } from "../../entity/commit.js";
+import { commitEntities, upsertOp } from "../../entity/commit.js";
 import { defineModule, register } from "../../kernel/registry.js";
 import { notifySyncBestEffort } from "../../paprika/client.js";
+import { makeCatalogDelete } from "../../shared/catalog.js";
 import { resolvePendingWriteTtl } from "../../utils/config.js";
 import { unwrapAtBoot } from "../../utils/errors.js";
 import { AisleUidSchema, NO_AISLE_UID } from "./ids.js";
@@ -118,30 +119,15 @@ register(
         });
       };
 
-      // Tombstone-delete + local delete commit. The reference guard lives with
-      // grocery's `delete_aisle` tool (grocery owns the referencing items); this
-      // owns only the catalog write. Erring after a successful POST is safe to
-      // surface — re-running the delete just re-POSTs the tombstone.
-      const deleteAisle: AisleApi["deleteAisle"] = async (uid) => {
-        if (!state.store.hasSynced) {
-          return err("Aisle list is not yet synced. Try again in a few seconds.");
-        }
-        const existing = state.store.get(uid);
-        if (existing === undefined) return err(`No aisle found with UID "${uid}".`);
-        return await infra.client
-          .saveAisles([{ ...existing, deleted: true }])
-          .mapErr((e) => `Failed to delete aisle "${existing.name}": ${e.message}`)
-          .andThen(() =>
-            commitEntities(state, [deleteOp(uid)], {
-              finish: () => notifySyncBestEffort(infra.client, infra.log),
-            }).mapErr(
-              (e) =>
-                `Aisle "${existing.name}" was deleted in Paprika, but the local commit failed (${e.message}). ` +
-                "Retrying is safe; the next sync reconciles either way.",
-            ),
-          )
-          .map(() => undefined);
-      };
+      // Tombstone-delete + local delete commit (the shared makeCatalogDelete
+      // shape). The reference guard lives with grocery's `delete_aisle` tool
+      // (grocery owns the referencing items); this owns only the catalog write.
+      const deleteAisle: AisleApi["deleteAisle"] = makeCatalogDelete({
+        noun: "Aisle",
+        state,
+        save: (tombstone) => infra.client.saveAisles([tombstone]),
+        finish: () => notifySyncBestEffort(infra.client, infra.log),
+      });
 
       return {
         api: {

@@ -2,6 +2,7 @@ import type { DomainCtx } from "../../../kernel/registry.js";
 import type { AisleState } from "../module.js";
 
 import { defineTool } from "../../../kernel/tool.js";
+import { sortCatalog } from "../../../shared/catalog.js";
 import { textResult } from "../../../shared/tools.js";
 import { aisleStartGuard } from "./guards.js";
 
@@ -23,10 +24,7 @@ export const listAislesTool = defineTool(
   [aisleStartGuard],
   (ctx: DomainCtx<AisleState, never>) => {
     return async () => {
-      const aisles = ctx.state.store.getAll().sort((a, b) => {
-        if (a.orderFlag !== b.orderFlag) return a.orderFlag - b.orderFlag;
-        return a.name.localeCompare(b.name);
-      });
+      const aisles = sortCatalog(ctx.state.store.getAll());
       if (aisles.length === 0) {
         return textResult(
           "No aisles found. Aisles are created automatically when you add a grocery or pantry item with a new aisle name.",

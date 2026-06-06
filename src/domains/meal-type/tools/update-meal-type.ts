@@ -6,25 +6,10 @@ import type { MealTypeState, MealTypeWrites } from "../module.js";
 import type { MealType } from "../types.js";
 
 import { defineTool } from "../../../kernel/tool.js";
+import { renderCatalogOrder, repositionCatalog, sortCatalog } from "../../../shared/catalog.js";
 import { commitFailure, textResult } from "../../../shared/tools.js";
 import { MealTypeUidSchema } from "../ids.js";
 import { mealTypeStartGuard } from "./guards.js";
-
-/** The catalog in display order — the same sort `list_meal_types` renders. */
-function sortedCatalog(state: MealTypeState): Array<MealType> {
-  return state.store
-    .getAll()
-    .slice()
-    .sort((a, b) => {
-      if (a.orderFlag !== b.orderFlag) return a.orderFlag - b.orderFlag;
-      return a.name.localeCompare(b.name);
-    });
-}
-
-/** Render the catalog as a numbered order listing for the tool response. */
-function renderOrder(mealTypes: ReadonlyArray<MealType>): string {
-  return mealTypes.map((mt, i) => `${String(i + 1)}. **${mt.name}** — \`${mt.uid}\``).join("\n");
-}
 
 /**
  * `update_meal_type` — rename, recolor, and/or reposition a meal type (built-ins
@@ -86,21 +71,15 @@ export const updateMealTypeTool = defineTool(
         name: newName ?? existing.name,
         color: args.color ?? existing.color,
       };
-      const sorted = sortedCatalog(ctx.state);
+      const sorted = sortCatalog(ctx.state.store.getAll());
 
-      let ordered: Array<MealType>;
-      if (args.position === undefined) {
-        // Rename/recolor-only: don't touch order flags (they may be sparse;
-        // renumbering here would rewrite the whole catalog for a one-type edit).
-        ordered = sorted.map((mt) => (mt.uid === target.uid ? target : mt));
-      } else {
-        // Reposition: remove, insert at the clamped index, renumber contiguously.
-        const without = sorted.filter((mt) => mt.uid !== target.uid);
-        const idx = Math.min(args.position - 1, without.length);
-        ordered = [...without.slice(0, idx), target, ...without.slice(idx)].map((mt, i) =>
-          mt.orderFlag === i ? mt : { ...mt, orderFlag: i },
-        );
-      }
+      // Rename/recolor-only edits don't touch order flags (they may be sparse;
+      // renumbering would rewrite the whole catalog for a one-type edit); a
+      // reposition renumbers contiguously via the shared repositionCatalog.
+      const ordered: Array<MealType> =
+        args.position === undefined
+          ? sorted.map((mt) => (mt.uid === target.uid ? target : mt))
+          : repositionCatalog(sorted, target, args.position);
 
       const toSave = ordered.filter((mt) => {
         const prev = ctx.state.store.get(mt.uid);
@@ -122,8 +101,8 @@ export const updateMealTypeTool = defineTool(
           if (args.color !== undefined && args.color !== existing.color) did.push(`recolored to ${args.color}`);
           if (args.position !== undefined) did.push(`moved to position ${String(args.position)}`);
           return textResult(
-            `Updated meal type "${existing.name}": ${did.join(", ")}.\n\nCurrent meal-type order:\n${renderOrder(
-              sortedCatalog(ctx.state),
+            `Updated meal type "${existing.name}": ${did.join(", ")}.\n\nCurrent meal-type order:\n${renderCatalogOrder(
+              sortCatalog(ctx.state.store.getAll()),
             )}`,
           );
         },

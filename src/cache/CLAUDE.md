@@ -15,7 +15,7 @@ The in-memory query/CRUD stores that are each session's source of truth for one 
 
 ## Stores at a glance
 
-Every store extends `EntityStore`, except `grocery-ingredient` — a plain name-keyed class (see Sharp edges). `aisle` / `meal-type` are reference catalogs whose only write path is internal auto-create (`ensureAisle` / `ensureMealType`, which mark pending-upsert) — no standalone create/edit/delete tools.
+Every store extends `EntityStore`, except `grocery-ingredient` — a plain name-keyed class (see Sharp edges). `aisle` / `meal-type` are reference catalogs with a managed lifecycle ([ADR-0017](../../docs/adr/0017-reference-catalog-management-tools.md)): internal auto-create (`ensureAisle` / `ensureMealType`, which mark pending-upsert), explicit edit (`update_aisle` / `update_meal_type`), and tombstone delete (`delete_aisle` / `delete_meal_type` — homed in grocery and meal-planner respectively, where the referencing entities are visible).
 
 ## Sharp edges
 
