@@ -230,6 +230,29 @@ describe("defineTool", () => {
       );
     });
 
+    it("strips userinfo and query from URL-shaped arg strings in the debug args record", async () => {
+      const { log, records } = makePinoCapture();
+      const tool = defineTool(spec, (_ctx: DomainCtx<unknown, never>) => () => textResult("ran"));
+
+      const { server, callTool } = makeTestServer();
+      tool.register(makeCtx(undefined, server, log));
+      // Credentials embed INSIDE url strings — userinfo and presigned-URL query
+      // signatures — where key-based redaction can't see, and a short signed
+      // URL would sail under the length gate.
+      await callTool("gated_tool", { q: "https://user:secret@cdn.example.com/img/photo.jpg?sig=abc123&exp=99" });
+
+      expect(records).toContainEqual(
+        expect.objectContaining({
+          tool: "gated_tool",
+          args: { q: "https://cdn.example.com/img/photo.jpg?[redacted]" },
+          msg: "tool args",
+        }),
+      );
+      const raw = JSON.stringify(records);
+      expect(raw).not.toContain("secret");
+      expect(raw).not.toContain("sig=abc123");
+    });
+
     it("two-arg form (no preconditions) still logs 'tool invoked' centrally", async () => {
       const { log, records } = makePinoCapture();
       const tool = defineTool(spec, (_ctx: DomainCtx<unknown, never>) => () => textResult("ran"));

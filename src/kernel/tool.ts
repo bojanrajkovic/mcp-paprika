@@ -73,25 +73,40 @@ type ErasedToolCallback = (args: unknown, extra: unknown) => CallToolResult | Pr
 const MAX_LOGGED_STRING = 256;
 
 /**
- * Size-bound a tool's args for the debug invoke log: any string longer than
- * {@link MAX_LOGGED_STRING} is replaced by a length marker, recursively. Tool
- * inputs are Zod-validated plain data (no cycles), and the correlation fields
- * the log exists for (uids, names, dates) are short — what gets cut is exactly
- * the payload-sized content (a ~13 MB base64 image, a full recipe's directions,
- * a signed image URL's query string) that has no business in a retained log
- * record. Sensitive key NAMES (`generation_token`, `token`, …) are the root
- * logger's job — `REDACT_PATHS` in `utils/log.ts` censors them on every log
- * site, not just this one.
+ * Sanitize a tool's args for the debug invoke log, recursively. Tool inputs are
+ * Zod-validated plain data (no cycles), and the correlation fields the log
+ * exists for (uids, names, dates) are short and survive untouched. Two string
+ * shapes are rewritten:
+ * - **URL-shaped strings** are stripped to protocol + host + path with the
+ *   query replaced by a marker: credentials embed INSIDE url strings (userinfo
+ *   `user:pass@host`, presigned-URL signatures in the query), where the
+ *   key-name-based `REDACT_PATHS` cannot see, and a short signed URL would
+ *   sail under the length gate.
+ * - **Oversized strings** (past {@link MAX_LOGGED_STRING}) become a length
+ *   marker — a ~13 MB base64 image or a full recipe's directions is payload,
+ *   not correlation data.
+ * Sensitive key NAMES (`generation_token`, `token`, …) are the root logger's
+ * job — `REDACT_PATHS` in `utils/log.ts` censors them on every log site, not
+ * just this one.
  */
 function loggableArgs(value: unknown): unknown {
-  if (typeof value === "string") {
-    return value.length > MAX_LOGGED_STRING ? `[${value.length.toString()} chars]` : value;
-  }
+  if (typeof value === "string") return loggableString(value);
   if (Array.isArray(value)) return value.map(loggableArgs);
   if (typeof value === "object" && value !== null) {
     return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, loggableArgs(v)]));
   }
   return value;
+}
+
+function loggableString(value: string): string {
+  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(value) && URL.canParse(value)) {
+    const url = new URL(value);
+    // protocol + host excludes userinfo by construction; the query (where
+    // presigned-URL credentials live) collapses to a marker.
+    const sanitized = `${url.protocol}//${url.host}${url.pathname}${url.search.length > 0 ? "?[redacted]" : ""}`;
+    return sanitized.length > MAX_LOGGED_STRING ? `[url, ${value.length.toString()} chars]` : sanitized;
+  }
+  return value.length > MAX_LOGGED_STRING ? `[${value.length.toString()} chars]` : value;
 }
 
 /**
