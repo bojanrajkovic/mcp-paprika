@@ -39,7 +39,7 @@ defineTool(spec, [pre1, pre2], (ctx) => handler);
 
 where each entry is a `ToolPrecondition<Ctx> = (ctx: Ctx) => Result<void, CallToolResult>`. The kernel wraps **every** registered callback (both overloads) once:
 
-1. logs `tool invoked` (uniform `{ tool }` shape, info) **before** the gate, so a gated call is still visible — plus the full `args` on a separate **debug** line, so per-call correlation (which UID, which list) is recoverable by raising the level without putting recipe-sized payloads in info logs;
+1. logs `tool invoked` (uniform `{ tool }` shape, info) **before** the gate, so a gated call is still visible — plus the `args` on a separate **debug** line, so per-call correlation (which UID, which list) is recoverable by raising the level. The args record is **size-bounded** (any string past 256 chars becomes a length marker, so a ~13 MB base64 image or a full recipe's directions never lands in a retained log) and credential-named fields (`generation_token`, …) are censored by the root logger's `REDACT_PATHS`;
 2. runs the preconditions in order, short-circuiting on the first `err` — that err **is** the tool response, and the failing guard's function name is logged (`tool gated by precondition`, **debug**: gating is the expected, self-healing cold-start state, and a retrying client would otherwise storm the info log with one gate line per call across the whole surface);
 3. calls the body.
 

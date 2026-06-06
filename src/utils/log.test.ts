@@ -537,6 +537,7 @@ describe("createLogger (composition)", () => {
       "access_token",
       "refresh_token",
       "id_token",
+      "generation_token",
     ] as const;
 
     for (const field of sensitiveFields) {

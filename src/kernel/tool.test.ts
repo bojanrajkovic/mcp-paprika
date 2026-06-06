@@ -215,6 +215,21 @@ describe("defineTool", () => {
       );
     });
 
+    it("size-bounds oversized arg strings in the debug args record", async () => {
+      const { log, records } = makePinoCapture();
+      const tool = defineTool(spec, (_ctx: DomainCtx<unknown, never>) => () => textResult("ran"));
+
+      const { server, callTool } = makeTestServer();
+      tool.register(makeCtx(undefined, server, log));
+      // A payload-sized string (e.g. a base64 image) must not be serialized
+      // verbatim into the log record — only a length marker survives.
+      await callTool("gated_tool", { q: "x".repeat(10_000) });
+
+      expect(records).toContainEqual(
+        expect.objectContaining({ tool: "gated_tool", args: { q: "[10000 chars]" }, msg: "tool args" }),
+      );
+    });
+
     it("two-arg form (no preconditions) still logs 'tool invoked' centrally", async () => {
       const { log, records } = makePinoCapture();
       const tool = defineTool(spec, (_ctx: DomainCtx<unknown, never>) => () => textResult("ran"));

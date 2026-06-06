@@ -70,6 +70,30 @@ export type ToolPrecondition<Ctx> = (ctx: Ctx) => Result<void, CallToolResult>;
  */
 type ErasedToolCallback = (args: unknown, extra: unknown) => CallToolResult | Promise<CallToolResult>;
 
+const MAX_LOGGED_STRING = 256;
+
+/**
+ * Size-bound a tool's args for the debug invoke log: any string longer than
+ * {@link MAX_LOGGED_STRING} is replaced by a length marker, recursively. Tool
+ * inputs are Zod-validated plain data (no cycles), and the correlation fields
+ * the log exists for (uids, names, dates) are short — what gets cut is exactly
+ * the payload-sized content (a ~13 MB base64 image, a full recipe's directions,
+ * a signed image URL's query string) that has no business in a retained log
+ * record. Sensitive key NAMES (`generation_token`, `token`, …) are the root
+ * logger's job — `REDACT_PATHS` in `utils/log.ts` censors them on every log
+ * site, not just this one.
+ */
+function loggableArgs(value: unknown): unknown {
+  if (typeof value === "string") {
+    return value.length > MAX_LOGGED_STRING ? `[${value.length.toString()} chars]` : value;
+  }
+  if (Array.isArray(value)) return value.map(loggableArgs);
+  if (typeof value === "object" && value !== null) {
+    return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, loggableArgs(v)]));
+  }
+  return value;
+}
+
 /**
  * Author a tool: `defineTool(spec, ctx => handler)`, or with readiness gates
  * `defineTool(spec, [pre1, pre2], ctx => handler)` (Express-middleware style;
@@ -152,8 +176,10 @@ export function defineTool<
         log.info({ tool: spec.name }, "tool invoked");
         // Args ride a separate debug line: per-call correlation (which UID, which
         // list) is recoverable by raising the level, without putting recipe-sized
-        // payloads in info logs. The root logger's redaction still applies.
-        log.debug({ tool: spec.name, args }, "tool args");
+        // payloads in info logs. Size-bounded (oversized strings become length
+        // markers) and the root logger's REDACT_PATHS censors credential-named
+        // fields; the level guard keeps the walk off the default-level path.
+        if (log.isLevelEnabled("debug")) log.debug({ tool: spec.name, args: loggableArgs(args) }, "tool args");
         for (const pre of preconditions) {
           const failure = pre(ctx).match(
             () => undefined,
