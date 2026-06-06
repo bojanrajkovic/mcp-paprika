@@ -104,6 +104,7 @@ register(
         api: {
           hasSynced: () => state.store.hasSynced,
           createItems,
+          countItemsInAisle: (uid) => state.store.getAll().filter((i) => i.aisleUid === uid).length,
         },
         writes: { commitPantryItem, commitPantryItemsBatch },
         tools: [

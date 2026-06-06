@@ -1,101 +1,28 @@
-import { z } from "zod";
+import { makeRecipeFlagTool, recipeFlagInputSchema } from "./flag-tool.js";
 
-import type { DomainCtx } from "../../../kernel/registry.js";
-import type { RecipeState, RecipeWrites } from "../module.js";
-
-import { defineTool } from "../../../kernel/tool.js";
-import { commitFailure, textResult } from "../../../shared/tools.js";
-import { RecipeUidSchema } from "../ids.js";
-import { recipeToMarkdown } from "../recipe-markdown.js";
-import { recipeColdStartGuard } from "./guards.js";
-
-export const favoriteRecipeInputSchema = z
-  .object({
-    uid: RecipeUidSchema.describe("Recipe UID"),
-  })
-  .strict();
-
-export const unfavoriteRecipeInputSchema = z
-  .object({
-    uid: RecipeUidSchema.describe("Recipe UID"),
-  })
-  .strict();
+// Aliases for the shared flag schema — the per-verb names the tests import.
+export const favoriteRecipeInputSchema = recipeFlagInputSchema;
+export const unfavoriteRecipeInputSchema = recipeFlagInputSchema;
 
 /** `favorite_recipe` — mark a recipe as a favorite. */
-export const favoriteRecipeTool = defineTool(
-  {
-    name: "favorite_recipe",
-    title: "Mark a recipe as a favorite",
-    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
-    description: "Mark a recipe as a favorite by UID (adds it to the Favorites list).",
-    inputSchema: favoriteRecipeInputSchema,
-  },
-  [recipeColdStartGuard],
-  (ctx: DomainCtx<RecipeState, never, RecipeWrites>) => {
-    const log = ctx.infra.log.child({ component: "favorite_recipe" });
-    return async (args) => {
-      const existing = ctx.state.recipe.store.get(args.uid);
-
-      if (!existing) {
-        return textResult(`No recipe found with UID "${args.uid}" (it may not exist or was already deleted).`);
-      }
-
-      const updated = { ...existing, onFavorites: true };
-
-      const saved = (await ctx.infra.client.saveRecipe(updated)).match(
-        (v) => v,
-        (e) => {
-          log.error({ err: e, uid: args.uid }, "saveRecipe failed");
-          return textResult(`Failed to favorite recipe: ${e.message}`);
-        },
-      );
-      if ("content" in saved) return saved;
-      const commitErr = commitFailure("recipe", await ctx.writes.commitRecipe(saved), { selfHealing: false });
-      if (commitErr) return commitErr;
-
-      const categoryNames = ctx.state.category.store.resolveNames(saved.categories);
-      return textResult(recipeToMarkdown(saved, categoryNames));
-    };
-  },
-);
+export const favoriteRecipeTool = makeRecipeFlagTool({
+  name: "favorite_recipe",
+  title: "Mark a recipe as a favorite",
+  description: "Mark a recipe as a favorite by UID (adds it to the Favorites list).",
+  flag: "onFavorites",
+  value: true,
+  failVerb: "favorite",
+});
 
 /** `unfavorite_recipe` — remove a recipe from favorites. */
-export const unfavoriteRecipeTool = defineTool(
-  {
-    name: "unfavorite_recipe",
-    title: "Remove a recipe from favorites",
-    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
-    description: "Remove a recipe from the Favorites list by UID.",
-    inputSchema: unfavoriteRecipeInputSchema,
-  },
-  [recipeColdStartGuard],
-  (ctx: DomainCtx<RecipeState, never, RecipeWrites>) => {
-    const log = ctx.infra.log.child({ component: "unfavorite_recipe" });
-    return async (args) => {
-      const existing = ctx.state.recipe.store.get(args.uid);
-
-      if (!existing) {
-        return textResult(`No recipe found with UID "${args.uid}" (it may not exist or was already deleted).`);
-      }
-
-      const updated = { ...existing, onFavorites: false };
-
-      const saved = (await ctx.infra.client.saveRecipe(updated)).match(
-        (v) => v,
-        (e) => {
-          log.error({ err: e, uid: args.uid }, "saveRecipe failed");
-          return textResult(`Failed to unfavorite recipe: ${e.message}`);
-        },
-      );
-      if ("content" in saved) return saved;
-      const commitErr = commitFailure("recipe", await ctx.writes.commitRecipe(saved), { selfHealing: false });
-      if (commitErr) return commitErr;
-
-      const categoryNames = ctx.state.category.store.resolveNames(saved.categories);
-      return textResult(recipeToMarkdown(saved, categoryNames));
-    };
-  },
-);
+export const unfavoriteRecipeTool = makeRecipeFlagTool({
+  name: "unfavorite_recipe",
+  title: "Remove a recipe from favorites",
+  description: "Remove a recipe from the Favorites list by UID.",
+  flag: "onFavorites",
+  value: false,
+  failVerb: "unfavorite",
+});
 
 /** Both favorite-state registrars, in registration order. */
 export const favoriteRecipeTools = [favoriteRecipeTool, unfavoriteRecipeTool];

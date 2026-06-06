@@ -28,6 +28,8 @@ import { groceryListResource } from "./resources/grocery-list-resource.js";
 import { groceryIngredientsSync } from "./syncs/ingredient-sync.js";
 import { groceryItemsSync } from "./syncs/item-sync.js";
 import { groceryListsSync } from "./syncs/list-sync.js";
+import { addRecipeToGroceryListTool } from "./tools/add-recipe-to-list.js";
+import { deleteAisleTool } from "./tools/delete-aisle.js";
 import { clearGroceryListTool, clearPurchasedTool } from "./tools/grocery-clear.js";
 import { markGroceryItemPurchasedTool } from "./tools/grocery-item-purchase.js";
 import { addGroceryItemsTool, deleteGroceryItemTool, updateGroceryItemTool } from "./tools/grocery-item.js";
@@ -57,8 +59,10 @@ interface GroceryEntitySlice<Store, Cache> {
  * THREE store/cache pairs. Grocery lists and items are `EntityStore`s (replace-all
  * sync via `syncReplaceAllEntity`); the ingredient catalog is a plain name-keyed
  * store (a direct bespoke reconcile, no pending-write sweep). Foreign keys point OUT
- * to declared deps: items + ingredients file into aisles (`dependsOn: aisle`), and
- * `move_grocery_items_to_pantry` writes THROUGH the pantry contract (`dependsOn: pantry`).
+ * to declared deps: items + ingredients file into aisles (`dependsOn: aisle`),
+ * `move_grocery_items_to_pantry` writes THROUGH the pantry contract (`dependsOn: pantry`),
+ * and `add_recipe_to_grocery_list` resolves its recipe READ-ONLY via the recipe
+ * contract (`dependsOn: recipe` — the item carries the recipe NAME link only).
  */
 export interface GroceryState {
   readonly lists: GroceryEntitySlice<GroceryListStore, DiskCache<GroceryList>>;
@@ -82,7 +86,7 @@ export interface GroceryWrites {
 }
 
 register(
-  defineModule("grocery", ["aisle", "pantry"])
+  defineModule("grocery", ["aisle", "pantry", "recipe"])
     .state<GroceryState>(async (infra) => {
       const log: Logger = infra.log;
 
@@ -171,6 +175,8 @@ register(
           clearPurchasedTool,
           clearGroceryListTool,
           moveToPantryTool,
+          addRecipeToGroceryListTool,
+          deleteAisleTool,
         ],
         resources: [groceryListResource],
         // Order matters: lists before items (children reference parent), then the

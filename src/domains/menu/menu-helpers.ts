@@ -75,8 +75,11 @@ export function menuToMarkdown(
     });
     lines.push("");
     for (const item of sorted) {
-      const typeName = nameByTypeUid.get(item.typeUid) ?? item.typeUid;
-      let line = `- **${typeName}:** ${item.name}`;
+      // A typeUid that misses the catalog is a DANGLING reference (its type was
+      // deleted — ADR-0017): render the item with no type prefix rather than
+      // leaking the raw UID into the line.
+      const typeName = nameByTypeUid.get(item.typeUid);
+      let line = typeName !== undefined ? `- **${typeName}:** ${item.name}` : `- ${item.name}`;
       if (includeItemUids) {
         line += ` · item \`${item.uid}\``;
         if (item.recipeUid !== null) {

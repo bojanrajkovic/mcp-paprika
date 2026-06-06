@@ -34,18 +34,16 @@ export function makeMealOrderFlagAssigner(state: MealState): (date: string) => n
 /**
  * Resolve a meal's display names from the deps, then render its markdown card.
  * Wraps the pure `mealToMarkdown` with the lookups every meal-write response path
- * repeats: typeName from the meal-type catalog (`Type N` fallback for unknown or
- * legacy types), and recipeName from the recipe store. Meals with `typeUid: null`
- * (legacy) fall through to the integer-labelled fallback; `recipeUid: null` renders
- * freeform.
+ * repeats: typeName from the meal-type catalog, and recipeName from the recipe
+ * store. Meals with `typeUid: null` (legacy, predating the catalog) fall back to
+ * the integer-labelled `Type N`; a non-null typeUid that misses the catalog is a
+ * DANGLING reference (its type was deleted — ADR-0017) and renders no type line
+ * at all. `recipeUid: null` renders freeform.
  */
 export function renderMealCard(meal: Readonly<Meal>, recipe: RecipeApi, mealType: MealTypeApi): string {
   const typeNameByUid = new Map<string, string>();
   for (const mt of mealType.getAll()) typeNameByUid.set(mt.uid, mt.name);
-  const typeName =
-    meal.typeUid !== null
-      ? (typeNameByUid.get(meal.typeUid) ?? `Type ${meal.type.toString()}`)
-      : `Type ${meal.type.toString()}`;
+  const typeName = meal.typeUid !== null ? (typeNameByUid.get(meal.typeUid) ?? null) : `Type ${meal.type.toString()}`;
   const recipeName = meal.recipeUid !== null ? (recipe.get(meal.recipeUid)?.name ?? null) : null;
   return mealToMarkdown(meal, typeName, recipeName);
 }
@@ -57,9 +55,13 @@ function formatMealLine(
 ): { typeName: string; entry: string } {
   // typeUid is the primary lookup, but older meals (predating Paprika's
   // mealtypes catalog) carry typeUid: null and rely on the `type` integer
-  // (which corresponds to MealType.originalType in the catalog).
-  const lookup = meal.typeUid !== null ? typeNames.get(meal.typeUid) : typeByOriginalType.get(meal.type);
-  const typeName = lookup ?? `Type ${meal.type.toString()}`;
+  // (which corresponds to MealType.originalType in the catalog). A non-null
+  // typeUid that misses the catalog is a DANGLING reference (its type was
+  // deleted — ADR-0017) and groups under "—" rather than a misleading Type N.
+  const typeName =
+    meal.typeUid !== null
+      ? (typeNames.get(meal.typeUid) ?? "—")
+      : (typeByOriginalType.get(meal.type) ?? `Type ${meal.type.toString()}`);
   const isFreeform = meal.recipeUid === null || meal.recipeUid === "";
   const entry = isFreeform ? `${meal.name} *(freeform)*` : meal.name;
   return { typeName, entry };

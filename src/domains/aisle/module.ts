@@ -12,12 +12,14 @@ import { hydrateStore } from "../../cache/hydrate.js";
 import { commitEntities, upsertOp } from "../../entity/commit.js";
 import { defineModule, register } from "../../kernel/registry.js";
 import { notifySyncBestEffort } from "../../paprika/client.js";
+import { makeCatalogDelete } from "../../shared/catalog.js";
 import { resolvePendingWriteTtl } from "../../utils/config.js";
 import { unwrapAtBoot } from "../../utils/errors.js";
 import { AisleUidSchema, NO_AISLE_UID } from "./ids.js";
 import { AisleStore } from "./store.js";
 import { aisleSync } from "./sync.js";
 import { listAislesTool } from "./tools/list-aisles.js";
+import { updateAisleTool } from "./tools/update-aisle.js";
 import { aisleDiskDescriptor } from "./types.js";
 
 declare module "../../kernel/registry.js" {
@@ -30,6 +32,20 @@ declare module "../../kernel/registry.js" {
 export interface AisleState {
   readonly store: AisleStore;
   readonly cache: DiskCache<Aisle>;
+}
+
+/** The aisle module's write chokepoints — `update_aisle` commits through these. */
+export interface AisleWrites {
+  /** Persist a batch of saved aisles locally (one flush, one notifySync) — reorder renumbers several at once. */
+  commitAisles(saved: ReadonlyArray<Readonly<Aisle>>): ResultAsync<void, CacheError>;
+  /**
+   * Run `body` holding the catalog write mutex — the SAME one `ensureAisle` and
+   * `deleteAisle` serialize on. `update_aisle` wraps its whole
+   * check-clash → save → commit sequence in this so two concurrent renames to
+   * one name (or a rename racing an auto-create) can't both pass the uniqueness
+   * check before either commits.
+   */
+  withCatalogWriteLock<T>(body: () => Promise<T>): Promise<T>;
 }
 
 register(
@@ -54,12 +70,29 @@ register(
       // infra) rather than `.state`, keeping AisleState pure (ADR-0012). It is a
       // CONTRACT write — grocery and pantry reach it via `ctx.deps.aisle` — so it
       // lands in `api`, not `ctx.writes`.
-      const ensureAisleMutex = new Mutex();
+      //
+      // ONE catalog write mutex serializes every name-uniqueness-sensitive write:
+      // ensureAisle's resolve-or-create, update_aisle's clash-check → save → commit
+      // (via writes.withCatalogWriteLock), and deleteAisle. Without it, two
+      // concurrent renames to the same name (or a rename racing an auto-create)
+      // both pass the check before either commits.
+      const catalogWriteMutex = new Mutex();
       // The commit protocol lives in src/entity/commit.ts; this binds aisle's slice.
-      const commitAisle = (aisle: Aisle): ResultAsync<void, CacheError> =>
-        commitEntities(state, [upsertOp(aisle)], {
-          finish: () => notifySyncBestEffort(infra.client, infra.log),
-        });
+      // Aisle commits fire resourceListChanged even though aisles have no resource
+      // of their own: grocery-list RESOURCES resolve item aisle names through this
+      // catalog live (render-resolution — ADR-0017), so a rename/reorder/delete
+      // changes their rendered content without any grocery entity changing.
+      const aisleFx = {
+        onCommitted: () => infra.notifier.resourceListChanged(),
+        finish: () => notifySyncBestEffort(infra.client, infra.log),
+      };
+      const commitAisles = (aisles: ReadonlyArray<Readonly<Aisle>>): ResultAsync<void, CacheError> =>
+        commitEntities(
+          state,
+          aisles.map((a) => upsertOp(a)),
+          aisleFx,
+        );
+      const commitAisle = (aisle: Aisle): ResultAsync<void, CacheError> => commitAisles([aisle]);
       const ensureAisle: AisleApi["ensureAisle"] = async (name) => {
         const trimmedName = name.trim();
         if (trimmedName === "") return ok({ aisle: "", aisleUid: NO_AISLE_UID });
@@ -74,7 +107,7 @@ register(
 
         // Serialize the create path so concurrent writes for the same new name
         // don't both miss resolveByName and create duplicate aisles.
-        return ensureAisleMutex.runExclusive(async () => {
+        return catalogWriteMutex.runExclusive(async () => {
           const recheck = state.store.resolveByName(trimmedName);
           if (recheck !== undefined) return ok({ aisle: recheck.name, aisleUid: recheck.uid });
 
@@ -108,13 +141,32 @@ register(
         });
       };
 
+      // Tombstone-delete + local delete commit (the shared makeCatalogDelete
+      // shape), serialized on the catalog write mutex like every other
+      // uniqueness-sensitive catalog write. The reference guard lives with
+      // grocery's `delete_aisle` tool (grocery owns the referencing items);
+      // this owns only the catalog write.
+      const deleteAisleInner = makeCatalogDelete({
+        noun: "Aisle",
+        state,
+        save: (tombstone) => infra.client.saveAisles([tombstone]),
+        onCommitted: aisleFx.onCommitted,
+        finish: aisleFx.finish,
+      });
+      const deleteAisle: AisleApi["deleteAisle"] = (uid) => catalogWriteMutex.runExclusive(() => deleteAisleInner(uid));
+
       return {
         api: {
           ensureAisle,
           resolveByName: (name) => state.store.resolveByName(name),
           get: (uid) => state.store.get(uid),
+          deleteAisle,
         },
-        tools: [listAislesTool],
+        writes: {
+          commitAisles,
+          withCatalogWriteLock: <T>(body: () => Promise<T>): Promise<T> => catalogWriteMutex.runExclusive(body),
+        },
+        tools: [listAislesTool, updateAisleTool],
         syncs: [aisleSync(state)],
         flush: () => state.cache.flush(),
       };

@@ -39,6 +39,18 @@ Add one or more items to the pantry. Skips items that duplicate an existing ingr
 
 - `items` — Array of items to add (1 or more)
 
+## `add_recipe_to_grocery_list`
+
+**Add a recipe's ingredients to a grocery list** — write
+
+Add a recipe's ingredients to a grocery list as linked grocery items. Parse the recipe's ingredient lines into the `items` array (one entry per ingredient, quantity separated out). Ingredients already on the list unpurchased are skipped and reported. Omit `listUid` to use the default grocery list.
+
+**Parameters**
+
+- `recipe` — The recipe to link: exact UID or title lookup
+- `listUid` _(optional)_ — Target grocery list UID; omit to use the default list (see list_grocery_lists)
+- `items` — The recipe's ingredients, parsed: one entry per ingredient line
+
 ## `categorize_recipe`
 
 **Add, replace, or remove a recipe's categories** — write, destructive, idempotent
@@ -128,6 +140,16 @@ Create a new recipe in the Paprika account. If you built this recipe from a web 
 - `rating` _(optional)_ — Rating 0–5 (default: 0)
 - `nutritionalInfo` _(optional)_ — Nutritional information
 
+## `delete_aisle`
+
+**Delete a grocery aisle** — write, destructive, idempotent
+
+Delete an aisle from the catalog. Refuses while unpurchased grocery items or pantry items still reference it — reassign those first (`update_grocery_item` / `update_pantry_item` with a different aisle). Deletion is permanent, but adding an item with the same aisle name recreates it.
+
+**Parameters**
+
+- `uid` — UID of the aisle to delete (from list_aisles)
+
 ## `delete_category`
 
 **Delete a recipe category** — write, destructive, idempotent
@@ -167,6 +189,16 @@ Soft-delete a meal from the planner by UID. Idempotent: a second delete on the s
 **Parameters**
 
 - `uid`
+
+## `delete_meal_type`
+
+**Delete a meal type** — write, destructive, idempotent
+
+Delete a custom meal type from the catalog. Existing meals and menu items that reference it are kept and simply show no meal type afterwards (the response reports how many). Planning a meal with the same type name later recreates it. Built-in types (Breakfast/Lunch/Dinner/Snacks) cannot be deleted — rename them with `update_meal_type` instead.
+
+**Parameters**
+
+- `uid` — UID of the meal type to delete (from list_meal_types)
 
 ## `delete_menu`
 
@@ -273,7 +305,7 @@ _No parameters._
 
 **List meal types** — read-only, idempotent
 
-List all meal types — the built-in Breakfast/Lunch/Dinner/Snacks plus any custom types — sorted by order then name. Each entry shows whether it is built-in or custom, its calendar-export schedule (all-day or a clock time), and its UID. Reference a type by name, or pass its UID to plan_meals / update_meal via the `type: { uid }` spec. Meal types are created and edited in the Paprika app, not through this server.
+List all meal types — the built-in Breakfast/Lunch/Dinner/Snacks plus any custom types — sorted by order then name. Each entry shows whether it is built-in or custom, its calendar-export schedule (all-day or a clock time), and its UID. Reference a type by name, or pass its UID to plan_meals / update_meal via the `type: { uid }` spec. Planning a meal with a new type name creates it; update_meal_type and delete_meal_type manage the catalog.
 
 _No parameters._
 
@@ -356,6 +388,16 @@ Move a menu item to a different day within its menu, by UID. A day beyond the me
 
 - `uid` — UID of the menuitem to move
 - `day` — Destination 1-indexed day. Days beyond the menu's current span auto-extend the menu.
+
+## `pin_recipe`
+
+**Pin a recipe** — write, idempotent
+
+Pin a recipe by UID so it floats to the top of the recipe list.
+
+**Parameters**
+
+- `uid` — Recipe UID
 
 ## `plan_meals`
 
@@ -554,6 +596,28 @@ Remove a recipe from the Favorites list by UID.
 
 - `uid` — Recipe UID
 
+## `unpin_recipe`
+
+**Unpin a recipe** — write, idempotent
+
+Unpin a recipe by UID (removes it from the pinned set at the top of the recipe list).
+
+**Parameters**
+
+- `uid` — Recipe UID
+
+## `update_aisle`
+
+**Rename or reorder a grocery aisle** — write, idempotent
+
+Rename an aisle and/or move it to a new position in the aisle order (the order you walk the store). Pass `name` to rename, `position` (1-based, as shown by `list_aisles`) to move, or both. Existing grocery and pantry items follow the rename automatically.
+
+**Parameters**
+
+- `uid` — UID of the aisle to update (from list_aisles)
+- `name` _(optional)_ — New display name (omit to leave unchanged)
+- `position` _(optional)_ — New 1-based position in the aisle order (omit to leave unchanged)
+
 ## `update_category`
 
 **Rename or re-parent a recipe category** — write, destructive, idempotent
@@ -589,6 +653,19 @@ Update an existing meal by UID. The `update` payload is a discriminated union: p
 
 - `uid`
 - `update` — Update payload. Pick exactly one shape: {recipe_uid?, type?, scale?} | {name, type?, scale?} | {recipe_uid: null, name?, type?, scale?}. Supplying both recipe_uid (a UID) and name is rejected — Paprika.app dispatches display off recipe_uid, so a stored custom name on a recipe-linked meal would never render. Use a freeform meal if you need a custom label. To change a meal's date, use reschedule_meal.
+
+## `update_meal_type`
+
+**Rename, recolor, or reorder a meal type** — write, idempotent
+
+Rename a meal type, change its display color, and/or move it to a new position in the meal-type order. Pass `name` to rename, `color` (hex, e.g. #4A90D9) to recolor, `position` (1-based, as shown by `list_meal_types`) to move, or any combination. Existing meals and menu items follow the rename automatically.
+
+**Parameters**
+
+- `uid` — UID of the meal type to update (from list_meal_types)
+- `name` _(optional)_ — New display name (omit to leave unchanged)
+- `color` _(optional)_ — New display color as a 6-digit hex code, e.g. #4A90D9 (omit to leave unchanged)
+- `position` _(optional)_ — New 1-based position in the meal-type order (omit to leave unchanged)
 
 ## `update_menu`
 

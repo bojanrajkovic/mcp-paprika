@@ -176,7 +176,7 @@ export const addPantryItemsTool = defineTool(
 
       // Phase 5: Build response
       const count = savedItems.length;
-      const rendered = savedItems.map((item) => pantryItemToMarkdown(item)).join("\n\n---\n\n");
+      const rendered = savedItems.map((item) => pantryItemToMarkdown(item, ctx.deps.aisle)).join("\n\n---\n\n");
       const header = `Added ${count.toString()} item(s) to the pantry.`;
 
       if (skipMessages.length > 0) {

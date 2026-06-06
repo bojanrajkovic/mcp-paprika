@@ -12,12 +12,14 @@ import { hydrateStore } from "../../cache/hydrate.js";
 import { commitEntities, upsertOp } from "../../entity/commit.js";
 import { defineModule, register } from "../../kernel/registry.js";
 import { notifySyncBestEffort } from "../../paprika/client.js";
+import { makeCatalogDelete } from "../../shared/catalog.js";
 import { resolvePendingWriteTtl } from "../../utils/config.js";
 import { unwrapAtBoot } from "../../utils/errors.js";
 import { MealTypeUidSchema } from "./ids.js";
 import { MealTypeStore } from "./store.js";
 import { mealTypeSync } from "./sync.js";
 import { listMealTypesTool } from "./tools/list-meal-types.js";
+import { updateMealTypeTool } from "./tools/update-meal-type.js";
 import { mealTypeDiskDescriptor } from "./types.js";
 
 declare module "../../kernel/registry.js" {
@@ -30,6 +32,20 @@ declare module "../../kernel/registry.js" {
 export interface MealTypeState {
   readonly store: MealTypeStore;
   readonly cache: DiskCache<MealType>;
+}
+
+/** The meal-type module's write chokepoints — `update_meal_type` commits through these. */
+export interface MealTypeWrites {
+  /** Persist a batch of saved meal types locally (one flush, one notifySync) — reorder renumbers several at once. */
+  commitMealTypes(saved: ReadonlyArray<Readonly<MealType>>): ResultAsync<void, CacheError>;
+  /**
+   * Run `body` holding the catalog write mutex — the SAME one `ensureMealType`
+   * and `deleteMealType` serialize on. `update_meal_type` wraps its whole
+   * check-clash → save → commit sequence in this so two concurrent renames to
+   * one name (or a rename racing an auto-create) can't both pass the
+   * uniqueness check before either commits.
+   */
+  withCatalogWriteLock<T>(body: () => Promise<T>): Promise<T>;
 }
 
 register(
@@ -54,12 +70,23 @@ register(
       // assembled here in `.build` rather than `.state`, keeping MealTypeState pure
       // (ADR-0012). It is a CONTRACT write — meal and menu reach it via
       // `ctx.deps["meal-type"]` — so it goes in `api`, not `ctx.writes`.
-      const ensureMealTypeMutex = new Mutex();
+      const catalogWriteMutex = new Mutex();
       // The commit protocol lives in src/entity/commit.ts; this binds meal-type's slice.
-      const commitMealType = (mealType: MealType): ResultAsync<void, CacheError> =>
-        commitEntities(state, [upsertOp(mealType)], {
-          finish: () => notifySyncBestEffort(infra.client, infra.log),
-        });
+      // Meal-type commits fire resourceListChanged even though meal types have no
+      // resource of their own: menu RESOURCES resolve item type names and ordering
+      // through this catalog live, so a rename/recolor/reorder/delete changes their
+      // rendered content without any menu entity changing (ADR-0017).
+      const mealTypeFx = {
+        onCommitted: () => infra.notifier.resourceListChanged(),
+        finish: () => notifySyncBestEffort(infra.client, infra.log),
+      };
+      const commitMealTypes = (mealTypes: ReadonlyArray<Readonly<MealType>>): ResultAsync<void, CacheError> =>
+        commitEntities(
+          state,
+          mealTypes.map((mt) => upsertOp(mt)),
+          mealTypeFx,
+        );
+      const commitMealType = (mealType: MealType): ResultAsync<void, CacheError> => commitMealTypes([mealType]);
       const ensureMealType: MealTypeApi["ensureMealType"] = async (name) => {
         const trimmedName = name.trim();
         if (trimmedName === "") {
@@ -76,7 +103,7 @@ register(
 
         // Serialize the create path so concurrent writes for the same new name
         // don't both miss resolveByName and create duplicate meal types.
-        return ensureMealTypeMutex.runExclusive(async () => {
+        return catalogWriteMutex.runExclusive(async () => {
           const recheck = state.store.resolveByName(trimmedName);
           if (recheck !== undefined) return ok(recheck);
 
@@ -120,6 +147,22 @@ register(
             );
         });
       };
+
+      // Tombstone-delete + local delete commit (the shared makeCatalogDelete
+      // shape). The reference counts live with the meal-planner coordinator's
+      // `delete_meal_type` tool (it can see meal and menu); this owns only the
+      // catalog write.
+      const deleteMealTypeInner = makeCatalogDelete({
+        noun: "Meal type",
+        state,
+        save: (tombstone) => infra.client.saveMealTypes([tombstone]),
+        onCommitted: mealTypeFx.onCommitted,
+        finish: mealTypeFx.finish,
+      });
+      // Serialized on the catalog write mutex like every other
+      // uniqueness-sensitive catalog write.
+      const deleteMealType: MealTypeApi["deleteMealType"] = (uid) =>
+        catalogWriteMutex.runExclusive(() => deleteMealTypeInner(uid));
 
       return {
         api: {
@@ -166,10 +209,16 @@ register(
             return { ok: true, resolved };
           },
           getAll: () => state.store.getAll(),
+          get: (uid) => state.store.get(uid),
           hasSynced: () => state.store.hasSynced,
           ensureMealType,
+          deleteMealType,
         },
-        tools: [listMealTypesTool],
+        writes: {
+          commitMealTypes,
+          withCatalogWriteLock: <T>(body: () => Promise<T>): Promise<T> => catalogWriteMutex.runExclusive(body),
+        },
+        tools: [listMealTypesTool, updateMealTypeTool],
         syncs: [mealTypeSync(state)],
         flush: () => state.cache.flush(),
       };

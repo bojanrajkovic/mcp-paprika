@@ -478,6 +478,13 @@ export class PaprikaClient {
     return this.postEntities(`${API_BASE}/groceryaisles/`, [aisle], aisleToApiPayload).map(() => aisle as Aisle);
   }
 
+  // Batch aisle upsert — one gzip array POST to the collection URL; Paprika
+  // upserts by `uid`. `update_aisle`'s reorder path renumbers several aisles in
+  // one write. A tombstone (`deleted: true` on the entity) deletes (`delete_aisle`).
+  saveAisles(aisles: ReadonlyArray<Readonly<Aisle>>): ResultAsync<void, PaprikaClientError> {
+    return this.postEntities(`${API_BASE}/groceryaisles/`, aisles, aisleToApiPayload);
+  }
+
   // Create or rename a meal type. POSTs a single-element gzip array to the
   // collection URL with `deleted: false`; Paprika upserts by `uid` and returns
   // `{result: true}`. Mirrors saveAisle — the caller (ensureMealType) commits locally.
@@ -485,6 +492,14 @@ export class PaprikaClient {
     return this.postEntities(`${API_BASE}/mealtypes/`, [mealType], mealTypeToApiPayload).map(
       () => mealType as MealType,
     );
+  }
+
+  // Batch meal-type upsert — one gzip array POST to the collection URL; Paprika
+  // upserts by `uid`. `update_meal_type`'s reorder path renumbers several types in
+  // one write. A tombstone (`deleted: true` on the entity) deletes
+  // (`delete_meal_type`); shape verified in docs/wire-captures/mealtypes.har.json.
+  saveMealTypes(mealTypes: ReadonlyArray<Readonly<MealType>>): ResultAsync<void, PaprikaClientError> {
+    return this.postEntities(`${API_BASE}/mealtypes/`, mealTypes, mealTypeToApiPayload);
   }
 
   // Create or rename/re-parent a category. POSTs a single-element gzip array to

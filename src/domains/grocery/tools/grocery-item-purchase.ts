@@ -49,7 +49,7 @@ export const markGroceryItemPurchasedTool = defineTool(
       const commitErr = commitFailure("grocery list", await ctx.writes.commitGroceryItem(saved));
       if (commitErr) return commitErr;
 
-      return textResult(groceryItemToMarkdown(saved));
+      return textResult(groceryItemToMarkdown(saved, ctx.deps.aisle));
     };
   },
 );

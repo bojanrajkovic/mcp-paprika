@@ -1,3 +1,4 @@
+import type { AisleUid } from "../../aisle/ids.js";
 import type { GroceryItemUid, GroceryListUid } from "../ids.js";
 import type { GroceryItem } from "./types.js";
 
@@ -29,5 +30,20 @@ export class GroceryItemStore extends EntityStore<GroceryItem, GroceryItemUid> {
       if (item.listUid === listUid && item.purchased) result.push(item);
     }
     return result;
+  }
+
+  /**
+   * How many UNPURCHASED items reference an aisle — `delete_aisle`'s guard count.
+   * Purchased items deliberately don't count: they're shopping history, and a
+   * delete guard must never block on state the user has no tool to fix
+   * (ADR-0017). The rule lives here, named, so a future caller can't re-derive
+   * it wrong.
+   */
+  countUnpurchasedInAisle(aisleUid: AisleUid): number {
+    let count = 0;
+    for (const item of this._items.values()) {
+      if (item.aisleUid === aisleUid && !item.purchased) count++;
+    }
+    return count;
   }
 }

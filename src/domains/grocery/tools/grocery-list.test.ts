@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { GroceryState } from "../module.js";
 
+import { makeAisle } from "../../../../test/domains/aisle/__fixtures__/aisles.js";
 import { makeGroceryItem } from "../../../../test/domains/grocery/__fixtures__/grocery-items.js";
 import { makeGroceryList } from "../../../../test/domains/grocery/__fixtures__/grocery-lists.js";
 import { useKernelHarness } from "../../../../test/support/kernel-harness.js";
@@ -91,6 +92,30 @@ describe("read_grocery_list tool", () => {
     expect(text).toContain(list.uid);
     expect(text).toContain("Apples");
     expect(text).toContain("Milk");
+  });
+
+  it("renders aisle names from the live catalog, not the item's denormalized copy", async () => {
+    // The item carries the stale pre-rename name; the catalog has the renamed
+    // aisle. Render must show the catalog name (render-resolve over cascade).
+    const aisle = makeAisle({ name: "Fresh Produce" });
+    const list = makeGroceryList({ name: "Weekly Shopping" });
+    const item = makeGroceryItem({ listUid: list.uid, ingredient: "Apples", aisle: "Produce", aisleUid: aisle.uid });
+    kh.seed({ groceryLists: [list], groceryItems: [item], aisles: [aisle] });
+
+    const text = await kh.callToolText("read_grocery_list", { lookup: { uid: list.uid } });
+
+    expect(text).toContain("Fresh Produce");
+    expect(text).not.toContain("| Produce |");
+  });
+
+  it("falls back to the denormalized aisle name for a dangling aisle UID", async () => {
+    const list = makeGroceryList({ name: "Weekly Shopping" });
+    const item = makeGroceryItem({ listUid: list.uid, ingredient: "Apples", aisle: "Produce", aisleUid: "gone-uid" });
+    kh.seed({ groceryLists: [list], groceryItems: [item], aisles: [] });
+
+    const text = await kh.callToolText("read_grocery_list", { lookup: { uid: list.uid } });
+
+    expect(text).toContain("Produce");
   });
 
   it("resolves by exact name match", async () => {

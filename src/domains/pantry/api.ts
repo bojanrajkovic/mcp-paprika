@@ -1,17 +1,18 @@
 import type { ResultAsync } from "neverthrow";
 
 import type { HasSynced } from "../../kernel/registry.js";
+import type { AisleUid } from "../aisle/ids.js";
 import type { PantryItem } from "./types.js";
 
 /**
- * Pantry's public contract — the surface grocery's `move_grocery_items_to_pantry`
- * consumes via `ctx.deps.pantry`. Scoped to exactly that one cross-domain call site,
- * nothing speculative:
- *   - `hasSynced` (inherited from {@link HasSynced}) — grocery gates the move on
- *     pantry being warm before any write;
- *   - `createItems` — the write the move needs, distinguishing API-create failure
- *     from local-commit failure so grocery can keep its create-first/delete-second
- *     ordering and partial-failure messaging.
+ * Pantry's public contract — the surface grocery consumes via `ctx.deps.pantry`.
+ * Scoped to exactly the live cross-domain call sites, nothing speculative:
+ *   - `hasSynced` (inherited from {@link HasSynced}) — grocery gates the move and
+ *     `delete_aisle` on pantry being warm;
+ *   - `createItems` — the write `move_grocery_items_to_pantry` needs, distinguishing
+ *     API-create failure from local-commit failure so grocery can keep its
+ *     create-first/delete-second ordering and partial-failure messaging;
+ *   - `countItemsInAisle` — the reference count `delete_aisle`'s guard blocks on.
  */
 export interface PantryApi extends HasSynced {
   /**
@@ -27,6 +28,8 @@ export interface PantryApi extends HasSynced {
    * the caller can surface their UIDs.
    */
   createItems(items: ReadonlyArray<PantryItem>): ResultAsync<ReadonlyArray<PantryItem>, PantryCreateError>;
+  /** How many pantry items reference an aisle — `delete_aisle`'s guard blocks while > 0. */
+  countItemsInAisle(uid: AisleUid): number;
 }
 
 /** The phase that failed inside `createItems`, with the underlying error message. */

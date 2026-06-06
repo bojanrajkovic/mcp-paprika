@@ -2,12 +2,14 @@ import type { DomainCtx } from "../../../kernel/registry.js";
 import type { AisleState } from "../module.js";
 
 import { defineTool } from "../../../kernel/tool.js";
+import { sortCatalog } from "../../../shared/catalog.js";
 import { textResult } from "../../../shared/tools.js";
 import { aisleStartGuard } from "./guards.js";
 
 /**
  * `list_aisles` — list the aisle catalog. Aisle is a Reference-class entity:
- * read-only, no resource surface (ADR-0004).
+ * list tool + managed lifecycle (auto-create via `ensureAisle`, `update_aisle`,
+ * `delete_aisle`), no resource surface (ADR-0004).
  */
 export const listAislesTool = defineTool(
   {
@@ -22,13 +24,10 @@ export const listAislesTool = defineTool(
   [aisleStartGuard],
   (ctx: DomainCtx<AisleState, never>) => {
     return async () => {
-      const aisles = ctx.state.store.getAll().sort((a, b) => {
-        if (a.orderFlag !== b.orderFlag) return a.orderFlag - b.orderFlag;
-        return a.name.localeCompare(b.name);
-      });
+      const aisles = sortCatalog(ctx.state.store.getAll());
       if (aisles.length === 0) {
         return textResult(
-          "No aisles found. Aisles are created in the Paprika app or automatically when you add a pantry item with a new aisle name.",
+          "No aisles found. Aisles are created automatically when you add a grocery or pantry item with a new aisle name.",
         );
       }
       const lines = aisles.map((a) => `- **${a.name}** — \`${a.uid}\``);
