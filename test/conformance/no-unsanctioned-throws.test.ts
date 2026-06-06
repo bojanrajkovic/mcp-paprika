@@ -16,14 +16,12 @@ import { describe, expect, it } from "vitest";
  * allowlisted file no longer carries an unsanctioned throw, so the ratchet can
  * only tighten toward "nothing but the recognized forms remain."
  *
- * Two of ADR-0014's five recognized forms have no recognizer here yet: the OAuth
- * error types (#2) and the cockatiel transient marker (#3). Every file that
- * throws them — the paprika client, the feature wrappers, auth — also still
- * throws forms its phase converts to `Result`, so those files sit in PENDING for
- * now. The phase that removes each entry (#264 / #265) adds the #2 / #3
- * recognizer at the same time, so the file's permanent protocol throws stay
- * sanctioned once its entry is gone. Until then PENDING means "not yet handled,"
- * not "will become Result."
+ * One of ADR-0014's five recognized forms has no recognizer here yet: the OAuth
+ * error types (#2). Every file that throws them — auth — also still throws
+ * forms its phase converts to `Result`, so those files sit in PENDING for now.
+ * The phase that removes each entry (#265) adds the #2 recognizer at the same
+ * time, so the file's permanent protocol throws stay sanctioned once its entry
+ * is gone. Until then PENDING means "not yet handled," not "will become Result."
  */
 
 // Recognized forms #1 + #4: the helper bodies whose `throw` IS the sanctioned
@@ -33,6 +31,23 @@ const RECOGNIZED_HELPERS: ReadonlyArray<readonly [file: string, fn: string]> = [
   ["src/utils/errors.ts", "assertNever"],
   ["src/utils/errors.ts", "unwrapAtBoot"],
   ["src/shared/resources.ts", "resourceNotFound"],
+];
+
+// Recognized form #3: throws inside a cockatiel-policy-governed callback (and
+// the executor wrapper that re-runs/normalizes around it). cockatiel's
+// `execute()` contract is throw-based — a matched marker (TransientHTTPError /
+// NetworkRetryableError) is retried, an unmatched throw (PaprikaAPIError,
+// TokenExpiredError, an auth rejection) escapes the retry loop — so EVERY
+// outcome inside the governed closure speaks in throws; the owned edge converts
+// to `Result` immediately outside it (ADR-0014: "the wrapper's internals may
+// still use throw-based control flow where a library demands it"). Pinned to
+// (file, innerFn, outerFn): the throw's nearest function AND the function that
+// encloses it must both match, so a future unrelated `execute`/`attempt` added
+// elsewhere in these files can't silently sanction its own throws.
+const COCKATIEL_GOVERNED: ReadonlyArray<readonly [file: string, innerFn: string, outerFn: string]> = [
+  ["src/paprika/client.ts", "attempt", "authenticate"],
+  ["src/paprika/client.ts", "execute", "request"],
+  ["src/utils/resilience.ts", "execute", "createResilientExecutor"],
 ];
 
 // Recognized form #5: fail-fast at process entry and kernel construction, off
@@ -51,13 +66,6 @@ const BOOT_SITES: ReadonlyArray<readonly [file: string, fn: string]> = [
 // campaign phase (#241) that handles it. DELETE an entry the moment its module
 // stops throwing an unsanctioned form — the staleness assertion below enforces it.
 const PENDING: ReadonlyArray<readonly [file: string, convertedBy: string]> = [
-  ["src/paprika/client.ts", "#264"],
-  // unwrapSyncStep — the one interim bridge from cache Results back onto the
-  // sync driver's throw-abort contract; removed when #264 makes the driver
-  // Result-aware.
-  ["src/paprika/sync.ts", "#264"],
-  ["src/utils/resilience.ts", "#264"],
-  ["src/server/sync-loop.ts", "#264"],
   ["src/features/embeddings.ts", "#265"],
   ["src/features/photography.ts", "#265"],
   ["src/features/json-vector-index.ts", "#265"],
@@ -77,6 +85,8 @@ interface ThrowSite {
   readonly file: string;
   readonly line: number;
   readonly enclosingFn: string;
+  /** Every named enclosing function, innermost first — `enclosingFn` is element 0. */
+  readonly enclosingChain: ReadonlyArray<string>;
 }
 
 const TEST_SUFFIXES = [".test.ts", ".test.integration.ts", ".e2e.test.ts", ".external.test.ts", ".property.test.ts"];
@@ -90,17 +100,18 @@ function sourceFiles(): Array<string> {
     .filter((p) => p.endsWith(".ts") && !TEST_SUFFIXES.some((s) => p.endsWith(s)));
 }
 
-function enclosingFnName(node: ts.Node, sf: ts.SourceFile): string {
+function enclosingFnChain(node: ts.Node, sf: ts.SourceFile): Array<string> {
+  const chain: Array<string> = [];
   for (let p: ts.Node | undefined = node.parent; p; p = p.parent) {
-    if (ts.isFunctionDeclaration(p) && p.name) return p.name.text;
-    if (ts.isMethodDeclaration(p)) return p.name.getText(sf);
-    if (ts.isArrowFunction(p) || ts.isFunctionExpression(p)) {
+    if (ts.isFunctionDeclaration(p) && p.name) chain.push(p.name.text);
+    else if (ts.isMethodDeclaration(p)) chain.push(p.name.getText(sf));
+    else if (ts.isArrowFunction(p) || ts.isFunctionExpression(p)) {
       const par = p.parent;
-      if (ts.isVariableDeclaration(par) && ts.isIdentifier(par.name)) return par.name.text;
-      if (ts.isPropertyAssignment(par)) return par.name.getText(sf);
+      if (ts.isVariableDeclaration(par) && ts.isIdentifier(par.name)) chain.push(par.name.text);
+      else if (ts.isPropertyAssignment(par)) chain.push(par.name.getText(sf));
     }
   }
-  return "<top>";
+  return chain;
 }
 
 function throwSites(file: string): Array<ThrowSite> {
@@ -108,10 +119,12 @@ function throwSites(file: string): Array<ThrowSite> {
   const sites: Array<ThrowSite> = [];
   const visit = (node: ts.Node): void => {
     if (ts.isThrowStatement(node)) {
+      const chain = enclosingFnChain(node, sf);
       sites.push({
         file,
         line: sf.getLineAndCharacterOfPosition(node.getStart(sf)).line + 1,
-        enclosingFn: enclosingFnName(node, sf),
+        enclosingFn: chain[0] ?? "<top>",
+        enclosingChain: chain,
       });
     }
     ts.forEachChild(node, visit);
@@ -124,7 +137,12 @@ const isBoot = (s: ThrowSite): boolean =>
   BOOT_SITES.some(([file, fn]) => s.file === file && (fn === "*" || s.enclosingFn === fn));
 const isRecognizedHelper = (s: ThrowSite): boolean =>
   RECOGNIZED_HELPERS.some(([file, fn]) => s.file === file && s.enclosingFn === fn);
-const isRecognized = (s: ThrowSite): boolean => isRecognizedHelper(s) || isBoot(s);
+const isCockatielGoverned = (s: ThrowSite): boolean =>
+  COCKATIEL_GOVERNED.some(
+    ([file, innerFn, outerFn]) =>
+      s.file === file && s.enclosingFn === innerFn && s.enclosingChain.slice(1).includes(outerFn),
+  );
+const isRecognized = (s: ThrowSite): boolean => isRecognizedHelper(s) || isCockatielGoverned(s) || isBoot(s);
 
 describe("ADR-0014: owned code throws only in recognized forms", () => {
   const allSites = sourceFiles().flatMap(throwSites);

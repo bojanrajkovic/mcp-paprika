@@ -11,7 +11,6 @@ import type { Menu } from "../types.js";
 import { MenuItemUidSchema, MenuUidSchema, RecipeUidSchema } from "../../../ids.js";
 import { defineTool } from "../../../kernel/tool.js";
 import { commitFailure, resolveLookup, textResult, uidOrTextLookupSchema } from "../../../shared/tools.js";
-import { toMessage } from "../../../utils/log.js";
 import { mealTypeSpecSchema } from "../../meal-type/meal-type-helpers.js";
 import { menuToMarkdown } from "../menu-helpers.js";
 import { menuStartGuard } from "./guards.js";
@@ -200,21 +199,22 @@ export const addMenuItemsTool = defineTool(
           let extendedTo: number | null = null;
           if (maxDay > menu.days) {
             const extended: Menu = { ...menu, days: maxDay };
-            try {
-              const saved = await ctx.infra.client.saveMenus([extended]);
-              const persisted = saved[0] ?? extended;
-              const commitErr = commitFailure("menu", await ctx.writes.commitMenu(persisted));
-              if (commitErr) return commitErr;
-              menuForRender = persisted;
-              extendedTo = maxDay;
-            } catch (error) {
-              const message = toMessage(error);
-              log.error({ err: error, uid: menu.uid }, "saveMenus (add_menu_items auto-expand) failed");
-              return textResult(
-                `Failed to extend menu "${menu.name}" to ${maxDay.toString()} day(s): ${message}. ` +
-                  `No items were added.`,
-              );
-            }
+            const saved = (await ctx.infra.client.saveMenus([extended])).match(
+              (v) => v,
+              (e) => {
+                log.error({ err: e, uid: menu.uid }, "saveMenus (add_menu_items auto-expand) failed");
+                return textResult(
+                  `Failed to extend menu "${menu.name}" to ${maxDay.toString()} day(s): ${e.message}. ` +
+                    `No items were added.`,
+                );
+              },
+            );
+            if ("content" in saved) return saved;
+            const persisted = saved[0] ?? extended;
+            const commitErr = commitFailure("menu", await ctx.writes.commitMenu(persisted));
+            if (commitErr) return commitErr;
+            menuForRender = persisted;
+            extendedTo = maxDay;
           }
 
           // ----- Stage 3: auto-create any deferred {name} meal types (pantry-style) -----
@@ -259,16 +259,16 @@ export const addMenuItemsTool = defineTool(
           }));
 
           // ----- Stage 5: single batch POST + commit -----
-          let savedItems: ReadonlyArray<MenuItem>;
-          try {
-            savedItems = await ctx.infra.client.saveMenuItems(builtItems);
-            const commitErr = commitFailure("menu", await ctx.writes.commitMenuItemsBatch(savedItems));
-            if (commitErr) return commitErr;
-          } catch (error) {
-            const message = toMessage(error);
-            log.error({ err: error, uid: menu.uid, count: builtItems.length }, "saveMenuItems failed");
-            return textResult(`Failed to add menu items: ${message}`);
-          }
+          const savedItems = (await ctx.infra.client.saveMenuItems(builtItems)).match(
+            (items) => items,
+            (e) => {
+              log.error({ err: e, uid: menu.uid, count: builtItems.length }, "saveMenuItems failed");
+              return textResult(`Failed to add menu items: ${e.message}`);
+            },
+          );
+          if ("content" in savedItems) return savedItems;
+          const commitErr = commitFailure("menu", await ctx.writes.commitMenuItemsBatch(savedItems));
+          if (commitErr) return commitErr;
 
           const extendNote =
             extendedTo !== null ? `Extended menu "${menu.name}" to ${extendedTo.toString()} day(s). ` : "";

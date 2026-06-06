@@ -8,6 +8,7 @@ import type { Notifier } from "./notifier.js";
 
 import { PaprikaClient } from "../paprika/client.js";
 import { BRANDING, iconSvgDataUri } from "../utils/branding.js";
+import { unwrapAtBoot } from "../utils/errors.js";
 import { createLogger } from "../utils/log.js";
 import { getCacheDir } from "../utils/xdg.js";
 
@@ -33,10 +34,10 @@ Orientation:
 /**
  * The pre-kernel bootstrap shared by both transports: build the logger, emit the
  * startup record, authenticate the Paprika client, and resolve the cache dir. This
- * is the real fast-fail for bad credentials (`client.authenticate()` throws here,
- * whereas `syncOnce()` swallows everything), so it stays OUTSIDE the kernel (#158).
- * The transports assemble the full kernel `Infra` from this base plus `notifier`,
- * `config`, `indexEvents`, and `generatedImageStore`.
+ * is the real fast-fail for bad credentials (an `authenticate()` err aborts boot
+ * via `unwrapAtBoot`, whereas `syncOnce()` swallows everything), so it stays
+ * OUTSIDE the kernel (#158). The transports assemble the full kernel `Infra` from
+ * this base plus `notifier`, `config`, `indexEvents`, and `generatedImageStore`.
  */
 export async function buildInfraBase(
   config: PaprikaConfig,
@@ -59,7 +60,7 @@ export async function buildInfraBase(
     log.child({ component: "paprika-client" }),
     { recipeFetchConcurrency: config.sync.recipeFetchConcurrency },
   );
-  await client.authenticate();
+  unwrapAtBoot(await client.authenticate(), "paprika authentication");
   log.info("authenticated with paprika");
 
   return { log, client, cacheDir: getCacheDir() };

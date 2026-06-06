@@ -14,7 +14,6 @@ import {
   textResult,
   uidOrTextLookupSchema,
 } from "../../../shared/tools.js";
-import { toMessage } from "../../../utils/log.js";
 import { groceryListToMarkdown } from "../grocery-helpers.js";
 import { groceryStartGuard } from "./guards.js";
 
@@ -143,16 +142,17 @@ export const createGroceryListTool = defineTool(
             deleted: false,
           };
 
-          try {
-            const saved = await ctx.infra.client.saveGroceryList(newList);
-            const commitErr = commitFailure("grocery list", await ctx.writes.commitGroceryList(saved));
-            if (commitErr) return commitErr;
-            return textResult(groceryListToMarkdown(saved, []));
-          } catch (error) {
-            const message = toMessage(error);
-            log.error({ err: error, name: args.name }, "saveGroceryList failed");
-            return textResult(`Failed to create grocery list: ${message}`);
-          }
+          return (await ctx.infra.client.saveGroceryList(newList)).match(
+            async (saved): Promise<CallToolResult> => {
+              const commitErr = commitFailure("grocery list", await ctx.writes.commitGroceryList(saved));
+              if (commitErr) return commitErr;
+              return textResult(groceryListToMarkdown(saved, []));
+            },
+            async (e) => {
+              log.error({ err: e, name: args.name }, "saveGroceryList failed");
+              return textResult(`Failed to create grocery list: ${e.message}`);
+            },
+          );
         },
         (guard) => guard,
       );
@@ -207,17 +207,18 @@ export const renameGroceryListTool = defineTool(
 
           const renamed: GroceryList = { ...existing, name: args.newName };
 
-          try {
-            const saved = await ctx.infra.client.saveGroceryList(renamed);
-            const commitErr = commitFailure("grocery list", await ctx.writes.commitGroceryList(saved));
-            if (commitErr) return commitErr;
-            const items = ctx.state.items.store.getByListUid(saved.uid);
-            return textResult(groceryListToMarkdown(saved, items));
-          } catch (error) {
-            const message = toMessage(error);
-            log.error({ err: error, uid: args.uid, newName: args.newName }, "saveGroceryList failed");
-            return textResult(`Failed to rename grocery list: ${message}`);
-          }
+          return (await ctx.infra.client.saveGroceryList(renamed)).match(
+            async (saved): Promise<CallToolResult> => {
+              const commitErr = commitFailure("grocery list", await ctx.writes.commitGroceryList(saved));
+              if (commitErr) return commitErr;
+              const items = ctx.state.items.store.getByListUid(saved.uid);
+              return textResult(groceryListToMarkdown(saved, items));
+            },
+            async (e) => {
+              log.error({ err: e, uid: args.uid, newName: args.newName }, "saveGroceryList failed");
+              return textResult(`Failed to rename grocery list: ${e.message}`);
+            },
+          );
         },
         (guard) => guard,
       );
@@ -254,17 +255,17 @@ export const deleteGroceryListTool = defineTool(
 
           const trashed: GroceryList = { ...existing, deleted: true };
 
-          try {
-            const saved = await ctx.infra.client.saveGroceryList(trashed);
-            const commitErr = commitFailure("grocery list", await ctx.writes.commitGroceryList(saved));
-            if (commitErr) return commitErr;
-          } catch (error) {
-            const message = toMessage(error);
-            log.error({ err: error, uid: args.uid }, "saveGroceryList failed");
-            return textResult(`Failed to delete grocery list: ${message}`);
-          }
-
-          return textResult(`Grocery list "${existing.name}" has been deleted.`);
+          return (await ctx.infra.client.saveGroceryList(trashed)).match(
+            async (saved): Promise<CallToolResult> => {
+              const commitErr = commitFailure("grocery list", await ctx.writes.commitGroceryList(saved));
+              if (commitErr) return commitErr;
+              return textResult(`Grocery list "${existing.name}" has been deleted.`);
+            },
+            async (e) => {
+              log.error({ err: e, uid: args.uid }, "saveGroceryList failed");
+              return textResult(`Failed to delete grocery list: ${e.message}`);
+            },
+          );
         },
         (guard) => guard,
       );

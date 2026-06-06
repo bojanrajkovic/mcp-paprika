@@ -1,3 +1,4 @@
+import { errAsync, okAsync } from "neverthrow";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { RecipeState } from "../module.js";
@@ -14,7 +15,7 @@ describe("rate_recipe tool", () => {
   it("sets rating and renders markdown with updated star rating", async () => {
     const recipe = makeRecipe({ rating: 0 });
     const updated = makeRecipe({ uid: recipe.uid, rating: 4 });
-    vi.mocked(kh.client().saveRecipe).mockResolvedValue(updated);
+    vi.mocked(kh.client().saveRecipe).mockReturnValue(okAsync(updated));
     kh.seed({ recipes: [recipe] });
 
     const text = await kh.callToolText("rate_recipe", { uid: recipe.uid, rating: 4 });
@@ -36,7 +37,7 @@ describe("rate_recipe tool", () => {
   it("commits the rated recipe to the store (Content entity)", async () => {
     const recipe = makeRecipe({ rating: 0 });
     const updated = makeRecipe({ uid: recipe.uid, rating: 5 });
-    vi.mocked(kh.client().saveRecipe).mockResolvedValue(updated);
+    vi.mocked(kh.client().saveRecipe).mockReturnValue(okAsync(updated));
     kh.seed({ recipes: [recipe] });
 
     await kh.callTool("rate_recipe", { uid: recipe.uid, rating: 5 });
@@ -47,7 +48,7 @@ describe("rate_recipe tool", () => {
 
   it("calls saveRecipe and notifySync exactly once each", async () => {
     const recipe = makeRecipe({ rating: 0 });
-    vi.mocked(kh.client().saveRecipe).mockResolvedValue(makeRecipe({ uid: recipe.uid, rating: 2 }));
+    vi.mocked(kh.client().saveRecipe).mockReturnValue(okAsync(makeRecipe({ uid: recipe.uid, rating: 2 })));
     kh.seed({ recipes: [recipe] });
 
     await kh.callTool("rate_recipe", { uid: recipe.uid, rating: 2 });
@@ -56,9 +57,9 @@ describe("rate_recipe tool", () => {
     expect(kh.client().notifySync).toHaveBeenCalledOnce();
   });
 
-  it("returns an error and leaves the store untouched when saveRecipe throws", async () => {
+  it("returns an error and leaves the store untouched when saveRecipe errs", async () => {
     const recipe = makeRecipe({ rating: 0 });
-    vi.mocked(kh.client().saveRecipe).mockRejectedValue(new Error("Network error"));
+    vi.mocked(kh.client().saveRecipe).mockReturnValue(errAsync(new Error("Network error")));
     kh.seed({ recipes: [recipe] });
     const before = kh.state().recipe.store.get(recipe.uid)?.rating;
 

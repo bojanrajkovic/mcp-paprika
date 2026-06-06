@@ -1,3 +1,4 @@
+import { errAsync, okAsync } from "neverthrow";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { RecipeUid } from "../../../ids.js";
@@ -23,8 +24,8 @@ describe("purge_recipe tool", () => {
     it("trashed recipe hard-deleted with confirmation", async () => {
       const trashed = makeRecipe({ name: "Old Soup", inTrash: true });
       const tombstone = { ...trashed, inTrash: true, deleted: true };
-      vi.mocked(kh.client().getRecipe).mockResolvedValue(trashed);
-      vi.mocked(kh.client().saveRecipe).mockResolvedValue(tombstone);
+      vi.mocked(kh.client().getRecipe).mockReturnValue(okAsync(trashed));
+      vi.mocked(kh.client().saveRecipe).mockReturnValue(okAsync(tombstone));
       kh.seed({ recipes: [makeRecipe({ name: "Keeper" })] }); // flips hasSynced
 
       const result = await kh.callTool("purge_recipe", { uid: trashed.uid });
@@ -37,8 +38,8 @@ describe("purge_recipe tool", () => {
 
     it("saveRecipe sent with both in_trash and deleted true", async () => {
       const trashed = makeRecipe({ name: "Old Soup", inTrash: true });
-      vi.mocked(kh.client().getRecipe).mockResolvedValue(trashed);
-      vi.mocked(kh.client().saveRecipe).mockResolvedValue({ ...trashed, inTrash: true, deleted: true });
+      vi.mocked(kh.client().getRecipe).mockReturnValue(okAsync(trashed));
+      vi.mocked(kh.client().saveRecipe).mockReturnValue(okAsync({ ...trashed, inTrash: true, deleted: true }));
       kh.seed({ recipes: [makeRecipe({ name: "Keeper" })] }); // flips hasSynced
 
       await kh.callTool("purge_recipe", { uid: trashed.uid });
@@ -49,8 +50,8 @@ describe("purge_recipe tool", () => {
 
     it("commit removes recipe from store and notifies clients (Content entity)", async () => {
       const trashed = makeRecipe({ name: "Old Soup", inTrash: true });
-      vi.mocked(kh.client().getRecipe).mockResolvedValue(trashed);
-      vi.mocked(kh.client().saveRecipe).mockResolvedValue({ ...trashed, inTrash: true, deleted: true });
+      vi.mocked(kh.client().getRecipe).mockReturnValue(okAsync(trashed));
+      vi.mocked(kh.client().saveRecipe).mockReturnValue(okAsync({ ...trashed, inTrash: true, deleted: true }));
       kh.seed({ recipes: [makeRecipe({ name: "Keeper" }), trashed] }); // flips hasSynced, seeds trashed recipe
 
       await kh.callTool("purge_recipe", { uid: trashed.uid });
@@ -65,8 +66,8 @@ describe("purge_recipe tool", () => {
       // synced), but the authoritative getRecipe returns it with inTrash:true —
       // so it still deletes.
       const appTrashed = makeRecipe({ name: "Trashed In App", inTrash: true });
-      vi.mocked(kh.client().getRecipe).mockResolvedValue(appTrashed);
-      vi.mocked(kh.client().saveRecipe).mockResolvedValue({ ...appTrashed, inTrash: true, deleted: true });
+      vi.mocked(kh.client().getRecipe).mockReturnValue(okAsync(appTrashed));
+      vi.mocked(kh.client().saveRecipe).mockReturnValue(okAsync({ ...appTrashed, inTrash: true, deleted: true }));
       kh.seed({ recipes: [makeRecipe({ name: "Keeper" })] }); // flips hasSynced; appTrashed NOT in store
 
       const result = await kh.callTool("purge_recipe", { uid: appTrashed.uid });
@@ -79,7 +80,7 @@ describe("purge_recipe tool", () => {
   describe("guards against destroying live recipes", () => {
     it("a live (non-trashed) recipe is refused with a trash_recipe-first hint", async () => {
       const live = makeRecipe({ name: "Dinner Tonight", inTrash: false });
-      vi.mocked(kh.client().getRecipe).mockResolvedValue(live);
+      vi.mocked(kh.client().getRecipe).mockReturnValue(okAsync(live));
       kh.seed({ recipes: [live] }); // store agrees it's live
 
       const result = await kh.callTool("purge_recipe", { uid: live.uid });
@@ -91,7 +92,7 @@ describe("purge_recipe tool", () => {
     });
 
     it("404 from getRecipe returns a not-found / already-deleted message", async () => {
-      vi.mocked(kh.client().getRecipe).mockRejectedValue(notFound("nonexistent-uid"));
+      vi.mocked(kh.client().getRecipe).mockReturnValue(errAsync(notFound("nonexistent-uid")));
       kh.seed({ recipes: [makeRecipe({ name: "Keeper" })] }); // flips hasSynced
 
       const result = await kh.callTool("purge_recipe", { uid: "nonexistent-uid" });
@@ -104,8 +105,10 @@ describe("purge_recipe tool", () => {
     it("idempotent — a second purge_recipe on the same UID reports already-deleted", async () => {
       const trashed = makeRecipe({ name: "Old Soup", inTrash: true });
       // First lookup returns the trashed recipe; after it's purged, the second lookup 404s.
-      vi.mocked(kh.client().getRecipe).mockResolvedValueOnce(trashed).mockRejectedValueOnce(notFound(trashed.uid));
-      vi.mocked(kh.client().saveRecipe).mockResolvedValue({ ...trashed, inTrash: true, deleted: true });
+      vi.mocked(kh.client().getRecipe)
+        .mockReturnValueOnce(okAsync(trashed))
+        .mockReturnValueOnce(errAsync(notFound(trashed.uid)));
+      vi.mocked(kh.client().saveRecipe).mockReturnValue(okAsync({ ...trashed, inTrash: true, deleted: true }));
       kh.seed({ recipes: [makeRecipe({ name: "Keeper" })] }); // flips hasSynced
 
       await kh.callTool("purge_recipe", { uid: trashed.uid }); // first: purges
@@ -117,10 +120,10 @@ describe("purge_recipe tool", () => {
   });
 
   describe("failure handling", () => {
-    it("saveRecipe throws — error surfaced, no false 'deleted'", async () => {
+    it("saveRecipe errs — error surfaced, no false 'deleted'", async () => {
       const trashed = makeRecipe({ name: "Old Soup", inTrash: true });
-      vi.mocked(kh.client().getRecipe).mockResolvedValue(trashed);
-      vi.mocked(kh.client().saveRecipe).mockRejectedValue(new Error("API timeout"));
+      vi.mocked(kh.client().getRecipe).mockReturnValue(okAsync(trashed));
+      vi.mocked(kh.client().saveRecipe).mockReturnValue(errAsync(new Error("API timeout")));
       kh.seed({ recipes: [makeRecipe({ name: "Keeper" })] }); // flips hasSynced
 
       const result = await kh.callTool("purge_recipe", { uid: trashed.uid });
@@ -133,8 +136,8 @@ describe("purge_recipe tool", () => {
     });
 
     it("a transient (non-404) lookup error does NOT masquerade as already-deleted", async () => {
-      vi.mocked(kh.client().getRecipe).mockRejectedValue(
-        new PaprikaAPIError("Server error", 503, "/api/v2/sync/recipe/x/"),
+      vi.mocked(kh.client().getRecipe).mockReturnValue(
+        errAsync(new PaprikaAPIError("Server error", 503, "/api/v2/sync/recipe/x/")),
       );
       kh.seed({ recipes: [makeRecipe({ name: "Keeper" })] }); // flips hasSynced
 
@@ -167,7 +170,7 @@ describe("purge_recipe tool", () => {
       const staleTrashed = makeRecipe({ uid, name: "Live Again", inTrash: true });
       const authoritative = { ...staleTrashed, inTrash: false };
 
-      vi.mocked(kh.client().getRecipe).mockResolvedValue(authoritative);
+      vi.mocked(kh.client().getRecipe).mockReturnValue(okAsync(authoritative));
       kh.seed({ recipes: [staleTrashed] }); // seed the stale trashed copy
 
       const text = await kh.callToolText("purge_recipe", { uid });
@@ -185,7 +188,7 @@ describe("purge_recipe tool", () => {
       const uid = "recipe-phantom-purge" as RecipeUid;
       const phantom = makeRecipe({ uid, name: "Ghost" });
 
-      vi.mocked(kh.client().getRecipe).mockRejectedValue(notFound(uid));
+      vi.mocked(kh.client().getRecipe).mockReturnValue(errAsync(notFound(uid)));
       kh.seed({ recipes: [phantom] }); // seed the phantom
 
       const text = await kh.callToolText("purge_recipe", { uid });

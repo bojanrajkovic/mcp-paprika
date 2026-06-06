@@ -24,26 +24,26 @@ import { categoriesEqual } from "../category/types.js";
 export function categoriesSync(state: RecipeState): SyncContribution<RecipeState, never> {
   return {
     tier: "reference",
-    reconcile: async (ctx) => {
-      const changes = await syncReplaceAllEntity({
+    reconcile: (ctx) =>
+      syncReplaceAllEntity({
         fetch: () => ctx.infra.client.listCategories(),
         cache: ctx.state.category.cache,
         store: ctx.state.category.store,
         equals: categoriesEqual,
         label: "categories",
         log: ctx.infra.log,
-      });
-      // `added` is excluded: a brand-new category has no referencing recipes yet — those
-      // arrive via update_recipe, which re-embeds through recipe sync. `updated` may also
-      // carry re-parents/order changes, but discover relies on the vector store's
-      // content-hash skip to make those a no-op.
-      if (changes.updated.length > 0 || changes.removedUids.length > 0) {
-        ctx.infra.indexEvents.emit({
-          type: "category-changed",
-          uids: [...changes.updated.map((c) => c.uid), ...changes.removedUids],
-        });
-      }
-    },
+      }).map((changes) => {
+        // `added` is excluded: a brand-new category has no referencing recipes yet — those
+        // arrive via update_recipe, which re-embeds through recipe sync. `updated` may also
+        // carry re-parents/order changes, but discover relies on the vector store's
+        // content-hash skip to make those a no-op.
+        if (changes.updated.length > 0 || changes.removedUids.length > 0) {
+          ctx.infra.indexEvents.emit({
+            type: "category-changed",
+            uids: [...changes.updated.map((c) => c.uid), ...changes.removedUids],
+          });
+        }
+      }),
     sweep: () => state.category.store.sweepPending(),
   };
 }

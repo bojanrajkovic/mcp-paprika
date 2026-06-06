@@ -1,3 +1,4 @@
+import { errAsync, okAsync } from "neverthrow";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { PantryItemUid } from "../../../ids.js";
@@ -14,8 +15,8 @@ describe("mark_pantry_item_out_of_stock tool", () => {
 
   it("marks an in-stock item as out of stock", async () => {
     const item = makePantryItem({ uid: "uid-1" as PantryItemUid, ingredient: "Milk", inStock: true });
-    vi.mocked(kh.client().savePantryItems).mockImplementation(async (items) =>
-      items.map((i) => ({ ...i, inStock: false })),
+    vi.mocked(kh.client().savePantryItems).mockImplementation((items) =>
+      okAsync(items.map((i) => ({ ...i, inStock: false }))),
     );
     kh.seed({ pantry: [item] });
 
@@ -41,7 +42,7 @@ describe("mark_pantry_item_out_of_stock tool", () => {
 
   it("save error returns error message, store not mutated", async () => {
     const item = makePantryItem({ uid: "uid-1" as PantryItemUid, ingredient: "Eggs", inStock: true });
-    vi.mocked(kh.client().savePantryItems).mockRejectedValue(new Error("server timeout"));
+    vi.mocked(kh.client().savePantryItems).mockReturnValue(errAsync(new Error("server timeout")));
     kh.seed({ pantry: [item] });
 
     const text = await kh.callToolText("mark_pantry_item_out_of_stock", { uid: "uid-1" });
@@ -69,8 +70,8 @@ describe("restock_pantry_item tool", () => {
 
   it("marks an out-of-stock item as in stock", async () => {
     const item = makePantryItem({ uid: "uid-2" as PantryItemUid, ingredient: "Butter", inStock: false });
-    vi.mocked(kh.client().savePantryItems).mockImplementation(async (items) =>
-      items.map((i) => ({ ...i, inStock: true })),
+    vi.mocked(kh.client().savePantryItems).mockImplementation((items) =>
+      okAsync(items.map((i) => ({ ...i, inStock: true }))),
     );
     kh.seed({ pantry: [item] });
 
@@ -96,7 +97,7 @@ describe("restock_pantry_item tool", () => {
 
   it("save error returns error message, store not mutated", async () => {
     const item = makePantryItem({ uid: "uid-2" as PantryItemUid, ingredient: "Cheese", inStock: false });
-    vi.mocked(kh.client().savePantryItems).mockRejectedValue(new Error("server timeout"));
+    vi.mocked(kh.client().savePantryItems).mockReturnValue(errAsync(new Error("server timeout")));
     kh.seed({ pantry: [item] });
 
     const text = await kh.callToolText("restock_pantry_item", { uid: "uid-2" });

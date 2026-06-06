@@ -6,7 +6,6 @@ import type { GroceryState, GroceryWrites } from "../module.js";
 import { GroceryListUidSchema } from "../../../ids.js";
 import { defineTool } from "../../../kernel/tool.js";
 import { commitFailure, textResult } from "../../../shared/tools.js";
-import { toMessage } from "../../../utils/log.js";
 import { groceryStartGuard } from "./guards.js";
 
 /**
@@ -41,17 +40,17 @@ export const clearPurchasedTool = defineTool(
           }
 
           const trashed = purchased.map((item) => ({ ...item, deleted: true }));
-          try {
-            const saved = await ctx.infra.client.saveGroceryItems(trashed);
-            const commitErr = commitFailure("grocery list", await ctx.writes.commitGroceryItemsBatch(saved));
-            if (commitErr) return commitErr;
-          } catch (error) {
-            const message = toMessage(error);
-            log.error({ err: error, listUid: args.listUid }, "saveGroceryItems (clear_purchased_grocery_items) failed");
-            return textResult(`Failed to clear purchased items from "${list.name}": ${message}`);
-          }
-
-          return textResult(`Cleared ${trashed.length.toString()} purchased item(s) from "${list.name}".`);
+          return (await ctx.infra.client.saveGroceryItems(trashed)).match(
+            async (saved): Promise<CallToolResult> => {
+              const commitErr = commitFailure("grocery list", await ctx.writes.commitGroceryItemsBatch(saved));
+              if (commitErr) return commitErr;
+              return textResult(`Cleared ${trashed.length.toString()} purchased item(s) from "${list.name}".`);
+            },
+            async (e) => {
+              log.error({ err: e, listUid: args.listUid }, "saveGroceryItems (clear_purchased_grocery_items) failed");
+              return textResult(`Failed to clear purchased items from "${list.name}": ${e.message}`);
+            },
+          );
         },
         (guard) => guard,
       );
@@ -91,17 +90,17 @@ export const clearGroceryListTool = defineTool(
           }
 
           const trashed = items.map((item) => ({ ...item, deleted: true }));
-          try {
-            const saved = await ctx.infra.client.saveGroceryItems(trashed);
-            const commitErr = commitFailure("grocery list", await ctx.writes.commitGroceryItemsBatch(saved));
-            if (commitErr) return commitErr;
-          } catch (error) {
-            const message = toMessage(error);
-            log.error({ err: error, listUid: args.listUid }, "saveGroceryItems (clear_grocery_list) failed");
-            return textResult(`Failed to clear items from "${list.name}": ${message}`);
-          }
-
-          return textResult(`Cleared ${trashed.length.toString()} item(s) from "${list.name}".`);
+          return (await ctx.infra.client.saveGroceryItems(trashed)).match(
+            async (saved): Promise<CallToolResult> => {
+              const commitErr = commitFailure("grocery list", await ctx.writes.commitGroceryItemsBatch(saved));
+              if (commitErr) return commitErr;
+              return textResult(`Cleared ${trashed.length.toString()} item(s) from "${list.name}".`);
+            },
+            async (e) => {
+              log.error({ err: e, listUid: args.listUid }, "saveGroceryItems (clear_grocery_list) failed");
+              return textResult(`Failed to clear items from "${list.name}": ${e.message}`);
+            },
+          );
         },
         (guard) => guard,
       );

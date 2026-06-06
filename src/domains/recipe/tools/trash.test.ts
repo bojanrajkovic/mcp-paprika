@@ -1,3 +1,4 @@
+import { errAsync, okAsync } from "neverthrow";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { RecipeState } from "../module.js";
@@ -13,7 +14,7 @@ describe("trash_recipe tool", () => {
   it("soft-deletes the recipe and returns confirmation with the recipe name", async () => {
     const recipe = makeRecipe({ name: "Pasta Carbonara" });
     const trashed = { ...recipe, inTrash: true };
-    vi.mocked(kh.client().saveRecipe).mockResolvedValue(trashed);
+    vi.mocked(kh.client().saveRecipe).mockReturnValue(okAsync(trashed));
     kh.seed({ recipes: [recipe] });
 
     const text = await kh.callToolText("trash_recipe", { uid: recipe.uid });
@@ -26,7 +27,7 @@ describe("trash_recipe tool", () => {
   it("calls saveRecipe with inTrash: true and notifySync exactly once", async () => {
     const recipe = makeRecipe({ name: "Pasta Carbonara" });
     const trashed = { ...recipe, inTrash: true };
-    vi.mocked(kh.client().saveRecipe).mockResolvedValue(trashed);
+    vi.mocked(kh.client().saveRecipe).mockReturnValue(okAsync(trashed));
     kh.seed({ recipes: [recipe] });
 
     await kh.callTool("trash_recipe", { uid: recipe.uid });
@@ -38,7 +39,7 @@ describe("trash_recipe tool", () => {
   it("commits the trashed recipe to the store", async () => {
     const recipe = makeRecipe({ name: "Pasta Carbonara" });
     const trashed = { ...recipe, inTrash: true };
-    vi.mocked(kh.client().saveRecipe).mockResolvedValue(trashed);
+    vi.mocked(kh.client().saveRecipe).mockReturnValue(okAsync(trashed));
     kh.seed({ recipes: [recipe] });
 
     await kh.callTool("trash_recipe", { uid: recipe.uid });
@@ -67,9 +68,9 @@ describe("trash_recipe tool", () => {
     expect(kh.client().saveRecipe).not.toHaveBeenCalled();
   });
 
-  it("saveRecipe throws — returns a failure message", async () => {
+  it("saveRecipe errs — returns a failure message", async () => {
     const recipe = makeRecipe();
-    vi.mocked(kh.client().saveRecipe).mockRejectedValue(new Error("API timeout"));
+    vi.mocked(kh.client().saveRecipe).mockReturnValue(errAsync(new Error("API timeout")));
     kh.seed({ recipes: [recipe] });
 
     const text = await kh.callToolText("trash_recipe", { uid: recipe.uid });

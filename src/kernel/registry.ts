@@ -5,7 +5,7 @@ import type { Logger } from "pino";
 import type { CacheError } from "../cache/disk-cache.js";
 import type { GeneratedImageStore } from "../features/generated-image-store.js";
 import type { PaprikaClient } from "../paprika/client.js";
-import type { AnySyncResult } from "../paprika/sync-types.js";
+import type { AnySyncResult, SyncError } from "../paprika/sync-types.js";
 import type { IndexEventEmitter } from "../server/index-events.js";
 import type { Notifier } from "../server/notifier.js";
 import type { PaprikaConfig } from "../utils/config.js";
@@ -152,12 +152,12 @@ type BootHooks<State, Deps extends DomainId> = Partial<Record<BootPhase, (ctx: B
  * store during reconcile (every catalog name resolves at read time), so a tier only
  * decides which reconciles a failure may take down. See docs/adr/0010-reference-sync-tier.md.
  *
- * - `reference` (the lookup catalogs: aisle, category, meal-type) runs FIRST, each in
- *   its own best-effort try/catch. A catalog fetch failure degrades to the last-good
- *   in-memory catalog rather than aborting the primary data sync.
- * - `core` (recipe, pantry, grocery) runs next, in dependency order; a core failure
- *   aborts the cycle (the driver's outer catch turns it into a logged no-op, mirroring
- *   the sync loop's never-throws contract).
+ * - `reference` (the lookup catalogs: aisle, category, meal-type) runs FIRST, each
+ *   best-effort: an `err` is logged and the cycle continues, degrading to the
+ *   last-good in-memory catalog rather than aborting the primary data sync.
+ * - `core` (recipe, pantry, grocery) runs next, in dependency order; a core `err`
+ *   aborts the cycle as a logged no-op, mirroring the sync loop's never-throws
+ *   contract (ADR-0014 reworked this seam from throw-abort to Result-abort).
  * - `additive` (meals, menus, photos) runs last, each best-effort, so a soft read
  *   surface can't abort core sync.
  */
@@ -168,21 +168,23 @@ export type SyncTier = "reference" | "core" | "additive";
  * and module-owned (hidden) stores. A multi-entity domain supplies one per owned
  * entity via `syncs`. `reconcile` receives the SAME {@link BootCtx} the boot hooks
  * do: its own store/cache via `state`, its declared deps' contracts via `deps`, the
- * Paprika client via `infra.client`. So no central all-stores context is needed. It returns
- * an `AnySyncResult` to be emitted as `sync:complete` (recipes/grocery/menus), or
- * `void` for reference/soft entities that emit nothing. `sweep` is the per-store
- * pending-write TTL sweep the driver runs once at end-of-cycle.
+ * Paprika client via `infra.client`. So no central all-stores context is needed. It
+ * resolves to an `AnySyncResult` to be emitted as `sync:complete` (recipes/grocery/
+ * menus), or `void` for reference/soft entities that emit nothing; an `err` is the
+ * abort signal the driver scopes by tier (ADR-0010 / ADR-0014 — a reconcile never
+ * throws). `sweep` is the per-store pending-write TTL sweep the driver runs once at
+ * end-of-cycle.
  */
 export interface SyncContribution<State, Deps extends DomainId> {
   readonly tier: SyncTier;
-  reconcile(ctx: BootCtx<State, Deps>): Promise<AnySyncResult | void>;
+  reconcile(ctx: BootCtx<State, Deps>): ResultAsync<AnySyncResult | void, SyncError>;
   sweep?(): number;
 }
 
 /** Kernel-facing erased sync contribution (the `State`/`Deps` generics gone). */
 interface ErasedSync {
   readonly tier: SyncTier;
-  reconcile(ctx: ErasedBootCtx): Promise<AnySyncResult | void>;
+  reconcile(ctx: ErasedBootCtx): ResultAsync<AnySyncResult | void, SyncError>;
   sweep?(): number;
 }
 
@@ -356,11 +358,11 @@ export interface Kernel {
   flushAll(): ResultAsync<void, CacheError>;
   /**
    * Run ONE sync cycle: reference catalogs first (best-effort), then core (recipe
-   * first, then the rest in dependency order; a core throw aborts), then additive
+   * first, then the rest in dependency order; a core `err` aborts), then additive
    * best-effort, then flush + sweep. Never throws.
    * Returns the results a production wiring emits as `sync:complete` (feeding the
    * notifier subscriber) — but ONLY for a cycle that completed through flush; an
-   * aborted cycle (a core throw or a flush rejection) returns `[]`, so a partial,
+   * aborted cycle (a core `err` or a flush error) returns `[]`, so a partial,
    * un-flushed cycle fans out no resource notification. The initial cycle already
    * ran at build time (gating the
    * post-sync hooks); the interval driver calls this on its loop.
@@ -438,14 +440,15 @@ export async function buildKernel(
   // can't express; if a second priority case ever appears, promote it to a declared
   // `SyncContribution` ordinal (copy first, abstract on the third).
   const syncOrder = [...built].sort((a, z) => (a.id === "recipe" ? -1 : 0) - (z.id === "recipe" ? -1 : 0));
-  const referenceSyncs: Array<() => Promise<AnySyncResult | void>> = [];
-  const coreSyncs: Array<() => Promise<AnySyncResult | void>> = [];
-  const additiveSyncs: Array<() => Promise<AnySyncResult | void>> = [];
+  type RunSync = () => ResultAsync<AnySyncResult | void, SyncError>;
+  const referenceSyncs: Array<RunSync> = [];
+  const coreSyncs: Array<RunSync> = [];
+  const additiveSyncs: Array<RunSync> = [];
   const sweepers: Array<() => number> = [];
   for (const b of syncOrder) {
     if (b.syncs === undefined) continue;
     for (const sync of b.syncs) {
-      const run = (): Promise<AnySyncResult | void> => sync.reconcile(bootCtxOf(b));
+      const run: RunSync = () => sync.reconcile(bootCtxOf(b));
       if (sync.tier === "reference") referenceSyncs.push(run);
       else if (sync.tier === "core") coreSyncs.push(run);
       else additiveSyncs.push(run);
@@ -454,31 +457,51 @@ export async function buildKernel(
   }
   const syncOnce = async (): Promise<ReadonlyArray<AnySyncResult>> => {
     const results: Array<AnySyncResult> = [];
+    // The reconciles speak Result (ADR-0014), so the abort seam is the core-tier
+    // `err` below, not a catch. The try/catch is pure defense-in-depth for a
+    // reconcile that breaks its own contract (a throw inside a chain callback
+    // rejects the underlying promise): syncOnce's never-throws promise is
+    // load-bearing for the interval loop and boot.
     try {
       // Reference catalogs first, best-effort: a catalog fetch failure degrades to the
       // last-good in-memory catalog (consumers resolve names at read time and gate on
       // hasSynced) rather than aborting the primary data sync below.
       for (const run of referenceSyncs) {
-        try {
-          const r = await run();
-          if (r !== undefined) results.push(r);
-        } catch (err) {
-          infra.log.warn({ err }, "reference sync failed; core sync unaffected");
-        }
+        (await run()).match(
+          (r) => {
+            if (r !== undefined) results.push(r);
+          },
+          (err) => {
+            infra.log.warn({ err }, "reference sync failed; core sync unaffected");
+          },
+        );
       }
       for (const run of coreSyncs) {
-        const r = await run();
-        if (r !== undefined) results.push(r);
-      }
-      for (const run of additiveSyncs) {
-        try {
-          const r = await run();
-          if (r !== undefined) results.push(r);
-        } catch (err) {
-          infra.log.warn({ err }, "additive sync failed; core sync unaffected");
+        const coreErr = (await run()).match(
+          (r) => {
+            if (r !== undefined) results.push(r);
+            return undefined;
+          },
+          (err) => err,
+        );
+        if (coreErr !== undefined) {
+          // A core err aborts the cycle: no flush, no sweep, no results — the
+          // partially reconciled state stays in memory and the next cycle retries.
+          infra.log.error({ err: coreErr }, "sync failed");
+          return [];
         }
       }
-      // Only a cycle that reached flush reports results: a core-reconcile throw (or
+      for (const run of additiveSyncs) {
+        (await run()).match(
+          (r) => {
+            if (r !== undefined) results.push(r);
+          },
+          (err) => {
+            infra.log.warn({ err }, "additive sync failed; core sync unaffected");
+          },
+        );
+      }
+      // Only a cycle that reached flush reports results: a core-reconcile err (or
       // a flush error) aborts the cycle. Returning the partially accumulated
       // `results` for an aborted, un-flushed cycle would fan out a resource
       // notification for state that never became durable — return `[]` instead.
@@ -495,7 +518,7 @@ export async function buildKernel(
         },
       );
     } catch (err) {
-      infra.log.error({ err }, "sync failed");
+      infra.log.error({ err }, "sync failed (reconcile broke the Result contract)");
       return [];
     }
   };

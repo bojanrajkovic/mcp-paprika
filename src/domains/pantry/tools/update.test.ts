@@ -1,3 +1,4 @@
+import { errAsync, okAsync } from "neverthrow";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { PantryItemUid } from "../../../ids.js";
@@ -23,7 +24,7 @@ describe("update_pantry_item tool", () => {
       inStock: true,
       notes: "salted",
     });
-    vi.mocked(kh.client().savePantryItems).mockImplementation(async (items) => items);
+    vi.mocked(kh.client().savePantryItems).mockImplementation((items) => okAsync(items));
     kh.seed({ pantry: [item] });
 
     const result = await kh.callTool("update_pantry_item", {
@@ -58,7 +59,7 @@ describe("update_pantry_item tool", () => {
       expirationDate: null,
       hasExpiration: false,
     });
-    vi.mocked(kh.client().savePantryItems).mockImplementation(async (items) => items);
+    vi.mocked(kh.client().savePantryItems).mockImplementation((items) => okAsync(items));
     kh.seed({ pantry: [item] });
 
     await kh.callTool("update_pantry_item", {
@@ -78,7 +79,7 @@ describe("update_pantry_item tool", () => {
       expirationDate: "2026-12-31",
       hasExpiration: true,
     });
-    vi.mocked(kh.client().savePantryItems).mockImplementation(async (items) => items);
+    vi.mocked(kh.client().savePantryItems).mockImplementation((items) => okAsync(items));
     kh.seed({ pantry: [item] });
 
     await kh.callTool("update_pantry_item", {
@@ -97,7 +98,7 @@ describe("update_pantry_item tool", () => {
       expirationDate: "2026-12-31",
       hasExpiration: true,
     });
-    vi.mocked(kh.client().savePantryItems).mockImplementation(async (items) => items);
+    vi.mocked(kh.client().savePantryItems).mockImplementation((items) => okAsync(items));
     kh.seed({ pantry: [item] });
 
     await kh.callTool("update_pantry_item", {
@@ -143,7 +144,7 @@ describe("update_pantry_item tool", () => {
       aisle: "Old Aisle",
       aisleUid: "old-uid",
     });
-    vi.mocked(kh.client().savePantryItems).mockImplementation(async (items) => items);
+    vi.mocked(kh.client().savePantryItems).mockImplementation((items) => okAsync(items));
     kh.seed({ pantry: [item], aisles: [dairyAisle] });
 
     await kh.callTool("update_pantry_item", { uid: "uid-1", aisle: "Dairy" });
@@ -159,7 +160,7 @@ describe("update_pantry_item tool", () => {
       aisle: "Frozen",
       aisleUid: "frozen-uid",
     });
-    vi.mocked(kh.client().savePantryItems).mockImplementation(async (items) => items);
+    vi.mocked(kh.client().savePantryItems).mockImplementation((items) => okAsync(items));
     kh.seed({ pantry: [item], aisles: [] });
 
     await kh.callTool("update_pantry_item", { uid: "uid-1", quantity: "3 lbs" });
@@ -172,8 +173,8 @@ describe("update_pantry_item tool", () => {
   it("unknown aisle is created and both fields set", async () => {
     const item = makePantryItem({ uid: "uid-1" as PantryItemUid });
     const newAisle = makeAisle({ name: "International" });
-    vi.mocked(kh.client().saveAisle).mockResolvedValue(newAisle);
-    vi.mocked(kh.client().savePantryItems).mockImplementation(async (items) => items);
+    vi.mocked(kh.client().saveAisle).mockReturnValue(okAsync(newAisle));
+    vi.mocked(kh.client().savePantryItems).mockImplementation((items) => okAsync(items));
     kh.seed({ pantry: [item], aisles: [] });
 
     await kh.callTool("update_pantry_item", { uid: "uid-1", aisle: "International" });
@@ -189,7 +190,7 @@ describe("update_pantry_item tool", () => {
       uid: "uid-1" as PantryItemUid,
       quantity: "1 lb",
     });
-    vi.mocked(kh.client().savePantryItems).mockRejectedValue(new Error("server timeout"));
+    vi.mocked(kh.client().savePantryItems).mockReturnValue(errAsync(new Error("server timeout")));
     kh.seed({ pantry: [item] });
 
     const result = await kh.callTool("update_pantry_item", {

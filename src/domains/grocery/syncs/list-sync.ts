@@ -20,9 +20,9 @@ import { groceryListsEqual } from "../grocery-list/types.js";
 export function groceryListsSync(state: GroceryState): SyncContribution<GroceryState, "aisle" | "pantry"> {
   return {
     tier: "core",
-    reconcile: async (ctx): Promise<GroceryListSyncResult> => {
+    reconcile: (ctx) => {
       ctx.infra.log.debug("fetching grocery lists");
-      const changes = await syncReplaceAllEntity({
+      return syncReplaceAllEntity({
         fetch: () => ctx.infra.client.listGroceryLists(),
         cache: ctx.state.lists.cache,
         store: ctx.state.lists.store,
@@ -30,8 +30,7 @@ export function groceryListsSync(state: GroceryState): SyncContribution<GroceryS
         label: "grocery lists",
         log: ctx.infra.log,
         afterLoad: () => ctx.state.lists.store.setLastSyncedAt(),
-      });
-      return { changeType: "grocery-lists", changes };
+      }).map((changes): GroceryListSyncResult => ({ changeType: "grocery-lists", changes }));
     },
     sweep: () => state.lists.store.sweepPending(),
   };

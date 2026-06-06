@@ -8,7 +8,6 @@ import type { Menu } from "../types.js";
 import { MenuUidSchema } from "../../../ids.js";
 import { defineTool } from "../../../kernel/tool.js";
 import { commitFailure, textResult } from "../../../shared/tools.js";
-import { toMessage } from "../../../utils/log.js";
 import { menuToMarkdown } from "../menu-helpers.js";
 import { menuStartGuard } from "./guards.js";
 
@@ -64,17 +63,18 @@ export const createMenuTool = defineTool(
             deleted: false,
           };
 
-          try {
-            const saved = await ctx.infra.client.saveMenus([newMenu]);
-            const created = saved[0] ?? newMenu;
-            const commitErr = commitFailure("menu", await ctx.writes.commitMenu(created));
-            if (commitErr) return commitErr;
-            return textResult(menuToMarkdown(created, [], ctx.deps["meal-type"].getAll()));
-          } catch (error) {
-            const message = toMessage(error);
-            log.error({ err: error, name: args.name }, "saveMenus (create_menu) failed");
-            return textResult(`Failed to create menu: ${message}`);
-          }
+          return (await ctx.infra.client.saveMenus([newMenu])).match(
+            async (saved): Promise<CallToolResult> => {
+              const created = saved[0] ?? newMenu;
+              const commitErr = commitFailure("menu", await ctx.writes.commitMenu(created));
+              if (commitErr) return commitErr;
+              return textResult(menuToMarkdown(created, [], ctx.deps["meal-type"].getAll()));
+            },
+            async (e) => {
+              log.error({ err: e, name: args.name }, "saveMenus (create_menu) failed");
+              return textResult(`Failed to create menu: ${e.message}`);
+            },
+          );
         },
         (guard) => guard,
       );

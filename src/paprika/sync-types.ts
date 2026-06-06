@@ -1,3 +1,4 @@
+import type { CacheError } from "../cache/disk-cache.js";
 import type { GroceryItem } from "../domains/grocery/grocery-item/types.js";
 import type { GroceryList } from "../domains/grocery/grocery-list/types.js";
 import type { MenuItem } from "../domains/menu/menu-item/types.js";
@@ -5,6 +6,15 @@ import type { Menu } from "../domains/menu/types.js";
 import type { PantryItem } from "../domains/pantry/types.js";
 import type { Recipe } from "../domains/recipe/types.js";
 import type { RecipeUid } from "../ids.js";
+import type { PaprikaClientError } from "./errors.js";
+
+/**
+ * What a reconcile can fail with: the client's typed error on a fetch, or the
+ * disk cache's on a put/remove. The driver only logs these (a `reference` /
+ * `additive` err is a warning; a `core` err aborts the cycle — ADR-0010/0014),
+ * so the union stays exactly the two producers' types, unnormalized.
+ */
+export type SyncError = CacheError | PaprikaClientError;
 
 export type EntityChanges<T> = {
   readonly added: ReadonlyArray<T>;

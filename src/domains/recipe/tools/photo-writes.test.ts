@@ -1,3 +1,4 @@
+import { errAsync, okAsync } from "neverthrow";
 import sharp from "sharp";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -39,8 +40,8 @@ describe("upload_recipe_photo", () => {
   it("uploads a base64 image: calls client.uploadPhoto with recipe photo fields + a first-photo entity", async () => {
     const recipe = makeRecipe({ uid: RECIPE_UID, name: "Test Recipe" });
     kh.seed({ recipes: [recipe], photos: [] });
-    vi.mocked(kh.client().uploadPhoto).mockImplementation(
-      async (r: Recipe, _photo: Photo, _thumb: Buffer, _full: Buffer) => r,
+    vi.mocked(kh.client().uploadPhoto).mockImplementation((r: Recipe, _photo: Photo, _thumb: Buffer, _full: Buffer) =>
+      okAsync(r),
     );
 
     const result = await kh.callTool("upload_recipe_photo", {
@@ -77,8 +78,8 @@ describe("upload_recipe_photo", () => {
       makePhoto({ recipeUid: RECIPE_UID, orderFlag: 1 }),
     ];
     kh.seed({ recipes: [makeRecipe({ uid: RECIPE_UID, name: "Test Recipe" })], photos: existing });
-    vi.mocked(kh.client().uploadPhoto).mockImplementation(
-      async (r: Recipe, _photo: Photo, _thumb: Buffer, _full: Buffer) => r,
+    vi.mocked(kh.client().uploadPhoto).mockImplementation((r: Recipe, _photo: Photo, _thumb: Buffer, _full: Buffer) =>
+      okAsync(r),
     );
 
     await kh.callTool("upload_recipe_photo", { recipe_uid: RECIPE_UID, source: { image_base64: jpegBase64 } });
@@ -90,8 +91,8 @@ describe("upload_recipe_photo", () => {
 
   it("downloads from a url and uploads (server fetches the bytes via fetchImageBytes)", async () => {
     kh.seed({ recipes: [makeRecipe({ uid: RECIPE_UID, name: "Test Recipe" })], photos: [] });
-    vi.mocked(kh.client().uploadPhoto).mockImplementation(
-      async (r: Recipe, _photo: Photo, _thumb: Buffer, _full: Buffer) => r,
+    vi.mocked(kh.client().uploadPhoto).mockImplementation((r: Recipe, _photo: Photo, _thumb: Buffer, _full: Buffer) =>
+      okAsync(r),
     );
     vi.mocked(fetchImageBytes).mockResolvedValue({
       bytes: Buffer.from(jpegBase64, "base64"),
@@ -146,8 +147,8 @@ describe("upload_recipe_photo", () => {
 
   it("attaches a previewed image by generation_token (no regeneration, no base64)", async () => {
     kh.seed({ recipes: [makeRecipe({ uid: RECIPE_UID, name: "Test Recipe" })], photos: [] });
-    vi.mocked(kh.client().uploadPhoto).mockImplementation(
-      async (r: Recipe, _photo: Photo, _thumb: Buffer, _full: Buffer) => r,
+    vi.mocked(kh.client().uploadPhoto).mockImplementation((r: Recipe, _photo: Photo, _thumb: Buffer, _full: Buffer) =>
+      okAsync(r),
     );
     const token = kh.infra().generatedImageStore.put({
       bytes: Buffer.from(jpegBase64, "base64"),
@@ -204,7 +205,9 @@ describe("upload_recipe_photo", () => {
       recipeUid: RECIPE_UID,
       model: "seedream",
     });
-    vi.mocked(kh.client().uploadPhoto).mockRejectedValueOnce(new Error("commit failure after the remote upload"));
+    vi.mocked(kh.client().uploadPhoto).mockReturnValueOnce(
+      errAsync(new Error("commit failure after the remote upload")),
+    );
 
     const failed = await kh.callTool("upload_recipe_photo", {
       recipe_uid: RECIPE_UID,
@@ -224,8 +227,8 @@ describe("upload_recipe_photo", () => {
 
   it("a token attaches at most once — a duplicate call gets the already-used error", async () => {
     kh.seed({ recipes: [makeRecipe({ uid: RECIPE_UID, name: "Test Recipe" })], photos: [] });
-    vi.mocked(kh.client().uploadPhoto).mockImplementation(
-      async (r: Recipe, _photo: Photo, _thumb: Buffer, _full: Buffer) => r,
+    vi.mocked(kh.client().uploadPhoto).mockImplementation((r: Recipe, _photo: Photo, _thumb: Buffer, _full: Buffer) =>
+      okAsync(r),
     );
     const token = kh.infra().generatedImageStore.put({
       bytes: Buffer.from(jpegBase64, "base64"),
@@ -252,8 +255,8 @@ describe("upload_recipe_photo", () => {
 
   it("caps a generated-token upload's full image at 2048px, but not a user-supplied one", async () => {
     kh.seed({ recipes: [makeRecipe({ uid: RECIPE_UID, name: "Test Recipe" })], photos: [] });
-    vi.mocked(kh.client().uploadPhoto).mockImplementation(
-      async (r: Recipe, _photo: Photo, _thumb: Buffer, _full: Buffer) => r,
+    vi.mocked(kh.client().uploadPhoto).mockImplementation((r: Recipe, _photo: Photo, _thumb: Buffer, _full: Buffer) =>
+      okAsync(r),
     );
     const big3000 = await sharp({
       create: { width: 3000, height: 2000, channels: 3, background: { r: 1, g: 2, b: 3 } },

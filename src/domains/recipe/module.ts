@@ -7,13 +7,14 @@ import type { Logger } from "pino";
 import type { CacheError, DiskCache } from "../../cache/disk-cache.js";
 import type { RecipeUid } from "../../ids.js";
 import type { PaprikaClient } from "../../paprika/client.js";
+import type { PaprikaClientError } from "../../paprika/errors.js";
 import type { Notifier } from "../../server/notifier.js";
 import type { RecipeApi } from "./api.js";
 import type { Category } from "./category/types.js";
 import type { Photo } from "./photo/types.js";
 import type { Recipe } from "./types.js";
 
-import { cacheError, DiskCache as DiskCacheImpl } from "../../cache/disk-cache.js";
+import { DiskCache as DiskCacheImpl } from "../../cache/disk-cache.js";
 import { hydrateStore } from "../../cache/hydrate.js";
 import { PhotoUidSchema } from "../../ids.js";
 import { defineModule, register } from "../../kernel/registry.js";
@@ -99,8 +100,13 @@ export interface RecipeWrites {
   commitCategoryUpsert(category: Category): ResultAsync<void, CacheError>;
   /** Persist a category soft-delete locally. */
   commitCategoryDelete(category: Category): ResultAsync<void, CacheError>;
-  /** Build the Photo + photo-bearing recipe, run the 3-request upload, commit both locally. */
-  attachPhotoToRecipe(recipe: Readonly<Recipe>, thumbnail: Buffer, full: Buffer): ResultAsync<Photo, CacheError>;
+  /** Build the Photo + photo-bearing recipe, run the 3-request upload, commit both locally.
+   * Errs with the client's error on an upload failure, the cache's on a local-commit one. */
+  attachPhotoToRecipe(
+    recipe: Readonly<Recipe>,
+    thumbnail: Buffer,
+    full: Buffer,
+  ): ResultAsync<Photo, CacheError | PaprikaClientError>;
   /** Persist a photo soft-delete locally. */
   commitPhotoDelete(savedPhoto: Photo): ResultAsync<void, CacheError>;
 }
@@ -355,10 +361,9 @@ register(
 
         // uploadPhoto stamps the recipe's content hash and returns the hashed recipe —
         // commit that so the cache matches what was POSTed and sync won't re-fetch it.
-        return ResultAsync.fromPromise(
-          client.uploadPhoto(recipeWithPhoto, photo, thumbnail, full),
-          cacheError("upload photo"),
-        ).andThen((savedRecipe) => commitPhotoUpload(savedRecipe, photo).map(() => photo));
+        return client
+          .uploadPhoto(recipeWithPhoto, photo, thumbnail, full)
+          .andThen((savedRecipe) => commitPhotoUpload(savedRecipe, photo).map(() => photo));
       };
 
       // The recipe-domain write photo-gen's generate_recipe_photo(attach:true) calls

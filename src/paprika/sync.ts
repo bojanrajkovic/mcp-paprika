@@ -1,13 +1,13 @@
-import type { Result } from "neverthrow";
 import { ResultAsync } from "neverthrow";
 import type { Logger } from "pino";
 
 import type { CacheError, DiskCache } from "../cache/disk-cache.js";
 import type { EntityStore } from "../entity/store.js";
-import type { EntityChanges } from "./sync-types.js";
+import type { PaprikaClientError } from "./errors.js";
+import type { EntityChanges, SyncError } from "./sync-types.js";
 
 type ReplaceAllEntityOptions<T extends { uid: UID }, UID extends string> = {
-  readonly fetch: () => Promise<ReadonlyArray<T>>;
+  readonly fetch: () => ResultAsync<ReadonlyArray<T>, PaprikaClientError>;
   readonly cache: Pick<DiskCache<T>, "getAll" | "put" | "remove">;
   readonly store: EntityStore<T, UID>;
   readonly equals: (a: T, b: T) => boolean;
@@ -15,24 +15,6 @@ type ReplaceAllEntityOptions<T extends { uid: UID }, UID extends string> = {
   readonly log: Logger;
   readonly afterLoad?: () => void;
 };
-
-/**
- * INTERIM (#264): unwrap a cache `Result` inside a reconcile by rethrowing its
- * error. The sync driver's abort contract is still throw-based — a core-tier
- * reconcile throw aborts the cycle (caught by the never-throws `syncOnce`) — so
- * until #264 makes the driver `Result`-aware, a cache failure re-enters that
- * contract here. This is the ONE sanctioned bridge for the whole sync path
- * (every reconcile that touches a cache funnels through it), allowlisted in the
- * ADR-0014 conformance test and removed by #264.
- */
-export function unwrapSyncStep<T>(result: Result<T, CacheError>): T {
-  return result.match(
-    (value) => value,
-    (e) => {
-      throw new Error(`sync step failed: ${e.context}: ${e.message}`, { cause: e.cause });
-    },
-  );
-}
 
 /**
  * Evict cache entries whose UID is no longer in the live snapshot, returning the
@@ -67,46 +49,49 @@ export function pruneOrphanCache<UID extends string>(
  * on content match (#92): a UID can appear in the canonical list with PRE-write
  * content while propagation is in flight, so clearing on presence alone would drop
  * protection and let the next cycle overwrite a local edit.
+ *
+ * An `err` anywhere in the chain (the fetch, a cache read/put/remove) propagates
+ * to the sync driver, which decides the blast radius by tier (ADR-0010).
  */
-export async function syncReplaceAllEntity<T extends { uid: UID }, UID extends string>(
+export function syncReplaceAllEntity<T extends { uid: UID }, UID extends string>(
   opts: ReplaceAllEntityOptions<T, UID>,
-): Promise<EntityChanges<T>> {
-  const rawIncoming = await opts.fetch();
-  const cached = unwrapSyncStep(await opts.cache.getAll());
-  const cachedByUid = new Map<UID, T>(cached.map((item) => [item.uid, item]));
-  const cachedUids = new Set<UID>(cached.map((item) => item.uid));
+): ResultAsync<EntityChanges<T>, SyncError> {
+  return opts.fetch().andThen((rawIncoming) =>
+    opts.cache.getAll().andThen((cached) => {
+      const cachedByUid = new Map<UID, T>(cached.map((item) => [item.uid, item]));
+      const cachedUids = new Set<UID>(cached.map((item) => item.uid));
 
-  const incomingFiltered = rawIncoming.filter(
-    (item) => !opts.store.isPendingDelete(item.uid) && !opts.store.isPendingUpsert(item.uid),
+      const incomingFiltered = rawIncoming.filter(
+        (item) => !opts.store.isPendingDelete(item.uid) && !opts.store.isPendingUpsert(item.uid),
+      );
+      const pendingUpserted = cached.filter((item) => opts.store.isPendingUpsert(item.uid));
+      const effective = [...incomingFiltered, ...pendingUpserted];
+      const effectiveUids = new Set<UID>(effective.map((item) => item.uid));
+
+      const newUids = new Set<UID>([...effectiveUids].filter((uid) => !cachedUids.has(uid)));
+
+      const updated = effective.filter((incoming) => {
+        const cachedItem = cachedByUid.get(incoming.uid);
+        return cachedItem !== undefined && !opts.equals(cachedItem, incoming);
+      });
+      const added = effective.filter((item) => newUids.has(item.uid));
+
+      return pruneOrphanCache(opts.cache, cachedUids, effectiveUids, opts.log, opts.label).andThen((removedUids) => {
+        opts.store.load(effective);
+        opts.afterLoad?.();
+        return ResultAsync.combine(effective.map((item) => opts.cache.put(item))).map(() => {
+          // Observation-based clearing: walk rawIncoming (not effective) so pending-upsert
+          // UIDs that were spliced out still get checked against the snapshot.
+          for (const item of rawIncoming) {
+            if (!opts.store.isPendingUpsert(item.uid)) continue;
+            const cachedItem = cachedByUid.get(item.uid);
+            if (cachedItem !== undefined && opts.equals(cachedItem, item)) {
+              opts.store.clearPending(item.uid);
+            }
+          }
+          return { added, updated, removedUids };
+        });
+      });
+    }),
   );
-  const pendingUpserted = cached.filter((item) => opts.store.isPendingUpsert(item.uid));
-  const effective = [...incomingFiltered, ...pendingUpserted];
-  const effectiveUids = new Set<UID>(effective.map((item) => item.uid));
-
-  const newUids = new Set<UID>([...effectiveUids].filter((uid) => !cachedUids.has(uid)));
-
-  const updated = effective.filter((incoming) => {
-    const cachedItem = cachedByUid.get(incoming.uid);
-    return cachedItem !== undefined && !opts.equals(cachedItem, incoming);
-  });
-  const added = effective.filter((item) => newUids.has(item.uid));
-
-  const removedUids = unwrapSyncStep(
-    await pruneOrphanCache(opts.cache, cachedUids, effectiveUids, opts.log, opts.label),
-  );
-  opts.store.load(effective);
-  opts.afterLoad?.();
-  unwrapSyncStep(await ResultAsync.combine(effective.map((item) => opts.cache.put(item))));
-
-  // Observation-based clearing: walk rawIncoming (not effective) so pending-upsert
-  // UIDs that were spliced out still get checked against the snapshot.
-  for (const item of rawIncoming) {
-    if (!opts.store.isPendingUpsert(item.uid)) continue;
-    const cachedItem = cachedByUid.get(item.uid);
-    if (cachedItem !== undefined && opts.equals(cachedItem, item)) {
-      opts.store.clearPending(item.uid);
-    }
-  }
-
-  return { added, updated, removedUids };
 }

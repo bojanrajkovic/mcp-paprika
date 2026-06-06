@@ -9,7 +9,6 @@ import type { MenuState, MenuWrites } from "../module.js";
 import { MenuItemUidSchema, RecipeUidSchema } from "../../../ids.js";
 import { defineTool } from "../../../kernel/tool.js";
 import { commitFailure, textResult } from "../../../shared/tools.js";
-import { toMessage } from "../../../utils/log.js";
 import { mealTypeSpecSchema, resolveOrCreateMealType } from "../../meal-type/meal-type-helpers.js";
 import { menuStartGuard } from "./guards.js";
 
@@ -89,16 +88,16 @@ export const updateMenuItemTool = defineTool(
             ...(args.recipe_uid !== undefined && { recipeUid: newRecipeUid, name: newName }),
           };
 
-          let saved: MenuItem;
-          try {
-            saved = (await ctx.infra.client.saveMenuItems([merged]))[0]!;
-            const commitErr = commitFailure("menu", await ctx.writes.commitMenuItem(saved));
-            if (commitErr) return commitErr;
-          } catch (error) {
-            const message = toMessage(error);
-            log.error({ err: error, uid }, "saveMenuItems (update_menu_item) failed");
-            return textResult(`Failed to update menu item: ${message}`);
-          }
+          const saved = (await ctx.infra.client.saveMenuItems([merged])).match(
+            (items) => items[0]!,
+            (e) => {
+              log.error({ err: e, uid }, "saveMenuItems (update_menu_item) failed");
+              return textResult(`Failed to update menu item: ${e.message}`);
+            },
+          );
+          if ("content" in saved) return saved;
+          const commitErr = commitFailure("menu", await ctx.writes.commitMenuItem(saved));
+          if (commitErr) return commitErr;
 
           return textResult(`Menu item "${saved.name}" updated.`);
         },

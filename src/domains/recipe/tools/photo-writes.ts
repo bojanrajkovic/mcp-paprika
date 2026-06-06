@@ -230,19 +230,20 @@ export const deletePhotoTool = defineTool(
             return textResult(`No photo found with UID "${args.photo_uid}" (it may not exist or was already deleted).`);
           }
 
-          try {
-            await ctx.infra.client.deletePhoto(existing);
-            const commitErr = commitFailure(
-              "photo",
-              await ctx.writes.commitPhotoDelete({ ...existing, deleted: true }),
-            );
-            if (commitErr) return commitErr;
-          } catch (error) {
-            log.error({ err: error, photo_uid: args.photo_uid }, "deletePhoto failed");
-            return textResult(`Failed to delete photo: ${toMessage(error)}`);
-          }
-
-          return textResult(`Deleted photo ${existing.name} from recipe.`);
+          return (await ctx.infra.client.deletePhoto(existing)).match(
+            async (): Promise<CallToolResult> => {
+              const commitErr = commitFailure(
+                "photo",
+                await ctx.writes.commitPhotoDelete({ ...existing, deleted: true }),
+              );
+              if (commitErr) return commitErr;
+              return textResult(`Deleted photo ${existing.name} from recipe.`);
+            },
+            async (e) => {
+              log.error({ err: e, photo_uid: args.photo_uid }, "deletePhoto failed");
+              return textResult(`Failed to delete photo: ${e.message}`);
+            },
+          );
         },
         (guard) => guard,
       );

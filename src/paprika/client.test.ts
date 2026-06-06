@@ -49,7 +49,7 @@ import {
 import { CircuitOpenError } from "../utils/errors.js";
 import { REDACT_PATHS, toMessage } from "../utils/log.js";
 import { PaprikaClient } from "./client.js";
-import { PaprikaAPIError, PaprikaAuthError } from "./errors.js";
+import { PaprikaAPIError, PaprikaAuthError, PaprikaError } from "./errors.js";
 import { computeRecipeHash } from "./recipe-hash.js";
 
 const AUTH_URL = "https://paprikaapp.com/api/v1/account/login/";
@@ -203,11 +203,11 @@ describe("PaprikaClient", () => {
 
       const client = new PaprikaClient("test@example.com", "password");
 
-      // Should not throw if response matches schema
-      await expect(client.authenticate()).resolves.toBeUndefined();
+      // Resolves ok if the response matches the schema
+      expect((await client.authenticate())._unsafeUnwrap()).toBeUndefined();
     });
 
-    it("non-2xx response (403) throws PaprikaAuthError with status in message", async () => {
+    it("non-2xx response (403) errs with PaprikaAuthError with status in message", async () => {
       server.use(
         http.post(AUTH_URL, () => {
           return HttpResponse.json({}, { status: 403 });
@@ -216,16 +216,12 @@ describe("PaprikaClient", () => {
 
       const client = new PaprikaClient("test@example.com", "password");
 
-      try {
-        await client.authenticate();
-        expect.fail("Should have thrown PaprikaAuthError");
-      } catch (error) {
-        expect(error).toBeInstanceOf(PaprikaAuthError);
-        expect((error as Error).message).toMatch(/HTTP 403/);
-      }
+      const error = (await client.authenticate())._unsafeUnwrapErr();
+      expect(error).toBeInstanceOf(PaprikaAuthError);
+      expect(error.message).toMatch(/HTTP 403/);
     });
 
-    it("non-2xx response (401) throws PaprikaAuthError with status in message", async () => {
+    it("non-2xx response (401) errs with PaprikaAuthError with status in message", async () => {
       server.use(
         http.post(AUTH_URL, () => {
           return HttpResponse.json({}, { status: 401 });
@@ -234,16 +230,12 @@ describe("PaprikaClient", () => {
 
       const client = new PaprikaClient("test@example.com", "password");
 
-      try {
-        await client.authenticate();
-        expect.fail("Should have thrown PaprikaAuthError");
-      } catch (error) {
-        expect(error).toBeInstanceOf(PaprikaAuthError);
-        expect((error as Error).message).toMatch(/HTTP 401/);
-      }
+      const error = (await client.authenticate())._unsafeUnwrapErr();
+      expect(error).toBeInstanceOf(PaprikaAuthError);
+      expect(error.message).toMatch(/HTTP 401/);
     });
 
-    it("malformed response (missing result.token) throws ZodError", async () => {
+    it("malformed response (missing result.token) errs with a PaprikaError wrapping the ZodError", async () => {
       server.use(
         http.post(AUTH_URL, () => {
           return HttpResponse.json({ wrong: "shape" });
@@ -252,10 +244,12 @@ describe("PaprikaClient", () => {
 
       const client = new PaprikaClient("test@example.com", "password");
 
-      await expect(client.authenticate()).rejects.toThrow(ZodError);
+      const error = (await client.authenticate())._unsafeUnwrapErr();
+      expect(error).toBeInstanceOf(PaprikaError);
+      expect(error.cause).toBeInstanceOf(ZodError);
     });
 
-    it("malformed response (missing result) throws ZodError", async () => {
+    it("malformed response (missing result) errs with a PaprikaError wrapping the ZodError", async () => {
       server.use(
         http.post(AUTH_URL, () => {
           return HttpResponse.json({ token: "orphaned-token" });
@@ -264,7 +258,9 @@ describe("PaprikaClient", () => {
 
       const client = new PaprikaClient("test@example.com", "password");
 
-      await expect(client.authenticate()).rejects.toThrow(ZodError);
+      const error = (await client.authenticate())._unsafeUnwrapErr();
+      expect(error).toBeInstanceOf(PaprikaError);
+      expect(error.cause).toBeInstanceOf(ZodError);
     });
 
     it("transient network failure during auth retries then succeeds (#158)", async () => {
@@ -282,7 +278,7 @@ describe("PaprikaClient", () => {
         const client = new PaprikaClient("test@example.com", "password");
         const promise = client.authenticate();
         await vi.runAllTimersAsync();
-        await expect(promise).resolves.toBeUndefined();
+        expect((await promise)._unsafeUnwrap()).toBeUndefined();
         expect(calls).toBe(3);
       } finally {
         vi.useRealTimers();
@@ -304,7 +300,7 @@ describe("PaprikaClient", () => {
         const client = new PaprikaClient("test@example.com", "password");
         const promise = client.authenticate();
         await vi.runAllTimersAsync();
-        await expect(promise).resolves.toBeUndefined();
+        expect((await promise)._unsafeUnwrap()).toBeUndefined();
         expect(calls).toBe(3);
       } finally {
         vi.useRealTimers();
@@ -321,7 +317,7 @@ describe("PaprikaClient", () => {
       );
 
       const client = new PaprikaClient("test@example.com", "password");
-      await expect(client.authenticate()).rejects.toBeInstanceOf(PaprikaAuthError);
+      expect((await client.authenticate())._unsafeUnwrapErr()).toBeInstanceOf(PaprikaAuthError);
       expect(calls).toBe(1); // no retry on a real auth rejection
     });
 
@@ -337,11 +333,9 @@ describe("PaprikaClient", () => {
       vi.useFakeTimers();
       try {
         const client = new PaprikaClient("test@example.com", "password");
-        // Attach the rejection handler BEFORE advancing timers so the eventual
-        // rejection (mid-backoff) is never momentarily unhandled.
-        const expectation = expect(client.authenticate()).rejects.toBeInstanceOf(PaprikaAuthError);
+        const promise = client.authenticate();
         await vi.runAllTimersAsync();
-        await expectation;
+        expect((await promise)._unsafeUnwrapErr()).toBeInstanceOf(PaprikaAuthError);
         expect(calls).toBeGreaterThan(1); // retried
         expect(calls).toBeLessThanOrEqual(4); // but bounded, not infinite
       } finally {
@@ -349,7 +343,7 @@ describe("PaprikaClient", () => {
       }
     });
 
-    it("malformed response (result.token missing) throws ZodError", async () => {
+    it("malformed response (result.token missing) errs with a PaprikaError wrapping the ZodError", async () => {
       server.use(
         http.post(AUTH_URL, () => {
           return HttpResponse.json({ result: { other: "field" } });
@@ -358,7 +352,9 @@ describe("PaprikaClient", () => {
 
       const client = new PaprikaClient("test@example.com", "password");
 
-      await expect(client.authenticate()).rejects.toThrow(ZodError);
+      const error = (await client.authenticate())._unsafeUnwrapErr();
+      expect(error).toBeInstanceOf(PaprikaError);
+      expect(error.cause).toBeInstanceOf(ZodError);
     });
   });
 
@@ -376,7 +372,7 @@ describe("PaprikaClient", () => {
       );
 
       const client = new PaprikaClient("test@example.com", "password");
-      const recipes = await client.listRecipes();
+      const recipes = (await client.listRecipes())._unsafeUnwrap();
 
       expect(recipes).toHaveLength(2);
       expect(recipes[0]!.uid).toBe("uid-1");
@@ -393,7 +389,7 @@ describe("PaprikaClient", () => {
       );
 
       const client = new PaprikaClient("test@example.com", "password");
-      const recipes = await client.listRecipes();
+      const recipes = (await client.listRecipes())._unsafeUnwrap();
 
       expect(recipes).toStrictEqual([]);
     });
@@ -408,7 +404,7 @@ describe("PaprikaClient", () => {
       );
 
       const client = new PaprikaClient("test@example.com", "password");
-      const recipe = await client.getRecipe("test-uid");
+      const recipe = (await client.getRecipe("test-uid"))._unsafeUnwrap();
 
       expect(recipe.name).toBe("Recipe test-uid");
       expect(recipe.prepTime).toBe(null);
@@ -430,17 +426,13 @@ describe("PaprikaClient", () => {
 
       const client = new PaprikaClient("test@example.com", "password");
 
-      try {
-        await client.getRecipe("gone-uid");
-        expect.fail("Should have thrown PaprikaAPIError");
-      } catch (error) {
-        expect(error).toBeInstanceOf(PaprikaAPIError);
-        expect((error as PaprikaAPIError).status).toBe(404);
-        expect((error as PaprikaAPIError).message).toContain("Recipe not found.");
-      }
+      const error = (await client.getRecipe("gone-uid"))._unsafeUnwrapErr();
+      expect(error).toBeInstanceOf(PaprikaAPIError);
+      expect((error as PaprikaAPIError).status).toBe(404);
+      expect((error as PaprikaAPIError).message).toContain("Recipe not found.");
     });
 
-    it("non-2xx response throws PaprikaAPIError", async () => {
+    it("non-2xx response errs with PaprikaAPIError", async () => {
       server.use(
         http.get(`${API_BASE}/recipe/not-found/`, () => {
           return HttpResponse.json({}, { status: 404 });
@@ -449,12 +441,8 @@ describe("PaprikaClient", () => {
 
       const client = new PaprikaClient("test@example.com", "password");
 
-      try {
-        await client.getRecipe("not-found");
-        expect.fail("Should have thrown PaprikaAPIError");
-      } catch (error) {
-        expect(error).toBeInstanceOf(PaprikaAPIError);
-      }
+      const error = (await client.getRecipe("not-found"))._unsafeUnwrapErr();
+      expect(error).toBeInstanceOf(PaprikaAPIError);
     });
   });
 
@@ -493,7 +481,7 @@ describe("PaprikaClient", () => {
       );
 
       const client = new PaprikaClient("test@example.com", "password");
-      const recipes = await client.getRecipes(["uid-1", "uid-2", "uid-3"]);
+      const recipes = (await client.getRecipes(["uid-1", "uid-2", "uid-3"]))._unsafeUnwrap();
 
       expect(recipes).toHaveLength(3);
       expect(recipes[0]!.name).toBe("Recipe uid-1");
@@ -504,7 +492,7 @@ describe("PaprikaClient", () => {
     it("getRecipes([]) returns [] with zero HTTP requests", async () => {
       // Deliberately NOT registering any handler — if a request is made, MSW returns 500
       const client = new PaprikaClient("test@example.com", "password");
-      const recipes = await client.getRecipes([]);
+      const recipes = (await client.getRecipes([]))._unsafeUnwrap();
 
       expect(recipes).toStrictEqual([]);
     });
@@ -530,7 +518,7 @@ describe("PaprikaClient", () => {
       expect(peakInFlight).toBeLessThanOrEqual(5);
     });
 
-    it("a single recipe fetch error causes entire getRecipes() to reject", async () => {
+    it("a single recipe fetch error errs the entire getRecipes()", async () => {
       server.use(
         http.get(`${API_BASE}/recipe/good-uid/`, () => {
           return HttpResponse.json({ result: makeSnakeCaseRecipe("good-uid") });
@@ -542,12 +530,8 @@ describe("PaprikaClient", () => {
 
       const client = new PaprikaClient("test@example.com", "password");
 
-      try {
-        await client.getRecipes(["good-uid", "bad-uid"]);
-        expect.fail("Should have thrown");
-      } catch (error) {
-        expect(error).toBeInstanceOf(PaprikaAPIError);
-      }
+      const error = (await client.getRecipes(["good-uid", "bad-uid"]))._unsafeUnwrapErr();
+      expect(error).toBeInstanceOf(PaprikaAPIError);
     });
   });
 
@@ -565,7 +549,7 @@ describe("PaprikaClient", () => {
       );
 
       const client = new PaprikaClient("test@example.com", "password");
-      const categories = await client.listCategories();
+      const categories = (await client.listCategories())._unsafeUnwrap();
 
       expect(categories).toHaveLength(2);
       expect(categories[0]!.name).toBe("Breakfast");
@@ -602,7 +586,7 @@ describe("PaprikaClient", () => {
       );
 
       const client = new PaprikaClient("test@example.com", "password");
-      const categories = await client.listCategories();
+      const categories = (await client.listCategories())._unsafeUnwrap();
 
       expect(categories).toStrictEqual([]);
     });
@@ -687,7 +671,7 @@ describe("PaprikaClient", () => {
 
       const client = new PaprikaClient("test@example.com", "password");
       const input = makeCamelCaseRecipe(uid); // a live recipe with a placeholder hash
-      const result = await client.saveRecipe(input);
+      const result = (await client.saveRecipe(input))._unsafeUnwrap();
 
       expect(result.uid).toBe(input.uid);
       expect(result.name).toBe(input.name);
@@ -720,7 +704,7 @@ describe("PaprikaClient", () => {
       // hash is trash-independent, so the edit must still produce a fresh, detectable
       // hash — not the stale echo.
       const trashedEdit: Recipe = { ...makeCamelCaseRecipe(uid), name: "Renamed while trashing", inTrash: true };
-      const result = await client.saveRecipe(trashedEdit);
+      const result = (await client.saveRecipe(trashedEdit))._unsafeUnwrap();
 
       expect(payload!["hash"]).toBe(computeRecipeHash(trashedEdit));
       expect(payload!["hash"]).not.toBe(trashedEdit.hash);
@@ -747,13 +731,13 @@ describe("PaprikaClient", () => {
       // Hard-delete tombstone: Paprika validates `deleted` against the stored hash, so
       // it must be echoed verbatim even though content fields are present.
       const tombstone: Recipe = { ...makeCamelCaseRecipe(uid), inTrash: true, deleted: true };
-      const result = await client.saveRecipe(tombstone);
+      const result = (await client.saveRecipe(tombstone))._unsafeUnwrap();
 
       expect(payload!["hash"]).toBe(tombstone.hash);
       expect(result.hash).toBe(tombstone.hash);
     });
 
-    it("non-2xx response throws PaprikaAPIError", async () => {
+    it("non-2xx response errs with PaprikaAPIError", async () => {
       const uid = "test-uid";
 
       server.use(
@@ -764,12 +748,8 @@ describe("PaprikaClient", () => {
 
       const client = new PaprikaClient("test@example.com", "password");
 
-      try {
-        await client.saveRecipe(makeCamelCaseRecipe(uid));
-        expect.fail("Should have thrown PaprikaAPIError");
-      } catch (error) {
-        expect(error).toBeInstanceOf(PaprikaAPIError);
-      }
+      const error = (await client.saveRecipe(makeCamelCaseRecipe(uid)))._unsafeUnwrapErr();
+      expect(error).toBeInstanceOf(PaprikaAPIError);
     });
   });
 
@@ -798,7 +778,7 @@ describe("PaprikaClient", () => {
       );
 
       const client = new PaprikaClient("test@example.com", "password");
-      const result = await client.notifySync();
+      const result = (await client.notifySync())._unsafeUnwrap();
 
       expect(result).toBeUndefined();
     });
@@ -839,7 +819,7 @@ describe("PaprikaClient", () => {
       expect(notifyReached).toBe(true);
     });
 
-    it("404 from getRecipe throws error and never calls saveRecipe or notifySync", async () => {
+    it("404 from getRecipe errs and never calls saveRecipe or notifySync", async () => {
       const uid = "not-found";
       let notifyReached = false;
 
@@ -857,12 +837,8 @@ describe("PaprikaClient", () => {
 
       const client = new PaprikaClient("test@example.com", "password");
 
-      try {
-        await client.deleteRecipe(RecipeUidSchema.parse(uid));
-        expect.fail("Should have thrown PaprikaAPIError");
-      } catch (error) {
-        expect(error).toBeInstanceOf(PaprikaAPIError);
-      }
+      const error = (await client.deleteRecipe(RecipeUidSchema.parse(uid)))._unsafeUnwrapErr();
+      expect(error).toBeInstanceOf(PaprikaAPIError);
 
       // Assert notify was never called
       expect(notifyReached).toBe(false);
@@ -906,7 +882,7 @@ describe("PaprikaClient", () => {
       expect(notifyReached).toBe(true);
     });
 
-    it("404 from getRecipe throws and never POSTs or notifies", async () => {
+    it("404 from getRecipe errs and never POSTs or notifies", async () => {
       const uid = "not-found";
       let notifyReached = false;
 
@@ -922,12 +898,8 @@ describe("PaprikaClient", () => {
 
       const client = new PaprikaClient("test@example.com", "password");
 
-      try {
-        await client.hardDeleteRecipe(RecipeUidSchema.parse(uid));
-        expect.fail("Should have thrown PaprikaAPIError");
-      } catch (error) {
-        expect(error).toBeInstanceOf(PaprikaAPIError);
-      }
+      const error = (await client.hardDeleteRecipe(RecipeUidSchema.parse(uid)))._unsafeUnwrapErr();
+      expect(error).toBeInstanceOf(PaprikaAPIError);
 
       expect(notifyReached).toBe(false);
     });
@@ -977,7 +949,7 @@ describe("PaprikaClient", () => {
       );
 
       const client = new PaprikaClient("test@example.com", "password");
-      const pantryItems = await client.listPantry();
+      const pantryItems = (await client.listPantry())._unsafeUnwrap();
 
       expect(pantryItems).toHaveLength(2);
       expect(pantryItems[0]!.uid).toBe("pantry-1");
@@ -999,7 +971,7 @@ describe("PaprikaClient", () => {
       );
 
       const client = new PaprikaClient("test@example.com", "password");
-      const pantryItems = await client.listPantry();
+      const pantryItems = (await client.listPantry())._unsafeUnwrap();
 
       expect(pantryItems).toStrictEqual([]);
     });
@@ -1116,7 +1088,7 @@ describe("PaprikaClient", () => {
 
       const client = new PaprikaClient("test@example.com", "password");
       const input = makeCamelCasePantryItem(uid);
-      const [result] = await client.savePantryItems([input]);
+      const [result] = (await client.savePantryItems([input]))._unsafeUnwrap();
 
       expect(capturedUrl).toBe(`${API_BASE}/pantry/`);
       expect(result?.uid).toBe(input.uid);
@@ -1145,7 +1117,7 @@ describe("PaprikaClient", () => {
 
       const client = new PaprikaClient("test@example.com", "password");
       await client.authenticate();
-      const [result] = await client.savePantryItems([makeCamelCasePantryItem(uid)]);
+      const [result] = (await client.savePantryItems([makeCamelCasePantryItem(uid)]))._unsafeUnwrap();
 
       expect(result?.uid).toBe(uid);
       expect(authCallCount).toBe(2);
@@ -1169,7 +1141,7 @@ describe("PaprikaClient", () => {
         );
 
         const client = new PaprikaClient("test@example.com", "password");
-        const [result] = await client.savePantryItems([makeCamelCasePantryItem(uid)]);
+        const [result] = (await client.savePantryItems([makeCamelCasePantryItem(uid)]))._unsafeUnwrap();
 
         expect(result?.uid).toBe(uid);
         expect(pantryCallCount).toBe(2);
@@ -1192,7 +1164,7 @@ describe("PaprikaClient", () => {
       );
 
       const client = new PaprikaClient("test@example.com", "password");
-      const [result] = await client.savePantryItems([makeCamelCasePantryItem(uid)]);
+      const [result] = (await client.savePantryItems([makeCamelCasePantryItem(uid)]))._unsafeUnwrap();
 
       expect(result?.uid).toBe(uid);
       expect(pantryCallCount).toBe(2);
@@ -1211,24 +1183,21 @@ describe("PaprikaClient", () => {
 
       const client = new PaprikaClient("test@example.com", "password");
 
-      let caught: unknown;
-      try {
-        await client.savePantryItems([makeCamelCasePantryItem(uid)]);
-        expect.fail("Should have thrown");
-      } catch (error) {
-        caught = error;
-      }
+      const error = (await client.savePantryItems([makeCamelCasePantryItem(uid)]))._unsafeUnwrapErr();
 
-      // After retries are exhausted, callers see the original network-level
-      // TypeError, not the internal retry marker. Tools that catch and
-      // surface the message stay consistent with the pre-retry behavior.
+      // After retries are exhausted, callers see a PaprikaError carrying the
+      // original network-level TypeError's message (and the TypeError as cause),
+      // not the internal retry marker. Tools that surface the message stay
+      // consistent with the pre-retry behavior.
       // (msw renders the message as "Failed to fetch"; node's undici emits
       // "fetch failed" in production — both are TypeError.)
-      expect(caught).toBeInstanceOf(TypeError);
+      expect(error).toBeInstanceOf(PaprikaError);
+      expect(error.cause).toBeInstanceOf(TypeError);
+      expect(error.message).toBe((error.cause as TypeError).message);
       expect(pantryCallCount).toBeGreaterThan(1);
     });
 
-    it("non-retryable HTTP error throws PaprikaAPIError", async () => {
+    it("non-retryable HTTP error errs with PaprikaAPIError", async () => {
       const uid = "pantry-test-7";
 
       server.use(
@@ -1239,19 +1208,15 @@ describe("PaprikaClient", () => {
 
       const client = new PaprikaClient("test@example.com", "password");
 
-      try {
-        await client.savePantryItems([makeCamelCasePantryItem(uid)]);
-        expect.fail("Should have thrown PaprikaAPIError");
-      } catch (error) {
-        expect(error).toBeInstanceOf(PaprikaAPIError);
-        if (error instanceof PaprikaAPIError) {
-          expect(error.status).toBe(400);
-          expect(error.endpoint).toBe(`${API_BASE}/pantry/`);
-        }
+      const error = (await client.savePantryItems([makeCamelCasePantryItem(uid)]))._unsafeUnwrapErr();
+      expect(error).toBeInstanceOf(PaprikaAPIError);
+      if (error instanceof PaprikaAPIError) {
+        expect(error.status).toBe(400);
+        expect(error.endpoint).toBe(`${API_BASE}/pantry/`);
       }
     });
 
-    it("invalid Zod envelope (result is string not boolean) throws ZodError", async () => {
+    it("invalid Zod envelope (result is string not boolean) errs with a PaprikaError wrapping the ZodError", async () => {
       const uid = "pantry-test-8";
 
       server.use(
@@ -1262,12 +1227,9 @@ describe("PaprikaClient", () => {
 
       const client = new PaprikaClient("test@example.com", "password");
 
-      try {
-        await client.savePantryItems([makeCamelCasePantryItem(uid)]);
-        expect.fail("Should have thrown ZodError");
-      } catch (error) {
-        expect(error).toBeInstanceOf(ZodError);
-      }
+      const error = (await client.savePantryItems([makeCamelCasePantryItem(uid)]))._unsafeUnwrapErr();
+      expect(error).toBeInstanceOf(PaprikaError);
+      expect(error.cause).toBeInstanceOf(ZodError);
     });
   });
 
@@ -1343,9 +1305,7 @@ describe("PaprikaClient", () => {
 
       vi.useFakeTimers();
       const client = new PaprikaClient("test@example.com", "password", testLog);
-      const callPromise = client.listRecipes().catch(() => {
-        /* expected rejection */
-      });
+      const callPromise = client.listRecipes();
       await vi.runAllTimersAsync();
       await callPromise;
 
@@ -1373,9 +1333,7 @@ describe("PaprikaClient", () => {
 
       // Make 5 failing tool calls — each exhausts all 3 retries
       for (let i = 0; i < 5; i++) {
-        const p = client.listRecipes().catch(() => {
-          /* expected */
-        });
+        const p = client.listRecipes();
         await vi.runAllTimersAsync();
         await p;
       }
@@ -1406,9 +1364,7 @@ describe("PaprikaClient", () => {
 
       // Trip the breaker: 5 failing calls (each exhausts maxAttempts=3, so 4 total fetches)
       for (let i = 0; i < 5; i++) {
-        const p = client.listRecipes().catch(() => {
-          /* expected */
-        });
+        const p = client.listRecipes();
         await vi.runAllTimersAsync();
         await p;
       }
@@ -1444,9 +1400,7 @@ describe("PaprikaClient", () => {
 
       // Trip the breaker: 5 failing calls
       for (let i = 0; i < 5; i++) {
-        const p = client.listRecipes().catch(() => {
-          /* expected */
-        });
+        const p = client.listRecipes();
         await vi.runAllTimersAsync();
         await p;
       }
@@ -1494,7 +1448,7 @@ describe("PaprikaClient", () => {
       expect(fetchCount).toBe(20);
     }, 60000);
 
-    it("6th call with open breaker throws CircuitOpenError without additional fetches", async () => {
+    it("6th call with open breaker errs with CircuitOpenError without additional fetches", async () => {
       let fetchCount = 0;
       server.use(
         http.get(`${API_BASE}/recipes/`, () => {
@@ -1509,13 +1463,8 @@ describe("PaprikaClient", () => {
       await tripBreaker(() => client.listRecipes());
       const fetchCountAfterTrip = fetchCount;
 
-      // 6th call should throw CircuitOpenError without making any fetch
-      let caught: unknown;
-      try {
-        await client.listRecipes();
-      } catch (err) {
-        caught = err;
-      }
+      // 6th call should err with CircuitOpenError without making any fetch
+      const caught = (await client.listRecipes())._unsafeUnwrapErr();
 
       expect(caught).toBeInstanceOf(CircuitOpenError);
       // No additional fetches were made
@@ -1539,12 +1488,7 @@ describe("PaprikaClient", () => {
 
       await tripBreaker(() => client.listRecipes());
 
-      let caught: unknown;
-      try {
-        await client.listRecipes();
-      } catch (err) {
-        caught = err;
-      }
+      const caught = (await client.listRecipes())._unsafeUnwrapErr();
 
       const msg = toMessage(caught);
       expect(msg).toContain(`${API_BASE}/recipes/`);
@@ -1606,9 +1550,7 @@ describe("PaprikaClient", () => {
       );
 
       const client = new PaprikaClient("test@example.com", "password", testLog);
-      await client.listRecipes().catch(() => {
-        /* expected */
-      });
+      await client.listRecipes();
 
       const errorRecords = records.filter((r) => r["msg"] === "paprika request failed (non-retryable)");
       expect(errorRecords).toHaveLength(1);
@@ -1687,9 +1629,7 @@ describe("PaprikaClient", () => {
       // Authenticate so the token is set (but since auth URL is not stubbed, it will fail)
       // Instead, directly make a request — the token is set as password, not auth token yet.
       // Just verify that no field in any record contains the secret token.
-      await client.listRecipes().catch(() => {
-        /* expected: 400 error */
-      });
+      await client.listRecipes(); // errs (400); the Result is irrelevant — only the log records matter
 
       // Serialize all records to string and verify no leak
       const allRecordsAsJson = JSON.stringify(records);
@@ -1750,7 +1690,7 @@ describe("PaprikaClient", () => {
       );
 
       const client = new PaprikaClient("test@example.com", "password");
-      const aisles = await client.listAisles();
+      const aisles = (await client.listAisles())._unsafeUnwrap();
 
       expect(aisles).toHaveLength(2);
       expect(aisles[0]!.name).toBe("Produce");
@@ -1764,7 +1704,7 @@ describe("PaprikaClient", () => {
       server.use(http.get(`${API_BASE}/groceryaisles/`, () => HttpResponse.json({ result: [] })));
 
       const client = new PaprikaClient("test@example.com", "password");
-      const aisles = await client.listAisles();
+      const aisles = (await client.listAisles())._unsafeUnwrap();
 
       expect(aisles).toStrictEqual([]);
     });
@@ -1779,7 +1719,7 @@ describe("PaprikaClient", () => {
       );
 
       const client = new PaprikaClient("test@example.com", "password");
-      const aisles = await client.listAisles();
+      const aisles = (await client.listAisles())._unsafeUnwrap();
 
       expect(aisles[0]!.deleted).toBe(false);
     });
@@ -1808,7 +1748,7 @@ describe("PaprikaClient", () => {
 
       const client = new PaprikaClient("test@example.com", "password");
       const input = makeTestAisle();
-      const result = await client.saveAisle(input);
+      const result = (await client.saveAisle(input))._unsafeUnwrap();
 
       expect(capturedUrl).toBe(`${API_BASE}/groceryaisles/`);
       expect(result.uid).toBe(input.uid);
@@ -1876,7 +1816,7 @@ describe("PaprikaClient", () => {
         orderFlag: 2,
         parentUid: CategoryUidSchema.parse("PARENT-UID"),
       });
-      const result = await client.saveCategory(input);
+      const result = (await client.saveCategory(input))._unsafeUnwrap();
 
       expect(capturedUrl).toBe(`${API_BASE}/categories/`);
       expect(result.uid).toBe(input.uid);
@@ -1943,7 +1883,7 @@ describe("PaprikaClient", () => {
       );
 
       const client = new PaprikaClient("test@example.com", "password");
-      const lists = await client.listGroceryLists();
+      const lists = (await client.listGroceryLists())._unsafeUnwrap();
 
       expect(lists).toHaveLength(2);
       expect(lists[0]!.name).toBe("Groceries");
@@ -1996,7 +1936,7 @@ describe("PaprikaClient", () => {
       );
 
       const client = new PaprikaClient("test@example.com", "password");
-      const items = await client.listGroceryItems();
+      const items = (await client.listGroceryItems())._unsafeUnwrap();
 
       expect(items).toHaveLength(2);
       expect(items[0]!.name).toBe("Apples");
@@ -2037,7 +1977,7 @@ describe("PaprikaClient", () => {
       );
 
       const client = new PaprikaClient("test@example.com", "password");
-      const ingredients = await client.listGroceryIngredients();
+      const ingredients = (await client.listGroceryIngredients())._unsafeUnwrap();
 
       expect(ingredients).toHaveLength(2);
       expect(ingredients[0]!.name).toBe("Milk");
@@ -2065,7 +2005,7 @@ describe("PaprikaClient", () => {
 
       const client = new PaprikaClient("test@example.com", "password");
       const input = makeTestGroceryList({ name: "Weekend", orderFlag: 1, isDefault: false });
-      const result = await client.saveGroceryList(input);
+      const result = (await client.saveGroceryList(input))._unsafeUnwrap();
 
       expect(result.uid).toBe(input.uid);
       expect(result.name).toBe(input.name);
@@ -2109,7 +2049,7 @@ describe("PaprikaClient", () => {
         name: "Bread",
         orderFlag: 1,
       });
-      const result = await client.saveGroceryItems([item1, item2]);
+      const result = (await client.saveGroceryItems([item1, item2]))._unsafeUnwrap();
 
       expect(result).toHaveLength(2);
       expect(result[0]!.name).toBe("Apples");
@@ -2156,7 +2096,7 @@ describe("PaprikaClient", () => {
 
       const client = new PaprikaClient("test@example.com", "password");
       const input = makeTestGroceryIngredient({ name: "Butter", aisleUid: AisleUidSchema.parse("AI-DAIRY") });
-      const result = await client.saveGroceryIngredient(input);
+      const result = (await client.saveGroceryIngredient(input))._unsafeUnwrap();
 
       expect(result.uid).toBe(input.uid);
       expect(result.name).toBe(input.name);
@@ -2193,7 +2133,7 @@ describe("PaprikaClient", () => {
       const client = new PaprikaClient("test@example.com", "password");
       const item1 = makeCamelCasePantryItem("pantry-uid-001", { ingredient: "Flour" });
       const item2 = makeCamelCasePantryItem("pantry-uid-002", { ingredient: "Sugar" });
-      const result = await client.savePantryItems([item1, item2]);
+      const result = (await client.savePantryItems([item1, item2]))._unsafeUnwrap();
 
       expect(result).toHaveLength(2);
       expect(result[0]!.ingredient).toBe("Flour");
@@ -2206,7 +2146,7 @@ describe("PaprikaClient", () => {
   });
 
   describe("listGroceryLists() non-retryable error", () => {
-    it("400 from /grocerylists/ throws PaprikaAPIError with status 400 and grocerylists endpoint", async () => {
+    it("400 from /grocerylists/ errs with PaprikaAPIError with status 400 and grocerylists endpoint", async () => {
       server.use(
         http.get(`${API_BASE}/grocerylists/`, () => {
           return HttpResponse.json({ error: "bad request" }, { status: 400 });
@@ -2215,14 +2155,10 @@ describe("PaprikaClient", () => {
 
       const client = new PaprikaClient("test@example.com", "password");
 
-      try {
-        await client.listGroceryLists();
-        expect.fail("Should have thrown PaprikaAPIError");
-      } catch (error) {
-        expect(error).toBeInstanceOf(PaprikaAPIError);
-        expect((error as PaprikaAPIError).status).toBe(400);
-        expect((error as PaprikaAPIError).endpoint).toContain("grocerylists");
-      }
+      const error = (await client.listGroceryLists())._unsafeUnwrapErr();
+      expect(error).toBeInstanceOf(PaprikaAPIError);
+      expect((error as PaprikaAPIError).status).toBe(400);
+      expect((error as PaprikaAPIError).endpoint).toContain("grocerylists");
     });
   });
 
@@ -2241,7 +2177,7 @@ describe("PaprikaClient", () => {
       );
 
       const client = new PaprikaClient("test@example.com", "password");
-      const items = await client.listGroceryItems();
+      const items = (await client.listGroceryItems())._unsafeUnwrap();
 
       expect(items).toStrictEqual([]);
       expect(callCount).toBe(3);
@@ -2267,7 +2203,7 @@ describe("PaprikaClient", () => {
       const meal1 = makeMeal({ uid: MealUidSchema.parse("meal-uid-001"), name: "Breakfast" });
       const meal2 = makeMeal({ uid: MealUidSchema.parse("meal-uid-002"), name: "Dinner" });
       const items: ReadonlyArray<Meal> = [meal1, meal2];
-      const result = await client.saveMeals(items);
+      const result = (await client.saveMeals(items))._unsafeUnwrap();
 
       // identity return
       expect(result).toBe(items);
@@ -2316,7 +2252,7 @@ describe("PaprikaClient", () => {
       expect(body).toStrictEqual([meal].map(mealToApiPayload));
     });
 
-    it("saveMeals() 400 from /meals/ throws PaprikaAPIError with status 400 and meals endpoint", async () => {
+    it("saveMeals() 400 from /meals/ errs with PaprikaAPIError with status 400 and meals endpoint", async () => {
       server.use(
         http.post(`${API_BASE}/meals/`, () => {
           return HttpResponse.json({ error: "bad request" }, { status: 400 });
@@ -2325,14 +2261,12 @@ describe("PaprikaClient", () => {
 
       const client = new PaprikaClient("test@example.com", "password");
 
-      try {
-        await client.saveMeals([makeMeal({ uid: MealUidSchema.parse("meal-uid-004") })]);
-        expect.fail("Should have thrown PaprikaAPIError");
-      } catch (error) {
-        expect(error).toBeInstanceOf(PaprikaAPIError);
-        expect((error as PaprikaAPIError).status).toBe(400);
-        expect((error as PaprikaAPIError).endpoint).toContain("meals");
-      }
+      const error = (
+        await client.saveMeals([makeMeal({ uid: MealUidSchema.parse("meal-uid-004") })])
+      )._unsafeUnwrapErr();
+      expect(error).toBeInstanceOf(PaprikaAPIError);
+      expect((error as PaprikaAPIError).status).toBe(400);
+      expect((error as PaprikaAPIError).endpoint).toContain("meals");
     });
   });
 
@@ -2350,7 +2284,7 @@ describe("PaprikaClient", () => {
       );
 
       const client = new PaprikaClient("test@example.com", "password");
-      const menus = await client.listMenus();
+      const menus = (await client.listMenus())._unsafeUnwrap();
 
       expect(menus).toHaveLength(2);
       expect(menus[0]!.uid).toBe("MENU-1");
@@ -2376,7 +2310,7 @@ describe("PaprikaClient", () => {
       );
 
       const client = new PaprikaClient("test@example.com", "password");
-      const items = await client.listMenuItems();
+      const items = (await client.listMenuItems())._unsafeUnwrap();
 
       expect(items).toHaveLength(2);
       expect(items[0]!.uid).toBe("MI-1");
@@ -2409,7 +2343,7 @@ describe("PaprikaClient", () => {
       const menu1: Menu = makeMenu({ uid: MenuUidSchema.parse("MENU-1"), name: "Week 1" });
       const menu2: Menu = makeMenu({ uid: MenuUidSchema.parse("MENU-2"), name: "Week 2" });
       const items: ReadonlyArray<Menu> = [menu1, menu2];
-      const result = await client.saveMenus(items);
+      const result = (await client.saveMenus(items))._unsafeUnwrap();
 
       expect(result).toBe(items);
 
@@ -2428,7 +2362,7 @@ describe("PaprikaClient", () => {
       expect(payload).not.toHaveProperty("orderFlag");
     });
 
-    it("400 from /menus/ throws PaprikaAPIError with status 400 and menus endpoint", async () => {
+    it("400 from /menus/ errs with PaprikaAPIError with status 400 and menus endpoint", async () => {
       server.use(
         http.post(`${API_BASE}/menus/`, () => {
           return HttpResponse.json({ error: "bad request" }, { status: 400 });
@@ -2437,14 +2371,10 @@ describe("PaprikaClient", () => {
 
       const client = new PaprikaClient("test@example.com", "password");
 
-      try {
-        await client.saveMenus([makeMenu({ uid: MenuUidSchema.parse("MENU-ERR") })]);
-        expect.fail("Should have thrown PaprikaAPIError");
-      } catch (error) {
-        expect(error).toBeInstanceOf(PaprikaAPIError);
-        expect((error as PaprikaAPIError).status).toBe(400);
-        expect((error as PaprikaAPIError).endpoint).toContain("menus");
-      }
+      const error = (await client.saveMenus([makeMenu({ uid: MenuUidSchema.parse("MENU-ERR") })]))._unsafeUnwrapErr();
+      expect(error).toBeInstanceOf(PaprikaAPIError);
+      expect((error as PaprikaAPIError).status).toBe(400);
+      expect((error as PaprikaAPIError).endpoint).toContain("menus");
     });
   });
 
@@ -2467,7 +2397,7 @@ describe("PaprikaClient", () => {
       const item1: MenuItem = makeMenuItem({ uid: MenuItemUidSchema.parse("MI-1"), name: "Quiche" });
       const item2: MenuItem = makeMenuItem({ uid: MenuItemUidSchema.parse("MI-2"), name: "Soup" });
       const items: ReadonlyArray<MenuItem> = [item1, item2];
-      const result = await client.saveMenuItems(items);
+      const result = (await client.saveMenuItems(items))._unsafeUnwrap();
 
       expect(result).toBe(items);
 
@@ -2489,7 +2419,7 @@ describe("PaprikaClient", () => {
       expect(payload).not.toHaveProperty("typeUid");
     });
 
-    it("400 from /menuitems/ throws PaprikaAPIError with status 400 and menuitems endpoint", async () => {
+    it("400 from /menuitems/ errs with PaprikaAPIError with status 400 and menuitems endpoint", async () => {
       server.use(
         http.post(`${API_BASE}/menuitems/`, () => {
           return HttpResponse.json({ error: "bad request" }, { status: 400 });
@@ -2498,14 +2428,12 @@ describe("PaprikaClient", () => {
 
       const client = new PaprikaClient("test@example.com", "password");
 
-      try {
-        await client.saveMenuItems([makeMenuItem({ uid: MenuItemUidSchema.parse("MI-ERR") })]);
-        expect.fail("Should have thrown PaprikaAPIError");
-      } catch (error) {
-        expect(error).toBeInstanceOf(PaprikaAPIError);
-        expect((error as PaprikaAPIError).status).toBe(400);
-        expect((error as PaprikaAPIError).endpoint).toContain("menuitems");
-      }
+      const error = (
+        await client.saveMenuItems([makeMenuItem({ uid: MenuItemUidSchema.parse("MI-ERR") })])
+      )._unsafeUnwrapErr();
+      expect(error).toBeInstanceOf(PaprikaAPIError);
+      expect((error as PaprikaAPIError).status).toBe(400);
+      expect((error as PaprikaAPIError).endpoint).toContain("menuitems");
     });
   });
 });

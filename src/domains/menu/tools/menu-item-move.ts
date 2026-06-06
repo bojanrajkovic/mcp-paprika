@@ -9,7 +9,6 @@ import type { Menu } from "../types.js";
 import { MenuItemUidSchema } from "../../../ids.js";
 import { defineTool } from "../../../kernel/tool.js";
 import { commitFailure, textResult } from "../../../shared/tools.js";
-import { toMessage } from "../../../utils/log.js";
 import { menuStartGuard } from "./guards.js";
 
 // `.strict()` — moving a menu item to a different day is its own act: it can
@@ -69,19 +68,20 @@ export const moveMenuItemTool = defineTool(
             const parent = ctx.state.menus.store.get(existing.menuUid);
             if (parent !== undefined && newDay > parent.days) {
               const expanded: Menu = { ...parent, days: newDay };
-              try {
-                const savedMenu = (await ctx.infra.client.saveMenus([expanded]))[0] ?? expanded;
-                const commitErr = commitFailure("menu", await ctx.writes.commitMenu(savedMenu));
-                if (commitErr) return commitErr;
-                extendedTo = newDay;
-              } catch (error) {
-                const message = toMessage(error);
-                log.error({ err: error, uid }, "saveMenus (move_menu_item auto-expand) failed");
-                return textResult(
-                  `Failed to extend the menu to ${newDay.toString()} day(s) for the move: ${message}. ` +
-                    `The item was not moved.`,
-                );
-              }
+              const savedMenus = (await ctx.infra.client.saveMenus([expanded])).match(
+                (v) => v,
+                (e) => {
+                  log.error({ err: e, uid }, "saveMenus (move_menu_item auto-expand) failed");
+                  return textResult(
+                    `Failed to extend the menu to ${newDay.toString()} day(s) for the move: ${e.message}. ` +
+                      `The item was not moved.`,
+                  );
+                },
+              );
+              if ("content" in savedMenus) return savedMenus;
+              const commitErr = commitFailure("menu", await ctx.writes.commitMenu(savedMenus[0] ?? expanded));
+              if (commitErr) return commitErr;
+              extendedTo = newDay;
             }
           }
 
@@ -97,16 +97,16 @@ export const moveMenuItemTool = defineTool(
 
           const moved: MenuItem = { ...existing, day: newDay, orderFlag: newOrderFlag };
 
-          let saved: MenuItem;
-          try {
-            saved = (await ctx.infra.client.saveMenuItems([moved]))[0]!;
-            const commitErr = commitFailure("menu", await ctx.writes.commitMenuItem(saved));
-            if (commitErr) return commitErr;
-          } catch (error) {
-            const message = toMessage(error);
-            log.error({ err: error, uid }, "saveMenuItems (move_menu_item) failed");
-            return textResult(`Failed to move menu item: ${message}`);
-          }
+          const saved = (await ctx.infra.client.saveMenuItems([moved])).match(
+            (items) => items[0]!,
+            (e) => {
+              log.error({ err: e, uid }, "saveMenuItems (move_menu_item) failed");
+              return textResult(`Failed to move menu item: ${e.message}`);
+            },
+          );
+          if ("content" in saved) return saved;
+          const commitErr = commitFailure("menu", await ctx.writes.commitMenuItem(saved));
+          if (commitErr) return commitErr;
 
           const extendNote = extendedTo !== null ? `Extended the menu to ${extendedTo.toString()} day(s). ` : "";
           return textResult(`${extendNote}Menu item "${saved.name}" moved to day ${saved.day.toString()}.`);

@@ -1,3 +1,4 @@
+import { errAsync, okAsync } from "neverthrow";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { MealTypeUid, MenuItemUid, MenuUid, RecipeUid } from "../../../ids.js";
@@ -52,7 +53,7 @@ describe("add_menu_items tool", () => {
   it("adds a batch of items and denormalizes the recipe name", async () => {
     const menu = makeMenu({ uid: "m-1" as MenuUid, name: "Holiday", days: 2 });
     seedBase(kh, { menus: [menu] });
-    vi.mocked(kh.client().saveMenuItems).mockImplementation(async (items: ReadonlyArray<MenuItem>) => [...items]);
+    vi.mocked(kh.client().saveMenuItems).mockImplementation((items: ReadonlyArray<MenuItem>) => okAsync([...items]));
 
     const text = await kh.callToolText("add_menu_items", {
       menu: { uid: "m-1" },
@@ -82,7 +83,7 @@ describe("add_menu_items tool", () => {
   it("adds a freeform menuitem (name, no recipe_uid) materializing recipeUid null", async () => {
     const menu = makeMenu({ uid: "m-1" as MenuUid, name: "Holiday", days: 1 });
     seedBase(kh, { menus: [menu] });
-    vi.mocked(kh.client().saveMenuItems).mockImplementation(async (items: ReadonlyArray<MenuItem>) => [...items]);
+    vi.mocked(kh.client().saveMenuItems).mockImplementation((items: ReadonlyArray<MenuItem>) => okAsync([...items]));
 
     const text = await kh.callToolText("add_menu_items", {
       menu: { uid: "m-1" },
@@ -102,7 +103,7 @@ describe("add_menu_items tool", () => {
   it("mixes recipe-linked and freeform items in one batch", async () => {
     const menu = makeMenu({ uid: "m-1" as MenuUid, name: "Holiday", days: 1 });
     seedBase(kh, { menus: [menu] });
-    vi.mocked(kh.client().saveMenuItems).mockImplementation(async (items: ReadonlyArray<MenuItem>) => [...items]);
+    vi.mocked(kh.client().saveMenuItems).mockImplementation((items: ReadonlyArray<MenuItem>) => okAsync([...items]));
 
     await kh.callTool("add_menu_items", {
       menu: { uid: "m-1" },
@@ -142,7 +143,7 @@ describe("add_menu_items tool", () => {
     // Existing item holds the menu-wide max orderFlag 0 → new items start at 1.
     const existing = makeMenuItem({ uid: "mi-existing" as MenuItemUid, menuUid: "m-1", day: 1, orderFlag: 0 });
     seedBase(kh, { menus: [menu], menuItems: [existing] });
-    vi.mocked(kh.client().saveMenuItems).mockImplementation(async (items: ReadonlyArray<MenuItem>) => [...items]);
+    vi.mocked(kh.client().saveMenuItems).mockImplementation((items: ReadonlyArray<MenuItem>) => okAsync([...items]));
 
     await kh.callTool("add_menu_items", {
       menu: { uid: "m-1" },
@@ -159,7 +160,7 @@ describe("add_menu_items tool", () => {
   it("numbers order_flag menu-wide across days, not per-day (matches the wire capture)", async () => {
     const menu = makeMenu({ uid: "m-1" as MenuUid, name: "Plan", days: 3 });
     seedBase(kh, { menus: [menu] });
-    vi.mocked(kh.client().saveMenuItems).mockImplementation(async (items: ReadonlyArray<MenuItem>) => [...items]);
+    vi.mocked(kh.client().saveMenuItems).mockImplementation((items: ReadonlyArray<MenuItem>) => okAsync([...items]));
 
     await kh.callTool("add_menu_items", {
       menu: { uid: "m-1" },
@@ -178,8 +179,8 @@ describe("add_menu_items tool", () => {
   it("auto-expands the menu day span when an item overflows it, committing the menu first", async () => {
     const menu = makeMenu({ uid: "m-1" as MenuUid, name: "Holiday", days: 1 });
     seedBase(kh, { menus: [menu] });
-    vi.mocked(kh.client().saveMenus).mockImplementation(async (items: ReadonlyArray<Menu>) => [...items]);
-    vi.mocked(kh.client().saveMenuItems).mockImplementation(async (items: ReadonlyArray<MenuItem>) => [...items]);
+    vi.mocked(kh.client().saveMenus).mockImplementation((items: ReadonlyArray<Menu>) => okAsync([...items]));
+    vi.mocked(kh.client().saveMenuItems).mockImplementation((items: ReadonlyArray<MenuItem>) => okAsync([...items]));
 
     const text = await kh.callToolText("add_menu_items", {
       menu: { uid: "m-1" },
@@ -201,7 +202,7 @@ describe("add_menu_items tool", () => {
   it("does NOT expand the menu when all days are in range", async () => {
     const menu = makeMenu({ uid: "m-1" as MenuUid, name: "Holiday", days: 5 });
     seedBase(kh, { menus: [menu] });
-    vi.mocked(kh.client().saveMenuItems).mockImplementation(async (items: ReadonlyArray<MenuItem>) => [...items]);
+    vi.mocked(kh.client().saveMenuItems).mockImplementation((items: ReadonlyArray<MenuItem>) => okAsync([...items]));
 
     await kh.callTool("add_menu_items", {
       menu: { uid: "m-1" },
@@ -244,8 +245,8 @@ describe("add_menu_items tool", () => {
   it("unknown type {name} auto-creates a custom type and adds the item with it", async () => {
     const menu = makeMenu({ uid: "m-1" as MenuUid, name: "Plan", days: 3 });
     seedBase(kh, { menus: [menu] });
-    vi.mocked(kh.client().saveMenuItems).mockImplementation(async (items: ReadonlyArray<MenuItem>) => [...items]);
-    vi.mocked(kh.client().saveMealType).mockImplementation(async (mt) => mt);
+    vi.mocked(kh.client().saveMenuItems).mockImplementation((items: ReadonlyArray<MenuItem>) => okAsync([...items]));
+    vi.mocked(kh.client().saveMealType).mockImplementation((mt) => okAsync(mt));
 
     await kh.callTool("add_menu_items", {
       menu: { uid: "m-1" },
@@ -264,8 +265,8 @@ describe("add_menu_items tool", () => {
   it("a batch rejected in validation creates NO meal type (pure-validate-first)", async () => {
     const menu = makeMenu({ uid: "m-1" as MenuUid, name: "Plan", days: 3 });
     seedBase(kh, { menus: [menu] });
-    vi.mocked(kh.client().saveMenuItems).mockImplementation(async (items: ReadonlyArray<MenuItem>) => [...items]);
-    vi.mocked(kh.client().saveMealType).mockImplementation(async (mt) => mt);
+    vi.mocked(kh.client().saveMenuItems).mockImplementation((items: ReadonlyArray<MenuItem>) => okAsync([...items]));
+    vi.mocked(kh.client().saveMealType).mockImplementation((mt) => okAsync(mt));
 
     const text = await kh.callToolText("add_menu_items", {
       menu: { uid: "m-1" },
@@ -283,8 +284,8 @@ describe("add_menu_items tool", () => {
   it("a failed menu auto-expand creates NO meal type (expand runs before create)", async () => {
     const menu = makeMenu({ uid: "m-1" as MenuUid, name: "Plan", days: 1 });
     seedBase(kh, { menus: [menu] });
-    vi.mocked(kh.client().saveMealType).mockImplementation(async (mt) => mt);
-    vi.mocked(kh.client().saveMenus).mockRejectedValue(new Error("network"));
+    vi.mocked(kh.client().saveMealType).mockImplementation((mt) => okAsync(mt));
+    vi.mocked(kh.client().saveMenus).mockReturnValue(errAsync(new Error("network")));
 
     const text = await kh.callToolText("add_menu_items", {
       menu: { uid: "m-1" },
@@ -329,7 +330,7 @@ describe("update_menu_item tool", () => {
       orderFlag: 0,
     });
     seedBase(kh, { menuItems: [item] });
-    vi.mocked(kh.client().saveMenuItems).mockImplementation(async (items: ReadonlyArray<MenuItem>) => [...items]);
+    vi.mocked(kh.client().saveMenuItems).mockImplementation((items: ReadonlyArray<MenuItem>) => okAsync([...items]));
 
     await kh.callTool("update_menu_item", { uid: "mi-1", type: { name: "Breakfast" } });
 
@@ -348,7 +349,7 @@ describe("update_menu_item tool", () => {
       name: "Tacos",
     });
     seedBase(kh, { menuItems: [item] });
-    vi.mocked(kh.client().saveMenuItems).mockImplementation(async (items: ReadonlyArray<MenuItem>) => [...items]);
+    vi.mocked(kh.client().saveMenuItems).mockImplementation((items: ReadonlyArray<MenuItem>) => okAsync([...items]));
 
     await kh.callTool("update_menu_item", { uid: "mi-1", recipe_uid: SOUP_UID });
 
@@ -369,7 +370,7 @@ describe("update_menu_item tool", () => {
   it("a rejected update (unknown recipe) with a new type {name} creates NO type", async () => {
     const item = makeMenuItem({ uid: "mi-1" as MenuItemUid, menuUid: "m-1" });
     seedBase(kh, { menuItems: [item] });
-    vi.mocked(kh.client().saveMealType).mockImplementation(async (mt) => mt);
+    vi.mocked(kh.client().saveMealType).mockImplementation((mt) => okAsync(mt));
 
     const text = await kh.callToolText("update_menu_item", {
       uid: "mi-1",
@@ -403,7 +404,7 @@ describe("delete_menu_item tool", () => {
   it("removes the item from the store and reports deletion", async () => {
     const item = makeMenuItem({ uid: "mi-1" as MenuItemUid, menuUid: "m-1", name: "Turkey" });
     kh.seed({ menus: [], menuItems: [item], mealTypes: [] });
-    vi.mocked(kh.client().saveMenuItems).mockImplementation(async (items: ReadonlyArray<MenuItem>) => [...items]);
+    vi.mocked(kh.client().saveMenuItems).mockImplementation((items: ReadonlyArray<MenuItem>) => okAsync([...items]));
 
     const text = await kh.callToolText("delete_menu_item", { uid: "mi-1" });
 
@@ -417,7 +418,7 @@ describe("delete_menu_item tool", () => {
   it("is idempotent: a second delete returns 'already deleted' without re-POSTing", async () => {
     const item = makeMenuItem({ uid: "mi-1" as MenuItemUid, menuUid: "m-1", name: "Turkey" });
     kh.seed({ menus: [], menuItems: [item], mealTypes: [] });
-    vi.mocked(kh.client().saveMenuItems).mockImplementation(async (items: ReadonlyArray<MenuItem>) => [...items]);
+    vi.mocked(kh.client().saveMenuItems).mockImplementation((items: ReadonlyArray<MenuItem>) => okAsync([...items]));
 
     await kh.callTool("delete_menu_item", { uid: "mi-1" });
     expect(kh.client().saveMenuItems).toHaveBeenCalledOnce();

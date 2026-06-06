@@ -17,17 +17,16 @@ import { menuItemsEqual } from "../menu-item/types.js";
 export function menuItemsSync(state: MenuState): SyncContribution<MenuState, "recipe" | "meal-type"> {
   return {
     tier: "additive",
-    reconcile: async (ctx): Promise<MenuItemSyncResult> => {
+    reconcile: (ctx) => {
       ctx.infra.log.debug("fetching menu items");
-      const changes = await syncReplaceAllEntity({
+      return syncReplaceAllEntity({
         fetch: () => ctx.infra.client.listMenuItems(),
         cache: ctx.state.items.cache,
         store: ctx.state.items.store,
         equals: menuItemsEqual,
         label: "menu items",
         log: ctx.infra.log,
-      });
-      return { changeType: "menu-items", changes };
+      }).map((changes): MenuItemSyncResult => ({ changeType: "menu-items", changes }));
     },
     sweep: () => state.items.store.sweepPending(),
   };

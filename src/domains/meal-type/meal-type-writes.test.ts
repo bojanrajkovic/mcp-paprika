@@ -1,4 +1,4 @@
-import { errAsync } from "neverthrow";
+import { errAsync, okAsync } from "neverthrow";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Infra } from "../../kernel/registry.js";
@@ -37,9 +37,9 @@ describe("meal-type ensureMealType + pending-write reconcile", () => {
 
   beforeEach(async () => {
     await tmp.setup();
-    listMealTypes.mockReset().mockResolvedValue([]);
-    saveMealType.mockReset().mockImplementation(async (mt: MealType) => mt);
-    notifySync.mockReset().mockResolvedValue(undefined);
+    listMealTypes.mockReset().mockReturnValue(okAsync([]));
+    saveMealType.mockReset().mockImplementation((mt: MealType) => okAsync(mt));
+    notifySync.mockReset().mockReturnValue(okAsync(undefined));
     infra = makeKernelInfra({ cacheDir: tmp.dir(), client: { listMealTypes, saveMealType, notifySync } });
     const mod = registeredModules().find((m) => m.id === "meal-type");
     if (mod === undefined) throw new Error("meal-type module not registered");
@@ -109,13 +109,13 @@ describe("meal-type ensureMealType + pending-write reconcile", () => {
     expect(state.store.isPendingUpsert(created.uid)).toBe(true);
 
     // A sync whose canonical list predates the create (Brunch absent) must NOT drop it.
-    listMealTypes.mockResolvedValue(builtins());
+    listMealTypes.mockReturnValue(okAsync(builtins()));
     await mealTypeSync(state).reconcile({ state, deps: {}, infra });
     expect(state.store.resolveByName("Brunch")?.uid).toBe(created.uid); // merged back from cache
     expect(state.store.isPendingUpsert(created.uid)).toBe(true); // not yet observed → still shielded
 
     // Once the canonical list includes it, the pending mark clears on observation.
-    listMealTypes.mockResolvedValue([...builtins(), created]);
+    listMealTypes.mockReturnValue(okAsync([...builtins(), created]));
     await mealTypeSync(state).reconcile({ state, deps: {}, infra });
     expect(state.store.resolveByName("Brunch")?.uid).toBe(created.uid);
     expect(state.store.isPendingUpsert(created.uid)).toBe(false); // cleared

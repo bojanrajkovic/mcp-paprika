@@ -1,10 +1,10 @@
 import { join } from "node:path";
 
-import { err, ok, okAsync, ResultAsync } from "neverthrow";
+import { okAsync, ResultAsync } from "neverthrow";
 
 import type { CacheError } from "../../cache/disk-cache.js";
 import type { PantryItemUid } from "../../ids.js";
-import type { PantryApi } from "./api.js";
+import type { PantryApi, PantryCreateError } from "./api.js";
 import type { PantryItem } from "./types.js";
 
 import { DiskCache } from "../../cache/disk-cache.js";
@@ -13,7 +13,6 @@ import { defineModule, register } from "../../kernel/registry.js";
 import { notifySyncBestEffort } from "../../paprika/client.js";
 import { resolvePendingWriteTtl } from "../../utils/config.js";
 import { unwrapAtBoot } from "../../utils/errors.js";
-import { toMessage } from "../../utils/log.js";
 import { PantryStore } from "./store.js";
 import { pantrySync } from "./sync.js";
 import { addPantryItemsTool } from "./tools/batch-add.js";
@@ -157,18 +156,15 @@ register(
       // so the two failure modes stay distinguishable (the live move tool reports
       // them differently): a `save` failure means nothing was created server-side;
       // a `commit` failure means the items exist server-side and surface next sync.
-      const createItems: PantryApi["createItems"] = async (items) => {
-        let saved: ReadonlyArray<PantryItem>;
-        try {
-          saved = await infra.client.savePantryItems(items);
-        } catch (error) {
-          return err({ phase: "save", message: toMessage(error), saved: [] });
-        }
-        return commitPantryItemsBatch(saved).match(
-          () => ok(saved),
-          (e) => err({ phase: "commit", message: e.message, saved }),
-        );
-      };
+      const createItems: PantryApi["createItems"] = (items) =>
+        infra.client
+          .savePantryItems(items)
+          .mapErr((e): PantryCreateError => ({ phase: "save", message: e.message, saved: [] }))
+          .andThen((saved) =>
+            commitPantryItemsBatch(saved)
+              .map(() => saved)
+              .mapErr((e): PantryCreateError => ({ phase: "commit", message: e.message, saved })),
+          );
 
       return {
         api: {

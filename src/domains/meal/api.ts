@@ -1,4 +1,4 @@
-import type { Result } from "neverthrow";
+import type { ResultAsync } from "neverthrow";
 
 import type { HasSynced } from "../../kernel/registry.js";
 import type { Meal } from "./types.js";
@@ -36,5 +36,5 @@ export interface MealApi extends HasSynced {
    * `infra.client.saveMeals` + `commitMealsBatch` sequence so the coordinator
    * never reaches the meal store or cache directly.
    */
-  createMeals(meals: ReadonlyArray<Meal>): Promise<Result<ReadonlyArray<Meal>, string>>;
+  createMeals(meals: ReadonlyArray<Meal>): ResultAsync<ReadonlyArray<Meal>, string>;
 }

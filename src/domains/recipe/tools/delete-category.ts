@@ -8,7 +8,6 @@ import type { Recipe } from "../types.js";
 import { CategoryUidSchema } from "../../../ids.js";
 import { defineTool } from "../../../kernel/tool.js";
 import { commitFailure, textResult } from "../../../shared/tools.js";
-import { toMessage } from "../../../utils/log.js";
 import { categoryStartGuard } from "./guards.js";
 
 /**
@@ -68,15 +67,17 @@ export const deleteCategoryTool = defineTool(
             );
           }
 
-          try {
-            await ctx.infra.client.deleteCategory(existing);
-            const commitErr = commitFailure("category", await ctx.writes.commitCategoryDelete(existing));
-            if (commitErr) return commitErr;
-            return textResult(`Deleted category "${existing.name}".`);
-          } catch (error) {
-            log.error({ err: error, uid: args.uid }, "deleteCategory failed");
-            return textResult(`Failed to delete category: ${toMessage(error)}`);
-          }
+          return (await ctx.infra.client.deleteCategory(existing)).match(
+            async (): Promise<CallToolResult> => {
+              const commitErr = commitFailure("category", await ctx.writes.commitCategoryDelete(existing));
+              if (commitErr) return commitErr;
+              return textResult(`Deleted category "${existing.name}".`);
+            },
+            async (e) => {
+              log.error({ err: e, uid: args.uid }, "deleteCategory failed");
+              return textResult(`Failed to delete category: ${e.message}`);
+            },
+          );
         },
         (guard) => guard,
       );

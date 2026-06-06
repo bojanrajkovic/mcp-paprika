@@ -1,3 +1,4 @@
+import { errAsync, okAsync } from "neverthrow";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { RecipeUid } from "../../../ids.js";
@@ -29,7 +30,7 @@ describe("recipe diff-and-fetch reconcile", () => {
   beforeEach(async () => {
     await tmp.setup();
     listRecipes.mockReset();
-    getRecipes.mockReset().mockResolvedValue([]);
+    getRecipes.mockReset().mockReturnValue(okAsync([]));
     infra = makeKernelInfra({ cacheDir: tmp.dir(), client: { listRecipes, getRecipes } });
     const recipeModule = registeredModules().find((m) => m.id === "recipe");
     if (recipeModule === undefined) throw new Error("recipe module not registered");
@@ -40,10 +41,11 @@ describe("recipe diff-and-fetch reconcile", () => {
     await tmp.teardown();
   });
 
-  // recipesSync's reconcile always returns a RecipeSyncResult; the SyncContribution
-  // boundary widens it to `AnySyncResult | void`, so narrow it back for the assertions.
+  // recipesSync's reconcile always resolves ok with a RecipeSyncResult; the
+  // SyncContribution boundary widens it to `Result<AnySyncResult | void, _>`, so
+  // unwrap and narrow it back for the assertions.
   const reconcile = async (): Promise<RecipeSyncResult> =>
-    (await recipesSync(state).reconcile({ state, deps: {}, infra })) as RecipeSyncResult;
+    (await recipesSync(state).reconcile({ state, deps: {}, infra }))._unsafeUnwrap() as RecipeSyncResult;
 
   /** Seed a recipe into both the cache (so its hash enters the diff index) and the store. */
   async function seed(recipe: ReturnType<typeof makeRecipe>): Promise<void> {
@@ -54,8 +56,8 @@ describe("recipe diff-and-fetch reconcile", () => {
   describe("diff-and-fetch happy path", () => {
     it("adds a recipe present in the list but not the cache", async () => {
       const r = makeRecipe({ uid: "r-add" as RecipeUid, name: "Added", hash: "h1" });
-      listRecipes.mockResolvedValue([{ uid: r.uid, hash: r.hash }]);
-      getRecipes.mockResolvedValue([r]);
+      listRecipes.mockReturnValue(okAsync([{ uid: r.uid, hash: r.hash }]));
+      getRecipes.mockReturnValue(okAsync([r]));
 
       const result = await reconcile();
 
@@ -67,8 +69,8 @@ describe("recipe diff-and-fetch reconcile", () => {
     it("re-fetches a recipe whose hash changed", async () => {
       await seed(makeRecipe({ uid: "r-chg" as RecipeUid, name: "Old", hash: "old" }));
       const updated = makeRecipe({ uid: "r-chg" as RecipeUid, name: "New", hash: "new" });
-      listRecipes.mockResolvedValue([{ uid: updated.uid, hash: "new" }]);
-      getRecipes.mockResolvedValue([updated]);
+      listRecipes.mockReturnValue(okAsync([{ uid: updated.uid, hash: "new" }]));
+      getRecipes.mockReturnValue(okAsync([updated]));
 
       const result = await reconcile();
 
@@ -78,7 +80,7 @@ describe("recipe diff-and-fetch reconcile", () => {
 
     it("drops a recipe the server no longer lists", async () => {
       await seed(makeRecipe({ uid: "r-del" as RecipeUid, name: "Gone", hash: "h" }));
-      listRecipes.mockResolvedValue([]);
+      listRecipes.mockReturnValue(okAsync([]));
 
       const result = await reconcile();
 
@@ -89,7 +91,7 @@ describe("recipe diff-and-fetch reconcile", () => {
 
     it("skips a recipe whose hash is unchanged (no fetch)", async () => {
       await seed(makeRecipe({ uid: "r-same" as RecipeUid, name: "Same", hash: "h" }));
-      listRecipes.mockResolvedValue([{ uid: "r-same", hash: "h" }]);
+      listRecipes.mockReturnValue(okAsync([{ uid: "r-same", hash: "h" }]));
 
       await reconcile();
 
@@ -104,7 +106,7 @@ describe("recipe diff-and-fetch reconcile", () => {
       await seed(r);
       state.recipe.store.markPendingUpsert(r.uid);
       // Stale list: Paprika hasn't propagated our write, so the UID is absent.
-      listRecipes.mockResolvedValue([]);
+      listRecipes.mockReturnValue(okAsync([]));
 
       await reconcile();
 
@@ -117,8 +119,10 @@ describe("recipe diff-and-fetch reconcile", () => {
       await seed(trashed);
       state.recipe.store.markPendingDelete(trashed.uid);
       // Stale list still has it with the pre-trash hash → would otherwise diff.changed + re-fetch.
-      listRecipes.mockResolvedValue([{ uid: trashed.uid, hash: "pre" }]);
-      getRecipes.mockResolvedValue([makeRecipe({ uid: trashed.uid, name: "Trashed", hash: "pre", inTrash: false })]);
+      listRecipes.mockReturnValue(okAsync([{ uid: trashed.uid, hash: "pre" }]));
+      getRecipes.mockReturnValue(
+        okAsync([makeRecipe({ uid: trashed.uid, name: "Trashed", hash: "pre", inTrash: false })]),
+      );
 
       await reconcile();
 
@@ -132,13 +136,13 @@ describe("recipe diff-and-fetch reconcile", () => {
       state.recipe.store.markPendingUpsert(r.uid);
 
       // Cycle 1: canonical entry still carries the pre-write hash → NOT cleared.
-      listRecipes.mockResolvedValue([{ uid: r.uid, hash: "old" }]);
+      listRecipes.mockReturnValue(okAsync([{ uid: r.uid, hash: "old" }]));
       await reconcile();
       expect(state.recipe.store.isPendingUpsert(r.uid)).toBe(true);
       expect(state.recipe.store.get(r.uid)?.name).toBe("Edited");
 
       // Cycle 2: canonical hash now matches our local content → cleared.
-      listRecipes.mockResolvedValue([{ uid: r.uid, hash: "new" }]);
+      listRecipes.mockReturnValue(okAsync([{ uid: r.uid, hash: "new" }]));
       await reconcile();
       expect(state.recipe.store.isPendingUpsert(r.uid)).toBe(false);
       expect(state.recipe.store.get(r.uid)?.name).toBe("Edited");
@@ -146,9 +150,40 @@ describe("recipe diff-and-fetch reconcile", () => {
   });
 
   it("marks the store synced after a cycle", async () => {
-    listRecipes.mockResolvedValue([]);
+    listRecipes.mockReturnValue(okAsync([]));
     expect(state.recipe.store.hasSynced).toBe(false);
     await reconcile();
     expect(state.recipe.store.hasSynced).toBe(true);
+  });
+
+  describe("partial cache failure", () => {
+    it("mirrors a successfully-put recipe into the store even when a sibling put fails", async () => {
+      // cache.put eagerly advances the uid→hash index, so a recipe whose put
+      // landed but whose store.set was skipped would read as current to the next
+      // diff and never be re-fetched — the store would serve it stale until the
+      // recipe next changes server-side. Each store.set must ride ITS OWN put.
+      const good = makeRecipe({ uid: "r-good" as RecipeUid, name: "Good", hash: "hg" });
+      const bad = makeRecipe({ uid: "r-bad" as RecipeUid, name: "Bad", hash: "hb" });
+      listRecipes.mockReturnValue(
+        okAsync([
+          { uid: good.uid, hash: good.hash },
+          { uid: bad.uid, hash: bad.hash },
+        ]),
+      );
+      getRecipes.mockReturnValue(okAsync([good, bad]));
+      const realPut = state.recipe.cache.put.bind(state.recipe.cache);
+      vi.spyOn(state.recipe.cache, "put").mockImplementation((recipe) =>
+        recipe.uid === bad.uid ? errAsync({ context: "put", message: "disk full", cause: undefined }) : realPut(recipe),
+      );
+
+      const outcome = await recipesSync(state).reconcile({ state, deps: {}, infra });
+
+      // The cycle aborts (core err), but the recipe whose put landed is in the
+      // store — aligned with its already-advanced hash-index entry — and the
+      // failed one is in neither.
+      expect(outcome._unsafeUnwrapErr()).toMatchObject({ message: "disk full" });
+      expect(state.recipe.store.get(good.uid)?.name).toBe("Good");
+      expect(state.recipe.store.get(bad.uid)).toBeUndefined();
+    });
   });
 });

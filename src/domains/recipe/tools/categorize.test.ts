@@ -1,3 +1,4 @@
+import { errAsync, okAsync } from "neverthrow";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { RecipeState } from "../module.js";
@@ -17,7 +18,7 @@ describe("categorize_recipe tool", () => {
     const catB = makeCategory({ name: "Quick" });
     const recipe = makeRecipe({ categories: [catA.uid] });
     kh.seed({ recipes: [recipe], categories: [catA, catB] });
-    vi.mocked(kh.client().saveRecipe).mockImplementation((r) => Promise.resolve(r));
+    vi.mocked(kh.client().saveRecipe).mockImplementation((r) => okAsync(r));
 
     await kh.callTool("categorize_recipe", { uid: recipe.uid, categories: ["Quick"] });
 
@@ -29,7 +30,7 @@ describe("categorize_recipe tool", () => {
     const catA = makeCategory({ name: "Dinner" });
     const recipe = makeRecipe({ categories: [catA.uid] });
     kh.seed({ recipes: [recipe], categories: [catA] });
-    vi.mocked(kh.client().saveRecipe).mockImplementation((r) => Promise.resolve(r));
+    vi.mocked(kh.client().saveRecipe).mockImplementation((r) => okAsync(r));
 
     await kh.callTool("categorize_recipe", { uid: recipe.uid, categories: [catA.uid], mode: "add" });
 
@@ -41,7 +42,7 @@ describe("categorize_recipe tool", () => {
     const catB = makeCategory({ name: "Quick" });
     const recipe = makeRecipe({ categories: [catA.uid] });
     kh.seed({ recipes: [recipe], categories: [catA, catB] });
-    vi.mocked(kh.client().saveRecipe).mockImplementation((r) => Promise.resolve(r));
+    vi.mocked(kh.client().saveRecipe).mockImplementation((r) => okAsync(r));
 
     await kh.callTool("categorize_recipe", { uid: recipe.uid, categories: ["Quick"], mode: "replace" });
 
@@ -55,7 +56,7 @@ describe("categorize_recipe tool", () => {
     const catB = makeCategory({ name: "Quick" });
     const recipe = makeRecipe({ categories: [catA.uid, catB.uid] });
     kh.seed({ recipes: [recipe], categories: [catA, catB] });
-    vi.mocked(kh.client().saveRecipe).mockImplementation((r) => Promise.resolve(r));
+    vi.mocked(kh.client().saveRecipe).mockImplementation((r) => okAsync(r));
 
     await kh.callTool("categorize_recipe", { uid: recipe.uid, categories: ["Quick"], mode: "remove" });
 
@@ -93,7 +94,7 @@ describe("categorize_recipe tool", () => {
     const catB = makeCategory({ name: "Quick" });
     const recipe = makeRecipe({ categories: [catA.uid] });
     kh.seed({ recipes: [recipe], categories: [catA, catB] });
-    vi.mocked(kh.client().saveRecipe).mockImplementation((r) => Promise.resolve(r));
+    vi.mocked(kh.client().saveRecipe).mockImplementation((r) => okAsync(r));
 
     await kh.callTool("categorize_recipe", { uid: recipe.uid, categories: ["Quick"], mode: "add" });
 
@@ -106,7 +107,7 @@ describe("categorize_recipe tool", () => {
     const catA = makeCategory({ name: "Dinner" });
     const recipe = makeRecipe({ categories: [] });
     kh.seed({ recipes: [recipe], categories: [catA] });
-    vi.mocked(kh.client().saveRecipe).mockImplementation((r) => Promise.resolve(r));
+    vi.mocked(kh.client().saveRecipe).mockImplementation((r) => okAsync(r));
 
     await kh.callTool("categorize_recipe", { uid: recipe.uid, categories: ["Dinner"], mode: "add" });
 
@@ -114,11 +115,11 @@ describe("categorize_recipe tool", () => {
     expect(kh.client().notifySync).toHaveBeenCalledOnce();
   });
 
-  it("returns an error and does not commit when saveRecipe throws", async () => {
+  it("returns an error and does not commit when saveRecipe errs", async () => {
     const catA = makeCategory({ name: "Dinner" });
     const recipe = makeRecipe({ categories: [] });
     kh.seed({ recipes: [recipe], categories: [catA] });
-    vi.mocked(kh.client().saveRecipe).mockRejectedValue(new Error("Network error"));
+    vi.mocked(kh.client().saveRecipe).mockReturnValue(errAsync(new Error("Network error")));
 
     const text = await kh.callToolText("categorize_recipe", { uid: recipe.uid, categories: ["Dinner"], mode: "add" });
 

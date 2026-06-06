@@ -10,7 +10,6 @@ import { GroceryItemUidSchema, PantryItemUidSchema } from "../../../ids.js";
 import { defineTool } from "../../../kernel/tool.js";
 import { commitFailure, textResult } from "../../../shared/tools.js";
 import { todayWire } from "../../../utils/dates.js";
-import { toMessage } from "../../../utils/log.js";
 import { groceryStartGuard } from "./guards.js";
 
 /**
@@ -86,22 +85,23 @@ export const moveToPantryTool = defineTool(
             async (savedPantry): Promise<CallToolResult> => {
               // Step 4: THEN DELETE — soft-delete grocery items
               const trashedGrocery = items.map((gi) => ({ ...gi, deleted: true }));
-              try {
-                const savedGrocery = await ctx.infra.client.saveGroceryItems(trashedGrocery);
-                const commitErr = commitFailure("grocery list", await ctx.writes.commitGroceryItemsBatch(savedGrocery));
-                if (commitErr) return commitErr;
-              } catch (error) {
-                // Partial failure: pantry items created but grocery delete failed.
-                // Return structured message so user knows the state.
-                const message = toMessage(error);
-                log.error({ err: error, uids: args.uids }, "saveGroceryItems (delete) failed after pantry create");
-                const pantryUids = savedPantry.map((p) => p.uid).join(", ");
-                return textResult(
-                  `Partial failure: ${savedPantry.length.toString()} pantry item(s) were created (UIDs: ${pantryUids}), ` +
-                    `but the grocery item delete failed: ${message}. ` +
-                    `The items may exist in both grocery and pantry. You can manually delete the grocery items.`,
-                );
-              }
+              const savedGrocery = (await ctx.infra.client.saveGroceryItems(trashedGrocery)).match(
+                (v) => v,
+                (e) => {
+                  // Partial failure: pantry items created but grocery delete failed.
+                  // Return structured message so user knows the state.
+                  log.error({ err: e, uids: args.uids }, "saveGroceryItems (delete) failed after pantry create");
+                  const pantryUids = savedPantry.map((p) => p.uid).join(", ");
+                  return textResult(
+                    `Partial failure: ${savedPantry.length.toString()} pantry item(s) were created (UIDs: ${pantryUids}), ` +
+                      `but the grocery item delete failed: ${e.message}. ` +
+                      `The items may exist in both grocery and pantry. You can manually delete the grocery items.`,
+                  );
+                },
+              );
+              if ("content" in savedGrocery) return savedGrocery;
+              const commitErr = commitFailure("grocery list", await ctx.writes.commitGroceryItemsBatch(savedGrocery));
+              if (commitErr) return commitErr;
 
               // Step 5: Success response
               const movedNames = items.map((gi) => gi.ingredient).join(", ");

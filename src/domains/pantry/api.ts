@@ -1,4 +1,4 @@
-import type { Result } from "neverthrow";
+import type { ResultAsync } from "neverthrow";
 
 import type { HasSynced } from "../../kernel/registry.js";
 import type { PantryItem } from "./types.js";
@@ -26,7 +26,7 @@ export interface PantryApi extends HasSynced {
    * sync, so grocery must NOT delete its items) — and carries the saved items so
    * the caller can surface their UIDs.
    */
-  createItems(items: ReadonlyArray<PantryItem>): Promise<Result<ReadonlyArray<PantryItem>, PantryCreateError>>;
+  createItems(items: ReadonlyArray<PantryItem>): ResultAsync<ReadonlyArray<PantryItem>, PantryCreateError>;
 }
 
 /** The phase that failed inside `createItems`, with the underlying error message. */

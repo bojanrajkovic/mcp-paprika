@@ -3,7 +3,7 @@ import { ResultAsync } from "neverthrow";
 import type { SyncContribution } from "../../../kernel/registry.js";
 import type { GroceryState } from "../module.js";
 
-import { pruneOrphanCache, unwrapSyncStep } from "../../../paprika/sync.js";
+import { pruneOrphanCache } from "../../../paprika/sync.js";
 
 /**
  * Grocery-ingredient sync — the bespoke replace-all reconcile. NOT
@@ -20,7 +20,7 @@ import { pruneOrphanCache, unwrapSyncStep } from "../../../paprika/sync.js";
  * `warn`-level count so the drop is observable. (Historically the un-nullable schema
  * also threw on these rows, aborting the whole cycle before meals/menus could sync.)
  *
- * `core` tier — inside the outer try that aborts the cycle on failure. Returns `void`
+ * `core` tier — an `err` here aborts the cycle. Returns `void`
  * — the ingredient catalog has no
  * MCP resource surface and emits no `sync:complete`. NO `sweep` — the plain store
  * tracks no pending writes, so there is nothing to sweep; and so (unlike the
@@ -30,39 +30,46 @@ import { pruneOrphanCache, unwrapSyncStep } from "../../../paprika/sync.js";
 export function groceryIngredientsSync(): SyncContribution<GroceryState, "aisle" | "pantry"> {
   return {
     tier: "core",
-    reconcile: async (ctx): Promise<void> => {
+    reconcile: (ctx) => {
       const { store, cache } = ctx.state.ingredients;
       const { client, log } = ctx.infra;
 
       // 6. Ingredient catalog sync (replace-all, no pending-writes)
       log.debug("fetching grocery ingredients");
-      const groceryIngredients = await client.listGroceryIngredients();
-      log.debug({ count: groceryIngredients.length }, "fetched grocery ingredients");
+      return client.listGroceryIngredients().andThen((groceryIngredients) => {
+        log.debug({ count: groceryIngredients.length }, "fetched grocery ingredients");
 
-      // Intentionally NOT filtered by `deleted`: grocery ingredients hard-delete, so
-      // `listGroceryIngredients()` never returns a `deleted:true` row (only recipes soft-delete) —
-      // the only drop below is the no-aisle one. See docs/architecture.md (Caching and sync).
-      // Drop entries with no aisle. Paprika returns aisle_uid: null for an ingredient
-      // that was never filed into an aisle (GroceryIngredientSchema coerces that to "").
-      // Such a row carries no aisle memory — add_grocery_items resolves it to "" and the
-      // item then defaults to "Miscellaneous", identical to having no catalog entry at
-      // all — so keeping it just bloats the catalog. (Historically the null value also
-      // aborted the whole sync cycle before meals/menus could sync.) Warn on the dropped
-      // count so the drop is observable rather than silent.
-      const filteredIngredients = groceryIngredients.filter((i) => i.aisleUid !== "");
-      const droppedNoAisle = groceryIngredients.length - filteredIngredients.length;
-      if (droppedNoAisle > 0) {
-        log.warn({ count: droppedNoAisle }, "dropped grocery ingredients with no aisle");
-      }
+        // Intentionally NOT filtered by `deleted`: grocery ingredients hard-delete, so
+        // `listGroceryIngredients()` never returns a `deleted:true` row (only recipes soft-delete) —
+        // the only drop below is the no-aisle one. See docs/architecture.md (Caching and sync).
+        // Drop entries with no aisle. Paprika returns aisle_uid: null for an ingredient
+        // that was never filed into an aisle (GroceryIngredientSchema coerces that to "").
+        // Such a row carries no aisle memory — add_grocery_items resolves it to "" and the
+        // item then defaults to "Miscellaneous", identical to having no catalog entry at
+        // all — so keeping it just bloats the catalog. (Historically the null value also
+        // aborted the whole sync cycle before meals/menus could sync.) Warn on the dropped
+        // count so the drop is observable rather than silent.
+        const filteredIngredients = groceryIngredients.filter((i) => i.aisleUid !== "");
+        const droppedNoAisle = groceryIngredients.length - filteredIngredients.length;
+        if (droppedNoAisle > 0) {
+          log.warn({ count: droppedNoAisle }, "dropped grocery ingredients with no aisle");
+        }
 
-      const cachedIngredientUids = new Set(unwrapSyncStep(await cache.getAll()).map((i) => i.uid));
-      const filteredIngredientUids = new Set(filteredIngredients.map((i) => i.uid));
-      unwrapSyncStep(
-        await pruneOrphanCache(cache, cachedIngredientUids, filteredIngredientUids, log, "grocery ingredients"),
-      );
-
-      store.load(filteredIngredients);
-      unwrapSyncStep(await ResultAsync.combine(filteredIngredients.map((i) => cache.put(i))));
+        return cache.getAll().andThen((cachedIngredients) => {
+          const cachedIngredientUids = new Set(cachedIngredients.map((i) => i.uid));
+          const filteredIngredientUids = new Set(filteredIngredients.map((i) => i.uid));
+          return pruneOrphanCache(
+            cache,
+            cachedIngredientUids,
+            filteredIngredientUids,
+            log,
+            "grocery ingredients",
+          ).andThen(() => {
+            store.load(filteredIngredients);
+            return ResultAsync.combine(filteredIngredients.map((i) => cache.put(i))).map(() => undefined);
+          });
+        });
+      });
     },
   };
 }

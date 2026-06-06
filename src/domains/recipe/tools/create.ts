@@ -10,7 +10,6 @@ import { RecipeUidSchema } from "../../../ids.js";
 import { defineTool } from "../../../kernel/tool.js";
 import { commitFailure, textResult } from "../../../shared/tools.js";
 import { formatTimestampWire } from "../../../utils/dates.js";
-import { toMessage } from "../../../utils/log.js";
 import { recipeToMarkdown, resolveCategoryRefs } from "../recipe-markdown.js";
 import { recipeColdStartGuard } from "./guards.js";
 
@@ -106,17 +105,18 @@ export const createRecipeTool = defineTool(
             deleted: false, // a freshly created recipe is never a hard-delete tombstone (#125)
           };
 
-          let saved: Recipe;
-          try {
-            saved = await ctx.infra.client.saveRecipe(newRecipe); // AC2.5
-            const commitErr = commitFailure("recipe", await ctx.writes.commitRecipe(saved), { selfHealing: false }); // AC2.5, AC2.6
-            if (commitErr) return commitErr;
-          } catch (error) {
-            // AC2.8: store/cache not updated — commitRecipe not reached
-            const message = toMessage(error);
-            log.error({ err: error, name: args.name }, "saveRecipe failed");
-            return textResult(`Failed to create recipe: ${message}`);
-          }
+          const saved = (await ctx.infra.client.saveRecipe(newRecipe)).match(
+            // AC2.5
+            (v) => v,
+            (e) => {
+              // AC2.8: store/cache not updated — commitRecipe not reached
+              log.error({ err: e, name: args.name }, "saveRecipe failed");
+              return textResult(`Failed to create recipe: ${e.message}`);
+            },
+          );
+          if ("content" in saved) return saved;
+          const commitErr = commitFailure("recipe", await ctx.writes.commitRecipe(saved), { selfHealing: false }); // AC2.5, AC2.6
+          if (commitErr) return commitErr;
 
           const categoryNames = ctx.state.category.store.resolveNames(saved.categories);
           const markdown = recipeToMarkdown(saved, categoryNames);

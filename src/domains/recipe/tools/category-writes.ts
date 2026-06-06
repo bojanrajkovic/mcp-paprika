@@ -9,7 +9,6 @@ import type { RecipeState, RecipeWrites } from "../module.js";
 import { CategoryUidSchema } from "../../../ids.js";
 import { defineTool } from "../../../kernel/tool.js";
 import { commitFailure, textResult } from "../../../shared/tools.js";
-import { toMessage } from "../../../utils/log.js";
 import { categoryStartGuard } from "./guards.js";
 
 function categorySummary(state: RecipeState, category: Category): string {
@@ -79,15 +78,17 @@ export const createCategoryTool = defineTool(
             parentUid: args.parentUid ?? null,
           };
 
-          try {
-            const saved = await ctx.infra.client.saveCategory(category);
-            const commitErr = commitFailure("category", await ctx.writes.commitCategoryUpsert(saved));
-            if (commitErr) return commitErr;
-            return textResult(`Created category ${categorySummary(ctx.state, saved)}`);
-          } catch (error) {
-            log.error({ err: error, name: args.name }, "saveCategory failed");
-            return textResult(`Failed to create category: ${toMessage(error)}`);
-          }
+          return (await ctx.infra.client.saveCategory(category)).match(
+            async (saved): Promise<CallToolResult> => {
+              const commitErr = commitFailure("category", await ctx.writes.commitCategoryUpsert(saved));
+              if (commitErr) return commitErr;
+              return textResult(`Created category ${categorySummary(ctx.state, saved)}`);
+            },
+            async (e) => {
+              log.error({ err: e, name: args.name }, "saveCategory failed");
+              return textResult(`Failed to create category: ${e.message}`);
+            },
+          );
         },
         (guard) => guard,
       );
@@ -145,18 +146,20 @@ export const updateCategoryTool = defineTool(
             parentUid: args.parentUid !== undefined ? args.parentUid : existing.parentUid,
           };
 
-          try {
-            const saved = await ctx.infra.client.saveCategory(updated);
-            // commitCategoryUpsert persists locally and emits `category-changed` on
-            // the kernel re-index seam so discover re-embeds the category's recipes
-            // (a rename changes the display name baked into their embedding text).
-            const commitErr = commitFailure("category", await ctx.writes.commitCategoryUpsert(saved));
-            if (commitErr) return commitErr;
-            return textResult(`Updated category ${categorySummary(ctx.state, saved)}`);
-          } catch (error) {
-            log.error({ err: error, uid: args.uid }, "saveCategory failed");
-            return textResult(`Failed to update category: ${toMessage(error)}`);
-          }
+          return (await ctx.infra.client.saveCategory(updated)).match(
+            async (saved): Promise<CallToolResult> => {
+              // commitCategoryUpsert persists locally and emits `category-changed` on
+              // the kernel re-index seam so discover re-embeds the category's recipes
+              // (a rename changes the display name baked into their embedding text).
+              const commitErr = commitFailure("category", await ctx.writes.commitCategoryUpsert(saved));
+              if (commitErr) return commitErr;
+              return textResult(`Updated category ${categorySummary(ctx.state, saved)}`);
+            },
+            async (e) => {
+              log.error({ err: e, uid: args.uid }, "saveCategory failed");
+              return textResult(`Failed to update category: ${e.message}`);
+            },
+          );
         },
         (guard) => guard,
       );

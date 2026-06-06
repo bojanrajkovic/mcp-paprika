@@ -1,3 +1,4 @@
+import { errAsync, okAsync } from "neverthrow";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { AisleState } from "../../aisle/module.js";
@@ -16,7 +17,7 @@ describe("add_pantry_items tool", () => {
 
   it("single item with defaults creates pantry item with correct field values", async () => {
     kh.seed({ pantry: [], aisles: [] });
-    vi.mocked(kh.client().savePantryItems).mockImplementation(async (items) => items);
+    vi.mocked(kh.client().savePantryItems).mockImplementation((items) => okAsync(items));
 
     const result = await kh.callTool("add_pantry_items", { items: [{ ingredient: "Butter" }] });
     const text = getText(result);
@@ -47,7 +48,7 @@ describe("add_pantry_items tool", () => {
 
   it("batch of 3 distinct items calls savePantryItems once with all 3", async () => {
     kh.seed({ pantry: [], aisles: [] });
-    vi.mocked(kh.client().savePantryItems).mockImplementation(async (items) => items);
+    vi.mocked(kh.client().savePantryItems).mockImplementation((items) => okAsync(items));
 
     const result = await kh.callTool("add_pantry_items", {
       items: [{ ingredient: "Apples" }, { ingredient: "Milk" }, { ingredient: "Eggs" }],
@@ -66,7 +67,7 @@ describe("add_pantry_items tool", () => {
   it("aisle dedup — repeated aisle name calls ensureAisle only once", async () => {
     const existingAisle = makeAisle({ uid: "AISLE-1" as AisleUid, name: "Produce" });
     kh.seed({ pantry: [], aisles: [existingAisle] });
-    vi.mocked(kh.client().savePantryItems).mockImplementation(async (items) => items);
+    vi.mocked(kh.client().savePantryItems).mockImplementation((items) => okAsync(items));
 
     await kh.callTool("add_pantry_items", {
       items: [
@@ -89,7 +90,7 @@ describe("add_pantry_items tool", () => {
   it("existing-pantry duplicate skipped with UID and merge suggestion", async () => {
     const existingItem = makePantryItem({ ingredient: "Butter", uid: "EXISTING-UID" as PantryItemUid });
     kh.seed({ pantry: [existingItem], aisles: [] });
-    vi.mocked(kh.client().savePantryItems).mockImplementation(async (items) => items);
+    vi.mocked(kh.client().savePantryItems).mockImplementation((items) => okAsync(items));
 
     const result = await kh.callTool("add_pantry_items", {
       items: [{ ingredient: "Eggs" }, { ingredient: "BUTTER" }], // BUTTER dupes existing
@@ -107,7 +108,7 @@ describe("add_pantry_items tool", () => {
 
   it("intra-batch duplicate — second occurrence skipped", async () => {
     kh.seed({ pantry: [], aisles: [] });
-    vi.mocked(kh.client().savePantryItems).mockImplementation(async (items) => items);
+    vi.mocked(kh.client().savePantryItems).mockImplementation((items) => okAsync(items));
 
     const result = await kh.callTool("add_pantry_items", {
       items: [{ ingredient: "Milk" }, { ingredient: "MILK" }],
@@ -163,7 +164,7 @@ describe("add_pantry_items tool", () => {
 
   it("valid dates normalized to Paprika wire format per item", async () => {
     kh.seed({ pantry: [], aisles: [] });
-    vi.mocked(kh.client().savePantryItems).mockImplementation(async (items) => items);
+    vi.mocked(kh.client().savePantryItems).mockImplementation((items) => okAsync(items));
 
     await kh.callTool("add_pantry_items", {
       items: [
@@ -193,8 +194,8 @@ describe("add_pantry_items tool", () => {
   it("savePantryItems API error returns error message, store not mutated", async () => {
     kh.seed({ pantry: [], aisles: [] });
     const { PaprikaAPIError } = await import("../../../paprika/errors.js");
-    vi.mocked(kh.client().savePantryItems).mockRejectedValue(
-      new PaprikaAPIError("Server error", 500, "https://example/api"),
+    vi.mocked(kh.client().savePantryItems).mockReturnValue(
+      errAsync(new PaprikaAPIError("Server error", 500, "https://example/api")),
     );
 
     const result = await kh.callTool("add_pantry_items", { items: [{ ingredient: "Butter" }] });
@@ -208,7 +209,7 @@ describe("add_pantry_items tool", () => {
   it("optional fields flow through correctly", async () => {
     const existingAisle = makeAisle({ uid: "AISLE-1" as AisleUid, name: "Produce" });
     kh.seed({ pantry: [], aisles: [existingAisle] });
-    vi.mocked(kh.client().savePantryItems).mockImplementation(async (items) => items);
+    vi.mocked(kh.client().savePantryItems).mockImplementation((items) => okAsync(items));
 
     await kh.callTool("add_pantry_items", {
       items: [
@@ -235,7 +236,7 @@ describe("add_pantry_items tool", () => {
       pantry: [makePantryItem({ ingredient: "Butter", uid: "UID-BT" as PantryItemUid })],
       aisles: [],
     });
-    vi.mocked(kh.client().savePantryItems).mockImplementation(async (items) => items);
+    vi.mocked(kh.client().savePantryItems).mockImplementation((items) => okAsync(items));
 
     const result = await kh.callTool("add_pantry_items", {
       items: [
@@ -259,8 +260,8 @@ describe("add_pantry_items tool", () => {
     const newAisle = makeAisle({ name: "Exotic", uid: "AISLE-EX" as AisleUid });
     // aisle store seeded as empty + synced so ensureAisle knows it can create
     kh.seed({ pantry: [], aisles: [] });
-    vi.mocked(kh.client().savePantryItems).mockImplementation(async (items) => items);
-    vi.mocked(kh.client().saveAisle).mockResolvedValue(newAisle);
+    vi.mocked(kh.client().savePantryItems).mockImplementation((items) => okAsync(items));
+    vi.mocked(kh.client().saveAisle).mockReturnValue(okAsync(newAisle));
 
     await kh.callTool("add_pantry_items", { items: [{ ingredient: "Dragon Fruit", aisle: "Exotic" }] });
 

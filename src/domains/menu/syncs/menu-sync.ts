@@ -18,9 +18,9 @@ import { menusEqual } from "../types.js";
 export function menusSync(state: MenuState): SyncContribution<MenuState, "recipe" | "meal-type"> {
   return {
     tier: "additive",
-    reconcile: async (ctx): Promise<MenuSyncResult> => {
+    reconcile: (ctx) => {
       ctx.infra.log.debug("fetching menus");
-      const changes = await syncReplaceAllEntity({
+      return syncReplaceAllEntity({
         fetch: () => ctx.infra.client.listMenus(),
         cache: ctx.state.menus.cache,
         store: ctx.state.menus.store,
@@ -28,8 +28,7 @@ export function menusSync(state: MenuState): SyncContribution<MenuState, "recipe
         label: "menus",
         log: ctx.infra.log,
         afterLoad: () => ctx.state.menus.store.setLastSyncedAt(),
-      });
-      return { changeType: "menus", changes };
+      }).map((changes): MenuSyncResult => ({ changeType: "menus", changes }));
     },
     sweep: () => state.menus.store.sweepPending(),
   };

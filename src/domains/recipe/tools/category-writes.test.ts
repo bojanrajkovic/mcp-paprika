@@ -1,3 +1,4 @@
+import { okAsync } from "neverthrow";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { CategoryUid } from "../../../ids.js";
@@ -15,7 +16,7 @@ describe("category write tools", () => {
   describe("create_category", () => {
     it("creates a top-level category and posts it", async () => {
       kh.seed({ recipes: [makeRecipe()], categories: [] });
-      vi.mocked(kh.client().saveCategory).mockImplementation((c) => Promise.resolve(c));
+      vi.mocked(kh.client().saveCategory).mockImplementation((c) => okAsync(c));
 
       const result = await kh.callTool("create_category", { name: "Thai" });
 
@@ -31,7 +32,7 @@ describe("category write tools", () => {
     it("nests under an existing parent and assigns orderFlag = max+1", async () => {
       const parent = makeCategory({ uid: "p" as CategoryUid, name: "Cuisines", orderFlag: 4 });
       kh.seed({ recipes: [makeRecipe()], categories: [parent] });
-      vi.mocked(kh.client().saveCategory).mockImplementation((c) => Promise.resolve(c));
+      vi.mocked(kh.client().saveCategory).mockImplementation((c) => okAsync(c));
 
       await kh.callTool("create_category", { name: "Thai", parentUid: "p" });
 
@@ -60,7 +61,7 @@ describe("category write tools", () => {
     it("renames a category", async () => {
       const cat = makeCategory({ uid: "c" as CategoryUid, name: "Old" });
       kh.seed({ recipes: [makeRecipe()], categories: [cat] });
-      vi.mocked(kh.client().saveCategory).mockImplementation((c) => Promise.resolve(c));
+      vi.mocked(kh.client().saveCategory).mockImplementation((c) => okAsync(c));
 
       const result = await kh.callTool("update_category", { uid: "c", name: "New" });
 
@@ -74,7 +75,7 @@ describe("category write tools", () => {
       const parent = makeCategory({ uid: "p" as CategoryUid, name: "Parent" });
       const child = makeCategory({ uid: "c" as CategoryUid, name: "Child", parentUid: "p" as CategoryUid });
       kh.seed({ recipes: [makeRecipe()], categories: [parent, child] });
-      vi.mocked(kh.client().saveCategory).mockImplementation((c) => Promise.resolve(c));
+      vi.mocked(kh.client().saveCategory).mockImplementation((c) => okAsync(c));
 
       await kh.callTool("update_category", { uid: "c", parentUid: null });
 
@@ -131,7 +132,7 @@ describe("category write tools", () => {
         recipes: [makeRecipe({ categories: [] as Array<CategoryUid> })],
         categories: [cat],
       });
-      vi.mocked(kh.client().deleteCategory).mockResolvedValue(undefined);
+      vi.mocked(kh.client().deleteCategory).mockReturnValue(okAsync(undefined));
 
       const result = await kh.callTool("delete_category", { uid: "c" });
 

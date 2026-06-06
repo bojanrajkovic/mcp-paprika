@@ -11,6 +11,19 @@
  * All classes support ES2024 ErrorOptions for cause chaining.
  */
 
+import type { CircuitOpenError } from "../utils/errors.js";
+
+/**
+ * The client's public error union (ADR-0014): every public `PaprikaClient`
+ * method errs with one of these. `PaprikaAPIError` / `PaprikaAuthError` pass
+ * through from the wire classification (callers key on `PaprikaAPIError.status`
+ * — e.g. purge_recipe's 404 idempotency branch); `CircuitOpenError` surfaces a
+ * tripped breaker; a foreign escape (an undici `TypeError`, a `ZodError` on a
+ * malformed body) is wrapped as a base `PaprikaError` at the edge with its
+ * message preserved.
+ */
+export type PaprikaClientError = PaprikaError | CircuitOpenError;
+
 /**
  * Base error class for all Paprika-related operations.
  * Extends the built-in Error class with proper name assignment.

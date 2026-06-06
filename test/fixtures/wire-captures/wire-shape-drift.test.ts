@@ -1,6 +1,7 @@
 import { gunzipSync } from "node:zlib";
 
 import { http, HttpResponse } from "msw";
+import type { ResultAsync } from "neverthrow";
 import { describe, expect, it } from "vitest";
 
 import type { GroceryIngredient } from "../../../src/domains/grocery/grocery-ingredient/types.js";
@@ -8,6 +9,7 @@ import type { GroceryItem } from "../../../src/domains/grocery/grocery-item/type
 import type { GroceryList } from "../../../src/domains/grocery/grocery-list/types.js";
 import type { PantryItem } from "../../../src/domains/pantry/types.js";
 import type { Recipe } from "../../../src/domains/recipe/types.js";
+import type { PaprikaClientError } from "../../../src/paprika/errors.js";
 
 import { GroceryIngredientSchema } from "../../../src/domains/grocery/grocery-ingredient/types.js";
 import { GroceryItemSchema } from "../../../src/domains/grocery/grocery-item/types.js";
@@ -78,7 +80,9 @@ function schemaInputKeys(schema: { innerType: () => { shape: Record<string, unkn
 async function capturePostBody(
   server: ReturnType<typeof useMswServer>,
   url: string,
-  doPost: (client: PaprikaClient) => Promise<unknown>,
+  // The client's write methods return ResultAsync; the await below settles it
+  // and the captured body is read off the msw handler (the Result is discarded).
+  doPost: (client: PaprikaClient) => ResultAsync<unknown, PaprikaClientError>,
 ): Promise<Record<string, unknown>> {
   let body: Array<Record<string, unknown>> | null = null;
 

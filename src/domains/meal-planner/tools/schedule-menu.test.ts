@@ -1,3 +1,4 @@
+import { errAsync, okAsync } from "neverthrow";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { MealTypeUid, MenuUid, RecipeUid } from "../../../ids.js";
@@ -194,7 +195,7 @@ describe("schedule_menu — materialization", () => {
     });
 
     // saveMeals must return the items it receives (identity mock) so commitMealsBatch can proceed
-    vi.mocked(kh.client().saveMeals).mockImplementation(async (items: ReadonlyArray<Meal>) => items);
+    vi.mocked(kh.client().saveMeals).mockImplementation((items: ReadonlyArray<Meal>) => okAsync(items));
 
     const result = await kh.callTool("schedule_menu", { menu: { name: "Multi-Day" }, start_date: "2026-05-27" });
     const payload = vi.mocked(kh.client().saveMeals).mock.calls[0]?.[0] as ReadonlyArray<Meal>;
@@ -250,7 +251,7 @@ describe("schedule_menu — materialization", () => {
       meals: [],
     });
 
-    vi.mocked(kh.client().saveMeals).mockImplementation(async (items: ReadonlyArray<Meal>) => items);
+    vi.mocked(kh.client().saveMeals).mockImplementation((items: ReadonlyArray<Meal>) => okAsync(items));
 
     await kh.callTool("schedule_menu", { menu: { name: "Multi-Day" }, start_date: "2026-05-27" });
     const payload = vi.mocked(kh.client().saveMeals).mock.calls[0]?.[0] as ReadonlyArray<Meal>;
@@ -292,7 +293,7 @@ describe("schedule_menu — materialization", () => {
       meals: [],
     });
 
-    vi.mocked(kh.client().saveMeals).mockImplementation(async (items: ReadonlyArray<Meal>) => items);
+    vi.mocked(kh.client().saveMeals).mockImplementation((items: ReadonlyArray<Meal>) => okAsync(items));
 
     await kh.callTool("schedule_menu", { menu: { name: "Multi-Day" }, start_date: "2026-05-27" });
     const payload = vi.mocked(kh.client().saveMeals).mock.calls[0]?.[0] as ReadonlyArray<Meal>;
@@ -322,7 +323,7 @@ describe("schedule_menu — materialization", () => {
       meals: [makeMeal({ date: "2026-05-27 00:00:00", typeUid: BREAKFAST_UID, orderFlag: 3 })],
     });
 
-    vi.mocked(kh.client().saveMeals).mockImplementation(async (items: ReadonlyArray<Meal>) => items);
+    vi.mocked(kh.client().saveMeals).mockImplementation((items: ReadonlyArray<Meal>) => okAsync(items));
 
     await kh.callTool("schedule_menu", { menu: { name: "Multi-Day" }, start_date: "2026-05-27" });
     const payload = vi.mocked(kh.client().saveMeals).mock.calls[0]?.[0] as ReadonlyArray<Meal>;
@@ -349,7 +350,7 @@ describe("schedule_menu — materialization", () => {
       meals: [],
     });
 
-    vi.mocked(kh.client().saveMeals).mockImplementation(async (items: ReadonlyArray<Meal>) => items);
+    vi.mocked(kh.client().saveMeals).mockImplementation((items: ReadonlyArray<Meal>) => okAsync(items));
 
     const result = await kh.callTool("schedule_menu", { menu: { name: "Multi-Day" }, start_date: "2026-05-27" });
     const payload = vi.mocked(kh.client().saveMeals).mock.calls[0]?.[0] as ReadonlyArray<Meal>;
@@ -375,7 +376,7 @@ describe("schedule_menu — materialization", () => {
       meals: [],
     });
 
-    vi.mocked(kh.client().saveMeals).mockImplementation(async (items: ReadonlyArray<Meal>) => items);
+    vi.mocked(kh.client().saveMeals).mockImplementation((items: ReadonlyArray<Meal>) => okAsync(items));
 
     const result = await kh.callTool("schedule_menu", { menu: { name: "Multi-Day" }, start_date: "2026-05-27" });
     const payload = vi.mocked(kh.client().saveMeals).mock.calls[0]?.[0] as ReadonlyArray<Meal>;
@@ -436,7 +437,7 @@ describe("schedule_menu — rejection paths", () => {
     expect(kh.client().saveMeals).not.toHaveBeenCalled();
   });
 
-  it("saveMeals throws → error message, nothing committed", async () => {
+  it("saveMeals errs → error message, nothing committed", async () => {
     kh.seed({
       recipes: [
         makeRecipe({ uid: BUTTER_CHICKEN_UID, name: "(Not) Butter Chicken" }),
@@ -447,7 +448,7 @@ describe("schedule_menu — rejection paths", () => {
       meals: [],
     });
 
-    vi.mocked(kh.client().saveMeals).mockRejectedValue(new Error("network down"));
+    vi.mocked(kh.client().saveMeals).mockReturnValue(errAsync(new Error("network down")));
 
     const text = await kh.callToolText("schedule_menu", { menu: { name: "Multi-Day" }, start_date: "2026-05-27" });
     expect(text).toContain("Failed to add menu to planner: network down");

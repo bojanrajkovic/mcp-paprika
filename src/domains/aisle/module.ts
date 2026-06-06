@@ -1,7 +1,7 @@
 import { join } from "node:path";
 
 import { Mutex } from "async-mutex";
-import { err, ok, ResultAsync } from "neverthrow";
+import { err, ok, okAsync, ResultAsync } from "neverthrow";
 
 import type { CacheError } from "../../cache/disk-cache.js";
 import type { AisleApi } from "./api.js";
@@ -14,7 +14,6 @@ import { defineModule, register } from "../../kernel/registry.js";
 import { notifySyncBestEffort } from "../../paprika/client.js";
 import { resolvePendingWriteTtl } from "../../utils/config.js";
 import { unwrapAtBoot } from "../../utils/errors.js";
-import { toMessage } from "../../utils/log.js";
 import { AisleStore } from "./store.js";
 import { aisleSync } from "./sync.js";
 import { listAislesTool } from "./tools/list-aisles.js";
@@ -92,29 +91,28 @@ register(
           const uid = AisleUidSchema.parse(crypto.randomUUID().toUpperCase());
           const newAisle: Aisle = { uid, name: trimmedName, orderFlag: maxOrder, deleted: false };
 
-          let saved: Aisle;
-          try {
-            // INTERIM (#264): the client still throws; convert at this first
-            // owned consumer until its surface is Result-native.
-            saved = await infra.client.saveAisle(newAisle);
-          } catch (error) {
-            return err(`Failed to create aisle "${trimmedName}": ${toMessage(error)}`);
-          }
-          return (await commitAisle(saved)).match(
-            () => ok({ aisle: saved.name, aisleUid: saved.uid }),
-            (e) => {
-              // The create landed server-side; only the local commit failed. Erring
-              // here would invite a retry that mints a DUPLICATE aisle (the recheck
-              // misses until the store knows it). Keep the in-memory catalog
-              // authoritative — re-shielded as pending so the next replace-all sync
-              // can't drop it before the canonical list catches up — and let that
-              // sync heal the disk copy.
-              state.store.markPendingUpsert(saved.uid);
-              state.store.set(saved);
-              infra.log.warn({ err: e, name: saved.name }, "aisle local commit failed after create; sync will heal");
-              return ok({ aisle: saved.name, aisleUid: saved.uid });
-            },
-          );
+          return await infra.client
+            .saveAisle(newAisle)
+            .mapErr((e) => `Failed to create aisle "${trimmedName}": ${e.message}`)
+            .andThen((saved) =>
+              commitAisle(saved)
+                .map(() => ({ aisle: saved.name, aisleUid: saved.uid }))
+                .orElse((e) => {
+                  // The create landed server-side; only the local commit failed. Erring
+                  // here would invite a retry that mints a DUPLICATE aisle (the recheck
+                  // misses until the store knows it). Keep the in-memory catalog
+                  // authoritative — re-shielded as pending so the next replace-all sync
+                  // can't drop it before the canonical list catches up — and let that
+                  // sync heal the disk copy.
+                  state.store.markPendingUpsert(saved.uid);
+                  state.store.set(saved);
+                  infra.log.warn(
+                    { err: e, name: saved.name },
+                    "aisle local commit failed after create; sync will heal",
+                  );
+                  return okAsync({ aisle: saved.name, aisleUid: saved.uid });
+                }),
+            );
         });
       };
 

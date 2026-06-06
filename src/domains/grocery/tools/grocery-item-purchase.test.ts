@@ -1,3 +1,4 @@
+import { errAsync, okAsync } from "neverthrow";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { GroceryItemUid, GroceryListUid } from "../../../ids.js";
@@ -22,7 +23,7 @@ describe("mark_grocery_item_purchased tool", () => {
       listUid: "LIST-1",
       purchased: false,
     });
-    vi.mocked(kh.client().saveGroceryItems).mockResolvedValue([{ ...item, purchased: true }]);
+    vi.mocked(kh.client().saveGroceryItems).mockReturnValue(okAsync([{ ...item, purchased: true }]));
     kh.seed({ groceryLists: [WEEKLY_LIST], groceryItems: [item] });
 
     const text = await kh.callToolText("mark_grocery_item_purchased", { uid: "ITEM-1" });
@@ -53,7 +54,7 @@ describe("mark_grocery_item_purchased tool", () => {
       purchased: false,
     });
     const savedItem = { ...item, purchased: true };
-    vi.mocked(kh.client().saveGroceryItems).mockResolvedValue([savedItem]);
+    vi.mocked(kh.client().saveGroceryItems).mockReturnValue(okAsync([savedItem]));
     kh.seed({ groceryLists: [WEEKLY_LIST], groceryItems: [item] });
 
     await kh.callTool("mark_grocery_item_purchased", { uid: "ITEM-2" });
@@ -71,14 +72,14 @@ describe("mark_grocery_item_purchased tool", () => {
     expect(kh.client().saveGroceryItems).not.toHaveBeenCalled();
   });
 
-  it("returns an error message when saveGroceryItems throws", async () => {
+  it("returns an error message when saveGroceryItems errs", async () => {
     const item = makeGroceryItem({
       uid: "ITEM-3" as GroceryItemUid,
       ingredient: "Butter",
       listUid: "LIST-1",
       purchased: false,
     });
-    vi.mocked(kh.client().saveGroceryItems).mockRejectedValue(new Error("Network error"));
+    vi.mocked(kh.client().saveGroceryItems).mockReturnValue(errAsync(new Error("Network error")));
     kh.seed({ groceryLists: [WEEKLY_LIST], groceryItems: [item] });
 
     const text = await kh.callToolText("mark_grocery_item_purchased", { uid: "ITEM-3" });

@@ -9,9 +9,8 @@ import type { Notifier } from "./notifier.js";
  *
  * `onCycle` runs one cycle. The kernel's `syncOnce()` already never throws, but
  * the inner `try/catch` is kept as belt-and-suspenders. The `scheduler.wait` +
- * `AbortController` + `AbortError`-swallow exit is the load-bearing piece:
- * `stop()` aborts the in-flight wait so the loop exits promptly instead of after
- * the full interval.
+ * `AbortController` + abort-exit is the load-bearing piece: `stop()` aborts the
+ * in-flight wait so the loop exits promptly instead of after the full interval.
  *
  * The loop runs `onCycle()` IMMEDIATELY as its first iteration (then waits). The
  * caller has already run the initial cycle at build time (the kernel's `buildKernel`
@@ -31,15 +30,15 @@ export function runSyncLoop(onCycle: () => Promise<void>, intervalMs: number): {
       }
       try {
         await scheduler.wait(intervalMs, { signal });
-      } catch (err) {
-        if (err instanceof Error && err.name === "AbortError") return;
-        throw err;
+      } catch {
+        // `scheduler.wait` rejects only on abort (`stop()` was called) — exit the
+        // loop. Exiting on any rejection (rather than rethrowing the non-abort
+        // ones into a swallowing catch, as the throw-based version did) keeps the
+        // behavior identical and the loop throw-free (ADR-0014).
+        return;
       }
     }
-  })().catch(() => {
-    // The loop only rejects on a non-abort `scheduler.wait` error (effectively
-    // never); swallow so it can't surface as an unhandled rejection on shutdown.
-  });
+  })();
   return {
     stop(): void {
       ac.abort();

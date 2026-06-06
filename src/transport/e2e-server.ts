@@ -16,6 +16,7 @@
  */
 
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { okAsync, type ResultAsync } from "neverthrow";
 
 import type { Aisle } from "../domains/aisle/types.js";
 import type { GroceryIngredient } from "../domains/grocery/grocery-ingredient/types.js";
@@ -31,6 +32,7 @@ import type { Photo } from "../domains/recipe/photo/types.js";
 import type { Recipe, RecipeEntry } from "../domains/recipe/types.js";
 import type { AisleUid, CategoryUid, PantryItemUid, RecipeUid } from "../ids.js";
 import type { PaprikaClient } from "../paprika/client.js";
+import type { PaprikaClientError } from "../paprika/errors.js";
 
 import { GeneratedImageStore } from "../features/generated-image-store.js";
 import { buildKernel } from "../kernel/registry.js";
@@ -44,24 +46,24 @@ import { getCacheDir } from "../utils/xdg.js";
 import "../kernel/modules.generated.js";
 
 interface IMockPaprikaClient {
-  authenticate(): Promise<void>;
-  listRecipes(): Promise<Array<RecipeEntry>>;
-  getRecipe(uid: string): Promise<Recipe>;
-  getRecipes(uids: ReadonlyArray<string>): Promise<Array<Recipe>>;
-  listCategories(): Promise<Array<Category>>;
-  listAisles(): Promise<Array<Aisle>>;
-  listPantry(): Promise<Array<PantryItem>>;
-  listGroceryLists(): Promise<Array<GroceryList>>;
-  listGroceryItems(): Promise<Array<GroceryItem>>;
-  listGroceryIngredients(): Promise<Array<GroceryIngredient>>;
-  listMealTypes(): Promise<Array<MealType>>;
-  listMeals(): Promise<Array<Meal>>;
-  listMenus(): Promise<Array<Menu>>;
-  listMenuItems(): Promise<Array<MenuItem>>;
-  listPhotos(): Promise<Array<Photo>>;
-  saveRecipe(recipe: Readonly<Recipe>): Promise<Recipe>;
-  deleteRecipe(uid: RecipeUid): Promise<void>;
-  notifySync(): Promise<void>;
+  authenticate(): ResultAsync<void, PaprikaClientError>;
+  listRecipes(): ResultAsync<Array<RecipeEntry>, PaprikaClientError>;
+  getRecipe(uid: string): ResultAsync<Recipe, PaprikaClientError>;
+  getRecipes(uids: ReadonlyArray<string>): ResultAsync<Array<Recipe>, PaprikaClientError>;
+  listCategories(): ResultAsync<Array<Category>, PaprikaClientError>;
+  listAisles(): ResultAsync<Array<Aisle>, PaprikaClientError>;
+  listPantry(): ResultAsync<Array<PantryItem>, PaprikaClientError>;
+  listGroceryLists(): ResultAsync<Array<GroceryList>, PaprikaClientError>;
+  listGroceryItems(): ResultAsync<Array<GroceryItem>, PaprikaClientError>;
+  listGroceryIngredients(): ResultAsync<Array<GroceryIngredient>, PaprikaClientError>;
+  listMealTypes(): ResultAsync<Array<MealType>, PaprikaClientError>;
+  listMeals(): ResultAsync<Array<Meal>, PaprikaClientError>;
+  listMenus(): ResultAsync<Array<Menu>, PaprikaClientError>;
+  listMenuItems(): ResultAsync<Array<MenuItem>, PaprikaClientError>;
+  listPhotos(): ResultAsync<Array<Photo>, PaprikaClientError>;
+  saveRecipe(recipe: Readonly<Recipe>): ResultAsync<Recipe, PaprikaClientError>;
+  deleteRecipe(uid: RecipeUid): ResultAsync<void, PaprikaClientError>;
+  notifySync(): ResultAsync<void, PaprikaClientError>;
 }
 
 class MockPaprikaClient implements IMockPaprikaClient {
@@ -118,78 +120,78 @@ class MockPaprikaClient implements IMockPaprikaClient {
     deleted: false,
   };
 
-  async authenticate(): Promise<void> {
-    // no-op
+  authenticate(): ResultAsync<void, PaprikaClientError> {
+    return okAsync(undefined);
   }
 
-  async listRecipes(): Promise<Array<RecipeEntry>> {
-    return [{ uid: "test-recipe-1" as RecipeUid, hash: "hash-123" }];
+  listRecipes(): ResultAsync<Array<RecipeEntry>, PaprikaClientError> {
+    return okAsync([{ uid: "test-recipe-1" as RecipeUid, hash: "hash-123" }]);
   }
 
-  async getRecipe(_uid: string): Promise<Recipe> {
-    return this.mockRecipe;
+  getRecipe(_uid: string): ResultAsync<Recipe, PaprikaClientError> {
+    return okAsync(this.mockRecipe);
   }
 
-  async getRecipes(_uids: ReadonlyArray<string>): Promise<Array<Recipe>> {
-    return [this.mockRecipe];
+  getRecipes(_uids: ReadonlyArray<string>): ResultAsync<Array<Recipe>, PaprikaClientError> {
+    return okAsync([this.mockRecipe]);
   }
 
-  async listCategories(): Promise<Array<Category>> {
-    return [this.mockCategory];
+  listCategories(): ResultAsync<Array<Category>, PaprikaClientError> {
+    return okAsync([this.mockCategory]);
   }
 
-  async listPantry(): Promise<Array<PantryItem>> {
-    return [this.mockPantryItem];
+  listPantry(): ResultAsync<Array<PantryItem>, PaprikaClientError> {
+    return okAsync([this.mockPantryItem]);
   }
 
   // Everything else the initial sync reconciles returns empty — after the sync the
   // stores hold only the seeded recipe, category, and pantry item.
-  async listAisles(): Promise<Array<Aisle>> {
-    return [];
+  listAisles(): ResultAsync<Array<Aisle>, PaprikaClientError> {
+    return okAsync([]);
   }
 
-  async listGroceryLists(): Promise<Array<GroceryList>> {
-    return [];
+  listGroceryLists(): ResultAsync<Array<GroceryList>, PaprikaClientError> {
+    return okAsync([]);
   }
 
-  async listGroceryItems(): Promise<Array<GroceryItem>> {
-    return [];
+  listGroceryItems(): ResultAsync<Array<GroceryItem>, PaprikaClientError> {
+    return okAsync([]);
   }
 
-  async listGroceryIngredients(): Promise<Array<GroceryIngredient>> {
-    return [];
+  listGroceryIngredients(): ResultAsync<Array<GroceryIngredient>, PaprikaClientError> {
+    return okAsync([]);
   }
 
-  async listMealTypes(): Promise<Array<MealType>> {
-    return [];
+  listMealTypes(): ResultAsync<Array<MealType>, PaprikaClientError> {
+    return okAsync([]);
   }
 
-  async listMeals(): Promise<Array<Meal>> {
-    return [];
+  listMeals(): ResultAsync<Array<Meal>, PaprikaClientError> {
+    return okAsync([]);
   }
 
-  async listMenus(): Promise<Array<Menu>> {
-    return [];
+  listMenus(): ResultAsync<Array<Menu>, PaprikaClientError> {
+    return okAsync([]);
   }
 
-  async listMenuItems(): Promise<Array<MenuItem>> {
-    return [];
+  listMenuItems(): ResultAsync<Array<MenuItem>, PaprikaClientError> {
+    return okAsync([]);
   }
 
-  async listPhotos(): Promise<Array<Photo>> {
-    return [];
+  listPhotos(): ResultAsync<Array<Photo>, PaprikaClientError> {
+    return okAsync([]);
   }
 
-  async saveRecipe(recipe: Readonly<Recipe>): Promise<Recipe> {
-    return recipe as Recipe;
+  saveRecipe(recipe: Readonly<Recipe>): ResultAsync<Recipe, PaprikaClientError> {
+    return okAsync(recipe as Recipe);
   }
 
-  async deleteRecipe(_uid: RecipeUid): Promise<void> {
-    // no-op
+  deleteRecipe(_uid: RecipeUid): ResultAsync<void, PaprikaClientError> {
+    return okAsync(undefined);
   }
 
-  async notifySync(): Promise<void> {
-    // no-op
+  notifySync(): ResultAsync<void, PaprikaClientError> {
+    return okAsync(undefined);
   }
 }
 

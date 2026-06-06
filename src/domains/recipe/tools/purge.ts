@@ -2,13 +2,11 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 
 import type { DomainCtx } from "../../../kernel/registry.js";
 import type { RecipeState, RecipeWrites } from "../module.js";
-import type { Recipe } from "../types.js";
 
 import { RecipeUidSchema } from "../../../ids.js";
 import { defineTool } from "../../../kernel/tool.js";
 import { PaprikaAPIError } from "../../../paprika/errors.js";
 import { commitFailure, textResult } from "../../../shared/tools.js";
-import { toMessage } from "../../../utils/log.js";
 import { recipeColdStartGuard } from "./guards.js";
 
 /**
@@ -44,24 +42,26 @@ export const purgeRecipeTool = defineTool(
           // have loaded as trashed), so a local-only lookup could return a stale
           // inTrash:false — or nothing at all — and wrongly refuse a genuinely
           // trashed recipe. getRecipe is the source of truth for inTrash (#125).
-          let recipe: Recipe;
-          try {
-            recipe = await ctx.infra.client.getRecipe(args.uid);
-          } catch (error) {
-            if (error instanceof PaprikaAPIError && error.status === 404) {
-              // Never existed, or already permanently deleted (trash emptied). Drop a
-              // stale local phantom so a later read/search can't serve it.
-              log.info({ uid: args.uid }, "purge_recipe: recipe not found (404)");
-              await ctx.writes.reconcileLocalRecipeAbsent(args.uid);
-              return textResult(
-                `No recipe found with UID "${args.uid}". It may have already been permanently deleted.`,
-              );
-            }
-            // Transient/upstream failure — don't masquerade as "already deleted".
-            const message = toMessage(error);
-            log.error({ err: error, uid: args.uid }, "purge_recipe lookup failed");
-            return textResult(`Failed to look up recipe "${args.uid}": ${message}`);
-          }
+          const recipe = await (
+            await ctx.infra.client.getRecipe(args.uid)
+          ).match(
+            (v) => v,
+            async (e): Promise<CallToolResult> => {
+              if (e instanceof PaprikaAPIError && e.status === 404) {
+                // Never existed, or already permanently deleted (trash emptied). Drop a
+                // stale local phantom so a later read/search can't serve it.
+                log.info({ uid: args.uid }, "purge_recipe: recipe not found (404)");
+                await ctx.writes.reconcileLocalRecipeAbsent(args.uid);
+                return textResult(
+                  `No recipe found with UID "${args.uid}". It may have already been permanently deleted.`,
+                );
+              }
+              // Transient/upstream failure — don't masquerade as "already deleted".
+              log.error({ err: e, uid: args.uid }, "purge_recipe lookup failed");
+              return textResult(`Failed to look up recipe "${args.uid}": ${e.message}`);
+            },
+          );
+          if ("content" in recipe) return recipe;
 
           if (!recipe.inTrash) {
             // Authoritative truth: it's live. Heal a stale local copy that still shows
@@ -78,19 +78,19 @@ export const purgeRecipeTool = defineTool(
           // created round-trip verbatim from the fetched recipe.
           const tombstone = { ...recipe, inTrash: true, deleted: true };
 
-          try {
-            const saved = await ctx.infra.client.saveRecipe(tombstone);
-            const commitErr = commitFailure("recipe", await ctx.writes.commitRecipeHardDelete(saved), {
-              selfHealing: false,
-            });
-            if (commitErr) return commitErr;
-          } catch (error) {
-            const message = toMessage(error);
-            log.error({ err: error, uid: args.uid }, "hard-delete saveRecipe failed");
-            return textResult(`Failed to permanently delete recipe: ${message}`);
-          }
-
-          return textResult(`Recipe "${recipe.name}" has been permanently deleted from the trash.`);
+          return (await ctx.infra.client.saveRecipe(tombstone)).match(
+            async (saved): Promise<CallToolResult> => {
+              const commitErr = commitFailure("recipe", await ctx.writes.commitRecipeHardDelete(saved), {
+                selfHealing: false,
+              });
+              if (commitErr) return commitErr;
+              return textResult(`Recipe "${recipe.name}" has been permanently deleted from the trash.`);
+            },
+            async (e) => {
+              log.error({ err: e, uid: args.uid }, "hard-delete saveRecipe failed");
+              return textResult(`Failed to permanently delete recipe: ${e.message}`);
+            },
+          );
         },
         (guard) => guard,
       );

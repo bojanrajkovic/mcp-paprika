@@ -3,6 +3,7 @@ import { Writable } from "node:stream";
 import type { ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import type { ResultAsync } from "neverthrow";
 import pino from "pino";
 import type { Logger } from "pino";
 import { vi } from "vitest";
@@ -173,9 +174,12 @@ export const DEFAULT_LOGGING_CONFIG = {
  * Used by both `paprika/client.test.ts` and `features/embeddings.test.ts`
  * because both clients compose the same `wrap(breaker, retry)` pattern.
  */
-export async function tripBreaker(makeCall: () => Promise<unknown>): Promise<void> {
+export async function tripBreaker(makeCall: () => Promise<unknown> | ResultAsync<unknown, unknown>): Promise<void> {
   for (let i = 0; i < 5; i++) {
-    const p = makeCall().catch(() => {
+    // Promise.resolve() absorbs both shapes: the paprika client's ResultAsync
+    // (which settles to a Result and never rejects) and the feature clients'
+    // plain rejecting promises (the .catch is for those — #265 converts them).
+    const p = Promise.resolve(makeCall()).catch(() => {
       /* expected — call is meant to fail */
     });
     await vi.runAllTimersAsync();
