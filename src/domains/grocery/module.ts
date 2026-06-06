@@ -28,6 +28,7 @@ import { groceryListResource } from "./resources/grocery-list-resource.js";
 import { groceryIngredientsSync } from "./syncs/ingredient-sync.js";
 import { groceryItemsSync } from "./syncs/item-sync.js";
 import { groceryListsSync } from "./syncs/list-sync.js";
+import { deleteAisleTool } from "./tools/delete-aisle.js";
 import { clearGroceryListTool, clearPurchasedTool } from "./tools/grocery-clear.js";
 import { markGroceryItemPurchasedTool } from "./tools/grocery-item-purchase.js";
 import { addGroceryItemsTool, deleteGroceryItemTool, updateGroceryItemTool } from "./tools/grocery-item.js";
@@ -171,6 +172,7 @@ register(
           clearPurchasedTool,
           clearGroceryListTool,
           moveToPantryTool,
+          deleteAisleTool,
         ],
         resources: [groceryListResource],
         // Order matters: lists before items (children reference parent), then the
