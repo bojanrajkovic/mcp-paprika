@@ -63,7 +63,7 @@ describe("update_recipe tool", () => {
     expect(kh.client().saveRecipe).not.toHaveBeenCalled();
   });
 
-  it("saveRecipe throws — returns an error message and store is not updated", async () => {
+  it("saveRecipe errs — returns an error message and store is not updated", async () => {
     const recipe = makeRecipe();
     vi.mocked(kh.client().saveRecipe).mockReturnValue(errAsync(new Error("Conflict")));
     kh.seed({ recipes: [recipe] });

@@ -426,7 +426,7 @@ describe("PaprikaClient", () => {
 
       const client = new PaprikaClient("test@example.com", "password");
 
-      const error: unknown = (await client.getRecipe("gone-uid"))._unsafeUnwrapErr();
+      const error = (await client.getRecipe("gone-uid"))._unsafeUnwrapErr();
       expect(error).toBeInstanceOf(PaprikaAPIError);
       expect((error as PaprikaAPIError).status).toBe(404);
       expect((error as PaprikaAPIError).message).toContain("Recipe not found.");
@@ -441,7 +441,7 @@ describe("PaprikaClient", () => {
 
       const client = new PaprikaClient("test@example.com", "password");
 
-      const error: unknown = (await client.getRecipe("not-found"))._unsafeUnwrapErr();
+      const error = (await client.getRecipe("not-found"))._unsafeUnwrapErr();
       expect(error).toBeInstanceOf(PaprikaAPIError);
     });
   });
@@ -530,7 +530,7 @@ describe("PaprikaClient", () => {
 
       const client = new PaprikaClient("test@example.com", "password");
 
-      const error: unknown = (await client.getRecipes(["good-uid", "bad-uid"]))._unsafeUnwrapErr();
+      const error = (await client.getRecipes(["good-uid", "bad-uid"]))._unsafeUnwrapErr();
       expect(error).toBeInstanceOf(PaprikaAPIError);
     });
   });
@@ -748,7 +748,7 @@ describe("PaprikaClient", () => {
 
       const client = new PaprikaClient("test@example.com", "password");
 
-      const error: unknown = (await client.saveRecipe(makeCamelCaseRecipe(uid)))._unsafeUnwrapErr();
+      const error = (await client.saveRecipe(makeCamelCaseRecipe(uid)))._unsafeUnwrapErr();
       expect(error).toBeInstanceOf(PaprikaAPIError);
     });
   });
@@ -837,7 +837,7 @@ describe("PaprikaClient", () => {
 
       const client = new PaprikaClient("test@example.com", "password");
 
-      const error: unknown = (await client.deleteRecipe(RecipeUidSchema.parse(uid)))._unsafeUnwrapErr();
+      const error = (await client.deleteRecipe(RecipeUidSchema.parse(uid)))._unsafeUnwrapErr();
       expect(error).toBeInstanceOf(PaprikaAPIError);
 
       // Assert notify was never called
@@ -898,7 +898,7 @@ describe("PaprikaClient", () => {
 
       const client = new PaprikaClient("test@example.com", "password");
 
-      const error: unknown = (await client.hardDeleteRecipe(RecipeUidSchema.parse(uid)))._unsafeUnwrapErr();
+      const error = (await client.hardDeleteRecipe(RecipeUidSchema.parse(uid)))._unsafeUnwrapErr();
       expect(error).toBeInstanceOf(PaprikaAPIError);
 
       expect(notifyReached).toBe(false);
@@ -1208,7 +1208,7 @@ describe("PaprikaClient", () => {
 
       const client = new PaprikaClient("test@example.com", "password");
 
-      const error: unknown = (await client.savePantryItems([makeCamelCasePantryItem(uid)]))._unsafeUnwrapErr();
+      const error = (await client.savePantryItems([makeCamelCasePantryItem(uid)]))._unsafeUnwrapErr();
       expect(error).toBeInstanceOf(PaprikaAPIError);
       if (error instanceof PaprikaAPIError) {
         expect(error.status).toBe(400);
@@ -1448,7 +1448,7 @@ describe("PaprikaClient", () => {
       expect(fetchCount).toBe(20);
     }, 60000);
 
-    it("6th call with open breaker throws CircuitOpenError without additional fetches", async () => {
+    it("6th call with open breaker errs with CircuitOpenError without additional fetches", async () => {
       let fetchCount = 0;
       server.use(
         http.get(`${API_BASE}/recipes/`, () => {
@@ -1464,7 +1464,7 @@ describe("PaprikaClient", () => {
       const fetchCountAfterTrip = fetchCount;
 
       // 6th call should err with CircuitOpenError without making any fetch
-      const caught: unknown = (await client.listRecipes())._unsafeUnwrapErr();
+      const caught = (await client.listRecipes())._unsafeUnwrapErr();
 
       expect(caught).toBeInstanceOf(CircuitOpenError);
       // No additional fetches were made
@@ -1488,7 +1488,7 @@ describe("PaprikaClient", () => {
 
       await tripBreaker(() => client.listRecipes());
 
-      const caught: unknown = (await client.listRecipes())._unsafeUnwrapErr();
+      const caught = (await client.listRecipes())._unsafeUnwrapErr();
 
       const msg = toMessage(caught);
       expect(msg).toContain(`${API_BASE}/recipes/`);
@@ -2155,7 +2155,7 @@ describe("PaprikaClient", () => {
 
       const client = new PaprikaClient("test@example.com", "password");
 
-      const error: unknown = (await client.listGroceryLists())._unsafeUnwrapErr();
+      const error = (await client.listGroceryLists())._unsafeUnwrapErr();
       expect(error).toBeInstanceOf(PaprikaAPIError);
       expect((error as PaprikaAPIError).status).toBe(400);
       expect((error as PaprikaAPIError).endpoint).toContain("grocerylists");
@@ -2261,7 +2261,7 @@ describe("PaprikaClient", () => {
 
       const client = new PaprikaClient("test@example.com", "password");
 
-      const error: unknown = (
+      const error = (
         await client.saveMeals([makeMeal({ uid: MealUidSchema.parse("meal-uid-004") })])
       )._unsafeUnwrapErr();
       expect(error).toBeInstanceOf(PaprikaAPIError);
@@ -2371,9 +2371,7 @@ describe("PaprikaClient", () => {
 
       const client = new PaprikaClient("test@example.com", "password");
 
-      const error: unknown = (
-        await client.saveMenus([makeMenu({ uid: MenuUidSchema.parse("MENU-ERR") })])
-      )._unsafeUnwrapErr();
+      const error = (await client.saveMenus([makeMenu({ uid: MenuUidSchema.parse("MENU-ERR") })]))._unsafeUnwrapErr();
       expect(error).toBeInstanceOf(PaprikaAPIError);
       expect((error as PaprikaAPIError).status).toBe(400);
       expect((error as PaprikaAPIError).endpoint).toContain("menus");
@@ -2430,7 +2428,7 @@ describe("PaprikaClient", () => {
 
       const client = new PaprikaClient("test@example.com", "password");
 
-      const error: unknown = (
+      const error = (
         await client.saveMenuItems([makeMenuItem({ uid: MenuItemUidSchema.parse("MI-ERR") })])
       )._unsafeUnwrapErr();
       expect(error).toBeInstanceOf(PaprikaAPIError);

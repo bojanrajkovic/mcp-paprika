@@ -10,8 +10,6 @@ import { NO_AISLE_UID, PantryItemUidSchema } from "../../../ids.js";
 import { defineTool } from "../../../kernel/tool.js";
 import { commitFailure, textResult } from "../../../shared/tools.js";
 import { normalizeWire, todayWire } from "../../../utils/dates.js";
-// pattern: Imperative Shell
-import { toMessage } from "../../../utils/log.js";
 import { pantryItemToMarkdown } from "../pantry-helpers.js";
 import { pantryStartGuard } from "./guards.js";
 
@@ -123,53 +121,47 @@ export const addPantryItemsTool = defineTool(
           // Phase 3: Build PantryItem objects with aisle resolution
           const builtItems: Array<PantryItem> = [];
           const batchAisleCache = new Map<string, { aisle: string; aisleUid: AisleUid }>();
-          try {
-            for (const { item, dates } of toAdd) {
-              const uid = PantryItemUidSchema.parse(crypto.randomUUID().toUpperCase());
+          for (const { item, dates } of toAdd) {
+            const uid = PantryItemUidSchema.parse(crypto.randomUUID().toUpperCase());
 
-              let aisle: string;
-              let aisleUid: AisleUid;
+            let aisle: string;
+            let aisleUid: AisleUid;
 
-              const aisleInput = item.aisle ?? "";
-              if (aisleInput === "") {
-                aisle = "";
-                aisleUid = NO_AISLE_UID;
+            const aisleInput = item.aisle ?? "";
+            if (aisleInput === "") {
+              aisle = "";
+              aisleUid = NO_AISLE_UID;
+            } else {
+              const aisleKey = aisleInput.toLowerCase();
+              const cached = batchAisleCache.get(aisleKey);
+              if (cached !== undefined) {
+                aisle = cached.aisle;
+                aisleUid = cached.aisleUid;
               } else {
-                const aisleKey = aisleInput.toLowerCase();
-                const cached = batchAisleCache.get(aisleKey);
-                if (cached !== undefined) {
-                  aisle = cached.aisle;
-                  aisleUid = cached.aisleUid;
-                } else {
-                  const resolved = (await ctx.deps.aisle.ensureAisle(aisleInput)).match(
-                    (v) => v,
-                    (message) => textResult(message),
-                  );
-                  if ("content" in resolved) return resolved;
-                  aisle = resolved.aisle;
-                  aisleUid = resolved.aisleUid;
-                  batchAisleCache.set(aisleKey, { aisle, aisleUid });
-                }
+                const resolved = (await ctx.deps.aisle.ensureAisle(aisleInput)).match(
+                  (v) => v,
+                  (message) => textResult(message),
+                );
+                if ("content" in resolved) return resolved;
+                aisle = resolved.aisle;
+                aisleUid = resolved.aisleUid;
+                batchAisleCache.set(aisleKey, { aisle, aisleUid });
               }
-
-              builtItems.push({
-                uid,
-                ingredient: item.ingredient,
-                quantity: item.quantity ?? "",
-                aisle,
-                aisleUid,
-                expirationDate: dates.expirationDate,
-                hasExpiration: dates.expirationDate !== null,
-                inStock: item.inStock ?? true,
-                purchaseDate: dates.purchaseDate,
-                notes: null,
-                deleted: false,
-              });
             }
-          } catch (error) {
-            const message = toMessage(error);
-            log.error({ err: error }, "aisle resolution failed");
-            return textResult(`Failed to add pantry items: ${message}`);
+
+            builtItems.push({
+              uid,
+              ingredient: item.ingredient,
+              quantity: item.quantity ?? "",
+              aisle,
+              aisleUid,
+              expirationDate: dates.expirationDate,
+              hasExpiration: dates.expirationDate !== null,
+              inStock: item.inStock ?? true,
+              purchaseDate: dates.purchaseDate,
+              notes: null,
+              deleted: false,
+            });
           }
 
           // Phase 4: Single batch POST + commit

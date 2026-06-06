@@ -115,7 +115,7 @@ describe("categorize_recipe tool", () => {
     expect(kh.client().notifySync).toHaveBeenCalledOnce();
   });
 
-  it("returns an error and does not commit when saveRecipe throws", async () => {
+  it("returns an error and does not commit when saveRecipe errs", async () => {
     const catA = makeCategory({ name: "Dinner" });
     const recipe = makeRecipe({ categories: [] });
     kh.seed({ recipes: [recipe], categories: [catA] });

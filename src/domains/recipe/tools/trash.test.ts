@@ -68,7 +68,7 @@ describe("trash_recipe tool", () => {
     expect(kh.client().saveRecipe).not.toHaveBeenCalled();
   });
 
-  it("saveRecipe throws — returns a failure message", async () => {
+  it("saveRecipe errs — returns a failure message", async () => {
     const recipe = makeRecipe();
     vi.mocked(kh.client().saveRecipe).mockReturnValue(errAsync(new Error("API timeout")));
     kh.seed({ recipes: [recipe] });

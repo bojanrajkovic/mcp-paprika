@@ -146,7 +146,7 @@ describe("create_recipe tool", () => {
     expect(callArgs?.categories).not.toContain("UnknownCat");
   });
 
-  it("returns an error and leaves the store untouched when saveRecipe throws", async () => {
+  it("returns an error and leaves the store untouched when saveRecipe errs", async () => {
     vi.mocked(kh.client().saveRecipe).mockReturnValue(errAsync(new Error("Network error")));
     kh.seed({ recipes: [makeRecipe()] });
     const before = kh.state().recipe.store.size;

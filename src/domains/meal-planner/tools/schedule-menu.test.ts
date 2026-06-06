@@ -437,7 +437,7 @@ describe("schedule_menu — rejection paths", () => {
     expect(kh.client().saveMeals).not.toHaveBeenCalled();
   });
 
-  it("saveMeals throws → error message, nothing committed", async () => {
+  it("saveMeals errs → error message, nothing committed", async () => {
     kh.seed({
       recipes: [
         makeRecipe({ uid: BUTTER_CHICKEN_UID, name: "(Not) Butter Chicken" }),

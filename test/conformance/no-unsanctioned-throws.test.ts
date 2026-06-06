@@ -41,11 +41,13 @@ const RECOGNIZED_HELPERS: ReadonlyArray<readonly [file: string, fn: string]> = [
 // outcome inside the governed closure speaks in throws; the owned edge converts
 // to `Result` immediately outside it (ADR-0014: "the wrapper's internals may
 // still use throw-based control flow where a library demands it"). Pinned to
-// (file, fn) so only the governed closures are sanctioned, not their files.
-const COCKATIEL_GOVERNED: ReadonlyArray<readonly [file: string, fn: string]> = [
-  ["src/paprika/client.ts", "attempt"],
-  ["src/paprika/client.ts", "execute"],
-  ["src/utils/resilience.ts", "execute"],
+// (file, innerFn, outerFn): the throw's nearest function AND the function that
+// encloses it must both match, so a future unrelated `execute`/`attempt` added
+// elsewhere in these files can't silently sanction its own throws.
+const COCKATIEL_GOVERNED: ReadonlyArray<readonly [file: string, innerFn: string, outerFn: string]> = [
+  ["src/paprika/client.ts", "attempt", "authenticate"],
+  ["src/paprika/client.ts", "execute", "request"],
+  ["src/utils/resilience.ts", "execute", "createResilientExecutor"],
 ];
 
 // Recognized form #5: fail-fast at process entry and kernel construction, off
@@ -83,6 +85,8 @@ interface ThrowSite {
   readonly file: string;
   readonly line: number;
   readonly enclosingFn: string;
+  /** Every named enclosing function, innermost first — `enclosingFn` is element 0. */
+  readonly enclosingChain: ReadonlyArray<string>;
 }
 
 const TEST_SUFFIXES = [".test.ts", ".test.integration.ts", ".e2e.test.ts", ".external.test.ts", ".property.test.ts"];
@@ -96,17 +100,18 @@ function sourceFiles(): Array<string> {
     .filter((p) => p.endsWith(".ts") && !TEST_SUFFIXES.some((s) => p.endsWith(s)));
 }
 
-function enclosingFnName(node: ts.Node, sf: ts.SourceFile): string {
+function enclosingFnChain(node: ts.Node, sf: ts.SourceFile): Array<string> {
+  const chain: Array<string> = [];
   for (let p: ts.Node | undefined = node.parent; p; p = p.parent) {
-    if (ts.isFunctionDeclaration(p) && p.name) return p.name.text;
-    if (ts.isMethodDeclaration(p)) return p.name.getText(sf);
-    if (ts.isArrowFunction(p) || ts.isFunctionExpression(p)) {
+    if (ts.isFunctionDeclaration(p) && p.name) chain.push(p.name.text);
+    else if (ts.isMethodDeclaration(p)) chain.push(p.name.getText(sf));
+    else if (ts.isArrowFunction(p) || ts.isFunctionExpression(p)) {
       const par = p.parent;
-      if (ts.isVariableDeclaration(par) && ts.isIdentifier(par.name)) return par.name.text;
-      if (ts.isPropertyAssignment(par)) return par.name.getText(sf);
+      if (ts.isVariableDeclaration(par) && ts.isIdentifier(par.name)) chain.push(par.name.text);
+      else if (ts.isPropertyAssignment(par)) chain.push(par.name.getText(sf));
     }
   }
-  return "<top>";
+  return chain;
 }
 
 function throwSites(file: string): Array<ThrowSite> {
@@ -114,10 +119,12 @@ function throwSites(file: string): Array<ThrowSite> {
   const sites: Array<ThrowSite> = [];
   const visit = (node: ts.Node): void => {
     if (ts.isThrowStatement(node)) {
+      const chain = enclosingFnChain(node, sf);
       sites.push({
         file,
         line: sf.getLineAndCharacterOfPosition(node.getStart(sf)).line + 1,
-        enclosingFn: enclosingFnName(node, sf),
+        enclosingFn: chain[0] ?? "<top>",
+        enclosingChain: chain,
       });
     }
     ts.forEachChild(node, visit);
@@ -131,7 +138,10 @@ const isBoot = (s: ThrowSite): boolean =>
 const isRecognizedHelper = (s: ThrowSite): boolean =>
   RECOGNIZED_HELPERS.some(([file, fn]) => s.file === file && s.enclosingFn === fn);
 const isCockatielGoverned = (s: ThrowSite): boolean =>
-  COCKATIEL_GOVERNED.some(([file, fn]) => s.file === file && s.enclosingFn === fn);
+  COCKATIEL_GOVERNED.some(
+    ([file, innerFn, outerFn]) =>
+      s.file === file && s.enclosingFn === innerFn && s.enclosingChain.slice(1).includes(outerFn),
+  );
 const isRecognized = (s: ThrowSite): boolean => isRecognizedHelper(s) || isCockatielGoverned(s) || isBoot(s);
 
 describe("ADR-0014: owned code throws only in recognized forms", () => {

@@ -120,7 +120,7 @@ describe("purge_recipe tool", () => {
   });
 
   describe("failure handling", () => {
-    it("saveRecipe throws — error surfaced, no false 'deleted'", async () => {
+    it("saveRecipe errs — error surfaced, no false 'deleted'", async () => {
       const trashed = makeRecipe({ name: "Old Soup", inTrash: true });
       vi.mocked(kh.client().getRecipe).mockReturnValue(okAsync(trashed));
       vi.mocked(kh.client().saveRecipe).mockReturnValue(errAsync(new Error("API timeout")));

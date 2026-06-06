@@ -72,7 +72,7 @@ describe("mark_grocery_item_purchased tool", () => {
     expect(kh.client().saveGroceryItems).not.toHaveBeenCalled();
   });
 
-  it("returns an error message when saveGroceryItems throws", async () => {
+  it("returns an error message when saveGroceryItems errs", async () => {
     const item = makeGroceryItem({
       uid: "ITEM-3" as GroceryItemUid,
       ingredient: "Butter",

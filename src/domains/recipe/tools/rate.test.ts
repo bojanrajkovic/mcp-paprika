@@ -57,7 +57,7 @@ describe("rate_recipe tool", () => {
     expect(kh.client().notifySync).toHaveBeenCalledOnce();
   });
 
-  it("returns an error and leaves the store untouched when saveRecipe throws", async () => {
+  it("returns an error and leaves the store untouched when saveRecipe errs", async () => {
     const recipe = makeRecipe({ rating: 0 });
     vi.mocked(kh.client().saveRecipe).mockReturnValue(errAsync(new Error("Network error")));
     kh.seed({ recipes: [recipe] });

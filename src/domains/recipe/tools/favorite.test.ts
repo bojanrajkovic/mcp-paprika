@@ -58,7 +58,7 @@ describe("favorite_recipe tool", () => {
     expect(kh.client().saveRecipe).not.toHaveBeenCalled();
   });
 
-  it("saveRecipe throws — returns a failure message", async () => {
+  it("saveRecipe errs — returns a failure message", async () => {
     const recipe = makeRecipe({ onFavorites: false });
     vi.mocked(kh.client().saveRecipe).mockReturnValue(errAsync(new Error("Network error")));
     kh.seed({ recipes: [recipe] });
@@ -133,7 +133,7 @@ describe("unfavorite_recipe tool", () => {
     expect(kh.client().saveRecipe).not.toHaveBeenCalled();
   });
 
-  it("saveRecipe throws — returns a failure message", async () => {
+  it("saveRecipe errs — returns a failure message", async () => {
     const recipe = makeRecipe({ onFavorites: true });
     vi.mocked(kh.client().saveRecipe).mockReturnValue(errAsync(new Error("Network error")));
     kh.seed({ recipes: [recipe] });
