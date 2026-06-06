@@ -7,13 +7,15 @@
  */
 
 import type { IRetryContext } from "cockatiel";
+import { errAsync, okAsync, ResultAsync } from "neverthrow";
 import type { Logger } from "pino";
 import { z } from "zod";
 
 import type { Recipe } from "../domains/recipe/types.js";
 import type { EmbeddingConfig } from "../utils/config.js";
 
-import { SILENT_LOG } from "../utils/log.js";
+import { CircuitOpenError } from "../utils/errors.js";
+import { SILENT_LOG, toMessage } from "../utils/log.js";
 import {
   createResilientExecutor,
   type ResilientExecutor,
@@ -21,6 +23,22 @@ import {
   TransientHTTPError,
 } from "../utils/resilience.js";
 import { EmbeddingAPIError, EmbeddingError } from "./embedding-errors.js";
+
+/**
+ * The client's public error union (ADR-0014): every public `EmbeddingClient`
+ * method errs with one of these. `EmbeddingAPIError` (a subclass of
+ * `EmbeddingError`) passes through from the wire classification;
+ * `CircuitOpenError` surfaces a tripped breaker; a foreign escape (a `ZodError`
+ * on a malformed body, an undici `TypeError`) is wrapped as a base
+ * `EmbeddingError` at the edge with its message preserved.
+ */
+export type EmbeddingFailure = EmbeddingError | CircuitOpenError;
+
+/** Normalize whatever escapes the resilience stack into {@link EmbeddingFailure}. */
+function toEmbeddingFailure(error: unknown): EmbeddingFailure {
+  if (error instanceof EmbeddingError || error instanceof CircuitOpenError) return error;
+  return new EmbeddingError(toMessage(error), { cause: error });
+}
 
 /**
  * Zod schema for validating embedding API responses.
@@ -76,30 +94,22 @@ export class EmbeddingClient {
   }
 
   /**
-   * Get the dimensionality of the embedding vectors.
-   * Must be called after at least one successful embedding call.
-   *
-   * @throws EmbeddingError if no embedding call has been made yet
+   * Dimensionality of the embedding vectors, or `null` until the first
+   * successful embedding call has reported it.
    */
-  get dimensions(): number {
-    if (this._dimensions === null) {
-      throw new EmbeddingError("Dimensions unknown: no embedding call has been made yet");
-    }
+  get dimensions(): number | null {
     return this._dimensions;
   }
 
   /**
    * Embed multiple texts in a single batch.
-   * Returns an array of embedding vectors, one per input text.
-   *
-   * @param texts - Array of texts to embed
-   * @returns Array of embedding vectors (each is an array of numbers)
-   * @throws EmbeddingAPIError on permanent HTTP errors from the embedding provider
-   * @throws CircuitOpenError when the local circuit breaker is open (no HTTP request issued)
-   * @throws ZodError on response validation failure
-   * @throws TransientHTTPError (internally caught by resilience) on transient failures
+   * Resolves ok with one embedding vector per input text. Errs with
+   * {@link EmbeddingFailure}: `EmbeddingAPIError` on a permanent HTTP error,
+   * `CircuitOpenError` when the local breaker is open (no HTTP request issued),
+   * or a base `EmbeddingError` wrapping a foreign escape (malformed body,
+   * network failure once retries are exhausted).
    */
-  async embedBatch(texts: ReadonlyArray<string>): Promise<Array<Array<number>>> {
+  embedBatch(texts: ReadonlyArray<string>): ResultAsync<Array<Array<number>>, EmbeddingFailure> {
     const endpoint = `${this._baseUrl}/embeddings`;
 
     const execute = async (ctx: IRetryContext): Promise<Array<Array<number>>> => {
@@ -144,25 +154,23 @@ export class EmbeddingClient {
     };
 
     // The executor maps a tripped breaker to CircuitOpenError("embeddings", endpoint);
-    // permanent errors (EmbeddingAPIError) and ZodError propagate unchanged.
-    return this._executor.execute(endpoint, execute);
+    // the throw-based cockatiel protocol ends at this owned edge (ADR-0014).
+    return ResultAsync.fromPromise(this._executor.execute(endpoint, execute), toEmbeddingFailure);
   }
 
   /**
    * Embed a single text.
-   * Delegates to embedBatch() and returns the first (and only) embedding.
-   *
-   * @param text - Text to embed
-   * @returns Single embedding vector
-   * @throws Same as embedBatch()
+   * Delegates to embedBatch() and resolves with the first (and only) embedding;
+   * errs as embedBatch() does, plus `EmbeddingError` on an empty response.
    */
-  async embed(text: string): Promise<Array<number>> {
-    const embeddings = await this.embedBatch([text]);
-    const first = embeddings[0];
-    if (first === undefined) {
-      throw new EmbeddingError("Empty embedding response");
-    }
-    return first;
+  embed(text: string): ResultAsync<Array<number>, EmbeddingFailure> {
+    return this.embedBatch([text]).andThen((embeddings) => {
+      const first = embeddings[0];
+      if (first === undefined) {
+        return errAsync(new EmbeddingError("Empty embedding response"));
+      }
+      return okAsync(first);
+    });
   }
 }
 

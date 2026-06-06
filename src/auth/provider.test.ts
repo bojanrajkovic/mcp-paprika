@@ -383,12 +383,14 @@ describe("MintingOAuthServerProvider", () => {
   describe("exchangeRefreshToken", () => {
     it("happy path: returns new pair, old refresh invalidated", async () => {
       // Issue a token pair via `tokenStore.issueAccessRefreshPair(...)`, then call `provider.exchangeRefreshToken(undefined as any, oldRefresh)`. Assert new pair returned, old refresh token invalidated (subsequent `provider.exchangeRefreshToken(_, oldRefresh)` rejects).
-      const pair = await tokenStore.issueAccessRefreshPair({
-        clientId: mockClient.client_id,
-        identity: makeVerifiedIdentity({ email: "user@example.com", sub: "user-sub-123" }),
-        scope: "openid email",
-        resource: "https://mcp.example.com/",
-      });
+      const pair = (
+        await tokenStore.issueAccessRefreshPair({
+          clientId: mockClient.client_id,
+          identity: makeVerifiedIdentity({ email: "user@example.com", sub: "user-sub-123" }),
+          scope: "openid email",
+          resource: "https://mcp.example.com/",
+        })
+      )._unsafeUnwrap();
 
       const newPair = await provider.exchangeRefreshToken(mockClient, pair.refresh.plaintext);
 
@@ -408,12 +410,14 @@ describe("MintingOAuthServerProvider", () => {
       // submits a refresh-token grant carrying A's refresh_token. The provider
       // MUST reject the rotation (otherwise B keeps A's session alive and
       // receives access tokens for A's identity).
-      const pair = await tokenStore.issueAccessRefreshPair({
-        clientId: mockClient.client_id,
-        identity: makeVerifiedIdentity({ email: "user@example.com", sub: "user-sub-123" }),
-        scope: "openid email",
-        resource: "https://mcp.example.com/",
-      });
+      const pair = (
+        await tokenStore.issueAccessRefreshPair({
+          clientId: mockClient.client_id,
+          identity: makeVerifiedIdentity({ email: "user@example.com", sub: "user-sub-123" }),
+          scope: "openid email",
+          resource: "https://mcp.example.com/",
+        })
+      )._unsafeUnwrap();
 
       const otherClient = await clientStore.registerClient({
         client_name: "Other Client",
@@ -437,12 +441,14 @@ describe("MintingOAuthServerProvider", () => {
 
     it("mismatched resource → invalid_target", async () => {
       // Issue pair with resource="A"; call `exchangeRefreshToken` with `resource: new URL("B/")`. Reject with `errorCode: "invalid_target"`.
-      const pair = await tokenStore.issueAccessRefreshPair({
-        clientId: mockClient.client_id,
-        identity: makeVerifiedIdentity({ email: "user@example.com", sub: "user-sub-123" }),
-        scope: "openid email",
-        resource: "https://a.example.com/",
-      });
+      const pair = (
+        await tokenStore.issueAccessRefreshPair({
+          clientId: mockClient.client_id,
+          identity: makeVerifiedIdentity({ email: "user@example.com", sub: "user-sub-123" }),
+          scope: "openid email",
+          resource: "https://a.example.com/",
+        })
+      )._unsafeUnwrap();
 
       await expect(
         provider.exchangeRefreshToken(mockClient, pair.refresh.plaintext, undefined, new URL("https://b.example.com")),
@@ -453,12 +459,14 @@ describe("MintingOAuthServerProvider", () => {
   describe("verifyAccessToken", () => {
     it("returns AuthInfo for valid token", async () => {
       // Issue pair, call `provider.verifyAccessToken(pair.access.plaintext)`. Resolves to AuthInfo with `clientId`, `scopes`, `extra.identity`, etc.
-      const pair = await tokenStore.issueAccessRefreshPair({
-        clientId: mockClient.client_id,
-        identity: makeVerifiedIdentity({ email: "user@example.com", sub: "user-sub-123" }),
-        scope: "openid email",
-        resource: "https://mcp.example.com/",
-      });
+      const pair = (
+        await tokenStore.issueAccessRefreshPair({
+          clientId: mockClient.client_id,
+          identity: makeVerifiedIdentity({ email: "user@example.com", sub: "user-sub-123" }),
+          scope: "openid email",
+          resource: "https://mcp.example.com/",
+        })
+      )._unsafeUnwrap();
 
       const authInfo = await provider.verifyAccessToken(pair.access.plaintext);
 
@@ -479,12 +487,14 @@ describe("MintingOAuthServerProvider", () => {
   describe("revokeToken", () => {
     it("removes token; subsequent verifyAccessToken throws InvalidTokenError", async () => {
       // Issue pair, call `provider.revokeToken({} as any, { token: pair.access.plaintext, token_type_hint: "access_token" })`. Then `provider.verifyAccessToken(pair.access.plaintext)` rejects with `errorCode: "invalid_token"`.
-      const pair = await tokenStore.issueAccessRefreshPair({
-        clientId: mockClient.client_id,
-        identity: makeVerifiedIdentity({ email: "user@example.com", sub: "user-sub-123" }),
-        scope: "openid email",
-        resource: "https://mcp.example.com/",
-      });
+      const pair = (
+        await tokenStore.issueAccessRefreshPair({
+          clientId: mockClient.client_id,
+          identity: makeVerifiedIdentity({ email: "user@example.com", sub: "user-sub-123" }),
+          scope: "openid email",
+          resource: "https://mcp.example.com/",
+        })
+      )._unsafeUnwrap();
 
       await provider.revokeToken(mockClient, {
         token: pair.access.plaintext,
@@ -504,12 +514,14 @@ describe("MintingOAuthServerProvider", () => {
       // tokens, but the requesting client must be the same as the client
       // associated with the token." Mismatch must NOT revoke (and must not
       // leak existence).
-      const pair = await tokenStore.issueAccessRefreshPair({
-        clientId: mockClient.client_id,
-        identity: makeVerifiedIdentity({ email: "user@example.com", sub: "user-sub-123" }),
-        scope: "openid email",
-        resource: "https://mcp.example.com/",
-      });
+      const pair = (
+        await tokenStore.issueAccessRefreshPair({
+          clientId: mockClient.client_id,
+          identity: makeVerifiedIdentity({ email: "user@example.com", sub: "user-sub-123" }),
+          scope: "openid email",
+          resource: "https://mcp.example.com/",
+        })
+      )._unsafeUnwrap();
 
       const otherClient = await clientStore.registerClient({
         client_name: "Other Client",
@@ -654,12 +666,14 @@ describe("MintingOAuthServerProvider", () => {
     });
 
     it("emits info record on refresh_token grant token mint", async () => {
-      const pair = await tokenStore.issueAccessRefreshPair({
-        clientId: mockClient.client_id,
-        identity: makeVerifiedIdentity({ email: "user@example.com", sub: "user-sub-123" }),
-        scope: "openid email",
-        resource: "https://mcp.example.com/",
-      });
+      const pair = (
+        await tokenStore.issueAccessRefreshPair({
+          clientId: mockClient.client_id,
+          identity: makeVerifiedIdentity({ email: "user@example.com", sub: "user-sub-123" }),
+          scope: "openid email",
+          resource: "https://mcp.example.com/",
+        })
+      )._unsafeUnwrap();
 
       const newTokens = await logProvider.exchangeRefreshToken(mockClient, pair.refresh.plaintext);
 
@@ -676,12 +690,14 @@ describe("MintingOAuthServerProvider", () => {
     });
 
     it("emits info record on token revocation", async () => {
-      const pair = await tokenStore.issueAccessRefreshPair({
-        clientId: mockClient.client_id,
-        identity: makeVerifiedIdentity({ email: "user@example.com", sub: "user-sub-123" }),
-        scope: "openid email",
-        resource: "https://mcp.example.com/",
-      });
+      const pair = (
+        await tokenStore.issueAccessRefreshPair({
+          clientId: mockClient.client_id,
+          identity: makeVerifiedIdentity({ email: "user@example.com", sub: "user-sub-123" }),
+          scope: "openid email",
+          resource: "https://mcp.example.com/",
+        })
+      )._unsafeUnwrap();
 
       await logProvider.revokeToken(mockClient, {
         token: pair.access.plaintext,

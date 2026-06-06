@@ -122,7 +122,7 @@ describe("PhotographyClient", () => {
       );
 
       const client = new PhotographyClient(makeConfig());
-      await client.generate({ prompt: "a bowl of soup", model: "seedream" });
+      (await client.generate({ prompt: "a bowl of soup", model: "seedream" }))._unsafeUnwrap();
 
       expect(auth).toBe(`Bearer ${API_KEY}`);
       expect(body["model"]).toBe("bytedance-seed/seedream-4.5");
@@ -145,7 +145,7 @@ describe("PhotographyClient", () => {
         }),
       );
       const client = new PhotographyClient(makeConfig());
-      await client.generate({ prompt: "x", model: "nano-banana-2" });
+      (await client.generate({ prompt: "x", model: "nano-banana-2" }))._unsafeUnwrap();
       expect(model).toBe("google/gemini-3.1-flash-image-preview");
       expect(modalities).toEqual(["image", "text"]);
     });
@@ -159,7 +159,7 @@ describe("PhotographyClient", () => {
         }),
       );
       const client = new PhotographyClient(makeConfig());
-      await client.generate({ prompt: "x", model: "seedream", aspectRatio: "4:3" });
+      (await client.generate({ prompt: "x", model: "seedream", aspectRatio: "4:3" }))._unsafeUnwrap();
       expect(imageConfig).toEqual({ aspect_ratio: "4:3" });
     });
 
@@ -172,11 +172,13 @@ describe("PhotographyClient", () => {
         }),
       );
       const client = new PhotographyClient(makeConfig());
-      await client.generate({
-        prompt: "restyle on marble",
-        model: "seedream",
-        referenceImage: { data: JPEG_BYTES, mimeType: "image/jpeg" },
-      });
+      (
+        await client.generate({
+          prompt: "restyle on marble",
+          model: "seedream",
+          referenceImage: { data: JPEG_BYTES, mimeType: "image/jpeg" },
+        })
+      )._unsafeUnwrap();
       expect(content).toEqual([
         { type: "text", text: "restyle on marble" },
         { type: "image_url", image_url: { url: `data:image/jpeg;base64,${JPEG_BYTES.toString("base64")}` } },
@@ -188,7 +190,7 @@ describe("PhotographyClient", () => {
     it("decodes a JPEG data-URI to bytes + mime, with cost and served model", async () => {
       server.use(http.post(ENDPOINT, () => HttpResponse.json(imageResponse({ cost: 0.04, model: "served/seedream" }))));
       const client = new PhotographyClient(makeConfig());
-      const out = await client.generate({ prompt: "x", model: "seedream" });
+      const out = (await client.generate({ prompt: "x", model: "seedream" }))._unsafeUnwrap();
       expect(out.bytes.equals(JPEG_BYTES)).toBe(true);
       expect(out.mimeType).toBe("image/jpeg");
       expect(out.costUsd).toBe(0.04);
@@ -198,7 +200,7 @@ describe("PhotographyClient", () => {
     it("decodes a PNG data-URI", async () => {
       server.use(http.post(ENDPOINT, () => HttpResponse.json(imageResponse({ bytes: PNG_BYTES, mime: "image/png" }))));
       const client = new PhotographyClient(makeConfig());
-      const out = await client.generate({ prompt: "x", model: "nano-banana" });
+      const out = (await client.generate({ prompt: "x", model: "nano-banana" }))._unsafeUnwrap();
       expect(out.bytes.equals(PNG_BYTES)).toBe(true);
       expect(out.mimeType).toBe("image/png");
     });
@@ -206,14 +208,16 @@ describe("PhotographyClient", () => {
     it("costUsd is null when usage.cost is absent", async () => {
       server.use(http.post(ENDPOINT, () => HttpResponse.json(imageResponse())));
       const client = new PhotographyClient(makeConfig());
-      const out = await client.generate({ prompt: "x", model: "seedream" });
+      const out = (await client.generate({ prompt: "x", model: "seedream" }))._unsafeUnwrap();
       expect(out.costUsd).toBeNull();
     });
 
     it("200 with no image → PhotographyError (refusal / text-only)", async () => {
       server.use(http.post(ENDPOINT, () => HttpResponse.json({ choices: [{ message: { content: "no" } }] })));
       const client = new PhotographyClient(makeConfig());
-      await expect(client.generate({ prompt: "x", model: "seedream" })).rejects.toBeInstanceOf(PhotographyError);
+      expect((await client.generate({ prompt: "x", model: "seedream" }))._unsafeUnwrapErr()).toBeInstanceOf(
+        PhotographyError,
+      );
     });
 
     it("non-data-URI image url → PhotographyError", async () => {
@@ -225,13 +229,17 @@ describe("PhotographyClient", () => {
         ),
       );
       const client = new PhotographyClient(makeConfig());
-      await expect(client.generate({ prompt: "x", model: "seedream" })).rejects.toBeInstanceOf(PhotographyError);
+      expect((await client.generate({ prompt: "x", model: "seedream" }))._unsafeUnwrapErr()).toBeInstanceOf(
+        PhotographyError,
+      );
     });
 
-    it("malformed envelope (no choices) → ZodError", async () => {
+    it("malformed envelope (no choices) → PhotographyError wrapping the ZodError", async () => {
       server.use(http.post(ENDPOINT, () => HttpResponse.json({ not: "a completion" })));
       const client = new PhotographyClient(makeConfig());
-      await expect(client.generate({ prompt: "x", model: "seedream" })).rejects.toBeInstanceOf(ZodError);
+      const error = (await client.generate({ prompt: "x", model: "seedream" }))._unsafeUnwrapErr();
+      expect(error).toBeInstanceOf(PhotographyError);
+      expect(error.cause).toBeInstanceOf(ZodError);
     });
   });
 
@@ -239,14 +247,10 @@ describe("PhotographyClient", () => {
     it("permanent (400) → PhotographyAPIError carrying status + endpoint", async () => {
       server.use(http.post(ENDPOINT, () => HttpResponse.json({ error: "bad" }, { status: 400 })));
       const client = new PhotographyClient(makeConfig());
-      try {
-        await client.generate({ prompt: "x", model: "seedream" });
-        expect.unreachable("should have thrown");
-      } catch (error) {
-        expect(error).toBeInstanceOf(PhotographyAPIError);
-        expect((error as PhotographyAPIError).status).toBe(400);
-        expect((error as PhotographyAPIError).endpoint).toBe(ENDPOINT);
-      }
+      const error = (await client.generate({ prompt: "x", model: "seedream" }))._unsafeUnwrapErr();
+      expect(error).toBeInstanceOf(PhotographyAPIError);
+      expect((error as PhotographyAPIError).status).toBe(400);
+      expect((error as PhotographyAPIError).endpoint).toBe(ENDPOINT);
     });
 
     it("transient (503) retries then succeeds", async () => {
@@ -259,7 +263,7 @@ describe("PhotographyClient", () => {
         }),
       );
       const client = new PhotographyClient(makeConfig());
-      const out = await client.generate({ prompt: "x", model: "seedream" });
+      const out = (await client.generate({ prompt: "x", model: "seedream" }))._unsafeUnwrap();
       expect(out.bytes.equals(JPEG_BYTES)).toBe(true);
       expect(calls).toBe(2);
     });
@@ -270,13 +274,9 @@ describe("PhotographyClient", () => {
         server.use(http.post(ENDPOINT, () => HttpResponse.json({}, { status: 503 })));
         const client = new PhotographyClient(makeConfig());
         await tripBreaker(() => client.generate({ prompt: "x", model: "seedream" as PhotoModel }));
-        try {
-          await client.generate({ prompt: "x", model: "seedream" });
-          expect.unreachable("breaker should be open");
-        } catch (error) {
-          expect(error).toBeInstanceOf(CircuitOpenError);
-          expect((error as CircuitOpenError).service).toBe("photography");
-        }
+        const error = (await client.generate({ prompt: "x", model: "seedream" }))._unsafeUnwrapErr();
+        expect(error).toBeInstanceOf(CircuitOpenError);
+        expect((error as CircuitOpenError).service).toBe("photography");
       } finally {
         vi.useRealTimers();
       }

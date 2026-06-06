@@ -6,7 +6,7 @@
  * personal-scale corpus (hundreds to low-thousands of recipes). Vectra's
  * package barrel eagerly loads its entire stack (gpt-tokenizer, openai, grpc,
  * wink NLP, cheerio, turndown — ~70 MB) even though we only use `LocalIndex`;
- * vendoring the ~8 methods we actually call drops all of it.
+ * owning the ~8 methods we actually call drops all of it.
  *
  * On-disk format is a deliberate subset of Vectra's `index.json`
  * (`{ version, items: [{ id, vector, norm, metadata }] }`), so an index written
@@ -16,19 +16,44 @@
  *   load, so a changed vector can never leave a stale norm behind (a real bug in
  *   Vectra's upsert path that silently corrupts ranking).
  * - **Boundary validation.** Vectors must be non-empty, all-finite, and share a
- *   single dimension; violations are treated as corruption and surface to the
- *   caller's recovery path rather than producing `NaN` scores.
+ *   single dimension; violations are treated as corruption and surface as an
+ *   `err` to the caller's recovery path rather than producing `NaN` scores.
  * - **Total comparator.** Non-finite scores (zero-norm items, zero-norm query)
  *   are filtered before ranking, and ties break deterministically by id — never
  *   the `NaN`-poisoned sort Vectra performs.
  * - **Crash-safe persistence.** Write-to-temp + fsync(file) + rename +
  *   fsync(dir), versus Vectra's plain truncating `writeFile`.
+ *
+ * This is owned code (a from-scratch rewrite of the slice of `vectra` we use,
+ * not a vendored copy), so per ADR-0014 its surface returns `Result`: every
+ * invariant violation and filesystem failure is an `err`, never a throw.
  */
 
 import { access, mkdir, open, readFile, rename, rm } from "node:fs/promises";
 import { dirname, join } from "node:path";
 
+import { err, errAsync, ok, okAsync, Result, ResultAsync } from "neverthrow";
 import { z } from "zod";
+
+import { toMessage } from "../utils/log.js";
+
+/**
+ * The index's error type: invariant violations (zero-norm vector, dimension
+ * mismatch, transaction misuse), structural corruption found on load, and
+ * filesystem failures. Carries the foreign cause where one exists so the
+ * `VectorStore` recovery path can log it.
+ */
+export class VectorIndexError extends Error {
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, options);
+    this.name = "VectorIndexError";
+  }
+}
+
+/** Wrap a foreign (filesystem/parse) rejection into {@link VectorIndexError}. */
+function indexError(context: string): (cause: unknown) => VectorIndexError {
+  return (cause) => new VectorIndexError(`${context}: ${toMessage(cause)}`, { cause });
+}
 
 /**
  * Euclidean (L2) norm of a vector. Caller guarantees finite elements.
@@ -151,53 +176,71 @@ export class JsonVectorIndex {
   }
 
   /**
-   * Create an empty index file. Throws if one already exists unless
+   * Create an empty index file. Errs if one already exists unless
    * `deleteIfExists` is set, in which case the existing file is removed first.
    */
-  async createIndex(config: CreateIndexConfig = {}): Promise<void> {
-    if (await this.isIndexCreated()) {
-      if (!config.deleteIfExists) {
-        throw new Error("Index already exists");
+  createIndex(config: CreateIndexConfig = {}): ResultAsync<void, VectorIndexError> {
+    return ResultAsync.fromSafePromise(this.isIndexCreated()).andThen((created) => {
+      if (created && !config.deleteIfExists) {
+        return errAsync(new VectorIndexError("Index already exists"));
       }
-      await rm(this._indexPath, { force: true });
-    }
-    await mkdir(this._folderPath, { recursive: true });
-    const data: IndexData = { version: config.version ?? 1, items: [] };
-    await this._persist(data);
-    this._data = data;
-    this._dimension = undefined;
+      const remove = created
+        ? ResultAsync.fromPromise(rm(this._indexPath, { force: true }), indexError("remove existing index"))
+        : okAsync<void, VectorIndexError>(undefined);
+      const data: IndexData = { version: config.version ?? 1, items: [] };
+      return remove
+        .andThen(() =>
+          ResultAsync.fromPromise(mkdir(this._folderPath, { recursive: true }), indexError("create index dir")),
+        )
+        .andThen(() => this._persist(data))
+        .map(() => {
+          this._data = data;
+          this._dimension = undefined;
+        });
+    });
   }
 
   /**
    * Load the index into memory if not already loaded. Validates every vector
    * (non-empty, all-finite, single shared dimension) and recomputes norms from
-   * the vectors, discarding any persisted norm. Throws on a missing or
+   * the vectors, discarding any persisted norm. Errs on a missing or
    * structurally invalid file so the caller can trigger corruption recovery.
    */
-  async loadIndexData(): Promise<void> {
+  loadIndexData(): ResultAsync<void, VectorIndexError> {
     if (this._data) {
-      return;
+      return okAsync(undefined);
     }
-    const raw = await readFile(this._indexPath, "utf-8");
-    const parsed = IndexFileSchema.parse(JSON.parse(raw));
-
-    let dimension: number | undefined;
-    const items: Array<IndexItem> = [];
-    for (const item of parsed.items) {
-      this._assertValidVector(item.vector, dimension);
-      dimension ??= item.vector.length;
-      const norm = vectorNorm(item.vector); // recompute — never trust the persisted value
-      // Reject zero-norm vectors as corruption (same bar as insert). This upholds
-      // the "every stored item has a positive norm" invariant that lets queryItems
-      // skip a per-item finite-score check.
-      if (norm === 0) {
-        throw new Error(`Index contains a zero-norm vector for id ${item.id}`);
-      }
-      items.push({ id: item.id, vector: item.vector, norm, metadata: item.metadata });
-    }
-
-    this._data = { version: parsed.version ?? 1, items };
-    this._dimension = dimension;
+    return ResultAsync.fromPromise(readFile(this._indexPath, "utf-8"), indexError("read index"))
+      .andThen((raw) => Result.fromThrowable(() => IndexFileSchema.parse(JSON.parse(raw)), indexError("parse index"))())
+      .andThen((parsed) => {
+        let dimension: number | undefined;
+        const items: Array<IndexItem> = [];
+        for (const item of parsed.items) {
+          const stepErr = this._validateVector(item.vector, dimension)
+            .andThen(() => {
+              const norm = vectorNorm(item.vector); // recompute — never trust the persisted value
+              // Reject zero-norm vectors as corruption (same bar as insert). This upholds
+              // the "every stored item has a positive norm" invariant that lets queryItems
+              // skip a per-item finite-score check.
+              if (norm === 0) {
+                return err(new VectorIndexError(`Index contains a zero-norm vector for id ${item.id}`));
+              }
+              return ok(norm);
+            })
+            .match(
+              (norm) => {
+                dimension ??= item.vector.length;
+                items.push({ id: item.id, vector: item.vector, norm, metadata: item.metadata });
+                return undefined;
+              },
+              (e) => e,
+            );
+          if (stepErr !== undefined) return err(stepErr);
+        }
+        this._data = { version: parsed.version ?? 1, items };
+        this._dimension = dimension;
+        return ok(undefined);
+      });
   }
 
   /**
@@ -209,12 +252,13 @@ export class JsonVectorIndex {
    * share the (large, immutable) vector arrays by reference until commit, instead
    * of deep-cloning every vector on every transaction.
    */
-  async beginUpdate(): Promise<void> {
+  beginUpdate(): ResultAsync<void, VectorIndexError> {
     if (this._update) {
-      throw new Error("Update already in progress");
+      return errAsync(new VectorIndexError("Update already in progress"));
     }
-    await this.loadIndexData();
-    this._update = { version: this._data!.version, items: [...this._data!.items] };
+    return this.loadIndexData().map(() => {
+      this._update = { version: this._data!.version, items: [...this._data!.items] };
+    });
   }
 
   /** Discard the in-flight transaction without persisting. */
@@ -224,20 +268,22 @@ export class JsonVectorIndex {
 
   /**
    * Commit the in-flight transaction: persist durably FIRST, then swap the live
-   * in-memory state. A failed write throws with committed state untouched, so a
+   * in-memory state. A failed write errs with committed state untouched, so a
    * reader never sees a half-applied update and the caller can `cancelUpdate()`.
    */
-  async endUpdate(): Promise<void> {
-    if (!this._update) {
-      throw new Error("No update in progress");
+  endUpdate(): ResultAsync<void, VectorIndexError> {
+    const update = this._update;
+    if (!update) {
+      return errAsync(new VectorIndexError("No update in progress"));
     }
-    await this._persist(this._update);
-    this._data = this._update;
-    this._update = undefined;
-    // Promote the dimension from the now-committed data (undefined when empty).
-    // Doing it here — not during `_addToUpdate` — keeps `_dimension` in sync with
-    // `_data`, so a rolled-back transaction can't leave it pinned.
-    this._dimension = this._data.items[0]?.vector.length;
+    return this._persist(update).map(() => {
+      this._data = update;
+      this._update = undefined;
+      // Promote the dimension from the now-committed data (undefined when empty).
+      // Doing it here — not during `_addToUpdate` — keeps `_dimension` in sync with
+      // `_data`, so a rolled-back transaction can't leave it pinned.
+      this._dimension = this._data.items[0]?.vector.length;
+    });
   }
 
   /**
@@ -245,78 +291,83 @@ export class JsonVectorIndex {
    * vector. Runs inside the active transaction, or opens a one-shot transaction
    * if none is in progress (mirroring Vectra's auto-transaction convenience).
    */
-  async upsertItem(item: UpsertItem): Promise<void> {
+  upsertItem(item: UpsertItem): ResultAsync<void, VectorIndexError> {
     if (this._update) {
-      this._addToUpdate(item);
-      return;
+      return okAsync<void, VectorIndexError>(undefined).andThen(() => this._addToUpdate(item));
     }
-    await this.beginUpdate();
-    try {
-      this._addToUpdate(item);
-      await this.endUpdate();
-    } catch (err) {
-      this.cancelUpdate();
-      throw err;
-    }
+    return this.beginUpdate()
+      .andThen(() => this._addToUpdate(item))
+      .andThen(() => this.endUpdate())
+      .orElse((e) => {
+        this.cancelUpdate();
+        return errAsync(e);
+      });
   }
 
   /** Remove an item by id. No-op if absent. Auto-transacts like `upsertItem`. */
-  async deleteItem(id: string): Promise<void> {
+  deleteItem(id: string): ResultAsync<void, VectorIndexError> {
     if (this._update) {
       this._removeFromUpdate(id);
-      return;
+      return okAsync(undefined);
     }
-    await this.beginUpdate();
-    try {
-      this._removeFromUpdate(id);
-      await this.endUpdate();
-    } catch (err) {
-      this.cancelUpdate();
-      throw err;
-    }
+    return this.beginUpdate()
+      .andThen(() => {
+        this._removeFromUpdate(id);
+        return this.endUpdate();
+      })
+      .orElse((e) => {
+        this.cancelUpdate();
+        return errAsync(e);
+      });
   }
 
   /**
-   * Return the `topK` items most similar to `vector` by cosine score, highest
-   * first. Non-finite scores (a zero-norm item, or a zero-norm query) are
-   * filtered out rather than allowed to poison the ranking, and ties break
+   * Resolve with the `topK` items most similar to `vector` by cosine score,
+   * highest first. Non-finite scores (a zero-norm item, or a zero-norm query)
+   * are filtered out rather than allowed to poison the ranking, and ties break
    * deterministically by id. A zero-norm query therefore yields no results.
    *
    * `minScore` (optional) drops results below a cosine cutoff *before* the
    * top-K slice, so a query with few genuine matches returns only those rather
    * than padding the list with near-zero-similarity noise.
    */
-  async queryItems(vector: ReadonlyArray<number>, topK: number, minScore?: number): Promise<Array<QueryResult>> {
-    await this.loadIndexData();
-    if (topK <= 0) {
-      return [];
-    }
-    this._assertValidVector(vector, this._dimension);
-    const queryNorm = vectorNorm(vector);
-    // A score is non-finite only when a norm is zero. Stored items are guaranteed
-    // positive-norm (rejected at insert and on load), so the sole remaining source
-    // is a zero-norm query — guard it once here rather than per item in the loop.
-    if (queryNorm === 0) {
-      return [];
-    }
-
-    const scored: Array<{ item: IndexItem; score: number }> = [];
-    for (const item of this._data!.items) {
-      const score = cosineScore(vector, queryNorm, item.vector, item.norm);
-      if (minScore === undefined || score >= minScore) {
-        scored.push({ item, score });
+  queryItems(
+    vector: ReadonlyArray<number>,
+    topK: number,
+    minScore?: number,
+  ): ResultAsync<Array<QueryResult>, VectorIndexError> {
+    return this.loadIndexData().andThen(() => {
+      if (topK <= 0) {
+        return ok<Array<QueryResult>, VectorIndexError>([]);
       }
-    }
+      return this._validateVector(vector, this._dimension).map(() => {
+        const queryNorm = vectorNorm(vector);
+        // A score is non-finite only when a norm is zero. Stored items are guaranteed
+        // positive-norm (rejected at insert and on load), so the sole remaining source
+        // is a zero-norm query — guard it once here rather than per item in the loop.
+        if (queryNorm === 0) {
+          return [];
+        }
 
-    scored.sort((a, b) => b.score - a.score || (a.item.id < b.item.id ? -1 : a.item.id > b.item.id ? 1 : 0));
+        const scored: Array<{ item: IndexItem; score: number }> = [];
+        for (const item of this._data!.items) {
+          const score = cosineScore(vector, queryNorm, item.vector, item.norm);
+          if (minScore === undefined || score >= minScore) {
+            scored.push({ item, score });
+          }
+        }
 
-    return scored.slice(0, topK).map((s) => ({
-      item: { id: s.item.id, metadata: s.item.metadata },
-      score: s.score,
-    }));
+        scored.sort((a, b) => b.score - a.score || (a.item.id < b.item.id ? -1 : a.item.id > b.item.id ? 1 : 0));
+
+        return scored.slice(0, topK).map((s) => ({
+          item: { id: s.item.id, metadata: s.item.metadata },
+          score: s.score,
+        }));
+      });
+    });
   }
 
-  private _addToUpdate(item: UpsertItem): void {
+  private _addToUpdate(item: UpsertItem): Result<void, VectorIndexError> {
     // Enforce a single dimension within the transaction without pinning the
     // committed `_dimension`: validate against the committed dimension, or — for
     // a still-empty index — the first item already staged in THIS transaction.
@@ -324,24 +375,26 @@ export class JsonVectorIndex {
     // cancelled or failed transaction never leaves it pinned to data that was
     // never committed.
     const expectedDim = this._dimension ?? this._update!.items[0]?.vector.length;
-    this._assertValidVector(item.vector, expectedDim);
-    const norm = vectorNorm(item.vector);
-    if (norm === 0) {
-      throw new Error(`Refusing to index zero-norm vector for id ${item.id}`);
-    }
-    const next: IndexItem = {
-      id: item.id,
-      vector: item.vector,
-      norm,
-      metadata: item.metadata ?? {},
-    };
-    const items = this._update!.items;
-    const existing = items.findIndex((i) => i.id === item.id);
-    if (existing >= 0) {
-      items[existing] = next;
-    } else {
-      items.push(next);
-    }
+    return this._validateVector(item.vector, expectedDim).andThen(() => {
+      const norm = vectorNorm(item.vector);
+      if (norm === 0) {
+        return err(new VectorIndexError(`Refusing to index zero-norm vector for id ${item.id}`));
+      }
+      const next: IndexItem = {
+        id: item.id,
+        vector: item.vector,
+        norm,
+        metadata: item.metadata ?? {},
+      };
+      const items = this._update!.items;
+      const existing = items.findIndex((i) => i.id === item.id);
+      if (existing >= 0) {
+        items[existing] = next;
+      } else {
+        items.push(next);
+      }
+      return ok(undefined);
+    });
   }
 
   private _removeFromUpdate(id: string): void {
@@ -357,39 +410,47 @@ export class JsonVectorIndex {
    * invariant: empty, non-finite elements, or a length that disagrees with the
    * dimension the index has already pinned.
    */
-  private _assertValidVector(vec: ReadonlyArray<number>, expectedDim: number | undefined): void {
+  private _validateVector(vec: ReadonlyArray<number>, expectedDim: number | undefined): Result<void, VectorIndexError> {
     if (vec.length === 0) {
-      throw new Error("Vector must be non-empty");
+      return err(new VectorIndexError("Vector must be non-empty"));
     }
     if (expectedDim !== undefined && vec.length !== expectedDim) {
-      throw new Error(`Vector dimension ${vec.length} does not match index dimension ${expectedDim}`);
+      return err(
+        new VectorIndexError(
+          `Vector dimension ${vec.length.toString()} does not match index dimension ${expectedDim.toString()}`,
+        ),
+      );
     }
     for (let i = 0; i < vec.length; i++) {
       if (!Number.isFinite(vec[i]!)) {
-        throw new Error(`Vector contains non-finite value at index ${i}`);
+        return err(new VectorIndexError(`Vector contains non-finite value at index ${i.toString()}`));
       }
     }
+    return ok(undefined);
   }
 
   /**
    * Durably write the index: temp file in the same directory, fsync it, rename
    * over the target, then fsync the directory so the rename itself survives a
    * crash. The temp name is unique per write to avoid colliding with a
-   * concurrent (mutex-serialized, but defensive) writer.
+   * concurrent (mutex-serialized, but defensive) writer. The async body uses no
+   * `throw` of its own — foreign rejections funnel through the single
+   * `fromPromise` edge.
    */
-  private async _persist(data: IndexData): Promise<void> {
-    // The folder is created by `createIndex` (and by VectorStore.init) before any
-    // write, so no per-commit mkdir is needed on the hot path.
-    const tmpPath = join(this._folderPath, `.${INDEX_FILE}-${process.pid.toString()}-${Date.now().toString()}.tmp`);
-    const fh = await open(tmpPath, "w");
-    try {
-      await fh.writeFile(JSON.stringify(data));
-      await fh.sync();
-    } finally {
-      await fh.close();
-    }
-    await rename(tmpPath, this._indexPath);
-    await this._fsyncDir(dirname(this._indexPath));
+  private _persist(data: IndexData): ResultAsync<void, VectorIndexError> {
+    const write = async (): Promise<void> => {
+      const tmpPath = join(this._folderPath, `.${INDEX_FILE}-${process.pid.toString()}-${Date.now().toString()}.tmp`);
+      const fh = await open(tmpPath, "w");
+      try {
+        await fh.writeFile(JSON.stringify(data));
+        await fh.sync();
+      } finally {
+        await fh.close();
+      }
+      await rename(tmpPath, this._indexPath);
+      await this._fsyncDir(dirname(this._indexPath));
+    };
+    return ResultAsync.fromPromise(write(), indexError("persist index"));
   }
 
   /**

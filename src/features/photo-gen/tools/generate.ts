@@ -12,7 +12,7 @@ import { fetchImageBytes } from "../../../shared/photo-fetch.js";
 import { textResult } from "../../../shared/tools.js";
 import { CircuitOpenError } from "../../../utils/errors.js";
 import { toMessage } from "../../../utils/log.js";
-import { PhotographyAPIError, PhotographyError } from "../../photography-errors.js";
+import { PhotographyAPIError } from "../../photography-errors.js";
 import { DEFAULT_PHOTO_MODEL, PHOTO_ASPECT_RATIOS, PHOTO_MODELS, recipeToPhotoPrompt } from "../../photography.js";
 
 /**
@@ -130,36 +130,42 @@ export const generatePhotoTool = defineTool(
       const categoryNames = ctx.deps.recipe.resolveCategoryNames(recipe.categories);
       const prompt = recipeToPhotoPrompt(recipe, categoryNames, args.style);
 
-      let generated;
-      try {
-        generated = await photographyClient.generate({
+      const generated = (
+        await photographyClient.generate({
           prompt,
           model,
           ...(args.aspect_ratio !== undefined && { aspectRatio: args.aspect_ratio }),
           ...(referenceImage !== undefined && { referenceImage }),
-        });
-      } catch (error) {
-        log.error({ err: error, recipe_uid: args.recipe_uid, model }, "image generation failed");
-        if (error instanceof CircuitOpenError) {
-          return textResult(
-            "Image generation is temporarily unavailable — the provider circuit opened after repeated failures. Try again in a minute.",
-          );
-        }
-        if (error instanceof PhotographyAPIError) {
-          if (error.status === 401 || error.status === 403) {
+        })
+      ).match(
+        (v) => v,
+        (error) => {
+          log.error({ err: error, recipe_uid: args.recipe_uid, model }, "image generation failed");
+          if (error instanceof CircuitOpenError) {
             return textResult(
-              "Image generation failed: the provider rejected the credentials. Check IMAGE_GEN_API_KEY (or the reused OpenRouter key).",
+              "Image generation is temporarily unavailable — the provider circuit opened after repeated failures. Try again in a minute.",
             );
           }
-          return textResult(`Image generation failed (HTTP ${error.status.toString()}): ${toMessage(error)}`);
-        }
-        if (error instanceof PhotographyError) {
-          return textResult(
-            `The model returned no image (a refusal or text-only reply) — try a different model or a clearer style hint. (${toMessage(error)})`,
-          );
-        }
-        return textResult(`Failed to generate photo: ${toMessage(error)}`);
-      }
+          if (error instanceof PhotographyAPIError) {
+            if (error.status === 401 || error.status === 403) {
+              return textResult(
+                "Image generation failed: the provider rejected the credentials. Check IMAGE_GEN_API_KEY (or the reused OpenRouter key).",
+              );
+            }
+            return textResult(`Image generation failed (HTTP ${error.status.toString()}): ${toMessage(error)}`);
+          }
+          // A base PhotographyError with no cause is the client's own classification
+          // (a refusal / text-only reply / non-data-URI payload); one WITH a cause
+          // wraps a foreign escape (malformed envelope, abort) — keep the generic copy.
+          if (error.cause === undefined) {
+            return textResult(
+              `The model returned no image (a refusal or text-only reply) — try a different model or a clearer style hint. (${toMessage(error)})`,
+            );
+          }
+          return textResult(`Failed to generate photo: ${toMessage(error)}`);
+        },
+      );
+      if ("content" in generated) return generated;
 
       const costSuffix = generated.costUsd !== null ? ` (cost: $${generated.costUsd.toFixed(4)})` : "";
 

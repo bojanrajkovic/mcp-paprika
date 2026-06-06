@@ -1,6 +1,10 @@
+import { okAsync, type ResultAsync } from "neverthrow";
+
+import type { VectorStoreFailure } from "../vector-store.js";
 import type { DiscoverApi } from "./api.js";
 
 import { defineModule, register } from "../../kernel/registry.js";
+import { unwrapAtBoot } from "../../utils/errors.js";
 import { EMBEDDING_SCHEMA_VERSION, EmbeddingClient } from "../embeddings.js";
 import { VectorStore } from "../vector-store.js";
 import { discoverRecipesTool } from "./tools/discover-recipes.js";
@@ -54,7 +58,7 @@ register(
         EMBEDDING_SCHEMA_VERSION,
         infra.log.child({ component: "vector-store" }),
       );
-      await vectorStore.init();
+      unwrapAtBoot(await vectorStore.init(), "vector store init");
 
       return { vectorStore, embedder };
     })
@@ -81,66 +85,74 @@ register(
           // so this is cheap when nothing changed), and clears hashes first when the index
           // is short relative to the store to force a full rebuild. Used at startup and as
           // the retry below.
-          const reconcile = async (): Promise<void> => {
-            if (ctx.deps.recipe.size() === 0) return;
+          const reconcile = (): ResultAsync<unknown, VectorStoreFailure> => {
+            if (ctx.deps.recipe.size() === 0) return okAsync(undefined);
             if (vectorStore.size < ctx.deps.recipe.size() * 0.9) vectorStore.clearHashes();
-            await vectorStore.indexRecipes(ctx.deps.recipe.getAll(), resolveNames);
+            return vectorStore.indexRecipes(ctx.deps.recipe.getAll(), resolveNames);
           };
 
           // Startup reconciliation. The initial `syncOnce()` fired its re-index events
           // BEFORE this subscription existed, so anything that changed while the server was
           // down — notably a category rename, which changes no recipe hash — is repaired
           // here (#177). Best-effort: a transient embeddings outage at startup must not
-          // crash the process; on failure, latch a retry the per-cycle handler drains.
+          // crash the process; on an err, latch a retry the per-cycle handler drains.
           let reconcilePending = false;
-          try {
-            await reconcile();
-          } catch (err) {
-            reconcilePending = true;
-            discoverLog.error(
-              { err },
-              "vector index error during startup reconcile; will retry on the next sync cycle",
-            );
-          }
+          (await reconcile()).match(
+            () => undefined,
+            (err) => {
+              reconcilePending = true;
+              discoverLog.error(
+                { err },
+                "vector index error during startup reconcile; will retry on the next sync cycle",
+              );
+            },
+          );
 
           // The single re-index channel: recipe writes and the recipe/category reconciles
           // emit here; discover
           // re-embeds. Handlers are fire-and-forget (the VectorStore serializes its writes
-          // via an async-mutex, so overlapping emits are safe) and each swallows its own
-          // errors — a re-index failure must not break a sync cycle or a tool write.
+          // via an async-mutex, so overlapping emits are safe) and each logs its own err —
+          // a re-index failure must not break a sync cycle or a tool write.
+          const logReindexErr = (err: VectorStoreFailure): undefined => {
+            discoverLog.error({ err }, "vector index error during re-index");
+            return undefined;
+          };
           ctx.infra.indexEvents.on((event) => {
             void (async () => {
-              try {
-                if (event.type === "recipe-changed") {
-                  // Fires every cycle: drain a pending startup reconcile first (the #177
-                  // self-heal — a recovered embeddings backend repairs without a recipe
-                  // edit), then re-embed any changed recipes.
-                  if (reconcilePending) {
-                    reconcilePending = false;
-                    try {
-                      await reconcile();
-                    } catch (err) {
+              if (event.type === "recipe-changed") {
+                // Fires every cycle: drain a pending startup reconcile first (the #177
+                // self-heal — a recovered embeddings backend repairs without a recipe
+                // edit), then re-embed any changed recipes.
+                if (reconcilePending) {
+                  reconcilePending = false;
+                  (await reconcile()).match(
+                    () => undefined,
+                    (err) => {
                       reconcilePending = true;
                       discoverLog.error(
                         { err },
                         "vector index startup-reconcile retry failed; will retry on the next cycle",
                       );
-                    }
-                  }
-                  if (event.recipes.length > 0) await vectorStore.indexRecipes(event.recipes, resolveNames);
-                } else if (event.type === "recipe-removed") {
-                  for (const uid of event.uids) await vectorStore.removeRecipe(uid);
-                } else {
-                  // category-changed: re-embed every live recipe referencing a changed
-                  // category — its display name is baked into their embedding text, but no
-                  // recipe hash changed, so the recipe diff never re-fetched them. Read
-                  // recipes through the contract.
-                  const changed = new Set<string>(event.uids);
-                  const affected = ctx.deps.recipe.getAll().filter((r) => r.categories.some((uid) => changed.has(uid)));
-                  if (affected.length > 0) await vectorStore.indexRecipes(affected, resolveNames);
+                    },
+                  );
                 }
-              } catch (err) {
-                discoverLog.error({ err }, "vector index error during re-index");
+                if (event.recipes.length > 0) {
+                  (await vectorStore.indexRecipes(event.recipes, resolveNames)).match(() => undefined, logReindexErr);
+                }
+              } else if (event.type === "recipe-removed") {
+                for (const uid of event.uids) {
+                  (await vectorStore.removeRecipe(uid)).match(() => undefined, logReindexErr);
+                }
+              } else {
+                // category-changed: re-embed every live recipe referencing a changed
+                // category — its display name is baked into their embedding text, but no
+                // recipe hash changed, so the recipe diff never re-fetched them. Read
+                // recipes through the contract.
+                const changed = new Set<string>(event.uids);
+                const affected = ctx.deps.recipe.getAll().filter((r) => r.categories.some((uid) => changed.has(uid)));
+                if (affected.length > 0) {
+                  (await vectorStore.indexRecipes(affected, resolveNames)).match(() => undefined, logReindexErr);
+                }
               }
             })();
           });

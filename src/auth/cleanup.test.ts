@@ -65,7 +65,7 @@ describe("sweepOnce", () => {
       SILENT_LOG,
       () => clock.v,
     );
-    const result = await cleanup.sweepOnce();
+    const result = (await cleanup.sweepOnce())._unsafeUnwrap();
 
     expect(result.clientsRemoved).toBe(1);
     expect((await cache.oauthClients.get("00000000-0000-0000-0000-000000000001"))._unsafeUnwrap()).toBeNull();
@@ -107,7 +107,7 @@ describe("sweepOnce", () => {
       SILENT_LOG,
       () => clock.v,
     );
-    const result = await cleanup.sweepOnce();
+    const result = (await cleanup.sweepOnce())._unsafeUnwrap();
 
     expect(result.clientsRemoved).toBe(1);
     expect(result.tokensRemoved).toBe(3);
@@ -141,10 +141,10 @@ describe("sweepOnce", () => {
       () => clock.v,
     );
 
-    const first = await cleanup.sweepOnce();
+    const first = (await cleanup.sweepOnce())._unsafeUnwrap();
     expect(first.clientsRemoved).toBe(1);
 
-    const second = await cleanup.sweepOnce();
+    const second = (await cleanup.sweepOnce())._unsafeUnwrap();
     expect(second.clientsRemoved).toBe(0);
     expect(second.tokensRemoved).toBe(0);
   });
@@ -169,7 +169,7 @@ describe("sweepOnce", () => {
       SILENT_LOG,
       () => clock.v,
     );
-    const result = await cleanup.sweepOnce();
+    const result = (await cleanup.sweepOnce())._unsafeUnwrap();
 
     expect(result.authRequestsRemoved).toBe(1);
     expect(result.authCodesRemoved).toBe(1);
@@ -195,7 +195,7 @@ describe("sweepOnce", () => {
       SILENT_LOG,
       () => clock.v,
     );
-    const result = await cleanup.sweepOnce();
+    const result = (await cleanup.sweepOnce())._unsafeUnwrap();
 
     expect(result.clientsRemoved).toBe(0);
     expect(result.tokensRemoved).toBe(0);
@@ -250,7 +250,7 @@ describe("sweepOnce", () => {
       SILENT_LOG,
       () => clock.v,
     );
-    const result = await cleanup.sweepOnce();
+    const result = (await cleanup.sweepOnce())._unsafeUnwrap();
 
     expect(result.expiredTokensRemoved).toBe(1);
     expect(result.clientsRemoved).toBe(0); // client wasn't stale
@@ -286,7 +286,7 @@ describe("sweepOnce", () => {
       SILENT_LOG,
       () => clock.v,
     );
-    const result = await cleanup.sweepOnce();
+    const result = (await cleanup.sweepOnce())._unsafeUnwrap();
 
     expect(result.pendingAuthorizationsRemoved).toBe(1);
     expect(pending.size).toBe(0);
@@ -322,7 +322,7 @@ describe("sweepOnce", () => {
       SILENT_LOG,
       () => clock.v,
     );
-    const result = await cleanup.sweepOnce();
+    const result = (await cleanup.sweepOnce())._unsafeUnwrap();
 
     expect(result.clientsRemoved).toBe(1);
     expect(result.tokensRemoved).toBe(1);

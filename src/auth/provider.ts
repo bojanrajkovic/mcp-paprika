@@ -23,6 +23,7 @@ import type { TokenStore } from "./token-store.js";
 import type { ResolvedOAuthConfig } from "./types.js";
 
 import { consentSecurityHeaders, renderConsentPage } from "./consent-page.js";
+import { unwrapOAuth } from "./errors.js";
 import { isRecognizedOrigin } from "./redirect-allowlist.js";
 import { ACCESS_TOKEN_TTL_SECONDS, generateOpaqueToken, hashTokenForStorage, nowSeconds } from "./tokens.js";
 import { type ApprovedAuthorization, makeUpstreamRedirectDeps, redirectUpstream } from "./upstream-redirect.js";
@@ -165,12 +166,14 @@ export class MintingOAuthServerProvider implements OAuthServerProvider {
       throw new InvalidTargetError("resource mismatch with original /authorize");
     }
 
-    const pair = await this._tokenStore.issueAccessRefreshPair({
-      clientId: state.clientId,
-      identity: state.identity,
-      scope: state.scope,
-      resource: state.resource,
-    });
+    const pair = unwrapOAuth(
+      await this._tokenStore.issueAccessRefreshPair({
+        clientId: state.clientId,
+        identity: state.identity,
+        scope: state.scope,
+        resource: state.resource,
+      }),
+    );
 
     const tokenHash = hashTokenForStorage(pair.access.plaintext);
     this.log.info(
@@ -197,30 +200,27 @@ export class MintingOAuthServerProvider implements OAuthServerProvider {
     // it was issued to. TokenStore.rotateRefresh enforces that by comparing
     // expectedClientId to the stored record (atomically under its mutex).
     // The returned IssuedPair.identity carries the rotated-out token's
-    // identity so we can log `sub` without a separate disk read.
-    const result = await this._tokenStore.rotateRefresh(refreshToken, client.client_id, scopes, resource?.toString());
-    return result.match(
-      (pair) => {
-        const tokenHash = hashTokenForStorage(pair.access.plaintext);
-        this.log.info(
-          { tokenHash, clientId: client.client_id, sub: pair.identity.sub },
-          "access token minted (refresh_token grant)",
-        );
-        return {
-          access_token: pair.access.plaintext,
-          refresh_token: pair.refresh.plaintext,
-          token_type: "Bearer",
-          expires_in: ACCESS_TOKEN_TTL_SECONDS,
-        };
-      },
-      (e) => {
-        throw e; // OAuthTokenError factories return SDK error subclasses, which the library serializes
-      },
+    // identity so we can log `sub` without a separate disk read. An err — the
+    // OAuthTokenError factories' SDK subclasses — crosses to the library via
+    // unwrapOAuth (ADR-0014 form #2), which serializes it.
+    const pair = unwrapOAuth(
+      await this._tokenStore.rotateRefresh(refreshToken, client.client_id, scopes, resource?.toString()),
     );
+    const tokenHash = hashTokenForStorage(pair.access.plaintext);
+    this.log.info(
+      { tokenHash, clientId: client.client_id, sub: pair.identity.sub },
+      "access token minted (refresh_token grant)",
+    );
+    return {
+      access_token: pair.access.plaintext,
+      refresh_token: pair.refresh.plaintext,
+      token_type: "Bearer",
+      expires_in: ACCESS_TOKEN_TTL_SECONDS,
+    };
   }
 
   async verifyAccessToken(token: string): Promise<AuthInfo> {
-    const info = await this._tokenStore.lookupAccessToken(token);
+    const info = unwrapOAuth(await this._tokenStore.lookupAccessToken(token));
     if (info === null) throw new InvalidTokenError("token invalid or expired");
     return info;
   }
@@ -233,10 +233,10 @@ export class MintingOAuthServerProvider implements OAuthServerProvider {
     // client". A token issued to a different client MUST NOT be revoked;
     // returning void either way (no existence leak) preserves §2.2's privacy
     // intent.
-    const record = await this._tokenStore.getTokenRecord(request.token);
+    const record = unwrapOAuth(await this._tokenStore.getTokenRecord(request.token));
     if (record === null) return;
     if (record.clientId !== client.client_id) return;
-    await this._tokenStore.revoke(request.token);
+    unwrapOAuth(await this._tokenStore.revoke(request.token));
     this.log.info(
       { tokenHash: record.tokenHash, clientId: client.client_id, sub: record.identity.sub },
       "access token revoked",

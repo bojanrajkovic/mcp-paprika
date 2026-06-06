@@ -13,7 +13,7 @@
 import { randomUUID, timingSafeEqual } from "node:crypto";
 
 import { InvalidRequestError } from "@modelcontextprotocol/sdk/server/auth/errors.js";
-import type { Result } from "neverthrow";
+import { errAsync, type ResultAsync } from "neverthrow";
 import type { Logger } from "pino";
 
 import type { CacheError } from "../cache/disk-cache.js";
@@ -21,22 +21,8 @@ import type { AuthCache } from "./disk.js";
 import type { OAuthClient } from "./types.js";
 
 import { validateRegistration, validateUpdate } from "./dcr-validator.js";
-import { OAuthClientNotFoundError } from "./errors.js";
+import { OAuthClientNotFoundError, OAuthTokenError, unwrapOAuth } from "./errors.js";
 import { generateOpaqueToken, hashTokenForStorage, nowSeconds } from "./tokens.js";
-
-/**
- * INTERIM (#265): unwrap a cache result by rethrowing — this store implements
- * the SDK's throw-based `OAuthRegisteredClientsStore` contract; #265 converts
- * it to `Result` end to end and removes this.
- */
-function must<T>(result: Result<T, CacheError>): T {
-  return result.match(
-    (value) => value,
-    (e) => {
-      throw new Error(`client registry cache failure: ${e.context}: ${e.message}`, { cause: e.cause });
-    },
-  );
-}
 
 // ============================================================================
 // Wire Format Conversion
@@ -109,11 +95,25 @@ export class DiskClientRegistrationStore {
   ) {}
 
   /**
+   * Map a cache failure to the wire-safe `server_error`, logging the real
+   * failure for the operator first.
+   */
+  private _registryUnavailable(e: CacheError): ReturnType<typeof OAuthTokenError.serverError> {
+    this.log.error({ err: e.cause, context: e.context }, "client registry cache failure");
+    return OAuthTokenError.serverError("client registry unavailable");
+  }
+
+  /**
    * Get a registered client by ID.
    * Returns undefined if not found.
+   *
+   * SDK contract (`OAuthRegisteredClientsStore`): throw-based — a cache failure
+   * crosses as a `server_error` (ADR-0014 form #2 via `unwrapOAuth`).
    */
   async getClient(clientId: string): Promise<OAuthClientInformationFull | undefined> {
-    const client = must(await this._cache.oauthClients.get(clientId));
+    const client = unwrapOAuth(
+      (await this._cache.oauthClients.get(clientId)).mapErr((e) => this._registryUnavailable(e)),
+    );
     if (client === null) return undefined;
     return storedToWire(client);
   }
@@ -121,16 +121,14 @@ export class DiskClientRegistrationStore {
   /**
    * Register a new client.
    * Validates metadata, generates clientId + RAT, persists, returns wire format with plaintext RAT.
-   * Throws OAuthMetadataValidationError on invalid metadata.
+   *
+   * SDK contract (the DCR handler): throw-based — every throw is an OAuth error
+   * type (ADR-0014 form #2): `OAuthMetadataValidationError` on invalid metadata,
+   * `InvalidRequestError` on the registration cap, `server_error` on a cache failure.
    */
   async registerClient(metaIn: unknown): Promise<OAuthClientInformationFull> {
     // Validate via dcr-validator; pass logger for URL-parse debug diagnosability
-    const validated = validateRegistration(metaIn, this.log).match(
-      (v) => v,
-      (e) => {
-        throw e;
-      },
-    );
+    const validated = unwrapOAuth(validateRegistration(metaIn, this.log));
 
     const clientId = randomUUID();
     const registrationAccessToken = generateOpaqueToken("mcp_rat_");
@@ -157,11 +155,13 @@ export class DiskClientRegistrationStore {
     // the authoritative race-safe enforcement. On overflow we throw an OAuth
     // `InvalidRequestError` so @hono/mcp's DCR handler returns 400 with the
     // standard `invalid_request` error code (rather than a 500).
-    const result = must(await this._cache.oauthClients.tryPut(stored, this._maxClients));
+    const result = unwrapOAuth(
+      (await this._cache.oauthClients.tryPut(stored, this._maxClients)).mapErr((e) => this._registryUnavailable(e)),
+    );
     if (!result.ok) {
       throw new InvalidRequestError(`client registration cap reached (${result.currentCount.toString()} clients)`);
     }
-    must(await this._cache.flush());
+    unwrapOAuth((await this._cache.flush()).mapErr((e) => this._registryUnavailable(e)));
     this.log.info(
       { clientId: stored.clientId, redirectUriCount: stored.redirectUris.length },
       "client registered via DCR",
@@ -176,59 +176,70 @@ export class DiskClientRegistrationStore {
   /**
    * Update an existing client's metadata (RFC 7592 PUT).
    * Validates patch, preserves RAT hash, updates metadata, bumps updatedAt.
-   * Returns wire format with registration_client_uri but NO plaintext RAT (client retains original from 201).
-   * Throws OAuthClientNotFoundError if client doesn't exist.
-   * Throws OAuthMetadataValidationError on invalid metadata.
+   * Resolves with wire format with registration_client_uri but NO plaintext RAT
+   * (client retains original from 201). Consumed by our own RFC 7592 route (not
+   * the SDK), so it is `Result`-native: errs with `OAuthClientNotFoundError`
+   * when the client doesn't exist, `OAuthMetadataValidationError` on invalid
+   * metadata, or `CacheError` on a registry failure (the route renders 503).
    */
-  async updateClient(clientId: string, metaIn: unknown): Promise<OAuthClientInformationFull> {
-    const existing = must(await this._cache.oauthClients.get(clientId));
-    if (existing === null) throw OAuthClientNotFoundError.forId(clientId);
+  updateClient(
+    clientId: string,
+    metaIn: unknown,
+  ): ResultAsync<OAuthClientInformationFull, OAuthClientNotFoundError | Error | CacheError> {
+    return this._cache.oauthClients.get(clientId).andThen((existing) => {
+      if (existing === null) return errAsync(OAuthClientNotFoundError.forId(clientId));
 
-    // Validate patch via dcr-validator; pass logger for URL-parse debug diagnosability
-    const validated = validateUpdate(metaIn, this.log).match(
-      (v) => v,
-      (e) => {
-        throw e;
-      },
-    );
+      // Validate patch via dcr-validator; pass logger for URL-parse debug diagnosability
+      return validateUpdate(metaIn, this.log).asyncAndThen((validated) => {
+        const now = nowSeconds();
 
-    const now = nowSeconds();
+        // Merge: spread existing, apply validated patch, reset tokenEndpointAuthMethod
+        const updated: OAuthClient = {
+          ...existing,
+          clientName: validated.clientName !== undefined ? validated.clientName : existing.clientName,
+          grantTypes: validated.grantTypes !== undefined ? validated.grantTypes : existing.grantTypes,
+          responseTypes: validated.responseTypes !== undefined ? validated.responseTypes : existing.responseTypes,
+          redirectUris: validated.redirectUris !== undefined ? validated.redirectUris : existing.redirectUris,
+          scope: validated.scope !== undefined ? validated.scope : existing.scope,
+          tokenEndpointAuthMethod: "none",
+          updatedAt: now,
+        };
 
-    // Merge: spread existing, apply validated patch, reset tokenEndpointAuthMethod
-    const updated: OAuthClient = {
-      ...existing,
-      clientName: validated.clientName !== undefined ? validated.clientName : existing.clientName,
-      grantTypes: validated.grantTypes !== undefined ? validated.grantTypes : existing.grantTypes,
-      responseTypes: validated.responseTypes !== undefined ? validated.responseTypes : existing.responseTypes,
-      redirectUris: validated.redirectUris !== undefined ? validated.redirectUris : existing.redirectUris,
-      scope: validated.scope !== undefined ? validated.scope : existing.scope,
-      tokenEndpointAuthMethod: "none",
-      updatedAt: now,
-    };
-
-    must(await this._cache.oauthClients.put(updated));
-    must(await this._cache.flush());
-
-    return storedToWire(updated, {
-      registrationClientUri: `${this._publicUrl}/register/${clientId}`,
+        return this._cache.oauthClients
+          .put(updated)
+          .andThen(() => this._cache.flush())
+          .map(() =>
+            storedToWire(updated, {
+              registrationClientUri: `${this._publicUrl}/register/${clientId}`,
+            }),
+          );
+      });
     });
   }
 
   /**
    * Delete a client.
-   * Removes from cache and disk. No cascade — the DELETE /register/:id route composes with TokenStore.removeAllForClient.
+   * Removes from cache and disk. No cascade — the DELETE /register/:id route
+   * composes with TokenStore.removeAllForClient. `Result`-native (our routes and
+   * the cleanup loop consume it, not the SDK).
    */
-  async deleteClient(clientId: string): Promise<void> {
-    must(await this._cache.oauthClients.remove(clientId));
-    must(await this._cache.flush());
+  deleteClient(clientId: string): ResultAsync<void, CacheError> {
+    return this._cache.oauthClients
+      .remove(clientId)
+      .andThen(() => this._cache.flush())
+      .map(() => undefined);
   }
 
   /**
    * Verify a registration access token against a client's stored hash.
-   * Returns true if the hashes match, false otherwise (including client not found).
+   * Resolves true if the hashes match, false otherwise (including client not
+   * found); errs with `CacheError` on a registry failure.
    */
-  async verifyRegistrationAccessToken(clientId: string, presentedToken: string): Promise<boolean> {
-    const client = must(await this._cache.oauthClients.get(clientId));
+  verifyRegistrationAccessToken(clientId: string, presentedToken: string): ResultAsync<boolean, CacheError> {
+    return this._cache.oauthClients.get(clientId).map((client) => this._ratMatches(client, presentedToken, clientId));
+  }
+
+  private _ratMatches(client: OAuthClient | null, presentedToken: string, clientId: string): boolean {
     if (client === null) return false;
 
     const presentedHash = hashTokenForStorage(presentedToken);

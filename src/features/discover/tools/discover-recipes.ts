@@ -77,7 +77,14 @@ export const discoverRecipesTool = defineTool(
         return textResult("Recipe store is not yet synced. Try again in a few seconds.");
       }
 
-      const results = await vectorStore.search(args.query, args.topK, args.minScore);
+      const results = (await vectorStore.search(args.query, args.topK, args.minScore)).match(
+        (v) => v,
+        (e) => {
+          log.error({ err: e }, "semantic search failed");
+          return textResult(`Semantic search failed: ${e.message}. Use search_recipes for keyword search instead.`);
+        },
+      );
+      if ("content" in results) return results;
       if (results.length === 0) {
         return textResult("No recipes found matching that description.");
       }

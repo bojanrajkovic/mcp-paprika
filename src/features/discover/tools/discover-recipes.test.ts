@@ -1,13 +1,14 @@
 import { fromAny } from "@total-typescript/shoehorn";
+import { okAsync, type ResultAsync } from "neverthrow";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { RecipeUid } from "../../../ids.js";
-import type { SemanticResult, VectorStore } from "../../vector-store.js";
+import type { SemanticResult, VectorStore, VectorStoreFailure } from "../../vector-store.js";
 
 import { makeCategory, makeRecipe } from "../../../../test/domains/recipe/__fixtures__/recipes.js";
 import { useKernelHarness } from "../../../../test/support/kernel-harness.js";
 
-// Build a minimal mock vector store whose `search` spy returns pre-supplied results.
+// Build a minimal mock vector store whose `search` spy resolves with pre-supplied results.
 // `uid` is loosened to a plain string so tests pass literal UIDs; branded here.
 function makeMockVectorStore(results: ReadonlyArray<{ uid: string; score: number; recipeName: string }> = []) {
   const branded: ReadonlyArray<SemanticResult> = results.map((r) => ({
@@ -15,7 +16,9 @@ function makeMockVectorStore(results: ReadonlyArray<{ uid: string; score: number
     uid: r.uid as RecipeUid,
   }));
   return {
-    search: vi.fn<(query: string, topK: number) => Promise<ReadonlyArray<SemanticResult>>>().mockResolvedValue(branded),
+    search: vi
+      .fn<(query: string, topK: number) => ResultAsync<ReadonlyArray<SemanticResult>, VectorStoreFailure>>()
+      .mockReturnValue(okAsync(branded)),
   };
 }
 

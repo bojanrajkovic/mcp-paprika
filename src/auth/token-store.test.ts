@@ -77,7 +77,7 @@ describe("TokenStore", () => {
   describe("issueAccessRefreshPair", () => {
     it("mints two distinct tokens, persists both, returns plaintexts only once", async () => {
       const input = makeTokenStoreInput();
-      const pair1 = await store.issueAccessRefreshPair(input);
+      const pair1 = (await store.issueAccessRefreshPair(input))._unsafeUnwrap();
 
       // Access and refresh should be different
       expect(pair1.access.plaintext).not.toBe(pair1.refresh.plaintext);
@@ -109,9 +109,9 @@ describe("TokenStore", () => {
       const input = makeTokenStoreInput({
         identity: { email: "alice@example.com", sub: "alice-sub", source: "email" as const },
       });
-      const { access } = await store.issueAccessRefreshPair(input);
+      const { access } = (await store.issueAccessRefreshPair(input))._unsafeUnwrap();
 
-      const result = await store.lookupAccessToken(access.plaintext);
+      const result = (await store.lookupAccessToken(access.plaintext))._unsafeUnwrap();
 
       expect(result).not.toBeNull();
       expect(result?.token).toBe(access.plaintext);
@@ -125,9 +125,9 @@ describe("TokenStore", () => {
 
     it("returns AuthInfo with resource as URL when present", async () => {
       const input = makeTokenStoreInput({ resource: "https://api.example.com" });
-      const { access } = await store.issueAccessRefreshPair(input);
+      const { access } = (await store.issueAccessRefreshPair(input))._unsafeUnwrap();
 
-      const result = await store.lookupAccessToken(access.plaintext);
+      const result = (await store.lookupAccessToken(access.plaintext))._unsafeUnwrap();
 
       expect(result?.resource).not.toBeUndefined();
       expect(result?.resource?.toString()).toBe("https://api.example.com/");
@@ -135,42 +135,42 @@ describe("TokenStore", () => {
 
     it("omits resource from AuthInfo when resource is empty string", async () => {
       const input = makeTokenStoreInput({ resource: "" });
-      const { access } = await store.issueAccessRefreshPair(input);
+      const { access } = (await store.issueAccessRefreshPair(input))._unsafeUnwrap();
 
-      const result = await store.lookupAccessToken(access.plaintext);
+      const result = (await store.lookupAccessToken(access.plaintext))._unsafeUnwrap();
 
       expect(result?.resource).toBeUndefined();
     });
 
     it("expired token returns null", async () => {
       const input = makeTokenStoreInput();
-      const { access } = await store.issueAccessRefreshPair(input);
+      const { access } = (await store.issueAccessRefreshPair(input))._unsafeUnwrap();
 
       // Advance time past expiration
       now = now + ACCESS_TOKEN_TTL_SECONDS + 1;
 
-      const result = await store.lookupAccessToken(access.plaintext);
+      const result = (await store.lookupAccessToken(access.plaintext))._unsafeUnwrap();
       expect(result).toBeNull();
     });
 
     it("unknown token returns null", async () => {
-      const result = await store.lookupAccessToken("mcp_at_doesnotexist");
+      const result = (await store.lookupAccessToken("mcp_at_doesnotexist"))._unsafeUnwrap();
       expect(result).toBeNull();
     });
 
     it("refresh-token kind returns null when queried as access", async () => {
       const input = makeTokenStoreInput();
-      const { refresh } = await store.issueAccessRefreshPair(input);
+      const { refresh } = (await store.issueAccessRefreshPair(input))._unsafeUnwrap();
 
-      const result = await store.lookupAccessToken(refresh.plaintext);
+      const result = (await store.lookupAccessToken(refresh.plaintext))._unsafeUnwrap();
       expect(result).toBeNull();
     });
 
     it("handles scopes with leading/trailing spaces and empty entries", async () => {
       const input = makeTokenStoreInput({ scope: "read  write  " });
-      const { access } = await store.issueAccessRefreshPair(input);
+      const { access } = (await store.issueAccessRefreshPair(input))._unsafeUnwrap();
 
-      const result = await store.lookupAccessToken(access.plaintext);
+      const result = (await store.lookupAccessToken(access.plaintext))._unsafeUnwrap();
       // split and filter should remove empty strings
       expect(result?.scopes).toEqual(["read", "write"]);
     });
@@ -179,9 +179,9 @@ describe("TokenStore", () => {
   describe("lookupRefreshToken", () => {
     it("returns OAuthToken when found", async () => {
       const input = makeTokenStoreInput();
-      const { refresh } = await store.issueAccessRefreshPair(input);
+      const { refresh } = (await store.issueAccessRefreshPair(input))._unsafeUnwrap();
 
-      const result = await store.lookupRefreshToken(refresh.plaintext);
+      const result = (await store.lookupRefreshToken(refresh.plaintext))._unsafeUnwrap();
 
       expect(result).not.toBeNull();
       expect(result?.kind).toBe("refresh");
@@ -191,24 +191,24 @@ describe("TokenStore", () => {
 
     it("expired refresh token returns null", async () => {
       const input = makeTokenStoreInput();
-      const { refresh } = await store.issueAccessRefreshPair(input);
+      const { refresh } = (await store.issueAccessRefreshPair(input))._unsafeUnwrap();
 
       now = now + REFRESH_TOKEN_TTL_SECONDS + 1;
 
-      const result = await store.lookupRefreshToken(refresh.plaintext);
+      const result = (await store.lookupRefreshToken(refresh.plaintext))._unsafeUnwrap();
       expect(result).toBeNull();
     });
 
     it("unknown token returns null", async () => {
-      const result = await store.lookupRefreshToken("mcp_rt_doesnotexist");
+      const result = (await store.lookupRefreshToken("mcp_rt_doesnotexist"))._unsafeUnwrap();
       expect(result).toBeNull();
     });
 
     it("access-token kind returns null when queried as refresh", async () => {
       const input = makeTokenStoreInput();
-      const { access } = await store.issueAccessRefreshPair(input);
+      const { access } = (await store.issueAccessRefreshPair(input))._unsafeUnwrap();
 
-      const result = await store.lookupRefreshToken(access.plaintext);
+      const result = (await store.lookupRefreshToken(access.plaintext))._unsafeUnwrap();
       expect(result).toBeNull();
     });
   });
@@ -216,7 +216,7 @@ describe("TokenStore", () => {
   describe("rotateRefresh", () => {
     it("returns new pair; old refresh is invalidated immediately", async () => {
       const input = makeTokenStoreInput();
-      const { refresh: r1 } = await store.issueAccessRefreshPair(input);
+      const { refresh: r1 } = (await store.issueAccessRefreshPair(input))._unsafeUnwrap();
 
       const result = await store.rotateRefresh(r1.plaintext, input.clientId);
 
@@ -241,7 +241,7 @@ describe("TokenStore", () => {
 
     it("rotateRefresh with mismatched resource → invalid_target", async () => {
       const input = makeTokenStoreInput({ resource: "https://m.example.com" });
-      const { refresh } = await store.issueAccessRefreshPair(input);
+      const { refresh } = (await store.issueAccessRefreshPair(input))._unsafeUnwrap();
 
       // requested resource does not match → invalid_target
       const result = await store.rotateRefresh(
@@ -260,7 +260,7 @@ describe("TokenStore", () => {
 
     it("rotateRefresh with matching resource succeeds", async () => {
       const input = makeTokenStoreInput({ resource: "https://m.example.com" });
-      const { refresh } = await store.issueAccessRefreshPair(input);
+      const { refresh } = (await store.issueAccessRefreshPair(input))._unsafeUnwrap();
 
       const result = await store.rotateRefresh(refresh.plaintext, input.clientId, undefined, "https://m.example.com");
 
@@ -274,7 +274,7 @@ describe("TokenStore", () => {
 
     it("scope widening → invalid_scope", async () => {
       const input = makeTokenStoreInput({ scope: "read" });
-      const { refresh } = await store.issueAccessRefreshPair(input);
+      const { refresh } = (await store.issueAccessRefreshPair(input))._unsafeUnwrap();
 
       const result = await store.rotateRefresh(refresh.plaintext, input.clientId, ["read", "write"]);
 
@@ -287,7 +287,7 @@ describe("TokenStore", () => {
 
     it("scope narrowing succeeds; new tokens have narrowed scope", async () => {
       const input = makeTokenStoreInput({ scope: "read write delete" });
-      const { refresh, access: a1 } = await store.issueAccessRefreshPair(input);
+      const { refresh, access: a1 } = (await store.issueAccessRefreshPair(input))._unsafeUnwrap();
 
       const result = await store.rotateRefresh(refresh.plaintext, input.clientId, ["read", "write"]);
 
@@ -300,18 +300,20 @@ describe("TokenStore", () => {
       );
 
       // Verify the new tokens have the narrowed scope
-      const newAccessInfo = await store.lookupAccessToken(
-        result.match(
-          (p) => p.access.plaintext,
-          () => null,
-        )!,
-      );
+      const newAccessInfo = (
+        await store.lookupAccessToken(
+          result.match(
+            (p) => p.access.plaintext,
+            () => null,
+          )!,
+        )
+      )._unsafeUnwrap();
       expect(newAccessInfo?.scopes).toEqual(["read", "write"]);
     });
 
     it("links new refresh to old via rotatedFromHash", async () => {
       const input = makeTokenStoreInput();
-      const { refresh: r1 } = await store.issueAccessRefreshPair(input);
+      const { refresh: r1 } = (await store.issueAccessRefreshPair(input))._unsafeUnwrap();
 
       const result = await store.rotateRefresh(r1.plaintext, input.clientId);
 
@@ -339,7 +341,7 @@ describe("TokenStore", () => {
       // A registered client must not be able to rotate another client's refresh
       // token — the stored token's clientId must match the requesting client.
       const ownerInput = makeTokenStoreInput({ clientId: "00000000-0000-0000-0000-000000000001" });
-      const { refresh } = await store.issueAccessRefreshPair(ownerInput);
+      const { refresh } = (await store.issueAccessRefreshPair(ownerInput))._unsafeUnwrap();
 
       const result = await store.rotateRefresh(refresh.plaintext, "00000000-0000-0000-0000-000000000002");
 
@@ -350,7 +352,7 @@ describe("TokenStore", () => {
       expect(errorCode).toBe("invalid_grant");
 
       // The original refresh token MUST still be valid (no rotation happened).
-      const stillValid = await store.lookupRefreshToken(refresh.plaintext);
+      const stillValid = (await store.lookupRefreshToken(refresh.plaintext))._unsafeUnwrap();
       expect(stillValid).not.toBeNull();
     });
 
@@ -360,7 +362,7 @@ describe("TokenStore", () => {
       // would see the token as valid and both would mint a new pair, enabling
       // refresh-token replay.
       const input = makeTokenStoreInput();
-      const { refresh } = await store.issueAccessRefreshPair(input);
+      const { refresh } = (await store.issueAccessRefreshPair(input))._unsafeUnwrap();
 
       const [a, b] = await Promise.all([
         store.rotateRefresh(refresh.plaintext, input.clientId),
@@ -382,21 +384,21 @@ describe("TokenStore", () => {
   describe("revoke", () => {
     it("removes token; subsequent lookup returns null", async () => {
       const input = makeTokenStoreInput();
-      const { access } = await store.issueAccessRefreshPair(input);
+      const { access } = (await store.issueAccessRefreshPair(input))._unsafeUnwrap();
 
-      await store.revoke(access.plaintext);
+      (await store.revoke(access.plaintext))._unsafeUnwrap();
 
-      const result = await store.lookupAccessToken(access.plaintext);
+      const result = (await store.lookupAccessToken(access.plaintext))._unsafeUnwrap();
       expect(result).toBeNull();
     });
 
     it("idempotent — second call on revoked token doesn't throw", async () => {
       const input = makeTokenStoreInput();
-      const { access } = await store.issueAccessRefreshPair(input);
+      const { access } = (await store.issueAccessRefreshPair(input))._unsafeUnwrap();
 
-      await store.revoke(access.plaintext);
+      (await store.revoke(access.plaintext))._unsafeUnwrap();
       // Should not throw
-      await store.revoke(access.plaintext);
+      (await store.revoke(access.plaintext))._unsafeUnwrap();
 
       expect(true).toBe(true);
     });
@@ -416,7 +418,7 @@ describe("TokenStore", () => {
       // observe both a successful rotation AND an "extra" issued pair from
       // the same plaintext.
       const input = makeTokenStoreInput();
-      const { refresh } = await store.issueAccessRefreshPair(input);
+      const { refresh } = (await store.issueAccessRefreshPair(input))._unsafeUnwrap();
 
       const [rotateResult] = await Promise.all([
         store.rotateRefresh(refresh.plaintext, input.clientId),
@@ -425,7 +427,7 @@ describe("TokenStore", () => {
 
       // The OLD refresh plaintext must no longer be usable, regardless of who
       // won the race.
-      expect(await store.lookupRefreshToken(refresh.plaintext)).toBeNull();
+      expect((await store.lookupRefreshToken(refresh.plaintext))._unsafeUnwrap()).toBeNull();
 
       // A second rotateRefresh on the same OLD plaintext must always fail —
       // either because revoke already removed it (revoke won) or because
@@ -453,18 +455,18 @@ describe("TokenStore", () => {
       const input1 = makeTokenStoreInput({ clientId: client1 });
       const input2 = makeTokenStoreInput({ clientId: client2 });
 
-      const pair1 = await store.issueAccessRefreshPair(input1);
-      const pair2 = await store.issueAccessRefreshPair(input2);
+      const pair1 = (await store.issueAccessRefreshPair(input1))._unsafeUnwrap();
+      const pair2 = (await store.issueAccessRefreshPair(input2))._unsafeUnwrap();
 
-      await store.removeAllForClient(client1);
+      (await store.removeAllForClient(client1))._unsafeUnwrap();
 
       // Client1 tokens should be gone
-      expect(await store.lookupAccessToken(pair1.access.plaintext)).toBeNull();
-      expect(await store.lookupRefreshToken(pair1.refresh.plaintext)).toBeNull();
+      expect((await store.lookupAccessToken(pair1.access.plaintext))._unsafeUnwrap()).toBeNull();
+      expect((await store.lookupRefreshToken(pair1.refresh.plaintext))._unsafeUnwrap()).toBeNull();
 
       // Client2 tokens should remain
-      expect(await store.lookupAccessToken(pair2.access.plaintext)).not.toBeNull();
-      expect(await store.lookupRefreshToken(pair2.refresh.plaintext)).not.toBeNull();
+      expect((await store.lookupAccessToken(pair2.access.plaintext))._unsafeUnwrap()).not.toBeNull();
+      expect((await store.lookupRefreshToken(pair2.refresh.plaintext))._unsafeUnwrap()).not.toBeNull();
     });
 
     it("concurrent rotateRefresh + removeAllForClient: no new tokens survive the deregistration", async () => {
@@ -478,7 +480,7 @@ describe("TokenStore", () => {
       // tokens remain for the client (whichever side wins, the other observes
       // the post-state and either tears down everything or fails to mint).
       const input = makeTokenStoreInput();
-      const { refresh } = await store.issueAccessRefreshPair(input);
+      const { refresh } = (await store.issueAccessRefreshPair(input))._unsafeUnwrap();
 
       await Promise.all([
         store.rotateRefresh(refresh.plaintext, input.clientId),
@@ -493,14 +495,14 @@ describe("TokenStore", () => {
   describe("access token persists across DiskCache restart", () => {
     it("access token persists across restart", async () => {
       const input = makeTokenStoreInput();
-      const { access } = await store.issueAccessRefreshPair(input);
+      const { access } = (await store.issueAccessRefreshPair(input))._unsafeUnwrap();
 
       // Simulate restart with fresh DiskCache and TokenStore on the same directory
       const cache2 = (await buildAuthCaches(tmp.dir()))._unsafeUnwrap();
       const store2 = new TokenStore(cache2);
 
       // token should persist and lookup should work
-      const result = await store2.lookupAccessToken(access.plaintext);
+      const result = (await store2.lookupAccessToken(access.plaintext))._unsafeUnwrap();
       expect(result).not.toBeNull();
       expect(result?.clientId).toBe(input.clientId);
     });
@@ -509,14 +511,14 @@ describe("TokenStore", () => {
   describe("refresh token persists across restart; rotation works", () => {
     it("refresh token persists across restart; rotation works post-restart", async () => {
       const input = makeTokenStoreInput();
-      const { refresh: r1 } = await store.issueAccessRefreshPair(input);
+      const { refresh: r1 } = (await store.issueAccessRefreshPair(input))._unsafeUnwrap();
 
       // Simulate restart with fresh DiskCache and TokenStore on the same directory
       const cache2 = (await buildAuthCaches(tmp.dir()))._unsafeUnwrap();
       const store2 = new TokenStore(cache2);
 
       // refresh token should persist
-      const found = await store2.lookupRefreshToken(r1.plaintext);
+      const found = (await store2.lookupRefreshToken(r1.plaintext))._unsafeUnwrap();
       expect(found).not.toBeNull();
 
       // Rotation should work post-restart
