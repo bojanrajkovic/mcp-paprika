@@ -73,6 +73,7 @@ Rejected after reading the add flow: a dangling catalog reference already degrad
 - Wire copies of items keep pre-rename aisle names forever (no cascade); any future consumer that reads the denormalized field directly (instead of resolving) would resurface stale names.
 - `delete_meal_type` can orphan meal/menu references by design; anything new that renders a `typeUid` must follow the omit-dangling convention (no raw UIDs, no `Type N` for a deleted type).
 - Built-in meal types are permanently undeletable through this surface. If Paprika's own clients ever delete one remotely, the replace-all sync honors it — the refusal protects only against this server doing the irreversible thing itself.
+- `delete_aisle`'s reference guard is best-effort under concurrency (the `delete_category` precedent): an item write racing the count can land referencing the just-deleted aisle. A local lock spanning grocery and pantry item writes would not cover the same race against Paprika's other clients (the cloud store has no transactions), so the accepted mitigation is that a dangling aisle reference is benign by construction — render-resolution falls back to the denormalized name, the catalog memory to the Miscellaneous placement.
 
 ## References
 

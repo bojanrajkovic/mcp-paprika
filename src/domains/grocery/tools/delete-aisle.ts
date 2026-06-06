@@ -20,6 +20,15 @@ import { groceryStartGuard, pantrySyncedGuard } from "./guards.js";
  * and isn't scrubbed: the add flow already treats a dangling catalog ref as "no
  * memory" (see add_grocery_items' Miscellaneous placement), so a scrub would be
  * behaviorally invisible.
+ *
+ * The guard is BEST-EFFORT under concurrency, like delete_category's: an item
+ * write racing the count can land referencing the just-deleted aisle. Closing
+ * that locally would take a lock spanning grocery AND pantry item writes — and
+ * still not cover the same race against Paprika's other clients, since the
+ * cloud store has no transactions. The designed safety net is that a dangling
+ * aisle ref is benign: render-resolution falls back to the item's denormalized
+ * name, and the catalog memory degrades to the Miscellaneous placement
+ * (ADR-0017).
  */
 export const deleteAisleTool = defineTool(
   {
