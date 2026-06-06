@@ -21,7 +21,7 @@ The suite is four vitest projects keyed on the file suffix — `pnpm test` runs 
 
 ## Rules
 
-- **Tests do not live here.** Colocated `*.test.ts` stays in `src/` next to the code it exercises; only support code moves here. The exceptions are tests _of_ the support itself (e.g. `fixtures/wire-captures/*.test.ts`), which sit with what they test.
+- **Tests do not live here.** Colocated `*.test.ts` stays in `src/` next to the code it exercises; only support code moves here. The exceptions are tests _of_ the support itself (e.g. `fixtures/wire-captures/*.test.ts`), which sit with what they test, and `conformance/` — the tree-wide gates that exercise all of `src/` rather than any one unit (the ADR-0014 throw gate, the ADR-0016 UID-leaf gate).
 - **Plain relative imports, no aliases.** Reaching production code reads `../../../src/domains/<domain>/...` — deliberately honest about the test→source dependency. See ADR-0006.
 - This tree is outside the build (`tsconfig.json` `include: ["src"]`), so nothing here ships to `dist/`. It is type-checked via `tsconfig.test.json` and linted via `pnpm lint` (which now covers `src/ test/`).
 
