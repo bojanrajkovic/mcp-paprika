@@ -1,6 +1,6 @@
 # Server Bootstrap & Transport Seams
 
-Last verified: 2026-06-04
+Last verified: 2026-06-06
 
 ## Purpose
 
@@ -10,9 +10,7 @@ The non-kernel pieces of the composition path: the transport-blind `Notifier` se
 
 - `../kernel/CLAUDE.md` + `docs/adr/0009-domain-isolated-tool-modules-kernel.md` — the kernel; module construction, the sync driver, and boot-phase ordering live there.
 - `docs/adr/0001-two-transports-and-composition-root.md` — the two-transport split, the `Notifier` seam, and the notifier/server bootstrap cycle (`ServerRef`) this still implements.
-- `notifier.ts` — `Notifier`, `singleServerNotifier`, `broadcastNotifier`.
-- `build.ts` — `buildInfraBase` (logger + authenticated client + cache dir) and `buildBrandedServer` (the server identity/instructions the kernel registers onto).
-- `sync-loop.ts` — `runSyncLoop` (the interval driver) + `notifyFromResults`. `index-events.ts` — the `IndexEventEmitter`.
+- Source is the catalog: the four files here are small and their doc-comments carry the per-piece rationale — read them rather than an export inventory.
 
 ## Sharp edges
 

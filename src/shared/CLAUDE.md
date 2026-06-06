@@ -6,12 +6,7 @@ Last verified: 2026-06-06
 
 The few genuinely cross-cutting helpers the tool layer shares across domains — the ones that belong to no single domain (ADR-0009 §3). Domain-specific helpers (the `*ToMarkdown` formatters, the meal-type spec/resolve) live with their domain under `src/domains/<domain>/`, not here.
 
-## Contents
-
-- `tools.ts` — `textResult` (the MCP text-content wire envelope every tool returns) and the uid-or-text lookup abstraction (`uidOrTextLookupSchema` + `resolveLookup` + `formatLookupOutcome` + the `LookupQuery`/`LookupOutcome` types) shared by the `read_*` tools.
-- `photo-fetch.ts` — `fetchImageBytes` + `MAX_IMAGE_BYTES`: the SSRF-guarded image download used by both recipe photo uploads and AI photo generation.
-- `resources.ts` — `resourceNotFound`: the one sanctioned throw on a resource read path. MCP resources have no in-band error channel, so the SDK's Protocol layer renders the thrown `McpError` as a JSON-RPC error (recognized form #1 in ADR-0014); a resource resolves its entity and crosses to the boundary through here.
-- `catalog.ts` — the ordered-reference-catalog machinery shared by aisle and meal-type (ADR-0017): `sortCatalog` / `repositionCatalog` / `renderCatalogOrder` for the list/update tools, and `makeCatalogDelete`, the tombstone-delete contract-write factory behind `AisleApi.deleteAisle` / `MealTypeApi.deleteMealType`.
+**Source is the catalog.** What each file exports, and why, lives in the files' own doc-comments — read them rather than an inventory here. The decisions behind the two non-obvious ones: `resources.ts`'s throw is ADR-0014's recognized form #1; `catalog.ts` is the ADR-0017 machinery.
 
 ## Sharp edges
 

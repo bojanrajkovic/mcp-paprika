@@ -15,7 +15,7 @@ The in-memory query/CRUD stores that are each session's source of truth for one 
 
 ## Stores at a glance
 
-Every store extends `EntityStore`, except `grocery-ingredient` — a plain name-keyed class (see Sharp edges). `aisle` / `meal-type` are reference catalogs with a managed lifecycle ([ADR-0017](../../docs/adr/0017-reference-catalog-management-tools.md)): internal auto-create (`ensureAisle` / `ensureMealType`, which mark pending-upsert), explicit edit (`update_aisle` / `update_meal_type`), and tombstone delete (`delete_aisle` / `delete_meal_type` — homed in grocery and meal-planner respectively, where the referencing entities are visible).
+Every store extends `EntityStore`, except `grocery-ingredient` — a plain name-keyed class (see Sharp edges). `aisle` / `meal-type` are reference catalogs with a managed lifecycle — auto-create, edit, and tombstone delete, with the delete tools homed where the referencing entities are visible; the semantics and homing live in [ADR-0017](../../docs/adr/0017-reference-catalog-management-tools.md), the roster in the registry.
 
 ## Sharp edges
 
@@ -35,9 +35,7 @@ Every store extends `EntityStore`, except `grocery-ingredient` — a plain name-
 
 On-disk persistence for every cached entity: one `DiskCache<T>` per entity — the durable backing store that makes the server warm on restart, while the in-memory stores remain the session's source of truth. Each domain module builds its own subcaches in its `.state` factory, pointing each at its flat `<cacheDir>/<entity>` subdir; there is no central composition root. The HTTP transport's auth caches come from `buildAuthCaches` (`../auth/disk.ts`). Tools never touch this layer.
 
-**Files.** `disk-cache.ts` (generic `DiskCache<T>` + `writeFileAtomic` + the `DiskCacheDescriptor<T>` contract). Behavior-carrying subcaches live with their owner, not here: the recipe subcache (`RecipeDiskCache`, hash index + `diff()`) at `../domains/recipe/disk.ts`, and the auth subcaches (`OAuthClientDiskCache` + the `oauthTokens` descriptor + `buildAuthCaches`) at `../auth/disk.ts`.
-
-**Descriptors.** Each Paprika entity co-locates its persistence config — subdir name, `parse`, key extractor — as a `DiskCacheDescriptor<T>` beside the schema its `parse` calls, in `../domains/<domain>/types.ts`; the owning module's `.state` joins the subdir against `infra.cacheDir` and supplies the logger to turn each descriptor into a live `DiskCache`. Entities whose cache carries extra behavior (recipes' hash index, OAuth clients' atomic cap) subclass `DiskCache` in a dedicated `disk.ts` instead of describing it. The auth caches aren't Paprika entities, so their `oauthTokens` descriptor and `OAuthClientDiskCache` subclass live with the auth module in `../auth/disk.ts` alongside `buildAuthCaches`. See `docs/architecture.md` ("Caching and sync") for the two-layer model and `docs/wire-format.md` for the recipe content-hash the `recipes` namespace diffs against.
+**Files and descriptors.** `disk-cache.ts` is the whole generic layer; the `DiskCacheDescriptor<T>` doc-comment there is the canonical description of the per-entity descriptor contract (don't restate it here). Behavior-carrying subcaches live with their owner, not here — the recipe and auth subcaches are the two (their `disk.ts` files carry the why). See `docs/architecture.md` ("Caching and sync") for the two-layer model and `docs/wire-format.md` for the recipe content-hash the `recipes` namespace diffs against.
 
 ### Persistence sharp edges
 
