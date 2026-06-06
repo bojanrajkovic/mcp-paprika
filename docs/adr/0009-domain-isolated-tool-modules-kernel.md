@@ -66,6 +66,8 @@ The source tree mirrors the graph: each domain lives at `src/domains/<domain>/` 
 
 > **Later refinement (file granularity).** The per-domain file _granularity_ sketched above was subsequently tightened: a trivial `DiskCacheDescriptor` lives in the entity's `types.ts` (a dedicated `disk.ts` only for a behavior-carrying cache such as recipe's), and a single untested reconcile is a flat `sync.ts` rather than a one-file `syncs/` directory. This ADR's domain-isolation decision is unchanged; the current layout rule lives in `src/domains/CLAUDE.md` ("File granularity").
 
+> **Later refinement (identifier location).** The central `ids.ts` leaf "retained for now" above was subsequently distributed: each domain declares its brands in its own `src/domains/<domain>/ids.ts` leaf (imports nothing but zod; one owning leaf per brand; conformance-gated), completing the brand-ownership rule this paragraph states — [ADR-0016](0016-per-domain-uid-leafs.md).
+
 **Disk stays flat, reuse-in-place.** Each entity's `DiskCacheDescriptor` keeps its original flat `<cacheDir>/<entity>` subdir; the source move carries no on-disk change and therefore needs no data migration on deployed instances. This is a deliberate divergence from a `<cacheDir>/<domain>/<entity>/` namespacing: the only motivation for namespaced disk was "reset a domain as a unit," which no current operation needs, and the migration risk on a live cache is not worth buying a capability nothing uses. Revisit if a domain-granular reset ever becomes a real requirement.
 
 ## Rejected alternatives
