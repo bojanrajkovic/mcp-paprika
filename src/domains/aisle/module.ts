@@ -18,6 +18,7 @@ import { AisleUidSchema, NO_AISLE_UID } from "./ids.js";
 import { AisleStore } from "./store.js";
 import { aisleSync } from "./sync.js";
 import { listAislesTool } from "./tools/list-aisles.js";
+import { updateAisleTool } from "./tools/update-aisle.js";
 import { aisleDiskDescriptor } from "./types.js";
 
 declare module "../../kernel/registry.js" {
@@ -30,6 +31,12 @@ declare module "../../kernel/registry.js" {
 export interface AisleState {
   readonly store: AisleStore;
   readonly cache: DiskCache<Aisle>;
+}
+
+/** The aisle module's write chokepoints — `update_aisle` commits through these. */
+export interface AisleWrites {
+  /** Persist a batch of saved aisles locally (one flush, one notifySync) — reorder renumbers several at once. */
+  commitAisles(saved: ReadonlyArray<Readonly<Aisle>>): ResultAsync<void, CacheError>;
 }
 
 register(
@@ -56,10 +63,13 @@ register(
       // lands in `api`, not `ctx.writes`.
       const ensureAisleMutex = new Mutex();
       // The commit protocol lives in src/entity/commit.ts; this binds aisle's slice.
-      const commitAisle = (aisle: Aisle): ResultAsync<void, CacheError> =>
-        commitEntities(state, [upsertOp(aisle)], {
-          finish: () => notifySyncBestEffort(infra.client, infra.log),
-        });
+      const commitAisles = (aisles: ReadonlyArray<Readonly<Aisle>>): ResultAsync<void, CacheError> =>
+        commitEntities(
+          state,
+          aisles.map((a) => upsertOp(a)),
+          { finish: () => notifySyncBestEffort(infra.client, infra.log) },
+        );
+      const commitAisle = (aisle: Aisle): ResultAsync<void, CacheError> => commitAisles([aisle]);
       const ensureAisle: AisleApi["ensureAisle"] = async (name) => {
         const trimmedName = name.trim();
         if (trimmedName === "") return ok({ aisle: "", aisleUid: NO_AISLE_UID });
@@ -114,7 +124,8 @@ register(
           resolveByName: (name) => state.store.resolveByName(name),
           get: (uid) => state.store.get(uid),
         },
-        tools: [listAislesTool],
+        writes: { commitAisles },
+        tools: [listAislesTool, updateAisleTool],
         syncs: [aisleSync(state)],
         flush: () => state.cache.flush(),
       };

@@ -19,7 +19,7 @@ describe("list_aisles tool", () => {
 
     const text = await kh.callToolText("list_aisles", {});
     expect(text.toLowerCase()).toContain("no aisles found");
-    expect(text).toContain("Paprika");
+    expect(text).toContain("created automatically");
   });
 
   it("aisles sorted by orderFlag ascending", async () => {
