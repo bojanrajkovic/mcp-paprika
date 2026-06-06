@@ -16,6 +16,7 @@ import type { Recipe } from "./types.js";
 
 import { DiskCache as DiskCacheImpl } from "../../cache/disk-cache.js";
 import { hydrateStore } from "../../cache/hydrate.js";
+import { commitEntities, commitSlices, deleteOp, sliceOps, upsertOp } from "../../entity/commit.js";
 import { defineModule, register } from "../../kernel/registry.js";
 import { notifySyncBestEffort } from "../../paprika/client.js";
 import { resolvePendingWriteTtl } from "../../utils/config.js";
@@ -167,58 +168,39 @@ register(
 
       // ---- Recipe write chokepoints ----
 
-      // Order: markPending* (FIRST, before any cache I/O) → cache put/remove → flush
-      // → store set/delete → resourceListChanged → notifySync. The pending mark
-      // shields this UID from sync-cycle reconciliation during the propagation race;
-      // a failed cache commit clears it (instead of shielding the UID until TTL) and
-      // surfaces as the chokepoint's `err`. `inTrash: true` is the recipe-side
-      // soft-delete → pending-delete; else upsert.
-      const commitRecipe: RecipeWrites["commitRecipe"] = (saved) => {
-        if (saved.inTrash) {
-          state.recipe.store.markPendingDelete(saved.uid);
-        } else {
-          state.recipe.store.markPendingUpsert(saved.uid);
-        }
-        return state.recipe.cache
-          .put(saved)
-          .andThen(() => state.recipe.cache.flush())
-          .mapErr((e) => {
-            state.recipe.store.clearPending(saved.uid);
-            return e;
-          })
-          .andThen(() => {
-            state.recipe.store.set(saved);
+      // The commit protocol (mark-first → cache → flush → clear-on-failure → store
+      // → effects → notify) lives in src/entity/commit.ts; these bind recipe's three
+      // slices and per-chokepoint effects.
+      const finish = () => notifySyncBestEffort(client, log);
+
+      // `inTrash: true` is the recipe-side soft-delete: the row survives (put + set),
+      // but its sync-facing intent is a delete — `markDelete` shields the UID as one.
+      const commitRecipe: RecipeWrites["commitRecipe"] = (saved) =>
+        commitEntities(state.recipe, [upsertOp(saved, { markDelete: saved.inTrash })], {
+          onCommitted: () => {
             notifier.resourceListChanged();
             // Re-index at commit time, before notifySync: a tool-written recipe's UID is
             // pending, so the sync recipe-diff filters it out and never re-embeds it (#177).
             // A trashed recipe is REMOVED from the index, else re-embedded (mirrors the
-            // markPending branch above). discover's index hook subscribes to this channel;
+            // markDelete flag above). discover's index hook subscribes to this channel;
             // the emit never throws.
             if (saved.inTrash) {
               infra.indexEvents.emit({ type: "recipe-removed", uids: [saved.uid] });
             } else {
               infra.indexEvents.emit({ type: "recipe-changed", recipes: [saved] });
             }
-            return notifySyncBestEffort(client, log);
-          });
-      };
+          },
+          finish,
+        });
 
-      const commitRecipeHardDelete: RecipeWrites["commitRecipeHardDelete"] = (saved) => {
-        state.recipe.store.markPendingDelete(saved.uid);
-        return state.recipe.cache
-          .remove(saved.uid)
-          .andThen(() => state.recipe.cache.flush())
-          .mapErr((e) => {
-            state.recipe.store.clearPending(saved.uid);
-            return e;
-          })
-          .andThen(() => {
-            state.recipe.store.delete(saved.uid);
+      const commitRecipeHardDelete: RecipeWrites["commitRecipeHardDelete"] = (saved) =>
+        commitEntities(state.recipe, [deleteOp(saved.uid)], {
+          onCommitted: () => {
             notifier.resourceListChanged();
             infra.indexEvents.emit({ type: "recipe-removed", uids: [saved.uid] });
-            return notifySyncBestEffort(client, log);
-          });
-      };
+          },
+          finish,
+        });
 
       // Canonical PULL — align local state to a getRecipe result WITHOUT a Paprika
       // write: no pending-write mark, no notifySync (nothing changed server-side).
@@ -279,63 +261,28 @@ register(
       // Mark-pending-first mirrors commitRecipe. No resourceListChanged() — categories
       // have no MCP resource surface; recipe rendering resolves names through the store
       // on read.
-      const commitCategoryUpsert: RecipeWrites["commitCategoryUpsert"] = (category) => {
-        state.category.store.markPendingUpsert(category.uid);
-        return state.category.cache
-          .put(category)
-          .andThen(() => state.category.cache.flush())
-          .mapErr((e) => {
-            state.category.store.clearPending(category.uid);
-            return e;
-          })
-          .andThen(() => {
-            state.category.store.set(category);
-            // A category rename changes the display name baked into its recipes' embedding
-            // text, yet no recipe hash, so the recipe diff never re-fetches them. discover's
-            // index hook re-embeds the category's recipes on this signal (best-effort).
-            infra.indexEvents.emit({ type: "category-changed", uids: [category.uid] });
-            return notifySyncBestEffort(client, log);
-          });
-      };
+      const commitCategoryUpsert: RecipeWrites["commitCategoryUpsert"] = (category) =>
+        commitEntities(state.category, [upsertOp(category)], {
+          // A category rename changes the display name baked into its recipes' embedding
+          // text, yet no recipe hash, so the recipe diff never re-fetches them. discover's
+          // index hook re-embeds the category's recipes on this signal (best-effort).
+          onCommitted: () => infra.indexEvents.emit({ type: "category-changed", uids: [category.uid] }),
+          finish,
+        });
 
-      const commitCategoryDelete: RecipeWrites["commitCategoryDelete"] = (category) => {
-        state.category.store.markPendingDelete(category.uid);
-        return state.category.cache
-          .remove(category.uid)
-          .andThen(() => state.category.cache.flush())
-          .mapErr((e) => {
-            state.category.store.clearPending(category.uid);
-            return e;
-          })
-          .andThen(() => {
-            state.category.store.delete(category.uid);
-            return notifySyncBestEffort(client, log);
-          });
-      };
+      const commitCategoryDelete: RecipeWrites["commitCategoryDelete"] = (category) =>
+        commitEntities(state.category, [deleteOp(category.uid)], { finish });
 
       // ---- Photo write chokepoints ----
       // attachPhotoToRecipe builds the Photo + photo-bearing recipe, runs the client's
       // verified 3-request upload, then commits BOTH the recipe and photo stores. No
       // resourceListChanged() — the recipe resource renders photoUrl, not photo/photoLarge.
-      const commitPhotoUpload = (savedRecipe: Recipe, savedPhoto: Photo): ResultAsync<void, CacheError> => {
-        state.recipe.store.markPendingUpsert(savedRecipe.uid);
-        state.photo.store.markPendingUpsert(savedPhoto.uid);
-        return state.recipe.cache
-          .put(savedRecipe)
-          .andThen(() => state.photo.cache.put(savedPhoto))
-          .andThen(() => state.recipe.cache.flush())
-          .andThen(() => state.photo.cache.flush())
-          .mapErr((e) => {
-            state.recipe.store.clearPending(savedRecipe.uid);
-            state.photo.store.clearPending(savedPhoto.uid);
-            return e;
-          })
-          .andThen(() => {
-            state.recipe.store.set(savedRecipe);
-            state.photo.store.set(savedPhoto);
-            return notifySyncBestEffort(client, log);
-          });
-      };
+      // The one multi-slice commit: recipe + photo land jointly (shared marks, joint
+      // clear-on-failure, one notifySync) via the helper's `commitSlices` core.
+      const commitPhotoUpload = (savedRecipe: Recipe, savedPhoto: Photo): ResultAsync<void, CacheError> =>
+        commitSlices([sliceOps(state.recipe, [upsertOp(savedRecipe)]), sliceOps(state.photo, [upsertOp(savedPhoto)])], {
+          finish,
+        });
 
       const attachPhotoToRecipe: RecipeWrites["attachPhotoToRecipe"] = (recipe, thumbnail, full) => {
         const existing = state.photo.store.getByRecipeUid(recipe.uid);
@@ -394,20 +341,8 @@ register(
         );
       };
 
-      const commitPhotoDelete: RecipeWrites["commitPhotoDelete"] = (savedPhoto) => {
-        state.photo.store.markPendingDelete(savedPhoto.uid);
-        return state.photo.cache
-          .remove(savedPhoto.uid)
-          .andThen(() => state.photo.cache.flush())
-          .mapErr((e) => {
-            state.photo.store.clearPending(savedPhoto.uid);
-            return e;
-          })
-          .andThen(() => {
-            state.photo.store.delete(savedPhoto.uid);
-            return notifySyncBestEffort(client, log);
-          });
-      };
+      const commitPhotoDelete: RecipeWrites["commitPhotoDelete"] = (savedPhoto) =>
+        commitEntities(state.photo, [deleteOp(savedPhoto.uid)], { finish });
 
       return {
         api: {

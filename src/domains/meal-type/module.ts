@@ -9,6 +9,7 @@ import type { MealType } from "./types.js";
 
 import { DiskCache } from "../../cache/disk-cache.js";
 import { hydrateStore } from "../../cache/hydrate.js";
+import { commitEntities, upsertOp } from "../../entity/commit.js";
 import { defineModule, register } from "../../kernel/registry.js";
 import { notifySyncBestEffort } from "../../paprika/client.js";
 import { resolvePendingWriteTtl } from "../../utils/config.js";
@@ -54,20 +55,11 @@ register(
       // (ADR-0012). It is a CONTRACT write — meal and menu reach it via
       // `ctx.deps["meal-type"]` — so it goes in `api`, not `ctx.writes`.
       const ensureMealTypeMutex = new Mutex();
-      const commitMealType = (mealType: MealType): ResultAsync<void, CacheError> => {
-        state.store.markPendingUpsert(mealType.uid);
-        return state.cache
-          .put(mealType)
-          .andThen(() => state.cache.flush())
-          .mapErr((e) => {
-            state.store.clearPending(mealType.uid);
-            return e;
-          })
-          .andThen(() => {
-            state.store.set(mealType);
-            return notifySyncBestEffort(infra.client, infra.log);
-          });
-      };
+      // The commit protocol lives in src/entity/commit.ts; this binds meal-type's slice.
+      const commitMealType = (mealType: MealType): ResultAsync<void, CacheError> =>
+        commitEntities(state, [upsertOp(mealType)], {
+          finish: () => notifySyncBestEffort(infra.client, infra.log),
+        });
       const ensureMealType: MealTypeApi["ensureMealType"] = async (name) => {
         const trimmedName = name.trim();
         if (trimmedName === "") {

@@ -1,6 +1,6 @@
 import { join } from "node:path";
 
-import { okAsync, ResultAsync } from "neverthrow";
+import { ResultAsync } from "neverthrow";
 import type { Logger } from "pino";
 
 import type { CacheError, DiskCache } from "../../cache/disk-cache.js";
@@ -10,10 +10,10 @@ import type { GroceryApi } from "./api.js";
 import type { GroceryIngredient } from "./grocery-ingredient/types.js";
 import type { GroceryItem } from "./grocery-item/types.js";
 import type { GroceryList } from "./grocery-list/types.js";
-import type { GroceryItemUid, GroceryListUid } from "./ids.js";
 
 import { DiskCache as DiskCacheImpl } from "../../cache/disk-cache.js";
 import { hydrateStore } from "../../cache/hydrate.js";
+import { commitEntities, deleteOp, upsertOp } from "../../entity/commit.js";
 import { defineModule, register } from "../../kernel/registry.js";
 import { notifySyncBestEffort } from "../../paprika/client.js";
 import { resolvePendingWriteTtl } from "../../utils/config.js";
@@ -137,114 +137,21 @@ register(
       // grocery's own tools reach them via `ctx.writes`; the empty `api` exposes none
       // (no live sibling reads grocery — see api.ts).
       //
-      // Order: markPending* (FIRST, before any cache I/O) → cache put/remove → flush →
-      // store set/delete → resourceListChanged → notifySync. The pending mark shields
-      // this UID from sync-cycle reconciliation during the propagation race.
-
-      const commitGroceryList: GroceryWrites["commitGroceryList"] = (saved) => {
-        if (saved.deleted) {
-          const uid: GroceryListUid = saved.uid;
-          state.lists.store.markPendingDelete(uid);
-          return state.lists.cache
-            .remove(uid)
-            .andThen(() => state.lists.cache.flush())
-            .mapErr((e) => {
-              state.lists.store.clearPending(uid);
-              return e;
-            })
-            .andThen(() => {
-              state.lists.store.delete(uid);
-              notifier.resourceListChanged();
-              return notifySyncBestEffort(client, infra.log);
-            });
-        }
-        state.lists.store.markPendingUpsert(saved.uid);
-        return state.lists.cache
-          .put(saved)
-          .andThen(() => state.lists.cache.flush())
-          .mapErr((e) => {
-            state.lists.store.clearPending(saved.uid);
-            return e;
-          })
-          .andThen(() => {
-            state.lists.store.set(saved);
-            notifier.resourceListChanged();
-            return notifySyncBestEffort(client, infra.log);
-          });
+      // The commit protocol (mark-first → cache → flush → clear-on-failure → store
+      // → effects → notify) lives in src/entity/commit.ts; these bind grocery's
+      // slices. Lists and items both fire resourceListChanged() — Content domain.
+      const groceryFx = {
+        onCommitted: () => notifier.resourceListChanged(),
+        finish: () => notifySyncBestEffort(client, infra.log),
       };
-
-      const commitGroceryItem: GroceryWrites["commitGroceryItem"] = (saved) => {
-        if (saved.deleted) {
-          const uid: GroceryItemUid = saved.uid;
-          state.items.store.markPendingDelete(uid);
-          return state.items.cache
-            .remove(uid)
-            .andThen(() => state.items.cache.flush())
-            .mapErr((e) => {
-              state.items.store.clearPending(uid);
-              return e;
-            })
-            .andThen(() => {
-              state.items.store.delete(uid);
-              notifier.resourceListChanged();
-              return notifySyncBestEffort(client, infra.log);
-            });
-        }
-        state.items.store.markPendingUpsert(saved.uid);
-        return state.items.cache
-          .put(saved)
-          .andThen(() => state.items.cache.flush())
-          .mapErr((e) => {
-            state.items.store.clearPending(saved.uid);
-            return e;
-          })
-          .andThen(() => {
-            state.items.store.set(saved);
-            notifier.resourceListChanged();
-            return notifySyncBestEffort(client, infra.log);
-          });
-      };
-
-      const commitGroceryItemsBatch: GroceryWrites["commitGroceryItemsBatch"] = (items) => {
-        if (items.length === 0) return okAsync(undefined);
-        for (const item of items) {
-          if (item.deleted) {
-            state.items.store.markPendingDelete(item.uid);
-          } else {
-            state.items.store.markPendingUpsert(item.uid);
-          }
-        }
-        const clearPending = (): void => {
-          for (const item of items) state.items.store.clearPending(item.uid);
-        };
-        // `ResultAsync.combine` awaits every op (the underlying promises never
-        // reject), so a failure cannot race `clearPending`.
-        //
-        // All-or-nothing store semantics on failure is intentional: saveGroceryItems()
-        // already succeeded, so any local cache/store divergence is temporary and
-        // reconciled by the next sync. Clearing all pending marks on failure is
-        // strictly better than leaving some marked — a marked UID suppresses sync
-        // reconciliation until TTL, which would keep stale local state around longer.
-        return ResultAsync.combine(
-          items.map((item) => (item.deleted ? state.items.cache.remove(item.uid) : state.items.cache.put(item))),
-        )
-          .andThen(() => state.items.cache.flush())
-          .mapErr((e) => {
-            clearPending();
-            return e;
-          })
-          .andThen(() => {
-            for (const item of items) {
-              if (item.deleted) {
-                state.items.store.delete(item.uid);
-              } else {
-                state.items.store.set(item);
-              }
-            }
-            notifier.resourceListChanged();
-            return notifySyncBestEffort(client, infra.log);
-          });
-      };
+      const listOp = (l: Readonly<GroceryList>) => (l.deleted ? deleteOp(l.uid) : upsertOp(l));
+      const itemOp = (i: Readonly<GroceryItem>) => (i.deleted ? deleteOp(i.uid) : upsertOp(i));
+      const commitGroceryList: GroceryWrites["commitGroceryList"] = (saved) =>
+        commitEntities(state.lists, [listOp(saved)], groceryFx);
+      const commitGroceryItem: GroceryWrites["commitGroceryItem"] = (saved) =>
+        commitEntities(state.items, [itemOp(saved)], groceryFx);
+      const commitGroceryItemsBatch: GroceryWrites["commitGroceryItemsBatch"] = (items) =>
+        commitEntities(state.items, items.map(itemOp), groceryFx);
 
       return {
         // Empty contract — no live sibling reads grocery state (see api.ts).

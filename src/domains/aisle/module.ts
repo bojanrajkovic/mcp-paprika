@@ -9,6 +9,7 @@ import type { Aisle } from "./types.js";
 
 import { DiskCache } from "../../cache/disk-cache.js";
 import { hydrateStore } from "../../cache/hydrate.js";
+import { commitEntities, upsertOp } from "../../entity/commit.js";
 import { defineModule, register } from "../../kernel/registry.js";
 import { notifySyncBestEffort } from "../../paprika/client.js";
 import { resolvePendingWriteTtl } from "../../utils/config.js";
@@ -54,20 +55,11 @@ register(
       // CONTRACT write — grocery and pantry reach it via `ctx.deps.aisle` — so it
       // lands in `api`, not `ctx.writes`.
       const ensureAisleMutex = new Mutex();
-      const commitAisle = (aisle: Aisle): ResultAsync<void, CacheError> => {
-        state.store.markPendingUpsert(aisle.uid);
-        return state.cache
-          .put(aisle)
-          .andThen(() => state.cache.flush())
-          .mapErr((e) => {
-            state.store.clearPending(aisle.uid);
-            return e;
-          })
-          .andThen(() => {
-            state.store.set(aisle);
-            return notifySyncBestEffort(infra.client, infra.log);
-          });
-      };
+      // The commit protocol lives in src/entity/commit.ts; this binds aisle's slice.
+      const commitAisle = (aisle: Aisle): ResultAsync<void, CacheError> =>
+        commitEntities(state, [upsertOp(aisle)], {
+          finish: () => notifySyncBestEffort(infra.client, infra.log),
+        });
       const ensureAisle: AisleApi["ensureAisle"] = async (name) => {
         const trimmedName = name.trim();
         if (trimmedName === "") return ok({ aisle: "", aisleUid: NO_AISLE_UID });
