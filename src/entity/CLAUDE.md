@@ -1,6 +1,6 @@
 # Entity Store
 
-Last verified: 2026-06-04
+Last verified: 2026-06-05
 
 The abstract base class for the in-memory stores: `EntityStore<T, UID>`. What it is and why it exists is in `docs/architecture.md` (Caching and sync); the source is the authority on which stores extend it (`GroceryIngredientStore`, keyed by ingredient name, is the one that doesn't). The generic constraints (`T extends { uid: UID }`, `UID extends string`) keep a `Recipe` store from being parameterized with a `PantryItemUid` at compile time and still admit Zod-branded UID subtypes. The rest of this file is the behavior that's easy to get wrong under concurrent sync.
 
@@ -12,7 +12,7 @@ Every `EntityStore` subclass inherits a `Map<UID, PendingWrite>`. Sync consults 
 - Upserts clear on content-equality observation; deletes never observation-clear (Paprika omits soft-deleted items, so absence is ambiguous). TTL is the only clearing mechanism for deletes.
 - **TTL ≤ 0 disables tracking entirely:** `markPendingUpsert` and `markPendingDelete` become no-ops. Each module`s `.state`passes`pendingWriteTtlMs: 0`(via`resolvePendingWriteTtl`) when `config.sync.enabled === false`, so a no-sync process never accumulates marks. The default is `DEFAULT_PENDING_WRITE_TTL_MS` (60s), overridable per store via the constructor.
 - `sweepPending(now?)` is the TTL fallback, called by the kernel`s `syncOnce` driver at the end of every cycle.
-- Commit helpers wrap cache I/O in `try { … } catch { clearPending(uid); throw }`, so a failed local commit doesn't leave a UID shielded for the full TTL window.
+- Commit helpers chain cache I/O as a `ResultAsync` whose `mapErr` runs `clearPending(uid)` before surfacing the error, so a failed local commit doesn't leave a UID shielded for the full TTL window.
 - All pending-writes methods are pure in-memory and never throw.
 
 ## Gotchas
