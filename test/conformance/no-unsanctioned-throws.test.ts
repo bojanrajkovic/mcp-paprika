@@ -51,8 +51,6 @@ const BOOT_SITES: ReadonlyArray<readonly [file: string, fn: string]> = [
 // campaign phase (#241) that handles it. DELETE an entry the moment its module
 // stops throwing an unsanctioned form — the staleness assertion below enforces it.
 const PENDING: ReadonlyArray<readonly [file: string, convertedBy: string]> = [
-  ["src/domains/aisle/module.ts", "#263"],
-  ["src/domains/meal-type/module.ts", "#263"],
   ["src/paprika/client.ts", "#264"],
   // unwrapSyncStep — the one interim bridge from cache Results back onto the
   // sync driver's throw-abort contract; removed when #264 makes the driver

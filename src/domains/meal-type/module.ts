@@ -1,7 +1,7 @@
 import { join } from "node:path";
 
 import { Mutex } from "async-mutex";
-import { ResultAsync } from "neverthrow";
+import { err, ok, ResultAsync } from "neverthrow";
 
 import type { CacheError } from "../../cache/disk-cache.js";
 import type { MealTypeApi } from "./api.js";
@@ -14,6 +14,7 @@ import { defineModule, register } from "../../kernel/registry.js";
 import { notifySyncBestEffort } from "../../paprika/client.js";
 import { resolvePendingWriteTtl } from "../../utils/config.js";
 import { unwrapAtBoot } from "../../utils/errors.js";
+import { toMessage } from "../../utils/log.js";
 import { MealTypeStore } from "./store.js";
 import { mealTypeSync } from "./sync.js";
 import { listMealTypesTool } from "./tools/list-meal-types.js";
@@ -71,22 +72,22 @@ register(
       const ensureMealType: MealTypeApi["ensureMealType"] = async (name) => {
         const trimmedName = name.trim();
         if (trimmedName === "") {
-          throw new Error("Meal type name cannot be empty.");
+          return err("Meal type name cannot be empty.");
         }
 
         const match = state.store.resolveByName(trimmedName);
-        if (match !== undefined) return match;
+        if (match !== undefined) return ok(match);
 
         // Can't distinguish "doesn't exist" from "not loaded yet" before sync.
         if (!state.store.hasSynced) {
-          throw new Error("Meal type list is not yet synced. Try again in a few seconds.");
+          return err("Meal type list is not yet synced. Try again in a few seconds.");
         }
 
         // Serialize the create path so concurrent writes for the same new name
         // don't both miss resolveByName and create duplicate meal types.
         return ensureMealTypeMutex.runExclusive(async () => {
           const recheck = state.store.resolveByName(trimmedName);
-          if (recheck !== undefined) return recheck;
+          if (recheck !== undefined) return ok(recheck);
 
           const existing = state.store.getAll();
           const maxOrder = existing.length === 0 ? 0 : Math.max(...existing.map((mt) => mt.orderFlag)) + 1;
@@ -104,13 +105,30 @@ register(
             deleted: false,
           };
 
-          const saved = await infra.client.saveMealType(newMealType);
-          // INTERIM (#263): ensureMealType's contract still throws; surface a commit
-          // failure on that contract until #263 converts it to a Result.
+          let saved: MealType;
+          try {
+            // INTERIM (#264): the client still throws; convert at this first
+            // owned consumer until its surface is Result-native.
+            saved = await infra.client.saveMealType(newMealType);
+          } catch (error) {
+            return err(`Failed to create meal type "${trimmedName}": ${toMessage(error)}`);
+          }
           return (await commitMealType(saved)).match(
-            () => saved,
+            () => ok(saved),
             (e) => {
-              throw new Error(`Failed to persist new meal type "${saved.name}": ${e.message}`, { cause: e.cause });
+              // The create landed server-side; only the local commit failed. Erring
+              // here would invite a retry that mints a DUPLICATE type (the recheck
+              // misses until the store knows it). Keep the in-memory catalog
+              // authoritative — re-shielded as pending so the next replace-all sync
+              // can't drop it before the canonical list catches up — and let that
+              // sync heal the disk copy.
+              state.store.markPendingUpsert(saved.uid);
+              state.store.set(saved);
+              infra.log.warn(
+                { err: e, name: saved.name },
+                "meal type local commit failed after create; sync will heal",
+              );
+              return ok(saved);
             },
           );
         });

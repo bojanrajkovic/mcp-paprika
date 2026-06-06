@@ -1,7 +1,7 @@
 import { join } from "node:path";
 
 import { Mutex } from "async-mutex";
-import { ResultAsync } from "neverthrow";
+import { err, ok, ResultAsync } from "neverthrow";
 
 import type { CacheError } from "../../cache/disk-cache.js";
 import type { AisleApi } from "./api.js";
@@ -14,6 +14,7 @@ import { defineModule, register } from "../../kernel/registry.js";
 import { notifySyncBestEffort } from "../../paprika/client.js";
 import { resolvePendingWriteTtl } from "../../utils/config.js";
 import { unwrapAtBoot } from "../../utils/errors.js";
+import { toMessage } from "../../utils/log.js";
 import { AisleStore } from "./store.js";
 import { aisleSync } from "./sync.js";
 import { listAislesTool } from "./tools/list-aisles.js";
@@ -70,34 +71,48 @@ register(
       };
       const ensureAisle: AisleApi["ensureAisle"] = async (name) => {
         const trimmedName = name.trim();
-        if (trimmedName === "") return { aisle: "", aisleUid: NO_AISLE_UID };
+        if (trimmedName === "") return ok({ aisle: "", aisleUid: NO_AISLE_UID });
 
         const match = state.store.resolveByName(trimmedName);
-        if (match !== undefined) return { aisle: match.name, aisleUid: match.uid };
+        if (match !== undefined) return ok({ aisle: match.name, aisleUid: match.uid });
 
         // Can't distinguish "doesn't exist" from "not loaded yet" before sync.
         if (!state.store.hasSynced) {
-          throw new Error("Aisle list is not yet synced. Try again in a few seconds.");
+          return err("Aisle list is not yet synced. Try again in a few seconds.");
         }
 
         // Serialize the create path so concurrent writes for the same new name
         // don't both miss resolveByName and create duplicate aisles.
         return ensureAisleMutex.runExclusive(async () => {
           const recheck = state.store.resolveByName(trimmedName);
-          if (recheck !== undefined) return { aisle: recheck.name, aisleUid: recheck.uid };
+          if (recheck !== undefined) return ok({ aisle: recheck.name, aisleUid: recheck.uid });
 
           const existing = state.store.getAll();
           const maxOrder = existing.length === 0 ? 0 : Math.max(...existing.map((a) => a.orderFlag)) + 1;
           const uid = AisleUidSchema.parse(crypto.randomUUID().toUpperCase());
           const newAisle: Aisle = { uid, name: trimmedName, orderFlag: maxOrder, deleted: false };
 
-          const saved = await infra.client.saveAisle(newAisle);
-          // INTERIM (#263): ensureAisle's contract still throws; surface a commit
-          // failure on that contract until #263 converts it to a Result.
+          let saved: Aisle;
+          try {
+            // INTERIM (#264): the client still throws; convert at this first
+            // owned consumer until its surface is Result-native.
+            saved = await infra.client.saveAisle(newAisle);
+          } catch (error) {
+            return err(`Failed to create aisle "${trimmedName}": ${toMessage(error)}`);
+          }
           return (await commitAisle(saved)).match(
-            () => ({ aisle: saved.name, aisleUid: saved.uid }),
+            () => ok({ aisle: saved.name, aisleUid: saved.uid }),
             (e) => {
-              throw new Error(`Failed to persist new aisle "${saved.name}": ${e.message}`, { cause: e.cause });
+              // The create landed server-side; only the local commit failed. Erring
+              // here would invite a retry that mints a DUPLICATE aisle (the recheck
+              // misses until the store knows it). Keep the in-memory catalog
+              // authoritative — re-shielded as pending so the next replace-all sync
+              // can't drop it before the canonical list catches up — and let that
+              // sync heal the disk copy.
+              state.store.markPendingUpsert(saved.uid);
+              state.store.set(saved);
+              infra.log.warn({ err: e, name: saved.name }, "aisle local commit failed after create; sync will heal");
+              return ok({ aisle: saved.name, aisleUid: saved.uid });
             },
           );
         });

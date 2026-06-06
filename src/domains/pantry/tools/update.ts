@@ -104,7 +104,14 @@ export const updatePantryItemTool = defineTool(
             // Resolve aisle: when provided, look up or auto-create to get both
             // the display name and its UID (fixes the stale-UID bug where the
             // old code updated `aisle` display but left `aisleUid` stale).
-            const aisleUpdate = args.aisle !== undefined ? await ctx.deps.aisle.ensureAisle(args.aisle) : undefined;
+            const aisleUpdate =
+              args.aisle !== undefined
+                ? (await ctx.deps.aisle.ensureAisle(args.aisle)).match(
+                    (v) => v,
+                    (message) => textResult(message),
+                  )
+                : undefined;
+            if (aisleUpdate !== undefined && "content" in aisleUpdate) return aisleUpdate;
 
             const updated: PantryItem = {
               ...existing,

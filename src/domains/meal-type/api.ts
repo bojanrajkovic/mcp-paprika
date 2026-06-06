@@ -1,3 +1,5 @@
+import type { Result } from "neverthrow";
+
 import type { MealTypeUid } from "../../ids.js";
 import type { HasSynced } from "../../kernel/registry.js";
 import type { MealTypeResolveResult, MealTypeSpec } from "./meal-type-helpers.js";
@@ -33,7 +35,11 @@ export interface MealTypeApi extends HasSynced {
    * custom type (`originalType: null`, default color/export), POSTs it, marks it
    * pending-upsert, and returns it. Called by the meal/menu WRITE tools for a
    * `{name}` spec that doesn't resolve — read/filter tools use `resolveSpec` and
-   * never create. Throws if the catalog hasn't synced or the save fails.
+   * never create. Errs with a ready-to-surface message on an empty name, an
+   * unsynced catalog, or a failed save (matching the other contract writes —
+   * ADR-0014). A failed LOCAL commit after a successful save is absorbed
+   * (warn + in-memory catalog updated): erring would invite a duplicate
+   * re-create, and the replace-all sync heals the disk copy.
    */
-  ensureMealType(name: string): Promise<MealType>;
+  ensureMealType(name: string): Promise<Result<MealType, string>>;
 }
