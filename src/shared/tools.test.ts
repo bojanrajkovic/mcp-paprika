@@ -150,4 +150,12 @@ describe("commitFailure", () => {
     expect(text).toContain("local grocery list cache failed (disk full)");
     expect(text).toContain("next sync");
   });
+
+  it("drops the self-heal promise for diff-synced entities", () => {
+    const result = commitFailure("recipe", err({ message: "disk full" }), { selfHealing: false });
+    const text = getText(result!);
+    expect(text).toContain("may remain stale");
+    expect(text).toContain("do not re-submit");
+    expect(text).not.toContain("next sync.");
+  });
 });

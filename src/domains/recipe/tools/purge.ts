@@ -80,7 +80,9 @@ export const purgeRecipeTool = defineTool(
 
           try {
             const saved = await ctx.infra.client.saveRecipe(tombstone);
-            const commitErr = commitFailure("recipe", await ctx.writes.commitRecipeHardDelete(saved));
+            const commitErr = commitFailure("recipe", await ctx.writes.commitRecipeHardDelete(saved), {
+              selfHealing: false,
+            });
             if (commitErr) return commitErr;
           } catch (error) {
             const message = toMessage(error);

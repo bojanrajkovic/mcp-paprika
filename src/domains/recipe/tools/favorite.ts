@@ -49,7 +49,7 @@ export const favoriteRecipeTool = defineTool(
           let saved: typeof existing;
           try {
             saved = await ctx.infra.client.saveRecipe(updated);
-            const commitErr = commitFailure("recipe", await ctx.writes.commitRecipe(saved));
+            const commitErr = commitFailure("recipe", await ctx.writes.commitRecipe(saved), { selfHealing: false });
             if (commitErr) return commitErr;
           } catch (error) {
             const message = toMessage(error);
@@ -92,7 +92,7 @@ export const unfavoriteRecipeTool = defineTool(
           let saved: typeof existing;
           try {
             saved = await ctx.infra.client.saveRecipe(updated);
-            const commitErr = commitFailure("recipe", await ctx.writes.commitRecipe(saved));
+            const commitErr = commitFailure("recipe", await ctx.writes.commitRecipe(saved), { selfHealing: false });
             if (commitErr) return commitErr;
           } catch (error) {
             const message = toMessage(error);

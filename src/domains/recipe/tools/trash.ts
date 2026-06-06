@@ -46,7 +46,7 @@ export const trashRecipeTool = defineTool(
 
           try {
             const saved = await ctx.infra.client.saveRecipe(trashed);
-            const commitErr = commitFailure("recipe", await ctx.writes.commitRecipe(saved));
+            const commitErr = commitFailure("recipe", await ctx.writes.commitRecipe(saved), { selfHealing: false });
             if (commitErr) return commitErr;
           } catch (error) {
             const message = toMessage(error);
