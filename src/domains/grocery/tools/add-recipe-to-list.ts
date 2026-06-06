@@ -79,6 +79,14 @@ export const addRecipeToGroceryListTool = defineTool(
       }
       const recipe = outcome.entity;
 
+      // Validate all items before any API calls (all-or-nothing, mirroring
+      // add_grocery_items): min(1) admits whitespace-only ingredients.
+      for (const item of args.items) {
+        if (item.ingredient.trim() === "") {
+          return textResult(`Invalid item: ingredient must not be empty.`);
+        }
+      }
+
       // Resolve the target list: explicit UID, or the default list.
       let list: GroceryList | undefined;
       if (args.listUid !== undefined) {

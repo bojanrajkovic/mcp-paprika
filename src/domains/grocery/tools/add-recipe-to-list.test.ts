@@ -139,6 +139,20 @@ describe("add_recipe_to_grocery_list tool", () => {
     expect(kh.client().saveGroceryItems).not.toHaveBeenCalled();
   });
 
+  it("rejects whitespace-only ingredients before any write", async () => {
+    const recipe = makeRecipe({ name: "Pad Thai" });
+    kh.seed({ recipes: [recipe], groceryLists: [makeGroceryList({ isDefault: true })], groceryItems: [] });
+
+    const text = await kh.callToolText("add_recipe_to_grocery_list", {
+      recipe: { title: "Pad Thai" },
+      items: [{ ingredient: "Rice noodles" }, { ingredient: "   " }],
+    });
+
+    expect(text).toContain("ingredient must not be empty");
+    expect(kh.client().saveGroceryItems).not.toHaveBeenCalled();
+    expect(kh.client().saveGroceryIngredient).not.toHaveBeenCalled();
+  });
+
   it("surfaces a save failure", async () => {
     const recipe = makeRecipe({ name: "Pad Thai" });
     const list = makeGroceryList({ isDefault: true });
