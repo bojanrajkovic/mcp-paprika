@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type { MealTypeUid } from "../../ids.js";
+import type { MealTypeUid } from "./ids.js";
 
 import { mealTypeSpecSchema } from "./meal-type-helpers.js";
 

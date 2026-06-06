@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import type { RecipeUid } from "../ids.js";
+import type { RecipeUid } from "../domains/recipe/ids.js";
 
 import { makeRecipe } from "../../test/domains/recipe/__fixtures__/recipes.js";
 import { makePinoCapture } from "../../test/support/tool-test-utils.js";

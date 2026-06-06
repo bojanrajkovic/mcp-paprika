@@ -2,15 +2,15 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 
 import type { GeneratedImageStore } from "../../../features/generated-image-store.js";
-import type { RecipeUid } from "../../../ids.js";
 import type { DomainCtx } from "../../../kernel/registry.js";
+import type { RecipeUid } from "../ids.js";
 import type { RecipeState, RecipeWrites } from "../module.js";
 
-import { PhotoUidSchema, RecipeUidSchema } from "../../../ids.js";
 import { defineTool } from "../../../kernel/tool.js";
 import { fetchImageBytes, MAX_IMAGE_BYTES } from "../../../shared/photo-fetch.js";
 import { commitFailure, textResult } from "../../../shared/tools.js";
 import { toMessage } from "../../../utils/log.js";
+import { PhotoUidSchema, RecipeUidSchema } from "../ids.js";
 import { GENERATED_MAX_FULL_EDGE, normalizePhoto } from "../photo-helpers.js";
 import { photoCatalogGuard, recipeColdStartGuard } from "./guards.js";
 

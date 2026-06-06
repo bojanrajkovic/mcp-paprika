@@ -4,13 +4,13 @@ import { okAsync, ResultAsync } from "neverthrow";
 import type { Logger } from "pino";
 
 import type { CacheError, DiskCache } from "../../cache/disk-cache.js";
-import type { GroceryItemUid, GroceryListUid } from "../../ids.js";
 import type { PaprikaClient } from "../../paprika/client.js";
 import type { Notifier } from "../../server/notifier.js";
 import type { GroceryApi } from "./api.js";
 import type { GroceryIngredient } from "./grocery-ingredient/types.js";
 import type { GroceryItem } from "./grocery-item/types.js";
 import type { GroceryList } from "./grocery-list/types.js";
+import type { GroceryItemUid, GroceryListUid } from "./ids.js";
 
 import { DiskCache as DiskCacheImpl } from "../../cache/disk-cache.js";
 import { hydrateStore } from "../../cache/hydrate.js";

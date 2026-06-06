@@ -29,9 +29,9 @@ import type { MenuItem } from "../domains/menu/menu-item/types.js";
 import type { Menu } from "../domains/menu/types.js";
 import type { PantryItem } from "../domains/pantry/types.js";
 import type { Category } from "../domains/recipe/category/types.js";
+import type { RecipeUid } from "../domains/recipe/ids.js";
 import type { Photo } from "../domains/recipe/photo/types.js";
 import type { Recipe, RecipeEntry } from "../domains/recipe/types.js";
-import type { RecipeUid } from "../ids.js";
 import type { PaprikaClientError } from "./errors.js";
 
 import { AisleSchema } from "../domains/aisle/types.js";

@@ -1,15 +1,16 @@
 import { DateTime } from "luxon";
 import { z } from "zod";
 
-import type { MealTypeUid, RecipeUid } from "../../../ids.js";
 import type { DomainCtx } from "../../../kernel/registry.js";
+import type { MealTypeUid } from "../../meal-type/ids.js";
+import type { RecipeUid } from "../../recipe/ids.js";
 import type { MealState } from "../module.js";
 
-import { RecipeUidSchema } from "../../../ids.js";
 import { defineTool } from "../../../kernel/tool.js";
 import { textResult } from "../../../shared/tools.js";
 import { parseInstant } from "../../../utils/dates.js";
 import { formatMealTypeResolveError, mealTypeSpecSchema } from "../../meal-type/meal-type-helpers.js";
+import { RecipeUidSchema } from "../../recipe/ids.js";
 import { mealStartGuard } from "./guards.js";
 import { renderMealsGroupedByDate } from "./helpers.js";
 

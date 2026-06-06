@@ -7,7 +7,7 @@ import { fromAny } from "@total-typescript/shoehorn";
 import { okAsync } from "neverthrow";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { RecipeUid } from "../ids.js";
+import type { RecipeUid } from "../domains/recipe/ids.js";
 import type { EmbeddingClient } from "./embeddings.js";
 
 import { makeRecipe } from "../../test/domains/recipe/__fixtures__/recipes.js";

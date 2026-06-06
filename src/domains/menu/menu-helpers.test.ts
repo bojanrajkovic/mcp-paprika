@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import type { MealTypeUid, MenuItemUid, MenuUid } from "../../ids.js";
+import type { MealTypeUid } from "../meal-type/ids.js";
+import type { MenuItemUid, MenuUid } from "./ids.js";
 
 import { makeMealType } from "../../../test/domains/meal-type/__fixtures__/meal-types.js";
 import { makeMenu, makeMenuItem } from "../../../test/domains/menu/__fixtures__/menus.js";

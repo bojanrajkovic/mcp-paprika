@@ -11,21 +11,21 @@ import type { PantryItem } from "../../../src/domains/pantry/types.js";
 import type { Recipe } from "../../../src/domains/recipe/types.js";
 import type { PaprikaClientError } from "../../../src/paprika/errors.js";
 
+import { NO_AISLE_UID } from "../../../src/domains/aisle/ids.js";
 import { GroceryIngredientSchema } from "../../../src/domains/grocery/grocery-ingredient/types.js";
 import { GroceryItemSchema } from "../../../src/domains/grocery/grocery-item/types.js";
 import { GroceryListSchema } from "../../../src/domains/grocery/grocery-list/types.js";
-import { MealTypeSchema } from "../../../src/domains/meal-type/types.js";
-import { MealSchema } from "../../../src/domains/meal/types.js";
-import { PantryItemSchema } from "../../../src/domains/pantry/types.js";
-import { CategorySchema } from "../../../src/domains/recipe/category/types.js";
-import { RecipeSchema } from "../../../src/domains/recipe/types.js";
 import {
   GroceryIngredientUidSchema,
   GroceryItemUidSchema,
   GroceryListUidSchema,
-  NO_AISLE_UID,
-  PantryItemUidSchema,
-} from "../../../src/ids.js";
+} from "../../../src/domains/grocery/ids.js";
+import { MealTypeSchema } from "../../../src/domains/meal-type/types.js";
+import { MealSchema } from "../../../src/domains/meal/types.js";
+import { PantryItemUidSchema } from "../../../src/domains/pantry/ids.js";
+import { PantryItemSchema } from "../../../src/domains/pantry/types.js";
+import { CategorySchema } from "../../../src/domains/recipe/category/types.js";
+import { RecipeSchema } from "../../../src/domains/recipe/types.js";
 import { PaprikaClient } from "../../../src/paprika/client.js";
 import { makeSnakeCaseMealType } from "../../domains/meal-type/__fixtures__/meal-types.js";
 import { makeSnakeCaseMeal } from "../../domains/meal/__fixtures__/meals.js";

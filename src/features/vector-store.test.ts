@@ -6,7 +6,7 @@ import { errAsync, okAsync, ResultAsync } from "neverthrow";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Mocked } from "vitest";
 
-import type { RecipeUid } from "../ids.js";
+import type { RecipeUid } from "../domains/recipe/ids.js";
 import type { EmbeddingClient, EmbeddingFailure } from "./embeddings.js";
 
 import { makeRecipe } from "../../test/domains/recipe/__fixtures__/recipes.js";

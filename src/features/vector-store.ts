@@ -58,8 +58,8 @@ import { err, errAsync, ok, okAsync, Result, ResultAsync } from "neverthrow";
 import type { Logger } from "pino";
 import { z } from "zod";
 
+import type { CategoryUid, RecipeUid } from "../domains/recipe/ids.js";
 import type { Recipe } from "../domains/recipe/types.js";
-import type { CategoryUid, RecipeUid } from "../ids.js";
 import type { EmbeddingClient, EmbeddingFailure } from "./embeddings.js";
 
 import { isNodeError } from "../utils/errors.js";

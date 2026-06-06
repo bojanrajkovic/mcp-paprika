@@ -1,4 +1,4 @@
-import type { AisleUid } from "../../ids.js";
+import type { AisleUid } from "./ids.js";
 import type { Aisle } from "./types.js";
 
 import { EntityStore } from "../../entity/index.js";

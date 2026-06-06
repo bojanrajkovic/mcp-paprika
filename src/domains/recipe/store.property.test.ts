@@ -1,7 +1,7 @@
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 
-import type { RecipeUid } from "../../ids.js";
+import type { RecipeUid } from "./ids.js";
 
 import { makeRecipe } from "../../../test/domains/recipe/__fixtures__/recipes.js";
 import { RecipeStore } from "./store.js";

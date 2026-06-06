@@ -1,7 +1,8 @@
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 
-import type { GroceryIngredientUid, GroceryItemUid, GroceryListUid, MenuItemUid, MenuUid } from "../ids.js";
+import type { GroceryIngredientUid, GroceryItemUid, GroceryListUid } from "../domains/grocery/ids.js";
+import type { MenuItemUid, MenuUid } from "../domains/menu/ids.js";
 
 import { GroceryIngredientStoredSchema } from "../domains/grocery/grocery-ingredient/types.js";
 import { GroceryItemStoredSchema } from "../domains/grocery/grocery-item/types.js";

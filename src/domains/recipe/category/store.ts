@@ -1,4 +1,4 @@
-import type { CategoryUid } from "../../../ids.js";
+import type { CategoryUid } from "../ids.js";
 import type { Category } from "./types.js";
 
 import { EntityStore } from "../../../entity/index.js";

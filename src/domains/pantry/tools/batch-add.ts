@@ -1,14 +1,15 @@
 import { z } from "zod";
 
-import type { AisleUid } from "../../../ids.js";
 import type { DomainCtx } from "../../../kernel/registry.js";
+import type { AisleUid } from "../../aisle/ids.js";
 import type { PantryState, PantryWrites } from "../module.js";
 import type { PantryItem } from "../types.js";
 
-import { NO_AISLE_UID, PantryItemUidSchema } from "../../../ids.js";
 import { defineTool } from "../../../kernel/tool.js";
 import { commitFailure, textResult } from "../../../shared/tools.js";
 import { normalizeWire, todayWire } from "../../../utils/dates.js";
+import { NO_AISLE_UID } from "../../aisle/ids.js";
+import { PantryItemUidSchema } from "../ids.js";
 import { pantryItemToMarkdown } from "../pantry-helpers.js";
 import { pantryStartGuard } from "./guards.js";
 

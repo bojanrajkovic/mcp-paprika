@@ -3,7 +3,9 @@ import { z } from "zod";
 import type { DiskCacheDescriptor } from "../../cache/disk-cache.js";
 
 import { makeSchemaEquals } from "../../entity/index.js";
-import { MealTypeUidSchema, MealUidSchema, RecipeUidSchema } from "../../ids.js";
+import { MealTypeUidSchema } from "../meal-type/ids.js";
+import { RecipeUidSchema } from "../recipe/ids.js";
+import { MealUidSchema } from "./ids.js";
 
 // MealStoredSchema — validates camelCase JSON read back from disk. No transform.
 // `typeUid` is nullable because legacy meals (created before Paprika's mealtypes

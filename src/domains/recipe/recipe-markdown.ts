@@ -1,5 +1,5 @@
-import type { CategoryUid } from "../../ids.js";
 import type { Category } from "./category/types.js";
+import type { CategoryUid } from "./ids.js";
 import type { Recipe } from "./types.js";
 
 export function recipeToMarkdown(recipe: Recipe, categoryNames: Array<string>, lastCookedAt?: string | null): string {

@@ -4,8 +4,8 @@ import type { GroceryList } from "../domains/grocery/grocery-list/types.js";
 import type { MenuItem } from "../domains/menu/menu-item/types.js";
 import type { Menu } from "../domains/menu/types.js";
 import type { PantryItem } from "../domains/pantry/types.js";
+import type { RecipeUid } from "../domains/recipe/ids.js";
 import type { Recipe } from "../domains/recipe/types.js";
-import type { RecipeUid } from "../ids.js";
 import type { PaprikaClientError } from "./errors.js";
 
 /**

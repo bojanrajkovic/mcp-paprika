@@ -18,6 +18,7 @@
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { okAsync, type ResultAsync } from "neverthrow";
 
+import type { AisleUid } from "../domains/aisle/ids.js";
 import type { Aisle } from "../domains/aisle/types.js";
 import type { GroceryIngredient } from "../domains/grocery/grocery-ingredient/types.js";
 import type { GroceryItem } from "../domains/grocery/grocery-item/types.js";
@@ -26,11 +27,12 @@ import type { MealType } from "../domains/meal-type/types.js";
 import type { Meal } from "../domains/meal/types.js";
 import type { MenuItem } from "../domains/menu/menu-item/types.js";
 import type { Menu } from "../domains/menu/types.js";
+import type { PantryItemUid } from "../domains/pantry/ids.js";
 import type { PantryItem } from "../domains/pantry/types.js";
 import type { Category } from "../domains/recipe/category/types.js";
+import type { CategoryUid, RecipeUid } from "../domains/recipe/ids.js";
 import type { Photo } from "../domains/recipe/photo/types.js";
 import type { Recipe, RecipeEntry } from "../domains/recipe/types.js";
-import type { AisleUid, CategoryUid, PantryItemUid, RecipeUid } from "../ids.js";
 import type { PaprikaClient } from "../paprika/client.js";
 import type { PaprikaClientError } from "../paprika/errors.js";
 

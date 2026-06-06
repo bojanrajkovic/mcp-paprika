@@ -2,15 +2,17 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { DateTime } from "luxon";
 import { z } from "zod";
 
-import type { MealTypeUid, RecipeUid } from "../../../ids.js";
 import type { DomainCtx } from "../../../kernel/registry.js";
+import type { MealTypeUid } from "../../meal-type/ids.js";
 import type { MealType } from "../../meal-type/types.js";
 import type { Meal } from "../../meal/types.js";
+import type { RecipeUid } from "../../recipe/ids.js";
 
-import { MealUidSchema, MenuUidSchema } from "../../../ids.js";
 import { defineTool } from "../../../kernel/tool.js";
 import { resolveLookup, textResult, uidOrTextLookupSchema } from "../../../shared/tools.js";
 import { formatCalendarDayWire, parseCalendarDay } from "../../../utils/dates.js";
+import { MealUidSchema } from "../../meal/ids.js";
+import { MenuUidSchema } from "../../menu/ids.js";
 import { scheduleMenuStartGuard } from "./guards.js";
 
 /**

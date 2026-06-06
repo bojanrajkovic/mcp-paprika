@@ -1,4 +1,4 @@
-import type { PhotoUid, RecipeUid } from "../../../ids.js";
+import type { PhotoUid, RecipeUid } from "../ids.js";
 import type { Photo } from "./types.js";
 
 import { EntityStore } from "../../../entity/index.js";

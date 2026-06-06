@@ -9,11 +9,11 @@ import type { MealType } from "./types.js";
 
 import { DiskCache } from "../../cache/disk-cache.js";
 import { hydrateStore } from "../../cache/hydrate.js";
-import { MealTypeUidSchema } from "../../ids.js";
 import { defineModule, register } from "../../kernel/registry.js";
 import { notifySyncBestEffort } from "../../paprika/client.js";
 import { resolvePendingWriteTtl } from "../../utils/config.js";
 import { unwrapAtBoot } from "../../utils/errors.js";
+import { MealTypeUidSchema } from "./ids.js";
 import { MealTypeStore } from "./store.js";
 import { mealTypeSync } from "./sync.js";
 import { listMealTypesTool } from "./tools/list-meal-types.js";

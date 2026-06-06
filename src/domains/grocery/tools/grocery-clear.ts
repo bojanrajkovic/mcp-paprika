@@ -1,9 +1,9 @@
 import type { DomainCtx } from "../../../kernel/registry.js";
 import type { GroceryState, GroceryWrites } from "../module.js";
 
-import { GroceryListUidSchema } from "../../../ids.js";
 import { defineTool } from "../../../kernel/tool.js";
 import { commitFailure, textResult } from "../../../shared/tools.js";
+import { GroceryListUidSchema } from "../ids.js";
 import { groceryStartGuard } from "./guards.js";
 
 /**

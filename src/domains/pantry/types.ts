@@ -3,7 +3,8 @@ import { z } from "zod";
 import type { DiskCacheDescriptor } from "../../cache/disk-cache.js";
 
 import { makeSchemaEquals } from "../../entity/index.js";
-import { AisleUidRef, NO_AISLE_UID, PantryItemUidSchema } from "../../ids.js";
+import { AisleUidRef, NO_AISLE_UID } from "../aisle/ids.js";
+import { PantryItemUidSchema } from "./ids.js";
 
 // PantryItemStoredSchema — validates camelCase JSON read back from disk. No transform.
 export const PantryItemStoredSchema = z.object({

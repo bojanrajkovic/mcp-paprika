@@ -1,7 +1,9 @@
 import { okAsync } from "neverthrow";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { MealTypeUid, MenuItemUid, MenuUid, RecipeUid } from "../../../ids.js";
+import type { MealTypeUid } from "../../meal-type/ids.js";
+import type { RecipeUid } from "../../recipe/ids.js";
+import type { MenuItemUid, MenuUid } from "../ids.js";
 import type { MenuItem } from "../menu-item/types.js";
 import type { Menu } from "../types.js";
 

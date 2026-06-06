@@ -2,7 +2,8 @@ import { z } from "zod";
 
 import type { DiskCacheDescriptor } from "../../../cache/disk-cache.js";
 
-import { AisleUidRef, GroceryIngredientUidSchema, NO_AISLE_UID } from "../../../ids.js";
+import { AisleUidRef, NO_AISLE_UID } from "../../aisle/ids.js";
+import { GroceryIngredientUidSchema } from "../ids.js";
 
 // GroceryIngredientStoredSchema — validates camelCase JSON read back from disk. No transform.
 export const GroceryIngredientStoredSchema = z.object({

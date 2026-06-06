@@ -1,16 +1,17 @@
 import { z } from "zod";
 
-import type { MealTypeUid } from "../../../ids.js";
 import type { DomainCtx } from "../../../kernel/registry.js";
+import type { MealTypeUid } from "../../meal-type/ids.js";
 import type { MealTypeSpec } from "../../meal-type/meal-type-helpers.js";
 import type { MealState, MealWrites } from "../module.js";
 import type { Meal } from "../types.js";
 
-import { MealUidSchema, RecipeUidSchema } from "../../../ids.js";
 import { defineTool } from "../../../kernel/tool.js";
 import { commitFailure, textResult } from "../../../shared/tools.js";
 import { parseCalendarDayWire, todayWire } from "../../../utils/dates.js";
 import { mealTypeSpecSchema, resolveOrCreateMealType } from "../../meal-type/meal-type-helpers.js";
+import { RecipeUidSchema } from "../../recipe/ids.js";
+import { MealUidSchema } from "../ids.js";
 import { mealStartGuard } from "./guards.js";
 import { makeMealOrderFlagAssigner, renderMealCard } from "./helpers.js";
 

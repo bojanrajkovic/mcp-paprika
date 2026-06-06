@@ -4,7 +4,6 @@ import type { DomainCtx } from "../../../kernel/registry.js";
 import type { GroceryList } from "../grocery-list/types.js";
 import type { GroceryState, GroceryWrites } from "../module.js";
 
-import { GroceryListUidSchema } from "../../../ids.js";
 import { defineTool } from "../../../kernel/tool.js";
 import {
   commitFailure,
@@ -14,6 +13,7 @@ import {
   uidOrTextLookupSchema,
 } from "../../../shared/tools.js";
 import { groceryListToMarkdown } from "../grocery-helpers.js";
+import { GroceryListUidSchema } from "../ids.js";
 import { groceryStartGuard } from "./guards.js";
 
 /**

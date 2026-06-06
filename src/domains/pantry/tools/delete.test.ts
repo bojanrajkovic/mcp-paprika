@@ -1,7 +1,7 @@
 import { errAsync, okAsync } from "neverthrow";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { PantryItemUid } from "../../../ids.js";
+import type { PantryItemUid } from "../ids.js";
 import type { PantryState } from "../module.js";
 
 import { makePantryItem } from "../../../../test/domains/pantry/__fixtures__/pantry.js";

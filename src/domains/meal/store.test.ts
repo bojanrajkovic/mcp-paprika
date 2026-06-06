@@ -1,7 +1,9 @@
 import { DateTime } from "luxon";
 import { beforeEach, describe, expect, it } from "vitest";
 
-import type { MealTypeUid, MealUid, RecipeUid } from "../../ids.js";
+import type { MealTypeUid } from "../meal-type/ids.js";
+import type { RecipeUid } from "../recipe/ids.js";
+import type { MealUid } from "./ids.js";
 
 import { makeMeal } from "../../../test/domains/meal/__fixtures__/meals.js";
 import { MealStore } from "./store.js";

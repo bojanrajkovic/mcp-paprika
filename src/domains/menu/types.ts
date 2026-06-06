@@ -3,7 +3,7 @@ import { z } from "zod";
 import type { DiskCacheDescriptor } from "../../cache/disk-cache.js";
 
 import { makeSchemaEquals } from "../../entity/index.js";
-import { MenuUidSchema } from "../../ids.js";
+import { MenuUidSchema } from "./ids.js";
 
 // MenuStoredSchema — validates camelCase JSON read back from disk. No transform.
 export const MenuStoredSchema = z.object({

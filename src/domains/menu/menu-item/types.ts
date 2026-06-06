@@ -3,7 +3,9 @@ import { z } from "zod";
 import type { DiskCacheDescriptor } from "../../../cache/disk-cache.js";
 
 import { makeSchemaEquals } from "../../../entity/index.js";
-import { MealTypeUidSchema, MenuItemUidSchema, MenuUidSchema, RecipeUidSchema } from "../../../ids.js";
+import { MealTypeUidSchema } from "../../meal-type/ids.js";
+import { RecipeUidSchema } from "../../recipe/ids.js";
+import { MenuItemUidSchema, MenuUidSchema } from "../ids.js";
 
 // MenuItemStoredSchema — validates camelCase JSON read back from disk. No transform.
 // `menuUid` is nullable: a cascade-deleted menuitem has `menu_uid: null` on the wire

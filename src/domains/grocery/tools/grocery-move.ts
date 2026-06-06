@@ -5,10 +5,11 @@ import type { PantryItem } from "../../pantry/types.js";
 import type { GroceryItem } from "../grocery-item/types.js";
 import type { GroceryState, GroceryWrites } from "../module.js";
 
-import { GroceryItemUidSchema, PantryItemUidSchema } from "../../../ids.js";
 import { defineTool } from "../../../kernel/tool.js";
 import { commitFailure, textResult } from "../../../shared/tools.js";
 import { todayWire } from "../../../utils/dates.js";
+import { PantryItemUidSchema } from "../../pantry/ids.js";
+import { GroceryItemUidSchema } from "../ids.js";
 import { groceryStartGuard, pantrySyncedGuard } from "./guards.js";
 
 /**

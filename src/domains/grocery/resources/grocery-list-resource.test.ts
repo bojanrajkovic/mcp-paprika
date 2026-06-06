@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import type { GroceryItemUid, GroceryListUid } from "../../../ids.js";
+import type { GroceryItemUid, GroceryListUid } from "../ids.js";
 import type { GroceryState } from "../module.js";
 
 import { makeGroceryItem } from "../../../../test/domains/grocery/__fixtures__/grocery-items.js";

@@ -4,10 +4,10 @@ import type { DomainCtx } from "../../../kernel/registry.js";
 import type { GroceryItem } from "../grocery-item/types.js";
 import type { GroceryState, GroceryWrites } from "../module.js";
 
-import { GroceryItemUidSchema } from "../../../ids.js";
 import { defineTool } from "../../../kernel/tool.js";
 import { commitFailure, textResult } from "../../../shared/tools.js";
 import { groceryItemToMarkdown } from "../grocery-helpers.js";
+import { GroceryItemUidSchema } from "../ids.js";
 import { groceryStartGuard } from "./guards.js";
 
 export const markGroceryItemPurchasedInputSchema = z

@@ -5,8 +5,8 @@ import type { DomainCtx } from "../../../kernel/registry.js";
 import type { ReferenceImage } from "../../photography.js";
 import type { PhotoGenState } from "../module.js";
 
+import { RecipeUidSchema } from "../../../domains/recipe/ids.js";
 import { makeThumbnail } from "../../../domains/recipe/photo-helpers.js";
-import { RecipeUidSchema } from "../../../ids.js";
 import { defineTool } from "../../../kernel/tool.js";
 import { fetchImageBytes } from "../../../shared/photo-fetch.js";
 import { textResult } from "../../../shared/tools.js";

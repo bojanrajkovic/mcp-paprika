@@ -3,7 +3,7 @@ import { z } from "zod";
 import type { MealTypeApi } from "./api.js";
 import type { MealType } from "./types.js";
 
-import { MealTypeUidSchema } from "../../ids.js";
+import { MealTypeUidSchema } from "./ids.js";
 
 /**
  * Union for selecting a meal type by name, UID, or built-in index. Three

@@ -1,4 +1,4 @@
-import type { PantryItemUid } from "../../ids.js";
+import type { PantryItemUid } from "./ids.js";
 import type { PantryItem } from "./types.js";
 
 import { EntityStore } from "../../entity/index.js";
