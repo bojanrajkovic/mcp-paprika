@@ -30,22 +30,16 @@ import {
 import { makeSnakeCasePantryItem } from "../../test/domains/pantry/__fixtures__/pantry.js";
 import { makeSnakeCaseRecipe } from "../../test/domains/recipe/__fixtures__/recipes.js";
 import { makePinoCapture, tripBreaker } from "../../test/support/tool-test-utils.js";
+import { AisleUidSchema } from "../domains/aisle/ids.js";
+import { GroceryIngredientUidSchema, GroceryItemUidSchema, GroceryListUidSchema } from "../domains/grocery/ids.js";
+import { MealUidSchema } from "../domains/meal/ids.js";
 import { mealToApiPayload } from "../domains/meal/types.js";
+import { MenuItemUidSchema, MenuUidSchema } from "../domains/menu/ids.js";
 import { menuItemToApiPayload } from "../domains/menu/menu-item/types.js";
 import { menuToApiPayload } from "../domains/menu/types.js";
+import { PantryItemUidSchema } from "../domains/pantry/ids.js";
+import { CategoryUidSchema, RecipeUidSchema } from "../domains/recipe/ids.js";
 import { RecipeSchema } from "../domains/recipe/types.js";
-import {
-  AisleUidSchema,
-  CategoryUidSchema,
-  GroceryIngredientUidSchema,
-  GroceryItemUidSchema,
-  GroceryListUidSchema,
-  MealUidSchema,
-  MenuItemUidSchema,
-  MenuUidSchema,
-  PantryItemUidSchema,
-  RecipeUidSchema,
-} from "../ids.js";
 import { CircuitOpenError } from "../utils/errors.js";
 import { REDACT_PATHS, toMessage } from "../utils/log.js";
 import { PaprikaClient } from "./client.js";

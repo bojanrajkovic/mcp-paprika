@@ -3,7 +3,7 @@ import { z } from "zod";
 import type { DiskCacheDescriptor } from "../../../cache/disk-cache.js";
 
 import { makeSchemaEquals } from "../../../entity/index.js";
-import { PhotoUidSchema, RecipeUidSchema } from "../../../ids.js";
+import { PhotoUidSchema, RecipeUidSchema } from "../ids.js";
 
 // PhotoStoredSchema — validates camelCase JSON read back from disk. No transform.
 // `recipeUid` is the foreign key to the owning recipe, branded `RecipeUid`. A

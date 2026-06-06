@@ -3,9 +3,9 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { DomainCtx } from "../../../kernel/registry.js";
 import type { RecipeState, RecipeWrites } from "../module.js";
 
-import { RecipeUidSchema } from "../../../ids.js";
 import { defineTool } from "../../../kernel/tool.js";
 import { commitFailure, textResult } from "../../../shared/tools.js";
+import { RecipeUidSchema } from "../ids.js";
 import { recipeColdStartGuard } from "./guards.js";
 
 /**

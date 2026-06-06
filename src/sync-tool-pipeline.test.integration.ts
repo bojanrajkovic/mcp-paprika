@@ -2,7 +2,7 @@ import { http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
-import type { RecipeUid } from "./ids.js";
+import type { RecipeUid } from "./domains/recipe/ids.js";
 import type { Infra, Kernel } from "./kernel/registry.js";
 import type { PaprikaConfig } from "./utils/config.js";
 

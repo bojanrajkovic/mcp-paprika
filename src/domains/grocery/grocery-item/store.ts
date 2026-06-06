@@ -1,4 +1,4 @@
-import type { GroceryItemUid, GroceryListUid } from "../../../ids.js";
+import type { GroceryItemUid, GroceryListUid } from "../ids.js";
 import type { GroceryItem } from "./types.js";
 
 import { EntityStore } from "../../../entity/index.js";

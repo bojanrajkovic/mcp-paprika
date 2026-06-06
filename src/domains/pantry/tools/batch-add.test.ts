@@ -1,14 +1,15 @@
 import { errAsync, okAsync } from "neverthrow";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import type { AisleUid } from "../../aisle/ids.js";
 import type { AisleState } from "../../aisle/module.js";
+import type { PantryItemUid } from "../ids.js";
 import type { PantryState } from "../module.js";
 
 import { makeAisle } from "../../../../test/domains/aisle/__fixtures__/aisles.js";
 import { makePantryItem } from "../../../../test/domains/pantry/__fixtures__/pantry.js";
 import { useKernelHarness } from "../../../../test/support/kernel-harness.js";
 import { getText } from "../../../../test/support/tool-test-utils.js";
-import { type AisleUid, type PantryItemUid } from "../../../ids.js";
 
 describe("add_pantry_items tool", () => {
   const kh = useKernelHarness<PantryState>("pantry");

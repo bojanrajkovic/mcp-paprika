@@ -10,8 +10,8 @@ import { makePhoto } from "../../../../test/domains/recipe/__fixtures__/photos.j
 import { makeRecipe } from "../../../../test/domains/recipe/__fixtures__/recipes.js";
 import { useKernelHarness } from "../../../../test/support/kernel-harness.js";
 import { getText } from "../../../../test/support/tool-test-utils.js";
-import { PhotoUidSchema, RecipeUidSchema } from "../../../ids.js";
 import { fetchImageBytes, isBlockedIp, ssrfLookup } from "../../../shared/photo-fetch.js";
+import { PhotoUidSchema, RecipeUidSchema } from "../ids.js";
 import { uploadPhotoInputSchema } from "./photo-writes.js";
 
 // The URL download is exercised end-to-end (real undici fetch + dispatcher) in

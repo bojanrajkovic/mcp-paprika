@@ -88,7 +88,8 @@ const meal = body[0]!;
 //
 // Use this to design Zod schemas (MealSchema, MealStoredSchema)
 // and TypeScript types (Meal, MealUid) following existing patterns
-// in src/meal/types.ts (UID brands like MealUid live in src/ids.ts).
+// in src/domains/meal/types.ts (UID brands like MealUid live in the
+// domain's ids.ts leaf).
 ```
 
 ## Choosing fixtures vs. hand-rolled factories

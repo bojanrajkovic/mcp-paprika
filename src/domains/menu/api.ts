@@ -1,5 +1,5 @@
-import type { MenuUid } from "../../ids.js";
 import type { HasSynced } from "../../kernel/registry.js";
+import type { MenuUid } from "./ids.js";
 import type { MenuItem } from "./menu-item/types.js";
 import type { Menu } from "./types.js";
 

@@ -1,16 +1,17 @@
 import { z } from "zod";
 
-import type { RecipeUid } from "../../../ids.js";
 import type { DomainCtx } from "../../../kernel/registry.js";
 import type { MealType } from "../../meal-type/types.js";
+import type { RecipeUid } from "../../recipe/ids.js";
 import type { MenuItem } from "../menu-item/types.js";
 import type { MenuState, MenuWrites } from "../module.js";
 import type { Menu } from "../types.js";
 
-import { MenuItemUidSchema, MenuUidSchema, RecipeUidSchema } from "../../../ids.js";
 import { defineTool } from "../../../kernel/tool.js";
 import { commitFailure, resolveLookup, textResult, uidOrTextLookupSchema } from "../../../shared/tools.js";
 import { mealTypeSpecSchema } from "../../meal-type/meal-type-helpers.js";
+import { RecipeUidSchema } from "../../recipe/ids.js";
+import { MenuItemUidSchema, MenuUidSchema } from "../ids.js";
 import { menuToMarkdown } from "../menu-helpers.js";
 import { menuStartGuard } from "./guards.js";
 

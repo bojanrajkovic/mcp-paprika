@@ -7,8 +7,8 @@ import type { Logger } from "pino";
 import { z } from "zod";
 
 import type { CacheError } from "../../cache/disk-cache.js";
-import type { RecipeUid } from "../../ids.js";
 import type { DiffResult } from "../../paprika/sync-types.js";
+import type { RecipeUid } from "./ids.js";
 import type { Recipe, RecipeEntry } from "./types.js";
 
 import { cacheError, DiskCache, enoentOk } from "../../cache/disk-cache.js";

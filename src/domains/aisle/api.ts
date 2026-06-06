@@ -1,6 +1,6 @@
 import type { Result } from "neverthrow";
 
-import type { AisleUid } from "../../ids.js";
+import type { AisleUid } from "./ids.js";
 import type { Aisle } from "./types.js";
 
 /**

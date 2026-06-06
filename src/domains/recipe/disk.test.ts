@@ -3,7 +3,7 @@ import { join } from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { RecipeUid } from "../../ids.js";
+import type { RecipeUid } from "./ids.js";
 
 import { makeRecipe } from "../../../test/domains/recipe/__fixtures__/recipes.js";
 import { makeRecipeCache, useTempDir } from "../../../test/support/disk-caches.js";

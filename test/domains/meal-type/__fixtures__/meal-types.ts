@@ -1,5 +1,5 @@
+import type { MealTypeUid } from "../../../../src/domains/meal-type/ids.js";
 import type { MealType } from "../../../../src/domains/meal-type/types.js";
-import type { MealTypeUid } from "../../../../src/ids.js";
 
 let mealTypeCounter = 0;
 

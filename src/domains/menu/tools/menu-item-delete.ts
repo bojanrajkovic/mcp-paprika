@@ -4,9 +4,9 @@ import type { DomainCtx } from "../../../kernel/registry.js";
 import type { MenuItem } from "../menu-item/types.js";
 import type { MenuState, MenuWrites } from "../module.js";
 
-import { MenuItemUidSchema } from "../../../ids.js";
 import { defineTool } from "../../../kernel/tool.js";
 import { commitFailure, textResult } from "../../../shared/tools.js";
+import { MenuItemUidSchema } from "../ids.js";
 import { menuStartGuard } from "./guards.js";
 
 export const deleteMenuItemInputSchema = z.object({

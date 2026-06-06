@@ -1,7 +1,8 @@
 import { okAsync } from "neverthrow";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { AisleUid, GroceryItemUid, GroceryListUid } from "../../../ids.js";
+import type { AisleUid } from "../../aisle/ids.js";
+import type { GroceryItemUid, GroceryListUid } from "../ids.js";
 import type { GroceryState } from "../module.js";
 
 import { makeAisle } from "../../../../test/domains/aisle/__fixtures__/aisles.js";

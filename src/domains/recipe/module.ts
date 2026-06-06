@@ -5,18 +5,17 @@ import { err, ok, ResultAsync } from "neverthrow";
 import type { Logger } from "pino";
 
 import type { CacheError, DiskCache } from "../../cache/disk-cache.js";
-import type { RecipeUid } from "../../ids.js";
 import type { PaprikaClient } from "../../paprika/client.js";
 import type { PaprikaClientError } from "../../paprika/errors.js";
 import type { Notifier } from "../../server/notifier.js";
 import type { RecipeApi } from "./api.js";
 import type { Category } from "./category/types.js";
+import type { RecipeUid } from "./ids.js";
 import type { Photo } from "./photo/types.js";
 import type { Recipe } from "./types.js";
 
 import { DiskCache as DiskCacheImpl } from "../../cache/disk-cache.js";
 import { hydrateStore } from "../../cache/hydrate.js";
-import { PhotoUidSchema } from "../../ids.js";
 import { defineModule, register } from "../../kernel/registry.js";
 import { notifySyncBestEffort } from "../../paprika/client.js";
 import { resolvePendingWriteTtl } from "../../utils/config.js";
@@ -25,6 +24,7 @@ import { toMessage } from "../../utils/log.js";
 import { CategoryStore } from "./category/store.js";
 import { categoryDiskDescriptor } from "./category/types.js";
 import { RecipeDiskCache } from "./disk.js";
+import { PhotoUidSchema } from "./ids.js";
 import { GENERATED_MAX_FULL_EDGE, normalizePhoto, sha256Hex } from "./photo-helpers.js";
 import { PhotoStore } from "./photo/store.js";
 import { photoDiskDescriptor } from "./photo/types.js";

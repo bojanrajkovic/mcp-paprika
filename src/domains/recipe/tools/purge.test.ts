@@ -1,7 +1,7 @@
 import { errAsync, okAsync } from "neverthrow";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { RecipeUid } from "../../../ids.js";
+import type { RecipeUid } from "../ids.js";
 import type { RecipeState } from "../module.js";
 
 import { makeRecipe } from "../../../../test/domains/recipe/__fixtures__/recipes.js";

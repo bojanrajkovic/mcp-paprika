@@ -4,9 +4,9 @@ import type { DomainCtx } from "../../../kernel/registry.js";
 import type { MenuState, MenuWrites } from "../module.js";
 import type { Menu } from "../types.js";
 
-import { MenuUidSchema } from "../../../ids.js";
 import { defineTool } from "../../../kernel/tool.js";
 import { commitFailure, textResult } from "../../../shared/tools.js";
+import { MenuUidSchema } from "../ids.js";
 import { menuToMarkdown } from "../menu-helpers.js";
 import { menuStartGuard } from "./guards.js";
 

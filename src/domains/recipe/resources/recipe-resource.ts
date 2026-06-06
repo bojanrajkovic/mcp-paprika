@@ -1,7 +1,7 @@
 import { ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
 
-import type { RecipeUid } from "../../../ids.js";
 import type { DomainCtx } from "../../../kernel/registry.js";
+import type { RecipeUid } from "../ids.js";
 import type { RecipeState } from "../module.js";
 
 import { resourceNotFound } from "../../../shared/resources.js";

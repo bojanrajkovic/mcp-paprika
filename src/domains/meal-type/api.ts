@@ -1,7 +1,7 @@
 import type { Result } from "neverthrow";
 
-import type { MealTypeUid } from "../../ids.js";
 import type { HasSynced } from "../../kernel/registry.js";
+import type { MealTypeUid } from "./ids.js";
 import type { MealTypeResolveResult, MealTypeSpec } from "./meal-type-helpers.js";
 import type { MealType } from "./types.js";
 

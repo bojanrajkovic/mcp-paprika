@@ -2,8 +2,8 @@ import { fromAny } from "@total-typescript/shoehorn";
 import { errAsync, okAsync, type ResultAsync } from "neverthrow";
 import { describe, expect, it, vi } from "vitest";
 
+import type { CategoryUid, RecipeUid } from "../../domains/recipe/ids.js";
 import type { Recipe } from "../../domains/recipe/types.js";
-import type { CategoryUid, RecipeUid } from "../../ids.js";
 import type { Infra } from "../../kernel/registry.js";
 import type { VectorStore, VectorStoreFailure } from "../vector-store.js";
 

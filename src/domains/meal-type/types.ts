@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import type { DiskCacheDescriptor } from "../../cache/disk-cache.js";
 
-import { MealTypeUidSchema } from "../../ids.js";
+import { MealTypeUidSchema } from "./ids.js";
 
 // MealTypeStoredSchema — validates camelCase JSON read back from disk. No transform.
 // `exportTime` is seconds since midnight (e.g. 28800 = 08:00, 64800 = 18:00).

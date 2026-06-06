@@ -1,14 +1,14 @@
 import { z } from "zod";
 
-import type { CategoryUid } from "../../../ids.js";
 import type { DomainCtx } from "../../../kernel/registry.js";
+import type { CategoryUid } from "../ids.js";
 import type { RecipeState, RecipeWrites } from "../module.js";
 import type { Recipe } from "../types.js";
 
-import { RecipeUidSchema } from "../../../ids.js";
 import { defineTool } from "../../../kernel/tool.js";
 import { commitFailure, textResult } from "../../../shared/tools.js";
 import { formatTimestampWire } from "../../../utils/dates.js";
+import { RecipeUidSchema } from "../ids.js";
 import { recipeToMarkdown, resolveCategoryRefs } from "../recipe-markdown.js";
 import { recipeColdStartGuard } from "./guards.js";
 

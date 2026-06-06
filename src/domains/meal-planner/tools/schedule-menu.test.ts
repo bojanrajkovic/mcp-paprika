@@ -1,11 +1,13 @@
 import { errAsync, okAsync } from "neverthrow";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { MealTypeUid, MenuUid, RecipeUid } from "../../../ids.js";
+import type { MealTypeUid } from "../../meal-type/ids.js";
 import type { MealState } from "../../meal/module.js";
 import type { Meal } from "../../meal/types.js";
+import type { MenuUid } from "../../menu/ids.js";
 import type { MenuItem } from "../../menu/menu-item/types.js";
 import type { Menu } from "../../menu/types.js";
+import type { RecipeUid } from "../../recipe/ids.js";
 
 import { makeMealType } from "../../../../test/domains/meal-type/__fixtures__/meal-types.js";
 import { makeMeal } from "../../../../test/domains/meal/__fixtures__/meals.js";

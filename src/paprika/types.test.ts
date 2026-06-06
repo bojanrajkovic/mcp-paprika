@@ -12,6 +12,7 @@ import type {
   RecipeSyncResult,
 } from "./sync-types.js";
 
+import { type AisleUid, AisleUidSchema } from "../domains/aisle/ids.js";
 import { type Aisle, AisleSchema, AisleStoredSchema } from "../domains/aisle/types.js";
 import { GroceryIngredientSchema, GroceryIngredientStoredSchema } from "../domains/grocery/grocery-ingredient/types.js";
 import { GroceryItemSchema, GroceryItemStoredSchema } from "../domains/grocery/grocery-item/types.js";
@@ -24,8 +25,10 @@ import {
   menuItemToApiPayload,
 } from "../domains/menu/menu-item/types.js";
 import { type Menu, MenuSchema, MenuStoredSchema, menuToApiPayload } from "../domains/menu/types.js";
+import { type PantryItemUid, PantryItemUidSchema } from "../domains/pantry/ids.js";
 import { type PantryItem, PantryItemSchema, PantryItemStoredSchema } from "../domains/pantry/types.js";
 import { type Category, CategorySchema } from "../domains/recipe/category/types.js";
+import { type CategoryUid, CategoryUidSchema, type RecipeUid, RecipeUidSchema } from "../domains/recipe/ids.js";
 import { type Photo, PhotoSchema, PhotoStoredSchema, photoToApiPayload } from "../domains/recipe/photo/types.js";
 import {
   type Recipe,
@@ -35,16 +38,6 @@ import {
   RecipeSchema,
   RecipeStoredSchema,
 } from "../domains/recipe/types.js";
-import {
-  type AisleUid,
-  AisleUidSchema,
-  type CategoryUid,
-  CategoryUidSchema,
-  type PantryItemUid,
-  PantryItemUidSchema,
-  type RecipeUid,
-  RecipeUidSchema,
-} from "../ids.js";
 import { type AuthResponse, AuthResponseSchema } from "./auth-response.js";
 
 describe("Branded UID Schemas and Entry Schemas", () => {

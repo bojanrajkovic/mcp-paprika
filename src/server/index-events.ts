@@ -1,7 +1,7 @@
 import type { Logger } from "pino";
 
+import type { RecipeUid } from "../domains/recipe/ids.js";
 import type { Recipe } from "../domains/recipe/types.js";
-import type { RecipeUid } from "../ids.js";
 
 /**
  * The recipe/category → discover re-index seam.

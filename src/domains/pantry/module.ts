@@ -3,8 +3,8 @@ import { join } from "node:path";
 import { okAsync, ResultAsync } from "neverthrow";
 
 import type { CacheError } from "../../cache/disk-cache.js";
-import type { PantryItemUid } from "../../ids.js";
 import type { PantryApi, PantryCreateError } from "./api.js";
+import type { PantryItemUid } from "./ids.js";
 import type { PantryItem } from "./types.js";
 
 import { DiskCache } from "../../cache/disk-cache.js";

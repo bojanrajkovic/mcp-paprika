@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import type { DiskCacheDescriptor } from "../../cache/disk-cache.js";
 
-import { AisleUidSchema } from "../../ids.js";
+import { AisleUidSchema } from "./ids.js";
 
 // AisleStoredSchema — validates camelCase JSON read back from disk. No transform.
 export const AisleStoredSchema = z.object({

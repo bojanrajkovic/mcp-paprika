@@ -4,7 +4,7 @@ import { join } from "node:path";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import type { CategoryUid, RecipeUid } from "../../ids.js";
+import type { CategoryUid, RecipeUid } from "./ids.js";
 
 import { makeCategory, makeRecipe } from "../../../test/domains/recipe/__fixtures__/recipes.js";
 import { makeCache, makeRecipeCache, useTempDir } from "../../../test/support/disk-caches.js";

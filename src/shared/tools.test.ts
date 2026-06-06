@@ -2,7 +2,7 @@ import { err, ok } from "neverthrow";
 import { describe, expect, it } from "vitest";
 
 import { getText } from "../../test/support/tool-test-utils.js";
-import { RecipeUidSchema } from "../ids.js";
+import { RecipeUidSchema } from "../domains/recipe/ids.js";
 import {
   commitFailure,
   formatLookupOutcome,

@@ -1,9 +1,9 @@
 import type { DomainCtx } from "../../../kernel/registry.js";
 import type { RecipeState } from "../module.js";
 
-import { RecipeUidSchema } from "../../../ids.js";
 import { defineTool } from "../../../kernel/tool.js";
 import { formatLookupOutcome, resolveLookup, uidOrTextLookupSchema } from "../../../shared/tools.js";
+import { RecipeUidSchema } from "../ids.js";
 import { recipeToMarkdown } from "../recipe-markdown.js";
 import { recipeColdStartGuard } from "./guards.js";
 

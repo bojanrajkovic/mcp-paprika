@@ -3,13 +3,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Infra } from "../../kernel/registry.js";
 import type { MealTypeApi } from "./api.js";
+import type { MealTypeUid } from "./ids.js";
 import type { MealTypeState } from "./module.js";
 import type { MealType } from "./types.js";
 
 import { makeMealType } from "../../../test/domains/meal-type/__fixtures__/meal-types.js";
 import { useTempDir } from "../../../test/support/disk-caches.js";
 import { makeKernelInfra } from "../../../test/support/kernel-harness.js";
-import { type MealTypeUid } from "../../ids.js";
 import { registeredModules } from "../../kernel/registry.js";
 // Side-effect: populate the module registry so the meal-type module is resolvable.
 import "../../kernel/modules.generated.js";

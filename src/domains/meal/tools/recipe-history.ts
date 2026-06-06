@@ -3,9 +3,9 @@ import type { MealTypeApi } from "../../meal-type/api.js";
 import type { MealState } from "../module.js";
 import type { Meal } from "../types.js";
 
-import { RecipeUidSchema } from "../../../ids.js";
 import { defineTool } from "../../../kernel/tool.js";
 import { textResult } from "../../../shared/tools.js";
+import { RecipeUidSchema } from "../../recipe/ids.js";
 import { mealStartGuard } from "./guards.js";
 
 // How many recent cooks to list. A summary, not a browse surface — "give me more"

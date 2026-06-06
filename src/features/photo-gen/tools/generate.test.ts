@@ -8,7 +8,7 @@ import type { GeneratedPhoto, GeneratePhotoOptions, PhotographyClient } from "..
 import { makeRecipe } from "../../../../test/domains/recipe/__fixtures__/recipes.js";
 import { useKernelHarness } from "../../../../test/support/kernel-harness.js";
 import { getText } from "../../../../test/support/tool-test-utils.js";
-import { RecipeUidSchema } from "../../../ids.js";
+import { RecipeUidSchema } from "../../../domains/recipe/ids.js";
 import { fetchImageBytes } from "../../../shared/photo-fetch.js";
 import { CircuitOpenError } from "../../../utils/errors.js";
 import { PhotographyAPIError, PhotographyError } from "../../photography-errors.js";

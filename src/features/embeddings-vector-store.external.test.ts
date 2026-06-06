@@ -15,7 +15,7 @@ import { join } from "node:path";
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { CategoryUid, RecipeUid } from "../ids.js";
+import type { CategoryUid, RecipeUid } from "../domains/recipe/ids.js";
 import type { EmbeddingConfig } from "../utils/config.js";
 
 import { makeRecipe } from "../../test/domains/recipe/__fixtures__/recipes.js";

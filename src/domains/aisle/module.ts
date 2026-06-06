@@ -9,11 +9,11 @@ import type { Aisle } from "./types.js";
 
 import { DiskCache } from "../../cache/disk-cache.js";
 import { hydrateStore } from "../../cache/hydrate.js";
-import { AisleUidSchema, NO_AISLE_UID } from "../../ids.js";
 import { defineModule, register } from "../../kernel/registry.js";
 import { notifySyncBestEffort } from "../../paprika/client.js";
 import { resolvePendingWriteTtl } from "../../utils/config.js";
 import { unwrapAtBoot } from "../../utils/errors.js";
+import { AisleUidSchema, NO_AISLE_UID } from "./ids.js";
 import { AisleStore } from "./store.js";
 import { aisleSync } from "./sync.js";
 import { listAislesTool } from "./tools/list-aisles.js";

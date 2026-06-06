@@ -1,14 +1,16 @@
 import { z } from "zod";
 
-import type { MealTypeUid, RecipeUid } from "../../../ids.js";
 import type { DomainCtx } from "../../../kernel/registry.js";
+import type { MealTypeUid } from "../../meal-type/ids.js";
+import type { RecipeUid } from "../../recipe/ids.js";
 import type { MenuItem } from "../menu-item/types.js";
 import type { MenuState, MenuWrites } from "../module.js";
 
-import { MenuItemUidSchema, RecipeUidSchema } from "../../../ids.js";
 import { defineTool } from "../../../kernel/tool.js";
 import { commitFailure, textResult } from "../../../shared/tools.js";
 import { mealTypeSpecSchema, resolveOrCreateMealType } from "../../meal-type/meal-type-helpers.js";
+import { RecipeUidSchema } from "../../recipe/ids.js";
+import { MenuItemUidSchema } from "../ids.js";
 import { menuStartGuard } from "./guards.js";
 
 // `.strict()` — `day` was promoted to move_menu_item (a day-move carries

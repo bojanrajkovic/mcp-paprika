@@ -1,7 +1,7 @@
 import type { SetRequired } from "type-fest";
 import { z } from "zod";
 
-import { CategoryUidSchema, RecipeUidSchema } from "../../ids.js";
+import { CategoryUidSchema, RecipeUidSchema } from "./ids.js";
 
 // Entry schemas for sync list endpoints
 export const RecipeEntrySchema = z.object({

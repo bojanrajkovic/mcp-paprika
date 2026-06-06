@@ -1,14 +1,15 @@
 import { z } from "zod";
 
-import type { AisleUid } from "../../../ids.js";
 import type { DomainCtx } from "../../../kernel/registry.js";
+import type { AisleUid } from "../../aisle/ids.js";
 import type { GroceryItem } from "../grocery-item/types.js";
 import type { GroceryState, GroceryWrites } from "../module.js";
 
-import { GroceryIngredientUidSchema, GroceryItemUidSchema, GroceryListUidSchema, NO_AISLE_UID } from "../../../ids.js";
 import { defineTool } from "../../../kernel/tool.js";
 import { commitFailure, textResult } from "../../../shared/tools.js";
+import { NO_AISLE_UID } from "../../aisle/ids.js";
 import { groceryItemToMarkdown } from "../grocery-helpers.js";
+import { GroceryIngredientUidSchema, GroceryItemUidSchema, GroceryListUidSchema } from "../ids.js";
 import { groceryStartGuard } from "./guards.js";
 
 const itemInputSchema = z.object({

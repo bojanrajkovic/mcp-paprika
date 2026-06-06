@@ -5,9 +5,9 @@ import type { MenuItem } from "../menu-item/types.js";
 import type { MenuState, MenuWrites } from "../module.js";
 import type { Menu } from "../types.js";
 
-import { MenuItemUidSchema } from "../../../ids.js";
 import { defineTool } from "../../../kernel/tool.js";
 import { commitFailure, textResult } from "../../../shared/tools.js";
+import { MenuItemUidSchema } from "../ids.js";
 import { menuStartGuard } from "./guards.js";
 
 // `.strict()` — moving a menu item to a different day is its own act: it can
