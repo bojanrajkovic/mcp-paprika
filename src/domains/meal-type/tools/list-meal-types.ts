@@ -34,9 +34,9 @@ function mealTypeLine(mt: Readonly<MealType>): string {
 
 /**
  * `list_meal_types` — list the meal-type catalog (sorted by order then name, one
- * bullet per entry, no input). Meal-type is a Reference-class entity: read-only, no
- * resource (ADR-0004). Mirrors `list_aisles`. Meal types are created/edited in the
- * Paprika app, not via MCP.
+ * bullet per entry, no input). Meal-type is a Reference-class entity: list tool +
+ * managed lifecycle (auto-create via `ensureMealType`, `update_meal_type`,
+ * `delete_meal_type`), no resource (ADR-0004). Mirrors `list_aisles`.
  */
 export const listMealTypesTool = defineTool(
   {

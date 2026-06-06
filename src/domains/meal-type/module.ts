@@ -18,6 +18,7 @@ import { MealTypeUidSchema } from "./ids.js";
 import { MealTypeStore } from "./store.js";
 import { mealTypeSync } from "./sync.js";
 import { listMealTypesTool } from "./tools/list-meal-types.js";
+import { updateMealTypeTool } from "./tools/update-meal-type.js";
 import { mealTypeDiskDescriptor } from "./types.js";
 
 declare module "../../kernel/registry.js" {
@@ -30,6 +31,12 @@ declare module "../../kernel/registry.js" {
 export interface MealTypeState {
   readonly store: MealTypeStore;
   readonly cache: DiskCache<MealType>;
+}
+
+/** The meal-type module's write chokepoints — `update_meal_type` commits through these. */
+export interface MealTypeWrites {
+  /** Persist a batch of saved meal types locally (one flush, one notifySync) — reorder renumbers several at once. */
+  commitMealTypes(saved: ReadonlyArray<Readonly<MealType>>): ResultAsync<void, CacheError>;
 }
 
 register(
@@ -56,10 +63,13 @@ register(
       // `ctx.deps["meal-type"]` — so it goes in `api`, not `ctx.writes`.
       const ensureMealTypeMutex = new Mutex();
       // The commit protocol lives in src/entity/commit.ts; this binds meal-type's slice.
-      const commitMealType = (mealType: MealType): ResultAsync<void, CacheError> =>
-        commitEntities(state, [upsertOp(mealType)], {
-          finish: () => notifySyncBestEffort(infra.client, infra.log),
-        });
+      const commitMealTypes = (mealTypes: ReadonlyArray<Readonly<MealType>>): ResultAsync<void, CacheError> =>
+        commitEntities(
+          state,
+          mealTypes.map((mt) => upsertOp(mt)),
+          { finish: () => notifySyncBestEffort(infra.client, infra.log) },
+        );
+      const commitMealType = (mealType: MealType): ResultAsync<void, CacheError> => commitMealTypes([mealType]);
       const ensureMealType: MealTypeApi["ensureMealType"] = async (name) => {
         const trimmedName = name.trim();
         if (trimmedName === "") {
@@ -169,7 +179,8 @@ register(
           hasSynced: () => state.store.hasSynced,
           ensureMealType,
         },
-        tools: [listMealTypesTool],
+        writes: { commitMealTypes },
+        tools: [listMealTypesTool, updateMealTypeTool],
         syncs: [mealTypeSync(state)],
         flush: () => state.cache.flush(),
       };
