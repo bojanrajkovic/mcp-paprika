@@ -12,7 +12,7 @@ import type { Menu } from "./types.js";
 
 import { DiskCache as DiskCacheImpl } from "../../cache/disk-cache.js";
 import { hydrateStore } from "../../cache/hydrate.js";
-import { commitEntities, deleteOp, upsertOp } from "../../entity/commit.js";
+import { commitEntities, deletedFlagOp } from "../../entity/commit.js";
 import { defineModule, register } from "../../kernel/registry.js";
 import { notifySyncBestEffort } from "../../paprika/client.js";
 import { resolvePendingWriteTtl } from "../../utils/config.js";
@@ -120,13 +120,12 @@ register(
         onCommitted: () => notifier.resourceListChanged(),
         finish: () => notifySyncBestEffort(client, infra.log),
       };
-      const menuOp = (m: Readonly<Menu>) => (m.deleted ? deleteOp(m.uid) : upsertOp(m));
-      const menuItemOp = (i: Readonly<MenuItem>) => (i.deleted ? deleteOp(i.uid) : upsertOp(i));
-      const commitMenu: MenuWrites["commitMenu"] = (saved) => commitEntities(state.menus, [menuOp(saved)], menuFx);
+      const commitMenu: MenuWrites["commitMenu"] = (saved) =>
+        commitEntities(state.menus, [deletedFlagOp(saved)], menuFx);
       const commitMenuItem: MenuWrites["commitMenuItem"] = (saved) =>
-        commitEntities(state.items, [menuItemOp(saved)], menuFx);
+        commitEntities(state.items, [deletedFlagOp(saved)], menuFx);
       const commitMenuItemsBatch: MenuWrites["commitMenuItemsBatch"] = (items) =>
-        commitEntities(state.items, items.map(menuItemOp), menuFx);
+        commitEntities(state.items, items.map(deletedFlagOp), menuFx);
 
       return {
         api: {

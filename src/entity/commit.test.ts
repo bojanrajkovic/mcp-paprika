@@ -134,6 +134,9 @@ describe("commitEntities: op kinds drive mark / cache / store correctly", () => 
     result._unsafeUnwrap();
     const firstCacheCall = log.findIndex((l) => l.startsWith("c."));
     const lastMark = log.map((l) => l.startsWith("s.mark")).lastIndexOf(true);
+    // Vacuity guard: with no marks logged, lastMark would be -1 and the
+    // ordering assertion below would pass without testing anything.
+    expect(lastMark).toBe(2);
     expect(lastMark).toBeLessThan(firstCacheCall);
     expect(log.filter((l) => l === "c.flush")).toHaveLength(1);
     expect(log.filter((l) => l === "finish")).toHaveLength(1);

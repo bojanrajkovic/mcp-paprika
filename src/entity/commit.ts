@@ -70,6 +70,17 @@ export const deleteOp = <UID extends string>(uid: UID): { readonly kind: "delete
   uid,
 });
 
+/**
+ * The standard classifier for entities carrying Paprika's `deleted` flag:
+ * deleted → hard delete, else upsert. NOT universal — recipe's trash is a
+ * soft-delete (`upsertOp(saved, { markDelete: saved.inTrash })`: the row
+ * survives with delete-intent marked), so reach for that shape, not this one,
+ * when the entity must outlive its delete flag.
+ */
+export const deletedFlagOp = <T extends { readonly uid: UID; readonly deleted: boolean }, UID extends string>(
+  item: T,
+): CommitOp<T, UID> => (item.deleted ? deleteOp(item.uid) : upsertOp(item));
+
 /** The per-commit side effects, supplied by the owning domain. */
 export interface CommitEffects {
   /** Post-apply, pre-`finish` effects (`resourceListChanged()`, index events). Never runs on the failure path. */

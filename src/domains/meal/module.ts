@@ -8,7 +8,7 @@ import type { Meal } from "./types.js";
 
 import { DiskCache as DiskCacheImpl } from "../../cache/disk-cache.js";
 import { hydrateStore } from "../../cache/hydrate.js";
-import { commitEntities, deleteOp, upsertOp } from "../../entity/commit.js";
+import { commitEntities, deletedFlagOp } from "../../entity/commit.js";
 import { defineModule, register } from "../../kernel/registry.js";
 import { notifySyncBestEffort } from "../../paprika/client.js";
 import { resolvePendingWriteTtl } from "../../utils/config.js";
@@ -76,10 +76,9 @@ register(
       // → notify) lives in src/entity/commit.ts; these bind meal's slice. No
       // resourceListChanged() — meals have no resource surface.
       const mealFx = { finish: () => notifySyncBestEffort(client, infra.log) };
-      const mealOp = (m: Readonly<Meal>) => (m.deleted ? deleteOp(m.uid) : upsertOp(m));
-      const commitMeal: MealWrites["commitMeal"] = (saved) => commitEntities(state, [mealOp(saved)], mealFx);
+      const commitMeal: MealWrites["commitMeal"] = (saved) => commitEntities(state, [deletedFlagOp(saved)], mealFx);
       const commitMealsBatch: MealWrites["commitMealsBatch"] = (items) =>
-        commitEntities(state, items.map(mealOp), mealFx);
+        commitEntities(state, items.map(deletedFlagOp), mealFx);
 
       // The coordinator's batch write (api): POST then commit through the in-scope
       // chokepoint. Returns the server-saved meals on success, a user-facing error

@@ -13,7 +13,7 @@ import type { GroceryList } from "./grocery-list/types.js";
 
 import { DiskCache as DiskCacheImpl } from "../../cache/disk-cache.js";
 import { hydrateStore } from "../../cache/hydrate.js";
-import { commitEntities, deleteOp, upsertOp } from "../../entity/commit.js";
+import { commitEntities, deletedFlagOp } from "../../entity/commit.js";
 import { defineModule, register } from "../../kernel/registry.js";
 import { notifySyncBestEffort } from "../../paprika/client.js";
 import { resolvePendingWriteTtl } from "../../utils/config.js";
@@ -144,14 +144,12 @@ register(
         onCommitted: () => notifier.resourceListChanged(),
         finish: () => notifySyncBestEffort(client, infra.log),
       };
-      const listOp = (l: Readonly<GroceryList>) => (l.deleted ? deleteOp(l.uid) : upsertOp(l));
-      const itemOp = (i: Readonly<GroceryItem>) => (i.deleted ? deleteOp(i.uid) : upsertOp(i));
       const commitGroceryList: GroceryWrites["commitGroceryList"] = (saved) =>
-        commitEntities(state.lists, [listOp(saved)], groceryFx);
+        commitEntities(state.lists, [deletedFlagOp(saved)], groceryFx);
       const commitGroceryItem: GroceryWrites["commitGroceryItem"] = (saved) =>
-        commitEntities(state.items, [itemOp(saved)], groceryFx);
+        commitEntities(state.items, [deletedFlagOp(saved)], groceryFx);
       const commitGroceryItemsBatch: GroceryWrites["commitGroceryItemsBatch"] = (items) =>
-        commitEntities(state.items, items.map(itemOp), groceryFx);
+        commitEntities(state.items, items.map(deletedFlagOp), groceryFx);
 
       return {
         // Empty contract — no live sibling reads grocery state (see api.ts).

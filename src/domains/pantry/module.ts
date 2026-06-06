@@ -8,7 +8,7 @@ import type { PantryItem } from "./types.js";
 
 import { DiskCache } from "../../cache/disk-cache.js";
 import { hydrateStore } from "../../cache/hydrate.js";
-import { commitEntities, deleteOp, upsertOp } from "../../entity/commit.js";
+import { commitEntities, deletedFlagOp } from "../../entity/commit.js";
 import { defineModule, register } from "../../kernel/registry.js";
 import { notifySyncBestEffort } from "../../paprika/client.js";
 import { resolvePendingWriteTtl } from "../../utils/config.js";
@@ -81,11 +81,10 @@ register(
       // → notify) lives in src/entity/commit.ts; these bind pantry's slice. No
       // resourceListChanged() — pantry has no MCP resource surface.
       const pantryFx = { finish: () => notifySyncBestEffort(infra.client, infra.log) };
-      const pantryOp = (i: Readonly<PantryItem>) => (i.deleted ? deleteOp(i.uid) : upsertOp(i));
       const commitPantryItem: PantryWrites["commitPantryItem"] = (saved) =>
-        commitEntities(state, [pantryOp(saved)], pantryFx);
+        commitEntities(state, [deletedFlagOp(saved)], pantryFx);
       const commitPantryItemsBatch: PantryWrites["commitPantryItemsBatch"] = (items) =>
-        commitEntities(state, items.map(pantryOp), pantryFx);
+        commitEntities(state, items.map(deletedFlagOp), pantryFx);
 
       // The public write grocery's move consumes. POST first, then local commit,
       // so the two failure modes stay distinguishable (the live move tool reports
