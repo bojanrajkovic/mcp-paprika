@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { fromAny } from "@total-typescript/shoehorn";
 import { Hono } from "hono";
 import type { JWTVerifyGetKey } from "jose";
+import { errAsync, okAsync } from "neverthrow";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { makeVerifiedIdentity } from "../../test/auth/__fixtures__/oauth-state.js";
@@ -589,10 +590,10 @@ describe("Auth Routes", () => {
       //
       // Deterministically simulating the race: stub the verifyRegistrationAccessToken
       // path to pass, but have updateClient throw OAuthClientNotFoundError.
-      const verifySpy = vi.spyOn(clientStore, "verifyRegistrationAccessToken").mockResolvedValue(true);
+      const verifySpy = vi.spyOn(clientStore, "verifyRegistrationAccessToken").mockReturnValue(okAsync(true));
       const updateSpy = vi
         .spyOn(clientStore, "updateClient")
-        .mockRejectedValue(OAuthClientNotFoundError.forId("ghost-client"));
+        .mockReturnValue(errAsync(OAuthClientNotFoundError.forId("ghost-client")));
 
       try {
         const res = await app.request("/register/ghost-client", {
@@ -643,12 +644,14 @@ describe("Auth Routes", () => {
       const clientId = registered.client_id;
 
       // Issue a token pair for this client
-      const pair = await tokenStore.issueAccessRefreshPair({
-        clientId,
-        identity: makeVerifiedIdentity({ email: "user@example.com", sub: "user-sub-123" }),
-        scope: "openid email",
-        resource: "https://mcp.example.com/",
-      });
+      const pair = (
+        await tokenStore.issueAccessRefreshPair({
+          clientId,
+          identity: makeVerifiedIdentity({ email: "user@example.com", sub: "user-sub-123" }),
+          scope: "openid email",
+          resource: "https://mcp.example.com/",
+        })
+      )._unsafeUnwrap();
 
       // Delete the client
       const res = await app.request(`/register/${clientId}`, {
@@ -661,7 +664,7 @@ describe("Auth Routes", () => {
       expect(res.status).toBe(204);
 
       // Token should be cascaded/removed
-      const token = await tokenStore.lookupAccessToken(pair.access.plaintext);
+      const token = (await tokenStore.lookupAccessToken(pair.access.plaintext))._unsafeUnwrap();
       expect(token).toBeNull();
 
       // Client should be deleted

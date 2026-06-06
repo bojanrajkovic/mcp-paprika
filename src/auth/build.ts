@@ -18,6 +18,7 @@ import type { PaprikaConfig } from "../utils/config.js";
 import type { AuthCache } from "./disk.js";
 import type { AuthContext, ResolvedOAuthConfig } from "./types.js";
 
+import { unwrapAtBoot } from "../utils/errors.js";
 import { AuthCodeStore } from "./auth-code-store.js";
 import { AuthRequestStore } from "./auth-request-store.js";
 import { AuthCleanup } from "./cleanup.js";
@@ -107,8 +108,13 @@ export async function buildAuthContext(
   const authLog = parentLog.child({ component: "auth" });
   const oidcClientLog = parentLog.child({ component: "oidc-client" });
 
-  // Fetch + validate upstream discovery document (rejects http:// endpoints; checks alg overlap)
-  const discovery = await loadDiscovery(resolved.discoveryUrl, resolved.allowedAlgs, oidcClientLog);
+  // Fetch + validate upstream discovery document (rejects http:// endpoints;
+  // checks alg overlap). An err aborts boot — there is no value running HTTP
+  // mode if the OAuth stack can't authenticate anyone (ADR-0014 form #5).
+  const discovery = unwrapAtBoot(
+    await loadDiscovery(resolved.discoveryUrl, resolved.allowedAlgs, oidcClientLog),
+    "oidc discovery",
+  );
   const jwks = createJwksFor(discovery);
 
   const clientStore = new DiskClientRegistrationStore(cache, resolved.publicUrl, authLog, MAX_REGISTERED_CLIENTS);

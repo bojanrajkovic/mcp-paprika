@@ -17,7 +17,28 @@ import {
   InvalidTargetError,
   InvalidTokenError,
   type OAuthError,
+  ServerError,
 } from "@modelcontextprotocol/sdk/server/auth/errors.js";
+import type { Result } from "neverthrow";
+
+/**
+ * Recognized form #2 boundary (ADR-0014): unwrap a `Result` whose error is an
+ * SDK `OAuthError`, throwing it into the SDK's throw-based authorization-server
+ * contract (`OAuthServerProvider` / the DCR handler), which serializes it as a
+ * spec-compliant response. The auth stores speak `Result`; this is the one
+ * sanctioned crossing back onto the SDK's throw rail. The `OAuthError`
+ * constraint is load-bearing: a non-OAuth error thrown at this edge would be
+ * wrapped as a 500 `server_error` instead of its spec response, so callers
+ * must `mapErr` to an OAuth type first — and the compiler holds them to it.
+ */
+export function unwrapOAuth<T, E extends OAuthError>(result: Result<T, E>): T {
+  return result.match(
+    (value) => value,
+    (e) => {
+      throw e;
+    },
+  );
+}
 
 /**
  * Error thrown when OAuth configuration validation fails at startup.
@@ -181,6 +202,16 @@ export const OAuthTokenError = {
    */
   invalidToken: (): OAuthError => {
     return new InvalidTokenError("token invalid or expired");
+  },
+
+  /**
+   * An internal store failure (the disk cache erred) surfacing at the SDK
+   * boundary. Maps to SDK ServerError (`server_error` on the wire). Keep the
+   * message generic — it can cross the wire; the cache layer's own logging
+   * carries the real failure for the operator.
+   */
+  serverError: (message: string): OAuthError => {
+    return new ServerError(message);
   },
 };
 

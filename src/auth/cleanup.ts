@@ -5,9 +5,9 @@
  * AbortController-gated _loop(), never-throws semantics.
  *
  * Responsibilities (run every CLEANUP_INTERVAL_MS = 6h):
- * 1. Remove stale DCR clients (lastTokenActivityAt > 90 days old) + cascade their tokens.
- * 2. Sweep expired in-memory AuthRequestStore, AuthCodeStore, and
+ * 1. Sweep expired in-memory AuthRequestStore, AuthCodeStore, and
  *    PendingAuthorizationStore (consent-ticket) entries.
+ * 2. Remove stale DCR clients (lastTokenActivityAt > 90 days old) + cascade their tokens.
  * 3. Sweep expired OAuth tokens (expiresAt < now). `rotateRefresh` deletes the
  *    previous refresh token but not the previous access token — every refresh
  *    leaves a soon-to-expire access record behind. Without this sweep,
@@ -19,8 +19,8 @@
 
 import { setTimeout as wait } from "node:timers/promises";
 
-import type { Result } from "neverthrow";
-import { ResultAsync } from "neverthrow";
+import type { OAuthError } from "@modelcontextprotocol/sdk/server/auth/errors.js";
+import { err, ok, type Result, ResultAsync } from "neverthrow";
 import type { Logger } from "pino";
 
 import type { CacheError } from "../cache/disk-cache.js";
@@ -30,22 +30,16 @@ import type { DiskClientRegistrationStore } from "./client-registration.js";
 import type { AuthCache } from "./disk.js";
 import type { PendingAuthorizationStore } from "./pending-authorization-store.js";
 import type { TokenStore } from "./token-store.js";
+import type { OAuthClient, OAuthToken } from "./types.js";
 
 import { DCR_CLIENT_STALE_DAYS, nowSeconds } from "./tokens.js";
 
 /**
- * INTERIM (#265): unwrap a cache result by rethrowing — `sweepOnce`'s contract
- * is still rejection-based (the loop catches and continues); #265 converts the
- * auth runtime to `Result` end to end and removes this.
+ * What a sweep can fail with: the cache's error on a direct read/remove, or the
+ * token store's already-mapped OAuth `server_error` from the cascade. The loop
+ * only logs either.
  */
-function must<T>(result: Result<T, CacheError>): T {
-  return result.match(
-    (value) => value,
-    (e) => {
-      throw new Error(`auth cleanup cache failure: ${e.context}: ${e.message}`, { cause: e.cause });
-    },
-  );
-}
+export type SweepError = CacheError | OAuthError;
 
 const CLEANUP_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 hours
 
@@ -82,32 +76,58 @@ export class AuthCleanup {
    * Run one cleanup sweep.
    *
    * Public for tests and for direct use from startup code (e.g., buildAuth).
-   * May throw on disk errors (DiskCache/TokenStore/DiskClientRegistrationStore
-   * failures propagate to the caller). The background loop (`_loop`) catches
-   * these and continues — callers invoking `sweepOnce` directly should handle
-   * rejection.
+   * `Result`-native: errs with {@link SweepError} on a disk/store failure. The
+   * background loop (`_loop`) logs an err and continues.
    *
-   * Returns counts of removed entries for observability.
+   * Resolves with counts of removed entries for observability.
    */
-  async sweepOnce(): Promise<{
-    clientsRemoved: number;
-    tokensRemoved: number;
-    expiredTokensRemoved: number;
-    authRequestsRemoved: number;
-    authCodesRemoved: number;
-    pendingAuthorizationsRemoved: number;
-  }> {
+  async sweepOnce(): Promise<
+    Result<
+      {
+        clientsRemoved: number;
+        tokensRemoved: number;
+        expiredTokensRemoved: number;
+        authRequestsRemoved: number;
+        authCodesRemoved: number;
+        pendingAuthorizationsRemoved: number;
+      },
+      SweepError
+    >
+  > {
     const now = this._now();
 
-    // (1) Stale DCR clients: lastTokenActivityAt older than DCR_CLIENT_STALE_DAYS (90d)
+    // (1) In-memory store sweeps — bound memory under sustained /authorize
+    //     traffic. Synchronous and infallible, so they run BEFORE any disk
+    //     work: a cache failure in the disk steps below errs out of the sweep,
+    //     and these must not sit a full interval behind a persistently sick
+    //     disk.
+    const authRequestsRemoved = this._authRequests.sweepExpired();
+    const authCodesRemoved = this._authCodes.sweepExpired();
+    const pendingAuthorizationsRemoved = this._pendingAuthorizations.sweepExpired();
+
+    // (2) Stale DCR clients: lastTokenActivityAt older than DCR_CLIENT_STALE_DAYS (90d).
+    //     From here on every step talks to the same disk cache, so the first
+    //     failure errs out honestly — the loop logs it and the next interval
+    //     retries the lot.
     const cutoff = now - DCR_CLIENT_STALE_DAYS * 86400;
-    const allClients = must(await this._cache.oauthClients.getAll());
+    let allClients: ReadonlyArray<OAuthClient> = [];
+    let allTokens: ReadonlyArray<OAuthToken> = [];
+    const snapshotErr = (
+      await ResultAsync.combine([this._cache.oauthClients.getAll(), this._cache.oauthTokens.getAll()])
+    ).match(
+      ([clients, tokens]) => {
+        allClients = clients;
+        allTokens = tokens;
+        return undefined;
+      },
+      (e) => e,
+    );
+    if (snapshotErr !== undefined) return err(snapshotErr);
     const stale = allClients.filter((c) => c.lastTokenActivityAt < cutoff);
 
-    // Fetch tokens once. Precompute per-client counts for the cascade loop and
-    // collect expired tokens for the orphan sweep in (3). One pass over all
-    // tokens, then we partition by stale-client cascade vs. expired-orphan.
-    const allTokens = must(await this._cache.oauthTokens.getAll());
+    // Precompute per-client counts for the cascade loop and collect expired
+    // tokens for the orphan sweep in (3). One pass over all tokens, then we
+    // partition by stale-client cascade vs. expired-orphan.
     const tokensByClient = new Map<string, number>();
     for (const t of allTokens) {
       tokensByClient.set(t.clientId, (tokensByClient.get(t.clientId) ?? 0) + 1);
@@ -116,15 +136,17 @@ export class AuthCleanup {
 
     let tokensRemoved = 0;
     for (const c of stale) {
+      const cascadeErr = (
+        await this._tokenStore.removeAllForClient(c.clientId).andThen(
+          () => this._clientStore.deleteClient(c.clientId), // cascade (AC5.4)
+        )
+      ).match(
+        () => undefined,
+        (e) => e,
+      );
+      if (cascadeErr !== undefined) return err(cascadeErr);
       tokensRemoved += tokensByClient.get(c.clientId) ?? 0;
-      await this._tokenStore.removeAllForClient(c.clientId); // cascade (AC5.4)
-      await this._clientStore.deleteClient(c.clientId);
     }
-
-    // (2) In-memory store sweeps — bound memory under sustained /authorize traffic
-    const authRequestsRemoved = this._authRequests.sweepExpired();
-    const authCodesRemoved = this._authCodes.sweepExpired();
-    const pendingAuthorizationsRemoved = this._pendingAuthorizations.sweepExpired();
 
     // (3) Expired-token sweep — remove tokens past `expiresAt` whose owning
     //     client is still active (stale-client cascade already covers the
@@ -134,36 +156,42 @@ export class AuthCleanup {
     let expiredTokensRemoved = 0;
     const expiredOrphans = allTokens.filter((t) => t.expiresAt < now && !staleClientIds.has(t.clientId));
     if (expiredOrphans.length > 0) {
-      must(await ResultAsync.combine(expiredOrphans.map((t) => this._cache.oauthTokens.remove(t.tokenHash))));
-      must(await this._cache.flush());
+      const sweepErr = (
+        await ResultAsync.combine(expiredOrphans.map((t) => this._cache.oauthTokens.remove(t.tokenHash))).andThen(() =>
+          this._cache.flush(),
+        )
+      ).match(
+        () => undefined,
+        (e) => e,
+      );
+      if (sweepErr !== undefined) return err(sweepErr);
       expiredTokensRemoved = expiredOrphans.length;
     }
 
-    return {
+    return ok({
       clientsRemoved: stale.length,
       tokensRemoved,
       expiredTokensRemoved,
       authRequestsRemoved,
       authCodesRemoved,
       pendingAuthorizationsRemoved,
-    };
+    });
   }
 
   private async _loop(): Promise<void> {
     // Capture signal locally to avoid null-dereference if stop() fires mid-loop
-    // (mirrors SyncEngine._loop() pattern from src/paprika/sync.ts)
+    // (mirrors the background sync loop's pattern in src/server/sync-loop.ts)
     while (this._ac !== null && !this._ac.signal.aborted) {
-      try {
-        await this.sweepOnce();
-      } catch (err) {
-        this.log.debug({ err }, "auth cleanup sweep failed; continuing");
-      }
+      (await this.sweepOnce()).match(
+        () => undefined,
+        (e) => {
+          this.log.debug({ err: e }, "auth cleanup sweep failed; continuing");
+        },
+      );
       try {
         await wait(this._intervalMs, undefined, { signal: this._ac.signal });
-      } catch (err) {
-        if (!(err instanceof Error && err.name === "AbortError")) {
-          this.log.debug({ err }, "auth cleanup wait failed unexpectedly");
-        }
+      } catch {
+        // `wait` rejects only on abort (`stop()` was called) — exit the loop.
         return;
       }
     }

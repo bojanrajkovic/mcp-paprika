@@ -1,5 +1,5 @@
 import { fromAny } from "@total-typescript/shoehorn";
-import { okAsync } from "neverthrow";
+import { errAsync, okAsync } from "neverthrow";
 import sharp from "sharp";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -76,7 +76,7 @@ describe("generate_recipe_photo tool", () => {
   } {
     const recipe = opts?.recipe ?? makeRecipe({ uid: RECIPE_UID, name: "Test Recipe" });
     const generated = makeGeneratedPhoto(opts?.generated);
-    const generate = opts?.generate ?? vi.fn().mockResolvedValue(generated);
+    const generate = opts?.generate ?? vi.fn().mockReturnValue(okAsync(generated));
 
     // Mirrors the real client: uploadPhoto returns the hash-stamped recipe.
     vi.mocked(kh.client().uploadPhoto).mockReturnValue(okAsync(recipe));
@@ -255,7 +255,7 @@ describe("generate_recipe_photo tool", () => {
     });
     vi.mocked(fetchImageBytes).mockResolvedValue({ bytes: imageBytes, contentType: "image/jpeg" });
 
-    const generate = vi.fn().mockResolvedValue(makeGeneratedPhoto());
+    const generate = vi.fn().mockReturnValue(okAsync(makeGeneratedPhoto()));
     vi.mocked(kh.client().uploadPhoto).mockReturnValue(okAsync(cached));
     vi.mocked(kh.client().getRecipe).mockReturnValue(okAsync(fresh));
 
@@ -272,7 +272,11 @@ describe("generate_recipe_photo tool", () => {
   });
 
   it("surfaces a generic generation failure as a tool error", async () => {
-    const generate = vi.fn().mockRejectedValue(new Error("provider exploded"));
+    // A wrapped foreign escape: base PhotographyError WITH a cause — the tool
+    // routes it to the generic copy, not the no-image refusal hint.
+    const generate = vi
+      .fn()
+      .mockReturnValue(errAsync(new PhotographyError("provider exploded", { cause: new Error("provider exploded") })));
     seedAndInject({ generate });
     const result = await kh.callTool("generate_recipe_photo", { recipe_uid: RECIPE_UID });
     expect(getText(result)).toContain("Failed to generate photo");
@@ -280,21 +284,25 @@ describe("generate_recipe_photo tool", () => {
   });
 
   it("a tripped breaker surfaces a 'temporarily unavailable' message", async () => {
-    const generate = vi.fn().mockRejectedValue(new CircuitOpenError("photography", "https://x/chat/completions"));
+    const generate = vi
+      .fn()
+      .mockReturnValue(errAsync(new CircuitOpenError("photography", "https://x/chat/completions")));
     seedAndInject({ generate });
     const result = await kh.callTool("generate_recipe_photo", { recipe_uid: RECIPE_UID });
     expect(getText(result)).toContain("temporarily unavailable");
   });
 
   it("a 401 from the provider yields a credentials hint", async () => {
-    const generate = vi.fn().mockRejectedValue(new PhotographyAPIError("bad key", 401, "https://x/chat/completions"));
+    const generate = vi
+      .fn()
+      .mockReturnValue(errAsync(new PhotographyAPIError("bad key", 401, "https://x/chat/completions")));
     seedAndInject({ generate });
     const result = await kh.callTool("generate_recipe_photo", { recipe_uid: RECIPE_UID });
     expect(getText(result)).toContain("IMAGE_GEN_API_KEY");
   });
 
   it("a no-image refusal yields a model/style hint", async () => {
-    const generate = vi.fn().mockRejectedValue(new PhotographyError("returned no image"));
+    const generate = vi.fn().mockReturnValue(errAsync(new PhotographyError("returned no image")));
     seedAndInject({ generate });
     const result = await kh.callTool("generate_recipe_photo", { recipe_uid: RECIPE_UID });
     expect(getText(result)).toContain("no image");

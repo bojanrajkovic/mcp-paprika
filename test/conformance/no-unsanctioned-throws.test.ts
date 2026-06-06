@@ -8,30 +8,42 @@ import { describe, expect, it } from "vitest";
  * ADR-0014 conformance — code we own returns `Result` and never throws to signal
  * a predictable outcome. This walks every `src` source file (AST, so comments
  * don't count) for `throw` statements and fails any that is neither a recognized
- * form nor a still-pending entry on the ratcheting allowlist below.
+ * form nor an entry on the ratcheting allowlist below.
  *
- * The allowlist is the neverthrow campaign's visible, shrinking surface (#241):
- * each entry names the phase issue that handles that module. As a module flips,
- * its entry must be DELETED — the staleness check fails the build if an
- * allowlisted file no longer carries an unsanctioned throw, so the ratchet can
- * only tighten toward "nothing but the recognized forms remain."
- *
- * One of ADR-0014's five recognized forms has no recognizer here yet: the OAuth
- * error types (#2). Every file that throws them — auth — also still throws
- * forms its phase converts to `Result`, so those files sit in PENDING for now.
- * The phase that removes each entry (#265) adds the #2 recognizer at the same
- * time, so the file's permanent protocol throws stay sanctioned once its entry
- * is gone. Until then PENDING means "not yet handled," not "will become Result."
+ * The allowlist was the neverthrow campaign's visible, shrinking surface (#241)
+ * and is now EMPTY: every recognized form (#1–#5) has a recognizer, and every
+ * remaining `throw` in `src/` is one of them. A new entry requires a tracked
+ * issue naming the phase that removes it — and should be treated as a real
+ * architectural question, not a quiet addition (ADR-0014).
  */
 
-// Recognized forms #1 + #4: the helper bodies whose `throw` IS the sanctioned
-// boundary crossing. Pinned to (file, function) so a same-named helper added
-// elsewhere can't silently sanction its own throws.
+// Recognized forms #1 + #2 + #4: the helper bodies whose `throw` IS the
+// sanctioned boundary crossing. Pinned to (file, function) so a same-named
+// helper added elsewhere can't silently sanction its own throws. `unwrapOAuth`
+// is form #2's Result→throw crossing onto the SDK's authorization-server rail.
 const RECOGNIZED_HELPERS: ReadonlyArray<readonly [file: string, fn: string]> = [
   ["src/utils/errors.ts", "assertNever"],
   ["src/utils/errors.ts", "unwrapAtBoot"],
   ["src/shared/resources.ts", "resourceNotFound"],
+  ["src/auth/errors.ts", "unwrapOAuth"],
 ];
+
+// Recognized form #2: the OAuth error types the SDK's authorization-server
+// router serializes into spec-compliant responses, thrown directly where the
+// SDK's throw-based contracts (`OAuthServerProvider`, the DCR handler) are
+// implemented. Matched by THROWN CONSTRUCTOR NAME, pinned to the two files
+// that implement those contracts (the same discipline as the other
+// recognizers — `src/auth/` has request-serving siblings like routes.ts that
+// must NOT inherit the waiver). A non-OAuth throw in the same methods still
+// fails the gate, and the Result→throw crossings ride the recognized
+// `unwrapOAuth` helper instead.
+const OAUTH_PROTOCOL_FILES: ReadonlySet<string> = new Set(["src/auth/provider.ts", "src/auth/client-registration.ts"]);
+const OAUTH_PROTOCOL_TYPES: ReadonlySet<string> = new Set([
+  "InvalidGrantError",
+  "InvalidTargetError",
+  "InvalidTokenError",
+  "InvalidRequestError",
+]);
 
 // Recognized form #3: throws inside a cockatiel-policy-governed callback (and
 // the executor wrapper that re-runs/normalizes around it). cockatiel's
@@ -48,6 +60,8 @@ const COCKATIEL_GOVERNED: ReadonlyArray<readonly [file: string, innerFn: string,
   ["src/paprika/client.ts", "attempt", "authenticate"],
   ["src/paprika/client.ts", "execute", "request"],
   ["src/utils/resilience.ts", "execute", "createResilientExecutor"],
+  ["src/features/embeddings.ts", "execute", "embedBatch"],
+  ["src/features/photography.ts", "execute", "generate"],
 ];
 
 // Recognized form #5: fail-fast at process entry and kernel construction, off
@@ -60,26 +74,16 @@ const BOOT_SITES: ReadonlyArray<readonly [file: string, fn: string]> = [
   ["src/index.ts", "*"],
   ["src/transport/e2e-server.ts", "*"],
   ["src/kernel/registry.ts", "visit"],
+  // buildAuthContext is the HTTP transport's auth bootstrap: config invariants
+  // and the Result unwraps that abort startup. Pinned to the function, not the
+  // file, so a throw added to a request-serving sibling in build.ts would fail.
+  ["src/auth/build.ts", "buildAuthContext"],
 ];
 
-// The ratcheting allowlist: owned modules that still throw, each mapped to the
-// campaign phase (#241) that handles it. DELETE an entry the moment its module
-// stops throwing an unsanctioned form — the staleness assertion below enforces it.
-const PENDING: ReadonlyArray<readonly [file: string, convertedBy: string]> = [
-  ["src/features/embeddings.ts", "#265"],
-  ["src/features/photography.ts", "#265"],
-  ["src/features/json-vector-index.ts", "#265"],
-  ["src/features/vector-store.ts", "#265"],
-  ["src/auth/build.ts", "#265"],
-  ["src/auth/client-registration.ts", "#265"],
-  ["src/auth/oidc-client.ts", "#265"],
-  ["src/auth/provider.ts", "#265"],
-  ["src/auth/routes.ts", "#265"],
-  // must() — the interim bridges from cache Results onto the SDK's throw-based
-  // auth contracts; removed when #265 converts the auth runtime end to end.
-  ["src/auth/token-store.ts", "#265"],
-  ["src/auth/cleanup.ts", "#265"],
-];
+// The ratcheting allowlist, now EMPTY (see the header). An entry is
+// [file, trackingIssue]; the staleness assertion forces deletion the moment the
+// module stops throwing an unsanctioned form.
+const PENDING: ReadonlyArray<readonly [file: string, convertedBy: string]> = [];
 
 interface ThrowSite {
   readonly file: string;
@@ -87,6 +91,8 @@ interface ThrowSite {
   readonly enclosingFn: string;
   /** Every named enclosing function, innermost first — `enclosingFn` is element 0. */
   readonly enclosingChain: ReadonlyArray<string>;
+  /** Constructor name when the throw is `throw new X(...)`, else null. */
+  readonly thrownType: string | null;
 }
 
 const TEST_SUFFIXES = [".test.ts", ".test.integration.ts", ".e2e.test.ts", ".external.test.ts", ".property.test.ts"];
@@ -120,11 +126,13 @@ function throwSites(file: string): Array<ThrowSite> {
   const visit = (node: ts.Node): void => {
     if (ts.isThrowStatement(node)) {
       const chain = enclosingFnChain(node, sf);
+      const expr = node.expression;
       sites.push({
         file,
         line: sf.getLineAndCharacterOfPosition(node.getStart(sf)).line + 1,
         enclosingFn: chain[0] ?? "<top>",
         enclosingChain: chain,
+        thrownType: ts.isNewExpression(expr) && ts.isIdentifier(expr.expression) ? expr.expression.text : null,
       });
     }
     ts.forEachChild(node, visit);
@@ -142,7 +150,10 @@ const isCockatielGoverned = (s: ThrowSite): boolean =>
     ([file, innerFn, outerFn]) =>
       s.file === file && s.enclosingFn === innerFn && s.enclosingChain.slice(1).includes(outerFn),
   );
-const isRecognized = (s: ThrowSite): boolean => isRecognizedHelper(s) || isCockatielGoverned(s) || isBoot(s);
+const isOAuthProtocolThrow = (s: ThrowSite): boolean =>
+  OAUTH_PROTOCOL_FILES.has(s.file) && s.thrownType !== null && OAUTH_PROTOCOL_TYPES.has(s.thrownType);
+const isRecognized = (s: ThrowSite): boolean =>
+  isRecognizedHelper(s) || isCockatielGoverned(s) || isOAuthProtocolThrow(s) || isBoot(s);
 
 describe("ADR-0014: owned code throws only in recognized forms", () => {
   const allSites = sourceFiles().flatMap(throwSites);

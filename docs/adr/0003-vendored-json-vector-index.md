@@ -1,7 +1,9 @@
 # ADR-0003: Vendored JSON vector index for semantic search
 
 **Status:** Accepted (2026-06-01, backfilled)
-**Last verified:** 2026-06-01
+**Last verified:** 2026-06-05
+
+> **Note (2026-06-05, [ADR-0014](0014-neverthrow-core-foreign-boundaries.md)):** "vendored" overstates it — the index is a from-scratch **rewrite** of the slice of Vectra this codebase uses (sharing only the on-disk format for migration-free loading), not a copied-in dependency. It is therefore **owned code**: per ADR-0014 its surface returns `Result` (invariant violations, corruption, and filesystem failures are `err`s), rather than getting a foreign-boundary throw exemption. The title keeps the historical label; read "vendored" below as "owned rewrite."
 
 ## Context
 

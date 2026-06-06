@@ -65,7 +65,7 @@ describe("EmbeddingClient", () => {
       );
 
       const client = new EmbeddingClient(makeEmbeddingConfig());
-      await client.embedBatch(["a", "b", "c"]);
+      (await client.embedBatch(["a", "b", "c"]))._unsafeUnwrap();
 
       expect(capturedMethod).toBe("POST");
       expect(capturedHeaders["authorization"]).toBe(`Bearer ${API_KEY}`);
@@ -84,7 +84,7 @@ describe("EmbeddingClient", () => {
       );
 
       const client = new EmbeddingClient(makeEmbeddingConfig());
-      const embedding = await client.embed("hello");
+      const embedding = (await client.embed("hello"))._unsafeUnwrap();
 
       expect(Array.isArray(embedding)).toBe(true);
       expect(typeof embedding[0]).toBe("number");
@@ -107,7 +107,7 @@ describe("EmbeddingClient", () => {
         model: MODEL,
       };
       const client = new EmbeddingClient(config);
-      await client.embedBatch(["test"]);
+      (await client.embedBatch(["test"]))._unsafeUnwrap();
 
       expect(capturedUrl).toBe("https://api.example.com/v1/embeddings");
       expect(capturedUrl).not.toContain("//embeddings");
@@ -121,7 +121,7 @@ describe("EmbeddingClient", () => {
       );
 
       const client = new EmbeddingClient(makeEmbeddingConfig());
-      const embeddings = await client.embedBatch(["test"]);
+      const embeddings = (await client.embedBatch(["test"]))._unsafeUnwrap();
 
       expect(embeddings).toHaveLength(1);
       expect(embeddings[0]).toEqual([0.1, 0.2, 0.3]);
@@ -143,7 +143,7 @@ describe("EmbeddingClient", () => {
       );
 
       const client = new EmbeddingClient(makeEmbeddingConfig());
-      const embedding = await client.embed("test");
+      const embedding = (await client.embed("test"))._unsafeUnwrap();
 
       expect(embedding).toEqual([0.1, 0.2]);
       expect(callCount).toBe(2);
@@ -164,7 +164,7 @@ describe("EmbeddingClient", () => {
         );
 
         const client = new EmbeddingClient(makeEmbeddingConfig());
-        const embedding = await client.embed("test");
+        const embedding = (await client.embed("test"))._unsafeUnwrap();
 
         expect(embedding).toEqual([0.1, 0.2]);
         expect(callCount).toBe(2);
@@ -193,15 +193,11 @@ describe("EmbeddingClient", () => {
 
       const client = new EmbeddingClient(makeEmbeddingConfig());
 
-      try {
-        await client.embedBatch(["test"]);
-        expect.fail("Should have thrown EmbeddingAPIError");
-      } catch (error) {
-        expect(error).toBeInstanceOf(EmbeddingAPIError);
-        const apiError = error as EmbeddingAPIError;
-        expect(apiError.status).toBe(400);
-        expect(apiError.endpoint).toBe(`${BASE_URL}/embeddings`);
-      }
+      const error = (await client.embedBatch(["test"]))._unsafeUnwrapErr();
+      expect(error).toBeInstanceOf(EmbeddingAPIError);
+      const apiError = error as EmbeddingAPIError;
+      expect(apiError.status).toBe(400);
+      expect(apiError.endpoint).toBe(`${BASE_URL}/embeddings`);
 
       // Verify no retry (only called once)
       expect(callCount).toBe(1);
@@ -219,20 +215,15 @@ describe("EmbeddingClient", () => {
 
       const client = new EmbeddingClient(makeEmbeddingConfig());
 
-      try {
-        await client.embedBatch(["test"]);
-        expect.fail("Should have thrown EmbeddingAPIError");
-      } catch (error) {
-        expect(error).toBeInstanceOf(EmbeddingAPIError);
-        const apiError = error as EmbeddingAPIError;
-        expect(apiError.status).toBe(401);
-      }
+      const error = (await client.embedBatch(["test"]))._unsafeUnwrapErr();
+      expect(error).toBeInstanceOf(EmbeddingAPIError);
+      expect((error as EmbeddingAPIError).status).toBe(401);
 
       // Verify no retry
       expect(callCount).toBe(1);
     });
 
-    it("malformed response throws ZodError", async () => {
+    it("malformed response errs with an EmbeddingError wrapping the ZodError", async () => {
       server.use(
         http.post(`${BASE_URL}/embeddings`, () => {
           // Missing 'data' field
@@ -245,12 +236,9 @@ describe("EmbeddingClient", () => {
 
       const client = new EmbeddingClient(makeEmbeddingConfig());
 
-      try {
-        await client.embedBatch(["test"]);
-        expect.fail("Should have thrown ZodError");
-      } catch (error) {
-        expect(error).toBeInstanceOf(ZodError);
-      }
+      const error = (await client.embedBatch(["test"]))._unsafeUnwrapErr();
+      expect(error).toBeInstanceOf(EmbeddingError);
+      expect(error.cause).toBeInstanceOf(ZodError);
     });
   });
 
@@ -263,21 +251,15 @@ describe("EmbeddingClient", () => {
       );
 
       const client = new EmbeddingClient(makeEmbeddingConfig());
-      await client.embed("test");
+      (await client.embed("test"))._unsafeUnwrap();
 
       expect(client.dimensions).toBe(4);
     });
 
-    it("dimensions throws EmbeddingError before any embed call", async () => {
+    it("dimensions is null before any embed call", () => {
       const client = new EmbeddingClient(makeEmbeddingConfig());
 
-      try {
-        void client.dimensions;
-        expect.fail("Should have thrown EmbeddingError");
-      } catch (error) {
-        expect(error).toBeInstanceOf(EmbeddingError);
-        expect((error as EmbeddingError).message).toContain("no embedding call has been made yet");
-      }
+      expect(client.dimensions).toBeNull();
     });
   });
 });
@@ -354,7 +336,7 @@ describe("Per-attempt logging in EmbeddingClient.embedBatch", () => {
 
     const { log, records } = makePinoCapture();
     const client = new EmbeddingClient(makeEmbeddingConfig(), log);
-    await client.embedBatch(["hello"]);
+    (await client.embedBatch(["hello"]))._unsafeUnwrap();
 
     const startRecords = records.filter((r) => r["msg"] === "embedding request start");
     expect(startRecords).toHaveLength(2);
@@ -383,11 +365,7 @@ describe("Per-attempt logging in EmbeddingClient.embedBatch", () => {
 
     const { log, records } = makePinoCapture();
     const client = new EmbeddingClient(makeEmbeddingConfig(), log);
-    try {
-      await client.embedBatch(["hello"]);
-    } catch {
-      // expected — non-retryable error
-    }
+    (await client.embedBatch(["hello"]))._unsafeUnwrapErr(); // errs — non-retryable
 
     const errorRecords = records.filter((r) => r["msg"] === "embedding request failed (non-retryable)");
     expect(errorRecords).toHaveLength(1);
@@ -438,12 +416,7 @@ describe("CircuitOpenError surface and breaker-counts-calls semantics", () => {
     await tripBreaker(() => client.embedBatch(["test"]));
     const fetchCountAfterTrip = fetchCount;
 
-    let caught: unknown;
-    try {
-      await client.embedBatch(["test"]);
-    } catch (err) {
-      caught = err;
-    }
+    const caught: unknown = (await client.embedBatch(["test"]))._unsafeUnwrapErr();
 
     expect(caught).toBeInstanceOf(CircuitOpenError);
     expect(fetchCount).toBe(fetchCountAfterTrip);
@@ -467,12 +440,7 @@ describe("CircuitOpenError surface and breaker-counts-calls semantics", () => {
 
     await tripBreaker(() => client.embedBatch(["test"]));
 
-    let caught: unknown;
-    try {
-      await client.embedBatch(["test"]);
-    } catch (err) {
-      caught = err;
-    }
+    const caught: unknown = (await client.embedBatch(["test"]))._unsafeUnwrapErr();
 
     const msg = toMessage(caught);
     expect(msg).toContain(`${BASE_URL}/embeddings`);

@@ -1,6 +1,7 @@
 import { type Context, Hono, type MiddlewareHandler } from "hono";
 import { rateLimiter } from "hono-rate-limiter";
 import type { JWTVerifyGetKey } from "jose";
+import { errAsync, okAsync, ResultAsync } from "neverthrow";
 import type { Logger } from "pino";
 import { z } from "zod";
 
@@ -14,6 +15,7 @@ import type { TokenStore } from "./token-store.js";
 import type { ResolvedOAuthConfig } from "./types.js";
 import type { IdTokenPayload } from "./types.js";
 
+import { toMessage } from "../utils/log.js";
 import { verifyIdentity } from "./allowlist.js";
 import { consentSecurityHeaders, renderDeniedPage, renderExpiredPage } from "./consent-page.js";
 import { OAuthClientNotFoundError, OAuthMetadataValidationError } from "./errors.js";
@@ -66,54 +68,15 @@ export function buildAuthRoutes(deps: AuthRoutesDeps): Hono {
 
     if (typeof code !== "string") return c.text("missing code parameter", 400);
 
-    // Exchange upstream code for upstream id_token. Pick the auth method
-    // advertised by discovery — IdPs that require `client_secret_basic`
-    // (Entra and some Okta tenants) fail every login if we always post the
-    // secret in the body, so we pick from `token_endpoint_auth_methods_supported`
-    // and only fall through to post when the field is absent / unrecognized.
-    let idToken: string;
-    try {
-      const authMethod = pickTokenAuthMethod(deps.discovery.token_endpoint_auth_methods_supported);
-      const headers: Record<string, string> = { "content-type": "application/x-www-form-urlencoded" };
-      const tokenBody = new URLSearchParams({
-        grant_type: "authorization_code",
-        code,
-        redirect_uri: `${deps.publicUrl}/oauth/callback`,
-      });
-      if (authMethod === "basic") {
-        // RFC 6749 §2.3.1: client_id and client_secret are application/x-www-form-urlencoded
-        // (percent-encoded) BEFORE being concatenated with ":" and base64-encoded.
-        const userpass = `${encodeURIComponent(deps.oidcConfig.clientId)}:${encodeURIComponent(deps.oidcConfig.clientSecret)}`;
-        headers["authorization"] = `Basic ${Buffer.from(userpass, "utf-8").toString("base64")}`;
-      } else {
-        tokenBody.set("client_id", deps.oidcConfig.clientId);
-        tokenBody.set("client_secret", deps.oidcConfig.clientSecret);
-      }
-      const tokenRes = await fetch(deps.discovery.token_endpoint, {
-        method: "POST",
-        headers,
-        body: tokenBody,
-      });
-      if (!tokenRes.ok) {
-        throw new Error(`token endpoint returned ${tokenRes.status}`);
-      }
-      const tokenJson = await tokenRes.json();
-
-      // Validate token response shape
-      const TokenResponseSchema = z.object({
-        id_token: z.string(),
-        access_token: z.string().optional(),
-        token_type: z.string().optional(),
-        expires_in: z.number().optional(),
-      });
-
-      const validated = TokenResponseSchema.safeParse(tokenJson);
-      if (!validated.success) {
-        throw new Error("token endpoint response missing id_token");
-      }
-      idToken = validated.data.id_token;
-    } catch (cause) {
-      deps.log.oidcClient.error({ err: cause }, "upstream token exchange failed");
+    // Exchange upstream code for upstream id_token.
+    const idToken = (await exchangeUpstreamCode(deps, code)).match(
+      (v): string | null => v,
+      (cause) => {
+        deps.log.oidcClient.error({ err: cause }, "upstream token exchange failed");
+        return null;
+      },
+    );
+    if (idToken === null) {
       return redirectToClient(c, stored.redirectUri, {
         error: "server_error",
         error_description: "upstream code exchange failed",
@@ -123,16 +86,21 @@ export function buildAuthRoutes(deps: AuthRoutesDeps): Hono {
     }
 
     // Verify id_token (alg, sig, iss, aud, nonce)
-    let payload: IdTokenPayload;
-    try {
-      payload = await verifyIdToken(idToken, deps.jwks, {
+    const payload = (
+      await verifyIdToken(idToken, deps.jwks, {
         clientId: deps.oidcConfig.clientId,
         issuer: deps.discovery.issuer,
         nonce: stored.ourNonce,
         allowedAlgs: deps.oidcConfig.allowedAlgs,
-      });
-    } catch (cause) {
-      deps.log.oidcClient.error({ err: cause }, "id_token verification failed");
+      })
+    ).match(
+      (p): IdTokenPayload | null => p,
+      (cause) => {
+        deps.log.oidcClient.error({ err: cause }, "id_token verification failed");
+        return null;
+      },
+    );
+    if (payload === null) {
       return redirectToClient(c, stored.redirectUri, {
         error: "access_denied",
         error_description: "id_token verification failed",
@@ -247,49 +215,125 @@ export function buildAuthRoutes(deps: AuthRoutesDeps): Hono {
   // PUT /register/{client_id} — RFC 7592 update
   app.put("/register/:clientId", async (c) => {
     const clientId = c.req.param("clientId");
-    const denied = await verifyRatBearer(c, deps.clientStore, clientId);
+    const denied = await verifyRatBearer(c, deps.clientStore, deps.log.auth, clientId);
     if (denied) return denied;
 
-    try {
-      const body = await c.req.json();
-      const updated = await deps.clientStore.updateClient(clientId, body);
-      return c.json(updated, 200);
-    } catch (e) {
-      if (e instanceof OAuthMetadataValidationError) {
-        return c.json({ error: "invalid_client_metadata", error_description: e.message }, 400);
-      }
-      // A concurrent DELETE /register/:id (or AuthCleanup's stale-client sweep)
-      // can land between verifyRatBearer's lookup and updateClient's load,
-      // making the client disappear mid-request. RFC 7592 doesn't enumerate
-      // 404 for this case but it's the closest match — definitely not a 500.
-      if (e instanceof OAuthClientNotFoundError) {
-        return c.json({ error: "invalid_client", error_description: "client not found" }, 404);
-      }
-      throw e;
-    }
+    return (await ResultAsync.fromPromise(c.req.json(), () => null)).match(
+      async (body: unknown) =>
+        (await deps.clientStore.updateClient(clientId, body)).match(
+          (updated) => c.json(updated, 200),
+          (e) => {
+            if (e instanceof OAuthMetadataValidationError) {
+              return c.json({ error: "invalid_client_metadata", error_description: e.message }, 400);
+            }
+            // A concurrent DELETE /register/:id (or AuthCleanup's stale-client sweep)
+            // can land between verifyRatBearer's lookup and updateClient's load,
+            // making the client disappear mid-request. RFC 7592 doesn't enumerate
+            // 404 for this case but it's the closest match — definitely not a 500.
+            if (e instanceof OAuthClientNotFoundError) {
+              return c.json({ error: "invalid_client", error_description: "client not found" }, 404);
+            }
+            // A registry/cache failure — surface the degraded store honestly (same
+            // convention as buildClientCap), never wave the update through.
+            deps.log.auth.error({ err: e, clientId }, "client update failed on a registry error");
+            return c.json({ error: "server_error", error_description: "client registry unavailable" }, 503);
+          },
+        ),
+      // Malformed JSON body — a 400 with the standard metadata error code (the
+      // pre-Result code let this escape as a 500).
+      async () =>
+        c.json({ error: "invalid_client_metadata", error_description: "request body is not valid JSON" }, 400),
+    );
   });
 
   // DELETE /register/{client_id} — RFC 7592 delete + cascade
   app.delete("/register/:clientId", async (c) => {
     const clientId = c.req.param("clientId");
-    const denied = await verifyRatBearer(c, deps.clientStore, clientId);
+    const denied = await verifyRatBearer(c, deps.clientStore, deps.log.auth, clientId);
     if (denied) return denied;
 
-    await deps.tokenStore.removeAllForClient(clientId); // cascade FIRST
-    await deps.clientStore.deleteClient(clientId);
-    return c.body(null, 204);
+    return (
+      await deps.tokenStore
+        .removeAllForClient(clientId) // cascade FIRST
+        .andThen(() => deps.clientStore.deleteClient(clientId))
+    ).match(
+      () => c.body(null, 204),
+      (e) => {
+        deps.log.auth.error({ err: e, clientId }, "client delete failed on a store error");
+        return c.json({ error: "server_error", error_description: "client registry unavailable" }, 503);
+      },
+    );
   });
 
   return app;
 }
 
 /**
+ * Exchange the upstream authorization code for an id_token at the IdP's token
+ * endpoint. Picks the auth method advertised by discovery — IdPs that require
+ * `client_secret_basic` (Entra and some Okta tenants) fail every login if we
+ * always post the secret in the body, so we pick from
+ * `token_endpoint_auth_methods_supported` and only fall through to post when
+ * the field is absent / unrecognized. Errs on a network failure, a non-ok
+ * status, or a response with no id_token; the caller logs and redirects.
+ */
+function exchangeUpstreamCode(deps: AuthRoutesDeps, code: string): ResultAsync<string, Error> {
+  const authMethod = pickTokenAuthMethod(deps.discovery.token_endpoint_auth_methods_supported);
+  const headers: Record<string, string> = { "content-type": "application/x-www-form-urlencoded" };
+  const tokenBody = new URLSearchParams({
+    grant_type: "authorization_code",
+    code,
+    redirect_uri: `${deps.publicUrl}/oauth/callback`,
+  });
+  if (authMethod === "basic") {
+    // RFC 6749 §2.3.1: client_id and client_secret are application/x-www-form-urlencoded
+    // (percent-encoded) BEFORE being concatenated with ":" and base64-encoded.
+    const userpass = `${encodeURIComponent(deps.oidcConfig.clientId)}:${encodeURIComponent(deps.oidcConfig.clientSecret)}`;
+    headers["authorization"] = `Basic ${Buffer.from(userpass, "utf-8").toString("base64")}`;
+  } else {
+    tokenBody.set("client_id", deps.oidcConfig.clientId);
+    tokenBody.set("client_secret", deps.oidcConfig.clientSecret);
+  }
+
+  // Validate token response shape
+  const TokenResponseSchema = z.object({
+    id_token: z.string(),
+    access_token: z.string().optional(),
+    token_type: z.string().optional(),
+    expires_in: z.number().optional(),
+  });
+
+  return ResultAsync.fromPromise(
+    fetch(deps.discovery.token_endpoint, { method: "POST", headers, body: tokenBody }),
+    (cause) => new Error(`token endpoint fetch failed: ${toMessage(cause)}`, { cause }),
+  )
+    .andThen((tokenRes) => {
+      if (!tokenRes.ok) {
+        return errAsync(new Error(`token endpoint returned ${tokenRes.status.toString()}`));
+      }
+      return ResultAsync.fromPromise(
+        tokenRes.json(),
+        (cause) => new Error(`token endpoint response is not JSON: ${toMessage(cause)}`, { cause }),
+      );
+    })
+    .andThen((tokenJson) => {
+      const validated = TokenResponseSchema.safeParse(tokenJson);
+      if (!validated.success) {
+        return errAsync(new Error("token endpoint response missing id_token"));
+      }
+      return okAsync(validated.data.id_token);
+    });
+}
+
+/**
  * Verify Registration Access Token (RAT) Bearer token and return null if valid,
- * or a 401 response if invalid/missing.
+ * a 401 response if invalid/missing, or a 503 on a registry failure (which must
+ * not read as "unauthorized" — the token may be perfectly valid).
  */
 async function verifyRatBearer(
   c: Context,
   store: DiskClientRegistrationStore,
+  log: Logger,
   clientId: string,
 ): Promise<Response | null> {
   const auth = c.req.header("authorization");
@@ -298,10 +342,13 @@ async function verifyRatBearer(
   if (!match) return c.json({ error: "unauthorized" }, 401);
 
   const presented = match[1]!;
-  const ok = await store.verifyRegistrationAccessToken(clientId, presented);
-  if (!ok) return c.json({ error: "unauthorized" }, 401);
-
-  return null;
+  return (await store.verifyRegistrationAccessToken(clientId, presented)).match(
+    (valid) => (valid ? null : c.json({ error: "unauthorized" }, 401)),
+    (e) => {
+      log.error({ err: e, clientId }, "RAT verification failed on a registry error");
+      return c.json({ error: "server_error", error_description: "client registry unavailable" }, 503);
+    },
+  );
 }
 
 /**

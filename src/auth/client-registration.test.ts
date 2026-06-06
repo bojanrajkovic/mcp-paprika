@@ -5,6 +5,7 @@
 
 import { randomUUID } from "node:crypto";
 
+import { InvalidClientMetadataError } from "@modelcontextprotocol/sdk/server/auth/errors.js";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { useTempDir } from "../../test/support/disk-caches.js";
@@ -12,7 +13,7 @@ import { makePinoCapture } from "../../test/support/tool-test-utils.js";
 import { SILENT_LOG } from "../utils/log.js";
 import { DiskClientRegistrationStore } from "./client-registration.js";
 import { type AuthCache, buildAuthCaches } from "./disk.js";
-import { OAuthClientNotFoundError, OAuthMetadataValidationError } from "./errors.js";
+import { OAuthClientNotFoundError } from "./errors.js";
 import { hashTokenForStorage } from "./tokens.js";
 
 // ============================================================================
@@ -85,7 +86,7 @@ describe("DiskClientRegistrationStore", () => {
       expect("client_secret" in response).toBe(false);
     });
 
-    it("rejects bad metadata (token_endpoint_auth_method=basic) throwing OAuthMetadataValidationError", async () => {
+    it("rejects bad metadata (token_endpoint_auth_method=basic) throwing InvalidClientMetadataError", async () => {
       const badMeta = {
         ...makeWireRegistration(),
         token_endpoint_auth_method: "basic", // not allowed
@@ -98,7 +99,10 @@ describe("DiskClientRegistrationStore", () => {
         thrownError = e;
       }
 
-      expect(thrownError).toBeInstanceOf(OAuthMetadataValidationError);
+      // The SDK error type carries the RFC 7591 §3.2.2 errorCode, so the DCR
+      // handler renders a 400 `invalid_client_metadata` rather than a 500.
+      expect(thrownError).toBeInstanceOf(InvalidClientMetadataError);
+      expect((thrownError as InvalidClientMetadataError).errorCode).toBe("invalid_client_metadata");
     });
 
     it("enforces maxClients atomically against concurrent registrations", async () => {
@@ -219,7 +223,7 @@ describe("DiskClientRegistrationStore", () => {
         scope: "openid email profile",
       };
 
-      const updated = await store.updateClient(registered.client_id, updateMeta);
+      const updated = (await store.updateClient(registered.client_id, updateMeta))._unsafeUnwrap();
 
       // Response should have updated fields
       expect(updated.client_name).toBe("Updated Client Name");
@@ -236,18 +240,13 @@ describe("DiskClientRegistrationStore", () => {
       expect(storedClient!.registrationAccessTokenHash).toBe(hashOfOriginalRat);
     });
 
-    it("missing clientId throws OAuthClientNotFoundError", async () => {
+    it("missing clientId errs with OAuthClientNotFoundError", async () => {
       const fakeId = randomUUID();
       const updateMeta = { client_name: "New Name" };
 
-      let thrownError: unknown;
-      try {
-        await store.updateClient(fakeId, updateMeta);
-      } catch (e) {
-        thrownError = e;
-      }
+      const error = (await store.updateClient(fakeId, updateMeta))._unsafeUnwrapErr();
 
-      expect(thrownError).toBeInstanceOf(OAuthClientNotFoundError);
+      expect(error).toBeInstanceOf(OAuthClientNotFoundError);
     });
   });
 
@@ -257,7 +256,7 @@ describe("DiskClientRegistrationStore", () => {
       const metaIn = makeWireRegistration();
       const registered = await store.registerClient(metaIn);
 
-      const result = await store.verifyRegistrationAccessToken(registered.client_id, "mcp_rat_wrong");
+      const result = (await store.verifyRegistrationAccessToken(registered.client_id, "mcp_rat_wrong"))._unsafeUnwrap();
 
       expect(result).toBe(false);
     });
@@ -267,10 +266,9 @@ describe("DiskClientRegistrationStore", () => {
       const metaIn = makeWireRegistration();
       const registered = await store.registerClient(metaIn);
 
-      const result = await store.verifyRegistrationAccessToken(
-        registered.client_id,
-        registered.registration_access_token!,
-      );
+      const result = (
+        await store.verifyRegistrationAccessToken(registered.client_id, registered.registration_access_token!)
+      )._unsafeUnwrap();
 
       expect(result).toBe(true);
     });
@@ -286,7 +284,7 @@ describe("DiskClientRegistrationStore", () => {
       expect(retrieved).toBeDefined();
 
       // Delete
-      await store.deleteClient(registered.client_id);
+      (await store.deleteClient(registered.client_id))._unsafeUnwrap();
 
       // Verify it's gone
       retrieved = await store.getClient(registered.client_id);

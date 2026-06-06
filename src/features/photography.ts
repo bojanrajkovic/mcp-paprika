@@ -12,13 +12,15 @@
  * at construction — credentials are the only construction-time input.
  */
 import type { IRetryContext } from "cockatiel";
+import { err, ok, type Result, ResultAsync } from "neverthrow";
 import type { Logger } from "pino";
 import { z } from "zod";
 
 import type { Recipe } from "../domains/recipe/types.js";
 import type { ResolvedImageGenConfig } from "../utils/config.js";
 
-import { SILENT_LOG } from "../utils/log.js";
+import { CircuitOpenError } from "../utils/errors.js";
+import { SILENT_LOG, toMessage } from "../utils/log.js";
 import {
   createResilientExecutor,
   type ResilientExecutor,
@@ -26,6 +28,22 @@ import {
   TransientHTTPError,
 } from "../utils/resilience.js";
 import { PhotographyAPIError, PhotographyError } from "./photography-errors.js";
+
+/**
+ * The client's public error union (ADR-0014): `generate` errs with one of
+ * these. `PhotographyAPIError` (a subclass of `PhotographyError`) passes
+ * through from the wire classification; `CircuitOpenError` surfaces a tripped
+ * breaker; a foreign escape (a `ZodError` on a malformed envelope, an abort
+ * once the request ceiling is hit) is wrapped as a base `PhotographyError` at
+ * the edge with its message preserved.
+ */
+export type PhotographyFailure = PhotographyError | CircuitOpenError;
+
+/** Normalize whatever escapes the resilience stack into {@link PhotographyFailure}. */
+function toPhotographyFailure(error: unknown): PhotographyFailure {
+  if (error instanceof PhotographyError || error instanceof CircuitOpenError) return error;
+  return new PhotographyError(toMessage(error), { cause: error });
+}
 
 /** Ordered curated model aliases — a tuple so it can seed the tool's `z.enum`. */
 export const PHOTO_MODELS = ["seedream", "nano-banana", "nano-banana-2", "gpt-image"] as const;
@@ -122,14 +140,14 @@ export class PhotographyClient {
   }
 
   /**
-   * Generate an image and return its raw bytes. Throws:
-   * - PhotographyAPIError on a permanent (non-retryable) HTTP status
-   * - PhotographyError on a 200 with no image (refusal / text-only completion)
-   *   or an unparseable image payload
-   * - CircuitOpenError when the breaker is open
-   * - ZodError on a malformed response envelope
+   * Generate an image and resolve with its raw bytes. Errs with
+   * {@link PhotographyFailure}: `PhotographyAPIError` on a permanent
+   * (non-retryable) HTTP status, `PhotographyError` on a 200 with no image
+   * (refusal / text-only completion), an unparseable image payload, or a
+   * wrapped foreign escape (malformed envelope, abort), and `CircuitOpenError`
+   * when the breaker is open.
    */
-  async generate(options: Readonly<GeneratePhotoOptions>): Promise<GeneratedPhoto> {
+  generate(options: Readonly<GeneratePhotoOptions>): ResultAsync<GeneratedPhoto, PhotographyFailure> {
     const { slug, imageOnly } = MODELS[options.model];
     const modalities = imageOnly ? ["image"] : ["image", "text"];
     const content: string | Array<ContentPart> = options.referenceImage
@@ -200,7 +218,15 @@ export class PhotographyClient {
           throw new PhotographyError(`Model "${options.model}" returned no image (a refusal or text-only completion).`);
         }
 
-        const photo = decodeDataUri(url);
+        // Result-returning decode, rethrown here INSIDE the cockatiel-governed
+        // closure (where every outcome speaks in throws — ADR-0014 form #3);
+        // the fromPromise edge below converts it back onto the Result rail.
+        const photo = decodeDataUri(url).match(
+          (v) => v,
+          (e) => {
+            throw e;
+          },
+        );
         const costUsd = parsed.usage?.cost ?? null;
         const servedModel = parsed.model ?? slug;
         const attemptDurationMs = Math.round(performance.now() - t0);
@@ -221,7 +247,8 @@ export class PhotographyClient {
       }
     };
 
-    return this._executor.execute(this._endpoint, execute);
+    // The throw-based cockatiel protocol ends at this owned edge (ADR-0014).
+    return ResultAsync.fromPromise(this._executor.execute(this._endpoint, execute), toPhotographyFailure);
   }
 }
 
@@ -261,12 +288,12 @@ export function recipeToPhotoPrompt(
   return parts.join(" ");
 }
 
-function decodeDataUri(url: string): { bytes: Buffer; mimeType: string } {
+function decodeDataUri(url: string): Result<{ bytes: Buffer; mimeType: string }, PhotographyError> {
   const match = DATA_URI_RE.exec(url);
   const mimeType = match?.[1];
   const base64 = match?.[2];
   if (mimeType === undefined || base64 === undefined) {
-    throw new PhotographyError("Image payload was not a base64 data-URI as expected.");
+    return err(new PhotographyError("Image payload was not a base64 data-URI as expected."));
   }
-  return { bytes: Buffer.from(base64, "base64"), mimeType };
+  return ok({ bytes: Buffer.from(base64, "base64"), mimeType });
 }

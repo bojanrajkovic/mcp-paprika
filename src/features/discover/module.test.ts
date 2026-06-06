@@ -1,15 +1,17 @@
 import { fromAny } from "@total-typescript/shoehorn";
+import { errAsync, okAsync, type ResultAsync } from "neverthrow";
 import { describe, expect, it, vi } from "vitest";
 
 import type { Recipe } from "../../domains/recipe/types.js";
 import type { CategoryUid, RecipeUid } from "../../ids.js";
 import type { Infra } from "../../kernel/registry.js";
-import type { VectorStore } from "../vector-store.js";
+import type { VectorStore, VectorStoreFailure } from "../vector-store.js";
 
 import { makeRecipe } from "../../../test/domains/recipe/__fixtures__/recipes.js";
 import { makeKernelInfra } from "../../../test/support/kernel-harness.js";
 import { makePinoCapture } from "../../../test/support/tool-test-utils.js";
 import { registeredModules } from "../../kernel/registry.js";
+import { VectorStoreError } from "../vector-store-errors.js";
 // Side-effect: register every module so `registeredModules()` can resolve "discover".
 import "../../kernel/modules.generated.js";
 
@@ -27,8 +29,10 @@ import "../../kernel/modules.generated.js";
 /** A mock VectorStore exposing only what the `index` hook touches. `size` drives the rebuild threshold. */
 function makeMockVectorStore(size = 0) {
   return {
-    indexRecipes: vi.fn<(recipes: ReadonlyArray<Recipe>, resolveNames: unknown) => Promise<void>>().mockResolvedValue(),
-    removeRecipe: vi.fn<(uid: string) => Promise<void>>().mockResolvedValue(),
+    indexRecipes: vi
+      .fn<(recipes: ReadonlyArray<Recipe>, resolveNames: unknown) => ResultAsync<unknown, VectorStoreFailure>>()
+      .mockReturnValue(okAsync(undefined)),
+    removeRecipe: vi.fn<(uid: string) => ResultAsync<void, VectorStoreFailure>>().mockReturnValue(okAsync(undefined)),
     clearHashes: vi.fn<() => void>(),
     size,
   };
@@ -195,7 +199,9 @@ describe("discover module — index boot hook (#177)", () => {
       const mockVs = makeMockVectorStore(10);
       const { infra, records } = await runIndexBoot([r1, r2], mockVs);
       mockVs.indexRecipes.mockClear();
-      mockVs.indexRecipes.mockRejectedValueOnce(new Error("embeddings down")).mockResolvedValueOnce();
+      mockVs.indexRecipes
+        .mockReturnValueOnce(errAsync(new VectorStoreError("embeddings down")))
+        .mockReturnValueOnce(okAsync(undefined));
 
       infra.indexEvents.emit({ type: "recipe-changed", recipes: [r1] });
       await settle();
@@ -211,7 +217,7 @@ describe("discover module — index boot hook (#177)", () => {
 
     it("catches and logs a removeRecipe failure", async () => {
       const mockVs = makeMockVectorStore(10);
-      mockVs.removeRecipe.mockRejectedValueOnce(new Error("remove failed"));
+      mockVs.removeRecipe.mockReturnValueOnce(errAsync(new VectorStoreError("remove failed")));
       const { infra, records } = await runIndexBoot([], mockVs);
 
       infra.indexEvents.emit({ type: "recipe-removed", uids: ["uid1" as RecipeUid] });
@@ -225,8 +231,8 @@ describe("discover module — index boot hook (#177)", () => {
     it("retries a failed startup reconcile on the next recipe-changed cycle", async () => {
       const recipe = makeRecipe({ uid: "r1" as RecipeUid });
       const mockVs = makeMockVectorStore(10);
-      // Embeddings briefly down at boot: the startup reconcile's indexRecipes rejects.
-      mockVs.indexRecipes.mockRejectedValueOnce(new Error("embeddings down"));
+      // Embeddings briefly down at boot: the startup reconcile's indexRecipes errs.
+      mockVs.indexRecipes.mockReturnValueOnce(errAsync(new VectorStoreError("embeddings down")));
 
       const { infra } = await runIndexBoot([recipe], mockVs);
       expect(mockVs.indexRecipes).toHaveBeenCalledTimes(1); // the failed startup attempt

@@ -3,7 +3,7 @@
  *
  * Provides recipe-aware vector operations with:
  * - Embedding lifecycle management (when/what to embed)
- * - Vector storage via the vendored `JsonVectorIndex`
+ * - Vector storage via the owned `JsonVectorIndex`
  * - Change detection via persisted content hash map
  * - Corruption recovery for both the vector index and hash map
  */
@@ -54,18 +54,35 @@ import { mkdir, readFile, rename, cp, open } from "node:fs/promises";
 import { join } from "node:path";
 
 import { Mutex } from "async-mutex";
+import { err, errAsync, ok, okAsync, Result, ResultAsync } from "neverthrow";
 import type { Logger } from "pino";
 import { z } from "zod";
 
 import type { Recipe } from "../domains/recipe/types.js";
 import type { CategoryUid, RecipeUid } from "../ids.js";
-import type { EmbeddingClient } from "./embeddings.js";
+import type { EmbeddingClient, EmbeddingFailure } from "./embeddings.js";
 
 import { isNodeError } from "../utils/errors.js";
-import { SILENT_LOG } from "../utils/log.js";
+import { SILENT_LOG, toMessage } from "../utils/log.js";
 import { recipeToEmbeddingText } from "./embeddings.js";
 import { JsonVectorIndex } from "./json-vector-index.js";
 import { VectorStoreError } from "./vector-store-errors.js";
+
+/**
+ * The store's public error union (ADR-0014): an embedding-provider failure
+ * passes through (callers report it as a provider issue — a tripped breaker, a
+ * permanent API error), while index and filesystem failures wrap as
+ * `VectorStoreError` at this layer.
+ */
+export type VectorStoreFailure = VectorStoreError | EmbeddingFailure;
+
+/** Wrap a foreign or index-layer failure into {@link VectorStoreError}. */
+function storeError(context: string): (cause: unknown) => VectorStoreError {
+  return (cause) =>
+    new VectorStoreError(`${context}: ${toMessage(cause)}`, {
+      cause: cause instanceof Error ? cause : undefined,
+    });
+}
 
 const HashIndexSchema = z.record(z.string(), z.string());
 
@@ -92,7 +109,7 @@ export class VectorStore {
   // multiple concurrent writers — the sync engine fires sync:complete (recipe)
   // and sync:category-change handlers from one syncOnce() without awaiting them,
   // and they both write here. The index's beginUpdate()/endUpdate() is a single
-  // transaction (a second beginUpdate while one is open throws), and `_hashes` +
+  // transaction (a second beginUpdate while one is open errs), and `_hashes` +
   // its persisted file are shared state, so every write runs exclusively (#177).
   private readonly _writeMutex = new Mutex();
 
@@ -107,157 +124,193 @@ export class VectorStore {
     this.log = log ?? SILENT_LOG;
   }
 
-  async init(): Promise<void> {
-    await mkdir(this._vectorsDir, { recursive: true });
-
+  init(): ResultAsync<void, VectorStoreError> {
     // Create or open the vector index, with corruption recovery (AC1.4). An
-    // existing index is eagerly loaded+validated here (non-finite vectors,
-    // ragged dimensions, unparseable JSON all throw) so corruption is repaired
-    // at startup rather than surfacing later during a reconcile.
-    try {
-      const created = await this._index.isIndexCreated();
-      if (created) {
-        await this._index.loadIndexData();
-      } else {
-        await this._index.createIndex();
-      }
-    } catch {
-      this.log.warn({ vectorsDir: this._vectorsDir }, "corrupt vector index, backing up and recreating");
-      const backupDir = `${this._vectorsDir}.bak`;
-      await cp(this._vectorsDir, backupDir, { recursive: true, force: true });
-      await this._index.createIndex({ version: 1, deleteIfExists: true });
-      this._hashes = {};
-      // Persist the cleared hash map so it matches the now-empty index on disk.
-      // Without this, a restart before the first successful re-index would reload
-      // the stale hash-index.json against the empty index, and indexRecipes would
-      // skip every "unchanged" recipe — leaving the index permanently empty.
-      await this._persistHashes();
-      return; // Skip loading the (just-cleared) hash index — everything is reset
-    }
+    // existing index is eagerly loaded+validated (non-finite vectors, ragged
+    // dimensions, unparseable JSON all err) so corruption is repaired at
+    // startup rather than surfacing later during a reconcile. A recovered
+    // (recreated) index skips the hash/meta load — everything was just reset.
+    return ResultAsync.fromPromise(mkdir(this._vectorsDir, { recursive: true }), storeError("create vectors dir"))
+      .andThen(() =>
+        // The probe is fromPromise (not fromSafePromise) so even an unexpected
+        // probe rejection routes into the corruption-recovery path below.
+        ResultAsync.fromPromise(this._index.isIndexCreated(), storeError("probe index"))
+          .andThen((created) => (created ? this._index.loadIndexData() : this._index.createIndex()))
+          .map(() => "loaded" as const)
+          .orElse((cause) => this._recoverCorruptIndex(cause).map(() => "recovered" as const)),
+      )
+      .andThen((state) => (state === "recovered" ? okAsync<void, VectorStoreError>(undefined) : this._postLoad()));
+  }
 
-    // Load hash map — follows DiskCache pattern (disk-cache.ts:60-88)
-    await this._loadHashIndex();
-
-    // Invalidate vectors when the embedding model or schema version changes.
-    // Clearing only the hash map is not enough: a new model may emit a different
-    // vector dimension, and the index pins its dimension from the still-present
-    // old vectors — so every re-embed upsert (and every search) would throw a
-    // dimension mismatch and deadlock re-indexing. Recreate the index so its
-    // dimension un-pins and the stale-dimension vectors are dropped.
-    const meta = await this._loadMeta();
-    if (meta !== null) {
-      const modelChanged = meta.model !== this._modelId;
-      const schemaChanged = (meta.schemaVersion ?? 0) !== this._schemaVersion;
-      if (modelChanged) {
-        this.log.info(
-          { previousModel: meta.model, newModel: this._modelId },
-          "embedding model changed, clearing vector index",
-        );
-      } else if (schemaChanged) {
-        this.log.info(
-          { previousSchemaVersion: meta.schemaVersion ?? 0, newSchemaVersion: this._schemaVersion },
-          "embedding schema version changed, clearing vector index",
-        );
-      }
-      if (modelChanged || schemaChanged) {
+  /** Back up the corrupt vectors dir, recreate an empty index, reset the hash map. */
+  private _recoverCorruptIndex(cause: unknown): ResultAsync<void, VectorStoreError> {
+    this.log.warn({ err: cause, vectorsDir: this._vectorsDir }, "corrupt vector index, backing up and recreating");
+    const backupDir = `${this._vectorsDir}.bak`;
+    return ResultAsync.fromPromise(
+      cp(this._vectorsDir, backupDir, { recursive: true, force: true }),
+      storeError("back up vectors dir"),
+    )
+      .andThen(() => this._index.createIndex({ version: 1, deleteIfExists: true }).mapErr(storeError("recreate index")))
+      .andThen(() => {
         this._hashes = {};
-        await this._index.createIndex({ version: 1, deleteIfExists: true });
-      }
-    }
+        // Persist the cleared hash map so it matches the now-empty index on disk.
+        // Without this, a restart before the first successful re-index would reload
+        // the stale hash-index.json against the empty index, and indexRecipes would
+        // skip every "unchanged" recipe — leaving the index permanently empty.
+        return this._persistHashes();
+      });
   }
 
-  private async _loadHashIndex(): Promise<void> {
-    let raw: string;
-    try {
-      raw = await readFile(this._hashIndexPath, "utf-8");
-    } catch (error: unknown) {
+  /** Load the hash map, then invalidate everything on a model/schema change. */
+  private _postLoad(): ResultAsync<void, VectorStoreError> {
+    return this._loadHashIndex()
+      .andThen(() => this._loadMeta())
+      .andThen((meta) => {
+        // Invalidate vectors when the embedding model or schema version changes.
+        // Clearing only the hash map is not enough: a new model may emit a different
+        // vector dimension, and the index pins its dimension from the still-present
+        // old vectors — so every re-embed upsert (and every search) would err with a
+        // dimension mismatch and deadlock re-indexing. Recreate the index so its
+        // dimension un-pins and the stale-dimension vectors are dropped.
+        if (meta === null) return okAsync<void, VectorStoreError>(undefined);
+        const modelChanged = meta.model !== this._modelId;
+        const schemaChanged = (meta.schemaVersion ?? 0) !== this._schemaVersion;
+        if (modelChanged) {
+          this.log.info(
+            { previousModel: meta.model, newModel: this._modelId },
+            "embedding model changed, clearing vector index",
+          );
+        } else if (schemaChanged) {
+          this.log.info(
+            { previousSchemaVersion: meta.schemaVersion ?? 0, newSchemaVersion: this._schemaVersion },
+            "embedding schema version changed, clearing vector index",
+          );
+        }
+        if (modelChanged || schemaChanged) {
+          this._hashes = {};
+          return this._index.createIndex({ version: 1, deleteIfExists: true }).mapErr(storeError("recreate index"));
+        }
+        return okAsync<void, VectorStoreError>(undefined);
+      });
+  }
+
+  private _loadHashIndex(): ResultAsync<void, VectorStoreError> {
+    return ResultAsync.fromPromise(readFile(this._hashIndexPath, "utf-8"), (e) => e)
+      .map((raw): string | null => raw)
+      .orElse((error) => {
+        if (isNodeError(error) && error.code === "ENOENT") {
+          // Cold-start: hash-index.json doesn't exist yet. Silent by design.
+          this._hashes = {};
+          return okAsync<string | null, VectorStoreError>(null);
+        }
+        return errAsync(storeError("read hash-index.json")(error));
+      })
+      .andThen((raw) => {
+        if (raw === null) return okAsync<void, VectorStoreError>(undefined);
+        return Result.fromThrowable(
+          () => JSON.parse(raw) as unknown,
+          (e) => e,
+        )().match(
+          (parsed) => {
+            const result = HashIndexSchema.safeParse(parsed);
+            if (!result.success) {
+              this.log.warn(
+                { path: this._hashIndexPath },
+                "schema mismatch on hash-index.json, backing up and resetting",
+              );
+              return this._backupFile(this._hashIndexPath, `${this._hashIndexPath}.bak`).map(() => {
+                this._hashes = {};
+              });
+            }
+            this._hashes = result.data;
+            return okAsync<void, VectorStoreError>(undefined);
+          },
+          (parseErr) => {
+            this.log.warn(
+              { err: parseErr, path: this._hashIndexPath },
+              "corrupt hash-index.json, backing up and resetting",
+            );
+            return this._backupFile(this._hashIndexPath, `${this._hashIndexPath}.bak`).map(() => {
+              this._hashes = {};
+            });
+          },
+        );
+      });
+  }
+
+  private _loadMeta(): ResultAsync<VectorMeta | null, VectorStoreError> {
+    return ResultAsync.fromPromise(readFile(this._metaPath, "utf-8"), (e) => e)
+      .map((raw): string | null => raw)
+      .orElse((error) => {
+        if (isNodeError(error) && error.code === "ENOENT") {
+          // Cold-start: vector-meta.json doesn't exist yet. Silent by design.
+          return okAsync<string | null, VectorStoreError>(null);
+        }
+        return errAsync(storeError("read vector-meta.json")(error));
+      })
+      .map((raw) => {
+        if (raw === null) return null;
+        return Result.fromThrowable(
+          () => VectorMetaSchema.parse(JSON.parse(raw)),
+          (e) => e,
+        )().match(
+          (meta) => meta,
+          (parseErr) => {
+            this.log.debug(
+              { err: parseErr, path: this._metaPath },
+              "could not parse vector-meta.json; will re-detect model/schema",
+            );
+            return null;
+          },
+        );
+      });
+  }
+
+  private _persistMeta(): ResultAsync<void, VectorStoreError> {
+    const write = async (): Promise<void> => {
+      const tmpPath = join(this._vectorsDir, `.vector-meta-${Date.now().toString()}.tmp`);
+      const fh = await open(tmpPath, "w");
+      try {
+        await fh.writeFile(JSON.stringify({ model: this._modelId, schemaVersion: this._schemaVersion }));
+        await fh.sync();
+      } finally {
+        await fh.close();
+      }
+      await rename(tmpPath, this._metaPath);
+    };
+    return ResultAsync.fromPromise(write(), storeError("persist vector-meta.json"));
+  }
+
+  private _backupFile(src: string, dest: string): ResultAsync<void, VectorStoreError> {
+    return ResultAsync.fromPromise(rename(src, dest), (e) => e).orElse((error) => {
       if (isNodeError(error) && error.code === "ENOENT") {
-        // Cold-start: hash-index.json doesn't exist yet. Silent by design.
-        this._hashes = {};
-        return;
+        // Idempotent removal: file already gone is the desired end state.
+        return okAsync<void, VectorStoreError>(undefined);
       }
-      throw error;
-    }
-
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(raw);
-    } catch (err) {
-      this.log.warn({ err, path: this._hashIndexPath }, "corrupt hash-index.json, backing up and resetting");
-      await this._backupFile(this._hashIndexPath, `${this._hashIndexPath}.bak`);
-      this._hashes = {};
-      return;
-    }
-
-    const result = HashIndexSchema.safeParse(parsed);
-    if (!result.success) {
-      this.log.warn({ path: this._hashIndexPath }, "schema mismatch on hash-index.json, backing up and resetting");
-      await this._backupFile(this._hashIndexPath, `${this._hashIndexPath}.bak`);
-      this._hashes = {};
-      return;
-    }
-
-    this._hashes = result.data;
+      return errAsync(storeError(`back up ${src}`)(error));
+    });
   }
 
-  private async _loadMeta(): Promise<VectorMeta | null> {
-    let raw: string;
-    try {
-      raw = await readFile(this._metaPath, "utf-8");
-    } catch (error: unknown) {
-      if (isNodeError(error) && error.code === "ENOENT") {
-        // Cold-start: vector-meta.json doesn't exist yet. Silent by design.
-        return null;
-      }
-      throw error;
-    }
-
-    try {
-      return VectorMetaSchema.parse(JSON.parse(raw));
-    } catch (err) {
-      this.log.debug({ err, path: this._metaPath }, "could not parse vector-meta.json; will re-detect model/schema");
-      return null;
-    }
-  }
-
-  private async _persistMeta(): Promise<void> {
-    const tmpPath = join(this._vectorsDir, `.vector-meta-${Date.now().toString()}.tmp`);
-    const fh = await open(tmpPath, "w");
-    try {
-      await fh.writeFile(JSON.stringify({ model: this._modelId, schemaVersion: this._schemaVersion }));
-      await fh.sync();
-    } finally {
-      await fh.close();
-    }
-    await rename(tmpPath, this._metaPath);
-  }
-
-  private async _backupFile(src: string, dest: string): Promise<void> {
-    try {
-      await rename(src, dest);
-    } catch (error: unknown) {
-      if (!isNodeError(error) || error.code !== "ENOENT") {
-        throw error;
-      }
-      // Idempotent removal: file already gone is the desired end state.
-    }
-  }
-
-  async indexRecipes(
+  indexRecipes(
     recipes: ReadonlyArray<Recipe>,
     resolveCats: (uids: ReadonlyArray<CategoryUid>) => ReadonlyArray<string>,
-  ): Promise<IndexingResult> {
+  ): ResultAsync<IndexingResult, VectorStoreFailure> {
     // Run exclusively so a concurrent indexRecipes/removeRecipe can't open an
     // overlapping vector-index transaction or race the hash map (see `_writeMutex`).
-    return this._writeMutex.runExclusive(() => this._indexRecipesLocked(recipes, resolveCats));
+    // fromPromise + flatten keeps the locked body's Result on the rail (the same
+    // double-Result shape as DiskCache._locked).
+    return ResultAsync.fromPromise(
+      this._writeMutex.runExclusive(() => this._indexRecipesLocked(recipes, resolveCats)),
+      storeError("index recipes"),
+    ).andThen((r) => r);
   }
 
   private async _indexRecipesLocked(
     recipes: ReadonlyArray<Recipe>,
     resolveCats: (uids: ReadonlyArray<CategoryUid>) => ReadonlyArray<string>,
-  ): Promise<IndexingResult> {
+  ): Promise<Result<IndexingResult, VectorStoreFailure>> {
     if (recipes.length === 0) {
-      return { indexed: 0, skipped: 0, total: 0 };
+      return ok({ indexed: 0, skipped: 0, total: 0 });
     }
 
     // Compute embedding texts and hashes, filter unchanged
@@ -278,58 +331,79 @@ export class VectorStore {
     }
 
     if (toEmbed.length === 0) {
-      return { indexed: 0, skipped, total: recipes.length };
+      return ok({ indexed: 0, skipped, total: recipes.length });
     }
 
-    // Batch embed in chunks of BATCH_SIZE to avoid API limits on large collections
+    // Batch embed in chunks of BATCH_SIZE to avoid API limits on large collections.
+    // An embedding failure aborts the whole run before any index mutation — the
+    // provider error passes through to the caller untouched.
     const allVectors: Array<Array<number>> = [];
     for (let offset = 0; offset < toEmbed.length; offset += BATCH_SIZE) {
       const chunk = toEmbed.slice(offset, offset + BATCH_SIZE);
-      const vectors = await this._embedder.embedBatch(chunk.map((e) => e.text));
-      allVectors.push(...vectors);
+      const batchErr = (await this._embedder.embedBatch(chunk.map((e) => e.text))).match(
+        (vectors) => {
+          allVectors.push(...vectors);
+          return undefined;
+        },
+        (e) => e,
+      );
+      if (batchErr !== undefined) return err(batchErr);
     }
 
     // Upsert into the vector index. A single recipe whose embedding is degenerate
     // — all-zero or non-finite, both of which the index rejects — must not abort
     // the whole batch and stall every other recipe, so skip+warn it here rather
-    // than letting upsertItem throw. A skipped recipe records no hash, so a
-    // transient bad embedding self-heals on the next sync cycle.
-    await this._index.beginUpdate();
+    // than handing upsertItem a vector it would err on. A skipped recipe records
+    // no hash, so a transient bad embedding self-heals on the next sync cycle.
+    const wrapIndexErr = (e: unknown): VectorStoreError =>
+      new VectorStoreError("Failed to upsert items into vector index", {
+        cause: e instanceof Error ? e : undefined,
+      });
+    const beginErr = (await this._index.beginUpdate()).match(() => undefined, wrapIndexErr);
+    if (beginErr !== undefined) return err(beginErr);
+
     const committed: typeof toEmbed = [];
-    try {
-      for (let i = 0; i < toEmbed.length; i++) {
-        const entry = toEmbed[i]!;
-        const vector = allVectors[i]!;
-        if (!vector.every(Number.isFinite) || vector.every((v) => v === 0)) {
-          this.log.warn({ uid: entry.recipe.uid }, "skipping recipe whose embedding is zero or non-finite");
-          continue;
-        }
+    for (let i = 0; i < toEmbed.length; i++) {
+      const entry = toEmbed[i]!;
+      const vector = allVectors[i]!;
+      if (!vector.every(Number.isFinite) || vector.every((v) => v === 0)) {
+        this.log.warn({ uid: entry.recipe.uid }, "skipping recipe whose embedding is zero or non-finite");
+        continue;
+      }
+      const upsertErr = (
         await this._index.upsertItem({
           id: entry.recipe.uid,
           vector,
           metadata: { recipeName: entry.recipe.name },
-        });
-        committed.push(entry);
+        })
+      ).match(() => undefined, wrapIndexErr);
+      if (upsertErr !== undefined) {
+        this._index.cancelUpdate();
+        return err(upsertErr);
       }
-      await this._index.endUpdate();
-    } catch (error: unknown) {
+      committed.push(entry);
+    }
+    const endErr = (await this._index.endUpdate()).match(() => undefined, wrapIndexErr);
+    if (endErr !== undefined) {
       this._index.cancelUpdate();
-      throw new VectorStoreError("Failed to upsert items into vector index", {
-        cause: error instanceof Error ? error : undefined,
-      });
+      return err(endErr);
     }
 
     // Update hash map and model metadata — only for recipes actually indexed.
     for (const entry of committed) {
       this._hashes[entry.recipe.uid] = entry.hash;
     }
-    await this._persistHashes();
-    await this._persistMeta();
-
-    return { indexed: committed.length, skipped, total: recipes.length };
+    return (await this._persistHashes().andThen(() => this._persistMeta())).map(() => ({
+      indexed: committed.length,
+      skipped,
+      total: recipes.length,
+    }));
   }
 
-  async indexRecipe(recipe: Readonly<Recipe>, categoryNames: ReadonlyArray<string>): Promise<IndexingResult> {
+  indexRecipe(
+    recipe: Readonly<Recipe>,
+    categoryNames: ReadonlyArray<string>,
+  ): ResultAsync<IndexingResult, VectorStoreFailure> {
     return this.indexRecipes([recipe], () => [...categoryNames]);
   }
 
@@ -346,39 +420,56 @@ export class VectorStore {
     this._hashes = {};
   }
 
-  private async _persistHashes(): Promise<void> {
-    const tmpPath = join(this._vectorsDir, `.hash-index-${Date.now().toString()}.tmp`);
-    const fh = await open(tmpPath, "w");
-    try {
-      await fh.writeFile(JSON.stringify(this._hashes, null, 2));
-      await fh.sync();
-    } finally {
-      await fh.close();
-    }
-    await rename(tmpPath, this._hashIndexPath);
-  }
-
-  async search(query: string, topK: number = 10, minScore?: number): Promise<ReadonlyArray<SemanticResult>> {
-    const vector = await this._embedder.embed(query);
-    const results = await this._index.queryItems(vector, topK, minScore);
-    // The vector index is generic over string ids; every id here was written from
-    // `recipe.uid` (see `upsertItem`), so minting `RecipeUid` at this boundary is
-    // sound and lets `SemanticResult` carry the brand to callers.
-    return results.map((r) => ({
-      uid: r.item.id as RecipeUid,
-      score: r.score,
-      recipeName: (r.item.metadata?.["recipeName"] as string) ?? "",
-    }));
-  }
-
-  async removeRecipe(uid: string): Promise<void> {
-    // Exclusive: shares the vector index + hash map with indexRecipes.
-    await this._writeMutex.runExclusive(async () => {
-      await this._index.deleteItem(uid);
-      if (uid in this._hashes) {
-        delete this._hashes[uid];
-        await this._persistHashes();
+  private _persistHashes(): ResultAsync<void, VectorStoreError> {
+    const write = async (): Promise<void> => {
+      const tmpPath = join(this._vectorsDir, `.hash-index-${Date.now().toString()}.tmp`);
+      const fh = await open(tmpPath, "w");
+      try {
+        await fh.writeFile(JSON.stringify(this._hashes, null, 2));
+        await fh.sync();
+      } finally {
+        await fh.close();
       }
-    });
+      await rename(tmpPath, this._hashIndexPath);
+    };
+    return ResultAsync.fromPromise(write(), storeError("persist hash-index.json"));
+  }
+
+  search(
+    query: string,
+    topK: number = 10,
+    minScore?: number,
+  ): ResultAsync<ReadonlyArray<SemanticResult>, VectorStoreFailure> {
+    return this._embedder
+      .embed(query)
+      .andThen((vector) => this._index.queryItems(vector, topK, minScore).mapErr(storeError("query vector index")))
+      .map((results) =>
+        // The vector index is generic over string ids; every id here was written from
+        // `recipe.uid` (see `upsertItem`), so minting `RecipeUid` at this boundary is
+        // sound and lets `SemanticResult` carry the brand to callers.
+        results.map((r) => ({
+          uid: r.item.id as RecipeUid,
+          score: r.score,
+          recipeName: (r.item.metadata?.["recipeName"] as string) ?? "",
+        })),
+      );
+  }
+
+  removeRecipe(uid: string): ResultAsync<void, VectorStoreError> {
+    // Exclusive: shares the vector index + hash map with indexRecipes.
+    return ResultAsync.fromPromise(
+      this._writeMutex.runExclusive(() => this._removeRecipeLocked(uid)),
+      storeError("remove recipe"),
+    ).andThen((r) => r);
+  }
+
+  private async _removeRecipeLocked(uid: string): Promise<Result<void, VectorStoreError>> {
+    const deleteErr = (await this._index.deleteItem(uid)).match(() => undefined, storeError("delete vector"));
+    if (deleteErr !== undefined) return err(deleteErr);
+    if (uid in this._hashes) {
+      delete this._hashes[uid];
+      return await this._persistHashes();
+    }
+    return ok(undefined);
   }
 }

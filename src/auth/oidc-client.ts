@@ -2,13 +2,15 @@ import { createRemoteJWKSet, jwtVerify, type JWTVerifyGetKey } from "jose";
 /**
  * OIDC upstream client: discovery loading and id_token verification.
  *
- * Two public functions:
+ * Two public functions, both `Result`-native (ADR-0014 — the foreign producers
+ * here are `fetch` and `jose`, caught at this owned edge):
  * - `loadDiscovery(discoveryUrl, allowedAlgs)`: Fetch and validate RFC 8414 discovery document at startup
  * - `verifyIdToken(token, jwks, expectations)`: Verify id_token signature + claims + nonce
  *
  * Uses `jose@^6.2.3` for JWT verification and JWKS management.
  * `loadDiscovery` is one-shot (no caching); `verifyIdToken` uses jose's built-in JWKS cache.
  */
+import { errAsync, okAsync, Result, ResultAsync } from "neverthrow";
 import type { Logger } from "pino";
 import { z } from "zod";
 
@@ -55,96 +57,104 @@ export type DiscoveryDoc = z.infer<typeof DiscoveryDocSchema>;
  * 4. Parse JSON and validate with Zod
  * 5. Check every endpoint URL (issuer, authorization_endpoint, token_endpoint, jwks_uri, userinfo_endpoint) is https://
  * 6. Verify algorithm overlap (upstream algorithms ∩ allowed algorithms must be non-empty)
- * 7. Return validated discovery document
+ * 7. Resolve with the validated discovery document
  *
- * Throws `OAuthMetadataValidationError` on any validation failure.
+ * Errs with `OAuthMetadataValidationError` on any validation failure.
  * AC7.5: All endpoint URLs must be https://
  *
  * @param discoveryUrl - OIDC discovery URL (must be https://)
  * @param allowedAlgs - Algorithms we accept for id_token signing (e.g., ["RS256", "ES256"])
- * @returns Validated discovery document
- * @throws OAuthMetadataValidationError if validation fails
  */
-export async function loadDiscovery(
+export function loadDiscovery(
   discoveryUrl: string,
   allowedAlgs: ReadonlyArray<string>,
   log?: Logger,
-): Promise<DiscoveryDoc> {
-  // Step 1: Verify discoveryUrl itself is https://
-  const url = new URL(discoveryUrl);
-  if (url.protocol !== "https:") {
-    throw OAuthMetadataValidationError.nonHttps("discoveryUrl", discoveryUrl);
-  }
-
-  const t0 = performance.now();
-  log?.debug({ method: "GET", url: url.toString(), attempt: 1 }, "oidc discovery start");
-
-  // Step 2: Fetch with timeout
-  let response: Response;
-  try {
-    response = await fetch(url, {
-      headers: { accept: "application/json" },
-      signal: AbortSignal.timeout(10_000),
-    });
-  } catch (cause) {
-    log?.error({ err: cause, method: "GET", url: url.toString(), attempt: 1 }, "oidc discovery fetch failed");
-    throw new OAuthMetadataValidationError("failed to fetch OIDC discovery document", { cause });
-  }
-
-  const attemptDurationMs = Math.round(performance.now() - t0);
-
-  // Step 3: Check response status
-  if (!response.ok) {
-    log?.error(
-      { method: "GET", url: url.toString(), attempt: 1, status: response.status, attemptDurationMs },
-      "oidc discovery returned non-ok",
-    );
-    throw OAuthMetadataValidationError.discoveryFetchFailed(url.toString(), response.status);
-  }
-
-  // Step 4: Parse and validate JSON
-  let json: unknown;
-  try {
-    json = await response.json();
-  } catch (cause) {
-    throw new OAuthMetadataValidationError("failed to parse discovery document as JSON", { cause });
-  }
-
-  const parseResult = DiscoveryDocSchema.safeParse(json);
-  if (!parseResult.success) {
-    throw OAuthMetadataValidationError.invalidDiscoveryDoc(parseResult.error.issues);
-  }
-  const doc = parseResult.data;
-
-  // Step 5: AC7.5 — verify all endpoint URLs are https://
-  const urlsToCheck: Array<[field: string, value: string | undefined]> = [
-    ["issuer", doc.issuer],
-    ["authorization_endpoint", doc.authorization_endpoint],
-    ["token_endpoint", doc.token_endpoint],
-    ["jwks_uri", doc.jwks_uri],
-    ["userinfo_endpoint", doc.userinfo_endpoint],
-  ];
-
-  for (const [field, value] of urlsToCheck) {
-    if (value === undefined) continue;
-    const endpointUrl = new URL(value);
-    if (endpointUrl.protocol !== "https:") {
-      throw OAuthMetadataValidationError.nonHttps(field, value);
+): ResultAsync<DiscoveryDoc, OAuthMetadataValidationError> {
+  // Step 1: Verify discoveryUrl itself parses and is https://
+  const parsedUrl = Result.fromThrowable(
+    () => new URL(discoveryUrl),
+    (cause) => new OAuthMetadataValidationError(`invalid discovery URL: ${toMessage(cause)}`, { cause }),
+  )();
+  return parsedUrl.asyncAndThen((url) => {
+    if (url.protocol !== "https:") {
+      return errAsync(OAuthMetadataValidationError.nonHttps("discoveryUrl", discoveryUrl));
     }
-  }
 
-  // Step 6: Verify algorithm overlap
-  const overlap = doc.id_token_signing_alg_values_supported.filter((alg) => allowedAlgs.includes(alg));
-  if (overlap.length === 0) {
-    throw OAuthMetadataValidationError.noAlgOverlap(doc.id_token_signing_alg_values_supported, Array.from(allowedAlgs));
-  }
+    const t0 = performance.now();
+    log?.debug({ method: "GET", url: url.toString(), attempt: 1 }, "oidc discovery start");
 
-  log?.debug(
-    { method: "GET", url: url.toString(), attempt: 1, status: response.status, attemptDurationMs },
-    "oidc discovery ok",
-  );
+    // Step 2: Fetch with timeout
+    return ResultAsync.fromPromise(
+      fetch(url, {
+        headers: { accept: "application/json" },
+        signal: AbortSignal.timeout(10_000),
+      }),
+      (cause) => {
+        log?.error({ err: cause, method: "GET", url: url.toString(), attempt: 1 }, "oidc discovery fetch failed");
+        return new OAuthMetadataValidationError("failed to fetch OIDC discovery document", { cause });
+      },
+    ).andThen((response) => {
+      const attemptDurationMs = Math.round(performance.now() - t0);
 
-  return doc;
+      // Step 3: Check response status
+      if (!response.ok) {
+        log?.error(
+          { method: "GET", url: url.toString(), attempt: 1, status: response.status, attemptDurationMs },
+          "oidc discovery returned non-ok",
+        );
+        return errAsync(OAuthMetadataValidationError.discoveryFetchFailed(url.toString(), response.status));
+      }
+
+      // Step 4: Parse and validate JSON
+      return ResultAsync.fromPromise(
+        response.json(),
+        (cause) => new OAuthMetadataValidationError("failed to parse discovery document as JSON", { cause }),
+      ).andThen((json) => {
+        const parseResult = DiscoveryDocSchema.safeParse(json);
+        if (!parseResult.success) {
+          return errAsync(OAuthMetadataValidationError.invalidDiscoveryDoc(parseResult.error.issues));
+        }
+        const doc = parseResult.data;
+
+        // Step 5: AC7.5 — verify all endpoint URLs are https://
+        const urlsToCheck: Array<[field: string, value: string | undefined]> = [
+          ["issuer", doc.issuer],
+          ["authorization_endpoint", doc.authorization_endpoint],
+          ["token_endpoint", doc.token_endpoint],
+          ["jwks_uri", doc.jwks_uri],
+          ["userinfo_endpoint", doc.userinfo_endpoint],
+        ];
+
+        for (const [field, value] of urlsToCheck) {
+          if (value === undefined) continue;
+          // The Zod schema already validated each as a URL, so `new URL` cannot
+          // reject here; only the scheme remains to check.
+          const endpointUrl = new URL(value);
+          if (endpointUrl.protocol !== "https:") {
+            return errAsync(OAuthMetadataValidationError.nonHttps(field, value));
+          }
+        }
+
+        // Step 6: Verify algorithm overlap
+        const overlap = doc.id_token_signing_alg_values_supported.filter((alg) => allowedAlgs.includes(alg));
+        if (overlap.length === 0) {
+          return errAsync(
+            OAuthMetadataValidationError.noAlgOverlap(
+              doc.id_token_signing_alg_values_supported,
+              Array.from(allowedAlgs),
+            ),
+          );
+        }
+
+        log?.debug(
+          { method: "GET", url: url.toString(), attempt: 1, status: response.status, attemptDurationMs },
+          "oidc discovery ok",
+        );
+
+        return okAsync(doc);
+      });
+    });
+  });
 }
 
 // ============================================================================
@@ -216,44 +226,42 @@ export interface VerifyIdTokenExpectations {
  *
  * AC7.3: alg=none is rejected unconditionally by jose
  * AC7.4: alg=HS256 is rejected because not in allowlist (and symmetric keys ignored by JWKS)
- * AC7.8: nonce mismatch throws after signature verification
+ * AC7.8: nonce mismatch errs after signature verification
  *
  * @param idToken - Signed id_token from upstream IdP
  * @param jwks - JWKS getter (from createJwksFor)
  * @param expectations - Expected claims and algorithms
- * @returns Parsed and validated id_token payload
- * @throws OAuthMetadataValidationError on any verification failure
+ * @returns Parsed and validated id_token payload; errs with
+ *   `OAuthMetadataValidationError` on any verification failure
  */
-export async function verifyIdToken(
+export function verifyIdToken(
   idToken: string,
   jwks: JWTVerifyGetKey,
   expectations: VerifyIdTokenExpectations,
-): Promise<IdTokenPayload> {
+): ResultAsync<IdTokenPayload, OAuthMetadataValidationError> {
   // Step 1-3: Signature verification, issuer/audience/expiration checks, algorithm validation
-  let payload: Record<string, unknown>;
-  try {
-    const result = await jwtVerify(idToken, jwks, {
+  return ResultAsync.fromPromise(
+    jwtVerify(idToken, jwks, {
       // jose's algorithms is typed mutable; spread to satisfy without mutating our readonly array
       algorithms: [...expectations.allowedAlgs],
       issuer: expectations.issuer,
       audience: expectations.clientId,
       clockTolerance: 60,
-    });
-    payload = result.payload;
-  } catch (cause) {
+    }),
     // jose's error types: JOSEAlgNotAllowed, JWSSignatureVerificationFailed,
     // JWTExpired, JWTClaimValidationFailed, JWTInvalid, etc.
     // All wrap into our semantic error
-    throw OAuthMetadataValidationError.idTokenInvalid(toMessage(cause), {
-      cause,
-    });
-  }
+    (cause) => OAuthMetadataValidationError.idTokenInvalid(toMessage(cause), { cause }),
+  ).andThen(({ payload }) => {
+    // Must run AFTER signature verification — payload claims are untrusted until the JWS signature is verified.
+    if (typeof payload["nonce"] !== "string" || payload["nonce"] !== expectations.nonce) {
+      return errAsync(OAuthMetadataValidationError.nonceMismatch());
+    }
 
-  // Must run AFTER signature verification — payload claims are untrusted until the JWS signature is verified.
-  if (typeof payload["nonce"] !== "string" || payload["nonce"] !== expectations.nonce) {
-    throw OAuthMetadataValidationError.nonceMismatch();
-  }
-
-  // Step 5: Validate payload shape
-  return IdTokenPayloadSchema.parse(payload);
+    // Step 5: Validate payload shape
+    return Result.fromThrowable(
+      () => IdTokenPayloadSchema.parse(payload),
+      (cause) => OAuthMetadataValidationError.idTokenInvalid(toMessage(cause), { cause }),
+    )();
+  });
 }

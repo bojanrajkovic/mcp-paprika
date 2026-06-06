@@ -2,16 +2,18 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 import { fromAny } from "@total-typescript/shoehorn";
+import { errAsync, okAsync, ResultAsync } from "neverthrow";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Mocked } from "vitest";
 
 import type { RecipeUid } from "../ids.js";
-import type { EmbeddingClient } from "./embeddings.js";
+import type { EmbeddingClient, EmbeddingFailure } from "./embeddings.js";
 
 import { makeRecipe } from "../../test/domains/recipe/__fixtures__/recipes.js";
 import { useTempDir } from "../../test/support/disk-caches.js";
 import { makePinoCapture } from "../../test/support/tool-test-utils.js";
 import { recipeToEmbeddingText } from "./embeddings.js";
+import { VectorIndexError } from "./json-vector-index.js";
 import { VectorStoreError } from "./vector-store-errors.js";
 import { contentHash, VectorStore } from "./vector-store.js";
 
@@ -95,7 +97,10 @@ describe("VectorStore VectorStoreError", () => {
 // Mock setup for all init and operation tests. These exercise VectorStore's
 // orchestration (corruption recovery, hash map, model/schema invalidation) with
 // the underlying index stubbed; json-vector-index.test.ts covers the real index.
-vi.mock("./json-vector-index.js", () => {
+vi.mock("./json-vector-index.js", async (importOriginal) => {
+  // Keep the real VectorIndexError (tests construct it for errAsync stubs);
+  // only the index class itself is stubbed.
+  const actual = await importOriginal<typeof import("./json-vector-index.js")>();
   const MockIndex = vi.fn();
   MockIndex.prototype.isIndexCreated = vi.fn();
   MockIndex.prototype.createIndex = vi.fn();
@@ -106,17 +111,32 @@ vi.mock("./json-vector-index.js", () => {
   MockIndex.prototype.upsertItem = vi.fn();
   MockIndex.prototype.deleteItem = vi.fn();
   MockIndex.prototype.queryItems = vi.fn();
-  return { JsonVectorIndex: MockIndex };
+  return { ...actual, JsonVectorIndex: MockIndex };
 });
 
 function makeMockEmbedder(): Mocked<EmbeddingClient> {
   return fromAny({
-    embed: vi.fn<(text: string) => Promise<Array<number>>>(),
-    embedBatch: vi.fn<(texts: ReadonlyArray<string>) => Promise<Array<Array<number>>>>(),
+    embed: vi.fn<(text: string) => ResultAsync<Array<number>, EmbeddingFailure>>(),
+    embedBatch: vi.fn<(texts: ReadonlyArray<string>) => ResultAsync<Array<Array<number>>, EmbeddingFailure>>(),
     get dimensions() {
       return 3;
     },
   });
+}
+
+/**
+ * Default every stubbed index method to an ok no-op so a test that doesn't
+ * care about a given call doesn't crash the store's Result chains; individual
+ * tests override the methods they exercise.
+ */
+async function stubIndexDefaults(): Promise<void> {
+  const { JsonVectorIndex } = await import("./json-vector-index.js");
+  const proto = (JsonVectorIndex as unknown as { prototype: Record<string, ReturnType<typeof vi.fn>> }).prototype;
+  for (const m of ["createIndex", "loadIndexData", "beginUpdate", "endUpdate", "upsertItem", "deleteItem"]) {
+    proto[m]!.mockReturnValue(okAsync(undefined));
+  }
+  proto["queryItems"]!.mockReturnValue(okAsync([]));
+  proto["isIndexCreated"]!.mockResolvedValue(false);
 }
 
 describe("VectorStore init", () => {
@@ -125,11 +145,11 @@ describe("VectorStore init", () => {
   beforeEach(async () => {
     await tmp.setup();
     vi.clearAllMocks();
+    await stubIndexDefaults();
   });
 
   afterEach(async () => {
     await tmp.teardown();
-    vi.clearAllMocks();
   });
 
   describe("First run - creates index and empty hash map", () => {
@@ -139,11 +159,11 @@ describe("VectorStore init", () => {
       const mockCreateIndex = vi.spyOn((JsonVectorIndex as any).prototype, "createIndex");
 
       mockIsIndexCreated.mockResolvedValue(false);
-      mockCreateIndex.mockResolvedValue(undefined);
+      mockCreateIndex.mockReturnValue(okAsync(undefined));
 
       const embedder = makeMockEmbedder();
       const store = new VectorStore(tmp.dir(), embedder, "test-model", 1);
-      await store.init();
+      (await store.init())._unsafeUnwrap();
 
       expect(mockIsIndexCreated).toHaveBeenCalled();
       expect(mockCreateIndex).toHaveBeenCalled();
@@ -166,11 +186,11 @@ describe("VectorStore init", () => {
       await writeFile(hashIndexPath, JSON.stringify(validIndex));
 
       mockIsIndexCreated.mockResolvedValue(true);
-      mockCreateIndex.mockResolvedValue(undefined);
+      mockCreateIndex.mockReturnValue(okAsync(undefined));
 
       const embedder = makeMockEmbedder();
       const store = new VectorStore(tmp.dir(), embedder, "test-model", 1);
-      await store.init();
+      (await store.init())._unsafeUnwrap();
 
       // Verify index was already created so createIndex not called
       expect(mockIsIndexCreated).toHaveBeenCalled();
@@ -197,7 +217,7 @@ describe("VectorStore init", () => {
       const embedder = makeMockEmbedder();
       const { log, records } = makePinoCapture();
       const store = new VectorStore(tmp.dir(), embedder, "test-model", 1, log);
-      await store.init();
+      (await store.init())._unsafeUnwrap();
 
       // Verify warn record (pino level 40) was emitted with corruption message
       const warnRecords = records.filter((r) => r["level"] === 40);
@@ -230,7 +250,7 @@ describe("VectorStore init", () => {
       const embedder = makeMockEmbedder();
       const { log, records } = makePinoCapture();
       const store = new VectorStore(tmp.dir(), embedder, "test-model", 1, log);
-      await store.init();
+      (await store.init())._unsafeUnwrap();
 
       // Verify warn record (pino level 40) was emitted with schema-mismatch message
       const warnRecords = records.filter((r) => r["level"] === 40);
@@ -251,12 +271,12 @@ describe("VectorStore init", () => {
 
       // Simulate corruption by throwing when calling isIndexCreated
       mockIsIndexCreated.mockRejectedValueOnce(new Error("Index corrupted"));
-      mockCreateIndex.mockResolvedValue(undefined);
+      mockCreateIndex.mockReturnValue(okAsync(undefined));
 
       const embedder = makeMockEmbedder();
       const { log, records } = makePinoCapture();
       const store = new VectorStore(tmp.dir(), embedder, "test-model", 1, log);
-      await store.init();
+      (await store.init())._unsafeUnwrap();
 
       // Verify warn record (pino level 40) was emitted with corruption message
       const warnRecords = records.filter((r) => r["level"] === 40);
@@ -276,8 +296,10 @@ describe("VectorStore init", () => {
       // Index file is present, but loading it fails validation (e.g. non-finite
       // vector / ragged dimension) — the new eager load in init() must catch it.
       mockIsIndexCreated.mockResolvedValue(true);
-      mockLoadIndexData.mockRejectedValueOnce(new Error("Vector contains non-finite value at index 3"));
-      mockCreateIndex.mockResolvedValue(undefined);
+      mockLoadIndexData.mockReturnValueOnce(
+        errAsync(new VectorIndexError("Vector contains non-finite value at index 3")),
+      );
+      mockCreateIndex.mockReturnValue(okAsync(undefined));
 
       // A stale hash-index.json from before the corruption. Recovery must clear
       // it on disk too, or a restart would reload these hashes against the now-
@@ -290,7 +312,7 @@ describe("VectorStore init", () => {
       const embedder = makeMockEmbedder();
       const { log, records } = makePinoCapture();
       const store = new VectorStore(tmp.dir(), embedder, "test-model", 1, log);
-      await store.init();
+      (await store.init())._unsafeUnwrap();
 
       const warnRecords = records.filter((r) => r["level"] === 40);
       expect(warnRecords).toHaveLength(1);
@@ -311,26 +333,27 @@ describe("VectorStore init", () => {
       const mockEndUpdate = vi.spyOn((JsonVectorIndex as any).prototype, "endUpdate");
 
       mockIsIndexCreated.mockResolvedValue(false);
-      mockBeginUpdate.mockResolvedValue(undefined);
-      mockUpsertItem.mockResolvedValue(undefined);
-      mockEndUpdate.mockResolvedValue(undefined);
+      mockBeginUpdate.mockReturnValue(okAsync(undefined));
+      mockUpsertItem.mockReturnValue(okAsync(undefined));
+      mockEndUpdate.mockReturnValue(okAsync(undefined));
 
       const embedder = makeMockEmbedder();
-      embedder.embedBatch.mockResolvedValue([[1, 0, 0]]);
+      embedder.embedBatch.mockReturnValue(okAsync([[1, 0, 0]]));
 
       // First run with model-a: index a recipe (no capture needed for first run)
       const store1 = new VectorStore(tmp.dir(), embedder, "model-a", 1);
-      await store1.init();
+      (await store1.init())._unsafeUnwrap();
       const recipe = makeRecipe({ uid: "recipe-1" as RecipeUid });
-      await store1.indexRecipes([recipe], () => []);
+      (await store1.indexRecipes([recipe], () => []))._unsafeUnwrap();
       expect(store1.size).toBe(1);
 
       // Second run with model-b: should clear hashes and emit info log
       vi.clearAllMocks();
+      await stubIndexDefaults();
       mockIsIndexCreated.mockResolvedValue(true);
       const { log, records } = makePinoCapture();
       const store2 = new VectorStore(tmp.dir(), embedder, "model-b", 1, log);
-      await store2.init();
+      (await store2.init())._unsafeUnwrap();
 
       expect(store2.size).toBe(0);
       // info level = pino numeric 30
@@ -345,24 +368,25 @@ describe("VectorStore init", () => {
       const { JsonVectorIndex } = await import("./json-vector-index.js");
       const mockIsIndexCreated = vi.spyOn((JsonVectorIndex as any).prototype, "isIndexCreated");
       const mockCreateIndex = vi.spyOn((JsonVectorIndex as any).prototype, "createIndex");
-      vi.spyOn((JsonVectorIndex as any).prototype, "loadIndexData").mockResolvedValue(undefined);
+      vi.spyOn((JsonVectorIndex as any).prototype, "loadIndexData").mockReturnValue(okAsync(undefined));
 
       mockIsIndexCreated.mockResolvedValue(false);
-      mockCreateIndex.mockResolvedValue(undefined);
+      mockCreateIndex.mockReturnValue(okAsync(undefined));
       const embedder = makeMockEmbedder();
-      embedder.embedBatch.mockResolvedValue([[1, 0, 0]]);
+      embedder.embedBatch.mockReturnValue(okAsync([[1, 0, 0]]));
 
       // First run establishes vector-meta.json with model-a.
       const store1 = new VectorStore(tmp.dir(), embedder, "model-a", 1);
-      await store1.init();
-      await store1.indexRecipes([makeRecipe({ uid: "recipe-1" as RecipeUid })], () => []);
+      (await store1.init())._unsafeUnwrap();
+      (await store1.indexRecipes([makeRecipe({ uid: "recipe-1" as RecipeUid })], () => []))._unsafeUnwrap();
 
       // Second run with a different model must call createIndex({deleteIfExists})
       // to drop the stale-dimension vectors and un-pin the index dimension.
       vi.clearAllMocks();
+      await stubIndexDefaults();
       mockIsIndexCreated.mockResolvedValue(true);
       const store2 = new VectorStore(tmp.dir(), embedder, "model-b", 1);
-      await store2.init();
+      (await store2.init())._unsafeUnwrap();
 
       expect(mockCreateIndex).toHaveBeenCalledWith({ version: 1, deleteIfExists: true });
       expect(store2.size).toBe(0);
@@ -376,26 +400,27 @@ describe("VectorStore init", () => {
       const mockEndUpdate = vi.spyOn((JsonVectorIndex as any).prototype, "endUpdate");
 
       mockIsIndexCreated.mockResolvedValue(false);
-      mockBeginUpdate.mockResolvedValue(undefined);
-      mockUpsertItem.mockResolvedValue(undefined);
-      mockEndUpdate.mockResolvedValue(undefined);
+      mockBeginUpdate.mockReturnValue(okAsync(undefined));
+      mockUpsertItem.mockReturnValue(okAsync(undefined));
+      mockEndUpdate.mockReturnValue(okAsync(undefined));
 
       const embedder = makeMockEmbedder();
-      embedder.embedBatch.mockResolvedValue([[1, 0, 0]]);
+      embedder.embedBatch.mockReturnValue(okAsync([[1, 0, 0]]));
 
       // First run with schema version 1 (no capture for first run)
       const store1 = new VectorStore(tmp.dir(), embedder, "same-model", 1);
-      await store1.init();
+      (await store1.init())._unsafeUnwrap();
       const recipe = makeRecipe({ uid: "recipe-1" as RecipeUid });
-      await store1.indexRecipes([recipe], () => []);
+      (await store1.indexRecipes([recipe], () => []))._unsafeUnwrap();
       expect(store1.size).toBe(1);
 
       // Second run with schema version 2 (embedding text format changed)
       vi.clearAllMocks();
+      await stubIndexDefaults();
       mockIsIndexCreated.mockResolvedValue(true);
       const { log, records } = makePinoCapture();
       const store2 = new VectorStore(tmp.dir(), embedder, "same-model", 2, log);
-      await store2.init();
+      (await store2.init())._unsafeUnwrap();
 
       expect(store2.size).toBe(0);
       // info level = pino numeric 30
@@ -414,24 +439,25 @@ describe("VectorStore init", () => {
       const mockEndUpdate = vi.spyOn((JsonVectorIndex as any).prototype, "endUpdate");
 
       mockIsIndexCreated.mockResolvedValue(false);
-      mockBeginUpdate.mockResolvedValue(undefined);
-      mockUpsertItem.mockResolvedValue(undefined);
-      mockEndUpdate.mockResolvedValue(undefined);
+      mockBeginUpdate.mockReturnValue(okAsync(undefined));
+      mockUpsertItem.mockReturnValue(okAsync(undefined));
+      mockEndUpdate.mockReturnValue(okAsync(undefined));
 
       const embedder = makeMockEmbedder();
-      embedder.embedBatch.mockResolvedValue([[1, 0, 0]]);
+      embedder.embedBatch.mockReturnValue(okAsync([[1, 0, 0]]));
 
       // First run
       const store1 = new VectorStore(tmp.dir(), embedder, "same-model", 1);
-      await store1.init();
+      (await store1.init())._unsafeUnwrap();
       const recipe = makeRecipe({ uid: "recipe-1" as RecipeUid });
-      await store1.indexRecipes([recipe], () => []);
+      (await store1.indexRecipes([recipe], () => []))._unsafeUnwrap();
 
       // Second run with same model
       vi.clearAllMocks();
+      await stubIndexDefaults();
       mockIsIndexCreated.mockResolvedValue(true);
       const store2 = new VectorStore(tmp.dir(), embedder, "same-model", 1);
-      await store2.init();
+      (await store2.init())._unsafeUnwrap();
 
       expect(store2.size).toBe(1);
     });
@@ -444,12 +470,12 @@ describe("VectorStore init", () => {
       const mockCreateIndex = vi.spyOn((JsonVectorIndex as any).prototype, "createIndex");
 
       mockIsIndexCreated.mockResolvedValue(false);
-      mockCreateIndex.mockResolvedValue(undefined);
+      mockCreateIndex.mockReturnValue(okAsync(undefined));
 
       const embedder = makeMockEmbedder();
       // No log argument — defaults to silent logger
       const store = new VectorStore(tmp.dir(), embedder, "test-model", 1);
-      await store.init();
+      (await store.init())._unsafeUnwrap();
 
       expect(store.size).toBe(0);
     });
@@ -460,12 +486,12 @@ describe("VectorStore init", () => {
       const mockCreateIndex = vi.spyOn((JsonVectorIndex as any).prototype, "createIndex");
 
       mockIsIndexCreated.mockResolvedValue(false);
-      mockCreateIndex.mockResolvedValue(undefined);
+      mockCreateIndex.mockReturnValue(okAsync(undefined));
 
       const embedder = makeMockEmbedder();
       const { log, records } = makePinoCapture();
       const store = new VectorStore(tmp.dir(), embedder, "test-model", 1, log);
-      await store.init();
+      (await store.init())._unsafeUnwrap();
 
       // ENOENT on hash-index.json is silent by design (cold-start)
       // Only the normal initialization path runs: no corruption = no records
@@ -480,11 +506,11 @@ describe("VectorStore indexRecipes", () => {
   beforeEach(async () => {
     await tmp.setup();
     vi.clearAllMocks();
+    await stubIndexDefaults();
   });
 
   afterEach(async () => {
     await tmp.teardown();
-    vi.clearAllMocks();
   });
 
   describe("Embeds and upserts recipes with changed content hash", () => {
@@ -497,23 +523,25 @@ describe("VectorStore indexRecipes", () => {
       const mockEndUpdate = vi.spyOn((JsonVectorIndex as any).prototype, "endUpdate");
 
       mockIsIndexCreated.mockResolvedValue(false);
-      mockBeginUpdate.mockResolvedValue(undefined);
-      mockUpsertItem.mockResolvedValue(undefined);
-      mockEndUpdate.mockResolvedValue(undefined);
+      mockBeginUpdate.mockReturnValue(okAsync(undefined));
+      mockUpsertItem.mockReturnValue(okAsync(undefined));
+      mockEndUpdate.mockReturnValue(okAsync(undefined));
 
       const embedder = makeMockEmbedder();
-      embedder.embedBatch.mockResolvedValue([
-        [1, 0, 0],
-        [0, 1, 0],
-      ]);
+      embedder.embedBatch.mockReturnValue(
+        okAsync([
+          [1, 0, 0],
+          [0, 1, 0],
+        ]),
+      );
 
       const store = new VectorStore(tmp.dir(), embedder, "test-model", 1);
-      await store.init();
+      (await store.init())._unsafeUnwrap();
 
       const recipe1 = makeRecipe({ uid: "recipe-1" as RecipeUid });
       const recipe2 = makeRecipe({ uid: "recipe-2" as RecipeUid });
 
-      const result = await store.indexRecipes([recipe1, recipe2], () => []);
+      const result = (await store.indexRecipes([recipe1, recipe2], () => []))._unsafeUnwrap();
 
       expect(embedder.embedBatch).toHaveBeenCalledWith(
         expect.arrayContaining([expect.stringContaining(recipe1.name), expect.stringContaining(recipe2.name)]),
@@ -535,25 +563,29 @@ describe("VectorStore indexRecipes", () => {
     it("skips a recipe with a degenerate (zero-norm) embedding without aborting the batch", async () => {
       const { JsonVectorIndex } = await import("./json-vector-index.js");
       vi.spyOn((JsonVectorIndex as any).prototype, "isIndexCreated").mockResolvedValue(false);
-      vi.spyOn((JsonVectorIndex as any).prototype, "beginUpdate").mockResolvedValue(undefined);
-      const mockUpsertItem = vi.spyOn((JsonVectorIndex as any).prototype, "upsertItem").mockResolvedValue(undefined);
-      vi.spyOn((JsonVectorIndex as any).prototype, "endUpdate").mockResolvedValue(undefined);
+      vi.spyOn((JsonVectorIndex as any).prototype, "beginUpdate").mockReturnValue(okAsync(undefined));
+      const mockUpsertItem = vi
+        .spyOn((JsonVectorIndex as any).prototype, "upsertItem")
+        .mockReturnValue(okAsync(undefined));
+      vi.spyOn((JsonVectorIndex as any).prototype, "endUpdate").mockReturnValue(okAsync(undefined));
 
       const embedder = makeMockEmbedder();
       // Second recipe's embedding is all-zero (degenerate) — must be skipped, not
       // allowed to throw and roll back the good first recipe.
-      embedder.embedBatch.mockResolvedValue([
-        [1, 0, 0],
-        [0, 0, 0],
-      ]);
+      embedder.embedBatch.mockReturnValue(
+        okAsync([
+          [1, 0, 0],
+          [0, 0, 0],
+        ]),
+      );
 
       const { log, records } = makePinoCapture();
       const store = new VectorStore(tmp.dir(), embedder, "test-model", 1, log);
-      await store.init();
+      (await store.init())._unsafeUnwrap();
 
       const good = makeRecipe({ uid: "recipe-good" as RecipeUid });
       const bad = makeRecipe({ uid: "recipe-bad" as RecipeUid });
-      const result = await store.indexRecipes([good, bad], () => []);
+      const result = (await store.indexRecipes([good, bad], () => []))._unsafeUnwrap();
 
       expect(mockUpsertItem).toHaveBeenCalledTimes(1);
       expect(mockUpsertItem).toHaveBeenCalledWith({
@@ -580,29 +612,30 @@ describe("VectorStore indexRecipes", () => {
       const mockEndUpdate = vi.spyOn((JsonVectorIndex as any).prototype, "endUpdate");
 
       mockIsIndexCreated.mockResolvedValue(false);
-      mockBeginUpdate.mockResolvedValue(undefined);
-      mockUpsertItem.mockResolvedValue(undefined);
-      mockEndUpdate.mockResolvedValue(undefined);
+      mockBeginUpdate.mockReturnValue(okAsync(undefined));
+      mockUpsertItem.mockReturnValue(okAsync(undefined));
+      mockEndUpdate.mockReturnValue(okAsync(undefined));
 
       const embedder = makeMockEmbedder();
-      embedder.embedBatch.mockResolvedValue([[1, 0, 0]]);
+      embedder.embedBatch.mockReturnValue(okAsync([[1, 0, 0]]));
 
       const store = new VectorStore(tmp.dir(), embedder, "test-model", 1);
-      await store.init();
+      (await store.init())._unsafeUnwrap();
 
       const recipe = makeRecipe({ uid: "recipe-1" as RecipeUid });
 
       // First indexing
-      await store.indexRecipes([recipe], () => []);
+      (await store.indexRecipes([recipe], () => []))._unsafeUnwrap();
 
       // Reset mocks
       vi.clearAllMocks();
-      mockBeginUpdate.mockResolvedValue(undefined);
-      mockUpsertItem.mockResolvedValue(undefined);
-      mockEndUpdate.mockResolvedValue(undefined);
+      await stubIndexDefaults();
+      mockBeginUpdate.mockReturnValue(okAsync(undefined));
+      mockUpsertItem.mockReturnValue(okAsync(undefined));
+      mockEndUpdate.mockReturnValue(okAsync(undefined));
 
       // Second indexing with same recipe
-      const result = await store.indexRecipes([recipe], () => []);
+      const result = (await store.indexRecipes([recipe], () => []))._unsafeUnwrap();
 
       expect(embedder.embedBatch).not.toHaveBeenCalled();
       expect(result).toEqual({ indexed: 0, skipped: 1, total: 1 });
@@ -619,37 +652,40 @@ describe("VectorStore indexRecipes", () => {
       const mockEndUpdate = vi.spyOn((JsonVectorIndex as any).prototype, "endUpdate");
 
       mockIsIndexCreated.mockResolvedValue(false);
-      mockBeginUpdate.mockResolvedValue(undefined);
-      mockUpsertItem.mockResolvedValue(undefined);
-      mockEndUpdate.mockResolvedValue(undefined);
+      mockBeginUpdate.mockReturnValue(okAsync(undefined));
+      mockUpsertItem.mockReturnValue(okAsync(undefined));
+      mockEndUpdate.mockReturnValue(okAsync(undefined));
 
       const embedder = makeMockEmbedder();
-      embedder.embedBatch.mockResolvedValue([[1, 0, 0]]);
+      embedder.embedBatch.mockReturnValue(okAsync([[1, 0, 0]]));
 
       const store = new VectorStore(tmp.dir(), embedder, "test-model", 1);
-      await store.init();
+      (await store.init())._unsafeUnwrap();
 
       const recipe1 = makeRecipe({ uid: "recipe-1" as RecipeUid });
 
       // First indexing
-      await store.indexRecipes([recipe1], () => []);
+      (await store.indexRecipes([recipe1], () => []))._unsafeUnwrap();
 
       // Reset mocks
       vi.clearAllMocks();
-      mockBeginUpdate.mockResolvedValue(undefined);
-      mockUpsertItem.mockResolvedValue(undefined);
-      mockEndUpdate.mockResolvedValue(undefined);
-      embedder.embedBatch.mockResolvedValue([
-        [1, 0, 0],
-        [0, 1, 0],
-        [0, 0, 1],
-      ]);
+      await stubIndexDefaults();
+      mockBeginUpdate.mockReturnValue(okAsync(undefined));
+      mockUpsertItem.mockReturnValue(okAsync(undefined));
+      mockEndUpdate.mockReturnValue(okAsync(undefined));
+      embedder.embedBatch.mockReturnValue(
+        okAsync([
+          [1, 0, 0],
+          [0, 1, 0],
+          [0, 0, 1],
+        ]),
+      );
 
       // Index 3 recipes: 2 new, 1 unchanged
       const recipe2 = makeRecipe({ uid: "recipe-2" as RecipeUid });
       const recipe3 = makeRecipe({ uid: "recipe-3" as RecipeUid });
 
-      const result = await store.indexRecipes([recipe1, recipe2, recipe3], () => []);
+      const result = (await store.indexRecipes([recipe1, recipe2, recipe3], () => []))._unsafeUnwrap();
 
       expect(result).toEqual({ indexed: 2, skipped: 1, total: 3 });
     });
@@ -665,18 +701,18 @@ describe("VectorStore indexRecipes", () => {
       const mockEndUpdate = vi.spyOn((JsonVectorIndex as any).prototype, "endUpdate");
 
       mockIsIndexCreated.mockResolvedValue(false);
-      mockBeginUpdate.mockResolvedValue(undefined);
-      mockUpsertItem.mockResolvedValue(undefined);
-      mockEndUpdate.mockResolvedValue(undefined);
+      mockBeginUpdate.mockReturnValue(okAsync(undefined));
+      mockUpsertItem.mockReturnValue(okAsync(undefined));
+      mockEndUpdate.mockReturnValue(okAsync(undefined));
 
       const embedder = makeMockEmbedder();
-      embedder.embedBatch.mockResolvedValue([[1, 0, 0]]);
+      embedder.embedBatch.mockReturnValue(okAsync([[1, 0, 0]]));
 
       const store = new VectorStore(tmp.dir(), embedder, "test-model", 1);
-      await store.init();
+      (await store.init())._unsafeUnwrap();
 
       const recipe = makeRecipe({ uid: "recipe-1" as RecipeUid });
-      await store.indexRecipes([recipe], () => []);
+      (await store.indexRecipes([recipe], () => []))._unsafeUnwrap();
 
       // Read the persisted hash-index.json
       const hashIndexPath = join(tmp.dir(), "vectors", "hash-index.json");
@@ -699,9 +735,9 @@ describe("VectorStore indexRecipes", () => {
       const embedder = makeMockEmbedder();
 
       const store = new VectorStore(tmp.dir(), embedder, "test-model", 1);
-      await store.init();
+      (await store.init())._unsafeUnwrap();
 
-      const result = await store.indexRecipes([], () => []);
+      const result = (await store.indexRecipes([], () => []))._unsafeUnwrap();
 
       expect(embedder.embedBatch).not.toHaveBeenCalled();
       expect(result).toEqual({ indexed: 0, skipped: 0, total: 0 });
@@ -718,33 +754,34 @@ describe("VectorStore indexRecipes", () => {
       const mockEndUpdate = vi.spyOn((JsonVectorIndex as any).prototype, "endUpdate");
 
       mockIsIndexCreated.mockResolvedValue(false);
-      mockBeginUpdate.mockResolvedValue(undefined);
-      mockUpsertItem.mockResolvedValue(undefined);
-      mockEndUpdate.mockResolvedValue(undefined);
+      mockBeginUpdate.mockReturnValue(okAsync(undefined));
+      mockUpsertItem.mockReturnValue(okAsync(undefined));
+      mockEndUpdate.mockReturnValue(okAsync(undefined));
 
       const embedder = makeMockEmbedder();
-      embedder.embedBatch.mockResolvedValue([[1, 0, 0]]);
+      embedder.embedBatch.mockReturnValue(okAsync([[1, 0, 0]]));
 
       // First store instance
       const store1 = new VectorStore(tmp.dir(), embedder, "test-model", 1);
-      await store1.init();
+      (await store1.init())._unsafeUnwrap();
       const recipe = makeRecipe({ uid: "recipe-1" as RecipeUid });
-      await store1.indexRecipes([recipe], () => []);
+      (await store1.indexRecipes([recipe], () => []))._unsafeUnwrap();
 
       // Reset mocks for second instance
       vi.clearAllMocks();
+      await stubIndexDefaults();
       mockIsIndexCreated.mockResolvedValue(true);
-      embedder.embedBatch.mockResolvedValue([[1, 0, 0]]);
-      mockBeginUpdate.mockResolvedValue(undefined);
-      mockUpsertItem.mockResolvedValue(undefined);
-      mockEndUpdate.mockResolvedValue(undefined);
+      embedder.embedBatch.mockReturnValue(okAsync([[1, 0, 0]]));
+      mockBeginUpdate.mockReturnValue(okAsync(undefined));
+      mockUpsertItem.mockReturnValue(okAsync(undefined));
+      mockEndUpdate.mockReturnValue(okAsync(undefined));
 
       // Create new store instance pointing to the same directory
       const store2 = new VectorStore(tmp.dir(), embedder, "test-model", 1);
-      await store2.init();
+      (await store2.init())._unsafeUnwrap();
 
       // Index the same recipe again
-      const result = await store2.indexRecipes([recipe], () => []);
+      const result = (await store2.indexRecipes([recipe], () => []))._unsafeUnwrap();
 
       // Should skip because hash matches persisted value
       expect(result).toEqual({ indexed: 0, skipped: 1, total: 1 });
@@ -759,11 +796,11 @@ describe("VectorStore search", () => {
   beforeEach(async () => {
     await tmp.setup();
     vi.clearAllMocks();
+    await stubIndexDefaults();
   });
 
   afterEach(async () => {
     await tmp.teardown();
-    vi.clearAllMocks();
   });
 
   describe("Embeds query and returns SemanticResult array", () => {
@@ -774,24 +811,26 @@ describe("VectorStore search", () => {
       const mockQueryItems = vi.spyOn((JsonVectorIndex as any).prototype, "queryItems");
 
       mockIsIndexCreated.mockResolvedValue(false);
-      mockQueryItems.mockResolvedValue([
-        {
-          item: { id: "recipe-1", metadata: { recipeName: "Pasta" } },
-          score: 0.95,
-        },
-        {
-          item: { id: "recipe-2", metadata: { recipeName: "Risotto" } },
-          score: 0.87,
-        },
-      ]);
+      mockQueryItems.mockReturnValue(
+        okAsync([
+          {
+            item: { id: "recipe-1", metadata: { recipeName: "Pasta" } },
+            score: 0.95,
+          },
+          {
+            item: { id: "recipe-2", metadata: { recipeName: "Risotto" } },
+            score: 0.87,
+          },
+        ]),
+      );
 
       const embedder = makeMockEmbedder();
-      embedder.embed.mockResolvedValue([1, 0, 0]);
+      embedder.embed.mockReturnValue(okAsync([1, 0, 0]));
 
       const store = new VectorStore(tmp.dir(), embedder, "test-model", 1);
-      await store.init();
+      (await store.init())._unsafeUnwrap();
 
-      const results = await store.search("pasta recipe", 10);
+      const results = (await store.search("pasta recipe", 10))._unsafeUnwrap();
 
       expect(embedder.embed).toHaveBeenCalledWith("pasta recipe");
       expect(mockQueryItems).toHaveBeenCalledWith([1, 0, 0], 10, undefined);
@@ -810,28 +849,30 @@ describe("VectorStore search", () => {
       const mockQueryItems = vi.spyOn((JsonVectorIndex as any).prototype, "queryItems");
 
       mockIsIndexCreated.mockResolvedValue(false);
-      mockQueryItems.mockResolvedValue([
-        {
-          item: { id: "recipe-1", metadata: { recipeName: "Best Match" } },
-          score: 0.99,
-        },
-        {
-          item: { id: "recipe-2", metadata: { recipeName: "Good Match" } },
-          score: 0.75,
-        },
-        {
-          item: { id: "recipe-3", metadata: { recipeName: "Fair Match" } },
-          score: 0.52,
-        },
-      ]);
+      mockQueryItems.mockReturnValue(
+        okAsync([
+          {
+            item: { id: "recipe-1", metadata: { recipeName: "Best Match" } },
+            score: 0.99,
+          },
+          {
+            item: { id: "recipe-2", metadata: { recipeName: "Good Match" } },
+            score: 0.75,
+          },
+          {
+            item: { id: "recipe-3", metadata: { recipeName: "Fair Match" } },
+            score: 0.52,
+          },
+        ]),
+      );
 
       const embedder = makeMockEmbedder();
-      embedder.embed.mockResolvedValue([1, 0, 0]);
+      embedder.embed.mockReturnValue(okAsync([1, 0, 0]));
 
       const store = new VectorStore(tmp.dir(), embedder, "test-model", 1);
-      await store.init();
+      (await store.init())._unsafeUnwrap();
 
-      const results = await store.search("query", 10);
+      const results = (await store.search("query", 10))._unsafeUnwrap();
 
       expect(results[0]!.score).toBe(0.99);
       expect(results[1]!.score).toBe(0.75);
@@ -847,15 +888,15 @@ describe("VectorStore search", () => {
       const mockQueryItems = vi.spyOn((JsonVectorIndex as any).prototype, "queryItems");
 
       mockIsIndexCreated.mockResolvedValue(false);
-      mockQueryItems.mockResolvedValue([]);
+      mockQueryItems.mockReturnValue(okAsync([]));
 
       const embedder = makeMockEmbedder();
-      embedder.embed.mockResolvedValue([1, 0, 0]);
+      embedder.embed.mockReturnValue(okAsync([1, 0, 0]));
 
       const store = new VectorStore(tmp.dir(), embedder, "test-model", 1);
-      await store.init();
+      (await store.init())._unsafeUnwrap();
 
-      const results = await store.search("query", 10);
+      const results = (await store.search("query", 10))._unsafeUnwrap();
 
       expect(results).toEqual([]);
     });
@@ -868,11 +909,11 @@ describe("VectorStore removeRecipe", () => {
   beforeEach(async () => {
     await tmp.setup();
     vi.clearAllMocks();
+    await stubIndexDefaults();
   });
 
   afterEach(async () => {
     await tmp.teardown();
-    vi.clearAllMocks();
   });
 
   describe("Deletes item from the vector index and removes from hash map", () => {
@@ -886,27 +927,28 @@ describe("VectorStore removeRecipe", () => {
       const mockDeleteItem = vi.spyOn((JsonVectorIndex as any).prototype, "deleteItem");
 
       mockIsIndexCreated.mockResolvedValue(false);
-      mockBeginUpdate.mockResolvedValue(undefined);
-      mockUpsertItem.mockResolvedValue(undefined);
-      mockEndUpdate.mockResolvedValue(undefined);
-      mockDeleteItem.mockResolvedValue(undefined);
+      mockBeginUpdate.mockReturnValue(okAsync(undefined));
+      mockUpsertItem.mockReturnValue(okAsync(undefined));
+      mockEndUpdate.mockReturnValue(okAsync(undefined));
+      mockDeleteItem.mockReturnValue(okAsync(undefined));
 
       const embedder = makeMockEmbedder();
-      embedder.embedBatch.mockResolvedValue([[1, 0, 0]]);
+      embedder.embedBatch.mockReturnValue(okAsync([[1, 0, 0]]));
 
       const store = new VectorStore(tmp.dir(), embedder, "test-model", 1);
-      await store.init();
+      (await store.init())._unsafeUnwrap();
 
       const recipe = makeRecipe({ uid: "recipe-1" as RecipeUid });
-      await store.indexRecipes([recipe], () => []);
+      (await store.indexRecipes([recipe], () => []))._unsafeUnwrap();
 
       // Verify recipe is in hash map
       expect(store.size).toBe(1);
 
       // Remove recipe
       vi.clearAllMocks();
-      mockDeleteItem.mockResolvedValue(undefined);
-      await store.removeRecipe("recipe-1");
+      await stubIndexDefaults();
+      mockDeleteItem.mockReturnValue(okAsync(undefined));
+      (await store.removeRecipe("recipe-1"))._unsafeUnwrap();
 
       // Verify the index deleteItem was called
       expect(mockDeleteItem).toHaveBeenCalledWith("recipe-1");
@@ -927,21 +969,21 @@ describe("VectorStore removeRecipe", () => {
       const mockDeleteItem = vi.spyOn((JsonVectorIndex as any).prototype, "deleteItem");
 
       mockIsIndexCreated.mockResolvedValue(false);
-      mockBeginUpdate.mockResolvedValue(undefined);
-      mockUpsertItem.mockResolvedValue(undefined);
-      mockEndUpdate.mockResolvedValue(undefined);
-      mockDeleteItem.mockResolvedValue(undefined);
+      mockBeginUpdate.mockReturnValue(okAsync(undefined));
+      mockUpsertItem.mockReturnValue(okAsync(undefined));
+      mockEndUpdate.mockReturnValue(okAsync(undefined));
+      mockDeleteItem.mockReturnValue(okAsync(undefined));
 
       const embedder = makeMockEmbedder();
-      embedder.embedBatch.mockResolvedValue([[1, 0, 0]]);
+      embedder.embedBatch.mockReturnValue(okAsync([[1, 0, 0]]));
 
       const store = new VectorStore(tmp.dir(), embedder, "test-model", 1);
-      await store.init();
+      (await store.init())._unsafeUnwrap();
 
       const recipe = makeRecipe({ uid: "recipe-1" as RecipeUid });
-      await store.indexRecipes([recipe], () => []);
+      (await store.indexRecipes([recipe], () => []))._unsafeUnwrap();
 
-      await store.removeRecipe("recipe-1");
+      (await store.removeRecipe("recipe-1"))._unsafeUnwrap();
 
       // Read the persisted hash-index.json
       const hashIndexPath = join(tmp.dir(), "vectors", "hash-index.json");
@@ -961,12 +1003,12 @@ describe("VectorStore removeRecipe", () => {
       const mockDeleteItem = vi.spyOn((JsonVectorIndex as any).prototype, "deleteItem");
 
       mockIsIndexCreated.mockResolvedValue(false);
-      mockDeleteItem.mockResolvedValue(undefined);
+      mockDeleteItem.mockReturnValue(okAsync(undefined));
 
       const embedder = makeMockEmbedder();
 
       const store = new VectorStore(tmp.dir(), embedder, "test-model", 1);
-      await store.init();
+      (await store.init())._unsafeUnwrap();
 
       // Should not throw
       await expect(store.removeRecipe("nonexistent-uid")).resolves.not.toThrow();
@@ -982,11 +1024,11 @@ describe("VectorStore write serialization (#177)", () => {
   beforeEach(async () => {
     await tmp.setup();
     vi.clearAllMocks();
+    await stubIndexDefaults();
   });
 
   afterEach(async () => {
     await tmp.teardown();
-    vi.clearAllMocks();
   });
 
   it("serializes overlapping indexRecipes calls so vector-index transactions never overlap", async () => {
@@ -996,29 +1038,35 @@ describe("VectorStore write serialization (#177)", () => {
     // The write mutex must keep that from happening.
     const { JsonVectorIndex } = await import("./json-vector-index.js");
     vi.spyOn((JsonVectorIndex as any).prototype, "isIndexCreated").mockResolvedValue(false);
-    vi.spyOn((JsonVectorIndex as any).prototype, "createIndex").mockResolvedValue(undefined);
-    vi.spyOn((JsonVectorIndex as any).prototype, "upsertItem").mockResolvedValue(undefined);
+    vi.spyOn((JsonVectorIndex as any).prototype, "createIndex").mockReturnValue(okAsync(undefined));
+    vi.spyOn((JsonVectorIndex as any).prototype, "upsertItem").mockReturnValue(okAsync(undefined));
 
     let openTransactions = 0;
     let maxOpen = 0;
-    vi.spyOn((JsonVectorIndex as any).prototype, "beginUpdate").mockImplementation(async () => {
+    vi.spyOn((JsonVectorIndex as any).prototype, "beginUpdate").mockImplementation(() => {
       openTransactions++;
       maxOpen = Math.max(maxOpen, openTransactions);
-      if (openTransactions > 1) throw new Error("Update already in progress");
+      if (openTransactions > 1) return errAsync(new VectorIndexError("Update already in progress"));
+      return okAsync(undefined);
     });
-    vi.spyOn((JsonVectorIndex as any).prototype, "endUpdate").mockImplementation(async () => {
+    vi.spyOn((JsonVectorIndex as any).prototype, "endUpdate").mockImplementation(() => {
       openTransactions--;
+      return okAsync(undefined);
     });
 
     const embedder = makeMockEmbedder();
     // Slow embed so the two calls would interleave without the mutex.
-    embedder.embedBatch.mockImplementation(async (texts) => {
-      await new Promise((r) => setTimeout(r, 10));
-      return texts.map(() => [1, 0, 0]);
-    });
+    embedder.embedBatch.mockImplementation((texts) =>
+      ResultAsync.fromSafePromise(
+        (async () => {
+          await new Promise((r) => setTimeout(r, 10));
+          return texts.map(() => [1, 0, 0]);
+        })(),
+      ),
+    );
 
     const store = new VectorStore(tmp.dir(), embedder, "test-model", 1);
-    await store.init();
+    (await store.init())._unsafeUnwrap();
 
     const r1 = makeRecipe({ uid: "r1" as RecipeUid });
     const r2 = makeRecipe({ uid: "r2" as RecipeUid });
@@ -1028,8 +1076,8 @@ describe("VectorStore write serialization (#177)", () => {
     // dropping that recipe's embedding update).
     const results = await Promise.all([store.indexRecipes([r1], () => []), store.indexRecipes([r2], () => [])]);
 
-    expect(results[0]!.indexed).toBe(1);
-    expect(results[1]!.indexed).toBe(1);
+    expect(results[0]!._unsafeUnwrap().indexed).toBe(1);
+    expect(results[1]!._unsafeUnwrap().indexed).toBe(1);
     expect(maxOpen).toBe(1); // never two transactions open at once
   });
 });

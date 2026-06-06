@@ -64,14 +64,14 @@ describe.skipIf(!ollamaAvailable)("EmbeddingClient + VectorStore (Ollama)", () =
     tempDir = await mkdtemp(join(tmpdir(), "paprika-e2e-ollama-"));
     const embedder = new EmbeddingClient(makeOllamaConfig());
     const store = new VectorStore(tempDir, embedder, OLLAMA_MODEL, 1);
-    await store.init();
+    (await store.init())._unsafeUnwrap();
     return { embedder, store };
   }
 
   it("embeds a single text and returns a 768-dimensional vector", async () => {
     const embedder = new EmbeddingClient(makeOllamaConfig());
 
-    const vector = await embedder.embed("chicken parmesan with marinara sauce");
+    const vector = (await embedder.embed("chicken parmesan with marinara sauce"))._unsafeUnwrap();
 
     expect(vector).toHaveLength(768);
     expect(embedder.dimensions).toBe(768);
@@ -83,7 +83,7 @@ describe.skipIf(!ollamaAvailable)("EmbeddingClient + VectorStore (Ollama)", () =
   it("embeds a batch of texts and returns one vector per input", async () => {
     const embedder = new EmbeddingClient(makeOllamaConfig());
 
-    const vectors = await embedder.embedBatch(["pasta recipe", "chocolate cake", "grilled salmon"]);
+    const vectors = (await embedder.embedBatch(["pasta recipe", "chocolate cake", "grilled salmon"]))._unsafeUnwrap();
 
     expect(vectors).toHaveLength(3);
     for (const vec of vectors) {
@@ -115,13 +115,13 @@ describe.skipIf(!ollamaAvailable)("EmbeddingClient + VectorStore (Ollama)", () =
       }),
     ];
 
-    const result = await store.indexRecipes(recipes, noCats);
+    const result = (await store.indexRecipes(recipes, noCats))._unsafeUnwrap();
 
     expect(result).toEqual({ indexed: 3, skipped: 0, total: 3 });
     expect(store.size).toBe(3);
 
     // Search for something semantically close to the pasta recipe
-    const results = await store.search("Italian noodle dish with cheese");
+    const results = (await store.search("Italian noodle dish with cheese"))._unsafeUnwrap();
 
     expect(results.length).toBeGreaterThan(0);
     // The pasta recipe should be the top result — it's the most semantically similar
@@ -154,9 +154,9 @@ describe.skipIf(!ollamaAvailable)("EmbeddingClient + VectorStore (Ollama)", () =
       }),
     ];
 
-    await store.indexRecipes(recipes, noCats);
+    (await store.indexRecipes(recipes, noCats))._unsafeUnwrap();
 
-    const results = await store.search("sweet chocolate dessert");
+    const results = (await store.search("sweet chocolate dessert"))._unsafeUnwrap();
 
     expect(results.length).toBeGreaterThan(0);
     expect(results[0]!.uid).toBe("brownie-1");
@@ -172,13 +172,13 @@ describe.skipIf(!ollamaAvailable)("EmbeddingClient + VectorStore (Ollama)", () =
       description: "Aromatic Thai green curry with tender chicken",
     });
 
-    const first = await store.indexRecipes([recipe], noCats);
+    const first = (await store.indexRecipes([recipe], noCats))._unsafeUnwrap();
     expect(first).toEqual({ indexed: 1, skipped: 0, total: 1 });
 
     // Spy on embedBatch to verify it's NOT called on re-index
     const embedBatchSpy = vi.spyOn(embedder, "embedBatch");
 
-    const second = await store.indexRecipes([recipe], noCats);
+    const second = (await store.indexRecipes([recipe], noCats))._unsafeUnwrap();
     expect(second).toEqual({ indexed: 0, skipped: 1, total: 1 });
     expect(embedBatchSpy).not.toHaveBeenCalled();
 
@@ -195,7 +195,7 @@ describe.skipIf(!ollamaAvailable)("EmbeddingClient + VectorStore (Ollama)", () =
       description: "Quick and easy vegetable stir fry",
     });
 
-    await store.indexRecipes([original], noCats);
+    (await store.indexRecipes([original], noCats))._unsafeUnwrap();
 
     // Change ingredients — should trigger re-embedding
     const modified = makeRecipe({
@@ -205,7 +205,7 @@ describe.skipIf(!ollamaAvailable)("EmbeddingClient + VectorStore (Ollama)", () =
       description: "Quick and easy vegetable stir fry",
     });
 
-    const result = await store.indexRecipes([modified], noCats);
+    const result = (await store.indexRecipes([modified], noCats))._unsafeUnwrap();
     expect(result).toEqual({ indexed: 1, skipped: 0, total: 1 });
   });
 
@@ -227,20 +227,20 @@ describe.skipIf(!ollamaAvailable)("EmbeddingClient + VectorStore (Ollama)", () =
       }),
     ];
 
-    await store.indexRecipes(recipes, noCats);
+    (await store.indexRecipes(recipes, noCats))._unsafeUnwrap();
 
     // Both should appear in a fish-related search
-    const before = await store.search("seafood fish dish");
+    const before = (await store.search("seafood fish dish"))._unsafeUnwrap();
     const uidsBefore = before.map((r) => r.uid);
     expect(uidsBefore).toContain("fish-1");
     expect(uidsBefore).toContain("fish-2");
 
     // Remove one
-    await store.removeRecipe("fish-1");
+    (await store.removeRecipe("fish-1"))._unsafeUnwrap();
     expect(store.size).toBe(1);
 
     // Only fish-2 should remain
-    const after = await store.search("seafood fish dish");
+    const after = (await store.search("seafood fish dish"))._unsafeUnwrap();
     const uidsAfter = after.map((r) => r.uid);
     expect(uidsAfter).not.toContain("fish-1");
     expect(uidsAfter).toContain("fish-2");
@@ -250,7 +250,7 @@ describe.skipIf(!ollamaAvailable)("EmbeddingClient + VectorStore (Ollama)", () =
     tempDir = await mkdtemp(join(tmpdir(), "paprika-e2e-ollama-"));
     const embedder1 = new EmbeddingClient(makeOllamaConfig());
     const store1 = new VectorStore(tempDir, embedder1, OLLAMA_MODEL, 1);
-    await store1.init();
+    (await store1.init())._unsafeUnwrap();
 
     const recipe = makeRecipe({
       uid: "pie-1" as RecipeUid,
@@ -259,24 +259,24 @@ describe.skipIf(!ollamaAvailable)("EmbeddingClient + VectorStore (Ollama)", () =
       description: "Traditional double-crust apple pie with warm spices",
     });
 
-    await store1.indexRecipes([recipe], noCats);
+    (await store1.indexRecipes([recipe], noCats))._unsafeUnwrap();
     expect(store1.size).toBe(1);
 
     // Create a new VectorStore on the same directory — simulates server restart
     const embedder2 = new EmbeddingClient(makeOllamaConfig());
     const store2 = new VectorStore(tempDir, embedder2, OLLAMA_MODEL, 1);
-    await store2.init();
+    (await store2.init())._unsafeUnwrap();
 
     expect(store2.size).toBe(1);
 
     // Should skip — hash persisted from first run
     const embedBatchSpy = vi.spyOn(embedder2, "embedBatch");
-    const result = await store2.indexRecipes([recipe], noCats);
+    const result = (await store2.indexRecipes([recipe], noCats))._unsafeUnwrap();
     expect(result).toEqual({ indexed: 0, skipped: 1, total: 1 });
     expect(embedBatchSpy).not.toHaveBeenCalled();
 
     // Search should still work with the persisted vector index
-    const results = await store2.search("apple dessert baking");
+    const results = (await store2.search("apple dessert baking"))._unsafeUnwrap();
     expect(results.length).toBeGreaterThan(0);
     expect(results[0]!.uid).toBe("pie-1");
 

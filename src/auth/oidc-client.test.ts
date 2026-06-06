@@ -36,7 +36,9 @@ describe("loadDiscovery", () => {
       ),
     );
 
-    const doc = await loadDiscovery("https://idp.example.com/.well-known/openid-configuration", ["RS256", "ES256"]);
+    const doc = (
+      await loadDiscovery("https://idp.example.com/.well-known/openid-configuration", ["RS256", "ES256"])
+    )._unsafeUnwrap();
 
     expect(doc.issuer).toBe("https://idp.example.com");
     expect(doc.authorization_endpoint).toBe("https://idp.example.com/authorize");
@@ -62,9 +64,9 @@ describe("loadDiscovery", () => {
       );
 
       // all endpoint URLs must be https://
-      await expect(
-        loadDiscovery("https://idp.example.com/.well-known/openid-configuration", ["RS256"]),
-      ).rejects.toThrow(OAuthMetadataValidationError);
+      expect(
+        (await loadDiscovery("https://idp.example.com/.well-known/openid-configuration", ["RS256"]))._unsafeUnwrapErr(),
+      ).toBeInstanceOf(OAuthMetadataValidationError);
     });
 
     it("rejects discovery with http:// token_endpoint", async () => {
@@ -81,9 +83,9 @@ describe("loadDiscovery", () => {
       );
 
       // all endpoint URLs must be https://
-      await expect(
-        loadDiscovery("https://idp.example.com/.well-known/openid-configuration", ["RS256"]),
-      ).rejects.toThrow(OAuthMetadataValidationError);
+      expect(
+        (await loadDiscovery("https://idp.example.com/.well-known/openid-configuration", ["RS256"]))._unsafeUnwrapErr(),
+      ).toBeInstanceOf(OAuthMetadataValidationError);
     });
 
     it("rejects discovery with http:// jwks_uri", async () => {
@@ -100,9 +102,9 @@ describe("loadDiscovery", () => {
       );
 
       // all endpoint URLs must be https://
-      await expect(
-        loadDiscovery("https://idp.example.com/.well-known/openid-configuration", ["RS256"]),
-      ).rejects.toThrow(OAuthMetadataValidationError);
+      expect(
+        (await loadDiscovery("https://idp.example.com/.well-known/openid-configuration", ["RS256"]))._unsafeUnwrapErr(),
+      ).toBeInstanceOf(OAuthMetadataValidationError);
     });
 
     it("rejects discovery with http:// userinfo_endpoint (when present)", async () => {
@@ -120,9 +122,9 @@ describe("loadDiscovery", () => {
       );
 
       // all endpoint URLs must be https://
-      await expect(
-        loadDiscovery("https://idp.example.com/.well-known/openid-configuration", ["RS256"]),
-      ).rejects.toThrow(OAuthMetadataValidationError);
+      expect(
+        (await loadDiscovery("https://idp.example.com/.well-known/openid-configuration", ["RS256"]))._unsafeUnwrapErr(),
+      ).toBeInstanceOf(OAuthMetadataValidationError);
     });
 
     it("rejects discovery with http:// issuer", async () => {
@@ -139,16 +141,16 @@ describe("loadDiscovery", () => {
       );
 
       // all endpoint URLs must be https://
-      await expect(
-        loadDiscovery("https://idp.example.com/.well-known/openid-configuration", ["RS256"]),
-      ).rejects.toThrow(OAuthMetadataValidationError);
+      expect(
+        (await loadDiscovery("https://idp.example.com/.well-known/openid-configuration", ["RS256"]))._unsafeUnwrapErr(),
+      ).toBeInstanceOf(OAuthMetadataValidationError);
     });
 
     it("rejects discoveryUrl itself when http://", async () => {
       // discoveryUrl itself must be https://
-      await expect(loadDiscovery("http://idp.example.com/.well-known/openid-configuration", ["RS256"])).rejects.toThrow(
-        OAuthMetadataValidationError,
-      );
+      expect(
+        (await loadDiscovery("http://idp.example.com/.well-known/openid-configuration", ["RS256"]))._unsafeUnwrapErr(),
+      ).toBeInstanceOf(OAuthMetadataValidationError);
     });
   });
 
@@ -165,9 +167,9 @@ describe("loadDiscovery", () => {
       ),
     );
 
-    await expect(loadDiscovery("https://idp.example.com/.well-known/openid-configuration", ["RS256"])).rejects.toThrow(
-      OAuthMetadataValidationError,
-    );
+    expect(
+      (await loadDiscovery("https://idp.example.com/.well-known/openid-configuration", ["RS256"]))._unsafeUnwrapErr(),
+    ).toBeInstanceOf(OAuthMetadataValidationError);
   });
 
   it("non-2xx response → throws", async () => {
@@ -178,9 +180,9 @@ describe("loadDiscovery", () => {
       ),
     );
 
-    await expect(loadDiscovery("https://idp.example.com/.well-known/openid-configuration", ["RS256"])).rejects.toThrow(
-      OAuthMetadataValidationError,
-    );
+    expect(
+      (await loadDiscovery("https://idp.example.com/.well-known/openid-configuration", ["RS256"]))._unsafeUnwrapErr(),
+    ).toBeInstanceOf(OAuthMetadataValidationError);
   });
 
   it("alg-allowlist mismatch (upstream advertises only HS256) → throws", async () => {
@@ -196,9 +198,9 @@ describe("loadDiscovery", () => {
       ),
     );
 
-    await expect(loadDiscovery("https://idp.example.com/.well-known/openid-configuration", ["RS256"])).rejects.toThrow(
-      OAuthMetadataValidationError,
-    );
+    expect(
+      (await loadDiscovery("https://idp.example.com/.well-known/openid-configuration", ["RS256"]))._unsafeUnwrapErr(),
+    ).toBeInstanceOf(OAuthMetadataValidationError);
   });
 
   it("upstream supports both RS256 and HS256; allowed = [RS256] → accepted (overlap = [RS256])", async () => {
@@ -214,7 +216,9 @@ describe("loadDiscovery", () => {
       ),
     );
 
-    const doc = await loadDiscovery("https://idp.example.com/.well-known/openid-configuration", ["RS256"]);
+    const doc = (
+      await loadDiscovery("https://idp.example.com/.well-known/openid-configuration", ["RS256"])
+    )._unsafeUnwrap();
 
     expect(doc.id_token_signing_alg_values_supported).toContain("RS256");
     expect(doc.id_token_signing_alg_values_supported).toContain("HS256");
@@ -238,7 +242,7 @@ describe("loadDiscovery", () => {
       );
 
       const { log, records } = makePinoCapture();
-      await loadDiscovery(discoveryUrl, allowedAlgs, log);
+      (await loadDiscovery(discoveryUrl, allowedAlgs, log))._unsafeUnwrap();
 
       const startRecord = records.find((r) => r["msg"] === "oidc discovery start");
       expect(startRecord).toBeDefined();
@@ -259,7 +263,9 @@ describe("loadDiscovery", () => {
       server.use(http.get(discoveryUrl, () => new HttpResponse(null, { status: 503 })));
 
       const { log, records } = makePinoCapture();
-      await expect(loadDiscovery(discoveryUrl, allowedAlgs, log)).rejects.toThrow(OAuthMetadataValidationError);
+      expect((await loadDiscovery(discoveryUrl, allowedAlgs, log))._unsafeUnwrapErr()).toBeInstanceOf(
+        OAuthMetadataValidationError,
+      );
 
       const errorRecord = records.find((r) => r["msg"] === "oidc discovery returned non-ok");
       expect(errorRecord).toBeDefined();
@@ -274,7 +280,9 @@ describe("loadDiscovery", () => {
       server.use(http.get(discoveryUrl, () => HttpResponse.error()));
 
       const { log, records } = makePinoCapture();
-      await expect(loadDiscovery(discoveryUrl, allowedAlgs, log)).rejects.toThrow(OAuthMetadataValidationError);
+      expect((await loadDiscovery(discoveryUrl, allowedAlgs, log))._unsafeUnwrapErr()).toBeInstanceOf(
+        OAuthMetadataValidationError,
+      );
 
       const errorRecord = records.find((r) => r["msg"] === "oidc discovery fetch failed");
       expect(errorRecord).toBeDefined();
@@ -298,7 +306,7 @@ describe("loadDiscovery", () => {
       );
 
       const { log, records } = makePinoCapture();
-      await loadDiscovery(discoveryUrl, allowedAlgs, log);
+      (await loadDiscovery(discoveryUrl, allowedAlgs, log))._unsafeUnwrap();
 
       // Verify REDACT_PATHS are not present as keys in any log record
       for (const record of records) {
@@ -342,7 +350,7 @@ describe("verifyIdToken", () => {
       ),
       http.get(jwksUrl, () => HttpResponse.json({ keys: [jwk] })),
     );
-    const discovery = await loadDiscovery(discoveryUrl, [...algs]);
+    const discovery = (await loadDiscovery(discoveryUrl, [...algs]))._unsafeUnwrap();
     return createJwksFor(discovery);
   }
 
@@ -364,12 +372,14 @@ describe("verifyIdToken", () => {
 
     const jwks = await setupJwks(jwk);
 
-    const payload = await verifyIdToken(token, jwks, {
-      clientId,
-      issuer,
-      nonce,
-      allowedAlgs: ["RS256"],
-    });
+    const payload = (
+      await verifyIdToken(token, jwks, {
+        clientId,
+        issuer,
+        nonce,
+        allowedAlgs: ["RS256"],
+      })
+    )._unsafeUnwrap();
 
     expect(payload.sub).toBe("user-1");
     expect(payload.email).toBe("user@x.com");
@@ -394,12 +404,14 @@ describe("verifyIdToken", () => {
 
     const jwks = await setupJwks(jwk, ["ES256"]);
 
-    const payload = await verifyIdToken(token, jwks, {
-      clientId,
-      issuer,
-      nonce,
-      allowedAlgs: ["ES256"],
-    });
+    const payload = (
+      await verifyIdToken(token, jwks, {
+        clientId,
+        issuer,
+        nonce,
+        allowedAlgs: ["ES256"],
+      })
+    )._unsafeUnwrap();
 
     expect(payload.sub).toBe("user-2");
     expect(payload.email).toBe("user2@x.com");
@@ -434,14 +446,16 @@ describe("verifyIdToken", () => {
 
     const jwks = await setupJwks(jwk);
 
-    await expect(
-      verifyIdToken(noneToken, jwks, {
-        clientId,
-        issuer,
-        nonce,
-        allowedAlgs: ["RS256"],
-      }),
-    ).rejects.toThrow(OAuthMetadataValidationError);
+    expect(
+      (
+        await verifyIdToken(noneToken, jwks, {
+          clientId,
+          issuer,
+          nonce,
+          allowedAlgs: ["RS256"],
+        })
+      )._unsafeUnwrapErr(),
+    ).toBeInstanceOf(OAuthMetadataValidationError);
   });
 
   it("id_token signed with HS256 is rejected", async () => {
@@ -469,14 +483,16 @@ describe("verifyIdToken", () => {
 
     const jwks = await setupJwks(rsaJwk);
 
-    await expect(
-      verifyIdToken(hs256Token, jwks, {
-        clientId,
-        issuer,
-        nonce,
-        allowedAlgs: ["RS256", "ES256"], // default allowlist
-      }),
-    ).rejects.toThrow(OAuthMetadataValidationError);
+    expect(
+      (
+        await verifyIdToken(hs256Token, jwks, {
+          clientId,
+          issuer,
+          nonce,
+          allowedAlgs: ["RS256", "ES256"], // default allowlist
+        })
+      )._unsafeUnwrapErr(),
+    ).toBeInstanceOf(OAuthMetadataValidationError);
   });
 
   it("rejects expired id_token (exp in the past)", async () => {
@@ -494,14 +510,16 @@ describe("verifyIdToken", () => {
 
     const jwks = await setupJwks(jwk);
 
-    await expect(
-      verifyIdToken(token, jwks, {
-        clientId,
-        issuer,
-        nonce,
-        allowedAlgs: ["RS256"],
-      }),
-    ).rejects.toThrow(OAuthMetadataValidationError);
+    expect(
+      (
+        await verifyIdToken(token, jwks, {
+          clientId,
+          issuer,
+          nonce,
+          allowedAlgs: ["RS256"],
+        })
+      )._unsafeUnwrapErr(),
+    ).toBeInstanceOf(OAuthMetadataValidationError);
   });
 
   it("rejects wrong audience", async () => {
@@ -519,14 +537,16 @@ describe("verifyIdToken", () => {
 
     const jwks = await setupJwks(jwk);
 
-    await expect(
-      verifyIdToken(token, jwks, {
-        clientId, // "client-x", but token has "wrong-client"
-        issuer,
-        nonce,
-        allowedAlgs: ["RS256"],
-      }),
-    ).rejects.toThrow(OAuthMetadataValidationError);
+    expect(
+      (
+        await verifyIdToken(token, jwks, {
+          clientId, // "client-x", but token has "wrong-client"
+          issuer,
+          nonce,
+          allowedAlgs: ["RS256"],
+        })
+      )._unsafeUnwrapErr(),
+    ).toBeInstanceOf(OAuthMetadataValidationError);
   });
 
   it("rejects wrong issuer", async () => {
@@ -544,14 +564,16 @@ describe("verifyIdToken", () => {
 
     const jwks = await setupJwks(jwk);
 
-    await expect(
-      verifyIdToken(token, jwks, {
-        clientId,
-        issuer, // "https://idp.example.com", but token has wrong issuer
-        nonce,
-        allowedAlgs: ["RS256"],
-      }),
-    ).rejects.toThrow(OAuthMetadataValidationError);
+    expect(
+      (
+        await verifyIdToken(token, jwks, {
+          clientId,
+          issuer, // "https://idp.example.com", but token has wrong issuer
+          nonce,
+          allowedAlgs: ["RS256"],
+        })
+      )._unsafeUnwrapErr(),
+    ).toBeInstanceOf(OAuthMetadataValidationError);
   });
 
   it("id_token with mismatched nonce is rejected after signature verification", async () => {
@@ -571,14 +593,16 @@ describe("verifyIdToken", () => {
 
     const jwks = await setupJwks(jwk);
 
-    await expect(
-      verifyIdToken(token, jwks, {
-        clientId,
-        issuer,
-        nonce: expectedNonce, // Expects "n-expected" but token has "n-wrong"
-        allowedAlgs: ["RS256"],
-      }),
-    ).rejects.toThrow(OAuthMetadataValidationError);
+    expect(
+      (
+        await verifyIdToken(token, jwks, {
+          clientId,
+          issuer,
+          nonce: expectedNonce, // Expects "n-expected" but token has "n-wrong"
+          allowedAlgs: ["RS256"],
+        })
+      )._unsafeUnwrapErr(),
+    ).toBeInstanceOf(OAuthMetadataValidationError);
   });
 
   it("id_token with no nonce claim is rejected (nonce required)", async () => {
@@ -597,14 +621,16 @@ describe("verifyIdToken", () => {
 
     const jwks = await setupJwks(jwk);
 
-    await expect(
-      verifyIdToken(token, jwks, {
-        clientId,
-        issuer,
-        nonce,
-        allowedAlgs: ["RS256"],
-      }),
-    ).rejects.toThrow(OAuthMetadataValidationError);
+    expect(
+      (
+        await verifyIdToken(token, jwks, {
+          clientId,
+          issuer,
+          nonce,
+          allowedAlgs: ["RS256"],
+        })
+      )._unsafeUnwrapErr(),
+    ).toBeInstanceOf(OAuthMetadataValidationError);
   });
 
   it("accepts array-valued aud claim (Microsoft Entra compatibility)", async () => {
@@ -623,12 +649,14 @@ describe("verifyIdToken", () => {
 
     const jwks = await setupJwks(jwk);
 
-    const payload = await verifyIdToken(token, jwks, {
-      clientId,
-      issuer,
-      nonce,
-      allowedAlgs: ["RS256"],
-    });
+    const payload = (
+      await verifyIdToken(token, jwks, {
+        clientId,
+        issuer,
+        nonce,
+        allowedAlgs: ["RS256"],
+      })
+    )._unsafeUnwrap();
 
     expect(Array.isArray(payload.aud)).toBe(true);
     expect(payload.aud).toContain(clientId);
@@ -653,12 +681,14 @@ describe("verifyIdToken", () => {
 
     const jwks = await setupJwks(jwk);
 
-    const payload = await verifyIdToken(token, jwks, {
-      clientId,
-      issuer,
-      nonce,
-      allowedAlgs: ["RS256"],
-    });
+    const payload = (
+      await verifyIdToken(token, jwks, {
+        clientId,
+        issuer,
+        nonce,
+        allowedAlgs: ["RS256"],
+      })
+    )._unsafeUnwrap();
 
     expect(payload.email_verified).toBe(true);
     expect(typeof payload.email_verified).toBe("boolean");

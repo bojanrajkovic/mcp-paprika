@@ -1,6 +1,6 @@
 # OAuth 2.1 Authorization Layer
 
-Last verified: 2026-06-04
+Last verified: 2026-06-05
 
 ## Purpose
 
@@ -15,6 +15,10 @@ Last verified: 2026-06-04
 ## Sharp edges
 
 These are the security and ordering invariants no grep over the source will _explain_ (the code enforces them; the WHY is here). Treat them as load-bearing: do not "simplify" any of them away.
+
+### Stores speak `Result`; only the SDK edge throws — and only OAuth error types
+
+The auth stores (`TokenStore`, `DiskClientRegistrationStore`'s route-facing methods, `AuthCleanup`, the OIDC fetch wrappers) are `Result`-native (ADR-0014). The SDK's `OAuthServerProvider` / DCR contracts are throw-based, so the provider and `registerClient`/`getClient` cross back onto the throw rail **only** with OAuth error types — directly (`InvalidGrantError`, …) or via the recognized `unwrapOAuth` helper in `errors.ts` — which the router serializes into spec responses. A disk-cache failure maps to a generic `server_error` at that edge (the real failure is logged first; the wire message stays generic) and to an honest 503 on our own RFC 7592 routes — never a silent pass or a 500. Don't add a non-OAuth throw to these surfaces; the conformance test pins the sanctioned set.
 
 ### The two OAuth relationships must never cross
 
