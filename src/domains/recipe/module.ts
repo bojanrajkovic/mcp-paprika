@@ -43,6 +43,7 @@ import { favoriteRecipeTools } from "./tools/favorite.js";
 import { listCategoriesTool } from "./tools/list-categories.js";
 import { listRecipesTool } from "./tools/list.js";
 import { photoWriteTools } from "./tools/photo-writes.js";
+import { pinRecipeTools } from "./tools/pin.js";
 import { purgeRecipeTool } from "./tools/purge.js";
 import { rateRecipeTool } from "./tools/rate.js";
 import { readRecipeTool } from "./tools/read.js";
@@ -377,6 +378,7 @@ register(
           updateRecipeTool,
           categorizeRecipeTool,
           ...favoriteRecipeTools,
+          ...pinRecipeTools,
           rateRecipeTool,
           trashRecipeTool,
           restoreRecipeTool,
