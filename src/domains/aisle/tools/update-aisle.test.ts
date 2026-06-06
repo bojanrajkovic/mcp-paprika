@@ -50,6 +50,9 @@ describe("update_aisle tool", () => {
     const saved = saveAisles.mock.calls[0]![0] as ReadonlyArray<Aisle>;
     expect(saved).toHaveLength(1);
     expect(saved[0]).toMatchObject({ uid: produce.uid, name: "Fresh Produce", orderFlag: 0 });
+    // Grocery-list resources render aisle names from this catalog live, so the
+    // commit must tell subscribed clients to refresh.
+    expect(kh.resourceListChanged()).toHaveBeenCalled();
   });
 
   it("rejects a rename that collides with another aisle's name", async () => {

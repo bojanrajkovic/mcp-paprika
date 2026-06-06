@@ -47,6 +47,7 @@ describe("delete_meal_type tool", () => {
     const text = await kh.callToolText("delete_meal_type", { uid: brunch.uid });
 
     expect(text).toBe('Deleted meal type "Brunch".');
+    expect(kh.resourceListChanged()).toHaveBeenCalled();
     const saveMealTypes = vi.mocked(kh.client().saveMealTypes);
     expect(saveMealTypes).toHaveBeenCalledOnce();
     const saved = saveMealTypes.mock.calls[0]![0] as ReadonlyArray<MealType>;
@@ -54,23 +55,35 @@ describe("delete_meal_type tool", () => {
     expect(mealTypeState().store.get(brunch.uid)).toBeUndefined();
   });
 
-  it("warns-and-proceeds over meal and menu-item references, built-ins included", async () => {
-    const dinner = makeMealType({ name: "Dinner", originalType: 2 });
+  it("warns-and-proceeds over meal and menu-item references on a custom type", async () => {
+    const brunch = makeMealType({ name: "Brunch", originalType: null });
     const menu = makeMenu();
-    seedBase(dinner, {
-      meals: [makeMeal({ typeUid: dinner.uid }), makeMeal({ typeUid: dinner.uid })],
-      menuItems: [makeMenuItem({ menuUid: menu.uid, typeUid: dinner.uid })],
+    seedBase(brunch, {
+      meals: [makeMeal({ typeUid: brunch.uid }), makeMeal({ typeUid: brunch.uid })],
+      menuItems: [makeMenuItem({ menuUid: menu.uid, typeUid: brunch.uid })],
     });
+
+    const text = await kh.callToolText("delete_meal_type", { uid: brunch.uid });
+
+    expect(text).toContain('Deleted meal type "Brunch".');
+    expect(text).toContain("2 meals and 1 menu item referenced it");
+    expect(mealTypeState().store.get(brunch.uid)).toBeUndefined();
+  });
+
+  it("refuses to delete a built-in type — {builtin} resolution cannot be restored", async () => {
+    const dinner = makeMealType({ name: "Dinner", originalType: 2 });
+    seedBase(dinner);
 
     const text = await kh.callToolText("delete_meal_type", { uid: dinner.uid });
 
-    expect(text).toContain('Deleted meal type "Dinner".');
-    expect(text).toContain("2 meals and 1 menu item referenced it");
-    expect(mealTypeState().store.get(dinner.uid)).toBeUndefined();
+    expect(text).toContain('Cannot delete "Dinner"');
+    expect(text).toContain("built-in");
+    expect(kh.client().saveMealTypes).not.toHaveBeenCalled();
+    expect(mealTypeState().store.get(dinner.uid)).toBeDefined();
   });
 
   it("surfaces a save failure and keeps the type", async () => {
-    const brunch = makeMealType({ name: "Brunch" });
+    const brunch = makeMealType({ name: "Brunch", originalType: null });
     seedBase(brunch);
     vi.mocked(kh.client().saveMealTypes).mockReturnValue(
       errAsync({ kind: "http", status: 500, message: "boom" } as never),

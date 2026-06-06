@@ -77,6 +77,7 @@ describe("delete_aisle tool", () => {
     const text = await kh.callToolText("delete_aisle", { uid: aisle.uid });
 
     expect(text).toBe('Deleted aisle "Bakery".');
+    expect(kh.resourceListChanged()).toHaveBeenCalled();
     const saveAisles = vi.mocked(kh.client().saveAisles);
     expect(saveAisles).toHaveBeenCalledOnce();
     const saved = saveAisles.mock.calls[0]![0] as ReadonlyArray<Aisle>;

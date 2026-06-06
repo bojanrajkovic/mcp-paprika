@@ -194,7 +194,7 @@ Soft-delete a meal from the planner by UID. Idempotent: a second delete on the s
 
 **Delete a meal type** — write, destructive, idempotent
 
-Delete a meal type from the catalog. Existing meals and menu items that reference it are kept and simply show no meal type afterwards (the response reports how many). Planning a meal with the same type name later recreates it.
+Delete a custom meal type from the catalog. Existing meals and menu items that reference it are kept and simply show no meal type afterwards (the response reports how many). Planning a meal with the same type name later recreates it. Built-in types (Breakfast/Lunch/Dinner/Snacks) cannot be deleted — rename them with `update_meal_type` instead.
 
 **Parameters**
 

@@ -75,6 +75,8 @@ export function makeCatalogDelete<
     readonly store: { readonly hasSynced: boolean; get(uid: UID): T | undefined };
   };
   readonly save: (tombstone: T) => ResultAsync<unknown, { readonly message: string }>;
+  /** Post-commit effect — catalog deletes fire `resourceListChanged` (live-resolved resource content changes). */
+  readonly onCommitted?: () => void;
   readonly finish: () => ResultAsync<void, never>;
 }): (uid: UID) => Promise<Result<void, string>> {
   return async (uid) => {
@@ -87,7 +89,10 @@ export function makeCatalogDelete<
       .save({ ...existing, deleted: true })
       .mapErr((e) => `Failed to delete ${opts.noun.toLowerCase()} "${existing.name}": ${e.message}`)
       .andThen(() =>
-        commitEntities(opts.state, [deleteOp<UID>(uid)], { finish: opts.finish }).mapErr(
+        commitEntities(opts.state, [deleteOp<UID>(uid)], {
+          ...(opts.onCommitted !== undefined ? { onCommitted: opts.onCommitted } : {}),
+          finish: opts.finish,
+        }).mapErr(
           (e: CacheError) =>
             `${opts.noun} "${existing.name}" was deleted in Paprika, but the local commit failed (${e.message}). ` +
             "Retrying is safe; the next sync reconciles either way.",

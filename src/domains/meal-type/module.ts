@@ -64,11 +64,19 @@ register(
       // `ctx.deps["meal-type"]` — so it goes in `api`, not `ctx.writes`.
       const ensureMealTypeMutex = new Mutex();
       // The commit protocol lives in src/entity/commit.ts; this binds meal-type's slice.
+      // Meal-type commits fire resourceListChanged even though meal types have no
+      // resource of their own: menu RESOURCES resolve item type names and ordering
+      // through this catalog live, so a rename/recolor/reorder/delete changes their
+      // rendered content without any menu entity changing (ADR-0017).
+      const mealTypeFx = {
+        onCommitted: () => infra.notifier.resourceListChanged(),
+        finish: () => notifySyncBestEffort(infra.client, infra.log),
+      };
       const commitMealTypes = (mealTypes: ReadonlyArray<Readonly<MealType>>): ResultAsync<void, CacheError> =>
         commitEntities(
           state,
           mealTypes.map((mt) => upsertOp(mt)),
-          { finish: () => notifySyncBestEffort(infra.client, infra.log) },
+          mealTypeFx,
         );
       const commitMealType = (mealType: MealType): ResultAsync<void, CacheError> => commitMealTypes([mealType]);
       const ensureMealType: MealTypeApi["ensureMealType"] = async (name) => {
@@ -140,7 +148,8 @@ register(
         noun: "Meal type",
         state,
         save: (tombstone) => infra.client.saveMealTypes([tombstone]),
-        finish: () => notifySyncBestEffort(infra.client, infra.log),
+        onCommitted: mealTypeFx.onCommitted,
+        finish: mealTypeFx.finish,
       });
 
       return {

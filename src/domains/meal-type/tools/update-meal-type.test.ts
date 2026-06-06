@@ -49,6 +49,9 @@ describe("update_meal_type tool", () => {
     expect(saveMealTypes).toHaveBeenCalledOnce();
     const saved = saveMealTypes.mock.calls[0]![0] as ReadonlyArray<MealType>;
     expect(saved).toHaveLength(1);
+    // Menu resources render meal-type names from this catalog live, so the
+    // commit must tell subscribed clients to refresh.
+    expect(kh.resourceListChanged()).toHaveBeenCalled();
   });
 
   it("rejects a rename that collides with another type's name", async () => {

@@ -87,11 +87,12 @@ describe("menuToMarkdown", () => {
     expect(md).toContain("- **Dinner:** Lasagna");
   });
 
-  it("falls back to typeUid string when the meal type is unknown", () => {
+  it("omits the type prefix for a dangling typeUid (deleted type), never the raw UID", () => {
     const menu = makeMenu({ uid: "m-7" as MenuUid, days: 1 });
     const item = makeMenuItem({ menuUid: "m-7", day: 1, typeUid: "ghost-type", name: "Soup" });
     const md = menuToMarkdown(menu, [item], [dinner]);
-    expect(md).toContain("- **ghost-type:** Soup");
+    expect(md).toContain("- Soup");
+    expect(md).not.toContain("ghost-type:");
   });
 
   it("appends item and recipe UIDs when includeItemUids is set", () => {
