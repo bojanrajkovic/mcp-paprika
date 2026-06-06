@@ -139,17 +139,21 @@ jobs:
           image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.push.outputs.digest }}
           format: spdx-json
           output-file: /tmp/sbom.spdx.json
-          # The action also uploads the SBOM to the GitHub Release as an
-          # asset; the attestation in GHCR is the canonical verifiable copy.
-          upload-release-assets: true
+          # upload-release-assets requires upload-artifact: true to stage the
+          # file as a workflow artifact first; without it the step finds nothing
+          # to attach and silently produces "Found 0 artifact(s)". The
+          # attestation in GHCR (attested below) is the canonical verifiable
+          # copy, so we skip the release-asset upload entirely.
+          upload-release-assets: false
           upload-artifact: false
 
       - name: Attest SBOM
-        uses: actions/attest-sbom@c604332985a26aa8cf1bdc465b92731239ec6b9e # v4.1.0
+        uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4.1.0
         with:
           subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           subject-digest: ${{ steps.push.outputs.digest }}
-          sbom-path: /tmp/sbom.spdx.json
+          predicate-type: 'https://spdx.dev/Document/v2.3'
+          predicate: /tmp/sbom.spdx.json
           push-to-registry: true
 
       # Cosign signs the *digest* (not the tags), so every tag pointing at
