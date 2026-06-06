@@ -95,14 +95,18 @@ export const addRecipeToGroceryListTool = defineTool(
       const listUid = list.uid;
 
       // Skip ingredients already on the list unpurchased (case-insensitive).
+      // One partition pass so the membership test lives in exactly one place.
       const onList = new Set(
         ctx.state.items.store
           .getByListUid(listUid)
           .filter((i) => !i.purchased)
           .map((i) => i.ingredient.toLowerCase()),
       );
-      const toAdd = args.items.filter((i) => !onList.has(i.ingredient.toLowerCase()));
-      const skipped = args.items.filter((i) => onList.has(i.ingredient.toLowerCase()));
+      const toAdd: Array<(typeof args.items)[number]> = [];
+      const skipped: Array<(typeof args.items)[number]> = [];
+      for (const item of args.items) {
+        (onList.has(item.ingredient.toLowerCase()) ? skipped : toAdd).push(item);
+      }
       const skippedNote =
         skipped.length > 0 ? `\n\nAlready on the list (skipped): ${skipped.map((i) => i.ingredient).join(", ")}.` : "";
       if (toAdd.length === 0) {
@@ -126,9 +130,7 @@ export const addRecipeToGroceryListTool = defineTool(
       const commitErr = commitFailure("grocery list", await ctx.writes.commitGroceryItemsBatch(savedItems));
       if (commitErr) return commitErr;
 
-      const rendered = savedItems
-        .map((item) => groceryItemToMarkdown(item, (i) => ctx.deps.aisle.get(i.aisleUid)?.name ?? i.aisle))
-        .join("\n\n---\n\n");
+      const rendered = savedItems.map((item) => groceryItemToMarkdown(item, ctx.deps.aisle)).join("\n\n---\n\n");
       return textResult(
         `Added ${String(savedItems.length)} item(s) from "${recipe.name}" to "${list.name}".${skippedNote}\n\n${rendered}`,
       );

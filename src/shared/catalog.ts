@@ -31,6 +31,10 @@ export function sortCatalog<T extends OrderedCatalogEntry>(entries: ReadonlyArra
  * remove, insert at the clamped index, renumber order flags contiguously.
  * Entries already carrying their contiguous flag are returned as-is, so a
  * caller can diff against the store to save only what changed.
+ *
+ * Precondition: `target` is an entry OF `sorted` (possibly with edited fields).
+ * An unknown uid is not detected — it would be inserted as an (N+1)th entry —
+ * so callers resolve the target from the store first.
  */
 export function repositionCatalog<T extends OrderedCatalogEntry>(
   sorted: ReadonlyArray<T>,
@@ -60,6 +64,9 @@ export function renderCatalogOrder(entries: ReadonlyArray<OrderedCatalogEntry>):
  * capitalized entity noun for messages, e.g. "Aisle" / "Meal type".
  */
 export function makeCatalogDelete<
+  // `uid: UID` re-narrows OrderedCatalogEntry's plain-string uid to the branded
+  // UID param — the load-bearing term that keeps the CommitTarget seam kind-safe.
+  // Don't "simplify" it away.
   T extends OrderedCatalogEntry & { readonly uid: UID; readonly deleted: boolean },
   UID extends string,
 >(opts: {

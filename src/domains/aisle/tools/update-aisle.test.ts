@@ -79,7 +79,9 @@ describe("update_aisle tool", () => {
 
     const text = await kh.callToolText("update_aisle", { uid: produce.uid, position: 99 });
 
-    expect(text).toContain("moved to position 99");
+    // The response reports the LANDED position (clamped to last), not the
+    // requested 99 — it must agree with the rendered order.
+    expect(text).toContain("moved to position 3");
     expect(kh.state().store.get(dairy.uid)?.orderFlag).toBe(0);
     expect(kh.state().store.get(frozen.uid)?.orderFlag).toBe(1);
     expect(kh.state().store.get(produce.uid)?.orderFlag).toBe(2);

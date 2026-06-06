@@ -188,6 +188,7 @@ register(
             return { ok: true, resolved };
           },
           getAll: () => state.store.getAll(),
+          get: (uid) => state.store.get(uid),
           hasSynced: () => state.store.hasSynced,
           ensureMealType,
           deleteMealType,

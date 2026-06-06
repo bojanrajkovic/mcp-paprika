@@ -200,9 +200,7 @@ export const addGroceryItemsTool = defineTool(
       if (commitErr) return commitErr;
 
       const count = savedItems.length;
-      const rendered = savedItems
-        .map((item) => groceryItemToMarkdown(item, (i) => ctx.deps.aisle.get(i.aisleUid)?.name ?? i.aisle))
-        .join("\n\n---\n\n");
+      const rendered = savedItems.map((item) => groceryItemToMarkdown(item, ctx.deps.aisle)).join("\n\n---\n\n");
       return textResult(`Added ${count.toString()} item(s) to the grocery list.\n\n${rendered}`);
     };
   },
@@ -275,7 +273,7 @@ export const updateGroceryItemTool = defineTool(
       const commitErr = commitFailure("grocery list", await ctx.writes.commitGroceryItem(saved));
       if (commitErr) return commitErr;
 
-      return textResult(groceryItemToMarkdown(saved, (i) => ctx.deps.aisle.get(i.aisleUid)?.name ?? i.aisle));
+      return textResult(groceryItemToMarkdown(saved, ctx.deps.aisle));
     };
   },
 );

@@ -51,7 +51,7 @@ export function groceryListResource(ctx: DomainCtx<GroceryState, "aisle" | "pant
         headerLines.push(`**Last synced:** ${lastSynced.toISOString()}`);
       }
 
-      const content = `${headerLines.join("\n")}\n\n${groceryListToMarkdown(list, items, (i) => ctx.deps.aisle.get(i.aisleUid)?.name ?? i.aisle)}`;
+      const content = `${headerLines.join("\n")}\n\n${groceryListToMarkdown(list, items, ctx.deps.aisle)}`;
       return {
         contents: [
           {

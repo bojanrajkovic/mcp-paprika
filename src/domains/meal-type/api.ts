@@ -31,6 +31,8 @@ export interface MealTypeApi extends HasSynced {
   resolveSpec(spec: MealTypeSpec): MealTypeResolveResult;
   /** The whole catalog (unsorted) — callers sort/render as needed. */
   getAll(): ReadonlyArray<MealType>;
+  /** UID lookup; `undefined` for an unknown or dangling UID. The coordinator's `delete_meal_type` resolve. */
+  get(uid: MealTypeUid): MealType | undefined;
   /**
    * Resolve-or-create a meal type by name (case-insensitive), mirroring aisle's
    * `ensureAisle`. Returns the existing type on a name hit; otherwise creates a

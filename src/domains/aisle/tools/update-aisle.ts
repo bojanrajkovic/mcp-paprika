@@ -86,7 +86,13 @@ export const updateAisleTool = defineTool(
 
           const did: Array<string> = [];
           if (newName !== undefined && newName !== existing.name) did.push(`renamed to "${newName}"`);
-          if (args.position !== undefined) did.push(`moved to position ${String(args.position)}`);
+          // Report where the aisle actually LANDED — a past-the-end position
+          // clamps to last, so echoing args.position would contradict the
+          // rendered order below.
+          if (args.position !== undefined) {
+            const landed = ordered.findIndex((a) => a.uid === target.uid) + 1;
+            did.push(`moved to position ${String(landed)}`);
+          }
           return textResult(
             `Updated aisle "${existing.name}": ${did.join(", ")}.\n\nCurrent aisle order:\n${renderCatalogOrder(
               sortCatalog(ctx.state.store.getAll()),

@@ -1,11 +1,12 @@
+import type { AisleNameSource } from "../aisle/display.js";
 import type { GroceryItem } from "./grocery-item/types.js";
 import type { GroceryList } from "./grocery-list/types.js";
 
-// Aisle display names resolve through the live catalog (`aisleNameOf`, built from
-// `ctx.deps.aisle.get`), with the item's denormalized `aisle` copy as the fallback
-// for dangling/no-aisle references. Items denormalize the name at write time, so
-// after an aisle rename the copies go stale; resolving at render keeps every
-// rendering current without cascade-rewriting items (the category pattern).
+import { aisleDisplayName } from "../aisle/display.js";
+
+// Aisle display names resolve through the live catalog (`aisles` — the caller
+// passes `ctx.deps.aisle`), with the item's denormalized copy as the fallback;
+// the contract lives in `../aisle/display.ts` (ADR-0017 render-resolution).
 
 /**
  * Renders a grocery list as markdown with metadata and a table of items.
@@ -13,7 +14,7 @@ import type { GroceryList } from "./grocery-list/types.js";
 export function groceryListToMarkdown(
   list: GroceryList,
   items: ReadonlyArray<GroceryItem>,
-  aisleNameOf: (item: GroceryItem) => string,
+  aisles: AisleNameSource,
 ): string {
   const lines: Array<string> = [];
   lines.push(`# ${list.name}`);
@@ -27,7 +28,7 @@ export function groceryListToMarkdown(
     lines.push("|------------|-----|-------|-----------|");
     for (const item of items) {
       const qty = item.quantity !== "" ? item.quantity : "—";
-      const aisleName = aisleNameOf(item);
+      const aisleName = aisleDisplayName(aisles, item);
       const aisle = aisleName !== "" ? aisleName : "—";
       const purchased = item.purchased ? "Yes" : "No";
       lines.push(`| ${item.ingredient} | ${qty} | ${aisle} | ${purchased} |`);
@@ -40,7 +41,7 @@ export function groceryListToMarkdown(
 /**
  * Renders a single grocery item as markdown with all available fields.
  */
-export function groceryItemToMarkdown(item: GroceryItem, aisleNameOf: (item: GroceryItem) => string): string {
+export function groceryItemToMarkdown(item: GroceryItem, aisles: AisleNameSource): string {
   const lines: Array<string> = [];
   lines.push(`# ${item.ingredient}`);
   lines.push("");
@@ -49,7 +50,7 @@ export function groceryItemToMarkdown(item: GroceryItem, aisleNameOf: (item: Gro
   if (item.quantity !== "") {
     lines.push(`**Quantity:** ${item.quantity}`);
   }
-  const aisleName = aisleNameOf(item);
+  const aisleName = aisleDisplayName(aisles, item);
   if (aisleName !== "") {
     lines.push(`**Aisle:** ${aisleName}`);
   }

@@ -43,12 +43,12 @@ export const deleteAisleTool = defineTool(
         return textResult(`No aisle found with UID "${args.uid}" (see list_aisles; the catalog may still be syncing).`);
       }
 
-      const groceryRefs = ctx.state.items.store.getAll().filter((i) => i.aisleUid === args.uid && !i.purchased);
+      const groceryRefs = ctx.state.items.store.countUnpurchasedInAisle(args.uid);
       const pantryRefs = ctx.deps.pantry.countItemsInAisle(args.uid);
-      if (groceryRefs.length > 0 || pantryRefs > 0) {
+      if (groceryRefs > 0 || pantryRefs > 0) {
         const parts: Array<string> = [];
-        if (groceryRefs.length > 0) {
-          parts.push(`${String(groceryRefs.length)} unpurchased grocery item${groceryRefs.length === 1 ? "" : "s"}`);
+        if (groceryRefs > 0) {
+          parts.push(`${String(groceryRefs)} unpurchased grocery item${groceryRefs === 1 ? "" : "s"}`);
         }
         if (pantryRefs > 0) {
           parts.push(`${String(pantryRefs)} pantry item${pantryRefs === 1 ? "" : "s"}`);

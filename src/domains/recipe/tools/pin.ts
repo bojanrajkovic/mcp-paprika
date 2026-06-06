@@ -1,14 +1,14 @@
 import { makeRecipeFlagTool, recipeFlagInputSchema } from "./flag-tool.js";
 
-export const pinRecipeInputSchema = recipeFlagInputSchema();
-export const unpinRecipeInputSchema = recipeFlagInputSchema();
+// Aliases for the shared flag schema — the per-verb names the tests import.
+export const pinRecipeInputSchema = recipeFlagInputSchema;
+export const unpinRecipeInputSchema = recipeFlagInputSchema;
 
 /** `pin_recipe` — pin a recipe so it floats to the top of the recipe list. */
 export const pinRecipeTool = makeRecipeFlagTool({
   name: "pin_recipe",
   title: "Pin a recipe",
   description: "Pin a recipe by UID so it floats to the top of the recipe list.",
-  inputSchema: pinRecipeInputSchema,
   flag: "isPinned",
   value: true,
   failVerb: "pin",
@@ -19,7 +19,6 @@ export const unpinRecipeTool = makeRecipeFlagTool({
   name: "unpin_recipe",
   title: "Unpin a recipe",
   description: "Unpin a recipe by UID (removes it from the pinned set at the top of the recipe list).",
-  inputSchema: unpinRecipeInputSchema,
   flag: "isPinned",
   value: false,
   failVerb: "unpin",

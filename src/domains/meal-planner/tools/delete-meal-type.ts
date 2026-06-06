@@ -36,7 +36,7 @@ export const deleteMealTypeTool = defineTool(
   (ctx: DomainCtx<Record<never, never>, "menu" | "meal" | "recipe" | "meal-type">) => {
     const log = ctx.infra.log.child({ component: "delete_meal_type" });
     return async (args) => {
-      const existing = ctx.deps["meal-type"].getAll().find((mt) => mt.uid === args.uid);
+      const existing = ctx.deps["meal-type"].get(args.uid);
       if (existing === undefined) {
         return textResult(`No meal type found with UID "${args.uid}" (see list_meal_types for the catalog).`);
       }

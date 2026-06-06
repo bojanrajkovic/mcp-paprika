@@ -10,10 +10,8 @@ import { RecipeUidSchema } from "../ids.js";
 import { recipeToMarkdown } from "../recipe-markdown.js";
 import { recipeColdStartGuard } from "./guards.js";
 
-/** The strict `{ uid }` input every recipe flag verb takes. */
-export function recipeFlagInputSchema(): z.ZodObject<{ uid: typeof RecipeUidSchema }> {
-  return z.object({ uid: RecipeUidSchema.describe("Recipe UID") }).strict();
-}
+/** The strict `{ uid }` input every recipe flag verb takes — one schema, shared by all four verbs. */
+export const recipeFlagInputSchema = z.object({ uid: RecipeUidSchema.describe("Recipe UID") }).strict();
 
 /**
  * Build one half of a recipe boolean-flag verb pair (`favorite_recipe` /
@@ -27,7 +25,6 @@ export function makeRecipeFlagTool(spec: {
   readonly name: string;
   readonly title: string;
   readonly description: string;
-  readonly inputSchema: ReturnType<typeof recipeFlagInputSchema>;
   readonly flag: "onFavorites" | "isPinned";
   readonly value: boolean;
   /** The verb for the failure message, e.g. "favorite", "unpin". */
@@ -39,7 +36,7 @@ export function makeRecipeFlagTool(spec: {
       title: spec.title,
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
       description: spec.description,
-      inputSchema: spec.inputSchema,
+      inputSchema: recipeFlagInputSchema,
     },
     [recipeColdStartGuard],
     (ctx: DomainCtx<RecipeState, never, RecipeWrites>) => {

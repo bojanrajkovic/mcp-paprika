@@ -99,7 +99,13 @@ export const updateMealTypeTool = defineTool(
           const did: Array<string> = [];
           if (newName !== undefined && newName !== existing.name) did.push(`renamed to "${newName}"`);
           if (args.color !== undefined && args.color !== existing.color) did.push(`recolored to ${args.color}`);
-          if (args.position !== undefined) did.push(`moved to position ${String(args.position)}`);
+          // Report where the type actually LANDED — a past-the-end position
+          // clamps to last, so echoing args.position would contradict the
+          // rendered order below.
+          if (args.position !== undefined) {
+            const landed = ordered.findIndex((mt) => mt.uid === target.uid) + 1;
+            did.push(`moved to position ${String(landed)}`);
+          }
           return textResult(
             `Updated meal type "${existing.name}": ${did.join(", ")}.\n\nCurrent meal-type order:\n${renderCatalogOrder(
               sortCatalog(ctx.state.store.getAll()),
