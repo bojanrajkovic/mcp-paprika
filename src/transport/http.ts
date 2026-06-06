@@ -148,8 +148,7 @@ export async function startHttp(config: PaprikaConfig, opts: StartHttpOptions = 
   // Auth needs only its own OAuth client/token subcaches. buildAuthCaches builds JUST
   // those — no entity subcaches, so no duplicate RecipeDiskCache for AuthCleanup's flush
   // loop to clobber, and no second writer over <cacheDir>/<entity>. HTTP-only (stdio has
-  // no auth). The legacy-index migration now lives on RecipeDiskCache.init(), so it runs
-  // for both transports independent of this.
+  // no auth).
   const authCache = unwrapAtBoot(
     await buildAuthCaches(cacheDir, rootLog.child({ component: "auth-cache" })),
     "auth caches init",

@@ -9,7 +9,7 @@ The in-memory query/CRUD stores that are each session's source of truth for one 
 ## Key References
 
 - `../entity/CLAUDE.md` — the shared `EntityStore` base class and the canonical pending-write (#57) invariants. Every store inherits those unless noted in Sharp edges; this file documents only what each store adds on top.
-- [Persistence](#persistence) (below) — the on-disk layer (per-entity `DiskCache<T>` + the `DiskCacheDescriptor<T>` contract, on-disk layout, migration, mutex model, recipe `diff()`); each entity's descriptor is co-located in its `../domains/<domain>/types.ts` (a behavior-carrying cache like recipe's keeps a dedicated `disk.ts`).
+- [Persistence](#persistence) (below) — the on-disk layer (per-entity `DiskCache<T>` + the `DiskCacheDescriptor<T>` contract, on-disk layout, mutex model, recipe `diff()`); each entity's descriptor is co-located in its `../domains/<domain>/types.ts` (a behavior-carrying cache like recipe's keeps a dedicated `disk.ts`).
 - `docs/architecture.md` — the two-layer cache+sync model and the diff-and-fetch vs. replace-all split.
 - Source: each entity's `../domains/<domain>/store.ts` owns its method signatures and field shapes, and its `../domains/<domain>/types.ts` owns the schema.
 
@@ -47,7 +47,7 @@ On-disk persistence for every cached entity: one `DiskCache<T>` per entity — t
 
 **No re-entrance inside the mutex.** A locked method must never call another locked method on the same instance or it deadlocks. Subclasses extend through the mutex-free `_putInner`/`_removeInner` helpers; the base's public `put`/`remove` acquire the mutex once, then call those internals.
 
-**Corruption resets a namespace to empty, not to a crash.** Invalid JSON or a schema mismatch on `recipes/index.json` logs a `warn` and leaves the in-memory hash map empty rather than throwing; the next sync re-fetches and re-hashes everything, repopulating the index. ENOENT on a per-uid read, a directory listing, or an unlink is a normal cold-start/idempotent case and is silent. The principle: a corrupt or missing cache must degrade to "re-sync," never to a startup failure. (This is also the upgrade path for any cache last written by ≤ v1.2.0, whose unified-index migration was removed in #260: its hash index simply cold-resyncs.)
+**Corruption resets a namespace to empty, not to a crash.** Invalid JSON or a schema mismatch on `recipes/index.json` logs a `warn` and leaves the in-memory hash map empty rather than throwing; the next sync re-fetches and re-hashes everything, repopulating the index. ENOENT on a per-uid read, a directory listing, or an unlink is a normal cold-start/idempotent case and is silent. The principle: a corrupt or missing cache must degrade to "re-sync," never to a startup failure.
 
 **The recipes index is temp-then-rename, inside the recipe mutex, on every flush.** `RecipeDiskCache._writePending` writes the uid→hash map to a `.index-<ts>.tmp` sibling and `rename`s it over `index.json` after `super._writePending()` has fsynced the data files. The rename is atomic, so a reader never sees a half-written index. Crash windows: die between data writes and the rename → new data files are durable and the _older_ index still references valid recipes (harmless); die during the rename → the old index stays in place and the next sync re-hashes the affected recipes. The index is rewritten unconditionally (even when `_pending` was empty) because `remove()` mutates the hash map without leaving a pending entry, so "nothing pending" does not imply "index current."
 

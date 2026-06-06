@@ -1,4 +1,4 @@
-import { writeFile } from "node:fs/promises";
+import { readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
@@ -247,6 +247,32 @@ describe("RecipeDiskCache cold-start persistence integration", () => {
       const text = getText(result);
       expect(text).toContain("Margherita Pizza");
       expect(text).not.toContain("Garlic Bread");
+    });
+  });
+
+  describe("Pre-v1.3.0 cache layout", () => {
+    it("boots cleanly from a cache dir holding a root-level unified index.json: blobs hydrate, the root file is ignored, and the hash index cold-resyncs", async () => {
+      // The shape a cache last written by ≤ v1.2.0 has: recipe blobs in
+      // recipes/<uid>.json, the old unified index at the cache root, and no
+      // recipes/index.json. The unified-index migration is gone; this layout
+      // must take the ordinary missing-index path (empty hash map → the next
+      // diff classifies everything as added) with the root file left inert.
+      const seed = makeRecipeCache(tmp.dir());
+      await seed.init();
+      const recipe = makeRecipe({ uid: "recipe-legacy-1" as RecipeUid, name: "Legacy Era", hash: "hash-1" });
+      await seed.put(recipe);
+      await seed.flush();
+      const rootIndex = JSON.stringify({ recipes: { "recipe-legacy-1": "hash-1" } });
+      await writeFile(join(tmp.dir(), "index.json"), rootIndex);
+      await rm(join(tmp.dir(), "recipes", "index.json"));
+
+      const cache = makeRecipeCache(tmp.dir());
+      (await cache.init())._unsafeUnwrap();
+
+      expect((await cache.get(recipe.uid))._unsafeUnwrap()).toEqual(recipe);
+      const diff = cache.diff([{ uid: recipe.uid, hash: recipe.hash }])._unsafeUnwrap();
+      expect(diff.added).toContain(recipe.uid);
+      expect(await readFile(join(tmp.dir(), "index.json"), "utf-8")).toBe(rootIndex);
     });
   });
 
