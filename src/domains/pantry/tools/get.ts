@@ -42,7 +42,7 @@ export const getPantryItemTool = defineTool(
       });
       return formatLookupOutcome(outcome, {
         entityNoun: "pantry item",
-        renderOne: (item) => pantryItemToMarkdown(item),
+        renderOne: (item) => pantryItemToMarkdown(item, (i) => ctx.deps.aisle.get(i.aisleUid)?.name ?? i.aisle),
         disambiguationLine: (item) => `- **${item.ingredient}** (uid: \`${item.uid}\`)`,
       });
     };

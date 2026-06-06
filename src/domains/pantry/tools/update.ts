@@ -127,7 +127,7 @@ export const updatePantryItemTool = defineTool(
       const commitErr = commitFailure("pantry", await ctx.writes.commitPantryItem(saved));
       if (commitErr) return commitErr;
 
-      return textResult(pantryItemToMarkdown(saved));
+      return textResult(pantryItemToMarkdown(saved, (i) => ctx.deps.aisle.get(i.aisleUid)?.name ?? i.aisle));
     };
   },
 );

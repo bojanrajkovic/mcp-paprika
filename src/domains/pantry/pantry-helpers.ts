@@ -4,7 +4,10 @@ import type { PantryItem } from "./types.js";
 // exposes a UI for pantry notes and no captured item has a non-null value.
 // Omitted from display and from POST payloads; retained in the schema so
 // the parser doesn't reject the field if the server starts populating it.
-export function pantryItemToMarkdown(item: PantryItem): string {
+// The aisle display name resolves through the live catalog (`aisleNameOf`, built
+// from `ctx.deps.aisle.get`), falling back to the item's denormalized `aisle` copy
+// for dangling/no-aisle references — see grocery-helpers.ts for the rationale.
+export function pantryItemToMarkdown(item: PantryItem, aisleNameOf: (item: PantryItem) => string): string {
   const lines: Array<string> = [];
 
   lines.push(`# ${item.ingredient}`);
@@ -14,8 +17,9 @@ export function pantryItemToMarkdown(item: PantryItem): string {
   if (item.quantity !== "") {
     lines.push(`**Quantity:** ${item.quantity}`);
   }
-  if (item.aisle !== "") {
-    lines.push(`**Aisle:** ${item.aisle}`);
+  const aisleName = aisleNameOf(item);
+  if (aisleName !== "") {
+    lines.push(`**Aisle:** ${aisleName}`);
   }
   lines.push(`**In stock:** ${item.inStock ? "Yes" : "No"}`);
   if (item.expirationDate !== null) {

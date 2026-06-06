@@ -80,7 +80,12 @@ export const readGroceryListTool = defineTool(
       });
       return formatLookupOutcome(outcome, {
         entityNoun: "grocery list",
-        renderOne: (list) => groceryListToMarkdown(list, ctx.state.items.store.getByListUid(list.uid)),
+        renderOne: (list) =>
+          groceryListToMarkdown(
+            list,
+            ctx.state.items.store.getByListUid(list.uid),
+            (i) => ctx.deps.aisle.get(i.aisleUid)?.name ?? i.aisle,
+          ),
         disambiguationLine: (list) => `- **${list.name}** (uid: \`${list.uid}\`)`,
       });
     };
@@ -131,7 +136,7 @@ export const createGroceryListTool = defineTool(
         async (saved) => {
           const commitErr = commitFailure("grocery list", await ctx.writes.commitGroceryList(saved));
           if (commitErr) return commitErr;
-          return textResult(groceryListToMarkdown(saved, []));
+          return textResult(groceryListToMarkdown(saved, [], (i) => ctx.deps.aisle.get(i.aisleUid)?.name ?? i.aisle));
         },
         async (e) => {
           log.error({ err: e, name: args.name }, "saveGroceryList failed");
@@ -169,7 +174,9 @@ export const renameGroceryListTool = defineTool(
       // Same-name no-op: case-insensitive check. Return the existing list rendered as markdown.
       if (existing.name.toLowerCase() === args.newName.toLowerCase()) {
         const items = ctx.state.items.store.getByListUid(existing.uid);
-        return textResult(groceryListToMarkdown(existing, items));
+        return textResult(
+          groceryListToMarkdown(existing, items, (i) => ctx.deps.aisle.get(i.aisleUid)?.name ?? i.aisle),
+        );
       }
 
       // Conflict check: reject if another list (different UID) has the exact same name.
@@ -190,7 +197,9 @@ export const renameGroceryListTool = defineTool(
           const commitErr = commitFailure("grocery list", await ctx.writes.commitGroceryList(saved));
           if (commitErr) return commitErr;
           const items = ctx.state.items.store.getByListUid(saved.uid);
-          return textResult(groceryListToMarkdown(saved, items));
+          return textResult(
+            groceryListToMarkdown(saved, items, (i) => ctx.deps.aisle.get(i.aisleUid)?.name ?? i.aisle),
+          );
         },
         async (e) => {
           log.error({ err: e, uid: args.uid, newName: args.newName }, "saveGroceryList failed");
