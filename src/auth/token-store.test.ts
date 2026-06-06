@@ -57,7 +57,7 @@ describe("TokenStore", () => {
 
   beforeEach(async () => {
     await tmp.setup();
-    cache = await buildAuthCaches(tmp.dir());
+    cache = (await buildAuthCaches(tmp.dir()))._unsafeUnwrap();
     clientStore = new DiskClientRegistrationStoreImpl(cache, "https://m.example.com", SILENT_LOG);
 
     now = nowSeconds();
@@ -94,8 +94,8 @@ describe("TokenStore", () => {
       const accessHash = hashTokenForStorage(pair1.access.plaintext);
       const refreshHash = hashTokenForStorage(pair1.refresh.plaintext);
 
-      const stored1 = await cache.oauthTokens.get(accessHash);
-      const stored2 = await cache.oauthTokens.get(refreshHash);
+      const stored1 = (await cache.oauthTokens.get(accessHash))._unsafeUnwrap();
+      const stored2 = (await cache.oauthTokens.get(refreshHash))._unsafeUnwrap();
 
       expect(stored1).not.toBeNull();
       expect(stored2).not.toBeNull();
@@ -320,7 +320,7 @@ describe("TokenStore", () => {
         () => null,
       )!;
       const r2Hash = hashTokenForStorage(r2Plaintext);
-      const r2Record = await cache.oauthTokens.get(r2Hash);
+      const r2Record = (await cache.oauthTokens.get(r2Hash))._unsafeUnwrap();
 
       expect(r2Record?.rotatedFromHash).toBe(hashTokenForStorage(r1.plaintext));
     });
@@ -485,7 +485,7 @@ describe("TokenStore", () => {
         store.removeAllForClient(input.clientId),
       ]);
 
-      const remaining = (await cache.oauthTokens.getAll()).filter((t) => t.clientId === input.clientId);
+      const remaining = (await cache.oauthTokens.getAll())._unsafeUnwrap().filter((t) => t.clientId === input.clientId);
       expect(remaining).toEqual([]);
     });
   });
@@ -496,7 +496,7 @@ describe("TokenStore", () => {
       const { access } = await store.issueAccessRefreshPair(input);
 
       // Simulate restart with fresh DiskCache and TokenStore on the same directory
-      const cache2 = await buildAuthCaches(tmp.dir());
+      const cache2 = (await buildAuthCaches(tmp.dir()))._unsafeUnwrap();
       const store2 = new TokenStore(cache2);
 
       // token should persist and lookup should work
@@ -512,7 +512,7 @@ describe("TokenStore", () => {
       const { refresh: r1 } = await store.issueAccessRefreshPair(input);
 
       // Simulate restart with fresh DiskCache and TokenStore on the same directory
-      const cache2 = await buildAuthCaches(tmp.dir());
+      const cache2 = (await buildAuthCaches(tmp.dir()))._unsafeUnwrap();
       const store2 = new TokenStore(cache2);
 
       // refresh token should persist

@@ -9,7 +9,7 @@ import type { Meal } from "../types.js";
 
 import { MealUidSchema, RecipeUidSchema } from "../../../ids.js";
 import { defineTool } from "../../../kernel/tool.js";
-import { textResult } from "../../../shared/tools.js";
+import { commitFailure, textResult } from "../../../shared/tools.js";
 import { parseCalendarDayWire } from "../../../utils/dates.js";
 import { toMessage } from "../../../utils/log.js";
 import { mealTypeSpecSchema, resolveOrCreateMealType } from "../../meal-type/meal-type-helpers.js";
@@ -248,7 +248,8 @@ export const planMealsTool = defineTool(
           let savedItems: ReadonlyArray<Meal>;
           try {
             savedItems = await ctx.infra.client.saveMeals(builtItems);
-            await ctx.writes.commitMealsBatch(savedItems);
+            const commitErr = commitFailure("meal plan", await ctx.writes.commitMealsBatch(savedItems));
+            if (commitErr) return commitErr;
           } catch (error) {
             const message = toMessage(error);
             log.error({ err: error, count: builtItems.length }, "saveMeals failed");
@@ -469,7 +470,8 @@ export const updateMealTool = defineTool(
           let saved: Meal;
           try {
             saved = (await ctx.infra.client.saveMeals([updated]))[0]!;
-            await ctx.writes.commitMeal(saved);
+            const commitErr = commitFailure("meal plan", await ctx.writes.commitMeal(saved));
+            if (commitErr) return commitErr;
           } catch (error) {
             const message = toMessage(error);
             log.error({ err: error, uid }, "saveMeals failed");
@@ -516,7 +518,8 @@ export const deleteMealTool = defineTool(
           const trashed: Meal = { ...existing, deleted: true };
           try {
             const saved = (await ctx.infra.client.saveMeals([trashed]))[0]!;
-            await ctx.writes.commitMeal(saved);
+            const commitErr = commitFailure("meal plan", await ctx.writes.commitMeal(saved));
+            if (commitErr) return commitErr;
           } catch (error) {
             const message = toMessage(error);
             log.error({ err: error, uid }, "saveMeals failed");

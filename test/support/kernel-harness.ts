@@ -45,8 +45,10 @@ function makeTestConfig(): PaprikaConfig {
  * `client.saveRecipe` lazily creates (and caches) a spy, so a write-tool test configures
  * and asserts the live mock post-setup — `vi.mocked(kh.client().saveRecipe).mockResolvedValue(…)`
  * then `expect(kh.client().saveRecipe).toHaveBeenCalledOnce()` — with no per-test injection.
- * `notifySync` (awaited but unused) resolves fine as `undefined`; methods whose RETURN a tool
- * consumes (e.g. `saveRecipe`) must be given a value by the test. `overrides` win over a stub.
+ * Every auto-stub resolves to `undefined` (a real promise — the commit chokepoints
+ * feed `notifySync()` through `ResultAsync.fromPromise`, which needs a thenable);
+ * methods whose RETURN a tool consumes (e.g. `saveRecipe`) must be given a value by
+ * the test. `overrides` win over a stub.
  */
 function makeMockClient(overrides: Partial<Record<keyof PaprikaClient, unknown>> = {}): PaprikaClient {
   const target: Record<string, unknown> = { ...overrides };
@@ -57,7 +59,7 @@ function makeMockClient(overrides: Partial<Record<keyof PaprikaClient, unknown>>
       if (prop in t) return t[prop];
       let fn = stubs.get(prop);
       if (fn === undefined) {
-        fn = vi.fn();
+        fn = vi.fn().mockResolvedValue(undefined);
         stubs.set(prop, fn);
       }
       return fn;

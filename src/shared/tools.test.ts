@@ -1,8 +1,16 @@
+import { err, ok } from "neverthrow";
 import { describe, expect, it } from "vitest";
 
 import { getText } from "../../test/support/tool-test-utils.js";
 import { RecipeUidSchema } from "../ids.js";
-import { formatLookupOutcome, type LookupOutcome, resolveLookup, textResult, uidOrTextLookupSchema } from "./tools.js";
+import {
+  commitFailure,
+  formatLookupOutcome,
+  type LookupOutcome,
+  resolveLookup,
+  textResult,
+  uidOrTextLookupSchema,
+} from "./tools.js";
 
 describe("shared helper functions", () => {
   describe("textResult wraps a string in the MCP wire envelope", () => {
@@ -126,5 +134,20 @@ describe("formatLookupOutcome", () => {
     expect(result).toContain("- Alpha (UID: A)");
     expect(result).toContain("- Alphabet (UID: B)");
     expect(result).toContain("Please re-invoke with a specific uid");
+  });
+});
+
+describe("commitFailure", () => {
+  it("returns undefined when the commit succeeded", () => {
+    expect(commitFailure("recipe", ok(undefined))).toBeUndefined();
+  });
+
+  it("renders the persisted-but-local-commit-failed response on err", () => {
+    const result = commitFailure("grocery list", err({ message: "disk full" }));
+    expect(result).toBeDefined();
+    const text = getText(result!);
+    expect(text).toContain("saved to Paprika");
+    expect(text).toContain("local grocery list cache failed (disk full)");
+    expect(text).toContain("next sync");
   });
 });

@@ -7,7 +7,7 @@ import type { Recipe } from "../types.js";
 import { RecipeUidSchema } from "../../../ids.js";
 import { defineTool } from "../../../kernel/tool.js";
 import { PaprikaAPIError } from "../../../paprika/errors.js";
-import { textResult } from "../../../shared/tools.js";
+import { commitFailure, textResult } from "../../../shared/tools.js";
 import { toMessage } from "../../../utils/log.js";
 import { recipeColdStartGuard } from "./guards.js";
 
@@ -80,7 +80,8 @@ export const purgeRecipeTool = defineTool(
 
           try {
             const saved = await ctx.infra.client.saveRecipe(tombstone);
-            await ctx.writes.commitRecipeHardDelete(saved);
+            const commitErr = commitFailure("recipe", await ctx.writes.commitRecipeHardDelete(saved));
+            if (commitErr) return commitErr;
           } catch (error) {
             const message = toMessage(error);
             log.error({ err: error, uid: args.uid }, "hard-delete saveRecipe failed");

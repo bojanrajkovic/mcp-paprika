@@ -1,8 +1,9 @@
 import { join } from "node:path";
 
+import { okAsync, ResultAsync } from "neverthrow";
 import type { Logger } from "pino";
 
-import type { DiskCache } from "../../cache/disk-cache.js";
+import type { CacheError, DiskCache } from "../../cache/disk-cache.js";
 import type { GroceryItemUid, GroceryListUid } from "../../ids.js";
 import type { PaprikaClient } from "../../paprika/client.js";
 import type { Notifier } from "../../server/notifier.js";
@@ -14,7 +15,9 @@ import type { GroceryList } from "./grocery-list/types.js";
 import { DiskCache as DiskCacheImpl } from "../../cache/disk-cache.js";
 import { hydrateStore } from "../../cache/hydrate.js";
 import { defineModule, register } from "../../kernel/registry.js";
+import { notifySyncBestEffort } from "../../paprika/client.js";
 import { resolvePendingWriteTtl } from "../../utils/config.js";
+import { unwrapAtBoot } from "../../utils/errors.js";
 import { GroceryIngredientStore } from "./grocery-ingredient/store.js";
 import { groceryIngredientDiskDescriptor } from "./grocery-ingredient/types.js";
 import { GroceryItemStore } from "./grocery-item/store.js";
@@ -71,11 +74,11 @@ export interface GroceryState {
  */
 export interface GroceryWrites {
   /** Persist a saved grocery list locally, then nudge cloud sync. Content → fires resourceListChanged. */
-  commitGroceryList(saved: Readonly<GroceryList>): Promise<void>;
+  commitGroceryList(saved: Readonly<GroceryList>): ResultAsync<void, CacheError>;
   /** Persist a saved grocery item locally. Inlined in the list resource → fires resourceListChanged. */
-  commitGroceryItem(saved: Readonly<GroceryItem>): Promise<void>;
+  commitGroceryItem(saved: Readonly<GroceryItem>): ResultAsync<void, CacheError>;
   /** Batch variant of commitGroceryItem: one flush, one resourceListChanged, one notifySync. */
-  commitGroceryItemsBatch(items: ReadonlyArray<Readonly<GroceryItem>>): Promise<void>;
+  commitGroceryItemsBatch(items: ReadonlyArray<Readonly<GroceryItem>>): ResultAsync<void, CacheError>;
 }
 
 register(
@@ -94,10 +97,10 @@ register(
         subdir: join(infra.cacheDir, groceryListDiskDescriptor.subdir),
         log,
       });
-      await listCache.init();
+      unwrapAtBoot(await listCache.init(), "grocery list cache init");
       // Warm each store from cache so tools work on a warm restart before the first
       // sync completes.
-      await hydrateStore(listCache, listStore);
+      unwrapAtBoot(await hydrateStore(listCache, listStore), "grocery list cache hydrate");
 
       const itemStore = new GroceryItemStore({ pendingWriteTtlMs });
       const itemCache = new DiskCacheImpl<GroceryItem>({
@@ -105,8 +108,8 @@ register(
         subdir: join(infra.cacheDir, groceryItemDiskDescriptor.subdir),
         log,
       });
-      await itemCache.init();
-      await hydrateStore(itemCache, itemStore);
+      unwrapAtBoot(await itemCache.init(), "grocery item cache init");
+      unwrapAtBoot(await hydrateStore(itemCache, itemStore), "grocery item cache hydrate");
 
       // The ingredient catalog is a plain name-keyed store (no pending-write TTL).
       const ingredientStore = new GroceryIngredientStore();
@@ -115,8 +118,8 @@ register(
         subdir: join(infra.cacheDir, groceryIngredientDiskDescriptor.subdir),
         log,
       });
-      await ingredientCache.init();
-      await hydrateStore(ingredientCache, ingredientStore);
+      unwrapAtBoot(await ingredientCache.init(), "grocery ingredient cache init");
+      unwrapAtBoot(await hydrateStore(ingredientCache, ingredientStore), "grocery ingredient cache hydrate");
 
       return {
         lists: { store: listStore, cache: listCache },
@@ -138,105 +141,109 @@ register(
       // store set/delete → resourceListChanged → notifySync. The pending mark shields
       // this UID from sync-cycle reconciliation during the propagation race.
 
-      const commitGroceryList: GroceryWrites["commitGroceryList"] = async (saved) => {
+      const commitGroceryList: GroceryWrites["commitGroceryList"] = (saved) => {
         if (saved.deleted) {
           const uid: GroceryListUid = saved.uid;
           state.lists.store.markPendingDelete(uid);
-          try {
-            await state.lists.cache.remove(uid);
-            await state.lists.cache.flush();
-          } catch (e) {
-            state.lists.store.clearPending(uid);
-            throw e;
-          }
-          state.lists.store.delete(uid);
-        } else {
-          state.lists.store.markPendingUpsert(saved.uid);
-          try {
-            await state.lists.cache.put(saved);
-            await state.lists.cache.flush();
-          } catch (e) {
-            state.lists.store.clearPending(saved.uid);
-            throw e;
-          }
-          state.lists.store.set(saved);
+          return state.lists.cache
+            .remove(uid)
+            .andThen(() => state.lists.cache.flush())
+            .mapErr((e) => {
+              state.lists.store.clearPending(uid);
+              return e;
+            })
+            .andThen(() => {
+              state.lists.store.delete(uid);
+              notifier.resourceListChanged();
+              return notifySyncBestEffort(client, infra.log);
+            });
         }
-        notifier.resourceListChanged();
-        await client.notifySync();
+        state.lists.store.markPendingUpsert(saved.uid);
+        return state.lists.cache
+          .put(saved)
+          .andThen(() => state.lists.cache.flush())
+          .mapErr((e) => {
+            state.lists.store.clearPending(saved.uid);
+            return e;
+          })
+          .andThen(() => {
+            state.lists.store.set(saved);
+            notifier.resourceListChanged();
+            return notifySyncBestEffort(client, infra.log);
+          });
       };
 
-      const commitGroceryItem: GroceryWrites["commitGroceryItem"] = async (saved) => {
+      const commitGroceryItem: GroceryWrites["commitGroceryItem"] = (saved) => {
         if (saved.deleted) {
           const uid: GroceryItemUid = saved.uid;
           state.items.store.markPendingDelete(uid);
-          try {
-            await state.items.cache.remove(uid);
-            await state.items.cache.flush();
-          } catch (e) {
-            state.items.store.clearPending(uid);
-            throw e;
-          }
-          state.items.store.delete(uid);
-        } else {
-          state.items.store.markPendingUpsert(saved.uid);
-          try {
-            await state.items.cache.put(saved);
-            await state.items.cache.flush();
-          } catch (e) {
-            state.items.store.clearPending(saved.uid);
-            throw e;
-          }
-          state.items.store.set(saved);
+          return state.items.cache
+            .remove(uid)
+            .andThen(() => state.items.cache.flush())
+            .mapErr((e) => {
+              state.items.store.clearPending(uid);
+              return e;
+            })
+            .andThen(() => {
+              state.items.store.delete(uid);
+              notifier.resourceListChanged();
+              return notifySyncBestEffort(client, infra.log);
+            });
         }
-        notifier.resourceListChanged();
-        await client.notifySync();
+        state.items.store.markPendingUpsert(saved.uid);
+        return state.items.cache
+          .put(saved)
+          .andThen(() => state.items.cache.flush())
+          .mapErr((e) => {
+            state.items.store.clearPending(saved.uid);
+            return e;
+          })
+          .andThen(() => {
+            state.items.store.set(saved);
+            notifier.resourceListChanged();
+            return notifySyncBestEffort(client, infra.log);
+          });
       };
 
-      const commitGroceryItemsBatch: GroceryWrites["commitGroceryItemsBatch"] = async (items) => {
-        if (items.length === 0) return;
-        const markedUids: Array<GroceryItemUid> = [];
+      const commitGroceryItemsBatch: GroceryWrites["commitGroceryItemsBatch"] = (items) => {
+        if (items.length === 0) return okAsync(undefined);
         for (const item of items) {
           if (item.deleted) {
             state.items.store.markPendingDelete(item.uid);
           } else {
             state.items.store.markPendingUpsert(item.uid);
           }
-          markedUids.push(item.uid);
         }
         const clearPending = (): void => {
-          for (const uid of markedUids) state.items.store.clearPending(uid);
+          for (const item of items) state.items.store.clearPending(item.uid);
         };
-        // allSettled (not Promise.all): fail-fast would let in-flight ops race the
-        // clearPending call in the catch block. We wait for every op to settle first.
+        // `ResultAsync.combine` awaits every op (the underlying promises never
+        // reject), so a failure cannot race `clearPending`.
         //
         // All-or-nothing store semantics on failure is intentional: saveGroceryItems()
         // already succeeded, so any local cache/store divergence is temporary and
         // reconciled by the next sync. Clearing all pending marks on failure is
         // strictly better than leaving some marked — a marked UID suppresses sync
         // reconciliation until TTL, which would keep stale local state around longer.
-        const opsResults = await Promise.allSettled(
+        return ResultAsync.combine(
           items.map((item) => (item.deleted ? state.items.cache.remove(item.uid) : state.items.cache.put(item))),
-        );
-        const opsFailure = opsResults.find((r): r is PromiseRejectedResult => r.status === "rejected");
-        if (opsFailure !== undefined) {
-          clearPending();
-          throw opsFailure.reason;
-        }
-        try {
-          await state.items.cache.flush();
-        } catch (e) {
-          clearPending();
-          throw e;
-        }
-        for (const item of items) {
-          if (item.deleted) {
-            state.items.store.delete(item.uid);
-          } else {
-            state.items.store.set(item);
-          }
-        }
-        notifier.resourceListChanged();
-        await client.notifySync();
+        )
+          .andThen(() => state.items.cache.flush())
+          .mapErr((e) => {
+            clearPending();
+            return e;
+          })
+          .andThen(() => {
+            for (const item of items) {
+              if (item.deleted) {
+                state.items.store.delete(item.uid);
+              } else {
+                state.items.store.set(item);
+              }
+            }
+            notifier.resourceListChanged();
+            return notifySyncBestEffort(client, infra.log);
+          });
       };
 
       return {
@@ -265,11 +272,12 @@ register(
         // ingredient catalog. All three are core — inside the outer try that aborts the
         // sync cycle on failure.
         syncs: [groceryListsSync(state), groceryItemsSync(state), groceryIngredientsSync()],
-        flush: async () => {
-          await state.lists.cache.flush();
-          await state.items.cache.flush();
-          await state.ingredients.cache.flush();
-        },
+        flush: () =>
+          ResultAsync.combine([
+            state.lists.cache.flush(),
+            state.items.cache.flush(),
+            state.ingredients.cache.flush(),
+          ]).map(() => undefined),
       };
     }),
 );

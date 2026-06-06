@@ -1,8 +1,35 @@
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import type { Result } from "neverthrow";
 import { z } from "zod";
 
 export function textResult(text: string): { content: [{ type: "text"; text: string }] } {
   return { content: [{ type: "text" as const, text }] } as const satisfies CallToolResult;
+}
+
+/**
+ * Consume a commit chokepoint's `Result` in a write tool: `undefined` when the
+ * commit landed, or the uniform "persisted to Paprika, local commit failed"
+ * response to return as-is. The two-line guard —
+ * `const commitErr = commitFailure("recipe", await ctx.writes.commitX(saved));
+ * if (commitErr) return commitErr;` — keeps the tool's success tail flat.
+ *
+ * The wording is deliberate: by the time a chokepoint runs, the Paprika POST
+ * already succeeded, so a failure here is LOCAL divergence (cache/store), which
+ * the next sync cycle reconciles. Telling the agent the write itself failed
+ * would invite a harmful retry (a duplicate write).
+ */
+export function commitFailure(
+  entity: string,
+  result: Result<void, { readonly message: string }>,
+): CallToolResult | undefined {
+  return result.match(
+    () => undefined,
+    (e) =>
+      textResult(
+        `The change was saved to Paprika, but updating the local ${entity} cache failed (${e.message}); ` +
+          `the local view will correct itself on the next sync.`,
+      ),
+  );
 }
 
 /**

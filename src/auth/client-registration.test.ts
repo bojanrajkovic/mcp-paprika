@@ -44,7 +44,7 @@ describe("DiskClientRegistrationStore", () => {
 
   beforeEach(async () => {
     await tmp.setup();
-    cache = await buildAuthCaches(tmp.dir());
+    cache = (await buildAuthCaches(tmp.dir()))._unsafeUnwrap();
     store = new DiskClientRegistrationStore(cache, "https://m.example.com", SILENT_LOG);
   });
 
@@ -154,7 +154,7 @@ describe("DiskClientRegistrationStore", () => {
       }
 
       // The disk index must show exactly 50 clients, not 51-54.
-      const all = await cache.oauthClients.getAll();
+      const all = (await cache.oauthClients.getAll())._unsafeUnwrap();
       expect(all.length).toBe(50);
     });
   });
@@ -189,7 +189,7 @@ describe("DiskClientRegistrationStore", () => {
       const original = await store.registerClient(metaIn);
 
       // Simulate restart: create fresh DiskCache instance pointing to the same directory
-      const cache2 = await buildAuthCaches(tmp.dir());
+      const cache2 = (await buildAuthCaches(tmp.dir()))._unsafeUnwrap();
       const store2 = new DiskClientRegistrationStore(cache2, "https://m.example.com", SILENT_LOG);
 
       // Read from fresh instance
@@ -200,7 +200,7 @@ describe("DiskClientRegistrationStore", () => {
       expect(retrieved!.client_id_issued_at).toBe(original.client_id_issued_at);
 
       // Verify hash was persisted (by checking that the plaintext RAT hashes to the stored hash)
-      const storedClient = await cache2.oauthClients.get(original.client_id);
+      const storedClient = (await cache2.oauthClients.get(original.client_id))._unsafeUnwrap();
       expect(storedClient).not.toBeNull();
       const hashOfOriginalRat = hashTokenForStorage(original.registration_access_token!);
       expect(storedClient!.registrationAccessTokenHash).toBe(hashOfOriginalRat);
@@ -230,7 +230,7 @@ describe("DiskClientRegistrationStore", () => {
       expect("registration_access_token" in updated).toBe(false);
 
       // Verify that the stored RAT hash is preserved (plaintext from original still hashes correctly)
-      const storedClient = await cache.oauthClients.get(registered.client_id);
+      const storedClient = (await cache.oauthClients.get(registered.client_id))._unsafeUnwrap();
       expect(storedClient).not.toBeNull();
       const hashOfOriginalRat = hashTokenForStorage(registered.registration_access_token!);
       expect(storedClient!.registrationAccessTokenHash).toBe(hashOfOriginalRat);
@@ -293,7 +293,7 @@ describe("DiskClientRegistrationStore", () => {
       expect(retrieved).toBeUndefined();
 
       // Verify it's gone after restart (persisted)
-      const cache2 = await buildAuthCaches(tmp.dir());
+      const cache2 = (await buildAuthCaches(tmp.dir()))._unsafeUnwrap();
       const store2 = new DiskClientRegistrationStore(cache2, "https://m.example.com", SILENT_LOG);
       retrieved = await store2.getClient(registered.client_id);
       expect(retrieved).toBeUndefined();

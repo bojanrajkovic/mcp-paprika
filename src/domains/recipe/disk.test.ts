@@ -27,15 +27,15 @@ afterEach(async () => {
 
 describe("RecipeDiskCache", () => {
   describe("init lifecycle", () => {
-    it("get/getAll throw before init", async () => {
+    it("get/getAll err before init", async () => {
       const cache = makeRecipeCache(tmp.dir());
-      await expect(cache.getAll()).rejects.toThrow("before init");
-      await expect(cache.get("any")).rejects.toThrow("before init");
+      expect((await cache.getAll())._unsafeUnwrapErr().message).toContain("before init");
+      expect((await cache.get("any"))._unsafeUnwrapErr().message).toContain("before init");
     });
 
-    it("diff throws before init", () => {
+    it("diff errs before init", () => {
       const cache = makeRecipeCache(tmp.dir());
-      expect(() => cache.diff([])).toThrow("before init");
+      expect(cache.diff([])._unsafeUnwrapErr().message).toContain("before init");
     });
   });
 
@@ -54,7 +54,7 @@ describe("RecipeDiskCache", () => {
       await cache.init();
       const recipe = makeRecipe();
       await cache.put(recipe);
-      expect(await cache.get(recipe.uid)).toEqual(recipe);
+      expect((await cache.get(recipe.uid))._unsafeUnwrap()).toEqual(recipe);
     });
 
     it("put + flush + get round-trips through disk", async () => {
@@ -64,13 +64,13 @@ describe("RecipeDiskCache", () => {
       await cache.put(recipe);
       await cache.flush();
 
-      expect(await cache.get(recipe.uid)).toEqual(recipe);
+      expect((await cache.get(recipe.uid))._unsafeUnwrap()).toEqual(recipe);
     });
 
     it("get returns null for an unknown uid", async () => {
       const cache = makeRecipeCache(tmp.dir());
       await cache.init();
-      expect(await cache.get("nonexistent-uid")).toBeNull();
+      expect((await cache.get("nonexistent-uid"))._unsafeUnwrap()).toBeNull();
     });
 
     it("remove deletes the file and drops the entry from the hash index", async () => {
@@ -87,7 +87,7 @@ describe("RecipeDiskCache", () => {
       await cache.flush();
 
       await expect(stat(filePath)).rejects.toThrow();
-      expect(await cache.get(recipe.uid)).toBeNull();
+      expect((await cache.get(recipe.uid))._unsafeUnwrap()).toBeNull();
 
       const indexRaw = await readFile(join(tmp.dir(), "recipes", "index.json"), "utf-8");
       const index = JSON.parse(indexRaw) as Record<string, string>;
@@ -97,7 +97,7 @@ describe("RecipeDiskCache", () => {
     it("remove is idempotent on a missing file", async () => {
       const cache = makeRecipeCache(tmp.dir());
       await cache.init();
-      await expect(cache.remove("never-existed")).resolves.toBeUndefined();
+      expect((await cache.remove("never-existed"))._unsafeUnwrap()).toBeUndefined();
     });
 
     it("getAll includes pending (not-yet-flushed) recipes", async () => {
@@ -106,7 +106,7 @@ describe("RecipeDiskCache", () => {
       const recipe = makeRecipe();
       await cache.put(recipe);
 
-      const all = await cache.getAll();
+      const all = (await cache.getAll())._unsafeUnwrap();
       expect(all).toHaveLength(1);
       expect(all[0]).toEqual(recipe);
     });
@@ -124,7 +124,7 @@ describe("RecipeDiskCache", () => {
 
       const c2 = makeRecipeCache(tmp.dir());
       await c2.init();
-      const all = await c2.getAll();
+      const all = (await c2.getAll())._unsafeUnwrap();
       expect(all).toHaveLength(3);
       expect(all).toContainEqual(r1);
       expect(all).toContainEqual(r2);
@@ -178,7 +178,7 @@ describe("RecipeDiskCache", () => {
       const cache = makeRecipeCache(tmp.dir());
       await cache.init();
       const recipe = makeRecipe({ uid: "uid-1" as RecipeUid });
-      const diff = cache.diff([{ uid: recipe.uid, hash: "h1" }]);
+      const diff = cache.diff([{ uid: recipe.uid, hash: "h1" }])._unsafeUnwrap();
       expect(diff.added).toContain(recipe.uid);
       expect(diff.changed).toHaveLength(0);
       expect(diff.removed).toHaveLength(0);
@@ -190,7 +190,7 @@ describe("RecipeDiskCache", () => {
       const recipe = makeRecipe({ uid: "uid-1" as RecipeUid, hash: "hash-v1" });
       await cache.put(recipe);
 
-      const diff = cache.diff([{ uid: recipe.uid, hash: "hash-v2" }]);
+      const diff = cache.diff([{ uid: recipe.uid, hash: "hash-v2" }])._unsafeUnwrap();
       expect(diff.changed).toContain(recipe.uid);
     });
 
@@ -200,7 +200,7 @@ describe("RecipeDiskCache", () => {
       const recipe = makeRecipe({ uid: "uid-1" as RecipeUid });
       await cache.put(recipe);
 
-      const diff = cache.diff([]);
+      const diff = cache.diff([])._unsafeUnwrap();
       expect(diff.removed).toContain(recipe.uid);
     });
 
@@ -209,11 +209,15 @@ describe("RecipeDiskCache", () => {
       await cache.init();
       const r1 = makeRecipe({ uid: "uid-1" as RecipeUid, hash: "hash-v1" });
       await cache.put(r1);
-      expect(cache.diff([{ uid: r1.uid, hash: "hash-v1" }])).toEqual({ added: [], changed: [], removed: [] });
+      expect(cache.diff([{ uid: r1.uid, hash: "hash-v1" }])._unsafeUnwrap()).toEqual({
+        added: [],
+        changed: [],
+        removed: [],
+      });
 
       const r2 = { ...r1, hash: "hash-v2" };
       await cache.put(r2);
-      expect(cache.diff([{ uid: r1.uid, hash: "hash-v1" }]).changed).toContain(r1.uid);
+      expect(cache.diff([{ uid: r1.uid, hash: "hash-v1" }])._unsafeUnwrap().changed).toContain(r1.uid);
     });
 
     it("mixed case: added + changed + removed in one call", async () => {
@@ -226,11 +230,13 @@ describe("RecipeDiskCache", () => {
       await cache.put(r2);
       await cache.put(r3);
 
-      const diff = cache.diff([
-        { uid: r1.uid, hash: "hash-a" }, // same
-        { uid: r2.uid, hash: "hash-CHANGED" }, // changed
-        { uid: "uid-4" as RecipeUid, hash: "hash-new" }, // added
-      ]);
+      const diff = cache
+        .diff([
+          { uid: r1.uid, hash: "hash-a" }, // same
+          { uid: r2.uid, hash: "hash-CHANGED" }, // changed
+          { uid: "uid-4" as RecipeUid, hash: "hash-new" }, // added
+        ])
+        ._unsafeUnwrap();
 
       expect(diff.added).toEqual(["uid-4"]);
       expect(diff.changed).toEqual([r2.uid]);
@@ -247,7 +253,7 @@ describe("RecipeDiskCache", () => {
       const { rename: renameMock } = await import("node:fs/promises");
       vi.mocked(renameMock).mockRejectedValueOnce(new Error("EACCES: simulated"));
 
-      await expect(cache.flush()).rejects.toThrow("EACCES: simulated");
+      expect((await cache.flush())._unsafeUnwrapErr().message).toContain("EACCES: simulated");
 
       // Recovery within a short window — proves the mutex released.
       const recovery = (async () => {

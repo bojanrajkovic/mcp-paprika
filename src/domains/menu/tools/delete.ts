@@ -6,7 +6,7 @@ import type { Menu } from "../types.js";
 
 import { MenuUidSchema } from "../../../ids.js";
 import { defineTool } from "../../../kernel/tool.js";
-import { resolveLookup, textResult, uidOrTextLookupSchema } from "../../../shared/tools.js";
+import { commitFailure, resolveLookup, textResult, uidOrTextLookupSchema } from "../../../shared/tools.js";
 import { toMessage } from "../../../utils/log.js";
 import { menuStartGuard } from "./guards.js";
 
@@ -70,7 +70,8 @@ export const deleteMenuTool = defineTool(
             const trashedItems = items.map((item) => ({ ...item, menuUid: null, deleted: true }));
             try {
               const savedItems = await ctx.infra.client.saveMenuItems(trashedItems);
-              await ctx.writes.commitMenuItemsBatch(savedItems);
+              const commitErr = commitFailure("menu", await ctx.writes.commitMenuItemsBatch(savedItems));
+              if (commitErr) return commitErr;
             } catch (error) {
               const message = toMessage(error);
               log.error({ err: error, uid: existing.uid }, "saveMenuItems (delete_menu cascade) failed");
@@ -85,7 +86,8 @@ export const deleteMenuTool = defineTool(
           try {
             const saved = await ctx.infra.client.saveMenus([trashedMenu]);
             const persisted = saved[0] ?? trashedMenu;
-            await ctx.writes.commitMenu(persisted);
+            const commitErr = commitFailure("menu", await ctx.writes.commitMenu(persisted));
+            if (commitErr) return commitErr;
           } catch (error) {
             const message = toMessage(error);
             log.error({ err: error, uid: existing.uid }, "saveMenus (delete_menu) failed");

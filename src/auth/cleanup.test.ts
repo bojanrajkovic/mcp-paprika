@@ -24,7 +24,7 @@ let tokenStore: TokenStore;
 
 beforeEach(async () => {
   await tmp.setup();
-  cache = await buildAuthCaches(tmp.dir());
+  cache = (await buildAuthCaches(tmp.dir()))._unsafeUnwrap();
   clientStore = new DiskClientRegistrationStore(cache, "https://example.com", SILENT_LOG);
   tokenStore = new TokenStore(cache);
 });
@@ -68,8 +68,8 @@ describe("sweepOnce", () => {
     const result = await cleanup.sweepOnce();
 
     expect(result.clientsRemoved).toBe(1);
-    expect(await cache.oauthClients.get("00000000-0000-0000-0000-000000000001")).toBeNull();
-    expect(await cache.oauthClients.get("00000000-0000-0000-0000-000000000002")).not.toBeNull();
+    expect((await cache.oauthClients.get("00000000-0000-0000-0000-000000000001"))._unsafeUnwrap()).toBeNull();
+    expect((await cache.oauthClients.get("00000000-0000-0000-0000-000000000002"))._unsafeUnwrap()).not.toBeNull();
   });
 
   it("stale-client deletion cascades — all tokens with matching clientId removed", async () => {
@@ -112,11 +112,11 @@ describe("sweepOnce", () => {
     expect(result.clientsRemoved).toBe(1);
     expect(result.tokensRemoved).toBe(3);
     // All 3 stale-client tokens removed
-    expect(await cache.oauthTokens.get(staleToken1.tokenHash)).toBeNull();
-    expect(await cache.oauthTokens.get(staleToken2.tokenHash)).toBeNull();
-    expect(await cache.oauthTokens.get(staleToken3.tokenHash)).toBeNull();
+    expect((await cache.oauthTokens.get(staleToken1.tokenHash))._unsafeUnwrap()).toBeNull();
+    expect((await cache.oauthTokens.get(staleToken2.tokenHash))._unsafeUnwrap()).toBeNull();
+    expect((await cache.oauthTokens.get(staleToken3.tokenHash))._unsafeUnwrap()).toBeNull();
     // Fresh-client token still present
-    expect(await cache.oauthTokens.get(freshToken.tokenHash)).not.toBeNull();
+    expect((await cache.oauthTokens.get(freshToken.tokenHash))._unsafeUnwrap()).not.toBeNull();
   });
 
   it("sweepOnce is idempotent — second run on the same state is a no-op", async () => {
@@ -254,9 +254,9 @@ describe("sweepOnce", () => {
 
     expect(result.expiredTokensRemoved).toBe(1);
     expect(result.clientsRemoved).toBe(0); // client wasn't stale
-    expect(await cache.oauthTokens.get(expiredAccess.tokenHash)).toBeNull();
-    expect(await cache.oauthTokens.get(liveAccess.tokenHash)).not.toBeNull();
-    expect(await cache.oauthTokens.get(liveRefresh.tokenHash)).not.toBeNull();
+    expect((await cache.oauthTokens.get(expiredAccess.tokenHash))._unsafeUnwrap()).toBeNull();
+    expect((await cache.oauthTokens.get(liveAccess.tokenHash))._unsafeUnwrap()).not.toBeNull();
+    expect((await cache.oauthTokens.get(liveRefresh.tokenHash))._unsafeUnwrap()).not.toBeNull();
   });
 
   it("sweeps expired pending-authorization (consent) entries (#147)", async () => {

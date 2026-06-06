@@ -1,10 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 
-import { err, ok } from "neverthrow";
+import { err, ok, ResultAsync } from "neverthrow";
 import type { Logger } from "pino";
 
-import type { DiskCache } from "../../cache/disk-cache.js";
+import type { CacheError, DiskCache } from "../../cache/disk-cache.js";
 import type { RecipeUid } from "../../ids.js";
 import type { PaprikaClient } from "../../paprika/client.js";
 import type { Notifier } from "../../server/notifier.js";
@@ -13,11 +13,13 @@ import type { Category } from "./category/types.js";
 import type { Photo } from "./photo/types.js";
 import type { Recipe } from "./types.js";
 
-import { DiskCache as DiskCacheImpl } from "../../cache/disk-cache.js";
+import { cacheError, DiskCache as DiskCacheImpl } from "../../cache/disk-cache.js";
 import { hydrateStore } from "../../cache/hydrate.js";
 import { PhotoUidSchema } from "../../ids.js";
 import { defineModule, register } from "../../kernel/registry.js";
+import { notifySyncBestEffort } from "../../paprika/client.js";
 import { resolvePendingWriteTtl } from "../../utils/config.js";
+import { unwrapAtBoot } from "../../utils/errors.js";
 import { toMessage } from "../../utils/log.js";
 import { CategoryStore } from "./category/store.js";
 import { categoryDiskDescriptor } from "./category/types.js";
@@ -86,21 +88,21 @@ export interface RecipeState {
  */
 export interface RecipeWrites {
   /** Persist a saved recipe locally, then nudge cloud sync. Content → fires resourceListChanged. */
-  commitRecipe(saved: Recipe): Promise<void>;
+  commitRecipe(saved: Recipe): ResultAsync<void, CacheError>;
   /** Hard-delete (empty-trash) commit: purge the recipe from cache + store. */
-  commitRecipeHardDelete(saved: Recipe): Promise<void>;
-  /** Canonical pull: align the local copy of a `getRecipe` result (no pending mark, no notifySync). */
+  commitRecipeHardDelete(saved: Recipe): ResultAsync<void, CacheError>;
+  /** Canonical pull: align the local copy of a `getRecipe` result (no pending mark, no notifySync). Best-effort — absorbs its own failures. */
   reconcileLocalRecipe(authoritative: Recipe): Promise<boolean>;
-  /** Canonical pull for a 404: drop a stale local phantom. */
+  /** Canonical pull for a 404: drop a stale local phantom. Best-effort — absorbs its own failures. */
   reconcileLocalRecipeAbsent(uid: RecipeUid): Promise<boolean>;
   /** Persist a category create/rename/re-parent locally. Reference → no resourceListChanged. */
-  commitCategoryUpsert(category: Category): Promise<void>;
+  commitCategoryUpsert(category: Category): ResultAsync<void, CacheError>;
   /** Persist a category soft-delete locally. */
-  commitCategoryDelete(category: Category): Promise<void>;
+  commitCategoryDelete(category: Category): ResultAsync<void, CacheError>;
   /** Build the Photo + photo-bearing recipe, run the 3-request upload, commit both locally. */
-  attachPhotoToRecipe(recipe: Readonly<Recipe>, thumbnail: Buffer, full: Buffer): Promise<Photo>;
+  attachPhotoToRecipe(recipe: Readonly<Recipe>, thumbnail: Buffer, full: Buffer): ResultAsync<Photo, CacheError>;
   /** Persist a photo soft-delete locally. */
-  commitPhotoDelete(savedPhoto: Photo): Promise<void>;
+  commitPhotoDelete(savedPhoto: Photo): ResultAsync<void, CacheError>;
 }
 
 register(
@@ -123,8 +125,8 @@ register(
       // and photos use the shared `hydrateStore`.
       const recipeStore = new RecipeStore({ pendingWriteTtlMs });
       const recipeCache = new RecipeDiskCache({ subdir: join(infra.cacheDir, "recipes"), log });
-      await recipeCache.init();
-      const cachedRecipes = await recipeCache.getAll();
+      unwrapAtBoot(await recipeCache.init(), "recipe cache init");
+      const cachedRecipes = unwrapAtBoot(await recipeCache.getAll(), "recipe cache hydrate");
       for (const recipe of cachedRecipes) recipeStore.set(recipe);
       if (cachedRecipes.length > 0) recipeStore.markSynced();
 
@@ -134,8 +136,8 @@ register(
         subdir: join(infra.cacheDir, categoryDiskDescriptor.subdir),
         log,
       });
-      await categoryCache.init();
-      await hydrateStore(categoryCache, categoryStore);
+      unwrapAtBoot(await categoryCache.init(), "category cache init");
+      unwrapAtBoot(await hydrateStore(categoryCache, categoryStore), "category cache hydrate");
 
       const photoStore = new PhotoStore({ pendingWriteTtlMs });
       const photoCache = new DiskCacheImpl<Photo>({
@@ -143,8 +145,8 @@ register(
         subdir: join(infra.cacheDir, photoDiskDescriptor.subdir),
         log,
       });
-      await photoCache.init();
-      await hydrateStore(photoCache, photoStore);
+      unwrapAtBoot(await photoCache.init(), "photo cache init");
+      unwrapAtBoot(await hydrateStore(photoCache, photoStore), "photo cache hydrate");
 
       return {
         recipe: { store: recipeStore, cache: recipeCache },
@@ -161,49 +163,55 @@ register(
 
       // Order: markPending* (FIRST, before any cache I/O) → cache put/remove → flush
       // → store set/delete → resourceListChanged → notifySync. The pending mark
-      // shields this UID from sync-cycle reconciliation during the propagation race.
-      // `inTrash: true` is the recipe-side soft-delete → pending-delete; else upsert.
-      const commitRecipe: RecipeWrites["commitRecipe"] = async (saved) => {
+      // shields this UID from sync-cycle reconciliation during the propagation race;
+      // a failed cache commit clears it (instead of shielding the UID until TTL) and
+      // surfaces as the chokepoint's `err`. `inTrash: true` is the recipe-side
+      // soft-delete → pending-delete; else upsert.
+      const commitRecipe: RecipeWrites["commitRecipe"] = (saved) => {
         if (saved.inTrash) {
           state.recipe.store.markPendingDelete(saved.uid);
         } else {
           state.recipe.store.markPendingUpsert(saved.uid);
         }
-        try {
-          await state.recipe.cache.put(saved);
-          await state.recipe.cache.flush();
-        } catch (e) {
-          state.recipe.store.clearPending(saved.uid);
-          throw e;
-        }
-        state.recipe.store.set(saved);
-        notifier.resourceListChanged();
-        // Re-index at commit time, before notifySync: a tool-written recipe's UID is
-        // pending, so the sync recipe-diff filters it out and never re-embeds it (#177).
-        // A trashed recipe is REMOVED from the index, else re-embedded (mirrors the
-        // markPending branch above). discover's index hook subscribes to this channel;
-        // the emit never throws.
-        if (saved.inTrash) {
-          infra.indexEvents.emit({ type: "recipe-removed", uids: [saved.uid] });
-        } else {
-          infra.indexEvents.emit({ type: "recipe-changed", recipes: [saved] });
-        }
-        await client.notifySync();
+        return state.recipe.cache
+          .put(saved)
+          .andThen(() => state.recipe.cache.flush())
+          .mapErr((e) => {
+            state.recipe.store.clearPending(saved.uid);
+            return e;
+          })
+          .andThen(() => {
+            state.recipe.store.set(saved);
+            notifier.resourceListChanged();
+            // Re-index at commit time, before notifySync: a tool-written recipe's UID is
+            // pending, so the sync recipe-diff filters it out and never re-embeds it (#177).
+            // A trashed recipe is REMOVED from the index, else re-embedded (mirrors the
+            // markPending branch above). discover's index hook subscribes to this channel;
+            // the emit never throws.
+            if (saved.inTrash) {
+              infra.indexEvents.emit({ type: "recipe-removed", uids: [saved.uid] });
+            } else {
+              infra.indexEvents.emit({ type: "recipe-changed", recipes: [saved] });
+            }
+            return notifySyncBestEffort(client, log);
+          });
       };
 
-      const commitRecipeHardDelete: RecipeWrites["commitRecipeHardDelete"] = async (saved) => {
+      const commitRecipeHardDelete: RecipeWrites["commitRecipeHardDelete"] = (saved) => {
         state.recipe.store.markPendingDelete(saved.uid);
-        try {
-          await state.recipe.cache.remove(saved.uid);
-          await state.recipe.cache.flush();
-        } catch (e) {
-          state.recipe.store.clearPending(saved.uid);
-          throw e;
-        }
-        state.recipe.store.delete(saved.uid);
-        notifier.resourceListChanged();
-        infra.indexEvents.emit({ type: "recipe-removed", uids: [saved.uid] });
-        await client.notifySync();
+        return state.recipe.cache
+          .remove(saved.uid)
+          .andThen(() => state.recipe.cache.flush())
+          .mapErr((e) => {
+            state.recipe.store.clearPending(saved.uid);
+            return e;
+          })
+          .andThen(() => {
+            state.recipe.store.delete(saved.uid);
+            notifier.resourceListChanged();
+            infra.indexEvents.emit({ type: "recipe-removed", uids: [saved.uid] });
+            return notifySyncBestEffort(client, log);
+          });
       };
 
       // Canonical PULL — align local state to a getRecipe result WITHOUT a Paprika
@@ -214,99 +222,116 @@ register(
         if (local !== undefined && local.hash === authoritative.hash && local.inTrash === authoritative.inTrash) {
           return false;
         }
-        try {
-          await state.recipe.cache.put(authoritative);
-          await state.recipe.cache.flush();
-        } catch (err) {
-          log.warn({ err, uid: authoritative.uid }, "local recipe reconcile failed; sync will heal it next cycle");
-          return false;
-        }
-        state.recipe.store.set(authoritative);
-        notifier.resourceListChanged();
-        // Same inTrash branch as commitRecipe: a canonical pull that lands a trashed
-        // recipe must REMOVE it from the index, not re-embed it.
-        if (authoritative.inTrash) {
-          infra.indexEvents.emit({ type: "recipe-removed", uids: [authoritative.uid] });
-        } else {
-          infra.indexEvents.emit({ type: "recipe-changed", recipes: [authoritative] });
-        }
-        return true;
+        return state.recipe.cache
+          .put(authoritative)
+          .andThen(() => state.recipe.cache.flush())
+          .match(
+            () => {
+              state.recipe.store.set(authoritative);
+              notifier.resourceListChanged();
+              // Same inTrash branch as commitRecipe: a canonical pull that lands a trashed
+              // recipe must REMOVE it from the index, not re-embed it.
+              if (authoritative.inTrash) {
+                infra.indexEvents.emit({ type: "recipe-removed", uids: [authoritative.uid] });
+              } else {
+                infra.indexEvents.emit({ type: "recipe-changed", recipes: [authoritative] });
+              }
+              return true;
+            },
+            (e) => {
+              log.warn(
+                { err: e, uid: authoritative.uid },
+                "local recipe reconcile failed; sync will heal it next cycle",
+              );
+              return false;
+            },
+          );
       };
 
       const reconcileLocalRecipeAbsent: RecipeWrites["reconcileLocalRecipeAbsent"] = async (uid) => {
         if (state.recipe.store.get(uid) === undefined) {
           return false;
         }
-        try {
-          await state.recipe.cache.remove(uid);
-          await state.recipe.cache.flush();
-        } catch (err) {
-          log.warn({ err, uid }, "local recipe reconcile (removal) failed; sync will heal it next cycle");
-          return false;
-        }
-        state.recipe.store.delete(uid);
-        notifier.resourceListChanged();
-        infra.indexEvents.emit({ type: "recipe-removed", uids: [uid] });
-        return true;
+        return state.recipe.cache
+          .remove(uid)
+          .andThen(() => state.recipe.cache.flush())
+          .match(
+            () => {
+              state.recipe.store.delete(uid);
+              notifier.resourceListChanged();
+              infra.indexEvents.emit({ type: "recipe-removed", uids: [uid] });
+              return true;
+            },
+            (e) => {
+              log.warn({ err: e, uid }, "local recipe reconcile (removal) failed; sync will heal it next cycle");
+              return false;
+            },
+          );
       };
 
       // ---- Category write chokepoints ----
       // Mark-pending-first mirrors commitRecipe. No resourceListChanged() — categories
       // have no MCP resource surface; recipe rendering resolves names through the store
       // on read.
-      const commitCategoryUpsert: RecipeWrites["commitCategoryUpsert"] = async (category) => {
+      const commitCategoryUpsert: RecipeWrites["commitCategoryUpsert"] = (category) => {
         state.category.store.markPendingUpsert(category.uid);
-        try {
-          await state.category.cache.put(category);
-          await state.category.cache.flush();
-        } catch (e) {
-          state.category.store.clearPending(category.uid);
-          throw e;
-        }
-        state.category.store.set(category);
-        // A category rename changes the display name baked into its recipes' embedding
-        // text, yet no recipe hash, so the recipe diff never re-fetches them. discover's
-        // index hook re-embeds the category's recipes on this signal (best-effort).
-        infra.indexEvents.emit({ type: "category-changed", uids: [category.uid] });
-        await client.notifySync();
+        return state.category.cache
+          .put(category)
+          .andThen(() => state.category.cache.flush())
+          .mapErr((e) => {
+            state.category.store.clearPending(category.uid);
+            return e;
+          })
+          .andThen(() => {
+            state.category.store.set(category);
+            // A category rename changes the display name baked into its recipes' embedding
+            // text, yet no recipe hash, so the recipe diff never re-fetches them. discover's
+            // index hook re-embeds the category's recipes on this signal (best-effort).
+            infra.indexEvents.emit({ type: "category-changed", uids: [category.uid] });
+            return notifySyncBestEffort(client, log);
+          });
       };
 
-      const commitCategoryDelete: RecipeWrites["commitCategoryDelete"] = async (category) => {
+      const commitCategoryDelete: RecipeWrites["commitCategoryDelete"] = (category) => {
         state.category.store.markPendingDelete(category.uid);
-        try {
-          await state.category.cache.remove(category.uid);
-          await state.category.cache.flush();
-        } catch (e) {
-          state.category.store.clearPending(category.uid);
-          throw e;
-        }
-        state.category.store.delete(category.uid);
-        await client.notifySync();
+        return state.category.cache
+          .remove(category.uid)
+          .andThen(() => state.category.cache.flush())
+          .mapErr((e) => {
+            state.category.store.clearPending(category.uid);
+            return e;
+          })
+          .andThen(() => {
+            state.category.store.delete(category.uid);
+            return notifySyncBestEffort(client, log);
+          });
       };
 
       // ---- Photo write chokepoints ----
       // attachPhotoToRecipe builds the Photo + photo-bearing recipe, runs the client's
       // verified 3-request upload, then commits BOTH the recipe and photo stores. No
       // resourceListChanged() — the recipe resource renders photoUrl, not photo/photoLarge.
-      const commitPhotoUpload = async (savedRecipe: Recipe, savedPhoto: Photo): Promise<void> => {
+      const commitPhotoUpload = (savedRecipe: Recipe, savedPhoto: Photo): ResultAsync<void, CacheError> => {
         state.recipe.store.markPendingUpsert(savedRecipe.uid);
         state.photo.store.markPendingUpsert(savedPhoto.uid);
-        try {
-          await state.recipe.cache.put(savedRecipe);
-          await state.photo.cache.put(savedPhoto);
-          await state.recipe.cache.flush();
-          await state.photo.cache.flush();
-        } catch (e) {
-          state.recipe.store.clearPending(savedRecipe.uid);
-          state.photo.store.clearPending(savedPhoto.uid);
-          throw e;
-        }
-        state.recipe.store.set(savedRecipe);
-        state.photo.store.set(savedPhoto);
-        await client.notifySync();
+        return state.recipe.cache
+          .put(savedRecipe)
+          .andThen(() => state.photo.cache.put(savedPhoto))
+          .andThen(() => state.recipe.cache.flush())
+          .andThen(() => state.photo.cache.flush())
+          .mapErr((e) => {
+            state.recipe.store.clearPending(savedRecipe.uid);
+            state.photo.store.clearPending(savedPhoto.uid);
+            return e;
+          })
+          .andThen(() => {
+            state.recipe.store.set(savedRecipe);
+            state.photo.store.set(savedPhoto);
+            return notifySyncBestEffort(client, log);
+          });
       };
 
-      const attachPhotoToRecipe: RecipeWrites["attachPhotoToRecipe"] = async (recipe, thumbnail, full) => {
+      const attachPhotoToRecipe: RecipeWrites["attachPhotoToRecipe"] = (recipe, thumbnail, full) => {
         const existing = state.photo.store.getByRecipeUid(recipe.uid);
         const orderFlag = existing.length > 0 ? Math.max(...existing.map((p) => p.orderFlag)) + 1 : 0;
         const photoUid = PhotoUidSchema.parse(randomUUID().toUpperCase());
@@ -330,9 +355,10 @@ register(
 
         // uploadPhoto stamps the recipe's content hash and returns the hashed recipe —
         // commit that so the cache matches what was POSTed and sync won't re-fetch it.
-        const savedRecipe = await client.uploadPhoto(recipeWithPhoto, photo, thumbnail, full);
-        await commitPhotoUpload(savedRecipe, photo);
-        return photo;
+        return ResultAsync.fromPromise(
+          client.uploadPhoto(recipeWithPhoto, photo, thumbnail, full),
+          cacheError("upload photo"),
+        ).andThen((savedRecipe) => commitPhotoUpload(savedRecipe, photo).map(() => photo));
       };
 
       // The recipe-domain write photo-gen's generate_recipe_photo(attach:true) calls
@@ -357,24 +383,25 @@ register(
         } catch (e) {
           return err({ message: `Failed to process the generated image: ${toMessage(e)}` });
         }
-        try {
-          return ok(await attachPhotoToRecipe(recipe, normalized.thumbnail, normalized.full));
-        } catch (e) {
-          return err({ message: `Failed to attach the generated photo: ${toMessage(e)}` });
-        }
+        return attachPhotoToRecipe(recipe, normalized.thumbnail, normalized.full).match(
+          (photo) => ok(photo),
+          (e) => err({ message: `Failed to attach the generated photo: ${e.message}` }),
+        );
       };
 
-      const commitPhotoDelete: RecipeWrites["commitPhotoDelete"] = async (savedPhoto) => {
+      const commitPhotoDelete: RecipeWrites["commitPhotoDelete"] = (savedPhoto) => {
         state.photo.store.markPendingDelete(savedPhoto.uid);
-        try {
-          await state.photo.cache.remove(savedPhoto.uid);
-          await state.photo.cache.flush();
-        } catch (e) {
-          state.photo.store.clearPending(savedPhoto.uid);
-          throw e;
-        }
-        state.photo.store.delete(savedPhoto.uid);
-        await client.notifySync();
+        return state.photo.cache
+          .remove(savedPhoto.uid)
+          .andThen(() => state.photo.cache.flush())
+          .mapErr((e) => {
+            state.photo.store.clearPending(savedPhoto.uid);
+            return e;
+          })
+          .andThen(() => {
+            state.photo.store.delete(savedPhoto.uid);
+            return notifySyncBestEffort(client, log);
+          });
       };
 
       return {
@@ -421,11 +448,12 @@ register(
         ],
         resources: [recipeResource],
         syncs: [recipesSync(state), categoriesSync(state), photosSync(state)],
-        flush: async () => {
-          await state.recipe.cache.flush();
-          await state.category.cache.flush();
-          await state.photo.cache.flush();
-        },
+        flush: () =>
+          ResultAsync.combine([
+            state.recipe.cache.flush(),
+            state.category.cache.flush(),
+            state.photo.cache.flush(),
+          ]).map(() => undefined),
       };
     }),
 );

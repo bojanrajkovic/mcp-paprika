@@ -5,7 +5,7 @@ import type { PantryState, PantryWrites } from "../module.js";
 
 import { PantryItemUidSchema } from "../../../ids.js";
 import { defineTool } from "../../../kernel/tool.js";
-import { textResult } from "../../../shared/tools.js";
+import { commitFailure, textResult } from "../../../shared/tools.js";
 import { toMessage } from "../../../utils/log.js";
 import { pantryStartGuard } from "./guards.js";
 
@@ -40,7 +40,8 @@ export const deletePantryItemTool = defineTool(
 
           try {
             const saved = (await ctx.infra.client.savePantryItems([trashed]))[0]!;
-            await ctx.writes.commitPantryItem(saved);
+            const commitErr = commitFailure("pantry", await ctx.writes.commitPantryItem(saved));
+            if (commitErr) return commitErr;
           } catch (error) {
             const message = toMessage(error);
             log.error({ err: error, uid: args.uid }, "savePantryItems failed");

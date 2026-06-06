@@ -429,10 +429,17 @@ export function buildClientCap(cache: AuthCache, max: number): MiddlewareHandler
   return async (c, next) => {
     if (c.req.path !== "/register" || c.req.method !== "POST") return next();
 
-    const clients = await cache.oauthClients.getAll();
-    if (clients.length >= max) {
-      return c.json({ error: "invalid_request", error_description: "client registration cap reached" }, 429);
-    }
-    await next();
+    return (await cache.oauthClients.getAll()).match<Promise<Response | void>>(
+      async (clients) => {
+        if (clients.length >= max) {
+          return c.json({ error: "invalid_request", error_description: "client registration cap reached" }, 429);
+        }
+        return next();
+      },
+      // A registry read failure must fail the registration honestly, not wave it
+      // through the cap — same surface-the-degraded-store convention as the
+      // bounded in-memory stores (503, not silence).
+      async () => c.json({ error: "server_error", error_description: "client registry unavailable" }, 503),
+    );
   };
 }

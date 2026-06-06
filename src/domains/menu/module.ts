@@ -1,8 +1,9 @@
 import { join } from "node:path";
 
+import { okAsync, ResultAsync } from "neverthrow";
 import type { Logger } from "pino";
 
-import type { DiskCache } from "../../cache/disk-cache.js";
+import type { CacheError, DiskCache } from "../../cache/disk-cache.js";
 import type { PaprikaClient } from "../../paprika/client.js";
 import type { Notifier } from "../../server/notifier.js";
 import type { MenuApi } from "./api.js";
@@ -12,7 +13,9 @@ import type { Menu } from "./types.js";
 import { DiskCache as DiskCacheImpl } from "../../cache/disk-cache.js";
 import { hydrateStore } from "../../cache/hydrate.js";
 import { defineModule, register } from "../../kernel/registry.js";
+import { notifySyncBestEffort } from "../../paprika/client.js";
 import { resolvePendingWriteTtl } from "../../utils/config.js";
+import { unwrapAtBoot } from "../../utils/errors.js";
 import { MenuItemStore } from "./menu-item/store.js";
 import { menuItemDiskDescriptor } from "./menu-item/types.js";
 import { menuResource } from "./resources/menu-resource.js";
@@ -59,11 +62,11 @@ export interface MenuState {
  */
 export interface MenuWrites {
   /** Persist a saved menu locally, then nudge cloud sync. Content → fires resourceListChanged. */
-  commitMenu(saved: Readonly<Menu>): Promise<void>;
+  commitMenu(saved: Readonly<Menu>): ResultAsync<void, CacheError>;
   /** Persist a saved menuitem locally. Inlined in the menu resource → fires resourceListChanged. */
-  commitMenuItem(saved: Readonly<MenuItem>): Promise<void>;
+  commitMenuItem(saved: Readonly<MenuItem>): ResultAsync<void, CacheError>;
   /** Batch variant of commitMenuItem: one flush, one resourceListChanged, one notifySync. */
-  commitMenuItemsBatch(items: ReadonlyArray<Readonly<MenuItem>>): Promise<void>;
+  commitMenuItemsBatch(items: ReadonlyArray<Readonly<MenuItem>>): ResultAsync<void, CacheError>;
 }
 
 register(
@@ -81,9 +84,9 @@ register(
         subdir: join(infra.cacheDir, menuDiskDescriptor.subdir),
         log,
       });
-      await menuCache.init();
+      unwrapAtBoot(await menuCache.init(), "menu cache init");
       // Warm both stores from cache so tools work on a warm restart before the first sync.
-      await hydrateStore(menuCache, menuStore);
+      unwrapAtBoot(await hydrateStore(menuCache, menuStore), "menu cache hydrate");
 
       const menuItemStore = new MenuItemStore({ pendingWriteTtlMs });
       const menuItemCache = new DiskCacheImpl<MenuItem>({
@@ -91,8 +94,8 @@ register(
         subdir: join(infra.cacheDir, menuItemDiskDescriptor.subdir),
         log,
       });
-      await menuItemCache.init();
-      await hydrateStore(menuItemCache, menuItemStore);
+      unwrapAtBoot(await menuItemCache.init(), "menu item cache init");
+      unwrapAtBoot(await hydrateStore(menuItemCache, menuItemStore), "menu item cache hydrate");
 
       return {
         menus: { store: menuStore, cache: menuCache },
@@ -113,99 +116,103 @@ register(
       // store set/delete → resourceListChanged → notifySync. The pending mark shields
       // this UID from sync-cycle reconciliation during the propagation race.
 
-      const commitMenu: MenuWrites["commitMenu"] = async (saved) => {
+      const commitMenu: MenuWrites["commitMenu"] = (saved) => {
         if (saved.deleted) {
           const uid = saved.uid;
           state.menus.store.markPendingDelete(uid);
-          try {
-            await state.menus.cache.remove(uid);
-            await state.menus.cache.flush();
-          } catch (e) {
-            state.menus.store.clearPending(uid);
-            throw e;
-          }
-          state.menus.store.delete(uid);
-        } else {
-          state.menus.store.markPendingUpsert(saved.uid);
-          try {
-            await state.menus.cache.put(saved);
-            await state.menus.cache.flush();
-          } catch (e) {
-            state.menus.store.clearPending(saved.uid);
-            throw e;
-          }
-          state.menus.store.set(saved);
+          return state.menus.cache
+            .remove(uid)
+            .andThen(() => state.menus.cache.flush())
+            .mapErr((e) => {
+              state.menus.store.clearPending(uid);
+              return e;
+            })
+            .andThen(() => {
+              state.menus.store.delete(uid);
+              notifier.resourceListChanged();
+              return notifySyncBestEffort(client, infra.log);
+            });
         }
-        notifier.resourceListChanged();
-        await client.notifySync();
+        state.menus.store.markPendingUpsert(saved.uid);
+        return state.menus.cache
+          .put(saved)
+          .andThen(() => state.menus.cache.flush())
+          .mapErr((e) => {
+            state.menus.store.clearPending(saved.uid);
+            return e;
+          })
+          .andThen(() => {
+            state.menus.store.set(saved);
+            notifier.resourceListChanged();
+            return notifySyncBestEffort(client, infra.log);
+          });
       };
 
-      const commitMenuItem: MenuWrites["commitMenuItem"] = async (saved) => {
+      const commitMenuItem: MenuWrites["commitMenuItem"] = (saved) => {
         if (saved.deleted) {
           const uid = saved.uid;
           state.items.store.markPendingDelete(uid);
-          try {
-            await state.items.cache.remove(uid);
-            await state.items.cache.flush();
-          } catch (e) {
-            state.items.store.clearPending(uid);
-            throw e;
-          }
-          state.items.store.delete(uid);
-        } else {
-          state.items.store.markPendingUpsert(saved.uid);
-          try {
-            await state.items.cache.put(saved);
-            await state.items.cache.flush();
-          } catch (e) {
-            state.items.store.clearPending(saved.uid);
-            throw e;
-          }
-          state.items.store.set(saved);
+          return state.items.cache
+            .remove(uid)
+            .andThen(() => state.items.cache.flush())
+            .mapErr((e) => {
+              state.items.store.clearPending(uid);
+              return e;
+            })
+            .andThen(() => {
+              state.items.store.delete(uid);
+              notifier.resourceListChanged();
+              return notifySyncBestEffort(client, infra.log);
+            });
         }
-        notifier.resourceListChanged();
-        await client.notifySync();
+        state.items.store.markPendingUpsert(saved.uid);
+        return state.items.cache
+          .put(saved)
+          .andThen(() => state.items.cache.flush())
+          .mapErr((e) => {
+            state.items.store.clearPending(saved.uid);
+            return e;
+          })
+          .andThen(() => {
+            state.items.store.set(saved);
+            notifier.resourceListChanged();
+            return notifySyncBestEffort(client, infra.log);
+          });
       };
 
-      const commitMenuItemsBatch: MenuWrites["commitMenuItemsBatch"] = async (items) => {
-        if (items.length === 0) return;
-        const markedUids: Array<MenuItem["uid"]> = [];
+      const commitMenuItemsBatch: MenuWrites["commitMenuItemsBatch"] = (items) => {
+        if (items.length === 0) return okAsync(undefined);
         for (const item of items) {
           if (item.deleted) {
             state.items.store.markPendingDelete(item.uid);
           } else {
             state.items.store.markPendingUpsert(item.uid);
           }
-          markedUids.push(item.uid);
         }
         const clearPending = (): void => {
-          for (const uid of markedUids) state.items.store.clearPending(uid);
+          for (const item of items) state.items.store.clearPending(item.uid);
         };
-        // allSettled (not Promise.all): fail-fast would let in-flight ops race the
-        // clearPending call in the catch block. We wait for every op to settle first.
-        const opsResults = await Promise.allSettled(
+        // `ResultAsync.combine` awaits every op (the underlying promises never
+        // reject), so a failure cannot race `clearPending`.
+        return ResultAsync.combine(
           items.map((item) => (item.deleted ? state.items.cache.remove(item.uid) : state.items.cache.put(item))),
-        );
-        const opsFailure = opsResults.find((r): r is PromiseRejectedResult => r.status === "rejected");
-        if (opsFailure !== undefined) {
-          clearPending();
-          throw opsFailure.reason;
-        }
-        try {
-          await state.items.cache.flush();
-        } catch (e) {
-          clearPending();
-          throw e;
-        }
-        for (const item of items) {
-          if (item.deleted) {
-            state.items.store.delete(item.uid);
-          } else {
-            state.items.store.set(item);
-          }
-        }
-        notifier.resourceListChanged();
-        await client.notifySync();
+        )
+          .andThen(() => state.items.cache.flush())
+          .mapErr((e) => {
+            clearPending();
+            return e;
+          })
+          .andThen(() => {
+            for (const item of items) {
+              if (item.deleted) {
+                state.items.store.delete(item.uid);
+              } else {
+                state.items.store.set(item);
+              }
+            }
+            notifier.resourceListChanged();
+            return notifySyncBestEffort(client, infra.log);
+          });
       };
 
       return {
@@ -234,10 +241,7 @@ register(
         // additive — a soft read surface must not abort core sync, so the kernel
         // runs each in its own best-effort try/catch.
         syncs: [menusSync(state), menuItemsSync(state)],
-        flush: async () => {
-          await state.menus.cache.flush();
-          await state.items.cache.flush();
-        },
+        flush: () => ResultAsync.combine([state.menus.cache.flush(), state.items.cache.flush()]).map(() => undefined),
       };
     }),
 );

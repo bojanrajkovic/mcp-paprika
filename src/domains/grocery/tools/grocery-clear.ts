@@ -5,7 +5,7 @@ import type { GroceryState, GroceryWrites } from "../module.js";
 
 import { GroceryListUidSchema } from "../../../ids.js";
 import { defineTool } from "../../../kernel/tool.js";
-import { textResult } from "../../../shared/tools.js";
+import { commitFailure, textResult } from "../../../shared/tools.js";
 import { toMessage } from "../../../utils/log.js";
 import { groceryStartGuard } from "./guards.js";
 
@@ -43,7 +43,8 @@ export const clearPurchasedTool = defineTool(
           const trashed = purchased.map((item) => ({ ...item, deleted: true }));
           try {
             const saved = await ctx.infra.client.saveGroceryItems(trashed);
-            await ctx.writes.commitGroceryItemsBatch(saved);
+            const commitErr = commitFailure("grocery list", await ctx.writes.commitGroceryItemsBatch(saved));
+            if (commitErr) return commitErr;
           } catch (error) {
             const message = toMessage(error);
             log.error({ err: error, listUid: args.listUid }, "saveGroceryItems (clear_purchased_grocery_items) failed");
@@ -92,7 +93,8 @@ export const clearGroceryListTool = defineTool(
           const trashed = items.map((item) => ({ ...item, deleted: true }));
           try {
             const saved = await ctx.infra.client.saveGroceryItems(trashed);
-            await ctx.writes.commitGroceryItemsBatch(saved);
+            const commitErr = commitFailure("grocery list", await ctx.writes.commitGroceryItemsBatch(saved));
+            if (commitErr) return commitErr;
           } catch (error) {
             const message = toMessage(error);
             log.error({ err: error, listUid: args.listUid }, "saveGroceryItems (clear_grocery_list) failed");

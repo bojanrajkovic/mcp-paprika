@@ -7,7 +7,7 @@ import type { Menu } from "../types.js";
 
 import { MenuUidSchema } from "../../../ids.js";
 import { defineTool } from "../../../kernel/tool.js";
-import { textResult } from "../../../shared/tools.js";
+import { commitFailure, textResult } from "../../../shared/tools.js";
 import { toMessage } from "../../../utils/log.js";
 import { menuToMarkdown } from "../menu-helpers.js";
 import { menuStartGuard } from "./guards.js";
@@ -67,7 +67,8 @@ export const createMenuTool = defineTool(
           try {
             const saved = await ctx.infra.client.saveMenus([newMenu]);
             const created = saved[0] ?? newMenu;
-            await ctx.writes.commitMenu(created);
+            const commitErr = commitFailure("menu", await ctx.writes.commitMenu(created));
+            if (commitErr) return commitErr;
             return textResult(menuToMarkdown(created, [], ctx.deps["meal-type"].getAll()));
           } catch (error) {
             const message = toMessage(error);

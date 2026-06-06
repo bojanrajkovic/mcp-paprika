@@ -1,4 +1,5 @@
 import { fromAny } from "@total-typescript/shoehorn";
+import { okAsync } from "neverthrow";
 import { describe, expect, it, vi } from "vitest";
 
 import type { DiskCache } from "../cache/disk-cache.js";
@@ -12,9 +13,9 @@ describe("syncReplaceAllEntity", () => {
   type GList = ReturnType<typeof makeGroceryList>;
 
   function makeCache(initial: ReadonlyArray<GList> = []) {
-    const getAll = vi.fn().mockResolvedValue(initial);
-    const put = vi.fn().mockResolvedValue(undefined);
-    const remove = vi.fn().mockResolvedValue(undefined);
+    const getAll = vi.fn().mockReturnValue(okAsync(initial));
+    const put = vi.fn().mockReturnValue(okAsync<void, never>(undefined));
+    const remove = vi.fn().mockReturnValue(okAsync<void, never>(undefined));
     const cache: Pick<DiskCache<GList>, "getAll" | "put" | "remove"> = fromAny({ getAll, put, remove });
     return { cache, getAll, put, remove };
   }
@@ -179,8 +180,9 @@ describe("syncReplaceAllEntity", () => {
       afterLoadOrder.push("load");
       return GroceryListStore.prototype.load.call(store, ...args);
     });
-    put.mockImplementation(async () => {
+    put.mockImplementation(() => {
       afterLoadOrder.push("put");
+      return okAsync<void, never>(undefined);
     });
     const afterLoad = vi.fn(() => {
       afterLoadOrder.push("afterLoad");

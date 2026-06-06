@@ -5,7 +5,7 @@ import type { RecipeState, RecipeWrites } from "../module.js";
 
 import { RecipeUidSchema } from "../../../ids.js";
 import { defineTool } from "../../../kernel/tool.js";
-import { textResult } from "../../../shared/tools.js";
+import { commitFailure, textResult } from "../../../shared/tools.js";
 import { toMessage } from "../../../utils/log.js";
 import { recipeColdStartGuard } from "./guards.js";
 
@@ -46,7 +46,8 @@ export const trashRecipeTool = defineTool(
 
           try {
             const saved = await ctx.infra.client.saveRecipe(trashed);
-            await ctx.writes.commitRecipe(saved);
+            const commitErr = commitFailure("recipe", await ctx.writes.commitRecipe(saved));
+            if (commitErr) return commitErr;
           } catch (error) {
             const message = toMessage(error);
             log.error({ err: error, uid: args.uid }, "saveRecipe failed");

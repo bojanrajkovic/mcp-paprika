@@ -8,7 +8,7 @@ import type { Recipe } from "../types.js";
 import { RecipeUidSchema } from "../../../ids.js";
 import { defineTool } from "../../../kernel/tool.js";
 import { PaprikaAPIError } from "../../../paprika/errors.js";
-import { textResult } from "../../../shared/tools.js";
+import { commitFailure, textResult } from "../../../shared/tools.js";
 import { toMessage } from "../../../utils/log.js";
 import { recipeToMarkdown } from "../recipe-markdown.js";
 import { recipeColdStartGuard } from "./guards.js";
@@ -76,7 +76,8 @@ export const restoreRecipeTool = defineTool(
           let saved: Recipe;
           try {
             saved = await ctx.infra.client.saveRecipe(updated);
-            await ctx.writes.commitRecipe(saved);
+            const commitErr = commitFailure("recipe", await ctx.writes.commitRecipe(saved));
+            if (commitErr) return commitErr;
           } catch (error) {
             const message = toMessage(error);
             log.error({ err: error, uid: args.uid }, "saveRecipe failed");

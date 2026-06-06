@@ -2,6 +2,8 @@
  * Cross-cutting error classes and helpers used by multiple modules.
  */
 
+import type { Result } from "neverthrow";
+
 /**
  * Type guard for Node's `ErrnoException` shape — any `Error` whose `code`
  * property is set by the runtime (typical for `fs`/`net`/`child_process`).
@@ -21,6 +23,25 @@ export function isNodeError(error: unknown): error is NodeJS.ErrnoException {
  */
 export function assertNever(value: never, message?: string): never {
   throw new Error(message ?? `Unreachable: unexpected value ${String(value)}`);
+}
+
+/**
+ * Construction-time unwrap: a `Result` consumed while the process is still
+ * assembling (a module `.state` factory hydrating its cache, transport
+ * bootstrap). An `err` here is unrecoverable — there is no session to answer
+ * and no sync cycle to degrade to — so it aborts boot: the one sanctioned
+ * fail-fast throw (recognized form #5 in ADR-0014). Never call this on a
+ * request or sync path; those stay `Result`-shaped.
+ */
+export function unwrapAtBoot<T, E>(result: Result<T, E>, context: string): T {
+  return result.match(
+    (value) => value,
+    (e) => {
+      const message =
+        typeof e === "object" && e !== null && "message" in e ? String((e as { message: unknown }).message) : String(e);
+      throw new Error(`boot: ${context}: ${message}`, { cause: e });
+    },
+  );
 }
 
 /**

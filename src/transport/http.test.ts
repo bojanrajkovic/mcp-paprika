@@ -803,15 +803,15 @@ describe("HTTP transport — OAuth mounted", () => {
       // check sees >= 50 existing clients.  buildClientCap reads cache.getAllOAuthClients()
       // on every POST /register — fresh disk files are visible on the very next call.
       const cacheDir = join(oauthXdg.dir(), "mcp-paprika");
-      const seedCache = await buildAuthCaches(cacheDir);
+      const seedCache = (await buildAuthCaches(cacheDir))._unsafeUnwrap();
 
       // Count existing clients (from other tests in this suite).
-      const existing = await seedCache.oauthClients.getAll();
+      const existing = (await seedCache.oauthClients.getAll())._unsafeUnwrap();
       const needed = 50 - existing.length;
       for (let i = 0; i < needed; i++) {
-        await seedCache.oauthClients.put(makeOAuthClient());
+        (await seedCache.oauthClients.put(makeOAuthClient()))._unsafeUnwrap();
       }
-      await seedCache.flush();
+      (await seedCache.flush())._unsafeUnwrap();
 
       // Now the server sees >= 50 clients; the next registration must be capped.
       const res = await fetch(`http://127.0.0.1:${oauthPort.toString()}/register`, {

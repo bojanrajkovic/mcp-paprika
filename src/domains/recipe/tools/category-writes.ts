@@ -8,7 +8,7 @@ import type { RecipeState, RecipeWrites } from "../module.js";
 
 import { CategoryUidSchema } from "../../../ids.js";
 import { defineTool } from "../../../kernel/tool.js";
-import { textResult } from "../../../shared/tools.js";
+import { commitFailure, textResult } from "../../../shared/tools.js";
 import { toMessage } from "../../../utils/log.js";
 import { categoryStartGuard } from "./guards.js";
 
@@ -81,7 +81,8 @@ export const createCategoryTool = defineTool(
 
           try {
             const saved = await ctx.infra.client.saveCategory(category);
-            await ctx.writes.commitCategoryUpsert(saved);
+            const commitErr = commitFailure("category", await ctx.writes.commitCategoryUpsert(saved));
+            if (commitErr) return commitErr;
             return textResult(`Created category ${categorySummary(ctx.state, saved)}`);
           } catch (error) {
             log.error({ err: error, name: args.name }, "saveCategory failed");
@@ -149,7 +150,8 @@ export const updateCategoryTool = defineTool(
             // commitCategoryUpsert persists locally and emits `category-changed` on
             // the kernel re-index seam so discover re-embeds the category's recipes
             // (a rename changes the display name baked into their embedding text).
-            await ctx.writes.commitCategoryUpsert(saved);
+            const commitErr = commitFailure("category", await ctx.writes.commitCategoryUpsert(saved));
+            if (commitErr) return commitErr;
             return textResult(`Updated category ${categorySummary(ctx.state, saved)}`);
           } catch (error) {
             log.error({ err: error, uid: args.uid }, "saveCategory failed");

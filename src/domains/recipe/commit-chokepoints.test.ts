@@ -1,3 +1,4 @@
+import { errAsync } from "neverthrow";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { CategoryUid, RecipeUid } from "../../ids.js";
@@ -23,9 +24,11 @@ describe("recipe commit chokepoints", () => {
       const state = kh.state();
       const writes = kh.writes();
       const saved = makeRecipe({ uid: "r-fail" as RecipeUid, name: "Doomed", hash: "h" });
-      vi.spyOn(state.recipe.cache, "flush").mockRejectedValue(new Error("disk full"));
+      vi.spyOn(state.recipe.cache, "flush").mockReturnValue(
+        errAsync({ context: "flush", message: "disk full", cause: undefined }),
+      );
 
-      await expect(writes.commitRecipe(saved)).rejects.toThrow("disk full");
+      expect((await writes.commitRecipe(saved))._unsafeUnwrapErr().message).toContain("disk full");
 
       // The catch clears the pending mark (so sync isn't shielded for the full TTL)
       // and never reaches `store.set` — the failed local commit leaves no trace.

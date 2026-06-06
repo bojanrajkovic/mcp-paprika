@@ -74,17 +74,17 @@ describe("RecipeDiskCache cold-start persistence integration", () => {
       await cache1.put(recipe2);
       await cache1.flush();
 
-      expect(await cache1.get(recipe1.uid)).toEqual(recipe1);
-      expect(await cache1.get(recipe2.uid)).toEqual(recipe2);
+      expect((await cache1.get(recipe1.uid))._unsafeUnwrap()).toEqual(recipe1);
+      expect((await cache1.get(recipe2.uid))._unsafeUnwrap()).toEqual(recipe2);
 
       // Simulate restart
       const cache2 = makeRecipeCache(tmp.dir());
       await cache2.init();
 
-      expect(await cache2.get(recipe1.uid)).toEqual(recipe1);
-      expect(await cache2.get(recipe2.uid)).toEqual(recipe2);
+      expect((await cache2.get(recipe1.uid))._unsafeUnwrap()).toEqual(recipe1);
+      expect((await cache2.get(recipe2.uid))._unsafeUnwrap()).toEqual(recipe2);
 
-      const allRecipes = await cache2.getAll();
+      const allRecipes = (await cache2.getAll())._unsafeUnwrap();
       expect(allRecipes).toHaveLength(2);
       expect(allRecipes).toContainEqual(recipe1);
       expect(allRecipes).toContainEqual(recipe2);
@@ -105,7 +105,7 @@ describe("RecipeDiskCache cold-start persistence integration", () => {
       await cache2.init();
 
       const store = new RecipeStore();
-      const cachedRecipes = await cache2.getAll();
+      const cachedRecipes = (await cache2.getAll())._unsafeUnwrap();
       for (const recipe of cachedRecipes) {
         store.set(recipe);
       }
@@ -136,8 +136,8 @@ describe("RecipeDiskCache cold-start persistence integration", () => {
       const cache2 = makeCache(tmp.dir(), categoryDiskDescriptor);
       await cache2.init();
 
-      expect(await cache2.get(category1.uid)).toEqual(category1);
-      expect(await cache2.get(category2.uid)).toEqual(category2);
+      expect((await cache2.get(category1.uid))._unsafeUnwrap()).toEqual(category1);
+      expect((await cache2.get(category2.uid))._unsafeUnwrap()).toEqual(category2);
     });
   });
 
@@ -152,7 +152,7 @@ describe("RecipeDiskCache cold-start persistence integration", () => {
       const cache2 = makeRecipeCache(tmp.dir());
       await cache2.init();
 
-      const diff = cache2.diff([{ uid: recipe1.uid, hash: recipe1.hash }]);
+      const diff = cache2.diff([{ uid: recipe1.uid, hash: recipe1.hash }])._unsafeUnwrap();
       expect(diff.added).toEqual([]);
       expect(diff.changed).toEqual([]);
       expect(diff.removed).toEqual([]);
@@ -169,7 +169,7 @@ describe("RecipeDiskCache cold-start persistence integration", () => {
       const cache2 = makeRecipeCache(tmp.dir());
       await cache2.init();
 
-      const diff = cache2.diff([{ uid: recipe1.uid, hash: "hash-new" }]);
+      const diff = cache2.diff([{ uid: recipe1.uid, hash: "hash-new" }])._unsafeUnwrap();
       expect(diff.added).toEqual([]);
       expect(diff.changed).toContain(recipe1.uid);
       expect(diff.removed).toEqual([]);
@@ -185,7 +185,7 @@ describe("RecipeDiskCache cold-start persistence integration", () => {
       const cache2 = makeRecipeCache(tmp.dir());
       await cache2.init();
 
-      const diff = cache2.diff([]);
+      const diff = cache2.diff([])._unsafeUnwrap();
       expect(diff.added).toEqual([]);
       expect(diff.changed).toEqual([]);
       expect(diff.removed).toContain(recipe1.uid);
@@ -264,7 +264,7 @@ describe("RecipeDiskCache cold-start persistence integration", () => {
       await cache.put(recipe);
       await cache.flush();
 
-      expect(await cache.get(recipe.uid)).toEqual(recipe);
+      expect((await cache.get(recipe.uid))._unsafeUnwrap()).toEqual(recipe);
     });
 
     it("handles a missing recipes index gracefully (first run)", async () => {
@@ -275,7 +275,7 @@ describe("RecipeDiskCache cold-start persistence integration", () => {
       await cache.put(recipe);
       await cache.flush();
 
-      expect(await cache.get(recipe.uid)).toEqual(recipe);
+      expect((await cache.get(recipe.uid))._unsafeUnwrap()).toEqual(recipe);
     });
   });
 
@@ -303,7 +303,7 @@ describe("RecipeDiskCache cold-start persistence integration", () => {
 
       const cache3 = makeRecipeCache(tmp.dir());
       await cache3.init();
-      const final = await cache3.get(recipe1.uid);
+      const final = (await cache3.get(recipe1.uid))._unsafeUnwrap();
       expect(final).toEqual(recipe1Updated);
       expect(final?.name).toBe("Evolving Recipe V2");
       expect(final?.ingredients).toBe("updated ingredients");
@@ -332,7 +332,7 @@ describe("RecipeDiskCache cold-start persistence integration", () => {
 
       const cache2 = makeRecipeCache(tmp.dir());
       await cache2.init();
-      const retrieved = await cache2.get(originalRecipe.uid);
+      const retrieved = (await cache2.get(originalRecipe.uid))._unsafeUnwrap();
 
       expect(retrieved).toEqual(originalRecipe);
     });
@@ -418,7 +418,7 @@ describe("RecipeDiskCache cold-start persistence integration", () => {
       const recipe = makeRecipe({ uid: "recipe-after-corrupt" as RecipeUid, name: "Recovered" });
       await cache.put(recipe);
       await cache.flush();
-      expect(await cache.get(recipe.uid)).toEqual(recipe);
+      expect((await cache.get(recipe.uid))._unsafeUnwrap()).toEqual(recipe);
     });
   });
 });

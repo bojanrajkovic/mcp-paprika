@@ -7,7 +7,7 @@ import type { Menu } from "../types.js";
 
 import { MenuUidSchema } from "../../../ids.js";
 import { defineTool } from "../../../kernel/tool.js";
-import { resolveLookup, textResult, uidOrTextLookupSchema } from "../../../shared/tools.js";
+import { commitFailure, resolveLookup, textResult, uidOrTextLookupSchema } from "../../../shared/tools.js";
 import { toMessage } from "../../../utils/log.js";
 import { menuToMarkdown } from "../menu-helpers.js";
 import { menuStartGuard } from "./guards.js";
@@ -122,7 +122,8 @@ export const updateMenuTool = defineTool(
           try {
             const saved = await ctx.infra.client.saveMenus([merged]);
             const persisted = saved[0] ?? merged;
-            await ctx.writes.commitMenu(persisted);
+            const commitErr = commitFailure("menu", await ctx.writes.commitMenu(persisted));
+            if (commitErr) return commitErr;
             return textResult(
               menuToMarkdown(
                 persisted,

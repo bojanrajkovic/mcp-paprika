@@ -19,8 +19,11 @@
 
 import { setTimeout as wait } from "node:timers/promises";
 
+import type { Result } from "neverthrow";
+import { ResultAsync } from "neverthrow";
 import type { Logger } from "pino";
 
+import type { CacheError } from "../cache/disk-cache.js";
 import type { AuthCodeStore } from "./auth-code-store.js";
 import type { AuthRequestStore } from "./auth-request-store.js";
 import type { DiskClientRegistrationStore } from "./client-registration.js";
@@ -29,6 +32,20 @@ import type { PendingAuthorizationStore } from "./pending-authorization-store.js
 import type { TokenStore } from "./token-store.js";
 
 import { DCR_CLIENT_STALE_DAYS, nowSeconds } from "./tokens.js";
+
+/**
+ * INTERIM (#265): unwrap a cache result by rethrowing — `sweepOnce`'s contract
+ * is still rejection-based (the loop catches and continues); #265 converts the
+ * auth runtime to `Result` end to end and removes this.
+ */
+function must<T>(result: Result<T, CacheError>): T {
+  return result.match(
+    (value) => value,
+    (e) => {
+      throw new Error(`auth cleanup cache failure: ${e.context}: ${e.message}`, { cause: e.cause });
+    },
+  );
+}
 
 const CLEANUP_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 hours
 
@@ -84,13 +101,13 @@ export class AuthCleanup {
 
     // (1) Stale DCR clients: lastTokenActivityAt older than DCR_CLIENT_STALE_DAYS (90d)
     const cutoff = now - DCR_CLIENT_STALE_DAYS * 86400;
-    const allClients = await this._cache.oauthClients.getAll();
+    const allClients = must(await this._cache.oauthClients.getAll());
     const stale = allClients.filter((c) => c.lastTokenActivityAt < cutoff);
 
     // Fetch tokens once. Precompute per-client counts for the cascade loop and
     // collect expired tokens for the orphan sweep in (3). One pass over all
     // tokens, then we partition by stale-client cascade vs. expired-orphan.
-    const allTokens = await this._cache.oauthTokens.getAll();
+    const allTokens = must(await this._cache.oauthTokens.getAll());
     const tokensByClient = new Map<string, number>();
     for (const t of allTokens) {
       tokensByClient.set(t.clientId, (tokensByClient.get(t.clientId) ?? 0) + 1);
@@ -117,8 +134,8 @@ export class AuthCleanup {
     let expiredTokensRemoved = 0;
     const expiredOrphans = allTokens.filter((t) => t.expiresAt < now && !staleClientIds.has(t.clientId));
     if (expiredOrphans.length > 0) {
-      await Promise.all(expiredOrphans.map((t) => this._cache.oauthTokens.remove(t.tokenHash)));
-      await this._cache.flush();
+      must(await ResultAsync.combine(expiredOrphans.map((t) => this._cache.oauthTokens.remove(t.tokenHash))));
+      must(await this._cache.flush());
       expiredTokensRemoved = expiredOrphans.length;
     }
 

@@ -8,7 +8,7 @@ import type { MenuState, MenuWrites } from "../module.js";
 
 import { MenuItemUidSchema, RecipeUidSchema } from "../../../ids.js";
 import { defineTool } from "../../../kernel/tool.js";
-import { textResult } from "../../../shared/tools.js";
+import { commitFailure, textResult } from "../../../shared/tools.js";
 import { toMessage } from "../../../utils/log.js";
 import { mealTypeSpecSchema, resolveOrCreateMealType } from "../../meal-type/meal-type-helpers.js";
 import { menuStartGuard } from "./guards.js";
@@ -92,7 +92,8 @@ export const updateMenuItemTool = defineTool(
           let saved: MenuItem;
           try {
             saved = (await ctx.infra.client.saveMenuItems([merged]))[0]!;
-            await ctx.writes.commitMenuItem(saved);
+            const commitErr = commitFailure("menu", await ctx.writes.commitMenuItem(saved));
+            if (commitErr) return commitErr;
           } catch (error) {
             const message = toMessage(error);
             log.error({ err: error, uid }, "saveMenuItems (update_menu_item) failed");

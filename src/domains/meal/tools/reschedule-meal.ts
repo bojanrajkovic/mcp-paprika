@@ -8,7 +8,7 @@ import type { Meal } from "../types.js";
 
 import { MealUidSchema } from "../../../ids.js";
 import { defineTool } from "../../../kernel/tool.js";
-import { textResult } from "../../../shared/tools.js";
+import { commitFailure, textResult } from "../../../shared/tools.js";
 import { parseCalendarDayWire } from "../../../utils/dates.js";
 import { toMessage } from "../../../utils/log.js";
 import { mealTypeSpecSchema, resolveOrCreateMealType } from "../../meal-type/meal-type-helpers.js";
@@ -111,7 +111,8 @@ export const rescheduleMealTool = defineTool(
           let saved: Meal;
           try {
             const savedItems = await ctx.infra.client.saveMeals([updated]);
-            await ctx.writes.commitMealsBatch(savedItems);
+            const commitErr = commitFailure("meal plan", await ctx.writes.commitMealsBatch(savedItems));
+            if (commitErr) return commitErr;
             saved = savedItems[0]!;
           } catch (error) {
             const message = toMessage(error);
