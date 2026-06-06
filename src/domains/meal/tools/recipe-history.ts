@@ -1,5 +1,3 @@
-import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
-
 import type { DomainCtx } from "../../../kernel/registry.js";
 import type { MealTypeApi } from "../../meal-type/api.js";
 import type { MealState } from "../module.js";
@@ -62,54 +60,46 @@ export const readRecipeHistoryTool = defineTool(
       ),
     },
   },
+  [mealStartGuard],
   (ctx: DomainCtx<MealState, "recipe" | "meal-type">) => {
-    const log = ctx.infra.log.child({ component: "read_recipe_history" });
     return async (args) => {
-      log.info({ tool: "read_recipe_history", recipe_uid: args.recipe_uid }, "tool invoked");
-      return mealStartGuard(ctx.state, ctx.deps["meal-type"]).match(
-        async (): Promise<CallToolResult> => {
-          const recipe = ctx.deps.recipe.get(args.recipe_uid);
-          if (recipe === undefined) {
-            return textResult(
-              `No recipe found with UID "${args.recipe_uid}". Check the UID (list_recipes / search_recipes), ` +
-                "or it may still be syncing.",
-            );
-          }
+      const recipe = ctx.deps.recipe.get(args.recipe_uid);
+      if (recipe === undefined) {
+        return textResult(
+          `No recipe found with UID "${args.recipe_uid}". Check the UID (list_recipes / search_recipes), ` +
+            "or it may still be syncing.",
+        );
+      }
 
-          // Headline date from `lastCookedAt` (null ⇒ never cooked); the count + recent
-          // list from `cookedHistory` (the same past-cook rule lastCookedAt heads).
-          const lastCooked = ctx.state.store.lastCookedAt(args.recipe_uid);
-          if (lastCooked === null) {
-            return textResult(
-              `**${recipe.name}** has no cooking history yet. ` +
-                "Use plan_meals to schedule it or log_cooked_meal to record a past cooking.",
-            );
-          }
+      // Headline date from `lastCookedAt` (null ⇒ never cooked); the count + recent
+      // list from `cookedHistory` (the same past-cook rule lastCookedAt heads).
+      const lastCooked = ctx.state.store.lastCookedAt(args.recipe_uid);
+      if (lastCooked === null) {
+        return textResult(
+          `**${recipe.name}** has no cooking history yet. ` +
+            "Use plan_meals to schedule it or log_cooked_meal to record a past cooking.",
+        );
+      }
 
-          const history = ctx.state.store.cookedHistory(args.recipe_uid);
-          const labelType = makeTypeLabeler(ctx.deps["meal-type"]);
-          const count = history.length;
+      const history = ctx.state.store.cookedHistory(args.recipe_uid);
+      const labelType = makeTypeLabeler(ctx.deps["meal-type"]);
+      const count = history.length;
 
-          const lines: Array<string> = [];
-          lines.push(`**${recipe.name}** — cooking history`);
-          lines.push("");
-          lines.push(
-            `Last cooked: ${lastCooked.slice(0, 10)} · cooked ${count.toString()} time${count === 1 ? "" : "s"}`,
-          );
-          lines.push("");
-          lines.push("Recent:");
-          for (const meal of history.slice(0, RECENT_LIMIT)) {
-            lines.push(`- ${meal.date.slice(0, 10)} · ${labelType(meal)}`);
-          }
-          if (count > RECENT_LIMIT) {
-            lines.push("");
-            lines.push(`_Showing ${RECENT_LIMIT.toString()} most recent of ${count.toString()}._`);
-          }
+      const lines: Array<string> = [];
+      lines.push(`**${recipe.name}** — cooking history`);
+      lines.push("");
+      lines.push(`Last cooked: ${lastCooked.slice(0, 10)} · cooked ${count.toString()} time${count === 1 ? "" : "s"}`);
+      lines.push("");
+      lines.push("Recent:");
+      for (const meal of history.slice(0, RECENT_LIMIT)) {
+        lines.push(`- ${meal.date.slice(0, 10)} · ${labelType(meal)}`);
+      }
+      if (count > RECENT_LIMIT) {
+        lines.push("");
+        lines.push(`_Showing ${RECENT_LIMIT.toString()} most recent of ${count.toString()}._`);
+      }
 
-          return textResult(lines.join("\n"));
-        },
-        (guard) => guard,
-      );
+      return textResult(lines.join("\n"));
     };
   },
 );

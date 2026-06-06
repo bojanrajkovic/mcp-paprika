@@ -1,4 +1,3 @@
-import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 
 import type { MealTypeUid } from "../../../ids.js";
@@ -47,78 +46,73 @@ export const logCookedMealTool = defineTool(
       "`type` for a non-dinner meal. To log a freeform (non-recipe) meal or to plan ahead in bulk, use plan_meals.",
     inputSchema: logCookedMealInputSchema,
   },
+  [mealStartGuard],
   (ctx: DomainCtx<MealState, "recipe" | "meal-type", MealWrites>) => {
     const log = ctx.infra.log.child({ component: "log_cooked_meal" });
     return async (args) => {
-      log.info({ tool: "log_cooked_meal", recipe_uid: args.recipe_uid }, "tool invoked");
-      return mealStartGuard(ctx.state, ctx.deps["meal-type"]).match(
-        async (): Promise<CallToolResult> => {
-          // Date defaults to today; a supplied date snaps to its own-zone calendar
-          // day (same normalization as plan_meals).
-          let date: string;
-          if (args.date === undefined) {
-            date = todayWire();
-          } else {
-            const parsed = parseCalendarDayWire(args.date);
-            if (parsed === null) {
-              return textResult(
-                `Could not parse date "${args.date}". Use ISO 8601 (e.g., "2026-06-15") or "yyyy-MM-dd HH:mm:ss".`,
-              );
-            }
-            date = parsed;
-          }
-
-          const recipe = ctx.deps.recipe.get(args.recipe_uid);
-          if (recipe === undefined) {
-            return textResult(
-              `recipe_uid "${args.recipe_uid}" is not known to the local recipe store; ` +
-                `wait for the next sync and retry, or log it with plan_meals as a freeform meal.`,
-            );
-          }
-
-          // Resolve the meal type LAST — after the date and recipe validations above. An
-          // unknown {name} auto-creates a type, so creating only once the rest of the input
-          // is known-good avoids leaving an orphan type behind on a rejected call.
-          // Type defaults to Dinner (the common case for a cooked meal).
-          const typeSpec: MealTypeSpec = args.type ?? { builtin: 2 };
-          const typeResult = await resolveOrCreateMealType(ctx.deps["meal-type"], typeSpec);
-          if (!typeResult.ok) {
-            return textResult(typeResult.message);
-          }
-          // Custom mealtypes carry originalType: null; Meal.type is vestigial when
-          // type_uid is set (see plan_meals for the full rationale).
-          const typeInteger = typeResult.resolved.originalType ?? 0;
-          const typeUid: MealTypeUid = typeResult.resolved.uid;
-
-          const meal: Meal = {
-            uid: MealUidSchema.parse(crypto.randomUUID().toUpperCase()),
-            recipeUid: args.recipe_uid,
-            name: recipe.name,
-            date,
-            type: typeInteger,
-            typeUid,
-            orderFlag: makeMealOrderFlagAssigner(ctx.state)(date),
-            isIngredient: false,
-            scale: null,
-            deleted: false,
-          };
-
-          const savedItems = (await ctx.infra.client.saveMeals([meal])).match(
-            (items) => items,
-            (e) => {
-              log.error({ err: e, recipe_uid: args.recipe_uid }, "saveMeals failed");
-              return textResult(`Failed to log cooked meal: ${e.message}`);
-            },
+      // Date defaults to today; a supplied date snaps to its own-zone calendar
+      // day (same normalization as plan_meals).
+      let date: string;
+      if (args.date === undefined) {
+        date = todayWire();
+      } else {
+        const parsed = parseCalendarDayWire(args.date);
+        if (parsed === null) {
+          return textResult(
+            `Could not parse date "${args.date}". Use ISO 8601 (e.g., "2026-06-15") or "yyyy-MM-dd HH:mm:ss".`,
           );
-          if ("content" in savedItems) return savedItems;
-          const commitErr = commitFailure("meal plan", await ctx.writes.commitMealsBatch(savedItems));
-          if (commitErr) return commitErr;
-          const saved = savedItems[0]!;
+        }
+        date = parsed;
+      }
 
-          return textResult(`Logged.\n\n${renderMealCard(saved, ctx.deps.recipe, ctx.deps["meal-type"])}`);
+      const recipe = ctx.deps.recipe.get(args.recipe_uid);
+      if (recipe === undefined) {
+        return textResult(
+          `recipe_uid "${args.recipe_uid}" is not known to the local recipe store; ` +
+            `wait for the next sync and retry, or log it with plan_meals as a freeform meal.`,
+        );
+      }
+
+      // Resolve the meal type LAST — after the date and recipe validations above. An
+      // unknown {name} auto-creates a type, so creating only once the rest of the input
+      // is known-good avoids leaving an orphan type behind on a rejected call.
+      // Type defaults to Dinner (the common case for a cooked meal).
+      const typeSpec: MealTypeSpec = args.type ?? { builtin: 2 };
+      const typeResult = await resolveOrCreateMealType(ctx.deps["meal-type"], typeSpec);
+      if (!typeResult.ok) {
+        return textResult(typeResult.message);
+      }
+      // Custom mealtypes carry originalType: null; Meal.type is vestigial when
+      // type_uid is set (see plan_meals for the full rationale).
+      const typeInteger = typeResult.resolved.originalType ?? 0;
+      const typeUid: MealTypeUid = typeResult.resolved.uid;
+
+      const meal: Meal = {
+        uid: MealUidSchema.parse(crypto.randomUUID().toUpperCase()),
+        recipeUid: args.recipe_uid,
+        name: recipe.name,
+        date,
+        type: typeInteger,
+        typeUid,
+        orderFlag: makeMealOrderFlagAssigner(ctx.state)(date),
+        isIngredient: false,
+        scale: null,
+        deleted: false,
+      };
+
+      const savedItems = (await ctx.infra.client.saveMeals([meal])).match(
+        (items) => items,
+        (e) => {
+          log.error({ err: e, recipe_uid: args.recipe_uid }, "saveMeals failed");
+          return textResult(`Failed to log cooked meal: ${e.message}`);
         },
-        (guard) => guard,
       );
+      if ("content" in savedItems) return savedItems;
+      const commitErr = commitFailure("meal plan", await ctx.writes.commitMealsBatch(savedItems));
+      if (commitErr) return commitErr;
+      const saved = savedItems[0]!;
+
+      return textResult(`Logged.\n\n${renderMealCard(saved, ctx.deps.recipe, ctx.deps["meal-type"])}`);
     };
   },
 );

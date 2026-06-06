@@ -82,6 +82,12 @@ export const REDACT_PATHS: ReadonlyArray<string> = [
   "id_token",
   "*.id_token",
   "*.*.id_token",
+  // The single-use AI-photo preview token (`upload_recipe_photo`'s
+  // `source.generation_token`) is a live capability: the kernel's debug-level
+  // args log would otherwise serialize it verbatim.
+  "generation_token",
+  "*.generation_token",
+  "*.*.generation_token",
 ];
 
 // Numeric pino level values → level names (pino serializes numeric levels)

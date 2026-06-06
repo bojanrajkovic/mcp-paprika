@@ -12,7 +12,7 @@ import { fetchImageBytes, MAX_IMAGE_BYTES } from "../../../shared/photo-fetch.js
 import { commitFailure, textResult } from "../../../shared/tools.js";
 import { toMessage } from "../../../utils/log.js";
 import { GENERATED_MAX_FULL_EDGE, normalizePhoto } from "../photo-helpers.js";
-import { recipeColdStartGuard } from "./guards.js";
+import { photoCatalogGuard, recipeColdStartGuard } from "./guards.js";
 
 /**
  * Image source for `upload_recipe_photo`: exactly one of `url`, `generation_token`, or
@@ -149,55 +149,41 @@ export const uploadPhotoTool = defineTool(
       "server cannot read your local filesystem. Photos are appended to the recipe's gallery in order.",
     inputSchema: uploadPhotoInputSchema.shape,
   },
+  [recipeColdStartGuard, photoCatalogGuard],
   (ctx: DomainCtx<RecipeState, never, RecipeWrites>) => {
     const log = ctx.infra.log.child({ component: "upload_recipe_photo" });
     return async (args) => {
-      const sourceKind =
-        "url" in args.source ? "url" : "generation_token" in args.source ? "generation_token" : "base64";
-      log.info({ tool: "upload_recipe_photo", recipe_uid: args.recipe_uid, source: sourceKind }, "tool invoked");
-      return recipeColdStartGuard(ctx.state).match(
-        async (): Promise<CallToolResult> => {
-          // Gate on the photo catalog being synced — order_flag/name are derived from the
-          // existing gallery, so uploading before photos sync could assign a colliding index.
-          if (!ctx.state.photo.store.hasSynced) {
-            return textResult("The photo catalog is still syncing; try again in a moment.");
-          }
-          const recipe = ctx.state.recipe.store.get(args.recipe_uid);
-          if (recipe === undefined)
-            return textResult(
-              `No recipe found with UID "${args.recipe_uid}" (it may not exist or was already deleted).`,
-            );
+      const recipe = ctx.state.recipe.store.get(args.recipe_uid);
+      if (recipe === undefined)
+        return textResult(`No recipe found with UID "${args.recipe_uid}" (it may not exist or was already deleted).`);
 
-          const resolved = await resolveSource(args.source, args.recipe_uid, ctx.infra.generatedImageStore);
-          if ("error" in resolved) return textResult(resolved.error);
-          if (!sniffImage(resolved.bytes)) {
-            return textResult("Unsupported image format. Provide a JPEG, PNG, WEBP, or GIF image.");
-          }
+      const resolved = await resolveSource(args.source, args.recipe_uid, ctx.infra.generatedImageStore);
+      if ("error" in resolved) return textResult(resolved.error);
+      if (!sniffImage(resolved.bytes)) {
+        return textResult("Unsupported image format. Provide a JPEG, PNG, WEBP, or GIF image.");
+      }
 
-          let thumbnail: Buffer;
-          let full: Buffer;
-          try {
-            // Cap generated-image output the same way generate_recipe_photo's attach
-            // path does, so preview-then-save and generate-and-attach store the
-            // same size. User-supplied url/base64 keep their native resolution.
-            ({ thumbnail, full } = await normalizePhoto(
-              resolved.bytes,
-              resolved.generated ? { maxFullEdge: GENERATED_MAX_FULL_EDGE } : undefined,
-            ));
-          } catch (error) {
-            log.error({ err: error, recipe_uid: args.recipe_uid }, "normalizePhoto failed");
-            return textResult(`Failed to process image: ${toMessage(error)}`);
-          }
+      let thumbnail: Buffer;
+      let full: Buffer;
+      try {
+        // Cap generated-image output the same way generate_recipe_photo's attach
+        // path does, so preview-then-save and generate-and-attach store the
+        // same size. User-supplied url/base64 keep their native resolution.
+        ({ thumbnail, full } = await normalizePhoto(
+          resolved.bytes,
+          resolved.generated ? { maxFullEdge: GENERATED_MAX_FULL_EDGE } : undefined,
+        ));
+      } catch (error) {
+        log.error({ err: error, recipe_uid: args.recipe_uid }, "normalizePhoto failed");
+        return textResult(`Failed to process image: ${toMessage(error)}`);
+      }
 
-          return (await ctx.writes.attachPhotoToRecipe(recipe, thumbnail, full)).match(
-            (photo) => textResult(`Attached photo ${photo.name} to "${recipe.name}" (photo UID: ${photo.uid}).`),
-            (e) => {
-              log.error({ err: e.cause ?? e, recipe_uid: args.recipe_uid }, "uploadPhoto failed");
-              return textResult(`Failed to upload photo: ${e.message}`);
-            },
-          );
+      return (await ctx.writes.attachPhotoToRecipe(recipe, thumbnail, full)).match(
+        (photo) => textResult(`Attached photo ${photo.name} to "${recipe.name}" (photo UID: ${photo.uid}).`),
+        (e) => {
+          log.error({ err: e.cause ?? e, recipe_uid: args.recipe_uid }, "uploadPhoto failed");
+          return textResult(`Failed to upload photo: ${e.message}`);
         },
-        (guard) => guard,
       );
     };
   },
@@ -214,38 +200,25 @@ export const deletePhotoTool = defineTool(
       "'already deleted' message without re-POSTing. Requires an exact photo UID.",
     inputSchema: deletePhotoInputSchema.shape,
   },
+  [recipeColdStartGuard, photoCatalogGuard],
   (ctx: DomainCtx<RecipeState, never, RecipeWrites>) => {
     const log = ctx.infra.log.child({ component: "delete_recipe_photo" });
     return async (args) => {
-      log.info({ tool: "delete_recipe_photo", photo_uid: args.photo_uid }, "tool invoked");
-      return recipeColdStartGuard(ctx.state).match(
-        async (): Promise<CallToolResult> => {
-          // Gate on the photo catalog being synced, else a not-yet-synced photo would
-          // read as "not found" before its first sync.
-          if (!ctx.state.photo.store.hasSynced) {
-            return textResult("The photo catalog is still syncing; try again in a moment.");
-          }
-          const existing = ctx.state.photo.store.get(args.photo_uid);
-          if (existing === undefined) {
-            return textResult(`No photo found with UID "${args.photo_uid}" (it may not exist or was already deleted).`);
-          }
+      const existing = ctx.state.photo.store.get(args.photo_uid);
+      if (existing === undefined) {
+        return textResult(`No photo found with UID "${args.photo_uid}" (it may not exist or was already deleted).`);
+      }
 
-          return (await ctx.infra.client.deletePhoto(existing)).match(
-            async (): Promise<CallToolResult> => {
-              const commitErr = commitFailure(
-                "photo",
-                await ctx.writes.commitPhotoDelete({ ...existing, deleted: true }),
-              );
-              if (commitErr) return commitErr;
-              return textResult(`Deleted photo ${existing.name} from recipe.`);
-            },
-            async (e) => {
-              log.error({ err: e, photo_uid: args.photo_uid }, "deletePhoto failed");
-              return textResult(`Failed to delete photo: ${e.message}`);
-            },
-          );
+      return (await ctx.infra.client.deletePhoto(existing)).match(
+        async (): Promise<CallToolResult> => {
+          const commitErr = commitFailure("photo", await ctx.writes.commitPhotoDelete({ ...existing, deleted: true }));
+          if (commitErr) return commitErr;
+          return textResult(`Deleted photo ${existing.name} from recipe.`);
         },
-        (guard) => guard,
+        async (e) => {
+          log.error({ err: e, photo_uid: args.photo_uid }, "deletePhoto failed");
+          return textResult(`Failed to delete photo: ${e.message}`);
+        },
       );
     };
   },

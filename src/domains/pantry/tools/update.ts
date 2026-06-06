@@ -1,4 +1,3 @@
-import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 
 import type { DomainCtx } from "../../../kernel/registry.js";
@@ -50,90 +49,85 @@ export const updatePantryItemTool = defineTool(
       "hasExpiration accordingly. To change stock status, use mark_pantry_item_out_of_stock / restock_pantry_item.",
     inputSchema: updatePantryItemInputSchema,
   },
+  [pantryStartGuard],
   (ctx: DomainCtx<PantryState, "aisle", PantryWrites>) => {
     const log = ctx.infra.log.child({ component: "update_pantry_item" });
     return async (args) => {
-      log.info({ tool: "update_pantry_item", uid: args.uid }, "tool invoked");
-      return pantryStartGuard(ctx.state).match(
-        async (): Promise<CallToolResult> => {
-          const existing = ctx.state.store.get(args.uid);
+      const existing = ctx.state.store.get(args.uid);
 
-          if (!existing) {
-            return textResult(`No pantry item found with UID "${args.uid}" (it may not exist or was already deleted).`);
-          }
+      if (!existing) {
+        return textResult(`No pantry item found with UID "${args.uid}" (it may not exist or was already deleted).`);
+      }
 
-          // Auto-derive hasExpiration when expirationDate is explicitly provided (AC5.3).
-          // When provided (string or null), derive hasExpiration; when omitted (undefined),
-          // leave both as-is. User-supplied date strings are normalized to Paprika's
-          // wire format ("yyyy-MM-dd HH:mm:ss") so the LLM can pass ISO 8601 freely.
-          let newExpirationDate: string | null;
-          if (args.expirationDate === undefined) {
-            newExpirationDate = existing.expirationDate;
-          } else if (args.expirationDate === null) {
-            newExpirationDate = null;
-          } else {
-            const normalized = normalizeWire(args.expirationDate);
-            if (normalized === null) {
-              return textResult(
-                `Could not parse expirationDate "${args.expirationDate}". Use ISO 8601 (e.g., "2026-12-31") or "yyyy-MM-dd HH:mm:ss".`,
-              );
-            }
-            newExpirationDate = normalized;
-          }
-          const newHasExpiration =
-            args.expirationDate !== undefined ? args.expirationDate !== null : existing.hasExpiration;
-
-          let newPurchaseDate: string | null;
-          if (args.purchaseDate === undefined) {
-            newPurchaseDate = existing.purchaseDate;
-          } else if (args.purchaseDate === null) {
-            newPurchaseDate = null;
-          } else {
-            const normalized = normalizeWire(args.purchaseDate);
-            if (normalized === null) {
-              return textResult(
-                `Could not parse purchaseDate "${args.purchaseDate}". Use ISO 8601 (e.g., "2026-12-31") or "yyyy-MM-dd HH:mm:ss".`,
-              );
-            }
-            newPurchaseDate = normalized;
-          }
-
-          // Resolve aisle: when provided, look up or auto-create to get both
-          // the display name and its UID (fixes the stale-UID bug where the
-          // old code updated `aisle` display but left `aisleUid` stale).
-          const aisleUpdate =
-            args.aisle !== undefined
-              ? (await ctx.deps.aisle.ensureAisle(args.aisle)).match(
-                  (v) => v,
-                  (message) => textResult(message),
-                )
-              : undefined;
-          if (aisleUpdate !== undefined && "content" in aisleUpdate) return aisleUpdate;
-
-          const updated: PantryItem = {
-            ...existing,
-            ...(args.ingredient !== undefined && { ingredient: args.ingredient }),
-            ...(args.quantity !== undefined && { quantity: args.quantity }),
-            ...(aisleUpdate !== undefined && { aisle: aisleUpdate.aisle, aisleUid: aisleUpdate.aisleUid }),
-            expirationDate: newExpirationDate,
-            hasExpiration: newHasExpiration,
-            purchaseDate: newPurchaseDate,
-          };
-          const saved = (await ctx.infra.client.savePantryItems([updated])).match(
-            (items) => items[0]!,
-            (e) => {
-              log.error({ err: e, uid: args.uid }, "savePantryItems failed");
-              return textResult(`Failed to update pantry item: ${e.message}`);
-            },
+      // Auto-derive hasExpiration when expirationDate is explicitly provided (AC5.3).
+      // When provided (string or null), derive hasExpiration; when omitted (undefined),
+      // leave both as-is. User-supplied date strings are normalized to Paprika's
+      // wire format ("yyyy-MM-dd HH:mm:ss") so the LLM can pass ISO 8601 freely.
+      let newExpirationDate: string | null;
+      if (args.expirationDate === undefined) {
+        newExpirationDate = existing.expirationDate;
+      } else if (args.expirationDate === null) {
+        newExpirationDate = null;
+      } else {
+        const normalized = normalizeWire(args.expirationDate);
+        if (normalized === null) {
+          return textResult(
+            `Could not parse expirationDate "${args.expirationDate}". Use ISO 8601 (e.g., "2026-12-31") or "yyyy-MM-dd HH:mm:ss".`,
           );
-          if ("content" in saved) return saved;
-          const commitErr = commitFailure("pantry", await ctx.writes.commitPantryItem(saved));
-          if (commitErr) return commitErr;
+        }
+        newExpirationDate = normalized;
+      }
+      const newHasExpiration =
+        args.expirationDate !== undefined ? args.expirationDate !== null : existing.hasExpiration;
 
-          return textResult(pantryItemToMarkdown(saved));
+      let newPurchaseDate: string | null;
+      if (args.purchaseDate === undefined) {
+        newPurchaseDate = existing.purchaseDate;
+      } else if (args.purchaseDate === null) {
+        newPurchaseDate = null;
+      } else {
+        const normalized = normalizeWire(args.purchaseDate);
+        if (normalized === null) {
+          return textResult(
+            `Could not parse purchaseDate "${args.purchaseDate}". Use ISO 8601 (e.g., "2026-12-31") or "yyyy-MM-dd HH:mm:ss".`,
+          );
+        }
+        newPurchaseDate = normalized;
+      }
+
+      // Resolve aisle: when provided, look up or auto-create to get both
+      // the display name and its UID (fixes the stale-UID bug where the
+      // old code updated `aisle` display but left `aisleUid` stale).
+      const aisleUpdate =
+        args.aisle !== undefined
+          ? (await ctx.deps.aisle.ensureAisle(args.aisle)).match(
+              (v) => v,
+              (message) => textResult(message),
+            )
+          : undefined;
+      if (aisleUpdate !== undefined && "content" in aisleUpdate) return aisleUpdate;
+
+      const updated: PantryItem = {
+        ...existing,
+        ...(args.ingredient !== undefined && { ingredient: args.ingredient }),
+        ...(args.quantity !== undefined && { quantity: args.quantity }),
+        ...(aisleUpdate !== undefined && { aisle: aisleUpdate.aisle, aisleUid: aisleUpdate.aisleUid }),
+        expirationDate: newExpirationDate,
+        hasExpiration: newHasExpiration,
+        purchaseDate: newPurchaseDate,
+      };
+      const saved = (await ctx.infra.client.savePantryItems([updated])).match(
+        (items) => items[0]!,
+        (e) => {
+          log.error({ err: e, uid: args.uid }, "savePantryItems failed");
+          return textResult(`Failed to update pantry item: ${e.message}`);
         },
-        (guard) => guard,
       );
+      if ("content" in saved) return saved;
+      const commitErr = commitFailure("pantry", await ctx.writes.commitPantryItem(saved));
+      if (commitErr) return commitErr;
+
+      return textResult(pantryItemToMarkdown(saved));
     };
   },
 );

@@ -1,4 +1,3 @@
-import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 
 import type { MealTypeUid, RecipeUid } from "../../../ids.js";
@@ -40,69 +39,64 @@ export const updateMenuItemTool = defineTool(
       "(menu_uid) is not editable via this tool — delete and re-add to move an item between menus.",
     inputSchema: updateMenuItemInputSchema,
   },
+  [menuStartGuard],
   (ctx: DomainCtx<MenuState, "recipe" | "meal-type", MenuWrites>) => {
     const log = ctx.infra.log.child({ component: "update_menu_item" });
     return async (args) => {
-      log.info({ tool: "update_menu_item", uid: args.uid }, "tool invoked");
-      return menuStartGuard(ctx).match(
-        async (): Promise<CallToolResult> => {
-          if (args.type === undefined && args.recipe_uid === undefined) {
-            return textResult("Nothing to update. Provide at least one of type or recipe_uid.");
-          }
+      if (args.type === undefined && args.recipe_uid === undefined) {
+        return textResult("Nothing to update. Provide at least one of type or recipe_uid.");
+      }
 
-          const uid = args.uid;
-          const existing = ctx.state.items.store.get(uid);
-          if (existing === undefined) {
-            return textResult(`No menu item found with UID "${uid}" (it may not exist or was already deleted).`);
-          }
-          // Resolve recipe link + refreshed display name if a new recipe is supplied.
-          let newRecipeUid: RecipeUid | null = existing.recipeUid;
-          let newName: string = existing.name;
-          if (args.recipe_uid !== undefined) {
-            const recipe = ctx.deps.recipe.get(args.recipe_uid);
-            if (recipe === undefined) {
-              return textResult(
-                `recipe_uid "${args.recipe_uid}" is not known to the local recipe store; ` +
-                  `wait for the next sync and retry.`,
-              );
-            }
-            newRecipeUid = args.recipe_uid;
-            newName = recipe.name;
-          }
-
-          // Resolve the meal type LAST — after the recipe validation above. An unknown
-          // {name} auto-creates a type, so creating only once the rest of the input is
-          // known-good avoids leaving an orphan type behind on a rejected call.
-          let newTypeUid: MealTypeUid | undefined;
-          if (args.type !== undefined) {
-            const result = await resolveOrCreateMealType(ctx.deps["meal-type"], args.type);
-            if (!result.ok) {
-              return textResult(result.message);
-            }
-            newTypeUid = result.resolved.uid;
-          }
-
-          const merged: MenuItem = {
-            ...existing,
-            ...(newTypeUid !== undefined && { typeUid: newTypeUid }),
-            ...(args.recipe_uid !== undefined && { recipeUid: newRecipeUid, name: newName }),
-          };
-
-          const saved = (await ctx.infra.client.saveMenuItems([merged])).match(
-            (items) => items[0]!,
-            (e) => {
-              log.error({ err: e, uid }, "saveMenuItems (update_menu_item) failed");
-              return textResult(`Failed to update menu item: ${e.message}`);
-            },
+      const uid = args.uid;
+      const existing = ctx.state.items.store.get(uid);
+      if (existing === undefined) {
+        return textResult(`No menu item found with UID "${uid}" (it may not exist or was already deleted).`);
+      }
+      // Resolve recipe link + refreshed display name if a new recipe is supplied.
+      let newRecipeUid: RecipeUid | null = existing.recipeUid;
+      let newName: string = existing.name;
+      if (args.recipe_uid !== undefined) {
+        const recipe = ctx.deps.recipe.get(args.recipe_uid);
+        if (recipe === undefined) {
+          return textResult(
+            `recipe_uid "${args.recipe_uid}" is not known to the local recipe store; ` +
+              `wait for the next sync and retry.`,
           );
-          if ("content" in saved) return saved;
-          const commitErr = commitFailure("menu", await ctx.writes.commitMenuItem(saved));
-          if (commitErr) return commitErr;
+        }
+        newRecipeUid = args.recipe_uid;
+        newName = recipe.name;
+      }
 
-          return textResult(`Menu item "${saved.name}" updated.`);
+      // Resolve the meal type LAST — after the recipe validation above. An unknown
+      // {name} auto-creates a type, so creating only once the rest of the input is
+      // known-good avoids leaving an orphan type behind on a rejected call.
+      let newTypeUid: MealTypeUid | undefined;
+      if (args.type !== undefined) {
+        const result = await resolveOrCreateMealType(ctx.deps["meal-type"], args.type);
+        if (!result.ok) {
+          return textResult(result.message);
+        }
+        newTypeUid = result.resolved.uid;
+      }
+
+      const merged: MenuItem = {
+        ...existing,
+        ...(newTypeUid !== undefined && { typeUid: newTypeUid }),
+        ...(args.recipe_uid !== undefined && { recipeUid: newRecipeUid, name: newName }),
+      };
+
+      const saved = (await ctx.infra.client.saveMenuItems([merged])).match(
+        (items) => items[0]!,
+        (e) => {
+          log.error({ err: e, uid }, "saveMenuItems (update_menu_item) failed");
+          return textResult(`Failed to update menu item: ${e.message}`);
         },
-        (guard) => guard,
       );
+      if ("content" in saved) return saved;
+      const commitErr = commitFailure("menu", await ctx.writes.commitMenuItem(saved));
+      if (commitErr) return commitErr;
+
+      return textResult(`Menu item "${saved.name}" updated.`);
     };
   },
 );

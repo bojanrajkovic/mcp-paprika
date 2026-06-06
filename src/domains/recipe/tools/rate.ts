@@ -1,4 +1,3 @@
-import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 
 import type { DomainCtx } from "../../../kernel/registry.js";
@@ -26,36 +25,31 @@ export const rateRecipeTool = defineTool(
     description: "Rate a recipe 0–5 stars by UID. Sets the recipe's star rating; pass 0 to clear it.",
     inputSchema: rateRecipeInputSchema,
   },
+  [recipeColdStartGuard],
   (ctx: DomainCtx<RecipeState, never, RecipeWrites>) => {
     const log = ctx.infra.log.child({ component: "rate_recipe" });
     return async (args) => {
-      log.info({ tool: "rate_recipe", uid: args.uid }, "tool invoked");
-      return recipeColdStartGuard(ctx.state).match(
-        async (): Promise<CallToolResult> => {
-          const existing = ctx.state.recipe.store.get(args.uid);
+      const existing = ctx.state.recipe.store.get(args.uid);
 
-          if (!existing) {
-            return textResult(`No recipe found with UID "${args.uid}" (it may not exist or was already deleted).`);
-          }
+      if (!existing) {
+        return textResult(`No recipe found with UID "${args.uid}" (it may not exist or was already deleted).`);
+      }
 
-          const updated = { ...existing, rating: args.rating };
+      const updated = { ...existing, rating: args.rating };
 
-          const saved = (await ctx.infra.client.saveRecipe(updated)).match(
-            (v) => v,
-            (e) => {
-              log.error({ err: e, uid: args.uid }, "saveRecipe failed");
-              return textResult(`Failed to rate recipe: ${e.message}`);
-            },
-          );
-          if ("content" in saved) return saved;
-          const commitErr = commitFailure("recipe", await ctx.writes.commitRecipe(saved), { selfHealing: false });
-          if (commitErr) return commitErr;
-
-          const categoryNames = ctx.state.category.store.resolveNames(saved.categories);
-          return textResult(recipeToMarkdown(saved, categoryNames));
+      const saved = (await ctx.infra.client.saveRecipe(updated)).match(
+        (v) => v,
+        (e) => {
+          log.error({ err: e, uid: args.uid }, "saveRecipe failed");
+          return textResult(`Failed to rate recipe: ${e.message}`);
         },
-        (guard) => guard,
       );
+      if ("content" in saved) return saved;
+      const commitErr = commitFailure("recipe", await ctx.writes.commitRecipe(saved), { selfHealing: false });
+      if (commitErr) return commitErr;
+
+      const categoryNames = ctx.state.category.store.resolveNames(saved.categories);
+      return textResult(recipeToMarkdown(saved, categoryNames));
     };
   },
 );

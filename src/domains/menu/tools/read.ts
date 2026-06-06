@@ -1,5 +1,3 @@
-import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
-
 import type { DomainCtx } from "../../../kernel/registry.js";
 import type { MenuState } from "../module.js";
 
@@ -33,28 +31,22 @@ export const readMenuTool = defineTool(
       }),
     },
   },
+  [menuStartGuard],
   (ctx: DomainCtx<MenuState, "recipe" | "meal-type">) => {
-    const log = ctx.infra.log.child({ component: "read_menu" });
-    return async (args) => {
-      log.info({ tool: "read_menu", ...args.lookup }, "tool invoked");
-      return menuStartGuard(ctx).match(
-        (): CallToolResult => {
-          const query = "uid" in args.lookup ? { uid: args.lookup.uid } : { text: args.lookup.name };
-          const outcome = resolveLookup(query, {
-            get: (uid) => ctx.state.menus.store.get(uid),
-            findByText: (text) => ctx.state.menus.store.findByName(text),
-          });
-          return formatLookupOutcome(outcome, {
-            entityNoun: "menu",
-            renderOne: (menu) =>
-              menuToMarkdown(menu, ctx.state.items.store.getByMenuUid(menu.uid), ctx.deps["meal-type"].getAll(), {
-                includeItemUids: true,
-              }),
-            disambiguationLine: (menu) => `- **${menu.name}** (uid: \`${menu.uid}\`)`,
-          });
-        },
-        (guard) => guard,
-      );
+    return (args) => {
+      const query = "uid" in args.lookup ? { uid: args.lookup.uid } : { text: args.lookup.name };
+      const outcome = resolveLookup(query, {
+        get: (uid) => ctx.state.menus.store.get(uid),
+        findByText: (text) => ctx.state.menus.store.findByName(text),
+      });
+      return formatLookupOutcome(outcome, {
+        entityNoun: "menu",
+        renderOne: (menu) =>
+          menuToMarkdown(menu, ctx.state.items.store.getByMenuUid(menu.uid), ctx.deps["meal-type"].getAll(), {
+            includeItemUids: true,
+          }),
+        disambiguationLine: (menu) => `- **${menu.name}** (uid: \`${menu.uid}\`)`,
+      });
     };
   },
 );

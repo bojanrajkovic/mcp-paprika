@@ -1,4 +1,3 @@
-import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 
 import type { CategoryUid } from "../../../ids.js";
@@ -50,83 +49,78 @@ export const createRecipeTool = defineTool(
       nutritionalInfo: z.string().optional().describe("Nutritional information"),
     },
   },
+  [recipeColdStartGuard],
   (ctx: DomainCtx<RecipeState, never, RecipeWrites>) => {
     const log = ctx.infra.log.child({ component: "create_recipe" });
     return async (args) => {
-      log.info({ tool: "create_recipe", name: args.name }, "tool invoked");
-      return recipeColdStartGuard(ctx.state).match(
-        async (): Promise<CallToolResult> => {
-          // Resolve category refs (UID or name) → UIDs (AC2.4, AC2.7)
-          const { uids: categories, unknown: unknownCategories } =
-            args.categories && args.categories.length > 0
-              ? resolveCategoryRefs(ctx.state.category.store.getAll(), args.categories)
-              : { uids: [] as Array<CategoryUid>, unknown: [] as Array<string> };
+      // Resolve category refs (UID or name) → UIDs (AC2.4, AC2.7)
+      const { uids: categories, unknown: unknownCategories } =
+        args.categories && args.categories.length > 0
+          ? resolveCategoryRefs(ctx.state.category.store.getAll(), args.categories)
+          : { uids: [] as Array<CategoryUid>, unknown: [] as Array<string> };
 
-          const warnings = unknownCategories.map((ref) => `Warning: category "${ref}" not found and was skipped.`);
+      const warnings = unknownCategories.map((ref) => `Warning: category "${ref}" not found and was skipped.`);
 
-          // Build the full Recipe object — all 28 fields required by the type.
-          // hash: "" is a placeholder — `client.saveRecipe` stamps the real
-          // content hash at the network boundary (stampContentHash, #167) and returns
-          // the hashed recipe, so the POST and the local commit are hash-consistent
-          // and the next sync won't re-fetch this recipe.
-          // Uppercase to match Paprika's native UUID format — the desktop client
-          // mints uppercase, and every other tool here already does (the server
-          // accepts either case but is case-preserving). See ADR-0007.
-          const uid = RecipeUidSchema.parse(crypto.randomUUID().toUpperCase());
-          const newRecipe: Recipe = {
-            uid,
-            hash: "",
-            name: args.name,
-            categories,
-            ingredients: args.ingredients,
-            directions: args.directions,
-            description: args.description ?? null, // AC2.3: omitted → null
-            notes: args.notes ?? null,
-            prepTime: args.prepTime ?? null,
-            cookTime: args.cookTime ?? null,
-            totalTime: args.totalTime ?? null,
-            servings: args.servings ?? null,
-            difficulty: args.difficulty ?? null,
-            rating: args.rating ?? 0, // AC2.3: omitted → 0 (Paprika's default)
-            created: formatTimestampWire(new Date()), // yyyy-MM-dd HH:mm:ss — Paprika 500s on ISO-8601 (#159)
-            imageUrl: "",
-            photo: null,
-            photoHash: null,
-            photoLarge: null,
-            photoUrl: null,
-            source: args.source ?? null,
-            sourceUrl: args.sourceUrl ?? null,
-            onFavorites: false,
-            inTrash: false,
-            isPinned: false,
-            onGroceryList: false,
-            scale: null,
-            nutritionalInfo: args.nutritionalInfo ?? null,
-            deleted: false, // a freshly created recipe is never a hard-delete tombstone (#125)
-          };
+      // Build the full Recipe object — all 28 fields required by the type.
+      // hash: "" is a placeholder — `client.saveRecipe` stamps the real
+      // content hash at the network boundary (stampContentHash, #167) and returns
+      // the hashed recipe, so the POST and the local commit are hash-consistent
+      // and the next sync won't re-fetch this recipe.
+      // Uppercase to match Paprika's native UUID format — the desktop client
+      // mints uppercase, and every other tool here already does (the server
+      // accepts either case but is case-preserving). See ADR-0007.
+      const uid = RecipeUidSchema.parse(crypto.randomUUID().toUpperCase());
+      const newRecipe: Recipe = {
+        uid,
+        hash: "",
+        name: args.name,
+        categories,
+        ingredients: args.ingredients,
+        directions: args.directions,
+        description: args.description ?? null, // AC2.3: omitted → null
+        notes: args.notes ?? null,
+        prepTime: args.prepTime ?? null,
+        cookTime: args.cookTime ?? null,
+        totalTime: args.totalTime ?? null,
+        servings: args.servings ?? null,
+        difficulty: args.difficulty ?? null,
+        rating: args.rating ?? 0, // AC2.3: omitted → 0 (Paprika's default)
+        created: formatTimestampWire(new Date()), // yyyy-MM-dd HH:mm:ss — Paprika 500s on ISO-8601 (#159)
+        imageUrl: "",
+        photo: null,
+        photoHash: null,
+        photoLarge: null,
+        photoUrl: null,
+        source: args.source ?? null,
+        sourceUrl: args.sourceUrl ?? null,
+        onFavorites: false,
+        inTrash: false,
+        isPinned: false,
+        onGroceryList: false,
+        scale: null,
+        nutritionalInfo: args.nutritionalInfo ?? null,
+        deleted: false, // a freshly created recipe is never a hard-delete tombstone (#125)
+      };
 
-          const saved = (await ctx.infra.client.saveRecipe(newRecipe)).match(
-            // AC2.5
-            (v) => v,
-            (e) => {
-              // AC2.8: store/cache not updated — commitRecipe not reached
-              log.error({ err: e, name: args.name }, "saveRecipe failed");
-              return textResult(`Failed to create recipe: ${e.message}`);
-            },
-          );
-          if ("content" in saved) return saved;
-          const commitErr = commitFailure("recipe", await ctx.writes.commitRecipe(saved), { selfHealing: false }); // AC2.5, AC2.6
-          if (commitErr) return commitErr;
-
-          const categoryNames = ctx.state.category.store.resolveNames(saved.categories);
-          const markdown = recipeToMarkdown(saved, categoryNames);
-          const prefix = warnings.length > 0 ? warnings.join("\n") + "\n\n" : "";
-          // The UID is rendered by recipeToMarkdown, so the caller can chain
-          // upload_recipe_photo / update_recipe without re-looking-up the new recipe.
-          return textResult(prefix + markdown);
+      const saved = (await ctx.infra.client.saveRecipe(newRecipe)).match(
+        // AC2.5
+        (v) => v,
+        (e) => {
+          // AC2.8: store/cache not updated — commitRecipe not reached
+          log.error({ err: e, name: args.name }, "saveRecipe failed");
+          return textResult(`Failed to create recipe: ${e.message}`);
         },
-        (guard) => guard,
       );
+      if ("content" in saved) return saved;
+      const commitErr = commitFailure("recipe", await ctx.writes.commitRecipe(saved), { selfHealing: false }); // AC2.5, AC2.6
+      if (commitErr) return commitErr;
+
+      const categoryNames = ctx.state.category.store.resolveNames(saved.categories);
+      const markdown = recipeToMarkdown(saved, categoryNames);
+      const prefix = warnings.length > 0 ? warnings.join("\n") + "\n\n" : "";
+      // The UID is rendered by recipeToMarkdown, so the caller can chain
+      // upload_recipe_photo / update_recipe without re-looking-up the new recipe.
+      return textResult(prefix + markdown);
     };
   },
 );

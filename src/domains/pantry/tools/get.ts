@@ -1,5 +1,3 @@
-import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
-
 import type { DomainCtx } from "../../../kernel/registry.js";
 import type { PantryState } from "../module.js";
 
@@ -34,25 +32,19 @@ export const getPantryItemTool = defineTool(
       }),
     },
   },
+  [pantryStartGuard],
   (ctx: DomainCtx<PantryState, "aisle">) => {
-    const log = ctx.infra.log.child({ component: "read_pantry_item" });
     return async (args) => {
-      log.info({ tool: "read_pantry_item", ...args.lookup }, "tool invoked");
-      return pantryStartGuard(ctx.state).match(
-        async (): Promise<CallToolResult> => {
-          const query = "uid" in args.lookup ? { uid: args.lookup.uid } : { text: args.lookup.ingredient };
-          const outcome = resolveLookup(query, {
-            get: (uid) => ctx.state.store.get(uid),
-            findByText: (text) => ctx.state.store.findByIngredient(text),
-          });
-          return formatLookupOutcome(outcome, {
-            entityNoun: "pantry item",
-            renderOne: (item) => pantryItemToMarkdown(item),
-            disambiguationLine: (item) => `- **${item.ingredient}** (uid: \`${item.uid}\`)`,
-          });
-        },
-        (guard) => guard,
-      );
+      const query = "uid" in args.lookup ? { uid: args.lookup.uid } : { text: args.lookup.ingredient };
+      const outcome = resolveLookup(query, {
+        get: (uid) => ctx.state.store.get(uid),
+        findByText: (text) => ctx.state.store.findByIngredient(text),
+      });
+      return formatLookupOutcome(outcome, {
+        entityNoun: "pantry item",
+        renderOne: (item) => pantryItemToMarkdown(item),
+        disambiguationLine: (item) => `- **${item.ingredient}** (uid: \`${item.uid}\`)`,
+      });
     };
   },
 );

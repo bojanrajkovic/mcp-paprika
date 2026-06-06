@@ -1,4 +1,3 @@
-import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 
 import type { DomainCtx } from "../../../kernel/registry.js";
@@ -30,6 +29,7 @@ export const createMenuTool = defineTool(
       notes: z.string().optional().default("").describe("Optional free-text notes for the menu"),
     },
   },
+  [menuStartGuard],
   (ctx: DomainCtx<MenuState, "recipe" | "meal-type", MenuWrites>) => {
     const log = ctx.infra.log.child({ component: "create_menu" });
     return async (args) => {
@@ -37,46 +37,40 @@ export const createMenuTool = defineTool(
       // handler is robust to direct invocation (tests) that bypasses the schema.
       const days = args.days ?? 1;
       const notes = args.notes ?? "";
-      log.info({ tool: "create_menu", name: args.name, days }, "tool invoked");
-      return menuStartGuard(ctx).match(
-        async (): Promise<CallToolResult> => {
-          // Duplicate-name guard: only reject on exact case-insensitive match.
-          // A starts-with or contains hit from findByName is NOT a duplicate.
-          const matches = ctx.state.menus.store.findByName(args.name);
-          const exactMatch = matches.find((m) => m.name.toLowerCase() === args.name.toLowerCase());
-          if (exactMatch !== undefined) {
-            return textResult(
-              `A menu named "${exactMatch.name}" already exists (UID: ${exactMatch.uid}). ` +
-                `Use update_menu to change it.`,
-            );
-          }
+      // Duplicate-name guard: only reject on exact case-insensitive match.
+      // A starts-with or contains hit from findByName is NOT a duplicate.
+      const matches = ctx.state.menus.store.findByName(args.name);
+      const exactMatch = matches.find((m) => m.name.toLowerCase() === args.name.toLowerCase());
+      if (exactMatch !== undefined) {
+        return textResult(
+          `A menu named "${exactMatch.name}" already exists (UID: ${exactMatch.uid}). ` +
+            `Use update_menu to change it.`,
+        );
+      }
 
-          // Next free orderFlag so the new menu sorts after existing ones in Paprika order.
-          const maxOrderFlag = ctx.state.menus.store.getAll().reduce((max, m) => Math.max(max, m.orderFlag), -1);
-          const uid = MenuUidSchema.parse(crypto.randomUUID().toUpperCase());
-          const newMenu: Menu = {
-            uid,
-            name: args.name,
-            days,
-            orderFlag: maxOrderFlag + 1,
-            notes,
-            deleted: false,
-          };
+      // Next free orderFlag so the new menu sorts after existing ones in Paprika order.
+      const maxOrderFlag = ctx.state.menus.store.getAll().reduce((max, m) => Math.max(max, m.orderFlag), -1);
+      const uid = MenuUidSchema.parse(crypto.randomUUID().toUpperCase());
+      const newMenu: Menu = {
+        uid,
+        name: args.name,
+        days,
+        orderFlag: maxOrderFlag + 1,
+        notes,
+        deleted: false,
+      };
 
-          return (await ctx.infra.client.saveMenus([newMenu])).match(
-            async (saved): Promise<CallToolResult> => {
-              const created = saved[0] ?? newMenu;
-              const commitErr = commitFailure("menu", await ctx.writes.commitMenu(created));
-              if (commitErr) return commitErr;
-              return textResult(menuToMarkdown(created, [], ctx.deps["meal-type"].getAll()));
-            },
-            async (e) => {
-              log.error({ err: e, name: args.name }, "saveMenus (create_menu) failed");
-              return textResult(`Failed to create menu: ${e.message}`);
-            },
-          );
+      return (await ctx.infra.client.saveMenus([newMenu])).match(
+        async (saved) => {
+          const created = saved[0] ?? newMenu;
+          const commitErr = commitFailure("menu", await ctx.writes.commitMenu(created));
+          if (commitErr) return commitErr;
+          return textResult(menuToMarkdown(created, [], ctx.deps["meal-type"].getAll()));
         },
-        (guard) => guard,
+        async (e) => {
+          log.error({ err: e, name: args.name }, "saveMenus (create_menu) failed");
+          return textResult(`Failed to create menu: ${e.message}`);
+        },
       );
     };
   },

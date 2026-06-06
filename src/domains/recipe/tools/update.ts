@@ -1,4 +1,3 @@
-import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 
 import type { DomainCtx } from "../../../kernel/registry.js";
@@ -52,54 +51,49 @@ export const updateRecipeTool = defineTool(
       "and trash_recipe / restore_recipe for those.",
     inputSchema: updateRecipeInputSchema,
   },
+  [recipeColdStartGuard],
   (ctx: DomainCtx<RecipeState, never, RecipeWrites>) => {
     const log = ctx.infra.log.child({ component: "update_recipe" });
     return async (args) => {
-      log.info({ tool: "update_recipe", uid: args.uid }, "tool invoked");
-      return recipeColdStartGuard(ctx.state).match(
-        async (): Promise<CallToolResult> => {
-          const existing = ctx.state.recipe.store.get(args.uid);
+      const existing = ctx.state.recipe.store.get(args.uid);
 
-          if (!existing) {
-            return textResult(`No recipe found with UID "${args.uid}" (it may not exist or was already deleted).`);
-          }
+      if (!existing) {
+        return textResult(`No recipe found with UID "${args.uid}" (it may not exist or was already deleted).`);
+      }
 
-          // Partial merge: conditional spread omits keys when value is undefined.
-          // Promoted fields (rating/categories/onFavorites/inTrash) are intentionally
-          // absent here — they leave the open-ended editor for their intent verbs.
-          const updated: Recipe = {
-            ...existing,
-            ...(args.name !== undefined && { name: args.name }),
-            ...(args.ingredients !== undefined && { ingredients: args.ingredients }),
-            ...(args.directions !== undefined && { directions: args.directions }),
-            ...(args.description !== undefined && { description: args.description }),
-            ...(args.notes !== undefined && { notes: args.notes }),
-            ...(args.servings !== undefined && { servings: args.servings }),
-            ...(args.prepTime !== undefined && { prepTime: args.prepTime }),
-            ...(args.cookTime !== undefined && { cookTime: args.cookTime }),
-            ...(args.totalTime !== undefined && { totalTime: args.totalTime }),
-            ...(args.source !== undefined && { source: args.source }),
-            ...(args.sourceUrl !== undefined && { sourceUrl: args.sourceUrl }),
-            ...(args.difficulty !== undefined && { difficulty: args.difficulty }),
-            ...(args.nutritionalInfo !== undefined && { nutritionalInfo: args.nutritionalInfo }),
-          };
+      // Partial merge: conditional spread omits keys when value is undefined.
+      // Promoted fields (rating/categories/onFavorites/inTrash) are intentionally
+      // absent here — they leave the open-ended editor for their intent verbs.
+      const updated: Recipe = {
+        ...existing,
+        ...(args.name !== undefined && { name: args.name }),
+        ...(args.ingredients !== undefined && { ingredients: args.ingredients }),
+        ...(args.directions !== undefined && { directions: args.directions }),
+        ...(args.description !== undefined && { description: args.description }),
+        ...(args.notes !== undefined && { notes: args.notes }),
+        ...(args.servings !== undefined && { servings: args.servings }),
+        ...(args.prepTime !== undefined && { prepTime: args.prepTime }),
+        ...(args.cookTime !== undefined && { cookTime: args.cookTime }),
+        ...(args.totalTime !== undefined && { totalTime: args.totalTime }),
+        ...(args.source !== undefined && { source: args.source }),
+        ...(args.sourceUrl !== undefined && { sourceUrl: args.sourceUrl }),
+        ...(args.difficulty !== undefined && { difficulty: args.difficulty }),
+        ...(args.nutritionalInfo !== undefined && { nutritionalInfo: args.nutritionalInfo }),
+      };
 
-          const saved = (await ctx.infra.client.saveRecipe(updated)).match(
-            (v) => v,
-            (e) => {
-              log.error({ err: e, uid: args.uid }, "saveRecipe failed");
-              return textResult(`Failed to update recipe: ${e.message}`);
-            },
-          );
-          if ("content" in saved) return saved;
-          const commitErr = commitFailure("recipe", await ctx.writes.commitRecipe(saved), { selfHealing: false });
-          if (commitErr) return commitErr;
-
-          const categoryNames = ctx.state.category.store.resolveNames(saved.categories);
-          return textResult(recipeToMarkdown(saved, categoryNames));
+      const saved = (await ctx.infra.client.saveRecipe(updated)).match(
+        (v) => v,
+        (e) => {
+          log.error({ err: e, uid: args.uid }, "saveRecipe failed");
+          return textResult(`Failed to update recipe: ${e.message}`);
         },
-        (guard) => guard,
       );
+      if ("content" in saved) return saved;
+      const commitErr = commitFailure("recipe", await ctx.writes.commitRecipe(saved), { selfHealing: false });
+      if (commitErr) return commitErr;
+
+      const categoryNames = ctx.state.category.store.resolveNames(saved.categories);
+      return textResult(recipeToMarkdown(saved, categoryNames));
     };
   },
 );

@@ -1,5 +1,3 @@
-import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
-
 import type { DomainCtx } from "../../../kernel/registry.js";
 import type { AisleState } from "../module.js";
 
@@ -21,26 +19,20 @@ export const listAislesTool = defineTool(
       "Includes the aisle UID needed for pantry and grocery item writes.",
     inputSchema: {},
   },
+  [aisleStartGuard],
   (ctx: DomainCtx<AisleState, never>) => {
-    const log = ctx.infra.log.child({ component: "list_aisles" });
     return async () => {
-      log.info({ tool: "list_aisles" }, "tool invoked");
-      return aisleStartGuard(ctx.state).match(
-        async (): Promise<CallToolResult> => {
-          const aisles = ctx.state.store.getAll().sort((a, b) => {
-            if (a.orderFlag !== b.orderFlag) return a.orderFlag - b.orderFlag;
-            return a.name.localeCompare(b.name);
-          });
-          if (aisles.length === 0) {
-            return textResult(
-              "No aisles found. Aisles are created in the Paprika app or automatically when you add a pantry item with a new aisle name.",
-            );
-          }
-          const lines = aisles.map((a) => `- **${a.name}** — \`${a.uid}\``);
-          return textResult(lines.join("\n"));
-        },
-        (guard) => guard,
-      );
+      const aisles = ctx.state.store.getAll().sort((a, b) => {
+        if (a.orderFlag !== b.orderFlag) return a.orderFlag - b.orderFlag;
+        return a.name.localeCompare(b.name);
+      });
+      if (aisles.length === 0) {
+        return textResult(
+          "No aisles found. Aisles are created in the Paprika app or automatically when you add a pantry item with a new aisle name.",
+        );
+      }
+      const lines = aisles.map((a) => `- **${a.name}** — \`${a.uid}\``);
+      return textResult(lines.join("\n"));
     };
   },
 );

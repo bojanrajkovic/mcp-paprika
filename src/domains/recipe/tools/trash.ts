@@ -25,37 +25,32 @@ export const trashRecipeTool = defineTool(
       uid: RecipeUidSchema.describe("Recipe UID to delete"),
     },
   },
+  [recipeColdStartGuard],
   (ctx: DomainCtx<RecipeState, never, RecipeWrites>) => {
     const log = ctx.infra.log.child({ component: "trash_recipe" });
     return async (args) => {
-      log.info({ tool: "trash_recipe", uid: args.uid }, "tool invoked");
-      return recipeColdStartGuard(ctx.state).match(
-        async (): Promise<CallToolResult> => {
-          const recipe = ctx.state.recipe.store.get(args.uid);
+      const recipe = ctx.state.recipe.store.get(args.uid);
 
-          if (!recipe) {
-            return textResult(`No recipe found with UID "${args.uid}" (it may not exist or was already deleted).`);
-          }
+      if (!recipe) {
+        return textResult(`No recipe found with UID "${args.uid}" (it may not exist or was already deleted).`);
+      }
 
-          if (recipe.inTrash) {
-            return textResult(`Recipe "${recipe.name}" is already in the trash.`);
-          }
+      if (recipe.inTrash) {
+        return textResult(`Recipe "${recipe.name}" is already in the trash.`);
+      }
 
-          const trashed = { ...recipe, inTrash: true };
+      const trashed = { ...recipe, inTrash: true };
 
-          return (await ctx.infra.client.saveRecipe(trashed)).match(
-            async (saved): Promise<CallToolResult> => {
-              const commitErr = commitFailure("recipe", await ctx.writes.commitRecipe(saved), { selfHealing: false });
-              if (commitErr) return commitErr;
-              return textResult(`Recipe "${recipe.name}" has been moved to the trash.`);
-            },
-            async (e) => {
-              log.error({ err: e, uid: args.uid }, "saveRecipe failed");
-              return textResult(`Failed to delete recipe: ${e.message}`);
-            },
-          );
+      return (await ctx.infra.client.saveRecipe(trashed)).match(
+        async (saved): Promise<CallToolResult> => {
+          const commitErr = commitFailure("recipe", await ctx.writes.commitRecipe(saved), { selfHealing: false });
+          if (commitErr) return commitErr;
+          return textResult(`Recipe "${recipe.name}" has been moved to the trash.`);
         },
-        (guard) => guard,
+        async (e) => {
+          log.error({ err: e, uid: args.uid }, "saveRecipe failed");
+          return textResult(`Failed to delete recipe: ${e.message}`);
+        },
       );
     };
   },

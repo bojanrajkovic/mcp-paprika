@@ -1,5 +1,3 @@
-import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
-
 import type { DomainCtx } from "../../../kernel/registry.js";
 import type { RecipeState } from "../module.js";
 
@@ -33,25 +31,19 @@ export const readRecipeTool = defineTool(
       }),
     },
   },
+  [recipeColdStartGuard],
   (ctx: DomainCtx<RecipeState, never>) => {
-    const log = ctx.infra.log.child({ component: "read_recipe" });
     return async (args) => {
-      log.info({ tool: "read_recipe", ...args.lookup }, "tool invoked");
-      return recipeColdStartGuard(ctx.state).match(
-        async (): Promise<CallToolResult> => {
-          const query = "uid" in args.lookup ? { uid: args.lookup.uid } : { text: args.lookup.title };
-          const outcome = resolveLookup(query, {
-            get: (uid) => ctx.state.recipe.store.get(uid),
-            findByText: (text) => ctx.state.recipe.store.findByName(text),
-          });
-          return formatLookupOutcome(outcome, {
-            entityNoun: "recipe",
-            renderOne: (recipe) => recipeToMarkdown(recipe, ctx.state.category.store.resolveNames(recipe.categories)),
-            disambiguationLine: (recipe) => `- ${recipe.name} (UID: ${recipe.uid})`,
-          });
-        },
-        (guard) => guard,
-      );
+      const query = "uid" in args.lookup ? { uid: args.lookup.uid } : { text: args.lookup.title };
+      const outcome = resolveLookup(query, {
+        get: (uid) => ctx.state.recipe.store.get(uid),
+        findByText: (text) => ctx.state.recipe.store.findByName(text),
+      });
+      return formatLookupOutcome(outcome, {
+        entityNoun: "recipe",
+        renderOne: (recipe) => recipeToMarkdown(recipe, ctx.state.category.store.resolveNames(recipe.categories)),
+        disambiguationLine: (recipe) => `- ${recipe.name} (UID: ${recipe.uid})`,
+      });
     };
   },
 );

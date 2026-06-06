@@ -1,4 +1,3 @@
-import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 
 import type { RecipeUid } from "../../../ids.js";
@@ -84,207 +83,197 @@ export const addMenuItemsTool = defineTool(
       "can fix every problem in one pass.",
     inputSchema: addMenuItemsInputSchema.shape,
   },
+  [menuStartGuard],
   (ctx: DomainCtx<MenuState, "recipe" | "meal-type", MenuWrites>) => {
     const log = ctx.infra.log.child({ component: "add_menu_items" });
     return async (args) => {
-      log.info({ tool: "add_menu_items", ...args.menu, count: args.items.length }, "tool invoked");
-      return menuStartGuard(ctx).match(
-        async (): Promise<CallToolResult> => {
-          // Resolve the parent menu (single). Misses and ambiguity short-circuit
-          // with the standard lookup wording, no network touched.
-          const query = "uid" in args.menu ? { uid: args.menu.uid } : { text: args.menu.name };
-          const outcome = resolveLookup(query, {
-            get: (uid) => ctx.state.menus.store.get(uid),
-            findByText: (text) => ctx.state.menus.store.findByName(text),
-          });
+      // Resolve the parent menu (single). Misses and ambiguity short-circuit
+      // with the standard lookup wording, no network touched.
+      const query = "uid" in args.menu ? { uid: args.menu.uid } : { text: args.menu.name };
+      const outcome = resolveLookup(query, {
+        get: (uid) => ctx.state.menus.store.get(uid),
+        findByText: (text) => ctx.state.menus.store.findByName(text),
+      });
 
-          if (outcome.kind === "uid_miss") {
-            return textResult(`No menu found with UID "${outcome.uid}" (it may not exist or was already deleted).`);
+      if (outcome.kind === "uid_miss") {
+        return textResult(`No menu found with UID "${outcome.uid}" (it may not exist or was already deleted).`);
+      }
+      if (outcome.kind === "text_none") {
+        return textResult(`No menus found matching "${outcome.text}".`);
+      }
+      if (outcome.kind === "text_many") {
+        const list = outcome.matches.map((menu) => `- **${menu.name}** (uid: \`${menu.uid}\`)`).join("\n");
+        return textResult(`Multiple menus match "${outcome.text}":\n${list}\n\nPlease re-invoke with a specific uid.`);
+      }
+
+      const menu = outcome.entity;
+
+      // ----- Stage 1: per-index validation (collect ALL errors, not first-only) -----
+      type ResolvedItem = {
+        readonly day: number;
+        // Exactly one is set: the type resolved in validation, or a {name} to
+        // auto-create in the build pass (deferred so a rejected batch makes no orphan type).
+        readonly resolvedType: MealType | null;
+        readonly pendingTypeName: string | null;
+        readonly resolvedName: string;
+        readonly recipeUid: RecipeUid | null;
+      };
+
+      const errors: Array<string> = [];
+      const resolved: Array<ResolvedItem> = [];
+
+      for (let i = 0; i < args.items.length; i++) {
+        const item = args.items[i]!;
+
+        // Recipe-linked XOR freeform — the structural union guarantees exactly
+        // one shape. Recipe items denormalize the display name from the local
+        // store (matching plan_meals' recipe-link contract); freeform items keep
+        // the supplied name and store recipeUid: null.
+        let recipeUid: RecipeUid | null;
+        let resolvedName: string;
+        if ("recipe_uid" in item) {
+          const recipe = ctx.deps.recipe.get(item.recipe_uid);
+          if (recipe === undefined) {
+            errors.push(
+              `Item ${i.toString()}: recipe_uid "${item.recipe_uid}" is not known to the local recipe store; ` +
+                `wait for the next sync and retry, or supply a freeform item (omit recipe_uid, supply name).`,
+            );
+            continue;
           }
-          if (outcome.kind === "text_none") {
-            return textResult(`No menus found matching "${outcome.text}".`);
-          }
-          if (outcome.kind === "text_many") {
-            const list = outcome.matches.map((menu) => `- **${menu.name}** (uid: \`${menu.uid}\`)`).join("\n");
+          recipeUid = item.recipe_uid;
+          resolvedName = recipe.name;
+        } else {
+          recipeUid = null;
+          resolvedName = item.name;
+        }
+
+        // Meal type resolution via the shared meal-type contract (same DU as plan_meals).
+        // An unknown {name} is deferred and auto-created in the build pass below.
+        const typeResult = ctx.deps["meal-type"].resolveSpec(item.type);
+        let resolvedType: MealType | null = null;
+        let pendingTypeName: string | null = null;
+        if (typeResult.ok) {
+          resolvedType = typeResult.resolved;
+        } else if (typeResult.reason === "unknown_name") {
+          pendingTypeName = typeResult.name;
+        } else if (typeResult.reason === "unknown_uid") {
+          errors.push(`Item ${i.toString()}: unknown meal type UID "${typeResult.uid}".`);
+          continue;
+        } else {
+          errors.push(
+            `Item ${i.toString()}: no built-in meal type found with index ${typeResult.index.toString()} ` +
+              `(expected 0=Breakfast, 1=Lunch, 2=Dinner, 3=Snacks).`,
+          );
+          continue;
+        }
+
+        resolved.push({
+          day: item.day,
+          resolvedType,
+          pendingTypeName,
+          resolvedName,
+          recipeUid,
+        });
+      }
+
+      if (errors.length > 0) {
+        const header =
+          errors.length === 1 ? "Could not add menu item:" : `Could not add ${errors.length.toString()} menu items:`;
+        return textResult(`${header}\n\n${errors.join("\n")}`);
+      }
+
+      // ----- Stage 2: auto-expand the menu span when an item overflows it -----
+      // Compute the batch's highest day; if it exceeds the menu's current span,
+      // grow the menu (days = maxDay) and persist that FIRST so the new items
+      // never reference days outside a saved menu. This runs BEFORE meal-type
+      // auto-create below, so a failed expand can't leave an orphan type behind.
+      const maxDay = resolved.reduce((max, r) => Math.max(max, r.day), 0);
+      let menuForRender: Menu = menu;
+      let extendedTo: number | null = null;
+      if (maxDay > menu.days) {
+        const extended: Menu = { ...menu, days: maxDay };
+        const saved = (await ctx.infra.client.saveMenus([extended])).match(
+          (v) => v,
+          (e) => {
+            log.error({ err: e, uid: menu.uid }, "saveMenus (add_menu_items auto-expand) failed");
             return textResult(
-              `Multiple menus match "${outcome.text}":\n${list}\n\nPlease re-invoke with a specific uid.`,
+              `Failed to extend menu "${menu.name}" to ${maxDay.toString()} day(s): ${e.message}. ` +
+                `No items were added.`,
             );
-          }
+          },
+        );
+        if ("content" in saved) return saved;
+        const persisted = saved[0] ?? extended;
+        const commitErr = commitFailure("menu", await ctx.writes.commitMenu(persisted));
+        if (commitErr) return commitErr;
+        menuForRender = persisted;
+        extendedTo = maxDay;
+      }
 
-          const menu = outcome.entity;
+      // ----- Stage 3: auto-create any deferred {name} meal types (pantry-style) -----
+      // Everything above (validation + the menu expand) has succeeded, so creating now
+      // leaves no orphan type on a rejected batch. Cache by lowercase name so a name
+      // repeated across items is created once.
+      const createdTypesByName = new Map<string, MealType>();
+      for (const r of resolved) {
+        if (r.pendingTypeName === null) continue;
+        const key = r.pendingTypeName.toLowerCase();
+        if (createdTypesByName.has(key)) continue;
+        const created = (await ctx.deps["meal-type"].ensureMealType(r.pendingTypeName)).match(
+          (mt) => mt,
+          (message) => message,
+        );
+        if (typeof created === "string") {
+          log.error({ name: r.pendingTypeName, message: created }, "ensureMealType failed");
+          return textResult(created);
+        }
+        createdTypesByName.set(key, created);
+      }
 
-          // ----- Stage 1: per-index validation (collect ALL errors, not first-only) -----
-          type ResolvedItem = {
-            readonly day: number;
-            // Exactly one is set: the type resolved in validation, or a {name} to
-            // auto-create in the build pass (deferred so a rejected batch makes no orphan type).
-            readonly resolvedType: MealType | null;
-            readonly pendingTypeName: string | null;
-            readonly resolvedName: string;
-            readonly recipeUid: RecipeUid | null;
-          };
+      // ----- Stage 4: assign menu-wide sequential orderFlag -----
+      // Paprika numbers menuitem order_flag across the WHOLE menu, not per day:
+      // the wire capture shows a multi-day menu's day-1 item at order_flag 0 and
+      // its day-3 item at order_flag 1 (docs/wire-captures/menus.har.json). Seed
+      // from the current menu-wide max and hand out a single increasing counter
+      // across the batch in submission order, regardless of day.
+      const liveItems = ctx.state.items.store.getByMenuUid(menu.uid);
+      const seedFlag = liveItems.reduce((max, item) => Math.max(max, item.orderFlag), -1) + 1;
 
-          const errors: Array<string> = [];
-          const resolved: Array<ResolvedItem> = [];
+      const builtItems: Array<MenuItem> = resolved.map((r, idx) => ({
+        uid: MenuItemUidSchema.parse(crypto.randomUUID().toUpperCase()),
+        menuUid: menu.uid,
+        recipeUid: r.recipeUid,
+        name: r.resolvedName,
+        day: r.day,
+        // Either the type resolved during validation, or the one just auto-created.
+        typeUid: (r.resolvedType ?? createdTypesByName.get(r.pendingTypeName!.toLowerCase())!).uid,
+        orderFlag: seedFlag + idx,
+        deleted: false,
+      }));
 
-          for (let i = 0; i < args.items.length; i++) {
-            const item = args.items[i]!;
-
-            // Recipe-linked XOR freeform — the structural union guarantees exactly
-            // one shape. Recipe items denormalize the display name from the local
-            // store (matching plan_meals' recipe-link contract); freeform items keep
-            // the supplied name and store recipeUid: null.
-            let recipeUid: RecipeUid | null;
-            let resolvedName: string;
-            if ("recipe_uid" in item) {
-              const recipe = ctx.deps.recipe.get(item.recipe_uid);
-              if (recipe === undefined) {
-                errors.push(
-                  `Item ${i.toString()}: recipe_uid "${item.recipe_uid}" is not known to the local recipe store; ` +
-                    `wait for the next sync and retry, or supply a freeform item (omit recipe_uid, supply name).`,
-                );
-                continue;
-              }
-              recipeUid = item.recipe_uid;
-              resolvedName = recipe.name;
-            } else {
-              recipeUid = null;
-              resolvedName = item.name;
-            }
-
-            // Meal type resolution via the shared meal-type contract (same DU as plan_meals).
-            // An unknown {name} is deferred and auto-created in the build pass below.
-            const typeResult = ctx.deps["meal-type"].resolveSpec(item.type);
-            let resolvedType: MealType | null = null;
-            let pendingTypeName: string | null = null;
-            if (typeResult.ok) {
-              resolvedType = typeResult.resolved;
-            } else if (typeResult.reason === "unknown_name") {
-              pendingTypeName = typeResult.name;
-            } else if (typeResult.reason === "unknown_uid") {
-              errors.push(`Item ${i.toString()}: unknown meal type UID "${typeResult.uid}".`);
-              continue;
-            } else {
-              errors.push(
-                `Item ${i.toString()}: no built-in meal type found with index ${typeResult.index.toString()} ` +
-                  `(expected 0=Breakfast, 1=Lunch, 2=Dinner, 3=Snacks).`,
-              );
-              continue;
-            }
-
-            resolved.push({
-              day: item.day,
-              resolvedType,
-              pendingTypeName,
-              resolvedName,
-              recipeUid,
-            });
-          }
-
-          if (errors.length > 0) {
-            const header =
-              errors.length === 1
-                ? "Could not add menu item:"
-                : `Could not add ${errors.length.toString()} menu items:`;
-            return textResult(`${header}\n\n${errors.join("\n")}`);
-          }
-
-          // ----- Stage 2: auto-expand the menu span when an item overflows it -----
-          // Compute the batch's highest day; if it exceeds the menu's current span,
-          // grow the menu (days = maxDay) and persist that FIRST so the new items
-          // never reference days outside a saved menu. This runs BEFORE meal-type
-          // auto-create below, so a failed expand can't leave an orphan type behind.
-          const maxDay = resolved.reduce((max, r) => Math.max(max, r.day), 0);
-          let menuForRender: Menu = menu;
-          let extendedTo: number | null = null;
-          if (maxDay > menu.days) {
-            const extended: Menu = { ...menu, days: maxDay };
-            const saved = (await ctx.infra.client.saveMenus([extended])).match(
-              (v) => v,
-              (e) => {
-                log.error({ err: e, uid: menu.uid }, "saveMenus (add_menu_items auto-expand) failed");
-                return textResult(
-                  `Failed to extend menu "${menu.name}" to ${maxDay.toString()} day(s): ${e.message}. ` +
-                    `No items were added.`,
-                );
-              },
-            );
-            if ("content" in saved) return saved;
-            const persisted = saved[0] ?? extended;
-            const commitErr = commitFailure("menu", await ctx.writes.commitMenu(persisted));
-            if (commitErr) return commitErr;
-            menuForRender = persisted;
-            extendedTo = maxDay;
-          }
-
-          // ----- Stage 3: auto-create any deferred {name} meal types (pantry-style) -----
-          // Everything above (validation + the menu expand) has succeeded, so creating now
-          // leaves no orphan type on a rejected batch. Cache by lowercase name so a name
-          // repeated across items is created once.
-          const createdTypesByName = new Map<string, MealType>();
-          for (const r of resolved) {
-            if (r.pendingTypeName === null) continue;
-            const key = r.pendingTypeName.toLowerCase();
-            if (createdTypesByName.has(key)) continue;
-            const created = (await ctx.deps["meal-type"].ensureMealType(r.pendingTypeName)).match(
-              (mt) => mt,
-              (message) => message,
-            );
-            if (typeof created === "string") {
-              log.error({ name: r.pendingTypeName, message: created }, "ensureMealType failed");
-              return textResult(created);
-            }
-            createdTypesByName.set(key, created);
-          }
-
-          // ----- Stage 4: assign menu-wide sequential orderFlag -----
-          // Paprika numbers menuitem order_flag across the WHOLE menu, not per day:
-          // the wire capture shows a multi-day menu's day-1 item at order_flag 0 and
-          // its day-3 item at order_flag 1 (docs/wire-captures/menus.har.json). Seed
-          // from the current menu-wide max and hand out a single increasing counter
-          // across the batch in submission order, regardless of day.
-          const liveItems = ctx.state.items.store.getByMenuUid(menu.uid);
-          const seedFlag = liveItems.reduce((max, item) => Math.max(max, item.orderFlag), -1) + 1;
-
-          const builtItems: Array<MenuItem> = resolved.map((r, idx) => ({
-            uid: MenuItemUidSchema.parse(crypto.randomUUID().toUpperCase()),
-            menuUid: menu.uid,
-            recipeUid: r.recipeUid,
-            name: r.resolvedName,
-            day: r.day,
-            // Either the type resolved during validation, or the one just auto-created.
-            typeUid: (r.resolvedType ?? createdTypesByName.get(r.pendingTypeName!.toLowerCase())!).uid,
-            orderFlag: seedFlag + idx,
-            deleted: false,
-          }));
-
-          // ----- Stage 5: single batch POST + commit -----
-          const savedItems = (await ctx.infra.client.saveMenuItems(builtItems)).match(
-            (items) => items,
-            (e) => {
-              log.error({ err: e, uid: menu.uid, count: builtItems.length }, "saveMenuItems failed");
-              return textResult(`Failed to add menu items: ${e.message}`);
-            },
-          );
-          if ("content" in savedItems) return savedItems;
-          const commitErr = commitFailure("menu", await ctx.writes.commitMenuItemsBatch(savedItems));
-          if (commitErr) return commitErr;
-
-          const extendNote =
-            extendedTo !== null ? `Extended menu "${menu.name}" to ${extendedTo.toString()} day(s). ` : "";
-          const header = `${extendNote}Added ${savedItems.length.toString()} item(s) to menu "${menu.name}".`;
-          const card = menuToMarkdown(
-            menuForRender,
-            ctx.state.items.store.getByMenuUid(menu.uid),
-            ctx.deps["meal-type"].getAll(),
-            {
-              includeItemUids: true,
-            },
-          );
-          return textResult(`${header}\n\n${card}`);
+      // ----- Stage 5: single batch POST + commit -----
+      const savedItems = (await ctx.infra.client.saveMenuItems(builtItems)).match(
+        (items) => items,
+        (e) => {
+          log.error({ err: e, uid: menu.uid, count: builtItems.length }, "saveMenuItems failed");
+          return textResult(`Failed to add menu items: ${e.message}`);
         },
-        (guard) => guard,
       );
+      if ("content" in savedItems) return savedItems;
+      const commitErr = commitFailure("menu", await ctx.writes.commitMenuItemsBatch(savedItems));
+      if (commitErr) return commitErr;
+
+      const extendNote = extendedTo !== null ? `Extended menu "${menu.name}" to ${extendedTo.toString()} day(s). ` : "";
+      const header = `${extendNote}Added ${savedItems.length.toString()} item(s) to menu "${menu.name}".`;
+      const card = menuToMarkdown(
+        menuForRender,
+        ctx.state.items.store.getByMenuUid(menu.uid),
+        ctx.deps["meal-type"].getAll(),
+        {
+          includeItemUids: true,
+        },
+      );
+      return textResult(`${header}\n\n${card}`);
     };
   },
 );

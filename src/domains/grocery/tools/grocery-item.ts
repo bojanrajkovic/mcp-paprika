@@ -1,4 +1,3 @@
-import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 
 import type { AisleUid } from "../../../ids.js";
@@ -44,141 +43,135 @@ export const addGroceryItemsTool = defineTool(
       items: z.array(itemInputSchema).min(1).describe("Array of items to add (1 or more)"),
     },
   },
+  [groceryStartGuard],
   (ctx: DomainCtx<GroceryState, "aisle" | "pantry", GroceryWrites>) => {
     const log = ctx.infra.log.child({ component: "add_grocery_items" });
     return async (args) => {
-      log.info({ tool: "add_grocery_items", listUid: args.listUid, count: args.items.length }, "tool invoked");
-      return groceryStartGuard(ctx.state).match(
-        async (): Promise<CallToolResult> => {
-          // Validate listUid (already brand-typed by the input schema)
-          const list = ctx.state.lists.store.get(args.listUid);
-          if (list === undefined) {
-            return textResult(`Grocery list with UID "${args.listUid}" not found.`);
-          }
+      // Validate listUid (already brand-typed by the input schema)
+      const list = ctx.state.lists.store.get(args.listUid);
+      if (list === undefined) {
+        return textResult(`Grocery list with UID "${args.listUid}" not found.`);
+      }
 
-          // Validate all items (all-or-nothing before any API calls)
-          for (const item of args.items) {
-            if (item.ingredient.trim() === "") {
-              return textResult(`Invalid item: ingredient must not be empty.`);
-            }
-          }
+      // Validate all items (all-or-nothing before any API calls)
+      for (const item of args.items) {
+        if (item.ingredient.trim() === "") {
+          return textResult(`Invalid item: ingredient must not be empty.`);
+        }
+      }
 
-          // Build all GroceryItem objects, resolving aisles first
-          const builtItems: Array<GroceryItem> = [];
-          const batchAisleCache = new Map<string, { aisle: string; aisleUid: AisleUid }>();
-          const catalogUpdated = new Set<string>();
-          for (const item of args.items) {
-            const ingredient = item.ingredient;
-            const ingredientKey = ingredient.toLowerCase();
-            const quantity = item.quantity ?? "";
-            const instruction = item.instruction ?? "";
-            const uid = GroceryItemUidSchema.parse(crypto.randomUUID().toUpperCase());
-            const name = quantity !== "" ? `${quantity} ${ingredient}` : ingredient;
+      // Build all GroceryItem objects, resolving aisles first
+      const builtItems: Array<GroceryItem> = [];
+      const batchAisleCache = new Map<string, { aisle: string; aisleUid: AisleUid }>();
+      const catalogUpdated = new Set<string>();
+      for (const item of args.items) {
+        const ingredient = item.ingredient;
+        const ingredientKey = ingredient.toLowerCase();
+        const quantity = item.quantity ?? "";
+        const instruction = item.instruction ?? "";
+        const uid = GroceryItemUidSchema.parse(crypto.randomUUID().toUpperCase());
+        const name = quantity !== "" ? `${quantity} ${ingredient}` : ingredient;
 
-            let aisle: string;
-            let aisleUid: AisleUid;
+        let aisle: string;
+        let aisleUid: AisleUid;
 
-            if (item.aisle !== undefined) {
-              const resolved = (await ctx.deps.aisle.ensureAisle(item.aisle)).match(
-                (v) => v,
-                (message) => textResult(message),
-              );
-              if ("content" in resolved) return resolved;
-              aisle = resolved.aisle;
-              aisleUid = resolved.aisleUid;
-              batchAisleCache.set(ingredientKey, { aisle, aisleUid });
-
-              if (!catalogUpdated.has(ingredientKey)) {
-                catalogUpdated.add(ingredientKey);
-                // Update (or create) the ingredient's catalog memory so the chosen
-                // aisle sticks for future adds. The two branches differ only in the
-                // entry they build; the save/commit tail is shared.
-                const catalogEntry = ctx.state.ingredients.store.lookupByName(ingredient);
-                const entry =
-                  catalogEntry !== undefined
-                    ? { ...catalogEntry, aisleUid }
-                    : {
-                        uid: GroceryIngredientUidSchema.parse(crypto.randomUUID().toUpperCase()),
-                        name: ingredient,
-                        aisleUid,
-                        deleted: false,
-                      };
-                const catalogErr = (await ctx.infra.client.saveGroceryIngredient(entry)).match(
-                  () => undefined,
-                  (e) => {
-                    log.error({ err: e, listUid: args.listUid }, "saveGroceryIngredient failed");
-                    return textResult(`Failed to add grocery items: ${e.message}`);
-                  },
-                );
-                if (catalogErr) return catalogErr;
-                ctx.state.ingredients.store.set(entry);
-                // The ingredient-catalog cache put is BEST-EFFORT: the save above
-                // already landed the entry server-side, and the catalog is replace-all
-                // synced, so a failed local put self-heals on the next cycle — warn
-                // rather than failing an add whose grocery items will still commit.
-                (await ctx.state.ingredients.cache.put(entry)).match(
-                  () => undefined,
-                  (e) => {
-                    log.warn({ err: e, ingredient }, "ingredient catalog cache put failed; next sync re-syncs it");
-                  },
-                );
-              }
-            } else {
-              const batchHit = batchAisleCache.get(ingredientKey);
-              if (batchHit !== undefined) {
-                aisle = batchHit.aisle;
-                aisleUid = batchHit.aisleUid;
-              } else {
-                const catalogEntry = ctx.state.ingredients.store.lookupByName(ingredient);
-                const resolvedAisle =
-                  catalogEntry !== undefined ? ctx.deps.aisle.get(catalogEntry.aisleUid) : undefined;
-                // No catalog memory (or it points at a now-missing aisle): place the
-                // item in the built-in "Miscellaneous" aisle, matching Paprika.app,
-                // which never leaves an item aisle-less. Fall back to "" only when the
-                // catalog has no Miscellaneous aisle (user-deleted, or a non-English
-                // catalog) — never auto-create it; it's a Paprika built-in.
-                const placement = resolvedAisle ?? ctx.deps.aisle.resolveByName("Miscellaneous");
-                aisle = placement?.name ?? "";
-                aisleUid = placement?.uid ?? NO_AISLE_UID;
-              }
-            }
-
-            const built: GroceryItem = {
-              uid,
-              name,
-              ingredient,
-              quantity,
-              aisle,
-              aisleUid,
-              listUid: args.listUid,
-              purchased: false,
-              deleted: false,
-              orderFlag: 0,
-              instruction,
-              recipe: null,
-              separate: false,
-            };
-            builtItems.push(built);
-          }
-
-          // Single batch POST for all items
-          const savedItems = (await ctx.infra.client.saveGroceryItems(builtItems)).match(
-            (items) => items,
-            (e) => {
-              log.error({ err: e, listUid: args.listUid }, "saveGroceryItems failed");
-              return textResult(`Failed to add grocery items: ${e.message}`);
-            },
+        if (item.aisle !== undefined) {
+          const resolved = (await ctx.deps.aisle.ensureAisle(item.aisle)).match(
+            (v) => v,
+            (message) => textResult(message),
           );
-          if ("content" in savedItems) return savedItems;
-          const commitErr = commitFailure("grocery list", await ctx.writes.commitGroceryItemsBatch(savedItems));
-          if (commitErr) return commitErr;
+          if ("content" in resolved) return resolved;
+          aisle = resolved.aisle;
+          aisleUid = resolved.aisleUid;
+          batchAisleCache.set(ingredientKey, { aisle, aisleUid });
 
-          const count = savedItems.length;
-          const rendered = savedItems.map((item) => groceryItemToMarkdown(item)).join("\n\n---\n\n");
-          return textResult(`Added ${count.toString()} item(s) to the grocery list.\n\n${rendered}`);
+          if (!catalogUpdated.has(ingredientKey)) {
+            catalogUpdated.add(ingredientKey);
+            // Update (or create) the ingredient's catalog memory so the chosen
+            // aisle sticks for future adds. The two branches differ only in the
+            // entry they build; the save/commit tail is shared.
+            const catalogEntry = ctx.state.ingredients.store.lookupByName(ingredient);
+            const entry =
+              catalogEntry !== undefined
+                ? { ...catalogEntry, aisleUid }
+                : {
+                    uid: GroceryIngredientUidSchema.parse(crypto.randomUUID().toUpperCase()),
+                    name: ingredient,
+                    aisleUid,
+                    deleted: false,
+                  };
+            const catalogErr = (await ctx.infra.client.saveGroceryIngredient(entry)).match(
+              () => undefined,
+              (e) => {
+                log.error({ err: e, listUid: args.listUid }, "saveGroceryIngredient failed");
+                return textResult(`Failed to add grocery items: ${e.message}`);
+              },
+            );
+            if (catalogErr) return catalogErr;
+            ctx.state.ingredients.store.set(entry);
+            // The ingredient-catalog cache put is BEST-EFFORT: the save above
+            // already landed the entry server-side, and the catalog is replace-all
+            // synced, so a failed local put self-heals on the next cycle — warn
+            // rather than failing an add whose grocery items will still commit.
+            (await ctx.state.ingredients.cache.put(entry)).match(
+              () => undefined,
+              (e) => {
+                log.warn({ err: e, ingredient }, "ingredient catalog cache put failed; next sync re-syncs it");
+              },
+            );
+          }
+        } else {
+          const batchHit = batchAisleCache.get(ingredientKey);
+          if (batchHit !== undefined) {
+            aisle = batchHit.aisle;
+            aisleUid = batchHit.aisleUid;
+          } else {
+            const catalogEntry = ctx.state.ingredients.store.lookupByName(ingredient);
+            const resolvedAisle = catalogEntry !== undefined ? ctx.deps.aisle.get(catalogEntry.aisleUid) : undefined;
+            // No catalog memory (or it points at a now-missing aisle): place the
+            // item in the built-in "Miscellaneous" aisle, matching Paprika.app,
+            // which never leaves an item aisle-less. Fall back to "" only when the
+            // catalog has no Miscellaneous aisle (user-deleted, or a non-English
+            // catalog) — never auto-create it; it's a Paprika built-in.
+            const placement = resolvedAisle ?? ctx.deps.aisle.resolveByName("Miscellaneous");
+            aisle = placement?.name ?? "";
+            aisleUid = placement?.uid ?? NO_AISLE_UID;
+          }
+        }
+
+        const built: GroceryItem = {
+          uid,
+          name,
+          ingredient,
+          quantity,
+          aisle,
+          aisleUid,
+          listUid: args.listUid,
+          purchased: false,
+          deleted: false,
+          orderFlag: 0,
+          instruction,
+          recipe: null,
+          separate: false,
+        };
+        builtItems.push(built);
+      }
+
+      // Single batch POST for all items
+      const savedItems = (await ctx.infra.client.saveGroceryItems(builtItems)).match(
+        (items) => items,
+        (e) => {
+          log.error({ err: e, listUid: args.listUid }, "saveGroceryItems failed");
+          return textResult(`Failed to add grocery items: ${e.message}`);
         },
-        (guard) => guard,
       );
+      if ("content" in savedItems) return savedItems;
+      const commitErr = commitFailure("grocery list", await ctx.writes.commitGroceryItemsBatch(savedItems));
+      if (commitErr) return commitErr;
+
+      const count = savedItems.length;
+      const rendered = savedItems.map((item) => groceryItemToMarkdown(item)).join("\n\n---\n\n");
+      return textResult(`Added ${count.toString()} item(s) to the grocery list.\n\n${rendered}`);
     };
   },
 );
@@ -209,55 +202,48 @@ export const updateGroceryItemTool = defineTool(
       "omitted fields retain their current values. To check an item off, use mark_grocery_item_purchased.",
     inputSchema: updateGroceryItemInputSchema,
   },
+  [groceryStartGuard],
   (ctx: DomainCtx<GroceryState, "aisle" | "pantry", GroceryWrites>) => {
     const log = ctx.infra.log.child({ component: "update_grocery_item" });
     return async (args) => {
-      log.info({ tool: "update_grocery_item", uid: args.uid }, "tool invoked");
-      return groceryStartGuard(ctx.state).match(
-        async (): Promise<CallToolResult> => {
-          const existing = ctx.state.items.store.get(args.uid);
-          if (existing === undefined) {
-            return textResult(
-              `No grocery item found with UID "${args.uid}" (it may not exist or was already deleted).`,
-            );
-          }
+      const existing = ctx.state.items.store.get(args.uid);
+      if (existing === undefined) {
+        return textResult(`No grocery item found with UID "${args.uid}" (it may not exist or was already deleted).`);
+      }
 
-          const aisleUpdate =
-            args.aisle !== undefined
-              ? (await ctx.deps.aisle.ensureAisle(args.aisle)).match(
-                  (v) => v,
-                  (message) => textResult(message),
-                )
-              : undefined;
-          if (aisleUpdate !== undefined && "content" in aisleUpdate) return aisleUpdate;
+      const aisleUpdate =
+        args.aisle !== undefined
+          ? (await ctx.deps.aisle.ensureAisle(args.aisle)).match(
+              (v) => v,
+              (message) => textResult(message),
+            )
+          : undefined;
+      if (aisleUpdate !== undefined && "content" in aisleUpdate) return aisleUpdate;
 
-          const newIngredient = existing.ingredient; // ingredient is not updatable
-          const newQuantity = args.quantity !== undefined ? args.quantity : existing.quantity;
-          const newName = newQuantity !== "" ? `${newQuantity} ${newIngredient}` : newIngredient;
+      const newIngredient = existing.ingredient; // ingredient is not updatable
+      const newQuantity = args.quantity !== undefined ? args.quantity : existing.quantity;
+      const newName = newQuantity !== "" ? `${newQuantity} ${newIngredient}` : newIngredient;
 
-          const updated: GroceryItem = {
-            ...existing,
-            ...(args.quantity !== undefined && { quantity: args.quantity }),
-            ...(aisleUpdate !== undefined && { aisle: aisleUpdate.aisle, aisleUid: aisleUpdate.aisleUid }),
-            ...(args.instruction !== undefined && { instruction: args.instruction }),
-            name: newName,
-          };
+      const updated: GroceryItem = {
+        ...existing,
+        ...(args.quantity !== undefined && { quantity: args.quantity }),
+        ...(aisleUpdate !== undefined && { aisle: aisleUpdate.aisle, aisleUid: aisleUpdate.aisleUid }),
+        ...(args.instruction !== undefined && { instruction: args.instruction }),
+        name: newName,
+      };
 
-          const saved = (await ctx.infra.client.saveGroceryItems([updated])).match(
-            (items) => items[0]!,
-            (e) => {
-              log.error({ err: e, uid: args.uid }, "saveGroceryItems failed");
-              return textResult(`Failed to update grocery item: ${e.message}`);
-            },
-          );
-          if ("content" in saved) return saved;
-          const commitErr = commitFailure("grocery list", await ctx.writes.commitGroceryItem(saved));
-          if (commitErr) return commitErr;
-
-          return textResult(groceryItemToMarkdown(saved));
+      const saved = (await ctx.infra.client.saveGroceryItems([updated])).match(
+        (items) => items[0]!,
+        (e) => {
+          log.error({ err: e, uid: args.uid }, "saveGroceryItems failed");
+          return textResult(`Failed to update grocery item: ${e.message}`);
         },
-        (guard) => guard,
       );
+      if ("content" in saved) return saved;
+      const commitErr = commitFailure("grocery list", await ctx.writes.commitGroceryItem(saved));
+      if (commitErr) return commitErr;
+
+      return textResult(groceryItemToMarkdown(saved));
     };
   },
 );
@@ -275,35 +261,28 @@ export const deleteGroceryItemTool = defineTool(
       uid: GroceryItemUidSchema.describe("Grocery item UID to delete"),
     },
   },
+  [groceryStartGuard],
   (ctx: DomainCtx<GroceryState, "aisle" | "pantry", GroceryWrites>) => {
     const log = ctx.infra.log.child({ component: "delete_grocery_item" });
     return async (args) => {
-      log.info({ tool: "delete_grocery_item", uid: args.uid }, "tool invoked");
-      return groceryStartGuard(ctx.state).match(
-        async (): Promise<CallToolResult> => {
-          const existing = ctx.state.items.store.get(args.uid);
+      const existing = ctx.state.items.store.get(args.uid);
 
-          if (!existing) {
-            return textResult(
-              `No grocery item found with UID "${args.uid}" (it may not exist or was already deleted).`,
-            );
-          }
+      if (!existing) {
+        return textResult(`No grocery item found with UID "${args.uid}" (it may not exist or was already deleted).`);
+      }
 
-          const trashed = { ...existing, deleted: true };
+      const trashed = { ...existing, deleted: true };
 
-          return (await ctx.infra.client.saveGroceryItems([trashed])).match(
-            async (items): Promise<CallToolResult> => {
-              const commitErr = commitFailure("grocery list", await ctx.writes.commitGroceryItem(items[0]!));
-              if (commitErr) return commitErr;
-              return textResult(`Grocery item "${existing.ingredient}" has been deleted.`);
-            },
-            async (e) => {
-              log.error({ err: e, uid: args.uid }, "saveGroceryItems failed");
-              return textResult(`Failed to delete grocery item: ${e.message}`);
-            },
-          );
+      return (await ctx.infra.client.saveGroceryItems([trashed])).match(
+        async (items) => {
+          const commitErr = commitFailure("grocery list", await ctx.writes.commitGroceryItem(items[0]!));
+          if (commitErr) return commitErr;
+          return textResult(`Grocery item "${existing.ingredient}" has been deleted.`);
         },
-        (guard) => guard,
+        async (e) => {
+          log.error({ err: e, uid: args.uid }, "saveGroceryItems failed");
+          return textResult(`Failed to delete grocery item: ${e.message}`);
+        },
       );
     };
   },

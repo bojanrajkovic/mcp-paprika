@@ -1,4 +1,3 @@
-import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 
 import type { DomainCtx } from "../../../kernel/registry.js";
@@ -29,35 +28,28 @@ export const markGroceryItemPurchasedTool = defineTool(
     description: "Mark a grocery item as purchased (checked off) by UID.",
     inputSchema: markGroceryItemPurchasedInputSchema,
   },
+  [groceryStartGuard],
   (ctx: DomainCtx<GroceryState, "aisle" | "pantry", GroceryWrites>) => {
     const log = ctx.infra.log.child({ component: "mark_grocery_item_purchased" });
     return async (args) => {
-      log.info({ tool: "mark_grocery_item_purchased", uid: args.uid }, "tool invoked");
-      return groceryStartGuard(ctx.state).match(
-        async (): Promise<CallToolResult> => {
-          const existing = ctx.state.items.store.get(args.uid);
-          if (existing === undefined) {
-            return textResult(
-              `No grocery item found with UID "${args.uid}" (it may not exist or was already deleted).`,
-            );
-          }
+      const existing = ctx.state.items.store.get(args.uid);
+      if (existing === undefined) {
+        return textResult(`No grocery item found with UID "${args.uid}" (it may not exist or was already deleted).`);
+      }
 
-          const updated: GroceryItem = { ...existing, purchased: true };
-          const saved = (await ctx.infra.client.saveGroceryItems([updated])).match(
-            (items) => items[0]!,
-            (e) => {
-              log.error({ err: e, uid: args.uid }, "saveGroceryItems failed");
-              return textResult(`Failed to mark grocery item purchased: ${e.message}`);
-            },
-          );
-          if ("content" in saved) return saved;
-          const commitErr = commitFailure("grocery list", await ctx.writes.commitGroceryItem(saved));
-          if (commitErr) return commitErr;
-
-          return textResult(groceryItemToMarkdown(saved));
+      const updated: GroceryItem = { ...existing, purchased: true };
+      const saved = (await ctx.infra.client.saveGroceryItems([updated])).match(
+        (items) => items[0]!,
+        (e) => {
+          log.error({ err: e, uid: args.uid }, "saveGroceryItems failed");
+          return textResult(`Failed to mark grocery item purchased: ${e.message}`);
         },
-        (guard) => guard,
       );
+      if ("content" in saved) return saved;
+      const commitErr = commitFailure("grocery list", await ctx.writes.commitGroceryItem(saved));
+      if (commitErr) return commitErr;
+
+      return textResult(groceryItemToMarkdown(saved));
     };
   },
 );

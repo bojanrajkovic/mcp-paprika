@@ -36,50 +36,45 @@ export const deleteCategoryTool = defineTool(
       uid: CategoryUidSchema.describe("UID of the category to delete"),
     },
   },
+  [categoryStartGuard],
   (ctx: DomainCtx<RecipeState, never, RecipeWrites>) => {
     const log = ctx.infra.log.child({ component: "delete_category" });
     return async (args) => {
-      log.info({ tool: "delete_category", uid: args.uid }, "tool invoked");
-      return categoryStartGuard(ctx.state).match(
+      const existing = ctx.state.category.store.get(args.uid);
+      if (existing === undefined) {
+        return textResult(`No category found with UID "${args.uid}" (it may not exist or was already deleted).`);
+      }
+
+      const children = ctx.state.category.store.getChildren(args.uid);
+      if (children.length > 0) {
+        const names = children.map((c) => `"${c.name}"`).join(", ");
+        return textResult(
+          `Cannot delete "${existing.name}": it has ${String(children.length)} child ` +
+            `categor${children.length === 1 ? "y" : "ies"} (${names}). Re-parent or delete ${
+              children.length === 1 ? "it" : "them"
+            } first with \`update_category\`.`,
+        );
+      }
+
+      const refs = recipesReferencing(ctx.state, args.uid);
+      if (refs.length > 0) {
+        return textResult(
+          `Cannot delete "${existing.name}": ${String(refs.length)} recipe${refs.length === 1 ? " is" : "s are"} ` +
+            `still assigned to it. Reassign ${refs.length === 1 ? "that recipe" : "those recipes"} with ` +
+            `\`update_recipe\` first.`,
+        );
+      }
+
+      return (await ctx.infra.client.deleteCategory(existing)).match(
         async (): Promise<CallToolResult> => {
-          const existing = ctx.state.category.store.get(args.uid);
-          if (existing === undefined) {
-            return textResult(`No category found with UID "${args.uid}" (it may not exist or was already deleted).`);
-          }
-
-          const children = ctx.state.category.store.getChildren(args.uid);
-          if (children.length > 0) {
-            const names = children.map((c) => `"${c.name}"`).join(", ");
-            return textResult(
-              `Cannot delete "${existing.name}": it has ${String(children.length)} child ` +
-                `categor${children.length === 1 ? "y" : "ies"} (${names}). Re-parent or delete ${
-                  children.length === 1 ? "it" : "them"
-                } first with \`update_category\`.`,
-            );
-          }
-
-          const refs = recipesReferencing(ctx.state, args.uid);
-          if (refs.length > 0) {
-            return textResult(
-              `Cannot delete "${existing.name}": ${String(refs.length)} recipe${refs.length === 1 ? " is" : "s are"} ` +
-                `still assigned to it. Reassign ${refs.length === 1 ? "that recipe" : "those recipes"} with ` +
-                `\`update_recipe\` first.`,
-            );
-          }
-
-          return (await ctx.infra.client.deleteCategory(existing)).match(
-            async (): Promise<CallToolResult> => {
-              const commitErr = commitFailure("category", await ctx.writes.commitCategoryDelete(existing));
-              if (commitErr) return commitErr;
-              return textResult(`Deleted category "${existing.name}".`);
-            },
-            async (e) => {
-              log.error({ err: e, uid: args.uid }, "deleteCategory failed");
-              return textResult(`Failed to delete category: ${e.message}`);
-            },
-          );
+          const commitErr = commitFailure("category", await ctx.writes.commitCategoryDelete(existing));
+          if (commitErr) return commitErr;
+          return textResult(`Deleted category "${existing.name}".`);
         },
-        (guard) => guard,
+        async (e) => {
+          log.error({ err: e, uid: args.uid }, "deleteCategory failed");
+          return textResult(`Failed to delete category: ${e.message}`);
+        },
       );
     };
   },
