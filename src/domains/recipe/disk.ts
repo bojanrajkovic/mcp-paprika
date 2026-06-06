@@ -1,5 +1,5 @@
-import { mkdir, readFile, rename, unlink } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { readFile, rename } from "node:fs/promises";
+import { join } from "node:path";
 
 import type { Result } from "neverthrow";
 import { okAsync, ResultAsync } from "neverthrow";
@@ -32,9 +32,7 @@ export class RecipeDiskCache extends DiskCache<Recipe> {
   }
 
   override init(): ResultAsync<void, CacheError> {
-    return this._maybeMigrateLegacyIndex()
-      .andThen(() => super.init())
-      .andThen(() => this._loadHashIndex());
+    return super.init().andThen(() => this._loadHashIndex());
   }
 
   /**
@@ -65,77 +63,6 @@ export class RecipeDiskCache extends DiskCache<Recipe> {
           this._hashes.set(uid, hash);
         }
       });
-  }
-
-  /**
-   * Idempotent, crash-safe one-shot upgrade from the legacy unified index
-   * (`<cacheDir>/index.json`, a `{ recipes: {uid→hash}, … }` map) to this cache's
-   * per-entity `recipes/index.json`. Only the `recipes` namespace carried real
-   * hashes; the other namespaces were directory-listing placeholders the per-entity
-   * caches rebuild from `readdir`, so only `recipes` is extracted. Writes the new
-   * file FIRST (temp-then-rename), then unlinks the legacy one; a crash between
-   * re-runs idempotently. Lives HERE, not on a composition root, so it runs wherever
-   * a RecipeDiskCache is built — both transports — independent of how the rest of the
-   * cache (or auth) is assembled. The legacy file sits one level above this subdir.
-   */
-  private _maybeMigrateLegacyIndex(): ResultAsync<void, CacheError> {
-    const legacyPath = join(dirname(this._subdir), "index.json");
-    return ResultAsync.fromPromise(readFile(legacyPath, "utf-8"), cacheError(`read ${legacyPath}`))
-      .orElse(enoentOk<string | null>(null)) // fresh install or already migrated
-      .andThen((raw) => {
-        if (raw === null) return okAsync<void, CacheError>(undefined);
-
-        let parsed: unknown;
-        try {
-          parsed = JSON.parse(raw);
-        } catch (err) {
-          this.log.warn(
-            { err, path: legacyPath },
-            "corrupt legacy index.json — discarding; recipes will be re-hashed on next sync",
-          );
-          return this._safeUnlink(legacyPath);
-        }
-
-        // Optional-chain: a legacy file holding JSON `null` parses fine but has no
-        // properties — it must fall into the malformed-discard branch, not throw.
-        const recipesParsed = RecipeIndexSchema.safeParse((parsed as { recipes?: unknown } | null)?.recipes);
-        let migrate: ResultAsync<void, CacheError>;
-        if (recipesParsed.success && Object.keys(recipesParsed.data).length > 0) {
-          const data = recipesParsed.data;
-          migrate = ResultAsync.fromPromise(
-            mkdir(this._subdir, { recursive: true }),
-            cacheError(`mkdir ${this._subdir}`),
-          )
-            .andThen(() => {
-              const tmpPath = join(this._subdir, `.index-${Date.now().toString()}.tmp`);
-              return this._writeFileAtomic(tmpPath, JSON.stringify(data, null, 2)).andThen(() =>
-                ResultAsync.fromPromise(
-                  rename(tmpPath, join(this._subdir, "index.json")),
-                  cacheError(`rename recipes index into place`),
-                ),
-              );
-            })
-            .map(() => {
-              this.log.info(
-                { count: Object.keys(data).length },
-                "migrated legacy unified index.json to recipes/index.json",
-              );
-            });
-        } else {
-          if (!recipesParsed.success) {
-            this.log.warn(
-              { path: legacyPath },
-              "legacy index.json present but recipes namespace is missing or malformed — discarding",
-            );
-          }
-          migrate = okAsync(undefined);
-        }
-        return migrate.andThen(() => this._safeUnlink(legacyPath));
-      });
-  }
-
-  private _safeUnlink(path: string): ResultAsync<void, CacheError> {
-    return ResultAsync.fromPromise(unlink(path), cacheError(`unlink ${path}`)).orElse(enoentOk<void>(undefined));
   }
 
   /**
