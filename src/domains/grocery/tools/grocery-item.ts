@@ -1,3 +1,5 @@
+import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import type { Logger } from "pino";
 import { z } from "zod";
 
 import type { DomainCtx } from "../../../kernel/registry.js";
@@ -12,7 +14,8 @@ import { groceryItemToMarkdown } from "../grocery-helpers.js";
 import { GroceryIngredientUidSchema, GroceryItemUidSchema, GroceryListUidSchema } from "../ids.js";
 import { groceryStartGuard } from "./guards.js";
 
-const itemInputSchema = z.object({
+/** One item to add — shared by `add_grocery_items` and `add_recipe_to_grocery_list`. */
+export const itemInputSchema = z.object({
   ingredient: z.string().min(1).describe("Ingredient name (required)"),
   quantity: z.string().optional().describe("Quantity, e.g. '2 lbs'"),
   aisle: z
@@ -24,6 +27,125 @@ const itemInputSchema = z.object({
     ),
   instruction: z.string().optional().describe("Free-form notes for this item"),
 });
+
+/**
+ * Build the `GroceryItem`s for a batch add, resolving each item's aisle and
+ * maintaining the ingredient catalog's aisle memory — the shared engine behind
+ * `add_grocery_items` and `add_recipe_to_grocery_list` (which stamps `recipe`
+ * with the linked recipe's name; a plain add passes `recipe: null`).
+ *
+ * An explicit `aisle` resolves via `ensureAisle` (auto-create) and upserts the
+ * ingredient's catalog memory (POST + store + best-effort cache put); an omitted
+ * one falls back batch-cache → catalog memory → the built-in Miscellaneous aisle.
+ * Returns the built items, or the ready-to-return `CallToolResult` of the first
+ * failure (an erring `ensureAisle` or a failed catalog save).
+ */
+export async function buildGroceryItems(
+  // Declared at the helper's MINIMAL dependency need ("aisle") so both callers'
+  // wider ctxs assign structurally; `Writes` stays defaulted (the helper never commits).
+  ctx: DomainCtx<GroceryState, "aisle">,
+  log: Logger,
+  listUid: z.infer<typeof GroceryListUidSchema>,
+  items: ReadonlyArray<z.infer<typeof itemInputSchema>>,
+  recipe: string | null,
+): Promise<Array<GroceryItem> | CallToolResult> {
+  const builtItems: Array<GroceryItem> = [];
+  const batchAisleCache = new Map<string, { aisle: string; aisleUid: AisleUid }>();
+  const catalogUpdated = new Set<string>();
+  for (const item of items) {
+    const ingredient = item.ingredient;
+    const ingredientKey = ingredient.toLowerCase();
+    const quantity = item.quantity ?? "";
+    const instruction = item.instruction ?? "";
+    const uid = GroceryItemUidSchema.parse(crypto.randomUUID().toUpperCase());
+    const name = quantity !== "" ? `${quantity} ${ingredient}` : ingredient;
+
+    let aisle: string;
+    let aisleUid: AisleUid;
+
+    if (item.aisle !== undefined) {
+      const resolved = (await ctx.deps.aisle.ensureAisle(item.aisle)).match(
+        (v) => v,
+        (message) => textResult(message),
+      );
+      if ("content" in resolved) return resolved;
+      aisle = resolved.aisle;
+      aisleUid = resolved.aisleUid;
+      batchAisleCache.set(ingredientKey, { aisle, aisleUid });
+
+      if (!catalogUpdated.has(ingredientKey)) {
+        catalogUpdated.add(ingredientKey);
+        // Update (or create) the ingredient's catalog memory so the chosen
+        // aisle sticks for future adds. The two branches differ only in the
+        // entry they build; the save/commit tail is shared.
+        const catalogEntry = ctx.state.ingredients.store.lookupByName(ingredient);
+        const entry =
+          catalogEntry !== undefined
+            ? { ...catalogEntry, aisleUid }
+            : {
+                uid: GroceryIngredientUidSchema.parse(crypto.randomUUID().toUpperCase()),
+                name: ingredient,
+                aisleUid,
+                deleted: false,
+              };
+        const catalogErr = (await ctx.infra.client.saveGroceryIngredient(entry)).match(
+          () => undefined,
+          (e) => {
+            log.error({ err: e, listUid }, "saveGroceryIngredient failed");
+            return textResult(`Failed to add grocery items: ${e.message}`);
+          },
+        );
+        if (catalogErr) return catalogErr;
+        ctx.state.ingredients.store.set(entry);
+        // The ingredient-catalog cache put is BEST-EFFORT: the save above
+        // already landed the entry server-side, and the catalog is replace-all
+        // synced, so a failed local put self-heals on the next cycle — warn
+        // rather than failing an add whose grocery items will still commit.
+        (await ctx.state.ingredients.cache.put(entry)).match(
+          () => undefined,
+          (e) => {
+            log.warn({ err: e, ingredient }, "ingredient catalog cache put failed; next sync re-syncs it");
+          },
+        );
+      }
+    } else {
+      const batchHit = batchAisleCache.get(ingredientKey);
+      if (batchHit !== undefined) {
+        aisle = batchHit.aisle;
+        aisleUid = batchHit.aisleUid;
+      } else {
+        const catalogEntry = ctx.state.ingredients.store.lookupByName(ingredient);
+        const resolvedAisle = catalogEntry !== undefined ? ctx.deps.aisle.get(catalogEntry.aisleUid) : undefined;
+        // No catalog memory (or it points at a now-missing aisle): place the
+        // item in the built-in "Miscellaneous" aisle, matching Paprika.app,
+        // which never leaves an item aisle-less. Fall back to "" only when the
+        // catalog has no Miscellaneous aisle (user-deleted, or a non-English
+        // catalog) — never auto-create it; it's a Paprika built-in.
+        const placement = resolvedAisle ?? ctx.deps.aisle.resolveByName("Miscellaneous");
+        aisle = placement?.name ?? "";
+        aisleUid = placement?.uid ?? NO_AISLE_UID;
+      }
+    }
+
+    const built: GroceryItem = {
+      uid,
+      name,
+      ingredient,
+      quantity,
+      aisle,
+      aisleUid,
+      listUid,
+      purchased: false,
+      deleted: false,
+      orderFlag: 0,
+      instruction,
+      recipe,
+      separate: false,
+    };
+    builtItems.push(built);
+  }
+  return builtItems;
+}
 
 /**
  * `add_grocery_items` — batch-add grocery items. Resolves aisles via the declared
@@ -61,102 +183,9 @@ export const addGroceryItemsTool = defineTool(
         }
       }
 
-      // Build all GroceryItem objects, resolving aisles first
-      const builtItems: Array<GroceryItem> = [];
-      const batchAisleCache = new Map<string, { aisle: string; aisleUid: AisleUid }>();
-      const catalogUpdated = new Set<string>();
-      for (const item of args.items) {
-        const ingredient = item.ingredient;
-        const ingredientKey = ingredient.toLowerCase();
-        const quantity = item.quantity ?? "";
-        const instruction = item.instruction ?? "";
-        const uid = GroceryItemUidSchema.parse(crypto.randomUUID().toUpperCase());
-        const name = quantity !== "" ? `${quantity} ${ingredient}` : ingredient;
-
-        let aisle: string;
-        let aisleUid: AisleUid;
-
-        if (item.aisle !== undefined) {
-          const resolved = (await ctx.deps.aisle.ensureAisle(item.aisle)).match(
-            (v) => v,
-            (message) => textResult(message),
-          );
-          if ("content" in resolved) return resolved;
-          aisle = resolved.aisle;
-          aisleUid = resolved.aisleUid;
-          batchAisleCache.set(ingredientKey, { aisle, aisleUid });
-
-          if (!catalogUpdated.has(ingredientKey)) {
-            catalogUpdated.add(ingredientKey);
-            // Update (or create) the ingredient's catalog memory so the chosen
-            // aisle sticks for future adds. The two branches differ only in the
-            // entry they build; the save/commit tail is shared.
-            const catalogEntry = ctx.state.ingredients.store.lookupByName(ingredient);
-            const entry =
-              catalogEntry !== undefined
-                ? { ...catalogEntry, aisleUid }
-                : {
-                    uid: GroceryIngredientUidSchema.parse(crypto.randomUUID().toUpperCase()),
-                    name: ingredient,
-                    aisleUid,
-                    deleted: false,
-                  };
-            const catalogErr = (await ctx.infra.client.saveGroceryIngredient(entry)).match(
-              () => undefined,
-              (e) => {
-                log.error({ err: e, listUid: args.listUid }, "saveGroceryIngredient failed");
-                return textResult(`Failed to add grocery items: ${e.message}`);
-              },
-            );
-            if (catalogErr) return catalogErr;
-            ctx.state.ingredients.store.set(entry);
-            // The ingredient-catalog cache put is BEST-EFFORT: the save above
-            // already landed the entry server-side, and the catalog is replace-all
-            // synced, so a failed local put self-heals on the next cycle — warn
-            // rather than failing an add whose grocery items will still commit.
-            (await ctx.state.ingredients.cache.put(entry)).match(
-              () => undefined,
-              (e) => {
-                log.warn({ err: e, ingredient }, "ingredient catalog cache put failed; next sync re-syncs it");
-              },
-            );
-          }
-        } else {
-          const batchHit = batchAisleCache.get(ingredientKey);
-          if (batchHit !== undefined) {
-            aisle = batchHit.aisle;
-            aisleUid = batchHit.aisleUid;
-          } else {
-            const catalogEntry = ctx.state.ingredients.store.lookupByName(ingredient);
-            const resolvedAisle = catalogEntry !== undefined ? ctx.deps.aisle.get(catalogEntry.aisleUid) : undefined;
-            // No catalog memory (or it points at a now-missing aisle): place the
-            // item in the built-in "Miscellaneous" aisle, matching Paprika.app,
-            // which never leaves an item aisle-less. Fall back to "" only when the
-            // catalog has no Miscellaneous aisle (user-deleted, or a non-English
-            // catalog) — never auto-create it; it's a Paprika built-in.
-            const placement = resolvedAisle ?? ctx.deps.aisle.resolveByName("Miscellaneous");
-            aisle = placement?.name ?? "";
-            aisleUid = placement?.uid ?? NO_AISLE_UID;
-          }
-        }
-
-        const built: GroceryItem = {
-          uid,
-          name,
-          ingredient,
-          quantity,
-          aisle,
-          aisleUid,
-          listUid: args.listUid,
-          purchased: false,
-          deleted: false,
-          orderFlag: 0,
-          instruction,
-          recipe: null,
-          separate: false,
-        };
-        builtItems.push(built);
-      }
+      // Build all GroceryItem objects (aisle resolution + catalog memory), no recipe link.
+      const builtItems = await buildGroceryItems(ctx, log, args.listUid, args.items, null);
+      if ("content" in builtItems) return builtItems;
 
       // Single batch POST for all items
       const savedItems = (await ctx.infra.client.saveGroceryItems(builtItems)).match(

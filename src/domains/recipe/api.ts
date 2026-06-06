@@ -6,7 +6,7 @@ import type { Photo } from "./photo/types.js";
 import type { Recipe } from "./types.js";
 
 /**
- * Recipe's public contract — the surface meal, menu, meal-planner, discover, and
+ * Recipe's public contract — the surface meal, menu, meal-planner, grocery, discover, and
  * photo-gen consume via `ctx.deps.recipe`. Recipe owns three entities (recipes,
  * categories, photos) — there is no separate category or photo domain — so the
  * category resolvers live here too.
@@ -22,6 +22,12 @@ import type { Recipe } from "./types.js";
 export interface RecipeApi extends HasSynced {
   /** UID lookup; `undefined` for an unknown or trashed-and-pruned UID. */
   get(uid: RecipeUid): Recipe | undefined;
+  /**
+   * Tiered case-insensitive name lookup (exact → starts-with → contains), returning
+   * the matches from at most one tier; trashed recipes excluded. Backs grocery's
+   * `add_recipe_to_grocery_list` uid-or-title resolve (mirrors `MenuApi.findByName`).
+   */
+  findByName(title: string): ReadonlyArray<Recipe>;
   /**
    * Resolve category references (each a `CategoryUid` or a case-insensitive
    * display name) to `{ uids, unknown }`. `unknown` carries refs that matched

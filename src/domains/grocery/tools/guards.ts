@@ -30,3 +30,18 @@ export function pantrySyncedGuard(ctx: DomainCtx<GroceryState, "aisle" | "pantry
   }
   return ok(undefined);
 }
+
+/**
+ * Secondary readiness gate for `add_recipe_to_grocery_list`: the recipe
+ * dependency must have completed a first sync before a recipe can be resolved
+ * by uid or title. Runs as a kernel precondition (ADR-0015), after
+ * `groceryStartGuard`.
+ */
+export function recipeSyncedGuard(
+  ctx: DomainCtx<GroceryState, "aisle" | "pantry" | "recipe">,
+): Result<void, CallToolResult> {
+  if (!ctx.deps.recipe.hasSynced()) {
+    return err(textResult("Recipes are not yet synced. Try again in a few seconds."));
+  }
+  return ok(undefined);
+}

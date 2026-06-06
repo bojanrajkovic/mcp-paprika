@@ -348,6 +348,7 @@ register(
       return {
         api: {
           get: (uid) => state.recipe.store.get(uid),
+          findByName: (title) => state.recipe.store.findByName(title),
           resolveCategoryRefs: (refs) => resolveCategoryRefs(state.category.store.getAll(), [...refs]),
           resolveCategoryNames: (uids) => state.category.store.resolveNames([...uids]),
           recipesInCategory: (categoryUid) =>
