@@ -25,4 +25,12 @@ describe("telemetryEnabled", () => {
       false,
     );
   });
+
+  it("parses the disable flag case-insensitively (the spec requires all case variants of true)", () => {
+    for (const value of ["TRUE", "True", "tRuE"]) {
+      expect(telemetryEnabled({ OTEL_SDK_DISABLED: value, OTEL_EXPORTER_OTLP_ENDPOINT: "http://collector:4318" })).toBe(
+        false,
+      );
+    }
+  });
 });

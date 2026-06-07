@@ -7,7 +7,7 @@
  * to the `@opentelemetry/api` no-op singletons.
  */
 export function telemetryEnabled(env: NodeJS.ProcessEnv): boolean {
-  if (env["OTEL_SDK_DISABLED"] === "true") return false;
+  if (env["OTEL_SDK_DISABLED"]?.toLowerCase() === "true") return false;
   return [
     env["OTEL_EXPORTER_OTLP_ENDPOINT"],
     env["OTEL_EXPORTER_OTLP_TRACES_ENDPOINT"],

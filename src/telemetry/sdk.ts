@@ -82,7 +82,7 @@ function positiveMillis(raw: string | undefined, fallback: number): number {
  * pointed at its localhost default, failing every export.
  */
 function otlpSignalEnabled(signal: "TRACES" | "METRICS"): boolean {
-  if (process.env[`OTEL_${signal}_EXPORTER`] === "none") return false;
+  if (process.env[`OTEL_${signal}_EXPORTER`]?.toLowerCase() === "none") return false;
   const general = process.env["OTEL_EXPORTER_OTLP_ENDPOINT"];
   const specific = process.env[`OTEL_EXPORTER_OTLP_${signal}_ENDPOINT`];
   return (general !== undefined && general !== "") || (specific !== undefined && specific !== "");
