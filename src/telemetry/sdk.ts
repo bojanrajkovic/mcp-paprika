@@ -152,7 +152,14 @@ export function startTelemetry(): Result<() => Promise<void>, Error> {
           [ATTR_SERVICE_NAME]: process.env["OTEL_SERVICE_NAME"] ?? "mcp-paprika",
           ...(version !== undefined && { [ATTR_SERVICE_VERSION]: version }),
         }),
-        resourceDetectors: [envDetector, processDetector, hostDetector, osDetector, containerDetector],
+        // Default detector set adds the container detector (not selectable
+        // via NodeSDK's env list). When the operator sets the standard
+        // OTEL_NODE_RESOURCE_DETECTORS, omit the option so NodeSDK's own env
+        // parsing governs — including `none`, the metadata opt-out — instead
+        // of this list silently overriding it.
+        ...(process.env["OTEL_NODE_RESOURCE_DETECTORS"] === undefined && {
+          resourceDetectors: [envDetector, processDetector, hostDetector, osDetector, containerDetector],
+        }),
         // Per-signal gating (see otlpSignalEnabled); both off yields an inert
         // SDK, which the endpoint-wide bootstrap gate makes a non-case in
         // practice. Each disabled arm must pass an EXPLICIT empty array:
