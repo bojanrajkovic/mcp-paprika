@@ -100,3 +100,5 @@ Never point the server's own output at stdout for this — in stdio mode stdout 
 ## Kubernetes
 
 The `k8s/` kustomization carries a commented `OTEL_EXPORTER_OTLP_ENDPOINT` block in `30-deployment.yaml`; uncomment and point it at the cluster's collector. The deployment needs no other change — the image's CMD already preloads the bootstrap, and the shutdown path flushes telemetry inside the existing drain window so final session metrics survive a rolling restart.
+
+**Pod identity on resources.** The SDK's container detector reads `container.id` from `/proc/self/cgroup`, which frequently comes up empty on cgroup-v2 hosts — don't rely on it for identity. The same manifest block carries commented downward-API env vars that feed `k8s.pod.name` / `k8s.namespace.name` / `k8s.node.name` through `OTEL_RESOURCE_ATTRIBUTES`, which the SDK's env detector reads natively — zero app support needed. (The alternative, a collector-side `k8sattributes` processor enriching by pod IP, also works if the cluster's collector already runs one; the downward API is the no-infrastructure option.)
