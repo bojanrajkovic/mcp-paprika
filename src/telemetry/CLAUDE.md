@@ -10,7 +10,7 @@ The OpenTelemetry substrate every instrumented seam records through: the opt-in 
 
 - **[ADR-0018](../../docs/adr/0018-opentelemetry-instrumentation.md)** — the canonical decisions: global API over `Infra` threading, the `--import`/first-import dual bootstrap, vendored conventions. Read it before changing the shape.
 - **`docs/telemetry.md`** — the operator guide: enabling, what comes out, the local Grafana/collector stand-up, stdio session semantics.
-- Source is the catalog: every custom metric name is `rg '"mcp_paprika\.' src`; spec-named instruments and their bucket advice live in `instruments.ts` + `semconv.ts`.
+- Source is the catalog: every custom metric name is `rg '"mcp_paprika\.' src`; spec-named instruments live in `instruments.ts` + `semconv.ts`. Histograms export exponential (no bucket advice anywhere — the `aggregationPreference` selector in `sdk.ts` is the single switch).
 
 ## Sharp edges
 

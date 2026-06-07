@@ -2,16 +2,18 @@
 // tool and resource chokepoints both feed `mcp.server.operation.duration`;
 // both transports feed the session histogram). Single-seam custom counters
 // live at their seam — only the shared, spec-named ones are centralized so
-// the descriptor (unit, bucket advice) exists exactly once. Everything is
-// `lazy` because the metrics API has no late-binding proxy (see scope.ts).
+// the descriptor exists exactly once. Everything is `lazy` because the
+// metrics API has no late-binding proxy (see scope.ts).
+//
+// No bucket advice anywhere: the SDK exports every histogram as a base2
+// exponential histogram (sdk.ts), so the semconv specs' advisory explicit
+// boundaries — which exist for the default explicit-bucket aggregation —
+// would be dead configuration here.
 
 import { type Histogram, ValueType } from "@opentelemetry/api";
 
 import { getMeter, lazy } from "./scope.js";
 import {
-  GEN_AI_DURATION_BUCKETS,
-  GEN_AI_TOKEN_USAGE_BUCKETS,
-  MCP_DURATION_BUCKETS,
   METRIC_GEN_AI_CLIENT_OPERATION_DURATION,
   METRIC_GEN_AI_CLIENT_TOKEN_USAGE,
   METRIC_MCP_SERVER_OPERATION_DURATION,
@@ -24,7 +26,6 @@ export const mcpServerOperationDuration: () => Histogram = lazy(() =>
     description: "Duration of MCP server operations",
     unit: "s",
     valueType: ValueType.DOUBLE,
-    advice: { explicitBucketBoundaries: [...MCP_DURATION_BUCKETS] },
   }),
 );
 
@@ -37,7 +38,6 @@ export const mcpServerSessionDuration: () => Histogram = lazy(() =>
     description: "Duration of MCP server sessions",
     unit: "s",
     valueType: ValueType.DOUBLE,
-    advice: { explicitBucketBoundaries: [...MCP_DURATION_BUCKETS] },
   }),
 );
 
@@ -47,7 +47,6 @@ export const genAiClientOperationDuration: () => Histogram = lazy(() =>
     description: "Duration of GenAI client operations",
     unit: "s",
     valueType: ValueType.DOUBLE,
-    advice: { explicitBucketBoundaries: [...GEN_AI_DURATION_BUCKETS] },
   }),
 );
 
@@ -56,6 +55,5 @@ export const genAiClientTokenUsage: () => Histogram = lazy(() =>
   getMeter().createHistogram(METRIC_GEN_AI_CLIENT_TOKEN_USAGE, {
     description: "Token usage of GenAI client operations",
     unit: "{token}",
-    advice: { explicitBucketBoundaries: [...GEN_AI_TOKEN_USAGE_BUCKETS] },
   }),
 );

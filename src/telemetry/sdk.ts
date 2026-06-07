@@ -30,7 +30,12 @@ import {
   processDetector,
   resourceFromAttributes,
 } from "@opentelemetry/resources";
-import { PeriodicExportingMetricReader } from "@opentelemetry/sdk-metrics";
+import {
+  type AggregationOption,
+  AggregationType,
+  InstrumentType,
+  PeriodicExportingMetricReader,
+} from "@opentelemetry/sdk-metrics";
 import { NodeSDK } from "@opentelemetry/sdk-node";
 import { ATTR_SERVICE_NAME, ATTR_SERVICE_VERSION } from "@opentelemetry/semantic-conventions";
 import { Result } from "neverthrow";
@@ -67,6 +72,16 @@ function metricExportIntervalMillis(raw: string | undefined): number {
   const parsed = Number(raw);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 60_000;
 }
+
+// Every histogram exports as a base2 EXPONENTIAL histogram (Prometheus/Mimir
+// "native histograms"): automatic bucketing at better resolution than any
+// hand-picked boundary set, which is why the semconv specs' advisory explicit
+// buckets are deliberately NOT used here. Requires a native-histogram-capable
+// pipeline (the LGTM stack qualifies); see docs/telemetry.md.
+const exponentialHistograms = (instrumentType: InstrumentType): AggregationOption =>
+  instrumentType === InstrumentType.HISTOGRAM
+    ? { type: AggregationType.EXPONENTIAL_HISTOGRAM }
+    : { type: AggregationType.DEFAULT };
 
 // dist/telemetry/sdk.js → ../../package.json lands on the repo/install root;
 // the same hop works from src/ under tsx. A missing/unreadable package.json
@@ -116,7 +131,7 @@ export function startTelemetry(): Result<() => Promise<void>, Error> {
         traceExporter: new OTLPTraceExporter(),
         metricReaders: [
           new PeriodicExportingMetricReader({
-            exporter: new OTLPMetricExporter(),
+            exporter: new OTLPMetricExporter({ aggregationPreference: exponentialHistograms }),
             // The reader does not read OTEL_METRIC_EXPORT_INTERVAL itself
             // (verified against sdk-metrics 2.7); honor it here so operators
             // keep the standard knob. Milliseconds, default 60s. The explicit

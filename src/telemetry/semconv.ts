@@ -46,25 +46,7 @@ export const METRIC_GEN_AI_CLIENT_OPERATION_DURATION = "gen_ai.client.operation.
 /** Token consumption of GenAI requests, by `gen_ai.token.type`. */
 export const METRIC_GEN_AI_CLIENT_TOKEN_USAGE = "gen_ai.client.token.usage";
 
-/**
- * Spec-advised buckets for the `mcp.*.duration` histograms: dense sub-second
- * resolution for ordinary operations, a tail out to 300 s for long-running
- * sessions and slow tools.
- */
-export const MCP_DURATION_BUCKETS: ReadonlyArray<number> = [
-  0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1, 2, 5, 10, 30, 60, 120, 300,
-];
-
-/**
- * Spec-advised buckets for `gen_ai.client.operation.duration`: a geometric
- * doubling series, because LLM-class calls legitimately stretch from tens of
- * milliseconds (embeddings) to >80 s (image generation).
- */
-export const GEN_AI_DURATION_BUCKETS: ReadonlyArray<number> = [
-  0.01, 0.02, 0.04, 0.08, 0.16, 0.32, 0.64, 1.28, 2.56, 5.12, 10.24, 20.48, 40.96, 81.92,
-];
-
-/** Spec-advised buckets for `gen_ai.client.token.usage` (powers of four). */
-export const GEN_AI_TOKEN_USAGE_BUCKETS: ReadonlyArray<number> = [
-  1, 4, 16, 64, 256, 1024, 4096, 16384, 65536, 262144, 1048576, 4194304, 16777216, 67108864,
-];
+// The specs' advisory explicit-bucket boundaries are deliberately not
+// vendored: every histogram exports as a base2 exponential histogram
+// (sdk.ts), where the advisory boundaries — defined for the default
+// explicit-bucket aggregation — never apply.

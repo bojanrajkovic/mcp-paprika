@@ -13,7 +13,6 @@ import type { PaprikaConfig } from "../utils/config.js";
 import type { ToolDef, ToolSpec } from "./tool.js";
 
 import { getMeter, getTracer, lazy, startTimer } from "../telemetry/scope.js";
-import { MCP_DURATION_BUCKETS } from "../telemetry/semconv.js";
 import { errorTypeName, traceResultAsync } from "../telemetry/trace-result.js";
 
 /**
@@ -397,7 +396,6 @@ const syncCycleDuration = lazy(() =>
     description: "Duration of sync cycles, by trigger and outcome",
     unit: "s",
     valueType: ValueType.DOUBLE,
-    advice: { explicitBucketBoundaries: [...MCP_DURATION_BUCKETS] },
   }),
 );
 const syncChanges = lazy(() =>
