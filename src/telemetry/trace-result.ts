@@ -46,10 +46,19 @@ export interface DurationRecording {
  * the duration histogram; `isError` controls span status separately, because
  * a classed outcome is not always a failure (a gated tool call and an
  * answered protocol not-found carry an `error.type` with status UNSET).
+ *
+ * `exception` is for ABNORMAL control flow only — the throw rails (contract
+ * breaches, boot failures, foreign escapes), where the stack trace IS the
+ * diagnostic: an Error here records the semconv exception event and puts its
+ * message on the span status. Result-rail err arms deliberately never pass
+ * it: a typed expected failure is an outcome, not an exception — its class
+ * rides `error.type` and its detail lives one pivot away in the
+ * trace-correlated log line.
  */
 export interface OperationOutcome {
   readonly errorType?: string | undefined;
   readonly isError?: boolean;
+  readonly exception?: unknown;
 }
 
 export interface OperationHandle {
@@ -81,7 +90,13 @@ export function startOperation(
       if (ended) return;
       ended = true;
       if (outcome?.errorType !== undefined) span.setAttribute(ATTR_ERROR_TYPE, outcome.errorType);
-      if (outcome?.isError === true) span.setStatus({ code: SpanStatusCode.ERROR });
+      if (outcome?.exception instanceof Error) span.recordException(outcome.exception);
+      if (outcome?.isError === true) {
+        span.setStatus({
+          code: SpanStatusCode.ERROR,
+          ...(outcome.exception instanceof Error && { message: outcome.exception.message }),
+        });
+      }
       span.end();
       if (duration !== undefined) {
         duration
@@ -95,6 +110,33 @@ export function startOperation(
       }
     },
   };
+}
+
+/**
+ * Promise-rail sibling of {@link traceResultAsync}, for paths whose protocol
+ * is throw-based (the fail-fast boot pipeline — ADR-0014 form #5): the
+ * operation ends ok on resolve, and a rejection ends it as an error and
+ * rethrows unchanged (a throw-transparent passthrough, pinned in the
+ * ADR-0014 conformance gate). Without this, a span open across a rejecting
+ * await never ends — and an un-ended span never exports, even when the
+ * failure path flushes.
+ */
+export async function tracePromise<V>(
+  tracer: Tracer,
+  name: string,
+  options: SpanOptions & { readonly duration?: DurationRecording },
+  fn: () => Promise<V>,
+): Promise<V> {
+  const { duration, ...spanOptions } = options;
+  const op = startOperation(tracer, name, spanOptions, duration);
+  try {
+    const value = await context.with(trace.setSpan(context.active(), op.span), fn);
+    op.end();
+    return value;
+  } catch (cause) {
+    op.end({ errorType: errorTypeName(cause), isError: true, exception: cause });
+    throw cause;
+  }
 }
 
 export type TraceResultOptions<E> = SpanOptions & {
@@ -140,7 +182,7 @@ export function traceResultAsync<T, E>(
     // PromiseLike ResultAsync without consuming it; the success arm is a no-op
     // (the .map below already ended the operation by then).
     void Promise.resolve(traced).then(undefined, (cause: unknown) => {
-      op.end({ errorType: errorTypeName(cause), isError: true });
+      op.end({ errorType: errorTypeName(cause), isError: true, exception: cause });
     });
     return traced
       .map((value) => {
@@ -152,7 +194,7 @@ export function traceResultAsync<T, E>(
         return error;
       });
   } catch (cause) {
-    op.end({ errorType: errorTypeName(cause), isError: true });
+    op.end({ errorType: errorTypeName(cause), isError: true, exception: cause });
     throw cause;
   }
 }

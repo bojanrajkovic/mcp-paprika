@@ -76,6 +76,10 @@ const INSTRUMENTATION_RETHROWS: ReadonlyArray<readonly [file: string, fn: string
   ["src/kernel/tool.ts", "fail"],
   ["src/shared/resources.ts", "tracedResourceRead"],
   ["src/telemetry/trace-result.ts", "traceResultAsync"],
+  ["src/telemetry/trace-result.ts", "tracePromise"],
+  // The boot wrapper: ends the boot span as an error so the flushed-on-failure
+  // boot trace exports, then lets the fail-fast throw (form #5) abort boot.
+  ["src/kernel/registry.ts", "inBoot"],
 ];
 
 // Recognized form #5: fail-fast at process entry and kernel construction, off

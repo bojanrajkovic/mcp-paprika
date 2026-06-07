@@ -243,7 +243,7 @@ export function defineTool<
           return result;
         };
         const fail = (cause: unknown): never => {
-          op.end({ errorType: errorTypeName(cause), isError: true });
+          op.end({ errorType: errorTypeName(cause), isError: true, exception: cause });
           throw cause;
         };
         // The guard chain runs inside the same try as the body, so even a

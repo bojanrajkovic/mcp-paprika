@@ -122,8 +122,19 @@ describe("traceResultAsync", () => {
 
     const span = onlySpan("op.sync_throw");
     expect(span.status.code).toBe(SpanStatusCode.ERROR);
+    expect(span.status.message).toBe("contract breach");
     expect(span.attributes["error.type"]).toBe("RangeError");
+    // Throw rails record the semconv exception event — the stack IS the
+    // diagnostic for abnormal control flow (Result-rail err arms never do).
+    expect(span.events.some((event) => event.name === "exception")).toBe(true);
     expect(record).toHaveBeenCalledOnce();
+  });
+
+  it("a Result-rail err records no exception event (an expected outcome, not abnormal control flow)", async () => {
+    await traceResultAsync(tracer, "op.no_exception", {}, () => errAsync(new TypeError("expected failure")));
+    const span = onlySpan("op.no_exception");
+    expect(span.status.code).toBe(SpanStatusCode.ERROR);
+    expect(span.events).toEqual([]);
   });
 
   it("ends the operation (ERROR) when the underlying promise rejects (contract breach), without altering the rejection", async () => {

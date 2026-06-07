@@ -13,7 +13,7 @@ import type { PaprikaConfig } from "../utils/config.js";
 import type { ToolDef, ToolSpec } from "./tool.js";
 
 import { getMeter, getTracer, lazy, startTimer } from "../telemetry/scope.js";
-import { errorTypeName, traceResultAsync } from "../telemetry/trace-result.js";
+import { errorTypeName, startOperation, tracePromise, traceResultAsync } from "../telemetry/trace-result.js";
 
 /**
  * The domain-isolation composition kernel.
@@ -452,18 +452,26 @@ export async function buildKernel(
   // boot phases (the cycle and reconcile spans parent under it via the active
   // context), with a child per module build. Boot is the one place per-module
   // timing matters — every .state factory hydrates its disk caches serially in
-  // dependency order, so a slow startup names its culprit here. A build that
-  // throws (boot fail-fast, ADR-0014 form #5) leaks its span; the process is
-  // exiting, so there is nothing to export it to.
-  const bootSpan = getTracer().startSpan("mcp_paprika.boot");
-  const inBoot = <V>(fn: () => Promise<V>): Promise<V> => context.with(trace.setSpan(context.active(), bootSpan), fn);
+  // dependency order, so a slow startup names its culprit here. A build or
+  // hook that throws (boot fail-fast, ADR-0014 form #5) ends the open spans
+  // as errors on its way out: the startup-failure path flushes telemetry, and
+  // only ENDED spans export — the boot trace is exactly the diagnostics a
+  // failed boot needs.
+  const bootOp = startOperation(getTracer(), "mcp_paprika.boot", {});
+  const inBoot = async <V>(fn: () => Promise<V>): Promise<V> => {
+    try {
+      return await context.with(trace.setSpan(context.active(), bootOp.span), fn);
+    } catch (cause) {
+      bootOp.end({ errorType: errorTypeName(cause), isError: true, exception: cause });
+      throw cause;
+    }
+  };
 
   // Phase 0 — construction (+ per-module cache hydration).
   await inBoot(async () => {
     for (const m of order) {
-      const moduleSpan = getTracer().startSpan(`boot.build_module ${m.id}`);
-      const b = await context.with(trace.setSpan(context.active(), moduleSpan), () => m.build(infra));
-      moduleSpan.end();
+      // async wrapper: ErasedModule.build may return a plain value or a promise.
+      const b = await tracePromise(getTracer(), `boot.build_module ${m.id}`, {}, async () => m.build(infra));
       apis.set(m.id, b.api);
       if (b.flush !== undefined) flushers.push(b.flush);
       built.push({
@@ -651,17 +659,15 @@ export async function buildKernel(
   await inBoot(async () => {
     await syncOnce("boot");
     for (const phase of BOOT_PHASES) {
-      const phaseSpan = getTracer().startSpan(`boot.phase ${phase}`);
-      await context.with(trace.setSpan(context.active(), phaseSpan), async () => {
+      await tracePromise(getTracer(), `boot.phase ${phase}`, {}, async () => {
         for (const b of built) {
           const hook = b.onReady?.[phase];
           if (hook !== undefined) await hook(bootCtxOf(b));
         }
       });
-      phaseSpan.end();
     }
   });
-  bootSpan.end();
+  bootOp.end();
 
   return {
     registerAll(server: McpServer): void {

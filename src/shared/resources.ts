@@ -48,7 +48,7 @@ export function tracedResourceRead<Args extends ReadonlyArray<unknown>, Out>(
         // UNSET: an answered protocol error, not a server failure.
         op.end({ errorType: ErrorCode[cause.code] ?? String(cause.code) });
       } else {
-        op.end({ errorType: errorTypeName(cause), isError: true });
+        op.end({ errorType: errorTypeName(cause), isError: true, exception: cause });
       }
       throw cause;
     }

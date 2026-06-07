@@ -117,6 +117,28 @@ describe("syncOnce telemetry", () => {
     expect(after).toBe(baseline);
   });
 
+  it("ends the boot and module spans as errors when a module build rejects (the trace must export)", async () => {
+    const boom = new Error("hydration failed");
+    const broken = {
+      id: "broken",
+      dependsOn: [],
+      build: async () => {
+        throw boom;
+      },
+    } as unknown as ErasedModule;
+
+    await expect(buildKernel(infra(), [broken])).rejects.toBe(boom);
+
+    // Both spans must be ENDED (an un-ended span never exports, even when the
+    // startup-failure path flushes) and classed as errors.
+    const [moduleSpan] = telemetry.spansNamed("boot.build_module broken");
+    expect(moduleSpan!.status.code).toBe(SpanStatusCode.ERROR);
+    expect(moduleSpan!.attributes["error.type"]).toBe("Error");
+
+    const bootSpans = telemetry.spansNamed("mcp_paprika.boot").filter((s) => s.status.code === SpanStatusCode.ERROR);
+    expect(bootSpans).toHaveLength(1);
+  });
+
   it("labels the build-time initial cycle trigger=boot", async () => {
     await buildKernel(infra(), [fakeModule("recipe", [{ tier: "core", reconcile: () => okAsync(undefined) }])]);
 
