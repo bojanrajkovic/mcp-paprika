@@ -170,6 +170,12 @@ export function startTelemetry(): Result<() => Promise<void>, Error> {
         // i.e. the stdio MCP wire. With one arm always provided per signal,
         // that env path is unreachable in every configuration.
         ...(otlpSignalEnabled("TRACES") ? { traceExporter: new OTLPTraceExporter() } : { spanProcessors: [] }),
+        // Logs are NEVER exported via OTLP (pino is the logging pipeline —
+        // docs/telemetry.md); the explicit empty array keeps NodeSDK off its
+        // logs env auto-configuration, whose OTEL_LOGS_EXPORTER accepts
+        // `console` — a stdout writer, the stdio MCP wire — and defaults to
+        // otlp at the localhost default.
+        logRecordProcessors: [],
         ...(otlpSignalEnabled("METRICS")
           ? {
               metricReaders: [
