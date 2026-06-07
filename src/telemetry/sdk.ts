@@ -62,6 +62,12 @@ function stderrDiagLogger(): DiagLogger {
 
 const packageJsonSchema = z.object({ version: z.string() });
 
+/** Parse the standard interval knob; anything non-finite or non-positive takes the 60s default. */
+function metricExportIntervalMillis(raw: string | undefined): number {
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 60_000;
+}
+
 // dist/telemetry/sdk.js → ../../package.json lands on the repo/install root;
 // the same hop works from src/ under tsx. A missing/unreadable package.json
 // degrades to an unversioned resource, never a startup failure.
@@ -113,8 +119,11 @@ export function startTelemetry(): Result<() => Promise<void>, Error> {
             exporter: new OTLPMetricExporter(),
             // The reader does not read OTEL_METRIC_EXPORT_INTERVAL itself
             // (verified against sdk-metrics 2.7); honor it here so operators
-            // keep the standard knob. Milliseconds, default 60s.
-            exportIntervalMillis: Number(process.env["OTEL_METRIC_EXPORT_INTERVAL"] ?? "") || 60_000,
+            // keep the standard knob. Milliseconds, default 60s. The explicit
+            // finite-positive guard (not `||`) keeps garbage and non-positive
+            // values — invalid for a periodic reader — on the default, without
+            // the falsy-zero trap.
+            exportIntervalMillis: metricExportIntervalMillis(process.env["OTEL_METRIC_EXPORT_INTERVAL"]),
           }),
         ],
         instrumentations: [new UndiciInstrumentation(), new RuntimeNodeInstrumentation()],

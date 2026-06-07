@@ -10,6 +10,7 @@ import type { DomainCtx, DomainId } from "./registry.js";
 import { mcpServerOperationDuration } from "../telemetry/instruments.js";
 import { getTracer } from "../telemetry/scope.js";
 import { ATTR_GEN_AI_OPERATION_NAME, ATTR_GEN_AI_TOOL_NAME, ATTR_MCP_METHOD_NAME } from "../telemetry/semconv.js";
+import { errorTypeName } from "../telemetry/trace-result.js";
 
 /**
  * A tool's registration metadata, **as data** — everything `registerTool` needs
@@ -207,6 +208,18 @@ export function defineTool<
     register(ctx) {
       const log = ctx.infra.log.child({ component: spec.name });
       const body = handler(ctx) as ErasedToolCallback;
+      // Per-registration constants, hoisted off the per-call path: the span
+      // name and every attribute except error.type are fixed per tool.
+      const spanName = `${TOOLS_CALL_METHOD} ${spec.name}`;
+      const spanAttributes = {
+        [ATTR_MCP_METHOD_NAME]: TOOLS_CALL_METHOD,
+        [ATTR_GEN_AI_OPERATION_NAME]: "execute_tool",
+        [ATTR_GEN_AI_TOOL_NAME]: spec.name,
+      } as const;
+      const metricAttributes = {
+        [ATTR_MCP_METHOD_NAME]: TOOLS_CALL_METHOD,
+        [ATTR_GEN_AI_TOOL_NAME]: spec.name,
+      } as const;
       const gated: ErasedToolCallback = (args, extra) => {
         log.info({ tool: spec.name }, "tool invoked");
         // Args ride a separate debug line: per-call correlation (which UID, which
@@ -215,21 +228,14 @@ export function defineTool<
         // markers) and the root logger's REDACT_PATHS censors credential-named
         // fields; the level guard keeps the walk off the default-level path.
         if (log.isLevelEnabled("debug")) log.debug({ tool: spec.name, args: loggableArgs(args) }, "tool args");
-        const span = getTracer().startSpan(`${TOOLS_CALL_METHOD} ${spec.name}`, {
-          attributes: {
-            [ATTR_MCP_METHOD_NAME]: TOOLS_CALL_METHOD,
-            [ATTR_GEN_AI_OPERATION_NAME]: "execute_tool",
-            [ATTR_GEN_AI_TOOL_NAME]: spec.name,
-          },
-        });
+        const span = getTracer().startSpan(spanName, { attributes: spanAttributes });
         const started = performance.now();
         const record = (errorType: string | undefined): void => {
           span.end();
-          mcpServerOperationDuration().record((performance.now() - started) / 1000, {
-            [ATTR_MCP_METHOD_NAME]: TOOLS_CALL_METHOD,
-            [ATTR_GEN_AI_TOOL_NAME]: spec.name,
-            ...(errorType !== undefined && { [ATTR_ERROR_TYPE]: errorType }),
-          });
+          mcpServerOperationDuration().record(
+            (performance.now() - started) / 1000,
+            errorType === undefined ? metricAttributes : { ...metricAttributes, [ATTR_ERROR_TYPE]: errorType },
+          );
         };
         // Ends the span + records the histogram exactly once per call. The
         // doc-comment above carries the outcome-classing rationale.
@@ -240,34 +246,37 @@ export function defineTool<
           record(errorType);
           return result;
         };
-        // Tool bodies never throw to signal an outcome (ADR-0014), but the SDK
-        // callback protocol is throw-based — instrumentation stays throw-
-        // transparent: a foreign escape ends the span as an error and rethrows
-        // for the SDK to render.
+        // Tool bodies and guards never throw to signal an outcome (ADR-0014),
+        // but the SDK callback protocol is throw-based — instrumentation stays
+        // throw-transparent: a foreign escape ends the span as an error and
+        // rethrows for the SDK to render.
         const fail = (cause: unknown): never => {
-          const errorType = cause instanceof Error ? cause.constructor.name : "unknown";
+          const errorType = errorTypeName(cause);
           span.setAttribute(ATTR_ERROR_TYPE, errorType);
           span.setStatus({ code: SpanStatusCode.ERROR });
           record(errorType);
           throw cause;
         };
-        for (const pre of preconditions) {
-          const failure = pre(ctx).match(
-            () => undefined,
-            (result) => result,
-          );
-          if (failure !== undefined) {
-            // debug, not info: gating is the expected, self-healing cold-start
-            // state, and a retrying client would otherwise storm the info log
-            // with one gate line per call across the whole surface.
-            log.debug({ tool: spec.name, precondition: pre.name || "(inline)" }, "tool gated by precondition");
-            span.setAttribute(ATTR_TOOL_GATED_BY, pre.name || "(inline)");
-            return finish(failure, "precondition_gated");
-          }
-        }
-        // context.with makes this span active for the body, so spans started
-        // inside it (undici fetches, feature pipelines) parent correctly.
+        // The guard chain runs inside the same try as the body, so even a
+        // contract-breaking guard throw routes through fail() instead of
+        // leaking the span.
         try {
+          for (const pre of preconditions) {
+            const failure = pre(ctx).match(
+              () => undefined,
+              (result) => result,
+            );
+            if (failure !== undefined) {
+              // debug, not info: gating is the expected, self-healing cold-start
+              // state, and a retrying client would otherwise storm the info log
+              // with one gate line per call across the whole surface.
+              log.debug({ tool: spec.name, precondition: pre.name || "(inline)" }, "tool gated by precondition");
+              span.setAttribute(ATTR_TOOL_GATED_BY, pre.name || "(inline)");
+              return finish(failure, "precondition_gated");
+            }
+          }
+          // context.with makes this span active for the body, so spans started
+          // inside it (undici fetches, feature pipelines) parent correctly.
           const outcome = context.with(trace.setSpan(context.active(), span), () => body(args, extra));
           return outcome instanceof Promise ? outcome.then(finish, fail) : finish(outcome);
         } catch (cause) {

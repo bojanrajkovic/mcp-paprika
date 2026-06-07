@@ -75,6 +75,7 @@ const COCKATIEL_GOVERNED: ReadonlyArray<readonly [file: string, innerFn: string,
 const INSTRUMENTATION_RETHROWS: ReadonlyArray<readonly [file: string, fn: string]> = [
   ["src/kernel/tool.ts", "fail"],
   ["src/shared/resources.ts", "tracedResourceRead"],
+  ["src/telemetry/trace-result.ts", "traceResultAsync"],
 ];
 
 // Recognized form #5: fail-fast at process entry and kernel construction, off

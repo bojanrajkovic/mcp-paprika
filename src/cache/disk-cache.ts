@@ -126,11 +126,15 @@ export class DiskCache<T> {
   protected readonly log: Logger;
   protected _initialized = false;
 
+  /** Metric entity label — the flat on-disk name; invariant, so computed once. */
+  private readonly _entity: string;
+
   constructor(opts: DiskCacheOptions<T>) {
     this._subdir = opts.subdir;
     this._parse = opts.parse;
     this._getKey = opts.getKey;
     this.log = opts.log ?? SILENT_LOG;
+    this._entity = basename(this._subdir);
   }
 
   init(): ResultAsync<void, CacheError> {
@@ -151,26 +155,28 @@ export class DiskCache<T> {
   }
 
   flush(): ResultAsync<void, CacheError> {
-    return this._measured(
-      "flush",
-      this._locked("flush", () => this._writePending()),
-    );
+    return this._measured("flush", () => this._locked("flush", () => this._writePending()));
   }
 
-  /** Record the operation histogram on ok and the error counter on err; values pass through untouched. */
-  private _measured<V>(op: string, result: ResultAsync<V, CacheError>): ResultAsync<V, CacheError> {
-    const entity = basename(this._subdir);
+  /**
+   * Record the operation histogram on ok and the error counter on err; values
+   * pass through untouched. Takes a THUNK so the timer starts before the
+   * operation does — an eagerly-built ResultAsync is already running (mutex
+   * acquisition included) by the time it could be passed in, which would
+   * undercount exactly the contended case the histogram exists to expose.
+   */
+  private _measured<V>(op: string, run: () => ResultAsync<V, CacheError>): ResultAsync<V, CacheError> {
     const started = performance.now();
-    return result
+    return run()
       .map((value) => {
         cacheOperationDuration().record((performance.now() - started) / 1000, {
-          "mcp_paprika.cache.entity": entity,
+          "mcp_paprika.cache.entity": this._entity,
           "mcp_paprika.cache.op": op,
         });
         return value;
       })
       .mapErr((error) => {
-        cacheErrors().add(1, { "mcp_paprika.cache.entity": entity, "mcp_paprika.cache.op": op });
+        cacheErrors().add(1, { "mcp_paprika.cache.entity": this._entity, "mcp_paprika.cache.op": op });
         return error;
       });
   }
@@ -188,7 +194,7 @@ export class DiskCache<T> {
   }
 
   getAll(): ResultAsync<Array<T>, CacheError> {
-    return this._measured("get_all", this._getAllInner());
+    return this._measured("get_all", () => this._getAllInner());
   }
 
   private _getAllInner(): ResultAsync<Array<T>, CacheError> {

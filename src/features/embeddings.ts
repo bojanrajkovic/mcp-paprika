@@ -7,6 +7,7 @@
  */
 
 import { SpanKind, trace } from "@opentelemetry/api";
+import { ATTR_ERROR_TYPE } from "@opentelemetry/semantic-conventions";
 import type { IRetryContext } from "cockatiel";
 import { errAsync, okAsync, ResultAsync } from "neverthrow";
 import type { Logger } from "pino";
@@ -24,7 +25,7 @@ import {
   ATTR_GEN_AI_TOKEN_TYPE,
   ATTR_GEN_AI_USAGE_INPUT_TOKENS,
 } from "../telemetry/semconv.js";
-import { traceResultAsync } from "../telemetry/trace-result.js";
+import { errorTypeName, traceResultAsync } from "../telemetry/trace-result.js";
 import { CircuitOpenError } from "../utils/errors.js";
 import { SILENT_LOG, toMessage } from "../utils/log.js";
 import {
@@ -187,7 +188,7 @@ export class EmbeddingClient {
     const recordDuration = (errorType: string | undefined): void => {
       genAiClientOperationDuration().record((performance.now() - started) / 1000, {
         ...this._genAiAttrs,
-        ...(errorType !== undefined && { "error.type": errorType }),
+        ...(errorType !== undefined && { [ATTR_ERROR_TYPE]: errorType }),
       });
     };
     return traceResultAsync(
@@ -197,7 +198,7 @@ export class EmbeddingClient {
         kind: SpanKind.CLIENT,
         attributes: { ...this._genAiAttrs, "mcp_paprika.embeddings.batch_size": texts.length },
       },
-      (error) => error.constructor.name,
+      errorTypeName,
       () =>
         // The executor maps a tripped breaker to CircuitOpenError("embeddings", endpoint);
         // the throw-based cockatiel protocol ends at this owned edge (ADR-0014).
@@ -207,7 +208,7 @@ export class EmbeddingClient {
             return vectors;
           })
           .mapErr((error) => {
-            recordDuration(error.constructor.name);
+            recordDuration(errorTypeName(error));
             return error;
           }),
     );

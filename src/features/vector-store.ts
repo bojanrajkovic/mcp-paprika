@@ -54,6 +54,7 @@ import { mkdir, readFile, rename, cp, open } from "node:fs/promises";
 import { join } from "node:path";
 
 import { trace } from "@opentelemetry/api";
+import { ATTR_ERROR_TYPE } from "@opentelemetry/semantic-conventions";
 import { Mutex } from "async-mutex";
 import { err, errAsync, ok, okAsync, Result, ResultAsync } from "neverthrow";
 import type { Logger } from "pino";
@@ -64,7 +65,7 @@ import type { Recipe } from "../domains/recipe/types.js";
 import type { EmbeddingClient, EmbeddingFailure } from "./embeddings.js";
 
 import { getMeter, getTracer, lazy } from "../telemetry/scope.js";
-import { traceResultAsync } from "../telemetry/trace-result.js";
+import { errorTypeName, traceResultAsync } from "../telemetry/trace-result.js";
 import { isNodeError } from "../utils/errors.js";
 import { SILENT_LOG, toMessage } from "../utils/log.js";
 import { recipeToEmbeddingText } from "./embeddings.js";
@@ -85,8 +86,6 @@ const vectorIndexSize = lazy(() =>
   }),
 );
 
-/** `error.type` class for vector-store failures (always Error subclasses). */
-const vectorErrorType = (error: VectorStoreFailure): string => error.constructor.name;
 import { JsonVectorIndex } from "./json-vector-index.js";
 import { VectorStoreError } from "./vector-store-errors.js";
 
@@ -332,7 +331,7 @@ export class VectorStore {
       getTracer(),
       "discover.reindex",
       { attributes: { "mcp_paprika.reindex.batch": recipes.length } },
-      vectorErrorType,
+      errorTypeName,
       () =>
         // Run exclusively so a concurrent indexRecipes/removeRecipe can't open an
         // overlapping vector-index transaction or race the hash map (see `_writeMutex`).
@@ -350,6 +349,15 @@ export class VectorStore {
             });
             reindexDuration().record((performance.now() - started) / 1000);
             return result;
+          })
+          .mapErr((error) => {
+            // A failed re-index records too, classed by error.type — a wedged
+            // embeddings backend must be visible in the metric, not just the
+            // span (the index-event dispatch counter can't see async failures).
+            reindexDuration().record((performance.now() - started) / 1000, {
+              [ATTR_ERROR_TYPE]: errorTypeName(error),
+            });
+            return error;
           }),
     );
   }
@@ -496,7 +504,7 @@ export class VectorStore {
       getTracer(),
       "discover.query",
       { attributes: { "mcp_paprika.discover.top_k": topK } },
-      vectorErrorType,
+      errorTypeName,
       () =>
         this._embedder
           .embed(query)

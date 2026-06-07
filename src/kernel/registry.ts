@@ -14,7 +14,7 @@ import type { ToolDef, ToolSpec } from "./tool.js";
 
 import { getMeter, getTracer, lazy } from "../telemetry/scope.js";
 import { MCP_DURATION_BUCKETS } from "../telemetry/semconv.js";
-import { traceResultAsync } from "../telemetry/trace-result.js";
+import { errorTypeName, traceResultAsync } from "../telemetry/trace-result.js";
 
 /**
  * The domain-isolation composition kernel.
@@ -414,7 +414,7 @@ const syncSweepExpired = lazy(() =>
 );
 
 /** `error.type` class for a reconcile failure: the error's constructor, or the plain-object CacheError. */
-const syncErrorType = (error: SyncError): string => (error instanceof Error ? error.constructor.name : "CacheError");
+const syncErrorType = (error: SyncError): string => errorTypeName(error, "CacheError");
 
 interface Built {
   readonly id: string;

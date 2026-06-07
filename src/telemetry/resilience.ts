@@ -45,6 +45,12 @@ const bulkheadAvailableSlots = lazy(() =>
  * through; the policies are per-instance (see utils/resilience.ts), so each
  * client wires its own. Observable callbacks fire only at collection time —
  * no cost on the request path.
+ *
+ * Per-process-singleton assumption is load-bearing: there is no
+ * removeCallback, so every wired client pins a gauge callback (and its
+ * closure) for the meter's lifetime. The resilient clients are all built
+ * once per process today; a future per-request/per-session client must NOT
+ * route through here without adding unregistration.
  */
 export function wireResilienceTelemetry(
   client: string,

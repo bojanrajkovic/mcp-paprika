@@ -12,6 +12,7 @@
  * at construction — credentials are the only construction-time input.
  */
 import { SpanKind, trace, ValueType } from "@opentelemetry/api";
+import { ATTR_ERROR_TYPE } from "@opentelemetry/semantic-conventions";
 import type { IRetryContext } from "cockatiel";
 import { err, ok, type Result, ResultAsync } from "neverthrow";
 import type { Logger } from "pino";
@@ -28,7 +29,7 @@ import {
   ATTR_GEN_AI_REQUEST_MODEL,
   ATTR_GEN_AI_RESPONSE_MODEL,
 } from "../telemetry/semconv.js";
-import { traceResultAsync } from "../telemetry/trace-result.js";
+import { errorTypeName, traceResultAsync } from "../telemetry/trace-result.js";
 import { CircuitOpenError } from "../utils/errors.js";
 import { SILENT_LOG, toMessage } from "../utils/log.js";
 import {
@@ -262,9 +263,12 @@ export class PhotographyClient {
         );
         // Cost and the served model are known only on the final, successful
         // attempt — record them here (the logical span is the active one).
+        // The > 0 guard protects the monotonic counter: a provider-reported
+        // zero/negative cost (a credit, a buggy field) would be DROPPED by the
+        // SDK as a monotonicity violation and could mask real spend.
         const span = trace.getActiveSpan();
         span?.setAttribute(ATTR_GEN_AI_RESPONSE_MODEL, servedModel);
-        if (costUsd !== null) {
+        if (costUsd !== null && costUsd > 0) {
           span?.setAttribute("mcp_paprika.photo.cost_usd", costUsd);
           photoGenCost().add(costUsd, { [ATTR_GEN_AI_REQUEST_MODEL]: slug });
         }
@@ -285,7 +289,7 @@ export class PhotographyClient {
     const recordDuration = (errorType: string | undefined): void => {
       genAiClientOperationDuration().record((performance.now() - started) / 1000, {
         ...genAiAttrs,
-        ...(errorType !== undefined && { "error.type": errorType }),
+        ...(errorType !== undefined && { [ATTR_ERROR_TYPE]: errorType }),
       });
     };
     return traceResultAsync(
@@ -295,7 +299,7 @@ export class PhotographyClient {
         kind: SpanKind.CLIENT,
         attributes: { ...genAiAttrs, "mcp_paprika.photo.kind": options.referenceImage ? "restyle" : "generate" },
       },
-      (error) => error.constructor.name,
+      errorTypeName,
       () =>
         // The throw-based cockatiel protocol ends at this owned edge (ADR-0014).
         ResultAsync.fromPromise(this._executor.execute(this._endpoint, execute), toPhotographyFailure)
@@ -304,7 +308,7 @@ export class PhotographyClient {
             return photo;
           })
           .mapErr((error) => {
-            recordDuration(error.constructor.name);
+            recordDuration(errorTypeName(error));
             return error;
           }),
     );

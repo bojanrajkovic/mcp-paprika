@@ -15,9 +15,6 @@
 /** The MCP protocol method handled by a span (e.g. `tools/call`). */
 export const ATTR_MCP_METHOD_NAME = "mcp.method.name";
 
-/** The MCP session identifier — span attribute only; UUID-valued, so never a metric attribute. */
-export const ATTR_MCP_SESSION_ID = "mcp.session.id";
-
 /** The kind of GenAI operation a span describes (`execute_tool`, `embeddings`, `generate_content`, …). */
 export const ATTR_GEN_AI_OPERATION_NAME = "gen_ai.operation.name";
 
@@ -38,9 +35,6 @@ export const ATTR_GEN_AI_TOKEN_TYPE = "gen_ai.token.type";
 
 /** Input-token count consumed by a GenAI request (span attribute). */
 export const ATTR_GEN_AI_USAGE_INPUT_TOKENS = "gen_ai.usage.input_tokens";
-
-/** Output-token count produced by a GenAI request (span attribute). */
-export const ATTR_GEN_AI_USAGE_OUTPUT_TOKENS = "gen_ai.usage.output_tokens";
 
 /** Server-side duration of an MCP operation, in seconds. */
 export const METRIC_MCP_SERVER_OPERATION_DURATION = "mcp.server.operation.duration";

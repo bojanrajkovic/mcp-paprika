@@ -37,10 +37,13 @@ const NAME_RE = /"(mcp_paprika\.[^"]*)"/g;
 const WELL_FORMED = /^mcp_paprika(\.[a-z0-9_]+)+$/;
 
 // Identity/credential key names that must never terminate a telemetry name.
-// Derived from REDACT_PATHS (leaf key names, wildcards stripped) plus the
-// identity claims the auth log lines carry but telemetry must not.
+// Derived from REDACT_PATHS leaf key names — `(\*\.)+` strips EVERY leading
+// wildcard level (`*.*.token` → `token`), not just one, so the derivation
+// holds even if the un-wildcarded entries are ever cleaned out of the redact
+// list — plus the identity claims the auth log lines carry but telemetry
+// must not.
 const SENSITIVE_SEGMENTS: ReadonlySet<string> = new Set([
-  ...REDACT_PATHS.map((p) => p.replace(/^\*\./, "").toLowerCase()),
+  ...REDACT_PATHS.map((p) => p.replace(/^(\*\.)+/, "").toLowerCase()),
   "email",
   "sub",
   "client_id",
@@ -73,5 +76,21 @@ describe("ADR-0018: custom telemetry names are well-formed and never identity-be
       .filter(([name]) => SENSITIVE_SEGMENTS.has(name.split(".").at(-1) ?? ""))
       .map(([name, file]) => `${name} (${file})`);
     expect(offenders).toEqual([]);
+  });
+
+  // Tools are structurally safe (defineTool's wrapper is the only way to
+  // register one), but resource registration is an opaque `(ctx) => void`
+  // the kernel can't see into — the tracedResourceRead wrap is applied by
+  // hand per resource file. This gate keeps that hand-application honest:
+  // a new resource that registers a read handler without the wrap ships
+  // untraced and unmetered with no other signal.
+  it("every resource file that calls registerResource wraps its handler in tracedResourceRead", () => {
+    const unwrapped = sourceFiles()
+      .filter((p) => /^src\/domains\/[^/]+\/resources\/.+\.ts$/.test(p))
+      .filter((p) => {
+        const text = readFileSync(p, "utf8");
+        return text.includes("registerResource") && !text.includes("tracedResourceRead");
+      });
+    expect(unwrapped).toEqual([]);
   });
 });

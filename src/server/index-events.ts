@@ -5,12 +5,15 @@ import type { Recipe } from "../domains/recipe/types.js";
 
 import { getMeter, lazy } from "../telemetry/scope.js";
 
-// The seam swallows handler errors by contract (a re-index failure must not
-// break a sync cycle or tool write), so — like the notifier — the counter is
-// the aggregate visibility the swallow takes away from operators.
+// Counts DISPATCH, not completion: the real subscriber (discover's re-index
+// hook) is fire-and-forget async, so by the time its work fails this emit has
+// long returned — "dispatched" is all this seam can honestly know, and
+// "handler_threw" covers only a synchronous escape. Re-index FAILURES are
+// visible where they happen: the discover.reindex span's error.type and the
+// reindex duration histogram (src/features/vector-store.ts).
 const indexEvents = lazy(() =>
   getMeter().createCounter("mcp_paprika.index_events", {
-    description: "Cross-domain index events, by type and handler outcome",
+    description: "Cross-domain index events, by type and dispatch outcome",
     unit: "{event}",
   }),
 );
@@ -53,19 +56,19 @@ export function createIndexEvents(log: Logger): IndexEventEmitter {
   return {
     emit(event) {
       for (const handler of handlers) {
+        let outcome = "dispatched";
         try {
           handler(event);
-          indexEvents().add(1, {
-            "mcp_paprika.index_event.type": event.type,
-            "mcp_paprika.index_event.outcome": "handled",
-          });
         } catch (err) {
           log.warn({ err, type: event.type }, "index-event handler threw; ignored (best-effort re-index)");
-          indexEvents().add(1, {
-            "mcp_paprika.index_event.type": event.type,
-            "mcp_paprika.index_event.outcome": "handler_threw",
-          });
+          outcome = "handler_threw";
         }
+        // Outside the swallow, so a recording hiccup can never be
+        // misattributed to the handler.
+        indexEvents().add(1, {
+          "mcp_paprika.index_event.type": event.type,
+          "mcp_paprika.index_event.outcome": outcome,
+        });
       }
     },
     on(handler) {

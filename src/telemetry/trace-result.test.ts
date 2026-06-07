@@ -6,7 +6,7 @@ import {
   type ReadableSpan,
   SimpleSpanProcessor,
 } from "@opentelemetry/sdk-trace-base";
-import { errAsync, okAsync } from "neverthrow";
+import { errAsync, okAsync, ResultAsync } from "neverthrow";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import { traceResultAsync } from "./trace-result.js";
@@ -95,5 +95,46 @@ describe("traceResultAsync", () => {
     const parent = onlySpan("op.parent");
     const child = onlySpan("op.child");
     expect(child.parentSpanContext?.spanId).toBe(parent.spanContext().spanId);
+  });
+
+  it("ends the span (ERROR) and rethrows unchanged when fn breaks the contract by throwing synchronously", () => {
+    const boom = new RangeError("contract breach");
+    expect(() =>
+      traceResultAsync(
+        tracer,
+        "op.sync_throw",
+        {},
+        () => "unused",
+        () => {
+          throw boom;
+        },
+      ),
+    ).toThrow(boom);
+
+    const span = onlySpan("op.sync_throw");
+    expect(span.status.code).toBe(SpanStatusCode.ERROR);
+    expect(span.attributes["error.type"]).toBe("RangeError");
+  });
+
+  it("ends the span (ERROR) when the underlying promise rejects (contract breach), without altering the rejection", async () => {
+    const boom = new TypeError("rejected chain");
+    const breached = traceResultAsync(
+      tracer,
+      "op.rejection",
+      {},
+      () => "unused",
+      // A ResultAsync whose underlying promise rejects — the breach the sync
+      // driver's defensive catch tolerates at cycle level.
+      () => new ResultAsync(Promise.reject(boom)) as ResultAsync<never, never>,
+    );
+    await expect(Promise.resolve(breached)).rejects.toBe(boom);
+    // The rejection tap ends the span on a microtask; flush it.
+    await new Promise((resolve) => {
+      setImmediate(resolve);
+    });
+
+    const span = onlySpan("op.rejection");
+    expect(span.status.code).toBe(SpanStatusCode.ERROR);
+    expect(span.attributes["error.type"]).toBe("TypeError");
   });
 });
