@@ -3,6 +3,18 @@ import type { Logger } from "pino";
 import type { RecipeUid } from "../domains/recipe/ids.js";
 import type { Recipe } from "../domains/recipe/types.js";
 
+import { getMeter, lazy } from "../telemetry/scope.js";
+
+// The seam swallows handler errors by contract (a re-index failure must not
+// break a sync cycle or tool write), so — like the notifier — the counter is
+// the aggregate visibility the swallow takes away from operators.
+const indexEvents = lazy(() =>
+  getMeter().createCounter("mcp_paprika.index_events", {
+    description: "Cross-domain index events, by type and handler outcome",
+    unit: "{event}",
+  }),
+);
+
 /**
  * The recipe/category → discover re-index seam.
  *
@@ -43,8 +55,16 @@ export function createIndexEvents(log: Logger): IndexEventEmitter {
       for (const handler of handlers) {
         try {
           handler(event);
+          indexEvents().add(1, {
+            "mcp_paprika.index_event.type": event.type,
+            "mcp_paprika.index_event.outcome": "handled",
+          });
         } catch (err) {
           log.warn({ err, type: event.type }, "index-event handler threw; ignored (best-effort re-index)");
+          indexEvents().add(1, {
+            "mcp_paprika.index_event.type": event.type,
+            "mcp_paprika.index_event.outcome": "handler_threw",
+          });
         }
       }
     },

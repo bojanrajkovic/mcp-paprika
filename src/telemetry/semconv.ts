@@ -30,6 +30,9 @@ export const ATTR_GEN_AI_PROVIDER_NAME = "gen_ai.provider.name";
 /** The model name the request asked for. */
 export const ATTR_GEN_AI_REQUEST_MODEL = "gen_ai.request.model";
 
+/** The concrete model that served the response (may differ from the request behind a router). */
+export const ATTR_GEN_AI_RESPONSE_MODEL = "gen_ai.response.model";
+
 /** Token-class discriminator on `gen_ai.client.token.usage` (`input` | `output`). */
 export const ATTR_GEN_AI_TOKEN_TYPE = "gen_ai.token.type";
 

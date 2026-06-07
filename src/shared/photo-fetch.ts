@@ -10,12 +10,30 @@ import ipaddr from "ipaddr.js";
 // keeps the dispatcher and the fetch on the same copy.
 import { Agent, type Dispatcher, fetch as undiciFetch, type Response as UndiciResponse } from "undici";
 
+import { getMeter, lazy } from "../telemetry/scope.js";
 import { toMessage } from "../utils/log.js";
 
 /** Default cap for a single fetched image. */
 export const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 /** Default per-request fetch timeout. */
 export const FETCH_TIMEOUT_MS = 15_000;
+
+/**
+ * Refused image fetches by enum reason. `blocked_ip` and `fetch_failed` are
+ * the security-relevant ones: the latter includes the SSRF guard's
+ * connect-time DNS rejection and blocked redirects, so a probing pattern
+ * shows up here while the URL itself stays in the (sanitized) logs only.
+ */
+const photoFetchRejections = lazy(() =>
+  getMeter().createCounter("mcp_paprika.photo_fetch.rejections", {
+    description: "Image fetches refused by the SSRF-guarded fetcher, by reason",
+    unit: "{rejection}",
+  }),
+);
+
+function rejected(reason: string): void {
+  photoFetchRejections().add(1, { "mcp_paprika.photo_fetch.reason": reason });
+}
 
 /**
  * True if an IP string (v4 or v6) is one we must never let the server fetch
@@ -112,15 +130,18 @@ export async function fetchImageBytes(
   try {
     parsed = new URL(url);
   } catch {
+    rejected("invalid_url");
     return { error: `Invalid url: ${url}` };
   }
   if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    rejected("unsupported_scheme");
     return { error: "Only http(s) image URLs are supported." };
   }
   // A bare IP-literal host skips DNS (undici connects directly, bypassing ssrfLookup),
   // so validate it here. Hostnames are validated rebinding-safe by ssrfAgent at connect.
   const literal = parsed.hostname.replace(/^\[(.+)\]$/, "$1");
   if (isIP(literal) !== 0 && isBlockedIp(literal)) {
+    rejected("blocked_ip");
     return { error: "URL resolves to a private or reserved address; refusing to fetch." };
   }
 
@@ -134,11 +155,20 @@ export async function fetchImageBytes(
       signal: AbortSignal.timeout(timeoutMs),
     });
   } catch (e) {
+    // Covers the SSRF guard's connect-time DNS rejection, blocked redirects,
+    // the timeout abort, and plain network failures.
+    rejected("fetch_failed");
     return { error: `Failed to download image: ${toMessage(e)}` };
   }
-  if (!res.ok) return { error: `Failed to download image: HTTP ${res.status.toString()}` };
+  if (!res.ok) {
+    rejected("http_error");
+    return { error: `Failed to download image: HTTP ${res.status.toString()}` };
+  }
 
   const capped = await readCapped(res, maxBytes);
-  if ("error" in capped) return capped;
+  if ("error" in capped) {
+    rejected("too_large");
+    return capped;
+  }
   return { bytes: capped.bytes, contentType: res.headers.get("content-type") };
 }

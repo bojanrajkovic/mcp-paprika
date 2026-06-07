@@ -6,6 +6,7 @@
  * - recipeToEmbeddingText: pure function for converting recipes to embedding text
  */
 
+import { SpanKind, trace } from "@opentelemetry/api";
 import type { IRetryContext } from "cockatiel";
 import { errAsync, okAsync, ResultAsync } from "neverthrow";
 import type { Logger } from "pino";
@@ -14,6 +15,16 @@ import { z } from "zod";
 import type { Recipe } from "../domains/recipe/types.js";
 import type { EmbeddingConfig } from "../utils/config.js";
 
+import { genAiClientOperationDuration, genAiClientTokenUsage } from "../telemetry/instruments.js";
+import { getTracer } from "../telemetry/scope.js";
+import {
+  ATTR_GEN_AI_OPERATION_NAME,
+  ATTR_GEN_AI_PROVIDER_NAME,
+  ATTR_GEN_AI_REQUEST_MODEL,
+  ATTR_GEN_AI_TOKEN_TYPE,
+  ATTR_GEN_AI_USAGE_INPUT_TOKENS,
+} from "../telemetry/semconv.js";
+import { traceResultAsync } from "../telemetry/trace-result.js";
 import { CircuitOpenError } from "../utils/errors.js";
 import { SILENT_LOG, toMessage } from "../utils/log.js";
 import {
@@ -76,6 +87,7 @@ export class EmbeddingClient {
   private readonly _model: string;
   private readonly log: Logger;
   private readonly _executor: ResilientExecutor;
+  private readonly _genAiAttrs: Readonly<Record<string, string>>;
   private _dimensions: number | null = null;
 
   constructor(config: Readonly<EmbeddingConfig>, log?: Logger) {
@@ -83,6 +95,14 @@ export class EmbeddingClient {
     this._apiKey = config.apiKey;
     this._model = config.model;
     this.log = log ?? SILENT_LOG;
+    // Provider = the endpoint host: the API is OpenAI-flavored but the actual
+    // provider is whatever the operator pointed baseUrl at (OpenAI, Ollama, a
+    // router) — one fixed value per deployment, so cardinality-safe.
+    this._genAiAttrs = {
+      [ATTR_GEN_AI_OPERATION_NAME]: "embeddings",
+      [ATTR_GEN_AI_REQUEST_MODEL]: this._model,
+      [ATTR_GEN_AI_PROVIDER_NAME]: new URL(this._baseUrl).host,
+    };
 
     // Per-instance resilience stack (breaker outside retry; see resilience.ts).
     // `logLabel: "embedding"` preserves the existing log-message wording.
@@ -148,14 +168,49 @@ export class EmbeddingClient {
         this._dimensions = parsed.data[0]!.embedding.length;
       }
 
+      // Usage is known only on the final, successful attempt — record it here
+      // (on the logical span via the active context, and the token histogram).
+      trace.getActiveSpan()?.setAttribute(ATTR_GEN_AI_USAGE_INPUT_TOKENS, parsed.usage.prompt_tokens);
+      genAiClientTokenUsage().record(parsed.usage.prompt_tokens, {
+        ...this._genAiAttrs,
+        [ATTR_GEN_AI_TOKEN_TYPE]: "input",
+      });
+
       const attemptDurationMs = Math.round(performance.now() - t0);
       this.log.debug({ attempt, attemptDurationMs }, "embedding request ok");
       return parsed.data.map((d) => d.embedding);
     };
 
-    // The executor maps a tripped breaker to CircuitOpenError("embeddings", endpoint);
-    // the throw-based cockatiel protocol ends at this owned edge (ADR-0014).
-    return ResultAsync.fromPromise(this._executor.execute(endpoint, execute), toEmbeddingFailure);
+    // The logical GenAI span covers every retry attempt and backoff wait; the
+    // per-attempt HTTP spans (undici instrumentation) parent under it.
+    const started = performance.now();
+    const recordDuration = (errorType: string | undefined): void => {
+      genAiClientOperationDuration().record((performance.now() - started) / 1000, {
+        ...this._genAiAttrs,
+        ...(errorType !== undefined && { "error.type": errorType }),
+      });
+    };
+    return traceResultAsync(
+      getTracer(),
+      `embeddings ${this._model}`,
+      {
+        kind: SpanKind.CLIENT,
+        attributes: { ...this._genAiAttrs, "mcp_paprika.embeddings.batch_size": texts.length },
+      },
+      (error) => error.constructor.name,
+      () =>
+        // The executor maps a tripped breaker to CircuitOpenError("embeddings", endpoint);
+        // the throw-based cockatiel protocol ends at this owned edge (ADR-0014).
+        ResultAsync.fromPromise(this._executor.execute(endpoint, execute), toEmbeddingFailure)
+          .map((vectors) => {
+            recordDuration(undefined);
+            return vectors;
+          })
+          .mapErr((error) => {
+            recordDuration(error.constructor.name);
+            return error;
+          }),
+    );
   }
 
   /**

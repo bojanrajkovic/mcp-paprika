@@ -450,22 +450,36 @@ export async function buildKernel(
   };
   const bootCtxOf = (b: Built): ErasedBootCtx => ({ state: b.state, deps: depsOf(b.dependsOn), infra });
 
+  // The boot trace: one root span covering construction → initial sync →
+  // boot phases (the cycle and reconcile spans parent under it via the active
+  // context), with a child per module build. Boot is the one place per-module
+  // timing matters — every .state factory hydrates its disk caches serially in
+  // dependency order, so a slow startup names its culprit here. A build that
+  // throws (boot fail-fast, ADR-0014 form #5) leaks its span; the process is
+  // exiting, so there is nothing to export it to.
+  const bootSpan = getTracer().startSpan("mcp_paprika.boot");
+  const inBoot = <V>(fn: () => Promise<V>): Promise<V> => context.with(trace.setSpan(context.active(), bootSpan), fn);
+
   // Phase 0 — construction (+ per-module cache hydration).
-  for (const m of order) {
-    const b = await m.build(infra);
-    apis.set(m.id, b.api);
-    if (b.flush !== undefined) flushers.push(b.flush);
-    built.push({
-      id: m.id,
-      dependsOn: m.dependsOn,
-      state: b.state,
-      writes: b.writes,
-      tools: b.tools,
-      resources: b.resources,
-      syncs: b.syncs,
-      onReady: b.onReady,
-    });
-  }
+  await inBoot(async () => {
+    for (const m of order) {
+      const moduleSpan = getTracer().startSpan(`boot.build_module ${m.id}`);
+      const b = await context.with(trace.setSpan(context.active(), moduleSpan), () => m.build(infra));
+      moduleSpan.end();
+      apis.set(m.id, b.api);
+      if (b.flush !== undefined) flushers.push(b.flush);
+      built.push({
+        id: m.id,
+        dependsOn: m.dependsOn,
+        state: b.state,
+        writes: b.writes,
+        tools: b.tools,
+        resources: b.resources,
+        syncs: b.syncs,
+        onReady: b.onReady,
+      });
+    }
+  });
 
   const flushAll = (): ResultAsync<void, CacheError> =>
     ResultAsync.combine(flushers.map((f) => f())).map(() => undefined);
@@ -637,13 +651,20 @@ export async function buildKernel(
   // driver's immediate first iteration re-syncs and DOES call notifyFromResults once a
   // session can receive it. If the bootstrap order ever changes so a server exists here,
   // wire notifyFromResults onto this call too.
-  await syncOnce("boot");
-  for (const phase of BOOT_PHASES) {
-    for (const b of built) {
-      const hook = b.onReady?.[phase];
-      if (hook !== undefined) await hook(bootCtxOf(b));
+  await inBoot(async () => {
+    await syncOnce("boot");
+    for (const phase of BOOT_PHASES) {
+      const phaseSpan = getTracer().startSpan(`boot.phase ${phase}`);
+      await context.with(trace.setSpan(context.active(), phaseSpan), async () => {
+        for (const b of built) {
+          const hook = b.onReady?.[phase];
+          if (hook !== undefined) await hook(bootCtxOf(b));
+        }
+      });
+      phaseSpan.end();
     }
-  }
+  });
+  bootSpan.end();
 
   return {
     registerAll(server: McpServer): void {

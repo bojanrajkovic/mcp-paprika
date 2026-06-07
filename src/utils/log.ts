@@ -5,6 +5,7 @@ import { closeSync, mkdirSync, openSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { Writable } from "node:stream";
 
+import { trace } from "@opentelemetry/api";
 import type { LevelWithSilent, Level as PinoLevel } from "pino";
 import pino from "pino";
 import pretty from "pino-pretty";
@@ -256,6 +257,15 @@ export function createLogger(opts: LoggerOptions): pino.Logger {
       // and would leak into the notifier fan-out's curated data.
       // null (not undefined) is required by pino's exactOptionalPropertyTypes TS config.
       base: null,
+      // Trace correlation WITHOUT @opentelemetry/instrumentation-pino: that
+      // package patches the pino module, which needs the ESM loader hook the
+      // bin/stdio path can't have (ADR-0018). A mixin reads the active span at
+      // log time — every record inside a tool call or sync cycle carries its
+      // trace, and "grep the log, pivot to the trace" works on both transports.
+      mixin() {
+        const spanContext = trace.getActiveSpan()?.spanContext();
+        return spanContext ? { trace_id: spanContext.traceId, span_id: spanContext.spanId } : {};
+      },
     },
     pino.multistream(
       [

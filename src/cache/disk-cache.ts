@@ -1,12 +1,31 @@
 import { mkdir, open, readdir, readFile, unlink } from "node:fs/promises";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 
 import { Mutex } from "async-mutex";
 import { err, errAsync, ok, okAsync, Result, ResultAsync } from "neverthrow";
 import type { Logger } from "pino";
 
+import { getMeter, lazy } from "../telemetry/scope.js";
 import { isNodeError } from "../utils/errors.js";
 import { SILENT_LOG } from "../utils/log.js";
+
+// Persistence-layer metrics at the two aggregate chokepoints: flush (the
+// fsync-heavy per-cycle durability cost) and getAll (boot hydration + the DCR
+// cap reads). Entity = the subdir's basename — the flat on-disk names
+// ("recipes", "pantry", …), a closed low-cardinality set. Per-item get/put
+// deliberately unmeasured: their cost aggregates into flush.
+const cacheOperationDuration = lazy(() =>
+  getMeter().createHistogram("mcp_paprika.cache.operation.duration", {
+    description: "Duration of disk-cache flush and getAll operations",
+    unit: "s",
+  }),
+);
+const cacheErrors = lazy(() =>
+  getMeter().createCounter("mcp_paprika.cache.errors", {
+    description: "Disk-cache operations that surfaced a CacheError (recovered ENOENTs excluded)",
+    unit: "{error}",
+  }),
+);
 
 // I/O error handling convention throughout this module:
 // Every filesystem call is converted to a `Result` at this edge (ADR-0014):
@@ -132,7 +151,28 @@ export class DiskCache<T> {
   }
 
   flush(): ResultAsync<void, CacheError> {
-    return this._locked("flush", () => this._writePending());
+    return this._measured(
+      "flush",
+      this._locked("flush", () => this._writePending()),
+    );
+  }
+
+  /** Record the operation histogram on ok and the error counter on err; values pass through untouched. */
+  private _measured<V>(op: string, result: ResultAsync<V, CacheError>): ResultAsync<V, CacheError> {
+    const entity = basename(this._subdir);
+    const started = performance.now();
+    return result
+      .map((value) => {
+        cacheOperationDuration().record((performance.now() - started) / 1000, {
+          "mcp_paprika.cache.entity": entity,
+          "mcp_paprika.cache.op": op,
+        });
+        return value;
+      })
+      .mapErr((error) => {
+        cacheErrors().add(1, { "mcp_paprika.cache.entity": entity, "mcp_paprika.cache.op": op });
+        return error;
+      });
   }
 
   get(key: string): ResultAsync<T | null, CacheError> {
@@ -148,6 +188,10 @@ export class DiskCache<T> {
   }
 
   getAll(): ResultAsync<Array<T>, CacheError> {
+    return this._measured("get_all", this._getAllInner());
+  }
+
+  private _getAllInner(): ResultAsync<Array<T>, CacheError> {
     return this._requireInit("getAll").asyncAndThen(() => {
       // Pending entries shadow disk; seed result with the buffer.
       const result: Map<string, T> = new Map(this._pending);

@@ -12,8 +12,10 @@ import { type Histogram, ValueType } from "@opentelemetry/api";
 import { getMeter, lazy } from "./scope.js";
 import {
   GEN_AI_DURATION_BUCKETS,
+  GEN_AI_TOKEN_USAGE_BUCKETS,
   MCP_DURATION_BUCKETS,
   METRIC_GEN_AI_CLIENT_OPERATION_DURATION,
+  METRIC_GEN_AI_CLIENT_TOKEN_USAGE,
   METRIC_MCP_SERVER_OPERATION_DURATION,
   METRIC_MCP_SERVER_SESSION_DURATION,
 } from "./semconv.js";
@@ -48,5 +50,14 @@ export const genAiClientOperationDuration: () => Histogram = lazy(() =>
     unit: "s",
     valueType: ValueType.DOUBLE,
     advice: { explicitBucketBoundaries: [...GEN_AI_DURATION_BUCKETS] },
+  }),
+);
+
+/** Token consumption of GenAI requests, by `gen_ai.token.type`. */
+export const genAiClientTokenUsage: () => Histogram = lazy(() =>
+  getMeter().createHistogram(METRIC_GEN_AI_CLIENT_TOKEN_USAGE, {
+    description: "Token usage of GenAI client operations",
+    unit: "{token}",
+    advice: { explicitBucketBoundaries: [...GEN_AI_TOKEN_USAGE_BUCKETS] },
   }),
 );

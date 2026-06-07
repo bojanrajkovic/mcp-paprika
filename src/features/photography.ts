@@ -11,6 +11,7 @@
  * `createResilientExecutor`. The model is chosen per call (see PhotoModel), not
  * at construction — credentials are the only construction-time input.
  */
+import { SpanKind, trace, ValueType } from "@opentelemetry/api";
 import type { IRetryContext } from "cockatiel";
 import { err, ok, type Result, ResultAsync } from "neverthrow";
 import type { Logger } from "pino";
@@ -19,6 +20,15 @@ import { z } from "zod";
 import type { Recipe } from "../domains/recipe/types.js";
 import type { ResolvedImageGenConfig } from "../utils/config.js";
 
+import { genAiClientOperationDuration } from "../telemetry/instruments.js";
+import { getMeter, getTracer, lazy } from "../telemetry/scope.js";
+import {
+  ATTR_GEN_AI_OPERATION_NAME,
+  ATTR_GEN_AI_PROVIDER_NAME,
+  ATTR_GEN_AI_REQUEST_MODEL,
+  ATTR_GEN_AI_RESPONSE_MODEL,
+} from "../telemetry/semconv.js";
+import { traceResultAsync } from "../telemetry/trace-result.js";
 import { CircuitOpenError } from "../utils/errors.js";
 import { SILENT_LOG, toMessage } from "../utils/log.js";
 import {
@@ -121,6 +131,15 @@ const photoResponseSchema = z.object({
 });
 
 const DATA_URI_RE = /^data:(image\/[a-z0-9.+-]+);base64,(.+)$/is;
+
+/** Cumulative spend reported by OpenRouter's usage.cost — the per-deployment image-generation budget signal. */
+const photoGenCost = lazy(() =>
+  getMeter().createCounter("mcp_paprika.photo_gen.cost_usd", {
+    description: "Cumulative image-generation spend reported by the provider",
+    unit: "usd",
+    valueType: ValueType.DOUBLE,
+  }),
+);
 
 export class PhotographyClient {
   private readonly _endpoint: string;
@@ -241,14 +260,54 @@ export class PhotographyClient {
           },
           "photo generated",
         );
+        // Cost and the served model are known only on the final, successful
+        // attempt — record them here (the logical span is the active one).
+        const span = trace.getActiveSpan();
+        span?.setAttribute(ATTR_GEN_AI_RESPONSE_MODEL, servedModel);
+        if (costUsd !== null) {
+          span?.setAttribute("mcp_paprika.photo.cost_usd", costUsd);
+          photoGenCost().add(costUsd, { [ATTR_GEN_AI_REQUEST_MODEL]: slug });
+        }
         return { ...photo, costUsd, servedModel };
       } finally {
         clearTimeout(timer);
       }
     };
 
-    // The throw-based cockatiel protocol ends at this owned edge (ADR-0014).
-    return ResultAsync.fromPromise(this._executor.execute(this._endpoint, execute), toPhotographyFailure);
+    // The logical GenAI span covers every retry attempt and the up-to-300s
+    // generation itself; the per-attempt HTTP spans (undici) parent under it.
+    const genAiAttrs = {
+      [ATTR_GEN_AI_OPERATION_NAME]: "generate_content",
+      [ATTR_GEN_AI_REQUEST_MODEL]: slug,
+      [ATTR_GEN_AI_PROVIDER_NAME]: new URL(this._endpoint).host,
+    };
+    const started = performance.now();
+    const recordDuration = (errorType: string | undefined): void => {
+      genAiClientOperationDuration().record((performance.now() - started) / 1000, {
+        ...genAiAttrs,
+        ...(errorType !== undefined && { "error.type": errorType }),
+      });
+    };
+    return traceResultAsync(
+      getTracer(),
+      `generate_content ${options.model}`,
+      {
+        kind: SpanKind.CLIENT,
+        attributes: { ...genAiAttrs, "mcp_paprika.photo.kind": options.referenceImage ? "restyle" : "generate" },
+      },
+      (error) => error.constructor.name,
+      () =>
+        // The throw-based cockatiel protocol ends at this owned edge (ADR-0014).
+        ResultAsync.fromPromise(this._executor.execute(this._endpoint, execute), toPhotographyFailure)
+          .map((photo) => {
+            recordDuration(undefined);
+            return photo;
+          })
+          .mapErr((error) => {
+            recordDuration(error.constructor.name);
+            return error;
+          }),
+    );
   }
 }
 
