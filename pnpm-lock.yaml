@@ -60,8 +60,8 @@ importers:
         specifier: ^0.34.5
         version: 0.34.5
       undici:
-        specifier: ^8.3.0
-        version: 8.3.0
+        specifier: ^8.4.0
+        version: 8.4.0
       zod:
         specifier: ^3.25.76
         version: 3.25.76
@@ -2203,8 +2203,8 @@ packages:
   undici-types@7.18.2:
     resolution: {integrity: sha512-AsuCzffGHJybSaRrmr5eHr81mwJU3kjw6M+uprWvCXiNeN9SOGwQ3Jn8jb8m3Z6izVgknn1R0FTCEAP2QrLY/w==}
 
-  undici@8.3.0:
-    resolution: {integrity: sha512-TkUDgb6tl7KOGZ+7e8E3d2FYgUQgF6z5YypqjWmixVQSQERFcVrVg0ySADm2LVLRh5ljAaHTCR5Fmz3Q34rB7Q==}
+  undici@8.4.0:
+    resolution: {integrity: sha512-tDR4LgFBeV7YBWOFMlmbhtrnFVWuZ6HKbkG+88/csQdhK2tPlW78PnLI2VRjIQtTlslvgSZ4R43WBE+4g6rhng==}
     engines: {node: '>=22.19.0'}
 
   unpipe@1.0.0:
@@ -4182,7 +4182,7 @@ snapshots:
 
   undici-types@7.18.2: {}
 
-  undici@8.3.0: {}
+  undici@8.4.0: {}
 
   unpipe@1.0.0: {}
 
