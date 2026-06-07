@@ -20,8 +20,17 @@ import { verifyIdentity } from "./allowlist.js";
 import { consentSecurityHeaders, renderDeniedPage, renderExpiredPage } from "./consent-page.js";
 import { OAuthClientNotFoundError, OAuthMetadataValidationError } from "./errors.js";
 import { verifyIdToken } from "./oidc-client.js";
+import {
+  ATTR_AUTH_DECISION,
+  ATTR_AUTH_ENDPOINT,
+  ATTR_AUTH_REASON,
+  authFailures,
+  consentDecisions,
+} from "./telemetry.js";
 import { generateOpaqueToken, nowSeconds } from "./tokens.js";
 import { makeUpstreamRedirectDeps, redirectUpstream } from "./upstream-redirect.js";
+
+const CALLBACK_ENDPOINT = { [ATTR_AUTH_ENDPOINT]: "callback" } as const;
 
 export interface AuthRoutesDeps {
   readonly clientStore: DiskClientRegistrationStore;
@@ -101,6 +110,7 @@ export function buildAuthRoutes(deps: AuthRoutesDeps): Hono {
       },
     );
     if (payload === null) {
+      authFailures().add(1, { ...CALLBACK_ENDPOINT, [ATTR_AUTH_REASON]: "id_token_verification_failed" });
       return redirectToClient(c, stored.redirectUri, {
         error: "access_denied",
         error_description: "id_token verification failed",
@@ -134,6 +144,7 @@ export function buildAuthRoutes(deps: AuthRoutesDeps): Hono {
         // retryable error at the callback instead. RFC 6749 §4.1.2.1.
         if (!codeStored) {
           deps.log.auth.warn({ clientId: stored.clientId }, "auth-code store full; rejecting callback");
+          authFailures().add(1, { ...CALLBACK_ENDPOINT, [ATTR_AUTH_REASON]: "store_full" });
           return redirectToClient(c, stored.redirectUri, {
             error: "temporarily_unavailable",
             error_description: "authorization temporarily unavailable, please retry",
@@ -161,6 +172,9 @@ export function buildAuthRoutes(deps: AuthRoutesDeps): Hono {
           },
           "allowlist denied identity",
         );
+        // The security signal: a non-allowlisted identity completed an
+        // upstream login. Identity stays in the log; the metric is count-only.
+        authFailures().add(1, { ...CALLBACK_ENDPOINT, [ATTR_AUTH_REASON]: "identity_not_allowed" });
         return redirectToClient(c, stored.redirectUri, {
           error: "access_denied",
           error_description: "identity not allowed by server policy",
@@ -184,6 +198,7 @@ export function buildAuthRoutes(deps: AuthRoutesDeps): Hono {
 
     const pending = deps.pendingAuthorizations.consume(ticket);
     if (pending === null) {
+      consentDecisions().add(1, { [ATTR_AUTH_DECISION]: "expired" });
       const { html, nonce } = renderExpiredPage();
       return c.html(html, 400, consentSecurityHeaders(nonce));
     }
@@ -196,11 +211,15 @@ export function buildAuthRoutes(deps: AuthRoutesDeps): Hono {
       // from a genuine deny-click; the cap bounds attacker-controlled log size.
       const submitted = typeof decision === "string" ? decision.slice(0, 32) : "(non-string)";
       deps.log.auth.warn({ clientId: pending.clientId, redirectOrigin, decision: submitted }, "consent denied");
+      // The attacker-controlled submitted value goes to the LOG only; the
+      // metric attribute is the fixed enum "deny" (cardinality discipline).
+      consentDecisions().add(1, { [ATTR_AUTH_DECISION]: "deny" });
       const { html, nonce } = renderDeniedPage();
       return c.html(html, 200, consentSecurityHeaders(nonce));
     }
 
     deps.log.auth.info({ clientId: pending.clientId, redirectOrigin, decision: "allow" }, "consent granted");
+    consentDecisions().add(1, { [ATTR_AUTH_DECISION]: "allow" });
     redirectUpstream(c, makeUpstreamRedirectDeps(deps.authRequests, deps.discovery, deps.oidcConfig, deps.publicUrl), {
       clientId: pending.clientId,
       codeChallenge: pending.codeChallenge,
@@ -443,7 +462,15 @@ export function buildDcrRateLimit(options: { readonly trustProxy: boolean }): Mi
   // gate buildClientCap applies.
   return async (c, next) => {
     if (c.req.path !== "/register" || c.req.method !== "POST") return next();
-    return inner(c, next);
+    // The limiter writes the 429 itself (returned as a Response, which must
+    // pass through unchanged); observe the outcome rather than re-implementing
+    // its handler.
+    const res = await inner(c, next);
+    const status = res instanceof Response ? res.status : c.res.status;
+    if (status === 429) {
+      authFailures().add(1, { [ATTR_AUTH_ENDPOINT]: "register", [ATTR_AUTH_REASON]: "rate_limited" });
+    }
+    return res;
   };
 }
 
@@ -479,6 +506,7 @@ export function buildClientCap(cache: AuthCache, max: number): MiddlewareHandler
     return (await cache.oauthClients.getAll()).match<Promise<Response | void>>(
       async (clients) => {
         if (clients.length >= max) {
+          authFailures().add(1, { [ATTR_AUTH_ENDPOINT]: "register", [ATTR_AUTH_REASON]: "cap_reached" });
           return c.json({ error: "invalid_request", error_description: "client registration cap reached" }, 429);
         }
         return next();
