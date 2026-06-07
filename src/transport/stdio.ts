@@ -116,6 +116,11 @@ export async function startStdio(config: PaprikaConfig): Promise<TransportHandle
   };
   process.stdin.once("end", onStdinClosed);
   process.stdin.once("close", onStdinClosed);
+  // TOCTOU guard: if the client vanished during the kernel build / initial
+  // sync, the pipe's end/close fired before these listeners attached and
+  // nothing re-delivers them — observe the terminal state directly instead.
+  // The endSession/shutdownTelemetry latches make a doubled signal harmless.
+  if (process.stdin.readableEnded || process.stdin.destroyed) onStdinClosed();
 
   return {
     async shutdown() {
