@@ -9,8 +9,8 @@ importers:
   .:
     dependencies:
       '@hono/mcp':
-        specifier: 0.2.5
-        version: 0.2.5(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))(hono-rate-limiter@0.5.3(hono@4.12.23))(hono@4.12.23)(zod@3.25.76)
+        specifier: 0.3.0
+        version: 0.3.0(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))(hono-rate-limiter@0.5.3(hono@4.12.23))(hono@4.12.23)(zod@3.25.76)
       '@hono/node-server':
         specifier: 1.19.14
         version: 1.19.14(hono@4.12.23)
@@ -401,12 +401,12 @@ packages:
     resolution: {integrity: sha512-XQ3cU+Q8Uqmrbf2e0cIC/QN43sTBSC8KF12u29Mb47tWrt2hAgBXSgpZMj4Ao8Uk0iJcU99QsOCaIL8934obCg==}
     engines: {node: ^14.17.0 || ^16.13.0 || >=18.0.0, npm: '>=6.14.13'}
 
-  '@hono/mcp@0.2.5':
-    resolution: {integrity: sha512-JsaJes7VlNvUrUQ9j2b9C13xjFLvyKQY515aWtsdJ9cwhBmWz5od2yUCbDu7cX38GeADmlLmpu4BKNNAV6G27w==}
+  '@hono/mcp@0.3.0':
+    resolution: {integrity: sha512-UhSWFbZwRxHBdptOn2r1HyB8Vt6gU+BL3AbTis2t8TBW69ZhG4soJQ09yEL/t/ymxszJnWp5Rq6tOXXOjuK1qg==}
     peerDependencies:
       '@modelcontextprotocol/sdk': ^1.25.1
       hono: '*'
-      hono-rate-limiter: ^0.4.2
+      hono-rate-limiter: ^0.5.3
       zod: ^3.25.0 || ^4.0.0
 
   '@hono/node-server@1.19.14':
@@ -2595,7 +2595,7 @@ snapshots:
 
   '@faker-js/faker@8.4.1': {}
 
-  '@hono/mcp@0.2.5(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))(hono-rate-limiter@0.5.3(hono@4.12.23))(hono@4.12.23)(zod@3.25.76)':
+  '@hono/mcp@0.3.0(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))(hono-rate-limiter@0.5.3(hono@4.12.23))(hono@4.12.23)(zod@3.25.76)':
     dependencies:
       '@modelcontextprotocol/sdk': 1.29.0(zod@3.25.76)
       hono: 4.12.23

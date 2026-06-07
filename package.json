@@ -45,7 +45,7 @@
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.test.json"
   },
   "dependencies": {
-    "@hono/mcp": "0.2.5",
+    "@hono/mcp": "0.3.0",
     "@hono/node-server": "1.19.14",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "async-mutex": "^0.5.0",
