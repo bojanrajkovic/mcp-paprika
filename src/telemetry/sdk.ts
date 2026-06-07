@@ -67,10 +67,25 @@ function stderrDiagLogger(): DiagLogger {
 
 const packageJsonSchema = z.object({ version: z.string() });
 
-/** Parse the standard interval knob; anything non-finite or non-positive takes the 60s default. */
-function metricExportIntervalMillis(raw: string | undefined): number {
+/** Parse a standard millisecond knob; anything non-finite or non-positive takes the fallback (no falsy-zero trap). */
+function positiveMillis(raw: string | undefined, fallback: number): number {
   const parsed = Number(raw);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : 60_000;
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+/**
+ * Whether a signal should export. The bootstrap gate is endpoint-wide (any
+ * OTLP endpoint enables telemetry); per signal, export needs that signal's
+ * endpoint (general or signal-specific) AND no standard
+ * `OTEL_{TRACES,METRICS}_EXPORTER=none` opt-out. Without this, an operator
+ * setting only OTEL_EXPORTER_OTLP_METRICS_ENDPOINT would get a trace exporter
+ * pointed at its localhost default, failing every export.
+ */
+function otlpSignalEnabled(signal: "TRACES" | "METRICS"): boolean {
+  if (process.env[`OTEL_${signal}_EXPORTER`] === "none") return false;
+  const general = process.env["OTEL_EXPORTER_OTLP_ENDPOINT"];
+  const specific = process.env[`OTEL_EXPORTER_OTLP_${signal}_ENDPOINT`];
+  return (general !== undefined && general !== "") || (specific !== undefined && specific !== "");
 }
 
 // Every histogram exports as a base2 EXPONENTIAL histogram (Prometheus/Mimir
@@ -122,25 +137,35 @@ export function startTelemetry(): Result<() => Promise<void>, Error> {
       diag.setLogger(stderrDiagLogger(), DIAG_LEVELS[rawLevel?.toLowerCase() ?? ""] ?? DiagLogLevel.ERROR);
 
       const version = serviceVersion();
+      // The reader does not read OTEL_METRIC_EXPORT_INTERVAL / _TIMEOUT itself
+      // (verified against sdk-metrics 2.7); honor both here so operators keep
+      // the standard knobs. The timeout self-clamps to the interval: passing
+      // both explicitly puts the reader on its throwing validation branch,
+      // and a timeout longer than the interval is invalid by construction.
+      const exportIntervalMillis = positiveMillis(process.env["OTEL_METRIC_EXPORT_INTERVAL"], 60_000);
+      const exportTimeoutMillis = Math.min(
+        positiveMillis(process.env["OTEL_METRIC_EXPORT_TIMEOUT"], 30_000),
+        exportIntervalMillis,
+      );
       const sdk = new NodeSDK({
         resource: resourceFromAttributes({
           [ATTR_SERVICE_NAME]: process.env["OTEL_SERVICE_NAME"] ?? "mcp-paprika",
           ...(version !== undefined && { [ATTR_SERVICE_VERSION]: version }),
         }),
         resourceDetectors: [envDetector, processDetector, hostDetector, osDetector, containerDetector],
-        traceExporter: new OTLPTraceExporter(),
-        metricReaders: [
-          new PeriodicExportingMetricReader({
-            exporter: new OTLPMetricExporter({ aggregationPreference: exponentialHistograms }),
-            // The reader does not read OTEL_METRIC_EXPORT_INTERVAL itself
-            // (verified against sdk-metrics 2.7); honor it here so operators
-            // keep the standard knob. Milliseconds, default 60s. The explicit
-            // finite-positive guard (not `||`) keeps garbage and non-positive
-            // values — invalid for a periodic reader — on the default, without
-            // the falsy-zero trap.
-            exportIntervalMillis: metricExportIntervalMillis(process.env["OTEL_METRIC_EXPORT_INTERVAL"]),
-          }),
-        ],
+        // Per-signal gating (see otlpSignalEnabled); both off yields an inert
+        // SDK, which the endpoint-wide bootstrap gate makes a non-case in
+        // practice.
+        ...(otlpSignalEnabled("TRACES") && { traceExporter: new OTLPTraceExporter() }),
+        ...(otlpSignalEnabled("METRICS") && {
+          metricReaders: [
+            new PeriodicExportingMetricReader({
+              exporter: new OTLPMetricExporter({ aggregationPreference: exponentialHistograms }),
+              exportIntervalMillis,
+              exportTimeoutMillis,
+            }),
+          ],
+        }),
         instrumentations: [new UndiciInstrumentation(), new RuntimeNodeInstrumentation()],
       });
       sdk.start();

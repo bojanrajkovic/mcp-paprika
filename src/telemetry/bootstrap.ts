@@ -49,14 +49,17 @@ if (telemetryEnabled(process.env)) {
 }
 
 /**
- * Flush and stop the SDK; a no-op when telemetry never started. Called from
- * the shutdown path AFTER the transport handle closes, so session-duration
+ * Flush and stop the SDK; a no-op when telemetry never started, and latched
+ * so competing shutdown paths (the stdio EOF handler racing a signal) flush
+ * exactly once. Called AFTER the transport closes, so session-duration
  * metrics recorded at session close make the final export. Shutdown errors
  * are swallowed onto stderr — a failed flush must not flip the exit code.
  */
 export async function shutdownTelemetry(): Promise<void> {
   if (shutdown === undefined) return;
-  await shutdown().catch((error: unknown) => {
+  const stop = shutdown;
+  shutdown = undefined;
+  await stop().catch((error: unknown) => {
     process.stderr.write(`[mcp-paprika] OpenTelemetry shutdown error: ${String(error)}\n`);
   });
 }
