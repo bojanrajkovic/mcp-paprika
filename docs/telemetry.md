@@ -2,7 +2,7 @@
 
 Last verified: 2026-06-06
 
-mcp-paprika emits OpenTelemetry **traces and metrics**, off by default and opt-in by configuring an OTLP destination. The design decisions (global-API recording, the dual-path bootstrap, vendored Development-status conventions) are recorded in [ADR-0018](adr/0018-opentelemetry-instrumentation.md); this page is the operator's view: how to turn it on, what comes out, and how to stand up a local stack to look at it.
+mcp-paprika emits OpenTelemetry **traces and metrics**, off by default and opt-in by configuring an OTLP destination. The design decisions (global-API recording, the dual-path bootstrap, vendored Development-status conventions) are recorded in [ADR-0018](https://github.com/bojanrajkovic/mcp-paprika/blob/main/docs/adr/0018-opentelemetry-instrumentation.md); this page is the operator's view: how to turn it on, what comes out, and how to stand up a local stack to look at it.
 
 ## Enabling
 

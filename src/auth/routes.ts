@@ -464,10 +464,17 @@ export function buildDcrRateLimit(options: { readonly trustProxy: boolean }): Mi
     if (c.req.path !== "/register" || c.req.method !== "POST") return next();
     // The limiter writes the 429 itself (returned as a Response, which must
     // pass through unchanged); observe the outcome rather than re-implementing
-    // its handler.
-    const res = await inner(c, next);
+    // its handler. A 429 alone doesn't attribute the rejection: when the
+    // limiter admits the request, `next` runs the downstream chain, whose
+    // client-cap middleware also answers 429 (recorded there as cap_reached) —
+    // only a 429 where `next` was never invoked is the limiter's own.
+    let admitted = false;
+    const res = await inner(c, () => {
+      admitted = true;
+      return next();
+    });
     const status = res instanceof Response ? res.status : c.res.status;
-    if (status === 429) {
+    if (status === 429 && !admitted) {
       authFailures().add(1, { [ATTR_AUTH_ENDPOINT]: "register", [ATTR_AUTH_REASON]: "rate_limited" });
     }
     return res;
