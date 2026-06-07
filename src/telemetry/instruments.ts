@@ -1,5 +1,3 @@
-// pattern: Functional Core
-//
 // The semconv-named instruments shared by more than one recording seam (the
 // tool and resource chokepoints both feed `mcp.server.operation.duration`;
 // both transports feed the session histogram). Single-seam custom counters

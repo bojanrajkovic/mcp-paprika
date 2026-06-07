@@ -10,8 +10,6 @@
  * after cache.init() completes.
  */
 
-// pattern: Imperative Shell
-
 import type { Logger } from "pino";
 
 import type { PaprikaConfig } from "../utils/config.js";

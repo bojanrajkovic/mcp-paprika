@@ -1,5 +1,3 @@
-// pattern: Functional Core
-//
 // Result-native span lifecycle. The standard OTel recipe ends spans in
 // try/catch/finally — but this codebase's core never throws to signal an
 // outcome (ADR-0014), so the error signal is the `err` arm of a `ResultAsync`,

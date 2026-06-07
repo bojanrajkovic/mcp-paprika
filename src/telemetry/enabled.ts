@@ -1,5 +1,3 @@
-// pattern: Functional Core
-
 /**
  * Whether the OpenTelemetry SDK should start at all. Telemetry is opt-in by
  * configuring an OTLP destination — the standard `OTEL_EXPORTER_OTLP_ENDPOINT`

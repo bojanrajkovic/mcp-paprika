@@ -1,5 +1,3 @@
-// pattern: Functional Core
-//
 // Resilience-layer metrics, wired once per client onto the cockatiel policy
 // hooks the clients already use for logging. Shared by the two resilience
 // stacks (PaprikaClient's bespoke one and createResilientExecutor's), so the

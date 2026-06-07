@@ -1,4 +1,4 @@
-// pattern: Imperative Shell — the foreign-boundary wrapper around the OTel NodeSDK.
+// The foreign-boundary wrapper around the OTel NodeSDK.
 //
 // Loaded ONLY when `telemetryEnabled` says so (the bootstrap dynamic-imports
 // this module), so a non-observing process never parses the SDK. Everything

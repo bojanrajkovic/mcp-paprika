@@ -1,5 +1,3 @@
-// pattern: Functional Core
-//
 // The one instrumentation scope every seam records under. Seams reach the
 // tracer/meter through the global `@opentelemetry/api` singletons rather than
 // an `Infra` field (ADR-0018): the API is designed as a process-wide ambient

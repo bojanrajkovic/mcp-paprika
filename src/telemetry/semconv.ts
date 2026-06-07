@@ -1,5 +1,3 @@
-// pattern: Functional Core
-//
 // Vendored OpenTelemetry semantic-convention constants for the MCP and GenAI
 // conventions, pinned to semconv spec v1.39.0 (the release that introduced the
 // MCP conventions; both families carry Development stability).

@@ -1,5 +1,3 @@
-// pattern: Functional Core
-//
 // Auth-surface counters, recorded at the decision points the audit log lines
 // already mark. Co-located with auth (not src/telemetry/) because auth is the
 // sole owner — the same rule that keeps the auth disk caches in auth/disk.ts.

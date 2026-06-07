@@ -1,5 +1,3 @@
-// pattern: Functional Core
-
 import { join } from "node:path";
 
 import envPaths from "env-paths";

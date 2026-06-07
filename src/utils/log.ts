@@ -1,6 +1,3 @@
-// pattern: Imperative Shell
-// (Pure pinoLevelToMcp lives inside but the file constructs streams and calls fs I/O.)
-
 import { closeSync, mkdirSync, openSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { Writable } from "node:stream";

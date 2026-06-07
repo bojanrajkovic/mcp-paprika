@@ -1,4 +1,4 @@
-// pattern: Imperative Shell — the telemetry entry point, loaded two ways.
+// The telemetry entry point, loaded two ways.
 //
 // 1. Container / HTTP deployments: `node --import dist/telemetry/bootstrap.js
 //    dist/index.js` (the Dockerfile CMD). The preload graph fully evaluates —
