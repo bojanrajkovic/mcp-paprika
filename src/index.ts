@@ -1,4 +1,9 @@
 #!/usr/bin/env node
+// Telemetry bootstrap MUST stay the first import: sibling static imports
+// evaluate in declaration order, and the SDK has to start before any other
+// module evaluates. (Under the container's `--import` preload this resolves
+// to the already-evaluated cache — see src/telemetry/bootstrap.ts.)
+import { shutdownTelemetry } from "./telemetry/bootstrap.js";
 import { startHttp } from "./transport/http.js";
 import { startStdio, type TransportHandle } from "./transport/stdio.js";
 import { loadConfig } from "./utils/config.js";
@@ -29,13 +34,18 @@ async function main(): Promise<void> {
     // be built yet (early startup failure) or may already be torn down at signal time.
     // See src/server/CLAUDE.md for the documented exception.
     process.stderr.write(`${signal} received, shutting down...\n`);
-    handle.shutdown().then(
-      () => process.exit(0),
-      (err: unknown) => {
-        process.stderr.write(`[mcp-paprika] Shutdown error: ${toMessage(err)}\n`);
-        process.exit(1);
-      },
-    );
+    // Telemetry flushes after the transport closes, so session-close metrics
+    // make the final export; shutdownTelemetry never rejects.
+    handle
+      .shutdown()
+      .then(() => shutdownTelemetry())
+      .then(
+        () => process.exit(0),
+        (err: unknown) => {
+          process.stderr.write(`[mcp-paprika] Shutdown error: ${toMessage(err)}\n`);
+          process.exit(1);
+        },
+      );
   };
 
   process.on("SIGINT", () => {

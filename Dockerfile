@@ -83,4 +83,9 @@ USER nonroot
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
     CMD ["/nodejs/bin/node", "/app/scripts/healthcheck.mjs"]
 
-CMD ["/app/dist/index.js"]
+# --import preloads the telemetry bootstrap before the entry graph resolves,
+# which lets the OTel ESM loader hook (registered in the bootstrap when an
+# OTLP endpoint is configured) transform application modules. The stdio/npm
+# path can't carry node flags and falls back to a first-import of the same
+# module — see src/telemetry/bootstrap.ts and ADR-0018.
+CMD ["--import", "/app/dist/telemetry/bootstrap.js", "/app/dist/index.js"]
