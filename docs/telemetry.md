@@ -45,7 +45,7 @@ Every histogram exports as a **base2 exponential histogram** (Prometheus/Mimir "
 
 **Logs** are _not_ exported via OTLP; pino stays the logging pipeline. Every record emitted inside an active span carries `trace_id`/`span_id` (a pino mixin), so log↔trace pivoting works in both directions.
 
-**Attribute discipline.** Metric attributes are enum- or name-class values only — tool names, entity names, outcome enums. No UIDs, URIs, free text, emails, subjects, or token material appears in any span or metric attribute; identity and payload detail stay in the (redacted) logs.
+**Attribute discipline.** Metric attributes are enum- or name-class values only — tool names, entity names, outcome enums. Attributes this server sets carry no UIDs, URIs, free text, emails, subjects, or token material; identity and payload detail stay in the (redacted) logs. The auto-instrumented HTTP spans (request middleware, undici) record URLs the libraries set themselves, so every span passes through a URL scrub at the trace exporter (`src/telemetry/url-scrub.ts`): queries (OAuth codes/state, presigned credentials), fragments, and userinfo never leave the process; origin + path survive — an outbound sync path's entity UID is the accepted span-level exception.
 
 ## Session semantics on stdio
 

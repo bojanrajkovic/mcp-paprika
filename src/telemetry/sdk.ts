@@ -41,6 +41,8 @@ import { ATTR_SERVICE_NAME, ATTR_SERVICE_VERSION } from "@opentelemetry/semantic
 import { Result } from "neverthrow";
 import { z } from "zod";
 
+import { urlScrubbingExporter } from "./url-scrub.js";
+
 const DIAG_LEVELS: Readonly<Record<string, DiagLogLevel>> = {
   none: DiagLogLevel.NONE,
   error: DiagLogLevel.ERROR,
@@ -169,7 +171,9 @@ export function startTelemetry(): Result<() => Promise<void>, Error> {
         // prevent) and even accepts `console` exporters — stdout writers,
         // i.e. the stdio MCP wire. With one arm always provided per signal,
         // that env path is unreachable in every configuration.
-        ...(otlpSignalEnabled("TRACES") ? { traceExporter: new OTLPTraceExporter() } : { spanProcessors: [] }),
+        ...(otlpSignalEnabled("TRACES")
+          ? { traceExporter: urlScrubbingExporter(new OTLPTraceExporter()) }
+          : { spanProcessors: [] }),
         // Logs are NEVER exported via OTLP (pino is the logging pipeline —
         // docs/telemetry.md); the explicit empty array keeps NodeSDK off its
         // logs env auto-configuration, whose OTEL_LOGS_EXPORTER accepts
