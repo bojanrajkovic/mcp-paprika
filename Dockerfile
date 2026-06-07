@@ -3,7 +3,7 @@
 # ─── Stage 1: builder ────────────────────────────────────────────────────────
 # Full Debian-based Node image so corepack/pnpm and TypeScript compilation
 # have all the tools they need.
-FROM node:24-bookworm-slim AS builder
+FROM node:24.16.0-bookworm-slim AS builder
 
 WORKDIR /app
 
@@ -32,7 +32,7 @@ RUN mkdir -p /opt/data/config /opt/data/cache
 # A separate install with --prod produces a node_modules tree without dev
 # dependencies (TypeScript, vitest, oxlint, etc.) — keeps the runtime image
 # small.
-FROM node:24-bookworm-slim AS prod-deps
+FROM node:24.16.0-bookworm-slim AS prod-deps
 
 WORKDIR /app
 RUN corepack enable
