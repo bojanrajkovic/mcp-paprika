@@ -27,6 +27,7 @@ The source tree is a typed composition kernel over self-registering domain modul
 - `src/shared/` — the few genuinely cross-cutting tool helpers: the MCP `textResult` envelope + the uid-or-text lookup abstraction (`tools.ts`), the SSRF-guarded image fetch (`photo-fetch.ts`), and the `resourceNotFound` boundary helper (`resources.ts`). See `src/shared/CLAUDE.md`.
 - `src/server/` — the composition root's remaining pieces: the `Notifier` abstraction, `buildInfraBase` + `buildBrandedServer`, the background sync loop, and the cross-entity index-event seam. See `src/server/CLAUDE.md`.
 - `src/paprika/` — the Paprika cloud-sync HTTP client and `syncReplaceAllEntity` (the shared per-module reconcile helper). Wire formats: `docs/wire-format.md`.
+- `src/telemetry/` — the OpenTelemetry substrate: the dual-path bootstrap + SDK assembly, vendored semconv constants, the shared instruments, and the Result-native span helper. Recording happens at the seams, not here. See `src/telemetry/CLAUDE.md` and ADR-0018.
 - `src/entity/` — the shared `EntityStore` base class. See `src/entity/CLAUDE.md`.
 - `src/cache/` — the persistence layer: per-entity `DiskCache`s (plus `DiskCacheRoot` and the auth-only `buildAuthCaches`), keeping the in-memory stores warm across restarts. See `src/cache/CLAUDE.md`.
 - `src/auth/` — the OAuth 2.1 authorization-server surface; loaded only under the HTTP transport.
@@ -45,6 +46,7 @@ For per-directory detail, read that directory's `CLAUDE.md`. For current counts 
 | Configuration (env vars, paths)         | `docs/configuration.md`        |
 | HTTP transport config                   | `docs/http-transport.md`       |
 | OAuth 2.1 / OIDC config                 | `docs/oauth-configuration.md`  |
+| Telemetry (traces/metrics, local stack) | `docs/telemetry.md`            |
 | Tools reference                         | `docs/tools/`                  |
 | Embedding providers                     | `docs/embedding-providers.md`  |
 | Releasing                               | `docs/releasing.md`            |
@@ -57,7 +59,7 @@ For per-directory detail, read that directory's `CLAUDE.md`. For current counts 
 - **Three-tier hooks** — pre-commit (oxfmt + oxlint), commit-msg (commitlint), pre-push (typecheck + test); CI re-runs them. Don't bypass.
 - **ESM with `.js` import extensions**, strict TypeScript, `readonly` by default.
 - **neverthrow in the core** — `Result` with `.match()` / `.andThen()`; never `.isOk()` / `.isErr()`; code we own never throws to signal an outcome. A `throw` survives only in the recognized forms of [ADR-0014](docs/adr/0014-neverthrow-core-foreign-boundaries.md) (foreign-protocol crossings via `resourceNotFound` / cockatiel / the OAuth router, `assertNever`, and boot), enforced by a conformance test.
-- **No `console`** — stdout is the MCP wire in stdio mode; use `ctx.log`. The `no-console` oxlint rule enforces it. Two documented `process.stderr.write` exceptions: `src/index.ts` and `src/transport/stdio.ts`.
+- **No `console`** — stdout is the MCP wire in stdio mode; use `ctx.log`. The `no-console` oxlint rule enforces it. Three documented `process.stderr.write` exceptions: `src/index.ts`, `src/transport/stdio.ts`, and the OTel diag logger in `src/telemetry/` (bootstrap + sdk).
 - **Slim directory `CLAUDE.md`** — each one points at its canonical doc plus reactively-accreted Sharp edges; it is not a mini architecture doc. See `docs/documentation-system.md`.
 - **`AGENTS.md` symlinks** — every `CLAUDE.md` has a sibling `AGENTS.md` symlink, so agents that look for `AGENTS.md` get the same guidance; the symlink keeps the two identical.
 - **Reference content is read from source, never enumerated in prose** — counts, store lists, field tables, and env dumps live in the registry, the Zod schemas, and `package.json`, not here. See `docs/documentation-system.md`.

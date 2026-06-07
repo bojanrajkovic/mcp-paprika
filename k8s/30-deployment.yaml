@@ -61,6 +61,14 @@ spec:
             # and bypass DCR rate limiting. See docs/configuration.md § "Trust proxy".
             - name: MCP_TRUST_PROXY
               value: "false"
+            # OpenTelemetry (opt-in): traces + metrics export over OTLP/HTTP
+            # when an endpoint is set; fully off otherwise. The image's
+            # --import preload makes the OTel ESM loader hook effective here.
+            # See docs/telemetry.md.
+            # - name: OTEL_EXPORTER_OTLP_ENDPOINT
+            #   value: http://otel-collector.observability.svc.cluster.local:4318
+            # - name: OTEL_SERVICE_NAME
+            #   value: mcp-paprika
           envFrom:
             - secretRef:
                 name: mcp-paprika
