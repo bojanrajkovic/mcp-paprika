@@ -155,8 +155,14 @@ export function startTelemetry(): Result<() => Promise<void>, Error> {
         resourceDetectors: [envDetector, processDetector, hostDetector, osDetector, containerDetector],
         // Per-signal gating (see otlpSignalEnabled); both off yields an inert
         // SDK, which the endpoint-wide bootstrap gate makes a non-case in
-        // practice.
-        ...(otlpSignalEnabled("TRACES") && { traceExporter: new OTLPTraceExporter() }),
+        // practice. The traces-off arm must pass an EXPLICIT empty
+        // spanProcessors: merely omitting traceExporter sends the NodeSDK to
+        // its env auto-configuration, which defaults to an otlp exporter (the
+        // localhost-default failure this gate exists to prevent) and even
+        // accepts OTEL_TRACES_EXPORTER=console — a stdout writer, i.e. the
+        // stdio MCP wire. With one arm always provided, that env path is
+        // unreachable in every configuration.
+        ...(otlpSignalEnabled("TRACES") ? { traceExporter: new OTLPTraceExporter() } : { spanProcessors: [] }),
         ...(otlpSignalEnabled("METRICS") && {
           metricReaders: [
             new PeriodicExportingMetricReader({

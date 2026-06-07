@@ -48,18 +48,25 @@ if (telemetryEnabled(process.env)) {
   );
 }
 
+let shutdownInFlight: Promise<void> | undefined;
+
 /**
- * Flush and stop the SDK; a no-op when telemetry never started, and latched
- * so competing shutdown paths (the stdio EOF handler racing a signal) flush
- * exactly once. Called AFTER the transport closes, so session-duration
- * metrics recorded at session close make the final export. Shutdown errors
- * are swallowed onto stderr — a failed flush must not flip the exit code.
+ * Flush and stop the SDK; a no-op when telemetry never started. Competing
+ * shutdown paths (the stdio EOF handler racing a signal, stdin `end` and
+ * `close` both firing) all AWAIT THE SAME in-flight flush — a latch that
+ * merely no-ops the second caller would let it process.exit() mid-flush and
+ * drop the buffered spans the first caller was still exporting. Called AFTER
+ * the transport closes, so session-duration metrics recorded at session
+ * close make the final export. Shutdown errors are swallowed onto stderr —
+ * a failed flush must not flip the exit code.
  */
 export async function shutdownTelemetry(): Promise<void> {
-  if (shutdown === undefined) return;
-  const stop = shutdown;
-  shutdown = undefined;
-  await stop().catch((error: unknown) => {
-    process.stderr.write(`[mcp-paprika] OpenTelemetry shutdown error: ${String(error)}\n`);
-  });
+  if (shutdown !== undefined) {
+    const stop = shutdown;
+    shutdown = undefined;
+    shutdownInFlight = stop().catch((error: unknown) => {
+      process.stderr.write(`[mcp-paprika] OpenTelemetry shutdown error: ${String(error)}\n`);
+    });
+  }
+  await shutdownInFlight;
 }
