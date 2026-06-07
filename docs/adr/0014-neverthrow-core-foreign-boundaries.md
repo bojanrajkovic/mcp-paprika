@@ -27,6 +27,8 @@ Exactly **five recognized throw forms** survive; every other `throw` in owned co
 4. an `assertNever` exhaustiveness assertion on an unreachable branch;
 5. fail-fast at process entry and kernel construction — off the request path entirely.
 
+A telemetry wrapper at a protocol chokepoint may **catch and rethrow** one of these recognized throws unchanged — ending its span in between — without that passthrough constituting a sixth form: the throw it re-emits is already sanctioned, and the wrapper neither swallows nor reshapes it. The conformance recognizers pin those rethrow sites explicitly ([ADR-0018](0018-opentelemetry-instrumentation.md)).
+
 The rule is **enforced by a conformance test**, not only by review: a unit-tier AST walk that recognizes the five forms and fails any other throw in owned code, backed by a seeded allowlist that **ratchets to empty** as each foreign wrapper is converted. The decision is applied **in full** — `DiskCache`, the paprika client, the feature wrappers, the auth OIDC-fetch wrappers, and the domain core (the commit chokepoints, every contract write including the two auto-create stragglers, resource lookups, and spec resolution) all return `Result` — and delivered as a phased migration tracked on the issue, so each step lands green and the end state is an allowlist holding nothing but the five recognized forms.
 
 It beat the field because the audit showed the core is already mostly `Result`-shaped, so committing is cheap relative to the consistency and typed-error ergonomics it buys, whereas the messy edges genuinely need _a_ containment strategy regardless — and "convert at the owned edge, return `Result`" is the one that keeps the core total.

@@ -4,7 +4,7 @@ import type { DomainCtx } from "../../../kernel/registry.js";
 import type { RecipeUid } from "../ids.js";
 import type { RecipeState } from "../module.js";
 
-import { resourceNotFound } from "../../../shared/resources.js";
+import { resourceNotFound, tracedResourceRead } from "../../../shared/resources.js";
 import { recipeToMarkdown } from "../recipe-markdown.js";
 
 /**
@@ -30,7 +30,7 @@ export function recipeResource(ctx: DomainCtx<RecipeState, never>): void {
     "recipes",
     template,
     { description: "Paprika recipes accessible by UID" },
-    async (uri, variables) => {
+    tracedResourceRead("recipes", async (uri, variables) => {
       const uid = variables["uid"] as RecipeUid;
       const recipe = ctx.state.recipe.store.get(uid);
       if (!recipe) {
@@ -63,6 +63,6 @@ export function recipeResource(ctx: DomainCtx<RecipeState, never>): void {
           },
         ],
       };
-    },
+    }),
   );
 }

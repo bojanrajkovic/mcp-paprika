@@ -4,7 +4,7 @@ import type { DomainCtx } from "../../../kernel/registry.js";
 import type { GroceryListUid } from "../ids.js";
 import type { GroceryState } from "../module.js";
 
-import { resourceNotFound } from "../../../shared/resources.js";
+import { resourceNotFound, tracedResourceRead } from "../../../shared/resources.js";
 import { groceryListToMarkdown } from "../grocery-helpers.js";
 
 /**
@@ -35,7 +35,7 @@ export function groceryListResource(ctx: DomainCtx<GroceryState, "aisle" | "pant
     "grocery-lists",
     template,
     { description: "Paprika grocery lists accessible by UID" },
-    async (uri, variables) => {
+    tracedResourceRead("grocery-lists", async (uri, variables) => {
       const uid = variables["uid"] as GroceryListUid;
       const list = ctx.state.lists.store.get(uid);
       if (!list) {
@@ -61,6 +61,6 @@ export function groceryListResource(ctx: DomainCtx<GroceryState, "aisle" | "pant
           },
         ],
       };
-    },
+    }),
   );
 }

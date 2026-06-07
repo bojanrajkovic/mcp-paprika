@@ -1,9 +1,15 @@
 import type { ToolCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult, ToolAnnotations } from "@modelcontextprotocol/sdk/types.js";
+import { context, SpanStatusCode, trace } from "@opentelemetry/api";
+import { ATTR_ERROR_TYPE } from "@opentelemetry/semantic-conventions";
 import type { Result } from "neverthrow";
 import type { ZodRawShape, ZodTypeAny } from "zod";
 
 import type { DomainCtx, DomainId } from "./registry.js";
+
+import { mcpServerOperationDuration } from "../telemetry/instruments.js";
+import { getTracer } from "../telemetry/scope.js";
+import { ATTR_GEN_AI_OPERATION_NAME, ATTR_GEN_AI_TOOL_NAME, ATTR_MCP_METHOD_NAME } from "../telemetry/semconv.js";
 
 /**
  * A tool's registration metadata, **as data** — everything `registerTool` needs
@@ -70,6 +76,11 @@ export type ToolPrecondition<Ctx> = (ctx: Ctx) => Result<void, CallToolResult>;
  */
 type ErasedToolCallback = (args: unknown, extra: unknown) => CallToolResult | Promise<CallToolResult>;
 
+const TOOLS_CALL_METHOD = "tools/call";
+
+/** Which precondition gated a call — custom-prefixed; the MCP conventions define no gate concept. */
+const ATTR_TOOL_GATED_BY = "mcp_paprika.tool.gated_by";
+
 const MAX_LOGGED_STRING = 256;
 
 /**
@@ -121,6 +132,15 @@ function loggableString(value: string): string {
  * - logs `tool invoked` (uniform `{ tool }` shape, info) BEFORE the gate, so a
  *   gated call is still visible, plus the full `args` at debug for per-call
  *   correlation;
+ * - opens a `tools/call {name}` span (INTERNAL — under HTTP the transport
+ *   middleware owns the SERVER span, and the GenAI `execute_tool` convention
+ *   wants INTERNAL) covering the gate chain AND the body, and records
+ *   `mcp.server.operation.duration` once per call. Outcomes class via
+ *   `error.type`: an `isError` result is `tool_error` (span status ERROR); a
+ *   gated call is `precondition_gated` with the guard's name on
+ *   `mcp_paprika.tool.gated_by` but status UNSET — gating is expected
+ *   cold-start state, the same reasoning as its debug-not-info log line. Args
+ *   never become attributes (UIDs and payloads stay out of telemetry);
  * - runs the {@link ToolPrecondition} chain in order, short-circuiting on the
  *   first `err` — that err IS the tool result, and the failing guard's function
  *   name is logged at debug (gating is expected cold-start state, not an
@@ -195,6 +215,42 @@ export function defineTool<
         // markers) and the root logger's REDACT_PATHS censors credential-named
         // fields; the level guard keeps the walk off the default-level path.
         if (log.isLevelEnabled("debug")) log.debug({ tool: spec.name, args: loggableArgs(args) }, "tool args");
+        const span = getTracer().startSpan(`${TOOLS_CALL_METHOD} ${spec.name}`, {
+          attributes: {
+            [ATTR_MCP_METHOD_NAME]: TOOLS_CALL_METHOD,
+            [ATTR_GEN_AI_OPERATION_NAME]: "execute_tool",
+            [ATTR_GEN_AI_TOOL_NAME]: spec.name,
+          },
+        });
+        const started = performance.now();
+        const record = (errorType: string | undefined): void => {
+          span.end();
+          mcpServerOperationDuration().record((performance.now() - started) / 1000, {
+            [ATTR_MCP_METHOD_NAME]: TOOLS_CALL_METHOD,
+            [ATTR_GEN_AI_TOOL_NAME]: spec.name,
+            ...(errorType !== undefined && { [ATTR_ERROR_TYPE]: errorType }),
+          });
+        };
+        // Ends the span + records the histogram exactly once per call. The
+        // doc-comment above carries the outcome-classing rationale.
+        const finish = (result: CallToolResult, gateErrorType?: string): CallToolResult => {
+          const errorType = gateErrorType ?? (result.isError === true ? "tool_error" : undefined);
+          if (errorType !== undefined) span.setAttribute(ATTR_ERROR_TYPE, errorType);
+          if (errorType === "tool_error") span.setStatus({ code: SpanStatusCode.ERROR });
+          record(errorType);
+          return result;
+        };
+        // Tool bodies never throw to signal an outcome (ADR-0014), but the SDK
+        // callback protocol is throw-based — instrumentation stays throw-
+        // transparent: a foreign escape ends the span as an error and rethrows
+        // for the SDK to render.
+        const fail = (cause: unknown): never => {
+          const errorType = cause instanceof Error ? cause.constructor.name : "unknown";
+          span.setAttribute(ATTR_ERROR_TYPE, errorType);
+          span.setStatus({ code: SpanStatusCode.ERROR });
+          record(errorType);
+          throw cause;
+        };
         for (const pre of preconditions) {
           const failure = pre(ctx).match(
             () => undefined,
@@ -205,10 +261,18 @@ export function defineTool<
             // state, and a retrying client would otherwise storm the info log
             // with one gate line per call across the whole surface.
             log.debug({ tool: spec.name, precondition: pre.name || "(inline)" }, "tool gated by precondition");
-            return failure;
+            span.setAttribute(ATTR_TOOL_GATED_BY, pre.name || "(inline)");
+            return finish(failure, "precondition_gated");
           }
         }
-        return body(args, extra);
+        // context.with makes this span active for the body, so spans started
+        // inside it (undici fetches, feature pipelines) parent correctly.
+        try {
+          const outcome = context.with(trace.setSpan(context.active(), span), () => body(args, extra));
+          return outcome instanceof Promise ? outcome.then(finish, fail) : finish(outcome);
+        } catch (cause) {
+          return fail(cause);
+        }
       };
       ctx.server.registerTool(spec.name, spec, gated as ToolCallback<I>);
     },
