@@ -25,6 +25,7 @@ import {
 } from "cockatiel";
 import type { Logger } from "pino";
 
+import { wireResilienceTelemetry } from "../telemetry/resilience.js";
 import { CircuitOpenError, type CircuitService } from "./errors.js";
 import { SILENT_LOG } from "./log.js";
 
@@ -129,6 +130,10 @@ export function createResilientExecutor(options: ResilienceOptions): ResilientEx
   breakerPolicy.onHalfOpen(() => {
     log.info({}, `${logLabel} circuit breaker half-open (probe pending)`);
   });
+
+  // Metrics ride the same hook surface as the log lines above; labeled by the
+  // same logLabel vocabulary ("embedding", "photography").
+  wireResilienceTelemetry(logLabel, retryPolicy, breakerPolicy);
 
   const resilience = wrap(breakerPolicy, retryPolicy);
 
