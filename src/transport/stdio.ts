@@ -8,6 +8,7 @@ import { buildBrandedServer, buildInfraBase } from "../server/build.js";
 import { createIndexEvents } from "../server/index-events.js";
 import { createServerRef, singleServerNotifier } from "../server/notifier.js";
 import { notifyFromResults, runSyncLoop } from "../server/sync-loop.js";
+import { ATTR_MCP_PAPRIKA_TRANSPORT, mcpServerSessionDuration } from "../telemetry/instruments.js";
 // Side-effect: every domain/feature module self-registers on import, so the kernel's
 // `registeredModules()` is populated before `buildKernel` reads it.
 import "../kernel/modules.generated.js";
@@ -80,12 +81,21 @@ export async function startStdio(config: PaprikaConfig): Promise<TransportHandle
   }
 
   tlog.info("connecting stdio transport");
+  const sessionStartedAt = performance.now();
   await server.connect(new StdioServerTransport());
   tlog.info("server ready");
 
   return {
     async shutdown() {
       loop?.stop();
+      // Under stdio, one session = the process lifetime, so the session
+      // duration records once at graceful shutdown (this server's answer to
+      // the semconv's open stdio-session-boundary question — see
+      // docs/telemetry.md). A SIGKILL loses the point, as it loses any
+      // final metric.
+      mcpServerSessionDuration().record((performance.now() - sessionStartedAt) / 1000, {
+        [ATTR_MCP_PAPRIKA_TRANSPORT]: "stdio",
+      });
     },
   };
 }
