@@ -28,6 +28,8 @@ export type TestTelemetry = {
     metricName: string,
     attrSubset?: Record<string, unknown>,
   ): Promise<ReadonlyArray<DataPoint<Histogram>>>;
+  /** Counter (Sum) datapoints for a metric, optionally filtered to an attribute subset. */
+  sumPoints(metricName: string, attrSubset?: Record<string, unknown>): Promise<ReadonlyArray<DataPoint<number>>>;
 };
 
 /**
@@ -62,14 +64,22 @@ export function installTestTelemetry(): TestTelemetry {
       return spanExporter.getFinishedSpans().filter((span) => span.name === name);
     },
     async histogramPoints(metricName, attrSubset = {}) {
-      const { resourceMetrics } = await metricReader.collect();
-      const points = resourceMetrics.scopeMetrics
-        .flatMap((scope) => scope.metrics)
-        .filter((metric) => metric.descriptor.name === metricName)
-        .flatMap((metric) => metric.dataPoints as ReadonlyArray<DataPoint<Histogram>>);
-      return points.filter((point) =>
-        Object.entries(attrSubset).every(([key, value]) => point.attributes[key] === value),
-      );
+      return collectPoints<Histogram>(metricName, attrSubset);
+    },
+    async sumPoints(metricName, attrSubset = {}) {
+      return collectPoints<number>(metricName, attrSubset);
     },
   };
+
+  async function collectPoints<V>(
+    metricName: string,
+    attrSubset: Record<string, unknown>,
+  ): Promise<ReadonlyArray<DataPoint<V>>> {
+    const { resourceMetrics } = await metricReader.collect();
+    return resourceMetrics.scopeMetrics
+      .flatMap((scope) => scope.metrics)
+      .filter((metric) => metric.descriptor.name === metricName)
+      .flatMap((metric) => metric.dataPoints as unknown as ReadonlyArray<DataPoint<V>>)
+      .filter((point) => Object.entries(attrSubset).every(([key, value]) => point.attributes[key] === value));
+  }
 }

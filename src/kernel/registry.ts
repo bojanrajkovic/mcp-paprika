@@ -1,4 +1,5 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { context, SpanStatusCode, trace, ValueType } from "@opentelemetry/api";
 import { ResultAsync } from "neverthrow";
 import type { Logger } from "pino";
 
@@ -10,6 +11,10 @@ import type { IndexEventEmitter } from "../server/index-events.js";
 import type { Notifier } from "../server/notifier.js";
 import type { PaprikaConfig } from "../utils/config.js";
 import type { ToolDef, ToolSpec } from "./tool.js";
+
+import { getMeter, getTracer, lazy } from "../telemetry/scope.js";
+import { MCP_DURATION_BUCKETS } from "../telemetry/semconv.js";
+import { traceResultAsync } from "../telemetry/trace-result.js";
 
 /**
  * The domain-isolation composition kernel.
@@ -366,9 +371,50 @@ export interface Kernel {
    * un-flushed cycle fans out no resource notification. The initial cycle already
    * ran at build time (gating the
    * post-sync hooks); the interval driver calls this on its loop.
+   *
+   * `trigger` only labels telemetry (the cycle span + duration histogram);
+   * behavior is identical. buildKernel's internal initial call passes "boot";
+   * every external caller is the interval path and takes the default.
    */
-  syncOnce(): Promise<ReadonlyArray<AnySyncResult>>;
+  syncOnce(trigger?: SyncTrigger): Promise<ReadonlyArray<AnySyncResult>>;
 }
+
+/** What started a sync cycle — a telemetry label, not a behavioral input. */
+export type SyncTrigger = "boot" | "interval";
+
+/** How a sync cycle ended, as recorded on its span and duration histogram. */
+type SyncOutcome = "ok" | "core_aborted" | "flush_failed" | "contract_breach";
+
+const ATTR_SYNC_TRIGGER = "mcp_paprika.sync.trigger";
+const ATTR_SYNC_OUTCOME = "mcp_paprika.sync.outcome";
+const ATTR_SYNC_TIER = "mcp_paprika.sync.tier";
+const ATTR_SYNC_DOMAIN = "mcp_paprika.sync.domain";
+const ATTR_SYNC_ENTITY = "mcp_paprika.sync.entity";
+const ATTR_SYNC_CHANGE_KIND = "mcp_paprika.sync.change.kind";
+
+const syncCycleDuration = lazy(() =>
+  getMeter().createHistogram("mcp_paprika.sync.cycle.duration", {
+    description: "Duration of sync cycles, by trigger and outcome",
+    unit: "s",
+    valueType: ValueType.DOUBLE,
+    advice: { explicitBucketBoundaries: [...MCP_DURATION_BUCKETS] },
+  }),
+);
+const syncChanges = lazy(() =>
+  getMeter().createCounter("mcp_paprika.sync.changes", {
+    description: "Entity changes applied by sync cycles that completed through flush",
+    unit: "{change}",
+  }),
+);
+const syncSweepExpired = lazy(() =>
+  getMeter().createCounter("mcp_paprika.sync.sweep.expired", {
+    description: "Pending-write marks expired by the end-of-cycle TTL sweep",
+    unit: "{mark}",
+  }),
+);
+
+/** `error.type` class for a reconcile failure: the error's constructor, or the plain-object CacheError. */
+const syncErrorType = (error: SyncError): string => (error instanceof Error ? error.constructor.name : "CacheError");
 
 interface Built {
   readonly id: string;
@@ -448,79 +494,136 @@ export async function buildKernel(
   for (const b of syncOrder) {
     if (b.syncs === undefined) continue;
     for (const sync of b.syncs) {
-      const run: RunSync = () => sync.reconcile(bootCtxOf(b));
+      // Each reconcile runs under its own span (named by owning domain — a
+      // domain with several syncs shares the name; the entity attribute
+      // stamped from the result disambiguates), child of the cycle span via
+      // the active context. error.type carries the typed failure's class.
+      const run: RunSync = () =>
+        traceResultAsync(
+          getTracer(),
+          `paprika.sync.reconcile ${b.id}`,
+          { attributes: { [ATTR_SYNC_TIER]: sync.tier, [ATTR_SYNC_DOMAIN]: b.id } },
+          syncErrorType,
+          () =>
+            sync.reconcile(bootCtxOf(b)).map((result) => {
+              // The reconcile span is the active span here (traceResultAsync
+              // runs fn under it); stamp what the reconcile produced.
+              if (result !== undefined) {
+                trace.getActiveSpan()?.setAttributes({
+                  [ATTR_SYNC_ENTITY]: result.changeType,
+                  "mcp_paprika.sync.added": result.changes.added.length,
+                  "mcp_paprika.sync.updated": result.changes.updated.length,
+                  "mcp_paprika.sync.removed": result.changes.removedUids.length,
+                });
+              }
+              return result;
+            }),
+        );
       if (sync.tier === "reference") referenceSyncs.push(run);
       else if (sync.tier === "core") coreSyncs.push(run);
       else additiveSyncs.push(run);
       if (sync.sweep !== undefined) sweepers.push(sync.sweep);
     }
   }
-  const syncOnce = async (): Promise<ReadonlyArray<AnySyncResult>> => {
-    const results: Array<AnySyncResult> = [];
-    // The reconciles speak Result (ADR-0014), so the abort seam is the core-tier
-    // `err` below, not a catch. The try/catch is pure defense-in-depth for a
-    // reconcile that breaks its own contract (a throw inside a chain callback
-    // rejects the underlying promise): syncOnce's never-throws promise is
-    // load-bearing for the interval loop and boot.
-    try {
-      // Reference catalogs first, best-effort: a catalog fetch failure degrades to the
-      // last-good in-memory catalog (consumers resolve names at read time and gate on
-      // hasSynced) rather than aborting the primary data sync below.
-      for (const run of referenceSyncs) {
-        (await run()).match(
-          (r) => {
-            if (r !== undefined) results.push(r);
-          },
-          (err) => {
-            infra.log.warn({ err }, "reference sync failed; core sync unaffected");
-          },
-        );
-      }
-      for (const run of coreSyncs) {
-        const coreErr = (await run()).match(
-          (r) => {
-            if (r !== undefined) results.push(r);
-            return undefined;
-          },
-          (err) => err,
-        );
-        if (coreErr !== undefined) {
-          // A core err aborts the cycle: no flush, no sweep, no results — the
-          // partially reconciled state stays in memory and the next cycle retries.
-          infra.log.error({ err: coreErr }, "sync failed");
-          return [];
+  const syncOnce = async (trigger: SyncTrigger = "interval"): Promise<ReadonlyArray<AnySyncResult>> => {
+    // The cycle span parents every reconcile span (and their undici fetch
+    // children) via the active context; `finish` is the single end point that
+    // stamps the outcome, records the duration histogram, and — only for a
+    // cycle that completed through flush — counts the applied changes. The
+    // change counters mirror the results contract: an aborted cycle reports
+    // none, exactly as it fans out no notification.
+    const cycleSpan = getTracer().startSpan("paprika.sync_cycle", { attributes: { [ATTR_SYNC_TRIGGER]: trigger } });
+    const cycleStarted = performance.now();
+    const finish = (outcome: SyncOutcome, results: ReadonlyArray<AnySyncResult>): ReadonlyArray<AnySyncResult> => {
+      cycleSpan.setAttribute(ATTR_SYNC_OUTCOME, outcome);
+      if (outcome !== "ok") cycleSpan.setStatus({ code: SpanStatusCode.ERROR });
+      cycleSpan.end();
+      syncCycleDuration().record((performance.now() - cycleStarted) / 1000, {
+        [ATTR_SYNC_TRIGGER]: trigger,
+        [ATTR_SYNC_OUTCOME]: outcome,
+      });
+      for (const r of results) {
+        const counts = [
+          ["added", r.changes.added.length],
+          ["updated", r.changes.updated.length],
+          ["removed", r.changes.removedUids.length],
+        ] as const;
+        for (const [kind, n] of counts) {
+          if (n > 0) syncChanges().add(n, { [ATTR_SYNC_ENTITY]: r.changeType, [ATTR_SYNC_CHANGE_KIND]: kind });
         }
       }
-      for (const run of additiveSyncs) {
-        (await run()).match(
-          (r) => {
-            if (r !== undefined) results.push(r);
+      return results;
+    };
+    return context.with(trace.setSpan(context.active(), cycleSpan), async () => {
+      const results: Array<AnySyncResult> = [];
+      // The reconciles speak Result (ADR-0014), so the abort seam is the core-tier
+      // `err` below, not a catch. The try/catch is pure defense-in-depth for a
+      // reconcile that breaks its own contract (a throw inside a chain callback
+      // rejects the underlying promise): syncOnce's never-throws promise is
+      // load-bearing for the interval loop and boot.
+      try {
+        // Reference catalogs first, best-effort: a catalog fetch failure degrades to the
+        // last-good in-memory catalog (consumers resolve names at read time and gate on
+        // hasSynced) rather than aborting the primary data sync below.
+        for (const run of referenceSyncs) {
+          (await run()).match(
+            (r) => {
+              if (r !== undefined) results.push(r);
+            },
+            (err) => {
+              infra.log.warn({ err }, "reference sync failed; core sync unaffected");
+            },
+          );
+        }
+        for (const run of coreSyncs) {
+          const coreErr = (await run()).match(
+            (r) => {
+              if (r !== undefined) results.push(r);
+              return undefined;
+            },
+            (err) => err,
+          );
+          if (coreErr !== undefined) {
+            // A core err aborts the cycle: no flush, no sweep, no results — the
+            // partially reconciled state stays in memory and the next cycle retries.
+            infra.log.error({ err: coreErr }, "sync failed");
+            return finish("core_aborted", []);
+          }
+        }
+        for (const run of additiveSyncs) {
+          (await run()).match(
+            (r) => {
+              if (r !== undefined) results.push(r);
+            },
+            (err) => {
+              infra.log.warn({ err }, "additive sync failed; core sync unaffected");
+            },
+          );
+        }
+        // Only a cycle that reached flush reports results: a core-reconcile err (or
+        // a flush error) aborts the cycle. Returning the partially accumulated
+        // `results` for an aborted, un-flushed cycle would fan out a resource
+        // notification for state that never became durable — return `[]` instead.
+        return (await flushAll()).match(
+          () => {
+            let swept = 0;
+            for (const sweep of sweepers) swept += sweep();
+            if (swept > 0) {
+              infra.log.debug({ swept }, "swept pending writes past TTL");
+              syncSweepExpired().add(swept);
+            }
+            return finish("ok", results);
           },
-          (err) => {
-            infra.log.warn({ err }, "additive sync failed; core sync unaffected");
+          (flushErr) => {
+            infra.log.error({ err: flushErr }, "sync flush failed");
+            return finish("flush_failed", []);
           },
         );
+      } catch (err) {
+        infra.log.error({ err }, "sync failed (reconcile broke the Result contract)");
+        return finish("contract_breach", []);
       }
-      // Only a cycle that reached flush reports results: a core-reconcile err (or
-      // a flush error) aborts the cycle. Returning the partially accumulated
-      // `results` for an aborted, un-flushed cycle would fan out a resource
-      // notification for state that never became durable — return `[]` instead.
-      return (await flushAll()).match(
-        () => {
-          let swept = 0;
-          for (const sweep of sweepers) swept += sweep();
-          if (swept > 0) infra.log.debug({ swept }, "swept pending writes past TTL");
-          return results;
-        },
-        (flushErr) => {
-          infra.log.error({ err: flushErr }, "sync flush failed");
-          return [];
-        },
-      );
-    } catch (err) {
-      infra.log.error({ err }, "sync failed (reconcile broke the Result contract)");
-      return [];
-    }
+    });
   };
 
   // Boot: construct → run the INITIAL sync cycle → run post-sync hooks. The initial
@@ -534,7 +637,7 @@ export async function buildKernel(
   // driver's immediate first iteration re-syncs and DOES call notifyFromResults once a
   // session can receive it. If the bootstrap order ever changes so a server exists here,
   // wire notifyFromResults onto this call too.
-  await syncOnce();
+  await syncOnce("boot");
   for (const phase of BOOT_PHASES) {
     for (const b of built) {
       const hook = b.onReady?.[phase];
