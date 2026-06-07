@@ -1,7 +1,6 @@
 import type { ToolCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult, ToolAnnotations } from "@modelcontextprotocol/sdk/types.js";
-import { context, SpanStatusCode, trace } from "@opentelemetry/api";
-import { ATTR_ERROR_TYPE } from "@opentelemetry/semantic-conventions";
+import { context, trace } from "@opentelemetry/api";
 import type { Result } from "neverthrow";
 import type { ZodRawShape, ZodTypeAny } from "zod";
 
@@ -10,7 +9,7 @@ import type { DomainCtx, DomainId } from "./registry.js";
 import { mcpServerOperationDuration } from "../telemetry/instruments.js";
 import { getTracer } from "../telemetry/scope.js";
 import { ATTR_GEN_AI_OPERATION_NAME, ATTR_GEN_AI_TOOL_NAME, ATTR_MCP_METHOD_NAME } from "../telemetry/semconv.js";
-import { errorTypeName } from "../telemetry/trace-result.js";
+import { errorTypeName, startOperation } from "../telemetry/trace-result.js";
 
 /**
  * A tool's registration metadata, **as data** — everything `registerTool` needs
@@ -228,38 +227,28 @@ export function defineTool<
         // markers) and the root logger's REDACT_PATHS censors credential-named
         // fields; the level guard keeps the walk off the default-level path.
         if (log.isLevelEnabled("debug")) log.debug({ tool: spec.name, args: loggableArgs(args) }, "tool args");
-        const span = getTracer().startSpan(spanName, { attributes: spanAttributes });
-        const started = performance.now();
-        const record = (errorType: string | undefined): void => {
-          span.end();
-          mcpServerOperationDuration().record(
-            (performance.now() - started) / 1000,
-            errorType === undefined ? metricAttributes : { ...metricAttributes, [ATTR_ERROR_TYPE]: errorType },
-          );
-        };
-        // Ends the span + records the histogram exactly once per call. The
-        // doc-comment above carries the outcome-classing rationale.
+        const op = startOperation(
+          getTracer(),
+          spanName,
+          { attributes: spanAttributes },
+          { histogram: mcpServerOperationDuration, attributes: metricAttributes },
+        );
+        // The protocol adapters: finish maps the SDK's CallToolResult outcomes
+        // onto op.end (the doc-comment above carries the outcome-classing
+        // rationale — gated keeps status UNSET); fail is the throw-transparent
+        // passthrough for the SDK's throw-based callback contract (ADR-0014).
         const finish = (result: CallToolResult, gateErrorType?: string): CallToolResult => {
           const errorType = gateErrorType ?? (result.isError === true ? "tool_error" : undefined);
-          if (errorType !== undefined) span.setAttribute(ATTR_ERROR_TYPE, errorType);
-          if (errorType === "tool_error") span.setStatus({ code: SpanStatusCode.ERROR });
-          record(errorType);
+          op.end({ errorType, isError: errorType === "tool_error" });
           return result;
         };
-        // Tool bodies and guards never throw to signal an outcome (ADR-0014),
-        // but the SDK callback protocol is throw-based — instrumentation stays
-        // throw-transparent: a foreign escape ends the span as an error and
-        // rethrows for the SDK to render.
         const fail = (cause: unknown): never => {
-          const errorType = errorTypeName(cause);
-          span.setAttribute(ATTR_ERROR_TYPE, errorType);
-          span.setStatus({ code: SpanStatusCode.ERROR });
-          record(errorType);
+          op.end({ errorType: errorTypeName(cause), isError: true });
           throw cause;
         };
         // The guard chain runs inside the same try as the body, so even a
         // contract-breaking guard throw routes through fail() instead of
-        // leaking the span.
+        // leaking the operation.
         try {
           for (const pre of preconditions) {
             const failure = pre(ctx).match(
@@ -271,13 +260,13 @@ export function defineTool<
               // state, and a retrying client would otherwise storm the info log
               // with one gate line per call across the whole surface.
               log.debug({ tool: spec.name, precondition: pre.name || "(inline)" }, "tool gated by precondition");
-              span.setAttribute(ATTR_TOOL_GATED_BY, pre.name || "(inline)");
+              op.span.setAttribute(ATTR_TOOL_GATED_BY, pre.name || "(inline)");
               return finish(failure, "precondition_gated");
             }
           }
           // context.with makes this span active for the body, so spans started
           // inside it (undici fetches, feature pipelines) parent correctly.
-          const outcome = context.with(trace.setSpan(context.active(), span), () => body(args, extra));
+          const outcome = context.with(trace.setSpan(context.active(), op.span), () => body(args, extra));
           return outcome instanceof Promise ? outcome.then(finish, fail) : finish(outcome);
         } catch (cause) {
           return fail(cause);

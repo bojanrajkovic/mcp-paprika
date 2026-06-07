@@ -1,10 +1,10 @@
 import { ErrorCode, McpError } from "@modelcontextprotocol/sdk/types.js";
-import { context, SpanStatusCode, trace } from "@opentelemetry/api";
-import { ATTR_ERROR_TYPE } from "@opentelemetry/semantic-conventions";
+import { context, trace } from "@opentelemetry/api";
 
 import { mcpServerOperationDuration } from "../telemetry/instruments.js";
 import { getTracer } from "../telemetry/scope.js";
 import { ATTR_MCP_METHOD_NAME } from "../telemetry/semconv.js";
+import { errorTypeName, startOperation } from "../telemetry/trace-result.js";
 
 const RESOURCES_READ_METHOD = "resources/read";
 
@@ -29,33 +29,26 @@ export function tracedResourceRead<Args extends ReadonlyArray<unknown>, Out>(
   kind: string,
   handler: (...args: Args) => Promise<Out>,
 ): (...args: Args) => Promise<Out> {
+  const attributes = { [ATTR_MCP_METHOD_NAME]: RESOURCES_READ_METHOD, [ATTR_RESOURCE_KIND]: kind };
   return async (...args: Args): Promise<Out> => {
-    const span = getTracer().startSpan(RESOURCES_READ_METHOD, {
-      attributes: { [ATTR_MCP_METHOD_NAME]: RESOURCES_READ_METHOD, [ATTR_RESOURCE_KIND]: kind },
-    });
-    const started = performance.now();
-    const record = (errorType: string | undefined): void => {
-      if (errorType !== undefined) span.setAttribute(ATTR_ERROR_TYPE, errorType);
-      span.end();
-      mcpServerOperationDuration().record((performance.now() - started) / 1000, {
-        [ATTR_MCP_METHOD_NAME]: RESOURCES_READ_METHOD,
-        [ATTR_RESOURCE_KIND]: kind,
-        ...(errorType !== undefined && { [ATTR_ERROR_TYPE]: errorType }),
-      });
-    };
+    const op = startOperation(
+      getTracer(),
+      RESOURCES_READ_METHOD,
+      { attributes },
+      { histogram: mcpServerOperationDuration, attributes },
+    );
     try {
-      const result = await context.with(trace.setSpan(context.active(), span), () => handler(...args));
-      record(undefined);
+      const result = await context.with(trace.setSpan(context.active(), op.span), () => handler(...args));
+      op.end();
       return result;
     } catch (cause) {
       if (cause instanceof McpError) {
         // ErrorCode's reverse mapping names the protocol error class
         // (InvalidParams, …) — low-cardinality by construction. Status stays
         // UNSET: an answered protocol error, not a server failure.
-        record(ErrorCode[cause.code] ?? String(cause.code));
+        op.end({ errorType: ErrorCode[cause.code] ?? String(cause.code) });
       } else {
-        span.setStatus({ code: SpanStatusCode.ERROR });
-        record(cause instanceof Error ? cause.constructor.name : "unknown");
+        op.end({ errorType: errorTypeName(cause), isError: true });
       }
       throw cause;
     }

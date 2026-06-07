@@ -5,7 +5,7 @@ import { Mutex } from "async-mutex";
 import { err, errAsync, ok, okAsync, Result, ResultAsync } from "neverthrow";
 import type { Logger } from "pino";
 
-import { getMeter, lazy } from "../telemetry/scope.js";
+import { getMeter, lazy, startTimer } from "../telemetry/scope.js";
 import { isNodeError } from "../utils/errors.js";
 import { SILENT_LOG } from "../utils/log.js";
 
@@ -166,10 +166,10 @@ export class DiskCache<T> {
    * undercount exactly the contended case the histogram exists to expose.
    */
   private _measured<V>(op: string, run: () => ResultAsync<V, CacheError>): ResultAsync<V, CacheError> {
-    const started = performance.now();
+    const elapsedSeconds = startTimer();
     return run()
       .map((value) => {
-        cacheOperationDuration().record((performance.now() - started) / 1000, {
+        cacheOperationDuration().record(elapsedSeconds(), {
           "mcp_paprika.cache.entity": this._entity,
           "mcp_paprika.cache.op": op,
         });

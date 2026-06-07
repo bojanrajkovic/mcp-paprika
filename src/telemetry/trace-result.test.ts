@@ -1,4 +1,4 @@
-import { context, SpanStatusCode } from "@opentelemetry/api";
+import { context, type Histogram, SpanStatusCode } from "@opentelemetry/api";
 import { AsyncLocalStorageContextManager } from "@opentelemetry/context-async-hooks";
 import {
   BasicTracerProvider,
@@ -7,9 +7,9 @@ import {
   SimpleSpanProcessor,
 } from "@opentelemetry/sdk-trace-base";
 import { errAsync, okAsync, ResultAsync } from "neverthrow";
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { traceResultAsync } from "./trace-result.js";
+import { startOperation, traceResultAsync } from "./trace-result.js";
 
 // A real context manager (not the API's no-op default) is required for the
 // context.with propagation the helper promises — child spans started inside
@@ -37,15 +37,15 @@ function onlySpan(name: string): ReadableSpan {
   return spans[0]!;
 }
 
+/** A fake lazy histogram — duration recording asserts against the spy, no MeterProvider needed. */
+function fakeHistogram(): { histogram: () => Histogram; record: ReturnType<typeof vi.fn> } {
+  const record = vi.fn();
+  return { histogram: () => ({ record }) as unknown as Histogram, record };
+}
+
 describe("traceResultAsync", () => {
   it("ends the span with status UNSET and passes the value through on ok", async () => {
-    const result = await traceResultAsync(
-      tracer,
-      "op.ok",
-      {},
-      () => "unused",
-      () => okAsync(42),
-    );
+    const result = await traceResultAsync(tracer, "op.ok", {}, () => okAsync(42));
     result.match(
       (value) => {
         expect(value).toBe(42);
@@ -59,12 +59,11 @@ describe("traceResultAsync", () => {
     expect(span.attributes["error.type"]).toBeUndefined();
   });
 
-  it("sets status ERROR plus error.type from the typed error and passes the error through on err", async () => {
+  it("sets status ERROR plus error.type from the options classifier and passes the error through on err", async () => {
     const result = await traceResultAsync(
       tracer,
       "op.err",
-      {},
-      (error: { readonly tag: string }) => error.tag,
+      { errorType: (error: { readonly tag: string }) => error.tag },
       () => errAsync({ tag: "SyncError" }),
     );
     result.match(
@@ -80,49 +79,59 @@ describe("traceResultAsync", () => {
     expect(span.attributes["error.type"]).toBe("SyncError");
   });
 
+  it("defaults the error classifier to the constructor name", async () => {
+    await traceResultAsync(tracer, "op.default_class", {}, () => errAsync(new RangeError("nope")));
+    expect(onlySpan("op.default_class").attributes["error.type"]).toBe("RangeError");
+  });
+
   it("parents spans started inside fn under the helper's span", async () => {
-    await traceResultAsync(
-      tracer,
-      "op.parent",
-      {},
-      () => "unused",
-      () => {
-        const child = tracer.startSpan("op.child");
-        child.end();
-        return okAsync(undefined);
-      },
-    );
+    await traceResultAsync(tracer, "op.parent", {}, () => {
+      const child = tracer.startSpan("op.child");
+      child.end();
+      return okAsync(undefined);
+    });
     const parent = onlySpan("op.parent");
     const child = onlySpan("op.child");
     expect(child.parentSpanContext?.spanId).toBe(parent.spanContext().spanId);
   });
 
-  it("ends the span (ERROR) and rethrows unchanged when fn breaks the contract by throwing synchronously", () => {
+  it("records the duration histogram once on ok, with the static attributes only", async () => {
+    const { histogram, record } = fakeHistogram();
+    await traceResultAsync(tracer, "op.duration_ok", { duration: { histogram, attributes: { dim: "a" } } }, () =>
+      okAsync(1),
+    );
+    expect(record).toHaveBeenCalledExactlyOnceWith(expect.any(Number), { dim: "a" });
+  });
+
+  it("records the duration histogram once on err, with error.type appended", async () => {
+    const { histogram, record } = fakeHistogram();
+    await traceResultAsync(tracer, "op.duration_err", { duration: { histogram, attributes: { dim: "a" } } }, () =>
+      errAsync(new TypeError("boom")),
+    );
+    expect(record).toHaveBeenCalledExactlyOnceWith(expect.any(Number), { dim: "a", "error.type": "TypeError" });
+  });
+
+  it("ends the operation (ERROR) and rethrows unchanged when fn breaks the contract by throwing synchronously", () => {
+    const { histogram, record } = fakeHistogram();
     const boom = new RangeError("contract breach");
     expect(() =>
-      traceResultAsync(
-        tracer,
-        "op.sync_throw",
-        {},
-        () => "unused",
-        () => {
-          throw boom;
-        },
-      ),
+      traceResultAsync(tracer, "op.sync_throw", { duration: { histogram } }, () => {
+        throw boom;
+      }),
     ).toThrow(boom);
 
     const span = onlySpan("op.sync_throw");
     expect(span.status.code).toBe(SpanStatusCode.ERROR);
     expect(span.attributes["error.type"]).toBe("RangeError");
+    expect(record).toHaveBeenCalledOnce();
   });
 
-  it("ends the span (ERROR) when the underlying promise rejects (contract breach), without altering the rejection", async () => {
+  it("ends the operation (ERROR) when the underlying promise rejects (contract breach), without altering the rejection", async () => {
     const boom = new TypeError("rejected chain");
     const breached = traceResultAsync(
       tracer,
       "op.rejection",
       {},
-      () => "unused",
       // A ResultAsync whose underlying promise rejects — the breach the sync
       // driver's defensive catch tolerates at cycle level.
       () => new ResultAsync(Promise.reject(boom)) as ResultAsync<never, never>,
@@ -136,5 +145,28 @@ describe("traceResultAsync", () => {
     const span = onlySpan("op.rejection");
     expect(span.status.code).toBe(SpanStatusCode.ERROR);
     expect(span.attributes["error.type"]).toBe("TypeError");
+  });
+});
+
+describe("startOperation", () => {
+  it("end() is latched: the span ends and the histogram records exactly once across competing end paths", () => {
+    const { histogram, record } = fakeHistogram();
+    const op = startOperation(tracer, "op.latch", {}, { histogram, attributes: { dim: "x" } });
+    op.end({ errorType: "First", isError: true });
+    op.end(); // late competing path — must no-op
+    op.end({ errorType: "Third", isError: true });
+
+    const span = onlySpan("op.latch");
+    expect(span.attributes["error.type"]).toBe("First");
+    expect(record).toHaveBeenCalledExactlyOnceWith(expect.any(Number), { dim: "x", "error.type": "First" });
+  });
+
+  it("a classed outcome with isError false keeps span status UNSET (the gated / answered-protocol shape)", () => {
+    const op = startOperation(tracer, "op.classed_unset", {});
+    op.end({ errorType: "precondition_gated" });
+
+    const span = onlySpan("op.classed_unset");
+    expect(span.attributes["error.type"]).toBe("precondition_gated");
+    expect(span.status.code).toBe(SpanStatusCode.UNSET);
   });
 });

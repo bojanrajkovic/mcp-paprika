@@ -7,7 +7,6 @@
  */
 
 import { SpanKind, trace } from "@opentelemetry/api";
-import { ATTR_ERROR_TYPE } from "@opentelemetry/semantic-conventions";
 import type { IRetryContext } from "cockatiel";
 import { errAsync, okAsync, ResultAsync } from "neverthrow";
 import type { Logger } from "pino";
@@ -25,7 +24,7 @@ import {
   ATTR_GEN_AI_TOKEN_TYPE,
   ATTR_GEN_AI_USAGE_INPUT_TOKENS,
 } from "../telemetry/semconv.js";
-import { errorTypeName, traceResultAsync } from "../telemetry/trace-result.js";
+import { traceResultAsync } from "../telemetry/trace-result.js";
 import { CircuitOpenError } from "../utils/errors.js";
 import { SILENT_LOG, toMessage } from "../utils/log.js";
 import {
@@ -182,35 +181,20 @@ export class EmbeddingClient {
       return parsed.data.map((d) => d.embedding);
     };
 
-    // The logical GenAI span covers every retry attempt and backoff wait; the
-    // per-attempt HTTP spans (undici instrumentation) parent under it.
-    const started = performance.now();
-    const recordDuration = (errorType: string | undefined): void => {
-      genAiClientOperationDuration().record((performance.now() - started) / 1000, {
-        ...this._genAiAttrs,
-        ...(errorType !== undefined && { [ATTR_ERROR_TYPE]: errorType }),
-      });
-    };
+    // The logical GenAI operation covers every retry attempt and backoff wait;
+    // the per-attempt HTTP spans (undici instrumentation) parent under it, and
+    // the duration histogram records at its end with the same error.type class.
     return traceResultAsync(
       getTracer(),
       `embeddings ${this._model}`,
       {
         kind: SpanKind.CLIENT,
         attributes: { ...this._genAiAttrs, "mcp_paprika.embeddings.batch_size": texts.length },
+        duration: { histogram: genAiClientOperationDuration, attributes: this._genAiAttrs },
       },
-      errorTypeName,
-      () =>
-        // The executor maps a tripped breaker to CircuitOpenError("embeddings", endpoint);
-        // the throw-based cockatiel protocol ends at this owned edge (ADR-0014).
-        ResultAsync.fromPromise(this._executor.execute(endpoint, execute), toEmbeddingFailure)
-          .map((vectors) => {
-            recordDuration(undefined);
-            return vectors;
-          })
-          .mapErr((error) => {
-            recordDuration(errorTypeName(error));
-            return error;
-          }),
+      // The executor maps a tripped breaker to CircuitOpenError("embeddings", endpoint);
+      // the throw-based cockatiel protocol ends at this owned edge (ADR-0014).
+      () => ResultAsync.fromPromise(this._executor.execute(endpoint, execute), toEmbeddingFailure),
     );
   }
 

@@ -25,7 +25,7 @@ import { createIndexEvents } from "../server/index-events.js";
 import { broadcastNotifier } from "../server/notifier.js";
 import { notifyFromResults, runSyncLoop } from "../server/sync-loop.js";
 import { ATTR_MCP_PAPRIKA_TRANSPORT, mcpServerSessionDuration } from "../telemetry/instruments.js";
-import { getMeter, lazy } from "../telemetry/scope.js";
+import { getMeter, lazy, startTimer } from "../telemetry/scope.js";
 import { unwrapAtBoot } from "../utils/errors.js";
 import { buildFaviconRouter } from "./favicon.js";
 // Side-effect: every domain/feature module self-registers on import.
@@ -46,8 +46,8 @@ export interface HttpTransportHandle extends TransportHandle {
 interface Session {
   server: McpServer;
   transport: StreamableHTTPTransport;
-  /** performance.now() at initialize — feeds mcp.server.session.duration at close. */
-  startedAt: number;
+  /** Started at initialize — yields elapsed seconds for mcp.server.session.duration at close. */
+  readonly elapsedSeconds: () => number;
 }
 
 const HTTP_TRANSPORT_ATTR = { [ATTR_MCP_PAPRIKA_TRANSPORT]: "http" } as const;
@@ -168,7 +168,7 @@ export async function startHttp(config: PaprikaConfig, opts: StartHttpOptions = 
     if (session === undefined) return;
     sessions.delete(id);
     activeSessions().add(-1, HTTP_TRANSPORT_ATTR);
-    mcpServerSessionDuration().record((performance.now() - session.startedAt) / 1000, HTTP_TRANSPORT_ATTR);
+    mcpServerSessionDuration().record(session.elapsedSeconds(), HTTP_TRANSPORT_ATTR);
   };
 
   // DNS rebinding protection: derive once at startup. The SDK's transport
@@ -395,7 +395,7 @@ export async function startHttp(config: PaprikaConfig, opts: StartHttpOptions = 
     const transport = new StreamableHTTPTransport({
       sessionIdGenerator: () => randomUUID(),
       onsessioninitialized: (id) => {
-        sessions.set(id, { server, transport, startedAt: performance.now() });
+        sessions.set(id, { server, transport, elapsedSeconds: startTimer() });
         activeSessions().add(1, HTTP_TRANSPORT_ATTR);
       },
       onsessionclosed: (id) => {

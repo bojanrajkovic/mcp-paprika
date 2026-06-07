@@ -54,7 +54,6 @@ import { mkdir, readFile, rename, cp, open } from "node:fs/promises";
 import { join } from "node:path";
 
 import { trace } from "@opentelemetry/api";
-import { ATTR_ERROR_TYPE } from "@opentelemetry/semantic-conventions";
 import { Mutex } from "async-mutex";
 import { err, errAsync, ok, okAsync, Result, ResultAsync } from "neverthrow";
 import type { Logger } from "pino";
@@ -65,7 +64,7 @@ import type { Recipe } from "../domains/recipe/types.js";
 import type { EmbeddingClient, EmbeddingFailure } from "./embeddings.js";
 
 import { getMeter, getTracer, lazy } from "../telemetry/scope.js";
-import { errorTypeName, traceResultAsync } from "../telemetry/trace-result.js";
+import { traceResultAsync } from "../telemetry/trace-result.js";
 import { isNodeError } from "../utils/errors.js";
 import { SILENT_LOG, toMessage } from "../utils/log.js";
 import { recipeToEmbeddingText } from "./embeddings.js";
@@ -321,17 +320,21 @@ export class VectorStore {
     recipes: ReadonlyArray<Recipe>,
     resolveCats: (uids: ReadonlyArray<CategoryUid>) => ReadonlyArray<string>,
   ): ResultAsync<IndexingResult, VectorStoreFailure> {
-    // The single re-index chokepoint, so the span covers every path that feeds
-    // it (startup reconcile, recipe-changed, category-changed, tool writes);
-    // embedding-batch spans parent under it. Mutex WAIT time is deliberately
-    // inside the span — queueing behind a concurrent re-index IS part of the
-    // latency this measures.
-    const started = performance.now();
+    // The single re-index chokepoint, so the operation covers every path that
+    // feeds it (startup reconcile, recipe-changed, category-changed, tool
+    // writes); embedding-batch spans parent under it. Mutex WAIT time is
+    // deliberately inside — queueing behind a concurrent re-index IS part of
+    // the latency this measures. The duration histogram records failures with
+    // error.type too: a wedged embeddings backend must be visible in the
+    // metric, not just the span (the index-event dispatch counter can't see
+    // async failures).
     return traceResultAsync(
       getTracer(),
       "discover.reindex",
-      { attributes: { "mcp_paprika.reindex.batch": recipes.length } },
-      errorTypeName,
+      {
+        attributes: { "mcp_paprika.reindex.batch": recipes.length },
+        duration: { histogram: reindexDuration },
+      },
       () =>
         // Run exclusively so a concurrent indexRecipes/removeRecipe can't open an
         // overlapping vector-index transaction or race the hash map (see `_writeMutex`).
@@ -347,17 +350,7 @@ export class VectorStore {
               "mcp_paprika.reindex.indexed": result.indexed,
               "mcp_paprika.reindex.skipped": result.skipped,
             });
-            reindexDuration().record((performance.now() - started) / 1000);
             return result;
-          })
-          .mapErr((error) => {
-            // A failed re-index records too, classed by error.type — a wedged
-            // embeddings backend must be visible in the metric, not just the
-            // span (the index-event dispatch counter can't see async failures).
-            reindexDuration().record((performance.now() - started) / 1000, {
-              [ATTR_ERROR_TYPE]: errorTypeName(error),
-            });
-            return error;
           }),
     );
   }
@@ -500,26 +493,21 @@ export class VectorStore {
     // Child of the discover_recipes tool span via the active context; the
     // query text itself never becomes an attribute (free text stays out of
     // telemetry), only the shape of the search.
-    return traceResultAsync(
-      getTracer(),
-      "discover.query",
-      { attributes: { "mcp_paprika.discover.top_k": topK } },
-      errorTypeName,
-      () =>
-        this._embedder
-          .embed(query)
-          .andThen((vector) => this._index.queryItems(vector, topK, minScore).mapErr(storeError("query vector index")))
-          .map((results) => {
-            trace.getActiveSpan()?.setAttribute("mcp_paprika.discover.result_count", results.length);
-            // The vector index is generic over string ids; every id here was written from
-            // `recipe.uid` (see `upsertItem`), so minting `RecipeUid` at this boundary is
-            // sound and lets `SemanticResult` carry the brand to callers.
-            return results.map((r) => ({
-              uid: r.item.id as RecipeUid,
-              score: r.score,
-              recipeName: (r.item.metadata?.["recipeName"] as string) ?? "",
-            }));
-          }),
+    return traceResultAsync(getTracer(), "discover.query", { attributes: { "mcp_paprika.discover.top_k": topK } }, () =>
+      this._embedder
+        .embed(query)
+        .andThen((vector) => this._index.queryItems(vector, topK, minScore).mapErr(storeError("query vector index")))
+        .map((results) => {
+          trace.getActiveSpan()?.setAttribute("mcp_paprika.discover.result_count", results.length);
+          // The vector index is generic over string ids; every id here was written from
+          // `recipe.uid` (see `upsertItem`), so minting `RecipeUid` at this boundary is
+          // sound and lets `SemanticResult` carry the brand to callers.
+          return results.map((r) => ({
+            uid: r.item.id as RecipeUid,
+            score: r.score,
+            recipeName: (r.item.metadata?.["recipeName"] as string) ?? "",
+          }));
+        }),
     );
   }
 

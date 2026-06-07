@@ -12,7 +12,7 @@ import type { Notifier } from "../server/notifier.js";
 import type { PaprikaConfig } from "../utils/config.js";
 import type { ToolDef, ToolSpec } from "./tool.js";
 
-import { getMeter, getTracer, lazy } from "../telemetry/scope.js";
+import { getMeter, getTracer, lazy, startTimer } from "../telemetry/scope.js";
 import { MCP_DURATION_BUCKETS } from "../telemetry/semconv.js";
 import { errorTypeName, traceResultAsync } from "../telemetry/trace-result.js";
 
@@ -516,8 +516,7 @@ export async function buildKernel(
         traceResultAsync(
           getTracer(),
           `paprika.sync.reconcile ${b.id}`,
-          { attributes: { [ATTR_SYNC_TIER]: sync.tier, [ATTR_SYNC_DOMAIN]: b.id } },
-          syncErrorType,
+          { attributes: { [ATTR_SYNC_TIER]: sync.tier, [ATTR_SYNC_DOMAIN]: b.id }, errorType: syncErrorType },
           () =>
             sync.reconcile(bootCtxOf(b)).map((result) => {
               // The reconcile span is the active span here (traceResultAsync
@@ -547,12 +546,12 @@ export async function buildKernel(
     // change counters mirror the results contract: an aborted cycle reports
     // none, exactly as it fans out no notification.
     const cycleSpan = getTracer().startSpan("paprika.sync_cycle", { attributes: { [ATTR_SYNC_TRIGGER]: trigger } });
-    const cycleStarted = performance.now();
+    const cycleElapsedSeconds = startTimer();
     const finish = (outcome: SyncOutcome, results: ReadonlyArray<AnySyncResult>): ReadonlyArray<AnySyncResult> => {
       cycleSpan.setAttribute(ATTR_SYNC_OUTCOME, outcome);
       if (outcome !== "ok") cycleSpan.setStatus({ code: SpanStatusCode.ERROR });
       cycleSpan.end();
-      syncCycleDuration().record((performance.now() - cycleStarted) / 1000, {
+      syncCycleDuration().record(cycleElapsedSeconds(), {
         [ATTR_SYNC_TRIGGER]: trigger,
         [ATTR_SYNC_OUTCOME]: outcome,
       });

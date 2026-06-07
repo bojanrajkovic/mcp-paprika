@@ -4,7 +4,7 @@ Last verified: 2026-06-06
 
 ## Purpose
 
-The OpenTelemetry substrate every instrumented seam records through: the opt-in dual-path bootstrap (`bootstrap.ts` + `sdk.ts`), the single instrumentation scope and instrument memoization (`scope.ts`), the vendored Development-status semconv constants (`semconv.ts`), the shared spec-named instruments (`instruments.ts`), the Result-native span helper (`trace-result.ts`), and the resilience-hook metric wiring (`resilience.ts`). **Recording lives at the seams** (the kernel tool/resource wrappers, the sync driver, the clients, the notifier) — this directory only provides the shared vocabulary and lifecycle.
+The OpenTelemetry substrate every instrumented seam records through: the opt-in dual-path bootstrap (`bootstrap.ts` + `sdk.ts`), the single instrumentation scope, instrument memoization, and the seconds timer (`scope.ts`), the vendored Development-status semconv constants (`semconv.ts`), the shared spec-named instruments (`instruments.ts`), the operation lifecycle (`trace-result.ts`: `startOperation` — span + duration + latched exactly-once `end()` — with `traceResultAsync` as its Result-rail adapter), and the resilience-hook metric wiring (`resilience.ts`). **Recording lives at the seams** (the kernel tool/resource wrappers, the sync driver, the clients, the notifier) — this directory only provides the shared vocabulary and lifecycle.
 
 ## Key References
 

@@ -31,3 +31,13 @@ export function lazy<T>(factory: () => T): () => T {
   let value: T | undefined;
   return () => (value ??= factory());
 }
+
+/**
+ * Start a duration timer; the returned thunk yields elapsed SECONDS — the
+ * unit every duration instrument here records ('s') — so the seconds
+ * conversion is named once instead of a `/ 1000` scattered per seam.
+ */
+export function startTimer(): () => number {
+  const started = performance.now();
+  return () => (performance.now() - started) / 1000;
+}

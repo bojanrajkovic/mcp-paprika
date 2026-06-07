@@ -12,7 +12,6 @@
  * at construction — credentials are the only construction-time input.
  */
 import { SpanKind, trace, ValueType } from "@opentelemetry/api";
-import { ATTR_ERROR_TYPE } from "@opentelemetry/semantic-conventions";
 import type { IRetryContext } from "cockatiel";
 import { err, ok, type Result, ResultAsync } from "neverthrow";
 import type { Logger } from "pino";
@@ -29,7 +28,7 @@ import {
   ATTR_GEN_AI_REQUEST_MODEL,
   ATTR_GEN_AI_RESPONSE_MODEL,
 } from "../telemetry/semconv.js";
-import { errorTypeName, traceResultAsync } from "../telemetry/trace-result.js";
+import { traceResultAsync } from "../telemetry/trace-result.js";
 import { CircuitOpenError } from "../utils/errors.js";
 import { SILENT_LOG, toMessage } from "../utils/log.js";
 import {
@@ -278,19 +277,13 @@ export class PhotographyClient {
       }
     };
 
-    // The logical GenAI span covers every retry attempt and the up-to-300s
-    // generation itself; the per-attempt HTTP spans (undici) parent under it.
+    // The logical GenAI operation covers every retry attempt and the up-to-300s
+    // generation itself; the per-attempt HTTP spans (undici) parent under it,
+    // and the duration histogram records at its end with the same error.type.
     const genAiAttrs = {
       [ATTR_GEN_AI_OPERATION_NAME]: "generate_content",
       [ATTR_GEN_AI_REQUEST_MODEL]: slug,
       [ATTR_GEN_AI_PROVIDER_NAME]: new URL(this._endpoint).host,
-    };
-    const started = performance.now();
-    const recordDuration = (errorType: string | undefined): void => {
-      genAiClientOperationDuration().record((performance.now() - started) / 1000, {
-        ...genAiAttrs,
-        ...(errorType !== undefined && { [ATTR_ERROR_TYPE]: errorType }),
-      });
     };
     return traceResultAsync(
       getTracer(),
@@ -298,19 +291,10 @@ export class PhotographyClient {
       {
         kind: SpanKind.CLIENT,
         attributes: { ...genAiAttrs, "mcp_paprika.photo.kind": options.referenceImage ? "restyle" : "generate" },
+        duration: { histogram: genAiClientOperationDuration, attributes: genAiAttrs },
       },
-      errorTypeName,
-      () =>
-        // The throw-based cockatiel protocol ends at this owned edge (ADR-0014).
-        ResultAsync.fromPromise(this._executor.execute(this._endpoint, execute), toPhotographyFailure)
-          .map((photo) => {
-            recordDuration(undefined);
-            return photo;
-          })
-          .mapErr((error) => {
-            recordDuration(errorTypeName(error));
-            return error;
-          }),
+      // The throw-based cockatiel protocol ends at this owned edge (ADR-0014).
+      () => ResultAsync.fromPromise(this._executor.execute(this._endpoint, execute), toPhotographyFailure),
     );
   }
 }

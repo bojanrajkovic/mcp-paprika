@@ -49,7 +49,7 @@ import { PhotoSchema, photoToApiPayload } from "../domains/recipe/photo/types.js
 import { RecipeEntrySchema, RecipeSchema } from "../domains/recipe/types.js";
 import { ATTR_CLIENT, observeBulkhead, wireResilienceTelemetry } from "../telemetry/resilience.js";
 import { getTracer } from "../telemetry/scope.js";
-import { errorTypeName, traceResultAsync } from "../telemetry/trace-result.js";
+import { traceResultAsync } from "../telemetry/trace-result.js";
 import { CircuitOpenError } from "../utils/errors.js";
 import { SILENT_LOG, toMessage } from "../utils/log.js";
 import { AuthResponseSchema } from "./auth-response.js";
@@ -391,7 +391,7 @@ export class PaprikaClient {
     // matched by the policy and escape immediately. Once the bounded retries
     // are exhausted, the mapper surfaces a clean PaprikaAuthError (preserving
     // the underlying cause) rather than the internal retry marker.
-    return traceResultAsync(getTracer(), "paprika.login", { attributes: PAPRIKA_CLIENT_ATTR }, errorTypeName, () =>
+    return traceResultAsync(getTracer(), "paprika.login", { attributes: PAPRIKA_CLIENT_ATTR }, () =>
       ResultAsync.fromPromise(this.retryPolicy.execute(attempt), (error) => {
         if (error instanceof NetworkRetryableError) {
           return new PaprikaAuthError("Authentication failed (network error)", { cause: error.cause });
@@ -794,7 +794,6 @@ export class PaprikaClient {
       getTracer(),
       `paprika.${operationFromUrl(url)}`,
       { attributes: { ...PAPRIKA_CLIENT_ATTR, [ATTR_HTTP_REQUEST_METHOD]: method } },
-      errorTypeName,
       () =>
         run().orElse((error) => {
           if (error instanceof TokenExpiredError) {
