@@ -1,7 +1,7 @@
 import type { ReadableSpan, SpanExporter } from "@opentelemetry/sdk-trace-base";
 import { describe, expect, it, vi } from "vitest";
 
-import { scrubUrl, urlScrubbingExporter } from "./url-scrub.js";
+import { scrubUrl, urlHostLabel, urlScrubbingExporter } from "./url-scrub.js";
 
 describe("scrubUrl", () => {
   it("drops the query — OAuth codes, state, presigned credentials", () => {
@@ -19,6 +19,17 @@ describe("scrubUrl", () => {
 
   it("fails closed on an unparseable value", () => {
     expect(scrubUrl("not a url")).toBe("[scrubbed:unparseable]");
+  });
+});
+
+describe("urlHostLabel", () => {
+  it("yields the host for a well-formed provider URL", () => {
+    expect(urlHostLabel("https://openrouter.ai/api/v1")).toBe("openrouter.ai");
+  });
+
+  it("never throws on a malformed base URL — degrades to a fixed marker", () => {
+    expect(urlHostLabel("not a url")).toBe("invalid-url");
+    expect(urlHostLabel("")).toBe("invalid-url");
   });
 });
 

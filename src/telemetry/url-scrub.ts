@@ -32,6 +32,16 @@ export function scrubUrl(raw: string): string {
   return `${url.origin}${url.pathname}`;
 }
 
+/**
+ * Non-throwing host label for provider attributes (`gen_ai.provider.name`).
+ * The config schemas only require a non-empty string, so a malformed base
+ * URL must degrade to a fixed marker — a telemetry label may never throw,
+ * neither at construction (boot) nor inside a Result-rail method.
+ */
+export function urlHostLabel(raw: string): string {
+  return URL.canParse(raw) ? new URL(raw).host : "invalid-url";
+}
+
 function scrubSpan(span: ReadableSpan): void {
   // ReadableSpan's attributes are typed read-only, but the export path holds
   // the live object; mutating here — the documented chokepoint — is what

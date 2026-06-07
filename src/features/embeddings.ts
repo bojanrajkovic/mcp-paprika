@@ -25,6 +25,7 @@ import {
   ATTR_GEN_AI_USAGE_INPUT_TOKENS,
 } from "../telemetry/semconv.js";
 import { traceResultAsync } from "../telemetry/trace-result.js";
+import { urlHostLabel } from "../telemetry/url-scrub.js";
 import { CircuitOpenError } from "../utils/errors.js";
 import { SILENT_LOG, toMessage } from "../utils/log.js";
 import {
@@ -101,7 +102,7 @@ export class EmbeddingClient {
     this._genAiAttrs = {
       [ATTR_GEN_AI_OPERATION_NAME]: "embeddings",
       [ATTR_GEN_AI_REQUEST_MODEL]: this._model,
-      [ATTR_GEN_AI_PROVIDER_NAME]: new URL(this._baseUrl).host,
+      [ATTR_GEN_AI_PROVIDER_NAME]: urlHostLabel(this._baseUrl),
     };
 
     // Per-instance resilience stack (breaker outside retry; see resilience.ts).

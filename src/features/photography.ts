@@ -29,6 +29,7 @@ import {
   ATTR_GEN_AI_RESPONSE_MODEL,
 } from "../telemetry/semconv.js";
 import { traceResultAsync } from "../telemetry/trace-result.js";
+import { urlHostLabel } from "../telemetry/url-scrub.js";
 import { CircuitOpenError } from "../utils/errors.js";
 import { SILENT_LOG, toMessage } from "../utils/log.js";
 import {
@@ -283,7 +284,7 @@ export class PhotographyClient {
     const genAiAttrs = {
       [ATTR_GEN_AI_OPERATION_NAME]: "generate_content",
       [ATTR_GEN_AI_REQUEST_MODEL]: slug,
-      [ATTR_GEN_AI_PROVIDER_NAME]: new URL(this._endpoint).host,
+      [ATTR_GEN_AI_PROVIDER_NAME]: urlHostLabel(this._endpoint),
     };
     return traceResultAsync(
       getTracer(),
