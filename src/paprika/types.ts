@@ -374,36 +374,106 @@ export type MealUid = z.infer<typeof MealUidSchema>;
 export const MealTypeUidSchema = z.string().brand("MealTypeUid");
 export type MealTypeUid = z.infer<typeof MealTypeUidSchema>;
 
-// MealStoredSchema — validates camelCase JSON read back from disk. No transform.
+// MealStoredSchema — validates camelCase JSON read back from disk.
 // `typeUid` is nullable because legacy meals (created before Paprika's mealtypes
 // feature) carry `null` for this field; new meals always carry a real UID.
+//
+// Every field but `uid` tolerates null/missing and coerces to the value the rest
+// of the code already treats as "absent" (mirrors MealSchema; see the rationale
+// there). Precedent: #76's recipe fix mirrored its coercions into the stored
+// schema so a cache written by any client version still hydrates.
 export const MealStoredSchema = z.object({
   uid: MealUidSchema,
-  recipeUid: z.string().nullable(),
-  name: z.string(),
-  date: z.string(),
-  type: z.number().int().nonnegative(),
-  typeUid: z.string().nullable(),
-  orderFlag: z.number().int(),
-  isIngredient: z.boolean(),
-  scale: z.string().nullable(),
+  recipeUid: z
+    .string()
+    .nullish()
+    .transform((v) => v ?? null),
+  name: z
+    .string()
+    .nullish()
+    .transform((v) => v ?? ""),
+  date: z
+    .string()
+    .nullish()
+    .transform((v) => v ?? ""),
+  type: z
+    .number()
+    .int()
+    .nullish()
+    .transform((v) => v ?? 0),
+  typeUid: z
+    .string()
+    .nullish()
+    .transform((v) => v ?? null),
+  orderFlag: z
+    .number()
+    .int()
+    .nullish()
+    .transform((v) => v ?? 0),
+  isIngredient: z
+    .boolean()
+    .nullish()
+    .transform((v) => v ?? false),
+  scale: z
+    .string()
+    .nullish()
+    .transform((v) => v ?? null),
   deleted: z.boolean().optional().default(false),
 });
 
 export type Meal = z.infer<typeof MealStoredSchema>;
 
 // MealSchema — accepts snake_case wire format, transforms to camelCase Meal.
+//
+// Every field but `uid` tolerates null/missing: Paprika's meal wire format is
+// looser than ours was — the macOS app POSTs meals without `is_ingredient` or
+// `scale` at all (docs/wire-captures/meals.har.json), and the API sneaks `null`
+// into nominally-required fields (#76 for recipes, #290 for meals). A single
+// stricter-than-reality field aborts the all-or-nothing `z.array()` parse in
+// listMeals, permanently wedging the meal store (#290). Each coercion picks the
+// value downstream code already treats as "absent": a "" name renders as-is, a
+// "" date fails `parseMealDate` and is hidden by the existing `isValid` guards,
+// `type: 0` only matters when `typeUid` is also null (legacy built-in matching),
+// and `isIngredient: false` is a normal served meal. `type`'s old `nonnegative()`
+// bound is dropped for the same reason — no consumer relies on it, so an
+// unexpected sentinel must not kill the sync.
 export const MealSchema = z
   .object({
     uid: MealUidSchema,
-    recipe_uid: z.string().nullable(),
-    name: z.string(),
-    date: z.string(),
-    type: z.number().int().nonnegative(),
-    type_uid: z.string().nullable(),
-    order_flag: z.number().int(),
-    is_ingredient: z.boolean(),
-    scale: z.string().nullable(),
+    recipe_uid: z
+      .string()
+      .nullish()
+      .transform((v) => v ?? null),
+    name: z
+      .string()
+      .nullish()
+      .transform((v) => v ?? ""),
+    date: z
+      .string()
+      .nullish()
+      .transform((v) => v ?? ""),
+    type: z
+      .number()
+      .int()
+      .nullish()
+      .transform((v) => v ?? 0),
+    type_uid: z
+      .string()
+      .nullish()
+      .transform((v) => v ?? null),
+    order_flag: z
+      .number()
+      .int()
+      .nullish()
+      .transform((v) => v ?? 0),
+    is_ingredient: z
+      .boolean()
+      .nullish()
+      .transform((v) => v ?? false),
+    scale: z
+      .string()
+      .nullish()
+      .transform((v) => v ?? null),
     deleted: z.boolean().optional().default(false),
   })
   .transform(

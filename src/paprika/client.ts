@@ -364,7 +364,26 @@ export class PaprikaClient {
   }
 
   async listMeals(): Promise<Array<Meal>> {
-    return this.request("GET", `${API_BASE}/meals/`, z.array(MealSchema));
+    // Fetched as raw rows and validated one at a time: z.array(MealSchema)'s
+    // all-or-nothing parse let a single malformed row abort the whole list and
+    // permanently wedge the meal store (#290). MealSchema's null coercions
+    // handle the absences we know about; this is the floor for the shapes we
+    // don't — a row that still fails is logged (uid + zod issues, so the poison
+    // row is identifiable from the MCP log) and skipped, and every other meal
+    // syncs normally.
+    const rows = await this.request("GET", `${API_BASE}/meals/`, z.array(z.unknown()));
+    const meals: Array<Meal> = [];
+    for (const [index, row] of rows.entries()) {
+      const parsed = MealSchema.safeParse(row);
+      if (parsed.success) {
+        meals.push(parsed.data);
+      } else {
+        const peek = z.object({ uid: z.string() }).safeParse(row);
+        const uid = peek.success ? peek.data.uid : undefined;
+        this.log.warn({ entity: "meal", index, uid, issues: parsed.error.issues }, "skipping unparseable meal row");
+      }
+    }
+    return meals;
   }
 
   async listMealTypes(): Promise<Array<MealType>> {
