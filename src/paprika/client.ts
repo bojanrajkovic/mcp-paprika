@@ -1,5 +1,6 @@
 import { gzipSync } from "node:zlib";
 
+import { ATTR_HTTP_REQUEST_METHOD } from "@opentelemetry/semantic-conventions";
 import {
   BrokenCircuitError,
   bulkhead,
@@ -46,6 +47,9 @@ import { PantryItemSchema } from "../domains/pantry/types.js";
 import { CategorySchema } from "../domains/recipe/category/types.js";
 import { PhotoSchema, photoToApiPayload } from "../domains/recipe/photo/types.js";
 import { RecipeEntrySchema, RecipeSchema } from "../domains/recipe/types.js";
+import { ATTR_CLIENT, observeBulkhead, wireResilienceTelemetry } from "../telemetry/resilience.js";
+import { getTracer } from "../telemetry/scope.js";
+import { traceResultAsync } from "../telemetry/trace-result.js";
 import { CircuitOpenError } from "../utils/errors.js";
 import { SILENT_LOG, toMessage } from "../utils/log.js";
 import { AuthResponseSchema } from "./auth-response.js";
@@ -54,6 +58,20 @@ import { computeRecipeHash } from "./recipe-hash.js";
 
 const AUTH_URL = "https://paprikaapp.com/api/v1/account/login/";
 const API_BASE = "https://paprikaapp.com/api/v2/sync";
+
+const PAPRIKA_CLIENT_ATTR = { [ATTR_CLIENT]: "paprika" } as const;
+
+/**
+ * Low-cardinality logical-operation name from a sync URL: the first path
+ * segment after `/sync/` ("recipes", "recipe", "photo", …) — never the UID
+ * that may follow it. Every `request()` URL is API_BASE-shaped; the fallback
+ * is defensive only.
+ */
+function operationFromUrl(url: string): string {
+  const segments = new URL(url).pathname.split("/").filter((s) => s.length > 0);
+  const syncIdx = segments.indexOf("sync");
+  return (syncIdx >= 0 ? segments[syncIdx + 1] : undefined) ?? "request";
+}
 
 // Concurrency for the N+1 recipe fetch during sync (see PaprikaClient constructor).
 const DEFAULT_RECIPE_FETCH_CONCURRENCY = 5;
@@ -323,6 +341,11 @@ export class PaprikaClient {
     this.breakerPolicy.onHalfOpen(() => {
       this.log.info({}, "paprika circuit breaker half-open (probe pending)");
     });
+
+    // Metrics ride the same hook surface as the log lines above: retry/giveup
+    // counters, breaker-state gauge, and the recipe-fetch bulkhead saturation.
+    wireResilienceTelemetry("paprika", this.retryPolicy, this.breakerPolicy);
+    observeBulkhead("paprika", this._recipesBulkhead);
   }
 
   authenticate(): ResultAsync<void, PaprikaClientError> {
@@ -368,16 +391,18 @@ export class PaprikaClient {
     // matched by the policy and escape immediately. Once the bounded retries
     // are exhausted, the mapper surfaces a clean PaprikaAuthError (preserving
     // the underlying cause) rather than the internal retry marker.
-    return ResultAsync.fromPromise(this.retryPolicy.execute(attempt), (error) => {
-      if (error instanceof NetworkRetryableError) {
-        return new PaprikaAuthError("Authentication failed (network error)", { cause: error.cause });
-      }
-      if (error instanceof TransientHTTPError) {
-        return new PaprikaAuthError(`Authentication failed (HTTP ${error.status.toString()})`, { cause: error });
-      }
-      if (error instanceof PaprikaError) return error;
-      return new PaprikaError(toMessage(error), { cause: error });
-    });
+    return traceResultAsync(getTracer(), "paprika.login", { attributes: PAPRIKA_CLIENT_ATTR }, () =>
+      ResultAsync.fromPromise(this.retryPolicy.execute(attempt), (error) => {
+        if (error instanceof NetworkRetryableError) {
+          return new PaprikaAuthError("Authentication failed (network error)", { cause: error.cause });
+        }
+        if (error instanceof TransientHTTPError) {
+          return new PaprikaAuthError(`Authentication failed (HTTP ${error.status.toString()})`, { cause: error });
+        }
+        if (error instanceof PaprikaError) return error;
+        return new PaprikaError(toMessage(error), { cause: error });
+      }),
+    );
   }
 
   listRecipes(): ResultAsync<Array<RecipeEntry>, PaprikaClientError> {
@@ -759,21 +784,33 @@ export class PaprikaClient {
     // as an orElse re-run instead of a catch + rethrow ladder.
     const run = (): ResultAsync<T, unknown> => ResultAsync.fromPromise(this.resilience.execute(execute), (e) => e);
 
-    return run().orElse((error) => {
-      if (error instanceof TokenExpiredError) {
-        if (!this.token) {
-          return errAsync(new PaprikaAuthError("Authentication required (HTTP 401)"));
-        }
-        return this.authenticate().andThen(() =>
-          run().mapErr((retryError) =>
-            retryError instanceof TokenExpiredError
-              ? new PaprikaAuthError("Authentication failed after re-auth (HTTP 401)")
-              : toClientError(retryError, url),
-          ),
-        );
-      }
-      return errAsync(toClientError(error, url));
-    });
+    // The LOGICAL operation span: one per request() call, covering every retry
+    // attempt, the backoff waits between them, and the 401 re-auth re-run — the
+    // latency the caller actually experiences. The per-attempt HTTP spans come
+    // from the undici instrumentation and parent under this one via the active
+    // context; without this span, a 3-attempt request reads as three short
+    // fetches and an inexplicable gap.
+    return traceResultAsync(
+      getTracer(),
+      `paprika.${operationFromUrl(url)}`,
+      { attributes: { ...PAPRIKA_CLIENT_ATTR, [ATTR_HTTP_REQUEST_METHOD]: method } },
+      () =>
+        run().orElse((error) => {
+          if (error instanceof TokenExpiredError) {
+            if (!this.token) {
+              return errAsync(new PaprikaAuthError("Authentication required (HTTP 401)"));
+            }
+            return this.authenticate().andThen(() =>
+              run().mapErr((retryError) =>
+                retryError instanceof TokenExpiredError
+                  ? new PaprikaAuthError("Authentication failed after re-auth (HTTP 401)")
+                  : toClientError(retryError, url),
+              ),
+            );
+          }
+          return errAsync(toClientError(error, url));
+        }),
+    );
   }
 }
 

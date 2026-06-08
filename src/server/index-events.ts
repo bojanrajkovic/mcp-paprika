@@ -3,6 +3,21 @@ import type { Logger } from "pino";
 import type { RecipeUid } from "../domains/recipe/ids.js";
 import type { Recipe } from "../domains/recipe/types.js";
 
+import { getMeter, lazy } from "../telemetry/scope.js";
+
+// Counts DISPATCH, not completion: the real subscriber (discover's re-index
+// hook) is fire-and-forget async, so by the time its work fails this emit has
+// long returned — "dispatched" is all this seam can honestly know, and
+// "handler_threw" covers only a synchronous escape. Re-index FAILURES are
+// visible where they happen: the discover.reindex span's error.type and the
+// reindex duration histogram (src/features/vector-store.ts).
+const indexEvents = lazy(() =>
+  getMeter().createCounter("mcp_paprika.index_events", {
+    description: "Cross-domain index events, by type and dispatch outcome",
+    unit: "{event}",
+  }),
+);
+
 /**
  * The recipe/category → discover re-index seam.
  *
@@ -41,11 +56,19 @@ export function createIndexEvents(log: Logger): IndexEventEmitter {
   return {
     emit(event) {
       for (const handler of handlers) {
+        let outcome = "dispatched";
         try {
           handler(event);
         } catch (err) {
           log.warn({ err, type: event.type }, "index-event handler threw; ignored (best-effort re-index)");
+          outcome = "handler_threw";
         }
+        // Outside the swallow, so a recording hiccup can never be
+        // misattributed to the handler.
+        indexEvents().add(1, {
+          "mcp_paprika.index_event.type": event.type,
+          "mcp_paprika.index_event.outcome": outcome,
+        });
       }
     },
     on(handler) {

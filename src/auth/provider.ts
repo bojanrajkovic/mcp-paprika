@@ -25,6 +25,7 @@ import type { ResolvedOAuthConfig } from "./types.js";
 import { consentSecurityHeaders, renderConsentPage } from "./consent-page.js";
 import { unwrapOAuth } from "./errors.js";
 import { isRecognizedOrigin } from "./redirect-allowlist.js";
+import { ATTR_AUTH_GRANT_TYPE, ATTR_AUTH_OUTCOME, tokensIssued, tokenVerifications } from "./telemetry.js";
 import { ACCESS_TOKEN_TTL_SECONDS, generateOpaqueToken, hashTokenForStorage, nowSeconds } from "./tokens.js";
 import { type ApprovedAuthorization, makeUpstreamRedirectDeps, redirectUpstream } from "./upstream-redirect.js";
 
@@ -180,6 +181,7 @@ export class MintingOAuthServerProvider implements OAuthServerProvider {
       { tokenHash, clientId: state.clientId, sub: state.identity.sub },
       "access token minted (authorization_code grant)",
     );
+    tokensIssued().add(1, { [ATTR_AUTH_GRANT_TYPE]: "authorization_code" });
 
     return {
       access_token: pair.access.plaintext,
@@ -211,6 +213,7 @@ export class MintingOAuthServerProvider implements OAuthServerProvider {
       { tokenHash, clientId: client.client_id, sub: pair.identity.sub },
       "access token minted (refresh_token grant)",
     );
+    tokensIssued().add(1, { [ATTR_AUTH_GRANT_TYPE]: "refresh_token" });
     return {
       access_token: pair.access.plaintext,
       refresh_token: pair.refresh.plaintext,
@@ -221,7 +224,11 @@ export class MintingOAuthServerProvider implements OAuthServerProvider {
 
   async verifyAccessToken(token: string): Promise<AuthInfo> {
     const info = unwrapOAuth(await this._tokenStore.lookupAccessToken(token));
-    if (info === null) throw new InvalidTokenError("token invalid or expired");
+    if (info === null) {
+      tokenVerifications().add(1, { [ATTR_AUTH_OUTCOME]: "invalid" });
+      throw new InvalidTokenError("token invalid or expired");
+    }
+    tokenVerifications().add(1, { [ATTR_AUTH_OUTCOME]: "ok" });
     return info;
   }
 

@@ -117,6 +117,17 @@ stdio non-TTY mode; the default is `<log-dir>/mcp-paprika.log`.
 Records at or above `MCP_LOG_NOTIFY_LEVEL` (default `warn`) are forwarded to connected
 MCP clients as logging messages.
 
+## Telemetry (OpenTelemetry)
+
+Traces and metrics are **off by default** and activate when `OTEL_EXPORTER_OTLP_ENDPOINT`
+(or a signal-specific `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` / `…_METRICS_ENDPOINT`) is
+set. Configuration uses the [standard OTel environment variables](https://opentelemetry.io/docs/languages/sdk-configuration/)
+read by the SDK itself — nothing telemetry-related lives in `config.json` or the
+`MCP_*` namespace. These variables may sit in the same `.env` file as the rest of the
+configuration. `OTEL_LOG_LEVEL` diagnostics go to stderr (never stdout — the stdio MCP
+wire). The full operator guide, including a local Grafana/collector stand-up, is
+[docs/telemetry.md](telemetry.md).
+
 ## Config file
 
 Place a `config.json` in the config directory. All fields are optional, and you can mix

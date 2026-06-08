@@ -23,6 +23,7 @@ import type { OAuthClient } from "./types.js";
 
 import { validateRegistration, validateUpdate } from "./dcr-validator.js";
 import { OAuthClientNotFoundError, OAuthTokenError, unwrapOAuth } from "./errors.js";
+import { dcrRegistrations } from "./telemetry.js";
 import { generateOpaqueToken, hashTokenForStorage, nowSeconds } from "./tokens.js";
 
 // ============================================================================
@@ -173,6 +174,7 @@ export class DiskClientRegistrationStore {
       { clientId: stored.clientId, redirectUriCount: stored.redirectUris.length },
       "client registered via DCR",
     );
+    dcrRegistrations().add(1);
 
     return storedToWire(stored, {
       registrationAccessToken,

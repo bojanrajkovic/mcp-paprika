@@ -64,6 +64,24 @@ const COCKATIEL_GOVERNED: ReadonlyArray<readonly [file: string, innerFn: string,
   ["src/features/photography.ts", "execute", "generate"],
 ];
 
+// Throw-transparent instrumentation passthroughs (ADR-0018, sanctioned in
+// ADR-0014's Decision): the telemetry wrappers at the tool/resource
+// chokepoints catch a protocol throw ONLY to end their span, then rethrow the
+// SAME value for the SDK's Protocol layer to render. The throw they re-emit
+// is already a recognized crossing (resourceNotFound's McpError on the
+// resource path; the SDK's throw-based tool-callback contract on the tool
+// path) — the wrapper neither swallows nor reshapes it. Pinned to (file, fn)
+// like the other recognizers.
+const INSTRUMENTATION_RETHROWS: ReadonlyArray<readonly [file: string, fn: string]> = [
+  ["src/kernel/tool.ts", "fail"],
+  ["src/shared/resources.ts", "tracedResourceRead"],
+  ["src/telemetry/trace-result.ts", "traceResultAsync"],
+  ["src/telemetry/trace-result.ts", "tracePromise"],
+  // The boot wrapper: ends the boot span as an error so the flushed-on-failure
+  // boot trace exports, then lets the fail-fast throw (form #5) abort boot.
+  ["src/kernel/registry.ts", "inBoot"],
+];
+
 // Recognized form #5: fail-fast at process entry and kernel construction, off
 // the request path. Pinned to exact files (not a directory prefix) so a throw
 // added to a request-serving sibling — e.g. src/transport/http.ts — is NOT
@@ -152,8 +170,14 @@ const isCockatielGoverned = (s: ThrowSite): boolean =>
   );
 const isOAuthProtocolThrow = (s: ThrowSite): boolean =>
   OAUTH_PROTOCOL_FILES.has(s.file) && s.thrownType !== null && OAUTH_PROTOCOL_TYPES.has(s.thrownType);
+const isInstrumentationRethrow = (s: ThrowSite): boolean =>
+  INSTRUMENTATION_RETHROWS.some(([file, fn]) => s.file === file && s.enclosingFn === fn);
 const isRecognized = (s: ThrowSite): boolean =>
-  isRecognizedHelper(s) || isCockatielGoverned(s) || isOAuthProtocolThrow(s) || isBoot(s);
+  isRecognizedHelper(s) ||
+  isCockatielGoverned(s) ||
+  isOAuthProtocolThrow(s) ||
+  isInstrumentationRethrow(s) ||
+  isBoot(s);
 
 describe("ADR-0014: owned code throws only in recognized forms", () => {
   const allSites = sourceFiles().flatMap(throwSites);

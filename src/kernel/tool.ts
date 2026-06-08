@@ -1,9 +1,15 @@
 import type { ToolCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult, ToolAnnotations } from "@modelcontextprotocol/sdk/types.js";
+import { context, trace } from "@opentelemetry/api";
 import type { Result } from "neverthrow";
 import type { ZodRawShape, ZodTypeAny } from "zod";
 
 import type { DomainCtx, DomainId } from "./registry.js";
+
+import { mcpServerOperationDuration } from "../telemetry/instruments.js";
+import { getTracer } from "../telemetry/scope.js";
+import { ATTR_GEN_AI_OPERATION_NAME, ATTR_GEN_AI_TOOL_NAME, ATTR_MCP_METHOD_NAME } from "../telemetry/semconv.js";
+import { errorTypeName, startOperation } from "../telemetry/trace-result.js";
 
 /**
  * A tool's registration metadata, **as data** — everything `registerTool` needs
@@ -70,6 +76,11 @@ export type ToolPrecondition<Ctx> = (ctx: Ctx) => Result<void, CallToolResult>;
  */
 type ErasedToolCallback = (args: unknown, extra: unknown) => CallToolResult | Promise<CallToolResult>;
 
+const TOOLS_CALL_METHOD = "tools/call";
+
+/** Which precondition gated a call — custom-prefixed; the MCP conventions define no gate concept. */
+const ATTR_TOOL_GATED_BY = "mcp_paprika.tool.gated_by";
+
 const MAX_LOGGED_STRING = 256;
 
 /**
@@ -121,6 +132,15 @@ function loggableString(value: string): string {
  * - logs `tool invoked` (uniform `{ tool }` shape, info) BEFORE the gate, so a
  *   gated call is still visible, plus the full `args` at debug for per-call
  *   correlation;
+ * - opens a `tools/call {name}` span (INTERNAL — under HTTP the transport
+ *   middleware owns the SERVER span, and the GenAI `execute_tool` convention
+ *   wants INTERNAL) covering the gate chain AND the body, and records
+ *   `mcp.server.operation.duration` once per call. Outcomes class via
+ *   `error.type`: an `isError` result is `tool_error` (span status ERROR); a
+ *   gated call is `precondition_gated` with the guard's name on
+ *   `mcp_paprika.tool.gated_by` but status UNSET — gating is expected
+ *   cold-start state, the same reasoning as its debug-not-info log line. Args
+ *   never become attributes (UIDs and payloads stay out of telemetry);
  * - runs the {@link ToolPrecondition} chain in order, short-circuiting on the
  *   first `err` — that err IS the tool result, and the failing guard's function
  *   name is logged at debug (gating is expected cold-start state, not an
@@ -187,6 +207,18 @@ export function defineTool<
     register(ctx) {
       const log = ctx.infra.log.child({ component: spec.name });
       const body = handler(ctx) as ErasedToolCallback;
+      // Per-registration constants, hoisted off the per-call path: the span
+      // name and every attribute except error.type are fixed per tool.
+      const spanName = `${TOOLS_CALL_METHOD} ${spec.name}`;
+      const spanAttributes = {
+        [ATTR_MCP_METHOD_NAME]: TOOLS_CALL_METHOD,
+        [ATTR_GEN_AI_OPERATION_NAME]: "execute_tool",
+        [ATTR_GEN_AI_TOOL_NAME]: spec.name,
+      } as const;
+      const metricAttributes = {
+        [ATTR_MCP_METHOD_NAME]: TOOLS_CALL_METHOD,
+        [ATTR_GEN_AI_TOOL_NAME]: spec.name,
+      } as const;
       const gated: ErasedToolCallback = (args, extra) => {
         log.info({ tool: spec.name }, "tool invoked");
         // Args ride a separate debug line: per-call correlation (which UID, which
@@ -195,20 +227,50 @@ export function defineTool<
         // markers) and the root logger's REDACT_PATHS censors credential-named
         // fields; the level guard keeps the walk off the default-level path.
         if (log.isLevelEnabled("debug")) log.debug({ tool: spec.name, args: loggableArgs(args) }, "tool args");
-        for (const pre of preconditions) {
-          const failure = pre(ctx).match(
-            () => undefined,
-            (result) => result,
-          );
-          if (failure !== undefined) {
-            // debug, not info: gating is the expected, self-healing cold-start
-            // state, and a retrying client would otherwise storm the info log
-            // with one gate line per call across the whole surface.
-            log.debug({ tool: spec.name, precondition: pre.name || "(inline)" }, "tool gated by precondition");
-            return failure;
+        const op = startOperation(
+          getTracer(),
+          spanName,
+          { attributes: spanAttributes },
+          { histogram: mcpServerOperationDuration, attributes: metricAttributes },
+        );
+        // The protocol adapters: finish maps the SDK's CallToolResult outcomes
+        // onto op.end (the doc-comment above carries the outcome-classing
+        // rationale — gated keeps status UNSET); fail is the throw-transparent
+        // passthrough for the SDK's throw-based callback contract (ADR-0014).
+        const finish = (result: CallToolResult, gateErrorType?: string): CallToolResult => {
+          const errorType = gateErrorType ?? (result.isError === true ? "tool_error" : undefined);
+          op.end({ errorType, isError: errorType === "tool_error" });
+          return result;
+        };
+        const fail = (cause: unknown): never => {
+          op.end({ errorType: errorTypeName(cause), isError: true, exception: cause });
+          throw cause;
+        };
+        // The guard chain runs inside the same try as the body, so even a
+        // contract-breaking guard throw routes through fail() instead of
+        // leaking the operation.
+        try {
+          for (const pre of preconditions) {
+            const failure = pre(ctx).match(
+              () => undefined,
+              (result) => result,
+            );
+            if (failure !== undefined) {
+              // debug, not info: gating is the expected, self-healing cold-start
+              // state, and a retrying client would otherwise storm the info log
+              // with one gate line per call across the whole surface.
+              log.debug({ tool: spec.name, precondition: pre.name || "(inline)" }, "tool gated by precondition");
+              op.span.setAttribute(ATTR_TOOL_GATED_BY, pre.name || "(inline)");
+              return finish(failure, "precondition_gated");
+            }
           }
+          // context.with makes this span active for the body, so spans started
+          // inside it (undici fetches, feature pipelines) parent correctly.
+          const outcome = context.with(trace.setSpan(context.active(), op.span), () => body(args, extra));
+          return outcome instanceof Promise ? outcome.then(finish, fail) : finish(outcome);
+        } catch (cause) {
+          return fail(cause);
         }
-        return body(args, extra);
       };
       ctx.server.registerTool(spec.name, spec, gated as ToolCallback<I>);
     },

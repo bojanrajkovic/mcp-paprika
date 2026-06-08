@@ -1,4 +1,9 @@
 #!/usr/bin/env node
+// Telemetry bootstrap MUST stay the first import: sibling static imports
+// evaluate in declaration order, and the SDK has to start before any other
+// module evaluates. (Under the container's `--import` preload this resolves
+// to the already-evaluated cache — see src/telemetry/bootstrap.ts.)
+import { shutdownTelemetry } from "./telemetry/bootstrap.js";
 import { startHttp } from "./transport/http.js";
 import { startStdio, type TransportHandle } from "./transport/stdio.js";
 import { loadConfig } from "./utils/config.js";
@@ -29,13 +34,21 @@ async function main(): Promise<void> {
     // be built yet (early startup failure) or may already be torn down at signal time.
     // See src/server/CLAUDE.md for the documented exception.
     process.stderr.write(`${signal} received, shutting down...\n`);
-    handle.shutdown().then(
-      () => process.exit(0),
-      (err: unknown) => {
+    // Telemetry flushes after the transport closes (so session-close metrics
+    // make the final export) — and ALSO when the transport shutdown itself
+    // fails, since the buffered spans are then the best diagnostics left.
+    // shutdownTelemetry never rejects.
+    void (async () => {
+      let exitCode = 0;
+      try {
+        await handle.shutdown();
+      } catch (err) {
         process.stderr.write(`[mcp-paprika] Shutdown error: ${toMessage(err)}\n`);
-        process.exit(1);
-      },
-    );
+        exitCode = 1;
+      }
+      await shutdownTelemetry();
+      process.exit(exitCode);
+    })();
   };
 
   process.on("SIGINT", () => {
@@ -46,7 +59,10 @@ async function main(): Promise<void> {
   });
 }
 
-main().catch((err: unknown) => {
+main().catch(async (err: unknown) => {
   process.stderr.write(`${toMessage(err)}\n`);
+  // A startup failure is exactly when the buffered boot trace matters most —
+  // flush before exiting, or the default batch processor discards it.
+  await shutdownTelemetry();
   process.exit(1);
 });

@@ -1,12 +1,31 @@
 import { mkdir, open, readdir, readFile, unlink } from "node:fs/promises";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 
 import { Mutex } from "async-mutex";
 import { err, errAsync, ok, okAsync, Result, ResultAsync } from "neverthrow";
 import type { Logger } from "pino";
 
+import { getMeter, lazy, startTimer } from "../telemetry/scope.js";
 import { isNodeError } from "../utils/errors.js";
 import { SILENT_LOG } from "../utils/log.js";
+
+// Persistence-layer metrics at the two aggregate chokepoints: flush (the
+// fsync-heavy per-cycle durability cost) and getAll (boot hydration + the DCR
+// cap reads). Entity = the subdir's basename — the flat on-disk names
+// ("recipes", "pantry", …), a closed low-cardinality set. Per-item get/put
+// deliberately unmeasured: their cost aggregates into flush.
+const cacheOperationDuration = lazy(() =>
+  getMeter().createHistogram("mcp_paprika.cache.operation.duration", {
+    description: "Duration of disk-cache flush and getAll operations",
+    unit: "s",
+  }),
+);
+const cacheErrors = lazy(() =>
+  getMeter().createCounter("mcp_paprika.cache.errors", {
+    description: "Disk-cache operations that surfaced a CacheError (recovered ENOENTs excluded)",
+    unit: "{error}",
+  }),
+);
 
 // I/O error handling convention throughout this module:
 // Every filesystem call is converted to a `Result` at this edge (ADR-0014):
@@ -107,11 +126,15 @@ export class DiskCache<T> {
   protected readonly log: Logger;
   protected _initialized = false;
 
+  /** Metric entity label — the flat on-disk name; invariant, so computed once. */
+  private readonly _entity: string;
+
   constructor(opts: DiskCacheOptions<T>) {
     this._subdir = opts.subdir;
     this._parse = opts.parse;
     this._getKey = opts.getKey;
     this.log = opts.log ?? SILENT_LOG;
+    this._entity = basename(this._subdir);
   }
 
   init(): ResultAsync<void, CacheError> {
@@ -132,7 +155,30 @@ export class DiskCache<T> {
   }
 
   flush(): ResultAsync<void, CacheError> {
-    return this._locked("flush", () => this._writePending());
+    return this._measured("flush", () => this._locked("flush", () => this._writePending()));
+  }
+
+  /**
+   * Record the operation histogram on ok and the error counter on err; values
+   * pass through untouched. Takes a THUNK so the timer starts before the
+   * operation does — an eagerly-built ResultAsync is already running (mutex
+   * acquisition included) by the time it could be passed in, which would
+   * undercount exactly the contended case the histogram exists to expose.
+   */
+  private _measured<V>(op: string, run: () => ResultAsync<V, CacheError>): ResultAsync<V, CacheError> {
+    const elapsedSeconds = startTimer();
+    return run()
+      .map((value) => {
+        cacheOperationDuration().record(elapsedSeconds(), {
+          "mcp_paprika.cache.entity": this._entity,
+          "mcp_paprika.cache.op": op,
+        });
+        return value;
+      })
+      .mapErr((error) => {
+        cacheErrors().add(1, { "mcp_paprika.cache.entity": this._entity, "mcp_paprika.cache.op": op });
+        return error;
+      });
   }
 
   get(key: string): ResultAsync<T | null, CacheError> {
@@ -148,6 +194,10 @@ export class DiskCache<T> {
   }
 
   getAll(): ResultAsync<Array<T>, CacheError> {
+    return this._measured("get_all", () => this._getAllInner());
+  }
+
+  private _getAllInner(): ResultAsync<Array<T>, CacheError> {
     return this._requireInit("getAll").asyncAndThen(() => {
       // Pending entries shadow disk; seed result with the buffer.
       const result: Map<string, T> = new Map(this._pending);

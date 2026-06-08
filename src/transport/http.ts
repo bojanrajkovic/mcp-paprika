@@ -4,10 +4,11 @@ import type { Server as NodeHttpServer } from "node:http";
 import { StreamableHTTPTransport } from "@hono/mcp";
 import { bearerAuth, mcpAuthRouter } from "@hono/mcp";
 import { serve, type ServerType } from "@hono/node-server";
+import { httpInstrumentationMiddleware } from "@hono/otel";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
 import { Hono } from "hono";
-import type { Context, Next } from "hono";
+import type { Context, MiddlewareHandler, Next } from "hono";
 import type { Logger } from "pino";
 
 import type { PaprikaConfig } from "../utils/config.js";
@@ -23,6 +24,8 @@ import { buildBrandedServer, buildInfraBase } from "../server/build.js";
 import { createIndexEvents } from "../server/index-events.js";
 import { broadcastNotifier } from "../server/notifier.js";
 import { notifyFromResults, runSyncLoop } from "../server/sync-loop.js";
+import { ATTR_MCP_PAPRIKA_TRANSPORT, mcpServerSessionDuration } from "../telemetry/instruments.js";
+import { getMeter, lazy, startTimer } from "../telemetry/scope.js";
 import { unwrapAtBoot } from "../utils/errors.js";
 import { buildFaviconRouter } from "./favicon.js";
 // Side-effect: every domain/feature module self-registers on import.
@@ -43,7 +46,19 @@ export interface HttpTransportHandle extends TransportHandle {
 interface Session {
   server: McpServer;
   transport: StreamableHTTPTransport;
+  /** Started at initialize — yields elapsed seconds for mcp.server.session.duration at close. */
+  readonly elapsedSeconds: () => number;
 }
+
+const HTTP_TRANSPORT_ATTR = { [ATTR_MCP_PAPRIKA_TRANSPORT]: "http" } as const;
+
+/** Live MCP sessions; +1 at initialize, −1 at close/eviction. HTTP-only — stdio is one session per process. */
+const activeSessions = lazy(() =>
+  getMeter().createUpDownCounter("mcp_paprika.sessions.active", {
+    description: "Currently active MCP sessions",
+    unit: "{session}",
+  }),
+);
 
 /**
  * Hono middleware factory that logs one structured record per request.
@@ -56,6 +71,30 @@ interface Session {
  * seam, so tests instantiate `accessLog` directly with a capture logger.
  */
 const PROBE_PATHS = new Set(["/healthz"]);
+
+/**
+ * The @hono/otel request-instrumentation middleware (SERVER spans per request,
+ * `http.server.request.duration` + active-requests metrics, incoming
+ * `traceparent` extraction), gated past two exclusions:
+ *
+ * - probe paths — the `PROBE_PATHS` precedent: liveness spam is not telemetry;
+ * - `GET /mcp` — the long-lived SSE stream. A span spanning an hours-long
+ *   connection never exports until close and is an anti-pattern; the session
+ *   metrics carry that signal instead. `POST /mcp` (the actual JSON-RPC
+ *   exchanges) keeps its spans, which the kernel's tool/resource spans then
+ *   parent under via the active context.
+ *
+ * Exported for isolated unit testing, same seam as {@link accessLog}.
+ */
+export function tracedRequests(): MiddlewareHandler {
+  const instrument = httpInstrumentationMiddleware();
+  return async (c, next) => {
+    if (PROBE_PATHS.has(c.req.path) || (c.req.method === "GET" && c.req.path === "/mcp")) {
+      return next();
+    }
+    return instrument(c, next);
+  };
+}
 
 export function accessLog(log: Logger) {
   return async (c: Context, next: Next): Promise<void> => {
@@ -119,6 +158,18 @@ export type StartHttpOptions = {
  */
 export async function startHttp(config: PaprikaConfig, opts: StartHttpOptions = {}): Promise<HttpTransportHandle> {
   const sessions = new Map<string, Session>();
+
+  // The single eviction point: both the transport's onsessionclosed and the
+  // shutdown drain route through here, so the active-sessions counter and the
+  // session-duration histogram record exactly once per session (the map
+  // delete is the idempotency guard).
+  const endSession = (id: string): void => {
+    const session = sessions.get(id);
+    if (session === undefined) return;
+    sessions.delete(id);
+    activeSessions().add(-1, HTTP_TRANSPORT_ATTR);
+    mcpServerSessionDuration().record(session.elapsedSeconds(), HTTP_TRANSPORT_ATTR);
+  };
 
   // DNS rebinding protection: derive once at startup. The SDK's transport
   // options for allowedHosts/allowedOrigins/enableDnsRebindingProtection carry
@@ -194,6 +245,11 @@ export async function startHttp(config: PaprikaConfig, opts: StartHttpOptions = 
   }
 
   const hono = new Hono();
+
+  // Request spans + HTTP server metrics: outermost, so the access log and
+  // every downstream handler run inside the request span (tool spans parent
+  // under it via the active context).
+  hono.use("*", tracedRequests());
 
   // Access log: mounted BEFORE /healthz and /mcp so every route's responses
   // are captured — including the liveness probe. Also before the auth block
@@ -339,10 +395,11 @@ export async function startHttp(config: PaprikaConfig, opts: StartHttpOptions = 
     const transport = new StreamableHTTPTransport({
       sessionIdGenerator: () => randomUUID(),
       onsessioninitialized: (id) => {
-        sessions.set(id, { server, transport });
+        sessions.set(id, { server, transport, elapsedSeconds: startTimer() });
+        activeSessions().add(1, HTTP_TRANSPORT_ATTR);
       },
       onsessionclosed: (id) => {
-        sessions.delete(id);
+        endSession(id);
       },
       allowedHosts,
       allowedOrigins,
@@ -421,9 +478,13 @@ export async function startHttp(config: PaprikaConfig, opts: StartHttpOptions = 
         loop?.stop();
         authContext?.cleanup.stop();
 
-        const sessionSnapshot = [...sessions.values()];
-        await Promise.allSettled(sessionSnapshot.map((s) => s.transport.close()));
-        sessions.clear();
+        const sessionSnapshot = [...sessions.entries()];
+        await Promise.allSettled(sessionSnapshot.map(([, s]) => s.transport.close()));
+        // endSession (not clear()) so evicted sessions record their duration
+        // and decrement the active counter; transport.close() may have already
+        // routed some through onsessionclosed — the map delete makes the
+        // second pass a no-op.
+        for (const [id] of sessionSnapshot) endSession(id);
 
         await new Promise<void>((resolve, reject) => {
           nodeServer.close((err) => {

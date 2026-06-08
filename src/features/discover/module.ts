@@ -4,10 +4,18 @@ import type { VectorStoreFailure } from "../vector-store.js";
 import type { DiscoverApi } from "./api.js";
 
 import { defineModule, register } from "../../kernel/registry.js";
+import { getMeter, lazy } from "../../telemetry/scope.js";
 import { unwrapAtBoot } from "../../utils/errors.js";
 import { EMBEDDING_SCHEMA_VERSION, EmbeddingClient } from "../embeddings.js";
 import { VectorStore } from "../vector-store.js";
 import { discoverRecipesTool } from "./tools/discover-recipes.js";
+
+/** 1 while a failed startup reconcile awaits its next-cycle retry (#177) — "embeddings were down at boot". */
+const reindexPendingLatch = lazy(() =>
+  getMeter().createObservableGauge("mcp_paprika.reindex.pending_latch", {
+    description: "Whether a failed startup vector-index reconcile is awaiting its next-cycle retry",
+  }),
+);
 
 declare module "../../kernel/registry.js" {
   interface DomainRegistry {
@@ -97,6 +105,9 @@ register(
           // here (#177). Best-effort: a transient embeddings outage at startup must not
           // crash the process; on an err, latch a retry the per-cycle handler drains.
           let reconcilePending = false;
+          reindexPendingLatch().addCallback((result) => {
+            result.observe(reconcilePending ? 1 : 0);
+          });
           (await reconcile()).match(
             () => undefined,
             (err) => {

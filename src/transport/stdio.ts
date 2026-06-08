@@ -8,6 +8,9 @@ import { buildBrandedServer, buildInfraBase } from "../server/build.js";
 import { createIndexEvents } from "../server/index-events.js";
 import { createServerRef, singleServerNotifier } from "../server/notifier.js";
 import { notifyFromResults, runSyncLoop } from "../server/sync-loop.js";
+import { shutdownTelemetry } from "../telemetry/bootstrap.js";
+import { ATTR_MCP_PAPRIKA_TRANSPORT, mcpServerSessionDuration } from "../telemetry/instruments.js";
+import { startTimer } from "../telemetry/scope.js";
 // Side-effect: every domain/feature module self-registers on import, so the kernel's
 // `registeredModules()` is populated before `buildKernel` reads it.
 import "../kernel/modules.generated.js";
@@ -80,12 +83,48 @@ export async function startStdio(config: PaprikaConfig): Promise<TransportHandle
   }
 
   tlog.info("connecting stdio transport");
+  const sessionElapsedSeconds = startTimer();
   await server.connect(new StdioServerTransport());
   tlog.info("server ready");
 
+  // The single end-of-session point, latched: the stdin-EOF handler below and
+  // the signal-driven handle.shutdown() can both reach it, and the session
+  // must record exactly once. Under stdio, one session = the process
+  // lifetime (this server's answer to the semconv's open stdio-session-
+  // boundary question — see docs/telemetry.md); a SIGKILL loses the point,
+  // as it loses any final metric.
+  let sessionEnded = false;
+  const endSession = (): void => {
+    if (sessionEnded) return;
+    sessionEnded = true;
+    loop?.stop();
+    mcpServerSessionDuration().record(sessionElapsedSeconds(), {
+      [ATTR_MCP_PAPRIKA_TRANSPORT]: "stdio",
+    });
+  };
+
+  // A normal client disconnect is the pipe closing, not a signal — and
+  // StdioServerTransport doesn't watch for it (its onclose fires only on
+  // programmatic close), so without this handler an EOF leaves the sync-loop
+  // and telemetry timers holding the process open forever, with no session
+  // metric and no flush. This implements the lifecycle the comment above
+  // documents: the process exits when stdin closes.
+  const onStdinClosed = (): void => {
+    tlog.info("stdin closed; shutting down");
+    endSession();
+    void shutdownTelemetry().then(() => process.exit(0));
+  };
+  process.stdin.once("end", onStdinClosed);
+  process.stdin.once("close", onStdinClosed);
+  // TOCTOU guard: if the client vanished during the kernel build / initial
+  // sync, the pipe's end/close fired before these listeners attached and
+  // nothing re-delivers them — observe the terminal state directly instead.
+  // The endSession/shutdownTelemetry latches make a doubled signal harmless.
+  if (process.stdin.readableEnded || process.stdin.destroyed) onStdinClosed();
+
   return {
     async shutdown() {
-      loop?.stop();
+      endSession();
     },
   };
 }
