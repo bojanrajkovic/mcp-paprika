@@ -1,7 +1,6 @@
 # ADR-0007: UID branding stays compile-time only
 
 **Status:** Accepted (2026-06-03)
-**Last verified:** 2026-06-03
 **Resolves the runtime-branding follow-up deferred by:** [ADR-0005](0005-composition-modules-and-identifiers.md)
 
 ## Context

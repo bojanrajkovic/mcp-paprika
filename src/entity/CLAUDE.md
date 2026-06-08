@@ -1,7 +1,5 @@
 # Entity Store
 
-Last verified: 2026-06-05
-
 The abstract base class for the in-memory stores: `EntityStore<T, UID>`. What it is and why it exists is in `docs/architecture.md` (Caching and sync); the source is the authority on which stores extend it (`GroceryIngredientStore`, keyed by ingredient name, is the one that doesn't). The generic constraints (`T extends { uid: UID }`, `UID extends string`) keep a `Recipe` store from being parameterized with a `PantryItemUid` at compile time and still admit Zod-branded UID subtypes. The rest of this file is the behavior that's easy to get wrong under concurrent sync.
 
 **`commit.ts` is the shared write-commit protocol** every domain's `*Writes` chokepoint binds (#255/#246): mark-pending-first → cache ops → one flush per cache → clear-ALL-marks-on-failure → store apply → `onCommitted` effects → one `notifySync`. The per-domain chokepoints in each `module.ts` `.build` are one-line `commitEntities` bindings (recipe's photo upload uses the `commitSlices` multi-slice core); the protocol's invariants are pinned once in `commit.test.ts`, not per domain. The cache is structurally typed and the notify tail arrives as a thunk, so `src/entity` imports neither `src/cache` nor `src/paprika`.

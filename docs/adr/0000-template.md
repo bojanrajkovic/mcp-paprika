@@ -3,7 +3,6 @@
 > Record an ADR only for a **decision with weighed alternatives**: a fork where a different reasonable engineer could have chosen otherwise, and the choice has lasting architectural consequences. Do **not** write an ADR for an implementation detail, a forced necessity (something the platform or a hard dependency left no choice about), or a workaround. Those belong in code comments or `docs/architecture.md`.
 
 **Status:** Proposed | Accepted (YYYY-MM-DD) | Superseded by ADR-NNNN | Deprecated
-**Last verified:** YYYY-MM-DD
 
 <!--
 Copy this file to docs/adr/NNNN-<kebab-title>.md, using the next free zero-padded

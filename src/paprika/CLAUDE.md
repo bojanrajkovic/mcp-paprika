@@ -1,7 +1,5 @@
 # Paprika API Client
 
-Last verified: 2026-06-05
-
 ## Purpose
 
 The Paprika Cloud Sync API client and the shared reconcile helper: authentication, wire-format encode/decode (Zod schemas), resilient HTTP, and `syncReplaceAllEntity` — the replace-all reconcile each domain's sync contribution drives. (The poll loop and the cycle driver live in the kernel + `src/server/sync-loop.ts`, not here.)

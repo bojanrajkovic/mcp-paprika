@@ -1,7 +1,6 @@
 # ADR-0009: Domain-isolated tool modules via a typed composition kernel
 
 **Status:** Accepted (2026-06-03)
-**Last verified:** 2026-06-04
 **Supersedes:** [ADR-0005](0005-composition-modules-and-identifiers.md) §1 (the phase-typed builder), and §2's rejection of domain-owned tools
 **Reshapes:** [ADR-0001](0001-two-transports-and-composition-root.md)'s `SessionContext`
 **Resolves:** [#212](https://github.com/bojanrajkovic/mcp-paprika/issues/212), [#215](https://github.com/bojanrajkovic/mcp-paprika/issues/215)

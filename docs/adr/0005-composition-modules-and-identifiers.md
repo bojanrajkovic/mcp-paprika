@@ -1,7 +1,8 @@
 # ADR-0005: Composition-root shape, module structure, and identifier branding
 
 **Status:** Accepted (2026-06-02)
-**Last verified:** 2026-06-02
+
+> **Note (2026-06-08):** [ADR-0009](0009-domain-isolated-tool-modules-kernel.md) supersedes §1 (the phase-typed builder) and §2's rejection of domain-owned tools, and moved tool registration out of `src/server/build.ts` into the per-domain modules under `src/domains/`. The `build.ts` specifics below describe the composition root as it stood at this decision.
 
 ## Context
 

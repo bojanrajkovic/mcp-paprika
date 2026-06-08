@@ -1,7 +1,6 @@
 # ADR-0018: OpenTelemetry via the global API, an opt-in dual-path bootstrap, and vendored Development-status conventions
 
 **Status:** Accepted (2026-06-06)
-**Last verified:** 2026-06-06
 
 ## Context
 

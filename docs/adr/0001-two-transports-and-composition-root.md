@@ -1,7 +1,6 @@
 # ADR-0001: Two MCP transports over one composition root
 
 **Status:** Accepted (2026-06-01, backfilled)
-**Last verified:** 2026-06-02
 
 ## Context
 

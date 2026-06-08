@@ -1,7 +1,5 @@
 # Architecture
 
-Last verified: 2026-06-06
-
 mcp-paprika bridges the Paprika recipe manager's cloud API to MCP clients. It keeps a local cache of the user's library, syncs it in the background, and exposes recipes, the pantry, grocery lists, meal planning, menus, and optional semantic search and AI photo generation as MCP tools and resources.
 
 This covers the shape and the _why_. Current inventories (which tools exist, which stores, which config keys, the on-disk layout) are read from source and the per-directory `CLAUDE.md` files, not transcribed here; see the documentation map in the root `CLAUDE.md`. Decisions with weighed alternatives live in `docs/adr/`.

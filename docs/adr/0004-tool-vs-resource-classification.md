@@ -3,7 +3,8 @@
 **Status:** Accepted (2026-06-01, backfilled)
 **Amended:** 2026-06-04 ([#224](https://github.com/bojanrajkovic/mcp-paprika/issues/224)) — meal types gain an auto-create write path; see the amendment under Rejected alternatives.
 **Amended:** 2026-06-06 ([#245](https://github.com/bojanrajkovic/mcp-paprika/issues/245)) — the sole-surface premise is now general, and Reference-class entities carry a managed lifecycle; see [ADR-0017](0017-reference-catalog-management-tools.md).
-**Last verified:** 2026-06-06
+
+> **Note (2026-06-08, [ADR-0009](0009-domain-isolated-tool-modules-kernel.md)):** the `src/server/build.ts` references below predate the kernel refactor; tool registration now lives in the per-domain modules under `src/domains/`. The classification reasoning here is unaffected — only the registry's location moved.
 
 ## Context
 

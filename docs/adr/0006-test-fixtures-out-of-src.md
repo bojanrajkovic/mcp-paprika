@@ -1,7 +1,6 @@
 # ADR-0006: Move test fixtures and helpers out of `src/`, keep colocated tests
 
 **Status:** Accepted (2026-06-02)
-**Last verified:** 2026-06-02
 
 ## Context
 

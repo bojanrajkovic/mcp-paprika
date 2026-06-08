@@ -1,7 +1,6 @@
 # ADR-0014: neverthrow in the core — throws only at foreign boundaries
 
 **Status:** Accepted (2026-06-05)
-**Last verified:** 2026-06-05
 **Related:** [ADR-0010](0010-reference-sync-tier.md) (the sync driver whose abort seam this reworks), [ADR-0013](0013-test-pyramid-and-tiers.md) (the test tier the conformance check joins), [ADR-0011](0011-tool-specs-as-data.md) (tool-as-data, which the companion gate-idiom decision extends), [ADR-0003](0003-vendored-json-vector-index.md) (the JSON vector index this treats as owned code, not a foreign boundary)
 
 ## Context

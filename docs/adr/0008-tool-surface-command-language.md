@@ -1,7 +1,8 @@
 # ADR-0008: Shape the tool surface as a forward-intent command language with rubric-gated intent verbs
 
 **Status:** Accepted (2026-06-03)
-**Last verified:** 2026-06-03
+
+> **Note (2026-06-08, [ADR-0009](0009-domain-isolated-tool-modules-kernel.md)):** the `src/server/build.ts` registry references below predate the kernel refactor; the roster now lives in the per-domain modules under `src/domains/`. The naming philosophy and promotion rule here are unaffected — only the registry's location moved.
 
 ## Context
 

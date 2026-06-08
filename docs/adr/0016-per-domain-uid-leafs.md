@@ -1,7 +1,6 @@
 # ADR-0016: UID brands live in per-domain leaf files
 
 **Status:** Accepted (2026-06-06)
-**Last verified:** 2026-06-06
 **Related:** [ADR-0007](0007-uid-branding-compile-time-only.md) (what a brand _is_ — compile-time-only semantics, unchanged here), [ADR-0009](0009-domain-isolated-tool-modules-kernel.md) (the per-domain ownership this completes), [ADR-0014](0014-neverthrow-core-foreign-boundaries.md) (the conformance-gate idiom this reuses). Resolves [#242](https://github.com/bojanrajkovic/mcp-paprika/issues/242).
 
 ## Context
