@@ -1484,6 +1484,7 @@ describe("meal-null-tolerance (#290): MealSchema coerces null/missing fields", (
       order_flag: null,
       is_ingredient: null,
       scale: null,
+      deleted: null,
     };
     const parsed: Meal = MealSchema.parse(nullRow);
     expect(parsed).toEqual({
@@ -1550,6 +1551,7 @@ describe("meal-null-tolerance (#290): MealStoredSchema mirrors the wire coercion
       type: null,
       typeUid: null,
       orderFlag: null,
+      deleted: null,
     });
     expect(parsed).toEqual({
       uid: "MEAL-UID-STORED",

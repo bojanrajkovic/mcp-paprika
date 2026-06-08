@@ -418,7 +418,10 @@ export const MealStoredSchema = z.object({
     .string()
     .nullish()
     .transform((v) => v ?? null),
-  deleted: z.boolean().optional().default(false),
+  deleted: z
+    .boolean()
+    .nullish()
+    .transform((v) => v ?? false),
 });
 
 export type Meal = z.infer<typeof MealStoredSchema>;
@@ -474,7 +477,10 @@ export const MealSchema = z
       .string()
       .nullish()
       .transform((v) => v ?? null),
-    deleted: z.boolean().optional().default(false),
+    deleted: z
+      .boolean()
+      .nullish()
+      .transform((v) => v ?? false),
   })
   .transform(
     ({ recipe_uid, type_uid, order_flag, is_ingredient, ...rest }): Meal => ({
