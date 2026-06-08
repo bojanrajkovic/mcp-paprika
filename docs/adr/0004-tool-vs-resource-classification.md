@@ -4,6 +4,8 @@
 **Amended:** 2026-06-04 ([#224](https://github.com/bojanrajkovic/mcp-paprika/issues/224)) — meal types gain an auto-create write path; see the amendment under Rejected alternatives.
 **Amended:** 2026-06-06 ([#245](https://github.com/bojanrajkovic/mcp-paprika/issues/245)) — the sole-surface premise is now general, and Reference-class entities carry a managed lifecycle; see [ADR-0017](0017-reference-catalog-management-tools.md).
 
+> **Note (2026-06-08, [ADR-0009](0009-domain-isolated-tool-modules-kernel.md)):** the `src/server/build.ts` references below predate the kernel refactor; tool registration now lives in the per-domain modules under `src/domains/`. The classification reasoning here is unaffected — only the registry's location moved.
+
 ## Context
 
 The Paprika domain has many entity types: recipes, categories, pantry items, grocery lists and their items, aisles, menus and their items, meal-planner entries, and meal types. Each one could, in principle, be exposed to an MCP client three ways: as a **tool** the model invokes on its own, as a **resource** the user attaches into a conversation, or as both. Exposing everything as everything is the path of least resistance and the path to an unusable surface: hundreds of redundant tools and resources, each carrying maintenance cost and each diluting the model's ability to pick the right one.

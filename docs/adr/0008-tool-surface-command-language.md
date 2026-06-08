@@ -2,6 +2,8 @@
 
 **Status:** Accepted (2026-06-03)
 
+> **Note (2026-06-08, [ADR-0009](0009-domain-isolated-tool-modules-kernel.md)):** the `src/server/build.ts` registry references below predate the kernel refactor; the roster now lives in the per-domain modules under `src/domains/`. The naming philosophy and promotion rule here are unaffected — only the registry's location moved.
+
 ## Context
 
 The tool surface accreted entity-by-entity and drifted off any single grammar: single-entity reads use both `read_` and a lone `get_`; one entity renames via a bespoke `rename_` while every other edits via `update_`; recipe querying spent several verbs that dropped the recipe noun; bulk and cross-entity actions carried entity-less or mechanical names; and the meal-planner read tool was named for a "history" it does not represent (it spans past and future). Most consequentially, the highest-frequency user intents — buying a grocery item, running out of a pantry staple, trashing a recipe — were buried as boolean fields on generic `update_` tools, so the act the user names in a sentence had no tool whose name carried that meaning.

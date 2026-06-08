@@ -2,6 +2,8 @@
 
 **Status:** Accepted (2026-06-02)
 
+> **Note (2026-06-08):** [ADR-0009](0009-domain-isolated-tool-modules-kernel.md) supersedes §1 (the phase-typed builder) and §2's rejection of domain-owned tools, and moved tool registration out of `src/server/build.ts` into the per-domain modules under `src/domains/`. The `build.ts` specifics below describe the composition root as it stood at this decision.
+
 ## Context
 
 ADR-0001 shipped two transports over one composition root and recorded, honestly, that hand-wiring the context was "the emergent default, not a considered rejection of a container," deferring the real evaluation to [#197](https://github.com/bojanrajkovic/mcp-paprika/issues/197). This ADR is that evaluation. It bottoms out three questions that surfaced together, because the wiring model, the folder shape, and the identifier types co-determine each other: a choice on any one constrains the others.
