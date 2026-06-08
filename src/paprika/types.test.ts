@@ -17,7 +17,7 @@ import { type Aisle, AisleSchema, AisleStoredSchema } from "../domains/aisle/typ
 import { GroceryIngredientSchema, GroceryIngredientStoredSchema } from "../domains/grocery/grocery-ingredient/types.js";
 import { GroceryItemSchema, GroceryItemStoredSchema } from "../domains/grocery/grocery-item/types.js";
 import { GroceryListSchema, GroceryListStoredSchema } from "../domains/grocery/grocery-list/types.js";
-import { type Meal, MealSchema, mealToApiPayload } from "../domains/meal/types.js";
+import { type Meal, MealSchema, MealStoredSchema, mealToApiPayload } from "../domains/meal/types.js";
 import {
   type MenuItem,
   MenuItemSchema,
@@ -1448,6 +1448,106 @@ describe("meal-payload: mealToApiPayload round-trip via MealSchema", () => {
     const parsed: Meal = MealSchema.parse(deletedWireMeal);
     const payload = mealToApiPayload(parsed);
     expect(payload["deleted"]).toBe(true);
+  });
+});
+
+describe("meal-null-tolerance (#290): MealSchema coerces null/missing fields", () => {
+  // Paprika sneaks nulls into nominally-required meal fields, and the macOS app
+  // POSTs meals without `is_ingredient`/`scale` at all (meals.har.json). A single
+  // such row used to abort the whole z.array(MealSchema) parse and permanently
+  // wedge the meal store — see #290 (the meal analogue of #76).
+  it("coerces a row with every coercible field null to the absent-value defaults", () => {
+    const nullRow = {
+      uid: "MEAL-UID-NULLS",
+      recipe_uid: null,
+      name: null,
+      date: null,
+      type: null,
+      type_uid: null,
+      order_flag: null,
+      is_ingredient: null,
+      scale: null,
+      deleted: null,
+    };
+    const parsed: Meal = MealSchema.parse(nullRow);
+    expect(parsed).toEqual({
+      uid: "MEAL-UID-NULLS",
+      recipeUid: null,
+      name: "",
+      date: "",
+      type: 0,
+      typeUid: null,
+      orderFlag: 0,
+      isIngredient: false,
+      scale: null,
+      deleted: false,
+    });
+  });
+
+  it("accepts a row missing is_ingredient and scale (the macOS app's own POST shape)", () => {
+    // Field set taken from the captured app write in docs/wire-captures/meals.har.json.
+    const appShapedRow = {
+      uid: "MEAL-UID-APP",
+      recipe_uid: "RECIPE-UID-1",
+      deleted: false,
+      order_flag: 0,
+      type_uid: "TYPE-UID-1",
+      date: "2026-05-26 00:00:00",
+      name: "(Not) Butter Chicken",
+      type: 0,
+    };
+    const parsed: Meal = MealSchema.parse(appShapedRow);
+    expect(parsed.isIngredient).toBe(false);
+    expect(parsed.scale).toBeNull();
+  });
+
+  it("accepts a negative legacy `type` integer instead of aborting", () => {
+    const parsed: Meal = MealSchema.parse({
+      uid: "MEAL-UID-NEG",
+      recipe_uid: null,
+      name: "Legacy",
+      date: "2020-01-01 00:00:00",
+      type: -1,
+      type_uid: null,
+      order_flag: 0,
+      is_ingredient: false,
+      scale: null,
+    });
+    expect(parsed.type).toBe(-1);
+  });
+
+  it("still rejects a row with no uid (unsalvageable; listMeals skips it row-wise)", () => {
+    const result = MealSchema.safeParse({ name: "No uid", date: "2026-01-01 00:00:00" });
+    expect(result.success).toBe(false);
+  });
+});
+
+describe("meal-null-tolerance (#290): MealStoredSchema mirrors the wire coercions", () => {
+  // Disk format mirrors the wire-format coercion (precedent: #76's recipe fix)
+  // so a cache written by any client version still hydrates on read-back.
+  it("coerces a stored row with every coercible field null/missing", () => {
+    const parsed: Meal = MealStoredSchema.parse({
+      uid: "MEAL-UID-STORED",
+      recipeUid: null,
+      name: null,
+      date: null,
+      type: null,
+      typeUid: null,
+      orderFlag: null,
+      deleted: null,
+    });
+    expect(parsed).toEqual({
+      uid: "MEAL-UID-STORED",
+      recipeUid: null,
+      name: "",
+      date: "",
+      type: 0,
+      typeUid: null,
+      orderFlag: 0,
+      isIngredient: false,
+      scale: null,
+      deleted: false,
+    });
   });
 });
 

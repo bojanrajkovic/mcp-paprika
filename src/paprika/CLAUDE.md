@@ -26,4 +26,6 @@ The Paprika Cloud Sync API client and the shared reconcile helper: authenticatio
 
 - **No-aisle grocery ingredients are dropped on sync.** Paprika returns `aisle_uid: null` for an ingredient never filed into an aisle (the schema coerces null → `""`). Such a row carries no aisle memory; resolving it yields the same Miscellaneous default as no catalog entry at all, so the sync layer drops it (with a single `warn`-level count). Historically the un-nullable schema also _threw_ on these rows, aborting the whole cycle before meals/menus could sync.
 
+- **Meal rows tolerate null/missing fields, and `listMeals` validates row-by-row.** Paprika's meal wire is looser than the apps suggest (the macOS app POSTs meals without `is_ingredient`/`scale`; nulls appear in nominally-required fields — #290), so `MealSchema`/`MealStoredSchema` coerce null/missing to absent-value defaults, and `listMeals` parses rows individually, logging (uid + zod issues) and skipping any row that still fails. Before this, one alien row aborted the all-or-nothing `z.array()` parse and the meal store never reached `hasSynced`.
+
 - **Recipe deletes ping `notify`.** `deleteRecipe`/`hardDeleteRecipe` call `notifySync()` after the write to nudge cross-client sync propagation; the collection-style entity writes do not.
