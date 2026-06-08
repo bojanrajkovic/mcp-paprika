@@ -9,8 +9,11 @@
 // exposes a sanitization hook, so the scrub lives where every span from
 // every instrumentation must pass: a delegating wrapper around the trace
 // exporter. Queries, fragments, and userinfo never leave the process;
-// origin + path survive (an outbound sync path's entity UID is accepted
-// span-level detail — the documented exception).
+// origin + path survive. Path-embedded identifiers are accepted span-level
+// detail in both directions — an outbound sync path's entity UID, and the
+// inbound RFC 7592 `/register/{clientId}` client id (a public identifier
+// per RFC 6749 §2.2): the material that needs protecting rides in queries,
+// fragments, and userinfo, which is where the scrub draws the line.
 
 import type { ReadableSpan, SpanExporter } from "@opentelemetry/sdk-trace-base";
 
