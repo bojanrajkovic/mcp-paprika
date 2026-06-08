@@ -1,7 +1,6 @@
 # ADR-0013: Test tiers, the module-integration harness, and structure-driven vitest projects
 
 **Status:** Accepted (2026-06-05)
-**Last verified:** 2026-06-05
 **Related:** [ADR-0006](0006-test-fixtures-out-of-src.md) (colocated tests + the `test/` support tree), [ADR-0009](0009-domain-isolated-tool-modules-kernel.md) (the kernel the harness builds)
 
 ## Context

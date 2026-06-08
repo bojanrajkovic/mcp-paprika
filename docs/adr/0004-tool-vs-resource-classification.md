@@ -3,7 +3,6 @@
 **Status:** Accepted (2026-06-01, backfilled)
 **Amended:** 2026-06-04 ([#224](https://github.com/bojanrajkovic/mcp-paprika/issues/224)) — meal types gain an auto-create write path; see the amendment under Rejected alternatives.
 **Amended:** 2026-06-06 ([#245](https://github.com/bojanrajkovic/mcp-paprika/issues/245)) — the sole-surface premise is now general, and Reference-class entities carry a managed lifecycle; see [ADR-0017](0017-reference-catalog-management-tools.md).
-**Last verified:** 2026-06-06
 
 ## Context
 

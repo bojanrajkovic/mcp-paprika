@@ -1,7 +1,6 @@
 # ADR-0011: Tool specs as data (boot-free tool-reference generation)
 
 **Status:** Accepted (2026-06-04)
-**Last verified:** 2026-06-04
 **Refines:** [ADR-0009](0009-domain-isolated-tool-modules-kernel.md) (the kernel's module/tool shape)
 
 ## Context

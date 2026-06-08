@@ -1,7 +1,5 @@
 # OAuth 2.1 Authorization Layer
 
-Last verified: 2026-06-05
-
 ## Purpose
 
 `src/auth/` is the OAuth 2.1 authorization-server surface `mcp-paprika` presents to remote MCP clients on the **HTTP transport only**. It plays two isolated roles at once: a full OAuth 2.1 authorization server _toward_ MCP clients (dynamic registration, PKCE auth-code flow, opaque token minting + revocation, metadata), and an OIDC _client_ toward one operator-configured upstream IdP (identity verification + allowlist). It is loaded only when `MCP_TRANSPORT=http`; in stdio mode, `buildAuthContext` returns `null` and nothing here is instantiated.

@@ -1,7 +1,5 @@
 # Shared Tool Helpers
 
-Last verified: 2026-06-06
-
 ## Purpose
 
 The few genuinely cross-cutting helpers the tool layer shares across domains — the ones that belong to no single domain (ADR-0009 §3). Domain-specific helpers (the `*ToMarkdown` formatters, the meal-type spec/resolve) live with their domain under `src/domains/<domain>/`, not here.

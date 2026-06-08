@@ -1,7 +1,5 @@
 # Composition Kernel
 
-Last verified: 2026-06-06
-
 ## Purpose
 
 The typed composition kernel: the substrate every domain module registers on. It constructs modules in dependency order, drives sync and boot-phase ordering, and hands each tool/resource/hook a context narrowed to its own state (`state`) and write chokepoints (`writes`), plus exactly its declared dependencies' contracts (`deps`), with process-wide singletons in `infra`. Reaching an undeclared domain — or a declared one's internals rather than its published contract — is a compile error.

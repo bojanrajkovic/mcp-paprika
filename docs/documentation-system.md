@@ -1,7 +1,5 @@
 # Documentation system
 
-**Last verified:** 2026-06-04
-
 This is the rubric every other doc in this repo points at: where each kind of knowledge lives, which genres may go stale, and what stays deliberately un-automated. When you're unsure where something goes, the answer is here.
 
 ## 1. One canonical home per concept
@@ -42,11 +40,11 @@ The JSDoc on a tool/resource registrar and on a domain's contract (`api.ts`) and
 - **Registrar names are nouns that name the tool** — `export const <camel>Tool = defineTool(...)` is a `ToolDef` value, so the export IS the tool, not a register-function. Keep the `*Tool` / `*Resource` suffix; name it for its id, fixing vague ones (`clearGroceryListTool`, not `clearAllTool`).
 - **Contract and interface docs describe the contract + real per-domain WHY** — the per-method contract, a binding gotcha, an ownership note, a dependency-cycle seam. Drop domain-location/graph justification (it lives once in ADR-0009 §3) and rote mechanism recital ("the store/cache stay private", "siblings reach via `ctx.deps`").
 
-## 5. "Last verified:" is the audit cadence, and there is deliberately no staleness gate
+## 5. Freshness is git's job, and there is deliberately no staleness gate
 
-Every `CLAUDE.md`, every architecture-class doc, and every ADR carries a **`Last verified: <date>`** stamp. That date is the audit mechanism: it tells a reader how recently a human checked the doc against reality, and it tells a maintainer which docs are overdue. Bump it when you verify; leave it alone for a typo fix.
+No doc carries a `Last verified` stamp. git's last-commit date already answers "how fresh is this" more accurately than a hand-maintained line — which only misleads when someone edits a doc without bumping it (the stamps here had already drifted that way). An ADR's `Status`, the doc's git history, and the audit cadence carry the rest.
 
-There is deliberately **no automated doc-staleness gate** mapping code paths or symbols to docs. Such a gate would false-positive constantly, flagging every "former-X" annotation and every intentionally-frozen historical note as drift, which trains people to ignore it. That violates the principle of preferring language and human audit over mechanical gates. Mechanical gates are reserved for unambiguous, near-zero-false-positive checks: commitlint, and the format, lint, typecheck, and test gates that run in CI and the git hooks. Doc freshness is a judgment call, so it stays one, backed by the verification stamp.
+There is deliberately **no automated doc-staleness gate** mapping code paths or symbols to docs. Such a gate would false-positive constantly, flagging every "former-X" annotation and every intentionally-frozen historical note as drift, which trains people to ignore it. That violates the principle of preferring language and human audit over mechanical gates. Mechanical gates are reserved for unambiguous, near-zero-false-positive checks: commitlint, and the format, lint, typecheck, and test gates that run in CI and the git hooks. Doc freshness is a judgment call, so it stays one — backed by human audit, not a per-file date.
 
 ## References
 

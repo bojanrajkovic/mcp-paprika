@@ -1,7 +1,6 @@
 # ADR-0005: Composition-root shape, module structure, and identifier branding
 
 **Status:** Accepted (2026-06-02)
-**Last verified:** 2026-06-02
 
 ## Context
 

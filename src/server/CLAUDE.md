@@ -1,7 +1,5 @@
 # Server Bootstrap & Transport Seams
 
-Last verified: 2026-06-06
-
 ## Purpose
 
 The non-kernel pieces of the composition path: the transport-blind `Notifier` seam, the pre-kernel bootstrap (`buildInfraBase` + `buildBrandedServer`), the background sync loop, and the cross-entity index-event seam. Module construction, the sync driver, and boot-phase ordering now live in the **kernel** (`../kernel/CLAUDE.md`); this directory is what wraps it for the two transports.

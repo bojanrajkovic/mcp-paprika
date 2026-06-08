@@ -1,7 +1,6 @@
 # ADR-0010: A `reference` sync tier for lookup catalogs
 
 **Status:** Accepted (2026-06-04)
-**Last verified:** 2026-06-05
 **Refines:** [ADR-0009](0009-domain-isolated-tool-modules-kernel.md) (the kernel sync driver)
 
 > **Note (2026-06-05, [ADR-0014](0014-neverthrow-core-foreign-boundaries.md)):** the abort seam this ADR describes in throw terms is now `Result`-based. A reconcile returns `ResultAsync<AnySyncResult | void, SyncError>` and never throws; "a core failure aborts the cycle" means a core reconcile's `err` (the driver logs it and returns `[]`), and a `reference`/`additive` `err` is logged best-effort instead of being caught. The tier model, ordering, and blast-radius semantics decided here are unchanged.

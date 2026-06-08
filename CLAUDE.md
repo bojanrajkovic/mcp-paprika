@@ -1,7 +1,5 @@
 # CLAUDE.md — AI Agent Index
 
-Last verified: 2026-06-06
-
 > **Keep this file lean.** It is the project-wide pointer index for agents. Detailed docs live under `docs/`; the human dev workflow lives in `CONTRIBUTING.md`; the rules that govern the doc system live in `docs/documentation-system.md`. When you change a feature, update its architecture doc or the relevant directory `CLAUDE.md`, not this index.
 
 ## Project

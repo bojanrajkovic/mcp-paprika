@@ -1,7 +1,5 @@
 # Test support
 
-Last verified: 2026-06-05
-
 Fixtures, generated wire-captures, and test helpers — the test-only code that supports the colocated `src/**/*.test.ts` suite. The decision and its rejected alternatives live in `../docs/adr/0006-test-fixtures-out-of-src.md`; this file is the layout pointer plus sharp edges.
 
 ## Layout

@@ -1,7 +1,6 @@
 # ADR-0015: Precondition-chain `defineTool` (declarative tool gates + centralized logging)
 
 **Status:** Accepted (2026-06-06)
-**Last verified:** 2026-06-06
 **Refines:** [ADR-0011](0011-tool-specs-as-data.md) (the `defineTool` authoring seam) · builds on [ADR-0014](0014-neverthrow-core-foreign-boundaries.md) (the `Result` guard shape)
 
 ## Context

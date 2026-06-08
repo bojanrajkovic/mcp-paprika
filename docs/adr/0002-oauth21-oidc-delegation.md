@@ -1,7 +1,6 @@
 # ADR-0002: OAuth 2.1 authorization server with OIDC identity delegation on the HTTP transport
 
 **Status:** Accepted (2026-06-01, backfilled)
-**Last verified:** 2026-06-01
 
 ## Context
 

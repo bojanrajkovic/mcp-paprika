@@ -1,7 +1,6 @@
 # ADR-0008: Shape the tool surface as a forward-intent command language with rubric-gated intent verbs
 
 **Status:** Accepted (2026-06-03)
-**Last verified:** 2026-06-03
 
 ## Context
 

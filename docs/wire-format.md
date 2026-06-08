@@ -1,7 +1,5 @@
 # Paprika Cloud Sync — Reverse-Engineered Wire Format
 
-**Last verified:** 2026-06-03
-
 Paprika's Cloud Sync API has no public documentation. Everything here was
 reconstructed by watching the macOS desktop client on the wire and reading the
 shipped framework, then pinned in the codebase so it can't drift silently. This

@@ -1,7 +1,6 @@
 # ADR-0012: Pure state interfaces and the `ctx.writes` chokepoint seam
 
 **Status:** Accepted (2026-06-04)
-**Last verified:** 2026-06-04
 **Refines:** [ADR-0009](0009-domain-isolated-tool-modules-kernel.md) (the kernel's module/ctx shape)
 
 ## Context

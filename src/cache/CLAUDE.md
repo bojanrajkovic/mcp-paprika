@@ -1,7 +1,5 @@
 # Caching Layer
 
-Last verified: 2026-06-06
-
 ## Purpose
 
 The in-memory query/CRUD stores that are each session's source of truth for one Paprika entity family. Tools and resources read these; each module hydrates its own stores from the disk cache on construction (via the shared `hydrateStore` helper in `hydrate.ts`); they never touch the filesystem. The store implementations live in their per-entity modules (`../domains/<domain>/store.ts`) — this doc catalogs their shared behavior — while the durable **persistence layer** that backs them lives flat in this directory. See [Persistence](#persistence).

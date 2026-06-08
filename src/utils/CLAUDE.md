@@ -1,7 +1,5 @@
 # Cross-Cutting Utilities
 
-Last verified: 2026-06-04
-
 ## Purpose
 
 Shared leaf-ish utilities used across every `src/` module: config loading, the process-wide logger, Paprika wire-date helpers, the shared resilience executor, XDG path resolution, duration parsing, cross-domain error classes, and connector branding (the icon/title/site identity presented to MCP hosts).

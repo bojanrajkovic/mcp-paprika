@@ -1,7 +1,5 @@
 # Domain Modules
 
-Last verified: 2026-06-06
-
 ## Purpose
 
 One directory per cohesive domain — the unit the kernel constructs, isolates, and sync-drives. A domain owns one or more Paprika entities, declares its dependencies, and exposes a public contract (`api.ts`) that sibling domains reach along a declared `dependsOn` edge.
