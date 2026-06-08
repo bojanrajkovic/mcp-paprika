@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.6.1](https://github.com/bojanrajkovic/mcp-paprika/compare/v1.6.0...v1.6.1) (2026-06-07)
+
+
+### Bug Fixes
+
+* **meal:** tolerate null/missing fields in meal wire rows so one bad row cannot wedge the meal store ([#290](https://github.com/bojanrajkovic/mcp-paprika/issues/290))
+
 ## [1.6.0](https://github.com/bojanrajkovic/mcp-paprika/compare/v1.5.0...v1.6.0) (2026-05-31)
 
 
