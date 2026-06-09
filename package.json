@@ -62,7 +62,7 @@
     "@opentelemetry/sdk-node": "^0.218.0",
     "@opentelemetry/semantic-conventions": "^1.41.1",
     "async-mutex": "^0.5.0",
-    "cockatiel": "^3.2.1",
+    "cockatiel": "^4.0.0",
     "dotenv": "^17.4.2",
     "env-paths": "^4.0.0",
     "hono": "4.12.23",
