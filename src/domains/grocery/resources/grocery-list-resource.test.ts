@@ -132,6 +132,11 @@ describe("grocery-list MCP resource", () => {
       expect(text).toContain("Purchased");
       expect(text).toContain("| No |");
       expect(text).toContain("| Yes |");
+      // The human-attachable resource keeps clean rows: no UID column, and no
+      // item UIDs leak into the body (the read_grocery_list tool carries those).
+      expect(text).not.toContain("UID |");
+      expect(text).not.toContain("gi-1");
+      expect(text).not.toContain("gi-2");
     });
 
     it("throws for an unknown UID", async () => {

@@ -94,6 +94,19 @@ describe("read_grocery_list tool", () => {
     expect(text).toContain("Milk");
   });
 
+  it("includes each item's UID so the per-item tools can be driven", async () => {
+    const list = makeGroceryList({ name: "Weekly Shopping" });
+    const item1 = makeGroceryItem({ listUid: list.uid, ingredient: "Apples" });
+    const item2 = makeGroceryItem({ listUid: list.uid, ingredient: "Milk" });
+    kh.seed({ groceryLists: [list], groceryItems: [item1, item2] });
+
+    const text = await kh.callToolText("read_grocery_list", { lookup: { uid: list.uid } });
+
+    expect(text).toContain("| UID |");
+    expect(text).toContain(`\`${item1.uid}\``);
+    expect(text).toContain(`\`${item2.uid}\``);
+  });
+
   it("renders aisle names from the live catalog, not the item's denormalized copy", async () => {
     // The item carries the stale pre-rename name; the catalog has the renamed
     // aisle. Render must show the catalog name (render-resolve over cascade).
