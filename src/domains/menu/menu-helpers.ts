@@ -13,8 +13,8 @@ import type { Menu } from "./types.js";
  * the line appends `` · item `<uid>` · recipe `<recipeUid>` `` so an agent can
  * drive `update_menu_item` / `delete_menu_item`; the recipe clause is omitted
  * when `recipeUid` is null. `read_menu` passes `includeItemUids: true`; the
- * resource passes `false` for clean recipe-name lines (matching
- * `groceryListToMarkdown`'s no-child-UID convention).
+ * resource passes `false` for clean recipe-name lines (the same model-facing /
+ * human-facing split `groceryListToMarkdown` carries on its `includeItemUids`).
  *
  * Pure like `mealToMarkdown` — takes the `mealTypes` catalog array for
  * `typeUid`→name/order resolution. Both callers pass `ctx.mealTypeStore.getAll()`.

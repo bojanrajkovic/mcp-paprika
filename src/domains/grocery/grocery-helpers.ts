@@ -10,12 +10,23 @@ import { aisleDisplayName } from "../aisle/display.js";
 
 /**
  * Renders a grocery list as markdown with metadata and a table of items.
+ *
+ * When `opts.includeItemUids` is set, the table carries a trailing `UID` column
+ * so an agent can drive the per-item tools (`update_grocery_item`,
+ * `delete_grocery_item`, `mark_grocery_item_purchased`, `move_grocery_items_to_pantry`)
+ * — without it there is no way to reach an item's UID from the list. The
+ * model-facing tools (`read_grocery_list` and the rename/create write tools that
+ * echo the list back) pass `true`; the human-attachable resource passes `false`
+ * for clean rows, matching the menu renderer's `includeItemUids` split.
  */
 export function groceryListToMarkdown(
   list: GroceryList,
   items: ReadonlyArray<GroceryItem>,
   aisles: AisleNameSource,
+  opts?: { readonly includeItemUids?: boolean },
 ): string {
+  const includeItemUids = opts?.includeItemUids ?? false;
+
   const lines: Array<string> = [];
   lines.push(`# ${list.name}`);
   lines.push("");
@@ -24,14 +35,19 @@ export function groceryListToMarkdown(
 
   if (items.length > 0) {
     lines.push("");
-    lines.push("| Ingredient | Qty | Aisle | Purchased |");
-    lines.push("|------------|-----|-------|-----------|");
+    lines.push(
+      includeItemUids ? "| Ingredient | Qty | Aisle | Purchased | UID |" : "| Ingredient | Qty | Aisle | Purchased |",
+    );
+    lines.push(
+      includeItemUids ? "|------------|-----|-------|-----------|-----|" : "|------------|-----|-------|-----------|",
+    );
     for (const item of items) {
       const qty = item.quantity !== "" ? item.quantity : "—";
       const aisleName = aisleDisplayName(aisles, item);
       const aisle = aisleName !== "" ? aisleName : "—";
       const purchased = item.purchased ? "Yes" : "No";
-      lines.push(`| ${item.ingredient} | ${qty} | ${aisle} | ${purchased} |`);
+      const row = `| ${item.ingredient} | ${qty} | ${aisle} | ${purchased} |`;
+      lines.push(includeItemUids ? `${row} \`${item.uid}\` |` : row);
     }
   }
 

@@ -60,6 +60,8 @@ export const readGroceryListTool = defineTool(
     description:
       "Get a grocery list by UID or name. Name lookup is tiered (exact → starts-with → contains) " +
       "and case-insensitive, with a disambiguation list when multiple lists match the same tier. " +
+      "Each item row carries its UID so you can drive update_grocery_item / delete_grocery_item / " +
+      "mark_grocery_item_purchased / move_grocery_items_to_pantry. " +
       'Pass exactly one shape: {"uid": "..."} or {"name": "..."}.',
     inputSchema: {
       lookup: uidOrTextLookupSchema({
@@ -80,7 +82,10 @@ export const readGroceryListTool = defineTool(
       });
       return formatLookupOutcome(outcome, {
         entityNoun: "grocery list",
-        renderOne: (list) => groceryListToMarkdown(list, ctx.state.items.store.getByListUid(list.uid), ctx.deps.aisle),
+        renderOne: (list) =>
+          groceryListToMarkdown(list, ctx.state.items.store.getByListUid(list.uid), ctx.deps.aisle, {
+            includeItemUids: true,
+          }),
         disambiguationLine: (list) => `- **${list.name}** (uid: \`${list.uid}\`)`,
       });
     };
@@ -169,7 +174,7 @@ export const renameGroceryListTool = defineTool(
       // Same-name no-op: case-insensitive check. Return the existing list rendered as markdown.
       if (existing.name.toLowerCase() === args.newName.toLowerCase()) {
         const items = ctx.state.items.store.getByListUid(existing.uid);
-        return textResult(groceryListToMarkdown(existing, items, ctx.deps.aisle));
+        return textResult(groceryListToMarkdown(existing, items, ctx.deps.aisle, { includeItemUids: true }));
       }
 
       // Conflict check: reject if another list (different UID) has the exact same name.
@@ -190,7 +195,7 @@ export const renameGroceryListTool = defineTool(
           const commitErr = commitFailure("grocery list", await ctx.writes.commitGroceryList(saved));
           if (commitErr) return commitErr;
           const items = ctx.state.items.store.getByListUid(saved.uid);
-          return textResult(groceryListToMarkdown(saved, items, ctx.deps.aisle));
+          return textResult(groceryListToMarkdown(saved, items, ctx.deps.aisle, { includeItemUids: true }));
         },
         async (e) => {
           log.error({ err: e, uid: args.uid, newName: args.newName }, "saveGroceryList failed");
