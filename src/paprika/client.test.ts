@@ -20,7 +20,7 @@ import type { PantryItem } from "../domains/pantry/types.js";
 import type { Category } from "../domains/recipe/category/types.js";
 import type { Recipe } from "../domains/recipe/types.js";
 
-import { makeMeal } from "../../test/domains/meal/__fixtures__/meals.js";
+import { makeMeal, makeSnakeCaseMeal } from "../../test/domains/meal/__fixtures__/meals.js";
 import {
   makeMenu,
   makeMenuItem,
@@ -2261,6 +2261,59 @@ describe("PaprikaClient", () => {
       expect(error).toBeInstanceOf(PaprikaAPIError);
       expect((error as PaprikaAPIError).status).toBe(400);
       expect((error as PaprikaAPIError).endpoint).toContain("meals");
+    });
+  });
+
+  describe("meal-null-tolerance (#290): listMeals() skips unparseable rows instead of aborting", () => {
+    it("returns the parseable meals, logs a warn naming the skipped row's uid, and keeps null-laden rows via coercion", async () => {
+      const { log: testLog, records } = makePinoCapture();
+      server.use(
+        http.get(`${API_BASE}/meals/`, () => {
+          return HttpResponse.json({
+            result: [
+              makeSnakeCaseMeal("MEAL-GOOD-1"),
+              // Beyond what the schema coercions can absorb: wrong TYPE, not null.
+              makeSnakeCaseMeal("MEAL-POISON", { name: 42, date: { nested: true } }),
+              // Null-laden but coercible: survives with absent-value defaults.
+              makeSnakeCaseMeal("MEAL-NULLS", {
+                name: null,
+                type: null,
+                order_flag: null,
+                is_ingredient: null,
+                scale: null,
+              }),
+            ],
+          });
+        }),
+      );
+
+      const client = new PaprikaClient("test@example.com", "password", testLog);
+      const meals = (await client.listMeals())._unsafeUnwrap();
+
+      expect(meals.map((m) => m.uid)).toEqual(["MEAL-GOOD-1", "MEAL-NULLS"]);
+      expect(meals[1]!.name).toBe("");
+      expect(meals[1]!.isIngredient).toBe(false);
+
+      const skips = records.filter((r) => r["msg"] === "skipping unparseable meal row");
+      expect(skips).toHaveLength(1);
+      expect(skips[0]!["uid"]).toBe("MEAL-POISON");
+      expect(skips[0]!["index"]).toBe(1);
+      expect(Array.isArray(skips[0]!["issues"])).toBe(true);
+    });
+
+    it("returns [] without logging when every row parses", async () => {
+      const { log: testLog, records } = makePinoCapture();
+      server.use(
+        http.get(`${API_BASE}/meals/`, () => {
+          return HttpResponse.json({ result: [] });
+        }),
+      );
+
+      const client = new PaprikaClient("test@example.com", "password", testLog);
+      const meals = (await client.listMeals())._unsafeUnwrap();
+
+      expect(meals).toStrictEqual([]);
+      expect(records.filter((r) => r["msg"] === "skipping unparseable meal row")).toHaveLength(0);
     });
   });
 
