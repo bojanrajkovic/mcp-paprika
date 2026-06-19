@@ -7,7 +7,7 @@ import type { MealState } from "../module.js";
 import { defineTool } from "../../../kernel/tool.js";
 import { toolResult } from "../../../shared/tools.js";
 import { mealStartGuard } from "./guards.js";
-import { renderMealsGroupedByDate } from "./helpers.js";
+import { mealListOutputSchema, mealToStructuredRow, renderMealsGroupedByDate, resolveMealTypeName } from "./helpers.js";
 
 export const readMealPlanInputSchema = z
   .object({
@@ -20,6 +20,11 @@ export const readMealPlanInputSchema = z
       .describe("How many days of the plan to show, counting today (default 7, max 31)."),
   })
   .strict();
+
+// Structured-output payload (ADR-0019, R1): the shared `{ items }` wrapper — a flat
+// array of meal rows. Each row carries its own `date` (so the model groups if it
+// wants) and the `uid` the rendered text omits, for `reschedule_meal` / `delete_meal`
+// / `update_meal`. An empty window emits `{ items: [] }` (a valid empty success).
 
 /**
  * `read_meal_plan` — show upcoming scheduled meals. Meal-type names for rendering
@@ -34,6 +39,7 @@ export const readMealPlanTool = defineTool(
       "Read the upcoming meal plan: meals scheduled from today forward, grouped by day in ascending date " +
       'order (today first). Defaults to the next 7 days; pass `days` to widen the window. For past meals or recall ("when did we last have X"), use search_meal_history.',
     inputSchema: readMealPlanInputSchema,
+    outputSchema: mealListOutputSchema,
   },
   [mealStartGuard],
   (ctx: DomainCtx<MealState, "recipe" | "meal-type">) => {
@@ -55,6 +61,7 @@ export const readMealPlanTool = defineTool(
       if (meals.length === 0) {
         return toolResult(
           `No meals planned between ${since.toFormat("yyyy-MM-dd")} and ${until.toFormat("yyyy-MM-dd")}.`,
+          { items: [] },
         );
       }
 
@@ -70,7 +77,9 @@ export const readMealPlanTool = defineTool(
       const header =
         `**Meal plan: ${since.toFormat("yyyy-MM-dd")} – ${until.toFormat("yyyy-MM-dd")}** ` +
         `(${count.toString()} meal${count === 1 ? "" : "s"})`;
-      return toolResult(`${header}\n${renderMealsGroupedByDate(ascending, ctx.deps["meal-type"])}`);
+      const resolveTypeName = resolveMealTypeName(ctx.deps["meal-type"]);
+      const items = ascending.map((meal) => mealToStructuredRow(meal, resolveTypeName(meal)));
+      return toolResult(`${header}\n${renderMealsGroupedByDate(ascending, ctx.deps["meal-type"])}`, { items });
     };
   },
 );

@@ -9,6 +9,7 @@ import { makeMealType } from "../../../../test/domains/meal-type/__fixtures__/me
 import { makeMeal } from "../../../../test/domains/meal/__fixtures__/meals.js";
 import { makeCategory, makeRecipe } from "../../../../test/domains/recipe/__fixtures__/recipes.js";
 import { useKernelHarness } from "../../../../test/support/kernel-harness.js";
+import { getText } from "../../../../test/support/tool-test-utils.js";
 import { searchMealHistoryInputSchema } from "./search-meal-history.js";
 
 const DINNER_UID = "dinner-uid" as MealTypeUid;
@@ -150,25 +151,49 @@ describe("search_meal_history tool", () => {
     expect(page2).toContain("Showing 2–2 of 2 past meals");
   });
 
-  it("reports an unknown class", async () => {
+  it("emits structured rows plus the total/offset pagination cursor (R1)", async () => {
     seedAll();
-    expect(await kh.callToolText("search_meal_history", { class: "Klingon" })).toContain(
-      'No category found matching "Klingon"',
-    );
+    const result = await kh.callTool("search_meal_history", { recipe_uid: PASTA_UID });
+    expect(result.isError).toBeFalsy();
+    const payload = result.structuredContent as {
+      items: Array<Record<string, unknown>>;
+      total: number;
+      offset: number;
+    };
+    expect(payload.total).toBe(2); // p-old + p-recent; p-future excluded
+    expect(payload.offset).toBe(0);
+    expect(payload.items.map((r) => r["uid"])).toEqual(["p-recent", "p-old"]); // newest-first
+    expect(payload.items[0]).toMatchObject({ uid: "p-recent", recipeUid: PASTA_UID, typeName: "Dinner" });
   });
 
-  it("reports an unknown meal type", async () => {
+  it("over-paging past the end is an error with a remediation hint, not an empty success", async () => {
     seedAll();
-    expect(await kh.callToolText("search_meal_history", { type: { name: "Brunch" } })).toContain(
-      'Unknown meal type "Brunch"',
-    );
+    const result = await kh.callTool("search_meal_history", { recipe_uid: PASTA_UID, limit: 1, offset: 5 });
+    expect(result.isError).toBe(true);
+    expect(getText(result)).toContain("Try a lower offset");
   });
 
-  it("reports no matches for a recipe never cooked", async () => {
+  it("reports an unknown class as an error", async () => {
     seedAll();
-    expect(await kh.callToolText("search_meal_history", { recipe_uid: "recipe-ghost" as RecipeUid })).toContain(
-      "No past meals found",
-    );
+    const result = await kh.callTool("search_meal_history", { class: "Klingon" });
+    expect(result.isError).toBe(true);
+    expect(getText(result)).toContain('No category found matching "Klingon"');
+  });
+
+  it("reports an unknown meal type as an error", async () => {
+    seedAll();
+    const result = await kh.callTool("search_meal_history", { type: { name: "Brunch" } });
+    expect(result.isError).toBe(true);
+    expect(getText(result)).toContain('Unknown meal type "Brunch"');
+  });
+
+  it("reports no matches for a recipe never cooked as an empty success", async () => {
+    seedAll();
+    const result = await kh.callTool("search_meal_history", { recipe_uid: "recipe-ghost" as RecipeUid });
+    expect(getText(result)).toContain("No past meals found");
+    // No match is a valid empty result, not an error.
+    expect(result.isError).toBeFalsy();
+    expect(result.structuredContent).toEqual({ items: [], total: 0, offset: 0 });
   });
 
   it("rejects unknown keys (strict schema)", () => {
