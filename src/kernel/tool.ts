@@ -158,10 +158,12 @@ function loggableString(value: string): string {
  * guard params). Do NOT wrap the array's ctx in `NoInfer`: contextually typing an
  * inline-arrow guard would then fix the generics to their constraints BEFORE the
  * handler is processed (args resolve left-to-right), collapsing `State` to
- * `unknown`. Registration is delegated straight to
- * `server.registerTool(name, spec, cb)`: `spec` carries an extra `name` the SDK
- * config ignores, which is fine — it is passed as a value, not an object literal,
- * so no excess-property error.
+ * `unknown`. Registration maps the {@link ToolSpec} to the SDK's `registerTool`
+ * config explicitly: `name` is the positional argument, and the remaining fields
+ * (`title`/`description`/`inputSchema`/`annotations`) become the config object.
+ * That explicit literal is the single seam through which a later spec field is
+ * threaded into the advertised surface (an output schema, or UI metadata on
+ * `_meta`).
  */
 export function defineTool<
   I extends ZodRawShape | ZodTypeAny,
@@ -272,7 +274,19 @@ export function defineTool<
           return fail(cause);
         }
       };
-      ctx.server.registerTool(spec.name, spec, gated as ToolCallback<I>);
+      // Map the spec to the SDK's registerTool config explicitly: `name` is the
+      // positional argument, not a config key. This is the single seam where a
+      // later spec field is threaded into the config (an output schema; UI `_meta`).
+      ctx.server.registerTool(
+        spec.name,
+        {
+          title: spec.title,
+          description: spec.description,
+          inputSchema: spec.inputSchema,
+          annotations: spec.annotations,
+        },
+        gated as ToolCallback<I>,
+      );
     },
   };
 }
