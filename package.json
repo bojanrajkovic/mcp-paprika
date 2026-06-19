@@ -81,6 +81,7 @@
   "devDependencies": {
     "@commitlint/cli": "^21.0.2",
     "@commitlint/config-conventional": "^21.0.2",
+    "@modelcontextprotocol/ext-apps": "1.7.4",
     "@msw/source": "^0.6.1",
     "@opentelemetry/context-async-hooks": "^2.8.0",
     "@opentelemetry/sdk-trace-base": "^2.8.0",
