@@ -179,6 +179,9 @@ describe("defineTool", () => {
 
       const out = await callTool("gated_tool", { q: "x" });
       expect(out.content[0]).toMatchObject({ type: "text", text: "still syncing" });
+      // The kernel normalizes every gate failure to isError (the guard returned a
+      // plain toolResult), so it is exempt from a schema-bearing tool's validation.
+      expect(out.isError).toBe(true);
       expect(calls).toEqual(["failing"]);
     });
 

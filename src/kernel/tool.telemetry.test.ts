@@ -74,8 +74,10 @@ describe("defineTool telemetry", () => {
     expect(points).toHaveLength(1);
   });
 
-  it("classes a gated call as precondition_gated, names the guard, and keeps status UNSET", async () => {
-    const gateResult: CallToolResult = { content: [{ type: "text", text: "syncing" }], isError: true };
+  it("classes a gated call as precondition_gated, names the guard, marks the result isError, keeps status UNSET", async () => {
+    // The guard returns a plain (non-error) result; the kernel normalizes every gate
+    // failure to isError so it is exempt from a schema-bearing tool's output validation.
+    const gateResult: CallToolResult = { content: [{ type: "text", text: "syncing" }] };
     const coldStartGuard: ToolPrecondition<DomainCtx<unknown, never>> = function coldStartGuard() {
       return err(gateResult);
     };
@@ -88,7 +90,8 @@ describe("defineTool telemetry", () => {
     tool.register(makeCtx(undefined, server));
 
     const out = await callTool("t_gated", {});
-    expect(out).toBe(gateResult);
+    // The kernel returns the guard's content with isError flagged on (a copy).
+    expect(out).toEqual({ ...gateResult, isError: true });
 
     const [span] = telemetry.spansNamed("tools/call t_gated");
     expect(span!.attributes["error.type"]).toBe("precondition_gated");

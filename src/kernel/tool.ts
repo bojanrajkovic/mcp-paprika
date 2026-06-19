@@ -285,15 +285,18 @@ export function defineTool<
               // with one gate line per call across the whole surface.
               log.debug({ tool: spec.name, precondition: pre.name || "(inline)" }, "tool gated by precondition");
               op.span.setAttribute(ATTR_TOOL_GATED_BY, pre.name || "(inline)");
-              // A gate failure returns the guard's result. Once a tool declares
-              // `outputSchema`, the SDK validates every NON-error result — and a
-              // gated response is the guard's result — so a schema-bearing GUARDED
-              // tool's gate must return an `isError` result (`errorResult`), which
-              // the SDK exempts from output validation; a non-error gate result
-              // with no `structuredContent` would be rejected. A3 #318 defines
-              // this: the meal reads' shared `mealStartGuard` returns `errorResult`
-              // (contract pinned in `tool.e2e.test.ts`).
-              return finish(failure, "precondition_gated");
+              // Normalize the gate failure to an `isError` result. Once a tool
+              // declares an `outputSchema`, the SDK validates every NON-error result
+              // — and a gated response is the guard's result — so a non-error gate
+              // result with no `structuredContent` would be rejected and its message
+              // replaced by a generic schema error. Marking every precondition-gate
+              // failure `isError` here exempts it from that validation (the SDK skips
+              // `isError` results), so guards never need to know which tools declare a
+              // schema: they return a plain `toolResult` and the kernel flags it. A
+              // gate failure genuinely IS an error. (Contract pinned in
+              // `tool.e2e.test.ts`; the span keeps its `precondition_gated` errorType,
+              // so this does not change gating telemetry.)
+              return finish({ ...failure, isError: true }, "precondition_gated");
             }
           }
           // context.with makes this span active for the body, so spans started
