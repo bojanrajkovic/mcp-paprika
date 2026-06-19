@@ -28,6 +28,7 @@ import { ATTR_MCP_PAPRIKA_TRANSPORT, mcpServerSessionDuration } from "../telemet
 import { getMeter, lazy, startTimer } from "../telemetry/scope.js";
 import { unwrapAtBoot } from "../utils/errors.js";
 import { buildFaviconRouter } from "./favicon.js";
+import { buildWidgetPreviewRouter } from "./widget-preview.js";
 // Side-effect: every domain/feature module self-registers on import.
 import "../kernel/modules.generated.js";
 
@@ -270,6 +271,15 @@ export async function startHttp(config: PaprikaConfig, opts: StartHttpOptions = 
   // outside the auth block) so a host's connector flow can fetch it pre-auth —
   // the OAuth AS metadata logo_uri points at this path. See src/utils/branding.ts.
   hono.route("/", buildFaviconRouter());
+
+  // Dev-only widget preview, config-gated and unauthenticated — mounted here,
+  // favicon-style, BEFORE the /mcp bearer guard. Absent entirely in production
+  // (the flag defaults off). It renders a built widget in a plain browser with a
+  // fake host shim; `?payload=` is read client-side by the shim, never reflected
+  // by the server. See src/transport/widget-preview.ts.
+  if (config.http.widgetPreview) {
+    hono.route("/", buildWidgetPreviewRouter(rootLog.child({ component: "widget-preview" })));
+  }
 
   if (authContext !== null) {
     // Capture auth to avoid null-checks inside callbacks (mirrors SyncEngine pattern)

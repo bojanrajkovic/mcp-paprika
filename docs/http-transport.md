@@ -13,13 +13,14 @@ host and origin allowlists, and graceful shutdown.
 
 ## Environment variables
 
-| Variable                     | Config path            | Required | Default     | Description                                                                                 |
-| ---------------------------- | ---------------------- | -------- | ----------- | ------------------------------------------------------------------------------------------- |
-| `MCP_HTTP_PORT`              | `http.port`            | No       | `3000`      | Port to bind when `MCP_TRANSPORT=http` (1–65535)                                            |
-| `MCP_HTTP_HOST`              | `http.host`            | No       | `"0.0.0.0"` | Host to bind when `MCP_TRANSPORT=http`                                                      |
-| `MCP_ALLOWED_HOSTS`          | `http.allowedHosts`    | No       | `[]`        | `Host`-header allowlist (DNS rebinding protection)                                          |
-| `MCP_ALLOWED_ORIGINS`        | `http.allowedOrigins`  | No       | `[]`        | `Origin`-header allowlist (browser-only; locks out CLI clients)                             |
-| `MCP_HTTP_SHUTDOWN_DRAIN_MS` | `http.shutdownDrainMs` | No       | `"5s"`      | Readiness-drain delay on `SIGTERM` (see [Graceful shutdown](#graceful-shutdown-kubernetes)) |
+| Variable                     | Config path            | Required | Default     | Description                                                                                    |
+| ---------------------------- | ---------------------- | -------- | ----------- | ---------------------------------------------------------------------------------------------- |
+| `MCP_HTTP_PORT`              | `http.port`            | No       | `3000`      | Port to bind when `MCP_TRANSPORT=http` (1–65535)                                               |
+| `MCP_HTTP_HOST`              | `http.host`            | No       | `"0.0.0.0"` | Host to bind when `MCP_TRANSPORT=http`                                                         |
+| `MCP_ALLOWED_HOSTS`          | `http.allowedHosts`    | No       | `[]`        | `Host`-header allowlist (DNS rebinding protection)                                             |
+| `MCP_ALLOWED_ORIGINS`        | `http.allowedOrigins`  | No       | `[]`        | `Origin`-header allowlist (browser-only; locks out CLI clients)                                |
+| `MCP_HTTP_SHUTDOWN_DRAIN_MS` | `http.shutdownDrainMs` | No       | `"5s"`      | Readiness-drain delay on `SIGTERM` (see [Graceful shutdown](#graceful-shutdown-kubernetes))    |
+| `MCP_WIDGET_PREVIEW`         | `http.widgetPreview`   | No       | `false`     | Mount the dev-only `/widget-preview` route (see [Widget preview](#widget-preview-development)) |
 
 `MCP_HTTP_PORT` accepts a number string or a bare number, coerced to an integer in
 the range `1`–`65535`. `MCP_HTTP_HOST` accepts any non-empty string and defaults to
@@ -97,6 +98,25 @@ appropriate when you're not running under an orchestrator, or for a single-repli
 
 The container runs `node` as PID 1 (distroless exec-form entrypoint), so `SIGTERM`
 reaches the process directly, with no shell wrapper to swallow it.
+
+## Widget preview (development)
+
+Widgets (ADR-0019) are served to a real MCP host as `ui://widget/{name}` resources
+and rendered in a sandboxed iframe. To iterate on a widget's UI without a host,
+set `MCP_WIDGET_PREVIEW=true` and open the built widget in a browser:
+
+```
+GET /widget-preview?widget=<name>&payload=<url-encoded-json>
+```
+
+The route is **off by default and absent in production** — it is mounted only when
+the flag is set, before the auth block, so it is unauthenticated and exists purely
+for local development. It serves the same self-contained HTML the `ui://` resource
+does, but substitutes a fake host shim for the real apps runtime: the shim feeds
+`?payload=` to the widget's `ontoolresult` so you see it render, and logs the
+messages the widget would send back. `?payload=` is read client-side by the shim
+and never reflected into the HTML by the server. Run `pnpm build:widgets` (or
+`pnpm dev:widgets` to rebuild on change) first so there is something to preview.
 
 ## Connector appearance
 

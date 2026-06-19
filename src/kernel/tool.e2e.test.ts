@@ -10,8 +10,9 @@
  * advertised tool, `name` must come from the positional argument (it is dropped
  * from the config object), and a declared `outputSchema` rides into the
  * advertisement (A1 #306) while a tool that omits it advertises none (the
- * `&&`-elision must not leak an empty key). `_meta` stays absent — the forward
- * guard C1 (#324) flips when it threads `ui` into the config.
+ * `&&`-elision must not leak an empty key). A declared `ui` rides into the
+ * advertisement's `_meta` as both the nested `ui.resourceUri` and the legacy flat
+ * key (C1 #324, ADR-0019), while a tool that omits it advertises no `_meta`.
  */
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -22,6 +23,7 @@ import type { DomainCtx, Infra } from "./registry.js";
 
 import { connectInMemoryMcp } from "../../test/support/in-memory-mcp.js";
 import { buildBrandedServer } from "../server/build.js";
+import { UI_RESOURCE_URI_META_KEY } from "../shared/mcp-app.js";
 import { toolResult } from "../shared/tools.js";
 import { SILENT_LOG } from "../utils/log.js";
 import { defineTool } from "./tool.js";
@@ -65,10 +67,9 @@ describe("defineTool — advertised tools/list surface", () => {
       const schema = advertised!.inputSchema as { properties?: Record<string, unknown> };
       expect(Object.keys(schema.properties ?? {})).toEqual(expect.arrayContaining(["query", "limit"]));
 
-      // A tool that declares no outputSchema advertises none — the `&&`-elision
-      // at the seam must not leak an empty `outputSchema` key.
+      // A tool that declares neither outputSchema nor ui advertises neither — the
+      // `&&`-elision at the seam must not leak an empty `outputSchema` or `_meta`.
       expect(advertised!.outputSchema).toBeUndefined();
-      // Forward guard: C1 (#324) threads `ui` into `_meta` and flips this.
       expect(advertised!._meta).toBeUndefined();
     } finally {
       await mcp.close();
@@ -106,6 +107,40 @@ describe("defineTool — advertised tools/list surface", () => {
       expect(result.structuredContent).toEqual({ echoed: "hi" });
       const content = result.content as Array<{ type: string; text: string }>;
       expect(content[0]).toMatchObject({ type: "text", text: "echo:hi" });
+    } finally {
+      await mcp.close();
+    }
+  });
+
+  it("threads a declared ui resource into the tools/list advertisement _meta", async () => {
+    const server = buildBrandedServer();
+    const resourceUri = "ui://widget/echo";
+    const tool = defineTool(
+      {
+        name: "echo_widget",
+        title: "Echo (widget)",
+        description: "Echoes its query back through a widget.",
+        annotations: { readOnlyHint: true },
+        inputSchema: { query: z.string() },
+        ui: { resourceUri },
+      },
+      (_ctx: DomainCtx<unknown, never>) => (args) => toolResult(`echo:${args.query}`),
+    );
+    tool.register(makeCtx(server));
+
+    const mcp = await connectInMemoryMcp(server);
+    try {
+      const { tools } = await mcp.client.listTools();
+      const advertised = tools.find((t) => t.name === "echo_widget");
+      expect(advertised).toBeDefined();
+
+      // The UI metadata rides into `_meta` as BOTH the preferred nested form (the
+      // apps surface reads `_meta.ui.resourceUri`) and the legacy flat key,
+      // mirroring what ext-apps' registerAppTool emits — so an older host reading
+      // only the flat key still resolves the widget.
+      const meta = advertised!._meta as { ui?: { resourceUri?: string }; [k: string]: unknown } | undefined;
+      expect(meta?.ui?.resourceUri).toBe(resourceUri);
+      expect(meta?.[UI_RESOURCE_URI_META_KEY]).toBe(resourceUri);
     } finally {
       await mcp.close();
     }

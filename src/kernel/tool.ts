@@ -6,6 +6,7 @@ import type { ZodRawShape, ZodTypeAny } from "zod";
 
 import type { DomainCtx, DomainId } from "./registry.js";
 
+import { UI_RESOURCE_URI_META_KEY } from "../shared/mcp-app.js";
 import { mcpServerOperationDuration } from "../telemetry/instruments.js";
 import { getTracer } from "../telemetry/scope.js";
 import { ATTR_GEN_AI_OPERATION_NAME, ATTR_GEN_AI_TOOL_NAME, ATTR_MCP_METHOD_NAME } from "../telemetry/semconv.js";
@@ -36,6 +37,15 @@ import { errorTypeName, startOperation } from "../telemetry/trace-result.js";
  * site, where one Zod schema derives both the formatter's row type and the
  * emitted payload type. Most tools omit it; the SDK's output validation is a
  * no-op until a tool declares one.
+ *
+ * `ui` is OPTIONAL and names the `ui://widget/{name}` resource a host renders for
+ * this tool's result (ADR-0019). Like `outputSchema` it is plain data threaded
+ * through the one `registerTool` seam — not a generic — and most tools omit it.
+ * When set, the seam maps it onto the SDK config's `_meta` (the nested
+ * `_meta.ui.resourceUri` the apps surface reads, plus the legacy flat key); when
+ * unset, no `_meta` is emitted and the advertised tool is byte-for-byte unchanged.
+ * A host without the apps surface ignores `_meta.ui` and shows the text result, so
+ * the widget surface is additive.
  */
 export interface ToolSpec<I extends ZodRawShape | ZodTypeAny = ZodRawShape | ZodTypeAny> {
   readonly name: string;
@@ -44,6 +54,7 @@ export interface ToolSpec<I extends ZodRawShape | ZodTypeAny = ZodRawShape | Zod
   readonly annotations: ToolAnnotations;
   readonly inputSchema: I;
   readonly outputSchema?: ZodRawShape | ZodTypeAny;
+  readonly ui?: { readonly resourceUri: string };
 }
 
 /**
@@ -171,9 +182,10 @@ function loggableString(value: string): string {
  * `unknown`. Registration maps the {@link ToolSpec} to the SDK's `registerTool`
  * config explicitly: `name` is the positional argument, and the remaining fields
  * (`title`/`description`/`inputSchema`/`annotations`, plus `outputSchema` when a
- * tool declares one) become the config object. That explicit literal is the
- * single seam through which a later spec field is threaded into the advertised
- * surface (UI metadata on `_meta`, next).
+ * tool declares one and `_meta` derived from `ui` when a tool declares that)
+ * become the config object. That explicit literal is the single seam through which
+ * a spec field is threaded into the advertised surface — `outputSchema` (A1) and
+ * the `ui` → `_meta` UI-resource mapping (C1, ADR-0019).
  */
 export function defineTool<
   I extends ZodRawShape | ZodTypeAny,
@@ -291,13 +303,19 @@ export function defineTool<
         }
       };
       // Map the spec to the SDK's registerTool config explicitly: `name` is the
-      // positional argument, not a config key. This is the single seam where a
-      // later spec field is threaded into the config (UI `_meta`, next). The
-      // SDK advertises `outputSchema` in tools/list and validates a tool's
-      // `structuredContent` against it; absent (the common case) it is a no-op.
-      // A Zod schema is always truthy, so `&&`-elision omits the key when unset
-      // — required under exactOptionalPropertyTypes, which rejects an explicit
-      // `outputSchema: undefined`.
+      // positional argument, not a config key. This is the single seam that threads
+      // a spec field the SDK config accepts under a different shape than `ToolSpec`
+      // names it — `outputSchema` (A1) and the `ui` → `_meta` UI-resource mapping
+      // (C1, ADR-0019). The SDK advertises `outputSchema` in tools/list and
+      // validates a tool's `structuredContent` against it; the `_meta` rides into
+      // the advertisement so a host fetches and renders the named `ui://` widget.
+      // Both keys are `&&`-elided: `spec.outputSchema` (a Zod schema) and `spec.ui`
+      // (an object) are always truthy when present, so the key is omitted when
+      // unset — required under exactOptionalPropertyTypes, which rejects an explicit
+      // `outputSchema: undefined` / `_meta: undefined`. The `_meta` carries the
+      // preferred nested `ui.resourceUri` AND the legacy flat key (mirroring
+      // ext-apps' registerAppTool) so an older host reading only the flat key still
+      // resolves the widget.
       ctx.server.registerTool(
         spec.name,
         {
@@ -306,6 +324,12 @@ export function defineTool<
           inputSchema: spec.inputSchema,
           annotations: spec.annotations,
           ...(spec.outputSchema && { outputSchema: spec.outputSchema }),
+          ...(spec.ui && {
+            _meta: {
+              ui: { resourceUri: spec.ui.resourceUri },
+              [UI_RESOURCE_URI_META_KEY]: spec.ui.resourceUri,
+            },
+          }),
         },
         gated as ToolCallback<I>,
       );

@@ -6,5 +6,11 @@
     "declaration": true
   },
   "include": ["src"],
-  "exclude": ["src/**/*.test.ts", "src/**/*.test.*.ts", "src/transport/e2e-server.ts"]
+  "exclude": [
+    "src/**/*.test.ts",
+    "src/**/*.test.*.ts",
+    "src/transport/e2e-server.ts",
+    "src/features/widgets/*/main.ts",
+    "src/features/widgets/**/*.svelte"
+  ]
 }
