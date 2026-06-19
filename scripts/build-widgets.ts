@@ -26,7 +26,7 @@ import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 import type { BuildContext, Plugin } from "esbuild";
-import { context } from "esbuild";
+import { context, transform } from "esbuild";
 
 const require = createRequire(import.meta.url);
 
@@ -83,7 +83,11 @@ async function makeContext(options: BuildWidgetsOptions): Promise<{ ctx: BuildCo
     target: "es2022",
     outdir: outDir,
     logLevel: "silent",
-    plugins: [esbuildSvelte({ compilerOptions: { css: "injected" } }), wrapAsHtml(outDir, extAppsBundle)],
+    plugins: [
+      esbuildSvelte({ compilerOptions: { css: "injected" } }),
+      minifyVendor(),
+      wrapAsHtml(outDir, extAppsBundle),
+    ],
   });
   return { ctx, names };
 }
@@ -111,6 +115,27 @@ function wrapAsHtml(outDir: string, extAppsBundle: string): Plugin {
             return writeFile(join(outDir, `${name}.html`), renderShell(name, extAppsBundle, file.text), "utf8");
           }),
         );
+      });
+    },
+  };
+}
+
+/**
+ * Minify ONLY third-party (`node_modules`) modules — the Svelte runtime is the
+ * bulk of a widget bundle — while leaving our own widget source (`main.ts` and
+ * the compiled component) readable in the served HTML for debugging. esbuild's
+ * top-level `minify` is whole-bundle; this per-file `onLoad` scopes minification
+ * to vendor code. (The ext-apps runtime is inlined separately and already ships
+ * minified, so it is unaffected.)
+ */
+function minifyVendor(): Plugin {
+  return {
+    name: "minify-vendor",
+    setup(build) {
+      build.onLoad({ filter: /[/\\]node_modules[/\\].*\.m?js$/ }, async (args) => {
+        const source = await readFile(args.path, "utf8");
+        const { code } = await transform(source, { minify: true, loader: "js", legalComments: "none" });
+        return { contents: code, loader: "js" };
       });
     },
   };
