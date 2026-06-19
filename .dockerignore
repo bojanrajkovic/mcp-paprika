@@ -11,6 +11,7 @@ coverage
 docs
 scripts
 !scripts/healthcheck.mjs
+!scripts/build-widgets.ts
 **/*.test.ts
 **/*.test.integration.ts
 **/*.property.test.ts

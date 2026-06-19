@@ -16,8 +16,11 @@ COPY package.json pnpm-lock.yaml ./
 RUN --mount=type=cache,target=/root/.local/share/pnpm/store \
     pnpm install --frozen-lockfile --ignore-scripts
 
-# Now bring in the source and compile.
+# Now bring in the source and compile. `pnpm build` is `tsc && build:widgets`,
+# so the widget build script (and the Svelte sources under src/) must be in the
+# builder context; the runtime stage still copies only the built dist/.
 COPY tsconfig.json ./
+COPY scripts/build-widgets.ts ./scripts/build-widgets.ts
 COPY src ./src
 RUN pnpm build
 
