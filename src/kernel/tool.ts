@@ -285,12 +285,14 @@ export function defineTool<
               // with one gate line per call across the whole surface.
               log.debug({ tool: spec.name, precondition: pre.name || "(inline)" }, "tool gated by precondition");
               op.span.setAttribute(ATTR_TOOL_GATED_BY, pre.name || "(inline)");
-              // A gate failure returns the guard's text-only result. Once a tool
-              // declares `outputSchema`, the SDK validates every non-error result
-              // — and a gated response is non-error — so a schema-bearing GUARDED
-              // tool must carry schema-compliant `structuredContent` on (or
-              // exempt) its gate failures. No such tool exists yet; the contract
-              // for gate failures under a schema is A2/A3's to define.
+              // A gate failure returns the guard's result. Once a tool declares
+              // `outputSchema`, the SDK validates every NON-error result — and a
+              // gated response is the guard's result — so a schema-bearing GUARDED
+              // tool's gate must return an `isError` result (`errorResult`), which
+              // the SDK exempts from output validation; a non-error gate result
+              // with no `structuredContent` would be rejected. A3 #318 defines
+              // this: the meal reads' shared `mealStartGuard` returns `errorResult`
+              // (contract pinned in `tool.e2e.test.ts`).
               return finish(failure, "precondition_gated");
             }
           }

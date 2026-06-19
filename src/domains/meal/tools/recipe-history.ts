@@ -1,36 +1,32 @@
+import { z } from "zod";
+
 import type { DomainCtx } from "../../../kernel/registry.js";
-import type { MealTypeApi } from "../../meal-type/api.js";
 import type { MealState } from "../module.js";
-import type { Meal } from "../types.js";
 
 import { defineTool } from "../../../kernel/tool.js";
-import { toolResult } from "../../../shared/tools.js";
+import { errorResult, toolResult } from "../../../shared/tools.js";
 import { RecipeUidSchema } from "../../recipe/ids.js";
 import { mealStartGuard } from "./guards.js";
+import { mealRowSchema, resolveMealTypeName } from "./helpers.js";
 
 // How many recent cooks to list. A summary, not a browse surface — "give me more"
 // is search_meal_history's job (it paginates), so this is a fixed cap, not a param.
 const RECENT_LIMIT = 10;
 
-/**
- * A meal → meal-type-name resolver, maps built ONCE for reuse across the recent
- * list. typeUid is the primary key; legacy meals (typeUid: null) fall back to the
- * `type` integer via `originalType`; an unresolved type renders `Type N`. A local
- * copy of the resolution in `renderMealsGroupedByDate` — kept inline here rather
- * than extracted, since this is only its second use (copy first, abstract later).
- */
-function makeTypeLabeler(mealType: MealTypeApi): (meal: Readonly<Meal>) => string {
-  const byUid = new Map<string, string>();
-  const byOriginalType = new Map<number, string>();
-  for (const mt of mealType.getAll()) {
-    byUid.set(mt.uid, mt.name);
-    if (mt.originalType !== null) byOriginalType.set(mt.originalType, mt.name);
-  }
-  return (meal) => {
-    const lookup = meal.typeUid !== null ? byUid.get(meal.typeUid) : byOriginalType.get(meal.type);
-    return lookup ?? `Type ${meal.type.toString()}`;
-  };
-}
+// Structured-output payload (ADR-0019, R1): the per-recipe cooking summary. Each
+// recent cook carries its meal `uid` so the model can reschedule/delete that specific
+// entry, and the recipe's own UID is echoed for chaining. The recent-cook entry is
+// the `uid`/`date`/`typeName` slice of the shared `mealRowSchema` — same field names,
+// so a meal identifier reads as `uid` across all three meal reads. A never-cooked
+// recipe emits the zero-summary (lastCooked: null, timesCooked: 0, recent: []) — a
+// valid empty success, not an error.
+export const readRecipeHistoryOutputSchema = z.object({
+  recipeUid: RecipeUidSchema,
+  recipeName: z.string(),
+  lastCooked: z.string().nullable().describe("Calendar day of the most recent past cook, yyyy-MM-dd, or null."),
+  timesCooked: z.number().int().nonnegative(),
+  recent: z.array(mealRowSchema.pick({ uid: true, date: true, typeName: true })),
+});
 
 /**
  * `read_recipe_history` — the per-recipe cooking SUMMARY (last cooked, times cooked,
@@ -59,13 +55,14 @@ export const readRecipeHistoryTool = defineTool(
         "The recipe to summarize, by UID (from list_recipes, search_recipes, or read_recipe).",
       ),
     },
+    outputSchema: readRecipeHistoryOutputSchema,
   },
   [mealStartGuard],
   (ctx: DomainCtx<MealState, "recipe" | "meal-type">) => {
     return async (args) => {
       const recipe = ctx.deps.recipe.get(args.recipe_uid);
       if (recipe === undefined) {
-        return toolResult(
+        return errorResult(
           `No recipe found with UID "${args.recipe_uid}". Check the UID (list_recipes / search_recipes), ` +
             "or it may still be syncing.",
         );
@@ -75,15 +72,18 @@ export const readRecipeHistoryTool = defineTool(
       // list from `cookedHistory` (the same past-cook rule lastCookedAt heads).
       const lastCooked = ctx.state.store.lastCookedAt(args.recipe_uid);
       if (lastCooked === null) {
+        // Never cooked is a valid empty success — the zero-summary, not an error.
         return toolResult(
           `**${recipe.name}** has no cooking history yet. ` +
             "Use plan_meals to schedule it or log_cooked_meal to record a past cooking.",
+          { recipeUid: args.recipe_uid, recipeName: recipe.name, lastCooked: null, timesCooked: 0, recent: [] },
         );
       }
 
       const history = ctx.state.store.cookedHistory(args.recipe_uid);
-      const labelType = makeTypeLabeler(ctx.deps["meal-type"]);
+      const resolveTypeName = resolveMealTypeName(ctx.deps["meal-type"]);
       const count = history.length;
+      const recentMeals = history.slice(0, RECENT_LIMIT);
 
       const lines: Array<string> = [];
       lines.push(`**${recipe.name}** — cooking history`);
@@ -91,15 +91,27 @@ export const readRecipeHistoryTool = defineTool(
       lines.push(`Last cooked: ${lastCooked.slice(0, 10)} · cooked ${count.toString()} time${count === 1 ? "" : "s"}`);
       lines.push("");
       lines.push("Recent:");
-      for (const meal of history.slice(0, RECENT_LIMIT)) {
-        lines.push(`- ${meal.date.slice(0, 10)} · ${labelType(meal)}`);
+      for (const meal of recentMeals) {
+        const typeName = resolveTypeName(meal);
+        lines.push(`- ${meal.date.slice(0, 10)} · ${typeName ?? `Type ${meal.type.toString()}`}`);
       }
       if (count > RECENT_LIMIT) {
         lines.push("");
         lines.push(`_Showing ${RECENT_LIMIT.toString()} most recent of ${count.toString()}._`);
       }
 
-      return toolResult(lines.join("\n"));
+      const recent = recentMeals.map((meal) => ({
+        uid: meal.uid,
+        date: meal.date.slice(0, 10),
+        typeName: resolveTypeName(meal),
+      }));
+      return toolResult(lines.join("\n"), {
+        recipeUid: args.recipe_uid,
+        recipeName: recipe.name,
+        lastCooked: lastCooked.slice(0, 10),
+        timesCooked: count,
+        recent,
+      });
     };
   },
 );

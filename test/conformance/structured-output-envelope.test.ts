@@ -6,23 +6,25 @@ import { RecipeUidSchema } from "../../src/domains/recipe/ids.js";
 import { toolResult } from "../../src/shared/tools.js";
 
 /**
- * ADR-0019 A1 conformance — the structured-output channel is *expressible* (the
- * two-argument `toolResult` envelope parses against a declared `outputSchema`)
- * yet still *inert* (no production tool declares a schema, so the SDK's output
- * validation never runs and the `tools/list` advertisement is unchanged).
+ * ADR-0019 structured-output conformance — the channel is *expressible* (the
+ * two-argument `toolResult` envelope parses against a declared `outputSchema`) and
+ * the rollout is *underway* (A3 #318 made the meal reads its first adopters).
  *
  * The positive check parses the envelope against the schema DIRECTLY:
  * `makeTestServer` discards the `registerTool` config and never runs the SDK's
  * `validateToolOutput`, so a harness round-trip would assert nothing. That a
  * declared schema reaches the real `tools/list` advertisement (the `toJsonSchema`
- * path) is anchored separately in `src/kernel/tool.e2e.test.ts`.
+ * path), and the SDK's success/`isError` validation contract, are anchored
+ * separately in `src/kernel/tool.e2e.test.ts`.
  *
- * The negative invariant is the tree-wide gate: every registered spec must carry
- * no `outputSchema`. A2 (#313) deliberately flips it for the first lookup tool —
- * at which point this assertion narrows to "all but that tool", it is not deleted.
+ * The adoption invariant is the tree-wide gate: it pins the EXACT set of
+ * schema-bearing tools. It started empty (A1 was inert); A3 #318 added the three
+ * meal reads. Each later A3/A2/B1 batch ADDS its tool names here — an explicit
+ * allowlist, so a tool that gains a schema unexpectedly (or one that should have
+ * but didn't) trips the gate rather than sliding by.
  */
 
-describe("ADR-0019 A1: structured-output envelope is expressible but inert", () => {
+describe("ADR-0019: structured-output envelope and rollout", () => {
   it("a structured toolResult parses against the tool's own outputSchema", () => {
     // A representative list-read payload: rows wrapped under a record key (the
     // SDK's structuredContent is a record, never a bare top-level array), each
@@ -46,8 +48,12 @@ describe("ADR-0019 A1: structured-output envelope is expressible but inert", () 
     expect(outputSchema.safeParse(result.structuredContent).success).toBe(true);
   });
 
-  it("no production tool declares an outputSchema (A1 is inert)", async () => {
-    const withSchema = (await collectToolSpecs()).filter((s) => s.outputSchema !== undefined).map((s) => s.name);
-    expect(withSchema).toEqual([]);
+  it("exactly the A3 meal reads declare an outputSchema (the rollout's current frontier)", async () => {
+    const withSchema = (await collectToolSpecs())
+      .filter((s) => s.outputSchema !== undefined)
+      .map((s) => s.name)
+      .sort();
+    // A3 #318 — the first adopters. Add each later batch's tool names as they land.
+    expect(withSchema).toEqual(["read_meal_plan", "read_recipe_history", "search_meal_history"]);
   });
 });

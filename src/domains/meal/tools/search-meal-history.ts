@@ -7,12 +7,12 @@ import type { RecipeUid } from "../../recipe/ids.js";
 import type { MealState } from "../module.js";
 
 import { defineTool } from "../../../kernel/tool.js";
-import { toolResult } from "../../../shared/tools.js";
+import { errorResult, toolResult } from "../../../shared/tools.js";
 import { parseInstant } from "../../../utils/dates.js";
 import { formatMealTypeResolveError, mealTypeSpecSchema } from "../../meal-type/meal-type-helpers.js";
 import { RecipeUidSchema } from "../../recipe/ids.js";
 import { mealStartGuard } from "./guards.js";
-import { renderMealsGroupedByDate } from "./helpers.js";
+import { mealListOutputSchema, mealToStructuredRow, renderMealsGroupedByDate, resolveMealTypeName } from "./helpers.js";
 
 export const searchMealHistoryInputSchema = z
   .object({
@@ -42,6 +42,16 @@ export const searchMealHistoryInputSchema = z
   })
   .strict();
 
+// Structured-output payload (ADR-0019, R1): the shared `{ items }` wrapper extended
+// with the pagination cursor the model needs to page — `total` is the full match
+// count (pre-pagination), `offset` the page start. A zero-match search emits
+// `{ items: [], total: 0, offset }` (a valid empty success); a bad filter or an
+// over-paged offset is an `errorResult` instead (it is not a successful answer).
+export const searchMealHistoryOutputSchema = mealListOutputSchema.extend({
+  total: z.number().int().nonnegative(),
+  offset: z.number().int().nonnegative(),
+});
+
 /**
  * `search_meal_history` — paged browse of cooked-meal history, optionally filtered by
  * recipe class. The class (category) filter resolves the class name/UID to a
@@ -61,6 +71,7 @@ export const searchMealHistoryTool = defineTool(
       "it returns the last 30 days. Future planner entries are excluded (use read_meal_plan for upcoming " +
       "meals). Results group by date (newest first), with a count, the last-made date, and pagination.",
     inputSchema: searchMealHistoryInputSchema,
+    outputSchema: searchMealHistoryOutputSchema,
   },
   [mealStartGuard],
   (ctx: DomainCtx<MealState, "recipe" | "meal-type">) => {
@@ -72,7 +83,7 @@ export const searchMealHistoryTool = defineTool(
       if (args.type !== undefined) {
         const result = ctx.deps["meal-type"].resolveSpec(args.type);
         if (!result.ok) {
-          return toolResult(formatMealTypeResolveError(result));
+          return errorResult(formatMealTypeResolveError(result));
         }
         typeUid = result.resolved.uid;
         typeName = result.resolved.name;
@@ -90,7 +101,7 @@ export const searchMealHistoryTool = defineTool(
       if (args.class !== undefined) {
         const { uids } = ctx.deps.recipe.resolveCategoryRefs([args.class]);
         if (uids.length === 0) {
-          return toolResult(`No category found matching "${args.class}".`);
+          return errorResult(`No category found matching "${args.class}".`);
         }
         const catUid = uids[0]!;
         classLabel = ctx.deps.recipe.resolveCategoryNames([catUid])[0] ?? args.class;
@@ -119,7 +130,7 @@ export const searchMealHistoryTool = defineTool(
       if (args.until !== undefined) {
         const parsed = parseInstant(args.until);
         if (parsed === null) {
-          return toolResult(`Could not parse until date "${args.until}". Use yyyy-MM-dd or ISO 8601.`);
+          return errorResult(`Could not parse until date "${args.until}". Use yyyy-MM-dd or ISO 8601.`);
         }
         until = parsed.endOf("day");
       } else {
@@ -130,7 +141,7 @@ export const searchMealHistoryTool = defineTool(
       if (args.since !== undefined) {
         const parsed = parseInstant(args.since);
         if (parsed === null) {
-          return toolResult(`Could not parse since date "${args.since}". Use yyyy-MM-dd or ISO 8601.`);
+          return errorResult(`Could not parse since date "${args.since}". Use yyyy-MM-dd or ISO 8601.`);
         }
         since = parsed.startOf("day");
       } else if (!hasFilter) {
@@ -158,10 +169,13 @@ export const searchMealHistoryTool = defineTool(
       const scope = scopeParts.length > 0 ? ` for ${scopeParts.join(", ")}` : "";
 
       if (total === 0) {
-        return toolResult(`No past meals found${scope}.`);
+        // Empty match is a valid empty success — carries the structured payload.
+        return toolResult(`No past meals found${scope}.`, { items: [], total: 0, offset });
       }
       if (meals.length === 0) {
-        return toolResult(
+        // Over-paged: matches exist but this offset is past the end. Bad input, not an
+        // empty answer — an errorResult with the remediation hint (the SDK exempts it).
+        return errorResult(
           `No meals at offset ${offset.toString()} of ${total.toString()} total. ` +
             `Try a lower offset (the last page starts at offset ${Math.max(0, total - limit).toString()}).`,
         );
@@ -181,7 +195,13 @@ export const searchMealHistoryTool = defineTool(
         : `${total.toString()} past meal${total === 1 ? "" : "s"}`;
       const header = `**${countLabel}${scope} (${rangeLabel})**${lastMade !== null ? ` · last made ${lastMade}` : ""}`;
 
-      return toolResult(`${header}\n${renderMealsGroupedByDate(meals, ctx.deps["meal-type"])}`);
+      const resolveTypeName = resolveMealTypeName(ctx.deps["meal-type"]);
+      const items = meals.map((meal) => mealToStructuredRow(meal, resolveTypeName(meal)));
+      return toolResult(`${header}\n${renderMealsGroupedByDate(meals, ctx.deps["meal-type"])}`, {
+        items,
+        total,
+        offset,
+      });
     };
   },
 );
