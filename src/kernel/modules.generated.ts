@@ -11,3 +11,4 @@ import "../domains/pantry/module.js";
 import "../domains/recipe/module.js";
 import "../features/discover/module.js";
 import "../features/photo-gen/module.js";
+import "../features/widgets/module.js";
