@@ -1,4 +1,5 @@
-import { readdir, readFile } from "node:fs/promises";
+import { execFileSync } from "node:child_process";
+import { readdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -45,5 +46,30 @@ describe("buildWidgets", () => {
     expect(html).toContain("mcp-paprika widget demo");
     // Self-contained: the CSP-sandboxed iframe can fetch no external script.
     expect(html).not.toMatch(/<script[^>]+\bsrc=/i);
+  });
+
+  it("emits an inline script that parses under module semantics (no top-level collision with the ext-apps runtime)", async () => {
+    await buildWidgets({ outDir: tmp.dir() });
+    const html = await readFile(join(tmp.dir(), "demo.html"), "utf8");
+
+    // The whole widget runs in one inline `<script type="module">`, sharing top-level
+    // scope with the prepended ext-apps runtime. An ESM-format bundle's top-level
+    // names collide with the runtime's minified names — a redeclaration that is a
+    // module-parse-time SyntaxError, killing the script (the widget loads blank in
+    // the host). The bundle is built as an IIFE to scope its names; `node --check`
+    // with module semantics is the exact check that catches a regression.
+    const script = html.match(/<script type="module">([\s\S]*?)<\/script>/)?.[1] ?? "";
+    expect(script.length).toBeGreaterThan(0);
+    const scriptPath = join(tmp.dir(), "demo.inline.mjs");
+    await writeFile(scriptPath, script, "utf8");
+
+    let parseError: string | null = null;
+    try {
+      execFileSync(process.execPath, ["--check", scriptPath], { stdio: "pipe" });
+    } catch (err) {
+      const stderr = (err as { stderr?: Buffer }).stderr?.toString() ?? "";
+      parseError = `${err instanceof Error ? err.message : String(err)}\n${stderr}`;
+    }
+    expect(parseError).toBeNull();
   });
 });

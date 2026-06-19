@@ -78,7 +78,12 @@ async function makeContext(options: BuildWidgetsOptions): Promise<{ ctx: BuildCo
     entryPoints: Object.fromEntries(names.map((name) => [name, join(srcDir, name, "main.ts")])),
     bundle: true,
     write: false,
-    format: "esm",
+    // IIFE, not ESM: the widget bundle is concatenated into the SAME inline
+    // `<script>` as the inlined ext-apps runtime, so an ESM bundle's top-level
+    // names share scope with the runtime's and a single minified-name collision
+    // is a redeclaration SyntaxError that kills the whole script (the widget then
+    // fails to load in the host). An IIFE scopes the bundle's names to itself.
+    format: "iife",
     platform: "browser",
     target: "es2022",
     outdir: outDir,
