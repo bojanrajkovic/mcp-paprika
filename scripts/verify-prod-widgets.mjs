@@ -7,7 +7,7 @@
 // path may import them, or the container (which ships prod-only deps) crashes.
 // This is the mechanical proof — it runs as plain node (no tsx; that is pruned
 // too) against the built `dist/`, after devDependencies are gone.
-import { readFile } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -19,15 +19,20 @@ function fail(message) {
   process.exit(1);
 }
 
-// 1. The build produced a self-contained demo widget.
-let demo;
+// 1. The build produced at least one self-contained widget (enumerated, not a
+//    hardcoded name — survives the demo being replaced by real widgets in C2+).
+let htmlFiles = [];
 try {
-  demo = await readFile(join(DIST_WIDGETS, "demo.html"), "utf8");
+  htmlFiles = (await readdir(DIST_WIDGETS)).filter((file) => file.endsWith(".html"));
 } catch (err) {
-  fail(`could not read dist/widgets/demo.html — did \`pnpm build\` run? (${String(err)})`);
+  fail(`could not read dist/widgets — did \`pnpm build\` run? (${String(err)})`);
 }
-if (demo.length < 1000) fail(`dist/widgets/demo.html is suspiciously small (${demo.length} bytes)`);
-if (!demo.includes("globalThis.ExtApps")) fail("dist/widgets/demo.html is missing the inlined ext-apps runtime");
+if (htmlFiles.length === 0) fail("dist/widgets contains no built widgets — `pnpm build` produced nothing to serve");
+for (const file of htmlFiles) {
+  const html = await readFile(join(DIST_WIDGETS, file), "utf8");
+  if (html.length < 1000) fail(`dist/widgets/${file} is suspiciously small (${html.length} bytes)`);
+  if (!html.includes("globalThis.ExtApps")) fail(`dist/widgets/${file} is missing the inlined ext-apps runtime`);
+}
 
 // 2. Importing the runtime widget path must NOT pull a pruned devDependency. A
 //    leaked value import of esbuild/svelte/ext-apps throws ERR_MODULE_NOT_FOUND
@@ -44,7 +49,7 @@ try {
   );
 }
 
-// 3. The runtime loader reads the built widgets with no build toolchain present.
+// 3. The runtime loader reads every built widget with no build toolchain present.
 const silent = {
   warn() {},
   info() {},
@@ -53,6 +58,8 @@ const silent = {
   },
 };
 const widgets = await loadWidgetArtifacts(DIST_WIDGETS, silent);
-if (!widgets.has("demo")) fail("loadWidgetArtifacts did not load the demo widget from dist/widgets");
+if (widgets.size !== htmlFiles.length) {
+  fail(`loadWidgetArtifacts loaded ${widgets.size} widget(s), but dist/widgets has ${htmlFiles.length} HTML file(s)`);
+}
 
 process.stdout.write(`verify-prod-widgets OK: prod-only deps serve [${[...widgets.keys()].join(", ")}]\n`);

@@ -32,7 +32,7 @@ export function buildWidgetPreviewRouter(log: Logger, opts: { readonly dir?: str
 
   app.get("/widget-preview", async (c) => {
     const payload = c.req.query("payload");
-    if (payload !== undefined && payload.length > MAX_PAYLOAD_BYTES) {
+    if (payload !== undefined && Buffer.byteLength(payload, "utf8") > MAX_PAYLOAD_BYTES) {
       return c.text(`payload too large (max ${MAX_PAYLOAD_BYTES.toString()} bytes)`, 413);
     }
 
@@ -49,8 +49,10 @@ export function buildWidgetPreviewRouter(log: Logger, opts: { readonly dir?: str
     }
 
     // Inject the shim as a classic <script> before the deferred module bundle, so
-    // it claims `globalThis.ExtApps` first and the real (`??=`) runtime no-ops.
-    return c.html(html.replace("<body>", `<body>\n    <script>${PREVIEW_SHIM}</script>`));
+    // it claims `globalThis.ExtApps` first and the real (`??=`) runtime no-ops. A
+    // function replacement is used so a `$` in the shim is never treated as a
+    // String.replace substitution pattern ($&, $1, …).
+    return c.html(html.replace("<body>", () => `<body>\n    <script>${PREVIEW_SHIM}</script>`));
   });
 
   return app;

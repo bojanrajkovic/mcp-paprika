@@ -27,9 +27,14 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 import type { BuildContext, Plugin } from "esbuild";
 import { context } from "esbuild";
-import esbuildSvelte from "esbuild-svelte";
 
 const require = createRequire(import.meta.url);
+
+// esbuild-svelte ships dual CJS/ESM with no `exports` map, so under nodenext BOTH
+// the default import and the namespace resolve to a non-callable shape. Load it via
+// require (runtime: CJS `module.exports = sveltePlugin`, a function) and recover the
+// plugin factory's type from the package's own default-export type.
+const esbuildSvelte = require("esbuild-svelte") as typeof import("esbuild-svelte").default;
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(HERE, "..");
 const DEFAULT_SRC_DIR = join(REPO_ROOT, "src", "features", "widgets");
@@ -94,7 +99,10 @@ function wrapAsHtml(outDir: string, extAppsBundle: string): Plugin {
     name: "wrap-widget-html",
     setup(build) {
       build.onEnd(async (result) => {
-        const outputs = result.outputFiles ?? [];
+        // One `<name>.js` per entry (css is injected, no sourcemaps). Filter to
+        // `.js` so a future extra output (a sourcemap, an asset chunk) is never
+        // wrapped into a bogus `<name>.<ext>.html` the resource would then serve.
+        const outputs = (result.outputFiles ?? []).filter((file) => file.path.endsWith(".js"));
         if (outputs.length === 0) return;
         await mkdir(outDir, { recursive: true });
         await Promise.all(
@@ -148,6 +156,17 @@ async function loadExtAppsBundle(): Promise<string> {
   });
 }
 
+/**
+ * Neutralize any literal `</script` in JS being inlined into an HTML `<script>`
+ * block: an embedded `</script>` (e.g. inside a string literal in a bundled
+ * library) would otherwise terminate the inline script early and break the widget.
+ * `<\/script` is identical JS but not an HTML end-tag — the same escape esbuild's
+ * and webpack's own HTML inliners apply; the hand-rolled shell must do it too.
+ */
+function inlineScriptSafe(js: string): string {
+  return js.replace(/<\/script/gi, "<\\/script");
+}
+
 function renderShell(name: string, extAppsBundle: string, widgetBundle: string): string {
   return `<!doctype html>
 <html lang="en">
@@ -159,8 +178,8 @@ function renderShell(name: string, extAppsBundle: string, widgetBundle: string):
   <body>
     <div id="app"></div>
     <script type="module">
-${extAppsBundle}
-${widgetBundle}
+${inlineScriptSafe(extAppsBundle)}
+${inlineScriptSafe(widgetBundle)}
     </script>
   </body>
 </html>
