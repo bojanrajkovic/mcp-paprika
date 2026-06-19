@@ -125,8 +125,14 @@ async function discoverWidgets(srcDir: string): Promise<readonly string[]> {
 
 /**
  * Read ext-apps' pre-bundled browser runtime and rewrite its trailing
- * `export{ local as Exported, … }` into `globalThis.ExtApps = { Exported: local, … }`
+ * `export{ local as Exported, … }` into `globalThis.ExtApps ??= { Exported: local, … }`
  * so it can be inlined ahead of the widget bundle and read via `globalThis.ExtApps`.
+ *
+ * The assignment is NULLISH (`??=`), not plain `=`: in production nothing has set
+ * `globalThis.ExtApps`, so the real runtime installs normally; under the dev
+ * preview route a fake host shim is injected by an earlier classic `<script>` and
+ * claims the slot first, so the real runtime no-ops and the shim wins (it would
+ * otherwise overwrite the shim and hang waiting for a host that isn't there).
  */
 async function loadExtAppsBundle(): Promise<string> {
   const raw = await readFile(require.resolve("@modelcontextprotocol/ext-apps/app-with-deps"), "utf8");
@@ -138,7 +144,7 @@ async function loadExtAppsBundle(): Promise<string> {
         return `${exported ?? local}:${local}`;
       })
       .join(",");
-    return `globalThis.ExtApps={${members}};`;
+    return `globalThis.ExtApps??={${members}};`;
   });
 }
 

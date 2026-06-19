@@ -124,7 +124,14 @@ function makeConfig(overrides: Partial<PaprikaConfig> = {}): PaprikaConfig {
     paprika: { email: "test@example.com", password: "secret" },
     sync: { enabled: false, interval: 60_000 },
     transport: "stdio",
-    http: { port: 0, host: "127.0.0.1", allowedHosts: [], allowedOrigins: [], shutdownDrainMs: 0 },
+    http: {
+      port: 0,
+      host: "127.0.0.1",
+      allowedHosts: [],
+      allowedOrigins: [],
+      shutdownDrainMs: 0,
+      widgetPreview: false,
+    },
     logging: SILENT_LOGGING_CONFIG,
     ...overrides,
   } as PaprikaConfig;
@@ -411,6 +418,7 @@ describe("HTTP transport (Streamable HTTP)", () => {
             allowedHosts: [],
             allowedOrigins: ["https://allowed.example.test"],
             shutdownDrainMs: 0,
+            widgetPreview: false,
           },
         }),
       );
@@ -439,6 +447,7 @@ describe("HTTP transport (Streamable HTTP)", () => {
             allowedHosts: [],
             allowedOrigins: ["https://allowed.example.test"],
             shutdownDrainMs: 0,
+            widgetPreview: false,
           },
         }),
       );
@@ -466,6 +475,7 @@ describe("HTTP transport (Streamable HTTP)", () => {
             allowedHosts: [],
             allowedOrigins: ["https://allowed.example.test"],
             shutdownDrainMs: 0,
+            widgetPreview: false,
           },
         }),
       );
@@ -550,7 +560,14 @@ describe("HTTP transport (Streamable HTTP)", () => {
     it("fails readiness (/healthz 503) during the pre-drain window, then refuses connections", async () => {
       const handle = await startHttp(
         makeConfig({
-          http: { port: 0, host: "127.0.0.1", allowedHosts: [], allowedOrigins: [], shutdownDrainMs: 300 },
+          http: {
+            port: 0,
+            host: "127.0.0.1",
+            allowedHosts: [],
+            allowedOrigins: [],
+            shutdownDrainMs: 300,
+            widgetPreview: false,
+          },
         }),
       );
       const port = handle.port;
@@ -590,7 +607,14 @@ function makeOAuthConfig(): PaprikaConfig {
     paprika: { email: "test@example.com", password: "secret" },
     sync: { enabled: false, interval: 60_000 },
     transport: "http",
-    http: { port: 0, host: "127.0.0.1", allowedHosts: [], allowedOrigins: [], shutdownDrainMs: 0 },
+    http: {
+      port: 0,
+      host: "127.0.0.1",
+      allowedHosts: [],
+      allowedOrigins: [],
+      shutdownDrainMs: 0,
+      widgetPreview: false,
+    },
     logging: SILENT_LOGGING_CONFIG,
     oauth: {
       publicUrl: PUBLIC_URL,

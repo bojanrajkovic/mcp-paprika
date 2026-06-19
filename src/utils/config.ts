@@ -23,6 +23,7 @@ const ENV_VAR_HINTS: Readonly<Record<string, string>> = {
   "http.allowedHosts": "MCP_ALLOWED_HOSTS",
   "http.allowedOrigins": "MCP_ALLOWED_ORIGINS",
   "http.shutdownDrainMs": "MCP_HTTP_SHUTDOWN_DRAIN_MS",
+  "http.widgetPreview": "MCP_WIDGET_PREVIEW",
   "logging.level": "MCP_LOG_LEVEL",
   "logging.notifyLevel": "MCP_LOG_NOTIFY_LEVEL",
   "logging.pretty": "MCP_LOG_PRETTY",
@@ -210,6 +211,13 @@ export const paprikaConfigSchema = z
         // terminationGracePeriodSeconds (the shutdown also reserves up to
         // SHUTDOWN_TIMEOUT_MS to drain). Set 0 to disable (tests, stdio).
         shutdownDrainMs: durationField.default("5s"),
+        // Dev-only widget preview. When true, GET /widget-preview renders a built
+        // widget in a plain browser with a fake host shim driven by ?payload=, so
+        // widget UI can be iterated without a real MCP host (ADR-0019). Default
+        // OFF: the route is absent in production and unauthenticated, and ?payload=
+        // is untrusted (read client-side by the shim, never reflected by the
+        // server). HTTP transport only. See docs/configuration.md.
+        widgetPreview: booleanField.default(false),
       })
       .default({}),
     features: z
@@ -464,6 +472,7 @@ export function buildEnvOverrides(env: NodeJS.ProcessEnv): Record<string, unknow
   if (env["MCP_ALLOWED_HOSTS"] !== undefined) http["allowedHosts"] = env["MCP_ALLOWED_HOSTS"];
   if (env["MCP_ALLOWED_ORIGINS"] !== undefined) http["allowedOrigins"] = env["MCP_ALLOWED_ORIGINS"];
   if (env["MCP_HTTP_SHUTDOWN_DRAIN_MS"] !== undefined) http["shutdownDrainMs"] = env["MCP_HTTP_SHUTDOWN_DRAIN_MS"];
+  if (env["MCP_WIDGET_PREVIEW"] !== undefined) http["widgetPreview"] = env["MCP_WIDGET_PREVIEW"];
 
   if (env["MCP_LOG_LEVEL"] !== undefined && env["MCP_LOG_LEVEL"] !== "") {
     logging["level"] = env["MCP_LOG_LEVEL"];
