@@ -6,7 +6,7 @@ import type { RecipeState, RecipeWrites } from "../module.js";
 import type { Recipe } from "../types.js";
 
 import { defineTool } from "../../../kernel/tool.js";
-import { commitFailure, textResult } from "../../../shared/tools.js";
+import { commitFailure, toolResult } from "../../../shared/tools.js";
 import { RecipeUidSchema } from "../ids.js";
 import { recipeToMarkdown, resolveCategoryRefs } from "../recipe-markdown.js";
 import { recipeColdStartGuard } from "./guards.js";
@@ -56,7 +56,7 @@ export const categorizeRecipeTool = defineTool(
     return async (args) => {
       const existing = ctx.state.recipe.store.get(args.uid);
       if (!existing) {
-        return textResult(`No recipe found with UID "${args.uid}" (it may not exist or was already deleted).`);
+        return toolResult(`No recipe found with UID "${args.uid}" (it may not exist or was already deleted).`);
       }
 
       const { uids: refUids, unknown } = resolveCategoryRefs(ctx.state.category.store.getAll(), args.categories);
@@ -67,7 +67,7 @@ export const categorizeRecipeTool = defineTool(
       // an all-typos call from silently wiping the recipe's categories.
       if (refUids.length === 0) {
         const prefix = warnings.length > 0 ? warnings.join("\n") + "\n\n" : "";
-        return textResult(`${prefix}No known categories matched, so "${existing.name}" was left unchanged.`);
+        return toolResult(`${prefix}No known categories matched, so "${existing.name}" was left unchanged.`);
       }
 
       // Compute the next category set per mode. Sets dedupe while preserving order.
@@ -87,7 +87,7 @@ export const categorizeRecipeTool = defineTool(
         (v) => v,
         (e) => {
           log.error({ err: e, uid: args.uid }, "saveRecipe failed");
-          return textResult(`Failed to categorize recipe: ${e.message}`);
+          return toolResult(`Failed to categorize recipe: ${e.message}`);
         },
       );
       if ("content" in saved) return saved;
@@ -97,7 +97,7 @@ export const categorizeRecipeTool = defineTool(
       const categoryNames = ctx.state.category.store.resolveNames(saved.categories);
       const markdown = recipeToMarkdown(saved, categoryNames);
       const prefix = warnings.length > 0 ? warnings.join("\n") + "\n\n" : "";
-      return textResult(prefix + markdown);
+      return toolResult(prefix + markdown);
     };
   },
 );

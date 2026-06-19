@@ -8,7 +8,7 @@ import type { MenuState, MenuWrites } from "../module.js";
 import type { Menu } from "../types.js";
 
 import { defineTool } from "../../../kernel/tool.js";
-import { commitFailure, resolveLookup, textResult, uidOrTextLookupSchema } from "../../../shared/tools.js";
+import { commitFailure, resolveLookup, toolResult, uidOrTextLookupSchema } from "../../../shared/tools.js";
 import { mealTypeSpecSchema } from "../../meal-type/meal-type-helpers.js";
 import { RecipeUidSchema } from "../../recipe/ids.js";
 import { MenuItemUidSchema, MenuUidSchema } from "../ids.js";
@@ -97,14 +97,14 @@ export const addMenuItemsTool = defineTool(
       });
 
       if (outcome.kind === "uid_miss") {
-        return textResult(`No menu found with UID "${outcome.uid}" (it may not exist or was already deleted).`);
+        return toolResult(`No menu found with UID "${outcome.uid}" (it may not exist or was already deleted).`);
       }
       if (outcome.kind === "text_none") {
-        return textResult(`No menus found matching "${outcome.text}".`);
+        return toolResult(`No menus found matching "${outcome.text}".`);
       }
       if (outcome.kind === "text_many") {
         const list = outcome.matches.map((menu) => `- **${menu.name}** (uid: \`${menu.uid}\`)`).join("\n");
-        return textResult(`Multiple menus match "${outcome.text}":\n${list}\n\nPlease re-invoke with a specific uid.`);
+        return toolResult(`Multiple menus match "${outcome.text}":\n${list}\n\nPlease re-invoke with a specific uid.`);
       }
 
       const menu = outcome.entity;
@@ -180,7 +180,7 @@ export const addMenuItemsTool = defineTool(
       if (errors.length > 0) {
         const header =
           errors.length === 1 ? "Could not add menu item:" : `Could not add ${errors.length.toString()} menu items:`;
-        return textResult(`${header}\n\n${errors.join("\n")}`);
+        return toolResult(`${header}\n\n${errors.join("\n")}`);
       }
 
       // ----- Stage 2: auto-expand the menu span when an item overflows it -----
@@ -197,7 +197,7 @@ export const addMenuItemsTool = defineTool(
           (v) => v,
           (e) => {
             log.error({ err: e, uid: menu.uid }, "saveMenus (add_menu_items auto-expand) failed");
-            return textResult(
+            return toolResult(
               `Failed to extend menu "${menu.name}" to ${maxDay.toString()} day(s): ${e.message}. ` +
                 `No items were added.`,
             );
@@ -226,7 +226,7 @@ export const addMenuItemsTool = defineTool(
         );
         if (typeof created === "string") {
           log.error({ name: r.pendingTypeName, message: created }, "ensureMealType failed");
-          return textResult(created);
+          return toolResult(created);
         }
         createdTypesByName.set(key, created);
       }
@@ -257,7 +257,7 @@ export const addMenuItemsTool = defineTool(
         (items) => items,
         (e) => {
           log.error({ err: e, uid: menu.uid, count: builtItems.length }, "saveMenuItems failed");
-          return textResult(`Failed to add menu items: ${e.message}`);
+          return toolResult(`Failed to add menu items: ${e.message}`);
         },
       );
       if ("content" in savedItems) return savedItems;
@@ -274,7 +274,7 @@ export const addMenuItemsTool = defineTool(
           includeItemUids: true,
         },
       );
-      return textResult(`${header}\n\n${card}`);
+      return toolResult(`${header}\n\n${card}`);
     };
   },
 );

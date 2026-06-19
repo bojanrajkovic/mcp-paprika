@@ -9,7 +9,7 @@ import {
   commitFailure,
   formatLookupOutcome,
   resolveLookup,
-  textResult,
+  toolResult,
   uidOrTextLookupSchema,
 } from "../../../shared/tools.js";
 import { groceryListToMarkdown } from "../grocery-helpers.js";
@@ -35,7 +35,7 @@ export const listGroceryListsTool = defineTool(
       const total = all.length;
 
       if (total === 0) {
-        return textResult("No grocery lists found.");
+        return toolResult("No grocery lists found.");
       }
 
       const header = `You have ${total.toString()} grocery list(s):`;
@@ -44,7 +44,7 @@ export const listGroceryListsTool = defineTool(
         return `- **${list.name}** — ${itemCount.toString()} item(s) (uid: \`${list.uid}\`)`;
       });
 
-      return textResult(header + "\n\n" + lines.join("\n"));
+      return toolResult(header + "\n\n" + lines.join("\n"));
     };
   },
 );
@@ -116,7 +116,7 @@ export const createGroceryListTool = defineTool(
       const matches = ctx.state.lists.store.findByName(args.name);
       const exactMatch = matches.find((l) => l.name.toLowerCase() === args.name.toLowerCase());
       if (exactMatch !== undefined) {
-        return textResult(
+        return toolResult(
           `A grocery list named "${exactMatch.name}" already exists (UID: ${exactMatch.uid}). ` +
             `Use rename_grocery_list to change its name.`,
         );
@@ -136,11 +136,11 @@ export const createGroceryListTool = defineTool(
         async (saved) => {
           const commitErr = commitFailure("grocery list", await ctx.writes.commitGroceryList(saved));
           if (commitErr) return commitErr;
-          return textResult(groceryListToMarkdown(saved, [], ctx.deps.aisle));
+          return toolResult(groceryListToMarkdown(saved, [], ctx.deps.aisle));
         },
         async (e) => {
           log.error({ err: e, name: args.name }, "saveGroceryList failed");
-          return textResult(`Failed to create grocery list: ${e.message}`);
+          return toolResult(`Failed to create grocery list: ${e.message}`);
         },
       );
     };
@@ -168,13 +168,13 @@ export const renameGroceryListTool = defineTool(
       const existing = ctx.state.lists.store.get(args.uid);
 
       if (!existing) {
-        return textResult(`No grocery list found with UID "${args.uid}" (it may not exist or was already deleted).`);
+        return toolResult(`No grocery list found with UID "${args.uid}" (it may not exist or was already deleted).`);
       }
 
       // Same-name no-op: case-insensitive check. Return the existing list rendered as markdown.
       if (existing.name.toLowerCase() === args.newName.toLowerCase()) {
         const items = ctx.state.items.store.getByListUid(existing.uid);
-        return textResult(groceryListToMarkdown(existing, items, ctx.deps.aisle, { includeItemUids: true }));
+        return toolResult(groceryListToMarkdown(existing, items, ctx.deps.aisle, { includeItemUids: true }));
       }
 
       // Conflict check: reject if another list (different UID) has the exact same name.
@@ -183,7 +183,7 @@ export const renameGroceryListTool = defineTool(
         (l) => l.name.toLowerCase() === args.newName.toLowerCase() && l.uid !== args.uid,
       );
       if (conflict !== undefined) {
-        return textResult(
+        return toolResult(
           `A grocery list named "${conflict.name}" already exists (UID: ${conflict.uid}). Choose a different name.`,
         );
       }
@@ -195,11 +195,11 @@ export const renameGroceryListTool = defineTool(
           const commitErr = commitFailure("grocery list", await ctx.writes.commitGroceryList(saved));
           if (commitErr) return commitErr;
           const items = ctx.state.items.store.getByListUid(saved.uid);
-          return textResult(groceryListToMarkdown(saved, items, ctx.deps.aisle, { includeItemUids: true }));
+          return toolResult(groceryListToMarkdown(saved, items, ctx.deps.aisle, { includeItemUids: true }));
         },
         async (e) => {
           log.error({ err: e, uid: args.uid, newName: args.newName }, "saveGroceryList failed");
-          return textResult(`Failed to rename grocery list: ${e.message}`);
+          return toolResult(`Failed to rename grocery list: ${e.message}`);
         },
       );
     };
@@ -226,7 +226,7 @@ export const deleteGroceryListTool = defineTool(
       const existing = ctx.state.lists.store.get(args.uid);
 
       if (!existing) {
-        return textResult(`No grocery list found with UID "${args.uid}" (it may not exist or was already deleted).`);
+        return toolResult(`No grocery list found with UID "${args.uid}" (it may not exist or was already deleted).`);
       }
 
       const trashed: GroceryList = { ...existing, deleted: true };
@@ -235,11 +235,11 @@ export const deleteGroceryListTool = defineTool(
         async (saved) => {
           const commitErr = commitFailure("grocery list", await ctx.writes.commitGroceryList(saved));
           if (commitErr) return commitErr;
-          return textResult(`Grocery list "${existing.name}" has been deleted.`);
+          return toolResult(`Grocery list "${existing.name}" has been deleted.`);
         },
         async (e) => {
           log.error({ err: e, uid: args.uid }, "saveGroceryList failed");
-          return textResult(`Failed to delete grocery list: ${e.message}`);
+          return toolResult(`Failed to delete grocery list: ${e.message}`);
         },
       );
     };

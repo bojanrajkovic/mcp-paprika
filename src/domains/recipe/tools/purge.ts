@@ -5,7 +5,7 @@ import type { RecipeState, RecipeWrites } from "../module.js";
 
 import { defineTool } from "../../../kernel/tool.js";
 import { PaprikaAPIError } from "../../../paprika/errors.js";
-import { commitFailure, textResult } from "../../../shared/tools.js";
+import { commitFailure, toolResult } from "../../../shared/tools.js";
 import { RecipeUidSchema } from "../ids.js";
 import { recipeColdStartGuard } from "./guards.js";
 
@@ -50,11 +50,11 @@ export const purgeRecipeTool = defineTool(
             // stale local phantom so a later read/search can't serve it.
             log.info({ uid: args.uid }, "purge_recipe: recipe not found (404)");
             await ctx.writes.reconcileLocalRecipeAbsent(args.uid);
-            return textResult(`No recipe found with UID "${args.uid}". It may have already been permanently deleted.`);
+            return toolResult(`No recipe found with UID "${args.uid}". It may have already been permanently deleted.`);
           }
           // Transient/upstream failure — don't masquerade as "already deleted".
           log.error({ err: e, uid: args.uid }, "purge_recipe lookup failed");
-          return textResult(`Failed to look up recipe "${args.uid}": ${e.message}`);
+          return toolResult(`Failed to look up recipe "${args.uid}": ${e.message}`);
         },
       );
       if ("content" in recipe) return recipe;
@@ -63,7 +63,7 @@ export const purgeRecipeTool = defineTool(
         // Authoritative truth: it's live. Heal a stale local copy that still shows
         // it trashed so reads/search agree before the next sync cycle.
         await ctx.writes.reconcileLocalRecipe(recipe);
-        return textResult(
+        return toolResult(
           `Recipe "${recipe.name}" is not in the trash, so it can't be permanently deleted. ` +
             `Move it to the trash first with trash_recipe (reversible), then call purge_recipe.`,
         );
@@ -80,11 +80,11 @@ export const purgeRecipeTool = defineTool(
             selfHealing: false,
           });
           if (commitErr) return commitErr;
-          return textResult(`Recipe "${recipe.name}" has been permanently deleted from the trash.`);
+          return toolResult(`Recipe "${recipe.name}" has been permanently deleted from the trash.`);
         },
         async (e) => {
           log.error({ err: e, uid: args.uid }, "hard-delete saveRecipe failed");
-          return textResult(`Failed to permanently delete recipe: ${e.message}`);
+          return toolResult(`Failed to permanently delete recipe: ${e.message}`);
         },
       );
     };

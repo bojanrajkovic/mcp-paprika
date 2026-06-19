@@ -8,7 +8,7 @@ import type { RecipeState, RecipeWrites } from "../module.js";
 
 import { defineTool } from "../../../kernel/tool.js";
 import { fetchImageBytes, MAX_IMAGE_BYTES } from "../../../shared/photo-fetch.js";
-import { commitFailure, textResult } from "../../../shared/tools.js";
+import { commitFailure, toolResult } from "../../../shared/tools.js";
 import { toMessage } from "../../../utils/log.js";
 import { PhotoUidSchema, RecipeUidSchema } from "../ids.js";
 import { GENERATED_MAX_FULL_EDGE, normalizePhoto } from "../photo-helpers.js";
@@ -155,12 +155,12 @@ export const uploadPhotoTool = defineTool(
     return async (args) => {
       const recipe = ctx.state.recipe.store.get(args.recipe_uid);
       if (recipe === undefined)
-        return textResult(`No recipe found with UID "${args.recipe_uid}" (it may not exist or was already deleted).`);
+        return toolResult(`No recipe found with UID "${args.recipe_uid}" (it may not exist or was already deleted).`);
 
       const resolved = await resolveSource(args.source, args.recipe_uid, ctx.infra.generatedImageStore);
-      if ("error" in resolved) return textResult(resolved.error);
+      if ("error" in resolved) return toolResult(resolved.error);
       if (!sniffImage(resolved.bytes)) {
-        return textResult("Unsupported image format. Provide a JPEG, PNG, WEBP, or GIF image.");
+        return toolResult("Unsupported image format. Provide a JPEG, PNG, WEBP, or GIF image.");
       }
 
       let thumbnail: Buffer;
@@ -175,14 +175,14 @@ export const uploadPhotoTool = defineTool(
         ));
       } catch (error) {
         log.error({ err: error, recipe_uid: args.recipe_uid }, "normalizePhoto failed");
-        return textResult(`Failed to process image: ${toMessage(error)}`);
+        return toolResult(`Failed to process image: ${toMessage(error)}`);
       }
 
       return (await ctx.writes.attachPhotoToRecipe(recipe, thumbnail, full)).match(
-        (photo) => textResult(`Attached photo ${photo.name} to "${recipe.name}" (photo UID: ${photo.uid}).`),
+        (photo) => toolResult(`Attached photo ${photo.name} to "${recipe.name}" (photo UID: ${photo.uid}).`),
         (e) => {
           log.error({ err: e.cause ?? e, recipe_uid: args.recipe_uid }, "uploadPhoto failed");
-          return textResult(`Failed to upload photo: ${e.message}`);
+          return toolResult(`Failed to upload photo: ${e.message}`);
         },
       );
     };
@@ -206,18 +206,18 @@ export const deletePhotoTool = defineTool(
     return async (args) => {
       const existing = ctx.state.photo.store.get(args.photo_uid);
       if (existing === undefined) {
-        return textResult(`No photo found with UID "${args.photo_uid}" (it may not exist or was already deleted).`);
+        return toolResult(`No photo found with UID "${args.photo_uid}" (it may not exist or was already deleted).`);
       }
 
       return (await ctx.infra.client.deletePhoto(existing)).match(
         async (): Promise<CallToolResult> => {
           const commitErr = commitFailure("photo", await ctx.writes.commitPhotoDelete({ ...existing, deleted: true }));
           if (commitErr) return commitErr;
-          return textResult(`Deleted photo ${existing.name} from recipe.`);
+          return toolResult(`Deleted photo ${existing.name} from recipe.`);
         },
         async (e) => {
           log.error({ err: e, photo_uid: args.photo_uid }, "deletePhoto failed");
-          return textResult(`Failed to delete photo: ${e.message}`);
+          return toolResult(`Failed to delete photo: ${e.message}`);
         },
       );
     };

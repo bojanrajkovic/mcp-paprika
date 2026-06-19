@@ -5,7 +5,7 @@ import type { DomainCtx } from "../../../kernel/registry.js";
 import type { MealState } from "../module.js";
 
 import { defineTool } from "../../../kernel/tool.js";
-import { textResult } from "../../../shared/tools.js";
+import { toolResult } from "../../../shared/tools.js";
 import { mealStartGuard } from "./guards.js";
 import { renderMealsGroupedByDate } from "./helpers.js";
 
@@ -53,7 +53,7 @@ export const readMealPlanTool = defineTool(
       const { meals } = ctx.state.store.getInDateRange({ since, until, offset: 0, limit: 500 });
 
       if (meals.length === 0) {
-        return textResult(
+        return toolResult(
           `No meals planned between ${since.toFormat("yyyy-MM-dd")} and ${until.toFormat("yyyy-MM-dd")}.`,
         );
       }
@@ -70,7 +70,7 @@ export const readMealPlanTool = defineTool(
       const header =
         `**Meal plan: ${since.toFormat("yyyy-MM-dd")} – ${until.toFormat("yyyy-MM-dd")}** ` +
         `(${count.toString()} meal${count === 1 ? "" : "s"})`;
-      return textResult(`${header}\n${renderMealsGroupedByDate(ascending, ctx.deps["meal-type"])}`);
+      return toolResult(`${header}\n${renderMealsGroupedByDate(ascending, ctx.deps["meal-type"])}`);
     };
   },
 );

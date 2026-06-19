@@ -6,7 +6,7 @@ import type { RecipeState, RecipeWrites } from "../module.js";
 import type { Recipe } from "../types.js";
 
 import { defineTool } from "../../../kernel/tool.js";
-import { commitFailure, textResult } from "../../../shared/tools.js";
+import { commitFailure, toolResult } from "../../../shared/tools.js";
 import { formatTimestampWire } from "../../../utils/dates.js";
 import { RecipeUidSchema } from "../ids.js";
 import { recipeToMarkdown, resolveCategoryRefs } from "../recipe-markdown.js";
@@ -108,7 +108,7 @@ export const createRecipeTool = defineTool(
         (e) => {
           // AC2.8: store/cache not updated — commitRecipe not reached
           log.error({ err: e, name: args.name }, "saveRecipe failed");
-          return textResult(`Failed to create recipe: ${e.message}`);
+          return toolResult(`Failed to create recipe: ${e.message}`);
         },
       );
       if ("content" in saved) return saved;
@@ -120,7 +120,7 @@ export const createRecipeTool = defineTool(
       const prefix = warnings.length > 0 ? warnings.join("\n") + "\n\n" : "";
       // The UID is rendered by recipeToMarkdown, so the caller can chain
       // upload_recipe_photo / update_recipe without re-looking-up the new recipe.
-      return textResult(prefix + markdown);
+      return toolResult(prefix + markdown);
     };
   },
 );

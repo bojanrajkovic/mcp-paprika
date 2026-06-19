@@ -2,7 +2,7 @@ import type { DomainCtx } from "../../../kernel/registry.js";
 import type { PantryState } from "../module.js";
 
 import { defineTool } from "../../../kernel/tool.js";
-import { textResult } from "../../../shared/tools.js";
+import { toolResult } from "../../../shared/tools.js";
 import { pantryStartGuard } from "./guards.js";
 
 /**
@@ -25,7 +25,7 @@ export const listPantryItemsTool = defineTool(
       const total = all.length;
 
       if (total === 0) {
-        return textResult("Your pantry is empty.");
+        return toolResult("Your pantry is empty.");
       }
 
       const header = `You have ${total.toString()} pantry item${total === 1 ? "" : "s"}:\n`;
@@ -37,7 +37,7 @@ export const listPantryItemsTool = defineTool(
         return `- **${item.ingredient}**${qty}${aisle}${status}${expires} (uid: \`${item.uid}\`)`;
       });
 
-      return textResult(header + "\n" + lines.join("\n"));
+      return toolResult(header + "\n" + lines.join("\n"));
     };
   },
 );

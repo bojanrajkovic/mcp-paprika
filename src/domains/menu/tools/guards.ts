@@ -4,7 +4,7 @@ import { err, ok, type Result } from "neverthrow";
 import type { DomainCtx } from "../../../kernel/registry.js";
 import type { MenuState } from "../module.js";
 
-import { textResult } from "../../../shared/tools.js";
+import { toolResult } from "../../../shared/tools.js";
 
 /**
  * Readiness gate: all three stores (menus, menu-items, meal-types) must have
@@ -19,7 +19,7 @@ import { textResult } from "../../../shared/tools.js";
  */
 export function menuStartGuard(ctx: DomainCtx<MenuState, "recipe" | "meal-type">): Result<void, CallToolResult> {
   if (!ctx.state.menus.store.hasSynced || !ctx.state.items.store.hasSynced || !ctx.deps["meal-type"].hasSynced()) {
-    return err(textResult("Menu data is not yet synced. Try again in a few seconds."));
+    return err(toolResult("Menu data is not yet synced. Try again in a few seconds."));
   }
   return ok(undefined);
 }

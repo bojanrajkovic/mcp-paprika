@@ -1,7 +1,7 @@
 import type { DomainCtx } from "../../../kernel/registry.js";
 
 import { defineTool } from "../../../kernel/tool.js";
-import { textResult } from "../../../shared/tools.js";
+import { toolResult } from "../../../shared/tools.js";
 import { MealTypeUidSchema } from "../../meal-type/ids.js";
 import { deleteMealTypeStartGuard } from "./guards.js";
 
@@ -44,11 +44,11 @@ export const deleteMealTypeTool = defineTool(
     return async (args) => {
       const existing = ctx.deps["meal-type"].get(args.uid);
       if (existing === undefined) {
-        return textResult(`No meal type found with UID "${args.uid}" (see list_meal_types for the catalog).`);
+        return toolResult(`No meal type found with UID "${args.uid}" (see list_meal_types for the catalog).`);
       }
 
       if (existing.originalType !== null) {
-        return textResult(
+        return toolResult(
           `Cannot delete "${existing.name}": it is a built-in meal type, and meal planning resolves built-ins ` +
             "by an identity a re-created custom type cannot restore. Rename, recolor, or reorder it with " +
             "`update_meal_type` instead.",
@@ -65,11 +65,11 @@ export const deleteMealTypeTool = defineTool(
           if (menuItemRefs > 0) parts.push(`${String(menuItemRefs)} menu item${menuItemRefs === 1 ? "" : "s"}`);
           const impact =
             parts.length > 0 ? ` ${parts.join(" and ")} referenced it and will show no meal type from now on.` : "";
-          return textResult(`Deleted meal type "${existing.name}".${impact}`);
+          return toolResult(`Deleted meal type "${existing.name}".${impact}`);
         },
         (message) => {
           log.error({ uid: args.uid, message }, "deleteMealType failed");
-          return textResult(message);
+          return toolResult(message);
         },
       );
     };

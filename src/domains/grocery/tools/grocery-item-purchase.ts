@@ -5,7 +5,7 @@ import type { GroceryItem } from "../grocery-item/types.js";
 import type { GroceryState, GroceryWrites } from "../module.js";
 
 import { defineTool } from "../../../kernel/tool.js";
-import { commitFailure, textResult } from "../../../shared/tools.js";
+import { commitFailure, toolResult } from "../../../shared/tools.js";
 import { groceryItemToMarkdown } from "../grocery-helpers.js";
 import { GroceryItemUidSchema } from "../ids.js";
 import { groceryStartGuard } from "./guards.js";
@@ -34,7 +34,7 @@ export const markGroceryItemPurchasedTool = defineTool(
     return async (args) => {
       const existing = ctx.state.items.store.get(args.uid);
       if (existing === undefined) {
-        return textResult(`No grocery item found with UID "${args.uid}" (it may not exist or was already deleted).`);
+        return toolResult(`No grocery item found with UID "${args.uid}" (it may not exist or was already deleted).`);
       }
 
       const updated: GroceryItem = { ...existing, purchased: true };
@@ -42,14 +42,14 @@ export const markGroceryItemPurchasedTool = defineTool(
         (items) => items[0]!,
         (e) => {
           log.error({ err: e, uid: args.uid }, "saveGroceryItems failed");
-          return textResult(`Failed to mark grocery item purchased: ${e.message}`);
+          return toolResult(`Failed to mark grocery item purchased: ${e.message}`);
         },
       );
       if ("content" in saved) return saved;
       const commitErr = commitFailure("grocery list", await ctx.writes.commitGroceryItem(saved));
       if (commitErr) return commitErr;
 
-      return textResult(groceryItemToMarkdown(saved, ctx.deps.aisle));
+      return toolResult(groceryItemToMarkdown(saved, ctx.deps.aisle));
     };
   },
 );

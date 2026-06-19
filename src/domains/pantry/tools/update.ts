@@ -5,7 +5,7 @@ import type { PantryState, PantryWrites } from "../module.js";
 import type { PantryItem } from "../types.js";
 
 import { defineTool } from "../../../kernel/tool.js";
-import { commitFailure, textResult } from "../../../shared/tools.js";
+import { commitFailure, toolResult } from "../../../shared/tools.js";
 import { normalizeWire } from "../../../utils/dates.js";
 import { PantryItemUidSchema } from "../ids.js";
 import { pantryItemToMarkdown } from "../pantry-helpers.js";
@@ -56,7 +56,7 @@ export const updatePantryItemTool = defineTool(
       const existing = ctx.state.store.get(args.uid);
 
       if (!existing) {
-        return textResult(`No pantry item found with UID "${args.uid}" (it may not exist or was already deleted).`);
+        return toolResult(`No pantry item found with UID "${args.uid}" (it may not exist or was already deleted).`);
       }
 
       // Auto-derive hasExpiration when expirationDate is explicitly provided (AC5.3).
@@ -71,7 +71,7 @@ export const updatePantryItemTool = defineTool(
       } else {
         const normalized = normalizeWire(args.expirationDate);
         if (normalized === null) {
-          return textResult(
+          return toolResult(
             `Could not parse expirationDate "${args.expirationDate}". Use ISO 8601 (e.g., "2026-12-31") or "yyyy-MM-dd HH:mm:ss".`,
           );
         }
@@ -88,7 +88,7 @@ export const updatePantryItemTool = defineTool(
       } else {
         const normalized = normalizeWire(args.purchaseDate);
         if (normalized === null) {
-          return textResult(
+          return toolResult(
             `Could not parse purchaseDate "${args.purchaseDate}". Use ISO 8601 (e.g., "2026-12-31") or "yyyy-MM-dd HH:mm:ss".`,
           );
         }
@@ -102,7 +102,7 @@ export const updatePantryItemTool = defineTool(
         args.aisle !== undefined
           ? (await ctx.deps.aisle.ensureAisle(args.aisle)).match(
               (v) => v,
-              (message) => textResult(message),
+              (message) => toolResult(message),
             )
           : undefined;
       if (aisleUpdate !== undefined && "content" in aisleUpdate) return aisleUpdate;
@@ -120,14 +120,14 @@ export const updatePantryItemTool = defineTool(
         (items) => items[0]!,
         (e) => {
           log.error({ err: e, uid: args.uid }, "savePantryItems failed");
-          return textResult(`Failed to update pantry item: ${e.message}`);
+          return toolResult(`Failed to update pantry item: ${e.message}`);
         },
       );
       if ("content" in saved) return saved;
       const commitErr = commitFailure("pantry", await ctx.writes.commitPantryItem(saved));
       if (commitErr) return commitErr;
 
-      return textResult(pantryItemToMarkdown(saved, ctx.deps.aisle));
+      return toolResult(pantryItemToMarkdown(saved, ctx.deps.aisle));
     };
   },
 );

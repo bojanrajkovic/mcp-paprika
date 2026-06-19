@@ -4,7 +4,7 @@ import { err, ok, type Result } from "neverthrow";
 import type { DomainCtx } from "../../../kernel/registry.js";
 import type { MealState } from "../module.js";
 
-import { textResult } from "../../../shared/tools.js";
+import { toolResult } from "../../../shared/tools.js";
 
 /**
  * Both stores must be synced. The mealtype store is required by the type resolver
@@ -16,7 +16,7 @@ import { textResult } from "../../../shared/tools.js";
  */
 export function mealStartGuard(ctx: DomainCtx<MealState, "meal-type">): Result<void, CallToolResult> {
   if (!ctx.state.store.hasSynced || !ctx.deps["meal-type"].hasSynced()) {
-    return err(textResult("Meal data is not yet synced. Try again in a few seconds."));
+    return err(toolResult("Meal data is not yet synced. Try again in a few seconds."));
   }
   return ok(undefined);
 }

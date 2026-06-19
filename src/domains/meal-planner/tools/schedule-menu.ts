@@ -9,7 +9,7 @@ import type { Meal } from "../../meal/types.js";
 import type { RecipeUid } from "../../recipe/ids.js";
 
 import { defineTool } from "../../../kernel/tool.js";
-import { resolveLookup, textResult, uidOrTextLookupSchema } from "../../../shared/tools.js";
+import { resolveLookup, toolResult, uidOrTextLookupSchema } from "../../../shared/tools.js";
 import { formatCalendarDayWire, parseCalendarDay } from "../../../utils/dates.js";
 import { MealUidSchema } from "../../meal/ids.js";
 import { MenuUidSchema } from "../../menu/ids.js";
@@ -122,27 +122,27 @@ export const scheduleMenuTool = defineTool(
       });
 
       if (outcome.kind === "uid_miss") {
-        return textResult(`No menu found with UID "${outcome.uid}" (it may not exist or was already deleted).`);
+        return toolResult(`No menu found with UID "${outcome.uid}" (it may not exist or was already deleted).`);
       }
       if (outcome.kind === "text_none") {
-        return textResult(`No menus found matching "${outcome.text}".`);
+        return toolResult(`No menus found matching "${outcome.text}".`);
       }
       if (outcome.kind === "text_many") {
         const list = outcome.matches.map((menu) => `- **${menu.name}** (uid: \`${menu.uid}\`)`).join("\n");
-        return textResult(`Multiple menus match "${outcome.text}":\n${list}\n\nPlease re-invoke with a specific uid.`);
+        return toolResult(`Multiple menus match "${outcome.text}":\n${list}\n\nPlease re-invoke with a specific uid.`);
       }
 
       const menu = outcome.entity;
 
       const menuItems = ctx.deps.menu.itemsOf(menu.uid);
       if (menuItems.length === 0) {
-        return textResult(`Menu "${menu.name}" has no items to add to the planner.`);
+        return toolResult(`Menu "${menu.name}" has no items to add to the planner.`);
       }
 
       // Parse the start date once; a bad date dooms the whole batch.
       const startDay = parseCalendarDay(args.start_date);
       if (startDay === null) {
-        return textResult(
+        return toolResult(
           `Could not parse start_date "${args.start_date}". ` +
             `Use ISO 8601 (e.g., "2026-06-15") or "yyyy-MM-dd HH:mm:ss".`,
         );
@@ -219,7 +219,7 @@ export const scheduleMenuTool = defineTool(
           errors.length === 1
             ? "Could not add menu to planner:"
             : `Could not add menu to planner (${errors.length.toString()} problems):`;
-        return textResult(`${header}\n\n${errors.join("\n")}`);
+        return toolResult(`${header}\n\n${errors.join("\n")}`);
       }
 
       // ----- Build meals with per-date order_flag, then POST once -----
@@ -242,10 +242,10 @@ export const scheduleMenuTool = defineTool(
       // text the live tool rendered. The coordinator never touches the meal store/cache.
       const result = await ctx.deps.meal.createMeals(builtItems);
       return result.match(
-        (): CallToolResult => textResult(renderPlannerAdds(menu.name, startDay, materialized)),
+        (): CallToolResult => toolResult(renderPlannerAdds(menu.name, startDay, materialized)),
         (message): CallToolResult => {
           log.error({ uid: menu.uid, count: builtItems.length }, "saveMeals failed");
-          return textResult(`Failed to add menu to planner: ${message}`);
+          return toolResult(`Failed to add menu to planner: ${message}`);
         },
       );
     };

@@ -4,7 +4,7 @@ import { err, ok, type Result } from "neverthrow";
 import type { DomainCtx } from "../../../kernel/registry.js";
 import type { GroceryState } from "../module.js";
 
-import { textResult } from "../../../shared/tools.js";
+import { toolResult } from "../../../shared/tools.js";
 
 /**
  * Readiness gate: both the lists and items stores (both grocery-owned) must have
@@ -13,7 +13,7 @@ import { textResult } from "../../../shared/tools.js";
  */
 export function groceryStartGuard({ state }: { readonly state: GroceryState }): Result<void, CallToolResult> {
   if (!state.lists.store.hasSynced || !state.items.store.hasSynced) {
-    return err(textResult("Grocery data is not yet synced. Try again in a few seconds."));
+    return err(toolResult("Grocery data is not yet synced. Try again in a few seconds."));
   }
   return ok(undefined);
 }
@@ -26,7 +26,7 @@ export function groceryStartGuard({ state }: { readonly state: GroceryState }): 
  */
 export function pantrySyncedGuard(ctx: DomainCtx<GroceryState, "aisle" | "pantry">): Result<void, CallToolResult> {
   if (!ctx.deps.pantry.hasSynced()) {
-    return err(textResult("Pantry is not yet synced. Try again in a few seconds."));
+    return err(toolResult("Pantry is not yet synced. Try again in a few seconds."));
   }
   return ok(undefined);
 }
@@ -41,7 +41,7 @@ export function recipeSyncedGuard(
   ctx: DomainCtx<GroceryState, "aisle" | "pantry" | "recipe">,
 ): Result<void, CallToolResult> {
   if (!ctx.deps.recipe.hasSynced()) {
-    return err(textResult("Recipes are not yet synced. Try again in a few seconds."));
+    return err(toolResult("Recipes are not yet synced. Try again in a few seconds."));
   }
   return ok(undefined);
 }

@@ -7,7 +7,7 @@ import type { MealType } from "../types.js";
 
 import { defineTool } from "../../../kernel/tool.js";
 import { renderCatalogOrder, repositionCatalog, sortCatalog } from "../../../shared/catalog.js";
-import { commitFailure, textResult } from "../../../shared/tools.js";
+import { commitFailure, toolResult } from "../../../shared/tools.js";
 import { MealTypeUidSchema } from "../ids.js";
 import { mealTypeStartGuard } from "./guards.js";
 
@@ -55,19 +55,19 @@ export const updateMealTypeTool = defineTool(
       ctx.writes.withCatalogWriteLock(async () => {
         const existing = ctx.state.store.get(args.uid);
         if (existing === undefined) {
-          return textResult(`No meal type found with UID "${args.uid}" (see list_meal_types for the catalog).`);
+          return toolResult(`No meal type found with UID "${args.uid}" (see list_meal_types for the catalog).`);
         }
 
         if (args.name === undefined && args.color === undefined && args.position === undefined) {
-          return textResult("Nothing to update: provide `name`, `color`, `position`, or any combination.");
+          return toolResult("Nothing to update: provide `name`, `color`, `position`, or any combination.");
         }
 
         const newName = args.name?.trim();
         if (newName !== undefined) {
-          if (newName === "") return textResult("Meal type name cannot be empty.");
+          if (newName === "") return toolResult("Meal type name cannot be empty.");
           const clash = ctx.state.store.resolveByName(newName);
           if (clash !== undefined && clash.uid !== existing.uid) {
-            return textResult(`A meal type named "${clash.name}" already exists — meal type names must be unique.`);
+            return toolResult(`A meal type named "${clash.name}" already exists — meal type names must be unique.`);
           }
         }
 
@@ -93,7 +93,7 @@ export const updateMealTypeTool = defineTool(
           );
         });
         if (toSave.length === 0) {
-          return textResult(`No changes — "${existing.name}" already has that name/color/position.`);
+          return toolResult(`No changes — "${existing.name}" already has that name/color/position.`);
         }
 
         return (await ctx.infra.client.saveMealTypes(toSave)).match(
@@ -111,7 +111,7 @@ export const updateMealTypeTool = defineTool(
               const landed = ordered.findIndex((mt) => mt.uid === target.uid) + 1;
               did.push(`moved to position ${String(landed)}`);
             }
-            return textResult(
+            return toolResult(
               `Updated meal type "${existing.name}": ${did.join(", ")}.\n\nCurrent meal-type order:\n${renderCatalogOrder(
                 sortCatalog(ctx.state.store.getAll()),
               )}`,
@@ -119,7 +119,7 @@ export const updateMealTypeTool = defineTool(
           },
           async (e) => {
             log.error({ err: e, uid: args.uid }, "saveMealTypes failed");
-            return textResult(`Failed to update meal type: ${e.message}`);
+            return toolResult(`Failed to update meal type: ${e.message}`);
           },
         );
       });

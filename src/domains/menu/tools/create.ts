@@ -5,7 +5,7 @@ import type { MenuState, MenuWrites } from "../module.js";
 import type { Menu } from "../types.js";
 
 import { defineTool } from "../../../kernel/tool.js";
-import { commitFailure, textResult } from "../../../shared/tools.js";
+import { commitFailure, toolResult } from "../../../shared/tools.js";
 import { MenuUidSchema } from "../ids.js";
 import { menuToMarkdown } from "../menu-helpers.js";
 import { menuStartGuard } from "./guards.js";
@@ -42,7 +42,7 @@ export const createMenuTool = defineTool(
       const matches = ctx.state.menus.store.findByName(args.name);
       const exactMatch = matches.find((m) => m.name.toLowerCase() === args.name.toLowerCase());
       if (exactMatch !== undefined) {
-        return textResult(
+        return toolResult(
           `A menu named "${exactMatch.name}" already exists (UID: ${exactMatch.uid}). ` +
             `Use update_menu to change it.`,
         );
@@ -65,11 +65,11 @@ export const createMenuTool = defineTool(
           const created = saved[0] ?? newMenu;
           const commitErr = commitFailure("menu", await ctx.writes.commitMenu(created));
           if (commitErr) return commitErr;
-          return textResult(menuToMarkdown(created, [], ctx.deps["meal-type"].getAll()));
+          return toolResult(menuToMarkdown(created, [], ctx.deps["meal-type"].getAll()));
         },
         async (e) => {
           log.error({ err: e, name: args.name }, "saveMenus (create_menu) failed");
-          return textResult(`Failed to create menu: ${e.message}`);
+          return toolResult(`Failed to create menu: ${e.message}`);
         },
       );
     };

@@ -6,7 +6,7 @@ import type { MealState, MealWrites } from "../module.js";
 import type { Meal } from "../types.js";
 
 import { defineTool } from "../../../kernel/tool.js";
-import { commitFailure, textResult } from "../../../shared/tools.js";
+import { commitFailure, toolResult } from "../../../shared/tools.js";
 import { parseCalendarDayWire } from "../../../utils/dates.js";
 import { mealTypeSpecSchema, resolveOrCreateMealType } from "../../meal-type/meal-type-helpers.js";
 import { MealUidSchema } from "../ids.js";
@@ -55,13 +55,13 @@ export const rescheduleMealTool = defineTool(
       const existing = ctx.state.store.get(uid);
 
       if (existing === undefined) {
-        return textResult(`No meal found with UID "${uid}" (it may not exist or was already deleted).`);
+        return toolResult(`No meal found with UID "${uid}" (it may not exist or was already deleted).`);
       }
 
       // Normalize the destination date in its own calendar zone (see plan_meals).
       const normalizedDate = parseCalendarDayWire(args.date);
       if (normalizedDate === null) {
-        return textResult(
+        return toolResult(
           `Could not parse date "${args.date}". Use ISO 8601 (e.g., "2026-06-15") or "yyyy-MM-dd HH:mm:ss".`,
         );
       }
@@ -70,7 +70,7 @@ export const rescheduleMealTool = defineTool(
 
       // Nothing to do: same date and no type co-change. Avoid a wasted POST + notifySync.
       if (!dateChanged && args.type === undefined) {
-        return textResult(renderMealCard(existing, ctx.deps.recipe, ctx.deps["meal-type"]));
+        return toolResult(renderMealCard(existing, ctx.deps.recipe, ctx.deps["meal-type"]));
       }
 
       // Resolve the optional type co-change LAST — after the date validation above. An
@@ -81,7 +81,7 @@ export const rescheduleMealTool = defineTool(
       if (args.type !== undefined) {
         const result = await resolveOrCreateMealType(ctx.deps["meal-type"], args.type);
         if (!result.ok) {
-          return textResult(result.message);
+          return toolResult(result.message);
         }
         // Custom mealtypes carry originalType: null; Meal.type is vestigial when
         // type_uid is set (see plan_meals for the full rationale).
@@ -108,7 +108,7 @@ export const rescheduleMealTool = defineTool(
         (items) => items,
         (e) => {
           log.error({ err: e, uid }, "saveMeals failed");
-          return textResult(`Failed to reschedule meal: ${e.message}`);
+          return toolResult(`Failed to reschedule meal: ${e.message}`);
         },
       );
       if ("content" in savedItems) return savedItems;
@@ -116,7 +116,7 @@ export const rescheduleMealTool = defineTool(
       if (commitErr) return commitErr;
       const saved = savedItems[0]!;
 
-      return textResult(renderMealCard(saved, ctx.deps.recipe, ctx.deps["meal-type"]));
+      return toolResult(renderMealCard(saved, ctx.deps.recipe, ctx.deps["meal-type"]));
     };
   },
 );

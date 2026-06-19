@@ -3,7 +3,7 @@ import { err, ok, type Result } from "neverthrow";
 
 import type { DomainCtx } from "../../../kernel/registry.js";
 
-import { textResult } from "../../../shared/tools.js";
+import { toolResult } from "../../../shared/tools.js";
 
 /**
  * `schedule_menu`'s three-leg readiness gate, in dependency order: recipe (display
@@ -17,13 +17,13 @@ export function scheduleMenuStartGuard(
   ctx: DomainCtx<Record<never, never>, "menu" | "meal" | "recipe" | "meal-type">,
 ): Result<void, CallToolResult> {
   if (!ctx.deps.recipe.hasSynced()) {
-    return err(textResult("Recipe store is not yet synced. Try again in a few seconds."));
+    return err(toolResult("Recipe store is not yet synced. Try again in a few seconds."));
   }
   if (!ctx.deps.menu.hasSynced() || !ctx.deps["meal-type"].hasSynced()) {
-    return err(textResult("Menu data is not yet synced. Try again in a few seconds."));
+    return err(toolResult("Menu data is not yet synced. Try again in a few seconds."));
   }
   if (!ctx.deps.meal.hasSynced()) {
-    return err(textResult("Meal planner is not yet synced. Try again in a few seconds."));
+    return err(toolResult("Meal planner is not yet synced. Try again in a few seconds."));
   }
   return ok(undefined);
 }
@@ -37,10 +37,10 @@ export function deleteMealTypeStartGuard(
   ctx: DomainCtx<Record<never, never>, "menu" | "meal" | "recipe" | "meal-type">,
 ): Result<void, CallToolResult> {
   if (!ctx.deps["meal-type"].hasSynced()) {
-    return err(textResult("Meal types are not yet synced. Try again in a few seconds."));
+    return err(toolResult("Meal types are not yet synced. Try again in a few seconds."));
   }
   if (!ctx.deps.meal.hasSynced() || !ctx.deps.menu.hasSynced()) {
-    return err(textResult("Meal and menu data is not yet synced. Try again in a few seconds."));
+    return err(toolResult("Meal and menu data is not yet synced. Try again in a few seconds."));
   }
   return ok(undefined);
 }

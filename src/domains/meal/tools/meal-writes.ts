@@ -9,7 +9,7 @@ import type { MealState, MealWrites } from "../module.js";
 import type { Meal } from "../types.js";
 
 import { defineTool } from "../../../kernel/tool.js";
-import { commitFailure, textResult } from "../../../shared/tools.js";
+import { commitFailure, toolResult } from "../../../shared/tools.js";
 import { parseCalendarDayWire } from "../../../utils/dates.js";
 import { mealTypeSpecSchema, resolveOrCreateMealType } from "../../meal-type/meal-type-helpers.js";
 import { RecipeUidSchema } from "../../recipe/ids.js";
@@ -194,7 +194,7 @@ export const planMealsTool = defineTool(
 
       if (errors.length > 0) {
         const header = errors.length === 1 ? "Could not add meal:" : `Could not add ${errors.length.toString()} meals:`;
-        return textResult(`${header}\n\n${errors.join("\n")}`);
+        return toolResult(`${header}\n\n${errors.join("\n")}`);
       }
 
       // ----- Stage 2: auto-create any deferred {name} meal types (pantry-style) -----
@@ -211,7 +211,7 @@ export const planMealsTool = defineTool(
         );
         if (typeof created === "string") {
           log.error({ name: r.pendingTypeName, message: created }, "ensureMealType failed");
-          return textResult(created);
+          return toolResult(created);
         }
         createdTypesByName.set(key, created);
       }
@@ -249,7 +249,7 @@ export const planMealsTool = defineTool(
         (items) => items,
         (e) => {
           log.error({ err: e, count: builtItems.length }, "saveMeals failed");
-          return textResult(`Failed to add meals: ${e.message}`);
+          return toolResult(`Failed to add meals: ${e.message}`);
         },
       );
       if ("content" in savedItems) return savedItems;
@@ -260,7 +260,7 @@ export const planMealsTool = defineTool(
       const cards = savedItems.map((meal) => renderMealCard(meal, ctx.deps.recipe, ctx.deps["meal-type"]));
 
       const header = `Added ${savedItems.length.toString()} meal(s) to the planner.`;
-      return textResult(`${header}\n\n${cards.join("\n\n---\n\n")}`);
+      return toolResult(`${header}\n\n${cards.join("\n\n---\n\n")}`);
     };
   },
 );
@@ -348,7 +348,7 @@ export const updateMealTool = defineTool(
       const existing = ctx.state.store.get(uid);
 
       if (existing === undefined) {
-        return textResult(`No meal found with UID "${uid}" (it may not exist or was already deleted).`);
+        return toolResult(`No meal found with UID "${uid}" (it may not exist or was already deleted).`);
       }
       // Resolve recipe_uid and name interaction. The structural union ensures we
       // never see (recipe_uid: <UID>, name: <X>) together — that combination
@@ -367,11 +367,11 @@ export const updateMealTool = defineTool(
             demoteOp.scale === undefined
           ) {
             // AC3.9: idempotent no-op — meal already freeform, nothing else changing
-            return textResult(renderMealCard(existing, ctx.deps.recipe, ctx.deps["meal-type"]));
+            return toolResult(renderMealCard(existing, ctx.deps.recipe, ctx.deps["meal-type"]));
           }
           if (existing.recipeUid !== null && demoteOp.name === undefined) {
             // AC3.10: demotion requires explicit name when meal is currently recipe-linked
-            return textResult(
+            return toolResult(
               `Demoting a recipe meal to freeform requires an explicit name. ` +
                 `Add 'name: "<your label>"' to the call.`,
             );
@@ -391,7 +391,7 @@ export const updateMealTool = defineTool(
           if (newLink !== existing.recipeUid) {
             const recipe = ctx.deps.recipe.get(newLink);
             if (recipe === undefined) {
-              return textResult(
+              return toolResult(
                 `recipe_uid "${newLink}" is not known to the local recipe store; ` +
                   `wait for the next sync and retry.`,
               );
@@ -408,7 +408,7 @@ export const updateMealTool = defineTool(
         // meals would never render in Paprika.app.
         const nameOp = op as z.infer<typeof nameUpdateVariant>;
         if (existing.recipeUid !== null) {
-          return textResult(
+          return toolResult(
             `Cannot set name on the recipe-linked meal "${existing.name}". ` +
               `Names auto-resolve from the recipe. To use a custom label, demote first via ` +
               `update_meal({uid, update: {recipe_uid: null, name: "<your label>"}}).`,
@@ -426,7 +426,7 @@ export const updateMealTool = defineTool(
       if (op.type !== undefined) {
         const result = await resolveOrCreateMealType(ctx.deps["meal-type"], op.type);
         if (!result.ok) {
-          return textResult(result.message);
+          return toolResult(result.message);
         }
         // Custom mealtypes carry `originalType: null`; `Meal.type` is vestigial when
         // `type_uid` is set (see plan_meals comment for the full rationale).
@@ -459,21 +459,21 @@ export const updateMealTool = defineTool(
         updated.typeUid === existing.typeUid &&
         updated.scale === existing.scale
       ) {
-        return textResult(renderMealCard(existing, ctx.deps.recipe, ctx.deps["meal-type"]));
+        return toolResult(renderMealCard(existing, ctx.deps.recipe, ctx.deps["meal-type"]));
       }
 
       const saved = (await ctx.infra.client.saveMeals([updated])).match(
         (items) => items[0]!,
         (e) => {
           log.error({ err: e, uid }, "saveMeals failed");
-          return textResult(`Failed to update meal: ${e.message}`);
+          return toolResult(`Failed to update meal: ${e.message}`);
         },
       );
       if ("content" in saved) return saved;
       const commitErr = commitFailure("meal plan", await ctx.writes.commitMeal(saved));
       if (commitErr) return commitErr;
 
-      return textResult(renderMealCard(saved, ctx.deps.recipe, ctx.deps["meal-type"]));
+      return toolResult(renderMealCard(saved, ctx.deps.recipe, ctx.deps["meal-type"]));
     };
   },
 );
@@ -503,18 +503,18 @@ export const deleteMealTool = defineTool(
       const existing = ctx.state.store.get(uid);
 
       if (existing === undefined) {
-        return textResult(`No meal found with UID "${uid}" (it may not exist or was already deleted).`);
+        return toolResult(`No meal found with UID "${uid}" (it may not exist or was already deleted).`);
       }
       const trashed: Meal = { ...existing, deleted: true };
       return (await ctx.infra.client.saveMeals([trashed])).match(
         async (items): Promise<CallToolResult> => {
           const commitErr = commitFailure("meal plan", await ctx.writes.commitMeal(items[0]!));
           if (commitErr) return commitErr;
-          return textResult(`Meal "${existing.name}" on ${existing.date} deleted.`);
+          return toolResult(`Meal "${existing.name}" on ${existing.date} deleted.`);
         },
         async (e) => {
           log.error({ err: e, uid }, "saveMeals failed");
-          return textResult(`Failed to delete meal: ${e.message}`);
+          return toolResult(`Failed to delete meal: ${e.message}`);
         },
       );
     };

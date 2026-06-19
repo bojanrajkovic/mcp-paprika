@@ -4,7 +4,7 @@ import type { MealType } from "../types.js";
 
 import { defineTool } from "../../../kernel/tool.js";
 import { sortCatalog } from "../../../shared/catalog.js";
-import { textResult } from "../../../shared/tools.js";
+import { toolResult } from "../../../shared/tools.js";
 import { mealTypeStartGuard } from "./guards.js";
 
 /**
@@ -58,11 +58,11 @@ export const listMealTypesTool = defineTool(
       const mealTypes = sortCatalog(ctx.state.store.getAll());
 
       if (mealTypes.length === 0) {
-        return textResult("No meal types found.");
+        return toolResult("No meal types found.");
       }
 
       const lines = mealTypes.map(mealTypeLine);
-      return textResult(lines.join("\n"));
+      return toolResult(lines.join("\n"));
     };
   },
 );

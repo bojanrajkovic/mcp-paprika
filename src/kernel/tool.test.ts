@@ -5,7 +5,7 @@ import { z } from "zod";
 import type { DomainCtx, Infra } from "./registry.js";
 
 import { makePinoCapture, makeTestServer } from "../../test/support/tool-test-utils.js";
-import { textResult } from "../shared/tools.js";
+import { toolResult } from "../shared/tools.js";
 import { SILENT_LOG } from "../utils/log.js";
 import { defineTool } from "./tool.js";
 
@@ -42,7 +42,7 @@ describe("defineTool", () => {
         (args) => {
           const query: string = args.query;
           const limit: number | undefined = args.limit;
-          return textResult(`${ctx.state.prefix}:${query}:${String(limit)}`);
+          return toolResult(`${ctx.state.prefix}:${query}:${String(limit)}`);
         },
     );
 
@@ -67,7 +67,7 @@ describe("defineTool", () => {
       (_ctx: DomainCtx<unknown, never>) => (args) => {
         const uid: string = args.uid;
         const count: number = args.count;
-        return textResult(`${uid}x${String(count)}`);
+        return toolResult(`${uid}x${String(count)}`);
       },
     );
 
@@ -87,7 +87,7 @@ describe("defineTool", () => {
         annotations: { readOnlyHint: true, idempotentHint: true },
         inputSchema: {},
       },
-      (_ctx: DomainCtx<unknown, never>) => () => textResult("pong"),
+      (_ctx: DomainCtx<unknown, never>) => () => toolResult("pong"),
     );
 
     const { server, callTool } = makeTestServer();
@@ -107,7 +107,7 @@ describe("defineTool", () => {
         annotations: { readOnlyHint: true },
         inputSchema: schema.shape,
       },
-      (_ctx: DomainCtx<unknown, never>) => (args) => textResult(args.name),
+      (_ctx: DomainCtx<unknown, never>) => (args) => toolResult(args.name),
     );
 
     const { server, callTool } = makeTestServer();
@@ -142,7 +142,7 @@ describe("defineTool", () => {
         ],
         (_ctx: DomainCtx<{ ready: boolean }, never>) => (args) => {
           calls.push("body");
-          return textResult(`ran:${args.q}`);
+          return toolResult(`ran:${args.q}`);
         },
       );
 
@@ -161,7 +161,7 @@ describe("defineTool", () => {
         [
           function failingGate(_ctx: { readonly state: unknown }) {
             calls.push("failing");
-            return err(textResult("still syncing"));
+            return err(toolResult("still syncing"));
           },
           function neverReached(_ctx: { readonly state: unknown }) {
             calls.push("never");
@@ -170,7 +170,7 @@ describe("defineTool", () => {
         ],
         (_ctx: DomainCtx<unknown, never>) => () => {
           calls.push("body");
-          return textResult("ran");
+          return toolResult("ran");
         },
       );
 
@@ -188,10 +188,10 @@ describe("defineTool", () => {
         spec,
         [
           function coldStartGate(_ctx: { readonly state: unknown }) {
-            return err(textResult("not ready"));
+            return err(toolResult("not ready"));
           },
         ],
-        (_ctx: DomainCtx<unknown, never>) => () => textResult("ran"),
+        (_ctx: DomainCtx<unknown, never>) => () => toolResult("ran"),
       );
 
       const { server, callTool } = makeTestServer();
@@ -217,7 +217,7 @@ describe("defineTool", () => {
 
     it("size-bounds oversized arg strings in the debug args record", async () => {
       const { log, records } = makePinoCapture();
-      const tool = defineTool(spec, (_ctx: DomainCtx<unknown, never>) => () => textResult("ran"));
+      const tool = defineTool(spec, (_ctx: DomainCtx<unknown, never>) => () => toolResult("ran"));
 
       const { server, callTool } = makeTestServer();
       tool.register(makeCtx(undefined, server, log));
@@ -232,7 +232,7 @@ describe("defineTool", () => {
 
     it("strips userinfo and query from URL-shaped arg strings in the debug args record", async () => {
       const { log, records } = makePinoCapture();
-      const tool = defineTool(spec, (_ctx: DomainCtx<unknown, never>) => () => textResult("ran"));
+      const tool = defineTool(spec, (_ctx: DomainCtx<unknown, never>) => () => toolResult("ran"));
 
       const { server, callTool } = makeTestServer();
       tool.register(makeCtx(undefined, server, log));
@@ -255,7 +255,7 @@ describe("defineTool", () => {
 
     it("two-arg form (no preconditions) still logs 'tool invoked' centrally", async () => {
       const { log, records } = makePinoCapture();
-      const tool = defineTool(spec, (_ctx: DomainCtx<unknown, never>) => () => textResult("ran"));
+      const tool = defineTool(spec, (_ctx: DomainCtx<unknown, never>) => () => toolResult("ran"));
 
       const { server, callTool } = makeTestServer();
       tool.register(makeCtx(undefined, server, log));

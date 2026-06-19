@@ -3,7 +3,7 @@ import type { Category } from "../category/types.js";
 import type { RecipeState } from "../module.js";
 
 import { defineTool } from "../../../kernel/tool.js";
-import { textResult } from "../../../shared/tools.js";
+import { toolResult } from "../../../shared/tools.js";
 import { categoryStartGuard } from "./guards.js";
 
 /**
@@ -23,7 +23,7 @@ export const listCategoriesTool = defineTool(
     return async (_args) => {
       const categories = ctx.state.category.store.getAll();
       if (categories.length === 0) {
-        return textResult("No categories found in your recipe library.");
+        return toolResult("No categories found in your recipe library.");
       }
 
       const recipes = ctx.state.recipe.store.getAll();
@@ -46,7 +46,7 @@ export const listCategoriesTool = defineTool(
 
       const sorted = categories.toSorted((a, b) => a.name.localeCompare(b.name));
 
-      return textResult(formatCategoryList(sorted, countMap));
+      return toolResult(formatCategoryList(sorted, countMap));
     };
   },
 );

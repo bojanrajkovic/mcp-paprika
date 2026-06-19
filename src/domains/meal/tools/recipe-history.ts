@@ -4,7 +4,7 @@ import type { MealState } from "../module.js";
 import type { Meal } from "../types.js";
 
 import { defineTool } from "../../../kernel/tool.js";
-import { textResult } from "../../../shared/tools.js";
+import { toolResult } from "../../../shared/tools.js";
 import { RecipeUidSchema } from "../../recipe/ids.js";
 import { mealStartGuard } from "./guards.js";
 
@@ -65,7 +65,7 @@ export const readRecipeHistoryTool = defineTool(
     return async (args) => {
       const recipe = ctx.deps.recipe.get(args.recipe_uid);
       if (recipe === undefined) {
-        return textResult(
+        return toolResult(
           `No recipe found with UID "${args.recipe_uid}". Check the UID (list_recipes / search_recipes), ` +
             "or it may still be syncing.",
         );
@@ -75,7 +75,7 @@ export const readRecipeHistoryTool = defineTool(
       // list from `cookedHistory` (the same past-cook rule lastCookedAt heads).
       const lastCooked = ctx.state.store.lastCookedAt(args.recipe_uid);
       if (lastCooked === null) {
-        return textResult(
+        return toolResult(
           `**${recipe.name}** has no cooking history yet. ` +
             "Use plan_meals to schedule it or log_cooked_meal to record a past cooking.",
         );
@@ -99,7 +99,7 @@ export const readRecipeHistoryTool = defineTool(
         lines.push(`_Showing ${RECENT_LIMIT.toString()} most recent of ${count.toString()}._`);
       }
 
-      return textResult(lines.join("\n"));
+      return toolResult(lines.join("\n"));
     };
   },
 );

@@ -5,7 +5,7 @@ import type { PantryState, PantryWrites } from "../module.js";
 import type { PantryItem } from "../types.js";
 
 import { defineTool } from "../../../kernel/tool.js";
-import { commitFailure, textResult } from "../../../shared/tools.js";
+import { commitFailure, toolResult } from "../../../shared/tools.js";
 import { PantryItemUidSchema } from "../ids.js";
 import { pantryItemToMarkdown } from "../pantry-helpers.js";
 import { pantryStartGuard } from "./guards.js";
@@ -41,7 +41,7 @@ export const markPantryItemOutOfStockTool = defineTool(
       const existing = ctx.state.store.get(args.uid);
 
       if (!existing) {
-        return textResult(`No pantry item found with UID "${args.uid}" (it may not exist or was already deleted).`);
+        return toolResult(`No pantry item found with UID "${args.uid}" (it may not exist or was already deleted).`);
       }
 
       const updated: PantryItem = { ...existing, inStock: false };
@@ -49,14 +49,14 @@ export const markPantryItemOutOfStockTool = defineTool(
         (items) => items[0]!,
         (e) => {
           log.error({ err: e, uid: args.uid }, "savePantryItems failed");
-          return textResult(`Failed to update pantry item: ${e.message}`);
+          return toolResult(`Failed to update pantry item: ${e.message}`);
         },
       );
       if ("content" in saved) return saved;
       const commitErr = commitFailure("pantry", await ctx.writes.commitPantryItem(saved));
       if (commitErr) return commitErr;
 
-      return textResult(pantryItemToMarkdown(saved, ctx.deps.aisle));
+      return toolResult(pantryItemToMarkdown(saved, ctx.deps.aisle));
     };
   },
 );
@@ -80,7 +80,7 @@ export const restockPantryItemTool = defineTool(
       const existing = ctx.state.store.get(args.uid);
 
       if (!existing) {
-        return textResult(`No pantry item found with UID "${args.uid}" (it may not exist or was already deleted).`);
+        return toolResult(`No pantry item found with UID "${args.uid}" (it may not exist or was already deleted).`);
       }
 
       const updated: PantryItem = { ...existing, inStock: true };
@@ -88,14 +88,14 @@ export const restockPantryItemTool = defineTool(
         (items) => items[0]!,
         (e) => {
           log.error({ err: e, uid: args.uid }, "savePantryItems failed");
-          return textResult(`Failed to update pantry item: ${e.message}`);
+          return toolResult(`Failed to update pantry item: ${e.message}`);
         },
       );
       if ("content" in saved) return saved;
       const commitErr = commitFailure("pantry", await ctx.writes.commitPantryItem(saved));
       if (commitErr) return commitErr;
 
-      return textResult(pantryItemToMarkdown(saved, ctx.deps.aisle));
+      return toolResult(pantryItemToMarkdown(saved, ctx.deps.aisle));
     };
   },
 );

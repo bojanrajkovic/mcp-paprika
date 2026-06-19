@@ -6,7 +6,7 @@ import type { GroceryItem } from "../grocery-item/types.js";
 import type { GroceryState, GroceryWrites } from "../module.js";
 
 import { defineTool } from "../../../kernel/tool.js";
-import { commitFailure, textResult } from "../../../shared/tools.js";
+import { commitFailure, toolResult } from "../../../shared/tools.js";
 import { todayWire } from "../../../utils/dates.js";
 import { PantryItemUidSchema } from "../../pantry/ids.js";
 import { GroceryItemUidSchema } from "../ids.js";
@@ -49,7 +49,7 @@ export const moveToPantryTool = defineTool(
         seen.add(uid);
         const item = ctx.state.items.store.get(uid);
         if (!item) {
-          return textResult(`No grocery item found with UID "${uid}" (it may not exist or was already deleted).`);
+          return toolResult(`No grocery item found with UID "${uid}" (it may not exist or was already deleted).`);
         }
         items.push(item);
       }
@@ -86,7 +86,7 @@ export const moveToPantryTool = defineTool(
               // Return structured message so user knows the state.
               log.error({ err: e, uids: args.uids }, "saveGroceryItems (delete) failed after pantry create");
               const pantryUids = savedPantry.map((p) => p.uid).join(", ");
-              return textResult(
+              return toolResult(
                 `Partial failure: ${savedPantry.length.toString()} pantry item(s) were created (UIDs: ${pantryUids}), ` +
                   `but the grocery item delete failed: ${e.message}. ` +
                   `The items may exist in both grocery and pantry. You can manually delete the grocery items.`,
@@ -100,17 +100,17 @@ export const moveToPantryTool = defineTool(
           // Step 5: Success response
           const movedNames = items.map((gi) => gi.ingredient).join(", ");
           const pantryUids = savedPantry.map((p) => p.uid).join(", ");
-          return textResult(
+          return toolResult(
             `Moved ${items.length.toString()} item(s) to pantry: ${movedNames}.\nNew pantry UIDs: ${pantryUids}`,
           );
         },
         async (error) => {
           log.error({ uids: args.uids, phase: error.phase }, `createItems failed (${error.phase})`);
           if (error.phase === "save") {
-            return textResult(`Failed to create pantry items: ${error.message}. No grocery items were deleted.`);
+            return toolResult(`Failed to create pantry items: ${error.message}. No grocery items were deleted.`);
           }
           const pantryUids = error.saved.map((p) => p.uid).join(", ");
-          return textResult(
+          return toolResult(
             `Pantry items were created on the server (UIDs: ${pantryUids}) but the local cache commit failed: ${error.message}. ` +
               `Grocery items were NOT deleted. The pantry items will appear after the next sync cycle.`,
           );

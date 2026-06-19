@@ -3,7 +3,7 @@ import type { MenuState, MenuWrites } from "../module.js";
 import type { Menu } from "../types.js";
 
 import { defineTool } from "../../../kernel/tool.js";
-import { commitFailure, resolveLookup, textResult, uidOrTextLookupSchema } from "../../../shared/tools.js";
+import { commitFailure, resolveLookup, toolResult, uidOrTextLookupSchema } from "../../../shared/tools.js";
 import { MenuUidSchema } from "../ids.js";
 import { menuStartGuard } from "./guards.js";
 
@@ -39,14 +39,14 @@ export const deleteMenuTool = defineTool(
       });
 
       if (outcome.kind === "uid_miss") {
-        return textResult(`No menu found with UID "${outcome.uid}" (it may not exist or was already deleted).`);
+        return toolResult(`No menu found with UID "${outcome.uid}" (it may not exist or was already deleted).`);
       }
       if (outcome.kind === "text_none") {
-        return textResult(`No menus found matching "${outcome.text}".`);
+        return toolResult(`No menus found matching "${outcome.text}".`);
       }
       if (outcome.kind === "text_many") {
         const list = outcome.matches.map((menu) => `- **${menu.name}** (uid: \`${menu.uid}\`)`).join("\n");
-        return textResult(`Multiple menus match "${outcome.text}":\n${list}\n\nPlease re-invoke with a specific uid.`);
+        return toolResult(`Multiple menus match "${outcome.text}":\n${list}\n\nPlease re-invoke with a specific uid.`);
       }
 
       const existing = outcome.entity;
@@ -65,7 +65,7 @@ export const deleteMenuTool = defineTool(
           (v) => v,
           (e) => {
             log.error({ err: e, uid: existing.uid }, "saveMenuItems (delete_menu cascade) failed");
-            return textResult(
+            return toolResult(
               `Failed to delete the recipes in menu "${existing.name}": ${e.message}. ` +
                 `The menu was NOT deleted. Try again.`,
             );
@@ -81,7 +81,7 @@ export const deleteMenuTool = defineTool(
         (v) => v,
         (e) => {
           log.error({ err: e, uid: existing.uid }, "saveMenus (delete_menu) failed");
-          return textResult(
+          return toolResult(
             `Deleted the ${items.length.toString()} recipe(s) in menu "${existing.name}", but failed to ` +
               `delete the menu itself: ${e.message}. The next sync should reconcile it; you can also retry.`,
           );
@@ -93,7 +93,7 @@ export const deleteMenuTool = defineTool(
       if (commitErr) return commitErr;
 
       const itemNote = items.length > 0 ? ` and its ${items.length.toString()} planned recipe(s)` : "";
-      return textResult(`Menu "${existing.name}"${itemNote} has been deleted.`);
+      return toolResult(`Menu "${existing.name}"${itemNote} has been deleted.`);
     };
   },
 );

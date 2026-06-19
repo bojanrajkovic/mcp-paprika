@@ -4,7 +4,7 @@ import type { DomainCtx } from "../../../kernel/registry.js";
 import type { RecipeState } from "../module.js";
 
 import { defineTool } from "../../../kernel/tool.js";
-import { textResult } from "../../../shared/tools.js";
+import { toolResult } from "../../../shared/tools.js";
 import { recipeColdStartGuard } from "./guards.js";
 
 /**
@@ -39,7 +39,7 @@ export const listRecipesTool = defineTool(
       const page = all.slice(args.offset, args.offset + args.limit);
 
       if (page.length === 0) {
-        return textResult(`No recipes found (total: ${total.toString()}, offset: ${args.offset.toString()}).`);
+        return toolResult(`No recipes found (total: ${total.toString()}, offset: ${args.offset.toString()}).`);
       }
 
       const header = `Showing ${page.length.toString()} of ${total.toString()} recipes (offset: ${args.offset.toString()}):\n`;
@@ -56,7 +56,7 @@ export const listRecipesTool = defineTool(
         return `- **${recipe.name}**${cats} (uid: ${recipe.uid})${metaSuffix}`;
       });
 
-      return textResult(header + "\n" + lines.join("\n"));
+      return toolResult(header + "\n" + lines.join("\n"));
     };
   },
 );

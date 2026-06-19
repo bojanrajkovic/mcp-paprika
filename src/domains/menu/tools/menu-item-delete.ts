@@ -5,7 +5,7 @@ import type { MenuItem } from "../menu-item/types.js";
 import type { MenuState, MenuWrites } from "../module.js";
 
 import { defineTool } from "../../../kernel/tool.js";
-import { commitFailure, textResult } from "../../../shared/tools.js";
+import { commitFailure, toolResult } from "../../../shared/tools.js";
 import { MenuItemUidSchema } from "../ids.js";
 import { menuStartGuard } from "./guards.js";
 
@@ -34,18 +34,18 @@ export const deleteMenuItemTool = defineTool(
       const existing = ctx.state.items.store.get(uid);
 
       if (existing === undefined) {
-        return textResult(`No menu item found with UID "${uid}" (it may not exist or was already deleted).`);
+        return toolResult(`No menu item found with UID "${uid}" (it may not exist or was already deleted).`);
       }
       const trashed: MenuItem = { ...existing, deleted: true };
       return (await ctx.infra.client.saveMenuItems([trashed])).match(
         async (items) => {
           const commitErr = commitFailure("menu", await ctx.writes.commitMenuItem(items[0]!));
           if (commitErr) return commitErr;
-          return textResult(`Menu item "${existing.name}" has been deleted.`);
+          return toolResult(`Menu item "${existing.name}" has been deleted.`);
         },
         async (e) => {
           log.error({ err: e, uid }, "saveMenuItems (delete_menu_item) failed");
-          return textResult(`Failed to delete menu item: ${e.message}`);
+          return toolResult(`Failed to delete menu item: ${e.message}`);
         },
       );
     };

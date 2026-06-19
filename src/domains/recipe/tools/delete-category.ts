@@ -6,7 +6,7 @@ import type { RecipeState, RecipeWrites } from "../module.js";
 import type { Recipe } from "../types.js";
 
 import { defineTool } from "../../../kernel/tool.js";
-import { commitFailure, textResult } from "../../../shared/tools.js";
+import { commitFailure, toolResult } from "../../../shared/tools.js";
 import { CategoryUidSchema } from "../ids.js";
 import { categoryStartGuard } from "./guards.js";
 
@@ -42,13 +42,13 @@ export const deleteCategoryTool = defineTool(
     return async (args) => {
       const existing = ctx.state.category.store.get(args.uid);
       if (existing === undefined) {
-        return textResult(`No category found with UID "${args.uid}" (it may not exist or was already deleted).`);
+        return toolResult(`No category found with UID "${args.uid}" (it may not exist or was already deleted).`);
       }
 
       const children = ctx.state.category.store.getChildren(args.uid);
       if (children.length > 0) {
         const names = children.map((c) => `"${c.name}"`).join(", ");
-        return textResult(
+        return toolResult(
           `Cannot delete "${existing.name}": it has ${String(children.length)} child ` +
             `categor${children.length === 1 ? "y" : "ies"} (${names}). Re-parent or delete ${
               children.length === 1 ? "it" : "them"
@@ -58,7 +58,7 @@ export const deleteCategoryTool = defineTool(
 
       const refs = recipesReferencing(ctx.state, args.uid);
       if (refs.length > 0) {
-        return textResult(
+        return toolResult(
           `Cannot delete "${existing.name}": ${String(refs.length)} recipe${refs.length === 1 ? " is" : "s are"} ` +
             `still assigned to it. Reassign ${refs.length === 1 ? "that recipe" : "those recipes"} with ` +
             `\`update_recipe\` first.`,
@@ -69,11 +69,11 @@ export const deleteCategoryTool = defineTool(
         async (): Promise<CallToolResult> => {
           const commitErr = commitFailure("category", await ctx.writes.commitCategoryDelete(existing));
           if (commitErr) return commitErr;
-          return textResult(`Deleted category "${existing.name}".`);
+          return toolResult(`Deleted category "${existing.name}".`);
         },
         async (e) => {
           log.error({ err: e, uid: args.uid }, "deleteCategory failed");
-          return textResult(`Failed to delete category: ${e.message}`);
+          return toolResult(`Failed to delete category: ${e.message}`);
         },
       );
     };
