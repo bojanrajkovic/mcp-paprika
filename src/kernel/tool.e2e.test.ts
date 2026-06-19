@@ -16,6 +16,7 @@
  */
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { err } from "neverthrow";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
@@ -24,7 +25,7 @@ import type { DomainCtx, Infra } from "./registry.js";
 import { connectInMemoryMcp } from "../../test/support/in-memory-mcp.js";
 import { buildBrandedServer } from "../server/build.js";
 import { UI_RESOURCE_URI_META_KEY } from "../shared/mcp-app.js";
-import { toolResult } from "../shared/tools.js";
+import { errorResult, toolResult } from "../shared/tools.js";
 import { SILENT_LOG } from "../utils/log.js";
 import { defineTool } from "./tool.js";
 
@@ -165,6 +166,83 @@ describe("defineTool — advertised tools/list surface", () => {
       const result = await mcp.client.callTool({ name: "echo_call", arguments: { query: "hi" } });
       const content = result.content as Array<{ type: string; text: string }>;
       expect(content[0]).toMatchObject({ type: "text", text: "echo:hi" });
+    } finally {
+      await mcp.close();
+    }
+  });
+});
+
+/**
+ * The structured-output × precondition-gate contract (ADR-0019, A3 #318).
+ *
+ * Once a tool declares an `outputSchema`, the SDK's `validateToolOutput` runs on
+ * every result it considers NON-error and requires a schema-valid
+ * `structuredContent` — but it returns early on an `isError` result. A precondition
+ * gate returns BEFORE the handler, so its result is what the SDK validates. These
+ * two cases pin both halves of the contract over the real transport (the
+ * `makeTestServer` stub discards the config and never validates, so a unit test
+ * cannot see this): an `isError` gate result is exempt and its friendly text
+ * survives; a non-error gate result under a schema is rejected and the friendly
+ * text is destroyed — which is exactly why a schema-bearing tool's gate must be
+ * `isError` (`errorResult`, not `toolResult`).
+ */
+describe("defineTool — structured output and precondition gates", () => {
+  it("exempts an isError precondition-gate result from output validation", async () => {
+    const server = buildBrandedServer();
+    const tool = defineTool(
+      {
+        name: "gated_iserror",
+        title: "Gated (isError)",
+        description: "A schema-bearing tool whose precondition gates with an isError result.",
+        annotations: { readOnlyHint: true },
+        inputSchema: { query: z.string() },
+        outputSchema: { echoed: z.string() },
+      },
+      [(_ctx: DomainCtx<unknown, never>) => err(errorResult("not ready"))],
+      (_ctx: DomainCtx<unknown, never>) => (args) => toolResult(`echo:${args.query}`, { echoed: args.query }),
+    );
+    tool.register(makeCtx(server));
+
+    const mcp = await connectInMemoryMcp(server);
+    try {
+      const result = await mcp.client.callTool({ name: "gated_iserror", arguments: { query: "hi" } });
+      // The SDK skips validateToolOutput on an isError result, so the gate's
+      // friendly message survives intact and no structuredContent is fabricated.
+      expect(result.isError).toBe(true);
+      expect(result.structuredContent).toBeUndefined();
+      const content = result.content as Array<{ type: string; text: string }>;
+      expect(content[0]).toMatchObject({ type: "text", text: "not ready" });
+    } finally {
+      await mcp.close();
+    }
+  });
+
+  it("rejects a non-error precondition-gate result on a schema-bearing tool", async () => {
+    const server = buildBrandedServer();
+    const tool = defineTool(
+      {
+        name: "gated_plain",
+        title: "Gated (plain)",
+        description: "A schema-bearing tool whose precondition gates with a non-error text result.",
+        annotations: { readOnlyHint: true },
+        inputSchema: { query: z.string() },
+        outputSchema: { echoed: z.string() },
+      },
+      [(_ctx: DomainCtx<unknown, never>) => err(toolResult("not ready"))],
+      (_ctx: DomainCtx<unknown, never>) => (args) => toolResult(`echo:${args.query}`, { echoed: args.query }),
+    );
+    tool.register(makeCtx(server));
+
+    const mcp = await connectInMemoryMcp(server);
+    try {
+      const result = await mcp.client.callTool({ name: "gated_plain", arguments: { query: "hi" } });
+      // A non-error result under a declared outputSchema is validated, and it carries
+      // no structuredContent — so the SDK rejects it: the delivered result is an
+      // error whose text is the validator's message, NOT the friendly "not ready".
+      // This is precisely why a schema-bearing tool's gate must be `errorResult`.
+      expect(result.isError).toBe(true);
+      const content = result.content as Array<{ type: string; text: string }>;
+      expect(content[0]?.text).not.toContain("not ready");
     } finally {
       await mcp.close();
     }

@@ -31,6 +31,24 @@ export function toolResult(text: string, structuredContent?: Record<string, unkn
 }
 
 /**
+ * The error envelope: a text-only result flagged `isError`, carrying NO
+ * `structuredContent`. The split from {@link toolResult} mirrors the SDK's own
+ * contract — once a tool declares an `outputSchema`, the SDK's `validateToolOutput`
+ * requires valid `structuredContent` on every NON-error result but returns early on
+ * an error one. So a schema-bearing tool returns this on the branches that are not a
+ * successful answer — a precondition gate that is not yet ready, an unknown UID, an
+ * unparseable argument — without fabricating a schema-valid payload for a non-result,
+ * and the friendly text + remediation hint survives intact instead of being replaced
+ * by the validator's generic schema error. That keeps "found nothing" (a real empty
+ * success — `toolResult(text, { items: [] })`) distinct from "your input was wrong /
+ * I am not ready" (this), which the model must not parse as data. Pure construction,
+ * no throw (ADR-0019; the contract is pinned in `src/kernel/tool.e2e.test.ts`).
+ */
+export function errorResult(text: string): CallToolResult {
+  return { content: [{ type: "text" as const, text }], isError: true } satisfies CallToolResult;
+}
+
+/**
  * Consume a commit chokepoint's `Result` in a write tool: `undefined` when the
  * commit landed, or the uniform "persisted to Paprika, local commit failed"
  * response to return as-is. The two-line guard —
