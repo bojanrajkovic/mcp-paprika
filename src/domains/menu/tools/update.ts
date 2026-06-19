@@ -5,7 +5,13 @@ import type { MenuState, MenuWrites } from "../module.js";
 import type { Menu } from "../types.js";
 
 import { defineTool } from "../../../kernel/tool.js";
-import { commitFailure, resolveLookup, toolResult, uidOrTextLookupSchema } from "../../../shared/tools.js";
+import {
+  commitFailure,
+  resolveLookup,
+  resolveOrPick,
+  toolResult,
+  uidOrTextLookupSchema,
+} from "../../../shared/tools.js";
 import { MenuUidSchema } from "../ids.js";
 import { menuToMarkdown } from "../menu-helpers.js";
 import { menuStartGuard } from "./guards.js";
@@ -52,20 +58,14 @@ export const updateMenuTool = defineTool(
         findByText: (text) => ctx.state.menus.store.findByName(text),
       });
 
-      // Only a single resolved menu can be mutated; misses and disambiguation
-      // return the standard wording without touching the network.
-      if (outcome.kind === "uid_miss") {
-        return toolResult(`No menu found with UID "${outcome.uid}" (it may not exist or was already deleted).`);
-      }
-      if (outcome.kind === "text_none") {
-        return toolResult(`No menus found matching "${outcome.text}".`);
-      }
-      if (outcome.kind === "text_many") {
-        const list = outcome.matches.map((menu) => `- **${menu.name}** (uid: \`${menu.uid}\`)`).join("\n");
-        return toolResult(`Multiple menus match "${outcome.text}":\n${list}\n\nPlease re-invoke with a specific uid.`);
-      }
-
-      const existing = outcome.entity;
+      // Only a single resolved menu can be mutated; a miss / no-match returns prose
+      // and an ambiguous name offers a disambiguation PICK, all before the network.
+      const resolved = await resolveOrPick(ctx.server.server, outcome, {
+        entityNoun: "menu",
+        describe: (m) => ({ uid: m.uid, label: m.name }),
+      });
+      if ("result" in resolved) return resolved.result;
+      const existing = resolved.entity;
 
       // Name-conflict guard: reject a rename that collides with a DIFFERENT menu
       // (mirrors create_menu's duplicate guard and rename_grocery_list). A no-op

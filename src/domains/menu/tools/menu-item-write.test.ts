@@ -240,7 +240,7 @@ describe("add_menu_items tool", () => {
       menu: { uid: "ghost" },
       items: [{ recipe_uid: TACOS_UID, day: 1, type: { name: "Dinner" } }],
     });
-    expect(text).toContain('No menu found with UID "ghost" (it may not exist or was already deleted).');
+    expect(text).toContain('No menu found with UID "ghost".');
     expect(kh.client().saveMenuItems).not.toHaveBeenCalled();
   });
 

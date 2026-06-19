@@ -49,7 +49,7 @@ describe("read_recipe tool", () => {
     const text = await kh.callToolText("read_recipe", { lookup: { title: "Pasta" } });
     expect(text).toContain("Pasta Bolognese");
     expect(text).toContain("Pasta Carbonara");
-    expect(text).toContain("UID:");
+    expect(text).toContain("(uid:");
     // A list, not a full recipe render.
     expect(text).not.toContain("## Ingredients");
   });

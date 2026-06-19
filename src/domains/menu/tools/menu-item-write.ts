@@ -8,7 +8,13 @@ import type { MenuState, MenuWrites } from "../module.js";
 import type { Menu } from "../types.js";
 
 import { defineTool } from "../../../kernel/tool.js";
-import { commitFailure, resolveLookup, toolResult, uidOrTextLookupSchema } from "../../../shared/tools.js";
+import {
+  commitFailure,
+  resolveLookup,
+  resolveOrPick,
+  toolResult,
+  uidOrTextLookupSchema,
+} from "../../../shared/tools.js";
 import { mealTypeSpecSchema } from "../../meal-type/meal-type-helpers.js";
 import { RecipeUidSchema } from "../../recipe/ids.js";
 import { MenuItemUidSchema, MenuUidSchema } from "../ids.js";
@@ -88,26 +94,19 @@ export const addMenuItemsTool = defineTool(
   (ctx: DomainCtx<MenuState, "recipe" | "meal-type", MenuWrites>) => {
     const log = ctx.infra.log.child({ component: "add_menu_items" });
     return async (args) => {
-      // Resolve the parent menu (single). Misses and ambiguity short-circuit
-      // with the standard lookup wording, no network touched.
+      // Resolve the parent menu (single): a miss / no-match returns prose, and an
+      // ambiguous name offers a disambiguation PICK, all before any network touch.
       const query = "uid" in args.menu ? { uid: args.menu.uid } : { text: args.menu.name };
       const outcome = resolveLookup(query, {
         get: (uid) => ctx.state.menus.store.get(uid),
         findByText: (text) => ctx.state.menus.store.findByName(text),
       });
-
-      if (outcome.kind === "uid_miss") {
-        return toolResult(`No menu found with UID "${outcome.uid}" (it may not exist or was already deleted).`);
-      }
-      if (outcome.kind === "text_none") {
-        return toolResult(`No menus found matching "${outcome.text}".`);
-      }
-      if (outcome.kind === "text_many") {
-        const list = outcome.matches.map((menu) => `- **${menu.name}** (uid: \`${menu.uid}\`)`).join("\n");
-        return toolResult(`Multiple menus match "${outcome.text}":\n${list}\n\nPlease re-invoke with a specific uid.`);
-      }
-
-      const menu = outcome.entity;
+      const resolvedMenu = await resolveOrPick(ctx.server.server, outcome, {
+        entityNoun: "menu",
+        describe: (m) => ({ uid: m.uid, label: m.name }),
+      });
+      if ("result" in resolvedMenu) return resolvedMenu.result;
+      const menu = resolvedMenu.entity;
 
       // ----- Stage 1: per-index validation (collect ALL errors, not first-only) -----
       type ResolvedItem = {

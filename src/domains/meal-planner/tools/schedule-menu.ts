@@ -9,7 +9,7 @@ import type { Meal } from "../../meal/types.js";
 import type { RecipeUid } from "../../recipe/ids.js";
 
 import { defineTool } from "../../../kernel/tool.js";
-import { resolveLookup, toolResult, uidOrTextLookupSchema } from "../../../shared/tools.js";
+import { resolveLookup, resolveOrPick, toolResult, uidOrTextLookupSchema } from "../../../shared/tools.js";
 import { formatCalendarDayWire, parseCalendarDay } from "../../../utils/dates.js";
 import { MealUidSchema } from "../../meal/ids.js";
 import { MenuUidSchema } from "../../menu/ids.js";
@@ -113,26 +113,20 @@ export const scheduleMenuTool = defineTool(
   (ctx: DomainCtx<Record<never, never>, "menu" | "meal" | "recipe" | "meal-type">) => {
     const log = ctx.infra.log.child({ component: "schedule_menu" });
     return async (args) => {
-      // Resolve the menu (single). Misses/ambiguity short-circuit with the
-      // standard lookup wording, no network touched.
+      // Resolve the menu (single): a miss / no-match returns prose and an
+      // ambiguous name offers a disambiguation PICK, all before any Paprika write.
       const query = "uid" in args.menu ? { uid: args.menu.uid } : { text: args.menu.name };
       const outcome = resolveLookup(query, {
         get: (uid) => ctx.deps.menu.get(uid),
         findByText: (text) => ctx.deps.menu.findByName(text),
       });
 
-      if (outcome.kind === "uid_miss") {
-        return toolResult(`No menu found with UID "${outcome.uid}" (it may not exist or was already deleted).`);
-      }
-      if (outcome.kind === "text_none") {
-        return toolResult(`No menus found matching "${outcome.text}".`);
-      }
-      if (outcome.kind === "text_many") {
-        const list = outcome.matches.map((menu) => `- **${menu.name}** (uid: \`${menu.uid}\`)`).join("\n");
-        return toolResult(`Multiple menus match "${outcome.text}":\n${list}\n\nPlease re-invoke with a specific uid.`);
-      }
-
-      const menu = outcome.entity;
+      const resolved = await resolveOrPick(ctx.server.server, outcome, {
+        entityNoun: "menu",
+        describe: (m) => ({ uid: m.uid, label: m.name }),
+      });
+      if ("result" in resolved) return resolved.result;
+      const menu = resolved.entity;
 
       const menuItems = ctx.deps.menu.itemsOf(menu.uid);
       if (menuItems.length === 0) {
