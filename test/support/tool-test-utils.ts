@@ -107,6 +107,13 @@ export function makeTestServer(): {
       });
     },
     sendResourceListChanged,
+    // The base Server slice the elicitation helpers (ADR-0020) read off `ctx.server.server`:
+    // no client is connected in a unit test, so capabilities are undefined → the gate is
+    // unsupported → fail-open, and a uid-or-text PICK falls back to the disambiguation prose.
+    server: {
+      getClientCapabilities: () => undefined,
+      elicitInput: () => Promise.reject(new Error("makeTestServer: elicitInput is not stubbed")),
+    },
   } as unknown as McpServer;
 
   return {

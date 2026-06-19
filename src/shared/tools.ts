@@ -2,6 +2,10 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { Result } from "neverthrow";
 import { z } from "zod";
 
+import type { ElicitationServer } from "./elicit.js";
+
+import { pickOne } from "./elicit.js";
+
 /**
  * The MCP wire envelope every tool returns. The one-argument form carries only
  * the human-readable text block; the two-argument form additionally carries a
@@ -173,27 +177,77 @@ export function resolveLookup<T, U extends string>(
 }
 
 /**
- * Renders a `LookupOutcome` to a `CallToolResult` with wording consistent
- * across the three lookup tools. `renderOne` produces the full single-entity
- * markdown; `disambiguationLine` produces one bullet of the multi-match list
- * (kept per-entity so each tool's existing line format is preserved).
- * `entityNoun` is the singular noun; the plural is `entityNoun + "s"`.
+ * Default ceiling on a `text_many` PICK: above it an enum is an unusable picker,
+ * so the disambiguation prose is shown instead of an elicitation (ADR-0020).
  */
-export function formatLookupOutcome<T>(
+const PICK_CAP = 8;
+
+/**
+ * Resolve a `LookupOutcome` to the single entity to act on, OR the terminal
+ * `CallToolResult` to return as-is — the shared narrow-or-terminate step every
+ * uid-or-text tool runs. The happy arms (`uid_hit` / `text_one`) yield
+ * `{ entity }`; `uid_miss` / `text_none` yield their not-found prose; and
+ * `text_many` offers a rung-3 disambiguation PICK (ADR-0020) when the match set
+ * fits under `cap`, proceeding with the chosen entity on accept. A decline, an
+ * un-elicitable client, or an over-cap set all fall back to the same
+ * disambiguation prose, so every non-pick path lands the caller on a list it can
+ * re-query from. `describe` maps an entity to the picker's opaque-UID value and
+ * its human label (also the prose bullet's label), so the PICK and the wording
+ * stay identical across the lookup tools.
+ */
+export async function resolveOrPick<T>(
+  server: ElicitationServer,
   outcome: LookupOutcome<T>,
-  config: { entityNoun: string; renderOne(entity: T): string; disambiguationLine(entity: T): string },
-): CallToolResult {
-  if (outcome.kind === "uid_hit" || outcome.kind === "text_one") {
-    return toolResult(config.renderOne(outcome.entity));
-  }
+  config: {
+    readonly entityNoun: string;
+    readonly describe: (entity: T) => { readonly uid: string; readonly label: string };
+    readonly cap?: number;
+  },
+): Promise<{ readonly entity: T } | { readonly result: CallToolResult }> {
+  if (outcome.kind === "uid_hit" || outcome.kind === "text_one") return { entity: outcome.entity };
   if (outcome.kind === "uid_miss") {
-    return toolResult(`No ${config.entityNoun} found with UID "${outcome.uid}".`);
+    return { result: toolResult(`No ${config.entityNoun} found with UID "${outcome.uid}".`) };
   }
   if (outcome.kind === "text_none") {
-    return toolResult(`No ${config.entityNoun}s found matching "${outcome.text}".`);
+    return { result: toolResult(`No ${config.entityNoun}s found matching "${outcome.text}".`) };
   }
-  const list = outcome.matches.map(config.disambiguationLine).join("\n");
-  return toolResult(
-    `Multiple ${config.entityNoun}s match "${outcome.text}":\n${list}\n\nPlease re-invoke with a specific uid.`,
-  );
+  if (outcome.matches.length <= (config.cap ?? PICK_CAP)) {
+    const picked = await pickOne(server, {
+      message: `More than one ${config.entityNoun} matches "${outcome.text}". Which one did you mean?`,
+      candidates: outcome.matches,
+      describe: config.describe,
+    });
+    if (picked !== "declined" && picked !== "unsupported") return { entity: picked.chosen };
+  }
+  const lines = outcome.matches
+    .map((entity) => {
+      const { uid, label } = config.describe(entity);
+      return `- **${label}** (uid: \`${uid}\`)`;
+    })
+    .join("\n");
+  return {
+    result: toolResult(
+      `Multiple ${config.entityNoun}s match "${outcome.text}":\n${lines}\n\nPlease re-invoke with a specific uid.`,
+    ),
+  };
+}
+
+/**
+ * Render a `LookupOutcome` to a `CallToolResult` for the read tools: a resolved
+ * entity (including one chosen via the {@link resolveOrPick} PICK) renders
+ * through `renderOne`; every not-found / disambiguation path returns the shared
+ * prose. `entityNoun` is the singular noun; the plural is `entityNoun + "s"`.
+ */
+export async function formatLookupOutcome<T>(
+  server: ElicitationServer,
+  outcome: LookupOutcome<T>,
+  config: {
+    readonly entityNoun: string;
+    readonly describe: (entity: T) => { readonly uid: string; readonly label: string };
+    readonly renderOne: (entity: T) => string;
+    readonly cap?: number;
+  },
+): Promise<CallToolResult> {
+  const resolved = await resolveOrPick(server, outcome, config);
+  return "entity" in resolved ? toolResult(config.renderOne(resolved.entity)) : resolved.result;
 }

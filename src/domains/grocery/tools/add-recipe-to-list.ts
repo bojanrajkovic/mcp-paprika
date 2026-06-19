@@ -5,7 +5,13 @@ import type { GroceryList } from "../grocery-list/types.js";
 import type { GroceryState, GroceryWrites } from "../module.js";
 
 import { defineTool } from "../../../kernel/tool.js";
-import { commitFailure, resolveLookup, toolResult, uidOrTextLookupSchema } from "../../../shared/tools.js";
+import {
+  commitFailure,
+  resolveLookup,
+  resolveOrPick,
+  toolResult,
+  uidOrTextLookupSchema,
+} from "../../../shared/tools.js";
 import { RecipeUidSchema } from "../../recipe/ids.js";
 import { groceryItemToMarkdown } from "../grocery-helpers.js";
 import { GroceryListUidSchema } from "../ids.js";
@@ -65,19 +71,12 @@ export const addRecipeToGroceryListTool = defineTool(
         get: (uid) => ctx.deps.recipe.get(uid),
         findByText: (text) => ctx.deps.recipe.findByName(text),
       });
-      if (outcome.kind === "uid_miss") {
-        return toolResult(`No recipe found with UID "${outcome.uid}".`);
-      }
-      if (outcome.kind === "text_none") {
-        return toolResult(`No recipes found matching "${outcome.text}".`);
-      }
-      if (outcome.kind === "text_many") {
-        const lines = outcome.matches.map((r) => `- **${r.name}** — \`${r.uid}\``);
-        return toolResult(
-          `Multiple recipes match "${outcome.text}" — retry with the UID of the one you mean:\n${lines.join("\n")}`,
-        );
-      }
-      const recipe = outcome.entity;
+      const resolved = await resolveOrPick(ctx.server.server, outcome, {
+        entityNoun: "recipe",
+        describe: (r) => ({ uid: r.uid, label: r.name }),
+      });
+      if ("result" in resolved) return resolved.result;
+      const recipe = resolved.entity;
 
       // Validate all items before any API calls (all-or-nothing, mirroring
       // add_grocery_items): min(1) admits whitespace-only ingredients.

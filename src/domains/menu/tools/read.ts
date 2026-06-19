@@ -33,19 +33,19 @@ export const readMenuTool = defineTool(
   },
   [menuStartGuard],
   (ctx: DomainCtx<MenuState, "recipe" | "meal-type">) => {
-    return (args) => {
+    return async (args) => {
       const query = "uid" in args.lookup ? { uid: args.lookup.uid } : { text: args.lookup.name };
       const outcome = resolveLookup(query, {
         get: (uid) => ctx.state.menus.store.get(uid),
         findByText: (text) => ctx.state.menus.store.findByName(text),
       });
-      return formatLookupOutcome(outcome, {
+      return formatLookupOutcome(ctx.server.server, outcome, {
         entityNoun: "menu",
+        describe: (menu) => ({ uid: menu.uid, label: menu.name }),
         renderOne: (menu) =>
           menuToMarkdown(menu, ctx.state.items.store.getByMenuUid(menu.uid), ctx.deps["meal-type"].getAll(), {
             includeItemUids: true,
           }),
-        disambiguationLine: (menu) => `- **${menu.name}** (uid: \`${menu.uid}\`)`,
       });
     };
   },

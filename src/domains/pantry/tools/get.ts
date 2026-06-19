@@ -40,10 +40,10 @@ export const getPantryItemTool = defineTool(
         get: (uid) => ctx.state.store.get(uid),
         findByText: (text) => ctx.state.store.findByIngredient(text),
       });
-      return formatLookupOutcome(outcome, {
+      return formatLookupOutcome(ctx.server.server, outcome, {
         entityNoun: "pantry item",
+        describe: (item) => ({ uid: item.uid, label: item.ingredient }),
         renderOne: (item) => pantryItemToMarkdown(item, ctx.deps.aisle),
-        disambiguationLine: (item) => `- **${item.ingredient}** (uid: \`${item.uid}\`)`,
       });
     };
   },

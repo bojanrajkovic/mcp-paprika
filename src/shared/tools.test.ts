@@ -1,5 +1,8 @@
+import type { ClientCapabilities, ElicitRequestFormParams, ElicitResult } from "@modelcontextprotocol/sdk/types.js";
 import { err, ok } from "neverthrow";
 import { describe, expect, it } from "vitest";
+
+import type { ElicitationServer } from "./elicit.js";
 
 import { getText } from "../../test/support/tool-test-utils.js";
 import { RecipeUidSchema } from "../domains/recipe/ids.js";
@@ -9,9 +12,24 @@ import {
   imageResult,
   type LookupOutcome,
   resolveLookup,
+  resolveOrPick,
   toolResult,
   uidOrTextLookupSchema,
 } from "./tools.js";
+
+/**
+ * A stub {@link ElicitationServer}: a responder marks the client form-capable and
+ * answers the pick; omitting it models a client that never advertised elicitation
+ * (so the gate is unsupported and the lookup falls back to prose).
+ */
+function elicitServer(respond?: (params: ElicitRequestFormParams) => ElicitResult): ElicitationServer {
+  return {
+    getClientCapabilities: () =>
+      respond ? ({ elicitation: { form: {} } } as unknown as ClientCapabilities) : undefined,
+    elicitInput: (params) =>
+      respond ? Promise.resolve(respond(params)) : Promise.reject(new Error("unreachable: no responder")),
+  };
+}
 
 describe("shared helper functions", () => {
   describe("toolResult wraps a string in the MCP wire envelope", () => {
@@ -127,35 +145,80 @@ describe("resolveLookup", () => {
   });
 });
 
-describe("formatLookupOutcome", () => {
+describe("formatLookupOutcome (no elicitation → prose for every non-happy arm)", () => {
   const entity: ToyEntity = { id: "A", label: "Alpha" };
   const config = {
     entityNoun: "recipe",
+    describe: (e: ToyEntity) => ({ uid: e.id, label: e.label }),
     renderOne: (e: ToyEntity) => `# ${e.label}`,
-    disambiguationLine: (e: ToyEntity) => `- ${e.label} (UID: ${e.id})`,
   };
-  const text = (outcome: LookupOutcome<ToyEntity>) => getText(formatLookupOutcome(outcome, config));
+  const noElicit = elicitServer();
+  const text = async (outcome: LookupOutcome<ToyEntity>) =>
+    getText(await formatLookupOutcome(noElicit, outcome, config));
 
-  it("uid_hit and text_one both render via renderOne", () => {
-    expect(text({ kind: "uid_hit", entity })).toBe("# Alpha");
-    expect(text({ kind: "text_one", entity })).toBe("# Alpha");
+  it("uid_hit and text_one both render via renderOne", async () => {
+    expect(await text({ kind: "uid_hit", entity })).toBe("# Alpha");
+    expect(await text({ kind: "text_one", entity })).toBe("# Alpha");
   });
 
-  it("uid_miss uses the singular noun", () => {
-    expect(text({ kind: "uid_miss", uid: "Z" })).toBe('No recipe found with UID "Z".');
+  it("uid_miss uses the singular noun", async () => {
+    expect(await text({ kind: "uid_miss", uid: "Z" })).toBe('No recipe found with UID "Z".');
   });
 
-  it("text_none uses the pluralized noun", () => {
-    expect(text({ kind: "text_none", text: "zzz" })).toBe('No recipes found matching "zzz".');
+  it("text_none uses the pluralized noun", async () => {
+    expect(await text({ kind: "text_none", text: "zzz" })).toBe('No recipes found matching "zzz".');
   });
 
-  it("text_many lists each match and prompts for a specific uid", () => {
+  it("text_many lists each match and prompts for a specific uid", async () => {
     const beta: ToyEntity = { id: "B", label: "Alphabet" };
-    const result = text({ kind: "text_many", text: "Alpha", matches: [entity, beta] });
+    const result = await text({ kind: "text_many", text: "Alpha", matches: [entity, beta] });
     expect(result).toContain('Multiple recipes match "Alpha":');
-    expect(result).toContain("- Alpha (UID: A)");
-    expect(result).toContain("- Alphabet (UID: B)");
+    expect(result).toContain("- **Alpha** (uid: `A`)");
+    expect(result).toContain("- **Alphabet** (uid: `B`)");
     expect(result).toContain("Please re-invoke with a specific uid");
+  });
+});
+
+describe("resolveOrPick (text_many → disambiguation PICK, ADR-0020)", () => {
+  const alpha: ToyEntity = { id: "A", label: "Alpha" };
+  const beta: ToyEntity = { id: "B", label: "Alphabet" };
+  const config = { entityNoun: "recipe", describe: (e: ToyEntity) => ({ uid: e.id, label: e.label }) };
+  const many: LookupOutcome<ToyEntity> = { kind: "text_many", text: "Alpha", matches: [alpha, beta] };
+
+  it("the happy arms pass straight through as { entity }", async () => {
+    expect(await resolveOrPick(elicitServer(), { kind: "uid_hit", entity: alpha }, config)).toEqual({ entity: alpha });
+    expect(await resolveOrPick(elicitServer(), { kind: "text_one", entity: beta }, config)).toEqual({ entity: beta });
+  });
+
+  it("returns the chosen entity when the user picks from text_many", async () => {
+    const server = elicitServer(() => ({ action: "accept", content: { choice: "B" } }));
+    expect(await resolveOrPick(server, many, config)).toEqual({ entity: beta });
+  });
+
+  it("falls back to the disambiguation prose when the user declines", async () => {
+    const resolved = await resolveOrPick(
+      elicitServer(() => ({ action: "decline" })),
+      many,
+      config,
+    );
+    expect("result" in resolved ? getText(resolved.result) : "").toContain('Multiple recipes match "Alpha":');
+  });
+
+  it("falls back to prose without eliciting when the client cannot be asked", async () => {
+    const resolved = await resolveOrPick(elicitServer(), many, config);
+    expect("result" in resolved ? getText(resolved.result) : "").toContain("Please re-invoke with a specific uid");
+  });
+
+  it("skips the pick and lists when the match set exceeds the cap", async () => {
+    const matches: ToyEntity[] = Array.from({ length: 9 }, (_, i) => ({ id: `U${i}`, label: `Item ${i}` }));
+    let asked = false;
+    const server = elicitServer(() => {
+      asked = true;
+      return { action: "accept", content: { choice: "U0" } };
+    });
+    const resolved = await resolveOrPick(server, { kind: "text_many", text: "Item", matches }, config);
+    expect(asked).toBe(false);
+    expect("result" in resolved).toBe(true);
   });
 });
 

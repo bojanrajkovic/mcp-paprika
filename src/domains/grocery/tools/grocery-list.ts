@@ -96,13 +96,13 @@ export const readGroceryListTool = defineTool(
         get: (uid) => ctx.state.lists.store.get(uid),
         findByText: (text) => ctx.state.lists.store.findByName(text),
       });
-      return formatLookupOutcome(outcome, {
+      return formatLookupOutcome(ctx.server.server, outcome, {
         entityNoun: "grocery list",
+        describe: (list) => ({ uid: list.uid, label: list.name }),
         renderOne: (list) =>
           groceryListToMarkdown(list, ctx.state.items.store.getByListUid(list.uid), ctx.deps.aisle, {
             includeItemUids: true,
           }),
-        disambiguationLine: (list) => `- **${list.name}** (uid: \`${list.uid}\`)`,
       });
     };
   },
