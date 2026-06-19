@@ -164,6 +164,10 @@ describe("upload_recipe_photo", () => {
 
     expect(kh.client().uploadPhoto).toHaveBeenCalledTimes(1);
     expect(getText(result)).toContain('Attached photo 1 to "Test Recipe"');
+    // The normalized thumbnail comes back as an image content block (ADR-0019 R2),
+    // so the person can confirm the right photo attached.
+    expect(result.content[1]).toMatchObject({ type: "image", mimeType: "image/jpeg" });
+    expect((result.content[1] as { data?: string }).data?.length ?? 0).toBeGreaterThan(0);
     // single-use: the token is spent
     expect(kh.infra().generatedImageStore.consume(token)).toBeNull();
   });

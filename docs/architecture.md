@@ -65,7 +65,7 @@ Semantic discovery is optional: the `discover_recipes` tool is always registered
 
 ## Photos
 
-The server reads and syncs recipe photos and can generate new ones. AI generation (`generate_recipe_photo`) is opt-in (registered only when an image-generation client is configured) and produces a styled photo through an OpenRouter image model, normalized with sharp. Any server-side image fetch is SSRF-hardened (unicast-only address guard plus a DNS-rebinding-safe dispatcher), because the URL can be model- or user-influenced. See `src/features/CLAUDE.md`.
+The server reads and syncs recipe photos and can generate new ones. AI generation (`generate_recipe_photo`) is opt-in — the tool is always registered but declines when no image-generation client is configured — and produces a styled photo through an OpenRouter image model, normalized with sharp. `upload_recipe_photo` and the `generate_recipe_photo` preview return the normalized JPEG thumbnail as an image content block (ADR-0019 R2, `imageResult` in `src/shared/tools.ts`), so the person sees the attached or previewed photo inline rather than a bare text ack. Any server-side image fetch is SSRF-hardened (unicast-only address guard plus a DNS-rebinding-safe dispatcher), because the URL can be model- or user-influenced. See `src/features/CLAUDE.md`.
 
 ## Structured output channel
 

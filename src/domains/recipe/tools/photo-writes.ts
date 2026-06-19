@@ -8,7 +8,7 @@ import type { RecipeState, RecipeWrites } from "../module.js";
 
 import { defineTool } from "../../../kernel/tool.js";
 import { fetchImageBytes, MAX_IMAGE_BYTES } from "../../../shared/photo-fetch.js";
-import { commitFailure, toolResult } from "../../../shared/tools.js";
+import { commitFailure, imageResult, toolResult } from "../../../shared/tools.js";
 import { toMessage } from "../../../utils/log.js";
 import { PhotoUidSchema, RecipeUidSchema } from "../ids.js";
 import { GENERATED_MAX_FULL_EDGE, normalizePhoto } from "../photo-helpers.js";
@@ -179,7 +179,10 @@ export const uploadPhotoTool = defineTool(
       }
 
       return (await ctx.writes.attachPhotoToRecipe(recipe, thumbnail, full)).match(
-        (photo) => toolResult(`Attached photo ${photo.name} to "${recipe.name}" (photo UID: ${photo.uid}).`),
+        // Return the normalized thumbnail (already in memory) as an image block so the
+        // person can confirm the right photo attached (ADR-0019 R2), not just read an ack.
+        (photo) =>
+          imageResult(`Attached photo ${photo.name} to "${recipe.name}" (photo UID: ${photo.uid}).`, thumbnail),
         (e) => {
           log.error({ err: e.cause ?? e, recipe_uid: args.recipe_uid }, "uploadPhoto failed");
           return toolResult(`Failed to upload photo: ${e.message}`);

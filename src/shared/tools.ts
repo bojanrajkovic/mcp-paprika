@@ -49,6 +49,23 @@ export function errorResult(text: string): CallToolResult {
 }
 
 /**
+ * A result carrying the human text PLUS a JPEG image content block (ADR-0019 R2 —
+ * image content blocks). MCP's `content` array holds multiple blocks, so the person
+ * sees the rendered image inline — e.g. the thumbnail just attached to or generated for
+ * a recipe — instead of confirming a photo landed from prose alone. The bytes are
+ * inlined as base64; callers pass a small normalized JPEG thumbnail (the full image
+ * stays server-side). Pure construction, no throw.
+ */
+export function imageResult(text: string, jpeg: Buffer): CallToolResult {
+  return {
+    content: [
+      { type: "text" as const, text },
+      { type: "image" as const, data: jpeg.toString("base64"), mimeType: "image/jpeg" },
+    ],
+  } satisfies CallToolResult;
+}
+
+/**
  * Consume a commit chokepoint's `Result` in a write tool: `undefined` when the
  * commit landed, or the uniform "persisted to Paprika, local commit failed"
  * response to return as-is. The two-line guard —
