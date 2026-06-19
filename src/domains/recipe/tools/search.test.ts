@@ -10,6 +10,23 @@ describe("search_recipes tool", () => {
   beforeEach(kh.setup);
   afterEach(kh.teardown);
 
+  it("emits structured recipe rows plus the total match count (R1)", async () => {
+    kh.seed({ recipes: [makeRecipe({ name: "Tomato Soup" }), makeRecipe({ name: "Tomato Pasta" })] });
+    const result = await kh.callTool("search_recipes", { query: "tomato", limit: 1 });
+    expect(result.isError).toBeFalsy();
+    const payload = result.structuredContent as { items: Array<Record<string, unknown>>; total: number };
+    expect(payload.total).toBe(2); // both match; capped at limit 1
+    expect(payload.items).toHaveLength(1);
+    expect(String(payload.items[0]!["name"])).toContain("Tomato");
+  });
+
+  it("requires at least one criterion (isError)", async () => {
+    kh.seed({ recipes: [makeRecipe({ name: "Anything" })] });
+    const result = await kh.callTool("search_recipes", {});
+    expect(result.isError).toBe(true);
+    expect(getText(result).toLowerCase()).toContain("at least one");
+  });
+
   it("non-empty store with matching query returns formatted results", async () => {
     kh.seed({ recipes: [makeRecipe({ name: "Chocolate Cake" })] });
     const text = await kh.callToolText("search_recipes", { query: "chocolate", limit: 20 });
@@ -250,10 +267,11 @@ describe("search_recipes tool", () => {
       expect(getText(result).toLowerCase()).toContain("no recipes");
     });
 
-    it("invalid duration string returns user-friendly error message", async () => {
+    it("invalid duration string returns a user-friendly error (isError)", async () => {
       kh.seed({ recipes: [makeRecipe({ name: "Quick", totalTime: "20 min" })] });
       const result = await kh.callTool("search_recipes", { maxTotal: "not a time", limit: 20 });
-      expect(result.isError).toBeFalsy();
+      // Unparseable input is a bad-input error (exempt from the SDK's output validation).
+      expect(result.isError).toBe(true);
       expect(getText(result).toLowerCase()).toContain("invalid");
     });
 

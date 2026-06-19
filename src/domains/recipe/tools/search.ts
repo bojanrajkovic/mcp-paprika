@@ -3,13 +3,14 @@ import { z } from "zod";
 
 import type { DomainCtx } from "../../../kernel/registry.js";
 import type { RecipeState } from "../module.js";
+import type { RecipeRow } from "../recipe-markdown.js";
 import type { TimeConstraints } from "../store.js";
 import type { Recipe } from "../types.js";
 
 import { defineTool } from "../../../kernel/tool.js";
-import { toolResult } from "../../../shared/tools.js";
+import { errorResult, toolResult } from "../../../shared/tools.js";
 import { parseDuration } from "../../../utils/duration.js";
-import { recipeMetadataLines } from "../recipe-markdown.js";
+import { recipeMetadataLines, recipeRowSchema, recipeToRow } from "../recipe-markdown.js";
 import { recipeColdStartGuard } from "./guards.js";
 
 export const searchRecipesInputSchema = z
@@ -39,6 +40,14 @@ export const searchRecipesInputSchema = z
   // therefore enforced at runtime in the handler, not on the schema.
   .strict();
 
+// Structured-output payload (ADR-0019, R1): the matched recipe rows (capped at
+// `limit`) plus `total`, the full match count before the cap — so the model can
+// tell its results were truncated.
+export const searchRecipesOutputSchema = z.object({
+  items: z.array(recipeRowSchema),
+  total: z.number().int().nonnegative(),
+});
+
 /**
  * `search_recipes` — search recipes by name / ingredient / description / time. The
  * `lastCookedAt` enrichment is DROPPED — recipe is `dependsOn []` (no meal
@@ -57,6 +66,7 @@ export const searchRecipesTool = defineTool(
       "ranked by query relevance when a query is present, or by ascending total time when " +
       "only time constraints are given.",
     inputSchema: searchRecipesInputSchema,
+    outputSchema: searchRecipesOutputSchema,
   },
   [recipeColdStartGuard],
   (ctx: DomainCtx<RecipeState, never>) => {
@@ -88,7 +98,7 @@ export const searchRecipesTool = defineTool(
           // searchRecipesInputSchema comment): reject an all-empty call so search
           // never silently returns the whole library.
           if (!hasQuery && !hasIngredients && !hasTime) {
-            return toolResult("Provide at least one of: query, ingredients, or a max prep/cook/total time.");
+            return errorResult("Provide at least one of: query, ingredients, or a max prep/cook/total time.");
           }
 
           // Build candidate set from the search/getAll path.
@@ -143,24 +153,31 @@ export const searchRecipesTool = defineTool(
             if (args.maxPrep !== undefined) criteria.push(`maxPrep "${args.maxPrep}"`);
             if (args.maxCook !== undefined) criteria.push(`maxCook "${args.maxCook}"`);
             if (args.maxTotal !== undefined) criteria.push(`maxTotal "${args.maxTotal}"`);
-            return toolResult(`No recipes found matching ${criteria.join(", ")}.`);
+            // No match is a valid empty success, not an error.
+            return toolResult(`No recipes found matching ${criteria.join(", ")}.`, { items: [], total: 0 });
           }
 
-          const lines = limited.map((r) => {
+          // Resolve category names once per row, feeding both the text and the
+          // structured channel so they can't disagree.
+          const total = queryResults.length;
+          const items: Array<RecipeRow> = [];
+          const lines: Array<string> = [];
+          for (const r of limited) {
             const categoryNames = ctx.state.category.store.resolveNames(r.recipe.categories);
+            items.push(recipeToRow(r.recipe, categoryNames));
             const base = formatRecipeItem(r.recipe, categoryNames);
-            if (!hasTime) return base;
-            const unverified = unverifiedTimeFields(r.recipe, constraints);
-            if (unverified.length === 0) return base;
-            return (
-              `${base}\n> ⚠️ _Time unverified — couldn't parse this recipe's ${unverified.join(" / ")} against your ` +
-              `limit, so it's shown rather than hidden. Check the displayed time before relying on it._`
+            const unverified = hasTime ? unverifiedTimeFields(r.recipe, constraints) : [];
+            lines.push(
+              unverified.length === 0
+                ? base
+                : `${base}\n> ⚠️ _Time unverified — couldn't parse this recipe's ${unverified.join(" / ")} against your ` +
+                    `limit, so it's shown rather than hidden. Check the displayed time before relying on it._`,
             );
-          });
+          }
 
-          return toolResult(lines.join("\n\n---\n\n"));
+          return toolResult(lines.join("\n\n---\n\n"), { items, total });
         },
-        (errorMsg) => toolResult(errorMsg),
+        (errorMsg) => errorResult(errorMsg),
       );
     };
   },

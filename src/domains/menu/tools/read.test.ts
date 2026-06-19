@@ -40,6 +40,16 @@ describe("list_menus tool", () => {
     expect(text).toContain("- **Holiday** (2 items, 3 days) — `m-1`");
   });
 
+  it("emits structured menu rows with uid, item count, and day span (R1)", async () => {
+    const menu = makeMenu({ uid: "m-1" as MenuUid, name: "Holiday", days: 3 });
+    const items = [makeMenuItem({ menuUid: "m-1", day: 1 }), makeMenuItem({ menuUid: "m-1", day: 2 })];
+    kh.seed({ menus: [menu], menuItems: items, mealTypes: [BREAKFAST, DINNER] });
+    const result = await kh.callTool("list_menus", {});
+    expect(result.isError).toBeFalsy();
+    const { items: rows } = result.structuredContent as { items: Array<Record<string, unknown>> };
+    expect(rows).toEqual([{ uid: "m-1", name: "Holiday", itemCount: 2, days: 3 }]);
+  });
+
   it("uses singular 'day' for a one-day menu", async () => {
     const menu = makeMenu({ uid: "m-2" as MenuUid, name: "Single", days: 1 });
     kh.seed({ menus: [menu], menuItems: [], mealTypes: [BREAKFAST, DINNER] });

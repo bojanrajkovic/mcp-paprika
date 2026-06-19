@@ -2,10 +2,20 @@ import { z } from "zod";
 
 import type { DomainCtx } from "../../../kernel/registry.js";
 import type { RecipeState } from "../module.js";
+import type { RecipeRow } from "../recipe-markdown.js";
 
 import { defineTool } from "../../../kernel/tool.js";
-import { toolResult } from "../../../shared/tools.js";
+import { errorResult, toolResult } from "../../../shared/tools.js";
+import { recipeRowSchema, recipeToRow } from "../recipe-markdown.js";
 import { recipeColdStartGuard } from "./guards.js";
+
+// Structured-output payload (ADR-0019, R1): the page of recipe rows plus the
+// pagination cursor — `total` is the full library size, `offset` the page start.
+export const listRecipesOutputSchema = z.object({
+  items: z.array(recipeRowSchema),
+  total: z.number().int().nonnegative(),
+  offset: z.number().int().nonnegative(),
+});
 
 /**
  * `list_recipes` — list recipes. The `lastCookedAt` enrichment is DROPPED — recipe is
@@ -30,6 +40,7 @@ export const listRecipesTool = defineTool(
         .default(25)
         .describe("Maximum number of recipes to return (default: 25, max: 50)"),
     },
+    outputSchema: listRecipesOutputSchema,
   },
   [recipeColdStartGuard],
   (ctx: DomainCtx<RecipeState, never>) => {
@@ -39,24 +50,35 @@ export const listRecipesTool = defineTool(
       const page = all.slice(args.offset, args.offset + args.limit);
 
       if (page.length === 0) {
-        return toolResult(`No recipes found (total: ${total.toString()}, offset: ${args.offset.toString()}).`);
+        // total 0 = an empty library (a valid empty success); a non-empty library
+        // with an empty page = an over-paged offset (bad input → isError + hint),
+        // the same split search_meal_history makes.
+        if (total === 0) {
+          return toolResult("No recipes found.", { items: [], total: 0, offset: args.offset });
+        }
+        return errorResult(
+          `No recipes at offset ${args.offset.toString()} of ${total.toString()} total. ` +
+            `Try a lower offset (the last page starts at offset ${Math.max(0, total - args.limit).toString()}).`,
+        );
       }
 
       const header = `Showing ${page.length.toString()} of ${total.toString()} recipes (offset: ${args.offset.toString()}):\n`;
-      const lines = page.map((recipe) => {
+      // One pass: resolve each recipe's category names once, feeding both the
+      // structured row and the text line (no parallel-array index coupling).
+      const rows: Array<RecipeRow> = [];
+      const lines: Array<string> = [];
+      for (const recipe of page) {
         const categoryNames = ctx.state.category.store.resolveNames(recipe.categories);
+        rows.push(recipeToRow(recipe, categoryNames));
         const cats = categoryNames.length > 0 ? ` [${categoryNames.join(", ")}]` : "";
-        const meta: Array<string> = [];
-        const dateOnly = recipe.created.slice(0, 10);
-        meta.push(`created: ${dateOnly}`);
+        const meta: Array<string> = [`created: ${recipe.created.slice(0, 10)}`];
         if (recipe.rating > 0) meta.push(`rating: ${recipe.rating.toString()}/5`);
         if (recipe.isPinned) meta.push("pinned");
         if (recipe.onGroceryList) meta.push("on grocery list");
-        const metaSuffix = ` · ${meta.join(" · ")}`;
-        return `- **${recipe.name}**${cats} (uid: ${recipe.uid})${metaSuffix}`;
-      });
+        lines.push(`- **${recipe.name}**${cats} (uid: ${recipe.uid}) · ${meta.join(" · ")}`);
+      }
 
-      return toolResult(header + "\n" + lines.join("\n"));
+      return toolResult(header + "\n" + lines.join("\n"), { items: rows, total, offset: args.offset });
     };
   },
 );

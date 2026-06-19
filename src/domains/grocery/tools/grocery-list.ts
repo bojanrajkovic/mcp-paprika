@@ -16,6 +16,18 @@ import { groceryListToMarkdown } from "../grocery-helpers.js";
 import { GroceryListUidSchema } from "../ids.js";
 import { groceryStartGuard } from "./guards.js";
 
+// Structured-output payload (ADR-0019, R1): a row per grocery list, carrying the
+// `uid` read_grocery_list / rename / delete consume plus its item count.
+export const listGroceryListsOutputSchema = z.object({
+  items: z.array(
+    z.object({
+      uid: GroceryListUidSchema,
+      name: z.string(),
+      itemCount: z.number().int().nonnegative(),
+    }),
+  ),
+});
+
 /**
  * `list_grocery_lists` — list all grocery lists with item counts. Counts come from
  * the co-owned item store, NOT a dep.
@@ -27,6 +39,7 @@ export const listGroceryListsTool = defineTool(
     annotations: { readOnlyHint: true, idempotentHint: true },
     description: "List all grocery lists sorted alphabetically by name, with UID and item count per list.",
     inputSchema: {},
+    outputSchema: listGroceryListsOutputSchema,
   },
   [groceryStartGuard],
   (ctx: DomainCtx<GroceryState, "aisle" | "pantry">) => {
@@ -35,16 +48,19 @@ export const listGroceryListsTool = defineTool(
       const total = all.length;
 
       if (total === 0) {
-        return toolResult("No grocery lists found.");
+        return toolResult("No grocery lists found.", { items: [] });
       }
 
+      // Item count resolved once per list, feeding both the text and the structured row.
+      const items = all.map((list) => ({
+        uid: list.uid,
+        name: list.name,
+        itemCount: ctx.state.items.store.getByListUid(list.uid).length,
+      }));
       const header = `You have ${total.toString()} grocery list(s):`;
-      const lines = all.map((list) => {
-        const itemCount = ctx.state.items.store.getByListUid(list.uid).length;
-        return `- **${list.name}** — ${itemCount.toString()} item(s) (uid: \`${list.uid}\`)`;
-      });
+      const lines = items.map((l) => `- **${l.name}** — ${l.itemCount.toString()} item(s) (uid: \`${l.uid}\`)`);
 
-      return toolResult(header + "\n\n" + lines.join("\n"));
+      return toolResult(header + "\n\n" + lines.join("\n"), { items });
     };
   },
 );

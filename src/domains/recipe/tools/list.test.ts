@@ -1,7 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { makeRecipe } from "../../../../test/domains/recipe/__fixtures__/recipes.js";
+import type { RecipeUid } from "../ids.js";
+
+import { makeCategory, makeRecipe } from "../../../../test/domains/recipe/__fixtures__/recipes.js";
 import { useKernelHarness } from "../../../../test/support/kernel-harness.js";
+import { getText } from "../../../../test/support/tool-test-utils.js";
 
 describe("list_recipes tool", () => {
   const kh = useKernelHarness("recipe");
@@ -81,5 +84,46 @@ describe("list_recipes tool", () => {
     const text = await kh.callToolText("list_recipes", { offset: 5, limit: 3 });
 
     expect(text).toContain("Showing 3 of 10");
+  });
+
+  it("emits structured recipe rows with uid, category names, and the pagination cursor (R1)", async () => {
+    const cat = makeCategory({ name: "Dessert" });
+    kh.seed({
+      categories: [cat],
+      recipes: [
+        makeRecipe({
+          uid: "r-1" as RecipeUid,
+          name: "Cake",
+          categories: [cat.uid],
+          rating: 4,
+          totalTime: "1 hour",
+          isPinned: true,
+        }),
+      ],
+    });
+
+    const result = await kh.callTool("list_recipes", { offset: 0, limit: 25 });
+    expect(result.isError).toBeFalsy();
+    const payload = result.structuredContent as {
+      items: Array<Record<string, unknown>>;
+      total: number;
+      offset: number;
+    };
+    expect(payload).toMatchObject({ total: 1, offset: 0 });
+    expect(payload.items[0]).toMatchObject({
+      uid: "r-1",
+      name: "Cake",
+      categories: ["Dessert"],
+      rating: 4,
+      totalTime: "1 hour",
+      isPinned: true,
+    });
+  });
+
+  it("over-paging past the end is an error, not an empty success", async () => {
+    kh.seed({ recipes: [makeRecipe({ name: "Only One" })] });
+    const result = await kh.callTool("list_recipes", { offset: 5, limit: 25 });
+    expect(result.isError).toBe(true);
+    expect(getText(result)).toContain("Try a lower offset");
   });
 });

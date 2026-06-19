@@ -88,6 +88,29 @@ describe("list_categories tool", () => {
     expect(text).toContain("uid: `cat-uid-1`");
   });
 
+  it("emits structured category rows carrying uid, recipeCount, and parentUid (R1)", async () => {
+    const parent = makeCategory({ uid: "p-1" as CategoryUid, name: "Baking", parentUid: null });
+    const child = makeCategory({ uid: "c-1" as CategoryUid, name: "Cakes", parentUid: "p-1" });
+    kh.seed({ recipes: [makeRecipe({ categories: [child.uid] })], categories: [parent, child] });
+
+    const result = await kh.callTool("list_categories", {});
+    expect(result.isError).toBeFalsy();
+    const { items } = result.structuredContent as { items: Array<Record<string, unknown>> };
+    // Flat, alphabetically sorted; the tree is reconstructable from parentUid.
+    expect(items).toEqual([
+      { uid: "p-1", name: "Baking", recipeCount: 0, parentUid: null },
+      { uid: "c-1", name: "Cakes", recipeCount: 1, parentUid: "p-1" },
+    ]);
+  });
+
+  it("normalizes a dangling parentUid to null in the structured rows (matches the text re-rooting)", async () => {
+    const orphan = makeCategory({ uid: "curries" as CategoryUid, name: "Curries", parentUid: "missing-parent" });
+    kh.seed({ recipes: [makeRecipe({ categories: [orphan.uid] })], categories: [orphan] });
+    const result = await kh.callTool("list_categories", {});
+    const { items } = result.structuredContent as { items: Array<Record<string, unknown>> };
+    expect(items).toEqual([{ uid: "curries", name: "Curries", recipeCount: 1, parentUid: null }]);
+  });
+
   it("renders child categories indented under parents", async () => {
     const parent = makeCategory({ uid: "parent-1" as CategoryUid, name: "Baking", parentUid: null });
     const child = makeCategory({ uid: "child-1" as CategoryUid, name: "Cakes", parentUid: "parent-1" });
