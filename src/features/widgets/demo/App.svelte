@@ -32,7 +32,9 @@
 
 <main>
   <h1>mcp-paprika widget demo</h1>
-  <p class="status" class:connected>{connected ? "Connected to host" : "Connecting…"}</p>
+  <p class="status" class:connected>
+    {connected ? "Connected to host" : "Connecting…"}
+  </p>
 
   {#if payload === undefined}
     <p class="empty">Waiting for a tool result…</p>
@@ -45,7 +47,10 @@
 <style>
   :global(body) {
     margin: 0;
-    font-family: system-ui, -apple-system, sans-serif;
+    font-family:
+      system-ui,
+      -apple-system,
+      sans-serif;
     color-scheme: light dark;
   }
   main {

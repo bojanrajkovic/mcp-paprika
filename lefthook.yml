@@ -17,6 +17,16 @@ pre-commit:
       glob: "{,**/}*.{ts,json,md}"
       stage_fixed: true
       run: pnpm exec oxfmt --write {staged_files}
+    prettier-svelte:
+      priority: 3
+      # oxfmt does not recognize .svelte and silently skips it; prettier-plugin-svelte
+      # formats widget markup/styles. This rewrites a DISJOINT file set (.svelte only,
+      # never .ts/.json/.md), so it can't race oxlint/oxfmt above — the priority is for
+      # determinism, not safety. Pass --plugin explicitly (no discoverable prettier
+      # config) so oxfmt stays the sole formatter for everything that isn't .svelte.
+      glob: "{,**/}*.svelte"
+      stage_fixed: true
+      run: pnpm exec prettier --plugin prettier-plugin-svelte --write {staged_files}
 
 commit-msg:
   commands:
