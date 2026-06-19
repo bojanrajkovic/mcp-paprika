@@ -27,6 +27,15 @@ import { errorTypeName, startOperation } from "../telemetry/trace-result.js";
  * `title` and `annotations` are REQUIRED: every tool in the surface supplies both,
  * and forcing them keeps the generated reference's read-only / destructive /
  * idempotent hints complete.
+ *
+ * `outputSchema` is OPTIONAL and plain runtime data: the same `ZodRawShape |
+ * ZodTypeAny` union as `inputSchema` (both forms the SDK's `registerTool`
+ * ingests), declaring the shape of the `structuredContent` a tool returns
+ * alongside its text. It does NOT participate in `defineTool`'s generic
+ * inference — per-tool structured-payload type safety lives at the authoring
+ * site, where one Zod schema derives both the formatter's row type and the
+ * emitted payload type. Most tools omit it; the SDK's output validation is a
+ * no-op until a tool declares one.
  */
 export interface ToolSpec<I extends ZodRawShape | ZodTypeAny = ZodRawShape | ZodTypeAny> {
   readonly name: string;
@@ -34,6 +43,7 @@ export interface ToolSpec<I extends ZodRawShape | ZodTypeAny = ZodRawShape | Zod
   readonly description: string;
   readonly annotations: ToolAnnotations;
   readonly inputSchema: I;
+  readonly outputSchema?: ZodRawShape | ZodTypeAny;
 }
 
 /**
@@ -160,10 +170,10 @@ function loggableString(value: string): string {
  * handler is processed (args resolve left-to-right), collapsing `State` to
  * `unknown`. Registration maps the {@link ToolSpec} to the SDK's `registerTool`
  * config explicitly: `name` is the positional argument, and the remaining fields
- * (`title`/`description`/`inputSchema`/`annotations`) become the config object.
- * That explicit literal is the single seam through which a later spec field is
- * threaded into the advertised surface (an output schema, or UI metadata on
- * `_meta`).
+ * (`title`/`description`/`inputSchema`/`annotations`, plus `outputSchema` when a
+ * tool declares one) become the config object. That explicit literal is the
+ * single seam through which a later spec field is threaded into the advertised
+ * surface (UI metadata on `_meta`, next).
  */
 export function defineTool<
   I extends ZodRawShape | ZodTypeAny,
@@ -263,6 +273,12 @@ export function defineTool<
               // with one gate line per call across the whole surface.
               log.debug({ tool: spec.name, precondition: pre.name || "(inline)" }, "tool gated by precondition");
               op.span.setAttribute(ATTR_TOOL_GATED_BY, pre.name || "(inline)");
+              // A gate failure returns the guard's text-only result. Once a tool
+              // declares `outputSchema`, the SDK validates every non-error result
+              // — and a gated response is non-error — so a schema-bearing GUARDED
+              // tool must carry schema-compliant `structuredContent` on (or
+              // exempt) its gate failures. No such tool exists yet; the contract
+              // for gate failures under a schema is A2/A3's to define.
               return finish(failure, "precondition_gated");
             }
           }
@@ -276,7 +292,12 @@ export function defineTool<
       };
       // Map the spec to the SDK's registerTool config explicitly: `name` is the
       // positional argument, not a config key. This is the single seam where a
-      // later spec field is threaded into the config (an output schema; UI `_meta`).
+      // later spec field is threaded into the config (UI `_meta`, next). The
+      // SDK advertises `outputSchema` in tools/list and validates a tool's
+      // `structuredContent` against it; absent (the common case) it is a no-op.
+      // A Zod schema is always truthy, so `&&`-elision omits the key when unset
+      // — required under exactOptionalPropertyTypes, which rejects an explicit
+      // `outputSchema: undefined`.
       ctx.server.registerTool(
         spec.name,
         {
@@ -284,6 +305,7 @@ export function defineTool<
           description: spec.description,
           inputSchema: spec.inputSchema,
           annotations: spec.annotations,
+          ...(spec.outputSchema && { outputSchema: spec.outputSchema }),
         },
         gated as ToolCallback<I>,
       );

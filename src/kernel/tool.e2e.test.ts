@@ -8,9 +8,10 @@
  * transport (see `test/support/in-memory-mcp.ts`), so it anchors the explicit
  * spec→config mapping in `register`: every `ToolSpec` field must land in the
  * advertised tool, `name` must come from the positional argument (it is dropped
- * from the config object), and the fields the precursor does NOT map
- * (`outputSchema`, `_meta`) must be absent — the forward guards A1 (#306) and C1
- * (#324) each flip when they extend the seam.
+ * from the config object), and a declared `outputSchema` rides into the
+ * advertisement (A1 #306) while a tool that omits it advertises none (the
+ * `&&`-elision must not leak an empty key). `_meta` stays absent — the forward
+ * guard C1 (#324) flips when it threads `ui` into the config.
  */
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -21,7 +22,7 @@ import type { DomainCtx, Infra } from "./registry.js";
 
 import { connectInMemoryMcp } from "../../test/support/in-memory-mcp.js";
 import { buildBrandedServer } from "../server/build.js";
-import { textResult } from "../shared/tools.js";
+import { toolResult } from "../shared/tools.js";
 import { SILENT_LOG } from "../utils/log.js";
 import { defineTool } from "./tool.js";
 
@@ -45,7 +46,7 @@ describe("defineTool — advertised tools/list surface", () => {
         annotations: { readOnlyHint: true, idempotentHint: true },
         inputSchema: { query: z.string(), limit: z.number().optional() },
       },
-      (_ctx: DomainCtx<unknown, never>) => (args) => textResult(`echo:${args.query}`),
+      (_ctx: DomainCtx<unknown, never>) => (args) => toolResult(`echo:${args.query}`),
     );
     tool.register(makeCtx(server));
 
@@ -64,10 +65,47 @@ describe("defineTool — advertised tools/list surface", () => {
       const schema = advertised!.inputSchema as { properties?: Record<string, unknown> };
       expect(Object.keys(schema.properties ?? {})).toEqual(expect.arrayContaining(["query", "limit"]));
 
-      // Forward guards: the precursor maps neither field. A1 (#306) sets
-      // `outputSchema`; C1 (#324) sets `_meta` from `ui`. Each flips its guard.
+      // A tool that declares no outputSchema advertises none — the `&&`-elision
+      // at the seam must not leak an empty `outputSchema` key.
       expect(advertised!.outputSchema).toBeUndefined();
+      // Forward guard: C1 (#324) threads `ui` into `_meta` and flips this.
       expect(advertised!._meta).toBeUndefined();
+    } finally {
+      await mcp.close();
+    }
+  });
+
+  it("threads a declared outputSchema into the tools/list advertisement", async () => {
+    const server = buildBrandedServer();
+    const tool = defineTool(
+      {
+        name: "echo_structured",
+        title: "Echo (structured)",
+        description: "Echoes its query back with a structured payload.",
+        annotations: { readOnlyHint: true },
+        inputSchema: { query: z.string() },
+        outputSchema: { echoed: z.string() },
+      },
+      (_ctx: DomainCtx<unknown, never>) => (args) => toolResult(`echo:${args.query}`, { echoed: args.query }),
+    );
+    tool.register(makeCtx(server));
+
+    const mcp = await connectInMemoryMcp(server);
+    try {
+      const { tools } = await mcp.client.listTools();
+      const advertised = tools.find((t) => t.name === "echo_structured");
+      expect(advertised?.outputSchema).toBeDefined();
+      const outSchema = advertised!.outputSchema as { properties?: Record<string, unknown> };
+      expect(Object.keys(outSchema.properties ?? {})).toContain("echoed");
+
+      // The success-path contract: a tools/call whose result carries
+      // `structuredContent` passes the SDK's validateToolOutput and is
+      // delivered with both halves intact (the text block and the record).
+      const result = await mcp.client.callTool({ name: "echo_structured", arguments: { query: "hi" } });
+      expect(result.isError).toBeFalsy();
+      expect(result.structuredContent).toEqual({ echoed: "hi" });
+      const content = result.content as Array<{ type: string; text: string }>;
+      expect(content[0]).toMatchObject({ type: "text", text: "echo:hi" });
     } finally {
       await mcp.close();
     }
@@ -83,7 +121,7 @@ describe("defineTool — advertised tools/list surface", () => {
         annotations: { readOnlyHint: true },
         inputSchema: { query: z.string() },
       },
-      (_ctx: DomainCtx<unknown, never>) => (args) => textResult(`echo:${args.query}`),
+      (_ctx: DomainCtx<unknown, never>) => (args) => toolResult(`echo:${args.query}`),
     );
     tool.register(makeCtx(server));
 
