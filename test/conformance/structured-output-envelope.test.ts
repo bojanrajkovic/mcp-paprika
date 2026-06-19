@@ -53,7 +53,17 @@ describe("ADR-0019: structured-output envelope and rollout", () => {
       .filter((s) => s.outputSchema !== undefined)
       .map((s) => s.name)
       .sort();
-    // A3 #318 — the first adopters. Add each later batch's tool names as they land.
-    expect(withSchema).toEqual(["read_meal_plan", "read_recipe_history", "search_meal_history"]);
+    // A3 #318 — the meal reads, the first adopters. A3 #319 — the recipe/grocery/menu
+    // list tools. Add each later batch's tool names as they land.
+    expect(withSchema).toEqual([
+      "list_categories",
+      "list_grocery_lists",
+      "list_menus",
+      "list_recipes",
+      "read_meal_plan",
+      "read_recipe_history",
+      "search_meal_history",
+      "search_recipes",
+    ]);
   });
 });

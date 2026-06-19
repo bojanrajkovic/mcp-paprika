@@ -1,10 +1,27 @@
+import { z } from "zod";
+
 import type { DomainCtx } from "../../../kernel/registry.js";
 import type { Category } from "../category/types.js";
 import type { RecipeState } from "../module.js";
 
 import { defineTool } from "../../../kernel/tool.js";
 import { toolResult } from "../../../shared/tools.js";
+import { CategoryUidSchema } from "../ids.js";
 import { categoryStartGuard } from "./guards.js";
+
+// Structured-output payload (ADR-0019, R1): a flat array of category rows. The text
+// renders the parent/child tree; the structured channel carries each `parentUid`
+// (and `uid`) so the model can rebuild the hierarchy or drive category ops itself.
+export const listCategoriesOutputSchema = z.object({
+  items: z.array(
+    z.object({
+      uid: CategoryUidSchema,
+      name: z.string(),
+      recipeCount: z.number().int().nonnegative(),
+      parentUid: CategoryUidSchema.nullable().describe("Parent category UID, or null for a top-level category."),
+    }),
+  ),
+});
 
 /**
  * `list_categories` — list categories with per-category recipe counts. Recipe owns
@@ -17,13 +34,14 @@ export const listCategoriesTool = defineTool(
     annotations: { readOnlyHint: true, idempotentHint: true },
     description: "List all recipe categories with the number of recipes in each. Categories are sorted alphabetically.",
     inputSchema: {},
+    outputSchema: listCategoriesOutputSchema,
   },
   [categoryStartGuard],
   (ctx: DomainCtx<RecipeState, never>) => {
     return async (_args) => {
       const categories = ctx.state.category.store.getAll();
       if (categories.length === 0) {
-        return toolResult("No categories found in your recipe library.");
+        return toolResult("No categories found in your recipe library.", { items: [] });
       }
 
       const recipes = ctx.state.recipe.store.getAll();
@@ -46,7 +64,19 @@ export const listCategoriesTool = defineTool(
 
       const sorted = categories.toSorted((a, b) => a.name.localeCompare(b.name));
 
-      return toolResult(formatCategoryList(sorted, countMap));
+      const knownUids = new Set(sorted.map((c) => c.uid));
+      const items = sorted.map((c) => ({
+        uid: c.uid,
+        name: c.name,
+        recipeCount: countMap.get(c.uid) ?? 0,
+        // Match the text's orphan re-rooting (`formatCategoryList`): a parentUid
+        // that points at a missing category is surfaced as null (top-level), so the
+        // model rebuilding the tree from `parentUid` gets the same shape the human
+        // sees, instead of an orphan dangling under a phantom parent.
+        parentUid: c.parentUid !== null && knownUids.has(c.parentUid) ? c.parentUid : null,
+      }));
+
+      return toolResult(formatCategoryList(sorted, countMap), { items });
     };
   },
 );

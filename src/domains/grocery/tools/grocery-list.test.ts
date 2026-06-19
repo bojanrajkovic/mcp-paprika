@@ -44,6 +44,16 @@ describe("list_grocery_lists tool", () => {
     expect(text).toContain("1 item(s)");
   });
 
+  it("emits structured grocery-list rows with uid and item count (R1)", async () => {
+    const listA = makeGroceryList({ name: "Weekly" });
+    const item1 = makeGroceryItem({ listUid: listA.uid });
+    kh.seed({ groceryLists: [listA], groceryItems: [item1] });
+    const result = await kh.callTool("list_grocery_lists", {});
+    expect(result.isError).toBeFalsy();
+    const { items } = result.structuredContent as { items: Array<Record<string, unknown>> };
+    expect(items).toEqual([{ uid: listA.uid, name: "Weekly", itemCount: 1 }]);
+  });
+
   it("sorts lists alphabetically by name", async () => {
     const listZ = makeGroceryList({ name: "Zebra Market" });
     const listA = makeGroceryList({ name: "Aldi Trip" });

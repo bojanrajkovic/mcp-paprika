@@ -1,6 +1,47 @@
+import { z } from "zod";
+
 import type { Category } from "./category/types.js";
 import type { CategoryUid } from "./ids.js";
 import type { Recipe } from "./types.js";
+
+import { RecipeUidSchema } from "./ids.js";
+
+/**
+ * The structured-output row for one recipe (ADR-0019, R1) — the machine-readable
+ * counterpart to the list/search text, shared by `list_recipes` and `search_recipes`.
+ * The `uid` is what the model's follow-ups (`read_recipe`, `rate_recipe`,
+ * `add_recipe_to_grocery_list`, …) consume; the rest are the selection fields the
+ * text shows (category names, rating, times, the two state flags). The full recipe
+ * body (ingredients/directions/etc.) stays in `read_recipe` — a list row is a summary.
+ */
+export const recipeRowSchema = z.object({
+  uid: RecipeUidSchema,
+  name: z.string(),
+  categories: z.array(z.string()).describe("Category names this recipe belongs to."),
+  rating: z.number().int().describe("0–5; 0 means unrated."),
+  prepTime: z.string().nullable(),
+  cookTime: z.string().nullable(),
+  totalTime: z.string().nullable(),
+  isPinned: z.boolean(),
+  onGroceryList: z.boolean(),
+});
+
+export type RecipeRow = z.infer<typeof recipeRowSchema>;
+
+/** Map a `Recipe` plus its resolved category names into a {@link RecipeRow}. */
+export function recipeToRow(recipe: Recipe, categoryNames: Array<string>): RecipeRow {
+  return {
+    uid: recipe.uid,
+    name: recipe.name,
+    categories: categoryNames,
+    rating: recipe.rating,
+    prepTime: recipe.prepTime,
+    cookTime: recipe.cookTime,
+    totalTime: recipe.totalTime,
+    isPinned: recipe.isPinned,
+    onGroceryList: recipe.onGroceryList,
+  };
+}
 
 export function recipeToMarkdown(recipe: Recipe, categoryNames: Array<string>, lastCookedAt?: string | null): string {
   const lines: Array<string> = [];
