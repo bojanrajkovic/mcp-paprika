@@ -3,7 +3,7 @@ import type { AisleState } from "../module.js";
 
 import { defineTool } from "../../../kernel/tool.js";
 import { sortCatalog } from "../../../shared/catalog.js";
-import { textResult } from "../../../shared/tools.js";
+import { toolResult } from "../../../shared/tools.js";
 import { aisleStartGuard } from "./guards.js";
 
 /**
@@ -26,12 +26,12 @@ export const listAislesTool = defineTool(
     return async () => {
       const aisles = sortCatalog(ctx.state.store.getAll());
       if (aisles.length === 0) {
-        return textResult(
+        return toolResult(
           "No aisles found. Aisles are created automatically when you add a grocery or pantry item with a new aisle name.",
         );
       }
       const lines = aisles.map((a) => `- **${a.name}** — \`${a.uid}\``);
-      return textResult(lines.join("\n"));
+      return toolResult(lines.join("\n"));
     };
   },
 );

@@ -4,7 +4,7 @@ import type { DomainCtx } from "../../../kernel/registry.js";
 import type { RecipeState, RecipeWrites } from "../module.js";
 
 import { defineTool } from "../../../kernel/tool.js";
-import { commitFailure, textResult } from "../../../shared/tools.js";
+import { commitFailure, toolResult } from "../../../shared/tools.js";
 import { RecipeUidSchema } from "../ids.js";
 import { recipeColdStartGuard } from "./guards.js";
 
@@ -32,11 +32,11 @@ export const trashRecipeTool = defineTool(
       const recipe = ctx.state.recipe.store.get(args.uid);
 
       if (!recipe) {
-        return textResult(`No recipe found with UID "${args.uid}" (it may not exist or was already deleted).`);
+        return toolResult(`No recipe found with UID "${args.uid}" (it may not exist or was already deleted).`);
       }
 
       if (recipe.inTrash) {
-        return textResult(`Recipe "${recipe.name}" is already in the trash.`);
+        return toolResult(`Recipe "${recipe.name}" is already in the trash.`);
       }
 
       const trashed = { ...recipe, inTrash: true };
@@ -45,11 +45,11 @@ export const trashRecipeTool = defineTool(
         async (saved): Promise<CallToolResult> => {
           const commitErr = commitFailure("recipe", await ctx.writes.commitRecipe(saved), { selfHealing: false });
           if (commitErr) return commitErr;
-          return textResult(`Recipe "${recipe.name}" has been moved to the trash.`);
+          return toolResult(`Recipe "${recipe.name}" has been moved to the trash.`);
         },
         async (e) => {
           log.error({ err: e, uid: args.uid }, "saveRecipe failed");
-          return textResult(`Failed to delete recipe: ${e.message}`);
+          return toolResult(`Failed to delete recipe: ${e.message}`);
         },
       );
     };

@@ -7,7 +7,7 @@ import type { CategoryUid } from "../ids.js";
 import type { RecipeState, RecipeWrites } from "../module.js";
 
 import { defineTool } from "../../../kernel/tool.js";
-import { commitFailure, textResult } from "../../../shared/tools.js";
+import { commitFailure, toolResult } from "../../../shared/tools.js";
 import { CategoryUidSchema } from "../ids.js";
 import { categoryStartGuard } from "./guards.js";
 
@@ -66,7 +66,7 @@ export const createCategoryTool = defineTool(
     const log = ctx.infra.log.child({ component: "create_category" });
     return async (args) => {
       if (args.parentUid !== undefined && ctx.state.category.store.get(args.parentUid) === undefined) {
-        return textResult(`No category found with UID "${args.parentUid}" to use as a parent.`);
+        return toolResult(`No category found with UID "${args.parentUid}" to use as a parent.`);
       }
 
       const category: Category = {
@@ -80,11 +80,11 @@ export const createCategoryTool = defineTool(
         async (saved): Promise<CallToolResult> => {
           const commitErr = commitFailure("category", await ctx.writes.commitCategoryUpsert(saved));
           if (commitErr) return commitErr;
-          return textResult(`Created category ${categorySummary(ctx.state, saved)}`);
+          return toolResult(`Created category ${categorySummary(ctx.state, saved)}`);
         },
         async (e) => {
           log.error({ err: e, name: args.name }, "saveCategory failed");
-          return textResult(`Failed to create category: ${e.message}`);
+          return toolResult(`Failed to create category: ${e.message}`);
         },
       );
     };
@@ -115,21 +115,21 @@ export const updateCategoryTool = defineTool(
     return async (args) => {
       const existing = ctx.state.category.store.get(args.uid);
       if (existing === undefined)
-        return textResult(`No category found with UID "${args.uid}" (it may not exist or was already deleted).`);
+        return toolResult(`No category found with UID "${args.uid}" (it may not exist or was already deleted).`);
 
       if (args.name === undefined && args.parentUid === undefined) {
-        return textResult("Nothing to update: provide `name`, `parentUid`, or both.");
+        return toolResult("Nothing to update: provide `name`, `parentUid`, or both.");
       }
 
       if (typeof args.parentUid === "string") {
         if (args.parentUid === args.uid) {
-          return textResult("A category cannot be its own parent.");
+          return toolResult("A category cannot be its own parent.");
         }
         if (ctx.state.category.store.get(args.parentUid) === undefined) {
-          return textResult(`No category found with UID "${args.parentUid}" to use as a parent.`);
+          return toolResult(`No category found with UID "${args.parentUid}" to use as a parent.`);
         }
         if (wouldCreateCycle(ctx.state, args.uid, args.parentUid)) {
-          return textResult("That move would create a cycle: the chosen parent is a descendant of this category.");
+          return toolResult("That move would create a cycle: the chosen parent is a descendant of this category.");
         }
       }
 
@@ -146,11 +146,11 @@ export const updateCategoryTool = defineTool(
           // (a rename changes the display name baked into their embedding text).
           const commitErr = commitFailure("category", await ctx.writes.commitCategoryUpsert(saved));
           if (commitErr) return commitErr;
-          return textResult(`Updated category ${categorySummary(ctx.state, saved)}`);
+          return toolResult(`Updated category ${categorySummary(ctx.state, saved)}`);
         },
         async (e) => {
           log.error({ err: e, uid: args.uid }, "saveCategory failed");
-          return textResult(`Failed to update category: ${e.message}`);
+          return toolResult(`Failed to update category: ${e.message}`);
         },
       );
     };

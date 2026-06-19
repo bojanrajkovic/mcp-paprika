@@ -2,7 +2,7 @@ import type { DomainCtx } from "../../../kernel/registry.js";
 import type { PantryState, PantryWrites } from "../module.js";
 
 import { defineTool } from "../../../kernel/tool.js";
-import { commitFailure, textResult } from "../../../shared/tools.js";
+import { commitFailure, toolResult } from "../../../shared/tools.js";
 import { PantryItemUidSchema } from "../ids.js";
 import { pantryStartGuard } from "./guards.js";
 
@@ -28,7 +28,7 @@ export const deletePantryItemTool = defineTool(
       const existing = ctx.state.store.get(args.uid);
 
       if (!existing) {
-        return textResult(`No pantry item found with UID "${args.uid}" (it may not exist or was already deleted).`);
+        return toolResult(`No pantry item found with UID "${args.uid}" (it may not exist or was already deleted).`);
       }
 
       const trashed = { ...existing, deleted: true };
@@ -37,11 +37,11 @@ export const deletePantryItemTool = defineTool(
         async (items) => {
           const commitErr = commitFailure("pantry", await ctx.writes.commitPantryItem(items[0]!));
           if (commitErr) return commitErr;
-          return textResult(`Pantry item "${existing.ingredient}" has been deleted.`);
+          return toolResult(`Pantry item "${existing.ingredient}" has been deleted.`);
         },
         async (e) => {
           log.error({ err: e, uid: args.uid }, "savePantryItems failed");
-          return textResult(`Failed to delete pantry item: ${e.message}`);
+          return toolResult(`Failed to delete pantry item: ${e.message}`);
         },
       );
     };

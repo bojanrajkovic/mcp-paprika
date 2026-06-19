@@ -5,7 +5,7 @@ import type { RecipeState, RecipeWrites } from "../module.js";
 import type { Recipe } from "../types.js";
 
 import { defineTool } from "../../../kernel/tool.js";
-import { commitFailure, textResult } from "../../../shared/tools.js";
+import { commitFailure, toolResult } from "../../../shared/tools.js";
 import { RecipeUidSchema } from "../ids.js";
 import { recipeToMarkdown } from "../recipe-markdown.js";
 import { recipeColdStartGuard } from "./guards.js";
@@ -58,7 +58,7 @@ export const updateRecipeTool = defineTool(
       const existing = ctx.state.recipe.store.get(args.uid);
 
       if (!existing) {
-        return textResult(`No recipe found with UID "${args.uid}" (it may not exist or was already deleted).`);
+        return toolResult(`No recipe found with UID "${args.uid}" (it may not exist or was already deleted).`);
       }
 
       // Partial merge: conditional spread omits keys when value is undefined.
@@ -85,7 +85,7 @@ export const updateRecipeTool = defineTool(
         (v) => v,
         (e) => {
           log.error({ err: e, uid: args.uid }, "saveRecipe failed");
-          return textResult(`Failed to update recipe: ${e.message}`);
+          return toolResult(`Failed to update recipe: ${e.message}`);
         },
       );
       if ("content" in saved) return saved;
@@ -93,7 +93,7 @@ export const updateRecipeTool = defineTool(
       if (commitErr) return commitErr;
 
       const categoryNames = ctx.state.category.store.resolveNames(saved.categories);
-      return textResult(recipeToMarkdown(saved, categoryNames));
+      return toolResult(recipeToMarkdown(saved, categoryNames));
     };
   },
 );

@@ -7,7 +7,7 @@ import type { TimeConstraints } from "../store.js";
 import type { Recipe } from "../types.js";
 
 import { defineTool } from "../../../kernel/tool.js";
-import { textResult } from "../../../shared/tools.js";
+import { toolResult } from "../../../shared/tools.js";
 import { parseDuration } from "../../../utils/duration.js";
 import { recipeMetadataLines } from "../recipe-markdown.js";
 import { recipeColdStartGuard } from "./guards.js";
@@ -88,7 +88,7 @@ export const searchRecipesTool = defineTool(
           // searchRecipesInputSchema comment): reject an all-empty call so search
           // never silently returns the whole library.
           if (!hasQuery && !hasIngredients && !hasTime) {
-            return textResult("Provide at least one of: query, ingredients, or a max prep/cook/total time.");
+            return toolResult("Provide at least one of: query, ingredients, or a max prep/cook/total time.");
           }
 
           // Build candidate set from the search/getAll path.
@@ -143,7 +143,7 @@ export const searchRecipesTool = defineTool(
             if (args.maxPrep !== undefined) criteria.push(`maxPrep "${args.maxPrep}"`);
             if (args.maxCook !== undefined) criteria.push(`maxCook "${args.maxCook}"`);
             if (args.maxTotal !== undefined) criteria.push(`maxTotal "${args.maxTotal}"`);
-            return textResult(`No recipes found matching ${criteria.join(", ")}.`);
+            return toolResult(`No recipes found matching ${criteria.join(", ")}.`);
           }
 
           const lines = limited.map((r) => {
@@ -158,9 +158,9 @@ export const searchRecipesTool = defineTool(
             );
           });
 
-          return textResult(lines.join("\n\n---\n\n"));
+          return toolResult(lines.join("\n\n---\n\n"));
         },
-        (errorMsg) => textResult(errorMsg),
+        (errorMsg) => toolResult(errorMsg),
       );
     };
   },

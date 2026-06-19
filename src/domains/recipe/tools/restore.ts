@@ -6,7 +6,7 @@ import type { RecipeState, RecipeWrites } from "../module.js";
 
 import { defineTool } from "../../../kernel/tool.js";
 import { PaprikaAPIError } from "../../../paprika/errors.js";
-import { commitFailure, textResult } from "../../../shared/tools.js";
+import { commitFailure, toolResult } from "../../../shared/tools.js";
 import { RecipeUidSchema } from "../ids.js";
 import { recipeToMarkdown } from "../recipe-markdown.js";
 import { recipeColdStartGuard } from "./guards.js";
@@ -51,11 +51,11 @@ export const restoreRecipeTool = defineTool(
             // stale local phantom so a later read/search can't serve it.
             log.info({ uid: args.uid }, "restore_recipe: recipe not found (404)");
             await ctx.writes.reconcileLocalRecipeAbsent(args.uid);
-            return textResult(`No recipe found with UID "${args.uid}" (it may not exist or was already deleted).`);
+            return toolResult(`No recipe found with UID "${args.uid}" (it may not exist or was already deleted).`);
           }
           // Transient/upstream failure — don't masquerade as "already active".
           log.error({ err: e, uid: args.uid }, "restore_recipe lookup failed");
-          return textResult(`Failed to look up recipe "${args.uid}": ${e.message}`);
+          return toolResult(`Failed to look up recipe "${args.uid}": ${e.message}`);
         },
       );
       if ("content" in recipe) return recipe;
@@ -64,7 +64,7 @@ export const restoreRecipeTool = defineTool(
         // Authoritative truth: it's live. Heal a stale local copy that still shows
         // it trashed (or is missing) so reads/search agree before the next sync.
         await ctx.writes.reconcileLocalRecipe(recipe);
-        return textResult(`Recipe "${recipe.name}" is already in your active library.`);
+        return toolResult(`Recipe "${recipe.name}" is already in your active library.`);
       }
 
       // A pure inTrash flip; saveRecipe's hash recompute is a no-op (the hash is
@@ -75,7 +75,7 @@ export const restoreRecipeTool = defineTool(
         (v) => v,
         (e) => {
           log.error({ err: e, uid: args.uid }, "saveRecipe failed");
-          return textResult(`Failed to restore recipe: ${e.message}`);
+          return toolResult(`Failed to restore recipe: ${e.message}`);
         },
       );
       if ("content" in saved) return saved;
@@ -83,7 +83,7 @@ export const restoreRecipeTool = defineTool(
       if (commitErr) return commitErr;
 
       const categoryNames = ctx.state.category.store.resolveNames(saved.categories);
-      return textResult(recipeToMarkdown(saved, categoryNames));
+      return toolResult(recipeToMarkdown(saved, categoryNames));
     };
   },
 );

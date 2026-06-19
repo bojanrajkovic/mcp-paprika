@@ -5,7 +5,7 @@ import type { MenuState, MenuWrites } from "../module.js";
 import type { Menu } from "../types.js";
 
 import { defineTool } from "../../../kernel/tool.js";
-import { commitFailure, resolveLookup, textResult, uidOrTextLookupSchema } from "../../../shared/tools.js";
+import { commitFailure, resolveLookup, toolResult, uidOrTextLookupSchema } from "../../../shared/tools.js";
 import { MenuUidSchema } from "../ids.js";
 import { menuToMarkdown } from "../menu-helpers.js";
 import { menuStartGuard } from "./guards.js";
@@ -43,7 +43,7 @@ export const updateMenuTool = defineTool(
     const log = ctx.infra.log.child({ component: "update_menu" });
     return async (args) => {
       if (args.name === undefined && args.days === undefined && args.notes === undefined) {
-        return textResult("Nothing to update. Provide at least one of name, days, or notes.");
+        return toolResult("Nothing to update. Provide at least one of name, days, or notes.");
       }
 
       const query = "uid" in args.lookup ? { uid: args.lookup.uid } : { text: args.lookup.name };
@@ -55,14 +55,14 @@ export const updateMenuTool = defineTool(
       // Only a single resolved menu can be mutated; misses and disambiguation
       // return the standard wording without touching the network.
       if (outcome.kind === "uid_miss") {
-        return textResult(`No menu found with UID "${outcome.uid}" (it may not exist or was already deleted).`);
+        return toolResult(`No menu found with UID "${outcome.uid}" (it may not exist or was already deleted).`);
       }
       if (outcome.kind === "text_none") {
-        return textResult(`No menus found matching "${outcome.text}".`);
+        return toolResult(`No menus found matching "${outcome.text}".`);
       }
       if (outcome.kind === "text_many") {
         const list = outcome.matches.map((menu) => `- **${menu.name}** (uid: \`${menu.uid}\`)`).join("\n");
-        return textResult(`Multiple menus match "${outcome.text}":\n${list}\n\nPlease re-invoke with a specific uid.`);
+        return toolResult(`Multiple menus match "${outcome.text}":\n${list}\n\nPlease re-invoke with a specific uid.`);
       }
 
       const existing = outcome.entity;
@@ -77,7 +77,7 @@ export const updateMenuTool = defineTool(
             .findByName(newName)
             .find((m) => m.name.toLowerCase() === newName.toLowerCase() && m.uid !== existing.uid);
           if (conflict !== undefined) {
-            return textResult(
+            return toolResult(
               `A menu named "${conflict.name}" already exists (UID: ${conflict.uid}). Choose a different name.`,
             );
           }
@@ -96,7 +96,7 @@ export const updateMenuTool = defineTool(
             .slice()
             .sort((a, b) => a.day - b.day)
             .map((item) => `- "${item.name}" on day ${item.day.toString()}`);
-          return textResult(
+          return toolResult(
             `Cannot shrink "${existing.name}" to ${args.days.toString()} day(s): ` +
               `${conflicts.length.toString()} planned recipe(s) fall on later days ` +
               `(planned recipes currently span ${maxDay.toString()} day(s)).\n` +
@@ -118,7 +118,7 @@ export const updateMenuTool = defineTool(
           const persisted = saved[0] ?? merged;
           const commitErr = commitFailure("menu", await ctx.writes.commitMenu(persisted));
           if (commitErr) return commitErr;
-          return textResult(
+          return toolResult(
             menuToMarkdown(
               persisted,
               ctx.state.items.store.getByMenuUid(persisted.uid),
@@ -128,7 +128,7 @@ export const updateMenuTool = defineTool(
         },
         async (e) => {
           log.error({ err: e, uid: existing.uid }, "saveMenus (update_menu) failed");
-          return textResult(`Failed to update menu: ${e.message}`);
+          return toolResult(`Failed to update menu: ${e.message}`);
         },
       );
     };

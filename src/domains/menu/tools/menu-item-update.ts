@@ -7,7 +7,7 @@ import type { MenuItem } from "../menu-item/types.js";
 import type { MenuState, MenuWrites } from "../module.js";
 
 import { defineTool } from "../../../kernel/tool.js";
-import { commitFailure, textResult } from "../../../shared/tools.js";
+import { commitFailure, toolResult } from "../../../shared/tools.js";
 import { mealTypeSpecSchema, resolveOrCreateMealType } from "../../meal-type/meal-type-helpers.js";
 import { RecipeUidSchema } from "../../recipe/ids.js";
 import { MenuItemUidSchema } from "../ids.js";
@@ -46,13 +46,13 @@ export const updateMenuItemTool = defineTool(
     const log = ctx.infra.log.child({ component: "update_menu_item" });
     return async (args) => {
       if (args.type === undefined && args.recipe_uid === undefined) {
-        return textResult("Nothing to update. Provide at least one of type or recipe_uid.");
+        return toolResult("Nothing to update. Provide at least one of type or recipe_uid.");
       }
 
       const uid = args.uid;
       const existing = ctx.state.items.store.get(uid);
       if (existing === undefined) {
-        return textResult(`No menu item found with UID "${uid}" (it may not exist or was already deleted).`);
+        return toolResult(`No menu item found with UID "${uid}" (it may not exist or was already deleted).`);
       }
       // Resolve recipe link + refreshed display name if a new recipe is supplied.
       let newRecipeUid: RecipeUid | null = existing.recipeUid;
@@ -60,7 +60,7 @@ export const updateMenuItemTool = defineTool(
       if (args.recipe_uid !== undefined) {
         const recipe = ctx.deps.recipe.get(args.recipe_uid);
         if (recipe === undefined) {
-          return textResult(
+          return toolResult(
             `recipe_uid "${args.recipe_uid}" is not known to the local recipe store; ` +
               `wait for the next sync and retry.`,
           );
@@ -76,7 +76,7 @@ export const updateMenuItemTool = defineTool(
       if (args.type !== undefined) {
         const result = await resolveOrCreateMealType(ctx.deps["meal-type"], args.type);
         if (!result.ok) {
-          return textResult(result.message);
+          return toolResult(result.message);
         }
         newTypeUid = result.resolved.uid;
       }
@@ -91,14 +91,14 @@ export const updateMenuItemTool = defineTool(
         (items) => items[0]!,
         (e) => {
           log.error({ err: e, uid }, "saveMenuItems (update_menu_item) failed");
-          return textResult(`Failed to update menu item: ${e.message}`);
+          return toolResult(`Failed to update menu item: ${e.message}`);
         },
       );
       if ("content" in saved) return saved;
       const commitErr = commitFailure("menu", await ctx.writes.commitMenuItem(saved));
       if (commitErr) return commitErr;
 
-      return textResult(`Menu item "${saved.name}" updated.`);
+      return toolResult(`Menu item "${saved.name}" updated.`);
     };
   },
 );

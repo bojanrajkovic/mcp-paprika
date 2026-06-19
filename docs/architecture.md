@@ -67,6 +67,10 @@ Semantic discovery is optional: it registers the `discover_recipes` tool only wh
 
 The server reads and syncs recipe photos and can generate new ones. AI generation (`generate_recipe_photo`) is opt-in (registered only when an image-generation client is configured) and produces a styled photo through an OpenRouter image model, normalized with sharp. Any server-side image fetch is SSRF-hardened (unicast-only address guard plus a DNS-rebinding-safe dispatcher), because the URL can be model- or user-influenced. See `src/features/CLAUDE.md`.
 
+## Structured output channel
+
+Every tool returns a text block; some additionally return a `structuredContent` record on MCP's parallel structured channel. The split serves two consumers that pull apart: the text stays clean prose for the person (a grocery list as ingredient / quantity / aisle, no identifier noise), while the structured payload carries the machine UIDs the model's follow-up calls consume. `toolResult()` in `src/shared/tools.ts` builds both halves (its two-argument form adds the structured record beside the text); a tool that returns one declares the shape as `ToolSpec.outputSchema`, which the SDK advertises in `tools/list`. Declaring a schema is a contract on the success path: the SDK then requires `structuredContent` on every non-error result and validates it against the schema, rejecting the call otherwise (an error result is exempt). No tool declares an output schema today, so the validation never runs and the advertised surface is unchanged. See [ADR-0019](adr/0019-mcp-app-widget-surface.md).
+
 ## Authentication
 
 Under stdio there is no auth surface: the OS process boundary is the trust boundary. Under HTTP the server is a full OAuth 2.1 authorization server toward MCP clients while delegating identity to one operator-configured upstream OIDC provider, minting its own opaque tokens and admitting only an allowlisted set of users. The entire `src/auth/` surface loads only when the transport is HTTP. See [ADR-0002](adr/0002-oauth21-oidc-delegation.md) and `src/auth/CLAUDE.md`.

@@ -3,7 +3,7 @@ import { err, ok, type Result } from "neverthrow";
 
 import type { PantryState } from "../module.js";
 
-import { textResult } from "../../../shared/tools.js";
+import { toolResult } from "../../../shared/tools.js";
 
 /**
  * Readiness gate: returns `ok` when the store has synced, `err` with a
@@ -11,7 +11,7 @@ import { textResult } from "../../../shared/tools.js";
  */
 export function pantryStartGuard({ state }: { readonly state: PantryState }): Result<void, CallToolResult> {
   if (!state.store.hasSynced) {
-    return err(textResult("Pantry is not yet synced. Try again in a few seconds."));
+    return err(toolResult("Pantry is not yet synced. Try again in a few seconds."));
   }
   return ok(undefined);
 }

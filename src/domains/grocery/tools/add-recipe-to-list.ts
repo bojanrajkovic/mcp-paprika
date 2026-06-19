@@ -5,7 +5,7 @@ import type { GroceryList } from "../grocery-list/types.js";
 import type { GroceryState, GroceryWrites } from "../module.js";
 
 import { defineTool } from "../../../kernel/tool.js";
-import { commitFailure, resolveLookup, textResult, uidOrTextLookupSchema } from "../../../shared/tools.js";
+import { commitFailure, resolveLookup, toolResult, uidOrTextLookupSchema } from "../../../shared/tools.js";
 import { RecipeUidSchema } from "../../recipe/ids.js";
 import { groceryItemToMarkdown } from "../grocery-helpers.js";
 import { GroceryListUidSchema } from "../ids.js";
@@ -66,14 +66,14 @@ export const addRecipeToGroceryListTool = defineTool(
         findByText: (text) => ctx.deps.recipe.findByName(text),
       });
       if (outcome.kind === "uid_miss") {
-        return textResult(`No recipe found with UID "${outcome.uid}".`);
+        return toolResult(`No recipe found with UID "${outcome.uid}".`);
       }
       if (outcome.kind === "text_none") {
-        return textResult(`No recipes found matching "${outcome.text}".`);
+        return toolResult(`No recipes found matching "${outcome.text}".`);
       }
       if (outcome.kind === "text_many") {
         const lines = outcome.matches.map((r) => `- **${r.name}** — \`${r.uid}\``);
-        return textResult(
+        return toolResult(
           `Multiple recipes match "${outcome.text}" — retry with the UID of the one you mean:\n${lines.join("\n")}`,
         );
       }
@@ -83,7 +83,7 @@ export const addRecipeToGroceryListTool = defineTool(
       // add_grocery_items): min(1) admits whitespace-only ingredients.
       for (const item of args.items) {
         if (item.ingredient.trim() === "") {
-          return textResult(`Invalid item: ingredient must not be empty.`);
+          return toolResult(`Invalid item: ingredient must not be empty.`);
         }
       }
 
@@ -92,12 +92,12 @@ export const addRecipeToGroceryListTool = defineTool(
       if (args.listUid !== undefined) {
         list = ctx.state.lists.store.get(args.listUid);
         if (list === undefined) {
-          return textResult(`Grocery list with UID "${args.listUid}" not found.`);
+          return toolResult(`Grocery list with UID "${args.listUid}" not found.`);
         }
       } else {
         list = ctx.state.lists.store.getAll().find((l) => l.isDefault);
         if (list === undefined) {
-          return textResult("No default grocery list found — pass `listUid` (see list_grocery_lists).");
+          return toolResult("No default grocery list found — pass `listUid` (see list_grocery_lists).");
         }
       }
       const listUid = list.uid;
@@ -118,7 +118,7 @@ export const addRecipeToGroceryListTool = defineTool(
       const skippedNote =
         skipped.length > 0 ? `\n\nAlready on the list (skipped): ${skipped.map((i) => i.ingredient).join(", ")}.` : "";
       if (toAdd.length === 0) {
-        return textResult(
+        return toolResult(
           `Nothing to add — every ingredient from "${recipe.name}" is already on "${list.name}" unpurchased.` +
             skippedNote,
         );
@@ -131,7 +131,7 @@ export const addRecipeToGroceryListTool = defineTool(
         (items) => items,
         (e) => {
           log.error({ err: e, listUid }, "saveGroceryItems failed");
-          return textResult(`Failed to add grocery items: ${e.message}`);
+          return toolResult(`Failed to add grocery items: ${e.message}`);
         },
       );
       if ("content" in savedItems) return savedItems;
@@ -139,7 +139,7 @@ export const addRecipeToGroceryListTool = defineTool(
       if (commitErr) return commitErr;
 
       const rendered = savedItems.map((item) => groceryItemToMarkdown(item, ctx.deps.aisle)).join("\n\n---\n\n");
-      return textResult(
+      return toolResult(
         `Added ${String(savedItems.length)} item(s) from "${recipe.name}" to "${list.name}".${skippedNote}\n\n${rendered}`,
       );
     };

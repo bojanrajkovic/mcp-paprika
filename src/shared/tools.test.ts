@@ -8,20 +8,28 @@ import {
   formatLookupOutcome,
   type LookupOutcome,
   resolveLookup,
-  textResult,
+  toolResult,
   uidOrTextLookupSchema,
 } from "./tools.js";
 
 describe("shared helper functions", () => {
-  describe("textResult wraps a string in the MCP wire envelope", () => {
-    it("textResult('hello') returns { content: [{ type: 'text', text: 'hello' }] }", () => {
-      const result = textResult("hello");
+  describe("toolResult wraps a string in the MCP wire envelope", () => {
+    it("toolResult('hello') returns { content: [{ type: 'text', text: 'hello' }] }", () => {
+      const result = toolResult("hello");
       expect(result).toEqual({ content: [{ type: "text", text: "hello" }] });
     });
 
-    it("textResult('') returns { content: [{ type: 'text', text: '' }] } (empty string is valid)", () => {
-      const result = textResult("");
+    it("toolResult('') returns { content: [{ type: 'text', text: '' }] } (empty string is valid)", () => {
+      const result = toolResult("");
       expect(result).toEqual({ content: [{ type: "text", text: "" }] });
+    });
+
+    it("the two-argument form carries structuredContent alongside the text block", () => {
+      const result = toolResult("Pasta", { uid: "abc", name: "Pasta" });
+      expect(result).toEqual({
+        content: [{ type: "text", text: "Pasta" }],
+        structuredContent: { uid: "abc", name: "Pasta" },
+      });
     });
   });
 });

@@ -2,7 +2,7 @@ import type { DomainCtx } from "../../../kernel/registry.js";
 import type { GroceryState, GroceryWrites } from "../module.js";
 
 import { defineTool } from "../../../kernel/tool.js";
-import { commitFailure, textResult } from "../../../shared/tools.js";
+import { commitFailure, toolResult } from "../../../shared/tools.js";
 import { GroceryListUidSchema } from "../ids.js";
 import { groceryStartGuard } from "./guards.js";
 
@@ -25,14 +25,14 @@ export const clearPurchasedTool = defineTool(
     return async (args) => {
       const list = ctx.state.lists.store.get(args.listUid);
       if (!list) {
-        return textResult(
+        return toolResult(
           `No grocery list found with UID "${args.listUid}" (it may not exist or was already deleted).`,
         );
       }
 
       const purchased = ctx.state.items.store.getPurchasedByList(args.listUid);
       if (purchased.length === 0) {
-        return textResult(`No purchased items to clear in list "${list.name}".`);
+        return toolResult(`No purchased items to clear in list "${list.name}".`);
       }
 
       const trashed = purchased.map((item) => ({ ...item, deleted: true }));
@@ -40,11 +40,11 @@ export const clearPurchasedTool = defineTool(
         async (saved) => {
           const commitErr = commitFailure("grocery list", await ctx.writes.commitGroceryItemsBatch(saved));
           if (commitErr) return commitErr;
-          return textResult(`Cleared ${trashed.length.toString()} purchased item(s) from "${list.name}".`);
+          return toolResult(`Cleared ${trashed.length.toString()} purchased item(s) from "${list.name}".`);
         },
         async (e) => {
           log.error({ err: e, listUid: args.listUid }, "saveGroceryItems (clear_purchased_grocery_items) failed");
-          return textResult(`Failed to clear purchased items from "${list.name}": ${e.message}`);
+          return toolResult(`Failed to clear purchased items from "${list.name}": ${e.message}`);
         },
       );
     };
@@ -70,14 +70,14 @@ export const clearGroceryListTool = defineTool(
     return async (args) => {
       const list = ctx.state.lists.store.get(args.listUid);
       if (!list) {
-        return textResult(
+        return toolResult(
           `No grocery list found with UID "${args.listUid}" (it may not exist or was already deleted).`,
         );
       }
 
       const items = ctx.state.items.store.getByListUid(args.listUid);
       if (items.length === 0) {
-        return textResult(`No items to clear in list "${list.name}".`);
+        return toolResult(`No items to clear in list "${list.name}".`);
       }
 
       const trashed = items.map((item) => ({ ...item, deleted: true }));
@@ -85,11 +85,11 @@ export const clearGroceryListTool = defineTool(
         async (saved) => {
           const commitErr = commitFailure("grocery list", await ctx.writes.commitGroceryItemsBatch(saved));
           if (commitErr) return commitErr;
-          return textResult(`Cleared ${trashed.length.toString()} item(s) from "${list.name}".`);
+          return toolResult(`Cleared ${trashed.length.toString()} item(s) from "${list.name}".`);
         },
         async (e) => {
           log.error({ err: e, listUid: args.listUid }, "saveGroceryItems (clear_grocery_list) failed");
-          return textResult(`Failed to clear items from "${list.name}": ${e.message}`);
+          return toolResult(`Failed to clear items from "${list.name}": ${e.message}`);
         },
       );
     };

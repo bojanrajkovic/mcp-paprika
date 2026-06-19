@@ -7,7 +7,7 @@ import type { MealState, MealWrites } from "../module.js";
 import type { Meal } from "../types.js";
 
 import { defineTool } from "../../../kernel/tool.js";
-import { commitFailure, textResult } from "../../../shared/tools.js";
+import { commitFailure, toolResult } from "../../../shared/tools.js";
 import { parseCalendarDayWire, todayWire } from "../../../utils/dates.js";
 import { mealTypeSpecSchema, resolveOrCreateMealType } from "../../meal-type/meal-type-helpers.js";
 import { RecipeUidSchema } from "../../recipe/ids.js";
@@ -59,7 +59,7 @@ export const logCookedMealTool = defineTool(
       } else {
         const parsed = parseCalendarDayWire(args.date);
         if (parsed === null) {
-          return textResult(
+          return toolResult(
             `Could not parse date "${args.date}". Use ISO 8601 (e.g., "2026-06-15") or "yyyy-MM-dd HH:mm:ss".`,
           );
         }
@@ -68,7 +68,7 @@ export const logCookedMealTool = defineTool(
 
       const recipe = ctx.deps.recipe.get(args.recipe_uid);
       if (recipe === undefined) {
-        return textResult(
+        return toolResult(
           `recipe_uid "${args.recipe_uid}" is not known to the local recipe store; ` +
             `wait for the next sync and retry, or log it with plan_meals as a freeform meal.`,
         );
@@ -81,7 +81,7 @@ export const logCookedMealTool = defineTool(
       const typeSpec: MealTypeSpec = args.type ?? { builtin: 2 };
       const typeResult = await resolveOrCreateMealType(ctx.deps["meal-type"], typeSpec);
       if (!typeResult.ok) {
-        return textResult(typeResult.message);
+        return toolResult(typeResult.message);
       }
       // Custom mealtypes carry originalType: null; Meal.type is vestigial when
       // type_uid is set (see plan_meals for the full rationale).
@@ -105,7 +105,7 @@ export const logCookedMealTool = defineTool(
         (items) => items,
         (e) => {
           log.error({ err: e, recipe_uid: args.recipe_uid }, "saveMeals failed");
-          return textResult(`Failed to log cooked meal: ${e.message}`);
+          return toolResult(`Failed to log cooked meal: ${e.message}`);
         },
       );
       if ("content" in savedItems) return savedItems;
@@ -113,7 +113,7 @@ export const logCookedMealTool = defineTool(
       if (commitErr) return commitErr;
       const saved = savedItems[0]!;
 
-      return textResult(`Logged.\n\n${renderMealCard(saved, ctx.deps.recipe, ctx.deps["meal-type"])}`);
+      return toolResult(`Logged.\n\n${renderMealCard(saved, ctx.deps.recipe, ctx.deps["meal-type"])}`);
     };
   },
 );

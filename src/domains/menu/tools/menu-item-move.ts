@@ -6,7 +6,7 @@ import type { MenuState, MenuWrites } from "../module.js";
 import type { Menu } from "../types.js";
 
 import { defineTool } from "../../../kernel/tool.js";
-import { commitFailure, textResult } from "../../../shared/tools.js";
+import { commitFailure, toolResult } from "../../../shared/tools.js";
 import { MenuItemUidSchema } from "../ids.js";
 import { menuStartGuard } from "./guards.js";
 
@@ -46,12 +46,12 @@ export const moveMenuItemTool = defineTool(
       const uid = args.uid;
       const existing = ctx.state.items.store.get(uid);
       if (existing === undefined) {
-        return textResult(`No menu item found with UID "${uid}" (it may not exist or was already deleted).`);
+        return toolResult(`No menu item found with UID "${uid}" (it may not exist or was already deleted).`);
       }
       // Idempotent no-op: already on the requested day. Returning early avoids a
       // wasted POST + a pointless menu-wide re-sequence.
       if (args.day === existing.day) {
-        return textResult(`Menu item "${existing.name}" is already on day ${existing.day.toString()}.`);
+        return toolResult(`Menu item "${existing.name}" is already on day ${existing.day.toString()}.`);
       }
 
       const newDay = args.day;
@@ -69,7 +69,7 @@ export const moveMenuItemTool = defineTool(
             (v) => v,
             (e) => {
               log.error({ err: e, uid }, "saveMenus (move_menu_item auto-expand) failed");
-              return textResult(
+              return toolResult(
                 `Failed to extend the menu to ${newDay.toString()} day(s) for the move: ${e.message}. ` +
                   `The item was not moved.`,
               );
@@ -98,7 +98,7 @@ export const moveMenuItemTool = defineTool(
         (items) => items[0]!,
         (e) => {
           log.error({ err: e, uid }, "saveMenuItems (move_menu_item) failed");
-          return textResult(`Failed to move menu item: ${e.message}`);
+          return toolResult(`Failed to move menu item: ${e.message}`);
         },
       );
       if ("content" in saved) return saved;
@@ -106,7 +106,7 @@ export const moveMenuItemTool = defineTool(
       if (commitErr) return commitErr;
 
       const extendNote = extendedTo !== null ? `Extended the menu to ${extendedTo.toString()} day(s). ` : "";
-      return textResult(`${extendNote}Menu item "${saved.name}" moved to day ${saved.day.toString()}.`);
+      return toolResult(`${extendNote}Menu item "${saved.name}" moved to day ${saved.day.toString()}.`);
     };
   },
 );

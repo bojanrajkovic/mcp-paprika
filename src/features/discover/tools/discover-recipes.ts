@@ -8,7 +8,7 @@ import type { DiscoverState } from "../module.js";
 
 import { recipeMetadataLines } from "../../../domains/recipe/recipe-markdown.js";
 import { defineTool } from "../../../kernel/tool.js";
-import { textResult } from "../../../shared/tools.js";
+import { toolResult } from "../../../shared/tools.js";
 
 export const discoverRecipesInputSchema = {
   query: z.string().describe("Natural language description of what you're looking for"),
@@ -62,7 +62,7 @@ export const discoverRecipesTool = defineTool(
       // across deployments.
       const { vectorStore } = ctx.state;
       if (vectorStore === null) {
-        return textResult(
+        return toolResult(
           "Semantic search is not configured on this server, so `discover_recipes` is unavailable. " +
             "Use `search_recipes` for keyword, ingredient, and time filtering instead.",
         );
@@ -72,19 +72,19 @@ export const discoverRecipesTool = defineTool(
       // not-yet-synced recipe store lacks, which the enrichment filter would drop and
       // report as "no matches" — return the retry hint instead.
       if (!ctx.deps.recipe.hasSynced()) {
-        return textResult("Recipe store is not yet synced. Try again in a few seconds.");
+        return toolResult("Recipe store is not yet synced. Try again in a few seconds.");
       }
 
       const results = (await vectorStore.search(args.query, args.topK, args.minScore)).match(
         (v) => v,
         (e) => {
           log.error({ err: e }, "semantic search failed");
-          return textResult(`Semantic search failed: ${e.message}. Use search_recipes for keyword search instead.`);
+          return toolResult(`Semantic search failed: ${e.message}. Use search_recipes for keyword search instead.`);
         },
       );
       if ("content" in results) return results;
       if (results.length === 0) {
-        return textResult("No recipes found matching that description.");
+        return toolResult("No recipes found matching that description.");
       }
 
       // Enrich results and filter out recipes that are gone or trashed.
@@ -101,7 +101,7 @@ export const discoverRecipesTool = defineTool(
       }
 
       if (enriched.length === 0) {
-        return textResult("No recipes found matching that description.");
+        return toolResult("No recipes found matching that description.");
       }
 
       // Format results with re-numbered indices.
@@ -110,7 +110,7 @@ export const discoverRecipesTool = defineTool(
         return formatDiscoverHit(index + 1, entry.recipe, entry.result.score, [...categoryNames]);
       });
 
-      return textResult(lines.join("\n\n"));
+      return toolResult(lines.join("\n\n"));
     };
   },
 );

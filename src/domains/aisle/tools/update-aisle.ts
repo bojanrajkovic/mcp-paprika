@@ -7,7 +7,7 @@ import type { Aisle } from "../types.js";
 
 import { defineTool } from "../../../kernel/tool.js";
 import { renderCatalogOrder, repositionCatalog, sortCatalog } from "../../../shared/catalog.js";
-import { commitFailure, textResult } from "../../../shared/tools.js";
+import { commitFailure, toolResult } from "../../../shared/tools.js";
 import { AisleUidSchema } from "../ids.js";
 import { aisleStartGuard } from "./guards.js";
 
@@ -49,19 +49,19 @@ export const updateAisleTool = defineTool(
       ctx.writes.withCatalogWriteLock(async () => {
         const existing = ctx.state.store.get(args.uid);
         if (existing === undefined) {
-          return textResult(`No aisle found with UID "${args.uid}" (see list_aisles for the catalog).`);
+          return toolResult(`No aisle found with UID "${args.uid}" (see list_aisles for the catalog).`);
         }
 
         if (args.name === undefined && args.position === undefined) {
-          return textResult("Nothing to update: provide `name`, `position`, or both.");
+          return toolResult("Nothing to update: provide `name`, `position`, or both.");
         }
 
         const newName = args.name?.trim();
         if (newName !== undefined) {
-          if (newName === "") return textResult("Aisle name cannot be empty.");
+          if (newName === "") return toolResult("Aisle name cannot be empty.");
           const clash = ctx.state.store.resolveByName(newName);
           if (clash !== undefined && clash.uid !== existing.uid) {
-            return textResult(`An aisle named "${clash.name}" already exists — aisle names must be unique.`);
+            return toolResult(`An aisle named "${clash.name}" already exists — aisle names must be unique.`);
           }
         }
 
@@ -81,7 +81,7 @@ export const updateAisleTool = defineTool(
           return prev === undefined || prev.name !== a.name || prev.orderFlag !== a.orderFlag;
         });
         if (toSave.length === 0) {
-          return textResult(`No changes — "${existing.name}" already has that name/position.`);
+          return toolResult(`No changes — "${existing.name}" already has that name/position.`);
         }
 
         return (await ctx.infra.client.saveAisles(toSave)).match(
@@ -98,7 +98,7 @@ export const updateAisleTool = defineTool(
               const landed = ordered.findIndex((a) => a.uid === target.uid) + 1;
               did.push(`moved to position ${String(landed)}`);
             }
-            return textResult(
+            return toolResult(
               `Updated aisle "${existing.name}": ${did.join(", ")}.\n\nCurrent aisle order:\n${renderCatalogOrder(
                 sortCatalog(ctx.state.store.getAll()),
               )}`,
@@ -106,7 +106,7 @@ export const updateAisleTool = defineTool(
           },
           async (e) => {
             log.error({ err: e, uid: args.uid }, "saveAisles failed");
-            return textResult(`Failed to update aisle: ${e.message}`);
+            return toolResult(`Failed to update aisle: ${e.message}`);
           },
         );
       });

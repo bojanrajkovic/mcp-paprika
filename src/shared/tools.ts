@@ -2,8 +2,32 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { Result } from "neverthrow";
 import { z } from "zod";
 
-export function textResult(text: string): { content: [{ type: "text"; text: string }] } {
-  return { content: [{ type: "text" as const, text }] } as const satisfies CallToolResult;
+/**
+ * The MCP wire envelope every tool returns. The one-argument form carries only
+ * the human-readable text block; the two-argument form additionally carries a
+ * `structuredContent` record on MCP's parallel structured channel — clean prose
+ * for the person, machine identifiers for the model driving the next call (and,
+ * later, a `ui://` widget's data). The text block is always present: MCP has no
+ * structured-only result, so this augments `content`, it does not replace it.
+ *
+ * A tool that returns the two-argument form must also declare an `outputSchema`
+ * on its `ToolSpec`. That coupling runs both ways at the SDK boundary: once a
+ * schema is declared the SDK requires `structuredContent` on every non-error
+ * result and validates it against the schema (an error result is exempt), so a
+ * schema-bearing tool returns the two-argument form on all of its success
+ * branches. `S extends Record<string, unknown>` matches the SDK's record-typed
+ * `structuredContent`, so a list read wraps its rows as `{ items: [...] }`
+ * rather than a bare array.
+ */
+export function toolResult(text: string): { content: [{ type: "text"; text: string }] };
+export function toolResult<S extends Record<string, unknown>>(
+  text: string,
+  structuredContent: S,
+): { content: [{ type: "text"; text: string }]; structuredContent: S };
+export function toolResult(text: string, structuredContent?: Record<string, unknown>): CallToolResult {
+  return structuredContent === undefined
+    ? ({ content: [{ type: "text" as const, text }] } satisfies CallToolResult)
+    : ({ content: [{ type: "text" as const, text }], structuredContent } satisfies CallToolResult);
 }
 
 /**
@@ -36,7 +60,7 @@ export function commitFailure(
   return result.match(
     () => undefined,
     (e) =>
-      textResult(
+      toolResult(
         `The change was saved to Paprika, but updating the local ${entity} cache failed (${e.message}); ${tail}`,
       ),
   );
@@ -125,16 +149,16 @@ export function formatLookupOutcome<T>(
   config: { entityNoun: string; renderOne(entity: T): string; disambiguationLine(entity: T): string },
 ): CallToolResult {
   if (outcome.kind === "uid_hit" || outcome.kind === "text_one") {
-    return textResult(config.renderOne(outcome.entity));
+    return toolResult(config.renderOne(outcome.entity));
   }
   if (outcome.kind === "uid_miss") {
-    return textResult(`No ${config.entityNoun} found with UID "${outcome.uid}".`);
+    return toolResult(`No ${config.entityNoun} found with UID "${outcome.uid}".`);
   }
   if (outcome.kind === "text_none") {
-    return textResult(`No ${config.entityNoun}s found matching "${outcome.text}".`);
+    return toolResult(`No ${config.entityNoun}s found matching "${outcome.text}".`);
   }
   const list = outcome.matches.map(config.disambiguationLine).join("\n");
-  return textResult(
+  return toolResult(
     `Multiple ${config.entityNoun}s match "${outcome.text}":\n${list}\n\nPlease re-invoke with a specific uid.`,
   );
 }

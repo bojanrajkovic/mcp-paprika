@@ -3,7 +3,7 @@ import { err, ok, type Result } from "neverthrow";
 
 import type { RecipeState } from "../module.js";
 
-import { textResult } from "../../../shared/tools.js";
+import { toolResult } from "../../../shared/tools.js";
 
 /**
  * Recipe readiness gates — a tool aborts early with a "still syncing" result if its
@@ -12,7 +12,7 @@ import { textResult } from "../../../shared/tools.js";
  */
 export function recipeColdStartGuard({ state }: { readonly state: RecipeState }): Result<void, CallToolResult> {
   if (!state.recipe.store.hasSynced) {
-    return err(textResult("Recipe store is not yet synced. Try again in a few seconds."));
+    return err(toolResult("Recipe store is not yet synced. Try again in a few seconds."));
   }
   return ok(undefined);
 }
@@ -26,7 +26,7 @@ export function categoryStartGuard({ state }: { readonly state: RecipeState }): 
   return recipeColdStartGuard({ state }).andThen(() =>
     state.category.store.hasSynced
       ? ok(undefined)
-      : err(textResult("The category catalog is still syncing; try again in a moment.")),
+      : err(toolResult("The category catalog is still syncing; try again in a moment.")),
   );
 }
 
@@ -38,7 +38,7 @@ export function categoryStartGuard({ state }: { readonly state: RecipeState }): 
  */
 export function photoCatalogGuard({ state }: { readonly state: RecipeState }): Result<void, CallToolResult> {
   if (!state.photo.store.hasSynced) {
-    return err(textResult("The photo catalog is still syncing; try again in a moment."));
+    return err(toolResult("The photo catalog is still syncing; try again in a moment."));
   }
   return ok(undefined);
 }

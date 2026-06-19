@@ -8,7 +8,7 @@ import type { DomainCtx, Infra } from "./registry.js";
 
 import { installTestTelemetry } from "../../test/support/telemetry-test-utils.js";
 import { makeTestServer } from "../../test/support/tool-test-utils.js";
-import { textResult } from "../shared/tools.js";
+import { toolResult } from "../shared/tools.js";
 import { SILENT_LOG } from "../utils/log.js";
 import { defineTool, type ToolPrecondition } from "./tool.js";
 
@@ -35,7 +35,7 @@ beforeEach(() => {
 
 describe("defineTool telemetry", () => {
   it("emits a tools/call span with the MCP + GenAI attributes and records the operation histogram", async () => {
-    const tool = defineTool(spec("t_ok"), (_ctx: DomainCtx<unknown, never>) => async () => textResult("fine"));
+    const tool = defineTool(spec("t_ok"), (_ctx: DomainCtx<unknown, never>) => async () => toolResult("fine"));
     const { server, callTool } = makeTestServer();
     tool.register(makeCtx(undefined, server));
 
@@ -82,7 +82,7 @@ describe("defineTool telemetry", () => {
     const tool = defineTool(
       spec("t_gated"),
       [coldStartGuard],
-      (_ctx: DomainCtx<unknown, never>) => async () => textResult("never reached"),
+      (_ctx: DomainCtx<unknown, never>) => async () => toolResult("never reached"),
     );
     const { server, callTool } = makeTestServer();
     tool.register(makeCtx(undefined, server));
@@ -100,7 +100,7 @@ describe("defineTool telemetry", () => {
     const tool = defineTool(spec("t_parent"), (_ctx: DomainCtx<unknown, never>) => async () => {
       const child = trace.getTracer("body").startSpan("body.work");
       child.end();
-      return textResult("done");
+      return toolResult("done");
     });
     const { server, callTool } = makeTestServer();
     tool.register(makeCtx(undefined, server));
@@ -119,7 +119,7 @@ describe("defineTool telemetry", () => {
     const tool = defineTool(
       spec("t_open"),
       [openGuard],
-      (_ctx: DomainCtx<unknown, never>) => async () => textResult("through"),
+      (_ctx: DomainCtx<unknown, never>) => async () => toolResult("through"),
     );
     const { server, callTool } = makeTestServer();
     tool.register(makeCtx(undefined, server));

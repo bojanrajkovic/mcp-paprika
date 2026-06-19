@@ -7,7 +7,7 @@ import type { RecipeUid } from "../../recipe/ids.js";
 import type { MealState } from "../module.js";
 
 import { defineTool } from "../../../kernel/tool.js";
-import { textResult } from "../../../shared/tools.js";
+import { toolResult } from "../../../shared/tools.js";
 import { parseInstant } from "../../../utils/dates.js";
 import { formatMealTypeResolveError, mealTypeSpecSchema } from "../../meal-type/meal-type-helpers.js";
 import { RecipeUidSchema } from "../../recipe/ids.js";
@@ -72,7 +72,7 @@ export const searchMealHistoryTool = defineTool(
       if (args.type !== undefined) {
         const result = ctx.deps["meal-type"].resolveSpec(args.type);
         if (!result.ok) {
-          return textResult(formatMealTypeResolveError(result));
+          return toolResult(formatMealTypeResolveError(result));
         }
         typeUid = result.resolved.uid;
         typeName = result.resolved.name;
@@ -90,7 +90,7 @@ export const searchMealHistoryTool = defineTool(
       if (args.class !== undefined) {
         const { uids } = ctx.deps.recipe.resolveCategoryRefs([args.class]);
         if (uids.length === 0) {
-          return textResult(`No category found matching "${args.class}".`);
+          return toolResult(`No category found matching "${args.class}".`);
         }
         const catUid = uids[0]!;
         classLabel = ctx.deps.recipe.resolveCategoryNames([catUid])[0] ?? args.class;
@@ -119,7 +119,7 @@ export const searchMealHistoryTool = defineTool(
       if (args.until !== undefined) {
         const parsed = parseInstant(args.until);
         if (parsed === null) {
-          return textResult(`Could not parse until date "${args.until}". Use yyyy-MM-dd or ISO 8601.`);
+          return toolResult(`Could not parse until date "${args.until}". Use yyyy-MM-dd or ISO 8601.`);
         }
         until = parsed.endOf("day");
       } else {
@@ -130,7 +130,7 @@ export const searchMealHistoryTool = defineTool(
       if (args.since !== undefined) {
         const parsed = parseInstant(args.since);
         if (parsed === null) {
-          return textResult(`Could not parse since date "${args.since}". Use yyyy-MM-dd or ISO 8601.`);
+          return toolResult(`Could not parse since date "${args.since}". Use yyyy-MM-dd or ISO 8601.`);
         }
         since = parsed.startOf("day");
       } else if (!hasFilter) {
@@ -158,10 +158,10 @@ export const searchMealHistoryTool = defineTool(
       const scope = scopeParts.length > 0 ? ` for ${scopeParts.join(", ")}` : "";
 
       if (total === 0) {
-        return textResult(`No past meals found${scope}.`);
+        return toolResult(`No past meals found${scope}.`);
       }
       if (meals.length === 0) {
-        return textResult(
+        return toolResult(
           `No meals at offset ${offset.toString()} of ${total.toString()} total. ` +
             `Try a lower offset (the last page starts at offset ${Math.max(0, total - limit).toString()}).`,
         );
@@ -181,7 +181,7 @@ export const searchMealHistoryTool = defineTool(
         : `${total.toString()} past meal${total === 1 ? "" : "s"}`;
       const header = `**${countLabel}${scope} (${rangeLabel})**${lastMade !== null ? ` · last made ${lastMade}` : ""}`;
 
-      return textResult(`${header}\n${renderMealsGroupedByDate(meals, ctx.deps["meal-type"])}`);
+      return toolResult(`${header}\n${renderMealsGroupedByDate(meals, ctx.deps["meal-type"])}`);
     };
   },
 );

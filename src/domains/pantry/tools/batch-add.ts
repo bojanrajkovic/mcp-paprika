@@ -6,7 +6,7 @@ import type { PantryState, PantryWrites } from "../module.js";
 import type { PantryItem } from "../types.js";
 
 import { defineTool } from "../../../kernel/tool.js";
-import { commitFailure, textResult } from "../../../shared/tools.js";
+import { commitFailure, toolResult } from "../../../shared/tools.js";
 import { normalizeWire, todayWire } from "../../../utils/dates.js";
 import { NO_AISLE_UID } from "../../aisle/ids.js";
 import { PantryItemUidSchema } from "../ids.js";
@@ -56,7 +56,7 @@ export const addPantryItemsTool = defineTool(
 
         const expirationDate = item.expirationDate !== undefined ? normalizeWire(item.expirationDate) : null;
         if (item.expirationDate !== undefined && expirationDate === null) {
-          return textResult(
+          return toolResult(
             `Item ${i.toString()} ("${item.ingredient}"): could not parse expirationDate "${item.expirationDate}". ` +
               `Use ISO 8601 (e.g., "2026-12-31") or "yyyy-MM-dd HH:mm:ss".`,
           );
@@ -66,7 +66,7 @@ export const addPantryItemsTool = defineTool(
         if (item.purchaseDate !== undefined) {
           const parsedPurchase = normalizeWire(item.purchaseDate);
           if (parsedPurchase === null) {
-            return textResult(
+            return toolResult(
               `Item ${i.toString()} ("${item.ingredient}"): could not parse purchaseDate "${item.purchaseDate}". ` +
                 `Use ISO 8601 (e.g., "2026-12-31") or "yyyy-MM-dd HH:mm:ss".`,
             );
@@ -113,7 +113,7 @@ export const addPantryItemsTool = defineTool(
 
       if (toAdd.length === 0) {
         const skipReport = skipMessages.join("\n");
-        return textResult(`All items were duplicates and skipped.\n\n${skipReport}`);
+        return toolResult(`All items were duplicates and skipped.\n\n${skipReport}`);
       }
 
       // Phase 3: Build PantryItem objects with aisle resolution
@@ -138,7 +138,7 @@ export const addPantryItemsTool = defineTool(
           } else {
             const resolved = (await ctx.deps.aisle.ensureAisle(aisleInput)).match(
               (v) => v,
-              (message) => textResult(message),
+              (message) => toolResult(message),
             );
             if ("content" in resolved) return resolved;
             aisle = resolved.aisle;
@@ -167,7 +167,7 @@ export const addPantryItemsTool = defineTool(
         (items) => items,
         (e) => {
           log.error({ err: e }, "savePantryItems failed");
-          return textResult(`Failed to add pantry items: ${e.message}`);
+          return toolResult(`Failed to add pantry items: ${e.message}`);
         },
       );
       if ("content" in savedItems) return savedItems;
@@ -181,10 +181,10 @@ export const addPantryItemsTool = defineTool(
 
       if (skipMessages.length > 0) {
         const skipReport = skipMessages.join("\n");
-        return textResult(`${header}\n\n${rendered}\n\n---\n\n**Skipped (duplicates):**\n${skipReport}`);
+        return toolResult(`${header}\n\n${rendered}\n\n---\n\n**Skipped (duplicates):**\n${skipReport}`);
       }
 
-      return textResult(`${header}\n\n${rendered}`);
+      return toolResult(`${header}\n\n${rendered}`);
     };
   },
 );

@@ -2,7 +2,7 @@ import type { DomainCtx } from "../../../kernel/registry.js";
 import type { GroceryState } from "../module.js";
 
 import { defineTool } from "../../../kernel/tool.js";
-import { textResult } from "../../../shared/tools.js";
+import { toolResult } from "../../../shared/tools.js";
 import { AisleUidSchema } from "../../aisle/ids.js";
 import { groceryStartGuard, pantrySyncedGuard } from "./guards.js";
 
@@ -48,7 +48,7 @@ export const deleteAisleTool = defineTool(
     return async (args) => {
       const existing = ctx.deps.aisle.get(args.uid);
       if (existing === undefined) {
-        return textResult(`No aisle found with UID "${args.uid}" (see list_aisles; the catalog may still be syncing).`);
+        return toolResult(`No aisle found with UID "${args.uid}" (see list_aisles; the catalog may still be syncing).`);
       }
 
       const groceryRefs = ctx.state.items.store.countUnpurchasedInAisle(args.uid);
@@ -61,17 +61,17 @@ export const deleteAisleTool = defineTool(
         if (pantryRefs > 0) {
           parts.push(`${String(pantryRefs)} pantry item${pantryRefs === 1 ? "" : "s"}`);
         }
-        return textResult(
+        return toolResult(
           `Cannot delete "${existing.name}": ${parts.join(" and ")} still reference it. ` +
             "Reassign them to another aisle first (`update_grocery_item` / `update_pantry_item`), then retry.",
         );
       }
 
       return (await ctx.deps.aisle.deleteAisle(args.uid)).match(
-        () => textResult(`Deleted aisle "${existing.name}".`),
+        () => toolResult(`Deleted aisle "${existing.name}".`),
         (message) => {
           log.error({ uid: args.uid, message }, "deleteAisle failed");
-          return textResult(message);
+          return toolResult(message);
         },
       );
     };

@@ -2,7 +2,7 @@ import type { DomainCtx } from "../../../kernel/registry.js";
 import type { MenuState } from "../module.js";
 
 import { defineTool } from "../../../kernel/tool.js";
-import { textResult } from "../../../shared/tools.js";
+import { toolResult } from "../../../shared/tools.js";
 import { menuStartGuard } from "./guards.js";
 
 /**
@@ -26,7 +26,7 @@ export const listMenusTool = defineTool(
         .sort((a, b) => a.orderFlag - b.orderFlag || a.name.localeCompare(b.name));
 
       if (all.length === 0) {
-        return textResult("No menus found.");
+        return toolResult("No menus found.");
       }
 
       const lines = all.map((menu) => {
@@ -35,7 +35,7 @@ export const listMenusTool = defineTool(
         return `- **${menu.name}** (${itemCount.toString()} items, ${menu.days.toString()} ${dayLabel}) — \`${menu.uid}\``;
       });
 
-      return textResult(lines.join("\n"));
+      return toolResult(lines.join("\n"));
     };
   },
 );
