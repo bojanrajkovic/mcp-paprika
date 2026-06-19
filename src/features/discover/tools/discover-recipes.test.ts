@@ -7,6 +7,7 @@ import type { SemanticResult, VectorStore, VectorStoreFailure } from "../../vect
 
 import { makeCategory, makeRecipe } from "../../../../test/domains/recipe/__fixtures__/recipes.js";
 import { useKernelHarness } from "../../../../test/support/kernel-harness.js";
+import { getText } from "../../../../test/support/tool-test-utils.js";
 
 // Build a minimal mock vector store whose `search` spy resolves with pre-supplied results.
 // `uid` is loosened to a plain string so tests pass literal UIDs; branded here.
@@ -270,6 +271,37 @@ describe("discover_recipes tool", () => {
 
       expect(text.toLowerCase()).toContain("try again");
       expect(mockVs.search).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("structured output (R1)", () => {
+    it("emits the shared recipe row plus a similarity score", async () => {
+      const mockVs = makeMockVectorStore([{ uid: "recipe-1", score: 0.92, recipeName: "Cake" }]);
+      injectVectorStore(kh, mockVs);
+      kh.seed({ recipes: [makeRecipe({ uid: "recipe-1" as RecipeUid, name: "Cake", rating: 5 })] });
+      const result = await kh.callTool("discover_recipes", { query: "cake" });
+      expect(result.isError).toBeFalsy();
+      const { items } = result.structuredContent as { items: Array<Record<string, unknown>> };
+      expect(items).toHaveLength(1);
+      expect(items[0]).toMatchObject({ uid: "recipe-1", name: "Cake", rating: 5, score: 0.92 });
+    });
+
+    it("a no-match query is an empty success, carrying { items: [] }", async () => {
+      const mockVs = makeMockVectorStore([]);
+      injectVectorStore(kh, mockVs);
+      kh.seed({ recipes: [makeRecipe()] });
+      const result = await kh.callTool("discover_recipes", { query: "nothing" });
+      expect(result.isError).toBeFalsy();
+      expect(result.structuredContent).toEqual({ items: [] });
+    });
+
+    it("not configured is an error directing to search_recipes (isError, no structuredContent)", async () => {
+      // No vectorStore injected → the feature gate declines before anything else.
+      kh.seed({ recipes: [makeRecipe()] });
+      const result = await kh.callTool("discover_recipes", { query: "anything" });
+      expect(result.isError).toBe(true);
+      expect(result.structuredContent).toBeUndefined();
+      expect(getText(result)).toContain("search_recipes");
     });
   });
 });

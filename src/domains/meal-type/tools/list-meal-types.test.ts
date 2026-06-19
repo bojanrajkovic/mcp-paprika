@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import type { MealTypeUid } from "../ids.js";
+
 import { makeMealType } from "../../../../test/domains/meal-type/__fixtures__/meal-types.js";
 import { useKernelHarness } from "../../../../test/support/kernel-harness.js";
 
@@ -18,6 +20,24 @@ describe("list_meal_types tool", () => {
     kh.seed({ mealTypes: [] });
     const text = await kh.callToolText("list_meal_types", {});
     expect(text).toContain("No meal types found.");
+  });
+
+  it("emits structured rows with uid, name, and originalType (R1)", async () => {
+    kh.seed({
+      mealTypes: [
+        makeMealType({ uid: "mt-dinner" as MealTypeUid, name: "Dinner", orderFlag: 2, originalType: 2 }),
+        makeMealType({ uid: "mt-brunch" as MealTypeUid, name: "Brunch", orderFlag: 4, originalType: null }),
+      ],
+    });
+    const result = await kh.callTool("list_meal_types", {});
+    expect(result.isError).toBeFalsy();
+    const { items } = result.structuredContent as { items: Array<Record<string, unknown>> };
+    // Sorted by orderFlag (Dinner 2 before Brunch 4); originalType is the built-in
+    // index (null for the custom type).
+    expect(items).toEqual([
+      { uid: "mt-dinner", name: "Dinner", originalType: 2 },
+      { uid: "mt-brunch", name: "Brunch", originalType: null },
+    ]);
   });
 
   it("meal types sorted by orderFlag ascending", async () => {

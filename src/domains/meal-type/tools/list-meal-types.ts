@@ -1,3 +1,5 @@
+import { z } from "zod";
+
 import type { DomainCtx } from "../../../kernel/registry.js";
 import type { MealTypeState } from "../module.js";
 import type { MealType } from "../types.js";
@@ -5,7 +7,26 @@ import type { MealType } from "../types.js";
 import { defineTool } from "../../../kernel/tool.js";
 import { sortCatalog } from "../../../shared/catalog.js";
 import { toolResult } from "../../../shared/tools.js";
+import { MealTypeUidSchema } from "../ids.js";
 import { mealTypeStartGuard } from "./guards.js";
+
+// Structured-output payload (ADR-0019, R1): one row per meal type, carrying the `uid`
+// (the `type: { uid }` spec / update_meal_type / delete_meal_type consume) and
+// `originalType` — the built-in index usable as `type: { builtin: N }`, or null for a
+// custom type. The calendar-export schedule stays text-only (display, not actionable).
+export const listMealTypesOutputSchema = z.object({
+  items: z.array(
+    z.object({
+      uid: MealTypeUidSchema,
+      name: z.string(),
+      originalType: z
+        .number()
+        .int()
+        .nullable()
+        .describe("Built-in index (0=Breakfast, 1=Lunch, 2=Dinner, 3=Snacks), or null for a custom type."),
+    }),
+  ),
+});
 
 /**
  * Format seconds-since-midnight as zero-padded `HH:MM` (e.g. 64800 → "18:00").
@@ -51,6 +72,7 @@ export const listMealTypesTool = defineTool(
       "by name, or pass its UID to plan_meals / update_meal via the `type: { uid }` spec. " +
       "Planning a meal with a new type name creates it; update_meal_type and delete_meal_type manage the catalog.",
     inputSchema: {},
+    outputSchema: listMealTypesOutputSchema,
   },
   [mealTypeStartGuard],
   (ctx: DomainCtx<MealTypeState, never>) => {
@@ -58,11 +80,12 @@ export const listMealTypesTool = defineTool(
       const mealTypes = sortCatalog(ctx.state.store.getAll());
 
       if (mealTypes.length === 0) {
-        return toolResult("No meal types found.");
+        return toolResult("No meal types found.", { items: [] });
       }
 
+      const items = mealTypes.map((mt) => ({ uid: mt.uid, name: mt.name, originalType: mt.originalType }));
       const lines = mealTypes.map(mealTypeLine);
-      return toolResult(lines.join("\n"));
+      return toolResult(lines.join("\n"), { items });
     };
   },
 );

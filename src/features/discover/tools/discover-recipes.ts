@@ -6,9 +6,9 @@ import type { DomainCtx } from "../../../kernel/registry.js";
 import type { SemanticResult } from "../../vector-store.js";
 import type { DiscoverState } from "../module.js";
 
-import { recipeMetadataLines } from "../../../domains/recipe/recipe-markdown.js";
+import { recipeMetadataLines, recipeRowSchema, recipeToRow } from "../../../domains/recipe/recipe-markdown.js";
 import { defineTool } from "../../../kernel/tool.js";
-import { toolResult } from "../../../shared/tools.js";
+import { errorResult, toolResult } from "../../../shared/tools.js";
 
 export const discoverRecipesInputSchema = {
   query: z.string().describe("Natural language description of what you're looking for"),
@@ -29,6 +29,13 @@ export const discoverRecipesInputSchema = {
       "Optional minimum similarity (cosine, 0-1). Results below it are dropped before the top-K cut, so a query with few genuine matches returns only those instead of padding with weak ones. Omit for no filtering. Use a modest value (e.g. ~0.3) to gate on relevance.",
     ),
 };
+
+// Structured-output payload (ADR-0019, R1): each hit is a recipe row (shared with
+// list_recipes / search_recipes) plus its similarity `score`. A query that matches
+// nothing is a valid empty success; "not configured" / not-yet-synced / search
+// failure are errorResults (the tool can't fulfil the request).
+const discoverRowSchema = recipeRowSchema.extend({ score: z.number().describe("Cosine similarity, 0–1.") });
+export const discoverRecipesOutputSchema = z.object({ items: z.array(discoverRowSchema) });
 
 /**
  * `discover_recipes` — semantic search over the vector index this module owns
@@ -53,6 +60,7 @@ export const discoverRecipesTool = defineTool(
     description:
       "Discover recipes using semantic search. Finds recipes matching a natural language description of what you're looking for.",
     inputSchema: discoverRecipesInputSchema,
+    outputSchema: discoverRecipesOutputSchema,
   },
   (ctx: DomainCtx<DiscoverState, "recipe">) => {
     const log = ctx.infra.log.child({ component: "discover_recipes" });
@@ -62,7 +70,9 @@ export const discoverRecipesTool = defineTool(
       // across deployments.
       const { vectorStore } = ctx.state;
       if (vectorStore === null) {
-        return toolResult(
+        // Capability gap on this deployment — the tool can't act, so isError (exempt
+        // from the schema's output validation) with the redirect hint.
+        return errorResult(
           "Semantic search is not configured on this server, so `discover_recipes` is unavailable. " +
             "Use `search_recipes` for keyword, ingredient, and time filtering instead.",
         );
@@ -72,19 +82,20 @@ export const discoverRecipesTool = defineTool(
       // not-yet-synced recipe store lacks, which the enrichment filter would drop and
       // report as "no matches" — return the retry hint instead.
       if (!ctx.deps.recipe.hasSynced()) {
-        return toolResult("Recipe store is not yet synced. Try again in a few seconds.");
+        return errorResult("Recipe store is not yet synced. Try again in a few seconds.");
       }
 
       const results = (await vectorStore.search(args.query, args.topK, args.minScore)).match(
         (v) => v,
         (e) => {
           log.error({ err: e }, "semantic search failed");
-          return toolResult(`Semantic search failed: ${e.message}. Use search_recipes for keyword search instead.`);
+          return errorResult(`Semantic search failed: ${e.message}. Use search_recipes for keyword search instead.`);
         },
       );
       if ("content" in results) return results;
       if (results.length === 0) {
-        return toolResult("No recipes found matching that description.");
+        // No semantic match is a valid empty success.
+        return toolResult("No recipes found matching that description.", { items: [] });
       }
 
       // Enrich results and filter out recipes that are gone or trashed.
@@ -101,16 +112,20 @@ export const discoverRecipesTool = defineTool(
       }
 
       if (enriched.length === 0) {
-        return toolResult("No recipes found matching that description.");
+        return toolResult("No recipes found matching that description.", { items: [] });
       }
 
-      // Format results with re-numbered indices.
-      const lines = enriched.map((entry, index) => {
-        const categoryNames = ctx.deps.recipe.resolveCategoryNames(entry.recipe.categories);
-        return formatDiscoverHit(index + 1, entry.recipe, entry.result.score, [...categoryNames]);
+      // One pass: resolve each hit's category names once, feeding the structured row
+      // (the shared recipe row + score) and the re-numbered text line.
+      const items: Array<z.infer<typeof discoverRowSchema>> = [];
+      const lines: Array<string> = [];
+      enriched.forEach((entry, index) => {
+        const categoryNames = [...ctx.deps.recipe.resolveCategoryNames(entry.recipe.categories)];
+        items.push({ ...recipeToRow(entry.recipe, categoryNames), score: entry.result.score });
+        lines.push(formatDiscoverHit(index + 1, entry.recipe, entry.result.score, categoryNames));
       });
 
-      return toolResult(lines.join("\n\n"));
+      return toolResult(lines.join("\n\n"), { items });
     };
   },
 );

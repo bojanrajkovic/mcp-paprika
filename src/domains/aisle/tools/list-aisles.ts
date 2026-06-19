@@ -1,10 +1,19 @@
+import { z } from "zod";
+
 import type { DomainCtx } from "../../../kernel/registry.js";
 import type { AisleState } from "../module.js";
 
 import { defineTool } from "../../../kernel/tool.js";
 import { sortCatalog } from "../../../shared/catalog.js";
 import { toolResult } from "../../../shared/tools.js";
+import { AisleUidSchema } from "../ids.js";
 import { aisleStartGuard } from "./guards.js";
+
+// Structured-output payload (ADR-0019, R1): one row per aisle — the `uid` pantry and
+// grocery item writes consume, plus the name.
+export const listAislesOutputSchema = z.object({
+  items: z.array(z.object({ uid: AisleUidSchema, name: z.string() })),
+});
 
 /**
  * `list_aisles` — list the aisle catalog. Aisle is a Reference-class entity:
@@ -20,6 +29,7 @@ export const listAislesTool = defineTool(
       "List all known aisles, sorted by order then name. " +
       "Includes the aisle UID needed for pantry and grocery item writes.",
     inputSchema: {},
+    outputSchema: listAislesOutputSchema,
   },
   [aisleStartGuard],
   (ctx: DomainCtx<AisleState, never>) => {
@@ -28,10 +38,12 @@ export const listAislesTool = defineTool(
       if (aisles.length === 0) {
         return toolResult(
           "No aisles found. Aisles are created automatically when you add a grocery or pantry item with a new aisle name.",
+          { items: [] },
         );
       }
+      const items = aisles.map((a) => ({ uid: a.uid, name: a.name }));
       const lines = aisles.map((a) => `- **${a.name}** — \`${a.uid}\``);
-      return toolResult(lines.join("\n"));
+      return toolResult(lines.join("\n"), { items });
     };
   },
 );

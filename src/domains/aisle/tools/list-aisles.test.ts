@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import type { AisleUid } from "../ids.js";
+
 import { makeAisle } from "../../../../test/domains/aisle/__fixtures__/aisles.js";
 import { useKernelHarness } from "../../../../test/support/kernel-harness.js";
 
@@ -52,6 +54,16 @@ describe("list_aisles tool", () => {
     const text = await kh.callToolText("list_aisles", {});
     expect(text).toContain(`**Bakery**`);
     expect(text).toContain(`\`${aisle.uid}\``);
+  });
+
+  it("emits structured rows with uid and name (R1)", async () => {
+    kh.seed({
+      aisles: [makeAisle({ uid: "a-produce" as AisleUid, name: "Produce", orderFlag: 0 })],
+    });
+    const result = await kh.callTool("list_aisles", {});
+    expect(result.isError).toBeFalsy();
+    const { items } = result.structuredContent as { items: Array<Record<string, unknown>> };
+    expect(items).toEqual([{ uid: "a-produce", name: "Produce" }]);
   });
 
   it("each aisle is on its own line with dash prefix", async () => {

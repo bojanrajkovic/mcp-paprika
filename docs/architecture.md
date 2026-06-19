@@ -61,7 +61,7 @@ A foreign key that may be _absent_ spells that absence explicitly at the field, 
 
 ## Semantic search
 
-Semantic discovery is optional: it registers the `discover_recipes` tool only when embedding config is present. An OpenAI-compatible embedding client turns each recipe into a vector over its name, description, categories, ingredients, and notes (**directions and nutrition are deliberately excluded**, so editing cooking steps doesn't churn the index) and stores it in a vendored, file-backed cosine index. Re-indexing is hash-tracked and funneled through one chokepoint, so every local write and category rename re-embeds only what changed; an unchanged sync typically makes zero embedding calls. See `src/features/CLAUDE.md` and [ADR-0003](adr/0003-vendored-json-vector-index.md).
+Semantic discovery is optional: the `discover_recipes` tool is always registered, but when no embedding config is present it declines with an `isError` result pointing at `search_recipes` (the feature gate lives in the handler, not in registration — ADR-0009 §5). An OpenAI-compatible embedding client turns each recipe into a vector over its name, description, categories, ingredients, and notes (**directions and nutrition are deliberately excluded**, so editing cooking steps doesn't churn the index) and stores it in a vendored, file-backed cosine index. Re-indexing is hash-tracked and funneled through one chokepoint, so every local write and category rename re-embeds only what changed; an unchanged sync typically makes zero embedding calls. See `src/features/CLAUDE.md` and [ADR-0003](adr/0003-vendored-json-vector-index.md).
 
 ## Photos
 
