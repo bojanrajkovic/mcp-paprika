@@ -7,8 +7,7 @@ import { textResult } from "../../../shared/tools.js";
 
 /**
  * Readiness gate: returns `ok` when the store has synced, `err` with a
- * user-facing `CallToolResult` otherwise. Runs as a kernel precondition
- * (ADR-0015).
+ * user-facing `CallToolResult` otherwise. Runs as a kernel precondition.
  */
 export function pantryStartGuard({ state }: { readonly state: PantryState }): Result<void, CallToolResult> {
   if (!state.store.hasSynced) {

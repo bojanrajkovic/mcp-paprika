@@ -10,7 +10,7 @@ import { recipeToMarkdown } from "../recipe-markdown.js";
 /**
  * `paprika://recipe/{uid}` — render a recipe as markdown. Categories are owned by
  * recipe, so names resolve through `ctx.state.category.store`, not a dep. Recipe is
- * one of the three Content-class entities with a resource surface (ADR-0004).
+ * one of the three Content-class entities with a resource surface.
  */
 export function recipeResource(ctx: DomainCtx<RecipeState, never>): void {
   const template = new ResourceTemplate("paprika://recipe/{uid}", {

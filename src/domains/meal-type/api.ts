@@ -40,8 +40,7 @@ export interface MealTypeApi extends HasSynced {
    * pending-upsert, and returns it. Called by the meal/menu WRITE tools for a
    * `{name}` spec that doesn't resolve — read/filter tools use `resolveSpec` and
    * never create. Errs with a ready-to-surface message on an empty name, an
-   * unsynced catalog, or a failed save (matching the other contract writes —
-   * ADR-0014). A failed LOCAL commit after a successful save is absorbed
+   * unsynced catalog, or a failed save. A failed LOCAL commit after a successful save is absorbed
    * (warn + in-memory catalog updated): erring would invite a duplicate
    * re-create, and the replace-all sync heals the disk copy.
    */

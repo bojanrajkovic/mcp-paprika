@@ -37,7 +37,7 @@ function makeTypeLabeler(mealType: MealTypeApi): (meal: Readonly<Meal>) => strin
  * recent dates), distinct from `search_meal_history`'s paged browse list. It lives in
  * the meal domain because the cook data is meal-owned (`MealStore.cookedHistory`):
  * recipe is dependency-free and meal already `dependsOn` recipe, so a recipe→meal edge
- * would be a build-time dependency cycle — "last cooked" stays meal-side (ADR-0009).
+ * would be a build-time dependency cycle — "last cooked" stays meal-side.
  * Resolves the recipe name via `ctx.deps.recipe` and meal-type labels via
  * `ctx.deps["meal-type"]`.
  */

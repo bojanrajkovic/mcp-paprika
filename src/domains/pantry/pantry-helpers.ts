@@ -9,7 +9,7 @@ import { aisleDisplayName } from "../aisle/display.js";
 // the parser doesn't reject the field if the server starts populating it.
 // The aisle display name resolves through the live catalog (`aisles` — the
 // caller passes `ctx.deps.aisle`); the fallback contract lives in
-// `../aisle/display.ts` (ADR-0017 render-resolution).
+// `../aisle/display.ts`.
 export function pantryItemToMarkdown(item: PantryItem, aisles: AisleNameSource): string {
   const lines: Array<string> = [];
 

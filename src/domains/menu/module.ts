@@ -76,8 +76,7 @@ register(
       const log: Logger = infra.log;
 
       // Two stores + two plain caches. Disk is flat: each cache's subdir is the
-      // original `<cacheDir>/menus` | `/menuitems` (reuse-in-place — ADR-0009 keeps
-      // the cache un-namespaced, so there is no migration).
+      // original `<cacheDir>/menus` | `/menuitems` (the cache is un-namespaced, so there is no migration).
       const pendingWriteTtlMs = resolvePendingWriteTtl(infra.config);
       const menuStore = new MenuStore({ pendingWriteTtlMs });
       const menuCache = new DiskCacheImpl<Menu>({
@@ -109,7 +108,7 @@ register(
 
       // ---- Menu write chokepoints ----
       // Assembled here (not in `.state`) because they close over `infra.client` and
-      // `infra.notifier`, keeping MenuState pure (ADR-0012). All three are internal —
+      // `infra.notifier`, keeping MenuState pure. All three are internal —
       // menu's own tools reach them via `ctx.writes`; the read `api` is assembled below
       // from the stores.
       //

@@ -53,7 +53,7 @@ register(
     .state<AisleState>(async (infra) => {
       const store = new AisleStore({ pendingWriteTtlMs: resolvePendingWriteTtl(infra.config) });
       // Disk is flat: the cache's subdir is the original `<cacheDir>/aisles`
-      // (reuse-in-place — ADR-0009 keeps the cache un-namespaced, so there is no migration).
+      // (the cache is un-namespaced, so there is no migration).
       const cache = new DiskCache<Aisle>({
         ...aisleDiskDescriptor,
         subdir: join(infra.cacheDir, aisleDiskDescriptor.subdir),
@@ -67,7 +67,7 @@ register(
     .build((state, infra) => {
       // ensureAisle is the auto-create write path (resolve-or-create + persist). It
       // closes over `infra.client`, so it is assembled here in `.build` (which has
-      // infra) rather than `.state`, keeping AisleState pure (ADR-0012). It is a
+      // infra) rather than `.state`, keeping AisleState pure. It is a
       // CONTRACT write — grocery and pantry reach it via `ctx.deps.aisle` — so it
       // lands in `api`, not `ctx.writes`.
       //
@@ -80,7 +80,7 @@ register(
       // The commit protocol lives in src/entity/commit.ts; this binds aisle's slice.
       // Aisle commits fire resourceListChanged even though aisles have no resource
       // of their own: grocery-list RESOURCES resolve item aisle names through this
-      // catalog live (render-resolution — ADR-0017), so a rename/reorder/delete
+      // catalog live (render-resolution), so a rename/reorder/delete
       // changes their rendered content without any grocery entity changing.
       const aisleFx = {
         onCommitted: () => infra.notifier.resourceListChanged(),

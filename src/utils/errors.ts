@@ -18,7 +18,7 @@ export function isNodeError(error: unknown): error is NodeJS.ErrnoException {
  * Exhaustiveness assertion for a branch the types prove unreachable (a `switch`
  * `default`, an `else` that cannot happen). The `never` parameter makes adding a
  * new union variant a compile error here; at runtime it throws — the one
- * sanctioned "reached the unreachable" throw, recognized form #4 in ADR-0014.
+ * sanctioned "reached the unreachable" throw.
  * Pass `message` to describe the surprise; the value is included by default.
  */
 export function assertNever(value: never, message?: string): never {
@@ -30,7 +30,7 @@ export function assertNever(value: never, message?: string): never {
  * assembling (a module `.state` factory hydrating its cache, transport
  * bootstrap). An `err` here is unrecoverable — there is no session to answer
  * and no sync cycle to degrade to — so it aborts boot: the one sanctioned
- * fail-fast throw (recognized form #5 in ADR-0014). Never call this on a
+ * fail-fast throw. Never call this on a
  * request or sync path; those stay `Result`-shaped.
  */
 export function unwrapAtBoot<T, E>(result: Result<T, E>, context: string): T {

@@ -34,7 +34,7 @@ export function runSyncLoop(onCycle: () => Promise<void>, intervalMs: number): {
         // `scheduler.wait` rejects only on abort (`stop()` was called) — exit the
         // loop. Exiting on any rejection (rather than rethrowing the non-abort
         // ones into a swallowing catch, as the throw-based version did) keeps the
-        // behavior identical and the loop throw-free (ADR-0014).
+        // behavior identical and the loop throw-free.
         return;
       }
     }

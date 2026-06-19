@@ -17,7 +17,7 @@ export interface AisleApi {
    * short-circuits to the no-aisle sentinel with no I/O. Called by the grocery
    * and pantry write tools. Errs with a ready-to-surface message when the
    * catalog hasn't synced or the save fails (matching the other contract
-   * writes — ADR-0014). A failed LOCAL commit after a successful save is
+   * writes). A failed LOCAL commit after a successful save is
    * absorbed (warn + in-memory catalog updated): erring would invite a
    * duplicate re-create, and the replace-all sync heals the disk copy.
    */

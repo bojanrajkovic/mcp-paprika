@@ -9,8 +9,8 @@ import { groceryListToMarkdown } from "../grocery-helpers.js";
 
 /**
  * `paprika://grocery-list/{uid}` — render a grocery list with its items inlined.
- * Grocery list is one of the three Content-class entities with a resource surface
- * (ADR-0004); items are INLINED and co-owned by grocery (resolved through
+ * Grocery list is one of the three Content-class entities with a resource surface;
+ * items are INLINED and co-owned by grocery (resolved through
  * `ctx.state.items.store`, not a dep), so a child grocery-item change fires
  * `resourceListChanged()`.
  *

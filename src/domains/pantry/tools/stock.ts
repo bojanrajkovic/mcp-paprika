@@ -24,7 +24,7 @@ export const restockPantryItemInputSchema = z
 
 /**
  * `mark_pantry_item_out_of_stock` — flip a pantry item to out-of-stock. `inStock` is
- * an intent verb (ADR-0008), so it lives here, not on `update_pantry_item`.
+ * an intent verb, so it lives here, not on `update_pantry_item`.
  */
 export const markPantryItemOutOfStockTool = defineTool(
   {
@@ -63,7 +63,7 @@ export const markPantryItemOutOfStockTool = defineTool(
 
 /**
  * `restock_pantry_item` — the in-stock intent verb, mirror of
- * `mark_pantry_item_out_of_stock` (ADR-0008).
+ * `mark_pantry_item_out_of_stock`.
  */
 export const restockPantryItemTool = defineTool(
   {

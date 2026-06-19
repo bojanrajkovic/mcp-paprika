@@ -41,7 +41,7 @@ import {
 import { PhotographyAPIError, PhotographyError } from "./photography-errors.js";
 
 /**
- * The client's public error union (ADR-0014): `generate` errs with one of
+ * The client's public error union: `generate` errs with one of
  * these. `PhotographyAPIError` (a subclass of `PhotographyError`) passes
  * through from the wire classification; `CircuitOpenError` surfaces a tripped
  * breaker; a foreign escape (a `ZodError` on a malformed envelope, an abort
@@ -239,7 +239,7 @@ export class PhotographyClient {
         }
 
         // Result-returning decode, rethrown here INSIDE the cockatiel-governed
-        // closure (where every outcome speaks in throws — ADR-0014 form #3);
+        // closure (where every outcome speaks in throws);
         // the fromPromise edge below converts it back onto the Result rail.
         const photo = decodeDataUri(url).match(
           (v) => v,
@@ -294,7 +294,7 @@ export class PhotographyClient {
         attributes: { ...genAiAttrs, "mcp_paprika.photo.kind": options.referenceImage ? "restyle" : "generate" },
         duration: { histogram: genAiClientOperationDuration, attributes: genAiAttrs },
       },
-      // The throw-based cockatiel protocol ends at this owned edge (ADR-0014).
+      // The throw-based cockatiel protocol ends at this owned edge.
       () => ResultAsync.fromPromise(this._executor.execute(this._endpoint, execute), toPhotographyFailure),
     );
   }

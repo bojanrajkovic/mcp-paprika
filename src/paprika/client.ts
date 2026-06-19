@@ -110,7 +110,7 @@ const RETRYABLE_STATUSES = new Set([429, 500, 502, 503]);
 
 /**
  * Normalize whatever escapes the resilience stack into the public error union
- * (ADR-0014: the foreign producers' throws stop at this owned edge). Paprika's
+ * (the foreign producers' throws stop at this owned edge). Paprika's
  * own classes pass through untouched (callers key on `PaprikaAPIError.status`);
  * cockatiel's `BrokenCircuitError` becomes the shared `CircuitOpenError`; the
  * network-retry marker unwraps to a `PaprikaError` carrying the original undici

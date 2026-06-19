@@ -1,6 +1,6 @@
 // The one instrumentation scope every seam records under. Seams reach the
 // tracer/meter through the global `@opentelemetry/api` singletons rather than
-// an `Infra` field (ADR-0018): the API is designed as a process-wide ambient
+// an `Infra` field: the API is designed as a process-wide ambient
 // with a safe no-op default — exactly the "off by default" property the
 // bootstrap relies on — and it keeps telemetry out of signatures in layers
 // that deliberately import nothing heavy (`src/entity/`, `src/cache/`).

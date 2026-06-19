@@ -7,7 +7,7 @@ import type { CommitTarget } from "../entity/commit.js";
 import { commitEntities, deleteOp } from "../entity/commit.js";
 
 // Shared machinery for the ordered reference catalogs (aisle, meal-type — the
-// ADR-0017 management tools). Both catalogs are flat name+orderFlag lists with
+// management tools). Both catalogs are flat name+orderFlag lists with
 // identical sort, reposition, and tombstone-delete semantics; the entity-specific
 // parts (fields, wire save, messages) stay with each domain.
 
@@ -60,7 +60,7 @@ export function renderCatalogOrder(entries: ReadonlyArray<OrderedCatalogEntry>):
  * ready-to-surface messages; erring after a successful POST is safe to surface —
  * re-running the delete just re-POSTs the tombstone, and the replace-all sync
  * reconciles either way. The reference guard/warning lives with the calling tool
- * (homed where the referencing entities are visible — ADR-0017). `noun` is the
+ * (homed where the referencing entities are visible). `noun` is the
  * capitalized entity noun for messages, e.g. "Aisle" / "Meal type".
  */
 export function makeCatalogDelete<

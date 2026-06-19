@@ -108,7 +108,7 @@ export async function buildAuthContext(
 
   // Fetch + validate upstream discovery document (rejects http:// endpoints;
   // checks alg overlap). An err aborts boot — there is no value running HTTP
-  // mode if the OAuth stack can't authenticate anyone (ADR-0014 form #5).
+  // mode if the OAuth stack can't authenticate anyone.
   const discovery = unwrapAtBoot(
     await loadDiscovery(resolved.discoveryUrl, resolved.allowedAlgs, oidcClientLog),
     "oidc discovery",

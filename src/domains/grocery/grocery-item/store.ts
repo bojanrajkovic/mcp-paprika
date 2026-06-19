@@ -35,8 +35,8 @@ export class GroceryItemStore extends EntityStore<GroceryItem, GroceryItemUid> {
   /**
    * How many UNPURCHASED items reference an aisle — `delete_aisle`'s guard count.
    * Purchased items deliberately don't count: they're shopping history, and a
-   * delete guard must never block on state the user has no tool to fix
-   * (ADR-0017). The rule lives here, named, so a future caller can't re-derive
+   * delete guard must never block on state the user has no tool to fix.
+   * The rule lives here, named, so a future caller can't re-derive
    * it wrong.
    */
   countUnpurchasedInAisle(aisleUid: AisleUid): number {

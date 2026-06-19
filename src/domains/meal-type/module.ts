@@ -53,7 +53,7 @@ register(
     .state<MealTypeState>(async (infra) => {
       const store = new MealTypeStore({ pendingWriteTtlMs: resolvePendingWriteTtl(infra.config) });
       // Disk is flat: the cache's subdir is the original `<cacheDir>/mealtypes`
-      // (reuse-in-place — ADR-0009 keeps the cache un-namespaced, so there is no migration).
+      // (the cache is un-namespaced, so there is no migration).
       const cache = new DiskCache<MealType>({
         ...mealTypeDiskDescriptor,
         subdir: join(infra.cacheDir, mealTypeDiskDescriptor.subdir),
@@ -67,15 +67,15 @@ register(
     .build((state, infra) => {
       // ensureMealType is the auto-create write path (resolve-or-create + persist),
       // mirroring aisle's ensureAisle. It closes over `infra.client`, so it is
-      // assembled here in `.build` rather than `.state`, keeping MealTypeState pure
-      // (ADR-0012). It is a CONTRACT write — meal and menu reach it via
+      // assembled here in `.build` rather than `.state`, keeping MealTypeState pure.
+      // It is a CONTRACT write — meal and menu reach it via
       // `ctx.deps["meal-type"]` — so it goes in `api`, not `ctx.writes`.
       const catalogWriteMutex = new Mutex();
       // The commit protocol lives in src/entity/commit.ts; this binds meal-type's slice.
       // Meal-type commits fire resourceListChanged even though meal types have no
       // resource of their own: menu RESOURCES resolve item type names and ordering
       // through this catalog live, so a rename/recolor/reorder/delete changes their
-      // rendered content without any menu entity changing (ADR-0017).
+      // rendered content without any menu entity changing.
       const mealTypeFx = {
         onCommitted: () => infra.notifier.resourceListChanged(),
         finish: () => notifySyncBestEffort(infra.client, infra.log),

@@ -33,7 +33,7 @@ declare module "../../kernel/registry.js" {
  * ("semantic search disabled"). The kernel registers the
  * `discover_recipes` tool unconditionally, so the feature gate lives INSIDE the tool
  * (and inside the boot hook): both no-op cleanly when `vectorStore === null` rather
- * than being conditionally registered (ADR-0009 §5#9). The `embedder` rides along
+ * than being conditionally registered. The `embedder` rides along
  * for symmetry / future per-cycle re-indexing and is `null` on the same condition.
  */
 export interface DiscoverState {

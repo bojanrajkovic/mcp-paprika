@@ -59,7 +59,7 @@ register(
     .state<PantryState>(async (infra) => {
       const store = new PantryStore({ pendingWriteTtlMs: resolvePendingWriteTtl(infra.config) });
       // Disk is flat: the cache's subdir is the original `<cacheDir>/pantry`
-      // (reuse-in-place — ADR-0009 keeps the cache un-namespaced, so there is no migration).
+      // (the cache is un-namespaced, so there is no migration).
       const cache = new DiskCache<PantryItem>({
         ...pantryDiskDescriptor,
         subdir: join(infra.cacheDir, pantryDiskDescriptor.subdir),
@@ -73,7 +73,7 @@ register(
     .build((state, infra) => {
       // ---- Pantry write chokepoints ----
       // Assembled here (not in `.state`) because they close over `infra.client`,
-      // keeping PantryState pure (ADR-0012). The commit chokepoints are internal —
+      // keeping PantryState pure. The commit chokepoints are internal —
       // pantry's own tools reach them via `ctx.writes` — while `createItems` is the
       // sibling-facing contract write grocery's move consumes via `ctx.deps.pantry`.
       //

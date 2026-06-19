@@ -9,7 +9,7 @@
 //    import. An npm bin script cannot carry node flags, and ESM links the whole
 //    static graph before evaluating, so the loader hook is inert here — which
 //    is fine: every configured instrumentation is diagnostics_channel- or
-//    perf-hooks-based and needs no module patching (ADR-0018).
+//    perf-hooks-based and needs no module patching.
 //
 // ESM module caching makes the two paths idempotent: whichever loads first
 // evaluates; the other resolves to the cached instance.

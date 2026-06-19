@@ -51,7 +51,7 @@ export function pruneOrphanCache<UID extends string>(
  * protection and let the next cycle overwrite a local edit.
  *
  * An `err` anywhere in the chain (the fetch, a cache read/put/remove) propagates
- * to the sync driver, which decides the blast radius by tier (ADR-0010).
+ * to the sync driver, which decides the blast radius by tier.
  */
 export function syncReplaceAllEntity<T extends { uid: UID }, UID extends string>(
   opts: ReplaceAllEntityOptions<T, UID>,

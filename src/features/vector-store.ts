@@ -89,7 +89,7 @@ import { JsonVectorIndex } from "./json-vector-index.js";
 import { VectorStoreError } from "./vector-store-errors.js";
 
 /**
- * The store's public error union (ADR-0014): an embedding-provider failure
+ * The store's public error union: an embedding-provider failure
  * passes through (callers report it as a provider issue — a tripped breaker, a
  * permanent API error), while index and filesystem failures wrap as
  * `VectorStoreError` at this layer.

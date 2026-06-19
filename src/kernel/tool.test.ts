@@ -117,7 +117,7 @@ describe("defineTool", () => {
     expect(out.content[0]).toMatchObject({ type: "text", text: "Soup" });
   });
 
-  describe("precondition chain (ADR-0015)", () => {
+  describe("precondition chain", () => {
     const spec = {
       name: "gated_tool",
       title: "Gated",

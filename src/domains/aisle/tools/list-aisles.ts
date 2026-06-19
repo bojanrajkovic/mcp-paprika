@@ -9,7 +9,7 @@ import { aisleStartGuard } from "./guards.js";
 /**
  * `list_aisles` — list the aisle catalog. Aisle is a Reference-class entity:
  * list tool + managed lifecycle (auto-create via `ensureAisle`, `update_aisle`,
- * `delete_aisle`), no resource surface (ADR-0004).
+ * `delete_aisle`), no resource surface.
  */
 export const listAislesTool = defineTool(
   {

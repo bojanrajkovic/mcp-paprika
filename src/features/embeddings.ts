@@ -37,7 +37,7 @@ import {
 import { EmbeddingAPIError, EmbeddingError } from "./embedding-errors.js";
 
 /**
- * The client's public error union (ADR-0014): every public `EmbeddingClient`
+ * The client's public error union: every public `EmbeddingClient`
  * method errs with one of these. `EmbeddingAPIError` (a subclass of
  * `EmbeddingError`) passes through from the wire classification;
  * `CircuitOpenError` surfaces a tripped breaker; a foreign escape (a `ZodError`
@@ -194,7 +194,7 @@ export class EmbeddingClient {
         duration: { histogram: genAiClientOperationDuration, attributes: this._genAiAttrs },
       },
       // The executor maps a tripped breaker to CircuitOpenError("embeddings", endpoint);
-      // the throw-based cockatiel protocol ends at this owned edge (ADR-0014).
+      // the throw-based cockatiel protocol ends at this owned edge.
       () => ResultAsync.fromPromise(this._executor.execute(endpoint, execute), toEmbeddingFailure),
     );
   }

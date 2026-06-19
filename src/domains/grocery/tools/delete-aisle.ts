@@ -27,8 +27,7 @@ import { groceryStartGuard, pantrySyncedGuard } from "./guards.js";
  * still not cover the same race against Paprika's other clients, since the
  * cloud store has no transactions. The designed safety net is that a dangling
  * aisle ref is benign: render-resolution falls back to the item's denormalized
- * name, and the catalog memory degrades to the Miscellaneous placement
- * (ADR-0017).
+ * name, and the catalog memory degrades to the Miscellaneous placement.
  */
 export const deleteAisleTool = defineTool(
   {

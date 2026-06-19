@@ -76,7 +76,7 @@ export function menuToMarkdown(
     lines.push("");
     for (const item of sorted) {
       // A typeUid that misses the catalog is a DANGLING reference (its type was
-      // deleted — ADR-0017): render the item with no type prefix rather than
+      // deleted): render the item with no type prefix rather than
       // leaking the raw UID into the line.
       const typeName = nameByTypeUid.get(item.typeUid);
       let line = typeName !== undefined ? `- **${typeName}:** ${item.name}` : `- ${item.name}`;

@@ -60,7 +60,7 @@ describe("makeSchemaEquals", () => {
 });
 
 // Pins the integration on real entity schemas — branded UIDs (plain strings at
-// runtime, ADR-0007), nullable foreign-key refs, the full field set — so the
+// runtime), nullable foreign-key refs, the full field set — so the
 // per-entity comparators stay equivalent to the hand-rolled ones they replaced.
 describe("makeSchemaEquals over real entity schemas", () => {
   it("excludes `deleted` but catches a real field change (Meal: branded UIDs, nullable refs)", () => {

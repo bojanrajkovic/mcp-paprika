@@ -14,7 +14,7 @@
 import type { CircuitOpenError } from "../utils/errors.js";
 
 /**
- * The client's public error union (ADR-0014): every public `PaprikaClient`
+ * The client's public error union: every public `PaprikaClient`
  * method errs with one of these. `PaprikaAPIError` / `PaprikaAuthError` pass
  * through from the wire classification (callers key on `PaprikaAPIError.status`
  * — e.g. purge_recipe's 404 idempotency branch); `CircuitOpenError` surfaces a

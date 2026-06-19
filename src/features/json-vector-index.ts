@@ -25,7 +25,7 @@
  *   fsync(dir), versus Vectra's plain truncating `writeFile`.
  *
  * This is owned code (a from-scratch rewrite of the slice of `vectra` we use,
- * not a vendored copy), so per ADR-0014 its surface returns `Result`: every
+ * not a vendored copy), so its surface returns `Result`: every
  * invariant violation and filesystem failure is an `err`, never a throw.
  */
 

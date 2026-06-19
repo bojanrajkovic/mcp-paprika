@@ -3,7 +3,7 @@
 // Loaded ONLY when `telemetryEnabled` says so (the bootstrap dynamic-imports
 // this module), so a non-observing process never parses the SDK. Everything
 // here that can throw is foreign (the SDK, `node:fs`, `node:module`) and is
-// caught at this edge into a `Result` (ADR-0014); telemetry failing to start
+// caught at this edge into a `Result`; telemetry failing to start
 // must never take the server down.
 //
 // Wire-safety invariant (stdio): nothing in the export path may touch stdout.
@@ -124,7 +124,7 @@ function serviceVersion(): string | undefined {
  * linked and registration is harmless — none of the configured
  * instrumentations need it (undici and runtime-node are diagnostics_channel/
  * perf-hooks based). It exists for headroom: any future module-patching
- * instrumentation Just Works wherever `--import` is used. See ADR-0018.
+ * instrumentation Just Works wherever `--import` is used.
  */
 export function startTelemetry(): Result<() => Promise<void>, Error> {
   return Result.fromThrowable(

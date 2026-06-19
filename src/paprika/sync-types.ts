@@ -11,7 +11,7 @@ import type { PaprikaClientError } from "./errors.js";
 /**
  * What a reconcile can fail with: the client's typed error on a fetch, or the
  * disk cache's on a put/remove. The driver only logs these (a `reference` /
- * `additive` err is a warning; a `core` err aborts the cycle — ADR-0010/0014),
+ * `additive` err is a warning; a `core` err aborts the cycle),
  * so the union stays exactly the two producers' types, unnormalized.
  */
 export type SyncError = CacheError | PaprikaClientError;

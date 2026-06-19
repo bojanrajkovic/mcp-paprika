@@ -14,7 +14,7 @@ import { pruneOrphanCache } from "../../paprika/sync.js";
  * rather than at TTL). `reference` tier — a lookup catalog pantry and grocery resolve
  * aisle names against at read time; runs best-effort ahead of core, so a transient
  * aisle-fetch failure degrades to the last-good catalog instead of aborting the
- * primary data sync (ADR-0010).
+ * primary data sync.
  */
 export function aisleSync(state: AisleState): SyncContribution<AisleState, never> {
   return {

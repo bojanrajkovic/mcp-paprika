@@ -18,7 +18,7 @@ export const recipeFlagInputSchema = z.object({ uid: RecipeUidSchema.describe("R
  * `unfavorite_recipe`, `pin_recipe` / `unpin_recipe`): look up by UID, save the
  * recipe with `flag` set to `value`, commit through the recipe chokepoint, and
  * render the result. The four verbs are configs over this one handler — a new
- * promoted flag transition (ADR-0008) is one `makeRecipeFlagTool` call per
+ * promoted flag transition is one `makeRecipeFlagTool` call per
  * direction.
  */
 export function makeRecipeFlagTool(spec: {

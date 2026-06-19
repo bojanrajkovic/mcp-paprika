@@ -23,7 +23,7 @@ import { scheduleMenuStartGuard } from "./guards.js";
  *
  * Its three-leg readiness gate (recipe — re-resolve names; menu + meal-type —
  * resolve items and their types; meal — POST the batch) lives in
- * `scheduleMenuStartGuard` (tools/guards.ts), run as a precondition (ADR-0015). Each
+ * `scheduleMenuStartGuard` (tools/guards.ts), run as a precondition. Each
  * leg carries its own "not yet synced" message; `menu.hasSynced()` covers BOTH
  * menu-owned stores (menus + menu-items), with the meal-type check as the third leg.
  */

@@ -10,7 +10,7 @@ import { menuToMarkdown } from "../menu-helpers.js";
 /**
  * `paprika://menu/{uid}` — render a menu with its items inlined. Resolves the
  * meal-type catalog (for item name/order rendering) via `ctx.deps["meal-type"].getAll()`.
- * Menu is one of the three Content-class entities with a resource surface (ADR-0004);
+ * Menu is one of the three Content-class entities with a resource surface;
  * a child menu-item change fires `resourceListChanged()` because items are inlined here.
  *
  * Recipe references are NOT read — recipe linkage is denormalized onto `MenuItem.name`

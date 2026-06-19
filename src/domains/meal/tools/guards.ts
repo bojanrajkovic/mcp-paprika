@@ -12,7 +12,7 @@ import { textResult } from "../../../shared/tools.js";
  * it, every "Dinner" / "Lunch" lookup returns undefined and the user sees "Unknown
  * meal type" errors that look like input mistakes but are actually a cold-cache
  * state. Guarding both up front turns that into a clear "still syncing" message.
- * Runs as a kernel precondition (ADR-0015).
+ * Runs as a kernel precondition.
  */
 export function mealStartGuard(ctx: DomainCtx<MealState, "meal-type">): Result<void, CallToolResult> {
   if (!ctx.state.store.hasSynced || !ctx.deps["meal-type"].hasSynced()) {
