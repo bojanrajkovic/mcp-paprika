@@ -6,6 +6,7 @@ import { RecipeUidSchema } from "../domains/recipe/ids.js";
 import {
   commitFailure,
   formatLookupOutcome,
+  imageResult,
   type LookupOutcome,
   resolveLookup,
   toolResult,
@@ -29,6 +30,19 @@ describe("shared helper functions", () => {
       expect(result).toEqual({
         content: [{ type: "text", text: "Pasta" }],
         structuredContent: { uid: "abc", name: "Pasta" },
+      });
+    });
+  });
+
+  describe("imageResult carries a text block plus a JPEG image content block (R2)", () => {
+    it("inlines the bytes as base64 with mimeType image/jpeg, no isError", () => {
+      const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0x01]);
+      const result = imageResult("attached", jpeg);
+      expect(result).toEqual({
+        content: [
+          { type: "text", text: "attached" },
+          { type: "image", data: jpeg.toString("base64"), mimeType: "image/jpeg" },
+        ],
       });
     });
   });

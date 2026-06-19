@@ -9,7 +9,7 @@ import { RecipeUidSchema } from "../../../domains/recipe/ids.js";
 import { makeThumbnail } from "../../../domains/recipe/photo-helpers.js";
 import { defineTool } from "../../../kernel/tool.js";
 import { fetchImageBytes } from "../../../shared/photo-fetch.js";
-import { toolResult } from "../../../shared/tools.js";
+import { imageResult, toolResult } from "../../../shared/tools.js";
 import { CircuitOpenError } from "../../../utils/errors.js";
 import { toMessage } from "../../../utils/log.js";
 import { PhotographyAPIError } from "../../photography-errors.js";
@@ -188,18 +188,12 @@ export const generatePhotoTool = defineTool(
           recipeUid: args.recipe_uid,
           model,
         });
-        return {
-          content: [
-            {
-              type: "text",
-              text:
-                `Generated a preview (≈280px thumbnail) for "${recipe.name}" using ${model}${costSuffix}. ` +
-                `Not attached. To save THIS exact image, call upload_recipe_photo with generation_token \`${token}\` ` +
-                `(no need to regenerate). The preview is held for about an hour.`,
-            },
-            { type: "image", data: thumbnail.toString("base64"), mimeType: "image/jpeg" },
-          ],
-        };
+        return imageResult(
+          `Generated a preview (≈280px thumbnail) for "${recipe.name}" using ${model}${costSuffix}. ` +
+            `Not attached. To save THIS exact image, call upload_recipe_photo with generation_token \`${token}\` ` +
+            `(no need to regenerate). The preview is held for about an hour.`,
+          thumbnail,
+        );
       }
 
       // ATTACH path — photos are RECIPE-owned, so the attach goes through the recipe
