@@ -26,9 +26,7 @@ import { loadWidgetArtifacts, widgetsDir } from "../features/widgets/artifacts.j
  */
 export function buildWidgetPreviewRouter(log: Logger, opts: { readonly dir?: string } = {}): Hono {
   const app = new Hono();
-  // Load the built widgets once at construction (degrades to empty if unbuilt).
-  // `opts.dir` overrides the resolved `dist/widgets` for tests.
-  const widgetsPromise = loadWidgetArtifacts(opts.dir ?? widgetsDir(), log);
+  const dir = opts.dir ?? widgetsDir();
 
   app.get("/widget-preview", async (c) => {
     const payload = c.req.query("payload");
@@ -36,7 +34,11 @@ export function buildWidgetPreviewRouter(log: Logger, opts: { readonly dir?: str
       return c.text(`payload too large (max ${MAX_PAYLOAD_BYTES.toString()} bytes)`, 413);
     }
 
-    const widgets = await widgetsPromise;
+    // Load PER REQUEST, not once at construction: this route exists for iteration
+    // with `pnpm dev:widgets` (which rebuilds on change), so a browser refresh must
+    // pick up the latest `dist/widgets/*.html` without a server restart. It is
+    // dev-only and not hot, so re-reading the dir each request is fine.
+    const widgets = await loadWidgetArtifacts(dir, log);
     const available = [...widgets.keys()].join(", ") || "(none — run `pnpm build:widgets`)";
 
     const name = c.req.query("widget");
