@@ -523,24 +523,27 @@ export function buildEnvOverrides(env: NodeJS.ProcessEnv): Record<string, unknow
 }
 
 // Recursively merges base config with overrides. Override values win for non-object fields.
+// Keys are treated strictly as data: the base value is read only from base's OWN properties
+// (a bracket read of an absent `__proto__` would otherwise yield `Object.prototype` and
+// wrongly recurse into it), and each merged value is written with `Object.defineProperty`
+// rather than `result[key] = …` (assignment honors the `__proto__` accessor, mutating or
+// nulling the prototype chain instead of recording the key). See #345.
 /** @internal Pure helper for config merging. Exported for property-based testing only. */
 export function deepMerge(base: Record<string, unknown>, overrides: Record<string, unknown>): Record<string, unknown> {
   const result: Record<string, unknown> = { ...base };
   for (const key of Object.keys(overrides)) {
-    const baseVal = base[key];
+    const baseVal = Object.hasOwn(base, key) ? base[key] : undefined;
     const overVal = overrides[key];
-    if (
+    const merged =
       typeof baseVal === "object" &&
       baseVal !== null &&
       !Array.isArray(baseVal) &&
       typeof overVal === "object" &&
       overVal !== null &&
       !Array.isArray(overVal)
-    ) {
-      result[key] = deepMerge(baseVal as Record<string, unknown>, overVal as Record<string, unknown>);
-    } else {
-      result[key] = overVal;
-    }
+        ? deepMerge(baseVal as Record<string, unknown>, overVal as Record<string, unknown>)
+        : overVal;
+    Object.defineProperty(result, key, { value: merged, writable: true, enumerable: true, configurable: true });
   }
   return result;
 }

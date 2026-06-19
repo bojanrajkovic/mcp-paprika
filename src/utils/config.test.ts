@@ -1582,4 +1582,22 @@ describe("Configuration loading", () => {
       }
     });
   });
+
+  describe("deepMerge prototype-pollution safety (#345)", () => {
+    // JSON.parse (like a real config file, and like fast-check's fc.object) yields an
+    // OWN enumerable "__proto__" data property — the case that broke the property suite.
+    it("records a '__proto__' override key as own data, without polluting the prototype", () => {
+      const result = deepMerge({}, JSON.parse('{ "__proto__": { "polluted": true } }') as Record<string, unknown>);
+      expect(Object.hasOwn(result, "__proto__")).toBe(true);
+      expect(Object.getPrototypeOf(result)).toBe(Object.prototype);
+      // No global pollution: an unrelated fresh object never inherits `polluted`.
+      expect(({} as Record<string, unknown>)["polluted"]).toBeUndefined();
+    });
+
+    it("a null '__proto__' override neither nulls the prototype nor drops the key", () => {
+      const result = deepMerge({}, JSON.parse('{ "__proto__": null }') as Record<string, unknown>);
+      expect("__proto__" in result).toBe(true);
+      expect(Object.getPrototypeOf(result)).toBe(Object.prototype);
+    });
+  });
 });
