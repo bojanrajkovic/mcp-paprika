@@ -14,6 +14,18 @@
  * the runtime reads the finished HTML as a string and never imports it, so
  * `pnpm install --prod` can omit ext-apps/esbuild/svelte entirely.
  *
+ * That inlined runtime is the bulk of a widget's payload (~337 KB), and the floor
+ * is essentially zod: the MCP SDK models every message as a zod schema and `App`
+ * reaches the protocol layer, so the runtime transitively retains almost all of
+ * zod (~242 KB; ext-apps + sdk are ~57 KB between them). Importing ext-apps'
+ * lighter `.` entry and letting esbuild tree-shake it was measured at ~306 KB —
+ * only ~9% smaller, because zod is the bulk and zod 3 resists dead-code
+ * elimination — while it would ALSO drop the `globalThis.ExtApps` seam the dev
+ * preview shim depends on (`transport/widget-preview.ts`) and deviate from the
+ * build-mcp-app skill's pattern. So `app-with-deps` is the effective floor (#348
+ * closed: not worth the rework for ~9%); the real lever is upstream — a lighter
+ * ext-apps validator (zod-mini / zod 4 jitless) — not this build.
+ *
  * The build is an esbuild `context` whose `onEnd` plugin wraps each entry's
  * bundled JS in the HTML shell — so the one-shot `buildWidgets()` (a `rebuild()`)
  * and the `--watch` loop (`ctx.watch()`) share the exact same wrapping pipeline.
