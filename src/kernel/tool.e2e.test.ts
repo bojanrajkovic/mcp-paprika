@@ -113,6 +113,37 @@ describe("defineTool — advertised tools/list surface", () => {
     }
   });
 
+  it("rejects a non-error result that omits structuredContent on a schema-bearing tool", async () => {
+    const server = buildBrandedServer();
+    const tool = defineTool(
+      {
+        name: "echo_missing_structured",
+        title: "Echo (missing structured)",
+        description: "A schema-bearing tool whose handler returns a non-error result with no structuredContent.",
+        annotations: { readOnlyHint: true },
+        inputSchema: { query: z.string() },
+        outputSchema: { echoed: z.string() },
+      },
+      (_ctx: DomainCtx<unknown, never>) => (args) => toolResult(`echo:${args.query}`),
+    );
+    tool.register(makeCtx(server));
+
+    const mcp = await connectInMemoryMcp(server);
+    try {
+      const result = await mcp.client.callTool({ name: "echo_missing_structured", arguments: { query: "hi" } });
+      // validateToolOutput runs on the non-error result, finds no structuredContent,
+      // and rejects it — the delivered result is an error whose text is the validator's
+      // message, NOT "echo:hi". This is the foundational SDK behaviour that makes
+      // `errorResult` (in-handler non-success branches) and the kernel's gate
+      // normalization necessary.
+      expect(result.isError).toBe(true);
+      const content = result.content as Array<{ type: string; text: string }>;
+      expect(content[0]?.text).not.toContain("echo:hi");
+    } finally {
+      await mcp.close();
+    }
+  });
+
   it("threads a declared ui resource into the tools/list advertisement _meta", async () => {
     const server = buildBrandedServer();
     const resourceUri = "ui://widget/echo";
@@ -173,57 +204,26 @@ describe("defineTool — advertised tools/list surface", () => {
 });
 
 /**
- * The structured-output × precondition-gate contract (ADR-0019, A3 #318).
+ * The structured-output × precondition-gate contract (ADR-0019; kernel normalization #356).
  *
- * Once a tool declares an `outputSchema`, the SDK's `validateToolOutput` runs on
- * every result it considers NON-error and requires a schema-valid
- * `structuredContent` — but it returns early on an `isError` result. A precondition
- * gate returns BEFORE the handler, so its result is what the SDK validates. These
- * two cases pin both halves of the contract over the real transport (the
- * `makeTestServer` stub discards the config and never validates, so a unit test
- * cannot see this): an `isError` gate result is exempt and its friendly text
- * survives; a non-error gate result under a schema is rejected and the friendly
- * text is destroyed — which is exactly why a schema-bearing tool's gate must be
- * `isError` (`errorResult`, not `toolResult`).
+ * Once a tool declares an `outputSchema`, the SDK's `validateToolOutput` runs on every
+ * result it considers NON-error and requires a schema-valid `structuredContent` — but
+ * it returns early on an `isError` result. A precondition gate returns BEFORE the
+ * handler, so its result is what the SDK would validate. The kernel marks EVERY
+ * precondition-gate failure `isError` (`{ ...failure, isError: true }`), so the gate
+ * result is always exempt and its friendly text survives — and guards never need to
+ * know which tools declare a schema (they return a plain `toolResult`). These cases pin
+ * that over the real transport, where the SDK's `validateToolOutput` actually runs (the
+ * `makeTestServer` stub runs the same kernel wrapper but never validates).
  */
-describe("defineTool — structured output and precondition gates", () => {
-  it("exempts an isError precondition-gate result from output validation", async () => {
-    const server = buildBrandedServer();
-    const tool = defineTool(
-      {
-        name: "gated_iserror",
-        title: "Gated (isError)",
-        description: "A schema-bearing tool whose precondition gates with an isError result.",
-        annotations: { readOnlyHint: true },
-        inputSchema: { query: z.string() },
-        outputSchema: { echoed: z.string() },
-      },
-      [(_ctx: DomainCtx<unknown, never>) => err(errorResult("not ready"))],
-      (_ctx: DomainCtx<unknown, never>) => (args) => toolResult(`echo:${args.query}`, { echoed: args.query }),
-    );
-    tool.register(makeCtx(server));
-
-    const mcp = await connectInMemoryMcp(server);
-    try {
-      const result = await mcp.client.callTool({ name: "gated_iserror", arguments: { query: "hi" } });
-      // The SDK skips validateToolOutput on an isError result, so the gate's
-      // friendly message survives intact and no structuredContent is fabricated.
-      expect(result.isError).toBe(true);
-      expect(result.structuredContent).toBeUndefined();
-      const content = result.content as Array<{ type: string; text: string }>;
-      expect(content[0]).toMatchObject({ type: "text", text: "not ready" });
-    } finally {
-      await mcp.close();
-    }
-  });
-
-  it("rejects a non-error precondition-gate result on a schema-bearing tool", async () => {
+describe("defineTool — precondition gates are exempt from output validation", () => {
+  it("marks a plain-toolResult gate failure isError, so the SDK exempts it and the text survives", async () => {
     const server = buildBrandedServer();
     const tool = defineTool(
       {
         name: "gated_plain",
-        title: "Gated (plain)",
-        description: "A schema-bearing tool whose precondition gates with a non-error text result.",
+        title: "Gated (plain toolResult)",
+        description: "A schema-bearing tool whose precondition gates with a plain (non-error) toolResult.",
         annotations: { readOnlyHint: true },
         inputSchema: { query: z.string() },
         outputSchema: { echoed: z.string() },
@@ -236,13 +236,41 @@ describe("defineTool — structured output and precondition gates", () => {
     const mcp = await connectInMemoryMcp(server);
     try {
       const result = await mcp.client.callTool({ name: "gated_plain", arguments: { query: "hi" } });
-      // A non-error result under a declared outputSchema is validated, and it carries
-      // no structuredContent — so the SDK rejects it: the delivered result is an
-      // error whose text is the validator's message, NOT the friendly "not ready".
-      // This is precisely why a schema-bearing tool's gate must be `errorResult`.
+      // The kernel flagged the gate result isError, so the SDK skips validateToolOutput:
+      // the friendly message survives and no structuredContent is fabricated. The guard
+      // returned a plain toolResult — it did not need to know about the outputSchema.
       expect(result.isError).toBe(true);
+      expect(result.structuredContent).toBeUndefined();
       const content = result.content as Array<{ type: string; text: string }>;
-      expect(content[0]?.text).not.toContain("not ready");
+      expect(content[0]).toMatchObject({ type: "text", text: "not ready" });
+    } finally {
+      await mcp.close();
+    }
+  });
+
+  it("delivers an already-isError gate failure unchanged (the normalization is idempotent)", async () => {
+    const server = buildBrandedServer();
+    const tool = defineTool(
+      {
+        name: "gated_iserror",
+        title: "Gated (errorResult)",
+        description: "A schema-bearing tool whose precondition gates with an errorResult.",
+        annotations: { readOnlyHint: true },
+        inputSchema: { query: z.string() },
+        outputSchema: { echoed: z.string() },
+      },
+      [(_ctx: DomainCtx<unknown, never>) => err(errorResult("not ready"))],
+      (_ctx: DomainCtx<unknown, never>) => (args) => toolResult(`echo:${args.query}`, { echoed: args.query }),
+    );
+    tool.register(makeCtx(server));
+
+    const mcp = await connectInMemoryMcp(server);
+    try {
+      const result = await mcp.client.callTool({ name: "gated_iserror", arguments: { query: "hi" } });
+      expect(result.isError).toBe(true);
+      expect(result.structuredContent).toBeUndefined();
+      const content = result.content as Array<{ type: string; text: string }>;
+      expect(content[0]).toMatchObject({ type: "text", text: "not ready" });
     } finally {
       await mcp.close();
     }
