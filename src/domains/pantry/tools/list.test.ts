@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import type { PantryItemUid } from "../ids.js";
 import type { PantryState } from "../module.js";
 
 import { makePantryItem } from "../../../../test/domains/pantry/__fixtures__/pantry.js";
@@ -47,6 +48,37 @@ describe("list_pantry_items tool", () => {
     const text = await kh.callToolText("list_pantry_items", {});
 
     expect(text).toBe("Your pantry is empty.");
+  });
+
+  it("emits structured rows; absent quantity/aisle normalize to null (R1)", async () => {
+    kh.seed({
+      pantry: [
+        makePantryItem({
+          uid: "p-milk" as PantryItemUid,
+          ingredient: "Milk",
+          quantity: "1 gal",
+          aisle: "Dairy",
+          inStock: true,
+          expirationDate: null,
+        }),
+        makePantryItem({
+          uid: "p-eggs" as PantryItemUid,
+          ingredient: "Eggs",
+          quantity: "",
+          aisle: "",
+          inStock: false,
+          expirationDate: "2026-12-01",
+        }),
+      ],
+    });
+    const result = await kh.callTool("list_pantry_items", {});
+    expect(result.isError).toBeFalsy();
+    const { items } = result.structuredContent as { items: Array<Record<string, unknown>> };
+    // Alphabetical (Eggs before Milk); the "" sentinels become null.
+    expect(items).toEqual([
+      { uid: "p-eggs", ingredient: "Eggs", quantity: null, aisle: null, inStock: false, expirationDate: "2026-12-01" },
+      { uid: "p-milk", ingredient: "Milk", quantity: "1 gal", aisle: "Dairy", inStock: true, expirationDate: null },
+    ]);
   });
 
   it("cold-start (hasSynced false) returns guard error", async () => {

@@ -53,12 +53,17 @@ describe("ADR-0019: structured-output envelope and rollout", () => {
       .filter((s) => s.outputSchema !== undefined)
       .map((s) => s.name)
       .sort();
-    // A3 #318 — the meal reads, the first adopters. A3 #319 — the recipe/grocery/menu
-    // list tools. Add each later batch's tool names as they land.
+    // A3 #318 — the meal reads (first adopters). A3 #319 — the recipe/grocery/menu list
+    // tools. A3 #320 — the catalogs, pantry list, and discover. Add each later batch's
+    // tool names as they land.
     expect(withSchema).toEqual([
+      "discover_recipes",
+      "list_aisles",
       "list_categories",
       "list_grocery_lists",
+      "list_meal_types",
       "list_menus",
+      "list_pantry_items",
       "list_recipes",
       "read_meal_plan",
       "read_recipe_history",
