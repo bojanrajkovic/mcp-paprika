@@ -256,7 +256,7 @@ export function createLogger(opts: LoggerOptions): pino.Logger {
       base: null,
       // Trace correlation WITHOUT @opentelemetry/instrumentation-pino: that
       // package patches the pino module, which needs the ESM loader hook the
-      // bin/stdio path can't have (ADR-0018). A mixin reads the active span at
+      // bin/stdio path can't have. A mixin reads the active span at
       // log time — every record inside a tool call or sync cycle carries its
       // trace, and "grep the log, pivot to the trace" works on both transports.
       mixin() {

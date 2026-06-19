@@ -13,7 +13,7 @@ import { categoriesEqual } from "../category/types.js";
  * `reference` tier — a lookup catalog recipe rendering resolves category names
  * against at read time; runs best-effort ahead of core, so a transient
  * categories-fetch failure degrades to the last-good catalog instead of aborting the
- * primary data sync (ADR-0010). Category is a reference entity with no MCP resource
+ * primary data sync. Category is a reference entity with no MCP resource
  * surface, so it emits NO `sync:complete` (returns `void`).
  *
  * A rename/removal must re-embed referencing recipes (the display name is baked into

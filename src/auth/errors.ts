@@ -22,7 +22,7 @@ import {
 import type { Result } from "neverthrow";
 
 /**
- * Recognized form #2 boundary (ADR-0014): unwrap a `Result` whose error is an
+ * OAuth boundary helper: unwrap a `Result` whose error is an
  * SDK `OAuthError`, throwing it into the SDK's throw-based authorization-server
  * contract (`OAuthServerProvider` / the DCR handler), which serializes it as a
  * spec-compliant response. The auth stores speak `Result`; this is the one

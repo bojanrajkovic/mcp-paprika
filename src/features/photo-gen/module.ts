@@ -29,7 +29,7 @@ declare module "../../kernel/registry.js" {
  * `photographyClient` is the OpenRouter image-generation HTTP client, carried as a
  * NULLABLE field: `null` when image generation is unconfigured. The kernel registers
  * `generate_recipe_photo` unconditionally, so the feature gate lives
- * INSIDE the tool (ADR-0009 §5#9): it no-ops with a clear "not configured" message
+ * INSIDE the tool: it no-ops with a clear "not configured" message
  * when `photographyClient === null` rather than being conditionally registered.
  */
 export interface PhotoGenState {

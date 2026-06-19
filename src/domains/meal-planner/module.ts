@@ -14,7 +14,7 @@ declare module "../../kernel/registry.js" {
 /**
  * The meal-planner COORDINATOR. It owns NO entity: no store, no cache, no sync
  * `reconcile`, no resource. It houses the cross-domain actions that span more
- * domains than any single owning module can see (ADR-0009):
+ * domains than any single owning module can see:
  *
  * - `schedule_menu` — materialize a saved menu's items into planner meals. Reads
  *   all four deps: menu + menu-items (resolve the menu, fetch its items), recipe

@@ -78,7 +78,7 @@ export type EmptyApi = Record<never, never>;
  * (`groceryStartGuard`) and aisle gate their own tools via `state.store.hasSynced`
  * and expose nothing — so the {@link EmptyApi} contracts stay empty, and aisle (read
  * cross-domain, but whose consumers resolve against the last-good catalog and never
- * need a sync gate — ADR-0010) does not expose it either. Each domain's header
+ * need a sync gate) does not expose it either. Each domain's header
  * records what its gate guards.
  */
 export interface HasSynced {
@@ -134,7 +134,7 @@ export interface BootCtx<State, Deps extends DomainId> {
  * `.build` because they close over `infra` (the Paprika client / notifier), so they
  * cannot live in the `.state`-typed object — keeping `state` a pure state interface.
  * `Writes` defaults to empty, so a read-only tool keeps a two-generic ctx and never
- * mentions it. See ADR-0012.
+ * mentions it.
  */
 export interface DomainCtx<State, Deps extends DomainId, Writes = Record<never, never>> extends BootCtx<State, Deps> {
   readonly server: McpServer;
@@ -161,7 +161,7 @@ type BootHooks<State, Deps extends DomainId> = Partial<Record<BootPhase, (ctx: B
  *   last-good in-memory catalog rather than aborting the primary data sync.
  * - `core` (recipe, pantry, grocery) runs next, in dependency order; a core `err`
  *   aborts the cycle as a logged no-op, mirroring the sync loop's never-throws
- *   contract (ADR-0014 reworked this seam from throw-abort to Result-abort).
+ *   contract (reworked from throw-abort to Result-abort).
  * - `additive` (meals, menus, photos) runs last, each best-effort, so a soft read
  *   surface can't abort core sync.
  */
@@ -175,8 +175,8 @@ export type SyncTier = "reference" | "core" | "additive";
  * Paprika client via `infra.client`. So no central all-stores context is needed. It
  * resolves to an `AnySyncResult` to be emitted as `sync:complete` (recipes/grocery/
  * menus), or `void` for reference/soft entities that emit nothing; an `err` is the
- * abort signal the driver scopes by tier (ADR-0010 / ADR-0014 — a reconcile never
- * throws). `sweep` is the per-store pending-write TTL sweep the driver runs once at
+ * abort signal the driver scopes by tier — a reconcile never
+ * throws. `sweep` is the per-store pending-write TTL sweep the driver runs once at
  * end-of-cycle.
  */
 export interface SyncContribution<State, Deps extends DomainId> {
@@ -201,13 +201,13 @@ interface ErasedSync {
  * `writes` is the module's write-chokepoint surface, surfaced to its own tools as
  * `ctx.writes`. It is assembled HERE (not in `.state`) because the chokepoints close
  * over `infra`, which `.build` receives but `.state` does not — keeping `State` a pure
- * state interface (ADR-0012). `Writes` is inferred from this object; a module with no
+ * state interface. `Writes` is inferred from this object; a module with no
  * tool-invoked chokepoints omits it.
  *
  * `resources` is parallel to `tools`: each entry registers an MCP resource template
  * via `ctx.server.registerResource(...)`, reading its own data via `ctx.state` and
  * any shared data via `ctx.deps.<id>` contracts. Resources are read-only (Content
- * domains only — recipe, grocery-list, menu, see ADR-0004), so they never touch
+ * domains only — recipe, grocery-list, menu), so they never touch
  * `ctx.writes` and most modules supply none.
  */
 export interface ModuleParts<Id extends DomainId, Deps extends DomainId, State, Writes = Record<never, never>> {
@@ -453,7 +453,7 @@ export async function buildKernel(
   // context), with a child per module build. Boot is the one place per-module
   // timing matters — every .state factory hydrates its disk caches serially in
   // dependency order, so a slow startup names its culprit here. A build or
-  // hook that throws (boot fail-fast, ADR-0014 form #5) ends the open spans
+  // hook that throws (boot fail-fast) ends the open spans
   // as errors on its way out: the startup-failure path flushes telemetry, and
   // only ENDED spans export — the boot trace is exactly the diagnostics a
   // failed boot needs.
@@ -496,7 +496,7 @@ export async function buildKernel(
   // in order: reference catalogs first (best-effort), then core in dependency order
   // (a failure aborts the cycle), then additive best-effort; then flush + sweep. The
   // whole cycle never throws. Tiers scope abort-blast-radius, not data ordering —
-  // nothing reads a sibling store during reconcile (ADR-0010).
+  // nothing reads a sibling store during reconcile.
   //
   // Recipe's core reconciles must LEAD the core tier: recipe must be marked synced
   // before the other core reconciles (pantry, grocery) run, so a later core failure
@@ -575,7 +575,7 @@ export async function buildKernel(
     };
     return context.with(trace.setSpan(context.active(), cycleSpan), async () => {
       const results: Array<AnySyncResult> = [];
-      // The reconciles speak Result (ADR-0014), so the abort seam is the core-tier
+      // The reconciles speak Result, so the abort seam is the core-tier
       // `err` below, not a catch. The try/catch is pure defense-in-depth for a
       // reconcile that breaks its own contract (a throw inside a chain callback
       // rejects the underlying promise): syncOnce's never-throws promise is

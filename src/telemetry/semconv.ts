@@ -5,7 +5,7 @@
 // Vendored rather than imported from `@opentelemetry/semantic-conventions/incubating`
 // on the package's own advice: the incubating entry point may break in MINOR
 // versions, so instrumentation code is told to copy the definitions it uses
-// (the same reasoning that vendored the vector index — ADR-0003). Stable
+// (the same reasoning that vendored the vector index). Stable
 // constants (`error.type`, `service.*`, `http.*`) ARE imported from the
 // package's stable entry; only Development-status names live here. When the
 // MCP/GenAI conventions stabilize, this file is the single rename site.

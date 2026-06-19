@@ -4,7 +4,7 @@
  * Manages issuance, lookup, rotation, and revocation of opaque bearer tokens.
  * All tokens are hashed before storage; plaintexts returned only once at issuance.
  *
- * Every method is `Result`-native (ADR-0014): the error channel is the SDK's
+ * Every method is `Result`-native: the error channel is the SDK's
  * `OAuthError` — domain outcomes (invalid_grant, invalid_scope, …) come from the
  * `OAuthTokenError` factories, and a disk-cache failure maps to a generic
  * `server_error` (the wire-safe shape the provider rethrows at the SDK edge).

@@ -204,7 +204,7 @@ export class MintingOAuthServerProvider implements OAuthServerProvider {
     // The returned IssuedPair.identity carries the rotated-out token's
     // identity so we can log `sub` without a separate disk read. An err — the
     // OAuthTokenError factories' SDK subclasses — crosses to the library via
-    // unwrapOAuth (ADR-0014 form #2), which serializes it.
+    // unwrapOAuth, which serializes it.
     const pair = unwrapOAuth(
       await this._tokenStore.rotateRefresh(refreshToken, client.client_id, scopes, resource?.toString()),
     );

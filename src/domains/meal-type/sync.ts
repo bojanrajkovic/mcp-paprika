@@ -18,7 +18,7 @@ import { pruneOrphanCache } from "../../paprika/sync.js";
  * so a transient meal-type fetch failure degrades to the last-good catalog (consumers
  * gate on `hasSynced`, which latches) rather than aborting the primary data sync.
  * `core` was rejected: meal-type's consumers (meal, menu) are themselves best-effort,
- * so promotion would buy no ordering and only widen the abort blast-radius (ADR-0010).
+ * so promotion would buy no ordering and only widen the abort blast-radius.
  */
 export function mealTypeSync(state: MealTypeState): SyncContribution<MealTypeState, never> {
   return {

@@ -7,7 +7,7 @@ import { pantryStartGuard } from "./guards.js";
 
 /**
  * `list_pantry_items` — list all pantry items. Pantry is a Data-class entity: no
- * resource surface (ADR-0004).
+ * resource surface.
  */
 export const listPantryItemsTool = defineTool(
   {

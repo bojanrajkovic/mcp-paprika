@@ -28,7 +28,7 @@ const cacheErrors = lazy(() =>
 );
 
 // I/O error handling convention throughout this module:
-// Every filesystem call is converted to a `Result` at this edge (ADR-0014):
+// Every filesystem call is converted to a `Result` at this edge:
 // `ResultAsync.fromPromise` wraps the foreign promise, and ENOENT-tolerant paths
 // recover via `.orElse` on the error's `cause` code rather than an
 // existsSync()-then-read dance. existsSync() is synchronous (blocks the event

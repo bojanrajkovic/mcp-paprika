@@ -36,7 +36,7 @@ export const discoverRecipesInputSchema = {
  * contract (`ctx.deps.recipe.get` for the row, `resolveCategoryNames` for its
  * categories).
  *
- * FEATURE GATE (ADR-0009 §5#9): the kernel registers every module's tools
+ * FEATURE GATE: the kernel registers every module's tools
  * unconditionally. When embeddings are unconfigured the `.state` factory carries a null
  * `vectorStore`, and the tool early-returns a clear "not configured" result. The tool
  * is always present; it just declines to act.
@@ -59,7 +59,7 @@ export const discoverRecipesTool = defineTool(
     return async (args): Promise<CallToolResult> => {
       // Feature gate: vectorStore is null when embeddings are unconfigured. The tool
       // is registered unconditionally and declines here, so the surface is uniform
-      // across deployments (ADR-0009 §5#9).
+      // across deployments.
       const { vectorStore } = ctx.state;
       if (vectorStore === null) {
         return textResult(

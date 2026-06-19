@@ -3,7 +3,7 @@
  * tool the server registers — by importing the tool modules and reading each tool's
  * `defineTool` spec as DATA. No kernel boot, no McpServer, no SDK internals: a tool
  * is `{ spec, register }`, and the same `spec` that drives registration is what this
- * reads, so the doc can never disagree with the registered surface (ADR-0011). The
+ * reads, so the doc can never disagree with the registered surface. The
  * discovery + rendering live in ./tool-specs.ts, shared with the drift/freshness
  * tests so the generator and its guards see the surface identically.
  *

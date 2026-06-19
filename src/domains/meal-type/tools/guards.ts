@@ -7,7 +7,7 @@ import { textResult } from "../../../shared/tools.js";
 
 /**
  * Readiness gate: `ok` once the meal-type catalog has synced, else `err` with a
- * user-facing `CallToolResult`. Runs as a kernel precondition (ADR-0015).
+ * user-facing `CallToolResult`. Runs as a kernel precondition.
  */
 export function mealTypeStartGuard({ state }: { readonly state: MealTypeState }): Result<void, CallToolResult> {
   if (!state.store.hasSynced) {

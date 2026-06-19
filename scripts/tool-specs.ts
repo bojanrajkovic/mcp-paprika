@@ -3,7 +3,7 @@
 // tests (assert no drift / freshness) import from here, so the generator and its
 // guards read the surface the SAME way. NO kernel boot, NO McpServer, NO SDK
 // internals: each tool is `defineTool(spec, …)` data, so importing a tool module
-// and reading `.spec` is the whole job (ADR-0011).
+// and reading `.spec` is the whole job.
 
 import { readdir } from "node:fs/promises";
 import { join, sep } from "node:path";

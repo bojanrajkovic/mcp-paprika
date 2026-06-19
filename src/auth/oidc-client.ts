@@ -2,7 +2,7 @@ import { createRemoteJWKSet, jwtVerify, type JWTVerifyGetKey } from "jose";
 /**
  * OIDC upstream client: discovery loading and id_token verification.
  *
- * Two public functions, both `Result`-native (ADR-0014 — the foreign producers
+ * Two public functions, both `Result`-native (the foreign producers
  * here are `fetch` and `jose`, caught at this owned edge):
  * - `loadDiscovery(discoveryUrl, allowedAlgs)`: Fetch and validate RFC 8414 discovery document at startup
  * - `verifyIdToken(token, jwks, expectations)`: Verify id_token signature + claims + nonce

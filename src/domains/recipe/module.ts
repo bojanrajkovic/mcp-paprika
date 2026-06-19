@@ -122,8 +122,7 @@ register(
       // Three stores + three caches. Recipes use the bespoke RecipeDiskCache
       // (carries the uid→hash diff index); categories + photos use plain DiskCache.
       // Disk is flat: each cache's subdir is `<cacheDir>/recipes` | `/categories` |
-      // `/photos` (reuse-in-place — ADR-0009 keeps the cache un-namespaced, so there
-      // is no migration).
+      // `/photos` (the cache is un-namespaced, so there is no migration).
       //
       // Each store is hydrated from its cache so tools work on a warm restart before
       // the first sync completes. Recipe is the load-bearing one: it syncs by DIFF, so

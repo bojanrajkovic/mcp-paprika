@@ -110,7 +110,7 @@ export class DiskClientRegistrationStore {
    * Returns undefined if not found.
    *
    * SDK contract (`OAuthRegisteredClientsStore`): throw-based — a cache failure
-   * crosses as a `server_error` (ADR-0014 form #2 via `unwrapOAuth`).
+   * crosses as a `server_error` (via `unwrapOAuth`).
    */
   async getClient(clientId: string): Promise<OAuthClientInformationFull | undefined> {
     const client = unwrapOAuth(
@@ -125,7 +125,7 @@ export class DiskClientRegistrationStore {
    * Validates metadata, generates clientId + RAT, persists, returns wire format with plaintext RAT.
    *
    * SDK contract (the DCR handler): throw-based — every throw is an SDK OAuth
-   * error type (ADR-0014 form #2): `InvalidClientMetadataError` (400,
+   * error type: `InvalidClientMetadataError` (400,
    * `invalid_client_metadata` per RFC 7591 §3.2.2) on invalid metadata,
    * `InvalidRequestError` on the registration cap, `server_error` on a cache failure.
    */

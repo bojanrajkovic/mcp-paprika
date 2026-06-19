@@ -63,7 +63,7 @@ export const generatePhotoInputSchema = z.object({
  * ephemeral preview ring buffer via `ctx.infra.generatedImageStore` — a shared
  * recipe↔photo-gen seam that avoids a dependency cycle.
  *
- * FEATURE GATE (ADR-0009 §5#9): the kernel registers every module's tools
+ * FEATURE GATE: the kernel registers every module's tools
  * unconditionally. When `ctx.state.photographyClient === null` (image generation
  * unconfigured) the tool early-returns a clear "not configured" message.
  */
@@ -87,7 +87,7 @@ export const generatePhotoTool = defineTool(
       const restyle = args.restyle_existing ?? false;
       const attach = args.attach ?? true;
 
-      // FEATURE GATE — null when image generation is unconfigured (ADR-0009 §5#9).
+      // FEATURE GATE — null when image generation is unconfigured.
       const photographyClient = ctx.state.photographyClient;
       if (photographyClient === null) {
         return textResult(

@@ -92,8 +92,7 @@ register(
 
       // Three stores + three plain caches. Disk is flat: each cache's subdir is the
       // original `<cacheDir>/grocerylists` | `/groceryitems` | `/groceryingredients`
-      // (reuse-in-place — ADR-0009 keeps the cache un-namespaced, so there is no
-      // migration).
+      // (the cache is un-namespaced, so there is no migration).
       const pendingWriteTtlMs = resolvePendingWriteTtl(infra.config);
       const listStore = new GroceryListStore({ pendingWriteTtlMs });
       const listCache = new DiskCacheImpl<GroceryList>({
@@ -137,7 +136,7 @@ register(
 
       // ---- Grocery write chokepoints ----
       // Assembled here (not in `.state`) because they close over `infra.client` and
-      // `infra.notifier`, keeping GroceryState pure (ADR-0012). All three are internal —
+      // `infra.notifier`, keeping GroceryState pure. All three are internal —
       // grocery's own tools reach them via `ctx.writes`; the empty `api` exposes none
       // (no live sibling reads grocery — see api.ts).
       //

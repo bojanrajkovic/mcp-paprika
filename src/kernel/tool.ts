@@ -15,7 +15,7 @@ import { errorTypeName, startOperation } from "../telemetry/trace-result.js";
  * A tool's registration metadata, **as data** — everything `registerTool` needs
  * except the handler. Splitting this out is what lets the doc generator read the
  * tool surface by importing the tool modules and reading `spec`, with no kernel
- * boot and no `McpServer` introspection (ADR-0011).
+ * boot and no `McpServer` introspection.
  *
  * `inputSchema` is `ZodRawShape | ZodTypeAny`, exactly the two forms the SDK's
  * `registerTool` accepts: a raw shape (`{ field: z.string(), … }` — most tools)
@@ -41,7 +41,7 @@ export interface ToolSpec<I extends ZodRawShape | ZodTypeAny = ZodRawShape | Zod
  * `register` that binds the handler to a per-session {@link DomainCtx} and calls
  * `server.registerTool`. The kernel iterates `tool.register(ctx)` in `registerAll`
  * — the data/behavior split means the SAME `spec` object drives both registration
- * and documentation, so the two cannot drift in content (ADR-0011).
+ * and documentation, so the two cannot drift in content.
  *
  * `Writes` is the module's write-chokepoint surface (`ctx.writes`); it defaults to
  * empty, so a read-only tool keeps a two-generic `DomainCtx<State, Deps>`. A write
@@ -54,7 +54,7 @@ export interface ToolDef<State, Deps extends DomainId, Writes = Record<never, ne
 
 /**
  * A tool readiness gate: `ok` to proceed, or `err` carrying the complete
- * {@link CallToolResult} to return instead of running the body (ADR-0015).
+ * {@link CallToolResult} to return instead of running the body.
  *
  * Declare a guard over the **narrowest ctx slice it needs** — `{ state: XState }`
  * for a domain's own cold-start gate, a deps-bearing `DomainCtx` for a
@@ -70,7 +70,7 @@ export type ToolPrecondition<Ctx> = (ctx: Ctx) => Result<void, CallToolResult>;
  * two-parameter `(args, extra)` form — but with `I` generic the conditional stays
  * unresolved inside `defineTool`, so the gate wrapper flows through this erased
  * shape and re-asserts `ToolCallback<I>` at the `registerTool` edge. This is the
- * tool-side sibling of `defineModule`'s single `ErasedModule` cast (ADR-0009 §1):
+ * tool-side sibling of `defineModule`'s single `ErasedModule` cast:
  * the kernel is a type-agnostic transport; the real safety lives at the
  * fully-checked authoring surface (the overloads below).
  */
@@ -122,8 +122,8 @@ function loggableString(value: string): string {
 
 /**
  * Author a tool: `defineTool(spec, ctx => handler)`, or with readiness gates
- * `defineTool(spec, [pre1, pre2], ctx => handler)` (Express-middleware style;
- * ADR-0015). The handler is a factory that receives the narrowed {@link DomainCtx}
+ * `defineTool(spec, [pre1, pre2], ctx => handler)` (Express-middleware style).
+ * The handler is a factory that receives the narrowed {@link DomainCtx}
  * and returns the SDK callback — the factory body holds per-registration setup
  * (e.g. a child logger the body logs through), and the returned callback is the
  * tool body.
@@ -238,7 +238,7 @@ export function defineTool<
         // The protocol adapters: finish maps the SDK's CallToolResult outcomes
         // onto op.end (the doc-comment above carries the outcome-classing
         // rationale — gated keeps status UNSET); fail is the throw-transparent
-        // passthrough for the SDK's throw-based callback contract (ADR-0014).
+        // passthrough for the SDK's throw-based callback contract.
         const finish = (result: CallToolResult, gateErrorType?: string): CallToolResult => {
           const errorType = gateErrorType ?? (result.isError === true ? "tool_error" : undefined);
           op.end({ errorType, isError: errorType === "tool_error" });

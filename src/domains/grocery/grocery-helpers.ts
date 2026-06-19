@@ -6,7 +6,7 @@ import { aisleDisplayName } from "../aisle/display.js";
 
 // Aisle display names resolve through the live catalog (`aisles` — the caller
 // passes `ctx.deps.aisle`), with the item's denormalized copy as the fallback;
-// the contract lives in `../aisle/display.ts` (ADR-0017 render-resolution).
+// the contract lives in `../aisle/display.ts`.
 
 /**
  * Renders a grocery list as markdown with metadata and a table of items.

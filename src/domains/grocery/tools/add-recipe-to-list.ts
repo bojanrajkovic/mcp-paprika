@@ -24,7 +24,7 @@ const recipeLookupSchema = uidOrTextLookupSchema({
  * "add to grocery list": create grocery items for a recipe's ingredients, each
  * carrying the recipe's NAME as its `recipe` link (the wire links by name, not
  * UID). The AGENT parses the recipe's free-text `ingredients` blob into items —
- * the engine embeds no ingredient NLP (ADR-0008); aisle resolution and the
+ * the engine embeds no ingredient NLP; aisle resolution and the
  * ingredient catalog's aisle memory ride the same `buildGroceryItems` engine as
  * `add_grocery_items`.
  *

@@ -4,7 +4,7 @@ import type { Meal } from "./types.js";
  * Renders a single meal as a markdown card suitable for inclusion in tool
  * responses. Callers are responsible for resolving `typeName` and `recipeName`
  * from the contexts they hold; a `null` typeName (a dangling `typeUid` whose
- * type was deleted — ADR-0017) omits the Type line entirely.
+ * type was deleted) omits the Type line entirely.
  */
 export function mealToMarkdown(meal: Readonly<Meal>, typeName: string | null, recipeName: string | null): string {
   const lines: Array<string> = [];

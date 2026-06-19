@@ -119,7 +119,7 @@ describe("MCP Server end-to-end round-trip", () => {
   });
 
   it("rejects a promoted field on update_recipe with a loud SDK input-validation error", async () => {
-    // ADR-0008 D1: rating left update_recipe for rate_recipe, and the update_recipe
+    // rating left update_recipe for rate_recipe, and the update_recipe
     // schema is .strict(), so a stray `rating` key is a hard SDK rejection (isError)
     // rather than a silently dropped key — the model can't set the field this way.
     const result = await client.callTool({

@@ -8,7 +8,7 @@ import { textResult } from "../../../shared/tools.js";
 /**
  * Recipe readiness gates — a tool aborts early with a "still syncing" result if its
  * store hasn't completed a first sync. Return `Result<void, CallToolResult>`, run as
- * kernel preconditions (ADR-0015).
+ * kernel preconditions.
  */
 export function recipeColdStartGuard({ state }: { readonly state: RecipeState }): Result<void, CallToolResult> {
   if (!state.recipe.store.hasSynced) {
@@ -34,7 +34,7 @@ export function categoryStartGuard({ state }: { readonly state: RecipeState }): 
  * The photo tools' second leg: the photo catalog must have synced. Photo `order_flag`
  * and `name` are derived from the existing gallery, so uploading before photos sync
  * could assign a colliding index; a delete before the first photo sync would read a
- * not-yet-synced photo as "not found". Runs after the recipe cold-start gate (ADR-0015).
+ * not-yet-synced photo as "not found". Runs after the recipe cold-start gate.
  */
 export function photoCatalogGuard({ state }: { readonly state: RecipeState }): Result<void, CallToolResult> {
   if (!state.photo.store.hasSynced) {

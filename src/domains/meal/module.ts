@@ -52,7 +52,7 @@ register(
     .state<MealState>(async (infra) => {
       const store = new MealStore({ pendingWriteTtlMs: resolvePendingWriteTtl(infra.config) });
       // Disk is flat: the cache's subdir is the original `<cacheDir>/meals`
-      // (reuse-in-place — ADR-0009 keeps the cache un-namespaced, so there is no migration).
+      // (the cache is un-namespaced, so there is no migration).
       const cache = new DiskCacheImpl<Meal>({
         ...mealDiskDescriptor,
         subdir: join(infra.cacheDir, mealDiskDescriptor.subdir),
@@ -68,7 +68,7 @@ register(
 
       // ---- Meal write chokepoints ----
       // Assembled here (not in `.state`) because they close over `infra.client`,
-      // keeping MealState pure (ADR-0012). The commit chokepoints are internal — meal's
+      // keeping MealState pure. The commit chokepoints are internal — meal's
       // own tools reach them via `ctx.writes` — while `createMeals` is the contract
       // write the meal-planner coordinator consumes via `ctx.deps.meal`.
       //

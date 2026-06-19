@@ -15,7 +15,7 @@ import { textResult } from "../../../shared/tools.js";
  * via `ctx.deps["meal-type"].hasSynced()`. Meal-type sync is checked separately
  * because it is additive and can lag independently — a cold catalog would render
  * every item with an opaque `typeUid` sorted as unknown. Returns
- * `Result<void, CallToolResult>`, run as a kernel precondition (ADR-0015).
+ * `Result<void, CallToolResult>`, run as a kernel precondition.
  */
 export function menuStartGuard(ctx: DomainCtx<MenuState, "recipe" | "meal-type">): Result<void, CallToolResult> {
   if (!ctx.state.menus.store.hasSynced || !ctx.state.items.store.hasSynced || !ctx.deps["meal-type"].hasSynced()) {

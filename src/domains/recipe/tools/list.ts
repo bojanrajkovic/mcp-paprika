@@ -9,7 +9,7 @@ import { recipeColdStartGuard } from "./guards.js";
 
 /**
  * `list_recipes` — list recipes. The `lastCookedAt` enrichment is DROPPED — recipe is
- * `dependsOn []` (no meal dependency); "last cooked" stays meal-side (ADR-0009),
+ * `dependsOn []` (no meal dependency); "last cooked" stays meal-side,
  * surfaced by the meal domain's `read_recipe_history` tool.
  */
 export const listRecipesTool = defineTool(

@@ -7,7 +7,7 @@ import type { CacheError } from "./disk-cache.js";
  * answer correctly on a warm restart before the first sync completes. Every
  * domain `.state` factory runs this once per owned store, unwrapping the result
  * via `unwrapAtBoot` (a cache that cannot be read at construction is a boot
- * failure, ADR-0014 form #5).
+ * failure, fail-fast boot).
  *
  * The empty-snapshot guard is load-bearing: `store.load()` marks the store synced
  * (`EntityStore.baseLoad` sets `hasSynced` unconditionally — an empty array is a

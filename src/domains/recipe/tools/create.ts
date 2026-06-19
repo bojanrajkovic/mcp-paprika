@@ -68,7 +68,7 @@ export const createRecipeTool = defineTool(
       // and the next sync won't re-fetch this recipe.
       // Uppercase to match Paprika's native UUID format — the desktop client
       // mints uppercase, and every other tool here already does (the server
-      // accepts either case but is case-preserving). See ADR-0007.
+      // accepts either case but is case-preserving).
       const uid = RecipeUidSchema.parse(crypto.randomUUID().toUpperCase());
       const newRecipe: Recipe = {
         uid,

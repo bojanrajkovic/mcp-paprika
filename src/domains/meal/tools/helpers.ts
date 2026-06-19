@@ -37,7 +37,7 @@ export function makeMealOrderFlagAssigner(state: MealState): (date: string) => n
  * repeats: typeName from the meal-type catalog, and recipeName from the recipe
  * store. Meals with `typeUid: null` (legacy, predating the catalog) fall back to
  * the integer-labelled `Type N`; a non-null typeUid that misses the catalog is a
- * DANGLING reference (its type was deleted — ADR-0017) and renders no type line
+ * DANGLING reference (its type was deleted) and renders no type line
  * at all. `recipeUid: null` renders freeform.
  */
 export function renderMealCard(meal: Readonly<Meal>, recipe: RecipeApi, mealType: MealTypeApi): string {
@@ -57,7 +57,7 @@ function formatMealLine(
   // mealtypes catalog) carry typeUid: null and rely on the `type` integer
   // (which corresponds to MealType.originalType in the catalog). A non-null
   // typeUid that misses the catalog is a DANGLING reference (its type was
-  // deleted — ADR-0017) and groups under "—" rather than a misleading Type N.
+  // deleted) and groups under "—" rather than a misleading Type N.
   const typeName =
     meal.typeUid !== null
       ? (typeNames.get(meal.typeUid) ?? "—")

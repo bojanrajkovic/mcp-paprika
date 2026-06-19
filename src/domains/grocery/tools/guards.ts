@@ -9,7 +9,7 @@ import { textResult } from "../../../shared/tools.js";
 /**
  * Readiness gate: both the lists and items stores (both grocery-owned) must have
  * completed a first sync — `read_grocery_list` inlines items. Returns
- * `Result<void, CallToolResult>`, runs as a kernel precondition (ADR-0015).
+ * `Result<void, CallToolResult>`, runs as a kernel precondition.
  */
 export function groceryStartGuard({ state }: { readonly state: GroceryState }): Result<void, CallToolResult> {
   if (!state.lists.store.hasSynced || !state.items.store.hasSynced) {
@@ -21,7 +21,7 @@ export function groceryStartGuard({ state }: { readonly state: GroceryState }): 
 /**
  * Secondary readiness gate for `move_grocery_items_to_pantry`: the pantry
  * dependency must also have completed a first sync before grocery items can be
- * moved into it. Runs as a kernel precondition (ADR-0015), after
+ * moved into it. Runs as a kernel precondition, after
  * `groceryStartGuard`.
  */
 export function pantrySyncedGuard(ctx: DomainCtx<GroceryState, "aisle" | "pantry">): Result<void, CallToolResult> {
@@ -34,7 +34,7 @@ export function pantrySyncedGuard(ctx: DomainCtx<GroceryState, "aisle" | "pantry
 /**
  * Secondary readiness gate for `add_recipe_to_grocery_list`: the recipe
  * dependency must have completed a first sync before a recipe can be resolved
- * by uid or title. Runs as a kernel precondition (ADR-0015), after
+ * by uid or title. Runs as a kernel precondition, after
  * `groceryStartGuard`.
  */
 export function recipeSyncedGuard(

@@ -3,7 +3,7 @@
 // ending, and the error.type classing — so span status and the duration
 // histogram's error.type can never disagree — with two rails over it:
 // `traceResultAsync` for the neverthrow core (status from the Result arms,
-// not exceptions — ADR-0014) and direct `startOperation` use for the
+// not exceptions) and direct `startOperation` use for the
 // throw-based protocol wrappers (kernel/tool.ts, shared/resources.ts), whose
 // finish/fail adapters map their protocol outcomes onto `end()`.
 
@@ -114,10 +114,9 @@ export function startOperation(
 
 /**
  * Promise-rail sibling of {@link traceResultAsync}, for paths whose protocol
- * is throw-based (the fail-fast boot pipeline — ADR-0014 form #5): the
+ * is throw-based (the fail-fast boot pipeline): the
  * operation ends ok on resolve, and a rejection ends it as an error and
- * rethrows unchanged (a throw-transparent passthrough, pinned in the
- * ADR-0014 conformance gate). Without this, a span open across a rejecting
+ * rethrows unchanged (a throw-transparent passthrough). Without this, a span open across a rejecting
  * await never ends — and an un-ended span never exports, even when the
  * failure path flushes.
  */
@@ -163,8 +162,7 @@ export type TraceResultOptions<E> = SpanOptions & {
  * the returned ResultAsync's underlying promise REJECTING (a throw inside a
  * chain callback — exactly the breach the sync driver's defensive catch
  * tolerates at cycle level), both end it as an error. The sync throw rethrows
- * unchanged (a throw-transparent passthrough, pinned in the ADR-0014
- * conformance gate); the rejection tap merely observes — the chain the caller
+ * unchanged (a throw-transparent passthrough); the rejection tap merely observes — the chain the caller
  * receives is untouched. `startOperation`'s latch keeps the end paths
  * mutually exclusive.
  */
