@@ -1,4 +1,4 @@
-import { okAsync } from "neverthrow";
+import { errAsync, okAsync } from "neverthrow";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { GroceryItemUid, GroceryListUid } from "../ids.js";
@@ -80,6 +80,7 @@ describe("clear_purchased_grocery_items tool", () => {
     const result = await kh.callTool("clear_purchased_grocery_items", { listUid: "LIST-1" });
     const text = getText(result);
 
+    expect(result.isError).toBeFalsy(); // a declined confirm is a plain (non-error) result
     expect(text).toContain("Cancelled");
     expect(kh.client().saveGroceryItems).not.toHaveBeenCalled();
   });
@@ -116,8 +117,25 @@ describe("clear_purchased_grocery_items tool", () => {
     const result = await kh.callTool("clear_purchased_grocery_items", { listUid: "NEVER-EXISTED" });
     const text = getText(result);
 
+    expect(result.isError).toBe(true);
     expect(text.toLowerCase()).toContain("no grocery list found");
     expect(kh.client().saveGroceryItems).not.toHaveBeenCalled();
+  });
+
+  it("returns an isError when saveGroceryItems errs", async () => {
+    const purchasedItem = makeGroceryItem({
+      uid: "ITEM-P9" as GroceryItemUid,
+      ingredient: "Apples",
+      listUid: "LIST-1",
+      purchased: true,
+    });
+    kh.seed({ groceryLists: [WEEKLY_LIST], groceryItems: [purchasedItem] });
+    vi.mocked(kh.client().saveGroceryItems).mockReturnValue(errAsync(new Error("Network error")));
+
+    const result = await kh.callTool("clear_purchased_grocery_items", { listUid: "LIST-1" });
+
+    expect(result.isError).toBe(true);
+    expect(getText(result)).toContain("Failed to clear purchased items");
   });
 });
 
@@ -220,6 +238,7 @@ describe("clear_grocery_list tool", () => {
     const result = await kh.callTool("clear_grocery_list", { listUid: "NEVER-EXISTED" });
     const text = getText(result);
 
+    expect(result.isError).toBe(true);
     expect(text.toLowerCase()).toContain("no grocery list found");
     expect(kh.client().saveGroceryItems).not.toHaveBeenCalled();
   });

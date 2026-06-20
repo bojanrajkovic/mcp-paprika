@@ -48,28 +48,38 @@ describe("buildWidgets", () => {
     expect(html).not.toMatch(/<script[^>]+\bsrc=/i);
   });
 
-  it("emits an inline script that parses under module semantics (no top-level collision with the ext-apps runtime)", async () => {
-    await buildWidgets({ outDir: tmp.dir() });
-    const html = await readFile(join(tmp.dir(), "demo.html"), "utf8");
+  // Every widget must compile to a self-contained inline script that parses under module
+  // semantics. The grocery-checklist's larger compiled output is the more likely place a
+  // regression sneaks in, so the guard runs per widget — add a name here when a widget ships.
+  it.each(["demo", "grocery-checklist"])(
+    "%s compiles to a self-contained inline script that parses under module semantics",
+    async (name) => {
+      await buildWidgets({ outDir: tmp.dir() });
+      const html = await readFile(join(tmp.dir(), `${name}.html`), "utf8");
 
-    // The whole widget runs in one inline `<script type="module">`, sharing top-level
-    // scope with the prepended ext-apps runtime. An ESM-format bundle's top-level
-    // names collide with the runtime's minified names — a redeclaration that is a
-    // module-parse-time SyntaxError, killing the script (the widget loads blank in
-    // the host). The bundle is built as an IIFE to scope its names; `node --check`
-    // with module semantics is the exact check that catches a regression.
-    const script = html.match(/<script type="module">([\s\S]*?)<\/script>/)?.[1] ?? "";
-    expect(script.length).toBeGreaterThan(0);
-    const scriptPath = join(tmp.dir(), "demo.inline.mjs");
-    await writeFile(scriptPath, script, "utf8");
+      // Self-contained: the ext-apps runtime is inlined as globalThis.ExtApps and the
+      // CSP-sandboxed iframe fetches no external script.
+      expect(html).toContain("globalThis.ExtApps");
+      expect(html).not.toMatch(/<script[^>]+\bsrc=/i);
 
-    let parseError: string | null = null;
-    try {
-      execFileSync(process.execPath, ["--check", scriptPath], { stdio: "pipe" });
-    } catch (err) {
-      const stderr = (err as { stderr?: Buffer }).stderr?.toString() ?? "";
-      parseError = `${err instanceof Error ? err.message : String(err)}\n${stderr}`;
-    }
-    expect(parseError).toBeNull();
-  });
+      // The whole widget runs in one inline `<script type="module">`, sharing top-level scope with
+      // the prepended ext-apps runtime. An ESM-format bundle's top-level names collide with the
+      // runtime's minified names — a redeclaration that is a module-parse-time SyntaxError, killing
+      // the script (the widget loads blank in the host). The bundle is built as an IIFE to scope its
+      // names; `node --check` with module semantics is the exact check that catches a regression.
+      const script = html.match(/<script type="module">([\s\S]*?)<\/script>/)?.[1] ?? "";
+      expect(script.length).toBeGreaterThan(0);
+      const scriptPath = join(tmp.dir(), `${name}.inline.mjs`);
+      await writeFile(scriptPath, script, "utf8");
+
+      let parseError: string | null = null;
+      try {
+        execFileSync(process.execPath, ["--check", scriptPath], { stdio: "pipe" });
+      } catch (err) {
+        const stderr = (err as { stderr?: Buffer }).stderr?.toString() ?? "";
+        parseError = `${err instanceof Error ? err.message : String(err)}\n${stderr}`;
+      }
+      expect(parseError).toBeNull();
+    },
+  );
 });

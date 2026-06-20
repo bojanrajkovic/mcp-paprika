@@ -86,10 +86,11 @@ export const SHIMMED_HOST_METHODS = [
 
 /**
  * The fake `globalThis.ExtApps` injected into a previewed widget. Its `App` reads
- * `?payload=` from `location.search` and feeds it to `ontoolresult` on `connect()`;
- * every other host method is a harmless no-op. Authored as a string because it
- * runs in the browser, not Node; {@link SHIMMED_HOST_METHODS} keeps its surface
- * honest against ext-apps.
+ * `?payload=` from `location.search` and on `connect()` feeds it to `ontoolresult` as the
+ * text content and, when it parses as JSON, as `structuredContent` (the channel the widgets
+ * render from); every other host method is a harmless no-op. Authored as a string because it
+ * runs in the browser, not Node; {@link SHIMMED_HOST_METHODS} keeps its surface honest
+ * against ext-apps.
  */
 const PREVIEW_SHIM = `globalThis.ExtApps = {
   applyHostStyleVariables() {},
@@ -105,9 +106,13 @@ const PREVIEW_SHIM = `globalThis.ExtApps = {
       catch { this.#payload = null; }
     }
     async connect() {
-      if (this.#payload !== null && this.#payload !== undefined) {
-        this.ontoolresult && this.ontoolresult({ content: [{ type: "text", text: this.#payload }] });
-      }
+      if (this.#payload === null || this.#payload === undefined) return;
+      let structuredContent;
+      try {
+        const parsed = JSON.parse(this.#payload);
+        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) structuredContent = parsed;
+      } catch {}
+      this.ontoolresult && this.ontoolresult({ content: [{ type: "text", text: this.#payload }], structuredContent });
     }
     getHostContext() { return { theme: "light" }; }
     sendMessage(message) { console.log("[widget-preview] sendMessage", message); return Promise.resolve({}); }

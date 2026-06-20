@@ -14,7 +14,12 @@ import {
   toolResult,
   uidOrTextLookupSchema,
 } from "../../../shared/tools.js";
-import { groceryListReadOutputSchema, groceryListToMarkdown, groceryListToStructured } from "../grocery-helpers.js";
+import {
+  groceryListReadOutputSchema,
+  groceryListToMarkdown,
+  groceryListToStructured,
+  sortGroceryItemsForChecklist,
+} from "../grocery-helpers.js";
 import { GroceryListUidSchema } from "../ids.js";
 import { groceryStartGuard } from "./guards.js";
 
@@ -90,6 +95,9 @@ export const readGroceryListTool = defineTool(
       }),
     },
     outputSchema: groceryListReadOutputSchema,
+    // Hosts with the apps surface render this result as the grocery checklist widget; others
+    // show the text/structured result unchanged.
+    ui: { resourceUri: "ui://widget/grocery-checklist" },
   },
   [groceryStartGuard],
   (ctx: DomainCtx<GroceryState, "aisle" | "pantry">) => {
@@ -99,13 +107,24 @@ export const readGroceryListTool = defineTool(
         get: (uid) => ctx.state.lists.store.get(uid),
         findByText: (text) => ctx.state.lists.store.findByName(text),
       });
+      // Emit items in store-walk order (aisle orderFlag → item orderFlag → uid) so the text table
+      // and the structuredContent the checklist widget renders agree by construction. Memoized so the
+      // sort + store scan run once even though formatLookupOutcome renders the same list twice (text
+      // + structured).
+      const checklistCache = new Map<string, ReturnType<typeof sortGroceryItemsForChecklist>>();
+      const checklistItems = (list: GroceryList) => {
+        const cached = checklistCache.get(list.uid);
+        if (cached) return cached;
+        const sorted = sortGroceryItemsForChecklist(ctx.state.items.store.getByListUid(list.uid), ctx.deps.aisle);
+        checklistCache.set(list.uid, sorted);
+        return sorted;
+      };
       return formatLookupOutcome(ctx.server.server, outcome, {
         entityNoun: "grocery list",
         describe: (list) => ({ uid: list.uid, label: list.name }),
         findWith: "list_grocery_lists",
-        renderOne: (list) => groceryListToMarkdown(list, ctx.state.items.store.getByListUid(list.uid), ctx.deps.aisle),
-        renderStructured: (list) =>
-          groceryListToStructured(list, ctx.state.items.store.getByListUid(list.uid), ctx.deps.aisle),
+        renderOne: (list) => groceryListToMarkdown(list, checklistItems(list), ctx.deps.aisle),
+        renderStructured: (list) => groceryListToStructured(list, checklistItems(list), ctx.deps.aisle),
       });
     };
   },
@@ -263,6 +282,7 @@ export const deleteGroceryListTool = defineTool(
       const stop = await confirmOrCancel(ctx.server.server, {
         message: `Permanently delete grocery list "${existing.name}" and its ${itemCount.toString()} item(s)? This cannot be undone.`,
         cancelled: `Cancelled — "${existing.name}" was not deleted.`,
+        log,
       });
       if (stop) return stop;
 

@@ -402,6 +402,13 @@ export async function startHttp(config: PaprikaConfig, opts: StartHttpOptions = 
     // tools on N session servers is safe — exactly as buildMcpServer(app) was.
     const server = buildBrandedServer();
     kernel.registerAll(server);
+    // Log the connecting client's advertised capabilities once per session (debug) — notably
+    // whether it offers form elicitation, which the destructive-confirm and disambiguation-pick
+    // gates check before issuing a request. oninitialized fires after the client's initialized
+    // notification, so getClientCapabilities() is populated by then.
+    server.server.oninitialized = () => {
+      log.debug({ clientCapabilities: server.server.getClientCapabilities() }, "mcp client initialized");
+    };
     const transport = new StreamableHTTPTransport({
       sessionIdGenerator: () => randomUUID(),
       onsessioninitialized: (id) => {
