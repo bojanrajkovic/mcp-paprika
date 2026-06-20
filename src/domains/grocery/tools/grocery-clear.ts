@@ -2,7 +2,7 @@ import type { DomainCtx } from "../../../kernel/registry.js";
 import type { GroceryState, GroceryWrites } from "../module.js";
 
 import { defineTool } from "../../../kernel/tool.js";
-import { commitFailure, confirmOrCancel, toolResult } from "../../../shared/tools.js";
+import { commitFailure, confirmOrCancel, errorResult, toolResult } from "../../../shared/tools.js";
 import { GroceryListUidSchema } from "../ids.js";
 import { groceryStartGuard } from "./guards.js";
 
@@ -25,7 +25,7 @@ export const clearPurchasedTool = defineTool(
     return async (args) => {
       const list = ctx.state.lists.store.get(args.listUid);
       if (!list) {
-        return toolResult(
+        return errorResult(
           `No grocery list found with UID "${args.listUid}" (it may not exist or was already deleted).`,
         );
       }
@@ -50,7 +50,7 @@ export const clearPurchasedTool = defineTool(
         },
         async (e) => {
           log.error({ err: e, listUid: args.listUid }, "saveGroceryItems (clear_purchased_grocery_items) failed");
-          return toolResult(`Failed to clear purchased items from "${list.name}": ${e.message}`);
+          return errorResult(`Failed to clear purchased items from "${list.name}": ${e.message}`);
         },
       );
     };
@@ -76,7 +76,7 @@ export const clearGroceryListTool = defineTool(
     return async (args) => {
       const list = ctx.state.lists.store.get(args.listUid);
       if (!list) {
-        return toolResult(
+        return errorResult(
           `No grocery list found with UID "${args.listUid}" (it may not exist or was already deleted).`,
         );
       }
@@ -101,7 +101,7 @@ export const clearGroceryListTool = defineTool(
         },
         async (e) => {
           log.error({ err: e, listUid: args.listUid }, "saveGroceryItems (clear_grocery_list) failed");
-          return toolResult(`Failed to clear items from "${list.name}": ${e.message}`);
+          return errorResult(`Failed to clear items from "${list.name}": ${e.message}`);
         },
       );
     };
