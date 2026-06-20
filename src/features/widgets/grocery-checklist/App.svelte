@@ -196,7 +196,14 @@
       showToast("Couldn’t clear — try again.");
       return;
     }
-    items = items.filter((i) => !i.purchased); // sweep only after the server confirms success
+    // A non-error clear result can't be told apart from a declined server-confirm — both are
+    // non-error and carry no structuredContent — so re-read the list and rebuild from the
+    // authoritative state instead of blindly sweeping purchased rows.
+    const fresh = await callTool("read_grocery_list", {
+      lookup: { uid: listMeta.uid },
+    });
+    if (fresh.structuredContent) receive(fresh);
+    else items = items.filter((i) => !i.purchased); // re-read unavailable: the clear succeeded, so sweep
   }
 </script>
 
