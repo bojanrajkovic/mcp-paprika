@@ -104,6 +104,7 @@ export const addMenuItemsTool = defineTool(
       const resolvedMenu = await resolveOrPick(ctx.server.server, outcome, {
         entityNoun: "menu",
         describe: (m) => ({ uid: m.uid, label: m.name }),
+        findWith: "list_menus",
       });
       if ("result" in resolvedMenu) return resolvedMenu.result;
       const menu = resolvedMenu.entity;

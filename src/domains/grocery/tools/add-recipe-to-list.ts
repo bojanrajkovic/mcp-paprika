@@ -74,6 +74,7 @@ export const addRecipeToGroceryListTool = defineTool(
       const resolved = await resolveOrPick(ctx.server.server, outcome, {
         entityNoun: "recipe",
         describe: (r) => ({ uid: r.uid, label: r.name }),
+        findWith: "search_recipes",
       });
       if ("result" in resolved) return resolved.result;
       const recipe = resolved.entity;

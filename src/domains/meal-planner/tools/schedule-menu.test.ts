@@ -145,14 +145,18 @@ describe("schedule_menu — menu resolution", () => {
 
   it("uid_miss → no menu found", async () => {
     seedAll();
-    const text = await kh.callToolText("schedule_menu", { menu: { uid: "nope" as MenuUid }, start_date: "2026-05-27" });
-    expect(text).toBe('No menu found with UID "nope".');
+    const result = await kh.callTool("schedule_menu", { menu: { uid: "nope" as MenuUid }, start_date: "2026-05-27" });
+    expect(result.isError).toBe(true);
+    expect(getText(result)).toBe(
+      'No menu found with UID "nope" (it may not exist or was already deleted). Use list_menus to find it.',
+    );
   });
 
   it("text_none → no menus matching", async () => {
     seedAll();
-    const text = await kh.callToolText("schedule_menu", { menu: { name: "Ghost Menu" }, start_date: "2026-05-27" });
-    expect(text).toBe('No menus found matching "Ghost Menu".');
+    const result = await kh.callTool("schedule_menu", { menu: { name: "Ghost Menu" }, start_date: "2026-05-27" });
+    expect(result.isError).toBe(true);
+    expect(getText(result)).toBe('No menus found matching "Ghost Menu". Use list_menus to find it.');
   });
 
   it("text_many → disambiguation list", async () => {
@@ -163,7 +167,9 @@ describe("schedule_menu — menu resolution", () => {
       ],
     });
     // "Week Plan" is a contains-match for both.
-    const text = await kh.callToolText("schedule_menu", { menu: { name: "Week Plan" }, start_date: "2026-05-27" });
+    const result = await kh.callTool("schedule_menu", { menu: { name: "Week Plan" }, start_date: "2026-05-27" });
+    expect(result.isError).toBe(true);
+    const text = getText(result);
     expect(text).toContain('Multiple menus match "Week Plan"');
     expect(text).toContain("`m-a`");
     expect(text).toContain("`m-b`");

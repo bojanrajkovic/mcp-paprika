@@ -8,6 +8,7 @@ import { makeGroceryItem } from "../../../../test/domains/grocery/__fixtures__/g
 import { makeGroceryList } from "../../../../test/domains/grocery/__fixtures__/grocery-lists.js";
 import { makeRecipe } from "../../../../test/domains/recipe/__fixtures__/recipes.js";
 import { useKernelHarness } from "../../../../test/support/kernel-harness.js";
+import { getText } from "../../../../test/support/tool-test-utils.js";
 
 describe("add_recipe_to_grocery_list tool", () => {
   const kh = useKernelHarness<GroceryState>("grocery");
@@ -31,11 +32,14 @@ describe("add_recipe_to_grocery_list tool", () => {
 
   it("returns not-found for an unknown recipe UID", async () => {
     kh.seed({ recipes: [makeRecipe()], groceryLists: [makeGroceryList({ isDefault: true })], groceryItems: [] });
-    const text = await kh.callToolText("add_recipe_to_grocery_list", {
+    const result = await kh.callTool("add_recipe_to_grocery_list", {
       recipe: { uid: "nope" },
       items: [{ ingredient: "Rice noodles" }],
     });
-    expect(text).toContain('No recipe found with UID "nope"');
+    expect(result.isError).toBe(true);
+    expect(getText(result)).toBe(
+      'No recipe found with UID "nope" (it may not exist or was already deleted). Use search_recipes to find it.',
+    );
   });
 
   it("disambiguates multiple title matches without writing", async () => {
@@ -43,11 +47,13 @@ describe("add_recipe_to_grocery_list tool", () => {
     const b = makeRecipe({ name: "Chicken Curry Soup" });
     kh.seed({ recipes: [a, b], groceryLists: [makeGroceryList({ isDefault: true })], groceryItems: [] });
 
-    const text = await kh.callToolText("add_recipe_to_grocery_list", {
+    const result = await kh.callTool("add_recipe_to_grocery_list", {
       recipe: { title: "Chicken" },
       items: [{ ingredient: "Chicken thighs" }],
     });
 
+    expect(result.isError).toBe(true);
+    const text = getText(result);
     expect(text).toContain("Multiple recipes match");
     expect(text).toContain(a.uid);
     expect(text).toContain(b.uid);

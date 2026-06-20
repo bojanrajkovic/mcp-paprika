@@ -42,6 +42,7 @@ export const readMenuTool = defineTool(
       return formatLookupOutcome(ctx.server.server, outcome, {
         entityNoun: "menu",
         describe: (menu) => ({ uid: menu.uid, label: menu.name }),
+        findWith: "list_menus",
         renderOne: (menu) =>
           menuToMarkdown(menu, ctx.state.items.store.getByMenuUid(menu.uid), ctx.deps["meal-type"].getAll(), {
             includeItemUids: true,

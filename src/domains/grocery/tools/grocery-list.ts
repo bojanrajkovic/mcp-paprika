@@ -100,6 +100,7 @@ export const readGroceryListTool = defineTool(
       return formatLookupOutcome(ctx.server.server, outcome, {
         entityNoun: "grocery list",
         describe: (list) => ({ uid: list.uid, label: list.name }),
+        findWith: "list_grocery_lists",
         renderOne: (list) =>
           groceryListToMarkdown(list, ctx.state.items.store.getByListUid(list.uid), ctx.deps.aisle, {
             includeItemUids: true,

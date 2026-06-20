@@ -8,6 +8,7 @@ import type { MenuState } from "../module.js";
 import { makeMealType } from "../../../../test/domains/meal-type/__fixtures__/meal-types.js";
 import { makeMenu, makeMenuItem } from "../../../../test/domains/menu/__fixtures__/menus.js";
 import { useKernelHarness } from "../../../../test/support/kernel-harness.js";
+import { getText } from "../../../../test/support/tool-test-utils.js";
 
 const DINNER_TYPE = makeMealType({ uid: "dinner-uid" as MealTypeUid, name: "Dinner", orderFlag: 2, originalType: 2 });
 
@@ -167,8 +168,11 @@ describe("update_menu tool", () => {
   it("reports a UID miss without saving", async () => {
     kh.seed({ menus: [], menuItems: [], mealTypes: [DINNER_TYPE] });
 
-    const text = await kh.callToolText("update_menu", { lookup: { uid: "ghost" }, name: "X" });
-    expect(text).toContain('No menu found with UID "ghost".');
+    const result = await kh.callTool("update_menu", { lookup: { uid: "ghost" }, name: "X" });
+    expect(result.isError).toBe(true);
+    expect(getText(result)).toBe(
+      'No menu found with UID "ghost" (it may not exist or was already deleted). Use list_menus to find it.',
+    );
     expect(kh.client().saveMenus).not.toHaveBeenCalled();
   });
 
@@ -177,7 +181,9 @@ describe("update_menu tool", () => {
     const b = makeMenu({ uid: "m-b" as MenuUid, name: "Summer Plan B" });
     kh.seed({ menus: [a, b], menuItems: [], mealTypes: [DINNER_TYPE] });
 
-    const text = await kh.callToolText("update_menu", { lookup: { name: "summer" }, days: 3 });
+    const result = await kh.callTool("update_menu", { lookup: { name: "summer" }, days: 3 });
+    expect(result.isError).toBe(true);
+    const text = getText(result);
     expect(text).toContain('Multiple menus match "summer"');
     expect(text).toContain("`m-a`");
     expect(text).toContain("`m-b`");
@@ -296,8 +302,11 @@ describe("delete_menu tool", () => {
   it("reports a UID miss without saving", async () => {
     kh.seed({ menus: [], menuItems: [], mealTypes: [DINNER_TYPE] });
 
-    const text = await kh.callToolText("delete_menu", { lookup: { uid: "ghost" } });
-    expect(text).toContain('No menu found with UID "ghost".');
+    const result = await kh.callTool("delete_menu", { lookup: { uid: "ghost" } });
+    expect(result.isError).toBe(true);
+    expect(getText(result)).toBe(
+      'No menu found with UID "ghost" (it may not exist or was already deleted). Use list_menus to find it.',
+    );
     expect(kh.client().saveMenus).not.toHaveBeenCalled();
   });
 
@@ -306,8 +315,9 @@ describe("delete_menu tool", () => {
     const b = makeMenu({ uid: "m-b" as MenuUid, name: "Weekly Plan B" });
     kh.seed({ menus: [a, b], menuItems: [], mealTypes: [DINNER_TYPE] });
 
-    const text = await kh.callToolText("delete_menu", { lookup: { name: "weekly" } });
-    expect(text).toContain('Multiple menus match "weekly"');
+    const result = await kh.callTool("delete_menu", { lookup: { name: "weekly" } });
+    expect(result.isError).toBe(true);
+    expect(getText(result)).toContain('Multiple menus match "weekly"');
     expect(kh.client().saveMenus).not.toHaveBeenCalled();
   });
 

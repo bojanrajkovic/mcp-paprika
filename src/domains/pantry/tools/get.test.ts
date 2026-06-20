@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { makePantryItem } from "../../../../test/domains/pantry/__fixtures__/pantry.js";
 import { useKernelHarness } from "../../../../test/support/kernel-harness.js";
+import { getText } from "../../../../test/support/tool-test-utils.js";
 
 describe("read_pantry_item tool", () => {
   const kh = useKernelHarness("pantry");
@@ -45,25 +46,29 @@ describe("read_pantry_item tool", () => {
       expect(text).toContain(item.uid);
     }
     expect(text).toContain("Multiple pantry items match");
-    expect(text).toContain("re-invoke with a specific uid");
+    expect(text).toContain("Re-invoke with a specific uid");
   });
 
   it("unknown UID returns a not-found message", async () => {
     const item = makePantryItem();
     kh.seed({ pantry: [item] });
 
-    const text = await kh.callToolText("read_pantry_item", { lookup: { uid: "does-not-exist" } });
+    const result = await kh.callTool("read_pantry_item", { lookup: { uid: "does-not-exist" } });
 
-    expect(text.toLowerCase()).toContain("no pantry item found");
+    expect(result.isError).toBe(true);
+    expect(getText(result)).toBe(
+      'No pantry item found with UID "does-not-exist" (it may not exist or was already deleted). Use list_pantry_items to find it.',
+    );
   });
 
   it("unknown ingredient name returns a not-found message", async () => {
     const item = makePantryItem();
     kh.seed({ pantry: [item] });
 
-    const text = await kh.callToolText("read_pantry_item", { lookup: { ingredient: "Caviar" } });
+    const result = await kh.callTool("read_pantry_item", { lookup: { ingredient: "Caviar" } });
 
-    expect(text.toLowerCase()).toContain("no pantry items found matching");
+    expect(result.isError).toBe(true);
+    expect(getText(result)).toBe('No pantry items found matching "Caviar". Use list_pantry_items to find it.');
   });
 
   it("cold-start (hasSynced false) returns the not-yet-synced guard error", async () => {
