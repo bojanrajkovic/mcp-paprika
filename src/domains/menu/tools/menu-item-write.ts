@@ -218,12 +218,20 @@ export const addMenuItemsTool = defineTool(
         );
         if ("content" in saved) return saved;
         const persisted = saved[0] ?? extended;
-        // The expand landed but the local cache diverged; no items are added yet, so this
-        // degraded success carries an empty items payload (still valid under the schema).
-        const commitErr = commitFailure("menu", await ctx.writes.commitMenu(persisted), {
-          structuredContent: { menuUid: menu.uid, items: [] },
-        });
-        if (commitErr) return commitErr;
+        // Unlike the final-batch commit (where the items already POSTed, so a local-cache
+        // divergence is a genuine degraded success), this divergence aborts BEFORE any item
+        // is added — the requested add did NOT happen. Signal an error, not a degraded
+        // empty-items success the model could read as "added 0" and never retry; the
+        // menu-extension write itself already landed on Paprika, so a retry completes the add.
+        const expandErr = (await ctx.writes.commitMenu(persisted)).match(
+          () => undefined,
+          (e) =>
+            errorResult(
+              `Extended menu "${menu.name}" to ${maxDay.toString()} day(s) on Paprika, but the local cache update ` +
+                `failed (${e.message}); the items were not added — retry add_menu_items once the menu syncs.`,
+            ),
+        );
+        if (expandErr) return expandErr;
         menuForRender = persisted;
         extendedTo = maxDay;
       }
