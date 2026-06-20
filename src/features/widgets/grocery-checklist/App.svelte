@@ -1,28 +1,52 @@
-<script>
+<script lang="ts">
+  import type { App } from "@modelcontextprotocol/ext-apps";
+
   import { onMount } from "svelte";
   import { flip } from "svelte/animate";
 
+  // A checklist row: a structured grocery item plus transient per-row UI flags.
+  interface Row {
+    uid: string;
+    ingredient: string;
+    quantity: string | null;
+    aisle: string | null;
+    purchased: boolean;
+    _busy: boolean;
+    _error: boolean;
+  }
+
+  // The two result shapes receive() accepts: a real ext-apps tool result (from ontoolresult) and
+  // callTool()'s narrowed wrapper (from the post-clear re-read). Both expose the structured channel;
+  // only the former carries `content` (the error-text fallback). Untrusted — every field is checked.
+  interface ReceivedResult {
+    readonly structuredContent?: Record<string, unknown> | undefined;
+    readonly content?:
+      | readonly { readonly type: string; readonly text?: string }[]
+      | undefined;
+  }
+
   // The ext-apps App instance, constructed in main.ts and handed in as a prop.
-  let { app } = $props();
+  let { app }: { app: App } = $props();
 
   // Local, mutable copy of read_grocery_list's structuredContent rows, so taps can update
   // optimistically. Replaced wholesale whenever the host feeds a fresh tool result.
-  let listMeta = $state(null); // { uid, name } | null
-  let items = $state([]); // [{ uid, ingredient, quantity, aisle, purchased, _busy, _error }]
-  let phase = $state("loading"); // "loading" | "ready" | "error"
-  let theme = $state("light");
-  let toast = $state(null); // { kind: "error" | "info", msg } | null
-  let errorMsg = $state(null); // the tool's own error text (not-found / disambiguation), for the error state
+  let listMeta = $state<{ uid: string; name: string } | null>(null);
+  let items = $state<Row[]>([]);
+  let phase = $state<"loading" | "ready" | "error">("loading");
+  let theme = $state<"light" | "dark">("light");
+  let toast = $state<{ kind: "error" | "info"; msg: string } | null>(null);
+  // The tool's own error text (not-found / disambiguation), for the error state.
+  let errorMsg = $state<string | null>(null);
   let confirmingClear = $state(false);
 
   const DEBOUNCE_MS = 300;
-  const lastTap = new Map(); // uid -> performance.now(), for the per-row flap-guard
-  let toastTimer;
+  const lastTap = new Map<string, number>(); // uid -> performance.now(), for the per-row flap-guard
+  let toastTimer: ReturnType<typeof setTimeout> | undefined;
 
   // Group consecutive same-aisle rows (read_grocery_list already emits store-walk order);
   // purchased items sink to the bottom of their aisle group.
   const groups = $derived.by(() => {
-    const out = [];
+    const out: { key: string; items: Row[] }[] = [];
     for (const item of items) {
       const key = item.aisle ?? "Other";
       const last = out[out.length - 1];
@@ -40,52 +64,58 @@
     // Handlers must be set BEFORE connect() completes the handshake.
     app.ontoolresult = (result) => receive(result);
     app.onhostcontextchanged = (ctx) => {
-      if (ctx?.theme) theme = ctx.theme;
+      if (ctx.theme) theme = ctx.theme;
     };
     Promise.resolve(app.connect()).then(() => {
-      const hc = app.getHostContext?.();
+      const hc = app.getHostContext();
       if (hc?.theme) theme = hc.theme;
     });
   });
 
   // The widget renders only off the structured channel. A host that renders the widget but
   // drops structuredContent gets a neutral state — never parse the human Markdown.
-  function receive(result) {
+  function receive(result: ReceivedResult | null | undefined) {
     const data = result?.structuredContent;
-    if (
-      !data ||
-      typeof data !== "object" ||
-      typeof data.uid !== "string" ||
-      !data.uid ||
-      !Array.isArray(data.items)
-    ) {
+    const uid = data?.["uid"];
+    const rawItems = data?.["items"];
+    if (!data || typeof uid !== "string" || !uid || !Array.isArray(rawItems)) {
       // No structured payload — an error result (unknown UID / no match / disambiguation) carries
       // its remediation in the text block, or a host dropped structuredContent. Surface that text
       // verbatim (display only, never parsed for data); don't clobber an already-loaded list on a
       // later failed read.
       if (phase !== "ready") {
-        const text = result?.content?.find((c) => c?.type === "text")?.text;
-        errorMsg = typeof text === "string" && text.trim() !== "" ? text : null;
+        const block = result?.content?.find((c) => c.type === "text");
+        const text = typeof block?.text === "string" ? block.text : undefined;
+        errorMsg = text && text.trim() !== "" ? text : null;
         phase = "error";
       }
       return;
     }
-    listMeta = { uid: data.uid, name: data.name };
-    items = data.items.map(toRow);
+    listMeta = {
+      uid,
+      name: typeof data["name"] === "string" ? data["name"] : "",
+    };
+    items = rawItems.map((r) => toRow(r));
     errorMsg = null;
     confirmingClear = false;
     phase = "ready";
   }
 
   // Map a structured grocery row into the local model (+ transient flags). Shared by the host
-  // re-read and the optimistic re-add so the row shape lives in one place.
-  function toRow(r) {
+  // re-read and the optimistic re-add so the row shape lives in one place. The row is untrusted
+  // structuredContent, so every field is coerced defensively.
+  function toRow(r: unknown): Row {
+    const row = (typeof r === "object" && r !== null ? r : {}) as Record<
+      string,
+      unknown
+    >;
     return {
-      uid: r.uid,
-      ingredient: r.ingredient,
-      quantity: r.quantity ?? null,
-      aisle: r.aisle ?? null,
-      purchased: Boolean(r.purchased),
+      uid: typeof row["uid"] === "string" ? row["uid"] : "",
+      ingredient:
+        typeof row["ingredient"] === "string" ? row["ingredient"] : "",
+      quantity: typeof row["quantity"] === "string" ? row["quantity"] : null,
+      aisle: typeof row["aisle"] === "string" ? row["aisle"] : null,
+      purchased: Boolean(row["purchased"]),
       _busy: false,
       _error: false,
     };
@@ -93,19 +123,25 @@
 
   // Call a server tool through the host bridge, treating a transport rejection the same as a
   // tool-reported error so an in-flight row is never left stuck.
-  async function callTool(name, args) {
+  async function callTool(
+    name: string,
+    args: Record<string, unknown>,
+  ): Promise<{
+    isError: boolean;
+    structuredContent: Record<string, unknown> | undefined;
+  }> {
     try {
       const res = await app.callServerTool({ name, arguments: args });
       return {
-        isError: Boolean(res?.isError),
-        structuredContent: res?.structuredContent,
+        isError: Boolean(res.isError),
+        structuredContent: res.structuredContent,
       };
     } catch {
-      return { isError: true };
+      return { isError: true, structuredContent: undefined };
     }
   }
 
-  function showToast(msg, kind = "error") {
+  function showToast(msg: string, kind: "error" | "info" = "error") {
     clearTimeout(toastTimer);
     toast = { msg, kind };
     toastTimer = setTimeout(() => {
@@ -115,7 +151,7 @@
 
   // A tap is ignored only if it follows another tap on the SAME row within the debounce window.
   // Guard on "has a prior tap", not against 0, so the first tap is never eaten near page load.
-  function tapThrottled(uid) {
+  function tapThrottled(uid: string): boolean {
     const now = performance.now();
     const last = lastTap.get(uid);
     if (last !== undefined && now - last < DEBOUNCE_MS) return true;
@@ -123,13 +159,13 @@
     return false;
   }
 
-  function onRow(item) {
+  function onRow(item: Row) {
     if (item._busy) return; // per-row in-flight lock
     if (!item.purchased) doMark(item);
     else doReadd(item);
   }
 
-  async function doMark(item) {
+  async function doMark(item: Row) {
     if (tapThrottled(item.uid)) return;
     item.purchased = true; // optimistic
     item._busy = true;
@@ -147,8 +183,10 @@
     }
   }
 
-  async function doReadd(item) {
+  async function doReadd(item: Row) {
+    if (!listMeta) return;
     if (tapThrottled(item.uid)) return;
+    const listUid = listMeta.uid;
     // Exact-match dedup vs unpurchased rows (same rule add_recipe_to_grocery_list uses) — guards a
     // rapid double-tap or an existing to-buy copy of the same ingredient.
     const dup = items.some(
@@ -165,7 +203,7 @@
     // to-buy row via add_grocery_items, then delete the bought copy so the item reads as a single
     // unchecked row instead of lingering as a duplicate.
     const add = await callTool("add_grocery_items", {
-      listUid: listMeta.uid,
+      listUid,
       items: [
         {
           ingredient: item.ingredient,
@@ -183,7 +221,8 @@
     }
     const del = await callTool("delete_grocery_item", { uid: item.uid });
     item._busy = false;
-    const added = add.structuredContent?.items?.[0];
+    const addedRows = add.structuredContent?.["items"];
+    const added = Array.isArray(addedRows) ? addedRows[0] : undefined;
     const idx = items.indexOf(item);
     if (idx < 0) return;
     if (!del.isError) {
@@ -207,10 +246,10 @@
   }
   async function confirmClear() {
     confirmingClear = false;
+    if (!listMeta) return;
     if (!items.some((i) => i.purchased)) return;
-    const res = await callTool("clear_purchased_grocery_items", {
-      listUid: listMeta.uid,
-    });
+    const listUid = listMeta.uid;
+    const res = await callTool("clear_purchased_grocery_items", { listUid });
     if (res.isError) {
       showToast("Couldn’t clear — try again.");
       return;
@@ -219,7 +258,7 @@
     // non-error and carry no structuredContent — so re-read the list and rebuild from the
     // authoritative state instead of blindly sweeping purchased rows.
     const fresh = await callTool("read_grocery_list", {
-      lookup: { uid: listMeta.uid },
+      lookup: { uid: listUid },
     });
     if (fresh.structuredContent) receive(fresh);
     else items = items.filter((i) => !i.purchased); // re-read unavailable: the clear succeeded, so sweep
@@ -246,7 +285,7 @@
     </div>
   {:else}
     <header>
-      <h1>{listMeta.name}</h1>
+      <h1>{listMeta?.name}</h1>
       <div class="head-right">
         {#if confirmingClear}
           <span class="progress">Clear {purchasedCount} purchased?</span>
