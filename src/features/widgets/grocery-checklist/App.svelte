@@ -34,7 +34,6 @@
     return out;
   });
 
-  const total = $derived(items.length);
   const purchasedCount = $derived(items.filter((i) => i.purchased).length);
 
   onMount(() => {
@@ -53,7 +52,13 @@
   // drops structuredContent gets a neutral state — never parse the human Markdown.
   function receive(result) {
     const data = result?.structuredContent;
-    if (!data || typeof data !== "object" || !Array.isArray(data.items)) {
+    if (
+      !data ||
+      typeof data !== "object" ||
+      typeof data.uid !== "string" ||
+      !data.uid ||
+      !Array.isArray(data.items)
+    ) {
       // No structured payload — an error result (unknown UID / no match / disambiguation) carries
       // its remediation in the text block, or a host dropped structuredContent. Surface that text
       // verbatim (display only, never parsed for data); don't clobber an already-loaded list on a
@@ -230,7 +235,7 @@
       <p class="t">Couldn’t load this list</p>
       {#if errorMsg}<p class="d">{errorMsg}</p>{/if}
     </div>
-  {:else if total === 0}
+  {:else if items.length === 0}
     <div class="empty">
       <div class="big">🧺</div>
       <p class="t">Nothing on this list yet</p>
@@ -248,7 +253,7 @@
           <button class="clear danger" onclick={confirmClear}>Clear</button>
           <button class="clear" onclick={cancelClear}>Keep</button>
         {:else}
-          <span class="progress">{purchasedCount}/{total} done</span>
+          <span class="progress">{purchasedCount}/{items.length} done</span>
           {#if purchasedCount > 0}
             <button class="clear" onclick={onClear}
               >Clear {purchasedCount}</button

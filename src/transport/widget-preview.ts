@@ -110,7 +110,7 @@ const PREVIEW_SHIM = `globalThis.ExtApps = {
       let structuredContent;
       try {
         const parsed = JSON.parse(this.#payload);
-        if (parsed && typeof parsed === "object") structuredContent = parsed;
+        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) structuredContent = parsed;
       } catch {}
       this.ontoolresult && this.ontoolresult({ content: [{ type: "text", text: this.#payload }], structuredContent });
     }
