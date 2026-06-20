@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import type { AisleNameSource } from "../aisle/display.js";
+import type { AisleUid } from "../aisle/ids.js";
 import type { GroceryItem } from "./grocery-item/types.js";
 import type { GroceryList } from "./grocery-list/types.js";
 
@@ -62,6 +63,27 @@ export function groceryItemToRow(item: GroceryItem, aisles: AisleNameSource): Gr
 
 export function groceryItemsToRows(items: ReadonlyArray<GroceryItem>, aisles: AisleNameSource): Array<GroceryItemRow> {
   return items.map((item) => groceryItemToRow(item, aisles));
+}
+
+/** The slice of the aisle catalog the checklist sort reads: each aisle's walk-order `orderFlag`. */
+export interface AisleOrderSource {
+  get(uid: AisleUid): { readonly orderFlag: number } | undefined;
+}
+
+/**
+ * Order grocery items into store-walk order for the checklist: by aisle `orderFlag`, then the
+ * item's own `orderFlag`, then `uid` for a total, stable order. Items with no/unknown aisle sort
+ * last (the widget's "Other" group). Pure and deterministic, so `read_grocery_list`'s text table
+ * and its `structuredContent` agree by construction and the widget can group consecutive
+ * same-aisle rows. The `orderFlag` is reached through the live catalog contract
+ * (`ctx.deps.aisle.get`), not the row — no new field rides the payload.
+ */
+export function sortGroceryItemsForChecklist(
+  items: ReadonlyArray<GroceryItem>,
+  aisleOrder: AisleOrderSource,
+): Array<GroceryItem> {
+  const order = (item: GroceryItem): number => aisleOrder.get(item.aisleUid)?.orderFlag ?? Number.MAX_SAFE_INTEGER;
+  return [...items].sort((a, b) => order(a) - order(b) || a.orderFlag - b.orderFlag || a.uid.localeCompare(b.uid));
 }
 
 /** Map a `GroceryList` plus its items into the structured read payload. */

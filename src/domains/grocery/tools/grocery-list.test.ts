@@ -8,6 +8,7 @@ import { makeGroceryItem } from "../../../../test/domains/grocery/__fixtures__/g
 import { makeGroceryList } from "../../../../test/domains/grocery/__fixtures__/grocery-lists.js";
 import { useKernelHarness } from "../../../../test/support/kernel-harness.js";
 import { getText } from "../../../../test/support/tool-test-utils.js";
+import { NO_AISLE_UID } from "../../aisle/ids.js";
 
 describe("list_grocery_lists tool", () => {
   const kh = useKernelHarness<GroceryState>("grocery");
@@ -125,6 +126,29 @@ describe("read_grocery_list tool", () => {
     const uids = structured.items.map((i) => i.uid);
     expect(uids).toContain(item1.uid);
     expect(uids).toContain(item2.uid);
+  });
+
+  it("emits items in store-walk order: aisle orderFlag, then item orderFlag, then uid", async () => {
+    // Catalog walk order: Dairy (1) before Produce (2); seeded out of order to prove the sort.
+    const dairy = makeAisle({ name: "Dairy", orderFlag: 1 });
+    const produce = makeAisle({ name: "Produce", orderFlag: 2 });
+    const list = makeGroceryList({ name: "Weekly Shopping" });
+    const apples = makeGroceryItem({ listUid: list.uid, ingredient: "Apples", aisleUid: produce.uid, orderFlag: 1 });
+    const bananas = makeGroceryItem({ listUid: list.uid, ingredient: "Bananas", aisleUid: produce.uid, orderFlag: 0 });
+    const milk = makeGroceryItem({ listUid: list.uid, ingredient: "Milk", aisleUid: dairy.uid, orderFlag: 0 });
+    const batteries = makeGroceryItem({
+      listUid: list.uid,
+      ingredient: "Batteries",
+      aisleUid: NO_AISLE_UID,
+      aisle: "",
+    });
+    kh.seed({ groceryLists: [list], groceryItems: [apples, bananas, milk, batteries], aisles: [dairy, produce] });
+
+    const result = await kh.callTool("read_grocery_list", { lookup: { uid: list.uid } });
+    const structured = result.structuredContent as { items: ReadonlyArray<{ ingredient: string }> };
+
+    // Dairy before Produce; within Produce item orderFlag 0 (Bananas) before 1 (Apples); no-aisle last.
+    expect(structured.items.map((i) => i.ingredient)).toEqual(["Milk", "Bananas", "Apples", "Batteries"]);
   });
 
   it("a not-found read carries no structuredContent (errorResult, B1/#321)", async () => {

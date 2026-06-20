@@ -19,6 +19,9 @@ export const markGroceryItemPurchasedInputSchema = z
 /**
  * `mark_grocery_item_purchased` — the purchased intent verb (marks a grocery item
  * bought), distinct from a free-form `update_grocery_item` edit.
+ *
+ * One-way: there is no "un-purchase" verb. A bought item's job on a shopping list is done;
+ * to put it back, re-add it for the next trip via `add_grocery_items`.
  */
 export const markGroceryItemPurchasedTool = defineTool(
   {

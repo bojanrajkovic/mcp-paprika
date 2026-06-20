@@ -14,7 +14,12 @@ import {
   toolResult,
   uidOrTextLookupSchema,
 } from "../../../shared/tools.js";
-import { groceryListReadOutputSchema, groceryListToMarkdown, groceryListToStructured } from "../grocery-helpers.js";
+import {
+  groceryListReadOutputSchema,
+  groceryListToMarkdown,
+  groceryListToStructured,
+  sortGroceryItemsForChecklist,
+} from "../grocery-helpers.js";
 import { GroceryListUidSchema } from "../ids.js";
 import { groceryStartGuard } from "./guards.js";
 
@@ -99,13 +104,16 @@ export const readGroceryListTool = defineTool(
         get: (uid) => ctx.state.lists.store.get(uid),
         findByText: (text) => ctx.state.lists.store.findByName(text),
       });
+      // Emit items in store-walk order (aisle orderFlag → item orderFlag → uid) so the text table
+      // and the structuredContent the checklist widget renders agree by construction.
+      const checklistItems = (list: GroceryList) =>
+        sortGroceryItemsForChecklist(ctx.state.items.store.getByListUid(list.uid), ctx.deps.aisle);
       return formatLookupOutcome(ctx.server.server, outcome, {
         entityNoun: "grocery list",
         describe: (list) => ({ uid: list.uid, label: list.name }),
         findWith: "list_grocery_lists",
-        renderOne: (list) => groceryListToMarkdown(list, ctx.state.items.store.getByListUid(list.uid), ctx.deps.aisle),
-        renderStructured: (list) =>
-          groceryListToStructured(list, ctx.state.items.store.getByListUid(list.uid), ctx.deps.aisle),
+        renderOne: (list) => groceryListToMarkdown(list, checklistItems(list), ctx.deps.aisle),
+        renderStructured: (list) => groceryListToStructured(list, checklistItems(list), ctx.deps.aisle),
       });
     };
   },
