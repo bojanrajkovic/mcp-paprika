@@ -1,16 +1,19 @@
-<script>
+<script lang="ts">
+  import type { App } from "@modelcontextprotocol/ext-apps";
+
   import { onMount } from "svelte";
 
   // The ext-apps App instance, constructed in main.ts and handed in as a prop.
-  let { app } = $props();
+  let { app }: { app: App } = $props();
 
-  let payload = $state(undefined);
+  let payload = $state<unknown>(undefined);
   let connected = $state(false);
 
   onMount(() => {
     // Handlers must be registered BEFORE connect() completes the handshake.
     app.ontoolresult = (result) => {
-      const text = result?.content?.[0]?.text;
+      const block = result?.content?.[0];
+      const text = block?.type === "text" ? block.text : undefined;
       try {
         payload = text ? JSON.parse(text) : null;
       } catch {

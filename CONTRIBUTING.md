@@ -13,17 +13,17 @@ The human-developer workflow for mcp-paprika. Agent-facing guidance and the proj
 
 ## Commands
 
-| Command                             | Description                                                                    |
-| ----------------------------------- | ------------------------------------------------------------------------------ |
-| `pnpm dev`                          | Run the dev server via tsx                                                     |
-| `pnpm build`                        | Compile TypeScript to `dist/`                                                  |
-| `pnpm test` / `pnpm test:watch`     | Run the vitest suite (once / in watch mode)                                    |
-| `pnpm typecheck`                    | Type-check source (`tsc --noEmit`) and the test project (`tsconfig.test.json`) |
-| `pnpm lint` / `pnpm lint:fix`       | oxlint (`--deny-warnings`) over `src/`                                         |
-| `pnpm format` / `pnpm format:check` | oxfmt over the tree                                                            |
-| `pnpm generate:fixtures`            | Regenerate typed fixtures from the HAR captures in `docs/wire-captures/`       |
+| Command                             | Description                                                                                                                                          |
+| ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm dev`                          | Run the dev server via tsx                                                                                                                           |
+| `pnpm build`                        | Compile TypeScript to `dist/`                                                                                                                        |
+| `pnpm test` / `pnpm test:watch`     | Run the vitest suite (once / in watch mode)                                                                                                          |
+| `pnpm typecheck`                    | Type-check source (`tsc --noEmit`), the test project (`tsconfig.test.json`), and the widget browser source (`svelte-check`, via `typecheck:widgets`) |
+| `pnpm lint` / `pnpm lint:fix`       | oxlint (`--deny-warnings`) over `src/`                                                                                                               |
+| `pnpm format` / `pnpm format:check` | oxfmt over the tree                                                                                                                                  |
+| `pnpm generate:fixtures`            | Regenerate typed fixtures from the HAR captures in `docs/wire-captures/`                                                                             |
 
-`tsconfig.json` excludes tests and fixtures; `tsconfig.test.json` extends it to type-check everything with `noEmit`, so build output is unaffected.
+`tsconfig.json` excludes tests and fixtures; `tsconfig.test.json` extends it to type-check everything with `noEmit`, so build output is unaffected. The widget browser entries (`main.ts`, `mount-widget.ts`, `*.svelte`) are excluded from both — esbuild bundles them and `tsc` can't parse `.svelte` — and are type-checked separately by `svelte-check` against `tsconfig.widgets.json` (browser `lib`, no Node types).
 
 ## Code conventions
 
