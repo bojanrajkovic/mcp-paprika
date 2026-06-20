@@ -48,7 +48,6 @@ export async function confirmGate(
   server: ElicitationServer,
   opts: { readonly message: string; readonly log?: Logger },
 ): Promise<ConfirmOutcome> {
-  opts.log?.debug({ clientCapabilities: server.getClientCapabilities() }, "confirm gate: client capability check");
   if (!supportsForm(server)) return "unsupported";
   try {
     const result = await server.elicitInput({
