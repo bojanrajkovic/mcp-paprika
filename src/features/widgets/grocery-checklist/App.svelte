@@ -8,7 +8,7 @@
   // Local, mutable copy of read_grocery_list's structuredContent rows, so taps can update
   // optimistically. Replaced wholesale whenever the host feeds a fresh tool result.
   let listMeta = $state(null); // { uid, name } | null
-  let items = $state([]); // [{ uid, ingredient, quantity, aisle, purchased, _busy, _error }]
+  let items = $state([]); // [{ uid, ingredient, quantity, aisle, purchased, _busy, _error, _ghost }]
   let phase = $state("loading"); // "loading" | "ready" | "error"
   let theme = $state("light");
   let toast = $state(null); // { kind: "error" | "info", msg } | null
@@ -18,17 +18,12 @@
   const lastTap = new Map(); // uid -> performance.now(), for the per-row flap-guard
   let toastTimer;
 
-  // Supersede: hide a purchased row when an unpurchased row of the same ingredient exists, so
-  // tapping a bought item back on reads as a clean toggle (one row) rather than two. A pure view
-  // rule — the bought "ghost" stays in the data until clear_purchased / sync ages it out.
-  const visible = $derived.by(() => {
-    const active = new Set(
-      items.filter((i) => !i.purchased).map((i) => i.ingredient.toLowerCase()),
-    );
-    return items.filter(
-      (i) => !(i.purchased && active.has(i.ingredient.toLowerCase())),
-    );
-  });
+  // Hide the bought "ghost" a re-add leaves behind (flagged in doReadd), so tapping a purchased
+  // item back on reads as a clean toggle (one row) rather than two. Only that specific ghost is
+  // hidden — a coincidental same-ingredient checked row stays visible. The flag is transient: a
+  // host re-read rebuilds rows without it, so the pair then shows as the two rows it truly is
+  // until clear_purchased sweeps the ghost.
+  const visible = $derived(items.filter((i) => !i._ghost));
 
   // Group consecutive same-aisle rows (read_grocery_list already emits store-walk order);
   // purchased items sink to the bottom of their aisle group.
@@ -85,6 +80,7 @@
       purchased: Boolean(r.purchased),
       _busy: false,
       _error: false,
+      _ghost: false,
     };
   }
 
@@ -178,7 +174,10 @@
     // read refreshes the list; re-check the index since a re-read may have replaced items meanwhile.
     const added = res.structuredContent?.items?.[0];
     const idx = items.indexOf(item);
-    if (added && idx >= 0) items.splice(idx, 0, toRow(added));
+    if (added && idx >= 0) {
+      item._ghost = true; // the bought copy is now superseded by the re-added row
+      items.splice(idx, 0, toRow(added));
+    }
   }
 
   function onClear() {
