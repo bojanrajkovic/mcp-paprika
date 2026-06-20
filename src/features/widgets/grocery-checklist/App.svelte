@@ -8,7 +8,7 @@
   // Local, mutable copy of read_grocery_list's structuredContent rows, so taps can update
   // optimistically. Replaced wholesale whenever the host feeds a fresh tool result.
   let listMeta = $state(null); // { uid, name } | null
-  let items = $state([]); // [{ uid, ingredient, quantity, aisle, purchased, _busy, _error, _ghost }]
+  let items = $state([]); // [{ uid, ingredient, quantity, aisle, purchased, _busy, _error }]
   let phase = $state("loading"); // "loading" | "ready" | "error"
   let theme = $state("light");
   let toast = $state(null); // { kind: "error" | "info", msg } | null
@@ -19,18 +19,11 @@
   const lastTap = new Map(); // uid -> performance.now(), for the per-row flap-guard
   let toastTimer;
 
-  // Hide the bought "ghost" a re-add leaves behind (flagged in doReadd), so tapping a purchased
-  // item back on reads as a clean toggle (one row) rather than two. Only that specific ghost is
-  // hidden — a coincidental same-ingredient checked row stays visible. The flag is transient: a
-  // host re-read rebuilds rows without it, so the pair then shows as the two rows it truly is
-  // until clear_purchased sweeps the ghost.
-  const visible = $derived(items.filter((i) => !i._ghost));
-
   // Group consecutive same-aisle rows (read_grocery_list already emits store-walk order);
   // purchased items sink to the bottom of their aisle group.
   const groups = $derived.by(() => {
     const out = [];
-    for (const item of visible) {
+    for (const item of items) {
       const key = item.aisle ?? "Other";
       const last = out[out.length - 1];
       if (last && last.key === key) last.items.push(item);
@@ -41,12 +34,8 @@
     return out;
   });
 
-  const total = $derived(visible.length);
-  const purchasedCount = $derived(visible.filter((i) => i.purchased).length);
-  // Clear sweeps every purchased server row, including a hidden re-add ghost. Count from all items,
-  // not `visible`, so the Clear action stays available to remove a ghost that's the only purchased
-  // row left (otherwise that ghost can't be cleared and resurfaces on the next read).
-  const clearableCount = $derived(items.filter((i) => i.purchased).length);
+  const total = $derived(items.length);
+  const purchasedCount = $derived(items.filter((i) => i.purchased).length);
 
   onMount(() => {
     // Handlers must be set BEFORE connect() completes the handshake.
@@ -94,7 +83,6 @@
       purchased: Boolean(r.purchased),
       _busy: false,
       _error: false,
-      _ghost: false,
     };
   }
 
@@ -156,8 +144,8 @@
 
   async function doReadd(item) {
     if (tapThrottled(item.uid)) return;
-    // Exact-match dedup vs unpurchased rows (same rule add_recipe_to_grocery_list uses). Supersede
-    // usually hides the purchased row before a second tap, so this mainly guards a rapid double-tap.
+    // Exact-match dedup vs unpurchased rows (same rule add_recipe_to_grocery_list uses) — guards a
+    // rapid double-tap or an existing to-buy copy of the same ingredient.
     const dup = items.some(
       (i) =>
         !i.purchased &&
@@ -168,7 +156,10 @@
       return;
     }
     item._busy = true;
-    const res = await callTool("add_grocery_items", {
+    // Re-add as a true toggle: mark is one-way (no un-purchase verb), so "put it back" is a fresh
+    // to-buy row via add_grocery_items, then delete the bought copy so the item reads as a single
+    // unchecked row instead of lingering as a duplicate.
+    const add = await callTool("add_grocery_items", {
       listUid: listMeta.uid,
       items: [
         {
@@ -180,19 +171,26 @@
         },
       ],
     });
-    item._busy = false;
-    if (res.isError) {
+    if (add.isError) {
+      item._busy = false;
       showToast("Couldn’t add that back — try again.");
       return;
     }
-    // add_grocery_items mints a NEW unpurchased row; insert it beside the original (which supersede
-    // then hides) so the ingredient reads as unchecked again. If the host omits the new row, the next
-    // read refreshes the list; re-check the index since a re-read may have replaced items meanwhile.
-    const added = res.structuredContent?.items?.[0];
+    const del = await callTool("delete_grocery_item", { uid: item.uid });
+    item._busy = false;
+    const added = add.structuredContent?.items?.[0];
     const idx = items.indexOf(item);
-    if (added && idx >= 0) {
-      item._ghost = true; // the bought copy is now superseded by the re-added row
-      items.splice(idx, 0, toRow(added));
+    if (idx < 0) return;
+    if (!del.isError) {
+      // Replace the bought row in place with the new to-buy row (keyed each → no scroll jump). If the
+      // host omitted the new row, just drop the bought one; the next read surfaces the addition.
+      if (added) items.splice(idx, 1, toRow(added));
+      else items.splice(idx, 1);
+    } else {
+      // Couldn't remove the bought copy: keep it and show the new row beside it — a visible,
+      // clearable duplicate rather than a lost re-add.
+      if (added) items.splice(idx + 1, 0, toRow(added));
+      showToast("Re-added, but couldn’t remove the bought copy.", "info");
     }
   }
 
@@ -246,14 +244,14 @@
       <h1>{listMeta.name}</h1>
       <div class="head-right">
         {#if confirmingClear}
-          <span class="progress">Clear {clearableCount} purchased?</span>
+          <span class="progress">Clear {purchasedCount} purchased?</span>
           <button class="clear danger" onclick={confirmClear}>Clear</button>
           <button class="clear" onclick={cancelClear}>Keep</button>
         {:else}
           <span class="progress">{purchasedCount}/{total} done</span>
-          {#if clearableCount > 0}
+          {#if purchasedCount > 0}
             <button class="clear" onclick={onClear}
-              >Clear {clearableCount}</button
+              >Clear {purchasedCount}</button
             >
           {/if}
         {/if}
