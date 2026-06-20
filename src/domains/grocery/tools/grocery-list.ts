@@ -95,6 +95,9 @@ export const readGroceryListTool = defineTool(
       }),
     },
     outputSchema: groceryListReadOutputSchema,
+    // Hosts with the apps surface render this result as the grocery checklist widget; others
+    // show the text/structured result unchanged.
+    ui: { resourceUri: "ui://widget/grocery-checklist" },
   },
   [groceryStartGuard],
   (ctx: DomainCtx<GroceryState, "aisle" | "pantry">) => {
