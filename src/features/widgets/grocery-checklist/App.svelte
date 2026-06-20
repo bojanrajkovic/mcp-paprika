@@ -160,7 +160,9 @@
         {
           ingredient: item.ingredient,
           quantity: item.quantity ?? undefined,
-          aisle: item.aisle ?? undefined,
+          // "" re-adds a no-aisle row as no-aisle; omitting aisle would auto-resolve it to a
+          // catalog/Miscellaneous aisle, moving the row the user just tapped.
+          aisle: item.aisle ?? "",
         },
       ],
     });
