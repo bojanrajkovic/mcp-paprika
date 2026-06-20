@@ -270,12 +270,11 @@
     let p = param;
     let x0: number | null = null;
     let dx = 0;
-    // Clear the in-progress drag's inline styles. Centralized so every exit path (commit, cancel, a
-    // capability flip mid-drag) leaves no row stuck translated/faded.
+    // Clear the in-progress drag's inline transform. Centralized so every exit path (commit, cancel,
+    // a capability flip mid-drag) leaves no row stuck translated.
     const reset = () => {
       x0 = null;
       node.style.transform = "";
-      node.style.opacity = "";
     };
     const down = (e: PointerEvent) => {
       if (!p.enabled) return;
@@ -286,9 +285,10 @@
     const move = (e: PointerEvent) => {
       if (x0 === null) return;
       if (!p.enabled) return reset(); // host flipped to pointer mid-drag — abandon the gesture
-      dx = Math.min(0, e.clientX - x0);
+      // Resist past the commit threshold so the row can't be dragged fully off — enough to reveal
+      // the action, not slide the whole row away. The row stays opaque; the action shows behind it.
+      dx = Math.max(-120, Math.min(0, e.clientX - x0));
       node.style.transform = `translateX(${dx.toString()}px)`;
-      node.style.opacity = Math.max(0.3, 1 + dx / 200).toString();
     };
     const up = () => {
       if (x0 === null) return;
@@ -355,36 +355,49 @@
             <div class="aisle">
               <h2>{group.key}</h2>
               <span class="acount">{group.items.length}</span>
-              <span class="rule"></span>
             </div>
             {#each group.items as item (item.uid)}
               {@const es = expState(item.expirationDate)}
               <div
-                class="item"
-                class:busy={item._busy}
-                class:exp-soon={es === "soon"}
-                class:exp-expired={es === "expired"}
+                class="item-wrap"
                 animate:flip={{ duration: motion(200) }}
                 transition:slide={{ duration: motion(200) }}
-                use:swipe={{ enabled: touchDevice, commit: () => onOut(item) }}
               >
-                <span class="body">
-                  <span class="name"
-                    >{item.ingredient}{#if item.quantity}<span class="qty">
-                        · {item.quantity}</span
-                      >{/if}</span
-                  >
-                  {#if es}<span class="badge {es}"
-                      >{expLabel(item.expirationDate)}</span
-                    >{/if}
-                </span>
-                {#if !touchDevice}
-                  <button
-                    class="out"
-                    onclick={() => onOut(item)}
-                    aria-label="Mark {item.ingredient} out of stock">Out</button
-                  >
+                {#if touchDevice}
+                  <!-- Revealed behind the row as it swipes left (iOS-Mail style). -->
+                  <div class="swipe-action" aria-hidden="true">
+                    Out of Stock
+                  </div>
                 {/if}
+                <div
+                  class="item"
+                  class:busy={item._busy}
+                  class:exp-soon={es === "soon"}
+                  class:exp-expired={es === "expired"}
+                  use:swipe={{
+                    enabled: touchDevice,
+                    commit: () => onOut(item),
+                  }}
+                >
+                  <span class="body">
+                    <span class="name"
+                      >{item.ingredient}{#if item.quantity}<span class="qty">
+                          · {item.quantity}</span
+                        >{/if}</span
+                    >
+                    {#if es}<span class="badge {es}"
+                        >{expLabel(item.expirationDate)}</span
+                      >{/if}
+                  </span>
+                  {#if !touchDevice}
+                    <button
+                      class="out"
+                      onclick={() => onOut(item)}
+                      aria-label="Mark {item.ingredient} out of stock"
+                      >Out of Stock</button
+                    >
+                  {/if}
+                </div>
               </div>
             {/each}
           </section>
@@ -537,18 +550,39 @@
     color: var(--faint);
     font-variant-numeric: tabular-nums;
   }
-  .aisle .rule {
-    flex: 1;
-    height: 1px;
-    background: var(--line);
+  /* The row footprint: it owns the divider so the line stays put while the inner .item swipes,
+     and clips the swipe so the translated row + revealed action never bleed past it. */
+  .item-wrap {
+    position: relative;
+    z-index: 0; /* own stacking context: scopes .item's z-index to the row so a scrolling row can't tie and paint over the sticky aisle header */
+    overflow: hidden;
+    border-bottom: 1px solid var(--line);
+  }
+
+  /* Revealed behind the row as it swipes left (touch). The row's opaque bg covers it at rest;
+     swiping uncovers it from the right edge — the iOS-Mail affordance. */
+  .swipe-action {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    padding-right: 22px;
+    background: oklch(0.55 0.2 25);
+    color: oklch(0.99 0.02 25);
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
   }
 
   .item {
+    position: relative;
+    z-index: 1; /* paints above .swipe-action; its opaque bg hides the action until swiped */
     display: flex;
     align-items: center;
     gap: 12px;
     padding: 11px 16px;
-    border-bottom: 1px solid var(--line);
     background: var(--bg);
     touch-action: pan-y;
   }
