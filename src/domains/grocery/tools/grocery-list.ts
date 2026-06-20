@@ -108,9 +108,17 @@ export const readGroceryListTool = defineTool(
         findByText: (text) => ctx.state.lists.store.findByName(text),
       });
       // Emit items in store-walk order (aisle orderFlag → item orderFlag → uid) so the text table
-      // and the structuredContent the checklist widget renders agree by construction.
-      const checklistItems = (list: GroceryList) =>
-        sortGroceryItemsForChecklist(ctx.state.items.store.getByListUid(list.uid), ctx.deps.aisle);
+      // and the structuredContent the checklist widget renders agree by construction. Memoized so the
+      // sort + store scan run once even though formatLookupOutcome renders the same list twice (text
+      // + structured).
+      const checklistCache = new Map<string, ReturnType<typeof sortGroceryItemsForChecklist>>();
+      const checklistItems = (list: GroceryList) => {
+        const cached = checklistCache.get(list.uid);
+        if (cached) return cached;
+        const sorted = sortGroceryItemsForChecklist(ctx.state.items.store.getByListUid(list.uid), ctx.deps.aisle);
+        checklistCache.set(list.uid, sorted);
+        return sorted;
+      };
       return formatLookupOutcome(ctx.server.server, outcome, {
         entityNoun: "grocery list",
         describe: (list) => ({ uid: list.uid, label: list.name }),

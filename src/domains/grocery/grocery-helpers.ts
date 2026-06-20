@@ -72,30 +72,34 @@ export interface AisleOrderSource {
 
 /**
  * Order grocery items into store-walk order for the checklist: by aisle `orderFlag`, then aisle
- * identity (name, then `aisleUid`), then the item's own `orderFlag`, then `uid` for a total, stable
- * order. The aisle tie-break before item order keeps one aisle's items contiguous even when two
- * aisles share an `orderFlag` (the catalog allows ties, breaking them by name) — without it an
- * A/B/A interleave would make the widget, which groups only consecutive same-aisle rows, render the
- * same aisle twice. Items with no/unknown aisle sort last (the widget's "Other" group). Pure and
- * deterministic, so `read_grocery_list`'s text table and its `structuredContent` agree by
- * construction. The aisle fields are reached through the live catalog contract (`ctx.deps.aisle.get`),
- * not the row — no new field rides the payload.
+ * identity (display name, then `aisleUid`), then the item's own `orderFlag`, then `uid` for a total,
+ * stable order. Resolving the aisle once per item and tie-breaking on identity before item order
+ * keeps one aisle's rows contiguous even when two aisles share an `orderFlag` — without it an A/B/A
+ * interleave would make the widget, which groups only consecutive same-aisle rows, render the same
+ * aisle twice. The display name falls back to the item's denormalized `aisle` when the catalog has
+ * no entry (a dangling / app-deleted `aisleUid`), so the sort key matches the name the widget groups
+ * on; items with no/unknown aisle sort last. Pure and deterministic, so `read_grocery_list`'s text
+ * table and its `structuredContent` agree by construction. The catalog fields are reached through the
+ * live contract (`ctx.deps.aisle.get`), not the row.
  */
 export function sortGroceryItemsForChecklist(
   items: ReadonlyArray<GroceryItem>,
   aisleOrder: AisleOrderSource,
 ): Array<GroceryItem> {
-  const aisle = (item: GroceryItem) => aisleOrder.get(item.aisleUid);
-  const order = (item: GroceryItem): number => aisle(item)?.orderFlag ?? Number.MAX_SAFE_INTEGER;
-  const aisleName = (item: GroceryItem): string => aisle(item)?.name ?? "";
-  return [...items].sort(
+  // Resolve each item's aisle once (one catalog lookup per item, not per comparison).
+  const decorated = items.map((item) => {
+    const a = aisleOrder.get(item.aisleUid);
+    return { item, order: a?.orderFlag ?? Number.MAX_SAFE_INTEGER, name: a?.name ?? item.aisle };
+  });
+  decorated.sort(
     (a, b) =>
-      order(a) - order(b) ||
-      aisleName(a).localeCompare(aisleName(b)) ||
-      a.aisleUid.localeCompare(b.aisleUid) ||
-      a.orderFlag - b.orderFlag ||
-      a.uid.localeCompare(b.uid),
+      a.order - b.order ||
+      a.name.localeCompare(b.name) ||
+      a.item.aisleUid.localeCompare(b.item.aisleUid) ||
+      a.item.orderFlag - b.item.orderFlag ||
+      a.item.uid.localeCompare(b.item.uid),
   );
+  return decorated.map((d) => d.item);
 }
 
 /** Map a `GroceryList` plus its items into the structured read payload. */

@@ -170,6 +170,29 @@ describe("read_grocery_list tool", () => {
     expect(structured.items.map((i) => i.ingredient)).toEqual(["Bread", "Buns", "Peas"]);
   });
 
+  it("groups dangling-aisle rows by their denormalized name so a group isn't split", async () => {
+    // Aisles missing from the catalog (app-deleted / sync gap) resolve to the item's denormalized
+    // name. The sort must group by that name, not fall through to aisleUid and interleave: here the
+    // two "Frozen" rows (uids AISLE-B/AISLE-D) would be split by "Anchovy" (AISLE-C) under a raw
+    // aisleUid tie-break.
+    const list = makeGroceryList({ name: "Weekly Shopping" });
+    const peas = makeGroceryItem({ listUid: list.uid, ingredient: "Peas", aisle: "Frozen", aisleUid: "AISLE-B" });
+    const anchovies = makeGroceryItem({
+      listUid: list.uid,
+      ingredient: "Anchovies",
+      aisle: "Anchovy",
+      aisleUid: "AISLE-C",
+    });
+    const spinach = makeGroceryItem({ listUid: list.uid, ingredient: "Spinach", aisle: "Frozen", aisleUid: "AISLE-D" });
+    kh.seed({ groceryLists: [list], groceryItems: [peas, anchovies, spinach], aisles: [] });
+
+    const result = await kh.callTool("read_grocery_list", { lookup: { uid: list.uid } });
+    const structured = result.structuredContent as { items: ReadonlyArray<{ ingredient: string }> };
+
+    // "Anchovy" (name <  "Frozen") first, then the Frozen pair contiguous.
+    expect(structured.items.map((i) => i.ingredient)).toEqual(["Anchovies", "Peas", "Spinach"]);
+  });
+
   it("a not-found read carries no structuredContent (errorResult, B1/#321)", async () => {
     kh.seed({ groceryLists: [], groceryItems: [] });
     const result = await kh.callTool("read_grocery_list", { lookup: { uid: "nope" } });
