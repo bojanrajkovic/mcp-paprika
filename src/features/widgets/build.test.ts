@@ -51,7 +51,7 @@ describe("buildWidgets", () => {
   // Every widget must compile to a self-contained inline script that parses under module
   // semantics. The grocery-checklist's larger compiled output is the more likely place a
   // regression sneaks in, so the guard runs per widget — add a name here when a widget ships.
-  it.each(["demo", "grocery-checklist"])(
+  it.each(["demo", "grocery-checklist", "pantry-checklist"])(
     "%s compiles to a self-contained inline script that parses under module semantics",
     async (name) => {
       await buildWidgets({ outDir: tmp.dir() });
