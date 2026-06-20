@@ -4,7 +4,7 @@ import type { Category } from "./category/types.js";
 import type { CategoryUid } from "./ids.js";
 import type { Recipe } from "./types.js";
 
-import { RecipeUidSchema } from "./ids.js";
+import { CategoryUidSchema, RecipeUidSchema } from "./ids.js";
 
 /**
  * The structured-output row for one recipe (ADR-0019, R1) — the machine-readable
@@ -40,6 +40,71 @@ export function recipeToRow(recipe: Recipe, categoryNames: Array<string>): Recip
     totalTime: recipe.totalTime,
     isPinned: recipe.isPinned,
     onGroceryList: recipe.onGroceryList,
+  };
+}
+
+/**
+ * The structured-output payload for `read_recipe` / `create_recipe` (ADR-0019, R1,
+ * B1/#321). Unlike the lean {@link recipeRowSchema} list row, the single-recipe read
+ * carries the full body (ingredients/directions/etc.) and `photoUrl`: its demonstrated
+ * downstream consumer is the step-anchored cooking widget (#337, "layered on
+ * read_recipe") and the recipe-card read-action (#336), both of which render from this
+ * payload. `categoryUids` is the raw FK that drives `categorize_recipe`; `categories`
+ * is the resolved-name view the text also shows (the raw+resolved split A3 uses for
+ * meal-type). The full prose still renders in the text block — this is the machine view.
+ */
+export const recipeReadOutputSchema = z.object({
+  uid: RecipeUidSchema,
+  name: z.string(),
+  categoryUids: z.array(CategoryUidSchema).describe("Category UIDs this recipe belongs to (drives categorize_recipe)."),
+  categories: z.array(z.string()).describe("Resolved category names."),
+  rating: z.number().int().describe("0–5; 0 means unrated."),
+  prepTime: z.string().nullable(),
+  cookTime: z.string().nullable(),
+  totalTime: z.string().nullable(),
+  servings: z.string().nullable(),
+  difficulty: z.string().nullable(),
+  ingredients: z.string(),
+  directions: z.string(),
+  description: z.string().nullable(),
+  notes: z.string().nullable(),
+  nutritionalInfo: z.string().nullable(),
+  source: z.string().nullable(),
+  sourceUrl: z.string().nullable(),
+  photoUrl: z.string().nullable(),
+  isPinned: z.boolean(),
+  onFavorites: z.boolean(),
+  onGroceryList: z.boolean(),
+  created: z.string(),
+});
+
+export type RecipeReadStructured = z.infer<typeof recipeReadOutputSchema>;
+
+/** Map a `Recipe` plus its resolved category names into a {@link RecipeReadStructured}. */
+export function recipeToReadStructured(recipe: Recipe, categoryNames: Array<string>): RecipeReadStructured {
+  return {
+    uid: recipe.uid,
+    name: recipe.name,
+    categoryUids: recipe.categories,
+    categories: categoryNames,
+    rating: recipe.rating,
+    prepTime: recipe.prepTime,
+    cookTime: recipe.cookTime,
+    totalTime: recipe.totalTime,
+    servings: recipe.servings,
+    difficulty: recipe.difficulty,
+    ingredients: recipe.ingredients,
+    directions: recipe.directions,
+    description: recipe.description,
+    notes: recipe.notes,
+    nutritionalInfo: recipe.nutritionalInfo,
+    source: recipe.source,
+    sourceUrl: recipe.sourceUrl,
+    photoUrl: recipe.photoUrl,
+    isPinned: recipe.isPinned,
+    onFavorites: recipe.onFavorites,
+    onGroceryList: recipe.onGroceryList,
+    created: recipe.created,
   };
 }
 

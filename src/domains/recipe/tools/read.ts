@@ -4,7 +4,7 @@ import type { RecipeState } from "../module.js";
 import { defineTool } from "../../../kernel/tool.js";
 import { formatLookupOutcome, resolveLookup, uidOrTextLookupSchema } from "../../../shared/tools.js";
 import { RecipeUidSchema } from "../ids.js";
-import { recipeToMarkdown } from "../recipe-markdown.js";
+import { recipeReadOutputSchema, recipeToMarkdown, recipeToReadStructured } from "../recipe-markdown.js";
 import { recipeColdStartGuard } from "./guards.js";
 
 /**
@@ -30,6 +30,7 @@ export const readRecipeTool = defineTool(
         textExample: "Chocolate Cake",
       }),
     },
+    outputSchema: recipeReadOutputSchema,
   },
   [recipeColdStartGuard],
   (ctx: DomainCtx<RecipeState, never>) => {
@@ -44,6 +45,8 @@ export const readRecipeTool = defineTool(
         describe: (recipe) => ({ uid: recipe.uid, label: recipe.name }),
         findWith: "search_recipes",
         renderOne: (recipe) => recipeToMarkdown(recipe, ctx.state.category.store.resolveNames(recipe.categories)),
+        renderStructured: (recipe) =>
+          recipeToReadStructured(recipe, ctx.state.category.store.resolveNames(recipe.categories)),
       });
     };
   },

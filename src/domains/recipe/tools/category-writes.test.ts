@@ -55,6 +55,27 @@ describe("category write tools", () => {
       const result = await kh.callTool("create_category", { name: "Thai" });
       expect(getText(result).toLowerCase()).toContain("try again");
     });
+
+    it("carries structuredContent with the new category's uid + parent FK (B1/#321)", async () => {
+      const parent = makeCategory({ uid: "p" as CategoryUid, name: "Cuisines" });
+      kh.seed({ recipes: [makeRecipe()], categories: [parent] });
+      vi.mocked(kh.client().saveCategory).mockImplementation((c) => okAsync(c));
+
+      const result = await kh.callTool("create_category", { name: "Thai", parentUid: "p" });
+
+      const posted = vi.mocked(kh.client().saveCategory).mock.calls[0]?.[0];
+      expect(result.isError).toBeUndefined();
+      expect(result.structuredContent).toEqual({ uid: posted?.uid, name: "Thai", parentUid: "p" });
+    });
+
+    it("an unknown parentUid is an isError with no structuredContent (B1/#321)", async () => {
+      kh.seed({ recipes: [makeRecipe()], categories: [] });
+
+      const result = await kh.callTool("create_category", { name: "Thai", parentUid: "nope" });
+
+      expect(result.isError).toBe(true);
+      expect(result.structuredContent).toBeUndefined();
+    });
   });
 
   describe("update_category", () => {

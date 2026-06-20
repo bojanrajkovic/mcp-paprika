@@ -78,4 +78,34 @@ describe("read_recipe tool", () => {
     const text = await kh.callToolText("read_recipe", { lookup: { uid: "anything" } });
     expect(text.toLowerCase()).toContain("try again");
   });
+
+  it("carries structuredContent with the recipe's machine fields (B1/#321)", async () => {
+    const category = makeCategory({ name: "Dessert" });
+    const recipe = makeRecipe({
+      name: "Chocolate Cake",
+      categories: [category.uid],
+      ingredients: "flour, sugar",
+      directions: "mix, bake",
+    });
+    kh.seed({ recipes: [recipe], categories: [category] });
+    const result = await kh.callTool("read_recipe", { lookup: { uid: recipe.uid } });
+    expect(result.isError).toBeUndefined();
+    // categoryUids is the raw FK; categories is the resolved-name view (raw+resolved split);
+    // the body rides structured for the cooking widget (#337).
+    expect(result.structuredContent).toMatchObject({
+      uid: recipe.uid,
+      name: "Chocolate Cake",
+      categoryUids: [category.uid],
+      categories: ["Dessert"],
+      ingredients: "flour, sugar",
+      directions: "mix, bake",
+    });
+  });
+
+  it("a not-found result carries no structuredContent (errorResult, B1/#321)", async () => {
+    kh.seed({ recipes: [makeRecipe()] });
+    const result = await kh.callTool("read_recipe", { lookup: { uid: "nonexistent-uid" } });
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toBeUndefined();
+  });
 });
