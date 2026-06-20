@@ -75,6 +75,7 @@ describe("ADR-0019: structured-output envelope and rollout", () => {
       "read_grocery_list",
       "read_meal_plan",
       "read_menu",
+      "read_pantry_item",
       "read_recipe",
       "read_recipe_history",
       "rename_grocery_list",
