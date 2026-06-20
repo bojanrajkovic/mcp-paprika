@@ -72,4 +72,29 @@ describe("buildWidgets", () => {
     }
     expect(parseError).toBeNull();
   });
+
+  it("builds the grocery-checklist widget to a self-contained, parseable HTML", async () => {
+    const built = await buildWidgets({ outDir: tmp.dir() });
+    expect(built).toContain("grocery-checklist");
+
+    const html = await readFile(join(tmp.dir(), "grocery-checklist.html"), "utf8");
+    expect(html).toContain("globalThis.ExtApps");
+    expect(html).not.toMatch(/<script[^>]+\bsrc=/i);
+
+    // Same IIFE / no-top-level-collision guard as the demo, but on the real component: its
+    // larger compiled output is the more likely place a module-parse-time SyntaxError sneaks in.
+    const script = html.match(/<script type="module">([\s\S]*?)<\/script>/)?.[1] ?? "";
+    expect(script.length).toBeGreaterThan(0);
+    const scriptPath = join(tmp.dir(), "grocery-checklist.inline.mjs");
+    await writeFile(scriptPath, script, "utf8");
+
+    let parseError: string | null = null;
+    try {
+      execFileSync(process.execPath, ["--check", scriptPath], { stdio: "pipe" });
+    } catch (err) {
+      const stderr = (err as { stderr?: Buffer }).stderr?.toString() ?? "";
+      parseError = `${err instanceof Error ? err.message : String(err)}\n${stderr}`;
+    }
+    expect(parseError).toBeNull();
+  });
 });
