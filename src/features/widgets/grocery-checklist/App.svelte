@@ -43,6 +43,10 @@
 
   const total = $derived(visible.length);
   const purchasedCount = $derived(visible.filter((i) => i.purchased).length);
+  // Clear sweeps every purchased server row, including a hidden re-add ghost. Count from all items,
+  // not `visible`, so the Clear action stays available to remove a ghost that's the only purchased
+  // row left (otherwise that ghost can't be cleared and resurfaces on the next read).
+  const clearableCount = $derived(items.filter((i) => i.purchased).length);
 
   onMount(() => {
     // Handlers must be set BEFORE connect() completes the handshake.
@@ -242,14 +246,14 @@
       <h1>{listMeta.name}</h1>
       <div class="head-right">
         {#if confirmingClear}
-          <span class="progress">Clear {purchasedCount} purchased?</span>
+          <span class="progress">Clear {clearableCount} purchased?</span>
           <button class="clear danger" onclick={confirmClear}>Clear</button>
           <button class="clear" onclick={cancelClear}>Keep</button>
         {:else}
           <span class="progress">{purchasedCount}/{total} done</span>
-          {#if purchasedCount > 0}
+          {#if clearableCount > 0}
             <button class="clear" onclick={onClear}
-              >Clear {purchasedCount}</button
+              >Clear {clearableCount}</button
             >
           {/if}
         {/if}
