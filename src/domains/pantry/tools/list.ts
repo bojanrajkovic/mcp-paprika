@@ -38,6 +38,9 @@ export const listPantryItemsTool = defineTool(
       "List all pantry items sorted alphabetically by ingredient name. Returns the ingredient, quantity, and aisle for each item. Use read_pantry_item with the UID for full details.",
     inputSchema: {},
     outputSchema: listPantryItemsOutputSchema,
+    // Hosts with the apps surface render this result as the pantry checklist widget; others
+    // show the text/structured result unchanged.
+    ui: { resourceUri: "ui://widget/pantry-checklist" },
   },
   [pantryStartGuard],
   (ctx: DomainCtx<PantryState, "aisle">) => {
