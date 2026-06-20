@@ -2,7 +2,7 @@ import type { DomainCtx } from "../../../kernel/registry.js";
 import type { GroceryState, GroceryWrites } from "../module.js";
 
 import { defineTool } from "../../../kernel/tool.js";
-import { commitFailure, toolResult } from "../../../shared/tools.js";
+import { commitFailure, confirmOrCancel, toolResult } from "../../../shared/tools.js";
 import { GroceryListUidSchema } from "../ids.js";
 import { groceryStartGuard } from "./guards.js";
 
@@ -34,6 +34,12 @@ export const clearPurchasedTool = defineTool(
       if (purchased.length === 0) {
         return toolResult(`No purchased items to clear in list "${list.name}".`);
       }
+
+      const stop = await confirmOrCancel(ctx.server.server, {
+        message: `Remove the ${purchased.length.toString()} purchased item(s) from "${list.name}"? This is permanent.`,
+        cancelled: `Cancelled — "${list.name}" was not cleared.`,
+      });
+      if (stop) return stop;
 
       const trashed = purchased.map((item) => ({ ...item, deleted: true }));
       return (await ctx.infra.client.saveGroceryItems(trashed)).match(
@@ -79,6 +85,12 @@ export const clearGroceryListTool = defineTool(
       if (items.length === 0) {
         return toolResult(`No items to clear in list "${list.name}".`);
       }
+
+      const stop = await confirmOrCancel(ctx.server.server, {
+        message: `Remove all ${items.length.toString()} item(s) from "${list.name}"? This is permanent.`,
+        cancelled: `Cancelled — "${list.name}" was not cleared.`,
+      });
+      if (stop) return stop;
 
       const trashed = items.map((item) => ({ ...item, deleted: true }));
       return (await ctx.infra.client.saveGroceryItems(trashed)).match(

@@ -31,6 +31,18 @@ describe("delete_pantry_item tool", () => {
     expect(after).toBeUndefined();
   });
 
+  it("declining the confirm cancels without writing", async () => {
+    const item = makePantryItem({ uid: "uid-1" as PantryItemUid, ingredient: "Butter", deleted: false });
+    vi.mocked(kh.client().savePantryItems).mockImplementation((items) => okAsync(items));
+    kh.seed({ pantry: [item] });
+    kh.setElicitResponder(() => ({ action: "decline" }));
+
+    const text = await kh.callToolText("delete_pantry_item", { uid: "uid-1" });
+
+    expect(text).toContain("Cancelled");
+    expect(kh.client().savePantryItems).not.toHaveBeenCalled();
+  });
+
   it("unknown UID returns no-item-found, store not mutated", async () => {
     kh.seed({ pantry: [] });
 

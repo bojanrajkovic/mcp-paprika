@@ -8,7 +8,7 @@ import type { RecipeState, RecipeWrites } from "../module.js";
 
 import { defineTool } from "../../../kernel/tool.js";
 import { fetchImageBytes, MAX_IMAGE_BYTES } from "../../../shared/photo-fetch.js";
-import { commitFailure, imageResult, toolResult } from "../../../shared/tools.js";
+import { commitFailure, confirmOrCancel, imageResult, toolResult } from "../../../shared/tools.js";
 import { toMessage } from "../../../utils/log.js";
 import { PhotoUidSchema, RecipeUidSchema } from "../ids.js";
 import { GENERATED_MAX_FULL_EDGE, normalizePhoto } from "../photo-helpers.js";
@@ -211,6 +211,12 @@ export const deletePhotoTool = defineTool(
       if (existing === undefined) {
         return toolResult(`No photo found with UID "${args.photo_uid}" (it may not exist or was already deleted).`);
       }
+
+      const stop = await confirmOrCancel(ctx.server.server, {
+        message: `Delete the photo "${existing.name}" from this recipe? Photos are identified only by opaque UID, so confirm this is the right one.`,
+        cancelled: `Cancelled — the photo was not deleted.`,
+      });
+      if (stop) return stop;
 
       return (await ctx.infra.client.deletePhoto(existing)).match(
         async (): Promise<CallToolResult> => {

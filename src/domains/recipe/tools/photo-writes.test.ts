@@ -341,6 +341,18 @@ describe("delete_recipe_photo", () => {
     expect(getText(result)).toContain("Deleted photo");
   });
 
+  it("declining the confirm cancels without writing", async () => {
+    const photo = makePhoto({ uid: PhotoUidSchema.parse("p-1"), recipeUid: RECIPE_UID });
+    kh.seed({ recipes: [makeRecipe({ uid: RECIPE_UID })], photos: [photo] });
+
+    kh.setElicitResponder(() => ({ action: "decline" }));
+    const result = await kh.callTool("delete_recipe_photo", { photo_uid: "p-1" });
+    const text = getText(result);
+
+    expect(text).toContain("Cancelled");
+    expect(kh.client().deletePhoto).not.toHaveBeenCalled();
+  });
+
   it("is idempotent: a retried delete reports 'already deleted' without re-POSTing", async () => {
     const photo = makePhoto({ uid: PhotoUidSchema.parse("p-1"), recipeUid: RECIPE_UID });
     kh.seed({ recipes: [makeRecipe({ uid: RECIPE_UID })], photos: [photo] });

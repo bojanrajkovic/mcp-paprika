@@ -9,7 +9,7 @@ import type { MealState, MealWrites } from "../module.js";
 import type { Meal } from "../types.js";
 
 import { defineTool } from "../../../kernel/tool.js";
-import { commitFailure, toolResult } from "../../../shared/tools.js";
+import { commitFailure, confirmOrCancel, toolResult } from "../../../shared/tools.js";
 import { parseCalendarDayWire } from "../../../utils/dates.js";
 import { mealTypeSpecSchema, resolveOrCreateMealType } from "../../meal-type/meal-type-helpers.js";
 import { RecipeUidSchema } from "../../recipe/ids.js";
@@ -505,6 +505,13 @@ export const deleteMealTool = defineTool(
       if (existing === undefined) {
         return toolResult(`No meal found with UID "${uid}" (it may not exist or was already deleted).`);
       }
+
+      const stop = await confirmOrCancel(ctx.server.server, {
+        message: `Delete the meal "${existing.name}" on ${existing.date}? This is permanent.`,
+        cancelled: `Cancelled — the meal was not deleted.`,
+      });
+      if (stop) return stop;
+
       const trashed: Meal = { ...existing, deleted: true };
       return (await ctx.infra.client.saveMeals([trashed])).match(
         async (items): Promise<CallToolResult> => {

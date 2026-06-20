@@ -7,6 +7,7 @@ import type { GroceryState, GroceryWrites } from "../module.js";
 import { defineTool } from "../../../kernel/tool.js";
 import {
   commitFailure,
+  confirmOrCancel,
   formatLookupOutcome,
   resolveLookup,
   toolResult,
@@ -244,6 +245,13 @@ export const deleteGroceryListTool = defineTool(
       if (!existing) {
         return toolResult(`No grocery list found with UID "${args.uid}" (it may not exist or was already deleted).`);
       }
+
+      const itemCount = ctx.state.items.store.getByListUid(args.uid).length;
+      const stop = await confirmOrCancel(ctx.server.server, {
+        message: `Permanently delete grocery list "${existing.name}" and its ${itemCount.toString()} item(s)? This cannot be undone.`,
+        cancelled: `Cancelled — "${existing.name}" was not deleted.`,
+      });
+      if (stop) return stop;
 
       const trashed: GroceryList = { ...existing, deleted: true };
 

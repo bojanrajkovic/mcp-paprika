@@ -4,7 +4,7 @@ import { z } from "zod";
 
 import type { ElicitationServer } from "./elicit.js";
 
-import { pickOne } from "./elicit.js";
+import { confirmGate, pickOne } from "./elicit.js";
 
 /**
  * The MCP wire envelope every tool returns. The one-argument form carries only
@@ -50,6 +50,22 @@ export function toolResult(text: string, structuredContent?: Record<string, unkn
  */
 export function errorResult(text: string): CallToolResult {
   return { content: [{ type: "text" as const, text }], isError: true } satisfies CallToolResult;
+}
+
+/**
+ * Run a {@link confirmGate} as a destructive-tool guard. Returns the cancel
+ * `CallToolResult` to return as-is when the user DECLINES the confirm, or
+ * `undefined` to proceed — both on accept and, fail-open, when the client cannot
+ * be elicited (ADR-0020). Keeps a gated handler to two lines at the point of the
+ * irreversible act: `const stop = await confirmOrCancel(ctx.server.server, {…}); if (stop) return stop;`.
+ * The `message` names the entity (and, for a bulk act, the count); `cancelled`
+ * is the plain acknowledgement that nothing was changed (never an `isError`).
+ */
+export async function confirmOrCancel(
+  server: ElicitationServer,
+  opts: { readonly message: string; readonly cancelled: string },
+): Promise<CallToolResult | undefined> {
+  return (await confirmGate(server, { message: opts.message })) === "declined" ? toolResult(opts.cancelled) : undefined;
 }
 
 /**

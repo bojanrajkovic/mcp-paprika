@@ -55,6 +55,17 @@ describe("delete_meal_type tool", () => {
     expect(mealTypeState().store.get(brunch.uid)).toBeUndefined();
   });
 
+  it("declining the confirm cancels without writing", async () => {
+    const brunch = makeMealType({ name: "Brunch", originalType: null });
+    seedBase(brunch);
+    kh.setElicitResponder(() => ({ action: "decline" }));
+
+    const text = await kh.callToolText("delete_meal_type", { uid: brunch.uid });
+
+    expect(text).toContain("Cancelled");
+    expect(kh.client().saveMealTypes).not.toHaveBeenCalled();
+  });
+
   it("warns-and-proceeds over meal and menu-item references on a custom type", async () => {
     const brunch = makeMealType({ name: "Brunch", originalType: null });
     const menu = makeMenu();

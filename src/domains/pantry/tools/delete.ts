@@ -2,7 +2,7 @@ import type { DomainCtx } from "../../../kernel/registry.js";
 import type { PantryState, PantryWrites } from "../module.js";
 
 import { defineTool } from "../../../kernel/tool.js";
-import { commitFailure, toolResult } from "../../../shared/tools.js";
+import { commitFailure, confirmOrCancel, toolResult } from "../../../shared/tools.js";
 import { PantryItemUidSchema } from "../ids.js";
 import { pantryStartGuard } from "./guards.js";
 
@@ -30,6 +30,12 @@ export const deletePantryItemTool = defineTool(
       if (!existing) {
         return toolResult(`No pantry item found with UID "${args.uid}" (it may not exist or was already deleted).`);
       }
+
+      const stop = await confirmOrCancel(ctx.server.server, {
+        message: `Permanently delete pantry item "${existing.ingredient}"? This cannot be undone (there is no restore).`,
+        cancelled: `Cancelled — "${existing.ingredient}" was not deleted.`,
+      });
+      if (stop) return stop;
 
       const trashed = { ...existing, deleted: true };
 

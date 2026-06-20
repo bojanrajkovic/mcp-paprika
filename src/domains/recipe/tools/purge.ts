@@ -5,7 +5,7 @@ import type { RecipeState, RecipeWrites } from "../module.js";
 
 import { defineTool } from "../../../kernel/tool.js";
 import { PaprikaAPIError } from "../../../paprika/errors.js";
-import { commitFailure, toolResult } from "../../../shared/tools.js";
+import { commitFailure, confirmOrCancel, toolResult } from "../../../shared/tools.js";
 import { RecipeUidSchema } from "../ids.js";
 import { recipeColdStartGuard } from "./guards.js";
 
@@ -68,6 +68,12 @@ export const purgeRecipeTool = defineTool(
             `Move it to the trash first with trash_recipe (reversible), then call purge_recipe.`,
         );
       }
+
+      const stop = await confirmOrCancel(ctx.server.server, {
+        message: `Permanently delete "${recipe.name}" from the trash? This cannot be undone.`,
+        cancelled: `Cancelled — "${recipe.name}" is still in the trash.`,
+      });
+      if (stop) return stop;
 
       // Same wire shape as a soft-delete (in_trash: true) plus deleted: true —
       // the exact "empty trash" payload Paprika.app emits. The recipe's hash and

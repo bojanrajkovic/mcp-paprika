@@ -6,7 +6,7 @@ import type { GroceryItem } from "../grocery-item/types.js";
 import type { GroceryState, GroceryWrites } from "../module.js";
 
 import { defineTool } from "../../../kernel/tool.js";
-import { commitFailure, toolResult } from "../../../shared/tools.js";
+import { commitFailure, confirmOrCancel, toolResult } from "../../../shared/tools.js";
 import { todayWire } from "../../../utils/dates.js";
 import { PantryItemUidSchema } from "../../pantry/ids.js";
 import { GroceryItemUidSchema } from "../ids.js";
@@ -53,6 +53,12 @@ export const moveToPantryTool = defineTool(
         }
         items.push(item);
       }
+
+      const stop = await confirmOrCancel(ctx.server.server, {
+        message: `Move ${items.length.toString()} item(s) to the pantry? They'll leave the grocery list.`,
+        cancelled: `Cancelled — nothing was moved to the pantry.`,
+      });
+      if (stop) return stop;
 
       // Step 2: Build PantryItem objects from GroceryItem fields
       const pantryItems: Array<PantryItem> = items.map((gi) => ({

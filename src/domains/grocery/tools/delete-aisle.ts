@@ -2,7 +2,7 @@ import type { DomainCtx } from "../../../kernel/registry.js";
 import type { GroceryState } from "../module.js";
 
 import { defineTool } from "../../../kernel/tool.js";
-import { toolResult } from "../../../shared/tools.js";
+import { confirmOrCancel, toolResult } from "../../../shared/tools.js";
 import { AisleUidSchema } from "../../aisle/ids.js";
 import { groceryStartGuard, pantrySyncedGuard } from "./guards.js";
 
@@ -66,6 +66,12 @@ export const deleteAisleTool = defineTool(
             "Reassign them to another aisle first (`update_grocery_item` / `update_pantry_item`), then retry.",
         );
       }
+
+      const stop = await confirmOrCancel(ctx.server.server, {
+        message: `Delete the aisle "${existing.name}"? Deletion is permanent (re-adding an item with the same aisle name recreates it).`,
+        cancelled: `Cancelled — aisle "${existing.name}" was not deleted.`,
+      });
+      if (stop) return stop;
 
       return (await ctx.deps.aisle.deleteAisle(args.uid)).match(
         () => toolResult(`Deleted aisle "${existing.name}".`),

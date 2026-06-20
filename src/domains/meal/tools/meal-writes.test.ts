@@ -713,6 +713,18 @@ describe("delete_meal", () => {
     expect(store.get(DELETE_MEAL_UID)).toBeUndefined();
   });
 
+  it("declining the confirm cancels without writing", async () => {
+    const meal = makeMeal({ uid: DELETE_MEAL_UID, name: "Tacos", date: "2026-06-15 18:00:00", deleted: false });
+    kh.seed({ meals: [meal], mealTypes: makeBuiltins(), recipes: [] });
+
+    kh.setElicitResponder(() => ({ action: "decline" }));
+    const result = await kh.callTool("delete_meal", { uid: DELETE_MEAL_UID });
+    const text = getText(result);
+
+    expect(text).toContain("Cancelled");
+    expect(kh.client().saveMeals).not.toHaveBeenCalled();
+  });
+
   it("retry after delete returns miss message, saveMeals NOT called again", async () => {
     vi.mocked(kh.client().saveMeals).mockImplementation((items) => okAsync([...items]));
     const meal = makeMeal({ uid: DELETE_MEAL_UID, name: "Tacos", date: "2026-06-15 18:00:00", deleted: false });

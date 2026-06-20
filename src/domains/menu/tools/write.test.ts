@@ -276,6 +276,23 @@ describe("delete_menu tool", () => {
     expect(kh.state().menus.store.get("m-1" as MenuUid)).toBeUndefined();
   });
 
+  it("declining the confirm cancels without writing", async () => {
+    const menu = makeMenu({ uid: "m-1" as MenuUid, name: "Holiday" });
+    const item1 = makeMenuItem({ uid: "mi-1" as MenuItemUid, menuUid: "m-1", name: "Turkey" });
+    kh.seed({ menus: [menu], menuItems: [item1], mealTypes: [DINNER_TYPE] });
+    vi.mocked(kh.client().saveMenuItems).mockImplementation((items) =>
+      okAsync(items.map((i) => ({ ...i, deleted: true, menuUid: null }))),
+    );
+    vi.mocked(kh.client().saveMenus).mockReturnValue(okAsync([{ ...menu, deleted: true }]));
+    kh.setElicitResponder(() => ({ action: "decline" }));
+
+    const text = await kh.callToolText("delete_menu", { lookup: { uid: "m-1" } });
+
+    expect(text).toContain("Cancelled");
+    expect(kh.client().saveMenuItems).not.toHaveBeenCalled();
+    expect(kh.client().saveMenus).not.toHaveBeenCalled();
+  });
+
   it("reports a UID miss without saving", async () => {
     kh.seed({ menus: [], menuItems: [], mealTypes: [DINNER_TYPE] });
 
