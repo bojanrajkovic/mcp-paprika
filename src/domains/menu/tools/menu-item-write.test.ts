@@ -83,6 +83,45 @@ describe("add_menu_items tool", () => {
     expect(kh.state().items.store.getByMenuUid("m-1" as MenuUid)).toHaveLength(2);
   });
 
+  it("carries the new item rows + parent menuUid on the structured channel (B1/#321)", async () => {
+    const menu = makeMenu({ uid: "m-1" as MenuUid, name: "Holiday", days: 2 });
+    seedBase(kh, { menus: [menu] });
+    vi.mocked(kh.client().saveMenuItems).mockImplementation((items: ReadonlyArray<MenuItem>) => okAsync([...items]));
+
+    const result = await kh.callTool("add_menu_items", {
+      menu: { uid: "m-1" },
+      items: [
+        { recipe_uid: TACOS_UID, day: 1, type: { name: "Dinner" } },
+        { name: "Leftover Night", day: 2, type: { name: "Dinner" } },
+      ],
+    });
+
+    expect(result.isError).toBeUndefined();
+    const structured = result.structuredContent as {
+      menuUid: string;
+      items: ReadonlyArray<{ uid: string; name: string; recipeUid: string | null; typeName: string | null }>;
+    };
+    expect(structured.menuUid).toBe("m-1");
+    expect(structured.items).toHaveLength(2);
+    expect(structured.items[0]).toMatchObject({ name: "Tacos", recipeUid: TACOS_UID, typeName: "Dinner" });
+    expect(structured.items[1]).toMatchObject({ name: "Leftover Night", recipeUid: null, typeName: "Dinner" });
+    // Each new item carries a uid so the model can chain update_menu_item / delete_menu_item.
+    expect(structured.items.every((i) => typeof i.uid === "string" && i.uid.length > 0)).toBe(true);
+  });
+
+  it("an invalid item (unknown recipe_uid) is an isError with no structuredContent (B1/#321)", async () => {
+    const menu = makeMenu({ uid: "m-1" as MenuUid, name: "Holiday", days: 1 });
+    seedBase(kh, { menus: [menu] });
+
+    const result = await kh.callTool("add_menu_items", {
+      menu: { uid: "m-1" },
+      items: [{ recipe_uid: "recipe-ghost", day: 1, type: { name: "Dinner" } }],
+    });
+
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toBeUndefined();
+  });
+
   it("adds a freeform menuitem (name, no recipe_uid) materializing recipeUid null", async () => {
     const menu = makeMenu({ uid: "m-1" as MenuUid, name: "Holiday", days: 1 });
     seedBase(kh, { menus: [menu] });

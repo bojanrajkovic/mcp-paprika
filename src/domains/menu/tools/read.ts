@@ -4,7 +4,7 @@ import type { MenuState } from "../module.js";
 import { defineTool } from "../../../kernel/tool.js";
 import { formatLookupOutcome, resolveLookup, uidOrTextLookupSchema } from "../../../shared/tools.js";
 import { MenuUidSchema } from "../ids.js";
-import { menuToMarkdown } from "../menu-helpers.js";
+import { menuReadOutputSchema, menuToMarkdown, menuToStructured } from "../menu-helpers.js";
 import { menuStartGuard } from "./guards.js";
 
 /**
@@ -30,6 +30,7 @@ export const readMenuTool = defineTool(
         textExample: "Thanksgiving Dinner",
       }),
     },
+    outputSchema: menuReadOutputSchema,
   },
   [menuStartGuard],
   (ctx: DomainCtx<MenuState, "recipe" | "meal-type">) => {
@@ -44,9 +45,9 @@ export const readMenuTool = defineTool(
         describe: (menu) => ({ uid: menu.uid, label: menu.name }),
         findWith: "list_menus",
         renderOne: (menu) =>
-          menuToMarkdown(menu, ctx.state.items.store.getByMenuUid(menu.uid), ctx.deps["meal-type"].getAll(), {
-            includeItemUids: true,
-          }),
+          menuToMarkdown(menu, ctx.state.items.store.getByMenuUid(menu.uid), ctx.deps["meal-type"].getAll()),
+        renderStructured: (menu) =>
+          menuToStructured(menu, ctx.state.items.store.getByMenuUid(menu.uid), ctx.deps["meal-type"].getAll()),
       });
     };
   },

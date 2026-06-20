@@ -59,8 +59,10 @@ describe("ADR-0019: structured-output envelope and rollout", () => {
     // tools that surface a new UID. Add each later batch's tool names as they land.
     expect(withSchema).toEqual([
       "add_grocery_items",
+      "add_menu_items",
       "create_category",
       "create_grocery_list",
+      "create_menu",
       "create_recipe",
       "discover_recipes",
       "list_aisles",
@@ -72,6 +74,7 @@ describe("ADR-0019: structured-output envelope and rollout", () => {
       "list_recipes",
       "read_grocery_list",
       "read_meal_plan",
+      "read_menu",
       "read_recipe",
       "read_recipe_history",
       "rename_grocery_list",

@@ -1,6 +1,77 @@
+import { z } from "zod";
+
 import type { MealType } from "../meal-type/types.js";
 import type { MenuItem } from "./menu-item/types.js";
 import type { Menu } from "./types.js";
+
+import { MealTypeUidSchema } from "../meal-type/ids.js";
+import { RecipeUidSchema } from "../recipe/ids.js";
+import { MenuItemUidSchema, MenuUidSchema } from "./ids.js";
+
+/**
+ * The structured-output row for one menu item (ADR-0019, R1, B1/#321) — the
+ * machine-readable counterpart to the day-by-day text, and the C3 meal-plan board
+ * feed (#335). `uid` drives `update_menu_item` / `delete_menu_item`; `recipeUid` chains
+ * to `read_recipe` (null for a freeform item); `typeUid` is the raw FK and `typeName`
+ * its resolved label (null when the type is dangling — the raw+resolved split A3 uses).
+ */
+export const menuItemRowSchema = z.object({
+  uid: MenuItemUidSchema,
+  day: z.number().int(),
+  name: z.string(),
+  typeUid: MealTypeUidSchema,
+  typeName: z.string().nullable().describe("Resolved meal-type name, or null when the type is dangling/unknown."),
+  recipeUid: RecipeUidSchema.nullable(),
+});
+
+export type MenuItemRow = z.infer<typeof menuItemRowSchema>;
+
+/** The structured-output payload for `read_menu` / `create_menu` (one shape per entity). */
+export const menuReadOutputSchema = z.object({
+  uid: MenuUidSchema,
+  name: z.string(),
+  days: z.number().int(),
+  notes: z.string(),
+  items: z.array(menuItemRowSchema),
+});
+
+export type MenuReadStructured = z.infer<typeof menuReadOutputSchema>;
+
+/**
+ * Map menu items into {@link MenuItemRow}s, resolving each type's name through the
+ * meal-type catalog (the same resolution {@link menuToMarkdown} uses, so the text and
+ * the rows agree by construction). A dangling `typeUid` resolves to `typeName: null`.
+ */
+export function menuItemsToRows(
+  items: ReadonlyArray<Readonly<MenuItem>>,
+  mealTypes: ReadonlyArray<Readonly<MealType>>,
+): Array<MenuItemRow> {
+  const nameByTypeUid = new Map<string, string>();
+  for (const mt of mealTypes) nameByTypeUid.set(mt.uid, mt.name);
+  return items.map((item) => ({
+    uid: item.uid,
+    day: item.day,
+    name: item.name,
+    typeUid: item.typeUid,
+    typeName: nameByTypeUid.get(item.typeUid) ?? null,
+    recipeUid: item.recipeUid,
+  }));
+}
+
+/** Map a `Menu` plus its items into the structured read payload. */
+export function menuToStructured(
+  menu: Readonly<Menu>,
+  items: ReadonlyArray<Readonly<MenuItem>>,
+  mealTypes: ReadonlyArray<Readonly<MealType>>,
+): MenuReadStructured {
+  return {
+    uid: menu.uid,
+    name: menu.name,
+    days: menu.days,
+    notes: menu.notes,
+    items: menuItemsToRows(items, mealTypes),
+  };
+}
 
 /**
  * Pure renderer for a single menu and its items. Iterates the menu's full
@@ -9,24 +80,20 @@ import type { Menu } from "./types.js";
  * `orderFlag` (an unknown `typeUid` sorts last), then by item `orderFlag`.
  *
  * Each item line shows the resolved meal-type name and the recipe display name
- * (already denormalized on `item.name`). When `opts.includeItemUids` is set,
- * the line appends `` · item `<uid>` · recipe `<recipeUid>` `` so an agent can
- * drive `update_menu_item` / `delete_menu_item`; the recipe clause is omitted
- * when `recipeUid` is null. `read_menu` passes `includeItemUids: true`; the
- * resource passes `false` for clean recipe-name lines (the same model-facing /
- * human-facing split `groceryListToMarkdown` carries on its `includeItemUids`).
+ * (already denormalized on `item.name`). The per-item menuitem/recipe UIDs travel on
+ * the structured channel ({@link menuToStructured}, ADR-0019 R1) — the human lines stay
+ * clean. The `includeItemUids` per-renderer flag was retired in B1 (#321, #353); the
+ * top-level menu `**UID:**` line is kept as a text fallback pending the reliable-channel
+ * decision (#367/#368).
  *
- * Pure like `mealToMarkdown` — takes the `mealTypes` catalog array for
- * `typeUid`→name/order resolution. Both callers pass `ctx.mealTypeStore.getAll()`.
+ * Pure — takes the `mealTypes` catalog array for `typeUid`→name/order resolution.
+ * Both callers pass `ctx.deps["meal-type"].getAll()`.
  */
 export function menuToMarkdown(
   menu: Readonly<Menu>,
   items: ReadonlyArray<Readonly<MenuItem>>,
   mealTypes: ReadonlyArray<Readonly<MealType>>,
-  opts?: { readonly includeItemUids?: boolean },
 ): string {
-  const includeItemUids = opts?.includeItemUids ?? false;
-
   // Resolve meal-type name and order once. `UNKNOWN_ORDER` sorts unknown types
   // last within a day (a menuitem may reference a type that's been deleted from
   // the catalog, or a custom type not yet synced).
@@ -79,13 +146,7 @@ export function menuToMarkdown(
       // deleted): render the item with no type prefix rather than
       // leaking the raw UID into the line.
       const typeName = nameByTypeUid.get(item.typeUid);
-      let line = typeName !== undefined ? `- **${typeName}:** ${item.name}` : `- ${item.name}`;
-      if (includeItemUids) {
-        line += ` · item \`${item.uid}\``;
-        if (item.recipeUid !== null) {
-          line += ` · recipe \`${item.recipeUid}\``;
-        }
-      }
+      const line = typeName !== undefined ? `- **${typeName}:** ${item.name}` : `- ${item.name}`;
       lines.push(line);
     }
   }
