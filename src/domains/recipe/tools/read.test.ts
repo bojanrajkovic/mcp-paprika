@@ -108,4 +108,13 @@ describe("read_recipe tool", () => {
     expect(result.isError).toBe(true);
     expect(result.structuredContent).toBeUndefined();
   });
+
+  it("structured photoUrl coalesces the imported image_url when no Paprika photo is set (B1/#321)", async () => {
+    // Imported/web recipes commonly carry imageUrl with photoUrl still null; a card
+    // rendering from photoUrl alone would drop the photo (matches recipe-resource.ts).
+    const recipe = makeRecipe({ name: "Imported", imageUrl: "https://site/hero.jpg", photoUrl: null });
+    kh.seed({ recipes: [recipe] });
+    const result = await kh.callTool("read_recipe", { lookup: { uid: recipe.uid } });
+    expect((result.structuredContent as { photoUrl: string | null }).photoUrl).toBe("https://site/hero.jpg");
+  });
 });

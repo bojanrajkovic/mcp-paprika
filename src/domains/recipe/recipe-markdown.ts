@@ -71,7 +71,10 @@ export const recipeReadOutputSchema = z.object({
   nutritionalInfo: z.string().nullable(),
   source: z.string().nullable(),
   sourceUrl: z.string().nullable(),
-  photoUrl: z.string().nullable(),
+  photoUrl: z
+    .string()
+    .nullable()
+    .describe("Display photo URL — the imported source image or an uploaded Paprika photo, or null."),
   isPinned: z.boolean(),
   onFavorites: z.boolean(),
   onGroceryList: z.boolean(),
@@ -100,7 +103,11 @@ export function recipeToReadStructured(recipe: Recipe, categoryNames: Array<stri
     nutritionalInfo: recipe.nutritionalInfo,
     source: recipe.source,
     sourceUrl: recipe.sourceUrl,
-    photoUrl: recipe.photoUrl,
+    // Display photo, coalesced like the recipe resource (recipe-resource.ts): an imported
+    // recipe carries image_url with photo_url still null, so a card rendering from photoUrl
+    // alone would drop the photo. `|| null` normalizes a trailing "" (a fresh recipe's
+    // imageUrl) to null.
+    photoUrl: recipe.imageUrl || recipe.photoUrl || null,
     isPinned: recipe.isPinned,
     onFavorites: recipe.onFavorites,
     onGroceryList: recipe.onGroceryList,
