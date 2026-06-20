@@ -19,8 +19,8 @@ export const readMenuTool = defineTool(
     description:
       "Get a menu by UID or name, rendered day by day with each day's planned recipes. " +
       "Name lookup is tiered (exact → starts-with → contains) and case-insensitive, with a " +
-      "disambiguation list when multiple menus match the same tier. Each recipe line carries " +
-      "its menuitem and recipe UIDs so you can drive update_menu_item / delete_menu_item. " +
+      "disambiguation list when multiple menus match the same tier. Each item's menuitem and recipe " +
+      "UIDs are returned so you can drive update_menu_item / delete_menu_item. " +
       'Pass exactly one shape: {"uid": "..."} or {"name": "..."}.',
     inputSchema: {
       lookup: uidOrTextLookupSchema({

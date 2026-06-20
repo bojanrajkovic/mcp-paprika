@@ -78,7 +78,7 @@ export const readGroceryListTool = defineTool(
     description:
       "Get a grocery list by UID or name. Name lookup is tiered (exact → starts-with → contains) " +
       "and case-insensitive, with a disambiguation list when multiple lists match the same tier. " +
-      "Each item row carries its UID so you can drive update_grocery_item / delete_grocery_item / " +
+      "Each item's UID is returned so you can drive update_grocery_item / delete_grocery_item / " +
       "mark_grocery_item_purchased / move_grocery_items_to_pantry. " +
       'Pass exactly one shape: {"uid": "..."} or {"name": "..."}.',
     inputSchema: {
