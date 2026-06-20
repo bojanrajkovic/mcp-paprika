@@ -43,6 +43,7 @@ export const getPantryItemTool = defineTool(
       return formatLookupOutcome(ctx.server.server, outcome, {
         entityNoun: "pantry item",
         describe: (item) => ({ uid: item.uid, label: item.ingredient }),
+        findWith: "list_pantry_items",
         renderOne: (item) => pantryItemToMarkdown(item, ctx.deps.aisle),
       });
     };

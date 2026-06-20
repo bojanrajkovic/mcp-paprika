@@ -146,43 +146,54 @@ describe("resolveLookup", () => {
   });
 });
 
-describe("formatLookupOutcome (no elicitation → prose for every non-happy arm)", () => {
+describe("formatLookupOutcome (no elicitation → isError + findWith hint for every non-happy arm)", () => {
   const entity: ToyEntity = { id: "A", label: "Alpha" };
   const config = {
     entityNoun: "recipe",
     describe: (e: ToyEntity) => ({ uid: e.id, label: e.label }),
     renderOne: (e: ToyEntity) => `# ${e.label}`,
+    findWith: "search_recipes",
   };
   const noElicit = elicitServer();
-  const text = async (outcome: LookupOutcome<ToyEntity>) =>
-    getText(await formatLookupOutcome(noElicit, outcome, config));
+  const run = async (outcome: LookupOutcome<ToyEntity>) => formatLookupOutcome(noElicit, outcome, config);
 
-  it("uid_hit and text_one both render via renderOne", async () => {
-    expect(await text({ kind: "uid_hit", entity })).toBe("# Alpha");
-    expect(await text({ kind: "text_one", entity })).toBe("# Alpha");
+  it("uid_hit and text_one both render via renderOne (success, not isError)", async () => {
+    const hit = await run({ kind: "uid_hit", entity });
+    expect(getText(hit)).toBe("# Alpha");
+    expect(hit.isError).toBeUndefined();
+    expect(getText(await run({ kind: "text_one", entity }))).toBe("# Alpha");
   });
 
-  it("uid_miss uses the singular noun", async () => {
-    expect(await text({ kind: "uid_miss", uid: "Z" })).toBe('No recipe found with UID "Z".');
+  it("uid_miss → isError, singular noun, soft-delete hint + the findWith verb", async () => {
+    const result = await run({ kind: "uid_miss", uid: "Z" });
+    expect(result.isError).toBe(true);
+    expect(getText(result)).toBe(
+      'No recipe found with UID "Z" (it may not exist or was already deleted). Use search_recipes to find it.',
+    );
   });
 
-  it("text_none uses the pluralized noun", async () => {
-    expect(await text({ kind: "text_none", text: "zzz" })).toBe('No recipes found matching "zzz".');
+  it("text_none → isError, pluralized noun + the findWith verb", async () => {
+    const result = await run({ kind: "text_none", text: "zzz" });
+    expect(result.isError).toBe(true);
+    expect(getText(result)).toBe('No recipes found matching "zzz". Use search_recipes to find it.');
   });
 
-  it("text_many lists each match and prompts for a specific uid", async () => {
+  it("text_many → isError list of matches, prompting for a specific uid", async () => {
     const beta: ToyEntity = { id: "B", label: "Alphabet" };
-    const result = await text({ kind: "text_many", text: "Alpha", matches: [entity, beta] });
-    expect(result).toContain('Multiple recipes match "Alpha":');
-    expect(result).toContain("- **Alpha** (uid: `A`)");
-    expect(result).toContain("- **Alphabet** (uid: `B`)");
-    expect(result).toContain("Please re-invoke with a specific uid");
+    const result = await run({ kind: "text_many", text: "Alpha", matches: [entity, beta] });
+    expect(result.isError).toBe(true);
+    const text = getText(result);
+    expect(text).toContain('Multiple recipes match "Alpha":');
+    expect(text).toContain("- **Alpha** (uid: `A`)");
+    expect(text).toContain("- **Alphabet** (uid: `B`)");
+    expect(text).toContain("Re-invoke with a specific uid");
   });
 });
 
-describe("resolveOrPick (text_many → disambiguation PICK, ADR-0020)", () => {
+describe("resolveOrPick (text_many → disambiguation PICK, ADR-0020; non-happy → isError)", () => {
   const alpha: ToyEntity = { id: "A", label: "Alpha" };
   const beta: ToyEntity = { id: "B", label: "Alphabet" };
+  // No findWith → the generic remediation fallback.
   const config = { entityNoun: "recipe", describe: (e: ToyEntity) => ({ uid: e.id, label: e.label }) };
   const many: LookupOutcome<ToyEntity> = { kind: "text_many", text: "Alpha", matches: [alpha, beta] };
 
@@ -191,23 +202,42 @@ describe("resolveOrPick (text_many → disambiguation PICK, ADR-0020)", () => {
     expect(await resolveOrPick(elicitServer(), { kind: "text_one", entity: beta }, config)).toEqual({ entity: beta });
   });
 
+  it("uid_miss → isError with the generic hint when findWith is unset", async () => {
+    const resolved = await resolveOrPick(elicitServer(), { kind: "uid_miss", uid: "Z" }, config);
+    expect("result" in resolved).toBe(true);
+    if ("result" in resolved) {
+      expect(resolved.result.isError).toBe(true);
+      expect(getText(resolved.result)).toBe(
+        'No recipe found with UID "Z" (it may not exist or was already deleted). Supply an exact UID, or look it up by name.',
+      );
+    }
+  });
+
   it("returns the chosen entity when the user picks from text_many", async () => {
     const server = elicitServer(() => ({ action: "accept", content: { choice: "B" } }));
     expect(await resolveOrPick(server, many, config)).toEqual({ entity: beta });
   });
 
-  it("falls back to the disambiguation prose when the user declines", async () => {
+  it("falls back to an isError disambiguation list when the user declines", async () => {
     const resolved = await resolveOrPick(
       elicitServer(() => ({ action: "decline" })),
       many,
       config,
     );
-    expect("result" in resolved ? getText(resolved.result) : "").toContain('Multiple recipes match "Alpha":');
+    expect("result" in resolved).toBe(true);
+    if ("result" in resolved) {
+      expect(resolved.result.isError).toBe(true);
+      expect(getText(resolved.result)).toContain('Multiple recipes match "Alpha":');
+    }
   });
 
-  it("falls back to prose without eliciting when the client cannot be asked", async () => {
+  it("falls back to an isError list without eliciting when the client cannot be asked", async () => {
     const resolved = await resolveOrPick(elicitServer(), many, config);
-    expect("result" in resolved ? getText(resolved.result) : "").toContain("Please re-invoke with a specific uid");
+    expect("result" in resolved).toBe(true);
+    if ("result" in resolved) {
+      expect(resolved.result.isError).toBe(true);
+      expect(getText(resolved.result)).toContain("Re-invoke with a specific uid");
+    }
   });
 
   it("skips the pick and lists when the match set exceeds the cap", async () => {
@@ -219,7 +249,7 @@ describe("resolveOrPick (text_many → disambiguation PICK, ADR-0020)", () => {
     });
     const resolved = await resolveOrPick(server, { kind: "text_many", text: "Item", matches }, config);
     expect(asked).toBe(false);
-    expect("result" in resolved).toBe(true);
+    expect("result" in resolved && resolved.result.isError).toBe(true);
   });
 });
 

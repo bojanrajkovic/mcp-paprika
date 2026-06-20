@@ -6,6 +6,7 @@ import type { MenuItemUid, MenuUid } from "../ids.js";
 import { makeMealType } from "../../../../test/domains/meal-type/__fixtures__/meal-types.js";
 import { makeMenu, makeMenuItem } from "../../../../test/domains/menu/__fixtures__/menus.js";
 import { useKernelHarness } from "../../../../test/support/kernel-harness.js";
+import { getText } from "../../../../test/support/tool-test-utils.js";
 
 const BREAKFAST = makeMealType({
   uid: "breakfast-uid" as MealTypeUid,
@@ -114,22 +115,28 @@ describe("read_menu tool", () => {
   it("reports no match for an unknown UID", async () => {
     const menu = makeMenu({ uid: "m-12" as MenuUid, name: "Present" });
     kh.seed({ menus: [menu], menuItems: [], mealTypes: [BREAKFAST, DINNER] });
-    const text = await kh.callToolText("read_menu", { lookup: { uid: "missing" } });
-    expect(text).toContain('No menu found with UID "missing".');
+    const result = await kh.callTool("read_menu", { lookup: { uid: "missing" } });
+    expect(result.isError).toBe(true);
+    expect(getText(result)).toBe(
+      'No menu found with UID "missing" (it may not exist or was already deleted). Use list_menus to find it.',
+    );
   });
 
   it("reports no match for a name with no hits", async () => {
     const menu = makeMenu({ uid: "m-13" as MenuUid, name: "Present" });
     kh.seed({ menus: [menu], menuItems: [], mealTypes: [BREAKFAST, DINNER] });
-    const text = await kh.callToolText("read_menu", { lookup: { name: "nonexistent" } });
-    expect(text).toContain('No menus found matching "nonexistent".');
+    const result = await kh.callTool("read_menu", { lookup: { name: "nonexistent" } });
+    expect(result.isError).toBe(true);
+    expect(getText(result)).toBe('No menus found matching "nonexistent". Use list_menus to find it.');
   });
 
   it("disambiguates when multiple menus match the same tier", async () => {
     const a = makeMenu({ uid: "m-14" as MenuUid, name: "Summer Plan A" });
     const b = makeMenu({ uid: "m-15" as MenuUid, name: "Summer Plan B" });
     kh.seed({ menus: [a, b], menuItems: [], mealTypes: [BREAKFAST, DINNER] });
-    const text = await kh.callToolText("read_menu", { lookup: { name: "summer" } });
+    const result = await kh.callTool("read_menu", { lookup: { name: "summer" } });
+    expect(result.isError).toBe(true);
+    const text = getText(result);
     expect(text).toContain('Multiple menus match "summer"');
     expect(text).toContain("`m-14`");
     expect(text).toContain("`m-15`");

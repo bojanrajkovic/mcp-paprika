@@ -7,6 +7,7 @@ import { makeAisle } from "../../../../test/domains/aisle/__fixtures__/aisles.js
 import { makeGroceryItem } from "../../../../test/domains/grocery/__fixtures__/grocery-items.js";
 import { makeGroceryList } from "../../../../test/domains/grocery/__fixtures__/grocery-lists.js";
 import { useKernelHarness } from "../../../../test/support/kernel-harness.js";
+import { getText } from "../../../../test/support/tool-test-utils.js";
 
 describe("list_grocery_lists tool", () => {
   const kh = useKernelHarness<GroceryState>("grocery");
@@ -174,9 +175,12 @@ describe("read_grocery_list tool", () => {
   it("returns not-found when name does not match any list", async () => {
     kh.seed({ groceryLists: [makeGroceryList({ name: "Weekly Shopping" })], groceryItems: [] });
 
-    const text = await kh.callToolText("read_grocery_list", { lookup: { name: "Completely Different" } });
+    const result = await kh.callTool("read_grocery_list", { lookup: { name: "Completely Different" } });
 
-    expect(text.toLowerCase()).toContain("no grocery lists found matching");
+    expect(result.isError).toBe(true);
+    expect(getText(result)).toBe(
+      'No grocery lists found matching "Completely Different". Use list_grocery_lists to find it.',
+    );
   });
 
   it("returns disambiguation when multiple lists match the same tier", async () => {
@@ -184,12 +188,14 @@ describe("read_grocery_list tool", () => {
     const listB = makeGroceryList({ name: "Weekly Costco" });
     kh.seed({ groceryLists: [listA, listB], groceryItems: [] });
 
-    const text = await kh.callToolText("read_grocery_list", { lookup: { name: "Weekly" } });
+    const result = await kh.callTool("read_grocery_list", { lookup: { name: "Weekly" } });
 
+    expect(result.isError).toBe(true);
+    const text = getText(result);
     expect(text).toContain("Multiple grocery lists match");
     expect(text).toContain(listA.uid);
     expect(text).toContain(listB.uid);
-    expect(text).toContain("Please re-invoke with a specific uid");
+    expect(text).toContain("Re-invoke with a specific uid");
   });
 });
 

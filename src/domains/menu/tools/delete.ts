@@ -48,6 +48,7 @@ export const deleteMenuTool = defineTool(
       const resolved = await resolveOrPick(ctx.server.server, outcome, {
         entityNoun: "menu",
         describe: (m) => ({ uid: m.uid, label: m.name }),
+        findWith: "list_menus",
       });
       if ("result" in resolved) return resolved.result;
       const existing = resolved.entity;

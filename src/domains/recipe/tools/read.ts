@@ -42,6 +42,7 @@ export const readRecipeTool = defineTool(
       return formatLookupOutcome(ctx.server.server, outcome, {
         entityNoun: "recipe",
         describe: (recipe) => ({ uid: recipe.uid, label: recipe.name }),
+        findWith: "search_recipes",
         renderOne: (recipe) => recipeToMarkdown(recipe, ctx.state.category.store.resolveNames(recipe.categories)),
       });
     };

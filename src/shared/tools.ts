@@ -123,9 +123,11 @@ export function commitFailure(
 
 /**
  * Builds the "look up an entity by exact UID OR by a fuzzy text field" input
- * schema shared by read_recipe, read_grocery_list, and read_pantry_item. A
- * `z.union` of two `.strict()` objects dispatched by property presence — the
- * same shape (and the same rationale) as `mealTypeSpecSchema` in meal-helpers.
+ * schema shared across the uid-or-text lookup tools — the `read_*` reads and the
+ * menu/grocery action tools that resolve an entity by name (the callers of
+ * `resolveLookup`). A `z.union` of two `.strict()` objects dispatched by property
+ * presence — the same shape (and the same rationale) as `mealTypeSpecSchema` in
+ * meal-helpers.
  *
  * The UID member is branded (e.g. `RecipeUidSchema`), so `args.lookup.uid` is
  * already brand-typed after parse — no cast at the store lookup. The text key
@@ -202,14 +204,17 @@ const PICK_CAP = 8;
  * Resolve a `LookupOutcome` to the single entity to act on, OR the terminal
  * `CallToolResult` to return as-is — the shared narrow-or-terminate step every
  * uid-or-text tool runs. The happy arms (`uid_hit` / `text_one`) yield
- * `{ entity }`; `uid_miss` / `text_none` yield their not-found prose; and
- * `text_many` offers a rung-3 disambiguation PICK (ADR-0020) when the match set
- * fits under `cap`, proceeding with the chosen entity on accept. A decline, an
- * un-elicitable client, or an over-cap set all fall back to the same
- * disambiguation prose, so every non-pick path lands the caller on a list it can
- * re-query from. `describe` maps an entity to the picker's opaque-UID value and
- * its human label (also the prose bullet's label), so the PICK and the wording
- * stay identical across the lookup tools.
+ * `{ entity }`. Every non-happy arm leaves the SUCCESS channel as an
+ * `errorResult` (isError, no `structuredContent`): `uid_miss` / `text_none`
+ * return a not-found message carrying the `findWith` remediation hint — the
+ * discovery verb that resolves the miss (ADR-0008) — so a schema-bearing caller
+ * (B1/#321) stays valid and the model never parses a "not found" as data.
+ * `text_many` first offers a rung-3 disambiguation PICK (ADR-0020) when the match
+ * set fits under `cap`, proceeding with the chosen entity on accept; a decline,
+ * an un-elicitable client, or an over-cap set fall back to an `isError`
+ * disambiguation list the caller can re-query from. `describe` maps an entity to
+ * the picker's opaque-UID value and its human label (also the bullet's label), so
+ * the PICK and the wording stay identical across the lookup tools.
  */
 export async function resolveOrPick<T>(
   server: ElicitationServer,
@@ -217,15 +222,29 @@ export async function resolveOrPick<T>(
   config: {
     readonly entityNoun: string;
     readonly describe: (entity: T) => { readonly uid: string; readonly label: string };
+    readonly findWith?: string;
     readonly cap?: number;
   },
 ): Promise<{ readonly entity: T } | { readonly result: CallToolResult }> {
   if (outcome.kind === "uid_hit" || outcome.kind === "text_one") return { entity: outcome.entity };
+
+  // Every non-happy arm leaves the SUCCESS channel as an errorResult (isError, no
+  // structuredContent), so a schema-bearing caller (B1/#321) stays valid and the
+  // model never parses a "not found" as data. `findWith` names the discovery verb
+  // that resolves the miss (ADR-0008); the seam owns the sentence so the wording
+  // stays uniform across tools.
+  const findHint = config.findWith
+    ? ` Use ${config.findWith} to find it.`
+    : " Supply an exact UID, or look it up by name.";
   if (outcome.kind === "uid_miss") {
-    return { result: toolResult(`No ${config.entityNoun} found with UID "${outcome.uid}".`) };
+    return {
+      result: errorResult(
+        `No ${config.entityNoun} found with UID "${outcome.uid}" (it may not exist or was already deleted).${findHint}`,
+      ),
+    };
   }
   if (outcome.kind === "text_none") {
-    return { result: toolResult(`No ${config.entityNoun}s found matching "${outcome.text}".`) };
+    return { result: errorResult(`No ${config.entityNoun}s found matching "${outcome.text}".${findHint}`) };
   }
   if (outcome.matches.length <= (config.cap ?? PICK_CAP)) {
     const picked = await pickOne(server, {
@@ -242,8 +261,8 @@ export async function resolveOrPick<T>(
     })
     .join("\n");
   return {
-    result: toolResult(
-      `Multiple ${config.entityNoun}s match "${outcome.text}":\n${lines}\n\nPlease re-invoke with a specific uid.`,
+    result: errorResult(
+      `Multiple ${config.entityNoun}s match "${outcome.text}":\n${lines}\n\nRe-invoke with a specific uid.`,
     ),
   };
 }
@@ -252,7 +271,8 @@ export async function resolveOrPick<T>(
  * Render a `LookupOutcome` to a `CallToolResult` for the read tools: a resolved
  * entity (including one chosen via the {@link resolveOrPick} PICK) renders
  * through `renderOne`; every not-found / disambiguation path returns the shared
- * prose. `entityNoun` is the singular noun; the plural is `entityNoun + "s"`.
+ * `errorResult` (isError) with its remediation hint. `entityNoun` is the singular
+ * noun; the plural is `entityNoun + "s"`.
  */
 export async function formatLookupOutcome<T>(
   server: ElicitationServer,
@@ -261,6 +281,7 @@ export async function formatLookupOutcome<T>(
     readonly entityNoun: string;
     readonly describe: (entity: T) => { readonly uid: string; readonly label: string };
     readonly renderOne: (entity: T) => string;
+    readonly findWith?: string;
     readonly cap?: number;
   },
 ): Promise<CallToolResult> {

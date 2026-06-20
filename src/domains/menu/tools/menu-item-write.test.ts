@@ -12,6 +12,7 @@ import { makeMealType } from "../../../../test/domains/meal-type/__fixtures__/me
 import { makeMenu, makeMenuItem } from "../../../../test/domains/menu/__fixtures__/menus.js";
 import { makeRecipe } from "../../../../test/domains/recipe/__fixtures__/recipes.js";
 import { useKernelHarness } from "../../../../test/support/kernel-harness.js";
+import { getText } from "../../../../test/support/tool-test-utils.js";
 import { updateMenuItemInputSchema } from "./menu-item-update.js";
 import { addMenuItemsInputSchema } from "./menu-item-write.js";
 
@@ -236,11 +237,14 @@ describe("add_menu_items tool", () => {
   it("reports a menu UID miss without saving", async () => {
     seedBase(kh, {});
 
-    const text = await kh.callToolText("add_menu_items", {
+    const result = await kh.callTool("add_menu_items", {
       menu: { uid: "ghost" },
       items: [{ recipe_uid: TACOS_UID, day: 1, type: { name: "Dinner" } }],
     });
-    expect(text).toContain('No menu found with UID "ghost".');
+    expect(result.isError).toBe(true);
+    expect(getText(result)).toBe(
+      'No menu found with UID "ghost" (it may not exist or was already deleted). Use list_menus to find it.',
+    );
     expect(kh.client().saveMenuItems).not.toHaveBeenCalled();
   });
 

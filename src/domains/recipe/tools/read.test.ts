@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { makeCategory, makeRecipe } from "../../../../test/domains/recipe/__fixtures__/recipes.js";
 import { useKernelHarness } from "../../../../test/support/kernel-harness.js";
+import { getText } from "../../../../test/support/tool-test-utils.js";
 
 describe("read_recipe tool", () => {
   const kh = useKernelHarness("recipe");
@@ -44,9 +45,11 @@ describe("read_recipe tool", () => {
     expect(text).toContain("# Chocolate Cake");
   });
 
-  it("multiple title matches return a disambiguation list", async () => {
+  it("multiple title matches return an isError disambiguation list", async () => {
     kh.seed({ recipes: [makeRecipe({ name: "Pasta Bolognese" }), makeRecipe({ name: "Pasta Carbonara" })] });
-    const text = await kh.callToolText("read_recipe", { lookup: { title: "Pasta" } });
+    const result = await kh.callTool("read_recipe", { lookup: { title: "Pasta" } });
+    expect(result.isError).toBe(true);
+    const text = getText(result);
     expect(text).toContain("Pasta Bolognese");
     expect(text).toContain("Pasta Carbonara");
     expect(text).toContain("(uid:");
@@ -54,16 +57,20 @@ describe("read_recipe tool", () => {
     expect(text).not.toContain("## Ingredients");
   });
 
-  it("UID not found returns a not-found message", async () => {
+  it("UID not found returns an isError not-found message naming search_recipes", async () => {
     kh.seed({ recipes: [makeRecipe()] });
-    const text = await kh.callToolText("read_recipe", { lookup: { uid: "nonexistent-uid" } });
-    expect(text.toLowerCase()).toContain("found");
+    const result = await kh.callTool("read_recipe", { lookup: { uid: "nonexistent-uid" } });
+    expect(result.isError).toBe(true);
+    expect(getText(result)).toBe(
+      'No recipe found with UID "nonexistent-uid" (it may not exist or was already deleted). Use search_recipes to find it.',
+    );
   });
 
-  it("title search with no matches returns a not-found message", async () => {
+  it("title search with no matches returns an isError not-found message naming search_recipes", async () => {
     kh.seed({ recipes: [makeRecipe({ name: "Pasta" })] });
-    const text = await kh.callToolText("read_recipe", { lookup: { title: "Zyzzyva Surprise" } });
-    expect(text.toLowerCase()).toContain("found");
+    const result = await kh.callTool("read_recipe", { lookup: { title: "Zyzzyva Surprise" } });
+    expect(result.isError).toBe(true);
+    expect(getText(result)).toBe('No recipes found matching "Zyzzyva Surprise". Use search_recipes to find it.');
   });
 
   it("cold-start (empty store) returns the cold-start guard error", async () => {
