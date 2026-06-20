@@ -65,25 +65,37 @@ export function groceryItemsToRows(items: ReadonlyArray<GroceryItem>, aisles: Ai
   return items.map((item) => groceryItemToRow(item, aisles));
 }
 
-/** The slice of the aisle catalog the checklist sort reads: each aisle's walk-order `orderFlag`. */
+/** The slice of the aisle catalog the checklist sort reads: each aisle's walk-order `orderFlag` and name. */
 export interface AisleOrderSource {
-  get(uid: AisleUid): { readonly orderFlag: number } | undefined;
+  get(uid: AisleUid): { readonly orderFlag: number; readonly name: string } | undefined;
 }
 
 /**
- * Order grocery items into store-walk order for the checklist: by aisle `orderFlag`, then the
- * item's own `orderFlag`, then `uid` for a total, stable order. Items with no/unknown aisle sort
- * last (the widget's "Other" group). Pure and deterministic, so `read_grocery_list`'s text table
- * and its `structuredContent` agree by construction and the widget can group consecutive
- * same-aisle rows. The `orderFlag` is reached through the live catalog contract
- * (`ctx.deps.aisle.get`), not the row — no new field rides the payload.
+ * Order grocery items into store-walk order for the checklist: by aisle `orderFlag`, then aisle
+ * identity (name, then `aisleUid`), then the item's own `orderFlag`, then `uid` for a total, stable
+ * order. The aisle tie-break before item order keeps one aisle's items contiguous even when two
+ * aisles share an `orderFlag` (the catalog allows ties, breaking them by name) — without it an
+ * A/B/A interleave would make the widget, which groups only consecutive same-aisle rows, render the
+ * same aisle twice. Items with no/unknown aisle sort last (the widget's "Other" group). Pure and
+ * deterministic, so `read_grocery_list`'s text table and its `structuredContent` agree by
+ * construction. The aisle fields are reached through the live catalog contract (`ctx.deps.aisle.get`),
+ * not the row — no new field rides the payload.
  */
 export function sortGroceryItemsForChecklist(
   items: ReadonlyArray<GroceryItem>,
   aisleOrder: AisleOrderSource,
 ): Array<GroceryItem> {
-  const order = (item: GroceryItem): number => aisleOrder.get(item.aisleUid)?.orderFlag ?? Number.MAX_SAFE_INTEGER;
-  return [...items].sort((a, b) => order(a) - order(b) || a.orderFlag - b.orderFlag || a.uid.localeCompare(b.uid));
+  const aisle = (item: GroceryItem) => aisleOrder.get(item.aisleUid);
+  const order = (item: GroceryItem): number => aisle(item)?.orderFlag ?? Number.MAX_SAFE_INTEGER;
+  const aisleName = (item: GroceryItem): string => aisle(item)?.name ?? "";
+  return [...items].sort(
+    (a, b) =>
+      order(a) - order(b) ||
+      aisleName(a).localeCompare(aisleName(b)) ||
+      a.aisleUid.localeCompare(b.aisleUid) ||
+      a.orderFlag - b.orderFlag ||
+      a.uid.localeCompare(b.uid),
+  );
 }
 
 /** Map a `GroceryList` plus its items into the structured read payload. */
