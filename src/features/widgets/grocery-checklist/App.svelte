@@ -12,6 +12,7 @@
   let phase = $state("loading"); // "loading" | "ready" | "error"
   let theme = $state("light");
   let toast = $state(null); // { kind: "error" | "info", msg } | null
+  let errorMsg = $state(null); // the tool's own error text (not-found / disambiguation), for the error state
   let confirmingClear = $state(false);
 
   const DEBOUNCE_MS = 300;
@@ -60,11 +61,20 @@
   function receive(result) {
     const data = result?.structuredContent;
     if (!data || typeof data !== "object" || !Array.isArray(data.items)) {
-      if (phase !== "ready") phase = "error";
+      // No structured payload — an error result (unknown UID / no match / disambiguation) carries
+      // its remediation in the text block, or a host dropped structuredContent. Surface that text
+      // verbatim (display only, never parsed for data); don't clobber an already-loaded list on a
+      // later failed read.
+      if (phase !== "ready") {
+        const text = result?.content?.find((c) => c?.type === "text")?.text;
+        errorMsg = typeof text === "string" && text.trim() !== "" ? text : null;
+        phase = "error";
+      }
       return;
     }
     listMeta = { uid: data.uid, name: data.name };
     items = data.items.map(toRow);
+    errorMsg = null;
     confirmingClear = false;
     phase = "ready";
   }
@@ -216,6 +226,7 @@
     <div class="empty">
       <div class="big">🛒</div>
       <p class="t">Couldn’t load this list</p>
+      {#if errorMsg}<p class="d">{errorMsg}</p>{/if}
     </div>
   {:else if total === 0}
     <div class="empty">
