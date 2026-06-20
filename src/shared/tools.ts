@@ -1,5 +1,6 @@
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { Result } from "neverthrow";
+import type { Logger } from "pino";
 import { z } from "zod";
 
 import type { ElicitationServer } from "./elicit.js";
@@ -63,9 +64,10 @@ export function errorResult(text: string): CallToolResult {
  */
 export async function confirmOrCancel(
   server: ElicitationServer,
-  opts: { readonly message: string; readonly cancelled: string },
+  opts: { readonly message: string; readonly cancelled: string; readonly log?: Logger },
 ): Promise<CallToolResult | undefined> {
-  return (await confirmGate(server, { message: opts.message })) === "declined" ? toolResult(opts.cancelled) : undefined;
+  const outcome = await confirmGate(server, { message: opts.message, ...(opts.log ? { log: opts.log } : {}) });
+  return outcome === "declined" ? toolResult(opts.cancelled) : undefined;
 }
 
 /**

@@ -38,6 +38,7 @@ export const clearPurchasedTool = defineTool(
       const stop = await confirmOrCancel(ctx.server.server, {
         message: `Remove the ${purchased.length.toString()} purchased item(s) from "${list.name}"? This is permanent.`,
         cancelled: `Cancelled — "${list.name}" was not cleared.`,
+        log,
       });
       if (stop) return stop;
 
@@ -89,6 +90,7 @@ export const clearGroceryListTool = defineTool(
       const stop = await confirmOrCancel(ctx.server.server, {
         message: `Remove all ${items.length.toString()} item(s) from "${list.name}"? This is permanent.`,
         cancelled: `Cancelled — "${list.name}" was not cleared.`,
+        log,
       });
       if (stop) return stop;
 

@@ -274,6 +274,7 @@ export const deleteGroceryListTool = defineTool(
       const stop = await confirmOrCancel(ctx.server.server, {
         message: `Permanently delete grocery list "${existing.name}" and its ${itemCount.toString()} item(s)? This cannot be undone.`,
         cancelled: `Cancelled — "${existing.name}" was not deleted.`,
+        log,
       });
       if (stop) return stop;
 
