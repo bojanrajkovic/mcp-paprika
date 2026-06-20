@@ -5,7 +5,7 @@ import type { MenuItemUid, MenuUid } from "./ids.js";
 
 import { makeMealType } from "../../../test/domains/meal-type/__fixtures__/meal-types.js";
 import { makeMenu, makeMenuItem } from "../../../test/domains/menu/__fixtures__/menus.js";
-import { menuToMarkdown } from "./menu-helpers.js";
+import { menuToMarkdown, menuToStructured } from "./menu-helpers.js";
 
 const breakfast = makeMealType({
   uid: "breakfast-uid" as MealTypeUid,
@@ -95,8 +95,8 @@ describe("menuToMarkdown", () => {
     expect(md).not.toContain("ghost-type:");
   });
 
-  it("appends item and recipe UIDs when includeItemUids is set", () => {
-    const menu = makeMenu({ uid: "m-8" as MenuUid, days: 1 });
+  it("menuToStructured carries each item's menuitem + recipe UID + resolved type name (B1/#321)", () => {
+    const menu = makeMenu({ uid: "m-8" as MenuUid, name: "Plan", days: 1, notes: "" });
     const item = makeMenuItem({
       uid: "mi-8" as MenuItemUid,
       menuUid: "m-8",
@@ -105,26 +105,62 @@ describe("menuToMarkdown", () => {
       name: "Curry",
       recipeUid: "recipe-xyz",
     });
-    const md = menuToMarkdown(menu, [item], [dinner], { includeItemUids: true });
-    expect(md).toContain("- **Dinner:** Curry · item `mi-8` · recipe `recipe-xyz`");
+    const structured = menuToStructured(menu, [item], [dinner]);
+    expect(structured).toMatchObject({ uid: "m-8", name: "Plan", days: 1, notes: "" });
+    expect(structured.items).toEqual([
+      { uid: "mi-8", day: 1, name: "Curry", typeUid: "dinner-uid", typeName: "Dinner", recipeUid: "recipe-xyz" },
+    ]);
   });
 
-  it("omits the recipe clause when recipeUid is null even with includeItemUids", () => {
+  it("menuToStructured carries recipeUid: null for freeform and typeName: null for a dangling type (B1/#321)", () => {
     const menu = makeMenu({ uid: "m-9" as MenuUid, days: 1 });
-    const item = makeMenuItem({
+    const freeform = makeMenuItem({
       uid: "mi-9" as MenuItemUid,
       menuUid: "m-9",
       day: 1,
-      typeUid: "dinner-uid",
+      typeUid: "ghost-type",
       name: "Freeform Night",
       recipeUid: null,
     });
-    const md = menuToMarkdown(menu, [item], [dinner], { includeItemUids: true });
-    expect(md).toContain("- **Dinner:** Freeform Night · item `mi-9`");
-    expect(md).not.toContain("· recipe");
+    const [row] = menuToStructured(menu, [freeform], [dinner]).items;
+    expect(row).toMatchObject({ uid: "mi-9", recipeUid: null, typeUid: "ghost-type", typeName: null });
   });
 
-  it("omits all UIDs by default (includeItemUids false)", () => {
+  it("menuToStructured emits rows in display order — day, meal-type orderFlag, item orderFlag (B1/#321)", () => {
+    const menu = makeMenu({ uid: "m-ord" as MenuUid, days: 2 });
+    // Input deliberately scrambled vs. display order (the store hands items in insertion/sync order).
+    const d2dinner = makeMenuItem({
+      uid: "d2d" as MenuItemUid,
+      menuUid: "m-ord",
+      day: 2,
+      typeUid: "dinner-uid",
+      name: "D2 Dinner",
+      orderFlag: 0,
+    });
+    const d1dinner = makeMenuItem({
+      uid: "d1d" as MenuItemUid,
+      menuUid: "m-ord",
+      day: 1,
+      typeUid: "dinner-uid",
+      name: "D1 Dinner",
+      orderFlag: 0,
+    });
+    const d1breakfast = makeMenuItem({
+      uid: "d1b" as MenuItemUid,
+      menuUid: "m-ord",
+      day: 1,
+      typeUid: "breakfast-uid",
+      name: "D1 Breakfast",
+      orderFlag: 0,
+    });
+
+    const rows = menuToStructured(menu, [d2dinner, d1dinner, d1breakfast], [breakfast, dinner]).items;
+
+    // breakfast orderFlag 0 < dinner orderFlag 2; day 1 before day 2 — matches the text render.
+    expect(rows.map((r) => r.uid)).toEqual(["d1b", "d1d", "d2d"]);
+  });
+
+  it("omits per-item UIDs from the text (they ride structuredContent now)", () => {
     const menu = makeMenu({ uid: "m-10" as MenuUid, days: 1 });
     const item = makeMenuItem({
       uid: "mi-10" as MenuItemUid,

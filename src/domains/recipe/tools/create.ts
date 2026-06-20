@@ -6,10 +6,15 @@ import type { RecipeState, RecipeWrites } from "../module.js";
 import type { Recipe } from "../types.js";
 
 import { defineTool } from "../../../kernel/tool.js";
-import { commitFailure, toolResult } from "../../../shared/tools.js";
+import { commitFailure, errorResult, toolResult } from "../../../shared/tools.js";
 import { formatTimestampWire } from "../../../utils/dates.js";
 import { RecipeUidSchema } from "../ids.js";
-import { recipeToMarkdown, resolveCategoryRefs } from "../recipe-markdown.js";
+import {
+  recipeReadOutputSchema,
+  recipeToMarkdown,
+  recipeToReadStructured,
+  resolveCategoryRefs,
+} from "../recipe-markdown.js";
 import { recipeColdStartGuard } from "./guards.js";
 
 /**
@@ -48,6 +53,7 @@ export const createRecipeTool = defineTool(
       rating: z.number().int().min(0).max(5).optional().describe("Rating 0–5 (default: 0)"),
       nutritionalInfo: z.string().optional().describe("Nutritional information"),
     },
+    outputSchema: recipeReadOutputSchema,
   },
   [recipeColdStartGuard],
   (ctx: DomainCtx<RecipeState, never, RecipeWrites>) => {
@@ -108,19 +114,26 @@ export const createRecipeTool = defineTool(
         (e) => {
           // AC2.8: store/cache not updated — commitRecipe not reached
           log.error({ err: e, name: args.name }, "saveRecipe failed");
-          return toolResult(`Failed to create recipe: ${e.message}`);
+          return errorResult(`Failed to create recipe: ${e.message}`);
         },
       );
       if ("content" in saved) return saved;
-      const commitErr = commitFailure("recipe", await ctx.writes.commitRecipe(saved), { selfHealing: false }); // AC2.5, AC2.6
-      if (commitErr) return commitErr;
 
       const categoryNames = ctx.state.category.store.resolveNames(saved.categories);
+      const structured = recipeToReadStructured(saved, categoryNames);
+      // AC2.5, AC2.6 — the degraded commit branch carries the structured payload (built
+      // from the just-saved recipe) so it stays a valid non-error success under the schema.
+      const commitErr = commitFailure("recipe", await ctx.writes.commitRecipe(saved), {
+        selfHealing: false,
+        structuredContent: structured,
+      });
+      if (commitErr) return commitErr;
+
       const markdown = recipeToMarkdown(saved, categoryNames);
       const prefix = warnings.length > 0 ? warnings.join("\n") + "\n\n" : "";
-      // The UID is rendered by recipeToMarkdown, so the caller can chain
-      // upload_recipe_photo / update_recipe without re-looking-up the new recipe.
-      return toolResult(prefix + markdown);
+      // The new UID rides structuredContent (and the rendered text), so the caller can
+      // chain upload_recipe_photo / update_recipe without re-looking-up the new recipe.
+      return toolResult(prefix + markdown, structured);
     };
   },
 );

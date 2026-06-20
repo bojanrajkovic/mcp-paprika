@@ -48,15 +48,22 @@ describe("ADR-0019: structured-output envelope and rollout", () => {
     expect(outputSchema.safeParse(result.structuredContent).success).toBe(true);
   });
 
-  it("exactly the A3 meal reads declare an outputSchema (the rollout's current frontier)", async () => {
+  it("exactly the rolled-out R1 tools declare an outputSchema (the conformance frontier)", async () => {
     const withSchema = (await collectToolSpecs())
       .filter((s) => s.outputSchema !== undefined)
       .map((s) => s.name)
       .sort();
     // A3 #318 — the meal reads (first adopters). A3 #319 — the recipe/grocery/menu list
-    // tools. A3 #320 — the catalogs, pantry list, and discover. Add each later batch's
-    // tool names as they land.
+    // tools. A3 #320 — the catalogs, pantry list, and discover. B1 #321 — the uid-or-text
+    // reads (read_recipe/read_grocery_list/read_menu/read_pantry_item) + the create/echo
+    // tools that surface a new UID. Add each later batch's tool names as they land.
     expect(withSchema).toEqual([
+      "add_grocery_items",
+      "add_menu_items",
+      "create_category",
+      "create_grocery_list",
+      "create_menu",
+      "create_recipe",
       "discover_recipes",
       "list_aisles",
       "list_categories",
@@ -65,8 +72,13 @@ describe("ADR-0019: structured-output envelope and rollout", () => {
       "list_menus",
       "list_pantry_items",
       "list_recipes",
+      "read_grocery_list",
       "read_meal_plan",
+      "read_menu",
+      "read_pantry_item",
+      "read_recipe",
       "read_recipe_history",
+      "rename_grocery_list",
       "search_meal_history",
       "search_recipes",
     ]);

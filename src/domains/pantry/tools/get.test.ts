@@ -77,4 +77,26 @@ describe("read_pantry_item tool", () => {
 
     expect(text.toLowerCase()).toContain("not yet synced");
   });
+
+  it("carries structuredContent with the item's machine fields (B1/#321)", async () => {
+    const item = makePantryItem({ ingredient: "Olive Oil", quantity: "1 bottle", inStock: true });
+    kh.seed({ pantry: [item] });
+
+    const result = await kh.callTool("read_pantry_item", { lookup: { uid: item.uid } });
+
+    expect(result.isError).toBeUndefined();
+    expect(result.structuredContent).toMatchObject({
+      uid: item.uid,
+      ingredient: "Olive Oil",
+      quantity: "1 bottle",
+      inStock: true,
+    });
+  });
+
+  it("a not-found result carries no structuredContent (errorResult, B1/#321)", async () => {
+    kh.seed({ pantry: [makePantryItem()] });
+    const result = await kh.callTool("read_pantry_item", { lookup: { uid: "nope" } });
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toBeUndefined();
+  });
 });

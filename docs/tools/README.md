@@ -434,7 +434,7 @@ Rate a recipe 0–5 stars by UID. Sets the recipe's star rating; pass 0 to clear
 
 **Read a grocery list and its items** — read-only, idempotent
 
-Get a grocery list by UID or name. Name lookup is tiered (exact → starts-with → contains) and case-insensitive, with a disambiguation list when multiple lists match the same tier. Each item row carries its UID so you can drive update_grocery_item / delete_grocery_item / mark_grocery_item_purchased / move_grocery_items_to_pantry. Pass exactly one shape: {"uid": "..."} or {"name": "..."}.
+Get a grocery list by UID or name. Name lookup is tiered (exact → starts-with → contains) and case-insensitive, with a disambiguation list when multiple lists match the same tier. Each item's UID is returned so you can drive update_grocery_item / delete_grocery_item / mark_grocery_item_purchased / move_grocery_items_to_pantry. Pass exactly one shape: {"uid": "..."} or {"name": "..."}.
 
 **Parameters**
 
@@ -454,7 +454,7 @@ Read the upcoming meal plan: meals scheduled from today forward, grouped by day 
 
 **Read a menu and its items** — read-only, idempotent
 
-Get a menu by UID or name, rendered day by day with each day's planned recipes. Name lookup is tiered (exact → starts-with → contains) and case-insensitive, with a disambiguation list when multiple menus match the same tier. Each recipe line carries its menuitem and recipe UIDs so you can drive update_menu_item / delete_menu_item. Pass exactly one shape: {"uid": "..."} or {"name": "..."}.
+Get a menu by UID or name, rendered day by day with each day's planned recipes. Name lookup is tiered (exact → starts-with → contains) and case-insensitive, with a disambiguation list when multiple menus match the same tier. Each item's menuitem and recipe UIDs are returned so you can drive update_menu_item / delete_menu_item. Pass exactly one shape: {"uid": "..."} or {"name": "..."}.
 
 **Parameters**
 

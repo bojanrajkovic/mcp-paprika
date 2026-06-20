@@ -50,7 +50,7 @@ export function menuResource(ctx: DomainCtx<MenuState, "recipe" | "meal-type">):
         headerLines.push(`**Last synced:** ${lastSynced.toISOString()}`);
       }
 
-      const body = menuToMarkdown(menu, items, ctx.deps["meal-type"].getAll(), { includeItemUids: false });
+      const body = menuToMarkdown(menu, items, ctx.deps["meal-type"].getAll());
       const content = `${headerLines.join("\n")}\n\n${body}`;
       return {
         contents: [

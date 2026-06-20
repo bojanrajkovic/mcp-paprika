@@ -174,4 +174,33 @@ describe("create_recipe tool", () => {
     expect(text.toLowerCase()).toContain("try again");
     expect(kh.client().saveRecipe).not.toHaveBeenCalled();
   });
+
+  it("carries structuredContent with the new recipe's machine fields (B1/#321)", async () => {
+    const savedRecipe = makeRecipe({ name: "Soup" });
+    vi.mocked(kh.client().saveRecipe).mockReturnValue(okAsync(savedRecipe));
+    kh.seed({ recipes: [makeRecipe()] });
+
+    const result = await kh.callTool("create_recipe", {
+      name: "Soup",
+      ingredients: "water, salt",
+      directions: "boil water, add salt",
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(result.structuredContent).toMatchObject({ uid: savedRecipe.uid, name: savedRecipe.name });
+  });
+
+  it("a saveRecipe failure is an isError result with no structuredContent (B1/#321)", async () => {
+    vi.mocked(kh.client().saveRecipe).mockReturnValue(errAsync(new Error("Network error")));
+    kh.seed({ recipes: [makeRecipe()] });
+
+    const result = await kh.callTool("create_recipe", {
+      name: "Recipe",
+      ingredients: "ingredients",
+      directions: "directions",
+    });
+
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toBeUndefined();
+  });
 });

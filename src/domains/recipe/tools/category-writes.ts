@@ -7,7 +7,7 @@ import type { CategoryUid } from "../ids.js";
 import type { RecipeState, RecipeWrites } from "../module.js";
 
 import { defineTool } from "../../../kernel/tool.js";
-import { commitFailure, toolResult } from "../../../shared/tools.js";
+import { commitFailure, errorResult, toolResult } from "../../../shared/tools.js";
 import { CategoryUidSchema } from "../ids.js";
 import { categoryStartGuard } from "./guards.js";
 
@@ -15,6 +15,21 @@ function categorySummary(state: RecipeState, category: Category): string {
   const parent = category.parentUid ? state.category.store.get(category.parentUid) : undefined;
   const parentLine = parent ? ` (under **${parent.name}**)` : " (top-level)";
   return `**${category.name}**${parentLine} — uid: \`${category.uid}\``;
+}
+
+/**
+ * Structured-output payload for `create_category` (ADR-0019, R1, B1/#321). No
+ * `read_category` tool exists, so this schema is create-only — it surfaces the new
+ * category UID (and its parent FK) on the structured channel.
+ */
+export const createCategoryOutputSchema = z.object({
+  uid: CategoryUidSchema,
+  name: z.string(),
+  parentUid: CategoryUidSchema.nullable().describe("Parent category UID, or null for a top-level category."),
+});
+
+function categoryToStructured(category: Category): z.infer<typeof createCategoryOutputSchema> {
+  return { uid: category.uid, name: category.name, parentUid: category.parentUid };
 }
 
 /** Highest `orderFlag` across all known categories, or -1 when none exist. */
@@ -60,13 +75,14 @@ export const createCategoryTool = defineTool(
       name: z.string().min(1).describe("Category display name"),
       parentUid: CategoryUidSchema.optional().describe("UID of the parent category to nest under (omit for top-level)"),
     },
+    outputSchema: createCategoryOutputSchema,
   },
   [categoryStartGuard],
   (ctx: DomainCtx<RecipeState, never, RecipeWrites>) => {
     const log = ctx.infra.log.child({ component: "create_category" });
     return async (args) => {
       if (args.parentUid !== undefined && ctx.state.category.store.get(args.parentUid) === undefined) {
-        return toolResult(`No category found with UID "${args.parentUid}" to use as a parent.`);
+        return errorResult(`No category found with UID "${args.parentUid}" to use as a parent.`);
       }
 
       const category: Category = {
@@ -78,13 +94,16 @@ export const createCategoryTool = defineTool(
 
       return (await ctx.infra.client.saveCategory(category)).match(
         async (saved): Promise<CallToolResult> => {
-          const commitErr = commitFailure("category", await ctx.writes.commitCategoryUpsert(saved));
+          const structured = categoryToStructured(saved);
+          const commitErr = commitFailure("category", await ctx.writes.commitCategoryUpsert(saved), {
+            structuredContent: structured,
+          });
           if (commitErr) return commitErr;
-          return toolResult(`Created category ${categorySummary(ctx.state, saved)}`);
+          return toolResult(`Created category ${categorySummary(ctx.state, saved)}`, structured);
         },
         async (e) => {
           log.error({ err: e, name: args.name }, "saveCategory failed");
-          return toolResult(`Failed to create category: ${e.message}`);
+          return errorResult(`Failed to create category: ${e.message}`);
         },
       );
     };

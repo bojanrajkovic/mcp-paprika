@@ -10,6 +10,7 @@ import type { Menu } from "../types.js";
 import { defineTool } from "../../../kernel/tool.js";
 import {
   commitFailure,
+  errorResult,
   resolveLookup,
   resolveOrPick,
   toolResult,
@@ -18,7 +19,7 @@ import {
 import { mealTypeSpecSchema } from "../../meal-type/meal-type-helpers.js";
 import { RecipeUidSchema } from "../../recipe/ids.js";
 import { MenuItemUidSchema, MenuUidSchema } from "../ids.js";
-import { menuToMarkdown } from "../menu-helpers.js";
+import { menuItemRowSchema, menuItemsToRows, menuToMarkdown } from "../menu-helpers.js";
 import { menuStartGuard } from "./guards.js";
 
 // One menuitem to add. Structurally EITHER recipe-linked (recipe_uid; display
@@ -70,6 +71,17 @@ export const addMenuItemsInputSchema = z.object({
 });
 
 /**
+ * Structured-output payload for `add_menu_items` (ADR-0019 R1, B1/#321): the parent
+ * menu UID plus a row per newly-added item (the new child UIDs the model chains on,
+ * distinguished from the menu's pre-existing items). Shares {@link menuItemRowSchema}
+ * with `read_menu`.
+ */
+export const addMenuItemsOutputSchema = z.object({
+  menuUid: MenuUidSchema,
+  items: z.array(menuItemRowSchema),
+});
+
+/**
  * `add_menu_items` — add items to a menu. Denormalizes the recipe display name via
  * `ctx.deps.recipe.get` and resolves the meal type via `ctx.deps["meal-type"]` (an
  * unknown `{name}` auto-creates a custom type).
@@ -89,6 +101,7 @@ export const addMenuItemsTool = defineTool(
       "if ANY item is invalid the entire batch is rejected with a per-index error enumeration so callers " +
       "can fix every problem in one pass.",
     inputSchema: addMenuItemsInputSchema.shape,
+    outputSchema: addMenuItemsOutputSchema,
   },
   [menuStartGuard],
   (ctx: DomainCtx<MenuState, "recipe" | "meal-type", MenuWrites>) => {
@@ -180,7 +193,7 @@ export const addMenuItemsTool = defineTool(
       if (errors.length > 0) {
         const header =
           errors.length === 1 ? "Could not add menu item:" : `Could not add ${errors.length.toString()} menu items:`;
-        return toolResult(`${header}\n\n${errors.join("\n")}`);
+        return errorResult(`${header}\n\n${errors.join("\n")}`);
       }
 
       // ----- Stage 2: auto-expand the menu span when an item overflows it -----
@@ -197,7 +210,7 @@ export const addMenuItemsTool = defineTool(
           (v) => v,
           (e) => {
             log.error({ err: e, uid: menu.uid }, "saveMenus (add_menu_items auto-expand) failed");
-            return toolResult(
+            return errorResult(
               `Failed to extend menu "${menu.name}" to ${maxDay.toString()} day(s): ${e.message}. ` +
                 `No items were added.`,
             );
@@ -205,8 +218,20 @@ export const addMenuItemsTool = defineTool(
         );
         if ("content" in saved) return saved;
         const persisted = saved[0] ?? extended;
-        const commitErr = commitFailure("menu", await ctx.writes.commitMenu(persisted));
-        if (commitErr) return commitErr;
+        // Unlike the final-batch commit (where the items already POSTed, so a local-cache
+        // divergence is a genuine degraded success), this divergence aborts BEFORE any item
+        // is added — the requested add did NOT happen. Signal an error, not a degraded
+        // empty-items success the model could read as "added 0" and never retry; the
+        // menu-extension write itself already landed on Paprika, so a retry completes the add.
+        const expandErr = (await ctx.writes.commitMenu(persisted)).match(
+          () => undefined,
+          (e) =>
+            errorResult(
+              `Extended menu "${menu.name}" to ${maxDay.toString()} day(s) on Paprika, but the local cache update ` +
+                `failed (${e.message}); the items were not added — retry add_menu_items once the menu syncs.`,
+            ),
+        );
+        if (expandErr) return expandErr;
         menuForRender = persisted;
         extendedTo = maxDay;
       }
@@ -226,7 +251,7 @@ export const addMenuItemsTool = defineTool(
         );
         if (typeof created === "string") {
           log.error({ name: r.pendingTypeName, message: created }, "ensureMealType failed");
-          return toolResult(created);
+          return errorResult(created);
         }
         createdTypesByName.set(key, created);
       }
@@ -257,24 +282,24 @@ export const addMenuItemsTool = defineTool(
         (items) => items,
         (e) => {
           log.error({ err: e, uid: menu.uid, count: builtItems.length }, "saveMenuItems failed");
-          return toolResult(`Failed to add menu items: ${e.message}`);
+          return errorResult(`Failed to add menu items: ${e.message}`);
         },
       );
       if ("content" in savedItems) return savedItems;
-      const commitErr = commitFailure("menu", await ctx.writes.commitMenuItemsBatch(savedItems));
+
+      const mealTypes = ctx.deps["meal-type"].getAll();
+      // Structured carries ONLY the newly-added items (the new child UIDs the model chains
+      // on), distinguished from the menu's pre-existing items the text card also shows.
+      const structured = { menuUid: menu.uid, items: menuItemsToRows(savedItems, mealTypes) };
+      const commitErr = commitFailure("menu", await ctx.writes.commitMenuItemsBatch(savedItems), {
+        structuredContent: structured,
+      });
       if (commitErr) return commitErr;
 
       const extendNote = extendedTo !== null ? `Extended menu "${menu.name}" to ${extendedTo.toString()} day(s). ` : "";
       const header = `${extendNote}Added ${savedItems.length.toString()} item(s) to menu "${menu.name}".`;
-      const card = menuToMarkdown(
-        menuForRender,
-        ctx.state.items.store.getByMenuUid(menu.uid),
-        ctx.deps["meal-type"].getAll(),
-        {
-          includeItemUids: true,
-        },
-      );
-      return toolResult(`${header}\n\n${card}`);
+      const card = menuToMarkdown(menuForRender, ctx.state.items.store.getByMenuUid(menu.uid), mealTypes);
+      return toolResult(`${header}\n\n${card}`, structured);
     };
   },
 );

@@ -4,7 +4,7 @@ import type { PantryState } from "../module.js";
 import { defineTool } from "../../../kernel/tool.js";
 import { formatLookupOutcome, resolveLookup, uidOrTextLookupSchema } from "../../../shared/tools.js";
 import { PantryItemUidSchema } from "../ids.js";
-import { pantryItemToMarkdown } from "../pantry-helpers.js";
+import { pantryItemReadOutputSchema, pantryItemToMarkdown, pantryItemToStructured } from "../pantry-helpers.js";
 import { pantryStartGuard } from "./guards.js";
 
 /**
@@ -31,6 +31,7 @@ export const getPantryItemTool = defineTool(
         textDescribe: 'Ingredient name fuzzy match, e.g. {"ingredient": "Olive Oil"}.',
       }),
     },
+    outputSchema: pantryItemReadOutputSchema,
   },
   [pantryStartGuard],
   (ctx: DomainCtx<PantryState, "aisle">) => {
@@ -45,6 +46,7 @@ export const getPantryItemTool = defineTool(
         describe: (item) => ({ uid: item.uid, label: item.ingredient }),
         findWith: "list_pantry_items",
         renderOne: (item) => pantryItemToMarkdown(item, ctx.deps.aisle),
+        renderStructured: (item) => pantryItemToStructured(item, ctx.deps.aisle),
       });
     };
   },

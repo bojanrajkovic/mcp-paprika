@@ -5,9 +5,9 @@ import type { MenuState, MenuWrites } from "../module.js";
 import type { Menu } from "../types.js";
 
 import { defineTool } from "../../../kernel/tool.js";
-import { commitFailure, toolResult } from "../../../shared/tools.js";
+import { commitFailure, errorResult, toolResult } from "../../../shared/tools.js";
 import { MenuUidSchema } from "../ids.js";
-import { menuToMarkdown } from "../menu-helpers.js";
+import { menuReadOutputSchema, menuToMarkdown, menuToStructured } from "../menu-helpers.js";
 import { menuStartGuard } from "./guards.js";
 
 /**
@@ -28,6 +28,7 @@ export const createMenuTool = defineTool(
       days: z.number().int().positive().optional().default(1).describe("Day span of the menu (>= 1, default 1)"),
       notes: z.string().optional().default("").describe("Optional free-text notes for the menu"),
     },
+    outputSchema: menuReadOutputSchema,
   },
   [menuStartGuard],
   (ctx: DomainCtx<MenuState, "recipe" | "meal-type", MenuWrites>) => {
@@ -42,7 +43,7 @@ export const createMenuTool = defineTool(
       const matches = ctx.state.menus.store.findByName(args.name);
       const exactMatch = matches.find((m) => m.name.toLowerCase() === args.name.toLowerCase());
       if (exactMatch !== undefined) {
-        return toolResult(
+        return errorResult(
           `A menu named "${exactMatch.name}" already exists (UID: ${exactMatch.uid}). ` +
             `Use update_menu to change it.`,
         );
@@ -63,13 +64,17 @@ export const createMenuTool = defineTool(
       return (await ctx.infra.client.saveMenus([newMenu])).match(
         async (saved) => {
           const created = saved[0] ?? newMenu;
-          const commitErr = commitFailure("menu", await ctx.writes.commitMenu(created));
+          const mealTypes = ctx.deps["meal-type"].getAll();
+          const structured = menuToStructured(created, [], mealTypes);
+          const commitErr = commitFailure("menu", await ctx.writes.commitMenu(created), {
+            structuredContent: structured,
+          });
           if (commitErr) return commitErr;
-          return toolResult(menuToMarkdown(created, [], ctx.deps["meal-type"].getAll()));
+          return toolResult(menuToMarkdown(created, [], mealTypes), structured);
         },
         async (e) => {
           log.error({ err: e, name: args.name }, "saveMenus (create_menu) failed");
-          return toolResult(`Failed to create menu: ${e.message}`);
+          return errorResult(`Failed to create menu: ${e.message}`);
         },
       );
     };

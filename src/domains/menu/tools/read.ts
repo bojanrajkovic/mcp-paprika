@@ -4,7 +4,7 @@ import type { MenuState } from "../module.js";
 import { defineTool } from "../../../kernel/tool.js";
 import { formatLookupOutcome, resolveLookup, uidOrTextLookupSchema } from "../../../shared/tools.js";
 import { MenuUidSchema } from "../ids.js";
-import { menuToMarkdown } from "../menu-helpers.js";
+import { menuReadOutputSchema, menuToMarkdown, menuToStructured } from "../menu-helpers.js";
 import { menuStartGuard } from "./guards.js";
 
 /**
@@ -19,8 +19,8 @@ export const readMenuTool = defineTool(
     description:
       "Get a menu by UID or name, rendered day by day with each day's planned recipes. " +
       "Name lookup is tiered (exact → starts-with → contains) and case-insensitive, with a " +
-      "disambiguation list when multiple menus match the same tier. Each recipe line carries " +
-      "its menuitem and recipe UIDs so you can drive update_menu_item / delete_menu_item. " +
+      "disambiguation list when multiple menus match the same tier. Each item's menuitem and recipe " +
+      "UIDs are returned so you can drive update_menu_item / delete_menu_item. " +
       'Pass exactly one shape: {"uid": "..."} or {"name": "..."}.',
     inputSchema: {
       lookup: uidOrTextLookupSchema({
@@ -30,6 +30,7 @@ export const readMenuTool = defineTool(
         textExample: "Thanksgiving Dinner",
       }),
     },
+    outputSchema: menuReadOutputSchema,
   },
   [menuStartGuard],
   (ctx: DomainCtx<MenuState, "recipe" | "meal-type">) => {
@@ -44,9 +45,9 @@ export const readMenuTool = defineTool(
         describe: (menu) => ({ uid: menu.uid, label: menu.name }),
         findWith: "list_menus",
         renderOne: (menu) =>
-          menuToMarkdown(menu, ctx.state.items.store.getByMenuUid(menu.uid), ctx.deps["meal-type"].getAll(), {
-            includeItemUids: true,
-          }),
+          menuToMarkdown(menu, ctx.state.items.store.getByMenuUid(menu.uid), ctx.deps["meal-type"].getAll()),
+        renderStructured: (menu) =>
+          menuToStructured(menu, ctx.state.items.store.getByMenuUid(menu.uid), ctx.deps["meal-type"].getAll()),
       });
     };
   },

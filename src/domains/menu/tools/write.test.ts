@@ -45,6 +45,28 @@ describe("create_menu tool", () => {
     expect(kh.state().menus.store.getAll()).toHaveLength(1);
   });
 
+  it("carries structuredContent for the new (empty) menu (B1/#321)", async () => {
+    kh.seed({ menus: [], menuItems: [], mealTypes: [DINNER_TYPE] });
+    vi.mocked(kh.client().saveMenus).mockReturnValue(
+      okAsync([makeMenu({ uid: "m-new" as MenuUid, name: "Holiday", days: 1, notes: "" })]),
+    );
+
+    const result = await kh.callTool("create_menu", { name: "Holiday" });
+
+    expect(result.isError).toBeUndefined();
+    expect(result.structuredContent).toMatchObject({ uid: "m-new", name: "Holiday", days: 1, items: [] });
+  });
+
+  it("a duplicate name is an isError with no structuredContent (B1/#321)", async () => {
+    const existing = makeMenu({ uid: "m-dup" as MenuUid, name: "Thanksgiving" });
+    kh.seed({ menus: [existing], menuItems: [], mealTypes: [DINNER_TYPE] });
+
+    const result = await kh.callTool("create_menu", { name: "thanksgiving" });
+
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toBeUndefined();
+  });
+
   it("honors explicit days and notes", async () => {
     kh.seed({ menus: [], menuItems: [], mealTypes: [DINNER_TYPE] });
     vi.mocked(kh.client().saveMenus).mockReturnValue(okAsync([makeMenu({ name: "Week", days: 7, notes: "low carb" })]));

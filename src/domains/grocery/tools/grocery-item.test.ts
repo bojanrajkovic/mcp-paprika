@@ -52,6 +52,50 @@ describe("add_grocery_items tool", () => {
     expect(item?.quantity).toBe("2 lbs");
   });
 
+  it("carries the new item rows + parent listUid on the structured channel (B1/#321)", async () => {
+    vi.mocked(kh.client().saveGroceryItems).mockImplementation((items) => okAsync(items));
+    kh.seed({
+      groceryLists: [WEEKLY_LIST],
+      groceryItems: [],
+      aisles: [PRODUCE_AISLE],
+      groceryIngredients: [BUTTER_INGREDIENT],
+    });
+
+    const result = await kh.callTool("add_grocery_items", {
+      listUid: "LIST-1",
+      items: [{ ingredient: "Chicken", quantity: "2 lbs" }, { ingredient: "Butter" }],
+    });
+
+    expect(result.isError).toBeUndefined();
+    const structured = result.structuredContent as {
+      listUid: string;
+      items: ReadonlyArray<{ uid: string; ingredient: string; quantity: string | null }>;
+    };
+    expect(structured.listUid).toBe("LIST-1");
+    expect(structured.items.map((i) => i.ingredient)).toEqual(["Chicken", "Butter"]);
+    expect(structured.items[0]?.quantity).toBe("2 lbs");
+    expect(structured.items[1]?.quantity).toBeNull(); // "" normalized to null
+    // Each new item carries a uid so the model can chain mark_grocery_item_purchased.
+    expect(structured.items.every((i) => typeof i.uid === "string" && i.uid.length > 0)).toBe(true);
+  });
+
+  it("an unknown listUid is an isError with no structuredContent (B1/#321)", async () => {
+    kh.seed({
+      groceryLists: [WEEKLY_LIST],
+      groceryItems: [],
+      aisles: [PRODUCE_AISLE],
+      groceryIngredients: [BUTTER_INGREDIENT],
+    });
+
+    const result = await kh.callTool("add_grocery_items", {
+      listUid: "MISSING",
+      items: [{ ingredient: "Chicken" }],
+    });
+
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toBeUndefined();
+  });
+
   it("single item with empty quantity creates name as just ingredient", async () => {
     vi.mocked(kh.client().saveGroceryItems).mockImplementation((items) => okAsync(items));
     kh.seed({

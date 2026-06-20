@@ -78,4 +78,43 @@ describe("read_recipe tool", () => {
     const text = await kh.callToolText("read_recipe", { lookup: { uid: "anything" } });
     expect(text.toLowerCase()).toContain("try again");
   });
+
+  it("carries structuredContent with the recipe's machine fields (B1/#321)", async () => {
+    const category = makeCategory({ name: "Dessert" });
+    const recipe = makeRecipe({
+      name: "Chocolate Cake",
+      categories: [category.uid],
+      ingredients: "flour, sugar",
+      directions: "mix, bake",
+    });
+    kh.seed({ recipes: [recipe], categories: [category] });
+    const result = await kh.callTool("read_recipe", { lookup: { uid: recipe.uid } });
+    expect(result.isError).toBeUndefined();
+    // categoryUids is the raw FK; categories is the resolved-name view (raw+resolved split);
+    // the body rides structured for the cooking widget (#337).
+    expect(result.structuredContent).toMatchObject({
+      uid: recipe.uid,
+      name: "Chocolate Cake",
+      categoryUids: [category.uid],
+      categories: ["Dessert"],
+      ingredients: "flour, sugar",
+      directions: "mix, bake",
+    });
+  });
+
+  it("a not-found result carries no structuredContent (errorResult, B1/#321)", async () => {
+    kh.seed({ recipes: [makeRecipe()] });
+    const result = await kh.callTool("read_recipe", { lookup: { uid: "nonexistent-uid" } });
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toBeUndefined();
+  });
+
+  it("structured photoUrl coalesces the imported image_url when no Paprika photo is set (B1/#321)", async () => {
+    // Imported/web recipes commonly carry imageUrl with photoUrl still null; a card
+    // rendering from photoUrl alone would drop the photo (matches recipe-resource.ts).
+    const recipe = makeRecipe({ name: "Imported", imageUrl: "https://site/hero.jpg", photoUrl: null });
+    kh.seed({ recipes: [recipe] });
+    const result = await kh.callTool("read_recipe", { lookup: { uid: recipe.uid } });
+    expect((result.structuredContent as { photoUrl: string | null }).photoUrl).toBe("https://site/hero.jpg");
+  });
 });
