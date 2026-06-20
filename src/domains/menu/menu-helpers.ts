@@ -46,9 +46,25 @@ export function menuItemsToRows(
   items: ReadonlyArray<Readonly<MenuItem>>,
   mealTypes: ReadonlyArray<Readonly<MealType>>,
 ): Array<MenuItemRow> {
+  const UNKNOWN_ORDER = Number.MAX_SAFE_INTEGER;
   const nameByTypeUid = new Map<string, string>();
-  for (const mt of mealTypes) nameByTypeUid.set(mt.uid, mt.name);
-  return items.map((item) => ({
+  const orderByTypeUid = new Map<string, number>();
+  for (const mt of mealTypes) {
+    nameByTypeUid.set(mt.uid, mt.name);
+    orderByTypeUid.set(mt.uid, mt.orderFlag);
+  }
+  // Emit rows in the SAME display order menuToMarkdown renders — day ascending, then
+  // within a day by meal-type orderFlag (unknown/dangling types last), then item
+  // orderFlag — so a widget rendering from structuredContent.items matches the text
+  // (the store can hand us items in insertion/sync order, not display order).
+  const ordered = [...items].sort((a, b) => {
+    if (a.day !== b.day) return a.day - b.day;
+    const orderA = orderByTypeUid.get(a.typeUid) ?? UNKNOWN_ORDER;
+    const orderB = orderByTypeUid.get(b.typeUid) ?? UNKNOWN_ORDER;
+    if (orderA !== orderB) return orderA - orderB;
+    return a.orderFlag - b.orderFlag;
+  });
+  return ordered.map((item) => ({
     uid: item.uid,
     day: item.day,
     name: item.name,

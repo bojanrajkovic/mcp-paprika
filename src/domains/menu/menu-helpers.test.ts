@@ -126,6 +126,40 @@ describe("menuToMarkdown", () => {
     expect(row).toMatchObject({ uid: "mi-9", recipeUid: null, typeUid: "ghost-type", typeName: null });
   });
 
+  it("menuToStructured emits rows in display order — day, meal-type orderFlag, item orderFlag (B1/#321)", () => {
+    const menu = makeMenu({ uid: "m-ord" as MenuUid, days: 2 });
+    // Input deliberately scrambled vs. display order (the store hands items in insertion/sync order).
+    const d2dinner = makeMenuItem({
+      uid: "d2d" as MenuItemUid,
+      menuUid: "m-ord",
+      day: 2,
+      typeUid: "dinner-uid",
+      name: "D2 Dinner",
+      orderFlag: 0,
+    });
+    const d1dinner = makeMenuItem({
+      uid: "d1d" as MenuItemUid,
+      menuUid: "m-ord",
+      day: 1,
+      typeUid: "dinner-uid",
+      name: "D1 Dinner",
+      orderFlag: 0,
+    });
+    const d1breakfast = makeMenuItem({
+      uid: "d1b" as MenuItemUid,
+      menuUid: "m-ord",
+      day: 1,
+      typeUid: "breakfast-uid",
+      name: "D1 Breakfast",
+      orderFlag: 0,
+    });
+
+    const rows = menuToStructured(menu, [d2dinner, d1dinner, d1breakfast], [breakfast, dinner]).items;
+
+    // breakfast orderFlag 0 < dinner orderFlag 2; day 1 before day 2 — matches the text render.
+    expect(rows.map((r) => r.uid)).toEqual(["d1b", "d1d", "d2d"]);
+  });
+
   it("omits per-item UIDs from the text (they ride structuredContent now)", () => {
     const menu = makeMenu({ uid: "m-10" as MenuUid, days: 1 });
     const item = makeMenuItem({
