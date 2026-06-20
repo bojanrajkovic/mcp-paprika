@@ -188,6 +188,21 @@ describe("formatLookupOutcome (no elicitation → isError + findWith hint for ev
     expect(text).toContain("- **Alphabet** (uid: `B`)");
     expect(text).toContain("Re-invoke with a specific uid");
   });
+
+  it("renderStructured carries structuredContent on the happy arm (B1/#321)", async () => {
+    const withStructured = { ...config, renderStructured: (e: ToyEntity) => ({ uid: e.id, label: e.label }) };
+    const hit = await formatLookupOutcome(noElicit, { kind: "uid_hit", entity }, withStructured);
+    expect(hit.isError).toBeUndefined();
+    expect(hit.structuredContent).toEqual({ uid: "A", label: "Alpha" });
+    expect(getText(hit)).toBe("# Alpha");
+  });
+
+  it("renderStructured never reaches a non-happy arm (errorResult carries no structuredContent)", async () => {
+    const withStructured = { ...config, renderStructured: (e: ToyEntity) => ({ uid: e.id, label: e.label }) };
+    const miss = await formatLookupOutcome(noElicit, { kind: "uid_miss", uid: "Z" }, withStructured);
+    expect(miss.isError).toBe(true);
+    expect(miss.structuredContent).toBeUndefined();
+  });
 });
 
 describe("resolveOrPick (text_many → disambiguation PICK, ADR-0020; non-happy → isError)", () => {
@@ -299,5 +314,17 @@ describe("commitFailure", () => {
     expect(text).toContain("may remain stale");
     expect(text).toContain("do not re-submit");
     expect(text).not.toContain("next sync.");
+  });
+
+  it("carries structuredContent on the degraded branch when a schema-bearing caller passes it (B1/#321)", () => {
+    const payload = { uid: "L1", name: "Weekly" };
+    const result = commitFailure("grocery list", err({ message: "disk full" }), { structuredContent: payload });
+    expect(result?.structuredContent).toEqual(payload);
+    expect(getText(result!)).toContain("saved to Paprika");
+  });
+
+  it("omits structuredContent when not passed (non-schema caller unaffected)", () => {
+    const result = commitFailure("grocery list", err({ message: "disk full" }));
+    expect(result?.structuredContent).toBeUndefined();
   });
 });

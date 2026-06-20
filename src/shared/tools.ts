@@ -101,11 +101,19 @@ export function imageResult(text: string, jpeg: Buffer): CallToolResult {
  * already advanced before the failed flush — the next diff believes the local
  * copy is current, so a recipe's tools pass `selfHealing: false` and the
  * message stops promising a repair the diff cannot deliver.
+ *
+ * A schema-bearing write tool (B1/#321) passes `structuredContent` — built from the
+ * just-saved entity, which is in hand even when the local flush failed — so this
+ * degraded branch stays a valid NON-error success under a declared `outputSchema`.
+ * The SDK requires `structuredContent` on every non-error result, and the write did
+ * land on Paprika; marking it `isError` would wrongly read as a failed write and
+ * invite the harmful retry the message warns against. Non-schema callers omit it and
+ * are unchanged.
  */
 export function commitFailure(
   entity: string,
   result: Result<void, { readonly message: string }>,
-  opts: { readonly selfHealing?: boolean } = {},
+  opts: { readonly selfHealing?: boolean; readonly structuredContent?: Record<string, unknown> } = {},
 ): CallToolResult | undefined {
   const tail =
     (opts.selfHealing ?? true)
@@ -114,10 +122,10 @@ export function commitFailure(
         "the change itself is already saved, so do not re-submit it.";
   return result.match(
     () => undefined,
-    (e) =>
-      toolResult(
-        `The change was saved to Paprika, but updating the local ${entity} cache failed (${e.message}); ${tail}`,
-      ),
+    (e) => {
+      const text = `The change was saved to Paprika, but updating the local ${entity} cache failed (${e.message}); ${tail}`;
+      return opts.structuredContent ? toolResult(text, opts.structuredContent) : toolResult(text);
+    },
   );
 }
 
@@ -273,6 +281,16 @@ export async function resolveOrPick<T>(
  * through `renderOne`; every not-found / disambiguation path returns the shared
  * `errorResult` (isError) with its remediation hint. `entityNoun` is the singular
  * noun; the plural is `entityNoun + "s"`.
+ *
+ * A schema-bearing read (B1/#321) passes `renderStructured` to additionally emit
+ * `structuredContent` on the happy arm — derived from the SAME resolved entity that
+ * `renderOne` formats, so the text and the structured payload agree by construction.
+ * Only the SUCCESS arm carries it; every non-happy arm stays an `errorResult` with no
+ * `structuredContent` (already so from A2), so a schema-bearing caller's success
+ * channel is the only path the SDK's `validateToolOutput` checks (ADR-0019). Per-tool
+ * payload typing lives at the call site (one Zod schema derives both the mapper's
+ * return type and the declared `outputSchema`); the `Record<string, unknown>` bound
+ * only erases it here.
  */
 export async function formatLookupOutcome<T>(
   server: ElicitationServer,
@@ -281,10 +299,13 @@ export async function formatLookupOutcome<T>(
     readonly entityNoun: string;
     readonly describe: (entity: T) => { readonly uid: string; readonly label: string };
     readonly renderOne: (entity: T) => string;
+    readonly renderStructured?: (entity: T) => Record<string, unknown>;
     readonly findWith?: string;
     readonly cap?: number;
   },
 ): Promise<CallToolResult> {
   const resolved = await resolveOrPick(server, outcome, config);
-  return "entity" in resolved ? toolResult(config.renderOne(resolved.entity)) : resolved.result;
+  if (!("entity" in resolved)) return resolved.result;
+  const text = config.renderOne(resolved.entity);
+  return config.renderStructured ? toolResult(text, config.renderStructured(resolved.entity)) : toolResult(text);
 }
