@@ -17,7 +17,6 @@
   const DEBOUNCE_MS = 300;
   const lastTap = new Map(); // uid -> performance.now(), for the per-row flap-guard
   let toastTimer;
-  let localSeq = 0; // fallback ids for a re-added row when the host omits the new row
 
   // Supersede: hide a purchased row when an unpurchased row of the same ingredient exists, so
   // tapping a bought item back on reads as a clean toggle (one row) rather than two. A pure view
@@ -70,7 +69,15 @@
       return;
     }
     listMeta = { uid: data.uid, name: data.name };
-    items = data.items.map((r) => ({
+    items = data.items.map(toRow);
+    confirmingClear = false;
+    phase = "ready";
+  }
+
+  // Map a structured grocery row into the local model (+ transient flags). Shared by the host
+  // re-read and the optimistic re-add so the row shape lives in one place.
+  function toRow(r) {
+    return {
       uid: r.uid,
       ingredient: r.ingredient,
       quantity: r.quantity ?? null,
@@ -78,9 +85,21 @@
       purchased: Boolean(r.purchased),
       _busy: false,
       _error: false,
-    }));
-    confirmingClear = false;
-    phase = "ready";
+    };
+  }
+
+  // Call a server tool through the host bridge, treating a transport rejection the same as a
+  // tool-reported error so an in-flight row is never left stuck.
+  async function callTool(name, args) {
+    try {
+      const res = await app.callServerTool({ name, arguments: args });
+      return {
+        isError: Boolean(res?.isError),
+        structuredContent: res?.structuredContent,
+      };
+    } catch {
+      return { isError: true };
+    }
   }
 
   function showToast(msg, kind = "error") {
@@ -101,8 +120,6 @@
     return false;
   }
 
-  const isError = (res) => Boolean(res && res.isError);
-
   function onRow(item) {
     if (item._busy) return; // per-row in-flight lock
     if (!item.purchased) doMark(item);
@@ -113,12 +130,11 @@
     if (tapThrottled(item.uid)) return;
     item.purchased = true; // optimistic
     item._busy = true;
-    const res = await app.callServerTool({
-      name: "mark_grocery_item_purchased",
-      arguments: { uid: item.uid },
+    const res = await callTool("mark_grocery_item_purchased", {
+      uid: item.uid,
     });
     item._busy = false;
-    if (isError(res)) {
+    if (res.isError) {
       item.purchased = false; // revert
       item._error = true;
       showToast("Couldn’t mark that purchased — try again.");
@@ -142,37 +158,27 @@
       return;
     }
     item._busy = true;
-    const res = await app.callServerTool({
-      name: "add_grocery_items",
-      arguments: {
-        listUid: listMeta.uid,
-        items: [
-          {
-            ingredient: item.ingredient,
-            quantity: item.quantity ?? undefined,
-            aisle: item.aisle ?? undefined,
-          },
-        ],
-      },
+    const res = await callTool("add_grocery_items", {
+      listUid: listMeta.uid,
+      items: [
+        {
+          ingredient: item.ingredient,
+          quantity: item.quantity ?? undefined,
+          aisle: item.aisle ?? undefined,
+        },
+      ],
     });
     item._busy = false;
-    if (isError(res)) {
+    if (res.isError) {
       showToast("Couldn’t add that back — try again.");
       return;
     }
-    // add_grocery_items mints a NEW unpurchased row; insert it beside the original, which supersede
-    // then hides — so the ingredient reads as unchecked again, one row.
-    const added = res?.structuredContent?.items?.[0];
-    const fresh = {
-      uid: added?.uid ?? `re-${(++localSeq).toString()}`,
-      ingredient: added?.ingredient ?? item.ingredient,
-      quantity: (added ? added.quantity : item.quantity) ?? null,
-      aisle: (added ? added.aisle : item.aisle) ?? null,
-      purchased: false,
-      _busy: false,
-      _error: false,
-    };
-    items.splice(items.indexOf(item), 0, fresh);
+    // add_grocery_items mints a NEW unpurchased row; insert it beside the original (which supersede
+    // then hides) so the ingredient reads as unchecked again. If the host omits the new row, the next
+    // read refreshes the list; re-check the index since a re-read may have replaced items meanwhile.
+    const added = res.structuredContent?.items?.[0];
+    const idx = items.indexOf(item);
+    if (added && idx >= 0) items.splice(idx, 0, toRow(added));
   }
 
   function onClear() {
@@ -183,17 +189,15 @@
   }
   async function confirmClear() {
     confirmingClear = false;
-    const before = items.slice();
-    if (!before.some((i) => i.purchased)) return;
-    items = items.filter((i) => !i.purchased); // optimistic sweep
-    const res = await app.callServerTool({
-      name: "clear_purchased_grocery_items",
-      arguments: { listUid: listMeta.uid },
+    if (!items.some((i) => i.purchased)) return;
+    const res = await callTool("clear_purchased_grocery_items", {
+      listUid: listMeta.uid,
     });
-    if (isError(res)) {
-      items = before; // restore
-      showToast("Couldn’t clear — items restored.");
+    if (res.isError) {
+      showToast("Couldn’t clear — try again.");
+      return;
     }
+    items = items.filter((i) => !i.purchased); // sweep only after the server confirms success
   }
 </script>
 
