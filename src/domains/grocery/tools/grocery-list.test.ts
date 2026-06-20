@@ -105,17 +105,33 @@ describe("read_grocery_list tool", () => {
     expect(text).toContain("Milk");
   });
 
-  it("includes each item's UID so the per-item tools can be driven", async () => {
+  it("carries each item's UID on the structured channel; the text table stays clean (B1/#321)", async () => {
     const list = makeGroceryList({ name: "Weekly Shopping" });
     const item1 = makeGroceryItem({ listUid: list.uid, ingredient: "Apples" });
     const item2 = makeGroceryItem({ listUid: list.uid, ingredient: "Milk" });
     kh.seed({ groceryLists: [list], groceryItems: [item1, item2] });
 
-    const text = await kh.callToolText("read_grocery_list", { lookup: { uid: list.uid } });
+    const result = await kh.callTool("read_grocery_list", { lookup: { uid: list.uid } });
 
-    expect(text).toContain("| UID |");
-    expect(text).toContain(`\`${item1.uid}\``);
-    expect(text).toContain(`\`${item2.uid}\``);
+    // The per-item UID column is retired from the text (the includeItemUids flag, #353).
+    expect(getText(result)).not.toContain("| UID |");
+    // The item UIDs now ride structuredContent — the C2 grocery-checklist feed.
+    const structured = result.structuredContent as {
+      uid: string;
+      items: ReadonlyArray<{ uid: string; ingredient: string }>;
+    };
+    expect(structured.uid).toBe(list.uid);
+    expect(structured.items).toHaveLength(2);
+    const uids = structured.items.map((i) => i.uid);
+    expect(uids).toContain(item1.uid);
+    expect(uids).toContain(item2.uid);
+  });
+
+  it("a not-found read carries no structuredContent (errorResult, B1/#321)", async () => {
+    kh.seed({ groceryLists: [], groceryItems: [] });
+    const result = await kh.callTool("read_grocery_list", { lookup: { uid: "nope" } });
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toBeUndefined();
   });
 
   it("renders aisle names from the live catalog, not the item's denormalized copy", async () => {
@@ -261,6 +277,26 @@ describe("create_grocery_list tool", () => {
     expect(kh.client().saveGroceryList).toHaveBeenCalledOnce();
     expect(text).toContain("Weekly Shopping");
   });
+
+  it("carries structuredContent for the new (empty) list (B1/#321)", async () => {
+    vi.mocked(kh.client().saveGroceryList).mockImplementation((list) => okAsync(list));
+    kh.seed({ groceryLists: [], groceryItems: [] });
+
+    const result = await kh.callTool("create_grocery_list", { name: "Weekly Shopping" });
+
+    expect(result.isError).toBeUndefined();
+    expect(result.structuredContent).toMatchObject({ name: "Weekly Shopping", items: [] });
+  });
+
+  it("a duplicate name is an isError with no structuredContent (B1/#321)", async () => {
+    const existing = makeGroceryList({ name: "Weekly Shopping" });
+    kh.seed({ groceryLists: [existing], groceryItems: [] });
+
+    const result = await kh.callTool("create_grocery_list", { name: "weekly shopping" });
+
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toBeUndefined();
+  });
 });
 
 describe("rename_grocery_list tool", () => {
@@ -325,6 +361,28 @@ describe("rename_grocery_list tool", () => {
     expect(text).toContain("already exists");
     expect(text).toContain(listB.uid);
     expect(kh.client().saveGroceryList).not.toHaveBeenCalled();
+  });
+
+  it("carries structuredContent for the renamed list (B1/#321)", async () => {
+    const list = makeGroceryList({ name: "Weekly Shopping" });
+    vi.mocked(kh.client().saveGroceryList).mockImplementation((l) => okAsync(l));
+    kh.seed({ groceryLists: [list], groceryItems: [] });
+
+    const result = await kh.callTool("rename_grocery_list", { uid: list.uid, newName: "Costco Run" });
+
+    expect(result.isError).toBeUndefined();
+    expect(result.structuredContent).toMatchObject({ uid: list.uid, name: "Costco Run" });
+  });
+
+  it("a conflicting rename is an isError with no structuredContent (B1/#321)", async () => {
+    const listA = makeGroceryList({ name: "Weekly Shopping" });
+    const listB = makeGroceryList({ name: "Costco Run" });
+    kh.seed({ groceryLists: [listA, listB], groceryItems: [] });
+
+    const result = await kh.callTool("rename_grocery_list", { uid: listA.uid, newName: "Costco Run" });
+
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toBeUndefined();
   });
 });
 

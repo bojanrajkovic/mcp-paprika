@@ -8,9 +8,9 @@ import type { GroceryItem } from "../grocery-item/types.js";
 import type { GroceryState, GroceryWrites } from "../module.js";
 
 import { defineTool } from "../../../kernel/tool.js";
-import { commitFailure, toolResult } from "../../../shared/tools.js";
+import { commitFailure, errorResult, toolResult } from "../../../shared/tools.js";
 import { NO_AISLE_UID } from "../../aisle/ids.js";
-import { groceryItemToMarkdown } from "../grocery-helpers.js";
+import { groceryItemRowSchema, groceryItemsToRows, groceryItemToMarkdown } from "../grocery-helpers.js";
 import { GroceryIngredientUidSchema, GroceryItemUidSchema, GroceryListUidSchema } from "../ids.js";
 import { groceryStartGuard } from "./guards.js";
 
@@ -148,6 +148,17 @@ export async function buildGroceryItems(
 }
 
 /**
+ * Structured-output payload for `add_grocery_items` (ADR-0019 R1, B1/#321): the parent
+ * list UID plus a row per newly-added item (the new child UIDs the model chains on,
+ * distinguished from the list's pre-existing items). Shares {@link groceryItemRowSchema}
+ * with `read_grocery_list`.
+ */
+export const addGroceryItemsOutputSchema = z.object({
+  listUid: GroceryListUidSchema,
+  items: z.array(groceryItemRowSchema),
+});
+
+/**
  * `add_grocery_items` — batch-add grocery items. Resolves aisles via the declared
  * `aisle` dependency contract (`ctx.deps.aisle.ensureAisle` / `.get` / `.resolveByName`) and
  * writes the grocery-ingredient catalog through this
@@ -165,6 +176,7 @@ export const addGroceryItemsTool = defineTool(
       listUid: GroceryListUidSchema.describe("UID of the grocery list to add items to"),
       items: z.array(itemInputSchema).min(1).describe("Array of items to add (1 or more)"),
     },
+    outputSchema: addGroceryItemsOutputSchema,
   },
   [groceryStartGuard],
   (ctx: DomainCtx<GroceryState, "aisle" | "pantry", GroceryWrites>) => {
@@ -173,35 +185,44 @@ export const addGroceryItemsTool = defineTool(
       // Validate listUid (already brand-typed by the input schema)
       const list = ctx.state.lists.store.get(args.listUid);
       if (list === undefined) {
-        return toolResult(`Grocery list with UID "${args.listUid}" not found.`);
+        return errorResult(`Grocery list with UID "${args.listUid}" not found.`);
       }
 
       // Validate all items (all-or-nothing before any API calls)
       for (const item of args.items) {
         if (item.ingredient.trim() === "") {
-          return toolResult(`Invalid item: ingredient must not be empty.`);
+          return errorResult(`Invalid item: ingredient must not be empty.`);
         }
       }
 
       // Build all GroceryItem objects (aisle resolution + catalog memory), no recipe link.
       const builtItems = await buildGroceryItems(ctx, log, args.listUid, args.items, null);
-      if ("content" in builtItems) return builtItems;
+      // buildGroceryItems is shared with the non-schema add_recipe_to_grocery_list, so it
+      // returns a plain toolResult on failure; under this tool's outputSchema that branch
+      // must be an isError result (no structuredContent), so flag it here.
+      if ("content" in builtItems) return { ...builtItems, isError: true };
 
       // Single batch POST for all items
       const savedItems = (await ctx.infra.client.saveGroceryItems(builtItems)).match(
         (items) => items,
         (e) => {
           log.error({ err: e, listUid: args.listUid }, "saveGroceryItems failed");
-          return toolResult(`Failed to add grocery items: ${e.message}`);
+          return errorResult(`Failed to add grocery items: ${e.message}`);
         },
       );
       if ("content" in savedItems) return savedItems;
-      const commitErr = commitFailure("grocery list", await ctx.writes.commitGroceryItemsBatch(savedItems));
+
+      // The new child UIDs ride structuredContent (and the degraded commit branch), so the
+      // model can chain mark_grocery_item_purchased / update_grocery_item without a re-read.
+      const structured = { listUid: args.listUid, items: groceryItemsToRows(savedItems, ctx.deps.aisle) };
+      const commitErr = commitFailure("grocery list", await ctx.writes.commitGroceryItemsBatch(savedItems), {
+        structuredContent: structured,
+      });
       if (commitErr) return commitErr;
 
       const count = savedItems.length;
       const rendered = savedItems.map((item) => groceryItemToMarkdown(item, ctx.deps.aisle)).join("\n\n---\n\n");
-      return toolResult(`Added ${count.toString()} item(s) to the grocery list.\n\n${rendered}`);
+      return toolResult(`Added ${count.toString()} item(s) to the grocery list.\n\n${rendered}`, structured);
     };
   },
 );

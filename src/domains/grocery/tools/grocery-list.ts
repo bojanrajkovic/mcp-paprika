@@ -8,12 +8,13 @@ import { defineTool } from "../../../kernel/tool.js";
 import {
   commitFailure,
   confirmOrCancel,
+  errorResult,
   formatLookupOutcome,
   resolveLookup,
   toolResult,
   uidOrTextLookupSchema,
 } from "../../../shared/tools.js";
-import { groceryListToMarkdown } from "../grocery-helpers.js";
+import { groceryListReadOutputSchema, groceryListToMarkdown, groceryListToStructured } from "../grocery-helpers.js";
 import { GroceryListUidSchema } from "../ids.js";
 import { groceryStartGuard } from "./guards.js";
 
@@ -88,6 +89,7 @@ export const readGroceryListTool = defineTool(
         textExample: "Weekly Shopping",
       }),
     },
+    outputSchema: groceryListReadOutputSchema,
   },
   [groceryStartGuard],
   (ctx: DomainCtx<GroceryState, "aisle" | "pantry">) => {
@@ -101,10 +103,9 @@ export const readGroceryListTool = defineTool(
         entityNoun: "grocery list",
         describe: (list) => ({ uid: list.uid, label: list.name }),
         findWith: "list_grocery_lists",
-        renderOne: (list) =>
-          groceryListToMarkdown(list, ctx.state.items.store.getByListUid(list.uid), ctx.deps.aisle, {
-            includeItemUids: true,
-          }),
+        renderOne: (list) => groceryListToMarkdown(list, ctx.state.items.store.getByListUid(list.uid), ctx.deps.aisle),
+        renderStructured: (list) =>
+          groceryListToStructured(list, ctx.state.items.store.getByListUid(list.uid), ctx.deps.aisle),
       });
     };
   },
@@ -124,6 +125,7 @@ export const createGroceryListTool = defineTool(
     inputSchema: {
       name: z.string().min(1).describe("Grocery list name (required)"),
     },
+    outputSchema: groceryListReadOutputSchema,
   },
   [groceryStartGuard],
   (ctx: DomainCtx<GroceryState, "aisle" | "pantry", GroceryWrites>) => {
@@ -134,7 +136,7 @@ export const createGroceryListTool = defineTool(
       const matches = ctx.state.lists.store.findByName(args.name);
       const exactMatch = matches.find((l) => l.name.toLowerCase() === args.name.toLowerCase());
       if (exactMatch !== undefined) {
-        return toolResult(
+        return errorResult(
           `A grocery list named "${exactMatch.name}" already exists (UID: ${exactMatch.uid}). ` +
             `Use rename_grocery_list to change its name.`,
         );
@@ -152,13 +154,16 @@ export const createGroceryListTool = defineTool(
 
       return (await ctx.infra.client.saveGroceryList(newList)).match(
         async (saved) => {
-          const commitErr = commitFailure("grocery list", await ctx.writes.commitGroceryList(saved));
+          const structured = groceryListToStructured(saved, [], ctx.deps.aisle);
+          const commitErr = commitFailure("grocery list", await ctx.writes.commitGroceryList(saved), {
+            structuredContent: structured,
+          });
           if (commitErr) return commitErr;
-          return toolResult(groceryListToMarkdown(saved, [], ctx.deps.aisle));
+          return toolResult(groceryListToMarkdown(saved, [], ctx.deps.aisle), structured);
         },
         async (e) => {
           log.error({ err: e, name: args.name }, "saveGroceryList failed");
-          return toolResult(`Failed to create grocery list: ${e.message}`);
+          return errorResult(`Failed to create grocery list: ${e.message}`);
         },
       );
     };
@@ -178,6 +183,7 @@ export const renameGroceryListTool = defineTool(
       uid: GroceryListUidSchema.describe("Grocery list UID to rename"),
       newName: z.string().min(1).describe("New name for the grocery list"),
     },
+    outputSchema: groceryListReadOutputSchema,
   },
   [groceryStartGuard],
   (ctx: DomainCtx<GroceryState, "aisle" | "pantry", GroceryWrites>) => {
@@ -186,13 +192,16 @@ export const renameGroceryListTool = defineTool(
       const existing = ctx.state.lists.store.get(args.uid);
 
       if (!existing) {
-        return toolResult(`No grocery list found with UID "${args.uid}" (it may not exist or was already deleted).`);
+        return errorResult(`No grocery list found with UID "${args.uid}" (it may not exist or was already deleted).`);
       }
 
       // Same-name no-op: case-insensitive check. Return the existing list rendered as markdown.
       if (existing.name.toLowerCase() === args.newName.toLowerCase()) {
         const items = ctx.state.items.store.getByListUid(existing.uid);
-        return toolResult(groceryListToMarkdown(existing, items, ctx.deps.aisle, { includeItemUids: true }));
+        return toolResult(
+          groceryListToMarkdown(existing, items, ctx.deps.aisle),
+          groceryListToStructured(existing, items, ctx.deps.aisle),
+        );
       }
 
       // Conflict check: reject if another list (different UID) has the exact same name.
@@ -201,7 +210,7 @@ export const renameGroceryListTool = defineTool(
         (l) => l.name.toLowerCase() === args.newName.toLowerCase() && l.uid !== args.uid,
       );
       if (conflict !== undefined) {
-        return toolResult(
+        return errorResult(
           `A grocery list named "${conflict.name}" already exists (UID: ${conflict.uid}). Choose a different name.`,
         );
       }
@@ -210,14 +219,17 @@ export const renameGroceryListTool = defineTool(
 
       return (await ctx.infra.client.saveGroceryList(renamed)).match(
         async (saved) => {
-          const commitErr = commitFailure("grocery list", await ctx.writes.commitGroceryList(saved));
-          if (commitErr) return commitErr;
           const items = ctx.state.items.store.getByListUid(saved.uid);
-          return toolResult(groceryListToMarkdown(saved, items, ctx.deps.aisle, { includeItemUids: true }));
+          const structured = groceryListToStructured(saved, items, ctx.deps.aisle);
+          const commitErr = commitFailure("grocery list", await ctx.writes.commitGroceryList(saved), {
+            structuredContent: structured,
+          });
+          if (commitErr) return commitErr;
+          return toolResult(groceryListToMarkdown(saved, items, ctx.deps.aisle), structured);
         },
         async (e) => {
           log.error({ err: e, uid: args.uid, newName: args.newName }, "saveGroceryList failed");
-          return toolResult(`Failed to rename grocery list: ${e.message}`);
+          return errorResult(`Failed to rename grocery list: ${e.message}`);
         },
       );
     };
