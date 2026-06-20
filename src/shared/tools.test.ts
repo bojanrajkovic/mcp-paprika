@@ -8,6 +8,7 @@ import { getText } from "../../test/support/tool-test-utils.js";
 import { RecipeUidSchema } from "../domains/recipe/ids.js";
 import {
   commitFailure,
+  confirmOrCancel,
   formatLookupOutcome,
   imageResult,
   type LookupOutcome,
@@ -219,6 +220,32 @@ describe("resolveOrPick (text_many → disambiguation PICK, ADR-0020)", () => {
     const resolved = await resolveOrPick(server, { kind: "text_many", text: "Item", matches }, config);
     expect(asked).toBe(false);
     expect("result" in resolved).toBe(true);
+  });
+});
+
+describe("confirmOrCancel (destructive-tool confirm gate, ADR-0020)", () => {
+  const opts = { message: "Permanently delete X?", cancelled: "Cancelled — X was not deleted." };
+
+  it("returns the plain cancel result (not isError) when the user declines", async () => {
+    const stop = await confirmOrCancel(
+      elicitServer(() => ({ action: "decline" })),
+      opts,
+    );
+    expect(stop ? getText(stop) : "").toBe("Cancelled — X was not deleted.");
+    expect(stop?.isError).toBeUndefined();
+  });
+
+  it("returns undefined (proceed) when the user accepts", async () => {
+    expect(
+      await confirmOrCancel(
+        elicitServer(() => ({ action: "accept" })),
+        opts,
+      ),
+    ).toBeUndefined();
+  });
+
+  it("returns undefined (fail-open) when the client cannot be elicited", async () => {
+    expect(await confirmOrCancel(elicitServer(), opts)).toBeUndefined();
   });
 });
 

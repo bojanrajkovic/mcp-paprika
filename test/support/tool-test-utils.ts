@@ -2,13 +2,23 @@ import { Writable } from "node:stream";
 
 import type { ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import type {
+  CallToolResult,
+  ClientCapabilities,
+  ElicitRequestFormParams,
+  ElicitResult,
+} from "@modelcontextprotocol/sdk/types.js";
 import type { ResultAsync } from "neverthrow";
 import pino from "pino";
 import type { Logger } from "pino";
 import { vi } from "vitest";
 
 import type { Notifier } from "../../src/server/notifier.js";
+
+/** A client's answer to a form elicitation; capable iff a responder is present. */
+export type ElicitResponder = (params: ElicitRequestFormParams) => ElicitResult | Promise<ElicitResult>;
+
+const FORM_CAPABLE = { elicitation: { form: {} } } as unknown as ClientCapabilities;
 
 /**
  * Shape returned by `makePinoCapture()`. `log` is the capture logger;
@@ -86,10 +96,15 @@ export function makeTestServer(): {
   callResourceList: (name: string) => Promise<unknown>;
   callResource: (name: string, uid: string, uri?: string) => Promise<unknown>;
   sendResourceListChanged: ReturnType<typeof vi.fn>;
+  setElicitResponder: (responder?: ElicitResponder) => void;
 } {
   const handlers = new Map<string, (args: Record<string, unknown>) => Promise<CallToolResult>>();
   const resourceHandlers = new Map<string, ResourceEntry>();
   const sendResourceListChanged = vi.fn();
+  // Drives the elicitation gate (ADR-0020): unset → no client capability → the gate is
+  // unsupported → fail-open (a confirm proceeds, a PICK falls back to prose). A test sets
+  // a responder via setElicitResponder to exercise the accept / decline paths.
+  let elicitResponder: ElicitResponder | undefined;
 
   const server = {
     registerTool(name: string, _config: unknown, handler: (args: Record<string, unknown>) => Promise<CallToolResult>) {
@@ -107,12 +122,13 @@ export function makeTestServer(): {
       });
     },
     sendResourceListChanged,
-    // The base Server slice the elicitation helpers (ADR-0020) read off `ctx.server.server`:
-    // no client is connected in a unit test, so capabilities are undefined → the gate is
-    // unsupported → fail-open, and a uid-or-text PICK falls back to the disambiguation prose.
+    // The base Server slice the elicitation helpers (ADR-0020) read off `ctx.server.server`.
     server: {
-      getClientCapabilities: () => undefined,
-      elicitInput: () => Promise.reject(new Error("makeTestServer: elicitInput is not stubbed")),
+      getClientCapabilities: () => (elicitResponder ? FORM_CAPABLE : undefined),
+      elicitInput: async (params: ElicitRequestFormParams) => {
+        if (!elicitResponder) throw new Error("makeTestServer: no elicit responder set");
+        return elicitResponder(params);
+      },
     },
   } as unknown as McpServer;
 
@@ -136,6 +152,9 @@ export function makeTestServer(): {
       return entry.read(url, { uid } as Record<string, string | string[]>);
     },
     sendResourceListChanged,
+    setElicitResponder: (responder) => {
+      elicitResponder = responder;
+    },
   };
 }
 

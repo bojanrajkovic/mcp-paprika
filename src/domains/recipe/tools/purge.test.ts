@@ -75,6 +75,19 @@ describe("purge_recipe tool", () => {
       expect(getText(result).toLowerCase()).toContain("permanently deleted");
       expect(kh.client().saveRecipe).toHaveBeenCalledOnce();
     });
+
+    it("declining the confirm cancels without writing", async () => {
+      const trashed = makeRecipe({ name: "Old Soup", inTrash: true });
+      vi.mocked(kh.client().getRecipe).mockReturnValue(okAsync(trashed));
+      kh.seed({ recipes: [makeRecipe({ name: "Keeper" })] }); // flips hasSynced
+
+      kh.setElicitResponder(() => ({ action: "decline" }));
+      const result = await kh.callTool("purge_recipe", { uid: trashed.uid });
+      const text = getText(result);
+
+      expect(text).toContain("Cancelled");
+      expect(kh.client().saveRecipe).not.toHaveBeenCalled();
+    });
   });
 
   describe("guards against destroying live recipes", () => {

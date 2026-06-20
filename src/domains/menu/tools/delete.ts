@@ -5,6 +5,7 @@ import type { Menu } from "../types.js";
 import { defineTool } from "../../../kernel/tool.js";
 import {
   commitFailure,
+  confirmOrCancel,
   resolveLookup,
   resolveOrPick,
   toolResult,
@@ -51,6 +52,12 @@ export const deleteMenuTool = defineTool(
       if ("result" in resolved) return resolved.result;
       const existing = resolved.entity;
       const items = ctx.state.items.store.getByMenuUid(existing.uid);
+
+      const stop = await confirmOrCancel(ctx.server.server, {
+        message: `Delete menu "${existing.name}" and its ${items.length.toString()} planned recipe(s)? This is permanent.`,
+        cancelled: `Cancelled — "${existing.name}" was not deleted.`,
+      });
+      if (stop) return stop;
 
       // Cascade: tombstone the menuitems FIRST (children before parent), so a
       // failure to tombstone the menu leaves orphaned-but-visible items the next

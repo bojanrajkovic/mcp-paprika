@@ -18,6 +18,26 @@ describe("move_grocery_items_to_pantry tool", () => {
   beforeEach(kh.setup);
   afterEach(kh.teardown);
 
+  it("declining the confirm cancels without writing", async () => {
+    const item = makeGroceryItem({
+      uid: "ITEM-1" as GroceryItemUid,
+      ingredient: "Apples",
+      aisle: "Produce",
+      aisleUid: "AISLE-1",
+      listUid: "LIST-1",
+    });
+    kh.seed({ pantry: [], groceryLists: [WEEKLY_LIST], groceryItems: [item] });
+
+    kh.setElicitResponder(() => ({ action: "decline" }));
+
+    const result = await kh.callTool("move_grocery_items_to_pantry", { uids: ["ITEM-1"] });
+    const text = getText(result);
+
+    expect(text).toContain("Cancelled");
+    expect(kh.client().savePantryItems).not.toHaveBeenCalled();
+    expect(kh.client().saveGroceryItems).not.toHaveBeenCalled();
+  });
+
   it("single UID creates pantry item then deletes grocery item", async () => {
     const item = makeGroceryItem({
       uid: "ITEM-1" as GroceryItemUid,

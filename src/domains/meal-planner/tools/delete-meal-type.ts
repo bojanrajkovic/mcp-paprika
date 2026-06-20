@@ -1,7 +1,7 @@
 import type { DomainCtx } from "../../../kernel/registry.js";
 
 import { defineTool } from "../../../kernel/tool.js";
-import { toolResult } from "../../../shared/tools.js";
+import { confirmOrCancel, toolResult } from "../../../shared/tools.js";
 import { MealTypeUidSchema } from "../../meal-type/ids.js";
 import { deleteMealTypeStartGuard } from "./guards.js";
 
@@ -54,6 +54,12 @@ export const deleteMealTypeTool = defineTool(
             "`update_meal_type` instead.",
         );
       }
+
+      const stop = await confirmOrCancel(ctx.server.server, {
+        message: `Delete the meal type "${existing.name}"? Meals and menu items using it will show no type, and a re-created type is a new identity.`,
+        cancelled: `Cancelled — "${existing.name}" was not deleted.`,
+      });
+      if (stop) return stop;
 
       const mealRefs = ctx.deps.meal.countByTypeUid(args.uid);
       const menuItemRefs = ctx.deps.menu.itemCountByTypeUid(args.uid);

@@ -86,6 +86,18 @@ describe("delete_aisle tool", () => {
     expect(aisleState().store.get(aisle.uid)).toBeUndefined();
   });
 
+  it("declining the confirm cancels without writing", async () => {
+    const aisle = makeAisle({ name: "Bakery" });
+    seedBase(aisle);
+
+    kh.setElicitResponder(() => ({ action: "decline" }));
+
+    const text = await kh.callToolText("delete_aisle", { uid: aisle.uid });
+
+    expect(text).toContain("Cancelled");
+    expect(kh.client().saveAisles).not.toHaveBeenCalled();
+  });
+
   it("surfaces a save failure and keeps the aisle", async () => {
     const aisle = makeAisle({ name: "Bakery" });
     seedBase(aisle);

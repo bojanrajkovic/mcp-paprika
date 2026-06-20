@@ -17,7 +17,7 @@ import { registeredModules } from "../../src/kernel/registry.js";
 import { createIndexEvents } from "../../src/server/index-events.js";
 import { SILENT_LOG } from "../../src/utils/log.js";
 import { getCacheDir } from "../../src/utils/xdg.js";
-import { getText, makeStubNotifier, makeTestServer } from "./tool-test-utils.js";
+import { type ElicitResponder, getText, makeStubNotifier, makeTestServer } from "./tool-test-utils.js";
 import { useXdgIsolation } from "./xdg-isolation.js";
 // Side-effect: every domain/feature module self-registers, so `registeredModules()`
 // is populated and the harness can resolve any module + its deps by id.
@@ -153,6 +153,7 @@ interface LiveHarness {
   readonly callTool: (name: string, args: Record<string, unknown>) => Promise<CallToolResult>;
   readonly callResourceList: (name: string) => Promise<unknown>;
   readonly callResource: (name: string, uid: string, uri?: string) => Promise<unknown>;
+  readonly setElicitResponder: (responder?: ElicitResponder) => void;
   readonly built: ReadonlyMap<string, Built>;
   readonly rootState: unknown;
   readonly rootWrites: unknown;
@@ -198,6 +199,8 @@ export interface KernelHarness<State = unknown, Writes = unknown> {
   readonly callToolText: (name: string, args: Record<string, unknown>) => Promise<string>;
   readonly callResourceList: (name: string) => Promise<unknown>;
   readonly callResource: (name: string, uid: string, uri?: string) => Promise<unknown>;
+  /** Drive the elicitation gate (ADR-0020): set an accept/decline responder, or unset to fail-open. */
+  readonly setElicitResponder: (responder?: ElicitResponder) => void;
   readonly seed: (data: SeedData) => void;
   /** The root module's `state`, typed via the `State` generic (e.g. `useKernelHarness<RecipeState>("recipe")`). */
   readonly state: () => State;
@@ -244,7 +247,7 @@ export function useKernelHarness<State = unknown, Writes = unknown>(
       const deps: Record<string, unknown> = {};
       for (const depId of rootModule.dependsOn) deps[depId] = built.get(depId)!.api;
 
-      const { server, callTool, callResourceList, callResource } = makeTestServer();
+      const { server, callTool, callResourceList, callResource, setElicitResponder } = makeTestServer();
       const ctx = { state: root.state, writes: root.writes ?? {}, deps, infra, server };
       for (const tool of root.tools) tool.register(ctx);
       for (const resource of root.resources ?? []) resource(ctx);
@@ -254,6 +257,7 @@ export function useKernelHarness<State = unknown, Writes = unknown>(
         callTool,
         callResourceList,
         callResource,
+        setElicitResponder,
         built,
         rootState: root.state,
         rootWrites: root.writes ?? {},
@@ -270,6 +274,7 @@ export function useKernelHarness<State = unknown, Writes = unknown>(
     callToolText: async (name, args) => getText(await live().callTool(name, args)),
     callResourceList: (name) => live().callResourceList(name),
     callResource: (name, uid, uri) => live().callResource(name, uid, uri),
+    setElicitResponder: (responder) => live().setElicitResponder(responder),
     seed: (data) => {
       seedBuilt(live().built, data);
     },

@@ -66,6 +66,24 @@ describe("clear_purchased_grocery_items tool", () => {
     expect(state.items.store.get("ITEM-U1" as GroceryItemUid)).toBeDefined();
   });
 
+  it("declining the confirm cancels without writing", async () => {
+    const purchasedItem = makeGroceryItem({
+      uid: "ITEM-P1" as GroceryItemUid,
+      ingredient: "Apples",
+      listUid: "LIST-1",
+      purchased: true,
+    });
+    kh.seed({ groceryLists: [WEEKLY_LIST], groceryItems: [purchasedItem] });
+
+    kh.setElicitResponder(() => ({ action: "decline" }));
+
+    const result = await kh.callTool("clear_purchased_grocery_items", { listUid: "LIST-1" });
+    const text = getText(result);
+
+    expect(text).toContain("Cancelled");
+    expect(kh.client().saveGroceryItems).not.toHaveBeenCalled();
+  });
+
   it("returns informational message when no purchased items, saveGroceryItems NOT called", async () => {
     const unpurchasedItem = makeGroceryItem({
       uid: "ITEM-U1" as GroceryItemUid,
@@ -154,6 +172,26 @@ describe("clear_grocery_list tool", () => {
     // All items removed from the store
     const state = kh.state();
     expect(state.items.store.getByListUid("LIST-1" as GroceryListUid)).toHaveLength(0);
+  });
+
+  it("declining the confirm cancels without writing", async () => {
+    const items = [
+      makeGroceryItem({
+        uid: "ITEM-1" as GroceryItemUid,
+        ingredient: "Apples",
+        listUid: "LIST-1",
+        purchased: true,
+      }),
+    ];
+    kh.seed({ groceryLists: [WEEKLY_LIST], groceryItems: items });
+
+    kh.setElicitResponder(() => ({ action: "decline" }));
+
+    const result = await kh.callTool("clear_grocery_list", { listUid: "LIST-1" });
+    const text = getText(result);
+
+    expect(text).toContain("Cancelled");
+    expect(kh.client().saveGroceryItems).not.toHaveBeenCalled();
   });
 
   it("empty list returns informational message, saveGroceryItems NOT called", async () => {

@@ -385,4 +385,17 @@ describe("delete_grocery_list tool", () => {
     // The auto-stubbing mock client would record any saveGroceryItems call if it happened
     expect(kh.client().saveGroceryItems).not.toHaveBeenCalled();
   });
+
+  it("declining the confirm cancels without writing", async () => {
+    const list = makeGroceryList({ name: "Weekly Shopping" });
+    vi.mocked(kh.client().saveGroceryList).mockImplementation((l) => okAsync(l));
+    kh.seed({ groceryLists: [list], groceryItems: [] });
+
+    kh.setElicitResponder(() => ({ action: "decline" }));
+
+    const text = await kh.callToolText("delete_grocery_list", { uid: list.uid });
+
+    expect(text).toContain("Cancelled");
+    expect(kh.client().saveGroceryList).not.toHaveBeenCalled();
+  });
 });
