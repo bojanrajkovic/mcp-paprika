@@ -321,7 +321,9 @@ register(
       const attachGeneratedPhoto: RecipeApi["attachGeneratedPhoto"] = async (recipeUid, full) => {
         const recipe = state.recipe.store.get(recipeUid);
         if (recipe === undefined)
-          return err({ message: `No recipe found with UID "${recipeUid}" (it may not exist or was already deleted).` });
+          return err({
+            message: `No recipe found with UID "${recipeUid}" (it may not exist or was already deleted). Use \`search_recipes\` to find it.`,
+          });
         // Gate on the photo catalog being synced — order_flag/name derive from the existing
         // gallery, so attaching before photos sync could assign a colliding index.
         if (!state.photo.store.hasSynced) {

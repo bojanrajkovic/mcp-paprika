@@ -134,7 +134,9 @@ export const updateCategoryTool = defineTool(
     return async (args) => {
       const existing = ctx.state.category.store.get(args.uid);
       if (existing === undefined)
-        return toolResult(`No category found with UID "${args.uid}" (it may not exist or was already deleted).`);
+        return toolResult(
+          `No category found with UID "${args.uid}" (it may not exist or was already deleted). Use \`list_categories\` to find it.`,
+        );
 
       if (args.name === undefined && args.parentUid === undefined) {
         return toolResult("Nothing to update: provide `name`, `parentUid`, or both.");

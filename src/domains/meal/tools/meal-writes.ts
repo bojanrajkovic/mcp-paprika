@@ -348,7 +348,9 @@ export const updateMealTool = defineTool(
       const existing = ctx.state.store.get(uid);
 
       if (existing === undefined) {
-        return toolResult(`No meal found with UID "${uid}" (it may not exist or was already deleted).`);
+        return toolResult(
+          `No meal found with UID "${uid}" (it may not exist or was already deleted). Use \`read_meal_plan\` to find it.`,
+        );
       }
       // Resolve recipe_uid and name interaction. The structural union ensures we
       // never see (recipe_uid: <UID>, name: <X>) together — that combination

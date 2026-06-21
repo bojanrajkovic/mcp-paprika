@@ -155,7 +155,9 @@ export const uploadPhotoTool = defineTool(
     return async (args) => {
       const recipe = ctx.state.recipe.store.get(args.recipe_uid);
       if (recipe === undefined)
-        return toolResult(`No recipe found with UID "${args.recipe_uid}" (it may not exist or was already deleted).`);
+        return toolResult(
+          `No recipe found with UID "${args.recipe_uid}" (it may not exist or was already deleted). Use \`search_recipes\` to find it.`,
+        );
 
       const resolved = await resolveSource(args.source, args.recipe_uid, ctx.infra.generatedImageStore);
       if ("error" in resolved) return toolResult(resolved.error);

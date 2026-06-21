@@ -32,7 +32,9 @@ export const trashRecipeTool = defineTool(
       const recipe = ctx.state.recipe.store.get(args.uid);
 
       if (!recipe) {
-        return toolResult(`No recipe found with UID "${args.uid}" (it may not exist or was already deleted).`);
+        return toolResult(
+          `No recipe found with UID "${args.uid}" (it may not exist or was already deleted). Use \`search_recipes\` to find it.`,
+        );
       }
 
       if (recipe.inTrash) {

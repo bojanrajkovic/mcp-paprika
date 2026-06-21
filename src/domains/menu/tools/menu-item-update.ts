@@ -52,7 +52,9 @@ export const updateMenuItemTool = defineTool(
       const uid = args.uid;
       const existing = ctx.state.items.store.get(uid);
       if (existing === undefined) {
-        return toolResult(`No menu item found with UID "${uid}" (it may not exist or was already deleted).`);
+        return toolResult(
+          `No menu item found with UID "${uid}" (it may not exist or was already deleted). Use \`read_menu\` to inspect its menu.`,
+        );
       }
       // Resolve recipe link + refreshed display name if a new recipe is supplied.
       let newRecipeUid: RecipeUid | null = existing.recipeUid;

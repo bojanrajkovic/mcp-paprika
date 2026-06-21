@@ -259,7 +259,9 @@ export const updateGroceryItemTool = defineTool(
     return async (args) => {
       const existing = ctx.state.items.store.get(args.uid);
       if (existing === undefined) {
-        return toolResult(`No grocery item found with UID "${args.uid}" (it may not exist or was already deleted).`);
+        return toolResult(
+          `No grocery item found with UID "${args.uid}" (it may not exist or was already deleted). Use \`read_grocery_list\` to inspect its list.`,
+        );
       }
 
       const aisleUpdate =

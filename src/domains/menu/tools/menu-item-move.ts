@@ -46,7 +46,9 @@ export const moveMenuItemTool = defineTool(
       const uid = args.uid;
       const existing = ctx.state.items.store.get(uid);
       if (existing === undefined) {
-        return toolResult(`No menu item found with UID "${uid}" (it may not exist or was already deleted).`);
+        return toolResult(
+          `No menu item found with UID "${uid}" (it may not exist or was already deleted). Use \`read_menu\` to inspect its menu.`,
+        );
       }
       // Idempotent no-op: already on the requested day. Returning early avoids a
       // wasted POST + a pointless menu-wide re-sequence.

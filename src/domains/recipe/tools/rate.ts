@@ -32,7 +32,9 @@ export const rateRecipeTool = defineTool(
       const existing = ctx.state.recipe.store.get(args.uid);
 
       if (!existing) {
-        return toolResult(`No recipe found with UID "${args.uid}" (it may not exist or was already deleted).`);
+        return toolResult(
+          `No recipe found with UID "${args.uid}" (it may not exist or was already deleted). Use \`search_recipes\` to find it.`,
+        );
       }
 
       const updated = { ...existing, rating: args.rating };

@@ -55,7 +55,9 @@ export const rescheduleMealTool = defineTool(
       const existing = ctx.state.store.get(uid);
 
       if (existing === undefined) {
-        return toolResult(`No meal found with UID "${uid}" (it may not exist or was already deleted).`);
+        return toolResult(
+          `No meal found with UID "${uid}" (it may not exist or was already deleted). Use \`read_meal_plan\` to find it.`,
+        );
       }
 
       // Normalize the destination date in its own calendar zone (see plan_meals).
