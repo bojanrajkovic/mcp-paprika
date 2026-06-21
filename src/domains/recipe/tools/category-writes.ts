@@ -93,7 +93,7 @@ export const createCategoryTool = defineTool(
       };
 
       return (await ctx.infra.client.saveCategory(category)).match(
-        async (saved): Promise<CallToolResult> => {
+        async (saved) => {
           const structured = categoryToStructured(saved);
           const commitErr = commitFailure("category", await ctx.writes.commitCategoryUpsert(saved), {
             structuredContent: structured,

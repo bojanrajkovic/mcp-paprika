@@ -20,12 +20,13 @@ import { err } from "neverthrow";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
+import type { TypedCallToolResult } from "../shared/tools.js";
 import type { DomainCtx, Infra } from "./registry.js";
 
 import { connectInMemoryMcp } from "../../test/support/in-memory-mcp.js";
 import { buildBrandedServer } from "../server/build.js";
 import { UI_RESOURCE_URI_META_KEY } from "../shared/mcp-app.js";
-import { errorResult, toolResult } from "../shared/tools.js";
+import { commitFailure, errorResult, toolResult } from "../shared/tools.js";
 import { SILENT_LOG } from "../utils/log.js";
 import { defineTool } from "./tool.js";
 
@@ -86,7 +87,7 @@ describe("defineTool — advertised tools/list surface", () => {
         description: "Echoes its query back with a structured payload.",
         annotations: { readOnlyHint: true },
         inputSchema: { query: z.string() },
-        outputSchema: { echoed: z.string() },
+        outputSchema: z.object({ echoed: z.string() }),
       },
       (_ctx: DomainCtx<unknown, never>) => (args) => toolResult(`echo:${args.query}`, { echoed: args.query }),
     );
@@ -115,6 +116,12 @@ describe("defineTool — advertised tools/list surface", () => {
 
   it("rejects a non-error result that omits structuredContent on a schema-bearing tool", async () => {
     const server = buildBrandedServer();
+    // The compile-time guard (TypedCallToolResult<O>, pinned in tool.type.test.ts) now
+    // ALSO rejects this handler statically — returning bare toolResult(text) under a
+    // declared outputSchema is a type error. This case proves the SDK's runtime
+    // validateToolOutput is still a defense-in-depth backstop for a result that reaches
+    // the wire wrong despite the types (e.g. via a cast), so the handler's return is cast
+    // past the guard on purpose to exercise that runtime path.
     const tool = defineTool(
       {
         name: "echo_missing_structured",
@@ -122,9 +129,11 @@ describe("defineTool — advertised tools/list surface", () => {
         description: "A schema-bearing tool whose handler returns a non-error result with no structuredContent.",
         annotations: { readOnlyHint: true },
         inputSchema: { query: z.string() },
-        outputSchema: { echoed: z.string() },
+        outputSchema: z.object({ echoed: z.string() }),
       },
-      (_ctx: DomainCtx<unknown, never>) => (args) => toolResult(`echo:${args.query}`),
+      (_ctx: DomainCtx<unknown, never>) =>
+        (args): TypedCallToolResult<{ echoed: string }> =>
+          toolResult(`echo:${args.query}`) as unknown as TypedCallToolResult<{ echoed: string }>,
     );
     tool.register(makeCtx(server));
 
@@ -201,6 +210,38 @@ describe("defineTool — advertised tools/list surface", () => {
       await mcp.close();
     }
   });
+
+  it("accepts a schema-bearing write tool's commit-divergence branch as a valid non-error result", async () => {
+    const server = buildBrandedServer();
+    const payload = { written: "x" };
+    const tool = defineTool(
+      {
+        name: "write_commit_diverge",
+        title: "Write (commit-diverge)",
+        description: "A schema-bearing write tool whose local commit fails after a successful Paprika POST.",
+        annotations: { readOnlyHint: false },
+        inputSchema: {},
+        outputSchema: z.object({ written: z.string() }),
+      },
+      (_ctx: DomainCtx<unknown, never>) => async (_args) => {
+        // Simulate: Paprika POST succeeded, local commit failed.
+        const ce = commitFailure("entity", err({ message: "disk full" }), { structuredContent: payload });
+        // The degraded branch must be a valid non-error result under the declared outputSchema.
+        return ce ?? toolResult("ok", payload);
+      },
+    );
+    tool.register(makeCtx(server));
+
+    const mcp = await connectInMemoryMcp(server);
+    try {
+      const result = await mcp.client.callTool({ name: "write_commit_diverge", arguments: {} });
+      // SDK validateToolOutput must accept this: isError falsy + structuredContent present.
+      expect(result.isError).toBeFalsy();
+      expect(result.structuredContent).toEqual(payload);
+    } finally {
+      await mcp.close();
+    }
+  });
 });
 
 /**
@@ -226,7 +267,7 @@ describe("defineTool — precondition gates are exempt from output validation", 
         description: "A schema-bearing tool whose precondition gates with a plain (non-error) toolResult.",
         annotations: { readOnlyHint: true },
         inputSchema: { query: z.string() },
-        outputSchema: { echoed: z.string() },
+        outputSchema: z.object({ echoed: z.string() }),
       },
       [(_ctx: DomainCtx<unknown, never>) => err(toolResult("not ready"))],
       (_ctx: DomainCtx<unknown, never>) => (args) => toolResult(`echo:${args.query}`, { echoed: args.query }),
@@ -257,7 +298,7 @@ describe("defineTool — precondition gates are exempt from output validation", 
         description: "A schema-bearing tool whose precondition gates with an errorResult.",
         annotations: { readOnlyHint: true },
         inputSchema: { query: z.string() },
-        outputSchema: { echoed: z.string() },
+        outputSchema: z.object({ echoed: z.string() }),
       },
       [(_ctx: DomainCtx<unknown, never>) => err(errorResult("not ready"))],
       (_ctx: DomainCtx<unknown, never>) => (args) => toolResult(`echo:${args.query}`, { echoed: args.query }),

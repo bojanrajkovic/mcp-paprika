@@ -304,7 +304,9 @@ describe("commitFailure", () => {
   it("carries structuredContent on the degraded branch when a schema-bearing caller passes it (B1/#321)", () => {
     const payload = { uid: "L1", name: "Weekly" };
     const result = commitFailure("grocery list", err({ message: "disk full" }), { structuredContent: payload });
-    expect(result?.structuredContent).toEqual(payload);
+    // result is TypedCallToolResult<O> | undefined — narrow to the success branch for the assertion
+    const asRecord = result as { structuredContent?: unknown } | undefined;
+    expect(asRecord?.structuredContent).toEqual(payload);
     expect(getText(result!)).toContain("saved to Paprika");
   });
 
