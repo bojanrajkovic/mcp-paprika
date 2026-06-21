@@ -59,11 +59,14 @@ const STYLES = `
     --line: oklch(0.90 0.008 70); --line-2: oklch(0.83 0.010 70);
     --paprika-red: oklch(0.543 0.174 30); --paprika-red-ink: oklch(0.99 0.01 75); --dest-bg: oklch(0.965 0.012 70); /* --paprika-red = #C0392B, the connector identity color */
     --mono: ui-monospace, "SF Mono", Menlo, monospace;
-    --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    /* Editorial serif (the NYT-Cooking register), a deliberate brand choice that rhymes with the
+       widgets' serif voice in a serif-first host. The page is standalone (no host shell to match), so
+       this is a fixed system serif, not host-adopted. The redirect host stays --mono (its anchor). */
+    --serif: Georgia, "Times New Roman", ui-serif, serif;
   }
   * { box-sizing: border-box; }
   body { margin: 0; min-height: 100vh; background: var(--paper); color: var(--ink);
-    font-family: var(--sans); line-height: 1.5; display: grid; place-items: center; padding: 24px; }
+    font-family: var(--serif); line-height: 1.5; display: grid; place-items: center; padding: 24px; }
   .screen { width: 100%; max-width: 440px; background: var(--card); border: 1px solid var(--line);
     border-radius: 14px; overflow: clip;
     box-shadow: 0 1px 2px oklch(0.5 0.02 70 / 0.05), 0 8px 24px oklch(0.5 0.02 70 / 0.06); }
