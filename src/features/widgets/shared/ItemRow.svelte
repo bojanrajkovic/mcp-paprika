@@ -49,5 +49,8 @@
   }
   .body.done .qty {
     color: var(--faint);
+    /* match the name's size when struck, so the line-through stays level across the whole row: a
+       smaller quantity seats its strike lower and the line visibly steps at the "·". */
+    font-size: inherit;
   }
 </style>
