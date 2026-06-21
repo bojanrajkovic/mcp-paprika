@@ -8,6 +8,7 @@
         "role": "primary",
         "displayName": "Paprika",
         "canonical": "oklch(0.543 0.174 30)",
+        "dark": "oklch(0.7 0.155 33)",
         "hex": "#C0392B",
         "tonalRamp": [
           "oklch(0.15 0.06 30)",
@@ -20,35 +21,19 @@
           "oklch(0.92 0.04 30)"
         ]
       },
-      "paprika-orange": {
-        "role": "primary",
-        "displayName": "Paprika Orange",
-        "canonical": "oklch(0.62 0.15 47)",
-        "dark": "oklch(0.72 0.15 48)",
-        "tonalRamp": [
-          "oklch(0.15 0.05 47)",
-          "oklch(0.25 0.08 47)",
-          "oklch(0.36 0.11 47)",
-          "oklch(0.48 0.14 47)",
-          "oklch(0.62 0.15 47)",
-          "oklch(0.72 0.15 48)",
-          "oklch(0.83 0.10 50)",
-          "oklch(0.93 0.04 52)"
-        ]
-      },
       "paprika-ink": {
         "role": "primary",
         "displayName": "Paprika Ink",
-        "canonical": "oklch(0.99 0.012 52)",
+        "canonical": "oklch(0.99 0.012 40)",
         "tonalRamp": [
-          "oklch(0.20 0.03 45)",
-          "oklch(0.35 0.03 48)",
-          "oklch(0.50 0.025 50)",
-          "oklch(0.66 0.02 52)",
-          "oklch(0.80 0.015 52)",
-          "oklch(0.90 0.013 52)",
-          "oklch(0.95 0.012 52)",
-          "oklch(0.99 0.012 52)"
+          "oklch(0.20 0.03 35)",
+          "oklch(0.35 0.03 37)",
+          "oklch(0.50 0.025 38)",
+          "oklch(0.66 0.02 39)",
+          "oklch(0.80 0.015 40)",
+          "oklch(0.90 0.013 40)",
+          "oklch(0.95 0.012 40)",
+          "oklch(0.99 0.012 40)"
         ]
       },
       "fresh-green": {
@@ -117,33 +102,33 @@
       "alert-red": {
         "role": "secondary",
         "displayName": "Alert Red",
-        "canonical": "oklch(0.54 0.21 22)",
-        "dark": "oklch(0.67 0.2 22)",
+        "canonical": "oklch(0.56 0.215 29)",
+        "dark": "oklch(0.7 0.2 29)",
         "tonalRamp": [
-          "oklch(0.16 0.06 22)",
-          "oklch(0.26 0.11 22)",
-          "oklch(0.36 0.15 22)",
-          "oklch(0.46 0.19 22)",
-          "oklch(0.54 0.21 22)",
-          "oklch(0.66 0.19 22)",
-          "oklch(0.80 0.11 22)",
-          "oklch(0.96 0.045 22)"
+          "oklch(0.16 0.06 29)",
+          "oklch(0.26 0.11 29)",
+          "oklch(0.37 0.15 29)",
+          "oklch(0.47 0.19 29)",
+          "oklch(0.56 0.215 29)",
+          "oklch(0.68 0.19 29)",
+          "oklch(0.82 0.11 28)",
+          "oklch(0.955 0.042 27)"
         ]
       },
       "alert-red-bg": {
         "role": "secondary",
         "displayName": "Alert Red Surface",
-        "canonical": "oklch(0.96 0.045 22)",
-        "dark": "oklch(0.29 0.07 22)",
+        "canonical": "oklch(0.955 0.042 27)",
+        "dark": "oklch(0.31 0.075 27)",
         "tonalRamp": [
-          "oklch(0.29 0.07 22)",
-          "oklch(0.42 0.09 22)",
-          "oklch(0.55 0.09 22)",
-          "oklch(0.68 0.085 22)",
-          "oklch(0.82 0.07 22)",
-          "oklch(0.90 0.06 22)",
-          "oklch(0.94 0.05 22)",
-          "oklch(0.96 0.045 22)"
+          "oklch(0.31 0.075 27)",
+          "oklch(0.43 0.09 27)",
+          "oklch(0.55 0.09 27)",
+          "oklch(0.68 0.085 27)",
+          "oklch(0.82 0.07 27)",
+          "oklch(0.90 0.06 27)",
+          "oklch(0.94 0.05 27)",
+          "oklch(0.955 0.042 27)"
         ]
       },
       "paper": {
@@ -339,9 +324,9 @@
       "name": "Accent Pill (Restock)",
       "kind": "chip",
       "refersTo": "pill-accent",
-      "description": "A widget action pill in the paprika-orange brand accent — the pantry Restock.",
+      "description": "A widget action pill in the paprika brand accent — the pantry Restock.",
       "html": "<button class=\"ds-pill-accent\">Restock</button>",
-      "css": ".ds-pill-accent { appearance: none; background: transparent; color: oklch(0.62 0.15 47); font: 600 12px system-ui, -apple-system, sans-serif; padding: 4px 12px; border: 1px solid color-mix(in oklch, oklch(0.62 0.15 47) 45%, transparent); border-radius: 999px; cursor: pointer; transition: background 0.13s; } .ds-pill-accent:hover { background: color-mix(in oklch, oklch(0.62 0.15 47) 12%, transparent); } .ds-pill-accent:focus-visible { outline: 2px solid oklch(0.62 0.15 47); outline-offset: 2px; }"
+      "css": ".ds-pill-accent { appearance: none; background: transparent; color: oklch(0.543 0.174 30); font: 600 12px system-ui, -apple-system, sans-serif; padding: 4px 12px; border: 1px solid color-mix(in oklch, oklch(0.543 0.174 30) 45%, transparent); border-radius: 999px; cursor: pointer; transition: background 0.13s; } .ds-pill-accent:hover { background: color-mix(in oklch, oklch(0.543 0.174 30) 12%, transparent); } .ds-pill-accent:focus-visible { outline: 2px solid oklch(0.543 0.174 30); outline-offset: 2px; }"
     },
     {
       "name": "Neutral Pill (Clear)",
@@ -349,7 +334,7 @@
       "refersTo": "pill-neutral",
       "description": "A muted widget action pill that resolves to ink on hover — grocery's Clear / Keep.",
       "html": "<button class=\"ds-pill-neutral\">Clear purchased</button>",
-      "css": ".ds-pill-neutral { appearance: none; background: transparent; color: oklch(0.52 0.012 72); font: 600 12px system-ui, -apple-system, sans-serif; padding: 5px 11px; border: 1px solid oklch(0.91 0.007 72); border-radius: 999px; cursor: pointer; transition: background 0.13s, color 0.13s; } .ds-pill-neutral:hover { background: oklch(0.96 0.006 72); color: oklch(0.27 0.012 72); } .ds-pill-neutral:focus-visible { outline: 2px solid oklch(0.62 0.15 47); outline-offset: 2px; }"
+      "css": ".ds-pill-neutral { appearance: none; background: transparent; color: oklch(0.52 0.012 72); font: 600 12px system-ui, -apple-system, sans-serif; padding: 5px 11px; border: 1px solid oklch(0.91 0.007 72); border-radius: 999px; cursor: pointer; transition: background 0.13s, color 0.13s; } .ds-pill-neutral:hover { background: oklch(0.96 0.006 72); color: oklch(0.27 0.012 72); } .ds-pill-neutral:focus-visible { outline: 2px solid oklch(0.543 0.174 30); outline-offset: 2px; }"
     },
     {
       "name": "List Row (done)",
@@ -357,7 +342,7 @@
       "refersTo": "list-row",
       "description": "An aisle-grouped checklist row with the ingredient·quantity body and a checked green box — the done state.",
       "html": "<div class=\"ds-row\"><span class=\"ds-box\"><svg viewBox=\"0 0 16 16\" aria-hidden=\"true\"><path d=\"M3.5 8.5l3 3 6-6.5\"/></svg></span><span class=\"ds-body\"><span class=\"ds-name\">Garlic<span class=\"ds-qty\"> · 1 head</span></span></span></div>",
-      "css": ".ds-row { display: flex; align-items: center; gap: 12px; padding: 11px 16px; border-bottom: 1px solid oklch(0.91 0.007 72); background: oklch(0.99 0.004 75); } .ds-box { flex: none; width: 20px; height: 20px; border-radius: 7px; border: 2px solid oklch(0.58 0.13 150); background: oklch(0.58 0.13 150); display: grid; place-items: center; } .ds-box svg { width: 12px; height: 12px; fill: none; stroke: oklch(0.99 0.02 150); stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; } .ds-body { flex: 1; min-width: 0; } .ds-name { color: oklch(0.64 0.01 72); text-decoration: line-through; text-decoration-color: color-mix(in oklch, oklch(0.64 0.01 72) 60%, transparent); } .ds-qty { color: oklch(0.64 0.01 72); font-size: 13px; font-variant-numeric: tabular-nums; }"
+      "css": ".ds-row { display: flex; align-items: center; gap: 12px; padding: 11px 16px; background: oklch(0.99 0.004 75); } .ds-box { flex: none; width: 20px; height: 20px; border-radius: 7px; border: 2px solid oklch(0.58 0.13 150); background: oklch(0.58 0.13 150); display: grid; place-items: center; } .ds-box svg { width: 12px; height: 12px; fill: none; stroke: oklch(0.99 0.02 150); stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; } .ds-body { flex: 1; min-width: 0; } .ds-name { color: oklch(0.64 0.01 72); text-decoration: line-through; text-decoration-color: color-mix(in oklch, oklch(0.64 0.01 72) 60%, transparent); } .ds-qty { color: oklch(0.64 0.01 72); font-variant-numeric: tabular-nums; }"
     },
     {
       "name": "Aisle Header",
@@ -365,7 +350,7 @@
       "refersTo": "label",
       "description": "The sticky, uppercase group header that pins to the top of the scroll as you move through a grouped list.",
       "html": "<div class=\"ds-aisle\"><h2>Produce</h2></div>",
-      "css": ".ds-aisle { padding: 12px 16px 5px; background: oklch(0.99 0.004 75); } .ds-aisle h2 { margin: 0; font: 650 12px system-ui, -apple-system, sans-serif; letter-spacing: 0.04em; text-transform: uppercase; color: oklch(0.52 0.012 72); }"
+      "css": ".ds-aisle { display: flex; align-items: baseline; gap: 8px; padding: 12px 16px 5px; border-top: 1px solid oklch(0.91 0.007 72); background: oklch(0.99 0.004 75); } .ds-aisle h2 { margin: 0; font: 650 12px system-ui, -apple-system, sans-serif; letter-spacing: 0.04em; text-transform: uppercase; color: oklch(0.52 0.012 72); }"
     },
     {
       "name": "Toast (info)",
@@ -373,15 +358,15 @@
       "refersTo": "toast",
       "description": "The floating status strip at the top of a widget, with the floating-toast shadow and an optional accent action.",
       "html": "<div class=\"ds-toast\"><span>Moved to pantry</span><button class=\"ds-toast-undo\">Undo</button></div>",
-      "css": ".ds-toast { display: flex; align-items: center; justify-content: space-between; gap: 12px; background: oklch(0.96 0.006 72); color: oklch(0.27 0.012 72); border: 1px solid oklch(0.91 0.007 72); border-radius: 10px; padding: 9px 12px; font: 550 13px system-ui, -apple-system, sans-serif; box-shadow: 0 8px 24px -12px oklch(0 0 0 / 0.5); } .ds-toast-undo { appearance: none; border: 0; background: transparent; color: oklch(0.62 0.15 47); font: 700 13px system-ui, -apple-system, sans-serif; cursor: pointer; padding: 2px 4px; }"
+      "css": ".ds-toast { display: flex; align-items: center; justify-content: space-between; gap: 12px; background: oklch(0.96 0.006 72); color: oklch(0.27 0.012 72); border: 1px solid oklch(0.91 0.007 72); border-radius: 10px; padding: 9px 12px; font: 550 13px system-ui, -apple-system, sans-serif; box-shadow: 0 8px 24px -12px oklch(0 0 0 / 0.5); } .ds-toast-undo { appearance: none; border: 0; background: transparent; color: oklch(0.543 0.174 30); font: 700 13px system-ui, -apple-system, sans-serif; cursor: pointer; padding: 2px 4px; }"
     },
     {
       "name": "Brand Mark",
       "kind": "custom",
       "refersTo": "brand-tile",
-      "description": "The connector's identity in a widget header — a paprika-orange tile with a bold P beside the title.",
+      "description": "The connector's identity in a widget header — a paprika-red tile with a bold P beside the title.",
       "html": "<div class=\"ds-brand\"><span class=\"ds-tile\" aria-hidden=\"true\">P</span><h1>Pantry</h1></div>",
-      "css": ".ds-brand { display: flex; align-items: center; gap: 8px; } .ds-tile { flex: none; width: 22px; height: 22px; border-radius: 6px; background: oklch(0.62 0.15 47); color: oklch(0.99 0.012 52); display: grid; place-items: center; font-weight: 800; font-size: 14px; } .ds-brand h1 { margin: 0; font: 650 17px system-ui, -apple-system, sans-serif; letter-spacing: -0.01em; color: oklch(0.27 0.012 72); }"
+      "css": ".ds-brand { display: flex; align-items: center; gap: 8px; } .ds-tile { flex: none; width: 22px; height: 22px; border-radius: 6px; background: oklch(0.543 0.174 30); color: oklch(0.99 0.012 40); display: grid; place-items: center; font-weight: 800; font-size: 14px; } .ds-brand h1 { margin: 0; font: 650 17px system-ui, -apple-system, sans-serif; letter-spacing: -0.01em; color: oklch(0.27 0.012 72); }"
     },
     {
       "name": "Destination Anchor",
@@ -398,8 +383,8 @@
     "keyCharacteristics": [
       "Warm-neutral foundation (hue ~72) — paper, not gray; native inside a warm host.",
       "One identity color (paprika), the rest semantic or neutral; color always carries meaning.",
-      "System-font typography only — no web fonts ship to an iframe or a security page.",
-      "Flat by default; a shadow appears only on something genuinely floating.",
+      "Host-matched typography — the widget adopts the shell's typeface (serif in a serif-first host, the host's sans otherwise) and ships no web font of its own.",
+      "Flat by default; one separator per category, and a shadow only on something genuinely floating.",
       "Touch-native affordances (tap targets, swipe-with-fallback) borrowed from the OS, not invented.",
       "Calm at the trust moment — legibility over alarm."
     ],
@@ -411,7 +396,7 @@
       },
       {
         "name": "The Two-Reds Rule",
-        "body": "Paprika-red is identity; alert-red is danger; they must never blur. The consent screen, which has no danger state, renders true paprika-red. The widget surface, where the brand accent coexists with a semantic danger-red and an amber, shifts the brand to paprika-orange so three warm signals stay legible apart. Brand and danger are never the same red in the same view.",
+        "body": "Paprika-red is identity; alert-red is danger; they must never blur. The brand is one earthy paprika-red on every surface — it is not shifted or re-hued. Danger is a separate, vivid fire-engine red, deliberately more saturated, so the two warm reds stay legible apart where they share a view (a paprika brand tile in the header, an alert-red expired badge in a row). Brand and danger are never the same red.",
         "section": "colors"
       },
       {
@@ -420,8 +405,8 @@
         "section": "colors"
       },
       {
-        "name": "The System-Font Rule",
-        "body": "The OS system sans is the whole type voice. No web font is ever shipped to a sandboxed widget iframe or to the security-critical consent page.",
+        "name": "The Match-the-Shell Rule",
+        "body": "A widget adopts the host's typeface, not its own — through the app SDK's style channel (--font-sans and the host's font CSS), a serif register for serif-first hosts and the host's sans otherwise, falling back to the system font. It ships no web font of its own; the security-critical consent page stays on the OS system font.",
         "section": "typography"
       },
       {
@@ -437,9 +422,9 @@
     ],
     "dos": [
       "Do ration color: one paprika identity accent, plus green (done/fresh), amber (expiring), red (danger). If a color isn't paprika and isn't carrying state, make it a warm neutral.",
-      "Do keep paprika-red for identity and alert-red for danger, and shift the brand to paprika-orange wherever it must share a view with the semantic red and amber.",
+      "Do keep paprika-red for identity (one earthy red, every surface) and a vivid fire-engine red for danger — distinct enough that they never blur where they share a view.",
       "Do render done and fresh in green; a checkmark is satisfying, never a red 'done.'",
-      "Do use the OS system sans as the entire type voice; reserve monospace for the OAuth redirect host alone.",
+      "Do match the shell's typeface via the host style channel (--font-sans / the host's font CSS); reserve monospace for the OAuth redirect host alone.",
       "Do keep surfaces flat — hairline dividers and warm tonal shifts for separation; a shadow only on the toast and the consent card.",
       "Do keep the warm cast on every neutral (hue ~72) so the surfaces sit native in a warm host.",
       "Do borrow native affordances — real tap targets, swipe-to-act with a visible-button fallback — rather than inventing new ones.",
@@ -452,8 +437,9 @@
       "Don't make the consent screen scary security-theater — no red warning banners, no fear copy, no phishy urgency. The redirect-approval earns trust by being legible and calm, never by shouting.",
       "Don't use a cold or pure-gray neutral; paper is warm.",
       "Don't add a shadow to a resting list, row, or button; flat is the default.",
-      "Don't ship a web font to the widget iframe or the consent page.",
-      "Don't blur the brand red and the danger red into the same color in the same view."
+      "Don't ship a web font of your own to the widget iframe or the consent page — adopt the host's typeface instead.",
+      "Don't divide rows within a category with per-row hairlines — one full-width separator per category, never a line per item.",
+      "Don't blur the brand red and the danger red — keep the brand earthy and the alert vivid, never the same red in the same view."
     ]
   }
 }

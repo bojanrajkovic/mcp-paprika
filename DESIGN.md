@@ -3,14 +3,13 @@ name: mcp-paprika
 description: The warm, editorial visual system for the two HTML surfaces of the Paprika MCP Connector — the in-host widgets and the OAuth consent screen.
 colors:
   paprika: "oklch(0.543 0.174 30)"
-  paprika-orange: "oklch(0.62 0.15 47)"
-  paprika-ink: "oklch(0.99 0.012 52)"
+  paprika-ink: "oklch(0.99 0.012 40)"
   fresh-green: "oklch(0.58 0.13 150)"
   fresh-green-ink: "oklch(0.99 0.02 150)"
   warn-amber: "oklch(0.66 0.12 75)"
   warn-amber-bg: "oklch(0.95 0.05 82)"
-  alert-red: "oklch(0.54 0.21 22)"
-  alert-red-bg: "oklch(0.96 0.045 22)"
+  alert-red: "oklch(0.56 0.215 29)"
+  alert-red-bg: "oklch(0.955 0.042 27)"
   paper: "oklch(0.99 0.004 75)"
   card: "oklch(0.995 0.004 75)"
   ink: "oklch(0.27 0.012 72)"
@@ -20,18 +19,18 @@ colors:
   hover: "oklch(0.96 0.006 72)"
 typography:
   title:
-    fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif"
+    fontFamily: "var(--widget-font, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif)"
     fontSize: "17px"
     fontWeight: 650
     lineHeight: 1.2
     letterSpacing: "-0.01em"
   body:
-    fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif"
+    fontFamily: "var(--widget-font, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif)"
     fontSize: "15px"
     fontWeight: 400
     lineHeight: 1.45
   label:
-    fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif"
+    fontFamily: "var(--widget-font, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif)"
     fontSize: "12px"
     fontWeight: 650
     lineHeight: 1.3
@@ -73,7 +72,7 @@ components:
     padding: "5px 11px"
   pill-accent:
     backgroundColor: "transparent"
-    textColor: "{colors.paprika-orange}"
+    textColor: "{colors.paprika}"
     rounded: "{rounded.pill}"
     padding: "4px 12px"
   pill-danger:
@@ -95,7 +94,7 @@ components:
     rounded: "{rounded.md}"
     padding: "9px 12px"
   brand-tile:
-    backgroundColor: "{colors.paprika-orange}"
+    backgroundColor: "{colors.paprika}"
     textColor: "{colors.paprika-ink}"
     rounded: "{rounded.sm}"
     size: "22px"
@@ -109,7 +108,7 @@ components:
 
 The two HTML surfaces of the Paprika MCP Connector should feel like a well-run kitchen: competent, unhurried, and quietly trustworthy. The home cook reaches a widget mid-task — standing in a store aisle, working at a stove — and the operator reaches the consent screen once, at the trust moment of first connect. Neither surface is a destination; both exist to let a person finish a thought and move on. The aesthetic is warm and food-forward but editorial — generous space, confident typography, an authority you trust on sight. The reference is NYT Cooking's warmth-with-restraint, never a bubbly consumer-recipe blog.
 
-Warmth here is structural, not decorative. Every neutral carries a faint warm cast (hue ~72) so the surfaces sit native inside a host's warm UI and so paper reads like paper, not like a cold gray dashboard. Color is rationed and always means something: a single paprika identity accent, a green that means _done_ or _fresh_, an amber that means _expiring_, a red that means _danger_. Depth is nearly absent — flat lists, hairline dividers, a shadow only on the one thing that genuinely floats. The voice is the operating system's own font, so a widget loads instantly inside a sandboxed iframe and a security page renders with zero web-font payload.
+Warmth here is structural, not decorative. Every neutral carries a faint warm cast (hue ~72) so the surfaces sit native inside a host's warm UI and so paper reads like paper, not like a cold gray dashboard. Color is rationed and always means something: a single paprika identity accent, a green that means _done_ or _fresh_, an amber that means _expiring_, a red that means _danger_. Depth is nearly absent — flat lists, one hairline separator per category, a shadow only on the one thing that genuinely floats. The type voice matches the shell: a widget adopts the host's own typeface through the app SDK — a serif in a serif-first host like Claude, the host's sans otherwise — so it sits native and ships zero web font of its own; the consent page uses the OS system font for the same reason.
 
 This system explicitly rejects four things. It is not generic AI/SaaS dashboard slop — no gradient text, no tracked-uppercase eyebrows over every section, no glassmorphism, no hero-metric templates. It is not enterprise/admin-console heaviness — no gray-on-gray chrome, no heavy borders, no table-everything density where a calm list belongs. It is not a cutesy consumer recipe app — no over-illustration, no bubbly-rounded everything, no emoji-soup, no playful display fonts in UI labels. And the consent screen is never security theater — no red warning banners, no fear copy, no phishy urgency.
 
@@ -117,8 +116,8 @@ This system explicitly rejects four things. It is not generic AI/SaaS dashboard 
 
 - Warm-neutral foundation (hue ~72) — paper, not gray; native inside a warm host.
 - One identity color (paprika), the rest semantic or neutral; color always carries meaning.
-- System-font typography only — no web fonts ship to an iframe or a security page.
-- Flat by default; a shadow appears only on something genuinely floating.
+- Host-matched typography — the widget adopts the shell's typeface (serif in a serif-first host, the host's sans otherwise) and ships no web font of its own.
+- Flat by default; one separator per category, and a shadow only on something genuinely floating.
 - Touch-native affordances (tap targets, swipe-with-fallback) borrowed from the OS, not invented.
 - Calm at the trust moment — legibility over alarm.
 
@@ -128,14 +127,13 @@ A rationed, food-warm palette: one brand identity color, three semantic signals,
 
 ### Primary
 
-- **Paprika** (`oklch(0.543 0.174 30)`, `#C0392B`): The connector's one identity color — the paprika-red tile, the favicon, the consent-screen accent (the brand dot and the **Allow** button). It nods to the Paprika app it bridges without claiming that brand. Used sparingly, as identity, never as decoration.
-- **Paprika Orange** (`oklch(0.62 0.15 47)` light / `oklch(0.72 0.15 48)` dark): The widget surface's brand-and-interactive accent — the header "P" tile, focus rings, the **Restock** pill, the toast's **Undo**. It is the same warm-red family shifted toward orange so the brand signal stays distinct from the widget's semantic danger-red and amber (see The Two-Reds Rule).
+- **Paprika** (`oklch(0.543 0.174 30)` light / `oklch(0.7 0.155 33)` dark, `#C0392B`): The connector's one identity color, and the single interactive accent on both surfaces — the header "P" tile, focus rings, the **Restock** pill, and the toast's **Undo** on the widgets; the brand dot and the **Allow** button on the consent screen. An earthy, brick-like red. It nods to the Paprika app it bridges without claiming that brand. Used sparingly, as identity and action, never as decoration.
 
 ### Secondary — Semantic signals
 
 - **Fresh Green** (`oklch(0.58 0.13 150)` light / `oklch(0.74 0.14 150)` dark): The _done / fresh_ state — a checked grocery item's box and tick, an in-stock pantry item. A completed action reads positive, never as a red "done."
 - **Warn Amber** (`oklch(0.66 0.12 75)`, surface `oklch(0.95 0.05 82)`): _Expiring soon_ — the pantry's expiry badge before it lapses.
-- **Alert Red** (`oklch(0.54 0.21 22)`, surface `oklch(0.96 0.045 22)`): _Danger / expired_ — the destructive-action confirm, the inline error toast, an expired pantry badge. A cooler, more saturated red than paprika, deliberately held apart from the brand.
+- **Alert Red** (`oklch(0.56 0.215 29)` light / `oklch(0.7 0.2 29)` dark, surface `oklch(0.955 0.042 27)`): _Danger / expired_ — the destructive-action confirm, the inline error toast, an expired pantry badge, the swipe-to-remove reveal. A vivid fire-engine red, deliberately more saturated than the earthy brick brand, so an alert never reads as the brand.
 
 ### Neutral — Warm paper
 
@@ -153,17 +151,17 @@ The widget surface themes to the host (light/dark, lightness shifts while hue ho
 
 **The One Identity Color Rule.** Paprika is the only identity color on either surface. Everything else is neutral or a semantic signal. If a color isn't paprika and isn't carrying state, it's a warm neutral.
 
-**The Two-Reds Rule.** Paprika-red is _identity_; alert-red is _danger_; they must never blur into each other. On the consent screen — which has no danger state — the identity renders as true paprika-red. On the widget surface, where the brand accent must coexist with a semantic danger-red and an amber, the brand shifts to paprika-_orange_ so three warm signals stay legible apart. Brand and danger are never the same red in the same view.
+**The Two-Reds Rule.** Paprika-red is _identity_; alert-red is _danger_; they must never blur into each other. The brand is one earthy paprika-red everywhere — it is not shifted or re-hued per surface. Danger is a separate, vivid fire-engine red, deliberately more saturated, so the two warm reds stay legible apart when they share a view (a paprika brand tile in the header, an alert-red expired badge in a row). Brand and danger are never the same red.
 
 **The Green-Means-Done Rule.** A completed or fresh state is always green, never a red checkmark. Done is a positive, and the color says so.
 
 ## 3. Typography
 
-**Display Font:** none — the system sans is the entire voice.
-**Body Font:** the OS system sans (`system-ui, -apple-system, "Segoe UI", Roboto, sans-serif`).
+**Body Font:** host-matched. The widget resolves `--widget-font` to the shell's typeface — a serif stack (`"Anthropic Serif", Georgia, "Times New Roman", ui-serif, serif`) for a serif-first host like Claude, the host's own `--font-sans` otherwise, falling back to the OS system sans (`system-ui, -apple-system, "Segoe UI", Roboto, sans-serif`). The consent page is OS system sans (it is server-rendered, not embedded, so it has no shell to match).
+**Display Font:** none — there is no separate display face; weight and size carry the hierarchy.
 **Mono Font:** `ui-monospace, "SF Mono", Menlo, monospace` — reserved for exactly one thing (see The Mono-Anchor Rule).
 
-**Character:** Quiet, native, and trustworthy. There is deliberately no display typeface: the NYT Cooking reference is borrowed for its warmth, restraint, and generous editorial spacing — not for a serif. These surfaces use the host/OS system font so a widget renders instantly inside a sandboxed iframe and the consent page ships with zero web-font payload. The personality comes from spacing, weight, and color, not from a typeface.
+**Character:** Quiet, native, and trustworthy. The widget speaks in the host's own voice — adopting the shell's typeface so it reads as part of the surrounding app, not a foreign embed. In a serif-first host like Claude this lands the NYT-Cooking editorial register the brand is tuned to; in a sans host it matches the host's sans. There is no separate display face and the widget ships no web font of its own — the personality comes from spacing, weight, color, and the host's type, not from a bespoke typeface.
 
 ### Hierarchy
 
@@ -175,7 +173,7 @@ The widget surface themes to the host (light/dark, lightness shifts while hue ho
 
 ### Named Rules
 
-**The System-Font Rule.** The OS system sans is the whole type voice. No web font is ever shipped to a sandboxed widget iframe or to the security-critical consent page. Speed and nativeness beat a bespoke typeface here.
+**The Match-the-Shell Rule.** A widget adopts the host's typeface, not its own — through the app SDK's style channel (`--font-sans` and the host's font CSS), choosing a serif register for serif-first hosts and the host's sans otherwise, falling back to the system font. It ships no web font of its own; the security-critical consent page likewise stays on the OS system font. Nativeness and a zero-payload iframe beat a bespoke typeface here.
 
 **The Mono-Anchor Rule.** The one element rendered in monospace is the OAuth redirect host — the single fact an attacker cannot forge. It gets the largest, most tamper-evident treatment on the screen precisely because it is the fact the user must read. Monospace is reserved for it; nothing decorative borrows the mono face.
 
@@ -203,8 +201,8 @@ The surface has two button families: the consent screen's full-width action butt
 - **Shape:** Action buttons are gently rounded (10px). Pills are fully round (999px).
 - **Primary (consent Allow):** Paprika fill (`paprika`) with light ink (`paprika-ink`), weight 600, padding 11px 14px, radius 10px. The single emphatic control on the trust surface.
 - **Ghost (consent Deny):** Transparent with ink text and a 1px `line-2` border, same size as Primary. Deny is given equal visual weight to Allow — the screen does not steer.
-- **Pills (widget actions):** 12px/600 text, padding ~5px 11px, fully round, 1px `line` border, transparent fill. Variants: **neutral** (muted → ink on hover, hover wash — grocery's Clear/Keep), **accent** (`paprika-orange` outline + text — pantry's Restock), **danger** (muted → alert-red on hover — pantry's Out), **danger-strong** (alert-red outline + text at rest — grocery's clear-confirm).
-- **Focus:** Pills and rows show a 2px `paprika-orange` focus ring, offset 2px. Always visible on keyboard focus; never suppressed.
+- **Pills (widget actions):** 12px/600 text, padding ~5px 11px, fully round, 1px `line` border, transparent fill. Variants: **neutral** (muted → ink on hover, hover wash — grocery's Clear/Keep), **accent** (`paprika` outline + text — pantry's Restock), **danger** (muted → alert-red on hover — pantry's Out), **danger-strong** (alert-red outline + text at rest — grocery's clear-confirm).
+- **Focus:** Pills and rows show a 2px `paprika` focus ring, offset 2px. Always visible on keyboard focus; never suppressed.
 
 ### Chips / Badges
 
@@ -221,19 +219,19 @@ The surface has two button families: the consent screen's full-width action butt
 
 ### List Rows
 
-- **Style:** Full-width rows on `paper`, padding 11px 16px, separated by a 1px `line` bottom border — never boxed cards. The ingredient name leads; a ` · quantity` follows in muted tabular figures.
+- **Style:** Full-width rows on `paper`, padding 11px 16px — never boxed cards, and **no per-row divider**. The ingredient name leads; a ` · quantity` follows in muted tabular figures (the separator is a real space on both sides of the `·`, so a done strike-through runs straight through it).
 - **Done state:** The name strikes through and dims to `faint` (a `color-mix` line color, never a harsh strike); a grocery checkbox (7px-radius, 2px border) fills with `fresh-green` and shows a green tick; an in-flight write shows a small `fresh-green` spinner.
-- **Grouped by aisle:** Rows sit under a sticky, uppercase 12px `muted` aisle header that pins to the top of the scroll as you move through a list.
+- **Grouped by aisle:** Each category is bracketed by a **full-width hairline separator** above its sticky, uppercase 12px `muted` heading (with a count as flavor text beside it); rows within a group flow without internal lines. One separator per category, not a line per row. The heading and its count baseline-align.
 
 ### Toast
 
 - **Style:** A floating status strip at the top of the widget, radius 10px, padding 9px 12px, with the floating-toast shadow.
-- **Variants:** **info** is the neutral `hover` surface with ink text; **error** is the `alert-red` surface with alert-red text. An optional action (the pantry Undo) renders in `paprika-orange`.
+- **Variants:** **info** is the neutral `hover` surface with ink text; **error** is the `alert-red` surface with alert-red text. An optional action (the pantry Undo) renders in `paprika`.
 - **Motion:** A 0.2s ease-out entrance, fully disabled under `prefers-reduced-motion`.
 
 ### Brand Mark (signature)
 
-The connector's identity on the widget surface: a 22px paprika-orange tile (6px radius) carrying a bold "P" in light ink, beside the widget title (17px/650). The tile is decorative — `aria-hidden`, the title carries the accessible name. It gives every widget a persistent, on-brand header without a logo image.
+The connector's identity on the widget surface: a 22px paprika-red tile (6px radius) carrying a bold "P" in light ink, beside the widget title (17px/650). The tile is decorative — `aria-hidden`, the title carries the accessible name. It gives every widget a persistent, on-brand header without a logo image.
 
 ### Destination Anchor (signature)
 
@@ -244,10 +242,10 @@ The consent screen's load-bearing element: a soft warm panel (`dest-bg`, 11px ra
 ### Do:
 
 - **Do** ration color: one paprika identity accent, plus green (done/fresh), amber (expiring), red (danger). If a color isn't paprika and isn't carrying state, make it a warm neutral.
-- **Do** keep paprika-red for _identity_ and alert-red for _danger_, and shift the brand to paprika-orange wherever it must share a view with the semantic red and amber (The Two-Reds Rule).
+- **Do** keep paprika-red for _identity_ (one earthy red, every surface) and a vivid fire-engine red for _danger_ — distinct enough that they never blur where they share a view (The Two-Reds Rule).
 - **Do** render _done_ and _fresh_ in green; a checkmark is satisfying, never a red "done."
-- **Do** use the OS system sans as the entire type voice; reserve monospace for the OAuth redirect host alone.
-- **Do** keep surfaces flat — hairline `line` dividers and warm tonal shifts for separation; a shadow only on the toast and the consent card.
+- **Do** match the shell's typeface via the host style channel (`--font-sans` / the host's font CSS — serif for a serif-first host, the host's sans otherwise); reserve monospace for the OAuth redirect host alone.
+- **Do** keep surfaces flat — one hairline separator per category and warm tonal shifts for separation; a shadow only on the toast and the consent card.
 - **Do** keep the warm cast on every neutral (hue ~72) so the surfaces sit native in a warm host.
 - **Do** borrow native affordances — real tap targets, swipe-to-act with a visible-button fallback — rather than inventing new ones.
 - **Do** keep the consent screen calm and legible: anchor on the redirect host, state the grant plainly, give Deny equal weight to Allow.
@@ -260,5 +258,6 @@ The consent screen's load-bearing element: a soft warm panel (`dest-bg`, 11px ra
 - **Don't** make the consent screen scary security-theater — no red warning banners, no fear copy, no phishy urgency. The redirect-approval earns trust by being legible and calm, never by shouting.
 - **Don't** use a cold or pure-gray neutral; paper is warm.
 - **Don't** add a shadow to a resting list, row, or button; flat is the default.
-- **Don't** ship a web font to the widget iframe or the consent page.
-- **Don't** blur the brand red and the danger red into the same color in the same view.
+- **Don't** divide rows within a category with per-row hairlines — one full-width separator per category, never a line per item.
+- **Don't** ship a web font of your own to the widget iframe or the consent page — adopt the host's typeface instead.
+- **Don't** blur the brand red and the danger red — keep the brand earthy and the alert vivid, never the same red in the same view.
