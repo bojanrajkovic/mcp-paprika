@@ -31,6 +31,32 @@
     _error: boolean;
   }
 
+  // A deduplicated display row: the first Row in a same-name+same-state group, plus the count of
+  // raw items it represents (1 = no duplicates, N = N identical rows collapsed).
+  interface DisplayRow extends Row {
+    count: number;
+  }
+
+  // Collapse same-name+same-purchased duplicates within a group into one display row (×N badge).
+  // The raw items array is unchanged, so purchasedCount/aisle header totals stay accurate.
+  // The first item's UID is used as the group key (stable, keyed-each-safe).
+  function dedupRows(rowItems: Row[]): DisplayRow[] {
+    const out: DisplayRow[] = [];
+    for (const item of rowItems) {
+      const key = item.ingredient.toLowerCase();
+      const existing = out.find(
+        (d) =>
+          d.ingredient.toLowerCase() === key && d.purchased === item.purchased,
+      );
+      if (existing) {
+        existing.count += 1;
+      } else {
+        out.push({ ...item, count: 1 });
+      }
+    }
+    return out;
+  }
+
   // The ext-apps App instance, constructed in main.ts and handed in as a prop.
   let { app }: { app: App } = $props();
 
@@ -291,7 +317,7 @@
 {/snippet}
 
 {#snippet rowList(rowItems: Row[])}
-  {#each rowItems as item (item.uid)}
+  {#each dedupRows(rowItems) as item (item.uid)}
     <button
       class="row"
       class:done={item.purchased}
@@ -315,7 +341,10 @@
         ingredient={item.ingredient}
         quantity={item.quantity}
         done={item.purchased}
-      />
+        >{#snippet extra()}{#if item.count > 1}<span class="dupe-count"
+              >×{item.count}</span
+            >{/if}{/snippet}</ItemRow
+      >
     </button>
   {/each}
 {/snippet}
@@ -437,6 +466,14 @@
     to {
       transform: rotate(360deg);
     }
+  }
+
+  .dupe-count {
+    margin-left: 5px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
   }
 
   .hint {

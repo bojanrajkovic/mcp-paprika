@@ -33,6 +33,31 @@
     _busy: boolean;
   }
 
+  // A deduplicated display row: the first Row in a same-name+same-inStock group, plus the count of
+  // raw items it represents (1 = no duplicates, N = N identical rows collapsed).
+  interface DisplayRow extends Row {
+    count: number;
+  }
+
+  // Collapse same-name+same-inStock duplicates into one display row (×N badge).
+  // The raw items array is unchanged, so inStockCount and the aisle header totals stay accurate.
+  // The first item's UID is used as the group key (stable, keyed-each-safe).
+  function dedupRows(rowItems: Row[]): DisplayRow[] {
+    const out: DisplayRow[] = [];
+    for (const item of rowItems) {
+      const key = item.ingredient.toLowerCase();
+      const existing = out.find(
+        (d) => d.ingredient.toLowerCase() === key && d.inStock === item.inStock,
+      );
+      if (existing) {
+        existing.count += 1;
+      } else {
+        out.push({ ...item, count: 1 });
+      }
+    }
+    return out;
+  }
+
   // The ext-apps App instance, constructed in main.ts and handed in as a prop.
   let { app }: { app: App } = $props();
 
@@ -341,9 +366,15 @@
         </button>
         {#if drawerOpen}
           <div class="drawer-body">
-            {#each outOfStock as item (item.uid)}
+            {#each dedupRows(outOfStock) as item (item.uid)}
               <div class="oos" class:busy={item._busy}>
-                <span class="oname">{item.ingredient}</span>
+                <span class="oname"
+                  >{item.ingredient}{#if item.count > 1}<span
+                      class="dupe-count"
+                    >
+                      ×{item.count}</span
+                    >{/if}</span
+                >
                 <PillButton variant="accent" onclick={() => onRestock(item)}
                   >Restock</PillButton
                 >
@@ -363,7 +394,7 @@
 {/snippet}
 
 {#snippet rowList(rowItems: Row[])}
-  {#each rowItems as item (item.uid)}
+  {#each dedupRows(rowItems) as item (item.uid)}
     {@const es = expState(item.expirationDate)}
     <div
       class="item-wrap"
@@ -383,6 +414,8 @@
       >
         <ItemRow ingredient={item.ingredient} quantity={item.quantity}>
           {#snippet extra()}
+            {#if item.count > 1}<span class="dupe-count">×{item.count}</span
+              >{/if}
             {#if es}<span class="badge {es}"
                 >{expLabel(item.expirationDate)}</span
               >{/if}
@@ -555,6 +588,13 @@
     color: var(--faint);
     text-decoration: line-through;
     text-decoration-color: color-mix(in oklch, var(--faint) 55%, transparent);
+  }
+
+  .dupe-count {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
   }
 
   @media (prefers-reduced-motion: reduce) {
