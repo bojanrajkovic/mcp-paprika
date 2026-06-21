@@ -1,0 +1,459 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-06-21T00:00:00Z",
+  "title": "Design System: mcp-paprika",
+  "extensions": {
+    "colorMeta": {
+      "paprika": {
+        "role": "primary",
+        "displayName": "Paprika",
+        "canonical": "oklch(0.543 0.174 30)",
+        "hex": "#C0392B",
+        "tonalRamp": [
+          "oklch(0.15 0.06 30)",
+          "oklch(0.25 0.10 30)",
+          "oklch(0.35 0.14 30)",
+          "oklch(0.45 0.17 30)",
+          "oklch(0.543 0.174 30)",
+          "oklch(0.66 0.15 30)",
+          "oklch(0.78 0.11 30)",
+          "oklch(0.92 0.04 30)"
+        ]
+      },
+      "paprika-orange": {
+        "role": "primary",
+        "displayName": "Paprika Orange",
+        "canonical": "oklch(0.62 0.15 47)",
+        "dark": "oklch(0.72 0.15 48)",
+        "tonalRamp": [
+          "oklch(0.15 0.05 47)",
+          "oklch(0.25 0.08 47)",
+          "oklch(0.36 0.11 47)",
+          "oklch(0.48 0.14 47)",
+          "oklch(0.62 0.15 47)",
+          "oklch(0.72 0.15 48)",
+          "oklch(0.83 0.10 50)",
+          "oklch(0.93 0.04 52)"
+        ]
+      },
+      "paprika-ink": {
+        "role": "primary",
+        "displayName": "Paprika Ink",
+        "canonical": "oklch(0.99 0.012 52)",
+        "tonalRamp": [
+          "oklch(0.20 0.03 45)",
+          "oklch(0.35 0.03 48)",
+          "oklch(0.50 0.025 50)",
+          "oklch(0.66 0.02 52)",
+          "oklch(0.80 0.015 52)",
+          "oklch(0.90 0.013 52)",
+          "oklch(0.95 0.012 52)",
+          "oklch(0.99 0.012 52)"
+        ]
+      },
+      "fresh-green": {
+        "role": "secondary",
+        "displayName": "Fresh Green",
+        "canonical": "oklch(0.58 0.13 150)",
+        "dark": "oklch(0.74 0.14 150)",
+        "tonalRamp": [
+          "oklch(0.16 0.04 150)",
+          "oklch(0.26 0.07 150)",
+          "oklch(0.37 0.10 150)",
+          "oklch(0.47 0.12 150)",
+          "oklch(0.58 0.13 150)",
+          "oklch(0.68 0.13 150)",
+          "oklch(0.78 0.11 150)",
+          "oklch(0.92 0.05 150)"
+        ]
+      },
+      "fresh-green-ink": {
+        "role": "secondary",
+        "displayName": "Fresh Green Ink",
+        "canonical": "oklch(0.99 0.02 150)",
+        "tonalRamp": [
+          "oklch(0.16 0.03 150)",
+          "oklch(0.30 0.04 150)",
+          "oklch(0.45 0.04 150)",
+          "oklch(0.60 0.035 150)",
+          "oklch(0.75 0.03 150)",
+          "oklch(0.88 0.025 150)",
+          "oklch(0.94 0.02 150)",
+          "oklch(0.99 0.02 150)"
+        ]
+      },
+      "warn-amber": {
+        "role": "tertiary",
+        "displayName": "Warn Amber",
+        "canonical": "oklch(0.66 0.12 75)",
+        "dark": "oklch(0.82 0.13 80)",
+        "tonalRamp": [
+          "oklch(0.20 0.05 78)",
+          "oklch(0.30 0.07 78)",
+          "oklch(0.42 0.09 78)",
+          "oklch(0.54 0.11 78)",
+          "oklch(0.66 0.12 75)",
+          "oklch(0.78 0.12 78)",
+          "oklch(0.88 0.09 80)",
+          "oklch(0.95 0.05 82)"
+        ]
+      },
+      "warn-amber-bg": {
+        "role": "tertiary",
+        "displayName": "Warn Amber Surface",
+        "canonical": "oklch(0.95 0.05 82)",
+        "dark": "oklch(0.30 0.06 80)",
+        "tonalRamp": [
+          "oklch(0.30 0.06 80)",
+          "oklch(0.42 0.07 80)",
+          "oklch(0.55 0.07 80)",
+          "oklch(0.68 0.07 80)",
+          "oklch(0.80 0.06 81)",
+          "oklch(0.88 0.055 82)",
+          "oklch(0.92 0.05 82)",
+          "oklch(0.95 0.05 82)"
+        ]
+      },
+      "alert-red": {
+        "role": "secondary",
+        "displayName": "Alert Red",
+        "canonical": "oklch(0.54 0.21 22)",
+        "dark": "oklch(0.67 0.2 22)",
+        "tonalRamp": [
+          "oklch(0.16 0.06 22)",
+          "oklch(0.26 0.11 22)",
+          "oklch(0.36 0.15 22)",
+          "oklch(0.46 0.19 22)",
+          "oklch(0.54 0.21 22)",
+          "oklch(0.66 0.19 22)",
+          "oklch(0.80 0.11 22)",
+          "oklch(0.96 0.045 22)"
+        ]
+      },
+      "alert-red-bg": {
+        "role": "secondary",
+        "displayName": "Alert Red Surface",
+        "canonical": "oklch(0.96 0.045 22)",
+        "dark": "oklch(0.29 0.07 22)",
+        "tonalRamp": [
+          "oklch(0.29 0.07 22)",
+          "oklch(0.42 0.09 22)",
+          "oklch(0.55 0.09 22)",
+          "oklch(0.68 0.085 22)",
+          "oklch(0.82 0.07 22)",
+          "oklch(0.90 0.06 22)",
+          "oklch(0.94 0.05 22)",
+          "oklch(0.96 0.045 22)"
+        ]
+      },
+      "paper": {
+        "role": "neutral",
+        "displayName": "Warm Paper",
+        "canonical": "oklch(0.99 0.004 75)",
+        "dark": "oklch(0.22 0.008 72)",
+        "tonalRamp": [
+          "oklch(0.22 0.008 72)",
+          "oklch(0.31 0.01 72)",
+          "oklch(0.45 0.012 72)",
+          "oklch(0.52 0.012 72)",
+          "oklch(0.64 0.01 72)",
+          "oklch(0.78 0.008 72)",
+          "oklch(0.91 0.007 72)",
+          "oklch(0.99 0.004 75)"
+        ]
+      },
+      "card": {
+        "role": "neutral",
+        "displayName": "Card",
+        "canonical": "oklch(0.995 0.004 75)",
+        "tonalRamp": [
+          "oklch(0.24 0.008 72)",
+          "oklch(0.33 0.01 72)",
+          "oklch(0.46 0.012 72)",
+          "oklch(0.58 0.011 72)",
+          "oklch(0.70 0.009 73)",
+          "oklch(0.84 0.007 74)",
+          "oklch(0.94 0.005 75)",
+          "oklch(0.995 0.004 75)"
+        ]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Warm Ink",
+        "canonical": "oklch(0.27 0.012 72)",
+        "dark": "oklch(0.95 0.005 75)",
+        "tonalRamp": [
+          "oklch(0.22 0.008 72)",
+          "oklch(0.27 0.012 72)",
+          "oklch(0.40 0.012 72)",
+          "oklch(0.52 0.012 72)",
+          "oklch(0.64 0.01 72)",
+          "oklch(0.78 0.008 72)",
+          "oklch(0.91 0.007 72)",
+          "oklch(0.99 0.004 75)"
+        ]
+      },
+      "muted": {
+        "role": "neutral",
+        "displayName": "Muted",
+        "canonical": "oklch(0.52 0.012 72)",
+        "tonalRamp": [
+          "oklch(0.22 0.008 72)",
+          "oklch(0.31 0.01 72)",
+          "oklch(0.45 0.012 72)",
+          "oklch(0.52 0.012 72)",
+          "oklch(0.64 0.01 72)",
+          "oklch(0.78 0.008 72)",
+          "oklch(0.91 0.007 72)",
+          "oklch(0.99 0.004 75)"
+        ]
+      },
+      "faint": {
+        "role": "neutral",
+        "displayName": "Faint",
+        "canonical": "oklch(0.64 0.01 72)",
+        "tonalRamp": [
+          "oklch(0.22 0.008 72)",
+          "oklch(0.31 0.01 72)",
+          "oklch(0.45 0.012 72)",
+          "oklch(0.52 0.012 72)",
+          "oklch(0.64 0.01 72)",
+          "oklch(0.78 0.008 72)",
+          "oklch(0.91 0.007 72)",
+          "oklch(0.99 0.004 75)"
+        ]
+      },
+      "line": {
+        "role": "neutral",
+        "displayName": "Hairline",
+        "canonical": "oklch(0.91 0.007 72)",
+        "dark": "oklch(0.31 0.01 72)",
+        "tonalRamp": [
+          "oklch(0.22 0.008 72)",
+          "oklch(0.31 0.01 72)",
+          "oklch(0.45 0.012 72)",
+          "oklch(0.52 0.012 72)",
+          "oklch(0.64 0.01 72)",
+          "oklch(0.78 0.008 72)",
+          "oklch(0.91 0.007 72)",
+          "oklch(0.99 0.004 75)"
+        ]
+      },
+      "hover": {
+        "role": "neutral",
+        "displayName": "Hover Wash",
+        "canonical": "oklch(0.96 0.006 72)",
+        "dark": "oklch(0.26 0.012 72)",
+        "tonalRamp": [
+          "oklch(0.22 0.008 72)",
+          "oklch(0.31 0.01 72)",
+          "oklch(0.45 0.012 72)",
+          "oklch(0.52 0.012 72)",
+          "oklch(0.64 0.01 72)",
+          "oklch(0.78 0.008 72)",
+          "oklch(0.91 0.007 72)",
+          "oklch(0.99 0.004 75)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "title": {
+        "displayName": "Title",
+        "purpose": "Widget header name and consent client name. The most prominent type on a surface."
+      },
+      "body": { "displayName": "Body", "purpose": "Row labels, grant copy, descriptions. The reading default." },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Aisle/group headers and consent field labels — uppercase, quietly tracked."
+      },
+      "mono": {
+        "displayName": "Mono Anchor",
+        "purpose": "Reserved exclusively for the OAuth redirect host on the consent screen — the un-forgeable fact."
+      }
+    },
+    "shadows": [
+      {
+        "name": "floating-toast",
+        "value": "0 8px 24px -12px oklch(0 0 0 / 0.5)",
+        "purpose": "The widget toast overlaying the list. Negative spread keeps it a soft lift."
+      },
+      {
+        "name": "lifted-card",
+        "value": "0 1px 2px oklch(0.5 0.02 70 / 0.05), 0 8px 24px oklch(0.5 0.02 70 / 0.06)",
+        "purpose": "The consent card lifted a hair off the page — a tight contact plus a diffuse ambient layer, both warm and very low alpha."
+      }
+    ],
+    "motion": [
+      {
+        "name": "toast-in",
+        "value": "0.2s ease-out",
+        "purpose": "Toast entrance; fully disabled under prefers-reduced-motion."
+      },
+      {
+        "name": "pill-state",
+        "value": "0.13s (background, color, border-color)",
+        "purpose": "Pill hover/focus color transition."
+      },
+      {
+        "name": "checkbox-fill",
+        "value": "0.15s (background, border-color)",
+        "purpose": "Grocery checkbox filling to green on done."
+      },
+      {
+        "name": "row-reorder",
+        "value": "animate:flip, gated to 0ms under prefers-reduced-motion",
+        "purpose": "A checked item sinking to the bottom of its aisle group. JS-driven slide/flip read prefers-reduced-motion explicitly, since Svelte JS transitions slip past the CSS reduced-motion block."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "widget",
+        "value": "fluid",
+        "purpose": "Widgets fill the host's sandboxed iframe viewport; no fixed breakpoints — they flex to the pane the host gives them."
+      },
+      {
+        "name": "consent-card",
+        "value": "440px",
+        "purpose": "The consent card's max-width; it centers on the page below that."
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button (Allow)",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The consent screen's single emphatic control — paprika fill at the trust moment.",
+      "html": "<button class=\"ds-btn-primary\">Allow</button>",
+      "css": ".ds-btn-primary { background: oklch(0.543 0.174 30); color: oklch(0.99 0.01 75); font: 600 0.92rem system-ui, -apple-system, sans-serif; padding: 11px 28px; border: 1px solid transparent; border-radius: 9px; cursor: pointer; transition: filter 0.15s; } .ds-btn-primary:hover { filter: brightness(1.05); } .ds-btn-primary:focus-visible { outline: 2px solid oklch(0.543 0.174 30); outline-offset: 2px; }"
+    },
+    {
+      "name": "Ghost Button (Deny)",
+      "kind": "button",
+      "refersTo": "button-ghost",
+      "description": "The consent Deny control — equal visual weight to Allow; the screen does not steer.",
+      "html": "<button class=\"ds-btn-ghost\">Deny</button>",
+      "css": ".ds-btn-ghost { background: transparent; color: oklch(0.26 0.012 70); font: 600 0.92rem system-ui, -apple-system, sans-serif; padding: 11px 28px; border: 1px solid oklch(0.83 0.010 70); border-radius: 9px; cursor: pointer; transition: background 0.15s; } .ds-btn-ghost:hover { background: oklch(0.96 0.006 72); } .ds-btn-ghost:focus-visible { outline: 2px solid oklch(0.543 0.174 30); outline-offset: 2px; }"
+    },
+    {
+      "name": "Accent Pill (Restock)",
+      "kind": "chip",
+      "refersTo": "pill-accent",
+      "description": "A widget action pill in the paprika-orange brand accent — the pantry Restock.",
+      "html": "<button class=\"ds-pill-accent\">Restock</button>",
+      "css": ".ds-pill-accent { appearance: none; background: transparent; color: oklch(0.62 0.15 47); font: 600 12px system-ui, -apple-system, sans-serif; padding: 4px 12px; border: 1px solid color-mix(in oklch, oklch(0.62 0.15 47) 45%, transparent); border-radius: 999px; cursor: pointer; transition: background 0.13s; } .ds-pill-accent:hover { background: color-mix(in oklch, oklch(0.62 0.15 47) 12%, transparent); } .ds-pill-accent:focus-visible { outline: 2px solid oklch(0.62 0.15 47); outline-offset: 2px; }"
+    },
+    {
+      "name": "Neutral Pill (Clear)",
+      "kind": "chip",
+      "refersTo": "pill-neutral",
+      "description": "A muted widget action pill that resolves to ink on hover — grocery's Clear / Keep.",
+      "html": "<button class=\"ds-pill-neutral\">Clear purchased</button>",
+      "css": ".ds-pill-neutral { appearance: none; background: transparent; color: oklch(0.52 0.012 72); font: 600 12px system-ui, -apple-system, sans-serif; padding: 5px 11px; border: 1px solid oklch(0.91 0.007 72); border-radius: 999px; cursor: pointer; transition: background 0.13s, color 0.13s; } .ds-pill-neutral:hover { background: oklch(0.96 0.006 72); color: oklch(0.27 0.012 72); } .ds-pill-neutral:focus-visible { outline: 2px solid oklch(0.62 0.15 47); outline-offset: 2px; }"
+    },
+    {
+      "name": "List Row (done)",
+      "kind": "custom",
+      "refersTo": "list-row",
+      "description": "An aisle-grouped checklist row with the ingredient·quantity body and a checked green box — the done state.",
+      "html": "<div class=\"ds-row\"><span class=\"ds-box\"><svg viewBox=\"0 0 16 16\" aria-hidden=\"true\"><path d=\"M3.5 8.5l3 3 6-6.5\"/></svg></span><span class=\"ds-body\"><span class=\"ds-name\">Garlic<span class=\"ds-qty\"> · 1 head</span></span></span></div>",
+      "css": ".ds-row { display: flex; align-items: center; gap: 12px; padding: 11px 16px; border-bottom: 1px solid oklch(0.91 0.007 72); background: oklch(0.99 0.004 75); } .ds-box { flex: none; width: 20px; height: 20px; border-radius: 7px; border: 2px solid oklch(0.58 0.13 150); background: oklch(0.58 0.13 150); display: grid; place-items: center; } .ds-box svg { width: 12px; height: 12px; fill: none; stroke: oklch(0.99 0.02 150); stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; } .ds-body { flex: 1; min-width: 0; } .ds-name { color: oklch(0.64 0.01 72); text-decoration: line-through; text-decoration-color: color-mix(in oklch, oklch(0.64 0.01 72) 60%, transparent); } .ds-qty { color: oklch(0.64 0.01 72); font-size: 13px; font-variant-numeric: tabular-nums; }"
+    },
+    {
+      "name": "Aisle Header",
+      "kind": "nav",
+      "refersTo": "label",
+      "description": "The sticky, uppercase group header that pins to the top of the scroll as you move through a grouped list.",
+      "html": "<div class=\"ds-aisle\"><h2>Produce</h2></div>",
+      "css": ".ds-aisle { padding: 12px 16px 5px; background: oklch(0.99 0.004 75); } .ds-aisle h2 { margin: 0; font: 650 12px system-ui, -apple-system, sans-serif; letter-spacing: 0.04em; text-transform: uppercase; color: oklch(0.52 0.012 72); }"
+    },
+    {
+      "name": "Toast (info)",
+      "kind": "custom",
+      "refersTo": "toast",
+      "description": "The floating status strip at the top of a widget, with the floating-toast shadow and an optional accent action.",
+      "html": "<div class=\"ds-toast\"><span>Moved to pantry</span><button class=\"ds-toast-undo\">Undo</button></div>",
+      "css": ".ds-toast { display: flex; align-items: center; justify-content: space-between; gap: 12px; background: oklch(0.96 0.006 72); color: oklch(0.27 0.012 72); border: 1px solid oklch(0.91 0.007 72); border-radius: 10px; padding: 9px 12px; font: 550 13px system-ui, -apple-system, sans-serif; box-shadow: 0 8px 24px -12px oklch(0 0 0 / 0.5); } .ds-toast-undo { appearance: none; border: 0; background: transparent; color: oklch(0.62 0.15 47); font: 700 13px system-ui, -apple-system, sans-serif; cursor: pointer; padding: 2px 4px; }"
+    },
+    {
+      "name": "Brand Mark",
+      "kind": "custom",
+      "refersTo": "brand-tile",
+      "description": "The connector's identity in a widget header — a paprika-orange tile with a bold P beside the title.",
+      "html": "<div class=\"ds-brand\"><span class=\"ds-tile\" aria-hidden=\"true\">P</span><h1>Pantry</h1></div>",
+      "css": ".ds-brand { display: flex; align-items: center; gap: 8px; } .ds-tile { flex: none; width: 22px; height: 22px; border-radius: 6px; background: oklch(0.62 0.15 47); color: oklch(0.99 0.012 52); display: grid; place-items: center; font-weight: 800; font-size: 14px; } .ds-brand h1 { margin: 0; font: 650 17px system-ui, -apple-system, sans-serif; letter-spacing: -0.01em; color: oklch(0.27 0.012 72); }"
+    },
+    {
+      "name": "Destination Anchor",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "The consent screen's load-bearing element — the redirect host in large monospace, the one fact the user must verify.",
+      "html": "<div class=\"ds-dest\"><div class=\"ds-dest-lbl\">Authorization code will be sent to</div><div class=\"ds-dest-host\">claude.ai</div></div>",
+      "css": ".ds-dest { background: oklch(0.965 0.012 70); border: 1px solid oklch(0.83 0.010 70); border-radius: 11px; padding: 13px 15px; } .ds-dest-lbl { font: 0.72rem system-ui, -apple-system, sans-serif; text-transform: uppercase; letter-spacing: 0.06em; color: oklch(0.53 0.012 70); margin-bottom: 5px; } .ds-dest-host { font: 700 1.3rem ui-monospace, 'SF Mono', Menlo, monospace; letter-spacing: -0.01em; color: oklch(0.26 0.012 70); word-break: break-all; line-height: 1.2; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Capable Kitchen",
+    "overview": "The two HTML surfaces of the Paprika MCP Connector should feel like a well-run kitchen: competent, unhurried, and quietly trustworthy. Neither surface is a destination — both exist to let a person finish a thought and move on. The aesthetic is warm and food-forward but editorial, after NYT Cooking's warmth-with-restraint, never a bubbly consumer-recipe blog. Warmth is structural: every neutral carries a faint warm cast (hue ~72) so the surfaces sit native in a warm host. Color is rationed and always means something — a single paprika identity accent, a green for done/fresh, an amber for expiring, a red for danger. Depth is nearly absent: flat lists, hairline dividers, a shadow only on the one thing that genuinely floats. The voice is the OS system font, so a widget loads instantly in a sandboxed iframe and the consent page ships with zero web-font payload.",
+    "keyCharacteristics": [
+      "Warm-neutral foundation (hue ~72) — paper, not gray; native inside a warm host.",
+      "One identity color (paprika), the rest semantic or neutral; color always carries meaning.",
+      "System-font typography only — no web fonts ship to an iframe or a security page.",
+      "Flat by default; a shadow appears only on something genuinely floating.",
+      "Touch-native affordances (tap targets, swipe-with-fallback) borrowed from the OS, not invented.",
+      "Calm at the trust moment — legibility over alarm."
+    ],
+    "rules": [
+      {
+        "name": "The One Identity Color Rule",
+        "body": "Paprika is the only identity color on either surface. Everything else is neutral or a semantic signal. If a color isn't paprika and isn't carrying state, it's a warm neutral.",
+        "section": "colors"
+      },
+      {
+        "name": "The Two-Reds Rule",
+        "body": "Paprika-red is identity; alert-red is danger; they must never blur. The consent screen, which has no danger state, renders true paprika-red. The widget surface, where the brand accent coexists with a semantic danger-red and an amber, shifts the brand to paprika-orange so three warm signals stay legible apart. Brand and danger are never the same red in the same view.",
+        "section": "colors"
+      },
+      {
+        "name": "The Green-Means-Done Rule",
+        "body": "A completed or fresh state is always green, never a red checkmark. Done is a positive, and the color says so.",
+        "section": "colors"
+      },
+      {
+        "name": "The System-Font Rule",
+        "body": "The OS system sans is the whole type voice. No web font is ever shipped to a sandboxed widget iframe or to the security-critical consent page.",
+        "section": "typography"
+      },
+      {
+        "name": "The Mono-Anchor Rule",
+        "body": "The one element rendered in monospace is the OAuth redirect host — the single fact an attacker cannot forge. It gets the largest, most tamper-evident treatment on the screen. Nothing decorative borrows the mono face.",
+        "section": "typography"
+      },
+      {
+        "name": "The Flat-By-Default Rule",
+        "body": "Surfaces are flat at rest. A shadow is a signal that something is floating (the toast) or lifted off the page (the consent card) — never decoration on a resting list, row, or button.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do ration color: one paprika identity accent, plus green (done/fresh), amber (expiring), red (danger). If a color isn't paprika and isn't carrying state, make it a warm neutral.",
+      "Do keep paprika-red for identity and alert-red for danger, and shift the brand to paprika-orange wherever it must share a view with the semantic red and amber.",
+      "Do render done and fresh in green; a checkmark is satisfying, never a red 'done.'",
+      "Do use the OS system sans as the entire type voice; reserve monospace for the OAuth redirect host alone.",
+      "Do keep surfaces flat — hairline dividers and warm tonal shifts for separation; a shadow only on the toast and the consent card.",
+      "Do keep the warm cast on every neutral (hue ~72) so the surfaces sit native in a warm host.",
+      "Do borrow native affordances — real tap targets, swipe-to-act with a visible-button fallback — rather than inventing new ones.",
+      "Do keep the consent screen calm and legible: anchor on the redirect host, state the grant plainly, give Deny equal weight to Allow."
+    ],
+    "donts": [
+      "Don't ship generic AI/SaaS dashboard slop — no gradient text, no tracked-uppercase eyebrows over every section, no identical icon-card grids, no glassmorphism, no hero-metric templates.",
+      "Don't drift into enterprise/admin-console heaviness — no gray-on-gray chrome, no heavy borders, no table-everything density where a calm list belongs.",
+      "Don't go cutesy consumer recipe app / food blog — no over-illustration, no bubbly-rounded everything, no emoji-heavy labels, no playful display fonts in UI. NYT Cooking, not a cutesy food blog.",
+      "Don't make the consent screen scary security-theater — no red warning banners, no fear copy, no phishy urgency. The redirect-approval earns trust by being legible and calm, never by shouting.",
+      "Don't use a cold or pure-gray neutral; paper is warm.",
+      "Don't add a shadow to a resting list, row, or button; flat is the default.",
+      "Don't ship a web font to the widget iframe or the consent page.",
+      "Don't blur the brand red and the danger red into the same color in the same view."
+    ]
+  }
+}
