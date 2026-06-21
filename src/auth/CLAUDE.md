@@ -20,38 +20,23 @@ The auth stores (`TokenStore`, `DiskClientRegistrationStore`'s route-facing meth
 
 ### The two OAuth relationships must never cross
 
-The MCP client must never see an upstream IdP token, and the upstream IdP must never see a dynamically-registered MCP client's identifier. This server **mints and owns** its own opaque access/refresh tokens; the upstream id_token is consumed for verification and discarded. That isolation is what makes the confused-deputy fix tractable and bounds the blast radius of either side. Don't introduce token pass-through or a shared identifier across the boundary; it silently breaks the model.
+The MCP client must never see an upstream IdP token, and the upstream IdP must never see a dynamically-registered MCP client's identifier: this server **mints and owns** its own opaque tokens, and the upstream id_token is consumed for verification then discarded. Don't introduce token pass-through or a shared identifier across the boundary — it silently breaks the confused-deputy model. Why this isolation: ADR-0002.
 
 ### Opaque tokens are stored as hashes; plaintext never touches disk
 
-Tokens are high-entropy random strings with no embedded claims, looked up server-side by their SHA-256 hash to resolve identity/scope/expiry. The plaintext is **never** persisted; the token-store layer hashes before any disk write, and the schema stores only the hash. Same rule for the DCR registration-access-token: returned in plaintext exactly once at registration, only its hash is kept. Never log or persist a raw token value; log `tokenHash` / `clientId` instead (the root logger also redacts `*.token`, `*.access_token`, etc., but don't rely on that as the only guard).
+Opaque tokens carry no embedded claims and are looked up server-side by their SHA-256 hash; the plaintext is **never** persisted (same for the DCR registration-access-token, returned in plaintext exactly once). Operational rule: never log or persist a raw token value — log `tokenHash` / `clientId` instead (the root logger also redacts `*.token` / `*.access_token`, but don't rely on that as the only guard). Why opaque-not-JWT: ADR-0002.
 
 ### Confused-deputy gate: fail-closed redirect-origin allowlist (#193)
 
-An open-DCR proxy AS that forwards every `/authorize` upstream under one static upstream `client_id` is a confused deputy: a malicious registered client can ride an allowlisted victim's live upstream session and get a token bound to the victim but delivered to the attacker's redirect. The structural control runs **before any upstream redirect** and is deliberately strict:
-
-- **Exact origin equality** on the request's single (already-SDK-validated) `redirect_uri`. No substring/suffix matching: `claude.ai.evil.com` and `evil-claude.ai` must never match `claude.ai`.
-- **https-pinned**, with an http exemption only for the loopback literals (`localhost` / `127.0.0.1` / `[::1]`), mirroring `dcr-validator.ts`; a URI that passes DCR is judged by the same standard.
-- **Scheme is re-checked at match time**, not just when the allowlist was normalized at startup, so the matcher never trusts a `URL.origin` it would not itself have admitted, regardless of how the set was built.
-- **Loopback is fail-closed including the port**: `http://localhost` does NOT cover `http://localhost:51004` (RFC 8252 §7.3 ephemeral ports). A port-agnostic loopback match would be a wildcard; a loopback client with a random port prompts unless its exact origin is listed.
-- **Empty allowlist means every `/authorize` is gated through consent** (fail-closed). The server ships safe and degrades to consent-on-every-login until the operator seeds `MCP_OAUTH_REDIRECT_ALLOWLIST`. A misconfigured deployment is over-cautious, never over-permissive.
-- A recognized origin forwards upstream unchanged; an unrecognized one is held under an opaque single-use consent ticket and the user sees a consent screen.
+An open-DCR proxy AS that forwards every `/authorize` upstream under one static `client_id` is a confused deputy; a fail-closed redirect-origin allowlist gates it **before any upstream redirect**. The strictness IS the security property — don't loosen any of it: **exact-origin equality** (never substring/suffix, so `claude.ai.evil.com` can't match `claude.ai`), **https-pinned** except the loopback literals, **scheme re-checked at match time**, **loopback fail-closed including the port** (RFC 8252 ephemeral ports — `http://localhost` ≠ `http://localhost:51004`), and an **empty allowlist gates every login through consent**. An unrecognized origin is held under a single-use consent ticket. Matching rules: `redirect-allowlist.ts`'s doc-comment; rationale: ADR-0002.
 
 ### Consent runs before upstream auth; deny never redirects to the target (#193)
 
-Ordering is the security property:
-
-- **Consent precedes upstream authentication**, so the consent page only ever shows client-supplied data; the user's identity is not yet known and **cannot leak** on that page.
-- The screen anchors on the **redirect host** (the field an attacker cannot forge) and treats the registration-supplied `client_name` as self-reported: every attacker-controlled field is HTML-escaped at every injection site, and the requested scope is never rendered (fixed coarse grant copy). Strict per-render nonce'd CSP + `X-Frame-Options: DENY` + `Cache-Control: no-store` on every consent-flow response.
-- The single-use ticket doubles as the **CSRF token** for the same-origin (`form-action 'self'`) approve form; `consume()` enforces single-use.
-- **Deny/expired never redirect back to the `redirect_uri`.** Because the screen fires _only_ for an unrecognized (therefore untrusted) target, redirecting a denial there would hand control to an attacker; deny/expired render terminal pages on our own origin instead. This is a deliberate divergence from RFC 6749 §4.1.2.1 that recognized clients never reach. Don't "fix" it back to spec.
-- The recognized branch and the consent-approve branch funnel through one shared `redirectUpstream` helper specifically so they cannot drift apart.
+Ordering is the security property: **consent precedes upstream authentication**, so the page shows only client-supplied data — the user's identity isn't known yet and **cannot leak** there. And **deny/expired never redirect back to the `redirect_uri`** (the screen fires only for an untrusted target, so redirecting a denial there would hand control to an attacker) — they render terminal pages on our own origin instead. That last point is a deliberate divergence from RFC 6749 §4.1.2.1 that recognized clients never reach; **don't "fix" it back to spec.** The per-field HTML-escaping, nonce'd CSP, single-use-ticket-as-CSRF-token, and the shared `redirectUpstream` funnel are detailed in ADR-0002 + the source.
 
 ### Bounded in-memory auth stores: reject-on-full, NOT a ring buffer (#194)
 
-The three in-memory TTL stores (auth-request, auth-code, pending-authorization) are all written from the **unauthenticated, unthrottled** `/authorize` path, so a registered attacker could flood them. Each is capped at a fixed live-entry max. When a write would exceed the cap for a _new_ key, the store sweeps expired entries first, then **rejects the new write** rather than evicting an existing one.
-
-Reject-on-full is the load-bearing choice: the oldest entry is typically a legitimate user several minutes into the upstream login and about to hit the callback. A ring buffer would evict _them_, converting a memory-exhaustion attack into a **login-denial attack against honest in-flight users**. The two unauthenticated write paths therefore surface a full store honestly (refuse with **503**) rather than handing back state that was never stored and sending the user upstream / rendering consent. The post-callback auth-code store's cap is defense-in-depth (its write is reached only after a completed upstream login + allowlist pass), but when full it degrades the client redirect to `error=temporarily_unavailable` (RFC 6749 §4.1.2.1) rather than issuing a code that would later fail at `/token`.
+The three in-memory TTL stores fed by the **unauthenticated, unthrottled** `/authorize` path are capped and **reject-on-full** (sweep expired, then refuse a new write with **503**) — NOT a ring buffer. Reject-on-full is load-bearing: the oldest entry is typically a legitimate user mid-login about to hit the callback, so evicting it would convert a memory-exhaustion attack into a **login-denial attack against honest in-flight users**. Don't switch these to eviction. (The post-callback auth-code store degrades to `error=temporarily_unavailable` instead of 503.) Full argument: ADR-0002 (#194).
 
 ### Crypto fail-closed defaults
 

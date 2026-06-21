@@ -38,7 +38,7 @@ Recipe writes and the recipe/category reconciles emit `recipe-changed`/`recipe-r
 
 ### Startup logging is level-gated; SIGINT/SIGTERM writes raw stderr
 
-`buildInfraBase` logs `mcp-paprika starting` and `buildKernel` logs `running initial sync` at `info`; `MCP_LOG_LEVEL=warn`+ silently suppresses them. The signal handler in `src/index.ts` bypasses the structured logger (it may not be built yet, or already torn down) — one of the two sanctioned `process.stderr.write` exceptions, because stdout carries the stdio wire.
+`buildInfraBase` logs `mcp-paprika starting` and `buildKernel` logs `running initial sync` at `info`; `MCP_LOG_LEVEL=warn`+ silently suppresses them. The signal handler in `src/index.ts` bypasses the structured logger (it may not be built yet, or already torn down) — one of the three sanctioned `process.stderr.write` exceptions (with `src/transport/stdio.ts` and the OTel diag logger), because stdout carries the stdio wire.
 
 ### Feature tools register unconditionally
 
