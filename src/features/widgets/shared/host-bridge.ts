@@ -1,5 +1,7 @@
 import type { App } from "@modelcontextprotocol/ext-apps";
 
+import { applyHostStyles } from "./host-style.js";
+
 /**
  * The two result shapes a widget's `receive()` accepts: a real ext-apps tool result (from
  * `ontoolresult`) and {@link callTool}'s narrowed wrapper. Both expose the structured channel; only
@@ -38,4 +40,31 @@ export function errorText(result: ReceivedResult | null | undefined): string | n
   const block = result?.content?.find((c) => c.type === "text");
   const text = typeof block?.text === "string" ? block.text : undefined;
   return text && text.trim() !== "" ? text : null;
+}
+
+/**
+ * Wire a widget to its host in one call: register the tool-result handler, adopt the host's style
+ * tokens + typeface ({@link applyHostStyles}) on connect AND on every host-context change, and hand the
+ * widget the merged context for its own reads (theme, touch). Handlers are set BEFORE `connect()`, so
+ * the handshake's first notifications are not missed. `onContext` always receives the FULL merged
+ * context (`app.getHostContext()`) — correct on a change event too, since the SDK merges the partial
+ * change params into the stored context before the handler fires (the change payload alone may omit
+ * `userAgent`, which would reset the font). This is the one bit of per-widget boilerplate the shared
+ * extraction would otherwise leave duplicated.
+ */
+export function connectHost(
+  app: App,
+  handlers: {
+    onResult: (result: ReceivedResult) => void;
+    onContext?: (ctx: ReturnType<App["getHostContext"]>) => void;
+  },
+): void {
+  const apply = (): void => {
+    const ctx = app.getHostContext();
+    handlers.onContext?.(ctx);
+    applyHostStyles(ctx);
+  };
+  app.ontoolresult = (result) => handlers.onResult(result);
+  app.onhostcontextchanged = apply;
+  Promise.resolve(app.connect()).then(apply);
 }

@@ -15,10 +15,10 @@
   import { groupConsecutive } from "../shared/group.js";
   import {
     callTool,
+    connectHost,
     errorText,
     type ReceivedResult,
   } from "../shared/host-bridge.js";
-  import { applyHostStyles } from "../shared/host-style.js";
   import { motion } from "../shared/motion.js";
 
   // A pantry row: a structured pantry item plus transient per-row UI flags. `inStock` drives which
@@ -76,23 +76,16 @@
   });
 
   onMount(() => {
-    // Handlers must be set BEFORE connect() completes the handshake.
-    app.ontoolresult = (result) => receive(result);
-    app.onhostcontextchanged = (ctx) => {
-      if (ctx.theme) theme = ctx.theme;
-      if (ctx.deviceCapabilities?.touch !== undefined)
-        touchDevice = ctx.deviceCapabilities.touch;
-      applyHostStyles(app.getHostContext());
-    };
-    Promise.resolve(app.connect()).then(() => {
-      const hc = app.getHostContext();
-      if (hc?.theme) theme = hc.theme;
-      // Prefer the host's declared capability; fall back to a coarse-pointer media query.
-      touchDevice =
-        hc?.deviceCapabilities?.touch ??
-        (typeof matchMedia === "function" &&
-          matchMedia("(pointer: coarse)").matches);
-      applyHostStyles(hc);
+    connectHost(app, {
+      onResult: receive,
+      onContext: (ctx) => {
+        if (ctx?.theme) theme = ctx.theme;
+        // Prefer the host's declared capability; fall back to a coarse-pointer media query.
+        touchDevice =
+          ctx?.deviceCapabilities?.touch ??
+          (typeof matchMedia === "function" &&
+            matchMedia("(pointer: coarse)").matches);
+      },
     });
   });
 

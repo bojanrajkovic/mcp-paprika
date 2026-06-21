@@ -14,10 +14,10 @@
   import { groupConsecutive } from "../shared/group.js";
   import {
     callTool,
+    connectHost,
     errorText,
     type ReceivedResult,
   } from "../shared/host-bridge.js";
-  import { applyHostStyles } from "../shared/host-style.js";
   import { motion } from "../shared/motion.js";
 
   // A checklist row: a structured grocery item plus transient per-row UI flags.
@@ -61,16 +61,11 @@
   const purchasedCount = $derived(items.filter((i) => i.purchased).length);
 
   onMount(() => {
-    // Handlers must be set BEFORE connect() completes the handshake.
-    app.ontoolresult = (result) => receive(result);
-    app.onhostcontextchanged = (ctx) => {
-      if (ctx.theme) theme = ctx.theme;
-      applyHostStyles(app.getHostContext());
-    };
-    Promise.resolve(app.connect()).then(() => {
-      const hc = app.getHostContext();
-      if (hc?.theme) theme = hc.theme;
-      applyHostStyles(hc);
+    connectHost(app, {
+      onResult: receive,
+      onContext: (ctx) => {
+        if (ctx?.theme) theme = ctx.theme;
+      },
     });
   });
 
