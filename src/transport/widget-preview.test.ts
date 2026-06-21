@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { useTempDir } from "../../test/support/disk-caches.js";
 import { SILENT_LOG } from "../utils/log.js";
-import { buildWidgetPreviewRouter, SHIMMED_HOST_METHODS } from "./widget-preview.js";
+import { buildWidgetPreviewRouter, SHIMMED_EXTAPPS_HELPERS, SHIMMED_HOST_METHODS } from "./widget-preview.js";
 
 const FIXTURE_HTML = `<!doctype html>
 <html lang="en">
@@ -41,6 +41,15 @@ describe("widget-preview route", () => {
     expect(body).toContain("globalThis.ExtApps");
     for (const method of SHIMMED_HOST_METHODS) {
       expect(body).toContain(method);
+    }
+
+    // The shim also provides the top-level ExtApps style helpers. The two that host-style.ts
+    // actually calls are pinned unconditionally so dropping one from SHIMMED_EXTAPPS_HELPERS
+    // doesn't silently remove the assertion; the rest are asserted via the shared list.
+    expect(body).toContain("applyHostStyleVariables");
+    expect(body).toContain("applyHostFonts");
+    for (const helper of SHIMMED_EXTAPPS_HELPERS) {
+      expect(body).toContain(helper);
     }
 
     // The shim is a classic <script> ahead of the deferred module bundle, so it

@@ -44,7 +44,10 @@
     --danger-bg: oklch(0.955 0.042 27);
     color-scheme: light;
 
-    height: 100%;
+    /* Cap at the viewport so long lists scroll; don't force a height so short lists size to content
+       rather than leaving a blank gap below the footer (100dvh is the iframe viewport, adjusting for
+       mobile browser chrome that 100vh ignores). */
+    max-height: 100dvh;
     display: flex;
     flex-direction: column;
     min-height: 0;

@@ -1,4 +1,10 @@
-import type { App } from "@modelcontextprotocol/ext-apps";
+import type {
+  App,
+  applyDocumentTheme,
+  applyHostFonts,
+  applyHostStyleVariables,
+  getDocumentTheme,
+} from "@modelcontextprotocol/ext-apps";
 import { Hono } from "hono";
 import type { Logger } from "pino";
 
@@ -86,6 +92,24 @@ export const SHIMMED_HOST_METHODS = [
   "openLink",
   "downloadFile",
 ] as const satisfies readonly (keyof App)[];
+
+/** Top-level `globalThis.ExtApps` helpers {@link previewShim} fakes alongside the `App` class.
+ * `satisfies` pins each name against the installed ext-apps module exports so a rename there is a
+ * compile error here. `host-style.ts` calls `applyHostStyleVariables` / `applyHostFonts` via this
+ * seam; dropping one from the shim would leave them calling undefined silently.
+ */
+type ExtAppsHelperShape = {
+  applyHostStyleVariables: typeof applyHostStyleVariables;
+  applyHostFonts: typeof applyHostFonts;
+  applyDocumentTheme: typeof applyDocumentTheme;
+  getDocumentTheme: typeof getDocumentTheme;
+};
+export const SHIMMED_EXTAPPS_HELPERS = [
+  "applyHostStyleVariables",
+  "applyHostFonts",
+  "applyDocumentTheme",
+  "getDocumentTheme",
+] as const satisfies readonly (keyof ExtAppsHelperShape)[];
 
 /**
  * The fake `globalThis.ExtApps` injected into a previewed widget. Its `App` reads
