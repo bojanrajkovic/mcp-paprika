@@ -1,4 +1,3 @@
-import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { Logger } from "pino";
 import { z } from "zod";
 
@@ -8,7 +7,7 @@ import type { GroceryItem } from "../grocery-item/types.js";
 import type { GroceryState, GroceryWrites } from "../module.js";
 
 import { defineTool } from "../../../kernel/tool.js";
-import { commitFailure, errorResult, toolResult } from "../../../shared/tools.js";
+import { commitFailure, type ErrorResult, errorResult, toolResult } from "../../../shared/tools.js";
 import { NO_AISLE_UID } from "../../aisle/ids.js";
 import { groceryItemRowSchema, groceryItemsToRows, groceryItemToMarkdown } from "../grocery-helpers.js";
 import { GroceryIngredientUidSchema, GroceryItemUidSchema, GroceryListUidSchema } from "../ids.js";
@@ -37,8 +36,8 @@ export const itemInputSchema = z.object({
  * An explicit `aisle` resolves via `ensureAisle` (auto-create) and upserts the
  * ingredient's catalog memory (POST + store + best-effort cache put); an omitted
  * one falls back batch-cache → catalog memory → the built-in Miscellaneous aisle.
- * Returns the built items, or an `errorResult` `CallToolResult` on the first
- * failure (an erring `ensureAisle` or a failed catalog save).
+ * Returns the built items, or an `ErrorResult` on the first failure (an erring
+ * `ensureAisle` or a failed catalog save).
  */
 export async function buildGroceryItems(
   // Declared at the helper's MINIMAL dependency need ("aisle") so both callers'
@@ -48,7 +47,7 @@ export async function buildGroceryItems(
   listUid: z.infer<typeof GroceryListUidSchema>,
   items: ReadonlyArray<z.infer<typeof itemInputSchema>>,
   recipe: string | null,
-): Promise<Array<GroceryItem> | CallToolResult> {
+): Promise<Array<GroceryItem> | ErrorResult> {
   const builtItems: Array<GroceryItem> = [];
   const batchAisleCache = new Map<string, { aisle: string; aisleUid: AisleUid }>();
   const catalogUpdated = new Set<string>();

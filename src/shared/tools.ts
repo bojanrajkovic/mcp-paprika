@@ -8,6 +8,32 @@ import type { ElicitationServer } from "./elicit.js";
 import { confirmGate, pickOne } from "./elicit.js";
 
 /**
+ * The typed return envelope for schema-bearing tools. When `O` is a
+ * concrete record type (the tool declared `outputSchema`), the handler must return
+ * EITHER a success result carrying `structuredContent: O` OR an `isError: true`
+ * error result — enforced at the TypeScript level so the SDK's `validateToolOutput`
+ * always passes. When `O = void` (no `outputSchema` declared), this collapses to
+ * plain `CallToolResult`, so non-schema tools are completely unchanged.
+ */
+export type TypedCallToolResult<O extends Record<string, unknown> | void> =
+  O extends Record<string, unknown>
+    ?
+        | { content: CallToolResult["content"]; structuredContent: O }
+        | { content: CallToolResult["content"]; isError: true }
+    : CallToolResult;
+
+/**
+ * The precise type {@link errorResult} returns: a text-only result with `isError`
+ * pinned to the literal `true`. Pinning the literal (rather than `CallToolResult`'s
+ * `isError?: boolean`) is what lets an error branch satisfy the `{ …; isError: true }`
+ * arm of {@link TypedCallToolResult} — so a schema-bearing handler can return an
+ * `errorResult` on its non-success branches and still typecheck. A terminal-result
+ * seam that only ever produces `errorResult`s (e.g. `resolveOrPick`'s `result`)
+ * carries this type, not the broad `CallToolResult`, for the same reason.
+ */
+export type ErrorResult = { content: [{ type: "text"; text: string }]; isError: true };
+
+/**
  * The MCP wire envelope every tool returns. The one-argument form carries only
  * the human-readable text block; the two-argument form additionally carries a
  * `structuredContent` record on MCP's parallel structured channel — clean prose
@@ -49,8 +75,8 @@ export function toolResult(text: string, structuredContent?: Record<string, unkn
  * I am not ready" (this), which the model must not parse as data. Pure construction,
  * no throw (ADR-0019; the contract is pinned in `src/kernel/tool.e2e.test.ts`).
  */
-export function errorResult(text: string): CallToolResult {
-  return { content: [{ type: "text" as const, text }], isError: true } satisfies CallToolResult;
+export function errorResult(text: string): ErrorResult {
+  return { content: [{ type: "text" as const, text }], isError: true as const };
 }
 
 /**
@@ -112,6 +138,19 @@ export function imageResult(text: string, jpeg: Buffer): CallToolResult {
  * invite the harmful retry the message warns against. Non-schema callers omit it and
  * are unchanged.
  */
+// Typed overload: structuredContent required → return type carries O
+export function commitFailure<O extends Record<string, unknown>>(
+  entity: string,
+  result: Result<void, { readonly message: string }>,
+  opts: { readonly structuredContent: O; readonly selfHealing?: boolean },
+): TypedCallToolResult<O> | undefined;
+// Untyped overload: non-schema callers, structuredContent absent
+export function commitFailure(
+  entity: string,
+  result: Result<void, { readonly message: string }>,
+  opts?: { readonly selfHealing?: boolean },
+): CallToolResult | undefined;
+// Implementation signature (covers both): keep the existing union opts shape
 export function commitFailure(
   entity: string,
   result: Result<void, { readonly message: string }>,
@@ -236,7 +275,7 @@ export async function resolveOrPick<T>(
     readonly cap?: number;
     readonly log?: Logger;
   },
-): Promise<{ readonly entity: T } | { readonly result: CallToolResult }> {
+): Promise<{ readonly entity: T } | { readonly result: ErrorResult }> {
   if (outcome.kind === "uid_hit" || outcome.kind === "text_one") return { entity: outcome.entity };
 
   // Every non-happy arm leaves the SUCCESS channel as an errorResult (isError, no

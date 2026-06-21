@@ -1,4 +1,3 @@
-import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 
 import type { Recipe } from "../../../domains/recipe/types.js";
@@ -64,7 +63,7 @@ export const discoverRecipesTool = defineTool(
   },
   (ctx: DomainCtx<DiscoverState, "recipe">) => {
     const log = ctx.infra.log.child({ component: "discover_recipes" });
-    return async (args): Promise<CallToolResult> => {
+    return async (args) => {
       // Feature gate: vectorStore is null when embeddings are unconfigured. The tool
       // is registered unconditionally and declines here, so the surface is uniform
       // across deployments.

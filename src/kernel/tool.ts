@@ -2,8 +2,9 @@ import type { ToolCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult, ToolAnnotations } from "@modelcontextprotocol/sdk/types.js";
 import { context, trace } from "@opentelemetry/api";
 import type { Result } from "neverthrow";
-import type { ZodRawShape, ZodTypeAny } from "zod";
+import type { ZodRawShape, ZodType, ZodTypeAny } from "zod";
 
+import type { TypedCallToolResult } from "../shared/tools.js";
 import type { DomainCtx, DomainId } from "./registry.js";
 
 import { UI_RESOURCE_URI_META_KEY } from "../shared/mcp-app.js";
@@ -29,14 +30,19 @@ import { errorTypeName, startOperation } from "../telemetry/trace-result.js";
  * and forcing them keeps the generated reference's read-only / destructive /
  * idempotent hints complete.
  *
- * `outputSchema` is OPTIONAL and plain runtime data: the same `ZodRawShape |
- * ZodTypeAny` union as `inputSchema` (both forms the SDK's `registerTool`
- * ingests), declaring the shape of the `structuredContent` a tool returns
- * alongside its text. It does NOT participate in `defineTool`'s generic
- * inference — per-tool structured-payload type safety lives at the authoring
- * site, where one Zod schema derives both the formatter's row type and the
- * emitted payload type. Most tools omit it; the SDK's output validation is a
- * no-op until a tool declares one.
+ * `outputSchema` is OPTIONAL: when `O` is a concrete record type the field must
+ * be a `ZodType<O>`, and TypeScript enforces that the handler's return type is
+ * `TypedCallToolResult<O>` — either a success result carrying `structuredContent: O`
+ * or an `isError: true` error result. That `O` generic threads enforcement to the
+ * handler return type, so a schema-bearing write tool that calls `commitFailure`
+ * without `structuredContent` is a compile-time error, as is returning
+ * `toolResult(text)` (no structured payload) from a schema-bearing handler. When
+ * `O = void` (the default, no `outputSchema` declared), `outputSchema` must be
+ * absent (`never`), and the handler return type collapses to plain `CallToolResult`
+ * — non-schema tools are completely unchanged. Per-tool payload typing still lives
+ * at the authoring site via `z.infer`; the `O` generic threads the enforcement, not
+ * the payload shape. Most tools omit it; the SDK's output validation is a no-op
+ * until a tool declares one.
  *
  * `ui` is OPTIONAL and names the `ui://widget/{name}` resource a host renders for
  * this tool's result (ADR-0019). Like `outputSchema` it is plain data threaded
@@ -47,13 +53,16 @@ import { errorTypeName, startOperation } from "../telemetry/trace-result.js";
  * A host without the apps surface ignores `_meta.ui` and shows the text result, so
  * the widget surface is additive.
  */
-export interface ToolSpec<I extends ZodRawShape | ZodTypeAny = ZodRawShape | ZodTypeAny> {
+export interface ToolSpec<
+  I extends ZodRawShape | ZodTypeAny = ZodRawShape | ZodTypeAny,
+  O extends Record<string, unknown> | void = void,
+> {
   readonly name: string;
   readonly title: string;
   readonly description: string;
   readonly annotations: ToolAnnotations;
   readonly inputSchema: I;
-  readonly outputSchema?: ZodRawShape | ZodTypeAny;
+  readonly outputSchema?: O extends Record<string, unknown> ? ZodType<O> : never;
   readonly ui?: { readonly resourceUri: string };
 }
 
@@ -69,7 +78,7 @@ export interface ToolSpec<I extends ZodRawShape | ZodTypeAny = ZodRawShape | Zod
  * tool annotates the third generic to reach its module's commit chokepoints.
  */
 export interface ToolDef<State, Deps extends DomainId, Writes = Record<never, never>> {
-  readonly spec: ToolSpec;
+  readonly spec: ToolSpec<ZodRawShape | ZodTypeAny, Record<string, unknown> | void>;
   register(ctx: DomainCtx<State, Deps, Writes>): void;
 }
 
@@ -96,6 +105,36 @@ export type ToolPrecondition<Ctx> = (ctx: Ctx) => Result<void, CallToolResult>;
  * fully-checked authoring surface (the overloads below).
  */
 type ErasedToolCallback = (args: unknown, extra: unknown) => CallToolResult | Promise<CallToolResult>;
+
+/**
+ * The handler-body type a {@link defineTool} factory must return: an SDK callback
+ * whose `(args, extra)` parameter shapes are exactly those `ToolCallback<I>`
+ * derives from the input schema, but with its RESULT narrowed to
+ * {@link TypedCallToolResult `TypedCallToolResult<O>`}. Re-deriving the parameters
+ * via `infer A` / `infer E` (rather than `ToolCallback<I>` outright) is what swaps
+ * the return type while preserving `args`'s schema-typed shape — that is the seam
+ * that threads `O` into the handler, so a schema-bearing tool that returns
+ * `toolResult(text)` with no structured payload, or calls `commitFailure` without
+ * `structuredContent`, fails to compile. When `O = void` the result collapses to
+ * `CallToolResult` and the constraint is the same one `ToolCallback<I>` always
+ * imposed, so non-schema tools are unchanged. A handler may take just `(args)`:
+ * a function of fewer parameters is assignable to one of more, so the `extra`
+ * parameter stays optional at the authoring site exactly as before.
+ *
+ * `NoInfer<O>` on the return is load-bearing: `O` must infer from `spec.outputSchema`
+ * (the `ToolSpec<I, O>` argument) BEFORE the body is checked, never FROM the body. With
+ * a still-inferrable `O`, TypeScript checks the handler in function-position, where the
+ * RETURN type is compared bivariantly — and a broad `CallToolResult` (its `.passthrough()`
+ * index signature `[k: string]: unknown` weakly "satisfies" `structuredContent: O`) slips
+ * through, so a handler returning `commitFailure(...)` without `structuredContent`, or any
+ * bare `CallToolResult`, would wrongly compile. Pinning `O` first makes each `return` a
+ * strict direct-assignment check against the concrete `TypedCallToolResult<O>`, closing
+ * that hole. The compile-time negatives are pinned in `tool.type.test.ts`.
+ */
+type TypedToolBody<I extends ZodRawShape | ZodTypeAny, O extends Record<string, unknown> | void> =
+  ToolCallback<I> extends (args: infer A, extra: infer E) => unknown
+    ? (args: A, extra: E) => TypedCallToolResult<NoInfer<O>> | Promise<TypedCallToolResult<NoInfer<O>>>
+    : never;
 
 const TOOLS_CALL_METHOD = "tools/call";
 
@@ -169,47 +208,58 @@ function loggableString(value: string): string {
  *   flat instead of inside an ok-arm.
  *
  * `I` is inferred from `spec.inputSchema` (so `handler`'s `args` is typed from the
- * schema); `State`/`Deps`/`Writes` are inferred from the `ctx` parameter's
- * annotation (`ctx: DomainCtx<FooState, "dep", FooWrites>`), which doubles as the
- * tool's dependency declaration — a read-only tool omits the third generic and
- * `Writes` defaults to empty. The handler annotation drives that inference even in
- * the three-arg form: the annotated factory is not context-sensitive, so it
- * contributes its candidates in TS's first inference round, and the precondition
- * array is then checked against the settled ctx (contravariance admits narrower
- * guard params). Do NOT wrap the array's ctx in `NoInfer`: contextually typing an
- * inline-arrow guard would then fix the generics to their constraints BEFORE the
- * handler is processed (args resolve left-to-right), collapsing `State` to
- * `unknown`. Registration maps the {@link ToolSpec} to the SDK's `registerTool`
- * config explicitly: `name` is the positional argument, and the remaining fields
- * (`title`/`description`/`inputSchema`/`annotations`, plus `outputSchema` when a
- * tool declares one and `_meta` derived from `ui` when a tool declares that)
- * become the config object. That explicit literal is the single seam through which
- * a spec field is threaded into the advertised surface — `outputSchema` (A1) and
- * the `ui` → `_meta` UI-resource mapping (C1, ADR-0019).
+ * schema); `O` is inferred from `spec.outputSchema` when provided (a `ZodType<O>`
+ * constrains the handler's return type to `TypedCallToolResult<O>`, enforcing that
+ * schema-bearing tools carry `structuredContent: O` on success and `isError: true`
+ * on non-success — so returning `toolResult(text)` without a payload, or calling
+ * `commitFailure` without `structuredContent`, is a compile-time error); when omitted
+ * `O = void` and the handler return type collapses to `CallToolResult`.
+ * `State`/`Deps`/`Writes` are inferred from the `ctx` parameter's annotation
+ * (`ctx: DomainCtx<FooState, "dep", FooWrites>`), which doubles as the tool's
+ * dependency declaration — a read-only tool omits the third generic and `Writes`
+ * defaults to empty. The handler annotation drives that inference even in the
+ * three-arg form: the annotated factory is not context-sensitive, so it contributes
+ * its candidates in TS's first inference round, and the precondition array is then
+ * checked against the settled ctx (contravariance admits narrower guard params). Do
+ * NOT wrap the array's ctx in `NoInfer`: contextually typing an inline-arrow guard
+ * would then fix the generics to their constraints BEFORE the handler is processed
+ * (args resolve left-to-right), collapsing `State` to `unknown`. Registration maps
+ * the {@link ToolSpec} to the SDK's `registerTool` config explicitly: `name` is the
+ * positional argument, and the remaining fields (`title`/`description`/`inputSchema`/
+ * `annotations`, plus `outputSchema` when a tool declares one and `_meta` derived from
+ * `ui` when a tool declares that) become the config object. That explicit literal is
+ * the single seam through which a spec field is threaded into the advertised surface —
+ * `outputSchema` and the `ui` → `_meta` UI-resource mapping.
  */
 export function defineTool<
   I extends ZodRawShape | ZodTypeAny,
-  State,
-  Deps extends DomainId,
-  Writes = Record<never, never>,
->(spec: ToolSpec<I>, handler: (ctx: DomainCtx<State, Deps, Writes>) => ToolCallback<I>): ToolDef<State, Deps, Writes>;
-export function defineTool<
-  I extends ZodRawShape | ZodTypeAny,
+  O extends Record<string, unknown> | void,
   State,
   Deps extends DomainId,
   Writes = Record<never, never>,
 >(
-  spec: ToolSpec<I>,
-  preconditions: ReadonlyArray<ToolPrecondition<DomainCtx<State, Deps, Writes>>>,
-  handler: (ctx: DomainCtx<State, Deps, Writes>) => ToolCallback<I>,
+  spec: ToolSpec<I, O>,
+  handler: (ctx: DomainCtx<State, Deps, Writes>) => TypedToolBody<I, O>,
 ): ToolDef<State, Deps, Writes>;
 export function defineTool<
   I extends ZodRawShape | ZodTypeAny,
+  O extends Record<string, unknown> | void,
   State,
   Deps extends DomainId,
   Writes = Record<never, never>,
 >(
-  spec: ToolSpec<I>,
+  spec: ToolSpec<I, O>,
+  preconditions: ReadonlyArray<ToolPrecondition<DomainCtx<State, Deps, Writes>>>,
+  handler: (ctx: DomainCtx<State, Deps, Writes>) => TypedToolBody<I, O>,
+): ToolDef<State, Deps, Writes>;
+export function defineTool<
+  I extends ZodRawShape | ZodTypeAny,
+  O extends Record<string, unknown> | void,
+  State,
+  Deps extends DomainId,
+  Writes = Record<never, never>,
+>(
+  spec: ToolSpec<I, O>,
   preconditionsOrHandler:
     | ReadonlyArray<ToolPrecondition<DomainCtx<State, Deps, Writes>>>
     | ((ctx: DomainCtx<State, Deps, Writes>) => ToolCallback<I>),
