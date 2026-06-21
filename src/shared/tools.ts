@@ -280,21 +280,15 @@ export async function resolveOrPick<T>(
 }
 
 /**
- * Render a `LookupOutcome` to a `CallToolResult` for the read tools: a resolved
- * entity (including one chosen via the {@link resolveOrPick} PICK) renders
+ * Render a `LookupOutcome` to a `CallToolResult` for non-schema read tools: a
+ * resolved entity (including one chosen via the {@link resolveOrPick} PICK) renders
  * through `renderOne`; every not-found / disambiguation path returns the shared
  * `errorResult` (isError) with its remediation hint. `entityNoun` is the singular
  * noun; the plural is `entityNoun + "s"`.
  *
- * A schema-bearing read (B1/#321) passes `renderStructured` to additionally emit
- * `structuredContent` on the happy arm — derived from the SAME resolved entity that
- * `renderOne` formats, so the text and the structured payload agree by construction.
- * Only the SUCCESS arm carries it; every non-happy arm stays an `errorResult` with no
- * `structuredContent` (already so from A2), so a schema-bearing caller's success
- * channel is the only path the SDK's `validateToolOutput` checks (ADR-0019). Per-tool
- * payload typing lives at the call site (one Zod schema derives both the mapper's
- * return type and the declared `outputSchema`); the `Record<string, unknown>` bound
- * only erases it here.
+ * Schema-bearing reads use {@link resolveOrPick} directly so children are resolved
+ * once and projected to both text and structured in a single expression, eliminating
+ * the two-closure double-resolve that `renderStructured` would require.
  */
 export async function formatLookupOutcome<T>(
   server: ElicitationServer,
@@ -303,7 +297,6 @@ export async function formatLookupOutcome<T>(
     readonly entityNoun: string;
     readonly describe: (entity: T) => { readonly uid: string; readonly label: string };
     readonly renderOne: (entity: T) => string;
-    readonly renderStructured?: (entity: T) => Record<string, unknown>;
     readonly findWith?: string;
     readonly cap?: number;
     readonly log?: Logger;
@@ -311,6 +304,5 @@ export async function formatLookupOutcome<T>(
 ): Promise<CallToolResult> {
   const resolved = await resolveOrPick(server, outcome, config);
   if (!("entity" in resolved)) return resolved.result;
-  const text = config.renderOne(resolved.entity);
-  return config.renderStructured ? toolResult(text, config.renderStructured(resolved.entity)) : toolResult(text);
+  return toolResult(config.renderOne(resolved.entity));
 }

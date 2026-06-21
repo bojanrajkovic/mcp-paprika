@@ -2,7 +2,7 @@ import type { DomainCtx } from "../../../kernel/registry.js";
 import type { RecipeState } from "../module.js";
 
 import { defineTool } from "../../../kernel/tool.js";
-import { formatLookupOutcome, resolveLookup, uidOrTextLookupSchema } from "../../../shared/tools.js";
+import { resolveLookup, resolveOrPick, toolResult, uidOrTextLookupSchema } from "../../../shared/tools.js";
 import { RecipeUidSchema } from "../ids.js";
 import { recipeReadOutputSchema, recipeToMarkdown, recipeToReadStructured } from "../recipe-markdown.js";
 import { recipeColdStartGuard } from "./guards.js";
@@ -40,15 +40,15 @@ export const readRecipeTool = defineTool(
         get: (uid) => ctx.state.recipe.store.get(uid),
         findByText: (text) => ctx.state.recipe.store.findByName(text),
       });
-      return formatLookupOutcome(ctx.server.server, outcome, {
+      const resolved = await resolveOrPick(ctx.server.server, outcome, {
         entityNoun: "recipe",
         describe: (recipe) => ({ uid: recipe.uid, label: recipe.name }),
         findWith: "search_recipes",
-        renderOne: (recipe) => recipeToMarkdown(recipe, ctx.state.category.store.resolveNames(recipe.categories)),
-        renderStructured: (recipe) =>
-          recipeToReadStructured(recipe, ctx.state.category.store.resolveNames(recipe.categories)),
         log: ctx.infra.log,
       });
+      if ("result" in resolved) return resolved.result;
+      const names = ctx.state.category.store.resolveNames(resolved.entity.categories);
+      return toolResult(recipeToMarkdown(resolved.entity, names), recipeToReadStructured(resolved.entity, names));
     };
   },
 );

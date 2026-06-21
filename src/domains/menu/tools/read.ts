@@ -2,7 +2,7 @@ import type { DomainCtx } from "../../../kernel/registry.js";
 import type { MenuState } from "../module.js";
 
 import { defineTool } from "../../../kernel/tool.js";
-import { formatLookupOutcome, resolveLookup, uidOrTextLookupSchema } from "../../../shared/tools.js";
+import { resolveLookup, resolveOrPick, toolResult, uidOrTextLookupSchema } from "../../../shared/tools.js";
 import { MenuUidSchema } from "../ids.js";
 import { menuReadOutputSchema, menuToMarkdown, menuToStructured } from "../menu-helpers.js";
 import { menuStartGuard } from "./guards.js";
@@ -40,16 +40,19 @@ export const readMenuTool = defineTool(
         get: (uid) => ctx.state.menus.store.get(uid),
         findByText: (text) => ctx.state.menus.store.findByName(text),
       });
-      return formatLookupOutcome(ctx.server.server, outcome, {
+      const resolved = await resolveOrPick(ctx.server.server, outcome, {
         entityNoun: "menu",
         describe: (menu) => ({ uid: menu.uid, label: menu.name }),
         findWith: "list_menus",
-        renderOne: (menu) =>
-          menuToMarkdown(menu, ctx.state.items.store.getByMenuUid(menu.uid), ctx.deps["meal-type"].getAll()),
-        renderStructured: (menu) =>
-          menuToStructured(menu, ctx.state.items.store.getByMenuUid(menu.uid), ctx.deps["meal-type"].getAll()),
         log: ctx.infra.log,
       });
+      if ("result" in resolved) return resolved.result;
+      const items = ctx.state.items.store.getByMenuUid(resolved.entity.uid);
+      const mealTypes = ctx.deps["meal-type"].getAll();
+      return toolResult(
+        menuToMarkdown(resolved.entity, items, mealTypes),
+        menuToStructured(resolved.entity, items, mealTypes),
+      );
     };
   },
 );
