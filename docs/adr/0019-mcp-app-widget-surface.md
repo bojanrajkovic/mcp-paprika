@@ -62,5 +62,6 @@ Rejected because elicitation cannot scroll, search, preview, or live-update — 
 - Related: [ADR-0004](0004-tool-vs-resource-classification.md) — the two-surface (tool/resource) classification this amends by adding a third, widget surface under the same demonstrated-consumer discipline.
 - Related: [ADR-0008](0008-tool-surface-command-language.md) — the tool-surface command-language principle the structured channel serves.
 - Related: [ADR-0011](0011-tool-specs-as-data.md) — the specs-as-data principle the kernel's UI-metadata seam should follow.
+- Related: [ADR-0021](0021-reliable-structured-content-channel.md) — commits `structuredContent` as the model's reliable identifier channel and removes the UID text fallback, completing the R1 clean-text half of this decision.
 - Follow-on feature work (not decided here): the grocery purchased-checklist widget as the first widget, and the cooking step-anchored ingredient/step view; specific widget designs are captured with their features.
 - External: the Model Context Protocol apps/UI surface (`ui://` resources and the app bridge) and the `@modelcontextprotocol/ext-apps` SDK.
