@@ -220,7 +220,7 @@ The surface has two button families: the consent screen's full-width action butt
 ### List Rows
 
 - **Style:** Full-width rows on `paper`, padding 11px 16px — never boxed cards, and **no per-row divider**. The ingredient name leads; a ` · quantity` follows in muted tabular figures (the separator is a real space on both sides of the `·`, so a done strike-through runs straight through it).
-- **Done state:** The name strikes through and dims to `faint` (a `color-mix` line color, never a harsh strike); a grocery checkbox (7px-radius, 2px border) fills with `fresh-green` and shows a green tick; an in-flight write shows a small `fresh-green` spinner.
+- **Done state:** The name strikes through and dims to `faint` (a `color-mix` line color, never a harsh strike); a grocery checkbox (6px-radius, 2px border) fills with `fresh-green` and shows a green tick; an in-flight write shows a small `fresh-green` spinner.
 - **Grouped by aisle:** Each category is bracketed by a **full-width hairline separator** above its sticky, uppercase 12px `muted` heading (with a count as flavor text beside it); rows within a group flow without internal lines. One separator per category, not a line per row. The heading and its count baseline-align.
 
 ### Toast

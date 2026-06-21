@@ -15,6 +15,7 @@ import { connectInMemoryMcp } from "../../../../test/support/in-memory-mcp.js";
 import { buildBrandedServer } from "../../../server/build.js";
 import { UI_RESOURCE_MIME_TYPE } from "../../../shared/mcp-app.js";
 import { SILENT_LOG } from "../../../utils/log.js";
+import { SERVER_CAPS_KEY } from "../shared/server-caps-key.js";
 import { widgetsResource } from "./widgets-resource.js";
 
 function makeCtx(server: McpServer, widgets: ReadonlyMap<string, string>): DomainCtx<WidgetsState, never> {
@@ -24,17 +25,21 @@ function makeCtx(server: McpServer, widgets: ReadonlyMap<string, string>): Domai
 describe("widgetsResource — ui://widget/{name}", () => {
   it("serves a known widget's HTML under the apps MIME type", async () => {
     const server = buildBrandedServer();
-    widgetsResource(makeCtx(server, new Map([["demo", "<html>demo widget</html>"]])));
+    widgetsResource(
+      makeCtx(server, new Map([["demo", "<html><body><!-- __widget-inject__ -->demo widget</body></html>"]])),
+    );
 
     const mcp = await connectInMemoryMcp(server);
     try {
       const result = await mcp.client.readResource({ uri: "ui://widget/demo" });
       expect(result.contents).toHaveLength(1);
-      expect(result.contents[0]).toMatchObject({
-        uri: "ui://widget/demo",
-        mimeType: UI_RESOURCE_MIME_TYPE,
-        text: "<html>demo widget</html>",
-      });
+      expect(result.contents[0]).toMatchObject({ uri: "ui://widget/demo", mimeType: UI_RESOURCE_MIME_TYPE });
+      // The resource handler injects window[SERVER_CAPS_KEY] at read time; the
+      // original HTML is embedded but the returned text is not a verbatim copy.
+      const content = result.contents[0];
+      const text = content !== undefined && "text" in content ? content.text : undefined;
+      expect(text).toContain("demo widget");
+      expect(text).toContain(SERVER_CAPS_KEY);
     } finally {
       await mcp.close();
     }

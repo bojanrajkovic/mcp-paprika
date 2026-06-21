@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { useTempDir } from "../../test/support/disk-caches.js";
+import { SERVER_CAPS_KEY } from "../features/widgets/shared/server-caps-key.js";
 import { SILENT_LOG } from "../utils/log.js";
 import { buildWidgetPreviewRouter, SHIMMED_EXTAPPS_HELPERS, SHIMMED_HOST_METHODS } from "./widget-preview.js";
 
@@ -11,6 +12,7 @@ const FIXTURE_HTML = `<!doctype html>
 <html lang="en">
   <head><meta charset="utf-8" /></head>
   <body>
+    <!-- __widget-inject__ -->
     <div id="app"></div>
     <script type="module">globalThis.ExtApps ??= { App: class {} };</script>
   </body>
@@ -55,6 +57,11 @@ describe("widget-preview route", () => {
     // The shim is a classic <script> ahead of the deferred module bundle, so it
     // claims globalThis.ExtApps first and the real (`??=`) runtime no-ops.
     expect(body.indexOf("<script>")).toBeLessThan(body.indexOf('<script type="module">'));
+
+    // The App constructor sets window[SERVER_CAPS_KEY] from ?elicitation= so the
+    // grocery checklist's elicitation-aware confirm can be exercised in the preview.
+    expect(body).toContain(SERVER_CAPS_KEY);
+    expect(body).toContain("supportsElicitation");
   });
 
   it("never reflects ?payload= into the served HTML (the shim reads it client-side)", async () => {

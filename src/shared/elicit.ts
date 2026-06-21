@@ -22,7 +22,7 @@ export interface ElicitationServer {
  * the boundary. Read off the per-session server, so under HTTP it reflects the
  * capability of *this* session's client (ADR-0001), not a process-wide value.
  */
-function supportsForm(server: ElicitationServer): boolean {
+export function supportsForm(server: ElicitationServer): boolean {
   return server.getClientCapabilities()?.elicitation?.form !== undefined;
 }
 

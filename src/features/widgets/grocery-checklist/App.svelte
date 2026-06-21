@@ -19,6 +19,7 @@
     type ReceivedResult,
   } from "../shared/host-bridge.js";
   import { motion } from "../shared/motion.js";
+  import { SERVER_CAPS_KEY } from "../shared/server-caps-key.js";
 
   // A checklist row: a structured grocery item plus transient per-row UI flags.
   interface Row {
@@ -44,6 +45,9 @@
   // The tool's own error text (not-found / disambiguation), for the error state.
   let errorMsg = $state<string | null>(null);
   let confirmingClear = $state(false);
+  // Suppresses the widget's inline two-tap confirm when the server's confirmGate is active.
+  // Set once in onMount from window.__MCP_SERVER_CAPS__ (injected at resources/read time).
+  let elicitation = $state(false);
 
   const DEBOUNCE_MS = 300;
   const lastTap = new Map<string, number>(); // uid -> performance.now(), for the per-row flap-guard
@@ -61,6 +65,12 @@
   const purchasedCount = $derived(items.filter((i) => i.purchased).length);
 
   onMount(() => {
+    const serverCaps = (globalThis as Record<string, unknown>)[SERVER_CAPS_KEY];
+    if (serverCaps !== null && typeof serverCaps === "object") {
+      elicitation = Boolean(
+        (serverCaps as Record<string, unknown>)["supportsElicitation"],
+      );
+    }
     connectHost(app, {
       onResult: receive,
       onContext: (ctx) => {
@@ -267,7 +277,9 @@
         {:else}
           <span class="progress">{purchasedCount}/{items.length} done</span>
           {#if purchasedCount > 0}
-            <PillButton onclick={onClear}>Clear {purchasedCount}</PillButton>
+            <PillButton onclick={elicitation ? confirmClear : onClear}
+              >Clear {purchasedCount}</PillButton
+            >
           {/if}
         {/if}
       </div>
@@ -376,7 +388,7 @@
   .row:focus-visible {
     outline: 2px solid var(--accent);
     outline-offset: -2px;
-    border-radius: 4px;
+    border-radius: 6px;
   }
   .row.err {
     animation: errFlash 1.1s ease-out;
@@ -395,7 +407,7 @@
     flex: none;
     width: 22px;
     height: 22px;
-    border-radius: 7px;
+    border-radius: 6px;
     border: 2px solid color-mix(in oklch, var(--ink) 28%, transparent);
     display: grid;
     place-items: center;
