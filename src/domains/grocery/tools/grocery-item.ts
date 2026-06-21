@@ -37,7 +37,7 @@ export const itemInputSchema = z.object({
  * An explicit `aisle` resolves via `ensureAisle` (auto-create) and upserts the
  * ingredient's catalog memory (POST + store + best-effort cache put); an omitted
  * one falls back batch-cache → catalog memory → the built-in Miscellaneous aisle.
- * Returns the built items, or the ready-to-return `CallToolResult` of the first
+ * Returns the built items, or an `errorResult` `CallToolResult` on the first
  * failure (an erring `ensureAisle` or a failed catalog save).
  */
 export async function buildGroceryItems(
@@ -66,7 +66,7 @@ export async function buildGroceryItems(
     if (item.aisle !== undefined) {
       const resolved = (await ctx.deps.aisle.ensureAisle(item.aisle)).match(
         (v) => v,
-        (message) => toolResult(message),
+        (message) => errorResult(message),
       );
       if ("content" in resolved) return resolved;
       aisle = resolved.aisle;
@@ -92,7 +92,7 @@ export async function buildGroceryItems(
           () => undefined,
           (e) => {
             log.error({ err: e, listUid }, "saveGroceryIngredient failed");
-            return toolResult(`Failed to add grocery items: ${e.message}`);
+            return errorResult(`Failed to add grocery items: ${e.message}`);
           },
         );
         if (catalogErr) return catalogErr;
@@ -197,10 +197,7 @@ export const addGroceryItemsTool = defineTool(
 
       // Build all GroceryItem objects (aisle resolution + catalog memory), no recipe link.
       const builtItems = await buildGroceryItems(ctx, log, args.listUid, args.items, null);
-      // buildGroceryItems is shared with the non-schema add_recipe_to_grocery_list, so it
-      // returns a plain toolResult on failure; under this tool's outputSchema that branch
-      // must be an isError result (no structuredContent), so flag it here.
-      if ("content" in builtItems) return { ...builtItems, isError: true };
+      if ("content" in builtItems) return builtItems;
 
       // Single batch POST for all items
       const savedItems = (await ctx.infra.client.saveGroceryItems(builtItems)).match(
