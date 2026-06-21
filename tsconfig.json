@@ -12,6 +12,7 @@
     "src/transport/e2e-server.ts",
     "src/features/widgets/mount-widget.ts",
     "src/features/widgets/*/main.ts",
+    "src/features/widgets/shared/**/*.ts",
     "src/features/widgets/**/*.svelte"
   ]
 }
