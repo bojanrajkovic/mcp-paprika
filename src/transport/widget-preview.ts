@@ -9,6 +9,7 @@ import { Hono } from "hono";
 import type { Logger } from "pino";
 
 import { loadWidgetArtifacts, widgetsDir } from "../features/widgets/artifacts.js";
+import { SERVER_CAPS_KEY } from "../features/widgets/shared/server-caps-key.js";
 
 /**
  * A dev-only Hono router serving
@@ -66,7 +67,7 @@ export function buildWidgetPreviewRouter(log: Logger, opts: { readonly dir?: str
     // it claims `globalThis.ExtApps` first and the real (`??=`) runtime no-ops. A
     // function replacement is used so a `$` in the shim is never treated as a
     // String.replace substitution pattern ($&, $1, …).
-    return c.html(html.replace("<body>", () => `<body>\n    <script>${PREVIEW_SHIM}</script>`));
+    return c.html(html.replace(/(<body[^>]*>)/i, (m) => `${m}\n    <script>${PREVIEW_SHIM}</script>`));
   });
 
   return app;
@@ -139,8 +140,8 @@ const PREVIEW_SHIM = `globalThis.ExtApps = {
     constructor() {
       try {
         const q = new URLSearchParams(location.search);
+        window["${SERVER_CAPS_KEY}"] = { supportsElicitation: q.get("elicitation") === "1" };
         this.#payload = q.get("payload");
-        window.__MCP_SERVER_CAPS__ = { supportsElicitation: q.get("elicitation") === "1" };
       } catch { this.#payload = null; }
     }
     async connect() {

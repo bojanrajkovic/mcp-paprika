@@ -3,8 +3,10 @@ import { ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { DomainCtx } from "../../../kernel/registry.js";
 import type { WidgetsState } from "../module.js";
 
+import { supportsForm } from "../../../shared/elicit.js";
 import { UI_RESOURCE_MIME_TYPE } from "../../../shared/mcp-app.js";
 import { resourceNotFound, tracedResourceRead } from "../../../shared/resources.js";
+import { SERVER_CAPS_KEY } from "../shared/server-caps-key.js";
 
 /**
  * `ui://widget/{name}` — serve a prebuilt, self-contained widget HTML for a host
@@ -39,16 +41,15 @@ export function widgetsResource(ctx: DomainCtx<WidgetsState, never>): void {
         resourceNotFound(`Widget not found: ${name}`);
       }
       // Inject server capabilities as a classic <script> so the widget can read
-      // them from window.__MCP_SERVER_CAPS__ before the module bundle runs. Done
+      // them from window[SERVER_CAPS_KEY] before the module bundle runs. Done
       // here (per resource-read, not at artifact-load time) so each client gets
       // capabilities reflecting its own negotiated session.
-      const caps = ctx.server.server.getClientCapabilities();
       const serverCaps = JSON.stringify({
-        supportsElicitation: caps?.elicitation?.form !== undefined,
+        supportsElicitation: supportsForm(ctx.server.server),
       });
       const injected = html.replace(
-        "<body>",
-        () => `<body>\n    <script>window.__MCP_SERVER_CAPS__=${serverCaps};</script>`,
+        /(<body[^>]*>)/i,
+        (m) => `${m}\n    <script>window["${SERVER_CAPS_KEY}"]=${serverCaps};</script>`,
       );
       return {
         contents: [{ uri: uri.href, mimeType: UI_RESOURCE_MIME_TYPE, text: injected }],

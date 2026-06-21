@@ -19,6 +19,7 @@
     type ReceivedResult,
   } from "../shared/host-bridge.js";
   import { motion } from "../shared/motion.js";
+  import { SERVER_CAPS_KEY } from "../shared/server-caps-key.js";
 
   // A checklist row: a structured grocery item plus transient per-row UI flags.
   interface Row {
@@ -64,9 +65,7 @@
   const purchasedCount = $derived(items.filter((i) => i.purchased).length);
 
   onMount(() => {
-    const serverCaps = (globalThis as Record<string, unknown>)[
-      "__MCP_SERVER_CAPS__"
-    ];
+    const serverCaps = (globalThis as Record<string, unknown>)[SERVER_CAPS_KEY];
     if (serverCaps !== null && typeof serverCaps === "object") {
       elicitation = Boolean(
         (serverCaps as Record<string, unknown>)["supportsElicitation"],

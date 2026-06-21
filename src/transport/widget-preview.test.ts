@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { useTempDir } from "../../test/support/disk-caches.js";
+import { SERVER_CAPS_KEY } from "../features/widgets/shared/server-caps-key.js";
 import { SILENT_LOG } from "../utils/log.js";
 import { buildWidgetPreviewRouter, SHIMMED_EXTAPPS_HELPERS, SHIMMED_HOST_METHODS } from "./widget-preview.js";
 
@@ -56,9 +57,9 @@ describe("widget-preview route", () => {
     // claims globalThis.ExtApps first and the real (`??=`) runtime no-ops.
     expect(body.indexOf("<script>")).toBeLessThan(body.indexOf('<script type="module">'));
 
-    // The App constructor sets window.__MCP_SERVER_CAPS__ from ?elicitation= so the
+    // The App constructor sets window[SERVER_CAPS_KEY] from ?elicitation= so the
     // grocery checklist's elicitation-aware confirm can be exercised in the preview.
-    expect(body).toContain("__MCP_SERVER_CAPS__");
+    expect(body).toContain(SERVER_CAPS_KEY);
     expect(body).toContain("supportsElicitation");
   });
 
