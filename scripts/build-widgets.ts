@@ -218,6 +218,7 @@ function renderShell(name: string, extAppsBundle: string, widgetBundle: string):
     <title>${name} widget</title>
   </head>
   <body>
+    <!-- __widget-inject__ -->
     <div id="app"></div>
     <script type="module">
 ${inlineScriptSafe(extAppsBundle)}

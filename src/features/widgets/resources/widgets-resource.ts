@@ -6,7 +6,7 @@ import type { WidgetsState } from "../module.js";
 import { supportsForm } from "../../../shared/elicit.js";
 import { UI_RESOURCE_MIME_TYPE } from "../../../shared/mcp-app.js";
 import { resourceNotFound, tracedResourceRead } from "../../../shared/resources.js";
-import { SERVER_CAPS_KEY } from "../shared/server-caps-key.js";
+import { SERVER_CAPS_KEY, WIDGET_INJECT_SLOT } from "../shared/server-caps-key.js";
 
 /**
  * `ui://widget/{name}` — serve a prebuilt, self-contained widget HTML for a host
@@ -47,10 +47,7 @@ export function widgetsResource(ctx: DomainCtx<WidgetsState, never>): void {
       const serverCaps = JSON.stringify({
         supportsElicitation: supportsForm(ctx.server.server),
       });
-      const injected = html.replace(
-        /(<body[^>]*>)/i,
-        (m) => `${m}\n    <script>window["${SERVER_CAPS_KEY}"]=${serverCaps};</script>`,
-      );
+      const injected = html.replace(WIDGET_INJECT_SLOT, `<script>window["${SERVER_CAPS_KEY}"]=${serverCaps};</script>`);
       return {
         contents: [{ uri: uri.href, mimeType: UI_RESOURCE_MIME_TYPE, text: injected }],
       };

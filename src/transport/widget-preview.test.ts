@@ -12,6 +12,7 @@ const FIXTURE_HTML = `<!doctype html>
 <html lang="en">
   <head><meta charset="utf-8" /></head>
   <body>
+    <!-- __widget-inject__ -->
     <div id="app"></div>
     <script type="module">globalThis.ExtApps ??= { App: class {} };</script>
   </body>
