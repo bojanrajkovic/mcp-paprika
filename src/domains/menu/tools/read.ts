@@ -48,6 +48,7 @@ export const readMenuTool = defineTool(
           menuToMarkdown(menu, ctx.state.items.store.getByMenuUid(menu.uid), ctx.deps["meal-type"].getAll()),
         renderStructured: (menu) =>
           menuToStructured(menu, ctx.state.items.store.getByMenuUid(menu.uid), ctx.deps["meal-type"].getAll()),
+        log: ctx.infra.log,
       });
     };
   },

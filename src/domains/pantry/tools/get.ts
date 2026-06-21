@@ -47,6 +47,7 @@ export const getPantryItemTool = defineTool(
         findWith: "list_pantry_items",
         renderOne: (item) => pantryItemToMarkdown(item, ctx.deps.aisle),
         renderStructured: (item) => pantryItemToStructured(item, ctx.deps.aisle),
+        log: ctx.infra.log,
       });
     };
   },

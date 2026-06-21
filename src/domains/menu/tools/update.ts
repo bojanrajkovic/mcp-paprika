@@ -64,6 +64,7 @@ export const updateMenuTool = defineTool(
         entityNoun: "menu",
         describe: (m) => ({ uid: m.uid, label: m.name }),
         findWith: "list_menus",
+        log,
       });
       if ("result" in resolved) return resolved.result;
       const existing = resolved.entity;

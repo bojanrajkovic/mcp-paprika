@@ -125,6 +125,7 @@ export const readGroceryListTool = defineTool(
         findWith: "list_grocery_lists",
         renderOne: (list) => groceryListToMarkdown(list, checklistItems(list), ctx.deps.aisle),
         renderStructured: (list) => groceryListToStructured(list, checklistItems(list), ctx.deps.aisle),
+        log: ctx.infra.log,
       });
     };
   },

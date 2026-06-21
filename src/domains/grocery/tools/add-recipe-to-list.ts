@@ -75,6 +75,7 @@ export const addRecipeToGroceryListTool = defineTool(
         entityNoun: "recipe",
         describe: (r) => ({ uid: r.uid, label: r.name }),
         findWith: "search_recipes",
+        log,
       });
       if ("result" in resolved) return resolved.result;
       const recipe = resolved.entity;
