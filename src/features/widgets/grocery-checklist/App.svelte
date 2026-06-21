@@ -419,7 +419,7 @@
     height: 14px;
   }
   .tick {
-    stroke: var(--accent-ink);
+    stroke: var(--success-ink);
     stroke-width: 2.6;
     stroke-linecap: round;
     stroke-linejoin: round;
@@ -428,8 +428,8 @@
     stroke-dashoffset: 20;
   }
   .row.done .box {
-    background: var(--accent);
-    border-color: var(--accent);
+    background: var(--success);
+    border-color: var(--success);
   }
   .row.done .tick {
     stroke-dashoffset: 0;
@@ -439,8 +439,8 @@
   .spin {
     width: 15px;
     height: 15px;
-    border: 2px solid color-mix(in oklch, var(--accent) 35%, transparent);
-    border-top-color: var(--accent);
+    border: 2px solid color-mix(in oklch, var(--success) 35%, transparent);
+    border-top-color: var(--success);
     border-radius: 50%;
     animation: spin 0.7s linear infinite;
   }
