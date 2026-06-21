@@ -7,28 +7,37 @@ import { aisleDisplayName } from "../aisle/display.js";
 import { PantryItemUidSchema } from "./ids.js";
 
 /**
- * The structured-output payload for `read_pantry_item` (ADR-0019, R1, B1/#321) — the
- * machine-readable counterpart to the markdown, and the C3 pantry-checklist widget feed
- * (#334). `uid` drives `update_pantry_item` / `mark_pantry_item_out_of_stock` /
- * `restock_pantry_item` / `delete_pantry_item`. `aisle` is the live-catalog display name
- * (null when unassigned) and `quantity` "" normalizes to null — matching the
- * `list_pantry_items` row convention so the model pattern-matches one shape.
+ * The six-field list row emitted by `list_pantry_items` — also the base shape
+ * `pantryItemReadOutputSchema` extends. `aisle` is the live-catalog display name
+ * (null when unassigned); `quantity` "" normalizes to null.
  */
-export const pantryItemReadOutputSchema = z.object({
+export const pantryItemRowSchema = z.object({
   uid: PantryItemUidSchema,
   ingredient: z.string(),
   quantity: z.string().nullable(),
   aisle: z.string().nullable().describe("Aisle display name, or null if unassigned."),
   inStock: z.boolean(),
   expirationDate: z.string().nullable(),
+});
+export type PantryItemRow = z.infer<typeof pantryItemRowSchema>;
+
+/**
+ * The structured-output payload for `read_pantry_item` — the machine-readable
+ * counterpart to the markdown, and the pantry-checklist widget feed.
+ * `uid` drives `update_pantry_item` / `mark_pantry_item_out_of_stock` /
+ * `restock_pantry_item` / `delete_pantry_item`. `aisle` is the live-catalog display name
+ * (null when unassigned) and `quantity` "" normalizes to null — matching the
+ * `list_pantry_items` row convention so the model pattern-matches one shape.
+ */
+export const pantryItemReadOutputSchema = pantryItemRowSchema.extend({
   purchaseDate: z.string().nullable(),
 });
 
 export type PantryItemReadStructured = z.infer<typeof pantryItemReadOutputSchema>;
 
-/** Map a `PantryItem` into its structured read payload, resolving the aisle name through
- * the live catalog (the same resolution {@link pantryItemToMarkdown} uses). */
-export function pantryItemToStructured(item: PantryItem, aisles: AisleNameSource): PantryItemReadStructured {
+/** Map a `PantryItem` into its list-row payload, resolving the aisle name through
+ * the live catalog. */
+export function pantryItemToRow(item: PantryItem, aisles: AisleNameSource): PantryItemRow {
   const aisle = aisleDisplayName(aisles, item);
   return {
     uid: item.uid,
@@ -37,8 +46,13 @@ export function pantryItemToStructured(item: PantryItem, aisles: AisleNameSource
     aisle: aisle !== "" ? aisle : null,
     inStock: item.inStock,
     expirationDate: item.expirationDate,
-    purchaseDate: item.purchaseDate,
   };
+}
+
+/** Map a `PantryItem` into its structured read payload, resolving the aisle name through
+ * the live catalog (the same resolution {@link pantryItemToMarkdown} uses). */
+export function pantryItemToStructured(item: PantryItem, aisles: AisleNameSource): PantryItemReadStructured {
+  return { ...pantryItemToRow(item, aisles), purchaseDate: item.purchaseDate };
 }
 
 // notes is on PantryItem (the GET wire includes it) but no Paprika client
