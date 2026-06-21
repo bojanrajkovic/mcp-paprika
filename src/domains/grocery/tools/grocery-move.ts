@@ -49,7 +49,9 @@ export const moveToPantryTool = defineTool(
         seen.add(uid);
         const item = ctx.state.items.store.get(uid);
         if (!item) {
-          return toolResult(`No grocery item found with UID "${uid}" (it may not exist or was already deleted).`);
+          return toolResult(
+            `No grocery item found with UID "${uid}" (it may not exist or was already deleted). Use \`read_grocery_list\` to inspect its list.`,
+          );
         }
         items.push(item);
       }

@@ -41,7 +41,9 @@ describe("pin_recipe tool", () => {
 
     const text = await kh.callToolText("pin_recipe", { uid: "nonexistent-uid" });
 
-    expect(text).toContain('No recipe found with UID "nonexistent-uid" (it may not exist or was already deleted).');
+    expect(text).toContain(
+      'No recipe found with UID "nonexistent-uid" (it may not exist or was already deleted). Use `search_recipes` to find it.',
+    );
     expect(kh.client().saveRecipe).not.toHaveBeenCalled();
   });
 
@@ -102,7 +104,9 @@ describe("unpin_recipe tool", () => {
 
     const text = await kh.callToolText("unpin_recipe", { uid: "nonexistent-uid" });
 
-    expect(text).toContain('No recipe found with UID "nonexistent-uid" (it may not exist or was already deleted).');
+    expect(text).toContain(
+      'No recipe found with UID "nonexistent-uid" (it may not exist or was already deleted). Use `search_recipes` to find it.',
+    );
     expect(kh.client().saveRecipe).not.toHaveBeenCalled();
   });
 

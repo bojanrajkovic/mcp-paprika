@@ -432,7 +432,9 @@ describe("update_menu_item tool", () => {
     seedBase(kh, {});
 
     const text = await kh.callToolText("update_menu_item", { uid: "ghost", type: { name: "Dinner" } });
-    expect(text).toContain('No menu item found with UID "ghost" (it may not exist or was already deleted).');
+    expect(text).toContain(
+      'No menu item found with UID "ghost" (it may not exist or was already deleted). Use `read_menu` to inspect its menu.',
+    );
     expect(kh.client().saveMenuItems).not.toHaveBeenCalled();
   });
 

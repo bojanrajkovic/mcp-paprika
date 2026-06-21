@@ -56,7 +56,9 @@ export const categorizeRecipeTool = defineTool(
     return async (args) => {
       const existing = ctx.state.recipe.store.get(args.uid);
       if (!existing) {
-        return toolResult(`No recipe found with UID "${args.uid}" (it may not exist or was already deleted).`);
+        return toolResult(
+          `No recipe found with UID "${args.uid}" (it may not exist or was already deleted). Use \`search_recipes\` to find it.`,
+        );
       }
 
       const { uids: refUids, unknown } = resolveCategoryRefs(ctx.state.category.store.getAll(), args.categories);

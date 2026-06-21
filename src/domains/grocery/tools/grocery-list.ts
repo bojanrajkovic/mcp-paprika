@@ -211,7 +211,9 @@ export const renameGroceryListTool = defineTool(
       const existing = ctx.state.lists.store.get(args.uid);
 
       if (!existing) {
-        return errorResult(`No grocery list found with UID "${args.uid}" (it may not exist or was already deleted).`);
+        return errorResult(
+          `No grocery list found with UID "${args.uid}" (it may not exist or was already deleted). Use \`list_grocery_lists\` to find it.`,
+        );
       }
 
       // Same-name no-op: case-insensitive check. Return the existing list rendered as markdown.

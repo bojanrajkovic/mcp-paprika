@@ -41,7 +41,9 @@ export const markPantryItemOutOfStockTool = defineTool(
       const existing = ctx.state.store.get(args.uid);
 
       if (!existing) {
-        return toolResult(`No pantry item found with UID "${args.uid}" (it may not exist or was already deleted).`);
+        return toolResult(
+          `No pantry item found with UID "${args.uid}" (it may not exist or was already deleted). Use \`list_pantry_items\` to find it.`,
+        );
       }
 
       const updated: PantryItem = { ...existing, inStock: false };
@@ -80,7 +82,9 @@ export const restockPantryItemTool = defineTool(
       const existing = ctx.state.store.get(args.uid);
 
       if (!existing) {
-        return toolResult(`No pantry item found with UID "${args.uid}" (it may not exist or was already deleted).`);
+        return toolResult(
+          `No pantry item found with UID "${args.uid}" (it may not exist or was already deleted). Use \`list_pantry_items\` to find it.`,
+        );
       }
 
       const updated: PantryItem = { ...existing, inStock: true };

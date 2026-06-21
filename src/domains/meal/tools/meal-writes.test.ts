@@ -626,7 +626,9 @@ describe("update_meal — failure/edge paths", () => {
     const result = await kh.callTool("update_meal", { uid: "UNKNOWN-UID" as MealUid, update: { name: "Anything" } });
     const text = getText(result);
 
-    expect(text).toBe('No meal found with UID "UNKNOWN-UID" (it may not exist or was already deleted).');
+    expect(text).toBe(
+      'No meal found with UID "UNKNOWN-UID" (it may not exist or was already deleted). Use `read_meal_plan` to find it.',
+    );
     expect(kh.client().saveMeals).not.toHaveBeenCalled();
   });
 
@@ -638,7 +640,9 @@ describe("update_meal — failure/edge paths", () => {
     const result = await kh.callTool("update_meal", { uid: TEST_MEAL_UID, update: { name: "Anything" } });
     const text = getText(result);
 
-    expect(text).toBe(`No meal found with UID "${TEST_MEAL_UID}" (it may not exist or was already deleted).`);
+    expect(text).toBe(
+      `No meal found with UID "${TEST_MEAL_UID}" (it may not exist or was already deleted). Use \`read_meal_plan\` to find it.`,
+    );
     expect(kh.client().saveMeals).not.toHaveBeenCalled();
   });
 

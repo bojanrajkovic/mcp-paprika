@@ -26,7 +26,7 @@ export const clearPurchasedTool = defineTool(
       const list = ctx.state.lists.store.get(args.listUid);
       if (!list) {
         return errorResult(
-          `No grocery list found with UID "${args.listUid}" (it may not exist or was already deleted).`,
+          `No grocery list found with UID "${args.listUid}" (it may not exist or was already deleted). Use \`list_grocery_lists\` to find it.`,
         );
       }
 
@@ -78,7 +78,7 @@ export const clearGroceryListTool = defineTool(
       const list = ctx.state.lists.store.get(args.listUid);
       if (!list) {
         return errorResult(
-          `No grocery list found with UID "${args.listUid}" (it may not exist or was already deleted).`,
+          `No grocery list found with UID "${args.listUid}" (it may not exist or was already deleted). Use \`list_grocery_lists\` to find it.`,
         );
       }
 
