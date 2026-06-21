@@ -5,25 +5,14 @@ import type { PantryState } from "../module.js";
 
 import { defineTool } from "../../../kernel/tool.js";
 import { toolResult } from "../../../shared/tools.js";
-import { PantryItemUidSchema } from "../ids.js";
+import { aisleDisplayName } from "../../aisle/display.js";
+import { pantryItemRowSchema, pantryItemToRow } from "../pantry-helpers.js";
 import { pantryStartGuard } from "./guards.js";
 
-// Structured-output payload (ADR-0019, R1): one row per pantry item, carrying the
-// `uid` (read_pantry_item / update / delete / mark-out-of-stock / restock consume)
-// plus the displayed fields. The "" sentinels for an absent quantity/aisle are
-// normalized to null so "no aisle" reads unambiguously.
-export const listPantryItemsOutputSchema = z.object({
-  items: z.array(
-    z.object({
-      uid: PantryItemUidSchema,
-      ingredient: z.string(),
-      quantity: z.string().nullable(),
-      aisle: z.string().nullable().describe("Aisle name, or null if unassigned."),
-      inStock: z.boolean(),
-      expirationDate: z.string().nullable(),
-    }),
-  ),
-});
+// Structured-output payload: one row per pantry item. Aisle resolves
+// through the live catalog so list and read always agree, even after an aisle rename.
+// The "" sentinels for absent quantity/aisle are normalized to null.
+export const listPantryItemsOutputSchema = z.object({ items: z.array(pantryItemRowSchema) });
 
 /**
  * `list_pantry_items` — list all pantry items. Pantry is a Data-class entity: no
@@ -52,21 +41,15 @@ export const listPantryItemsTool = defineTool(
         return toolResult("Your pantry is empty.", { items: [] });
       }
 
-      const items = all.map((item) => ({
-        uid: item.uid,
-        ingredient: item.ingredient,
-        quantity: item.quantity !== "" ? item.quantity : null,
-        aisle: item.aisle !== "" ? item.aisle : null,
-        inStock: item.inStock,
-        expirationDate: item.expirationDate,
-      }));
+      const items = all.map((item) => pantryItemToRow(item, ctx.deps.aisle));
       const header = `You have ${total.toString()} pantry item${total === 1 ? "" : "s"}:\n`;
       const lines = all.map((item) => {
         const qty = item.quantity !== "" ? ` (${item.quantity})` : "";
-        const aisle = item.aisle !== "" ? ` — ${item.aisle}` : "";
+        const aisle = aisleDisplayName(ctx.deps.aisle, item);
+        const aisleStr = aisle !== "" ? ` — ${aisle}` : "";
         const status = item.inStock ? "" : " · **out of stock**";
         const expires = item.expirationDate !== null ? ` · expires ${item.expirationDate}` : "";
-        return `- **${item.ingredient}**${qty}${aisle}${status}${expires} (uid: \`${item.uid}\`)`;
+        return `- **${item.ingredient}**${qty}${aisleStr}${status}${expires} (uid: \`${item.uid}\`)`;
       });
 
       return toolResult(header + "\n" + lines.join("\n"), { items });
