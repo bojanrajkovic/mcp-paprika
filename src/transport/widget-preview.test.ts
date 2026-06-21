@@ -55,6 +55,11 @@ describe("widget-preview route", () => {
     // The shim is a classic <script> ahead of the deferred module bundle, so it
     // claims globalThis.ExtApps first and the real (`??=`) runtime no-ops.
     expect(body.indexOf("<script>")).toBeLessThan(body.indexOf('<script type="module">'));
+
+    // The App constructor sets window.__MCP_SERVER_CAPS__ from ?elicitation= so the
+    // grocery checklist's elicitation-aware confirm can be exercised in the preview.
+    expect(body).toContain("__MCP_SERVER_CAPS__");
+    expect(body).toContain("supportsElicitation");
   });
 
   it("never reflects ?payload= into the served HTML (the shim reads it client-side)", async () => {

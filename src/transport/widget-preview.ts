@@ -12,11 +12,14 @@ import { loadWidgetArtifacts, widgetsDir } from "../features/widgets/artifacts.j
 
 /**
  * A dev-only Hono router serving
- * `GET /widget-preview?widget=<name>&payload=<json>&theme=<light|dark>&userAgent=<host>`:
+ * `GET /widget-preview?widget=<name>&payload=<json>&theme=<light|dark>&userAgent=<host>&elicitation=<0|1>`:
  * a built widget rendered in a plain browser tab with a FAKE host shim, so widget
  * UI can be iterated with ordinary devtools, no real MCP host required. `theme` and
  * `userAgent` drive the shim's `getHostContext()`, so the host-matched theme and
  * typeface (a serif-first host renders the serif stack) can be previewed too.
+ * `elicitation=1` sets `window.__MCP_SERVER_CAPS__.supportsElicitation=true` in the
+ * shim constructor, mirroring what `widgets-resource.ts` injects at `resources/read`
+ * time so the elicitation-aware confirm path can be exercised without a real MCP host.
  *
  * Mount it ONLY behind the `MCP_WIDGET_PREVIEW` flag (it does not exist in
  * production) and, like the favicon, BEFORE the `/mcp` bearer guard (it is
@@ -112,13 +115,13 @@ export const SHIMMED_EXTAPPS_HELPERS = [
 ] as const satisfies readonly (keyof ExtAppsHelperShape)[];
 
 /**
- * The fake `globalThis.ExtApps` injected into a previewed widget. Its `App` reads
- * `?payload=` from `location.search` and on `connect()` feeds it to `ontoolresult` as the
- * text content and, when it parses as JSON, as `structuredContent` (the channel the widgets
- * render from). Its `getHostContext()` reflects `?theme=` (light|dark) and `?userAgent=`, so the
- * host-matched theme and typeface can be exercised; every other host method is a harmless no-op.
- * Authored as a string because it runs in the browser, not Node; {@link SHIMMED_HOST_METHODS}
- * keeps its surface honest against ext-apps.
+ * The fake `globalThis.ExtApps` injected into a previewed widget. Its `App` constructor
+ * reads `?elicitation=` and sets `window.__MCP_SERVER_CAPS__` (mirroring the injection
+ * `widgets-resource.ts` does at `resources/read` time), then reads `?payload=` for the
+ * `connect()` feed to `ontoolresult`. Its `getHostContext()` reflects `?theme=` (light|dark)
+ * and `?userAgent=`; every other host method is a harmless no-op. Authored as a string
+ * because it runs in the browser, not Node; {@link SHIMMED_HOST_METHODS} keeps its surface
+ * honest against ext-apps.
  */
 const PREVIEW_SHIM = `globalThis.ExtApps = {
   applyHostStyleVariables() {},
@@ -134,8 +137,11 @@ const PREVIEW_SHIM = `globalThis.ExtApps = {
     onhostcontextchanged;
     #payload;
     constructor() {
-      try { this.#payload = new URLSearchParams(location.search).get("payload"); }
-      catch { this.#payload = null; }
+      try {
+        const q = new URLSearchParams(location.search);
+        this.#payload = q.get("payload");
+        window.__MCP_SERVER_CAPS__ = { supportsElicitation: q.get("elicitation") === "1" };
+      } catch { this.#payload = null; }
     }
     async connect() {
       if (this.#payload === null || this.#payload === undefined) return;

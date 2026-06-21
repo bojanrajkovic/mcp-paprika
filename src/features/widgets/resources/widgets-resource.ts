@@ -38,8 +38,20 @@ export function widgetsResource(ctx: DomainCtx<WidgetsState, never>): void {
       if (html === undefined) {
         resourceNotFound(`Widget not found: ${name}`);
       }
+      // Inject server capabilities as a classic <script> so the widget can read
+      // them from window.__MCP_SERVER_CAPS__ before the module bundle runs. Done
+      // here (per resource-read, not at artifact-load time) so each client gets
+      // capabilities reflecting its own negotiated session.
+      const caps = ctx.server.server.getClientCapabilities();
+      const serverCaps = JSON.stringify({
+        supportsElicitation: caps?.elicitation?.form !== undefined,
+      });
+      const injected = html.replace(
+        "<body>",
+        () => `<body>\n    <script>window.__MCP_SERVER_CAPS__=${serverCaps};</script>`,
+      );
       return {
-        contents: [{ uri: uri.href, mimeType: UI_RESOURCE_MIME_TYPE, text: html }],
+        contents: [{ uri: uri.href, mimeType: UI_RESOURCE_MIME_TYPE, text: injected }],
       };
     }),
   );

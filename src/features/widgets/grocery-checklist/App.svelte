@@ -44,6 +44,9 @@
   // The tool's own error text (not-found / disambiguation), for the error state.
   let errorMsg = $state<string | null>(null);
   let confirmingClear = $state(false);
+  // Suppresses the widget's inline two-tap confirm when the server's confirmGate is active.
+  // Set once in onMount from window.__MCP_SERVER_CAPS__ (injected at resources/read time).
+  let elicitation = $state(false);
 
   const DEBOUNCE_MS = 300;
   const lastTap = new Map<string, number>(); // uid -> performance.now(), for the per-row flap-guard
@@ -61,6 +64,14 @@
   const purchasedCount = $derived(items.filter((i) => i.purchased).length);
 
   onMount(() => {
+    const serverCaps = (globalThis as Record<string, unknown>)[
+      "__MCP_SERVER_CAPS__"
+    ];
+    if (serverCaps !== null && typeof serverCaps === "object") {
+      elicitation = Boolean(
+        (serverCaps as Record<string, unknown>)["supportsElicitation"],
+      );
+    }
     connectHost(app, {
       onResult: receive,
       onContext: (ctx) => {
@@ -267,7 +278,9 @@
         {:else}
           <span class="progress">{purchasedCount}/{items.length} done</span>
           {#if purchasedCount > 0}
-            <PillButton onclick={onClear}>Clear {purchasedCount}</PillButton>
+            <PillButton onclick={elicitation ? confirmClear : onClear}
+              >Clear {purchasedCount}</PillButton
+            >
           {/if}
         {/if}
       </div>
