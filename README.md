@@ -22,7 +22,7 @@ An [MCP](https://modelcontextprotocol.io/) server for the [Paprika](https://www.
 | `http`    | no       | Streamable HTTP for Claude Mobile and other HTTP-based MCP clients, or self-hosting |
 
 The HTTP transport ships with **OAuth 2.1** (authorization code + PKCE, RFC 7591
-dynamic client registration); the [HTTP transport quick start](docs/quick-start-http.md)
+dynamic client registration); the [HTTP transport quick start](https://github.com/bojanrajkovic/mcp-paprika/blob/main/docs/quick-start-http.md)
 sets it up end to end.
 
 ## Quick start — stdio (Claude Desktop / Claude Code / Cursor)
@@ -45,30 +45,30 @@ Add to your MCP client config:
 ```
 
 That's the whole local setup. To enable semantic search or AI recipe photos, add the
-optional provider credentials from [configuration.md](docs/configuration.md).
+optional provider credentials from [configuration.md](https://github.com/bojanrajkovic/mcp-paprika/blob/main/docs/configuration.md).
 
 ## Quick start — HTTP transport
 
 For remote clients (Claude Mobile, claude.ai), the server speaks Streamable HTTP behind
 OAuth 2.1, delegating identity to an upstream OIDC provider you choose. The
-[HTTP transport quick start](docs/quick-start-http.md) walks an IdP from zero to a
-working Claude connector, and [deployment.md](docs/deployment.md) covers running it in a
+[HTTP transport quick start](https://github.com/bojanrajkovic/mcp-paprika/blob/main/docs/quick-start-http.md) walks an IdP from zero to a
+working Claude connector, and [deployment.md](https://github.com/bojanrajkovic/mcp-paprika/blob/main/docs/deployment.md) covers running it in a
 container, behind a reverse proxy, or with Docker Compose.
 
 ## Documentation
 
 **Guides**
 
-- **[HTTP transport quick start](docs/quick-start-http.md)** — OIDC setup from zero to a Claude connector
-- **[Deployment](docs/deployment.md)** — container, TLS termination, Docker Compose
+- **[HTTP transport quick start](https://github.com/bojanrajkovic/mcp-paprika/blob/main/docs/quick-start-http.md)** — OIDC setup from zero to a Claude connector
+- **[Deployment](https://github.com/bojanrajkovic/mcp-paprika/blob/main/docs/deployment.md)** — container, TLS termination, Docker Compose
 
 **Reference**
 
-- **[Configuration](docs/configuration.md)** — env vars, config files, platform paths
-- **[HTTP transport](docs/http-transport.md)** — binding, host/origin allowlists, graceful shutdown
-- **[OAuth 2.1 configuration](docs/oauth-configuration.md)** — OIDC providers, allowlist, consent gate
+- **[Configuration](https://github.com/bojanrajkovic/mcp-paprika/blob/main/docs/configuration.md)** — env vars, config files, platform paths
+- **[HTTP transport](https://github.com/bojanrajkovic/mcp-paprika/blob/main/docs/http-transport.md)** — binding, host/origin allowlists, graceful shutdown
+- **[OAuth 2.1 configuration](https://github.com/bojanrajkovic/mcp-paprika/blob/main/docs/oauth-configuration.md)** — OIDC providers, allowlist, consent gate
 - **[Tools reference](https://github.com/bojanrajkovic/mcp-paprika/tree/main/docs/tools)** — every tool with parameters and examples
-- **[Embedding providers](docs/embedding-providers.md)** — semantic search with Ollama, OpenAI, OpenRouter
+- **[Embedding providers](https://github.com/bojanrajkovic/mcp-paprika/blob/main/docs/embedding-providers.md)** — semantic search with Ollama, OpenAI, OpenRouter
 - **[Architecture](https://github.com/bojanrajkovic/mcp-paprika/blob/main/docs/architecture.md)** — how it works under the hood
 - **[Releasing](https://github.com/bojanrajkovic/mcp-paprika/blob/main/docs/releasing.md)** — release model, prerelease validation, attestation verification
 
