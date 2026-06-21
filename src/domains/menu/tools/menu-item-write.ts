@@ -118,6 +118,7 @@ export const addMenuItemsTool = defineTool(
         entityNoun: "menu",
         describe: (m) => ({ uid: m.uid, label: m.name }),
         findWith: "list_menus",
+        log,
       });
       if ("result" in resolvedMenu) return resolvedMenu.result;
       const menu = resolvedMenu.entity;

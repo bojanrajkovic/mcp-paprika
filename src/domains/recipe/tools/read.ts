@@ -47,6 +47,7 @@ export const readRecipeTool = defineTool(
         renderOne: (recipe) => recipeToMarkdown(recipe, ctx.state.category.store.resolveNames(recipe.categories)),
         renderStructured: (recipe) =>
           recipeToReadStructured(recipe, ctx.state.category.store.resolveNames(recipe.categories)),
+        log: ctx.infra.log,
       });
     };
   },

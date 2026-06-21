@@ -234,6 +234,7 @@ export async function resolveOrPick<T>(
     readonly describe: (entity: T) => { readonly uid: string; readonly label: string };
     readonly findWith?: string;
     readonly cap?: number;
+    readonly log?: Logger;
   },
 ): Promise<{ readonly entity: T } | { readonly result: CallToolResult }> {
   if (outcome.kind === "uid_hit" || outcome.kind === "text_one") return { entity: outcome.entity };
@@ -261,6 +262,7 @@ export async function resolveOrPick<T>(
       message: `More than one ${config.entityNoun} matches "${outcome.text}". Which one did you mean?`,
       candidates: outcome.matches,
       describe: config.describe,
+      ...(config.log ? { log: config.log } : {}),
     });
     if (picked !== "declined" && picked !== "unsupported") return { entity: picked.chosen };
   }
@@ -304,6 +306,7 @@ export async function formatLookupOutcome<T>(
     readonly renderStructured?: (entity: T) => Record<string, unknown>;
     readonly findWith?: string;
     readonly cap?: number;
+    readonly log?: Logger;
   },
 ): Promise<CallToolResult> {
   const resolved = await resolveOrPick(server, outcome, config);
