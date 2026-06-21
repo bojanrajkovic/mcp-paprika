@@ -18,6 +18,7 @@
     type ReceivedResult,
   } from "../shared/host-bridge.js";
   import { applyHostStyles } from "../shared/host-style.js";
+  import { motion } from "../shared/motion.js";
 
   // A checklist row: a structured grocery item plus transient per-row UI flags.
   interface Row {
@@ -304,7 +305,7 @@
       role="checkbox"
       aria-checked={item.purchased}
       onclick={() => onRow(item)}
-      animate:flip={{ duration: 220 }}
+      animate:flip={{ duration: motion(220) }}
     >
       <span class="box">
         {#if item._busy}
