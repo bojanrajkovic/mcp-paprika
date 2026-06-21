@@ -9,8 +9,8 @@ import {
   commitFailure,
   confirmOrCancel,
   errorResult,
-  formatLookupOutcome,
   resolveLookup,
+  resolveOrPick,
   toolResult,
   uidOrTextLookupSchema,
 } from "../../../shared/tools.js";
@@ -107,26 +107,24 @@ export const readGroceryListTool = defineTool(
         get: (uid) => ctx.state.lists.store.get(uid),
         findByText: (text) => ctx.state.lists.store.findByName(text),
       });
-      // Emit items in store-walk order (aisle orderFlag → item orderFlag → uid) so the text table
-      // and the structuredContent the checklist widget renders agree by construction. Memoized so the
-      // sort + store scan run once even though formatLookupOutcome renders the same list twice (text
-      // + structured).
-      const checklistCache = new Map<string, ReturnType<typeof sortGroceryItemsForChecklist>>();
-      const checklistItems = (list: GroceryList) => {
-        const cached = checklistCache.get(list.uid);
-        if (cached) return cached;
-        const sorted = sortGroceryItemsForChecklist(ctx.state.items.store.getByListUid(list.uid), ctx.deps.aisle);
-        checklistCache.set(list.uid, sorted);
-        return sorted;
-      };
-      return formatLookupOutcome(ctx.server.server, outcome, {
+      const resolved = await resolveOrPick(ctx.server.server, outcome, {
         entityNoun: "grocery list",
         describe: (list) => ({ uid: list.uid, label: list.name }),
         findWith: "list_grocery_lists",
-        renderOne: (list) => groceryListToMarkdown(list, checklistItems(list), ctx.deps.aisle),
-        renderStructured: (list) => groceryListToStructured(list, checklistItems(list), ctx.deps.aisle),
         log: ctx.infra.log,
       });
+      if ("result" in resolved) return resolved.result;
+      // Emit items in store-walk order (aisle orderFlag → item orderFlag → uid) so the text table
+      // and the structuredContent the checklist widget renders agree by construction. Resolved once
+      // and projected to both text and structured in the same expression.
+      const items = sortGroceryItemsForChecklist(
+        ctx.state.items.store.getByListUid(resolved.entity.uid),
+        ctx.deps.aisle,
+      );
+      return toolResult(
+        groceryListToMarkdown(resolved.entity, items, ctx.deps.aisle),
+        groceryListToStructured(resolved.entity, items, ctx.deps.aisle),
+      );
     };
   },
 );

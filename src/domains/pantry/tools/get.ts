@@ -2,7 +2,7 @@ import type { DomainCtx } from "../../../kernel/registry.js";
 import type { PantryState } from "../module.js";
 
 import { defineTool } from "../../../kernel/tool.js";
-import { formatLookupOutcome, resolveLookup, uidOrTextLookupSchema } from "../../../shared/tools.js";
+import { resolveLookup, resolveOrPick, toolResult, uidOrTextLookupSchema } from "../../../shared/tools.js";
 import { PantryItemUidSchema } from "../ids.js";
 import { pantryItemReadOutputSchema, pantryItemToMarkdown, pantryItemToStructured } from "../pantry-helpers.js";
 import { pantryStartGuard } from "./guards.js";
@@ -41,14 +41,17 @@ export const getPantryItemTool = defineTool(
         get: (uid) => ctx.state.store.get(uid),
         findByText: (text) => ctx.state.store.findByIngredient(text),
       });
-      return formatLookupOutcome(ctx.server.server, outcome, {
+      const resolved = await resolveOrPick(ctx.server.server, outcome, {
         entityNoun: "pantry item",
         describe: (item) => ({ uid: item.uid, label: item.ingredient }),
         findWith: "list_pantry_items",
-        renderOne: (item) => pantryItemToMarkdown(item, ctx.deps.aisle),
-        renderStructured: (item) => pantryItemToStructured(item, ctx.deps.aisle),
         log: ctx.infra.log,
       });
+      if ("result" in resolved) return resolved.result;
+      return toolResult(
+        pantryItemToMarkdown(resolved.entity, ctx.deps.aisle),
+        pantryItemToStructured(resolved.entity, ctx.deps.aisle),
+      );
     };
   },
 );
