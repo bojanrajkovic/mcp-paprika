@@ -5,9 +5,12 @@ import type { Logger } from "pino";
 import { loadWidgetArtifacts, widgetsDir } from "../features/widgets/artifacts.js";
 
 /**
- * A dev-only Hono router serving `GET /widget-preview?widget=<name>&payload=<json>`:
+ * A dev-only Hono router serving
+ * `GET /widget-preview?widget=<name>&payload=<json>&theme=<light|dark>&userAgent=<host>`:
  * a built widget rendered in a plain browser tab with a FAKE host shim, so widget
- * UI can be iterated with ordinary devtools, no real MCP host required.
+ * UI can be iterated with ordinary devtools, no real MCP host required. `theme` and
+ * `userAgent` drive the shim's `getHostContext()`, so the host-matched theme and
+ * typeface (a serif-first host renders the serif stack) can be previewed too.
  *
  * Mount it ONLY behind the `MCP_WIDGET_PREVIEW` flag (it does not exist in
  * production) and, like the favicon, BEFORE the `/mcp` bearer guard (it is
@@ -88,14 +91,19 @@ export const SHIMMED_HOST_METHODS = [
  * The fake `globalThis.ExtApps` injected into a previewed widget. Its `App` reads
  * `?payload=` from `location.search` and on `connect()` feeds it to `ontoolresult` as the
  * text content and, when it parses as JSON, as `structuredContent` (the channel the widgets
- * render from); every other host method is a harmless no-op. Authored as a string because it
- * runs in the browser, not Node; {@link SHIMMED_HOST_METHODS} keeps its surface honest
- * against ext-apps.
+ * render from). Its `getHostContext()` reflects `?theme=` (light|dark) and `?userAgent=`, so the
+ * host-matched theme and typeface can be exercised; every other host method is a harmless no-op.
+ * Authored as a string because it runs in the browser, not Node; {@link SHIMMED_HOST_METHODS}
+ * keeps its surface honest against ext-apps.
  */
 const PREVIEW_SHIM = `globalThis.ExtApps = {
   applyHostStyleVariables() {},
+  applyHostFonts() {},
   applyDocumentTheme() {},
-  getDocumentTheme() { return "light"; },
+  getDocumentTheme() {
+    try { return new URLSearchParams(location.search).get("theme") === "dark" ? "dark" : "light"; }
+    catch { return "light"; }
+  },
   App: class {
     ontoolresult;
     ontoolinput;
@@ -114,7 +122,15 @@ const PREVIEW_SHIM = `globalThis.ExtApps = {
       } catch {}
       this.ontoolresult && this.ontoolresult({ content: [{ type: "text", text: this.#payload }], structuredContent });
     }
-    getHostContext() { return { theme: "light" }; }
+    getHostContext() {
+      let theme = "light", userAgent;
+      try {
+        const q = new URLSearchParams(location.search);
+        if (q.get("theme") === "dark") theme = "dark";
+        userAgent = q.get("userAgent") ?? undefined;
+      } catch {}
+      return userAgent ? { theme, userAgent } : { theme };
+    }
     sendMessage(message) { console.log("[widget-preview] sendMessage", message); return Promise.resolve({}); }
     updateModelContext() { return Promise.resolve({}); }
     callServerTool() { return Promise.resolve({ content: [] }); }

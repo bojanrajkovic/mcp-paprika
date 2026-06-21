@@ -57,19 +57,22 @@ const STYLES = `
     --paper: oklch(0.985 0.006 75); --card: oklch(0.995 0.004 75);
     --ink: oklch(0.26 0.012 70); --muted: oklch(0.53 0.012 70); --faint: oklch(0.66 0.010 70);
     --line: oklch(0.90 0.008 70); --line-2: oklch(0.83 0.010 70);
-    --clay: oklch(0.543 0.174 30); --clay-ink: oklch(0.99 0.01 75); --dest-bg: oklch(0.965 0.012 70); /* --clay = #C0392B, the connector icon color */
+    --paprika-red: oklch(0.543 0.174 30); --paprika-red-ink: oklch(0.99 0.01 75); --dest-bg: oklch(0.965 0.012 70); /* --paprika-red = #C0392B, the connector identity color */
     --mono: ui-monospace, "SF Mono", Menlo, monospace;
-    --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    /* Editorial serif (the NYT-Cooking register), a deliberate brand choice that rhymes with the
+       widgets' serif voice in a serif-first host. The page is standalone (no host shell to match), so
+       this is a fixed system serif, not host-adopted. The redirect host stays --mono (its anchor). */
+    --serif: Georgia, "Times New Roman", ui-serif, serif;
   }
   * { box-sizing: border-box; }
   body { margin: 0; min-height: 100vh; background: var(--paper); color: var(--ink);
-    font-family: var(--sans); line-height: 1.5; display: grid; place-items: center; padding: 24px; }
+    font-family: var(--serif); line-height: 1.5; display: grid; place-items: center; padding: 24px; }
   .screen { width: 100%; max-width: 440px; background: var(--card); border: 1px solid var(--line);
     border-radius: 14px; overflow: clip;
     box-shadow: 0 1px 2px oklch(0.5 0.02 70 / 0.05), 0 8px 24px oklch(0.5 0.02 70 / 0.06); }
   .brandbar { font-size: 0.72rem; color: var(--faint); letter-spacing: 0.04em;
     padding: 12px 22px; border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 7px; }
-  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--clay); }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--paprika-red); }
   .body { padding: 20px 22px 6px; }
   .head { display: flex; align-items: center; gap: 13px; margin-bottom: 18px; }
   .avatar { width: 42px; height: 42px; border-radius: 10px; flex: none; background: oklch(0.92 0.03 250);
@@ -93,7 +96,7 @@ const STYLES = `
   .btn { flex: 1; text-align: center; padding: 11px 14px; border-radius: 9px; font: inherit;
     font-size: 0.92rem; font-weight: 600; border: 1px solid transparent; cursor: pointer; }
   .btn-ghost { background: transparent; color: var(--ink); border-color: var(--line-2); }
-  .btn-fill { background: var(--clay); color: var(--clay-ink); }
+  .btn-fill { background: var(--paprika-red); color: var(--paprika-red-ink); }
   .foot { padding: 0 0 18px; font-size: 0.78rem; color: var(--faint); }
   .terminal { padding: 28px 24px; text-align: center; }
   .terminal h1 { font-size: 1.2rem; font-weight: 650; margin: 0 0 8px; }
