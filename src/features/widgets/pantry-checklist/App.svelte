@@ -446,13 +446,13 @@
     font-variant-numeric: tabular-nums;
   }
 
-  /* The row footprint: it owns the divider so the line stays put while the inner .item swipes, and
-     clips the swipe so the translated row + revealed action never bleed past it. */
+  /* The row footprint: it clips the swipe so the translated row + revealed action never bleed past it.
+     Rows carry no per-row divider — the category separators (GroupedList's `.aisle` top border) are
+     the only horizontal lines in the list. */
   .item-wrap {
     position: relative;
     z-index: 0; /* own stacking context: scopes .item's z-index to the row so a scrolling row can't tie and paint over the sticky aisle header */
     overflow: hidden;
-    border-bottom: 1px solid var(--line);
   }
 
   /* Revealed behind the row as it swipes left (touch). The row's opaque bg covers it at rest; swiping

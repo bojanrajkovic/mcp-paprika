@@ -1,10 +1,12 @@
 <script lang="ts">
   import type { Snippet } from "svelte";
 
-  // The ingredient·quantity body shared by every row, whatever the row's leading/trailing controls (a
-  // checkbox, an Out button, a swipe). `done` strikes through and dims the name + quantity (a checked
-  // grocery item). `extra` renders after the name inside the body (the pantry expiry badge); omitted,
-  // it's just the name + dimmed quantity.
+  // The ingredient · quantity body shared by every row, whatever the row's leading/trailing controls
+  // (a checkbox, an Out button, a swipe). `done` strikes through and dims the name + quantity (a
+  // checked grocery item). `extra` renders after the name inside the body (the pantry expiry badge);
+  // omitted, it's just the name + dimmed quantity. The " · " separator is written as a `{" · "}`
+  // expression, not literal markup, so Svelte does not trim its leading space — the dot reads spaced
+  // and the `done` strike-through runs continuously through it (a margin would break the line).
   let {
     ingredient,
     quantity = null,
@@ -20,7 +22,8 @@
 
 <span class="body" class:done>
   <span class="name"
-    >{ingredient}{#if quantity}<span class="qty"> · {quantity}</span>{/if}</span
+    >{ingredient}{#if quantity}<span class="qty">{" · "}{quantity}</span
+      >{/if}</span
   >
   {@render extra?.()}
 </span>

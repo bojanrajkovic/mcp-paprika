@@ -292,7 +292,6 @@
   <span class="count"
     >{group.items.filter((i) => !i.purchased).length}/{group.items.length}</span
   >
-  <span class="rule"></span>
 {/snippet}
 
 {#snippet rowList(rowItems: Row[])}
@@ -341,7 +340,8 @@
   }
   .head-right {
     display: flex;
-    align-items: center;
+    /* baseline so the "n/n done" count reads on the same line as the pill labels beside it. */
+    align-items: baseline;
     gap: 8px;
     flex: none;
   }
@@ -352,16 +352,12 @@
     white-space: nowrap;
   }
 
-  /* Trailing content for the sticky aisle header (rendered through GroupedList's headerExtra slot). */
+  /* Trailing flavor text for the sticky aisle header (rendered through GroupedList's headerExtra
+     slot) — the per-aisle done count, beside the heading. */
   .count {
     font-size: 11px;
     color: var(--faint);
     font-variant-numeric: tabular-nums;
-  }
-  .rule {
-    flex: 1;
-    height: 1px;
-    background: var(--line);
   }
 
   .row {
@@ -371,7 +367,6 @@
     width: 100%;
     padding: 11px 16px;
     border: 0;
-    border-bottom: 1px solid var(--line);
     background: transparent;
     text-align: left;
     font: inherit;
@@ -451,6 +446,7 @@
   .hint {
     padding: 12px 16px;
     margin: 0;
+    border-top: 1px solid var(--line);
     font-size: 12px;
     color: var(--faint);
   }

@@ -4,9 +4,12 @@
   type Group = { key: string; items: T[] };
 
   // The shared grouped-list chrome: the scroll viewport, the sticky group headers, and the group
-  // sections. The header's trailing content (a count, a rule) and the row rendering (the keyed each +
-  // flip + the divergent row element) are slotted, because those are where the two checklist widgets
-  // differ — the list shell is what they share. `padBottom` adds the safe-area scroll padding for a
+  // sections. The header's trailing count is slotted (`headerExtra` — the two widgets count different
+  // things), as is the row rendering (`rows` — the keyed each + flip + the divergent row element);
+  // those are where the two checklist widgets differ. Each category is bracketed by a full-width
+  // separator above its small-caps heading (the sticky `.aisle`'s top border); rows within a group are
+  // NOT separated by per-row hairlines — one separator per category reads cleaner than a line per
+  // item, which looks busy inside a single group. `padBottom` adds the safe-area scroll padding for a
   // widget whose scroll ends at the viewport bottom (grocery); a widget with its own bottom chrome
   // (pantry's drawer) handles the inset there and opts out.
   let {
@@ -49,9 +52,12 @@
 
   .aisle {
     display: flex;
+    /* baseline, not center: the heading and its trailing count are different sizes, so a shared
+       text baseline reads aligned where centering their boxes would not. */
     align-items: baseline;
     gap: 8px;
     padding: 12px 16px 5px;
+    border-top: 1px solid var(--line);
     position: sticky;
     top: 0;
     background: var(--bg);
