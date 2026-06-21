@@ -17,6 +17,7 @@
     errorText,
     type ReceivedResult,
   } from "../shared/host-bridge.js";
+  import { applyHostStyles } from "../shared/host-style.js";
 
   // A checklist row: a structured grocery item plus transient per-row UI flags.
   interface Row {
@@ -63,10 +64,12 @@
     app.ontoolresult = (result) => receive(result);
     app.onhostcontextchanged = (ctx) => {
       if (ctx.theme) theme = ctx.theme;
+      applyHostStyles(app.getHostContext());
     };
     Promise.resolve(app.connect()).then(() => {
       const hc = app.getHostContext();
       if (hc?.theme) theme = hc.theme;
+      applyHostStyles(hc);
     });
   });
 

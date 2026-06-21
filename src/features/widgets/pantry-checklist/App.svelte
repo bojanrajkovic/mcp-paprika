@@ -18,6 +18,7 @@
     errorText,
     type ReceivedResult,
   } from "../shared/host-bridge.js";
+  import { applyHostStyles } from "../shared/host-style.js";
   import { motion } from "../shared/motion.js";
 
   // A pantry row: a structured pantry item plus transient per-row UI flags. `inStock` drives which
@@ -81,6 +82,7 @@
       if (ctx.theme) theme = ctx.theme;
       if (ctx.deviceCapabilities?.touch !== undefined)
         touchDevice = ctx.deviceCapabilities.touch;
+      applyHostStyles(app.getHostContext());
     };
     Promise.resolve(app.connect()).then(() => {
       const hc = app.getHostContext();
@@ -90,6 +92,7 @@
         hc?.deviceCapabilities?.touch ??
         (typeof matchMedia === "function" &&
           matchMedia("(pointer: coarse)").matches);
+      applyHostStyles(hc);
     });
   });
 
@@ -462,8 +465,8 @@
     align-items: center;
     justify-content: flex-end;
     padding-right: 22px;
-    background: oklch(0.55 0.2 25);
-    color: oklch(0.99 0.02 25);
+    background: oklch(0.56 0.215 29);
+    color: oklch(0.99 0.02 29);
     font-size: 13px;
     font-weight: 700;
     letter-spacing: 0.02em;
