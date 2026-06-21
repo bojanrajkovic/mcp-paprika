@@ -376,7 +376,7 @@
   .row:focus-visible {
     outline: 2px solid var(--accent);
     outline-offset: -2px;
-    border-radius: 4px;
+    border-radius: 6px;
   }
   .row.err {
     animation: errFlash 1.1s ease-out;
@@ -395,7 +395,7 @@
     flex: none;
     width: 22px;
     height: 22px;
-    border-radius: 7px;
+    border-radius: 6px;
     border: 2px solid color-mix(in oklch, var(--ink) 28%, transparent);
     display: grid;
     place-items: center;
