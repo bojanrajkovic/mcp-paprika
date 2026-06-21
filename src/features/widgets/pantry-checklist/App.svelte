@@ -5,6 +5,7 @@
   import { onMount } from "svelte";
   import { slide } from "svelte/transition";
 
+  import BrandMark from "../shared/BrandMark.svelte";
   import GroupedList from "../shared/GroupedList.svelte";
   import ItemRow from "../shared/ItemRow.svelte";
   import PillButton from "../shared/PillButton.svelte";
@@ -306,7 +307,7 @@
   {:else}
     <header>
       <div class="htop">
-        <h1>Pantry</h1>
+        <BrandMark title="Pantry" />
         <span class="count">{inStockCount} in stock</span>
       </div>
       {#if touchDevice && inStockCount > 0}
@@ -412,15 +413,9 @@
   }
   .htop {
     display: flex;
-    align-items: baseline;
+    align-items: center;
     justify-content: space-between;
     gap: 10px;
-  }
-  h1 {
-    font-size: 17px;
-    font-weight: 650;
-    letter-spacing: -0.01em;
-    margin: 0;
   }
   .htop .count {
     font-size: 12.5px;

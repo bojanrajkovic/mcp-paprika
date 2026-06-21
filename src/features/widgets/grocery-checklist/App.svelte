@@ -4,6 +4,7 @@
   import { onMount } from "svelte";
   import { flip } from "svelte/animate";
 
+  import BrandMark from "../shared/BrandMark.svelte";
   import GroupedList from "../shared/GroupedList.svelte";
   import ItemRow from "../shared/ItemRow.svelte";
   import PillButton from "../shared/PillButton.svelte";
@@ -256,7 +257,7 @@
     />
   {:else}
     <header>
-      <h1>{listMeta?.name}</h1>
+      <BrandMark title={listMeta?.name ?? ""} />
       <div class="head-right">
         {#if confirmingClear}
           <span class="progress">Clear {purchasedCount} purchased?</span>
@@ -334,12 +335,6 @@
     padding: 16px 16px 10px;
     padding-top: calc(16px + env(safe-area-inset-top));
     background: linear-gradient(var(--bg) 80%, transparent);
-  }
-  h1 {
-    font-size: 17px;
-    font-weight: 650;
-    letter-spacing: -0.01em;
-    margin: 0;
   }
   .head-right {
     display: flex;
