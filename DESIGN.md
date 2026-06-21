@@ -157,7 +157,7 @@ The widget surface themes to the host (light/dark, lightness shifts while hue ho
 
 ## 3. Typography
 
-**Body Font:** host-matched. The widget resolves `--widget-font` to the shell's typeface — a serif stack (`"Anthropic Serif", Georgia, "Times New Roman", ui-serif, serif`) for a serif-first host like Claude, the host's own `--font-sans` otherwise, falling back to the OS system sans (`system-ui, -apple-system, "Segoe UI", Roboto, sans-serif`). The consent page is OS system sans (it is server-rendered, not embedded, so it has no shell to match).
+**Body Font:** host-matched. The widget resolves `--widget-font` to the shell's typeface — a serif stack (`"Anthropic Serif", Georgia, "Times New Roman", ui-serif, serif`) for a serif-first host like Claude, the host's own `--font-sans` otherwise, falling back to the OS system sans (`system-ui, -apple-system, "Segoe UI", Roboto, sans-serif`). The consent page uses a fixed **editorial serif** (`Georgia, "Times New Roman", ui-serif, serif`) — a deliberate brand choice, not host-matched: it is server-rendered with no host shell to inherit from, so it picks an editorial register that rhymes with the widgets' serif voice while keeping its monospace redirect-host anchor.
 **Display Font:** none — there is no separate display face; weight and size carry the hierarchy.
 **Mono Font:** `ui-monospace, "SF Mono", Menlo, monospace` — reserved for exactly one thing (see The Mono-Anchor Rule).
 
@@ -173,7 +173,7 @@ The widget surface themes to the host (light/dark, lightness shifts while hue ho
 
 ### Named Rules
 
-**The Match-the-Shell Rule.** A widget adopts the host's typeface, not its own — through the app SDK's style channel (`--font-sans` and the host's font CSS), choosing a serif register for serif-first hosts and the host's sans otherwise, falling back to the system font. It ships no web font of its own; the security-critical consent page likewise stays on the OS system font. Nativeness and a zero-payload iframe beat a bespoke typeface here.
+**The Match-the-Shell Rule.** A widget adopts the host's typeface, not its own — through the app SDK's style channel (`--font-sans` and the host's font CSS), choosing a serif register for serif-first hosts and the host's sans otherwise, falling back to the system font. It ships no web font of its own. The security-critical consent page is not embedded, so it cannot match a shell — it uses a fixed editorial serif as a deliberate brand choice, keeping its monospace redirect-host anchor. Nativeness and a zero-payload iframe beat a bespoke webfont here.
 
 **The Mono-Anchor Rule.** The one element rendered in monospace is the OAuth redirect host — the single fact an attacker cannot forge. It gets the largest, most tamper-evident treatment on the screen precisely because it is the fact the user must read. Monospace is reserved for it; nothing decorative borrows the mono face.
 

@@ -406,7 +406,7 @@
       },
       {
         "name": "The Match-the-Shell Rule",
-        "body": "A widget adopts the host's typeface, not its own — through the app SDK's style channel (--font-sans and the host's font CSS), a serif register for serif-first hosts and the host's sans otherwise, falling back to the system font. It ships no web font of its own; the security-critical consent page stays on the OS system font.",
+        "body": "A widget adopts the host's typeface, not its own — through the app SDK's style channel (--font-sans and the host's font CSS), a serif register for serif-first hosts and the host's sans otherwise, falling back to the system font. It ships no web font of its own. The security-critical consent page is not embedded, so it uses a fixed editorial serif as a deliberate brand choice, keeping its monospace redirect-host anchor.",
         "section": "typography"
       },
       {
