@@ -27,7 +27,7 @@ The source tree is a typed composition kernel over self-registering domain modul
 - `src/paprika/` — the Paprika cloud-sync HTTP client and `syncReplaceAllEntity` (the shared per-module reconcile helper). Wire formats: `docs/wire-format.md`.
 - `src/telemetry/` — the OpenTelemetry substrate: the dual-path bootstrap + SDK assembly, vendored semconv constants, the shared instruments, and the Result-native span helper. Recording happens at the seams, not here. See `src/telemetry/CLAUDE.md` and ADR-0018.
 - `src/entity/` — the shared `EntityStore` base class. See `src/entity/CLAUDE.md`.
-- `src/cache/` — the persistence layer: per-entity `DiskCache`s (plus `DiskCacheRoot` and the auth-only `buildAuthCaches`), keeping the in-memory stores warm across restarts. See `src/cache/CLAUDE.md`.
+- `src/cache/` — the persistence layer: per-entity `DiskCache`s (plus the auth-only `buildAuthCaches`), keeping the in-memory stores warm across restarts. See `src/cache/CLAUDE.md`.
 - `src/auth/` — the OAuth 2.1 authorization-server surface; loaded only under the HTTP transport.
 - `src/utils/` — config (Zod schema), logging, resilience, dates, XDG paths.
 - `scripts/`, `docs/wire-captures/`, `Dockerfile`, `.github/workflows/` — tooling, sanitized wire captures, container build, CI.
