@@ -8,9 +8,9 @@
     desc,
     inline = false,
   }: {
-    icon?: string;
-    title?: string;
-    desc?: string;
+    icon?: string | undefined;
+    title?: string | undefined;
+    desc?: string | undefined;
     inline?: boolean;
   } = $props();
 </script>

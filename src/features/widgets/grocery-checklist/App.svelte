@@ -4,6 +4,19 @@
   import { onMount } from "svelte";
   import { flip } from "svelte/animate";
 
+  import GroupedList from "../shared/GroupedList.svelte";
+  import ItemRow from "../shared/ItemRow.svelte";
+  import PillButton from "../shared/PillButton.svelte";
+  import StatusScreen from "../shared/StatusScreen.svelte";
+  import Toast from "../shared/Toast.svelte";
+  import WidgetShell from "../shared/WidgetShell.svelte";
+  import { groupConsecutive } from "../shared/group.js";
+  import {
+    callTool,
+    errorText,
+    type ReceivedResult,
+  } from "../shared/host-bridge.js";
+
   // A checklist row: a structured grocery item plus transient per-row UI flags.
   interface Row {
     uid: string;
@@ -13,16 +26,6 @@
     purchased: boolean;
     _busy: boolean;
     _error: boolean;
-  }
-
-  // The two result shapes receive() accepts: a real ext-apps tool result (from ontoolresult) and
-  // callTool()'s narrowed wrapper (from the post-clear re-read). Both expose the structured channel;
-  // only the former carries `content` (the error-text fallback). Untrusted — every field is checked.
-  interface ReceivedResult {
-    readonly structuredContent?: Record<string, unknown> | undefined;
-    readonly content?:
-      | readonly { readonly type: string; readonly text?: string }[]
-      | undefined;
   }
 
   // The ext-apps App instance, constructed in main.ts and handed in as a prop.
@@ -43,16 +46,10 @@
   const lastTap = new Map<string, number>(); // uid -> performance.now(), for the per-row flap-guard
   let toastTimer: ReturnType<typeof setTimeout> | undefined;
 
-  // Group consecutive same-aisle rows (read_grocery_list already emits store-walk order);
-  // purchased items sink to the bottom of their aisle group.
+  // Group consecutive same-aisle rows (read_grocery_list already emits store-walk order); purchased
+  // items sink to the bottom of their aisle group.
   const groups = $derived.by(() => {
-    const out: { key: string; items: Row[] }[] = [];
-    for (const item of items) {
-      const key = item.aisle ?? "Other";
-      const last = out[out.length - 1];
-      if (last && last.key === key) last.items.push(item);
-      else out.push({ key, items: [item] });
-    }
+    const out = groupConsecutive(items, (item) => item.aisle ?? "Other");
     for (const g of out)
       g.items.sort((a, b) => Number(a.purchased) - Number(b.purchased));
     return out;
@@ -72,21 +69,17 @@
     });
   });
 
-  // The widget renders only off the structured channel. A host that renders the widget but
-  // drops structuredContent gets a neutral state — never parse the human Markdown.
+  // The widget renders only off the structured channel. A host that renders the widget but drops
+  // structuredContent gets a neutral state — never parse the human Markdown.
   function receive(result: ReceivedResult | null | undefined) {
     const data = result?.structuredContent;
     const uid = data?.["uid"];
     const rawItems = data?.["items"];
     if (!data || typeof uid !== "string" || !uid || !Array.isArray(rawItems)) {
-      // No structured payload — an error result (unknown UID / no match / disambiguation) carries
-      // its remediation in the text block, or a host dropped structuredContent. Surface that text
-      // verbatim (display only, never parsed for data); don't clobber an already-loaded list on a
-      // later failed read.
+      // No structured payload — surface the error result's remediation text verbatim (display only),
+      // and don't clobber an already-loaded list on a later failed read.
       if (phase !== "ready") {
-        const block = result?.content?.find((c) => c.type === "text");
-        const text = typeof block?.text === "string" ? block.text : undefined;
-        errorMsg = text && text.trim() !== "" ? text : null;
+        errorMsg = errorText(result);
         phase = "error";
       }
       return;
@@ -101,9 +94,8 @@
     phase = "ready";
   }
 
-  // Map a structured grocery row into the local model (+ transient flags). Shared by the host
-  // re-read and the optimistic re-add so the row shape lives in one place. The row is untrusted
-  // structuredContent, so every field is coerced defensively.
+  // Map a structured grocery row into the local model (+ transient flags). Shared by the host re-read
+  // and the optimistic re-add so the row shape lives in one place; every field is coerced defensively.
   function toRow(r: unknown): Row {
     const row = (typeof r === "object" && r !== null ? r : {}) as Record<
       string,
@@ -121,26 +113,6 @@
     };
   }
 
-  // Call a server tool through the host bridge, treating a transport rejection the same as a
-  // tool-reported error so an in-flight row is never left stuck.
-  async function callTool(
-    name: string,
-    args: Record<string, unknown>,
-  ): Promise<{
-    isError: boolean;
-    structuredContent: Record<string, unknown> | undefined;
-  }> {
-    try {
-      const res = await app.callServerTool({ name, arguments: args });
-      return {
-        isError: Boolean(res.isError),
-        structuredContent: res.structuredContent,
-      };
-    } catch {
-      return { isError: true, structuredContent: undefined };
-    }
-  }
-
   function showToast(msg: string, kind: "error" | "info" = "error") {
     clearTimeout(toastTimer);
     toast = { msg, kind };
@@ -149,8 +121,8 @@
     }, 2600);
   }
 
-  // A tap is ignored only if it follows another tap on the SAME row within the debounce window.
-  // Guard on "has a prior tap", not against 0, so the first tap is never eaten near page load.
+  // A tap is ignored only if it follows another tap on the SAME row within the debounce window. Guard
+  // on "has a prior tap", not against 0, so the first tap is never eaten near page load.
   function tapThrottled(uid: string): boolean {
     const now = performance.now();
     const last = lastTap.get(uid);
@@ -169,7 +141,7 @@
     if (tapThrottled(item.uid)) return;
     item.purchased = true; // optimistic
     item._busy = true;
-    const res = await callTool("mark_grocery_item_purchased", {
+    const res = await callTool(app, "mark_grocery_item_purchased", {
       uid: item.uid,
     });
     item._busy = false;
@@ -202,7 +174,7 @@
     // Re-add as a true toggle: mark is one-way (no un-purchase verb), so "put it back" is a fresh
     // to-buy row via add_grocery_items, then delete the bought copy so the item reads as a single
     // unchecked row instead of lingering as a duplicate.
-    const add = await callTool("add_grocery_items", {
+    const add = await callTool(app, "add_grocery_items", {
       listUid,
       items: [
         {
@@ -219,7 +191,7 @@
       showToast("Couldn’t add that back — try again.");
       return;
     }
-    const del = await callTool("delete_grocery_item", { uid: item.uid });
+    const del = await callTool(app, "delete_grocery_item", { uid: item.uid });
     item._busy = false;
     const addedRows = add.structuredContent?.["items"];
     const added = Array.isArray(addedRows) ? addedRows[0] : undefined;
@@ -231,8 +203,8 @@
       if (added) items.splice(idx, 1, toRow(added));
       else items.splice(idx, 1);
     } else {
-      // Couldn't remove the bought copy: keep it and show the new row beside it — a visible,
-      // clearable duplicate rather than a lost re-add.
+      // Couldn't remove the bought copy: keep it and show the new row beside it — a visible, clearable
+      // duplicate rather than a lost re-add.
       if (added) items.splice(idx + 1, 0, toRow(added));
       showToast("Re-added, but couldn’t remove the bought copy.", "info");
     }
@@ -249,15 +221,17 @@
     if (!listMeta) return;
     if (!items.some((i) => i.purchased)) return;
     const listUid = listMeta.uid;
-    const res = await callTool("clear_purchased_grocery_items", { listUid });
+    const res = await callTool(app, "clear_purchased_grocery_items", {
+      listUid,
+    });
     if (res.isError) {
       showToast("Couldn’t clear — try again.");
       return;
     }
-    // A non-error clear result can't be told apart from a declined server-confirm — both are
-    // non-error and carry no structuredContent — so re-read the list and rebuild from the
-    // authoritative state instead of blindly sweeping purchased rows.
-    const fresh = await callTool("read_grocery_list", {
+    // A non-error clear result can't be told apart from a declined server-confirm — both are non-error
+    // and carry no structuredContent — so re-read the list and rebuild from the authoritative state
+    // instead of blindly sweeping purchased rows.
+    const fresh = await callTool(app, "read_grocery_list", {
       lookup: { uid: listUid },
     });
     if (fresh.structuredContent) receive(fresh);
@@ -265,143 +239,93 @@
   }
 </script>
 
-<main class:dark={theme === "dark"}>
+<WidgetShell dark={theme === "dark"}>
   {#if phase === "loading"}
-    <div class="empty"><p class="d">Loading…</p></div>
+    <StatusScreen desc="Loading…" />
   {:else if phase === "error"}
-    <div class="empty">
-      <div class="big">🛒</div>
-      <p class="t">Couldn’t load this list</p>
-      {#if errorMsg}<p class="d">{errorMsg}</p>{/if}
-    </div>
+    <StatusScreen
+      icon="🛒"
+      title="Couldn’t load this list"
+      desc={errorMsg ?? undefined}
+    />
   {:else if items.length === 0}
-    <div class="empty">
-      <div class="big">🧺</div>
-      <p class="t">Nothing on this list yet</p>
-      <p class="d">
-        Add items and they’ll appear here, grouped by aisle in the order you
-        walk the store.
-      </p>
-    </div>
+    <StatusScreen
+      icon="🧺"
+      title="Nothing on this list yet"
+      desc="Add items and they’ll appear here, grouped by aisle in the order you walk the store."
+    />
   {:else}
     <header>
       <h1>{listMeta?.name}</h1>
       <div class="head-right">
         {#if confirmingClear}
           <span class="progress">Clear {purchasedCount} purchased?</span>
-          <button class="clear danger" onclick={confirmClear}>Clear</button>
-          <button class="clear" onclick={cancelClear}>Keep</button>
+          <PillButton variant="danger-strong" onclick={confirmClear}
+            >Clear</PillButton
+          >
+          <PillButton onclick={cancelClear}>Keep</PillButton>
         {:else}
           <span class="progress">{purchasedCount}/{items.length} done</span>
           {#if purchasedCount > 0}
-            <button class="clear" onclick={onClear}
-              >Clear {purchasedCount}</button
-            >
+            <PillButton onclick={onClear}>Clear {purchasedCount}</PillButton>
           {/if}
         {/if}
       </div>
     </header>
 
-    <div class="scroll">
-      {#each groups as group (group.key)}
-        <section class="group">
-          <div class="aisle">
-            <h2>{group.key}</h2>
-            <span class="count"
-              >{group.items.filter((i) => !i.purchased).length}/{group.items
-                .length}</span
-            >
-            <span class="rule"></span>
-          </div>
-          {#each group.items as item (item.uid)}
-            <button
-              class="row"
-              class:done={item.purchased}
-              class:busy={item._busy}
-              class:err={item._error}
-              role="checkbox"
-              aria-checked={item.purchased}
-              onclick={() => onRow(item)}
-              animate:flip={{ duration: 220 }}
-            >
-              <span class="box">
-                {#if item._busy}
-                  <span class="spin"></span>
-                {:else}
-                  <svg viewBox="0 0 16 16" aria-hidden="true"
-                    ><path class="tick" d="M3.5 8.5l3 3 6-6.5" /></svg
-                  >
-                {/if}
-              </span>
-              <span class="body">
-                <span class="name"
-                  >{item.ingredient}{#if item.quantity}<span class="qty">
-                      · {item.quantity}</span
-                    >{/if}</span
-                >
-              </span>
-            </button>
-          {/each}
-        </section>
-      {/each}
-      <p class="hint">Tap a purchased item to add it back to the list.</p>
-    </div>
+    <GroupedList
+      {groups}
+      headerExtra={aisleHeader}
+      rows={rowList}
+      footer={hint}
+    />
   {/if}
 
-  {#if toast}
-    <div class="toast {toast.kind}" role="status">{toast.msg}</div>
-  {/if}
-</main>
+  <Toast {toast} />
+</WidgetShell>
+
+{#snippet aisleHeader(group: { key: string; items: Row[] })}
+  <span class="count"
+    >{group.items.filter((i) => !i.purchased).length}/{group.items.length}</span
+  >
+  <span class="rule"></span>
+{/snippet}
+
+{#snippet rowList(rowItems: Row[])}
+  {#each rowItems as item (item.uid)}
+    <button
+      class="row"
+      class:done={item.purchased}
+      class:busy={item._busy}
+      class:err={item._error}
+      role="checkbox"
+      aria-checked={item.purchased}
+      onclick={() => onRow(item)}
+      animate:flip={{ duration: 220 }}
+    >
+      <span class="box">
+        {#if item._busy}
+          <span class="spin"></span>
+        {:else}
+          <svg viewBox="0 0 16 16" aria-hidden="true"
+            ><path class="tick" d="M3.5 8.5l3 3 6-6.5" /></svg
+          >
+        {/if}
+      </span>
+      <ItemRow
+        ingredient={item.ingredient}
+        quantity={item.quantity}
+        done={item.purchased}
+      />
+    </button>
+  {/each}
+{/snippet}
+
+{#snippet hint()}
+  <p class="hint">Tap a purchased item to add it back to the list.</p>
+{/snippet}
 
 <style>
-  :global(body) {
-    margin: 0;
-  }
-
-  main {
-    /* Theme tokens — light by default, overridden under .dark. Colors live in custom props so a
-       host-context theme flip re-skins the whole widget in one place. */
-    --bg: oklch(0.99 0.003 250);
-    --ink: oklch(0.27 0.012 265);
-    --muted: oklch(0.52 0.012 265);
-    --faint: oklch(0.64 0.01 265);
-    --line: oklch(0.92 0.005 265);
-    --hover: oklch(0.96 0.004 265);
-    --accent: oklch(0.58 0.13 150);
-    --accent-ink: oklch(0.99 0.02 150);
-    --danger: oklch(0.55 0.17 25);
-    --danger-bg: oklch(0.96 0.04 25);
-    color-scheme: light;
-
-    height: 100%;
-    display: flex;
-    flex-direction: column;
-    min-height: 0;
-    position: relative;
-    background: var(--bg);
-    color: var(--ink);
-    font:
-      15px/1.45 system-ui,
-      -apple-system,
-      "Segoe UI",
-      Roboto,
-      sans-serif;
-    -webkit-font-smoothing: antialiased;
-  }
-  main.dark {
-    --bg: oklch(0.21 0.012 265);
-    --ink: oklch(0.95 0.005 265);
-    --muted: oklch(0.72 0.012 265);
-    --faint: oklch(0.58 0.012 265);
-    --line: oklch(0.3 0.013 265);
-    --hover: oklch(0.25 0.014 265);
-    --accent: oklch(0.74 0.14 150);
-    --accent-ink: oklch(0.16 0.03 150);
-    --danger: oklch(0.72 0.16 25);
-    --danger-bg: oklch(0.28 0.06 25);
-    color-scheme: dark;
-  }
-
   header {
     display: flex;
     align-items: center;
@@ -429,69 +353,14 @@
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
   }
-  .clear {
-    appearance: none;
-    border: 1px solid var(--line);
-    background: transparent;
-    color: var(--muted);
-    font: inherit;
-    font-size: 12px;
-    font-weight: 600;
-    padding: 5px 11px;
-    border-radius: 999px;
-    cursor: pointer;
-    white-space: nowrap;
-    transition:
-      background 0.13s,
-      color 0.13s,
-      border-color 0.13s;
-  }
-  .clear:hover {
-    background: var(--hover);
-    color: var(--ink);
-  }
-  .clear:focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: 2px;
-  }
-  .clear.danger {
-    border-color: color-mix(in oklch, var(--danger) 55%, transparent);
-    color: var(--danger);
-  }
-  .clear.danger:hover {
-    background: var(--danger-bg);
-  }
 
-  .scroll {
-    flex: 1;
-    min-height: 0;
-    overflow-y: auto;
-    padding-bottom: calc(20px + env(safe-area-inset-bottom));
-  }
-
-  .aisle {
-    display: flex;
-    align-items: baseline;
-    gap: 8px;
-    padding: 12px 16px 5px;
-    position: sticky;
-    top: 0;
-    background: var(--bg);
-  }
-  .aisle h2 {
-    margin: 0;
-    font-size: 12px;
-    font-weight: 650;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-    color: var(--muted);
-  }
-  .aisle .count {
+  /* Trailing content for the sticky aisle header (rendered through GroupedList's headerExtra slot). */
+  .count {
     font-size: 11px;
     color: var(--faint);
     font-variant-numeric: tabular-nums;
   }
-  .aisle .rule {
+  .rule {
     flex: 1;
     height: 1px;
     background: var(--line);
@@ -581,89 +450,11 @@
     }
   }
 
-  .body {
-    flex: 1;
-    min-width: 0;
-  }
-  .name {
-    display: block;
-    overflow-wrap: anywhere;
-  }
-  .qty {
-    color: var(--muted);
-    font-size: 13px;
-    font-variant-numeric: tabular-nums;
-  }
-  .row.done .name {
-    color: var(--faint);
-    text-decoration: line-through;
-    text-decoration-color: color-mix(in oklch, var(--faint) 60%, transparent);
-  }
-  .row.done .qty {
-    color: var(--faint);
-  }
-
   .hint {
     padding: 12px 16px;
     margin: 0;
     font-size: 12px;
     color: var(--faint);
-  }
-
-  .empty {
-    flex: 1;
-    display: grid;
-    place-content: center;
-    justify-items: center;
-    text-align: center;
-    gap: 6px;
-    padding: 40px 24px;
-    color: var(--muted);
-  }
-  .empty .big {
-    font-size: 30px;
-  }
-  .empty .t {
-    color: var(--ink);
-    font-weight: 600;
-    margin: 0;
-  }
-  .empty .d {
-    font-size: 13px;
-    max-width: 34ch;
-    margin: 0;
-  }
-
-  .toast {
-    position: absolute;
-    left: 12px;
-    right: 12px;
-    top: calc(12px + env(safe-area-inset-top));
-    z-index: 5;
-    background: var(--danger-bg);
-    color: var(--danger);
-    border: 1px solid color-mix(in oklch, var(--danger) 40%, transparent);
-    border-radius: 10px;
-    padding: 9px 12px;
-    font-size: 13px;
-    font-weight: 550;
-    box-shadow: 0 8px 24px -12px oklch(0 0 0 / 0.5);
-    animation: toastIn 0.2s ease-out;
-  }
-  .toast.info {
-    background: var(--hover);
-    color: var(--ink);
-    border-color: var(--line);
-  }
-  @keyframes toastIn {
-    from {
-      opacity: 0;
-      transform: translateY(-6px);
-    }
-    to {
-      opacity: 1;
-      transform: none;
-    }
   }
 
   @media (prefers-reduced-motion: reduce) {
