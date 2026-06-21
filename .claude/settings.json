@@ -1,5 +1,6 @@
 {
   "enabledPlugins": {
-    "mcp-server-dev@claude-plugins-official": true
+    "mcp-server-dev@claude-plugins-official": true,
+    "impeccable@impeccable": true
   }
 }
