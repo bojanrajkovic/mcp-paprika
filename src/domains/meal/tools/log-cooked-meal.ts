@@ -7,13 +7,19 @@ import type { MealState, MealWrites } from "../module.js";
 import type { Meal } from "../types.js";
 
 import { defineTool } from "../../../kernel/tool.js";
-import { commitFailure, toolResult } from "../../../shared/tools.js";
+import { commitFailure, errorResult, toolResult } from "../../../shared/tools.js";
 import { parseCalendarDayWire, todayWire } from "../../../utils/dates.js";
 import { mealTypeSpecSchema, resolveOrCreateMealType } from "../../meal-type/meal-type-helpers.js";
 import { RecipeUidSchema } from "../../recipe/ids.js";
 import { MealUidSchema } from "../ids.js";
 import { mealStartGuard } from "./guards.js";
-import { makeMealOrderFlagAssigner, renderMealCard } from "./helpers.js";
+import {
+  makeMealOrderFlagAssigner,
+  mealListOutputSchema,
+  mealToStructuredRow,
+  renderMealCard,
+  resolveMealTypeName,
+} from "./helpers.js";
 
 export const logCookedMealInputSchema = z
   .object({
@@ -46,6 +52,7 @@ export const logCookedMealTool = defineTool(
       "meal type — a quick way to keep your cooking history current. Pass `date` to log a different day or " +
       "`type` for a non-dinner meal. To log a freeform (non-recipe) meal or to plan ahead in bulk, use plan_meals.",
     inputSchema: logCookedMealInputSchema,
+    outputSchema: mealListOutputSchema,
   },
   [mealStartGuard],
   (ctx: DomainCtx<MealState, "recipe" | "meal-type", MealWrites>) => {
@@ -59,7 +66,7 @@ export const logCookedMealTool = defineTool(
       } else {
         const parsed = parseCalendarDayWire(args.date);
         if (parsed === null) {
-          return toolResult(
+          return errorResult(
             `Could not parse date "${args.date}". Use ISO 8601 (e.g., "2026-06-15") or "yyyy-MM-dd HH:mm:ss".`,
           );
         }
@@ -68,7 +75,7 @@ export const logCookedMealTool = defineTool(
 
       const recipe = ctx.deps.recipe.get(args.recipe_uid);
       if (recipe === undefined) {
-        return toolResult(
+        return errorResult(
           `recipe_uid "${args.recipe_uid}" is not known to the local recipe store; ` +
             `wait for the next sync and retry, or log it with plan_meals as a freeform meal.`,
         );
@@ -81,7 +88,7 @@ export const logCookedMealTool = defineTool(
       const typeSpec: MealTypeSpec = args.type ?? { builtin: 2 };
       const typeResult = await resolveOrCreateMealType(ctx.deps["meal-type"], typeSpec);
       if (!typeResult.ok) {
-        return toolResult(typeResult.message);
+        return errorResult(typeResult.message);
       }
       // Custom mealtypes carry originalType: null; Meal.type is vestigial when
       // type_uid is set (see plan_meals for the full rationale).
@@ -105,15 +112,22 @@ export const logCookedMealTool = defineTool(
         (items) => items,
         (e) => {
           log.error({ err: e, recipe_uid: args.recipe_uid }, "saveMeals failed");
-          return toolResult(`Failed to log cooked meal: ${e.message}`);
+          return errorResult(`Failed to log cooked meal: ${e.message}`);
         },
       );
       if ("content" in savedItems) return savedItems;
-      const commitErr = commitFailure("meal plan", await ctx.writes.commitMealsBatch(savedItems));
-      if (commitErr) return commitErr;
       const saved = savedItems[0]!;
 
-      return toolResult(`Logged.\n\n${renderMealCard(saved, ctx.deps.recipe, ctx.deps["meal-type"])}`);
+      // The new meal UID rides structuredContent (and the degraded commit branch),
+      // so the model can chain reschedule_meal / update_meal / delete_meal without a re-read.
+      const typeName = resolveMealTypeName(ctx.deps["meal-type"]);
+      const structured = { items: [mealToStructuredRow(saved, typeName(saved))] };
+      const commitErr = commitFailure("meal plan", await ctx.writes.commitMealsBatch(savedItems), {
+        structuredContent: structured,
+      });
+      if (commitErr) return commitErr;
+
+      return toolResult(`Logged.\n\n${renderMealCard(saved, ctx.deps.recipe, ctx.deps["meal-type"])}`, structured);
     };
   },
 );

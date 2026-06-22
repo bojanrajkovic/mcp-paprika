@@ -58,7 +58,9 @@ describe("ADR-0019: structured-output envelope and rollout", () => {
     // reads (read_recipe/read_grocery_list/read_menu/read_pantry_item) + the create/echo
     // tools that surface a new UID. R1 #367 — the last two unsafe creators
     // (add_pantry_items / add_recipe_to_grocery_list), which surfaced new UIDs only in
-    // text. Add each later batch's tool names as they land.
+    // text. R1 #399 — the meal creators/mover that mint new entity UIDs (log_cooked_meal,
+    // move_grocery_items_to_pantry, plan_meals, schedule_menu). Add each later batch's
+    // tool names as they land.
     expect(withSchema).toEqual([
       "add_grocery_items",
       "add_menu_items",
@@ -76,6 +78,9 @@ describe("ADR-0019: structured-output envelope and rollout", () => {
       "list_menus",
       "list_pantry_items",
       "list_recipes",
+      "log_cooked_meal",
+      "move_grocery_items_to_pantry",
+      "plan_meals",
       "read_grocery_list",
       "read_meal_plan",
       "read_menu",
@@ -83,6 +88,7 @@ describe("ADR-0019: structured-output envelope and rollout", () => {
       "read_recipe",
       "read_recipe_history",
       "rename_grocery_list",
+      "schedule_menu",
       "search_meal_history",
       "search_recipes",
     ]);

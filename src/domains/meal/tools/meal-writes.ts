@@ -9,13 +9,19 @@ import type { MealState, MealWrites } from "../module.js";
 import type { Meal } from "../types.js";
 
 import { defineTool } from "../../../kernel/tool.js";
-import { commitFailure, confirmOrCancel, toolResult } from "../../../shared/tools.js";
+import { commitFailure, confirmOrCancel, errorResult, toolResult } from "../../../shared/tools.js";
 import { parseCalendarDayWire } from "../../../utils/dates.js";
 import { mealTypeSpecSchema, resolveOrCreateMealType } from "../../meal-type/meal-type-helpers.js";
 import { RecipeUidSchema } from "../../recipe/ids.js";
 import { MealUidSchema } from "../ids.js";
 import { mealStartGuard } from "./guards.js";
-import { makeMealOrderFlagAssigner, renderMealCard } from "./helpers.js";
+import {
+  makeMealOrderFlagAssigner,
+  mealListOutputSchema,
+  mealToStructuredRow,
+  renderMealCard,
+  resolveMealTypeName,
+} from "./helpers.js";
 
 // Each meal item is structurally either recipe-linked OR freeform — never both.
 // Custom `name` on a recipe-linked meal is dead data: Paprika.app dispatches the
@@ -99,6 +105,7 @@ export const planMealsTool = defineTool(
       "is invalid the entire batch is rejected with a per-index error enumeration so callers " +
       "can fix all problems in one pass.",
     inputSchema: addMealsInputSchema.shape,
+    outputSchema: mealListOutputSchema,
   },
   [mealStartGuard],
   (ctx: DomainCtx<MealState, "recipe" | "meal-type", MealWrites>) => {
@@ -194,7 +201,7 @@ export const planMealsTool = defineTool(
 
       if (errors.length > 0) {
         const header = errors.length === 1 ? "Could not add meal:" : `Could not add ${errors.length.toString()} meals:`;
-        return toolResult(`${header}\n\n${errors.join("\n")}`);
+        return errorResult(`${header}\n\n${errors.join("\n")}`);
       }
 
       // ----- Stage 2: auto-create any deferred {name} meal types (pantry-style) -----
@@ -211,7 +218,7 @@ export const planMealsTool = defineTool(
         );
         if (typeof created === "string") {
           log.error({ name: r.pendingTypeName, message: created }, "ensureMealType failed");
-          return toolResult(created);
+          return errorResult(created);
         }
         createdTypesByName.set(key, created);
       }
@@ -249,18 +256,25 @@ export const planMealsTool = defineTool(
         (items) => items,
         (e) => {
           log.error({ err: e, count: builtItems.length }, "saveMeals failed");
-          return toolResult(`Failed to add meals: ${e.message}`);
+          return errorResult(`Failed to add meals: ${e.message}`);
         },
       );
       if ("content" in savedItems) return savedItems;
-      const commitErr = commitFailure("meal plan", await ctx.writes.commitMealsBatch(savedItems));
+
+      // The new meal UIDs ride structuredContent (and the degraded commit branch),
+      // so the model can chain reschedule_meal / update_meal / delete_meal without a re-read.
+      const typeName = resolveMealTypeName(ctx.deps["meal-type"]);
+      const structured = { items: savedItems.map((m) => mealToStructuredRow(m, typeName(m))) };
+      const commitErr = commitFailure("meal plan", await ctx.writes.commitMealsBatch(savedItems), {
+        structuredContent: structured,
+      });
       if (commitErr) return commitErr;
 
       // ----- Stage 5: render response -----
       const cards = savedItems.map((meal) => renderMealCard(meal, ctx.deps.recipe, ctx.deps["meal-type"]));
 
       const header = `Added ${savedItems.length.toString()} meal(s) to the planner.`;
-      return toolResult(`${header}\n\n${cards.join("\n\n---\n\n")}`);
+      return toolResult(`${header}\n\n${cards.join("\n\n---\n\n")}`, structured);
     };
   },
 );

@@ -1,4 +1,3 @@
-import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { DateTime } from "luxon";
 import { z } from "zod";
 
@@ -9,9 +8,10 @@ import type { Meal } from "../../meal/types.js";
 import type { RecipeUid } from "../../recipe/ids.js";
 
 import { defineTool } from "../../../kernel/tool.js";
-import { resolveLookup, resolveOrPick, toolResult, uidOrTextLookupSchema } from "../../../shared/tools.js";
+import { errorResult, resolveLookup, resolveOrPick, toolResult, uidOrTextLookupSchema } from "../../../shared/tools.js";
 import { formatCalendarDayWire, parseCalendarDay } from "../../../utils/dates.js";
 import { MealUidSchema } from "../../meal/ids.js";
+import { mealListOutputSchema, mealToStructuredRow, resolveMealTypeName } from "../../meal/tools/helpers.js";
 import { MenuUidSchema } from "../../menu/ids.js";
 import { scheduleMenuStartGuard } from "./guards.js";
 
@@ -108,6 +108,7 @@ export const scheduleMenuTool = defineTool(
       "whole batch is rejected with a per-item enumeration (freeform items keep their stored name). To remove " +
       "a meal afterward, find it via read_meal_plan or search_meal_history and call delete_meal.",
     inputSchema: scheduleMenuInputSchema.shape,
+    outputSchema: mealListOutputSchema,
   },
   [scheduleMenuStartGuard],
   (ctx: DomainCtx<Record<never, never>, "menu" | "meal" | "recipe" | "meal-type">) => {
@@ -132,13 +133,13 @@ export const scheduleMenuTool = defineTool(
 
       const menuItems = ctx.deps.menu.itemsOf(menu.uid);
       if (menuItems.length === 0) {
-        return toolResult(`Menu "${menu.name}" has no items to add to the planner.`);
+        return errorResult(`Menu "${menu.name}" has no items to add to the planner.`);
       }
 
       // Parse the start date once; a bad date dooms the whole batch.
       const startDay = parseCalendarDay(args.start_date);
       if (startDay === null) {
-        return toolResult(
+        return errorResult(
           `Could not parse start_date "${args.start_date}". ` +
             `Use ISO 8601 (e.g., "2026-06-15") or "yyyy-MM-dd HH:mm:ss".`,
         );
@@ -215,7 +216,7 @@ export const scheduleMenuTool = defineTool(
           errors.length === 1
             ? "Could not add menu to planner:"
             : `Could not add menu to planner (${errors.length.toString()} problems):`;
-        return toolResult(`${header}\n\n${errors.join("\n")}`);
+        return errorResult(`${header}\n\n${errors.join("\n")}`);
       }
 
       // ----- Build meals with per-date order_flag, then POST once -----
@@ -233,15 +234,23 @@ export const scheduleMenuTool = defineTool(
         deleted: false,
       }));
 
+      // The new meal UIDs ride structuredContent — schedule_menu's text omits them
+      // entirely (it scales to a 21-meal week), so without this the model could not
+      // chain reschedule_meal / update_meal / delete_meal on what it just created.
+      const typeName = resolveMealTypeName(ctx.deps["meal-type"]);
+
       // The meal contract internalizes the live `client.saveMeals` + `commitMealsBatch`
       // sequence and returns a Result; a write failure carries the same toMessage-style
       // text the live tool rendered. The coordinator never touches the meal store/cache.
       const result = await ctx.deps.meal.createMeals(builtItems);
       return result.match(
-        (): CallToolResult => toolResult(renderPlannerAdds(menu.name, startDay, materialized)),
-        (message): CallToolResult => {
+        (savedMeals) =>
+          toolResult(renderPlannerAdds(menu.name, startDay, materialized), {
+            items: savedMeals.map((m) => mealToStructuredRow(m, typeName(m))),
+          }),
+        (message) => {
           log.error({ uid: menu.uid, count: builtItems.length }, "saveMeals failed");
-          return toolResult(`Failed to add menu to planner: ${message}`);
+          return errorResult(`Failed to add menu to planner: ${message}`);
         },
       );
     };
