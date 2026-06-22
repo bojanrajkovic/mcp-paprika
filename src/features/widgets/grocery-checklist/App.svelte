@@ -46,6 +46,7 @@
   // The tool's own error text (not-found / disambiguation), for the error state.
   let errorMsg = $state<string | null>(null);
   let confirmingClear = $state(false);
+  let confirmingMove = $state(false);
   // Suppresses the widget's inline two-tap confirm when the server's confirmGate is active.
   // Set once in onMount from window.__MCP_SERVER_CAPS__ (injected at resources/read time).
   let elicitation = $state(false);
@@ -102,6 +103,7 @@
     items = rawItems.map((r) => toRow(r));
     errorMsg = null;
     confirmingClear = false;
+    confirmingMove = false;
     phase = "ready";
   }
 
@@ -248,6 +250,38 @@
     if (fresh.structuredContent) receive(fresh);
     else items = items.filter((i) => !i.purchased); // re-read unavailable: the clear succeeded, so sweep
   }
+
+  function onMove() {
+    confirmingMove = true;
+  }
+  function cancelMove() {
+    confirmingMove = false;
+  }
+  // Send the same purchased set the clear action operates on to the pantry. move_grocery_items_to_pantry
+  // creates the pantry items then soft-deletes the grocery rows; we re-read rather than reconcile its
+  // pantry-shaped structuredContent into this grocery view.
+  async function confirmMove() {
+    confirmingMove = false;
+    if (!listMeta) return;
+    const purchased = items.filter((i) => i.purchased);
+    if (purchased.length === 0) return;
+    const listUid = listMeta.uid;
+    const res = await callTool(app, "move_grocery_items_to_pantry", {
+      uids: purchased.map((i) => i.uid),
+    });
+    if (res.isError) {
+      showToast("Couldn’t move to pantry — try again.");
+      return;
+    }
+    // Like the clear path, a non-error move can't be told apart from a declined server-confirm (both
+    // non-error, neither carrying this list's rows), and a partial move can leave items in both stores
+    // — so re-read the list and rebuild from authoritative state instead of blindly sweeping.
+    const fresh = await callTool(app, "read_grocery_list", {
+      lookup: { uid: listUid },
+    });
+    if (fresh.structuredContent) receive(fresh);
+    else items = items.filter((i) => !i.purchased); // re-read unavailable: the move succeeded, so sweep
+  }
 </script>
 
 <WidgetShell dark={theme === "dark"}>
@@ -275,9 +309,18 @@
             >Clear</PillButton
           >
           <PillButton onclick={cancelClear}>Keep</PillButton>
+        {:else if confirmingMove}
+          <span class="progress">Move {purchasedCount} to pantry?</span>
+          <PillButton variant="accent" onclick={confirmMove}>Move</PillButton>
+          <PillButton onclick={cancelMove}>Keep</PillButton>
         {:else}
           <span class="progress">{purchasedCount}/{items.length} done</span>
           {#if purchasedCount > 0}
+            <PillButton
+              variant="accent"
+              onclick={elicitation ? confirmMove : onMove}
+              >Move {purchasedCount} → pantry</PillButton
+            >
             <PillButton onclick={elicitation ? confirmClear : onClear}
               >Clear {purchasedCount}</PillButton
             >
