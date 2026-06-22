@@ -67,18 +67,22 @@ describe("add_recipe_to_grocery_list tool", () => {
     const otherList = makeGroceryList({ name: "Costco" });
     kh.seed({ recipes: [recipe], groceryLists: [otherList, defaultList], groceryItems: [] });
 
-    const text = await kh.callToolText("add_recipe_to_grocery_list", {
+    const result = await kh.callTool("add_recipe_to_grocery_list", {
       recipe: { title: "Pad Thai" },
       items: [{ ingredient: "Rice noodles", quantity: "8 oz" }, { ingredient: "Tamarind paste" }],
     });
 
-    expect(text).toContain('Added 2 item(s) from "Pad Thai" to "Groceries".');
+    expect(getText(result)).toContain('Added 2 item(s) from "Pad Thai" to "Groceries".');
     const saved = vi.mocked(kh.client().saveGroceryItems).mock.calls[0]![0] as ReadonlyArray<GroceryItem>;
     expect(saved).toHaveLength(2);
     for (const item of saved) {
       expect(item.recipe).toBe("Pad Thai");
       expect(item.listUid).toBe(defaultList.uid);
     }
+    // The new item UIDs ride structuredContent so the model can chain on them.
+    const structured = result.structuredContent as { listUid: string; items: ReadonlyArray<{ uid: string }> };
+    expect(structured.listUid).toBe(defaultList.uid);
+    expect(structured.items.map((i) => i.uid)).toEqual(saved.map((i) => i.uid));
     // Committed to the store + Content notification fired.
     expect(kh.state().items.store.getByListUid(defaultList.uid)).toHaveLength(2);
     expect(kh.resourceListChanged()).toHaveBeenCalled();

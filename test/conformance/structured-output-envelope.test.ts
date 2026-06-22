@@ -56,10 +56,14 @@ describe("ADR-0019: structured-output envelope and rollout", () => {
     // A3 #318 — the meal reads (first adopters). A3 #319 — the recipe/grocery/menu list
     // tools. A3 #320 — the catalogs, pantry list, and discover. B1 #321 — the uid-or-text
     // reads (read_recipe/read_grocery_list/read_menu/read_pantry_item) + the create/echo
-    // tools that surface a new UID. Add each later batch's tool names as they land.
+    // tools that surface a new UID. R1 #367 — the last two unsafe creators
+    // (add_pantry_items / add_recipe_to_grocery_list), which surfaced new UIDs only in
+    // text. Add each later batch's tool names as they land.
     expect(withSchema).toEqual([
       "add_grocery_items",
       "add_menu_items",
+      "add_pantry_items",
+      "add_recipe_to_grocery_list",
       "create_category",
       "create_grocery_list",
       "create_menu",

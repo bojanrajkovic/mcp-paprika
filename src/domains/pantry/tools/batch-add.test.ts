@@ -57,11 +57,14 @@ describe("add_pantry_items tool", () => {
     const text = getText(result);
 
     expect(kh.client().savePantryItems).toHaveBeenCalledOnce();
-    const savedItems: ReadonlyArray<{ ingredient: string }> =
+    const savedItems: ReadonlyArray<{ uid: string; ingredient: string }> =
       vi.mocked(kh.client().savePantryItems).mock.calls[0]?.[0] ?? [];
     expect(savedItems).toHaveLength(3);
     expect(savedItems.map((i) => i.ingredient)).toEqual(["Apples", "Milk", "Eggs"]);
     expect(text).toContain("Added 3 item(s)");
+    // The new item UIDs ride structuredContent so the model can chain on them.
+    const structured = result.structuredContent as { items: ReadonlyArray<{ uid: string }> };
+    expect(structured.items.map((i) => i.uid)).toEqual(savedItems.map((i) => i.uid));
     expect(kh.client().notifySync).toHaveBeenCalled();
   });
 
