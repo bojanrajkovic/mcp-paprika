@@ -11,7 +11,7 @@ behave when configured: `discover_recipes` (semantic search) and `generate_recip
 
 **Add items to a grocery list** — write
 
-Add one or more items to a grocery list. Check read_grocery_list first to avoid duplicate ingredients — no server-side duplicate guard.
+Add one or more items to a grocery list. Skips items whose ingredient is already on the list unpurchased (case-insensitive) and reports them with the existing UID and a suggestion to use update_grocery_item to merge quantities.
 
 **Parameters**
 
@@ -43,7 +43,7 @@ Add one or more items to the pantry. Skips items that duplicate an existing ingr
 
 **Add a recipe's ingredients to a grocery list** — write
 
-Add a recipe's ingredients to a grocery list as linked grocery items. Parse the recipe's ingredient lines into the `items` array (one entry per ingredient, quantity separated out). Ingredients already on the list unpurchased are skipped and reported. Omit `listUid` to use the default grocery list.
+Add a recipe's ingredients to a grocery list as linked grocery items. Parse the recipe's ingredient lines into the `items` array (one entry per ingredient, quantity separated out). Ingredients already on the list unpurchased are skipped and reported with their UID and a hint to use update_grocery_item to merge quantities. Omit `listUid` to use the default grocery list.
 
 **Parameters**
 

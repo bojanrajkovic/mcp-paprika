@@ -175,7 +175,7 @@ export const addGroceryItemsTool = defineTool(
     title: "Add items to a grocery list",
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
     description:
-      "Add one or more items to a grocery list. Check read_grocery_list first to avoid duplicate ingredients — no server-side duplicate guard.",
+      "Add one or more items to a grocery list. Skips items whose ingredient is already on the list unpurchased (case-insensitive) and reports them with the existing UID and a suggestion to use update_grocery_item to merge quantities.",
     inputSchema: {
       listUid: GroceryListUidSchema.describe("UID of the grocery list to add items to"),
       items: z.array(itemInputSchema).min(1).describe("Array of items to add (1 or more)"),
@@ -199,8 +199,43 @@ export const addGroceryItemsTool = defineTool(
         }
       }
 
+      // Duplicate detection: skip items already on the list unpurchased (case-insensitive);
+      // also skip intra-batch repeats. Report each with the existing UID so the model can
+      // call update_grocery_item to merge quantities without a pre-flight read.
+      const onList = new Map(
+        ctx.state.items.store
+          .getByListUid(args.listUid)
+          .filter((i) => !i.purchased)
+          .map((i) => [i.ingredient.toLowerCase(), i.uid] as const),
+      );
+      const toAdd: Array<(typeof args.items)[number]> = [];
+      const skipMessages: Array<string> = [];
+      const seenIngredients = new Map<string, string>();
+      for (const item of args.items) {
+        const key = item.ingredient.toLowerCase();
+        const existingUid = onList.get(key);
+        const intraMatch = seenIngredients.get(key);
+        if (existingUid !== undefined) {
+          skipMessages.push(
+            `Skipped "${item.ingredient}": already on the list unpurchased (UID: ${existingUid}). Use update_grocery_item with this UID to merge quantities.`,
+          );
+        } else if (intraMatch !== undefined) {
+          skipMessages.push(`Skipped "${item.ingredient}": duplicates "${intraMatch}" in this batch.`);
+        } else {
+          seenIngredients.set(key, item.ingredient);
+          toAdd.push(item);
+        }
+      }
+      if (toAdd.length === 0) {
+        const skipReport = skipMessages.join("\n");
+        return toolResult(`All items were duplicates and skipped.\n\n${skipReport}`, {
+          listUid: args.listUid,
+          items: [],
+        });
+      }
+
       // Build all GroceryItem objects (aisle resolution + catalog memory), no recipe link.
-      const builtItems = await buildGroceryItems(ctx, log, args.listUid, args.items, null);
+      const builtItems = await buildGroceryItems(ctx, log, args.listUid, toAdd, null);
       if ("content" in builtItems) return builtItems;
 
       // Single batch POST for all items
@@ -223,7 +258,12 @@ export const addGroceryItemsTool = defineTool(
 
       const count = savedItems.length;
       const rendered = savedItems.map((item) => groceryItemToMarkdown(item, ctx.deps.aisle)).join("\n\n---\n\n");
-      return toolResult(`Added ${count.toString()} item(s) to the grocery list.\n\n${rendered}`, structured);
+      const header = `Added ${count.toString()} item(s) to the grocery list.`;
+      if (skipMessages.length > 0) {
+        const skipReport = skipMessages.join("\n");
+        return toolResult(`${header}\n\n${rendered}\n\n---\n\n**Skipped (duplicates):**\n${skipReport}`, structured);
+      }
+      return toolResult(`${header}\n\n${rendered}`, structured);
     };
   },
 );
