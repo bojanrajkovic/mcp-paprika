@@ -1,11 +1,10 @@
-import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
-
 import type { DomainCtx } from "../../../kernel/registry.js";
 import type { RecipeState, RecipeWrites } from "../module.js";
 
 import { defineTool } from "../../../kernel/tool.js";
-import { commitFailure, toolResult } from "../../../shared/tools.js";
+import { commitFailure, errorResult, toolResult } from "../../../shared/tools.js";
 import { RecipeUidSchema } from "../ids.js";
+import { recipeReadOutputSchema, recipeToReadStructured } from "../recipe-markdown.js";
 import { recipeColdStartGuard } from "./guards.js";
 
 /**
@@ -24,6 +23,7 @@ export const trashRecipeTool = defineTool(
     inputSchema: {
       uid: RecipeUidSchema.describe("Recipe UID to delete"),
     },
+    outputSchema: recipeReadOutputSchema,
   },
   [recipeColdStartGuard],
   (ctx: DomainCtx<RecipeState, never, RecipeWrites>) => {
@@ -32,26 +32,40 @@ export const trashRecipeTool = defineTool(
       const recipe = ctx.state.recipe.store.get(args.uid);
 
       if (!recipe) {
-        return toolResult(
+        return errorResult(
           `No recipe found with UID "${args.uid}" (it may not exist or was already deleted). Use \`search_recipes\` to find it.`,
         );
       }
 
       if (recipe.inTrash) {
-        return toolResult(`Recipe "${recipe.name}" is already in the trash.`);
+        // A no-op success: the recipe is already where the caller wants it, so the
+        // structured payload is the trashed recipe (NOT an error).
+        const categoryNames = ctx.state.category.store.resolveNames(recipe.categories);
+        return toolResult(
+          `Recipe "${recipe.name}" is already in the trash.`,
+          recipeToReadStructured(recipe, categoryNames),
+        );
       }
 
       const trashed = { ...recipe, inTrash: true };
 
       return (await ctx.infra.client.saveRecipe(trashed)).match(
-        async (saved): Promise<CallToolResult> => {
-          const commitErr = commitFailure("recipe", await ctx.writes.commitRecipe(saved), { selfHealing: false });
+        async (saved) => {
+          // The ack keeps its prose, but the saved (now-trashed) recipe rides
+          // structuredContent so a widget or the model can re-render the result —
+          // deleted:true rides through fine.
+          const categoryNames = ctx.state.category.store.resolveNames(saved.categories);
+          const structured = recipeToReadStructured(saved, categoryNames);
+          const commitErr = commitFailure("recipe", await ctx.writes.commitRecipe(saved), {
+            structuredContent: structured,
+            selfHealing: false,
+          });
           if (commitErr) return commitErr;
-          return toolResult(`Recipe "${recipe.name}" has been moved to the trash.`);
+          return toolResult(`Recipe "${recipe.name}" has been moved to the trash.`, structured);
         },
         async (e) => {
           log.error({ err: e, uid: args.uid }, "saveRecipe failed");
-          return toolResult(`Failed to delete recipe: ${e.message}`);
+          return errorResult(`Failed to delete recipe: ${e.message}`);
         },
       );
     };

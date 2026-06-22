@@ -59,18 +59,22 @@ describe("ADR-0019: structured-output envelope and rollout", () => {
     // tools that surface a new UID. R1 #367 — the last two unsafe creators
     // (add_pantry_items / add_recipe_to_grocery_list), which surfaced new UIDs only in
     // text. R1 #399 — the meal creators/mover that mint new entity UIDs (log_cooked_meal,
-    // move_grocery_items_to_pantry, plan_meals, schedule_menu). Add each later batch's
-    // tool names as they land.
+    // move_grocery_items_to_pantry, plan_meals, schedule_menu). R1 — the recipe write-acks
+    // that echo a resolvable recipe (categorize_recipe, favorite_recipe/unfavorite_recipe,
+    // pin_recipe/unpin_recipe, rate_recipe, restore_recipe, trash_recipe, update_recipe).
+    // Add each later batch's tool names as they land.
     expect(withSchema).toEqual([
       "add_grocery_items",
       "add_menu_items",
       "add_pantry_items",
       "add_recipe_to_grocery_list",
+      "categorize_recipe",
       "create_category",
       "create_grocery_list",
       "create_menu",
       "create_recipe",
       "discover_recipes",
+      "favorite_recipe",
       "list_aisles",
       "list_categories",
       "list_grocery_lists",
@@ -80,7 +84,9 @@ describe("ADR-0019: structured-output envelope and rollout", () => {
       "list_recipes",
       "log_cooked_meal",
       "move_grocery_items_to_pantry",
+      "pin_recipe",
       "plan_meals",
+      "rate_recipe",
       "read_grocery_list",
       "read_meal_plan",
       "read_menu",
@@ -88,9 +94,14 @@ describe("ADR-0019: structured-output envelope and rollout", () => {
       "read_recipe",
       "read_recipe_history",
       "rename_grocery_list",
+      "restore_recipe",
       "schedule_menu",
       "search_meal_history",
       "search_recipes",
+      "trash_recipe",
+      "unfavorite_recipe",
+      "unpin_recipe",
+      "update_recipe",
     ]);
   });
 });

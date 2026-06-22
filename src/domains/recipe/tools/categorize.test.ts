@@ -63,7 +63,24 @@ describe("categorize_recipe tool", () => {
     expect(vi.mocked(kh.client().saveRecipe).mock.calls[0]?.[0]?.categories).toEqual([catA.uid]);
   });
 
-  it("warns and leaves the recipe unchanged when every reference is unknown", async () => {
+  it("carries structuredContent with the recategorized recipe's machine fields", async () => {
+    const catA = makeCategory({ name: "Dinner" });
+    const catB = makeCategory({ name: "Quick" });
+    const recipe = makeRecipe({ categories: [catA.uid] });
+    kh.seed({ recipes: [recipe], categories: [catA, catB] });
+    vi.mocked(kh.client().saveRecipe).mockImplementation((r) => okAsync(r));
+
+    const result = await kh.callTool("categorize_recipe", { uid: recipe.uid, categories: ["Quick"], mode: "add" });
+
+    expect(result.isError).toBeUndefined();
+    expect(result.structuredContent).toMatchObject({
+      uid: recipe.uid,
+      categoryUids: [catA.uid, catB.uid],
+      categories: ["Dinner", "Quick"],
+    });
+  });
+
+  it("every reference unknown is an isError result with no structuredContent and no save", async () => {
     const catA = makeCategory({ name: "Dinner" });
     const recipe = makeRecipe({ categories: [catA.uid] });
     kh.seed({ recipes: [recipe], categories: [catA] });
@@ -77,15 +94,19 @@ describe("categorize_recipe tool", () => {
 
     expect(text).toContain("not found");
     expect(text).toContain("left unchanged");
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toBeUndefined();
     expect(kh.client().saveRecipe).not.toHaveBeenCalled();
   });
 
-  it("returns a not-found message for an unknown recipe UID", async () => {
+  it("an unknown recipe UID is an isError result with no structuredContent", async () => {
     kh.seed({ recipes: [makeRecipe()], categories: [] });
 
     const result = await kh.callTool("categorize_recipe", { uid: "nope", categories: ["X"] });
 
     expect(getText(result).toLowerCase()).toContain("no recipe found");
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toBeUndefined();
     expect(kh.client().saveRecipe).not.toHaveBeenCalled();
   });
 
@@ -121,10 +142,12 @@ describe("categorize_recipe tool", () => {
     kh.seed({ recipes: [recipe], categories: [catA] });
     vi.mocked(kh.client().saveRecipe).mockReturnValue(errAsync(new Error("Network error")));
 
-    const text = await kh.callToolText("categorize_recipe", { uid: recipe.uid, categories: ["Dinner"], mode: "add" });
+    const result = await kh.callTool("categorize_recipe", { uid: recipe.uid, categories: ["Dinner"], mode: "add" });
 
-    expect(text).toContain("Failed to categorize recipe");
-    expect(text).toContain("Network error");
+    expect(getText(result)).toContain("Failed to categorize recipe");
+    expect(getText(result)).toContain("Network error");
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toBeUndefined();
     // Store is unchanged — categories still empty.
     expect(kh.state().recipe.store.get(recipe.uid)?.categories).toEqual([]);
   });

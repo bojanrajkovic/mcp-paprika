@@ -6,9 +6,14 @@ import type { RecipeState, RecipeWrites } from "../module.js";
 import type { Recipe } from "../types.js";
 
 import { defineTool } from "../../../kernel/tool.js";
-import { commitFailure, toolResult } from "../../../shared/tools.js";
+import { commitFailure, errorResult, toolResult } from "../../../shared/tools.js";
 import { RecipeUidSchema } from "../ids.js";
-import { recipeToMarkdown, resolveCategoryRefs } from "../recipe-markdown.js";
+import {
+  recipeReadOutputSchema,
+  recipeToMarkdown,
+  recipeToReadStructured,
+  resolveCategoryRefs,
+} from "../recipe-markdown.js";
 import { recipeColdStartGuard } from "./guards.js";
 
 // Strict (exported for direct Zod-validation tests). The `categories` field left
@@ -49,6 +54,7 @@ export const categorizeRecipeTool = defineTool(
       "add (union with current — the default), replace (set exactly these), or remove (drop these). " +
       "Unknown category names are skipped with a warning. To edit other recipe fields, use update_recipe.",
     inputSchema: categorizeRecipeInputSchema,
+    outputSchema: recipeReadOutputSchema,
   },
   [recipeColdStartGuard],
   (ctx: DomainCtx<RecipeState, never, RecipeWrites>) => {
@@ -56,7 +62,7 @@ export const categorizeRecipeTool = defineTool(
     return async (args) => {
       const existing = ctx.state.recipe.store.get(args.uid);
       if (!existing) {
-        return toolResult(
+        return errorResult(
           `No recipe found with UID "${args.uid}" (it may not exist or was already deleted). Use \`search_recipes\` to find it.`,
         );
       }
@@ -69,7 +75,7 @@ export const categorizeRecipeTool = defineTool(
       // an all-typos call from silently wiping the recipe's categories.
       if (refUids.length === 0) {
         const prefix = warnings.length > 0 ? warnings.join("\n") + "\n\n" : "";
-        return toolResult(`${prefix}No known categories matched, so "${existing.name}" was left unchanged.`);
+        return errorResult(`${prefix}No known categories matched, so "${existing.name}" was left unchanged.`);
       }
 
       // Compute the next category set per mode. Sets dedupe while preserving order.
@@ -89,17 +95,21 @@ export const categorizeRecipeTool = defineTool(
         (v) => v,
         (e) => {
           log.error({ err: e, uid: args.uid }, "saveRecipe failed");
-          return toolResult(`Failed to categorize recipe: ${e.message}`);
+          return errorResult(`Failed to categorize recipe: ${e.message}`);
         },
       );
       if ("content" in saved) return saved;
-      const commitErr = commitFailure("recipe", await ctx.writes.commitRecipe(saved), { selfHealing: false });
+      const categoryNames = ctx.state.category.store.resolveNames(saved.categories);
+      const structured = recipeToReadStructured(saved, categoryNames);
+      const commitErr = commitFailure("recipe", await ctx.writes.commitRecipe(saved), {
+        structuredContent: structured,
+        selfHealing: false,
+      });
       if (commitErr) return commitErr;
 
-      const categoryNames = ctx.state.category.store.resolveNames(saved.categories);
       const markdown = recipeToMarkdown(saved, categoryNames);
       const prefix = warnings.length > 0 ? warnings.join("\n") + "\n\n" : "";
-      return toolResult(prefix + markdown);
+      return toolResult(prefix + markdown, structured);
     };
   },
 );
