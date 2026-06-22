@@ -5,7 +5,7 @@ import type { DomainCtx } from "../../../kernel/registry.js";
 import type { SemanticResult } from "../../vector-store.js";
 import type { DiscoverState } from "../module.js";
 
-import { recipeRowSchema } from "../../../domains/recipe/recipe-markdown.js";
+import { recipeMetadataLines, recipeRowSchema } from "../../../domains/recipe/recipe-markdown.js";
 import { defineTool } from "../../../kernel/tool.js";
 import { errorResult, toolResult } from "../../../shared/tools.js";
 
@@ -124,7 +124,7 @@ export const discoverRecipesTool = defineTool(
       enriched.forEach((entry, index) => {
         const row = rows[index]!;
         items.push({ ...row, score: entry.result.score });
-        lines.push(formatDiscoverHit(index + 1, entry.recipe, entry.result.score, row.categories, ctx.deps.recipe));
+        lines.push(formatDiscoverHit(index + 1, entry.recipe, entry.result.score, row.categories));
       });
 
       return toolResult(lines.join("\n\n"), { items });
@@ -132,13 +132,7 @@ export const discoverRecipesTool = defineTool(
   },
 );
 
-function formatDiscoverHit(
-  index: number,
-  recipe: Recipe,
-  score: number,
-  categoryNames: Array<string>,
-  recipeApi: { metadataLines(recipe: Recipe): ReadonlyArray<string> },
-): string {
+function formatDiscoverHit(index: number, recipe: Recipe, score: number, categoryNames: Array<string>): string {
   const percentage = Math.round(score * 100);
   const lines: Array<string> = [];
   lines.push(`${String(index)}. **${recipe.name}** — ${String(percentage)}% match`);
@@ -146,7 +140,7 @@ function formatDiscoverHit(
   if (categoryNames.length > 0) {
     lines.push(`   **Categories:** ${categoryNames.join(", ")}`);
   }
-  for (const line of recipeApi.metadataLines(recipe)) {
+  for (const line of recipeMetadataLines(recipe)) {
     lines.push(`   ${line}`);
   }
   return lines.join("\n");

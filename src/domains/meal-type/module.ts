@@ -16,7 +16,7 @@ import { makeCatalogDelete } from "../../shared/catalog.js";
 import { resolvePendingWriteTtl } from "../../utils/config.js";
 import { unwrapAtBoot } from "../../utils/errors.js";
 import { MealTypeUidSchema } from "./ids.js";
-import { formatMealTypeResolveError, resolveOrCreateMealType } from "./meal-type-helpers.js";
+import { resolveOrCreateMealType } from "./meal-type-helpers.js";
 import { MealTypeStore } from "./store.js";
 import { mealTypeSync } from "./sync.js";
 import { listMealTypesTool } from "./tools/list-meal-types.js";
@@ -217,7 +217,6 @@ register(
         hasSynced: () => state.store.hasSynced,
         ensureMealType,
         resolveOrCreate: (spec) => resolveOrCreateMealType(api, spec),
-        formatResolveError: (result) => formatMealTypeResolveError(result),
         deleteMealType,
       };
 

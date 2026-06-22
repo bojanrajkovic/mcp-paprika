@@ -16,8 +16,8 @@ import type { Recipe } from "./types.js";
  *   - `get` — the recipe-name/existence read every meal/menu/coordinator write does;
  *   - `resolveCategoryRefs` — meal's `search_meal_history` UID/name → CategoryUid;
  *   - `resolveCategoryNames` — meal label, discover display, photo-gen prompt;
- *   - `toRows` / `metadataLines` — discover's `discover_recipes` row + text projection,
- *     resolving each recipe's category names through recipe's own category store.
+ *   - `toRows` — discover's `discover_recipes` structured rows, resolving each recipe's
+ *     category names through recipe's own category store.
  *
  * The inherited `hasSynced` is the meal-planner cold-start gate — the recipe store
  * must be warm before the coordinator resolves recipe names.
@@ -68,12 +68,6 @@ export interface RecipeApi extends HasSynced {
    * category dependency stays private to recipe.
    */
   toRows(recipes: ReadonlyArray<Recipe>): ReadonlyArray<RecipeRow>;
-  /**
-   * The metadata text lines (times / rating / pinned / on-grocery-list) for one
-   * recipe — the human-readable counterpart discover's hit renderer appends under
-   * each result. Pure projection of the recipe's own fields.
-   */
-  metadataLines(recipe: Recipe): ReadonlyArray<string>;
   /**
    * Attach an AI-generated image (raw full-resolution bytes) to a recipe — the
    * recipe-domain write `generate_recipe_photo` (attach:true) calls, since recipe

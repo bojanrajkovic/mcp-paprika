@@ -155,22 +155,4 @@ describe("meal-type ensureMealType + pending-write reconcile", () => {
       expect(saveMealType).not.toHaveBeenCalled();
     });
   });
-
-  describe("formatResolveError (contract method)", () => {
-    it("renders the unknown-name message with the known types and discriminator hint", () => {
-      const message = api.formatResolveError({
-        ok: false,
-        reason: "unknown_name",
-        name: "Linner",
-        knownNames: ["Breakfast", "Dinner"],
-      });
-      expect(message).toContain('Unknown meal type "Linner"');
-      expect(message).toContain("Breakfast, Dinner");
-    });
-
-    it("renders the unknown-uid and unknown-builtin messages", () => {
-      expect(api.formatResolveError({ ok: false, reason: "unknown_uid", uid: "X" })).toContain('UID "X"');
-      expect(api.formatResolveError({ ok: false, reason: "unknown_builtin", index: 9 })).toContain("index 9");
-    });
-  });
 });

@@ -29,7 +29,7 @@ import { PhotoUidSchema } from "./ids.js";
 import { GENERATED_MAX_FULL_EDGE, normalizePhoto, sha256Hex } from "./photo-helpers.js";
 import { PhotoStore } from "./photo/store.js";
 import { photoDiskDescriptor } from "./photo/types.js";
-import { recipeMetadataLines, recipeToRow, resolveCategoryRefs } from "./recipe-markdown.js";
+import { recipeToRow, resolveCategoryRefs } from "./recipe-markdown.js";
 import { recipeResource } from "./resources/recipe-resource.js";
 import { RecipeStore } from "./store.js";
 import { categoriesSync } from "./syncs/category-sync.js";
@@ -365,7 +365,6 @@ register(
           // importing recipeToRow and resolving names itself.
           toRows: (recipes) =>
             recipes.map((r) => recipeToRow(r, [...state.category.store.resolveNames([...r.categories])])),
-          metadataLines: (recipe) => recipeMetadataLines(recipe),
           attachGeneratedPhoto,
         },
         writes: {
