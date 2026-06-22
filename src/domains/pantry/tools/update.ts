@@ -5,10 +5,10 @@ import type { PantryState, PantryWrites } from "../module.js";
 import type { PantryItem } from "../types.js";
 
 import { defineTool } from "../../../kernel/tool.js";
-import { commitFailure, toolResult } from "../../../shared/tools.js";
+import { commitFailure, errorResult, toolResult } from "../../../shared/tools.js";
 import { normalizeWire } from "../../../utils/dates.js";
 import { PantryItemUidSchema } from "../ids.js";
-import { pantryItemToMarkdown } from "../pantry-helpers.js";
+import { pantryItemReadOutputSchema, pantryItemToMarkdown, pantryItemToStructured } from "../pantry-helpers.js";
 import { pantryStartGuard } from "./guards.js";
 
 // Strict (exported for direct Zod-validation tests). `inStock` was promoted to
@@ -48,6 +48,7 @@ export const updatePantryItemTool = defineTool(
       "changed; omitted fields retain their existing values. Setting expirationDate also updates " +
       "hasExpiration accordingly. To change stock status, use mark_pantry_item_out_of_stock / restock_pantry_item.",
     inputSchema: updatePantryItemInputSchema,
+    outputSchema: pantryItemReadOutputSchema,
   },
   [pantryStartGuard],
   (ctx: DomainCtx<PantryState, "aisle", PantryWrites>) => {
@@ -56,7 +57,7 @@ export const updatePantryItemTool = defineTool(
       const existing = ctx.state.store.get(args.uid);
 
       if (!existing) {
-        return toolResult(
+        return errorResult(
           `No pantry item found with UID "${args.uid}" (it may not exist or was already deleted). Use \`list_pantry_items\` to find it.`,
         );
       }
@@ -73,7 +74,7 @@ export const updatePantryItemTool = defineTool(
       } else {
         const normalized = normalizeWire(args.expirationDate);
         if (normalized === null) {
-          return toolResult(
+          return errorResult(
             `Could not parse expirationDate "${args.expirationDate}". Use ISO 8601 (e.g., "2026-12-31") or "yyyy-MM-dd HH:mm:ss".`,
           );
         }
@@ -90,7 +91,7 @@ export const updatePantryItemTool = defineTool(
       } else {
         const normalized = normalizeWire(args.purchaseDate);
         if (normalized === null) {
-          return toolResult(
+          return errorResult(
             `Could not parse purchaseDate "${args.purchaseDate}". Use ISO 8601 (e.g., "2026-12-31") or "yyyy-MM-dd HH:mm:ss".`,
           );
         }
@@ -104,7 +105,7 @@ export const updatePantryItemTool = defineTool(
         args.aisle !== undefined
           ? (await ctx.deps.aisle.ensureAisle(args.aisle)).match(
               (v) => v,
-              (message) => toolResult(message),
+              (message) => errorResult(message),
             )
           : undefined;
       if (aisleUpdate !== undefined && "content" in aisleUpdate) return aisleUpdate;
@@ -122,14 +123,18 @@ export const updatePantryItemTool = defineTool(
         (items) => items[0]!,
         (e) => {
           log.error({ err: e, uid: args.uid }, "savePantryItems failed");
-          return toolResult(`Failed to update pantry item: ${e.message}`);
+          return errorResult(`Failed to update pantry item: ${e.message}`);
         },
       );
       if ("content" in saved) return saved;
-      const commitErr = commitFailure("pantry", await ctx.writes.commitPantryItem(saved));
+
+      const structured = pantryItemToStructured(saved, ctx.deps.aisle);
+      const commitErr = commitFailure("pantry", await ctx.writes.commitPantryItem(saved), {
+        structuredContent: structured,
+      });
       if (commitErr) return commitErr;
 
-      return toolResult(pantryItemToMarkdown(saved, ctx.deps.aisle));
+      return toolResult(pantryItemToMarkdown(saved, ctx.deps.aisle), structured);
     };
   },
 );
